@@ -75,5 +75,7 @@ export function useCatalogTableMetadata(
   const snapshotQuery = requested.database
     ? selectedSnapshotQuery
     : defaultSnapshotQuery;
-  return { table, snapshotQuery };
+  // The catalog result travels with the table so a failed introspection can be told apart
+  // from a table that genuinely has no primary key.
+  return { table, catalogQueryResult, snapshotQuery };
 }

@@ -86,12 +86,6 @@ function supportsMemberLocal(integration: ProviderIntegrationSummary) {
   return integration.provider === "gcpCloudSql" && integration.credentialMethod === "adcWif";
 }
 
-function initialFocus(container: HTMLElement | null) {
-  container?.querySelector<HTMLElement>(
-    "button:not([disabled]), input:not([disabled]), select:not([disabled])",
-  )?.focus();
-}
-
 export function ProviderCredentialDialog({
   initialProvider,
   onClose,
@@ -112,7 +106,6 @@ export function ProviderCredentialDialog({
   const [pending, setPending] = useState<"begin" | "verify" | null>(null);
   const [revoking, setRevoking] = useState<string | null>(null);
   const [actionFailed, setActionFailed] = useState(false);
-  const dialogRef = useRef<HTMLElement>(null);
   const onCloseRef = useRef(onClose);
   const returnFocusRef = useRef(returnFocus);
 
@@ -153,35 +146,11 @@ export function ProviderCredentialDialog({
     window.requestAnimationFrame(returnFocusRef.current);
   }, []);
 
-  useEffect(() => {
-    initialFocus(dialogRef.current);
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        close();
-        return;
-      }
-      if (event.key !== "Tab") return;
-      const focusable = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>(
-        "button:not([disabled]), input:not([disabled]), select:not([disabled])",
-      ) ?? []);
-      if (!focusable.length) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1]!;
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      window.removeEventListener("keydown", onKeyDown);
-      dispatch({ type: "discard" });
-    };
-  }, [close]);
+  // The reducer holds the ephemeral secret and one-use receipt, so unmounting by
+  // any route has to discard them even when `close` never ran.
+  useEffect(() => () => {
+    dispatch({ type: "discard" });
+  }, []);
 
   async function verify(receipt: NonNullable<typeof state.receipt>) {
     setPending("verify");
@@ -256,10 +225,10 @@ export function ProviderCredentialDialog({
   return (
     <ModalBackdrop onMouseDown={close}>
       <ModalSurface
-        ref={dialogRef}
         aria-labelledby="provider-credential-title"
         aria-describedby="provider-credential-boundary"
         aria-busy={loading || pending !== null || revoking !== null}
+        onEscape={close}
       >
         <ModalTitleBar
           title={t("providerCredentials.title")}

@@ -610,6 +610,14 @@ pub(crate) trait HostedKnowledgeAuthorityPort: Clone + Send + Sync + 'static {
         workspace_id: Uuid,
         source_id: Uuid,
     ) -> impl Future<Output = AppResult<Option<Uuid>>> + Send;
+    /// Stop the control-plane code index queued for `source_id`. Resolves to
+    /// `true` only when a queued or claimed job was actually stopped.
+    fn cancel_source_sync(
+        &self,
+        account_id: &str,
+        workspace_id: Uuid,
+        source_id: Uuid,
+    ) -> impl Future<Output = AppResult<bool>> + Send;
     fn delete_source(
         &self,
         account_id: &str,

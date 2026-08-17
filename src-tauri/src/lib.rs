@@ -203,6 +203,7 @@ pub fn run() {
             features::knowledge::transport::list_knowledge_source_sync_progress,
             features::knowledge::transport::revoke_knowledge_source,
             features::knowledge::transport::sync_knowledge_source,
+            features::knowledge::transport::cancel_knowledge_source_sync,
             features::knowledge::transport::search_knowledge_graph,
             features::knowledge::transport::list_knowledge_mappings,
             features::knowledge::transport::decide_knowledge_mapping,

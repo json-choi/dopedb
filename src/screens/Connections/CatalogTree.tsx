@@ -1,3 +1,7 @@
+// Catalog subtree of the Database Explorer tree. Every navigable row is a
+// `role="treeitem"` with an `aria-level`; the explorer container owns the single
+// roving-focus keyboard handler and reads those rows out of the DOM, so rows
+// here only declare their depth, expanded state and `data-tree-toggle`.
 import {
   useCallback,
   useEffect,
@@ -60,6 +64,8 @@ type Props = {
   detailError?: string;
   applySchemaScope?: boolean;
   initiallyOpen?: boolean;
+  /** `aria-level` of this catalog's database row inside the explorer tree. */
+  level: number;
   scrollElement: HTMLDivElement | null;
   filter: string;
   activeSearchResultKey?: string | null;
@@ -236,6 +242,16 @@ export default function CatalogTree(props: Props) {
     overview,
     props.applySchemaScope,
   ]);
+  const databaseLevel = props.level;
+  // Access, overview-failure and detail-failure rows render as siblings of the
+  // windowed rows inside the database row's own subtree, so they sit one level
+  // below it just like the first schema or collection section does.
+  const databaseChildLevel = databaseLevel + 1;
+  const schemaLevel = databaseLevel + 1;
+  const sectionLevel = isDocumentEngine(connection.engine)
+    ? schemaLevel
+    : schemaLevel + 1;
+  const relationLevel = sectionLevel + 1;
   const databaseSectionKey = (section: string) =>
     `${connection.database}\u0000${section}`;
   const catalogKey = `${connection.id}\u0000${connection.database}`;
@@ -316,10 +332,12 @@ export default function CatalogTree(props: Props) {
                 "[data-database-root]",
               );
         row?.scrollIntoView({ block: "nearest" });
-        (
-          row?.querySelector<HTMLButtonElement>(".tbl-name") ??
-          row?.querySelector<HTMLElement>('[role="button"]')
-        )?.focus();
+        // Rows that carry their own `tabindex` are the treeitem; shared
+        // `TreeSectionButton` rows delegate focus to their native toggle.
+        (row?.hasAttribute("tabindex")
+          ? row
+          : row?.querySelector<HTMLElement>("button")
+        )?.focus({ preventScroll: true });
       });
     });
     return () => {
@@ -370,10 +388,13 @@ export default function CatalogTree(props: Props) {
     return !collapsedMetadataSections.has(`${tableKey(table)}:${section}`);
   }
 
-  function renderColumnRows(table: CatalogTable) {
+  function renderColumnRows(table: CatalogTable, level: number) {
     return table.columns.map((column) => (
       <div
-        className="ds-object-row tw:cursor-default tw:gap-1 tw:rounded-xs tw:pl-4 tw:text-ui"
+        className="ds-object-row tw:cursor-default tw:gap-1 tw:rounded-xs tw:pl-4 tw:text-ui tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring"
+        role="treeitem"
+        aria-level={level}
+        tabIndex={-1}
         key={`${tableKey(table)}:column:${column.ordinal}:${column.name}`}
         title={[
           column.dataType,
@@ -418,14 +439,17 @@ export default function CatalogTree(props: Props) {
       `${constraint.column} → ${target || `#${index + 1}`}`;
   }
 
-  function renderKeyRows(table: CatalogTable) {
+  function renderKeyRows(table: CatalogTable, level: number) {
     const keys: Array<CatalogConstraint | CatalogForeignKey> =
       table.constraints.length > 0
         ? table.constraints
         : table.foreignKeys;
     return keys.map((constraint, index) => (
       <div
-        className="ds-object-row tw:cursor-default tw:gap-1 tw:rounded-xs tw:pl-4 tw:text-ui"
+        className="ds-object-row tw:cursor-default tw:gap-1 tw:rounded-xs tw:pl-4 tw:text-ui tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring"
+        role="treeitem"
+        aria-level={level}
+        tabIndex={-1}
         key={`${tableKey(table)}:key:${keyLabel(constraint, index)}:${index}`}
         title={keyLabel(constraint, index)}
       >
@@ -452,10 +476,13 @@ export default function CatalogTree(props: Props) {
     return `${index.name} (${columns.join(", ")})`;
   }
 
-  function renderIndexRows(table: CatalogTable) {
+  function renderIndexRows(table: CatalogTable, level: number) {
     return table.indexes.map((index) => (
       <div
-        className="ds-object-row tw:cursor-default tw:gap-1 tw:rounded-xs tw:pl-4 tw:text-ui"
+        className="ds-object-row tw:cursor-default tw:gap-1 tw:rounded-xs tw:pl-4 tw:text-ui tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring"
+        role="treeitem"
+        aria-level={level}
+        tabIndex={-1}
         key={`${tableKey(table)}:index:${index.name}`}
         title={indexLabel(index)}
       >
@@ -480,6 +507,7 @@ export default function CatalogTree(props: Props) {
     section: "columns" | "keys" | "indexes",
     count: number,
     children: ReturnType<typeof renderColumnRows>,
+    level: number,
   ) {
     if (count === 0) return null;
     const expanded = metadataSectionIsOpen(table, section);
@@ -488,26 +516,29 @@ export default function CatalogTree(props: Props) {
         className="tw:flex tw:flex-col tw:gap-px"
         key={`${tableKey(table)}:${section}`}
       >
-        <TreeSectionButton
-          expanded={expanded}
-          icon={section === "keys" ? "key" : section === "indexes" ? "list" : "columns"}
-          onToggle={() => toggleMetadataSection(table, section)}
-        >
-          {t(
-            section === "keys"
-              ? "connections.keys"
-              : section === "indexes"
-                ? "connections.indexes"
-                : "connections.columns",
-            { count },
-          )}
-        </TreeSectionButton>
+        <div role="treeitem" aria-level={level}>
+          <TreeSectionButton
+            expanded={expanded}
+            icon={section === "keys" ? "key" : section === "indexes" ? "list" : "columns"}
+            tabIndex={-1}
+            onToggle={() => toggleMetadataSection(table, section)}
+          >
+            {t(
+              section === "keys"
+                ? "connections.keys"
+                : section === "indexes"
+                  ? "connections.indexes"
+                  : "connections.columns",
+              { count },
+            )}
+          </TreeSectionButton>
+        </div>
         {expanded && children}
       </div>
     );
   }
 
-  function renderTableDetails(table: CatalogTable) {
+  function renderTableDetails(table: CatalogTable, level: number) {
     if (!fullCatalog) {
       return (
         <div className="tw:pl-5 tw:text-xs tw:text-muted-foreground">
@@ -524,19 +555,22 @@ export default function CatalogTree(props: Props) {
           table,
           "columns",
           table.columns.length,
-          renderColumnRows(table),
+          renderColumnRows(table, level + 1),
+          level,
         )}
         {renderMetadataSection(
           table,
           "keys",
           keyCount,
-          renderKeyRows(table),
+          renderKeyRows(table, level + 1),
+          level,
         )}
         {renderMetadataSection(
           table,
           "indexes",
           table.indexes.length,
-          renderIndexRows(table),
+          renderIndexRows(table, level + 1),
+          level,
         )}
         {table.columns.length + keyCount + table.indexes.length === 0 && (
           <div className="tw:pl-5 tw:text-xs tw:text-muted-foreground">
@@ -547,16 +581,27 @@ export default function CatalogTree(props: Props) {
     );
   }
 
-  function renderTable(table: CatalogTable) {
+  function renderTable(table: CatalogTable, level: number) {
     const key = tableKey(table);
     const tableDiff = diff?.tableDiffs[key];
     const tone = tableDiffTone(tableDiff);
     const detailsOpen = expandedTables.has(key);
+    const expandable = !isDocumentEngine(connection.engine);
     return (
       <div className="tw:flex tw:flex-col tw:gap-px" key={key}>
         <div
-          className="ds-object-row tw:group tw:relative tw:gap-1 tw:rounded-xs tw:select-none tw:text-ui tw:data-[search-active=true]:bg-selection tw:data-[search-active=true]:text-selection-foreground"
+          className="ds-object-row tw:group tw:relative tw:gap-1 tw:rounded-xs tw:select-none tw:text-ui tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:data-[search-active=true]:bg-selection tw:data-[search-active=true]:text-selection-foreground"
           data-table-key={key}
+          role="treeitem"
+          aria-level={level}
+          aria-expanded={expandable ? detailsOpen : undefined}
+          tabIndex={-1}
+          onKeyDown={(event) => {
+            if (event.target !== event.currentTarget) return;
+            if (event.key !== "Enter" && event.key !== " ") return;
+            event.preventDefault();
+            props.onOpenTable(table);
+          }}
           data-explorer-search-result={
             normalizedFilter ? tableSearchResultKey(table) : undefined
           }
@@ -573,11 +618,12 @@ export default function CatalogTree(props: Props) {
                 : undefined
           }
         >
-          {!isDocumentEngine(connection.engine) && (
+          {expandable && (
             <button
               type="button"
+              data-tree-toggle
+              tabIndex={-1}
               className="tw:grid tw:size-3 tw:shrink-0 tw:cursor-pointer tw:place-items-center tw:rounded-xs tw:border-0 tw:bg-transparent tw:p-0 tw:text-2xs tw:text-muted-foreground tw:hover:text-foreground"
-              aria-expanded={detailsOpen}
               aria-label={
                 detailsOpen
                   ? t("connections.collapseMetadata", { table: table.name })
@@ -609,6 +655,7 @@ export default function CatalogTree(props: Props) {
           <button
             type="button"
             className="tbl-name tw:min-w-[10ch] tw:flex-1 tw:cursor-pointer tw:overflow-hidden tw:border-0 tw:bg-transparent tw:p-0 tw:text-left tw:font-sans tw:text-inherit tw:text-ellipsis tw:whitespace-nowrap"
+            tabIndex={-1}
             onClick={() => props.onOpenTable(table)}
           >
             {table.schema ? table.name : tableLabel(connection.engine, table)}
@@ -621,16 +668,19 @@ export default function CatalogTree(props: Props) {
               </span>
             )}
         </div>
-        {detailsOpen && renderTableDetails(table)}
+        {detailsOpen && renderTableDetails(table, level + 1)}
       </div>
     );
   }
 
-  function renderMissingTable(table: CatalogTable) {
+  function renderMissingTable(table: CatalogTable, level: number) {
     return (
       <div
         key={`missing-${tableKey(table)}`}
-        className="ds-object-row tw:cursor-default tw:gap-1 tw:rounded-xs tw:text-muted-foreground"
+        className="ds-object-row tw:cursor-default tw:gap-1 tw:rounded-xs tw:text-muted-foreground tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring"
+        role="treeitem"
+        aria-level={level}
+        tabIndex={-1}
         title={t("connections.schemaDiffTableMissing")}
       >
         <span
@@ -662,6 +712,7 @@ export default function CatalogTree(props: Props) {
     object: CatalogObject,
     icon: Parameters<typeof Icon>[0]["name"],
     index: number,
+    level: number,
     insideSchema = false,
   ) {
     const label =
@@ -674,7 +725,10 @@ export default function CatalogTree(props: Props) {
           : catalogObjectLabel(object);
     return (
       <div
-        className="ds-object-row tw:cursor-default tw:gap-1 tw:rounded-xs tw:text-ui tw:data-[search-active=true]:bg-selection tw:data-[search-active=true]:text-selection-foreground"
+        className="ds-object-row tw:cursor-default tw:gap-1 tw:rounded-xs tw:text-ui tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:data-[search-active=true]:bg-selection tw:data-[search-active=true]:text-selection-foreground"
+        role="treeitem"
+        aria-level={level}
+        tabIndex={-1}
         key={`${object.schema ?? ""}:${object.kind}:${object.name}:${
           object.detail ?? index
         }`}
@@ -801,20 +855,25 @@ export default function CatalogTree(props: Props) {
           `${connection.database}:section:collections`,
           0,
           () => (
-            <TreeSectionButton
-              expanded={collectionsOpen}
-              icon="collection"
-              onToggle={() =>
-                props.onToggleRelationSection(collectionSectionKey)
-              }
-            >
-              {t("connections.collections", { count: tables.length })}
-            </TreeSectionButton>
+            <div role="treeitem" aria-level={sectionLevel}>
+              <TreeSectionButton
+                expanded={collectionsOpen}
+                icon="collection"
+                tabIndex={-1}
+                onToggle={() =>
+                  props.onToggleRelationSection(collectionSectionKey)
+                }
+              >
+                {t("connections.collections", { count: tables.length })}
+              </TreeSectionButton>
+            </div>
           ),
         ));
         if (collectionsOpen) {
           for (const table of tables) {
-            rows.push(row(tableRowKey(table), 1, () => renderTable(table)));
+            rows.push(row(tableRowKey(table), 1, () =>
+              renderTable(table, relationLevel),
+            ));
           }
         }
       }
@@ -827,10 +886,15 @@ export default function CatalogTree(props: Props) {
           `${connection.database}:schema:${schemaKey}`,
           0,
           () => (
-            <div data-schema-key={schemaKey}>
+            <div
+              data-schema-key={schemaKey}
+              role="treeitem"
+              aria-level={schemaLevel}
+            >
               <TreeSectionButton
                 expanded={schemaOpen}
                 icon="folder"
+                tabIndex={-1}
                 onToggle={() => toggleSchema(schemaKey)}
               >
                 {schema || t("connections.defaultSchema")}
@@ -849,20 +913,25 @@ export default function CatalogTree(props: Props) {
             `${connection.database}:schema:${schemaKey}:section:table`,
             1,
             () => (
-              <TreeSectionButton
-                expanded={tablesOpen}
-                icon="table"
-                onToggle={() =>
-                  props.onToggleRelationSection(tableSectionKey)
-                }
-              >
-                {t("connections.tables", { count: contents.tables.length })}
-              </TreeSectionButton>
+              <div role="treeitem" aria-level={sectionLevel}>
+                <TreeSectionButton
+                  expanded={tablesOpen}
+                  icon="table"
+                  tabIndex={-1}
+                  onToggle={() =>
+                    props.onToggleRelationSection(tableSectionKey)
+                  }
+                >
+                  {t("connections.tables", { count: contents.tables.length })}
+                </TreeSectionButton>
+              </div>
             ),
           ));
           if (tablesOpen) {
             for (const table of contents.tables) {
-              rows.push(row(tableRowKey(table), 1, () => renderTable(table)));
+              rows.push(row(tableRowKey(table), 1, () =>
+                renderTable(table, relationLevel),
+              ));
             }
           }
         }
@@ -876,20 +945,25 @@ export default function CatalogTree(props: Props) {
             `${connection.database}:schema:${schemaKey}:section:view`,
             1,
             () => (
-              <TreeSectionButton
-                expanded={viewsOpen}
-                icon="view"
-                onToggle={() =>
-                  props.onToggleRelationSection(viewSectionKey)
-                }
-              >
-                {t("connections.views", { count: contents.views.length })}
-              </TreeSectionButton>
+              <div role="treeitem" aria-level={sectionLevel}>
+                <TreeSectionButton
+                  expanded={viewsOpen}
+                  icon="view"
+                  tabIndex={-1}
+                  onToggle={() =>
+                    props.onToggleRelationSection(viewSectionKey)
+                  }
+                >
+                  {t("connections.views", { count: contents.views.length })}
+                </TreeSectionButton>
+              </div>
             ),
           ));
           if (viewsOpen) {
             for (const view of contents.views) {
-              rows.push(row(tableRowKey(view), 1, () => renderTable(view)));
+              rows.push(row(tableRowKey(view), 1, () =>
+                renderTable(view, relationLevel),
+              ));
             }
           }
         }
@@ -909,15 +983,18 @@ export default function CatalogTree(props: Props) {
             `${connection.database}:schema:${schemaKey}:section:${section.kind}`,
             1,
             () => (
-              <TreeSectionButton
-                expanded={expanded}
-                icon={section.icon}
-                onToggle={() =>
-                  props.onToggleObjectSection(objectSectionKey)
-                }
-              >
-                {t(section.label, { count: objects.length })}
-              </TreeSectionButton>
+              <div role="treeitem" aria-level={sectionLevel}>
+                <TreeSectionButton
+                  expanded={expanded}
+                  icon={section.icon}
+                  tabIndex={-1}
+                  onToggle={() =>
+                    props.onToggleObjectSection(objectSectionKey)
+                  }
+                >
+                  {t(section.label, { count: objects.length })}
+                </TreeSectionButton>
+              </div>
             ),
           ));
           if (expanded) {
@@ -925,7 +1002,14 @@ export default function CatalogTree(props: Props) {
               rows.push(row(
                 objectRowKey(object, index),
                 1,
-                () => renderObject(object, section.icon, index, true),
+                () =>
+                  renderObject(
+                    object,
+                    section.icon,
+                    index,
+                    relationLevel,
+                    true,
+                  ),
               ));
             });
           }
@@ -949,7 +1033,7 @@ export default function CatalogTree(props: Props) {
         rows.push(row(
           `${connection.database}:missing:${tableKey(table)}`,
           0,
-          () => renderMissingTable(table),
+          () => renderMissingTable(table, schemaLevel),
         ));
       }
     }
@@ -980,21 +1064,39 @@ export default function CatalogTree(props: Props) {
       ref={treeRef}
       className="tw:flex tw:flex-col tw:gap-px tw:pt-1 tw:pr-0 tw:pb-2 tw:pl-3"
     >
-      <div
-        className="tw:flex tw:flex-col tw:gap-px"
-        data-database-root
-      >
-        <TreeSectionButton
-          expanded={databaseVisible}
-          icon="database"
-          onToggle={toggleDatabase}
+      <div className="tw:flex tw:flex-col tw:gap-px">
+        <div
+          data-database-root
+          role="treeitem"
+          aria-level={databaseLevel}
         >
-          {databaseDisplayName()}
-        </TreeSectionButton>
+          <TreeSectionButton
+            expanded={databaseVisible}
+            icon="database"
+            tabIndex={-1}
+            onToggle={toggleDatabase}
+          >
+            {databaseDisplayName()}
+          </TreeSectionButton>
+        </div>
         {databaseVisible ? (
           <div className="tw:flex tw:flex-col tw:gap-px tw:pl-3">
             {accessIssue ? (
-              <div className="tw:grid tw:gap-1 tw:px-2 tw:py-2 tw:text-sm">
+              <div
+                role="treeitem"
+                aria-level={databaseChildLevel}
+                tabIndex={-1}
+                className="tw:grid tw:gap-1 tw:px-2 tw:py-2 tw:text-sm tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring"
+                onKeyDown={(event) => {
+                  if (event.target !== event.currentTarget) return;
+                  if (event.key !== "Enter" && event.key !== " ") return;
+                  if (accessIssue !== "credentials" || !props.onResolveAccess) {
+                    return;
+                  }
+                  event.preventDefault();
+                  props.onResolveAccess();
+                }}
+              >
                 <strong className="tw:text-foreground">
                   {accessIssue === "grant"
                     ? t("workspace.connectionUseRequired")
@@ -1008,6 +1110,7 @@ export default function CatalogTree(props: Props) {
                 {accessIssue === "credentials" && props.onResolveAccess ? (
                   <button
                     type="button"
+                    tabIndex={-1}
                     className="tw:mt-1 tw:w-fit tw:cursor-pointer tw:rounded-xs tw:border tw:border-border-subtle tw:bg-card tw:px-2 tw:py-1 tw:font-sans tw:text-xs tw:text-foreground tw:hover:border-ring"
                     onClick={props.onResolveAccess}
                   >
@@ -1017,12 +1120,24 @@ export default function CatalogTree(props: Props) {
               </div>
             ) : null}
             {error ? (
-              <div className="tw:flex tw:items-start tw:gap-2 tw:px-2 tw:py-1 tw:text-sm tw:text-danger">
+              <div
+                role="treeitem"
+                aria-level={databaseChildLevel}
+                tabIndex={-1}
+                className="tw:flex tw:items-start tw:gap-2 tw:px-2 tw:py-1 tw:text-sm tw:text-danger tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring"
+                onKeyDown={(event) => {
+                  if (event.target !== event.currentTarget) return;
+                  if (event.key !== "Enter" && event.key !== " ") return;
+                  event.preventDefault();
+                  props.onRetryOverview();
+                }}
+              >
                 <span className="tw:min-w-0 tw:flex-1 tw:wrap-break-word">
                   {error}
                 </span>
                 <button
                   type="button"
+                  tabIndex={-1}
                   className="tw:shrink-0 tw:cursor-pointer tw:rounded-xs tw:border tw:border-border-subtle tw:bg-card tw:px-1.5 tw:py-px tw:font-sans tw:text-2xs tw:text-foreground tw:hover:border-ring"
                   onClick={props.onRetryOverview}
                 >
@@ -1031,12 +1146,24 @@ export default function CatalogTree(props: Props) {
               </div>
             ) : null}
             {detailError ? (
-              <div className="tw:flex tw:items-start tw:gap-2 tw:px-2 tw:py-1 tw:text-sm tw:text-muted-foreground">
+              <div
+                role="treeitem"
+                aria-level={databaseChildLevel}
+                tabIndex={-1}
+                className="tw:flex tw:items-start tw:gap-2 tw:px-2 tw:py-1 tw:text-sm tw:text-muted-foreground tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring"
+                onKeyDown={(event) => {
+                  if (event.target !== event.currentTarget) return;
+                  if (event.key !== "Enter" && event.key !== " ") return;
+                  event.preventDefault();
+                  props.onRequestDetails();
+                }}
+              >
                 <span className="tw:min-w-0 tw:flex-1 tw:wrap-break-word">
                   {detailError}
                 </span>
                 <button
                   type="button"
+                  tabIndex={-1}
                   className="tw:shrink-0 tw:cursor-pointer tw:rounded-xs tw:border tw:border-border-subtle tw:bg-card tw:px-1.5 tw:py-px tw:font-sans tw:text-2xs tw:text-foreground tw:hover:border-ring"
                   onClick={props.onRequestDetails}
                 >

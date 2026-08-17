@@ -82,7 +82,6 @@ export default function WorkspaceConnectionDialog({
   );
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
-  const dialogRef = useRef<HTMLFormElement>(null);
   const initialFocusRef = useRef<HTMLElement | null>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
   const selectedTargetValue = targetValue || targets[0]?.value || "";
@@ -98,33 +97,6 @@ export default function WorkspaceConnectionDialog({
     }
     return () => returnFocus?.focus?.();
   }, [returnFocusRef]);
-
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !pending) {
-        onClose();
-        return;
-      }
-      if (event.key !== "Tab") return;
-      const focusable = Array.from(
-        dialogRef.current?.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
-        ) ?? [],
-      );
-      if (focusable.length === 0) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose, pending]);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -176,9 +148,9 @@ export default function WorkspaceConnectionDialog({
         aria-labelledby="workspace-connection-title"
         aria-describedby="workspace-connection-description"
         aria-busy={pending}
+        onEscape={pending ? undefined : onClose}
       >
         <form
-          ref={dialogRef}
           className="tw:flex tw:min-h-0 tw:flex-col tw:gap-3 tw:overflow-auto tw:p-4"
           onSubmit={submit}
         >

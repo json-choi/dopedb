@@ -15,6 +15,7 @@ export function TreeSectionButton({
   danger = false,
   selected = false,
   prominence = "default",
+  tabIndex,
 }: {
   expanded: boolean;
   icon: IconName;
@@ -25,6 +26,11 @@ export function TreeSectionButton({
   danger?: boolean;
   selected?: boolean;
   prominence?: "default" | "project";
+  /**
+   * Forwarded to the native toggle. A tree whose container owns the single Tab
+   * stop passes `-1`; omitting it keeps today's standalone Tab stop.
+   */
+  tabIndex?: number;
 }) {
   return (
     <div
@@ -41,6 +47,7 @@ export function TreeSectionButton({
         type="button"
         className="tw:flex tw:min-w-0 tw:flex-1 tw:cursor-pointer tw:items-center tw:gap-1 tw:border-0 tw:bg-transparent tw:px-1 tw:py-[var(--ds-tree-row-padding-block)] tw:text-left tw:font-inherit tw:text-inherit tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring"
         aria-expanded={expanded}
+        tabIndex={tabIndex}
         onClick={onToggle}
       >
         <span className="tw:grid tw:w-[var(--ds-icon-sm)] tw:shrink-0 tw:place-items-center tw:text-2xs">

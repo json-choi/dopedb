@@ -59,5 +59,5 @@ export type BackgroundTask =
       remainingFiles: number;
       attempt: number;
       retryAt: string | null;
-      cancellable: false;
+      cancellable: boolean;
     });

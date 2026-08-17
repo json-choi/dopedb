@@ -48,9 +48,7 @@ export default function SqlParameterDialog({
     <ModalBackdrop onMouseDown={onCancel}>
       <ModalSurface
         aria-labelledby="sql-parameters-title"
-        onKeyDown={(event) => {
-          if (event.key === "Escape") onCancel();
-        }}
+        onEscape={onCancel}
       >
         <form className="tw:flex tw:min-h-0 tw:flex-1 tw:flex-col" onSubmit={submit}>
           <ModalTitleBar

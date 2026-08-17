@@ -91,11 +91,7 @@ export function ProjectSetupDialog({
     >
       <ModalSurface
         aria-labelledby={PROJECT_SETUP_TITLE_ID}
-        onKeyDown={(event) => {
-          if (event.key !== "Escape" || createProject.isPending) return;
-          event.preventDefault();
-          onClose();
-        }}
+        onEscape={createProject.isPending ? undefined : onClose}
       >
         <form
           className="tw:flex tw:min-h-0 tw:flex-1 tw:flex-col"

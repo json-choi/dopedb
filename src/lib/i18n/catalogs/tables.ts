@@ -6,6 +6,8 @@ export const tablesCatalog = defineCatalog(
     "tables.activeFilters": "{count} filter",
     "tables.activeFiltersPlural": "{count} filters",
     "tables.applyExpression": "Apply {label}",
+    "tables.catalogLoadFailed":
+      "Schema metadata could not be loaded, so row editing is disabled: {error}",
     "tables.catalogRequired": "Schema metadata is still loading. Try again in a moment.",
     "tables.changeSetRolledBack":
       "The staged transaction was rolled back. Reload rows before retrying.",
@@ -20,6 +22,7 @@ export const tablesCatalog = defineCatalog(
     "tables.copyJson": "Copy JSON",
     "tables.copyRow": "Row copied",
     "tables.copyTsv": "Copy TSV",
+    "tables.countUnavailable": "total count unavailable",
     "tables.delete": "Delete",
     "tables.deleteRow": "Delete row?",
     "tables.discardStaged": "Discard staged changes",
@@ -87,6 +90,8 @@ export const tablesCatalog = defineCatalog(
     "tables.activeFilters": "필터 {count}개",
     "tables.activeFiltersPlural": "필터 {count}개",
     "tables.applyExpression": "{label} 적용",
+    "tables.catalogLoadFailed":
+      "스키마 메타데이터를 불러오지 못해 행 편집이 비활성화되었습니다: {error}",
     "tables.catalogRequired": "스키마 메타데이터를 불러오는 중입니다. 잠시 후 다시 시도하세요.",
     "tables.changeSetRolledBack":
       "변경 트랜잭션이 롤백되었습니다. 행을 새로고침한 뒤 다시 시도하세요.",
@@ -101,6 +106,7 @@ export const tablesCatalog = defineCatalog(
     "tables.copyJson": "JSON 복사",
     "tables.copyRow": "행이 복사되었습니다",
     "tables.copyTsv": "TSV 복사",
+    "tables.countUnavailable": "총 개수를 불러오지 못함",
     "tables.delete": "삭제",
     "tables.deleteRow": "행 삭제?",
     "tables.discardStaged": "준비된 변경 버리기",

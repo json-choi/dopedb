@@ -16,9 +16,11 @@ export const safetyCatalog = defineCatalog(
     "safety.execPreviewRowLimitHint":
       "Skip execute-preview above this estimate (L3 gate).",
     "safety.explainPreview": "EXPLAIN preview",
-    "safety.explainPreviewHint": "Show the plan / row estimate before running.",
+    "safety.explainPreviewHint":
+      "Fetch the plan / row estimate before running. Off sends no EXPLAIN on any connection, including production, so SQL Explain returns no plan and no row-threshold caution is raised.",
     "safety.guardrails": "Guardrails",
     "safety.limits": "Limits",
+    "safety.loadFailed": "Could not load safety settings: {error}",
     "safety.loading": "Loading safety settings...",
     "safety.maxRows": "Max rows",
     "safety.maxRowsHint": "Row cap applied to read result sets.",
@@ -78,9 +80,11 @@ export const safetyCatalog = defineCatalog(
     "safety.execPreviewRowLimitHint":
       "예상 행 수가 이 값을 넘으면 실행 미리보기를 건너뜁니다 (L3 게이트).",
     "safety.explainPreview": "EXPLAIN 미리보기",
-    "safety.explainPreviewHint": "실행 전 플랜과 행 추정치를 보여줍니다.",
+    "safety.explainPreviewHint":
+      "실행 전 플랜과 행 추정치를 가져옵니다. 끄면 운영을 포함한 모든 연결에서 EXPLAIN을 보내지 않으므로 SQL Explain이 플랜을 반환하지 않고 예상 행 수 주의도 생성되지 않습니다.",
     "safety.guardrails": "가드레일",
     "safety.limits": "제한값",
+    "safety.loadFailed": "안전 설정을 불러오지 못했습니다: {error}",
     "safety.loading": "안전 설정을 불러오는 중...",
     "safety.maxRows": "최대 행 수",
     "safety.maxRowsHint": "읽기 결과 집합에 적용되는 행 수 제한입니다.",

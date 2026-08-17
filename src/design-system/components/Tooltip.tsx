@@ -121,8 +121,10 @@ export function Tooltip({
 
   useEffect(() => {
     if (!open) return;
+    // A tooltip is the outermost dismissible surface on its trigger, so it only
+    // consumes Escape that no menu or dialog already claimed.
     const dismiss = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
+      if (event.key !== "Escape" || event.defaultPrevented) return;
       clearPending();
       setOpen(false);
       setPosition(null);

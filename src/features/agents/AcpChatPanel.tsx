@@ -299,13 +299,17 @@ function AcpChatSurface({
   label: string;
   layout: AgentDockLayout;
 }) {
+  // All three layouts are the same right-anchored tool window, not a dialog:
+  // there is no backdrop, the workbench behind stays clickable and focusable,
+  // and overlay/compact only reproject the docked panel for narrow viewports.
+  // Declaring aria-modal here told screen readers the rest of the app was inert
+  // while focus still left freely, so the landmark stays a plain complementary
+  // region. Escape ownership stays with ToolbarMenu, dialogs, and Tooltip.
   return (
     <aside
       className="tw:relative tw:col-start-4 tw:row-start-2 tw:mt-0 tw:mr-1 tw:mb-1 tw:ml-0 tw:flex tw:min-w-0 tw:flex-col tw:overflow-hidden tw:rounded-md tw:border tw:border-border-subtle tw:bg-background tw:data-[layout=overlay]:fixed tw:data-[layout=overlay]:inset-y-0 tw:data-[layout=overlay]:right-0 tw:data-[layout=overlay]:z-[var(--ds-z-modal)] tw:data-[layout=overlay]:m-0 tw:data-[layout=overlay]:w-[min(520px,calc(100vw_-_44px))] tw:data-[layout=overlay]:rounded-none tw:data-[layout=overlay]:shadow-popover tw:data-[layout=compact]:fixed tw:data-[layout=compact]:top-title-toolbar tw:data-[layout=compact]:right-0 tw:data-[layout=compact]:bottom-status-bar tw:data-[layout=compact]:left-0 tw:data-[layout=compact]:z-[var(--ds-z-modal)] tw:data-[layout=compact]:m-0 tw:data-[layout=compact]:w-screen tw:data-[layout=compact]:rounded-none tw:data-[layout=compact]:border-x-0"
       aria-label={label}
-      aria-modal={layout === "docked" ? undefined : true}
       data-layout={layout}
-      role={layout === "docked" ? undefined : "dialog"}
     >
       {children}
     </aside>

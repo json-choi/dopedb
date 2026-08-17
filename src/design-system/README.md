@@ -247,6 +247,15 @@ Elevation은 세 단계만 허용한다.
   상태. tool window가 열렸다는 이유만으로 primary 파랑을 사용하지 않는다.
 - `IdeTabStrip`, `IdeTab`: 평평한 document strip과 strip 안쪽의 둥근 active
   tab. 화면별 rectangular selection이나 bottom accent를 다시 만들지 않는다.
+  strip은 Tab stop 하나만 노출하고 좌·우 방향키와 Home/End의 순환 focus를
+  소유한다. 문서 활성화는 workbench 전체를 바꾸므로 방향키는 focus만 옮기고
+  Enter/Space가 선택을 확정한다. `IdeTab`의 `tabIndex`는 생략하면 active tab만
+  `0`이 되며, 화면이 자체 방향키 handler를 두면 `defaultPrevented`가 우선한다.
+  active tab이 없는 strip은 Tab으로 도달할 수 없으므로 두 strip 모두 첫 tab에
+  Tab stop 하나를 되돌려준다. strip 전체를 keyboard에서 지우지 않기 위한
+  보장이며, `tabIndex`를 명시한 tab은 화면이 소유한 fallback을 유지한다.
+  `WorkbenchDocumentStrip`처럼 active 문서가 다른 연결에 속할 수 있는 strip은
+  계속 자체 `tabIndex`로 어느 tab이 stop을 갖는지 결정한다.
 - query toolbar는 정상 autosave 완료 아이콘을 상시 반복하지 않는다. 저장 중,
   미저장, conflict, 실패처럼 사용자가 알아야 하는 예외 상태만 schema selector
   뒤의 status slot에 표시하고, 실행 결과는 editor inline marker가 소유한다.
@@ -254,7 +263,9 @@ Elevation은 세 단계만 허용한다.
   둥근 selected capsule. 일반 document 전환은 40px `document`, Services처럼
   36px command row와 나란히 놓이는 tab은 `compact` density를 사용한다. 다중
   결과 tab이 가용 폭을 넘으면 strip 안에서 수평 이동하고 바깥 pane을
-  밀어내지 않는다.
+  밀어내지 않는다. 이 strip도 Tab stop 하나와 좌·우 방향키·Home/End 순환
+  focus를 소유하며, 이미 적재된 view만 바꾸므로 focus가 이동한 tab을 그대로
+  선택한다.
 - `Button`: 전역 `.btn`을 대체하는 Tailwind button primitive. variant, density,
   icon geometry, tone, active/expanded state를 semantic prop으로 소유한다.
   popup 내부 full-width action은 화면별 class를 만들지 않고
@@ -333,9 +344,14 @@ Elevation은 세 단계만 허용한다.
   `CheckboxField`의 native `indeterminate` 상태로 부분 선택을 표현한다.
 - `PanelTabs`: 데이터소스 속성·설정 패널의 ARIA tab navigation. 좁은 폭에서는
   가로로 스크롤하며 선택 변경과 viewport resize 뒤에도 active tab을 자동으로
-  노출한다.
+  노출한다. strip 전체가 Tab stop 하나를 가지며 좌·우 방향키는 순환 이동,
+  Home/End는 양끝으로 이동한다. 속성 pane 전환은 부수 효과가 없으므로 focus가
+  이동한 tab을 그대로 선택한다.
 - `IconRailTabs`: desktop dialog의 42px 세로 category navigation. icon-only
   tab의 selection, tooltip, roving arrow/Home/End keyboard focus를 소유한다.
+  rail은 `aria-orientation="vertical"`이지만 오른쪽에 방향키를 요구하는 이웃이
+  없으므로 위·아래와 함께 좌·우 방향키도 category를 이동한다. 이 cross-axis
+  허용은 rail만의 예외이며 document·tool tab row는 계속 한 축만 사용한다.
 - `SegmentedControl`: 속성 편집기의 소수 상호 배타 선택을 위한 compact
   radiogroup, keyboard focus와 semantic selection treatment.
 - `EnvironmentBadge`: dev/staging/prod 의미색과 대문자 표기를 한곳에서 소유.
@@ -347,12 +363,58 @@ Elevation은 세 단계만 허용한다.
   상시 표시하지 않는다. `TreeRowActions`는 행의
   실제 command만 받아 hover/focus에서 표시하고 title 폭을 상시 차지하지 않는다.
   toggle은 native button이고 interactive row action은 그 sibling이므로 nested
-  button을 만들지 않으며, action은 접근성 트리와 keyboard tab 순서에 독립 노출한다.
+  button을 만들지 않으며, action은 접근성 트리에 독립 노출한다. roving focus
+  tree 안의 소비자는 그 action button에 `tabIndex={-1}`을 넘겨 container 하나만
+  Tab 순서에 남기고, 같은 command를 tool window toolbar나 그 행 자신의 실행으로
+  계속 도달할 수 있게 유지한다. tree 밖 소비자는 prop을 생략해 기존 Tab stop을
+  그대로 쓴다.
   `VirtualTreeRows`의
   inline height/translate는 TanStack React
   Virtual이 측정한 viewport geometry를 적용하는 vendor integration 예외이며,
   색상·간격·row 외형은 계속 semantic utility가 소유한다. 데이터베이스·스키마·
   객체 폴더 이름을 uppercase category heading처럼 바꾸지 않는다.
+  Database Explorer의 tree는 scroll container 하나가 `role="tree"`와 Tab stop을
+  소유하고, 각 행은 `role="treeitem"`과 `aria-level`만 선언한다. 아래에 적은
+  `ToolbarMenu` trigger 하나만 아직 남은 예외이며 새 예외를 늘리지 않는다.
+  화면마다 별도 roving 구현을 만들지 않는다. focus 대상은 행이 `tabindex`를
+  가지면 행 자신, 아니면 `TreeSectionButton`의 native toggle이며
+  `aria-expanded`는 그 focus 대상 하나만 소유한다. `TreeSectionButton`은
+  `tabIndex`를 그 native toggle에 전달하므로 tree 안의 행은 `-1`을 넘겨
+  container 하나만 Tab 순서에 남기고, prop을 생략한 tree 밖 소비자는 기존
+  Tab stop을 그대로 유지한다. `aria-level`은 Project 1, Environment 2,
+  resource folder 3, connection 4에서 시작해 database, schema, section,
+  object, metadata section, column까지 1씩만 증가하며 `Unassigned`와 Project가
+  없는 tree는 root 1에서 다시 시작한다. ArrowLeft가 이 숫자로 상위 행을
+  찾으므로 새 행에는 추정한 깊이가 아니라 실제 깊이를 넘긴다.
+  확장·축소는 `data-tree-toggle`이 지정한 요소를 통해 ArrowLeft/ArrowRight가
+  수행하고, chevron을 두 번째 Tab stop으로 만들지 않는다. `treeitem`은
+  중첩하지 않으며 자식 subtree는 행의 sibling으로 둔다. `role="tree"` 안에서
+  focus를 받을 수 있는 행은 빈 상태 placeholder까지 모두 `role="treeitem"`,
+  실제 `aria-level`, `tabIndex={-1}`을 갖는다. 방향키가 건너뛰는 행이 Tab으로만
+  닿으면 tree의 keyboard model이 깨진다. 행 자신이 focus 대상이면 그 안의
+  button은 native activation을 받지 못하므로 행이 Enter/Space를 받아 command를
+  실행한다. 행 안의 다른 command button도 `tabIndex={-1}`로 Tab 순서에서 빼고,
+  connection 행의 menu처럼 Enter/Space가 이미 다른 뜻을 가진 자리는
+  `ContextMenu`와 `Shift+F10`이 그 행에서 menu를 연다. 열린 `PopupMenu`는
+  `role="menu"`인 별도 composite이므로 그 안의 항목은 tree가 아니라 menu 계약을
+  따른다. 남은 예외는 `ToolbarMenu` 하나다. `ToolbarMenu`는 trigger의 focus를
+  스스로 소유하고 `tabIndex` prop을 받지 않으므로 connection 행의 introspection
+  scope badge는 아직 tree 안의 두 번째 Tab stop이다. `ToolbarMenu`가 `tabIndex`를
+  native trigger에 전달하게 되면 그 badge에 `-1`을 넘기고 이 문단을 지운다.
+  keyboard 계약은
+  ArrowUp/ArrowDown이 보이는 행만 이동, ArrowRight가 접힌 행을 펼치고 펼쳐진
+  행에서는 첫 자식으로, ArrowLeft가 펼쳐진 행을 접고 접힌 행에서는 상위
+  `aria-level` 행으로, Home/End가 처음·마지막 행으로 이동, Enter/Space가
+  실행이다. `VirtualTreeRows`가 windowing하므로 Home/End와 viewport 경계
+  이동은 먼저 scroll한 뒤 다음 frame에서 mount된 행을 다시 읽고, focus 전에
+  항상 `scrollIntoView({ block: "nearest" })`를 호출한다. 행을 여는 query가
+  실패하면 빈 상태 문구로 원인을 단정하지 않고 `InlineNotice tone="danger"`와
+  `app.retry` action을 같은 자리에 표시한다. 그 실패 행은 자신이 `tabindex`를
+  소유한다. retry button은 refetch 중 `disabled`가 되고 disabled button의
+  `.focus()`는 무시되므로, focus를 button에 위임하면 ArrowDown이 그 행에서
+  멈춘다. 그 사이 Enter는 아무 일도 하지 않으므로 실패 행은 refetch 동안
+  `aria-busy`로 대기를 알린다. `tabRovingFocus`는 tablist
+  전용이므로 tree에 재사용하지 않는다.
 - `PopupMenu`, `PopupMenuItem`, `PopupMenuCheckbox`: 평평한 popover menu
   surface와 keyboard-focus 가능한 command/check row.
 - `ToolbarMenu triggerVariant="statusBar"`와 `menuSize="tasks"`: status bar
@@ -379,6 +441,31 @@ Elevation은 세 단계만 허용한다.
   programmatic focus를 다시 포함한다. 닫힐 때는 아직 존재하는 원래 trigger로
   focus를 복구한다. 첫 작업 control을 명시해야 하는 feature만
   `data-modal-initial-focus`를 사용한다.
+  Escape는 `onEscape?: () => void`를 전달한 dialog에서만 dismiss로 동작한다.
+  `ModalSurface`는 caller의 `onKeyDown`을 먼저 실행해 `defaultPrevented`를
+  존중하고, `isTopmostModal`로 최상위 dialog 하나만 닫은 뒤 propagation을
+  멈춰 ToolbarMenu·Tooltip 같은 바깥 listener가 같은 keypress를 다시 처리하지
+  않게 한다. Escape를 임시로 막아야 하는 흐름은 별도 flag 대신 `onEscape`에
+  `undefined`를 전달하고, 화면별 document keydown listener를 다시 만들지 않는다.
+  Escape 소유권은 열린 `ToolbarMenu` → 최상위 dialog → `Tooltip` 순으로
+  가장 안쪽 surface 하나만 닫는다.
+  synthetic handler 하나로는 부족하므로 `ModalSurface`는 document keydown
+  listener도 함께 소유한다. React는 portal 이벤트를 portal container에서
+  위임하고 `document.body`에는 fiber가 없으므로, 제출 중에 focus한 control이
+  `disabled`가 되거나 닫히지 않는 dialog의 backdrop을 눌러 focus가 `body`로
+  떨어지면 synthetic Escape가 아예 dispatch되지 않는다. `focusin`도 그 이동에는
+  발생하지 않아 focus containment로 복구할 수 없다. 이 listener는 같은 계약을
+  그대로 사용한다. capture 단계의 `ToolbarMenu`가 이미 propagation을 멈췄으면
+  실행되지 않고, synthetic 경로가 dialog를 닫았으면 portal container에서
+  propagation이 멈춰 중복 실행되지 않으며, caller의 `preventDefault()`와 앞선
+  dialog의 처리는 `defaultPrevented`로 존중한다. `isTopmostModal`과 같은 flag가
+  stacked dialog를 keypress당 하나로 유지하고 bubble 단계의 `Tooltip`은 이미
+  처리된 key를 버린다. 따라서 화면은 Escape를 위해 자체 `window`/`document`
+  listener를 만들지 않는다.
+  살아 있는 PTY, 실행 중인 세션처럼 닫기가 사용자 소유 상태를 파괴하는
+  dialog는 `onEscape`를 전달하지 않고 명시적 close command만 둔다. 이때
+  "focus가 terminal 밖일 때만"이라는 조건은 backdrop click이 남긴 `body`
+  focus와 구분되지 않으므로 안전 장치가 아니다.
   `size="settings"`는 DopeDB 2026.1.4 실앱에서 재측정한 982×722 설정 dialog를,
   `size="dataSources"`는
   DopeDB 2026.1.4 실앱에서 재측정한 980×731 frame을 compact full-height fallback과 함께
@@ -604,7 +691,9 @@ DopeDB 관찰에서 가져온 역할 계약이다.
 [`src/design-system/components/ToolWindow.tsx`](components/ToolWindow.tsx)에
 있고 form과 tab primitive는 같은 디렉터리의 `FormControls.tsx`,
 `PanelTabs.tsx`, `IconRailTabs.tsx`, `SegmentedControl.tsx`에 있다. 같은
-형태는 화면에서 utility 문자열로 다시 만들지 않는다.
+형태는 화면에서 utility 문자열로 다시 만들지 않는다. tab strip의 roving
+arrow/Home/End focus 계산과 active tab이 없을 때의 Tab stop 복구는
+`tabRovingFocus.ts` 하나가 소유하며 strip마다 복제하지 않는다.
 
 ACP처럼 protocol이 작업 상태를 소유하는 화면은
 [`src/design-system/components/Agent.tsx`](components/Agent.tsx)의

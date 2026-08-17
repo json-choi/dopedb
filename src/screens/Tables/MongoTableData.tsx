@@ -52,6 +52,9 @@ export default function MongoTableData({
   const total = countQuery.data ?? null;
   const busy = rowsQuery.isFetching;
   const error = rowsQuery.error ? errMessage(rowsQuery.error) : null;
+  // A failed count leaves `total` null, which otherwise reads exactly like a count that
+  // has not landed yet. Say so instead of silently dropping the range's denominator.
+  const countUnavailable = countQuery.error != null;
   const fallbackColumns = useMemo(
     () => table.columns.map((column) => column.name),
     [table.columns],
@@ -172,6 +175,7 @@ export default function MongoTableData({
                   total: total.toLocaleString(),
                 })
               : t("tables.rowRange", { from, to }),
+            countUnavailable ? t("tables.countUnavailable") : null,
             documentPage.truncated ? t("tables.truncated") : null,
             `${documentPage.durationMs} ms`,
           ]
@@ -179,6 +183,7 @@ export default function MongoTableData({
             .join(" · ")}
         >
           {t("ide.queryRows", { count: rows })}
+          {countUnavailable ? ` · ${t("tables.countUnavailable")}` : ""}
           {documentPage.truncated ? ` · ${t("tables.truncated")}` : ""}
         </DataGridStatusPill>
       ) : null}

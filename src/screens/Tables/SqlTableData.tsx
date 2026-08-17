@@ -66,7 +66,7 @@ export default function SqlTableData({
   const [ddlOpen, setDdlOpen] = useState(false);
   const [catalogEnabled, setCatalogEnabled] = useState(false);
   const engine = connection.engine;
-  const { table, snapshotQuery } = useCatalogTableMetadata(
+  const { table, catalogQueryResult, snapshotQuery } = useCatalogTableMetadata(
     connection.id,
     requestedTable,
     catalogEnabled,
@@ -183,6 +183,10 @@ export default function SqlTableData({
   async function refreshRowsAndCount() {
     await rowsQuery.refetch();
     await countQuery.refetch();
+    // Without this the toolbar refresh only ever reloads rows, so one failed
+    // introspection would disable row editing for the whole life of the document.
+    if (catalogQueryResult.error) await catalogQueryResult.refetch();
+    if (snapshotQuery.error) await snapshotQuery.refetch();
   }
 
   function cycleSort(col: string) {
@@ -392,9 +396,19 @@ export default function SqlTableData({
     void refreshRowsAndCount();
   }
 
-  const noEditTitle = nonScalarPk
-    ? t("tables.nonScalarPk")
-    : t("tables.noTablePk");
+  // An introspection failure leaves the table without columns, so the "no primary key"
+  // reason would be a false diagnosis. Name the real cause first. A catalog that has
+  // not been read yet — still disabled behind the first page, or in flight — is the
+  // same false diagnosis in the other direction: the primary key was never looked at.
+  const noEditTitle = catalogQueryResult.error
+    ? t("tables.catalogLoadFailed", {
+        error: errMessage(catalogQueryResult.error),
+      })
+    : catalogQueryResult.data === undefined
+      ? t("tables.catalogRequired")
+      : nonScalarPk
+        ? t("tables.nonScalarPk")
+        : t("tables.noTablePk");
   const panelOpen = reviewing || !!editor || !!cellSel || !!pendingDelete;
 
   return (

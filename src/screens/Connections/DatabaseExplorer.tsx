@@ -8,6 +8,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type KeyboardEvent,
   type ReactNode,
 } from "react";
 import {
@@ -72,6 +73,7 @@ import { Icon } from "../../components/Icon";
 import { Button } from "../../design-system/components/Button";
 import { EnvironmentBadge } from "../../design-system/components/EnvironmentBadge";
 import {
+  InlineNotice,
   LoadingLabel,
   StatusDot,
   type StatusTone,
@@ -99,6 +101,132 @@ import ConnectionNode from "./ConnectionNode";
 import type { CatalogTreeSearchResult } from "./CatalogTree";
 import DdlModal from "./DdlModal";
 import { useCatalogTree } from "./useCatalogTree";
+
+// Roving keyboard focus for the whole explorer tree. Rows declare themselves as
+// `role="treeitem"` with an `aria-level`; the focus target is the row when it
+// carries its own `tabindex` and otherwise the shared `TreeSectionButton`
+// toggle. Leaf rows are windowed by `VirtualTreeRows`, so a neighbour can be
+// unmounted at the viewport edge: edge jumps and boundary steps scroll first and
+// re-read the mounted rows on the next frame instead of trusting one snapshot.
+const TREE_ROW_SELECTOR = '[role="treeitem"]';
+const TREE_ROW_STEP = 24;
+
+// Explorer folder depths. Everything below a connection continues from
+// `connectionLevel + 1` inside `ConnectionNode`/`CatalogTree`, so the whole
+// chain Project → Environment → folder → connection → database → schema →
+// section → object → metadata → column stays strictly increasing by one.
+const PROJECT_LEVEL = 1;
+const ENVIRONMENT_LEVEL = PROJECT_LEVEL + 1;
+const ENVIRONMENT_RESOURCE_LEVEL = ENVIRONMENT_LEVEL + 1;
+const ENVIRONMENT_CONNECTION_LEVEL = ENVIRONMENT_RESOURCE_LEVEL + 1;
+// `Unassigned` and the driver-only tree are siblings of a Project, not of an
+// Environment resource folder, so they restart at the root level.
+const ROOT_LEVEL = 1;
+
+function treeRowsOf(container: HTMLElement) {
+  return Array.from(container.querySelectorAll<HTMLElement>(TREE_ROW_SELECTOR));
+}
+
+function treeRowFocusTarget(row: HTMLElement) {
+  if (row.hasAttribute("tabindex")) return row;
+  return row.querySelector<HTMLElement>("button") ?? row;
+}
+
+function treeRowToggle(row: HTMLElement) {
+  return (
+    row.querySelector<HTMLElement>("[data-tree-toggle]") ??
+    row.querySelector<HTMLElement>("button")
+  );
+}
+
+function treeRowExpanded(row: HTMLElement) {
+  return (
+    treeRowFocusTarget(row).getAttribute("aria-expanded") ??
+    row.getAttribute("aria-expanded")
+  );
+}
+
+function treeRowLevel(row: HTMLElement) {
+  return Number(row.getAttribute("aria-level") ?? "1");
+}
+
+function focusTreeRow(row: HTMLElement) {
+  row.scrollIntoView({ block: "nearest" });
+  treeRowFocusTarget(row).focus({ preventScroll: true });
+}
+
+function activeTreeRow(container: HTMLElement) {
+  const active = document.activeElement;
+  if (!(active instanceof HTMLElement) || !container.contains(active)) {
+    return null;
+  }
+  return active.closest<HTMLElement>(TREE_ROW_SELECTOR);
+}
+
+function stepTreeRow(container: HTMLElement, delta: 1 | -1) {
+  const rows = treeRowsOf(container);
+  if (rows.length === 0) return;
+  const current = activeTreeRow(container);
+  const index = current ? rows.indexOf(current) : -1;
+  if (index < 0) {
+    focusTreeRow(delta > 0 ? rows[0] : rows[rows.length - 1]);
+    return;
+  }
+  const next = rows[index + delta];
+  if (next) {
+    focusTreeRow(next);
+    return;
+  }
+  const canScroll =
+    delta > 0
+      ? container.scrollTop + container.clientHeight <
+        container.scrollHeight - 1
+      : container.scrollTop > 0;
+  if (!canScroll || !current) return;
+  container.scrollTop += delta * TREE_ROW_STEP;
+  requestAnimationFrame(() => {
+    const mounted = treeRowsOf(container);
+    const anchor = mounted.indexOf(current);
+    // Windowing can unmount the anchor row during the scroll. Falling back to the
+    // first or last mounted row would teleport to the opposite end of the tree, so
+    // a lost anchor keeps focus where it is instead.
+    if (anchor < 0) return;
+    const target = mounted[anchor + delta];
+    if (target) focusTreeRow(target);
+  });
+}
+
+// A row without `aria-expanded` can still be a parent whose children are always
+// visible, like the schema group. ArrowRight descends into the next deeper row
+// instead of doing nothing.
+function treeRowHasVisibleChild(container: HTMLElement, row: HTMLElement) {
+  const rows = treeRowsOf(container);
+  const next = rows[rows.indexOf(row) + 1];
+  return next !== undefined && treeRowLevel(next) > treeRowLevel(row);
+}
+
+function jumpTreeRow(container: HTMLElement, edge: "end" | "start") {
+  container.scrollTop = edge === "start" ? 0 : container.scrollHeight;
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      const rows = treeRowsOf(container);
+      const target = edge === "start" ? rows[0] : rows[rows.length - 1];
+      if (target) focusTreeRow(target);
+    });
+  });
+}
+
+function focusTreeParent(container: HTMLElement, row: HTMLElement) {
+  const rows = treeRowsOf(container);
+  const level = treeRowLevel(row);
+  for (let cursor = rows.indexOf(row) - 1; cursor >= 0; cursor -= 1) {
+    const candidate = rows[cursor];
+    if (treeRowLevel(candidate) < level) {
+      focusTreeRow(candidate);
+      return;
+    }
+  }
+}
 
 function knowledgeSourceTone(source: KnowledgeSource): StatusTone {
   if (source.health === "ready") return "success";
@@ -223,6 +351,12 @@ export function DatabaseExplorer({
   const [projectSetupOpen, setProjectSetupOpen] = useState(false);
   const [environmentSetupProjectId, setEnvironmentSetupProjectId] =
     useState<string | null>(null);
+  // The per-Project "add environment" row action is inside the roving-focus tree
+  // and is therefore not a Tab stop, so the toolbar has to carry the same
+  // command for the Project the user is standing in. A Project with no
+  // environment can never be named by `activeProjectEnvironmentId`, which is why
+  // the last focused Project subtree is remembered instead.
+  const focusedProjectIdRef = useRef<string | null>(null);
   const [expandedProjectIds, setExpandedProjectIds] = useState<Set<string>>(
     new Set(),
   );
@@ -249,6 +383,54 @@ export function DatabaseExplorer({
   } | null>(null);
   const [treeScrollElement, setTreeScrollElement] =
     useState<HTMLDivElement | null>(null);
+  const onTreeKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLDivElement>) => {
+      if (
+        event.defaultPrevented ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey
+      ) {
+        return;
+      }
+      const container = event.currentTarget;
+      const origin = event.target as HTMLElement;
+      if (origin.closest('input, textarea, [role="menu"], [role="dialog"]')) {
+        return;
+      }
+      const row = origin.closest<HTMLElement>(TREE_ROW_SELECTOR);
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        stepTreeRow(container, 1);
+      } else if (event.key === "ArrowUp") {
+        event.preventDefault();
+        stepTreeRow(container, -1);
+      } else if (event.key === "Home") {
+        event.preventDefault();
+        jumpTreeRow(container, "start");
+      } else if (event.key === "End") {
+        event.preventDefault();
+        jumpTreeRow(container, "end");
+      } else if (event.key === "ArrowRight" && row) {
+        const expanded = treeRowExpanded(row);
+        if (expanded === "false") {
+          event.preventDefault();
+          treeRowToggle(row)?.click();
+        } else if (
+          expanded === "true" ||
+          treeRowHasVisibleChild(container, row)
+        ) {
+          event.preventDefault();
+          stepTreeRow(container, 1);
+        }
+      } else if (event.key === "ArrowLeft" && row) {
+        event.preventDefault();
+        if (treeRowExpanded(row) === "true") treeRowToggle(row)?.click();
+        else focusTreeParent(container, row);
+      }
+    },
+    [],
+  );
   const [savingScopeId, setSavingScopeId] = useState<string | null>(null);
   const [localRevealRequest, setLocalRevealRequest] = useState(0);
   const [providerCredentialsOpen, setProviderCredentialsOpen] =
@@ -739,12 +921,17 @@ export function DatabaseExplorer({
     commands.toggleCollapsedSection(key);
   }
 
-  function renderConnection(connection: ConnectionProfile, nested = false) {
+  function renderConnection(
+    connection: ConnectionProfile,
+    nested: boolean,
+    level: number,
+  ) {
     return (
       <ConnectionNode
         key={connection.id}
         connection={connection}
         nested={nested}
+        level={level}
         selected={connection.id === selectedId}
         selectedTableKey={selectedTableKey}
         expanded={open.has(connection.id)}
@@ -824,7 +1011,7 @@ export function DatabaseExplorer({
     );
   }
 
-  function renderGroup(group: SchemaConnectionGroup) {
+  function renderGroup(group: SchemaConnectionGroup, level: number) {
     const isDropTarget =
       dropTarget?.kind === "group" && dropTarget.key === group.key;
     const engine = group.connections[0]?.engine;
@@ -849,6 +1036,12 @@ export function DatabaseExplorer({
       { added: 0, missing: 0, changed: 0 },
     );
     const groupTotal = groupCounts.added + groupCounts.missing + groupCounts.changed;
+    // The row itself is the focus target, so the diff command has to be reachable
+    // from the row rather than from a second Tab stop inside the tree.
+    const openGroupDiff = () => {
+      for (const connection of group.connections) ensureLoaded(connection.id);
+      onOpenSchemaDiff(group);
+    };
     return (
       <div
         key={`group-${group.key}`}
@@ -858,8 +1051,17 @@ export function DatabaseExplorer({
       >
         <div
           data-active={activeSchemaGroupKey === group.key}
-          className="tw:flex tw:min-h-control-sm tw:items-center tw:gap-1 tw:px-1 tw:text-xs tw:text-muted-foreground tw:data-[active=true]:text-primary"
+          className="tw:flex tw:min-h-control-sm tw:items-center tw:gap-1 tw:px-1 tw:text-xs tw:text-muted-foreground tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:data-[active=true]:text-primary"
+          role="treeitem"
+          aria-level={level}
+          tabIndex={-1}
           title={t("connections.schemaGroupTitle", { group: group.label })}
+          onKeyDown={(event) => {
+            if (event.target !== event.currentTarget) return;
+            if (event.key !== "Enter" && event.key !== " ") return;
+            event.preventDefault();
+            openGroupDiff();
+          }}
         >
           {engine && <EngineMark engine={engine} size="tree" />}
           <span className="tw:min-w-0 tw:flex-1 tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap tw:font-bold tw:text-foreground">
@@ -868,12 +1070,10 @@ export function DatabaseExplorer({
           <button
             type="button"
             className="tw:inline-flex tw:min-h-control-xs tw:min-w-0 tw:cursor-pointer tw:items-center tw:justify-center tw:gap-[2px] tw:rounded-full tw:border tw:border-border-subtle tw:bg-card tw:px-1.5 tw:font-sans tw:text-2xs tw:font-bold tw:whitespace-nowrap tw:text-muted-foreground tw:hover:border-ring tw:hover:text-primary"
+            tabIndex={-1}
             title={t("schemaDiff.openTitle")}
             aria-label={t("schemaDiff.openTitle")}
-            onClick={() => {
-              for (const connection of group.connections) ensureLoaded(connection.id);
-              onOpenSchemaDiff(group);
-            }}
+            onClick={openGroupDiff}
           >
             {!schemaGroupIsCompatible(group) ? (
               <Icon name="alert" />
@@ -902,7 +1102,9 @@ export function DatabaseExplorer({
             )}
           </button>
         </div>
-        {group.connections.map((conn) => renderConnection(conn, true))}
+        {group.connections.map((conn) =>
+          renderConnection(conn, true, level + 1),
+        )}
       </div>
     );
   }
@@ -924,6 +1126,9 @@ export function DatabaseExplorer({
       <button
         key={binding.id}
         type="button"
+        role="treeitem"
+        aria-level={ENVIRONMENT_CONNECTION_LEVEL}
+        tabIndex={-1}
         className="tw:flex tw:min-h-[var(--ds-tree-row-height)] tw:w-full tw:min-w-0 tw:items-center tw:gap-1.5 tw:border-0 tw:bg-transparent tw:px-1 tw:py-[var(--ds-tree-row-padding-block)] tw:pl-5 tw:text-left tw:font-sans tw:text-sm tw:text-muted-foreground tw:hover:bg-muted tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring"
         onClick={() =>
           onOpenProjectEnvironment(
@@ -943,6 +1148,61 @@ export function DatabaseExplorer({
     );
   }
 
+  // A folder whose query failed states the failure and offers the retry instead
+  // of falling through to the "nothing here yet" branch. The exact error stays
+  // on the row title so a 396px sidebar keeps one line. The failure is a real
+  // `treeitem`, so ArrowUp/ArrowDown reach it and the retry stays inside the
+  // container's single Tab stop with `tabIndex={-1}`; Enter/Space runs it like
+  // any other row. The row owns the `tabindex` rather than delegating to the
+  // retry button: while the refetch runs that button is `disabled` and
+  // `.focus()` on it is a no-op, which would strand ArrowDown on this row.
+  // Enter still swallows the key during that refetch, so the row carries
+  // `aria-busy` and the wait is announced instead of reading as a dead key.
+  function renderTreeQueryFailure(
+    label: string,
+    error: unknown,
+    fetching: boolean,
+    level: number,
+    onRetry: () => void,
+  ) {
+    return (
+      <div
+        role="treeitem"
+        aria-level={level}
+        aria-busy={fetching}
+        tabIndex={-1}
+        className="tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring"
+        onKeyDown={(event) => {
+          if (event.target !== event.currentTarget) return;
+          if (event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          if (!fetching) onRetry();
+        }}
+      >
+        <InlineNotice
+          tone="danger"
+          icon="alert"
+          role="alert"
+          action={
+            <Button
+              size="compact"
+              tabIndex={-1}
+              disabled={fetching}
+              onClick={onRetry}
+            >
+              <Icon name="refresh" />
+              {t("app.retry")}
+            </Button>
+          }
+        >
+          <span className="tw:block tw:truncate" title={errMessage(error)}>
+            {label}
+          </span>
+        </InlineNotice>
+      </div>
+    );
+  }
+
   function renderEnvironmentResources(environment: KnowledgeEnvironment) {
     const databaseKey = `${environment.id}:databases`;
     const sourceKey = `${environment.id}:sources`;
@@ -955,6 +1215,7 @@ export function DatabaseExplorer({
     const databaseExpanded = expandedResourceKeys.has(databaseKey);
     const sourceExpanded = expandedResourceKeys.has(sourceKey);
     const analysisExpanded = expandedResourceKeys.has(analysisKey);
+    const databaseQuery = environmentConnectionQueries[environmentIndex];
     const analysisQuery = environmentAnalysisQueries[environmentIndex];
     const environmentAnalyses = analysisQuery?.data ?? [];
     const activeAnalysisIsVisible = environmentAnalyses.some(
@@ -963,43 +1224,57 @@ export function DatabaseExplorer({
 
     return (
       <div className="tw:grid tw:pl-3">
-        <TreeSectionButton
-          expanded={databaseExpanded}
-          icon="database"
-          selected={
-            activeProjectEnvironmentId === environment.id &&
-            activeProjectEnvironmentView === "databases"
-          }
-          actions={
-            <TreeRowActions>
-              <Button
-                iconOnly
-                size="xs"
-                variant="ghost"
-                title={t("connections.environmentAddDatabase")}
-                aria-label={t("connections.environmentAddDatabase")}
-                onClick={() => {
-                  onOpenProjectEnvironment(environment.id, "databases");
-                  onNewConnection();
-                }}
-              >
-                <Icon name="plus" />
-              </Button>
-            </TreeRowActions>
-          }
-          onToggle={() => {
-            toggleExpandedId(setExpandedResourceKeys, databaseKey);
-            onOpenProjectEnvironment(environment.id, "databases");
-          }}
-        >
-          {t("connections.environmentDatabases")}
-        </TreeSectionButton>
+        <div role="treeitem" aria-level={ENVIRONMENT_RESOURCE_LEVEL}>
+          <TreeSectionButton
+            expanded={databaseExpanded}
+            icon="database"
+            tabIndex={-1}
+            selected={
+              activeProjectEnvironmentId === environment.id &&
+              activeProjectEnvironmentView === "databases"
+            }
+            actions={
+              <TreeRowActions>
+                <Button
+                  iconOnly
+                  size="xs"
+                  variant="ghost"
+                  tabIndex={-1}
+                  title={t("connections.environmentAddDatabase")}
+                  aria-label={t("connections.environmentAddDatabase")}
+                  onClick={() => {
+                    onOpenProjectEnvironment(environment.id, "databases");
+                    onNewConnection();
+                  }}
+                >
+                  <Icon name="plus" />
+                </Button>
+              </TreeRowActions>
+            }
+            onToggle={() => {
+              toggleExpandedId(setExpandedResourceKeys, databaseKey);
+              onOpenProjectEnvironment(environment.id, "databases");
+            }}
+          >
+            {t("connections.environmentDatabases")}
+          </TreeSectionButton>
+        </div>
         {databaseExpanded ? (
           <div className="tw:grid tw:border-l tw:border-border-subtle tw:pl-1">
-            {environmentConnectionQueries[environmentIndex]?.isPending ? (
+            {databaseQuery?.isPending ? (
               <div className="tw:min-h-control-sm tw:px-2 tw:py-1 tw:text-xs">
                 <LoadingLabel>{t("common.loading")}</LoadingLabel>
               </div>
+            ) : databaseQuery?.error ? (
+              // A failed binding read is not an empty Environment; naming it keeps
+              // the "add database" hint from asserting a cause the query never saw.
+              renderTreeQueryFailure(
+                t("connections.environmentDatabaseLoadFailed"),
+                databaseQuery.error,
+                databaseQuery.isFetching,
+                ENVIRONMENT_CONNECTION_LEVEL,
+                () => void databaseQuery.refetch(),
+              )
             ) : bindings.length > 0 ? (
               bindings.map((binding) => {
                 const connection = binding.connectionId
@@ -1008,13 +1283,20 @@ export function DatabaseExplorer({
                     )
                   : null;
                 return connection
-                  ? renderConnection(connection, true)
+                  ? renderConnection(
+                      connection,
+                      true,
+                      ENVIRONMENT_CONNECTION_LEVEL,
+                    )
                   : renderUnavailableBinding(binding);
               })
             ) : (
               <button
                 type="button"
-                className="tw:min-h-control-sm tw:cursor-pointer tw:border-0 tw:bg-transparent tw:px-5 tw:py-1 tw:text-left tw:font-sans tw:text-xs tw:text-muted-foreground tw:hover:bg-muted tw:hover:text-foreground"
+                role="treeitem"
+                aria-level={ENVIRONMENT_CONNECTION_LEVEL}
+                tabIndex={-1}
+                className="tw:min-h-control-sm tw:cursor-pointer tw:border-0 tw:bg-transparent tw:px-5 tw:py-1 tw:text-left tw:font-sans tw:text-xs tw:text-muted-foreground tw:hover:bg-muted tw:hover:text-foreground tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring"
                 onClick={() =>
                   onOpenProjectEnvironment(environment.id, "databases")
                 }
@@ -1025,47 +1307,64 @@ export function DatabaseExplorer({
           </div>
         ) : null}
 
-        <TreeSectionButton
-          expanded={sourceExpanded}
-          icon="branch"
-          selected={
-            activeProjectEnvironmentId === environment.id &&
-            activeProjectEnvironmentView === "sources"
-          }
-          actions={
-            <TreeRowActions>
-              <Button
-                iconOnly
-                size="xs"
-                variant="ghost"
-                title={t("connections.environmentAddSource")}
-                aria-label={t("connections.environmentAddSource")}
-                onClick={() =>
-                  onOpenProjectEnvironment(environment.id, "sources")
-                }
-              >
-                <Icon name="plus" />
-              </Button>
-            </TreeRowActions>
-          }
-          onToggle={() => {
-            toggleExpandedId(setExpandedResourceKeys, sourceKey);
-            onOpenProjectEnvironment(environment.id, "sources");
-          }}
-        >
-          {t("connections.environmentDataSources")}
-        </TreeSectionButton>
+        <div role="treeitem" aria-level={ENVIRONMENT_RESOURCE_LEVEL}>
+          <TreeSectionButton
+            expanded={sourceExpanded}
+            icon="branch"
+            tabIndex={-1}
+            selected={
+              activeProjectEnvironmentId === environment.id &&
+              activeProjectEnvironmentView === "sources"
+            }
+            actions={
+              <TreeRowActions>
+                <Button
+                  iconOnly
+                  size="xs"
+                  variant="ghost"
+                  tabIndex={-1}
+                  title={t("connections.environmentAddSource")}
+                  aria-label={t("connections.environmentAddSource")}
+                  onClick={() =>
+                    onOpenProjectEnvironment(environment.id, "sources")
+                  }
+                >
+                  <Icon name="plus" />
+                </Button>
+              </TreeRowActions>
+            }
+            onToggle={() => {
+              toggleExpandedId(setExpandedResourceKeys, sourceKey);
+              onOpenProjectEnvironment(environment.id, "sources");
+            }}
+          >
+            {t("connections.environmentDataSources")}
+          </TreeSectionButton>
+        </div>
         {sourceExpanded ? (
           <div className="tw:grid tw:border-l tw:border-border-subtle tw:pl-1">
             {knowledgeSources.isPending ? (
               <div className="tw:min-h-control-sm tw:px-2 tw:py-1 tw:text-xs">
                 <LoadingLabel>{t("common.loading")}</LoadingLabel>
               </div>
+            ) : knowledgeSources.error ? (
+              // Same boundary as the databases folder: a failed source listing
+              // must not be reported as "this Environment has no source".
+              renderTreeQueryFailure(
+                t("connections.environmentSourceLoadFailed"),
+                knowledgeSources.error,
+                knowledgeSources.isFetching,
+                ENVIRONMENT_CONNECTION_LEVEL,
+                () => void knowledgeSources.refetch(),
+              )
             ) : environmentSources.length > 0 ? (
               environmentSources.map((source) => (
                 <button
                   key={source.sourceId}
                   type="button"
+                  role="treeitem"
+                  aria-level={ENVIRONMENT_CONNECTION_LEVEL}
+                  tabIndex={-1}
                   className="tw:flex tw:min-h-[var(--ds-tree-row-height)] tw:w-full tw:min-w-0 tw:items-center tw:gap-1.5 tw:border-0 tw:bg-transparent tw:px-1 tw:py-[var(--ds-tree-row-padding-block)] tw:pl-5 tw:text-left tw:font-sans tw:text-sm tw:text-foreground tw:hover:bg-muted tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring"
                   onClick={() =>
                     onOpenProjectEnvironment(environment.id, "sources")
@@ -1088,7 +1387,10 @@ export function DatabaseExplorer({
             ) : (
               <button
                 type="button"
-                className="tw:min-h-control-sm tw:cursor-pointer tw:border-0 tw:bg-transparent tw:px-5 tw:py-1 tw:text-left tw:font-sans tw:text-xs tw:text-muted-foreground tw:hover:bg-muted tw:hover:text-foreground"
+                role="treeitem"
+                aria-level={ENVIRONMENT_CONNECTION_LEVEL}
+                tabIndex={-1}
+                className="tw:min-h-control-sm tw:cursor-pointer tw:border-0 tw:bg-transparent tw:px-5 tw:py-1 tw:text-left tw:font-sans tw:text-xs tw:text-muted-foreground tw:hover:bg-muted tw:hover:text-foreground tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring"
                 onClick={() =>
                   onOpenProjectEnvironment(environment.id, "sources")
                 }
@@ -1099,21 +1401,24 @@ export function DatabaseExplorer({
           </div>
         ) : null}
 
-        <TreeSectionButton
-          expanded={analysisExpanded}
-          icon="chart"
-          selected={
-            activeProjectEnvironmentId === environment.id &&
-            activeProjectEnvironmentView === "analyses" &&
-            !activeAnalysisIsVisible
-          }
-          onToggle={() => {
-            toggleExpandedId(setExpandedResourceKeys, analysisKey);
-            onOpenProjectEnvironment(environment.id, "analyses");
-          }}
-        >
-          {t("connections.environmentAnalyses")}
-        </TreeSectionButton>
+        <div role="treeitem" aria-level={ENVIRONMENT_RESOURCE_LEVEL}>
+          <TreeSectionButton
+            expanded={analysisExpanded}
+            icon="chart"
+            tabIndex={-1}
+            selected={
+              activeProjectEnvironmentId === environment.id &&
+              activeProjectEnvironmentView === "analyses" &&
+              !activeAnalysisIsVisible
+            }
+            onToggle={() => {
+              toggleExpandedId(setExpandedResourceKeys, analysisKey);
+              onOpenProjectEnvironment(environment.id, "analyses");
+            }}
+          >
+            {t("connections.environmentAnalyses")}
+          </TreeSectionButton>
+        </div>
         {analysisExpanded ? (
           <div className="tw:grid tw:border-l tw:border-border-subtle tw:pl-1">
             {sharedKnowledgeWorkspace && analysisQuery?.isPending ? (
@@ -1121,23 +1426,21 @@ export function DatabaseExplorer({
                 <LoadingLabel>{t("common.loading")}</LoadingLabel>
               </div>
             ) : sharedKnowledgeWorkspace && analysisQuery?.error ? (
-              <button
-                type="button"
-                className="tw:flex tw:min-h-control-sm tw:w-full tw:min-w-0 tw:cursor-pointer tw:items-center tw:gap-1.5 tw:border-0 tw:bg-transparent tw:px-2 tw:py-1 tw:text-left tw:font-sans tw:text-xs tw:text-danger tw:hover:bg-muted tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring"
-                onClick={() => void analysisQuery.refetch()}
-                title={errMessage(analysisQuery.error)}
-              >
-                <Icon name="alert" className="tw:shrink-0" />
-                <span className="tw:min-w-0 tw:flex-1 tw:truncate">
-                  {t("connections.environmentAnalysisLoadFailed")}
-                </span>
-                <span className="tw:shrink-0">{t("app.retry")}</span>
-              </button>
+              renderTreeQueryFailure(
+                t("connections.environmentAnalysisLoadFailed"),
+                analysisQuery.error,
+                analysisQuery.isFetching,
+                ENVIRONMENT_CONNECTION_LEVEL,
+                () => void analysisQuery.refetch(),
+              )
             ) : environmentAnalyses.length > 0 ? (
               environmentAnalyses.map((article) => (
                 <button
                   key={article.id}
                   type="button"
+                  role="treeitem"
+                  aria-level={ENVIRONMENT_CONNECTION_LEVEL}
+                  tabIndex={-1}
                   data-selected={
                     activeProjectEnvironmentResourceId === article.id
                   }
@@ -1161,7 +1464,10 @@ export function DatabaseExplorer({
             ) : (
               <button
                 type="button"
-                className="tw:min-h-control-sm tw:cursor-pointer tw:border-0 tw:bg-transparent tw:px-5 tw:py-1 tw:text-left tw:font-sans tw:text-xs tw:text-muted-foreground tw:hover:bg-muted tw:hover:text-foreground"
+                role="treeitem"
+                aria-level={ENVIRONMENT_CONNECTION_LEVEL}
+                tabIndex={-1}
+                className="tw:min-h-control-sm tw:cursor-pointer tw:border-0 tw:bg-transparent tw:px-5 tw:py-1 tw:text-left tw:font-sans tw:text-xs tw:text-muted-foreground tw:hover:bg-muted tw:hover:text-foreground tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring"
                 onClick={() =>
                   onOpenProjectEnvironment(environment.id, "analyses")
                 }
@@ -1181,30 +1487,40 @@ export function DatabaseExplorer({
       (environment) => environment.id === activeProjectEnvironmentId,
     );
     return (
-      <div key={project.id} className="tw:grid">
-        <TreeSectionButton
-          expanded={projectExpanded}
-          icon="folder"
-          prominence="project"
-          selected={activeEnvironmentBelongsToProject && !projectExpanded}
-          actions={
-            <TreeRowActions>
-              <Button
-                iconOnly
-                size="xs"
-                variant="ghost"
-                title={t("connections.addEnvironment")}
-                aria-label={t("connections.addEnvironment")}
-                onClick={() => setEnvironmentSetupProjectId(project.id)}
-              >
-                <Icon name="plus" />
-              </Button>
-            </TreeRowActions>
-          }
-          onToggle={() => toggleExpandedId(setExpandedProjectIds, project.id)}
-        >
-          {project.name}
-        </TreeSectionButton>
+      <div
+        key={project.id}
+        className="tw:grid"
+        onFocus={() => {
+          focusedProjectIdRef.current = project.id;
+        }}
+      >
+        <div role="treeitem" aria-level={PROJECT_LEVEL}>
+          <TreeSectionButton
+            expanded={projectExpanded}
+            icon="folder"
+            prominence="project"
+            tabIndex={-1}
+            selected={activeEnvironmentBelongsToProject && !projectExpanded}
+            actions={
+              <TreeRowActions>
+                <Button
+                  iconOnly
+                  size="xs"
+                  variant="ghost"
+                  tabIndex={-1}
+                  title={t("connections.addEnvironment")}
+                  aria-label={t("connections.addEnvironment")}
+                  onClick={() => setEnvironmentSetupProjectId(project.id)}
+                >
+                  <Icon name="plus" />
+                </Button>
+              </TreeRowActions>
+            }
+            onToggle={() => toggleExpandedId(setExpandedProjectIds, project.id)}
+          >
+            {project.name}
+          </TreeSectionButton>
+        </div>
         {projectExpanded ? (
           <div className="tw:grid tw:border-l tw:border-border-strong tw:pl-1">
             {project.environments.map((environment) => {
@@ -1213,30 +1529,33 @@ export function DatabaseExplorer({
               );
               return (
                 <div key={environment.id} className="tw:grid">
-                  <TreeSectionButton
-                    expanded={environmentExpanded}
-                    icon="folder"
-                    selected={
-                      activeProjectEnvironmentId === environment.id &&
-                      !environmentExpanded
-                    }
-                    trailing={
-                      <EnvironmentBadge
-                        environment={knowledgeEnvironmentBadge(
-                          environment.riskClass,
-                        )}
-                      />
-                    }
-                    onToggle={() => {
-                      toggleExpandedId(
-                        setExpandedEnvironmentIds,
-                        environment.id,
-                      );
-                      onOpenProjectEnvironment(environment.id, "databases");
-                    }}
-                  >
-                    {environment.name}
-                  </TreeSectionButton>
+                  <div role="treeitem" aria-level={ENVIRONMENT_LEVEL}>
+                    <TreeSectionButton
+                      expanded={environmentExpanded}
+                      icon="folder"
+                      tabIndex={-1}
+                      selected={
+                        activeProjectEnvironmentId === environment.id &&
+                        !environmentExpanded
+                      }
+                      trailing={
+                        <EnvironmentBadge
+                          environment={knowledgeEnvironmentBadge(
+                            environment.riskClass,
+                          )}
+                        />
+                      }
+                      onToggle={() => {
+                        toggleExpandedId(
+                          setExpandedEnvironmentIds,
+                          environment.id,
+                        );
+                        onOpenProjectEnvironment(environment.id, "databases");
+                      }}
+                    >
+                      {environment.name}
+                    </TreeSectionButton>
+                  </div>
                   {environmentExpanded
                     ? renderEnvironmentResources(environment)
                     : null}
@@ -1290,12 +1609,16 @@ export function DatabaseExplorer({
 
   function openEnvironmentSetup() {
     const projects = knowledgeProjects.data ?? [];
+    const focusedProject = projects.find(
+      (project) => project.id === focusedProjectIdRef.current,
+    );
     const activeProject = projects.find((project) =>
       project.environments.some(
         (environment) => environment.id === activeProjectEnvironmentId,
       ),
     );
-    const projectId = activeProject?.id ?? projects[0]?.id ?? null;
+    const projectId =
+      focusedProject?.id ?? activeProject?.id ?? projects[0]?.id ?? null;
     if (projectId) setEnvironmentSetupProjectId(projectId);
   }
 
@@ -1328,6 +1651,18 @@ export function DatabaseExplorer({
       </ToolWindowAction>
     );
   }
+
+  // The scroller only becomes the ARIA tree once it actually holds rows, so this
+  // mirrors the three branches below that emit a `treeitem`: a Project list, the
+  // Project-read failure row, and the driver-only tree that renders connections
+  // flat while knowledge is off. Having connections is not enough — with
+  // knowledge on and no Project, the `Unassigned` folder never renders and the
+  // scroller would announce an empty tree with a dead Tab stop. The first-run
+  // surface is a plain command list, not a tree.
+  const explorerTreeReady =
+    (knowledgeProjects.data?.length ?? 0) > 0 ||
+    (knowledgeEnabled && knowledgeProjects.error !== null) ||
+    (!knowledgeEnabled && unassignedSections.length > 0);
 
   return (
     <ToolWindowSideSurface
@@ -1497,21 +1832,28 @@ export function DatabaseExplorer({
       <div
         ref={setTreeScrollElement}
         data-catalog-tree-scroll
-        className="tw:min-h-0 tw:flex-1 tw:overflow-x-hidden tw:overflow-y-auto tw:p-1 tw:[container-name:db-sidebar] tw:[container-type:inline-size]"
+        role={explorerTreeReady ? "tree" : undefined}
+        aria-label={
+          explorerTreeReady ? t("connections.explorerTree") : undefined
+        }
+        tabIndex={explorerTreeReady ? 0 : undefined}
+        onKeyDown={onTreeKeyDown}
+        className="tw:min-h-0 tw:flex-1 tw:overflow-x-hidden tw:overflow-y-auto tw:p-1 tw:[container-name:db-sidebar] tw:[container-type:inline-size] tw:focus-visible:outline-none tw:focus-visible:ring-1 tw:focus-visible:ring-ring tw:focus-visible:ring-inset"
       >
         {knowledgeEnabled && knowledgeProjects.isPending ? (
           <div className="tw:min-h-control-md tw:px-2 tw:py-1 tw:text-xs">
             <LoadingLabel>{t("connections.loadingProjects")}</LoadingLabel>
           </div>
         ) : null}
-        {knowledgeEnabled && knowledgeProjects.error ? (
-          <p
-            className="tw:m-0 tw:px-2 tw:py-1 tw:text-xs tw:text-danger"
-            role="alert"
-          >
-            {errMessage(knowledgeProjects.error)}
-          </p>
-        ) : null}
+        {knowledgeEnabled && knowledgeProjects.error
+          ? renderTreeQueryFailure(
+              t("connections.projectLoadFailed"),
+              knowledgeProjects.error,
+              knowledgeProjects.isFetching,
+              ROOT_LEVEL,
+              () => void knowledgeProjects.refetch(),
+            )
+          : null}
         {knowledgeEnabled &&
         knowledgeProjects.isSuccess &&
         (knowledgeProjects.data?.length ?? 0) === 0 ? (
@@ -1587,21 +1929,28 @@ export function DatabaseExplorer({
         (knowledgeProjects.data?.length ?? 0) > 0 &&
         unassignedSections.length > 0 ? (
           <div className="tw:grid tw:pt-1">
-            <TreeSectionButton
-              expanded={expandedResourceKeys.has("unassigned")}
-              icon="folder"
-              onToggle={() =>
-                toggleExpandedId(setExpandedResourceKeys, "unassigned")
-              }
-            >
-              {t("connections.unassigned")}
-            </TreeSectionButton>
+            <div role="treeitem" aria-level={ROOT_LEVEL}>
+              <TreeSectionButton
+                expanded={expandedResourceKeys.has("unassigned")}
+                icon="folder"
+                tabIndex={-1}
+                onToggle={() =>
+                  toggleExpandedId(setExpandedResourceKeys, "unassigned")
+                }
+              >
+                {t("connections.unassigned")}
+              </TreeSectionButton>
+            </div>
             {expandedResourceKeys.has("unassigned") ? (
               <div className="tw:grid tw:border-l tw:border-border-subtle tw:pl-1">
                 {unassignedSections.map((section) =>
                   section.kind === "group"
-                    ? renderGroup(section.group)
-                    : renderConnection(section.connection, true),
+                    ? renderGroup(section.group, ROOT_LEVEL + 1)
+                    : renderConnection(
+                        section.connection,
+                        true,
+                        ROOT_LEVEL + 1,
+                      ),
                 )}
               </div>
             ) : null}
@@ -1609,8 +1958,8 @@ export function DatabaseExplorer({
         ) : !knowledgeEnabled ? (
           unassignedSections.map((section) =>
             section.kind === "group"
-              ? renderGroup(section.group)
-              : renderConnection(section.connection),
+              ? renderGroup(section.group, ROOT_LEVEL)
+              : renderConnection(section.connection, false, ROOT_LEVEL),
           )
         ) : null}
       </div>

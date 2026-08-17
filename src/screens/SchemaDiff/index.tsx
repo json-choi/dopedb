@@ -94,12 +94,17 @@ export default function SchemaDiff({
   const [targetId, setTargetId] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [search, setSearch] = useState("");
-  const [refreshing, setRefreshing] = useState(false);
+  // "Refresh all" re-introspects every member of the group, so it needs a settled/total
+  // counter rather than a boolean the user cannot read progress from.
+  const [refreshProgress, setRefreshProgress] = useState<{
+    completed: number;
+    total: number;
+  } | null>(null);
   const [refreshErrors, setRefreshErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     catalogScopeKeyRef.current = catalogScope.key;
-    setRefreshing(false);
+    setRefreshProgress(null);
     setRefreshErrors({});
   }, [catalogScope.key]);
 
@@ -186,20 +191,30 @@ export default function SchemaDiff({
 
   async function refreshAll() {
     const scopeKey = catalogScope.key;
-    setRefreshing(true);
+    setRefreshProgress({ completed: 0, total: group.connections.length });
     setRefreshErrors({});
     const results = await Promise.allSettled(
       group.connections.map(async (connection) => {
-        const catalog = await fetchFreshCatalog(connection.id);
-        if (catalogScopeKeyRef.current === scopeKey) {
-          await replaceFreshCatalog(
-            queryClient,
-            connection.id,
-            scopeKey,
-            catalog,
-          );
+        try {
+          const catalog = await fetchFreshCatalog(connection.id);
+          if (catalogScopeKeyRef.current === scopeKey) {
+            await replaceFreshCatalog(
+              queryClient,
+              connection.id,
+              scopeKey,
+              catalog,
+            );
+          }
+          return connection.id;
+        } finally {
+          if (catalogScopeKeyRef.current === scopeKey) {
+            setRefreshProgress((current) =>
+              current
+                ? { ...current, completed: current.completed + 1 }
+                : current,
+            );
+          }
         }
-        return connection.id;
       }),
     );
     const errors: Record<string, string> = {};
@@ -210,7 +225,7 @@ export default function SchemaDiff({
     });
     if (catalogScopeKeyRef.current === scopeKey) {
       setRefreshErrors(errors);
-      setRefreshing(false);
+      setRefreshProgress(null);
     }
   }
 
@@ -263,13 +278,32 @@ export default function SchemaDiff({
           ))}
         </WorkbenchSelect>
         <span className="ds-toolbar-spacer" />
+        {refreshProgress ? (
+          <span
+            aria-live="polite"
+            className="tw:shrink-0 tw:text-xs tw:tabular-nums tw:text-muted-foreground"
+          >
+            {t("schemaDiff.refreshProgress", {
+              completed: refreshProgress.completed,
+              total: refreshProgress.total,
+            })}
+          </span>
+        ) : null}
         <Button
-          disabled={refreshing}
+          disabled={refreshProgress !== null}
           iconOnly
           onClick={() => void refreshAll()}
           size="compact"
-          title={refreshing ? t("schemaDiff.refreshing") : t("schemaDiff.refreshAll")}
-          aria-label={refreshing ? t("schemaDiff.refreshing") : t("schemaDiff.refreshAll")}
+          title={
+            refreshProgress
+              ? t("schemaDiff.refreshing")
+              : t("schemaDiff.refreshAll")
+          }
+          aria-label={
+            refreshProgress
+              ? t("schemaDiff.refreshing")
+              : t("schemaDiff.refreshAll")
+          }
         >
           <Icon name="refresh" />
         </Button>

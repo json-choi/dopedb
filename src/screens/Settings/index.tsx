@@ -1,6 +1,6 @@
 // Settings shell for agent tools, command-line, safety, language, and updates.
 // Kept outside the data tabs so navigation remains focused on the selected database.
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Update } from "@tauri-apps/plugin-updater";
 import type { ConnectionProfile } from "../../features/connections/domain";
 import type { SafetySettings } from "../../ipc/types";
@@ -156,22 +156,6 @@ export default function Settings({
     onClose();
   }
 
-  // Esc closes the overlay, matching other full-screen overlays. Ref keeps the handler
-  // pinned to the latest close() (refreshSafety side-effect) without re-binding.
-  const closeRef = useRef(close);
-  closeRef.current = close;
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      // Don't hijack Escape while a field has focus — close() reloads Safety and would
-      // discard unsaved edits. Let the input's own Escape (blur/revert) win instead.
-      if ((e.target as HTMLElement)?.closest("input, textarea, select")) return;
-      closeRef.current();
-    };
-    window.addEventListener("keydown", h);
-    return () => window.removeEventListener("keydown", h);
-  }, []);
-
   const activeEntry =
     settingsEntries.find((entry) => entry.id === section) ??
     settingsEntries[0];
@@ -181,6 +165,18 @@ export default function Settings({
       <ModalSurface
         size="settings"
         aria-labelledby="settings-dialog-title"
+        onKeyDown={(event) => {
+          // Escape inside a settings field belongs to that field's own revert or
+          // blur; close() reloads Safety and would discard the unsaved edit.
+          if (
+            event.key === "Escape" &&
+            event.target instanceof HTMLElement &&
+            event.target.closest("input, textarea, select")
+          ) {
+            event.preventDefault();
+          }
+        }}
+        onEscape={close}
       >
         <div
           data-settings

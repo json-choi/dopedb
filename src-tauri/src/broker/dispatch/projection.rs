@@ -257,6 +257,8 @@ pub(super) fn map_application_error(error: AppError) -> ErrorCode {
         AppError::Blocked { .. } => ErrorCode::PolicyBlocked,
         AppError::ProposalRequired => ErrorCode::PolicyBlocked,
         AppError::Safety(_) => ErrorCode::PolicyBlocked,
+        // A user-requested stop is not a policy block and not a failure.
+        AppError::Cancelled(_) => ErrorCode::Cancelled,
         AppError::CredentialBindingRequired
         | AppError::NotFound(_)
         | AppError::Config(_)

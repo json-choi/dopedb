@@ -18,7 +18,7 @@ import {
   StatusBadge,
   type StatusTone,
 } from "../../design-system/components/Status";
-import { errMessage } from "../../ipc/types";
+import { errDetails, errMessage } from "../../ipc/types";
 import { useI18n } from "../../lib/i18n";
 import { useCatalogScope } from "../../lib/queries";
 import { captureProductEvent } from "../../features/productAnalytics/client";
@@ -52,6 +52,7 @@ import {
 import {
   beginKnowledgeGithubInstall,
   bindKnowledgeEnvironmentConnection,
+  cancelKnowledgeSourceSync,
   connectKnowledgeGithubSource,
   connectKnowledgeLocalFolder,
   decideKnowledgeMapping,
@@ -103,6 +104,15 @@ const syncPhaseKey = {
 // Exact-commit GitHub browsing is the current default. Existing graph data is
 // preserved for future use, but graph construction and graph UI stay dormant.
 const KNOWLEDGE_GRAPH_UI_ENABLED = false;
+
+// The one rejection a stopped sync returns (`sync_cancelled`,
+// src-tauri/src/features/knowledge/domain.rs). A client-side flag cannot know
+// what the backend actually did, so the stopped branch reads the typed `kind`
+// discriminant `AppError::Cancelled` serializes; message text is display copy
+// and must never carry a decision.
+function isKnowledgeSyncCancelled(error: unknown): boolean {
+  return errDetails(error).kind === "cancelled";
+}
 
 type PendingKnowledgeSyncAnalytics = {
   attemptId: string;
@@ -193,6 +203,8 @@ export default function Knowledge({
     ),
     [sourceSyncProgress.data],
   );
+  // A failed progress poll must not make a still-running sync look stopped.
+  const sourceSyncProgressUnavailable = sourceSyncProgress.error != null;
   const repositories = useQuery({
     queryKey: repositoryKey,
     queryFn: listKnowledgeGithubRepositories,
@@ -228,12 +240,18 @@ export default function Knowledge({
     new Map<
       string,
       {
-        state: "syncing" | "ready" | "failed";
+        state: "syncing" | "ready" | "cancelled" | "failed";
         errorKind: string | null;
         previousGraphRevisionId?: string | null;
       }
     >(),
   );
+  // The source whose Stop request stopped nothing, with whether this device
+  // could ask the authority that owns the work at all. An unverified request
+  // says so instead of asserting that nothing was running.
+  const [unstoppedSource, setUnstoppedSource] = useState<
+    { sourceId: string; verified: boolean } | null
+  >(null);
   const hasSelectedEnvironmentSource = Boolean(
     environmentId &&
     sources.data?.some(
@@ -300,6 +318,7 @@ export default function Knowledge({
     setView("sources");
     setProvider(githubProviderVisible ? "github" : "local_folder");
     setActionError(null);
+    setUnstoppedSource(null);
   }, [catalogScope.key, githubProviderVisible]);
 
   useEffect(() => {
@@ -367,6 +386,10 @@ export default function Knowledge({
         });
         return next;
       });
+      // A fresh lifecycle state replaces what an unreached Stop reported.
+      setUnstoppedSource((current) =>
+        current?.sourceId === change.sourceId ? null : current,
+      );
       if (change.state === "ready") {
         finishKnowledgeSyncOutcome(
           pendingSourceSyncAnalytics.current,
@@ -382,6 +405,8 @@ export default function Knowledge({
         void queryClient.invalidateQueries({
           queryKey: knowledgeQueryKeys.sourceSyncProgress(catalogScope.key),
         });
+      } else if (change.state === "cancelled") {
+        pendingSourceSyncAnalytics.current.delete(change.sourceId);
       } else if (change.state === "failed") {
         finishKnowledgeSyncOutcome(
           pendingSourceSyncAnalytics.current,
@@ -599,6 +624,9 @@ export default function Knowledge({
           syncReason: "manual",
         });
       }
+      setUnstoppedSource((current) =>
+        current?.sourceId === sourceId ? null : current,
+      );
       setSourceActivity((current) => {
         const next = new Map(current);
         next.set(sourceId, { state: "syncing", errorKind: null });
@@ -633,18 +661,61 @@ export default function Knowledge({
       });
     },
     onError: (error, sourceId) => {
-      finishKnowledgeSyncOutcome(
-        pendingSourceSyncAnalytics.current,
-        sourceId,
-        "failed",
-      );
+      const cancelled = isKnowledgeSyncCancelled(error);
+      // A stopped attempt is neither a success nor a failure, so it is dropped
+      // rather than reported as a sync outcome.
+      if (cancelled) {
+        pendingSourceSyncAnalytics.current.delete(sourceId);
+      } else {
+        finishKnowledgeSyncOutcome(
+          pendingSourceSyncAnalytics.current,
+          sourceId,
+          "failed",
+        );
+      }
       setSourceActivity((current) => {
         const next = new Map(current);
-        next.set(sourceId, { state: "failed", errorKind: "manual_sync" });
+        next.set(sourceId, {
+          state: cancelled ? "cancelled" : "failed",
+          errorKind: cancelled ? null : "manual_sync",
+        });
         return next;
       });
-      setActionError(errMessage(error));
+      setActionError(cancelled ? null : errMessage(error));
     },
+  });
+  const cancelSync = useMutation({
+    mutationFn: cancelKnowledgeSourceSync,
+    onMutate: (sourceId) => {
+      setUnstoppedSource((current) =>
+        current?.sourceId === sourceId ? null : current,
+      );
+    },
+    onSuccess: async (result) => {
+      // `cancelled: false` means the request stopped no running work, so the
+      // screen neither badges the source as stopped nor clears an unrelated
+      // error it did not resolve. `verified: false` means the request never
+      // reached the authority that owns the work, so the row must not claim
+      // that nothing was running either.
+      if (result.cancelled) {
+        setActionError(null);
+        setSourceActivity((current) => {
+          const next = new Map(current);
+          next.set(result.sourceId, { state: "cancelled", errorKind: null });
+          return next;
+        });
+      } else {
+        setUnstoppedSource({
+          sourceId: result.sourceId,
+          verified: result.verified,
+        });
+      }
+      await queryClient.invalidateQueries({
+        queryKey: knowledgeQueryKeys.sourceSyncProgress(catalogScope.key),
+      });
+      await queryClient.invalidateQueries({ queryKey: sourceKey });
+    },
+    onError: (error) => setActionError(errMessage(error)),
   });
   const search = useMutation({
     mutationFn: ({ environmentId, query }: { environmentId: string; query: string }) =>
@@ -733,7 +804,18 @@ export default function Knowledge({
     onError: (error) => setActionError(errMessage(error)),
   });
   const pending = connectGithub.isPending || connectLocal.isPending;
-  const sourceLoadError = projects.error ?? sources.error;
+  // A failed connection list silently empties the database picker and disables Bind, so it
+  // has to surface through the same load-error notice as Projects and sources.
+  const sourceLoadError = projects.error ?? sources.error ?? connections.error;
+  // The notice retries exactly the lists that failed, so recovery never depends
+  // on leaving and re-entering the screen.
+  const retryingSourceLoad =
+    projects.isFetching || sources.isFetching || connections.isFetching;
+  const retrySourceLoad = () => {
+    if (projects.error) void projects.refetch();
+    if (sources.error) void sources.refetch();
+    if (connections.error) void connections.refetch();
+  };
   if (view === "analyses" && selectedProject && selectedEnvironment) {
     return (
       <AnalysisArticles
@@ -791,7 +873,21 @@ export default function Knowledge({
       </header>
 
       {sourceLoadError ? (
-        <InlineNotice tone="danger" icon="alert" role="alert">
+        <InlineNotice
+          tone="danger"
+          icon="alert"
+          role="alert"
+          action={
+            <Button
+              size="compact"
+              disabled={retryingSourceLoad}
+              onClick={retrySourceLoad}
+            >
+              <Icon name="refresh" />
+              {t("app.retry")}
+            </Button>
+          }
+        >
           {errMessage(sourceLoadError)}
         </InlineNotice>
       ) : null}
@@ -850,17 +946,28 @@ export default function Knowledge({
             ) : repositories.isPending ? (
               <LoadingLabel>{t("knowledge.loadingRepositories")}</LoadingLabel>
             ) : repositories.error || (repositories.data?.length ?? 0) === 0 ? (
-              <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-3">
-                <span className="tw:text-sm tw:text-muted-foreground">{t("knowledge.githubAccessHint")}</span>
-                <Button onClick={async () => {
-                  try {
-                    setActionError(null);
-                    await openUrl(await beginKnowledgeGithubInstall());
-                  } catch (error) {
-                    setActionError(errMessage(error));
-                  }
-                }}>{t("knowledge.githubAccessAction")}</Button>
-                <Button variant="ghost" onClick={() => void repositories.refetch()}><Icon name="refresh" />{t("knowledge.refresh")}</Button>
+              <div className="tw:grid tw:gap-3">
+                {/* A failed listing is not the same as "GitHub granted us nothing"; naming it
+                    keeps the grant-access hint from becoming a wrong diagnosis. */}
+                {repositories.error ? (
+                  <InlineNotice tone="danger" icon="alert" role="alert">
+                    {t("knowledge.repositoriesLoadFailed", {
+                      error: errMessage(repositories.error),
+                    })}
+                  </InlineNotice>
+                ) : null}
+                <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-3">
+                  <span className="tw:text-sm tw:text-muted-foreground">{t("knowledge.githubAccessHint")}</span>
+                  <Button onClick={async () => {
+                    try {
+                      setActionError(null);
+                      await openUrl(await beginKnowledgeGithubInstall());
+                    } catch (error) {
+                      setActionError(errMessage(error));
+                    }
+                  }}>{t("knowledge.githubAccessAction")}</Button>
+                  <Button variant="ghost" onClick={() => void repositories.refetch()}><Icon name="refresh" />{t("knowledge.refresh")}</Button>
+                </div>
               </div>
             ) : (
               <>
@@ -1069,6 +1176,26 @@ export default function Knowledge({
           ) : null}
           {environmentConnections.isPending ? (
             <LoadingLabel>{t("knowledge.loadingDatabases")}</LoadingLabel>
+          ) : environmentConnections.error ? (
+            <InlineNotice
+              tone="danger"
+              icon="alert"
+              role="alert"
+              action={
+                <Button
+                  size="compact"
+                  disabled={environmentConnections.isFetching}
+                  onClick={() => void environmentConnections.refetch()}
+                >
+                  <Icon name="refresh" />
+                  {t("app.retry")}
+                </Button>
+              }
+            >
+              {t("knowledge.databasesLoadFailed", {
+                error: errMessage(environmentConnections.error),
+              })}
+            </InlineNotice>
           ) : (environmentConnections.data?.length ?? 0) === 0 ? (
             <p className="tw:m-0 tw:text-sm tw:text-muted-foreground">{t("knowledge.emptyDatabases")}</p>
           ) : (
@@ -1096,18 +1223,58 @@ export default function Knowledge({
           <h2 className="tw:m-0 tw:text-base tw:font-semibold">{t("knowledge.sources")}</h2>
           <Button iconOnly size="compact" variant="ghost" title={t("knowledge.refreshSources")} onClick={() => void sources.refetch()}><Icon name="refresh" /></Button>
         </div>
-        {sources.isPending ? <LoadingLabel>{t("knowledge.loadingSources")}</LoadingLabel> : selectedEnvironmentSources.length === 0 ? (
+        {sources.isPending ? (
+          <LoadingLabel>{t("knowledge.loadingSources")}</LoadingLabel>
+        ) : sources.error ? (
+          // A failed listing is not an empty Environment, so the load failure
+          // owns this slot instead of the "no source yet" sentence.
+          <InlineNotice
+            tone="danger"
+            icon="alert"
+            role="alert"
+            action={
+              <Button
+                size="compact"
+                disabled={sources.isFetching}
+                onClick={() => void sources.refetch()}
+              >
+                <Icon name="refresh" />
+                {t("app.retry")}
+              </Button>
+            }
+          >
+            {t("knowledge.sourcesLoadFailed", {
+              error: errMessage(sources.error),
+            })}
+          </InlineNotice>
+        ) : selectedEnvironmentSources.length === 0 ? (
           <p className="tw:m-0 tw:text-sm tw:text-muted-foreground">{t("knowledge.emptySources")}</p>
         ) : (
           <div className="tw:grid tw:overflow-hidden tw:rounded-md tw:border tw:border-border-subtle">
             {selectedEnvironmentSources.map((source) => {
               const activity = sourceActivity.get(source.sourceId);
               const progress = sourceSyncProgressById.get(source.sourceId);
+              const progressUnavailable =
+                !progress &&
+                sourceSyncProgressUnavailable &&
+                (activity?.state === "syncing" || source.health === "syncing");
+              // A cancelled attempt published nothing, so the badge falls back to
+              // the stored health instead of inventing a state of its own.
+              const liveActivity = activity?.state === "cancelled"
+                ? undefined
+                : activity?.state;
               const visibleHealth = !KNOWLEDGE_GRAPH_UI_ENABLED && source.provider === "github"
                 ? source.health
-                : progress
+                : progress || progressUnavailable
                 ? "syncing"
-                : activity?.state ?? source.health;
+                : liveActivity ?? source.health;
+              // Every reason this row can say work is running — including a
+              // stored `syncing` health, which `progressUnavailable` already
+              // trusts — must also offer the handle that stops it.
+              const syncInFlight = Boolean(progress)
+                || activity?.state === "syncing"
+                || source.health === "syncing"
+                || (sync.isPending && sync.variables === source.sourceId);
               const tone: StatusTone = visibleHealth === "ready" ? "success" : visibleHealth === "failed" ? "danger" : "warning";
               const overallProgress = progress
                 ? knowledgeSyncOverallPercent(progress)
@@ -1165,6 +1332,10 @@ export default function Knowledge({
                               })}
                         />
                       </div>
+                    ) : progressUnavailable ? (
+                      <span className="tw:pt-1 tw:text-xs tw:text-muted-foreground">
+                        {t("knowledge.syncProgressUnavailable")}
+                      </span>
                     ) : null}
                     {source.provider === "local_folder" && !source.localCapabilityAvailable ? (
                       <span className="tw:text-xs tw:text-warning">{t("knowledge.restoreLocalFolder")}</span>
@@ -1176,11 +1347,25 @@ export default function Knowledge({
                         })}
                       </span>
                     ) : null}
+                    {unstoppedSource?.sourceId === source.sourceId ? (
+                      <span className="tw:text-xs tw:text-warning">
+                        {t(
+                          unstoppedSource.verified
+                            ? "knowledge.cancelSyncReachedNothing"
+                            : "knowledge.cancelSyncNotVerified",
+                        )}
+                      </span>
+                    ) : null}
                   </div>
                   <div className="tw:flex tw:flex-wrap tw:items-center tw:justify-end tw:gap-2 tw:@max-[560px]:justify-start">
                     {KNOWLEDGE_GRAPH_UI_ENABLED ? (
                       <Button size="compact" disabled={sync.isPending || activity?.state === "syncing" || Boolean(progress)} onClick={() => sync.mutate(source.sourceId)}>
                         <Icon name="refresh" />{(sync.isPending && sync.variables === source.sourceId) || activity?.state === "syncing" || progress ? t("knowledge.syncing") : activity?.state === "failed" ? t("knowledge.retry") : t("knowledge.sync")}
+                      </Button>
+                    ) : null}
+                    {syncInFlight ? (
+                      <Button size="compact" variant="ghost" disabled={cancelSync.isPending && cancelSync.variables === source.sourceId} onClick={() => cancelSync.mutate(source.sourceId)}>
+                        {cancelSync.isPending && cancelSync.variables === source.sourceId ? t("knowledge.cancellingSync") : t("knowledge.cancelSync")}
                       </Button>
                     ) : null}
                     <ConfirmButton size="compact" variant="dangerGhost" disabled={revoke.isPending} onConfirm={() => revoke.mutate(source.sourceId)}>{t("knowledge.remove")}</ConfirmButton>

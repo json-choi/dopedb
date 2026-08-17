@@ -3,6 +3,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use dashmap::DashMap;
 use dopedb_protocol::{GraphBuildArtifactV1, KnowledgeSourceProvider};
 use serde::Serialize;
 use uuid::Uuid;
@@ -13,8 +14,8 @@ use crate::kernel::identity::{AccountId, WorkspaceId};
 
 use super::adapters::local::{LocalFolderAdapter, LocalFolderWatch};
 use super::domain::{
-    validate_graph_publish, Project, ProjectDefinition, ProjectEnvironment, SourceHealthState,
-    SourceSnapshot,
+    sync_cancelled, validate_graph_publish, Project, ProjectDefinition, ProjectEnvironment,
+    SourceHealthState, SourceSnapshot, SyncCancellation,
 };
 use super::extractor::build_graph;
 use super::ports::{LocalKnowledgeSourcePort, RemoteKnowledgeEnvironment, RemoteKnowledgeProject};
@@ -33,8 +34,112 @@ pub(crate) struct KnowledgeSyncReceipt {
     pub(crate) edge_count: usize,
 }
 
+/// What a cancel request actually reached. `cancelled` is false when nothing was
+/// in flight for the source, so the screen never claims it stopped work it did
+/// not. `verified` is false when this device could not ask the authority that
+/// owns the work at all, so `cancelled: false` is never read as the stronger
+/// claim that nothing was running.
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct KnowledgeSyncCancellation {
+    pub(crate) source_id: Uuid,
+    pub(crate) cancelled: bool,
+    pub(crate) verified: bool,
+}
+
 pub(crate) trait KnowledgeSourceRootPort: Send + Sync {
     fn fetch_root(&self, source_id: Uuid) -> AppResult<Option<PathBuf>>;
+}
+
+/// The local sync runs of each source. `gates` makes a source an occupancy
+/// claim rather than a bulletin board: a second local sync for the same source
+/// waits for the run in flight instead of racing it, so two runs can never both
+/// build and publish an index while only the last-registered one hears a stop.
+/// `signals` then holds exactly one signal — the running one's — so a stop that
+/// reached the previous run can never be inherited by the next.
+#[derive(Clone, Default)]
+struct SyncRunRegistry {
+    signals: Arc<DashMap<Uuid, SyncCancellation>>,
+    /// One gate per source. Gates are kept for the process lifetime because the
+    /// set of sources is bounded and removing a gate a waiting run already holds
+    /// would let a third run claim the source alongside it.
+    gates: Arc<DashMap<Uuid, Arc<tokio::sync::Mutex<()>>>>,
+}
+
+impl SyncRunRegistry {
+    /// Wait for the run in flight for `source_id`, then claim the source for a
+    /// new logical run with a signal of its own.
+    async fn begin(&self, source_id: Uuid) -> SyncRun {
+        // Cloned out of the map before awaiting so no map guard is ever held
+        // across a suspension point.
+        let gate = self
+            .gates
+            .entry(source_id)
+            .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
+            .clone();
+        let permit = gate.lock_owned().await;
+        let cancellation = SyncCancellation::default();
+        self.signals.insert(source_id, cancellation.clone());
+        SyncRun {
+            registry: self.clone(),
+            source_id,
+            cancellation,
+            stoppable: true,
+            _permit: permit,
+        }
+    }
+
+    /// Stop the run in flight for `source_id`. `false` when there is none, so the
+    /// receipt never claims local work was stopped.
+    fn cancel(&self, source_id: Uuid) -> bool {
+        match self.signals.get(&source_id) {
+            Some(run) => {
+                run.cancel();
+                true
+            }
+            None => false,
+        }
+    }
+}
+
+/// Holds the source for one logical run: the stop signal while the run can still
+/// observe it, and the occupancy permit until the run returns.
+struct SyncRun {
+    registry: SyncRunRegistry,
+    source_id: Uuid,
+    cancellation: SyncCancellation,
+    stoppable: bool,
+    _permit: tokio::sync::OwnedMutexGuard<()>,
+}
+
+impl SyncRun {
+    fn cancellation(&self) -> &SyncCancellation {
+        &self.cancellation
+    }
+
+    /// Leave the window in which a stop can still reach this run, so a Stop that
+    /// arrives from here on reports honestly that it reached no stoppable work.
+    /// The source stays claimed until the run returns, so the uninterruptible
+    /// publish that follows still runs alone.
+    fn close_stop_window(&mut self) {
+        if !self.stoppable {
+            return;
+        }
+        self.stoppable = false;
+        // Only the run that still owns the claim releases it; a slow earlier run
+        // must not remove the signal a newer run already registered.
+        self.registry
+            .signals
+            .remove_if(&self.source_id, |_, current| {
+                current.same_run(&self.cancellation)
+            });
+    }
+}
+
+impl Drop for SyncRun {
+    fn drop(&mut self) {
+        self.close_stop_window();
+    }
 }
 
 #[derive(Clone)]
@@ -42,6 +147,7 @@ pub(crate) struct KnowledgeSourceSynchronizer {
     knowledge: KnowledgeFeature,
     local_sources: LocalFolderAdapter,
     roots: Arc<dyn KnowledgeSourceRootPort>,
+    runs: SyncRunRegistry,
 }
 
 impl KnowledgeSourceSynchronizer {
@@ -54,6 +160,7 @@ impl KnowledgeSourceSynchronizer {
             knowledge,
             local_sources,
             roots,
+            runs: SyncRunRegistry::default(),
         }
     }
 
@@ -91,6 +198,58 @@ impl KnowledgeSourceSynchronizer {
         self.local_sources.watch(&stored.binding).await
     }
 
+    /// Stop the sync running for `source_id`. Local work observes this run's own
+    /// signal at its next checkpoint; a hosted GitHub index is stopped by the
+    /// control plane, which supersedes the queued job and discards its partial
+    /// index so the source returns to `stale` instead of `syncing`.
+    pub(crate) async fn cancel_sync(&self, source_id: Uuid) -> AppResult<KnowledgeSyncCancellation> {
+        // The source is resolved inside the active workspace before anything is
+        // stopped, so a cancel can never reach a sync outside the current scope.
+        let active_scope = self.knowledge.active_resource_scope().await?;
+        let stored = self
+            .knowledge
+            .scopes(active_scope.workspace_id)
+            .await?
+            .into_iter()
+            .find(|candidate| candidate.binding.source_id == source_id)
+            .ok_or_else(|| AppError::NotFound("the Project Knowledge source".into()))?;
+        if stored.binding.provider != KnowledgeSourceProvider::Github {
+            // A Local Folder sync runs entirely on this device, so its own signal
+            // is the whole answer and this device did check it.
+            return Ok(KnowledgeSyncCancellation {
+                source_id,
+                cancelled: self.runs.cancel(source_id),
+                verified: true,
+            });
+        }
+        // A hosted index is stoppable only through the control plane; this device
+        // registers no local run for it, so there is no local signal to consult.
+        // Without a signed-in workspace account the control plane cannot be asked
+        // at all, so the receipt reports the request as unverified instead of
+        // asserting that nothing was running.
+        if active_scope.selected_account_id.is_none() {
+            return Ok(KnowledgeSyncCancellation {
+                source_id,
+                cancelled: false,
+                verified: false,
+            });
+        }
+        let remote = self.active_remote_scope(active_scope).await?;
+        let cancelled = self
+            .knowledge
+            .cancel_remote_source_sync(
+                remote.account.as_str(),
+                remote.remote_workspace_id,
+                source_id,
+            )
+            .await?;
+        Ok(KnowledgeSyncCancellation {
+            source_id,
+            cancelled,
+            verified: true,
+        })
+    }
+
     pub(crate) async fn sync(&self, source_id: Uuid) -> AppResult<KnowledgeSyncReceipt> {
         let active_scope = self.knowledge.active_resource_scope().await?;
         let stored = self
@@ -101,6 +260,9 @@ impl KnowledgeSourceSynchronizer {
             .find(|candidate| candidate.binding.source_id == source_id)
             .ok_or_else(|| AppError::NotFound("the Project Knowledge source".into()))?;
         let previous_artifact = self.knowledge.active_for_source(source_id).await?;
+        // The hosted arm holds no local run: the control plane owns that job and
+        // has no checkpoint here, so registering a signal nothing reads would let
+        // a cancel receipt claim a stop this device never made.
         if stored.binding.provider == KnowledgeSourceProvider::Github {
             let remote = self.active_remote_scope(active_scope).await?;
             let previous_graph_revision_id = self
@@ -133,6 +295,10 @@ impl KnowledgeSourceSynchronizer {
             });
         }
 
+        // Claiming the source here serialises this run against any other local
+        // sync of the same source, so only one of them can build and publish.
+        let mut run = self.runs.begin(source_id).await;
+        let cancellation = run.cancellation().clone();
         let parent = previous_artifact
             .as_ref()
             .map(|artifact| artifact.graph_revision_id);
@@ -146,11 +312,16 @@ impl KnowledgeSourceSynchronizer {
             .local_sources
             .snapshot(&stored.binding, previous_snapshot.as_ref())
             .await?;
+        if cancellation.is_cancelled() {
+            return Err(sync_cancelled());
+        }
         let artifact = if let Some(artifact) = unchanged_graph(
             previous_snapshot.as_ref(),
             &snapshot,
             previous_artifact.as_ref(),
         ) {
+            // The pinned revision is unchanged, so there is no stoppable work left.
+            run.close_stop_window();
             artifact
         } else {
             let artifact = build_graph(
@@ -158,9 +329,19 @@ impl KnowledgeSourceSynchronizer {
                 &snapshot,
                 parent,
                 previous_artifact.as_ref(),
+                &cancellation,
             )
             .await?;
             validate_graph_publish(&artifact, &stored.environment)?;
+            // Last cancellation point: the stage/save/activate sequence below runs
+            // to completion so a cancel can never leave a half-written index. The
+            // stop window closes with it, so a Stop that arrives from here on
+            // reports honestly that it reached no work instead of claiming a stop
+            // this run cannot make.
+            if cancellation.is_cancelled() {
+                return Err(sync_cancelled());
+            }
+            run.close_stop_window();
             self.knowledge.stage(&artifact).await?;
             self.knowledge
                 .save_scope(

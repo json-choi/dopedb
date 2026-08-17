@@ -105,12 +105,6 @@ function planTone(plan: ProviderProvisioningPlan): StatusTone {
   return "neutral";
 }
 
-function focusFirst(container: HTMLElement | null) {
-  container?.querySelector<HTMLElement>(
-    "button:not([disabled]), input:not([disabled]), select:not([disabled])",
-  )?.focus();
-}
-
 export function ManagedAccessLauncher({
   connectionId,
   provider,
@@ -179,10 +173,6 @@ export function ManagedAccessDialog({
     | null
   >(null);
   const [failed, setFailed] = useState(false);
-  const dialogRef = useRef<HTMLElement>(null);
-  const pendingRef = useRef(pending);
-  const closeRef = useRef({ onClose, returnFocus });
-  closeRef.current = { onClose, returnFocus };
 
   const selectedStatus = useMemo(
     () => statuses.data?.find((status) => status.provider === provider) ?? null,
@@ -197,38 +187,6 @@ export function ManagedAccessDialog({
     onClose();
     window.requestAnimationFrame(returnFocus);
   };
-
-  useEffect(() => {
-    pendingRef.current = pending;
-  }, [pending]);
-
-  useEffect(() => {
-    focusFirst(dialogRef.current);
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && pendingRef.current === null) {
-        event.preventDefault();
-        closeRef.current.onClose();
-        window.requestAnimationFrame(closeRef.current.returnFocus);
-        return;
-      }
-      if (event.key !== "Tab") return;
-      const controls = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>(
-        "button:not([disabled]), input:not([disabled]), select:not([disabled])",
-      ) ?? []);
-      const first = controls[0];
-      const last = controls[controls.length - 1];
-      if (!first || !last) return;
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
 
   useEffect(() => {
     if (!plan || plan.operationState !== "executing") return;
@@ -394,12 +352,12 @@ export function ManagedAccessDialog({
   return (
     <ModalBackdrop onMouseDown={pending === null ? close : undefined}>
       <ModalSurface
-        ref={dialogRef}
         size="wide"
         fill
         aria-labelledby="managed-access-title"
         aria-describedby="managed-access-description"
         aria-busy={pending !== null}
+        onEscape={pending === null ? close : undefined}
       >
         <ModalTitleBar
           title={t("managedAccess.title")}

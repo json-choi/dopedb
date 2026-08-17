@@ -1,3 +1,7 @@
+// Connection row of the Database Explorer tree plus the catalog subtrees it
+// owns. The row is a `role="treeitem"` with a single roving tab stop; expand and
+// collapse belong to the explorer container's arrow-key contract, so the chevron
+// only exposes `data-tree-toggle` for pointer users.
 import type {
   PointerEvent,
   RefObject,
@@ -45,6 +49,12 @@ const EMPTY_CATALOGS: Record<string, Catalog> = {};
 type Props = {
   connection: ConnectionProfile;
   nested: boolean;
+  /**
+   * `aria-level` of this connection row. The explorer counts the real
+   * Project/Environment/folder depth above it, so `nested` stays a purely
+   * visual flag and never approximates the level.
+   */
+  level: number;
   selected: boolean;
   selectedTableKey: string | null;
   expanded: boolean;
@@ -138,6 +148,7 @@ export default function ConnectionNode(props: Props) {
       ) ?? []),
     ]),
   ).sort((left, right) => left.localeCompare(right));
+  const connectionLevel = props.level;
   const scopedSchemas = selectedSchemaScope(connection);
   const selectedSchemaCount =
     scopedSchemas.length === 0
@@ -152,11 +163,13 @@ export default function ConnectionNode(props: Props) {
         data-nested={props.nested}
         data-dragging={props.draggingId === connection.id}
         data-drop-target={isDropTarget}
-        className="ds-object-row tw:group tw:relative tw:touch-none tw:select-none tw:gap-1 tw:rounded-xs tw:pr-[calc(var(--ds-control-sm)+var(--ds-space-1))] tw:text-ui tw:font-medium tw:leading-ui tw:data-[nested=true]:pl-2 tw:data-[dragging=true]:opacity-50 tw:data-[drop-target=true]:bg-muted tw:data-[drop-target=true]:ring-2 tw:data-[drop-target=true]:ring-ring"
-        role="button"
+        className="ds-object-row tw:group tw:relative tw:touch-none tw:select-none tw:gap-1 tw:rounded-xs tw:pr-[calc(var(--ds-control-sm)+var(--ds-space-1))] tw:text-ui tw:font-medium tw:leading-ui tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:data-[nested=true]:pl-2 tw:data-[dragging=true]:opacity-50 tw:data-[drop-target=true]:bg-muted tw:data-[drop-target=true]:ring-2 tw:data-[drop-target=true]:ring-ring"
+        role="treeitem"
         aria-selected={props.selected}
+        aria-expanded={props.expanded}
+        aria-level={connectionLevel}
         aria-label={`${connection.name || t("app.unnamed")} · ${description}`}
-        tabIndex={0}
+        tabIndex={-1}
         onPointerDown={(event) => props.onPointerDown(event, connection)}
         onPointerMove={props.onPointerMove}
         onPointerUp={props.onPointerUp}
@@ -174,10 +187,31 @@ export default function ConnectionNode(props: Props) {
             event.preventDefault();
             if (props.selected) props.onToggleOpen();
             else props.onSelect();
+            return;
+          }
+          // The connection menu trigger sits inside a `treeitem`, so it is not a
+          // Tab stop of its own. The platform context-menu keys open it from the
+          // row itself; focus moves to the trigger so the menu's own Escape
+          // handler still has somewhere to return to.
+          if (
+            event.key === "ContextMenu" ||
+            (event.shiftKey && event.key === "F10")
+          ) {
+            event.preventDefault();
+            event.currentTarget
+              .querySelector<HTMLButtonElement>(
+                "[data-connection-menu-trigger]",
+              )
+              ?.focus({ preventScroll: true });
+            props.onOpenMenu(
+              props.openMenuId === connection.id ? null : connection.id,
+            );
           }
         }}
       >
         <span
+          data-tree-toggle
+          aria-hidden="true"
           className="tw:grid tw:w-3 tw:shrink-0 tw:place-items-center tw:text-2xs tw:text-muted-foreground"
           title={
             props.expanded
@@ -332,6 +366,7 @@ export default function ConnectionNode(props: Props) {
             iconOnly
             size="xs"
             variant="ghost"
+            tabIndex={-1}
             title={t("connections.connectionMenu")}
             aria-label={t("connections.connectionMenu")}
             aria-expanded={props.openMenuId === connection.id}
@@ -440,6 +475,7 @@ export default function ConnectionNode(props: Props) {
                 detailError={props.detailErrorsByDatabase[key]}
                 applySchemaScope={database.isDefault}
                 initiallyOpen={database.isDefault}
+                level={connectionLevel + 1}
                 scrollElement={props.treeScrollElement}
                 filter={props.filter}
                 activeSearchResultKey={props.activeSearchResultKey}
@@ -492,6 +528,7 @@ export default function ConnectionNode(props: Props) {
             error={props.error}
             detailError={props.detailError}
             initiallyOpen
+            level={connectionLevel + 1}
             scrollElement={props.treeScrollElement}
             filter={props.filter}
             activeSearchResultKey={props.activeSearchResultKey}

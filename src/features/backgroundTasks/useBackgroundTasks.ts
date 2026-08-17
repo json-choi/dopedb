@@ -21,6 +21,7 @@ import {
   knowledgeSyncRemainingFiles,
 } from "../knowledge/syncProgress";
 import { knowledgeQueryKeys } from "../knowledge/queryKeys";
+import { cancelKnowledgeSourceSync } from "../knowledge/tauriAdapter";
 import type { BackgroundTask, BackgroundTaskStatus } from "./domain";
 
 const ACTIVE_JOB_STATES = new Set<Job["state"]>([
@@ -201,7 +202,7 @@ export function useBackgroundTasks({
         remainingFiles: knowledgeSyncRemainingFiles(progress),
         attempt: progress.attempt,
         retryAt: progress.retryAt,
-        cancellable: false,
+        cancellable: true,
       }));
 
     return [...queryTasks, ...agentTasks, ...jobTasks, ...knowledgeTasks].sort(
@@ -227,6 +228,14 @@ export function useBackgroundTasks({
           await queryClient.invalidateQueries({
             queryKey: qk.jobs(task.connectionId),
           });
+        } else if (task.kind === "knowledge") {
+          await cancelKnowledgeSourceSync(task.sourceId);
+          await queryClient.invalidateQueries({
+            queryKey: knowledgeQueryKeys.sourceSyncProgress(workspaceScopeKey),
+          });
+          await queryClient.invalidateQueries({
+            queryKey: knowledgeQueryKeys.sources(workspaceScopeKey),
+          });
         }
       } finally {
         setCancellingKeys((current) => {
@@ -236,7 +245,7 @@ export function useBackgroundTasks({
         });
       }
     },
-    [cancellingKeys, queryClient],
+    [cancellingKeys, queryClient, workspaceScopeKey],
   );
 
   return {

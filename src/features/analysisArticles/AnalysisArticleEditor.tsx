@@ -127,9 +127,7 @@ export function AnalysisArticleEditor({
         size="wide"
         fill
         aria-labelledby="analysis-editor-title"
-        onKeyDown={(event) => {
-          if (event.key === "Escape") onClose();
-        }}
+        onEscape={saving ? undefined : onClose}
       >
         <ModalTitleBar
           title={t("analysis.editorTitle", { title: article.definition.title })}

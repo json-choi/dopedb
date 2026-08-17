@@ -1,11 +1,26 @@
 // Flat IDE tab primitives shared by workbench document strips. Active tabs sit
-// inside the strip instead of turning the entire rectangular segment blue.
+// inside the strip instead of turning the entire rectangular segment blue, and
+// each strip owns one Tab stop with horizontal roving arrow/Home/End focus.
 import type {
+  KeyboardEvent,
   KeyboardEventHandler,
   MouseEventHandler,
   ReactNode,
   Ref,
 } from "react";
+
+import {
+  moveTabRovingFocus,
+  tabRovingDirection,
+  withTabStripFallbackStop,
+} from "./tabRovingFocus";
+
+// Both strips read the focused tab from the tablist, so a focused close button
+// or rename input never steals the arrow keys.
+function rovingTabTarget(event: KeyboardEvent<HTMLDivElement>) {
+  if (!(event.target instanceof HTMLElement)) return null;
+  return event.target.closest<HTMLElement>('[role="tab"]');
+}
 
 export function IdeTabStrip({
   label,
@@ -24,9 +39,20 @@ export function IdeTabStrip({
         className="ds-control-row tw:flex tw:min-w-0 tw:flex-1 tw:items-stretch tw:overflow-x-auto tw:[scrollbar-width:none] tw:[&::-webkit-scrollbar]:hidden"
         role="tablist"
         aria-label={label}
-        onKeyDown={onKeyDown}
+        aria-orientation="horizontal"
+        onKeyDown={(event) => {
+          onKeyDown?.(event);
+          if (event.defaultPrevented) return;
+          const direction = tabRovingDirection(event.key, "horizontal");
+          const tab = direction ? rovingTabTarget(event) : null;
+          if (!direction || !tab) return;
+          event.preventDefault();
+          // Activating a document tab swaps the whole workbench document, so
+          // arrows only move focus and Enter/Space activates the focused tab.
+          moveTabRovingFocus(tab, direction, { activate: false });
+        }}
       >
-        {children}
+        {withTabStripFallbackStop(children)}
       </div>
       {actions ? (
         <div className="ds-control-row tw:flex tw:shrink-0 tw:items-center tw:border-l tw:border-border-subtle tw:px-1">
@@ -50,7 +76,7 @@ export function IdeTab({
 }: {
   active: boolean;
   title: string;
-  tabIndex: number;
+  tabIndex?: number;
   tabRef?: Ref<HTMLDivElement>;
   editing?: ReactNode;
   trailing?: ReactNode;
@@ -70,7 +96,7 @@ export function IdeTab({
           className="tw:flex tw:h-full tw:min-w-0 tw:flex-1 tw:cursor-pointer tw:items-center tw:gap-2 tw:border-0 tw:bg-transparent tw:px-2 tw:font-sans tw:text-inherit tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-inset tw:focus-visible:ring-ring tw:[&_.icon]:shrink-0 tw:[&>span]:min-w-0 tw:[&>span]:overflow-hidden tw:[&>span]:text-ellipsis tw:[&>span]:whitespace-nowrap"
           role="tab"
           aria-selected={active}
-          tabIndex={tabIndex}
+          tabIndex={tabIndex ?? (active ? 0 : -1)}
           onClick={onActivate}
           onDoubleClick={onDoubleClick}
           title={title}
@@ -103,8 +129,17 @@ export function IdeToolTabStrip({
         className="tw:flex tw:min-w-0 tw:flex-1 tw:items-center tw:gap-1 tw:overflow-x-auto tw:[scrollbar-width:none] tw:[&::-webkit-scrollbar]:hidden"
         role="tablist"
         aria-label={label}
+        aria-orientation="horizontal"
+        onKeyDown={(event) => {
+          const direction = tabRovingDirection(event.key, "horizontal");
+          const tab = direction ? rovingTabTarget(event) : null;
+          if (!direction || !tab) return;
+          event.preventDefault();
+          // Tool tabs only swap an already loaded view, so focus activates.
+          moveTabRovingFocus(tab, direction);
+        }}
       >
-        {children}
+        {withTabStripFallbackStop(children)}
       </div>
       {status}
     </div>
@@ -114,11 +149,13 @@ export function IdeToolTabStrip({
 export function IdeToolTab({
   active,
   size = "compact",
+  tabIndex,
   children,
   onClick,
 }: {
   active: boolean;
   size?: "compact" | "document";
+  tabIndex?: number;
   children: ReactNode;
   onClick: () => void;
 }) {
@@ -127,6 +164,7 @@ export function IdeToolTab({
       type="button"
       role="tab"
       aria-selected={active}
+      tabIndex={tabIndex ?? (active ? 0 : -1)}
       data-active={active}
       data-size={size}
       className="tw:flex tw:h-control-md tw:min-w-[88px] tw:max-w-[min(42vw,420px)] tw:cursor-pointer tw:items-center tw:gap-1.5 tw:overflow-hidden tw:rounded-sm tw:border tw:border-transparent tw:bg-transparent tw:px-3 tw:font-sans tw:text-sm tw:text-ellipsis tw:whitespace-nowrap tw:text-muted-foreground tw:data-[size=document]:min-w-[120px] tw:data-[active=true]:border-selection tw:data-[active=true]:bg-selection tw:data-[active=true]:text-selection-foreground tw:hover:bg-muted tw:hover:text-foreground"

@@ -1,8 +1,9 @@
 // Canonical vertical category navigation for dense desktop dialogs. The rail
 // owns icon geometry, selected state, tooltip parity, and roving keyboard focus.
-import type { KeyboardEvent, ReactNode } from "react";
+import type { ReactNode } from "react";
 
 import { Button } from "./Button";
+import { moveTabRovingFocus, tabRovingDirection } from "./tabRovingFocus";
 
 export type IconRailTab<T extends string> = {
   id: T;
@@ -10,33 +11,6 @@ export type IconRailTab<T extends string> = {
   label: string;
   disabled?: boolean;
 };
-
-function moveRailFocus(
-  event: KeyboardEvent<HTMLButtonElement>,
-  direction: "end" | "next" | "previous" | "start",
-) {
-  const rail = event.currentTarget.closest('[role="tablist"]');
-  if (!rail) return;
-
-  const tabs = Array.from(
-    rail.querySelectorAll<HTMLButtonElement>('[role="tab"]:not(:disabled)'),
-  );
-  if (tabs.length === 0) return;
-
-  const current = tabs.indexOf(event.currentTarget);
-  const target =
-    direction === "start"
-      ? tabs[0]
-      : direction === "end"
-        ? tabs[tabs.length - 1]
-        : direction === "next"
-          ? tabs[(current + 1 + tabs.length) % tabs.length]
-          : tabs[(current - 1 + tabs.length) % tabs.length];
-
-  event.preventDefault();
-  target?.focus();
-  target?.click();
-}
 
 export function IconRailTabs<T extends string>({
   tabs,
@@ -73,18 +47,17 @@ export function IconRailTabs<T extends string>({
             aria-label={tab.label}
             onClick={() => onChange(tab.id)}
             onKeyDown={(event) => {
-              if (event.key === "ArrowDown" || event.key === "ArrowRight") {
-                moveRailFocus(event, "next");
-              } else if (
-                event.key === "ArrowUp" ||
-                event.key === "ArrowLeft"
-              ) {
-                moveRailFocus(event, "previous");
-              } else if (event.key === "Home") {
-                moveRailFocus(event, "start");
-              } else if (event.key === "End") {
-                moveRailFocus(event, "end");
-              }
+              // The rail is vertical, but nothing to its right claims the
+              // horizontal arrows, so ArrowLeft/ArrowRight keep walking the
+              // categories the way they did before roving focus was shared.
+              const direction = tabRovingDirection(event.key, "vertical", {
+                crossAxis: true,
+              });
+              if (!direction) return;
+              event.preventDefault();
+              // The rail only swaps an already mounted category pane, so moving
+              // focus selects the tab it lands on.
+              moveTabRovingFocus(event.currentTarget, direction);
             }}
           >
             {tab.icon}

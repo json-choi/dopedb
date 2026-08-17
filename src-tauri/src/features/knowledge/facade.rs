@@ -579,6 +579,17 @@ where
             .await
     }
 
+    pub(crate) async fn cancel_remote_source_sync(
+        &self,
+        account_id: &str,
+        workspace_id: Uuid,
+        source_id: Uuid,
+    ) -> AppResult<bool> {
+        self.authority
+            .cancel_source_sync(account_id, workspace_id, source_id)
+            .await
+    }
+
     pub(crate) async fn delete_remote_source(
         &self,
         account_id: &str,

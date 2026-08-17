@@ -11,7 +11,10 @@ import {
   TextInput,
 } from "../../../design-system/components/FormControls";
 import { SettingsGroup } from "../../../design-system/components/Settings";
-import { StatusBadge } from "../../../design-system/components/Status";
+import {
+  InlineNotice,
+  StatusBadge,
+} from "../../../design-system/components/Status";
 import {
   connectionCanEnterWritePath,
   effectiveSafetySettings,
@@ -65,13 +68,35 @@ export default function Safety({
     setSettings(safetyQuery.data ?? null);
   }, [connectionId, safetyQuery.data]);
 
+  // A failed load must name the panel it belongs to and keep a retry in reach; without it
+  // the write policy can only be reconfigured by leaving and re-entering Settings.
   if (!settings) {
+    if (safetyQuery.error) {
+      return (
+        <div className="tw:grid tw:w-full tw:max-w-[880px] tw:gap-3 tw:p-4">
+          <h2 className="tw:m-0">{t("safety.title")}</h2>
+          <InlineNotice
+            tone="danger"
+            icon="alert"
+            role="alert"
+            action={
+              <Button
+                size="compact"
+                disabled={safetyQuery.isFetching}
+                onClick={() => void safetyQuery.refetch()}
+              >
+                {t("app.retry")}
+              </Button>
+            }
+          >
+            {t("safety.loadFailed", { error: errMessage(safetyQuery.error) })}
+          </InlineNotice>
+        </div>
+      );
+    }
     return (
-      <div
-        role={safetyQuery.error ? "alert" : "status"}
-        className="tw:p-4 tw:text-muted-foreground"
-      >
-        {safetyQuery.error ? errMessage(safetyQuery.error) : t("safety.loading")}
+      <div role="status" className="tw:p-4 tw:text-muted-foreground">
+        {t("safety.loading")}
       </div>
     );
   }

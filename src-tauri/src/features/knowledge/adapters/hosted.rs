@@ -76,6 +76,12 @@ struct QueuedKnowledgeSourceResponse {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct CancelledKnowledgeSourceResponse {
+    cancelled: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct RemoteKnowledgeSourcesResponse {
     sources: Vec<RemoteKnowledgeSource>,
 }
@@ -1127,6 +1133,33 @@ async fn request_knowledge_source_sync(
     Ok(queued.graph_revision_id)
 }
 
+/// Ask the control plane to stop the queued or claimed code index for this
+/// source. The queue supersedes the job and discards its partial index, so the
+/// hosted worker cannot advance it any further and the source returns to `stale`.
+async fn cancel_knowledge_source_sync(
+    user_id: &str,
+    workspace_id: Uuid,
+    source_id: Uuid,
+) -> AppResult<bool> {
+    let token = bearer(user_id)?;
+    let response = client()?
+        .post(format!(
+            "{}/api/v1/workspaces/{workspace_id}/knowledge/sources/{source_id}/cancel",
+            origin()?
+        ))
+        .bearer_auth(token.as_str())
+        .json(&json!({}))
+        .send()
+        .await
+        .map_err(|error| request_error("cancelling the workspace code index", error))?;
+    if !response.status().is_success() {
+        return Err(oauth_error(response).await);
+    }
+    let cancelled: CancelledKnowledgeSourceResponse =
+        knowledge_response(response, "reading the cancelled workspace code index").await?;
+    Ok(cancelled.cancelled)
+}
+
 async fn delete_knowledge_source(
     user_id: &str,
     workspace_id: Uuid,
@@ -1363,6 +1396,15 @@ impl HostedKnowledgeAuthorityPort for HostedKnowledgeAuthority {
         source_id: Uuid,
     ) -> impl std::future::Future<Output = AppResult<Option<Uuid>>> + Send {
         request_knowledge_source_sync(account_id, workspace_id, source_id)
+    }
+
+    fn cancel_source_sync(
+        &self,
+        account_id: &str,
+        workspace_id: Uuid,
+        source_id: Uuid,
+    ) -> impl std::future::Future<Output = AppResult<bool>> + Send {
+        cancel_knowledge_source_sync(account_id, workspace_id, source_id)
     }
 
     fn delete_source(

@@ -29,6 +29,12 @@ pub enum AppError {
     #[error("timeout: {0}")]
     Timeout(String),
 
+    /// A user-requested stop reached the work before it finished. This is a typed
+    /// outcome rather than a failure, so clients switch on `kind` instead of
+    /// matching a message and never record it as an error.
+    #[error("cancelled: {0}")]
+    Cancelled(String),
+
     /// A safety-layer violation the DB or classifier rejected before execution.
     #[error("safety violation: {0}")]
     Safety(String),
@@ -85,6 +91,7 @@ impl AppError {
             AppError::Agent(_) => "agent",
             AppError::Network(_) => "network",
             AppError::Timeout(_) => "timeout",
+            AppError::Cancelled(_) => "cancelled",
             AppError::Safety(_) => "safety",
             AppError::Parse(_) => "parse",
             AppError::Keychain(_) => "keychain",

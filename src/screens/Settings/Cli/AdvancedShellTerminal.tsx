@@ -239,6 +239,13 @@ function AdvancedShellTerminalDialog({
       : t("terminal.approvalRequired")
     : null;
 
+  // This dialog deliberately passes no `onEscape`. Closing it kills the PTY, and
+  // Escape is a normal terminal key: xterm cancels it on its own textarea, but
+  // one keypress from the title bar, the footer, or `document.body` after a
+  // backdrop click would still tear down a live shell. "Focus is outside the
+  // terminal" cannot separate that accident from intent, because the backdrop
+  // click is exactly what leaves focus outside. The explicit title-bar and footer
+  // Close commands own the teardown instead.
   return (
     <ModalBackdrop>
       <ModalSurface

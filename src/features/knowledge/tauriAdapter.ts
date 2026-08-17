@@ -8,6 +8,7 @@ import type {
   KnowledgeProject,
   KnowledgeSource,
   KnowledgeSourceSyncProgress,
+  KnowledgeSyncCancellation,
   KnowledgeSyncResult,
   KnowledgeSourceChanged,
   KnowledgeSearchResult,
@@ -108,6 +109,12 @@ export function revokeKnowledgeSource(sourceId: string): Promise<void> {
 
 export function syncKnowledgeSource(sourceId: string): Promise<KnowledgeSyncResult> {
   return invoke("sync_knowledge_source", { sourceId });
+}
+
+export function cancelKnowledgeSourceSync(
+  sourceId: string,
+): Promise<KnowledgeSyncCancellation> {
+  return invoke("cancel_knowledge_source_sync", { sourceId });
 }
 
 export function onKnowledgeSourceChanged(

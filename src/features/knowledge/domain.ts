@@ -130,9 +130,17 @@ export type KnowledgeSyncResult = {
   edgeCount: number;
 };
 
+export type KnowledgeSyncCancellation = {
+  sourceId: string;
+  cancelled: boolean;
+  /** False when this device could not ask the authority that owns the work at
+   *  all, so `cancelled: false` must not be read as "nothing was running". */
+  verified: boolean;
+};
+
 export type KnowledgeSourceChanged = {
   sourceId: string;
-  state: "syncing" | "ready" | "failed";
+  state: "syncing" | "ready" | "cancelled" | "failed";
   errorKind: string | null;
 };
 

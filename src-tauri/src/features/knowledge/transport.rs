@@ -954,6 +954,17 @@ pub(crate) async fn sync_knowledge_source(
     state.knowledge_watches.sync(source_id).await
 }
 
+/// Stop the sync running for this source. Local indexing observes the cancel at
+/// its next checkpoint and publishes nothing; a hosted GitHub index is stopped
+/// by the control plane, which discards the partial index for that job.
+#[tauri::command]
+pub(crate) async fn cancel_knowledge_source_sync(
+    state: State<'_, AppState>,
+    source_id: Uuid,
+) -> AppResult<super::source_sync::KnowledgeSyncCancellation> {
+    state.knowledge_watches.cancel_sync(source_id).await
+}
+
 async fn active_workspace_graphs(
     state: &AppState,
     project_environment_id: Uuid,

@@ -1,6 +1,7 @@
 // Canonical modal backdrop and bounded dialog surface. Feature dialogs own
 // their content and actions; this primitive owns viewport placement, elevation,
-// responsive bounds, and background interaction blocking.
+// responsive bounds, background interaction blocking, and the keyboard contract
+// (focus containment, focus restore, and topmost-only Escape dismissal).
 import {
   forwardRef,
   type HTMLAttributes,
@@ -37,7 +38,10 @@ function focusableModalElements(surface: HTMLElement) {
   );
 }
 
-function isTopmostModal(surface: HTMLElement) {
+// Sibling dialog surfaces gate their own Escape handlers on this so a stacked
+// dialog dismisses one layer per keypress. Last mounted dialog in document
+// order wins.
+export function isTopmostModal(surface: HTMLElement) {
   const modals = document.querySelectorAll<HTMLElement>(
     '[role="dialog"][aria-modal="true"]',
   );
@@ -68,12 +72,14 @@ export const ModalSurface = forwardRef<
     children: ReactNode;
     size?: "medium" | "wide" | "settings" | "dataSources";
     fill?: boolean;
+    onEscape?: () => void;
   } & Omit<HTMLAttributes<HTMLElement>, "className" | "children">
 >(function ModalSurface(
   {
     children,
     size = "medium",
     fill = false,
+    onEscape,
     onKeyDown,
     tabIndex,
     ...props
@@ -81,6 +87,7 @@ export const ModalSurface = forwardRef<
   ref,
 ) {
   const surfaceRef = useRef<HTMLElement>(null);
+  const onEscapeRef = useRef(onEscape);
   const previousFocusRef = useRef<HTMLElement | null>(
     typeof document !== "undefined" &&
       document.activeElement instanceof HTMLElement
@@ -88,6 +95,9 @@ export const ModalSurface = forwardRef<
       : null,
   );
   useImperativeHandle(ref, () => surfaceRef.current!);
+  useLayoutEffect(() => {
+    onEscapeRef.current = onEscape;
+  });
 
   useLayoutEffect(() => {
     const surface = surfaceRef.current;
@@ -114,9 +124,34 @@ export const ModalSurface = forwardRef<
         focusInside();
       }
     };
+
+    // React delegates portal events at the portal container, so a keydown whose
+    // target is `document.body` itself has no fiber and never reaches the
+    // synthetic handler below. The browser drops focus to `body` whenever the
+    // focused control becomes `disabled` mid-flight or a backdrop click lands on
+    // a dialog that does not close, and `focusin` never fires for that move, so
+    // focus containment cannot recover it either. This listener answers Escape
+    // in exactly those cases and keeps the same ownership contract: the
+    // `ToolbarMenu` capture listener already stopped propagation before this
+    // runs, the synthetic handler stops propagation at the portal container when
+    // it closed the dialog, a caller's `preventDefault()` is respected through
+    // `defaultPrevented`, and `isTopmostModal` plus that same flag keep stacked
+    // dialogs to one close per keypress. `Tooltip` listens on the document
+    // bubble too and drops the key once this claimed it.
+    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      const onEscapeNow = onEscapeRef.current;
+      if (!onEscapeNow || !isTopmostModal(surface)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      onEscapeNow();
+    };
+
     document.addEventListener("focusin", containFocus);
+    document.addEventListener("keydown", closeOnEscape);
     return () => {
       document.removeEventListener("focusin", containFocus);
+      document.removeEventListener("keydown", closeOnEscape);
       if (
         previousFocus?.isConnected &&
         (surface.contains(document.activeElement) ||
@@ -139,7 +174,15 @@ export const ModalSurface = forwardRef<
       onMouseDown={(event) => event.stopPropagation()}
       onKeyDown={(event) => {
         onKeyDown?.(event);
-        if (event.defaultPrevented || event.key !== "Tab") return;
+        if (event.defaultPrevented) return;
+        if (event.key === "Escape") {
+          if (!onEscape || !isTopmostModal(event.currentTarget)) return;
+          event.preventDefault();
+          event.stopPropagation();
+          onEscape();
+          return;
+        }
+        if (event.key !== "Tab") return;
         const focusable = focusableModalElements(event.currentTarget);
         if (focusable.length === 0) {
           event.preventDefault();

@@ -146,9 +146,7 @@ export default function SkillStartupGate() {
       <ModalSurface
         aria-labelledby="agent-startup-title"
         aria-describedby="agent-startup-description"
-        onKeyDown={(event) => {
-          if (event.key === "Escape" && busy === null) saveForLater();
-        }}
+        onEscape={busy === null ? saveForLater : undefined}
       >
         <ModalTitleBar
           title={t("agentTools.startupTitle")}

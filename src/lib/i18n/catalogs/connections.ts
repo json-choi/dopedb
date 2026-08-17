@@ -94,12 +94,17 @@ export const connectionsCatalog = defineCatalog(
       "Could not load analyses",
     "connections.environmentAnalyses": "Analyses",
     "connections.environmentDatabases": "Databases",
+    "connections.environmentDatabaseLoadFailed":
+      "Could not load databases",
     "connections.environmentDatabaseUnavailable":
       "This workspace database is not available on this device",
     "connections.environmentLocalFolder": "Local folder",
     "connections.environmentDataSources": "Data sources",
+    "connections.environmentSourceLoadFailed":
+      "Could not load data sources",
     "connections.environmentNoAnalyses": "No analyses yet",
     "connections.loadingProjects": "Loading Projects…",
+    "connections.projectLoadFailed": "Could not load Projects",
     "connections.unassigned": "Unassigned",
     "connections.dataSourceCatalogNavigation":
       "Data source catalog navigation",
@@ -182,6 +187,7 @@ export const connectionsCatalog = defineCatalog(
     "connections.fileAndSample": "Files and samples",
     "connections.sampleDatabase": "Sample database",
     "connections.expand": "Expand",
+    "connections.explorerTree": "Database objects",
     "connections.expandAll": "Expand all",
     "connections.expandMetadata": "Expand metadata for {table}",
     "connections.compareSchemaStructure": "Compare Schema Structure",
@@ -405,12 +411,17 @@ export const connectionsCatalog = defineCatalog(
       "분석을 불러오지 못했습니다",
     "connections.environmentAnalyses": "분석",
     "connections.environmentDatabases": "데이터베이스",
+    "connections.environmentDatabaseLoadFailed":
+      "데이터베이스를 불러오지 못했습니다",
     "connections.environmentDatabaseUnavailable":
       "이 워크스페이스 데이터베이스를 현재 기기에서 사용할 수 없습니다",
     "connections.environmentLocalFolder": "로컬 폴더",
     "connections.environmentDataSources": "데이터 소스",
+    "connections.environmentSourceLoadFailed":
+      "데이터 소스를 불러오지 못했습니다",
     "connections.environmentNoAnalyses": "아직 분석 아티클이 없습니다",
     "connections.loadingProjects": "프로젝트 불러오는 중…",
+    "connections.projectLoadFailed": "프로젝트를 불러오지 못했습니다",
     "connections.unassigned": "미분류",
     "connections.dataSourceCatalogNavigation":
       "데이터 소스 카탈로그 탐색",
@@ -492,6 +503,7 @@ export const connectionsCatalog = defineCatalog(
     "connections.fileAndSample": "파일 및 샘플",
     "connections.sampleDatabase": "샘플 데이터베이스",
     "connections.expand": "펼치기",
+    "connections.explorerTree": "데이터베이스 객체",
     "connections.expandAll": "모두 펼치기",
     "connections.expandMetadata": "{table} 메타데이터 펼치기",
     "connections.compareSchemaStructure": "스키마 구조 비교",

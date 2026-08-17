@@ -13,7 +13,10 @@ use uuid::Uuid;
 
 use crate::error::AppResult;
 
-use super::source_sync::{KnowledgeSourceSynchronizer, KnowledgeSyncReceipt};
+use super::domain::is_sync_cancelled;
+use super::source_sync::{
+    KnowledgeSourceSynchronizer, KnowledgeSyncCancellation, KnowledgeSyncReceipt,
+};
 
 const WATCH_DEBOUNCE: Duration = Duration::from_millis(750);
 
@@ -81,6 +84,13 @@ impl KnowledgeWatchRuntime {
     pub(crate) async fn sync(&self, source_id: Uuid) -> AppResult<KnowledgeSyncReceipt> {
         self.synchronizer.sync(source_id).await
     }
+
+    pub(crate) async fn cancel_sync(
+        &self,
+        source_id: Uuid,
+    ) -> AppResult<KnowledgeSyncCancellation> {
+        self.synchronizer.cancel_sync(source_id).await
+    }
 }
 
 async fn watch_source(
@@ -105,6 +115,11 @@ async fn drive_changes(
         emit_state(events, source_id, "syncing", None);
         match synchronizer.sync(source_id).await {
             Ok(_) => emit_state(events, source_id, "ready", None),
+            // A user-requested stop is not a source failure, so it never leaves a
+            // `failed` badge behind; the screen falls back to the stored health.
+            Err(error) if is_sync_cancelled(&error) => {
+                emit_state(events, source_id, "cancelled", None);
+            }
             Err(error) => emit_state(events, source_id, "failed", Some(error.kind())),
         }
     }

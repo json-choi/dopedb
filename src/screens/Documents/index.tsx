@@ -19,6 +19,7 @@ import DataGrid from "../../features/queryResults/DataGrid";
 import { Icon } from "../../components/Icon";
 import ResultToolbar from "../../features/queryResults/ResultToolbar";
 import { Button } from "../../design-system/components/Button";
+import { InlineNotice } from "../../design-system/components/Status";
 import {
   WorkbenchDivider,
   WorkbenchContainedBody,
@@ -258,9 +259,11 @@ export default function Documents({
           disabled={running || tables.length === 0}
           onChange={setCollection}
         >
-          {tables.length === 0 && (
+          {catalog.error ? (
+            <option value="">{t("documents.collectionsUnavailable")}</option>
+          ) : tables.length === 0 ? (
             <option value="">{t("documents.noCollections")}</option>
-          )}
+          ) : null}
           {tables.map((table) => (
             <option key={table.name} value={table.name}>
               {table.name}
@@ -270,6 +273,28 @@ export default function Documents({
       </WorkbenchToolbar>
 
       <WorkbenchContainedBody>
+        {/* Without this branch a failed collection introspection is indistinguishable from
+            a database that simply has no collections. */}
+        {catalog.error ? (
+          <InlineNotice
+            tone="danger"
+            icon="alert"
+            role="alert"
+            action={
+              <Button
+                size="compact"
+                disabled={catalog.isFetching}
+                onClick={() => void catalog.refetch()}
+              >
+                {t("app.retry")}
+              </Button>
+            }
+          >
+            {t("documents.collectionsFailed", {
+              error: errMessage(catalog.error),
+            })}
+          </InlineNotice>
+        ) : null}
         <div
           data-result={Boolean(result)}
           data-workbench-scroll-owner="document-controls"

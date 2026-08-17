@@ -130,16 +130,26 @@ export default function ToolbarMenu({
       }
       close();
     };
+    // An open menu is the innermost dismissible surface on its trigger, so it
+    // claims Escape in the capture phase and stops propagation. `ModalSurface`
+    // and `Tooltip` would already drop the key on `defaultPrevented`, but
+    // `stopPropagation` is what stops the surfaces that listen on `window`
+    // without that gate: the mobile explorer overlay
+    // (`useResponsiveShell`), `CellViewer`, and `DdlModal` all dismiss on any
+    // Escape, and this menu renders inside them. Dropping to `preventDefault`
+    // alone would close two surfaces per keypress, so the cost is that a
+    // focused control below the menu does not see this Escape.
     const closeOnEscape = (event: globalThis.KeyboardEvent) => {
       if (event.key !== "Escape") return;
       event.preventDefault();
+      event.stopPropagation();
       close({ restoreFocus: true });
     };
     document.addEventListener("pointerdown", closeOutside);
-    document.addEventListener("keydown", closeOnEscape);
+    document.addEventListener("keydown", closeOnEscape, true);
     return () => {
       document.removeEventListener("pointerdown", closeOutside);
-      document.removeEventListener("keydown", closeOnEscape);
+      document.removeEventListener("keydown", closeOnEscape, true);
     };
   }, [open]);
 

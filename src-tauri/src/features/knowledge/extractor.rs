@@ -23,7 +23,7 @@ use uuid::Uuid;
 
 use crate::error::{AppError, AppResult};
 
-use super::domain::SourceSnapshot;
+use super::domain::{sync_cancelled, SourceSnapshot, SyncCancellation};
 use super::ports::LocalKnowledgeSourcePort;
 
 const EXTRACTOR_ID: &str = "dopedb.structural-code";
@@ -139,6 +139,7 @@ pub(crate) async fn build_graph<A: LocalKnowledgeSourcePort>(
     snapshot: &SourceSnapshot,
     parent_graph_revision_id: Option<Uuid>,
     previous: Option<&GraphBuildArtifactV1>,
+    cancellation: &SyncCancellation,
 ) -> AppResult<GraphBuildArtifactV1> {
     if !snapshot.binding.validate() || snapshot.environment_revision == 0 {
         return Err(AppError::Blocked {
@@ -170,6 +171,9 @@ pub(crate) async fn build_graph<A: LocalKnowledgeSourcePort>(
         )?;
     }
     for file in &snapshot.files {
+        if cancellation.is_cancelled() {
+            return Err(sync_cancelled());
+        }
         if incremental && !changed.contains(&file.path) {
             continue;
         }

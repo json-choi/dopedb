@@ -255,6 +255,65 @@ export async function requeueGithubKnowledgeSync(input: {
   return result.rows[0] ?? null;
 }
 
+// Stop the code index a member started. Superseding the job is the same halt the
+// claim path already applies to an outdated job: every worker write is guarded on
+// `state = 'claimed'`, so a superseded job cannot advance a phase, record a file,
+// or activate a revision, and its partial index rows are discarded here. The
+// source returns to 'stale' so nothing re-claims it until a member syncs again.
+export async function cancelGithubKnowledgeSync(input: {
+  organizationId: string;
+  sourceId: string;
+  authority: KnowledgeMutationAuthority;
+}) {
+  const result = await db.execute<{ cancelled: number }>(sql`
+    WITH cancelled AS MATERIALIZED (
+      UPDATE "workspace_control"."knowledge_source_sync_job" job
+      SET "state" = 'superseded',
+        "claimed_at" = NULL,
+        "lease_expires_at" = NULL,
+        "worker_id" = NULL,
+        "finished_at" = now(),
+        "updated_at" = now()
+      FROM "workspace_control"."knowledge_source" source
+      WHERE source."organization_id" = job."organization_id"
+        AND source."id" = job."source_id"
+        AND job."organization_id" = ${input.organizationId}
+        AND job."source_id" = ${input.sourceId}::uuid
+        AND job."state" IN ('queued', 'claimed')
+        AND source."provider" = 'github'
+        AND source."revoked_at" IS NULL
+        AND ${knowledgeMutationAuthoritySql(input.authority, input.organizationId)}
+      RETURNING job."id"
+    ), purged AS (
+      DELETE FROM "workspace_control"."knowledge_code_index_file" file
+      USING cancelled
+      WHERE file."job_id" = cancelled."id"
+      RETURNING file."job_id"
+    ), purged_fragments AS (
+      DELETE FROM "workspace_control"."knowledge_code_index_activation_fragment" fragment
+      USING cancelled
+      WHERE fragment."job_id" = cancelled."id"
+      RETURNING fragment."job_id"
+    ), purged_entities AS (
+      DELETE FROM "workspace_control"."knowledge_code_index_activation_entity" entity
+      USING cancelled
+      WHERE entity."job_id" = cancelled."id"
+      RETURNING entity."job_id"
+    ), stalled AS (
+      UPDATE "workspace_control"."knowledge_source" source
+      SET "sync_state" = 'stale',
+        "updated_at" = now()
+      WHERE source."organization_id" = ${input.organizationId}
+        AND source."id" = ${input.sourceId}::uuid
+        AND source."sync_state" IN ('pending', 'syncing')
+        AND EXISTS (SELECT 1 FROM cancelled)
+      RETURNING source."id"
+    )
+    SELECT count(*)::int AS "cancelled" FROM cancelled
+  `);
+  return { cancelled: (result.rows[0]?.cancelled ?? 0) > 0 };
+}
+
 export async function recordGithubKnowledgePush(input: {
   organizationId: string;
   sourceId: string;

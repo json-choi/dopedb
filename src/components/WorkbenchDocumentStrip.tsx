@@ -86,17 +86,6 @@ export default function WorkbenchDocumentStrip({
   return (
     <IdeTabStrip
       label={t("app.workbenchNavigation")}
-      onKeyDown={(event) => {
-          if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-          const tabs = [
-            ...event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'),
-          ];
-          const current = tabs.indexOf(event.target as HTMLButtonElement);
-          if (current < 0) return;
-          event.preventDefault();
-          const direction = event.key === "ArrowRight" ? 1 : -1;
-          tabs[(current + direction + tabs.length) % tabs.length]?.focus();
-      }}
       actions={
         <ToolbarMenu
           label={t("tabs.openDocuments")}
@@ -131,6 +120,11 @@ export default function WorkbenchDocumentStrip({
               tabRef={active ? activeTabRef : undefined}
               active={active}
               title={title}
+              // `IdeTab` defaults to `active ? 0 : -1`, but `activeId` is the
+              // workbench-wide document and this strip only renders the selected
+              // connection's documents. Without this fallback a strip whose
+              // active document belongs to another connection would expose no
+              // Tab stop at all.
               tabIndex={
                 active || (!hasVisibleActiveDocument && document.id === keyboardFallbackId)
                   ? 0

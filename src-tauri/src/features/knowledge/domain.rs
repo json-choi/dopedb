@@ -1,6 +1,8 @@
 //! Provider-neutral Project Knowledge values and safety invariants.
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 use dopedb_protocol::{
@@ -13,6 +15,42 @@ use uuid::Uuid;
 
 use crate::error::{AppError, AppResult};
 use crate::kernel::identity::{AccountId, WorkspaceId};
+
+/// The one error a cancelled Project Knowledge sync returns. It carries the
+/// dedicated `cancelled` kind, so both the watcher and the screen discriminate a
+/// user-requested stop by type instead of by message text, and a cancelled sync
+/// never leaves a `failed` health state behind.
+pub(crate) fn sync_cancelled() -> AppError {
+    AppError::Cancelled("Project Knowledge sync cancelled".into())
+}
+
+/// True when `error` is the cancellation this feature raises.
+pub(crate) fn is_sync_cancelled(error: &AppError) -> bool {
+    matches!(error, AppError::Cancelled(message) if message == "Project Knowledge sync cancelled")
+}
+
+/// Cooperative stop signal for exactly one logical sync run. The feature owns it
+/// so a checkpoint never reads a process-wide executor registry, and a stop that
+/// reached an earlier run can never be inherited by the next one. The cancel use
+/// case is the only writer; every checkpoint only reads.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct SyncCancellation(Arc<AtomicBool>);
+
+impl SyncCancellation {
+    pub(crate) fn cancel(&self) {
+        self.0.store(true, Ordering::SeqCst);
+    }
+
+    pub(crate) fn is_cancelled(&self) -> bool {
+        self.0.load(Ordering::SeqCst)
+    }
+
+    /// True when both values are the same run's signal rather than two runs of
+    /// the same source.
+    pub(crate) fn same_run(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
