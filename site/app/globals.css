@@ -160,6 +160,11 @@ p {
   margin: 0;
 }
 
+/* Korean copy breaks between 어절, never inside one. keep-all is inert for Latin text. */
+:lang(ko) {
+  word-break: keep-all;
+}
+
 @keyframes landing-rise {
   from {
     opacity: 0;

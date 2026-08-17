@@ -1,6 +1,6 @@
 # DopeDB Product Positioning
 
-Status: accepted product decision, updated 2026-08-12.
+Status: accepted product decision, updated 2026-08-17.
 
 This document owns DopeDB's market category, competitive boundary, and public
 message. Architecture documents prove how the promise is enforced; the landing
@@ -113,6 +113,12 @@ Korean short headline:
 
 > DB 접근은 함께, 인증정보는 각자 보관하세요.
 
+The short headline is the **descriptive** line. It stays in page metadata, structured
+data, README files, and the workspace console sign-in screen. The landing hero uses a
+separate persuasive hook recorded in [Landing hook](#landing-hook); a hook may lead
+with the reader's situation, but it may not assert anything the claim discipline below
+forbids.
+
 ## Proof and claim discipline
 
 Public copy may describe these implemented foundations:
@@ -127,6 +133,20 @@ Public copy may describe these implemented foundations:
   transaction rollback, durable local results, and audit receipts;
 - local query execution without routing database traffic through the workspace
   service.
+
+Two of those foundations are easy to overstate, so public copy must carry their
+boundary in the same sentence that makes the claim:
+
+- **Availability.** An already-synchronized workspace connection used with a
+  member-local credential keeps working while the workspace service is unreachable,
+  and Personal Workspace never required an account. Issuing a new managed credential
+  and applying membership, policy, or revision changes do require the service, so
+  never write an unqualified "DopeDB going down cannot affect you."
+- **Result locality.** Queries, results, cancellation, and rollback stay on the
+  member's machine, with one deliberate exception: the reviewed, bounded, masked
+  result fragments a person publishes into an internal Analysis Article. Copy may say
+  results stay local only when it also names that exception, and must not claim the
+  workspace service knows *nothing* beyond who may reach what.
 
 Public copy must label the product as an alpha and must not imply that the following
 open roadmap work is complete:
@@ -175,7 +195,33 @@ The public landing page serves one audience and one primary action:
 
 GitHub and architecture documents are supporting evidence, not competing hero calls
 to action. Future testimonials, usage numbers, or customer logos must never be
-fabricated; add them only when a verifiable source exists.
+fabricated; add them only when a verifiable source exists. The same rule covers
+setup-time and performance figures: a promise such as "five minutes to your first
+connection" needs a measured onboarding source, so prefer a verifiable low-cost fact
+("no account required") over an invented duration.
+
+### Landing hook
+
+The hero opens on the reader's situation rather than on architecture:
+
+> Before you hand Codex your prod database.
+>
+> An Agent can ignore a system prompt. It cannot ignore authority.
+
+Korean:
+
+> Codex에게 prod DB를 맡기기 전에.
+>
+> Agent는 system prompt를 무시할 수 있습니다. 권한은 무시할 수 없습니다.
+
+Rules for changing the hook:
+
+- Keep the alpha label and the local-execution proof visible in the same viewport.
+- Name a concrete moment the reader recognizes; do not lead with "boundary" or
+  "control plane" as the subject of the sentence.
+- Say what the reader does not have to experience, not what the system internally owns.
+- Every trust section stays answerable by the [Proof and claim discipline](#proof-and-claim-discipline)
+  list, including the availability and result-locality boundaries.
 
 ## Success measure
 

@@ -34,10 +34,10 @@ export const homeCopy = {
     },
     hero: {
       eyebrow: "Open source · Alpha · Local execution",
-      headline: "Share database access.",
-      accent: "Keep credentials personal.",
+      headline: "Before you hand Codex",
+      accent: "your prod database.",
       text:
-        "DopeDB gives a team one connection and policy without creating one shared password. Each member or Agent receives only the authority it needs, while database traffic and recovery stay on the desktop.",
+        "An Agent can ignore a system prompt. It cannot ignore authority. DopeDB pins every Agent to one connection at one revision, and a write runs only as the exact payload a human approved.",
       primary: "Download the alpha",
       secondary: "Open team workspace",
       proof:
@@ -69,14 +69,14 @@ export const homeCopy = {
     ],
     boundary: {
       eyebrow: "01 / Shared access",
-      title: "One connection. Individual authority.",
+      title: "Share the connection, not the key.",
       body:
-        "The collaboration layer owns identity and policy. Credentials and query execution remain deliberately outside the shared record.",
+        "One shared account makes every audit entry look like the same person. DopeDB gives the team what the database is and leaves how to open it with each member.",
       items: [
         {
           index: "01",
           overline: "Secretless record",
-          title: "Share what the database is, not the key that opens it.",
+          title: "Sharing another connection never creates another secret to rotate.",
           body:
             "Provider resource, environment, policy, and revision travel with the workspace connection. A long-lived database secret does not.",
         },
@@ -98,9 +98,9 @@ export const homeCopy = {
     },
     product: {
       eyebrow: "02 / Desktop boundary",
-      title: "The workspace coordinates. Your desktop executes.",
+      title: "Your queries never pass through our servers.",
       body:
-        "DopeDB is not a database proxy. The native app keeps credentials, database traffic, write approval, cancellation, rollback, results, and local audit at the machine where the work runs.",
+        "DopeDB is not a database proxy. We know who may reach what; credentials, queries, results, cancellation, and rollback all happen on your machine. The only results that leave it are the bounded fragments a person reviewed and shared. With a connection already synchronized, our service going down does not stop your database work.",
       imageAlt:
         "DopeDB desktop workspace showing an Agent answer, database result, safety gate, and audit timeline",
       labels: [
@@ -112,7 +112,7 @@ export const homeCopy = {
       eyebrow: "Enforced, not prompted",
       title: "Safety lives outside the Agent.",
       body:
-        "A system prompt can be ignored. DopeDB binds authority to the operation itself and keeps the human recovery controls visible.",
+        "Authority, approval, and recovery are not promises the Agent keeps for you. They are bound to the operation itself, and the handles a human needs stay on screen.",
       items: [
         {
           icon: Fingerprint,
@@ -136,9 +136,9 @@ export const homeCopy = {
     },
     workflow: {
       eyebrow: "03 / Exact operation",
-      title: "A bounded path from intent to receipt.",
+      title: "An approval screen makes the Agent faster.",
       body:
-        "The Agent can move quickly because the authority, write decision, and recovery path are already explicit.",
+        "When what is allowed and what can be undone are settled in advance, nobody has to confirm every step. Stop only the dangerous ones.",
       steps: [
         {
           index: "01",
@@ -180,35 +180,40 @@ receipt         pending human decision`,
     },
     faq: {
       eyebrow: "Before you trust it",
-      title: "The important questions, answered directly.",
+      title: "Not convinced? Ask these first.",
       items: [
         {
-          question: "Does the workspace service proxy database queries?",
+          question: "Do my queries pass through your servers?",
           answer:
-            "No. It coordinates membership, connection metadata, policy, provider resources, revisions, and collaboration audit. Database traffic continues to run from Desktop.",
+            "No. The workspace service coordinates membership, connection metadata, policy, provider resources, revisions, and collaboration audit. Database traffic continues to run from your Desktop.",
         },
         {
-          question: "Are database credentials uploaded with a shared connection?",
+          question: "If I share a connection, does my database password go up with it?",
           answer:
             "No. Member-local credentials remain in that member's OS store. Supported managed access returns an expiring member-specific credential and does not persist the issued secret.",
         },
         {
-          question: "Can an Agent approve its own write?",
+          question: "Can an Agent approve the write it just wrote?",
           answer:
             "No. Risky SQL becomes an immutable proposal. A human approves the exact payload in Desktop before the operation can proceed.",
         },
         {
-          question: "Is DopeDB production-ready?",
+          question: "If DopeDB goes down, do we lose our database?",
           answer:
-            "The public build is an alpha. Verify the supported provider and recovery scope, use least-privilege database roles, and test your workflow before touching production data.",
+            "No. An already synchronized connection with your own credential keeps working, and Personal Workspace never needed an account. New managed credentials and membership or policy changes wait until the service is back.",
+        },
+        {
+          question: "Can I use it in production today?",
+          answer:
+            "It is still an alpha. Verify the supported provider and recovery scope, use least-privilege database roles, and validate your workflow before it touches production data.",
         },
       ],
     },
     download: {
       eyebrow: "Open-source alpha",
-      title: "Put one real connection inside a visible boundary.",
+      title: "Put one real connection in. The account can wait.",
       body:
-        "Start with Personal Workspace without an account. Sign in only when you want team sharing or managed provider access.",
+        "Personal Workspace runs without signing in. Sign in only when you want team sharing or managed provider access.",
       primary: "Open the latest release",
       source: "Build from source",
       sourceNote: `Building from source needs ${buildToolchain}.`,
@@ -244,7 +249,7 @@ receipt         pending human decision`,
       ],
     },
     footer: {
-      statement: "Shared access. Personal credentials. Exact Agent authority.",
+      statement: "Kill the shared password. Keep the access. Pin the Agent.",
       workspace: "Team workspace",
       privacy: "Privacy",
       terms: "Terms",
@@ -265,10 +270,10 @@ receipt         pending human decision`,
     },
     hero: {
       eyebrow: "오픈소스 · Alpha · 로컬 실행",
-      headline: "DB 접근은 함께.",
-      accent: "인증정보는 각자.",
+      headline: "Codex에게 prod DB를",
+      accent: "맡기기 전에.",
       text:
-        "DopeDB는 공용 password를 만들지 않고도 팀이 하나의 연결과 정책을 쓰게 합니다. 구성원과 Agent는 필요한 권한만 받고, DB traffic과 복구 경계는 Desktop에 남습니다.",
+        "Agent는 system prompt를 무시할 수 있습니다. 권한은 무시할 수 없습니다. DopeDB는 연결 하나·revision 하나에 Agent를 고정하고, write는 사람이 승인한 payload만 통과시킵니다.",
       primary: "Alpha 다운로드",
       secondary: "팀 워크스페이스 열기",
       proof: "Personal Workspace는 무계정 · macOS와 Windows · MIT 라이선스",
@@ -299,14 +304,14 @@ receipt         pending human decision`,
     ],
     boundary: {
       eyebrow: "01 / 공유 접근",
-      title: "연결은 하나. 권한은 각자.",
+      title: "연결은 공유하고, key는 공유하지 않습니다.",
       body:
-        "협업 계층은 정체성과 정책을 소유합니다. 자격 증명과 query 실행은 의도적으로 공유 record 밖에 둡니다.",
+        "공용 계정 하나를 돌려쓰면 감사 로그가 전부 같은 사람이 됩니다. DopeDB는 무슨 DB인지만 팀에 공유하고, 그 DB를 여는 방법은 개인에게 남깁니다.",
       items: [
         {
           index: "01",
           overline: "비밀값 없는 record",
-          title: "DB가 무엇인지는 공유하고, DB를 여는 key는 공유하지 않습니다.",
+          title: "연결을 하나 더 공유해도 돌려야 할 비밀값이 하나 더 생기지 않습니다.",
           body:
             "Provider resource, environment, policy, revision은 workspace connection을 따라가지만 장기 DB 비밀값은 따라가지 않습니다.",
         },
@@ -328,9 +333,9 @@ receipt         pending human decision`,
     },
     product: {
       eyebrow: "02 / Desktop 경계",
-      title: "Workspace는 조정하고, Desktop은 실행합니다.",
+      title: "당신의 쿼리는 우리 서버를 지나가지 않습니다.",
       body:
-        "DopeDB는 database proxy가 아닙니다. Native app이 credential, DB traffic, write approval, cancellation, rollback, result, local audit를 실제 작업이 실행되는 기기에 둡니다.",
+        "DopeDB는 proxy가 아닙니다. 우리는 누가 무엇에 접근할 수 있는지를 알고, 자격 증명·쿼리·결과·중단·rollback은 당신 기기에서 벌어집니다. 팀에 올라가는 결과는 사람이 검토해 공유한 bounded 조각뿐이고, 이미 동기화된 연결이라면 우리 서비스가 멈춰도 당신의 DB 작업은 멈추지 않습니다.",
       imageAlt:
         "Agent 답변, 데이터베이스 결과, 안전 게이트, 감사 타임라인을 보여주는 DopeDB 데스크톱 워크스페이스",
       labels: [
@@ -342,7 +347,7 @@ receipt         pending human decision`,
       eyebrow: "Prompt가 아니라 집행",
       title: "안전 경계는 Agent 밖에 있습니다.",
       body:
-        "System prompt는 무시될 수 있습니다. DopeDB는 operation 자체에 권한을 묶고, 사람이 필요한 복구 수단을 화면에 남깁니다.",
+        "권한, 승인, 복구는 Agent가 알아서 지키겠다고 약속하는 대상이 아닙니다. operation 자체에 묶여 있고, 사람이 쓸 손잡이는 화면에 남아 있습니다.",
       items: [
         {
           icon: Fingerprint,
@@ -366,9 +371,9 @@ receipt         pending human decision`,
     },
     workflow: {
       eyebrow: "03 / 정확한 Operation",
-      title: "의도에서 receipt까지 경계가 있는 한 경로.",
+      title: "승인 화면이 있으면 Agent는 더 빨라집니다.",
       body:
-        "권한, write 결정, 복구 경로가 이미 명확하기 때문에 Agent는 그 안에서 빠르게 움직일 수 있습니다.",
+        "무엇이 허용되는지, 되돌릴 수 있는지가 미리 정해져 있으면 사람이 매번 확인할 이유가 없어집니다. 위험한 것만 멈춰 세우세요.",
       steps: [
         {
           index: "01",
@@ -410,35 +415,40 @@ receipt         pending human decision`,
     },
     faq: {
       eyebrow: "신뢰하기 전에",
-      title: "중요한 질문에는 바로 답합니다.",
+      title: "못 믿겠으면, 이것부터 물어보세요.",
       items: [
         {
-          question: "Workspace service가 DB query를 proxy하나요?",
+          question: "내 쿼리가 당신들 서버를 지나가나요?",
           answer:
-            "아니요. Membership, connection metadata, policy, provider resource, revision, collaboration audit만 조정합니다. DB traffic은 계속 Desktop에서 실행됩니다.",
+            "아니요. Workspace service는 membership, connection metadata, policy, provider resource, revision, collaboration audit만 조정합니다. DB traffic은 계속 당신의 Desktop에서 실행됩니다.",
         },
         {
-          question: "공유 connection과 함께 DB credential도 업로드되나요?",
+          question: "연결을 공유하면 내 DB 비번도 같이 올라가나요?",
           answer:
             "아니요. Member-local credential은 각자의 OS 저장소에 남습니다. 지원되는 managed access는 만료되는 구성원별 credential을 반환하며 발급된 secret을 저장하지 않습니다.",
         },
         {
-          question: "Agent가 자신의 write를 승인할 수 있나요?",
+          question: "Agent가 자기가 만든 write를 자기가 승인할 수 있나요?",
           answer:
             "아니요. 위험한 SQL은 불변 proposal이 됩니다. 사람이 Desktop에서 exact payload를 승인해야 operation이 진행됩니다.",
         },
         {
-          question: "지금 production에 사용할 수 있나요?",
+          question: "DopeDB가 내려가면 우리 DB도 못 쓰나요?",
           answer:
-            "공개 빌드는 alpha입니다. 지원 provider와 복구 범위를 확인하고 최소 권한 DB role을 사용하며 production data 전에 workflow를 검증하세요.",
+            "아니요. 이미 동기화된 연결과 각자의 credential로는 그대로 작업할 수 있고, Personal Workspace는 애초에 계정이 필요 없습니다. 새 managed credential 발급과 멤버십·정책 변경 반영만 service가 돌아온 뒤로 밀립니다.",
+        },
+        {
+          question: "지금 production에 써도 되나요?",
+          answer:
+            "아직 Alpha입니다. 지원 provider와 복구 범위를 확인하고 최소 권한 DB role을 사용하며 production data에 닿기 전에 workflow를 검증하세요.",
         },
       ],
     },
     download: {
       eyebrow: "오픈소스 Alpha",
-      title: "실제 연결 하나를 보이는 경계 안에 넣어보세요.",
+      title: "진짜 연결 하나를 넣어보세요. 계정은 그다음입니다.",
       body:
-        "계정 없이 Personal Workspace로 시작하세요. 팀 공유나 managed provider access가 필요할 때만 로그인합니다.",
+        "Personal Workspace는 로그인 없이 동작합니다. 팀 공유나 managed provider가 필요해질 때만 로그인하면 됩니다.",
       primary: "최신 Release 열기",
       source: "소스에서 빌드",
       sourceNote: `소스에서 빌드하려면 ${buildToolchain}이 필요합니다.`,
@@ -474,7 +484,7 @@ receipt         pending human decision`,
       ],
     },
     footer: {
-      statement: "공유 접근. 개인별 인증정보. 정확한 Agent 권한.",
+      statement: "비번은 없애고. 접근은 남기고. Agent는 묶어두고.",
       workspace: "팀 워크스페이스",
       privacy: "개인정보처리방침",
       terms: "이용약관",
