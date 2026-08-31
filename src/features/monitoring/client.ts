@@ -8,7 +8,7 @@ import type { Event } from "@sentry/react";
 import type { ErrorInfo } from "react";
 
 const SENTRY_DSN =
-  "https://6a996b840dfc625c22eee410e885b93f@o4511867515895808.ingest.us.sentry.io/4511868739190784";
+  "https://1ef5b6fd989b94471cd7f84e0078529e@o4511867515895808.ingest.us.sentry.io/4512004769316864";
 const SAFE_TAGS = new Set([
   "surface",
   "runtime",
