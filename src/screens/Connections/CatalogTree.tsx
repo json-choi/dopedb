@@ -68,6 +68,8 @@ type Props = {
   onRetryOverview: () => void;
   onResolveAccess?: () => void;
   onRecoverAuthentication?: () => void;
+  onRecoverManagedConnection?: () => void;
+  managedConnectionRecoveryPending?: boolean;
   authenticationRecoveryPending?: boolean;
   authenticationRecoveryError?: CatalogLoadIssue;
   onToggleRelationSection: (key: string) => void;
@@ -756,6 +758,10 @@ export default function CatalogTree(props: Props) {
               authenticationRecoveryError={props.authenticationRecoveryError}
               onResolveAccess={props.onResolveAccess}
               onRecoverAuthentication={props.onRecoverAuthentication}
+              onRecoverManagedConnection={props.onRecoverManagedConnection}
+              managedConnectionRecoveryPending={
+                props.managedConnectionRecoveryPending
+              }
               onRetryOverview={props.onRetryOverview}
               onRequestDetails={props.onRequestDetails}
             />

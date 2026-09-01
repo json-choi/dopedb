@@ -11,45 +11,97 @@ import { workspaceId as asWorkspaceId } from "../workspaces/domain";
 import { workspaceManagedConnectionConsoleUrl } from "../workspaces/tauriAdapter";
 import type { ConnectionProfile } from "./domain";
 
-export function useManagedConnectionRecovery(
-  profile: ConnectionProfile,
+type ReturnAction = () => void;
+
+function managedRecoveryActive(profile: ConnectionProfile) {
+  return profile.credentialMode === "managed"
+    && profile.workspaceAccess !== "local";
+}
+
+export function useManagedConnectionRecoveryLauncher(
   catalogScope: CatalogScope,
 ) {
   const { t } = useI18n();
   const toast = useToast();
-  const [openingSettings, setOpeningSettings] = useState(false);
+  const [openingConnectionId, setOpeningConnectionId] = useState<string | null>(
+    null,
+  );
   const mounted = useRef(true);
+  const returnAction = useRef<ReturnAction | null>(null);
+
   useEffect(() => {
     mounted.current = true;
+    const handleFocus = () => {
+      const action = returnAction.current;
+      if (!action) return;
+      returnAction.current = null;
+      action();
+    };
+    window.addEventListener("focus", handleFocus);
     return () => {
       mounted.current = false;
+      returnAction.current = null;
+      window.removeEventListener("focus", handleFocus);
     };
   }, []);
 
-  const active = profile.credentialMode === "managed"
-    && profile.workspaceAccess !== "local";
-  const canOpenSettings = active
-    && profile.workspaceAccess === "manage"
-    && catalogScope.workspaceKind === "team"
-    && catalogScope.workspaceId !== null;
+  function canOpenSettings(profile: ConnectionProfile) {
+    return managedRecoveryActive(profile)
+      && profile.workspaceAccess === "manage"
+      && catalogScope.workspaceKind === "team"
+      && catalogScope.workspaceId !== null;
+  }
 
-  async function openSettings() {
-    if (!canOpenSettings || !catalogScope.workspaceId || openingSettings) return;
-    setOpeningSettings(true);
+  async function openSettings(
+    profile: ConnectionProfile,
+    onReturn?: ReturnAction,
+  ) {
+    if (
+      !canOpenSettings(profile)
+      || !catalogScope.workspaceId
+      || openingConnectionId !== null
+    ) return;
+    setOpeningConnectionId(profile.id);
     try {
       const url = await workspaceManagedConnectionConsoleUrl(
         asWorkspaceId(catalogScope.workspaceId),
         profile.id,
       );
+      returnAction.current = onReturn ?? null;
       await openUrl(url);
     } catch (error) {
+      returnAction.current = null;
       toast(t("connections.managedWorkspace.openFailed", {
         error: errMessage(error),
       }), "error");
     } finally {
-      if (mounted.current) setOpeningSettings(false);
+      if (mounted.current) setOpeningConnectionId(null);
     }
   }
 
-  return { active, canOpenSettings, openingSettings, openSettings };
+  return {
+    canOpenSettings,
+    openingConnectionId,
+    openSettings,
+  };
+}
+
+export function useManagedConnectionRecovery(
+  profile: ConnectionProfile,
+  catalogScope: CatalogScope,
+) {
+  const launcher = useManagedConnectionRecoveryLauncher(catalogScope);
+  const active = managedRecoveryActive(profile);
+  const canOpenSettings = launcher.canOpenSettings(profile);
+  const openingSettings = launcher.openingConnectionId === profile.id;
+
+  return {
+    active,
+    canOpenSettings,
+    openingSettings,
+    openSettings: (onReturn?: ReturnAction) => launcher.openSettings(
+      profile,
+      onReturn,
+    ),
+  };
 }

@@ -163,8 +163,11 @@ export function privateJsonStream(data: unknown, init: ResponseInit = {}) {
   return new Response(body, { ...init, headers });
 }
 
-export function jsonError(message: string, status: number) {
-  return privateJson({ error: message }, { status });
+export function jsonError(message: string, status: number, code?: string) {
+  return privateJson(
+    code === undefined ? { error: message } : { error: message, code },
+    { status },
+  );
 }
 
 export function mutationAllowed(request: Request, appOrigin: string) {

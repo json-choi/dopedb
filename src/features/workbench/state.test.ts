@@ -95,6 +95,7 @@ import {
   distinctCatalogDetailIssue,
   filterLoadedCatalogObjects,
   isAuthenticationRequired,
+  isManagedConnectionRecoveryRequired,
   supportedObjectKinds,
 } from "../catalogExplorer/catalogDomain";
 import {
@@ -734,6 +735,16 @@ describe("workbench state ownership", () => {
     expect(expiredAuthentication.message).not.toContain("config error:");
     expect(
       isAuthenticationRequired(catalogLoadIssue(new Error("network"))),
+    ).toBe(false);
+    const managedConnectionRecovery = catalogLoadIssue({
+      kind: "managedConnectionRecoveryRequired",
+      message: "managed workspace connection repair is required",
+    });
+    expect(
+      isManagedConnectionRecoveryRequired(managedConnectionRecovery),
+    ).toBe(true);
+    expect(
+      isManagedConnectionRecoveryRequired(expiredAuthentication),
     ).toBe(false);
     const serviceAccountBigQuery = {
       ...bigQuery,

@@ -45,7 +45,12 @@ export const connectionsCatalog = defineCatalog(
     "connections.managedWorkspace.securityNote":
       "This Desktop profile intentionally contains no editable host or password. Workspace Web owns the provider target and issues member-specific, short-lived access only when it is needed.",
     "connections.managedWorkspace.open": "Open managed-access repair",
+    "connections.managedWorkspace.recover": "Repair managed connection",
     "connections.managedWorkspace.opening": "Opening Workspace Web…",
+    "connections.managedWorkspace.recoveryRequiredManager":
+      "This managed database connection needs repair. Open its Workspace settings; short-lived credentials resume automatically after repair.",
+    "connections.managedWorkspace.recoveryRequiredMember":
+      "This managed database connection needs repair. Ask a Workspace manager to repair its provider connection.",
     "connections.managedWorkspace.openFailed":
       "Could not open this database in Workspace Web: {error}",
     "connections.connectionSaved": "Connection saved",
@@ -480,7 +485,12 @@ export const connectionsCatalog = defineCatalog(
     "connections.managedWorkspace.securityNote":
       "이 Desktop 프로필에는 편집할 호스트나 비밀번호가 의도적으로 들어 있지 않습니다. 워크스페이스 웹이 공급자 대상을 관리하고 필요할 때만 구성원별 단기 접근을 발급합니다.",
     "connections.managedWorkspace.open": "관리형 접근 복구 열기",
+    "connections.managedWorkspace.recover": "관리형 연결 복구",
     "connections.managedWorkspace.opening": "워크스페이스 웹 여는 중…",
+    "connections.managedWorkspace.recoveryRequiredManager":
+      "이 관리형 DB 연결을 복구해야 합니다. 워크스페이스 설정에서 복구하면 단기 자격 증명은 다시 자동 갱신됩니다.",
+    "connections.managedWorkspace.recoveryRequiredMember":
+      "이 관리형 DB 연결을 복구해야 합니다. 워크스페이스 관리자에게 공급자 연결 복구를 요청하세요.",
     "connections.managedWorkspace.openFailed":
       "워크스페이스 웹에서 이 DB를 열지 못했습니다: {error}",
     "connections.connectionSaved": "연결이 저장되었습니다",

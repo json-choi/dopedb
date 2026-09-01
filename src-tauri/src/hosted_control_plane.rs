@@ -17,11 +17,13 @@ use crate::error::{AppError, AppResult};
 
 const DEFAULT_CONTROL_PLANE_ORIGIN: &str = "https://app.dopedb.dev";
 pub(crate) const EXPECTED_REVISION_HEADER: &str = "x-dopedb-expected-revision";
+const MANAGED_CONNECTION_RECOVERY_REQUIRED_CODE: &str = "managed_connection_recovery_required";
 
 static CONTROL_PLANE_CLIENT: OnceLock<Client> = OnceLock::new();
 
 #[derive(Debug, Deserialize)]
 struct ControlPlaneErrorResponse {
+    code: Option<String>,
     error: Option<String>,
     error_description: Option<String>,
     message: Option<String>,
@@ -87,6 +89,14 @@ fn response_source(status: StatusCode) -> &'static str {
     } else {
         "workspace service"
     }
+}
+
+fn control_plane_response_error(status: StatusCode, code: Option<&str>, detail: &str) -> AppError {
+    if status == StatusCode::CONFLICT && code == Some(MANAGED_CONNECTION_RECOVERY_REQUIRED_CODE) {
+        return AppError::ManagedConnectionRecoveryRequired;
+    }
+    let source = response_source(status);
+    AppError::Network(format!("{source} returned {status}: {detail}"))
 }
 
 fn is_json_media_type(value: Option<&str>) -> bool {
@@ -180,8 +190,8 @@ pub(crate) async fn response_error(response: Response) -> AppError {
             !value.is_empty() && value.len() <= 512 && !value.chars().any(char::is_control)
         })
         .unwrap_or("the control plane rejected the request");
-    let source = response_source(status);
-    AppError::Network(format!("{source} returned {status}: {detail}"))
+    let code = body.as_ref().and_then(|value| value.code.as_deref());
+    control_plane_response_error(status, code, detail)
 }
 
 #[cfg(test)]
@@ -202,4 +212,22 @@ pub(crate) fn assert_shared_http_client_contract() {
         response_source(StatusCode::BAD_REQUEST),
         "workspace service"
     );
+    let recovery = control_plane_response_error(
+        StatusCode::CONFLICT,
+        Some(MANAGED_CONNECTION_RECOVERY_REQUIRED_CODE),
+        "untrusted upstream detail",
+    );
+    assert_eq!(recovery.kind(), "managedConnectionRecoveryRequired");
+    assert_eq!(
+        recovery.to_string(),
+        "managed workspace connection repair is required"
+    );
+    assert!(matches!(
+        control_plane_response_error(
+            StatusCode::BAD_REQUEST,
+            Some(MANAGED_CONNECTION_RECOVERY_REQUIRED_CODE),
+            "invalid request",
+        ),
+        AppError::Network(_)
+    ));
 }

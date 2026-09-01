@@ -47,6 +47,9 @@ import {
 
 type RouteContext = { params: Promise<{ workspaceId: string; connectionId: string }> };
 
+const MANAGED_CONNECTION_RECOVERY_REQUIRED =
+  "managed_connection_recovery_required";
+
 function mutationAuthority(authorization: {
   role: string;
   session: { session: { id: string }; user: { id: string } };
@@ -106,7 +109,11 @@ export async function POST(request: Request, context: RouteContext) {
     || connection.integrationRevocationPendingAt
     || connection.integrationRevocationClaimId
   )) {
-    return jsonError("Shared connection template is unsafe", 409);
+    return jsonError(
+      "Shared connection template is unsafe",
+      409,
+      MANAGED_CONNECTION_RECOVERY_REQUIRED,
+    );
   }
   if (connection.credentialMode !== "member_local" && connection.credentialMode !== "managed") {
     return jsonError("Shared connection template is unsafe", 409);

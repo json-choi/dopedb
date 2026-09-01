@@ -32,6 +32,12 @@ export function isAuthenticationRequired(
   return issue?.kind === "authenticationRequired";
 }
 
+export function isManagedConnectionRecoveryRequired(
+  issue: CatalogLoadIssue | undefined,
+): boolean {
+  return issue?.kind === "managedConnectionRecoveryRequired";
+}
+
 /** One failed backend read may feed both overview and detail observers. */
 export function distinctCatalogDetailIssue(
   overview: CatalogLoadIssue | undefined,

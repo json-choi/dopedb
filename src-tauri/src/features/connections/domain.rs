@@ -81,7 +81,7 @@ fn connection_test_failure(error: &AppError) -> ConnectionTestFailure {
         AppError::Db(sqlx::Error::Database(database)) => {
             classify_database_failure(database.as_ref())
         }
-        AppError::AuthenticationRequired(_) => (
+        AppError::AuthenticationRequired(_) | AppError::ManagedConnectionRecoveryRequired => (
             ConnectionTestFailureCode::Authentication,
             Some(ConnectionTestFailureField::Credentials),
         ),
@@ -154,6 +154,9 @@ fn safe_connection_test_detail(error: &AppError) -> String {
         AppError::Network(_) | AppError::Io(_) => "the network connection failed",
         AppError::AuthenticationRequired(_) => {
             "the connection credential is no longer authenticated"
+        }
+        AppError::ManagedConnectionRecoveryRequired => {
+            "the managed workspace connection requires provider repair"
         }
         AppError::Config(_) => "the driver rejected the connection configuration",
         AppError::Keychain(_) => "the OS credential store could not supply this connection",

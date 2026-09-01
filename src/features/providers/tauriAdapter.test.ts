@@ -25,6 +25,7 @@ import gcpOAuthSource from "../../../workspace-cloud/lib/providers/gcp-cloud-oau
 import gcpOAuthCallbackSource from "../../../workspace-cloud/lib/providers/gcp-cloud-oauth-callback.ts?raw";
 import managedLeaseRouteSource from "../../../workspace-cloud/app/api/v1/workspaces/[workspaceId]/connections/[connectionId]/lease/route.ts?raw";
 import managedAccessRouteSource from "../../../workspace-cloud/app/api/v1/workspaces/[workspaceId]/connections/[connectionId]/managed-access/route.ts?raw";
+import connectionActionRouteSource from "../../../workspace-cloud/app/api/v1/workspaces/[workspaceId]/connections/[connectionId]/route.ts?raw";
 import connectionGrantsRouteSource from "../../../workspace-cloud/app/api/v1/workspaces/[workspaceId]/connections/[connectionId]/grants/route.ts?raw";
 import providerIntegrationRouteSource from "../../../workspace-cloud/app/api/v1/workspaces/[workspaceId]/provider-integrations/route.ts?raw";
 import providerIntegrationDomainSource from "../../../workspace-cloud/lib/provider-integrations/domain.ts?raw";
@@ -1144,6 +1145,12 @@ describe("provider credential Tauri adapter", () => {
       'networkMode: input.selection.networkMode || "PRIVATE_SERVICES_ACCESS"',
     );
     expect(hostedControlPlaneSource).toContain(".or(value.error.as_deref())");
+    expect(
+      connectionActionRouteSource.match(/managed_connection_recovery_required/g),
+    ).toHaveLength(1);
+    expect(hostedControlPlaneSource).toContain(
+      "managedConnectionRecoveryRequired",
+    );
     expect(gcpSetupRouteSource).toContain("writeAccess: true");
     expect(gcpSetupRouteSource).toContain("matchesManagedGcpRepairTarget");
     expect(gcpSetupRouteSource).toContain('eq(workspaceConnection.credentialMode, "managed")');

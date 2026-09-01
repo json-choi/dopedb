@@ -9,7 +9,11 @@ import {
   pickConnectionFile,
 } from "../connections/tauriAdapter";
 import { bigQueryAuthMode } from "../connections/bigQueryOnboardingModel";
-import type { ConnectionProfile } from "../connections/domain";
+import {
+  canRecoverBigQueryAuthentication,
+  type ConnectionProfile,
+} from "../connections/domain";
+import { useManagedConnectionRecoveryLauncher } from "../connections/useManagedConnectionRecovery";
 import { qk, type CatalogScope } from "../../lib/queries";
 import { catalogLoadIssue } from "./catalogDomain";
 import type { useCatalogExplorerState } from "./state";
@@ -23,6 +27,9 @@ export function useCatalogExplorerLoading(
   commands: CatalogExplorerCommands,
 ) {
   const queryClient = useQueryClient();
+  const managedConnectionRecovery = useManagedConnectionRecoveryLauncher(
+    catalogScope,
+  );
   const authenticationRecovery = useMutation({
     mutationFn: async ({ connection }: {
       connection: ConnectionProfile;
@@ -90,26 +97,44 @@ export function useCatalogExplorerLoading(
 
   const recoveryConnectionId = authenticationRecovery.variables?.connection.id
     ?? null;
+
+  function connectionRecoveryProps(
+    connection: ConnectionProfile,
+    onManagedReturn: () => void,
+  ) {
+    return {
+      onRecoverAuthentication: canRecoverBigQueryAuthentication(connection)
+        ? () => {
+            if (!authenticationRecovery.isPending) {
+              authenticationRecovery.mutate({
+                connection,
+                scopeKey: catalogScope.key,
+              });
+            }
+          }
+        : undefined,
+      authenticationRecoveryPending: authenticationRecovery.isPending
+        && recoveryConnectionId === connection.id,
+      authenticationRecoveryError: authenticationRecovery.isError
+        && recoveryConnectionId === connection.id
+        && authenticationRecovery.error
+        ? catalogLoadIssue(authenticationRecovery.error)
+        : undefined,
+      onRecoverManagedConnection:
+        managedConnectionRecovery.canOpenSettings(connection)
+          ? () => void managedConnectionRecovery.openSettings(
+              connection,
+              onManagedReturn,
+            )
+          : undefined,
+      managedConnectionRecoveryPending:
+        managedConnectionRecovery.openingConnectionId === connection.id,
+    };
+  }
+
   return {
     ensureLoaded,
     retryOverview,
-    recoverAuthentication: (connection: ConnectionProfile) => {
-      if (connection.engine !== "bigquery" || authenticationRecovery.isPending) {
-        return;
-      }
-      authenticationRecovery.mutate({
-        connection,
-        scopeKey: catalogScope.key,
-      });
-    },
-    authenticationRecoveryPendingId: authenticationRecovery.isPending
-      ? recoveryConnectionId
-      : null,
-    authenticationRecoveryErrorId: authenticationRecovery.isError
-      ? recoveryConnectionId
-      : null,
-    authenticationRecoveryError: authenticationRecovery.error
-      ? catalogLoadIssue(authenticationRecovery.error)
-      : undefined,
+    connectionRecoveryProps,
   };
 }

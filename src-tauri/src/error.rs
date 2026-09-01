@@ -65,6 +65,11 @@ pub enum AppError {
     #[error("{0} authentication is required")]
     AuthenticationRequired(String),
 
+    /// The shared managed target cannot issue a short-lived credential until a
+    /// Workspace manager repairs its provider integration or resource binding.
+    #[error("managed workspace connection repair is required")]
+    ManagedConnectionRecoveryRequired,
+
     /// The safety gate blocked an action; `reason` is shown verbatim in the UI.
     #[error("blocked: {reason}")]
     Blocked { reason: String },
@@ -100,6 +105,7 @@ impl AppError {
             AppError::NotFound(_) => "notFound",
             AppError::CredentialBindingRequired => "credentialBindingRequired",
             AppError::AuthenticationRequired(_) => "authenticationRequired",
+            AppError::ManagedConnectionRecoveryRequired => "managedConnectionRecoveryRequired",
             AppError::Blocked { .. } => "blocked",
             AppError::ProposalRequired => "proposalRequired",
             AppError::OutcomeUnknown(_) => "outcomeUnknown",

@@ -247,6 +247,7 @@ pub(super) fn map_target_error(error: AppError) -> ErrorCode {
         AppError::Blocked { .. } => ErrorCode::ScopeDenied,
         AppError::CredentialBindingRequired
         | AppError::AuthenticationRequired(_)
+        | AppError::ManagedConnectionRecoveryRequired
         | AppError::Config(_)
         | AppError::Parse(_) => ErrorCode::InvalidRequest,
         AppError::Timeout(_) => ErrorCode::Timeout,
@@ -273,6 +274,7 @@ pub(super) fn map_application_error(error: AppError) -> ErrorCode {
         AppError::Safety(_) => ErrorCode::PolicyBlocked,
         AppError::CredentialBindingRequired
         | AppError::AuthenticationRequired(_)
+        | AppError::ManagedConnectionRecoveryRequired
         | AppError::NotFound(_)
         | AppError::Config(_)
         | AppError::Parse(_) => ErrorCode::InvalidRequest,

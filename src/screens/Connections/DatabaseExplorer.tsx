@@ -12,7 +12,6 @@ import {
 import type { CatalogTable } from "../../ipc/types";
 import { errMessage } from "../../ipc/types";
 import {
-  canRecoverBigQueryAuthentication,
   connectionAccessIssue,
   type ConnectionProfile,
 } from "../../features/connections/domain";
@@ -272,10 +271,7 @@ export function DatabaseExplorer({
   const {
     ensureLoaded,
     retryOverview,
-    recoverAuthentication,
-    authenticationRecoveryPendingId,
-    authenticationRecoveryErrorId,
-    authenticationRecoveryError,
+    connectionRecoveryProps,
   } = useCatalogExplorerLoading(catalogScope, commands);
   const {
     deletingProjectId,
@@ -513,19 +509,9 @@ export function DatabaseExplorer({
         onRetryOverview={(database) =>
           retryOverview(connection.id, database)
         }
-        onRecoverAuthentication={
-          canRecoverBigQueryAuthentication(connection)
-            ? () => recoverAuthentication(connection)
-            : undefined
-        }
-        authenticationRecoveryPending={
-          authenticationRecoveryPendingId === connection.id
-        }
-        authenticationRecoveryError={
-          authenticationRecoveryErrorId === connection.id
-            ? authenticationRecoveryError
-            : undefined
-        }
+        {...connectionRecoveryProps(connection, () => {
+          void refreshSchema(connection.id);
+        })}
         onToggleRelationSection={(sectionKey) =>
           toggleRelationSection(connection.id, sectionKey)
         }
