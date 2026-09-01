@@ -252,6 +252,7 @@ pub async fn connect(
     profile: &ConnectionProfile,
     secret: &str,
     access: ConnectionAccess,
+    bigquery_auth_scope: Option<&crate::bigquery::BigQueryAuthScope>,
 ) -> AppResult<Live> {
     let driver = resolve(profile)?;
     let adapter = driver.adapter.ok_or_else(|| {
@@ -277,8 +278,12 @@ pub async fn connect(
                     reason: "BigQuery connections are read-only in DopeDB".into(),
                 });
             }
+            let auth_scope = bigquery_auth_scope.ok_or_else(|| AppError::Blocked {
+                reason: "BigQuery authentication is not pinned to the active Workspace member"
+                    .into(),
+            })?;
             Live::Sql(crate::connection::LiveConnection::bigquery(
-                crate::bigquery::connect(profile).await?,
+                crate::bigquery::connect(profile, auth_scope).await?,
             ))
         }
     })

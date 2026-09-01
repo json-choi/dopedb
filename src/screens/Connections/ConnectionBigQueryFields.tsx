@@ -93,14 +93,9 @@ export function ConnectionBigQueryFields({
                   tone={
                     bigQuery.auth?.authenticated ? "success" : "warning"
                   }
-                  title={bigQuery.auth?.account ?? undefined}
                 >
                   {bigQuery.auth?.authenticated
-                    ? t("connections.bigQueryConnectedAccount", {
-                        account:
-                          bigQuery.auth.account ??
-                          t("connections.bigQueryConnected"),
-                      })
+                    ? t("connections.bigQueryConnected")
                     : t("connections.bigQueryNotConnected")}
                 </StatusBadge>
               )}

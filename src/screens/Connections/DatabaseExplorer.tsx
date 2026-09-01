@@ -12,6 +12,7 @@ import {
 import type { CatalogTable } from "../../ipc/types";
 import { errMessage } from "../../ipc/types";
 import {
+  canRecoverBigQueryAuthentication,
   connectionAccessIssue,
   type ConnectionProfile,
 } from "../../features/connections/domain";
@@ -513,8 +514,7 @@ export function DatabaseExplorer({
           retryOverview(connection.id, database)
         }
         onRecoverAuthentication={
-          connection.engine === "bigquery" &&
-          connection.workspaceAccess === "local"
+          canRecoverBigQueryAuthentication(connection)
             ? () => recoverAuthentication(connection)
             : undefined
         }

@@ -1,8 +1,9 @@
 //! BigQuery read adapter backed by Google's official `bq` CLI.
 //!
-//! Authentication remains owned by the user's Google Cloud CLI installation. SQL is
-//! sent over stdin (never argv), every read is server dry-run first, and the real job
-//! carries a byte-billing ceiling plus an exact id for cancellation.
+//! Authentication remains owned by the official Google Cloud CLI inside an exact
+//! app-selected Workspace/member scope. SQL is sent over stdin (never argv), every
+//! read is server dry-run first, and the real job carries a byte-billing ceiling plus
+//! an exact id for cancellation.
 
 #[path = "connection.rs"]
 mod connection;
@@ -38,11 +39,12 @@ use crate::features::catalog::{
     Catalog, CatalogOverview, CatalogOverviewDetailState, CatalogOverviewRelation, Column,
     DatabaseObject, Table,
 };
+use crate::kernel::access::ActiveResourceScope;
 use crate::model::{ConnectionProfile, QueryResult};
 use crate::process_tree::{ProcessTree, ProcessTreeError};
 
 pub(crate) use onboarding::{
-    auth_state, authenticate_google_account, authenticate_service_account,
+    auth_state, authenticate_google_account, authenticate_service_account, cleanup_connection_auth,
     cleanup_service_account_auth, discover_datasets, discover_projects, uses_service_account_auth,
     BigQueryAuthState, BigQueryDatasetSummary, BigQueryProjectSummary,
 };
@@ -59,6 +61,47 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 const QUERY_TIMEOUT: Duration = Duration::from_secs(300);
 const CANCEL_TIMEOUT: Duration = Duration::from_secs(15);
 const MAX_LIST_RESULTS: u64 = 10_000;
+
+/// Opaque local-only CLI profile identity. Google-account authentication is shared
+/// only inside one exact Workspace/member selection; service-account authentication
+/// narrows that boundary to one connection binding. Neither key exposes account data
+/// in filesystem paths or process arguments.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct BigQueryAuthScope {
+    workspace_member_key: String,
+    connection_binding_key: String,
+}
+
+impl BigQueryAuthScope {
+    pub(crate) fn from_active_scope(scope: &ActiveResourceScope, connection_id: Uuid) -> Self {
+        let mut workspace_digest = Sha256::new();
+        workspace_digest.update(b"dopedb-bigquery-workspace-member-v1\0");
+        workspace_digest.update(scope.workspace_id.as_bytes());
+        workspace_digest.update(b"\0");
+        workspace_digest.update(scope.account_scope.storage_key().as_bytes());
+        let workspace_member_key = hex::encode(workspace_digest.finalize());
+
+        let mut connection_digest = Sha256::new();
+        connection_digest.update(b"dopedb-bigquery-connection-binding-v1\0");
+        connection_digest.update(workspace_member_key.as_bytes());
+        connection_digest.update(b"\0");
+        connection_digest.update(connection_id.as_bytes());
+        let connection_binding_key = hex::encode(connection_digest.finalize());
+
+        Self {
+            workspace_member_key,
+            connection_binding_key,
+        }
+    }
+
+    fn workspace_member_key(&self) -> &str {
+        &self.workspace_member_key
+    }
+
+    fn connection_binding_key(&self) -> &str {
+        &self.connection_binding_key
+    }
+}
 
 #[derive(Clone)]
 pub(crate) struct BigQueryConnection {
@@ -209,12 +252,13 @@ pub(crate) fn validate_profile(profile: &ConnectionProfile) -> AppResult<()> {
     Ok(())
 }
 
-pub(crate) async fn connect(profile: &ConnectionProfile) -> AppResult<BigQueryConnection> {
+pub(crate) async fn connect(
+    profile: &ConnectionProfile,
+    auth_scope: &BigQueryAuthScope,
+) -> AppResult<BigQueryConnection> {
     validate_profile(profile)?;
-    let home = dirs::home_dir().ok_or_else(|| {
-        AppError::Config("the user home directory is unavailable for Google Cloud CLI".into())
-    })?;
-    let cloudsdk_config = onboarding::cloudsdk_config(profile, &home)?;
+    let home = crate::app_paths::home_dir()?;
+    let cloudsdk_config = onboarding::cloudsdk_config(profile, auth_scope)?;
     let executable = discover_executable().await?;
     let provisional = BigQueryConnection {
         inner: Arc::new(BigQueryConnectionInner {

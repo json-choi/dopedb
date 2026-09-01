@@ -52,7 +52,8 @@ pub async fn upsert_connection(
     if saved.engine == crate::model::Engine::Bigquery
         && !crate::bigquery::uses_service_account_auth(&saved)?
     {
-        if let Err(error) = crate::bigquery::cleanup_service_account_auth(&saved).await {
+        let auth_scope = state.connections.bigquery_auth_scope(&saved).await?;
+        if let Err(error) = crate::bigquery::cleanup_service_account_auth(&auth_scope).await {
             tracing::warn!(
                 connection_id = %saved.id,
                 %error,
@@ -94,15 +95,21 @@ pub async fn delete_connection(
     app: tauri::AppHandle,
     id: ConnectionId,
 ) -> AppResult<()> {
+    let bigquery_auth_scope = state
+        .connections
+        .existing_bigquery_auth_scope(id.into())
+        .await?;
     let deleted = state.services.connections.delete(id).await?;
     state.terminals.stop_connection(id, &app);
     state.agents_acp.stop_connection(id);
-    if let Err(error) = crate::bigquery::cleanup_service_account_auth(&deleted).await {
-        tracing::warn!(
-            connection_id = %id,
-            %error,
-            "could not remove the deleted BigQuery service-account CLI profile"
-        );
+    if let Some(auth_scope) = bigquery_auth_scope {
+        if let Err(error) = crate::bigquery::cleanup_connection_auth(&auth_scope).await {
+            tracing::warn!(
+                connection_id = %id,
+                %error,
+                "could not remove the deleted BigQuery connection CLI profile"
+            );
+        }
     }
     match state.services.connections.list_profiles().await {
         Ok(remaining) => {
@@ -170,42 +177,56 @@ pub async fn discover_connection_profile_databases(
 
 #[tauri::command]
 pub async fn get_bigquery_auth_state(
+    state: State<'_, AppState>,
     profile: ConnectionProfile,
 ) -> AppResult<crate::bigquery::BigQueryAuthState> {
-    crate::bigquery::auth_state(profile).await
+    let auth_scope = state.connections.bigquery_auth_scope(&profile).await?;
+    crate::bigquery::auth_state(profile, &auth_scope).await
 }
 
 #[tauri::command]
 pub async fn authenticate_bigquery_google_account(
+    state: State<'_, AppState>,
     profile: ConnectionProfile,
 ) -> AppResult<crate::bigquery::BigQueryAuthState> {
-    crate::bigquery::authenticate_google_account(profile).await
+    let auth_scope = state.connections.bigquery_auth_scope(&profile).await?;
+    crate::bigquery::authenticate_google_account(profile, &auth_scope).await
 }
 
 #[tauri::command]
 pub async fn authenticate_bigquery_service_account(
+    state: State<'_, AppState>,
     profile: ConnectionProfile,
     credential_file: String,
 ) -> AppResult<crate::bigquery::BigQueryAuthState> {
-    crate::bigquery::authenticate_service_account(profile, credential_file).await
+    let auth_scope = state.connections.bigquery_auth_scope(&profile).await?;
+    crate::bigquery::authenticate_service_account(profile, credential_file, &auth_scope).await
 }
 
 #[tauri::command]
-pub async fn clear_bigquery_service_account_auth(profile: ConnectionProfile) -> AppResult<()> {
-    crate::bigquery::cleanup_service_account_auth(&profile).await
+pub async fn clear_bigquery_service_account_auth(
+    state: State<'_, AppState>,
+    profile: ConnectionProfile,
+) -> AppResult<()> {
+    let auth_scope = state.connections.bigquery_auth_scope(&profile).await?;
+    crate::bigquery::cleanup_service_account_auth(&auth_scope).await
 }
 
 #[tauri::command]
 pub async fn discover_bigquery_projects(
+    state: State<'_, AppState>,
     profile: ConnectionProfile,
 ) -> AppResult<Vec<crate::bigquery::BigQueryProjectSummary>> {
-    crate::bigquery::discover_projects(profile).await
+    let auth_scope = state.connections.bigquery_auth_scope(&profile).await?;
+    crate::bigquery::discover_projects(profile, &auth_scope).await
 }
 
 #[tauri::command]
 pub async fn discover_bigquery_datasets(
+    state: State<'_, AppState>,
     profile: ConnectionProfile,
     project_id: String,
 ) -> AppResult<Vec<crate::bigquery::BigQueryDatasetSummary>> {
-    crate::bigquery::discover_datasets(profile, project_id).await
+    let auth_scope = state.connections.bigquery_auth_scope(&profile).await?;
+    crate::bigquery::discover_datasets(profile, project_id, &auth_scope).await
 }

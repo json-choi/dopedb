@@ -71,7 +71,7 @@ pub fn decide(settings: &SafetySettings, c: &Classification) -> GateDecision {
         QueryKind::Ddl => {
             if !settings.allow_writes || !settings.allow_schema_changes {
                 GateDecision::Block {
-                    reason: "schema changes are disabled for this connection. Enable the Schema changes level in Settings → Safety to propose this DDL."
+                    reason: "schema changes are disabled for this connection; review the required permission shown with this result before proposing this DDL."
                         .into(),
                 }
             } else {

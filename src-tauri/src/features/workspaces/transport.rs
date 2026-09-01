@@ -448,8 +448,21 @@ pub async fn delete_workspace_connection(
     app: tauri::AppHandle,
     id: ConnectionId,
 ) -> AppResult<ConnectionProfile> {
+    let bigquery_auth_scope = state
+        .connections
+        .existing_bigquery_auth_scope(id.into())
+        .await?;
     let profile = state.services.workspace.delete_connection(id).await?;
     state.terminals.stop_connection(id, &app);
     state.agents_acp.stop_connection(id);
+    if let Some(auth_scope) = bigquery_auth_scope {
+        if let Err(error) = crate::bigquery::cleanup_connection_auth(&auth_scope).await {
+            tracing::warn!(
+                connection_id = %id,
+                %error,
+                "could not remove the deleted BigQuery connection CLI profile"
+            );
+        }
+    }
     Ok(profile)
 }

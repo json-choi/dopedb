@@ -11,6 +11,7 @@ export type WriteBlockRecoveryKind =
   | "localSafety"
   | "managedCredential"
   | "schemaSafety"
+  | "schemaUnavailable"
   | "workspaceGrant"
   | "workspacePolicy"
   | "workspacePolicyAndDevice";
@@ -69,7 +70,17 @@ export function writeBlockRecoveryKind(
   ) {
     return "workspaceGrant";
   }
-  if (schemaAccessError) return "schemaSafety";
+  if (schemaAccessError) {
+    if (
+      connection.credentialMode === "managed" &&
+      connection.workspaceAccess !== "manage"
+    ) {
+      return "workspaceGrant";
+    }
+    return safetySchemaControlAvailable(connection)
+      ? "schemaSafety"
+      : "schemaUnavailable";
+  }
   if (!connection.allowWrites && connection.credentialMode === "managed") {
     return connection.workspaceAccess === "manage"
       ? "workspacePolicyAndDevice"
@@ -77,6 +88,15 @@ export function writeBlockRecoveryKind(
   }
   if (!connection.allowWrites) return "localSafety";
   return "deviceSafety";
+}
+
+export function writeBlockRecoveryOpensSafety(
+  kind: WriteBlockRecoveryKind,
+): boolean {
+  return kind === "deviceSafety"
+    || kind === "localSafety"
+    || kind === "schemaSafety"
+    || kind === "workspacePolicyAndDevice";
 }
 
 /**

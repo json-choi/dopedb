@@ -68,7 +68,7 @@ impl ScriptPlatformAdapter {
             QueryKind::Write
         };
         if has_ddl && !settings.allow_schema_changes {
-            let reason = "schema changes are disabled for this connection. Enable the Schema changes level in Settings → Safety to run this DDL script.";
+            let reason = "schema changes are disabled for this connection; review the required permission shown with this result before running this DDL script.";
             record_script_run(
                 &self.store,
                 &operation_pin,

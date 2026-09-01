@@ -1550,8 +1550,24 @@ async fn remote_template_sync_preserves_member_local_credential_binding() {
     let mut local_binding = sqlite_profile(id, "shared");
     local_binding.workspace_access = crate::model::WorkspaceConnectionAccess::Write;
     local_binding.credential_mode = crate::model::WorkspaceCredentialMode::MemberLocal;
+    let bigquery_id = Uuid::new_v4();
+    let mut bigquery_template = sqlite_profile(bigquery_id, "shared analytics");
+    bigquery_template.engine = Engine::Bigquery;
+    bigquery_template.provider = crate::model::Provider::Generic;
+    bigquery_template.driver_id = Some("google-bq-cli".into());
+    bigquery_template.host = "example-project".into();
+    bigquery_template.port = 443;
+    bigquery_template.database = "analytics".into();
+    bigquery_template.readonly_default = true;
+    bigquery_template.allow_writes = false;
+    bigquery_template.workspace_access = crate::model::WorkspaceConnectionAccess::Read;
+    bigquery_template.credential_mode = crate::model::WorkspaceCredentialMode::MemberLocal;
     store
-        .sync_remote_connections(workspace_id, &user.id, &[(local_binding, 1)])
+        .sync_remote_connections(
+            workspace_id,
+            &user.id,
+            &[(local_binding, 1), (bigquery_template.clone(), 1)],
+        )
         .await
         .unwrap();
     let mut member_options = HashMap::new();
@@ -1567,6 +1583,13 @@ async fn remote_template_sync_preserves_member_local_credential_binding() {
         )
         .await
         .unwrap();
+    let mut bigquery_member_options = HashMap::new();
+    bigquery_member_options.insert("authMode".into(), "serviceAccount".into());
+    bigquery_member_options.insert("maximumBytesBilled".into(), "1073741824".into());
+    store
+        .bind_connection_credentials(bigquery_id, &user.id, "", &bigquery_member_options, None)
+        .await
+        .unwrap();
 
     let mut remote_update = sqlite_profile(id, "renamed");
     remote_update.username.clear();
@@ -1576,7 +1599,11 @@ async fn remote_template_sync_preserves_member_local_credential_binding() {
     remote_update.workspace_access = crate::model::WorkspaceConnectionAccess::Read;
     remote_update.credential_mode = crate::model::WorkspaceCredentialMode::MemberLocal;
     store
-        .sync_remote_connections(workspace_id, &user.id, &[(remote_update, 2)])
+        .sync_remote_connections(
+            workspace_id,
+            &user.id,
+            &[(remote_update, 2), (bigquery_template, 1)],
+        )
         .await
         .unwrap();
     store
@@ -1604,6 +1631,23 @@ async fn remote_template_sync_preserves_member_local_credential_binding() {
         crate::model::WorkspaceConnectionAccess::Read
     );
     assert!(!loaded.allow_writes);
+    let loaded_bigquery = store.get_connection(bigquery_id).await.unwrap();
+    assert!(loaded_bigquery.username.is_empty());
+    assert!(loaded_bigquery.secret_ref.is_none());
+    assert_eq!(
+        loaded_bigquery
+            .extra_params
+            .get("authMode")
+            .map(String::as_str),
+        Some("serviceAccount")
+    );
+    assert_eq!(
+        loaded_bigquery
+            .extra_params
+            .get("maximumBytesBilled")
+            .map(String::as_str),
+        Some("1073741824")
+    );
 
     // An Environment with a GitHub source but no graph remains an exact Agent
     // scope. Raw source identity is pinned independently from graph grants.

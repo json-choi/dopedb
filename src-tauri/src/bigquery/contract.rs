@@ -358,8 +358,8 @@ pub(crate) fn assert_bigquery_contract() {
             "message": "Google Cloud authentication is required",
         }),
     );
-    assert!(valid_project_id("campfire-460003"));
-    assert!(!valid_project_id("Campfire-460003"));
+    assert!(valid_project_id("sample-analytics-2026"));
+    assert!(!valid_project_id("Sample-analytics-2026"));
     assert!(valid_dataset_id("analytics_2026"));
     assert!(!valid_dataset_id("analytics-prod"));
     assert!(valid_location("asia-northeast3"));
@@ -369,7 +369,7 @@ pub(crate) fn assert_bigquery_contract() {
         engine: crate::model::Engine::Bigquery,
         provider: crate::model::Provider::Generic,
         driver_id: Some("google-bq-cli".into()),
-        host: "campfire-460003".into(),
+        host: "sample-analytics-2026".into(),
         port: 443,
         database: "analytics_2026".into(),
         username: String::new(),

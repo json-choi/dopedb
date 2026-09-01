@@ -224,6 +224,11 @@ impl ConnectionContext {
                     }
                 }
 
+                if let Some(error) = state.managed_open_retry_error() {
+                    drop(state);
+                    return Err(error);
+                }
+
                 let expired = state.entry.take();
                 if expired.is_some() {
                     drop(state);
@@ -235,6 +240,7 @@ impl ConnectionContext {
                 let opened = connect_authorized(
                     Arc::clone(&self.manager.inner.remote_authority),
                     Arc::clone(&self.manager.inner.provider_local),
+                    &self.pin,
                     &target_profile,
                     &self.authorization,
                     self.access,
@@ -243,10 +249,14 @@ impl ConnectionContext {
                 let opened = match opened {
                     Ok(opened) => opened,
                     Err(error) => {
+                        if self.pin.profile.credential_mode == WorkspaceCredentialMode::Managed {
+                            state.remember_managed_open_failure(&error);
+                        }
                         drop(state);
                         return Err(error);
                     }
                 };
+                state.clear_managed_open_failure();
                 if self.pin.requires_remote_rbac {
                     let reauthorized = match authorize_pin(
                         self.manager.inner.remote_authority.as_ref(),
@@ -375,6 +385,7 @@ impl ConnectionContext {
         let opened = connect_authorized(
             Arc::clone(&self.manager.inner.remote_authority),
             Arc::clone(&self.manager.inner.provider_local),
+            &self.pin,
             &self.pin.profile,
             &self.authorization,
             self.access,

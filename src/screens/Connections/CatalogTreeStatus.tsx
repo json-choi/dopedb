@@ -2,6 +2,7 @@
 import { Button } from "../../design-system/components/Button";
 import { LoadingLabel } from "../../design-system/components/Status";
 import {
+  distinctCatalogDetailIssue,
   isAuthenticationRequired,
   type CatalogLoadIssue,
 } from "../../features/catalogExplorer/catalogDomain";
@@ -68,6 +69,7 @@ export function CatalogTreeStatus({
     ? authenticationRecoveryMessage
       ?? t("connections.bigQueryAuthenticationExpired")
     : error?.message;
+  const uniqueDetailError = distinctCatalogDetailIssue(error, detailError);
   return (
     <>
       {accessIssue ? (
@@ -132,10 +134,10 @@ export function CatalogTreeStatus({
           </Button>
         </div>
       ) : null}
-      {detailError && !authenticationIssue ? (
+      {uniqueDetailError && !authenticationIssue ? (
         <div className="tw:flex tw:items-start tw:gap-2 tw:px-2 tw:py-1 tw:text-sm tw:text-muted-foreground">
           <span className="tw:min-w-0 tw:flex-1 tw:wrap-break-word">
-            {detailError.message}
+            {uniqueDetailError.message}
           </span>
           <Button
             size="xs"

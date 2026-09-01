@@ -75,7 +75,6 @@ export type BigQueryAuthMode = "googleAccount" | "serviceAccount";
 export interface BigQueryAuthState {
   mode: BigQueryAuthMode;
   authenticated: boolean;
-  account: string | null;
 }
 
 export interface BigQueryProjectSummary {
@@ -125,6 +124,31 @@ export type ConnectionTestReceipt =
   | { ok: false; failure: ConnectionTestFailure };
 
 export type ConnectionAccessIssue = "grant" | "credentials";
+
+/**
+ * BigQuery authentication is member-local even when its redacted connection
+ * identity is shared by a Project. Only members who can read that resource may
+ * start the official Google Cloud CLI recovery flow on their own device.
+ */
+export function canRecoverBigQueryAuthentication(
+  connection: Pick<
+    ConnectionProfile,
+    "engine" | "credentialMode" | "workspaceAccess"
+  >,
+): boolean {
+  if (connection.engine !== "bigquery") return false;
+  if (
+    connection.workspaceAccess === "local"
+    && connection.credentialMode === "local"
+  ) {
+    return true;
+  }
+  return (
+    connection.workspaceAccess !== "local"
+    && connection.workspaceAccess !== "view"
+    && connection.credentialMode === "memberLocal"
+  );
+}
 
 /** One authority-neutral projection shared by Explorer loading and recovery UI. */
 export function connectionAccessIssue(

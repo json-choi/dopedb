@@ -25,7 +25,9 @@ use crate::error::{AppError, AppResult};
 use crate::features::workspaces::{Workspace, WorkspaceAuthUser, WorkspaceRole};
 use crate::kernel::access::PinnedConnection;
 use crate::kernel::identity::{AccountId, ConnectionId, ProviderBindingId, WorkspaceId};
-use crate::model::{ConnectionProfile, Engine, Provider, WorkspaceCredentialMode};
+use crate::model::{
+    ConnectionProfile, Engine, Provider, WorkspaceConnectionAccess, WorkspaceCredentialMode,
+};
 use crate::store::Store;
 
 use super::remote_authority::RemoteConnectionAuthorityPort;
@@ -56,6 +58,10 @@ use cache::{
 pub(crate) use policy::assert_gcp_mysql_grant_contract;
 
 const MANAGED_RELEASE_TIMEOUT: Duration = Duration::from_secs(5);
+// A failed managed connection must not mint a fresh provider credential for every
+// catalog observer or repeated click. Twenty seconds keeps one exact cache key below
+// the hosted five-per-minute admission ceiling while still allowing explicit recovery.
+const MANAGED_OPEN_RETRY_COOLDOWN: Duration = Duration::from_secs(20);
 const MAX_TARGET_DATABASE_BYTES: usize = 255;
 const MAX_BIGQUERY_DATASET_BYTES: usize = 1_024;
 
@@ -76,6 +82,19 @@ pub(crate) fn assert_warm_cache_authorization_contract() {
     assert!(cached_handoff_needs_remote_refresh(true, true));
     assert!(!cached_handoff_needs_remote_refresh(false, false));
     assert!(!cached_handoff_needs_remote_refresh(false, true));
+
+    let mut slot = ConnectionSlot::default();
+    assert!(slot.managed_open_retry_error().is_none());
+    slot.remember_managed_open_failure(&AppError::Network("provider preflight failed".into()));
+    assert!(matches!(
+        slot.managed_open_retry_error(),
+        Some(AppError::Network(message)) if message == "provider preflight failed"
+    ));
+    slot.clear_managed_open_failure();
+    slot.remember_managed_open_failure(&AppError::Blocked {
+        reason: "grant changed".into(),
+    });
+    assert!(slot.managed_open_retry_error().is_none());
 }
 
 fn resolve_target_database(

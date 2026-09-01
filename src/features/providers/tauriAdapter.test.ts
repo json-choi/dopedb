@@ -358,7 +358,7 @@ describe("provider credential Tauri adapter", () => {
       connectionId: "55555555-5555-4555-8555-555555555555",
       provider: "gcpCloudSql",
       targetDisplayName: "sample-db-dev / app",
-      targetDetail: "campfire-460003 · asia-northeast3",
+      targetDetail: "sample-project-123 · asia-northeast3",
       engine: "postgres",
       intent: "apply",
       access: "read",

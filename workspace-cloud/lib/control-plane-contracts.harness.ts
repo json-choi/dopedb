@@ -748,7 +748,7 @@ describe("Desktop control-plane contracts", () => {
       engine: "bigquery",
       provider: "generic",
       driverId: "google-bq-cli",
-      host: "campfire-460003",
+      host: "sample-analytics-2026",
       port: 443,
       database: "analytics_2026",
       sslmode: "require",

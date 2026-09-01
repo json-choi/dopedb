@@ -367,7 +367,9 @@ export default function Safety({
         >
           {hasUnsavedChanges
             ? t("safety.unsavedChanges")
-            : t("safety.noUnsavedChanges")}
+            : schemaUnavailableHint
+              ? t("safety.appliedWithSchemaUnavailable")
+              : t("safety.noUnsavedChanges")}
         </span>
       </div>
 

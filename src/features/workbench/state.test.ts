@@ -49,7 +49,10 @@ import {
   connectionUrlNeedsDatabaseSelection,
   parseConnectionUrl,
 } from "../connections/connectionUrl";
-import type { DriverDescriptor } from "../connections/domain";
+import {
+  canRecoverBigQueryAuthentication,
+  type DriverDescriptor,
+} from "../connections/domain";
 import { switchConnectionSource } from "../connections/connectionEditorModel";
 import {
   BIGQUERY_AUTH_MODE_PARAMETER,
@@ -58,6 +61,7 @@ import {
   isValidBigQueryDatasetId,
   isValidBigQueryProjectId,
 } from "../connections/bigQueryOnboardingModel";
+import { connectionQueryKeys } from "../connections/queries";
 import {
   CONNECTION_SSH_ALIAS_PARAMETER,
   isConnectionOptionSupported,
@@ -82,6 +86,7 @@ import {
 } from "../../design-system/treeKeyboard";
 import {
   catalogLoadIssue,
+  distinctCatalogDetailIssue,
   filterLoadedCatalogObjects,
   isAuthenticationRequired,
   supportedObjectKinds,
@@ -632,8 +637,33 @@ describe("workbench state ownership", () => {
       extraParams: { maximumBytesBilled: "1073741824" },
     });
     expect(bigQueryAuthMode(bigQuery)).toBe("googleAccount");
-    expect(isValidBigQueryProjectId("campfire-460003")).toBe(true);
-    expect(isValidBigQueryProjectId("Campfire-460003")).toBe(false);
+    expect(connectionQueryKeys.bigQueryAuth(bigQuery, "scope-a")).not.toEqual(
+      connectionQueryKeys.bigQueryAuth(bigQuery, "scope-b"),
+    );
+    expect(canRecoverBigQueryAuthentication(bigQuery)).toBe(true);
+    expect(
+      canRecoverBigQueryAuthentication({
+        ...bigQuery,
+        workspaceAccess: "read",
+        credentialMode: "memberLocal",
+      }),
+    ).toBe(true);
+    expect(
+      canRecoverBigQueryAuthentication({
+        ...bigQuery,
+        workspaceAccess: "view",
+        credentialMode: "memberLocal",
+      }),
+    ).toBe(false);
+    expect(
+      canRecoverBigQueryAuthentication({
+        ...bigQuery,
+        workspaceAccess: "manage",
+        credentialMode: "managed",
+      }),
+    ).toBe(false);
+    expect(isValidBigQueryProjectId("sample-analytics-2026")).toBe(true);
+    expect(isValidBigQueryProjectId("Sample-analytics-2026")).toBe(false);
     expect(isValidBigQueryDatasetId("analytics_2026")).toBe(true);
     expect(isValidBigQueryDatasetId("analytics-2026")).toBe(false);
     expect(bigQueryResourceInputMode(true, 2)).toBe("select");
@@ -644,6 +674,17 @@ describe("workbench state ownership", () => {
       message: "Google Cloud authentication is required",
     });
     expect(isAuthenticationRequired(expiredAuthentication)).toBe(true);
+    expect(
+      distinctCatalogDetailIssue(expiredAuthentication, {
+        ...expiredAuthentication,
+      }),
+    ).toBeUndefined();
+    expect(
+      distinctCatalogDetailIssue(expiredAuthentication, {
+        kind: "network",
+        message: "another failure",
+      }),
+    ).toEqual({ kind: "network", message: "another failure" });
     expect(expiredAuthentication.message).not.toContain("config error:");
     expect(
       isAuthenticationRequired(catalogLoadIssue(new Error("network"))),
@@ -679,7 +720,7 @@ describe("workbench state ownership", () => {
       diagnoseConnection(
         {
           ...bigQuery,
-          host: "campfire-460003",
+          host: "sample-analytics-2026",
           database: "analytics_2026",
         },
         [],
@@ -716,13 +757,13 @@ describe("workbench state ownership", () => {
       new Set(["materialized_view"]),
     );
     const importedBigQuery = parseConnectionUrl(
-      "bigquery://reader:secret@campfire-460003:9999/analytics_2026?location=US&maximumBytesBilled=42&foo=discarded&schemaGroup=discarded&allowWrites=true",
+      "bigquery://reader:secret@sample-analytics-2026:9999/analytics_2026?location=US&maximumBytesBilled=42&foo=discarded&schemaGroup=discarded&allowWrites=true",
     );
     expect(importedBigQuery).not.toBeNull();
     expect(importedBigQuery?.update).toMatchObject({
       engine: "bigquery",
       provider: "generic",
-      host: "campfire-460003",
+      host: "sample-analytics-2026",
       port: 443,
       database: "analytics_2026",
       username: "",

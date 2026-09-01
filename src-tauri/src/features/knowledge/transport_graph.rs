@@ -325,19 +325,6 @@ pub(crate) async fn bind_knowledge_environment_connection(
                             .into(),
                 });
             }
-            if connection.profile.engine == Engine::Bigquery
-                && connection
-                    .profile
-                    .extra_params
-                    .get("authMode")
-                    .is_some_and(|mode| mode == "serviceAccount")
-            {
-                return Err(AppError::Blocked {
-                    reason: "A service-account BigQuery connection cannot be shared. Use member Google Cloud CLI authentication for a Team Project"
-                        .into(),
-                });
-            }
-
             let source_connection_id = ConnectionId::from(connection.connection_id);
             let workspace_id = WorkspaceId::from(connection.scope.workspace_id);
             drop(connection);

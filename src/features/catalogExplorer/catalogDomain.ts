@@ -32,6 +32,16 @@ export function isAuthenticationRequired(
   return issue?.kind === "authenticationRequired";
 }
 
+/** One failed backend read may feed both overview and detail observers. */
+export function distinctCatalogDetailIssue(
+  overview: CatalogLoadIssue | undefined,
+  detail: CatalogLoadIssue | undefined,
+): CatalogLoadIssue | undefined {
+  return detail?.kind === overview?.kind && detail?.message === overview?.message
+    ? undefined
+    : detail;
+}
+
 export const SQL_OBJECT_SECTIONS: Array<{
   kind: CatalogObjectKind;
   icon: IconName;

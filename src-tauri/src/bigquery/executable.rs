@@ -110,18 +110,6 @@ pub(super) fn sdk_roots() -> Vec<PathBuf> {
     roots
 }
 
-pub(super) fn default_cloudsdk_config(home: &Path) -> AppResult<PathBuf> {
-    #[cfg(windows)]
-    let config = dirs::config_dir()
-        .map(|directory| directory.join("gcloud"))
-        .ok_or_else(|| {
-            AppError::Config("the Google Cloud CLI configuration directory is unavailable".into())
-        })?;
-    #[cfg(not(windows))]
-    let config = home.join(".config/gcloud");
-    Ok(config)
-}
-
 async fn hash_regular_file(path: &Path) -> Result<(String, u64), CommandFailure> {
     let metadata = tokio::fs::metadata(path)
         .await

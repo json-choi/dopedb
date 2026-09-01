@@ -24,6 +24,72 @@ impl ConnectionManager {
         }
     }
 
+    /// Resolve the local Google CLI profile boundary without inspecting a Google
+    /// identity. Existing shared profiles must match their exact active member
+    /// binding; unsaved profiles are admitted only as local records owned by the
+    /// current Workspace scope.
+    pub(crate) async fn bigquery_auth_scope(
+        &self,
+        profile: &ConnectionProfile,
+    ) -> AppResult<crate::bigquery::BigQueryAuthScope> {
+        if profile.engine != Engine::Bigquery || profile.provider != Provider::Generic {
+            return Err(AppError::Config(
+                "BigQuery authentication requires a generic BigQuery profile".into(),
+            ));
+        }
+        let _scope_guard = self.inner.scope_gate.read().await;
+        match self.inner.store.pin_connection_for_view(profile.id).await {
+            Ok(pin) => {
+                if pin.requires_remote_rbac {
+                    if pin.profile.engine != Engine::Bigquery
+                        || pin.profile.provider != Provider::Generic
+                        || profile.workspace_access != pin.profile.workspace_access
+                        || profile.credential_mode != pin.profile.credential_mode
+                    {
+                        return Err(scope_changed());
+                    }
+                } else if profile.workspace_access != WorkspaceConnectionAccess::Local
+                    || profile.credential_mode != WorkspaceCredentialMode::Local
+                {
+                    return Err(scope_changed());
+                }
+                Ok(crate::bigquery::BigQueryAuthScope::from_active_scope(
+                    &pin.scope, profile.id,
+                ))
+            }
+            Err(AppError::NotFound(_))
+                if profile.workspace_access == WorkspaceConnectionAccess::Local
+                    && profile.credential_mode == WorkspaceCredentialMode::Local =>
+            {
+                self.inner
+                    .store
+                    .ensure_connection_write_scope(profile.id)
+                    .await?;
+                let scope = self.inner.store.active_resource_scope().await?;
+                Ok(crate::bigquery::BigQueryAuthScope::from_active_scope(
+                    &scope, profile.id,
+                ))
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    /// Capture deletion cleanup authority before the connection row disappears.
+    pub(crate) async fn existing_bigquery_auth_scope(
+        &self,
+        connection_id: Uuid,
+    ) -> AppResult<Option<crate::bigquery::BigQueryAuthScope>> {
+        let _scope_guard = self.inner.scope_gate.read().await;
+        let pin = self
+            .inner
+            .store
+            .pin_connection_for_view(connection_id)
+            .await?;
+        Ok((pin.profile.engine == Engine::Bigquery).then(|| {
+            crate::bigquery::BigQueryAuthScope::from_active_scope(&pin.scope, connection_id)
+        }))
+    }
+
     pub(super) async fn pin_is_current(&self, pin: &PinnedConnection) -> AppResult<bool> {
         self.inner.store.is_pin_current(pin).await
     }

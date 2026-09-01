@@ -12,6 +12,7 @@ import {
   safetySchemaControlAvailable,
   safetyWriteControlAvailable,
   writeBlockRecoveryKind,
+  writeBlockRecoveryOpensSafety,
 } from "../safetySettings/policy";
 import { approveManualOperationIfRequired } from "../queries/runPath";
 import { buildRunSignal } from "./runSignal";
@@ -210,6 +211,35 @@ describe("SQL run guidance", () => {
         },
       ),
     ).toBe("schemaSafety");
+    expect(
+      writeBlockRecoveryKind(
+        {
+          ...managedWorkspaceManager,
+          allowWrites: true,
+          provider: "gcpCloudSql",
+        },
+        {
+          kind: "blocked",
+          message: "schema changes are disabled for this connection",
+        },
+      ),
+    ).toBe("schemaUnavailable");
+    expect(
+      writeBlockRecoveryKind(
+        {
+          ...managedWorkspaceManager,
+          allowWrites: true,
+          workspaceAccess: "write",
+        },
+        {
+          kind: "blocked",
+          message: "schema changes are disabled for this connection",
+        },
+      ),
+    ).toBe("workspaceGrant");
+    expect(writeBlockRecoveryOpensSafety("schemaSafety")).toBe(true);
+    expect(writeBlockRecoveryOpensSafety("schemaUnavailable")).toBe(false);
+    expect(writeBlockRecoveryOpensSafety("workspaceGrant")).toBe(false);
     expect(
       writeBlockRecoveryKind(
         {

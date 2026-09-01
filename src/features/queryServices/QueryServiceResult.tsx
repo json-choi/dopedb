@@ -22,6 +22,7 @@ import { useI18n } from "../../lib/i18n";
 import type { ConnectionProfile } from "../connections/domain";
 import {
   writeBlockRecoveryKind,
+  writeBlockRecoveryOpensSafety,
   type WriteBlockRecoveryKind,
 } from "../safetySettings/policy";
 import StreamOutcome from "./StreamOutcome";
@@ -224,15 +225,19 @@ function ScriptResults({
           ]
         : [];
   const fillsResultPane = statementIndex !== undefined;
-  const hasSafetyRecovery = connection !== null && statements.some(({ statement }) => (
-    statement.error
-      ? writeBlockRecoveryKind(connection, {
+  const recoveryKinds = connection === null
+    ? []
+    : statements.flatMap(({ statement }) => {
+        if (!statement.error) return [];
+        const kind = writeBlockRecoveryKind(connection, {
           kind: null,
           message: statement.error,
           sql: statement.sql,
-        }) !== null
-      : false
-  ));
+        });
+        return kind ? [kind] : [];
+      });
+  const hasSafetyRecovery = recoveryKinds.length > 0;
+  const canOpenSafety = recoveryKinds.some(writeBlockRecoveryOpensSafety);
   const content = (
     <>
       <ResultMeta>
@@ -244,7 +249,7 @@ function ScriptResults({
           tone="warning"
           icon="info"
           role="status"
-          action={(
+          action={canOpenSafety ? (
             <Button
               size="compact"
               onClick={() => onOpenSafety(connection.id)}
@@ -253,9 +258,13 @@ function ScriptResults({
                 connection: connection.name,
               })}
             </Button>
-          )}
+          ) : undefined}
         >
-          {t("sql.writeBlock.scriptGuidance")}
+          {t(
+            canOpenSafety
+              ? "sql.writeBlock.scriptGuidance"
+              : "sql.writeBlock.scriptUnavailableGuidance",
+          )}
         </InlineNotice>
       ) : null}
       {statements.map(({ statement, index }) => (
@@ -446,6 +455,12 @@ function WriteBlockRecoveryRow({
         connection: connection.name,
       });
       break;
+    case "schemaUnavailable":
+      permission = t("sql.writeBlock.permissionSchemaUnavailable");
+      guidance = t("sql.writeBlock.guidanceSchemaUnavailable", {
+        connection: connection.name,
+      });
+      break;
     case "workspaceGrant":
       permission = t("sql.writeBlock.permissionWorkspaceGrant");
       guidance = t("sql.writeBlock.guidanceWorkspaceGrant", {
@@ -465,11 +480,7 @@ function WriteBlockRecoveryRow({
       });
       break;
   }
-  const canModifyHere =
-    kind === "deviceSafety" ||
-    kind === "localSafety" ||
-    kind === "schemaSafety" ||
-    kind === "workspacePolicyAndDevice";
+  const canModifyHere = writeBlockRecoveryOpensSafety(kind);
   return (
     <>
       <dt>{t("sql.writeBlock.requiredPermission")}</dt>
@@ -483,19 +494,16 @@ function WriteBlockRecoveryRow({
               {guidance}
             </p>
           </div>
-          <div className="tw:shrink-0">
+          {canModifyHere ? <div className="tw:shrink-0">
             <Button
               size="compact"
               onClick={() => onOpenSafety(connection.id)}
             >
-              {t(
-                canModifyHere
-                  ? "sql.writeBlock.openSafety"
-                  : "sql.writeBlock.reviewSafety",
-                { connection: connection.name },
-              )}
+              {t("sql.writeBlock.openSafety", {
+                connection: connection.name,
+              })}
             </Button>
-          </div>
+          </div> : null}
         </div>
       </dd>
     </>

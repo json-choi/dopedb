@@ -41,11 +41,12 @@ pub(crate) fn compose(
     connections: ConnectionManager,
     credentials: Arc<dyn ConnectionCredentialVault>,
 ) -> ConnectionsFeature {
+    let ad_hoc = SystemAdHocConnection::new(connections.clone());
     ConnectionUseCases::new(
         SqliteConnectionRepository::new(store),
         RuntimeConnectionAuthority::new(connections),
         SystemDriverRegistry,
-        SystemAdHocConnection,
+        ad_hoc,
         credentials,
     )
 }

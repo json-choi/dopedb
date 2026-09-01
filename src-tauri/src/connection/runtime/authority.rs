@@ -56,12 +56,16 @@ pub(super) async fn retire_opened(mut opened: OpenedLive) {
 }
 
 async fn open_live(
+    pin: &PinnedConnection,
     alias_profile: &ConnectionProfile,
     target_profile: &ConnectionProfile,
     secret: &str,
     access: ConnectionAccess,
     cloud_sql_config: Option<cloud_sql_proxy::CloudSqlProxyConfig>,
 ) -> AppResult<(Live, Option<SshTunnel>, Option<CloudSqlProxy>)> {
+    let bigquery_auth_scope = (alias_profile.engine == Engine::Bigquery).then(|| {
+        crate::bigquery::BigQueryAuthScope::from_active_scope(&pin.scope, pin.connection_id)
+    });
     if let Some(config) = cloud_sql_config {
         if alias_profile
             .extra_params
@@ -72,7 +76,14 @@ async fn open_live(
             ));
         }
         let opened = cloud_sql_proxy::open(target_profile, config).await?;
-        return match crate::driver::connect(&opened.profile, secret, access).await {
+        return match crate::driver::connect(
+            &opened.profile,
+            secret,
+            access,
+            bigquery_auth_scope.as_ref(),
+        )
+        .await
+        {
             Ok(live) => Ok((live, None, Some(opened.proxy))),
             Err(error) => {
                 tokio::time::sleep(Duration::from_millis(50)).await;
@@ -89,7 +100,14 @@ async fn open_live(
         };
     }
     let transport = ssh::open(alias_profile, target_profile).await?;
-    match crate::driver::connect(&transport.profile, secret, access).await {
+    match crate::driver::connect(
+        &transport.profile,
+        secret,
+        access,
+        bigquery_auth_scope.as_ref(),
+    )
+    .await
+    {
         Ok(live) => Ok((live, transport.tunnel, None)),
         Err(error) => {
             if let Some(tunnel) = transport.tunnel {
@@ -267,6 +285,7 @@ pub(super) fn opened_provider_target_expiry_shrank(
 pub(super) async fn connect_authorized(
     remote_authority: Arc<dyn RemoteConnectionAuthorityPort>,
     provider_local: Arc<dyn ProviderLocalConnectionPort>,
+    pin: &PinnedConnection,
     profile: &ConnectionProfile,
     authorization: &ConnectionAuthorization,
     access: ConnectionAccess,
@@ -297,6 +316,7 @@ pub(super) async fn connect_authorized(
             lease_id: lease.lease_id,
         };
         let (live, ssh_tunnel, cloud_sql_proxy) = match open_live(
+            pin,
             profile,
             &lease.profile,
             lease.secret.as_str(),
@@ -357,6 +377,7 @@ pub(super) async fn connect_authorized(
         }
         let retire_at = Instant::now() + target.cache_retire_after()?;
         let (live, ssh_tunnel, cloud_sql_proxy) = open_live(
+            pin,
             profile,
             &resolved.profile,
             secret.as_str(),
@@ -374,7 +395,7 @@ pub(super) async fn connect_authorized(
     }
     let secret = Zeroizing::new(super::super::fetch_profile_secret(profile)?);
     let (live, ssh_tunnel, cloud_sql_proxy) =
-        open_live(profile, profile, secret.as_str(), access, None).await?;
+        open_live(pin, profile, profile, secret.as_str(), access, None).await?;
     Ok(OpenedLive {
         live,
         retire_at: None,

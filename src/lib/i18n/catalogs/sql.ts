@@ -30,8 +30,14 @@ export const sqlCatalog = defineCatalog(
     "sql.writeBlock.permissionSchemaSafety": "Schema-change access",
     "sql.writeBlock.guidanceSchemaSafety":
       "Open Settings > Safety for {connection} and choose Schema changes. If that level is unavailable, the same screen shows the exact missing grant or provider capability.",
+    "sql.writeBlock.permissionSchemaUnavailable":
+      "Schema changes unavailable for this connection",
+    "sql.writeBlock.guidanceSchemaUnavailable":
+      "{connection} can run data changes, but its current engine, credential mode, or managed provider does not support schema-change credentials in DopeDB. No local Safety setting can widen this boundary.",
     "sql.writeBlock.scriptGuidance":
       "Review this connection's single access-level control. It covers read, data changes, and schema changes without a second permission request.",
+    "sql.writeBlock.scriptUnavailableGuidance":
+      "One or more statements exceed this connection's current workspace or provider boundary. Review the statement errors; there is no local Safety switch that can widen it.",
     "sql.writeBlock.permissionWorkspaceGrant":
       "Workspace DB read/write or manage access",
     "sql.writeBlock.guidanceWorkspaceGrant":
@@ -178,8 +184,14 @@ export const sqlCatalog = defineCatalog(
     "sql.writeBlock.permissionSchemaSafety": "스키마 변경 접근",
     "sql.writeBlock.guidanceSchemaSafety":
       "설정 → 안전 → {connection}에서 ‘스키마 변경’을 선택하세요. 선택할 수 없다면 같은 화면에서 부족한 권한이나 공급자 지원 여부를 바로 확인할 수 있습니다.",
+    "sql.writeBlock.permissionSchemaUnavailable":
+      "이 연결에서는 스키마 변경을 사용할 수 없음",
+    "sql.writeBlock.guidanceSchemaUnavailable":
+      "{connection}은 데이터 변경은 실행할 수 있지만 현재 엔진·자격 증명 방식 또는 관리형 공급자가 DopeDB의 스키마 변경 자격 증명을 지원하지 않습니다. 로컬 안전 설정으로 이 경계를 넓힐 수 없습니다.",
     "sql.writeBlock.scriptGuidance":
       "이 연결의 단일 접근 단계 설정을 확인하세요. 두 번째 권한 요청 없이 읽기·데이터 변경·스키마 변경을 한 곳에서 제어합니다.",
+    "sql.writeBlock.scriptUnavailableGuidance":
+      "하나 이상의 문장이 이 연결의 현재 워크스페이스 또는 공급자 경계를 넘습니다. 각 문장의 오류를 확인하세요. 로컬 안전 설정으로 이 경계를 넓힐 수 없습니다.",
     "sql.writeBlock.permissionWorkspaceGrant":
       "워크스페이스 DB 읽기/쓰기 또는 관리 권한",
     "sql.writeBlock.guidanceWorkspaceGrant":

@@ -1,5 +1,6 @@
 // Owns BigQuery's local Google Cloud CLI authentication and bounded resource
-// discovery. The editor receives only account and resource identifiers.
+// discovery. The editor receives only authentication availability and bounded
+// resource identifiers.
 import { useRef, useState } from "react";
 import {
   useMutation,
@@ -9,7 +10,7 @@ import {
 
 import { errDetails } from "../../ipc/types";
 import { useI18n } from "../../lib/i18n";
-import { qk } from "../../lib/queries";
+import { qk, useCatalogScope } from "../../lib/queries";
 import {
   BIGQUERY_AUTH_MODE_PARAMETER,
   bigQueryAuthMode,
@@ -36,6 +37,7 @@ export function useBigQueryOnboardingController(
 ) {
   const { t } = useI18n();
   const queryClient = useQueryClient();
+  const catalogScope = useCatalogScope();
   const createdServiceAccountProfile = useRef<ConnectionProfile | null>(null);
   const [preparingCli, setPreparingCli] = useState(false);
   const [cliError, setCliError] = useState<unknown>(null);
@@ -44,18 +46,18 @@ export function useBigQueryOnboardingController(
   const mode = bigQueryAuthMode(profile);
   const applicable =
     profile.engine === "bigquery" && profile.workspaceAccess === "local";
-  const enabled = applicable && cliAvailable;
+  const enabled = applicable && cliAvailable && catalogScope.ready;
   const auth = useQuery({
-    ...bigQueryAuthStateQuery(profile),
+    ...bigQueryAuthStateQuery(profile, catalogScope.key),
     enabled,
   });
   const projects = useQuery({
-    ...bigQueryProjectsQuery(profile),
+    ...bigQueryProjectsQuery(profile, catalogScope.key),
     enabled: enabled && auth.data?.authenticated === true,
   });
   const projectId = profile.host.trim();
   const datasets = useQuery({
-    ...bigQueryDatasetsQuery(profile, projectId),
+    ...bigQueryDatasetsQuery(profile, projectId, catalogScope.key),
     enabled:
       enabled &&
       auth.data?.authenticated === true &&

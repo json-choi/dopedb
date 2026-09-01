@@ -157,6 +157,7 @@ export async function POST(request: Request, context: RouteContext) {
       SELECT ${workspaceId}, ${authorization.session.user.id}, 'connection.grant.update', 'connection', ${connectionId},
         jsonb_build_object('memberId', ${body.memberId}, 'capability', granted."capability"), ${crypto.randomUUID()}::uuid
       FROM granted
+      RETURNING "resource_id"
     ) SELECT "capability" FROM granted JOIN audit ON TRUE
   `);
   if (!result.rows[0]) return jsonError("Connection grant changed concurrently. Retry.", 409);
@@ -252,6 +253,7 @@ export async function DELETE(request: Request, context: RouteContext) {
         ("organization_id", "actor_user_id", "action", "resource_type", "resource_id", "redacted_summary", "request_id")
       SELECT ${workspaceId}, ${authorization.session.user.id}, 'connection.grant.revoke', 'connection', ${connectionId},
         jsonb_build_object('memberId', revoked."memberId"), ${crypto.randomUUID()}::uuid FROM revoked
+      RETURNING "resource_id"
     ) SELECT "memberId" FROM revoked JOIN audit ON TRUE
     `);
   } catch (error) {

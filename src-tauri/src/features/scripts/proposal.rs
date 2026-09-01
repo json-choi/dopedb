@@ -128,7 +128,7 @@ impl ScriptPlatformAdapter {
         if has_ddl && !settings.allow_schema_changes {
             return Err(DesktopScriptRunError::Scoped(DesktopScriptScopedFailure {
                 error: AppError::Blocked {
-                    reason: "schema changes are disabled for this connection. Enable the Schema changes level in Settings → Safety to propose this DDL."
+                    reason: "schema changes are disabled for this connection; review the required permission shown with this result before proposing this DDL."
                         .into(),
                 },
                 _scope: Box::new(operation_scope),

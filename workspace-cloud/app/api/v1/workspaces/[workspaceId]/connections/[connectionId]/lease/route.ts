@@ -49,10 +49,16 @@ type RouteContext = {
 // the pending reservation to be retired before the platform stops the request.
 export const maxDuration = 60;
 
-function consumeLeaseBudget(organizationId: string, userId: string) {
+function consumeLeaseBudget(
+  organizationId: string,
+  userId: string,
+  connectionId: string,
+) {
   return consumeRateLimit({
     namespace: "workspace-lease",
-    discriminator: `${organizationId}:${userId}`,
+    // One busy connection must not consume the admission budget of every other
+    // database that the same member explicitly opens in this Workspace.
+    discriminator: `${organizationId}:${userId}:${connectionId}`,
     limit: 5,
   });
 }
@@ -263,7 +269,11 @@ export async function POST(request: Request, context: RouteContext) {
   if (activeCount.value >= 5) {
     return jsonError("Too many active database sessions. Retry after leases expire.", 429);
   }
-  if (!await consumeLeaseBudget(workspaceId, authorization.session.user.id)) {
+  if (!await consumeLeaseBudget(
+    workspaceId,
+    authorization.session.user.id,
+    connectionId,
+  )) {
     return jsonError("Managed database access is being opened too quickly. Retry shortly.", 429);
   }
   const accessMode = requestedAccessMode;

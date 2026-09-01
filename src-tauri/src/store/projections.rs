@@ -78,9 +78,24 @@ pub(super) fn row_to_connection_with_binding(
 ) -> AppResult<ConnectionProfile> {
     let mut profile = row_to_connection(r)?;
     if profile.workspace_access != WorkspaceConnectionAccess::Local {
-        if profile.engine == Engine::Bigquery {
-            // Shared BigQuery records carry project/dataset identity only. Each
-            // member authenticates through their own Google Cloud CLI context.
+        if profile.engine == Engine::Bigquery
+            && profile.credential_mode == WorkspaceCredentialMode::MemberLocal
+        {
+            // Shared BigQuery records carry project/dataset identity only. Restore
+            // the safe member-local auth mode and query options so recovery uses
+            // this member's own Google Cloud CLI context. Password-like fields stay
+            // unrepresentable for BigQuery.
+            profile.username.clear();
+            profile.extra_params = match r.try_get::<Option<String>, _>("binding_extra_params")? {
+                Some(value) => serde_json::from_str(&value).map_err(|error| {
+                    AppError::Config(format!(
+                        "connection binding extra_params contains invalid JSON: {error}"
+                    ))
+                })?,
+                None => HashMap::new(),
+            };
+            profile.secret_ref = None;
+        } else if profile.engine == Engine::Bigquery {
             profile.username.clear();
             profile.extra_params.clear();
             profile.secret_ref = None;

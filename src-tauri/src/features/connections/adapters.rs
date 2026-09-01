@@ -211,8 +211,29 @@ impl DriverRegistryPort for SystemDriverRegistry {
     }
 }
 
-#[derive(Clone, Copy)]
-pub(crate) struct SystemAdHocConnection;
+#[derive(Clone)]
+pub(crate) struct SystemAdHocConnection {
+    connections: ConnectionManager,
+}
+
+impl SystemAdHocConnection {
+    pub(crate) fn new(connections: ConnectionManager) -> Self {
+        Self { connections }
+    }
+
+    async fn bigquery_auth_scope(
+        &self,
+        profile: &ConnectionProfile,
+    ) -> AppResult<Option<crate::bigquery::BigQueryAuthScope>> {
+        if profile.engine != crate::model::Engine::Bigquery {
+            return Ok(None);
+        }
+        self.connections
+            .bigquery_auth_scope(profile)
+            .await
+            .map(Some)
+    }
+}
 
 /// An unsaved connection-form probe is only a reachability read, never a target
 /// mutation capability.
@@ -226,11 +247,13 @@ impl AdHocConnectionPort for SystemAdHocConnection {
     ) -> AppResult<()> {
         // A reachability probe only pings the target; it never needs a write
         // credential or a write-capable pool (including for MongoDB profiles).
+        let bigquery_auth_scope = self.bigquery_auth_scope(profile).await?;
         let transport = connection::ssh::open(profile, profile).await?;
         let live = match driver::connect(
             &transport.profile,
             password.as_str(),
             AD_HOC_CONNECTION_TEST_ACCESS,
+            bigquery_auth_scope.as_ref(),
         )
         .await
         {
@@ -264,11 +287,13 @@ impl AdHocConnectionPort for SystemAdHocConnection {
                 _ => String::new(),
             };
         }
+        let bigquery_auth_scope = self.bigquery_auth_scope(&target).await?;
         let transport = connection::ssh::open(&target, &target).await?;
         let live = match driver::connect(
             &transport.profile,
             password.as_str(),
             AD_HOC_CONNECTION_TEST_ACCESS,
+            bigquery_auth_scope.as_ref(),
         )
         .await
         {

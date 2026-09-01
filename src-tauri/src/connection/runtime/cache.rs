@@ -12,12 +12,13 @@ use tokio::sync::Mutex;
 use tokio::time::Instant;
 use uuid::Uuid;
 
+use crate::error::AppError;
 use crate::kernel::access::{AccountScope, PinnedConnection};
 use crate::kernel::sync::lock_unpoisoned;
 
 use super::{
     release_managed_bounded, ConnectionAccess, Live, ManagedLeaseHandle, ProviderLocalBindingPin,
-    ProviderLocalTarget, MANAGED_RELEASE_TIMEOUT,
+    ProviderLocalTarget, MANAGED_OPEN_RETRY_COOLDOWN, MANAGED_RELEASE_TIMEOUT,
 };
 use crate::connection::cloud_sql_proxy::CloudSqlProxy;
 use crate::connection::ssh::SshTunnel;
@@ -159,12 +160,43 @@ impl Drop for CacheEntry {
     }
 }
 
+struct ManagedOpenFailure {
+    retry_at: Instant,
+    message: String,
+}
+
 #[derive(Default)]
 pub(super) struct ConnectionSlot {
     // Empty slots deliberately remain mapped. Removing a slot after releasing this
     // mutex can orphan a waiter that has already cloned the Arc and let a second slot
     // open a duplicate pool for the same authority key.
     pub(super) entry: Option<Arc<CacheEntry>>,
+    managed_open_failure: Option<ManagedOpenFailure>,
+}
+
+impl ConnectionSlot {
+    pub(super) fn remember_managed_open_failure(&mut self, error: &AppError) {
+        let AppError::Network(message) = error else {
+            return;
+        };
+        self.managed_open_failure = Some(ManagedOpenFailure {
+            retry_at: Instant::now() + MANAGED_OPEN_RETRY_COOLDOWN,
+            message: message.clone(),
+        });
+    }
+
+    pub(super) fn managed_open_retry_error(&mut self) -> Option<AppError> {
+        let failure = self.managed_open_failure.as_ref()?;
+        if failure.retry_at <= Instant::now() {
+            self.managed_open_failure = None;
+            return None;
+        }
+        Some(AppError::Network(failure.message.clone()))
+    }
+
+    pub(super) fn clear_managed_open_failure(&mut self) {
+        self.managed_open_failure = None;
+    }
 }
 
 pub(super) fn schedule_expiry(slot: Arc<Mutex<ConnectionSlot>>, generation: u64, delay: Duration) {
