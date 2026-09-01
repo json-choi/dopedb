@@ -6,7 +6,10 @@ import { boundedJsonResponse } from "../bounded-json-response";
 import { env } from "../env";
 import { MAX_PROVIDER_RESULTS } from "./adapter-contract";
 import { ProviderRequestError } from "./provider-types";
-import { gcpCloudSqlEngine } from "./gcp-cloud-sql-core";
+import {
+  GCP_LEASE_SECONDS,
+  gcpCloudSqlEngine,
+} from "./gcp-cloud-sql-core";
 
 const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -18,6 +21,11 @@ const REQUEST_TIMEOUT_MS = 20_000;
 const MAX_TOKEN_RESPONSE_BYTES = 64 * 1_024;
 const MAX_PROFILE_RESPONSE_BYTES = 32 * 1_024;
 const MAX_INVENTORY_RESPONSE_BYTES = 2 * 1_024 * 1_024;
+
+// A reconnect preflight may need to wait out a non-revocable Cloud SQL IAM
+// login token. Keep the one-use setup authorization alive for that 15-minute
+// window plus a small final-save buffer, bounded by Google's own token expiry.
+export const GCP_SETUP_SESSION_SECONDS = GCP_LEASE_SECONDS + 5 * 60;
 
 export type GcpSetupCredential = {
   accessToken: string;

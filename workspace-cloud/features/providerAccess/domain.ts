@@ -187,7 +187,7 @@ function strictRecord(value: unknown, keys: readonly string[]) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const row = value as Record<string, unknown>;
   return Object.keys(row).length === keys.length
-    && keys.every((key) => Object.hasOwn(row, key))
+    && keys.every((key) => Object.prototype.hasOwnProperty.call(row, key))
     ? row
     : null;
 }
@@ -388,6 +388,85 @@ export type GcpSetupPermissionCheck = {
   canAutoGrant: boolean;
   missing: GcpSetupPermissionRequirement[];
 };
+
+export type GcpActiveLeaseConflict = {
+  activeLeaseCount: number;
+  retryAt: string;
+  setupExpiresAt: string;
+};
+
+export type GcpActiveLeaseCopy = {
+  wait: string;
+  reconnect: string;
+};
+
+export function parseGcpActiveLeaseConflict(
+  value: unknown,
+  now = Date.now(),
+): GcpActiveLeaseConflict | null {
+  const row = strictRecord(value, [
+    "error",
+    "code",
+    "activeLeaseCount",
+    "retryAt",
+    "setupExpiresAt",
+  ]);
+  const retryAt = typeof row?.retryAt === "string"
+    ? Date.parse(row.retryAt)
+    : Number.NaN;
+  const setupExpiresAt = typeof row?.setupExpiresAt === "string"
+    ? Date.parse(row.setupExpiresAt)
+    : Number.NaN;
+  if (
+    !row
+    || row.error !== "Active Cloud SQL database access is still valid"
+    || row.code !== "gcp_active_database_access"
+    || typeof row.activeLeaseCount !== "number"
+    || !Number.isSafeInteger(row.activeLeaseCount)
+    || row.activeLeaseCount < 1
+    || row.activeLeaseCount > 1_000_000
+    || !Number.isFinite(retryAt)
+    || retryAt <= now - 5_000
+    || retryAt > now + 20 * 60 * 1_000
+    || !Number.isFinite(setupExpiresAt)
+    || setupExpiresAt <= now - 60 * 1_000
+    || setupExpiresAt > now + 65 * 60 * 1_000
+  ) {
+    return null;
+  }
+  return {
+    activeLeaseCount: row.activeLeaseCount,
+    retryAt: row.retryAt as string,
+    setupExpiresAt: row.setupExpiresAt as string,
+  };
+}
+
+export function gcpActiveLeaseRetryMessage(
+  conflict: GcpActiveLeaseConflict,
+  copy: GcpActiveLeaseCopy,
+  locale: "en" | "ko",
+  now = Date.now(),
+) {
+  const retryAt = Date.parse(conflict.retryAt);
+  const setupExpiresAt = Date.parse(conflict.setupExpiresAt);
+  const completionBufferMs = 4 * 60 * 1_000;
+  const template = setupExpiresAt >= retryAt + completionBufferMs
+    ? copy.wait
+    : copy.reconnect;
+  const replacements = {
+    count: String(conflict.activeLeaseCount),
+    minutes: String(Math.max(1, Math.ceil((retryAt - now) / (60 * 1_000)))),
+    time: new Intl.DateTimeFormat(locale === "ko" ? "ko-KR" : "en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      second: "2-digit",
+    }).format(new Date(retryAt)),
+  };
+  return Object.entries(replacements).reduce(
+    (message, [key, replacement]) => message.split(`{${key}}`).join(replacement),
+    template,
+  );
+}
 
 export function parseGcpSetupPermissionCheck(
   value: unknown,

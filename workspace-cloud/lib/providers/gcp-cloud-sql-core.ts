@@ -184,6 +184,16 @@ function identityDigest(value: unknown) {
     .digest("hex");
 }
 
+export function gcpCloudSqlTargetFingerprint(
+  projectId: string,
+  instanceId: string,
+) {
+  if (!gcpProjectId(projectId) || !gcpResourceName(instanceId)) {
+    throw new Error("Invalid GCP Cloud SQL target");
+  }
+  return identityDigest({ projectId, instanceId });
+}
+
 export function gcpCloudSqlIntegrationIdentity(
   credential: GcpCloudSqlCredential,
 ) {
@@ -191,10 +201,10 @@ export function gcpCloudSqlIntegrationIdentity(
   const writePrincipal = credential.writeServiceAccountEmail
     ? identityDigest(credential.writeServiceAccountEmail)
     : "none";
-  const instance = identityDigest({
-    projectId: credential.projectId,
-    instanceId: credential.instanceId,
-  });
+  const instance = gcpCloudSqlTargetFingerprint(
+    credential.projectId,
+    credential.instanceId,
+  );
   const integration = identityDigest({
     version: 1,
     projectId: credential.projectId,

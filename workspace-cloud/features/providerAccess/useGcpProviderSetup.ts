@@ -4,6 +4,8 @@
 import { useCallback, useEffect } from "react";
 
 import {
+  gcpActiveLeaseRetryMessage,
+  parseGcpActiveLeaseConflict,
   parseGcpSetupPermissionCheck,
   type GcpSetupInstance,
   type GcpSetupInventory,
@@ -16,6 +18,20 @@ import { localizedProviderMessage } from "../../lib/workspace-provider-copy";
 import { workspaceMessages } from "../../lib/workspace-messages";
 
 type ProviderAccessCopy = (typeof workspaceMessages)[WorkspaceLocale]["providerAccess"];
+
+function activeGcpLeaseError(
+  value: unknown,
+  copy: ProviderAccessCopy,
+  locale: WorkspaceLocale,
+) {
+  const conflict = parseGcpActiveLeaseConflict(value);
+  return conflict
+    ? gcpActiveLeaseRetryMessage(conflict, {
+      wait: copy.gcpActiveLeaseWait,
+      reconnect: copy.gcpActiveLeaseReconnect,
+    }, locale)
+    : null;
+}
 
 export function useGcpProviderSetup({
   workspaceId,
@@ -319,6 +335,11 @@ export function useGcpProviderSetup({
           setGcpSetupError(copy.gcpSessionExpired);
           return;
         }
+        const activeLeaseError = activeGcpLeaseError(failure, copy, locale);
+        if (activeLeaseError) {
+          setGcpSetupError(activeLeaseError);
+          return;
+        }
         const permissionCheck = parseGcpSetupPermissionCheck(failure?.permissions);
         if (permissionCheck) {
           setGcpPermissionCheck(permissionCheck);
@@ -350,7 +371,17 @@ export function useGcpProviderSetup({
         },
       ).catch(() => null);
       if (!integrationResponse?.ok) {
-        setGcpSetupError(await providerResponseError(integrationResponse, copy.gcpSaveError, locale));
+        const failure = await integrationResponse?.json().catch(() => null);
+        setGcpSetupError(
+          activeGcpLeaseError(failure, copy, locale)
+            ?? (typeof failure?.error === "string"
+              ? localizedProviderMessage(
+                failure.error,
+                locale,
+                copy.gcpSaveError,
+              )
+              : copy.gcpSaveError),
+        );
         return;
       }
       const integrationBody = await integrationResponse.json().catch(() => null);

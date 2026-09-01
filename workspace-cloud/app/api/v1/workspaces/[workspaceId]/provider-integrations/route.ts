@@ -13,6 +13,8 @@ import {
 } from "../../../../../../lib/http";
 import { providerCatalog } from "../../../../../../lib/provider-catalog";
 import {
+  activeIntegrationLeaseRevocationWindow,
+  gcpActiveDatabaseAccessConflict,
   parseManagedProviderResource,
   revokeActiveLeases,
 } from "../../../../../../lib/provider-integrations";
@@ -275,6 +277,7 @@ export async function POST(request: Request, context: RouteContext) {
       | null = null;
     let localVerificationTarget: GcpLocalVerificationTarget | null = null;
     let production: boolean | null = null;
+    let gcpSetupExpiresAt: Date | null = null;
     if (body.provider === "neon") {
       const configuration = body.configuration as Record<string, unknown> | null;
       const apiKey = typeof configuration?.apiKey === "string"
@@ -341,11 +344,12 @@ export async function POST(request: Request, context: RouteContext) {
           gt(providerSetupSession.expiresAt, new Date()),
           isNull(providerSetupSession.consumedAt),
         ),
-        columns: { id: true },
+        columns: { id: true, expiresAt: true },
       });
       if (!setup) {
         return jsonError("Google Cloud setup session expired", 410);
       }
+      gcpSetupExpiresAt = setup.expiresAt;
       try {
         const ticket = openProviderBootstrapTicket<{
           configuration?: unknown;
@@ -620,6 +624,22 @@ export async function POST(request: Request, context: RouteContext) {
       }
       let revocation;
       try {
+        if (provider === "gcpCloudSql" && gcpSetupExpiresAt) {
+          const activeLeaseWindow = await activeIntegrationLeaseRevocationWindow({
+            organizationId: workspaceId,
+            integrationId,
+          });
+          if (activeLeaseWindow) {
+            await releaseRevocationGateClaim(reconnectClaim).catch(() => false);
+            return privateJson(
+              gcpActiveDatabaseAccessConflict(
+                activeLeaseWindow,
+                gcpSetupExpiresAt,
+              ),
+              { status: 409 },
+            );
+          }
+        }
         revocation = await revokeActiveLeases({
           organizationId: workspaceId,
           integrationId,

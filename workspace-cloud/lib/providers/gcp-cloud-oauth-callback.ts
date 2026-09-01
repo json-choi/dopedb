@@ -15,7 +15,10 @@ import {
   providerSetupSession,
 } from "../schema";
 import { authorizeWorkspace } from "../workspace-authorization";
-import { exchangeGcpCloudCode } from "./gcp-cloud-oauth";
+import {
+  exchangeGcpCloudCode,
+  GCP_SETUP_SESSION_SECONDS,
+} from "./gcp-cloud-oauth";
 import { ProviderRequestError } from "./provider-types";
 import {
   localizedWorkspacePath,
@@ -97,7 +100,7 @@ export async function gcpCloudSetupCallbackResponse(request: Request) {
     const setupId = crypto.randomUUID();
     const expiresAt = new Date(Math.min(
       Date.parse(credential.expiresAt),
-      Date.now() + 10 * 60 * 1_000,
+      Date.now() + GCP_SETUP_SESSION_SECONDS * 1_000,
     ));
     stage = "credential_sealing";
     const encryptedCredential = sealProviderSetupCredential(setupId, credential);

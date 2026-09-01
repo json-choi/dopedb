@@ -21,6 +21,8 @@ const koreanByEnglish: Readonly<Record<string, string>> = {
     "현재 사용 중인 쓰기 자격 증명은 만료 전 강제로 폐기할 수 없습니다. 잠시 뒤 다시 시도하세요.",
   "Active database access could not be revoked. Retry the update.":
     "현재 사용 중인 단기 DB 자격 증명을 폐기하지 못했습니다. 자격 증명이 만료된 뒤 다시 시도하세요.",
+  "Active database access could not be revoked yet. Retry reconnecting.":
+    "현재 사용 중인 단기 DB 자격 증명은 즉시 폐기할 수 없습니다. 만료된 뒤 다시 연결하세요.",
 };
 
 const englishByKorean: Readonly<Record<string, string>> = {

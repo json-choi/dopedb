@@ -7,3 +7,4 @@ export * from "./provider-integrations/integration";
 export * from "./provider-integrations/integration-repository";
 export * from "./provider-integrations/lease-cleanup";
 export * from "./provider-integrations/lease-issuance";
+export * from "./provider-integrations/lease-revocation-window";

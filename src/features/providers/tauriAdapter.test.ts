@@ -9,6 +9,7 @@ import gcpBootstrapDatabaseSource from "../../../workspace-cloud/lib/providers/g
 import gcpBootstrapIamSource from "../../../workspace-cloud/lib/providers/gcp-cloud-bootstrap-iam.ts?raw";
 import gcpBootstrapSqlSource from "../../../workspace-cloud/lib/providers/gcp-cloud-bootstrap-sql.ts?raw";
 import gcpCloudSqlSource from "../../../workspace-cloud/lib/providers/gcp-cloud-sql.ts?raw";
+import gcpCloudSqlCoreSource from "../../../workspace-cloud/lib/providers/gcp-cloud-sql-core.ts?raw";
 import vaultProviderSource from "../../../workspace-cloud/lib/providers/vault.ts?raw";
 import boundedJsonResponseSource from "../../../workspace-cloud/lib/bounded-json-response.ts?raw";
 import neonFacadeSource from "../../../workspace-cloud/lib/providers/neon.ts?raw";
@@ -21,6 +22,7 @@ import neonBootstrapSource from "../../../workspace-cloud/lib/providers/neon-boo
 import neonBootstrapRouteSource from "../../../workspace-cloud/app/api/v1/workspaces/[workspaceId]/provider-integrations/[integrationId]/neon-bootstrap/route.ts?raw";
 import gcpSetupRouteSource from "../../../workspace-cloud/app/api/v1/workspaces/[workspaceId]/provider-integrations/gcp-setup/[setupId]/route.ts?raw";
 import gcpOAuthSource from "../../../workspace-cloud/lib/providers/gcp-cloud-oauth.ts?raw";
+import gcpOAuthCallbackSource from "../../../workspace-cloud/lib/providers/gcp-cloud-oauth-callback.ts?raw";
 import managedLeaseRouteSource from "../../../workspace-cloud/app/api/v1/workspaces/[workspaceId]/connections/[connectionId]/lease/route.ts?raw";
 import managedAccessRouteSource from "../../../workspace-cloud/app/api/v1/workspaces/[workspaceId]/connections/[connectionId]/managed-access/route.ts?raw";
 import connectionGrantsRouteSource from "../../../workspace-cloud/app/api/v1/workspaces/[workspaceId]/connections/[connectionId]/grants/route.ts?raw";
@@ -30,6 +32,7 @@ import providerIntegrationSource from "../../../workspace-cloud/lib/provider-int
 import providerDiscoveryProofSource from "../../../workspace-cloud/lib/provider-discovery-proof.ts?raw";
 import providerLeaseCleanupSource from "../../../workspace-cloud/lib/provider-integrations/lease-cleanup.ts?raw";
 import providerLeaseIssuanceSource from "../../../workspace-cloud/lib/provider-integrations/lease-issuance.ts?raw";
+import providerLeaseRevocationWindowSource from "../../../workspace-cloud/lib/provider-integrations/lease-revocation-window.ts?raw";
 import gcpSetupSource from "../../../workspace-cloud/features/providerAccess/GcpCloudSetup.tsx?raw";
 import gcpProviderSetupControllerSource from "../../../workspace-cloud/features/providerAccess/useGcpProviderSetup.ts?raw";
 import managedConnectionRecoverySource from "../../../workspace-cloud/features/providerAccess/managedConnectionRecovery.ts?raw";
@@ -135,6 +138,10 @@ import {
   parseNeonBranchInventory as parseNeonBranchInventoryResponse,
   parseNeonBranchOperations,
 } from "../../../workspace-cloud/features/providerAccess/neonBranches";
+import {
+  gcpActiveLeaseRetryMessage,
+  parseGcpActiveLeaseConflict,
+} from "../../../workspace-cloud/features/providerAccess/domain";
 const neonBranchOperationsApplicationSource = [
   neonBranchOperationsApplicationEntrySource,
   neonBranchOperationsContractsSource,
@@ -453,6 +460,79 @@ describe("provider credential Tauri adapter", () => {
     expect(gcpBootstrapIamSource).not.toContain(
       "roles/iam.serviceAccountTokenCreator",
     );
+
+    const setupPreflight = gcpSetupRouteSource.indexOf(
+      "const activeLeaseWindow = await activeIntegrationLeaseRevocationWindow",
+    );
+    const setupBootstrap = gcpSetupRouteSource.indexOf(
+      "const result = await bootstrapGcpCloudSql",
+    );
+    expect(setupPreflight).toBeGreaterThanOrEqual(0);
+    expect(setupBootstrap).toBeGreaterThan(setupPreflight);
+    expect(gcpSetupRouteSource).toContain("gcpActiveDatabaseAccessConflict");
+    expect(gcpSetupRouteSource).toContain("setup.expiresAt");
+    expect(gcpCloudSqlCoreSource).toContain(
+      "export function gcpCloudSqlTargetFingerprint",
+    );
+    expect(providerLeaseRevocationWindowSource).toContain(
+      "gt(workspaceCredentialLease.expiresAt, now)",
+    );
+    expect(providerLeaseRevocationWindowSource).toContain(
+      '"gcp_active_database_access"',
+    );
+    const reconnectClaim = providerIntegrationRouteSource.indexOf(
+      "reconnectClaim = await claimRevocationGate",
+    );
+    const reconnectPreflight = providerIntegrationRouteSource.indexOf(
+      "const activeLeaseWindow = await activeIntegrationLeaseRevocationWindow",
+      reconnectClaim,
+    );
+    const reconnectRevocation = providerIntegrationRouteSource.indexOf(
+      "revocation = await revokeActiveLeases",
+      reconnectPreflight,
+    );
+    expect(reconnectClaim).toBeGreaterThanOrEqual(0);
+    expect(reconnectPreflight).toBeGreaterThan(reconnectClaim);
+    expect(reconnectRevocation).toBeGreaterThan(reconnectPreflight);
+    expect(gcpOAuthSource).toContain(
+      "GCP_SETUP_SESSION_SECONDS = GCP_LEASE_SECONDS + 5 * 60",
+    );
+    expect(gcpOAuthCallbackSource).toContain(
+      "GCP_SETUP_SESSION_SECONDS * 1_000",
+    );
+
+    const now = Date.parse("2026-09-01T10:00:00.000Z");
+    const conflict = parseGcpActiveLeaseConflict({
+      error: "Active Cloud SQL database access is still valid",
+      code: "gcp_active_database_access",
+      activeLeaseCount: 2,
+      retryAt: "2026-09-01T10:12:00.000Z",
+      setupExpiresAt: "2026-09-01T10:20:00.000Z",
+    }, now);
+    expect(conflict).not.toBeNull();
+    expect(gcpActiveLeaseRetryMessage(
+      conflict!,
+      { wait: "wait:{count}:{minutes}", reconnect: "reconnect:{count}:{minutes}" },
+      "en",
+      now,
+    )).toBe("wait:2:12");
+    expect(gcpActiveLeaseRetryMessage(
+      { ...conflict!, setupExpiresAt: "2026-09-01T10:14:00.000Z" },
+      { wait: "wait:{count}:{minutes}", reconnect: "reconnect:{count}:{minutes}" },
+      "ko",
+      now,
+    )).toBe("reconnect:2:12");
+    expect(parseGcpActiveLeaseConflict({
+      error: "Active Cloud SQL database access is still valid",
+      code: "unexpected",
+      activeLeaseCount: 2,
+      retryAt: "2026-09-01T10:12:00.000Z",
+      setupExpiresAt: "2026-09-01T10:20:00.000Z",
+    }, now)).toBeNull();
+    expect(gcpProviderSetupControllerSource).toContain(
+      "parseGcpActiveLeaseConflict",
+    );
+    expect(workspaceMessagesSource).toContain("gcpActiveLeaseReconnect");
   });
 
   it("prohibits legacy provider identity and manual GCP trust input", async () => {

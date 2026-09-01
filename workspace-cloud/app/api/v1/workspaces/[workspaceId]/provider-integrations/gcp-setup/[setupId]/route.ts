@@ -25,14 +25,22 @@ import {
 import { vercelOidcToken } from "../../../../../../../../lib/providers/gcp-cloud-sql";
 import { ProviderRequestError } from "../../../../../../../../lib/providers/provider-types";
 import {
+  gcpCloudSqlTargetFingerprint,
+} from "../../../../../../../../lib/providers/gcp-cloud-sql-core";
+import {
   openProviderSetupCredential,
   sealProviderBootstrapTicket,
 } from "../../../../../../../../lib/secret-envelope";
-import { parseManagedProviderResource } from "../../../../../../../../lib/provider-integrations";
+import {
+  activeIntegrationLeaseRevocationWindow,
+  gcpActiveDatabaseAccessConflict,
+  parseManagedProviderResource,
+} from "../../../../../../../../lib/provider-integrations";
 import {
   providerSetupSession,
   workspaceConnection,
   workspaceProviderIntegration,
+  workspaceProviderPrincipalClaim,
 } from "../../../../../../../../lib/schema";
 import { authorizeWorkspace } from "../../../../../../../../lib/workspace-authorization";
 
@@ -110,6 +118,38 @@ async function matchesManagedGcpRepairTarget(input: {
       return false;
     }
   });
+}
+
+async function managedGcpTargetIntegrationId(input: {
+  workspaceId: string;
+  projectId: string;
+  instanceId: string;
+}) {
+  const targetFingerprint = gcpCloudSqlTargetFingerprint(
+    input.projectId,
+    input.instanceId,
+  );
+  const rows = await db.select({
+    integrationId: workspaceProviderIntegration.id,
+  }).from(workspaceProviderPrincipalClaim).innerJoin(
+    workspaceProviderIntegration,
+    eq(
+      workspaceProviderPrincipalClaim.integrationId,
+      workspaceProviderIntegration.id,
+    ),
+  ).where(and(
+    eq(workspaceProviderPrincipalClaim.organizationId, input.workspaceId),
+    eq(workspaceProviderPrincipalClaim.targetFingerprint, targetFingerprint),
+    eq(workspaceProviderIntegration.organizationId, input.workspaceId),
+    eq(workspaceProviderIntegration.provider, "gcpCloudSql"),
+    inArray(workspaceProviderIntegration.status, ["active", "reconnect_required"]),
+    isNull(workspaceProviderIntegration.revokedAt),
+  ));
+  const integrationIds = [...new Set(rows.map((row) => row.integrationId))];
+  if (integrationIds.length > 1) {
+    throw new Error("Cloud SQL target ownership is inconsistent");
+  }
+  return integrationIds[0] ?? null;
 }
 
 export async function GET(request: Request, context: RouteContext) {
@@ -239,6 +279,27 @@ export async function POST(request: Request, context: RouteContext) {
         "The managed Cloud SQL repair target changed. Start repair again from the database.",
         409,
       );
+    }
+    const targetIntegrationId = repairIntegrationId
+      ?? await managedGcpTargetIntegrationId({
+        workspaceId,
+        projectId: body.projectId,
+        instanceId: body.instanceId,
+      });
+    if (targetIntegrationId) {
+      const activeLeaseWindow = await activeIntegrationLeaseRevocationWindow({
+        organizationId: workspaceId,
+        integrationId: targetIntegrationId,
+      });
+      if (activeLeaseWindow) {
+        return privateJson(
+          gcpActiveDatabaseAccessConflict(
+            activeLeaseWindow,
+            setup.expiresAt,
+          ),
+          { status: 409 },
+        );
+      }
     }
     const permissionCheck = await checkGcpSetupPermissions(
       setup.credential,

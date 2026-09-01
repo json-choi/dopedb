@@ -15,7 +15,7 @@
     },
     "src/features/providers/tauriAdapter.test.ts": {
       "tests": 6,
-      "protects": "Provider authority receipts, connection-bound provisioning discovery, exact managed-target authority, actionable control-plane errors, catalog capability projection, parseable managed-import SQL, role-gated managed writes, safe Neon branch soft-delete, legacy backup compatibility, identity rejection, restart-free Cloud SQL IAM approval, propagation-safe administrator bootstrap with exact cleanup, and keyless GCP bootstrap boundaries"
+      "protects": "Provider authority receipts, connection-bound provisioning discovery, exact managed-target authority, actionable control-plane errors, catalog capability projection, parseable managed-import SQL, role-gated managed writes, safe Neon branch soft-delete, legacy backup compatibility, identity rejection, restart-free Cloud SQL IAM approval, propagation-safe administrator bootstrap with exact cleanup, active-lease-aware Cloud SQL reconnect preflight and retry timing, and keyless GCP bootstrap boundaries"
     },
     "src/features/queries/tauriAdapter.test.ts": {
       "tests": 13,
