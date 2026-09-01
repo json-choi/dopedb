@@ -1,7 +1,7 @@
 "use client";
 
 // GCP setup owns its OAuth-session inventory, permission checks, and bootstrap use case.
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 
 import {
   parseGcpSetupPermissionCheck,
@@ -9,6 +9,7 @@ import {
   type GcpSetupInventory,
 } from "./domain";
 import type { ProviderAccessFieldSetter, ProviderAccessState } from "./state";
+import type { GcpManagedConnectionRecoveryTarget } from "./managedConnectionRecovery";
 import { providerResponseError } from "./transport";
 import type { WorkspaceLocale } from "../../lib/workspace-locale";
 import { localizedProviderMessage } from "../../lib/workspace-provider-copy";
@@ -23,6 +24,10 @@ export function useGcpProviderSetup({
   copy,
   state,
   setField,
+  gcpRecoveryTarget,
+  gcpRecoveryTargetPending,
+  gcpRecoveryTargetMissing,
+  clearGcpRecoveryIntent,
 }: {
   workspaceId: string;
   gcpSetupId: string | null;
@@ -30,6 +35,10 @@ export function useGcpProviderSetup({
   copy: ProviderAccessCopy;
   state: ProviderAccessState;
   setField: ProviderAccessFieldSetter;
+  gcpRecoveryTarget: GcpManagedConnectionRecoveryTarget | null;
+  gcpRecoveryTargetPending: boolean;
+  gcpRecoveryTargetMissing: boolean;
+  clearGcpRecoveryIntent: () => void;
 }) {
   const {
     providers,
@@ -56,6 +65,62 @@ export function useGcpProviderSetup({
   const setGcpSetupError = setField("gcpSetupError");
   const setGcpSetupReconnectRequired = setField("gcpSetupReconnectRequired");
   const setMutation = setField("mutation");
+  const repairProjectId = gcpRecoveryTarget?.resource.project ?? "";
+  const repairInstanceId = gcpRecoveryTarget?.resource.instance ?? "";
+
+  const loadGcpProject = useCallback(async (
+    projectId: string,
+    signal?: AbortSignal,
+  ) => {
+    if (!gcpSetupId) return null;
+    const query = new URLSearchParams({ kind: "instances", project: projectId });
+    const permissionQuery = new URLSearchParams({ kind: "permissions", project: projectId });
+    const [response, permissionResponse] = await Promise.all([
+      fetch(
+        `/api/v1/workspaces/${workspaceId}/provider-integrations/gcp-setup/${gcpSetupId}?${query}`,
+        { cache: "no-store", signal },
+      ).catch(() => null),
+      fetch(
+        `/api/v1/workspaces/${workspaceId}/provider-integrations/gcp-setup/${gcpSetupId}?${permissionQuery}`,
+        { cache: "no-store", signal },
+      ).catch(() => null),
+    ]);
+    if (signal?.aborted) return null;
+    if (!response?.ok || !permissionResponse?.ok) {
+      const failedResponse = response?.ok ? permissionResponse : response;
+      if (failedResponse?.status === 401 || failedResponse?.status === 410) {
+        setGcpSetupReconnectRequired(true);
+        setGcpSetupError(copy.gcpSessionExpired);
+        return null;
+      }
+      setGcpSetupError(await providerResponseError(
+        failedResponse,
+        response?.ok ? copy.gcpPermissionsError : copy.gcpInstancesError,
+        locale,
+      ));
+      return null;
+    }
+    const body = await response.json().catch(() => null);
+    const permissionBody = await permissionResponse.json().catch(() => null);
+    const permissionCheck = parseGcpSetupPermissionCheck(permissionBody?.permissions);
+    if (!Array.isArray(body?.instances) || !permissionCheck) {
+      setGcpSetupError(copy.gcpSetupShapeError);
+      return null;
+    }
+    const instances = body.instances as GcpSetupInstance[];
+    setGcpSetupInstances(instances);
+    setGcpPermissionCheck(permissionCheck);
+    return instances;
+  }, [
+    copy,
+    gcpSetupId,
+    locale,
+    setGcpPermissionCheck,
+    setGcpSetupError,
+    setGcpSetupInstances,
+    setGcpSetupReconnectRequired,
+    workspaceId,
+  ]);
 
   useEffect(() => {
     if (!gcpSetupId) {
@@ -68,14 +133,37 @@ export function useGcpProviderSetup({
       setGcpSetupReconnectRequired(false);
       return;
     }
+    if (gcpRecoveryTargetMissing) {
+      setGcpSetupInventory(null);
+      setGcpSetupInstances([]);
+      setSelectedGcpProjectId("");
+      setSelectedGcpInstanceId("");
+      setGcpPermissionCheck(null);
+      setGcpSetupError(copy.gcpRepairTargetUnavailable);
+      setGcpSetupReconnectRequired(false);
+      setMutation("");
+      return;
+    }
+    if (gcpRecoveryTargetPending) {
+      setGcpSetupInventory(null);
+      setGcpSetupInstances([]);
+      setSelectedGcpProjectId("");
+      setSelectedGcpInstanceId("");
+      setGcpPermissionCheck(null);
+      setGcpSetupError("");
+      setGcpSetupReconnectRequired(false);
+      setMutation("");
+      return;
+    }
     const controller = new AbortController();
     setMutation("gcp:projects");
     setGcpSetupError("");
     setGcpSetupReconnectRequired(false);
-    void fetch(
-      `/api/v1/workspaces/${workspaceId}/provider-integrations/gcp-setup/${gcpSetupId}?kind=projects`,
-      { cache: "no-store", signal: controller.signal },
-    ).then(async (response) => {
+    void (async () => {
+      const response = await fetch(
+        `/api/v1/workspaces/${workspaceId}/provider-integrations/gcp-setup/${gcpSetupId}?kind=projects`,
+        { cache: "no-store", signal: controller.signal },
+      );
       if (!response.ok) {
         if (response.status === 401 || response.status === 410) {
           setGcpSetupReconnectRequired(true);
@@ -91,9 +179,22 @@ export function useGcpProviderSetup({
       ) {
         throw new Error(copy.gcpProjectsShapeError);
       }
-      setGcpSetupInventory(body as GcpSetupInventory);
+      const inventory = body as GcpSetupInventory;
+      setGcpSetupInventory(inventory);
       setGcpSetupReconnectRequired(false);
-    }).catch((cause) => {
+      if (!repairProjectId || !repairInstanceId) return;
+      if (!inventory.projects.some((item) => item.id === repairProjectId)) {
+        throw new Error(copy.gcpRepairTargetUnavailable);
+      }
+      setSelectedGcpProjectId(repairProjectId);
+      setSelectedGcpInstanceId("");
+      const instances = await loadGcpProject(repairProjectId, controller.signal);
+      if (!instances || controller.signal.aborted) return;
+      if (!instances.some((item) => item.id === repairInstanceId)) {
+        throw new Error(copy.gcpRepairTargetUnavailable);
+      }
+      setSelectedGcpInstanceId(repairInstanceId);
+    })().catch((cause) => {
       if (!controller.signal.aborted) {
         setGcpSetupError(cause instanceof Error
           ? localizedProviderMessage(cause.message, locale, copy.gcpStartError)
@@ -106,7 +207,12 @@ export function useGcpProviderSetup({
   }, [
     copy,
     gcpSetupId,
+    gcpRecoveryTargetMissing,
+    gcpRecoveryTargetPending,
     locale,
+    loadGcpProject,
+    repairInstanceId,
+    repairProjectId,
     setGcpEnvironmentClassification,
     setGcpIamRoleGrantApproved,
     setGcpPermissionCheck,
@@ -115,6 +221,8 @@ export function useGcpProviderSetup({
     setGcpSetupInventory,
     setGcpSetupReconnectRequired,
     setMutation,
+    setSelectedGcpInstanceId,
+    setSelectedGcpProjectId,
     workspaceId,
   ]);
 
@@ -132,41 +240,7 @@ export function useGcpProviderSetup({
     setMutation("gcp:instances");
     setGcpSetupError("");
     try {
-      const query = new URLSearchParams({ kind: "instances", project: projectId });
-      const permissionQuery = new URLSearchParams({ kind: "permissions", project: projectId });
-      const [response, permissionResponse] = await Promise.all([
-        fetch(
-          `/api/v1/workspaces/${workspaceId}/provider-integrations/gcp-setup/${gcpSetupId}?${query}`,
-          { cache: "no-store" },
-        ).catch(() => null),
-        fetch(
-          `/api/v1/workspaces/${workspaceId}/provider-integrations/gcp-setup/${gcpSetupId}?${permissionQuery}`,
-          { cache: "no-store" },
-        ).catch(() => null),
-      ]);
-      if (!response?.ok || !permissionResponse?.ok) {
-        const failedResponse = response?.ok ? permissionResponse : response;
-        if (failedResponse?.status === 401 || failedResponse?.status === 410) {
-          setGcpSetupReconnectRequired(true);
-          setGcpSetupError(copy.gcpSessionExpired);
-          return;
-        }
-        setGcpSetupError(await providerResponseError(
-          failedResponse,
-          response?.ok ? copy.gcpPermissionsError : copy.gcpInstancesError,
-          locale,
-        ));
-        return;
-      }
-      const body = await response.json().catch(() => null);
-      const permissionBody = await permissionResponse.json().catch(() => null);
-      const permissionCheck = parseGcpSetupPermissionCheck(permissionBody?.permissions);
-      if (!Array.isArray(body?.instances) || !permissionCheck) {
-        setGcpSetupError(copy.gcpSetupShapeError);
-        return;
-      }
-      setGcpSetupInstances(body.instances as GcpSetupInstance[]);
-      setGcpPermissionCheck(permissionCheck);
+      await loadGcpProject(projectId);
     } finally {
       setMutation("");
     }
@@ -195,6 +269,12 @@ export function useGcpProviderSetup({
       ) && !gcpProductionApproved)
       || (!instance.iamAuthenticationEnabled && !gcpRestartApproved)
       || !gcpPermissionCheck
+      || gcpRecoveryTargetPending
+      || gcpRecoveryTargetMissing
+      || (gcpRecoveryTarget && (
+        project?.id !== gcpRecoveryTarget.resource.project
+        || instance?.id !== gcpRecoveryTarget.resource.instance
+      ))
       || (gcpPermissionCheck.missing.length > 0 && (
         !gcpPermissionCheck.canAutoGrant || !gcpIamRoleGrantApproved
       ))
@@ -220,6 +300,9 @@ export function useGcpProviderSetup({
             approveProduction: gcpProductionApproved,
             approveInstanceRestart: gcpRestartApproved,
             approveIamRoleGrant: gcpIamRoleGrantApproved,
+            ...(gcpRecoveryTarget ? {
+              repairIntegrationId: gcpRecoveryTarget.intent.integrationId,
+            } : {}),
           }),
         },
       ).catch(() => null);
@@ -254,6 +337,9 @@ export function useGcpProviderSetup({
             provider: "gcpCloudSql",
             setupId: gcpSetupId,
             bootstrapTicket: bootstrap.bootstrapTicket,
+            ...(gcpRecoveryTarget ? {
+              repairIntegrationId: gcpRecoveryTarget.intent.integrationId,
+            } : {}),
           }),
         },
       ).catch(() => null);
@@ -265,7 +351,11 @@ export function useGcpProviderSetup({
       const integrationId = typeof integrationBody?.integration?.id === "string"
         ? integrationBody.integration.id
         : "";
-      if (!integrationId) {
+      if (
+        !integrationId
+        || (gcpRecoveryTarget
+          && integrationId !== gcpRecoveryTarget.intent.integrationId)
+      ) {
         setGcpSetupError(copy.gcpSavedShapeError);
         return;
       }
@@ -281,7 +371,16 @@ export function useGcpProviderSetup({
       nextUrl.searchParams.delete("status");
       nextUrl.searchParams.delete("gcpSetup");
       nextUrl.searchParams.set("section", "databases");
-      nextUrl.searchParams.set("integration", integrationId);
+      if (gcpRecoveryTarget) {
+        clearGcpRecoveryIntent();
+        nextUrl.searchParams.delete("integration");
+        nextUrl.searchParams.set(
+          "connection",
+          gcpRecoveryTarget.intent.connectionId,
+        );
+      } else {
+        nextUrl.searchParams.set("integration", integrationId);
+      }
       window.location.replace(nextUrl);
     } finally {
       setMutation("");

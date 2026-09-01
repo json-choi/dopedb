@@ -132,7 +132,10 @@ DopeDB의 제품 축, 실제 사용자 작업, 접근성, 운영 안전성, 지�
   로컬 host·password 수정을 안내하지 않고 관리 주체, 관리자가 확인할 provider
   account·DB 등록·멤버 접근을 설명한다. exact `manage` 권한이 있으면 native가
   검증한 Workspace Web origin의 해당 DB 행으로 직접 이동하는 실제 command를
-  제공한다.
+  제공한다. 해당 DB 행은 설명에서 끝나지 않고 provider 재승인을 시작하는 복구
+  command를 소유한다. GCP Cloud SQL 복구는 기존 integration·project·instance를
+  고정한 채 OAuth를 다시 받고 IAM DB 인증 flag와 전용 DB 사용자를 재검증·복구한
+  뒤 같은 DB 행으로 돌아온다. 기존 connection ID와 멤버 grant는 유지한다.
 - enabled control은 반드시 실제 command와 state owner를 가진다. 아직 없는 기능은
   tracker에 `missing`으로 기록하고 가짜 control을 만들지 않는다.
 

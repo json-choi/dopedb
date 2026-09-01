@@ -117,7 +117,7 @@ export async function POST(request: Request, context: RouteContext) {
         authorization.membership.id,
       )} AS lock_key
       UNION
-      SELECT concat('member:', ${workspaceId}, ':', member."user_id")
+      SELECT concat('member:', ${workspaceId}::text, ':', member."user_id")
       FROM "workspace_control"."member" member
       WHERE member."organization_id" = ${workspaceId} AND member."id" = ${body.memberId}
     ), locks AS MATERIALIZED (

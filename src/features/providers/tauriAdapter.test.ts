@@ -31,6 +31,9 @@ import providerDiscoveryProofSource from "../../../workspace-cloud/lib/provider-
 import providerLeaseCleanupSource from "../../../workspace-cloud/lib/provider-integrations/lease-cleanup.ts?raw";
 import providerLeaseIssuanceSource from "../../../workspace-cloud/lib/provider-integrations/lease-issuance.ts?raw";
 import gcpSetupSource from "../../../workspace-cloud/features/providerAccess/GcpCloudSetup.tsx?raw";
+import gcpProviderSetupControllerSource from "../../../workspace-cloud/features/providerAccess/useGcpProviderSetup.ts?raw";
+import managedConnectionRecoverySource from "../../../workspace-cloud/features/providerAccess/managedConnectionRecovery.ts?raw";
+import managedConnectionRecoveryControllerSource from "../../../workspace-cloud/features/providerAccess/useManagedConnectionRecovery.ts?raw";
 import providerIntegrationListSource from "../../../workspace-cloud/features/providerAccess/ProviderIntegrationList.tsx?raw";
 import providerResourcePickerSource from "../../../workspace-cloud/features/providerAccess/ProviderResourcePicker.tsx?raw";
 import neonBranchManagerSource from "../../../workspace-cloud/features/providerAccess/NeonBranchManager.tsx?raw";
@@ -132,7 +135,6 @@ import {
   parseNeonBranchInventory as parseNeonBranchInventoryResponse,
   parseNeonBranchOperations,
 } from "../../../workspace-cloud/features/providerAccess/neonBranches";
-
 const neonBranchOperationsApplicationSource = [
   neonBranchOperationsApplicationEntrySource,
   neonBranchOperationsContractsSource,
@@ -1001,6 +1003,34 @@ describe("provider credential Tauri adapter", () => {
     );
     expect(hostedControlPlaneSource).toContain(".or(value.error.as_deref())");
     expect(gcpSetupRouteSource).toContain("writeAccess: true");
+    expect(gcpSetupRouteSource).toContain("matchesManagedGcpRepairTarget");
+    expect(gcpSetupRouteSource).toContain('eq(workspaceConnection.credentialMode, "managed")');
+    expect(connectionGrantsRouteSource).toContain("${workspaceId}::text");
+    expect(sharedDatabasePanelSource).toContain("repairManagedConnection");
+    expect(managedConnectionRecoveryControllerSource).toContain(
+      "saveManagedConnectionRecoveryIntent",
+    );
+    expect(gcpProviderSetupControllerSource).toContain("repairIntegrationId");
+    expect(gcpSetupSource).toContain("copy.repairPinnedTarget");
+    expect(providerIntegrationRouteSource).toContain(
+      "requestedRepairIntegrationId",
+    );
+    expect(providerIntegrationRouteSource).toContain(
+      "The managed Cloud SQL repair target changed",
+    );
+    expect(managedConnectionRecoverySource).not.toMatch(
+      /password|accessToken|refreshToken|credential/i,
+    );
+    expect(managedConnectionRecoverySource).toContain(
+      "RECOVERY_TTL_MS = 15 * 60 * 1_000",
+    );
+    expect(managedConnectionRecoverySource).toContain(
+      "item.connectionId === intent.connectionId",
+    );
+    expect(managedConnectionRecoverySource).toContain(
+      "item.integrationId === intent.integrationId",
+    );
+    expect(managedConnectionRecoverySource).toContain("storage.removeItem");
     expect(managedLeaseRouteSource).toContain(
       'let requestedAccessMode: "read" | "write" | "schema"',
     );

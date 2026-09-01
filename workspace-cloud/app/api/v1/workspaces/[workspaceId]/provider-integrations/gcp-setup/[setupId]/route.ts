@@ -1,6 +1,6 @@
 // Session-bound Google Cloud setup inventory and bootstrap boundary. The opaque
 // setup id never authorizes access by itself; membership and user are rechecked.
-import { and, eq, gt, isNull } from "drizzle-orm";
+import { and, eq, gt, inArray, isNull } from "drizzle-orm";
 import { db } from "../../../../../../../../lib/db";
 import { env } from "../../../../../../../../lib/env";
 import {
@@ -28,7 +28,12 @@ import {
   openProviderSetupCredential,
   sealProviderBootstrapTicket,
 } from "../../../../../../../../lib/secret-envelope";
-import { providerSetupSession } from "../../../../../../../../lib/schema";
+import { parseManagedProviderResource } from "../../../../../../../../lib/provider-integrations";
+import {
+  providerSetupSession,
+  workspaceConnection,
+  workspaceProviderIntegration,
+} from "../../../../../../../../lib/schema";
 import { authorizeWorkspace } from "../../../../../../../../lib/workspace-authorization";
 
 type RouteContext = {
@@ -65,6 +70,46 @@ async function setupCredential(
       row.encryptedCredential,
     ),
   };
+}
+
+async function matchesManagedGcpRepairTarget(input: {
+  workspaceId: string;
+  integrationId: string;
+  projectId: string;
+  instanceId: string;
+}) {
+  const rows = await db.select({
+    providerResource: workspaceConnection.providerResource,
+  }).from(workspaceConnection).innerJoin(
+    workspaceProviderIntegration,
+    eq(
+      workspaceConnection.providerIntegrationId,
+      workspaceProviderIntegration.id,
+    ),
+  ).where(and(
+    eq(workspaceConnection.organizationId, input.workspaceId),
+    eq(workspaceConnection.providerIntegrationId, input.integrationId),
+    eq(workspaceConnection.credentialMode, "managed"),
+    isNull(workspaceConnection.deletedAt),
+    eq(workspaceProviderIntegration.organizationId, input.workspaceId),
+    eq(workspaceProviderIntegration.provider, "gcpCloudSql"),
+    inArray(workspaceProviderIntegration.status, ["active", "reconnect_required"]),
+    isNull(workspaceProviderIntegration.revokedAt),
+  ));
+  return rows.some((row) => {
+    try {
+      const resource = parseManagedProviderResource(
+        "gcpCloudSql",
+        row.providerResource,
+      );
+      return "project" in resource
+        && "instance" in resource
+        && resource.project === input.projectId
+        && resource.instance === input.instanceId;
+    } catch {
+      return false;
+    }
+  });
 }
 
 export async function GET(request: Request, context: RouteContext) {
@@ -164,6 +209,15 @@ export async function POST(request: Request, context: RouteContext) {
   ) {
     return jsonError("Invalid Google Cloud setup request", 400);
   }
+  const repairIntegrationId = body.repairIntegrationId === undefined
+    ? null
+    : typeof body.repairIntegrationId === "string"
+      && isUuid(body.repairIntegrationId)
+      ? body.repairIntegrationId
+      : "invalid";
+  if (repairIntegrationId === "invalid") {
+    return jsonError("Invalid managed connection repair target", 400);
+  }
   const oidcToken = vercelOidcToken(request);
   if (!oidcToken) {
     return jsonError("Vercel OIDC is not enabled for this deployment", 503);
@@ -174,6 +228,17 @@ export async function POST(request: Request, context: RouteContext) {
     const project = projects.find((item) => item.id === body.projectId);
     if (!project || project.number !== body.projectNumber) {
       return jsonError("Google Cloud project identity changed during setup", 409);
+    }
+    if (repairIntegrationId && !await matchesManagedGcpRepairTarget({
+      workspaceId,
+      integrationId: repairIntegrationId,
+      projectId: body.projectId,
+      instanceId: body.instanceId,
+    })) {
+      return jsonError(
+        "The managed Cloud SQL repair target changed. Start repair again from the database.",
+        409,
+      );
     }
     const permissionCheck = await checkGcpSetupPermissions(
       setup.credential,

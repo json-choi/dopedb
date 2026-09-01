@@ -198,6 +198,7 @@ export async function POST(request: Request, context: RouteContext) {
     configuration?: unknown;
     setupId?: unknown;
     bootstrapTicket?: unknown;
+    repairIntegrationId?: unknown;
   } | null;
   if (
     body?.provider !== "planetScale"
@@ -206,6 +207,17 @@ export async function POST(request: Request, context: RouteContext) {
     && body?.provider !== "vault"
   ) {
     return jsonError("Managed access for this provider is not available", 409);
+  }
+  const requestedRepairIntegrationId = body.provider === "gcpCloudSql"
+    && typeof body.repairIntegrationId === "string"
+    && isUuid(body.repairIntegrationId)
+      ? body.repairIntegrationId
+      : null;
+  if (
+    body.repairIntegrationId !== undefined
+    && requestedRepairIntegrationId === null
+  ) {
+    return jsonError("Invalid managed connection repair target", 400);
   }
   if (
     body.provider === "vault"
@@ -411,7 +423,13 @@ export async function POST(request: Request, context: RouteContext) {
       if (claimedPrincipals.some((row) => (
         row.organizationId !== workspaceId
         || row.provider !== "gcpCloudSql"
-        || row.status !== "active"
+        || (
+          row.status !== "active"
+          && !(
+            row.integrationId === requestedRepairIntegrationId
+            && row.status === "reconnect_required"
+          )
+        )
         || row.revokedAt !== null
         || row.targetFingerprint !== gcpIdentity.instance
       ))) {
@@ -558,6 +576,20 @@ export async function POST(request: Request, context: RouteContext) {
           }
         });
       }
+    }
+    if (
+      requestedRepairIntegrationId
+      && (
+        !existing
+        || existing.id !== requestedRepairIntegrationId
+        || !["active", "reconnect_required"].includes(existing.status)
+        || existing.revokedAt !== null
+      )
+    ) {
+      return jsonError(
+        "The managed Cloud SQL repair target changed. Start repair again from the database.",
+        409,
+      );
     }
     if (
       provider === "vault"

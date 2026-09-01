@@ -4,20 +4,16 @@
 // OAuth-return setup flow without depending on shared connection inventory.
 import { useCallback, useEffect } from "react";
 
-import {
-  emptyNeon, emptyVault, vaultConfigurationPayload, type Integration, type Provider,
-} from "./domain";
+import { providerAccountMutations } from "./providerAccountMutations";
 import { useProviderAccessState } from "./state";
 import {
   fetchProviderAccessWithManagedConnections,
   fetchProviderAccountSnapshot,
   providerResponseError,
 } from "./transport";
-import {
-  connectProviderIntegration,
-  disconnectProviderIntegration,
-} from "./integrationMutations";
 import { useGcpProviderSetup } from "./useGcpProviderSetup";
+import { useGcpRecoveryState } from "./useGcpRecoveryState";
+import { useManagedConnectionRecovery } from "./useManagedConnectionRecovery";
 import { useWorkspaceLocale } from "../../app/components/WorkspaceLocale";
 import { workspaceMessages } from "../../lib/workspace-messages";
 
@@ -55,9 +51,6 @@ export function useProviderAccountAccess(
   const setIntegrations = setField("integrations");
   const setManagedConnections = setField("managedConnections");
   const setManagedConnectionsLoaded = setField("managedConnectionsLoaded");
-  const setSetupProviderId = setField("setupProviderId");
-  const setNeonConfiguration = setField("neonConfiguration");
-  const setVaultConfiguration = setField("vaultConfiguration");
   const setGcpEnvironmentClassification = setField("gcpEnvironmentClassification");
   const setGcpProductionApproved = setField("gcpProductionApproved");
   const setGcpRestartApproved = setField("gcpRestartApproved");
@@ -66,19 +59,37 @@ export function useProviderAccountAccess(
   const setMutation = setField("mutation");
   const setError = setField("error");
   const setupProvider = providers.find((item) => item.id === setupProviderId) ?? null;
+  const recovery = useGcpRecoveryState({
+    workspaceId,
+    gcpSetupId,
+    managedConnections,
+  });
+  const { beginInventoryLoad, finishInventoryLoad } = recovery;
+  const repairManagedConnection = useManagedConnectionRecovery({
+    workspaceId,
+    providers,
+    mutation,
+    locale,
+    copy,
+    setMutation,
+    setError,
+  });
 
   const loadAccountAccess = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     setManagedConnectionsLoaded(false);
+    beginInventoryLoad();
     const { response, data } = await fetchProviderAccountSnapshot(workspaceId, signal);
     if (signal?.aborted) return;
     if (!response?.ok) {
       setError(await providerResponseError(response, copy.loadError, locale));
+      finishInventoryLoad();
       setLoading(false);
       return;
     }
     if (!data) {
       setError(copy.shapeError);
+      finishInventoryLoad();
       setLoading(false);
       return;
     }
@@ -98,6 +109,7 @@ export function useProviderAccountAccess(
       setManagedConnections(inventory.data.managedConnections);
       setManagedConnectionsLoaded(true);
     }
+    finishInventoryLoad();
   }, [
     copy,
     locale,
@@ -107,6 +119,8 @@ export function useProviderAccountAccess(
     setManagedConnections,
     setManagedConnectionsLoaded,
     setProviders,
+    beginInventoryLoad,
+    finishInventoryLoad,
     workspaceId,
   ]);
 
@@ -117,85 +131,49 @@ export function useProviderAccountAccess(
   }, [loadAccountAccess]);
 
   const gcpSetup = useGcpProviderSetup({
-    workspaceId, gcpSetupId, locale, copy, state, setField,
+    workspaceId,
+    gcpSetupId,
+    locale,
+    copy,
+    state,
+    setField,
+    gcpRecoveryTarget: recovery.target,
+    gcpRecoveryTargetPending: recovery.pending,
+    gcpRecoveryTargetMissing: recovery.targetMissing,
+    clearGcpRecoveryIntent: recovery.clear,
+  });
+  const mutations = providerAccountMutations({
+    workspaceId,
+    locale,
+    copy,
+    state,
+    setField,
+    loadAccountAccess,
+    repairManagedConnection,
+    restartGcpSetup: gcpSetup.reconnectGcpSetup,
   });
 
-  async function connect(provider: Provider, configuration?: object) {
-    if (mutation) return;
-    setMutation(`connect:${provider.id}`);
-    setError("");
-    try {
-      const response = await connectProviderIntegration(
-        workspaceId,
-        provider.id,
-        provider.id === "vault"
-          ? vaultConfigurationPayload(vaultConfiguration)
-          : configuration,
-      );
-      if (!response?.ok) {
-        setError(await providerResponseError(response, copy.connectError, locale));
-        return;
-      }
-      const body = await response.json().catch(() => null);
-      if (provider.setupKind === "oauth") {
-        if (typeof body?.authorizationUrl !== "string") {
-          setError(copy.authorizationUrlError);
-          return;
-        }
-        window.location.assign(body.authorizationUrl);
-        return;
-      }
-      setNeonConfiguration(emptyNeon);
-      setVaultConfiguration(emptyVault);
-      setSetupProviderId("");
-      await loadAccountAccess();
-    } finally {
-      setMutation("");
-    }
-  }
-
-  function beginConnect(provider: Provider) {
-    if (provider.setupKind === "oauth") {
-      void connect(provider);
-      return;
-    }
-    const next = setupProviderId === provider.id ? "" : provider.id;
-    if (next !== "neon") setNeonConfiguration(emptyNeon);
-    if (next !== "vault") setVaultConfiguration(emptyVault);
-    setSetupProviderId(next);
-    setError("");
-  }
-
-  function reconnectGcpSetup() {
-    gcpSetup.reconnectGcpSetup(connect);
-  }
-
-  async function disconnect(integration: Integration) {
-    if (mutation || !window.confirm(copy.disconnectConfirm)) return;
-    setMutation(`disconnect:${integration.id}`);
-    setError("");
-    try {
-      const response = await disconnectProviderIntegration(
-        workspaceId,
-        integration.id,
-      );
-      if (!response?.ok) {
-        setError(await providerResponseError(response, copy.disconnectError, locale));
-        return;
-      }
-      await loadAccountAccess();
-    } finally {
-      setMutation("");
-    }
-  }
-
   const { completeGcpSetup, selectGcpInstance, selectGcpProject } = gcpSetup;
+  const {
+    beginConnect,
+    beginReconnect,
+    connect,
+    disconnect,
+    reconnectGcpSetup,
+    setNeonConfiguration,
+    setVaultConfiguration,
+  } = mutations;
 
   return {
     providers,
     integrations,
     managedConnections,
     managedConnectionsLoaded,
+    managedConnectionsSettled: recovery.inventorySettled,
+    gcpRecoveryIntent: recovery.intent,
+    gcpRecoveryTarget: recovery.target,
+    gcpRecoveryTargetPending: recovery.pending,
+    gcpRecoveryTargetMissing: recovery.targetMissing,
     setupProvider,
     neonConfiguration,
     vaultConfiguration,
@@ -215,6 +193,7 @@ export function useProviderAccountAccess(
     mutation,
     error,
     beginConnect,
+    beginReconnect,
     completeGcpSetup,
     connect,
     disconnect,

@@ -135,12 +135,30 @@ export function SharedDatabasePanel({
                       : copy.memberLocalDescription}
                   </small>
                   {focused && managed ? (
-                    <small
-                      className="tw:max-w-[48rem] tw:text-2xs tw:leading-body tw:text-foreground"
-                      role="status"
-                    >
-                      {copy.desktopRecovery}
-                    </small>
+                    <div className="tw:grid tw:max-w-[48rem] tw:justify-items-start tw:gap-2">
+                      <small
+                        className="tw:text-2xs tw:leading-body tw:text-foreground"
+                        role="status"
+                      >
+                        {copy.desktopRecovery}
+                      </small>
+                      {managed.provider === "gcpCloudSql"
+                      && connection.accessMode === "manage" ? (
+                        <>
+                          <small className="tw:text-2xs tw:leading-body tw:text-muted-foreground">
+                            {copy.repairDescription}
+                          </small>
+                          <ControlButton
+                            onClick={() => void controller.repairManagedConnection(managed)}
+                            disabled={Boolean(controller.mutation)}
+                          >
+                            {controller.mutation === `repair:${connection.id}`
+                              ? copy.repairingManaged
+                              : copy.repairManaged}
+                          </ControlButton>
+                        </>
+                      ) : null}
+                    </div>
                   ) : null}
                 </div>
                 <div className="tw:grid tw:justify-items-end tw:gap-1 tw:max-[640px]:justify-items-start">

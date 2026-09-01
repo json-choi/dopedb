@@ -39,12 +39,12 @@ export const connectionsCatalog = defineCatalog(
     "connections.managedWorkspace.label": "Endpoint and credentials",
     "connections.managedWorkspace.status": "Managed in Workspace Web",
     "connections.managedWorkspace.managerDescription":
-      "The real endpoint and a short-lived credential are issued when this database is used. Change or repair the provider account and database registration in Workspace Web.",
+      "The real endpoint and a short-lived credential are issued when this database is used. Open the exact database in Workspace Web to repair its provider setup and member access.",
     "connections.managedWorkspace.memberDescription":
       "The real endpoint and a short-lived credential are issued by the Workspace. Ask a Workspace admin to check the provider account and database registration if access fails.",
     "connections.managedWorkspace.securityNote":
       "This Desktop profile intentionally contains no editable host or password. Workspace Web owns the provider target and issues member-specific, short-lived access only when it is needed.",
-    "connections.managedWorkspace.open": "Open this database in Workspace Web",
+    "connections.managedWorkspace.open": "Open managed-access repair",
     "connections.managedWorkspace.opening": "Opening Workspace Web…",
     "connections.managedWorkspace.openFailed":
       "Could not open this database in Workspace Web: {error}",
@@ -474,12 +474,12 @@ export const connectionsCatalog = defineCatalog(
     "connections.managedWorkspace.label": "엔드포인트 및 자격 증명",
     "connections.managedWorkspace.status": "워크스페이스 웹에서 관리됨",
     "connections.managedWorkspace.managerDescription":
-      "이 DB를 사용할 때 실제 엔드포인트와 단기 자격 증명이 발급됩니다. 공급자 계정과 DB 등록의 변경·복구는 워크스페이스 웹에서 진행하세요.",
+      "이 DB를 사용할 때 실제 엔드포인트와 단기 자격 증명이 발급됩니다. 워크스페이스 웹에서 이 DB의 공급자 설정과 구성원 접근 권한을 바로 복구할 수 있습니다.",
     "connections.managedWorkspace.memberDescription":
       "실제 엔드포인트와 단기 자격 증명은 워크스페이스가 발급합니다. 접근에 실패하면 워크스페이스 관리자에게 공급자 계정과 DB 등록 상태 확인을 요청하세요.",
     "connections.managedWorkspace.securityNote":
       "이 Desktop 프로필에는 편집할 호스트나 비밀번호가 의도적으로 들어 있지 않습니다. 워크스페이스 웹이 공급자 대상을 관리하고 필요할 때만 구성원별 단기 접근을 발급합니다.",
-    "connections.managedWorkspace.open": "워크스페이스 웹에서 이 DB 열기",
+    "connections.managedWorkspace.open": "관리형 접근 복구 열기",
     "connections.managedWorkspace.opening": "워크스페이스 웹 여는 중…",
     "connections.managedWorkspace.openFailed":
       "워크스페이스 웹에서 이 DB를 열지 못했습니다: {error}",

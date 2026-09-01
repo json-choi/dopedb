@@ -285,6 +285,14 @@ credentials, then atomically replaces hash-only global principal claims so a ser
 account cannot be reused by another integration. Selecting a different dedicated
 instance creates a separate integration; move its connections before disconnecting the
 old one.
+When Desktop cannot obtain a managed Cloud SQL lease, a manager can open that exact
+database row in Workspace Web and start **Repair managed access**. The OAuth round trip
+retains only a 15-minute, non-secret browser intent containing opaque workspace,
+connection, and integration IDs. After OAuth, the server-projected managed connection
+pins the existing project and instance; the setup rechecks required permissions, IAM
+database authentication, and dedicated database users. The final mutation must resolve
+to the same integration before it updates credentials, and then returns to the same
+database row without replacing its connection ID or grants.
 GCP managed connections saved before the explicit network-path field was introduced
 are intentionally not leased. A workspace admin must reconnect and re-import the
 instance so current discovery supplies the exact path; the server does not guess a path

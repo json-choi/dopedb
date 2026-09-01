@@ -20,6 +20,7 @@ import {
   providerResponseError,
 } from "./transport";
 import { useNeonProviderBootstrap } from "./useNeonProviderBootstrap";
+import { useManagedConnectionRecovery } from "./useManagedConnectionRecovery";
 import { useWorkspaceLocale } from "../../app/components/WorkspaceLocale";
 import { workspaceMessages } from "../../lib/workspace-messages";
 
@@ -64,6 +65,15 @@ export function useSharedDatabaseAccess(
   const setResourcePending = setField("resourcePending");
   const setMutation = setField("mutation");
   const setError = setField("error");
+  const repairManagedConnection = useManagedConnectionRecovery({
+    workspaceId,
+    providers,
+    mutation,
+    locale,
+    copy,
+    setMutation,
+    setError,
+  });
   const pendingImportRef = useRef<PendingProviderImport | null>(null);
   const selectedConnection = useMemo(
     () => connections.find((item) => item.id === selectedConnectionId) ?? null,
@@ -568,6 +578,7 @@ export function useSharedDatabaseAccess(
     deleteSharedConnection,
     importDiscoveredResource,
     preflightNeonBootstrap,
+    repairManagedConnection,
     resetResources,
     selectResource,
     setNeonEnvironmentClassification,

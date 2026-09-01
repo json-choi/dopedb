@@ -42,6 +42,10 @@ export function GcpCloudSetup({
     gcpIamRoleGrantApproved,
     gcpSetupError,
     gcpSetupReconnectRequired,
+    gcpRecoveryIntent,
+    gcpRecoveryTarget,
+    gcpRecoveryTargetPending,
+    gcpRecoveryTargetMissing,
     mutation,
     error,
     completeGcpSetup,
@@ -54,6 +58,8 @@ export function GcpCloudSetup({
     setGcpRestartApproved,
   } = controller;
   const configuring = mutation === "gcp:bootstrap";
+  const recovering = Boolean(gcpRecoveryIntent) || gcpRecoveryTargetPending;
+  const recoveryTargetMissing = gcpRecoveryTargetMissing;
   const [configurationElapsedSeconds, setConfigurationElapsedSeconds] =
     useState(0);
   useEffect(() => {
@@ -93,7 +99,9 @@ export function GcpCloudSetup({
     ),
   );
   const approvalsComplete = Boolean(
-    selectedInstance
+    !recoveryTargetMissing
+    && !gcpRecoveryTargetPending
+    && selectedInstance
     && selectedInstance.ready
     && environmentClassified
     && (!effectiveProduction || gcpProductionApproved)
@@ -118,11 +126,13 @@ export function GcpCloudSetup({
       <header className="tw:flex tw:items-start tw:justify-between tw:gap-3">
         <div className="tw:grid tw:gap-1">
           <strong className="tw:text-sm tw:text-foreground">
-            {copy.title}
+            {recovering ? copy.repairTitle : copy.title}
           </strong>
           <small className="tw:text-2xs tw:leading-body tw:text-muted-foreground">
             {gcpSetupReconnectRequired
               ? copy.reconnectDescription
+              : gcpRecoveryTarget
+                ? copy.repairHeaderDescription
               : gcpSetupInventory
               ? `${gcpSetupInventory.account}${copy.accountDescriptionSuffix}`
               : copy.loadingDescription}
@@ -166,10 +176,30 @@ export function GcpCloudSetup({
             03 · {copy.waiting}
           </span>
           <strong className="tw:text-xs tw:font-medium tw:text-muted-foreground">
-            {copy.configureAfterApproval}
+            {recovering ? copy.repairAfterApproval : copy.configureAfterApproval}
           </strong>
         </li>
       </ol>
+
+      {gcpRecoveryTarget ? (
+        <div className="tw:grid tw:gap-1 tw:border-y tw:border-primary/30 tw:bg-primary/5 tw:px-3 tw:py-2.5" role="status">
+          <strong className="tw:text-xs tw:font-semibold tw:text-foreground">
+            {copy.repairPinnedTarget}
+          </strong>
+          <span className="tw:font-mono tw:text-2xs tw:text-primary">
+            {gcpRecoveryTarget.resource.project} / {gcpRecoveryTarget.resource.instance} / {gcpRecoveryTarget.resource.database}
+          </span>
+          <small className="tw:text-2xs tw:leading-body tw:text-muted-foreground">
+            {copy.repairPinnedDescription}
+          </small>
+        </div>
+      ) : null}
+
+      {recoveryTargetMissing ? (
+        <p className="tw:m-0 tw:border tw:border-danger/40 tw:bg-danger/10 tw:p-3 tw:text-2xs tw:leading-body tw:text-danger" role="alert">
+          {copy.repairTargetUnavailable}
+        </p>
+      ) : null}
 
       {gcpSetupReconnectRequired ? (
         <div
@@ -207,7 +237,7 @@ export function GcpCloudSetup({
       <div className="tw:grid tw:grid-cols-1 tw:gap-3 tw:lg:grid-cols-2">
         <ControlField label={copy.project}>
           <ControlSelect
-            disabled={!gcpSetupInventory || busy}
+            disabled={!gcpSetupInventory || busy || recovering}
             value={selectedGcpProjectId}
             onChange={(event) => void selectGcpProject(event.target.value)}
           >
@@ -222,7 +252,7 @@ export function GcpCloudSetup({
 
         <ControlField label={copy.instance}>
           <ControlSelect
-            disabled={!selectedGcpProjectId || busy}
+            disabled={!selectedGcpProjectId || busy || recovering}
             value={selectedGcpInstanceId}
             onChange={(event) => selectGcpInstance(event.target.value)}
           >
@@ -473,7 +503,7 @@ export function GcpCloudSetup({
         ) : null}
         <div className="tw:flex tw:flex-col tw:items-stretch tw:gap-3 tw:sm:flex-row tw:sm:items-center tw:sm:justify-between">
           <small className="tw:max-w-[62ch] tw:text-2xs tw:leading-body tw:text-muted-foreground">
-            {copy.finalDescription}
+            {recovering ? copy.repairFinalDescription : copy.finalDescription}
           </small>
           <div className="tw:w-full tw:[&>button]:w-full tw:sm:w-auto">
             <ControlButton
@@ -482,14 +512,16 @@ export function GcpCloudSetup({
               disabled={!approvalsComplete || busy}
               onClick={() => void completeGcpSetup()}
             >
-               {mutation === "gcp:bootstrap"
-                 ? copy.configuringButton
-                 : gcpPermissionCheck?.missing.length
-                   ? copy.configureWithGrant
-                 : selectedInstance?.production === "unknown"
-                   ? copy.configureWithClassification
-                   : copy.configure}
-             </ControlButton>
+              {mutation === "gcp:bootstrap"
+                ? copy.configuringButton
+                : recovering
+                  ? copy.repairConfigure
+                  : gcpPermissionCheck?.missing.length
+                    ? copy.configureWithGrant
+                    : selectedInstance?.production === "unknown"
+                      ? copy.configureWithClassification
+                      : copy.configure}
+            </ControlButton>
           </div>
         </div>
       </div>

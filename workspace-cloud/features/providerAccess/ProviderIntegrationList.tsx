@@ -33,6 +33,7 @@ export function ProviderIntegrationList({
     vaultConfiguration,
     mutation,
     beginConnect,
+    beginReconnect,
     connect,
     disconnect,
     setNeonConfiguration,
@@ -101,7 +102,7 @@ export function ProviderIntegrationList({
                   {provider ? (
                     <ControlButton
                       disabled={!provider.configured || mutation !== ""}
-                      onClick={() => beginConnect(provider)}
+                      onClick={() => beginReconnect(integration)}
                     >
                       {copy.reconnect}
                     </ControlButton>
