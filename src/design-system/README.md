@@ -194,7 +194,9 @@ color를 거부한다.
 
 ## 타이포그래피
 
-- Sans: `Geist` 우선, OS sans-serif fallback.
+- Sans: 앱에 번들한 `SUIT Variable` 우선, OS sans-serif fallback. npm package
+  `@sun-typeface/suit`의 Variable WOFF2를 고정 버전으로 포함하며 CDN이나 설치된
+  시스템 폰트에 의존하지 않는다.
 - Mono: `--ds-font-mono`. 경로, SQL, 값, 식별자, 숫자 비교에 사용한다.
 - Body: 14px.
 - Dense UI: 13px.
@@ -326,7 +328,8 @@ Elevation은 세 단계만 허용한다.
 - `ToolbarMenu menuSize="scope"`: Explorer schema scope popover의 outer
   frame을 300px로 고정한다. feature child가 popover padding과 border를
   중복 계산하지 않는다.
-- `ToolbarMenu triggerVariant="gridHeader"`: 28px data-grid header 안의
+- `ToolbarMenu triggerVariant="treeAction"`: 28px tree row 안의 24px overflow
+  action. `triggerVariant="gridHeader"`: 28px data-grid header 안의
   filter action을 24px로 제한해 header를 늘리지 않는다.
 - `ToolWindowSection`: dense tool window 안의 제목 있는 명령 그룹.
   `prominence="catalog"`는 Data Sources처럼 강한 group heading을 사용한다.
@@ -368,6 +371,11 @@ Elevation은 세 단계만 허용한다.
   개수는 folder 행에
   상시 표시하지 않는다. `TreeRowActions`는 행의
   실제 command만 받아 hover/focus에서 표시하고 title 폭을 상시 차지하지 않는다.
+  Workspace Explorer의 Project/resource 행은 28px로 고정한다. Project는
+  13px·650 weight, resource folder는 12px·550 weight,
+  DB·source·article leaf는 12px·450 weight를 사용한다. DB의 24px tree
+  action과 provider target metadata는 같은 한 줄 안에 머물러 Diff·관리 action의
+  유무나 target 길이가 행 높이를 바꾸지 않는다.
   toggle은 native button이고 interactive row action은 그 sibling이므로 nested
   button을 만들지 않으며, action은 접근성 트리와 keyboard tab 순서에 독립 노출한다.
   `VirtualTreeRows`의
@@ -761,6 +769,7 @@ database ERD는 이 renderer가 아니라 기존 React Flow + ELK surface가 소
 | `size="compact"` | 32px dense toolbar control |
 | `size="compact" iconOnly` | 32px toolbar icon action; padding 없는 정사각형 |
 | `size="xs" iconOnly` | 24px close·dismiss·inline remove action |
+| `size="tree"` | 24px tree-row action; 28px resource row 안에서만 사용 |
 
 Cancel, Close, Dismiss는 destructive가 아니다. 기본 variant 또는 `ghost`를
 사용한다.

@@ -185,7 +185,7 @@ export default function ConnectionNode(props: Props) {
         data-nested={props.nested}
         data-dragging={props.draggingId === connection.id}
         data-drop-target={isDropTarget}
-        className="ds-object-row tw:group tw:relative tw:cursor-grab tw:touch-none tw:select-none tw:gap-1 tw:rounded-xs tw:pr-[calc(var(--ds-control-sm)+var(--ds-space-1))] tw:text-ui tw:font-medium tw:leading-ui tw:active:cursor-grabbing tw:data-[nested=true]:pl-2 tw:data-[dragging=true]:opacity-50 tw:data-[drop-target=true]:bg-muted tw:data-[drop-target=true]:ring-2 tw:data-[drop-target=true]:ring-ring"
+        className="ds-object-row tw:group tw:relative tw:h-control-sm tw:min-h-control-sm tw:cursor-grab tw:touch-none tw:select-none tw:gap-1 tw:rounded-xs tw:py-0 tw:pr-[calc(var(--ds-control-xs)+var(--ds-space-1))] tw:text-sm tw:font-normal tw:leading-ui tw:active:cursor-grabbing tw:data-[nested=true]:pl-2 tw:data-[dragging=true]:opacity-50 tw:data-[drop-target=true]:bg-muted tw:data-[drop-target=true]:ring-2 tw:data-[drop-target=true]:ring-ring"
         role="treeitem"
         aria-expanded={props.expanded}
         aria-level={props.treeLevel}
@@ -231,12 +231,14 @@ export default function ConnectionNode(props: Props) {
         {!props.nested && (
           <EngineMark engine={connection.engine} size="tree" />
         )}
-        <span className="tw:grid tw:min-w-0 tw:flex-1 tw:gap-px">
-          <span className="tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap">
+        <span className="tw:flex tw:min-w-0 tw:flex-1 tw:items-center tw:gap-1.5 tw:overflow-hidden">
+          <span className="tw:min-w-0 tw:flex-1 tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap">
             {connection.name || t("app.unnamed")}
           </span>
           {connection.providerTarget ? (
-            <ProviderTargetLabel target={connection.providerTarget} />
+            <span className="tw:max-w-[42%] tw:min-w-0 tw:shrink tw:overflow-hidden">
+              <ProviderTargetLabel target={connection.providerTarget} />
+            </span>
           ) : null}
         </span>
         {connection.workspaceAccess === "local" &&
@@ -366,7 +368,7 @@ export default function ConnectionNode(props: Props) {
             data-connection-menu-trigger
             data-tree-context-action
             iconOnly
-            size="xs"
+            size="tree"
             variant="ghost"
             title={t("connections.connectionMenu")}
             aria-label={t("connections.connectionMenu")}

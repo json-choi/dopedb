@@ -172,7 +172,7 @@ export function KnowledgeProjectTree(props: KnowledgeProjectTreeProps) {
           <TreeRowActions>
             <Button
               iconOnly
-              size="xs"
+              size="tree"
               variant="ghost"
               disabled={deleting}
               title={t("connections.addEnvironment")}
@@ -185,6 +185,7 @@ export function KnowledgeProjectTree(props: KnowledgeProjectTreeProps) {
             <ToolbarMenu
               icon="moreVertical"
               label={t("connections.projectMenu")}
+              triggerVariant="treeAction"
               triggerTabIndex={-1}
             >
               <div role="none" data-menu-keep-open>
@@ -347,7 +348,7 @@ function KnowledgeProjectResources({
             <TreeRowActions>
               <Button
                 iconOnly
-                size="xs"
+                size="tree"
                 variant="ghost"
                 title={t("connections.environmentAddDatabase")}
                 aria-label={t("connections.environmentAddDatabase")}
@@ -443,7 +444,7 @@ function KnowledgeProjectResources({
           <TreeRowActions>
             <Button
               iconOnly
-              size="xs"
+              size="tree"
               variant="ghost"
               title={t("connections.environmentAddSource")}
               aria-label={t("connections.environmentAddSource")}
@@ -485,7 +486,7 @@ function KnowledgeProjectResources({
               <button
                 key={source.sourceId}
                 type="button"
-                className="tw:flex tw:min-h-[var(--ds-tree-row-height)] tw:w-full tw:min-w-0 tw:items-center tw:gap-1.5 tw:border-0 tw:bg-transparent tw:px-1 tw:py-[var(--ds-tree-row-padding-block)] tw:pl-5 tw:text-left tw:font-sans tw:text-sm tw:text-foreground tw:hover:bg-muted tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring"
+                className="tw:flex tw:h-control-sm tw:min-h-control-sm tw:w-full tw:min-w-0 tw:items-center tw:gap-1.5 tw:border-0 tw:bg-transparent tw:px-1 tw:py-0 tw:pl-5 tw:text-left tw:font-sans tw:text-sm tw:font-normal tw:leading-ui tw:text-foreground tw:hover:bg-muted tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring"
                 onClick={() => onOpenEnvironment(environment.id, "sources")}
                 title={`${environment.name} · ${source.provider === "github" ? "GitHub" : t("connections.environmentLocalFolder")} · ${knowledgeRevisionLabel(source.revision, {
                   dirty: t("knowledge.revisionDirty"),
@@ -566,7 +567,7 @@ function KnowledgeProjectResources({
                 key={article.id}
                 type="button"
                 data-selected={activeResourceId === article.id}
-                className="tw:flex tw:min-h-[var(--ds-tree-row-height)] tw:w-full tw:min-w-0 tw:items-center tw:gap-1.5 tw:border-0 tw:bg-transparent tw:px-1 tw:py-[var(--ds-tree-row-padding-block)] tw:pl-5 tw:text-left tw:font-sans tw:text-sm tw:text-foreground tw:data-[selected=true]:bg-selection tw:hover:bg-muted tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring"
+                className="tw:flex tw:h-control-sm tw:min-h-control-sm tw:w-full tw:min-w-0 tw:items-center tw:gap-1.5 tw:border-0 tw:bg-transparent tw:px-1 tw:py-0 tw:pl-5 tw:text-left tw:font-sans tw:text-sm tw:font-normal tw:leading-ui tw:text-foreground tw:data-[selected=true]:bg-selection tw:hover:bg-muted tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring"
                 onClick={() =>
                   onOpenEnvironment(environment.id, "analyses", article.id)
                 }
@@ -656,7 +657,7 @@ function UnavailableBindingRow({
     <div
       data-knowledge-environment-drop-id={environment.id}
       data-drop-target={dropTargetEnvironmentId === environment.id}
-      className="tw:group tw:relative tw:flex tw:min-h-[var(--ds-tree-row-height)] tw:min-w-0 tw:items-stretch tw:text-sm tw:text-muted-foreground tw:data-[drop-target=true]:bg-muted tw:data-[drop-target=true]:ring-2 tw:data-[drop-target=true]:ring-ring tw:hover:bg-muted"
+      className="tw:group tw:relative tw:flex tw:h-control-sm tw:min-h-control-sm tw:min-w-0 tw:items-stretch tw:text-sm tw:font-normal tw:leading-ui tw:text-muted-foreground tw:data-[drop-target=true]:bg-muted tw:data-[drop-target=true]:ring-2 tw:data-[drop-target=true]:ring-ring tw:hover:bg-muted"
       role="treeitem"
       aria-level={3}
       data-explorer-tree-item
@@ -666,7 +667,7 @@ function UnavailableBindingRow({
     >
       <button
         type="button"
-        className="tw:flex tw:min-w-0 tw:flex-1 tw:items-center tw:gap-1.5 tw:border-0 tw:bg-transparent tw:px-1 tw:py-[var(--ds-tree-row-padding-block)] tw:pl-5 tw:text-left tw:font-sans tw:text-inherit tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring"
+        className="tw:flex tw:min-w-0 tw:flex-1 tw:items-center tw:gap-1.5 tw:border-0 tw:bg-transparent tw:px-1 tw:py-0 tw:pl-5 tw:text-left tw:font-sans tw:text-inherit tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring"
         onClick={onOpen}
         title={t("connections.environmentDatabaseUnavailable")}
         data-tree-primary-action
@@ -688,7 +689,7 @@ function UnavailableBindingRow({
           label={t("connections.removeFromProject")}
           confirmLabel={t("connections.reallyRemoveFromProject")}
           disabled={removing}
-          size="xs"
+          size="tree"
           tone="danger"
           variant="dangerGhost"
           onConfirm={onRemove}

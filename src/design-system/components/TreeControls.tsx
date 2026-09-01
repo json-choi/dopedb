@@ -36,10 +36,10 @@ export function TreeSectionButton({
       data-selected={selected || undefined}
       className={
         danger
-          ? "tw:group tw:relative tw:flex tw:min-h-[var(--ds-tree-row-height)] tw:min-w-0 tw:select-none tw:items-stretch tw:text-sm tw:font-medium tw:text-danger tw:data-[selected=true]:bg-selection tw:data-[selected=true]:text-selection-foreground"
+          ? "tw:group tw:relative tw:flex tw:h-control-sm tw:min-h-control-sm tw:min-w-0 tw:select-none tw:items-stretch tw:text-sm tw:font-medium tw:leading-ui tw:text-danger tw:data-[selected=true]:bg-selection tw:data-[selected=true]:text-selection-foreground"
           : prominence === "project"
-            ? "tw:group tw:relative tw:flex tw:min-h-control-sm tw:min-w-0 tw:select-none tw:items-stretch tw:text-sm tw:font-semibold tw:text-foreground tw:hover:bg-muted tw:data-[selected=true]:bg-selection tw:data-[selected=true]:text-selection-foreground"
-          : "tw:group tw:relative tw:flex tw:min-h-[var(--ds-tree-row-height)] tw:min-w-0 tw:select-none tw:items-stretch tw:text-sm tw:font-medium tw:text-foreground tw:hover:bg-muted tw:data-[selected=true]:bg-selection tw:data-[selected=true]:text-selection-foreground"
+            ? "tw:group tw:relative tw:flex tw:h-control-sm tw:min-h-control-sm tw:min-w-0 tw:select-none tw:items-stretch tw:text-ui tw:font-semibold tw:leading-ui tw:text-foreground tw:hover:bg-muted tw:data-[selected=true]:bg-selection tw:data-[selected=true]:text-selection-foreground"
+          : "tw:group tw:relative tw:flex tw:h-control-sm tw:min-h-control-sm tw:min-w-0 tw:select-none tw:items-stretch tw:text-sm tw:font-medium tw:leading-ui tw:text-foreground tw:hover:bg-muted tw:data-[selected=true]:bg-selection tw:data-[selected=true]:text-selection-foreground"
       }
     >
       <button

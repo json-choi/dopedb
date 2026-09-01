@@ -70,7 +70,7 @@ export function SchemaDiffTrigger({
         });
   return (
     <Button
-      size="xs"
+      size="tree"
       variant="ghost"
       title={title}
       aria-label={t("schemaDiff.openTitle")}
