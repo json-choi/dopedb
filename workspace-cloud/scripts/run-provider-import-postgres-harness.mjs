@@ -38,6 +38,7 @@ const result = spawnSync(
     cwd: workspaceCloudDirectory,
     env: {
       ...process.env,
+      BETTER_AUTH_URL: "https://dopedb.invalid",
       WORKSPACE_CLOUD_RUN_POSTGRES_IMPORT_HARNESS: "1",
     },
     stdio: "inherit",

@@ -18,6 +18,7 @@ export async function runAuthorityProviderScenarios(
     organizationId,
     projectStore,
     receiptId,
+    removableMemberId,
     resourceId,
     revocationGateLockKey,
     sessionId,
@@ -336,6 +337,24 @@ export async function runAuthorityProviderScenarios(
     consumedReceipts: 1,
   });
 
+  const connectionGrantRoute = await import(
+    "../../app/api/v1/workspaces/[workspaceId]/connections/[connectionId]/grants/route"
+  );
+  const grantResponse = await connectionGrantRoute.POST(new Request(
+    `https://dopedb.invalid/api/v1/workspaces/${organizationId}/connections/${left.connection.id}/grants`,
+    {
+      method: "POST",
+      headers: { authorization: authState.bearer, "content-type": "application/json" },
+      body: JSON.stringify({ memberId: removableMemberId, capability: "manage" }),
+    },
+  ), { params: Promise.resolve({
+    workspaceId: organizationId, connectionId: left.connection.id,
+  }) });
+  expect(grantResponse.status).toBe(200);
+  await expect(grantResponse.json()).resolves.toEqual({
+    memberId: removableMemberId, capability: "manage",
+  });
+
   const developmentEnvironment = createdProject.environments.find(
     (environment) => environment.name === "Dev",
   );
@@ -348,7 +367,6 @@ export async function runAuthorityProviderScenarios(
       ${developmentEnvironment.revision}, ${left.connection.id}::uuid,
       ${left.connection.contentRevision}, 'primary', 'Harness')
   `;
-
 
   return {
     createdProject,

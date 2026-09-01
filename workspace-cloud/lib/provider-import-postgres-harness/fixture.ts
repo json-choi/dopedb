@@ -212,7 +212,7 @@ export async function seedProviderImportPostgresHarness(
   ]);
 
   const suffix = randomUUID();
-  const organizationId = `harness-org-${suffix}`;
+  const organizationId = randomUUID();
   const otherOrganizationId = `harness-other-${suffix}`;
   const userId = `harness-user-${suffix}`;
   const memberId = `harness-member-${suffix}`;

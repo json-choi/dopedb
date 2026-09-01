@@ -155,7 +155,7 @@ export async function POST(request: Request, context: RouteContext) {
       INSERT INTO "workspace_control"."workspace_audit_event"
         ("organization_id", "actor_user_id", "action", "resource_type", "resource_id", "redacted_summary", "request_id")
       SELECT ${workspaceId}, ${authorization.session.user.id}, 'connection.grant.update', 'connection', ${connectionId},
-        jsonb_build_object('memberId', ${body.memberId}, 'capability', granted."capability"), ${crypto.randomUUID()}::uuid
+        jsonb_build_object('memberId', ${body.memberId}::text, 'capability', granted."capability"), ${crypto.randomUUID()}::uuid
       FROM granted
       RETURNING "resource_id"
     ) SELECT "capability" FROM granted JOIN audit ON TRUE
