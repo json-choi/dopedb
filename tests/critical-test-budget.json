@@ -35,7 +35,7 @@
     },
     "src/features/workbench/state.test.ts": {
       "tests": 4,
-      "protects": "Workbench document identity, save ownership, SQL resolve context, mutually exclusive AppShell route transitions, first-connection Test/engine/Demo contracts including managed BigQuery tooling, typed authentication recovery, and discovered-resource selector fallback, immutable Analysis snapshot controls, editable-target-safe Action Search shortcuts, Project-level Explorer resource flattening with exact Environment DB badges and preferred-Environment Databases-folder drops, 5,000-item loaded-only Explorer search and tree keyboard navigation, common modal title-only native drag isolation, durable Knowledge sync progress projection, and app-lifetime updater single-flight, retry, progress, relaunch, and resource cleanup"
+      "protects": "Workbench document identity, save ownership, SQL resolve context, mutually exclusive AppShell route transitions, first-connection Test/engine/Demo contracts including managed BigQuery tooling, typed authentication recovery, and discovered-resource selector fallback, immutable Analysis snapshot controls, editable-target-safe Action Search shortcuts, Project-level Explorer resource flattening with exact Environment DB badges, preferred-Environment Databases-folder drops, and exact shared-connection replacement receipts, 5,000-item loaded-only Explorer search and tree keyboard navigation, common modal title-only native drag isolation, durable Knowledge sync progress projection, and app-lifetime updater single-flight, retry, progress, relaunch, and resource cleanup"
     },
     "src/features/workspaces/authPolicy.test.ts": {
       "tests": 3,

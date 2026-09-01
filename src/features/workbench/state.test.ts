@@ -93,6 +93,7 @@ import {
   projectConnectionAssignment,
   projectDatabasesDropTargets,
   projectResourceKey,
+  promotedProjectConnectionSourceId,
 } from "../catalogExplorer/projectResources";
 import { knowledgeEnvironmentBadge } from "../knowledge/presentation";
 import type { Catalog, CatalogObject, CatalogTable } from "../../ipc/types";
@@ -924,6 +925,22 @@ describe("workbench state ownership", () => {
     expect(explorerAssignment.unassignedConnectionIds).toEqual(
       new Set([bigQuery.id]),
     );
+    expect(
+      promotedProjectConnectionSourceId(bigQuery, {
+        connectionId: "shared-bigquery",
+      }),
+    ).toBe(bigQuery.id);
+    expect(
+      promotedProjectConnectionSourceId(bigQuery, {
+        connectionId: bigQuery.id,
+      }),
+    ).toBeNull();
+    expect(
+      promotedProjectConnectionSourceId(
+        { ...bigQuery, workspaceAccess: "read" },
+        { connectionId: "shared-bigquery" },
+      ),
+    ).toBeNull();
     expect(
       selectGuidedDemoEnvironment([
         {

@@ -24,6 +24,10 @@ pub(crate) struct WorkspaceConnectionCopyRequest {
     pub(crate) connection_id: ConnectionId,
     pub(crate) workspace_id: WorkspaceId,
     pub(crate) account_user_id: AccountId,
+    /// Project assignment may publish a team-local connection into its current
+    /// workspace before binding it. The general copy dialog keeps requiring a
+    /// different workspace so this narrower path stays explicit.
+    pub(crate) allow_active_workspace: bool,
 }
 
 pub(crate) struct WorkspaceCredentialBindingRequest {

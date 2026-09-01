@@ -44,6 +44,7 @@ where
             connection_id,
             workspace_id,
             account_user_id,
+            allow_active_workspace,
         } = request;
         let source = self.repository.get_connection(connection_id).await?;
         if source.workspace_access != WorkspaceConnectionAccess::Local {
@@ -59,7 +60,8 @@ where
             .find(|workspace| workspace.id == workspace_id && workspace.kind == WorkspaceKind::Team)
             .ok_or_else(|| AppError::NotFound(format!("team workspace {workspace_id}")))?;
         let current_account = self.repository.active_account_id().await?;
-        if target.id == self.repository.active_workspace_id().await?
+        if !allow_active_workspace
+            && target.id == self.repository.active_workspace_id().await?
             && current_account.as_ref() == Some(&account_user_id)
         {
             return Err(AppError::Config("choose a different team workspace".into()));

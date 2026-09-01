@@ -32,7 +32,11 @@ DopeDB의 제품 축, 실제 사용자 작업, 접근성, 운영 안전성, 지�
   Environment에 이미 묶인 DB 행으로 끌어 놓거나 Project의 `Databases` folder에
   놓으면 기존 environment-connection binding command로 이동한다. folder drop은
   그 Project에서 현재 선택된 Environment를 우선하고 없으면 첫 Environment를
-  exact binding 대상으로 사용한다. Environment가 없는 Project는 database binding
+  exact binding 대상으로 사용한다. Team Workspace의 로컬 연결을 놓으면 같은
+  명시적 동작 안에서 비밀값 없는 shared connection identity를 먼저 발행하고 해당
+  identity를 binding한다. 구성원 비밀번호와 BigQuery Google CLI 인증은 기기에
+  남으며 발행 또는 binding 실패 시 새 shared identity를 롤백해 중복 연결을 남기지
+  않는다. Environment가 없는 Project는 database binding
   화면을 사용하며, 이미 묶인 연결을 암묵적으로 재배치하거나 복제하지
   않는다. 한 workspace의 DB 연결은 동시에 한 Project Environment에만 배정되며,
   다른 Project로 옮기려면 DB 행의 명시적인 `프로젝트에서 제거` command로 기존

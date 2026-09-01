@@ -557,7 +557,10 @@ DopeDB의 실제 작업 흐름과 접근성, supported viewport를 위한 제품
   surface로 표시한다. folder drop은 현재 선택된 Environment를 우선하고 없으면 첫
   Environment를 exact binding 대상으로 사용한다. Environment가 없거나 키보드를
   사용하는 경우에는 기존 Environment database binding 화면을 사용한다. 이 shortcut은
-  기존 environment binding command를 재사용하며, 이미 묶인
+  기존 environment binding command를 재사용한다. Team-local 연결은 같은 동작에서
+  비밀값 없는 shared connection identity를 먼저 발행하고 exact Environment에
+  binding하며, 실패 시 새 identity를 롤백한다. 구성원 자격 증명과 BigQuery Google
+  CLI 인증은 기기에 남는다. 이미 묶인
   연결의 암묵적 이동이나 복제를 허용하지 않는다. 한 workspace에서 동일한 connection은
   하나의 Project Environment에만 active binding을 가질 수 있다. 배정된 DB 행의 메뉴는
   전역 connection 삭제 대신 `프로젝트에서 제거`를 제공하고 exact binding만 해제한다.

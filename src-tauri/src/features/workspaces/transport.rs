@@ -379,6 +379,7 @@ pub async fn copy_connection_to_workspace(
             connection_id,
             workspace_id,
             account_user_id,
+            allow_active_workspace: false,
         })
         .await
 }

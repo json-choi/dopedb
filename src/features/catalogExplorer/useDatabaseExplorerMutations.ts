@@ -30,7 +30,10 @@ import { deleteWorkspaceConnection } from "../workspaces/tauriAdapter";
 import { errMessage } from "../../ipc/types";
 import { useI18n } from "../../lib/i18n";
 import { qk, type CatalogScope } from "../../lib/queries";
-import { projectResourceKey } from "./projectResources";
+import {
+  projectResourceKey,
+  promotedProjectConnectionSourceId,
+} from "./projectResources";
 import { SCHEMA_SCOPE_PARAMETER } from "./scopeFilter";
 import type { useCatalogExplorerState } from "./state";
 
@@ -87,6 +90,34 @@ export function useDatabaseExplorerMutations({
     currentScopeKeyRef.current = catalogScope.key;
   }, [catalogScope.key]);
 
+  function evictConnectionQueries(connectionId: string) {
+    queryClient.removeQueries({
+      queryKey: qk.catalog(connectionId, catalogScope.key),
+    });
+    queryClient.removeQueries({
+      queryKey: qk.catalogOverview(connectionId, catalogScope.key),
+    });
+    queryClient.removeQueries({
+      queryKey: qk.catalogSnapshot(connectionId, catalogScope.key),
+    });
+    queryClient.removeQueries({
+      queryKey: qk.connectionDatabases(connectionId, catalogScope.key),
+    });
+    queryClient.removeQueries({
+      queryKey: ["databaseCatalogOverview", connectionId],
+    });
+    queryClient.removeQueries({
+      queryKey: ["databaseCatalog", connectionId],
+    });
+  }
+
+  function forgetDeletedConnection(connectionId: string) {
+    commands.forget(connectionId);
+    forgetConnection(connectionId);
+    evictConnectionQueries(connectionId);
+    onDeleted(connectionId);
+  }
+
   async function bindDroppedConnection(
     connection: ConnectionProfile,
     environmentId: string,
@@ -103,7 +134,28 @@ export function useDatabaseExplorerMutations({
         alias:
           connection.name.trim() || connection.database.trim() || "database",
       });
+      const promotedSourceId = promotedProjectConnectionSourceId(
+        connection,
+        binding,
+      );
+      let localCleanupFailed = false;
+      if (promotedSourceId !== null) {
+        try {
+          await deleteConnection(promotedSourceId);
+          forgetDeletedConnection(promotedSourceId);
+        } catch {
+          // The shared Project binding is already authoritative. Preserve both
+          // records and make the recoverable local duplicate visible to the user.
+          localCleanupFailed = true;
+        }
+      }
       await Promise.all([
+        promotedSourceId !== null
+          ? queryClient.invalidateQueries({
+              queryKey: connectionQueryKeys.all(catalogScope.key),
+              refetchType: "active",
+            })
+          : Promise.resolve(),
         queryClient.invalidateQueries({
           queryKey: knowledgeQueryKeys.environmentConnections(),
           refetchType: "active",
@@ -118,7 +170,11 @@ export function useDatabaseExplorerMutations({
         void captureProductEvent({
           name: "environment_connection_bound",
           properties: {
-            accessMode: productAnalyticsAccessMode(connection.credentialMode),
+            accessMode: productAnalyticsAccessMode(
+              promotedSourceId === null
+                ? connection.credentialMode
+                : "memberLocal",
+            ),
             engine: productAnalyticsConnectionEngine(connection.engine),
           },
           context,
@@ -132,6 +188,15 @@ export function useDatabaseExplorerMutations({
           environment: environment.name,
         }),
       );
+      if (localCleanupFailed) {
+        toast(
+          t("connections.projectConnectionCleanupFailed", {
+            connection:
+              connection.name || connection.database || t("app.unnamed"),
+          }),
+          "error",
+        );
+      }
     } catch (error) {
       toast(errMessage(error), "error");
     }
@@ -207,28 +272,8 @@ export function useDatabaseExplorerMutations({
       } else {
         await deleteConnection(connection.id);
       }
-      commands.forget(connection.id);
-      forgetConnection(connection.id);
-      queryClient.removeQueries({
-        queryKey: qk.catalog(connection.id, catalogScope.key),
-      });
-      queryClient.removeQueries({
-        queryKey: qk.catalogOverview(connection.id, catalogScope.key),
-      });
-      queryClient.removeQueries({
-        queryKey: qk.catalogSnapshot(connection.id, catalogScope.key),
-      });
-      queryClient.removeQueries({
-        queryKey: qk.connectionDatabases(connection.id, catalogScope.key),
-      });
-      queryClient.removeQueries({
-        queryKey: ["databaseCatalogOverview", connection.id],
-      });
-      queryClient.removeQueries({
-        queryKey: ["databaseCatalog", connection.id],
-      });
+      forgetDeletedConnection(connection.id);
       toast(t("connections.connectionDeleted"));
-      onDeleted(connection.id);
     } catch (error) {
       toast(errMessage(error), "error");
     } finally {

@@ -98,6 +98,8 @@ export const connectionsCatalog = defineCatalog(
       "Could not load Environment databases",
     "connections.environmentConnectionMoved":
       "Moved {connection} to {environment}.",
+    "connections.projectConnectionCleanupFailed":
+      "Added {connection} to the Project, but its old Unassigned local copy could not be removed. Delete that copy from its connection menu.",
     "connections.environmentConnectionRemoved":
       "Removed {connection} from the Project.",
     "connections.removeFromProject": "Remove from Project",
@@ -514,6 +516,8 @@ export const connectionsCatalog = defineCatalog(
       "환경 데이터베이스를 불러오지 못했습니다",
     "connections.environmentConnectionMoved":
       "{connection} 연결을 {environment} 환경으로 이동했습니다.",
+    "connections.projectConnectionCleanupFailed":
+      "{connection} 연결을 프로젝트에 추가했지만 기존 미분류 로컬 복사본을 제거하지 못했습니다. 해당 연결 메뉴에서 복사본을 삭제해 주세요.",
     "connections.environmentConnectionRemoved":
       "{connection} 연결을 프로젝트에서 제거했습니다.",
     "connections.removeFromProject": "프로젝트에서 제거",

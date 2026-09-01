@@ -112,6 +112,22 @@ export function projectConnectionAssignment(
   };
 }
 
+/**
+ * Team Project assignment may replace a device-local connection with the newly
+ * synchronized shared profile. A different binding id is the native command's
+ * explicit success receipt; never infer promotion from a name or endpoint.
+ */
+export function promotedProjectConnectionSourceId(
+  connection: Pick<ConnectionProfile, "id" | "workspaceAccess">,
+  binding: Pick<EnvironmentConnection, "connectionId">,
+) {
+  return connection.workspaceAccess === "local"
+    && binding.connectionId !== null
+    && binding.connectionId !== connection.id
+    ? connection.id
+    : null;
+}
+
 export function flattenProjectEnvironmentResources<T>(
   project: KnowledgeProject,
   resourcesForEnvironment: (environmentId: string) => readonly T[],
