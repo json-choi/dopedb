@@ -3,6 +3,7 @@
 import type { I18nKey } from "../../lib/i18n";
 
 import type {
+  ConnectionProfile,
   ConnectionTestFailure,
   ConnectionTestFailureCode,
 } from "./domain";
@@ -13,10 +14,26 @@ type Translate = (
   vars?: Record<string, string | number>,
 ) => string;
 
+type ConnectionTestFailureContext = Pick<
+  ConnectionProfile,
+  "credentialMode" | "workspaceAccess"
+>;
+
+function isWorkspaceManaged(
+  context?: ConnectionTestFailureContext,
+): boolean {
+  return context?.credentialMode === "managed"
+    && context.workspaceAccess !== "local";
+}
+
 export function connectionTestFailureTitle(
   t: Translate,
   code: ConnectionTestFailureCode,
+  context?: ConnectionTestFailureContext,
 ): string {
+  if (isWorkspaceManaged(context)) {
+    return t("connections.testFailure.managedTitle");
+  }
   switch (code) {
     case "timeoutNetwork": return t("connections.testFailure.timeoutNetworkTitle");
     case "authentication": return t("connections.testFailure.authenticationTitle");
@@ -29,7 +46,13 @@ export function connectionTestFailureTitle(
 export function connectionTestFailureRecovery(
   t: Translate,
   code: ConnectionTestFailureCode,
+  context?: ConnectionTestFailureContext,
 ): string {
+  if (isWorkspaceManaged(context)) {
+    return context?.workspaceAccess === "manage"
+      ? t("connections.testFailure.managedManagerRecovery")
+      : t("connections.testFailure.managedMemberRecovery");
+  }
   switch (code) {
     case "timeoutNetwork": return t("connections.testFailure.timeoutNetworkRecovery");
     case "authentication": return t("connections.testFailure.authenticationRecovery");
@@ -41,7 +64,9 @@ export function connectionTestFailureRecovery(
 
 export function connectionTestFailureTarget(
   failure: ConnectionTestFailure,
+  context?: ConnectionTestFailureContext,
 ): { tab: ConnectionTab; fieldId: string } | null {
+  if (isWorkspaceManaged(context)) return null;
   if (failure.field === "credentials") {
     return { tab: "general", fieldId: "connection-password" };
   }

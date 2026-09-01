@@ -47,6 +47,7 @@ export default async function SettingsPage({
     gcpSetup?: string | string[];
     integration?: string | string[];
     article?: string | string[];
+    connection?: string | string[];
     block?: string | string[];
     section?: string | string[];
   }>;
@@ -79,6 +80,12 @@ export default async function SettingsPage({
       .test(params.article)
       ? params.article
       : null;
+  const requestedConnectionId =
+    typeof params.connection === "string"
+    && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+      .test(params.connection)
+      ? params.connection
+      : null;
   const requestHeaders = await headers();
   const session = await auth.api.getSession({ headers: requestHeaders });
   const encodedWorkspaceId = requestedWorkspaceId
@@ -86,7 +93,11 @@ export default async function SettingsPage({
     : null;
   const settingsPath = localizedWorkspacePath(`/settings?${
     encodedWorkspaceId ? `workspace=${encodedWorkspaceId}&` : ""
-  }section=${requestedSection}`, locale);
+  }section=${requestedSection}${
+    requestedConnectionId
+      ? `&connection=${encodeURIComponent(requestedConnectionId)}`
+      : ""
+  }`, locale);
   if (!session) {
     redirect(localizedWorkspacePath(
       `/auth/sign-in?returnTo=${encodeURIComponent(settingsPath)}`,
@@ -402,6 +413,7 @@ export default async function SettingsPage({
               gcpSetupId={requestedGcpSetupId}
               initialIntegrationId={requestedIntegrationId}
               initialArticleId={requestedArticleId}
+              initialConnectionId={requestedConnectionId}
               area={activeManagementArea}
               canEditWorkspace={canEditActiveWorkspace}
               locale={locale}

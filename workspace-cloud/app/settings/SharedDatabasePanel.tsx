@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ControlButton, ControlLink } from "../components/Controls";
 import { NeonBranchManager } from "../../features/providerAccess/NeonBranchManager";
 import { ProviderResourcePicker } from "../../features/providerAccess/ProviderResourcePicker";
@@ -12,9 +12,11 @@ import { useWorkspaceLocale } from "../components/WorkspaceLocale";
 export function SharedDatabasePanel({
   workspaceId,
   initialIntegrationId = null,
+  initialConnectionId = null,
 }: {
   workspaceId: string;
   initialIntegrationId?: string | null;
+  initialConnectionId?: string | null;
 }) {
   const locale = useWorkspaceLocale();
   const copy = workspaceMessages[locale].sharedDatabases;
@@ -27,6 +29,16 @@ export function SharedDatabasePanel({
   const managedByConnection = new Map(
     controller.managedConnections.map((item) => [item.connectionId, item]),
   );
+
+  useEffect(() => {
+    if (controller.loading || !initialConnectionId) return;
+    const frame = requestAnimationFrame(() => {
+      const target = document.getElementById(`database-${initialConnectionId}`);
+      target?.focus({ preventScroll: true });
+      target?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [controller.connections, controller.loading, initialConnectionId]);
 
   return (
     <section className="tw:grid tw:gap-5 tw:p-5">
@@ -90,6 +102,7 @@ export function SharedDatabasePanel({
         <div className="tw:grid tw:border-t tw:border-border">
           {controller.connections.map((connection) => {
             const managed = managedByConnection.get(connection.id);
+            const focused = connection.id === initialConnectionId;
             const provider = controller.providers.find(
               (item) => item.id === managed?.provider,
             );
@@ -101,8 +114,11 @@ export function SharedDatabasePanel({
               : "";
             return (
               <article
-                className="tw:grid tw:min-h-[72px] tw:grid-cols-[minmax(0,1fr)_auto] tw:items-center tw:gap-4 tw:border-b tw:border-border tw:py-3 tw:max-[640px]:grid-cols-1"
+                className="tw:grid tw:min-h-[72px] tw:grid-cols-[minmax(0,1fr)_auto] tw:items-center tw:gap-4 tw:border-b tw:border-border tw:py-3 tw:outline-none tw:data-[focused=true]:bg-selection tw:focus-visible:ring-2 tw:focus-visible:ring-inset tw:focus-visible:ring-ring tw:max-[640px]:grid-cols-1"
+                data-focused={focused}
+                id={`database-${connection.id}`}
                 key={connection.id}
+                tabIndex={focused ? -1 : undefined}
               >
                 <div className="tw:grid tw:min-w-0 tw:gap-1">
                   <span className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
@@ -118,6 +134,14 @@ export function SharedDatabasePanel({
                       ? `${provider.name} · ${target}`
                       : copy.memberLocalDescription}
                   </small>
+                  {focused && managed ? (
+                    <small
+                      className="tw:max-w-[48rem] tw:text-2xs tw:leading-body tw:text-foreground"
+                      role="status"
+                    >
+                      {copy.desktopRecovery}
+                    </small>
+                  ) : null}
                 </div>
                 <div className="tw:grid tw:justify-items-end tw:gap-1 tw:max-[640px]:justify-items-start">
                   <strong className="tw:font-mono tw:text-2xs tw:uppercase tw:text-primary">
@@ -126,6 +150,17 @@ export function SharedDatabasePanel({
                       : copy.localMode}
                   </strong>
                   <span className="tw:flex tw:flex-wrap tw:items-center tw:justify-end tw:gap-2 tw:max-[640px]:justify-start">
+                    {managed ? (
+                      <a
+                        className="tw:text-2xs tw:text-muted-foreground tw:hover:text-foreground"
+                        href={localizedWorkspacePath(
+                          `/settings?workspace=${encodeURIComponent(workspaceId)}&section=cloud-accounts`,
+                          locale,
+                        )}
+                      >
+                        {copy.manageProvider}
+                      </a>
+                    ) : null}
                     <a
                       className="tw:text-2xs tw:text-muted-foreground tw:hover:text-foreground"
                       href={localizedWorkspacePath(

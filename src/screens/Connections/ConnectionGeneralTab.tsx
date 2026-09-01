@@ -17,6 +17,7 @@ import type { ConnectionInputMode } from "../../features/connections/connectionE
 import type { ConnectionEditorController } from "../../features/connections/useConnectionEditorController";
 import { useI18n } from "../../lib/i18n";
 import { ConnectionBigQueryFields } from "./ConnectionBigQueryFields";
+import { ManagedWorkspaceConnectionField } from "./ManagedWorkspaceConnectionField";
 
 type Controller = ConnectionEditorController;
 
@@ -25,12 +26,14 @@ export function ConnectionGeneralTab({
   sources,
   drivers,
   workspaceDialog,
+  managedConnection,
   busy,
 }: {
   profile: Controller["profile"];
   sources: Controller["catalog"]["sources"];
   drivers: Controller["catalog"]["drivers"];
   workspaceDialog: Controller["dialogs"]["workspace"];
+  managedConnection: Controller["commands"]["managedConnection"];
   busy: boolean;
 }) {
   const { t } = useI18n();
@@ -222,52 +225,59 @@ export function ConnectionGeneralTab({
         <ConnectionBigQueryFields profile={profile} drivers={drivers} />
       ) : (
         <section className="tw:grid tw:gap-3">
-          <PropertyRow
-            label={t("connections.host")}
-            htmlFor="connection-host"
-          >
-            <div className="tw:grid tw:grid-cols-[minmax(0,1fr)_auto_112px] tw:items-start tw:gap-3 tw:@max-[560px]:grid-cols-1 tw:@max-[560px]:gap-1.5">
-              <div className="tw:grid tw:gap-1.5">
-                <TextInput
-                  id="connection-host"
-                  density="compact"
-                  value={form.host}
-                  disabled={!canEditConnection}
-                  aria-invalid={
-                    validation.host?.tone === "danger" || undefined
-                  }
-                  onChange={(event) => set("host", event.target.value)}
-                />
-                {validation.host ? (
-                  <FieldValidationMessage validation={validation.host} />
-                ) : null}
+          {managedConnection.active ? (
+            <ManagedWorkspaceConnectionField
+              recovery={managedConnection}
+              busy={busy}
+            />
+          ) : (
+            <PropertyRow
+              label={t("connections.host")}
+              htmlFor="connection-host"
+            >
+              <div className="tw:grid tw:grid-cols-[minmax(0,1fr)_auto_112px] tw:items-start tw:gap-3 tw:@max-[560px]:grid-cols-1 tw:@max-[560px]:gap-1.5">
+                <div className="tw:grid tw:gap-1.5">
+                  <TextInput
+                    id="connection-host"
+                    density="compact"
+                    value={form.host}
+                    disabled={!canEditConnection}
+                    aria-invalid={
+                      validation.host?.tone === "danger" || undefined
+                    }
+                    onChange={(event) => set("host", event.target.value)}
+                  />
+                  {validation.host ? (
+                    <FieldValidationMessage validation={validation.host} />
+                  ) : null}
+                </div>
+                <label
+                  htmlFor="connection-port"
+                  className="tw:inline-flex tw:min-h-control-md tw:items-center tw:text-sm tw:text-foreground tw:@max-[560px]:min-h-0"
+                >
+                  {t("connections.port")}
+                </label>
+                <div className="tw:grid tw:gap-1.5">
+                  <TextInput
+                    id="connection-port"
+                    density="compact"
+                    type="number"
+                    value={profile.port.draft}
+                    min={1}
+                    max={65_535}
+                    aria-invalid={
+                      validation.port?.tone === "danger" || undefined
+                    }
+                    disabled={!canEditConnection || (isMongo && srv)}
+                    onChange={(event) => profile.port.setDraft(event.target.value)}
+                  />
+                  {validation.port ? (
+                    <FieldValidationMessage validation={validation.port} />
+                  ) : null}
+                </div>
               </div>
-              <label
-                htmlFor="connection-port"
-                className="tw:inline-flex tw:min-h-control-md tw:items-center tw:text-sm tw:text-foreground tw:@max-[560px]:min-h-0"
-              >
-                {t("connections.port")}
-              </label>
-              <div className="tw:grid tw:gap-1.5">
-                <TextInput
-                  id="connection-port"
-                  density="compact"
-                  type="number"
-                  value={profile.port.draft}
-                  min={1}
-                  max={65_535}
-                  aria-invalid={
-                    validation.port?.tone === "danger" || undefined
-                  }
-                  disabled={!canEditConnection || (isMongo && srv)}
-                  onChange={(event) => profile.port.setDraft(event.target.value)}
-                />
-                {validation.port ? (
-                  <FieldValidationMessage validation={validation.port} />
-                ) : null}
-              </div>
-            </div>
-          </PropertyRow>
+            </PropertyRow>
+          )}
 
           {isMongo && !isSharedTemplate ? (
             <PropertyRow label={t("connections.srv")}>
@@ -350,7 +360,9 @@ export function ConnectionGeneralTab({
                 </div>
               </PropertyRow>
               <p className="tw:m-0 tw:border-t tw:border-border-subtle tw:pt-3 tw:text-sm tw:leading-body tw:text-muted-foreground">
-                {t("workspace.copySecurityNote")}
+                {managedConnection.active
+                  ? t("connections.managedWorkspace.securityNote")
+                  : t("workspace.copySecurityNote")}
               </p>
             </>
           ) : (

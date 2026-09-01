@@ -127,6 +127,12 @@ DopeDB의 제품 축, 실제 사용자 작업, 접근성, 운영 안전성, 지�
   이 계약을 충족하지 못하는 provider는 같은 Safety 화면에서 지원하지 않는 이유만
   표시하고 권한이 있는 것처럼 보이는 control이나 우회용 장기 owner secret을 만들지
   않는다.
+- Workspace 관리형 연결의 Desktop 프로필은 실행 시 발급되는 실제 endpoint와
+  credential을 편집 가능한 로컬 값처럼 표시하지 않는다. 연결 검사가 실패하면
+  로컬 host·password 수정을 안내하지 않고 관리 주체, 관리자가 확인할 provider
+  account·DB 등록·멤버 접근을 설명한다. exact `manage` 권한이 있으면 native가
+  검증한 Workspace Web origin의 해당 DB 행으로 직접 이동하는 실제 command를
+  제공한다.
 - enabled control은 반드시 실제 command와 state owner를 가진다. 아직 없는 기능은
   tracker에 `missing`으로 기록하고 가짜 control을 만들지 않는다.
 

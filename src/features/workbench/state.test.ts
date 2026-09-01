@@ -51,8 +51,14 @@ import {
 } from "../connections/connectionUrl";
 import {
   canRecoverBigQueryAuthentication,
+  connectionId as connectionProfileId,
   type DriverDescriptor,
 } from "../connections/domain";
+import {
+  connectionTestFailureRecovery,
+  connectionTestFailureTarget,
+  connectionTestFailureTitle,
+} from "../connections/connectionTestFailure";
 import { switchConnectionSource } from "../connections/connectionEditorModel";
 import {
   BIGQUERY_AUTH_MODE_PARAMETER,
@@ -109,6 +115,8 @@ import {
 import { queryResultPhase } from "../../lib/queryResultPhase";
 import { compareCatalogs, diffCounts } from "../../lib/schemaDiff";
 import { tableRef } from "../../lib/tableRef";
+import type { I18nKey } from "../../lib/i18n";
+import { workspaceManagedConnectionSettingsUrl } from "../workspaces/navigation";
 
 function deferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
@@ -142,6 +150,44 @@ function storedDocument(id = "doc-1"): SqlDocument {
 
 describe("workbench state ownership", () => {
   it("restores persisted SQL without removing the connection welcome document", () => {
+    const key = (value: I18nKey) => value;
+    const managedManager = {
+      credentialMode: "managed" as const,
+      workspaceAccess: "manage" as const,
+    };
+    const managedMember = {
+      credentialMode: "managed" as const,
+      workspaceAccess: "read" as const,
+    };
+    expect(
+      connectionTestFailureTitle(key, "timeoutNetwork", managedManager),
+    ).toBe("connections.testFailure.managedTitle");
+    expect(
+      connectionTestFailureRecovery(key, "authentication", managedManager),
+    ).toBe("connections.testFailure.managedManagerRecovery");
+    expect(
+      connectionTestFailureRecovery(key, "tls", managedMember),
+    ).toBe("connections.testFailure.managedMemberRecovery");
+    expect(connectionTestFailureTarget({
+      code: "authentication",
+      field: "credentials",
+      detail: "redacted",
+    }, managedManager)).toBeNull();
+
+    const managedConnectionId = connectionProfileId(
+      "55555555-5555-4555-8555-555555555555",
+    );
+    const recoveryUrl = new URL(workspaceManagedConnectionSettingsUrl(
+      "https://workspace.example.test/settings?workspace=11111111-1111-4111-8111-111111111111#workspace-11111111-1111-4111-8111-111111111111",
+      managedConnectionId,
+    ));
+    expect(recoveryUrl.searchParams.get("workspace")).toBe(
+      "11111111-1111-4111-8111-111111111111",
+    );
+    expect(recoveryUrl.searchParams.get("section")).toBe("databases");
+    expect(recoveryUrl.searchParams.get("connection")).toBe(managedConnectionId);
+    expect(recoveryUrl.hash).toBe(`#database-${managedConnectionId}`);
+
     const selectedDraft = "SELECT 1;\n  SELECT 2;  \nSELECT 3;";
     const selectedStart = selectedDraft.indexOf("  SELECT 2;");
     const selectedEnd = selectedDraft.indexOf("\nSELECT 3;");

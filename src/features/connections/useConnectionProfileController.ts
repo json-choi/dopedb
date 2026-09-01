@@ -47,6 +47,7 @@ import type { BigQueryOnboardingController } from "./useBigQueryOnboardingContro
 import type { ConnectionCatalogController } from "./useConnectionCatalogController";
 import type { ConnectionEditorDialogs } from "./useConnectionEditorDialogs";
 import type { ConnectionProfileState } from "./useConnectionProfileState";
+import { useManagedConnectionRecovery } from "./useManagedConnectionRecovery";
 
 export function useConnectionProfileController({
   connections,
@@ -88,6 +89,10 @@ export function useConnectionProfileController({
     };
   }, []);
   const driverCatalog = catalog.model.driverCatalog;
+  const managedConnection = useManagedConnectionRecovery(
+    form.value,
+    catalogScope,
+  );
   const diagnosticProfile = isSharedTemplate
     ? { ...form.value, extraParams: {} }
     : form.value;
@@ -134,8 +139,16 @@ export function useConnectionProfileController({
     problemItems.push({
       id: "connection-test-failure",
       tone: "danger",
-      title: connectionTestFailureTitle(t, status.testFailure.code),
-      description: connectionTestFailureRecovery(t, status.testFailure.code),
+      title: connectionTestFailureTitle(
+        t,
+        status.testFailure.code,
+        form.value,
+      ),
+      description: connectionTestFailureRecovery(
+        t,
+        status.testFailure.code,
+        form.value,
+      ),
     });
   }
   const validation = {
@@ -192,7 +205,10 @@ export function useConnectionProfileController({
     if (diagnosticId === "connection-test-failure") {
       dialogs.problems.setOpen(false);
       if (status.testFailure) {
-        const target = connectionTestFailureTarget(status.testFailure);
+        const target = connectionTestFailureTarget(
+          status.testFailure,
+          form.value,
+        );
         if (!target) return;
         tabState.setActive(target.tab);
         requestAnimationFrame(() => document.getElementById(target.fieldId)?.focus());
@@ -463,8 +479,11 @@ export function useConnectionProfileController({
       message: status.message,
       messageIsError: status.messageIsError,
       testFailure: status.testFailure,
-      testFailureTitle: (code: ConnectionTestFailureCode) => connectionTestFailureTitle(t, code),
-      testFailureRecovery: (code: ConnectionTestFailureCode) => connectionTestFailureRecovery(t, code),
+      testFailureTitle: (code: ConnectionTestFailureCode) =>
+        connectionTestFailureTitle(t, code, form.value),
+      testFailureRecovery: (code: ConnectionTestFailureCode) =>
+        connectionTestFailureRecovery(t, code, form.value),
+      managedConnection,
       save,
       test,
       duplicate: duplicateCurrentConnection,

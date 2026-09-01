@@ -1375,6 +1375,9 @@ describe("provider credential Tauri adapter", () => {
     expect(sharedDatabaseControllerSource).toContain('method: "DELETE"');
     expect(sharedDatabaseControllerSource).toContain('"x-dopedb-expected-revision"');
     expect(sharedDatabasePanelSource).toContain("copy.remove");
+    expect(sharedDatabasePanelSource).toContain("copy.desktopRecovery");
+    expect(sharedDatabasePanelSource).toContain('id={`database-${connection.id}`}');
+    expect(sharedDatabasePanelSource).toContain("copy.manageProvider");
     expect(connectionAccessPanelSource).toContain("copy.writePolicyStatus");
     expect(connectionAccessPanelSource).toContain("copy.writePolicyDesktop");
     expect(connectionAccessPanelSource).not.toContain("changeWritePolicy");

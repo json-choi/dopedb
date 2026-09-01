@@ -1,6 +1,7 @@
 // Composes the profile editor header, tabs, diagnostics, and action status from
 // narrow grouped presentation models.
 import { DiagnosticSummary } from "../../design-system/components/Diagnostics";
+import { Button } from "../../design-system/components/Button";
 import {
   FieldValidationMessage,
   TextInput,
@@ -85,6 +86,20 @@ export function ConnectionProfilePanel({
             <p className="tw:m-0 tw:text-sm tw:leading-body tw:text-foreground">
               {commands.testFailureRecovery(commands.testFailure.code)}
             </p>
+            {commands.managedConnection.canOpenSettings ? (
+              <div className="tw:mt-1">
+                <Button
+                  size="compact"
+                  tone="primary"
+                  disabled={commands.managedConnection.openingSettings}
+                  onClick={() => void commands.managedConnection.openSettings()}
+                >
+                  {commands.managedConnection.openingSettings
+                    ? t("connections.managedWorkspace.opening")
+                    : t("connections.managedWorkspace.open")}
+                </Button>
+              </div>
+            ) : null}
             <details className="tw:min-w-0 tw:text-xs">
               <summary className="tw:cursor-pointer tw:text-muted-foreground">
                 {t("connections.testFailure.technicalDetails")}
@@ -109,6 +124,7 @@ export function ConnectionProfilePanel({
             sources={sources}
             drivers={drivers}
             workspaceDialog={workspaceDialog}
+            managedConnection={commands.managedConnection}
             busy={commands.busy}
           />
         ) : null}

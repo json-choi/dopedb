@@ -42,6 +42,7 @@ export function WorkspaceManagementPanel({
   gcpSetupId,
   initialIntegrationId,
   initialArticleId,
+  initialConnectionId,
   area,
   canEditWorkspace,
   locale,
@@ -52,6 +53,7 @@ export function WorkspaceManagementPanel({
   gcpSetupId: string | null;
   initialIntegrationId: string | null;
   initialArticleId: string | null;
+  initialConnectionId: string | null;
   area: WorkspaceManagementArea;
   canEditWorkspace: boolean;
   locale: WorkspaceLocale;
@@ -108,6 +110,7 @@ export function WorkspaceManagementPanel({
           <SharedDatabasePanel
             workspaceId={workspaceId}
             initialIntegrationId={initialIntegrationId}
+            initialConnectionId={initialConnectionId}
           />
         ) : null}
         {area === "analyses" ? (

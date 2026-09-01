@@ -36,6 +36,18 @@ export const connectionsCatalog = defineCatalog(
     "connections.connectionMenu": "Connection actions",
     "connections.projectMenu": "Project actions",
     "connections.connectionOk": "Connection OK",
+    "connections.managedWorkspace.label": "Endpoint and credentials",
+    "connections.managedWorkspace.status": "Managed in Workspace Web",
+    "connections.managedWorkspace.managerDescription":
+      "The real endpoint and a short-lived credential are issued when this database is used. Change or repair the provider account and database registration in Workspace Web.",
+    "connections.managedWorkspace.memberDescription":
+      "The real endpoint and a short-lived credential are issued by the Workspace. Ask a Workspace admin to check the provider account and database registration if access fails.",
+    "connections.managedWorkspace.securityNote":
+      "This Desktop profile intentionally contains no editable host or password. Workspace Web owns the provider target and issues member-specific, short-lived access only when it is needed.",
+    "connections.managedWorkspace.open": "Open this database in Workspace Web",
+    "connections.managedWorkspace.opening": "Opening Workspace Web…",
+    "connections.managedWorkspace.openFailed":
+      "Could not open this database in Workspace Web: {error}",
     "connections.connectionSaved": "Connection saved",
     "connections.clouds": "Clouds",
     "connections.dataSourceFromCloudProvider":
@@ -264,6 +276,12 @@ export const connectionsCatalog = defineCatalog(
     "connections.testFailure.unknownTitle": "Connection check failed",
     "connections.testFailure.unknownRecovery":
       "Review the technical details, correct the connection settings, and test again.",
+    "connections.testFailure.managedTitle":
+      "Workspace-managed access could not be issued",
+    "connections.testFailure.managedManagerRecovery":
+      "Do not edit the read-only connection values below. Open this database in Workspace Web, check its provider account and database registration, then return here and test again.",
+    "connections.testFailure.managedMemberRecovery":
+      "This connection is controlled in Workspace Web, not on this device. Ask a Workspace admin to check its provider account, database registration, and your access, then test again.",
     "connections.testFailure.technicalDetails": "Technical details",
     "connections.testFailure.transportDetail":
       "The Desktop connection-test transport failed before returning a typed receipt.",
@@ -453,6 +471,18 @@ export const connectionsCatalog = defineCatalog(
     "connections.connectionMenu": "연결 메뉴",
     "connections.projectMenu": "프로젝트 메뉴",
     "connections.connectionOk": "연결 정상",
+    "connections.managedWorkspace.label": "엔드포인트 및 자격 증명",
+    "connections.managedWorkspace.status": "워크스페이스 웹에서 관리됨",
+    "connections.managedWorkspace.managerDescription":
+      "이 DB를 사용할 때 실제 엔드포인트와 단기 자격 증명이 발급됩니다. 공급자 계정과 DB 등록의 변경·복구는 워크스페이스 웹에서 진행하세요.",
+    "connections.managedWorkspace.memberDescription":
+      "실제 엔드포인트와 단기 자격 증명은 워크스페이스가 발급합니다. 접근에 실패하면 워크스페이스 관리자에게 공급자 계정과 DB 등록 상태 확인을 요청하세요.",
+    "connections.managedWorkspace.securityNote":
+      "이 Desktop 프로필에는 편집할 호스트나 비밀번호가 의도적으로 들어 있지 않습니다. 워크스페이스 웹이 공급자 대상을 관리하고 필요할 때만 구성원별 단기 접근을 발급합니다.",
+    "connections.managedWorkspace.open": "워크스페이스 웹에서 이 DB 열기",
+    "connections.managedWorkspace.opening": "워크스페이스 웹 여는 중…",
+    "connections.managedWorkspace.openFailed":
+      "워크스페이스 웹에서 이 DB를 열지 못했습니다: {error}",
     "connections.connectionSaved": "연결이 저장되었습니다",
     "connections.clouds": "클라우드",
     "connections.dataSourceFromCloudProvider":
@@ -680,6 +710,12 @@ export const connectionsCatalog = defineCatalog(
     "connections.testFailure.unknownTitle": "연결 검사에 실패했습니다",
     "connections.testFailure.unknownRecovery":
       "기술 상세를 확인하고 연결 설정을 수정한 뒤 다시 테스트하세요.",
+    "connections.testFailure.managedTitle":
+      "워크스페이스 관리형 접근을 발급하지 못했습니다",
+    "connections.testFailure.managedManagerRecovery":
+      "아래 읽기 전용 연결값은 수정하지 마세요. 워크스페이스 웹에서 이 DB를 열어 공급자 계정과 DB 등록 상태를 확인한 뒤 돌아와 다시 테스트하세요.",
+    "connections.testFailure.managedMemberRecovery":
+      "이 연결은 이 기기가 아니라 워크스페이스 웹에서 관리됩니다. 워크스페이스 관리자에게 공급자 계정, DB 등록과 내 접근 권한 확인을 요청한 뒤 다시 테스트하세요.",
     "connections.testFailure.technicalDetails": "기술 상세",
     "connections.testFailure.transportDetail":
       "Desktop 연결 테스트 전송이 구조화된 결과를 반환하기 전에 실패했습니다.",

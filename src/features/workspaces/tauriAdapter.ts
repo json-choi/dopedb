@@ -15,6 +15,7 @@ import type {
   WorkspaceId,
   WorkspaceLoginPoll,
 } from "./domain";
+import { workspaceManagedConnectionSettingsUrl } from "./navigation";
 
 export function workspaceFeatureState(): Promise<WorkspaceFeatureState> {
   return invoke("workspace_feature_state");
@@ -46,6 +47,14 @@ export function pollWorkspaceLogin(deviceCode: string): Promise<WorkspaceLoginPo
 
 export function workspaceConsoleUrl(workspaceId?: WorkspaceId): Promise<string> {
   return invoke("workspace_console_url", { workspaceId: workspaceId ?? null });
+}
+
+export async function workspaceManagedConnectionConsoleUrl(
+  workspaceId: WorkspaceId,
+  connectionId: ConnectionId,
+): Promise<string> {
+  const consoleUrl = await workspaceConsoleUrl(workspaceId);
+  return workspaceManagedConnectionSettingsUrl(consoleUrl, connectionId);
 }
 
 export function listWorkspaces(): Promise<Workspace[]> {
