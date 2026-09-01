@@ -44,7 +44,7 @@ export type ProviderAccessState = {
   selectedGcpInstanceId: string;
   gcpEnvironmentClassification: GcpEnvironmentClassification;
   gcpProductionApproved: boolean;
-  gcpRestartApproved: boolean;
+  gcpIamAuthenticationChangeApproved: boolean;
   gcpPermissionCheck: GcpSetupPermissionCheck | null;
   gcpIamRoleGrantApproved: boolean;
   gcpSetupError: string;
@@ -90,7 +90,7 @@ export const initialProviderAccessState: ProviderAccessState = {
   selectedGcpInstanceId: "",
   gcpEnvironmentClassification: "",
   gcpProductionApproved: false,
-  gcpRestartApproved: false,
+  gcpIamAuthenticationChangeApproved: false,
   gcpPermissionCheck: null,
   gcpIamRoleGrantApproved: false,
   gcpSetupError: "",

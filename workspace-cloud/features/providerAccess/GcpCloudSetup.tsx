@@ -37,7 +37,7 @@ export function GcpCloudSetup({
     selectedGcpInstanceId,
     gcpEnvironmentClassification,
     gcpProductionApproved,
-    gcpRestartApproved,
+    gcpIamAuthenticationChangeApproved,
     gcpPermissionCheck,
     gcpIamRoleGrantApproved,
     gcpSetupError,
@@ -55,7 +55,7 @@ export function GcpCloudSetup({
     setGcpEnvironmentClassification,
     setGcpIamRoleGrantApproved,
     setGcpProductionApproved,
-    setGcpRestartApproved,
+    setGcpIamAuthenticationChangeApproved,
   } = controller;
   const configuring = mutation === "gcp:bootstrap";
   const recovering = Boolean(gcpRecoveryIntent) || gcpRecoveryTargetPending;
@@ -105,7 +105,10 @@ export function GcpCloudSetup({
     && selectedInstance.ready
     && environmentClassified
     && (!effectiveProduction || gcpProductionApproved)
-    && (selectedInstance.iamAuthenticationEnabled || gcpRestartApproved)
+    && (
+      selectedInstance.iamAuthenticationEnabled
+      || gcpIamAuthenticationChangeApproved
+    )
     && gcpPermissionCheck
     && (
       gcpPermissionCheck.missing.length === 0
@@ -446,10 +449,12 @@ export function GcpCloudSetup({
                 <input
                   className="tw:mt-0.5 tw:size-4 tw:accent-primary"
                   type="checkbox"
-                  checked={gcpRestartApproved}
+                  checked={gcpIamAuthenticationChangeApproved}
                   disabled={busy}
                   onChange={(event) =>
-                    setGcpRestartApproved(event.target.checked)
+                    setGcpIamAuthenticationChangeApproved(
+                      event.target.checked,
+                    )
                   }
                 />
                 <span className="tw:grid tw:gap-1 tw:text-xs tw:text-foreground">

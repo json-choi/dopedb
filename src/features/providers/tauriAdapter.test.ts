@@ -393,6 +393,68 @@ describe("provider credential Tauri adapter", () => {
     })).toThrow("Invalid provider operation state");
   });
 
+  it("keeps Cloud SQL IAM setting approval restart-free", () => {
+    expect(gcpSetupRouteSource).toContain(
+      'typeof body.approveIamAuthenticationChange !== "boolean"',
+    );
+    expect(gcpProviderSetupControllerSource).toContain(
+      "approveIamAuthenticationChange:",
+    );
+    expect(gcpProviderSetupControllerSource).toContain(
+      "gcpIamAuthenticationChangeApproved",
+    );
+    expect(gcpSetupSource).toContain("gcpIamAuthenticationChangeApproved");
+    expect(gcpBootstrapSource).toContain(
+      "approveIamAuthenticationChange",
+    );
+    expect(gcpBootstrapSource).not.toContain(
+      "approveInstanceRestart",
+    );
+    expect(workspaceMessagesSource).toContain(
+      "not requiring an instance restart.",
+    );
+    expect(workspaceMessagesSource).toContain(
+      "인스턴스 재시작이 필요하지 않습니다.",
+    );
+    expect(workspaceMessagesSource).not.toMatch(
+      /instance may restart while|인스턴스가 재시작될 수/,
+    );
+    const enableIamAuthenticationSource = gcpBootstrapDatabaseSource.slice(
+      gcpBootstrapDatabaseSource.indexOf(
+        "export async function enableIamAuthentication",
+      ),
+      gcpBootstrapDatabaseSource.indexOf(
+        "export async function ensureDatabaseUserOnce",
+      ),
+    );
+    expect(enableIamAuthenticationSource).toContain('method: "PATCH"');
+    expect(enableIamAuthenticationSource).not.toContain("/restart");
+  });
+
+  it("avoids the IAM Credentials propagation retry dead end during Cloud SQL setup", () => {
+    expect(gcpBootstrapCoreSource).toContain(
+      '"cloudsql.instances.executeSql"',
+    );
+    expect(gcpBootstrapDatabaseSource).toContain(
+      "prepareDatabaseBootstrapUser",
+    );
+    expect(gcpBootstrapDatabaseSource).toContain('type: "CLOUD_IAM_USER"');
+    expect(gcpBootstrapDatabaseSource).toContain(
+      "restoreDatabaseBootstrapUser",
+    );
+    expect(gcpBootstrapDatabaseSource).toContain(
+      "revokeExistingRoles = false",
+    );
+    expect(gcpBootstrapSqlSource).toContain("executor: input.credential");
+    expect(gcpBootstrapSqlSource).toContain(
+      "restoreDatabaseBootstrapUser",
+    );
+    expect(gcpBootstrapSqlSource).not.toContain("bootstrapAccessToken");
+    expect(gcpBootstrapIamSource).not.toContain(
+      "roles/iam.serviceAccountTokenCreator",
+    );
+  });
+
   it("prohibits legacy provider identity and manual GCP trust input", async () => {
     expect(neonInheritedRoleRetirementStatement(
       "dopedb_member01_1234567890abcdef1234567890abcdef",

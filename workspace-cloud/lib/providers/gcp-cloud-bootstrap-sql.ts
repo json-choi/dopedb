@@ -5,91 +5,24 @@ import { ProviderRequestError } from "./provider-types";
 import {
   CLOUD_SQL_IDENTITY_PROPAGATION_TIMEOUT_MS,
   GcpUpstreamRequestError,
-  IAM_CREDENTIALS_ORIGIN,
-  IAM_ORIGIN,
   PROPAGATION_RETRY_INTERVAL_MS,
-  RESOURCE_MANAGER_ORIGIN,
   SQL_ADMIN_ORIGIN,
-  TOKEN_CREATOR_PROPAGATION_TIMEOUT_MS,
   googleRequest,
   object,
-  waitSqlOperation,
   type GcpCloudBootstrapInput,
   type JsonObject,
 } from "./gcp-cloud-bootstrap-core";
-import {
-  grantBootstrapProjectAccess,
-  grantTokenCreator,
-  removeIamPolicyBindings,
-  ensureServiceAccount,
-  serviceAccountId,
-  type IamBinding,
-} from "./gcp-cloud-bootstrap-iam";
 import {
   dataApiState,
   databaseNames,
   ensureDatabaseUser,
   instanceDetails,
+  prepareDatabaseBootstrapUser,
+  restoreDatabaseBootstrapUser,
   setDataApiAccess,
   setDatabaseRoles,
+  type GcpDatabaseBootstrapUser,
 } from "./gcp-cloud-bootstrap-database";
-
-export async function bootstrapAccessToken(
-  credential: GcpSetupCredential,
-  serviceAccountEmail: string,
-) {
-  const startedAt = Date.now();
-  for (;;) {
-    try {
-      const body = (await googleRequest(
-        credential,
-        `${IAM_CREDENTIALS_ORIGIN}/v1/projects/-/serviceAccounts/${
-          encodeURIComponent(serviceAccountEmail)
-        }:generateAccessToken`,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            scope: ["https://www.googleapis.com/auth/cloud-platform"],
-            lifetime: "600s",
-          }),
-        },
-      ))!;
-      if (
-        typeof body.accessToken !== "string"
-        || body.accessToken.length < 32
-        || body.accessToken.length > 8_192
-        || typeof body.expireTime !== "string"
-        || Date.parse(body.expireTime) <= Date.now() + 60_000
-      ) {
-        throw new ProviderRequestError(
-          "gcpCloudSql",
-          "Google Cloud returned an unsafe bootstrap token",
-          502,
-        );
-      }
-      return {
-        accessToken: body.accessToken,
-        email: serviceAccountEmail,
-        expiresAt: body.expireTime,
-      } satisfies GcpSetupCredential;
-    } catch (error) {
-      if (
-        !(error instanceof ProviderRequestError)
-        || ![403, 404, 502, 503].includes(error.status)
-      ) {
-        throw error;
-      }
-      if (Date.now() - startedAt >= TOKEN_CREATOR_PROPAGATION_TIMEOUT_MS) {
-        throw new ProviderRequestError(
-          "gcpCloudSql",
-          "Google Cloud IAM Credentials 권한 반영이 지연되고 있습니다. 잠시 뒤 다시 시도하세요.",
-          503,
-        );
-      }
-      await new Promise((resolve) => setTimeout(resolve, 5_000));
-    }
-  }
-}
 
 export function responseStatusFailed(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
@@ -354,40 +287,6 @@ export async function configureMysqlPrivileges(input: {
   }
 }
 
-export async function deleteDatabaseUser(
-  credential: GcpSetupCredential,
-  projectId: string,
-  instanceId: string,
-  user: JsonObject,
-) {
-  if (typeof user.name !== "string") return;
-  const query = new URLSearchParams({
-    name: user.name,
-    host: typeof user.host === "string" ? user.host : "",
-  });
-  const operation = (await googleRequest(
-    credential,
-    `${SQL_ADMIN_ORIGIN}/projects/${encodeURIComponent(projectId)}/instances/${
-      encodeURIComponent(instanceId)
-    }/users?${query}`,
-    { method: "DELETE" },
-  ))!;
-  await waitSqlOperation(credential, projectId, operation);
-}
-
-export async function deleteServiceAccount(
-  credential: GcpSetupCredential,
-  projectId: string,
-  email: string,
-) {
-  await googleRequest(
-    credential,
-    `${IAM_ORIGIN}/v1/projects/${encodeURIComponent(projectId)
-    }/serviceAccounts/${encodeURIComponent(email)}`,
-    { method: "DELETE" },
-  );
-}
-
 export async function configureDatabasePrivileges(input: {
   credential: GcpSetupCredential;
   configuration: GcpCloudBootstrapInput;
@@ -408,63 +307,25 @@ export async function configureDatabasePrivileges(input: {
     input.configuration.instanceId,
   );
   const dataApiInitiallyEnabled = dataApiState(details).enabled;
-  const bootstrapDescription =
-    `dopedb-bootstrap:v1:${input.fingerprint}:${input.configuration.instanceId}`;
-  const bootstrapEmail = await ensureServiceAccount(
-    input.credential,
-    input.configuration.projectId,
-    serviceAccountId("bootstrap", input.fingerprint),
-    bootstrapDescription,
-    `DopeDB bootstrap · ${input.configuration.instanceId}`.slice(0, 100),
-  );
-  const serviceAccountUrl = `${IAM_ORIGIN}/v1/projects/${
-    encodeURIComponent(input.configuration.projectId)
-  }/serviceAccounts/${encodeURIComponent(bootstrapEmail)}`;
-  let projectBindings: IamBinding[] = [];
-  let tokenBinding: IamBinding | null = null;
-  let bootstrapUser: JsonObject | null = null;
+  let bootstrapUser: GcpDatabaseBootstrapUser | null = null;
   let failure: unknown = null;
   try {
-    tokenBinding = await grantTokenCreator(
-      input.credential,
-      input.configuration.projectId,
-      bootstrapEmail,
-    );
-    projectBindings = await grantBootstrapProjectAccess(
-      input.credential,
-      input.configuration,
-      bootstrapEmail,
-      input.fingerprint,
-    );
     await setDataApiAccess(
       input.credential,
       input.configuration.projectId,
       input.configuration.instanceId,
       true,
     );
-    bootstrapUser = await ensureDatabaseUser(
+    bootstrapUser = await prepareDatabaseBootstrapUser(
       input.credential,
       input.configuration.projectId,
       input.configuration.instanceId,
-      bootstrapEmail,
       input.engine,
-      ["cloudsqlsuperuser"],
-    );
-    await setDatabaseRoles(
-      input.credential,
-      input.configuration.projectId,
-      input.configuration.instanceId,
-      bootstrapUser,
-      ["cloudsqlsuperuser"],
-    );
-    const executor = await bootstrapAccessToken(
-      input.credential,
-      bootstrapEmail,
     );
     if (input.engine === "postgres") {
       await configurePostgresPrivileges({
         control: input.credential,
-        executor,
+        executor: input.credential,
         projectId: input.configuration.projectId,
         instanceId: input.configuration.instanceId,
         databaseVersion: input.databaseVersion,
@@ -475,7 +336,7 @@ export async function configureDatabasePrivileges(input: {
       });
     } else {
       await configureMysqlPrivileges({
-        executor,
+        executor: input.credential,
         projectId: input.configuration.projectId,
         instanceId: input.configuration.instanceId,
         databases,
@@ -489,7 +350,7 @@ export async function configureDatabasePrivileges(input: {
 
   const cleanupFailures: unknown[] = [];
   if (bootstrapUser) {
-    await deleteDatabaseUser(
+    await restoreDatabaseBootstrapUser(
       input.credential,
       input.configuration.projectId,
       input.configuration.instanceId,
@@ -504,27 +365,6 @@ export async function configureDatabasePrivileges(input: {
       false,
     ).catch((error) => cleanupFailures.push(error));
   }
-  if (projectBindings.length > 0) {
-    await removeIamPolicyBindings(
-      input.credential,
-      `${RESOURCE_MANAGER_ORIGIN}/v1/projects/${
-        encodeURIComponent(input.configuration.projectId)
-      }`,
-      projectBindings,
-    ).catch((error) => cleanupFailures.push(error));
-  }
-  if (tokenBinding) {
-    await removeIamPolicyBindings(
-      input.credential,
-      serviceAccountUrl,
-      [tokenBinding],
-    ).catch((error) => cleanupFailures.push(error));
-  }
-  await deleteServiceAccount(
-    input.credential,
-    input.configuration.projectId,
-    bootstrapEmail,
-  ).catch((error) => cleanupFailures.push(error));
   if (cleanupFailures.length > 0) {
     throw new ProviderRequestError(
       "gcpCloudSql",

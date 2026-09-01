@@ -161,10 +161,10 @@ export function setupFingerprint(input: GcpCloudBootstrapInput) {
 }
 
 export function serviceAccountId(
-  kind: "read" | "write" | "bootstrap",
+  kind: "read" | "write",
   fingerprint: string,
 ) {
-  const short = kind === "read" ? "r" : kind === "write" ? "w" : "b";
+  const short = kind === "read" ? "r" : "w";
   return `dopedb-${short}-${fingerprint}`;
 }
 
@@ -492,21 +492,6 @@ export async function grantWorkloadIdentity(
   }]);
 }
 
-export async function grantTokenCreator(
-  credential: GcpSetupCredential,
-  projectId: string,
-  serviceAccountEmail: string,
-) {
-  const resource = `${IAM_ORIGIN}/v1/projects/${encodeURIComponent(projectId)
-  }/serviceAccounts/${encodeURIComponent(serviceAccountEmail)}`;
-  const binding = {
-    role: "roles/iam.serviceAccountTokenCreator",
-    members: [`user:${credential.email}`],
-  };
-  await updateIamPolicy(credential, resource, [binding]);
-  return binding;
-}
-
 export async function grantCloudSqlRoles(
   credential: GcpSetupCredential,
   input: GcpCloudBootstrapInput,
@@ -562,49 +547,4 @@ export async function grantCloudSqlRoles(
     `${RESOURCE_MANAGER_ORIGIN}/v1/projects/${encodeURIComponent(input.projectId)}`,
     additions,
   );
-}
-
-export function bootstrapProjectBindings(
-  input: GcpCloudBootstrapInput,
-  serviceAccountEmail: string,
-  fingerprint: string,
-): IamBinding[] {
-  const target = `projects/${input.projectId}/instances/${input.instanceId}`;
-  const condition = {
-    title: `dopedb-bootstrap-${fingerprint}`,
-    description: "Temporary DopeDB database privilege bootstrap",
-    expression:
-      `resource.service == 'sqladmin.googleapis.com' && (resource.name == '${target}' || resource.name.startsWith('${target}/'))`,
-  };
-  return [
-    {
-      role: "roles/cloudsql.instanceUser",
-      members: [`serviceAccount:${serviceAccountEmail}`],
-      condition,
-    },
-    {
-      role: "roles/cloudsql.client",
-      members: [`serviceAccount:${serviceAccountEmail}`],
-      condition,
-    },
-  ];
-}
-
-export async function grantBootstrapProjectAccess(
-  credential: GcpSetupCredential,
-  input: GcpCloudBootstrapInput,
-  serviceAccountEmail: string,
-  fingerprint: string,
-) {
-  const bindings = bootstrapProjectBindings(
-    input,
-    serviceAccountEmail,
-    fingerprint,
-  );
-  await updateIamPolicy(
-    credential,
-    `${RESOURCE_MANAGER_ORIGIN}/v1/projects/${encodeURIComponent(input.projectId)}`,
-    bindings,
-  );
-  return bindings;
 }

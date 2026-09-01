@@ -204,7 +204,7 @@ export async function POST(request: Request, context: RouteContext) {
       || body.environmentClassification === "development"
     )
     || typeof body.approveProduction !== "boolean"
-    || typeof body.approveInstanceRestart !== "boolean"
+    || typeof body.approveIamAuthenticationChange !== "boolean"
     || typeof body.approveIamRoleGrant !== "boolean"
   ) {
     return jsonError("Invalid Google Cloud setup request", 400);
@@ -273,7 +273,7 @@ export async function POST(request: Request, context: RouteContext) {
         // read-only and decides whether the write principal can ever be leased.
         writeAccess: true,
         approveProduction: body.approveProduction,
-        approveInstanceRestart: body.approveInstanceRestart,
+        approveIamAuthenticationChange: body.approveIamAuthenticationChange,
       },
     });
     if (temporaryGrant) {

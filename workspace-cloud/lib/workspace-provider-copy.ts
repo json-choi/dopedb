@@ -70,8 +70,6 @@ const englishByKorean: Readonly<Record<string, string>> = {
     "The new Google Cloud service account has not propagated to Cloud SQL yet. Try again shortly.",
   "Cloud SQL Data API 설정 반영이 지연되고 있습니다. 잠시 뒤 다시 시도하세요.":
     "Cloud SQL Data API configuration is still propagating. Try again shortly.",
-  "Google Cloud IAM Credentials 권한 반영이 지연되고 있습니다. 잠시 뒤 다시 시도하세요.":
-    "Google Cloud IAM Credentials permissions are still propagating. Try again shortly.",
   "Cloud SQL IAM 데이터베이스 인증 반영이 지연되고 있습니다. 잠시 뒤 다시 시도하세요.":
     "Cloud SQL IAM database authentication is still propagating. Try again shortly.",
 };

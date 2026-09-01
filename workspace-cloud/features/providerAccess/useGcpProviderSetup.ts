@@ -48,7 +48,7 @@ export function useGcpProviderSetup({
     selectedGcpInstanceId,
     gcpEnvironmentClassification,
     gcpProductionApproved,
-    gcpRestartApproved,
+    gcpIamAuthenticationChangeApproved,
     gcpPermissionCheck,
     gcpIamRoleGrantApproved,
     mutation,
@@ -59,7 +59,9 @@ export function useGcpProviderSetup({
   const setSelectedGcpInstanceId = setField("selectedGcpInstanceId");
   const setGcpEnvironmentClassification = setField("gcpEnvironmentClassification");
   const setGcpProductionApproved = setField("gcpProductionApproved");
-  const setGcpRestartApproved = setField("gcpRestartApproved");
+  const setGcpIamAuthenticationChangeApproved = setField(
+    "gcpIamAuthenticationChangeApproved",
+  );
   const setGcpPermissionCheck = setField("gcpPermissionCheck");
   const setGcpIamRoleGrantApproved = setField("gcpIamRoleGrantApproved");
   const setGcpSetupError = setField("gcpSetupError");
@@ -233,7 +235,7 @@ export function useGcpProviderSetup({
     setGcpSetupInstances([]);
     setGcpEnvironmentClassification("");
     setGcpProductionApproved(false);
-    setGcpRestartApproved(false);
+    setGcpIamAuthenticationChangeApproved(false);
     setGcpPermissionCheck(null);
     setGcpIamRoleGrantApproved(false);
     if (!projectId) return;
@@ -250,7 +252,7 @@ export function useGcpProviderSetup({
     setSelectedGcpInstanceId(instanceId);
     setGcpEnvironmentClassification("");
     setGcpProductionApproved(false);
-    setGcpRestartApproved(false);
+    setGcpIamAuthenticationChangeApproved(false);
     setGcpIamRoleGrantApproved(false);
   }
 
@@ -267,7 +269,10 @@ export function useGcpProviderSetup({
         instance.production === true
         || (instance.production === "unknown" && gcpEnvironmentClassification === "production")
       ) && !gcpProductionApproved)
-      || (!instance.iamAuthenticationEnabled && !gcpRestartApproved)
+      || (
+        !instance.iamAuthenticationEnabled
+        && !gcpIamAuthenticationChangeApproved
+      )
       || !gcpPermissionCheck
       || gcpRecoveryTargetPending
       || gcpRecoveryTargetMissing
@@ -298,7 +303,8 @@ export function useGcpProviderSetup({
               ? gcpEnvironmentClassification
               : null,
             approveProduction: gcpProductionApproved,
-            approveInstanceRestart: gcpRestartApproved,
+            approveIamAuthenticationChange:
+              gcpIamAuthenticationChangeApproved,
             approveIamRoleGrant: gcpIamRoleGrantApproved,
             ...(gcpRecoveryTarget ? {
               repairIntegrationId: gcpRecoveryTarget.intent.integrationId,

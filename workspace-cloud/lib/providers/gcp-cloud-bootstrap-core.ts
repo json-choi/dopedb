@@ -27,7 +27,6 @@ export const SERVICE_USAGE_ORIGIN = "https://serviceusage.googleapis.com";
 export const SQL_ADMIN_ORIGIN = "https://sqladmin.googleapis.com/sql/v1beta4";
 export const REQUEST_TIMEOUT_MS = 30_000;
 export const OPERATION_TIMEOUT_MS = 210_000;
-export const TOKEN_CREATOR_PROPAGATION_TIMEOUT_MS = 180_000;
 export const CLOUD_SQL_IDENTITY_PROPAGATION_TIMEOUT_MS = 90_000;
 export const DATA_API_PROPAGATION_TIMEOUT_MS = 30_000;
 export const PROPAGATION_RETRY_INTERVAL_MS = 5_000;
@@ -101,6 +100,7 @@ export const GCP_SETUP_ROLE_REQUIREMENTS = [
     label: "Cloud SQL Admin",
     purpose: "IAM DB 인증과 전용 데이터베이스 사용자 구성",
     permissions: [
+      "cloudsql.instances.executeSql",
       "cloudsql.instances.update",
       "cloudsql.users.create",
       "cloudsql.users.delete",
@@ -118,7 +118,7 @@ export type GcpCloudBootstrapInput = {
   environmentClassification: "production" | "development" | null;
   writeAccess: boolean;
   approveProduction: boolean;
-  approveInstanceRestart: boolean;
+  approveIamAuthenticationChange: boolean;
 };
 
 export type GcpCloudBootstrapResult = {

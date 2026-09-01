@@ -152,10 +152,10 @@ export async function enableIamAuthentication(
 ) {
   const current = databaseFlag(details, engine);
   if (current.enabled) return false;
-  if (!input.approveInstanceRestart) {
+  if (!input.approveIamAuthenticationChange) {
     throw new ProviderRequestError(
       "gcpCloudSql",
-      "Approve the possible Cloud SQL restart before enabling IAM authentication",
+      "Approve the Cloud SQL IAM database authentication setting change before it is applied",
       409,
     );
   }
@@ -305,17 +305,267 @@ export async function ensureDatabaseUser(
   }
 }
 
+export type GcpDatabaseBootstrapUser = {
+  user: JsonObject;
+  created: boolean;
+  elevated: boolean;
+  engine: "postgres" | "mysql";
+};
+
+function databaseRoles(user: JsonObject) {
+  if (user.databaseRoles === undefined) return [];
+  if (
+    !Array.isArray(user.databaseRoles)
+    || user.databaseRoles.length > 100
+    || user.databaseRoles.some((role) => (
+      typeof role !== "string"
+      || !/^[A-Za-z_][A-Za-z0-9_]{0,62}$/.test(role)
+    ))
+  ) {
+    throw new ProviderRequestError(
+      "gcpCloudSql",
+      "Cloud SQL returned invalid database roles",
+      502,
+    );
+  }
+  return [...new Set(user.databaseRoles)].sort();
+}
+
+function bootstrapDatabaseUsername(
+  email: string,
+  engine: "postgres" | "mysql",
+) {
+  if (!/^[^@\s]{1,128}@[^@\s]{1,190}$/.test(email)) {
+    throw new ProviderRequestError(
+      "gcpCloudSql",
+      "Google Cloud setup account is invalid",
+      403,
+    );
+  }
+  return engine === "postgres" ? email : email.slice(0, email.indexOf("@"));
+}
+
+function findBootstrapDatabaseUser(
+  rows: unknown[],
+  email: string,
+  engine: "postgres" | "mysql",
+) {
+  const expectedName = bootstrapDatabaseUsername(email, engine).toLowerCase();
+  const normalizedEmail = email.toLowerCase();
+  const candidates = rows.flatMap((value) => (
+    value && typeof value === "object" && !Array.isArray(value)
+      ? [value as JsonObject]
+      : []
+  ));
+  const exact = candidates.find((row) => (
+    row.type === "CLOUD_IAM_USER"
+    && (typeof row.iamEmail === "string"
+      ? row.iamEmail.toLowerCase() === normalizedEmail
+      : typeof row.name === "string"
+        && row.name.toLowerCase() === expectedName)
+  ));
+  const collision = candidates.find((row) => (
+    row !== exact
+    && typeof row.name === "string"
+    && row.name.toLowerCase() === expectedName
+  ));
+  if (collision) {
+    throw new ProviderRequestError(
+      "gcpCloudSql",
+      "The setup account database user name is already in use",
+      409,
+    );
+  }
+  return exact ?? null;
+}
+
+async function listDatabaseUsers(
+  credential: GcpSetupCredential,
+  projectId: string,
+  instanceId: string,
+) {
+  const body = (await googleRequest(
+    credential,
+    `${SQL_ADMIN_ORIGIN}/projects/${encodeURIComponent(projectId)}/instances/${
+      encodeURIComponent(instanceId)
+    }/users`,
+  ))!;
+  return Array.isArray(body.items) ? body.items : [];
+}
+
+async function deleteDatabaseUser(
+  credential: GcpSetupCredential,
+  projectId: string,
+  instanceId: string,
+  user: JsonObject,
+) {
+  if (typeof user.name !== "string") return;
+  const query = new URLSearchParams({
+    name: user.name,
+    host: typeof user.host === "string" ? user.host : "",
+  });
+  const operation = (await googleRequest(
+    credential,
+    `${SQL_ADMIN_ORIGIN}/projects/${encodeURIComponent(projectId)}/instances/${
+      encodeURIComponent(instanceId)
+    }/users?${query}`,
+    { method: "DELETE" },
+  ))!;
+  await waitSqlOperation(credential, projectId, operation);
+}
+
+export async function prepareDatabaseBootstrapUser(
+  credential: GcpSetupCredential,
+  projectId: string,
+  instanceId: string,
+  engine: "postgres" | "mysql",
+): Promise<GcpDatabaseBootstrapUser> {
+  const rows = await listDatabaseUsers(credential, projectId, instanceId);
+  const existing = findBootstrapDatabaseUser(
+    rows,
+    credential.email,
+    engine,
+  );
+  if (existing) {
+    const originalRoles = databaseRoles(existing);
+    const elevated = !originalRoles.includes("cloudsqlsuperuser");
+    if (elevated) {
+      try {
+        await setDatabaseRoles(
+          credential,
+          projectId,
+          instanceId,
+          existing,
+          ["cloudsqlsuperuser"],
+        );
+      } catch (error) {
+        await restoreDatabaseBootstrapUser(
+          credential,
+          projectId,
+          instanceId,
+          { user: existing, created: false, elevated: true, engine },
+        ).catch(() => {
+          throw new ProviderRequestError(
+            "gcpCloudSql",
+            "Temporary Cloud SQL setup account cleanup failed",
+            409,
+          );
+        });
+        throw error;
+      }
+    }
+    return { user: existing, created: false, elevated, engine };
+  }
+
+  const operation = (await googleRequest(
+    credential,
+    `${SQL_ADMIN_ORIGIN}/projects/${encodeURIComponent(projectId)}/instances/${
+      encodeURIComponent(instanceId)
+    }/users`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        name: credential.email,
+        type: "CLOUD_IAM_USER",
+        databaseRoles: ["cloudsqlsuperuser"],
+      }),
+    },
+  ))!;
+  try {
+    await waitSqlOperation(credential, projectId, operation);
+    const created = findBootstrapDatabaseUser(
+      await listDatabaseUsers(credential, projectId, instanceId),
+      credential.email,
+      engine,
+    );
+    if (!created) {
+      throw new ProviderRequestError(
+        "gcpCloudSql",
+        "Cloud SQL did not create the temporary setup user",
+        502,
+      );
+    }
+    return {
+      user: created,
+      created: true,
+      elevated: true,
+      engine,
+    };
+  } catch (error) {
+    const created = findBootstrapDatabaseUser(
+      await listDatabaseUsers(credential, projectId, instanceId).catch(() => []),
+      credential.email,
+      engine,
+    );
+    if (created) {
+      await deleteDatabaseUser(
+        credential,
+        projectId,
+        instanceId,
+        created,
+      ).catch(() => {
+        throw new ProviderRequestError(
+          "gcpCloudSql",
+          "Temporary Cloud SQL setup account cleanup failed",
+          409,
+        );
+      });
+    }
+    throw error;
+  }
+}
+
+export async function restoreDatabaseBootstrapUser(
+  credential: GcpSetupCredential,
+  projectId: string,
+  instanceId: string,
+  bootstrap: GcpDatabaseBootstrapUser,
+) {
+  if (bootstrap.created) {
+    await deleteDatabaseUser(
+      credential,
+      projectId,
+      instanceId,
+      bootstrap.user,
+    );
+    return;
+  }
+  if (bootstrap.elevated) {
+    const current = findBootstrapDatabaseUser(
+      await listDatabaseUsers(credential, projectId, instanceId),
+      credential.email,
+      bootstrap.engine,
+    );
+    if (!current) return;
+    const roles = databaseRoles(current).filter(
+      (role) => role !== "cloudsqlsuperuser",
+    );
+    await setDatabaseRoles(
+      credential,
+      projectId,
+      instanceId,
+      current,
+      roles,
+      true,
+    );
+  }
+}
+
 export async function setDatabaseRoles(
   credential: GcpSetupCredential,
   projectId: string,
   instanceId: string,
   user: JsonObject,
   roles: string[],
+  revokeExistingRoles = false,
 ) {
+  const userType = user.type;
   if (
     typeof user.name !== "string"
-    || user.type !== "CLOUD_IAM_SERVICE_ACCOUNT"
-    || roles.length === 0
+    || (
+      userType !== "CLOUD_IAM_SERVICE_ACCOUNT"
+      && userType !== "CLOUD_IAM_USER"
+    )
     || roles.some((role) => !/^[A-Za-z_][A-Za-z0-9_]{0,62}$/.test(role))
   ) {
     throw new ProviderRequestError(
@@ -327,7 +577,7 @@ export async function setDatabaseRoles(
   const query = new URLSearchParams({
     name: user.name,
     host: typeof user.host === "string" ? user.host : "",
-    revokeExistingRoles: "false",
+    revokeExistingRoles: String(revokeExistingRoles),
   });
   for (const role of roles) query.append("databaseRoles", role);
   const operation = (await googleRequest(
@@ -338,7 +588,7 @@ export async function setDatabaseRoles(
       method: "PUT",
       body: JSON.stringify({
         name: user.name,
-        type: "CLOUD_IAM_SERVICE_ACCOUNT",
+        type: userType,
       }),
     },
   ))!;
