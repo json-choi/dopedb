@@ -441,6 +441,11 @@
       "appVersion": "0.3.91",
       "releaseRevision": 23,
       "packageDigest": "c04692f062b8060aec1051ce08a754f1d0007728e71c600fbbb1510cafb2e6e7"
+    },
+    {
+      "appVersion": "0.3.92",
+      "releaseRevision": 23,
+      "packageDigest": "c04692f062b8060aec1051ce08a754f1d0007728e71c600fbbb1510cafb2e6e7"
     }
   ]
 }
