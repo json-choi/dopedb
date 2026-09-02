@@ -337,8 +337,9 @@ separate hosting-log boundary.
 - The Vercel first-party relay does not persist raw analytics. The dedicated
   Cloudflare Worker persists the normalized v1 event only in analytics D1.
 - One-way rate-limit bucket keys are operational abuse-control data, not product
-  events. They use the shared 24-hour expiry eligibility and bounded background
-  cleanup; they must not be queried as funnel identity.
+  events. They use the shared 24-hour expiry eligibility and reclaim a bounded
+  oldest-first batch only while a rate-limited request already has PostgreSQL
+  active; they must not be queried as funnel identity.
 - Raw events in the EU-jurisdiction D1 database expire after 30 days. A daily
   bounded scheduled job refreshes aggregate rows and deletes up to 30,000 expired
   raw rows per run; operators must monitor that the oldest row remains inside the

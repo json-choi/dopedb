@@ -29,7 +29,10 @@ import {
   type ProductEventName,
 } from "./product-analytics";
 import { parseSharedAnalysisArticleCreate } from "./workspace-analysis-articles";
-import { workspaceSchedulerBoundedWakeAt } from "./workspace-background-scheduler";
+import {
+  workspaceSchedulerBoundedWakeAt,
+  workspaceSchedulerReceipt,
+} from "./workspace-background-scheduler";
 import {
   parseSharedConnection,
   publicConnection,
@@ -632,12 +635,15 @@ describe("Desktop control-plane contracts", () => {
   it("decodes the same strict sync, lease, and Analysis Article goldens as Rust", async () => {
     expect(fixture.schemaVersion).toBe(CONTROL_PLANE_CONTRACTS_SCHEMA_VERSION);
     const schedulerNow = new Date("2026-08-15T18:12:30Z");
-    expect(workspaceSchedulerBoundedWakeAt(null, schedulerNow).toISOString())
-      .toBe("2026-08-15T19:00:00.000Z");
-    expect(workspaceSchedulerBoundedWakeAt("2026-08-15T18:30:00Z", schedulerNow).toISOString())
+    expect(workspaceSchedulerBoundedWakeAt(null, schedulerNow)).toBeNull();
+    expect(workspaceSchedulerReceipt(null)).toEqual({
+      contractVersion: 2,
+      nextRunAt: null,
+    });
+    expect(workspaceSchedulerBoundedWakeAt("2026-08-15T18:30:00Z", schedulerNow)?.toISOString())
       .toBe("2026-08-15T18:30:00.000Z");
-    expect(workspaceSchedulerBoundedWakeAt("2026-08-15T22:00:00Z", schedulerNow).toISOString())
-      .toBe("2026-08-15T19:00:00.000Z");
+    expect(workspaceSchedulerBoundedWakeAt("2026-08-15T22:00:00Z", schedulerNow)?.toISOString())
+      .toBe("2026-08-15T22:00:00.000Z");
     for (const page of [
       fixture.workspaceSync.bootstrap,
       fixture.workspaceSync.incremental,

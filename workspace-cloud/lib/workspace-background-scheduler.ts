@@ -6,14 +6,13 @@ import { boundedJsonResponse } from "./bounded-json-response";
 import { neonSql } from "./db";
 import { env } from "./env";
 
-const CONTRACT_VERSION = "1";
+const CONTRACT_VERSION = "2";
 const KICK_TIMEOUT_MS = 5_000;
 const MAX_KICK_RESPONSE_BYTES = 1_024;
 const MIN_WAKE_DELAY_MS = 60_000;
-const IDLE_RECONCILIATION_MS = 60 * 60_000;
-const MAX_SCHEDULE_AHEAD_MS = 24 * 60 * 60_000;
+const MAX_SCHEDULE_AHEAD_MS = 366 * 24 * 60 * 60_000;
 
-export type WorkspaceBackgroundTask = "knowledge" | "maintenance";
+export type WorkspaceBackgroundTask = "credential" | "maintenance";
 
 function record(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -35,9 +34,10 @@ function checkedNotBefore(value: Date) {
 }
 
 /**
- * Best-effort producer wake-up. PostgreSQL has already committed the durable
- * work before this call; the Worker's one-hour reconciliation receipt repairs a
- * missed kick without making a user mutation depend on Cloudflare availability.
+ * Producer wake-up. PostgreSQL remains the durable work authority while D1
+ * stores only the earliest task-level due time. Security-sensitive producers
+ * must check the boolean result when the coordinator is enabled; retention
+ * producers may retry through their idempotent mutation path.
  */
 export async function kickWorkspaceBackgroundTask(input: {
   task: WorkspaceBackgroundTask;
@@ -71,46 +71,32 @@ export async function kickWorkspaceBackgroundTask(input: {
 }
 
 export function workspaceSchedulerBoundedWakeAt(candidate: unknown, now = new Date()) {
-  // Align idle reconciliation for every task to one wall-clock boundary so an
-  // empty system wakes Neon once, rather than once per independently completed
-  // task. A real due time remains earlier and wins below.
-  const idleReconciliationAt = Math.ceil(
-    (now.getTime() + MIN_WAKE_DELAY_MS) / IDLE_RECONCILIATION_MS,
-  ) * IDLE_RECONCILIATION_MS;
+  if (candidate === null || candidate === undefined) return null;
   const parsed = candidate instanceof Date
     ? candidate
     : typeof candidate === "string" || typeof candidate === "number"
       ? new Date(candidate)
       : null;
   const epoch = parsed?.valueOf();
-  const bounded = epoch !== undefined && Number.isFinite(epoch)
-    ? Math.min(Math.max(epoch, now.getTime() + MIN_WAKE_DELAY_MS), idleReconciliationAt)
-    : idleReconciliationAt;
-  return new Date(bounded);
+  if (epoch === undefined || !Number.isFinite(epoch)) {
+    throw new Error("Invalid workspace background due time");
+  }
+  return new Date(Math.min(
+    Math.max(epoch, now.getTime() + MIN_WAKE_DELAY_MS),
+    now.getTime() + MAX_SCHEDULE_AHEAD_MS,
+  ));
 }
 
-export async function nextKnowledgeBackgroundRunAt() {
+export async function nextCredentialBackgroundRunAt() {
   const rows = await neonSql.query(
     `SELECT min(CASE
-         WHEN job."state" = 'queued' THEN job."available_at"
-         ELSE job."lease_expires_at"
-       END) AS "nextRunAt"
-     FROM "workspace_control"."knowledge_source_sync_job" job
-     JOIN "workspace_control"."knowledge_source" source
-       ON source."organization_id" = job."organization_id"
-      AND source."id" = job."source_id"
-     JOIN "workspace_control"."knowledge_github_installation" installation
-       ON installation."organization_id" = source."organization_id"
-      AND installation."id" = source."github_installation_id"
-     WHERE job."state" IN ('queued', 'claimed')
-       AND job."attempt" < 20
-       AND source."provider" = 'github'
-       AND source."visibility" = 'shared_graph'
-       AND source."revoked_at" IS NULL
-       AND source."sync_state" IN ('pending', 'syncing')
-       AND source."commit_sha" = job."desired_commit_sha"
-       AND source."sync_revision" = job."source_sync_revision"
-       AND installation."status" = 'active'`,
+       WHEN lease."cleanup_claimed_at" IS NOT NULL
+         AND lease."cleanup_claimed_at" > now() - interval '2 minutes'
+         THEN lease."cleanup_claimed_at" + interval '2 minutes'
+       ELSE COALESCE(lease."cleanup_next_attempt_at", lease."expires_at")
+     END) AS "nextRunAt"
+     FROM "workspace_control"."workspace_credential_lease" lease
+     WHERE lease."revoked_at" IS NULL`,
   );
   return workspaceSchedulerBoundedWakeAt(rows[0]?.nextRunAt);
 }
@@ -120,15 +106,6 @@ export async function nextMaintenanceBackgroundRunAt() {
   const rows = await neonSql.query(
     `SELECT min(due."nextRunAt") AS "nextRunAt"
      FROM (
-       SELECT CASE
-         WHEN lease."cleanup_claimed_at" IS NOT NULL
-           AND lease."cleanup_claimed_at" > now() - interval '2 minutes'
-           THEN lease."cleanup_claimed_at" + interval '2 minutes'
-         ELSE COALESCE(lease."cleanup_next_attempt_at", lease."expires_at")
-       END AS "nextRunAt"
-       FROM "workspace_control"."workspace_credential_lease" lease
-       WHERE lease."revoked_at" IS NULL
-       UNION ALL
        SELECT CASE
          WHEN notification."claimed_at" IS NOT NULL
            AND notification."claimed_at" > now() - interval '2 minutes'
@@ -168,10 +145,10 @@ export function workspaceSchedulerRequest(request: Request) {
   return request.headers.get("x-dopedb-background-scheduler-contract") === CONTRACT_VERSION;
 }
 
-export function workspaceSchedulerReceipt(nextRunAt: Date) {
+export function workspaceSchedulerReceipt(nextRunAt: Date | null) {
   return {
-    contractVersion: 1 as const,
-    nextRunAt: nextRunAt.toISOString(),
+    contractVersion: 2 as const,
+    nextRunAt: nextRunAt?.toISOString() ?? null,
   };
 }
 

@@ -33,6 +33,7 @@ import {
   analysisBlockResultColumns,
   parseAnalysisArticleVersionPayload,
 } from "../../../../../../../../../../lib/workspace-analysis-articles";
+import { kickWorkspaceBackgroundTask } from "../../../../../../../../../../lib/workspace-background-scheduler";
 import { canonicalHash } from "../../../../../../../../../../lib/workspace-versioning";
 
 type RouteContext = {
@@ -157,6 +158,7 @@ export async function POST(request: Request, context: RouteContext) {
   if (!staged) {
     return jsonError("Analysis result staging authority changed or its budget was exceeded", 409);
   }
+  await kickWorkspaceBackgroundTask({ task: "maintenance", notBefore: expiresAt });
   return privateJson({
     blockId: staged.blockId,
     ordinal: staged.ordinal,

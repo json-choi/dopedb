@@ -9,7 +9,6 @@ import {
 } from "@/lib/knowledge/mutation-authority";
 import { knowledgeSource } from "@/lib/schema";
 import { authorizeWorkspace } from "@/lib/workspace-authorization";
-import { kickWorkspaceBackgroundTask } from "@/lib/workspace-background-scheduler";
 
 type RouteContext = { params: Promise<{ workspaceId: string; sourceId: string }> };
 
@@ -29,7 +28,6 @@ export async function POST(request: Request, context: RouteContext) {
     authority,
   });
   if (!queued) return jsonError("GitHub Knowledge source not found", 404);
-  await kickWorkspaceBackgroundTask({ task: "knowledge" });
   return privateJson({ queued: true, ...queued }, { status: 202 });
 }
 

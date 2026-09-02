@@ -1,17 +1,20 @@
-const CONTRACT_VERSION = "1";
+const CONTRACT_VERSION = "2";
 const MAX_KICK_BODY_BYTES = 1_024;
 const MAX_UPSTREAM_BODY_BYTES = 16 * 1_024;
-const MAX_NOT_BEFORE_MS = 24 * 60 * 60_000;
+const MAX_NOT_BEFORE_MS = 366 * 24 * 60 * 60_000;
 const PAST_SKEW_MS = 5 * 60_000;
 const LEASE_MS = 90_000;
 const UPSTREAM_TIMEOUT_MS = 55_000;
 const MIN_RETRY_MS = 60_000;
 const MAX_RETRY_MS = 15 * 60_000;
+const CIRCUIT_BREAKER_FAILURES = 5;
+const CIRCUIT_BREAKER_RETRY_MS = 6 * 60 * 60_000;
+const DORMANT_DUE_AT_MS = Date.UTC(3000, 0, 1);
 const RFC3339 = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?(Z|([+-])(\d{2}):(\d{2}))$/;
 
 const TASKS = {
-  knowledge: "/api/internal/cron/knowledge",
-  maintenance: "/api/internal/cron/credential-leases",
+  credential: "/api/internal/cron/credential-leases",
+  maintenance: "/api/internal/cron/maintenance",
 } as const;
 
 type Task = keyof typeof TASKS;
@@ -183,7 +186,8 @@ export function parseKick(value: unknown, nowMs = Date.now()) {
 
 export function parseSchedulerReceipt(value: unknown, nowMs = Date.now()) {
   if (!record(value) || !exact(value.scheduler, ["contractVersion", "nextRunAt"])) return null;
-  if (value.scheduler.contractVersion !== 1) return null;
+  if (value.scheduler.contractVersion !== 2) return null;
+  if (value.scheduler.nextRunAt === null) return DORMANT_DUE_AT_MS;
   const nextRunAtMs = validRfc3339(value.scheduler.nextRunAt);
   if (
     nextRunAtMs === null
@@ -230,6 +234,8 @@ async function kick(request: Request, env: Env) {
       ON CONFLICT(task) DO UPDATE SET
         due_at_ms = min(workspace_background_task_v1.due_at_ms, excluded.due_at_ms),
         generation = workspace_background_task_v1.generation + 1,
+        failure_count = 0,
+        last_error_kind = NULL,
         updated_at_ms = excluded.updated_at_ms
     `).bind(parsed.task, parsed.dueAtMs, Date.now()).run();
     return response({ accepted: true }, 202);
@@ -250,7 +256,11 @@ async function claimTask(env: Env, task: Task, nowMs: number): Promise<ClaimedTa
 }
 
 function retryDelay(failureCount: number) {
-  return Math.min(MIN_RETRY_MS * (2 ** Math.min(Math.max(failureCount, 0), 4)), MAX_RETRY_MS);
+  if (failureCount >= CIRCUIT_BREAKER_FAILURES) return CIRCUIT_BREAKER_RETRY_MS;
+  return Math.min(
+    MIN_RETRY_MS * (2 ** Math.max(failureCount - 1, 0)),
+    MAX_RETRY_MS,
+  );
 }
 
 function transportDiagnostic(error: unknown, aborted: boolean) {
@@ -323,7 +333,7 @@ async function executeTask(env: Env, task: Task, nowMs: number) {
   }
   if (!claim) return;
   let errorKind: "transport" | "response" | "receipt" | null = null;
-  let nextRunAtMs = nowMs + retryDelay(claim.failure_count);
+  let nextRunAtMs = nowMs + retryDelay(claim.failure_count + 1);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
   let transportKind: string | null = null;

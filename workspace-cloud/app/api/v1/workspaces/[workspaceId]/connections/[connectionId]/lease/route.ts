@@ -9,6 +9,7 @@ import {
   parseManagedLeaseRequest,
 } from "../../../../../../../../lib/control-plane-contracts";
 import { db } from "../../../../../../../../lib/db";
+import { env } from "../../../../../../../../lib/env";
 import {
   boundedJsonBody,
   isUuid,
@@ -352,10 +353,19 @@ export async function POST(request: Request, context: RouteContext) {
       });
       return jsonError("Workspace database authority changed. Retry with current access.", 409);
     }
-    await kickWorkspaceBackgroundTask({
-      task: "maintenance",
+    const cleanupScheduled = await kickWorkspaceBackgroundTask({
+      task: "credential",
       notBefore: new Date(lease.expiresAt),
     });
+    if (env.workspaceBackgroundSchedulerEnabled() && !cleanupScheduled) {
+      await revokeActiveLeases({
+        organizationId: workspaceId,
+        leaseId: lease.leaseId,
+        userId: authorization.session.user.id,
+        connectionId,
+      });
+      return jsonError("Managed credential cleanup could not be scheduled. Retry shortly.", 503);
+    }
     return privateJson(managedLeaseResponse({
       lease: {
         id: lease.leaseId,

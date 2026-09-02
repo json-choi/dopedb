@@ -9,6 +9,7 @@ import {
   workspaceProviderResource,
 } from "../schema";
 import { revocationGateLockKey } from "../revocation-gates";
+import { kickWorkspaceBackgroundTask } from "../workspace-background-scheduler";
 import { discoveredProviderResource } from "./domain";
 
 type ProviderDiscoveryReceiptRow = {
@@ -155,7 +156,14 @@ export async function recordProviderDiscoveryReceipt(input: {
     SELECT "id", "expiresAt" FROM issued
     LIMIT 1
   `);
-  return providerDiscoveryReceiptRow(result.rows[0]);
+  const receipt = providerDiscoveryReceiptRow(result.rows[0]);
+  if (receipt) {
+    await kickWorkspaceBackgroundTask({
+      task: "maintenance",
+      notBefore: receipt.expiresAt,
+    });
+  }
+  return receipt;
 }
 
 // External discovery may take seconds. Re-check the exact live principal and

@@ -26,7 +26,6 @@ import {
   knowledgeSource,
 } from "@/lib/schema";
 import { authorizeWorkspace } from "@/lib/workspace-authorization";
-import { kickWorkspaceBackgroundTask } from "@/lib/workspace-background-scheduler";
 
 type RouteContext = { params: Promise<{ workspaceId: string }> };
 
@@ -189,7 +188,6 @@ export async function POST(request: Request, context: RouteContext) {
         authority,
       });
       if (!jobId) return jsonError("Knowledge source authority changed", 409);
-      await kickWorkspaceBackgroundTask({ task: "knowledge" });
     }
     return privateJson({ source }, { status: 201 });
   } catch {

@@ -9,7 +9,7 @@ import { rateLimit } from "./schema";
 import { canonicalHash } from "./workspace-versioning";
 
 const DEFAULT_RETENTION_MS = 24 * 60 * 60 * 1_000;
-const MAX_CLEANUP_ROWS = 1_000;
+const OPPORTUNISTIC_CLEANUP_ROWS = 16;
 
 export function forwardedClientKey(headers: Pick<Headers, "get">) {
   const forwarded = headers.get("x-forwarded-for")?.split(",")[0]?.trim()
@@ -47,55 +47,33 @@ export async function consumeRateLimit(input: {
   }
   // A fixed-window bucket must encode the window itself. Reusing one row while
   // moving `last_request` on every hit turns low steady traffic into an eternal
-  // lockout because the reset condition is never reached. Windowed keys let the
-  // next interval start independently; bounded retention removes old buckets.
+  // lockout because the reset condition is never reached. Reclaim a tiny,
+  // oldest-first batch inside this same already-active database statement so
+  // rate-limit hygiene never needs an idle background wake-up.
   const windowStartedAt = Math.floor(now / windowMs) * windowMs;
   const key = `${input.namespace}:${input.discriminator}:${windowStartedAt}`;
+  const cutoff = now - retentionMs;
   const result = await db.execute<{ value: number }>(sql`
-    INSERT INTO ${rateLimit} ("id", "key", "count", "last_request")
-    VALUES (${crypto.randomUUID()}, ${key}, ${cost}, ${now})
-    ON CONFLICT ("key") DO UPDATE SET
-      "count" = ${rateLimit.count} + ${cost},
-      "last_request" = ${now}
-    RETURNING "count" AS "value"
-  `);
-  return Number(result.rows[0]?.value ?? Number.POSITIVE_INFINITY) <= input.limit;
-}
-
-/**
- * Retention is background maintenance, not part of the request hot path. Delete a
- * bounded oldest-first batch so an accumulated table can never turn one public
- * page request or one cron tick into an unbounded write transaction.
- */
-export async function cleanupExpiredRateLimits(input?: {
-  retentionMs?: number;
-  limit?: number;
-}) {
-  const retentionMs = input?.retentionMs ?? DEFAULT_RETENTION_MS;
-  const limit = input?.limit ?? MAX_CLEANUP_ROWS;
-  if (
-    !Number.isSafeInteger(retentionMs)
-    || retentionMs < 60_000
-    || !Number.isSafeInteger(limit)
-    || limit < 1
-    || limit > MAX_CLEANUP_ROWS
-  ) {
-    throw new Error("Invalid rate-limit cleanup boundary");
-  }
-  const cutoff = Date.now() - retentionMs;
-  const result = await db.execute<{ id: string }>(sql`
     WITH expired AS MATERIALIZED (
       SELECT ${rateLimit.id}
       FROM ${rateLimit}
       WHERE ${rateLimit.lastRequest} < ${cutoff}
       ORDER BY ${rateLimit.lastRequest} ASC, ${rateLimit.id} ASC
-      LIMIT ${limit}
+      LIMIT ${OPPORTUNISTIC_CLEANUP_ROWS}
       FOR UPDATE SKIP LOCKED
+    ), deleted AS (
+      DELETE FROM ${rateLimit}
+      USING expired
+      WHERE ${rateLimit.id} = expired."id"
+    ), consumed AS (
+      INSERT INTO ${rateLimit} ("id", "key", "count", "last_request")
+      VALUES (${crypto.randomUUID()}, ${key}, ${cost}, ${now})
+      ON CONFLICT ("key") DO UPDATE SET
+        "count" = ${rateLimit.count} + ${cost},
+        "last_request" = ${now}
+      RETURNING "count" AS "value"
     )
-    DELETE FROM ${rateLimit}
-    USING expired
-    WHERE ${rateLimit.id} = expired."id"
-    RETURNING ${rateLimit.id} AS "id"
+    SELECT "value" FROM consumed
   `);
-  return result.rows.length;
+  return Number(result.rows[0]?.value ?? Number.POSITIVE_INFINITY) <= input.limit;
 }

@@ -41,6 +41,7 @@ import {
   analysisBlockResultColumns,
   parseAnalysisArticleVersionPayload,
 } from "../../../../../../../../../lib/workspace-analysis-articles";
+import { kickWorkspaceBackgroundTask } from "../../../../../../../../../lib/workspace-background-scheduler";
 import { hasWorkspaceCapability } from "../../../../../../../../../lib/workspace-permissions";
 import { canonicalHash } from "../../../../../../../../../lib/workspace-versioning";
 
@@ -308,6 +309,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         payloadHash: String(staged.payloadHash),
       });
     }
+    await kickWorkspaceBackgroundTask({ task: "maintenance", notBefore: expiresAt });
     fragmentManifest = stagedManifest;
   }
   if (fragmentManifest.length > 0 && !mayStoreSharedResults) {

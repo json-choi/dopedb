@@ -23,12 +23,12 @@ host. Before removing an origin from that allowlist, disconnect its workspace
 integrations and let all durable lease revocations complete; removing it first
 deliberately makes future broker calls fail closed. Neon and GCP Cloud SQL do not add application
 environment secrets. Set a separate random `CRON_SECRET` for the authenticated
-credential-cleanup and Project Knowledge routes. Background work is coordinated by
-the separate `workspace-scheduler-cloudflare/` Worker: D1 holds only the two next-run
-timestamps, while durable jobs, leases, authority, and audit state remain in
-PostgreSQL. Event producers move a task earlier and an hourly receipt repairs a missed
-kick. Do not add an independent Vercel cron: polling PostgreSQL every minute prevents
-Neon from suspending even when there is no work. Register this PlanetScale callback:
+credential-cleanup and retention routes. Background work is coordinated by the
+separate `workspace-scheduler-cloudflare/` Worker: D1 holds only the credential and
+maintenance due times, while leases, authority, and audit state remain in PostgreSQL.
+Event producers record an exact due time; a null receipt leaves the task dormant, so
+an idle workspace makes no periodic Neon query. Do not add an independent Vercel cron:
+polling PostgreSQL prevents Neon from suspending. Register this PlanetScale callback:
 
 ```text
 http://localhost:3000/api/v1/providers/planet-scale/callback
@@ -136,12 +136,12 @@ session start, so a branch move makes an old session fail closed rather than sil
 changing its code view.
 
 `KNOWLEDGE_GRAPH_BUILDS_ENABLED=0` is the fail-closed production default. While it is
-off, webhook pushes advance only the source's pinned commit and the Knowledge cron does
-not claim graph jobs. Migration 0054 supersedes unfinished graph jobs and removes their
-staging rows while preserving every previously activated graph/head. The older bounded
-manifest, index, and activation pipeline remains behind the explicit flag for a later
-paid/experimental evaluation; enabling it is not part of the free-source-browsing
-contract.
+off, webhook pushes advance only the source's pinned commit and no recurring Knowledge
+task exists. Migration 0054 supersedes unfinished graph jobs and removes their staging
+rows while preserving every previously activated graph/head. The older bounded manifest,
+index, and activation pipeline remains dormant for a later paid/experimental evaluation;
+reactivation requires an explicit scheduler design and is not part of the
+free-source-browsing contract.
 
 Local Folder remains strictly device-local because the cloud cannot observe an
 offline path. Desktop indexes and watches it locally; the hosted source inventory and
@@ -504,11 +504,12 @@ then fail closed. The matching Owner may still open the lifecycle boundary and c
 before the fixed seven-day deadline. Cancellation resumes only member markers written
 by that exact schedule and is idempotent after a lost response.
 
-The authenticated cron hard-purges deleted backup tombstones after seven days and
-processes due workspace deletions in bounded batches. Final workspace purge is one
-database transaction that rechecks the receipt, deadline, live credentials, Provider
-state, rotations, and revocation claims before removing backups, wrapped data keys,
-and the organization. It leaves only a payload-free receipt containing opaque ids,
+The event-driven authenticated maintenance route hard-purges deleted backup tombstones
+after seven days and processes due workspace deletions in bounded batches. Final
+workspace purge is one database transaction that rechecks the receipt, deadline,
+live credentials, Provider state, rotations, and revocation claims before removing
+backups, wrapped data keys, and the organization. It leaves only a payload-free receipt
+containing opaque ids,
 timestamps, actor id when the account still exists, and terminal status. The SQL purge
 function is not executable by `PUBLIC`; there is no browser endpoint for immediate
 hard deletion.

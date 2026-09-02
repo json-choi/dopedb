@@ -11,7 +11,6 @@ import {
   knowledgeGithubInstallation,
   knowledgeSource,
 } from "@/lib/schema";
-import { kickWorkspaceBackgroundTask } from "@/lib/workspace-background-scheduler";
 
 const MAX_WEBHOOK_BYTES = 2 * 1024 * 1024;
 const MAX_CHANGED_FILES = 10_000;
@@ -141,7 +140,6 @@ export async function POST(request: Request) {
   if (installations.length === 0) return new Response(null, { status: 202 });
   const graphBuildsEnabled = env.knowledgeGraphBuildsEnabled();
   const installationIds = installations.map((installation) => installation.id);
-  let shouldKick = false;
 
   if (event === "push") {
     const repositoryPayload = payload.repository;
@@ -176,7 +174,7 @@ export async function POST(request: Request) {
     ));
     if (graphBuildsEnabled) {
       for (const source of sources) {
-        const recorded = await recordGithubKnowledgePush({
+        await recordGithubKnowledgePush({
           organizationId: source.organizationId,
           sourceId: source.id,
           deliveryId,
@@ -184,7 +182,6 @@ export async function POST(request: Request) {
           afterCommitSha: after,
           changedFiles: files,
         });
-        shouldKick = Boolean(recorded?.jobId) || shouldKick;
       }
     } else {
       for (let offset = 0; offset < sources.length; offset += RAW_SOURCE_REVISION_BATCH) {
@@ -238,8 +235,7 @@ export async function POST(request: Request) {
           commitSha: knowledgeSource.commitSha,
         });
         if (graphBuildsEnabled) {
-          const queued = await requeueSources(sources);
-          shouldKick = queued || shouldKick;
+          await requeueSources(sources);
         }
       }
     }
@@ -269,8 +265,7 @@ export async function POST(request: Request) {
         commitSha: knowledgeSource.commitSha,
       });
       if (action === "added" && graphBuildsEnabled) {
-        const queued = await requeueSources(sources);
-        shouldKick = queued || shouldKick;
+        await requeueSources(sources);
       }
     }
   } else if (event === "repository") {
@@ -299,12 +294,10 @@ export async function POST(request: Request) {
           commitSha: knowledgeSource.commitSha,
         });
         if (available && graphBuildsEnabled) {
-          const queued = await requeueSources(sources);
-          shouldKick = queued || shouldKick;
+          await requeueSources(sources);
         }
       }
     }
   }
-  if (shouldKick) await kickWorkspaceBackgroundTask({ task: "knowledge" });
   return new Response(null, { status: 202 });
 }

@@ -294,6 +294,7 @@ export function collectWorkspaceCloudHttpDiagnostics({ lineCount, read, relative
     diagnostics.push("workspace-cloud/vercel.json: PostgreSQL background work must not regain an independent Vercel cron");
   }
   for (const token of [
+    'const CONTRACT_VERSION = "2"',
     "env.workspaceBackgroundSchedulerEnabled()",
     "env.workspaceBackgroundSchedulerUrl()",
     "env.workspaceBackgroundSchedulerToken()",
@@ -302,17 +303,21 @@ export function collectWorkspaceCloudHttpDiagnostics({ lineCount, read, relative
     "boundedJsonResponse(response, MAX_KICK_RESPONSE_BYTES)",
     'redirect: "error"',
     "AbortSignal.timeout(KICK_TIMEOUT_MS)",
-    "nextKnowledgeBackgroundRunAt",
+    "nextCredentialBackgroundRunAt",
     "nextMaintenanceBackgroundRunAt",
-    "idleReconciliationAt = Math.ceil(",
+    "nextRunAt: nextRunAt?.toISOString() ?? null",
   ]) {
     if (!schedulerServiceSource.includes(token)) {
       diagnostics.push(`${workspaceSchedulerService}: background scheduler boundary is missing ${token}`);
     }
   }
+  if (schedulerServiceSource.includes("IDLE_RECONCILIATION_MS")) {
+    diagnostics.push(`${workspaceSchedulerService}: idle Neon reconciliation must remain removed`);
+  }
   for (const token of [
-    'knowledge: "/api/internal/cron/knowledge"',
-    'maintenance: "/api/internal/cron/credential-leases"',
+    'const CONTRACT_VERSION = "2"',
+    'credential: "/api/internal/cron/credential-leases"',
+    'maintenance: "/api/internal/cron/maintenance"',
     "MAX_KICK_BODY_BYTES = 1_024",
     "MAX_UPSTREAM_BODY_BYTES = 16 * 1_024",
     "new AbortController()",
@@ -323,6 +328,10 @@ export function collectWorkspaceCloudHttpDiagnostics({ lineCount, read, relative
     "redirectDiagnostic(upstream, expectedUrl)",
     "due_at_ms = min(workspace_background_task_v1.due_at_ms, excluded.due_at_ms)",
     "generation = workspace_background_task_v1.generation + 1",
+    "failure_count = 0",
+    "CIRCUIT_BREAKER_FAILURES",
+    "CIRCUIT_BREAKER_RETRY_MS",
+    "value.scheduler.nextRunAt === null",
     "WHERE task = ? AND generation = ? AND lease_token = ?",
     'hostname !== "app.dopedb.dev"',
     'upstream.headers.get("x-dopedb-background-scheduler-contract")',
@@ -330,6 +339,9 @@ export function collectWorkspaceCloudHttpDiagnostics({ lineCount, read, relative
     if (!schedulerWorkerSource.includes(token)) {
       diagnostics.push(`${workspaceSchedulerWorker}: scheduler Worker boundary is missing ${token}`);
     }
+  }
+  if (schedulerWorkerSource.includes('/api/internal/cron/knowledge')) {
+    diagnostics.push(`${workspaceSchedulerWorker}: dormant Knowledge work must not have a recurring scheduler task`);
   }
   if (/\b(?:workspaceId|organizationId|sourceId|memberId)\b/.test(schedulerWorkerSource)) {
     diagnostics.push(`${workspaceSchedulerWorker}: scheduler D1 must not receive tenant or resource identities`);
@@ -341,8 +353,8 @@ export function collectWorkspaceCloudHttpDiagnostics({ lineCount, read, relative
     diagnostics.push("workspace-cloud/lib/env.ts: background scheduler must use only the dedicated Cloudflare Worker");
   }
   for (const route of [
-    "workspace-cloud/app/api/internal/cron/knowledge/route.ts",
     "workspace-cloud/app/api/internal/cron/credential-leases/route.ts",
+    "workspace-cloud/app/api/internal/cron/maintenance/route.ts",
   ]) {
     const source = read(route);
     for (const token of [
@@ -356,12 +368,45 @@ export function collectWorkspaceCloudHttpDiagnostics({ lineCount, read, relative
       }
     }
   }
-  if (!read("workspace-cloud/app/api/internal/cron/knowledge/route.ts").includes(
-    "processCodeIndexQueue({ maxSteps: 10, deadlineMs: 40_000 })",
-  )) {
-    diagnostics.push(
-      "workspace-cloud Knowledge scheduler must consume multiple bounded checkpoints per wake-up",
-    );
+  for (const [producer, tokens] of [
+    [
+      "workspace-cloud/app/api/v1/workspaces/[workspaceId]/connections/[connectionId]/lease/route.ts",
+      ['task: "credential"', "workspaceBackgroundSchedulerEnabled() && !cleanupScheduled"],
+    ],
+    [
+      "workspace-cloud/lib/provider-integrations/discovery-receipts.ts",
+      ['task: "maintenance"', "notBefore: receipt.expiresAt"],
+    ],
+    [
+      "workspace-cloud/lib/provider-integrations/lease-cleanup.ts",
+      ['task: "credential"', "result.deferred > 0"],
+    ],
+    [
+      "workspace-cloud/app/api/v1/workspaces/[workspaceId]/analyses/[articleId]/runs/[runId]/fragments/route.ts",
+      ['task: "maintenance"', "notBefore: expiresAt"],
+    ],
+    [
+      "workspace-cloud/app/api/v1/workspaces/[workspaceId]/analyses/[articleId]/runs/[runId]/route.ts",
+      ['task: "maintenance"', "notBefore: expiresAt"],
+    ],
+    [
+      "workspace-cloud/app/api/v1/workspaces/[workspaceId]/backups/[backupId]/route.ts",
+      ['task: "maintenance"', "notBefore: purgeAfter"],
+    ],
+    [
+      "workspace-cloud/app/api/v1/workspaces/[workspaceId]/lifecycle/route.ts",
+      ['task: "maintenance"', "notBefore: new Date(status.purgeAfter)"],
+    ],
+  ]) {
+    const source = read(producer);
+    for (const token of tokens) {
+      if (!source.includes(token)) {
+        diagnostics.push(`${producer}: event-driven scheduler producer is missing ${token}`);
+      }
+    }
+  }
+  if (read("workspace-cloud/lib/rate-limit.ts").includes("cleanupExpiredRateLimits")) {
+    diagnostics.push("workspace-cloud rate-limit retention must stay on the already-active request path");
   }
 
   const routeImportCounts = { db: 0, drizzle: 0, schema: 0 };

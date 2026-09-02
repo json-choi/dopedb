@@ -15,6 +15,7 @@ import {
   workspaceLifecycleStatus,
 } from "../../../../../../lib/workspace-lifecycle";
 import { authorizeWorkspaceLifecycle } from "../../../../../../lib/workspace-authorization";
+import { kickWorkspaceBackgroundTask } from "../../../../../../lib/workspace-background-scheduler";
 
 type RouteContext = { params: Promise<{ workspaceId: string }> };
 
@@ -97,6 +98,19 @@ export async function POST(request: Request, context: RouteContext) {
         : "Workspace deletion can no longer be cancelled",
       status,
     }, { status: 409 });
+  }
+  if (action === "schedule_deletion" && status?.purgeAfter) {
+    const scheduled = await kickWorkspaceBackgroundTask({
+      task: "maintenance",
+      notBefore: new Date(status.purgeAfter),
+    });
+    if (env.workspaceBackgroundSchedulerEnabled() && !scheduled) {
+      return privateJson({
+        error: "Workspace deletion was recorded, but retention cleanup could not be scheduled. Retry this request.",
+        result,
+        status,
+      }, { status: 503 });
+    }
   }
   return privateJson({ result, status });
 }

@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import worker, { __test, parseKick, parseSchedulerReceipt } from "./index";
 
 type SchedulerRow = {
-  task: "knowledge" | "maintenance";
+  task: "credential" | "maintenance";
   dueAtMs: number;
   leaseUntilMs: number;
   leaseToken: string | null;
@@ -44,6 +44,7 @@ function fakeDatabase(row: SchedulerRow) {
           if (query.includes("INSERT INTO workspace_background_task_v1")) {
             row.dueAtMs = Math.min(row.dueAtMs, Number(values[1]));
             row.generation += 1;
+            row.failureCount = 0;
             return { meta: { changes: 1 } };
           }
           if (query.includes("WHERE task = ? AND generation = ?")) {
@@ -80,11 +81,11 @@ describe("Cloudflare workspace scheduler contract", () => {
   it("accepts only bounded closed kicks and a closed scheduler receipt", async () => {
     const now = Date.parse("2026-08-15T00:00:00Z");
     expect(parseKick({
-      task: "knowledge",
+      task: "credential",
       notBefore: "2026-08-15T00:00:30Z",
-    }, now)).toEqual({ task: "knowledge", dueAtMs: now + 30_000 });
+    }, now)).toEqual({ task: "credential", dueAtMs: now + 30_000 });
     expect(parseKick({
-      task: "knowledge",
+      task: "credential",
       notBefore: "2026-08-15T00:00:30Z",
       workspaceId: crypto.randomUUID(),
     }, now)).toBeNull();
@@ -94,15 +95,28 @@ describe("Cloudflare workspace scheduler contract", () => {
     }, now)).toBeNull();
     expect(parseKick({
       task: "maintenance",
-      notBefore: "2026-08-16T00:00:01Z",
+      notBefore: "2027-08-15T00:00:00Z",
+    }, now)).toEqual({
+      task: "maintenance",
+      dueAtMs: Date.parse("2027-08-15T00:00:00Z"),
+    });
+    expect(parseKick({
+      task: "maintenance",
+      notBefore: "2027-08-17T00:00:01Z",
     }, now)).toBeNull();
     expect(parseSchedulerReceipt({
-      scheduler: { contractVersion: 1, nextRunAt: "2026-08-15T01:00:00Z" },
+      scheduler: { contractVersion: 2, nextRunAt: "2026-08-15T01:00:00Z" },
       ok: true,
     }, now)).toBe(now + 60 * 60_000);
     expect(parseSchedulerReceipt({
+      scheduler: { contractVersion: 2, nextRunAt: null },
+    }, now)).toBe(Date.UTC(3000, 0, 1));
+    expect(parseSchedulerReceipt({
+      scheduler: { contractVersion: 1, nextRunAt: null },
+    }, now)).toBeNull();
+    expect(parseSchedulerReceipt({
       scheduler: {
-        contractVersion: 1,
+        contractVersion: 2,
         nextRunAt: "2026-08-15T01:00:00Z",
         sourceId: crypto.randomUUID(),
       },
@@ -125,7 +139,7 @@ describe("Cloudflare workspace scheduler contract", () => {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          "x-dopedb-background-scheduler-contract": "1",
+          "x-dopedb-background-scheduler-contract": "2",
           "x-dopedb-background-token": token,
         },
         body,
@@ -148,7 +162,7 @@ describe("Cloudflare workspace scheduler contract", () => {
   it("preserves a concurrent producer kick instead of overwriting it with an idle receipt", async () => {
     const now = Date.parse("2026-08-15T00:00:00Z");
     const row: SchedulerRow = {
-      task: "knowledge",
+      task: "credential",
       dueAtMs: now,
       leaseUntilMs: 0,
       leaseToken: null,
@@ -170,11 +184,11 @@ describe("Cloudflare workspace scheduler contract", () => {
           method: "POST",
           headers: {
             "content-type": "application/json",
-            "x-dopedb-background-scheduler-contract": "1",
+            "x-dopedb-background-scheduler-contract": "2",
             "x-dopedb-background-token": "a".repeat(64),
           },
           body: JSON.stringify({
-            task: "knowledge",
+            task: "credential",
             notBefore: "2026-08-15T00:00:30Z",
           }),
         },
@@ -184,15 +198,15 @@ describe("Cloudflare workspace scheduler contract", () => {
         {
           ok: true,
           scheduler: {
-            contractVersion: 1,
-            nextRunAt: "2026-08-15T01:00:00Z",
+            contractVersion: 2,
+            nextRunAt: null,
           },
         },
-        { headers: { "x-dopedb-background-scheduler-contract": "1" } },
+        { headers: { "x-dopedb-background-scheduler-contract": "2" } },
       );
     }));
 
-    await __test.executeTask(env as never, "knowledge", now);
+    await __test.executeTask(env as never, "credential", now);
     expect(row.dueAtMs).toBe(now);
     expect(row.leaseUntilMs).toBe(0);
     expect(row.leaseToken).toBeNull();
@@ -232,6 +246,41 @@ describe("Cloudflare workspace scheduler contract", () => {
     expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ redirect: "manual" });
     expect(row.failureCount).toBe(1);
     expect(row.dueAtMs).toBe(now + 60_000);
+
+    row.dueAtMs = now;
+    row.failureCount = 4;
+    await __test.executeTask({
+      SCHEDULER_DB: fakeDatabase(row),
+      KICK_TOKEN: "a".repeat(64),
+      WORKSPACE_CRON_SECRET: "b".repeat(64),
+      WORKSPACE_ORIGIN: "https://app.dopedb.dev",
+    } as never, "maintenance", now);
+    expect(row.failureCount).toBe(5);
+    expect(row.dueAtMs).toBe(now + 6 * 60 * 60_000);
+
+    const kicked = await worker.fetch(new Request(
+      "https://dopedb-workspace-scheduler.test.workers.dev/v1/kick",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-dopedb-background-scheduler-contract": "2",
+          "x-dopedb-background-token": "a".repeat(64),
+        },
+        body: JSON.stringify({
+          task: "maintenance",
+          notBefore: "2026-08-15T00:00:30Z",
+        }),
+      },
+    ), {
+      SCHEDULER_DB: fakeDatabase(row),
+      KICK_TOKEN: "a".repeat(64),
+      WORKSPACE_CRON_SECRET: "b".repeat(64),
+      WORKSPACE_ORIGIN: "https://app.dopedb.dev",
+    } as never);
+    expect(kicked.status).toBe(202);
+    expect(row.failureCount).toBe(0);
+    expect(row.dueAtMs).toBe(now + 30_000);
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });

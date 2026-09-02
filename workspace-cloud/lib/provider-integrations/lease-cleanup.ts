@@ -40,6 +40,7 @@ import {
   neonCredential,
   vaultCredential,
 } from "./integration";
+import { kickWorkspaceBackgroundTask } from "../workspace-background-scheduler";
 
 type LeaseCleanupRow = {
   id: string;
@@ -393,7 +394,13 @@ export async function revokeActiveLeases(
     )
     .where(and(...predicates))
     .orderBy(asc(workspaceCredentialLease.expiresAt));
-  return revokeLeaseRows(leases);
+  const result = await revokeLeaseRows(leases);
+  if (result.deferred > 0) {
+    // A synchronous revoke can be deferred until provider expiry or retry. Wake
+    // the credential-only task once; its receipt records the exact next due time.
+    await kickWorkspaceBackgroundTask({ task: "credential" });
+  }
+  return result;
 }
 
 type ClaimedLeaseRow = {
