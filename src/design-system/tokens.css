@@ -16,13 +16,13 @@
   --ds-font-mono:
     "SF Mono", SFMono-Regular, ui-monospace, "Cascadia Code", Menlo, Consolas,
     "Liberation Mono", monospace;
-  --ds-font-size-2xs: 10px;
-  --ds-font-size-xs: 11px;
-  --ds-font-size-sm: 12px;
-  --ds-font-size-ui: 13px;
-  --ds-font-size-body: 14px;
-  --ds-font-size-title: 16px;
-  --ds-font-size-heading: 22px;
+  --ds-font-size-2xs: 11px;
+  --ds-font-size-xs: 12px;
+  --ds-font-size-sm: 13px;
+  --ds-font-size-ui: 14px;
+  --ds-font-size-body: 15px;
+  --ds-font-size-title: 17px;
+  --ds-font-size-heading: 23px;
   --ds-font-weight-readable: 450;
   --ds-font-weight-medium: 550;
   --ds-font-weight-semibold: 650;

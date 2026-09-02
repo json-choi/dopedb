@@ -12,10 +12,7 @@ import {
   TextInput,
 } from "../../../design-system/components/FormControls";
 import { SettingsGroup } from "../../../design-system/components/Settings";
-import {
-  InlineNotice,
-  StatusBadge,
-} from "../../../design-system/components/Status";
+import { InlineNotice } from "../../../design-system/components/Status";
 import {
   canManageWorkspaceWritePolicy,
   effectiveSafetySettings,
@@ -236,24 +233,9 @@ export default function Safety({
           {saveError}
         </InlineNotice>
       ) : null}
-      <div className="tw:flex tw:items-center tw:justify-between tw:gap-3 tw:max-[860px]:flex-col tw:max-[860px]:items-start">
-        <div className="tw:inline-flex tw:items-center tw:gap-2 tw:max-[640px]:flex-col tw:max-[640px]:items-start">
-          <h2>{t("safety.title")}</h2>
-          <InfoTip label={t("safety.body")} />
-        </div>
-        <StatusBadge
-          tone={effectiveAllowSchemaChanges ? "danger" : effectiveAllowWrites ? "warning" : "success"}
-        >
-          {effectiveAllowSchemaChanges
-            ? t("safety.modeSchemaChanges")
-            : workspaceManaged
-              ? effectiveAllowWrites
-                ? t("safety.modeWorkspaceWrites")
-                : t("safety.modeSharedReadOnly")
-              : effectiveAllowWrites
-                ? t("safety.modeWrites")
-                : t("safety.modeReadOnly")}
-        </StatusBadge>
+      <div className="tw:inline-flex tw:items-center tw:gap-2 tw:max-[640px]:flex-col tw:max-[640px]:items-start">
+        <h2>{t("safety.title")}</h2>
+        <InfoTip label={t("safety.body")} />
       </div>
 
       <div className="tw:grid tw:grid-cols-[minmax(0,1.2fr)_minmax(264px,0.8fr)] tw:gap-4 tw:max-[1180px]:grid-cols-2 tw:max-[860px]:grid-cols-1">

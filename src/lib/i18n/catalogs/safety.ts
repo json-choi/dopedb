@@ -9,13 +9,13 @@ export const safetyCatalog = defineCatalog(
     "safety.accessRead": "Read only",
     "safety.accessWrite": "Data changes",
     "safety.accessSchema": "Schema changes",
-    "safety.apply": "Apply safety settings",
+    "safety.apply": "Apply access level",
     "safety.applying": "Applying...",
     "safety.autoRunReads": "Auto-run reads",
     "safety.autoRunReadsHint":
       "Run read-only SELECTs without a manual approve.",
     "safety.body":
-      "This is the only Desktop control for read, data-change, and schema-change authority on this connection. Run approves SQL you authored; Agent proposals still require an explicit approval.",
+      "Choose this connection's access level once here. The required workspace and device checks are applied together without another setting. Run approves SQL you authored; Agent proposals still require an explicit approval.",
     "safety.execPreviewRowLimit": "Exec-preview row limit",
     "safety.execPreviewRowLimitHint":
       "Skip execute-preview above this estimate (L3 gate).",
@@ -31,11 +31,6 @@ export const safetyCatalog = defineCatalog(
       "Member-local credentials are read-only. Workspace writes require a managed connection and an administrator-enabled write policy.",
     "safety.memberLocalSchemaUnavailable":
       "Schema changes are unavailable for member-local credentials. Configure managed access, then return to this Safety screen.",
-    "safety.modeReadOnly": "Agent-safe read mode",
-    "safety.modeSharedReadOnly": "Workspace read-only",
-    "safety.modeSchemaChanges": "Schema changes allowed",
-    "safety.modeWorkspaceWrites": "Workspace writes allowed",
-    "safety.modeWrites": "Writes allowed",
     "safety.noUnsavedChanges": "Current settings are applied.",
     "safety.appliedWithSchemaUnavailable":
       "The selected read/data-change level is applied. Schema changes remain unavailable for the reason shown above.",
@@ -74,9 +69,9 @@ export const safetyCatalog = defineCatalog(
     "safety.refreshFailed":
       "The saved safety settings are still shown, but they could not be refreshed. {error}",
     "safety.sharedWritesHint":
-      "A workspace administrator sets the maximum DB authority. This device switch can narrow an allowed write grant but cannot broaden it.",
+      "Choose one access level within the maximum granted to your account. Ask a connection manager to broaden that maximum.",
     "safety.sharedWritesManagerHint":
-      "One Apply updates the workspace mutation ceiling and this device gate together. Data and schema changes still use separate short-lived credentials.",
+      "Choose one highest level for this connection. Apply updates it everywhere required; there is no second write setting.",
     "safety.mutationsEngineUnavailable":
       "This engine is read-only in DopeDB, so data and schema changes are unavailable.",
     "safety.schemaProviderUnavailable":
@@ -87,7 +82,7 @@ export const safetyCatalog = defineCatalog(
       "The device stayed read-only, but the workspace write policy could not be rolled back. Retry with this switch off. {error}",
     "safety.title": "Safety settings",
     "safety.unsavedChanges":
-      "Not applied yet. Apply to update this device and, for a managed connection, the workspace ceiling together.",
+      "Not applied yet. Apply to save the selected level as this connection's single access setting.",
   },
   {
     "safety.accessLevel": "데이터베이스 접근",
@@ -96,12 +91,12 @@ export const safetyCatalog = defineCatalog(
     "safety.accessRead": "읽기 전용",
     "safety.accessWrite": "데이터 변경",
     "safety.accessSchema": "스키마 변경",
-    "safety.apply": "안전 설정 적용",
+    "safety.apply": "접근 단계 적용",
     "safety.applying": "적용 중...",
     "safety.autoRunReads": "읽기 자동 실행",
     "safety.autoRunReadsHint": "읽기 전용 SELECT를 수동 승인 없이 실행합니다.",
     "safety.body":
-      "이 연결의 읽기·데이터 변경·스키마 변경 권한을 제어하는 유일한 Desktop 화면입니다. 직접 작성한 SQL은 실행 동작이 승인이고, Agent 제안은 별도 승인이 필요합니다.",
+      "이 연결의 접근 단계는 여기서 한 번만 선택합니다. 필요한 워크스페이스 및 기기 검사는 별도 설정 없이 함께 적용됩니다. 직접 작성한 SQL은 실행 동작이 승인이고, Agent 제안은 별도 승인이 필요합니다.",
     "safety.execPreviewRowLimit": "실행 미리보기 행 제한",
     "safety.execPreviewRowLimitHint":
       "예상 행 수가 이 값을 넘으면 실행 미리보기를 건너뜁니다 (L3 게이트).",
@@ -117,11 +112,6 @@ export const safetyCatalog = defineCatalog(
       "구성원 로컬 자격 증명 연결은 읽기 전용입니다. 워크스페이스 쓰기는 관리형 연결과 관리자가 활성화한 쓰기 정책이 필요합니다.",
     "safety.memberLocalSchemaUnavailable":
       "구성원 로컬 자격 증명에서는 스키마 변경을 사용할 수 없습니다. 관리형 접근을 구성한 뒤 이 안전 화면으로 돌아오세요.",
-    "safety.modeReadOnly": "에이전트 안전 읽기 모드",
-    "safety.modeSharedReadOnly": "워크스페이스 읽기 전용",
-    "safety.modeSchemaChanges": "스키마 변경 허용",
-    "safety.modeWorkspaceWrites": "워크스페이스 쓰기 허용",
-    "safety.modeWrites": "쓰기 허용",
     "safety.noUnsavedChanges": "현재 설정이 적용되어 있습니다.",
     "safety.appliedWithSchemaUnavailable":
       "선택한 읽기·데이터 변경 단계는 적용됐습니다. 위에 표시된 이유로 스키마 변경은 계속 사용할 수 없습니다.",
@@ -160,9 +150,9 @@ export const safetyCatalog = defineCatalog(
     "safety.refreshFailed":
       "저장된 안전 설정을 계속 표시하지만 새로고침하지 못했습니다. {error}",
     "safety.sharedWritesHint":
-      "워크스페이스 관리자가 DB 권한의 상한을 정합니다. 이 기기의 스위치는 허용된 쓰기 권한을 좁힐 수 있지만 더 넓힐 수는 없습니다.",
+      "현재 계정에 부여된 최대 범위 안에서 접근 단계 하나를 선택합니다. 범위를 넓히려면 연결 관리자에게 요청하세요.",
     "safety.sharedWritesManagerHint":
-      "한 번의 적용으로 워크스페이스 변경 상한과 이 기기의 gate를 함께 갱신합니다. 데이터 변경과 스키마 변경에는 서로 다른 단기 자격 증명을 사용합니다.",
+      "이 연결에 허용할 가장 높은 단계 하나만 선택하세요. 적용하면 필요한 모든 곳에 반영되며 두 번째 쓰기 설정은 없습니다.",
     "safety.mutationsEngineUnavailable":
       "이 엔진은 DopeDB에서 읽기 전용이므로 데이터 변경과 스키마 변경을 사용할 수 없습니다.",
     "safety.schemaProviderUnavailable":
@@ -173,6 +163,6 @@ export const safetyCatalog = defineCatalog(
       "이 기기는 읽기 전용으로 유지됐지만 워크스페이스 쓰기 정책을 되돌리지 못했습니다. 스위치를 끈 상태로 다시 저장하세요. {error}",
     "safety.title": "안전 설정",
     "safety.unsavedChanges":
-      "아직 적용되지 않았습니다. 적용을 누르면 이 기기와 관리형 연결의 워크스페이스 상한을 함께 갱신합니다.",
+      "아직 적용되지 않았습니다. 적용하면 선택한 단계가 이 연결의 단일 접근 설정으로 저장됩니다.",
   },
 );

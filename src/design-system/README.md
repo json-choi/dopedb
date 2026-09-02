@@ -198,14 +198,14 @@ color를 거부한다.
   `@sun-typeface/suit`의 Variable WOFF2를 고정 버전으로 포함하며 CDN이나 설치된
   시스템 폰트에 의존하지 않는다.
 - Mono: `--ds-font-mono`. 경로, SQL, 값, 식별자, 숫자 비교에 사용한다.
-- Body: 14px.
-- Dense UI: 13px.
-- 보조 텍스트: 12px.
+- Body: 15px.
+- Dense UI: 14px.
+- 보조 텍스트: 13px.
 - 기본 본문과 일반 leaf row는 최소 450, tree section·일반 control·DB row는 550,
   section emphasis는 650, heading과 강한 category label은 700 weight를 사용한다.
   `font-normal/medium/semibold/bold`는 이 네 semantic token에 대응하며 화면별
   임의 숫자 weight로 가독성을 보정하지 않는다.
-- uppercase category label: 11px, 650–700 weight, `0.05em` tracking.
+- uppercase category label: 12px, 650–700 weight, `0.05em` tracking.
 - 큰 제목은 `-0.02em`, 패널 제목은 `-0.01em` tracking을 사용한다.
 - 데이터 숫자는 `font-variant-numeric: tabular-nums`를 사용한다.
 
@@ -375,8 +375,8 @@ Elevation은 세 단계만 허용한다.
   상시 표시하지 않는다. `TreeRowActions`는 행의
   실제 command만 받아 hover/focus에서 표시하고 title 폭을 상시 차지하지 않는다.
   Workspace Explorer의 Project/resource 행은 28px로 고정한다. Project는
-  13px·650 weight, resource folder는 12px·550 weight,
-  DB·source·article leaf는 12px·450 weight를 사용한다. DB의 24px tree
+  14px·650 weight, resource folder는 13px·550 weight,
+  DB·source·article leaf는 13px·450 weight를 사용한다. DB의 24px tree
   action과 provider target metadata는 같은 한 줄 안에 머물러 Diff·관리 action의
   유무나 target 길이가 행 높이를 바꾸지 않는다.
   toggle은 native button이고 interactive row action은 그 sibling이므로 nested

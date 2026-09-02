@@ -120,7 +120,10 @@ DopeDB의 제품 축, 실제 사용자 작업, 접근성, 운영 안전성, 지�
   workspace가 부여한 권한은 상한이고 기기별 Safety 설정은 이를 좁힐 수만 있다.
   이 화면은 `읽기 → 데이터 변경(DML) → 스키마 변경(DDL)`의 단일 계층을 한 번에
   저장하며, provider 설정·연결 편집기·실행 오류 화면에 별도 권한 control을 만들지
-  않는다. DDL은 workspace `manage` grant, 현재 기기의 명시적 DDL opt-in, 정확한
+  않는다. 동일 상태를 반복하는 별도 쓰기 허용 badge도 두지 않는다. 실행 오류는
+  provider가 DDL을 지원하지 않는 경우에도 exact 연결의 이 화면으로 바로 이동해
+  현재 가능한 최대 단계와 제한 이유를 확인할 수 있어야 한다. DDL은 workspace
+  `manage` grant, 현재 기기의 명시적 DDL opt-in, 정확한
   Operation 승인과 provider가 검증한 짧은 스키마 자격 증명을 모두 만족할 때만
   가능하다. 기존 객체를 개인 단기 role 소유로 남기지 않고 provider adapter가
   안정적인 정책 owner로 인수·회수할 수 있는 연결에서만 DDL 단계를 활성화한다.

@@ -238,7 +238,7 @@ describe("SQL run guidance", () => {
       ),
     ).toBe("workspaceGrant");
     expect(writeBlockRecoveryOpensSafety("schemaSafety")).toBe(true);
-    expect(writeBlockRecoveryOpensSafety("schemaUnavailable")).toBe(false);
+    expect(writeBlockRecoveryOpensSafety("schemaUnavailable")).toBe(true);
     expect(writeBlockRecoveryOpensSafety("workspaceGrant")).toBe(false);
     expect(
       writeBlockRecoveryKind(

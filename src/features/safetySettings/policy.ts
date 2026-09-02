@@ -96,6 +96,7 @@ export function writeBlockRecoveryOpensSafety(
   return kind === "deviceSafety"
     || kind === "localSafety"
     || kind === "schemaSafety"
+    || kind === "schemaUnavailable"
     || kind === "workspacePolicyAndDevice";
 }
 
