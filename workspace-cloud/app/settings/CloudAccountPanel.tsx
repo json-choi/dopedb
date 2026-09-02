@@ -19,7 +19,7 @@ export function CloudAccountPanel({
   const configuringGcp = Boolean(controller.gcpSetupId);
 
   return (
-    <section className="tw:grid tw:gap-5 tw:p-5">
+    <section className="tw:grid tw:gap-5 tw:p-6 tw:max-[640px]:p-4">
       <header className="tw:flex tw:items-start tw:justify-between tw:gap-4 tw:max-[640px]:grid">
         <div className="tw:grid tw:gap-1">
           <strong className="tw:text-sm tw:text-foreground">

@@ -41,7 +41,7 @@ export function SharedDatabasePanel({
   }, [controller.connections, controller.loading, initialConnectionId]);
 
   return (
-    <section className="tw:grid tw:gap-5 tw:p-5">
+    <section className="tw:grid tw:gap-5 tw:p-6 tw:max-[640px]:p-4">
       <header className="tw:flex tw:items-start tw:justify-between tw:gap-4 tw:max-[640px]:grid">
         <div className="tw:grid tw:gap-1">
           <strong className="tw:text-sm tw:text-foreground">
@@ -99,7 +99,7 @@ export function SharedDatabasePanel({
           {copy.loading}
         </p>
       ) : (
-        <div className="tw:grid tw:border-t tw:border-border">
+        <div className="tw:-mx-3 tw:grid tw:border-t tw:border-border">
           {controller.connections.map((connection) => {
             const managed = managedByConnection.get(connection.id);
             const focused = connection.id === initialConnectionId;
@@ -114,7 +114,7 @@ export function SharedDatabasePanel({
               : "";
             return (
               <article
-                className="tw:grid tw:min-h-[72px] tw:grid-cols-[minmax(0,1fr)_auto] tw:items-center tw:gap-4 tw:border-b tw:border-border tw:py-3 tw:outline-none tw:data-[focused=true]:bg-selection tw:focus-visible:ring-2 tw:focus-visible:ring-inset tw:focus-visible:ring-ring tw:max-[640px]:grid-cols-1"
+                className="tw:grid tw:min-h-[72px] tw:grid-cols-[minmax(0,1fr)_auto] tw:items-center tw:gap-x-4 tw:gap-y-3 tw:border-b tw:border-border tw:px-3 tw:py-3 tw:outline-none tw:data-[focused=true]:bg-selection tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:max-[640px]:grid-cols-1"
                 data-focused={focused}
                 id={`database-${connection.id}`}
                 key={connection.id}
@@ -134,32 +134,6 @@ export function SharedDatabasePanel({
                       ? `${provider.name} · ${target}`
                       : copy.memberLocalDescription}
                   </small>
-                  {focused && managed ? (
-                    <div className="tw:grid tw:max-w-[48rem] tw:justify-items-start tw:gap-2">
-                      <small
-                        className="tw:text-2xs tw:leading-body tw:text-foreground"
-                        role="status"
-                      >
-                        {copy.desktopRecovery}
-                      </small>
-                      {managed.provider === "gcpCloudSql"
-                      && connection.accessMode === "manage" ? (
-                        <>
-                          <small className="tw:text-2xs tw:leading-body tw:text-muted-foreground">
-                            {copy.repairDescription}
-                          </small>
-                          <ControlButton
-                            onClick={() => void controller.repairManagedConnection(managed)}
-                            disabled={Boolean(controller.mutation)}
-                          >
-                            {controller.mutation === `repair:${connection.id}`
-                              ? copy.repairingManaged
-                              : copy.repairManaged}
-                          </ControlButton>
-                        </>
-                      ) : null}
-                    </div>
-                  ) : null}
                 </div>
                 <div className="tw:grid tw:justify-items-end tw:gap-1 tw:max-[640px]:justify-items-start">
                   <strong className="tw:font-mono tw:text-2xs tw:uppercase tw:text-primary">
@@ -201,6 +175,32 @@ export function SharedDatabasePanel({
                     ) : null}
                   </span>
                 </div>
+                {focused && managed ? (
+                  <div className="tw:col-span-full tw:grid tw:justify-items-start tw:gap-2 tw:border-t tw:border-border tw:pt-3 tw:max-[640px]:col-span-1">
+                    <small
+                      className="tw:max-w-[48rem] tw:text-2xs tw:leading-body tw:text-foreground"
+                      role="status"
+                    >
+                      {copy.desktopRecovery}
+                    </small>
+                    {managed.provider === "gcpCloudSql"
+                    && connection.accessMode === "manage" ? (
+                      <>
+                        <small className="tw:max-w-[48rem] tw:text-2xs tw:leading-body tw:text-muted-foreground">
+                          {copy.repairDescription}
+                        </small>
+                        <ControlButton
+                          onClick={() => void controller.repairManagedConnection(managed)}
+                          disabled={Boolean(controller.mutation)}
+                        >
+                          {controller.mutation === `repair:${connection.id}`
+                            ? copy.repairingManaged
+                            : copy.repairManaged}
+                        </ControlButton>
+                      </>
+                    ) : null}
+                  </div>
+                ) : null}
               </article>
             );
           })}

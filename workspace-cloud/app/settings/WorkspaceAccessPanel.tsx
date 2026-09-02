@@ -188,7 +188,7 @@ export function WorkspaceAccessPanel({ workspaceId }: { workspaceId: string }) {
   }
 
   return (
-    <section className="tw:grid tw:gap-3 tw:p-5">
+    <section className="tw:grid tw:gap-3 tw:p-6 tw:max-[640px]:p-4">
       <header className="tw:flex tw:items-start tw:justify-between tw:gap-3">
         <strong className="tw:text-sm tw:text-foreground">
           {copy.title}

@@ -66,7 +66,7 @@ export function WorkspaceManagementPanel({
 
   return (
     <section className="tw:min-w-0 tw:overflow-hidden tw:rounded-panel tw:border tw:border-border tw:bg-surface tw:shadow-panel">
-        <header className="tw:flex tw:items-center tw:justify-between tw:gap-5 tw:border-b tw:border-border tw:bg-surface-inset/70 tw:px-6 tw:py-4 tw:max-[640px]:items-start">
+        <header className="tw:flex tw:items-center tw:justify-between tw:gap-5 tw:border-b tw:border-border tw:bg-surface-inset/70 tw:px-6 tw:py-4 tw:max-[640px]:items-start tw:max-[640px]:px-4">
           <div className="tw:flex tw:min-w-0 tw:items-center tw:gap-3">
             <span className="tw:grid tw:size-10 tw:shrink-0 tw:place-items-center tw:rounded-surface tw:bg-selection tw:font-mono tw:text-2xs tw:font-medium tw:text-primary">
               {workspaceName.slice(0, 2).toUpperCase()}

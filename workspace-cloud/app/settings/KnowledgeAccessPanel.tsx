@@ -228,7 +228,7 @@ export function KnowledgeAccessPanel({ workspaceId }: { workspaceId: string }) {
   }
 
   return (
-    <section className="tw:grid tw:gap-4 tw:border-t tw:border-border tw:p-5">
+    <section className="tw:grid tw:gap-4 tw:border-t tw:border-border tw:p-6 tw:max-[640px]:p-4">
       <header className="tw:flex tw:items-start tw:justify-between tw:gap-3 tw:max-[720px]:grid">
         <div className="tw:grid tw:gap-1">
           <strong className="tw:text-sm tw:text-foreground">{text.title}</strong>

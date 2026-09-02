@@ -249,7 +249,10 @@ Elevation은 세 단계만 허용한다.
 - `workspace-cloud/app/components/Controls`: workspace 관리 화면의
   `ControlButton`, `ControlLink`, field/input/select/textarea 밀도를 함께 소유한다.
   외부 관리 콘솔로 이동하는 action도 화면에서 button utility를 복사하지 않고
-  `ControlLink`를 사용한다.
+  `ControlLink`를 사용한다. Workspace 관리 panel의 header와 최상위 본문은
+  desktop 24px, 640px 이하 16px의 같은 content gutter를 사용한다. Database
+  요약과 우측 action은 확장 상태에서도 첫 2열을 유지하고, 복구 안내처럼 길어지는
+  보조 내용은 그 아래 전체 폭 grid row가 소유한다.
 - `IdeTitleToolbar`, `IdeStatusBarSurface`: title/status chrome의
   고정 높이와 좌·중앙·우 slot. feature shell은 command와 state만 제공한다.
 - `IdeToolbarLauncher`: title toolbar의 32px launcher와 중립적인 open/pressed
