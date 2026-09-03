@@ -69,7 +69,11 @@ export default function AgentTools() {
           }
           onClick={() => void refresh()}
         >
-          {t("agentTools.checkAgain")}
+          {t(
+            busy === "plugin-check"
+              ? "agentTools.checkingUpdates"
+              : "agentTools.checkAgain",
+          )}
         </Button>
       </div>
     </div>

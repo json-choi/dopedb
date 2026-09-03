@@ -28,7 +28,10 @@ separate `workspace-scheduler-cloudflare/` Worker: D1 holds only the credential 
 maintenance due times, while leases, authority, and audit state remain in PostgreSQL.
 Event producers record an exact due time; a null receipt leaves the task dormant, so
 an idle workspace makes no periodic Neon query. Do not add an independent Vercel cron:
-polling PostgreSQL prevents Neon from suspending. Register this PlanetScale callback:
+polling PostgreSQL prevents Neon from suspending. Managed credentials always expire at
+the provider; a missed scheduler wake-up never rejects an otherwise valid lease, and
+the next managed-access request performs a bounded cleanup repair before issuing more
+access. Register this PlanetScale callback:
 
 ```text
 http://localhost:3000/api/v1/providers/planet-scale/callback

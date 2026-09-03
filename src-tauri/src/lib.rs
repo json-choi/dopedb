@@ -153,6 +153,7 @@ pub fn run() {
             features::agents::external_transport::respond_external_agent_request,
             features::agents::transport::detect_agent_clis,
             features::agents::transport::list_agent_acp_plugins,
+            features::agents::transport::check_agent_acp_plugin_updates,
             features::agents::transport::install_agent_acp_plugin,
             features::agents::transport::remove_agent_acp_plugin,
             features::agents::transport::set_agent_acp_plugin_enabled,

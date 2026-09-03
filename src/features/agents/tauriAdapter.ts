@@ -24,6 +24,10 @@ export function listAgentAcpPlugins(): Promise<AcpPluginStatus[]> {
   return invoke("list_agent_acp_plugins");
 }
 
+export function checkAgentAcpPluginUpdates(): Promise<AcpPluginStatus[]> {
+  return invoke("check_agent_acp_plugin_updates");
+}
+
 export function installAgentAcpPlugin(
   pluginId: AcpPluginId,
 ): Promise<AcpPluginMutationReceipt> {

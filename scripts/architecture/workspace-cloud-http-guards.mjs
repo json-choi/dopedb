@@ -371,7 +371,7 @@ export function collectWorkspaceCloudHttpDiagnostics({ lineCount, read, relative
   for (const [producer, tokens] of [
     [
       "workspace-cloud/app/api/v1/workspaces/[workspaceId]/connections/[connectionId]/lease/route.ts",
-      ['task: "credential"', "workspaceBackgroundSchedulerEnabled() && !cleanupScheduled"],
+      ['task: "credential"', "Provider-enforced expiry is the authority boundary"],
     ],
     [
       "workspace-cloud/lib/provider-integrations/discovery-receipts.ts",
@@ -403,6 +403,31 @@ export function collectWorkspaceCloudHttpDiagnostics({ lineCount, read, relative
       if (!source.includes(token)) {
         diagnostics.push(`${producer}: event-driven scheduler producer is missing ${token}`);
       }
+    }
+  }
+  const managedLeaseRouteSource = read(
+    "workspace-cloud/app/api/v1/workspaces/[workspaceId]/connections/[connectionId]/lease/route.ts",
+  );
+  if (
+    managedLeaseRouteSource.includes("workspaceBackgroundSchedulerEnabled()")
+    || managedLeaseRouteSource.includes("cleanup could not be scheduled")
+  ) {
+    diagnostics.push(
+      "managed lease delivery must rely on provider expiry and bounded request-time cleanup, not scheduler availability",
+    );
+  }
+  const managedLeaseIssuanceSource = read(
+    "workspace-cloud/lib/provider-integrations/lease-issuance.ts",
+  );
+  for (const token of [
+    "cleanupExpiredManagedLeases({",
+    "integrationId: input.integration.id",
+    'input.accessMode === "schema" ? 20 : 2',
+  ]) {
+    if (!managedLeaseIssuanceSource.includes(token)) {
+      diagnostics.push(
+        `workspace-cloud/lib/provider-integrations/lease-issuance.ts: request-time cleanup repair is missing ${token}`,
+      );
     }
   }
   if (read("workspace-cloud/lib/rate-limit.ts").includes("cleanupExpiredRateLimits")) {

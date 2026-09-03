@@ -22,6 +22,15 @@ pub fn list_agent_acp_plugins(state: State<'_, AppState>) -> AppResult<Vec<AcpPl
     state.agent_plugins.statuses()
 }
 
+/// Check signed catalog metadata without downloading or activating an adapter.
+#[tauri::command]
+pub async fn check_agent_acp_plugin_updates(
+    state: State<'_, AppState>,
+    app: tauri::AppHandle,
+) -> AppResult<Vec<AcpPluginStatus>> {
+    state.agent_plugins.check_updates(&app, true).await
+}
+
 /// Download, verify, stage, and enable one signed first-party adapter plugin.
 #[tauri::command]
 pub async fn install_agent_acp_plugin(

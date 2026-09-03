@@ -278,6 +278,7 @@ export const agentsCatalog = defineCatalog(
       "The installed Skill revision and package digest did not match the current bundle.",
     "agentTools.backupCreated": "Backup preserved at {path}",
     "agentTools.checkAgain": "Check again",
+    "agentTools.checkingUpdates": "Checking updates…",
     "agentTools.cliMissing": "CLI not detected",
     "agentTools.conflictInvalidProvenance": "Invalid management marker",
     "agentTools.conflictMissing": "Missing",
@@ -301,6 +302,7 @@ export const agentsCatalog = defineCatalog(
     "agentTools.pluginRemoved": "ACP adapter plugin removed. Local CLI, login, Skill, and conversation history were preserved.",
     "agentTools.installSelected": "Install selected ({count})",
     "agentTools.installPlugin": "Install plugin",
+    "agentTools.updatePlugin": "Install update",
     "agentTools.retryPlugin": "Retry installation",
     "agentTools.removePlugin": "Remove plugin",
     "agentTools.removePluginConfirm":
@@ -308,6 +310,10 @@ export const agentsCatalog = defineCatalog(
     "agentTools.enablePlugin": "Enable",
     "agentTools.disablePlugin": "Disable",
     "agentTools.pluginDownload": "Download {size}",
+    "agentTools.pluginInstalledIdentity": "Adapter {version} · {release}",
+    "agentTools.pluginUpdateIdentity": "Adapter {version} · {release}",
+    "agentTools.pluginUpdateDescription":
+      "Signed release {release} is available for adapter {version}. The current adapter remains active until you install it.",
     "agentTools.pluginProgress": "Installing {provider} ACP adapter",
     "agentTools.pluginStagedDescription":
       "The signed adapter is installed. Its first successful chat promotes it to the active version.",
@@ -693,6 +699,7 @@ export const agentsCatalog = defineCatalog(
       "설치된 Skill 리비전과 패키지 다이제스트가 현재 번들과 일치하지 않습니다.",
     "agentTools.backupCreated": "기존 파일을 {path}에 보존했습니다.",
     "agentTools.checkAgain": "다시 확인",
+    "agentTools.checkingUpdates": "업데이트 확인 중…",
     "agentTools.cliMissing": "CLI를 찾지 못함",
     "agentTools.conflictInvalidProvenance": "잘못된 관리 표식",
     "agentTools.conflictMissing": "누락됨",
@@ -716,6 +723,7 @@ export const agentsCatalog = defineCatalog(
     "agentTools.pluginRemoved": "ACP 어댑터 플러그인을 제거했습니다. 로컬 CLI, 로그인, 스킬과 대화 기록은 보존했습니다.",
     "agentTools.installSelected": "선택 항목 설치 ({count})",
     "agentTools.installPlugin": "플러그인 설치",
+    "agentTools.updatePlugin": "업데이트 설치",
     "agentTools.retryPlugin": "설치 다시 시도",
     "agentTools.removePlugin": "플러그인 제거",
     "agentTools.removePluginConfirm":
@@ -723,6 +731,10 @@ export const agentsCatalog = defineCatalog(
     "agentTools.enablePlugin": "사용",
     "agentTools.disablePlugin": "사용 안 함",
     "agentTools.pluginDownload": "다운로드 {size}",
+    "agentTools.pluginInstalledIdentity": "어댑터 {version} · {release}",
+    "agentTools.pluginUpdateIdentity": "어댑터 {version} · {release}",
+    "agentTools.pluginUpdateDescription":
+      "어댑터 {version}용 서명 릴리스 {release}을 설치할 수 있습니다. 설치하기 전까지 현재 어댑터가 계속 사용됩니다.",
     "agentTools.pluginProgress": "{provider} ACP 어댑터 설치 중",
     "agentTools.pluginStagedDescription":
       "서명된 어댑터가 설치되었습니다. 첫 채팅이 정상적으로 시작되면 활성 버전으로 확정됩니다.",

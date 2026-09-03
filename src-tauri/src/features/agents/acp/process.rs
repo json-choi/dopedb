@@ -73,6 +73,7 @@ impl AcpProcessLaunchPort for TauriAcpProcessLaunchPort {
             Ok(PreparedAcpProcess {
                 plugin_id,
                 adapter_bundle_version: plugin_plan.adapter_bundle_version,
+                plugin_installation_id: plugin_plan.installation_id,
                 runtime_executable,
                 runtime_sha256: plugin_plan.node_sha256,
                 adapter_entrypoint,
@@ -98,6 +99,7 @@ impl AcpProcessLaunchPort for TauriAcpProcessLaunchPort {
 pub(super) struct PreparedAcpProcess {
     plugin_id: AcpPluginId,
     adapter_bundle_version: String,
+    plugin_installation_id: String,
     runtime_executable: PathBuf,
     runtime_sha256: String,
     adapter_entrypoint: PathBuf,
@@ -158,6 +160,7 @@ impl AcpProcess {
         AcpPluginCandidateReceipt {
             plugin_id: self.prepared.plugin_id,
             plugin_version: self.prepared.adapter_bundle_version.clone(),
+            plugin_installation_id: self.prepared.plugin_installation_id.clone(),
             candidate: self.prepared.plugin_candidate,
             plugins: self.prepared.plugins.clone(),
             app: self.prepared.app.clone(),
@@ -260,6 +263,7 @@ impl AcpProcess {
 pub(super) struct AcpPluginCandidateReceipt {
     plugin_id: AcpPluginId,
     plugin_version: String,
+    plugin_installation_id: String,
     candidate: bool,
     plugins: AcpPluginManager,
     app: AppHandle,
@@ -280,13 +284,18 @@ impl AcpPluginCandidateReceipt {
 
     pub(super) fn record_initialize_success(&self) -> AppResult<()> {
         self.plugins
-            .record_initialize_success(&self.app, self.plugin_id, &self.plugin_version)
+            .record_initialize_success(&self.app, self.plugin_id, &self.plugin_installation_id)
             .map(|_| ())
     }
 
     pub(super) fn record_initialize_failure(&self, reason: &str) -> AppResult<()> {
         self.plugins
-            .record_initialize_failure(&self.app, self.plugin_id, &self.plugin_version, reason)
+            .record_initialize_failure(
+                &self.app,
+                self.plugin_id,
+                &self.plugin_installation_id,
+                reason,
+            )
             .map(|_| ())
     }
 }

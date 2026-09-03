@@ -35,7 +35,8 @@ on the Agent registration command. The ID fixes the provider and the local CLI
 environment variable (`CLAUDE_CODE_EXECUTABLE` or `CODEX_PATH`).
 
 `SignedAcpPluginManifestV1` is the catalog wire shape. Its inner manifest owns
-the upstream tag and commit, compatibility ranges, relative adapter entrypoint,
+the exact upstream package version, tag and commit, compatibility ranges,
+relative adapter entrypoint,
 artifact URL and independent signature, packed archive hash, canonical unpacked
 content-tree hash, size budgets, license inventory, SBOM digest,
 release/revocation timestamps, and rollout cohort. The outer envelope
@@ -57,6 +58,16 @@ redirects and byte counts. It verifies the signed manifest, artifact signature,
 archive hash, compatibility range, and canonical content-tree hash before an
 atomic stage. Archive extraction rejects absolute or parent paths, links,
 special files, duplicate paths, oversized files, and file-count abuse.
+
+The upstream adapter version, immutable distribution release ID
+(`acp-bundle-vYYYY.MM.DD.N`), and signed manifest digest are three separate
+identities. The version is user-facing compatibility information, the release ID
+selects an immutable published asset set, and the manifest digest is the local
+installation directory and activation-receipt key. Rebuilding an unchanged
+upstream version therefore creates a distinct candidate without overwriting or
+conflicting with the current bundle. Desktop continues to resolve legacy
+version-keyed installation directories so an upgrade does not strand an existing
+last-known-good adapter.
 
 The first new ACP session launches a candidate. Successful initialization
 promotes it to current and last-known-good; failure quarantines it and retries
@@ -104,8 +115,12 @@ key. Configuration validation compares the complete decoded updater public key
 with `acp-plugin.pub`, not only its key ID, so a drifted or mistyped key fails
 before a bundle is built.
 
-At runtime, startup schedules (but does not await) a 24-hour-coalesced update
-check for installed plugins only. Download, verification, candidate promotion,
-quarantine, and removal emit categorical provider/operation/outcome telemetry;
+At runtime, startup schedules (but does not await) a 24-hour-coalesced signed
+manifest check for installed plugins only. The check records an available release
+but never downloads, stages, or activates its executable artifact. Agent Tools can
+run the same metadata check explicitly; only the user's Install update action
+downloads and stages that exact reviewed release. The active or last-known-good
+adapter remains usable while an update waits. Download, verification, candidate
+promotion, quarantine, and removal emit categorical provider/operation/outcome telemetry;
 versions, paths, failure strings, credentials, prompts, and database data are
 never included.

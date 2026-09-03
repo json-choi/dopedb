@@ -9,7 +9,6 @@ import {
   parseManagedLeaseRequest,
 } from "../../../../../../../../lib/control-plane-contracts";
 import { db } from "../../../../../../../../lib/db";
-import { env } from "../../../../../../../../lib/env";
 import {
   boundedJsonBody,
   isUuid,
@@ -353,19 +352,14 @@ export async function POST(request: Request, context: RouteContext) {
       });
       return jsonError("Workspace database authority changed. Retry with current access.", 409);
     }
-    const cleanupScheduled = await kickWorkspaceBackgroundTask({
+    // Provider-enforced expiry is the authority boundary. The durable row lets
+    // the event-driven coordinator remove expired provider objects early, while
+    // a missed wake-up is repaired by the next managed-access request instead
+    // of discarding a credential that is already safely time-bounded.
+    await kickWorkspaceBackgroundTask({
       task: "credential",
       notBefore: new Date(lease.expiresAt),
     });
-    if (env.workspaceBackgroundSchedulerEnabled() && !cleanupScheduled) {
-      await revokeActiveLeases({
-        organizationId: workspaceId,
-        leaseId: lease.leaseId,
-        userId: authorization.session.user.id,
-        connectionId,
-      });
-      return jsonError("Managed credential cleanup could not be scheduled. Retry shortly.", 503);
-    }
     return privateJson(managedLeaseResponse({
       lease: {
         id: lease.leaseId,

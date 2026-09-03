@@ -85,6 +85,24 @@ export function AgentPluginSection({ controller }: AgentPluginSectionProps) {
                 Boolean(pluginStatus.failure) ||
                 pluginStatus.state === "update_available" ||
                 pluginStatus.state === "rollback_required";
+              const activeVersion =
+                pluginStatus.candidateVersion ??
+                pluginStatus.installedVersion ??
+                pluginStatus.lastKnownGoodVersion;
+              const versionLabel =
+                pluginStatus.state === "update_available" &&
+                pluginStatus.availableVersion &&
+                pluginStatus.availableReleaseId
+                  ? t("agentTools.pluginUpdateIdentity", {
+                      version: pluginStatus.availableVersion,
+                      release: pluginStatus.availableReleaseId,
+                    })
+                  : activeVersion && pluginStatus.installedReleaseId
+                    ? t("agentTools.pluginInstalledIdentity", {
+                        version: activeVersion,
+                        release: pluginStatus.installedReleaseId,
+                      })
+                    : activeVersion;
               return (
                 <div className="tw:grid tw:gap-3 tw:py-4" key={plugin.id}>
                   <div className="tw:flex tw:items-center tw:justify-between tw:gap-4 tw:@max-[520px]:flex-col tw:@max-[520px]:items-start">
@@ -118,9 +136,7 @@ export function AgentPluginSection({ controller }: AgentPluginSectionProps) {
                       </StatusBadge>
                     </div>
                     <span className="tw:text-ui tw:text-muted-foreground">
-                      {pluginStatus.candidateVersion ??
-                        pluginStatus.installedVersion ??
-                        pluginStatus.lastKnownGoodVersion ??
+                      {versionLabel ??
                         t("agentTools.pluginDownload", { size: plugin.download })}
                     </span>
                   </div>
@@ -143,6 +159,16 @@ export function AgentPluginSection({ controller }: AgentPluginSectionProps) {
                       {t("agentTools.pluginStagedDescription")}
                     </p>
                   ) : null}
+                  {pluginStatus.state === "update_available" &&
+                  pluginStatus.availableVersion &&
+                  pluginStatus.availableReleaseId ? (
+                    <p className="tw:m-0 tw:text-ui tw:text-muted-foreground">
+                      {t("agentTools.pluginUpdateDescription", {
+                        version: pluginStatus.availableVersion,
+                        release: pluginStatus.availableReleaseId,
+                      })}
+                    </p>
+                  ) : null}
                   <div className="ds-control-row tw:flex tw:flex-wrap tw:items-center tw:gap-[var(--ds-control-gap)]">
                     {selectable ? (
                       <Button
@@ -150,9 +176,11 @@ export function AgentPluginSection({ controller }: AgentPluginSectionProps) {
                         onClick={() => void installPlugins([plugin.id])}
                       >
                         {t(
-                          installed
-                            ? "agentTools.retryPlugin"
-                            : "agentTools.installPlugin",
+                          pluginStatus.state === "update_available"
+                            ? "agentTools.updatePlugin"
+                            : installed
+                              ? "agentTools.retryPlugin"
+                              : "agentTools.installPlugin",
                         )}
                       </Button>
                     ) : (

@@ -159,7 +159,7 @@ impl AppState {
                 trace.finish("broker_start", "post_paint", started, true);
                 let update_app = app.clone();
                 tauri::async_runtime::spawn(async move {
-                    agent_plugins.update_installed(&update_app).await;
+                    agent_plugins.check_installed_updates(&update_app).await;
                 });
                 let watch_app = app.clone();
                 tauri::async_runtime::spawn(async move {

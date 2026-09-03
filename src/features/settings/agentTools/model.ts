@@ -18,6 +18,7 @@ export type AgentToolsBusyAction =
   | SkillTargetSelection
   | AcpPluginId
   | "plugin-batch"
+  | "plugin-check"
   | "self-test"
   | "legacy-cleanup";
 

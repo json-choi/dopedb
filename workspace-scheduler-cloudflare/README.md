@@ -17,6 +17,12 @@ failures open a six-hour circuit-breaker interval; a new producer kick resets
 the failure state and retries earlier. This keeps PostgreSQL authoritative while
 allowing Neon to remain suspended when there is no durable work.
 
+The coordinator shortens the lifetime of expired provider objects but is not the
+credential validity boundary. Each provider enforces the signed-in member lease TTL,
+and active managed-access requests repair missed cleanup wake-ups in a bounded batch.
+An unavailable coordinator therefore does not turn a safely expiring credential into
+a user-visible connection failure.
+
 `/v1/kick` requires the exact contract header and the `KICK_TOKEN` Worker
 secret. The token is a server-to-server capability, never a Desktop or browser
 secret. The Worker calls the existing internal routes with the separate

@@ -103,7 +103,9 @@ export default function SkillStartupGate() {
       const current = pluginsQ.data?.find((plugin) => plugin.pluginId === id);
       if (
         current?.enabled &&
-        (current.state === "ready" || current.state === "staged")
+        (current.installedVersion !== null ||
+          current.candidateVersion !== null ||
+          current.lastKnownGoodVersion !== null)
       ) {
         continue;
       }

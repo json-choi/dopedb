@@ -15,6 +15,7 @@ pub(crate) enum AcpPluginInstallationState {
     Verifying,
     Staged,
     Ready,
+    UpdateAvailable,
     Removing,
     Failed,
 }
@@ -26,8 +27,11 @@ pub(crate) struct AcpPluginStatus {
     pub(crate) state: AcpPluginInstallationState,
     pub(crate) enabled: bool,
     pub(crate) installed_version: Option<String>,
+    pub(crate) installed_release_id: Option<String>,
     pub(crate) candidate_version: Option<String>,
     pub(crate) last_known_good_version: Option<String>,
+    pub(crate) available_version: Option<String>,
+    pub(crate) available_release_id: Option<String>,
     pub(crate) failure: Option<String>,
 }
 
@@ -51,6 +55,7 @@ pub(crate) struct AcpPluginTelemetry {
 #[derive(Debug, Clone)]
 pub(crate) struct AcpPluginLaunchPlan {
     pub(crate) adapter_bundle_version: String,
+    pub(crate) installation_id: String,
     pub(crate) node_executable: PathBuf,
     pub(crate) node_sha256: String,
     pub(crate) adapter_entrypoint: PathBuf,
@@ -78,9 +83,39 @@ pub(super) struct PersistedPluginRecord {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct InstalledPluginVersion {
-    pub(super) version: String,
+    // Keep the legacy JSON key so existing Desktop versions can still read
+    // activation state after an upgrade. Filesystem identity is the signed
+    // manifest digest, never this human-facing package version.
+    #[serde(rename = "version")]
+    pub(super) adapter_bundle_version: String,
     pub(super) manifest_sha256: String,
     pub(super) entrypoint_sha256: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct AvailablePluginVersion {
+    pub(super) adapter_version: String,
+    pub(super) adapter_bundle_version: String,
+    pub(super) release_id: String,
+    pub(super) manifest_sha256: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct PersistedAvailableUpdates {
+    pub(super) schema_version: u16,
+    #[serde(default)]
+    pub(super) plugins: BTreeMap<AcpPluginId, AvailablePluginVersion>,
+}
+
+impl Default for PersistedAvailableUpdates {
+    fn default() -> Self {
+        Self {
+            schema_version: RUNTIME_STATE_SCHEMA_VERSION,
+            plugins: BTreeMap::new(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -103,7 +138,8 @@ impl Default for PersistedRuntimeState {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct QuarantinedPluginVersion {
-    pub(super) version: String,
+    #[serde(rename = "version")]
+    pub(super) adapter_bundle_version: String,
     pub(super) manifest_sha256: String,
     pub(super) reason: String,
 }

@@ -33,7 +33,7 @@ pub(super) fn validate_state(state: &PersistedRuntimeState) -> AppResult<()> {
         .into_iter()
         .flatten()
         {
-            if semver::Version::parse(&version.version).is_err()
+            if semver::Version::parse(&version.adapter_bundle_version).is_err()
                 || !valid_digest(&version.manifest_sha256)
                 || !valid_digest(&version.entrypoint_sha256)
             {
@@ -41,6 +41,26 @@ pub(super) fn validate_state(state: &PersistedRuntimeState) -> AppResult<()> {
                     "an ACP plugin version state is invalid".into(),
                 ));
             }
+        }
+    }
+    Ok(())
+}
+
+pub(super) fn validate_available_updates(state: &PersistedAvailableUpdates) -> AppResult<()> {
+    if state.schema_version != RUNTIME_STATE_SCHEMA_VERSION || state.plugins.len() > 2 {
+        return Err(AppError::Config(
+            "the ACP plugin available-update state is invalid".into(),
+        ));
+    }
+    for update in state.plugins.values() {
+        if semver::Version::parse(&update.adapter_version).is_err()
+            || semver::Version::parse(&update.adapter_bundle_version).is_err()
+            || catalog_release_version(&format!("refs/tags/{}", update.release_id)).is_none()
+            || !valid_digest(&update.manifest_sha256)
+        {
+            return Err(AppError::Config(
+                "an ACP plugin available update is invalid".into(),
+            ));
         }
     }
     Ok(())

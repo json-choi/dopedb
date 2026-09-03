@@ -13,4 +13,5 @@ pub(crate) fn assert_acp_plugin_runtime_contract() {
     archive::assert_archive_security_contract();
     manager::assert_candidate_fallback_contract();
     manager::assert_catalog_release_contract();
+    manager::assert_installation_identity_contract();
 }

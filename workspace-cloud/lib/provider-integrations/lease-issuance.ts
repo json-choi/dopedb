@@ -152,20 +152,35 @@ export async function issueManagedLease(input: {
       projectId: resource.project,
       branchId: resource.branch,
     });
-    // A schema credential temporarily assumes the stable policy owner. Sweep
-    // expired roles before reserving the connection-wide single schema slot so
-    // a crashed Desktop cannot overlap two schema authorities.
-    const cleanup = await cleanupExpiredManagedLeases({
+  }
+  // Every active managed-access request also repairs a missed event-driven
+  // cleanup wake-up. Provider expiry remains authoritative; only a Neon schema
+  // lease must wait for physical role cleanup because it temporarily owns the
+  // connection-wide policy role.
+  const cleanupMustComplete = input.integration.provider === "neon"
+    && input.accessMode === "schema";
+  let cleanupDeferred = 0;
+  try {
+    cleanupDeferred = (await cleanupExpiredManagedLeases({
       integrationId: input.integration.id,
       limit: input.accessMode === "schema" ? 20 : 2,
-    });
-    if (cleanup.deferred > 0) {
+    })).deferred;
+  } catch (error) {
+    if (cleanupMustComplete) {
+      if (error instanceof ProviderRequestError) throw error;
       throw new ProviderRequestError(
         "neon",
-        "Expired Neon database access could not be cleaned up",
+        "Expired Neon database access cleanup could not be verified",
         503,
       );
     }
+  }
+  if (cleanupMustComplete && cleanupDeferred > 0) {
+    throw new ProviderRequestError(
+      "neon",
+      "Expired Neon database access could not be cleaned up",
+      503,
+    );
   }
   const reservation = await reserveManagedLeaseIfUnblocked(authority);
   if (reservation !== "reserved") {

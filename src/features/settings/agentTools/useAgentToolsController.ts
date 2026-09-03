@@ -8,6 +8,7 @@ import {
   agentPluginStatusQuery,
 } from "../../agents/queryOptions";
 import {
+  checkAgentAcpPluginUpdates,
   installAgentAcpPlugin,
   removeAgentAcpPlugin,
   setAgentAcpPluginEnabled,
@@ -250,13 +251,21 @@ export function useAgentToolsController() {
   }
 
   async function refresh() {
+    setBusy("plugin-check");
     setError(null);
-    await Promise.all([
-      statusQuery.refetch(),
-      pluginQuery.refetch(),
-      cliQuery.refetch(),
-      cleanupQuery.refetch(),
-    ]);
+    try {
+      await Promise.all([
+        statusQuery.refetch(),
+        checkAgentAcpPluginUpdates(),
+        cliQuery.refetch(),
+        cleanupQuery.refetch(),
+      ]);
+      await pluginQuery.refetch();
+    } catch (reason) {
+      reportError(reason);
+    } finally {
+      setBusy(null);
+    }
   }
 
   const cleanupReady =

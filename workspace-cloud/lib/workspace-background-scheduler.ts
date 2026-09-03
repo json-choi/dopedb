@@ -35,9 +35,9 @@ function checkedNotBefore(value: Date) {
 
 /**
  * Producer wake-up. PostgreSQL remains the durable work authority while D1
- * stores only the earliest task-level due time. Security-sensitive producers
- * must check the boolean result when the coordinator is enabled; retention
- * producers may retry through their idempotent mutation path.
+ * stores only the earliest task-level due time. Provider-enforced lease expiry
+ * is independent of this best-effort wake-up, and active requests repair missed
+ * credential cleanup without reintroducing an idle polling loop.
  */
 export async function kickWorkspaceBackgroundTask(input: {
   task: WorkspaceBackgroundTask;

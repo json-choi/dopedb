@@ -21,9 +21,9 @@ use crate::error::{AppError, AppResult};
 use super::archive::{checked_stage_file, extract_verified_archive, verify_content_tree};
 use super::domain::{
     AcpPluginInstallationState, AcpPluginLaunchPlan, AcpPluginMutationReceipt, AcpPluginStatus,
-    AcpPluginTelemetry, InstalledPluginMarker, InstalledPluginVersion, PersistedPluginRecord,
-    PersistedQuarantineState, PersistedRuntimeState, QuarantinedPluginVersion,
-    RUNTIME_STATE_SCHEMA_VERSION,
+    AcpPluginTelemetry, AvailablePluginVersion, InstalledPluginMarker, InstalledPluginVersion,
+    PersistedAvailableUpdates, PersistedPluginRecord, PersistedQuarantineState,
+    PersistedRuntimeState, QuarantinedPluginVersion, RUNTIME_STATE_SCHEMA_VERSION,
 };
 use super::verification::{
     sha256_file, verify_artifact, verify_bundled_node, verify_compatibility, verify_manifest,
@@ -49,6 +49,8 @@ const CATALOG_REFS_URL: &str =
     "https://api.github.com/repos/json-choi/dopedb/git/matching-refs/tags/acp-bundle-v?per_page=100";
 const CATALOG_RESOLUTION_TTL: Duration = Duration::from_secs(15 * 60);
 const UPDATE_CHECK_INTERVAL: chrono::Duration = chrono::Duration::hours(24);
+const OBSOLETE_VERSION_COLLISION_FAILURE: &str =
+    "blocked: an installed ACP plugin version conflicts with the signed artifact";
 
 #[derive(Clone)]
 pub(crate) struct AcpPluginManager {
@@ -122,183 +124,6 @@ impl AcpPluginManager {
             .is_some_and(record_has_ready_fallback))
     }
 
-    pub(crate) async fn update_installed(&self, app: &AppHandle) {
-        let state = match self.load_state() {
-            Ok(state) => state,
-            Err(error) => {
-                tracing::warn!(%error, "could not load ACP plugin state for background update");
-                return;
-            }
-        };
-        let now = chrono::Utc::now();
-        let due = state
-            .plugins
-            .iter()
-            .filter_map(|(plugin_id, record)| {
-                let installed = record.current.is_some()
-                    || record.candidate.is_some()
-                    || record.last_known_good.is_some();
-                let checked_recently = record
-                    .last_checked_at
-                    .as_deref()
-                    .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok())
-                    .is_some_and(|checked| {
-                        now.signed_duration_since(checked.to_utc()) < UPDATE_CHECK_INTERVAL
-                    });
-                (record.enabled && installed && !checked_recently).then_some(*plugin_id)
-            })
-            .collect::<Vec<_>>();
-        for plugin_id in due {
-            if let Err(error) = self.install(app, plugin_id).await {
-                tracing::warn!(
-                    %error,
-                    plugin_id = plugin_id.as_str(),
-                    "ACP plugin background update was deferred"
-                );
-            }
-        }
-    }
-
-    pub(crate) async fn install(
-        &self,
-        app: &AppHandle,
-        plugin_id: AcpPluginId,
-    ) -> AppResult<AcpPluginMutationReceipt> {
-        emit_telemetry(app, plugin_id, "install_update", "started");
-        let _guard = self.inner.mutation.lock().await;
-        self.set_phase(plugin_id, AcpPluginInstallationState::Checking)?;
-        let result = self.install_locked(app, plugin_id).await;
-        self.clear_phase(plugin_id);
-        match result {
-            Ok(receipt) => {
-                emit_telemetry(app, plugin_id, "install_update", "succeeded");
-                Ok(receipt)
-            }
-            Err(error) => {
-                let _ = self.record_failure(plugin_id, &error.to_string());
-                emit_telemetry(app, plugin_id, "install_update", "failed");
-                Err(error)
-            }
-        }
-    }
-
-    async fn install_locked(
-        &self,
-        app: &AppHandle,
-        plugin_id: AcpPluginId,
-    ) -> AppResult<AcpPluginMutationReceipt> {
-        let runtime = verify_bundled_node(app)?;
-        let (catalog_release, manifest_bytes) = self.download_manifest(plugin_id).await?;
-        let envelope: SignedAcpPluginManifestV1 = serde_json::from_slice(&manifest_bytes)
-            .map_err(|_| AppError::Network("the ACP plugin manifest is invalid".into()))?;
-        if envelope.manifest.plugin_id != plugin_id {
-            return Err(AppError::Blocked {
-                reason: "the ACP plugin manifest changed the requested plugin identity".into(),
-            });
-        }
-        verify_manifest(&envelope)?;
-        if envelope.manifest.artifact.url != artifact_url(&catalog_release, plugin_id) {
-            return Err(AppError::Blocked {
-                reason: "the ACP plugin manifest does not belong to its stable release".into(),
-            });
-        }
-        verify_compatibility(&envelope.manifest, &runtime)?;
-
-        let mut state = self.load_state()?;
-        let before = state.plugins.get(&plugin_id).cloned().unwrap_or_default();
-        if version_matches(&before.current, &envelope)
-            || version_matches(&before.candidate, &envelope)
-        {
-            let record = state.plugins.entry(plugin_id).or_default();
-            record.enabled = true;
-            record.failure = None;
-            record.last_checked_at = Some(chrono::Utc::now().to_rfc3339());
-            self.write_state(&state)?;
-            return Ok(AcpPluginMutationReceipt {
-                changed: false,
-                status: self.project_status(plugin_id, &state)?,
-            });
-        }
-
-        self.set_phase(plugin_id, AcpPluginInstallationState::Downloading)?;
-        let download = self.download_artifact(&envelope).await?;
-        self.set_phase(plugin_id, AcpPluginInstallationState::Verifying)?;
-        if let Err(error) = verify_artifact(&download, &envelope.manifest) {
-            let _ = fs::remove_file(&download);
-            return Err(error);
-        }
-
-        let stage = self.inner.root.join("staging").join(format!(
-            "{}-{}",
-            plugin_id.provider_slug(),
-            Uuid::new_v4()
-        ));
-        prepare_new_directory(&stage)?;
-        let prepared = (|| -> AppResult<InstalledPluginVersion> {
-            let entrypoint_sha256 =
-                extract_verified_archive(&download, &stage, &envelope.manifest)?;
-            let installed = InstalledPluginVersion {
-                version: envelope.manifest.adapter_bundle_version.clone(),
-                manifest_sha256: envelope.manifest_sha256.clone(),
-                entrypoint_sha256: entrypoint_sha256.clone(),
-            };
-            write_new_json(
-                &stage.join("installed.json"),
-                &InstalledPluginMarker {
-                    schema_version: RUNTIME_STATE_SCHEMA_VERSION,
-                    envelope: envelope.clone(),
-                    entrypoint_sha256,
-                },
-            )?;
-            sync_directory(&stage);
-            Ok(installed)
-        })();
-        let installed = match prepared {
-            Ok(installed) => installed,
-            Err(error) => {
-                let _ = remove_owned_tree(&self.inner.root, &stage);
-                let _ = fs::remove_file(&download);
-                return Err(error);
-            }
-        };
-
-        let target = self.version_directory(plugin_id, &installed.version);
-        if fs::symlink_metadata(&target).is_ok() {
-            let existing = self.read_installed_marker(&target)?;
-            if existing.envelope.manifest_sha256 != installed.manifest_sha256
-                || existing.entrypoint_sha256 != installed.entrypoint_sha256
-            {
-                let _ = remove_owned_tree(&self.inner.root, &stage);
-                let _ = fs::remove_file(&download);
-                return Err(AppError::Blocked {
-                    reason: "an installed ACP plugin version conflicts with the signed artifact"
-                        .into(),
-                });
-            }
-            remove_owned_tree(&self.inner.root, &stage)?;
-        } else {
-            prepare_directory(target.parent().ok_or_else(|| {
-                AppError::Config("the ACP plugin version has no provider directory".into())
-            })?)?;
-            fs::rename(&stage, &target)?;
-            sync_directory(target.parent().expect("provider directory was checked"));
-        }
-        let _ = fs::remove_file(&download);
-
-        let record = state.plugins.entry(plugin_id).or_default();
-        record.enabled = true;
-        record.candidate = Some(installed);
-        record.failure = None;
-        record.last_checked_at = Some(chrono::Utc::now().to_rfc3339());
-        self.write_state(&state)?;
-        self.prune_unreferenced_versions(plugin_id, &state)?;
-        self.set_phase(plugin_id, AcpPluginInstallationState::Staged)?;
-        Ok(AcpPluginMutationReceipt {
-            changed: true,
-            status: self.project_status(plugin_id, &state)?,
-        })
-    }
-
     pub(crate) async fn remove(
         &self,
         app: &AppHandle,
@@ -335,6 +160,7 @@ impl AcpPluginManager {
         let mut quarantine = self.load_quarantine()?;
         quarantine.plugins.remove(&plugin_id);
         self.write_quarantine(&quarantine)?;
+        self.clear_available_update(plugin_id)?;
         self.write_state(&state)?;
         Ok(AcpPluginMutationReceipt {
             changed,
@@ -385,7 +211,7 @@ impl AcpPluginManager {
                     .map(|version| (version, false))
             })
             .ok_or_else(|| AppError::NotFound("a ready ACP plugin version".into()))?;
-        let directory = self.version_directory(plugin_id, &installed.version);
+        let directory = self.installed_directory(plugin_id, installed);
         let marker = self.read_installed_marker(&directory)?;
         verify_manifest(&marker.envelope)?;
         if marker.envelope.manifest.plugin_id != plugin_id
@@ -407,7 +233,8 @@ impl AcpPluginManager {
         let runtime = verify_bundled_node(app)?;
         verify_compatibility(&marker.envelope.manifest, &runtime)?;
         Ok(AcpPluginLaunchPlan {
-            adapter_bundle_version: installed.version.clone(),
+            adapter_bundle_version: installed.adapter_bundle_version.clone(),
+            installation_id: installed.manifest_sha256.clone(),
             node_executable: runtime.executable,
             node_sha256: runtime.executable_sha256,
             adapter_entrypoint: entrypoint,
@@ -420,17 +247,17 @@ impl AcpPluginManager {
         &self,
         app: &AppHandle,
         plugin_id: AcpPluginId,
-        version: &str,
+        installation_id: &str,
     ) -> AppResult<AcpPluginStatus> {
         let mut state = self.load_state()?;
         let record = state.plugins.get_mut(&plugin_id).ok_or_else(|| {
             AppError::NotFound(format!("{} ACP plugin", plugin_id.provider_slug()))
         })?;
         if let Some(candidate) = record.candidate.take() {
-            if candidate.version != version {
+            if candidate.manifest_sha256 != installation_id {
                 record.candidate = Some(candidate);
                 return Err(AppError::Blocked {
-                    reason: "the ACP plugin success receipt changed candidate version".into(),
+                    reason: "the ACP plugin success receipt changed candidate identity".into(),
                 });
             }
             record.current = Some(candidate.clone());
@@ -438,7 +265,7 @@ impl AcpPluginManager {
         } else if record
             .current
             .as_ref()
-            .is_none_or(|current| current.version != version)
+            .is_none_or(|current| current.manifest_sha256 != installation_id)
         {
             return Err(AppError::Blocked {
                 reason: "the ACP plugin success receipt is not active".into(),
@@ -456,7 +283,7 @@ impl AcpPluginManager {
         &self,
         app: &AppHandle,
         plugin_id: AcpPluginId,
-        version: &str,
+        installation_id: &str,
         reason: &str,
     ) -> AppResult<AcpPluginStatus> {
         let mut state = self.load_state()?;
@@ -464,7 +291,7 @@ impl AcpPluginManager {
             let record = state.plugins.get_mut(&plugin_id).ok_or_else(|| {
                 AppError::NotFound(format!("{} ACP plugin", plugin_id.provider_slug()))
             })?;
-            take_failed_candidate(record, version, reason)?
+            take_failed_candidate(record, installation_id, reason)?
         };
         // Persist the candidate deactivation before touching its files. A process-exit
         // race on Windows may delay the quarantine rename, but must never make the
@@ -486,7 +313,7 @@ impl AcpPluginManager {
         version: &InstalledPluginVersion,
         reason: &str,
     ) -> AppResult<()> {
-        let source = self.version_directory(plugin_id, &version.version);
+        let source = self.installed_directory(plugin_id, version);
         if fs::symlink_metadata(&source).is_ok() {
             let destination_root = self
                 .inner
@@ -494,15 +321,18 @@ impl AcpPluginManager {
                 .join("quarantine")
                 .join(plugin_id.provider_slug());
             prepare_directory(&destination_root)?;
-            let destination =
-                destination_root.join(format!("{}-{}", version.version, Uuid::new_v4()));
+            let destination = destination_root.join(format!(
+                "{}-{}",
+                version.adapter_bundle_version,
+                Uuid::new_v4()
+            ));
             fs::rename(source, destination)?;
             sync_directory(&destination_root);
         }
         let mut quarantine = self.load_quarantine()?;
         let records = quarantine.plugins.entry(plugin_id).or_default();
         records.push(QuarantinedPluginVersion {
-            version: version.version.clone(),
+            adapter_bundle_version: version.adapter_bundle_version.clone(),
             manifest_sha256: version.manifest_sha256.clone(),
             reason: bounded_failure(reason),
         });
@@ -519,6 +349,11 @@ impl AcpPluginManager {
         state: &PersistedRuntimeState,
     ) -> AppResult<AcpPluginStatus> {
         let record = state.plugins.get(&plugin_id).cloned().unwrap_or_default();
+        let updates = self.load_available_updates()?;
+        let available = updates
+            .plugins
+            .get(&plugin_id)
+            .filter(|available| !record_contains_manifest(&record, &available.manifest_sha256));
         let phase = self
             .inner
             .phases
@@ -529,6 +364,8 @@ impl AcpPluginManager {
         let state = phase.unwrap_or_else(|| {
             if record.candidate.is_some() {
                 AcpPluginInstallationState::Staged
+            } else if available.is_some() {
+                AcpPluginInstallationState::UpdateAvailable
             } else if record.current.is_some() || record.last_known_good.is_some() {
                 AcpPluginInstallationState::Ready
             } else if record.failure.is_some() {
@@ -537,6 +374,16 @@ impl AcpPluginManager {
                 AcpPluginInstallationState::NotInstalled
             }
         });
+        let installed_release_id = record
+            .candidate
+            .as_ref()
+            .or(record.current.as_ref())
+            .or(record.last_known_good.as_ref())
+            .and_then(|installed| {
+                self.release_id_for_installed(plugin_id, installed)
+                    .ok()
+                    .flatten()
+            });
         Ok(AcpPluginStatus {
             plugin_id,
             state,
@@ -544,17 +391,31 @@ impl AcpPluginManager {
             installed_version: record
                 .current
                 .as_ref()
-                .map(|version| version.version.clone()),
+                .map(|version| version.adapter_bundle_version.clone()),
+            installed_release_id,
             candidate_version: record
                 .candidate
                 .as_ref()
-                .map(|version| version.version.clone()),
+                .map(|version| version.adapter_bundle_version.clone()),
             last_known_good_version: record
                 .last_known_good
                 .as_ref()
-                .map(|version| version.version.clone()),
+                .map(|version| version.adapter_bundle_version.clone()),
+            available_version: available.map(|version| version.adapter_version.clone()),
+            available_release_id: available.map(|version| version.release_id.clone()),
             failure: record.failure,
         })
+    }
+
+    fn release_id_for_installed(
+        &self,
+        plugin_id: AcpPluginId,
+        installed: &InstalledPluginVersion,
+    ) -> AppResult<Option<String>> {
+        let directory = self.installed_directory(plugin_id, installed);
+        let marker = self.read_installed_marker(&directory)?;
+        verify_manifest(&marker.envelope)?;
+        Ok(release_id_from_manifest(&marker.envelope, plugin_id))
     }
 
     fn record_failure(&self, plugin_id: AcpPluginId, failure: &str) -> AppResult<()> {
@@ -701,14 +562,55 @@ fn emit_telemetry(
     );
 }
 
-fn version_matches(
+fn installation_matches(
     installed: &Option<InstalledPluginVersion>,
     envelope: &SignedAcpPluginManifestV1,
 ) -> bool {
     installed.as_ref().is_some_and(|installed| {
-        installed.version == envelope.manifest.adapter_bundle_version
+        installed.adapter_bundle_version == envelope.manifest.adapter_bundle_version
             && installed.manifest_sha256 == envelope.manifest_sha256
     })
+}
+
+fn record_contains_manifest(record: &PersistedPluginRecord, manifest_sha256: &str) -> bool {
+    [
+        record.current.as_ref(),
+        record.candidate.as_ref(),
+        record.last_known_good.as_ref(),
+    ]
+    .into_iter()
+    .flatten()
+    .any(|installed| installed.manifest_sha256 == manifest_sha256)
+}
+
+fn available_update(
+    record: &PersistedPluginRecord,
+    release_id: String,
+    envelope: &SignedAcpPluginManifestV1,
+) -> Option<AvailablePluginVersion> {
+    (!record_contains_manifest(record, &envelope.manifest_sha256)).then(|| AvailablePluginVersion {
+        adapter_version: envelope.manifest.adapter_version.clone(),
+        adapter_bundle_version: envelope.manifest.adapter_bundle_version.clone(),
+        release_id,
+        manifest_sha256: envelope.manifest_sha256.clone(),
+    })
+}
+
+fn release_id_from_manifest(
+    envelope: &SignedAcpPluginManifestV1,
+    plugin_id: AcpPluginId,
+) -> Option<String> {
+    let prefix = "https://github.com/json-choi/dopedb/releases/download/";
+    let suffix = format!("/{}.tar.gz", plugin_id.provider_slug());
+    let release_id = envelope
+        .manifest
+        .artifact
+        .url
+        .strip_prefix(prefix)?
+        .strip_suffix(&suffix)?;
+    catalog_release_version(&format!("refs/tags/{release_id}"))?;
+    (artifact_url(release_id, plugin_id) == envelope.manifest.artifact.url)
+        .then(|| release_id.to_owned())
 }
 
 fn record_has_ready_fallback(record: &PersistedPluginRecord) -> bool {
@@ -717,19 +619,25 @@ fn record_has_ready_fallback(record: &PersistedPluginRecord) -> bool {
         && (record.current.is_some() || record.last_known_good.is_some())
 }
 
+fn clear_obsolete_version_collision_failure(record: &mut PersistedPluginRecord) {
+    if record.failure.as_deref() == Some(OBSOLETE_VERSION_COLLISION_FAILURE) {
+        record.failure = None;
+    }
+}
+
 fn take_failed_candidate(
     record: &mut PersistedPluginRecord,
-    version: &str,
+    installation_id: &str,
     reason: &str,
 ) -> AppResult<Option<InstalledPluginVersion>> {
     let Some(candidate) = record.candidate.take() else {
         record.failure = Some(bounded_failure(reason));
         return Ok(None);
     };
-    if candidate.version != version {
+    if candidate.manifest_sha256 != installation_id {
         record.candidate = Some(candidate);
         return Err(AppError::Blocked {
-            reason: "the ACP plugin failure receipt changed candidate version".into(),
+            reason: "the ACP plugin failure receipt changed candidate identity".into(),
         });
     }
     record.failure = Some(bounded_failure(reason));
@@ -739,12 +647,12 @@ fn take_failed_candidate(
 #[cfg(test)]
 pub(super) fn assert_candidate_fallback_contract() {
     let stable = InstalledPluginVersion {
-        version: "1.0.0".into(),
+        adapter_bundle_version: "1.0.0".into(),
         manifest_sha256: "a".repeat(64),
         entrypoint_sha256: "b".repeat(64),
     };
     let candidate = InstalledPluginVersion {
-        version: "1.1.0".into(),
+        adapter_bundle_version: "1.0.0".into(),
         manifest_sha256: "c".repeat(64),
         entrypoint_sha256: "d".repeat(64),
     };
@@ -757,23 +665,92 @@ pub(super) fn assert_candidate_fallback_contract() {
         last_checked_at: None,
     };
 
-    let failed = take_failed_candidate(&mut record, &candidate.version, "startup timed out")
-        .expect("the active candidate can be failed")
-        .expect("the failed version remains available for quarantine");
+    let failed =
+        take_failed_candidate(&mut record, &candidate.manifest_sha256, "startup timed out")
+            .expect("the active candidate can be failed")
+            .expect("the failed version remains available for quarantine");
 
     assert_eq!(failed, candidate);
     assert!(record.candidate.is_none());
     assert_eq!(
-        record.current.as_ref().map(|value| value.version.as_str()),
+        record
+            .current
+            .as_ref()
+            .map(|value| value.adapter_bundle_version.as_str()),
         Some("1.0.0")
     );
     assert_eq!(
         record
             .last_known_good
             .as_ref()
-            .map(|value| value.version.as_str()),
+            .map(|value| value.adapter_bundle_version.as_str()),
         Some("1.0.0")
     );
     assert_eq!(record.failure.as_deref(), Some("startup timed out"));
     assert!(record_has_ready_fallback(&record));
+}
+
+#[cfg(test)]
+pub(super) fn assert_installation_identity_contract() {
+    let temporary = tempfile::tempdir().expect("temporary ACP plugin root is available");
+    let manager = AcpPluginManager::with_root(temporary.path().join("plugins"))
+        .expect("ACP plugin manager accepts a private temporary root");
+    let stable = InstalledPluginVersion {
+        adapter_bundle_version: "1.0.0".into(),
+        manifest_sha256: "a".repeat(64),
+        entrypoint_sha256: "b".repeat(64),
+    };
+    let rebuilt = InstalledPluginVersion {
+        adapter_bundle_version: "1.0.0".into(),
+        manifest_sha256: "c".repeat(64),
+        entrypoint_sha256: "d".repeat(64),
+    };
+
+    assert_ne!(
+        manager.content_directory(AcpPluginId::Claude, &stable.manifest_sha256),
+        manager.content_directory(AcpPluginId::Claude, &rebuilt.manifest_sha256),
+        "two signed distributions of one upstream version need distinct paths"
+    );
+    assert!(!record_contains_manifest(
+        &PersistedPluginRecord {
+            enabled: true,
+            current: Some(stable.clone()),
+            ..PersistedPluginRecord::default()
+        },
+        &rebuilt.manifest_sha256,
+    ));
+
+    let legacy =
+        manager.legacy_version_directory(AcpPluginId::Claude, &stable.adapter_bundle_version);
+    prepare_directory(&legacy).expect("legacy version directory can be represented");
+    assert_eq!(
+        manager.installed_directory(AcpPluginId::Claude, &stable),
+        legacy,
+        "an existing version-keyed install remains launchable"
+    );
+
+    let content = manager.content_directory(AcpPluginId::Claude, &stable.manifest_sha256);
+    prepare_directory(&content).expect("content-addressed directory can be represented");
+    assert_eq!(
+        manager.installed_directory(AcpPluginId::Claude, &stable),
+        content,
+        "content-addressed storage takes precedence after migration"
+    );
+    let mut migrated = PersistedPluginRecord {
+        failure: Some(OBSOLETE_VERSION_COLLISION_FAILURE.into()),
+        ..PersistedPluginRecord::default()
+    };
+    clear_obsolete_version_collision_failure(&mut migrated);
+    assert!(migrated.failure.is_none());
+
+    let mut preserved = PersistedPluginRecord {
+        failure: Some("network: artifact download failed".into()),
+        ..PersistedPluginRecord::default()
+    };
+    clear_obsolete_version_collision_failure(&mut preserved);
+    assert_eq!(
+        preserved.failure.as_deref(),
+        Some("network: artifact download failed"),
+        "unrelated install failures remain visible"
+    );
 }

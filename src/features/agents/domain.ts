@@ -39,8 +39,11 @@ export interface AcpPluginStatus {
   state: AcpPluginInstallationState;
   enabled: boolean;
   installedVersion: string | null;
+  installedReleaseId: string | null;
   candidateVersion: string | null;
   lastKnownGoodVersion: string | null;
+  availableVersion: string | null;
+  availableReleaseId: string | null;
   failure: string | null;
 }
 
