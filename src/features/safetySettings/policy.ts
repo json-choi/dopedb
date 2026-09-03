@@ -147,8 +147,8 @@ export function safetyWriteControlAvailable(
 
 /**
  * DDL is a separate, narrower device opt-in. Personal SQL connections can use
- * their own credential; managed DDL currently requires an exact manage grant
- * on a Neon PostgreSQL connection so the broker can issue a disposable role.
+ * their own credential; managed DDL requires an exact manage grant on a
+ * PostgreSQL adapter with a verified stable-owner schema lease.
  */
 export function safetySchemaControlAvailable(
   connection: ConnectionWriteAuthority,
@@ -162,7 +162,7 @@ export function safetySchemaControlAvailable(
   return (
     connection.credentialMode === "managed" &&
     connection.workspaceAccess === "manage" &&
-    connection.provider === "neon" &&
+    (connection.provider === "neon" || connection.provider === "gcpCloudSql") &&
     connection.engine === "postgres"
   );
 }

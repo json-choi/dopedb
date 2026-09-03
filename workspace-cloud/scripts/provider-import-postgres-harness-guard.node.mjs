@@ -129,39 +129,10 @@ test("guard accepts a dedicated confirmed database", () => {
     /cleanup must be unconditional inside the root finally/,
   );
   expectMutatedSourceRejection(
-    "lib/knowledge/graph-activation-postgres.harness.ts",
-    (source) => source.replace("  it(", "  it.concurrent("),
-    /exactly one unmodified root test declaration/,
-  );
-  expectMutatedSourceRejection(
-    "lib/knowledge/graph-activation-postgres.harness.ts",
-    (source) => source.replace(
-      "      queueHarness.query = null;",
-      "      // queueHarness.query = null;",
-    ),
-    /cleanup must be unconditional inside the root finally/,
-  );
-  expectMutatedSourceRejection(
-    "lib/knowledge/graph-activation-postgres.harness.ts",
-    (source) => source.replace(
-      "      await client.end({ timeout: 5 });",
-      "      // await client.end({ timeout: 5 });",
-    ),
-    /cleanup must be unconditional inside the root finally/,
-  );
-  expectMutatedSourceRejection(
-    "lib/knowledge/graph-activation-postgres.harness.ts",
-    (source) => source.replace(
-      'DELETE FROM "workspace_control"."organization"',
-      'SELECT * FROM "workspace_control"."organization"',
-    ),
-    /cleanup must be unconditional inside the root finally/,
-  );
-  expectMutatedSourceRejection(
     PROVIDER_POSTGRES_HARNESS_CONFIG_PATH,
     (source) => source.replace(
-      '"lib/knowledge/graph-activation-postgres.harness.ts",',
-      '"lib/knowledge/graph-activation-postgres.harness.ts",\n      "lib/hidden-postgres.harness.ts",',
+      '"lib/provider-import-postgres.harness.ts",',
+      '"lib/provider-import-postgres.harness.ts",\n      "lib/hidden-postgres.harness.ts",',
     ),
     /config and guarded root manifest must match exactly/,
   );

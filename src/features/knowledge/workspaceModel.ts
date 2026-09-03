@@ -12,34 +12,12 @@ export function knowledgeRepositoryLabel(
   return `${repository.fullName}${repository.private ? ` · ${privateLabel}` : ""}`;
 }
 
-export const knowledgeMappingStateKey = {
-  proposed: "knowledge.mappingStateProposed",
-  approved: "knowledge.mappingStateApproved",
-  rejected: "knowledge.mappingStateRejected",
-  stale: "knowledge.mappingStateStale",
-} as const;
-
-export const knowledgeMappingTargetKey = {
-  table: "knowledge.mappingTargetTable",
-  column: "knowledge.mappingTargetColumn",
-} as const;
-
 export const knowledgeSourceHealthKey = {
   ready: "knowledge.sourceHealthReady",
   syncing: "knowledge.sourceHealthSyncing",
   stale: "knowledge.sourceHealthStale",
   failed: "knowledge.sourceHealthFailed",
 } as const;
-
-export const knowledgeSyncPhaseKey = {
-  activating: "knowledge.syncPhaseActivating",
-  indexing: "knowledge.syncPhaseIndexing",
-  manifest: "knowledge.syncPhaseManifest",
-} as const;
-
-// Exact-commit GitHub browsing is the current default. Existing graph data is
-// preserved for future use, but graph construction and graph UI stay dormant.
-export const KNOWLEDGE_GRAPH_UI_ENABLED = false;
 
 export interface PendingKnowledgeSyncAnalytics {
   attemptId: string;

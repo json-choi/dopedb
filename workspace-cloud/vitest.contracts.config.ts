@@ -9,7 +9,6 @@ export default defineConfig({
   test: {
     include: [
       "lib/control-plane-contracts.harness.ts",
-      "lib/knowledge/code-index-core.harness.ts",
     ],
   },
 });

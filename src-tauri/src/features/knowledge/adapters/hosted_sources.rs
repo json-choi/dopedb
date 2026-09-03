@@ -425,67 +425,6 @@ pub(super) async fn read_remote_source(
     Ok(result)
 }
 
-pub(super) async fn list_remote_knowledge_source_sync_progress(
-    user_id: &str,
-    workspace_id: Uuid,
-) -> AppResult<Vec<RemoteKnowledgeSyncProgress>> {
-    let token = bearer(user_id).await?;
-    let response = client()?
-        .get(format!(
-            "{}/api/v1/workspaces/{workspace_id}/knowledge/source-sync-progress",
-            origin()?
-        ))
-        .bearer_auth(token.as_str())
-        .send()
-        .await
-        .map_err(|error| request_error("loading workspace Knowledge sync progress", error))?;
-    if !response.status().is_success() {
-        return Err(oauth_error(response).await);
-    }
-    let progress = knowledge_response::<RemoteKnowledgeSyncProgressResponse>(
-        response,
-        "reading workspace Knowledge sync progress",
-    )
-    .await?
-    .progress;
-    if progress.len() > 512 || progress.iter().any(|item| !item.validate()) {
-        return Err(AppError::Network(
-            "Project Knowledge returned invalid sync progress".into(),
-        ));
-    }
-    Ok(progress)
-}
-
-pub(super) async fn request_knowledge_source_sync(
-    user_id: &str,
-    workspace_id: Uuid,
-    source_id: Uuid,
-) -> AppResult<Option<Uuid>> {
-    let token = bearer(user_id).await?;
-    let response = client()?
-        .post(format!(
-            "{}/api/v1/workspaces/{workspace_id}/knowledge/sources/{source_id}",
-            origin()?
-        ))
-        .bearer_auth(token.as_str())
-        .json(&json!({}))
-        .send()
-        .await
-        .map_err(|error| request_error("queueing the workspace code index", error))?;
-    if !response.status().is_success() {
-        return Err(oauth_error(response).await);
-    }
-    let queued: QueuedKnowledgeSourceResponse =
-        knowledge_response(response, "reading the queued workspace code index").await?;
-    if !queued.queued {
-        return Err(AppError::Network(
-            "Project Knowledge did not queue the code index".into(),
-        ));
-    }
-    let _ = queued.job_id;
-    Ok(queued.graph_revision_id)
-}
-
 pub(super) async fn delete_knowledge_source(
     user_id: &str,
     workspace_id: Uuid,

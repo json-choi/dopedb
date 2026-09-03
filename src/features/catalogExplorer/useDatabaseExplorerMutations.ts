@@ -362,10 +362,6 @@ export function useDatabaseExplorerMutations({
           queryKey: knowledgeQueryKeys.agentEnvironments(),
           refetchType: "active",
         }),
-        queryClient.invalidateQueries({
-          queryKey: knowledgeQueryKeys.sourceSyncProgress(catalogScope.key),
-          refetchType: "active",
-        }),
       ]);
       toast(t("connections.projectDeleted", { project: project.name }));
     } catch (error) {

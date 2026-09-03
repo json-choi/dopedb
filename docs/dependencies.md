@@ -11,12 +11,9 @@ enough to make a release eligible.
   upgrade target yet.
 - Every JavaScript project pins the same pnpm version in `packageManager`, and
   GitHub Actions uses that exact version.
-- TypeScript 7 performs application type-checking. The Workspace Cloud AST
-  security guard imports the compiler API from Microsoft's
-  `@typescript/typescript6` compatibility package because TypeScript 7.0 does
-  not ship a programmatic compiler API. Both Next.js applications enable
-  `experimental.useTypeScriptCli` so Next invokes the TypeScript 7 CLI instead
-  of trying to load that missing API.
+- TypeScript 7 performs application type-checking. Both Next.js applications
+  enable `experimental.useTypeScriptCli` so Next invokes the TypeScript 7 CLI
+  instead of trying to load its removed programmatic compiler API.
 - pnpm project settings live in each project's `pnpm-workspace.yaml`. pnpm 11
   no longer reads dependency-resolution and build-policy settings from the
   `pnpm` field in `package.json`.

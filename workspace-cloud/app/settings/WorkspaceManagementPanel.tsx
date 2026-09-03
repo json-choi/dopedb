@@ -3,7 +3,6 @@
 import { ConnectionAccessPanel } from "./ConnectionAccessPanel";
 import { CloudAccountPanel } from "./CloudAccountPanel";
 import { AnalysisManagementPanel } from "./AnalysisManagementPanel";
-import { KnowledgeAccessPanel } from "./KnowledgeAccessPanel";
 import { SharedDatabasePanel } from "./SharedDatabasePanel";
 import { WorkspaceAccessPanel } from "./WorkspaceAccessPanel";
 import { WorkspaceLifecyclePanel } from "./WorkspaceLifecyclePanel";
@@ -95,10 +94,7 @@ export function WorkspaceManagementPanel({
           <WorkspaceAccessPanel workspaceId={workspaceId} />
         ) : null}
         {area === "database-access" ? (
-          <>
-            <ConnectionAccessPanel workspaceId={workspaceId} />
-            <KnowledgeAccessPanel workspaceId={workspaceId} />
-          </>
+          <ConnectionAccessPanel workspaceId={workspaceId} />
         ) : null}
         {area === "cloud-accounts" ? (
           <CloudAccountPanel

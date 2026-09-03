@@ -493,7 +493,3 @@ export function useConnectionProfileController({
     },
   };
 }
-
-export type ConnectionProfileController = ReturnType<
-  typeof useConnectionProfileController
->;

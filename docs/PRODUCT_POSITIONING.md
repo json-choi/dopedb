@@ -132,6 +132,8 @@ Public copy may describe these implemented foundations:
   Vault Database Secrets access for fixed generic PostgreSQL/MySQL targets, that
   returns expiring member-specific database credentials without persisting the
   issued secret or distributing the broker AppRole to Desktop;
+- managed schema changes for Neon and GCP Cloud SQL PostgreSQL through a separate
+  schema principal with short-lived credentials and a stable provider-bound owner;
 - official Claude and Codex ACP sessions pinned to workspace/account/connection
   revision and local policy;
 - read-only execution, exact write proposals and approvals, cancellation, manual
@@ -176,7 +178,7 @@ When work competes for time, use this order:
 3. Strengthen the exact Agent authority, approval, stop, result, and recovery loop.
 4. Keep GitHub exploration cheap and exact through pinned tree/path/file reads, then
    validate a graph product with measured quality, latency, and operating-cost gains
-   before re-enabling graph construction as a paid/experimental capability.
+   before implementing graph construction as a paid/experimental capability.
 5. Complete simple Analysis Article sharing and deletion, exact single-query manual rerun,
    and fixed public HTML publication only on top of that environment boundary.
 6. Deepen schema introspection where it improves Agent judgment.

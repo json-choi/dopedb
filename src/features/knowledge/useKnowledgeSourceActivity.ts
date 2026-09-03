@@ -12,7 +12,6 @@ import {
 } from "./workspaceModel";
 
 export function useKnowledgeSourceActivity(
-  scopeKey: string,
   sources: KnowledgeSource[] | undefined,
   queryClient: QueryClient,
 ) {
@@ -50,9 +49,6 @@ export function useKnowledgeSourceActivity(
         void queryClient.invalidateQueries({
           queryKey: knowledgeQueryKeys.agentEnvironments(),
         });
-        void queryClient.invalidateQueries({
-          queryKey: knowledgeQueryKeys.sourceSyncProgress(scopeKey),
-        });
       } else if (change.state === "failed") {
         finishKnowledgeSyncOutcome(
           pendingSyncAnalytics.current,
@@ -68,7 +64,7 @@ export function useKnowledgeSourceActivity(
       disposed = true;
       unlisten?.();
     };
-  }, [queryClient, scopeKey]);
+  }, [queryClient]);
 
   useEffect(() => {
     if (!sources) return;
@@ -133,6 +129,5 @@ export function useKnowledgeSourceActivity(
   return {
     pendingSyncAnalytics,
     activity,
-    setActivity,
   };
 }

@@ -215,9 +215,9 @@ removing its validation label.
 
 ## Deferred decisions
 
-- Knowledge graph construction remains dormant until a benchmark proves material
-  quality or latency gains relative to GitHub exact-commit reads and operating cost,
-  and a paid or experimental entitlement is explicitly approved.
+- Knowledge graph construction is not shipped. A new implementation starts only after
+  a benchmark proves material quality or latency gains relative to GitHub exact-commit
+  reads and operating cost, and a paid or experimental entitlement is explicitly approved.
 - Additional providers and engines require verified demand and a complete connection,
   revoke, drift, and platform test plan.
 - Enterprise SSO/SCIM, configurable retention, data residency beyond the current

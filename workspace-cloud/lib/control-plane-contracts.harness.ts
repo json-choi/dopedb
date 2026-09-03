@@ -658,9 +658,18 @@ describe("Desktop control-plane contracts", () => {
     const lease = managedLeaseResponse(fixture.managedLease.response);
     expect(lease.lease.provider).toBe("gcpCloudSql");
     expect(lease.lease.connector?.kind).toBe("gcpCloudSqlAuthProxy");
+    const gcpSchemaLease = managedLeaseResponse({
+      lease: {
+        ...(fixture.managedLease.response as { lease: object }).lease,
+        accessMode: "schema",
+      },
+    });
+    expect(gcpSchemaLease.lease.accessMode).toBe("schema");
     expect(() => managedLeaseResponse({
       lease: {
         ...(fixture.managedLease.response as { lease: object }).lease,
+        provider: "planetScale",
+        connector: undefined,
         accessMode: "schema",
       },
     })).toThrow("Invalid managed lease response contract");

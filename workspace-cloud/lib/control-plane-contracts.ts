@@ -3,9 +3,9 @@
 // by Rust so independently deployed clients cannot drift silently.
 
 export const CONTROL_PLANE_CONTRACTS_SCHEMA_VERSION = 1 as const;
-export const LEGACY_MANAGED_LEASE_CONTRACT_VERSION = "access-v2" as const;
-export const PREVIOUS_MANAGED_LEASE_CONTRACT_VERSION = "access-v3" as const;
-export const MANAGED_LEASE_CONTRACT_VERSION = "access-v4" as const;
+export const LEGACY_MANAGED_LEASE_CONTRACT_VERSION = "access-v3" as const;
+export const PREVIOUS_MANAGED_LEASE_CONTRACT_VERSION = "access-v4" as const;
+export const MANAGED_LEASE_CONTRACT_VERSION = "access-v5" as const;
 
 export type ManagedAccessMode = "read" | "write" | "schema";
 
@@ -263,7 +263,8 @@ export function managedLeaseResponse(value: unknown): ManagedLeaseResponse {
     || (lease.tlsServerCaPem !== undefined && typeof lease.tlsServerCaPem !== "string")
     || !isStringLiteral(lease.accessMode, MANAGED_ACCESS_MODES)
     || (lease.accessMode === "schema" && (
-      lease.provider !== "neon" || lease.engine !== "postgres"
+      (lease.provider !== "neon" && lease.provider !== "gcpCloudSql")
+      || lease.engine !== "postgres"
     ))
     || !validRfc3339Instant(lease.expiresAt)
     || (lease.provider === "gcpCloudSql") !== Boolean(connector)

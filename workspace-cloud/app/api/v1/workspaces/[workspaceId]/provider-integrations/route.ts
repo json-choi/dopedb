@@ -273,7 +273,7 @@ export async function POST(request: Request, context: RouteContext) {
     let grantedScope: string;
     let neonConfigurationCredential: NeonCredential | null = null;
     let gcpIdentity:
-      | ReturnType<typeof gcpCloudSqlIntegrationIdentity>
+      | Awaited<ReturnType<typeof gcpCloudSqlIntegrationIdentity>>
       | null = null;
     let localVerificationTarget: GcpLocalVerificationTarget | null = null;
     let production: boolean | null = null;
@@ -371,13 +371,15 @@ export async function POST(request: Request, context: RouteContext) {
       }
       stage = "gcp_credential_validation";
       await validateGcpCloudSqlCredential(credential, oidcToken);
-      gcpIdentity = gcpCloudSqlIntegrationIdentity(credential);
+      gcpIdentity = await gcpCloudSqlIntegrationIdentity(credential);
       localVerificationTarget = gcpLocalVerificationTarget(credential);
       externalAccountId = gcpIdentity.externalAccountId;
       displayName = `GCP Cloud SQL · ${credential.projectId} / ${credential.instanceId}`;
-      grantedScope = credential.writeServiceAccountEmail
-        ? "cloudsql.read cloudsql.write"
-        : "cloudsql.read";
+      grantedScope = [
+        "cloudsql.read",
+        ...(credential.writeServiceAccountEmail ? ["cloudsql.write"] : []),
+        ...(credential.schemaServiceAccountEmail ? ["cloudsql.schema"] : []),
+      ].join(" ");
     } else {
       credential = parseVaultCredential(body.configuration);
       await verifyVaultCredential(credential);

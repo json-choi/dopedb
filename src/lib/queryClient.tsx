@@ -69,11 +69,6 @@ export async function cancelWorkspaceResourceQueries(queryClient: QueryClient) {
   await queryClient.cancelQueries({ predicate: isWorkspaceResource });
 }
 
-/** Re-read mounted private resources only after the current native authority is proven unchanged. */
-export async function refetchWorkspaceResourceQueries(queryClient: QueryClient) {
-  await queryClient.refetchQueries({ predicate: isWorkspaceResource, type: "active" });
-}
-
 /** Resume only data-less private observers stranded by a completed scope replacement. */
 export async function resumePendingWorkspaceResourceQueries(queryClient: QueryClient) {
   await queryClient.refetchQueries({

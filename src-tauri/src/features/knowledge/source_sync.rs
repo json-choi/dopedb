@@ -8,16 +8,11 @@ use serde::Serialize;
 use uuid::Uuid;
 
 use crate::error::{AppError, AppResult};
-use crate::kernel::access::{ActiveResourceScope, WorkspaceKind};
-use crate::kernel::identity::{AccountId, WorkspaceId};
 
 use super::adapters::local::{LocalFolderAdapter, LocalFolderWatch};
-use super::domain::{
-    validate_graph_publish, Project, ProjectDefinition, ProjectEnvironment, SourceHealthState,
-    SourceSnapshot,
-};
+use super::domain::{validate_graph_publish, SourceHealthState, SourceSnapshot};
 use super::extractor::build_graph;
-use super::ports::{LocalKnowledgeSourcePort, RemoteKnowledgeEnvironment, RemoteKnowledgeProject};
+use super::ports::LocalKnowledgeSourcePort;
 use super::KnowledgeFeature;
 
 #[derive(Debug, Clone, Serialize)]
@@ -100,38 +95,13 @@ impl KnowledgeSourceSynchronizer {
             .into_iter()
             .find(|candidate| candidate.binding.source_id == source_id)
             .ok_or_else(|| AppError::NotFound("the Project Knowledge source".into()))?;
-        let previous_artifact = self.knowledge.active_for_source(source_id).await?;
         if stored.binding.provider == KnowledgeSourceProvider::Github {
-            let remote = self.active_remote_scope(active_scope).await?;
-            let previous_graph_revision_id = self
-                .knowledge
-                .request_remote_source_sync(
-                    remote.account.as_str(),
-                    remote.remote_workspace_id,
-                    source_id,
-                )
-                .await?;
-            return Ok(KnowledgeSyncReceipt {
-                source_id,
-                state: SourceHealthState::Syncing,
-                graph_revision_id: previous_graph_revision_id,
-                parsed_files: previous_artifact
-                    .as_ref()
-                    .map_or(0, |artifact| artifact.health.parsed_files),
-                skipped_files: previous_artifact
-                    .as_ref()
-                    .map_or(0, |artifact| artifact.health.skipped_files),
-                changed_files: previous_artifact
-                    .as_ref()
-                    .map_or_else(Vec::new, |artifact| artifact.changed_files.clone()),
-                node_count: previous_artifact
-                    .as_ref()
-                    .map_or(0, |artifact| artifact.nodes.len()),
-                edge_count: previous_artifact
-                    .as_ref()
-                    .map_or(0, |artifact| artifact.edges.len()),
+            return Err(AppError::Blocked {
+                reason: "hosted GitHub Knowledge sources are revision-tracked by the workspace"
+                    .into(),
             });
         }
+        let previous_artifact = self.knowledge.active_for_source(source_id).await?;
 
         let parent = previous_artifact
             .as_ref()
@@ -186,102 +156,6 @@ impl KnowledgeSourceSynchronizer {
             node_count: artifact.nodes.len(),
             edge_count: artifact.edges.len(),
         })
-    }
-
-    async fn active_remote_scope(
-        &self,
-        scope: ActiveResourceScope,
-    ) -> AppResult<ActiveRemoteKnowledgeScope> {
-        let account_value = scope.selected_account_id.as_ref().ok_or_else(|| {
-            AppError::Config("Sign in to connect GitHub to Personal Workspace".into())
-        })?;
-        let account = AccountId::new(account_value.clone())
-            .ok_or_else(|| AppError::Config("the selected workspace account is invalid".into()))?;
-        let projects = if scope.workspace_kind == WorkspaceKind::Personal {
-            self.knowledge
-                .knowledge_projects(scope.workspace_id)
-                .await?
-                .into_iter()
-                .map(project_projection)
-                .collect::<Vec<_>>()
-        } else {
-            let projects = self
-                .knowledge
-                .list_remote_projects(account.as_str(), scope.workspace_id)
-                .await?;
-            for project in &projects {
-                self.knowledge
-                    .save_knowledge_project(&project_definition(scope.workspace_id, project))
-                    .await?;
-            }
-            self.knowledge
-                .retain_knowledge_projects(
-                    scope.workspace_id,
-                    &projects
-                        .iter()
-                        .map(|project| project.id)
-                        .collect::<Vec<_>>(),
-                )
-                .await?;
-            projects
-        };
-        let remote_workspace_id = if scope.workspace_kind == WorkspaceKind::Personal {
-            self.knowledge
-                .ensure_personal_scope(account.as_str(), &projects)
-                .await?
-                .workspace_id
-        } else {
-            scope.workspace_id
-        };
-        Ok(ActiveRemoteKnowledgeScope {
-            account,
-            remote_workspace_id,
-        })
-    }
-}
-
-struct ActiveRemoteKnowledgeScope {
-    account: AccountId,
-    remote_workspace_id: Uuid,
-}
-
-fn project_definition(workspace_id: Uuid, project: &RemoteKnowledgeProject) -> ProjectDefinition {
-    ProjectDefinition {
-        project: Project {
-            id: project.id,
-            workspace_id: WorkspaceId::from(workspace_id),
-            name: project.name.clone(),
-            revision: project.revision,
-        },
-        environments: project
-            .environments
-            .iter()
-            .map(|environment| ProjectEnvironment {
-                id: environment.id,
-                project_id: project.id,
-                name: environment.name.clone(),
-                risk_class: environment.risk_class,
-                revision: environment.revision,
-            })
-            .collect(),
-    }
-}
-
-fn project_projection(definition: ProjectDefinition) -> RemoteKnowledgeProject {
-    RemoteKnowledgeProject {
-        id: definition.project.id,
-        name: definition.project.name,
-        revision: definition.project.revision,
-        environments: definition
-            .environments
-            .into_iter()
-            .map(|environment| RemoteKnowledgeEnvironment {
-                id: environment.id,
-                name: environment.name,
-                risk_class: environment.risk_class,
-                revision: environment.revision,
-            })
-            .collect(),
     }
 }
 

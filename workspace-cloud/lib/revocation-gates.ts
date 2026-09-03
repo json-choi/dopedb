@@ -311,7 +311,7 @@ function capabilityPredicate(input: ManagedLeaseAuthority) {
   if (input.accessMode === "schema") {
     return sql`${member.role} IN ('admin', 'owner')
         AND ${workspaceConnection.allowWrites} = TRUE
-        AND ${workspaceProviderIntegration.provider} = 'neon'
+        AND ${workspaceProviderIntegration.provider} IN ('neon', 'gcpCloudSql')
         AND ${workspaceConnection.engine} = 'postgres'
         AND ${workspaceProviderResource.capabilityManifest} -> 'write' = 'true'::jsonb`;
   }

@@ -8,14 +8,10 @@ import type {
   KnowledgeProject,
   KnowledgeInventory,
   KnowledgeSource,
-  KnowledgeSourceSyncProgress,
-  KnowledgeSyncResult,
   KnowledgeSourceChanged,
-  KnowledgeSearchResult,
   LocalKnowledgeSourceInput,
   EnvironmentConnection,
   BindEnvironmentConnectionInput,
-  KnowledgeMapping,
 } from "./domain";
 
 export function listKnowledgeProjects(): Promise<KnowledgeProject[]> {
@@ -46,26 +42,6 @@ export function revokeKnowledgeEnvironmentConnection(
   bindingId: string,
 ): Promise<void> {
   return invoke("revoke_knowledge_environment_connection", { projectEnvironmentId, bindingId });
-}
-
-export function listKnowledgeMappings(
-  projectEnvironmentId: string,
-): Promise<KnowledgeMapping[]> {
-  return invoke("list_knowledge_mappings", { projectEnvironmentId });
-}
-
-export function decideKnowledgeMapping(
-  projectEnvironmentId: string,
-  proposalId: string,
-  expectedGraphRevisionId: string,
-  decision: "approved" | "rejected",
-): Promise<void> {
-  return invoke("decide_knowledge_mapping", {
-    projectEnvironmentId,
-    proposalId,
-    expectedGraphRevisionId,
-    decision,
-  });
 }
 
 export function createKnowledgeProject(
@@ -114,18 +90,8 @@ export function listKnowledgeSources(): Promise<KnowledgeSource[]> {
   return invoke("list_knowledge_sources");
 }
 
-export function listKnowledgeSourceSyncProgress(): Promise<
-  KnowledgeSourceSyncProgress[]
-> {
-  return invoke("list_knowledge_source_sync_progress");
-}
-
 export function revokeKnowledgeSource(sourceId: string): Promise<void> {
   return invoke("revoke_knowledge_source", { sourceId });
-}
-
-export function syncKnowledgeSource(sourceId: string): Promise<KnowledgeSyncResult> {
-  return invoke("sync_knowledge_source", { sourceId });
 }
 
 export function onKnowledgeSourceChanged(
@@ -134,12 +100,4 @@ export function onKnowledgeSourceChanged(
   return listen<KnowledgeSourceChanged>("knowledge-source:changed", (event) =>
     listener(event.payload),
   );
-}
-
-export function searchKnowledgeGraph(
-  projectEnvironmentId: string,
-  query: string,
-  limit = 20,
-): Promise<KnowledgeSearchResult> {
-  return invoke("search_knowledge_graph", { projectEnvironmentId, query, limit });
 }

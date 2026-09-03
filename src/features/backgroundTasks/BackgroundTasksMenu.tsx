@@ -16,19 +16,9 @@ const STATUS_KEYS: Record<BackgroundTaskStatus, I18nKey> = {
   waitingPermission: "ide.backgroundTask.status.waitingPermission",
 };
 
-const KNOWLEDGE_PHASE_KEYS: Record<
-  Extract<BackgroundTask, { kind: "knowledge" }>["phase"],
-  I18nKey
-> = {
-  activating: "knowledge.syncPhaseActivating",
-  indexing: "knowledge.syncPhaseIndexing",
-  manifest: "knowledge.syncPhaseManifest",
-};
-
 function taskIcon(task: BackgroundTask): IconName {
   if (task.kind === "agent") return "user";
   if (task.kind === "query") return "terminal";
-  if (task.kind === "knowledge") return "branch";
   return task.operation === "import" ? "download" : "upload";
 }
 
@@ -50,14 +40,12 @@ export default function BackgroundTasksMenu({
   onCancel,
   onOpenAgent,
   onOpenQuery,
-  onOpenKnowledge,
 }: {
   tasks: BackgroundTask[];
   cancellingKeys: ReadonlySet<string>;
   onCancel: (task: BackgroundTask) => Promise<void>;
   onOpenAgent: (connectionId: string) => void;
   onOpenQuery: (sessionId: string) => void;
-  onOpenKnowledge: (projectEnvironmentId: string) => void;
 }) {
   const { t } = useI18n();
   const label = t("ide.backgroundProcesses", { count: tasks.length });
@@ -101,36 +89,14 @@ export default function BackgroundTasksMenu({
       <div role="presentation" className="tw:grid">
         {tasks.map((task) => {
           const cancelling = cancellingKeys.has(task.key);
-          const canOpen =
-            task.kind === "agent" ||
-            task.kind === "query" ||
-            task.kind === "knowledge";
-          const context = task.kind === "knowledge"
-            ? `${task.projectName} / ${task.environmentName} · ${t(
-                KNOWLEDGE_PHASE_KEYS[task.phase],
-              )} · ${
-                task.totalFiles > 0
-                  ? t("knowledge.syncProgressFiles", {
-                      completed: task.completedFiles.toLocaleString(),
-                      total: task.totalFiles.toLocaleString(),
-                      remaining: task.remainingFiles.toLocaleString(),
-                    })
-                  : t("knowledge.syncProgressPreparing")
-              }${
-                task.retryAt
-                  ? ` · ${t("knowledge.syncRetryAt", {
-                      attempt: task.attempt.toLocaleString(),
-                      time: new Date(task.retryAt).toLocaleTimeString(),
-                    })}`
-                  : ""
-              }`
-            : `${task.connectionName} · ${t(STATUS_KEYS[task.status])}${
-                task.rowsProcessed !== null
-                  ? ` · ${t("ide.backgroundTask.rows", {
-                      count: task.rowsProcessed.toLocaleString(),
-                    })}`
-                  : ""
-              }`;
+          const canOpen = task.kind === "agent" || task.kind === "query";
+          const context = `${task.connectionName} · ${t(STATUS_KEYS[task.status])}${
+            task.rowsProcessed !== null
+              ? ` · ${t("ide.backgroundTask.rows", {
+                  count: task.rowsProcessed.toLocaleString(),
+                })}`
+              : ""
+          }`;
           return (
             <div
               key={task.key}
@@ -183,18 +149,6 @@ export default function BackgroundTasksMenu({
                       size="xs"
                       variant="ghost"
                       onClick={() => onOpenAgent(task.connectionId)}
-                    >
-                      <Icon name="externalLink" />
-                      {t("ide.backgroundTask.open")}
-                    </Button>
-                  ) : task.kind === "knowledge" ? (
-                    <Button
-                      role="menuitem"
-                      size="xs"
-                      variant="ghost"
-                      onClick={() =>
-                        onOpenKnowledge(task.projectEnvironmentId)
-                      }
                     >
                       <Icon name="externalLink" />
                       {t("ide.backgroundTask.open")}

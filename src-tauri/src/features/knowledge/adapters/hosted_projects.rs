@@ -357,39 +357,6 @@ pub(super) fn valid_remote_mapping(mapping: &KnowledgeMappingProposal) -> bool {
         && !mapping.target_identity.chars().any(char::is_control)
 }
 
-pub(super) async fn list_remote_knowledge_mappings(
-    user_id: &str,
-    workspace_id: Uuid,
-) -> AppResult<Vec<KnowledgeMappingProposal>> {
-    let token = bearer(user_id).await?;
-    let response = client()?
-        .get(format!(
-            "{}/api/v1/workspaces/{workspace_id}/knowledge/mappings",
-            origin()?
-        ))
-        .bearer_auth(token.as_str())
-        .send()
-        .await
-        .map_err(|error| request_error("loading Knowledge mappings", error))?;
-    if !response.status().is_success() {
-        return Err(oauth_error(response).await);
-    }
-    let mappings =
-        knowledge_response::<KnowledgeMappingsResponse>(response, "reading Knowledge mappings")
-            .await?
-            .mappings;
-    if mappings.len() > 10_000
-        || mappings
-            .iter()
-            .any(|mapping| !valid_remote_mapping(mapping))
-    {
-        return Err(AppError::Network(
-            "Project Knowledge returned invalid mappings".into(),
-        ));
-    }
-    Ok(mappings)
-}
-
 pub(super) async fn propose_remote_knowledge_mapping(
     user_id: &str,
     workspace_id: Uuid,
@@ -437,43 +404,6 @@ pub(super) async fn propose_remote_knowledge_mapping(
         ));
     }
     Ok(mapping)
-}
-
-pub(super) async fn decide_remote_knowledge_mapping(
-    user_id: &str,
-    workspace_id: Uuid,
-    mapping_id: Uuid,
-    expected_graph_revision_id: Uuid,
-    decision: MappingProposalState,
-) -> AppResult<()> {
-    let decision = match decision {
-        MappingProposalState::Approved => "approved",
-        MappingProposalState::Rejected => "rejected",
-        _ => {
-            return Err(AppError::Config(
-                "a remote Knowledge mapping decision must be final".into(),
-            ));
-        }
-    };
-    let token = bearer(user_id).await?;
-    let response = client()?
-        .patch(format!(
-            "{}/api/v1/workspaces/{workspace_id}/knowledge/mappings",
-            origin()?
-        ))
-        .bearer_auth(token.as_str())
-        .json(&DecideKnowledgeMappingRequest {
-            mapping_id,
-            expected_graph_revision_id,
-            decision,
-        })
-        .send()
-        .await
-        .map_err(|error| request_error("deciding a Knowledge mapping", error))?;
-    if !response.status().is_success() {
-        return Err(oauth_error(response).await);
-    }
-    Ok(())
 }
 
 pub(super) async fn download_knowledge_graph(

@@ -2,7 +2,6 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
 import { isUuid, jsonError, mutationAllowed, privateJson } from "@/lib/http";
-import { requeueGithubKnowledgeSync } from "@/lib/knowledge/sync-queue";
 import {
   knowledgeMutationAuthority,
   knowledgeMutationAuthoritySql,
@@ -18,17 +17,10 @@ export async function POST(request: Request, context: RouteContext) {
   if (!isUuid(workspaceId) || !isUuid(sourceId)) return jsonError("Invalid source id", 400);
   const authorization = await authorizeWorkspace(request, workspaceId, "manage");
   if (!authorization.ok) return jsonError(authorization.error, authorization.status);
-  if (!env.knowledgeGraphBuildsEnabled()) {
-    return jsonError("Knowledge graph indexing is temporarily disabled; this source is available through exact-commit browsing", 409);
-  }
-  const authority = knowledgeMutationAuthority(authorization, workspaceId, "manage");
-  const queued = await requeueGithubKnowledgeSync({
-    organizationId: workspaceId,
-    sourceId,
-    authority,
-  });
-  if (!queued) return jsonError("GitHub Knowledge source not found", 404);
-  return privateJson({ queued: true, ...queued }, { status: 202 });
+  return jsonError(
+    "Knowledge graph indexing is not available; this source uses exact-commit browsing",
+    409,
+  );
 }
 
 export async function DELETE(request: Request, context: RouteContext) {

@@ -8,9 +8,7 @@ export type KnowledgeEnvironment = {
 export type KnowledgeEnvironmentView =
   | "sources"
   | "databases"
-  | "mappings"
-  | "analyses"
-  | "explore";
+  | "analyses";
 
 export type KnowledgeEnvironmentFocus = {
   environmentId: string | null;
@@ -81,22 +79,6 @@ export type KnowledgeInventory = {
   sources: KnowledgeSource[];
 };
 
-export type KnowledgeSourceSyncProgress = {
-  sourceId: string;
-  projectEnvironmentId: string;
-  displayName: string;
-  projectName: string;
-  environmentName: string;
-  phase: "manifest" | "indexing" | "activating";
-  state: "queued" | "claimed";
-  totalFiles: number;
-  completedFiles: number;
-  attempt: number;
-  startedAt: string;
-  updatedAt: string;
-  retryAt: string | null;
-};
-
 export type CreateKnowledgeProjectInput = {
   name: string;
   environments: Array<{ name: string; riskClass: KnowledgeEnvironment["riskClass"] }>;
@@ -124,37 +106,10 @@ export type LocalKnowledgeSourceInput = {
   displayName: string;
 };
 
-export type KnowledgeSyncResult = {
-  sourceId: string;
-  state: "ready" | "syncing";
-  graphRevisionId: string | null;
-  parsedFiles: number;
-  skippedFiles: number;
-  changedFiles: string[];
-  nodeCount: number;
-  edgeCount: number;
-};
-
 export type KnowledgeSourceChanged = {
   sourceId: string;
   state: "syncing" | "ready" | "failed";
   errorKind: string | null;
-};
-
-export type KnowledgeNode = {
-  id: string;
-  kind: "file" | "module" | "type" | "function" | "route" | "table" | "column" | "migration" | "event";
-  name: string;
-  qualifiedName: string;
-  attributes?: Record<string, string>;
-};
-
-export type KnowledgeSearchResult = {
-  graphRevisionIds: string[];
-  matches: Array<{
-    graphRevisionId: string;
-    node: KnowledgeNode;
-  }>;
 };
 
 export type EnvironmentConnection = {
@@ -177,20 +132,4 @@ export type BindEnvironmentConnectionInput = {
   connectionId: string;
   role: string;
   alias: string;
-};
-
-export type KnowledgeMapping = {
-  id: string;
-  projectEnvironmentId: string;
-  graphRevisionId: string;
-  connectionId: string;
-  connectionRevision: number;
-  database: string;
-  schemaFingerprint: string;
-  fromNodeId: string;
-  fromNodeName: string;
-  targetKind: "table" | "column";
-  targetIdentity: string;
-  state: "proposed" | "approved" | "rejected" | "stale";
-  proposedAt: string;
 };

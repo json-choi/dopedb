@@ -248,7 +248,7 @@ Elevation은 세 단계만 허용한다.
   기기에서는 Apple Silicon/Intel/Windows 선택 surface로 이동한다. 추천과 수동
   선택 analytics를 구분하며 user-agent 추측으로 잘못된 DMG를 자동 선택하지 않는다.
 - `workspace-cloud/app/components/Controls`: workspace 관리 화면의
-  `ControlButton`, `ControlLink`, field/input/select/textarea 밀도를 함께 소유한다.
+  `ControlButton`, `ControlLink`, field/input/select 밀도를 함께 소유한다.
   외부 관리 콘솔로 이동하는 action도 화면에서 button utility를 복사하지 않고
   `ControlLink`를 사용한다. Workspace 관리 panel의 header와 최상위 본문은
   desktop 24px, 640px 이하 16px의 같은 content gutter를 사용한다. Database
@@ -810,7 +810,6 @@ Surface는 기본적으로 `card + border + rounded-lg + no shadow`다. floating
 - `StatusBadge tone="success"`: 성공/trust
 - `StatusBadge tone="warning"`: warning/review
 - `StatusBadge tone="danger"`: 오류/차단
-- `.badge.nowhere`: 실행 위치가 없어 실제로 차단된 상태
 
 ### Form
 
@@ -833,8 +832,7 @@ Surface는 기본적으로 `card + border + rounded-lg + no shadow`다. floating
 
 워크벤치:
 
-- `.ds-workbench-head`, `.ds-workbench-title`, `.ds-title-line`
-- `.ds-meta-row`, `.ds-meta-dot`
+- `.ds-title-line`, `.ds-meta-dot`
 
 Toolbar:
 
@@ -844,7 +842,6 @@ Toolbar:
 
 Agent/safety:
 
-- `.ds-card-stack`, `.ds-card-title-row`, `.ds-card-row`
 - `.ds-tone-trust`
 - `.ds-attention-stack`, `.ds-attention-badge`
 

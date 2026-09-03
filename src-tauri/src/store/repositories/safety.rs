@@ -122,7 +122,7 @@ impl Store {
                 credential_mode == "managed"
                     && workspace_access == "manage"
                     && previous_ceiling
-                    && provider == "neon"
+                    && matches!(provider.as_str(), "neon" | "gcp_cloud_sql")
                     && engine == "postgres"
             };
         if s.allow_schema_changes && !schema_authorized {

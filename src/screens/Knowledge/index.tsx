@@ -26,39 +26,26 @@ import type {
   KnowledgeEnvironmentView,
 } from "../../features/knowledge/domain";
 import { knowledgeQueryKeys } from "../../features/knowledge/queryKeys";
-import {
-  knowledgeSyncProgressQuery,
-} from "../../features/knowledge/syncProgress";
 import { bindKnowledgeEnvironmentConnectionWithRefresh } from "../../features/knowledge/bindEnvironmentConnection";
 import {
   connectKnowledgeGithubSource,
   connectKnowledgeLocalFolder,
-  decideKnowledgeMapping,
   listKnowledgeGithubRepositories,
-  listKnowledgeMappings,
   listKnowledgeEnvironmentConnections,
   revokeKnowledgeSource,
   revokeKnowledgeEnvironmentConnection,
-  searchKnowledgeGraph,
-  syncKnowledgeSource,
 } from "../../features/knowledge/tauriAdapter";
 import { knowledgeInventoryQuery } from "../../features/knowledge/inventory";
 import {
   KnowledgeConnectSourceSection,
   KnowledgeSourceInventory,
 } from "../../features/knowledge/components/KnowledgeSourceSections";
-import {
-  KnowledgeExploreSection,
-  KnowledgeMappingSection,
-} from "../../features/knowledge/components/KnowledgeGraphSections";
 import { KnowledgeDatabaseSection } from "../../features/knowledge/components/KnowledgeDatabaseSection";
 import { KnowledgeWorkspaceHeader } from "../../features/knowledge/components/KnowledgeWorkspaceHeader";
 import { useKnowledgeGithubInstall } from "../../features/knowledge/useKnowledgeGithubInstall";
 import { useKnowledgeSourceActivity } from "../../features/knowledge/useKnowledgeSourceActivity";
 import {
-  KNOWLEDGE_GRAPH_UI_ENABLED,
   captureKnowledgeSyncOutcome,
-  finishKnowledgeSyncOutcome,
   type PendingKnowledgeSyncAnalytics,
 } from "../../features/knowledge/workspaceModel";
 import AnalysisArticles from "./AnalysisArticles";
@@ -108,22 +95,6 @@ export default function Knowledge({
   });
   const projectsPhase = queryResultPhase(projects.data, projects.error);
   const sourcesPhase = queryResultPhase(sources.data, sources.error);
-  const sourceRows = sources.data;
-  const sourceSyncProgress = useQuery(
-    knowledgeSyncProgressQuery(
-      catalogScope.key,
-      sharedWorkspace && KNOWLEDGE_GRAPH_UI_ENABLED,
-    ),
-  );
-  const sourceSyncProgressById = useMemo(
-    () => new Map(
-      (sourceSyncProgress.data ?? []).map((progress) => [
-        progress.sourceId,
-        progress,
-      ]),
-    ),
-    [sourceSyncProgress.data],
-  );
   const repositories = useQuery({
     queryKey: repositoryKey,
     queryFn: listKnowledgeGithubRepositories,
@@ -142,12 +113,10 @@ export default function Knowledge({
   );
   const [projectId, setProjectId] = useState("");
   const [environmentId, setEnvironmentId] = useState("");
-  const [provider, setProvider] = useState<"github" | "local_folder">("github");
   const [repositoryId, setRepositoryId] = useState("");
   const [refName, setRefName] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
   const [connectionId, setConnectionId] = useState("");
   const [connectionRole, setConnectionRole] = useState("primary");
   const [connectionAlias, setConnectionAlias] = useState("");
@@ -173,17 +142,9 @@ export default function Knowledge({
   const {
     pendingSyncAnalytics: pendingSourceSyncAnalytics,
     activity: sourceActivity,
-    setActivity: setSourceActivity,
   } = useKnowledgeSourceActivity(
-    catalogScope.key,
     sources.data,
     queryClient,
-  );
-  const hasSelectedEnvironmentSource = Boolean(
-    environmentId &&
-    sources.data?.some(
-      (source) => source.projectEnvironmentId === environmentId,
-    ),
   );
   const environmentConnections = useQuery({
     queryKey: knowledgeQueryKeys.environmentConnections(
@@ -197,20 +158,6 @@ export default function Knowledge({
     environmentConnections.data,
     environmentConnections.error,
   );
-  const mappingsKey = knowledgeQueryKeys.mappings(
-    environmentId,
-    catalogScope.key,
-  );
-  const mappings = useQuery({
-    queryKey: mappingsKey,
-    queryFn: () => listKnowledgeMappings(environmentId),
-    enabled:
-      sharedWorkspace &&
-      KNOWLEDGE_GRAPH_UI_ENABLED &&
-      Boolean(environmentId) &&
-      view === "sources" &&
-      hasSelectedEnvironmentSource,
-  });
   const selectedProject = useMemo(
     () => projects.data?.find((project) => project.id === projectId) ?? null,
     [projectId, projects.data],
@@ -254,7 +201,6 @@ export default function Knowledge({
     setProjectId("");
     setEnvironmentId("");
     setView("sources");
-    setProvider(githubProviderVisible ? "github" : "local_folder");
     setActionError(null);
     resetGithubInstall();
   }, [catalogScope.key, githubProviderVisible, resetGithubInstall]);
@@ -274,11 +220,7 @@ export default function Knowledge({
 
   useEffect(() => {
     if (!environmentFocus || !projects.data) return;
-    setView(
-      environmentFocus.view === "mappings" || environmentFocus.view === "explore"
-        ? "sources"
-        : environmentFocus.view,
-    );
+    setView(environmentFocus.view);
     if (environmentFocus.environmentId === null) return;
     const project = projects.data.find((candidate) =>
       candidate.environments.some(
@@ -313,9 +255,6 @@ export default function Knowledge({
   const refreshInventory = async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: sourceKey }),
-      queryClient.invalidateQueries({
-        queryKey: knowledgeQueryKeys.sourceSyncProgress(catalogScope.key),
-      }),
       queryClient.invalidateQueries({ queryKey: repositoryKey }),
       queryClient.invalidateQueries({
         queryKey: knowledgeQueryKeys.agentEnvironments(),
@@ -353,15 +292,6 @@ export default function Knowledge({
           );
         }
       }
-      setSourceActivity((current) => {
-        const next = new Map(current);
-        next.set(source.sourceId, {
-          state: "syncing",
-          errorKind: null,
-          previousGraphRevisionId: null,
-        });
-        return next;
-      });
       setActionError(null);
       await refreshInventory();
     },
@@ -428,82 +358,10 @@ export default function Knowledge({
       setActionError(null);
       await queryClient.invalidateQueries({ queryKey: sourceKey });
       await queryClient.invalidateQueries({
-        queryKey: knowledgeQueryKeys.sourceSyncProgress(catalogScope.key),
-      });
-      await queryClient.invalidateQueries({
         queryKey: knowledgeQueryKeys.agentEnvironments(),
       });
     },
     onError: (error) => setActionError(errMessage(error)),
-  });
-  const sync = useMutation({
-    mutationFn: syncKnowledgeSource,
-    onMutate: (sourceId) => {
-      const source = sourceRows?.find(
-        (candidate) => candidate.sourceId === sourceId,
-      );
-      const context = productAnalyticsWorkspaceContext(catalogScope);
-      if (source && context) {
-        pendingSourceSyncAnalytics.current.set(sourceId, {
-          attemptId: crypto.randomUUID(),
-          context,
-          previousGraphRevisionId: source.graphRevisionId,
-          sourceKind: source.provider,
-          syncReason: "manual",
-        });
-      }
-      setSourceActivity((current) => {
-        const next = new Map(current);
-        next.set(sourceId, { state: "syncing", errorKind: null });
-        return next;
-      });
-    },
-    onSuccess: async (result, sourceId) => {
-      if (result.state === "ready") {
-        finishKnowledgeSyncOutcome(
-          pendingSourceSyncAnalytics.current,
-          sourceId,
-          "success",
-        );
-      }
-      setSourceActivity((current) => {
-        const next = new Map(current);
-        next.set(sourceId, {
-          state: result.state,
-          errorKind: null,
-          previousGraphRevisionId:
-            result.state === "syncing" ? result.graphRevisionId : undefined,
-        });
-        return next;
-      });
-      setActionError(null);
-      await queryClient.invalidateQueries({ queryKey: sourceKey });
-      await queryClient.invalidateQueries({
-        queryKey: knowledgeQueryKeys.sourceSyncProgress(catalogScope.key),
-      });
-      await queryClient.invalidateQueries({
-        queryKey: knowledgeQueryKeys.agentEnvironments(),
-      });
-    },
-    onError: (error, sourceId) => {
-      finishKnowledgeSyncOutcome(
-        pendingSourceSyncAnalytics.current,
-        sourceId,
-        "failed",
-      );
-      setSourceActivity((current) => {
-        const next = new Map(current);
-        next.set(sourceId, { state: "failed", errorKind: "manual_sync" });
-        return next;
-      });
-      setActionError(errMessage(error));
-    },
-  });
-  const search = useMutation({
-    mutationFn: ({ environmentId, query }: { environmentId: string; query: string }) =>
-      searchKnowledgeGraph(environmentId, query),
-    onError: (error) => setActionError(errMessage(error)),
-    onSuccess: () => setActionError(null),
   });
   const bindConnection = useMutation({
     mutationFn: bindKnowledgeEnvironmentConnectionWithRefresh,
@@ -562,28 +420,6 @@ export default function Knowledge({
       await queryClient.invalidateQueries({
         queryKey: knowledgeQueryKeys.agentEnvironments(),
       });
-    },
-    onError: (error) => setActionError(errMessage(error)),
-  });
-  const decideMapping = useMutation({
-    mutationFn: ({
-      proposalId,
-      graphRevisionId,
-      decision,
-    }: {
-      proposalId: string;
-      graphRevisionId: string;
-      decision: "approved" | "rejected";
-    }) =>
-      decideKnowledgeMapping(
-        environmentId,
-        proposalId,
-        graphRevisionId,
-        decision,
-      ),
-    onSuccess: async () => {
-      setActionError(null);
-      await queryClient.invalidateQueries({ queryKey: mappingsKey });
     },
     onError: (error) => setActionError(errMessage(error)),
   });
@@ -647,7 +483,6 @@ export default function Knowledge({
         <KnowledgeConnectSourceSection
           projectName={selectedProject?.name ?? ""}
           environmentName={selectedEnvironment?.name ?? ""}
-          provider={provider}
           githubProviderVisible={githubProviderVisible}
           personalAuthResolved={personalAuthResolved}
           githubAvailable={githubAvailable}
@@ -663,7 +498,6 @@ export default function Knowledge({
           pending={pending}
           githubPending={connectGithub.isPending}
           localPending={connectLocal.isPending}
-          onProviderChange={setProvider}
           onRepositoryChange={(repository) => {
             setRepositoryId(repository.id);
             setRefName(repository.defaultBranch);
@@ -696,22 +530,6 @@ export default function Knowledge({
         />
       ) : null}
 
-      {KNOWLEDGE_GRAPH_UI_ENABLED &&
-      sharedWorkspace &&
-      (projects.data?.length ?? 0) > 0 &&
-      view === "sources" &&
-      selectedEnvironmentSources.length > 0 ? (
-        <KnowledgeMappingSection
-          mappings={mappings.data}
-          pending={mappings.isPending}
-          error={mappings.error}
-          decisionPending={decideMapping.isPending}
-          onRefresh={() => void mappings.refetch()}
-          onDecision={(proposalId, graphRevisionId, decision) =>
-            decideMapping.mutate({ proposalId, graphRevisionId, decision })
-          }
-        />
-      ) : null}
       {(projects.data?.length ?? 0) > 0 && view === "databases" ? (
         <KnowledgeDatabaseSection
           environmentSelected={Boolean(environmentId)}
@@ -763,31 +581,9 @@ export default function Knowledge({
           phase={sourcesPhase}
           sources={selectedEnvironmentSources}
           activityBySourceId={sourceActivity}
-          progressBySourceId={sourceSyncProgressById}
-          syncPending={sync.isPending}
-          syncingSourceId={sync.variables}
           revokePending={revoke.isPending}
           onRefresh={() => void sources.refetch()}
-          onSync={(sourceId) => sync.mutate(sourceId)}
           onRevoke={(sourceId) => revoke.mutate(sourceId)}
-        />
-      ) : null}
-
-      {KNOWLEDGE_GRAPH_UI_ENABLED &&
-      (projects.data?.length ?? 0) > 0 &&
-      view === "explore" ? (
-        <KnowledgeExploreSection
-          query={searchQuery}
-          result={search.data}
-          pending={search.isPending}
-          environmentSelected={Boolean(environmentId)}
-          onQueryChange={setSearchQuery}
-          onSearch={() =>
-            search.mutate({
-              environmentId,
-              query: searchQuery.trim(),
-            })
-          }
         />
       ) : null}
     </div>

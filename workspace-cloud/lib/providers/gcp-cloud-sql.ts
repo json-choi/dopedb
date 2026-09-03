@@ -2,14 +2,13 @@
 // Customer service-account keys are never created, uploaded, or persisted.
 import "server-only";
 
-import { boundedJsonResponse } from "../bounded-json-response";
 import {
   GCP_LEASE_SECONDS,
+  GCP_SCHEMA_LEASE_SECONDS,
   gcpCloudSqlEngine,
   gcpConnectionTarget,
   gcpDatabaseUsername,
   gcpWifAudience,
-  normalizeGcpUpstreamStatus,
   parseGcpCloudSqlCredential,
   type GcpCloudSqlCredential,
   type GcpCloudSqlResource,
@@ -20,29 +19,30 @@ import {
   type ManagedProviderLease,
   type ProviderResourceItem,
 } from "./provider-types";
-import { logGcpManagedAccessUpstreamRejection } from "../workspace-server-log";
+import {
+  gcpJsonRequest,
+  type GcpRequestStage,
+} from "./gcp-cloud-managed-http";
+import { verifyGcpSchemaServiceAccountPolicy } from "./gcp-cloud-schema-authority";
 
 const STS_URL = "https://sts.googleapis.com/v1/token";
 const IAM_CREDENTIALS_ORIGIN = "https://iamcredentials.googleapis.com";
 const SQL_ADMIN_ORIGIN = "https://sqladmin.googleapis.com/sql/v1beta4";
 const CLOUD_PLATFORM_SCOPE = "https://www.googleapis.com/auth/cloud-platform";
 const SQL_LOGIN_SCOPE = "https://www.googleapis.com/auth/sqlservice.login";
-const REQUEST_TIMEOUT_MS = 15_000;
-const MAX_TRANSIENT_REQUEST_ATTEMPTS = 3;
-const TRANSIENT_RETRY_BASE_MS = 500;
-const MAX_TOKEN_RESPONSE_BYTES = 64 * 1_024;
-const MAX_SQL_ADMIN_RESPONSE_BYTES = 512 * 1_024;
 type JsonObject = Record<string, unknown>;
-type GcpRequestStage =
-  | "federation"
-  | "serviceAccount"
-  | "cloudSqlAdmin.connectSettings"
-  | "cloudSqlAdmin.instance";
 
 type GcpAccessToken = {
   accessToken: string;
   expiresAt: string;
 };
+
+function object(value: unknown): JsonObject {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new ProviderRequestError("gcpCloudSql", "GCP returned an invalid response", 502);
+  }
+  return value as JsonObject;
+}
 
 function requireCurrentSecurityConfiguration(
   credential: GcpCloudSqlCredential,
@@ -58,13 +58,6 @@ function requireCurrentSecurityConfiguration(
   }
 }
 
-function object(value: unknown): JsonObject {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new ProviderRequestError("gcpCloudSql", "GCP returned an invalid response", 502);
-  }
-  return value as JsonObject;
-}
-
 function requiredString(value: unknown, field: string, maxLength: number) {
   if (
     typeof value !== "string"
@@ -75,20 +68,6 @@ function requiredString(value: unknown, field: string, maxLength: number) {
     throw new ProviderRequestError("gcpCloudSql", `GCP response omitted ${field}`, 502);
   }
   return value;
-}
-
-function googleErrorReason(value: unknown): string | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const details = (value as JsonObject).details;
-  if (!Array.isArray(details)) return null;
-  for (const detail of details) {
-    if (!detail || typeof detail !== "object" || Array.isArray(detail)) continue;
-    const reason = (detail as JsonObject).reason;
-    if (typeof reason === "string" && /^[A-Z0-9_]{1,128}$/.test(reason)) {
-      return reason;
-    }
-  }
-  return null;
 }
 
 function requestOidcToken(value: string | null) {
@@ -118,98 +97,11 @@ export function vercelOidcToken(request: Request): string | null {
   return null;
 }
 
-function transientGcpStatus(status: number) {
-  return status === 408
-    || status === 429
-    || status === 500
-    || status === 502
-    || status === 503
-    || status === 504;
-}
-
-// Every request through jsonRequest is either short-lived token issuance or a
-// read-only Cloud SQL inspection. Retrying these calls cannot widen IAM/DB
-// authority; the complete provider-authority sequence still has a 45s bound.
-async function waitForTransientRetry(attempt: number, deadline: number) {
-  const exponential = TRANSIENT_RETRY_BASE_MS * (2 ** attempt);
-  const jitter = Math.floor(Math.random() * TRANSIENT_RETRY_BASE_MS);
-  const delay = exponential + jitter;
-  if (Date.now() + delay >= deadline) return false;
-  await new Promise((resolve) => setTimeout(resolve, delay));
-  return true;
-}
-
-async function jsonRequest(
-  provider: string,
-  stage: GcpRequestStage,
-  url: string,
-  init: RequestInit,
-) {
-  const responseLimit = stage.startsWith("cloudSqlAdmin.")
-    ? MAX_SQL_ADMIN_RESPONSE_BYTES
-    : MAX_TOKEN_RESPONSE_BYTES;
-  const deadline = Date.now() + REQUEST_TIMEOUT_MS;
-  let response: Response | null = null;
-  let body: unknown = null;
-  for (let attempt = 0; attempt < MAX_TRANSIENT_REQUEST_ATTEMPTS; attempt += 1) {
-    const remainingMs = deadline - Date.now();
-    if (remainingMs <= 0) break;
-    response = await fetch(url, {
-      ...init,
-      cache: "no-store",
-      signal: AbortSignal.timeout(Math.max(1, remainingMs)),
-    }).catch(() => null);
-    body = response
-      ? await boundedJsonResponse(response, responseLimit).catch(() => null)
-      : null;
-    if (response?.ok) return object(body);
-    const retryable = response === null || transientGcpStatus(response.status);
-    if (
-      !retryable
-      || attempt + 1 >= MAX_TRANSIENT_REQUEST_ATTEMPTS
-      || !await waitForTransientRetry(attempt, deadline)
-    ) break;
-  }
-  if (!response) {
-    throw new ProviderRequestError(
-      provider,
-      "Google Cloud is temporarily unavailable. Retry the query.",
-      503,
-    );
-  }
-  const transient = transientGcpStatus(response.status);
-  const status = transient
-    ? 503
-    : normalizeGcpUpstreamStatus(response.status);
-  const googleError = body && typeof body === "object" && !Array.isArray(body)
-    ? (body as JsonObject).error
-    : null;
-  const googleStatus = googleError && typeof googleError === "object" && !Array.isArray(googleError)
-    && typeof (googleError as JsonObject).status === "string"
-    ? (googleError as JsonObject).status
-    : null;
-  const googleReason = googleErrorReason(googleError);
-  logGcpManagedAccessUpstreamRejection({
-    stage,
-    upstreamStatus: response.status,
-    googleStatus,
-    googleReason,
-  });
-  const message = transient
-    ? "Google Cloud temporarily could not issue managed database access. Retry the query."
-    : stage === "federation"
-      ? "GCP Workload Identity rejected the DopeDB deployment"
-      : stage === "serviceAccount"
-        ? "GCP service-account token issuance was denied"
-        : "Cloud SQL Admin denied the managed access check";
-  throw new ProviderRequestError(provider, message, status);
-}
-
 async function federatedToken(
   credential: GcpCloudSqlCredential,
   oidcToken: string,
 ) {
-  const body = await jsonRequest("gcpCloudSql", "federation", STS_URL, {
+  const body = await gcpJsonRequest("federation", STS_URL, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
@@ -229,10 +121,18 @@ async function serviceAccountTokenFromFederation(input: {
   federatedAccessToken: string;
   serviceAccountEmail: string;
   scope: string;
+  lifetimeSeconds?: number;
 }): Promise<GcpAccessToken> {
   requireCurrentSecurityConfiguration(input.credential);
-  const body = await jsonRequest(
-    "gcpCloudSql",
+  const lifetimeSeconds = input.lifetimeSeconds ?? GCP_LEASE_SECONDS;
+  if (
+    !Number.isInteger(lifetimeSeconds)
+    || lifetimeSeconds < 60
+    || lifetimeSeconds > GCP_LEASE_SECONDS
+  ) {
+    throw new ProviderRequestError("gcpCloudSql", "Invalid GCP token lifetime", 500);
+  }
+  const body = await gcpJsonRequest(
     "serviceAccount",
     `${IAM_CREDENTIALS_ORIGIN}/v1/projects/-/serviceAccounts/${
       encodeURIComponent(input.serviceAccountEmail)
@@ -245,7 +145,7 @@ async function serviceAccountTokenFromFederation(input: {
       },
       body: JSON.stringify({
         scope: [input.scope],
-        lifetime: `${GCP_LEASE_SECONDS}s`,
+        lifetime: `${lifetimeSeconds}s`,
       }),
     },
   );
@@ -259,7 +159,7 @@ async function serviceAccountTokenFromFederation(input: {
   if (
     !Number.isFinite(validMs)
     || validMs < 60_000
-    || validMs > (GCP_LEASE_SECONDS + 60) * 1_000
+    || validMs > (lifetimeSeconds + 60) * 1_000
   ) {
     throw new ProviderRequestError(
       "gcpCloudSql",
@@ -300,14 +200,28 @@ async function controlPlaneToken(
   });
 }
 
+function verifySchemaServiceAccountPolicy(
+  credential: GcpCloudSqlCredential,
+  controlAccessToken: string,
+) {
+  return verifyGcpSchemaServiceAccountPolicy({
+    credential,
+    controlAccessToken,
+    request: (url, init) => gcpJsonRequest(
+      "iam.serviceAccountPolicy",
+      url,
+      init,
+    ),
+  });
+}
+
 async function sqlAdminRequest(
   credential: GcpCloudSqlCredential,
   accessToken: string,
   stage: Extract<GcpRequestStage, `cloudSqlAdmin.${string}`>,
   path: string,
 ): Promise<JsonObject> {
-  return jsonRequest(
-    "gcpCloudSql",
+  return gcpJsonRequest(
     stage,
     `${SQL_ADMIN_ORIGIN}${path}`,
     {
@@ -375,12 +289,26 @@ export async function validateGcpCloudSqlCredential(
         scope: SQL_LOGIN_SCOPE,
       }),
     ] : []),
+    ...(credential.schemaServiceAccountEmail ? [
+      serviceAccountTokenFromFederation({
+        credential,
+        federatedAccessToken,
+        serviceAccountEmail: credential.schemaServiceAccountEmail,
+        scope: SQL_LOGIN_SCOPE,
+        lifetimeSeconds: GCP_SCHEMA_LEASE_SECONDS,
+      }),
+    ] : []),
   ]);
-  const details = await instanceDetailsWithToken(
-    credential,
-    control.accessToken,
-    credential.instanceId,
-  );
+  const [details] = await Promise.all([
+    instanceDetailsWithToken(
+      credential,
+      control.accessToken,
+      credential.instanceId,
+    ),
+    credential.schemaServiceAccountEmail
+      ? verifySchemaServiceAccountPolicy(credential, control.accessToken)
+      : Promise.resolve(),
+  ]);
   if (
     details.name !== credential.instanceId
     || !gcpCloudSqlEngine(details.databaseVersion)
@@ -623,10 +551,10 @@ export async function issueGcpCloudSqlLease(input: {
   accessMode: ManagedAccessMode;
   externalCredentialId: string;
 }): Promise<ManagedProviderLease> {
-  if (input.accessMode === "schema") {
+  if (input.accessMode === "schema" && input.resource.engine !== "postgres") {
     throw new ProviderRequestError(
       "gcpCloudSql",
-      "Cloud SQL managed schema access is not supported",
+      "Cloud SQL managed schema access requires PostgreSQL",
       409,
     );
   }
@@ -638,16 +566,23 @@ export async function issueGcpCloudSqlLease(input: {
     );
   }
   requireDedicatedInstance(input.credential, input.resource.instance);
-  const serviceAccountEmail = input.accessMode === "write"
-    ? input.credential.writeServiceAccountEmail
-    : input.credential.readServiceAccountEmail;
+  const serviceAccountEmail = input.accessMode === "schema"
+    ? input.credential.schemaServiceAccountEmail
+    : input.accessMode === "write"
+      ? input.credential.writeServiceAccountEmail
+      : input.credential.readServiceAccountEmail;
   if (!serviceAccountEmail) {
     throw new ProviderRequestError(
       "gcpCloudSql",
-      "Cloud SQL write service account is not configured",
+      input.accessMode === "schema"
+        ? "Reconnect this Cloud SQL integration to configure managed schema access"
+        : "Cloud SQL write service account is not configured",
       409,
     );
   }
+  const leaseSeconds = input.accessMode === "schema"
+    ? GCP_SCHEMA_LEASE_SECONDS
+    : GCP_LEASE_SECONDS;
   const federatedAccessToken = await federatedToken(
     input.credential,
     input.oidcToken,
@@ -657,6 +592,7 @@ export async function issueGcpCloudSqlLease(input: {
     federatedAccessToken,
     serviceAccountEmail,
     scope: CLOUD_PLATFORM_SCOPE,
+    lifetimeSeconds: leaseSeconds,
   });
   const controlTokenPromise = serviceAccountEmail
     === input.credential.readServiceAccountEmail
@@ -673,6 +609,7 @@ export async function issueGcpCloudSqlLease(input: {
       federatedAccessToken,
       serviceAccountEmail,
       scope: SQL_LOGIN_SCOPE,
+      lifetimeSeconds: leaseSeconds,
     }),
     connectorTokenPromise,
     controlTokenPromise,
@@ -693,6 +630,9 @@ export async function issueGcpCloudSqlLease(input: {
       input.resource.instance,
       input.resource.engine,
     ),
+    input.accessMode === "schema"
+      ? verifySchemaServiceAccountPolicy(input.credential, control.accessToken)
+      : Promise.resolve(),
   ]);
   const actualEngine = gcpCloudSqlEngine(settings.databaseVersion);
   if (

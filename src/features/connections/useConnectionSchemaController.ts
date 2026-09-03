@@ -80,7 +80,3 @@ export function useConnectionSchemaController(
     toggleScope,
   };
 }
-
-export type ConnectionSchemaController = ReturnType<
-  typeof useConnectionSchemaController
->;

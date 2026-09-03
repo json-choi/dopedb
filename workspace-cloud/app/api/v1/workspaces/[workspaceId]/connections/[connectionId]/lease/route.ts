@@ -45,6 +45,9 @@ type RouteContext = {
   params: Promise<{ workspaceId: string; connectionId: string }>;
 };
 
+const MANAGED_CONNECTION_RECOVERY_REQUIRED =
+  "managed_connection_recovery_required";
+
 // Leaves room for the 45-second provider-authority gate to fail closed and for
 // the pending reservation to be retired before the platform stops the request.
 export const maxDuration = 60;
@@ -122,12 +125,6 @@ export async function POST(request: Request, context: RouteContext) {
     request, workspaceId, connectionId, "use",
   );
   if (!authorization.ok) return jsonError(authorization.error, authorization.status);
-  if (
-    requestedAccessMode === "schema"
-    && managedLeaseContract !== MANAGED_LEASE_CONTRACT_VERSION
-  ) {
-    return jsonError("Update DopeDB to use managed schema access safely", 426);
-  }
   const connection = await db.query.workspaceConnection.findFirst({
     where: and(
       eq(workspaceConnection.id, connectionId),
@@ -167,6 +164,18 @@ export async function POST(request: Request, context: RouteContext) {
     : integration.provider;
   if (connection.provider !== expectedConnectionProvider) {
     return jsonError("Managed database provider does not match the connection", 409);
+  }
+  if (
+    requestedAccessMode === "schema"
+    && (
+      managedLeaseContract === LEGACY_MANAGED_LEASE_CONTRACT_VERSION
+      || (
+        integration.provider === "gcpCloudSql"
+        && managedLeaseContract !== MANAGED_LEASE_CONTRACT_VERSION
+      )
+    )
+  ) {
+    return jsonError("Update DopeDB to use managed schema access safely", 426);
   }
   if (
     integration.provider === "vault"
@@ -393,7 +402,15 @@ export async function POST(request: Request, context: RouteContext) {
       databaseCode: nestedDatabaseCode(error),
     });
     if (error instanceof ProviderRequestError) {
-      return jsonError(error.message, error.status);
+      return jsonError(
+        error.message,
+        error.status,
+        integration.provider === "gcpCloudSql"
+          && accessMode === "schema"
+          && error.message === "Reconnect this Cloud SQL integration to configure managed schema access"
+          ? MANAGED_CONNECTION_RECOVERY_REQUIRED
+          : undefined,
+      );
     }
     return jsonError("Managed database access could not be issued", 502);
   }

@@ -125,7 +125,7 @@ async function managedGcpTargetIntegrationId(input: {
   projectId: string;
   instanceId: string;
 }) {
-  const targetFingerprint = gcpCloudSqlTargetFingerprint(
+  const targetFingerprint = await gcpCloudSqlTargetFingerprint(
     input.projectId,
     input.instanceId,
   );

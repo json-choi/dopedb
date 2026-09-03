@@ -75,7 +75,7 @@ export const safetyCatalog = defineCatalog(
     "safety.mutationsEngineUnavailable":
       "This engine is read-only in DopeDB, so data and schema changes are unavailable.",
     "safety.schemaProviderUnavailable":
-      "Managed schema changes currently require a Neon PostgreSQL connection. Other providers remain available for read and data-change access.",
+      "Managed schema changes require a Neon or GCP Cloud SQL PostgreSQL connection. Other providers remain available for read and data-change access.",
     "safety.schemaRequiresManage":
       "Schema changes require the exact manage grant for this connection. A connection manager can choose the level here; there is no second permission screen.",
     "safety.workspacePolicyRollbackFailed":
@@ -156,7 +156,7 @@ export const safetyCatalog = defineCatalog(
     "safety.mutationsEngineUnavailable":
       "이 엔진은 DopeDB에서 읽기 전용이므로 데이터 변경과 스키마 변경을 사용할 수 없습니다.",
     "safety.schemaProviderUnavailable":
-      "관리형 스키마 변경은 현재 Neon PostgreSQL 연결에서 지원합니다. 다른 공급자는 읽기와 데이터 변경을 계속 사용할 수 있습니다.",
+      "관리형 스키마 변경은 Neon 또는 GCP Cloud SQL PostgreSQL 연결에서 지원합니다. 다른 공급자는 읽기와 데이터 변경을 계속 사용할 수 있습니다.",
     "safety.schemaRequiresManage":
       "스키마 변경에는 이 연결의 정확한 관리 권한이 필요합니다. 연결 관리자가 이 화면에서 단계를 선택하며 별도의 권한 화면은 없습니다.",
     "safety.workspacePolicyRollbackFailed":

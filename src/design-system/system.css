@@ -167,12 +167,6 @@ h3 {
   color: var(--ds-text);
 }
 
-.badge.nowhere {
-  background: var(--ds-danger-emphasis);
-  border-color: var(--ds-danger-emphasis);
-  color: var(--ds-destructive-foreground);
-}
-
 .ds-context-badge {
   min-width: 0;
   min-height: var(--ds-control-xs);
@@ -221,20 +215,6 @@ h3 {
   filter: grayscale(0.85) opacity(0.8);
 }
 
-.ds-workbench-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--ds-space-3);
-  min-width: 0;
-}
-
-.ds-workbench-title {
-  display: grid;
-  gap: var(--ds-space-1);
-  min-width: 0;
-}
-
 .ds-title-line {
   display: flex;
   align-items: center;
@@ -250,17 +230,6 @@ h3 {
   line-height: var(--ds-line-tight);
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.ds-meta-row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--ds-space-2);
-  min-width: 0;
-  color: var(--ds-text-muted);
-  font-size: var(--ds-font-size-sm);
-  line-height: var(--ds-line-ui);
 }
 
 .ds-meta-dot::before {
@@ -292,44 +261,6 @@ h3 {
   min-width: var(--ds-space-3);
 }
 
-.ds-card-stack {
-  min-width: 0;
-  display: grid;
-  gap: var(--ds-space-2);
-}
-
-.ds-card-title-row {
-  display: flex;
-  align-items: center;
-  gap: var(--ds-space-2);
-  min-width: 0;
-}
-
-.ds-card-row {
-  display: grid;
-  grid-template-columns: var(--ds-control-sm) minmax(0, 1fr);
-  align-items: center;
-  gap: var(--ds-space-2);
-  min-height: 64px;
-}
-
-.ds-card-row > .icon,
-.ds-card-title-row > .icon {
-  color: var(--ds-accent-text);
-  font-size: var(--ds-font-size-title);
-}
-
-.ds-card-row strong,
-.ds-card-title-row strong {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--ds-text);
-  font-size: var(--ds-font-size-ui);
-  line-height: var(--ds-line-ui);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .ds-tone-trust {
   border-color: var(--ds-trust-border);
   background: var(--ds-trust-bg);
@@ -359,8 +290,7 @@ h3 {
   margin-right: auto;
 }
 
-.app :where(input:not([type="checkbox"]):not([type="radio"]), select, textarea),
-.table-filter {
+.app :where(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
   box-sizing: border-box;
   border: var(--ds-border-width) solid var(--ds-input);
   border-radius: var(--ds-radius-sm);
@@ -369,16 +299,11 @@ h3 {
   font: inherit;
 }
 
-.app :where(input:not([type="checkbox"]):not([type="radio"]), select, textarea),
-.table-filter {
+.app :where(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
   height: var(--ds-control-field);
   min-height: var(--ds-control-field);
   padding: 0 var(--ds-control-pad-x-sm);
   line-height: var(--ds-line-ui);
-}
-
-.table-filter {
-  width: 100%;
 }
 
 .app :where(textarea) {
@@ -398,8 +323,7 @@ h3 {
   input:not([type="checkbox"]):not([type="radio"]):focus,
   select:focus,
   textarea:focus
-),
-.table-filter:focus {
+) {
   border-color: var(--ds-focus);
   box-shadow: var(--ds-focus-ring);
   outline: none;

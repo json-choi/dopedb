@@ -161,10 +161,10 @@ export function setupFingerprint(input: GcpCloudBootstrapInput) {
 }
 
 export function serviceAccountId(
-  kind: "read" | "write",
+  kind: "read" | "write" | "schema",
   fingerprint: string,
 ) {
-  const short = kind === "read" ? "r" : "w";
+  const short = kind === "read" ? "r" : kind === "write" ? "w" : "s";
   return `dopedb-${short}-${fingerprint}`;
 }
 
@@ -247,8 +247,11 @@ export function addBinding(
     && (binding.condition?.expression ?? "") === (expected.condition?.expression ?? "")
   ));
   if (matching) {
-    if (!matching.members.includes(expected.members[0])) {
-      matching.members.push(expected.members[0]);
+    const missingMembers = expected.members.filter(
+      (member) => !matching.members.includes(member),
+    );
+    if (missingMembers.length > 0) {
+      matching.members.push(...missingMembers);
       matching.members.sort();
       return true;
     }
@@ -492,11 +495,26 @@ export async function grantWorkloadIdentity(
   }]);
 }
 
+export async function grantSchemaPolicyInspection(
+  credential: GcpSetupCredential,
+  projectId: string,
+  schemaServiceAccountEmail: string,
+  readServiceAccountEmail: string,
+) {
+  const resource = `${IAM_ORIGIN}/v1/projects/${encodeURIComponent(projectId)
+  }/serviceAccounts/${encodeURIComponent(schemaServiceAccountEmail)}`;
+  await updateIamPolicy(credential, resource, [{
+    role: "roles/iam.serviceAccountViewer",
+    members: [`serviceAccount:${readServiceAccountEmail}`],
+  }]);
+}
+
 export async function grantCloudSqlRoles(
   credential: GcpSetupCredential,
   input: GcpCloudBootstrapInput,
   readEmail: string,
   writeEmail: string | null,
+  schemaEmail: string | null,
   fingerprint: string,
 ) {
   const target = `projects/${input.projectId}/instances/${input.instanceId}`;
@@ -512,6 +530,7 @@ export async function grantCloudSqlRoles(
       members: [
         `serviceAccount:${readEmail}`,
         ...(writeEmail ? [`serviceAccount:${writeEmail}`] : []),
+        ...(schemaEmail ? [`serviceAccount:${schemaEmail}`] : []),
       ],
     },
     {
@@ -538,6 +557,18 @@ export async function grantCloudSqlRoles(
       {
         role: "roles/cloudsql.instanceUser",
         members: [`serviceAccount:${writeEmail}`],
+        condition,
+      },
+    ] : []),
+    ...(schemaEmail ? [
+      {
+        role: "roles/cloudsql.client",
+        members: [`serviceAccount:${schemaEmail}`],
+        condition,
+      },
+      {
+        role: "roles/cloudsql.instanceUser",
+        members: [`serviceAccount:${schemaEmail}`],
         condition,
       },
     ] : []),

@@ -74,26 +74,6 @@ impl Store {
         Ok(projects)
     }
 
-    pub(in crate::features::knowledge::adapters) async fn knowledge_environment_exists(
-        &self,
-        workspace_id: Uuid,
-        project_environment_id: Uuid,
-    ) -> AppResult<bool> {
-        let exists: i64 = sqlx::query_scalar(
-            "SELECT EXISTS(
-                 SELECT 1
-                 FROM knowledge_project_environments environment
-                 JOIN knowledge_projects project ON project.id = environment.project_id
-                 WHERE environment.id = ?1 AND project.workspace_id = ?2
-             )",
-        )
-        .bind(project_environment_id.to_string())
-        .bind(workspace_id.to_string())
-        .fetch_one(self.pool())
-        .await?;
-        Ok(exists != 0)
-    }
-
     pub(in crate::features::knowledge::adapters) async fn create_knowledge_project(
         &self,
         workspace_id: Uuid,

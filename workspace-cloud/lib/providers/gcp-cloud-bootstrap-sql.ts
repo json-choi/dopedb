@@ -14,7 +14,6 @@ import {
 } from "./gcp-cloud-bootstrap-core";
 import {
   dataApiState,
-  databaseNames,
   ensureDatabaseUser,
   instanceDetails,
   prepareDatabaseBootstrapUser,
@@ -23,6 +22,10 @@ import {
   setDatabaseRoles,
   type GcpDatabaseBootstrapUser,
 } from "./gcp-cloud-bootstrap-database";
+import {
+  gcpSchemaDatabasePolicySql,
+  gcpSchemaOwnerInventorySql,
+} from "./gcp-cloud-schema-policy";
 
 export function responseStatusFailed(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
@@ -74,7 +77,7 @@ export async function executeSql(
           409,
         );
       }
-      return;
+      return body;
     } catch (error) {
       const retryable = error instanceof GcpUpstreamRequestError
         ? [400, 403, 409, 429, 500, 502, 503].includes(
@@ -98,6 +101,55 @@ export async function executeSql(
       );
     }
   }
+}
+
+function sqlStringColumn(body: JsonObject, columnName: string) {
+  const results = Array.isArray(body.results) ? body.results : [];
+  if (results.length !== 1) {
+    throw new ProviderRequestError(
+      "gcpCloudSql",
+      "Cloud SQL returned an invalid database inventory",
+      502,
+    );
+  }
+  const result = object(results[0]);
+  const columns = Array.isArray(result.columns) ? result.columns : [];
+  const rows = Array.isArray(result.rows) ? result.rows : [];
+  if (
+    columns.length !== 1
+    || object(columns[0]).name !== columnName
+    || rows.length > 101
+  ) {
+    throw new ProviderRequestError(
+      "gcpCloudSql",
+      "Cloud SQL returned an invalid database inventory",
+      502,
+    );
+  }
+  return rows.map((row) => {
+    const values = object(row).values;
+    if (!Array.isArray(values) || values.length !== 1) {
+      throw new ProviderRequestError(
+        "gcpCloudSql",
+        "Cloud SQL returned an invalid database inventory",
+        502,
+      );
+    }
+    const value = object(values[0]).value;
+    if (
+      typeof value !== "string"
+      || value.length === 0
+      || value.length > 63
+      || /[\u0000-\u001f\u007f]/.test(value)
+    ) {
+      throw new ProviderRequestError(
+        "gcpCloudSql",
+        "Cloud SQL returned an invalid database owner",
+        502,
+      );
+    }
+    return value;
+  });
 }
 
 export function pgIdentifier(value: string) {
@@ -125,9 +177,91 @@ export async function configurePostgresPrivileges(input: {
   databases: string[];
   readUser: JsonObject;
   writeUser: JsonObject | null;
+  schemaUser: JsonObject | null;
+  bootstrapUser: GcpDatabaseBootstrapUser;
   fingerprint: string;
 }) {
   const version = Number(/^POSTGRES_(\d+)/.exec(input.databaseVersion)?.[1] ?? "0");
+  const bootstrapDatabase = input.databases.includes("postgres")
+    ? "postgres"
+    : input.databases[0];
+  if (!bootstrapDatabase) {
+    throw new ProviderRequestError(
+      "gcpCloudSql",
+      "Cloud SQL has no database to configure",
+      409,
+    );
+  }
+  const schemaName = typeof input.schemaUser?.name === "string"
+    ? input.schemaUser.name
+    : null;
+  if (input.schemaUser && !schemaName) {
+    throw new ProviderRequestError(
+      "gcpCloudSql",
+      "Cloud SQL schema IAM username is unavailable",
+      409,
+    );
+  }
+  if (input.schemaUser && schemaName) {
+    if (input.bootstrapUser.originalRoles.includes(schemaName)) {
+      throw new ProviderRequestError(
+        "gcpCloudSql",
+        "Cloud SQL setup account already holds the managed schema role",
+        409,
+      );
+    }
+    const bootstrapName = typeof input.bootstrapUser.user.name === "string"
+      ? input.bootstrapUser.user.name
+      : null;
+    if (!bootstrapName) {
+      throw new ProviderRequestError(
+        "gcpCloudSql",
+        "Cloud SQL setup database user is unavailable",
+        409,
+      );
+    }
+    const ownerRoles = new Set<string>();
+    for (const database of input.databases.filter(
+      (name) => !["template0", "template1"].includes(name),
+    )) {
+      const inventory = await executeSql(
+        input.executor,
+        input.projectId,
+        input.instanceId,
+        database,
+        gcpSchemaOwnerInventorySql(schemaName),
+      );
+      for (const role of sqlStringColumn(inventory, "owner_role")) {
+        if (role !== bootstrapName) ownerRoles.add(role);
+      }
+    }
+    const temporaryRoles = [...new Set([
+      schemaName,
+      ...ownerRoles,
+    ])].filter((role) => (
+      role !== "cloudsqlsuperuser"
+      && !input.bootstrapUser.originalRoles.includes(role)
+    )).sort();
+    const resultingRoleCount = new Set([
+      ...input.bootstrapUser.originalRoles,
+      "cloudsqlsuperuser",
+      ...temporaryRoles,
+    ]).size;
+    if (resultingRoleCount > 100) {
+      throw new ProviderRequestError(
+        "gcpCloudSql",
+        "Cloud SQL schema ownership scope is too large to configure safely",
+        409,
+      );
+    }
+    await setDatabaseRoles(
+      input.control,
+      input.projectId,
+      input.instanceId,
+      input.bootstrapUser.user,
+      temporaryRoles,
+    );
+  }
   if (version >= 14) {
     await setDatabaseRoles(
       input.control,
@@ -172,21 +306,26 @@ export async function configurePostgresPrivileges(input: {
               };`
             : ""),
       );
+      if (schemaName) {
+        await executeSql(
+          input.executor,
+          input.projectId,
+          input.instanceId,
+          database,
+          gcpSchemaDatabasePolicySql({
+            postgresMajorVersion: version,
+            database,
+            schemaUser: schemaName,
+            readRole: null,
+            writeRole: null,
+          }),
+        );
+      }
     }
     return;
   }
   const readRole = `dopedb_r_${input.fingerprint}`;
   const writeRole = `dopedb_w_${input.fingerprint}`;
-  const bootstrapDatabase = input.databases.includes("postgres")
-    ? "postgres"
-    : input.databases[0];
-  if (!bootstrapDatabase) {
-    throw new ProviderRequestError(
-      "gcpCloudSql",
-      "Cloud SQL has no database to configure",
-      409,
-    );
-  }
   await executeSql(
     input.executor,
     input.projectId,
@@ -247,6 +386,25 @@ export async function configurePostgresPrivileges(input: {
       [writeRole],
     );
   }
+  if (schemaName) {
+    for (const database of input.databases.filter(
+      (name) => !["template0", "template1"].includes(name),
+    )) {
+      await executeSql(
+        input.executor,
+        input.projectId,
+        input.instanceId,
+        database,
+        gcpSchemaDatabasePolicySql({
+          postgresMajorVersion: version,
+          database,
+          schemaUser: schemaName,
+          readRole,
+          writeRole: input.writeUser ? writeRole : null,
+        }),
+      );
+    }
+  }
 }
 
 export async function configureMysqlPrivileges(input: {
@@ -292,15 +450,13 @@ export async function configureDatabasePrivileges(input: {
   configuration: GcpCloudBootstrapInput;
   engine: "postgres" | "mysql";
   databaseVersion: string;
+  databases: string[];
   readUser: JsonObject;
   writeUser: JsonObject | null;
+  schemaUser: JsonObject | null;
   fingerprint: string;
 }) {
-  const databases = await databaseNames(
-    input.credential,
-    input.configuration.projectId,
-    input.configuration.instanceId,
-  );
+  const databases = input.databases;
   const details = await instanceDetails(
     input.credential,
     input.configuration.projectId,
@@ -332,6 +488,8 @@ export async function configureDatabasePrivileges(input: {
         databases,
         readUser: input.readUser,
         writeUser: input.writeUser,
+        schemaUser: input.schemaUser,
+        bootstrapUser,
         fingerprint: input.fingerprint,
       });
     } else {

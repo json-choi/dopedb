@@ -33,32 +33,18 @@
   --ds-line-body: 1.55;
 
   /* Compact 4px spacing grid. */
-  --ds-space-0: 0;
   --ds-space-1: 4px;
   --ds-space-2: 8px;
   --ds-space-3: 12px;
   --ds-space-4: 16px;
-  --ds-space-5: 20px;
   --ds-space-6: 24px;
   --ds-space-8: 32px;
 
   /* Component rhythm */
-  --ds-action-gap: var(--ds-space-2);
   --ds-control-gap: var(--ds-space-2);
-  --ds-icon-text-gap-tight: 6px;
-  --ds-row-gap-tight: 1px;
   --ds-segment-gap: 2px;
-  --ds-optical-offset-xs: 2px;
-  --ds-optical-offset-sm: 3px;
   --ds-control-pad-x: var(--ds-space-4);
   --ds-control-pad-x-sm: var(--ds-space-3);
-  --ds-control-pad-x-xs: 6px;
-  --ds-chip-pad-y: 1px;
-  --ds-chip-pad-x: 6px;
-  --ds-chip-pad-x-sm: 5px;
-  --ds-chip-pad-x-xs: var(--ds-space-1);
-  --ds-chip-pad-x-2xs: 3px;
-  --ds-list-indent: 18px;
   --ds-popover-offset: var(--ds-space-1);
   --ds-popover-offset-lg: 6px;
   --ds-viewport-gutter: var(--ds-space-2);
@@ -78,7 +64,6 @@
   --ds-border-width-strong: 2px;
   --ds-border-width-bold: 3px;
   --ds-stroke-width: 1.5;
-  --ds-stroke-width-strong: 2.5;
   --ds-focus-width: var(--ds-border-width-strong);
   --ds-focus-offset: var(--ds-border-width-strong);
 
@@ -102,8 +87,6 @@
   --ds-control-lg: 36px;
   --ds-control-xl: 40px;
   --ds-control-field: var(--ds-control-lg);
-  --ds-control-field-sm: var(--ds-control-md);
-  --ds-control-field-xs: var(--ds-control-xs);
   --ds-tree-row-height: 24px;
   --ds-tree-row-padding-block: 2px;
   --ds-tree-badge-height: 20px;
@@ -116,10 +99,6 @@
   --ds-status-bar-height: 32px;
   --ds-panel-gutter: 4px;
   --ds-tool-window-primary-ratio: 46%;
-  --ds-sidebar-min: 180px;
-  --ds-sidebar-default: 304px;
-  --ds-sidebar-max: 520px;
-  --ds-window-controls-safe-height: 0px;
   --ds-pane-pad: 16px;
   --ds-line: var(--ds-border-width) solid var(--ds-border-subtle);
 
@@ -136,7 +115,6 @@
   --ds-primary: #3574f0;
   --ds-primary-foreground: #ffffff;
   --ds-primary-hover: #467ff2;
-  --ds-primary-active: #2f65ca;
   --ds-secondary: #393b40;
   --ds-secondary-foreground: #dfe1e5;
   --ds-muted: #2b2d30;
@@ -149,14 +127,11 @@
   --ds-ring: #548af7;
   --ds-editor-surface: #191a1c;
   --ds-worktree-sidebar: #191a1c;
-  --ds-worktree-sidebar-foreground: #dfe1e5;
   --ds-worktree-sidebar-accent: #2b2d30;
-  --ds-worktree-sidebar-border: rgb(255 255 255 / 0.08);
 
   /* DopeDB surface aliases */
   --ds-bg-app: var(--ds-card);
   --ds-bg-sidebar: var(--ds-worktree-sidebar);
-  --ds-sidebar-border: var(--ds-worktree-sidebar-border);
   --ds-surface-0: var(--ds-card);
   --ds-surface-1: var(--ds-background);
   --ds-surface-2: var(--ds-secondary);
@@ -167,30 +142,22 @@
   --ds-text-muted: var(--ds-muted-foreground);
   --ds-text-subtle: #6f737a;
   --ds-text-inverse: var(--ds-primary-foreground);
-  --ds-text-on-accent-muted: rgb(255 255 255 / 0.78);
-  --ds-border-on-accent: rgb(255 255 255 / 0.22);
   --ds-overlay: rgb(0 0 0 / 0.62);
 
   /*
    * Primary is the single affirmative action. Accent is a neutral selection
    * surface; strong color remains reserved for state.
    */
-  --ds-primary-text: var(--ds-foreground);
-  --ds-primary-soft: var(--ds-muted);
   --ds-accent: var(--ds-primary);
   --ds-accent-text: #6b9bfa;
-  --ds-accent-hover: var(--ds-primary-hover);
-  --ds-accent-active: var(--ds-primary-active);
   --ds-accent-soft: #25324d;
   --ds-hover: var(--ds-muted);
-  --ds-hover-strong: var(--ds-selection);
 
   /* Status colors keep state-only use of color. */
   --ds-info: #60a5fa;
   --ds-positive: #86efac;
   --ds-positive-soft: color-mix(in srgb, var(--ds-positive) 10%, transparent);
   --ds-caution: #fbbf24;
-  --ds-caution-soft: color-mix(in srgb, var(--ds-caution) 10%, transparent);
   --ds-critical: var(--ds-destructive);
   --ds-critical-emphasis: #df2225;
   --ds-critical-soft: color-mix(in srgb, var(--ds-critical) 10%, transparent);
@@ -198,13 +165,10 @@
   --ds-warning: var(--ds-caution);
   --ds-danger: var(--ds-critical);
   --ds-danger-emphasis: var(--ds-critical-emphasis);
-  --ds-status-border-mix: 42%;
 
   /* Trust/risk surfaces for agent-native workflows. */
   --ds-trust-bg: var(--ds-positive-soft);
   --ds-trust-border: color-mix(in srgb, var(--ds-positive) 25%, transparent);
-  --ds-risk-bg: var(--ds-caution-soft);
-  --ds-risk-border: color-mix(in srgb, var(--ds-caution) 25%, transparent);
   --ds-danger-bg: var(--ds-critical-soft);
   --ds-danger-border: color-mix(in srgb, var(--ds-critical) 25%, transparent);
 

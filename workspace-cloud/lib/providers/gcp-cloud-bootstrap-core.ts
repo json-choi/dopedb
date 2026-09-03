@@ -129,6 +129,7 @@ export type GcpCloudBootstrapResult = {
   databaseUsers: {
     read: string;
     write: string | null;
+    schema: string | null;
   };
 };
 

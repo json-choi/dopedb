@@ -18,7 +18,6 @@ import {
   knowledgeMutationAuthority,
   knowledgeMutationAuthoritySql,
 } from "@/lib/knowledge/mutation-authority";
-import { enqueueInitialGithubKnowledgeSync } from "@/lib/knowledge/sync-queue";
 import {
   knowledgeGithubInstallation,
   knowledgeProject,
@@ -132,7 +131,7 @@ export async function POST(request: Request, context: RouteContext) {
       SELECT ${body.sourceId}::uuid, ${workspaceId}, environment."project_id",
         environment."id", environment."revision", 'github', ${body.displayName.trim()},
         'shared_graph', installation."id", ${body.repositoryId}, ${repository.full_name},
-        ${body.refName}, ${commitSha}, ${env.knowledgeGraphBuildsEnabled() ? "pending" : "ready"}
+        ${body.refName}, ${commitSha}, 'ready'
       FROM ${knowledgeProjectEnvironment} AS environment
       JOIN ${knowledgeProject} AS project
         ON project."organization_id" = environment."organization_id"
@@ -180,15 +179,6 @@ export async function POST(request: Request, context: RouteContext) {
         || source.refName !== body.refName
       ))
     ) return jsonError("Knowledge source id is already bound", 409);
-    if (env.knowledgeGraphBuildsEnabled()) {
-      const jobId = await enqueueInitialGithubKnowledgeSync({
-        organizationId: workspaceId,
-        sourceId: body.sourceId,
-        commitSha,
-        authority,
-      });
-      if (!jobId) return jsonError("Knowledge source authority changed", 409);
-    }
     return privateJson({ source }, { status: 201 });
   } catch {
     return jsonError("GitHub source verification failed", 424);

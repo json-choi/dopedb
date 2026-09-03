@@ -613,5 +613,3 @@ export function useNeonBranchManager({
     setSwitchConnectionId,
   };
 }
-
-export type NeonBranchManagerController = ReturnType<typeof useNeonBranchManager>;

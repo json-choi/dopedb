@@ -556,7 +556,7 @@ export async function githubSourceManifest(
     }
     totalBytes += item.size ?? 0;
     if (files.length >= MAX_SOURCE_FILES || totalBytes > maxTotalBytes) {
-      throw new Error("GitHub repository exceeds the code-index manifest budget");
+      throw new Error("GitHub repository exceeds the source manifest budget");
     }
     files.push({ path: item.path, blobSha: item.sha, bytes: item.size ?? 0 });
   }

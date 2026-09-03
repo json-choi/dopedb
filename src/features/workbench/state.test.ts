@@ -33,10 +33,6 @@ import {
   initialAppShellMode,
 } from "../appShell/navigationState";
 import {
-  knowledgeSyncOverallPercent,
-  knowledgeSyncRemainingFiles,
-} from "../knowledge/syncProgress";
-import {
   AppUpdaterController,
   type AppUpdateResource,
   type AppUpdaterDownloadEvent,
@@ -281,31 +277,6 @@ describe("workbench state ownership", () => {
       kind: "content",
       route: { kind: "schemaDiff", groupKey: "schema-group" },
     });
-
-    const progress = {
-      sourceId: "source-1",
-      projectEnvironmentId: "environment-1",
-      displayName: "owner/repository",
-      projectName: "Project",
-      environmentName: "Production",
-      phase: "indexing" as const,
-      state: "claimed" as const,
-      totalFiles: 1_200,
-      completedFiles: 480,
-      attempt: 0,
-      startedAt: "2026-08-14T06:00:00Z",
-      updatedAt: "2026-08-14T06:05:00Z",
-      retryAt: null,
-    };
-    expect(knowledgeSyncOverallPercent(progress)).toBe(38);
-    expect(knowledgeSyncRemainingFiles(progress)).toBe(720);
-    expect(
-      knowledgeSyncOverallPercent({
-        ...progress,
-        phase: "activating",
-        completedFiles: progress.totalFiles,
-      }),
-    ).toBe(99);
 
     const firstDownload = deferred<void>();
     const retryDownload = deferred<void>();

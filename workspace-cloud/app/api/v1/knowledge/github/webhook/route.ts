@@ -1,19 +1,13 @@
 import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { env } from "@/lib/env";
 import { verifyGithubWebhook } from "@/lib/knowledge/github-app";
-import {
-  reconcileGithubKnowledgeCommit,
-  recordGithubKnowledgePush,
-  recordGithubSourceRevisions,
-} from "@/lib/knowledge/sync-queue";
+import { recordGithubSourceRevisions } from "@/lib/knowledge/source-revisions";
 import {
   knowledgeGithubInstallation,
   knowledgeSource,
 } from "@/lib/schema";
 
 const MAX_WEBHOOK_BYTES = 2 * 1024 * 1024;
-const MAX_CHANGED_FILES = 10_000;
 const RAW_SOURCE_REVISION_BATCH = 10_000;
 
 async function boundedBody(request: Request) {
@@ -43,33 +37,6 @@ function safeDelivery(value: string | null) {
   return value && /^[A-Za-z0-9-]{1,128}$/.test(value) ? value : null;
 }
 
-function safePath(value: unknown): value is string {
-  return typeof value === "string"
-    && value.length > 0
-    && value.length <= 4_096
-    && !value.startsWith("/")
-    && !value.includes("\\")
-    && !/[\u0000-\u001f\u007f-\u009f]/.test(value)
-    && value.split("/").every((segment) => segment && segment !== "." && segment !== "..");
-}
-
-function changedFiles(payload: Record<string, unknown>) {
-  const commits = Array.isArray(payload.commits) ? payload.commits : [];
-  const paths = new Set<string>();
-  for (const value of commits) {
-    if (!value || typeof value !== "object") continue;
-    const commit = value as Record<string, unknown>;
-    for (const key of ["added", "modified", "removed"] as const) {
-      const values = Array.isArray(commit[key]) ? commit[key] : [];
-      for (const path of values) {
-        if (safePath(path)) paths.add(path);
-        if (paths.size > MAX_CHANGED_FILES) return [];
-      }
-    }
-  }
-  return [...paths].sort();
-}
-
 function positiveInteger(value: unknown): bigint | null {
   if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) return null;
   return BigInt(value);
@@ -90,22 +57,6 @@ function repositories(value: unknown) {
     if (id) result.push({ id: id.toString(), fullName });
   }
   return result;
-}
-
-async function requeueSources(
-  sources: Array<{ organizationId: string; id: string; commitSha: string | null }>,
-) {
-  let queued = false;
-  for (const source of sources) {
-    if (!source.commitSha) continue;
-    await reconcileGithubKnowledgeCommit({
-      organizationId: source.organizationId,
-      sourceId: source.id,
-      observedCommitSha: source.commitSha,
-    });
-    queued = true;
-  }
-  return queued;
 }
 
 export async function POST(request: Request) {
@@ -132,13 +83,11 @@ export async function POST(request: Request) {
   if (!installationId) return new Response(null, { status: 202 });
   const installations = await db.select({
     id: knowledgeGithubInstallation.id,
-    organizationId: knowledgeGithubInstallation.organizationId,
   }).from(knowledgeGithubInstallation).where(eq(
     knowledgeGithubInstallation.installationId,
     installationId,
   ));
   if (installations.length === 0) return new Response(null, { status: 202 });
-  const graphBuildsEnabled = env.knowledgeGraphBuildsEnabled();
   const installationIds = installations.map((installation) => installation.id);
 
   if (event === "push") {
@@ -158,7 +107,6 @@ export async function POST(request: Request) {
       ? payload.after
       : null;
     if (!repositoryId || !refName || !before) return new Response(null, { status: 202 });
-    const files = changedFiles(payload);
     const shortRef = refName.replace(/^refs\/(?:heads|tags)\//, "");
     const sources = await db.select({
       id: knowledgeSource.id,
@@ -172,29 +120,16 @@ export async function POST(request: Request) {
       ),
       isNull(knowledgeSource.revokedAt),
     ));
-    if (graphBuildsEnabled) {
-      for (const source of sources) {
-        await recordGithubKnowledgePush({
+    for (let offset = 0; offset < sources.length; offset += RAW_SOURCE_REVISION_BATCH) {
+      await recordGithubSourceRevisions(
+        sources.slice(offset, offset + RAW_SOURCE_REVISION_BATCH).map((source) => ({
           organizationId: source.organizationId,
           sourceId: source.id,
           deliveryId,
           beforeCommitSha: before,
           afterCommitSha: after,
-          changedFiles: files,
-        });
-      }
-    } else {
-      for (let offset = 0; offset < sources.length; offset += RAW_SOURCE_REVISION_BATCH) {
-        await recordGithubSourceRevisions(
-          sources.slice(offset, offset + RAW_SOURCE_REVISION_BATCH).map((source) => ({
-            organizationId: source.organizationId,
-            sourceId: source.id,
-            deliveryId,
-            beforeCommitSha: before,
-            afterCommitSha: after,
-          })),
-        );
-      }
+        })),
+      );
     }
   } else if (event === "installation") {
     const action = typeof payload.action === "string" ? payload.action : "";
@@ -220,8 +155,8 @@ export async function POST(request: Request) {
           updatedAt: new Date(),
         }).where(inArray(knowledgeSource.githubInstallationId, installationIds));
       } else {
-        const sources = await db.update(knowledgeSource).set({
-          syncState: graphBuildsEnabled ? "pending" : "ready",
+        await db.update(knowledgeSource).set({
+          syncState: "ready",
           syncRevision: sql`${knowledgeSource.syncRevision} + 1`,
           lastFailureCode: null,
           revokedAt: null,
@@ -229,14 +164,7 @@ export async function POST(request: Request) {
         }).where(inArray(
           knowledgeSource.githubInstallationId,
           installationIds,
-        )).returning({
-          organizationId: knowledgeSource.organizationId,
-          id: knowledgeSource.id,
-          commitSha: knowledgeSource.commitSha,
-        });
-        if (graphBuildsEnabled) {
-          await requeueSources(sources);
-        }
+        ));
       }
     }
   } else if (event === "installation_repositories") {
@@ -247,10 +175,10 @@ export async function POST(request: Request) {
         ? repositories(payload.repositories_added)
         : [];
     if (changed.length > 0) {
-      const sources = await db.update(knowledgeSource).set({
+      await db.update(knowledgeSource).set({
         syncState: action === "removed"
           ? "stale"
-          : graphBuildsEnabled ? "pending" : "ready",
+          : "ready",
         syncRevision: sql`${knowledgeSource.syncRevision} + 1`,
         lastFailureCode: action === "removed"
           ? "github_repository_access_removed"
@@ -259,14 +187,7 @@ export async function POST(request: Request) {
       }).where(and(
         inArray(knowledgeSource.githubInstallationId, installationIds),
         inArray(knowledgeSource.repositoryId, changed.map((repository) => repository.id)),
-      )).returning({
-        organizationId: knowledgeSource.organizationId,
-        id: knowledgeSource.id,
-        commitSha: knowledgeSource.commitSha,
-      });
-      if (action === "added" && graphBuildsEnabled) {
-        await requeueSources(sources);
-      }
+      ));
     }
   } else if (event === "repository") {
     const action = typeof payload.action === "string" ? payload.action : "";
@@ -275,27 +196,20 @@ export async function POST(request: Request) {
       const unavailable = action === "deleted" || action === "archived" || action === "transferred";
       const available = action === "renamed" || action === "unarchived";
       if (unavailable || available) {
-        const sources = await db.update(knowledgeSource).set({
+        await db.update(knowledgeSource).set({
           ...(available && repository.fullName
             ? { repositoryFullName: repository.fullName }
             : {}),
           syncState: unavailable
             ? "stale"
-            : graphBuildsEnabled ? "pending" : "ready",
+            : "ready",
           syncRevision: sql`${knowledgeSource.syncRevision} + 1`,
           lastFailureCode: unavailable ? "github_repository_unavailable" : null,
           updatedAt: new Date(),
         }).where(and(
           inArray(knowledgeSource.githubInstallationId, installationIds),
           eq(knowledgeSource.repositoryId, repository.id),
-        )).returning({
-          organizationId: knowledgeSource.organizationId,
-          id: knowledgeSource.id,
-          commitSha: knowledgeSource.commitSha,
-        });
-        if (available && graphBuildsEnabled) {
-          await requeueSources(sources);
-        }
+        ));
       }
     }
   }

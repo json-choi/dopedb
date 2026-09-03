@@ -1,5 +1,3 @@
-import { timingSafeEqual } from "node:crypto";
-
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const CRYPTO_KEY = /^projects\/[A-Za-z0-9._:-]+\/locations\/[A-Za-z0-9_-]+\/keyRings\/[A-Za-z0-9_-]+\/cryptoKeys\/[A-Za-z0-9_-]+$/;
 const CRYPTO_KEY_VERSION = /^projects\/[A-Za-z0-9._:-]+\/locations\/[A-Za-z0-9_-]+\/keyRings\/[A-Za-z0-9_-]+\/cryptoKeys\/[A-Za-z0-9_-]+\/cryptoKeyVersions\/[1-9][0-9]*$/;
@@ -152,20 +150,4 @@ export function parseKmsDecryptResponse(value: unknown): Buffer {
     throw new WorkspaceKmsError("integrity", 502);
   }
   return plaintext;
-}
-
-export function sameWrappedDataKey(left: string, right: string) {
-  const leftBytes = base64Bytes(left, 8_192);
-  const rightBytes = base64Bytes(right, 8_192);
-  try {
-    return Boolean(
-      leftBytes
-      && rightBytes
-      && leftBytes.length === rightBytes.length
-      && timingSafeEqual(leftBytes, rightBytes),
-    );
-  } finally {
-    leftBytes?.fill(0);
-    rightBytes?.fill(0);
-  }
 }

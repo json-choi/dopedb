@@ -4,7 +4,6 @@ import type {
   InputHTMLAttributes,
   ReactNode,
   SelectHTMLAttributes,
-  TextareaHTMLAttributes,
 } from "react";
 import { createElement } from "react";
 
@@ -102,16 +101,5 @@ export function ControlSelect({
     >
       {children}
     </select>
-  );
-}
-
-export function ControlTextarea(
-  props: Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "className">,
-) {
-  return (
-    <textarea
-      className="tw:min-h-28 tw:w-full tw:min-w-0 tw:resize-y tw:rounded-control tw:border tw:border-border tw:bg-surface tw:px-3.5 tw:py-3 tw:text-xs tw:leading-body tw:text-foreground tw:shadow-[inset_0_1px_2px_color-mix(in_srgb,var(--ds-text)_5%,transparent)] tw:outline-none tw:placeholder:text-muted-foreground tw:focus:border-primary tw:focus:ring-2 tw:focus:ring-ring/20 tw:disabled:cursor-not-allowed tw:disabled:opacity-[var(--ds-disabled-opacity)]"
-      {...props}
-    />
   );
 }

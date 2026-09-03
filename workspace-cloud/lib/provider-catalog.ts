@@ -79,11 +79,3 @@ export const providerCatalog: readonly ProviderDescriptor[] = [
     note: "허용된 Vault AppRole로 구성원별 15분 이하 동적 DB 자격증명을 발급·회수합니다.",
   },
 ] as const;
-
-export function isProviderKind(value: string): value is ProviderKind {
-  return providerKinds.includes(value as ProviderKind);
-}
-
-export function providerDescriptor(provider: string) {
-  return providerCatalog.find((item) => item.id === provider) ?? null;
-}

@@ -1,10 +1,10 @@
 // Pure GCP Cloud SQL trust and resource validation. The integration stores only
 // WIF coordinates and service-account identities, never a service-account key.
 
-import { createHash } from "node:crypto";
 import type { ManagedEngine, ManagedSslMode } from "./provider-types";
 
 export const GCP_LEASE_SECONDS = 15 * 60;
+export const GCP_SCHEMA_LEASE_SECONDS = 10 * 60;
 
 export type GcpCloudSqlNetworkMode =
   | "PUBLIC"
@@ -19,6 +19,8 @@ export type GcpCloudSqlCredential = {
   instanceId: string;
   readServiceAccountEmail: string;
   writeServiceAccountEmail: string | null;
+  schemaServiceAccountEmail: string | null;
+  workloadIdentitySubject: string | null;
   databaseNames: string[];
   dedicatedServiceAccountsConfirmed: true;
   instanceScopedIamConfirmed: true;
@@ -67,6 +69,14 @@ export function parseGcpCloudSqlCredential(
     || body.writeServiceAccountEmail == null
     ? null
     : body.writeServiceAccountEmail;
+  const schemaServiceAccountEmail = body.schemaServiceAccountEmail === ""
+    || body.schemaServiceAccountEmail == null
+    ? null
+    : body.schemaServiceAccountEmail;
+  const workloadIdentitySubject = body.workloadIdentitySubject === ""
+    || body.workloadIdentitySubject == null
+    ? null
+    : body.workloadIdentitySubject;
   const databaseNames = body.databaseNames === undefined
     ? []
     : body.databaseNames;
@@ -80,7 +90,18 @@ export function parseGcpCloudSqlCredential(
     || !gcpServiceAccountEmail(body.readServiceAccountEmail)
     || (writeServiceAccountEmail !== null
       && !gcpServiceAccountEmail(writeServiceAccountEmail))
+    || (schemaServiceAccountEmail !== null
+      && !gcpServiceAccountEmail(schemaServiceAccountEmail))
     || writeServiceAccountEmail === body.readServiceAccountEmail
+    || schemaServiceAccountEmail === body.readServiceAccountEmail
+    || (schemaServiceAccountEmail !== null
+      && schemaServiceAccountEmail === writeServiceAccountEmail)
+    || (workloadIdentitySubject !== null && (
+      typeof workloadIdentitySubject !== "string"
+      || !/^owner:[A-Za-z0-9_-]{1,100}:project:[A-Za-z0-9_-]{1,100}:environment:production$/
+        .test(workloadIdentitySubject)
+    ))
+    || (schemaServiceAccountEmail !== null && workloadIdentitySubject === null)
     || !Array.isArray(databaseNames)
     || databaseNames.length > 200
     || !databaseNames.every((name) => gcpResourceName(name))
@@ -98,6 +119,8 @@ export function parseGcpCloudSqlCredential(
     instanceId: body.instanceId,
     readServiceAccountEmail: body.readServiceAccountEmail,
     writeServiceAccountEmail,
+    schemaServiceAccountEmail,
+    workloadIdentitySubject,
     databaseNames,
     dedicatedServiceAccountsConfirmed: true,
     instanceScopedIamConfirmed: true,
@@ -168,6 +191,15 @@ export function gcpWifAudience(credential: GcpCloudSqlCredential) {
     + `/providers/${credential.workloadIdentityProviderId}`;
 }
 
+export function gcpWifPrincipal(credential: GcpCloudSqlCredential) {
+  if (!credential.workloadIdentitySubject) {
+    throw new Error("GCP workload identity subject is required");
+  }
+  return `principal://iam.googleapis.com/projects/${credential.projectNumber}`
+    + `/locations/global/workloadIdentityPools/${credential.workloadIdentityPoolId}`
+    + `/subject/${credential.workloadIdentitySubject}`;
+}
+
 export function gcpLocalVerificationTarget(
   credential: GcpCloudSqlCredential,
 ): GcpLocalVerificationTarget {
@@ -178,13 +210,17 @@ export function gcpLocalVerificationTarget(
   };
 }
 
-function identityDigest(value: unknown) {
-  return createHash("sha256")
-    .update(JSON.stringify(value))
-    .digest("hex");
+async function identityDigest(value: unknown) {
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(JSON.stringify(value)),
+  );
+  return [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
 }
 
-export function gcpCloudSqlTargetFingerprint(
+export async function gcpCloudSqlTargetFingerprint(
   projectId: string,
   instanceId: string,
 ) {
@@ -194,32 +230,41 @@ export function gcpCloudSqlTargetFingerprint(
   return identityDigest({ projectId, instanceId });
 }
 
-export function gcpCloudSqlIntegrationIdentity(
+export async function gcpCloudSqlIntegrationIdentity(
   credential: GcpCloudSqlCredential,
 ) {
-  const readPrincipal = identityDigest(credential.readServiceAccountEmail);
-  const writePrincipal = credential.writeServiceAccountEmail
-    ? identityDigest(credential.writeServiceAccountEmail)
-    : "none";
-  const instance = gcpCloudSqlTargetFingerprint(
-    credential.projectId,
-    credential.instanceId,
-  );
-  const integration = identityDigest({
-    version: 1,
-    projectId: credential.projectId,
-    projectNumber: credential.projectNumber,
-    workloadIdentityPoolId: credential.workloadIdentityPoolId,
-    workloadIdentityProviderId: credential.workloadIdentityProviderId,
-    instanceId: credential.instanceId,
-    readServiceAccountEmail: credential.readServiceAccountEmail,
-    writeServiceAccountEmail: credential.writeServiceAccountEmail,
-  });
+  const [readPrincipal, writePrincipal, schemaPrincipal, instance, integration] =
+    await Promise.all([
+      identityDigest(credential.readServiceAccountEmail),
+      credential.writeServiceAccountEmail
+        ? identityDigest(credential.writeServiceAccountEmail)
+        : Promise.resolve("none"),
+      credential.schemaServiceAccountEmail
+        ? identityDigest(credential.schemaServiceAccountEmail)
+        : Promise.resolve("none"),
+      gcpCloudSqlTargetFingerprint(
+        credential.projectId,
+        credential.instanceId,
+      ),
+      identityDigest({
+        version: 2,
+        projectId: credential.projectId,
+        projectNumber: credential.projectNumber,
+        workloadIdentityPoolId: credential.workloadIdentityPoolId,
+        workloadIdentityProviderId: credential.workloadIdentityProviderId,
+        instanceId: credential.instanceId,
+        readServiceAccountEmail: credential.readServiceAccountEmail,
+        writeServiceAccountEmail: credential.writeServiceAccountEmail,
+        schemaServiceAccountEmail: credential.schemaServiceAccountEmail,
+        workloadIdentitySubject: credential.workloadIdentitySubject,
+      }),
+    ]);
   return {
     externalAccountId:
-      `gcp-wif-v1:r${readPrincipal}:w${writePrincipal}:n${instance}:i${integration}`,
+      `gcp-wif-v2:r${readPrincipal}:w${writePrincipal}:s${schemaPrincipal}:n${instance}:i${integration}`,
     readPrincipal,
     writePrincipal: writePrincipal === "none" ? null : writePrincipal,
+    schemaPrincipal: schemaPrincipal === "none" ? null : schemaPrincipal,
     instance,
   };
 }
@@ -227,11 +272,11 @@ export function gcpCloudSqlIntegrationIdentity(
 export type GcpCloudSqlPrincipalClaim = {
   principalFingerprint: string;
   targetFingerprint: string;
-  accessKind: "read" | "write";
+  accessKind: "read" | "write" | "schema";
 };
 
 export function gcpCloudSqlPrincipalClaims(
-  identity: ReturnType<typeof gcpCloudSqlIntegrationIdentity>,
+  identity: Awaited<ReturnType<typeof gcpCloudSqlIntegrationIdentity>>,
 ): GcpCloudSqlPrincipalClaim[] {
   return [
     {
@@ -244,6 +289,13 @@ export function gcpCloudSqlPrincipalClaims(
         principalFingerprint: identity.writePrincipal,
         targetFingerprint: identity.instance,
         accessKind: "write" as const,
+      }]
+      : []),
+    ...(identity.schemaPrincipal
+      ? [{
+        principalFingerprint: identity.schemaPrincipal,
+        targetFingerprint: identity.instance,
+        accessKind: "schema" as const,
       }]
       : []),
   ];

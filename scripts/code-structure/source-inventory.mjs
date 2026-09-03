@@ -114,8 +114,3 @@ export function collectSourceInventory(root) {
       };
     });
 }
-
-export const sourceInventoryContract = Object.freeze({
-  codeExtensions: [...CODE_EXTENSIONS].sort(),
-  ignoredDirectories: [...IGNORED_DIRECTORIES].sort(),
-});

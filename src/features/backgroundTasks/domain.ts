@@ -4,7 +4,6 @@ import type {
   ConnectionId as JobConnectionId,
   JobId,
 } from "../jobs/domain";
-import type { KnowledgeSourceSyncProgress } from "../knowledge/domain";
 
 export type BackgroundTaskStatus =
   | "starting"
@@ -46,18 +45,4 @@ export type BackgroundTask =
       connectionName: string;
       operation: "import" | "export";
       cancellable: boolean;
-    })
-  | (BackgroundTaskBase & {
-      kind: "knowledge";
-      sourceId: string;
-      projectEnvironmentId: string;
-      projectName: string;
-      environmentName: string;
-      phase: KnowledgeSourceSyncProgress["phase"];
-      totalFiles: number;
-      completedFiles: number;
-      remainingFiles: number;
-      attempt: number;
-      retryAt: string | null;
-      cancellable: false;
     });

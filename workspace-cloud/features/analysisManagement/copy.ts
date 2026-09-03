@@ -42,5 +42,3 @@ export const analysisManagementText = {
     savedQuery: "저장 쿼리",
   },
 } as const;
-
-export type AnalysisManagementText = (typeof analysisManagementText)[keyof typeof analysisManagementText];

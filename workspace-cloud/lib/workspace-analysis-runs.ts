@@ -5,12 +5,6 @@ import { parseLegacyAnalysisRunCompletionEnvelope } from "./workspace-analysis-r
 import type { AnalysisArticleDefinition } from "./workspace-analysis-article-contracts";
 import { canonicalHash } from "./workspace-versioning";
 
-export const analysisRunStates = [
-  "queued", "running", "succeeded", "failed", "cancelled", "stale",
-] as const;
-
-export type AnalysisRunState = (typeof analysisRunStates)[number];
-
 export type AnalysisRunRequest = Readonly<{
   id: string;
   articleRevision: number;

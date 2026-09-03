@@ -24,6 +24,7 @@ import {
   ensureProvider,
   ensureServiceAccount,
   grantCloudSqlRoles,
+  grantSchemaPolicyInspection,
   grantWorkloadIdentity,
   serviceAccountId,
   setupFingerprint,
@@ -168,6 +169,15 @@ export async function bootstrapGcpCloudSql(input: {
         `DopeDB write · ${configuration.instanceId}`.slice(0, 100),
       )
     : null;
+  const schemaEmail = selected.engine === "postgres"
+    ? await ensureServiceAccount(
+        credential,
+        configuration.projectId,
+        serviceAccountId("schema", fingerprint),
+        description,
+        `DopeDB schema · ${configuration.instanceId}`.slice(0, 100),
+      )
+    : null;
   const principal = `principal://iam.googleapis.com/projects/${
     configuration.projectNumber
   }/locations/global/workloadIdentityPools/${POOL_ID}/subject/${
@@ -188,12 +198,29 @@ export async function bootstrapGcpCloudSql(input: {
         principal,
       ),
     ] : []),
+    ...(schemaEmail ? [
+      grantWorkloadIdentity(
+        credential,
+        configuration.projectId,
+        schemaEmail,
+        principal,
+      ),
+    ] : []),
   ]);
+  if (schemaEmail) {
+    await grantSchemaPolicyInspection(
+      credential,
+      configuration.projectId,
+      schemaEmail,
+      readEmail,
+    );
+  }
   await grantCloudSqlRoles(
     credential,
     configuration,
     readEmail,
     writeEmail,
+    schemaEmail,
     fingerprint,
   );
   const details = await instanceDetails(
@@ -232,6 +259,16 @@ export async function bootstrapGcpCloudSql(input: {
       engine,
     );
   }
+  let schemaDatabaseUser: JsonObject | null = null;
+  if (schemaEmail) {
+    schemaDatabaseUser = await ensureDatabaseUser(
+      credential,
+      configuration.projectId,
+      configuration.instanceId,
+      schemaEmail,
+      engine,
+    );
+  }
   if (typeof details.databaseVersion !== "string") {
     throw new ProviderRequestError(
       "gcpCloudSql",
@@ -239,15 +276,11 @@ export async function bootstrapGcpCloudSql(input: {
       409,
     );
   }
-  const configuredDatabases = await configureDatabasePrivileges({
+  const configuredDatabases = await databaseNames(
     credential,
-    configuration,
-    engine,
-    databaseVersion: details.databaseVersion,
-    readUser: readDatabaseUser,
-    writeUser: writeDatabaseUser,
-    fingerprint,
-  });
+    configuration.projectId,
+    configuration.instanceId,
+  );
   const durableConfiguration = parseGcpCloudSqlCredential({
     projectId: configuration.projectId,
     projectNumber: configuration.projectNumber,
@@ -256,11 +289,24 @@ export async function bootstrapGcpCloudSql(input: {
     instanceId: configuration.instanceId,
     readServiceAccountEmail: readEmail,
     writeServiceAccountEmail: writeEmail,
+    schemaServiceAccountEmail: schemaEmail,
+    workloadIdentitySubject: identity.subject,
     databaseNames: configuredDatabases,
     dedicatedServiceAccountsConfirmed: true,
     instanceScopedIamConfirmed: true,
   });
   await waitForFederation(durableConfiguration, input.oidcToken);
+  await configureDatabasePrivileges({
+    credential,
+    configuration,
+    engine,
+    databaseVersion: details.databaseVersion,
+    databases: configuredDatabases,
+    readUser: readDatabaseUser,
+    writeUser: writeDatabaseUser,
+    schemaUser: schemaDatabaseUser,
+    fingerprint,
+  });
   return {
     configuration: durableConfiguration,
     engine,
@@ -269,6 +315,7 @@ export async function bootstrapGcpCloudSql(input: {
     databaseUsers: {
       read: readEmail,
       write: writeEmail,
+      schema: schemaEmail,
     },
   };
 }

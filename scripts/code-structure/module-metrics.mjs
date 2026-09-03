@@ -194,8 +194,3 @@ export function measureModule(record) {
     strongThreshold: thresholds.strong,
   };
 }
-
-export const moduleMetricContract = Object.freeze({
-  categoryThresholds: CATEGORY_THRESHOLDS,
-  responsibilityNames: Object.keys(RESPONSIBILITY_PATTERNS).sort(),
-});

@@ -16,8 +16,7 @@ use crate::features::knowledge::ports::{
     CreatedKnowledgeSource, HostedKnowledgeAuthorityPort, PinnedSourceReadRequest,
     PinnedSourceSearchRequest, RemoteEnvironmentConnectionBinding, RemoteGithubRepository,
     RemoteKnowledgeGrant, RemoteKnowledgeInventory, RemoteKnowledgeProject, RemoteKnowledgeSource,
-    RemoteKnowledgeSyncProgress, RemotePersonalKnowledgeScope, RemoteSourceReadResult,
-    RemoteSourceSearchResult,
+    RemotePersonalKnowledgeScope, RemoteSourceReadResult, RemoteSourceSearchResult,
 };
 use crate::hosted_control_plane::{
     bounded_json_response, client, origin, request_error, response_error as oauth_error,
@@ -77,14 +76,6 @@ struct CreatedKnowledgeSourceResponse {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct QueuedKnowledgeSourceResponse {
-    queued: bool,
-    job_id: Uuid,
-    graph_revision_id: Option<Uuid>,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct RemoteKnowledgeSourcesResponse {
     sources: Vec<RemoteKnowledgeSource>,
 }
@@ -100,12 +91,6 @@ struct SourceReadRequest<'a> {
     path: &'a str,
     line_start: u32,
     line_end: u32,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct RemoteKnowledgeSyncProgressResponse {
-    progress: Vec<RemoteKnowledgeSyncProgress>,
 }
 
 #[derive(Serialize)]
@@ -157,12 +142,6 @@ struct CreatedKnowledgeGrant {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct KnowledgeMappingsResponse {
-    mappings: Vec<KnowledgeMappingProposal>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct KnowledgeMappingResponse {
     mapping: KnowledgeMappingProposal,
 }
@@ -176,14 +155,6 @@ struct ProposeKnowledgeMappingRequest<'a> {
     from_node_id: &'a str,
     target_kind: &'a str,
     target_identity: &'a str,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct DecideKnowledgeMappingRequest<'a> {
-    mapping_id: Uuid,
-    expected_graph_revision_id: Uuid,
-    decision: &'a str,
 }
 
 #[derive(Deserialize)]
@@ -302,14 +273,6 @@ impl HostedKnowledgeAuthorityPort for HostedKnowledgeAuthority {
         create_current_knowledge_grant(account_id, workspace_id, member_id, environment_id)
     }
 
-    fn list_mappings(
-        &self,
-        account_id: &str,
-        workspace_id: Uuid,
-    ) -> impl std::future::Future<Output = AppResult<Vec<KnowledgeMappingProposal>>> + Send {
-        list_remote_knowledge_mappings(account_id, workspace_id)
-    }
-
     fn propose_mapping(
         &self,
         account_id: &str,
@@ -318,23 +281,6 @@ impl HostedKnowledgeAuthorityPort for HostedKnowledgeAuthority {
         proposal: &KnowledgeMappingProposal,
     ) -> impl std::future::Future<Output = AppResult<KnowledgeMappingProposal>> + Send {
         propose_remote_knowledge_mapping(account_id, workspace_id, grant_id, proposal)
-    }
-
-    fn decide_mapping(
-        &self,
-        account_id: &str,
-        workspace_id: Uuid,
-        mapping_id: Uuid,
-        expected_graph_revision_id: Uuid,
-        decision: MappingProposalState,
-    ) -> impl std::future::Future<Output = AppResult<()>> + Send {
-        decide_remote_knowledge_mapping(
-            account_id,
-            workspace_id,
-            mapping_id,
-            expected_graph_revision_id,
-            decision,
-        )
     }
 
     fn download_graph(
@@ -451,23 +397,6 @@ impl HostedKnowledgeAuthorityPort for HostedKnowledgeAuthority {
         request: &PinnedSourceReadRequest<'_>,
     ) -> impl std::future::Future<Output = AppResult<RemoteSourceReadResult>> + Send {
         read_remote_source(request)
-    }
-
-    fn list_source_sync_progress(
-        &self,
-        account_id: &str,
-        workspace_id: Uuid,
-    ) -> impl std::future::Future<Output = AppResult<Vec<RemoteKnowledgeSyncProgress>>> + Send {
-        list_remote_knowledge_source_sync_progress(account_id, workspace_id)
-    }
-
-    fn request_source_sync(
-        &self,
-        account_id: &str,
-        workspace_id: Uuid,
-        source_id: Uuid,
-    ) -> impl std::future::Future<Output = AppResult<Option<Uuid>>> + Send {
-        request_knowledge_source_sync(account_id, workspace_id, source_id)
     }
 
     fn delete_source(

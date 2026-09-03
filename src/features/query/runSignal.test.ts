@@ -15,7 +15,7 @@ import {
   writeBlockRecoveryOpensSafety,
 } from "../safetySettings/policy";
 import { approveManualOperationIfRequired } from "../queries/runPath";
-import { buildRunSignal } from "./runSignal";
+import { analyzeRunSignal, localizeRunSignal } from "./runSignal";
 
 const safety: SafetySettings = {
   requireApproval: true,
@@ -30,6 +30,13 @@ const safety: SafetySettings = {
 
 const t = (key: string, vars?: Record<string, string | number>) =>
   `${key}${vars ? `:${JSON.stringify(vars)}` : ""}`;
+
+const buildRunSignal = (
+  sql: string,
+  statements: string[],
+  settings: SafetySettings,
+  translate: typeof t,
+) => localizeRunSignal(analyzeRunSignal(sql, statements, settings), translate);
 
 describe("SQL run guidance", () => {
   it("warns before a write while one Safety control owns manual approval", async () => {
@@ -128,13 +135,18 @@ describe("SQL run guidance", () => {
     expect(safetySchemaControlAvailable({
       ...managedWorkspaceManager,
       provider: "gcpCloudSql",
-    })).toBe(false);
+    })).toBe(true);
     expect(
       requestedSafetySettings(
         { ...managedWorkspaceManager, provider: "gcpCloudSql" },
         { ...safety, allowWrites: true, allowSchemaChanges: true },
       ),
-    ).toMatchObject({ allowWrites: true, allowSchemaChanges: false });
+    ).toMatchObject({ allowWrites: true, allowSchemaChanges: true });
+    expect(safetySchemaControlAvailable({
+      ...managedWorkspaceManager,
+      provider: "gcpCloudSql",
+      engine: "mysql",
+    })).toBe(false);
     expect(canManageWorkspaceWritePolicy({
       ...managedWorkspaceManager,
       workspaceAccess: "write",
@@ -223,7 +235,7 @@ describe("SQL run guidance", () => {
           message: "schema changes are disabled for this connection",
         },
       ),
-    ).toBe("schemaUnavailable");
+    ).toBe("schemaSafety");
     expect(
       writeBlockRecoveryKind(
         {

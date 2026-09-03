@@ -14,7 +14,7 @@ use zeroize::Zeroizing;
 pub const CONTROL_PLANE_CONTRACTS_SCHEMA_VERSION: u32 = 1;
 /// Desktop and Workspace Cloud must agree on this header before a managed
 /// credential can cross the HTTPS boundary.
-pub const MANAGED_LEASE_CONTRACT_VERSION: &str = "access-v4";
+pub const MANAGED_LEASE_CONTRACT_VERSION: &str = "access-v5";
 const JAVASCRIPT_MAX_SAFE_INTEGER: i64 = 9_007_199_254_740_991;
 
 /// Workspace sync cursors cross a JavaScript number boundary in Cloud and must
@@ -144,7 +144,8 @@ impl ManagedLeasePayload {
             && (!is_gcp || connector_is_valid)
             && (is_gcp || self.sslmode == "verify-full")
             && (self.access_mode != ManagedAccessMode::Schema
-                || (self.provider == "neon" && self.engine == "postgres"))
+                || (matches!(self.provider.as_str(), "neon" | "gcpCloudSql")
+                    && self.engine == "postgres"))
             && valid_rfc3339_instant(&self.expires_at)
     }
 }

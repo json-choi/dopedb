@@ -23,17 +23,14 @@ use crate::kernel::access::{ActiveResourceScope, WorkspaceKind};
 use crate::kernel::identity::{AccountId, WorkspaceId};
 use crate::state::AppState;
 
-use super::application::{search_graphs, KnowledgeSearchResult};
 use super::domain::{
-    EnvironmentRiskClass, KnowledgeMappingProposal, MappingProposalState, Project,
-    ProjectDefinition, ProjectEnvironment, SourceBindingDraft, SourceHealthState, SourceLocator,
-    StoredKnowledgeScope,
+    EnvironmentRiskClass, Project, ProjectDefinition, ProjectEnvironment, SourceBindingDraft,
+    SourceHealthState, SourceLocator, StoredKnowledgeScope,
 };
 use super::ports::{
     AppendKnowledgeEnvironmentRequest, CreateKnowledgeEnvironmentRequest,
     CreateKnowledgeProjectRequest, LocalKnowledgeSourcePort, RemoteGithubRepository,
     RemoteKnowledgeEnvironment, RemoteKnowledgeProject, RemoteKnowledgeSource,
-    RemoteKnowledgeSyncProgress,
 };
 
 #[path = "transport_graph.rs"]
@@ -145,17 +142,6 @@ pub(crate) fn serialize_knowledge_source_revision_for_test(
         .expect("revision projection should serialize")
 }
 
-#[cfg(test)]
-pub(crate) fn round_trip_knowledge_sync_progress_for_test(
-    value: serde_json::Value,
-) -> Option<serde_json::Value> {
-    let progress: RemoteKnowledgeSyncProgress = serde_json::from_value(value).ok()?;
-    progress
-        .validate()
-        .then(|| serde_json::to_value(progress).ok())
-        .flatten()
-}
-
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct CreateProjectInput {
@@ -222,69 +208,6 @@ pub(crate) struct BindEnvironmentConnectionInput {
     connection_id: Uuid,
     role: String,
     alias: String,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct StoredMappingTarget {
-    connection_id: Uuid,
-    connection_revision: i64,
-    database: String,
-    qualified_target: String,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub(crate) struct KnowledgeMappingProjection {
-    id: Uuid,
-    project_environment_id: Uuid,
-    graph_revision_id: Uuid,
-    connection_id: Uuid,
-    connection_revision: i64,
-    database: String,
-    schema_fingerprint: String,
-    from_node_id: String,
-    from_node_name: String,
-    target_kind: String,
-    target_identity: String,
-    state: MappingProposalState,
-    proposed_at: chrono::DateTime<chrono::Utc>,
-}
-
-#[derive(Debug, Clone, Copy, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub(crate) enum KnowledgeMappingDecision {
-    Approved,
-    Rejected,
-}
-
-fn mapping_projection(
-    proposal: KnowledgeMappingProposal,
-    graph: &dopedb_protocol::GraphBuildArtifactV1,
-) -> AppResult<KnowledgeMappingProjection> {
-    let target: StoredMappingTarget = serde_json::from_str(&proposal.target_identity)
-        .map_err(|_| AppError::Config("the stored Knowledge mapping target is invalid".into()))?;
-    let from_node_name = graph
-        .nodes
-        .iter()
-        .find(|node| node.id == proposal.from_node_id)
-        .map(|node| node.qualified_name.clone())
-        .ok_or_else(|| AppError::Config("the stored Knowledge mapping node is invalid".into()))?;
-    Ok(KnowledgeMappingProjection {
-        id: proposal.id,
-        project_environment_id: proposal.project_environment_id,
-        graph_revision_id: proposal.graph_revision_id,
-        connection_id: target.connection_id,
-        connection_revision: target.connection_revision,
-        database: target.database,
-        schema_fingerprint: proposal.schema_fingerprint,
-        from_node_id: proposal.from_node_id,
-        from_node_name,
-        target_kind: proposal.target_kind,
-        target_identity: target.qualified_target,
-        state: proposal.state,
-        proposed_at: proposal.proposed_at,
-    })
 }
 
 pub(super) fn selected_team_account(scope: &ActiveResourceScope) -> AppResult<AccountId> {

@@ -17,7 +17,6 @@ import { retainInertShellChildren } from "../appShell/useInertShellBackground";
 import {
   cancelWorkspaceResourceQueries,
   resetConnectionResourceQueries,
-  refetchWorkspaceResourceQueries,
   resetWorkspaceResourceQueries,
   resumePendingWorkspaceResourceQueries,
 } from "../../lib/queryClient";
@@ -785,9 +784,7 @@ describe("workspace auth lifecycle", () => {
     await resetWorkspaceResourceQueries(queryClient);
     expect(privateReads).toBe(1);
     expect(privateObserver.getCurrentResult().data).toBeUndefined();
-    // WorkspaceAccount performs this only when authority changed but the observer
-    // key did not (for example, an admin-to-viewer membership update).
-    await refetchWorkspaceResourceQueries(queryClient);
+    await resumePendingWorkspaceResourceQueries(queryClient);
     expect(privateReads).toBe(2);
     expect(privateObserver.getCurrentResult().data).toBe(2);
 
@@ -816,7 +813,7 @@ describe("workspace auth lifecycle", () => {
     await cancelWorkspaceResourceQueries(queryClient);
     expect(knowledgeObserver.getCurrentResult().status).toBe("pending");
     expect(knowledgeObserver.getCurrentResult().fetchStatus).toBe("idle");
-    await refetchWorkspaceResourceQueries(queryClient);
+    await resumePendingWorkspaceResourceQueries(queryClient);
     expect(knowledgeReads).toBe(2);
     expect(knowledgeObserver.getCurrentResult().data).toEqual(["ready"]);
 

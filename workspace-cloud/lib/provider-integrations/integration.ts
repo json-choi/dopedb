@@ -33,10 +33,8 @@ import {
   listGcpProjects,
 } from "../providers/gcp-cloud-sql";
 import {
-  gcpLocalVerificationTarget as projectGcpLocalVerificationTarget,
   parseGcpCloudSqlCredential,
   type GcpCloudSqlCredential,
-  type GcpLocalVerificationTarget,
 } from "../providers/gcp-cloud-sql-core";
 import {
   ProviderRequestError,
@@ -281,21 +279,6 @@ export function vaultCredential(integration: ActiveProviderIntegration) {
     integration.id,
     integration.encryptedCredential,
   ));
-}
-
-/** Opens the server-only envelope and returns only the exact redacted target. */
-export function localGcpVerificationTarget(
-  integration: Pick<ActiveProviderIntegration, "id" | "provider" | "encryptedCredential">,
-): GcpLocalVerificationTarget {
-  if (integration.provider !== "gcpCloudSql") {
-    throw new Error("GCP verification target requested for another provider");
-  }
-  return projectGcpLocalVerificationTarget(
-    parseGcpCloudSqlCredential(openProviderCredential<GcpCloudSqlCredential>(
-      integration.id,
-      integration.encryptedCredential,
-    )),
-  );
 }
 
 export function requiredOidcToken(value: string | null | undefined) {

@@ -198,12 +198,3 @@ export function localizeRunSignal(
       : undefined,
   };
 }
-
-export function buildRunSignal(
-  sql: string,
-  statements: string[],
-  safety: SafetySettings,
-  t: Translate,
-): RunSignal | null {
-  return localizeRunSignal(analyzeRunSignal(sql, statements, safety), t);
-}

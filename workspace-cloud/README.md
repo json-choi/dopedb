@@ -131,13 +131,12 @@ Desktop or stored in PostgreSQL. ACP sessions copy the exact source identities a
 session start, so a branch move makes an old session fail closed rather than silently
 changing its code view.
 
-`KNOWLEDGE_GRAPH_BUILDS_ENABLED=0` is the fail-closed production default. While it is
-off, webhook pushes advance only the source's pinned commit and no recurring Knowledge
-task exists. Migration 0054 supersedes unfinished graph jobs and removes their staging
-rows while preserving every previously activated graph/head. The older bounded manifest,
-index, and activation pipeline remains dormant for a later paid/experimental evaluation;
-reactivation requires an explicit scheduler design and is not part of the
-free-source-browsing contract.
+Graph construction is not shipped by the control plane. Webhook pushes advance only
+the source's pinned commit and no recurring Knowledge task exists. Migration 0054
+supersedes unfinished graph jobs and removes their staging rows while preserving every
+previously activated graph/head for data compatibility. A future paid or experimental
+graph product requires a new entitlement, scheduler, storage, and benchmarked execution
+design rather than restoring the retired implementation.
 
 Local Folder remains strictly device-local because the cloud cannot observe an
 offline path. Desktop indexes and watches it locally; the hosted source inventory and
@@ -224,11 +223,12 @@ browser form.
    applying them. Otherwise the UI reports the missing permissions without pretending
    the connection is ready.
 4. The server enables the required APIs, creates the instance-scoped Workload Identity
-   Pool/provider plus separate dedicated read and write service accounts, applies the
-   narrow IAM bindings, enables Cloud SQL IAM authentication when approved, creates
-   both IAM database users, and grants each its database-side least privilege. Imported
-   connections still start with `allowWrites: false`; provisioning a dormant write
-   principal does not authorize any workspace member to use it.
+   Pool/provider plus separate dedicated read and write service accounts, and, for
+   PostgreSQL, a third schema service account. It applies the narrow IAM bindings,
+   enables Cloud SQL IAM authentication when approved, creates the matching IAM
+   database users, and grants each its database-side least privilege. Imported
+   connections still start with `allowWrites: false`; provisioning dormant write and
+   schema principals does not authorize any workspace member to use them.
 5. The completed integration stores only keyless trust coordinates and encrypted
    Provider authorization needed for rotation. Google login tokens, service-account
    keys, and database passwords are never copied into a shared connection or returned
@@ -242,13 +242,27 @@ revalidated and reused by deterministic identity; a partially completed setup ca
 retried without adding duplicate principals.
 
 At lease time Vercel OIDC is exchanged through GCP STS and IAM Credentials for
-15-minute `sqlservice.login` and connector tokens. They reach only the native desktop
-process. The app starts the pinned Google Cloud SQL Auth Proxy from its signed bundle,
-binds it to a random loopback port for that pool, and gives the database driver the IAM
-login token. The connector owns instance authorization and TLS, so Public IP no longer
-requires each member machine to be added to Authorized Networks. Private services
-access and Private Service Connect still require an existing resolvable network path
-from that machine; the connector cannot create VPC reachability.
+15-minute read/write tokens or a 10-minute PostgreSQL schema token. They reach only the
+native desktop process. The app starts the pinned Google Cloud SQL Auth Proxy from its
+signed bundle, binds it to a random loopback port for that pool, and gives the database
+driver the IAM login token. The connector owns instance authorization and TLS, so
+Public IP no longer requires each member machine to be added to Authorized Networks.
+Private services access and Private Service Connect still require an existing
+resolvable network path from that machine; the connector cannot create VPC
+reachability.
+
+PostgreSQL schema access uses the dedicated IAM database role itself as the stable
+owner. Setup temporarily grants its user that target role and every existing owner
+needed to transfer non-extension relations, routines, and user-defined types in
+`public`, then restores the setup user's original roles exactly. It also removes public
+database `CREATE` and `TEMPORARY` plus public schema `CREATE`, rejects access to other
+user schemas, and removes public execution from managed routines. While executing as
+the exact schema role, that transaction also installs bounded database-local session
+defaults; it then restores the setup user's roles. Every schema lease rechecks the
+schema service account's exact IAM policy and the
+database-side login, ownership, membership, ACL, and timeout boundary before Desktop
+permits SQL. Cloud SQL MySQL remains read/write-only because this ownership boundary is
+PostgreSQL-specific.
 
 When an admin selects an existing member-local shared connection during a receipt-bound
 provider import, the service converts that connection in place instead of creating a
@@ -289,10 +303,11 @@ pins the existing project and instance; the setup rechecks required permissions,
 database authentication, and dedicated database users. The final mutation must resolve
 to the same integration before it updates credentials, and then returns to the same
 database row without replacing its connection ID or grants.
-GCP managed connections saved before the explicit network-path field was introduced
-are intentionally not leased. A workspace admin must reconnect and re-import the
-instance so current discovery supplies the exact path; the server does not guess a path
-for legacy records.
+GCP managed connections saved before the explicit network-path field or PostgreSQL
+schema principal was introduced are intentionally not given the missing capability. A
+workspace admin must use **Repair managed access** (or reconnect and re-import) so
+current discovery supplies the exact path and provisions the schema principal; the
+server does not guess either boundary for legacy records.
 
 ## Analysis Articles
 
@@ -387,11 +402,12 @@ domain DTOs discard them, and they never decide Article visibility or execution.
   already delivered remain bounded by their actual Provider expiry of at most 15
   minutes, while the desktop retires its pool earlier when workspace authority changes.
 - Managed lease POSTs send
-  `x-dopedb-managed-lease-contract: access-v4` and an explicit `read`, `write`, or
-  `schema` access mode. The service temporarily accepts `access-v3` and `access-v2`
-  for read/write compatibility, but schema credentials fail with HTTP 426 unless the
-  Desktop sends `access-v4`. This preserves existing access while the control plane is
-  deployed before the matching Desktop release.
+  `x-dopedb-managed-lease-contract: access-v5` and an explicit `read`, `write`, or
+  `schema` access mode. The service temporarily accepts `access-v4` and `access-v3`
+  for read/write compatibility and keeps the previously released `access-v4` Neon
+  schema path. GCP schema credentials fail with HTTP 426 unless Desktop sends
+  `access-v5`. This preserves existing access while the control plane is deployed
+  before the matching Desktop release.
 - Independently deployed Desktop and Workspace Cloud decode the same versioned
   `dopedb-protocol/tests/fixtures/control-plane-contracts-v1.json` golden for ordered
   workspace sync, managed lease request/response, and Analysis Article creation.

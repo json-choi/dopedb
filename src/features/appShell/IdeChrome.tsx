@@ -180,7 +180,6 @@ export function IdeStatusBar({
   unseenOperationCount,
   onOpenQueryTask,
   onOpenAgentTask,
-  onOpenKnowledgeTask,
   onOpenManualTransaction,
   onCommitManualTransaction,
   onRollbackManualTransaction,
@@ -202,7 +201,6 @@ export function IdeStatusBar({
   unseenOperationCount: number;
   onOpenQueryTask: (sessionId: string) => void;
   onOpenAgentTask: (connectionId: string) => void;
-  onOpenKnowledgeTask: (projectEnvironmentId: string) => void;
   onOpenManualTransaction: (
     transaction: WorkspaceManualTransaction,
   ) => void;
@@ -322,7 +320,6 @@ export function IdeStatusBar({
           onCancel={onCancelBackgroundTask}
           onOpenAgent={onOpenAgentTask}
           onOpenQuery={onOpenQueryTask}
-          onOpenKnowledge={onOpenKnowledgeTask}
         />
       ) : null}
       <SqlEditorStatusItems

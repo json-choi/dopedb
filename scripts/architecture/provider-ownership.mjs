@@ -41,6 +41,7 @@ const controlPlaneHttpAdapters = new Set([
 
 const hostedProviderJsonAdapters = [
   "workspace-cloud/lib/providers/gcp-cloud-bootstrap-core.ts",
+  "workspace-cloud/lib/providers/gcp-cloud-managed-http.ts",
   "workspace-cloud/lib/providers/gcp-cloud-oauth.ts",
   "workspace-cloud/lib/providers/gcp-cloud-sql.ts",
   "workspace-cloud/lib/providers/neon-api.ts",
@@ -131,7 +132,13 @@ export function collectProviderOwnershipDiagnostics(context) {
     if (/\bresponse\.json\s*\(/.test(source)) {
       diagnostics.push(`${filePath}: Hosted provider JSON must use the bounded response reader`);
     }
-    if (!/boundedJsonResponse/.test(source)) {
+    const usesReviewedResponseBoundary = /boundedJsonResponse/.test(source)
+      || (
+        filePath === "workspace-cloud/lib/providers/gcp-cloud-sql.ts"
+        && /gcpJsonRequest/.test(source)
+        && /from "[.]\/gcp-cloud-managed-http";/.test(source)
+      );
+    if (!usesReviewedResponseBoundary) {
       diagnostics.push(`${filePath}: Hosted provider adapter bypasses boundedJsonResponse`);
     }
   }

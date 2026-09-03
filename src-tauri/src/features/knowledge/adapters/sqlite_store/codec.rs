@@ -1,9 +1,8 @@
-use chrono::{DateTime, Utc};
 use dopedb_protocol::{GraphBuildArtifactV1, KnowledgeSourceProvider, KnowledgeSourceVisibility};
 use sha2::{Digest, Sha256};
 
 use crate::error::{AppError, AppResult};
-use crate::features::knowledge::domain::{EnvironmentRiskClass, MappingProposalState};
+use crate::features::knowledge::domain::EnvironmentRiskClass;
 
 const MAX_GRAPH_ARTIFACT_JSON_BYTES: usize = 256 * 1024 * 1024;
 
@@ -30,16 +29,6 @@ pub(super) type KnowledgeScopeRow = (
     i64,
     String,
 );
-pub(super) type KnowledgeMappingRow = (
-    String,
-    String,
-    String,
-    String,
-    String,
-    String,
-    DateTime<Utc>,
-);
-
 pub(super) fn checked_name(value: &str) -> AppResult<&str> {
     let value = value.trim();
     if value.is_empty() || value.len() > 512 || value.chars().any(char::is_control) {
@@ -83,27 +72,6 @@ pub(super) fn parse_risk_class(value: &str) -> AppResult<EnvironmentRiskClass> {
         "custom" => Ok(EnvironmentRiskClass::Custom),
         _ => Err(AppError::Config(
             "the stored Project Environment risk class is invalid".into(),
-        )),
-    }
-}
-
-pub(super) fn mapping_state_value(state: MappingProposalState) -> &'static str {
-    match state {
-        MappingProposalState::Proposed => "proposed",
-        MappingProposalState::Approved => "approved",
-        MappingProposalState::Rejected => "rejected",
-        MappingProposalState::Stale => "stale",
-    }
-}
-
-pub(super) fn parse_mapping_state(value: &str) -> AppResult<MappingProposalState> {
-    match value {
-        "proposed" => Ok(MappingProposalState::Proposed),
-        "approved" => Ok(MappingProposalState::Approved),
-        "rejected" => Ok(MappingProposalState::Rejected),
-        "stale" => Ok(MappingProposalState::Stale),
-        _ => Err(AppError::Config(
-            "the stored Knowledge mapping state is invalid".into(),
         )),
     }
 }

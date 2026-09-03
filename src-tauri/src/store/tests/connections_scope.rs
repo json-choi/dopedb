@@ -8,9 +8,7 @@ use crate::features::knowledge::test_support::{
 use crate::kernel::access::WorkspaceKind;
 
 fn assert_knowledge_source_revision_ipc_uses_camel_case_fields() {
-    use crate::features::knowledge::transport::{
-        round_trip_knowledge_sync_progress_for_test, serialize_knowledge_source_revision_for_test,
-    };
+    use crate::features::knowledge::transport::serialize_knowledge_source_revision_for_test;
     use dopedb_protocol::SourceRevisionIdentity;
 
     let cases = [
@@ -67,32 +65,6 @@ fn assert_knowledge_source_revision_ipc_uses_camel_case_fields() {
             expected,
         );
     }
-
-    let progress = serde_json::json!({
-        "sourceId": "550e8400-e29b-41d4-a716-446655440000",
-        "projectEnvironmentId": "550e8400-e29b-41d4-a716-446655440001",
-        "displayName": "owner/repository",
-        "projectName": "Project",
-        "environmentName": "Production",
-        "phase": "indexing",
-        "state": "claimed",
-        "totalFiles": 1200,
-        "completedFiles": 480,
-        "attempt": 0,
-        "startedAt": "2026-08-14T06:00:00Z",
-        "updatedAt": "2026-08-14T06:05:00Z",
-        "retryAt": null,
-    });
-    assert_eq!(
-        round_trip_knowledge_sync_progress_for_test(progress.clone()),
-        Some(progress.clone()),
-    );
-    let mut oversized = progress.clone();
-    oversized["completedFiles"] = serde_json::json!(1201);
-    assert_eq!(round_trip_knowledge_sync_progress_for_test(oversized), None,);
-    let mut widened = progress;
-    widened["repository"] = serde_json::json!("must/not/leak");
-    assert_eq!(round_trip_knowledge_sync_progress_for_test(widened), None);
 }
 
 async fn assert_legacy_sql_document_database_scope_migrates() {
@@ -368,14 +340,15 @@ async fn assert_current_store_migration_is_write_free() {
     assert_eq!(local_project.project.revision, 2);
     assert_eq!(local_project.environments.len(), 2);
     let local_environment_id = local_project.environments[0].id;
+    assert!(local_project
+        .environments
+        .iter()
+        .any(|environment| environment.id == local_environment_id));
     assert!(knowledge
-        .knowledge_environment_exists(personal_workspace_id, local_environment_id)
+        .knowledge_projects(Uuid::from_u128(0xdead))
         .await
-        .unwrap());
-    assert!(!knowledge
-        .knowledge_environment_exists(Uuid::from_u128(0xdead), local_environment_id)
-        .await
-        .unwrap());
+        .unwrap()
+        .is_empty());
     assert!(knowledge
         .create_knowledge_environment(
             personal_workspace_id,
@@ -457,7 +430,18 @@ async fn assert_current_store_migration_is_write_free() {
         .unwrap();
     knowledge.stage(&second).await.unwrap();
     knowledge.activate(&second).await.unwrap();
-    let active_set = knowledge.active_set(environment.id).await.unwrap();
+    let active_set = vec![
+        knowledge
+            .active_for_source(artifact.binding.source_id)
+            .await
+            .unwrap()
+            .unwrap(),
+        knowledge
+            .active_for_source(second.binding.source_id)
+            .await
+            .unwrap()
+            .unwrap(),
+    ];
     assert_eq!(active_set.len(), 2);
     assert!(active_set
         .iter()
@@ -490,24 +474,20 @@ async fn assert_current_store_migration_is_write_free() {
         expires_at: Utc::now() + chrono::Duration::hours(1),
     };
     knowledge.save_grant(&grant).await.unwrap();
-    assert_eq!(
-        knowledge
-            .active_knowledge_grant(
-                personal_workspace_id,
-                grant.account_id.as_str(),
-                environment.id,
-                environment.revision,
-                &grant.graph_revision_ids,
-            )
-            .await
-            .unwrap(),
-        Some(grant.id)
-    );
     knowledge
         .retain_granted_environment_heads(environment.id, &grant.graph_revision_ids)
         .await
         .unwrap();
-    assert_eq!(knowledge.active_set(environment.id).await.unwrap().len(), 2);
+    assert!(knowledge
+        .active_for_source(artifact.binding.source_id)
+        .await
+        .unwrap()
+        .is_some());
+    assert!(knowledge
+        .active_for_source(second.binding.source_id)
+        .await
+        .unwrap()
+        .is_some());
 
     let mapping = KnowledgeMappingProposal {
         id: Uuid::from_u128(0x1261),
@@ -527,55 +507,13 @@ async fn assert_current_store_migration_is_write_free() {
         proposed_at: Utc::now(),
     };
     knowledge.propose_mapping(&mapping).await.unwrap();
-    let proposals = knowledge
-        .mappings_for_revision(environment.id, artifact.graph_revision_id)
-        .await
-        .unwrap();
-    assert_eq!(proposals, vec![mapping.clone()]);
-    knowledge
-        .decide_mapping(
-            mapping.id,
-            artifact.graph_revision_id,
-            MappingProposalState::Approved,
-        )
-        .await
-        .unwrap();
-    assert_eq!(
-        knowledge
-            .mappings_for_revision(environment.id, artifact.graph_revision_id)
+    let stored_mapping_state: String =
+        sqlx::query_scalar("SELECT state FROM knowledge_mapping_proposals WHERE id = ?1")
+            .bind(mapping.id.to_string())
+            .fetch_one(&pool)
             .await
-            .unwrap()[0]
-            .state,
-        MappingProposalState::Approved
-    );
-    let approved_mapping = KnowledgeMappingProposal {
-        state: MappingProposalState::Approved,
-        ..mapping.clone()
-    };
-    knowledge
-        .sync_remote_knowledge_mapping(&approved_mapping)
-        .await
-        .unwrap();
-    let changed_remote_identity = KnowledgeMappingProposal {
-        target_identity: "changed".into(),
-        ..approved_mapping
-    };
-    assert!(matches!(
-        knowledge
-            .sync_remote_knowledge_mapping(&changed_remote_identity)
-            .await,
-        Err(AppError::Blocked { .. })
-    ));
-    assert!(matches!(
-        knowledge
-            .decide_mapping(
-                mapping.id,
-                artifact.graph_revision_id,
-                MappingProposalState::Rejected,
-            )
-            .await,
-        Err(AppError::Blocked { .. })
-    ));
+            .unwrap();
+    assert_eq!(stored_mapping_state, "proposed");
 
     let current_connection_id = Uuid::from_u128(0x1291);
     let secondary_connection_id = Uuid::from_u128(0x1292);
@@ -698,20 +636,16 @@ async fn assert_current_store_migration_is_write_free() {
         .delete_knowledge_project(personal_workspace_id, project.id, project.revision)
         .await
         .unwrap();
-    assert!(!knowledge
-        .knowledge_environment_exists(personal_workspace_id, environment.id)
-        .await
-        .unwrap());
     assert!(knowledge
         .active_for_source(artifact.binding.source_id)
         .await
         .unwrap()
         .is_none());
     assert!(knowledge
-        .active_set(environment.id)
+        .active_for_source(second.binding.source_id)
         .await
         .unwrap()
-        .is_empty());
+        .is_none());
     assert!(knowledge
         .knowledge_projects(personal_workspace_id)
         .await

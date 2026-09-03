@@ -7,7 +7,6 @@ import {
   SelectInput,
   TextInput,
 } from "../../../design-system/components/FormControls";
-import { ProgressBar } from "../../../design-system/components/Progress";
 import {
   InlineNotice,
   LoadingLabel,
@@ -20,28 +19,20 @@ import type { QueryResultPhase } from "../../../lib/queryResultPhase";
 import type {
   GithubKnowledgeRepository,
   KnowledgeSource,
-  KnowledgeSourceSyncProgress,
 } from "../domain";
 import {
   knowledgeRevisionLabel,
 } from "../presentation";
-import {
-  knowledgeSyncOverallPercent,
-  knowledgeSyncRemainingFiles,
-} from "../syncProgress";
 import type { GithubInstallState } from "../useKnowledgeGithubInstall";
 import {
-  KNOWLEDGE_GRAPH_UI_ENABLED,
   knowledgeRepositoryLabel,
   knowledgeSourceHealthKey,
-  knowledgeSyncPhaseKey,
   type KnowledgeSourceActivity,
 } from "../workspaceModel";
 
 interface KnowledgeConnectSourceSectionProps {
   projectName: string;
   environmentName: string;
-  provider: "github" | "local_folder";
   githubProviderVisible: boolean;
   personalAuthResolved: boolean;
   githubAvailable: boolean;
@@ -57,7 +48,6 @@ interface KnowledgeConnectSourceSectionProps {
   pending: boolean;
   githubPending: boolean;
   localPending: boolean;
-  onProviderChange: (provider: "github" | "local_folder") => void;
   onRepositoryChange: (repository: GithubKnowledgeRepository) => void;
   onRefNameChange: (value: string) => void;
   onDisplayNameChange: (value: string) => void;
@@ -71,7 +61,6 @@ interface KnowledgeConnectSourceSectionProps {
 export function KnowledgeConnectSourceSection({
   projectName,
   environmentName,
-  provider,
   githubProviderVisible,
   personalAuthResolved,
   githubAvailable,
@@ -87,7 +76,6 @@ export function KnowledgeConnectSourceSection({
   pending,
   githubPending,
   localPending,
-  onProviderChange,
   onRepositoryChange,
   onRefNameChange,
   onDisplayNameChange,
@@ -112,30 +100,9 @@ export function KnowledgeConnectSourceSection({
             })}
           </p>
         </div>
-        <div className="tw:inline-flex tw:gap-1" role="group" aria-label={t("knowledge.sourceProvider")}>
-          {githubProviderVisible ? (
-            <Button
-              size="compact"
-              variant={provider === "github" ? "selected" : "ghost"}
-              onClick={() => onProviderChange("github")}
-            >
-              GitHub
-            </Button>
-          ) : null}
-          {KNOWLEDGE_GRAPH_UI_ENABLED ? (
-            <Button
-              size="compact"
-              variant={provider === "local_folder" ? "selected" : "ghost"}
-              onClick={() => onProviderChange("local_folder")}
-            >
-              <Icon name="folder" />
-              {t("knowledge.localFolder")}
-            </Button>
-          ) : null}
-        </div>
       </div>
 
-      {provider === "github" && githubProviderVisible ? (
+      {githubProviderVisible ? (
         !personalAuthResolved ? (
           <LoadingLabel>{t("workspace.loginChecking")}</LoadingLabel>
         ) : !githubAvailable ? (
@@ -321,12 +288,8 @@ interface KnowledgeSourceInventoryProps {
   phase: QueryResultPhase;
   sources: KnowledgeSource[];
   activityBySourceId: ReadonlyMap<string, KnowledgeSourceActivity>;
-  progressBySourceId: ReadonlyMap<string, KnowledgeSourceSyncProgress>;
-  syncPending: boolean;
-  syncingSourceId: string | undefined;
   revokePending: boolean;
   onRefresh: () => void;
-  onSync: (sourceId: string) => void;
   onRevoke: (sourceId: string) => void;
 }
 
@@ -334,12 +297,8 @@ export function KnowledgeSourceInventory({
   phase,
   sources,
   activityBySourceId,
-  progressBySourceId,
-  syncPending,
-  syncingSourceId,
   revokePending,
   onRefresh,
-  onSync,
   onRevoke,
 }: KnowledgeSourceInventoryProps) {
   const { t } = useI18n();
@@ -369,22 +328,16 @@ export function KnowledgeSourceInventory({
         <div className="tw:grid tw:overflow-hidden tw:rounded-md tw:border tw:border-border-subtle">
           {sources.map((source) => {
             const activity = activityBySourceId.get(source.sourceId);
-            const progress = progressBySourceId.get(source.sourceId);
             const visibleHealth =
-              !KNOWLEDGE_GRAPH_UI_ENABLED && source.provider === "github"
+              source.provider === "github"
                 ? source.health
-                : progress
-                  ? "syncing"
-                  : activity?.state ?? source.health;
+                : activity?.state ?? source.health;
             const tone: StatusTone =
               visibleHealth === "ready"
                 ? "success"
                 : visibleHealth === "failed"
                   ? "danger"
                   : "warning";
-            const overallProgress = progress
-              ? knowledgeSyncOverallPercent(progress)
-              : null;
             return (
               <article
                 key={source.sourceId}
@@ -410,47 +363,10 @@ export function KnowledgeSourceInventory({
                       snapshot: t("knowledge.revisionSnapshot"),
                     })}
                   </span>
-                  {source.provider === "github" && !KNOWLEDGE_GRAPH_UI_ENABLED ? (
+                  {source.provider === "github" ? (
                     <span className="tw:text-xs tw:text-muted-foreground">
                       {t("knowledge.sourceBrowseMode")}
                     </span>
-                  ) : null}
-                  {progress ? (
-                    <div className="tw:grid tw:gap-1.5 tw:pt-1">
-                      <span className="tw:flex tw:min-w-0 tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-0.5 tw:text-xs tw:text-muted-foreground">
-                        <span>{t(knowledgeSyncPhaseKey[progress.phase])}</span>
-                        <span>
-                          {progress.totalFiles > 0
-                            ? t("knowledge.syncProgressFiles", {
-                                completed: progress.completedFiles.toLocaleString(),
-                                total: progress.totalFiles.toLocaleString(),
-                                remaining: knowledgeSyncRemainingFiles(progress).toLocaleString(),
-                              })
-                            : t("knowledge.syncProgressPreparing")}
-                        </span>
-                        <span>
-                          {progress.retryAt
-                            ? t("knowledge.syncRetryAt", {
-                                attempt: progress.attempt.toLocaleString(),
-                                time: new Date(progress.retryAt).toLocaleTimeString(),
-                              })
-                            : t("knowledge.syncUpdatedAt", {
-                                time: new Date(progress.updatedAt).toLocaleTimeString(),
-                              })}
-                        </span>
-                      </span>
-                      <ProgressBar
-                        density="compact"
-                        value={overallProgress}
-                        label={
-                          overallProgress === null
-                            ? t("knowledge.syncProgressPreparing")
-                            : t("knowledge.syncProgressPercent", {
-                                count: overallProgress.toFixed(0),
-                              })
-                        }
-                      />
-                    </div>
                   ) : null}
                   {source.provider === "local_folder" && !source.localCapabilityAvailable ? (
                     <span className="tw:text-xs tw:text-warning">
@@ -466,26 +382,6 @@ export function KnowledgeSourceInventory({
                   ) : null}
                 </div>
                 <div className="tw:flex tw:flex-wrap tw:items-center tw:justify-end tw:gap-2 tw:@max-[560px]:justify-start">
-                  {KNOWLEDGE_GRAPH_UI_ENABLED ? (
-                    <Button
-                      size="compact"
-                      disabled={
-                        syncPending ||
-                        activity?.state === "syncing" ||
-                        Boolean(progress)
-                      }
-                      onClick={() => onSync(source.sourceId)}
-                    >
-                      <Icon name="refresh" />
-                      {(syncPending && syncingSourceId === source.sourceId) ||
-                      activity?.state === "syncing" ||
-                      progress
-                        ? t("knowledge.syncing")
-                        : activity?.state === "failed"
-                          ? t("knowledge.retry")
-                          : t("knowledge.sync")}
-                    </Button>
-                  ) : null}
                   <ConfirmButton
                     size="compact"
                     variant="dangerGhost"

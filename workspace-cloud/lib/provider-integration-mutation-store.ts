@@ -27,7 +27,7 @@ export type ProviderIntegrationGeneration = {
 export type ProviderPrincipalClaim = {
   principalFingerprint: string;
   targetFingerprint: string;
-  accessKind: "read" | "write";
+  accessKind: "read" | "write" | "schema";
 };
 
 /**
@@ -78,27 +78,6 @@ function validLocalVerificationTarget(
 export type PersistProviderIntegrationResult =
   | { ok: true; id: string }
   | { ok: false };
-
-// Keep the durable-write inventory explicit. New provider credential writes
-// require both an entry here and a final authority-bound SQL assertion.
-export const PROVIDER_INTEGRATION_DURABLE_MUTATION_ENTRYPOINTS = Object.freeze([
-  "persistProviderIntegration",
-  "claimPlanetScaleCredentialRefresh",
-  "markPlanetScaleCredentialRefreshRemoteStarted",
-  "finalizePlanetScaleCredentialRefresh",
-  "requirePlanetScaleCredentialReconnect",
-  "claimProviderIntegrationDisconnect",
-  "resumeProviderIntegrationDisconnect",
-  "markProviderIntegrationDisconnectLeasesRevoked",
-  "markProviderIntegrationLeaseCleanupPending",
-  "markProviderIntegrationProviderRevokeStarted",
-  "markProviderIntegrationProviderRevokeAmbiguous",
-  "markProviderIntegrationProviderRevoked",
-  "releaseProviderIntegrationDisconnectClaim",
-  "planetScaleOAuthCallback",
-  "providerAccessToken",
-  "disconnectProviderIntegration",
-] as const);
 
 function expectedGeneration(input: PersistProviderIntegrationInput) {
   const existing = input.existing;
@@ -370,23 +349,6 @@ export async function finalizePlanetScaleCredentialRefresh(input: {
     RETURNING integration."id"::text AS "id"
   `);
   return result.rows.length === 1;
-}
-
-/** Release only a fenced pre-I/O claim. */
-export async function releasePlanetScaleCredentialRefreshClaim(input: {
-  integrationId: string; generation: bigint; claimId: string;
-}): Promise<void> {
-  await db.execute(sql`
-    UPDATE ${workspaceProviderIntegration}
-    SET "refresh_claimed_at" = NULL, "refresh_claim_id" = NULL,
-        "refresh_generation" = NULL, "refresh_phase" = 'idle',
-        "refresh_remote_started_at" = NULL
-    WHERE "id" = ${input.integrationId}::uuid
-      AND "generation" = ${input.generation}
-      AND "refresh_generation" = ${input.generation}
-      AND "refresh_claim_id" = ${input.claimId}::uuid
-      AND "refresh_phase" = 'claimed'
-  `);
 }
 
 /** A post-I/O failure is ambiguous and can only be repaired by explicit OAuth reconnect. */

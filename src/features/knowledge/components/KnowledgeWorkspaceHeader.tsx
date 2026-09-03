@@ -36,11 +36,7 @@ export function KnowledgeWorkspaceHeader({
   const title =
     view === "databases"
       ? t("knowledge.viewDatabases")
-      : view === "mappings"
-        ? t("knowledge.viewMappings")
-        : view === "explore"
-          ? t("knowledge.viewExplore")
-          : t("knowledge.viewSources");
+      : t("knowledge.viewSources");
   return (
     <>
       <header className="tw:flex tw:min-h-control-lg tw:min-w-0 tw:flex-wrap tw:items-center tw:gap-2 tw:border-b tw:border-border-subtle tw:pb-3">

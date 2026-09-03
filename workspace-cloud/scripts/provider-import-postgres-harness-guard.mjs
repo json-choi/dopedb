@@ -6,7 +6,6 @@ const workspaceCloudDirectory = dirname(dirname(fileURLToPath(import.meta.url)))
 
 export const PROVIDER_IMPORT_POSTGRES_HARNESS_SOURCE_LIMITS = Object.freeze({
   "lib/provider-import-postgres.harness.ts": 70,
-  "lib/knowledge/graph-activation-postgres.harness.ts": 800,
   "lib/provider-import-postgres-harness/fixture.ts": 380,
   "lib/provider-import-postgres-harness/assertions.ts": 200,
   "lib/provider-import-postgres-harness/authority-provider-scenarios.ts": 380,
@@ -16,10 +15,11 @@ export const PROVIDER_IMPORT_POSTGRES_HARNESS_SOURCE_LIMITS = Object.freeze({
   "lib/provider-import-postgres-harness/sync-scenarios.ts": 200,
   "lib/provider-import-postgres-harness/provider-operation-scenarios.ts": 600,
   "lib/provider-import-postgres-harness/personal-knowledge-scenarios.ts": 80,
+  "lib/provider-import-postgres-harness/source-revision-scenarios.ts": 120,
   "lib/provider-import-postgres-harness/workspace-lifecycle-scenarios.ts": 320,
 });
 
-export const PROVIDER_IMPORT_POSTGRES_HARNESS_TOTAL_LINE_LIMIT = 3_500;
+export const PROVIDER_IMPORT_POSTGRES_HARNESS_TOTAL_LINE_LIMIT = 2_820;
 export const PROVIDER_POSTGRES_HARNESS_CONFIG_PATH =
   "vitest.provider-harness.config.ts";
 
@@ -34,27 +34,6 @@ const POSTGRES_HARNESS_ROOT_MANIFEST = Object.freeze({
     finallyMarkers: Object.freeze([]),
     sourceMarkers: Object.freeze([
       "openProviderImportPostgresHarness(",
-    ]),
-  }),
-  "lib/knowledge/graph-activation-postgres.harness.ts": Object.freeze({
-    cleanupRequirements: Object.freeze([
-      Object.freeze({
-        marker: "queueHarness.query = null;",
-        tokens: Object.freeze(["queueHarness", ".", "query", "=", "null"]),
-      }),
-      Object.freeze({
-        marker: 'DELETE FROM "workspace_control"."organization"',
-        tokens: Object.freeze(["await", "client"]),
-      }),
-      Object.freeze({
-        marker: "await client.end({ timeout: 5 });",
-        tokens: Object.freeze(["await", "client", ".", "end", "("]),
-      }),
-    ]),
-    finallyMarkers: Object.freeze([]),
-    sourceMarkers: Object.freeze([
-      '"provider_harness"."isolated_database_sentinel"',
-      "expect(sentinel[0]?.confirmed).toBe(true)",
     ]),
   }),
 });

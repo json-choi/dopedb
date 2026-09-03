@@ -15,17 +15,16 @@ use crate::kernel::access::{ActiveResourceScope, PinnedConnection, WorkspaceKind
 
 use super::domain::{
     validate_binding_draft, EnvironmentConnectionBinding, EnvironmentRiskClass,
-    KnowledgeEnvironmentSummary, KnowledgeMappingProposal, KnowledgeSessionScope,
-    MappingProposalState, Project, ProjectDefinition, ProjectEnvironment, SourceBindingDraft,
-    SourceLocator, SourceSnapshot, StoredKnowledgeScope,
+    KnowledgeEnvironmentSummary, KnowledgeMappingProposal, KnowledgeSessionScope, Project,
+    ProjectDefinition, ProjectEnvironment, SourceBindingDraft, SourceLocator, SourceSnapshot,
+    StoredKnowledgeScope,
 };
 use super::ports::{
     AppendKnowledgeEnvironmentRequest, CreateKnowledgeProjectRequest, CreateKnowledgeSourceRequest,
     HostedKnowledgeAuthorityPort, KnowledgeRepositoryPort, PinnedSourceReadRequest,
     PinnedSourceSearchRequest, RemoteEnvironmentConnectionBinding, RemoteGithubRepository,
     RemoteKnowledgeInventory, RemoteKnowledgeProject, RemoteKnowledgeSource,
-    RemoteKnowledgeSyncProgress, RemotePersonalKnowledgeScope, RemoteSourceReadResult,
-    RemoteSourceSearchResult,
+    RemotePersonalKnowledgeScope, RemoteSourceReadResult, RemoteSourceSearchResult,
 };
 use super::KnowledgeAccessReconciliation;
 
@@ -74,16 +73,6 @@ where
         workspace_id: Uuid,
     ) -> AppResult<Vec<ProjectDefinition>> {
         self.repository.knowledge_projects(workspace_id).await
-    }
-
-    pub(crate) async fn knowledge_environment_exists(
-        &self,
-        workspace_id: Uuid,
-        environment_id: Uuid,
-    ) -> AppResult<bool> {
-        self.repository
-            .knowledge_environment_exists(workspace_id, environment_id)
-            .await
     }
 
     pub(crate) async fn create_knowledge_project(
@@ -178,13 +167,6 @@ where
         source_id: Uuid,
     ) -> AppResult<Option<GraphBuildArtifactV1>> {
         self.repository.active_for_source(source_id).await
-    }
-
-    pub(crate) async fn active_set(
-        &self,
-        environment_id: Uuid,
-    ) -> AppResult<Vec<GraphBuildArtifactV1>> {
-        self.repository.active_set(environment_id).await
     }
 
     pub(crate) async fn by_revision(
@@ -341,60 +323,11 @@ where
         self.authority.read_source(request).await
     }
 
-    pub(crate) async fn active_knowledge_grant(
-        &self,
-        workspace_id: Uuid,
-        account_id: &str,
-        environment_id: Uuid,
-        environment_revision: u64,
-        graph_revision_ids: &[Uuid],
-    ) -> AppResult<Option<Uuid>> {
-        self.repository
-            .active_knowledge_grant(
-                workspace_id,
-                account_id,
-                environment_id,
-                environment_revision,
-                graph_revision_ids,
-            )
-            .await
-    }
-
-    pub(crate) async fn sync_remote_knowledge_mapping(
-        &self,
-        proposal: &KnowledgeMappingProposal,
-    ) -> AppResult<()> {
-        self.repository
-            .sync_remote_knowledge_mapping(proposal)
-            .await
-    }
-
     pub(crate) async fn propose_mapping(
         &self,
         proposal: &KnowledgeMappingProposal,
     ) -> AppResult<()> {
         self.repository.propose_mapping(proposal).await
-    }
-
-    pub(crate) async fn decide_mapping(
-        &self,
-        proposal_id: Uuid,
-        revision_id: Uuid,
-        state: MappingProposalState,
-    ) -> AppResult<()> {
-        self.repository
-            .decide_mapping(proposal_id, revision_id, state)
-            .await
-    }
-
-    pub(crate) async fn mappings_for_revision(
-        &self,
-        environment_id: Uuid,
-        revision_id: Uuid,
-    ) -> AppResult<Vec<KnowledgeMappingProposal>> {
-        self.repository
-            .mappings_for_revision(environment_id, revision_id)
-            .await
     }
 
     pub(crate) async fn environment_connections(
@@ -518,33 +451,6 @@ where
     ) -> AppResult<RemoteKnowledgeProject> {
         self.authority
             .create_environment(account_id, workspace_id, project_id, request)
-            .await
-    }
-
-    pub(crate) async fn list_remote_mappings(
-        &self,
-        account_id: &str,
-        workspace_id: Uuid,
-    ) -> AppResult<Vec<KnowledgeMappingProposal>> {
-        self.authority.list_mappings(account_id, workspace_id).await
-    }
-
-    pub(crate) async fn decide_remote_mapping(
-        &self,
-        account_id: &str,
-        workspace_id: Uuid,
-        mapping_id: Uuid,
-        expected_graph_revision_id: Uuid,
-        decision: MappingProposalState,
-    ) -> AppResult<()> {
-        self.authority
-            .decide_mapping(
-                account_id,
-                workspace_id,
-                mapping_id,
-                expected_graph_revision_id,
-                decision,
-            )
             .await
     }
 
@@ -702,27 +608,6 @@ where
         workspace_id: Uuid,
     ) -> AppResult<Vec<RemoteKnowledgeSource>> {
         self.authority.list_sources(account_id, workspace_id).await
-    }
-
-    pub(crate) async fn list_remote_source_sync_progress(
-        &self,
-        account_id: &str,
-        workspace_id: Uuid,
-    ) -> AppResult<Vec<RemoteKnowledgeSyncProgress>> {
-        self.authority
-            .list_source_sync_progress(account_id, workspace_id)
-            .await
-    }
-
-    pub(crate) async fn request_remote_source_sync(
-        &self,
-        account_id: &str,
-        workspace_id: Uuid,
-        source_id: Uuid,
-    ) -> AppResult<Option<Uuid>> {
-        self.authority
-            .request_source_sync(account_id, workspace_id, source_id)
-            .await
     }
 
     pub(crate) async fn delete_remote_source(

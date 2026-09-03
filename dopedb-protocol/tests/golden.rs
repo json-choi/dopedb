@@ -521,8 +521,18 @@ fn public_protocol_goldens_match_pinned_agent_and_control_plane_contracts() {
         .expect("fixture connector")
         .access_token
         .is_empty());
+    let mut gcp_schema = contracts.managed_lease.response.clone();
+    gcp_schema["lease"]["accessMode"] = json!("schema");
+    let gcp_schema: ManagedLeaseResponse =
+        serde_json::from_value(gcp_schema).expect("GCP schema access mode must decode");
+    assert!(gcp_schema.validate());
     let mut invalid_schema_provider = contracts.managed_lease.response.clone();
+    invalid_schema_provider["lease"]["provider"] = json!("planetScale");
     invalid_schema_provider["lease"]["accessMode"] = json!("schema");
+    invalid_schema_provider["lease"]
+        .as_object_mut()
+        .expect("managed lease fixture")
+        .remove("connector");
     let invalid_schema_provider: ManagedLeaseResponse =
         serde_json::from_value(invalid_schema_provider)
             .expect("known schema access mode must decode");

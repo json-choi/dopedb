@@ -22,8 +22,6 @@ export const knowledgeQueryKeys = {
     scopeKey === undefined
       ? ([KNOWLEDGE_WORKSPACE_QUERY_ROOTS[0], "sources"] as const)
       : ([KNOWLEDGE_WORKSPACE_QUERY_ROOTS[0], "sources", scopeKey] as const),
-  sourceSyncProgress: (scopeKey: string) =>
-    [KNOWLEDGE_WORKSPACE_QUERY_ROOTS[0], "source-sync-progress", scopeKey] as const,
   githubRepositories: (scopeKey: string) =>
     [
       KNOWLEDGE_WORKSPACE_QUERY_ROOTS[0],
@@ -52,13 +50,6 @@ export const knowledgeQueryKeys = {
             environmentId,
             scopeKey,
           ] as const),
-  mappings: (environmentId: string, scopeKey: string) =>
-    [
-      KNOWLEDGE_WORKSPACE_QUERY_ROOTS[0],
-      "mappings",
-      environmentId,
-      scopeKey,
-    ] as const,
   agentEnvironments: (connectionId?: string, scopeKey?: string) =>
     connectionId === undefined
       ? ([AGENT_KNOWLEDGE_CONNECTION_QUERY_ROOTS[0]] as const)

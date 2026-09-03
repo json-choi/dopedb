@@ -5,10 +5,8 @@ import "server-only";
 import { and, eq, isNull } from "drizzle-orm";
 
 import { db } from "../db";
-import { env } from "../env";
 import {
   knowledgeEnvironmentConnection,
-  knowledgeEnvironmentHead,
   knowledgeProject,
   knowledgeProjectEnvironment,
   knowledgeSource,
@@ -91,18 +89,11 @@ export async function listKnowledgeSources(workspaceId: string) {
     syncState: knowledgeSource.syncState,
     syncRevision: knowledgeSource.syncRevision,
     lastFailureCode: knowledgeSource.lastFailureCode,
-    graphRevisionId: knowledgeEnvironmentHead.graphRevisionId,
-  }).from(knowledgeSource).leftJoin(knowledgeEnvironmentHead, and(
-    eq(knowledgeEnvironmentHead.organizationId, knowledgeSource.organizationId),
-    eq(knowledgeEnvironmentHead.projectEnvironmentId, knowledgeSource.projectEnvironmentId),
-    eq(knowledgeEnvironmentHead.sourceId, knowledgeSource.id),
-  )).where(and(
+  }).from(knowledgeSource).where(and(
     eq(knowledgeSource.organizationId, workspaceId),
     isNull(knowledgeSource.revokedAt),
   ));
-  return env.knowledgeGraphBuildsEnabled()
-    ? sources
-    : sources.map((source) => ({ ...source, graphRevisionId: null }));
+  return sources.map((source) => ({ ...source, graphRevisionId: null }));
 }
 
 export async function listKnowledgeEnvironmentConnections(workspaceId: string) {

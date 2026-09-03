@@ -2,7 +2,6 @@
 
 use std::future::Future;
 
-use chrono::{DateTime, Utc};
 use dopedb_protocol::{
     GraphBuildArtifactV1, GraphRevisionDiffV1, KnowledgeSourceBindingV1, SourceRevisionIdentity,
 };
@@ -15,8 +14,7 @@ use crate::kernel::access::{ActiveResourceScope, PinnedConnection};
 use super::domain::{
     EnvironmentConnectionBinding, EnvironmentRiskClass, KnowledgeEnvironmentSummary,
     KnowledgeGrant, KnowledgeMappingProposal, KnowledgeSessionScope, KnowledgeSessionSource,
-    MappingProposalState, Project, ProjectDefinition, ProjectEnvironment, SourceSnapshot,
-    StoredKnowledgeScope,
+    Project, ProjectDefinition, ProjectEnvironment, SourceSnapshot, StoredKnowledgeScope,
 };
 
 /// Hosted Knowledge DTOs belong to the authority port rather than its HTTP
@@ -126,45 +124,6 @@ pub(crate) struct PinnedSourceReadRequest<'a> {
     pub(crate) path: &'a str,
     pub(crate) line_start: u32,
     pub(crate) line_end: u32,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub(crate) struct RemoteKnowledgeSyncProgress {
-    pub(crate) source_id: Uuid,
-    pub(crate) project_environment_id: Uuid,
-    pub(crate) display_name: String,
-    pub(crate) project_name: String,
-    pub(crate) environment_name: String,
-    pub(crate) phase: String,
-    pub(crate) state: String,
-    pub(crate) total_files: u32,
-    pub(crate) completed_files: u32,
-    pub(crate) attempt: u32,
-    pub(crate) started_at: DateTime<Utc>,
-    pub(crate) updated_at: DateTime<Utc>,
-    pub(crate) retry_at: Option<DateTime<Utc>>,
-}
-
-impl RemoteKnowledgeSyncProgress {
-    pub(crate) fn validate(&self) -> bool {
-        let safe_name = |value: &str| {
-            !value.trim().is_empty() && value.len() <= 512 && !value.chars().any(char::is_control)
-        };
-        matches!(self.phase.as_str(), "manifest" | "indexing" | "activating")
-            && matches!(self.state.as_str(), "queued" | "claimed")
-            && safe_name(&self.display_name)
-            && safe_name(&self.project_name)
-            && safe_name(&self.environment_name)
-            && self.total_files <= 20_000
-            && self.completed_files <= self.total_files
-            && self.attempt <= 20
-            && self.updated_at >= self.started_at
-            && self.updated_at <= Utc::now() + chrono::Duration::minutes(5)
-            && self.retry_at.as_ref().is_none_or(|retry_at| {
-                self.state == "queued" && self.attempt > 0 && *retry_at >= self.started_at
-            })
-    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -330,10 +289,6 @@ pub(crate) trait KnowledgeGraphRepositoryPort: Clone + Send + Sync + 'static {
         &self,
         source_id: Uuid,
     ) -> impl Future<Output = AppResult<Option<GraphBuildArtifactV1>>> + Send;
-    fn active_set(
-        &self,
-        project_environment_id: Uuid,
-    ) -> impl Future<Output = AppResult<Vec<GraphBuildArtifactV1>>> + Send;
     fn by_revision(
         &self,
         graph_revision_id: Uuid,
@@ -354,17 +309,6 @@ pub(crate) trait KnowledgeMappingRepositoryPort: Clone + Send + Sync + 'static {
         &self,
         proposal: &KnowledgeMappingProposal,
     ) -> impl Future<Output = AppResult<()>> + Send;
-    fn decide_mapping(
-        &self,
-        proposal_id: Uuid,
-        expected_graph_revision_id: Uuid,
-        state: MappingProposalState,
-    ) -> impl Future<Output = AppResult<()>> + Send;
-    fn mappings_for_revision(
-        &self,
-        project_environment_id: Uuid,
-        graph_revision_id: Uuid,
-    ) -> impl Future<Output = AppResult<Vec<KnowledgeMappingProposal>>> + Send;
 }
 
 /// Complete device-local persistence boundary consumed by the Knowledge
@@ -386,11 +330,6 @@ pub(crate) trait KnowledgeRepositoryPort:
         &self,
         workspace_id: Uuid,
     ) -> impl Future<Output = AppResult<Vec<ProjectDefinition>>> + Send;
-    fn knowledge_environment_exists(
-        &self,
-        workspace_id: Uuid,
-        environment_id: Uuid,
-    ) -> impl Future<Output = AppResult<bool>> + Send;
     fn create_knowledge_project(
         &self,
         workspace_id: Uuid,
@@ -438,14 +377,6 @@ pub(crate) trait KnowledgeRepositoryPort:
         workspace_id: Uuid,
         account_id: &str,
     ) -> impl Future<Output = AppResult<Vec<GraphBuildArtifactV1>>> + Send;
-    fn active_knowledge_grant(
-        &self,
-        workspace_id: Uuid,
-        account_id: &str,
-        environment_id: Uuid,
-        environment_revision: u64,
-        graph_revision_ids: &[Uuid],
-    ) -> impl Future<Output = AppResult<Option<Uuid>>> + Send;
     fn revoke_knowledge_grants_for_account(
         &self,
         workspace_id: Uuid,
@@ -459,10 +390,6 @@ pub(crate) trait KnowledgeRepositoryPort:
         &self,
         environment_id: Uuid,
         revisions: &[Uuid],
-    ) -> impl Future<Output = AppResult<()>> + Send;
-    fn sync_remote_knowledge_mapping(
-        &self,
-        proposal: &KnowledgeMappingProposal,
     ) -> impl Future<Output = AppResult<()>> + Send;
     fn environment_connections(
         &self,
@@ -544,11 +471,6 @@ pub(crate) trait HostedKnowledgeAuthorityPort: Clone + Send + Sync + 'static {
         member_id: &str,
         environment_id: Uuid,
     ) -> impl Future<Output = AppResult<()>> + Send;
-    fn list_mappings(
-        &self,
-        account_id: &str,
-        workspace_id: Uuid,
-    ) -> impl Future<Output = AppResult<Vec<KnowledgeMappingProposal>>> + Send;
     fn propose_mapping(
         &self,
         account_id: &str,
@@ -556,14 +478,6 @@ pub(crate) trait HostedKnowledgeAuthorityPort: Clone + Send + Sync + 'static {
         grant_id: Uuid,
         proposal: &KnowledgeMappingProposal,
     ) -> impl Future<Output = AppResult<KnowledgeMappingProposal>> + Send;
-    fn decide_mapping(
-        &self,
-        account_id: &str,
-        workspace_id: Uuid,
-        mapping_id: Uuid,
-        expected_graph_revision_id: Uuid,
-        decision: MappingProposalState,
-    ) -> impl Future<Output = AppResult<()>> + Send;
     fn download_graph(
         &self,
         account_id: &str,
@@ -631,17 +545,6 @@ pub(crate) trait HostedKnowledgeAuthorityPort: Clone + Send + Sync + 'static {
         &self,
         request: &PinnedSourceReadRequest<'_>,
     ) -> impl Future<Output = AppResult<RemoteSourceReadResult>> + Send;
-    fn list_source_sync_progress(
-        &self,
-        account_id: &str,
-        workspace_id: Uuid,
-    ) -> impl Future<Output = AppResult<Vec<RemoteKnowledgeSyncProgress>>> + Send;
-    fn request_source_sync(
-        &self,
-        account_id: &str,
-        workspace_id: Uuid,
-        source_id: Uuid,
-    ) -> impl Future<Output = AppResult<Option<Uuid>>> + Send;
     fn delete_source(
         &self,
         account_id: &str,

@@ -135,10 +135,6 @@ export function WorkbenchSelect({
   );
 }
 
-export function MetadataDot() {
-  return <span className="ds-meta-dot" aria-hidden="true" />;
-}
-
 export function WorkbenchEmptyState({
   icon,
   children,

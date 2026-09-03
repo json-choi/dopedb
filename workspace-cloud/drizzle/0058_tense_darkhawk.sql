@@ -1,0 +1,2 @@
+ALTER TABLE "workspace_control"."workspace_provider_principal_claim" DROP CONSTRAINT "provider_principal_claim_access_kind";--> statement-breakpoint
+ALTER TABLE "workspace_control"."workspace_provider_principal_claim" ADD CONSTRAINT "provider_principal_claim_access_kind" CHECK ("workspace_control"."workspace_provider_principal_claim"."access_kind" IN ('read', 'write', 'schema'));

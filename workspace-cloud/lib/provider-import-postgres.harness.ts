@@ -14,6 +14,7 @@ import {
   seedProviderImportPostgresHarness,
 } from "./provider-import-postgres-harness/fixture";
 import { runProviderOperationScenarios } from "./provider-import-postgres-harness/provider-operation-scenarios";
+import { runSourceRevisionScenarios } from "./provider-import-postgres-harness/source-revision-scenarios";
 import { runSyncScenarios } from "./provider-import-postgres-harness/sync-scenarios";
 import { runWorkspaceLifecycleScenarios } from "./provider-import-postgres-harness/workspace-lifecycle-scenarios";
 
@@ -47,6 +48,7 @@ describe.runIf(enabled)("provider import PostgreSQL concurrency harness", () => 
       const support = await runProviderImportSupportAssertions();
       const fixture = await seedProviderImportPostgresHarness(database);
       await runPersonalKnowledgeScenarios(fixture);
+      await runSourceRevisionScenarios(fixture);
       const provider = await runAuthorityProviderScenarios(fixture);
       const analysis = await runAnalysisLifecycleScenarios(fixture, provider);
 

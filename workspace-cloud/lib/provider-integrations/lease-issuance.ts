@@ -115,7 +115,11 @@ export async function issueManagedLease(input: {
   resource: ManagedProviderResource;
   oidcToken?: string | null;
 }): Promise<ManagedProviderLease & { leaseId: string; providerAuditId: string }> {
-  if (input.accessMode === "schema" && input.integration.provider !== "neon") {
+  if (
+    input.accessMode === "schema"
+    && input.integration.provider !== "neon"
+    && input.integration.provider !== "gcpCloudSql"
+  ) {
     throw new ProviderRequestError(
       input.integration.provider,
       "This managed provider does not support short-lived schema access",
@@ -289,13 +293,6 @@ export async function issueManagedLease(input: {
         break;
       }
       case "gcpCloudSql": {
-        if (input.accessMode === "schema") {
-          throw new ProviderRequestError(
-            "gcpCloudSql",
-            "Cloud SQL managed schema access is not supported",
-            409,
-          );
-        }
         const credential = gcpCredential(input.integration);
         const oidcToken = requiredOidcToken(input.oidcToken);
         lease = await issueAfterFreshProviderAuthority(

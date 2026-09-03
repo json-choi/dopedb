@@ -308,8 +308,8 @@ export async function ensureDatabaseUser(
 export type GcpDatabaseBootstrapUser = {
   user: JsonObject;
   created: boolean;
-  elevated: boolean;
   engine: "postgres" | "mysql";
+  originalRoles: string[];
 };
 
 function databaseRoles(user: JsonObject) {
@@ -319,7 +319,9 @@ function databaseRoles(user: JsonObject) {
     || user.databaseRoles.length > 100
     || user.databaseRoles.some((role) => (
       typeof role !== "string"
-      || !/^[A-Za-z_][A-Za-z0-9_]{0,62}$/.test(role)
+      || role.length === 0
+      || role.length > 63
+      || /[\u0000-\u001f\u007f]/.test(role)
     ))
   ) {
     throw new ProviderRequestError(
@@ -443,7 +445,12 @@ export async function prepareDatabaseBootstrapUser(
           credential,
           projectId,
           instanceId,
-          { user: existing, created: false, elevated: true, engine },
+          {
+            user: existing,
+            created: false,
+            engine,
+            originalRoles,
+          },
         ).catch(() => {
           throw new ProviderRequestError(
             "gcpCloudSql",
@@ -454,7 +461,7 @@ export async function prepareDatabaseBootstrapUser(
         throw error;
       }
     }
-    return { user: existing, created: false, elevated, engine };
+    return { user: existing, created: false, engine, originalRoles };
   }
 
   const operation = (await googleRequest(
@@ -488,8 +495,8 @@ export async function prepareDatabaseBootstrapUser(
     return {
       user: created,
       created: true,
-      elevated: true,
       engine,
+      originalRoles: [],
     };
   } catch (error) {
     const created = findBootstrapDatabaseUser(
@@ -530,22 +537,23 @@ export async function restoreDatabaseBootstrapUser(
     );
     return;
   }
-  if (bootstrap.elevated) {
-    const current = findBootstrapDatabaseUser(
-      await listDatabaseUsers(credential, projectId, instanceId),
-      credential.email,
-      bootstrap.engine,
-    );
-    if (!current) return;
-    const roles = databaseRoles(current).filter(
-      (role) => role !== "cloudsqlsuperuser",
-    );
+  const current = findBootstrapDatabaseUser(
+    await listDatabaseUsers(credential, projectId, instanceId),
+    credential.email,
+    bootstrap.engine,
+  );
+  if (!current) return;
+  const currentRoles = databaseRoles(current);
+  if (
+    currentRoles.length !== bootstrap.originalRoles.length
+    || currentRoles.some((role, index) => role !== bootstrap.originalRoles[index])
+  ) {
     await setDatabaseRoles(
       credential,
       projectId,
       instanceId,
       current,
-      roles,
+      bootstrap.originalRoles,
       true,
     );
   }
@@ -566,7 +574,13 @@ export async function setDatabaseRoles(
       userType !== "CLOUD_IAM_SERVICE_ACCOUNT"
       && userType !== "CLOUD_IAM_USER"
     )
-    || roles.some((role) => !/^[A-Za-z_][A-Za-z0-9_]{0,62}$/.test(role))
+    || roles.length > 100
+    || new Set(roles).size !== roles.length
+    || roles.some((role) => (
+      role.length === 0
+      || role.length > 63
+      || /[\u0000-\u001f\u007f]/.test(role)
+    ))
   ) {
     throw new ProviderRequestError(
       "gcpCloudSql",

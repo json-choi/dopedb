@@ -814,7 +814,7 @@ export const workspaceProviderPrincipalClaim = workspaceControl.table(
     ),
     check(
       "provider_principal_claim_access_kind",
-      sql`${table.accessKind} IN ('read', 'write')`,
+      sql`${table.accessKind} IN ('read', 'write', 'schema')`,
     ),
   ],
 );

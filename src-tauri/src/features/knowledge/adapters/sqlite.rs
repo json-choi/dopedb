@@ -12,8 +12,8 @@ use crate::store::Store;
 
 use super::super::domain::{
     EnvironmentConnectionBinding, EnvironmentRiskClass, KnowledgeEnvironmentSummary,
-    KnowledgeGrant, KnowledgeMappingProposal, KnowledgeSessionScope, MappingProposalState, Project,
-    ProjectDefinition, ProjectEnvironment, SourceSnapshot, StoredKnowledgeScope,
+    KnowledgeGrant, KnowledgeMappingProposal, KnowledgeSessionScope, Project, ProjectDefinition,
+    ProjectEnvironment, SourceSnapshot, StoredKnowledgeScope,
 };
 use super::super::ports::{
     KnowledgeGrantPort, KnowledgeGraphRepositoryPort, KnowledgeMappingRepositoryPort,
@@ -68,13 +68,6 @@ impl KnowledgeGraphRepositoryPort for SqliteKnowledgeRepository {
         self.store.active_for_source(source_id).await
     }
 
-    async fn active_set(
-        &self,
-        project_environment_id: Uuid,
-    ) -> AppResult<Vec<GraphBuildArtifactV1>> {
-        self.store.active_set(project_environment_id).await
-    }
-
     async fn by_revision(
         &self,
         graph_revision_id: Uuid,
@@ -103,27 +96,6 @@ impl KnowledgeMappingRepositoryPort for SqliteKnowledgeRepository {
     async fn propose_mapping(&self, proposal: &KnowledgeMappingProposal) -> AppResult<()> {
         self.store.propose_mapping(proposal).await
     }
-
-    async fn decide_mapping(
-        &self,
-        proposal_id: Uuid,
-        expected_graph_revision_id: Uuid,
-        state: MappingProposalState,
-    ) -> AppResult<()> {
-        self.store
-            .decide_mapping(proposal_id, expected_graph_revision_id, state)
-            .await
-    }
-
-    async fn mappings_for_revision(
-        &self,
-        project_environment_id: Uuid,
-        graph_revision_id: Uuid,
-    ) -> AppResult<Vec<KnowledgeMappingProposal>> {
-        self.store
-            .mappings_for_revision(project_environment_id, graph_revision_id)
-            .await
-    }
 }
 
 impl KnowledgeRepositoryPort for SqliteKnowledgeRepository {
@@ -133,16 +105,6 @@ impl KnowledgeRepositoryPort for SqliteKnowledgeRepository {
 
     async fn knowledge_projects(&self, workspace_id: Uuid) -> AppResult<Vec<ProjectDefinition>> {
         self.store.knowledge_projects(workspace_id).await
-    }
-
-    async fn knowledge_environment_exists(
-        &self,
-        workspace_id: Uuid,
-        environment_id: Uuid,
-    ) -> AppResult<bool> {
-        self.store
-            .knowledge_environment_exists(workspace_id, environment_id)
-            .await
     }
 
     async fn create_knowledge_project(
@@ -225,25 +187,6 @@ impl KnowledgeRepositoryPort for SqliteKnowledgeRepository {
             .await
     }
 
-    async fn active_knowledge_grant(
-        &self,
-        workspace_id: Uuid,
-        account_id: &str,
-        environment_id: Uuid,
-        environment_revision: u64,
-        graph_revision_ids: &[Uuid],
-    ) -> AppResult<Option<Uuid>> {
-        self.store
-            .active_knowledge_grant(
-                workspace_id,
-                account_id,
-                environment_id,
-                environment_revision,
-                graph_revision_ids,
-            )
-            .await
-    }
-
     async fn revoke_knowledge_grants_for_account(
         &self,
         workspace_id: Uuid,
@@ -266,13 +209,6 @@ impl KnowledgeRepositoryPort for SqliteKnowledgeRepository {
         self.store
             .retain_granted_environment_heads(environment_id, revisions)
             .await
-    }
-
-    async fn sync_remote_knowledge_mapping(
-        &self,
-        proposal: &KnowledgeMappingProposal,
-    ) -> AppResult<()> {
-        self.store.sync_remote_knowledge_mapping(proposal).await
     }
 
     async fn environment_connections(

@@ -12,8 +12,6 @@ import { canonicalHash } from "./workspace-versioning";
 
 const SLUG = /^[a-z0-9][a-z0-9-]{7,127}$/;
 
-export type PublicAnalysisPublication = NonNullable<Awaited<ReturnType<typeof loadPublicAnalysisPublication>>>;
-
 export async function consumePublicAnalysisBudget(clientKey: string) {
   return await consumeRateLimit({
     namespace: "public-analysis",

@@ -89,7 +89,10 @@ impl SafetyPlatformAdapter {
             && settings.allow_writes
             && if profile.credential_mode == WorkspaceCredentialMode::Managed {
                 profile.workspace_access.can_manage()
-                    && profile.provider == crate::model::Provider::Neon
+                    && matches!(
+                        profile.provider,
+                        crate::model::Provider::Neon | crate::model::Provider::GcpCloudSql
+                    )
                     && profile.engine == crate::model::Engine::Postgres
             } else {
                 update_local_write_ceiling && local_mutations_supported

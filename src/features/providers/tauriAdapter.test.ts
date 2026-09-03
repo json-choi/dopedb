@@ -10,6 +10,9 @@ import gcpBootstrapIamSource from "../../../workspace-cloud/lib/providers/gcp-cl
 import gcpBootstrapSqlSource from "../../../workspace-cloud/lib/providers/gcp-cloud-bootstrap-sql.ts?raw";
 import gcpCloudSqlSource from "../../../workspace-cloud/lib/providers/gcp-cloud-sql.ts?raw";
 import gcpCloudSqlCoreSource from "../../../workspace-cloud/lib/providers/gcp-cloud-sql-core.ts?raw";
+import gcpCloudSqlHttpSource from "../../../workspace-cloud/lib/providers/gcp-cloud-managed-http.ts?raw";
+import gcpSchemaAuthoritySource from "../../../workspace-cloud/lib/providers/gcp-cloud-schema-authority.ts?raw";
+import gcpSchemaPolicySource from "../../../workspace-cloud/lib/providers/gcp-cloud-schema-policy.ts?raw";
 import vaultProviderSource from "../../../workspace-cloud/lib/providers/vault.ts?raw";
 import boundedJsonResponseSource from "../../../workspace-cloud/lib/bounded-json-response.ts?raw";
 import neonFacadeSource from "../../../workspace-cloud/lib/providers/neon.ts?raw";
@@ -101,12 +104,14 @@ import workspaceConnectionsSource from "../../../workspace-cloud/lib/workspace-c
 import workspacePermissionsSource from "../../../workspace-cloud/lib/workspace-permissions.ts?raw";
 import workspaceRevocationGatesSource from "../../../workspace-cloud/lib/revocation-gates.ts?raw";
 import workspaceSchemaSource from "../../../workspace-cloud/lib/schema.ts?raw";
+import gcpSchemaClaimMigrationSource from "../../../workspace-cloud/drizzle/0058_tense_darkhawk.sql?raw";
 import workspaceVersioningStoreSource from "../../../workspace-cloud/lib/workspace-versioning-store.ts?raw";
 import workspaceSettingsNavigationSource from "../../../workspace-cloud/app/settings/SettingsNavigation.tsx?raw";
 import safetySettingsScreenSource from "../../../src/screens/Settings/Safety/index.tsx?raw";
 import desktopSharedConnectionSource from "../../../src-tauri/src/features/workspaces/adapters/control_plane/connections.rs?raw";
 import desktopControlPlaneSource from "../../../src-tauri/src/features/workspaces/adapters/control_plane.rs?raw";
 import hostedControlPlaneSource from "../../../src-tauri/src/hosted_control_plane.rs?raw";
+import desktopRuntimePolicySource from "../../../src-tauri/src/connection/runtime_policy.rs?raw";
 import {
   neonBranchQueryable,
   parseNeonBranchInventory,
@@ -143,6 +148,15 @@ import {
   gcpActiveLeaseRetryMessage,
   parseGcpActiveLeaseConflict,
 } from "../../../workspace-cloud/features/providerAccess/domain";
+import {
+  gcpCloudSqlIntegrationIdentity,
+  gcpCloudSqlPrincipalClaims,
+  parseGcpCloudSqlCredential,
+} from "../../../workspace-cloud/lib/providers/gcp-cloud-sql-core";
+import {
+  gcpSchemaDatabasePolicySql,
+  gcpSchemaOwnerInventorySql,
+} from "../../../workspace-cloud/lib/providers/gcp-cloud-schema-policy";
 const neonBranchOperationsApplicationSource = [
   neonBranchOperationsApplicationEntrySource,
   neonBranchOperationsContractsSource,
@@ -473,7 +487,7 @@ describe("provider credential Tauri adapter", () => {
     expect(gcpSetupRouteSource).toContain("gcpActiveDatabaseAccessConflict");
     expect(gcpSetupRouteSource).toContain("setup.expiresAt");
     expect(gcpCloudSqlCoreSource).toContain(
-      "export function gcpCloudSqlTargetFingerprint",
+      "export async function gcpCloudSqlTargetFingerprint",
     );
     expect(providerLeaseRevocationWindowSource).toContain(
       "gt(workspaceCredentialLease.expiresAt, now)",
@@ -1112,12 +1126,124 @@ describe("provider credential Tauri adapter", () => {
     expect(gcpBootstrapSource).toContain("roles/iam.workloadIdentityUser");
     expect(gcpBootstrapSource).toContain("configureDatabasePrivileges");
     expect(gcpBootstrapSource).toContain("pg_write_all_data");
+    expect(gcpBootstrapApplicationSource).toContain('serviceAccountId("schema", fingerprint)');
+    expect(gcpBootstrapIamSource).toContain("grantSchemaPolicyInspection");
+    expect(gcpBootstrapIamSource).toContain('roles/iam.serviceAccountViewer');
+    expect(gcpBootstrapIamSource).toContain("expected.members.filter");
+    expect(gcpBootstrapIamSource).toContain("matching.members.push(...missingMembers)");
+    expect(gcpCloudSqlCoreSource).toContain("GCP_SCHEMA_LEASE_SECONDS = 10 * 60");
+    expect(gcpCloudSqlSource).toContain("verifyGcpSchemaServiceAccountPolicy");
+    expect(gcpSchemaAuthoritySource).toContain("iam.serviceAccountViewer");
+    expect(gcpSchemaAuthoritySource).toContain("gcpWifPrincipal(credential)");
+    expect(gcpCloudSqlSource).toContain("GCP_SCHEMA_LEASE_SECONDS");
+    expect(providerLeaseIssuanceSource).toContain(
+      'input.integration.provider !== "gcpCloudSql"',
+    );
+    expect(workspaceRevocationGatesSource).toContain("('neon', 'gcpCloudSql')");
+    expect(workspaceConnectionsSource).toContain(
+      'input.provider === "neon" || input.provider === "gcpCloudSql"',
+    );
+    expect(desktopRuntimePolicySource).toContain(
+      "GCP Cloud SQL schema credential exceeded its approved PostgreSQL policy",
+    );
+    expect(gcpSchemaClaimMigrationSource).toContain("'read', 'write', 'schema'");
+    expect(gcpSchemaPolicySource).not.toContain("cloudsqlsuperuser TO");
+    const schemaCredential = parseGcpCloudSqlCredential({
+      projectId: "example-project",
+      projectNumber: "123456789012",
+      workloadIdentityPoolId: "dopedb-pool",
+      workloadIdentityProviderId: "dopedb-provider",
+      instanceId: "example-instance",
+      readServiceAccountEmail:
+        "dopedb-r-0123456789abcd@example-project.iam.gserviceaccount.com",
+      writeServiceAccountEmail:
+        "dopedb-w-0123456789abcd@example-project.iam.gserviceaccount.com",
+      schemaServiceAccountEmail:
+        "dopedb-s-0123456789abcd@example-project.iam.gserviceaccount.com",
+      workloadIdentitySubject:
+        "owner:user_1:project:project_1:environment:production",
+      databaseNames: ["app"],
+      dedicatedServiceAccountsConfirmed: true,
+      instanceScopedIamConfirmed: true,
+    });
+    expect(gcpCloudSqlPrincipalClaims(
+      await gcpCloudSqlIntegrationIdentity(schemaCredential),
+    ).map((claim) => claim.accessKind)).toEqual(["read", "write", "schema"]);
+    expect(parseGcpCloudSqlCredential({
+      ...schemaCredential,
+      schemaServiceAccountEmail: undefined,
+      workloadIdentitySubject: undefined,
+    })).toMatchObject({
+      schemaServiceAccountEmail: null,
+      workloadIdentitySubject: null,
+    });
+    const schemaUser = "dopedb-s-0123456789abcd@example-project.iam";
+    const ownerInventorySql = gcpSchemaOwnerInventorySql(schemaUser);
+    expect(ownerInventorySql).toContain("pg_database");
+    expect(ownerInventorySql).toContain("database.datdba");
+    expect(ownerInventorySql).toContain("schema.nspowner");
+    expect(ownerInventorySql).toContain("role.rolname = 'cloudsqlsuperuser'");
+    expect(ownerInventorySql).toContain("LIMIT 101");
+    const schemaPolicySql = gcpSchemaDatabasePolicySql({
+      postgresMajorVersion: 18,
+      database: "app",
+      schemaUser,
+      readRole: null,
+      writeRole: null,
+    });
+    expect(schemaPolicySql).toContain("BEGIN; SET LOCAL ROLE NONE");
+    expect(schemaPolicySql).toContain("REVOKE CREATE ON SCHEMA public FROM PUBLIC");
+    expect(schemaPolicySql).toContain(
+      "Cloud SQL IAM service-account role exceeds the schema boundary",
+    );
+    expect(schemaPolicySql).toContain("owner_row.rolname <> 'cloudsqlsuperuser'");
+    expect(schemaPolicySql).toContain("ALTER TABLE %I.%I OWNER TO %I");
+    expect(schemaPolicySql).toContain("Cloud SQL setup role cannot transfer schema ownership");
+    expect(schemaPolicySql).toContain("schema login role has an unexpected member");
+    expect(schemaPolicySql).toContain("REVOKE EXECUTE ON ROUTINE %I.%I(%s)");
+    expect(schemaPolicySql).not.toContain("REVOKE EXECUTE ON ALL FUNCTIONS");
+    expect(schemaPolicySql).toContain(
+      "ALTER DEFAULT PRIVILEGES REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC",
+    );
+    expect(schemaPolicySql).toContain(
+      "IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS",
+    );
+    expect(schemaPolicySql).not.toContain("CREATE ROLE");
+    expect(schemaPolicySql).not.toContain("dopedb_a_");
+    expect(schemaPolicySql).not.toContain("dopedb_s_");
+    expect(schemaPolicySql).toContain("IN DATABASE %I RESET ALL");
+    expect(schemaPolicySql).toContain("SET role = %L");
+    expect(schemaPolicySql).toContain("SET statement_timeout = %L");
+    expect(schemaPolicySql).toContain("SET idle_session_timeout = %L");
+    expect(schemaPolicySql).toMatch(/COMMIT;$/);
+    const legacySchemaPolicySql = gcpSchemaDatabasePolicySql({
+      postgresMajorVersion: 9,
+      database: "app",
+      schemaUser,
+      readRole: "dopedb_r_0123456789abcd",
+      writeRole: "dopedb_w_0123456789abcd",
+    });
+    expect(legacySchemaPolicySql).toContain("routine.proisagg");
+    expect(legacySchemaPolicySql).toContain("REVOKE EXECUTE ON FUNCTION");
+    expect(legacySchemaPolicySql).not.toContain("idle_session_timeout");
+    expect(gcpBootstrapDatabaseSource).toContain("originalRoles");
+    expect(gcpBootstrapSqlSource).toContain("input.bootstrapUser.user");
+    expect(gcpBootstrapSqlSource).toContain("schemaName");
+    expect(gcpCloudSqlSource).not.toContain("gcpSchemaDatabaseExecutor");
+    expect(desktopRuntimePolicySource).toContain("exact_schema_owner");
+    expect(desktopRuntimePolicySource).toContain("&sql.write_pool");
+    expect(desktopRuntimePolicySource).not.toContain("safe_policy_admin");
+    expect(desktopRuntimePolicySource).not.toContain("dopedb_a_");
+    expect(desktopRuntimePolicySource).toContain("cloudsqliamserviceaccount");
+    expect(desktopRuntimePolicySource).toContain("membership.roleid = lease.oid");
+    expect(desktopRuntimePolicySource).toContain("safe_system_role");
+    expect(desktopRuntimePolicySource).toContain("no_public_managed_routine");
     expect(gcpBootstrapSource).toContain("roles/serviceusage.serviceUsageConsumer");
     expect(gcpBootstrapSource).toContain("Temporary Cloud SQL privilege bootstrap cleanup failed");
-    expect(gcpCloudSqlSource).toContain("logGcpManagedAccessUpstreamRejection");
-    expect(gcpCloudSqlSource).toContain("MAX_TRANSIENT_REQUEST_ATTEMPTS = 3");
-    expect(gcpCloudSqlSource).toContain("waitForTransientRetry(attempt, deadline)");
-    expect(gcpCloudSqlSource).toContain(
+    expect(gcpCloudSqlHttpSource).toContain("logGcpManagedAccessUpstreamRejection");
+    expect(gcpCloudSqlHttpSource).toContain("MAX_TRANSIENT_REQUEST_ATTEMPTS = 3");
+    expect(gcpCloudSqlHttpSource).toContain("waitForTransientRetry(attempt, deadline)");
+    expect(gcpCloudSqlHttpSource).toContain(
       "Google Cloud temporarily could not issue managed database access",
     );
     const gcpLeaseIssuanceSource = gcpCloudSqlSource.slice(
@@ -1135,7 +1261,7 @@ describe("provider credential Tauri adapter", () => {
     expect(workspaceServerLogSource).not.toMatch(
       /error\.message|request\.body|response\.body/,
     );
-    expect(gcpCloudSqlSource).toContain("Cloud SQL Admin denied the managed access check");
+    expect(gcpCloudSqlHttpSource).toContain("Cloud SQL Admin denied the managed access check");
     expect(gcpCloudSqlSource).toContain('"x-goog-user-project": credential.projectId');
     expect(gcpCloudSqlSource).toContain("Cloud SQL instance identity changed during verification");
     expect(gcpCloudSqlSource).toContain("return { providerAuditId: connectionName }");
@@ -1182,6 +1308,12 @@ describe("provider credential Tauri adapter", () => {
     expect(managedConnectionRecoverySource).toContain("storage.removeItem");
     expect(managedLeaseRouteSource).toContain(
       'let requestedAccessMode: "read" | "write" | "schema"',
+    );
+    expect(managedLeaseRouteSource).toContain(
+      'integration.provider === "gcpCloudSql"',
+    );
+    expect(managedLeaseRouteSource).toContain(
+      "managedLeaseContract === LEGACY_MANAGED_LEASE_CONTRACT_VERSION",
     );
     expect(managedLeaseRouteSource).toContain("providerResourceSupportsSchema");
     expect(managedLeaseRouteSource).toContain("providerResourceSupportsWrite");
