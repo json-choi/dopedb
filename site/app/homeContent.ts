@@ -100,7 +100,7 @@ export const homeCopy = {
       eyebrow: "02 / Desktop boundary",
       title: "Your queries never pass through our servers.",
       body:
-        "DopeDB is not a database proxy. We know who may reach what; credentials, queries, results, cancellation, and rollback all happen on your machine. The only results that leave it are the bounded fragments a person reviewed and shared. With a connection already synchronized, our service going down does not stop your database work.",
+        "DopeDB is not a database proxy. We know who may reach what; credentials, queries, results, cancellation, and rollback all happen on your machine. Analysis Articles share sanitized HTML and execution receipts, while result rows stay local. With a connection already synchronized, our service going down does not stop your database work.",
       imageAlt:
         "DopeDB Desktop showing the bundled Demo SQLite orders table in the local data workbench",
       captureLabel: "Captured from DopeDB Desktop",
@@ -118,9 +118,9 @@ export const homeCopy = {
         },
         {
           index: "02",
-          title: "Review and share an Analysis Article",
+          title: "Create and share an Analysis Article",
           body:
-            "A live, versioned analysis keeps its evidence and exposes only the reviewed blocks selected for sharing.",
+            "A versioned Article shares sanitized HTML and one saved query; each member reruns it locally with their own access.",
           duration: "00:08 · REAL UI",
           src: "/guided-demo/02-agent-analysis-article.mp4",
           poster: "/guided-demo/02-agent-analysis-article.jpg",
@@ -264,9 +264,6 @@ receipt         pending human decision`,
       detectedMacIntel: "Intel Mac detected · x64 DMG selected",
       detectedMacUnknown: "macOS detected · choose Apple Silicon or Intel",
       detectedUnsupported: "No installer for this device · choose a desktop build",
-      macWarningTitle: "Legacy macOS alpha releases may show a developer warning.",
-      macWarningBody:
-        "For releases published before Developer ID notarization, confirm the file came from GitHub Releases, then use System Settings → Privacy & Security → Open Anyway.",
       windowsWarningTitle: "Windows alpha installers may show a SmartScreen warning.",
       windowsWarningBody:
         "The installer is not code-signed yet. Confirm the file came from GitHub Releases, then choose More info → Run anyway.",
@@ -379,7 +376,7 @@ receipt         pending human decision`,
       eyebrow: "02 / Desktop 경계",
       title: "당신의 쿼리는 우리 서버를 지나가지 않습니다.",
       body:
-        "DopeDB는 proxy가 아닙니다. 우리는 누가 무엇에 접근할 수 있는지를 알고, 자격 증명·쿼리·결과·중단·rollback은 당신 기기에서 벌어집니다. 팀에 올라가는 결과는 사람이 검토해 공유한 bounded 조각뿐이고, 이미 동기화된 연결이라면 우리 서비스가 멈춰도 당신의 DB 작업은 멈추지 않습니다.",
+        "DopeDB는 proxy가 아닙니다. 우리는 누가 무엇에 접근할 수 있는지를 알고, 자격 증명·쿼리·결과·중단·rollback은 당신 기기에서 벌어집니다. Analysis Article은 정제된 HTML과 실행 영수증만 공유하고 결과 행은 로컬에 둡니다. 이미 동기화된 연결이라면 우리 서비스가 멈춰도 당신의 DB 작업은 멈추지 않습니다.",
       imageAlt:
         "로컬 데이터 워크벤치에서 번들 Demo SQLite 주문 테이블을 보여주는 실제 DopeDB Desktop 화면",
       captureLabel: "실제 DopeDB Desktop 캡처",
@@ -397,9 +394,9 @@ receipt         pending human decision`,
         },
         {
           index: "02",
-          title: "Analysis Article 검토와 공유",
+          title: "Analysis Article 생성과 공유",
           body:
-            "Live·versioned 분석이 근거를 보존하고, 공유할 때는 사람이 고른 검토 완료 block만 내보냅니다.",
+            "버전이 있는 Article은 정제된 HTML과 하나의 저장 쿼리를 공유하고, 각 구성원이 자신의 권한으로 로컬에서 다시 실행합니다.",
           duration: "00:08 · 실제 UI",
           src: "/guided-demo/02-agent-analysis-article.mp4",
           poster: "/guided-demo/02-agent-analysis-article.jpg",
@@ -543,9 +540,6 @@ receipt         pending human decision`,
       detectedMacIntel: "Intel Mac 감지 · x64 DMG를 선택했습니다",
       detectedMacUnknown: "macOS 감지 · Apple Silicon 또는 Intel을 선택하세요",
       detectedUnsupported: "이 기기용 설치 파일 없음 · 데스크톱 설치 파일을 선택하세요",
-      macWarningTitle: "이전 macOS Alpha 릴리스에는 개발자 확인 경고가 표시될 수 있습니다.",
-      macWarningBody:
-        "Developer ID 공증 전에 발행된 릴리스라면 GitHub Releases에서 받은 파일인지 확인한 뒤 System Settings → Privacy & Security → Open Anyway를 사용하세요.",
       windowsWarningTitle: "Windows Alpha 설치본에는 SmartScreen 경고가 표시될 수 있습니다.",
       windowsWarningBody:
         "설치 파일에 아직 코드 서명이 없습니다. GitHub Releases에서 받은 파일인지 확인한 뒤 추가 정보 → 실행을 선택하세요.",

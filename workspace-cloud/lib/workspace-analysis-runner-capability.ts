@@ -1,5 +1,5 @@
-// Exact Desktop-runner possession proof. This capability is independent from
-// the short, single-refresh lease capability and is never persisted in clear.
+// Exact Desktop-runner possession proof for a user-triggered foreground run.
+// The clear capability is returned only at registration and is never persisted.
 import "server-only";
 
 import { createHash, randomBytes } from "node:crypto";

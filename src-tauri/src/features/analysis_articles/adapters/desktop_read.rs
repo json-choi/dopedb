@@ -1,17 +1,7 @@
 //! Exact-scope Desktop read adapter for Analysis Article query nodes.
 
-use std::collections::{BTreeMap, HashMap, HashSet};
-
-use chrono::{DateTime, NaiveDate, Utc};
-use dopedb_protocol::{
-    AnalysisColumn, AnalysisParameter, AnalysisParameterType, AnalysisQueryReceipt,
-    AnalysisQueryState,
-};
-use serde_json::Value;
-use sqlparser::dialect::{
-    BigQueryDialect, Dialect, MySqlDialect, PostgreSqlDialect, SQLiteDialect,
-};
-use sqlparser::tokenizer::{Token, Tokenizer};
+use chrono::Utc;
+use dopedb_protocol::{AnalysisColumn, AnalysisQueryReceipt, AnalysisQueryState};
 use uuid::Uuid;
 
 use crate::audit::{self, RecordArgs};
@@ -52,20 +42,6 @@ impl DesktopAnalysisReadExecution {
 }
 
 impl AnalysisReadExecutionPort for DesktopAnalysisReadExecution {
-    async fn verify_join_mappings(&self, mapping_ids: &[Uuid]) -> AppResult<()> {
-        for id in mapping_ids {
-            let approved = self.knowledge.mapping_is_approved(*id).await?;
-            if !approved {
-                return Err(AppError::Blocked {
-                    reason: format!(
-                        "Analysis Article cross-source mapping {id} is not approved locally"
-                    ),
-                });
-            }
-        }
-        Ok(())
-    }
-
     async fn execute_read<'a>(
         &'a self,
         request: AnalysisReadExecutionRequest<'a>,
@@ -124,14 +100,7 @@ impl AnalysisReadExecutionPort for DesktopAnalysisReadExecution {
                 reason: "Analysis Articles currently require a relational read source; document sources must use a typed document node".into(),
             });
         }
-        let prepared = prepare_sql(
-            &request.query.sql,
-            &request.query.parameter_ids,
-            request.parameter_definitions,
-            request.parameters,
-            pin.profile.engine,
-        )?;
-        let sql = prepared.sql.as_str();
+        let sql = request.query.sql.as_str();
         let classification = safety::classify(sql, pin.profile.engine)?;
         if classification.kind != QueryKind::Read || classification.statement_count != 1 {
             return Err(AppError::Blocked {
@@ -144,10 +113,9 @@ impl AnalysisReadExecutionPort for DesktopAnalysisReadExecution {
             .connect(pin.clone(), ConnectionAccess::Read)
             .await?;
         let live = lease.live().sql()?;
-        let result = safety::run_read_only_byte_capped_parameterized_cancellable(
+        let result = safety::run_read_only_byte_capped_cancellable(
             pool_ref(live.ro()),
             sql,
-            &prepared.parameters,
             maximum_rows,
             request.query.max_bytes,
             Some(&cancellation),
@@ -219,10 +187,7 @@ impl AnalysisReadExecutionPort for DesktopAnalysisReadExecution {
             connection_id: request.authority.connection_id,
             connection_revision: request.authority.connection_revision,
             query_run_id: request.run_id,
-            query_hash: canonical_hash(&serde_json::json!({
-                "sql": request.query.sql,
-                "parameterValues": request.parameters,
-            }))?,
+            query_hash: canonical_hash(&serde_json::json!({ "sql": request.query.sql }))?,
             schema_fingerprint: schema_fingerprint(&request.query.columns)?,
             state: AnalysisQueryState::Succeeded,
             row_count: result.row_count as u64,
@@ -238,190 +203,6 @@ impl AnalysisReadExecutionPort for DesktopAnalysisReadExecution {
             },
         })
     }
-}
-
-#[derive(Debug, PartialEq)]
-struct PreparedSql {
-    sql: String,
-    parameters: Vec<safety::ReadOnlyBindValue>,
-}
-
-fn prepare_sql(
-    sql: &str,
-    parameter_ids: &[String],
-    parameter_definitions: &[AnalysisParameter],
-    parameters: &BTreeMap<String, Value>,
-    engine: Engine,
-) -> AppResult<PreparedSql> {
-    let expected = parameter_ids
-        .iter()
-        .map(String::as_str)
-        .collect::<HashSet<_>>();
-    if expected.len() != parameter_ids.len() {
-        return Err(AppError::Config(
-            "Analysis Article parameter list changed after validation".into(),
-        ));
-    }
-    let definitions = parameter_definitions
-        .iter()
-        .map(|parameter| (parameter.id.as_str(), parameter))
-        .collect::<HashMap<_, _>>();
-    let mut rendered = String::with_capacity(sql.len());
-    let mut bindings = Vec::with_capacity(parameter_ids.len());
-    let mut seen = HashSet::with_capacity(parameter_ids.len());
-    let mut rest = sql;
-    while let Some(start) = rest.find("{{") {
-        rendered.push_str(&rest[..start]);
-        let after = &rest[start + 2..];
-        let end = after.find("}}").ok_or_else(|| {
-            AppError::Config("Analysis Article SQL contains an unresolved parameter".into())
-        })?;
-        let id = &after[..end];
-        if !expected.contains(id) || !seen.insert(id) {
-            return Err(AppError::Config(format!(
-                "Analysis Article parameter token changed: {id}"
-            )));
-        }
-        let definition = definitions.get(id).ok_or_else(|| {
-            AppError::Config(format!("Analysis Article parameter is missing: {id}"))
-        })?;
-        let value = parameters.get(id).ok_or_else(|| {
-            AppError::Config(format!("Analysis Article parameter is missing: {id}"))
-        })?;
-        bindings.push(bind_parameter_value(definition.parameter_type, value, id)?);
-        rendered.push_str(&parameter_placeholder(engine, bindings.len())?);
-        rest = &after[end + 2..];
-    }
-    rendered.push_str(rest);
-    if seen.len() != expected.len() || rendered.contains("{{") || rendered.contains("}}") {
-        return Err(AppError::Config(
-            "Analysis Article SQL contains an unresolved parameter".into(),
-        ));
-    }
-    validate_driver_placeholders(&rendered, engine, bindings.len())?;
-    Ok(PreparedSql {
-        sql: rendered,
-        parameters: bindings,
-    })
-}
-
-fn bind_parameter_value(
-    parameter_type: AnalysisParameterType,
-    value: &Value,
-    id: &str,
-) -> AppResult<safety::ReadOnlyBindValue> {
-    let invalid = || {
-        AppError::Config(format!(
-            "Analysis Article parameter value changed after validation: {id}"
-        ))
-    };
-    if value.is_null() {
-        return Ok(match parameter_type {
-            AnalysisParameterType::Boolean => safety::ReadOnlyBindValue::Boolean(None),
-            AnalysisParameterType::Number => safety::ReadOnlyBindValue::Number(None),
-            AnalysisParameterType::String | AnalysisParameterType::Enum => {
-                safety::ReadOnlyBindValue::Text(None)
-            }
-            AnalysisParameterType::Date => safety::ReadOnlyBindValue::Date(None),
-            AnalysisParameterType::Datetime => safety::ReadOnlyBindValue::DateTime(None),
-        });
-    }
-    Ok(match parameter_type {
-        AnalysisParameterType::Boolean => {
-            safety::ReadOnlyBindValue::Boolean(Some(value.as_bool().ok_or_else(invalid)?))
-        }
-        AnalysisParameterType::Number => {
-            let number = value
-                .as_f64()
-                .filter(|number| number.is_finite())
-                .ok_or_else(invalid)?;
-            safety::ReadOnlyBindValue::Number(Some(number))
-        }
-        AnalysisParameterType::String | AnalysisParameterType::Enum => {
-            safety::ReadOnlyBindValue::Text(Some(value.as_str().ok_or_else(invalid)?.to_owned()))
-        }
-        AnalysisParameterType::Date => safety::ReadOnlyBindValue::Date(Some(
-            NaiveDate::parse_from_str(value.as_str().ok_or_else(invalid)?, "%Y-%m-%d")
-                .map_err(|_| invalid())?,
-        )),
-        AnalysisParameterType::Datetime => safety::ReadOnlyBindValue::DateTime(Some(
-            DateTime::parse_from_rfc3339(value.as_str().ok_or_else(invalid)?)
-                .map_err(|_| invalid())?
-                .with_timezone(&Utc),
-        )),
-    })
-}
-
-fn parameter_placeholder(engine: Engine, ordinal: usize) -> AppResult<String> {
-    if !(1..=32).contains(&ordinal) {
-        return Err(AppError::Config(
-            "Analysis Article parameter count changed after validation".into(),
-        ));
-    }
-    match engine {
-        Engine::Postgres => Ok(format!("${ordinal}")),
-        Engine::Mysql | Engine::Sqlite => Ok("?".into()),
-        Engine::Mongodb => Err(AppError::Blocked {
-            reason: "Analysis Articles require a relational parameter binder".into(),
-        }),
-        Engine::Bigquery => Err(AppError::Blocked {
-            reason: "parameterized Analysis Article queries are not available for BigQuery yet"
-                .into(),
-        }),
-    }
-}
-
-fn validate_driver_placeholders(sql: &str, engine: Engine, expected: usize) -> AppResult<()> {
-    let postgres = PostgreSqlDialect {};
-    let mysql = MySqlDialect {};
-    let sqlite = SQLiteDialect {};
-    let bigquery = BigQueryDialect {};
-    let dialect: &dyn Dialect = match engine {
-        Engine::Postgres => &postgres,
-        Engine::Mysql => &mysql,
-        Engine::Sqlite => &sqlite,
-        Engine::Mongodb => {
-            return Err(AppError::Blocked {
-                reason: "Analysis Articles require a relational parameter binder".into(),
-            })
-        }
-        Engine::Bigquery => &bigquery,
-    };
-    let tokens = Tokenizer::new(dialect, sql)
-        .tokenize()
-        .map_err(|_| AppError::Config("Analysis Article SQL could not be tokenized".into()))?;
-    if engine == Engine::Sqlite
-        && tokens
-            .iter()
-            .any(|token| matches!(token, Token::Colon | Token::AtSign))
-    {
-        return Err(AppError::Config(
-            "Analysis Article SQL contains an invalid parameter position".into(),
-        ));
-    }
-    let placeholders = tokens
-        .into_iter()
-        .filter_map(|token| match token {
-            Token::Placeholder(value) => Some(value),
-            _ => None,
-        })
-        .collect::<Vec<_>>();
-    let matches = placeholders.len() == expected
-        && match engine {
-            Engine::Postgres => placeholders
-                .iter()
-                .enumerate()
-                .all(|(index, value)| value == &format!("${}", index + 1)),
-            Engine::Mysql | Engine::Sqlite => placeholders.iter().all(|value| value == "?"),
-            Engine::Mongodb => false,
-            Engine::Bigquery => placeholders.is_empty(),
-        };
-    if !matches {
-        return Err(AppError::Config(
-            "Analysis Article SQL contains an invalid parameter position".into(),
-        ));
-    }
-    Ok(())
 }
 
 fn validate_query_result_columns(
@@ -443,7 +224,7 @@ fn validate_query_result_columns(
     {
         return Err(AppError::Blocked {
             reason: format!(
-                "Analysis query '{query_id}' result schema changed; review the Article before sharing new results"
+                "Analysis query '{query_id}' result schema changed; update the Article definition before using this local result"
             ),
         });
     }
@@ -513,92 +294,17 @@ fn pool_ref(pool: &DbPool) -> PoolRef<'_> {
 }
 
 #[cfg(test)]
-pub(crate) fn assert_parameter_binding_contract() {
-    let payload = r#"\' OR 1=1 -- "#;
-    let parameter = AnalysisParameter {
-        id: "needle".into(),
-        label: "Needle".into(),
-        parameter_type: AnalysisParameterType::String,
-        required: true,
-        default_value: Value::String(String::new()),
-        options: Vec::new(),
-    };
-    let prepared = prepare_sql(
-        "SELECT name FROM t WHERE name = {{needle}}",
-        &["needle".into()],
-        std::slice::from_ref(&parameter),
-        &BTreeMap::from([("needle".into(), Value::String(payload.into()))]),
-        Engine::Mysql,
-    )
-    .expect("MySQL Analysis parameter should become a driver bind");
-    assert_eq!(prepared.sql, "SELECT name FROM t WHERE name = ?");
+pub(crate) fn assert_exact_query_contract() {
     assert_eq!(
-        safety::classify(&prepared.sql, Engine::Mysql)
-            .expect("placeholder template should remain classifiable")
+        safety::classify("SELECT 1", Engine::Sqlite)
+            .expect("exact saved query should remain classifiable")
             .kind,
         QueryKind::Read
     );
-    assert_eq!(
-        prepared.parameters,
-        vec![safety::ReadOnlyBindValue::Text(Some(payload.into()))]
-    );
-    assert!(!prepared.sql.contains(payload));
-    assert!(prepare_sql(
-        "SELECT '{{needle}}'",
-        &["needle".into()],
-        std::slice::from_ref(&parameter),
-        &BTreeMap::from([("needle".into(), Value::String(payload.into()))]),
-        Engine::Mysql,
-    )
-    .is_err());
-    assert!(prepare_sql(
-        "SELECT name FROM t WHERE name = {{needle}} OR id = ?",
-        &["needle".into()],
-        std::slice::from_ref(&parameter),
-        &BTreeMap::from([("needle".into(), Value::String(payload.into()))]),
-        Engine::Mysql,
-    )
-    .is_err());
-
-    let count = AnalysisParameter {
-        id: "count".into(),
-        label: "Count".into(),
-        parameter_type: AnalysisParameterType::Number,
-        required: true,
-        default_value: serde_json::json!(0),
-        options: Vec::new(),
-    };
-    let postgres = prepare_sql(
-        "SELECT {{needle}} AS needle, {{count}} AS count",
-        &["count".into(), "needle".into()],
-        &[count, parameter.clone()],
-        &BTreeMap::from([
-            ("count".into(), serde_json::json!(7.5)),
-            ("needle".into(), Value::String("n2".into())),
-        ]),
-        Engine::Postgres,
-    )
-    .expect("PostgreSQL binds should follow SQL occurrence order");
-    assert_eq!(postgres.sql, "SELECT $1 AS needle, $2 AS count");
-    assert_eq!(
-        safety::classify(&postgres.sql, Engine::Postgres)
-            .expect("placeholder template should remain classifiable")
+    assert_ne!(
+        safety::classify("DELETE FROM records", Engine::Sqlite)
+            .expect("write classification should succeed")
             .kind,
         QueryKind::Read
     );
-    assert_eq!(
-        postgres.parameters,
-        vec![
-            safety::ReadOnlyBindValue::Text(Some("n2".into())),
-            safety::ReadOnlyBindValue::Number(Some(7.5)),
-        ]
-    );
-    assert!(prepare_sql(
-        "SELECT name FROM t WHERE name = {{needle}} OR id = :other",
-        &["needle".into()],
-        &[parameter],
-        &BTreeMap::from([("needle".into(), Value::String(payload.into()))]),
-        Engine::Sqlite,
-    )
-    .is_err());
 }

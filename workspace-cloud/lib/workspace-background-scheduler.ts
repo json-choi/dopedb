@@ -102,21 +102,9 @@ export async function nextCredentialBackgroundRunAt() {
 }
 
 export async function nextMaintenanceBackgroundRunAt() {
-  const emailConfigured = Boolean(env.resendApiKey() && env.workspaceSignalFrom());
   const rows = await neonSql.query(
     `SELECT min(due."nextRunAt") AS "nextRunAt"
      FROM (
-       SELECT CASE
-         WHEN notification."claimed_at" IS NOT NULL
-           AND notification."claimed_at" > now() - interval '2 minutes'
-           THEN notification."claimed_at" + interval '2 minutes'
-         ELSE notification."next_attempt_at"
-       END AS "nextRunAt"
-       FROM "workspace_control"."workspace_analysis_signal_notification" notification
-       WHERE $1::boolean
-         AND notification."channel" = 'email'
-         AND notification."state" = 'pending'
-       UNION ALL
        SELECT receipt."expires_at"
        FROM "workspace_control"."workspace_provider_discovery_receipt" receipt
        WHERE receipt."consumed_at" IS NULL
@@ -124,9 +112,6 @@ export async function nextMaintenanceBackgroundRunAt() {
        SELECT receipt."consumed_at" + interval '10 minutes'
        FROM "workspace_control"."workspace_provider_discovery_receipt" receipt
        WHERE receipt."consumed_at" IS NOT NULL
-       UNION ALL
-       SELECT fragment."expires_at"
-       FROM "workspace_control"."workspace_analysis_result_fragment" fragment
        UNION ALL
        SELECT backup."purge_after"
        FROM "workspace_control"."workspace_metadata_backup" backup
@@ -136,7 +121,6 @@ export async function nextMaintenanceBackgroundRunAt() {
        FROM "workspace_control"."workspace_profile" profile
        WHERE profile."lifecycle_state" = 'deletion_pending'
      ) due`,
-    [emailConfigured],
   );
   return workspaceSchedulerBoundedWakeAt(rows[0]?.nextRunAt);
 }

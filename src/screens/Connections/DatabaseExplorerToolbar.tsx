@@ -3,13 +3,11 @@ import type { ReactNode } from "react";
 import { Icon } from "../../components/Icon";
 import ToolbarMenu, { ToolbarMenuItem } from "../../components/ToolbarMenu";
 import { Button } from "../../design-system/components/Button";
-import { SelectInput } from "../../design-system/components/FormControls";
 import {
   ToolWindowHideButton,
   ToolWindowSearchRow,
 } from "../../design-system/components/ToolWindow";
 import { TreeSearch } from "../../design-system/components/TreeControls";
-import type { AnalysisArticleState } from "../../features/analysisArticles/domain";
 import type { ConnectionProfile } from "../../features/connections/domain";
 import { useI18n } from "../../lib/i18n";
 import type { CatalogTreeSearchResult } from "./CatalogTree";
@@ -28,7 +26,6 @@ interface DatabaseExplorerToolbarProps {
   activeEnvironmentId: string | null;
   activeEnvironmentView: string | null;
   analysisFilter: string;
-  analysisStateFilter: "all" | AnalysisArticleState;
   selectedTableKey: string | null;
   showRowCounts: boolean;
   hasExpandedItems: boolean;
@@ -47,9 +44,6 @@ interface DatabaseExplorerToolbarProps {
   onCollapseAll: () => void;
   onToggleRowCounts: () => void;
   onAnalysisFilterChange: (value: string) => void;
-  onAnalysisStateFilterChange: (
-    value: "all" | AnalysisArticleState,
-  ) => void;
   onClose: () => void;
 }
 
@@ -67,7 +61,6 @@ export function DatabaseExplorerToolbar({
   activeEnvironmentId,
   activeEnvironmentView,
   analysisFilter,
-  analysisStateFilter,
   selectedTableKey,
   showRowCounts,
   hasExpandedItems,
@@ -86,7 +79,6 @@ export function DatabaseExplorerToolbar({
   onCollapseAll,
   onToggleRowCounts,
   onAnalysisFilterChange,
-  onAnalysisStateFilterChange,
   onClose,
 }: DatabaseExplorerToolbarProps) {
   const { t } = useI18n();
@@ -240,24 +232,6 @@ export function DatabaseExplorerToolbar({
               onChange={onAnalysisFilterChange}
               onEscape={() => onAnalysisFilterChange("")}
             />
-          </div>
-          <div className="tw:w-[112px] tw:shrink-0">
-            <SelectInput
-              density="compact"
-              aria-label={t("analysis.stateFilterLabel")}
-              value={analysisStateFilter}
-              onChange={(event) =>
-                onAnalysisStateFilterChange(
-                  event.target.value as "all" | AnalysisArticleState,
-                )
-              }
-            >
-              <option value="all">{t("analysis.filterAll")}</option>
-              <option value="draft">{t("analysis.stateDraft")}</option>
-              <option value="review">{t("analysis.stateReview")}</option>
-              <option value="live">{t("analysis.stateLive")}</option>
-              <option value="archived">{t("analysis.stateArchived")}</option>
-            </SelectInput>
           </div>
         </ToolWindowSearchRow>
       ) : null}

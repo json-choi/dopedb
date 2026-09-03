@@ -2,11 +2,12 @@ use dopedb_protocol::{
     canonical_knowledge_json_bytes, catalog::CatalogSnapshot, decode_arguments,
     knowledge_graph_artifact_size_allowed, valid_workspace_sync_cursor, AcpPluginArtifact,
     AcpPluginCompatibility, AcpPluginId, AcpPluginLicense, AcpPluginManifestV1, AcpPluginProvider,
-    AcpPluginUpstream, AgentSessionRegisterArguments, AppOpenCommand, AppOpenResult,
-    AuthenticationRequirement, CatalogSearchCommand, CatalogShowCommand, CommandName, CommandSpec,
-    ConnectionListCommand, ConnectionShowCommand, ConnectionTestCommand, DatabaseListCommand,
-    DocumentRunCommand, ErrorCode, ExternalAgentConfig, ExternalAgentConfigCreateCommand,
-    ExternalAgentProvider, ExternalAgentResourceScope, ExternalAgentSessionRevokeCommand,
+    AcpPluginUpstream, AgentSessionRegisterArguments, AnalysisArticleRecord,
+    AnalysisArticleVersionPayload, AppOpenCommand, AppOpenResult, AuthenticationRequirement,
+    CatalogSearchCommand, CatalogShowCommand, CommandName, CommandSpec, ConnectionListCommand,
+    ConnectionShowCommand, ConnectionTestCommand, DatabaseListCommand, DocumentRunCommand,
+    ErrorCode, ExternalAgentConfig, ExternalAgentConfigCreateCommand, ExternalAgentProvider,
+    ExternalAgentResourceScope, ExternalAgentSessionRevokeCommand,
     ExternalAgentSessionStartCommand, GraphBuildArtifactV1, ManagedAccessMode, ManagedLeaseRequest,
     ManagedLeaseResponse, OperationCancelCommand, OperationShowCommand, OperationWaitCommand,
     ProtocolError, QueryCancelCommand, QueryPlanCommand, QueryRunCommand, RequestEnvelope,
@@ -544,6 +545,93 @@ fn public_protocol_goldens_match_pinned_agent_and_control_plane_contracts() {
         serde_json::to_value(article).unwrap(),
         contracts.analysis_article_create
     );
+    let mut legacy_article = contracts.analysis_article_create.clone();
+    let current_definition = legacy_article["definition"].clone();
+    legacy_article["definition"] = json!({
+        "version": 2,
+        "source": current_definition["source"],
+        "title": current_definition["title"],
+        "html": current_definition["html"],
+        "question": "",
+        "summary": "",
+        "timezone": "UTC",
+        "parameters": [],
+        "queries": [{
+            "id": current_definition["query"]["id"],
+            "title": current_definition["query"]["title"],
+            "connectionRole": current_definition["query"]["connectionRole"],
+            "sql": current_definition["query"]["sql"],
+            "parameterIds": [],
+            "maxRows": current_definition["query"]["maxRows"],
+            "maxBytes": current_definition["query"]["maxBytes"],
+            "cacheTtlSeconds": 0,
+            "columns": current_definition["query"]["columns"]
+        }],
+        "transforms": [],
+        "metrics": [],
+        "blocks": [{
+            "id": "query_result",
+            "kind": "table",
+            "title": "Query result",
+            "sourceNodeId": current_definition["query"]["id"],
+            "width": 12,
+            "config": {}
+        }],
+        "claims": [],
+        "refresh": {
+            "mode": "manual",
+            "cron": null,
+            "timezone": "UTC",
+            "runnerId": null,
+            "maxStalenessSeconds": 86400,
+            "resultRetentionDays": 30,
+            "shareReviewedResults": false
+        },
+        "warnings": []
+    });
+    let projected_legacy: SharedAnalysisArticleCreate =
+        serde_json::from_value(legacy_article.clone()).expect("manual v2 Article must project");
+    let projected_json = serde_json::to_value(projected_legacy).unwrap();
+    assert_eq!(projected_json["definition"]["version"], 3);
+    assert!(projected_json["definition"].get("query").is_some());
+    assert!(projected_json["definition"].get("queries").is_none());
+    let mut retired_version = contracts.analysis_article_create.clone();
+    let retired_version_fields = retired_version
+        .as_object_mut()
+        .expect("Analysis Article fixture object");
+    retired_version_fields.insert("state".into(), json!("live"));
+    retired_version_fields.insert("ownerMemberId".into(), json!("member-fixture"));
+    retired_version_fields.insert("deleted".into(), json!(false));
+    let current_version: AnalysisArticleVersionPayload =
+        serde_json::from_value(retired_version).expect("retired version payload must project");
+    let current_version_json = serde_json::to_value(current_version).unwrap();
+    assert!(current_version_json.get("state").is_none());
+
+    let mut retired_record = contracts.analysis_article_create.clone();
+    let retired_record_fields = retired_record
+        .as_object_mut()
+        .expect("Analysis Article fixture object");
+    retired_record_fields.insert("state".into(), json!("live"));
+    retired_record_fields.insert("ownerMemberId".into(), json!("member-fixture"));
+    retired_record_fields.insert("updatedByMemberId".into(), json!("member-fixture"));
+    retired_record_fields.insert("revision".into(), json!(2));
+    retired_record_fields.insert("liveRevision".into(), json!(2));
+    retired_record_fields.insert("liveRunId".into(), Value::Null);
+    retired_record_fields.insert("latestSuccessfulRunId".into(), Value::Null);
+    retired_record_fields.insert("createdAt".into(), json!("2026-09-03T00:00:00Z"));
+    retired_record_fields.insert("updatedAt".into(), json!("2026-09-03T00:00:01Z"));
+    let current_record: AnalysisArticleRecord =
+        serde_json::from_value(retired_record).expect("retired Article record must project");
+    let current_record_json = serde_json::to_value(current_record).unwrap();
+    assert!(current_record_json.get("state").is_none());
+    assert!(current_record_json.get("liveRevision").is_none());
+    assert!(current_record_json.get("liveRunId").is_none());
+    let mut scheduled_legacy = legacy_article.clone();
+    scheduled_legacy["definition"]["refresh"]["mode"] = json!("scheduled");
+    scheduled_legacy["definition"]["refresh"]["cron"] = json!("0 * * * *");
+    assert!(serde_json::from_value::<SharedAnalysisArticleCreate>(scheduled_legacy).is_err());
+    legacy_article["definition"]["queries"][0]["parameterIds"] = json!(["range"]);
+    assert!(serde_json::from_value::<SharedAnalysisArticleCreate>(legacy_article).is_err());
     for acceptance in &contracts.analysis_article_acceptances {
         let candidate =
             apply_semantic_mutations(&contracts.analysis_article_create, &acceptance.mutations);
@@ -868,13 +956,13 @@ fn unknown_envelope_and_active_command_fields_fail_closed() {
 }
 
 #[test]
-fn command_names_match_the_v16_catalog() {
+fn command_names_match_the_v17_catalog() {
     let actual = dopedb_protocol::CommandName::ALL
         .into_iter()
         .map(|command| command.as_str())
         .collect::<Vec<_>>();
     let expected: Vec<String> =
-        serde_json::from_str(include_str!("fixtures/command-catalog-v16.json")).unwrap();
+        serde_json::from_str(include_str!("fixtures/command-catalog-v17.json")).unwrap();
     assert_eq!(actual, expected);
 
     let external_config = ExternalAgentConfig {

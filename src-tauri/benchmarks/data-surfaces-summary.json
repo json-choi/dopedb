@@ -3,85 +3,62 @@
   "measurementScope": "sqlite_ipc_renderer_model",
   "environment": {
     "os": "darwin",
-    "release": "25.3.0",
+    "release": "25.6.0",
     "arch": "arm64",
-    "node": "v24.12.0"
+    "node": "v24.19.0"
   },
-  "methodology": "In-memory SQLite uses the production cursor-list SELECT shapes and production page/preview limits. IPC bytes are JSON UTF-8 bytes for one retained page. Heap is the non-negative V8 heap delta after forced GC while retaining only that page or the four-entry dashboard LRU. Open latency is p50/p95 over 20 synchronous first-page reads after seeding. Audit full verification iterates genesis-to-tail without collecting rows. Dashboard values model the production kind row caps, exact JSON byte caps, 60s gcTime, and four-result LRU. This excludes Tauri serialization overhead, React DOM, provider/network latency, and packaged-WebView baseline memory.",
+  "methodology": "In-memory SQLite uses the production cursor-list SELECT shapes and production page/preview limits. IPC bytes are JSON UTF-8 bytes for one retained page. Heap is the non-negative V8 heap delta after forced GC while retaining only that page or the four-entry Analysis Article result LRU. Open latency is p50/p95 over 20 synchronous first-page reads after seeding. Audit full verification iterates genesis-to-tail without collecting rows. Analysis values model the current one-query row and byte caps, 60s gcTime, and four-result LRU. This excludes Tauri serialization overhead, React DOM, provider/network latency, and packaged-WebView baseline memory.",
   "fixtures": {
     "historyRows": 10000,
     "auditRows": 100000,
     "largeRevisions": 50,
     "revisionBytesEach": 1048586,
-    "dashboardInputRows": 100000,
-    "dashboardTilesRun": 8
+    "analysisInputRows": 100000,
+    "analysisQueriesRun": 8
   },
   "surfaces": {
     "history": {
       "retainedRows": 100,
       "hasNextPage": true,
       "ipcBytes": 77593,
-      "retainedHeapDeltaBytes": 145808,
-      "openLatencyP50Us": 210,
-      "openLatencyP95Us": 238
+      "retainedHeapDeltaBytes": 145632,
+      "openLatencyP50Us": 245,
+      "openLatencyP95Us": 256
     },
     "auditPage": {
       "retainedRows": 50,
       "hasNextPage": true,
       "ipcBytes": 64693,
       "retainedHeapDeltaBytes": 106496,
-      "openLatencyP50Us": 96,
-      "openLatencyP95Us": 100
+      "openLatencyP50Us": 93,
+      "openLatencyP95Us": 101
     },
     "auditFullVerification": {
       "ok": true,
       "entryCount": 100000,
       "tailHash": "2c867ea5db3934b7d112f777850655bdb6768fe0abd6b008f7dcb82587aa4732",
-      "retainedHeapDeltaBytes": 2184,
-      "latencyMs": 314.1
+      "retainedHeapDeltaBytes": 168,
+      "latencyMs": 292.3
     },
     "localHistory": {
       "retainedRows": 20,
       "hasNextPage": true,
       "ipcBytes": 13401,
       "retainedHeapDeltaBytes": 19312,
-      "openLatencyP50Us": 6368,
-      "openLatencyP95Us": 7172
+      "openLatencyP50Us": 6704,
+      "openLatencyP95Us": 7008
     },
-    "dashboards": {
-      "byKind": {
-        "metric": {
-          "retainedRows": 1,
-          "ipcBytes": 304,
-          "rowCap": 1,
-          "byteCap": 65536,
-          "truncated": true
-        },
-        "line": {
-          "retainedRows": 1230,
-          "ipcBytes": 262084,
-          "rowCap": 2000,
-          "byteCap": 262144,
-          "truncated": true
-        },
-        "bar": {
-          "retainedRows": 1230,
-          "ipcBytes": 262084,
-          "rowCap": 2000,
-          "byteCap": 262144,
-          "truncated": true
-        },
-        "table": {
-          "retainedRows": 1000,
-          "ipcBytes": 213094,
-          "rowCap": 1000,
-          "byteCap": 524288,
-          "truncated": true
-        }
+    "analysisArticles": {
+      "query": {
+        "retainedRows": 4922,
+        "ipcBytes": 1048480,
+        "rowCap": 5000,
+        "byteCap": 1048576,
+        "truncated": true
       },
       "cacheEntriesAfterEightRuns": 4,
-      "cacheIpcBytes": 737566,
-      "retainedHeapDeltaBytes": 1320984,
+      "cacheIpcBytes": 4193920,
+      "retainedHeapDeltaBytes": 7349992,
       "gcTimeMs": 60000
     }
   }

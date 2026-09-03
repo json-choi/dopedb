@@ -103,7 +103,6 @@ const analyticsPropertyKeys = {
   agent_turn_completed: ["outcome", "provider", "durationBucket"],
   analysis_article_proposal_completed: [],
   analysis_article_run_completed: ["outcome", "trigger", "durationBucket"],
-  analysis_article_state_transitioned: ["fromState", "toState"],
   workspace_membership_ready: ["role"],
   shared_connection_access_ready: ["accessMode", "engine"],
 } as const satisfies Record<ProductEventName, readonly string[]>;

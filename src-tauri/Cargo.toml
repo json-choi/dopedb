@@ -90,7 +90,6 @@ notify = "8"
 tree-sitter = "0.26.11"
 tree-sitter-typescript = "0.23.2"
 tree-sitter-rust = "0.24.2"
-tauri-plugin-notification = "2.3.3"
 
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
 tauri-plugin-autostart = "2.5.1"

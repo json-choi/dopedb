@@ -194,9 +194,10 @@ color를 거부한다.
 
 ## 타이포그래피
 
-- Sans: 앱에 번들한 `SUIT Variable` 우선, OS sans-serif fallback. npm package
-  `@sun-typeface/suit`의 Variable WOFF2를 고정 버전으로 포함하며 CDN이나 설치된
-  시스템 폰트에 의존하지 않는다.
+- Sans: 앱에 번들한 `Pretendard Variable` 우선, OS sans-serif fallback. npm
+  package `pretendard`의 dynamic-subset Variable WOFF2를 고정 버전으로 포함하며
+  CDN이나 설치된 시스템 폰트에 의존하지 않는다. 같은 UI 글꼴을 Desktop,
+  Workspace, 소개 사이트에서 사용한다.
 - Mono: `--ds-font-mono`. 경로, SQL, 값, 식별자, 숫자 비교에 사용한다.
 - Body: 15px.
 - Dense UI: 14px.
@@ -556,10 +557,10 @@ DopeDB의 실제 작업 흐름과 접근성, supported viewport를 위한 제품
   exact Project Environment preset과 함께 열고 저장 성공 시 같은 binding command로
   해당 Project에 즉시 넣으며,
   `Data sources` folder의 `plus`는 현재 exact Environment의 source 연결 상세를,
-  `Analyses` folder는 Agent가 제안한 Article draft collection을 열며 수동 빈 draft
+  `Analyses` folder는 Agent가 제안한 Article collection을 열며 수동 빈 Article
   `plus`를 제공하지 않는다. collection의 유일한 생성 action은 현재 Environment와
   연결 revision을 고정한 AI Chat composer로 이동해 분석 질문을 받은 뒤, Agent가
-  검증된 읽기 결과로 제안한 draft를 다시 collection에 넣는다. Project가 없는
+  검증된 읽기 결과로 제안한 Article을 바로 collection에 넣는다. Project가 없는
   workspace에서는 설명만 표시하고 별도 생성 row를 누적하지 않으며, 생성 직후 새
   Project의 `Databases` folder와 기본 Environment binding 상세를 연다. resource
   folder와 `Unassigned` 행에는 연결 개수 badge를 붙이지 않는다. `Unassigned` 연결

@@ -305,26 +305,26 @@ pub(super) fn tools_result() -> Value {
                 true,
             ),
             tool_definition(
-                TOOL_ANALYSIS_ARTICLE_DRAFT_RUN,
-                "Run an Analysis Article draft",
+                TOOL_ANALYSIS_ARTICLE_VERIFY,
+                "Verify an Analysis Article",
                 "Executes one bounded read-only saved query for a simple HTML Article without saving or publishing it. connectionId must name one exact database already selected in this session.",
-                analysis_article_input_schema(true, false),
+                analysis_article_input_schema(false),
                 true,
                 false,
             ),
             tool_definition(
                 TOOL_ANALYSIS_ARTICLE_PROPOSE,
                 "Propose an Analysis Article",
-                "Creates a shared draft containing sanitized HTML and one bounded read-only saved query for the exact selected connectionId. The Broker injects its current authority. This cannot schedule work or publish the HTML.",
-                analysis_article_input_schema(false, false),
+                "Creates a shared Article containing sanitized HTML and one bounded read-only saved query for the exact selected connectionId. The Broker injects its current authority. This cannot schedule work or publish the HTML.",
+                analysis_article_input_schema(false),
                 false,
                 false,
             ),
             tool_definition(
-                TOOL_ANALYSIS_ARTICLE_UPDATE_DRAFT,
-                "Update an Analysis Article draft",
-                "Updates the HTML and single saved query of one exact draft revision on its original selected connectionId. Non-draft, stale-revision, and cross-resource Articles are rejected.",
-                analysis_article_input_schema(false, true),
+                TOOL_ANALYSIS_ARTICLE_UPDATE,
+                "Update an Analysis Article",
+                "Updates the HTML and single saved query of one exact Article revision on its original selected connectionId. Stale-revision and cross-resource updates are rejected.",
+                analysis_article_input_schema(true),
                 false,
                 false,
             ),
@@ -507,7 +507,7 @@ fn knowledge_node_schema() -> Value {
     })
 }
 
-fn analysis_article_input_schema(include_parameters: bool, include_revision: bool) -> Value {
+fn analysis_article_input_schema(include_revision: bool) -> Value {
     let id = || json!({ "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$" });
     let required_display =
         |maximum| json!({ "type": "string", "minLength": 1, "maxLength": maximum });
@@ -527,7 +527,7 @@ fn analysis_article_input_schema(include_parameters: bool, include_revision: boo
     let definition = json!({
         "type": "object",
         "properties": {
-            "version": { "const": 2 },
+            "version": { "const": 3 },
             "title": required_display(160),
             "html": { "type": "string", "maxLength": 250_000 },
             "query": {
@@ -537,13 +537,11 @@ fn analysis_article_input_schema(include_parameters: bool, include_revision: boo
                     "title": required_display(256),
                     "connectionRole": id(),
                     "sql": { "type": "string", "minLength": 1, "maxLength": 100_000 },
-                    "parameterIds": { "const": [] },
                     "maxRows": { "type": "integer", "minimum": 1, "maximum": 50_000 },
                     "maxBytes": { "type": "integer", "minimum": 1_024, "maximum": 16_777_216 },
-                    "cacheTtlSeconds": { "const": 0 },
                     "columns": { "type": "array", "minItems": 1, "maxItems": 256, "items": column }
                 },
-                "required": ["id", "title", "connectionRole", "sql", "parameterIds", "maxRows", "maxBytes", "cacheTtlSeconds", "columns"],
+                "required": ["id", "title", "connectionRole", "sql", "maxRows", "maxBytes", "columns"],
                 "additionalProperties": false
             }
         },
@@ -561,12 +559,6 @@ fn analysis_article_input_schema(include_parameters: bool, include_revision: boo
     );
     properties.insert("definition".into(), definition);
     let mut required = vec!["connectionId", "definition"];
-    if include_parameters {
-        properties.insert(
-            "parameterValues".into(),
-            json!({ "type": "object", "maxProperties": 0, "additionalProperties": false }),
-        );
-    }
     if include_revision {
         properties.insert(
             "articleId".into(),

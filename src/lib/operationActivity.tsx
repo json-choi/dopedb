@@ -39,12 +39,6 @@ interface BrokerOperationEvent {
   errorCode: string | null;
 }
 
-interface SignalRunnerEvent {
-  state: "registering" | "evaluating" | "ready" | "deferred" | "disabled";
-  ruleId: string | null;
-  errorKind: string | null;
-}
-
 const Ctx = createContext<OperationActivityValue | null>(null);
 
 export function useOperationActivity(): OperationActivityValue {
@@ -104,30 +98,8 @@ export function OperationActivityProvider({
     ).catch((error) =>
       console.error("operation activity listen failed:", error),
     );
-    const signalPending = listen<SignalRunnerEvent>(
-      "signal-runner:changed",
-      (event) => {
-        if (event.payload.state === "registering" || event.payload.state === "ready") return;
-        const now = new Date();
-        const item: OperationActivity = {
-          id: idRef.current++,
-          ts: now.toLocaleTimeString(),
-          iso: now.toISOString(),
-          tool: "signal-monitor",
-          detail: event.payload.errorKind
-            ? `${event.payload.state}: ${event.payload.errorKind}`
-            : event.payload.state,
-          error: event.payload.state === "deferred",
-          payload: { ...event.payload },
-        };
-        setFeed((current) => [item, ...current].slice(0, CAP));
-        setLatest(item);
-        setUnseen((count) => count + 1);
-      },
-    ).catch((error) => console.error("signal activity listen failed:", error));
     return () => {
       void pending.then((unlisten) => unlisten && unlisten());
-      void signalPending.then((unlisten) => unlisten && unlisten());
     };
   }, []);
 

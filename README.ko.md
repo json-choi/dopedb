@@ -72,9 +72,9 @@ flowchart LR
     D -->|로컬 DB traffic| DB
 ```
 
-워크스페이스 서비스는 control plane이며 hosted database proxy가 아닙니다. 일반적인
-query와 result는 구성원의 기기에 남습니다. 사람이 명시적으로 검토하고 범위 제한과
-masking을 적용한 result fragment만 internal Analysis Article에 공유할 수 있습니다.
+워크스페이스 서비스는 control plane이며 hosted database proxy가 아닙니다. query와
+result row는 구성원의 기기에 남습니다. Analysis Article은 정제된 HTML과 정확한
+읽기 전용 query 하나만 공유하며, 외부에는 변경 불가능한 HTML 공개본만 노출합니다.
 
 ## Alpha에서 지금 사용할 수 있는 것
 

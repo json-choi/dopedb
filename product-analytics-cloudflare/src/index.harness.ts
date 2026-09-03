@@ -13,7 +13,7 @@ describe("Cloudflare product analytics contract", () => {
     const value = structuredClone(golden);
     for (const event of value.events) event.occurredAt = "2026-08-14T00:00:00Z";
     const parsed = parseEnvelope(value, now);
-    expect(parsed?.events).toHaveLength(15);
+    expect(parsed?.events).toHaveLength(golden.events.length);
     expect(parsed?.events.map((event) => event.name)).toEqual(
       golden.events.map((event) => event.name),
     );

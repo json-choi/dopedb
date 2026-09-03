@@ -21,6 +21,28 @@
       "removalCondition": "운영 데이터베이스를 새 기준선으로 재구축하고 구버전 앱 writer 지원을 공식 종료한 뒤에만 압축한다."
     },
     {
+      "id": "analysis-article-v1-v2-read-adapters",
+      "paths": [
+        "dopedb-protocol/src/analysis_article_compat.rs",
+        "src-tauri/src/features/analysis_articles/result_compat.rs",
+        "src-tauri/src/features/analysis_articles/adapters/hosted_runs.rs",
+        "workspace-cloud/lib/workspace-analysis-legacy-definition.ts",
+        "workspace-cloud/lib/workspace-analysis-run-compat.ts",
+        "workspace-cloud/lib/workspace-analysis-version-compat.ts"
+      ],
+      "reason": "기존 수동 Analysis Article, 생명주기 필드, completion envelope와 기기 내 암호화 결과 캐시를 현재 v3 HTML+단일 쿼리·단일 결과 DTO로만 투영하고 자동화·파라미터·호스팅 결과 동작은 되살리지 않는다.",
+      "removalCondition": "운영 저장소에 v1/v2 정의와 이전 completion·생명주기 envelope가 없고 지원 대상 Desktop의 암호화 캐시와 HTTP 소비자가 모두 현재 writer로 전환되었음을 확인한 뒤 제거한다."
+    },
+    {
+      "id": "retired-analysis-autostart-cleanup",
+      "paths": [
+        "src-tauri/Cargo.toml",
+        "src-tauri/src/lib.rs"
+      ],
+      "reason": "과거 Analysis 자동 실행을 위해 등록된 OS 시작 항목을 앱 시작 시 비활성화하기 위해 플러그인을 읽기·해제 용도로만 잠시 유지한다.",
+      "removalCondition": "지원되는 모든 설치가 한 번 이상 정리 코드를 실행했고 OS 시작 항목 잔존 가능성이 없어졌을 때 플러그인과 해제 호출을 함께 제거한다."
+    },
+    {
       "id": "retired-agent-chat-archive",
       "paths": [
         "src-tauri/src/store/retired_chat_archive.rs",

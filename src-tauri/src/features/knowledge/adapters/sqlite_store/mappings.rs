@@ -86,21 +86,6 @@ impl Store {
 }
 
 impl Store {
-    pub(in crate::features::knowledge::adapters) async fn mapping_is_approved(
-        &self,
-        proposal_id: Uuid,
-    ) -> AppResult<bool> {
-        Ok(sqlx::query(
-            "SELECT 1 FROM knowledge_mapping_proposals
-             WHERE id = ?1 AND state = 'approved'
-             LIMIT 1",
-        )
-        .bind(proposal_id.to_string())
-        .fetch_optional(self.pool())
-        .await?
-        .is_some())
-    }
-
     pub(in crate::features::knowledge::adapters) async fn propose_mapping(
         &self,
         proposal: &KnowledgeMappingProposal,

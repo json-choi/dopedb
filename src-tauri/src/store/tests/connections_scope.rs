@@ -736,108 +736,50 @@ async fn assert_current_store_migration_is_write_free() {
     let runner_account = Uuid::from_u128(0x991).to_string();
     let runner_workspace = Uuid::from_u128(0x992);
     let runner_device = store
-        .automation_runner_device_id(&runner_account, runner_workspace)
+        .analysis_run_device_id(&runner_account, runner_workspace)
         .await
         .unwrap();
     assert_eq!(
         store
-            .automation_runner_device_id(&runner_account, runner_workspace)
+            .analysis_run_device_id(&runner_account, runner_workspace)
             .await
             .unwrap(),
         runner_device
     );
     let replacement_runner_device = store
-        .replace_automation_runner_device_id(&runner_account, runner_workspace)
+        .replace_analysis_run_device_id(&runner_account, runner_workspace)
         .await
         .unwrap();
     assert_ne!(replacement_runner_device, runner_device);
     assert_eq!(
         store
-            .automation_runner_device_id(&runner_account, runner_workspace)
+            .analysis_run_device_id(&runner_account, runner_workspace)
             .await
             .unwrap(),
         replacement_runner_device
     );
     assert_ne!(
         store
-            .automation_runner_device_id(&runner_account, Uuid::from_u128(0x993))
+            .analysis_run_device_id(&runner_account, Uuid::from_u128(0x993))
             .await
             .unwrap(),
         replacement_runner_device
     );
     assert_ne!(
         store
-            .automation_runner_device_id(&Uuid::from_u128(0x994).to_string(), runner_workspace)
+            .analysis_run_device_id(&Uuid::from_u128(0x994).to_string(), runner_workspace)
             .await
             .unwrap(),
         replacement_runner_device
     );
-    store
-        .set_automation_runner_background_allowed(true)
-        .await
-        .unwrap();
-    assert!(store.automation_runner_background_allowed().await.unwrap());
-    store
-        .set_automation_runner_background_allowed(false)
-        .await
-        .unwrap();
-    assert!(!store.automation_runner_background_allowed().await.unwrap());
-    let signal_id = Uuid::new_v4();
-    let signal_time = Utc::now();
-    store
-        .record_analysis_signal_metric_sample(
-            Uuid::from(project.workspace_id),
-            "knowledge-member",
-            signal_id,
-            1,
-            signal_time,
-            signal_time,
-            Some(42.0),
-            100,
-            crate::store::LocalAnalysisSignalState::Normal,
-            &"a".repeat(64),
-        )
-        .await
-        .unwrap();
-    let signal_samples = store
-        .recent_analysis_signal_metric_samples(
-            Uuid::from(project.workspace_id),
-            "knowledge-member",
-            signal_id,
-            1,
-            10,
-        )
-        .await
-        .unwrap();
-    assert_eq!(signal_samples.len(), 1);
-    assert_eq!(signal_samples[0].metric_value, Some(42.0));
-    assert_eq!(signal_samples[0].sample_count, 100);
-    assert_eq!(
-        signal_samples[0].observed_state,
-        crate::store::LocalAnalysisSignalState::Normal
-    );
-    assert!(store
-        .recent_analysis_signal_metric_samples(
-            Uuid::from(project.workspace_id),
-            "other-member",
-            signal_id,
-            1,
-            10,
-        )
-        .await
-        .unwrap()
-        .is_empty());
-    let signal_columns: Vec<String> = sqlx::query_scalar(
-        "SELECT name FROM pragma_table_info('analysis_signal_metric_samples') ORDER BY cid",
+    let retired_sample_table: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM sqlite_master
+         WHERE type = 'table' AND name = 'analysis_signal_metric_samples'",
     )
-    .fetch_all(&pool)
+    .fetch_one(&pool)
     .await
     .unwrap();
-    for forbidden in ["sql", "credential", "password", "token", "host"] {
-        assert!(!signal_columns
-            .iter()
-            .any(|column| column.to_ascii_lowercase().contains(forbidden)));
-    }
+    assert_eq!(retired_sample_table, 0);
 
     sqlx::query("PRAGMA query_only = ON")
         .execute(&pool)

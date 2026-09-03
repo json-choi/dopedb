@@ -1,5 +1,5 @@
 // Inventory and heartbeat registration for member-owned Analysis runners.
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 
 import { db } from "../../../../../../../lib/db";
 import { env } from "../../../../../../../lib/env";
@@ -10,10 +10,7 @@ import {
   mutationAllowed,
   privateJson,
 } from "../../../../../../../lib/http";
-import {
-  workspaceAnalysisArticle,
-  workspaceAnalysisRunner,
-} from "../../../../../../../lib/schema";
+import { workspaceAnalysisRunner } from "../../../../../../../lib/schema";
 import { authorizeWorkspace } from "../../../../../../../lib/workspace-authorization";
 import {
   analysisRunnerCapabilityHeader,
@@ -36,17 +33,7 @@ export async function GET(request: Request, context: RouteContext) {
     deviceId: workspaceAnalysisRunner.deviceId,
     displayName: workspaceAnalysisRunner.displayName,
     runnerCapabilityGeneration: workspaceAnalysisRunner.runnerCapabilityGeneration,
-    backgroundAllowed: workspaceAnalysisRunner.backgroundAllowed,
     lastSeenAt: workspaceAnalysisRunner.lastSeenAt,
-    scheduledArticleCount: sql<number>`(
-      SELECT count(*)::int
-      FROM ${workspaceAnalysisArticle} article
-      WHERE article."organization_id" = ${workspaceAnalysisRunner.organizationId}
-        AND article."deleted_at" IS NULL
-        AND article."state" = 'live'
-        AND article."definition"->'refresh'->>'mode' = 'scheduled'
-        AND article."definition"->'refresh'->>'runnerId' = ${workspaceAnalysisRunner.id}::text
-    )`,
   }).from(workspaceAnalysisRunner).where(and(
     eq(workspaceAnalysisRunner.organizationId, workspaceId),
     eq(workspaceAnalysisRunner.memberId, authorization.membership.id),
@@ -112,7 +99,7 @@ export async function POST(request: Request, context: RouteContext) {
   }
   if (runner.status === "unbound" || runner.status === "replacement_required") {
     return jsonError(
-      "This legacy Analysis runner is quarantined. Register again with a new Desktop device id.",
+      "This runner identity cannot be reused. Register again with a new Desktop device id.",
       428,
     );
   }
@@ -124,7 +111,6 @@ export async function POST(request: Request, context: RouteContext) {
   }
   if (runner.status === "invalid") return jsonError("Invalid Analysis runner capability", 403);
   if (!runner.id || !runner.deviceId || !runner.displayName || !runner.lastSeenAt
-    || typeof runner.backgroundAllowed !== "boolean"
     || !runner.runnerCapabilityGeneration) {
     return jsonError("Analysis runner authority changed", 409);
   }
@@ -133,7 +119,6 @@ export async function POST(request: Request, context: RouteContext) {
       id: runner.id,
       deviceId: runner.deviceId,
       displayName: runner.displayName,
-      backgroundAllowed: runner.backgroundAllowed,
       runnerCapabilityGeneration: runner.runnerCapabilityGeneration,
       lastSeenAt: runner.lastSeenAt.toISOString(),
       online: true,

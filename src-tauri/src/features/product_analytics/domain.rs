@@ -106,7 +106,6 @@ enum ProductAnalyticsPayloadV1 {
     AgentTurnCompleted(AgentTurnCompletedProperties),
     AnalysisArticleProposalCompleted(AnalysisArticleProposalCompletedProperties),
     AnalysisArticleRunCompleted(AnalysisArticleRunCompletedProperties),
-    AnalysisArticleStateTransitioned(AnalysisArticleStateTransitionedProperties),
     WorkspaceMembershipReady(WorkspaceMembershipReadyProperties),
     SharedConnectionAccessReady(SharedConnectionAccessReadyProperties),
 }
@@ -206,13 +205,6 @@ struct AnalysisArticleRunCompletedProperties {
     outcome: AnalysisRunOutcome,
     trigger: AnalysisRunTrigger,
     duration_bucket: DurationBucket,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct AnalysisArticleStateTransitionedProperties {
-    from_state: AnalysisArticleState,
-    to_state: AnalysisArticleState,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -357,15 +349,6 @@ enum AnalysisRunTrigger {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-enum AnalysisArticleState {
-    Draft,
-    Review,
-    Live,
-    Archived,
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
 enum WorkspaceRole {
     Viewer,
     Analyst,
@@ -456,15 +439,6 @@ impl ProductAnalyticsEventV1 {
                 }
             }
         }
-        if let ProductAnalyticsPayloadV1::AnalysisArticleStateTransitioned(properties) =
-            &self.payload
-        {
-            if std::mem::discriminant(&properties.from_state)
-                == std::mem::discriminant(&properties.to_state)
-            {
-                return Err("analysis article transition must change state");
-            }
-        }
         if matches!(
             self.payload,
             ProductAnalyticsPayloadV1::WorkspaceMembershipReady(_)
@@ -548,7 +522,6 @@ pub(crate) fn assert_product_analytics_contract() {
         "agent_turn_completed",
         "analysis_article_proposal_completed",
         "analysis_article_run_completed",
-        "analysis_article_state_transitioned",
         "workspace_membership_ready",
         "shared_connection_access_ready",
     ];
@@ -582,7 +555,6 @@ pub(crate) fn assert_product_analytics_contract() {
             "agent_session_initialization_completed" => &["outcome", "provider"],
             "agent_turn_completed" => &["outcome", "provider", "durationBucket"],
             "analysis_article_run_completed" => &["outcome", "trigger", "durationBucket"],
-            "analysis_article_state_transitioned" => &["fromState", "toState"],
             "workspace_membership_ready" => &["role"],
             _ => panic!("unexpected product analytics golden event {name}"),
         };

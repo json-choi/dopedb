@@ -6,7 +6,7 @@ const repoRoot = path.join(__dirname, "..");
 
 const scriptPolicy = process.env.NODE_ENV === "production"
   ? "script-src 'self' 'unsafe-inline'"
-  : "script-src 'self' 'unsafe-inline' 'unsafe-eval'";
+  : "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://va.vercel-scripts.com";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {

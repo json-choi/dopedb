@@ -100,13 +100,6 @@ const EVENTS = {
     },
     identity: "workspace",
   },
-  analysis_article_state_transitioned: {
-    properties: {
-      fromState: ["draft", "review", "live", "archived"],
-      toState: ["draft", "review", "live", "archived"],
-    },
-    identity: "workspace",
-  },
   workspace_membership_ready: {
     properties: { role: ["viewer", "analyst", "editor", "admin", "owner"] },
     identity: "team",
@@ -167,8 +160,7 @@ function validProperties(name: EventName, value: unknown) {
       return false;
     }
   }
-  return name !== "analysis_article_state_transitioned"
-    || (value as Record<string, unknown>).fromState !== (value as Record<string, unknown>).toState;
+  return true;
 }
 
 function validIdentity(name: EventName, value: Record<string, unknown>) {

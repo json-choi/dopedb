@@ -11,16 +11,10 @@ import {
 import {
   getAnalysisRunControl,
 } from "@/lib/workspace-analysis-run-store";
-import { hashAnalysisLeaseCapability } from "@/lib/workspace-analysis-runner-store";
 
 type RouteContext = {
   params: Promise<{ workspaceId: string; articleId: string; runId: string }>;
 };
-
-function leaseCapability(request: Request) {
-  const value = request.headers.get("x-dopedb-analysis-capability")?.trim() ?? "";
-  return value === "" ? null : (/^[0-9a-f]{64}$/.test(value) ? value : undefined);
-}
 
 export async function GET(request: Request, context: RouteContext) {
   if (!isAnalysisDesktopBearerRequest(request)) {
@@ -37,8 +31,6 @@ export async function GET(request: Request, context: RouteContext) {
       request.headers.has(analysisRunnerCapabilityHeader) ? 403 : 428,
     );
   }
-  const lease = leaseCapability(request);
-  if (lease === undefined) return jsonError("Invalid Analysis lease capability", 403);
   const authorization = await authorizeWorkspace(request, workspaceId, "view");
   if (!authorization.ok) return jsonError(authorization.error, authorization.status);
   const control = await getAnalysisRunControl({
@@ -46,9 +38,7 @@ export async function GET(request: Request, context: RouteContext) {
     articleId,
     runId,
     membershipId: authorization.membership.id,
-    role: authorization.role,
     runnerCapabilityHash: hashAnalysisRunnerCapability(runnerCapability),
-    leaseCapabilityHash: lease ? hashAnalysisLeaseCapability(lease) : null,
   });
   if (!control) return jsonError("Analysis Article run not found", 404);
   return privateJson({ control });

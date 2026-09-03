@@ -159,7 +159,6 @@ const analyticsPropertyKeys = {
   agent_turn_completed: ["outcome", "provider", "durationBucket"],
   analysis_article_proposal_completed: [],
   analysis_article_run_completed: ["outcome", "trigger", "durationBucket"],
-  analysis_article_state_transitioned: ["fromState", "toState"],
   workspace_membership_ready: ["role"],
   shared_connection_access_ready: ["accessMode", "engine"],
 } as const satisfies Record<ProductEventName, readonly string[]>;
@@ -720,6 +719,55 @@ describe("Desktop control-plane contracts", () => {
     expect(managedLeaseResponse(brokeredGeneric).lease.provider).toBe("generic");
     expect(parseSharedAnalysisArticleCreate(fixture.analysisArticleCreate))
       .toEqual(fixture.analysisArticleCreate);
+    const currentArticle = structuredClone(fixture.analysisArticleCreate) as {
+      definition: {
+        source: string;
+        title: string;
+        html: string;
+        query: Record<string, unknown> & { id: string };
+      };
+    };
+    const legacyQuery = {
+      ...currentArticle.definition.query,
+      parameterIds: [],
+      cacheTtlSeconds: 0,
+    };
+    const projectedLegacy = parseSharedAnalysisArticleCreate({
+      ...currentArticle,
+      definition: {
+        version: 2,
+        source: currentArticle.definition.source,
+        title: currentArticle.definition.title,
+        html: currentArticle.definition.html,
+        question: "",
+        summary: "",
+        timezone: "UTC",
+        parameters: [],
+        queries: [legacyQuery],
+        transforms: [],
+        metrics: [],
+        blocks: [{
+          id: "query_result",
+          kind: "table",
+          title: "Query result",
+          sourceNodeId: legacyQuery.id,
+          width: 12,
+          config: {},
+        }],
+        claims: [],
+        refresh: {
+          mode: "manual",
+          cron: null,
+          timezone: "UTC",
+          runnerId: null,
+          maxStalenessSeconds: 86_400,
+          resultRetentionDays: 30,
+          shareReviewedResults: false,
+        },
+        warnings: [],
+      },
+    });
+    expect(projectedLegacy).toEqual(currentArticle);
 
     const connectionVersion = {
       name: "Primary",
@@ -832,7 +880,11 @@ describe("Desktop control-plane contracts", () => {
     })).toThrow();
 
     type MutableAnalysisFixture = {
-      definition: { html: string; blocks: Array<Record<string, unknown>> };
+      definition: {
+        version: number;
+        html: string;
+        query: Record<string, unknown> & { columns: unknown[] };
+      };
     };
     const malformedArticle = (mutate: (article: MutableAnalysisFixture) => void) => {
       const article = structuredClone(fixture.analysisArticleCreate) as MutableAnalysisFixture;
@@ -840,21 +892,14 @@ describe("Desktop control-plane contracts", () => {
       return article;
     };
     expect(() => parseSharedAnalysisArticleCreate(malformedArticle((article) => {
-      article.definition.blocks[0] = {
-        id: "missing_heading_text",
-        kind: "heading",
-        title: "Missing text",
-        sourceNodeId: null,
-        width: 12,
-        config: { level: 1 },
-      };
-    }))).toThrow("Invalid heading block");
+      article.definition.query.parameterIds = [];
+    }))).toThrow();
     expect(() => parseSharedAnalysisArticleCreate(malformedArticle((article) => {
-      article.definition.blocks[0]!.config = {};
-    }))).toThrow("Invalid table block");
+      article.definition.query.columns = [];
+    }))).toThrow("Invalid Analysis Article columns");
     expect(() => parseSharedAnalysisArticleCreate(malformedArticle((article) => {
-      article.definition.blocks[0]!.id = "other_result";
-    }))).toThrow("one HTML document and one manual read query");
+      article.definition.version = 2;
+    }))).toThrow("Invalid Analysis Article definition");
     const sanitized = parseSharedAnalysisArticleCreate(malformedArticle((article) => {
       article.definition.html = '<p>Safe</p><script>alert(1)</script><a href="javascript:alert(2)">link</a>';
     }));
@@ -970,16 +1015,6 @@ describe("Desktop control-plane contracts", () => {
       workspaceKey: analyticsWorkspaceKey,
       workspaceKind: "personal",
     }), analyticsNow)).toBeNull();
-    expect(parseProductAnalyticsEnvelope(analyticsEnvelope(
-      "analysis_article_state_transitioned",
-      {
-        actorKey: analyticsActorKey,
-        workspaceKey: analyticsWorkspaceKey,
-        workspaceKind: "team",
-      },
-      { fromState: "review", toState: "review" },
-    ), analyticsNow)).toBeNull();
-
     expect(acceptsProductAnalyticsContract(new Headers({
       "x-dopedb-product-analytics-contract": "1",
     }))).toBe(true);

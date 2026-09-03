@@ -1,6 +1,5 @@
-// Atomic run persistence for Desktop-executed Analysis Articles. The control
-// plane never opens a database connection; it verifies exact pins and stores
-// only receipts plus already-encrypted bounded fragments.
+// Atomic persistence for explicit Desktop-run Analysis Articles. The control
+// plane verifies immutable authority and stores receipts, never result rows.
 import "server-only";
 
 import { sql, type SQL } from "drizzle-orm";
@@ -14,8 +13,6 @@ import {
   workspaceAnalysisArticleQueryReceipt,
   workspaceAnalysisArticleRevision,
   workspaceAnalysisArticleRun,
-  workspaceAnalysisRefreshLease,
-  workspaceAnalysisResultFragment,
   workspaceAnalysisRunner,
   workspaceAuditEvent,
   workspaceConnection,
@@ -23,7 +20,6 @@ import {
   workspaceResourceVersion,
 } from "./schema";
 import type {
-  AnalysisResultFragmentReference,
   AnalysisQueryReceiptInput,
   AnalysisRunCompletion,
   AnalysisRunRequest,
@@ -43,19 +39,6 @@ export type AnalysisRunControl = Readonly<{
   authorized: boolean;
 }>;
 
-export type SealedAnalysisFragment = Readonly<{
-  blockId: string;
-  ordinal: number;
-  dataKeyId: string;
-  keyReference: string;
-  keyVersion: string;
-  ciphertext: string;
-  payloadHash: string;
-  rowCount: number;
-  plaintextBytes: number;
-  expiresAt: Date;
-}>;
-
 type RawRow = Record<string, unknown>;
 
 export type AnalysisRunStart = Readonly<{
@@ -63,23 +46,12 @@ export type AnalysisRunStart = Readonly<{
   connectionContentRevisions: Readonly<Record<string, number>>;
 }>;
 
-// These predicates intentionally recognize the immutable version-1 payload,
-// rather than guessing from two coincidentally equal revision numbers. Before
-// 0.3.74 those pins stored the internal authority epoch. A legacy Article may
-// use the current content only when its immutable current connection version
-// predates the Article revision; any later content edit remains fail-closed.
-// Every caller names the joined rows `revision`, `pin`, and `connection`, while
-// the supplied SQL fragments select the applicable revision payload and time.
-function legacyAnalysisConnectionAuthority(
-  revisionPayload: SQL,
-  revisionCreatedAt: SQL,
-) {
+function legacyAnalysisConnectionAuthority(revisionPayload: SQL, revisionCreatedAt: SQL) {
   return sql`
     ${revisionPayload} #>> '{definition,version}' = '1'
     AND pin."connection_revision" <= connection."revision"
     AND EXISTS (
-      SELECT 1
-      FROM ${workspaceResourceVersion} legacy_content
+      SELECT 1 FROM ${workspaceResourceVersion} legacy_content
       WHERE legacy_content."organization_id" = connection."organization_id"
         AND legacy_content."resource_type" = 'connection'
         AND legacy_content."resource_id" = connection."id"
@@ -89,23 +61,17 @@ function legacyAnalysisConnectionAuthority(
     )`;
 }
 
-function analysisConnectionMatchesPin(
-  revisionPayload: SQL,
-  revisionCreatedAt: SQL,
-) {
+function analysisConnectionMatchesPin(revisionPayload: SQL, revisionCreatedAt: SQL) {
   return sql`(
-    (${revisionPayload} #>> '{definition,version}' = '2'
+    (${revisionPayload} #>> '{definition,version}' IN ('2', '3')
       AND connection."content_revision" = pin."connection_revision")
     OR (${legacyAnalysisConnectionAuthority(revisionPayload, revisionCreatedAt)})
   )`;
 }
 
-function analysisReceiptMatchesConnection(
-  revisionPayload: SQL,
-  revisionCreatedAt: SQL,
-) {
+function analysisReceiptMatchesConnection(revisionPayload: SQL, revisionCreatedAt: SQL) {
   return sql`(
-    (${revisionPayload} #>> '{definition,version}' = '2'
+    (${revisionPayload} #>> '{definition,version}' IN ('2', '3')
       AND pin."connection_revision" = requested.connection_revision
       AND connection."content_revision" = pin."connection_revision")
     OR (${legacyAnalysisConnectionAuthority(revisionPayload, revisionCreatedAt)}
@@ -151,9 +117,8 @@ function runProjection() {
     run."article_revision"::double precision AS "articleRevision",
     run."runner_id"::text AS "runnerId",
     run."runner_capability_generation"::double precision AS "runnerCapabilityGeneration",
-    run."lease_id"::text AS "leaseId", run."trigger" AS "trigger",
-    run."state" AS "state", run."parameter_values" AS "parameterValues",
-    run."parameter_hash" AS "parameterHash", run."definition_hash" AS "definitionHash",
+    run."trigger" AS "trigger", run."state" AS "state",
+    run."definition_hash" AS "definitionHash",
     run."schema_fingerprints" AS "schemaFingerprints", run."row_count"::integer AS "rowCount",
     run."byte_count"::integer AS "byteCount", run."result_hash" AS "resultHash",
     run."error_kind" AS "errorKind", run."error_message" AS "errorMessage",
@@ -171,20 +136,12 @@ function runProjection() {
       'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "createdAt"`;
 }
 
-/**
- * Lightweight liveness projection for an executing Desktop runner. This keeps
- * cancellation, runner possession, the optional scheduled lease, and every
- * exact connection grant in one bounded database read without loading receipts
- * or the full Article payload.
- */
 export async function getAnalysisRunControl(input: {
   organizationId: string;
   articleId: string;
   runId: string;
   membershipId: string;
-  role: string;
   runnerCapabilityHash: string;
-  leaseCapabilityHash: string | null;
 }): Promise<AnalysisRunControl | null> {
   const result = await db.execute<AnalysisRunControl>(sql`
     SELECT run."state" AS "state",
@@ -192,12 +149,10 @@ export async function getAnalysisRunControl(input: {
         to_char(run."cancel_requested_at" AT TIME ZONE 'UTC',
           'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') END AS "cancelRequestedAt",
       EXISTS (
-        SELECT 1
-        FROM ${workspaceAnalysisRunner} runner
+        SELECT 1 FROM ${workspaceAnalysisRunner} runner
         JOIN ${workspaceAnalysisArticle} article
           ON article."organization_id" = run."organization_id"
-         AND article."id" = run."article_id"
-         AND article."deleted_at" IS NULL
+         AND article."id" = run."article_id" AND article."deleted_at" IS NULL
         JOIN ${workspaceAnalysisArticleRevision} revision
           ON revision."organization_id" = run."organization_id"
          AND revision."article_id" = run."article_id"
@@ -208,29 +163,20 @@ export async function getAnalysisRunControl(input: {
           AND runner."revoked_at" IS NULL
           AND runner."runner_capability_hash" = ${input.runnerCapabilityHash}
           AND runner."runner_capability_generation" = run."runner_capability_generation"
-          AND (run."trigger" <> 'schedule' OR runner."background_allowed" = TRUE)
-          AND (
-            article."live_revision" = run."article_revision"
-            OR (article."revision" = run."article_revision"
-              AND ${input.role} IN ('editor', 'admin', 'owner'))
-          )
+          AND run."trigger" = 'manual' AND run."lease_id" IS NULL
+          AND article."revision" = run."article_revision"
           AND EXISTS (
-            SELECT 1
-            FROM ${workspaceAnalysisArticleConnection} pin
+            SELECT 1 FROM ${workspaceAnalysisArticleConnection} pin
             WHERE pin."organization_id" = run."organization_id"
               AND pin."article_id" = run."article_id"
               AND pin."article_revision" = run."article_revision"
           )
           AND NOT EXISTS (
-            SELECT 1
-            FROM ${workspaceAnalysisArticleConnection} pin
+            SELECT 1 FROM ${workspaceAnalysisArticleConnection} pin
             LEFT JOIN ${workspaceConnection} connection
               ON connection."organization_id" = pin."organization_id"
              AND connection."id" = pin."connection_id"
-             AND ${analysisConnectionMatchesPin(
-               sql`revision."payload"`,
-               sql`revision."created_at"`,
-             )}
+             AND ${analysisConnectionMatchesPin(sql`revision."payload"`, sql`revision."created_at"`)}
              AND connection."deleted_at" IS NULL
              AND connection."revocation_pending_at" IS NULL
             LEFT JOIN ${knowledgeEnvironmentConnection} environment_binding
@@ -250,24 +196,6 @@ export async function getAnalysisRunControl(input: {
               AND pin."article_revision" = run."article_revision"
               AND (connection."id" IS NULL OR environment_binding."id" IS NULL
                 OR connection_grant."connection_id" IS NULL)
-          )
-          AND (
-            (run."lease_id" IS NULL AND ${input.leaseCapabilityHash}::text IS NULL)
-            OR (${input.leaseCapabilityHash}::text IS NOT NULL AND EXISTS (
-              SELECT 1
-              FROM ${workspaceAnalysisRefreshLease} lease
-              WHERE lease."organization_id" = run."organization_id"
-                AND lease."id" = run."lease_id"
-                AND lease."article_id" = run."article_id"
-                AND lease."article_revision" = run."article_revision"
-                AND lease."runner_id" = run."runner_id"
-                AND lease."runner_capability_generation" = run."runner_capability_generation"
-                AND lease."parameter_hash" = run."parameter_hash"
-                AND lease."lease_capability_hash" = ${input.leaseCapabilityHash}
-                AND lease."expires_at" > now()
-                AND lease."completed_at" IS NULL
-                AND lease."revoked_at" IS NULL
-            ))
           )
       ) AS "authorized"
     FROM ${workspaceAnalysisArticleRun} run
@@ -305,28 +233,25 @@ export async function requestAnalysisRunCancellation(input: {
         AND member."revocation_claim_id" IS NULL
       FOR UPDATE OF session, member
     ), current AS MATERIALIZED (
-      SELECT run."id"
-      FROM ${workspaceAnalysisArticleRun} run
+      SELECT run."id" FROM ${workspaceAnalysisArticleRun} run
       JOIN ${workspaceAnalysisRunner} runner
-        ON runner."organization_id" = run."organization_id"
-       AND runner."id" = run."runner_id"
+        ON runner."organization_id" = run."organization_id" AND runner."id" = run."runner_id"
       JOIN authority ON TRUE
       WHERE run."organization_id" = ${input.organizationId}
         AND run."article_id" = ${input.articleId}::uuid
         AND run."id" = ${input.runId}::uuid
         AND run."state" IN ('queued', 'running')
         AND run."cancel_requested_at" IS NULL
+        AND run."trigger" = 'manual' AND run."lease_id" IS NULL
         AND (run."requested_by_member_id" = authority."id"
           OR runner."member_id" = authority."id"
           OR authority."role" IN ('editor', 'admin', 'owner'))
       FOR UPDATE OF run, runner
     ), updated AS MATERIALIZED (
       UPDATE ${workspaceAnalysisArticleRun} run SET
-        "cancel_requested_at" = now(),
-        "cancel_requested_by_member_id" = authority."id"
+        "cancel_requested_at" = now(), "cancel_requested_by_member_id" = authority."id"
       FROM current CROSS JOIN authority
-      WHERE run."organization_id" = ${input.organizationId}
-        AND run."id" = current."id"
+      WHERE run."organization_id" = ${input.organizationId} AND run."id" = current."id"
       RETURNING run.*
     ), audit AS MATERIALIZED (
       INSERT INTO ${workspaceAuditEvent}
@@ -351,8 +276,6 @@ export async function commitAnalysisRunCreate(input: {
   parameterHash: string;
   definitionHash: string;
   runnerCapabilityHash: string;
-  leaseId?: string | null;
-  leaseCapabilityHash?: string | null;
   authority: AnalysisRunAuthority;
 }) {
   const requestId = crypto.randomUUID();
@@ -383,12 +306,10 @@ export async function commitAnalysisRunCreate(input: {
         AND runner."revoked_at" IS NULL
         AND runner."runner_capability_hash" = ${input.runnerCapabilityHash}
         AND runner."runner_capability_generation" IS NOT NULL
-        AND (${input.run.trigger} <> 'schedule' OR runner."background_allowed" = TRUE)
       FOR UPDATE OF runner
     ), article_authority AS MATERIALIZED (
       SELECT article."id", article."project_environment_id", article."environment_revision",
-        revision."payload" AS "revision_payload",
-        revision."created_at" AS "revision_created_at"
+        revision."payload" AS "revision_payload", revision."created_at" AS "revision_created_at"
       FROM ${workspaceAnalysisArticle} article
       JOIN ${workspaceAnalysisArticleRevision} revision
         ON revision."organization_id" = article."organization_id"
@@ -396,11 +317,8 @@ export async function commitAnalysisRunCreate(input: {
        AND revision."revision" = ${input.run.articleRevision}
       JOIN authority ON TRUE
       WHERE article."organization_id" = ${input.organizationId}
-        AND article."id" = ${input.articleId}::uuid
-        AND article."deleted_at" IS NULL
-        AND (article."live_revision" = ${input.run.articleRevision}
-          OR (article."revision" = ${input.run.articleRevision}
-            AND authority."role" IN ('editor', 'admin', 'owner')))
+        AND article."id" = ${input.articleId}::uuid AND article."deleted_at" IS NULL
+        AND article."revision" = ${input.run.articleRevision}
       FOR UPDATE OF article, revision
     ), connection_authority AS MATERIALIZED (
       SELECT pin."connection_id", connection."content_revision"
@@ -409,12 +327,8 @@ export async function commitAnalysisRunCreate(input: {
       JOIN ${workspaceConnection} connection
         ON connection."organization_id" = pin."organization_id"
        AND connection."id" = pin."connection_id"
-       AND ${analysisConnectionMatchesPin(
-         sql`article_authority."revision_payload"`,
-         sql`article_authority."revision_created_at"`,
-       )}
-       AND connection."deleted_at" IS NULL
-       AND connection."revocation_pending_at" IS NULL
+       AND ${analysisConnectionMatchesPin(sql`article_authority."revision_payload"`, sql`article_authority."revision_created_at"`)}
+       AND connection."deleted_at" IS NULL AND connection."revocation_pending_at" IS NULL
       JOIN ${knowledgeEnvironmentConnection} environment_binding
         ON environment_binding."organization_id" = connection."organization_id"
        AND environment_binding."project_environment_id" = article_authority."project_environment_id"
@@ -431,28 +345,6 @@ export async function commitAnalysisRunCreate(input: {
         AND pin."article_id" = ${input.articleId}::uuid
         AND pin."article_revision" = ${input.run.articleRevision}
       FOR UPDATE OF connection, environment_binding, connection_grant
-    ), lease_lock AS MATERIALIZED (
-      SELECT lease."runner_id"
-      FROM ${workspaceAnalysisRefreshLease} lease
-      JOIN runner_authority ON runner_authority."id" = lease."runner_id"
-      WHERE lease."organization_id" = ${input.organizationId}
-        AND lease."id" = ${input.leaseId ?? null}::uuid
-        AND lease."article_id" = ${input.articleId}::uuid
-        AND lease."article_revision" = ${input.run.articleRevision}
-        AND lease."lease_capability_hash" = ${input.leaseCapabilityHash ?? null}
-        AND lease."runner_capability_generation" = runner_authority."runner_capability_generation"
-        AND lease."parameter_hash" = ${input.parameterHash}
-        AND lease."expires_at" > now()
-        AND lease."completed_at" IS NULL AND lease."revoked_at" IS NULL
-      FOR UPDATE OF lease
-    ), lease_authority AS MATERIALIZED (
-      SELECT runner_authority."id"
-      FROM runner_authority
-      WHERE (${input.leaseId ?? null}::uuid IS NULL
-          AND ${input.run.trigger} <> 'schedule')
-        OR EXISTS (
-          SELECT 1 FROM lease_lock WHERE lease_lock."runner_id" = runner_authority."id"
-        )
     ), inserted AS MATERIALIZED (
       INSERT INTO ${workspaceAnalysisArticleRun}
         ("id", "organization_id", "article_id", "article_revision", "runner_id",
@@ -460,20 +352,14 @@ export async function commitAnalysisRunCreate(input: {
          "state", "parameter_values", "parameter_hash", "definition_hash", "started_at")
       SELECT ${input.run.id}::uuid, ${input.organizationId}, ${input.articleId}::uuid,
         ${input.run.articleRevision}, runner_authority."id",
-        runner_authority."runner_capability_generation", ${input.leaseId ?? null}::uuid,
-        authority."id", ${input.run.trigger}, 'running',
-        ${JSON.stringify(input.run.parameterValues)}::jsonb, ${input.parameterHash},
-        ${input.definitionHash}, now()
-      FROM authority
-      JOIN runner_authority ON TRUE
-      JOIN article_authority ON TRUE
-      JOIN lease_authority ON lease_authority."id" = runner_authority."id"
-      WHERE (SELECT count(*) FROM connection_authority) = (
-        SELECT count(*) FROM ${workspaceAnalysisArticleConnection} pin
-        WHERE pin."organization_id" = ${input.organizationId}
-          AND pin."article_id" = ${input.articleId}::uuid
-          AND pin."article_revision" = ${input.run.articleRevision}
-      )
+        runner_authority."runner_capability_generation", NULL, authority."id", 'manual', 'running',
+        '{}'::jsonb, ${input.parameterHash}, ${input.definitionHash}, now()
+      FROM authority JOIN runner_authority ON TRUE JOIN article_authority ON TRUE
+      WHERE (SELECT count(*) FROM connection_authority) = 1
+        AND (SELECT count(*) FROM ${workspaceAnalysisArticleConnection} pin
+          WHERE pin."organization_id" = ${input.organizationId}
+            AND pin."article_id" = ${input.articleId}::uuid
+            AND pin."article_revision" = ${input.run.articleRevision}) = 1
       RETURNING *
     ), audit AS MATERIALIZED (
       INSERT INTO ${workspaceAuditEvent}
@@ -482,17 +368,14 @@ export async function commitAnalysisRunCreate(input: {
       SELECT ${input.organizationId}, ${input.authority.userId}, 'analysis_article.run_start',
         'analysis_article_run', inserted."id"::text,
         jsonb_build_object('articleId', inserted."article_id", 'articleRevision',
-          inserted."article_revision", 'trigger', inserted."trigger"), ${requestId}::uuid
+          inserted."article_revision", 'trigger', 'manual'), ${requestId}::uuid
       FROM inserted RETURNING "resource_id"
     )
     SELECT ${runProjection()}, (
-      SELECT jsonb_object_agg(
-        connection_authority."connection_id"::text,
-        connection_authority."content_revision"
-      ) FROM connection_authority
+      SELECT jsonb_object_agg(connection_authority."connection_id"::text,
+        connection_authority."content_revision") FROM connection_authority
     ) AS "connectionContentRevisions"
-    FROM inserted run
-    JOIN audit ON audit."resource_id" = run."id"::text
+    FROM inserted run JOIN audit ON audit."resource_id" = run."id"::text
   `);
   return returnedAnalysisRunStart(result.rows[0]);
 }
@@ -512,173 +395,6 @@ function receiptRows(receipts: readonly AnalysisQueryReceiptInput[]) {
   }));
 }
 
-/**
- * Cheap, side-effect-free authority check performed before KMS work. The write
- * transaction below deliberately repeats every condition and remains canonical.
- */
-export async function canStageAnalysisRunFragment(input: {
-  organizationId: string;
-  articleId: string;
-  runId: string;
-  runnerId: string;
-  runnerCapabilityHash: string;
-  authority: AnalysisRunAuthority;
-}) {
-  const result = await db.execute<{ allowed: boolean }>(sql`
-    SELECT EXISTS (
-      SELECT 1
-      FROM "workspace_control"."session" session
-      JOIN "workspace_control"."member" member
-        ON member."id" = ${input.authority.membershipId}
-       AND member."organization_id" = ${input.organizationId}
-       AND member."user_id" = ${input.authority.userId}
-      JOIN ${workspaceAnalysisArticleRun} run
-        ON run."organization_id" = member."organization_id"
-       AND run."article_id" = ${input.articleId}::uuid
-       AND run."id" = ${input.runId}::uuid
-       AND run."runner_id" = ${input.runnerId}::uuid
-       AND run."state" = 'running'
-       AND run."cancel_requested_at" IS NULL
-      JOIN ${workspaceAnalysisRunner} runner
-        ON runner."organization_id" = run."organization_id"
-       AND runner."id" = run."runner_id"
-       AND runner."member_id" = member."id"
-       AND runner."revoked_at" IS NULL
-       AND runner."runner_capability_hash" = ${input.runnerCapabilityHash}
-       AND runner."runner_capability_generation" = run."runner_capability_generation"
-      JOIN ${workspaceAnalysisArticle} article
-        ON article."organization_id" = run."organization_id"
-       AND article."id" = run."article_id"
-       AND article."deleted_at" IS NULL
-      JOIN ${workspaceAnalysisArticleRevision} revision
-        ON revision."organization_id" = run."organization_id"
-       AND revision."article_id" = run."article_id"
-       AND revision."revision" = run."article_revision"
-      WHERE session."id" = ${input.authority.sessionId}
-        AND session."user_id" = ${input.authority.userId}
-        AND session."expires_at" > now()
-        AND member."role" = ${input.authority.role}
-        AND member."revocation_pending_at" IS NULL
-        AND member."revocation_claim_id" IS NULL
-        AND (article."live_revision" = run."article_revision"
-          OR (article."revision" = run."article_revision"
-            AND article."state" = 'review'
-            AND revision."payload" #>> '{definition,refresh,shareReviewedResults}' = 'true'))
-    ) AS "allowed"
-  `);
-  return result.rows[0]?.allowed === true;
-}
-
-export async function stageAnalysisRunFragment(input: {
-  organizationId: string;
-  articleId: string;
-  runId: string;
-  runnerId: string;
-  runnerCapabilityHash: string;
-  fragment: SealedAnalysisFragment;
-  authority: AnalysisRunAuthority;
-}) {
-  const requestId = crypto.randomUUID();
-  const result = await db.execute<RawRow>(sql`
-    WITH authority_lock AS MATERIALIZED (
-      SELECT pg_advisory_xact_lock(hashtextextended(${memberLockKey(input)}, 0))
-    ), authority AS MATERIALIZED (
-      SELECT member."id"
-      FROM "workspace_control"."session" session
-      JOIN "workspace_control"."member" member
-        ON member."id" = ${input.authority.membershipId}
-       AND member."organization_id" = ${input.organizationId}
-       AND member."user_id" = ${input.authority.userId}
-      JOIN authority_lock ON TRUE
-      WHERE session."id" = ${input.authority.sessionId}
-        AND session."user_id" = ${input.authority.userId}
-        AND session."expires_at" > now()
-        AND member."role" = ${input.authority.role}
-        AND member."revocation_pending_at" IS NULL
-        AND member."revocation_claim_id" IS NULL
-      FOR UPDATE OF session, member
-    ), current AS MATERIALIZED (
-      SELECT run."id"
-      FROM ${workspaceAnalysisArticleRun} run
-      JOIN ${workspaceAnalysisRunner} runner
-        ON runner."organization_id" = run."organization_id"
-       AND runner."id" = run."runner_id"
-       AND runner."member_id" = ${input.authority.membershipId}
-       AND runner."revoked_at" IS NULL
-       AND runner."runner_capability_hash" = ${input.runnerCapabilityHash}
-       AND runner."runner_capability_generation" = run."runner_capability_generation"
-      JOIN authority ON TRUE
-      JOIN ${workspaceAnalysisArticle} article
-        ON article."organization_id" = run."organization_id"
-       AND article."id" = run."article_id"
-       AND article."deleted_at" IS NULL
-      JOIN ${workspaceAnalysisArticleRevision} revision
-        ON revision."organization_id" = run."organization_id"
-       AND revision."article_id" = run."article_id"
-       AND revision."revision" = run."article_revision"
-      WHERE run."organization_id" = ${input.organizationId}
-        AND run."article_id" = ${input.articleId}::uuid
-        AND run."id" = ${input.runId}::uuid
-        AND run."runner_id" = ${input.runnerId}::uuid
-        AND run."state" = 'running'
-        AND run."cancel_requested_at" IS NULL
-        AND (article."live_revision" = run."article_revision"
-          OR (article."revision" = run."article_revision"
-            AND article."state" = 'review'
-            AND revision."payload" #>> '{definition,refresh,shareReviewedResults}' = 'true'))
-      FOR UPDATE OF run, runner, article, revision
-    ), inserted AS MATERIALIZED (
-      INSERT INTO ${workspaceAnalysisResultFragment}
-        ("organization_id", "run_id", "block_id", "ordinal", "data_key_id",
-         "key_reference", "key_version", "ciphertext", "payload_hash", "row_count",
-         "plaintext_bytes", "expires_at")
-      SELECT ${input.organizationId}, current."id", ${input.fragment.blockId},
-        ${input.fragment.ordinal}, ${input.fragment.dataKeyId}, ${input.fragment.keyReference},
-        ${input.fragment.keyVersion}, ${input.fragment.ciphertext},
-        ${input.fragment.payloadHash}, ${input.fragment.rowCount},
-        ${input.fragment.plaintextBytes}, ${input.fragment.expiresAt.toISOString()}::timestamptz
-      FROM current
-      WHERE (SELECT count(*) FROM ${workspaceAnalysisResultFragment} staged
-          WHERE staged."organization_id" = ${input.organizationId}
-            AND staged."run_id" = current."id") < 256
-        AND COALESCE((SELECT sum(staged."plaintext_bytes")
-          FROM ${workspaceAnalysisResultFragment} staged
-          WHERE staged."organization_id" = ${input.organizationId}
-            AND staged."run_id" = current."id"), 0) + ${input.fragment.plaintextBytes}
-          <= 16777216
-      ON CONFLICT ("organization_id", "run_id", "block_id", "ordinal") DO NOTHING
-      RETURNING "block_id" AS "blockId", "ordinal", "payload_hash" AS "payloadHash"
-    ), existing AS MATERIALIZED (
-      SELECT fragment."block_id" AS "blockId", fragment."ordinal",
-        fragment."payload_hash" AS "payloadHash"
-      FROM ${workspaceAnalysisResultFragment} fragment
-      JOIN current ON current."id" = fragment."run_id"
-      WHERE fragment."organization_id" = ${input.organizationId}
-        AND fragment."block_id" = ${input.fragment.blockId}
-        AND fragment."ordinal" = ${input.fragment.ordinal}
-        AND fragment."payload_hash" = ${input.fragment.payloadHash}
-        AND fragment."expires_at" > now()
-    ), audit AS MATERIALIZED (
-      INSERT INTO ${workspaceAuditEvent}
-        ("organization_id", "actor_user_id", "action", "resource_type", "resource_id",
-         "redacted_summary", "request_id")
-      SELECT ${input.organizationId}, ${input.authority.userId},
-        'analysis_article.result_fragment_staged', 'analysis_article_run', current."id"::text,
-        jsonb_build_object('articleId', ${input.articleId}::text, 'blockId',
-          ${input.fragment.blockId}::text, 'ordinal', ${input.fragment.ordinal}::integer),
-        ${requestId}::uuid
-      FROM current
-      WHERE EXISTS (SELECT 1 FROM inserted)
-      RETURNING "resource_id"
-    )
-    SELECT "blockId", "ordinal", "payloadHash" FROM inserted
-    UNION ALL
-    SELECT "blockId", "ordinal", "payloadHash" FROM existing
-    LIMIT 1
-  `);
-  return result.rows[0] ?? null;
-}
-
 export async function commitAnalysisRunCompletion(input: {
   organizationId: string;
   articleId: string;
@@ -686,35 +402,29 @@ export async function commitAnalysisRunCompletion(input: {
   runnerId: string;
   runnerCapabilityHash: string;
   completion: AnalysisRunCompletion;
-  fragmentManifest: readonly AnalysisResultFragmentReference[];
   authority: AnalysisRunAuthority;
 }) {
   const receipts = receiptRows(input.completion.queryReceipts);
-  const fragments = input.fragmentManifest.map((fragment) => ({
-    block_id: fragment.blockId,
-    ordinal: fragment.ordinal,
-    payload_hash: fragment.payloadHash,
-  }));
   const schemaFingerprints = Object.fromEntries(
     input.completion.state === "succeeded"
-      ? input.completion.queryReceipts.map(
-        (receipt) => [receipt.queryNodeId, receipt.schemaFingerprint],
-      )
+      ? input.completion.queryReceipts.map((receipt) => [receipt.queryNodeId, receipt.schemaFingerprint])
       : [],
   );
   const rowCount = input.completion.state === "succeeded"
     ? input.completion.queryReceipts.reduce((sum, receipt) => sum + receipt.rowCount, 0)
     : 0;
+  const byteCount = input.completion.state === "succeeded"
+    ? input.completion.queryReceipts.reduce((sum, receipt) => sum + receipt.byteCount, 0)
+    : 0;
   const resultHash = input.completion.state === "succeeded"
-    ? analysisRunResultHash(input.completion.queryReceipts, input.fragmentManifest)
+    ? analysisRunResultHash(input.completion.queryReceipts)
     : null;
   const requestId = crypto.randomUUID();
   const result = await db.execute<RawRow>(sql`
     WITH authority_lock AS MATERIALIZED (
       SELECT pg_advisory_xact_lock(hashtextextended(${memberLockKey(input)}, 0))
     ), authority AS MATERIALIZED (
-      SELECT member."id"
-      FROM "workspace_control"."session" session
+      SELECT member."id" FROM "workspace_control"."session" session
       JOIN "workspace_control"."member" member
         ON member."id" = ${input.authority.membershipId}
        AND member."organization_id" = ${input.organizationId}
@@ -727,9 +437,6 @@ export async function commitAnalysisRunCompletion(input: {
         AND member."revocation_pending_at" IS NULL
         AND member."revocation_claim_id" IS NULL
       FOR UPDATE OF session, member
-    ), requested_fragment AS MATERIALIZED (
-      SELECT * FROM jsonb_to_recordset(${JSON.stringify(fragments)}::jsonb)
-        AS requested(block_id text, ordinal integer, payload_hash text)
     ), current AS MATERIALIZED (
       SELECT run.*, revision."payload" AS "revision_payload",
         revision."created_at" AS "revision_created_at"
@@ -754,74 +461,8 @@ export async function commitAnalysisRunCompletion(input: {
         AND run."id" = ${input.runId}::uuid
         AND run."article_id" = ${input.articleId}::uuid
         AND run."runner_id" = ${input.runnerId}::uuid
-        AND run."state" = 'running'
+        AND run."state" = 'running' AND run."trigger" = 'manual' AND run."lease_id" IS NULL
         AND (run."cancel_requested_at" IS NULL OR ${input.completion.state} <> 'succeeded')
-        AND (
-          ${fragments.length} = 0
-          OR article."live_revision" = run."article_revision"
-          OR (article."revision" = run."article_revision"
-            AND article."state" = 'review'
-            AND revision."payload" #>> '{definition,refresh,shareReviewedResults}' = 'true')
-        )
-        AND (
-          ${input.completion.state} <> 'succeeded'
-          OR ${fragments.length} > 0
-          OR NOT (
-            COALESCE(article."live_revision" = run."article_revision", FALSE)
-            OR (article."revision" = run."article_revision"
-              AND article."state" = 'review'
-              AND revision."payload" #>> '{definition,refresh,shareReviewedResults}' = 'true')
-          )
-          OR NOT EXISTS (
-            SELECT 1
-            FROM jsonb_array_elements(
-              COALESCE(revision."payload" #> '{definition,blocks}', '[]'::jsonb)
-            ) block
-            WHERE block -> 'sourceNodeId' <> 'null'::jsonb
-          )
-        )
-        AND (
-          (${input.completion.state} <> 'succeeded'
-            AND NOT EXISTS (SELECT 1 FROM requested_fragment))
-          OR (${input.completion.state} = 'succeeded'
-            AND (
-              NOT (
-                COALESCE(article."live_revision" = run."article_revision", FALSE)
-                OR (article."revision" = run."article_revision"
-                  AND article."state" = 'review'
-                  AND revision."payload" #>> '{definition,refresh,shareReviewedResults}' = 'true')
-              )
-              OR (NOT EXISTS (
-                SELECT 1
-                FROM jsonb_array_elements(
-                  COALESCE(revision."payload" #> '{definition,blocks}', '[]'::jsonb)
-                ) block
-                WHERE block ->> 'sourceNodeId' IS NOT NULL
-                  AND NOT EXISTS (
-                    SELECT 1 FROM requested_fragment requested
-                    WHERE requested.block_id = block ->> 'id'
-                  )
-              )
-              AND NOT EXISTS (
-                SELECT 1 FROM requested_fragment requested
-                WHERE NOT EXISTS (
-                  SELECT 1
-                  FROM jsonb_array_elements(
-                    COALESCE(revision."payload" #> '{definition,blocks}', '[]'::jsonb)
-                  ) block
-                  WHERE block ->> 'sourceNodeId' IS NOT NULL
-                    AND block ->> 'id' = requested.block_id
-                )
-              )
-              AND NOT EXISTS (
-                SELECT 1
-                FROM requested_fragment requested
-                GROUP BY requested.block_id
-                HAVING min(requested.ordinal) <> 0
-                  OR max(requested.ordinal) <> count(DISTINCT requested.ordinal) - 1
-                  OR count(*) <> count(DISTINCT requested.ordinal)
-              ))))
-        )
       FOR UPDATE OF run, runner, article, revision
     ), requested_receipt AS MATERIALIZED (
       SELECT * FROM jsonb_to_recordset(${JSON.stringify(receipts)}::jsonb)
@@ -829,8 +470,7 @@ export async function commitAnalysisRunCompletion(input: {
           query_run_id uuid, query_hash text, schema_fingerprint text, state text,
           row_count bigint, byte_count bigint, duration_ms bigint)
     ), receipt_authority AS MATERIALIZED (
-      SELECT requested.query_node_id
-      FROM requested_receipt requested
+      SELECT requested.query_node_id FROM requested_receipt requested
       JOIN current ON TRUE
       JOIN ${workspaceAnalysisArticleConnection} pin
         ON pin."organization_id" = current."organization_id"
@@ -840,16 +480,11 @@ export async function commitAnalysisRunCompletion(input: {
       JOIN ${workspaceConnection} connection
         ON connection."organization_id" = pin."organization_id"
        AND connection."id" = pin."connection_id"
-       AND ${analysisReceiptMatchesConnection(
-         sql`current."revision_payload"`,
-         sql`current."revision_created_at"`,
-       )}
-       AND connection."deleted_at" IS NULL
-       AND connection."revocation_pending_at" IS NULL
+       AND ${analysisReceiptMatchesConnection(sql`current."revision_payload"`, sql`current."revision_created_at"`)}
+       AND connection."deleted_at" IS NULL AND connection."revocation_pending_at" IS NULL
       JOIN ${workspaceAnalysisArticle} article
         ON article."organization_id" = current."organization_id"
-       AND article."id" = current."article_id"
-       AND article."deleted_at" IS NULL
+       AND article."id" = current."article_id" AND article."deleted_at" IS NULL
       JOIN ${knowledgeEnvironmentConnection} environment_binding
         ON environment_binding."organization_id" = connection."organization_id"
        AND environment_binding."project_environment_id" = article."project_environment_id"
@@ -863,47 +498,11 @@ export async function commitAnalysisRunCompletion(input: {
        AND connection_grant."member_id" = ${input.authority.membershipId}
        AND connection_grant."capability" IN ('use', 'manage')
       FOR UPDATE OF connection, environment_binding, connection_grant
-    ), verified_fragments AS MATERIALIZED (
-      SELECT fragment."run_id", fragment."plaintext_bytes"
-      FROM current CROSS JOIN requested_fragment requested
-      JOIN ${workspaceAnalysisResultFragment} fragment
-        ON fragment."organization_id" = current."organization_id"
-       AND fragment."run_id" = current."id"
-       AND fragment."block_id" = requested.block_id
-       AND fragment."ordinal" = requested.ordinal
-       AND fragment."payload_hash" = requested.payload_hash
-       AND fragment."expires_at" > now()
-    ), evidence_eligible AS MATERIALIZED (
-      SELECT current."id"
-      FROM current
-      WHERE (
-          ${input.completion.state} <> 'succeeded'
-          OR (SELECT count(*) FROM receipt_authority) = ${receipts.length}
-        )
-        AND (
-          ${input.completion.state} <> 'succeeded'
-          OR (
-            (SELECT count(*) FROM verified_fragments) = ${fragments.length}
-            AND (SELECT count(*) FROM ${workspaceAnalysisResultFragment} stored
-              WHERE stored."organization_id" = current."organization_id"
-                AND stored."run_id" = current."id"
-                AND stored."expires_at" > now()) = ${fragments.length}
-            AND COALESCE((SELECT sum("plaintext_bytes") FROM verified_fragments), 0)
-              <= 16777216
-          )
-        )
-    ), discarded_fragments AS MATERIALIZED (
-      DELETE FROM ${workspaceAnalysisResultFragment} discarded
-      USING current JOIN evidence_eligible ON evidence_eligible."id" = current."id"
-      WHERE discarded."organization_id" = current."organization_id"
-        AND discarded."run_id" = evidence_eligible."id"
-        AND ${input.completion.state} <> 'succeeded'
-      RETURNING discarded."run_id"
     ), eligible AS MATERIALIZED (
-      SELECT evidence_eligible."id"
-      FROM evidence_eligible
-      WHERE ${input.completion.state} = 'succeeded'
-        OR (SELECT count(*) FROM discarded_fragments) >= 0
+      SELECT current."id" FROM current
+      WHERE ${input.completion.state} <> 'succeeded'
+        OR ((SELECT count(*) FROM receipt_authority) = ${receipts.length}
+          AND ${receipts.length} = 1)
     ), inserted_receipts AS MATERIALIZED (
       INSERT INTO ${workspaceAnalysisArticleQueryReceipt}
         ("organization_id", "run_id", "query_node_id", "connection_id",
@@ -920,43 +519,28 @@ export async function commitAnalysisRunCompletion(input: {
       UPDATE ${workspaceAnalysisArticleRun} run
       SET "state" = ${input.completion.state},
         "schema_fingerprints" = ${JSON.stringify(schemaFingerprints)}::jsonb,
-        "row_count" = ${rowCount}, "byte_count" = COALESCE(
-          (SELECT sum("plaintext_bytes") FROM verified_fragments), 0
-        ),
-        "result_hash" = ${resultHash},
+        "row_count" = ${rowCount}, "byte_count" = ${byteCount}, "result_hash" = ${resultHash},
         "error_kind" = ${input.completion.error?.kind ?? null},
-        "error_message" = ${input.completion.error?.message ?? null},
-        "finished_at" = now()
+        "error_message" = ${input.completion.error?.message ?? null}, "finished_at" = now()
       FROM current JOIN eligible ON eligible."id" = current."id"
       WHERE run."organization_id" = current."organization_id" AND run."id" = current."id"
-        AND (
-          ${input.completion.state} <> 'succeeded'
-          OR (SELECT count(*) FROM inserted_receipts) = ${receipts.length}
-        )
+        AND (${input.completion.state} <> 'succeeded'
+          OR (SELECT count(*) FROM inserted_receipts) = ${receipts.length})
       RETURNING run.*
     ), article_updated AS MATERIALIZED (
       UPDATE ${workspaceAnalysisArticle} article
       SET "latest_successful_run_id" = CASE
           WHEN ${input.completion.state} = 'succeeded'
             AND article."revision" = updated."article_revision" THEN updated."id"
-          ELSE article."latest_successful_run_id"
-        END,
+          ELSE article."latest_successful_run_id" END,
         "updated_at" = CASE
           WHEN ${input.completion.state} = 'succeeded'
             AND article."revision" = updated."article_revision" THEN now()
-          ELSE article."updated_at"
-        END
+          ELSE article."updated_at" END
       FROM updated
       WHERE article."organization_id" = updated."organization_id"
         AND article."id" = updated."article_id"
       RETURNING article."id"
-    ), lease_updated AS MATERIALIZED (
-      UPDATE ${workspaceAnalysisRefreshLease} lease
-      SET "completed_at" = now()
-      FROM updated
-      WHERE lease."organization_id" = updated."organization_id"
-        AND lease."id" = updated."lease_id"
-      RETURNING lease."id"
     ), audit AS MATERIALIZED (
       INSERT INTO ${workspaceAuditEvent}
         ("organization_id", "actor_user_id", "action", "resource_type", "resource_id",
@@ -966,20 +550,14 @@ export async function commitAnalysisRunCompletion(input: {
         jsonb_build_object('articleId', updated."article_id", 'articleRevision',
           updated."article_revision", 'state', updated."state", 'rowCount', updated."row_count",
           'byteCount', updated."byte_count"), ${requestId}::uuid
-      FROM updated JOIN article_updated ON TRUE
-      RETURNING "resource_id"
+      FROM updated JOIN article_updated ON TRUE RETURNING "resource_id"
     )
     SELECT ${runProjection()} FROM updated run
     JOIN audit ON audit."resource_id" = run."id"::text
   `);
   if (result.rows[0]) return result.rows[0];
   return replayAnalysisRunCompletion({
-    ...input,
-    receipts,
-    fragments,
-    schemaFingerprints,
-    rowCount,
-    resultHash,
+    ...input, receipts, schemaFingerprints, rowCount, byteCount, resultHash,
   });
 }
 
@@ -990,20 +568,18 @@ async function replayAnalysisRunCompletion(input: {
   runnerId: string;
   runnerCapabilityHash: string;
   completion: AnalysisRunCompletion;
-  fragmentManifest: readonly AnalysisResultFragmentReference[];
   authority: AnalysisRunAuthority;
   receipts: ReturnType<typeof receiptRows>;
-  fragments: Array<{ block_id: string; ordinal: number; payload_hash: string }>;
   schemaFingerprints: Record<string, string>;
   rowCount: number;
+  byteCount: number;
   resultHash: string | null;
 }) {
   const result = await db.execute<RawRow>(sql`
     WITH authority_lock AS MATERIALIZED (
       SELECT pg_advisory_xact_lock(hashtextextended(${memberLockKey(input)}, 0))
     ), authority AS MATERIALIZED (
-      SELECT member."id"
-      FROM "workspace_control"."session" session
+      SELECT member."id" FROM "workspace_control"."session" session
       JOIN "workspace_control"."member" member
         ON member."id" = ${input.authority.membershipId}
        AND member."organization_id" = ${input.organizationId}
@@ -1021,80 +597,30 @@ async function replayAnalysisRunCompletion(input: {
         AS requested(query_node_id text, connection_id uuid, connection_revision bigint,
           query_run_id uuid, query_hash text, schema_fingerprint text, state text,
           row_count bigint, byte_count bigint, duration_ms bigint)
-    ), requested_fragment AS MATERIALIZED (
-      SELECT * FROM jsonb_to_recordset(${JSON.stringify(input.fragments)}::jsonb)
-        AS requested(block_id text, ordinal integer, payload_hash text)
     ), replay AS MATERIALIZED (
-      SELECT run.*
-      FROM ${workspaceAnalysisArticleRun} run
+      SELECT run.* FROM ${workspaceAnalysisArticleRun} run
       JOIN ${workspaceAnalysisRunner} runner
-        ON runner."organization_id" = run."organization_id"
-       AND runner."id" = run."runner_id"
+        ON runner."organization_id" = run."organization_id" AND runner."id" = run."runner_id"
        AND runner."member_id" = ${input.authority.membershipId}
        AND runner."revoked_at" IS NULL
        AND runner."runner_capability_hash" = ${input.runnerCapabilityHash}
        AND runner."runner_capability_generation" = run."runner_capability_generation"
       JOIN authority ON TRUE
-      JOIN ${workspaceAnalysisArticleRevision} revision
-        ON revision."organization_id" = run."organization_id"
-       AND revision."article_id" = run."article_id"
-       AND revision."revision" = run."article_revision"
       WHERE run."organization_id" = ${input.organizationId}
         AND run."article_id" = ${input.articleId}::uuid
-        AND run."id" = ${input.runId}::uuid
-        AND run."runner_id" = ${input.runnerId}::uuid
-        AND run."state" = ${input.completion.state}
-        AND run."finished_at" IS NOT NULL
+        AND run."id" = ${input.runId}::uuid AND run."runner_id" = ${input.runnerId}::uuid
+        AND run."trigger" = 'manual' AND run."lease_id" IS NULL
+        AND run."state" = ${input.completion.state} AND run."finished_at" IS NOT NULL
         AND run."schema_fingerprints" = ${JSON.stringify(input.schemaFingerprints)}::jsonb
-        AND run."row_count" = ${input.rowCount}
+        AND run."row_count" = ${input.rowCount} AND run."byte_count" = ${input.byteCount}
         AND run."result_hash" IS NOT DISTINCT FROM ${input.resultHash}
         AND run."error_kind" IS NOT DISTINCT FROM ${input.completion.error?.kind ?? null}
         AND run."error_message" IS NOT DISTINCT FROM ${input.completion.error?.message ?? null}
-        AND (
-          (${input.completion.state} <> 'succeeded'
-            AND NOT EXISTS (SELECT 1 FROM requested_fragment))
-          OR (${input.completion.state} = 'succeeded'
-            AND NOT EXISTS (SELECT 1 FROM requested_fragment))
-          OR (${input.completion.state} = 'succeeded'
-            AND NOT EXISTS (
-              SELECT 1
-              FROM jsonb_array_elements(
-                COALESCE(revision."payload" #> '{definition,blocks}', '[]'::jsonb)
-              ) block
-              WHERE block ->> 'sourceNodeId' IS NOT NULL
-                AND NOT EXISTS (
-                  SELECT 1 FROM requested_fragment requested
-                  WHERE requested.block_id = block ->> 'id'
-                )
-            )
-            AND NOT EXISTS (
-              SELECT 1 FROM requested_fragment requested
-              WHERE NOT EXISTS (
-                SELECT 1
-                FROM jsonb_array_elements(
-                  COALESCE(revision."payload" #> '{definition,blocks}', '[]'::jsonb)
-                ) block
-                WHERE block ->> 'sourceNodeId' IS NOT NULL
-                  AND block ->> 'id' = requested.block_id
-              )
-            )
-            AND NOT EXISTS (
-              SELECT 1
-              FROM requested_fragment requested
-              GROUP BY requested.block_id
-              HAVING min(requested.ordinal) <> 0
-                OR max(requested.ordinal) <> count(DISTINCT requested.ordinal) - 1
-                OR count(*) <> count(DISTINCT requested.ordinal)
-            ))
-        )
         AND (SELECT count(*) FROM ${workspaceAnalysisArticleQueryReceipt} stored
           WHERE stored."organization_id" = run."organization_id"
             AND stored."run_id" = run."id") = CASE
-              WHEN ${input.completion.state} = 'succeeded' THEN ${input.receipts.length}
-              ELSE 0
-            END
-        AND (SELECT count(*)
-          FROM requested_receipt requested
+              WHEN ${input.completion.state} = 'succeeded' THEN ${input.receipts.length} ELSE 0 END
+        AND (SELECT count(*) FROM requested_receipt requested
           JOIN ${workspaceAnalysisArticleQueryReceipt} stored
             ON stored."organization_id" = run."organization_id"
            AND stored."run_id" = run."id"
@@ -1108,30 +634,8 @@ async function replayAnalysisRunCompletion(input: {
            AND stored."row_count" = requested.row_count
            AND stored."byte_count" = requested.byte_count
            AND stored."duration_ms" = requested.duration_ms) = CASE
-             WHEN ${input.completion.state} = 'succeeded' THEN ${input.receipts.length}
-             ELSE 0
-           END
-        AND (SELECT count(*) FROM ${workspaceAnalysisResultFragment} stored
-          WHERE stored."organization_id" = run."organization_id"
-            AND stored."run_id" = run."id"
-            AND stored."expires_at" > now()) = ${input.fragments.length}
-        AND (SELECT count(*)
-          FROM requested_fragment requested
-          JOIN ${workspaceAnalysisResultFragment} stored
-            ON stored."organization_id" = run."organization_id"
-           AND stored."run_id" = run."id"
-           AND stored."block_id" = requested.block_id
-           AND stored."ordinal" = requested.ordinal
-           AND stored."payload_hash" = requested.payload_hash
-           AND stored."expires_at" > now()) = ${input.fragments.length}
-        AND run."byte_count" = COALESCE((
-          SELECT sum(stored."plaintext_bytes")
-          FROM ${workspaceAnalysisResultFragment} stored
-          WHERE stored."organization_id" = run."organization_id"
-            AND stored."run_id" = run."id"
-            AND stored."expires_at" > now()
-        ), 0)
-      FOR UPDATE OF run, runner, revision
+             WHEN ${input.completion.state} = 'succeeded' THEN ${input.receipts.length} ELSE 0 END
+      FOR UPDATE OF run, runner
     )
     SELECT ${runProjection()} FROM replay run
   `);

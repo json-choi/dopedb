@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import type { AnalysisArticleState } from "../../features/analysisArticles/domain";
 import { analysisQueryKeys } from "../../features/analysisArticles/queryKeys";
 import { listAnalysisArticles } from "../../features/analysisArticles/tauriAdapter";
 import { projectResourceKey } from "../../features/catalogExplorer/projectResources";
@@ -86,9 +85,6 @@ export function useDatabaseExplorerKnowledge({
     environmentConnections.error,
   );
   const [analysisFilter, setAnalysisFilter] = useState("");
-  const [analysisStateFilter, setAnalysisStateFilter] = useState<
-    "all" | AnalysisArticleState
-  >("all");
   const [expandedProjectIds, setExpandedProjectIds] = useState<Set<string>>(
     new Set(),
   );
@@ -177,7 +173,6 @@ export function useDatabaseExplorerKnowledge({
 
   useEffect(() => {
     setAnalysisFilter("");
-    setAnalysisStateFilter("all");
   }, [activeProjectId, catalogScope.key]);
 
   useEffect(() => {
@@ -224,8 +219,6 @@ export function useDatabaseExplorerKnowledge({
     retrySources: sources.refetch,
     analysisFilter,
     setAnalysisFilter,
-    analysisStateFilter,
-    setAnalysisStateFilter,
     expandedProjectIds,
     setExpandedProjectIds,
     expandedResourceKeys,

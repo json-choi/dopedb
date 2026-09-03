@@ -29,9 +29,6 @@ use workspace_codec::{
 
 use bootstrap::*;
 use projections::*;
-pub(crate) use repositories::analysis_signal_samples::{
-    LocalAnalysisSignalMetricSample, LocalAnalysisSignalState,
-};
 use repositories::*;
 
 pub(crate) use projections::{

@@ -1,5 +1,5 @@
 const ID = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
-const UNSAFE_DISPLAY = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\u202a-\u202e\u2066-\u2069]/u;
+const UNSAFE_DISPLAY = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\u202a-\u202e\u2066-\u2069\ufeff]/u;
 
 export function exactRecord(value: unknown, fields: readonly string[]) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;

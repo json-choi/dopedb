@@ -117,7 +117,6 @@ export function WorkspaceManagementPanel({
           <AnalysisManagementPanel
             workspaceId={workspaceId}
             initialArticleId={initialArticleId}
-            canEdit={canEditWorkspace}
           />
         ) : null}
         {area === "lifecycle" ? (

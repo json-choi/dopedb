@@ -59,40 +59,29 @@ pub fn run() {
 
     let builder = tauri::Builder::default();
     #[cfg(any(target_os = "macos", windows, target_os = "linux"))]
-    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
-        if !args
-            .iter()
-            .any(|argument| features::automation_runner::is_background_launch_argument(argument))
-        {
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.show();
-                let _ = window.set_focus();
-            }
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        if let Some(window) = app.get_webview_window("main") {
+            let _ = window.show();
+            let _ = window.set_focus();
         }
     }));
     #[cfg(any(target_os = "macos", windows, target_os = "linux"))]
     let builder = builder.plugin(tauri_plugin_autostart::init(
         tauri_plugin_autostart::MacosLauncher::LaunchAgent,
-        Some(vec![features::automation_runner::BACKGROUND_ARGUMENT]),
+        None,
     ));
     builder
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(state)
         .setup(|app| {
             let state = app.state::<state::AppState>();
-            let background_launch = std::env::args().any(|argument| {
-                features::automation_runner::is_background_launch_argument(&argument)
-            });
-            if background_launch && state.analysis_runner.background_allowed() {
-                if let Err(error) = app.autolaunch().enable() {
-                    tracing::warn!(%error, "could not migrate background automation registration");
-                }
-                if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.hide();
+            #[cfg(any(target_os = "macos", windows, target_os = "linux"))]
+            if app.autolaunch().is_enabled().unwrap_or(false) {
+                if let Err(error) = app.autolaunch().disable() {
+                    tracing::warn!(%error, "could not remove retired Analysis autostart registration");
                 }
             }
             let mut events = state.services.job.subscribe();
@@ -160,8 +149,6 @@ pub fn run() {
             features::agents::transport::list_retired_chat_archive_threads,
             features::agents::transport::get_retired_chat_archive_messages,
             features::workspaces::transport::workspace_feature_state,
-            features::automation_runner::transport::automation_runner_settings,
-            features::automation_runner::transport::set_automation_runner_background_allowed,
             commands::cli_installation_status,
             commands::install_cli,
             commands::skill_status,
@@ -252,29 +239,14 @@ pub fn run() {
             features::product_analytics::transport::submit_product_analytics_batch,
             features::analysis_articles::transport::list_analysis_articles_command,
             features::analysis_articles::transport::update_analysis_article_command,
-            features::analysis_articles::transport::transition_analysis_article_command,
-            features::analysis_articles::transport::transfer_analysis_article_command,
-            features::analysis_articles::transport::restore_analysis_article_revision_command,
             features::analysis_articles::transport::delete_analysis_article_command,
             features::analysis_articles::transport::get_local_analysis_article_result_command,
             features::analysis_articles::transport::list_analysis_article_revisions_command,
-            features::analysis_articles::transport::list_analysis_runners_command,
-            features::analysis_articles::transport::revoke_analysis_runner_command,
             features::analysis_articles::transport::list_analysis_publications_command,
             features::analysis_articles::transport::create_analysis_publication_command,
             features::analysis_articles::transport::revoke_analysis_publication_command,
             features::analysis_articles::transport::analysis_publication_url_command,
-            features::analysis_articles::transport::list_analysis_collaborators_command,
-            features::analysis_articles::transport::list_analysis_signals_command,
-            features::analysis_articles::transport::create_analysis_signal_command,
-            features::analysis_articles::transport::update_analysis_signal_command,
-            features::analysis_articles::transport::set_analysis_signal_enabled_command,
-            features::analysis_articles::transport::delete_analysis_signal_command,
-            features::analysis_articles::transport::list_analysis_signal_receipts_command,
-            features::analysis_articles::transport::list_analysis_notifications_command,
-            features::analysis_articles::transport::mark_analysis_notifications_read_command,
             features::analysis_articles::transport::list_analysis_article_runs_command,
-            features::analysis_articles::transport::get_analysis_article_result_command,
             features::analysis_articles::transport::run_analysis_article_command,
             features::analysis_articles::transport::cancel_analysis_article_run,
             features::catalog::transport::get_schema,
@@ -347,20 +319,6 @@ pub fn run() {
             commands::pick_file,
             executor::cancel::cancel_query,
         ])
-        .on_window_event(|window, event| {
-            if window.label() == "main"
-                && matches!(event, tauri::WindowEvent::CloseRequested { .. })
-                && window
-                    .state::<state::AppState>()
-                    .analysis_runner
-                    .background_allowed()
-            {
-                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                    api.prevent_close();
-                    let _ = window.hide();
-                }
-            }
-        })
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app_handle, event| {

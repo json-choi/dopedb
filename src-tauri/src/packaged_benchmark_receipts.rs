@@ -183,7 +183,7 @@ pub(super) async fn packaged_read_receipt(
             50,
             21,
         ),
-        "analysis-article-multi-block" => (
+        "analysis-article-local-results" => (
             "SELECT article_revision, length(ciphertext), length(result_hash) \
              FROM analysis_article_local_results ORDER BY created_at DESC LIMIT 8",
             8,

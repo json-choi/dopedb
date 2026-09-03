@@ -118,10 +118,9 @@ export function checkAnalysisArchitecture(harness) {
     failures.push("Analysis Desktop read adapter must implement AnalysisReadExecutionPort");
   }
 
-  // Shared protocol validation protects only the reviewed cross-runtime safety
-  // and authority invariants. Workspace Cloud remains authoritative for full
-  // Analysis schedule/config policy, so Rust must not grow a second cron/IANA
-  // parser or acquire transport/storage dependencies.
+  // Shared protocol validation owns the compact cross-runtime safety and
+  // authority invariants. It must not regain retired automation configuration
+  // or acquire transport/storage dependencies.
   const analysisValidationPath =
     "dopedb-protocol/src/analysis_article_validation.rs";
   const analysisSqlValidationPath =
@@ -139,25 +138,109 @@ export function checkAnalysisArchitecture(harness) {
     }
   }
   const analysisValidation = read(analysisValidationPath);
-  if (
-    !analysisValidation.includes(
-      "Workspace Cloud remains the authoritative parser",
-    )
-    || !analysisValidation.includes(
-      "duplicate those feature-owned parsers",
-    )
-  ) {
+  if (!analysisValidation.includes("definition.version == 3")) {
     failures.push(
-      `${analysisValidationPath}: validator must retain the Cloud-authoritative policy boundary`,
+      `${analysisValidationPath}: validator must enforce the current compact definition version`,
     );
   }
+  const currentAnalysisContractPaths = [
+    "dopedb-protocol/src/analysis_article.rs",
+    "dopedb-cli/src/agent_mcp_tools.rs",
+    "src/features/analysisArticles/domain.ts",
+    `${analysisRoot}/domain.rs`,
+    "workspace-cloud/lib/workspace-analysis-article-contracts.ts",
+    "workspace-cloud/lib/workspace-analysis-runs.ts",
+  ];
+  const retiredAnalysisFieldPattern =
+    /\b(?:parameterIds|parameter_ids|parameterValues|parameter_values|cacheTtlSeconds|cache_ttl_seconds|backgroundAllowed|background_allowed|fragmentManifest|fragment_manifest|fragments|blockId|block_id|AnalysisArticleState|analysisArticleStates|liveRevision|live_revision|liveRunId|live_run_id)\b/;
+  for (const filePath of currentAnalysisContractPaths) {
+    if (retiredAnalysisFieldPattern.test(read(filePath))) {
+      failures.push(
+        `${filePath}: current Analysis contracts must not regain retired automation, parameter, or result-fragment fields`,
+      );
+    }
+  }
+  const retiredAnalysisRoutes = [
+    "workspace-cloud/app/api/v1/workspaces/[workspaceId]/analyses/leases/route.ts",
+    "workspace-cloud/app/api/v1/workspaces/[workspaceId]/analyses/members/route.ts",
+    "workspace-cloud/app/api/v1/workspaces/[workspaceId]/analyses/migration-failures/route.ts",
+    "workspace-cloud/app/api/v1/workspaces/[workspaceId]/analyses/notifications/route.ts",
+    "workspace-cloud/app/api/v1/workspaces/[workspaceId]/analyses/[articleId]/runs/[runId]/fragments/route.ts",
+    "workspace-cloud/app/api/v1/workspaces/[workspaceId]/analyses/[articleId]/runs/[runId]/results/route.ts",
+    "workspace-cloud/app/api/v1/workspaces/[workspaceId]/analyses/[articleId]/signals/route.ts",
+  ];
+  for (const filePath of retiredAnalysisRoutes) {
+    if (exists(filePath)) {
+      failures.push(`${filePath}: retired Analysis API must not be restored`);
+    }
+  }
+  const retiredDesktopCommands =
+    /\b(?:transition_analysis_article_command|transfer_analysis_article_command|restore_analysis_article_revision_command|list_analysis_runners_command|revoke_analysis_runner_command|list_analysis_collaborators_command|list_analysis_signals_command|create_analysis_signal_command|update_analysis_signal_command|set_analysis_signal_enabled_command|delete_analysis_signal_command|list_analysis_signal_receipts_command|list_analysis_notifications_command|mark_analysis_notifications_read_command|get_analysis_article_result_command|automation_runner_settings|set_automation_runner_background_allowed)\b/;
+  for (const filePath of ["src-tauri/src/lib.rs", "src/features/analysisArticles/tauriAdapter.ts"]) {
+    if (retiredDesktopCommands.test(read(filePath))) {
+      failures.push(`${filePath}: retired Analysis Desktop command must not be registered`);
+    }
+  }
+  const retiredAgentArticleSurface =
+    /\b(?:AnalysisArticleDraftDefinition|AnalysisArticleDraftRunArguments|AnalysisArticleDraftRunCommand|AnalysisArticleUpdateDraftArguments|AnalysisArticleUpdateDraftCommand|AnalysisArticleDraftRun|AnalysisArticleUpdateDraft|analysis_article_draft_run|analysis_article_update_draft)\b|analysis_article\.(?:draft_run|update_draft)/;
+  for (const filePath of [
+    "dopedb-protocol/src/analysis_article.rs",
+    "dopedb-protocol/src/analysis_article_command.rs",
+    "dopedb-protocol/src/request.rs",
+    "dopedb-cli/src/agent_mcp.rs",
+    "dopedb-cli/src/agent_mcp_dispatch.rs",
+    "dopedb-cli/src/agent_mcp_tools.rs",
+    "src-tauri/src/broker/dispatch/analysis_article_operation.rs",
+  ]) {
+    if (retiredAgentArticleSurface.test(read(filePath))) {
+      failures.push(`${filePath}: retired Analysis draft command surface must not return`);
+    }
+  }
+  const hostedAnalysisAdapter = read(`${analysisAdapters}/hosted.rs`);
+  if (!hostedAnalysisAdapter.includes("article.definition.version != 3")) {
+    failures.push(
+      `${analysisAdapters}/hosted.rs: hosted Article responses must enforce the current v3 definition`,
+    );
+  }
+  const analysisArticleStore = read(
+    "workspace-cloud/lib/workspace-analysis-article-store.ts",
+  );
+  for (const required of [
+    "::jsonb, 'live', authority",
+    '"state" = \'live\'',
+    '"live_revision" = article."revision" + 1',
+  ]) {
+    if (!analysisArticleStore.includes(required)) {
+      failures.push(
+        "workspace-cloud/lib/workspace-analysis-article-store.ts: persistence compatibility columns must track the newest saved Article revision",
+      );
+      break;
+    }
+  }
+  const analysisArticleHttp = read(
+    "workspace-cloud/lib/workspace-analysis-article-http.ts",
+  );
+  if (/\bincludeWorking\b|\bliveRevision\b|\bliveRunId\b/.test(analysisArticleHttp)) {
+    failures.push(
+      "workspace-cloud/lib/workspace-analysis-article-http.ts: current Article reads must not branch on the retired lifecycle",
+    );
+  }
+  for (const filePath of [
+    "src/screens/Connections/DatabaseExplorerToolbar.tsx",
+    "src/screens/Connections/KnowledgeProjectTree.tsx",
+    "src/screens/Connections/useDatabaseExplorerKnowledge.ts",
+  ]) {
+    if (/\banalysisStateFilter\b|analysis\.state(?:FilterLabel|Draft|Review|Live|Archived)/.test(read(filePath))) {
+      failures.push(`${filePath}: retired Analysis lifecycle controls must not return`);
+    }
+  }
   if (
-    /\bchrono_tz\b|\bcron(?:_parser)?::|\bCronExpressionParser\b|\bcron-parser\b/.test(
+    /\bchrono_tz\b|\bcron(?:_parser)?::|\bCronExpressionParser\b|\bcron-parser\b|\bparameter_ids\b|\bcache_ttl_seconds\b/.test(
       analysisValidation,
     )
   ) {
     failures.push(
-      `${analysisValidationPath}: Rust must not duplicate Cloud cron or IANA timezone policy`,
+      `${analysisValidationPath}: current validation must not restore retired automation or parameter fields`,
     );
   }
   for (const filePath of [

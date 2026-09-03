@@ -137,7 +137,7 @@ impl Store {
                 .await
                 .map_err(|_| AppError::Config("Analysis result key task stopped".into()))??;
         let plaintext = decrypt(&key, &aad, &nonce, &ciphertext)?;
-        let receipt: AnalysisDefinitionRunReceipt = serde_json::from_slice(&plaintext)?;
+        let receipt = crate::features::analysis_articles::deserialize_local_result(&plaintext)?;
         if receipt.article_id != article_id
             || receipt.article_revision != article_revision
             || receipt.run_id != stored_run_id

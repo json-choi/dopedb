@@ -40,14 +40,15 @@ pub(super) use legacy::{add_sql_document_database_scope, migrate_agent_acp_provi
 /// Version 21 adds the bounded raw-source descriptors captured by resumable ACP
 /// sessions. It is intentionally separate from version 12 so databases that had
 /// already crossed that migration before the field existed are repaired.
-/// Version 22 repairs upgraded databases whose version-18 path created signal
-/// samples but omitted the encrypted Analysis Article local-result cache table.
+/// Version 22 repairs upgraded databases whose version-18 path omitted the
+/// encrypted Analysis Article local-result cache table.
 /// Version 23 enforces one active Project assignment per workspace connection;
 /// legacy duplicate rows remain operable until the user removes them explicitly.
 /// Version 24 persists the immutable multi-Environment Project resource set and
 /// its optional single database write target for resumable ACP sessions. Version
 /// 25 adds the device-local DDL opt-in without widening any existing connection.
-pub(super) const LOCAL_SCHEMA_VERSION: i64 = 25;
+/// Version 26 removes retired Analysis automation samples and background flags.
+pub(super) const LOCAL_SCHEMA_VERSION: i64 = 26;
 
 pub(super) async fn migrate_local_store(pool: &SqlitePool) -> AppResult<bool> {
     let version: i64 = sqlx::query_scalar("PRAGMA user_version")
@@ -158,7 +159,7 @@ pub(super) async fn migrate_local_store(pool: &SqlitePool) -> AppResult<bool> {
         migrated = true;
     }
     if version < 18 {
-        ensure_analysis_signal_runtime_schema(pool).await?;
+        migrate_analysis_runner_identity(pool).await?;
         set_local_schema_version(pool, 18).await?;
         migrated = true;
     }
@@ -203,6 +204,13 @@ pub(super) async fn migrate_local_store(pool: &SqlitePool) -> AppResult<bool> {
         migrated = true;
         if version >= 24 || workspace_binding_ready {
             set_local_schema_version(pool, 25).await?;
+        }
+    }
+    if version < 26 {
+        retire_analysis_automation_storage(pool).await?;
+        migrated = true;
+        if version >= 25 || workspace_binding_ready {
+            set_local_schema_version(pool, 26).await?;
         }
     }
     Ok(migrated)

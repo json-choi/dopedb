@@ -67,7 +67,7 @@ export type PackagedBenchmarkActionName =
   | "history-10k"
   | "audit-100k"
   | "local-history-50"
-  | "analysis-article-multi-block"
+  | "analysis-article-local-results"
   | "erd-drag-1k"
   | "grid-and-pane-resize"
   | "workbench-scroll-continuity";

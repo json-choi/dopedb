@@ -1,5 +1,5 @@
 // Workspace Analysis Article library. Definitions and exact authority pins are
-// shared here; result rows enter only through the separately encrypted run API.
+// shared here; query result rows always remain on Desktop.
 import { env } from "../../../../../../lib/env";
 import {
   boundedJsonBody,
@@ -54,7 +54,6 @@ export async function GET(request: Request, context: RouteContext) {
   const articles = await listAccessibleAnalysisArticles({
     organizationId: workspaceId,
     memberId: authorization.membership.id,
-    includeWorking: hasWorkspaceCapability(authorization.role, "write"),
     projectEnvironmentId: environmentId ?? undefined,
   });
   return privateJson({ workspaceId, articles });
@@ -93,7 +92,7 @@ export async function POST(request: Request, context: RouteContext) {
     });
     if (!created) {
       return jsonError(
-        "Analysis authority changed. Refresh the Environment, connection grants, mappings, Knowledge grant, and runner.",
+        "Analysis authority changed. Refresh the Project and connection grant.",
         409,
       );
     }

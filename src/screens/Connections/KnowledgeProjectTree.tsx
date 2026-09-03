@@ -33,10 +33,7 @@ import {
   preferredProjectEnvironment,
   projectResourceKey,
 } from "../../features/catalogExplorer/projectResources";
-import type {
-  AnalysisArticleRecord,
-  AnalysisArticleState,
-} from "../../features/analysisArticles/domain";
+import type { AnalysisArticleRecord } from "../../features/analysisArticles/domain";
 import { errMessage } from "../../ipc/types";
 import { useI18n } from "../../lib/i18n";
 import type { QueryResultPhase } from "../../lib/queryResultPhase";
@@ -81,7 +78,6 @@ interface KnowledgeProjectTreeProps {
   activeView: KnowledgeEnvironmentView | null;
   activeResourceId: string | null;
   analysisFilter: string;
-  analysisStateFilter: "all" | AnalysisArticleState;
   renderConnection: RenderConnection;
   onToggleProject: () => void;
   onToggleResource: (resourceKey: string) => void;
@@ -102,12 +98,6 @@ function sourceTone(source: KnowledgeSource): StatusTone {
   if (source.health === "ready") return "success";
   if (source.health === "failed") return "danger";
   return "warning";
-}
-
-function analysisTone(article: AnalysisArticleRecord): StatusTone {
-  if (article.state === "live") return "success";
-  if (article.state === "review") return "warning";
-  return "neutral";
 }
 
 function TreeLoadFailure({
@@ -241,7 +231,6 @@ function KnowledgeProjectResources({
   activeView,
   activeResourceId,
   analysisFilter,
-  analysisStateFilter,
   renderConnection,
   onToggleResource,
   onAddEnvironment,
@@ -301,11 +290,8 @@ function KnowledgeProjectResources({
   const visibleProjectAnalyses = analysisFilterApplies
     ? projectAnalyses.filter(
         ({ resource: article }) =>
-          (analysisStateFilter === "all" || article.state === analysisStateFilter) &&
           (!analysisNeedle ||
-            article.definition.title.toLocaleLowerCase().includes(analysisNeedle) ||
-            article.definition.question.toLocaleLowerCase().includes(analysisNeedle) ||
-            article.definition.summary.toLocaleLowerCase().includes(analysisNeedle)),
+            article.definition.title.toLocaleLowerCase().includes(analysisNeedle)),
       )
     : projectAnalyses;
   const activeAnalysisIsVisible = visibleProjectAnalyses.some(
@@ -571,7 +557,7 @@ function KnowledgeProjectResources({
                 onClick={() =>
                   onOpenEnvironment(environment.id, "analyses", article.id)
                 }
-                title={`${environment.name} · ${article.definition.question}`}
+                title={`${environment.name} · ${article.definition.title}`}
                 role="treeitem"
                 aria-level={3}
                 aria-selected={activeResourceId === article.id}
@@ -581,7 +567,6 @@ function KnowledgeProjectResources({
                 data-tree-primary-action
                 tabIndex={-1}
               >
-                <StatusDot tone={analysisTone(article)} />
                 <Icon name="chart" className="tw:shrink-0" />
                 <span className="tw:min-w-0 tw:flex-1 tw:truncate">
                   {article.definition.title}

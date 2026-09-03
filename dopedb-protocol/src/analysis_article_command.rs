@@ -1,13 +1,10 @@
 //! Exact Agent/Broker commands for the Analysis Article domain.
 
-use std::collections::BTreeMap;
-
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use uuid::Uuid;
 
 use crate::{
-    AnalysisArticleDraftDefinition, AnalysisArticleRecord, AnalysisRunReceipt,
+    AnalysisArticleInputDefinition, AnalysisArticleRecord, AnalysisRunReceipt,
     AuthenticationRequirement, CommandName, CommandSpec,
 };
 
@@ -15,25 +12,23 @@ use crate::{
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AnalysisArticleProposeArguments {
     pub connection_id: Uuid,
-    pub definition: AnalysisArticleDraftDefinition,
+    pub definition: AnalysisArticleInputDefinition,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct AnalysisArticleUpdateDraftArguments {
+pub struct AnalysisArticleUpdateArguments {
     pub article_id: Uuid,
     pub expected_revision: i64,
     pub connection_id: Uuid,
-    pub definition: AnalysisArticleDraftDefinition,
+    pub definition: AnalysisArticleInputDefinition,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct AnalysisArticleDraftRunArguments {
+pub struct AnalysisArticleVerifyArguments {
     pub connection_id: Uuid,
-    pub definition: AnalysisArticleDraftDefinition,
-    #[serde(default)]
-    pub parameter_values: BTreeMap<String, Value>,
+    pub definition: AnalysisArticleInputDefinition,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -49,8 +44,8 @@ pub struct AnalysisArticleListResult {
 }
 
 pub struct AnalysisArticleProposeCommand;
-pub struct AnalysisArticleUpdateDraftCommand;
-pub struct AnalysisArticleDraftRunCommand;
+pub struct AnalysisArticleUpdateCommand;
+pub struct AnalysisArticleVerifyCommand;
 pub struct AnalysisArticleListCommand;
 
 macro_rules! analysis_article_command {
@@ -73,16 +68,16 @@ analysis_article_command!(
     CommandName::AnalysisArticlePropose
 );
 analysis_article_command!(
-    AnalysisArticleUpdateDraftCommand,
-    AnalysisArticleUpdateDraftArguments,
+    AnalysisArticleUpdateCommand,
+    AnalysisArticleUpdateArguments,
     AnalysisArticleRecordResult,
-    CommandName::AnalysisArticleUpdateDraft
+    CommandName::AnalysisArticleUpdate
 );
 analysis_article_command!(
-    AnalysisArticleDraftRunCommand,
-    AnalysisArticleDraftRunArguments,
+    AnalysisArticleVerifyCommand,
+    AnalysisArticleVerifyArguments,
     AnalysisRunReceipt,
-    CommandName::AnalysisArticleDraftRun
+    CommandName::AnalysisArticleVerify
 );
 analysis_article_command!(
     AnalysisArticleListCommand,

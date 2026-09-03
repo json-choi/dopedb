@@ -30,7 +30,7 @@ export async function runAuthorityProviderScenarios(
   // Authorization and browser cookies are mutually exclusive authority
   // sources. A syntactically valid but unverifiable Bearer value must not
   // fall through to an otherwise valid browser session, including on the
-  // route that issues the clear runner capability.
+  // runner registration route that issues the clear possession capability.
   const sessionToken = `harness-token-${suffix}`;
   authState.bearer = `Bearer ${sessionToken}`;
   authState.cookie = `better-auth.session_token=harness-cookie-${suffix}`;
@@ -65,10 +65,9 @@ export async function runAuthorityProviderScenarios(
   process.env.BETTER_AUTH_URL = "https://dopedb.invalid";
   try {
     const rejectedWorkspaceId = randomUUID();
-    const [runnerRoute, leaseRoute] = await Promise.all([
-      import("../../app/api/v1/workspaces/[workspaceId]/analyses/runners/route"),
-      import("../../app/api/v1/workspaces/[workspaceId]/analyses/leases/route"),
-    ]);
+    const runnerRoute = await import(
+      "../../app/api/v1/workspaces/[workspaceId]/analyses/runners/route"
+    );
     const rejectedRegistration = await runnerRoute.POST(new Request(
       `https://dopedb.invalid/api/v1/workspaces/${rejectedWorkspaceId}/analyses/runners`,
       {
@@ -82,31 +81,11 @@ export async function runAuthorityProviderScenarios(
         body: JSON.stringify({
           deviceId: randomUUID(),
           displayName: "Cookie fallback attempt",
-          backgroundAllowed: false,
         }),
       },
     ), { params: Promise.resolve({ workspaceId: rejectedWorkspaceId }) });
     expect(rejectedRegistration.status).toBe(401);
     expect(await rejectedRegistration.text()).not.toContain("runnerCapability");
-
-    const rejectedClaim = await leaseRoute.POST(new Request(
-      `https://dopedb.invalid/api/v1/workspaces/${rejectedWorkspaceId}/analyses/leases`,
-      {
-        method: "POST",
-        headers: {
-          authorization: "Bearer invalid-native-session",
-          cookie: authState.cookie,
-          "content-type": "application/json",
-          "x-dopedb-analysis-runner-capability": "a".repeat(64),
-        },
-        body: JSON.stringify({
-          runnerId: randomUUID(),
-          deviceId: randomUUID(),
-          background: false,
-        }),
-      },
-    ), { params: Promise.resolve({ workspaceId: rejectedWorkspaceId }) });
-    expect(rejectedClaim.status).toBe(401);
   } finally {
     if (previousAuthOrigin === undefined) delete process.env.BETTER_AUTH_URL;
     else process.env.BETTER_AUTH_URL = previousAuthOrigin;

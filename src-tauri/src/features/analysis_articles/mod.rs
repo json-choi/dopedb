@@ -1,15 +1,11 @@
 //! Analysis Article vertical slice and adapter composition boundary.
 
 pub(crate) mod adapters;
-mod config;
 mod domain;
 mod facade;
 mod ports;
+mod result_compat;
 mod runner;
-pub(crate) mod runtime;
-mod runtime_ports;
-mod signals;
-mod transforms;
 pub(crate) mod transport;
 mod validation;
 
@@ -18,7 +14,7 @@ use crate::features::knowledge::KnowledgeFeature;
 use crate::store::Store;
 
 pub(crate) use domain::{AnalysisDefinitionRunReceipt, AnalysisDefinitionRunRequest};
-pub(crate) use ports::AnalysisArticleMutation;
+pub(crate) use result_compat::deserialize_local_result;
 #[cfg(test)]
 pub(crate) use runner::assert_runner_safety_contract;
 

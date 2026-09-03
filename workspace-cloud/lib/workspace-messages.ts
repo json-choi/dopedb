@@ -126,7 +126,7 @@ const en = {
       },
       analyses: {
         label: "Analysis",
-        description: "Shared Articles, current results, Signals, publications, and Desktop runner health",
+        description: "Shared HTML Articles, manual run receipts, and immutable publications",
       },
       members: {
         label: "Members",
@@ -933,7 +933,7 @@ const ko: DeepStringShape<typeof en> = {
       },
       analyses: {
         label: "분석",
-        description: "공유 Article, 최신 결과, Signal, 공개본과 Desktop 실행기 상태",
+        description: "공유 HTML Article, 수동 실행 영수증과 변경 불가능한 공개본",
       },
       members: {
         label: "멤버 관리",

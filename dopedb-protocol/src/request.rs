@@ -7,7 +7,7 @@ use serde_json::Value;
 use uuid::Uuid;
 use zeroize::Zeroizing;
 
-/// Version-16 command catalog. Any addition, removal, or meaning change requires a
+/// Version-17 command catalog. Any addition, removal, or meaning change requires a
 /// command-schema version bump and an explicitly negotiated compatibility range.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum CommandName {
@@ -63,10 +63,10 @@ pub enum CommandName {
     QueryCancel,
     #[serde(rename = "analysis_article.propose")]
     AnalysisArticlePropose,
-    #[serde(rename = "analysis_article.update_draft")]
-    AnalysisArticleUpdateDraft,
-    #[serde(rename = "analysis_article.draft_run")]
-    AnalysisArticleDraftRun,
+    #[serde(rename = "analysis_article.update")]
+    AnalysisArticleUpdate,
+    #[serde(rename = "analysis_article.verify")]
+    AnalysisArticleVerify,
     #[serde(rename = "analysis_article.list")]
     AnalysisArticleList,
     #[serde(rename = "sql.propose")]
@@ -133,8 +133,8 @@ impl CommandName {
         Self::QueryRun,
         Self::QueryCancel,
         Self::AnalysisArticlePropose,
-        Self::AnalysisArticleUpdateDraft,
-        Self::AnalysisArticleDraftRun,
+        Self::AnalysisArticleUpdate,
+        Self::AnalysisArticleVerify,
         Self::AnalysisArticleList,
         Self::SqlPropose,
         Self::OperationShow,
@@ -181,8 +181,8 @@ impl CommandName {
             Self::QueryRun => "query.run",
             Self::QueryCancel => "query.cancel",
             Self::AnalysisArticlePropose => "analysis_article.propose",
-            Self::AnalysisArticleUpdateDraft => "analysis_article.update_draft",
-            Self::AnalysisArticleDraftRun => "analysis_article.draft_run",
+            Self::AnalysisArticleUpdate => "analysis_article.update",
+            Self::AnalysisArticleVerify => "analysis_article.verify",
             Self::AnalysisArticleList => "analysis_article.list",
             Self::SqlPropose => "sql.propose",
             Self::OperationShow => "operation.show",

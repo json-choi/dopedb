@@ -314,7 +314,10 @@ pub(crate) async fn run_packaged_benchmark_backend(
             "agent-tools" => action == "agent-skill-reload",
             "long-lived-data" => matches!(
                 action.as_str(),
-                "history-10k" | "audit-100k" | "local-history-50" | "analysis-article-multi-block"
+                "history-10k"
+                    | "audit-100k"
+                    | "local-history-50"
+                    | "analysis-article-local-results"
             ),
             _ => false,
         };
@@ -502,7 +505,7 @@ const ACTION_NAMES: [&str; 37] = [
     "history-10k",
     "audit-100k",
     "local-history-50",
-    "analysis-article-multi-block",
+    "analysis-article-local-results",
     "erd-drag-1k",
     "grid-and-pane-resize",
     "workbench-scroll-continuity",

@@ -147,9 +147,9 @@ where
             if page.refresh_connections {
                 self.sync_connections(account_user_id, workspace_id).await?;
             }
-            // Article definitions and encrypted result fragments have one
-            // authenticated control-plane reader. There is deliberately no second
-            // SQLite projection that could become an alternate authority.
+            // Article definitions and run receipts have one authenticated
+            // control-plane reader. Result rows remain in Desktop's local recovery
+            // cache and never become a second shared authority.
             if page.refresh_analyses {
                 tracing::debug!(
                     %workspace_id,

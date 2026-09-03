@@ -19,42 +19,31 @@ pub(super) async fn remove_retired_bi_schema(pool: &SqlitePool) -> AppResult<()>
     Ok(())
 }
 
-pub(super) async fn ensure_analysis_signal_runtime_schema(pool: &SqlitePool) -> AppResult<()> {
+pub(super) async fn migrate_analysis_runner_identity(pool: &SqlitePool) -> AppResult<()> {
     sqlx::raw_sql(
-        "CREATE TABLE IF NOT EXISTS analysis_signal_metric_samples (
-             workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-             account_user_id TEXT NOT NULL CHECK(account_user_id <> ''),
-             signal_id TEXT NOT NULL,
-             signal_revision INTEGER NOT NULL CHECK(signal_revision > 0),
-             scheduled_at TEXT NOT NULL,
-             evaluated_at TEXT NOT NULL,
-             metric_value REAL,
-             sample_count INTEGER NOT NULL CHECK(sample_count >= 0),
-             observed_state TEXT NOT NULL
-                 CHECK(observed_state IN ('normal', 'firing', 'no_data', 'error', 'stale')),
-             schema_fingerprint TEXT NOT NULL
-                 CHECK(length(schema_fingerprint) = 64
-                   AND schema_fingerprint NOT GLOB '*[^0-9a-f]*'),
-             PRIMARY KEY (
-               workspace_id, account_user_id, signal_id, signal_revision, scheduled_at
-             )
-         );
-         CREATE INDEX IF NOT EXISTS idx_analysis_signal_samples_recent
-           ON analysis_signal_metric_samples(
-             workspace_id, account_user_id, signal_id, signal_revision, evaluated_at DESC
-           );
-         INSERT INTO app_settings (key, value)
+        "INSERT INTO app_settings (key, value)
            SELECT 'analysis_runner_device_id', value
            FROM app_settings
            WHERE key = 'signal_runner_device_id'
            ON CONFLICT(key) DO NOTHING;
-         INSERT INTO app_settings (key, value)
-           SELECT 'analysis_runner_background_allowed', value
-           FROM app_settings
-           WHERE key = 'signal_runner_background_allowed'
-           ON CONFLICT(key) DO NOTHING;
          DELETE FROM app_settings
            WHERE key IN ('signal_runner_device_id', 'signal_runner_background_allowed');",
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+pub(super) async fn retire_analysis_automation_storage(pool: &SqlitePool) -> AppResult<()> {
+    sqlx::raw_sql(
+        "CREATE TABLE IF NOT EXISTS app_settings (
+             key   TEXT PRIMARY KEY,
+             value TEXT NOT NULL
+         );
+         DROP TABLE IF EXISTS analysis_signal_metric_samples;
+         DELETE FROM app_settings
+           WHERE key IN ('analysis_runner_background_allowed',
+                         'signal_runner_background_allowed');",
     )
     .execute(pool)
     .await?;

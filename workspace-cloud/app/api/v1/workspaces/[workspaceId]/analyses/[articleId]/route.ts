@@ -1,6 +1,4 @@
-// One Analysis Article's optimistic lifecycle. A published liveRevision remains
-// visible while editors revise the working projection; a new live revision is
-// accepted only after the exact working revision has a successful Desktop run.
+// One Analysis Article's current optimistic edit and delete boundary.
 import { and, eq } from "drizzle-orm";
 
 import { db } from "../../../../../../../lib/db";
@@ -16,7 +14,6 @@ import {
 import {
   workspaceAnalysisArticle,
   workspaceAnalysisArticleRevision,
-  workspaceAnalysisArticleRun,
 } from "../../../../../../../lib/schema";
 import { authorizeWorkspace } from "../../../../../../../lib/workspace-authorization";
 import { accessibleAnalysisArticle } from "../../../../../../../lib/workspace-analysis-article-http";
@@ -31,7 +28,6 @@ import {
   parseSharedAnalysisArticleCreate,
   publicAnalysisArticle,
   type AnalysisArticleVersionPayload,
-  type AnalysisArticleState,
   type SharedAnalysisArticleCreate,
 } from "../../../../../../../lib/workspace-analysis-articles";
 import { hasWorkspaceCapability } from "../../../../../../../lib/workspace-permissions";
@@ -50,26 +46,6 @@ function authority(authorization: {
     membershipId: authorization.membership.id,
     role: authorization.role,
   };
-}
-
-function articleInput(article: {
-  id: string;
-  projectEnvironmentId: string;
-  environmentRevision: number;
-  sourceKnowledgeGrantId: string | null;
-  graphRevisionIds: readonly string[];
-  connections: readonly unknown[];
-  definition: unknown;
-}) {
-  return parseSharedAnalysisArticleCreate({
-    id: article.id,
-    projectEnvironmentId: article.projectEnvironmentId,
-    environmentRevision: article.environmentRevision,
-    sourceKnowledgeGrantId: article.sourceKnowledgeGrantId,
-    graphRevisionIds: article.graphRevisionIds,
-    connections: article.connections,
-    definition: article.definition,
-  });
 }
 
 async function expectedRevision(request: Request) {
@@ -95,7 +71,6 @@ export async function GET(request: Request, context: RouteContext) {
     organizationId: workspaceId,
     articleId,
     memberId: authorization.membership.id,
-    includeWorking: hasWorkspaceCapability(authorization.role, "write"),
   });
   if (!article) return jsonError("Analysis Article not found", 404);
   return privateJson({ article });
@@ -118,7 +93,6 @@ export async function PATCH(request: Request, context: RouteContext) {
     organizationId: workspaceId,
     articleId,
     memberId: authorization.membership.id,
-    includeWorking: true,
   });
   if (!current) return jsonError("Analysis Article not found", 404);
   if (match.value !== current.revision) {
@@ -133,103 +107,30 @@ export async function PATCH(request: Request, context: RouteContext) {
     return jsonError("Invalid Analysis Article action", 400);
   }
 
-  let nextArticle: SharedAnalysisArticleCreate = articleInput(current);
-  let nextState = current.state as AnalysisArticleState;
-  let ownerMemberId = current.ownerMemberId;
-  let operation: AnalysisArticleMutationOperation;
-
-  if (body.action === "update" && Object.keys(body).length === 2) {
-    try {
-      nextArticle = parseSharedAnalysisArticleCreate(body.article);
-    } catch (error) {
-      return jsonError(error instanceof Error ? error.message : "Invalid Analysis Article", 400);
-    }
-    if (nextArticle.id !== articleId) return jsonError("Analysis Article identity cannot change", 409);
-    nextState = "draft";
-    operation = nextArticle.definition.source === "human" ? "update" : "propose";
-  } else if (body.action === "submitReview" && Object.keys(body).length === 1) {
-    if (current.state !== "draft") return jsonError("Only a draft can enter review", 409);
-    nextState = "review";
-    operation = "submit_review";
-  } else if (body.action === "returnDraft" && Object.keys(body).length === 1) {
-    if (current.state !== "review") return jsonError("Only a review can return to draft", 409);
-    nextState = "draft";
-    operation = "return_draft";
-  } else if (body.action === "publishLive" && Object.keys(body).length === 1) {
-    if (current.state !== "review") return jsonError("Approve the review before publishing live", 409);
-    if (!current.latestSuccessfulRunId) {
-      return jsonError("Run this exact review successfully before publishing it live", 409);
-    }
-    const successfulRun = await db.query.workspaceAnalysisArticleRun.findFirst({
-      where: and(
-        eq(workspaceAnalysisArticleRun.organizationId, workspaceId),
-        eq(workspaceAnalysisArticleRun.articleId, articleId),
-        eq(workspaceAnalysisArticleRun.id, current.latestSuccessfulRunId),
-        eq(workspaceAnalysisArticleRun.articleRevision, current.revision),
-        eq(workspaceAnalysisArticleRun.state, "succeeded"),
-      ),
-      columns: { id: true },
-    });
-    if (!successfulRun) {
-      return jsonError("Run this exact review successfully before publishing it live", 409);
-    }
-    nextState = "live";
-    operation = "publish_live";
-  } else if (body.action === "archive" && Object.keys(body).length === 1) {
-    nextState = "archived";
-    operation = "archive";
-  } else if (
-    body.action === "transfer"
-    && Object.keys(body).length === 2
-    && typeof body.ownerMemberId === "string"
-    && isUuid(body.ownerMemberId)
-  ) {
-    ownerMemberId = body.ownerMemberId;
-    operation = "transfer";
-  } else if (
-    body.action === "restore"
-    && Object.keys(body).length === 2
-    && typeof body.revision === "number"
-    && Number.isSafeInteger(body.revision)
-    && body.revision >= 1
-  ) {
-    const historical = await db.query.workspaceAnalysisArticleRevision.findFirst({
-      where: and(
-        eq(workspaceAnalysisArticleRevision.organizationId, workspaceId),
-        eq(workspaceAnalysisArticleRevision.articleId, articleId),
-        eq(workspaceAnalysisArticleRevision.revision, body.revision),
-      ),
-      columns: { payload: true },
-    });
-    if (!historical) return jsonError("Analysis Article revision not found", 404);
-    try {
-      const payload = parseAnalysisArticleVersionPayload(historical.payload);
-      if (payload.deleted || payload.id !== articleId) {
-        return jsonError("Analysis Article revision cannot be restored", 409);
-      }
-      nextArticle = payload;
-      ownerMemberId = payload.ownerMemberId;
-      nextState = "draft";
-    } catch {
-      return jsonError("Analysis Article revision is invalid", 409);
-    }
-    operation = "restore";
-  } else {
+  if (body.action !== "update" || Object.keys(body).length !== 2) {
     return jsonError("Invalid Analysis Article action", 400);
   }
+  let nextArticle: SharedAnalysisArticleCreate;
+  try {
+    nextArticle = parseSharedAnalysisArticleCreate(body.article);
+  } catch (error) {
+    return jsonError(error instanceof Error ? error.message : "Invalid Analysis Article", 400);
+  }
+  if (nextArticle.id !== articleId) return jsonError("Analysis Article identity cannot change", 409);
+  const operation: AnalysisArticleMutationOperation = nextArticle.definition.source === "human"
+    ? "update" : "propose";
 
   const updated = await commitAnalysisArticleMutation({
     organizationId: workspaceId,
     article: nextArticle,
     expectedRevision: current.revision,
-    state: nextState,
-    ownerMemberId,
+    ownerMemberId: current.ownerMemberId,
     authority: authority(authorization),
     operation,
   });
   if (!updated) {
     return jsonError(
-      "Analysis authority changed. Refresh the Environment, connection grants, mappings, Knowledge grant, and runner.",
+      "Analysis authority changed. Refresh the Project and connection grant.",
       409,
     );
   }

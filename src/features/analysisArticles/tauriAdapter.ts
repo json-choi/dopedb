@@ -5,7 +5,6 @@ import type {
   AnalysisArticleRecord,
   AnalysisArticleChanged,
   AnalysisArticleRevision,
-  AnalysisParameterValue,
   AnalysisPublication,
   AnalysisPublicationRequest,
   AnalysisRun,
@@ -31,18 +30,6 @@ export function updateAnalysisArticle(
     articleId,
     expectedRevision,
     article,
-  });
-}
-
-export function restoreAnalysisArticleRevision(
-  articleId: string,
-  expectedRevision: number,
-  revision: number,
-): Promise<AnalysisArticleRecord> {
-  return invoke("restore_analysis_article_revision_command", {
-    articleId,
-    expectedRevision,
-    revision,
   });
 }
 
@@ -83,13 +70,11 @@ export function runAnalysisArticle(
   articleId: string,
   articleRevision: number,
   runId: string,
-  parameterValues: Record<string, AnalysisParameterValue>,
 ): Promise<AnalysisRunCommandResult> {
   return invoke("run_analysis_article_command", {
     articleId,
     articleRevision,
     runId,
-    parameterValues,
   });
 }
 

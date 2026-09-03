@@ -7,17 +7,10 @@ import { useAnalysisManagement } from "../../features/analysisManagement/useAnal
 export function AnalysisManagementPanel({
   workspaceId,
   initialArticleId,
-  canEdit,
 }: {
   workspaceId: string;
   initialArticleId: string | null;
-  canEdit: boolean;
 }) {
-  const controller = useAnalysisManagement({ workspaceId, initialArticleId, canEdit });
-  return (
-    <AnalysisManagementView
-      controller={controller}
-      canEdit={canEdit}
-    />
-  );
+  const controller = useAnalysisManagement({ workspaceId, initialArticleId });
+  return <AnalysisManagementView controller={controller} />;
 }

@@ -11,8 +11,8 @@ export function bytes(value: number) {
 }
 
 function stateTone(state: string) {
-  if (["live", "succeeded", "normal", "recovered", "online"].includes(state)) return "success";
-  if (["failed", "cancelled", "stale", "firing", "critical", "offline"].includes(state)) return "danger";
+  if (state === "succeeded") return "success";
+  if (["failed", "cancelled", "stale", "revoked"].includes(state)) return "danger";
   return "neutral";
 }
 

@@ -142,18 +142,6 @@
       }
     },
     {
-      "eventId": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
-      "name": "analysis_article_state_transitioned",
-      "occurredAt": "2026-08-14T00:00:00Z",
-      "actorKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      "workspaceKey": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-      "workspaceKind": "team",
-      "properties": {
-        "fromState": "draft",
-        "toState": "review"
-      }
-    },
-    {
       "eventId": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
       "name": "workspace_membership_ready",
       "occurredAt": "2026-08-14T00:00:00Z",

@@ -95,10 +95,6 @@ export type ProductEventPropertiesByName = {
     trigger: "manual";
     durationBucket: ProductAnalyticsDurationBucket;
   };
-  analysis_article_state_transitioned: {
-    fromState: "draft" | "review" | "live" | "archived";
-    toState: "draft" | "review" | "live" | "archived";
-  };
   workspace_membership_ready: {
     role: "viewer" | "analyst" | "editor" | "admin" | "owner";
   };
@@ -230,7 +226,6 @@ const EVENT_NAMES = new Set<ProductEventName>([
   "agent_turn_completed",
   "analysis_article_proposal_completed",
   "analysis_article_run_completed",
-  "analysis_article_state_transitioned",
   "workspace_membership_ready",
   "shared_connection_access_ready",
 ]);
@@ -380,11 +375,6 @@ function validProperties(name: ProductEventName, value: unknown): boolean {
         enumField(value.outcome, ["success", "failed", "cancelled", "stale"]) &&
         value.trigger === "manual" &&
         oneOf(value.durationBucket, DURATIONS);
-    case "analysis_article_state_transitioned":
-      return fields(value, ["fromState", "toState"]) &&
-        enumField(value.fromState, ["draft", "review", "live", "archived"]) &&
-        enumField(value.toState, ["draft", "review", "live", "archived"]) &&
-        value.fromState !== value.toState;
     case "workspace_membership_ready":
       return fields(value, ["role"]) && enumField(
         value.role,

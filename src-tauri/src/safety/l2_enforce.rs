@@ -15,7 +15,6 @@
 
 use std::time::{Duration, Instant};
 
-use chrono::{DateTime, NaiveDate, Utc};
 use sqlx::{AssertSqlSafe, Executor, SqlSafeStr};
 use tokio::time::timeout;
 
@@ -27,34 +26,6 @@ use crate::executor::read::{
 use crate::model::{Engine, QueryResult};
 
 use super::{PoolRef, STATEMENT_TIMEOUT_MS};
-
-/// A scalar Analysis Article parameter after contract validation. Keeping the
-/// declared type for `NULL` values lets every driver encode a real typed bind
-/// instead of falling back to SQL text interpolation.
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) enum ReadOnlyBindValue {
-    Boolean(Option<bool>),
-    Number(Option<f64>),
-    Text(Option<String>),
-    Date(Option<NaiveDate>),
-    DateTime(Option<DateTime<Utc>>),
-}
-
-macro_rules! bind_read_only_values {
-    ($query:expr, $values:expr) => {{
-        let mut query = $query;
-        for value in $values {
-            query = match value {
-                ReadOnlyBindValue::Boolean(value) => query.bind(*value),
-                ReadOnlyBindValue::Number(value) => query.bind(*value),
-                ReadOnlyBindValue::Text(value) => query.bind(value.clone()),
-                ReadOnlyBindValue::Date(value) => query.bind(*value),
-                ReadOnlyBindValue::DateTime(value) => query.bind(*value),
-            };
-        }
-        query
-    }};
-}
 
 /// Run `sql` under a DB-enforced read-only session and materialize the rows.
 /// Rows are STREAMED (fetch stops one past `max_rows` → bounded memory, `truncated`
@@ -89,22 +60,14 @@ pub(crate) async fn run_read_only_cancellable(
 /// transaction while stopping row decoding at both the definition's row cap and
 /// byte cap. The byte cap is enforced during streaming, not after materializing a
 /// potentially unbounded cell value collection.
-pub(crate) async fn run_read_only_byte_capped_parameterized_cancellable(
+pub(crate) async fn run_read_only_byte_capped_cancellable(
     pool: PoolRef<'_>,
     sql: &str,
-    parameters: &[ReadOnlyBindValue],
     max_rows: u64,
     max_bytes: usize,
     cancellation: Option<&CancelHandle>,
 ) -> AppResult<QueryResult> {
     if let PoolRef::Bigquery(connection) = pool {
-        if !parameters.is_empty() {
-            return Err(AppError::Blocked {
-                reason:
-                    "parameterized Analysis Article execution is not available for BigQuery yet"
-                        .into(),
-            });
-        }
         return connection
             .query_byte_capped(sql, max_rows, max_bytes, cancellation)
             .await;
@@ -112,7 +75,7 @@ pub(crate) async fn run_read_only_byte_capped_parameterized_cancellable(
     cancel::guard_registered(
         cancellation,
         cancel::QUERY_TIMEOUT,
-        run_read_only_byte_capped_inner(pool, sql, parameters, max_rows, max_bytes),
+        run_read_only_byte_capped_inner(pool, sql, max_rows, max_bytes),
     )
     .await
 }
@@ -120,7 +83,6 @@ pub(crate) async fn run_read_only_byte_capped_parameterized_cancellable(
 async fn run_read_only_byte_capped_inner(
     pool: PoolRef<'_>,
     sql: &str,
-    parameters: &[ReadOnlyBindValue],
     max_rows: u64,
     max_bytes: usize,
 ) -> AppResult<QueryResult> {
@@ -140,10 +102,7 @@ async fn run_read_only_byte_capped_inner(
                 )))
                 .execute(&mut *connection)
                 .await;
-                let query = bind_read_only_values!(
-                    sqlx::query::<sqlx::Postgres>(AssertSqlSafe(sql)),
-                    parameters
-                );
+                let query = sqlx::query::<sqlx::Postgres>(AssertSqlSafe(sql));
                 guarded_app(stream_byte_capped(
                     query.fetch(&mut *connection),
                     max,
@@ -179,10 +138,7 @@ async fn run_read_only_byte_capped_inner(
                 sqlx::query("START TRANSACTION READ ONLY")
                     .execute(&mut *connection)
                     .await?;
-                let query = bind_read_only_values!(
-                    sqlx::query::<sqlx::MySql>(AssertSqlSafe(sql)),
-                    parameters
-                );
+                let query = sqlx::query::<sqlx::MySql>(AssertSqlSafe(sql));
                 guarded_app(stream_byte_capped(
                     query.fetch(&mut *connection),
                     max,
@@ -213,10 +169,7 @@ async fn run_read_only_byte_capped_inner(
                 sqlx::query("PRAGMA query_only = ON")
                     .execute(&mut *connection)
                     .await?;
-                let query = bind_read_only_values!(
-                    sqlx::query::<sqlx::Sqlite>(AssertSqlSafe(sql)),
-                    parameters
-                );
+                let query = sqlx::query::<sqlx::Sqlite>(AssertSqlSafe(sql));
                 guarded_app(stream_byte_capped(
                     query.fetch(&mut *connection),
                     max,
@@ -496,35 +449,17 @@ mod tests {
         assert!(r.truncated);
         assert_eq!(r.columns, vec!["id".to_string(), "name".to_string()]);
 
-        let payload = r#"\' OR 1=1 -- "#.to_owned();
-        let bound = run_read_only_byte_capped_parameterized_cancellable(
+        let byte_capped = run_read_only_byte_capped_cancellable(
             PoolRef::Sqlite(&pool),
-            "SELECT id FROM t WHERE name = ?",
-            &[ReadOnlyBindValue::Text(Some(payload))],
-            100,
+            "SELECT id, name FROM t ORDER BY id",
+            2,
             64 * 1024,
             None,
         )
         .await
         .unwrap();
-        assert_eq!(bound.row_count, 0);
-
-        let ordered = run_read_only_byte_capped_parameterized_cancellable(
-            PoolRef::Sqlite(&pool),
-            "SELECT id FROM t WHERE name = ? OR id = ? ORDER BY id",
-            &[
-                ReadOnlyBindValue::Text(Some("n2".into())),
-                ReadOnlyBindValue::Number(Some(5.0)),
-            ],
-            100,
-            64 * 1024,
-            None,
-        )
-        .await
-        .unwrap();
-        assert_eq!(ordered.row_count, 2);
-        assert_eq!(ordered.rows[0][0], serde_json::json!(2));
-        assert_eq!(ordered.rows[1][0], serde_json::json!(5));
+        assert_eq!(byte_capped.row_count, 2);
+        assert!(byte_capped.truncated);
 
         let classification = crate::model::Classification {
             kind: crate::model::QueryKind::Read,

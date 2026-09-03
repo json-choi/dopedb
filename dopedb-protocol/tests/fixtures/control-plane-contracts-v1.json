@@ -89,64 +89,28 @@
       }
     ],
     "definition": {
-      "version": 2,
+      "version": 3,
       "source": "human",
       "title": "Active accounts",
       "html": "<p>A bounded aggregate tied to one exact connection revision.</p>",
-      "question": "",
-      "summary": "",
-      "timezone": "UTC",
-      "parameters": [],
-      "queries": [
-        {
-          "id": "active_accounts",
-          "title": "Active accounts",
-          "connectionRole": "primary",
-          "sql": "SELECT count(*) AS active_accounts FROM accounts WHERE active = TRUE",
-          "parameterIds": [],
-          "maxRows": 5,
-          "maxBytes": 16384,
-          "cacheTtlSeconds": 0,
-          "columns": [
-            {
-              "name": "active_accounts",
-              "type": "number",
-              "nullable": false,
-              "role": "measure",
-              "sensitivity": "internal",
-              "masking": "none"
-            }
-          ]
-        }
-      ],
-      "transforms": [],
-      "metrics": [],
-      "blocks": [
-        {
-          "id": "query_result",
-          "kind": "table",
-          "title": "Query result",
-          "sourceNodeId": "active_accounts",
-          "width": 12,
-          "config": {
-            "columns": [
-              "active_accounts"
-            ],
-            "pageSize": 10
+      "query": {
+        "id": "active_accounts",
+        "title": "Active accounts",
+        "connectionRole": "primary",
+        "sql": "SELECT count(*) AS active_accounts FROM accounts WHERE active = TRUE",
+        "maxRows": 5,
+        "maxBytes": 16384,
+        "columns": [
+          {
+            "name": "active_accounts",
+            "type": "number",
+            "nullable": false,
+            "role": "measure",
+            "sensitivity": "internal",
+            "masking": "none"
           }
-        }
-      ],
-      "claims": [],
-      "refresh": {
-        "mode": "manual",
-        "cron": null,
-        "timezone": "UTC",
-        "runnerId": null,
-        "maxStalenessSeconds": 86400,
-        "resultRetentionDays": 30,
-        "shareReviewedResults": false
-      },
-      "warnings": []
+        ]
+      }
     }
   },
   "analysisArticleAcceptances": [
@@ -154,7 +118,7 @@
       "name": "Analysis Article SQL accepts an underscore-prefixed dollar quote tag",
       "mutations": [
         {
-          "path": ["definition", "queries", 0, "sql"],
+          "path": ["definition", "query", "sql"],
           "value": "SELECT $_tag$delete$_tag$ AS active_accounts"
         }
       ]
@@ -370,28 +334,28 @@
       "name": "Analysis Article enforces query row bounds",
       "contract": "analysisArticleCreate",
       "mutations": [
-        { "path": ["definition", "queries", 0, "maxRows"], "value": 50001 }
+        { "path": ["definition", "query", "maxRows"], "value": 50001 }
       ]
     },
     {
       "name": "Analysis Article binds queries to declared connection roles",
       "contract": "analysisArticleCreate",
       "mutations": [
-        { "path": ["definition", "queries", 0, "connectionRole"], "value": "missing" }
+        { "path": ["definition", "query", "connectionRole"], "value": "missing" }
       ]
     },
     {
-      "name": "Analysis Article requires its single query result block identity",
+      "name": "Analysis Article rejects the retired parameter-id field",
       "contract": "analysisArticleCreate",
       "mutations": [
-        { "path": ["definition", "blocks", 0, "id"], "value": "other_result" }
+        { "path": ["definition", "query", "parameterIds"], "value": [] }
       ]
     },
     {
-      "name": "Analysis Article rejects presentation blocks in the saved query contract",
+      "name": "Analysis Article rejects the retired cache-policy field",
       "contract": "analysisArticleCreate",
       "mutations": [
-        { "path": ["definition", "blocks", 0, "kind"], "value": "metric" }
+        { "path": ["definition", "query", "cacheTtlSeconds"], "value": 0 }
       ]
     }
   ]

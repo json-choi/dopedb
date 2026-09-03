@@ -112,11 +112,12 @@
   --ds-shadow-popover: 0 24px 70px color-mix(in srgb, var(--ds-text) 18%, transparent);
   --ds-disabled-opacity: .55;
   --font-workspace-sans:
-    var(--font-workspace-body-loaded), "Apple SD Gothic Neo", "Noto Sans KR",
-    ui-sans-serif, system-ui, sans-serif;
+    "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
+    system-ui, Roboto, "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo",
+    "Noto Sans KR", "Malgun Gothic", sans-serif;
   --font-workspace-display:
-    Newsreader, "Iowan Old Style", "Palatino Linotype", "Apple SD Gothic Neo",
-    "Noto Serif KR", ui-serif, Georgia, serif;
+    "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
+    system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   --font-workspace-mono:
     var(--font-workspace-mono-loaded), "SFMono-Regular", Consolas, monospace;
 }

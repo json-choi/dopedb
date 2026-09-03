@@ -1954,11 +1954,11 @@ export const knowledgeMappingProposal = workspaceControl.table(
   ],
 );
 
-// Analysis Articles are the single BI domain. They replace the previous
-// Dashboard, Funnel Analysis, and Report projections. Definitions and immutable
-// authority pins are shared; database traffic remains Desktop-only. Bounded team
-// result fragments are encrypted with the workspace data key, while public
-// publications contain only an explicitly approved fixed snapshot.
+// Analysis Articles share sanitized HTML, one exact query, immutable authority
+// pins, run metadata, and receipts. Database traffic and result rows remain on
+// Desktop. Public publications contain only an explicitly approved HTML snapshot.
+// Columns and tables marked historical below stay represented until an explicit
+// retention migration can remove deployed data without silently destroying it.
 export const workspaceAnalysisRunner = workspaceControl.table(
   "workspace_analysis_runner",
   {
@@ -2033,6 +2033,8 @@ export const workspaceAnalysisArticle = workspaceControl.table(
     revision: bigint("revision", { mode: "number" }).notNull().default(1),
     liveRevision: bigint("live_revision", { mode: "number" }),
     liveRunId: uuid("live_run_id"),
+    // Historical scheduler column. Migration 0057 nulls it and current code
+    // never schedules from it.
     nextRefreshAt: timestamp("next_refresh_at", { withTimezone: true }),
     latestSuccessfulRunId: uuid("latest_successful_run_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -2210,6 +2212,7 @@ export const workspaceAnalysisArticleRevision = workspaceControl.table(
   ],
 );
 
+// Historical scheduler lease rows. No current route or worker issues leases.
 export const workspaceAnalysisRefreshLease = workspaceControl.table(
   "workspace_analysis_refresh_lease",
   {
@@ -2451,6 +2454,7 @@ export const workspaceAnalysisArticleQueryReceipt = workspaceControl.table(
   ],
 );
 
+// Historical hosted result rows. Current result rows are local to Desktop.
 export const workspaceAnalysisResultFragment = workspaceControl.table(
   "workspace_analysis_result_fragment",
   {
@@ -2594,6 +2598,7 @@ export const workspaceAnalysisPublication = workspaceControl.table(
   ],
 );
 
+// Historical automation records retained only for audit-safe migration.
 export const workspaceAnalysisSignal = workspaceControl.table(
   "workspace_analysis_signal",
   {

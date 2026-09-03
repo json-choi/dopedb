@@ -183,7 +183,6 @@ operation finishes; it is not an event for every intermediate UI click.
 | `agent_turn_completed` | One ACP user turn reaches a terminal result | `outcome`: `success`, `failed`, `cancelled`; `provider`: `claude`, `codex`; `durationBucket`: shared duration enum | Workspace context |
 | `analysis_article_proposal_completed` | Reserved in the v1 wire contract; no current producer exists until an authoritative proposal receipt carries its exact workspace/account scope | No properties | Workspace context |
 | `analysis_article_run_completed` | A manually started exact-source article run reaches an observed terminal result | `outcome`: `success`, `failed`, `cancelled`, `stale`; `trigger`: `manual`; `durationBucket`: shared duration enum | Workspace context |
-| `analysis_article_state_transitioned` | A durable lifecycle transaction changes an article to a different state | `fromState`, `toState`: `draft`, `review`, `live`, `archived`; values must differ | Workspace context |
 | `workspace_membership_ready` | Once per app session when the selected team workspace membership and its current role are visible in the local auth projection; this is not a membership-join receipt | `role`: `viewer`, `analyst`, `editor`, `admin`, `owner` | Team workspace context |
 | `shared_connection_access_ready` | The first successful team SQL workbench query observed per workspace, engine, and access mode in an app session; this is a verified-access proxy, not a local-binding or managed-lease issuance receipt | `accessMode`: `local`, `managed`; `engine`: `postgres`, `mysql`, `sqlite`, `mongodb` | Team workspace context |
 
@@ -222,8 +221,7 @@ The canonical aggregate funnels are:
    `knowledge_environment_created` -> `environment_connection_bound` ->
    successful `knowledge_source_sync_completed` when a source is used -> successful
    `agent_session_initialization_completed` -> successful `agent_turn_completed`
-   -> successful `analysis_article_run_completed` -> transition to `review` or
-   `live`.
+   -> successful manual `analysis_article_run_completed`.
    A source sync is optional when the Agent uses schema context without a
    Knowledge source.
 4. **Team sharing:** team `workspace_scope_ready` ->
@@ -262,9 +260,8 @@ The v1 vocabulary is intentionally narrower than future producer coverage:
 - Knowledge events cover initial source connection and manual sync only. Webhook
   and scheduled sync have no v1 producer. The reserved proposal event has no
   current producer because the global article-change notification lacks an
-  authoritative workspace/account scope. Analysis Article runs cover manual runs
-  only; proposal validation failures, scheduled runs, and Agent-test runs have no
-  v1 producer.
+  authoritative workspace/account scope. Analysis Article runs are manual-only;
+  proposal validation failures and Agent-test runs have no v1 producer.
 - `workspace_membership_ready` is a once-per-session observation, so it cannot
   measure invitation acceptance or exact join time.
 - `shared_connection_access_ready` is deduplicated once per session for the same
@@ -442,7 +439,7 @@ Every release that changes analytics must verify:
   disclosed;
 - a renderer batch is accepted only by the exact currently granted native consent
   generation, and that native-only field is absent from the Cloud envelope;
-- each of the 15 events accepts only its exact properties and identity shape;
+- each of the 14 events accepts only its exact properties and identity shape;
 - unknown events/properties, raw UUID identity keys, forbidden fields, stale
   timestamps, duplicate event IDs, oversized bodies/batches, and invalid enums are
   rejected at Desktop and server boundaries;

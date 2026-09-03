@@ -134,8 +134,6 @@ export function DatabaseExplorer({
     retrySources,
     analysisFilter,
     setAnalysisFilter,
-    analysisStateFilter,
-    setAnalysisStateFilter,
     expandedProjectIds,
     setExpandedProjectIds,
     expandedResourceKeys,
@@ -577,7 +575,6 @@ export function DatabaseExplorer({
         activeEnvironmentId={activeProjectEnvironmentId}
         activeEnvironmentView={activeProjectEnvironmentView}
         analysisFilter={analysisFilter}
-        analysisStateFilter={analysisStateFilter}
         selectedTableKey={selectedTableKey}
         showRowCounts={showRowCounts}
         hasExpandedItems={
@@ -612,7 +609,6 @@ export function DatabaseExplorer({
           commands.patch({ showRowCounts: !showRowCounts })
         }
         onAnalysisFilterChange={setAnalysisFilter}
-        onAnalysisStateFilterChange={setAnalysisStateFilter}
         onClose={onClose}
       />
 
@@ -688,7 +684,6 @@ export function DatabaseExplorer({
               activeView={activeProjectEnvironmentView}
               activeResourceId={activeProjectEnvironmentResourceId}
               analysisFilter={analysisFilter}
-              analysisStateFilter={analysisStateFilter}
               renderConnection={renderConnection}
               onToggleProject={() =>
                 setExpandedProjectIds((current) =>

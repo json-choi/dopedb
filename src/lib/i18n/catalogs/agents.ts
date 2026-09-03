@@ -229,7 +229,7 @@ export const agentsCatalog = defineCatalog(
     "agent.acpToolDetails": "Tool input and result",
     "agent.acpToolOutput": "Tool output",
     "agent.acpToolRequest": "Tool request",
-    "agent.acpReviewArticleDraft": "Review Analysis Article draft",
+    "agent.acpOpenAnalysisArticle": "Open Analysis Article",
     "agent.acpSqlApprovalTitle": "Review database change",
     "agent.acpSqlApprovalBody":
       "This SQL is reloaded from DopeDB's immutable local proposal. The Agent cannot approve or execute it.",
@@ -650,7 +650,7 @@ export const agentsCatalog = defineCatalog(
     "agent.acpToolDetails": "도구 입력 및 결과",
     "agent.acpToolOutput": "도구 출력",
     "agent.acpToolRequest": "도구 요청",
-    "agent.acpReviewArticleDraft": "Analysis Article 초안 검토",
+    "agent.acpOpenAnalysisArticle": "Analysis Article 열기",
     "agent.acpSqlApprovalTitle": "데이터 변경 검토",
     "agent.acpSqlApprovalBody":
       "DopeDB의 변경 불가능한 로컬 제안에서 다시 불러온 SQL입니다. Agent는 이를 승인하거나 실행할 수 없습니다.",

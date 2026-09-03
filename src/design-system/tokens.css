@@ -11,8 +11,9 @@
 
   /* Typography */
   --ds-font-sans:
-    "SUIT Variable", "SUIT", -apple-system, BlinkMacSystemFont, "Segoe UI",
-    sans-serif;
+    "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
+    system-ui, Roboto, "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo",
+    "Noto Sans KR", "Malgun Gothic", sans-serif;
   --ds-font-mono:
     "SF Mono", SFMono-Regular, ui-monospace, "Cascadia Code", Menlo, Consolas,
     "Liberation Mono", monospace;

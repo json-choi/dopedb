@@ -1,8 +1,6 @@
 import sanitizeHtml from "sanitize-html";
 
-import type { AnalysisBlock, AnalysisQueryNode } from "./workspace-analysis-article-contracts";
-
-const UNSAFE_DISPLAY = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\u202a-\u202e\u2066-\u2069]/u;
+const UNSAFE_DISPLAY = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\u202a-\u202e\u2066-\u2069\ufeff]/u;
 const ARTICLE_HTML_TAGS = [
   "p", "h2", "h3", "h4", "blockquote", "ul", "ol", "li", "strong", "em",
   "code", "pre", "a", "hr", "br", "table", "thead", "tbody", "tr", "th", "td",
@@ -49,7 +47,7 @@ function paragraphs(value: string) {
 export function legacyArticleHtml(
   question: string,
   summary: string,
-  blocks: readonly AnalysisBlock[],
+  blocks: readonly LegacyNarrativeBlock[],
 ) {
   const parts: string[] = [];
   if (summary.trim()) parts.push(paragraphs(summary));
@@ -68,16 +66,7 @@ export function legacyArticleHtml(
   return sanitizeAnalysisArticleHtml(parts.join(""));
 }
 
-export function queryResultBlock(query: AnalysisQueryNode): AnalysisBlock {
-  return {
-    id: "query_result",
-    kind: "table",
-    title: "Query result",
-    sourceNodeId: query.id,
-    width: 12,
-    config: {
-      columns: query.columns.map((column) => column.name),
-      pageSize: Math.max(10, Math.min(500, query.maxRows)),
-    },
-  };
-}
+export type LegacyNarrativeBlock = Readonly<{
+  kind: string;
+  config: Readonly<Record<string, unknown>>;
+}>;

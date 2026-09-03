@@ -35,7 +35,7 @@ Current scope:
 - Distribution: GitHub Releases and Tauri updater metadata
 
 The shipped workspace core and the remaining grant administration, provider
-lifecycle, sync, recovery, Analysis Article, and Agent-report work are tracked in
+lifecycle, sync, recovery, Analysis Article validation, and Agent-runtime work are tracked in
 the [Workspace Collaboration Roadmap](./WORKSPACE_ROADMAP.md). The app is still
 an alpha; that roadmap, not landing copy, determines what may be described as
 complete.
@@ -78,15 +78,15 @@ Cloud views render those controllers and never become dependencies of feature co
 the shared list/event projection. Cold workbench screens load behind one `React.lazy`
 boundary so they do not inflate the startup entry.
 
-The hosted control plane keeps HTTP routes thin. Versioned Cloud/Desktop payloads are
-defined in `dopedb-protocol`, mirrored by the Cloud contract module, and verified against
-one golden fixture plus its representative shared semantic-rejection mutations. The corpus
-protects named cross-language invariants but is not an exhaustive proof that independent
-parsers are equivalent. Workspace Cloud remains authoritative for full Analysis Article
-parameter, schedule, and transform/block definition semantics; Rust checks only the shared safety
-and authority subset before transport. Provider routes parse and authorize transport input,
-then delegate to provider-owned application workflows; provider persistence and provider
-API adapters stay behind that application boundary.
+The hosted control plane keeps HTTP routes thin. The current compact Analysis Article
+payload is defined in `dopedb-protocol`, mirrored by the Cloud contract module, and
+verified against one golden fixture plus representative semantic-rejection mutations.
+The corpus protects named cross-language invariants but is not an exhaustive proof that
+independent parsers are equivalent. A private, bounded compatibility adapter may read the
+immediately preceding stored definition and completion envelope, but every public response
+uses the current sanitized-HTML-plus-one-query shape. Provider routes parse and authorize
+transport input, then delegate to provider-owned application workflows; provider
+persistence and provider API adapters stay behind that application boundary.
 
 The frontend renders database state and approval decisions. It does not own the safety decision.
 Writes and DDL require an immutable Operation proposal, an exact stored approval, and
@@ -182,7 +182,7 @@ app-only Agent bridge launcher; stdio MCP settings and Agent descendants carry a
 not the bearer, and the Broker revalidates their OS ancestry for every request. The command
 surface and session-scoped bridge cover secret-free connection summaries, canonical
 catalog/schema/table metadata, typed MongoDB reads, SQL read planning/execution,
-declarative Analysis Article drafting, immutable SQL proposals, and operation receipts.
+declarative Analysis Article authoring, immutable SQL proposals, and operation receipts.
 
 The bounded activity projection keeps only command, request/session/connection
 identifiers, state, and a stable error code. It does not retain result rows, SQL text,
@@ -198,11 +198,13 @@ bridge or `dopedb document run` with bounded `find`, `aggregate`,
 or `count` JSON shapes; unknown fields and write stages such as `$out` or `$merge` fail
 closed.
 
-Analysis Article commands accept a closed, versioned declarative definition. Draft runs
-remain pinned to the session's exact Knowledge grant and connection revisions, execute
-through the read-only database path, and return bounded result fragments. Propose and
-update operations preserve the article revision contract; public publication remains an
-immutable approved snapshot rather than an executable query surface.
+Analysis Article commands accept a closed, versioned definition containing sanitized HTML
+and one exact read-only query. A person starts each run in Desktop; the run is pinned to the
+current workspace, Article revision, connection grant, and connection revision. Rows stay
+in the member's bounded encrypted local recovery cache, while the control plane receives
+only run metadata and the query receipt. Update operations preserve the immutable Article
+revision contract; public publication remains an immutable HTML snapshot rather than an
+executable query surface.
 
 Query planning never sends other sessions' SQL text, users, client addresses, or
 parameters to the agent. It returns aggregate connection usage, active/long-running
@@ -272,7 +274,7 @@ The site lives in `site/`.
   [`docs/PRODUCT_POSITIONING.md`](./PRODUCT_POSITIONING.md)
 - Framework: Next.js app router
 - SEO files: `site/app/robots.ts`, `site/app/sitemap.ts`
-- Product preview image: `site/public/dopedb-dashboard.png`
+- Product preview image: `site/public/dopedb-desktop.png`
 - Preview generator: `site/scripts/generate-preview.py`
 
 Local commands:

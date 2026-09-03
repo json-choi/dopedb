@@ -72,9 +72,9 @@ flowchart LR
     D -->|local database traffic| DB
 ```
 
-The workspace service is a control plane, not a hosted database proxy. Ordinary
-queries and results stay on the member's machine. Only a deliberately reviewed,
-bounded, and masked result fragment may be shared into an internal Analysis Article.
+The workspace service is a control plane, not a hosted database proxy. Queries and
+result rows stay on the member's machine. An Analysis Article shares sanitized HTML
+and one exact read-only query; only its immutable HTML publication is public.
 
 ## What ships in the alpha
 

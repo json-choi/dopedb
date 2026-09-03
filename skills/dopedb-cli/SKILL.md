@@ -117,14 +117,15 @@ as you would for SQL results.
 
 Analysis Articles are created only inside a Desktop-launched or Desktop-approved,
 Project-resource-pinned Agent session. The session-scoped DopeDB server supplies typed
-`analysis_article_draft_run`, `analysis_article_propose`,
-`analysis_article_update_draft`, and `analysis_article_list` tools there. Do not
+`analysis_article_verify`, `analysis_article_propose`,
+`analysis_article_update`, and `analysis_article_list` tools there. Do not
 try to reproduce that authority with the public CLI, a saved query-run id, or a
 general MCP server.
 
 Without an approved Agent session, explain that the user must use built-in AI
 Chat or run the Project's `dopedb agent start`. The Agent may verify and propose
-ordinary HTML with one bounded read-only saved query. A person edits the HTML,
+ordinary HTML with one bounded read-only saved query. The Article is shared in the
+workspace immediately after it is saved. A person edits the HTML,
 reruns that query when current data is needed, and publishes an immutable HTML
 copy.
 

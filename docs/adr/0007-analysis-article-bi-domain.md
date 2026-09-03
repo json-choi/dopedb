@@ -61,6 +61,12 @@ or hosted execution. Results remain as bounded local artifacts; the workspace
 service may retain run metadata and audit receipts but is not a result warehouse.
 Failure never erases the last recoverable successful local result.
 
+Saving creates the current shared workspace revision immediately. There is no separate
+draft/review/live workflow in the current product; those values survive only in old
+stored rows and, temporarily, in a bounded HTTP response adapter for supported older
+Desktop builds. They are projected away before entering the current domain DTO and do
+not control visibility or execution.
+
 ## HTML contract
 
 The body is ordinary HTML, not a component graph. It is sanitized against a
@@ -98,7 +104,7 @@ must not remain as hidden enabled product paths.
 ## Agent and human ownership
 
 An exact-grant ACP Agent may propose or update the HTML body and the one read-only
-query, and may perform a bounded draft read. It cannot publish or revoke a public
+query, and may perform a bounded pre-save read. It cannot publish or revoke a public
 page, broaden the connection grant, or run a query from the hosted service.
 
 The screen owns database selection, SQL/result inspection, manual rerun,

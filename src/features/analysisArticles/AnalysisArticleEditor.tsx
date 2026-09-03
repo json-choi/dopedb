@@ -29,39 +29,11 @@ function simpleDefinition(
   query: AnalysisQueryNode,
 ): SharedAnalysisArticleCreate["definition"] {
   return {
-    version: 2,
+    version: 3,
     source: article.definition.source,
     title,
     html,
-    question: "",
-    summary: "",
-    timezone: "UTC",
-    parameters: [],
-    queries: [query],
-    transforms: [],
-    metrics: [],
-    blocks: [{
-      id: "query_result",
-      kind: "table",
-      title: "Query result",
-      sourceNodeId: query.id,
-      width: 12,
-      config: {
-        columns: query.columns.map((column) => column.name),
-        pageSize: Math.max(10, Math.min(500, query.maxRows)),
-      },
-    }],
-    claims: [],
-    refresh: {
-      mode: "manual",
-      cron: null,
-      timezone: "UTC",
-      runnerId: null,
-      maxStalenessSeconds: 86_400,
-      resultRetentionDays: 30,
-      shareReviewedResults: false,
-    },
-    warnings: [],
+    query,
   };
 }
 
@@ -79,7 +51,7 @@ export function AnalysisArticleEditor({
   onClose: () => void;
 }) {
   const { t } = useI18n();
-  const initialQuery = article.definition.queries[0]!;
+  const initialQuery = article.definition.query;
   const [title, setTitle] = useState(article.definition.title);
   const [html, setHtml] = useState(article.definition.html);
   const [sql, setSql] = useState(initialQuery.sql);
@@ -101,8 +73,6 @@ export function AnalysisArticleEditor({
       ...initialQuery,
       connectionRole: binding.role,
       sql: normalizedSql,
-      parameterIds: [],
-      cacheTtlSeconds: 0,
     };
     setError(null);
     onSave({

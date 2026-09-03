@@ -1,4 +1,4 @@
-//! Hosted article, runner, publication, and collaborator operations.
+//! Hosted article and immutable publication operations.
 
 use super::*;
 
@@ -105,33 +105,19 @@ pub(crate) async fn mutate_analysis_article(
     workspace_id: Uuid,
     article_id: Uuid,
     expected_revision: i64,
-    mutation: AnalysisArticleMutation,
+    article: &SharedAnalysisArticleCreate,
 ) -> AppResult<AnalysisArticleRecord> {
     if expected_revision < 1 {
         return Err(AppError::Config(
             "Analysis Article expected revision must be positive".into(),
         ));
     }
-    let body = match mutation {
-        AnalysisArticleMutation::Update(article) => {
-            if article.id != article_id || !article.validate() {
-                return Err(AppError::Config(
-                    "Analysis Article update contract is invalid".into(),
-                ));
-            }
-            json!({ "action": "update", "article": article })
-        }
-        AnalysisArticleMutation::SubmitReview => json!({ "action": "submitReview" }),
-        AnalysisArticleMutation::ReturnDraft => json!({ "action": "returnDraft" }),
-        AnalysisArticleMutation::PublishLive => json!({ "action": "publishLive" }),
-        AnalysisArticleMutation::Archive => json!({ "action": "archive" }),
-        AnalysisArticleMutation::Transfer { owner_member_id } => {
-            json!({ "action": "transfer", "ownerMemberId": owner_member_id })
-        }
-        AnalysisArticleMutation::Restore { revision } => {
-            json!({ "action": "restore", "revision": revision })
-        }
-    };
+    if article.id != article_id || !article.validate() {
+        return Err(AppError::Config(
+            "Analysis Article update contract is invalid".into(),
+        ));
+    }
+    let body = json!({ "action": "update", "article": article });
     let token = token(user_id).await?;
     let raw = client()?
         .patch(format!(
@@ -331,50 +317,4 @@ pub(crate) fn analysis_publication_url(slug: &str) -> AppResult<String> {
         return Err(AppError::Config("invalid Analysis publication slug".into()));
     }
     Ok(format!("{}/analyses/{slug}", origin()?))
-}
-
-pub(crate) async fn list_analysis_collaborators(
-    user_id: &str,
-    workspace_id: Uuid,
-) -> AppResult<AnalysisCollaboratorDirectory> {
-    let token = token(user_id).await?;
-    let raw = client()?
-        .get(format!(
-            "{}/api/v1/workspaces/{workspace_id}/analyses/members",
-            origin()?
-        ))
-        .bearer_auth(token.as_str())
-        .send()
-        .await
-        .map_err(|error| request_error("loading Analysis collaborators", error))?;
-    let body: AnalysisCollaboratorDirectory = response(
-        raw,
-        user_id,
-        "Analysis collaborator directory",
-        MAX_DEFINITION_RESPONSE_BYTES,
-    )
-    .await?;
-    if body.workspace_id != workspace_id
-        || body.members.is_empty()
-        || body.members.len() > 100
-        || !body
-            .members
-            .iter()
-            .any(|member| member.id == body.current_member_id)
-        || body.members.iter().any(|member| {
-            member.name.trim().is_empty()
-                || member.name.chars().count() > 256
-                || !matches!(
-                    member.role.as_str(),
-                    "viewer" | "analyst" | "editor" | "admin" | "owner"
-                )
-                || member.can_own_analysis
-                    != matches!(member.role.as_str(), "editor" | "admin" | "owner")
-        })
-    {
-        return Err(AppError::Network(
-            "Analysis collaborator directory returned invalid membership".into(),
-        ));
-    }
-    Ok(body)
 }

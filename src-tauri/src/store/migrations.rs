@@ -574,7 +574,7 @@ CREATE TABLE IF NOT EXISTS sql_document_revisions (
 CREATE INDEX IF NOT EXISTS idx_sql_document_revisions_recent
     ON sql_document_revisions(document_id, local_revision DESC);
 
--- Local recovery for privacy-minimized Analysis Article block fragments. The
+-- Local recovery for privacy-minimized Analysis Article query results. The
 -- content is authenticated-encrypted with a device key held by the OS credential
 -- store; only authority metadata, nonce, ciphertext, and retention timestamps are
 -- representable here. This table never participates in workspace sync.
@@ -600,31 +600,6 @@ CREATE INDEX IF NOT EXISTS idx_analysis_article_local_result_latest
     );
 CREATE INDEX IF NOT EXISTS idx_analysis_article_local_result_expiry
     ON analysis_article_local_results(expires_at);
-
--- Device-local baseline samples for live Analysis Article signals. Values are
--- deliberately absent from workspace synchronization and hosted receipts.
-CREATE TABLE IF NOT EXISTS analysis_signal_metric_samples (
-    workspace_id      TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-    account_user_id   TEXT NOT NULL CHECK(account_user_id <> ''),
-    signal_id         TEXT NOT NULL,
-    signal_revision   INTEGER NOT NULL CHECK(signal_revision > 0),
-    scheduled_at      TEXT NOT NULL,
-    evaluated_at      TEXT NOT NULL,
-    metric_value      REAL,
-    sample_count      INTEGER NOT NULL CHECK(sample_count >= 0),
-    observed_state    TEXT NOT NULL
-                      CHECK(observed_state IN ('normal', 'firing', 'no_data', 'error', 'stale')),
-    schema_fingerprint TEXT NOT NULL
-                      CHECK(length(schema_fingerprint) = 64
-                        AND schema_fingerprint NOT GLOB '*[^0-9a-f]*'),
-    PRIMARY KEY (
-        workspace_id, account_user_id, signal_id, signal_revision, scheduled_at
-    )
-);
-CREATE INDEX IF NOT EXISTS idx_analysis_signal_samples_recent
-    ON analysis_signal_metric_samples(
-        workspace_id, account_user_id, signal_id, signal_revision, evaluated_at DESC
-    );
 
 -- Hosted pull checkpoints are account-scoped. Two accounts in the same team
 -- workspace can have different grants and must never share a cursor merely because

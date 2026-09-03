@@ -158,10 +158,10 @@ pub(super) async fn call_tool(
                 broker_request::<AnalysisArticleListCommand>(client, &EmptyArguments {}).await?;
             tool_success(&result)
         }
-        TOOL_ANALYSIS_ARTICLE_DRAFT_RUN => {
-            let arguments: AnalysisArticleDraftRunArguments = tool_arguments(params)?;
+        TOOL_ANALYSIS_ARTICLE_VERIFY => {
+            let arguments: AnalysisArticleVerifyArguments = tool_arguments(params)?;
             let result =
-                analysis_article_request::<AnalysisArticleDraftRunCommand>(client, &arguments)
+                analysis_article_request::<AnalysisArticleVerifyCommand>(client, &arguments)
                     .await?;
             tool_success(&result)
         }
@@ -172,10 +172,10 @@ pub(super) async fn call_tool(
                     .await?;
             tool_success(&result)
         }
-        TOOL_ANALYSIS_ARTICLE_UPDATE_DRAFT => {
-            let arguments: AnalysisArticleUpdateDraftArguments = tool_arguments(params)?;
+        TOOL_ANALYSIS_ARTICLE_UPDATE => {
+            let arguments: AnalysisArticleUpdateArguments = tool_arguments(params)?;
             let result =
-                analysis_article_request::<AnalysisArticleUpdateDraftCommand>(client, &arguments)
+                analysis_article_request::<AnalysisArticleUpdateCommand>(client, &arguments)
                     .await?;
             tool_success(&result)
         }

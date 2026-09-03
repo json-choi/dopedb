@@ -1,6 +1,6 @@
 //! Feature-scoped SQLite repository implementations owned by the local store.
 
-pub(crate) mod analysis_signal_samples;
+mod analysis_run_identity;
 mod catalog;
 mod connections;
 mod history;

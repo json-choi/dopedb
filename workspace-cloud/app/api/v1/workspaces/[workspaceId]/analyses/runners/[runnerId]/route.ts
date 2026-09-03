@@ -1,6 +1,4 @@
-// Forget one member-owned Desktop runner. Revocation atomically stops future
-// schedules and active refresh leases; Article definitions retain the old
-// runner id so the UI can explain and explicitly reassign the broken schedule.
+// Forget one member-owned Desktop runner and stop its active foreground run.
 import { env } from "../../../../../../../../lib/env";
 import { isUuid, jsonError, mutationAllowed, privateJson } from "../../../../../../../../lib/http";
 import { authorizeWorkspace } from "../../../../../../../../lib/workspace-authorization";

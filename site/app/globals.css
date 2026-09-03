@@ -81,10 +81,12 @@
     linear-gradient(315deg, rgba(255, 107, 92, 0.12), transparent 36%),
     var(--paper-2);
   --font-site-sans:
-    var(--font-body-loaded), "Avenir Next", "Apple SD Gothic Neo", ui-sans-serif,
-    system-ui, sans-serif;
+    "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
+    system-ui, Roboto, "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo",
+    "Noto Sans KR", "Malgun Gothic", sans-serif;
   --font-site-display:
-    var(--font-display-loaded), "Apple SD Gothic Neo", "Helvetica Neue", sans-serif;
+    "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
+    system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   --font-site-mono:
     var(--font-mono-loaded), "SFMono-Regular", Consolas, "Liberation Mono", Menlo,
     monospace;

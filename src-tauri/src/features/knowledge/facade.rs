@@ -376,10 +376,6 @@ where
         self.repository.propose_mapping(proposal).await
     }
 
-    pub(crate) async fn mapping_is_approved(&self, proposal_id: Uuid) -> AppResult<bool> {
-        self.repository.mapping_is_approved(proposal_id).await
-    }
-
     pub(crate) async fn decide_mapping(
         &self,
         proposal_id: Uuid,

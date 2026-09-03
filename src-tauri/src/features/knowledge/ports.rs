@@ -350,10 +350,6 @@ pub(crate) trait KnowledgeGrantPort: Clone + Send + Sync + 'static {
 }
 
 pub(crate) trait KnowledgeMappingRepositoryPort: Clone + Send + Sync + 'static {
-    fn mapping_is_approved(
-        &self,
-        proposal_id: Uuid,
-    ) -> impl Future<Output = AppResult<bool>> + Send;
     fn propose_mapping(
         &self,
         proposal: &KnowledgeMappingProposal,

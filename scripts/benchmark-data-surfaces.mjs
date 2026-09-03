@@ -133,14 +133,14 @@ const report = {
     node: process.version,
   },
   methodology:
-    "In-memory SQLite uses the production cursor-list SELECT shapes and production page/preview limits. IPC bytes are JSON UTF-8 bytes for one retained page. Heap is the non-negative V8 heap delta after forced GC while retaining only that page or the four-entry Analysis Article result LRU. Open latency is p50/p95 over 20 synchronous first-page reads after seeding. Audit full verification iterates genesis-to-tail without collecting rows. Analysis values model the production block row caps, exact JSON byte caps, 60s gcTime, and four-result LRU. This excludes Tauri serialization overhead, React DOM, provider/network latency, and packaged-WebView baseline memory.",
+    "In-memory SQLite uses the production cursor-list SELECT shapes and production page/preview limits. IPC bytes are JSON UTF-8 bytes for one retained page. Heap is the non-negative V8 heap delta after forced GC while retaining only that page or the four-entry Analysis Article result LRU. Open latency is p50/p95 over 20 synchronous first-page reads after seeding. Audit full verification iterates genesis-to-tail without collecting rows. Analysis values model the current one-query row and byte caps, 60s gcTime, and four-result LRU. This excludes Tauri serialization overhead, React DOM, provider/network latency, and packaged-WebView baseline memory.",
   fixtures: {
     historyRows: HISTORY_ROWS,
     auditRows: AUDIT_ROWS,
     largeRevisions: REVISION_ROWS,
     revisionBytesEach: Buffer.byteLength(largeRevisionContent()),
     analysisInputRows: 100_000,
-    analysisBlocksRun: 8,
+    analysisQueriesRun: 8,
   },
   surfaces: {
     history: history,
@@ -285,38 +285,28 @@ function measureAuditVerification() {
 function measureAnalysisArticles() {
   const sourceRow = ["2026-01-01", "x".repeat(192), 42];
   const inputRows = Array.from({ length: 100_000 }, () => sourceRow);
-  const definitions = [
-    ["metric", 1, 64 * 1024],
-    ["line", 2_000, 256 * 1024],
-    ["bar", 2_000, 256 * 1024],
-    ["table", 1_000, 512 * 1024],
-  ];
-  const byKind = Object.fromEntries(definitions.map(([kind, rowCap, byteCap]) => {
-    const result = enforceResultBudget(inputRows, Number(rowCap), Number(byteCap));
-    return [kind, {
-      retainedRows: result.rows.length,
-      ipcBytes: Buffer.byteLength(JSON.stringify(result)),
-      rowCap,
-      byteCap,
-      truncated: result.truncated,
-    }];
-  }));
+  const rowCap = 5_000;
+  const byteCap = 1024 * 1024;
+  const bounded = enforceResultBudget(inputRows, rowCap, byteCap);
   global.gc();
   const before = process.memoryUsage().heapUsed;
   const cache = new Map();
-  for (let tile = 0; tile < 8; tile += 1) {
-    const [kind, rowCap, byteCap] = definitions[tile % definitions.length];
-    const wirePayload = JSON.stringify(
-      enforceResultBudget(inputRows, Number(rowCap), Number(byteCap)),
-    );
-    cache.delete(`tile-${tile}`);
-    cache.set(`tile-${tile}`, JSON.parse(wirePayload));
+  for (let run = 0; run < 8; run += 1) {
+    const wirePayload = JSON.stringify(bounded);
+    cache.delete(`run-${run}`);
+    cache.set(`run-${run}`, JSON.parse(wirePayload));
     while (cache.size > 4) cache.delete(cache.keys().next().value);
   }
   global.gc();
   const after = process.memoryUsage().heapUsed;
   return {
-    byKind,
+    query: {
+      retainedRows: bounded.rows.length,
+      ipcBytes: Buffer.byteLength(JSON.stringify(bounded)),
+      rowCap,
+      byteCap,
+      truncated: bounded.truncated,
+    },
     cacheEntriesAfterEightRuns: cache.size,
     cacheIpcBytes: [...cache.values()].reduce(
       (total, result) => total + Buffer.byteLength(JSON.stringify(result)),

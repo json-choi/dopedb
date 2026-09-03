@@ -34,7 +34,6 @@ const durationBucketRule = enumRule(
   "over_60s",
   "unknown",
 );
-const articleStateRule = enumRule("draft", "review", "live", "archived");
 
 type PropertyRule =
   | ReturnType<typeof enumRule>
@@ -98,10 +97,6 @@ const PRODUCT_EVENT_PROPERTIES = {
     outcome: enumRule("success", "failed", "cancelled", "stale"),
     trigger: enumRule("manual"),
     durationBucket: durationBucketRule,
-  },
-  analysis_article_state_transitioned: {
-    fromState: articleStateRule,
-    toState: articleStateRule,
   },
   workspace_membership_ready: {
     role: enumRule("viewer", "analyst", "editor", "admin", "owner"),
@@ -222,10 +217,6 @@ function parseProperties(
     if (!validProperty(child, schema[key])) return null;
     properties[key] = child as ProductEventPropertyValue;
   }
-  if (
-    name === "analysis_article_state_transitioned"
-    && properties.fromState === properties.toState
-  ) return null;
   return properties;
 }
 

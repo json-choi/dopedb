@@ -606,7 +606,7 @@ function ToolCallCard({
             }
           >
             <Icon name="chart" />
-            {t("agent.acpReviewArticleDraft")}
+            {t("agent.acpOpenAnalysisArticle")}
           </Button>
         ) : null}
         {sqlProposal ? (
@@ -661,7 +661,7 @@ function ToolCallCard({
             }
           >
             <Icon name="chart" />
-            {t("agent.acpReviewArticleDraft")}
+            {t("agent.acpOpenAnalysisArticle")}
           </Button>
         ) : null}
         {sqlProposal ? (

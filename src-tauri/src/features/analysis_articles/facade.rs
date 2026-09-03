@@ -7,14 +7,13 @@ use crate::error::AppResult;
 
 use super::domain::{AnalysisDefinitionRunReceipt, AnalysisDefinitionRunRequest};
 use super::ports::{
-    AnalysisArticleMutation, AnalysisHostedAuthorityPort, AnalysisLocalRepositoryPort,
-    AnalysisReadExecutionPort, AnalysisSignalSampleWrite, LocalAnalysisSignalMetricSample,
-    LocalAnalysisSignalState,
+    AnalysisHostedAuthorityPort, AnalysisLocalRepositoryPort, AnalysisReadExecutionPort,
 };
 use super::runner::AnalysisArticleRunner;
 use super::validation::validate_shared_create;
 
 const LOCAL_RESULT_SAVE_TIMEOUT: Duration = Duration::from_secs(10);
+const LOCAL_RESULT_RETENTION_DAYS: u16 = 30;
 
 #[derive(Clone)]
 pub(crate) struct AnalysisArticlesFeature<L, E, H> {
@@ -49,14 +48,6 @@ where
         self.local.delete_results(article_id).await
     }
 
-    pub(crate) async fn background_allowed(&self) -> AppResult<bool> {
-        self.local.background_allowed().await
-    }
-
-    pub(crate) async fn set_background_allowed(&self, allowed: bool) -> AppResult<()> {
-        self.local.set_background_allowed(allowed).await
-    }
-
     pub(crate) async fn runner_device_id(
         &self,
         account_user_id: &str,
@@ -74,49 +65,6 @@ where
     ) -> AppResult<uuid::Uuid> {
         self.local
             .replace_runner_device_id(account_user_id, workspace_id)
-            .await
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) async fn record_signal_sample(
-        &self,
-        workspace_id: uuid::Uuid,
-        account_id: &str,
-        signal_id: uuid::Uuid,
-        signal_revision: u64,
-        scheduled_at: chrono::DateTime<chrono::Utc>,
-        evaluated_at: chrono::DateTime<chrono::Utc>,
-        metric_value: Option<f64>,
-        sample_count: u64,
-        state: LocalAnalysisSignalState,
-        schema_fingerprint: &str,
-    ) -> AppResult<()> {
-        self.local
-            .record_signal_sample(AnalysisSignalSampleWrite {
-                workspace_id,
-                account_id: account_id.to_owned(),
-                signal_id,
-                signal_revision,
-                scheduled_at,
-                evaluated_at,
-                metric_value,
-                sample_count,
-                state,
-                schema_fingerprint: schema_fingerprint.to_owned(),
-            })
-            .await
-    }
-
-    pub(crate) async fn recent_signal_samples(
-        &self,
-        workspace_id: uuid::Uuid,
-        account_id: &str,
-        signal_id: uuid::Uuid,
-        signal_revision: u64,
-        limit: usize,
-    ) -> AppResult<Vec<LocalAnalysisSignalMetricSample>> {
-        self.local
-            .recent_signal_samples(workspace_id, account_id, signal_id, signal_revision, limit)
             .await
     }
 
@@ -160,18 +108,16 @@ where
         workspace_id: uuid::Uuid,
         article_id: uuid::Uuid,
         expected_revision: i64,
-        mutation: AnalysisArticleMutation,
+        article: &dopedb_protocol::SharedAnalysisArticleCreate,
     ) -> AppResult<dopedb_protocol::AnalysisArticleRecord> {
-        if let AnalysisArticleMutation::Update(article) = &mutation {
-            validate_shared_create(article)?;
-        }
+        validate_shared_create(article)?;
         self.hosted
             .mutate_article(
                 account_id,
                 workspace_id,
                 article_id,
                 expected_revision,
-                mutation,
+                article,
             )
             .await
     }
@@ -181,7 +127,6 @@ where
         request: AnalysisDefinitionRunRequest,
     ) -> AppResult<AnalysisDefinitionRunReceipt> {
         let workspace_id = request.workspace_id;
-        let retention_days = request.definition.refresh.result_retention_days;
         let persist_local_result = request.persist_local_result;
         let receipt = self.runner.run_definition(request).await?;
         if persist_local_result {
@@ -194,7 +139,11 @@ where
                 tokio::spawn(async move {
                     match tokio::time::timeout(
                         LOCAL_RESULT_SAVE_TIMEOUT,
-                        local.save_result(workspace_id, &cached_receipt, retention_days),
+                        local.save_result(
+                            workspace_id,
+                            &cached_receipt,
+                            LOCAL_RESULT_RETENTION_DAYS,
+                        ),
                     )
                     .await
                     {

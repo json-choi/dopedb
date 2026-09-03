@@ -105,7 +105,7 @@ export async function runSyncScenarios(
       INSERT INTO "workspace_control"."workspace_audit_event"
         ("organization_id", "actor_user_id", "action", "resource_type",
          "resource_id", "redacted_summary", "request_id")
-      VALUES (${organizationId}, ${userId}, 'analysis_article.archive', 'analysis_article',
+      VALUES (${organizationId}, ${userId}, 'analysis_article.delete', 'analysis_article',
               NULL, '{}'::jsonb, ${randomUUID()}::uuid)
     `,
   ]);

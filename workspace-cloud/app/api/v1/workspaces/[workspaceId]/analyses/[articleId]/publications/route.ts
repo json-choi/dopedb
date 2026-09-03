@@ -39,7 +39,6 @@ export async function GET(request: Request, context: RouteContext) {
     organizationId: workspaceId,
     articleId,
     memberId: authorization.membership.id,
-    includeWorking: hasWorkspaceCapability(authorization.role, "write"),
   });
   if (!article) return jsonError("Analysis Article not found", 404);
   const rows = await db.select({
@@ -91,7 +90,6 @@ export async function POST(request: Request, context: RouteContext) {
     organizationId: workspaceId,
     articleId,
     memberId: authorization.membership.id,
-    includeWorking: true,
   });
   if (!article) return jsonError("Analysis Article not found", 404);
   if (article.ownerMemberId !== authorization.membership.id

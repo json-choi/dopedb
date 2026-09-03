@@ -201,19 +201,21 @@ PostgreSQL과 MySQL 각각에서 최초 tree, database expand, schema expand, se
 macOS packaged app의 사람이 관찰한 결과를 함께 기록하며 cold와 warm 수치를 섞지
 않는다.
 
-## Session D — Production signal lifecycle
+## Session D — Analysis Article manual lifecycle
 
-대상 이슈: #131
+1. 비민감 fixture를 읽는 하나의 read-only query와 sanitized HTML로 Article을 만든다.
+2. 다른 구성원이 자신의 로컬 자격 증명으로 Article을 열 수 있는지 확인한다.
+3. Desktop에서 **Run again**을 눌러 현재 Article·connection revision과 grant가 다시
+   검증되는지 확인한다.
+4. 실행 중 cancel이 bounded time 안에 멈추고 부분 결과가 공유되지 않는지 확인한다.
+5. 성공한 결과 행은 실행한 Desktop의 로컬 복구 캐시에만 남고, Web에는 run metadata와
+   query receipt만 보이는지 확인한다.
+6. immutable HTML publication을 발행한 뒤 saved query와 private result가 공개되지 않는지,
+   revoke 직후 같은 slug가 더 이상 열리지 않는지 확인한다.
 
-1. 비민감 fixture를 읽는 Production signal rule을 명시적 경고와 승인 후 만든다.
-2. 임계값을 넘겨 firing을 만들고 App, Web, email의 동일 event identity를 확인한다.
-3. pause 상태에서 새 알림이 발송되지 않는지 확인한다.
-4. 실행 중 cancel이 bounded time 안에 멈추는지 확인한다.
-5. 값을 정상 범위로 되돌려 recovered를 확인한다.
-6. rule과 runner lease를 정리하고 더 이상 query나 email이 발생하지 않는지 본다.
-
-Production 데이터 값, email 주소와 query result는 첨부에서 제거한다. 생성, 승인,
-firing, pause/cancel, recovered, cleanup의 audit sequence만 남긴다.
+Production 데이터 값, 계정 식별자, saved query와 query result는 첨부에서 제거한다.
+Article revision, 수동 실행, cancel/completion receipt, publication/revoke audit sequence만
+남긴다.
 
 ## 이슈 종료 순서
 

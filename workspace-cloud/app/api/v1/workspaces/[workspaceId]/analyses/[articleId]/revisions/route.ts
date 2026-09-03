@@ -8,6 +8,7 @@ import { workspaceAnalysisArticleRevision } from "../../../../../../../../lib/sc
 import { authorizeWorkspace } from "../../../../../../../../lib/workspace-authorization";
 import { accessibleAnalysisArticle } from "../../../../../../../../lib/workspace-analysis-article-http";
 import { parseAnalysisArticleVersionPayload } from "../../../../../../../../lib/workspace-analysis-articles";
+import { withRetiredVersionPayloadState } from "../../../../../../../../lib/workspace-analysis-version-compat";
 import { hasWorkspaceCapability } from "../../../../../../../../lib/workspace-permissions";
 
 type RouteContext = { params: Promise<{ workspaceId: string; articleId: string }> };
@@ -26,7 +27,6 @@ export async function GET(request: Request, context: RouteContext) {
     organizationId: workspaceId,
     articleId,
     memberId: authorization.membership.id,
-    includeWorking: true,
   });
   if (!accessible) return jsonError("Analysis Article not found", 404);
   const revisions = await db.select().from(workspaceAnalysisArticleRevision).where(and(
@@ -40,7 +40,9 @@ export async function GET(request: Request, context: RouteContext) {
         revision: revision.revision,
         baseRevision: revision.baseRevision,
         operation: revision.operation,
-        payload: parseAnalysisArticleVersionPayload(revision.payload),
+        payload: withRetiredVersionPayloadState(
+          parseAnalysisArticleVersionPayload(revision.payload),
+        ),
         payloadHash: revision.payloadHash,
         createdByMemberId: revision.createdByMemberId,
         createdAt: revision.createdAt.toISOString(),

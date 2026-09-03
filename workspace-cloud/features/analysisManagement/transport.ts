@@ -1,8 +1,6 @@
-// HTTP transport owns only the bounded Article, run, publication, and legacy
-// recovery requests used by the simplified management surface.
+// HTTP transport owns the bounded Article, run, and publication requests.
 import type {
   AnalysisArticle,
-  AnalysisMigrationFailure,
   AnalysisPublication,
   AnalysisRun,
   Detail,
@@ -23,40 +21,21 @@ async function responseError(response: Response | null, fallback: string) {
   return typeof body?.error === "string" ? body.error : fallback;
 }
 
-async function requiredResponse(request: Promise<Response | null>, fallback: string) {
-  const response = await request;
-  if (!response?.ok) throw new Error(await responseError(response, fallback));
-  return response;
-}
-
 export type AnalysisOverview = Readonly<{
   articles: AnalysisArticle[];
-  migrationFailures: AnalysisMigrationFailure[];
 }>;
 
 export async function loadAnalysisOverview(
   workspaceId: string,
-  canEdit: boolean,
   fallback: string,
   signal?: AbortSignal,
 ): Promise<AnalysisOverview> {
   const base = `/api/v1/workspaces/${workspaceId}/analyses`;
-  const [articleResponse, migrationResponse] = await Promise.all([
-    fetch(base, { cache: "no-store", signal }).catch(() => null),
-    canEdit
-      ? fetch(`${base}/migration-failures`, { cache: "no-store", signal }).catch(() => null)
-      : Promise.resolve(null),
-  ]);
-  const failed = [articleResponse, ...(canEdit ? [migrationResponse] : [])]
-    .find((response) => !response?.ok) ?? null;
-  if (failed) throw new Error(await responseError(failed, fallback));
-  const [articleBody, migrationBody] = await Promise.all([
-    articleResponse!.json().catch(() => null),
-    migrationResponse?.json().catch(() => null) ?? null,
-  ]);
+  const articleResponse = await fetch(base, { cache: "no-store", signal }).catch(() => null);
+  if (!articleResponse?.ok) throw new Error(await responseError(articleResponse, fallback));
+  const articleBody = await articleResponse.json().catch(() => null);
   return {
     articles: array<AnalysisArticle>(object(articleBody)?.articles),
-    migrationFailures: array<AnalysisMigrationFailure>(object(migrationBody)?.failures),
   };
 }
 
@@ -81,20 +60,4 @@ export async function loadAnalysisDetail(
     runs: array<AnalysisRun>(object(runBody)?.runs),
     publications: array<AnalysisPublication>(object(publicationBody)?.publications),
   };
-}
-
-export async function resolveAnalysisMigrationFailure(
-  workspaceId: string,
-  failureId: string,
-  articleId: string,
-  fallback: string,
-) {
-  await requiredResponse(fetch(
-    `/api/v1/workspaces/${workspaceId}/analyses/migration-failures`,
-    {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ failureId, articleId }),
-    },
-  ).catch(() => null), fallback);
 }

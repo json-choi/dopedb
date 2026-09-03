@@ -9,7 +9,6 @@ import { useI18n } from "../../lib/i18n";
 import { useCatalogScope } from "../../lib/queries";
 import type { EnvironmentConnection, KnowledgeEnvironment } from "../knowledge/domain";
 import {
-  mergeAnalysisFragments,
   type AnalysisArticleRecord,
   type AnalysisDefinitionRunReceipt,
   type SharedAnalysisArticleCreate,
@@ -24,7 +23,6 @@ import {
   listAnalysisArticleRuns,
   listAnalysisArticles,
   onAnalysisArticleChanged,
-  restoreAnalysisArticleRevision,
   runAnalysisArticle,
   updateAnalysisArticle,
 } from "./tauriAdapter";
@@ -103,10 +101,7 @@ export function useAnalysisArticlesController({
   const memoryResult = selected ? localResults.get(selected.id) ?? null : null;
   const localResult = memoryResult
     ?? (recoveredResult.data?.articleRevision === selected?.revision ? recoveredResult.data : null);
-  const blockData = useMemo(
-    () => mergeAnalysisFragments(localResult?.fragments ?? []),
-    [localResult?.fragments],
-  );
+  const resultData = localResult?.result ?? null;
 
   useEffect(() => {
     let disposed = false;
@@ -152,18 +147,9 @@ export function useAnalysisArticlesController({
     },
     onError: (error) => setActionError(errMessage(error)),
   });
-  const restore = useMutation({
-    mutationFn: ({ article, revision }: { article: AnalysisArticleRecord; revision: number }) =>
-      restoreAnalysisArticleRevision(article.id, article.revision, revision),
-    onSuccess: async (article) => {
-      setActionError(null);
-      await refreshArticle(article.id);
-    },
-    onError: (error) => setActionError(errMessage(error)),
-  });
   const execute = useMutation({
     mutationFn: ({ article, runId }: { article: AnalysisArticleRecord; runId: string }) =>
-      runAnalysisArticle(article.id, article.revision, runId, {}),
+      runAnalysisArticle(article.id, article.revision, runId),
     onMutate: ({ article, runId }) => {
       setActionError(null);
       setRunning({ articleId: article.id, runId });
@@ -208,7 +194,7 @@ export function useAnalysisArticlesController({
     agentBinding,
     articles,
     askAgent,
-    blockData,
+    resultData,
     cancel,
     detailTabs,
     editorArticle,
@@ -216,7 +202,6 @@ export function useAnalysisArticlesController({
     localResult,
     recoveredResult,
     remove,
-    restore,
     revisions,
     running,
     runs,

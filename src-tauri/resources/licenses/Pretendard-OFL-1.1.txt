@@ -1,8 +1,8 @@
-SUIT Variable
-https://github.com/sun-typeface/SUIT
+Pretendard Variable
+https://github.com/orioncactus/pretendard
 
-Copyright (c) 2022, SUNN (http://sun.fo/suit),
-with Reserved Font Name SUIT.
+Copyright (c) 2021, Kil Hyung-jin (https://github.com/orioncactus/pretendard),
+with Reserved Font Name Pretendard.
 
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
 This license is copied below, and is also available with a FAQ at:

@@ -201,8 +201,6 @@ export const env = {
   workspaceBackgroundSchedulerEnabled,
   workspaceBackgroundSchedulerToken,
   workspaceBackgroundSchedulerUrl,
-  workspaceSignalFrom: () => optional("WORKSPACE_SIGNAL_FROM")
-    || optional("WORKSPACE_INVITATION_FROM"),
   workspaceKmsKeyName: () => required("WORKSPACE_KMS_KEY_NAME"),
   workspaceKmsWifAudience: () => required("WORKSPACE_KMS_WIF_AUDIENCE"),
   workspaceKmsServiceAccountEmail: () => required("WORKSPACE_KMS_SERVICE_ACCOUNT_EMAIL"),

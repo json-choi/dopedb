@@ -1,29 +1,15 @@
-export const analysisArticleStates = ["draft", "review", "live", "archived"] as const;
-
-export type AnalysisArticleState = (typeof analysisArticleStates)[number];
 export type AnalysisArticleSource =
   | "human"
   | "dopedb.acp.claude"
   | "dopedb.acp.codex"
   | "migration";
-export type AnalysisParameterValue = string | number | boolean | null;
+export type AnalysisCellValue = string | number | boolean | null;
 
 export type AnalysisArticleConnection = {
   connectionId: string;
   connectionRevision: number;
   role: string;
   alias: string;
-};
-
-// Parameters remain readable for legacy Articles that were projected into the
-// simple model. New Articles always create an empty list.
-export type AnalysisParameter = {
-  id: string;
-  label: string;
-  type: "string" | "number" | "boolean" | "date" | "datetime" | "enum";
-  required: boolean;
-  defaultValue: AnalysisParameterValue;
-  options: string[];
 };
 
 export type AnalysisColumn = {
@@ -49,49 +35,17 @@ export type AnalysisQueryNode = {
   title: string;
   connectionRole: string;
   sql: string;
-  parameterIds: string[];
   maxRows: number;
   maxBytes: number;
-  cacheTtlSeconds: 0;
   columns: AnalysisColumn[];
 };
 
-type AnalysisQueryResultBlock = {
-  id: "query_result";
-  kind: "table";
-  title: string;
-  sourceNodeId: string;
-  width: 12;
-  config: {
-    columns: string[];
-    pageSize: number;
-  };
-};
-
 export type AnalysisArticleDefinition = {
-  version: 2;
+  version: 3;
   source: AnalysisArticleSource;
   title: string;
   html: string;
-  question: "";
-  summary: "";
-  timezone: "UTC";
-  parameters: AnalysisParameter[];
-  queries: [AnalysisQueryNode];
-  transforms: never[];
-  metrics: never[];
-  blocks: [AnalysisQueryResultBlock];
-  claims: never[];
-  refresh: {
-    mode: "manual";
-    cron: null;
-    timezone: "UTC";
-    runnerId: null;
-    maxStalenessSeconds: number;
-    resultRetentionDays: number;
-    shareReviewedResults: false;
-  };
-  warnings: never[];
+  query: AnalysisQueryNode;
 };
 
 export type SharedAnalysisArticleCreate = {
@@ -105,19 +59,14 @@ export type SharedAnalysisArticleCreate = {
 };
 
 export type AnalysisArticleVersionPayload = SharedAnalysisArticleCreate & {
-  state: AnalysisArticleState;
   ownerMemberId: string;
   deleted: boolean;
 };
 
 export type AnalysisArticleRecord = SharedAnalysisArticleCreate & {
-  state: AnalysisArticleState;
   ownerMemberId: string;
   updatedByMemberId: string;
   revision: number;
-  liveRevision: number | null;
-  liveRunId: string | null;
-  nextRefreshAt: string | null;
   latestSuccessfulRunId: string | null;
   createdAt: string;
   updatedAt: string;
@@ -136,12 +85,9 @@ export type AnalysisQueryReceipt = {
   durationMs: number;
 };
 
-export type AnalysisResultFragment = {
-  version: 1;
-  blockId: string;
-  ordinal: number;
+export type AnalysisResultData = {
   columns: AnalysisColumn[];
-  rows: AnalysisParameterValue[][];
+  rows: AnalysisCellValue[][];
   truncated: boolean;
 };
 
@@ -149,9 +95,8 @@ export type AnalysisDefinitionRunReceipt = {
   runId: string;
   articleId: string;
   articleRevision: number;
-  parameterValues: Record<string, AnalysisParameterValue>;
   queryReceipts: AnalysisQueryReceipt[];
-  fragments: AnalysisResultFragment[];
+  result: AnalysisResultData;
   resultHash: string;
   startedAt: string;
   finishedAt: string;
@@ -162,11 +107,8 @@ export type AnalysisRun = {
   articleId: string;
   articleRevision: number;
   runnerId: string;
-  leaseId: string | null;
-  trigger: "manual" | "schedule" | "signal" | "publication";
+  runnerCapabilityGeneration: number | null;
   state: "queued" | "running" | "succeeded" | "failed" | "cancelled" | "stale";
-  parameterValues: Record<string, AnalysisParameterValue>;
-  parameterHash: string;
   definitionHash: string;
   schemaFingerprints: Record<string, string>;
   rowCount: number;
@@ -184,7 +126,6 @@ export type AnalysisRun = {
 export type AnalysisRunCommandResult = {
   run: AnalysisRun;
   result: AnalysisDefinitionRunReceipt;
-  sharedResult: boolean;
 };
 
 export type AnalysisRunPage = {
@@ -231,31 +172,3 @@ export type AnalysisPublication = {
   publishedAt: string;
   revokedAt: string | null;
 };
-
-export type AnalysisBlockData = {
-  columns: AnalysisColumn[];
-  rows: AnalysisParameterValue[][];
-  truncated: boolean;
-};
-
-export function mergeAnalysisFragments(
-  fragments: readonly AnalysisResultFragment[],
-): Map<string, AnalysisBlockData> {
-  const grouped = new Map<string, AnalysisResultFragment[]>();
-  for (const fragment of fragments) {
-    const current = grouped.get(fragment.blockId) ?? [];
-    current.push(fragment);
-    grouped.set(fragment.blockId, current);
-  }
-  const output = new Map<string, AnalysisBlockData>();
-  for (const [blockId, group] of grouped) {
-    group.sort((left, right) => left.ordinal - right.ordinal);
-    const columns = group[0]?.columns ?? [];
-    output.set(blockId, {
-      columns,
-      rows: group.flatMap((fragment) => fragment.rows),
-      truncated: group.some((fragment) => fragment.truncated),
-    });
-  }
-  return output;
-}

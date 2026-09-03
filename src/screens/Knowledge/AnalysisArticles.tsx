@@ -7,7 +7,7 @@ import { AnalysisPublicationPanel } from "../../features/analysisArticles/Analys
 import type {
   AnalysisArticleRecord,
   AnalysisArticleRevision,
-  AnalysisBlockData,
+  AnalysisResultData,
   AnalysisRun,
 } from "../../features/analysisArticles/domain";
 import { useAnalysisArticlesController } from "../../features/analysisArticles/useAnalysisArticlesController";
@@ -167,7 +167,7 @@ export default function AnalysisArticles({
               {controller.tab === "article" ? (
                 <ArticleDocument
                   article={selected}
-                  result={controller.blockData.get("query_result") ?? controller.blockData.values().next().value ?? null}
+                  result={controller.resultData}
                   resultLoading={controller.recoveredResult.isFetching || controller.execute.isPending}
                   ranAt={controller.localResult?.finishedAt ?? null}
                   showPublication={showPublication}
@@ -178,8 +178,6 @@ export default function AnalysisArticles({
                   revisions={controller.revisions.data ?? []}
                   runs={controller.runs.data?.runs ?? []}
                   loading={controller.revisions.isPending || controller.runs.isPending}
-                  restoring={controller.restore.isPending}
-                  onRestore={(revision) => controller.restore.mutate({ article: selected, revision })}
                 />
               )}
             </div>
@@ -209,14 +207,14 @@ function ArticleDocument({
   scopeKey,
 }: {
   article: AnalysisArticleRecord;
-  result: AnalysisBlockData | null;
+  result: AnalysisResultData | null;
   resultLoading: boolean;
   ranAt: string | null;
   showPublication: boolean;
   scopeKey: string;
 }) {
   const { t } = useI18n();
-  const query = article.definition.queries[0]!;
+  const query = article.definition.query;
   return (
     <div className="tw:mx-auto tw:grid tw:w-full tw:max-w-[1100px] tw:gap-8 tw:p-6 tw:@max-[760px]:p-3">
       <article
@@ -253,7 +251,7 @@ function ArticleDocument({
   );
 }
 
-function ResultTable({ result, title }: { result: AnalysisBlockData; title: string }) {
+function ResultTable({ result, title }: { result: AnalysisResultData; title: string }) {
   return (
     <div className="tw:max-h-[520px] tw:overflow-auto tw:rounded-surface tw:border tw:border-border">
       <table className="tw:w-full tw:min-w-max tw:border-collapse tw:text-left tw:text-xs">
@@ -279,14 +277,10 @@ function HistoryView({
   revisions,
   runs,
   loading,
-  restoring,
-  onRestore,
 }: {
   revisions: AnalysisArticleRevision[];
   runs: AnalysisRun[];
   loading: boolean;
-  restoring: boolean;
-  onRestore: (revision: number) => void;
 }) {
   const { t } = useI18n();
   if (loading) return <div className="tw:p-5"><LoadingLabel>{t("analysis.loadingHistory")}</LoadingLabel></div>;
@@ -298,7 +292,6 @@ function HistoryView({
           <div className="tw:flex tw:items-center tw:gap-3 tw:rounded-md tw:border tw:border-border-subtle tw:p-3" key={revision.revision}>
             <strong className="tw:font-mono tw:text-xs">r{revision.revision}</strong>
             <span className="tw:min-w-0 tw:flex-1 tw:truncate tw:text-xs tw:text-muted-foreground">{revision.operation} · {new Date(revision.createdAt).toLocaleString()}</span>
-            <Button size="xs" disabled={restoring} onClick={() => onRestore(revision.revision)}>{t("analysis.restore")}</Button>
           </div>
         ))}
       </section>

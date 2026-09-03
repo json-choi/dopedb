@@ -177,7 +177,7 @@ When work competes for time, use this order:
 4. Keep GitHub exploration cheap and exact through pinned tree/path/file reads, then
    validate a graph product with measured quality, latency, and operating-cost gains
    before re-enabling graph construction as a paid/experimental capability.
-5. Complete the simple Analysis Article archive, exact single-query manual rerun,
+5. Complete simple Analysis Article sharing and deletion, exact single-query manual rerun,
    and fixed public HTML publication only on top of that environment boundary.
 6. Deepen schema introspection where it improves Agent judgment.
 

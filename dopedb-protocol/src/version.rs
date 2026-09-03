@@ -4,7 +4,7 @@ use thiserror::Error;
 
 pub const PROTOCOL_MIN: u16 = 1;
 pub const PROTOCOL_MAX: u16 = 1;
-pub const COMMAND_SCHEMA_VERSION: u16 = 16;
+pub const COMMAND_SCHEMA_VERSION: u16 = 17;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
 #[error(

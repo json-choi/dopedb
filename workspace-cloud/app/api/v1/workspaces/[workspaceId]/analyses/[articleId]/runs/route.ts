@@ -19,16 +19,38 @@ import {
   isAnalysisDesktopBearerRequest,
   parseAnalysisRunnerCapability,
 } from "../../../../../../../../lib/workspace-analysis-runner-capability";
-import { hashAnalysisLeaseCapability } from "../../../../../../../../lib/workspace-analysis-runner-store";
 import {
   commitAnalysisRunCreate,
   type AnalysisRunAuthority,
 } from "../../../../../../../../lib/workspace-analysis-run-store";
 import { parseAnalysisRunRequest } from "../../../../../../../../lib/workspace-analysis-runs";
-import { hasWorkspaceCapability } from "../../../../../../../../lib/workspace-permissions";
 import { canonicalHash } from "../../../../../../../../lib/workspace-versioning";
 
 type RouteContext = { params: Promise<{ workspaceId: string; articleId: string }> };
+
+function publicAnalysisRun(run: typeof workspaceAnalysisArticleRun.$inferSelect) {
+  return {
+    id: run.id,
+    articleId: run.articleId,
+    articleRevision: run.articleRevision,
+    runnerId: run.runnerId,
+    runnerCapabilityGeneration: run.runnerCapabilityGeneration,
+    trigger: run.trigger,
+    state: run.state,
+    definitionHash: run.definitionHash,
+    schemaFingerprints: run.schemaFingerprints,
+    rowCount: run.rowCount,
+    byteCount: run.byteCount,
+    resultHash: run.resultHash,
+    errorKind: run.errorKind,
+    errorMessage: run.errorMessage,
+    cancelRequestedAt: run.cancelRequestedAt?.toISOString() ?? null,
+    cancelRequestedByMemberId: run.cancelRequestedByMemberId,
+    startedAt: run.startedAt?.toISOString() ?? null,
+    finishedAt: run.finishedAt?.toISOString() ?? null,
+    createdAt: run.createdAt.toISOString(),
+  };
+}
 
 function authority(authorization: {
   role: string;
@@ -50,17 +72,10 @@ export async function GET(request: Request, context: RouteContext) {
   }
   const authorization = await authorizeWorkspace(request, workspaceId, "view");
   if (!authorization.ok) return jsonError(authorization.error, authorization.status);
-  const canEdit = hasWorkspaceCapability(authorization.role, "write");
   const article = await accessibleAnalysisArticle({
     organizationId: workspaceId,
     articleId,
     memberId: authorization.membership.id,
-    includeWorking: canEdit,
-  }) ?? await accessibleAnalysisArticle({
-    organizationId: workspaceId,
-    articleId,
-    memberId: authorization.membership.id,
-    includeWorking: false,
   });
   if (!article) return jsonError("Analysis Article not found", 404);
   const url = new URL(request.url);
@@ -76,15 +91,8 @@ export async function GET(request: Request, context: RouteContext) {
     .where(and(...filters))
     .orderBy(desc(workspaceAnalysisArticleRun.createdAt))
     .limit(100);
-  const visible = canEdit ? rows : rows.filter((run) => run.id === article.liveRunId);
   return privateJson({
-    runs: visible.map((run) => ({
-      ...run,
-      createdAt: run.createdAt.toISOString(),
-      startedAt: run.startedAt?.toISOString() ?? null,
-      finishedAt: run.finishedAt?.toISOString() ?? null,
-      cancelRequestedAt: run.cancelRequestedAt?.toISOString() ?? null,
-    })),
+    runs: rows.map(publicAnalysisRun),
     nextCursor: rows.length === 100 ? rows.at(-1)!.createdAt.toISOString() : null,
   });
 }
@@ -113,52 +121,27 @@ export async function POST(request: Request, context: RouteContext) {
   if (typeof requestedRevision !== "number" || !Number.isSafeInteger(requestedRevision)) {
     return jsonError("Invalid Analysis Article revision", 400);
   }
-  const canEdit = hasWorkspaceCapability(authorization.role, "write");
-  const working = canEdit ? await accessibleAnalysisArticle({
+  const article = await accessibleAnalysisArticle({
     organizationId: workspaceId,
     articleId,
     memberId: authorization.membership.id,
-    includeWorking: true,
-  }) : null;
-  const article = working?.revision === requestedRevision
-    ? working
-    : await accessibleAnalysisArticle({
-      organizationId: workspaceId,
-      articleId,
-      memberId: authorization.membership.id,
-      includeWorking: false,
-    });
+  });
   if (!article || article.revision !== requestedRevision) {
     return jsonError("Analysis Article revision is not runnable", 404);
   }
   let run;
   try {
-    run = parseAnalysisRunRequest(body.value, article.definition);
+    run = parseAnalysisRunRequest(body.value);
   } catch (error) {
     return jsonError(error instanceof Error ? error.message : "Invalid Analysis Article run", 400);
-  }
-  const leaseId = request.headers.get("x-dopedb-analysis-lease")?.trim() ?? null;
-  const leaseCapability = request.headers.get("x-dopedb-analysis-capability")?.trim() ?? null;
-  if (run.trigger === "schedule") {
-    if (!leaseId || !isUuid(leaseId) || !leaseCapability || !/^[0-9a-f]{64}$/.test(leaseCapability)) {
-      return jsonError("A scheduled run requires its refresh lease capability", 403);
-    }
-  } else if (run.trigger === "signal") {
-    return jsonError("Signal evaluation starts from an Article signal, not the manual run API", 409);
-  } else if (leaseId !== null || leaseCapability !== null) {
-    return jsonError("Manual runs cannot carry a refresh lease", 400);
   }
   const created = await commitAnalysisRunCreate({
     organizationId: workspaceId,
     articleId,
     run,
-    parameterHash: canonicalHash(run.parameterValues),
+    parameterHash: canonicalHash({}),
     definitionHash: canonicalHash(article.definition),
     runnerCapabilityHash: hashAnalysisRunnerCapability(runnerCapability),
-    leaseId: run.trigger === "schedule" ? leaseId : null,
-    leaseCapabilityHash: run.trigger === "schedule" && leaseCapability
-      ? hashAnalysisLeaseCapability(leaseCapability)
-      : null,
     authority: authority(authorization),
   });
   if (!created) {

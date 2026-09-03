@@ -1,16 +1,15 @@
-//! ACP-only Analysis Article draft operations. The Agent supplies declarative
+//! ACP-only Analysis Article operations. The Agent supplies declarative
 //! content; the authenticated session supplies every authority and revision pin.
 
 use dopedb_protocol::{
-    AnalysisArticleDraftRunArguments, AnalysisArticleDraftRunCommand, AnalysisArticleListCommand,
-    AnalysisArticleListResult, AnalysisArticleProposeArguments, AnalysisArticleProposeCommand,
-    AnalysisArticleRecordResult, AnalysisArticleSource, AnalysisArticleState,
-    AnalysisArticleUpdateDraftArguments, AnalysisArticleUpdateDraftCommand, AnalysisRefreshMode,
-    AnalysisRunReceipt, AnalysisRunState, SharedAnalysisArticleCreate,
+    AnalysisArticleListCommand, AnalysisArticleListResult, AnalysisArticleProposeArguments,
+    AnalysisArticleProposeCommand, AnalysisArticleRecordResult, AnalysisArticleSource,
+    AnalysisArticleUpdateArguments, AnalysisArticleUpdateCommand, AnalysisArticleVerifyArguments,
+    AnalysisArticleVerifyCommand, AnalysisRunReceipt, AnalysisRunState,
+    SharedAnalysisArticleCreate,
 };
 use tauri::Emitter;
 
-use crate::features::analysis_articles::AnalysisArticleMutation;
 use crate::features::analysis_articles::AnalysisDefinitionRunRequest;
 
 use super::*;
@@ -23,8 +22,8 @@ pub(super) async fn handle(
     let capability = match request.command {
         CommandName::AnalysisArticleList => BrokerCapability::AnalysisArticleRead,
         CommandName::AnalysisArticlePropose
-        | CommandName::AnalysisArticleUpdateDraft
-        | CommandName::AnalysisArticleDraftRun => BrokerCapability::AnalysisArticlePropose,
+        | CommandName::AnalysisArticleUpdate
+        | CommandName::AnalysisArticleVerify => BrokerCapability::AnalysisArticlePropose,
         _ => return failure(request_id, ErrorCode::InvalidRequest, false),
     };
     let session = match dispatcher.authenticate(request, capability) {
@@ -94,19 +93,19 @@ pub(super) async fn handle(
             };
             propose(dispatcher, &session, source, arguments).await
         }
-        CommandName::AnalysisArticleUpdateDraft => {
-            let arguments = match decode_arguments::<AnalysisArticleUpdateDraftCommand>(request) {
+        CommandName::AnalysisArticleUpdate => {
+            let arguments = match decode_arguments::<AnalysisArticleUpdateCommand>(request) {
                 Ok(arguments) => arguments,
                 Err(_) => return failure(request_id, ErrorCode::InvalidRequest, false),
             };
-            update_draft(dispatcher, &session, source, arguments).await
+            update_article(dispatcher, &session, source, arguments).await
         }
-        CommandName::AnalysisArticleDraftRun => {
-            let arguments = match decode_arguments::<AnalysisArticleDraftRunCommand>(request) {
+        CommandName::AnalysisArticleVerify => {
+            let arguments = match decode_arguments::<AnalysisArticleVerifyCommand>(request) {
                 Ok(arguments) => arguments,
                 Err(_) => return failure(request_id, ErrorCode::InvalidRequest, false),
             };
-            run_draft(dispatcher, &session, source, arguments).await
+            verify_article(dispatcher, &session, source, arguments).await
         }
         _ => Err(ErrorCode::InvalidRequest),
     };
@@ -118,21 +117,13 @@ fn article_create(
     scope: &crate::features::knowledge::domain::KnowledgeSessionScope,
     connection_id: Uuid,
     source: AnalysisArticleSource,
-    definition: dopedb_protocol::AnalysisArticleDraftDefinition,
+    definition: dopedb_protocol::AnalysisArticleInputDefinition,
     article_id: Uuid,
 ) -> Result<SharedAnalysisArticleCreate, ErrorCode> {
     let environment_revision =
         i64::try_from(scope.environment_revision).map_err(|_| ErrorCode::InvalidRequest)?;
-    let mut definition = definition.with_source(source);
-    definition.refresh.mode = AnalysisRefreshMode::Manual;
-    definition.refresh.cron = None;
-    definition.refresh.runner_id = None;
-    definition.refresh.share_reviewed_results = false;
-    let query_role = definition
-        .queries
-        .first()
-        .map(|query| query.connection_role.as_str())
-        .ok_or(ErrorCode::InvalidRequest)?;
+    let definition = definition.with_source(source);
+    let query_role = definition.query.connection_role.as_str();
     let scoped_connection = scope
         .connections
         .iter()
@@ -209,11 +200,11 @@ async fn propose(
         .map_err(|_| ErrorCode::Internal)
 }
 
-async fn update_draft(
+async fn update_article(
     dispatcher: &BrokerDispatcher,
     session: &AuthenticatedSession,
     source: AnalysisArticleSource,
-    arguments: AnalysisArticleUpdateDraftArguments,
+    arguments: AnalysisArticleUpdateArguments,
 ) -> Result<serde_json::Value, ErrorCode> {
     if arguments.expected_revision < 1 {
         return Err(ErrorCode::InvalidRequest);
@@ -230,8 +221,7 @@ async fn update_draft(
         .await
         .map_err(map_application_error)?;
     let scope = scope_for_connection(session, arguments.connection_id)?;
-    if existing.state != AnalysisArticleState::Draft
-        || existing.revision != arguments.expected_revision
+    if existing.revision != arguments.expected_revision
         || existing.project_environment_id != scope.project_environment_id
     {
         return Err(ErrorCode::OperationConflict);
@@ -254,7 +244,7 @@ async fn update_draft(
             workspace_id,
             arguments.article_id,
             arguments.expected_revision,
-            AnalysisArticleMutation::Update(Box::new(article)),
+            &article,
         )
         .await
         .map_err(map_application_error)?;
@@ -263,11 +253,11 @@ async fn update_draft(
         .map_err(|_| ErrorCode::Internal)
 }
 
-async fn run_draft(
+async fn verify_article(
     dispatcher: &BrokerDispatcher,
     session: &AuthenticatedSession,
     source: AnalysisArticleSource,
-    arguments: AnalysisArticleDraftRunArguments,
+    arguments: AnalysisArticleVerifyArguments,
 ) -> Result<serde_json::Value, ErrorCode> {
     let article_id = Uuid::new_v4();
     let run_id = Uuid::new_v4();
@@ -289,7 +279,6 @@ async fn run_draft(
             article_revision: 1,
             definition: article.definition,
             connections: article.connections,
-            parameter_values: arguments.parameter_values,
             run_id,
             persist_local_result: false,
         })
@@ -300,9 +289,8 @@ async fn run_draft(
         article_id: receipt.article_id,
         article_revision: receipt.article_revision,
         state: AnalysisRunState::Succeeded,
-        parameter_values: receipt.parameter_values,
         query_receipts: receipt.query_receipts,
-        fragments: receipt.fragments,
+        result: receipt.result,
         result_hash: Some(receipt.result_hash),
         error: None,
         started_at: receipt.started_at,

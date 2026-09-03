@@ -43,11 +43,8 @@ managed-access flow: `read_organizations`, `read_databases`, `read_branches`,
 grant missing any of them instead of leaving a partially working integration.
 
 To deliver invitation email, also set `RESEND_API_KEY` and a verified
-`WORKSPACE_INVITATION_FROM` sender; without them, the dashboard keeps the email-bound
-copy-link fallback. Signal email can use a separate verified
-`WORKSPACE_SIGNAL_FROM`; when absent it deliberately reuses the invitation sender.
-Failed Signal delivery is claimed durably and retried with bounded backoff. Ambiguous
-email attempts retry within 23 hours, inside Resend's 24-hour idempotency-key lifetime.
+`WORKSPACE_INVITATION_FROM` sender; without them, the workspace console keeps the
+email-bound copy-link fallback.
 The anonymous first-party product-outcome endpoint is disabled unless
 `PRODUCT_ANALYTICS_RELAY_ENABLED=1` and both
 `PRODUCT_ANALYTICS_CLOUDFLARE_URL` and `PRODUCT_ANALYTICS_CLOUDFLARE_TOKEN` are set.
@@ -84,12 +81,8 @@ production command requires `DATABASE_URL_UNPOOLED` and does not fall back to th
 runtime URL; a missing URL or migration failure stops the deployment instead of serving
 code against an older control-plane schema.
 
-Migration `0051_orange_sway` adds the Signal email claim, due-at, and retry indexes
-without rewriting existing notification payloads. Existing pending rows become due at
-migration time; delivered/failed rows remain terminal. It also indexes stale rate-limit
-rows. Each due maintenance invocation deletes at most 1,000 expired rows, so
-retention never adds an unbounded delete to the public request path. The schema
-checks require claim id/timestamp pairs and prevent a delivered row from being retried.
+Due maintenance deletes at most 1,000 expired rate-limit rows per invocation, so
+retention never adds an unbounded delete to the public request path.
 
 The older `/api/v1/providers/gcp-cloud-sql/callback` route remains only because an
 already registered Google OAuth client may still reference it. The canonical callback
@@ -303,43 +296,36 @@ for legacy records.
 
 ## Analysis Articles
 
-An Analysis Article is the one shared BI resource for a Project Environment. Its
-immutable definition revisions pin connection and Environment revisions, bounded
-read-only query nodes, typed transforms, semantic metrics, responsive document blocks,
-review evidence, refresh policy, and ownership. Dashboard, Funnel Analysis, and Agent
-Report are migration-only source kinds and have no live route, command, or table.
+An Analysis Article is a versioned sanitized HTML document with exactly one bounded,
+read-only saved query pinned to one Project Environment and one exact connection content
+revision. Its current wire contract contains no block graph, transform, metric,
+parameter, schedule, signal, or result-sharing policy.
 
-Database execution remains on a member-owned Desktop runner inside exact current grants.
-The control plane stores only reviewed, bounded, independently encrypted result
-fragments whose declared column sensitivity and masking permit workspace sharing. Team
-readers see the latest successful compatible live result; a failed refresh leaves the
-last successful result visible with explicit freshness and runner health.
-
-Desktop uploads each bounded result fragment through the staged-result endpoint before
-it completes a run. The service performs a read-only exact-run preflight before KMS
-work, but the final PostgreSQL transaction is authoritative: it rechecks the same
-session, member, runner, cancellation, Article revision, result-sharing state, and
-connection grants while it atomically commits receipts and the complete fragment
-manifest. Retrying the same fragment or exact terminal completion is idempotent. Result
-reads recompute the committed evidence hash from every still-unexpired fragment and
-fail closed if retention cleanup has removed only part of a manifest. During the
-Desktop/cloud rolling-upgrade window, the completion route also accepts the previous
-inline `fragments` shape under a four-MiB bounded body and seals it through the same KMS
-and SQL authority boundary; larger results require the staged protocol.
+The query runs only after an authenticated person explicitly selects **Run again** in
+Desktop. A foreground, member-owned Desktop runner rechecks the current session,
+Article revision, connection grant, runner capability, cancellation state, and local
+read-only policy. Result rows stay in Desktop's bounded encrypted recovery cache. The
+control plane stores only run metadata, the single query receipt, and collaboration
+audit; it has no result upload or result-read endpoint.
 
 The collection endpoint is `/api/v1/workspaces/:workspaceId/analyses`; item, immutable
-revision, run/result, runner/lease, Signal, notification, and publication endpoints are
-nested below it. Every mutation uses optimistic authority checks. A person reviews and
-makes revisions live, enables production scheduling, approves mappings, and publishes
-fixed external snapshots. Public `/analyses/:slug` pages read only immutable snapshot
-payloads and cannot reach a workspace session, SQL, credentials, or refresh commands.
+revision, manual run, foreground runner, cancellation/control, and publication endpoints
+are nested below it. Every mutation uses optimistic authority checks. The newest saved
+revision is shared immediately with members who hold the exact connection grant; an
+Editor can separately publish an immutable HTML snapshot. Public
+`/analyses/:slug` pages read only that snapshot and cannot reach a workspace session,
+saved query, credentials, or rerun command.
 The public HTML and snapshot API are private `no-store` responses because a slug is
 revocable access: every request rechecks publication state and a revoked slug becomes
 unavailable without a browser or shared-cache grace period.
 
-Invalid legacy BI records are preserved in the non-executable migration-failure archive
-for explicit recovery. The one-way migration then drops the legacy projections so a
-second BI model cannot continue accumulating.
+Migration `0057_retire_analysis_automation` disables dormant background runners,
+refresh leases, signals, and notification attempts. Those historical rows remain only
+for audit-safe data migration; no route, scheduler, or UI reads them. The bounded
+definition compatibility adapter converts supported old records to the compact current
+shape and never re-emits retired behavior. A separate response-only compatibility
+adapter may append inert lifecycle fields for supported older Desktop builds; current
+domain DTOs discard them, and they never decide Article visibility or execution.
 
 ## Trust boundary
 
@@ -416,8 +402,8 @@ second BI model cannot continue accumulating.
   representative rather than an exhaustive parser-equivalence proof: a field, enum,
   or semantic constraint change must add the relevant accept/reject case and pass
   both parsers before either side ships. `workspace-analysis-articles.ts` remains the
-  sole authority for the full parameter, schedule, and transform/block definition policy;
-  Rust deliberately validates only the named cross-runtime safety and authority
+  sole Cloud authority for the compact HTML-plus-one-query contract; Rust deliberately
+  validates the same cross-runtime safety and authority
   invariants before sending a create/update request.
 - Desktop pool retirement calls the exact tenant/user/connection/lease DELETE
   boundary for early provider revocation. Natural provider expiry and the durable

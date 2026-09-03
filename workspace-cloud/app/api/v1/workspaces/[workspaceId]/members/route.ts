@@ -28,7 +28,6 @@ import {
   member,
   user,
   workspaceAnalysisArticle,
-  workspaceAnalysisSignal,
   workspaceAuditEvent,
 } from "../../../../../../lib/schema";
 import { removeMemberAfterAnalysisRunnerCleanup } from "../../../../../../lib/workspace-analysis-runner-store";
@@ -425,26 +424,7 @@ export async function DELETE(request: Request, context: RouteContext) {
     if (ownedArticle) {
       await abandonMemberClaim(claim);
       return jsonError(
-        "Transfer this member's active Analysis Articles before removing them",
-        409,
-      );
-    }
-    const activeSignalRecipient = await db.query.workspaceAnalysisSignal.findFirst({
-      where: and(
-        eq(workspaceAnalysisSignal.organizationId, workspaceId),
-        eq(workspaceAnalysisSignal.enabled, true),
-        isNull(workspaceAnalysisSignal.deletedAt),
-        sql`COALESCE(
-          ${workspaceAnalysisSignal.definition}->'recipientMemberIds' ? ${existing.id},
-          false
-        )`,
-      ),
-      columns: { id: true },
-    });
-    if (activeSignalRecipient) {
-      await abandonMemberClaim(claim);
-      return jsonError(
-        "Remove this member from active Analysis signal recipients before removing them",
+        "Delete this member's active Analysis Articles before removing them",
         409,
       );
     }

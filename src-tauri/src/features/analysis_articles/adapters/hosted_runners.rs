@@ -10,13 +10,8 @@ pub(crate) struct RemoteAnalysisRunner {
     pub(crate) display_name: String,
     #[serde(default)]
     pub(crate) runner_capability_generation: Option<u64>,
-    pub(crate) background_allowed: bool,
     pub(crate) last_seen_at: DateTime<Utc>,
     pub(crate) online: bool,
-    #[serde(default)]
-    pub(crate) scheduled_article_count: u64,
-    #[serde(default)]
-    pub(crate) is_current: bool,
 }
 
 #[derive(Deserialize)]
@@ -65,8 +60,7 @@ struct RunnerCollectionResponse {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct AnalysisRunnerRevocation {
     pub(crate) id: Uuid,
-    pub(crate) scheduled_article_count: u64,
-    pub(crate) active_lease_count: u64,
+    pub(crate) active_run_count: u64,
 }
 
 #[derive(Debug, Deserialize)]
@@ -80,14 +74,12 @@ struct RunnerRevocationResponse {
 struct RunnerRegistrationRequest<'a> {
     device_id: &'a str,
     display_name: &'a str,
-    background_allowed: bool,
 }
 
 pub(crate) async fn register_analysis_runner(
     user_id: &str,
     workspace_id: Uuid,
     device_id: &str,
-    background_allowed: bool,
 ) -> AppResult<RegisteredAnalysisRunner> {
     let token = token(user_id).await?;
     let device_id = Uuid::parse_str(device_id)
@@ -124,7 +116,6 @@ pub(crate) async fn register_analysis_runner(
         .json(&RunnerRegistrationRequest {
             device_id: &device_id_string,
             display_name: &display_name,
-            background_allowed,
         });
     if let Some(capability) = existing_capability.as_deref() {
         request = request.header(ANALYSIS_RUNNER_CAPABILITY_HEADER, capability);
@@ -153,7 +144,6 @@ pub(crate) async fn register_analysis_runner(
     .await?;
     if body.runner.device_id != device_id_string
         || body.runner.display_name != display_name
-        || body.runner.background_allowed != background_allowed
         || !body.runner.online
         || body.runner.last_seen_at < Utc::now() - chrono::Duration::minutes(2)
         || body.runner.last_seen_at > Utc::now() + chrono::Duration::seconds(30)
@@ -275,10 +265,7 @@ pub(crate) async fn revoke_analysis_runner(
         MAX_DEFINITION_RESPONSE_BYTES,
     )
     .await?;
-    if body.revoked.id != runner_id
-        || body.revoked.scheduled_article_count > 10_000
-        || body.revoked.active_lease_count > 10_000
-    {
+    if body.revoked.id != runner_id || body.revoked.active_run_count > 10_000 {
         return Err(AppError::Network(
             "Analysis runner revocation returned invalid evidence".into(),
         ));

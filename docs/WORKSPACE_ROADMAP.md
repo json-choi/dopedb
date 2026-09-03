@@ -1,879 +1,226 @@
 # Workspace Collaboration Roadmap
 
-Status: Milestone 0 implemented; Milestone 1 identity/RBAC slice implemented;
-Milestone 2 shared-connection core, explicit conflict recovery, plus PlanetScale, Neon,
-and GCP Cloud SQL managed-access adapters implemented; Milestone 4 shared-dashboard definition sync and
-revision core implemented, with packaged two-member verification still open. KMS-wrapped
-metadata backup, resumable key rotation, reversible Owner workspace deletion, and an
-account-scoped ordered pull cursor are implemented in the control plane. Production uses a dedicated Vercel OIDC principal,
-GCP Workload Identity Federation provider, service account, and single-key KMS grant;
-packaged recovery evidence remains open. General provider inventory, full sync, and per-connection-grant
-exit criteria stay open below. The 2026-08-12 PD-40 decision supersedes separate
-Dashboard, Funnel Analysis, Agent Report, and Signal product surfaces with one
-Analysis Article domain. Milestone 8 implementation and one-way removal are complete;
-packaged two-member, live hosted migration, scheduler, email, and public-publication
-evidence remain deployment validation gates rather than a second implementation path.
+Status: maintained alpha roadmap, updated 2026-09-03.
 
-This roadmap owns how DopeDB completes and hardens its team workspace without
-turning the workspace service into a database proxy or weakening the local
-safety boundary. Milestones are ordered by dependency and exit criteria rather
-than calendar date.
+This document tracks the remaining work needed to harden DopeDB's team workspace.
+It does not define product scope. Scope is owned by
+[Product Positioning](./PRODUCT_POSITIONING.md),
+[Product UI Scope](./PRODUCT_UI_SCOPE.md), and accepted ADRs.
 
-## Product Outcome
+## Product outcome
 
-DopeDB is the shared database access workspace for teams and AI agents. The
-hosted service is the control plane for identity, secretless connection records,
-policy, provider resources, revisions, and collaboration audit. The desktop app
-remains the local execution, approval, stop, and recovery boundary. This roadmap
-implements the promise in [Product Positioning](./PRODUCT_POSITIONING.md); it does
-not turn DopeDB into a hosted query proxy, a universal local database client, or
-an always-on general MCP server.
+DopeDB is a shared database-access workspace for teams and AI agents. The hosted
+service owns identity, secret-free connection records, policy, provider resources,
+revisions, and collaboration audit. Desktop owns credentials, database traffic,
+execution, approval, cancellation, recovery, and local result rows.
 
-Prioritize the workspace in this order:
+Work is prioritized in this order:
 
-1. Reliably share one connection and give each member individual access.
-2. Complete provider discovery, issuance, expiry, revoke, and drift handling.
-3. Enforce and recover every Project-resource-pinned Agent operation at exact authority.
-4. Add versioned Analysis Articles, bounded live team results, metric signals, and
-   fixed public publications on top of that boundary.
+1. Make sharing one connection and obtaining member-specific access reliable.
+2. Complete provider discovery, least-privilege issuance, revoke, expiry, and drift.
+3. Enforce every Agent operation inside one exact Project resource grant.
+4. Keep the simple HTML Analysis Article and immutable public publication reliable.
+5. Deepen schema introspection where it materially improves Agent judgment.
 
-Driver breadth and general client convenience are not workspace exit criteria.
+Driver count, a general database-client feature list, dashboards, text-to-SQL, and an
+always-on general MCP server are not workspace exit criteria.
 
-## Product Decision
+## Architecture boundary
 
-Use a local-execution, hosted-control-plane architecture:
-
-- Keep `site/` as the public marketing deployment at `dopedb.dev`.
-- Build `workspace-cloud/` as a separate Next.js application and Vercel Project at
-  `app.dopedb.dev`. It owns the authenticated web surfaces and `/api/v1/*` control-plane
-  routes. API and account UI deploy together initially; they can split later without
-  changing the versioned API contract.
-- Use the `workspace_control` schema in hosted PostgreSQL for collaboration metadata.
-  Only `workspace-cloud` receives its database URL; the desktop app never connects to
-  the control-plane database directly.
-
-- The workspace service synchronizes membership, connection templates, Analysis
-  Article definitions, bounded reviewed result fragments, revisions, publications,
-  signal receipts, and collaboration audit events.
-- Member-local mode keeps database credentials in that member's OS credential store.
-  Desktop provider discovery, when supported, delegates to an official provider CLI
-  with fixed arguments and machine-readable output; Desktop never reads a provider
-  token to call that provider's HTTP API itself.
-- Optional managed mode encrypts reusable workspace-owned provider authorization at the
-  control plane (or uses keyless cloud federation) and uses it only to create
-  member-specific, least-privilege, short-lived
-  database credentials. Those one-time credentials are never persisted by the
-  service or desktop and are dropped from process memory with the live pool.
-- Provider authentication is adapter-based. DopeDB remains responsible for workspace
-  RBAC, resource scope, audit, and short-lived DB credential issuance. A third-party
-  authentication broker is not a runtime dependency and requires a separate product
-  decision before introduction.
-- Queries continue to run from an exact-grant Desktop runner through the existing
-  Rust safety, monitoring, audit, read path, and explicit write-approval path. The
-  hosted service does not open a database connection.
-- Query result rows are not synchronized by default. A reviewed live Analysis
-  Article may publish only bounded, masked result fragments with independent
-  authorization and retention; a public article is a separate immutable snapshot
-  selected from one successful run.
-- Workspace membership never grants target-database write access or `pg_monitor`.
-  Those remain database-side privileges of the credential used on each device.
-- Database drivers and provider control-plane adapters remain separate. A driver
-  connects to PostgreSQL, MySQL, MongoDB, or a graph database; a provider adapter
-  discovers and manages Neon, PlanetScale, or another hosted service.
+- `workspace-cloud/` is the authenticated web and API control plane at
+  `app.dopedb.dev`; `site/` is the separate public marketing deployment.
+- Hosted PostgreSQL stores collaboration metadata. Desktop never connects to that
+  database directly.
+- Member-local credentials stay in each member's OS credential store.
+- Managed access uses provider-native or approved broker authority to issue a
+  member-specific, least-privilege, short-lived database credential. The issued
+  secret is delivered once and kept only in Desktop process memory.
+- Target-database traffic never passes through Workspace Cloud.
+- Provider discovery and authentication use the provider's official CLI where the
+  app is the caller. DopeDB does not read a provider token and call its API directly.
+- Codex and Claude run through their official adapters or official local CLIs. Every
+  Agent session is bound to the current workspace, account, exact selected Project
+  resources, process ancestry, local policy, and at most one write target.
 
 ```mermaid
 flowchart LR
-    A["Member A · DopeDB"] <-->|"authenticated HTTPS metadata sync"| W["Workspace control plane"]
-    B["Member B · DopeDB"] <-->|"authenticated HTTPS metadata sync"| W
-    W --> M["members · roles · invitations"]
-    W --> R["connection templates · analysis articles · publications"]
-    W --> P["provider resources · permissions · approvals"]
-    W --> V["revisions · collaboration audit"]
-    A --> KA["A's OS credential store · local mode"]
-    B --> KB["B's OS credential store · local mode"]
-    KA --> D["Target database"]
-    KB --> D
-    KA --> PA["official provider CLI · supported local discovery"]
-    KB --> PB["official provider CLI · supported local discovery"]
-    PA --> API["provider control plane"]
-    PB --> API
-    W --> MI["encrypted provider grant · managed mode"]
-    MI --> API
-    API --> EP["member-specific TTL DB credential"]
-    EP -.->|"HTTPS once · memory only"| A
-    EP -.->|"HTTPS once · memory only"| B
-    A --> SA["local Terminal · CLI · safety pipeline"]
-    B --> SB["local Terminal · CLI · safety pipeline"]
+    W["Workspace control plane<br/>identity · connections · grants · revisions"]
+    A["Member A Desktop<br/>credential · execution · audit"]
+    B["Member B Desktop<br/>credential · execution · audit"]
+    AA["Codex or Claude<br/>exact Project grant"]
+    AB["Codex or Claude<br/>exact Project grant"]
+    DB[(Target database)]
+    W <-->|"secret-free metadata"| A
+    W <-->|"secret-free metadata"| B
+    AA <-->|"runtime-only typed bridge"| A
+    AB <-->|"runtime-only typed bridge"| B
+    A -->|"local DB traffic"| DB
+    B -->|"local DB traffic"| DB
 ```
 
-## Deployment and Identity Decision
+## Shared and local data
 
-The first hosted control plane uses one dedicated Next.js/Vercel project rather than
-adding API routes to the marketing site. This separates database credentials, auth
-secrets, deployments, rollback, logs, rate limits, and preview environments from public
-site changes while keeping the code in this repository.
-
-Better Auth is the authentication and membership boundary, using its Drizzle adapter,
-Google provider, Organization plugin, Bearer plugin, and RFC 8628 Device Authorization
-plugin. Drizzle schema and migrations are the source of truth for hosted PostgreSQL.
-
-Desktop sign-in follows Better Auth's standard device authorization flow:
-
-1. The desktop requests codes from `POST /api/auth/device/code` with the fixed,
-   server-validated `dopedb-desktop` client id.
-2. Better Auth returns a high-entropy device code, a human-readable user code, and an
-   `app.dopedb.dev/auth/device` verification URL that expires after ten minutes.
-3. The browser completes Google sign-in through Better Auth's callback and state checks.
-4. The signed-in user claims and explicitly approves or denies the displayed user code.
-5. The desktop polls `POST /api/auth/device/token` at the server-provided interval. An
-   approved code is consumed once and returns a Better Auth Bearer session.
-6. The desktop stores the Bearer session in the OS credential store and sends it only
-   over HTTPS. Better Auth owns rotation, expiry, revocation, and rate limiting.
-
-Google is requested only for identity scopes. Database hooks clear provider access,
-refresh, and ID token values before every account create or update, so the account row
-retains the provider subject but not reusable Google credentials.
-
-The authenticated web surface initially covers device-login completion, invitation
-acceptance, account/session management, and workspace membership administration. Normal
-database work remains in the Tauri app.
-
-## Goals
-
-- Let a user create a workspace and invite teammates with clear roles.
-- Share connection definitions without sharing long-lived raw passwords.
-- Let each member bind their own database credential to a shared connection.
-- Let an admin optionally enable provider-backed automatic access. The current public
-  path issues only a short-lived read credential; a future write credential requires
-  the separate provisioning, database grant, and approval work owned by #99/#100.
-- Let an administrator bind a provider authorization to a managed workspace
-  integration in the web console and import only resources that both the provider
-  and workspace authorize. Desktop does not collect provider API credentials.
-- Apply workspace roles, resource grants, provider-token scopes, environment policy,
-  and local safety checks as narrowing layers rather than interchangeable authority.
-- Share and version complete Analysis Articles across members and devices, including
-  narrative, exact-source analysis graph, metrics, layout, evidence, and signals.
-- Keep internal articles current through an explicit Desktop runner and share only
-  reviewed bounded result fragments; publish external values only as an approved
-  immutable web snapshot.
-- Keep offline access to already-synchronized workspace resources.
-- Record both database execution activity and collaboration changes without mixing
-  their trust guarantees.
-
-## Non-goals for the First Release
-
-- Proxying database traffic through the workspace service.
-- Distributing or retaining static shared database passwords, certificates, or cloud
-  tokens. Managed one-time credentials are explicitly limited, audited, and expiring.
-- Claiming that workspace policy can restrict how a member uses a personal provider
-  token outside DopeDB. The external provider remains authoritative for that token.
-- Granting target-database privileges or PostgreSQL roles through workspace membership.
-  An Editor role may permit DopeDB's write path, but the member's own target-database
-  credential and the local safety/approval gates must independently permit it.
-- Treating provider project, branch, compute, backup, credential, or deployment APIs
-  as database-driver responsibilities.
-- Persisting every query result or agent conversation to the workspace.
-- Public live-query links or any public route that can reach a database, private
-  evidence, hidden SQL, or a workspace credential. Approved fixed Analysis Article
-  snapshots are explicitly in scope under ADR 0007.
-- Real-time co-editing of SQL or reports.
-- Replacing target-database audit logs with workspace events.
-
-## Shared and Local-only Data
-
-| Resource | Workspace data | Local-only data |
+| Resource | Workspace Cloud | Desktop only |
 | --- | --- | --- |
-| Connection | engine, host, port, database, SSL, environment, safety policy, credential mode, redacted provider selector | member-local username/password, token, certificate, connection URL, advanced parameters, local `secret_ref`, live pool |
-| Provider integration | provider kind, external account id, encrypted OAuth envelope, verified scope, status, workspace policy | plaintext OAuth token, deployment encryption key, one-time DB credentials |
-| Provider operation | redacted request, approval state, provider operation id, outcome | unredacted secret responses and local transport diagnostics |
-| Analysis Article | title, narrative, exact source/transform/metric/block definition, revision, freshness policy, bounded reviewed result fragments | raw source artifacts, unreviewed intermediate results, credential, Agent transcript |
-| Public article | immutable approved block/result snapshot, masking receipt, publication revision | database grant, hidden SQL, private evidence, refresh command |
-| Monitoring | desired coverage and policy hints | current load snapshot and credential-specific `pg_monitor` status |
-| Project integration | optional repository-relative configuration | absolute `project_dir` on each device |
-| Agent Terminal/CLI | workspace-scoped connection identifiers and policy | ephemeral Terminal capability, client session, single-use query plans |
-| History and audit | explicit collaboration events and published report provenance | full local query history and hash-chained execution audit |
+| Connection | engine, endpoint fields, environment, safety ceiling, revision, grant, redacted provider selector | username, password, token, certificate, connection URL, local secret reference, live pool |
+| Provider integration | encrypted provider authorization or keyless trust metadata, verified scope, lifecycle and audit | one-time issued DB credential and local transport diagnostics |
+| Project | resource identity, Environment bindings, exact revisions and grants | Local Folder absolute path and member-specific credential binding |
+| Agent session | no transcript, capability, SQL, result, or process token | exact runtime grant, process binding, transcript, proposals and execution results |
+| Analysis Article | sanitized HTML, one read-only query definition, exact connection content revision, immutable revisions, manual run receipt metadata | query result rows and bounded encrypted recovery artifact |
+| Public article | immutable sanitized HTML snapshot, slug state, publisher receipt | saved query, private result, database grant, rerun command |
+| Audit | collaboration changes and redacted authority receipts | full local query and operation audit |
 
-Connection usernames are member-local in the default mode. Managed mode instead creates
-a distinct provider credential for the current workspace member and lease, preserving
-target-database attribution without asking the user to copy a password.
+Workspace roles never grant target-database privileges. The credential used on the
+member's device and the database's own roles remain authoritative.
 
-## Authorization Model
+## Current Analysis Article contract
 
-Workspace roles and connection permissions are separate. A broad workspace role
-must not imply production database access.
+[ADR 0007](./adr/0007-analysis-article-bi-domain.md) owns this contract:
+
+- one sanitized HTML body;
+- exactly one non-empty bounded read-only query;
+- exactly one connection content revision pin;
+- immutable edit history;
+- an explicit Desktop-only manual run with cancellation and authority rechecks;
+- local-only result rows and a hosted query receipt;
+- an optional immutable public HTML publication with no query or session path.
+
+There is no parameter surface, transform graph, visualization block registry,
+multi-query join, schedule, background runner selection, freshness monitor, result
+upload, metric signal, or hosted database execution.
+
+The current serializer emits only the compact definition. A private bounded adapter
+may read supported old definitions and immediately converts them to that compact
+shape. A separate HTTP compatibility adapter temporarily appends inert lifecycle
+markers for supported older Desktop builds and projects them away on current reads.
+Neither adapter restores retired behavior. Migration `0057_retire_analysis_automation`
+disables dormant background runners, refresh leases, signals, and notification
+attempts. Historical tables remain temporarily for audit-safe production migration;
+no current route, scheduler, or UI reads them.
+
+## Authorization model
+
+Workspace role and connection grant are separate narrowing layers.
 
 | Capability | Viewer | Analyst | Editor | Admin | Owner |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| View published Analysis Articles | yes | yes | yes | yes | yes |
-| Run an allowed shared read query | no | yes | yes | yes | yes |
-| Create analysis drafts | no | yes | yes | yes | yes |
-| Edit and publish shared resources | no | no | yes | yes | yes |
-| Manage connection templates and policies | no | no | no | yes | yes |
-| Invite, remove, and change member roles | no | no | no | yes | yes |
-| Transfer ownership or delete the workspace | no | no | no | no | yes |
-
-The application authorization model maps Analyst to read-only execution, Editor to a
-write-capable role, and Admin/Owner to management. A managed write lease is available
-only when a current Admin/Owner has enabled that connection's durable `allowWrites`
-policy, the provider resource advertises a separately provisioned write credential,
-and the member has both an Editor/Admin/Owner role and a `use`/`manage` connection
-grant. It must still satisfy database roles, local safety configuration, explicit
-approval, and the #99/#100 provisioning contract. The provider credential TTL rotates
-automatically and does not shorten the lifetime of the durable role assignment.
-Per-connection grants such as `access_prod` remain a later refinement and default to
-deny until implemented. Existing local credentials and advanced connection parameters
-are never inherited by another member or device.
-
-Provider integrations add a separate resource hierarchy:
-
-```text
-workspace
-└─ provider integration
-   └─ organization, project, or database
-      └─ branch, endpoint, compute, or deployment resource
-         └─ workspace connection template
-```
-
-Provider actions use explicit capabilities such as `provider.view`,
-`provider.integration.manage`, `provider.resource.import`,
-`provider.branch.create`, `provider.branch.delete`, `provider.compute.manage`,
-`provider.credentials.manage`, `provider.backup.restore`,
-`provider.deploy_request.create`, `provider.deploy_request.approve`, and
-`provider.deploy.execute`. An adapter reports which capabilities a particular
-provider resource supports; the UI and API must not infer support from the provider
-name alone.
-
-Every provider or database operation is evaluated as the intersection of:
-
-1. active workspace membership and role defaults;
-2. explicit resource grants and denies;
-3. provider-reported capabilities and the bound token's verified scopes;
-4. environment policy, including a separate production-access grant; and
-5. local database safety and credential state when the operation reaches a database.
-
-An explicit deny wins. A high-scope provider token cannot broaden workspace access,
-and an Owner role cannot create authority that the external provider or target
-database has not granted. Production, credential, restore, deployment, and
-destructive operations can additionally require an approval request.
-
-## Provider Integration Boundary
-
-Keep two adapter contracts with no shared secret-bearing configuration object:
-
-- A `DriverAdapter` connects to a database and implements query execution, schema
-  inspection, cancellation, and engine-specific value handling.
-- A `ProviderAdapter` talks to a hosted service control plane and implements resource
-  discovery plus capability-gated operations such as branch or compute management.
-
-A provider resource may create or update a workspace connection template through a
-redacted selector, but the template never owns or serializes a provider token.
-
-Member-local database credentials remain available for every driver. A Desktop-local
-provider integration is available only where an official CLI implements the required
-bounded discovery contract; it never falls back to a raw token or direct provider HTTP
-request. Managed mode stores reusable provider authorization separately from connection
-templates and routes provider control-plane calls through the workspace service.
-PlanetScale uses OAuth and provider-native TTL roles/passwords. Neon uses a hosted,
-encrypted, preferably project-scoped API key to create a 15-minute SQL role whose grants
-are limited to current user schemas in the selected database. GCP Cloud SQL stores no
-service-account key: Vercel OIDC and
-Workload Identity Federation issue 15-minute IAM database login tokens for separate
-dedicated read and write service accounts. The native client receives a credential once
-over HTTPS, pins provider-required TLS material, creates the pool in Rust, and evicts
-that pool before expiry. The control plane issues the write identity only after the
-live workspace role, connection grant, administrator write policy, canonical provider
-capability, and #99/#100 provisioning contract all pass in the final lease boundary.
-
-Metadata backups use versioned workspace data keys wrapped by Cloud KMS, with bounded,
-resumable rotation across live and tombstoned backups. Production activates that path
-through an exact-project, exact-team, production-only Vercel OIDC/WIF principal with
-access to the single metadata-backup key. Managed mode does not
-proxy database queries, and current Provider authorization continues through the three
-implemented adapters until PD-18 explicitly chooses another Provider or authentication
-boundary.
-
-## Target Data Model
-
-### Workspace service
-
-- Better Auth `user`, `account`, `session`, and `verification` models own identity.
-- Better Auth `organization`, `member`, and `invitation` models own workspace membership.
-- Better Auth `device_code` implements expiring RFC 8628 desktop authorization.
-- `workspace_profile`: organization lifecycle, encryption key reference, residency,
-  and application revision metadata.
-- `workspace_connections`: shareable connection template and default safety policy.
-- `connection_permissions`: per-member or per-role connection grants.
-- `workspace_provider_integrations`: provider kind, external account or organization
-  identity, encrypted credential envelope, verified scope, status, and workspace policy.
-- `provider_oauth_state`: hashed, expiring, session-bound, single-use OAuth state.
-- `workspace_credential_leases`: secret-free issuer id, member, connection, access
-  mode, expiry, and revocation audit index.
-- `workspace_provider_resources`: imported provider resource tree, stable external
-  ids, environment, lifecycle state, redacted metadata, and capability snapshot.
-- `provider_resource_permissions`: per-member or per-role grants and explicit denies
-  scoped to an integration or individual provider resource.
-- `provider_operation_requests`: requested action, redacted arguments, risk class,
-  approvals, stable idempotency key, provider operation id, and terminal status.
-- `analysis_articles`: Project Environment-scoped identity, ownership, lifecycle,
-  current draft revision, and current live revision.
-- `analysis_article_revisions`: immutable source query, typed transform graph,
-  semantic metric, article block/layout, refresh, and publication policy definition.
-- `analysis_article_runs`: runner, exact authority, source/graph/schema revisions,
-  freshness, duration, terminal state, and immutable receipt identity.
-- `analysis_article_result_fragments`: separately encrypted, integrity-bound,
-  masked and bounded block results with explicit retention.
-- `analysis_article_publications`: immutable approved public block/result snapshot,
-  slug lifecycle, masking confirmation, and publisher receipt.
-- `analysis_article_signals`: deterministic condition and notification policy bound
-  to an exact live article revision and metric semantic id.
-- `resource_revisions`: immutable revision metadata for conflict detection and rollback.
-- `workspace_audit_events`: actor, device, action, resource, before/after revision,
-  timestamp, and a redacted change summary.
-
-### Desktop store
-
-- Add `workspace_id`, `remote_id`, `revision`, `sync_status`, and `deleted_at` to
-  synchronizable resources.
-- Add `credential_bindings` keyed by workspace connection, member, and device. Its
-  `local_secret_ref` never leaves the device.
-- Add `provider_credential_bindings` keyed by provider integration, member, and
-  device, including the external identity, verified scope summary, verification time,
-  and local `secret_ref`. The credential itself never enters sync storage.
-- Add `sync_outbox` for durable offline mutations and an account-scoped
-  `workspace_sync_state` for pull cursors. A workspace-only cursor is invalid because
-  two accounts in the same local app can have different connection grants.
-- Keep query history, schema cache, live monitoring snapshots, and the existing
-  hash-chained execution audit local by default.
-
-Existing local UUIDs should remain stable. On migration, create a local Personal
-Workspace, assign every existing connection and snippet to it, and convert each
-Dashboard, Funnel Analysis, and Agent Report into one Analysis Article. Signing in
-must not be required to keep using that personal workspace.
-
-## Analysis Article Contract
-
-ADR 0007 owns the complete contract. In summary:
-
-- One immutable revision stores the reusable exact-source queries, bounded
-  parameters, approved cross-source mappings, typed transforms, semantic metrics,
-  narrative, blocks, layout, and refresh policy.
-- Each run records its exact grant and source revisions. A failed or partial run
-  never replaces the latest compatible successful run.
-- Every visible metric can open its source query, transform, mapping, run receipt,
-  and execution timestamp.
-- A Desktop runner, not the hosted service, performs scheduled reads. Missing or
-  unhealthy runners are shown as stale rather than implied to be monitoring.
-- Internal live sharing uploads only explicitly reviewed, masked, bounded result
-  fragments. Raw source artifacts and arbitrary query results remain local.
-- Public publication freezes selected blocks from one successful run; the public
-  route cannot execute, refresh, or reach private evidence.
-- Agent proposals remain drafts. Humans approve mappings, live revisions,
-  production schedules, shared fragments, public snapshots, and ownership.
-
-## Synchronization Contract
-
-Implementation snapshot (2026-08-06): every committed shared-resource or authority
-audit appends a payload-free event under a gap-free, per-workspace sequence in the
-same PostgreSQL transaction. Credential-lease and web-only backup/key lifecycle facts
-remain in the audit log without expanding the projection cursor. The cursor response carries only changed collection categories and
-tombstone presence—never resource ids, actors, summaries, SQL, credentials, or result
-data. The desktop serializes one workspace/account replay, re-fetches connections and
-Analysis Articles through their independently authorized collection routes, and advances its
-account-scoped SQLite checkpoint only after every selected projection commits. A new
-client bootstraps from a full authorized snapshot; a server restore or long-offline
-cursor compaction explicitly rebases the cursor and also forces a full snapshot.
-Article draft proposals, run receipts, and result-fragment publications use one strict
-ordered outbound outbox; the hosted article revision remains authoritative while the
-Desktop keeps only its authorized projection and local source artifacts.
-
-- The service is authoritative for workspace membership, permissions, and the latest
-  shared resource revision.
-- The desktop remains authoritative for actual database execution and member-local
-  credentials. The provider remains authoritative for managed credential validity.
-- Local mutations enter an outbox before network transmission.
-- Pushes use optimistic concurrency with the resource revision as a precondition.
-- Pulls use an ordered cursor and include tombstones for deletions.
-- SQL, connection policy, and Analysis Article conflicts are never silently merged. Preserve
-  both versions and require an explicit choice or a new merged revision.
-- Retry operations are idempotent through stable operation identifiers.
-- Provider mutations are never accepted from an offline outbox without a fresh
-  authorization and approval check. Their idempotency keys prevent a reconnect or
-  timeout from repeating a destructive external action.
-- A revoked member loses future sync and workspace key access. The product must state
-  honestly that revocation cannot erase data the member already exported.
-
-The hosted version uses TLS and record-bound AES-256-GCM for managed provider grants.
-Metadata backups use KMS-wrapped, versioned data keys and resumable rotation; enabling
-that path in production remains gated on dedicated keyless WIF deployment configuration.
-Plaintext provider grants and one-time database passwords are excluded from persistence
-and general logs. End-to-end encrypted workspace content can be evaluated later
-as a separate product and recovery design because it changes search, invitations,
-device recovery, and server-side collaboration behavior.
-
-## Audit Boundaries
-
-Keep explicit ledgers with distinct trust boundaries:
-
-1. The local execution audit answers which credential executed which database
-   statement and whether it was blocked, approved, or completed.
-2. The workspace collaboration audit answers who invited a member, shared a
-   connection, changed a policy, edited an Analysis Article, published a live
-   revision, or published/revoked a public snapshot.
-3. Provider operation events answer who requested and approved an external action,
-   which resource and idempotency key were used, and which redacted provider outcome
-   was observed. In member-local credential mode, this is an application receipt and
-   must not be presented as stronger evidence than the provider's own audit log.
-
-Workspace application logs must not contain passwords, result rows, full certificates,
-Terminal session capabilities, or unredacted snapshot contents. Collaboration events should reference a
-resource revision rather than duplicating sensitive payloads.
-
-## Milestone 0 — Local Workspace Foundation
-
-Deliverables:
-
-- Introduce Workspace, WorkspaceMember, and resource scope types in the Rust/TypeScript
-  data contract.
-- Introduce a provider-neutral authorization decision contract with actor, action,
-  resource hierarchy, environment, reason, and optional approval requirement.
-- Migrate existing data into a Personal Workspace without changing existing UUIDs.
-- Scope connection, dashboard, and snippet reads/writes by active workspace.
-- Add a workspace switcher that initially contains only the Personal Workspace.
-- Add local revision, tombstone, outbox, and sync cursor storage.
-- Put all new behavior behind a feature flag until migrations and rollback are proven.
-
-Exit criteria:
-
-- Upgrading and downgrading through a backup preserves every existing connection and
-  dashboard.
-- The app remains fully usable offline and without an account.
-- Agent CLI commands cannot resolve a connection outside the currently selected workspace.
-- No secret value enters the new workspace or sync tables.
-
-## Milestone 1 — Identity, Membership, and Control Plane
-
-Implementation snapshot (2026-07-23): `workspace-cloud/` now contains the dedicated
-Next.js auth/account frontend and `/api/v1` service. Better Auth owns Google sign-in,
-Organization membership, Bearer sessions, invitation primitives, database rate limits,
-and RFC 8628 desktop authorization. Drizzle ORM is the only application database layer,
-Drizzle Kit owns migrations, and the Neon schema has been cut over from the empty SQL
-prototype. Workspace creation/listing and active-session visibility are implemented.
-Google application credentials and the production Vercel project/domain are configured.
-Desktop device authorization now requests and polls Better Auth codes, validates the
-resulting Bearer session in Rust, and stores it in the OS credential store without exposing
-it to the webview. Authenticated organization memberships are reconciled into the local
-workspace switcher at sign-in and app startup. Better Auth Multi Session keeps up to ten
-browser identities separate, while the desktop stores one Bearer session per validated
-account id and groups duplicate workspace memberships by account. Account switching restores
-that identity's last team workspace atomically; Personal Workspace data remains account-free.
-The cached identity renders immediately and revalidates silently on focus or after five
-minutes, so a network check never makes the login control flicker. Sessions expire after
-30 days and rotate their freshness daily.
-
-The web console creates verified-email-bound invitations, exposes a copyable acceptance
-link, lists members, and lets Admin/Owner assign Viewer, read-only Analyst, read/write Editor,
-or Admin roles. Admins can also remove members, cancel or reissue pending invitations, and
-revoke device sessions. Optional Resend delivery sends the same email-bound acceptance URL;
-deployments without it retain the secure copy-link workflow. Account selection is available
-before device approval and invitation acceptance so an already active browser identity cannot
-silently approve the wrong account.
-
-This snapshot is the shipped identity and administration slice, not completion of every
-Milestone 1 exit criterion. Durable bidirectional sync for every shared resource and its
-packaged multi-device evidence remain future work. KMS-backed metadata backup/restore,
-resumable key rotation, and reversible workspace deletion are now implemented.
-Shared-connection optimistic conflicts have an explicit recovery surface under Milestone 2.
-The server-log exit criterion is enforced in the root build: one closed categorical
-sink owns runtime failure events, and an automatic source check rejects direct logging
-or exception sinks that could serialize requests, SQL, result rows, identifiers, or
-credentials. Managed-access failures expose only provider, bounded status, and
-`provider_request`/`database_schema`/`database_unavailable`/`unexpected` categories.
-
-Deliverables:
-
-- Add account authentication, device sessions, workspace creation, invitations, and
-  role management.
-- Deploy `workspace-cloud/` independently from `site/`, with production-only control-plane
-  credentials and a separate database/branch for preview deployments.
-- Configure Better Auth Google, Organization, Bearer, and RFC 8628 Device Authorization
-  plugins over the Drizzle adapter; do not maintain parallel custom auth tables or routes.
-- Add minimal web pages for sign-in completion, invitations, sessions, and member admin;
-  keep product data exploration in the desktop app.
-- Implement authenticated push/pull sync with optimistic revisions and tombstones.
-- Add per-workspace encryption, backups, rate limits, and collaboration audit events.
-- Add member removal, token revocation, invitation expiry, and workspace deletion
-  workflows.
-- Provide a self-hosting-compatible API boundary even if the first service is hosted.
-
-Exit criteria:
-
-- Unauthorized users cannot enumerate workspace ids or resource metadata.
-- Role and resource permission checks run server-side on every mutation and read.
-- Revoked sessions stop syncing immediately.
-- Offline edits converge after reconnect, and conflicts retain both versions.
-- Server logs and traces pass automated secret and sensitive-payload checks.
-
-## Milestone 2 — Shared Connections
-
-Implementation snapshot (2026-08-01): an Admin or Owner can copy a Personal
-Workspace connection into a team workspace and manage the shared template lifecycle
-with optimistic revisions. The cloud API accepts a strict redacted
-template whose schema has no username, password, token, certificate, connection URL,
-advanced parameter, or `secret_ref` field. The sharer's secret is duplicated only
-inside that device's OS credential store. In member-local mode, other members receive a
-synchronized template with Credentials Required state and bind their own
-username/password locally. Template updates preserve that member-local overlay, and
-template deletion removes the synchronized local cache and its credential reference. Cached
-role authority is enforced in manual queries, scripts, previews, schema introspection,
-Analysis Article runs, signal runner grants, and Agent CLI reads. Analyst is read-only; Editor can enter the
-existing write/approval path when an Admin/Owner has enabled the DB policy; Admin/Owner can
-manage membership and DB write policy. Credential references,
-RBAC snapshots, schema caches, query history, and Agent threads are keyed by the exact local
-account scope, so two accounts in the same workspace cannot reuse or overwrite one another's
-secrets or cached permissions. A failed copy removes its temporary credential item and rolls
-back the newly created server template where possible. Target-database credentials remain
-authoritative and SQLite file connections are not shareable.
-
-The cached role is only a UI hint. Before a shared connection reads, writes, previews a
-write, changes a database monitoring grant, or serves an Agent CLI read, the desktop asks the
-control plane to revalidate the active session, current membership, role, workspace id,
-and connection id. The check fails closed when the service is unavailable. Removing a
-member in member-local mode cannot revoke a database credential they already possess;
-the target database administrator must revoke that account separately. Managed
-PlanetScale and Neon credentials are revoked on role/removal changes when the provider
-is reachable and otherwise expire after at most 15 minutes. Cloud SQL IAM tokens have
-no immediate revocation endpoint, so authority-changing mutations wait for the live
-lease to expire. Native pool eviction stops reuse before expiry, but a query that was
-already checked out is ultimately bounded by the target database's statement/session
-limits rather than by token expiry alone.
-
-Admins can connect PlanetScale through OAuth, Neon through an API key, or GCP Cloud SQL
-through keyless WIF in the web console, discover only authorized three-level resource
-trees, and attach one database to a shared connection. The desktop then obtains a
-member-specific read or read/write credential without showing a password dialog.
-Reusable provider grants are encrypted at rest; GCP stores only trust coordinates;
-lease rows contain no plaintext credential; the desktop caches only a live pool until
-shortly before provider expiry. GCP Cloud SQL pools use the pinned official Auth Proxy
-as a loopback-only desktop transport, so Public IP does not require a separate
-Authorized Networks entry for every workspace member. The workspace service still
-never proxies database query traffic.
-
-A stale connection mutation preserves both the exact server revision and the candidate
-revision as immutable secret-free records. Members with the connection's explicit manage
-grant review the current and candidate templates side by side in the web console and either
-retain the current revision or apply the candidate. Candidate application goes through the
-ordinary revision-fenced update/delete path, including managed-lease revocation and provider
-safety checks, before an append-only resolution fact is recorded. Replaying a lost response
-recognizes the already selected revision rather than executing the mutation twice. An
-isolated PostgreSQL harness verifies tenant isolation, both decisions, replay idempotency,
-and resolution immutability.
-
-This core deliberately shares endpoint templates plus one redacted provider resource
-selector. It does not yet satisfy the later per-connection grant,
-provider-resource inventory/import, or full tombstone-sync deliverables listed below.
-
-Deliverables:
-
-- Add an explicit Share with Workspace flow for a local connection.
-- Synchronize connection templates and default read-safety policies.
-- Allow a connection template to reference an optional provider resource without
-  embedding provider authentication in the connection profile.
-- Add member/device credential binding with local OS credential-store persistence.
-- Show Ready, Credentials Required, Access Denied, and Connection Failed states.
-- Allow admins to assign per-connection production and read-execution permissions.
-- Expose monitoring coverage as a local capability while sharing only the workspace's
-  desired policy, such as `pg_monitor` recommended.
-
-Exit criteria:
-
-- A recipient can connect using an individual database account without receiving the
-  sharer's secret.
-- Sharing, editing, or deleting a connection never changes another member's local
-  credential binding.
-- Analyst execution is read-only. Editor writes still require the administrator DB
-  policy, target credential, connection safety setting, and explicit local approval.
-  Agent SQL reads remain
-  read-only and still require `query plan` before `query run`.
-- Workspace roles cannot grant target-database permissions without the separate
-  provider/database privilege and per-connection policy gates.
-- Removing a connection invalidates future execution but preserves relevant audit
-  history.
-
-## Milestone 3 — Provider Integrations
-
-Deliverables:
-
-- Expand the implemented provider-neutral PlanetScale/Neon/GCP managed-access boundary
-  into persisted resource inventory, capability detection, and idempotent import.
-- Add only official-CLI-backed member/device provider bindings. Providers without
-  that machine-readable CLI contract remain managed web integrations; do not add a
-  Desktop API-key fallback.
-- Synchronize only redacted organization, project, database, branch, endpoint,
-  compute, lifecycle, and capability metadata.
-- Let an authorized member turn an imported provider database or branch into a
-  workspace connection template while keeping the DB credential binding separate.
-- Show Credentials Required, Scope Insufficient, Access Denied, Unsupported
-  Capability, Provider Unavailable, and Ready states.
-
-Exit criteria:
-
-- Provider API credentials and one-time database credentials never enter workspace
-  sync payloads, application logs, or crash reports.
-- A member cannot enumerate or import a provider resource into the wrong workspace,
-  even by submitting a known external id directly.
-- A token with broader provider scopes cannot bypass a workspace deny or production
-  access policy inside DopeDB.
-- Capability differences are driven by adapter output, so provider products do not
-  expose actions they do not support.
-- Importing the same external resource is idempotent and preserves the existing
-  workspace connection and local credential bindings.
-
-## Milestone 4 — Shared Dashboards
-
-Migration status: the implemented revision, ownership, outbox, conflict, and local
-read-run contracts are inputs to Milestone 8. Dashboard is not a terminal product
-domain after the 2026-08-12 PD-40 decision.
-
-Implementation snapshot (2026-08-06): team-workspace dashboard definitions synchronize
-through an explicit outbox and hosted projection while Personal Workspace dashboards
-remain local. The sync contract contains title, description, SQL, visualization, state,
-owner/updater, and revision only; query result rows, parameter values, credentials, and
-local execution history have no hosted field. Hosted create/update/delete mutations
-recheck the live session, membership, connection grant, exact connection tenant, and
-optimistic revision in the same PostgreSQL statement that writes immutable revision and
-redacted audit records. A stale content edit becomes a separate conflict-copy draft,
-while publish, archive, restore, transfer, and deletion fail closed on stale authority.
-
-Desktop pulls the authoritative definition after connection sync, retains dirty or
-conflicted local work, and runs a shared dashboard only through the existing local
-read-only dashboard runner using that member's connection binding or managed lease.
-Archived definitions cannot execute. Workspace settings exposes definition metadata,
-history, restore, publish/archive, and ownership transfer without exposing result rows.
-The remaining exit check is a packaged two-member/two-device run proving that both
-members obtain current results through independent credentials and that offline
-conflict recovery remains understandable in the shipped UI.
-
-Deliverables:
-
-- Share existing dashboard definitions into a workspace.
-- Add draft, published, archived, owner, updated-by, and revision metadata.
-- Run shared dashboards locally through the existing read-only dashboard command.
-- Add revision history, restore, duplicate-on-conflict, and ownership transfer.
-- Show whether a member lacks credentials or execution permission for the dashboard's
-  source connection.
-
-Exit criteria:
-
-- Two members can open the same dashboard definition and obtain results through their
-  own credentials.
-- Result rows are not uploaded during ordinary dashboard viewing.
-- Concurrent SQL or visualization changes cannot overwrite each other silently.
-- A dashboard cannot reference a connection outside its workspace.
-
-Milestones 0–2 form the workspace and shared-connection foundation. Milestones 0–4
-form the first team-product MVP with read-only provider discovery, role-gated managed
-database access, and shared dashboards.
-
-## Milestone 5 — Saved Agent Analysis Reports
-
-Migration status: the implemented evidence, proposal, immutable revision, human
-publication, and ordered replay contracts are inputs to Milestone 8. Agent Report is
-not a separate product surface after the 2026-08-12 PD-40 decision.
-
-Implementation snapshot (2026-08-06): the Agent can propose a complete draft and
-append new immutable evidence only from successful, connection-pinned read runs. The
-desktop writes each exact, secret-free mutation to SQLite before its first hosted
-request and replays one account's rows in insertion order after startup, login,
-membership refresh, or workspace/account activation. Every replay rechecks the active
-Team membership, Editor role, connection revision, member-local binding revision, and
-connection access before the hosted service independently rechecks its live session and
-grant. Lost create and append responses are idempotent only when the report definition,
-new claims, evidence identities, SQL, timestamps, author, and exact adjacent revisions
-all match. Result rows, credentials, artifact handles, and Agent transcripts have no
-outbox or hosted representation; replay failures retain only a categorical error kind.
-
-The web workspace owns report reading, human editing, review, publish/archive, immutable
-revision history, evidence inspection, restore, and ownership transfer. The desktop
-therefore keeps an outbound Agent mutation outbox, not a second report reader cache that
-could become an authority. Remaining release evidence is a packaged two-member recovery
-run that drops responses between commit and acknowledgement and confirms ordered replay
-without duplicate reports or evidence.
-
-Deliverables:
-
-- Add report list, editor, evidence-query panel, review, and publish flows.
-- Let the Agent CLI propose a report only from durable successful query-run identifiers.
-- Store the original question, narrative conclusion, evidence query metadata, and
-  preflight warnings as versioned report content.
-- Add explicit rerun and append-new-evidence behavior.
-- Add comments and reviewer status only after revision ownership is reliable.
-
-Exit criteria:
-
-- A published report remains understandable without rerunning its queries.
-- Every claimed data point can point to an evidence query and execution timestamp.
-- An agent cannot publish or replace a report without explicit user agreement.
-- Editing a report does not mutate its historical evidence records.
-
-## Milestone 6 — Controlled Provider Operations
-
-Deliverables:
-
-- Add capability-gated operation requests for provider branch, compute, credential,
-  backup, restore, and deployment actions supported by each adapter.
-- Require fresh server authorization before execution and stable idempotency keys for
-  every provider mutation.
-- Classify operations by read-only, non-production mutation, production mutation,
-  credential-sensitive, restore, and destructive risk.
-- Require explicit production access and configurable additional approval for
-  production, credential, restore, deployment, and destructive actions.
-- Record requester, approver, resource, redacted arguments, provider operation id,
-  outcome, and timestamps in the workspace audit stream.
-- Keep member-local execution available while expanding managed, short-lived issuers
-  only where the provider can enforce identity, scope, TTL, and revocation.
-- Support one closed generic PostgreSQL/MySQL broker path through a deployment-
-  allowlisted HashiCorp Vault Database Secrets AppRole. The broker issues a distinct
-  maximum-15-minute lease per member; its AppRole and static database owner password
-  never cross into Desktop or shared connection metadata.
-
-Exit criteria:
-
-- Reconnects, retries, and provider timeouts cannot execute an operation more than
-  once.
-- Revocation or a permission change between request and execution causes a fresh
-  denial rather than using a stale approval.
-- Secret-bearing provider responses are displayed once when necessary and are never
-  persisted in shared metadata or general audit events.
-- Production and destructive actions cannot be self-approved when the workspace
-  policy requires a second actor.
-- Provider-native audit identifiers are retained so administrators can reconcile
-  DopeDB events with the provider's own audit history.
-
-## Milestone 7 — Deferred Enterprise Controls
-
-Deliverables:
-
-- Add SSO/domain policy, SCIM, configurable retention, and export controls as demand
-  requires.
-- Keep centrally distributed static database passwords out of scope; the narrow
-  dynamic Vault Database Secrets adapter belongs to Milestone 6 rather than this
-  enterprise suite.
-- Evaluate end-to-end encryption and self-hosted control-plane packaging separately.
-
-Exit criteria:
-
-- Any future enterprise secret feature must not return shared static credentials to
-  the UI or Agent and must support central revocation.
-- Enterprise controls do not weaken the default local-credential model.
-
-This milestone remains deferred by PD-32. Analysis Article result fragments and
-public snapshots are not enterprise shared-secret features and are owned by the
-narrower ADR 0007 contract below.
-
-## Milestone 8 — Comprehensive Analysis Article BI Archive
-
-This milestone is complete only when Dashboard, Funnel Analysis, Agent Report, and
-their standalone product surfaces no longer exist. Partial aliases, compatibility
-readers, duplicate menus, and disabled placeholders do not satisfy the migration.
-
-Implementation status: complete on 2026-08-12. The canonical local, protocol, Desktop,
-ACP, hosted, authenticated web, and immutable public paths below are connected, and the
-legacy product paths were removed after one-way archival migration. A clean/live hosted
-PostgreSQL migration and packaged multi-member production lifecycle remain explicit
-deployment validation because the development machine has no safe test PostgreSQL;
-they do not authorize a legacy fallback.
-
-Deliverables:
-
-- Add the canonical Analysis Article identity, immutable definition revision,
-  exact source binding, typed transform DAG, semantic metric, ordered block/layout,
-  refresh policy, and lifecycle contracts.
-- Support narrative, metric, time-series, bar, area, scatter, table, funnel, cohort,
-  retention heatmap, date-range, comparison, and allowlisted segment blocks through
-  one closed versioned registry. Reject arbitrary executable content.
-- Execute each database source independently through the exact Environment and
-  connection revision grant. Push down filters and aggregation, then combine only
-  bounded typed results with project/filter/sort/limit/union/group/aggregate,
-  approved inner/left join, window/lag, ratio/difference/rate, cohort, and retention
-  transforms.
-- Add a cancellable Rust transform runtime and immutable run receipts. Bind every
-  value to source query, mapping, transform, schema, graph, runner, and timestamp.
-- Add member/device Desktop runner registration, short leases, schedule claims,
-  freshness targets, production approval, load bounds, heartbeats, and last-good
-  preservation. Never describe an offline runner as current monitoring.
-- Publish only reviewed masked bounded result fragments for team reading. Encrypt
-  fragments separately, integrity-bind them to the run, authorize them independently,
-  and enforce row, byte, cell, and retention deletion limits on both client and server.
-- Add the Analysis library, article author/review/live/archive flow, responsive
-  document layout, current/stale/partial runner state, lineage inspector, revision
-  history, conflict recovery, manual refresh, cancellation, and metric signal controls
-  to Desktop and workspace web.
-- Add immutable public publication preview, sensitivity confirmation, selected block
-  snapshot, public slug, caching, accessibility, rate limiting, revocation, and
-  version replacement. The public route must have no query or private evidence path.
-- Convert Dashboard, Funnel Analysis, Agent Report, and Signal data in one-way local
-  and hosted migrations. Preserve invalid records as non-executable migration
-  failures, then remove all old schema, API, protocol, screen, navigation, setting,
-  translation, and fallback code.
-
-Exit criteria:
-
-- Two members see the same latest compatible successful article result without
-  sharing a credential, and the UI states exactly which Desktop runner produced it.
-- A two-database daily retention article can be defined, reviewed, scheduled,
-  refreshed, inspected to source lineage, and rendered as KPI, time series, heatmap,
-  table, and narrative from one artifact.
-- An unapproved join, sensitive column, stale schema/mapping/grant, oversized result,
-  offline runner, cross-workspace id, or stale revision fails closed without replacing
-  the last successful result.
-- Every internal fragment can be independently authorized, integrity checked,
-  expired, revoked, and deleted without granting database execution.
-- A public article displays exactly one approved immutable snapshot, cannot refresh or
-  enumerate workspace resources, and becomes unavailable immediately after revoke.
-- Agent-created content remains draft until a human approves mappings, live revision,
-  production schedule, internal result publication, and public publication.
-- Repository search finds no live Dashboard, Funnel Analysis, or Agent Report product
-  route, table, command, screen, menu, translation, or compatibility reader.
-
-## Cross-cutting Validation
-
-Every milestone must include:
-
-- Rust and TypeScript migration and serialization tests.
-- RBAC tests for every API and local command boundary.
-- Provider adapter contract tests for resource hierarchy, capability discovery,
-  pagination, rate limits, redaction, and unsupported operations.
-- Authorization tests for cross-workspace external ids, explicit denies, production
-  gates, provider scope mismatches, stale approvals, and confused-deputy attempts.
-- Offline, retry, duplicate-delivery, tombstone, and conflict tests.
-- Credential and sensitive-data leak tests covering logs, crash reports, analytics,
-  and sync payloads.
-- macOS and Windows credential-store behavior.
-- Query execution tests proving workspace state cannot bypass read-only enforcement,
-  monitoring preflight, row caps, approval gates, or audit recording.
-- Recovery tests for workspace deletion, member revocation, and failed partial sync.
-
-## Remaining Product Decisions
-
-- Knowledge graphs are dormant. GitHub sources use exact-commit tree/path/file reads
-  by default; graph construction returns only after a benchmark proves material Agent
-  quality or latency gains relative to its PostgreSQL, GitHub API, and scheduler cost,
-  and after a paid/experimental entitlement boundary is approved.
-
-- Account recovery and the timing of non-Google identity providers.
-- Member-local versus managed authorization for any Provider selected by PD-18;
-  PlanetScale already uses its native OAuth flow for the managed-access pilot.
-- Provider resource refresh intervals, rate-limit budgets, webhook availability, and
-  behavior when an imported resource is deleted outside DopeDB.
-- The initial production and destructive-operation approval matrix.
-- Workspace billing and ownership transfer rules.
-- Whether connection usernames are shared defaults or always local overrides.
-- Initial Analysis Article result-fragment and public-publication byte, row, and
-  retention limits within ADR 0007's fixed safety boundary.
-- Data residency requirements beyond the initial US-East deployment.
-- Cross-device Personal Workspace sync beyond the decided account-bound GitHub
-  Knowledge overlay. Database records, credentials, and Local Folder paths remain
-  local unless a later product decision explicitly changes that boundary.
-
-These decisions do not block Milestone 0 because the local schema should support both
-hosted and self-hosted sync implementations.
+| View current Articles for granted connections | yes | yes | yes | yes | yes |
+| Run an allowed shared read locally | no | yes | yes | yes | yes |
+| Create or update a shared Article | no | no | yes | yes | yes |
+| Edit an Article or publish immutable HTML | no | no | yes | yes | yes |
+| Manage connection policy and grants | no | no | no | yes | yes |
+| Invite, remove, or change member roles | no | no | no | yes | yes |
+| Delete the workspace | no | no | no | no | yes |
+
+Every database operation is narrowed by all applicable layers:
+
+1. active account and workspace session;
+2. current membership and workspace role;
+3. exact Project Environment/resource revision;
+4. explicit connection grant;
+5. provider and database credential capability;
+6. Desktop safety policy;
+7. exact proposal approval when the caller did not author the mutation;
+8. target database privilege and read-only/transaction enforcement.
+
+A cached role is only a UI hint. Revocation and mutation paths lock and recheck the
+authoritative rows before committing.
+
+## Implemented foundation
+
+- Personal and team workspaces, device sign-in, invitations, roles, and member removal.
+- Secret-free shared connection templates and member-local credential bindings.
+- Per-connection `view`, `use`, and `manage` grants.
+- Managed PlanetScale, Neon, GCP Cloud SQL, and allowlisted Vault access paths.
+- Provider credential lease issuance, early revoke, provider expiry, and deferred
+  cleanup through exact due-time scheduling rather than idle PostgreSQL polling.
+- Project and Environment resource binding for databases, BigQuery, and source code.
+- Exact-resource Desktop ACP sessions and Desktop-approved external
+  `dopedb agent init/start` sessions.
+- Local read-only enforcement, immutable write proposals, exact approvals,
+  cancellation, rollback, result recovery, and hash-chained local audit.
+- Compact HTML Analysis Articles, immutable revisions, manual Desktop rerun receipts,
+  cancellation, and immutable public HTML publications.
+- KMS-wrapped metadata backup, resumable key rotation, and reversible Owner workspace
+  deletion in the control plane.
+
+Implemented does not mean production validation is complete. Public claims remain
+bounded by [Product Positioning](./PRODUCT_POSITIONING.md).
+
+## Remaining alpha work
+
+### Shared connection reliability
+
+- Finish packaged two-member tests for create, grant, local binding, managed lease,
+  revoke, reconnect, duplicate prevention, and member removal.
+- Verify that every permission error links to the single authoritative Safety or
+  Workspace database-access surface and reports the exact missing layer.
+- Verify macOS and Windows credential-store isolation across multiple signed-in
+  accounts and workspace switches.
+
+### Provider lifecycle
+
+- Run production discovery/import/lease/revoke/drift scenarios for every shipped
+  provider with redacted evidence.
+- Verify scheduler outages never extend provider credentials and that the next request
+  performs bounded repair without periodic database polling.
+- Complete recovery UX for revoked OAuth/provider authority while preserving connection
+  IDs, Project bindings, and member grants.
+
+### Project and Agent authority
+
+- Complete packaged Project-context selection across arbitrary combinations of
+  databases, BigQuery resources, and source repositories.
+- Prove a stale resource revision, account change, workspace switch, process exit, or
+  grant revoke stops the exact session without affecting unrelated work.
+- Complete signed adapter distribution and remove transitional launcher code only
+  after independently verified parity.
+
+### Analysis Article validation
+
+- Verify two members can read the same Article definition and manually run its query
+  with independent credentials while result rows remain local.
+- Verify restart recovery preserves the last bounded local success and a failed rerun
+  does not erase it.
+- Verify publication creates and revokes one immutable HTML snapshot and exposes no
+  saved SQL, private result, workspace enumeration, or rerun path.
+- After production migration evidence confirms no rollback need, decide separately
+  whether dormant historical tables and the bounded compatibility adapter can be
+  deleted. That decision must include a data-retention and recovery plan.
+
+### Sync, backup, and recovery
+
+- Complete full bidirectional projection validation, cursor compaction/rebase, offline
+  replay, conflict visibility, KMS restore, and cross-account isolation.
+- Verify destructive workspace lifecycle actions against live KMS and production
+  PostgreSQL with explicit recovery evidence.
+
+## Validation requirements
+
+Every completed item needs evidence proportional to its risk:
+
+- Rust and TypeScript contract checks for wire changes;
+- cross-workspace, stale-revision, explicit-deny, and confused-deputy tests;
+- credential and sensitive-data leak checks for logs, analytics, crash reports, sync,
+  and backups;
+- macOS and Windows packaged behavior for credential and process boundaries;
+- target database tests proving Workspace state cannot bypass database read-only or
+  privilege enforcement;
+- retry, cancellation, process exit, provider timeout, and partial-failure recovery;
+- no hidden scheduler, hosted result storage, or always-on database endpoint.
+
+Do not close a live-validation issue from unit tests alone. Record the account,
+provider, app version, exact scenario, redacted evidence, and remaining failure before
+removing its validation label.
+
+## Deferred decisions
+
+- Knowledge graph construction remains dormant until a benchmark proves material
+  quality or latency gains relative to GitHub exact-commit reads and operating cost,
+  and a paid or experimental entitlement is explicitly approved.
+- Additional providers and engines require verified demand and a complete connection,
+  revoke, drift, and platform test plan.
+- Enterprise SSO/SCIM, configurable retention, data residency beyond the current
+  deployment, and self-hosted control-plane packaging remain separate decisions.
+- Cross-device Personal Workspace database, credential, and Local Folder sync is not
+  implied by account sign-in.

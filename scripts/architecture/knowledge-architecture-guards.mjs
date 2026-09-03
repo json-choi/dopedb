@@ -480,9 +480,9 @@ export function checkKnowledgeArchitecture(harness) {
     );
   }
 
-  // Background runtimes receive their dependencies at composition time. Tauri is
-  // only an event/notification adapter and must never become a global AppState
-  // service locator or a path back into a feature transport helper.
+  // Long-lived Knowledge work receives dependencies at composition time. Tauri
+  // must never become a global AppState service locator or a path back into a
+  // feature transport helper.
   for (const [filePath, rules] of [
     ["src-tauri/src/features/knowledge/runtime.rs", [
       [/\bAppState\b|\.state\s*::\s*</, "Knowledge watcher runtime must use injected dependencies rather than AppHandle state lookup"],
@@ -492,16 +492,6 @@ export function checkKnowledgeArchitecture(harness) {
     ["src-tauri/src/features/knowledge/source_sync.rs", [
       [/\bAppState\b|\.state\s*::\s*</, "Knowledge source synchronization must use its injected feature facade"],
       [/\b(?:super::transport|crate::features::[A-Za-z0-9_]+::transport)\b/, "Knowledge source synchronization must not depend on a feature transport"],
-    ]],
-    ["src-tauri/src/features/analysis_articles/runtime.rs", [
-      [/\bAppState\b|\.state\s*::\s*</, "Analysis scheduler must use injected dependencies rather than AppHandle state lookup"],
-      [/\btauri(?:::|\b)/, "Analysis scheduler must emit through its desktop runtime port"],
-      [/\b(?:super::transport|crate::features::[A-Za-z0-9_]+::transport)\b/, "Analysis scheduler must not call a feature transport helper"],
-    ]],
-    ["src-tauri/src/features/analysis_articles/signals.rs", [
-      [/\bAppState\b|\.state\s*::\s*</, "Analysis signals must use the injected Analysis facade"],
-      [/\btauri(?:::|\b)/, "Analysis signals must notify through the desktop runtime port"],
-      [/\b(?:super::transport|crate::features::[A-Za-z0-9_]+::transport)\b/, "Analysis signals must not call a feature transport helper"],
     ]],
   ]) {
     const source = read(filePath);

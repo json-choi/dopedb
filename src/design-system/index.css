@@ -3,7 +3,7 @@
  * migrated. Utilities use the same --ds-* source of truth as legacy classes.
  */
 @layer theme, base, components, utilities;
-@import "@sun-typeface/suit/fonts/variable/woff2/SUIT-Variable.css";
+@import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 @import "tailwindcss/theme.css" layer(theme) prefix(tw);
 @import "tailwindcss/utilities.css" layer(utilities) prefix(tw) source("../") important;
 @import "./tokens.css";

@@ -1,23 +1,11 @@
 import type { Metadata } from "next";
 import { Analytics } from "@vercel/analytics/next";
 import { headers } from "next/headers";
-import { Archivo, IBM_Plex_Mono, Manrope } from "next/font/google";
+import { IBM_Plex_Mono } from "next/font/google";
+import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 import "./globals.css";
 
 const siteUrl = "https://dopedb.dev";
-
-const displayFont = Archivo({
-  display: "swap",
-  subsets: ["latin"],
-  variable: "--font-display-loaded",
-  weight: ["400", "500", "600"],
-});
-
-const bodyFont = Manrope({
-  display: "swap",
-  subsets: ["latin"],
-  variable: "--font-body-loaded",
-});
 
 const monoFont = IBM_Plex_Mono({
   display: "swap",
@@ -109,7 +97,7 @@ export default async function RootLayout({
 
   return (
     <html
-      className={`${displayFont.variable} ${bodyFont.variable} ${monoFont.variable}`}
+      className={monoFont.variable}
       lang={lang}
     >
       <body className="tw:min-h-[100dvh] tw:bg-paper tw:text-ink tw:antialiased">

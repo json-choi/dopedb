@@ -7,7 +7,6 @@
 pub(crate) mod activity;
 pub(crate) mod agents;
 pub(crate) mod analysis_articles;
-pub(crate) mod automation_runner;
 pub(crate) mod catalog;
 pub(crate) mod connections;
 pub(crate) mod documents;

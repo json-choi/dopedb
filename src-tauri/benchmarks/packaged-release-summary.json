@@ -55,7 +55,7 @@
         "history": 10000,
         "audit": 100000,
         "revisions": 50,
-        "dashboardTiles": 8
+        "analysisLocalResults": 8
       },
       "erdNodes": 1000
     },
@@ -85,7 +85,7 @@
       "history-10k": 500,
       "audit-100k": 500,
       "local-history-50": 500,
-      "dashboard-multi-tile": 500
+      "analysis-article-local-results": 500
     }
   },
   "aggregates": {
@@ -317,7 +317,7 @@
         "ipcBatchToReactCommitP50Ms": 19,
         "ipcBatchToReactCommitP95Ms": 19
       },
-      "dashboard-multi-tile": {
+      "analysis-article-local-results": {
         "runs": 3,
         "samples": 15,
         "actionToPaintP50Ms": 20,
@@ -1194,7 +1194,7 @@
         "measured": 41,
         "budget": 500
       },
-      "dashboard-multi-tile": {
+      "analysis-article-local-results": {
         "status": "passed",
         "measured": 20,
         "budget": 500
@@ -8297,7 +8297,7 @@
             "ipcBatchToReactCommitMs": 18.999999999999943
           },
           {
-            "name": "dashboard-multi-tile",
+            "name": "analysis-article-local-results",
             "samplesMs": [
               20,
               20,
@@ -8487,7 +8487,7 @@
             "ipcBatchToReactCommitMs": 20
           },
           {
-            "name": "dashboard-multi-tile",
+            "name": "analysis-article-local-results",
             "samplesMs": [
               20,
               20.000000000000114,
@@ -8677,7 +8677,7 @@
             "ipcBatchToReactCommitMs": 19
           },
           {
-            "name": "dashboard-multi-tile",
+            "name": "analysis-article-local-results",
             "samplesMs": [
               20,
               20,

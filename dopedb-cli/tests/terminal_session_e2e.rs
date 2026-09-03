@@ -213,10 +213,10 @@ pub(super) fn run() {
     .unwrap();
     let stored_definition = &contracts["analysisArticleCreate"]["definition"];
     let proposal_definition = serde_json::json!({
-        "version": 2,
+        "version": 3,
         "title": stored_definition["title"],
         "html": stored_definition["html"],
-        "query": stored_definition["queries"][0],
+        "query": stored_definition["query"],
     });
     let (cancel_started_tx, cancel_started_rx) = mpsc::channel();
     let server = thread::spawn(move || {
@@ -527,7 +527,7 @@ pub(super) fn run() {
     assert_eq!(
         article_tool["inputSchema"]["properties"]["definition"]["properties"]["version"]
             ["const"],
-        2,
+        3,
     );
     assert_eq!(
         article_tool["inputSchema"]["properties"]["definition"]["properties"]["html"]
@@ -538,24 +538,18 @@ pub(super) fn run() {
         article_tool["inputSchema"]["properties"]["definition"]["required"],
         serde_json::json!(["version", "title", "html", "query"]),
     );
-    assert_eq!(
-        article_tool["inputSchema"]["properties"]["definition"]["properties"]["query"]
-            ["properties"]["parameterIds"]["const"],
-        serde_json::json!([]),
-    );
-    assert_eq!(
-        article_tool["inputSchema"]["properties"]["definition"]["properties"]["query"]
-            ["properties"]["cacheTtlSeconds"]["const"],
-        0,
-    );
+    let query_schema = &article_tool["inputSchema"]["properties"]["definition"]["properties"]
+        ["query"];
+    assert!(query_schema["properties"].get("parameterIds").is_none());
+    assert!(query_schema["properties"].get("cacheTtlSeconds").is_none());
     assert!(article_tool["description"]
         .as_str()
         .unwrap()
         .contains("sanitized HTML"));
     let update_tool = tools
         .iter()
-        .find(|tool| tool["name"] == "analysis_article_update_draft")
-        .expect("the app-managed MCP bridge must expose exact draft updates");
+        .find(|tool| tool["name"] == "analysis_article_update")
+        .expect("the app-managed MCP bridge must expose exact Article updates");
     assert_eq!(update_tool["inputSchema"]["additionalProperties"], false);
     assert_eq!(
         update_tool["inputSchema"]["properties"]["expectedRevision"]["minimum"],
@@ -565,15 +559,14 @@ pub(super) fn run() {
         .as_str()
         .unwrap()
         .contains("cross-resource"));
-    let draft_run_tool = tools
+    let verify_tool = tools
         .iter()
-        .find(|tool| tool["name"] == "analysis_article_draft_run")
-        .expect("the app-managed MCP bridge must expose bounded draft verification");
-    assert_eq!(draft_run_tool["annotations"]["readOnlyHint"], true);
-    assert_eq!(
-        draft_run_tool["inputSchema"]["properties"]["parameterValues"]["maxProperties"],
-        0,
-    );
+        .find(|tool| tool["name"] == "analysis_article_verify")
+        .expect("the app-managed MCP bridge must expose bounded Article verification");
+    assert_eq!(verify_tool["annotations"]["readOnlyHint"], true);
+    assert!(verify_tool["inputSchema"]["properties"]
+        .get("parameterValues")
+        .is_none());
     for name in ["operation_status", "operation_wait", "operation_cancel"] {
         let tool = tools.iter().find(|tool| tool["name"] == name).unwrap();
         assert_eq!(

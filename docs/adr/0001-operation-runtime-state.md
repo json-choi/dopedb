@@ -2,7 +2,7 @@
 
 - 상태: 승인
 - 날짜: 2026-07-24
-- 관련 계획: `docs/CLI_TERMINAL_PLATFORM_IMPLEMENTATION_PLAN.md` Phase 0~2
+- 현재 제품 경계: `docs/PRODUCT_POSITIONING.md`, `docs/PRODUCT_UI_SCOPE.md`
 
 ## 결정
 
@@ -60,7 +60,7 @@ operation을 만든다.
 
 ## 결과
 
-- frontend boolean만으로 쓰기를 승인하는 기존 경로는 Phase 2에서 제거한다.
+- frontend boolean만으로 쓰기를 승인하는 경로는 제거되었으며 다시 만들지 않는다.
 - 기존 `audit_log` chain 형식은 바꾸지 않는다. Operation lifecycle은 별도 hash-chained
   `operation_events` ledger에 기록한다.
 - 상태 추가나 전이 변경은 이 ADR, protocol type, state-machine test를 함께 변경해야 한다.

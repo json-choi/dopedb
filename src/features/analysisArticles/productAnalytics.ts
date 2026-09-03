@@ -7,38 +7,7 @@ import {
   productAnalyticsDurationBucket,
   productAnalyticsWorkspaceContext,
 } from "../productAnalytics/outcomes";
-import type {
-  AnalysisArticleState,
-  AnalysisRun,
-} from "./domain";
-
-function newAnalyticsAttemptId() {
-  try {
-    return crypto.randomUUID();
-  } catch {
-    return null;
-  }
-}
-
-export function beginAnalysisArticleStateTransitionOutcome(
-  scope: CatalogScope,
-  fromState: AnalysisArticleState,
-) {
-  const context = productAnalyticsWorkspaceContext(scope);
-  const attemptId = newAnalyticsAttemptId();
-  let completed = false;
-  return (toState: AnalysisArticleState) => {
-    if (completed || fromState === toState) return;
-    completed = true;
-    if (!context || !attemptId) return;
-    void captureProductEvent({
-      name: "analysis_article_state_transitioned",
-      properties: { fromState, toState },
-      context,
-      dedupeId: attemptId,
-    });
-  };
-}
+import type { AnalysisRun } from "./domain";
 
 export function beginManualAnalysisRunOutcome(scope: CatalogScope) {
   const context = productAnalyticsWorkspaceContext(scope);

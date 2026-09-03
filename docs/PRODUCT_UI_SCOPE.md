@@ -193,7 +193,7 @@ DopeDB의 제품 축, 실제 사용자 작업, 접근성, 운영 안전성, 지�
 | PD-28 | safe branch checkpoint/restore | `구현` | 승인된 격리 생성, connection revision 전환, 복귀·폐기와 audit를 하나의 durable operation으로 묶는다. |
 | PD-29 | engine별 native query cancellation | `구현 안 함` | exact operation signal, timeout, connection-close fallback과 unknown outcome 보존을 유지한다. |
 | PD-30 | disk-backed query result | `구현` | Rust가 bounded page artifact와 streaming CSV/JSON export를 소유한다. |
-| PD-31 | HTML Analysis Article | `구현` | sanitized HTML 본문과 exact connection에 고정된 읽기 전용 쿼리 하나만 저장하고 Desktop에서 수동 재조회한다. |
+| PD-31 | HTML Analysis Article | `구현` | sanitized HTML 본문과 exact connection에 고정된 읽기 전용 쿼리 하나만 저장하고 Desktop에서 수동 재조회한다. 저장한 최신 revision은 별도 draft/review/live 단계 없이 해당 connection grant를 가진 워크스페이스 멤버에게 공유된다. |
 | PD-32 | enterprise shared-secret suite | `구현 안 함` | 중앙 static secret 배포·SSO·SCIM·self-hosted 묶음을 별도 수요 없이 예약하지 않는다. PD-18의 좁은 Vault Database Secrets 동적 발급 adapter는 이 suite에 포함되지 않는다. |
 | PD-33 | general Plugin Platform | `구현 안 함` | app-owned driver, provider, ACP adapter의 닫힌 목록만 지원한다. |
 | PD-34 | realtime SQL CRDT/presence | `구현 안 함` | 일반 SQL text와 cursor는 로컬에 두고 공유할 가치가 있는 결과만 HTML Analysis Article로 저장한다. |
@@ -202,7 +202,7 @@ DopeDB의 제품 축, 실제 사용자 작업, 접근성, 운영 안전성, 지�
 | PD-37 | Project resource-set exact scope | `구현` | session 시작 시 한 Project에서 사용자가 선택한 connection/source/Environment revision 집합을 immutable pin으로 고정한다. 읽기는 선택 집합 안에서만 connection별로 실행하고 쓰기 proposal은 명시한 단일 DB에만 허용한다. |
 | PD-38 | funnel analysis/block migration | `구현 안 함` | funnel·cohort·chart는 별도 UI domain으로 이관하지 않고 SQL 또는 Agent 결과를 일반 HTML로 설명한다. |
 | PD-39 | metric signal monitoring | `구현 안 함` | Article은 수동 재조회 문서이며 cron·signal·background runner를 소유하지 않는다. |
-| PD-40 | Analysis Article archive | `구현` | ADR 0007의 sanitized HTML, 단일 bounded read query, 로컬 수동 재조회, immutable public HTML 계약을 따른다. |
+| PD-40 | Analysis Article 삭제·공개 발행 | `구현` | optimistic revision 기반 삭제와 ADR 0007의 immutable public HTML 발행·해지를 제공한다. 별도 archive 상태 전환은 만들지 않는다. |
 | PD-41 | External official Agent CLI | `구현` | `dopedb agent init/start`가 secret-free Project resource config, 매 실행 Desktop 검토, process-bound runtime-only typed bridge로 공식 로컬 Codex/Claude를 실행한다. 저장된 범용 MCP와 provider token 접근은 허용하지 않는다. |
 
 ## 변경 규칙

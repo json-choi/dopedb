@@ -17,10 +17,7 @@ pub mod l3_preview;
 pub mod l4_gate;
 
 pub use l1_parse::{classify, classify_with_integrity, ClassificationIntegrity};
-pub(crate) use l2_enforce::run_read_only_cancellable;
-pub(crate) use l2_enforce::{
-    run_read_only_byte_capped_parameterized_cancellable, ReadOnlyBindValue,
-};
+pub(crate) use l2_enforce::{run_read_only_byte_capped_cancellable, run_read_only_cancellable};
 pub use l3_preview::preview;
 pub use l4_gate::{decide, GateDecision};
 

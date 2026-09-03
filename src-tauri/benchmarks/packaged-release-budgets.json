@@ -28,7 +28,7 @@
     "history-10k": 500,
     "audit-100k": 500,
     "local-history-50": 500,
-    "analysis-article-multi-block": 500
+    "analysis-article-local-results": 500
   },
   "notes": {
     "interactionP95Ms": "Applies to editor input/cursor/run, Explorer expansion/search, first result batch, grid/Agent scroll, permission/reconnect, ERD drag, cancellation, and resize checkpoints. Explicit background/format budgets are listed in actionP95Ms.",

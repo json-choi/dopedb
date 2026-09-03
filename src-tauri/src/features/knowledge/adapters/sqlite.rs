@@ -100,10 +100,6 @@ impl KnowledgeGrantPort for SqliteKnowledgeRepository {
 }
 
 impl KnowledgeMappingRepositoryPort for SqliteKnowledgeRepository {
-    async fn mapping_is_approved(&self, proposal_id: Uuid) -> AppResult<bool> {
-        self.store.mapping_is_approved(proposal_id).await
-    }
-
     async fn propose_mapping(&self, proposal: &KnowledgeMappingProposal) -> AppResult<()> {
         self.store.propose_mapping(proposal).await
     }

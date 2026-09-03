@@ -144,32 +144,16 @@ export function HomeActionSections({ c }: { c: HomeCopy }) {
 
           <PlatformDownloadOptions copy={c.download} />
 
-          <div className="tw:mt-5 tw:grid tw:grid-cols-2 tw:gap-3 tw:max-[760px]:grid-cols-1">
-            {[
-              {
-                body: c.download.macWarningBody,
-                title: c.download.macWarningTitle,
-              },
-              {
-                body: c.download.windowsWarningBody,
-                title: c.download.windowsWarningTitle,
-              },
-            ].map((warning) => (
-              <div
-                className="tw:flex tw:gap-3 tw:border tw:border-warning/30 tw:bg-warning/5 tw:p-4"
-                key={warning.title}
-              >
-                <LockKeyhole className="tw:mt-0.5 tw:shrink-0 tw:text-warning" size={17} />
-                <div>
-                  <h3 className="tw:text-[13px] tw:font-medium tw:text-cream">
-                    {warning.title}
-                  </h3>
-                  <p className="tw:mt-1.5 tw:text-xs tw:leading-relaxed tw:text-cream-muted">
-                    {warning.body}
-                  </p>
-                </div>
-              </div>
-            ))}
+          <div className="tw:mt-5 tw:flex tw:gap-3 tw:border tw:border-warning/30 tw:bg-warning/5 tw:p-4">
+            <LockKeyhole className="tw:mt-0.5 tw:shrink-0 tw:text-warning" size={17} />
+            <div>
+              <h3 className="tw:text-[13px] tw:font-medium tw:text-cream">
+                {c.download.windowsWarningTitle}
+              </h3>
+              <p className="tw:mt-1.5 tw:text-xs tw:leading-relaxed tw:text-cream-muted">
+                {c.download.windowsWarningBody}
+              </p>
+            </div>
           </div>
         </div>
       </div>

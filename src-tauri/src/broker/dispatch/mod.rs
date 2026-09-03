@@ -217,8 +217,8 @@ impl BrokerDispatcher {
             | CommandName::OperationWait
             | CommandName::OperationCancel => query_document::handle(self, &request).await,
             CommandName::AnalysisArticlePropose
-            | CommandName::AnalysisArticleUpdateDraft
-            | CommandName::AnalysisArticleDraftRun
+            | CommandName::AnalysisArticleUpdate
+            | CommandName::AnalysisArticleVerify
             | CommandName::AnalysisArticleList => {
                 analysis_article_operation::handle(self, &request).await
             }

@@ -1,15 +1,13 @@
 //! Authenticated Analysis Article control-plane adapter. Bearer sessions and
-//! scheduled-run capabilities stay in Rust; the renderer receives only typed,
-//! credential-free definitions, receipts, and privacy-minimized result fragments.
+//! manual-run capabilities stay in Rust; result rows never leave Desktop.
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use dopedb_protocol::{
-    AnalysisArticleRecord, AnalysisArticleVersionPayload, AnalysisQueryReceipt,
-    AnalysisResultFragment, AnalysisRunError, AnalysisRunState, AnalysisRunTrigger,
-    SharedAnalysisArticleCreate,
+    AnalysisArticleRecord, AnalysisArticleVersionPayload, AnalysisQueryReceipt, AnalysisRunError,
+    AnalysisRunState, SharedAnalysisArticleCreate,
 };
 use reqwest::{Response, StatusCode, Url};
 use serde::de::DeserializeOwned;
@@ -27,9 +25,8 @@ use crate::hosted_control_plane::{
     bounded_json_response, client, origin, request_error, response_error as oauth_error,
     EXPECTED_REVISION_HEADER,
 };
-use crate::operations::canonical_hash;
 
-use super::super::ports::{AnalysisArticleMutation, AnalysisHostedAuthorityPort};
+use super::super::ports::AnalysisHostedAuthorityPort;
 
 #[path = "hosted_articles.rs"]
 mod articles;
@@ -39,23 +36,13 @@ mod results;
 mod runners;
 #[path = "hosted_runs.rs"]
 mod runs;
-#[path = "hosted_signals.rs"]
-mod signals;
 
 pub(crate) use articles::*;
 pub(crate) use results::complete_analysis_run;
-#[cfg(test)]
-use results::should_use_inline_completion_fallback;
 pub(crate) use runners::*;
 pub(crate) use runs::*;
-pub(crate) use signals::*;
 
 const MAX_DEFINITION_RESPONSE_BYTES: usize = 2 * 1024 * 1024;
-const MAX_RESULT_RESPONSE_BYTES: usize = 18 * 1024 * 1024;
-const MAX_INLINE_COMPLETION_REQUEST_BYTES: usize = 4 * 1024 * 1024;
-const RESULT_UPLOAD_ATTEMPTS: usize = 3;
-const ANALYSIS_RESULT_PROTOCOL_HEADER: &str = "x-dopedb-analysis-result-protocol";
-const STAGED_ANALYSIS_RESULT_PROTOCOL: &str = "staged-v1";
 const ANALYSIS_RUNNER_CAPABILITY_HEADER: &str = "x-dopedb-analysis-runner-capability";
 const ANALYSIS_RUNNER_CAPABILITY_VERSION_HEADER: &str =
     "x-dopedb-analysis-runner-capability-version";
@@ -100,76 +87,6 @@ pub(crate) struct RemoteAnalysisArticleRevision {
 struct RevisionCollectionResponse {
     article_id: Uuid,
     revisions: Vec<RemoteAnalysisArticleRevision>,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub(crate) struct RemoteAnalysisResultRun {
-    pub(crate) id: Uuid,
-    pub(crate) article_id: Uuid,
-    pub(crate) article_revision: i64,
-    pub(crate) state: AnalysisRunState,
-    pub(crate) result_hash: Option<String>,
-    pub(crate) row_count: u64,
-    pub(crate) byte_count: u64,
-    pub(crate) finished_at: Option<DateTime<Utc>>,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub(crate) struct RemoteAnalysisResult {
-    pub(crate) run: RemoteAnalysisResultRun,
-    pub(crate) fragments: Vec<AnalysisResultFragment>,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct RemoteAnalysisLeaseResponse {
-    id: Uuid,
-    article_id: Uuid,
-    article_revision: i64,
-    runner_id: Uuid,
-    runner_capability_generation: u64,
-    scheduled_at: DateTime<Utc>,
-    expires_at: DateTime<Utc>,
-    #[serde(deserialize_with = "deserialize_secret")]
-    capability: Zeroizing<String>,
-    parameter_values: BTreeMap<String, serde_json::Value>,
-    article: AnalysisArticleVersionPayload,
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct LeaseResponse {
-    lease: Option<RemoteAnalysisLeaseResponse>,
-}
-
-pub(crate) struct RemoteAnalysisLease {
-    pub(crate) id: Uuid,
-    pub(crate) article_id: Uuid,
-    pub(crate) article_revision: i64,
-    pub(crate) runner_id: Uuid,
-    pub(crate) runner_capability_generation: u64,
-    pub(crate) scheduled_at: DateTime<Utc>,
-    pub(crate) expires_at: DateTime<Utc>,
-    pub(crate) capability: Zeroizing<String>,
-    pub(crate) runner_capability: Zeroizing<String>,
-    pub(crate) parameter_values: BTreeMap<String, serde_json::Value>,
-    pub(crate) article: AnalysisArticleVersionPayload,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct LeaseClaimRequest<'a> {
-    runner_id: Uuid,
-    device_id: &'a str,
-    background: bool,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct LeaseReleaseResponse {
-    revoked: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -314,42 +231,20 @@ pub(crate) fn assert_hosted_mutation_error_contract() {
         classify_article_mutation_error(StatusCode::BAD_GATEWAY, upstream()),
         AppError::Network(_)
     ));
-    assert!(should_use_inline_completion_fallback(
-        StatusCode::BAD_REQUEST,
-        None,
-    ));
-    assert!(!should_use_inline_completion_fallback(
-        StatusCode::BAD_REQUEST,
-        Some(STAGED_ANALYSIS_RESULT_PROTOCOL),
-    ));
-    assert!(!should_use_inline_completion_fallback(
-        StatusCode::CONFLICT,
-        None,
-    ));
 }
 
 fn validate_article(article: &AnalysisArticleRecord, expected_id: Option<Uuid>) -> AppResult<()> {
     if expected_id.is_some_and(|id| id != article.id)
         || article.environment_revision < 1
         || article.revision < 1
-        || article
-            .live_revision
-            .is_some_and(|revision| revision < 1 || revision > article.revision)
         || article.connections.is_empty()
-        || article.definition.version != 2
+        || article.definition.version != 3
     {
         return Err(AppError::Network(
             "Analysis Article returned invalid identity or authority".into(),
         ));
     }
     Ok(())
-}
-
-fn deserialize_secret<'de, D>(deserializer: D) -> Result<Zeroizing<String>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    String::deserialize(deserializer).map(Zeroizing::new)
 }
 
 fn deserialize_optional_secret<'de, D>(
@@ -365,7 +260,6 @@ fn validate_run(run: &RemoteAnalysisRun, article_id: Uuid, run_id: Option<Uuid>)
     if run.article_id != article_id
         || run_id.is_some_and(|id| run.id != id)
         || run.article_revision < 1
-        || run.parameter_hash.len() != 64
         || run.definition_hash.len() != 64
         || matches!(
             run.state,
@@ -409,104 +303,6 @@ fn validate_publication(
     Ok(())
 }
 
-fn safe_analysis_id(value: &str) -> bool {
-    let mut characters = value.chars();
-    characters
-        .next()
-        .is_some_and(|character| character.is_ascii_alphabetic())
-        && value.len() <= 64
-        && characters
-            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '_' | '-'))
-}
-
-fn validate_signal_definition(definition: &AnalysisSignalDefinition) -> bool {
-    let condition_valid = match definition.condition {
-        AnalysisSignalCondition::ThresholdAbove { value }
-        | AnalysisSignalCondition::ThresholdBelow { value }
-        | AnalysisSignalCondition::AbsoluteChange { value } => value.is_finite(),
-        AnalysisSignalCondition::PercentageChange { percentage } => {
-            percentage.is_finite() && percentage >= 0.0
-        }
-        AnalysisSignalCondition::MissingData { count }
-        | AnalysisSignalCondition::ConsecutiveFailure { count } => (1..=1_000).contains(&count),
-    };
-    let needs_baseline = matches!(
-        definition.condition,
-        AnalysisSignalCondition::AbsoluteChange { .. }
-            | AnalysisSignalCondition::PercentageChange { .. }
-    );
-    condition_valid
-        && definition.production_confirmed
-        && definition.minimum_sample_count <= 1_000_000_000
-        && definition.cooldown_seconds <= 31_622_400
-        && (1..=1_000).contains(&definition.rearm_after_normal_count)
-        && definition
-            .baseline_window_seconds
-            .is_some_and(|value| (60..=31_622_400).contains(&value))
-            == needs_baseline
-        && !definition.recipient_member_ids.is_empty()
-        && definition.recipient_member_ids.len() <= 100
-        && definition
-            .recipient_member_ids
-            .iter()
-            .copied()
-            .collect::<HashSet<_>>()
-            .len()
-            == definition.recipient_member_ids.len()
-        && !definition.channels.is_empty()
-        && definition.channels.len() <= 3
-        && definition
-            .channels
-            .iter()
-            .copied()
-            .collect::<HashSet<_>>()
-            .len()
-            == definition.channels.len()
-}
-
-fn validate_signal(
-    signal: &RemoteAnalysisSignal,
-    article_id: Uuid,
-    expected_id: Option<Uuid>,
-) -> AppResult<()> {
-    if signal.article_id != article_id
-        || expected_id.is_some_and(|id| id != signal.id)
-        || signal.article_revision < 1
-        || signal.revision < 1
-        || !safe_analysis_id(&signal.block_id)
-        || !validate_signal_definition(&signal.definition)
-        || signal
-            .owner_member_id
-            .as_deref()
-            .is_some_and(|owner| owner.trim().is_empty() || owner.len() > 256)
-        || !matches!(
-            signal.last_observed_state.as_str(),
-            "unknown" | "normal" | "firing" | "recovered" | "no_data" | "error" | "stale"
-        )
-    {
-        return Err(AppError::Network(
-            "Analysis signal returned invalid identity or policy".into(),
-        ));
-    }
-    Ok(())
-}
-
-fn validate_signal_request(
-    request: &AnalysisSignalCreateRequest,
-    article_id: Uuid,
-) -> AppResult<()> {
-    if request.article_revision < 1
-        || !safe_analysis_id(&request.block_id)
-        || !validate_signal_definition(&request.definition)
-        || request.id == article_id
-    {
-        return Err(AppError::Config(
-            "invalid Analysis signal definition".into(),
-        ));
-    }
-    Ok(())
-}
-
 #[derive(Clone, Copy)]
 pub(crate) struct HostedAnalysisAuthority;
 
@@ -544,14 +340,14 @@ impl AnalysisHostedAuthorityPort for HostedAnalysisAuthority {
         workspace_id: Uuid,
         article_id: Uuid,
         expected_revision: i64,
-        mutation: AnalysisArticleMutation,
+        article: &SharedAnalysisArticleCreate,
     ) -> AppResult<AnalysisArticleRecord> {
         mutate_analysis_article(
             account_id,
             workspace_id,
             article_id,
             expected_revision,
-            mutation,
+            article,
         )
         .await
     }

@@ -382,14 +382,6 @@ export function collectWorkspaceCloudHttpDiagnostics({ lineCount, read, relative
       ['task: "credential"', "result.deferred > 0"],
     ],
     [
-      "workspace-cloud/app/api/v1/workspaces/[workspaceId]/analyses/[articleId]/runs/[runId]/fragments/route.ts",
-      ['task: "maintenance"', "notBefore: expiresAt"],
-    ],
-    [
-      "workspace-cloud/app/api/v1/workspaces/[workspaceId]/analyses/[articleId]/runs/[runId]/route.ts",
-      ['task: "maintenance"', "notBefore: expiresAt"],
-    ],
-    [
       "workspace-cloud/app/api/v1/workspaces/[workspaceId]/backups/[backupId]/route.ts",
       ['task: "maintenance"', "notBefore: purgeAfter"],
     ],
