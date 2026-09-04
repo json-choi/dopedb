@@ -37,6 +37,7 @@ export default function AcpChatComposer({
 }: AcpChatComposerProps) {
   const { t } = useI18n();
   const active = session.active;
+  if (setup.enabledProviders.length === 0) return null;
   const composerDisabled =
     session.starting ||
     !setup.prerequisitesReady ||
@@ -206,36 +207,26 @@ export default function AcpChatComposer({
       </ToolWindowComposer>
       <ToolWindowComposerContext>
         <AgentProviderMark provider={setup.selectedProvider} />
-        {setup.enabledProviders.length > 0 ? (
-          <span className="tw:max-w-[10rem]">
-            <InlineSelect
-              value={setup.selectedProvider}
-              disabled={session.starting}
-              onChange={(event) =>
-                void commands.setup.changeProvider(
-                  event.target.value as AgentProvider,
-                )
-              }
-              aria-label={t("agent.acpProvider")}
-              title={t("agent.acpLocalAuth")}
-            >
-              {setup.enabledProviders.includes("claude") ? (
-                <option value="claude">Claude Agent</option>
-              ) : null}
-              {setup.enabledProviders.includes("codex") ? (
-                <option value="codex">Codex</option>
-              ) : null}
-            </InlineSelect>
-          </span>
-        ) : (
-          <Button
-            size="compact"
-            variant="ghost"
-            onClick={commands.setup.openAgentSetup}
+        <span className="tw:max-w-[10rem]">
+          <InlineSelect
+            value={setup.selectedProvider}
+            disabled={session.starting}
+            onChange={(event) =>
+              void commands.setup.changeProvider(
+                event.target.value as AgentProvider,
+              )
+            }
+            aria-label={t("agent.acpProvider")}
+            title={t("agent.acpLocalAuth")}
           >
-            {t("agent.acpOpenSetup")}
-          </Button>
-        )}
+            {setup.enabledProviders.includes("claude") ? (
+              <option value="claude">Claude Agent</option>
+            ) : null}
+            {setup.enabledProviders.includes("codex") ? (
+              <option value="codex">Codex</option>
+            ) : null}
+          </InlineSelect>
+        </span>
         {composer.modelOption ? (
           <ConfigSelect
             option={composer.modelOption}

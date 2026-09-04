@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "../../../design-system/components/Button";
 import {
+  CheckboxField,
   Field,
   SelectInput,
   TextInput,
@@ -64,9 +65,10 @@ export function EnvironmentSetupDialog({
     () => projects.find((project) => project.id === projectId) ?? null,
     [projectId, projects],
   );
-  const [environmentName, setEnvironmentName] = useState("prod");
+  const [environmentName, setEnvironmentName] = useState("");
   const [riskClass, setRiskClass] =
-    useState<KnowledgeEnvironment["riskClass"]>("production");
+    useState<KnowledgeEnvironment["riskClass"]>("development");
+  const [productionConfirmed, setProductionConfirmed] = useState(false);
   const createEnvironment = useMutation({
     mutationFn: createKnowledgeEnvironment,
     onMutate: () => {
@@ -112,7 +114,9 @@ export function EnvironmentSetupDialog({
     },
   });
   const canCreate =
-    selectedProject !== null && environmentName.trim().length > 0;
+    selectedProject !== null &&
+    environmentName.trim().length > 0 &&
+    (riskClass !== "production" || productionConfirmed);
 
   return (
     <ModalBackdrop
@@ -173,11 +177,12 @@ export function EnvironmentSetupDialog({
                 <SelectInput
                   density="compact"
                   value={riskClass}
-                  onChange={(event) =>
+                  onChange={(event) => {
                     setRiskClass(
                       event.target.value as KnowledgeEnvironment["riskClass"],
-                    )
-                  }
+                    );
+                    setProductionConfirmed(false);
+                  }}
                 >
                   <option value="development">
                     {t("connections.environmentRiskDevelopment")}
@@ -197,6 +202,17 @@ export function EnvironmentSetupDialog({
                 </SelectInput>
               </Field>
             </div>
+            {riskClass === "production" ? (
+              <InlineNotice tone="warning" icon="alert">
+                <CheckboxField
+                  checked={productionConfirmed}
+                  onChange={(event) =>
+                    setProductionConfirmed(event.target.checked)
+                  }
+                  label={t("connections.environmentProductionConfirm")}
+                />
+              </InlineNotice>
+            ) : null}
             {createEnvironment.error ? (
               <InlineNotice tone="danger" icon="alert" role="alert">
                 {errMessage(createEnvironment.error)}

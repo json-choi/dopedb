@@ -107,7 +107,7 @@ export function ConnectionCatalogDetail({
                 <dd className="tw:m-0 tw:flex tw:flex-wrap tw:gap-1">
                   {driver.supportedProviders.map((provider) => (
                     <span className="badge" key={provider}>
-                      {clouds.providerLabel(provider)}
+                      {drivers.providerLabel(driver, provider)}
                     </span>
                   ))}
                 </dd>
@@ -133,7 +133,7 @@ export function ConnectionCatalogDetail({
               <div className="tw:flex tw:flex-wrap tw:gap-2">
                 {driver.capabilities.map((capability) => (
                   <span className="badge" key={capability}>
-                    {capability}
+                    {t(`connections.driverCapability.${capability}`)}
                   </span>
                 ))}
               </div>

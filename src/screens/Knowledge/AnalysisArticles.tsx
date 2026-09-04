@@ -22,6 +22,7 @@ import {
   WorkbenchToolbar,
 } from "../../design-system/components/Workbench";
 import { useI18n } from "../../lib/i18n";
+import type { I18nKey } from "../../lib/i18n";
 
 function cellText(value: string | number | boolean | null) {
   if (value === null) return "—";
@@ -29,10 +30,32 @@ function cellText(value: string | number | boolean | null) {
   return String(value);
 }
 
-function sourceLabel(article: AnalysisArticleRecord) {
+type Translate = (key: I18nKey, vars?: Record<string, string | number>) => string;
+
+function sourceLabel(article: AnalysisArticleRecord, t: Translate) {
   if (article.definition.source === "dopedb.acp.claude") return "Claude";
   if (article.definition.source === "dopedb.acp.codex") return "Codex";
-  return "Human";
+  return t("analysis.sourceHuman");
+}
+
+function runStateLabel(t: Translate, state: AnalysisRun["state"]) {
+  return t(`analysis.runState.${state}`);
+}
+
+function revisionOperationLabel(t: Translate, operation: string) {
+  if (operation === "create") {
+    return t("analysis.revisionCreated");
+  }
+  if (operation === "propose" || operation === "proposed") {
+    return t("analysis.revisionProposed");
+  }
+  if (operation === "update" || operation === "updated") {
+    return t("analysis.revisionUpdated");
+  }
+  if (operation === "delete" || operation === "deleted") {
+    return t("analysis.revisionDeleted");
+  }
+  return t("analysis.revisionChanged");
 }
 
 function connectionLabel(
@@ -54,6 +77,8 @@ export default function AnalysisArticles({
   focusId,
   onOpenAgent,
   onNewConnection,
+  onRequestTeamWorkspace,
+  teamWorkspaceAction = "signIn",
 }: {
   projectName: string;
   environment: KnowledgeEnvironment;
@@ -63,6 +88,8 @@ export default function AnalysisArticles({
   focusId?: string | null;
   onOpenAgent?: (connectionId: string, environmentId?: string, prompt?: string) => void;
   onNewConnection?: () => void;
+  onRequestTeamWorkspace?: () => void;
+  teamWorkspaceAction?: "signIn" | "select";
 }) {
   const { t } = useI18n();
   const [showPublication, setShowPublication] = useState(false);
@@ -80,6 +107,16 @@ export default function AnalysisArticles({
       <WorkbenchEmptyState icon="chart">
         <strong>{t("analysis.teamOnlyTitle")}</strong>
         <span>{t("analysis.teamOnlyBody")}</span>
+        {onRequestTeamWorkspace ? (
+          <Button variant="primary" onClick={onRequestTeamWorkspace}>
+            <Icon name="user" />
+            {t(
+              teamWorkspaceAction === "select"
+                ? "analysis.chooseTeamWorkspace"
+                : "analysis.signInForTeamWorkspace",
+            )}
+          </Button>
+        ) : null}
       </WorkbenchEmptyState>
     );
   }
@@ -137,7 +174,7 @@ export default function AnalysisArticles({
               <div className="tw:grid tw:min-w-0 tw:gap-1">
                 <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
                   <h1 className="tw:m-0 tw:truncate tw:text-title tw:font-semibold tw:tracking-tight">{selected.definition.title}</h1>
-                  <StatusBadge density="compact">{sourceLabel(selected)}</StatusBadge>
+                  <StatusBadge density="compact">{sourceLabel(selected, t)}</StatusBadge>
                   <span className="tw:font-mono tw:text-2xs tw:text-muted-foreground">r{selected.revision}</span>
                 </div>
                 <span className="tw:text-xs tw:text-muted-foreground">
@@ -265,6 +302,7 @@ function ArticleDocument({
 }
 
 function ResultTable({ result, title }: { result: AnalysisResultData; title: string }) {
+  const { t } = useI18n();
   return (
     <div className="tw:max-h-[520px] tw:overflow-auto tw:rounded-surface tw:border tw:border-border">
       <table className="tw:w-full tw:min-w-max tw:border-collapse tw:text-left tw:text-xs">
@@ -281,7 +319,7 @@ function ResultTable({ result, title }: { result: AnalysisResultData; title: str
           })}</tr>
         ))}</tbody>
       </table>
-      {result.truncated ? <p className="tw:m-0 tw:p-2 tw:text-xs tw:text-warning">Result reached its safety limit.</p> : null}
+      {result.truncated ? <p className="tw:m-0 tw:p-2 tw:text-xs tw:text-warning">{t("analysis.resultSafetyLimit")}</p> : null}
     </div>
   );
 }
@@ -304,7 +342,7 @@ function HistoryView({
         {revisions.map((revision) => (
           <div className="tw:flex tw:items-center tw:gap-3 tw:rounded-md tw:border tw:border-border-subtle tw:p-3" key={revision.revision}>
             <strong className="tw:font-mono tw:text-xs">r{revision.revision}</strong>
-            <span className="tw:min-w-0 tw:flex-1 tw:truncate tw:text-xs tw:text-muted-foreground">{revision.operation} · {new Date(revision.createdAt).toLocaleString()}</span>
+            <span className="tw:min-w-0 tw:flex-1 tw:truncate tw:text-xs tw:text-muted-foreground">{revisionOperationLabel(t, revision.operation)} · {new Date(revision.createdAt).toLocaleString()}</span>
           </div>
         ))}
       </section>
@@ -312,7 +350,7 @@ function HistoryView({
         <h2 className="tw:m-0 tw:text-sm tw:font-semibold">{t("analysis.runs")}</h2>
         {runs.map((run) => (
           <div className="tw:flex tw:items-center tw:gap-3 tw:rounded-md tw:border tw:border-border-subtle tw:p-3" key={run.id}>
-            <StatusBadge density="compact" tone={run.state === "succeeded" ? "success" : run.state === "failed" ? "danger" : "neutral"}>{run.state}</StatusBadge>
+            <StatusBadge density="compact" tone={run.state === "succeeded" ? "success" : run.state === "failed" ? "danger" : "neutral"}>{runStateLabel(t, run.state)}</StatusBadge>
             <span className="tw:min-w-0 tw:flex-1 tw:truncate tw:text-xs tw:text-muted-foreground">r{run.articleRevision} · {run.finishedAt ? new Date(run.finishedAt).toLocaleString() : run.createdAt}</span>
           </div>
         ))}

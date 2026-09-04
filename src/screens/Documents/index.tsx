@@ -45,6 +45,18 @@ import { queryResultPhase } from "../../lib/queryResultPhase";
 import { useQueryRun } from "../../lib/useQueryRun";
 
 type Op = "find" | "aggregate" | "count";
+const DOCUMENT_LIMIT_MAX = 1_000_000;
+
+export function parseDocumentLimit(value: string): number | null {
+  const trimmed = value.trim();
+  if (!/^\d+$/.test(trimmed)) return null;
+  const parsed = Number(trimmed);
+  return Number.isSafeInteger(parsed)
+    && parsed >= 1
+    && parsed <= DOCUMENT_LIMIT_MAX
+    ? parsed
+    : null;
+}
 
 function parseJsonField(text: string, label: string): JsonValue | undefined {
   const trimmed = text.trim();
@@ -91,7 +103,8 @@ export default function Documents({
   const [filterText, setFilterText] = useState("");
   const [projectionText, setProjectionText] = useState("");
   const [sortText, setSortText] = useState("");
-  const [limit, setLimit] = useState(100);
+  const [limitDraft, setLimitDraft] = useState("100");
+  const [limitInteracted, setLimitInteracted] = useState(false);
   const [pipelineText, setPipelineText] = useState("[]");
   const [countFilterText, setCountFilterText] = useState("");
 
@@ -127,7 +140,10 @@ export default function Documents({
       setSortText(
         parsed.sort !== undefined ? JSON.stringify(parsed.sort, null, 2) : "",
       );
-      if (typeof parsed.limit === "number") setLimit(parsed.limit);
+      if (typeof parsed.limit === "number") {
+        setLimitDraft(String(parsed.limit));
+        setLimitInteracted(false);
+      }
     } else if (parsed.op === "aggregate") {
       setPipelineText(JSON.stringify(parsed.pipeline, null, 2));
     } else if (parsed.op === "count") {
@@ -152,8 +168,20 @@ export default function Documents({
   } | null>(null);
   const [parseErr, setParseErr] = useState<string | null>(null);
   const [runErr, setRunErr] = useState<string | null>(null);
+  const parsedLimit = parseDocumentLimit(limitDraft);
+  const limitValidation =
+    op === "find" && limitInteracted && parsedLimit === null
+      ? {
+          tone: "danger" as const,
+          message: t("documents.limitInvalid", { max: DOCUMENT_LIMIT_MAX }),
+        }
+      : undefined;
 
   function buildQuery(): DocumentQuery | null {
+    if (op === "find" && parsedLimit === null) {
+      setLimitInteracted(true);
+      return null;
+    }
     try {
       if (op === "find") {
         return {
@@ -162,7 +190,7 @@ export default function Documents({
           filter: parseJsonField(filterText, t("documents.filter")),
           projection: parseJsonField(projectionText, t("documents.projection")),
           sort: parseJsonField(sortText, t("documents.sort")),
-          limit,
+          limit: parsedLimit,
         };
       }
       if (op === "aggregate") {
@@ -348,12 +376,19 @@ export default function Documents({
                 />
               </Field>
               <div className="tw:w-[120px]">
-                <Field label={t("documents.limit")}>
+                <Field
+                  label={t("documents.limit")}
+                  validation={limitValidation}
+                >
                   <TextInput
                     type="number"
                     min={1}
-                    value={limit}
-                    onChange={(e) => setLimit(Number(e.target.value) || 100)}
+                    max={DOCUMENT_LIMIT_MAX}
+                    step={1}
+                    value={limitDraft}
+                    aria-invalid={limitValidation ? true : undefined}
+                    onBlur={() => setLimitInteracted(true)}
+                    onChange={(e) => setLimitDraft(e.target.value)}
                   />
                 </Field>
               </div>

@@ -11,6 +11,7 @@ import {
 } from "../connections/domain";
 import { providerTargetDisplayName } from "../connections/ProviderTargetLabel";
 import type { WorkbenchDocument } from "../workbench/domain";
+import type { KnowledgeEnvironmentFocus } from "../knowledge/domain";
 import ManualTransactionsMenu from "../queries/ManualTransactionsMenu";
 import type { WorkspaceManualTransaction } from "../queries/useWorkspaceManualTransactions";
 import { SQL_EDITOR_INDENT_SIZE } from "../queries/editorStatus";
@@ -175,6 +176,7 @@ export function IdeStatusBar({
   selectedDatabase,
   selectedNamespace,
   activeDocument,
+  knowledgeFocus,
   backgroundTasks,
   cancellingBackgroundTaskKeys,
   manualTransactions,
@@ -196,6 +198,7 @@ export function IdeStatusBar({
   selectedDatabase: string | null;
   selectedNamespace: string | null;
   activeDocument: WorkbenchDocument | null;
+  knowledgeFocus: KnowledgeEnvironmentFocus | null;
   backgroundTasks: BackgroundTask[];
   cancellingBackgroundTaskKeys: ReadonlySet<string>;
   manualTransactions: WorkspaceManualTransaction[];
@@ -223,14 +226,31 @@ export function IdeStatusBar({
     id: string;
     label: string;
     onSelect?: () => void;
-  }> = [
-    {
-      id: "database",
-      label: t("ide.databaseRoot"),
-      onSelect: onRevealDatabaseContext,
-    },
-  ];
-  if (selected) {
+  }> = knowledgeFocus
+    ? [
+        {
+          id: "projects",
+          label: t("connections.projects"),
+        },
+        {
+          id: `knowledge:${knowledgeFocus.view}`,
+          label: t(
+            knowledgeFocus.view === "analyses"
+              ? "analysis.title"
+              : knowledgeFocus.view === "sources"
+                ? "knowledge.sources"
+                : "connections.environmentDatabases",
+          ),
+        },
+      ]
+    : [
+        {
+          id: "database",
+          label: t("ide.databaseRoot"),
+          onSelect: onRevealDatabaseContext,
+        },
+      ];
+  if (!knowledgeFocus && selected) {
     const selectedDatabaseLabel = selectedDatabase
       ? databaseDisplayLabel(selected.engine, selectedDatabase)
       : null;
@@ -336,7 +356,9 @@ export function IdeStatusBar({
       ) : null}
       <SqlEditorStatusItems
         documentId={
-          activeDocument?.kind === "sql" ? activeDocument.id : null
+          !knowledgeFocus && activeDocument?.kind === "sql"
+            ? activeDocument.id
+            : null
         }
       />
       {selected ? (

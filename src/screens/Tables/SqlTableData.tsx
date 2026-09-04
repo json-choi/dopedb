@@ -643,8 +643,15 @@ export default function SqlTableData({
             .filter(Boolean)
             .join(" · ")}
         >
-          {t("ide.queryRows", { count: result.rows.length })}
+          {total != null
+            ? t("tables.rowRangeTotal", {
+                from,
+                to,
+                total: total.toLocaleString(),
+              })
+            : t("tables.rowRange", { from, to })}
           {result.truncated ? ` · ${t("tables.truncated")}` : ""}
+          {` · ${t("tables.durationMs", { duration: result.durationMs })}`}
         </DataGridStatusPill>
       ) : null}
       {ddlOpen ? (

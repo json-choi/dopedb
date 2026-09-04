@@ -100,7 +100,7 @@ export function useConnectionCatalogController({
     visibleCatalogDrivers.find((driver) => driver.id === activeDriver?.id) ??
     visibleCatalogDrivers[0] ??
     null;
-  const cloudProviders: Array<{ provider: ProviderKind; label: string }> = [
+  const allCloudProviders: Array<{ provider: ProviderKind; label: string }> = [
     { provider: "neon", label: t("connections.providerNeon") },
     {
       provider: "gcpCloudSql",
@@ -111,6 +111,16 @@ export function useConnectionCatalogController({
       label: t("connections.providerPlanetScale"),
     },
   ];
+  // Only GCP currently owns a real new-profile credential command. Existing
+  // profiles retain the provider-specific managed-access tools below.
+  const cloudProviders = identity.isNew
+    ? allCloudProviders.filter(({ provider }) => provider === "gcpCloudSql")
+    : allCloudProviders;
+  const selectedCloudProvider = cloudProviders.some(
+    ({ provider }) => provider === catalogCloudProvider,
+  )
+    ? catalogCloudProvider
+    : cloudProviders[0]?.provider ?? "gcpCloudSql";
   const normalizedAddSearch = addSearch.trim().toLocaleLowerCase();
   const matchesAddSearch = (...values: string[]) =>
     normalizedAddSearch.length === 0 ||
@@ -247,6 +257,16 @@ export function useConnectionCatalogController({
     return t("connections.providerGcpCloudSql");
   }
 
+  function driverProviderLabel(
+    driver: DriverDescriptor,
+    provider: Provider,
+  ) {
+    if (driver.engine === "bigquery" && provider === "generic") {
+      return t("connections.providerBigQueryCli");
+    }
+    return providerLabel(provider);
+  }
+
   return {
     model: { driverCatalog },
     view: {
@@ -294,10 +314,11 @@ export function useConnectionCatalogController({
         installingId: installingDriverId,
         download: downloadDriver,
         status: driverStatus,
+        providerLabel: driverProviderLabel,
       },
       clouds: {
         providers: cloudProviders,
-        selected: catalogCloudProvider,
+        selected: selectedCloudProvider,
         select: setCatalogCloudProvider,
         providerLabel,
         openProviderCredentials,

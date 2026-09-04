@@ -93,7 +93,7 @@ export const connectionsCatalog = defineCatalog(
     "connections.projectNamePlaceholder": "e.g. Customer portal",
     "connections.firstEnvironment": "First Environment",
     "connections.environmentName": "Environment name",
-    "connections.environmentNamePlaceholder": "e.g. main or prod",
+    "connections.environmentNamePlaceholder": "e.g. main or development",
     "connections.environmentSetupTitle": "Add Environment",
     "connections.environmentSetupDescription":
       "Add an Environment inside a Project, then connect the databases and source code that belong to that exact scope.",
@@ -103,6 +103,8 @@ export const connectionsCatalog = defineCatalog(
     "connections.environmentRiskDevelopment": "Development",
     "connections.environmentRiskStaging": "Staging",
     "connections.environmentRiskProduction": "Production",
+    "connections.environmentProductionConfirm":
+      "I understand this Environment represents production access.",
     "connections.environmentRiskTest": "Test",
     "connections.environmentRiskCustom": "Custom",
     "connections.projectSetupNextStep":
@@ -226,6 +228,13 @@ export const connectionsCatalog = defineCatalog(
     "connections.driverInstalled": "{name} is installed.",
     "connections.driverInstalledStatus": "Installed",
     "connections.driverCapabilities": "Driver capabilities",
+    "connections.driverCapability.sql": "SQL queries",
+    "connections.driverCapability.documentQuery": "Document queries",
+    "connections.driverCapability.transactions": "Transactions",
+    "connections.driverCapability.introspection": "Schema introspection",
+    "connections.driverCapability.collections": "Collections",
+    "connections.driverCapability.schemaDiff": "Schema comparison",
+    "connections.driverCapability.monitoring": "Monitoring",
     "connections.drivers": "Drivers",
     "connections.driverVersion": "Version",
     "connections.problemDriverCatalogUnavailable":
@@ -368,6 +377,7 @@ export const connectionsCatalog = defineCatalog(
     "connections.providerAuto": "Automatic detection",
     "connections.providerGcpCloudSql": "GCP Cloud SQL",
     "connections.providerGeneric": "Generic / self-hosted",
+    "connections.providerBigQueryCli": "Official Google BigQuery CLI",
     "connections.providerNeon": "Neon",
     "connections.neonBranch": "Neon branch",
     "connections.neonBranchTarget": "Neon branch {name} ({id})",
@@ -540,7 +550,7 @@ export const connectionsCatalog = defineCatalog(
     "connections.projectNamePlaceholder": "예: 고객 포털",
     "connections.firstEnvironment": "첫 환경",
     "connections.environmentName": "환경 이름",
-    "connections.environmentNamePlaceholder": "예: main 또는 prod",
+    "connections.environmentNamePlaceholder": "예: main 또는 development",
     "connections.environmentSetupTitle": "환경 추가",
     "connections.environmentSetupDescription":
       "프로젝트 안에 환경을 추가한 다음, 그 범위에 속한 데이터베이스와 소스 코드를 연결합니다.",
@@ -550,6 +560,8 @@ export const connectionsCatalog = defineCatalog(
     "connections.environmentRiskDevelopment": "개발",
     "connections.environmentRiskStaging": "스테이징",
     "connections.environmentRiskProduction": "운영",
+    "connections.environmentProductionConfirm":
+      "이 환경이 운영 접근 권한을 나타낸다는 점을 이해했습니다.",
     "connections.environmentRiskTest": "테스트",
     "connections.environmentRiskCustom": "사용자 지정",
     "connections.projectSetupNextStep":
@@ -672,6 +684,13 @@ export const connectionsCatalog = defineCatalog(
     "connections.driverInstalled": "{name} 드라이버가 설치되었습니다.",
     "connections.driverInstalledStatus": "설치됨",
     "connections.driverCapabilities": "드라이버 기능",
+    "connections.driverCapability.sql": "SQL 쿼리",
+    "connections.driverCapability.documentQuery": "문서 쿼리",
+    "connections.driverCapability.transactions": "트랜잭션",
+    "connections.driverCapability.introspection": "스키마 탐색",
+    "connections.driverCapability.collections": "컬렉션",
+    "connections.driverCapability.schemaDiff": "스키마 비교",
+    "connections.driverCapability.monitoring": "모니터링",
     "connections.drivers": "드라이버",
     "connections.driverVersion": "버전",
     "connections.problemDriverCatalogUnavailable":
@@ -813,6 +832,7 @@ export const connectionsCatalog = defineCatalog(
     "connections.providerAuto": "자동 감지",
     "connections.providerGcpCloudSql": "GCP Cloud SQL",
     "connections.providerGeneric": "일반 / 자체 호스팅",
+    "connections.providerBigQueryCli": "Google BigQuery 공식 CLI",
     "connections.providerNeon": "Neon",
     "connections.neonBranch": "Neon 브랜치",
     "connections.neonBranchTarget": "Neon 브랜치 {name} ({id})",

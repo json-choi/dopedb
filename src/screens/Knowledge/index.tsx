@@ -20,6 +20,7 @@ import {
 } from "../../features/productAnalytics/outcomes";
 import { workspaceAuthStateQuery } from "../../features/workspaces/queries";
 import { requestWorkspaceLogin } from "../../features/workspaces/loginRequest";
+import { requestWorkspaceSelection } from "../../features/workspaces/selectionRequest";
 import { connectionsQuery } from "../../features/connections/queries";
 import type {
   KnowledgeEnvironmentFocus,
@@ -463,6 +464,14 @@ export default function Knowledge({
         focusId={environmentFocus?.resourceId}
         onOpenAgent={onOpenAgent}
         onNewConnection={onNewConnection}
+        onRequestTeamWorkspace={
+          signedInPersonalAccount
+            ? requestWorkspaceSelection
+            : requestWorkspaceLogin
+        }
+        teamWorkspaceAction={
+          signedInPersonalAccount ? "select" : "signIn"
+        }
       />
     );
   }

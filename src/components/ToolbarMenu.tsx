@@ -33,6 +33,7 @@ export default function ToolbarMenu({
   triggerVariant = "default",
   menuSize = "default",
   triggerTabIndex,
+  openRequest,
 }: {
   label: string;
   icon?: IconName;
@@ -50,14 +51,30 @@ export default function ToolbarMenu({
     | "statusBar";
   menuSize?: "default" | "scope" | "tasks";
   triggerTabIndex?: number;
+  openRequest?: number;
 }) {
   const generatedId = useId();
   const menuId = `toolbar-menu-${generatedId.replace(/:/g, "")}`;
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const focusFirstOnOpen = useRef(false);
+  const lastOpenRequest = useRef(openRequest);
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState<FloatingMenuPosition | null>(null);
+
+  useEffect(() => {
+    if (
+      openRequest === undefined ||
+      openRequest === lastOpenRequest.current
+    ) {
+      return;
+    }
+    if (disabled) return;
+    lastOpenRequest.current = openRequest;
+    focusFirstOnOpen.current = true;
+    setPosition(null);
+    setOpen(true);
+  }, [disabled, openRequest]);
 
   function close({ restoreFocus = false } = {}) {
     setOpen(false);

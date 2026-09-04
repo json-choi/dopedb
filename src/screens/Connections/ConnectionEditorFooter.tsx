@@ -8,13 +8,11 @@ import { useI18n } from "../../lib/i18n";
 export function ConnectionEditorFooter({
   view,
   canEditConnection,
-  hasBlockingProblems,
   commands,
   onCancel,
 }: {
   view: ConnectionEditorController["catalog"]["navigation"]["view"];
   canEditConnection: boolean;
-  hasBlockingProblems: boolean;
   commands: ConnectionEditorController["commands"];
   onCancel: ConnectionEditorProps["onCancel"];
 }) {
@@ -33,7 +31,7 @@ export function ConnectionEditorFooter({
               {t("common.cancel")}
             </Button>
             <Button
-              disabled={commands.busy || hasBlockingProblems}
+              disabled={commands.busy}
               size="compact"
               onClick={() => void commands.save(false)}
             >
@@ -43,7 +41,7 @@ export function ConnectionEditorFooter({
             </Button>
             <Button
               variant="primary"
-              disabled={commands.busy || hasBlockingProblems}
+              disabled={commands.busy}
               size="compact"
               onClick={() => void commands.save(true)}
             >
@@ -54,32 +52,21 @@ export function ConnectionEditorFooter({
           </>
         ) : (
           <Button
-            variant="primary"
             size="compact"
             disabled={commands.busy}
             onClick={onCancel}
           >
-            {t("common.ok")}
+            {t("common.close")}
           </Button>
         )
       ) : (
-        <>
-          <Button
-            size="compact"
-            disabled={commands.busy}
-            onClick={onCancel}
-          >
-            {t("common.cancel")}
-          </Button>
-          <Button
-            size="compact"
-            variant="primary"
-            disabled={commands.busy}
-            onClick={onCancel}
-          >
-            {t("common.ok")}
-          </Button>
-        </>
+        <Button
+          size="compact"
+          disabled={commands.busy}
+          onClick={onCancel}
+        >
+          {t("common.close")}
+        </Button>
       )}
     </ModalFooter>
   );

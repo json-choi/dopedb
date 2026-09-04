@@ -99,7 +99,6 @@ export function ConnectionForm(props: ConnectionEditorProps) {
           <ConnectionEditorFooter
             view={catalog.navigation.view}
             canEditConnection={profile.flags.canEditConnection}
-            hasBlockingProblems={dialogs.problems.hasBlocking}
             commands={commands}
             onCancel={() => void commands.cancel()}
           />

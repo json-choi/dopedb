@@ -23,6 +23,10 @@ export const productAnalyticsCatalog = defineCatalog(
     "productAnalytics.settingsBody":
       "Choose whether this official desktop build may send privacy-bounded product usage events.",
     "productAnalytics.settingsTitle": "Product analytics",
+    "productAnalytics.notCollectedTitle": "Not collected",
+    "productAnalytics.sharedFieldsTitle": "Shared fields",
+    "productAnalytics.transferRetentionTitle": "Transfer and retention",
+    "productAnalytics.revokeTitle": "When turned off",
     "productAnalytics.updateFailed":
       "The privacy choice could not be saved. Please try again.",
     "settings.privacy": "Privacy",
@@ -49,6 +53,10 @@ export const productAnalyticsCatalog = defineCatalog(
     "productAnalytics.settingsBody":
       "공식 데스크톱 빌드에서 개인정보 보호 범위가 제한된 제품 사용 이벤트를 전송할지 선택합니다.",
     "productAnalytics.settingsTitle": "제품 분석",
+    "productAnalytics.notCollectedTitle": "수집하지 않음",
+    "productAnalytics.sharedFieldsTitle": "공유 항목",
+    "productAnalytics.transferRetentionTitle": "전송 및 보관",
+    "productAnalytics.revokeTitle": "끄면 삭제되는 항목",
     "productAnalytics.updateFailed":
       "개인정보 선택을 저장하지 못했습니다. 다시 시도해 주세요.",
     "settings.privacy": "개인정보",

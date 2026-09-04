@@ -19,7 +19,6 @@ export function JobPlanForm({ controller }: { controller: JobPanelController }) 
   const {
     batchSize,
     busy,
-    canSubmit,
     capability,
     customMapping,
     errorPolicy,
@@ -243,15 +242,6 @@ export function JobPlanForm({ controller }: { controller: JobPanelController }) 
           </p>
         )}
 
-        <span className="tw:col-span-full tw:@max-[760px]:col-span-1">
-          <Button
-            variant="primary"
-            disabled={!canSubmit}
-            onClick={() => void commands.submit()}
-          >
-            {busy ? t("common.loading") : t("jobs.create")}
-          </Button>
-        </span>
       </div>
     </>
   );

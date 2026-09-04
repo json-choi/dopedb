@@ -17,8 +17,10 @@ import {
 
 function connectionEndpoint(connection: ConnectionProfile) {
   if (connection.engine === "sqlite") {
-    return databaseDisplayLabel(connection.engine, connection.database)
-      || connection.host
+    return databaseDisplayLabel(
+      connection.engine,
+      connection.database || connection.host,
+    )
       || "sqlite";
   }
   return `${connection.host}${connection.port ? `:${connection.port}` : ""}`;
@@ -43,13 +45,18 @@ export default function ConnectionPicker({
     const databaseLabel =
       databaseDisplayLabel(connection.engine, connection.database)
       || t("common.unknown");
+    const endpoint = connectionEndpoint(connection);
+    const showEndpoint = endpoint !== databaseLabel;
+    const safetyLabel = connection.allowWrites && !connection.readonlyDefault
+      ? t("ide.writeEnabled")
+      : t("ide.readOnly");
     return (
       <button
         key={connection.id}
         type="button"
-        className="tw:flex tw:min-h-[92px] tw:min-w-0 tw:cursor-pointer tw:flex-col tw:items-stretch tw:justify-between tw:gap-3 tw:rounded-lg tw:border tw:border-border-subtle tw:bg-card tw:p-3 tw:font-sans tw:text-left tw:text-foreground tw:shadow-panel tw:transition-[border-color,background,box-shadow] tw:duration-150 tw:hover:border-border-strong tw:hover:bg-selection/40 tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring"
+        className="tw:flex tw:min-h-[76px] tw:min-w-0 tw:cursor-pointer tw:flex-col tw:items-stretch tw:justify-between tw:gap-2 tw:rounded-md tw:border tw:border-border-subtle tw:bg-card tw:p-3 tw:font-sans tw:text-left tw:text-foreground tw:transition-[border-color,background] tw:duration-150 tw:hover:border-border-strong tw:hover:bg-selection/40 tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring"
         onClick={() => onSelect(connection.id)}
-        title={`${connection.engine} · ${connectionEndpoint(connection)} · ${databaseLabel}`}
+        title={`${connection.engine} · ${endpoint} · ${safetyLabel}`}
         aria-label={t("app.openConnection", { name })}
       >
         <span className="tw:flex tw:min-w-0 tw:items-center tw:gap-2">
@@ -71,8 +78,14 @@ export default function ConnectionPicker({
               <ProviderTargetLabel target={connection.providerTarget} showState />
             </>
           ) : null}
+          {showEndpoint ? (
+            <>
+              <span className="ds-meta-dot tw:shrink-0" />
+              <span>{endpoint}</span>
+            </>
+          ) : null}
           <span className="ds-meta-dot tw:shrink-0" />
-          <span>{connectionEndpoint(connection)}</span>
+          <span>{safetyLabel}</span>
         </span>
       </button>
     );

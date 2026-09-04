@@ -25,6 +25,7 @@ interface DatabaseExplorerToolbarProps {
   activeSearchResult: CatalogTreeSearchResult | undefined;
   activeEnvironmentId: string | null;
   activeEnvironmentView: string | null;
+  analysisAvailable: boolean;
   analysisFilter: string;
   selectedTableKey: string | null;
   showRowCounts: boolean;
@@ -60,6 +61,7 @@ export function DatabaseExplorerToolbar({
   activeSearchResult,
   activeEnvironmentId,
   activeEnvironmentView,
+  analysisAvailable,
   analysisFilter,
   selectedTableKey,
   showRowCounts,
@@ -222,7 +224,9 @@ export function DatabaseExplorerToolbar({
             </span>
           ) : null}
         </ToolWindowSearchRow>
-      ) : activeEnvironmentId && activeEnvironmentView === "analyses" ? (
+      ) : activeEnvironmentId &&
+        activeEnvironmentView === "analyses" &&
+        analysisAvailable ? (
         <ToolWindowSearchRow>
           <div className="tw:min-w-0 tw:flex-1">
             <TreeSearch

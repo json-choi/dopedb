@@ -50,7 +50,7 @@ export function useConnectionProfileState({
   });
   const [isNew, setIsNew] = useState(initial === null);
   const [persisted, setPersisted] = useState(initial !== null);
-  const [nameInteracted, setNameInteracted] = useState(initial !== null);
+  const [nameInteracted, setNameInteracted] = useState(false);
   const [password, setPassword] = useState("");
   const [portDraft, setPortDraftState] = useState(() => String(form.port));
   const [connectionInputMode, setConnectionInputMode] =

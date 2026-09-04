@@ -625,8 +625,9 @@ DopeDB의 실제 작업 흐름과 접근성, supported viewport를 위한 제품
   Agent가 제안한 mutation은 별도 단일 승인·거절 surface를 유지한다.
 - `ResultMeta`, `SqlSnippet`: 결과 pane의 고정 metadata bar와 축약 SQL 표기.
 - `DataGridStatusPill`: table data와 query result가 공유하는 grid 하단 중앙의
-  floating row-count surface. 범위·duration·선택 상태의 상세 정보는 접근 가능한
-  title에 유지하고 grid를 밀어내는 전체 폭 footer를 만들지 않는다.
+  floating result-status surface. 행 범위·전체 수·duration·잘림 여부는 tooltip 없이
+  읽을 수 있는 짧은 문구로 표시하고, 선택 상태 같은 추가 상세는 접근 가능한 title에
+  유지한다. grid를 밀어내는 전체 폭 footer는 만들지 않는다.
 - `ResultWorkbenchToolbar`, `ResultWorkbenchFooter`: materialized/streaming
   결과가 공유하는 grid mode, 전체 셀 검색, 실제 export action과 행·duration
   상태. workbench export는 별도 CSV/JSON text button을 나열하지 않고

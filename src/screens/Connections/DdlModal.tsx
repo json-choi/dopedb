@@ -42,7 +42,7 @@ export default function DdlModal({
           })}
           titleId="ddl-dialog-title"
         />
-        <div className="tw:min-h-[280px] tw:min-w-0 tw:flex-1 tw:overflow-auto tw:bg-background tw:p-3">
+        <div className="tw:min-h-[112px] tw:min-w-0 tw:max-h-[min(60dvh,560px)] tw:flex-none tw:overflow-auto tw:bg-background tw:p-3">
           {error ? (
             <div className="tw:text-ui tw:text-danger" role="alert">
               {error}
@@ -53,7 +53,7 @@ export default function DdlModal({
               <LoadingLabel>{t("common.loading")}</LoadingLabel>
             </div>
           )}
-          {text != null && <LazySqlViewer value={text} minHeight="240px" />}
+          {text != null && <LazySqlViewer value={text} minHeight="96px" />}
         </div>
         <ModalFooter>
           <Button

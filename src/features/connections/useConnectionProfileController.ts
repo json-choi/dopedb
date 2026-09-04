@@ -113,11 +113,15 @@ export function useConnectionProfileController({
     diagnostics.some((diagnostic) => diagnostic.tone === "danger");
   const hasTestBlockingProblems =
     connectionUrlInvalid || diagnostics.some(connectionDiagnosticBlocksTest);
-  const problemItems: DiagnosticItem[] = diagnostics.map((diagnostic) => ({
-    id: diagnostic.id,
-    tone: diagnostic.tone,
-    title: connectionDiagnosticMessage(t, diagnostic.code),
-  }));
+  const problemItems: DiagnosticItem[] = diagnostics
+    .filter(
+      ({ fieldId }) => fieldId !== "connection-name" || form.nameInteracted,
+    )
+    .map((diagnostic) => ({
+      id: diagnostic.id,
+      tone: diagnostic.tone,
+      title: connectionDiagnosticMessage(t, diagnostic.code),
+    }));
   if (connectionUrlInvalid) {
     problemItems.push({
       id: "connection-url-invalid",
@@ -235,6 +239,7 @@ export function useConnectionProfileController({
 
   async function save(closeEditor: boolean) {
     if (hasBlockingProblems) {
+      form.revealNameValidation();
       dialogs.problems.setOpen(true);
       return;
     }
@@ -353,6 +358,7 @@ export function useConnectionProfileController({
 
   async function test() {
     if (hasTestBlockingProblems) {
+      form.revealNameValidation();
       dialogs.problems.setOpen(true);
       return;
     }
@@ -464,7 +470,6 @@ export function useConnectionProfileController({
       },
       bigQuery,
       validation,
-      revealNameValidation: form.revealNameValidation,
     },
     problems: {
       items: problemItems,

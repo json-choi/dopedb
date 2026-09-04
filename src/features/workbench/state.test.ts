@@ -47,9 +47,12 @@ import {
 } from "../connections/connectionUrl";
 import {
   canRecoverBigQueryAuthentication,
+  databaseDisplayLabel,
   connectionId as connectionProfileId,
   type DriverDescriptor,
 } from "../connections/domain";
+import { queryServiceSessionProjection } from "../queryServices/useQueryServices";
+import { parseDocumentLimit } from "../../screens/Documents";
 import {
   connectionTestFailureRecovery,
   connectionTestFailureTarget,
@@ -94,6 +97,7 @@ import {
   isManagedConnectionRecoveryRequired,
   supportedObjectKinds,
 } from "../catalogExplorer/catalogDomain";
+import { isCatalogSearchResultActive } from "../catalogExplorer/state";
 import {
   flattenProjectEnvironmentResources,
   moveProjectDatabaseResource,
@@ -201,6 +205,35 @@ describe("workbench state ownership", () => {
     expect(queryResultPhase(undefined, null)).toBe("coldLoading");
     expect(queryResultPhase([], new Error("offline"))).toBe("staleError");
     expect(queryResultPhase([], null)).toBe("loaded");
+    expect(isCatalogSearchResultActive(undefined, undefined)).toBe(false);
+    expect(isCatalogSearchResultActive("relation:orders", undefined)).toBe(false);
+    expect(isCatalogSearchResultActive("relation:orders", "relation:orders"))
+      .toBe(true);
+    expect(databaseDisplayLabel("sqlite", "/Users/person/private/demo.sqlite"))
+      .toBe("demo.sqlite");
+    expect(parseDocumentLimit("")).toBeNull();
+    expect(parseDocumentLimit("0")).toBeNull();
+    expect(parseDocumentLimit("1.5")).toBeNull();
+    expect(parseDocumentLimit("250")).toBe(250);
+    expect(parseDocumentLimit("1000001")).toBeNull();
+    expect(queryServiceSessionProjection({
+      key: "personal:local",
+      ready: true,
+      workspaceId: "personal",
+      accountScope: null,
+    }, "personal:local")).toBe("memory");
+    expect(queryServiceSessionProjection({
+      key: "team:one",
+      ready: true,
+      workspaceId: "workspace-1",
+      accountScope: "account-1",
+    }, "team:one")).toBe("persistent");
+    expect(queryServiceSessionProjection({
+      key: "team:old",
+      ready: true,
+      workspaceId: "workspace-old",
+      accountScope: "account-old",
+    }, "team:new")).toBe("ignore");
 
     const welcome = stableDocument("db-1", "welcome");
     const initialized = workbenchReducer(emptyWorkbenchState, {

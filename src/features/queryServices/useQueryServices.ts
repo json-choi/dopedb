@@ -26,6 +26,16 @@ type QueryServiceScope = {
   accountScope: string | null;
 };
 
+export function queryServiceSessionProjection(
+  scope: QueryServiceScope,
+  currentScopeKey: string,
+): "ignore" | "memory" | "persistent" {
+  if (!scope.ready || scope.key !== currentScopeKey) return "ignore";
+  return storageScope(scope.workspaceId, scope.accountScope)
+    ? "persistent"
+    : "memory";
+}
+
 export function useQueryServices(
   scope: QueryServiceScope,
   onPersistenceError: (error: unknown) => void,
@@ -99,11 +109,16 @@ export function useQueryServices(
         scope.workspaceId,
         scope.accountScope,
       );
-      if (
-        !scope.ready ||
-        !expectedScope ||
-        scopeKeyRef.current !== scope.key
-      ) {
+      const projection = queryServiceSessionProjection(
+        {
+          key: scope.key,
+          ready: scope.ready,
+          workspaceId: scope.workspaceId,
+          accountScope: scope.accountScope,
+        },
+        scopeKeyRef.current,
+      );
+      if (projection === "ignore") {
         return;
       }
       const previous = store.session(session.id);
@@ -126,6 +141,10 @@ export function useQueryServices(
         runningUpdates.push(scope.key, session);
       }
       if (!isTerminalQueryServiceSession(session)) return;
+      // Personal workspaces intentionally have no account scope to persist
+      // against. They still own a live Services projection for the current
+      // app session; only the durable snapshot is account-scoped.
+      if (projection === "memory" || !expectedScope) return;
       if (store.session(session.id)?.updatedAt !== session.updatedAt) return;
       const serialized = JSON.stringify(session);
       if (persistedSnapshots.current.get(session.id) === serialized) return;

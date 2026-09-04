@@ -29,6 +29,7 @@ import type {
 } from "../../ipc/types";
 import { errMessage } from "../../ipc/types";
 import { useI18n } from "../../lib/i18n";
+import type { I18nKey } from "../../lib/i18n";
 import {
   auditEntryQuery,
   auditPageQuery,
@@ -79,6 +80,55 @@ function statusTone(status: string) {
   return "neutral";
 }
 
+type Translate = (key: I18nKey, vars?: Record<string, string | number>) => string;
+
+function queryKindLabel(t: Translate, kind: string) {
+  if (kind === "read") return t("activity.kindRead");
+  if (kind === "write") return t("activity.kindWrite");
+  if (kind === "ddl") return t("activity.kindDdl");
+  if (kind === "privilege") return t("activity.kindPrivilege");
+  return t("activity.kindUnknown");
+}
+
+function activityStatusLabel(t: Translate, status: string) {
+  if (status === "ok" || status === "success" || status === "done") {
+    return t("activity.statusSucceeded");
+  }
+  if (status === "error" || status === "failed") {
+    return t("activity.statusFailed");
+  }
+  if (status === "blocked") return t("activity.statusBlocked");
+  if (status === "outcome_unknown") return t("activity.statusOutcomeUnknown");
+  return t("activity.statusUnknown");
+}
+
+function activityOriginLabel(t: Translate, origin: string) {
+  if (origin === "manual") return t("activity.originManual");
+  if (origin === "agent") return t("activity.originAgent");
+  if (origin === "analysis_article") return t("activity.originAnalysisArticle");
+  if (origin === "table_editor") return t("activity.originTableEditor");
+  if (origin === "cli") return t("activity.originCli");
+  return t("activity.originOther");
+}
+
+function auditActionLabel(t: Translate, action: string) {
+  const labels: Readonly<Record<string, I18nKey>> = {
+    propose: "activity.actionPropose",
+    approve: "activity.actionApprove",
+    reject: "activity.actionReject",
+    execute: "activity.actionExecute",
+    "execute:attempt": "activity.actionExecuteAttempt",
+    blocked: "activity.actionBlocked",
+    error: "activity.actionError",
+    read: "activity.actionRead",
+    "script:execute": "activity.actionScriptExecute",
+    "script:execute:attempt": "activity.actionScriptExecuteAttempt",
+    "analysis_article:run": "activity.actionAnalysisRun",
+  };
+  const key = labels[action];
+  return key ? t(key) : t("activity.actionOther");
+}
+
 function AuditRow({
   connectionId,
   entry,
@@ -117,10 +167,10 @@ function AuditRow({
               data-tone={actionTone(entry.action)}
               className="badge tw:normal-case tw:data-[tone=danger]:border-danger tw:data-[tone=danger]:text-danger tw:data-[tone=primary]:border-primary tw:data-[tone=primary]:text-primary tw:data-[tone=success]:border-success tw:data-[tone=success]:text-success"
             >
-              {entry.action}
+              {auditActionLabel(t, entry.action)}
             </span>
             {entry.kind.toLowerCase() !== entry.action.toLowerCase() && (
-              <span className="badge kind">{entry.kind}</span>
+              <span className="badge kind">{queryKindLabel(t, entry.kind)}</span>
             )}
             {tampered && (
               <strong className="tw:text-danger">{t("activity.auditTampered")}</strong>
@@ -424,8 +474,19 @@ export default function Activity({
                 {t("activity.queriesDescription")}
               </p>
             </div>
-            <Button type="button" size="compact" onClick={refresh} disabled={busy}>
-              {busy ? "..." : t("common.refresh")}
+            <Button
+              type="button"
+              size="compact"
+              onClick={refresh}
+              disabled={busy}
+              aria-busy={busy}
+            >
+              <Icon
+                name="refresh"
+                data-loading={busy || undefined}
+                className="tw:data-[loading=true]:animate-spin tw:motion-reduce:animate-none"
+              />
+              {busy ? t("common.refreshing") : t("common.refresh")}
             </Button>
           </div>
 
@@ -448,7 +509,11 @@ export default function Activity({
                   aria-label={t("activity.allStatuses")}
                 >
                   <option value="">{t("activity.allStatuses")}</option>
-                  {page?.statuses.map((status) => <option key={status} value={status}>{status}</option>)}
+                  {page?.statuses.map((status) => (
+                    <option key={status} value={status}>
+                      {activityStatusLabel(t, status)}
+                    </option>
+                  ))}
                 </SelectInput>
               </span>
               <span className="tw:min-w-[140px]">
@@ -459,7 +524,11 @@ export default function Activity({
                   aria-label={t("activity.allOrigins")}
                 >
                   <option value="">{t("activity.allOrigins")}</option>
-                  {page?.origins.map((origin) => <option key={origin} value={origin}>{origin}</option>)}
+                  {page?.origins.map((origin) => (
+                    <option key={origin} value={origin}>
+                      {activityOriginLabel(t, origin)}
+                    </option>
+                  ))}
                 </SelectInput>
               </span>
             </div>
@@ -511,15 +580,15 @@ export default function Activity({
                     >
                       <td className="tw:whitespace-nowrap tw:text-muted-foreground" title={fullTime(row.executedAt)}>{relTime(row.executedAt)}</td>
                       <td>
-                        <span data-tone={originTone(row.origin)} className="badge tw:data-[tone=primary]:border-primary tw:data-[tone=primary]:text-primary tw:data-[tone=warning]:border-warning tw:data-[tone=warning]:text-warning">{row.origin}</span>
+                        <span data-tone={originTone(row.origin)} className="badge tw:data-[tone=primary]:border-primary tw:data-[tone=primary]:text-primary tw:data-[tone=warning]:border-warning tw:data-[tone=warning]:text-warning">{activityOriginLabel(t, row.origin)}</span>
                       </td>
-                      <td><span className="badge kind">{row.kind}</span></td>
+                      <td><span className="badge kind">{queryKindLabel(t, row.kind)}</span></td>
                       <td>
                         <span
                           data-tone={statusTone(row.status)}
                           className="badge icon-only-badge tw:data-[tone=danger]:border-danger tw:data-[tone=danger]:text-danger tw:data-[tone=success]:border-success tw:data-[tone=success]:text-success"
-                          title={row.errorPreview ? `${row.status}: ${row.errorPreview}` : row.status}
-                          aria-label={row.errorPreview ? `${row.status}: ${row.errorPreview}` : row.status}
+                          title={row.errorPreview ? `${activityStatusLabel(t, row.status)}: ${row.errorPreview}` : activityStatusLabel(t, row.status)}
+                          aria-label={row.errorPreview ? `${activityStatusLabel(t, row.status)}: ${row.errorPreview}` : activityStatusLabel(t, row.status)}
                           role="img"
                         >
                           <Icon name={statusIcon(row.status)} />

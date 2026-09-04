@@ -9,7 +9,10 @@ import {
   type CatalogScope,
 } from "../../lib/queries";
 import { filterCatalogOverview } from "../catalogExplorer/scopeFilter";
-import type { ConnectionProfile } from "../connections/domain";
+import {
+  databaseDisplayLabel,
+  type ConnectionProfile,
+} from "../connections/domain";
 import type { SettingsSection } from "../settings/domain";
 import type { WorkbenchDocument } from "../workbench/domain";
 import { useCachedCatalogOverviews } from "./catalogCache";
@@ -55,6 +58,8 @@ export function useActionSearchItems({
     scope.key,
     open && scope.ready,
   );
+  const visibleDatabase = (connection: ConnectionProfile, database: string) =>
+    databaseDisplayLabel(connection.engine, database);
 
   const actions: ActionSearchItem[] = [
     {
@@ -123,7 +128,7 @@ export function useActionSearchItems({
         connection.providerTarget?.branchName ??
           connection.providerTarget?.branchId,
         connection.host,
-        connection.database,
+        visibleDatabase(connection, connection.database),
       ]
         .filter(Boolean)
         .join(" · "),
@@ -157,7 +162,11 @@ export function useActionSearchItems({
       id: `document:${document.id}`,
       kind: "document",
       label,
-      detail: selected?.name || selected?.database || t("app.unnamed"),
+      detail:
+        selected?.name ||
+        (selected
+          ? visibleDatabase(selected, selected.database)
+          : t("app.unnamed")),
       keywords: [document.kind],
       run: () => commands.activateDocument(document),
     };
@@ -179,9 +188,15 @@ export function useActionSearchItems({
         kind: "databaseObject" as const,
         label: [relation.schema, relation.name].filter(Boolean).join("."),
         detail: [
-          connection.name || connection.database,
-          target.database !== connection.database ? target.database : null,
-          relation.kind,
+          connection.name || visibleDatabase(connection, connection.database),
+          target.database !== connection.database
+            ? visibleDatabase(connection, target.database)
+            : null,
+          t(
+            relation.kind === "view"
+              ? "schemaDiff.objectView"
+              : "schemaDiff.objectTable",
+          ),
         ]
           .filter(Boolean)
           .join(" · "),

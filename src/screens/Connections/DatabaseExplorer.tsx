@@ -590,6 +590,7 @@ export function DatabaseExplorer({
         activeSearchResult={activeSearchResult}
         activeEnvironmentId={activeProjectEnvironmentId}
         activeEnvironmentView={activeProjectEnvironmentView}
+        analysisAvailable={sharedKnowledgeWorkspace}
         analysisFilter={analysisFilter}
         selectedTableKey={selectedTableKey}
         showRowCounts={showRowCounts}

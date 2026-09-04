@@ -1,6 +1,6 @@
 // Active workspace/project menu for the title toolbar. Workspace changes clear cached
 // resource reads before the shell reloads the newly selected account scope.
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
@@ -13,6 +13,7 @@ import {
   runWorkspaceAuthorityTransition,
 } from "../cache";
 import { workspaceAuthStateQuery, workspaceContextQuery } from "../queries";
+import { onWorkspaceSelectionRequested } from "../selectionRequest";
 import {
   buildWorkspaceChoiceGroups,
   parseWorkspaceChoice,
@@ -40,6 +41,11 @@ export default function WorkspaceSwitcher({
   const auth = useQuery(workspaceAuthStateQuery());
   const [switching, setSwitching] = useState(false);
   const [dashboardOpening, setDashboardOpening] = useState(false);
+  const [openRequest, setOpenRequest] = useState(0);
+  useEffect(
+    () => onWorkspaceSelectionRequested(() => setOpenRequest((value) => value + 1)),
+    [],
+  );
   const roleLabels = {
     viewer: t("workspace.accessView"),
     analyst: t("workspace.accessRead"),
@@ -113,6 +119,7 @@ export default function WorkspaceSwitcher({
       align="start"
       label={t("workspace.select")}
       disabled={context.isLoading || switching}
+      openRequest={openRequest}
       trigger={
         <>
           <span className="tw:grid tw:size-5 tw:shrink-0 tw:place-items-center tw:rounded-xs tw:bg-secondary tw:font-mono tw:text-xs tw:font-bold tw:text-foreground">

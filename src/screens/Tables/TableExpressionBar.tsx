@@ -44,9 +44,15 @@ function ExpressionField({
         {label}
       </span>
       <input
-        className="tw:h-control-sm tw:min-h-control-sm tw:min-w-0 tw:flex-1 tw:rounded-none tw:border-0 tw:bg-transparent tw:px-1 tw:font-mono tw:text-sm tw:text-foreground tw:shadow-none tw:focus-visible:ring-0 tw:aria-invalid:text-danger"
+        className="tw:mx-1 tw:h-[calc(var(--ds-control-sm)_-_6px)] tw:min-h-0 tw:min-w-0 tw:flex-1 tw:rounded-xs tw:border tw:border-input tw:bg-input tw:px-2 tw:font-mono tw:text-sm tw:text-foreground tw:shadow-none tw:data-[dirty=true]:border-ring tw:focus-visible:border-ring tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring/30 tw:aria-invalid:border-danger tw:aria-invalid:text-danger"
         value={value}
+        data-dirty={dirty || undefined}
         disabled={busy}
+        placeholder={t(
+          kind === "where"
+            ? "tables.whereExpressionPlaceholder"
+            : "tables.orderByExpressionPlaceholder",
+        )}
         aria-label={t(
           kind === "where"
             ? "tables.whereExpression"

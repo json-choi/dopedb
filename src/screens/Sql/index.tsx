@@ -18,6 +18,7 @@ import {
   useSqlWorkbenchController,
   type SqlWorkbenchProps,
 } from "../../features/queries/useSqlWorkbenchController";
+import { databaseDisplayLabel } from "../../features/connections/domain";
 import { useI18n } from "../../lib/i18n";
 import SqlParameterDialog from "./SqlParameterDialog";
 
@@ -204,7 +205,10 @@ export default function Sql(props: SqlWorkbenchProps) {
           label={t("sql.databaseSelector")}
           title={t("sql.databaseSelectorHint", {
             connection: connection.name || t("app.unnamed"),
-            database: effectiveDatabase,
+            database: databaseDisplayLabel(
+              connection.engine,
+              effectiveDatabase,
+            ),
           })}
           icon="database"
           value={effectiveDatabase}
@@ -213,7 +217,7 @@ export default function Sql(props: SqlWorkbenchProps) {
         >
           {databaseOptions.map((database) => (
             <option key={database} value={database}>
-              {database}
+              {databaseDisplayLabel(connection.engine, database)}
             </option>
           ))}
         </WorkbenchSelect>

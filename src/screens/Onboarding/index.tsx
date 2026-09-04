@@ -1,8 +1,18 @@
 // Welcome document. Only commands with a real application owner
 // appear here; provider setup and Agent actions stay in their tool windows.
+import { Icon, type IconName } from "../../components/Icon";
 import { useI18n } from "../../lib/i18n";
 import { Button } from "../../design-system/components/Button";
 import { ProductAnalyticsConsentPrompt } from "../../features/productAnalytics/ConsentPrompt";
+
+type WelcomeCommand = {
+  id: string;
+  icon: IconName;
+  label: string;
+  shortcut?: string;
+  disabled?: boolean;
+  onClick: (returnFocus: HTMLButtonElement) => void;
+};
 
 export default function Onboarding({
   connectionName,
@@ -31,71 +41,73 @@ export default function Onboarding({
 }) {
   const { t } = useI18n();
   const connected = Boolean(connectionName);
-  const commands = [
-    ...(guidedDemo
-      ? [
-          {
-            id: "demo-browse-orders",
-            label: t("onboarding.demoBrowseOrders"),
-            onClick: guidedDemo.onBrowseOrders,
-          },
-          {
-            id: "demo-analyze-revenue",
-            label: t("onboarding.demoAnalyzeRevenue"),
-            onClick: guidedDemo.onAnalyzeRevenue,
-          },
-          {
-            id: "demo-practice-approval",
-            label: guidedDemo.writeEnabled
-              ? t("onboarding.demoPracticeApproval")
-              : t("onboarding.demoEnableWrites"),
-            onClick: guidedDemo.writeEnabled
-              ? guidedDemo.onPracticeApproval
-              : guidedDemo.onOpenSafety,
-          },
-        ]
-      : []),
-    ...(connected && onNewQuery
-      ? [
-          {
-            id: "new-query",
-            label: t("ide.action.newQuery"),
-            onClick: onNewQuery,
-          },
-        ]
-      : []),
-    {
-      id: "new-data-source",
-      label: t("connections.new"),
-      onClick: onNewConnection,
-    },
-    ...(!connected && onCreateDemoDatabase
-      ? [
-          {
-            id: "create-demo-sqlite",
-            label: creatingDemo
-              ? t(
-                  guidedDemoAvailable
-                    ? "onboarding.demoStarting"
-                    : "connections.demoCreating",
-                )
-              : t(
-                  guidedDemoAvailable
-                    ? "onboarding.demoStart"
-                    : "connections.demoSqlite",
-                ),
-            disabled: creatingDemo,
-            onClick: onCreateDemoDatabase,
-          },
-        ]
-      : []),
-    {
-      id: "search-everywhere",
-      label: t("ide.action.actionSearch"),
-      shortcut: "Shift ×2",
-      onClick: onActionSearch,
-    },
-  ] as const;
+  const commands: WelcomeCommand[] = [];
+  if (guidedDemo) {
+    commands.push(
+      {
+        id: "demo-browse-orders",
+        icon: "table",
+        label: t("onboarding.demoBrowseOrders"),
+        onClick: guidedDemo.onBrowseOrders,
+      },
+      {
+        id: "demo-analyze-revenue",
+        icon: "chart",
+        label: t("onboarding.demoAnalyzeRevenue"),
+        onClick: guidedDemo.onAnalyzeRevenue,
+      },
+      {
+        id: "demo-practice-approval",
+        icon: guidedDemo.writeEnabled ? "unlock" : "lock",
+        label: guidedDemo.writeEnabled
+          ? t("onboarding.demoPracticeApproval")
+          : t("onboarding.demoEnableWrites"),
+        onClick: guidedDemo.writeEnabled
+          ? guidedDemo.onPracticeApproval
+          : guidedDemo.onOpenSafety,
+      },
+    );
+  }
+  if (connected && onNewQuery) {
+    commands.push({
+      id: "new-query",
+      icon: "play",
+      label: t("ide.action.newQuery"),
+      onClick: onNewQuery,
+    });
+  }
+  commands.push({
+    id: "new-data-source",
+    icon: "database",
+    label: t("connections.new"),
+    onClick: onNewConnection,
+  });
+  if (!connected && onCreateDemoDatabase) {
+    commands.push({
+      id: "create-demo-sqlite",
+      icon: "download",
+      label: creatingDemo
+        ? t(
+            guidedDemoAvailable
+              ? "onboarding.demoStarting"
+              : "connections.demoCreating",
+          )
+        : t(
+            guidedDemoAvailable
+              ? "onboarding.demoStart"
+              : "connections.demoSqlite",
+          ),
+      disabled: creatingDemo,
+      onClick: onCreateDemoDatabase,
+    });
+  }
+  commands.push({
+    id: "search-everywhere",
+    icon: "search",
+    label: t("ide.action.actionSearch"),
+    shortcut: "Shift ×2",
+    onClick: onActionSearch,
+  });
 
   return (
     <div className="tw:flex tw:h-full tw:min-h-0 tw:flex-col tw:overflow-hidden tw:bg-editor">
@@ -112,28 +124,37 @@ export default function Onboarding({
               )}
             </p>
           ) : null}
-          <div className="tw:grid tw:gap-1" aria-label={t("onboarding.title")}>
+          <div
+            className="tw:overflow-hidden tw:rounded-md tw:border tw:border-border-subtle tw:bg-card"
+            aria-label={t("onboarding.title")}
+            role="group"
+          >
             {commands.map((command) => (
-              <Button
+              <div
                 key={command.id}
-                presentation="menuItem"
-                size="compact"
-                variant="ghost"
-                disabled={"disabled" in command && command.disabled}
-                onClick={(event) => {
-                  event.currentTarget.focus({ preventScroll: true });
-                  command.onClick(event.currentTarget);
-                }}
+                className="tw:border-b tw:border-border-subtle tw:last:border-b-0"
               >
-                <span className="tw:flex tw:w-full tw:min-w-0 tw:items-center tw:justify-between tw:gap-4">
-                  <span className="tw:truncate">{command.label}</span>
-                  {"shortcut" in command ? (
-                    <span className="tw:shrink-0 tw:font-mono tw:text-xs tw:font-normal tw:text-muted-foreground">
-                      {command.shortcut}
-                    </span>
-                  ) : null}
-                </span>
-              </Button>
+                <Button
+                  presentation="menuItem"
+                  size="compact"
+                  variant="ghost"
+                  disabled={command.disabled}
+                  onClick={(event) => {
+                    event.currentTarget.focus({ preventScroll: true });
+                    command.onClick(event.currentTarget);
+                  }}
+                >
+                  <Icon name={command.icon} />
+                  <span className="tw:flex tw:w-full tw:min-w-0 tw:items-center tw:justify-between tw:gap-4">
+                    <span className="tw:truncate">{command.label}</span>
+                    {command.shortcut ? (
+                      <span className="tw:shrink-0 tw:font-mono tw:text-xs tw:font-normal tw:text-muted-foreground">
+                        {command.shortcut}
+                      </span>
+                    ) : null}
+                  </span>
+                </Button>
+              </div>
             ))}
           </div>
         </main>

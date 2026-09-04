@@ -16,6 +16,7 @@ import { useI18n } from "../../lib/i18n";
 import { tableDiffTone, type TableSchemaDiff } from "../../lib/schemaDiff";
 import { tableKey, tableLabel } from "../../lib/tableRef";
 import { catalogObjectLabel } from "../../features/catalogExplorer/catalogDomain";
+import { isCatalogSearchResultActive } from "../../features/catalogExplorer/state";
 import { schemaTableDiffTitle } from "./schemaDiffPresentation";
 
 interface CatalogRelationRowProps {
@@ -213,7 +214,10 @@ export function CatalogRelationRow({
         className="ds-object-row tw:group tw:relative tw:gap-1 tw:rounded-xs tw:select-none tw:text-ui tw:data-[search-active=true]:bg-selection tw:data-[search-active=true]:text-selection-foreground"
         data-table-key={key}
         data-explorer-search-result={searchResultKey}
-        data-search-active={activeSearchResultKey === searchResultKey || undefined}
+        data-search-active={
+          isCatalogSearchResultActive(searchResultKey, activeSearchResultKey)
+            || undefined
+        }
         data-diff={tone ?? "none"}
         aria-selected={selected}
         title={
@@ -340,7 +344,10 @@ export function CatalogObjectRow({
     <div
       className="ds-object-row tw:cursor-default tw:gap-1 tw:rounded-xs tw:text-ui tw:data-[search-active=true]:bg-selection tw:data-[search-active=true]:text-selection-foreground"
       data-explorer-search-result={searchResultKey}
-      data-search-active={activeSearchResultKey === searchResultKey || undefined}
+      data-search-active={
+        isCatalogSearchResultActive(searchResultKey, activeSearchResultKey)
+          || undefined
+      }
       title={[
         catalogObjectLabel(object),
         object.parent ? `${t("connections.objectOn")} ${object.parent}` : null,

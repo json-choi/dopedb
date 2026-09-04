@@ -1,4 +1,4 @@
-import { useRef, type ReactNode, type RefObject } from "react";
+import { useEffect, useRef, type ReactNode, type RefObject } from "react";
 
 import { Icon } from "../../components/Icon";
 import { ResizeSeparator } from "../../design-system/components/ResizeSeparator";
@@ -240,6 +240,11 @@ function ShellLayoutContent({ model, commands }: Props) {
       requestedAgentWidth: agent.width,
     }));
   const agentLayout = agentDockLayout(viewport.compact, agentOverlay);
+  useEffect(() => {
+    if (agent.open && agentOverlay && services.open) {
+      commands.services.close();
+    }
+  }, [agent.open, agentOverlay, commands.services, services.open]);
   const compactAgentModalOpen =
     agent.open &&
     workspace.selected !== null &&
@@ -466,6 +471,7 @@ function ShellLayoutContent({ model, commands }: Props) {
         selectedDatabase={selectedDatabase}
         selectedNamespace={selectedNamespace}
         activeDocument={activeWorkbenchDocument}
+        knowledgeFocus={explorer.knowledgeFocus}
         backgroundTasks={status.backgroundTasks}
         cancellingBackgroundTaskKeys={status.cancellingBackgroundTaskKeys}
         manualTransactions={status.manualTransactions}

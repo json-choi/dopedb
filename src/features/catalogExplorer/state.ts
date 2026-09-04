@@ -18,6 +18,13 @@ type CatalogExplorerAction =
   | { type: "toggleObjectSection"; key: string }
   | { type: "toggleCollapsedSection"; key: string };
 
+export function isCatalogSearchResultActive(
+  resultKey: string | undefined,
+  activeResultKey: string | null | undefined,
+) {
+  return resultKey !== undefined && activeResultKey === resultKey;
+}
+
 export function initialCatalogExplorerState(
   scopeKey: string,
 ): CatalogExplorerState {
