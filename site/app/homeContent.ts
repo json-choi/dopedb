@@ -11,7 +11,7 @@ export const downloadUrls = {
 };
 export const siteUrl = "https://dopedb.dev";
 // Keep in sync with the required local tools in docs/PROJECT.md#development.
-export const buildToolchain = "Rust 1.94+ · Node.js 24 · pnpm 11.17.0";
+export const buildToolchain = "Rust 1.94+ · Node.js 24 · pnpm 11.25.0";
 
 export type Lang = "en" | "ko";
 

@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "description": "Review-only upstream pins for independently released DopeDB ACP adapter bundles.",
   "dependencies": {
-    "@agentclientprotocol/claude-agent-acp": "0.63.0",
-    "@agentclientprotocol/codex-acp": "1.1.14"
+    "@agentclientprotocol/claude-agent-acp": "0.73.0",
+    "@agentclientprotocol/codex-acp": "1.8.0"
   }
 }

@@ -20,8 +20,8 @@ name = "dopedb-agent-bridge"
 path = "src/agent_bridge_main.rs"
 
 [dependencies]
-clap = { version = "4.5", features = ["derive"] }
-clap_complete = "4.6.8"
+clap = { version = "4.6", features = ["derive"] }
+clap_complete = "4.6.9"
 dirs = "6"
 dopedb-protocol = { path = "../dopedb-protocol" }
 hex = "0.4"

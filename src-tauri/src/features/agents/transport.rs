@@ -2,6 +2,9 @@
 
 use dopedb_protocol::AcpPluginId;
 use tauri::State;
+use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+use tauri_plugin_opener::OpenerExt;
+use url::Url;
 
 use crate::error::AppResult;
 use crate::kernel::identity::{AcpSessionId, ConnectionId};
@@ -15,6 +18,78 @@ use super::domain::{
 };
 use super::runtime::{AcpPluginMutationReceipt, AcpPluginStatus};
 use crate::features::knowledge::domain::KnowledgeEnvironmentSummary;
+
+const MAX_EXTERNAL_AGENT_LINK_BYTES: usize = 2_048;
+
+fn validated_external_agent_link(href: &str) -> AppResult<String> {
+    if href.is_empty()
+        || href.len() > MAX_EXTERNAL_AGENT_LINK_BYTES
+        || href.chars().any(char::is_control)
+    {
+        return Err(crate::AppError::Config(
+            "the Agent external link is invalid".into(),
+        ));
+    }
+    let parsed = Url::parse(href)
+        .map_err(|_| crate::AppError::Config("the Agent external link is invalid".into()))?;
+    match parsed.scheme() {
+        "http" | "https"
+            if parsed.host_str().is_some()
+                && parsed.username().is_empty()
+                && parsed.password().is_none() => {}
+        "mailto" if !parsed.path().is_empty() => {}
+        _ => {
+            return Err(crate::AppError::Config(
+                "the Agent external link must use HTTPS, HTTP, or mailto".into(),
+            ));
+        }
+    }
+    Ok(parsed.into())
+}
+
+/// Validate an untrusted Agent link, ask for native consent, then open it.
+#[tauri::command]
+pub async fn open_agent_external_link(
+    app: tauri::AppHandle,
+    href: String,
+    language: String,
+) -> AppResult<bool> {
+    let target = validated_external_agent_link(&href)?;
+    let (title, message) = if language == "ko" {
+        (
+            "외부 링크를 열까요?",
+            format!("Agent가 제안한 외부 주소입니다. 기본 앱에서 열까요?\n\n{target}"),
+        )
+    } else {
+        (
+            "Open external link?",
+            format!(
+                "The Agent suggested this external destination. Open it in your default application?\n\n{target}"
+            ),
+        )
+    };
+    let (sender, receiver) = tokio::sync::oneshot::channel();
+    app.dialog()
+        .message(message)
+        .title(title)
+        .kind(MessageDialogKind::Warning)
+        .buttons(MessageDialogButtons::YesNo)
+        .show(move |confirmed| {
+            let _ = sender.send(confirmed);
+        });
+    let confirmed = receiver.await.map_err(|_| {
+        crate::AppError::Config("the external-link confirmation was interrupted".into())
+    })?;
+    if !confirmed {
+        return Ok(false);
+    }
+    app.opener()
+        .open_url(target, None::<String>)
+        .map_err(|error| {
+            crate::AppError::Config(format!("could not open external link: {error}"))
+        })?;
+    Ok(true)
+}
 
 /// Inspect the two closed-catalog ACP adapter plugin installations.
 #[tauri::command]
@@ -241,4 +316,14 @@ pub(crate) fn assert_agent_transport_contract() {
     assert!(agent_session_requires_hosted_knowledge_reconciliation(
         Some("account-1"),
     ));
+    assert_eq!(
+        validated_external_agent_link("https://example.test/path?q=1")
+            .expect("valid external link"),
+        "https://example.test/path?q=1"
+    );
+    assert!(validated_external_agent_link("mailto:owner@example.test").is_ok());
+    assert!(validated_external_agent_link("javascript:alert(1)").is_err());
+    assert!(validated_external_agent_link("https://user@example.test").is_err());
+    assert!(validated_external_agent_link("https://example.test/\nnext").is_err());
+    assert!(validated_external_agent_link(&"x".repeat(MAX_EXTERNAL_AGENT_LINK_BYTES + 1)).is_err());
 }

@@ -1,6 +1,10 @@
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 import capability from "../../../src-tauri/capabilities/default.json";
+import {
+  AGENT_SETUP_URLS,
+  DOPEDB_RELEASES_URL,
+} from "../../lib/externalLinks";
 import productAnalyticsGoldenSource from "../../../tests/fixtures/product-analytics-v1.json";
 import { knowledgeQueryKeys } from "../knowledge/queryKeys";
 import {
@@ -186,6 +190,10 @@ describe("workspace auth lifecycle", () => {
       "https://github.com/apps/dopedb-knowledge/installations/new?state=*",
     );
     expect(allowedUrls).toContain("https://dopedb.dev/privacy");
+    expect(allowedUrls).toContain(AGENT_SETUP_URLS.claude);
+    expect(allowedUrls).toContain(AGENT_SETUP_URLS.codex);
+    expect(allowedUrls).toContain(DOPEDB_RELEASES_URL);
+    expect(allowedUrls).toContain("https://app.dopedb.dev/analyses/*");
     expect(allowedUrls).not.toContain("https://github.com/*");
 
     const translateKey = ((key: string) => key) as Parameters<

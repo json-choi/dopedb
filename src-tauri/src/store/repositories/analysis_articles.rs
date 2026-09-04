@@ -192,9 +192,11 @@ fn encrypt(
     let mut nonce = vec![0_u8; 24];
     getrandom::fill(&mut nonce)
         .map_err(|_| AppError::Config("operating system random source is unavailable".into()))?;
+    let nonce_array = XNonce::try_from(nonce.as_slice())
+        .map_err(|_| AppError::Config("Analysis result nonce is invalid".into()))?;
     let ciphertext = cipher
         .encrypt(
-            XNonce::from_slice(&nonce),
+            &nonce_array,
             Payload {
                 msg: plaintext,
                 aad,
@@ -217,9 +219,12 @@ fn decrypt(
     }
     let cipher = XChaCha20Poly1305::new_from_slice(key.as_ref())
         .map_err(|_| AppError::Config("Analysis result cache key is invalid".into()))?;
+    let nonce = XNonce::try_from(nonce).map_err(|_| {
+        AppError::Config("Analysis Article local result envelope is invalid".into())
+    })?;
     cipher
         .decrypt(
-            XNonce::from_slice(nonce),
+            &nonce,
             Payload {
                 msg: ciphertext,
                 aad,

@@ -63,6 +63,7 @@ export const account = workspaceControl.table(
     id: text("id").default(sql`gen_random_uuid()::text`).primaryKey(),
     accountId: text("account_id").notNull(),
     providerId: text("provider_id").notNull(),
+    issuer: text("issuer").notNull(),
     userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
     accessToken: text("access_token"),
     refreshToken: text("refresh_token"),
@@ -76,7 +77,7 @@ export const account = workspaceControl.table(
   },
   (table) => [
     index("account_user_idx").on(table.userId),
-    uniqueIndex("account_provider_subject_idx").on(table.providerId, table.accountId),
+    uniqueIndex("account_issuer_subject_idx").on(table.issuer, table.accountId),
   ],
 );
 

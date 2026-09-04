@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "packageManager": "pnpm@11.17.0",
+  "packageManager": "pnpm@11.25.0",
   "scripts": {
     "build": "tsc --noEmit",
     "test": "vitest run --config vitest.config.ts",
@@ -12,9 +12,9 @@
     "db:migrate:remote": "wrangler d1 migrations apply dopedb-product-analytics --remote"
   },
   "devDependencies": {
-    "@types/node": "26.1.1",
+    "@types/node": "26.4.1",
     "typescript": "7.0.2",
-    "vitest": "4.1.10",
-    "wrangler": "4.122.0"
+    "vitest": "4.1.11",
+    "wrangler": "4.128.0"
   }
 }

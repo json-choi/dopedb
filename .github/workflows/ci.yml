@@ -14,6 +14,20 @@ permissions:
   contents: read
 
 jobs:
+  dependency_vulnerability_scan:
+    name: dependency-vulnerability-scan
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@6e4298ebc4db23e847df9b2e2de2939d6f066c67 # v2.5.1
+    with:
+      scan-args: |-
+        --recursive
+        ./
+      fail-on-vuln: true
+      upload-sarif: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
   frontend_smoke:
     name: frontend-smoke
     runs-on: ubuntu-latest
@@ -24,7 +38,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         with:
-          version: 11.17.0
+          version: 11.25.0
           run_install: false
 
       - name: Setup Node.js
@@ -36,9 +50,6 @@ jobs:
 
       - name: Install app dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: Audit app production dependencies
-        run: pnpm audit --prod --audit-level high
 
       - name: Build desktop frontend
         run: pnpm build
@@ -102,7 +113,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         with:
-          version: 11.17.0
+          version: 11.25.0
           run_install: false
 
       - name: Setup Node.js
@@ -114,9 +125,6 @@ jobs:
 
       - name: Install workspace cloud dependencies
         run: pnpm --dir workspace-cloud install --frozen-lockfile
-
-      - name: Audit workspace cloud production dependencies
-        run: pnpm --dir workspace-cloud audit --prod --audit-level high
 
       - name: Build workspace cloud without production secrets
         run: pnpm --dir workspace-cloud build
@@ -149,7 +157,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         with:
-          version: 11.17.0
+          version: 11.25.0
           run_install: false
 
       - name: Setup Node.js
@@ -161,9 +169,6 @@ jobs:
 
       - name: Install site dependencies
         run: pnpm --dir site install --frozen-lockfile
-
-      - name: Audit site production dependencies
-        run: pnpm --dir site audit --prod --audit-level high
 
       - name: Build marketing site
         run: pnpm --dir site build
@@ -178,7 +183,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         with:
-          version: 11.17.0
+          version: 11.25.0
           run_install: false
 
       - name: Setup Node.js
@@ -191,39 +196,74 @@ jobs:
       - name: Install analytics Worker dependencies
         run: pnpm --dir product-analytics-cloudflare install --frozen-lockfile
 
-      - name: Audit analytics Worker production dependencies
-        run: pnpm --dir product-analytics-cloudflare audit --prod --audit-level high
-
       - name: Verify analytics Worker and public contract
         run: |
           pnpm --dir product-analytics-cloudflare build
           pnpm --dir product-analytics-cloudflare test
           pnpm --dir product-analytics-cloudflare exec wrangler deploy --dry-run
 
+  scheduler_cloudflare:
+    name: scheduler-cloudflare
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        with:
+          version: 11.25.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: workspace-scheduler-cloudflare/pnpm-lock.yaml
+
+      - name: Install scheduler Worker dependencies
+        run: pnpm --dir workspace-scheduler-cloudflare install --frozen-lockfile
+
+      - name: Verify scheduler Worker
+        run: |
+          pnpm --dir workspace-scheduler-cloudflare build
+          pnpm --dir workspace-scheduler-cloudflare test
+          pnpm --dir workspace-scheduler-cloudflare exec wrangler deploy --dry-run
+
   build:
     needs:
+      - dependency_vulnerability_scan
       - frontend_smoke
       - rust_smoke
       - provider_postgres
       - site_build
       - analytics_cloudflare
+      - scheduler_cloudflare
+      - windows-check
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
       - name: Preserve the required build check
         env:
+          DEPENDENCY_VULNERABILITY_SCAN_RESULT: ${{ needs.dependency_vulnerability_scan.result }}
           FRONTEND_RESULT: ${{ needs.frontend_smoke.result }}
           RUST_RESULT: ${{ needs.rust_smoke.result }}
           PROVIDER_POSTGRES_RESULT: ${{ needs.provider_postgres.result }}
           SITE_BUILD_RESULT: ${{ needs.site_build.result }}
           ANALYTICS_CLOUDFLARE_RESULT: ${{ needs.analytics_cloudflare.result }}
+          SCHEDULER_CLOUDFLARE_RESULT: ${{ needs.scheduler_cloudflare.result }}
+          WINDOWS_CHECK_RESULT: ${{ needs.windows-check.result }}
         run: |
+          test "$DEPENDENCY_VULNERABILITY_SCAN_RESULT" = success
           test "$FRONTEND_RESULT" = success
           test "$RUST_RESULT" = success
           test "$PROVIDER_POSTGRES_RESULT" = success
           test "$SITE_BUILD_RESULT" = success
           test "$ANALYTICS_CLOUDFLARE_RESULT" = success
+          test "$SCHEDULER_CLOUDFLARE_RESULT" = success
+          test "$WINDOWS_CHECK_RESULT" = success
 
   windows-check:
     runs-on: windows-latest
@@ -234,7 +274,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         with:
-          version: 11.17.0
+          version: 11.25.0
           run_install: false
 
       - name: Setup Node.js

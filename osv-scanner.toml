@@ -1,0 +1,87 @@
+# Time-bounded exceptions for target-conditional or currently unreplaceable
+# transitive dependencies. OSV still fails CI for every other finding.
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0411"
+ignoreUntil = 2026-12-04
+reason = "GTK3 is Linux-only in Tauri's lock graph; DopeDB currently ships macOS and verifies Windows, neither compiles this crate."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0412"
+ignoreUntil = 2026-12-04
+reason = "GTK3 is Linux-only in Tauri's lock graph; DopeDB currently ships macOS and verifies Windows, neither compiles this crate."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0413"
+ignoreUntil = 2026-12-04
+reason = "GTK3 is Linux-only in Tauri's lock graph; DopeDB currently ships macOS and verifies Windows, neither compiles this crate."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0414"
+ignoreUntil = 2026-12-04
+reason = "GTK3 is Linux-only in Tauri's lock graph; DopeDB currently ships macOS and verifies Windows, neither compiles this crate."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0415"
+ignoreUntil = 2026-12-04
+reason = "GTK3 is Linux-only in Tauri's lock graph; DopeDB currently ships macOS and verifies Windows, neither compiles this crate."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0416"
+ignoreUntil = 2026-12-04
+reason = "GTK3 is Linux-only in Tauri's lock graph; DopeDB currently ships macOS and verifies Windows, neither compiles this crate."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0417"
+ignoreUntil = 2026-12-04
+reason = "GTK3 is Linux-only in Tauri's lock graph; DopeDB currently ships macOS and verifies Windows, neither compiles this crate."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0418"
+ignoreUntil = 2026-12-04
+reason = "GTK3 is Linux-only in Tauri's lock graph; DopeDB currently ships macOS and verifies Windows, neither compiles this crate."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0419"
+ignoreUntil = 2026-12-04
+reason = "GTK3 is Linux-only in Tauri's lock graph; DopeDB currently ships macOS and verifies Windows, neither compiles this crate."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0420"
+ignoreUntil = 2026-12-04
+reason = "GTK3 is Linux-only in Tauri's lock graph; DopeDB currently ships macOS and verifies Windows, neither compiles this crate."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0429"
+ignoreUntil = 2026-12-04
+reason = "The affected glib 0.18 path is Linux-only through Tauri GTK3 and is not compiled for the currently shipped macOS or verified Windows targets."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0370"
+ignoreUntil = 2026-12-04
+reason = "proc-macro-error is present only below the target-conditional Linux GTK3 graph retained by current Tauri."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2025-0075"
+ignoreUntil = 2026-12-04
+reason = "Unmaintained-only advisory in current Tauri 2.11.5's urlpattern build dependency; no compatible app-level replacement exists."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2025-0080"
+ignoreUntil = 2026-12-04
+reason = "Unmaintained-only advisory in current Tauri 2.11.5's urlpattern build dependency; no compatible app-level replacement exists."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2025-0081"
+ignoreUntil = 2026-12-04
+reason = "Unmaintained-only advisory in current Tauri 2.11.5's urlpattern build dependency; no compatible app-level replacement exists."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2025-0098"
+ignoreUntil = 2026-12-04
+reason = "Unmaintained-only advisory in current Tauri 2.11.5's urlpattern build dependency; no compatible app-level replacement exists."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2025-0100"
+ignoreUntil = 2026-12-04
+reason = "Unmaintained-only advisory in current Tauri 2.11.5's urlpattern build dependency; no compatible app-level replacement exists."

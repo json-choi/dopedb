@@ -6,7 +6,8 @@ set -euo pipefail
 readonly default_login="jaesong-blip"
 readonly owner_login="json-choi"
 readonly github_host="github.com"
-readonly project_root="$(cd "$(dirname "$0")/.." && pwd)"
+project_root="$(cd "$(dirname "$0")/.." && pwd)"
+readonly project_root
 readonly gh_bin="${DOPEDB_GH_BIN:-gh}"
 readonly lock_dir="${DOPEDB_GH_SWITCH_LOCK_DIR:-${TMPDIR:-/tmp}/dopedb-gh-owner-$(id -u).lock}"
 

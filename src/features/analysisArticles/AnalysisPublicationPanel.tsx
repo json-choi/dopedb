@@ -85,6 +85,15 @@ export function AnalysisPublicationPanel({
     });
   };
 
+  const openPublication = async (slug: string) => {
+    setError(null);
+    try {
+      await openUrl(await analysisPublicationUrl(slug));
+    } catch (reason) {
+      setError(t("analysis.openPublicationFailed", { error: errMessage(reason) }));
+    }
+  };
+
   if (!article.latestSuccessfulRunId) {
     return <InlineNotice tone="warning" icon="alert">{t("analysis.publishRunFirst")}</InlineNotice>;
   }
@@ -148,7 +157,7 @@ export function AnalysisPublicationPanel({
                 {publication.revokedAt ? <StatusBadge density="compact" tone="danger">{t("analysis.revoked")}</StatusBadge> : null}
                 {!publication.revokedAt ? (
                   <>
-                    <Button size="xs" onClick={() => void analysisPublicationUrl(publication.slug).then(openUrl)}>
+                    <Button size="xs" onClick={() => void openPublication(publication.slug)}>
                       {t("analysis.openPublication")}
                     </Button>
                     <Button size="xs" onClick={() => preparePublication(publication)}>{t("analysis.prepareNewVersion")}</Button>

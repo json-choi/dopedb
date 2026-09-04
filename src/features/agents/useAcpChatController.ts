@@ -15,6 +15,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import type { CatalogTable } from "../../ipc/types";
 import { errMessage } from "../../ipc/types";
 import { useI18n } from "../../lib/i18n";
+import { AGENT_SETUP_URLS } from "../../lib/externalLinks";
 import { useCatalogScope } from "../../lib/queries";
 import type { ConnectionProfile } from "../connections/domain";
 import {
@@ -64,6 +65,7 @@ import {
   cancelAgentAcpSession,
   closeAgentAcpSession,
   focusAgentAcpSession,
+  openAgentExternalLink,
   promptAgentAcpSession,
   respondAgentAcpPermission,
   resumeAgentAcpSession,
@@ -80,10 +82,6 @@ import { useAcpScopeCommands } from "./useAcpScopeCommands";
 import { useAcpChatViewport } from "./useAcpChatViewport";
 
 const MAX_PROMPT_CHARS = 8 * 1024;
-const AGENT_SETUP_URL: Record<AgentProvider, string> = {
-  claude: "https://docs.anthropic.com/en/docs/claude-code/getting-started",
-  codex: "https://help.openai.com/en/articles/11096431",
-};
 export type AcpChatControllerInput = {
   connection: ConnectionProfile;
   connections: ConnectionProfile[];
@@ -598,7 +596,7 @@ export function useAcpChatController({
   async function openSetupGuide(provider: AgentProvider) {
     setError(null);
     try {
-      await openUrl(AGENT_SETUP_URL[provider]);
+      await openUrl(AGENT_SETUP_URLS[provider]);
     } catch (reason) {
       setError(t("agent.acpSetupActionFailed", { error: errMessage(reason) }));
     }
@@ -674,8 +672,11 @@ export function useAcpChatController({
   }
 
   const openMessageLink = useCallback((href: string) => {
-    void openUrl(href).catch(() => undefined);
-  }, []);
+    setError(null);
+    void openAgentExternalLink(href, lang).catch((reason) => {
+      setError(t("agent.acpOpenLinkFailed", { error: errMessage(reason) }));
+    });
+  }, [lang, t]);
 
   return {
     viewport,

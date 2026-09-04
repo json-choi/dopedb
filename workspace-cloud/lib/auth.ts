@@ -49,6 +49,9 @@ function createAuth() {
       },
     },
     account: {
+      // This pre-MVP baseline preserves the existing provider-scoped identity
+      // model explicitly for Better Auth 1.7 instead of adopting issuer merging.
+      identityStrategy: "provider-id",
       updateAccountOnSignIn: false,
       storeAccountCookie: false,
     },

@@ -6,6 +6,7 @@ CREATE TABLE "workspace_control"."account" (
 	"id" text PRIMARY KEY DEFAULT gen_random_uuid()::text NOT NULL,
 	"account_id" text NOT NULL,
 	"provider_id" text NOT NULL,
+	"issuer" text NOT NULL,
 	"user_id" text NOT NULL,
 	"access_token" text,
 	"refresh_token" text,
@@ -1303,7 +1304,7 @@ ALTER TABLE "workspace_control"."workspace_sync_event" ADD CONSTRAINT "workspace
 ALTER TABLE "workspace_control"."workspace_sync_event" ADD CONSTRAINT "workspace_sync_event_org_audit_fk" FOREIGN KEY ("organization_id","audit_event_id") REFERENCES "workspace_control"."workspace_audit_event"("organization_id","id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "workspace_control"."workspace_sync_head" ADD CONSTRAINT "workspace_sync_head_organization_id_organization_id_fk" FOREIGN KEY ("organization_id") REFERENCES "workspace_control"."organization"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "account_user_idx" ON "workspace_control"."account" USING btree ("user_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "account_provider_subject_idx" ON "workspace_control"."account" USING btree ("provider_id","account_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "account_issuer_subject_idx" ON "workspace_control"."account" USING btree ("issuer","account_id");--> statement-breakpoint
 CREATE INDEX "device_code_user_idx" ON "workspace_control"."device_code" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "invitation_organization_idx" ON "workspace_control"."invitation" USING btree ("organization_id");--> statement-breakpoint
 CREATE INDEX "invitation_email_idx" ON "workspace_control"."invitation" USING btree ("email");--> statement-breakpoint

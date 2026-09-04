@@ -1,6 +1,7 @@
 /dist
 /output/
 /node_modules
+/agent-runtime/plugins/node_modules
 /target
 /tsconfig*.tsbuildinfo
 /site/.next

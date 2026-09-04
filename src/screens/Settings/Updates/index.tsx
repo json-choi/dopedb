@@ -2,18 +2,18 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 
 import { Icon, type IconName } from "../../../components/Icon";
 import InfoTip from "../../../components/InfoTip";
+import { useToast } from "../../../components/Toast";
 import { Button } from "../../../design-system/components/Button";
 import { ProgressBar } from "../../../design-system/components/Progress";
-import {
-  StatusBadge,
-  type StatusTone,
-} from "../../../design-system/components/Status";
+import { StatusBadge, type StatusTone } from "../../../design-system/components/Status";
 import {
   appUpdaterProgress,
   type AppUpdaterPhase,
   type AppUpdaterSnapshot,
 } from "../../../features/updater/controller";
 import { useI18n } from "../../../lib/i18n";
+import { DOPEDB_RELEASES_URL } from "../../../lib/externalLinks";
+import { errMessage } from "../../../ipc/types";
 
 function bytes(value: number | null) {
   if (value === null || !Number.isFinite(value)) return null;
@@ -58,6 +58,7 @@ export default function Updates({
   onInstall: () => Promise<void>;
 }) {
   const { t } = useI18n();
+  const toast = useToast();
   const progress = appUpdaterProgress(snapshot);
   const busy =
     snapshot.phase === "checking" ||
@@ -80,6 +81,17 @@ export default function Updates({
                 : snapshot.phase === "error"
                   ? t("updates.error")
                   : t("updates.idle");
+
+  const openReleases = async () => {
+    try {
+      await openUrl(DOPEDB_RELEASES_URL);
+    } catch (reason) {
+      toast(
+        t("updates.openReleasesFailed", { error: errMessage(reason) }),
+        "error",
+      );
+    }
+  };
 
   return (
     <div className="tw:w-full tw:max-w-[720px] tw:p-4 tw:max-[760px]:max-w-none">
@@ -183,13 +195,7 @@ export default function Updates({
                 ? stateLabel
                 : t("updates.updateAndRelaunch")}
           </Button>
-          <Button
-            onClick={() =>
-              void openUrl(
-                "https://github.com/json-choi/dopedb/releases/latest",
-              )
-            }
-          >
+          <Button onClick={() => void openReleases()}>
             {t("updates.openReleases")}
           </Button>
         </div>

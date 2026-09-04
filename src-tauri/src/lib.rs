@@ -64,7 +64,11 @@ pub fn run() {
     }));
     builder
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_opener::init())
+        .plugin(
+            tauri_plugin_opener::Builder::new()
+                .open_js_links_on_click(false)
+                .build(),
+        )
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(state)
@@ -132,6 +136,7 @@ pub fn run() {
             features::agents::transport::install_agent_acp_plugin,
             features::agents::transport::remove_agent_acp_plugin,
             features::agents::transport::set_agent_acp_plugin_enabled,
+            features::agents::transport::open_agent_external_link,
             features::workspaces::transport::workspace_feature_state,
             commands::cli_installation_status,
             commands::install_cli,

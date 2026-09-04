@@ -50,9 +50,19 @@ export default defineConfig(({ command }) => {
         ignored: ["**/target/**"],
       },
     },
+    worker: {
+      // Vite defaults workers to IIFE output. Module output preserves worker
+      // exports without requiring a global name and remains compatible with
+      // the module workers created by the application.
+      format: "es",
+    },
     build: {
       target: "esnext",
       sourcemap: uploadSourcemaps ? "hidden" : false,
+      // Mermaid's parser is one lazy, upstream-generated module (~662 kB
+      // minified / ~143 kB gzip) and cannot be split at an internal module
+      // boundary. Initial dependencies are independently capped below.
+      chunkSizeWarningLimit: 700,
       rolldownOptions: {
         output: {
           codeSplitting: {
@@ -62,6 +72,19 @@ export default defineConfig(({ command }) => {
                 test: /node_modules[\\/](?:react|react-dom|@tanstack[\\/]react-query)[\\/]/,
                 includeDependenciesRecursively: true,
                 priority: 20,
+              },
+              {
+                name: "observability-vendor",
+                test: /node_modules[\\/]@sentry[\\/]/,
+                includeDependenciesRecursively: true,
+                priority: 15,
+              },
+              {
+                name: "rich-text-vendor",
+                test:
+                  /node_modules[\\/](?:react-markdown|remark|rehype|unified|micromark|mdast-util|hast-util|unist-util|vfile)[^\\/]*[\\/]/,
+                includeDependenciesRecursively: true,
+                priority: 14,
               },
             ],
           },

@@ -42,16 +42,37 @@ stable upgrade targets:
 
 ## Audit record
 
-The 2026-07-28 refresh aligned pnpm 11.17.0, TypeScript 7.0.2, Next.js
-16.2.12, Better Auth and its Drizzle adapter 1.6.25, lucide-react 1.27.0,
-current compatible Rust patches, and current GitHub Actions majors.
+The 2026-09-04 refresh aligned pnpm 11.25.0 across every JavaScript project and
+CI workflow. The desktop, Workspace Cloud, site, analytics Worker, scheduler
+Worker, and official ACP adapter pins have no update eligible under the
+1,440-minute policy. Notable reviewed upgrades include ESLint 10, Vite 8.2,
+Next.js 16.3, Better Auth 1.7, and the current Claude and Codex ACP adapters.
 
-Two npm releases were intentionally kept at their immediately preceding
-versions because they were less than 24 hours old when the lockfiles were
-regenerated:
+Better Auth 1.7 changes account identity storage. Because this repository is
+still on its resettable pre-MVP baseline, the schema now declares the required
+`issuer` and explicitly preserves provider-scoped identity with
+`identityStrategy: "provider-id"`. No remote database migration is performed by
+dependency refreshes.
 
-- `@codemirror/view` 6.43.7
-- `@types/node` 26.1.2
+Cargo refreshed 148 compatible packages, including the current Tauri plugins,
+MongoDB driver, keyring, RustCrypto AEAD stack, XLSX writer, and tree-sitter.
+The obsolete `rkyv` 0.7 dependency path was removed. All checked-in GitHub
+Actions remain pinned to the commit behind their latest eligible stable tag.
+OSV exceptions are explicit and expire on 2026-12-04: Linux-only GTK3 entries
+that are not compiled for the shipped macOS or verified Windows targets, plus
+unmaintained-only `unic-*` entries currently required by Tauri's `urlpattern`
+build dependency. Any other OSV finding fails CI.
 
-Their declared ranges remain compatible. A future audited lockfile refresh can
-select them after they satisfy the minimum release age; no bypass is required.
+The following registry releases were intentionally held because they were less
+than 24 hours old when the lockfiles were regenerated:
+
+- `@codemirror/view` 6.43.11
+- `@types/react-dom` 19.2.7
+- `postcss` 8.5.28
+- `lucide-react` 1.40.0
+- `wrangler` 4.129.0
+- Vitest 5.0.0
+- Rust 1.98.1 through the `dtolnay/rust-toolchain` stable action
+
+A future audited refresh can select them after they satisfy the minimum release
+age and their applicable migration checks pass; no policy bypass is required.

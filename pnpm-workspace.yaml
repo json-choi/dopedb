@@ -3,6 +3,8 @@ allowBuilds:
   core-js: false
   esbuild: true
 overrides:
+  '@codemirror/state': 6.7.2
+  '@codemirror/view': 6.43.10
   'dompurify@<3.4.13': 3.4.13
 minimumReleaseAge: 1440
 minimumReleaseAgeStrict: true

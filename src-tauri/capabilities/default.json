@@ -20,6 +20,18 @@
         },
         {
           "url": "https://github.com/apps/dopedb-knowledge/installations/new?state=*"
+        },
+        {
+          "url": "https://docs.anthropic.com/en/docs/claude-code/getting-started"
+        },
+        {
+          "url": "https://help.openai.com/en/articles/11096431"
+        },
+        {
+          "url": "https://github.com/json-choi/dopedb/releases/latest"
+        },
+        {
+          "url": "https://app.dopedb.dev/analyses/*"
         }
       ]
     },

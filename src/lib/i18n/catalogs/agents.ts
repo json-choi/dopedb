@@ -193,6 +193,8 @@ export const agentsCatalog = defineCatalog(
     "agent.acpSkillRequiredTitle": "DopeDB Skill required",
     "agent.acpSetupActionFailed":
       "Could not open the Agent setup action: {error}",
+    "agent.acpOpenLinkFailed":
+      "Could not open the external link suggested by the Agent: {error}",
     "agent.acpSetupCheckAgain": "Check again",
     "agent.acpSetupCopied": "Login command copied",
     "agent.acpSetupCopyLogin": "Copy login command",
@@ -595,6 +597,8 @@ export const agentsCatalog = defineCatalog(
     "agent.acpSkillRequiredTitle": "DopeDB Skill 필요",
     "agent.acpSetupActionFailed":
       "Agent 설정 작업을 열지 못했습니다: {error}",
+    "agent.acpOpenLinkFailed":
+      "Agent가 제안한 외부 링크를 열지 못했습니다: {error}",
     "agent.acpSetupCheckAgain": "다시 확인",
     "agent.acpSetupCopied": "로그인 명령 복사됨",
     "agent.acpSetupCopyLogin": "로그인 명령 복사",

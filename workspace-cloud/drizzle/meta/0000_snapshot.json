@@ -27,6 +27,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "issuer": {
+          "name": "issuer",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
         "user_id": {
           "name": "user_id",
           "type": "text",
@@ -106,11 +112,11 @@
           "method": "btree",
           "with": {}
         },
-        "account_provider_subject_idx": {
-          "name": "account_provider_subject_idx",
+        "account_issuer_subject_idx": {
+          "name": "account_issuer_subject_idx",
           "columns": [
             {
-              "expression": "provider_id",
+              "expression": "issuer",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

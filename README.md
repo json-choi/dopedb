@@ -161,7 +161,7 @@ it with an important database.
 
 ## Run from source
 
-Requirements: Rust stable 1.94+, Node.js 24, pnpm 11.17.0, and Xcode Command
+Requirements: Rust stable 1.94+, Node.js 24, pnpm 11.25.0, and Xcode Command
 Line Tools for macOS builds.
 
 ```sh

@@ -113,7 +113,7 @@ DopeDB는 현재 alpha입니다. 중요한 데이터베이스에 사용하기 �
 
 ## 소스에서 실행하기
 
-필요한 도구: Rust stable 1.94 이상, Node.js 24, pnpm 11.17.0, macOS 빌드용
+필요한 도구: Rust stable 1.94 이상, Node.js 24, pnpm 11.25.0, macOS 빌드용
 Xcode Command Line Tools.
 
 ```sh

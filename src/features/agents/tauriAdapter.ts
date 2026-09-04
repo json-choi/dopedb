@@ -128,6 +128,14 @@ export function setAgentAcpConfigOption(
   });
 }
 
+/** Opens an Agent-supplied external link only after native validation and consent. */
+export function openAgentExternalLink(
+  href: string,
+  language: "en" | "ko",
+): Promise<boolean> {
+  return invoke("open_agent_external_link", { href, language });
+}
+
 export function onAgentAcpChanged(
   listener: (event: AcpSessionChanged) => void,
 ): Promise<UnlistenFn> {

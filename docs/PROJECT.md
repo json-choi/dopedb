@@ -241,7 +241,7 @@ Required local tools:
 
 - Rust stable 1.94 or newer
 - Node.js 24
-- pnpm 11.17.0
+- pnpm 11.25.0
 - Xcode Command Line Tools
 
 Main commands:
