@@ -35,6 +35,7 @@ pub(crate) use projections::{
 };
 
 use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -79,16 +80,38 @@ impl Store {
     pub async fn open() -> AppResult<Store> {
         let dir = crate::app_paths::data_root()?;
         std::fs::create_dir_all(&dir)?;
-        let path = dir.join("app.db");
+        Self::open_at(&dir.join("app.db")).await
+    }
 
-        let opts = SqliteConnectOptions::new()
-            .filename(&path)
-            .create_if_missing(true)
-            .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
-            .foreign_keys(true);
+    async fn open_at(path: &Path) -> AppResult<Store> {
+        let pool = open_local_store_pool(path).await?;
+        let pool = match bootstrap_local_store(&pool).await? {
+            LocalStoreBootstrap::Ready { .. } => pool,
+            LocalStoreBootstrap::ResetRequired {
+                version,
+                application_id,
+            } => {
+                tracing::warn!(
+                    version,
+                    application_id,
+                    "resetting unsupported pre-MVP local database"
+                );
+                pool.close().await;
+                remove_local_store_files(path).await?;
 
-        let pool = SqlitePoolOptions::new().connect_with(opts).await?;
-        bootstrap_local_store(&pool).await?;
+                let fresh_pool = open_local_store_pool(path).await?;
+                match bootstrap_local_store(&fresh_pool).await? {
+                    LocalStoreBootstrap::Ready { .. } => fresh_pool,
+                    LocalStoreBootstrap::ResetRequired { .. } => {
+                        fresh_pool.close().await;
+                        return Err(AppError::Config(
+                            "local database reset did not create the MVP baseline".into(),
+                        ));
+                    }
+                }
+            }
+        };
+
         repair_active_scope_on_open(&pool).await?;
         Ok(Store {
             pool,
@@ -133,4 +156,39 @@ impl Store {
             .await?;
         Ok(Self::from_pool_for_test(pool))
     }
+}
+
+async fn open_local_store_pool(path: &Path) -> AppResult<SqlitePool> {
+    let options = SqliteConnectOptions::new()
+        .filename(path)
+        .create_if_missing(true)
+        .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
+        .foreign_keys(true);
+    Ok(SqlitePoolOptions::new().connect_with(options).await?)
+}
+
+async fn remove_local_store_files(path: &Path) -> AppResult<()> {
+    for candidate in local_store_files(path) {
+        match tokio::fs::remove_file(candidate).await {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.into()),
+        }
+    }
+    Ok(())
+}
+
+fn local_store_files(path: &Path) -> [PathBuf; 4] {
+    [
+        sqlite_sidecar_path(path, "-wal"),
+        sqlite_sidecar_path(path, "-shm"),
+        sqlite_sidecar_path(path, "-journal"),
+        path.to_path_buf(),
+    ]
+}
+
+fn sqlite_sidecar_path(path: &Path, suffix: &str) -> PathBuf {
+    let mut sidecar = path.as_os_str().to_os_string();
+    sidecar.push(suffix);
+    PathBuf::from(sidecar)
 }

@@ -2,15 +2,22 @@
 //!
 //! DopeDB is still pre-MVP, so local stores from earlier schema experiments are
 //! deliberately unsupported. Keeping one current baseline avoids carrying data
-//! conversion code into the product and makes a mismatched store fail visibly.
+//! conversion code into the product; a mismatched app-owned store is reset by
+//! [`Store::open`](super::Store::open) instead of being decoded or upgraded.
 
 use super::*;
 
-/// First MVP baseline. Earlier development schemas are rejected instead of upgraded.
+/// First MVP baseline. Earlier development schemas are reset instead of upgraded.
 pub(super) const LOCAL_SCHEMA_BASELINE: i64 = 1;
 pub(super) const LOCAL_SCHEMA_APPLICATION_ID: i64 = 0x444f_5045;
 
-pub(super) async fn bootstrap_local_store(pool: &SqlitePool) -> AppResult<bool> {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum LocalStoreBootstrap {
+    Ready { created: bool },
+    ResetRequired { version: i64, application_id: i64 },
+}
+
+pub(super) async fn bootstrap_local_store(pool: &SqlitePool) -> AppResult<LocalStoreBootstrap> {
     let version: i64 = sqlx::query_scalar("PRAGMA user_version")
         .fetch_one(pool)
         .await?;
@@ -18,12 +25,13 @@ pub(super) async fn bootstrap_local_store(pool: &SqlitePool) -> AppResult<bool> 
         .fetch_one(pool)
         .await?;
     if version == LOCAL_SCHEMA_BASELINE && application_id == LOCAL_SCHEMA_APPLICATION_ID {
-        return Ok(false);
+        return Ok(LocalStoreBootstrap::Ready { created: false });
     }
     if version != 0 || application_id != 0 {
-        return Err(AppError::Config(format!(
-            "local database schema {version} is not the MVP baseline; remove the development app database and restart"
-        )));
+        return Ok(LocalStoreBootstrap::ResetRequired {
+            version,
+            application_id,
+        });
     }
 
     let mut transaction = pool.begin().await?;
@@ -40,5 +48,5 @@ pub(super) async fn bootstrap_local_store(pool: &SqlitePool) -> AppResult<bool> 
         .execute(&mut *transaction)
         .await?;
     transaction.commit().await?;
-    Ok(true)
+    Ok(LocalStoreBootstrap::Ready { created: true })
 }

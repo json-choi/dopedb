@@ -86,9 +86,7 @@ export default function WorkspaceAccount({
   const membershipRefreshRetryTimer = useRef<number | null>(null);
   const membershipRefreshFailures = useRef(0);
   const workspaceAccountMounted = useRef(false);
-  const browserWasActive = useRef(false);
   const providerCredentialAuthorityVersion = useRef<number | null>(null);
-  const focusReturnHandler = useRef<() => void>(() => undefined);
   const membershipRefreshHandler = useRef<(force?: boolean) => void>(() => undefined);
   const loginRequestHandler = useRef<() => void>(() => undefined);
   const scopeChangeHandler = useRef<() => void | Promise<void>>(
@@ -224,17 +222,11 @@ export default function WorkspaceAccount({
 
   useEffect(() => {
     workspaceAccountMounted.current = true;
-    const onBlur = () => {
-      if (pendingLogin.current) browserWasActive.current = true;
-    };
     const onFocus = () => {
-      if (!pendingLogin.current) {
-        membershipRefreshHandler.current(membershipRefreshFailures.current > 0);
-        return;
-      }
-      if (!browserWasActive.current) return;
-      browserWasActive.current = false;
-      focusReturnHandler.current();
+      // Returning from the browser is not a device-flow outcome. The normal poll
+      // loop owns completion; only the visible Cancel action aborts a pending login.
+      if (pendingLogin.current) return;
+      membershipRefreshHandler.current(membershipRefreshFailures.current > 0);
     };
     const onOnline = () => membershipRefreshHandler.current(true);
     const onOffline = () => clearMembershipRefreshRetry();
@@ -245,14 +237,12 @@ export default function WorkspaceAccount({
         clearMembershipRefreshRetry();
       }
     };
-    window.addEventListener("blur", onBlur);
     window.addEventListener("focus", onFocus);
     window.addEventListener("online", onOnline);
     window.addEventListener("offline", onOffline);
     document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
       workspaceAccountMounted.current = false;
-      window.removeEventListener("blur", onBlur);
       window.removeEventListener("focus", onFocus);
       window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", onOffline);
@@ -361,7 +351,6 @@ export default function WorkspaceAccount({
   function abortLoginAttempt() {
     loginAttempt.current += 1;
     pendingLogin.current = null;
-    browserWasActive.current = false;
     setLoginPhase("idle");
   }
 
@@ -399,29 +388,6 @@ export default function WorkspaceAccount({
     return false;
   }
 
-  async function checkAfterBrowserReturn() {
-    const pending = pendingLogin.current;
-    if (!pending) return;
-    try {
-      // Give the approval request a brief moment to commit before treating a returned
-      // focus with a still-pending code as a closed/cancelled browser flow.
-      await wait(350);
-      let result = await pollOnce(pending.deviceCode);
-      if (result.status === "slowDown") {
-        await wait(5_250);
-        if (pendingLogin.current?.attempt !== pending.attempt) return;
-        result = await pollOnce(pending.deviceCode);
-      }
-      if (await handlePollResult(result, pending.attempt)) return;
-      cancelLogin();
-    } catch {
-      // Returning from the browser is an explicit local cancellation boundary even
-      // when the network cannot confirm the still-pending server code.
-      cancelLogin();
-    }
-  }
-
-  focusReturnHandler.current = () => void checkAfterBrowserReturn();
   membershipRefreshHandler.current = (force = false) => {
     if (!auth.data?.authenticated || membershipRefreshInFlight.current) return;
     const revalidateAuth = shouldRevalidateWorkspaceAuth(
@@ -464,7 +430,6 @@ export default function WorkspaceAccount({
         analyticsAttemptId,
         deviceCode: authorization.deviceCode,
       };
-      browserWasActive.current = false;
       await openUrl(authorization.verificationUriComplete);
       if (loginAttempt.current !== attempt) return;
       setLoginPhase("waiting");

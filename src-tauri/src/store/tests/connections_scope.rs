@@ -69,9 +69,12 @@ fn assert_knowledge_source_revision_ipc_uses_camel_case_fields() {
 
 async fn assert_current_store_baseline_and_invariants() {
     let pool = memory_pool().await;
-    assert!(super::super::bootstrap::bootstrap_local_store(&pool)
-        .await
-        .unwrap());
+    assert_eq!(
+        super::super::bootstrap::bootstrap_local_store(&pool)
+            .await
+            .unwrap(),
+        super::super::bootstrap::LocalStoreBootstrap::Ready { created: true }
+    );
     let version: i64 = sqlx::query_scalar("PRAGMA user_version")
         .fetch_one(&pool)
         .await
@@ -600,13 +603,59 @@ async fn assert_current_store_baseline_and_invariants() {
         .execute(&pool)
         .await
         .unwrap();
-    assert!(!super::super::bootstrap::bootstrap_local_store(&pool)
-        .await
-        .unwrap());
+    assert_eq!(
+        super::super::bootstrap::bootstrap_local_store(&pool)
+            .await
+            .unwrap(),
+        super::super::bootstrap::LocalStoreBootstrap::Ready { created: false }
+    );
     sqlx::query("PRAGMA query_only = OFF")
         .execute(&pool)
         .await
         .unwrap();
+
+    let legacy_root = tempfile::tempdir().unwrap();
+    let legacy_path = legacy_root.path().join("app.db");
+    let legacy_pool = super::super::open_local_store_pool(&legacy_path)
+        .await
+        .unwrap();
+    sqlx::query("CREATE TABLE legacy_marker (value TEXT NOT NULL)")
+        .execute(&legacy_pool)
+        .await
+        .unwrap();
+    sqlx::query("PRAGMA application_id = 1146048581")
+        .execute(&legacy_pool)
+        .await
+        .unwrap();
+    sqlx::query("PRAGMA user_version = 26")
+        .execute(&legacy_pool)
+        .await
+        .unwrap();
+    legacy_pool.close().await;
+
+    let reset_store = Store::open_at(&legacy_path).await.unwrap();
+    let reset_version: i64 = sqlx::query_scalar("PRAGMA user_version")
+        .fetch_one(reset_store.pool())
+        .await
+        .unwrap();
+    assert_eq!(
+        reset_version,
+        super::super::bootstrap::LOCAL_SCHEMA_BASELINE
+    );
+    let reset_application_id: i64 = sqlx::query_scalar("PRAGMA application_id")
+        .fetch_one(reset_store.pool())
+        .await
+        .unwrap();
+    assert_eq!(
+        reset_application_id,
+        super::super::bootstrap::LOCAL_SCHEMA_APPLICATION_ID
+    );
+    assert!(
+        sqlx::query_scalar::<_, String>("SELECT value FROM legacy_marker")
+            .fetch_optional(reset_store.pool())
+            .await
+            .is_err()
+    );
 
     let gate = crate::startup::PostPaintRecoveryGate::new();
     assert!(gate.claim_start());
