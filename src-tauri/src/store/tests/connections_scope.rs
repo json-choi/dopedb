@@ -1824,12 +1824,27 @@ async fn managed_remote_template_never_reads_or_accepts_a_local_binding() {
         .await
         .unwrap();
     assert!(store.get_safety(id).await.unwrap().allow_writes);
-    template.allow_writes = false;
+    template.engine = crate::model::Engine::Postgres;
+    template.provider = crate::model::Provider::GcpCloudSql;
+    template.provider_target = None;
     store
-        .sync_remote_connections(workspace_id, &user.id, &[(template, 4)])
+        .sync_remote_connections(workspace_id, &user.id, &[(template.clone(), 4)])
         .await
         .unwrap();
-    assert!(!store.get_safety(id).await.unwrap().allow_writes);
+    device_safety.allow_schema_changes = true;
+    assert!(store
+        .set_safety(id, 4, false, &device_safety)
+        .await
+        .unwrap());
+    assert!(store.get_safety(id).await.unwrap().allow_schema_changes);
+    template.allow_writes = false;
+    store
+        .sync_remote_connections(workspace_id, &user.id, &[(template, 5)])
+        .await
+        .unwrap();
+    let revoked_safety = store.get_safety(id).await.unwrap();
+    assert!(!revoked_safety.allow_writes);
+    assert!(!revoked_safety.allow_schema_changes);
     let binding_material: (String, String, Option<String>) = sqlx::query_as(
         "SELECT username, extra_params, secret_ref
          FROM workspace_connection_bindings
