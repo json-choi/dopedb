@@ -174,8 +174,8 @@ pub struct SafetySettings {
     pub auto_run_reads: bool,
     /// Row cap applied to read result sets.
     pub max_rows: u64,
-    /// L3 gate (design-review #4): skip execute-preview when the EXPLAIN row estimate
-    /// exceeds this and show the estimate only ("would lock ~N rows").
+    /// L3 review threshold. EXPLAIN estimates above this value receive an
+    /// extra-review note; the value neither skips preview nor approves execution.
     pub exec_preview_row_limit: i64,
 }
 
@@ -241,11 +241,9 @@ pub struct Classification {
     pub no_where: bool,
     pub tables: Vec<String>,
     pub notes: Vec<String>,
-    /// True ONLY for exactly one cleanly-parsed top-level INSERT/UPDATE/DELETE —
-    /// i.e. a statement the L3 execute+ROLLBACK preview can undo. DDL/utility
-    /// statements implicit-commit (RENAME/OPTIMIZE/LOAD DATA…), so ROLLBACK is a
-    /// no-op and the preview would take permanent effect BEFORE L4 approval.
-    /// Fail-safe/parse-error/multi-statement writes are false. Gates l3_preview.
+    /// True only for one cleanly parsed top-level INSERT/UPDATE/DELETE. This
+    /// remains classification metadata for consumers that require rollback-safe
+    /// DML; the current L3 preview path is EXPLAIN-only and never executes it.
     #[serde(default)]
     pub rollback_safe: bool,
 }
@@ -256,9 +254,10 @@ pub struct Classification {
 pub enum PreviewMode {
     /// Read path: EXPLAIN plan only, never executed.
     Explain,
-    /// Write path: executed in a txn then unconditionally rolled back for exact N.
+    /// Legacy wire value retained for older preview reports. The current preview
+    /// path never executes a mutation before approval.
     ExecRollback,
-    /// Execute-preview skipped (estimate over threshold); estimate shown only.
+    /// No plan was requested for this statement or because preview is disabled.
     Skipped,
 }
 
@@ -269,11 +268,11 @@ pub struct PreviewReport {
     pub mode: PreviewMode,
     /// EXPLAIN-derived row estimate.
     pub estimated_rows: Option<i64>,
-    /// Exact rows_affected from the execute+rollback path.
+    /// Legacy exact-row field retained for older preview reports.
     pub exact_rows: Option<i64>,
     /// Raw/formatted plan text, if captured.
     pub plan: Option<String>,
-    /// Human note, e.g. "would lock ~120000 rows — preview skipped".
+    /// Human note describing the preview result or why no plan was requested.
     pub note: Option<String>,
 }
 

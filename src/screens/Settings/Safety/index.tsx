@@ -1,12 +1,11 @@
 // Per-connection SafetySettings editor. Loads via get_safety, saves via set_safety.
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { SafetySettings } from "../../../ipc/types";
 import { errMessage } from "../../../ipc/types";
 import InfoTip from "../../../components/InfoTip";
 import { useToast } from "../../../components/Toast";
 import { Button } from "../../../design-system/components/Button";
-import { SegmentedControl } from "../../../design-system/components/SegmentedControl";
 import {
   CheckboxField,
   TextInput,
@@ -39,14 +38,6 @@ const TOGGLES: { key: keyof SafetySettings; label: I18nKey; hint: I18nKey }[] = 
   { key: "autoRunReads", label: "safety.autoRunReads", hint: "safety.autoRunReadsHint" },
   { key: "explainPreview", label: "safety.explainPreview", hint: "safety.explainPreviewHint" },
 ];
-
-type DatabaseAccessLevel = "read" | "write" | "schema";
-
-function databaseAccessLevel(settings: SafetySettings): DatabaseAccessLevel {
-  if (settings.allowSchemaChanges) return "schema";
-  if (settings.allowWrites) return "write";
-  return "read";
-}
 
 const NUMBERS: { key: keyof SafetySettings; label: I18nKey; hint: I18nKey }[] = [
   { key: "maxRows", label: "safety.maxRows", hint: "safety.maxRowsHint" },
@@ -83,6 +74,7 @@ export default function Safety({
   const [settings, setSettings] = useState<SafetySettings | null>(null);
   const [busy, setBusy] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const accessPermissionsLabelId = useId();
   const toast = useToast();
   const queryClient = useQueryClient();
   const safetyQuery = useQuery(safetySettingsQuery(connectionId));
@@ -196,11 +188,6 @@ export default function Safety({
     settings.allowWrites && writeControlAvailable;
   const effectiveAllowSchemaChanges =
     settings.allowSchemaChanges && effectiveAllowWrites && schemaControlAvailable;
-  const accessLevel = databaseAccessLevel({
-    ...settings,
-    allowWrites: effectiveAllowWrites,
-    allowSchemaChanges: effectiveAllowSchemaChanges,
-  });
 
   const schemaUnavailableHint: I18nKey | null = schemaControlAvailable
     ? null
@@ -211,6 +198,39 @@ export default function Safety({
         : connection.credentialMode === "managed"
           ? "safety.schemaProviderUnavailable"
           : "safety.mutationsEngineUnavailable";
+
+  const accessPermissions = [
+    {
+      key: "read",
+      label: "safety.accessRead" as const,
+      hint: "safety.accessReadHint" as const,
+      checked: true,
+      disabled: true,
+      onChange: undefined,
+    },
+    {
+      key: "write",
+      label: "safety.accessWrite" as const,
+      hint: "safety.accessWriteHint" as const,
+      checked: effectiveAllowWrites,
+      disabled: busy || !writeControlAvailable,
+      onChange: (checked: boolean) => {
+        setSettings((current) => current ? {
+          ...current,
+          allowWrites: checked,
+          allowSchemaChanges: checked && current.allowSchemaChanges,
+        } : current);
+      },
+    },
+    {
+      key: "schema",
+      label: "safety.accessSchema" as const,
+      hint: "safety.accessSchemaHint" as const,
+      checked: effectiveAllowSchemaChanges,
+      disabled: busy || !schemaControlAvailable || !effectiveAllowWrites,
+      onChange: (checked: boolean) => set("allowSchemaChanges", checked),
+    },
+  ];
 
   return (
     <div className="tw:flex tw:w-full tw:max-w-[880px] tw:flex-col tw:gap-4 tw:max-[640px]:max-w-none">
@@ -242,34 +262,33 @@ export default function Safety({
         <SettingsGroup title={t("safety.guardrails")}>
           <div className="tw:grid tw:gap-2 tw:pb-3">
             <div className="tw:flex tw:items-center tw:gap-2">
-              <strong className="tw:text-sm">{t("safety.accessLevel")}</strong>
+              <strong id={accessPermissionsLabelId} className="tw:text-sm">
+                {t("safety.accessLevel")}
+              </strong>
               <InfoTip label={t("safety.accessLevelHint")} />
             </div>
-            <SegmentedControl
-              value={accessLevel}
-              label={t("safety.accessLevel")}
-              disabled={busy}
-              options={[
-                { value: "read", label: t("safety.accessRead") },
-                {
-                  value: "write",
-                  label: t("safety.accessWrite"),
-                  disabled: !writeControlAvailable,
-                },
-                {
-                  value: "schema",
-                  label: t("safety.accessSchema"),
-                  disabled: !schemaControlAvailable,
-                },
-              ]}
-              onChange={(level) => {
-                setSettings((current) => current ? {
-                  ...current,
-                  allowWrites: level !== "read",
-                  allowSchemaChanges: level === "schema",
-                } : current);
-              }}
-            />
+            <div
+              role="group"
+              aria-labelledby={accessPermissionsLabelId}
+              className="tw:grid"
+            >
+              {accessPermissions.map((permission) => (
+                <div
+                  key={permission.key}
+                  className="tw:grid tw:min-h-control-lg tw:grid-cols-[minmax(0,1fr)_20px] tw:items-center tw:gap-2 tw:border-t tw:border-border-subtle tw:py-2 tw:first-of-type:border-t-0"
+                >
+                  <CheckboxField
+                    checked={permission.checked}
+                    disabled={permission.disabled}
+                    onChange={permission.onChange
+                      ? (event) => permission.onChange?.(event.target.checked)
+                      : undefined}
+                    label={<strong>{t(permission.label)}</strong>}
+                  />
+                  <InfoTip label={t(permission.hint)} />
+                </div>
+              ))}
+            </div>
             <p className="tw:m-0 tw:text-sm tw:leading-body tw:text-muted-foreground">
               {t(
                 memberLocalReadOnly

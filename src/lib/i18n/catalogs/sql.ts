@@ -16,26 +16,26 @@ export const sqlCatalog = defineCatalog(
     "sql.errorPositionAt": "Line {line}, column {column}",
     "sql.errorTitle": "Query error",
     "sql.writeBlock.requiredPermission": "Required permission",
-    "sql.writeBlock.permissionDeviceSafety": "Connection access level",
+    "sql.writeBlock.permissionDeviceSafety": "Data-change permission",
     "sql.writeBlock.guidanceDeviceSafety":
-      "Open Settings > Safety for {connection}, choose Data changes, and apply the access level.",
+      "Open Settings > Safety for {connection}, check Data changes, and apply the permissions.",
     "sql.writeBlock.permissionLocalSafety":
-      "Connection access level",
+      "Data-change permission",
     "sql.writeBlock.guidanceLocalSafety":
-      "Open Settings > Safety for {connection}, choose Data changes, and apply the connection's single access level.",
+      "Open Settings > Safety for {connection}, check Data changes, and apply the connection permissions.",
     "sql.writeBlock.permissionManagedCredential":
       "Managed write credential",
     "sql.writeBlock.guidanceManagedCredential":
       "{connection} uses a member-local credential, which is read-only. A workspace administrator must configure managed access and then enable its write policy in Settings > Safety.",
     "sql.writeBlock.permissionSchemaSafety": "Schema-change access",
     "sql.writeBlock.guidanceSchemaSafety":
-      "Open Settings > Safety for {connection} and choose Schema changes. If that level is unavailable, the same screen shows the exact missing grant or provider capability.",
+      "Open Settings > Safety for {connection} and check Schema changes. If that permission is unavailable, the same screen shows the exact missing grant or provider capability.",
     "sql.writeBlock.permissionSchemaUnavailable":
       "Schema changes unavailable for this connection",
     "sql.writeBlock.guidanceSchemaUnavailable":
-      "{connection} can run data changes, but its current managed provider cannot issue DopeDB's short-lived schema credential. Open the connection's access setting to see the supported maximum level and its requirement.",
+      "{connection} can run data changes, but its current managed provider cannot issue DopeDB's short-lived schema credential. Open the connection's permission settings to see what is supported and what is required.",
     "sql.writeBlock.scriptGuidance":
-      "Review this connection's single access-level control. It covers read, data changes, and schema changes without a second permission request.",
+      "Review this connection's permission checkboxes. They cover reading, data changes, and schema changes in one Safety screen.",
     "sql.writeBlock.scriptUnavailableGuidance":
       "One or more statements exceed this connection's current workspace or provider boundary. Review the statement errors; there is no local Safety switch that can widen it.",
     "sql.writeBlock.permissionWorkspaceGrant":
@@ -43,13 +43,13 @@ export const sqlCatalog = defineCatalog(
     "sql.writeBlock.guidanceWorkspaceGrant":
       "Ask a connection manager to grant read/write or manage access to {connection}. That manager changes the limit in Settings > Safety; this device can only narrow it.",
     "sql.writeBlock.permissionWorkspacePolicy":
-      "Connection access level (manager)",
+      "Connection permissions (manager)",
     "sql.writeBlock.guidanceWorkspacePolicy":
-      "A connection manager must open Settings > Safety for {connection}, choose Data changes, and apply its access level.",
+      "A connection manager must open Settings > Safety for {connection}, check Data changes, and apply the permissions.",
     "sql.writeBlock.permissionWorkspacePolicyAndDevice":
-      "Connection access level",
+      "Data-change permission",
     "sql.writeBlock.guidanceWorkspacePolicyAndDevice":
-      "You have manage access. Open Settings > Safety for {connection}, choose Data changes, and apply its single access level.",
+      "You have manage access. Open Settings > Safety for {connection}, check Data changes, and apply the permissions.",
     "sql.writeBlock.openSafety": "Open {connection} access settings",
     "sql.writeBlock.reviewSafety": "Review {connection} access settings",
     "sql.explain": "Explain",
@@ -132,7 +132,7 @@ export const sqlCatalog = defineCatalog(
     "sql.signalWriteStatement": "Write/DDL requires approval",
     "sql.signalWritesDisabled": "Writes are off",
     "sql.schemaDisabledScript":
-      "Schema changes are disabled for this connection. Choose Schema changes in Settings > Safety.",
+      "Schema changes are disabled for this connection. Check Schema changes in Settings > Safety.",
     "sql.statementCount": "{count} statements",
     "sql.tx": "Tx:",
     "sql.txAuto": "Auto",
@@ -156,7 +156,7 @@ export const sqlCatalog = defineCatalog(
     "sql.viewParametersCount": "View {count} parameter occurrences",
     "sql.writeCommitted": "write committed",
     "sql.writesDisabledScript":
-      "Writes are disabled for this connection - a script that modifies data will be blocked. Enable writes in Settings > Safety.",
+      "Writes are disabled for this connection - a script that modifies data will be blocked. Check Data changes in Settings > Safety.",
   },
   {
     "sql.affected": "{count}개 영향",
@@ -172,38 +172,38 @@ export const sqlCatalog = defineCatalog(
     "sql.errorPositionAt": "{line}줄 {column}열",
     "sql.errorTitle": "쿼리 오류",
     "sql.writeBlock.requiredPermission": "필요한 권한",
-    "sql.writeBlock.permissionDeviceSafety": "연결 접근 단계",
+    "sql.writeBlock.permissionDeviceSafety": "데이터 변경 권한",
     "sql.writeBlock.guidanceDeviceSafety":
-      "설정 → 안전 → {connection}에서 ‘데이터 변경’을 선택하고 접근 단계를 적용하세요.",
+      "설정 → 안전 → {connection}에서 ‘데이터 변경’을 체크하고 권한을 적용하세요.",
     "sql.writeBlock.permissionLocalSafety":
-      "연결 접근 단계",
+      "데이터 변경 권한",
     "sql.writeBlock.guidanceLocalSafety":
-      "설정 → 안전 → {connection}에서 ‘데이터 변경’을 선택하고 이 연결의 단일 접근 단계를 적용하세요.",
+      "설정 → 안전 → {connection}에서 ‘데이터 변경’을 체크하고 연결 권한을 적용하세요.",
     "sql.writeBlock.permissionManagedCredential": "관리형 쓰기 자격 증명",
     "sql.writeBlock.guidanceManagedCredential":
       "{connection}은 읽기 전용인 구성원 로컬 자격 증명을 사용합니다. 워크스페이스 관리자가 관리형 접근을 구성한 뒤 설정 → 안전에서 쓰기 정책을 켜야 합니다.",
     "sql.writeBlock.permissionSchemaSafety": "스키마 변경 접근",
     "sql.writeBlock.guidanceSchemaSafety":
-      "설정 → 안전 → {connection}에서 ‘스키마 변경’을 선택하세요. 선택할 수 없다면 같은 화면에서 부족한 권한이나 공급자 지원 여부를 바로 확인할 수 있습니다.",
+      "설정 → 안전 → {connection}에서 ‘스키마 변경’을 체크하세요. 사용할 수 없다면 같은 화면에서 부족한 권한이나 공급자 지원 여부를 바로 확인할 수 있습니다.",
     "sql.writeBlock.permissionSchemaUnavailable":
       "이 연결에서는 스키마 변경을 사용할 수 없음",
     "sql.writeBlock.guidanceSchemaUnavailable":
-      "{connection}은 데이터 변경은 실행할 수 있지만 현재 관리형 공급자가 DopeDB의 단기 스키마 자격 증명을 발급할 수 없습니다. 이 연결의 권한 설정에서 지원되는 최대 단계와 필요한 조건을 확인하세요.",
+      "{connection}은 데이터 변경은 실행할 수 있지만 현재 관리형 공급자가 DopeDB의 단기 스키마 자격 증명을 발급할 수 없습니다. 이 연결의 권한 설정에서 지원 범위와 필요한 조건을 확인하세요.",
     "sql.writeBlock.scriptGuidance":
-      "이 연결의 단일 접근 단계 설정을 확인하세요. 두 번째 권한 요청 없이 읽기·데이터 변경·스키마 변경을 한 곳에서 제어합니다.",
+      "이 연결의 권한 체크박스를 확인하세요. 읽기·데이터 변경·스키마 변경을 하나의 안전 화면에서 제어합니다.",
     "sql.writeBlock.scriptUnavailableGuidance":
       "하나 이상의 문장이 이 연결의 현재 워크스페이스 또는 공급자 경계를 넘습니다. 각 문장의 오류를 확인하세요. 로컬 안전 설정으로 이 경계를 넓힐 수 없습니다.",
     "sql.writeBlock.permissionWorkspaceGrant":
       "워크스페이스 DB 읽기/쓰기 또는 관리 권한",
     "sql.writeBlock.guidanceWorkspaceGrant":
       "연결 관리자에게 {connection}의 읽기/쓰기 또는 관리 권한을 요청하세요. 관리자는 설정 → 안전에서 상한을 바꾸며, 이 기기에서는 권한을 좁힐 수만 있습니다.",
-    "sql.writeBlock.permissionWorkspacePolicy": "연결 접근 단계(관리자)",
+    "sql.writeBlock.permissionWorkspacePolicy": "연결 권한(관리자)",
     "sql.writeBlock.guidanceWorkspacePolicy":
-      "연결 관리자가 설정 → 안전 → {connection}에서 ‘데이터 변경’을 선택하고 접근 단계를 적용해야 합니다.",
+      "연결 관리자가 설정 → 안전 → {connection}에서 ‘데이터 변경’을 체크하고 권한을 적용해야 합니다.",
     "sql.writeBlock.permissionWorkspacePolicyAndDevice":
-      "연결 접근 단계",
+      "데이터 변경 권한",
     "sql.writeBlock.guidanceWorkspacePolicyAndDevice":
-      "관리 권한이 있습니다. 설정 → 안전 → {connection}에서 ‘데이터 변경’을 선택하고 단일 접근 단계를 적용하세요.",
+      "관리 권한이 있습니다. 설정 → 안전 → {connection}에서 ‘데이터 변경’을 체크하고 권한을 적용하세요.",
     "sql.writeBlock.openSafety": "{connection} 권한 설정 열기",
     "sql.writeBlock.reviewSafety": "{connection} 권한 설정에서 확인",
     "sql.explain": "Explain",
@@ -286,7 +286,7 @@ export const sqlCatalog = defineCatalog(
     "sql.signalWriteStatement": "쓰기/DDL 승인 필요",
     "sql.signalWritesDisabled": "쓰기 비활성화됨",
     "sql.schemaDisabledScript":
-      "이 연결의 스키마 변경이 꺼져 있습니다. 설정 → 안전에서 ‘스키마 변경’을 선택하세요.",
+      "이 연결의 스키마 변경이 꺼져 있습니다. 설정 → 안전에서 ‘스키마 변경’을 체크하세요.",
     "sql.statementCount": "{count}개 문장",
     "sql.tx": "Tx:",
     "sql.txAuto": "자동",
@@ -310,6 +310,6 @@ export const sqlCatalog = defineCatalog(
     "sql.viewParametersCount": "파라미터 {count}개 보기",
     "sql.writeCommitted": "쓰기 커밋됨",
     "sql.writesDisabledScript":
-      "이 연결은 쓰기가 비활성화되어 있습니다. 데이터를 수정하는 스크립트는 차단됩니다. 설정 > 안전에서 쓰기를 활성화하세요.",
+      "이 연결은 쓰기가 비활성화되어 있습니다. 데이터를 수정하는 스크립트는 차단됩니다. 설정 → 안전에서 ‘데이터 변경’을 체크하세요.",
   },
 );
