@@ -16,14 +16,19 @@ import { useToast } from "../../components/Toast";
 import {
   fallbackSchemaGroupName,
   type DropTarget,
+  type ProjectDatabaseOrderDrag,
 } from "./catalogDomain";
-import type { ProjectDatabasesDropTarget } from "./projectResources";
+import type {
+  ProjectDatabaseOrderPlacement,
+  ProjectDatabasesDropTarget,
+} from "./projectResources";
 
 type DragStart = {
   id: string;
   pointerId: number;
   x: number;
   y: number;
+  projectDatabaseOrder?: ProjectDatabaseOrderDrag;
 };
 
 type EnvironmentDropTarget = {
@@ -40,6 +45,12 @@ type ConnectionDragOptions = {
     connection: ConnectionProfile,
     environmentId: string,
   ) => Promise<void>;
+  onReorderProjectDatabase?: (
+    projectId: string,
+    draggedBindingId: string,
+    targetBindingId: string,
+    placement: ProjectDatabaseOrderPlacement,
+  ) => void;
 };
 
 export function useSchemaGroupDrag(
@@ -165,6 +176,15 @@ export function useSchemaGroupDrag(
   async function applyDrop(dragId: string, target: DropTarget) {
     const dragged = connectionById(dragId);
     if (!dragged) return;
+    if (target.kind === "projectDatabaseOrder") {
+      options.onReorderProjectDatabase?.(
+        target.projectId,
+        target.draggedBindingId,
+        target.targetBindingId,
+        target.placement,
+      );
+      return;
+    }
     if (target.kind === "projectDatabases") {
       if (!canDropOnProjectDatabases(dragId, target.projectId)) return;
       await options.onDropOnEnvironment?.(dragged, target.environmentId);
@@ -264,6 +284,44 @@ export function useSchemaGroupDrag(
     ) {
       return { kind: "environment", id: targetEnvironmentId };
     }
+    const orderSource = dragStartRef.current?.projectDatabaseOrder;
+    const orderElement = element.closest<HTMLElement>(
+      "[data-project-database-binding-id]",
+    );
+    const targetBindingId = orderElement?.dataset.projectDatabaseBindingId;
+    const orderTargetProjectId = orderElement?.dataset.projectDatabaseProjectId;
+    const targetBlockFirstBindingId =
+      orderElement?.dataset.projectDatabaseBlockFirstBindingId;
+    const targetBlockLastBindingId =
+      orderElement?.dataset.projectDatabaseBlockLastBindingId;
+    if (
+      orderSource &&
+      orderElement &&
+      targetBindingId &&
+      targetBlockFirstBindingId &&
+      targetBlockLastBindingId &&
+      orderTargetProjectId === orderSource.projectId
+    ) {
+      if (
+        targetBlockFirstBindingId === orderSource.blockFirstBindingId &&
+        targetBlockLastBindingId === orderSource.blockLastBindingId
+      ) {
+        return null;
+      }
+      const bounds = orderElement.getBoundingClientRect();
+      const placement =
+        y < bounds.top + bounds.height / 2 ? "before" : "after";
+      return {
+        kind: "projectDatabaseOrder",
+        projectId: orderSource.projectId,
+        draggedBindingId: orderSource.bindingId,
+        targetBindingId:
+          placement === "before"
+            ? targetBlockFirstBindingId
+            : targetBlockLastBindingId,
+        placement,
+      };
+    }
     const targetConnectionId = element.closest<HTMLElement>(
       "[data-connection-id]",
     )?.dataset.connectionId;
@@ -296,6 +354,7 @@ export function useSchemaGroupDrag(
   function pointerDown(
     event: PointerEvent<HTMLDivElement>,
     connection: ConnectionProfile,
+    projectDatabaseOrder?: ProjectDatabaseOrderDrag,
   ) {
     if (
       event.button !== 0 ||
@@ -311,6 +370,7 @@ export function useSchemaGroupDrag(
       pointerId: event.pointerId,
       x: event.clientX,
       y: event.clientY,
+      projectDatabaseOrder,
     };
     event.currentTarget.setPointerCapture?.(event.pointerId);
   }
@@ -403,6 +463,16 @@ function sameDropTarget(
     };
     return left.projectId === projectTarget.projectId
       && left.environmentId === projectTarget.environmentId;
+  }
+  if (left.kind === "projectDatabaseOrder") {
+    const orderTarget = right as Extract<
+      DropTarget,
+      { kind: "projectDatabaseOrder" }
+    >;
+    return left.targetBindingId === orderTarget.targetBindingId
+      && left.draggedBindingId === orderTarget.draggedBindingId
+      && left.projectId === orderTarget.projectId
+      && left.placement === orderTarget.placement;
   }
   return left.key === (right as { kind: "group"; key: string }).key;
 }

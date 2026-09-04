@@ -35,6 +35,7 @@ import type { CatalogTreeSearchResult } from "./CatalogTree";
 import type {
   CatalogLoadIssue,
   DropTarget,
+  ProjectDatabaseOrderDrag,
 } from "../../features/catalogExplorer/catalogDomain";
 import {
   nextSchemaScopeSelection,
@@ -50,6 +51,7 @@ type Props = {
   connection: ConnectionProfile;
   environmentBadge?: string | null;
   environmentDropId?: string;
+  projectDatabaseOrder?: ProjectDatabaseOrderDrag;
   treeKey?: string;
   nested: boolean;
   selected: boolean;
@@ -89,6 +91,7 @@ type Props = {
   onPointerDown: (
     event: PointerEvent<HTMLDivElement>,
     connection: ConnectionProfile,
+    projectDatabaseOrder?: ProjectDatabaseOrderDrag,
   ) => void;
   onPointerMove: (event: PointerEvent<HTMLDivElement>) => void;
   onPointerUp: (event: PointerEvent<HTMLDivElement>) => void;
@@ -157,6 +160,11 @@ export default function ConnectionNode(props: Props) {
       props.dropTarget.id === connection.id) ||
     (props.dropTarget?.kind === "environment" &&
       props.dropTarget.id === props.environmentDropId);
+  const orderDropPlacement =
+    props.dropTarget?.kind === "projectDatabaseOrder" &&
+    props.dropTarget.targetBindingId === props.projectDatabaseOrder?.bindingId
+      ? props.dropTarget.placement
+      : null;
   const availableSchemas = Array.from(
     new Set([
       ...(props.overview?.namespaces ?? []),
@@ -184,6 +192,14 @@ export default function ConnectionNode(props: Props) {
       <div
         data-connection-id={connection.id}
         data-knowledge-environment-drop-id={props.environmentDropId}
+        data-project-database-binding-id={props.projectDatabaseOrder?.bindingId}
+        data-project-database-project-id={props.projectDatabaseOrder?.projectId}
+        data-project-database-block-first-binding-id={
+          props.projectDatabaseOrder?.blockFirstBindingId
+        }
+        data-project-database-block-last-binding-id={
+          props.projectDatabaseOrder?.blockLastBindingId
+        }
         data-nested={props.nested}
         data-dragging={props.draggingId === connection.id}
         data-drop-target={isDropTarget}
@@ -198,7 +214,9 @@ export default function ConnectionNode(props: Props) {
         data-explorer-tree-parent-key={props.treeParentKey ?? undefined}
         data-tree-primary-action
         tabIndex={-1}
-        onPointerDown={(event) => props.onPointerDown(event, connection)}
+        onPointerDown={(event) =>
+          props.onPointerDown(event, connection, props.projectDatabaseOrder)
+        }
         onPointerMove={props.onPointerMove}
         onPointerUp={props.onPointerUp}
         onPointerCancel={props.onPointerCancel}
@@ -212,6 +230,13 @@ export default function ConnectionNode(props: Props) {
           else props.onSelect();
         }}
       >
+        {orderDropPlacement ? (
+          <span
+            aria-hidden="true"
+            data-placement={orderDropPlacement}
+            className="tw:pointer-events-none tw:absolute tw:right-0 tw:left-0 tw:z-[var(--ds-z-base)] tw:h-[var(--ds-border-width-strong)] tw:bg-ring tw:data-[placement=before]:top-0 tw:data-[placement=after]:bottom-0"
+          />
+        ) : null}
         <span
           className="tw:grid tw:w-3 tw:shrink-0 tw:place-items-center tw:text-2xs tw:text-muted-foreground"
           title={

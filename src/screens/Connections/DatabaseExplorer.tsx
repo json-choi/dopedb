@@ -33,6 +33,7 @@ import {
 } from "../../features/catalogExplorer/catalogDomain";
 import { useCatalogExplorerState } from "../../features/catalogExplorer/state";
 import { useSchemaGroupDrag } from "../../features/catalogExplorer/useSchemaGroupDrag";
+import { useProjectDatabaseOrder } from "../../features/catalogExplorer/useProjectDatabaseOrder";
 import { useCatalogScope } from "../../lib/queries";
 import {
   buildConnectionSections,
@@ -57,7 +58,6 @@ import { SchemaConnectionGroupRow } from "./SchemaConnectionGroupRow";
 import { useDatabaseExplorerMutations } from "../../features/catalogExplorer/useDatabaseExplorerMutations";
 import { useCatalogExplorerLoading } from "../../features/catalogExplorer/useCatalogExplorerLoading";
 import { useProjectExplorerActions } from "../../features/catalogExplorer/useProjectExplorerActions";
-
 
 // Database Explorer: connections in the sidebar, the selected one
 // expanded to reveal its tables. Clicking a table opens its data in the main area.
@@ -144,6 +144,12 @@ export function DatabaseExplorer({
     activeEnvironmentId: activeProjectEnvironmentId,
     activeEnvironmentView: activeProjectEnvironmentView,
   });
+  const projectDatabaseOrder = useProjectDatabaseOrder(
+    catalogScope,
+    knowledgeProjects.data,
+    environmentConnections.data,
+    connections,
+  );
   const [projectSetupOpen, setProjectSetupOpen] = useState(false);
   const [environmentSetupProjectId, setEnvironmentSetupProjectId] =
     useState<string | null>(null);
@@ -323,6 +329,7 @@ export function DatabaseExplorer({
     projectDatabasesTargets: projectDatabaseDropTargets,
     unassignedConnectionIds,
     onDropOnEnvironment: bindDroppedConnection,
+    onReorderProjectDatabase: projectDatabaseOrder.reorder,
   });
   const errs: Record<string, CatalogLoadIssue> = { ...overviewErrs };
   for (const [connectionId, message] of Object.entries(refreshErrs)) {
@@ -440,6 +447,9 @@ export function DatabaseExplorer({
         connection={connection}
         environmentBadge={environmentBadge}
         environmentDropId={environmentDropId}
+        projectDatabaseOrder={
+          binding ? projectDatabaseOrder.dragContext(binding) : undefined
+        }
         treeKey={treeKey}
         nested={nested}
         selected={connection.id === selectedId}
@@ -684,6 +694,7 @@ export function DatabaseExplorer({
               activeView={activeProjectEnvironmentView}
               activeResourceId={activeProjectEnvironmentResourceId}
               analysisFilter={analysisFilter}
+              databaseBindingOrder={projectDatabaseOrder.bindingOrder(project.id)}
               renderConnection={renderConnection}
               onToggleProject={() =>
                 setExpandedProjectIds((current) =>

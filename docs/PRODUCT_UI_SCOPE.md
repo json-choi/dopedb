@@ -52,6 +52,10 @@ DopeDB의 제품 축, 실제 사용자 작업, 접근성, 운영 안전성, 지�
   필터와 Article 선택도 Explorer가 소유하며, 중앙 Analysis document는 선택한
   Article만 표시하고 별도의 collection
   rail을 만들지 않는다.
+  Project의 `Databases` 목록은 행 pointer drag로 구성원별 표시 순서를 바꿀 수 있지만
+  Project·Environment binding 자체는 변경하지 않는다. 같은 schema group은 하나의
+  연속된 이동 블록으로 유지하며 블록 안에서는 production, staging, development,
+  test/custom 순서로 표시한다.
 - Project의 `Databases +`에서 시작한 PostgreSQL, MySQL, SQLite, MongoDB,
   BigQuery 연결은 저장 성공과 같은 흐름에서 그 Project의 현재 preferred exact
   Environment에 binding한다. 연결만 만들고 `Unassigned`에 남기는 중간 상태를

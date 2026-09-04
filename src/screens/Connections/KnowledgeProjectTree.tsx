@@ -30,6 +30,7 @@ import {
 } from "../../features/knowledge/presentation";
 import {
   flattenProjectEnvironmentResources,
+  orderProjectDatabaseResources,
   preferredProjectEnvironment,
   projectResourceKey,
 } from "../../features/catalogExplorer/projectResources";
@@ -78,6 +79,7 @@ interface KnowledgeProjectTreeProps {
   activeView: KnowledgeEnvironmentView | null;
   activeResourceId: string | null;
   analysisFilter: string;
+  databaseBindingOrder: readonly string[];
   renderConnection: RenderConnection;
   onToggleProject: () => void;
   onToggleResource: (resourceKey: string) => void;
@@ -231,6 +233,7 @@ function KnowledgeProjectResources({
   activeView,
   activeResourceId,
   analysisFilter,
+  databaseBindingOrder,
   renderConnection,
   onToggleResource,
   onAddEnvironment,
@@ -254,12 +257,16 @@ function KnowledgeProjectResources({
   const databaseKey = projectResourceKey(project.id, "databases");
   const sourceKey = projectResourceKey(project.id, "sources");
   const analysisKey = projectResourceKey(project.id, "analyses");
-  const projectBindings = flattenProjectEnvironmentResources(
-    project,
-    (environmentId) =>
-      (environmentConnections ?? []).filter(
-        (binding) => binding.projectEnvironmentId === environmentId,
-      ),
+  const projectBindings = orderProjectDatabaseResources(
+    flattenProjectEnvironmentResources(
+      project,
+      (environmentId) =>
+        (environmentConnections ?? []).filter(
+          (binding) => binding.projectEnvironmentId === environmentId,
+        ),
+    ),
+    connections,
+    databaseBindingOrder,
   );
   const projectSources = flattenProjectEnvironmentResources(
     project,

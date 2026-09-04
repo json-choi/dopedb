@@ -14,10 +14,24 @@ export type DropTarget =
   | { kind: "group"; key: string }
   | { kind: "environment"; id: string }
   | {
+      kind: "projectDatabaseOrder";
+      projectId: string;
+      draggedBindingId: string;
+      targetBindingId: string;
+      placement: "before" | "after";
+    }
+  | {
       kind: "projectDatabases";
       projectId: string;
       environmentId: string;
     };
+
+export type ProjectDatabaseOrderDrag = {
+  projectId: string;
+  bindingId: string;
+  blockFirstBindingId: string;
+  blockLastBindingId: string;
+};
 
 export type CatalogLoadIssue = Pick<AppErrorDetails, "kind" | "message">;
 

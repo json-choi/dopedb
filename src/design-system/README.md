@@ -576,6 +576,9 @@ DopeDB의 실제 작업 흐름과 접근성, supported viewport를 위한 제품
   연결의 암묵적 이동이나 복제를 허용하지 않는다. 한 workspace에서 동일한 connection은
   하나의 Project Environment에만 active binding을 가질 수 있다. 배정된 DB 행의 메뉴는
   전역 connection 삭제 대신 `프로젝트에서 제거`를 제공하고 exact binding만 해제한다.
+  배정된 DB 행을 같은 Project의 `Databases` 목록 안에서 pointer drag하면 구성원·기기별
+  표시 순서만 바꾸며 binding을 옮기지 않는다. 같은 schema group은 하나의 연속된 이동
+  블록이고, 그 안의 행은 production, staging, development, test/custom 순서를 유지한다.
   같은 schema group의 DB는 단일
   `Databases` 목록 안에서 각 DB row의 `diff` command와 connection menu로 동일한
   Schema Diff workbench를 열 수 있어야 한다. 중앙 환경 상세나 AI Chat 안내에 같은

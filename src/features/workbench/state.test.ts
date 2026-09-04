@@ -96,6 +96,8 @@ import {
 } from "../catalogExplorer/catalogDomain";
 import {
   flattenProjectEnvironmentResources,
+  moveProjectDatabaseResource,
+  orderProjectDatabaseResources,
   preferredProjectEnvironment,
   preferredProjectDatabaseDropTarget,
   projectConnectionAssignment,
@@ -942,6 +944,108 @@ describe("workbench state ownership", () => {
         badge: "prod",
       },
     ]);
+    const groupedConnections = [
+      {
+        ...blankConnection(),
+        id: connectionProfileId("connection-prod-mirai"),
+        name: "Prod-mirai",
+        env: "prod",
+        schemaGroup: "mirai",
+      },
+      {
+        ...blankConnection(),
+        id: connectionProfileId("connection-mirai-log"),
+        name: "Mirai-log",
+        env: "prod",
+      },
+      {
+        ...blankConnection(),
+        id: connectionProfileId("connection-dev-mirai"),
+        name: "Dev-mirai",
+        env: "dev",
+        schemaGroup: "mirai",
+      },
+    ];
+    const groupedProjectDatabaseRows = [
+      {
+        environment: explorerProject.environments[1]!,
+        resource: {
+          id: "binding-prod-mirai",
+          connectionId: groupedConnections[0]!.id,
+        },
+      },
+      {
+        environment: explorerProject.environments[1]!,
+        resource: {
+          id: "binding-mirai-log",
+          connectionId: groupedConnections[1]!.id,
+        },
+      },
+      {
+        environment: explorerProject.environments[0]!,
+        resource: {
+          id: "binding-dev-mirai",
+          connectionId: groupedConnections[2]!.id,
+        },
+      },
+    ];
+    const contiguousProjectDatabaseRows = orderProjectDatabaseResources(
+      groupedProjectDatabaseRows,
+      groupedConnections,
+      ["binding-prod-mirai", "binding-mirai-log", "binding-dev-mirai"],
+    );
+    expect(
+      contiguousProjectDatabaseRows.map(({ resource }) => resource.id),
+    ).toEqual([
+      "binding-prod-mirai",
+      "binding-dev-mirai",
+      "binding-mirai-log",
+    ]);
+    const movedProjectDatabaseOrder = moveProjectDatabaseResource(
+      contiguousProjectDatabaseRows,
+      groupedConnections,
+      "binding-dev-mirai",
+      "binding-mirai-log",
+      "after",
+    );
+    expect(movedProjectDatabaseOrder).toEqual([
+      "binding-mirai-log",
+      "binding-prod-mirai",
+      "binding-dev-mirai",
+    ]);
+    expect(
+      moveProjectDatabaseResource(
+        contiguousProjectDatabaseRows,
+        groupedConnections,
+        "binding-mirai-log",
+        "binding-prod-mirai",
+        "after",
+      ),
+    ).toEqual([
+      "binding-prod-mirai",
+      "binding-dev-mirai",
+      "binding-mirai-log",
+    ]);
+    expect(
+      moveProjectDatabaseResource(
+        contiguousProjectDatabaseRows,
+        groupedConnections,
+        "binding-mirai-log",
+        "binding-dev-mirai",
+        "before",
+      ),
+    ).toEqual([
+      "binding-mirai-log",
+      "binding-prod-mirai",
+      "binding-dev-mirai",
+    ]);
+    expect(
+      orderProjectDatabaseResources(
+        groupedProjectDatabaseRows,
+        groupedConnections,
+        movedProjectDatabaseOrder,
+      ).map(({ resource }) => resource.id),
+    ).toEqual(movedProjectDatabaseOrder);
     expect(
       preferredProjectEnvironment(
         explorerProject,
