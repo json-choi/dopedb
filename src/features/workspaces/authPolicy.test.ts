@@ -1,6 +1,10 @@
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 import capability from "../../../src-tauri/capabilities/default.json";
+import tauriBenchmarkConfig from "../../../src-tauri/tauri.benchmark.conf.json";
+import tauriConfig from "../../../src-tauri/tauri.conf.json";
+import tauriDevConfig from "../../../src-tauri/tauri.dev.conf.json";
+import { desktopWorkspaceLoginCallbackUrl } from "../../../workspace-cloud/lib/desktop-deep-link";
 import {
   AGENT_SETUP_URLS,
   DOPEDB_RELEASES_URL,
@@ -196,6 +200,20 @@ describe("workspace auth lifecycle", () => {
     expect(allowedUrls).toContain(DOPEDB_RELEASES_URL);
     expect(allowedUrls).toContain("https://app.dopedb.dev/analyses/*");
     expect(allowedUrls).not.toContain("https://github.com/*");
+
+    const loginCallback = new URL(desktopWorkspaceLoginCallbackUrl);
+    expect(loginCallback.protocol).toBe("dopedb:");
+    expect(loginCallback.host).toBe("auth");
+    expect(loginCallback.pathname).toBe("/device-complete");
+    expect(loginCallback.username).toBe("");
+    expect(loginCallback.password).toBe("");
+    expect(loginCallback.search).toBe("");
+    expect(loginCallback.hash).toBe("");
+    expect(tauriConfig.plugins["deep-link"].desktop.schemes).toEqual(["dopedb"]);
+    expect(tauriDevConfig.plugins["deep-link"].desktop.schemes).toEqual(["dopedb-dev"]);
+    expect(tauriBenchmarkConfig.plugins["deep-link"].desktop.schemes).toEqual([
+      "dopedb-benchmark",
+    ]);
 
     const translateKey = ((key: string) => key) as Parameters<
       typeof agentSessionErrorLabel

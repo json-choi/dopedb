@@ -32,6 +32,11 @@
     "createUpdaterArtifacts": false
   },
   "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["dopedb-benchmark"]
+      }
+    },
     "updater": {
       "endpoints": []
     }

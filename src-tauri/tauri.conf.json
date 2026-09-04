@@ -65,6 +65,11 @@
     }
   },
   "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["dopedb"]
+      }
+    },
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDcxRjEwRTY0ODhDODRDNzEKUldSeFRNaUlaQTd4Y1N5Ly8wZ3hNRWZnT2I0RGRBQXBwZzN6NC82NVFMWTlvUkNXWHViMUw1QXQK",
       "endpoints": [

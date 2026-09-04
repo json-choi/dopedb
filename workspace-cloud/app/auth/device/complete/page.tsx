@@ -9,6 +9,7 @@ import {
 } from "../../../components/Identity";
 import { getWorkspaceLocale } from "../../../../lib/workspace-locale-server";
 import { workspaceMessages } from "../../../../lib/workspace-messages";
+import { DeviceCompletionAction } from "./DeviceCompletionAction";
 
 export default async function DeviceCompletePage({
   searchParams,
@@ -38,6 +39,10 @@ export default async function DeviceCompletePage({
           <IdentityBody>
             {copy.completeBody}
           </IdentityBody>
+          <DeviceCompletionAction
+            label={copy.completeOpenApp}
+            hint={copy.completeOpenAppHint}
+          />
         </IdentityCard>
       </div>
     </IdentitySingleShell>

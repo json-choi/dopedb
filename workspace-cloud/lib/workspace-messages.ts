@@ -68,7 +68,9 @@ const en = {
     completeDeniedEyebrow: "DEVICE DENIED",
     completeAuthorized: "Connected.",
     completeDenied: "Request denied.",
-    completeBody: "Return to the DopeDB app. You can close this browser window.",
+    completeBody: "Opening the DopeDB app. You can close this browser window after it appears.",
+    completeOpenApp: "Open DopeDB",
+    completeOpenAppHint: "If the app did not open automatically, use the button above.",
   },
   githubInstallation: {
     connectedEyebrow: "GITHUB CONNECTED",
@@ -859,7 +861,9 @@ const ko: DeepStringShape<typeof en> = {
     completeDeniedEyebrow: "DEVICE DENIED",
     completeAuthorized: "연결되었습니다.",
     completeDenied: "요청을 거절했습니다.",
-    completeBody: "DopeDB 앱으로 돌아가세요. 이 브라우저 창은 닫아도 됩니다.",
+    completeBody: "DopeDB 앱을 여는 중입니다. 앱이 나타나면 이 브라우저 창은 닫아도 됩니다.",
+    completeOpenApp: "DopeDB 앱 열기",
+    completeOpenAppHint: "앱이 자동으로 열리지 않았다면 위 버튼을 눌러 주세요.",
   },
   githubInstallation: {
     connectedEyebrow: "GITHUB CONNECTED",

@@ -7,6 +7,7 @@ import { ProviderCredentialDialog } from "../../providers/ProviderCredentialDial
 import { ProviderCredentialsMenuItem } from "../../providers/ProviderCredentialsMenuItem";
 import {
   beginWorkspaceLogin,
+  onWorkspaceLoginCallback,
   pollWorkspaceLogin,
   refreshWorkspaceAuthState,
   setActiveWorkspaceAccount,
@@ -88,6 +89,7 @@ export default function WorkspaceAccount({
   const workspaceAccountMounted = useRef(false);
   const providerCredentialAuthorityVersion = useRef<number | null>(null);
   const membershipRefreshHandler = useRef<(force?: boolean) => void>(() => undefined);
+  const loginCallbackHandler = useRef<() => void>(() => undefined);
   const loginRequestHandler = useRef<() => void>(() => undefined);
   const scopeChangeHandler = useRef<() => void | Promise<void>>(
     () => undefined,
@@ -259,6 +261,13 @@ export default function WorkspaceAccount({
   useEffect(() => onWorkspaceLoginRequested(() => loginRequestHandler.current()), []);
 
   useEffect(() => {
+    const pending = onWorkspaceLoginCallback(() => loginCallbackHandler.current());
+    return () => {
+      void pending.then((unlisten) => unlisten()).catch(() => undefined);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!menuOpen) return;
     const close = (event: MouseEvent) => {
       if (!rootRef.current?.contains(event.target as Node)) setMenuOpen(false);
@@ -365,6 +374,7 @@ export default function WorkspaceAccount({
     if (result.status === "signedIn" && result.user) {
       const analyticsAttemptId = pendingLogin.current.analyticsAttemptId;
       pendingLogin.current = null;
+      if (loginAttempt.current === attempt) loginAttempt.current += 1;
       setLoginPhase("idle");
       // The native poll returns `signedIn` only after the account credential has
       // been durably accepted. Scope synchronization is measured separately and
@@ -377,6 +387,7 @@ export default function WorkspaceAccount({
     if (result.status === "denied" || result.status === "expired") {
       const analyticsAttemptId = pendingLogin.current.analyticsAttemptId;
       pendingLogin.current = null;
+      if (loginAttempt.current === attempt) loginAttempt.current += 1;
       setLoginPhase("idle");
       captureLoginOutcome(analyticsAttemptId, result.status);
       toast(
@@ -387,6 +398,20 @@ export default function WorkspaceAccount({
     }
     return false;
   }
+
+  loginCallbackHandler.current = () => {
+    const pending = pendingLogin.current;
+    if (!pending) return;
+    void pollOnce(pending.deviceCode)
+      .then((result) => handlePollResult(result, pending.attempt))
+      .catch((error) => {
+        // A wake-up poll is opportunistic. Network failures stay owned by the
+        // scheduled device-flow loop, while a post-acceptance sync failure remains
+        // visible because the pending attempt already reached a terminal state.
+        if (pendingLogin.current?.attempt === pending.attempt) return;
+        toast(t("workspace.loginFailed", { error: errMessage(error) }), "error");
+      });
+  };
 
   membershipRefreshHandler.current = (force = false) => {
     if (!auth.data?.authenticated || membershipRefreshInFlight.current) return;

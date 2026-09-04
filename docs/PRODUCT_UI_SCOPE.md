@@ -103,6 +103,11 @@ DopeDB의 제품 축, 실제 사용자 작업, 접근성, 운영 안전성, 지�
 - 작업용 chrome은 낮고 조용하게 유지하며 정보는 실행 문맥 가까이에 둔다.
 - command row와 tree row는 compact density를 사용하고, 선택·focus·위험·실패처럼
   의미가 있는 상태에만 색과 elevation을 사용한다.
+- Desktop workspace 로그인은 브라우저 승인이 끝나면 비밀값 없는 앱 URL로 기존
+  앱을 다시 활성화하고 즉시 device 상태를 확인한다. 앱 URL에는 token, device
+  code, 계정 또는 workspace 식별자를 넣지 않으며 서버 polling만 로그인 완료의
+  정본이다. 브라우저가 자동 앱 호출을 막을 때를 위해 같은 완료 화면에 명시적인
+  `DopeDB 앱 열기` action을 유지한다.
 - Action Search는 672px 이하의 non-modal surface다. 빈 질의는 scope와 input만
   보이고, Database·Documents·Actions·Settings처럼 실제 결과가 있는 범주만 둔다.
 - popup, menu, modal은 viewport collision, keyboard 이동, focus containment와

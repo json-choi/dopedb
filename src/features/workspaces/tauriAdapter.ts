@@ -1,5 +1,6 @@
 // The only frontend owner of workspace Tauri command names. Bearer sessions remain
 // behind the Rust adapter and no function here accepts or returns token material.
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { invoke } from "../../ipc/core";
 
 import type {
@@ -16,6 +17,8 @@ import type {
   WorkspaceLoginPoll,
 } from "./domain";
 import { workspaceManagedConnectionSettingsUrl } from "./navigation";
+
+const WORKSPACE_LOGIN_CALLBACK_EVENT = "workspace-login:callback";
 
 export function workspaceFeatureState(): Promise<WorkspaceFeatureState> {
   return invoke("workspace_feature_state");
@@ -43,6 +46,12 @@ export function beginWorkspaceLogin(): Promise<WorkspaceDeviceAuthorization> {
 
 export function pollWorkspaceLogin(deviceCode: string): Promise<WorkspaceLoginPoll> {
   return invoke("poll_workspace_login", { deviceCode });
+}
+
+export function onWorkspaceLoginCallback(
+  handler: () => void,
+): Promise<UnlistenFn> {
+  return listen(WORKSPACE_LOGIN_CALLBACK_EVENT, handler);
 }
 
 export function workspaceConsoleUrl(workspaceId?: WorkspaceId): Promise<string> {

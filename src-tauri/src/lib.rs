@@ -62,6 +62,8 @@ pub fn run() {
             let _ = window.set_focus();
         }
     }));
+    #[cfg(any(target_os = "macos", windows, target_os = "linux"))]
+    let builder = builder.plugin(tauri_plugin_deep_link::init());
     builder
         .plugin(tauri_plugin_dialog::init())
         .plugin(
@@ -73,6 +75,8 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(state)
         .setup(|app| {
+            #[cfg(any(target_os = "macos", windows, target_os = "linux"))]
+            features::workspaces::adapters::register_workspace_login_callback(app);
             let state = app.state::<state::AppState>();
             let mut events = state.services.job.subscribe();
             let handle = app.handle().clone();
