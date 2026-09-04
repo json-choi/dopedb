@@ -20,6 +20,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const NODE_DIST_ORIGIN = "https://nodejs.org";
 const catalogPath = join(
   repositoryRoot,
   "src-tauri/resources/agent-runtime/runtime-catalog.json",
@@ -76,6 +77,8 @@ if (!existsSync(archivePath) || sha256File(archivePath) !== platform.archiveSha2
   );
   rmSync(temporaryArchive, { force: true });
   try {
+    // validateCatalog pins the HTTPS origin and exact per-target filename.
+    // codeql[js/file-access-to-http]
     const response = await fetch(new URL(platform.archive, catalog.source), {
       redirect: "error",
     });
@@ -92,6 +95,8 @@ if (!existsSync(archivePath) || sha256File(archivePath) !== platform.archiveSha2
         }
         let offset = 0;
         while (offset < chunk.byteLength) {
+          // Length and SHA-256 are pinned before this temporary file is promoted.
+          // codeql[js/http-to-file-access]
           offset += writeSync(file, chunk, offset);
         }
       }
@@ -202,13 +207,24 @@ function rustHostTriple() {
 }
 
 function validateCatalog(value) {
+  let source;
+  try {
+    source = new URL(String(value?.source));
+  } catch {
+    throw new Error("invalid Node runtime catalog source");
+  }
   if (
     value?.schemaVersion !== 1 ||
     value.runtime !== "node" ||
     !/^\d+\.\d+\.\d+$/.test(value.version) ||
     !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(value.releasedAt) ||
     value.license !== "MIT" ||
-    !String(value.source).startsWith(`https://nodejs.org/dist/v${value.version}/`) ||
+    source.origin !== NODE_DIST_ORIGIN ||
+    source.pathname !== `/dist/v${value.version}/` ||
+    source.username ||
+    source.password ||
+    source.search ||
+    source.hash ||
     !value.platforms ||
     typeof value.platforms !== "object"
   ) {
@@ -222,17 +238,36 @@ function validateCatalog(value) {
   if (Object.keys(value.platforms).sort().join("\n") !== requiredTargets.sort().join("\n")) {
     throw new Error("Node runtime catalog must contain exactly the supported release targets");
   }
+  const expectedLayouts = {
+    "aarch64-apple-darwin": {
+      archive: `node-v${value.version}-darwin-arm64.tar.gz`,
+      executable: `node-v${value.version}-darwin-arm64/bin/node`,
+      licenseFile: `node-v${value.version}-darwin-arm64/LICENSE`,
+    },
+    "x86_64-apple-darwin": {
+      archive: `node-v${value.version}-darwin-x64.tar.gz`,
+      executable: `node-v${value.version}-darwin-x64/bin/node`,
+      licenseFile: `node-v${value.version}-darwin-x64/LICENSE`,
+    },
+    "x86_64-pc-windows-msvc": {
+      archive: `node-v${value.version}-win-x64.zip`,
+      executable: `node-v${value.version}-win-x64/node.exe`,
+      licenseFile: `node-v${value.version}-win-x64/LICENSE`,
+    },
+  };
   for (const [target, platform] of Object.entries(value.platforms)) {
+    const expected = expectedLayouts[target];
     if (
-      !String(platform.archive).startsWith(`node-v${value.version}-`) ||
+      !platform ||
+      typeof platform !== "object" ||
+      !expected ||
+      platform.archive !== expected.archive ||
       !/^[a-f0-9]{64}$/.test(platform.archiveSha256) ||
       !Number.isSafeInteger(platform.archiveBytes) ||
       platform.archiveBytes <= 0 ||
       platform.archiveBytes > 60 * 1024 * 1024 ||
-      !String(platform.executable).startsWith(`node-v${value.version}-`) ||
-      !String(platform.licenseFile).startsWith(`node-v${value.version}-`) ||
-      platform.executable.includes("..") ||
-      platform.licenseFile.includes("..")
+      platform.executable !== expected.executable ||
+      platform.licenseFile !== expected.licenseFile
     ) {
       throw new Error(`invalid Node runtime catalog entry for ${target}`);
     }

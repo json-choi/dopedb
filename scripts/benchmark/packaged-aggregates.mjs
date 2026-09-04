@@ -113,7 +113,6 @@ export function createBenchmarkAggregates(harness) {
       const firstIpcBatch = actionMetricSamples(
         group,
         "firstIpcBatchSamplesMs",
-        "firstIpcBatchMs",
       );
       return [name, {
         runs: group.length,

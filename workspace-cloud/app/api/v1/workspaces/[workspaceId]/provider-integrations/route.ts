@@ -264,7 +264,6 @@ export async function POST(request: Request, context: RouteContext) {
     let externalAccountId: string;
     let displayName: string;
     let grantedScope: string;
-    let neonConfigurationCredential: NeonCredential | null = null;
     let gcpIdentity:
       | Awaited<ReturnType<typeof gcpCloudSqlIntegrationIdentity>>
       | null = null;
@@ -302,7 +301,6 @@ export async function POST(request: Request, context: RouteContext) {
         projectId,
         organizationId,
       });
-      neonConfigurationCredential = credential;
       const info = await inspectNeonCredential(credential);
       externalAccountId = info.externalAccountId;
       displayName = info.displayName;

@@ -126,7 +126,9 @@ function newSessionId() {
 const localStore = new ProductAnalyticsLocalStore(browserStorage());
 const listeners = new Set<Listener>();
 const completedSessionCaptures = new Set<string>();
-const pendingSessionCaptures = new Map<string, Promise<boolean>>();
+type PendingSessionCapture = Readonly<{ promise: Promise<boolean> }>;
+
+const pendingSessionCaptures = new Map<string, PendingSessionCapture>();
 let availability: ProductAnalyticsSnapshot["availability"] = "checking";
 let appVersion: string | null = null;
 let sessionId = newSessionId();
@@ -443,7 +445,7 @@ async function captureProductEventInternal(
   if (sessionCaptureKey !== null) {
     if (completedSessionCaptures.has(sessionCaptureKey)) return true;
     const pending = pendingSessionCaptures.get(sessionCaptureKey);
-    if (pending) return pending;
+    if (pending) return pending.promise;
   }
 
   const attempt = (async () => {
@@ -498,13 +500,14 @@ async function captureProductEventInternal(
   })();
 
   if (sessionCaptureKey === null) return attempt;
-  pendingSessionCaptures.set(sessionCaptureKey, attempt);
+  const pending = { promise: attempt } satisfies PendingSessionCapture;
+  pendingSessionCaptures.set(sessionCaptureKey, pending);
   try {
-    const captured = await attempt;
+    const captured = await pending.promise;
     if (captured) completedSessionCaptures.add(sessionCaptureKey);
     return captured;
   } finally {
-    if (pendingSessionCaptures.get(sessionCaptureKey) === attempt) {
+    if (pendingSessionCaptures.get(sessionCaptureKey) === pending) {
       pendingSessionCaptures.delete(sessionCaptureKey);
     }
   }

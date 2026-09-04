@@ -106,11 +106,11 @@ export function persistedConnectionVersionPayload(
 export function parseExpectedRevision(request: Request): number | null {
   const dedicated = request.headers.get(EXPECTED_REVISION_HEADER);
   if (dedicated === null) return null;
-  const dedicatedMatch = dedicated === null ? null : /^([0-9]+)$/.exec(dedicated.trim());
-  if (dedicated !== null && !dedicatedMatch) {
+  const dedicatedMatch = /^([0-9]+)$/.exec(dedicated.trim());
+  if (!dedicatedMatch) {
     throw new Error(`${EXPECTED_REVISION_HEADER} must be a non-negative revision`);
   }
-  const revision = Number(dedicatedMatch![1]);
+  const revision = Number(dedicatedMatch[1]);
   if (!Number.isSafeInteger(revision)) throw new Error("Invalid expected revision");
   return revision;
 }

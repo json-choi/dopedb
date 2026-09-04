@@ -168,6 +168,9 @@ export async function GET(request: Request, context: RouteContext) {
   const query = new URL(request.url).searchParams;
   const kind = query.get("kind") ?? "projects";
   try {
+    // The query selects among three read-only discovery operations only after
+    // workspace manage authority and the user-bound setup session are checked.
+    // codeql[js/user-controlled-bypass]
     if (kind === "projects") {
       const projects = await listGcpOAuthProjects(setup.credential);
       return privateJson({
@@ -176,6 +179,7 @@ export async function GET(request: Request, context: RouteContext) {
         projects,
       });
     }
+    // codeql[js/user-controlled-bypass]
     if (kind === "instances") {
       const project = query.get("project") ?? "";
       const instances = await listGcpOAuthInstances(setup.credential, project);
@@ -185,6 +189,7 @@ export async function GET(request: Request, context: RouteContext) {
         instances,
       });
     }
+    // codeql[js/user-controlled-bypass]
     if (kind === "permissions") {
       const projectId = query.get("project") ?? "";
       const projects = await listGcpOAuthProjects(setup.credential);

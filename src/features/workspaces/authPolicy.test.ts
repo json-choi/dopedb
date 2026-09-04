@@ -52,6 +52,7 @@ import {
   type ProductAnalyticsStorage,
 } from "../productAnalytics/storage";
 import {
+  isProductAnalyticsAppVersion,
   isProductAnalyticsEvent,
   isProductAnalyticsEventInput,
   type ProductEventName,
@@ -298,6 +299,22 @@ describe("workspace auth lifecycle", () => {
     expect(productAnalyticsGolden.events.map((event) => event.name)).toEqual(
       Object.keys(analyticsPropertyKeys),
     );
+    for (const version of [
+      "0.3.98",
+      "1.0.0-alpha.1+darwin-arm64",
+      "999999999999999999999999.0.0",
+    ]) {
+      expect(isProductAnalyticsAppVersion(version), version).toBe(true);
+    }
+    for (const version of [
+      "01.0.0",
+      "1.0.0-01",
+      "1.0.0+",
+      "1.0.0-alpha..1",
+      `1.0.0-${"--.".repeat(40)}`,
+    ]) {
+      expect(isProductAnalyticsAppVersion(version), version).toBe(false);
+    }
     for (const event of productAnalyticsGolden.events) {
       expect(isProductAnalyticsEvent(event), event.name).toBe(true);
       expect(sortedKeys(event.properties), event.name).toEqual(

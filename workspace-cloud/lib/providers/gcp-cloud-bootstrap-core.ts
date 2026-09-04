@@ -220,15 +220,45 @@ export function googleErrorMessage(body: unknown) {
   return typeof message === "string" && message.length <= 500 ? message : "";
 }
 
+type GoogleApiLocation = Readonly<{ origin: string; pathname: string }>;
+
+function googleApiLocation(value: string): GoogleApiLocation | null {
+  try {
+    const url = new URL(value);
+    if (
+      url.protocol !== "https:"
+      || url.username
+      || url.password
+    ) return null;
+    return { origin: url.origin, pathname: url.pathname };
+  } catch {
+    return null;
+  }
+}
+
+function matchesGoogleApiBase(
+  location: GoogleApiLocation | null,
+  base: string,
+) {
+  if (!location) return false;
+  const expected = new URL(base);
+  if (location.origin !== expected.origin) return false;
+  const basePath = expected.pathname.replace(/\/$/, "");
+  return !basePath
+    || location.pathname === basePath
+    || location.pathname.startsWith(`${basePath}/`);
+}
+
 export function iamServiceAccountPropagationPending(
   status: number,
   url: string,
   body: unknown,
 ) {
+  const location = googleApiLocation(url);
   if (
     status !== 400
-    || !url.startsWith(RESOURCE_MANAGER_ORIGIN)
-    || !url.endsWith(":setIamPolicy")
+    || !matchesGoogleApiBase(location, RESOURCE_MANAGER_ORIGIN)
+    || !location?.pathname.endsWith(":setIamPolicy")
   ) {
     return false;
   }
@@ -237,6 +267,7 @@ export function iamServiceAccountPropagationPending(
 }
 
 export function upstreamMessage(status: number, url: string, body: unknown) {
+  const location = googleApiLocation(url);
   if (status === 401) return "Google Cloud 승인이 만료되었습니다. 계정을 다시 연결하세요.";
   if (status === 403) {
     const { reason, service, consumer } = googleErrorInfo(body);
@@ -255,22 +286,28 @@ export function upstreamMessage(status: number, url: string, body: unknown) {
     if (reason.includes("ORG_POLICY")) {
       return "Google Cloud 조직 정책이 이 설정 작업을 차단했습니다.";
     }
-    if (url.startsWith(SERVICE_USAGE_ORIGIN)) {
+    if (matchesGoogleApiBase(location, SERVICE_USAGE_ORIGIN)) {
       return "필수 API를 활성화할 수 없습니다. Service Usage Admin 권한이 필요합니다.";
     }
-    if (url.startsWith(IAM_CREDENTIALS_ORIGIN)) {
+    if (matchesGoogleApiBase(location, IAM_CREDENTIALS_ORIGIN)) {
       return "임시 서비스 계정 자격 증명을 발급할 수 없습니다.";
     }
-    if (url.startsWith(IAM_ORIGIN) && url.includes("workloadIdentityPool")) {
+    if (
+      matchesGoogleApiBase(location, IAM_ORIGIN)
+      && location?.pathname.includes("workloadIdentityPool")
+    ) {
       return "Workload Identity를 구성할 수 없습니다. Workload Identity Pool Admin 권한이 필요합니다.";
     }
-    if (url.startsWith(IAM_ORIGIN) && url.includes("serviceAccounts")) {
+    if (
+      matchesGoogleApiBase(location, IAM_ORIGIN)
+      && location?.pathname.includes("serviceAccounts")
+    ) {
       return "서비스 계정을 구성할 수 없습니다. Service Account Admin 권한이 필요합니다.";
     }
-    if (url.startsWith(RESOURCE_MANAGER_ORIGIN)) {
+    if (matchesGoogleApiBase(location, RESOURCE_MANAGER_ORIGIN)) {
       return "프로젝트 IAM 정책을 변경할 수 없습니다. Project IAM Admin 권한이 필요합니다.";
     }
-    if (url.startsWith(SQL_ADMIN_ORIGIN)) {
+    if (matchesGoogleApiBase(location, SQL_ADMIN_ORIGIN)) {
       return "Cloud SQL 설정을 변경할 수 없습니다. Cloud SQL Admin 권한이 필요합니다.";
     }
     return "Google Cloud에서 이 설정 작업을 거부했습니다.";

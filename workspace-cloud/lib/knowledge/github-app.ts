@@ -166,6 +166,9 @@ export function githubInstallationUserAuthorizationUrl(
     installationId,
     clientSecret,
   );
+  // RFC 7636 requires SHA-256 for the S256 PKCE challenge. The verifier is a
+  // 256-bit HMAC output, not a human password or stored password credential.
+  // codeql[js/insufficient-password-hash]
   const codeChallenge = createHash("sha256")
     .update(codeVerifier)
     .digest("base64url");

@@ -41,7 +41,9 @@ jobs:
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
-          queries: security-and-quality
+          # ESLint, Clippy, and the repository structure checks own code-quality
+          # diagnostics. CodeQL stays focused on the broader security query set.
+          queries: security-extended
           config: |
             paths-ignore:
               - graphify-out

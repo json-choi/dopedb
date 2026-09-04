@@ -261,7 +261,7 @@ export function useSqlDocumentAutosave({
       baseline.content !== content;
     if (!dirty) {
       setSaveState("saved");
-      if (documentId) clearRecovery(documentId);
+      clearRecovery(documentId);
       return;
     }
     setSaveState("dirty");

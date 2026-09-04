@@ -22,11 +22,39 @@ type WriteBlockError = Readonly<{
   sql?: string;
 }>;
 
+function sqlAfterLeadingTrivia(sql: string): string | null {
+  let cursor = 0;
+  while (cursor < sql.length) {
+    const character = sql[cursor] ?? "";
+    if (/\s/u.test(character)) {
+      cursor += 1;
+      continue;
+    }
+    if (sql.startsWith("--", cursor)) {
+      cursor += 2;
+      while (
+        cursor < sql.length
+        && sql[cursor] !== "\r"
+        && sql[cursor] !== "\n"
+      ) cursor += 1;
+      continue;
+    }
+    if (sql.startsWith("/*", cursor)) {
+      const end = sql.indexOf("*/", cursor + 2);
+      if (end === -1) return null;
+      cursor = end + 2;
+      continue;
+    }
+    break;
+  }
+  return sql.slice(cursor);
+}
+
 function isDdlStatement(sql: string | undefined): boolean {
   if (!sql) return false;
-  return /^\s*(?:(?:--[^\r\n]*(?:\r?\n|$))|(?:\/\*[\s\S]*?\*\/\s*))*\s*(?:create|alter|drop|truncate|comment|reindex)\b/i.test(
-    sql,
-  );
+  const statement = sqlAfterLeadingTrivia(sql);
+  return statement !== null
+    && /^(?:create|alter|drop|truncate|comment|reindex)\b/i.test(statement);
 }
 
 function isSchemaAccessError(error: WriteBlockError): boolean {

@@ -192,6 +192,11 @@ export function collectWorkspaceCloudHttpDiagnostics({ lineCount, read, relative
 
   const analyticsRouteSource = read(productAnalyticsRoute);
   const analyticsServiceSource = read(productAnalyticsService);
+  const analyticsAuthorizationSource = [
+    "authorization: `Bearer ",
+    "$",
+    "{token}`",
+  ].join("");
   for (const token of [
     "const MAX_BODY_BYTES = 32 * 1_024",
     "boundedJsonBody(request, MAX_BODY_BYTES)",
@@ -236,7 +241,7 @@ export function collectWorkspaceCloudHttpDiagnostics({ lineCount, read, relative
     "if (!await consumeRateLimit(budget)) return false",
     "env.productAnalyticsCloudflareToken()",
     "env.productAnalyticsCloudflareUrl()",
-    "authorization: `Bearer ${token}`",
+    analyticsAuthorizationSource,
     "body: JSON.stringify(envelope)",
     "redirect: \"error\"",
     "AbortSignal.timeout(CLOUDFLARE_TIMEOUT_MS)",
@@ -256,8 +261,7 @@ export function collectWorkspaceCloudHttpDiagnostics({ lineCount, read, relative
   const environmentSource = read("workspace-cloud/lib/env.ts");
   if (
     !environmentSource.includes("PRODUCT_ANALYTICS_WORKER_HOST")
-    || environmentSource.includes("eu.i.posthog.com")
-    || environmentSource.includes("us.i.posthog.com")
+    || /\b(?:eu|us)\.i\.posthog\.com\b/.test(environmentSource)
   ) {
     diagnostics.push("workspace-cloud/lib/env.ts: product analytics must use only the dedicated Cloudflare Worker");
   }
@@ -540,7 +544,7 @@ export function collectWorkspaceCloudHttpDiagnostics({ lineCount, read, relative
     cloudSources,
     workspaceCloudRuntimeModuleSpecifiers,
   );
-  for (const [filePath, source] of cloudSources) {
+  for (const filePath of cloudSources.keys()) {
     const specifiers = runtimeDependencies.specifiers.get(filePath) ?? [];
     if (filePath.startsWith("workspace-cloud/lib/") && filePath !== "workspace-cloud/lib/provider-integrations.ts") {
       for (const specifier of specifiers) {

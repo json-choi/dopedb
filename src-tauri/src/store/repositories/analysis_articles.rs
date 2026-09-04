@@ -237,34 +237,43 @@ fn decrypt(
 mod tests {
     use super::*;
 
+    fn random_bytes<const N: usize>() -> [u8; N] {
+        let mut bytes = [0_u8; N];
+        getrandom::fill(&mut bytes).unwrap();
+        bytes
+    }
+
     fn key() -> Zeroizing<[u8; 32]> {
-        Zeroizing::new([0x5a; 32])
+        Zeroizing::new(random_bytes())
     }
 
     #[test]
     fn encrypted_cache_round_trips_only_with_exact_authority() {
         let aad = b"workspace\0account\0article\0revision\0run\0hash";
         let plaintext = br#"{"result":"privacy-minimized"}"#;
-        let (nonce, ciphertext) = encrypt(&key(), aad, plaintext).unwrap();
+        let key = key();
+        let (nonce, ciphertext) = encrypt(&key, aad, plaintext).unwrap();
         assert_ne!(ciphertext, plaintext);
-        assert_eq!(
-            decrypt(&key(), aad, &nonce, &ciphertext).unwrap(),
-            plaintext
-        );
-        assert!(decrypt(&key(), b"different-account", &nonce, &ciphertext).is_err());
+        assert_eq!(decrypt(&key, aad, &nonce, &ciphertext).unwrap(), plaintext);
+        assert!(decrypt(&key, b"different-account", &nonce, &ciphertext).is_err());
     }
 
     #[test]
     fn encrypted_cache_rejects_tampering() {
         let aad = b"exact-authority";
-        let (nonce, mut ciphertext) = encrypt(&key(), aad, b"bounded result").unwrap();
+        let key = key();
+        let (nonce, mut ciphertext) = encrypt(&key, aad, b"bounded result").unwrap();
         ciphertext[0] ^= 0x01;
-        assert!(decrypt(&key(), aad, &nonce, &ciphertext).is_err());
+        assert!(decrypt(&key, aad, &nonce, &ciphertext).is_err());
     }
 
     #[test]
     fn encrypted_cache_rejects_invalid_envelopes() {
-        assert!(decrypt(&key(), b"authority", &[0; 23], &[0; 32]).is_err());
-        assert!(decrypt(&key(), b"authority", &[0; 24], &[0; 16]).is_err());
+        let key = key();
+        let short_nonce = random_bytes::<23>();
+        let valid_nonce = random_bytes::<24>();
+        let invalid_ciphertext = random_bytes::<16>();
+        assert!(decrypt(&key, b"authority", &short_nonce, &invalid_ciphertext).is_err());
+        assert!(decrypt(&key, b"authority", &valid_nonce, &invalid_ciphertext).is_err());
     }
 }

@@ -70,6 +70,7 @@ pub(crate) fn client() -> AppResult<&'static Client> {
     let client = Client::builder()
         .timeout(Duration::from_secs(15))
         .redirect(Policy::none())
+        .https_only(!cfg!(debug_assertions))
         .user_agent(concat!("DopeDB/", env!("CARGO_PKG_VERSION"), " desktop"))
         .build()
         .map_err(|error| AppError::Network(format!("could not create HTTP client: {error}")))?;

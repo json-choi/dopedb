@@ -50,37 +50,64 @@ function validInstallation(
     && /^[A-Za-z0-9-]{1,255}$/.test(installation.account.login);
 }
 
-export async function GET(request: Request) {
-  const url = new URL(request.url);
+type GithubCallbackInput =
+  | Readonly<{
+      kind: "installation";
+      setupState: string;
+      installationId: bigint;
+    }>
+  | Readonly<{
+      kind: "user_authorization";
+      setupState: string;
+      installationId: bigint;
+      code: string;
+      authorizationState: GithubInstallationUserAuthorizationState;
+    }>;
+
+function parseGithubCallbackInput(url: URL): GithubCallbackInput {
   const stateValue = url.searchParams.get("state") ?? "";
   const code = url.searchParams.get("code");
-  let setupState = "";
-  let installationId = 0n;
-  let userAuthorizationState: GithubInstallationUserAuthorizationState | null = null;
-  try {
-    if (code !== null) {
-      if (!/^[A-Za-z0-9_-]{16,256}$/.test(code)) {
-        throw new Error("Invalid GitHub user authorization code");
-      }
-      userAuthorizationState = parseGithubInstallationUserAuthorizationState(
-        stateValue,
-      );
-      setupState = userAuthorizationState.setupState;
-      installationId = userAuthorizationState.installationId;
-    } else {
-      const installationIdValue = url.searchParams.get("installation_id") ?? "";
-      if (
-        !/^[A-Za-z0-9_-]{32,256}$/.test(stateValue)
-        || !/^[1-9][0-9]{0,19}$/.test(installationIdValue)
-      ) {
-        throw new Error("Invalid GitHub setup callback");
-      }
-      setupState = stateValue;
-      installationId = BigInt(installationIdValue);
-      if (installationId > BigInt(Number.MAX_SAFE_INTEGER)) {
-        throw new Error("Invalid GitHub setup callback");
-      }
+  // This chooses one of GitHub's two documented callback stages. Each stage
+  // independently validates its state before any authority or mutation runs.
+  // codeql[js/user-controlled-bypass]
+  if (code !== null) {
+    if (!/^[A-Za-z0-9_-]{16,256}$/.test(code)) {
+      throw new Error("Invalid GitHub user authorization code");
     }
+    const authorizationState = parseGithubInstallationUserAuthorizationState(
+      stateValue,
+    );
+    return {
+      kind: "user_authorization",
+      setupState: authorizationState.setupState,
+      installationId: authorizationState.installationId,
+      code,
+      authorizationState,
+    };
+  }
+  const installationIdValue = url.searchParams.get("installation_id") ?? "";
+  if (
+    !/^[A-Za-z0-9_-]{32,256}$/.test(stateValue)
+    || !/^[1-9][0-9]{0,19}$/.test(installationIdValue)
+  ) {
+    throw new Error("Invalid GitHub setup callback");
+  }
+  const installationId = BigInt(installationIdValue);
+  if (installationId > BigInt(Number.MAX_SAFE_INTEGER)) {
+    throw new Error("Invalid GitHub setup callback");
+  }
+  return {
+    kind: "installation",
+    setupState: stateValue,
+    installationId,
+  };
+}
+
+export async function GET(request: Request) {
+  const url = new URL(request.url);
+  let callback: GithubCallbackInput;
+  try {
+    callback = parseGithubCallbackInput(url);
   } catch {
     logGithubKnowledgeSetupFailure({
       stage: "request_validation",
@@ -90,6 +117,7 @@ export async function GET(request: Request) {
     });
     return redirect("failed");
   }
+  const { setupState, installationId } = callback;
   const stateHash = createHash("sha256").update(setupState).digest("hex");
   let stage = "setup_lookup";
   try {
@@ -109,7 +137,10 @@ export async function GET(request: Request) {
     stage = "workspace_authorization";
     const browserSession = await authoritativeSession(request);
     if (!browserSession || browserSession.user.id !== setup.userId) {
-      if (code === null) return redirectToSignIn(request);
+      // Only the server-recorded installation stage may survive sign-in; the
+      // signed user-authorization stage fails closed if its session is gone.
+      // codeql[js/user-controlled-bypass]
+      if (callback.kind === "installation") return redirectToSignIn(request);
       logGithubKnowledgeSetupFailure({
         stage,
         kind: "unauthorized",
@@ -148,25 +179,19 @@ export async function GET(request: Request) {
       });
       return redirect("failed");
     }
-    if (code === null) {
+    // The opaque setup state was looked up above and bound to this authenticated
+    // user and workspace before the OAuth stage can be entered.
+    // codeql[js/user-controlled-bypass]
+    if (callback.kind === "installation") {
       return Response.redirect(
         githubInstallationUserAuthorizationUrl(setupState, installationId),
         303,
       );
     }
-    if (!userAuthorizationState) {
-      logGithubKnowledgeSetupFailure({
-        stage: "request_validation",
-        kind: "invalid_request",
-        status: 0,
-        databaseCode: null,
-      });
-      return redirect("failed");
-    }
     stage = "user_authorization";
     const userCanAccessInstallation = await verifyGithubInstallationUserAccess(
-      code,
-      userAuthorizationState,
+      callback.code,
+      callback.authorizationState,
     );
     if (!userCanAccessInstallation) {
       logGithubKnowledgeSetupFailure({

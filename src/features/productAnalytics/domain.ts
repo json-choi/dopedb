@@ -248,7 +248,55 @@ const PLATFORMS = new Set<ProductAnalyticsPlatform>([
 ]);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const HASH = /^[0-9a-f]{64}$/;
-const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
+function isSemverNumericIdentifier(value: string) {
+  if (!value || (value.length > 1 && value[0] === "0")) return false;
+  for (const character of value) {
+    if (character < "0" || character > "9") return false;
+  }
+  return true;
+}
+
+function isSemverLabel(value: string, rejectNumericLeadingZero: boolean) {
+  if (!value) return false;
+  let numeric = true;
+  for (const character of value) {
+    const digit = character >= "0" && character <= "9";
+    const upper = character >= "A" && character <= "Z";
+    const lower = character >= "a" && character <= "z";
+    if (!digit && !upper && !lower && character !== "-") return false;
+    if (!digit) numeric = false;
+  }
+  return !rejectNumericLeadingZero
+    || !numeric
+    || value.length === 1
+    || value[0] !== "0";
+}
+
+function isSemanticVersion(value: string) {
+  if (!value || value.length > 128) return false;
+  const buildParts = value.split("+");
+  if (buildParts.length > 2) return false;
+  const release = buildParts[0] ?? "";
+  const build = buildParts[1];
+  if (
+    build !== undefined
+    && !build.split(".").every((part) => isSemverLabel(part, false))
+  ) return false;
+  const prereleaseSeparator = release.indexOf("-");
+  const core = prereleaseSeparator === -1
+    ? release
+    : release.slice(0, prereleaseSeparator);
+  const prerelease = prereleaseSeparator === -1
+    ? undefined
+    : release.slice(prereleaseSeparator + 1);
+  const coreParts = core.split(".");
+  if (
+    coreParts.length !== 3
+    || !coreParts.every(isSemverNumericIdentifier)
+  ) return false;
+  return prerelease === undefined
+    || prerelease.split(".").every((part) => isSemverLabel(part, true));
+}
 const RFC3339 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/;
 
 function object(value: unknown): value is Record<string, unknown> {
@@ -432,7 +480,7 @@ export function isQueuedProductAnalyticsEvent(
     value.consentGeneration >= 0 && value.consentGeneration <= 0xffff_ffff &&
     typeof value.sessionId === "string" && UUID.test(value.sessionId) &&
     typeof value.appVersion === "string" && value.appVersion.length <= 128 &&
-    SEMVER.test(value.appVersion) &&
+    isSemanticVersion(value.appVersion) &&
     oneOf(value.platform, PLATFORMS) &&
     (value.locale === "ko" || value.locale === "en") &&
     isProductAnalyticsEvent(value.event);
@@ -482,7 +530,7 @@ export function isProductAnalyticsEventInput(
 }
 
 export function isProductAnalyticsAppVersion(value: string) {
-  return value.length <= 128 && SEMVER.test(value);
+  return isSemanticVersion(value);
 }
 
 export function isProductAnalyticsUuid(value: string) {

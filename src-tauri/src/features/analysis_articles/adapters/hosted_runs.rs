@@ -2,6 +2,9 @@
 
 use super::*;
 
+// Every request below uses the shared origin validator, which rejects cleartext
+// outside a debug-only loopback origin; the release client is HTTPS-only too.
+
 #[derive(Debug, Clone, Copy, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum AnalysisRunTrigger {
@@ -208,6 +211,7 @@ pub(crate) async fn cancel_analysis_run(
 ) -> AppResult<RemoteAnalysisRun> {
     let token = token(user_id).await?;
     let raw = client()?
+        // codeql[rust/cleartext-transmission]
         .post(format!(
             "{}/api/v1/workspaces/{workspace_id}/analyses/{article_id}/runs/{run_id}/cancel",
             origin()?

@@ -423,7 +423,11 @@ where
 
     fn delete_secret_best_effort(&self, id: Uuid, action: &'static str) {
         if let Err(error) = self.credentials.delete(&id) {
-            tracing::warn!(credential_id = %id, %error, action, "credential cleanup deferred");
+            tracing::warn!(
+                error_kind = error.kind(),
+                action,
+                "credential cleanup deferred"
+            );
         }
     }
 }

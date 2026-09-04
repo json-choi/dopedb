@@ -168,7 +168,6 @@ export async function runNeonBranchDeleteOperation(
           credential,
           plan: operation.plan,
         });
-        providerOperationId = receipt.providerOperationId;
         observation = {
           status: "pending",
           branchId: receipt.branchId,

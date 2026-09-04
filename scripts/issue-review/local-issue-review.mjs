@@ -186,27 +186,31 @@ async function saveState(state) {
 
 async function acquireLock() {
   await mkdir(stateRoot, { recursive: true, mode: 0o700 });
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    try {
-      const handle = await open(lockPath, "wx", 0o600);
-      await handle.writeFile(`${process.pid}\n`);
-      await handle.close();
-      return async () => unlink(lockPath).catch(() => undefined);
-    } catch (error) {
-      if (error?.code !== "EEXIST") throw error;
-      const pid = Number((await readFile(lockPath, "utf8").catch(() => "")).trim());
-      if (Number.isSafeInteger(pid) && pid > 0) {
-        try {
-          process.kill(pid, 0);
-          throw new Error(`Issue review worker is already running (pid ${pid})`);
-        } catch (signalError) {
-          if (signalError?.code !== "ESRCH") throw signalError;
-        }
-      }
-      await unlink(lockPath).catch(() => undefined);
+  let handle;
+  try {
+    handle = await open(lockPath, "wx", 0o600);
+  } catch (error) {
+    if (error?.code === "EEXIST") {
+      throw new Error(
+        "Issue review lock already exists; verify that no worker is running before removing the stale lock",
+      );
     }
+    throw error;
   }
-  throw new Error("Could not acquire issue review lock");
+  try {
+    await handle.writeFile(`${process.pid}\n`);
+  } catch (error) {
+    await handle.close().catch(() => undefined);
+    await unlink(lockPath).catch(() => undefined);
+    throw error;
+  }
+  try {
+    await handle.close();
+  } catch (error) {
+    await unlink(lockPath).catch(() => undefined);
+    throw error;
+  }
+  return async () => unlink(lockPath).catch(() => undefined);
 }
 
 function git(...args) {

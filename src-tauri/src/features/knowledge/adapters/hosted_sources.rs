@@ -2,6 +2,9 @@
 
 use super::*;
 
+// Every request below uses the shared origin validator, which rejects cleartext
+// outside a debug-only loopback origin; the release client is HTTPS-only too.
+
 pub(super) async fn list_environment_connections(
     user_id: &str,
     workspace_id: Uuid,
@@ -17,6 +20,7 @@ pub(super) async fn list_environment_connections(
         },
     );
     let response = client()?
+        // codeql[rust/cleartext-transmission]
         .get(format!("{}{path}", origin()?))
         .bearer_auth(token.as_str())
         .send()
@@ -278,6 +282,7 @@ pub(super) async fn list_remote_knowledge_sources(
 ) -> AppResult<Vec<RemoteKnowledgeSource>> {
     let token = bearer(user_id).await?;
     let response = client()?
+        // codeql[rust/cleartext-transmission]
         .get(format!(
             "{}/api/v1/workspaces/{workspace_id}/knowledge/sources",
             origin()?

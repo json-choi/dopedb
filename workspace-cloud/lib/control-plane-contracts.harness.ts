@@ -54,6 +54,10 @@ import {
   type NeonResource,
 } from "./providers/neon-core";
 import {
+  iamServiceAccountPropagationPending,
+  upstreamMessage,
+} from "./providers/gcp-cloud-bootstrap-core";
+import {
   connectionLeaseRevocationScope,
   EXPECTED_REVISION_HEADER,
   parseExpectedRevision,
@@ -767,6 +771,32 @@ describe("Desktop control-plane contracts", () => {
       credentialMode: "member_local",
     }, "analyst", "read").credentialsRequired).toBe(false);
 
+    expect(upstreamMessage(
+      403,
+      "https://serviceusage.googleapis.com/v1/projects/123/services:batchEnable",
+      {},
+    )).toContain("Service Usage Admin");
+    expect(upstreamMessage(
+      403,
+      "https://serviceusage.googleapis.com.attacker.invalid/v1/projects/123",
+      {},
+    )).toBe("Google Cloud에서 이 설정 작업을 거부했습니다.");
+    const missingServiceAccount = {
+      error: {
+        message: "Service account agent1@project1.iam.gserviceaccount.com does not exist.",
+      },
+    };
+    expect(iamServiceAccountPropagationPending(
+      400,
+      "https://cloudresourcemanager.googleapis.com/v1/projects/project1:setIamPolicy",
+      missingServiceAccount,
+    )).toBe(true);
+    expect(iamServiceAccountPropagationPending(
+      400,
+      "https://cloudresourcemanager.googleapis.com.attacker.invalid/v1/projects/project1:setIamPolicy",
+      missingServiceAccount,
+    )).toBe(false);
+
     for (const acceptance of fixture.analysisArticleAcceptances) {
       const candidate = applySemanticMutations(
         fixture.analysisArticleCreate,
@@ -859,6 +889,22 @@ describe("Desktop control-plane contracts", () => {
     ]);
     expect(parseProductAnalyticsEnvelope(productAnalyticsGolden, analyticsNow))
       .toEqual(productAnalyticsGolden);
+    for (const appVersion of ["0.3.98", "1.0.0-alpha.1+darwin-arm64"]) {
+      expect(parseProductAnalyticsEnvelope({
+        ...productAnalyticsGolden,
+        appVersion,
+      }, analyticsNow), appVersion).not.toBeNull();
+    }
+    for (const appVersion of [
+      "01.2.3",
+      "1.0.0-01",
+      `1.0.0-${"--.".repeat(40)}`,
+    ]) {
+      expect(parseProductAnalyticsEnvelope({
+        ...productAnalyticsGolden,
+        appVersion,
+      }, analyticsNow), appVersion).toBeNull();
+    }
     expect(productAnalyticsGolden.events.map((event) => event.name)).toEqual(
       Object.keys(analyticsPropertyKeys),
     );

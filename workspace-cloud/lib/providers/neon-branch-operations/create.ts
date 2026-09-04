@@ -178,7 +178,6 @@ export async function runNeonBranchCreateOperation(
           planHash: operation.planHash,
           ownershipMarker: operation.ownershipMarker,
         });
-        providerOperationId = receipt.providerOperationId;
         observation = {
           status: "pending",
           branchId: receipt.branchId,

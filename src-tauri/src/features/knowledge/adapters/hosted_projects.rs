@@ -2,6 +2,9 @@
 
 use super::*;
 
+// Every request below uses the shared origin validator, which rejects cleartext
+// outside a debug-only loopback origin; the release client is HTTPS-only too.
+
 pub(super) async fn ensure_personal_knowledge_scope(
     user_id: &str,
     projects: &[RemoteKnowledgeProject],
@@ -101,6 +104,7 @@ pub(super) async fn list_knowledge_projects(
 ) -> AppResult<Vec<RemoteKnowledgeProject>> {
     let token = bearer(user_id).await?;
     let response = client()?
+        // codeql[rust/cleartext-transmission]
         .get(format!(
             "{}/api/v1/workspaces/{workspace_id}/knowledge/projects",
             origin()?
@@ -253,6 +257,7 @@ pub(super) async fn list_current_knowledge_grants(
 ) -> AppResult<Vec<RemoteKnowledgeGrant>> {
     let token = bearer(user_id).await?;
     let response = client()?
+        // codeql[rust/cleartext-transmission]
         .get(format!(
             "{}/api/v1/workspaces/{workspace_id}/knowledge/grants?scope=mine",
             origin()?
@@ -305,6 +310,7 @@ pub(super) async fn create_current_knowledge_grant(
     }
     let token = bearer(user_id).await?;
     let response = client()?
+        // codeql[rust/cleartext-transmission]
         .post(format!(
             "{}/api/v1/workspaces/{workspace_id}/knowledge/grants",
             origin()?
@@ -415,6 +421,7 @@ pub(super) async fn download_knowledge_graph(
 ) -> AppResult<GraphBuildArtifactV1> {
     let token = bearer(user_id).await?;
     let response = client()?
+        // codeql[rust/cleartext-transmission]
         .get(format!(
             "{}/api/v1/workspaces/{workspace_id}/knowledge/sources/{source_id}/graph?grantId={grant_id}",
             origin()?

@@ -32,7 +32,15 @@ describe("Cloudflare product analytics contract", () => {
     normalizedDate.events[0].occurredAt = "2026-02-30T00:00:00Z";
     expect(parseEnvelope(normalizedDate, Date.parse("2026-03-01T00:00:00Z"))).toBeNull();
 
+    for (const appVersion of ["0.3.98", "1.0.0-alpha.1+darwin-arm64"]) {
+      expect(parseEnvelope({ ...value, appVersion }, now), appVersion).not.toBeNull();
+    }
     expect(parseEnvelope({ ...value, appVersion: "1.2.3-.." }, now)).toBeNull();
+    expect(parseEnvelope({ ...value, appVersion: "01.2.3" }, now)).toBeNull();
+    expect(parseEnvelope({
+      ...value,
+      appVersion: `1.0.0-${"--.".repeat(40)}`,
+    }, now)).toBeNull();
     expect(parseEnvelope({ ...value, consentGeneration: 3 }, now)).toBeNull();
 
     let prepareCalls = 0;

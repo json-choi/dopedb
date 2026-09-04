@@ -227,6 +227,32 @@ describe("SQL run guidance", () => {
         {
           ...managedWorkspaceManager,
           allowWrites: true,
+        },
+        {
+          kind: "database",
+          message: "must be owner of schema public",
+          sql: `${"/* reviewed */".repeat(2_000)}\n-- migration\nALTER TABLE events ADD COLUMN source text`,
+        },
+      ),
+    ).toBe("schemaSafety");
+    expect(
+      writeBlockRecoveryKind(
+        {
+          ...managedWorkspaceManager,
+          allowWrites: true,
+        },
+        {
+          kind: "database",
+          message: "must be owner of schema public",
+          sql: "/* unterminated CREATE TABLE events (id bigint)",
+        },
+      ),
+    ).toBeNull();
+    expect(
+      writeBlockRecoveryKind(
+        {
+          ...managedWorkspaceManager,
+          allowWrites: true,
           provider: "gcpCloudSql",
         },
         {

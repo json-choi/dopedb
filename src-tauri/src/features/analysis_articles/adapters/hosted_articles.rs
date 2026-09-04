@@ -2,6 +2,9 @@
 
 use super::*;
 
+// Every request below uses the shared origin validator, which rejects cleartext
+// outside a debug-only loopback origin; the release client is HTTPS-only too.
+
 pub(crate) async fn list_analysis_articles(
     user_id: &str,
     workspace_id: Uuid,
@@ -149,6 +152,7 @@ pub(crate) async fn delete_analysis_article(
 ) -> AppResult<i64> {
     let token = token(user_id).await?;
     let raw = client()?
+        // codeql[rust/cleartext-transmission]
         .delete(format!(
             "{}/api/v1/workspaces/{workspace_id}/analyses/{article_id}",
             origin()?
@@ -180,6 +184,7 @@ pub(crate) async fn list_analysis_article_revisions(
 ) -> AppResult<Vec<RemoteAnalysisArticleRevision>> {
     let token = token(user_id).await?;
     let raw = client()?
+        // codeql[rust/cleartext-transmission]
         .get(format!(
             "{}/api/v1/workspaces/{workspace_id}/analyses/{article_id}/revisions",
             origin()?
@@ -217,6 +222,7 @@ pub(crate) async fn list_analysis_publications(
 ) -> AppResult<Vec<RemoteAnalysisPublication>> {
     let token = token(user_id).await?;
     let raw = client()?
+        // codeql[rust/cleartext-transmission]
         .get(format!(
             "{}/api/v1/workspaces/{workspace_id}/analyses/{article_id}/publications",
             origin()?
@@ -251,6 +257,7 @@ pub(crate) async fn create_analysis_publication(
 ) -> AppResult<RemoteAnalysisPublication> {
     let token = token(user_id).await?;
     let raw = client()?
+        // codeql[rust/cleartext-transmission]
         .post(format!(
             "{}/api/v1/workspaces/{workspace_id}/analyses/{article_id}/publications",
             origin()?
@@ -284,6 +291,7 @@ pub(crate) async fn revoke_analysis_publication(
 ) -> AppResult<DateTime<Utc>> {
     let token = token(user_id).await?;
     let raw = client()?
+        // codeql[rust/cleartext-transmission]
         .delete(format!(
             "{}/api/v1/workspaces/{workspace_id}/analyses/{article_id}/publications/{publication_id}",
             origin()?

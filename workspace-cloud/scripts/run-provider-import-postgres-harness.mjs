@@ -13,9 +13,8 @@ try {
   console.error("Refusing PostgreSQL harness: source safety guard failed.");
   process.exit(2);
 }
-let harness;
 try {
-  harness = validateHarnessEnvironment(process.env);
+  validateHarnessEnvironment(process.env);
 } catch {
   console.error(
     "Refusing PostgreSQL harness: independently provisioned test database verification failed.",
