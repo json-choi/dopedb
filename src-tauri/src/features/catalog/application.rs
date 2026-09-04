@@ -6,7 +6,7 @@ use crate::error::AppResult;
 use crate::kernel::identity::ConnectionId;
 use crate::kernel::TerminalAuthority;
 
-use super::domain::{Catalog, CatalogOverview, CatalogReadPolicy, DatabaseSummary};
+use super::domain::{CatalogOverview, CatalogReadPolicy, DatabaseSummary};
 use super::ports::CatalogGatewayPort;
 
 #[derive(Clone)]
@@ -20,14 +20,6 @@ where
 {
     pub(crate) fn new(gateway: G) -> Self {
         Self { gateway }
-    }
-
-    pub(crate) async fn load(
-        &self,
-        connection_id: ConnectionId,
-        policy: CatalogReadPolicy,
-    ) -> AppResult<Catalog> {
-        self.gateway.load(connection_id, policy).await
     }
 
     pub(crate) async fn load_snapshot(
@@ -50,14 +42,6 @@ where
         connection_id: ConnectionId,
     ) -> AppResult<Vec<DatabaseSummary>> {
         self.gateway.list_databases(connection_id).await
-    }
-
-    pub(crate) async fn load_database(
-        &self,
-        connection_id: ConnectionId,
-        database: String,
-    ) -> AppResult<Catalog> {
-        self.gateway.load_database(connection_id, database).await
     }
 
     pub(crate) async fn load_database_snapshot(

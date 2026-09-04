@@ -1,10 +1,6 @@
-//! Catalog V2 cache adapter.
-//!
-//! The existing UI/CLI catalog stays wire-compatible while persistence uses the
-//! canonical protocol DTO. Every read is authorized and pinned before consulting
-//! SQLite, and every write is compare-and-swap against that same pin.
+//! Canonical catalog snapshot cache adapter.
 
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 
 use chrono::Utc;
 use dopedb_protocol::catalog as v2;
@@ -14,7 +10,7 @@ use crate::error::{AppError, AppResult};
 use crate::model::{ConnectionProfile, Engine};
 use crate::store::{CacheWriteOutcome, Store};
 
-use super::{Catalog, Column, DatabaseObject, ForeignKey, Index, Table};
+use super::{Catalog, ForeignKey, Table};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CatalogReadMode {
@@ -23,30 +19,6 @@ pub(crate) enum CatalogReadMode {
     CacheFirst,
     /// Delete the current scoped cache first, introspect live, then write through.
     Refresh,
-}
-
-/// Load a legacy catalog while retaining a caller-owned, already authorized scope.
-///
-/// Terminal callers must use this rather than pinning a second time: a queued scope
-/// mutation can otherwise turn the nested read-pin into a writer-preference deadlock.
-pub(crate) async fn load_catalog_in_context(
-    store: &Store,
-    context: ConnectionContext,
-    mode: CatalogReadMode,
-) -> AppResult<Catalog> {
-    if mode == CatalogReadMode::CacheFirst {
-        if let Some(snapshot) = store.get_catalog_if_current(context.pin()).await? {
-            return Ok(from_snapshot(&snapshot));
-        }
-    } else if mode == CatalogReadMode::Refresh {
-        // The context's scope guard prevents a workspace/account switch between this
-        // delete and the subsequent CAS write.
-        store
-            .clear_schema_cache(context.pin().connection_id)
-            .await?;
-    }
-
-    introspect_and_maybe_store(store, context).await
 }
 
 /// Load a canonical snapshot while retaining a caller-owned, already authorized scope.
@@ -85,28 +57,6 @@ pub(crate) async fn load_catalog_snapshot_in_context(
         }
     }
     Ok(snapshot)
-}
-
-async fn introspect_and_maybe_store(
-    store: &Store,
-    context: ConnectionContext,
-) -> AppResult<Catalog> {
-    let lease = context.connect().await?;
-    let catalog = super::introspect(lease.live()).await?;
-    if lease.pin().profile.database.trim().is_empty() {
-        // Catalog V2 deliberately requires a stable database identity. Engines that
-        // allow an omitted default database remain usable, but are not persisted
-        // until that identity can be represented without inventing one.
-        return Ok(catalog);
-    }
-
-    let snapshot = snapshot_from_catalog(&lease.pin().profile, &catalog)?;
-    match store.put_catalog_if_current(lease.pin(), &snapshot).await? {
-        CacheWriteOutcome::Stored | CacheWriteOutcome::NotPersisted => Ok(catalog),
-        CacheWriteOutcome::Stale => Err(AppError::Blocked {
-            reason: "workspace or connection access changed; retry schema loading".into(),
-        }),
-    }
 }
 
 pub(crate) fn snapshot_from_catalog(
@@ -336,151 +286,6 @@ fn table_to_relation(table: &Table) -> v2::Relation {
     }
 }
 
-fn from_snapshot(snapshot: &v2::CatalogSnapshot) -> Catalog {
-    Catalog {
-        tables: snapshot.relations().iter().map(relation_to_table).collect(),
-        objects: snapshot
-            .routines()
-            .iter()
-            .map(|routine| DatabaseObject {
-                schema: routine.object.namespace.clone(),
-                name: routine.object.name.clone(),
-                kind: routine
-                    .native_kind
-                    .clone()
-                    .unwrap_or_else(|| "function".into()),
-                detail: routine.detail.clone().or_else(|| {
-                    (!routine.arguments.is_empty()).then(|| routine.arguments.join(", "))
-                }),
-                parent: routine.parent.clone(),
-                native_id: routine.object.native_id.clone(),
-                arguments: routine.arguments.clone(),
-                return_type: routine.return_type.clone(),
-                language: routine.language.clone(),
-                comment: routine.comment.clone(),
-            })
-            .chain(snapshot.other_objects().iter().map(|object| {
-                DatabaseObject {
-                    schema: object.object.namespace.clone(),
-                    name: object.object.name.clone(),
-                    kind: object
-                        .native_kind
-                        .clone()
-                        .unwrap_or_else(|| object_kind_name(object.object.kind).into()),
-                    detail: object.detail.clone().or_else(|| object.comment.clone()),
-                    parent: object.parent.clone(),
-                    native_id: object.object.native_id.clone(),
-                    arguments: Vec::new(),
-                    return_type: None,
-                    language: None,
-                    comment: object.comment.clone(),
-                }
-            }))
-            .collect(),
-    }
-}
-
-fn relation_to_table(relation: &v2::Relation) -> Table {
-    let primary_columns = relation
-        .constraints
-        .iter()
-        .filter(|constraint| constraint.kind == v2::ConstraintKind::Primary)
-        .flat_map(|constraint| constraint.columns.iter().cloned())
-        .collect::<HashSet<_>>();
-    let foreign_keys = relation
-        .constraints
-        .iter()
-        .filter(|constraint| constraint.kind == v2::ConstraintKind::Foreign)
-        .flat_map(|constraint| {
-            let referenced = constraint.referenced_relation.as_ref();
-            constraint
-                .columns
-                .iter()
-                .enumerate()
-                .filter_map(move |(index, column)| {
-                    let referenced = referenced?;
-                    Some(ForeignKey {
-                        name: Some(constraint.name.clone()),
-                        ordinal: u32::try_from(index + 1).unwrap_or(u32::MAX),
-                        column: column.clone(),
-                        references_table: referenced.name.clone(),
-                        references_column: constraint
-                            .referenced_columns
-                            .get(index)
-                            .cloned()
-                            .unwrap_or_default(),
-                        references_schema: referenced.namespace.clone(),
-                        update_action: constraint.update_action.clone(),
-                        delete_action: constraint.delete_action.clone(),
-                        deferrable: constraint.deferrable,
-                        validated: constraint.validated,
-                    })
-                })
-        })
-        .collect();
-    Table {
-        database: None,
-        schema: relation.object.namespace.clone(),
-        name: relation.object.name.clone(),
-        kind: object_kind_name(relation.object.kind).into(),
-        native_id: relation.object.native_id.clone(),
-        comment: relation.comment.clone(),
-        partition_parent: relation.partition_parent.clone(),
-        partition_children: relation.partition_children.clone(),
-        columns: relation
-            .columns
-            .iter()
-            .map(|column| Column {
-                name: column.name.clone(),
-                data_type: column.native_type.clone(),
-                nullable: column.nullable,
-                pk: primary_columns.contains(&column.name),
-                ordinal: column.ordinal,
-                length: column.length,
-                precision: column.precision,
-                scale: column.scale,
-                default_expression: column.default_expression.clone(),
-                generated_expression: column.generated_expression.clone(),
-                identity: column.identity,
-                auto_increment: column.auto_increment,
-                collation: column.collation.clone(),
-                comment: column.comment.clone(),
-            })
-            .collect(),
-        foreign_keys,
-        constraints: relation
-            .constraints
-            .iter()
-            .filter(|constraint| {
-                !matches!(
-                    constraint.kind,
-                    v2::ConstraintKind::Primary | v2::ConstraintKind::Foreign
-                )
-            })
-            .cloned()
-            .collect(),
-        indexes: relation
-            .indexes
-            .iter()
-            .map(|index| Index {
-                name: index.name.clone(),
-                columns: index
-                    .keys
-                    .iter()
-                    .filter_map(|key| key.column.clone())
-                    .collect(),
-                unique: index.unique,
-                method: index.method.clone(),
-                keys: index.keys.clone(),
-                included_columns: index.included_columns.clone(),
-                predicate: index.predicate.clone(),
-                valid: index.valid,
-            })
-            .collect(),
-        row_estimate: relation.row_estimate,
-    }
-}
-
 const fn engine(engine: Engine) -> v2::DatabaseEngine {
     match engine {
         Engine::Postgres => v2::DatabaseEngine::Postgres,
@@ -501,19 +306,6 @@ fn object_kind(kind: &str) -> v2::ObjectKind {
         "type" => v2::ObjectKind::Type,
         "trigger" => v2::ObjectKind::Trigger,
         _ => v2::ObjectKind::Other,
-    }
-}
-
-const fn object_kind_name(kind: v2::ObjectKind) -> &'static str {
-    match kind {
-        v2::ObjectKind::Table => "table",
-        v2::ObjectKind::View => "view",
-        v2::ObjectKind::MaterializedView => "materialized_view",
-        v2::ObjectKind::Routine => "function",
-        v2::ObjectKind::Sequence => "sequence",
-        v2::ObjectKind::Type => "type",
-        v2::ObjectKind::Trigger => "trigger",
-        v2::ObjectKind::Other => "other",
     }
 }
 

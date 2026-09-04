@@ -94,20 +94,6 @@ pub(super) async fn auth_user(user_id: &str) -> AppResult<Option<WorkspaceAuthUs
     Ok(user)
 }
 
-/// One-time upgrade from the old fixed credential item. The token is validated before
-/// it is copied to its account-specific key, so corrupt legacy state is never retained.
-pub(super) async fn migrate_legacy_session() -> AppResult<Option<WorkspaceAuthUser>> {
-    let Some(token) = fetch_legacy_workspace_session().await?.map(Zeroizing::new) else {
-        return Ok(None);
-    };
-    let user = session_for_token(token.as_str()).await?;
-    if let Some(user) = user.as_ref() {
-        store_workspace_session(&user.id, token.as_str()).await?;
-    }
-    delete_legacy_workspace_session().await?;
-    Ok(user)
-}
-
 /// Revoke the current Better Auth session when the control plane is reachable, then
 /// always remove the native client's credential. Remote revocation is best-effort so
 /// losing the network cannot trap someone in a locally signed-in desktop session.

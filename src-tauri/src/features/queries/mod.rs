@@ -42,11 +42,11 @@ pub(crate) use adapters::{
 use adapters::{StoredDesktopSqlPayload, DESKTOP_SQL_PAYLOAD_SCHEMA_VERSION};
 use application::QueryUseCases;
 pub(crate) use domain::{
-    project_query_service_session_snapshot, validate_query_service_session_snapshot,
-    DesktopPreviewIntent, DesktopSqlInspectionRequest, DesktopSqlProposalRequest,
-    DesktopSqlResultExportFormat, DesktopSqlResultExportProgress, DesktopSqlResultExportReceipt,
-    DesktopSqlStreamBatch, DesktopSqlStreamReady, DesktopSqlStreamSinkError,
-    QueryServiceSessionSnapshot, TerminalQueryPlanRequest, TerminalSqlProposalRequest,
+    validate_query_service_session_snapshot, DesktopPreviewIntent, DesktopSqlInspectionRequest,
+    DesktopSqlProposalRequest, DesktopSqlResultExportFormat, DesktopSqlResultExportProgress,
+    DesktopSqlResultExportReceipt, DesktopSqlStreamBatch, DesktopSqlStreamReady,
+    DesktopSqlStreamSinkError, QueryServiceSessionSnapshot, TerminalQueryPlanRequest,
+    TerminalSqlProposalRequest,
 };
 pub(crate) use manual_transaction::{
     ManualExecutionTarget, ManualScriptRequest, ManualTransactionRuntime, ManualTransactionStatus,

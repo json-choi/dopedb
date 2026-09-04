@@ -416,11 +416,6 @@ impl Store {
                 reason: "the Agent Knowledge database scope is invalid".into(),
             });
         }
-        let expected_project_id = if scope.project_id.is_nil() {
-            String::new()
-        } else {
-            scope.project_id.to_string()
-        };
         let authority_active: bool = sqlx::query_scalar(
             "SELECT EXISTS(
                 SELECT 1
@@ -438,7 +433,7 @@ impl Store {
                   AND current.revision = binding.connection_revision
                   AND current.deleted_at IS NULL
                   AND project.workspace_id = ?5
-                  AND (?6 = '' OR environment.project_id = ?6)
+                  AND environment.project_id = ?6
             )",
         )
         .bind(scope.project_environment_id.to_string())
@@ -449,7 +444,7 @@ impl Store {
         .bind(scope.authority_connection_id.to_string())
         .bind(scope.authority_connection_revision)
         .bind(expected_workspace_id.to_string())
-        .bind(expected_project_id)
+        .bind(scope.project_id.to_string())
         .fetch_one(self.pool())
         .await?;
         if !authority_active {

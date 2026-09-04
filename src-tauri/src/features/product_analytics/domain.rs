@@ -520,7 +520,6 @@ pub(crate) fn assert_product_analytics_contract() {
         "knowledge_source_sync_completed",
         "agent_session_initialization_completed",
         "agent_turn_completed",
-        "analysis_article_proposal_completed",
         "analysis_article_run_completed",
         "workspace_membership_ready",
         "shared_connection_access_ready",
@@ -535,9 +534,7 @@ pub(crate) fn assert_product_analytics_contract() {
             .expect("shared product analytics event has a name");
         assert_eq!(name, expected_name);
         let property_keys: &[&str] = match name {
-            "desktop_installation_ready"
-            | "workspace_scope_ready"
-            | "analysis_article_proposal_completed" => &[],
+            "desktop_installation_ready" | "workspace_scope_ready" => &[],
             "workspace_authentication_completed" => &["outcome"],
             "knowledge_environment_created" => &["creationKind"],
             "connection_verification_completed" => &["outcome", "engine", "credentialMode", "ssh"],
@@ -579,7 +576,13 @@ pub(crate) fn assert_product_analytics_contract() {
         event["occurredAt"] = serde_json::to_value(now).expect("current timestamp serializes");
     }
     assert_eq!(golden["events"][2]["workspaceKind"], "personal");
-    assert_eq!(golden["events"][13]["workspaceKind"], "team");
+    assert_eq!(
+        golden["events"]
+            .as_array()
+            .and_then(|events| events.last())
+            .and_then(|event| event["workspaceKind"].as_str()),
+        Some("team")
+    );
     let expected_public_wire = golden.clone();
     golden["consentGeneration"] = serde_json::json!(1);
     let golden_batch: ProductAnalyticsBatchV1 =

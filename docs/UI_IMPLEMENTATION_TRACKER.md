@@ -14,6 +14,10 @@ runtime과 성능 수치로 수행한다.
 
 ## 화면 상태
 
+MVP의 provider import는 항상 새 managed connection을 만든다. 기존
+member-local connection을 선택해 ID와 참조를 보존하는 전환 단계는 UI/API 범위에
+없다. 이미 관리형인 exact DB의 provider 권한 복구는 별도 현재 기능으로 유지한다.
+
 | 영역 | 상태 | 현재 소유자 | 남은 acceptance gap |
 | --- | --- | --- | --- |
 | App shell/chrome | `complete` | `features/appShell`, design-system chrome primitives | packaged macOS·Windows에서 keyboard launcher와 compact window를 정기 확인 |

@@ -237,7 +237,7 @@ fn validate_article(article: &AnalysisArticleRecord, expected_id: Option<Uuid>) 
     if expected_id.is_some_and(|id| id != article.id)
         || article.environment_revision < 1
         || article.revision < 1
-        || article.connections.is_empty()
+        || article.connection_revision < 1
         || article.definition.version != 3
     {
         return Err(AppError::Network(
@@ -264,7 +264,7 @@ fn validate_run(run: &RemoteAnalysisRun, article_id: Uuid, run_id: Option<Uuid>)
         || matches!(
             run.state,
             AnalysisRunState::Queued | AnalysisRunState::Running
-        ) && !matches!(run.runner_capability_generation, Some(generation) if generation > 0)
+        ) && run.runner_capability_generation == 0
         || run
             .result_hash
             .as_ref()

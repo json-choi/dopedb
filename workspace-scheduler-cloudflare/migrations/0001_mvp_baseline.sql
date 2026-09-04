@@ -1,4 +1,6 @@
-CREATE TABLE workspace_background_task_v2 (
+PRAGMA foreign_keys = ON;
+
+CREATE TABLE workspace_background_task (
   task TEXT PRIMARY KEY NOT NULL
     CHECK (task IN ('credential', 'maintenance')),
   due_at_ms INTEGER NOT NULL CHECK (due_at_ms >= 0),
@@ -17,27 +19,12 @@ CREATE TABLE workspace_background_task_v2 (
   )
 ) WITHOUT ROWID, STRICT;
 
--- The old maintenance task covered credentials and retention together. Copy
--- its earliest due time into both new queues so an in-flight production task
--- is drained once after migration; the obsolete Knowledge row is discarded.
-INSERT INTO workspace_background_task_v2 (
-  task, due_at_ms, lease_until_ms, lease_token, generation,
-  failure_count, last_error_kind, updated_at_ms
-)
-SELECT 'credential', due_at_ms, 0, NULL, generation + 1, 0, NULL, updated_at_ms
-FROM workspace_background_task_v1
-WHERE task = 'maintenance'
-UNION ALL
-SELECT 'maintenance', due_at_ms, 0, NULL, generation + 1, 0, NULL, updated_at_ms
-FROM workspace_background_task_v1
-WHERE task = 'maintenance';
-
-INSERT OR IGNORE INTO workspace_background_task_v2 (
+-- Deployment explicitly kicks both tasks after the Vercel receipt contract is
+-- live. A far-future seed prevents a newly deployed Worker from touching the
+-- workspace database before that hand-off has completed.
+INSERT INTO workspace_background_task (
   task, due_at_ms, lease_until_ms, lease_token, generation,
   failure_count, last_error_kind, updated_at_ms
 ) VALUES
   ('credential', 32503680000000, 0, NULL, 0, 0, NULL, 0),
   ('maintenance', 32503680000000, 0, NULL, 0, 0, NULL, 0);
-
-DROP TABLE workspace_background_task_v1;
-ALTER TABLE workspace_background_task_v2 RENAME TO workspace_background_task_v1;

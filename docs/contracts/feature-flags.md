@@ -4,7 +4,7 @@
 
 | Flag | 활성화 전 gate |
 | --- | --- |
-| `operation_runtime_v1` | migration/recovery/exact approval 검증 |
+| `operation_runtime_v1` | recovery/exact approval 검증 |
 | `local_broker_v1` | peer identity, framing limit, stale discovery 검증 |
 | `cli_v1` | protocol/secret snapshot/platform packaging 검증 |
 | `skill_manager_v1` | atomic install과 user-modified 보존 검증 |
@@ -18,8 +18,8 @@
 | `workspace_resources_v1` | revision/conflict/RBAC 검증 |
 | `realtime_collaboration_v1` | short-lived token/reconnect/compaction 검증 |
 
-request field나 Agent/Plugin이 flag를 켤 수 없다. migration은 flag와 무관하게
-idempotent하고 이전 binary가 모르는 새 table을 안전하게 무시할 수 있어야 한다.
+request field나 Agent/Plugin이 flag를 켤 수 없다. 로컬 저장소는 단일 MVP
+기준선만 지원하며 과거 개발 스키마는 자동 변환하지 않고 명시적으로 거부한다.
 
 현재 desktop composition root는 검증을 마친 platform flag를 명시적으로
 활성화한다. `plugins_v1`, `workspace_resources_v1`,
@@ -30,7 +30,6 @@ SQL 문서 기능은 autosave, crash recovery, optimistic conflict 경로를 검
 분기였던 이전 rollout flag는 제거했으며 새 adapter가 과거 경로로 되돌아가는
 fallback도 제공하지 않는다.
 
-현재 UI/CLI의 legacy `Catalog` wire를 보존하는 내부 `schema_cache_v2` adapter는
-권한 scope와 cache CAS를 강화한 졸업된 persistence 기반이므로 이 flag로 되돌리지
-않는다. 이 flag는 향후 canonical `CatalogSnapshot`을 새 CLI/ERD/DDL consumer에
-노출하는 경로를 gate한다.
+현재 UI와 CLI는 canonical `CatalogSnapshot`과 권한 범위가 고정된
+`catalog_cache`만 사용한다. 이 flag는 새 CLI/ERD/DDL consumer를 노출하는 경로를
+gate하며 과거 Catalog wire나 cache adapter를 되살리지 않는다.

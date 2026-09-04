@@ -8,15 +8,9 @@ use crate::error::AppResult;
 use crate::kernel::identity::ConnectionId;
 use crate::kernel::TerminalAuthority;
 
-use super::domain::{Catalog, CatalogOverview, CatalogReadPolicy, DatabaseSummary};
+use super::domain::{CatalogOverview, CatalogReadPolicy, DatabaseSummary};
 
 pub(crate) trait CatalogGatewayPort: Clone + Send + Sync + 'static {
-    fn load(
-        &self,
-        connection_id: ConnectionId,
-        policy: CatalogReadPolicy,
-    ) -> impl Future<Output = AppResult<Catalog>> + Send;
-
     fn load_snapshot(
         &self,
         connection_id: ConnectionId,
@@ -32,12 +26,6 @@ pub(crate) trait CatalogGatewayPort: Clone + Send + Sync + 'static {
         &self,
         connection_id: ConnectionId,
     ) -> impl Future<Output = AppResult<Vec<DatabaseSummary>>> + Send;
-
-    fn load_database(
-        &self,
-        connection_id: ConnectionId,
-        database: String,
-    ) -> impl Future<Output = AppResult<Catalog>> + Send;
 
     fn load_database_snapshot(
         &self,

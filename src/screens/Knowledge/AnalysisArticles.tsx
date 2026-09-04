@@ -32,7 +32,17 @@ function cellText(value: string | number | boolean | null) {
 function sourceLabel(article: AnalysisArticleRecord) {
   if (article.definition.source === "dopedb.acp.claude") return "Claude";
   if (article.definition.source === "dopedb.acp.codex") return "Codex";
-  return article.definition.source === "migration" ? "Migrated" : "Human";
+  return "Human";
+}
+
+function connectionLabel(
+  article: AnalysisArticleRecord,
+  bindings: readonly EnvironmentConnection[],
+) {
+  const binding = bindings.find(
+    (candidate) => candidate.remoteConnectionId === article.connectionId,
+  );
+  return binding ? binding.alias || binding.connectionName : article.connectionId;
 }
 
 export default function AnalysisArticles({
@@ -131,7 +141,7 @@ export default function AnalysisArticles({
                   <span className="tw:font-mono tw:text-2xs tw:text-muted-foreground">r{selected.revision}</span>
                 </div>
                 <span className="tw:text-xs tw:text-muted-foreground">
-                  {selected.connections[0]?.alias} · {t("analysis.manualOnly")}
+                  {connectionLabel(selected, bindings)} · {t("analysis.manualOnly")}
                 </span>
               </div>
               <div className="ds-control-row tw:flex tw:flex-wrap tw:items-center tw:justify-end tw:gap-1">
@@ -172,6 +182,7 @@ export default function AnalysisArticles({
                   ranAt={controller.localResult?.finishedAt ?? null}
                   showPublication={showPublication}
                   scopeKey={scopeKey}
+                  connectionLabel={connectionLabel(selected, bindings)}
                 />
               ) : (
                 <HistoryView
@@ -205,6 +216,7 @@ function ArticleDocument({
   ranAt,
   showPublication,
   scopeKey,
+  connectionLabel,
 }: {
   article: AnalysisArticleRecord;
   result: AnalysisResultData | null;
@@ -212,6 +224,7 @@ function ArticleDocument({
   ranAt: string | null;
   showPublication: boolean;
   scopeKey: string;
+  connectionLabel: string;
 }) {
   const { t } = useI18n();
   const query = article.definition.query;
@@ -225,7 +238,7 @@ function ArticleDocument({
       <section className="tw:grid tw:gap-3 tw:border-t tw:border-border-subtle tw:pt-5">
         <div className="tw:flex tw:flex-wrap tw:items-center tw:justify-between tw:gap-2">
           <h2 className="tw:m-0 tw:text-sm tw:font-semibold">{t("analysis.savedQuery")}</h2>
-          <span className="tw:text-xs tw:text-muted-foreground">{article.connections[0]?.alias}</span>
+          <span className="tw:text-xs tw:text-muted-foreground">{connectionLabel}</span>
         </div>
         <pre className="tw:m-0 tw:max-h-72 tw:overflow-auto tw:rounded-surface tw:border tw:border-border-subtle tw:bg-surface-inset tw:p-4 tw:text-xs tw:leading-relaxed"><code>{query.sql}</code></pre>
       </section>

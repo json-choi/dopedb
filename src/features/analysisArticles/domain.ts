@@ -1,16 +1,8 @@
 export type AnalysisArticleSource =
   | "human"
   | "dopedb.acp.claude"
-  | "dopedb.acp.codex"
-  | "migration";
+  | "dopedb.acp.codex";
 export type AnalysisCellValue = string | number | boolean | null;
-
-export type AnalysisArticleConnection = {
-  connectionId: string;
-  connectionRevision: number;
-  role: string;
-  alias: string;
-};
 
 export type AnalysisColumn = {
   name: string;
@@ -33,7 +25,6 @@ export type AnalysisColumn = {
 export type AnalysisQueryNode = {
   id: string;
   title: string;
-  connectionRole: string;
   sql: string;
   maxRows: number;
   maxBytes: number;
@@ -52,9 +43,8 @@ export type SharedAnalysisArticleCreate = {
   id: string;
   projectEnvironmentId: string;
   environmentRevision: number;
-  sourceKnowledgeGrantId: string | null;
-  graphRevisionIds: string[];
-  connections: AnalysisArticleConnection[];
+  connectionId: string;
+  connectionRevision: number;
   definition: AnalysisArticleDefinition;
 };
 

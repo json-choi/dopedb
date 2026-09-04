@@ -1,2 +1,0 @@
-DROP INDEX "workspace_control"."knowledge_environment_connection_active_idx";--> statement-breakpoint
-CREATE UNIQUE INDEX "knowledge_environment_connection_active_idx" ON "workspace_control"."knowledge_environment_connection" USING btree ("organization_id","connection_id") WHERE "workspace_control"."knowledge_environment_connection"."revoked_at" IS NULL;

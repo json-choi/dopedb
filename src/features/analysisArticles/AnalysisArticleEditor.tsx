@@ -55,7 +55,7 @@ export function AnalysisArticleEditor({
   const [title, setTitle] = useState(article.definition.title);
   const [html, setHtml] = useState(article.definition.html);
   const [sql, setSql] = useState(initialQuery.sql);
-  const [connectionId, setConnectionId] = useState(article.connections[0]?.connectionId ?? "");
+  const [connectionId, setConnectionId] = useState(article.connectionId);
   const [error, setError] = useState<string | null>(null);
   const usableBindings = useMemo(
     () => bindings.filter((binding) => binding.remoteConnectionId && !binding.stale),
@@ -71,7 +71,6 @@ export function AnalysisArticleEditor({
     if (!normalizedSql) return setError(t("analysis.editorQueryRequired"));
     const query: AnalysisQueryNode = {
       ...initialQuery,
-      connectionRole: binding.role,
       sql: normalizedSql,
     };
     setError(null);
@@ -79,14 +78,8 @@ export function AnalysisArticleEditor({
       id: article.id,
       projectEnvironmentId: article.projectEnvironmentId,
       environmentRevision: article.environmentRevision,
-      sourceKnowledgeGrantId: null,
-      graphRevisionIds: [],
-      connections: [{
-        connectionId: binding.remoteConnectionId,
-        connectionRevision: binding.connectionContentRevision,
-        role: binding.role,
-        alias: binding.alias || binding.connectionName,
-      }],
+      connectionId: binding.remoteConnectionId,
+      connectionRevision: binding.connectionContentRevision,
       definition: simpleDefinition(article, normalizedTitle, html, query),
     });
   };

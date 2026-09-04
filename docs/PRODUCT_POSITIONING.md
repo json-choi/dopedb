@@ -161,8 +161,8 @@ open roadmap work is complete:
 - general provider inventory/import and all revoke/drift reconciliation;
 - full bidirectional resource sync, KMS wrapping, backup/restore, or self-service
   workspace deletion;
-- packaged two-member production validation of the simplified Analysis Article
-  migration, manual rerun recovery, and fixed public HTML publication flow;
+- packaged two-member production validation of the current Analysis Article
+  contract, manual rerun recovery, and fixed public HTML publication flow;
 - the remaining Local Folder Project Knowledge and any paid/experimental graph product;
   GitHub exact-commit source browsing is the default source path, not a completed graph;
 - bundled Node and independently installed first-party ACP adapter distribution;

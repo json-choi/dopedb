@@ -48,8 +48,6 @@ uuid_identity!(QueryExecutionId);
 uuid_identity!(TerminalSessionId);
 uuid_identity!(AcpSessionId);
 uuid_identity!(RuntimeId);
-uuid_identity!(RetiredChatThreadId);
-uuid_identity!(RetiredChatMessageId);
 uuid_identity!(JobId);
 uuid_identity!(JobFileCapabilityId);
 uuid_identity!(JobArtifactId);

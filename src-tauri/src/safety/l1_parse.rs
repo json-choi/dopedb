@@ -54,13 +54,13 @@ impl ClassificationAnalysis {
     }
 
     /// Whether an impact preview may acquire a target read capability before a
-    /// durable approval exists. Only a clean read or direct rollback-safe DML is
+    /// durable approval exists. Only a clean read or direct DML is
     /// eligible; every fail-safe classification remains pre-connection only.
     pub fn may_touch_target_for_impact_preview(&self) -> bool {
         matches!(self.integrity, ClassificationIntegrity::ExactSingle)
             && (matches!(self.classification.kind, QueryKind::Read)
                 || (matches!(self.classification.kind, QueryKind::Write)
-                    && self.classification.rollback_safe))
+                    && self.classification.direct_dml))
     }
 }
 
@@ -88,7 +88,7 @@ fn fail_safe(
             no_where: false,
             tables: Vec::new(),
             notes: vec![note.into()],
-            rollback_safe: false,
+            direct_dml: false,
         },
         integrity,
     }
@@ -138,7 +138,7 @@ pub fn classify_with_integrity(sql: &str, engine: Engine) -> AppResult<Classific
                     "{} statements found — only single statements are allowed",
                     statements.len()
                 )],
-                rollback_safe: false,
+                direct_dml: false,
             },
             integrity: ClassificationIntegrity::MultipleStatements,
         });
@@ -173,10 +173,9 @@ pub fn classify_with_integrity(sql: &str, engine: Engine) -> AppResult<Classific
             no_where,
             tables,
             notes,
-            // Only direct DML has the transaction semantics required by L3's
-            // execute-and-ROLLBACK preview. Utility statements and write-like query
-            // forms stay gated but are never preview-executed.
-            rollback_safe: matches!(
+            // Utility statements and write-like query forms stay gated, while
+            // direct DML can participate in bounded table-change workflows.
+            direct_dml: matches!(
                 stmt,
                 Statement::Insert(_) | Statement::Update(_) | Statement::Delete(_)
             ),

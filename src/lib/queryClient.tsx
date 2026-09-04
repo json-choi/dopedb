@@ -22,7 +22,6 @@ const WORKSPACE_QUERY_ALLOWLIST = new Set([
   "drivers",
   "cliInstallation",
   "skillStatus",
-  "legacyMcpCleanup",
 ]);
 
 const isWorkspaceResource = (query: { queryKey: readonly unknown[] }) =>

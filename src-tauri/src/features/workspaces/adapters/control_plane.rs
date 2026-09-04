@@ -21,8 +21,7 @@ use uuid::Uuid;
 use zeroize::Zeroizing;
 
 use crate::connection::keychain::{
-    delete_legacy_workspace_session, delete_workspace_session, fetch_legacy_workspace_session,
-    fetch_workspace_session, store_workspace_session,
+    delete_workspace_session, fetch_workspace_session, store_workspace_session,
 };
 use crate::connection::{
     ConnectionAccess, GcpCloudSqlNetworkMode,
@@ -43,9 +42,7 @@ use crate::model::{
 };
 
 use super::super::ports::WorkspaceControlPlanePort;
-use authentication::{
-    auth_user, begin_login, migrate_legacy_session, poll_login, remote_workspaces, sign_out,
-};
+use authentication::{auth_user, begin_login, poll_login, remote_workspaces, sign_out};
 use connections::{
     authorize_connection, delete_connection, issue_managed_connection_lease,
     release_managed_connection_lease, remote_connections, share_connection, update_connection,
@@ -96,10 +93,6 @@ struct RemoteWorkspaceResponse {
     role: Option<String>,
 }
 
-fn default_remote_credential_mode() -> String {
-    "member_local".into()
-}
-
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RemoteConnectionResponse {
@@ -118,9 +111,7 @@ struct RemoteConnectionResponse {
     schema_group: Option<String>,
     revision: i64,
     access_mode: String,
-    #[serde(default = "default_remote_credential_mode")]
     credential_mode: String,
-    #[serde(default)]
     provider_target: Option<ConnectionProviderTarget>,
 }
 
@@ -346,10 +337,6 @@ impl WorkspaceControlPlanePort for HostedWorkspaceControlPlane {
 
     async fn auth_user(&self, account_id: &AccountId) -> AppResult<Option<WorkspaceAuthUser>> {
         auth_user(account_id.as_str()).await
-    }
-
-    async fn migrate_legacy_session(&self) -> AppResult<Option<WorkspaceAuthUser>> {
-        migrate_legacy_session().await
     }
 
     async fn sign_out(&self, account_id: &AccountId) -> AppResult<()> {

@@ -69,7 +69,6 @@ pub(super) fn skipped_preview_report(note: &str) -> PreviewReport {
     PreviewReport {
         mode: PreviewMode::Skipped,
         estimated_rows: None,
-        exact_rows: None,
         plan: None,
         note: Some(note.into()),
     }

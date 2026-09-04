@@ -39,7 +39,7 @@ function relationKey(schema: string | null, name: string) {
 
 /**
  * Keeps the live overview authoritative for relation identity while hydrating matching
- * rows from a possibly older, persisted full catalog.
+ * rows from the last persisted full-catalog snapshot.
  */
 export function catalogFromOverview(
   overview: CatalogOverview,

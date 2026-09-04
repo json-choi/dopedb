@@ -445,12 +445,7 @@ impl ConnectionContext {
             opened.live.test().await?;
             if self.access.is_mutation() {
                 let live = opened.live.sql()?;
-                if !live.has_writable_pool {
-                    return Err(AppError::Blocked {
-                        reason: "managed write credential did not open a writable pool".into(),
-                    });
-                }
-                live.write_pool.ping().await?;
+                live.rw()?.ping().await?;
             }
             if self.pin.profile.provider == Provider::PlanetScale {
                 verify_planetscale_policy(&opened.live, self.pin.profile.engine, self.access)

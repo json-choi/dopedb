@@ -17,16 +17,15 @@ New encrypted Neon credential envelopes use this explicit contract:
 
 ```text
 kind = apiKey
-schemaVersion = 1
+schemaVersion = 2
 apiKey = secret
+projectId = optional project selector
 organizationId = optional organization selector
 ```
 
-The server can still read the original unversioned API-key envelope, but always
-normalizes it to version 1 before use. That compatibility belongs only to the
-hosted encrypted envelope and is not a Desktop credential path. An OAuth
-credential kind must not be added until Neon supplies DopeDB with a production
-third-party client contract.
+The server accepts only this current envelope. Unversioned and earlier encrypted
+payloads are unsupported in the pre-MVP service. An OAuth credential kind must not
+be added until Neon supplies DopeDB with a production third-party client contract.
 
 ## Official evidence
 

@@ -37,7 +37,7 @@ WHERE NOT t.tgisinternal AND n.nspname NOT IN ('pg_catalog', 'information_schema
 ORDER BY schema_name, object_kind, object_name, object_detail
 "#;
 
-const OBJECTS_LEGACY_SQL: &str = r#"
+const OBJECTS_PRE_11_SQL: &str = r#"
 SELECT n.nspname AS schema_name,
        p.proname AS object_name,
        'function' AS object_kind,
@@ -75,6 +75,6 @@ pub(super) fn objects_sql_for_version(server_version_num: u32) -> &'static str {
     if server_version_num >= 110_000 {
         OBJECTS_SQL
     } else {
-        OBJECTS_LEGACY_SQL
+        OBJECTS_PRE_11_SQL
     }
 }

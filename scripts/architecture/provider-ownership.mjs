@@ -243,7 +243,7 @@ export function collectProviderOwnershipDiagnostics(context) {
     .map((file) => [relative(file), read(relative(file))])
     .filter(([filePath]) => filePath.endsWith(".rs") && !isTestModule(filePath))) {
     if (
-      filePath !== "src-tauri/src/store/migrations.rs" &&
+      filePath !== "src-tauri/src/store/schema.rs" &&
       !filePath.startsWith("src-tauri/src/features/providers/adapters/") &&
       /\b(?:INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+workspace_provider_(?:bindings|credential_cleanup)\b/is.test(
         source,
@@ -273,7 +273,7 @@ export function collectProviderOwnershipDiagnostics(context) {
 
   if (exists("src-tauri/src/store/provider_bindings.rs")) {
     diagnostics.push(
-      "removed legacy path returned: src-tauri/src/store/provider_bindings.rs",
+      "removed provider binding path returned: src-tauri/src/store/provider_bindings.rs",
     );
   }
 

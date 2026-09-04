@@ -110,16 +110,12 @@ pub(super) fn validate_scope(
             Ok(())
         };
     };
-    let selected = if summary.knowledge_scopes.is_empty() {
-        uuid::Uuid::from(summary.connection_id) == connection_id
-    } else {
-        summary.knowledge_scopes.iter().any(|scope| {
-            scope
-                .connections
-                .iter()
-                .any(|connection| connection.connection_id == connection_id)
-        })
-    };
+    let selected = summary.knowledge_scopes.iter().any(|scope| {
+        scope
+            .connections
+            .iter()
+            .any(|connection| connection.connection_id == connection_id)
+    });
     selected.then_some(()).ok_or_else(|| AppError::Blocked {
         reason: "editor context is outside the Agent's exact selected database set".into(),
     })
@@ -238,12 +234,6 @@ pub(crate) fn assert_editor_context_scope_contract() {
         title: "Exact editor scope".into(),
         lifecycle: AcpSessionLifecycle::Ready,
         acp_session_id: Some("official-adapter-session".into()),
-        knowledge_grant_id: None,
-        project_environment_id: None,
-        environment_revision: None,
-        knowledge_sources: Vec::new(),
-        graph_revision_ids: Vec::new(),
-        environment_connections: Vec::new(),
         knowledge_scopes: vec![KnowledgeSessionScope {
             project_id: Uuid::new_v4(),
             knowledge_grant_id: None,
@@ -291,11 +281,5 @@ pub(crate) fn assert_editor_context_scope_contract() {
     assert!(validate_scope(&selected, &summary).is_ok());
 
     summary.knowledge_scopes.clear();
-    let legacy = AcpPromptContext {
-        connection_id: Some(anchor_connection_id),
-        document_text: Some("select 1".into()),
-        ..AcpPromptContext::default()
-    };
-    assert!(validate_scope(&legacy, &summary).is_ok());
     assert!(validate_scope(&selected, &summary).is_err());
 }

@@ -7,8 +7,7 @@ use sqlx::Row;
 
 use crate::error::{AppError, AppResult};
 use crate::features::queries::{
-    project_query_service_session_snapshot, validate_query_service_session_snapshot,
-    QueryServiceSessionSnapshot,
+    validate_query_service_session_snapshot, QueryServiceSessionSnapshot,
 };
 
 use super::Store;
@@ -58,20 +57,7 @@ impl Store {
                     "persisted Services metadata does not match its snapshot".into(),
                 ));
             }
-            let (snapshot, migrated) = project_query_service_session_snapshot(validated.snapshot);
-            if migrated {
-                sqlx::query(
-                    "UPDATE query_service_sessions SET snapshot_json = ?1
-                         WHERE workspace_id = ?2 AND account_scope = ?3 AND id = ?4",
-                )
-                .bind(serde_json::to_string(&snapshot)?)
-                .bind(scope.workspace_id.to_string())
-                .bind(scope.account_scope.storage_key())
-                .bind(&validated.id)
-                .execute(&self.pool)
-                .await?;
-            }
-            snapshots.push(snapshot);
+            snapshots.push(validated.snapshot);
         }
         Ok(snapshots)
     }

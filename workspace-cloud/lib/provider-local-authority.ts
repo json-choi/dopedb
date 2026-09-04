@@ -80,24 +80,20 @@ export function projectLocalProviderAuthority(
     || !UUID.test(row.id)
     || !isSafeText(row.displayName, MAX_DISPLAY_NAME)
     || !isSafeText(grantedScope, MAX_GRANTED_SCOPE, true)
+    || (row.provider === "gcpCloudSql" && !isGcpVerificationTarget(verificationTarget))
     || (row.provider !== "gcpCloudSql" && verificationTarget !== undefined)
     || (verificationTarget !== undefined && !isGcpVerificationTarget(verificationTarget))
   ) {
     throw new Error("Invalid local provider authority projection");
   }
-  // Old GCP integration rows have no durable, secret-free target.  They must
-  // reconnect before the desktop can authorize ADC/WIF, but remain visible so
-  // the inventory itself does not disappear or require decryption to render.
-  const targetMissing = row.provider === "gcpCloudSql" && verificationTarget === undefined;
-  const status = targetMissing ? "reconnect_required" : row.status;
   return {
     id: row.id,
     provider: row.provider,
-    status,
+    status: row.status,
     generation: row.generation.toString(),
     displayName: row.displayName,
     grantedScope,
-    reconnectRequired: status === "reconnect_required",
+    reconnectRequired: row.status === "reconnect_required",
     ...(verificationTarget ? { verificationTarget } : {}),
   };
 }

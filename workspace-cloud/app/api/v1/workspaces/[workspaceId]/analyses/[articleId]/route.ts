@@ -9,7 +9,6 @@ import {
   jsonError,
   mutationAllowed,
   privateJson,
-  privateRevisionMutationJson,
 } from "../../../../../../../lib/http";
 import {
   workspaceAnalysisArticle,
@@ -134,12 +133,8 @@ export async function PATCH(request: Request, context: RouteContext) {
       409,
     );
   }
-  return privateRevisionMutationJson(request, {
-    article: publicAnalysisArticle({
-      ...updated,
-      graphRevisionIds: nextArticle.graphRevisionIds,
-      connections: nextArticle.connections,
-    }),
+  return privateJson({
+    article: publicAnalysisArticle(updated),
   });
 }
 
@@ -189,7 +184,7 @@ export async function DELETE(request: Request, context: RouteContext) {
     authority: authority(authorization),
   });
   if (!deleted) return jsonError("Analysis Article authority changed. Retry deletion.", 409);
-  return privateRevisionMutationJson(request, {
+  return privateJson({
     deleted: true,
     revision: deleted.revision,
   });

@@ -51,7 +51,7 @@ function SchemaFrame({ children }: { children: ReactNode }) {
   );
 }
 
-function legacyTableFor(tables: CatalogTable[], relation: CatalogRelationV2) {
+function catalogTableFor(tables: CatalogTable[], relation: CatalogRelationV2) {
   return (
     tables.find(
       (table) =>
@@ -82,7 +82,7 @@ export default function SchemaExplorer({
     enabled: schemaDetailsEnabled(detailsRequested, catalogScope.ready),
     select: (catalog) => filterCatalog(connection, catalog),
   });
-  // A cold legacy catalog load persists the canonical snapshot before it resolves.
+  // A cold full-catalog projection persists the canonical snapshot before it resolves.
   // Waiting for it avoids running the same live introspection twice in parallel.
   const snapshotQuery = useQuery({
     ...catalogSnapshotQuery(
@@ -140,7 +140,7 @@ export default function SchemaExplorer({
     ) ?? 0;
 
   function openRelation(relation: CatalogRelationV2) {
-    const table = legacyTableFor(
+    const table = catalogTableFor(
       catalogQueryResult.data?.tables ?? [],
       relation,
     );
@@ -319,7 +319,7 @@ export default function SchemaExplorer({
                         {selected.columns.length}
                       </span>
                     </div>
-                    {legacyTableFor(
+                    {catalogTableFor(
                       catalogQueryResult.data.tables,
                       selected,
                     ) && (

@@ -270,7 +270,7 @@ impl Store {
                         Err(error) => tracing::warn!(
                             connection_id = %profile.id,
                             %error,
-                            "ignored an invalid shared credential reference during managed migration"
+                            "ignored an invalid shared credential reference during managed synchronization"
                         ),
                     }
                 }

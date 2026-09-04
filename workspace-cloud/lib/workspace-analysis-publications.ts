@@ -39,19 +39,6 @@ function text(value: unknown, maximum: number, empty = false) {
   return empty || value.trim().length > 0 ? value : null;
 }
 
-function escapeHtmlText(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
-
-function paragraph(value: string) {
-  return value.trim() ? `<p>${escapeHtmlText(value).replaceAll("\n", "<br>")}</p>` : "";
-}
-
 export function parseAnalysisPublicationRequest(value: unknown): AnalysisPublicationRequest {
   const row = exactRecord(value, [
     "id", "runId", "slug", "replacePublicationId", "visibility", "searchIndexable",
@@ -105,43 +92,8 @@ function parseCurrentSnapshot(value: unknown): AnalysisPublicSnapshot | null {
   };
 }
 
-function migrateLegacySnapshot(value: unknown): AnalysisPublicSnapshot | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const row = value as Record<string, unknown>;
-  if (row.version !== 1) return null;
-  const title = text(row.title, 160);
-  const description = text(row.description, 2_000, true);
-  const summary = text(row.summary, 20_000, true);
-  const publishedAt = typeof row.dataAsOf === "string" ? new Date(row.dataAsOf) : null;
-  if (title === null || description === null || summary === null || !publishedAt
-    || Number.isNaN(publishedAt.valueOf()) || typeof row.searchIndexable !== "boolean"
-    || !Array.isArray(row.blocks)) return null;
-  const parts = [paragraph(description), paragraph(summary)];
-  for (const valueBlock of row.blocks.slice(0, 128)) {
-    if (!valueBlock || typeof valueBlock !== "object" || Array.isArray(valueBlock)) continue;
-    const block = valueBlock as Record<string, unknown>;
-    const config = block.config && typeof block.config === "object" && !Array.isArray(block.config)
-      ? block.config as Record<string, unknown> : null;
-    if (block.kind === "heading" && typeof config?.text === "string") {
-      parts.push(`<h2>${escapeHtmlText(config.text.slice(0, 1_000))}</h2>`);
-    } else if ((block.kind === "markdown" || block.kind === "callout")
-      && typeof config?.markdown === "string") {
-      parts.push(paragraph(config.markdown.slice(0, 100_000)));
-    } else if (block.kind === "divider") {
-      parts.push("<hr>");
-    }
-  }
-  return {
-    version: 2,
-    title,
-    html: sanitizeAnalysisArticleHtml(parts.join("")),
-    publishedAt: publishedAt.toISOString(),
-    searchIndexable: row.searchIndexable,
-  };
-}
-
 export function parseAnalysisPublicSnapshot(value: unknown): AnalysisPublicSnapshot {
-  const snapshot = parseCurrentSnapshot(value) ?? migrateLegacySnapshot(value);
+  const snapshot = parseCurrentSnapshot(value);
   if (!snapshot) throw new Error("Invalid public Analysis Article snapshot");
   if (new TextEncoder().encode(JSON.stringify(snapshot)).byteLength > 300 * 1024) {
     throw new Error("Public Analysis Article snapshot is too large");

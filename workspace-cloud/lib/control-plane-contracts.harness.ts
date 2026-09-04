@@ -13,7 +13,6 @@ import {
   parseWorkspaceSyncPage,
 } from "./control-plane-contracts";
 import { candidateConflictResolution } from "./connection-conflict-decision";
-import { privateRevisionMutationJson } from "./http";
 import {
   githubInstallationUserAuthorizationUrl,
   parseGithubInstallationUserAuthorizationState,
@@ -157,7 +156,6 @@ const analyticsPropertyKeys = {
   knowledge_source_sync_completed: ["outcome", "sourceKind", "syncReason"],
   agent_session_initialization_completed: ["outcome", "provider"],
   agent_turn_completed: ["outcome", "provider", "durationBucket"],
-  analysis_article_proposal_completed: [],
   analysis_article_run_completed: ["outcome", "trigger", "durationBucket"],
   workspace_membership_ready: ["role"],
   shared_connection_access_ready: ["accessMode", "engine"],
@@ -185,32 +183,16 @@ describe("Connection conflict decisions", () => {
 });
 
 describe("Optimistic revision transport", () => {
-  it("uses a dedicated header without triggering HTTP conditional response handling", () => {
+  it("uses only the dedicated expected-revision header", () => {
     const request = new Request("https://app.dopedb.dev/example", {
       headers: { [EXPECTED_REVISION_HEADER]: "7" },
     });
     expect(parseExpectedRevision(request)).toBe(7);
-    expect(privateRevisionMutationJson(request, { revision: 8 }).headers.get("etag"))
+    expect(parseExpectedRevision(new Request("https://app.dopedb.dev/example")))
       .toBeNull();
   });
 
-  it("keeps legacy If-Match clients working by matching their non-cacheable response ETag", () => {
-    const request = new Request("https://app.dopedb.dev/example", {
-      headers: { "if-match": '"7"' },
-    });
-    expect(parseExpectedRevision(request)).toBe(7);
-    const response = privateRevisionMutationJson(request, { revision: 8 });
-    expect(response.headers.get("etag")).toBe('"7"');
-    expect(response.headers.get("cache-control")).toBe("private, no-store");
-  });
-
-  it("rejects ambiguous or malformed expected revisions", () => {
-    expect(() => parseExpectedRevision(new Request("https://app.dopedb.dev/example", {
-      headers: {
-        [EXPECTED_REVISION_HEADER]: "7",
-        "if-match": '"8"',
-      },
-    }))).toThrow("disagree");
+  it("rejects malformed expected revisions", () => {
     expect(() => parseExpectedRevision(new Request("https://app.dopedb.dev/example", {
       headers: { [EXPECTED_REVISION_HEADER]: '"7"' },
     }))).toThrow(EXPECTED_REVISION_HEADER);
@@ -728,55 +710,6 @@ describe("Desktop control-plane contracts", () => {
     expect(managedLeaseResponse(brokeredGeneric).lease.provider).toBe("generic");
     expect(parseSharedAnalysisArticleCreate(fixture.analysisArticleCreate))
       .toEqual(fixture.analysisArticleCreate);
-    const currentArticle = structuredClone(fixture.analysisArticleCreate) as {
-      definition: {
-        source: string;
-        title: string;
-        html: string;
-        query: Record<string, unknown> & { id: string };
-      };
-    };
-    const legacyQuery = {
-      ...currentArticle.definition.query,
-      parameterIds: [],
-      cacheTtlSeconds: 0,
-    };
-    const projectedLegacy = parseSharedAnalysisArticleCreate({
-      ...currentArticle,
-      definition: {
-        version: 2,
-        source: currentArticle.definition.source,
-        title: currentArticle.definition.title,
-        html: currentArticle.definition.html,
-        question: "",
-        summary: "",
-        timezone: "UTC",
-        parameters: [],
-        queries: [legacyQuery],
-        transforms: [],
-        metrics: [],
-        blocks: [{
-          id: "query_result",
-          kind: "table",
-          title: "Query result",
-          sourceNodeId: legacyQuery.id,
-          width: 12,
-          config: {},
-        }],
-        claims: [],
-        refresh: {
-          mode: "manual",
-          cron: null,
-          timezone: "UTC",
-          runnerId: null,
-          maxStalenessSeconds: 86_400,
-          resultRetentionDays: 30,
-          shareReviewedResults: false,
-        },
-        warnings: [],
-      },
-    });
-    expect(projectedLegacy).toEqual(currentArticle);
 
     const connectionVersion = {
       name: "Primary",

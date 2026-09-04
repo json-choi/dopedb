@@ -97,12 +97,6 @@ export async function POST(request: Request, context: RouteContext) {
       426,
     );
   }
-  if (runner.status === "unbound" || runner.status === "replacement_required") {
-    return jsonError(
-      "This runner identity cannot be reused. Register again with a new Desktop device id.",
-      428,
-    );
-  }
   if (runner.status === "missing") {
     return jsonError(
       "The Analysis runner capability is unavailable. Register again with a new Desktop device id.",
@@ -124,6 +118,5 @@ export async function POST(request: Request, context: RouteContext) {
       online: true,
     },
     runnerCapability: runner.runnerCapability,
-    runnerCapabilityGeneration: runner.runnerCapabilityGeneration,
   }, { status: runner.status === "created" ? 201 : 200 });
 }

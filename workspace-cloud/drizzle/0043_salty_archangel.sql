@@ -1,4 +1,0 @@
-ALTER TABLE "workspace_control"."workspace_analysis_result_fragment" DROP CONSTRAINT "workspace_analysis_result_fragment_key";--> statement-breakpoint
-ALTER TABLE "workspace_control"."workspace_analysis_article" ADD COLUMN "live_run_id" uuid;--> statement-breakpoint
-ALTER TABLE "workspace_control"."workspace_analysis_result_fragment" ADD CONSTRAINT "workspace_analysis_result_fragment_key" CHECK ("workspace_control"."workspace_analysis_result_fragment"."key_reference" = 'dopedb-workspace-data-key'
-        AND "workspace_control"."workspace_analysis_result_fragment"."key_version" ~ '^v[1-9][0-9]*$');

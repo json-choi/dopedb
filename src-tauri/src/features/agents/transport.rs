@@ -1,17 +1,17 @@
-//! Tauri transport for ACP sessions, CLI probes, and read-only retired archives.
+//! Tauri transport for ACP sessions and CLI probes.
 
 use dopedb_protocol::AcpPluginId;
 use tauri::State;
 
 use crate::error::AppResult;
-use crate::kernel::identity::{AcpSessionId, ConnectionId, RetiredChatThreadId};
+use crate::kernel::identity::{AcpSessionId, ConnectionId};
 use crate::state::AppState;
 use uuid::Uuid;
 
 use super::acp::{AcpResourceRequest, DesktopAcpRuntimePorts};
 use super::domain::{
     AcpPromptContext, AcpSessionFocus, AcpSessionSummary, AgentCliInfo, AgentProvider,
-    AgentResourceScopeSelection, RetiredChatArchiveMessage, RetiredChatArchiveThread,
+    AgentResourceScopeSelection,
 };
 use super::runtime::{AcpPluginMutationReceipt, AcpPluginStatus};
 use crate::features::knowledge::domain::KnowledgeEnvironmentSummary;
@@ -70,36 +70,25 @@ pub fn set_agent_acp_plugin_enabled(
 }
 
 /// Start one connection-pinned session through an official ACP registry adapter.
-// The flat arguments are the stable Tauri invoke wire contract used by shipped clients.
-#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn start_agent_acp_session(
     state: State<'_, AppState>,
     app: tauri::AppHandle,
     connection_id: ConnectionId,
     provider: AgentProvider,
-    project_environment_id: Option<Uuid>,
-    environment_connection_ids: Option<Vec<Uuid>>,
-    resource_scopes: Option<Vec<AgentResourceScopeSelection>>,
+    resource_scopes: Vec<AgentResourceScopeSelection>,
     write_connection_id: Option<Uuid>,
 ) -> AppResult<AcpSessionFocus> {
     state.wait_for_post_paint_recovery().await?;
-    let has_project_resource_scope = project_environment_id.is_some()
-        || resource_scopes
-            .as_ref()
-            .is_some_and(|scopes| !scopes.is_empty());
-    if has_project_resource_scope {
-        let connection = state
-            .services
-            .knowledge
-            .pin_connection_for_read(Uuid::from(connection_id))
-            .await?;
-        if agent_session_requires_hosted_knowledge_reconciliation(
-            has_project_resource_scope,
-            connection.scope.selected_account_id.as_deref(),
-        ) {
-            state.services.knowledge.reconcile_current_access().await?;
-        }
+    let connection = state
+        .services
+        .knowledge
+        .pin_connection_for_read(Uuid::from(connection_id))
+        .await?;
+    if agent_session_requires_hosted_knowledge_reconciliation(
+        connection.scope.selected_account_id.as_deref(),
+    ) {
+        state.services.knowledge.reconcile_current_access().await?;
     }
     let ports = DesktopAcpRuntimePorts::new(app, state.agent_plugins.clone());
     state
@@ -108,8 +97,6 @@ pub async fn start_agent_acp_session(
             connection_id,
             provider,
             AcpResourceRequest {
-                project_environment_id,
-                environment_connection_ids,
                 resource_scopes,
                 write_connection_id,
             },
@@ -119,10 +106,9 @@ pub async fn start_agent_acp_session(
 }
 
 fn agent_session_requires_hosted_knowledge_reconciliation(
-    has_project_resource_scope: bool,
     selected_account_id: Option<&str>,
 ) -> bool {
-    has_project_resource_scope && selected_account_id.is_some()
+    selected_account_id.is_some()
 }
 
 /// List exact Project Environments available through this connection revision.
@@ -250,35 +236,9 @@ pub async fn detect_agent_clis(state: State<'_, AppState>) -> AppResult<Vec<Agen
 #[cfg(test)]
 pub(crate) fn assert_agent_transport_contract() {
     assert!(!agent_session_requires_hosted_knowledge_reconciliation(
-        true, None,
+        None,
     ));
     assert!(agent_session_requires_hosted_knowledge_reconciliation(
-        true,
         Some("account-1"),
     ));
-    assert!(!agent_session_requires_hosted_knowledge_reconciliation(
-        false,
-        Some("account-1"),
-    ));
-}
-
-/// List the read-only archive left by the retired in-app Agent chat.
-#[tauri::command]
-pub async fn list_retired_chat_archive_threads(
-    state: State<'_, AppState>,
-) -> AppResult<Vec<RetiredChatArchiveThread>> {
-    state.services.agents.list_retired_archive_threads().await
-}
-
-/// Read one archived thread's messages, oldest first, without any mutation path.
-#[tauri::command]
-pub async fn get_retired_chat_archive_messages(
-    state: State<'_, AppState>,
-    thread_id: RetiredChatThreadId,
-) -> AppResult<Vec<RetiredChatArchiveMessage>> {
-    state
-        .services
-        .agents
-        .retired_archive_messages(thread_id)
-        .await
 }

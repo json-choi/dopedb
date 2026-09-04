@@ -1,6 +1,6 @@
 //! Remaining cross-feature `#[tauri::command]` adapters.
-//! Migrated vertical slices own their transport beside the feature; commands stay
-//! here only until their service boundary is extracted. Every command returns an
+//! Feature vertical slices own their transport beside the feature; commands stay
+//! here only when they still span shared service boundaries. Every command returns an
 //! [`AppResult`] that serializes to `{ kind, message }` for the frontend.
 //!
 //! Safety invariants live in the service/operation path: writes, DDL, and privilege

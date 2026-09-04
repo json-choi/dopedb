@@ -91,8 +91,6 @@ const PRODUCT_EVENT_PROPERTIES = {
     provider: enumRule("claude", "codex"),
     durationBucket: durationBucketRule,
   },
-  analysis_article_proposal_completed: {
-  },
   analysis_article_run_completed: {
     outcome: enumRule("success", "failed", "cancelled", "stale"),
     trigger: enumRule("manual"),

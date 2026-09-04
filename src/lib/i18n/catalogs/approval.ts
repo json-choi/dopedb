@@ -14,9 +14,6 @@ export const approvalCatalog = defineCatalog(
     "approval.impactPreview": "Impact preview",
     "approval.impactUnknown":
       "Impact could not be estimated - affected row count unknown",
-    "approval.modeExecRollback": "executed + rolled back (exact)",
-    "approval.modeExplain": "EXPLAIN plan",
-    "approval.modeSkipped": "skipped (over threshold)",
     "approval.noWhere": "NO WHERE",
     "approval.payloadHash": "Exact payload SHA-256:",
     "approval.readOnlyAutoRunning": "Read-only - auto-running...",
@@ -52,9 +49,6 @@ export const approvalCatalog = defineCatalog(
     "approval.impactPreview": "영향 미리보기",
     "approval.impactUnknown":
       "영향을 추정할 수 없습니다 - 영향받는 행 수를 알 수 없음",
-    "approval.modeExecRollback": "실행 후 롤백됨 (정확)",
-    "approval.modeExplain": "EXPLAIN 플랜",
-    "approval.modeSkipped": "건너뜀 (임계값 초과)",
     "approval.noWhere": "NO WHERE",
     "approval.payloadHash": "정확한 페이로드 SHA-256:",
     "approval.readOnlyAutoRunning": "읽기 전용 - 자동 실행 중...",

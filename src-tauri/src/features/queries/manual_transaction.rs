@@ -180,7 +180,7 @@ impl ManualTransactionRuntime {
             .connect_to_database(pin, ConnectionAccess::Write, database)
             .await?;
         let database = start.target_database().to_owned();
-        let connection = ManualConnection::begin(&start.live().sql()?.write_pool).await?;
+        let connection = ManualConnection::begin(start.live().sql()?.rw()?).await?;
         let started_at = Utc::now();
         let session = Arc::new(ManualSession {
             transaction_id: Uuid::new_v4(),

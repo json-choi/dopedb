@@ -18,7 +18,6 @@ import { approveManualOperationIfRequired } from "../queries/runPath";
 import { analyzeRunSignal, localizeRunSignal } from "./runSignal";
 
 const safety: SafetySettings = {
-  requireApproval: true,
   allowWrites: false,
   allowSchemaChanges: false,
   wrapWritesInTx: true,

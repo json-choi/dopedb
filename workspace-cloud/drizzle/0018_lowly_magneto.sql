@@ -1,4 +1,0 @@
-ALTER TABLE "workspace_control"."workspace_provider_operation" DROP CONSTRAINT "provider_operation_kind";--> statement-breakpoint
-ALTER TABLE "workspace_control"."workspace_provider_operation" ADD CONSTRAINT "provider_operation_kind" CHECK ("workspace_control"."workspace_provider_operation"."kind" IN (
-        'neon.branch.create', 'neon.branch.delete', 'neon.branch.switch'
-      ));

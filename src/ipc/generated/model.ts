@@ -59,11 +59,7 @@ credentialMode: WorkspaceCredentialMode,
  */
 providerTarget: ConnectionProviderTarget | null, };
 export type SafetySettings = {
-/**
- * Legacy persisted compatibility field. Exact Operation approval is always
- * required for target mutations regardless of this value.
- */
-requireApproval: boolean, allowWrites: boolean,
+allowWrites: boolean,
 /**
  * Device-local opt-in for DDL. This can only narrow a local owner credential
  * or a workspace-managed schema lease authorized by an exact manage grant.
@@ -101,22 +97,16 @@ statementCount: number,
 noWhere: boolean, tables: Array<string>, notes: Array<string>,
 /**
  * True ONLY for exactly one cleanly-parsed top-level INSERT/UPDATE/DELETE —
- * i.e. a statement the L3 execute+ROLLBACK preview can undo. DDL/utility
- * statements implicit-commit (RENAME/OPTIMIZE/LOAD DATA…), so ROLLBACK is a
- * no-op and the preview would take permanent effect BEFORE L4 approval.
- * Fail-safe/parse-error/multi-statement writes are false. Gates l3_preview.
+ * i.e. a statement the exact write executor can handle as bounded DML.
+ * Fail-safe, parse-error, multi-statement, DDL, and utility writes are false.
  */
-rollbackSafe: boolean, };
-export type PreviewMode = "explain" | "execRollback" | "skipped";
+directDml: boolean, };
+export type PreviewMode = "explain" | "skipped";
 export type PreviewReport = { mode: PreviewMode,
 /**
  * EXPLAIN-derived row estimate.
  */
 estimatedRows: number | null,
-/**
- * Exact rows_affected from the execute+rollback path.
- */
-exactRows: number | null,
 /**
  * Raw/formatted plan text, if captured.
  */
@@ -158,6 +148,6 @@ export type HistoryEntry = { id: string, connectionId: string, sql: string, kind
  */
 status: string, rowCount: number | null, durationMs: number | null, error: string | null, executedAt: string,
 /**
- * "agent" | "manual" | "analysis_article" | "migration" | surface id.
+ * "agent" | "manual" | "analysis_article" | surface id.
  */
 origin: string, };

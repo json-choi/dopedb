@@ -261,10 +261,6 @@ pub struct EnvironmentRevisionScope {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct EnvironmentContextResult {
     pub project_id: Uuid,
-    /// Legacy primary Environment fields remain as a compact compatibility
-    /// projection. `environments` is authoritative for a multi-resource set.
-    pub project_environment_id: Uuid,
-    pub environment_revision: u64,
     pub environments: Vec<EnvironmentRevisionScope>,
     pub connections: Vec<EnvironmentConnectionScope>,
     pub sources: Vec<EnvironmentSourceScope>,

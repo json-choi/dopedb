@@ -396,7 +396,7 @@ export function checkFrontendArchitecture(harness) {
     }
   }
 
-  // These migrated screens are presentation leaves. Their feature controllers own
+  // These screens are presentation leaves. Their feature controllers own
   // server cache, IPC commands, streaming, and mutation workflows; keep both sides
   // below the reviewed size ratchet so responsibility cannot silently flow back.
   for (const boundary of [

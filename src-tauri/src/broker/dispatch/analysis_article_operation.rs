@@ -123,15 +123,11 @@ fn article_create(
     let environment_revision =
         i64::try_from(scope.environment_revision).map_err(|_| ErrorCode::InvalidRequest)?;
     let definition = definition.with_source(source);
-    let query_role = definition.query.connection_role.as_str();
     let scoped_connection = scope
         .connections
         .iter()
         .find(|connection| connection.connection_id == connection_id)
         .ok_or(ErrorCode::ScopeDenied)?;
-    if scoped_connection.role != query_role {
-        return Err(ErrorCode::ScopeDenied);
-    }
     let remote_connection_id = scoped_connection
         .remote_connection_id
         .ok_or(ErrorCode::ScopeDenied)?;
@@ -139,14 +135,8 @@ fn article_create(
         id: article_id,
         project_environment_id: scope.project_environment_id,
         environment_revision,
-        source_knowledge_grant_id: None,
-        graph_revision_ids: Vec::new(),
-        connections: vec![dopedb_protocol::AnalysisArticleConnection {
-            connection_id: remote_connection_id,
-            connection_revision: scoped_connection.connection_content_revision,
-            role: scoped_connection.role.clone(),
-            alias: scoped_connection.alias.clone(),
-        }],
+        connection_id: remote_connection_id,
+        connection_revision: scoped_connection.connection_content_revision,
         definition,
     };
     article
@@ -233,7 +223,9 @@ async fn update_article(
         arguments.definition,
         arguments.article_id,
     )?;
-    if existing.connections != article.connections {
+    if existing.connection_id != article.connection_id
+        || existing.connection_revision != article.connection_revision
+    {
         return Err(ErrorCode::OperationConflict);
     }
     let updated = dispatcher
@@ -278,7 +270,8 @@ async fn verify_article(
             article_id,
             article_revision: 1,
             definition: article.definition,
-            connections: article.connections,
+            connection_id: article.connection_id,
+            connection_revision: article.connection_revision,
             run_id,
             persist_local_result: false,
         })

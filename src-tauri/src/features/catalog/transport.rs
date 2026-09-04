@@ -9,26 +9,6 @@ use crate::state::AppState;
 use super::{CatalogOverview, CatalogReadPolicy, CatalogSnapshot, DatabaseSummary};
 
 #[tauri::command]
-pub async fn get_schema(state: State<'_, AppState>, id: ConnectionId) -> AppResult<String> {
-    let catalog = state
-        .services
-        .catalog
-        .load(id, CatalogReadPolicy::CacheFirst)
-        .await?;
-    Ok(serde_json::to_string(&catalog)?)
-}
-
-#[tauri::command]
-pub async fn refresh_schema(state: State<'_, AppState>, id: ConnectionId) -> AppResult<String> {
-    let catalog = state
-        .services
-        .catalog
-        .load(id, CatalogReadPolicy::Refresh)
-        .await?;
-    Ok(serde_json::to_string(&catalog)?)
-}
-
-#[tauri::command]
 pub async fn get_catalog_snapshot(
     state: State<'_, AppState>,
     id: ConnectionId,
@@ -37,6 +17,18 @@ pub async fn get_catalog_snapshot(
         .services
         .catalog
         .load_snapshot(id, CatalogReadPolicy::CacheFirst)
+        .await
+}
+
+#[tauri::command]
+pub async fn refresh_catalog_snapshot(
+    state: State<'_, AppState>,
+    id: ConnectionId,
+) -> AppResult<CatalogSnapshot> {
+    state
+        .services
+        .catalog
+        .load_snapshot(id, CatalogReadPolicy::Refresh)
         .await
 }
 
@@ -55,16 +47,6 @@ pub async fn list_connection_databases(
     id: ConnectionId,
 ) -> AppResult<Vec<DatabaseSummary>> {
     state.services.catalog.list_databases(id).await
-}
-
-#[tauri::command]
-pub async fn get_database_schema(
-    state: State<'_, AppState>,
-    id: ConnectionId,
-    database: String,
-) -> AppResult<String> {
-    let catalog = state.services.catalog.load_database(id, database).await?;
-    Ok(serde_json::to_string(&catalog)?)
 }
 
 #[tauri::command]

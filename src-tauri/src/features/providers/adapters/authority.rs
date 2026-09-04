@@ -190,15 +190,6 @@ fn parse_integration(value: RemoteIntegration) -> AppResult<ProviderIntegrationS
                 instance_id,
             }),
         ),
-        // A pre-projection GCP integration has no durable, secret-free target.
-        // Cloud exposes that as reconnect-required rather than removing the
-        // integration; accepting only this exact state keeps one bad legacy
-        // row from making the complete inventory unavailable.
-        (LocalProvider::GcpCloudSql, None)
-            if value.status == "reconnect_required" && value.reconnect_required =>
-        {
-            None
-        }
         (LocalProvider::GcpCloudSql, _) => {
             return Err(AppError::Network(
                 "provider authority response is invalid".into(),

@@ -152,7 +152,7 @@ export function checkAnalysisArchitecture(harness) {
     "workspace-cloud/lib/workspace-analysis-runs.ts",
   ];
   const retiredAnalysisFieldPattern =
-    /\b(?:parameterIds|parameter_ids|parameterValues|parameter_values|cacheTtlSeconds|cache_ttl_seconds|backgroundAllowed|background_allowed|fragmentManifest|fragment_manifest|fragments|blockId|block_id|AnalysisArticleState|analysisArticleStates|liveRevision|live_revision|liveRunId|live_run_id)\b/;
+    /\b(?:AnalysisArticleConnection|sourceKnowledgeGrantId|source_knowledge_grant_id|graphRevisionIds|graph_revision_ids|connectionRole|connection_role|parameterIds|parameter_ids|parameterValues|parameter_values|cacheTtlSeconds|cache_ttl_seconds|backgroundAllowed|background_allowed|fragmentManifest|fragment_manifest|fragments|blockId|block_id|AnalysisArticleState|analysisArticleStates|liveRevision|live_revision|liveRunId|live_run_id)\b/;
   for (const filePath of currentAnalysisContractPaths) {
     if (retiredAnalysisFieldPattern.test(read(filePath))) {
       failures.push(
@@ -205,17 +205,20 @@ export function checkAnalysisArchitecture(harness) {
   const analysisArticleStore = read(
     "workspace-cloud/lib/workspace-analysis-article-store.ts",
   );
-  for (const required of [
-    "::jsonb, 'live', authority",
-    '"state" = \'live\'',
-    '"live_revision" = article."revision" + 1',
-  ]) {
-    if (!analysisArticleStore.includes(required)) {
-      failures.push(
-        "workspace-cloud/lib/workspace-analysis-article-store.ts: persistence compatibility columns must track the newest saved Article revision",
-      );
-      break;
-    }
+  if (/\b(?:live_revision|live_run_id|next_refresh_at)\b/.test(analysisArticleStore)) {
+    failures.push(
+      "workspace-cloud/lib/workspace-analysis-article-store.ts: removed Analysis lifecycle columns must not return",
+    );
+  }
+  const analysisSchema = read("workspace-cloud/lib/schema.ts");
+  if (
+    /\b(?:workspaceAnalysisArticleConnection|workspaceAnalysisArticleGraph|workspaceAnalysisRefreshLease|workspaceAnalysisResultFragment|workspaceAnalysisSignal|workspaceAnalysisSignalRevision|workspaceAnalysisSignalReceipt|workspaceAnalysisNotificationAttempt|workspaceAnalysisMigrationFailure|sourceKnowledgeGrantId|liveRevision|liveRunId|nextRefreshAt|backgroundAllowed|leaseId|parameterValues|parameterHash)\b/.test(
+      analysisSchema,
+    )
+  ) {
+    failures.push(
+      "workspace-cloud/lib/schema.ts: pre-MVP Analysis automation, result, and migration storage must not return",
+    );
   }
   const analysisArticleHttp = read(
     "workspace-cloud/lib/workspace-analysis-article-http.ts",

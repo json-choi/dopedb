@@ -75,8 +75,8 @@ jobs:
           cargo test --package dopedb-cli --test terminal_session_e2e
           cargo test --package release-updater-verify
 
-  provider_migration:
-    name: provider-migration
+  provider_postgres:
+    name: provider-postgres
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -130,9 +130,6 @@ jobs:
             sudo apt-get update
             sudo apt-get install --yes postgresql-client
           fi
-
-      - name: Test Provider legacy migration and rollback
-        run: bash scripts/test-provider-legacy-migration.sh
 
       - name: Test Provider import harness guard
         run: pnpm --dir workspace-cloud test:postgres-harness-guard
@@ -207,7 +204,7 @@ jobs:
     needs:
       - frontend_smoke
       - rust_smoke
-      - provider_migration
+      - provider_postgres
       - site_build
       - analytics_cloudflare
     if: always()
@@ -218,13 +215,13 @@ jobs:
         env:
           FRONTEND_RESULT: ${{ needs.frontend_smoke.result }}
           RUST_RESULT: ${{ needs.rust_smoke.result }}
-          PROVIDER_MIGRATION_RESULT: ${{ needs.provider_migration.result }}
+          PROVIDER_POSTGRES_RESULT: ${{ needs.provider_postgres.result }}
           SITE_BUILD_RESULT: ${{ needs.site_build.result }}
           ANALYTICS_CLOUDFLARE_RESULT: ${{ needs.analytics_cloudflare.result }}
         run: |
           test "$FRONTEND_RESULT" = success
           test "$RUST_RESULT" = success
-          test "$PROVIDER_MIGRATION_RESULT" = success
+          test "$PROVIDER_POSTGRES_RESULT" = success
           test "$SITE_BUILD_RESULT" = success
           test "$ANALYTICS_CLOUDFLARE_RESULT" = success
 

@@ -2,10 +2,8 @@
 // over HTTPS exactly once and is absent from all database and audit writes.
 import { and, count, eq, gt, isNull, sql } from "drizzle-orm";
 import {
-  LEGACY_MANAGED_LEASE_CONTRACT_VERSION,
   managedLeaseResponse,
   MANAGED_LEASE_CONTRACT_VERSION,
-  PREVIOUS_MANAGED_LEASE_CONTRACT_VERSION,
   parseManagedLeaseRequest,
 } from "../../../../../../../../lib/control-plane-contracts";
 import { db } from "../../../../../../../../lib/db";
@@ -96,11 +94,7 @@ export async function POST(request: Request, context: RouteContext) {
   const managedLeaseContract = request.headers.get(
     "x-dopedb-managed-lease-contract",
   );
-  if (
-    managedLeaseContract !== MANAGED_LEASE_CONTRACT_VERSION
-    && managedLeaseContract !== PREVIOUS_MANAGED_LEASE_CONTRACT_VERSION
-    && managedLeaseContract !== LEGACY_MANAGED_LEASE_CONTRACT_VERSION
-  ) {
+  if (managedLeaseContract !== MANAGED_LEASE_CONTRACT_VERSION) {
     return jsonError(
       "Update DopeDB to use managed database access safely",
       426,
@@ -165,27 +159,6 @@ export async function POST(request: Request, context: RouteContext) {
   if (connection.provider !== expectedConnectionProvider) {
     return jsonError("Managed database provider does not match the connection", 409);
   }
-  if (
-    requestedAccessMode === "schema"
-    && (
-      managedLeaseContract === LEGACY_MANAGED_LEASE_CONTRACT_VERSION
-      || (
-        integration.provider === "gcpCloudSql"
-        && managedLeaseContract !== MANAGED_LEASE_CONTRACT_VERSION
-      )
-    )
-  ) {
-    return jsonError("Update DopeDB to use managed schema access safely", 426);
-  }
-  if (
-    integration.provider === "vault"
-    && managedLeaseContract !== MANAGED_LEASE_CONTRACT_VERSION
-  ) {
-    return jsonError(
-      "Update DopeDB to use brokered database access safely",
-      426,
-    );
-  }
   const canonicalResource = await db.query.workspaceProviderResource.findFirst({
     where: and(
       eq(workspaceProviderResource.id, connection.providerResourceId),
@@ -195,8 +168,6 @@ export async function POST(request: Request, context: RouteContext) {
     columns: { resource: true, redactedMetadata: true, capabilityManifest: true },
   });
   if (!canonicalResource) {
-    // A legacy JSON-only managed connection remains cleanup-capable, but never
-    // becomes issuance-capable after receipt-bound canonical resources exist.
     return jsonError("Managed database access requires a canonical provider resource", 409);
   }
   let resource;

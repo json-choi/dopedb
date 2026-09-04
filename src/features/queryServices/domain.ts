@@ -42,11 +42,7 @@ export type QueryServiceResult =
       error: QueryServiceError;
       prompt: string;
     }
-  | {
-      kind: "unavailable";
-      sql: string;
-      reason: string;
-    };
+  ;
 
 export type QueryServiceSession = {
   schemaVersion: 2;
@@ -85,11 +81,10 @@ export function isTerminalQueryServiceSession(
 export function parseQueryServiceSession(value: unknown): QueryServiceSession {
   if (
     !isRecord(value) ||
-    (value.schemaVersion !== 1 && value.schemaVersion !== 2)
+    value.schemaVersion !== 2
   ) {
     throw new Error("Unsupported Services session snapshot");
   }
-  const normalized = normalizeLegacySession(value);
   const strings = [
     "id",
     "documentId",
@@ -103,50 +98,24 @@ export function parseQueryServiceSession(value: unknown): QueryServiceSession {
     "startedLabel",
   ] as const;
   if (
-    strings.some((key) => typeof normalized[key] !== "string") ||
-    typeof normalized.updatedAt !== "number" ||
-    typeof normalized.status !== "string" ||
-    !["completed", "failed", "cancelled"].includes(normalized.status) ||
-    !isQueryServiceResult(normalized.result)
+    strings.some((key) => typeof value[key] !== "string") ||
+    typeof value.updatedAt !== "number" ||
+    typeof value.status !== "string" ||
+    !["completed", "failed", "cancelled"].includes(value.status) ||
+    !isQueryServiceResult(value.result)
   ) {
     throw new Error("Invalid Services session snapshot");
   }
-  const resultKind = normalized.result.kind;
+  const resultKind = value.result.kind;
   const statusMatchesResult =
-    (normalized.status === "completed" &&
-      ["materialized", "stream", "script", "unavailable"].includes(resultKind)) ||
-    (normalized.status === "failed" && resultKind === "error") ||
-    (normalized.status === "cancelled" && resultKind === "none");
+    (value.status === "completed" &&
+      ["materialized", "stream", "script"].includes(resultKind)) ||
+    (value.status === "failed" && resultKind === "error") ||
+    (value.status === "cancelled" && resultKind === "none");
   if (!statusMatchesResult) {
     throw new Error("Invalid Services session terminal state");
   }
-  return normalized as QueryServiceSession;
-}
-
-function normalizeLegacySession(
-  value: Record<string, unknown>,
-): Record<string, unknown> {
-  if (value.schemaVersion !== 1) return value;
-  const result = value.result;
-  if (isRecord(result) && result.kind === "stream") {
-    if (value.status === "cancelled") {
-      return {
-        ...value,
-        schemaVersion: 2,
-        result: { kind: "none" },
-      };
-    }
-    return {
-      ...value,
-      schemaVersion: 2,
-      result: {
-        kind: "unavailable",
-        sql: typeof result.sql === "string" ? result.sql : String(value.sql ?? ""),
-        reason: "legacyResultFormat",
-      },
-    };
-  }
-  return { ...value, schemaVersion: 2 };
+  return value as QueryServiceSession;
 }
 
 function isQueryServiceResult(
@@ -171,9 +140,6 @@ function isQueryServiceResult(
   }
   if (value.kind === "script") {
     return typeof value.at === "string" && isScriptOutcome(value.outcome);
-  }
-  if (value.kind === "unavailable") {
-    return typeof value.sql === "string" && typeof value.reason === "string";
   }
   return (
     value.kind === "error" &&

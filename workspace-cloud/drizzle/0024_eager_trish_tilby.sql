@@ -1,2 +1,0 @@
-ALTER TABLE "workspace_control"."workspace_data_key_rotation" ADD COLUMN "idempotency_key" uuid NOT NULL;--> statement-breakpoint
-CREATE UNIQUE INDEX "workspace_data_key_rotation_org_idempotency_idx" ON "workspace_control"."workspace_data_key_rotation" USING btree ("organization_id","idempotency_key");

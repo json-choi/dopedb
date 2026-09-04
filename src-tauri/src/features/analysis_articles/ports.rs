@@ -3,8 +3,7 @@
 use std::future::Future;
 
 use dopedb_protocol::{
-    AnalysisArticleConnection, AnalysisArticleRecord, AnalysisQueryNode, AnalysisQueryReceipt,
-    SharedAnalysisArticleCreate,
+    AnalysisArticleRecord, AnalysisQueryNode, AnalysisQueryReceipt, SharedAnalysisArticleCreate,
 };
 use uuid::Uuid;
 
@@ -44,7 +43,8 @@ pub(crate) trait AnalysisLocalRepositoryPort: Clone + Send + Sync + 'static {
 pub(crate) struct AnalysisReadExecutionRequest<'a> {
     pub(crate) workspace_id: Option<Uuid>,
     pub(crate) project_environment_id: Option<Uuid>,
-    pub(crate) authority: &'a AnalysisArticleConnection,
+    pub(crate) connection_id: Uuid,
+    pub(crate) connection_revision: i64,
     pub(crate) query: &'a AnalysisQueryNode,
     pub(crate) run_id: Uuid,
     pub(crate) cancellation_id: Uuid,

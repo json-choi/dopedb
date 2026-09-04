@@ -1,6 +1,6 @@
 /*
- * Tailwind v4 runs without Preflight while the existing workbench reset is
- * migrated. Utilities use the same --ds-* source of truth as legacy classes.
+ * Tailwind v4 runs without Preflight because the workbench owns its explicit
+ * reset. Utilities and shared primitives use the same --ds-* source of truth.
  */
 @layer theme, base, components, utilities;
 @import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";

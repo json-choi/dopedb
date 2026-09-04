@@ -87,9 +87,6 @@ export type ProductEventPropertiesByName = {
     provider: "claude" | "codex";
     durationBucket: ProductAnalyticsDurationBucket;
   };
-  analysis_article_proposal_completed: {
-    readonly [key: string]: never;
-  };
   analysis_article_run_completed: {
     outcome: "success" | "failed" | "cancelled" | "stale";
     trigger: "manual";
@@ -224,7 +221,6 @@ const EVENT_NAMES = new Set<ProductEventName>([
   "knowledge_source_sync_completed",
   "agent_session_initialization_completed",
   "agent_turn_completed",
-  "analysis_article_proposal_completed",
   "analysis_article_run_completed",
   "workspace_membership_ready",
   "shared_connection_access_ready",
@@ -368,8 +364,6 @@ function validProperties(name: ProductEventName, value: unknown): boolean {
         enumField(value.outcome, ["success", "failed", "cancelled"]) &&
         enumField(value.provider, ["claude", "codex"]) &&
         oneOf(value.durationBucket, DURATIONS);
-    case "analysis_article_proposal_completed":
-      return fields(value, []);
     case "analysis_article_run_completed":
       return fields(value, ["outcome", "trigger", "durationBucket"]) &&
         enumField(value.outcome, ["success", "failed", "cancelled", "stale"]) &&

@@ -51,12 +51,11 @@ const readProposal: SqlOperationProposal = {
     noWhere: false,
     tables: [],
     notes: [],
-    rollbackSafe: false,
+    directDml: false,
   },
   preview: {
     mode: "explain",
     estimatedRows: null,
-    exactRows: null,
     plan: null,
     note: null,
   },
@@ -183,13 +182,9 @@ describe("query Tauri adapter", () => {
         },
       },
     ]);
-    await expect(listQueryServiceSessions(serviceScope)).resolves.toEqual([
-      expect.objectContaining({
-        schemaVersion: 2,
-        status: "cancelled",
-        result: { kind: "none" },
-      }),
-    ]);
+    await expect(listQueryServiceSessions(serviceScope)).rejects.toThrow(
+      "Unsupported Services session snapshot",
+    );
 
     const serviceStore = new QueryServiceStore("workspace:account-1");
     let fullNotifications = 0;

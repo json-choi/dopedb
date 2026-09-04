@@ -74,11 +74,6 @@ export async function registerAnalysisRunner(input: {
       SELECT ${input.organizationId}, authority."id", ${input.registration.deviceId},
         ${input.registration.displayName}, ${issuedCapabilityHash}, 1, now(), NULL
       FROM authority
-      WHERE NOT EXISTS (
-        SELECT 1 FROM ${workspaceAnalysisRunner} historical
-        WHERE historical."organization_id" = ${input.organizationId}
-          AND historical."device_id" = ${input.registration.deviceId}
-      )
       ON CONFLICT ("organization_id", "device_id") WHERE "revoked_at" IS NULL DO NOTHING
       RETURNING inserted_runner.*
     ), verified AS MATERIALIZED (
@@ -90,25 +85,20 @@ export async function registerAnalysisRunner(input: {
         AND runner."device_id" = ${input.registration.deviceId}
         AND runner."member_id" = authority."id" AND runner."revoked_at" IS NULL
         AND runner."runner_capability_hash" = ${providedCapabilityHash}
-        AND runner."runner_capability_generation" IS NOT NULL
         AND NOT EXISTS (SELECT 1 FROM inserted)
       RETURNING runner.*
     ), stored AS MATERIALIZED (
       SELECT inserted.*, TRUE AS "created" FROM inserted
       UNION ALL SELECT verified.*, FALSE AS "created" FROM verified
     ), conflict AS MATERIALIZED (
-      SELECT CASE
-          WHEN runner."member_id" = authority."id" AND runner."revoked_at" IS NOT NULL
-            THEN 'replacement_required'
-          WHEN runner."member_id" = authority."id"
-            AND (runner."runner_capability_hash" IS NULL
-              OR runner."runner_capability_generation" IS NULL) THEN 'unbound'
-          WHEN runner."member_id" = authority."id" AND ${providedCapabilityHash}::text IS NULL
+      SELECT CASE WHEN runner."member_id" = authority."id"
+            AND ${providedCapabilityHash}::text IS NULL
             THEN 'missing'
           ELSE 'invalid' END AS "status"
       FROM ${workspaceAnalysisRunner} runner JOIN authority ON TRUE
       WHERE runner."organization_id" = ${input.organizationId}
         AND runner."device_id" = ${input.registration.deviceId}
+        AND runner."revoked_at" IS NULL
         AND NOT EXISTS (SELECT 1 FROM stored)
       LIMIT 1
     ), audit AS MATERIALIZED (
@@ -131,8 +121,7 @@ export async function registerAnalysisRunner(input: {
     UNION ALL SELECT conflict."status", NULL, NULL, NULL, NULL, NULL FROM conflict
   `);
   const row = result.rows[0];
-  if (row?.status === "missing" || row?.status === "unbound"
-    || row?.status === "replacement_required" || row?.status === "invalid"
+  if (row?.status === "missing" || row?.status === "invalid"
     || row?.status === "unsupported") return { status: row.status } as const;
   const lastSeenAt = row?.lastSeenAt instanceof Date
     ? row.lastSeenAt : new Date(String(row?.lastSeenAt));

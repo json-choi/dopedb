@@ -1,4 +1,4 @@
-//! Store migration, shared connection binding, and catalog scope-isolation tests.
+//! Store baseline, shared connection binding, and catalog scope-isolation tests.
 
 use super::fixtures::*;
 use crate::features::knowledge::test_support::{
@@ -67,116 +67,24 @@ fn assert_knowledge_source_revision_ipc_uses_camel_case_fields() {
     }
 }
 
-async fn assert_legacy_sql_document_database_scope_migrates() {
-    let legacy_pool = memory_pool().await;
-    sqlx::raw_sql(
-        "CREATE TABLE connections (
-             id TEXT PRIMARY KEY,
-             db_name TEXT NOT NULL
-         );
-         CREATE TABLE sql_documents (
-             id TEXT PRIMARY KEY,
-             connection_id TEXT NOT NULL REFERENCES connections(id)
-         );
-         INSERT INTO connections (id, db_name) VALUES ('connection-1', 'analytics');
-         INSERT INTO sql_documents (id, connection_id)
-         VALUES ('document-1', 'connection-1');",
-    )
-    .execute(&legacy_pool)
-    .await
-    .unwrap();
-    super::super::bootstrap::add_sql_document_database_scope(&legacy_pool)
-        .await
-        .unwrap();
-    let selected_database: String =
-        sqlx::query_scalar("SELECT selected_database FROM sql_documents WHERE id = 'document-1'")
-            .fetch_one(&legacy_pool)
-            .await
-            .unwrap();
-    assert_eq!(selected_database, "analytics");
-}
-
-async fn assert_legacy_agent_acp_provider_migrates() {
-    let legacy_pool = memory_pool().await;
-    sqlx::raw_sql(
-        "CREATE TABLE agent_acp_sessions (
-             id TEXT PRIMARY KEY,
-             connection_id TEXT NOT NULL,
-             workspace_id TEXT NOT NULL,
-             account_scope TEXT NOT NULL,
-             provider TEXT NOT NULL CHECK(provider IN ('codex')),
-             title TEXT NOT NULL,
-             lifecycle TEXT NOT NULL,
-             acp_session_id TEXT,
-             error TEXT,
-             created_at TEXT NOT NULL,
-             updated_at TEXT NOT NULL
-         );
-         CREATE TABLE agent_acp_events (
-             session_id TEXT NOT NULL REFERENCES agent_acp_sessions(id) ON DELETE CASCADE,
-             sequence INTEGER NOT NULL CHECK(sequence > 0),
-             created_at TEXT NOT NULL,
-             payload TEXT NOT NULL,
-             PRIMARY KEY(session_id, sequence)
-         );
-         CREATE INDEX idx_agent_acp_sessions_scope
-             ON agent_acp_sessions(workspace_id, account_scope, updated_at DESC);
-         CREATE INDEX idx_agent_acp_events_session
-             ON agent_acp_events(session_id, sequence);
-         INSERT INTO agent_acp_sessions
-             (id, connection_id, workspace_id, account_scope, provider, title,
-              lifecycle, created_at, updated_at)
-         VALUES
-             ('codex-session', 'connection-1', 'workspace-1', 'personal',
-              'codex', 'Existing session', 'ready', '2026-07-30', '2026-07-30');
-         INSERT INTO agent_acp_events
-             (session_id, sequence, created_at, payload)
-         VALUES ('codex-session', 1, '2026-07-30', '{}');",
-    )
-    .execute(&legacy_pool)
-    .await
-    .unwrap();
-
-    super::super::bootstrap::migrate_agent_acp_providers(&legacy_pool)
-        .await
-        .unwrap();
-    sqlx::query(
-        "INSERT INTO agent_acp_sessions
-             (id, connection_id, workspace_id, account_scope, provider, title,
-              lifecycle, created_at, updated_at)
-         VALUES
-             ('claude-session', 'connection-1', 'workspace-1', 'personal',
-              'claude', 'Claude session', 'starting', '2026-07-30', '2026-07-30')",
-    )
-    .execute(&legacy_pool)
-    .await
-    .unwrap();
-
-    let preserved_events: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM agent_acp_events WHERE session_id = 'codex-session'",
-    )
-    .fetch_one(&legacy_pool)
-    .await
-    .unwrap();
-    assert_eq!(preserved_events, 1);
-    let event_parent: String =
-        sqlx::query_scalar("SELECT \"table\" FROM pragma_foreign_key_list('agent_acp_events')")
-            .fetch_one(&legacy_pool)
-            .await
-            .unwrap();
-    assert_eq!(event_parent, "agent_acp_sessions");
-}
-
-async fn assert_current_store_migration_is_write_free() {
+async fn assert_current_store_baseline_and_invariants() {
     let pool = memory_pool().await;
-    assert!(super::super::bootstrap::migrate_local_store(&pool)
+    assert!(super::super::bootstrap::bootstrap_local_store(&pool)
         .await
         .unwrap());
     let version: i64 = sqlx::query_scalar("PRAGMA user_version")
         .fetch_one(&pool)
         .await
         .unwrap();
-    assert_eq!(version, super::super::bootstrap::LOCAL_SCHEMA_VERSION);
+    assert_eq!(version, super::super::bootstrap::LOCAL_SCHEMA_BASELINE);
+    let application_id: i64 = sqlx::query_scalar("PRAGMA application_id")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        application_id,
+        super::super::bootstrap::LOCAL_SCHEMA_APPLICATION_ID
+    );
 
     let integrity_connection_id = Uuid::from_u128(0x1200);
     let store = Store::from_pool_for_test(pool.clone());
@@ -314,7 +222,7 @@ async fn assert_current_store_migration_is_write_free() {
         SourceRevisionIdentity,
     };
 
-    let personal_workspace_id = Uuid::parse_str(migrations::PERSONAL_WORKSPACE_ID).unwrap();
+    let personal_workspace_id = Uuid::parse_str(schema::PERSONAL_WORKSPACE_ID).unwrap();
     let local_project = knowledge
         .create_knowledge_project(
             personal_workspace_id,
@@ -430,7 +338,7 @@ async fn assert_current_store_migration_is_write_free() {
         .unwrap();
     knowledge.stage(&second).await.unwrap();
     knowledge.activate(&second).await.unwrap();
-    let active_set = vec![
+    let active_set = [
         knowledge
             .active_for_source(artifact.binding.source_id)
             .await
@@ -517,7 +425,7 @@ async fn assert_current_store_migration_is_write_free() {
 
     let current_connection_id = Uuid::from_u128(0x1291);
     let secondary_connection_id = Uuid::from_u128(0x1292);
-    let mut agent_scope = Some(crate::features::knowledge::domain::KnowledgeSessionScope {
+    let mut resource_scope = crate::features::knowledge::domain::KnowledgeSessionScope {
         project_id: project.id,
         knowledge_grant_id: Some(Uuid::from_u128(0x1290)),
         project_environment_id: environment.id,
@@ -547,8 +455,7 @@ async fn assert_current_store_migration_is_write_free() {
                 alias: "Analytics".into(),
             },
         ],
-    });
-    let mut resource_scope = agent_scope.clone().unwrap();
+    };
     crate::features::agents::acp::narrow_resource_scope(
         &mut resource_scope,
         &[secondary_connection_id],
@@ -574,23 +481,6 @@ async fn assert_current_store_migration_is_write_free() {
         ),
         Err(AppError::Blocked { .. })
     ));
-    crate::features::agents::acp::narrow_knowledge_scope(
-        &mut agent_scope,
-        current_connection_id,
-        Some(vec![current_connection_id]),
-    )
-    .unwrap();
-    assert_eq!(agent_scope.unwrap().connections.len(), 1);
-    let mut invalid_scope = None;
-    assert!(matches!(
-        crate::features::agents::acp::narrow_knowledge_scope(
-            &mut invalid_scope,
-            current_connection_id,
-            Some(vec![secondary_connection_id]),
-        ),
-        Err(AppError::Blocked { .. })
-    ));
-
     let mut failed = artifact.clone();
     failed.graph_revision_id = Uuid::from_u128(127);
     failed.parent_graph_revision_id = Some(artifact.graph_revision_id);
@@ -706,126 +596,17 @@ async fn assert_current_store_migration_is_write_free() {
             .unwrap(),
         replacement_runner_device
     );
-    let retired_sample_table: i64 = sqlx::query_scalar(
-        "SELECT count(*) FROM sqlite_master
-         WHERE type = 'table' AND name = 'analysis_signal_metric_samples'",
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    assert_eq!(retired_sample_table, 0);
-
     sqlx::query("PRAGMA query_only = ON")
         .execute(&pool)
         .await
         .unwrap();
-    assert!(!super::super::bootstrap::migrate_local_store(&pool)
+    assert!(!super::super::bootstrap::bootstrap_local_store(&pool)
         .await
         .unwrap());
     sqlx::query("PRAGMA query_only = OFF")
         .execute(&pool)
         .await
         .unwrap();
-
-    let v1_pool = memory_pool().await;
-    sqlx::raw_sql(migrations::SCHEMA)
-        .execute(&v1_pool)
-        .await
-        .unwrap();
-    sqlx::query("PRAGMA user_version = 1")
-        .execute(&v1_pool)
-        .await
-        .unwrap();
-    assert!(super::super::bootstrap::migrate_local_store(&v1_pool)
-        .await
-        .unwrap());
-    let paging_indexes: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM sqlite_master
-         WHERE type = 'index'
-           AND name IN ('idx_history_scope_recent', 'idx_audit_connection_row')",
-    )
-    .fetch_one(&v1_pool)
-    .await
-    .unwrap();
-    assert_eq!(paging_indexes, 2);
-
-    let v20_pool = memory_pool().await;
-    sqlx::raw_sql(migrations::SCHEMA)
-        .execute(&v20_pool)
-        .await
-        .unwrap();
-    sqlx::raw_sql(
-        "INSERT INTO agent_acp_sessions (
-             id, connection_id, workspace_id, account_scope, provider, title,
-             lifecycle, acp_session_id, project_environment_id,
-             knowledge_grant_id, environment_revision, graph_revision_ids,
-             environment_connections, error, created_at, updated_at
-         ) VALUES (
-             'legacy-session', 'legacy-connection',
-             '00000000-0000-0000-0000-000000000001', 'personal', 'codex',
-             'Legacy session', 'closed', NULL, NULL, NULL, NULL, '[]', '[]',
-             NULL, '2026-08-17T00:00:00Z', '2026-08-17T00:00:00Z'
-         );
-         ALTER TABLE agent_acp_sessions DROP COLUMN knowledge_sources;
-         PRAGMA user_version = 20;",
-    )
-    .execute(&v20_pool)
-    .await
-    .unwrap();
-    assert!(super::super::bootstrap::migrate_local_store(&v20_pool)
-        .await
-        .unwrap());
-    let repaired_sources: String = sqlx::query_scalar(
-        "SELECT knowledge_sources FROM agent_acp_sessions WHERE id = 'legacy-session'",
-    )
-    .fetch_one(&v20_pool)
-    .await
-    .unwrap();
-    assert_eq!(repaired_sources, "[]");
-    let repaired_version: i64 = sqlx::query_scalar("PRAGMA user_version")
-        .fetch_one(&v20_pool)
-        .await
-        .unwrap();
-    assert_eq!(
-        repaired_version,
-        super::super::bootstrap::LOCAL_SCHEMA_VERSION
-    );
-
-    let v21_pool = memory_pool().await;
-    sqlx::raw_sql(migrations::SCHEMA)
-        .execute(&v21_pool)
-        .await
-        .unwrap();
-    sqlx::raw_sql(
-        "DROP TABLE analysis_article_local_results;
-         PRAGMA user_version = 21;",
-    )
-    .execute(&v21_pool)
-    .await
-    .unwrap();
-    assert!(super::super::bootstrap::migrate_local_store(&v21_pool)
-        .await
-        .unwrap());
-    let repaired_local_result_schema: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM sqlite_master
-         WHERE (type = 'table' AND name = 'analysis_article_local_results')
-            OR (type = 'index' AND name IN (
-                'idx_analysis_article_local_result_latest',
-                'idx_analysis_article_local_result_expiry'
-            ))",
-    )
-    .fetch_one(&v21_pool)
-    .await
-    .unwrap();
-    assert_eq!(repaired_local_result_schema, 3);
-    let repaired_v21_version: i64 = sqlx::query_scalar("PRAGMA user_version")
-        .fetch_one(&v21_pool)
-        .await
-        .unwrap();
-    assert_eq!(
-        repaired_v21_version,
-        super::super::bootstrap::LOCAL_SCHEMA_VERSION
-    );
 
     let gate = crate::startup::PostPaintRecoveryGate::new();
     assert!(gate.claim_start());
@@ -836,156 +617,6 @@ async fn assert_current_store_migration_is_write_free() {
     assert!(!waiter.is_finished());
     gate.finish(true);
     waiter.await.unwrap().unwrap();
-}
-
-async fn assert_retired_operation_kind_migrates_without_losing_provenance() {
-    let pool = memory_pool().await;
-    sqlx::raw_sql(
-        r#"
-        CREATE TABLE connections (
-            id TEXT PRIMARY KEY,
-            port INTEGER NOT NULL,
-            extra_params TEXT NOT NULL DEFAULT '{}',
-            provider_target TEXT
-        );
-        CREATE TABLE workspace_connection_bindings (
-            connection_id TEXT NOT NULL REFERENCES connections(id) ON DELETE CASCADE,
-            account_user_id TEXT NOT NULL,
-            extra_params TEXT NOT NULL DEFAULT '{}',
-            PRIMARY KEY (connection_id, account_user_id)
-        );
-        CREATE TABLE operations (
-            id TEXT PRIMARY KEY,
-            runtime_id TEXT NOT NULL,
-            workspace_id TEXT NOT NULL,
-            account_scope TEXT NOT NULL,
-            connection_id TEXT NOT NULL,
-            connection_revision INTEGER NOT NULL,
-            terminal_session_id TEXT,
-            actor_kind TEXT NOT NULL,
-            actor_id TEXT NOT NULL,
-            actor_provenance_json TEXT NOT NULL,
-            operation_kind TEXT NOT NULL CHECK(operation_kind IN (
-                'read_query', 'document_read', 'write_sql', 'ddl', 'privilege',
-                'sql_script', 'table_data_change', 'schema_change', 'import',
-                'export', 'migration', 'dashboard_create', 'plugin_action',
-                'provider_action'
-            )),
-            payload_schema_version INTEGER NOT NULL,
-            payload_json TEXT NOT NULL,
-            payload_hash TEXT NOT NULL,
-            schema_fingerprint TEXT,
-            risk_level TEXT NOT NULL,
-            preview_json TEXT NOT NULL,
-            policy_snapshot_json TEXT NOT NULL,
-            policy_revision TEXT NOT NULL,
-            state TEXT NOT NULL,
-            single_use INTEGER NOT NULL,
-            idempotency_key TEXT NOT NULL,
-            expires_at TEXT,
-            started_at TEXT,
-            finished_at TEXT,
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL
-        );
-        CREATE TABLE operation_approvals (
-            id TEXT PRIMARY KEY,
-            operation_id TEXT NOT NULL REFERENCES operations(id),
-            payload_hash TEXT NOT NULL,
-            approver_kind TEXT NOT NULL,
-            approver_id TEXT NOT NULL,
-            decision TEXT NOT NULL,
-            reason TEXT,
-            policy_revision TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            expires_at TEXT
-        );
-        CREATE TABLE operation_events (
-            id TEXT PRIMARY KEY,
-            operation_id TEXT NOT NULL REFERENCES operations(id),
-            sequence INTEGER NOT NULL,
-            event_kind TEXT NOT NULL,
-            state TEXT NOT NULL,
-            event_json TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            prev_hash TEXT,
-            hash TEXT NOT NULL,
-            UNIQUE(operation_id, sequence)
-        );
-        INSERT INTO operations (
-            id, runtime_id, workspace_id, account_scope, connection_id,
-            connection_revision, terminal_session_id, actor_kind, actor_id,
-            actor_provenance_json, operation_kind, payload_schema_version,
-            payload_json, payload_hash, schema_fingerprint, risk_level,
-            preview_json, policy_snapshot_json, policy_revision, state,
-            single_use, idempotency_key, expires_at, started_at, finished_at,
-            created_at, updated_at
-        ) VALUES (
-            'operation-1', 'runtime-1', 'workspace-1', 'account-1', 'connection-1',
-            1, NULL, 'local_user', 'member-1', '{"originSurface":"retired"}',
-            'dashboard_create', 1, '{}',
-            '0000000000000000000000000000000000000000000000000000000000000000',
-            NULL, 'low', '{}', '{}', 'policy-1', 'succeeded', 1,
-            'retired-operation-1', NULL, '2026-08-01T00:00:00Z',
-            '2026-08-01T00:00:01Z', '2026-08-01T00:00:00Z',
-            '2026-08-01T00:00:01Z'
-        );
-        INSERT INTO operation_approvals VALUES (
-            'approval-1', 'operation-1',
-            '0000000000000000000000000000000000000000000000000000000000000000',
-            'local_user', 'member-1', 'approved', NULL, 'policy-1',
-            '2026-08-01T00:00:00Z', NULL
-        );
-        INSERT INTO operation_events VALUES (
-            'event-1', 'operation-1', 1, 'succeeded', 'succeeded', '{}',
-            '2026-08-01T00:00:01Z', NULL,
-            '1111111111111111111111111111111111111111111111111111111111111111'
-        );
-        CREATE TABLE agent_acp_sessions (
-            id TEXT PRIMARY KEY
-        );
-        PRAGMA user_version = 18;
-        "#,
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-
-    assert!(super::super::bootstrap::migrate_local_store(&pool)
-        .await
-        .unwrap());
-    let operation_kind: String =
-        sqlx::query_scalar("SELECT operation_kind FROM operations WHERE id = 'operation-1'")
-            .fetch_one(&pool)
-            .await
-            .unwrap();
-    assert_eq!(operation_kind, "retired_artifact");
-    let approvals: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM operation_approvals WHERE operation_id = 'operation-1'",
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    let events: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM operation_events WHERE operation_id = 'operation-1'",
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    assert_eq!((approvals, events), (1, 1));
-    let violations: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM pragma_foreign_key_check")
-        .fetch_one(&pool)
-        .await
-        .unwrap();
-    assert_eq!(violations, 0);
-    let definition: String = sqlx::query_scalar(
-        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'operations'",
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    assert!(definition.contains("retired_artifact"));
-    assert!(!definition.contains("dashboard_create"));
 }
 
 async fn assert_agent_acp_batch_replay_is_bounded(store: &Store, connection_id: Uuid) {
@@ -1006,12 +637,6 @@ async fn assert_agent_acp_batch_replay_is_bounded(store: &Store, connection_id: 
         title: "Bounded replay".into(),
         lifecycle: AcpSessionLifecycle::Ready,
         acp_session_id: Some("official-adapter-session".into()),
-        knowledge_grant_id: None,
-        project_environment_id: None,
-        environment_revision: None,
-        knowledge_sources: Vec::new(),
-        graph_revision_ids: Vec::new(),
-        environment_connections: Vec::new(),
         knowledge_scopes: vec![KnowledgeSessionScope {
             project_id: Uuid::from_u128(0xac01),
             knowledge_grant_id: None,
@@ -1120,40 +745,6 @@ async fn assert_agent_acp_batch_replay_is_bounded(store: &Store, connection_id: 
         .all(|events| events[0].sequence < events[1].sequence));
     assert_eq!(focus.events.last().map(|event| event.sequence), Some(609));
 
-    let legacy_environment_connections = serde_json::json!([{
-        "connectionId": connection_id,
-        "connectionRevision": 7,
-        "role": "primary",
-        "alias": "Primary",
-    }]);
-    sqlx::query(
-        "UPDATE agent_acp_sessions
-         SET environment_connections = ?1
-         WHERE id = ?2",
-    )
-    .bind(legacy_environment_connections.to_string())
-    .bind(session_id.to_string())
-    .execute(store.pool())
-    .await
-    .unwrap();
-    let legacy = store
-        .list_agent_acp_sessions()
-        .await
-        .unwrap()
-        .into_iter()
-        .find(|session| session.id == session_id)
-        .unwrap();
-    assert_eq!(legacy.environment_connections.len(), 1);
-    assert_eq!(
-        legacy.environment_connections[0].connection_content_revision,
-        7
-    );
-    assert_eq!(legacy.environment_connections[0].remote_connection_id, None);
-    assert_eq!(
-        legacy.acp_session_id.as_deref(),
-        Some("official-adapter-session")
-    );
-
     let corrupt_session_id = AcpSessionId::from(Uuid::new_v4());
     let mut corrupt_summary = summary.clone();
     corrupt_summary.id = corrupt_session_id;
@@ -1177,7 +768,7 @@ async fn assert_agent_acp_batch_replay_is_bounded(store: &Store, connection_id: 
         .unwrap();
     sqlx::query(
         "UPDATE agent_acp_sessions
-         SET environment_connections = '[{\"connectionId\":true}]'
+         SET knowledge_scopes = '[{\"projectId\":true}]'
          WHERE id = ?1",
     )
     .bind(corrupt_session_id.to_string())
@@ -1197,7 +788,7 @@ async fn assert_agent_acp_batch_replay_is_bounded(store: &Store, connection_id: 
         recovered.error.as_deref(),
         Some("agent_session_metadata_unavailable")
     );
-    assert!(recovered.environment_connections.is_empty());
+    assert!(recovered.knowledge_scopes.is_empty());
     let recovered_focus = store
         .focus_agent_acp_session(corrupt_session_id, None)
         .await
@@ -1289,15 +880,9 @@ async fn assert_agent_acp_batch_replay_is_bounded(store: &Store, connection_id: 
 #[tokio::test]
 async fn remote_template_sync_preserves_member_local_credential_binding() {
     assert_knowledge_source_revision_ipc_uses_camel_case_fields();
-    assert_legacy_sql_document_database_scope_migrates().await;
-    assert_legacy_agent_acp_provider_migrates().await;
-    assert_retired_operation_kind_migrates_without_losing_provenance().await;
-    assert_current_store_migration_is_write_free().await;
+    assert_current_store_baseline_and_invariants().await;
     let pool = memory_pool().await;
-    sqlx::raw_sql(migrations::SCHEMA)
-        .execute(&pool)
-        .await
-        .unwrap();
+    sqlx::raw_sql(schema::SCHEMA).execute(&pool).await.unwrap();
     let store = Store::from_pool_for_test(pool);
     let knowledge = SqliteKnowledgeRepository::new(store.clone());
     let workspace_id = Uuid::new_v4();
@@ -1527,7 +1112,7 @@ async fn remote_template_sync_preserves_member_local_credential_binding() {
 
     // An Environment with a GitHub source but no graph remains an exact Agent
     // scope. Raw source identity is pinned independently from graph grants.
-    sqlx::raw_sql(migrations::KNOWLEDGE_SCHEMA)
+    sqlx::raw_sql(schema::KNOWLEDGE_SCHEMA)
         .execute(store.pool())
         .await
         .unwrap();
@@ -1712,10 +1297,7 @@ async fn remote_template_sync_preserves_member_local_credential_binding() {
 #[tokio::test]
 async fn managed_remote_template_never_reads_or_accepts_a_local_binding() {
     let pool = memory_pool().await;
-    sqlx::raw_sql(migrations::SCHEMA)
-        .execute(&pool)
-        .await
-        .unwrap();
+    sqlx::raw_sql(schema::SCHEMA).execute(&pool).await.unwrap();
     let store = Store::from_pool_for_test(pool);
     let workspace_id = Uuid::new_v4();
     let user = workspace_user("10000000-0000-0000-0000-000000000001", "Owner");
@@ -1776,42 +1358,31 @@ async fn managed_remote_template_never_reads_or_accepts_a_local_binding() {
     assert!(loaded.secret_ref.is_none());
     assert!(loaded.allow_writes);
     assert_eq!(loaded.provider_target, Some(provider_target));
-    let stored_port = i64::from(loaded.port);
-    let stored_provider_target = serde_json::to_string(&loaded.provider_target).unwrap();
-    sqlx::query("UPDATE connections SET extra_params = '{' WHERE id = ?1")
-        .bind(id.to_string())
-        .execute(store.pool())
-        .await
-        .unwrap();
-    assert!(matches!(
-        store.get_connection(id).await,
-        Err(AppError::Config(_))
-    ));
-    sqlx::query("UPDATE connections SET extra_params = '{}', provider_target = '{' WHERE id = ?1")
-        .bind(id.to_string())
-        .execute(store.pool())
-        .await
-        .unwrap();
-    assert!(matches!(
-        store.get_connection(id).await,
-        Err(AppError::Config(_))
-    ));
-    sqlx::query("UPDATE connections SET provider_target = ?1, port = -1 WHERE id = ?2")
-        .bind(stored_provider_target)
-        .bind(id.to_string())
-        .execute(store.pool())
-        .await
-        .unwrap();
-    assert!(matches!(
-        store.get_connection(id).await,
-        Err(AppError::Config(_))
-    ));
-    sqlx::query("UPDATE connections SET port = ?1 WHERE id = ?2")
-        .bind(stored_port)
-        .bind(id.to_string())
-        .execute(store.pool())
-        .await
-        .unwrap();
+    assert!(
+        sqlx::query("UPDATE connections SET extra_params = '{' WHERE id = ?1")
+            .bind(id.to_string())
+            .execute(store.pool())
+            .await
+            .is_err()
+    );
+    assert!(
+        sqlx::query("UPDATE connections SET provider_target = '{' WHERE id = ?1")
+            .bind(id.to_string())
+            .execute(store.pool())
+            .await
+            .is_err()
+    );
+    assert!(
+        sqlx::query("UPDATE connections SET port = -1 WHERE id = ?1")
+            .bind(id.to_string())
+            .execute(store.pool())
+            .await
+            .is_err()
+    );
+    let unchanged = store.get_connection(id).await.unwrap();
+    assert_eq!(unchanged.port, loaded.port);
+    assert_eq!(unchanged.extra_params, loaded.extra_params);
+    assert_eq!(unchanged.provider_target, loaded.provider_target);
     assert!(!store.get_safety(id).await.unwrap().allow_writes);
     let mut device_safety = store.get_safety(id).await.unwrap();
     device_safety.allow_writes = true;
@@ -1875,20 +1446,17 @@ async fn managed_remote_template_never_reads_or_accepts_a_local_binding() {
         store.put_catalog_if_current(&pin, &snapshot).await.unwrap(),
         CacheWriteOutcome::NotPersisted
     );
-    let v2_rows: i64 = sqlx::query_scalar("SELECT count(*) FROM schema_cache_v2")
+    let cache_rows: i64 = sqlx::query_scalar("SELECT count(*) FROM catalog_cache")
         .fetch_one(store.pool())
         .await
         .unwrap();
-    assert_eq!(v2_rows, 0);
+    assert_eq!(cache_rows, 0);
 }
 
 #[tokio::test]
 async fn shared_connection_bindings_are_isolated_per_signed_in_account() {
     let pool = memory_pool().await;
-    sqlx::raw_sql(migrations::SCHEMA)
-        .execute(&pool)
-        .await
-        .unwrap();
+    sqlx::raw_sql(schema::SCHEMA).execute(&pool).await.unwrap();
     let store = Store::from_pool_for_test(pool);
     let workspace_id = Uuid::new_v4();
     let connection_id = Uuid::new_v4();
@@ -1967,7 +1535,7 @@ async fn shared_connection_bindings_are_isolated_per_signed_in_account() {
         crate::model::WorkspaceConnectionAccess::Write
     );
     assert!(profile_a.allow_writes);
-    sqlx::query(
+    assert!(sqlx::query(
         "UPDATE workspace_connection_bindings SET extra_params = '{'
          WHERE connection_id = ?1 AND account_user_id = ?2",
     )
@@ -1975,24 +1543,11 @@ async fn shared_connection_bindings_are_isolated_per_signed_in_account() {
     .bind(user_a.id.as_str())
     .execute(store.pool())
     .await
-    .unwrap();
-    assert!(matches!(
-        store.get_connection(connection_id).await,
-        Err(AppError::Config(_))
-    ));
-    sqlx::query(
-        "UPDATE workspace_connection_bindings SET extra_params = '{}'
-         WHERE connection_id = ?1 AND account_user_id = ?2",
-    )
-    .bind(connection_id.to_string())
-    .bind(user_a.id.as_str())
-    .execute(store.pool())
-    .await
-    .unwrap();
-    store
-        .set_schema_cache(connection_id, r#"{"owner":"alpha"}"#)
-        .await
-        .unwrap();
+    .is_err());
+    let unchanged_profile_a = store.get_connection(connection_id).await.unwrap();
+    assert_eq!(unchanged_profile_a.username, profile_a.username);
+    assert_eq!(unchanged_profile_a.extra_params, profile_a.extra_params);
+    assert_eq!(unchanged_profile_a.secret_ref, profile_a.secret_ref);
     let execution_pin_a = store.pin_connection_for_read(connection_id).await.unwrap();
     let history_id = Uuid::new_v4();
     let history_sql = format!("SELECT '{}'", "x".repeat(700));
@@ -2049,7 +1604,7 @@ async fn shared_connection_bindings_are_isolated_per_signed_in_account() {
     .unwrap();
     let services_snapshot =
         crate::features::queries::validate_query_service_session_snapshot(serde_json::json!({
-            "schemaVersion": 1,
+            "schemaVersion": 2,
             "id": "document-alpha:1",
             "documentId": "document-alpha",
             "connectionId": connection_id,
@@ -2069,7 +1624,6 @@ async fn shared_connection_bindings_are_isolated_per_signed_in_account() {
         .save_query_service_session(workspace_id, user_a.id.as_str(), services_snapshot.clone())
         .await
         .unwrap();
-    seed_legacy_chat_thread(&store, connection_id, "alpha archive").await;
 
     store
         .activate_workspace(workspace_id, Some(&user_b.id))
@@ -2104,11 +1658,6 @@ async fn shared_connection_bindings_are_isolated_per_signed_in_account() {
         Err(AppError::Blocked { .. })
     ));
     assert!(store
-        .get_schema_cache(connection_id)
-        .await
-        .unwrap()
-        .is_none());
-    assert!(store
         .list_history_page(connection_id, None, None, None, None)
         .await
         .unwrap()
@@ -2131,28 +1680,10 @@ async fn shared_connection_bindings_are_isolated_per_signed_in_account() {
             .await,
         Err(AppError::Blocked { .. })
     ));
-    assert!(store
-        .list_retired_chat_archive_threads()
-        .await
-        .unwrap()
-        .is_empty());
-    store
-        .set_schema_cache(connection_id, r#"{"owner":"beta"}"#)
-        .await
-        .unwrap();
-
     store
         .activate_workspace(workspace_id, Some(&user_a.id))
         .await
         .unwrap();
-    assert_eq!(
-        store
-            .get_schema_cache(connection_id)
-            .await
-            .unwrap()
-            .as_deref(),
-        Some(r#"{"owner":"alpha"}"#)
-    );
     let history_page = store
         .list_history_page(connection_id, None, None, None, None)
         .await
@@ -2205,15 +1736,6 @@ async fn shared_connection_bindings_are_isolated_per_signed_in_account() {
             .len(),
         1
     );
-    assert_eq!(
-        store
-            .list_retired_chat_archive_threads()
-            .await
-            .unwrap()
-            .len(),
-        1
-    );
-
     let removed_for_b = store
         .sync_remote_connections(workspace_id, &user_b.id, &[])
         .await
@@ -2259,10 +1781,7 @@ async fn shared_connection_bindings_are_isolated_per_signed_in_account() {
 #[tokio::test]
 async fn pinned_catalog_cache_rejects_scope_aba_and_keeps_accounts_isolated() {
     let pool = memory_pool().await;
-    sqlx::raw_sql(migrations::SCHEMA)
-        .execute(&pool)
-        .await
-        .unwrap();
+    sqlx::raw_sql(schema::SCHEMA).execute(&pool).await.unwrap();
     let store = Store::from_pool_for_test(pool);
     let workspace_id = Uuid::new_v4();
     let connection_id = Uuid::new_v4();
@@ -2309,23 +1828,6 @@ async fn pinned_catalog_cache_rejects_scope_aba_and_keeps_accounts_isolated() {
     assert_eq!(pin_a.catalog_cache_policy, CatalogCachePolicy::Persistent);
     assert!(store.is_pin_current(&pin_a).await.unwrap());
 
-    // V1 rows have no revision provenance and must never be promoted/read by V2.
-    sqlx::query(
-        "INSERT INTO schema_cache
-                (connection_id, account_scope, introspected_at, catalog_json)
-             VALUES (?1, ?2, '2026-01-01', '{\"legacy\":true}')",
-    )
-    .bind(connection_id.to_string())
-    .bind(user_a.id.as_str())
-    .execute(store.pool())
-    .await
-    .unwrap();
-    assert!(store
-        .get_catalog_if_current(&pin_a)
-        .await
-        .unwrap()
-        .is_none());
-
     let snapshot = catalog_snapshot(connection_id, ":memory:", 'a');
     assert_eq!(
         store
@@ -2338,17 +1840,6 @@ async fn pinned_catalog_cache_rejects_scope_aba_and_keeps_accounts_isolated() {
         store.get_catalog_if_current(&pin_a).await.unwrap().unwrap(),
         snapshot
     );
-    let legacy_rows: i64 = sqlx::query_scalar(
-        "SELECT count(*) FROM schema_cache
-             WHERE connection_id = ?1 AND account_scope = ?2",
-    )
-    .bind(connection_id.to_string())
-    .bind(user_a.id.as_str())
-    .fetch_one(store.pool())
-    .await
-    .unwrap();
-    assert_eq!(legacy_rows, 0);
-
     store
         .activate_workspace(workspace_id, Some(&user_b.id))
         .await
@@ -2425,26 +1916,6 @@ async fn pinned_catalog_cache_rejects_scope_aba_and_keeps_accounts_isolated() {
     );
     let repinned_a = role_repinned_a;
 
-    // A rollback binary can only write V1. Its row acts as a freshness marker:
-    // after re-upgrade, the new runtime must miss instead of reviving older V2.
-    sqlx::query(
-        "INSERT INTO schema_cache
-                (connection_id, account_scope, introspected_at, catalog_json)
-             VALUES (?1, ?2, '2026-07-24T00:01:00Z', '{\"rollback\":true}')
-             ON CONFLICT(connection_id, account_scope) DO UPDATE SET
-                introspected_at = excluded.introspected_at,
-                catalog_json = excluded.catalog_json",
-    )
-    .bind(connection_id.to_string())
-    .bind(user_a.id.as_str())
-    .execute(store.pool())
-    .await
-    .unwrap();
-    assert!(store
-        .get_catalog_if_current(&repinned_a)
-        .await
-        .unwrap()
-        .is_none());
     let refreshed = catalog_snapshot(connection_id, ":memory:", 'd');
     assert_eq!(
         store
@@ -2463,7 +1934,7 @@ async fn pinned_catalog_cache_rejects_scope_aba_and_keeps_accounts_isolated() {
     );
 
     sqlx::query(
-        "UPDATE schema_cache_v2 SET captured_at = 'not-a-time'
+        "UPDATE catalog_cache SET captured_at = 'not-a-time'
              WHERE workspace_id = ?1 AND account_scope = ?2 AND connection_id = ?3",
     )
     .bind(workspace_id.to_string())
@@ -2483,7 +1954,7 @@ async fn pinned_catalog_cache_rejects_scope_aba_and_keeps_accounts_isolated() {
         .unwrap();
 
     sqlx::query(
-        "UPDATE schema_cache_v2 SET catalog_json = '{'
+        "UPDATE catalog_cache SET catalog_json = '{'
              WHERE workspace_id = ?1 AND account_scope = ?2 AND connection_id = ?3",
     )
     .bind(workspace_id.to_string())
@@ -2505,7 +1976,7 @@ async fn pinned_catalog_cache_rejects_scope_aba_and_keeps_accounts_isolated() {
     let mut tampered = serde_json::to_value(&refreshed).unwrap();
     tampered["fingerprint"] = serde_json::Value::String("e".repeat(64));
     sqlx::query(
-        "UPDATE schema_cache_v2
+        "UPDATE catalog_cache
              SET fingerprint = ?1, catalog_json = ?2
              WHERE workspace_id = ?3 AND account_scope = ?4 AND connection_id = ?5",
     )
@@ -2528,7 +1999,7 @@ async fn pinned_catalog_cache_rejects_scope_aba_and_keeps_accounts_isolated() {
         .unwrap();
 
     sqlx::query(
-        "UPDATE schema_cache_v2 SET catalog_schema_version = 1
+        "UPDATE catalog_cache SET catalog_schema_version = 1
              WHERE workspace_id = ?1 AND account_scope = ?2 AND connection_id = ?3",
     )
     .bind(workspace_id.to_string())

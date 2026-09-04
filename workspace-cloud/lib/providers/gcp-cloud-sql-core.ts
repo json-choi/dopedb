@@ -466,16 +466,7 @@ export function gcpConnectionTarget(input: {
     selectedCaMode !== "GOOGLE_MANAGED_INTERNAL_CA"
     || selectedMode === "PRIVATE_SERVICE_CONNECT"
   ) {
-    let dns = targets.find((item) => item.connectionType === selectedMode)?.name;
-    if (!dns && selectedMode === "PRIVATE_SERVICE_CONNECT") {
-      const legacyDns = validDnsName(connectSettings.dnsName);
-      if (
-        connectSettings.pscEnabled === true
-        && legacyDns?.endsWith(".sql.goog")
-      ) {
-        dns = legacyDns;
-      }
-    }
+    const dns = targets.find((item) => item.connectionType === selectedMode)?.name;
     if (!dns) {
       throw new Error(
         "Cloud SQL has no instance-scoped DNS name for the selected network",

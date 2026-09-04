@@ -52,12 +52,10 @@ export function createBenchmarkAggregates(harness) {
     };
   }
 
-  function actionMetricSamples(group, samplesKey, legacyKey) {
+  function actionMetricSamples(group, samplesKey) {
     return group.flatMap((action) => {
       const samples = action[samplesKey];
-      if (Array.isArray(samples)) return samples.filter(Number.isFinite);
-      const legacy = action[legacyKey];
-      return Number.isFinite(legacy) ? [legacy] : [];
+      return Array.isArray(samples) ? samples.filter(Number.isFinite) : [];
     });
   }
 
@@ -83,42 +81,34 @@ export function createBenchmarkAggregates(harness) {
       const backendRequestToFirstRow = actionMetricSamples(
         group,
         "backendRequestToFirstRowSamplesMs",
-        "backendRequestToFirstRowMs",
       );
       const backendFirstRowToIpcBatch = actionMetricSamples(
         group,
         "backendFirstRowToIpcBatchSamplesMs",
-        "backendFirstRowToIpcBatchMs",
       );
       const ipcBatchToReactCommit = actionMetricSamples(
         group,
         "ipcBatchToReactCommitSamplesMs",
-        "ipcBatchToReactCommitMs",
       );
       const operationClaim = actionMetricSamples(
         group,
         "operationClaimSamplesMs",
-        "operationClaimMs",
       );
       const poolConnectStart = actionMetricSamples(
         group,
         "poolConnectStartSamplesMs",
-        "poolConnectStartMs",
       );
       const poolConnectReady = actionMetricSamples(
         group,
         "poolConnectReadySamplesMs",
-        "poolConnectReadyMs",
       );
       const backendExecuteStart = actionMetricSamples(
         group,
         "backendExecuteStartSamplesMs",
-        "backendExecuteStartMs",
       );
       const firstRow = actionMetricSamples(
         group,
         "firstRowSamplesMs",
-        "firstRowMs",
       );
       const firstIpcBatch = actionMetricSamples(
         group,

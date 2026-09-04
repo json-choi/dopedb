@@ -227,13 +227,13 @@ async function kick(request: Request, env: Env) {
   if (!parsed) return response({ accepted: false }, 400);
   try {
     await env.SCHEDULER_DB.prepare(`
-      INSERT INTO workspace_background_task_v1 (
+      INSERT INTO workspace_background_task (
         task, due_at_ms, lease_until_ms, lease_token, generation,
         failure_count, last_error_kind, updated_at_ms
       ) VALUES (?, ?, 0, NULL, 1, 0, NULL, ?)
       ON CONFLICT(task) DO UPDATE SET
-        due_at_ms = min(workspace_background_task_v1.due_at_ms, excluded.due_at_ms),
-        generation = workspace_background_task_v1.generation + 1,
+        due_at_ms = min(workspace_background_task.due_at_ms, excluded.due_at_ms),
+        generation = workspace_background_task.generation + 1,
         failure_count = 0,
         last_error_kind = NULL,
         updated_at_ms = excluded.updated_at_ms
@@ -247,7 +247,7 @@ async function kick(request: Request, env: Env) {
 async function claimTask(env: Env, task: Task, nowMs: number): Promise<ClaimedTask | null> {
   const leaseToken = crypto.randomUUID();
   return env.SCHEDULER_DB.prepare(`
-    UPDATE workspace_background_task_v1
+    UPDATE workspace_background_task
     SET lease_until_ms = ?, lease_token = ?, generation = generation + 1,
       updated_at_ms = ?
     WHERE task = ? AND due_at_ms <= ? AND lease_until_ms <= ?
@@ -299,7 +299,7 @@ async function finishTask(
   const nowMs = Date.now();
   const failed = errorKind !== null;
   const result = await env.SCHEDULER_DB.prepare(`
-    UPDATE workspace_background_task_v1
+    UPDATE workspace_background_task
     SET due_at_ms = ?, lease_until_ms = 0, lease_token = NULL,
       failure_count = ?, last_error_kind = ?, updated_at_ms = ?
     WHERE task = ? AND generation = ? AND lease_token = ?
@@ -316,7 +316,7 @@ async function finishTask(
     // A concurrent kick advanced generation and owns the earlier due_at. Only
     // release this exact lease; never overwrite the producer's wake-up.
     await env.SCHEDULER_DB.prepare(`
-      UPDATE workspace_background_task_v1
+      UPDATE workspace_background_task
       SET lease_until_ms = 0, lease_token = NULL, updated_at_ms = ?
       WHERE task = ? AND lease_token = ?
     `).bind(nowMs, claim.task, claim.lease_token).run();

@@ -17,7 +17,6 @@ pub mod features;
 mod hosted_control_plane;
 mod introspect;
 mod kernel;
-mod legacy_mcp_cleanup;
 pub mod model;
 mod mongo;
 mod monitoring;
@@ -37,8 +36,6 @@ pub use error::{AppError, AppResult};
 use std::time::Duration;
 
 use tauri::{Emitter, Manager};
-#[cfg(any(target_os = "macos", windows, target_os = "linux"))]
-use tauri_plugin_autostart::ManagerExt;
 
 pub fn run() {
     #[cfg(feature = "packaged-benchmark")]
@@ -65,11 +62,6 @@ pub fn run() {
             let _ = window.set_focus();
         }
     }));
-    #[cfg(any(target_os = "macos", windows, target_os = "linux"))]
-    let builder = builder.plugin(tauri_plugin_autostart::init(
-        tauri_plugin_autostart::MacosLauncher::LaunchAgent,
-        None,
-    ));
     builder
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
@@ -78,12 +70,6 @@ pub fn run() {
         .manage(state)
         .setup(|app| {
             let state = app.state::<state::AppState>();
-            #[cfg(any(target_os = "macos", windows, target_os = "linux"))]
-            if app.autolaunch().is_enabled().unwrap_or(false) {
-                if let Err(error) = app.autolaunch().disable() {
-                    tracing::warn!(%error, "could not remove retired Analysis autostart registration");
-                }
-            }
             let mut events = state.services.job.subscribe();
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
@@ -146,8 +132,6 @@ pub fn run() {
             features::agents::transport::install_agent_acp_plugin,
             features::agents::transport::remove_agent_acp_plugin,
             features::agents::transport::set_agent_acp_plugin_enabled,
-            features::agents::transport::list_retired_chat_archive_threads,
-            features::agents::transport::get_retired_chat_archive_messages,
             features::workspaces::transport::workspace_feature_state,
             commands::cli_installation_status,
             commands::install_cli,
@@ -163,8 +147,6 @@ pub fn run() {
             packaged_benchmark::run_packaged_benchmark_backend,
             packaged_benchmark::complete_packaged_benchmark,
             packaged_benchmark::fail_packaged_benchmark,
-            legacy_mcp_cleanup::legacy_mcp_cleanup_status,
-            legacy_mcp_cleanup::legacy_mcp_cleanup_apply,
             features::terminals::transport::terminal_create,
             features::terminals::transport::terminal_write,
             features::terminals::transport::terminal_resize,
@@ -244,13 +226,11 @@ pub fn run() {
             features::analysis_articles::transport::list_analysis_article_runs_command,
             features::analysis_articles::transport::run_analysis_article_command,
             features::analysis_articles::transport::cancel_analysis_article_run,
-            features::catalog::transport::get_schema,
-            features::catalog::transport::refresh_schema,
             features::catalog::transport::get_catalog_snapshot,
+            features::catalog::transport::refresh_catalog_snapshot,
             features::catalog::transport::get_catalog_overview,
             features::catalog::transport::list_connection_databases,
             features::connections::transport::discover_connection_profile_databases,
-            features::catalog::transport::get_database_schema,
             features::catalog::transport::get_database_catalog_overview,
             features::catalog::transport::get_database_catalog_snapshot,
             features::catalog::transport::get_table_ddl,

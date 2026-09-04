@@ -58,7 +58,7 @@ export function collectQueryProductionModuleDiagnostics(context) {
     const lines = lineCount(read(filePath));
     if (lines > ratchet.featureFileLineLimit) {
       diagnostics.push(
-        `${filePath}: replacement module has ${lines} lines; keep migrated modules below ${ratchet.featureFileLineLimit}`,
+        `${filePath}: query module has ${lines} lines; keep query modules below ${ratchet.featureFileLineLimit}`,
       );
     }
   }
@@ -87,7 +87,7 @@ export function collectQueryTestModuleDiagnostics(context) {
     actual.some((filePath, index) => filePath !== expected[index])
   ) {
     diagnostics.push(
-      `src-tauri/src/features/queries: replacement module set changed; expected ${expected.join(", ")}, found ${actual.join(", ") || "none"}`,
+      `src-tauri/src/features/queries: approved module set changed; expected ${expected.join(", ")}, found ${actual.join(", ") || "none"}`,
     );
   }
   return diagnostics;

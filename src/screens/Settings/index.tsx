@@ -27,7 +27,6 @@ import AdvancedSettings from "./Advanced";
 import AgentTools from "./AgentTools";
 import CliSettings from "./Cli";
 import PrivacySettings from "./Privacy";
-import RetiredChatArchive from "./RetiredChatArchive";
 import Safety from "./Safety";
 import Updates from "./Updates";
 
@@ -84,13 +83,6 @@ export default function Settings({
           scope: "application",
           disabled: false,
           keywords: "command line terminal path cli",
-        },
-        {
-          id: "archive",
-          label: t("settings.retiredArchive"),
-          scope: "application",
-          disabled: false,
-          keywords: "chat history archive conversation",
         },
         {
           id: "language",
@@ -299,9 +291,6 @@ export default function Settings({
                 {section === "agent-tools" && <AgentTools />}
                 {section === "advanced" && <AdvancedSettings />}
                 {section === "cli" && <CliSettings connection={connection} />}
-                {section === "archive" && (
-                  <RetiredChatArchive connection={connection} />
-                )}
                 {section === "privacy" && <PrivacySettings />}
                 {section === "updates" && (
                   <Updates

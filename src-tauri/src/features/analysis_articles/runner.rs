@@ -38,25 +38,24 @@ where
                 "Analysis Article revision must be positive".into(),
             ));
         }
-        validate_definition(&request.definition, &request.connections)?;
+        if request.connection_revision < 1 {
+            return Err(AppError::Config(
+                "Analysis Article connection revision must be positive".into(),
+            ));
+        }
+        validate_definition(&request.definition)?;
         let cancellation = cancel::register(request.run_id);
         if cancellation.is_cancelled() {
             return Err(AppError::Safety("Analysis Article run cancelled".into()));
         }
         let query = &request.definition.query;
-        let authority = request
-            .connections
-            .iter()
-            .find(|connection| connection.role == query.connection_role)
-            .ok_or_else(|| {
-                AppError::Config("Analysis Article query lost its connection authority".into())
-            })?;
         let outcome = self
             .execution
             .execute_read(AnalysisReadExecutionRequest {
                 workspace_id: request.workspace_id,
                 project_environment_id: request.project_environment_id,
-                authority,
+                connection_id: request.connection_id,
+                connection_revision: request.connection_revision,
                 query,
                 run_id: Uuid::new_v4(),
                 cancellation_id: request.run_id,
@@ -170,8 +169,6 @@ fn sha256(bytes: &[u8]) -> String {
 pub(crate) fn assert_runner_safety_contract() {
     super::adapters::assert_exact_query_contract();
     super::adapters::assert_hosted_mutation_error_contract();
-    super::result_compat::assert_result_compat_contract();
-
     let fixture: Value = serde_json::from_str(include_str!(
         "../../../../dopedb-protocol/tests/fixtures/control-plane-contracts-v1.json"
     ))

@@ -1,6 +1,5 @@
 import {
   analysisArticleSources,
-  type AnalysisArticleConnection,
   type AnalysisArticleDefinition,
   type AnalysisArticleSource,
   type AnalysisArticleVersionPayload,
@@ -9,17 +8,11 @@ import {
 } from "./workspace-analysis-article-contracts";
 import { parseColumns } from "./workspace-analysis-column-parser";
 import { sanitizeAnalysisArticleHtml } from "./workspace-analysis-html";
-import { parseLegacyAnalysisArticleDefinition } from "./workspace-analysis-legacy-definition";
-import {
-  parseRetiredAnalysisArticleVersionPayload,
-  withRetiredArticleRecordFields,
-} from "./workspace-analysis-version-compat";
 import {
   analysisId as id,
   displayText,
   exactRecord,
   safeInteger,
-  uniqueValues as unique,
 } from "./workspace-analysis-validation";
 
 export * from "./workspace-analysis-article-contracts";
@@ -107,28 +100,15 @@ function validateReadOnlySql(sql: string) {
   }
 }
 
-function parseConnection(value: unknown): AnalysisArticleConnection {
-  const row = exactRecord(value, ["connectionId", "connectionRevision", "role", "alias"]);
-  const revision = safeInteger(row?.connectionRevision, 1, Number.MAX_SAFE_INTEGER);
-  const role = id(row?.role);
-  const alias = displayText(row?.alias, 128);
-  if (!row || typeof row.connectionId !== "string" || !UUID.test(row.connectionId)
-    || revision === null || role === null || alias === null) {
-    throw new Error("Invalid Analysis Article connection");
-  }
-  return { connectionId: row.connectionId, connectionRevision: revision, role, alias };
-}
-
 function parseQuery(value: unknown): AnalysisQueryNode {
   const row = exactRecord(value, [
-    "id", "title", "connectionRole", "sql", "maxRows", "maxBytes", "columns",
+    "id", "title", "sql", "maxRows", "maxBytes", "columns",
   ]);
   const queryId = id(row?.id);
   const title = displayText(row?.title, 256);
-  const connectionRole = id(row?.connectionRole);
   const maxRows = safeInteger(row?.maxRows, 1, 50_000);
   const maxBytes = safeInteger(row?.maxBytes, 1_024, 16 * 1024 * 1024);
-  if (!row || queryId === null || title === null || connectionRole === null
+  if (!row || queryId === null || title === null
     || typeof row.sql !== "string" || row.sql.trim().length === 0
     || new TextEncoder().encode(row.sql).byteLength > 100_000 || row.sql.includes("\u0000")
     || maxRows === null || maxBytes === null) {
@@ -138,7 +118,6 @@ function parseQuery(value: unknown): AnalysisQueryNode {
   return {
     id: queryId,
     title,
-    connectionRole,
     sql: row.sql,
     maxRows,
     maxBytes,
@@ -164,40 +143,32 @@ function parseCurrentDefinition(value: unknown): AnalysisArticleDefinition | nul
 }
 
 function parseDefinition(value: unknown) {
-  return parseCurrentDefinition(value) ?? parseLegacyAnalysisArticleDefinition(value, parseQuery);
+  const definition = parseCurrentDefinition(value);
+  if (!definition) throw new Error("Invalid Analysis Article definition");
+  return definition;
 }
 
 export function parseSharedAnalysisArticleCreate(value: unknown): SharedAnalysisArticleCreate {
   const row = exactRecord(value, [
-    "id", "projectEnvironmentId", "environmentRevision", "sourceKnowledgeGrantId",
-    "graphRevisionIds", "connections", "definition",
+    "id", "projectEnvironmentId", "environmentRevision", "connectionId",
+    "connectionRevision", "definition",
   ]);
   const environmentRevision = safeInteger(row?.environmentRevision, 1, Number.MAX_SAFE_INTEGER);
+  const connectionRevision = safeInteger(row?.connectionRevision, 1, Number.MAX_SAFE_INTEGER);
   if (!row || typeof row.id !== "string" || !UUID.test(row.id)
     || typeof row.projectEnvironmentId !== "string" || !UUID.test(row.projectEnvironmentId)
     || environmentRevision === null
-    || row.sourceKnowledgeGrantId !== null
-    || !Array.isArray(row.graphRevisionIds) || row.graphRevisionIds.length !== 0
-    || !Array.isArray(row.connections) || row.connections.length < 1 || row.connections.length > 32) {
+    || typeof row.connectionId !== "string" || !UUID.test(row.connectionId)
+    || connectionRevision === null) {
     throw new Error("Invalid Analysis Article authority");
   }
-  const connections = row.connections.map(parseConnection);
-  if (!unique(connections.map((connection) => connection.connectionId))
-    || !unique(connections.map((connection) => connection.role))) {
-    throw new Error("Duplicate Analysis Article connection authority");
-  }
   const definition = parseDefinition(row.definition);
-  const queryConnection = connections.find(
-    (connection) => connection.role === definition.query.connectionRole,
-  );
-  if (!queryConnection) throw new Error("Analysis Article query connection is unavailable");
   return {
     id: row.id,
     projectEnvironmentId: row.projectEnvironmentId,
     environmentRevision,
-    sourceKnowledgeGrantId: null,
-    graphRevisionIds: [],
-    connections: [queryConnection],
+    connectionId: row.connectionId,
+    connectionRevision,
     definition,
   };
 }
@@ -206,7 +177,14 @@ export function analysisArticleVersionPayload(input: SharedAnalysisArticleCreate
   ownerMemberId: string;
   deleted?: boolean;
 }): AnalysisArticleVersionPayload {
-  const parsed = parseSharedAnalysisArticleCreate(input);
+  const parsed = parseSharedAnalysisArticleCreate({
+    id: input.id,
+    projectEnvironmentId: input.projectEnvironmentId,
+    environmentRevision: input.environmentRevision,
+    connectionId: input.connectionId,
+    connectionRevision: input.connectionRevision,
+    definition: input.definition,
+  });
   if (!input.ownerMemberId) {
     throw new Error("Invalid Analysis Article version authority");
   }
@@ -215,19 +193,14 @@ export function analysisArticleVersionPayload(input: SharedAnalysisArticleCreate
 
 export function parseAnalysisArticleVersionPayload(value: unknown): AnalysisArticleVersionPayload {
   const row = exactRecord(value, [
-    "id", "projectEnvironmentId", "environmentRevision", "sourceKnowledgeGrantId",
-    "graphRevisionIds", "connections", "definition", "ownerMemberId", "deleted",
+    "id", "projectEnvironmentId", "environmentRevision", "connectionId",
+    "connectionRevision", "definition", "ownerMemberId", "deleted",
   ]);
   if (row && typeof row.ownerMemberId === "string"
     && row.ownerMemberId.length > 0 && typeof row.deleted === "boolean") {
     const article = parseSharedAnalysisArticleCreate(row);
     return { ...article, ownerMemberId: row.ownerMemberId, deleted: row.deleted };
   }
-  const retired = parseRetiredAnalysisArticleVersionPayload(
-    value,
-    parseSharedAnalysisArticleCreate,
-  );
-  if (retired) return retired;
   throw new Error("Invalid Analysis Article revision payload");
 }
 
@@ -235,9 +208,8 @@ export function publicAnalysisArticle(row: {
   id: string;
   projectEnvironmentId: string;
   environmentRevision: number;
-  sourceKnowledgeGrantId: string | null;
-  graphRevisionIds: readonly string[];
-  connections: readonly AnalysisArticleConnection[];
+  connectionId: string;
+  connectionRevision: number;
   definition: unknown;
   ownerMemberId: string;
   updatedByMemberId: string;
@@ -253,7 +225,7 @@ export function publicAnalysisArticle(row: {
     || Number.isNaN(row.createdAt.valueOf()) || Number.isNaN(row.updatedAt.valueOf())) {
     throw new Error("Invalid stored Analysis Article");
   }
-  return withRetiredArticleRecordFields({
+  return {
     ...parsed,
     ownerMemberId: row.ownerMemberId,
     updatedByMemberId: row.updatedByMemberId,
@@ -261,5 +233,5 @@ export function publicAnalysisArticle(row: {
     latestSuccessfulRunId: row.latestSuccessfulRunId,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
-  });
+  };
 }

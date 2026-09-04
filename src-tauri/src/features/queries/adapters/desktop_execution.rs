@@ -280,7 +280,7 @@ impl QueryPlatformAdapter {
                     })
                 }),
             // DDL has its own exact schema authority and must never be routed
-            // through an older manual read/write transaction pool.
+            // through the generic manual read/write transaction pool.
             QueryKind::Ddl | QueryKind::Privilege => None,
         };
         let (manual_transaction, execution) = match manual_execution {

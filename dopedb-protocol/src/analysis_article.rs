@@ -1,8 +1,6 @@
 //! Credential-free contracts for current Analysis Articles.
 //!
-//! A current definition is sanitized HTML plus exactly one bounded read-only
-//! query. Deserialization of the retired expanded definition is isolated in
-//! `analysis_article_compat`; serialization always emits this compact shape.
+//! A definition is sanitized HTML plus exactly one bounded read-only query.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -17,7 +15,6 @@ pub enum AnalysisArticleSource {
     DopedbAcpClaude,
     #[serde(rename = "dopedb.acp.codex")]
     DopedbAcpCodex,
-    Migration,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -64,16 +61,6 @@ pub enum AnalysisColumnMasking {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct AnalysisArticleConnection {
-    #[serde(deserialize_with = "deserialize_contract_uuid")]
-    pub connection_id: Uuid,
-    pub connection_revision: i64,
-    pub role: String,
-    pub alias: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AnalysisColumn {
     pub name: String,
     #[serde(rename = "type")]
@@ -89,14 +76,13 @@ pub struct AnalysisColumn {
 pub struct AnalysisQueryNode {
     pub id: String,
     pub title: String,
-    pub connection_role: String,
     pub sql: String,
     pub max_rows: u64,
     pub max_bytes: usize,
     pub columns: Vec<AnalysisColumn>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AnalysisArticleDefinition {
     pub version: u32,
@@ -104,15 +90,6 @@ pub struct AnalysisArticleDefinition {
     pub title: String,
     pub html: String,
     pub query: AnalysisQueryNode,
-}
-
-impl<'de> Deserialize<'de> for AnalysisArticleDefinition {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        crate::analysis_article_compat::deserialize_definition(deserializer)
-    }
 }
 
 /// Agent-authored portion of a current Analysis Article. Authority and source
@@ -146,11 +123,9 @@ pub struct SharedAnalysisArticleCreate {
     #[serde(deserialize_with = "deserialize_contract_uuid")]
     pub project_environment_id: Uuid,
     pub environment_revision: i64,
-    #[serde(deserialize_with = "deserialize_required_contract_uuid_nullable")]
-    pub source_knowledge_grant_id: Option<Uuid>,
-    #[serde(deserialize_with = "deserialize_contract_uuid_list")]
-    pub graph_revision_ids: Vec<Uuid>,
-    pub connections: Vec<AnalysisArticleConnection>,
+    #[serde(deserialize_with = "deserialize_contract_uuid")]
+    pub connection_id: Uuid,
+    pub connection_revision: i64,
     pub definition: AnalysisArticleDefinition,
 }
 
@@ -168,33 +143,6 @@ where
     parse_contract_uuid(&value).ok_or_else(|| serde::de::Error::custom("invalid contract UUID"))
 }
 
-fn deserialize_required_contract_uuid_nullable<'de, D>(
-    deserializer: D,
-) -> Result<Option<Uuid>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    Option::<String>::deserialize(deserializer)?
-        .map(|value| {
-            parse_contract_uuid(&value)
-                .ok_or_else(|| serde::de::Error::custom("invalid contract UUID"))
-        })
-        .transpose()
-}
-
-fn deserialize_contract_uuid_list<'de, D>(deserializer: D) -> Result<Vec<Uuid>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    Vec::<String>::deserialize(deserializer)?
-        .into_iter()
-        .map(|value| {
-            parse_contract_uuid(&value)
-                .ok_or_else(|| serde::de::Error::custom("invalid contract UUID"))
-        })
-        .collect()
-}
-
 fn parse_contract_uuid(value: &str) -> Option<Uuid> {
     let bytes = value.as_bytes();
     (bytes.len() == 36
@@ -209,38 +157,27 @@ fn parse_contract_uuid(value: &str) -> Option<Uuid> {
     .flatten()
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AnalysisArticleVersionPayload {
     pub id: Uuid,
     pub project_environment_id: Uuid,
     pub environment_revision: i64,
-    pub source_knowledge_grant_id: Option<Uuid>,
-    pub graph_revision_ids: Vec<Uuid>,
-    pub connections: Vec<AnalysisArticleConnection>,
+    pub connection_id: Uuid,
+    pub connection_revision: i64,
     pub definition: AnalysisArticleDefinition,
     pub owner_member_id: String,
     pub deleted: bool,
 }
 
-impl<'de> Deserialize<'de> for AnalysisArticleVersionPayload {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        crate::analysis_article_compat::deserialize_version_payload(deserializer)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AnalysisArticleRecord {
     pub id: Uuid,
     pub project_environment_id: Uuid,
     pub environment_revision: i64,
-    pub source_knowledge_grant_id: Option<Uuid>,
-    pub graph_revision_ids: Vec<Uuid>,
-    pub connections: Vec<AnalysisArticleConnection>,
+    pub connection_id: Uuid,
+    pub connection_revision: i64,
     pub definition: AnalysisArticleDefinition,
     pub owner_member_id: String,
     pub updated_by_member_id: String,
@@ -248,15 +185,6 @@ pub struct AnalysisArticleRecord {
     pub latest_successful_run_id: Option<Uuid>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
-}
-
-impl<'de> Deserialize<'de> for AnalysisArticleRecord {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        crate::analysis_article_compat::deserialize_record(deserializer)
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

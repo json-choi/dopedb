@@ -15,8 +15,6 @@ import {
   localizedNeonFindingText,
 } from "../../lib/workspace-provider-copy";
 
-type ImportIntent = "" | "create" | "replace";
-
 export function ProviderResourcePicker({
   controller,
 }: {
@@ -28,19 +26,15 @@ export function ProviderResourcePicker({
   const steps = [
     copy.steps.account,
     copy.steps.database,
-    copy.steps.mode,
     copy.steps.review,
   ];
   const {
     integrations,
-    connections,
-    selectedConnectionId,
     selectedIntegrationId,
     selection,
     resourceOptions,
     resourcePending,
     mutation,
-    selectedConnection,
     selectedIntegration,
     selectedProvider,
     resourceComplete,
@@ -54,16 +48,11 @@ export function ProviderResourcePicker({
     preflightNeonBootstrap,
     resetResources,
     selectResource,
-    setSelectedConnectionId,
     setSelectedIntegrationId,
     setNeonPublicAclApproved,
     setNeonProductionApproved,
   } = controller;
   const [step, setStep] = useState(1);
-  const [intent, setIntent] = useState<ImportIntent>("");
-  const replaceableConnections = connections.filter(
-    (connection) => connection.credentialMode === "member_local",
-  );
   const finalLevel = selectedProvider?.resourceLevels.at(-1);
   const finalResource = finalLevel
     ? resourceOptions[finalLevel.key]?.find(
@@ -101,18 +90,7 @@ export function ProviderResourcePicker({
 
   function chooseIntegration(integrationId: string) {
     setSelectedIntegrationId(integrationId);
-    setSelectedConnectionId("");
-    setIntent("");
     resetResources();
-  }
-
-  function chooseIntent(nextIntent: Exclude<ImportIntent, "">) {
-    setIntent(nextIntent);
-    if (nextIntent === "create") {
-      setSelectedConnectionId("");
-    } else {
-      setSelectedConnectionId(replaceableConnections[0]?.id ?? "");
-    }
   }
 
   return (
@@ -128,11 +106,11 @@ export function ProviderResourcePicker({
             </small>
           </div>
           <span className="tw:font-mono tw:text-2xs tw:uppercase tw:text-primary">
-            {step} / 4
+            {step} / 3
           </span>
         </div>
         <ol
-          className="tw:m-0 tw:grid tw:list-none tw:grid-cols-4 tw:gap-px tw:p-0"
+          className="tw:m-0 tw:grid tw:list-none tw:grid-cols-3 tw:gap-px tw:p-0"
           aria-label={copy.progressLabel}
         >
           {steps.map((label, index) => {
@@ -273,76 +251,6 @@ export function ProviderResourcePicker({
           <>
             <div className="tw:grid tw:gap-1">
               <strong className="tw:text-sm tw:text-foreground">
-                {copy.modeQuestion}
-              </strong>
-              <p className="tw:m-0 tw:text-2xs tw:leading-body tw:text-muted-foreground">
-                {copy.modeDescription}
-              </p>
-            </div>
-            <div className="tw:grid tw:border-t tw:border-border">
-              <button
-                className="tw:grid tw:min-h-[64px] tw:grid-cols-[auto_minmax(0,1fr)] tw:items-start tw:gap-3 tw:border-0 tw:border-b tw:border-border tw:bg-transparent tw:px-2 tw:py-3 tw:text-left tw:text-foreground tw:hover:bg-surface-raised tw:data-[selected=true]:bg-selection"
-                type="button"
-                data-selected={intent === "create"}
-                onClick={() => chooseIntent("create")}
-              >
-                <span className="tw:mt-0.5 tw:grid tw:size-4 tw:place-items-center tw:rounded-full tw:border tw:border-border tw:data-[selected=true]:border-primary">
-                  <i
-                    className="tw:size-2 tw:rounded-full tw:bg-transparent tw:data-[selected=true]:bg-primary"
-                    data-selected={intent === "create"}
-                  />
-                </span>
-                <span className="tw:grid tw:gap-1">
-                  <strong className="tw:text-xs">{copy.createTitle}</strong>
-                  <small className="tw:text-2xs tw:leading-body tw:text-muted-foreground">
-                    {copy.createDescription}
-                  </small>
-                </span>
-              </button>
-              <button
-                className="tw:grid tw:min-h-[64px] tw:grid-cols-[auto_minmax(0,1fr)] tw:items-start tw:gap-3 tw:border-0 tw:border-b tw:border-border tw:bg-transparent tw:px-2 tw:py-3 tw:text-left tw:text-foreground tw:hover:bg-surface-raised tw:data-[selected=true]:bg-selection tw:disabled:cursor-not-allowed tw:disabled:opacity-[var(--ds-disabled-opacity)]"
-                type="button"
-                data-selected={intent === "replace"}
-                disabled={replaceableConnections.length === 0}
-                onClick={() => chooseIntent("replace")}
-              >
-                <span className="tw:mt-0.5 tw:grid tw:size-4 tw:place-items-center tw:rounded-full tw:border tw:border-border">
-                  <i
-                    className="tw:size-2 tw:rounded-full tw:bg-transparent tw:data-[selected=true]:bg-primary"
-                    data-selected={intent === "replace"}
-                  />
-                </span>
-                <span className="tw:grid tw:gap-1">
-                  <strong className="tw:text-xs">{copy.replaceTitle}</strong>
-                  <small className="tw:text-2xs tw:leading-body tw:text-muted-foreground">
-                    {copy.replaceDescription}
-                  </small>
-                </span>
-              </button>
-            </div>
-            {intent === "replace" ? (
-              <ControlField label={copy.replaceField}>
-                <ControlSelect
-                  value={selectedConnectionId}
-                  onChange={(event) =>
-                    setSelectedConnectionId(event.target.value)
-                  }
-                >
-                  {replaceableConnections.map((connection) => (
-                    <option value={connection.id} key={connection.id}>
-                      {connection.name} · {connection.engine}
-                    </option>
-                  ))}
-                </ControlSelect>
-              </ControlField>
-            ) : null}
-          </>
-        ) : null}
-
-        {step === 4 ? (
-          <>
-            <div className="tw:grid tw:gap-1">
-              <strong className="tw:text-sm tw:text-foreground">
                 {copy.reviewTitle}
               </strong>
               <p className="tw:m-0 tw:text-2xs tw:leading-body tw:text-muted-foreground">
@@ -366,14 +274,6 @@ export function ProviderResourcePicker({
               </dt>
               <dd className="tw:m-0 tw:border-b tw:border-border tw:py-2 tw:text-foreground">
                 {targetLabel}
-              </dd>
-              <dt className="tw:border-b tw:border-border tw:py-2 tw:font-mono tw:text-2xs tw:uppercase tw:text-muted-foreground">
-                {copy.connectionMode}
-              </dt>
-              <dd className="tw:m-0 tw:border-b tw:border-border tw:py-2 tw:text-foreground">
-                {intent === "replace"
-                  ? `${selectedConnection?.name ?? copy.selectedConnection} ${copy.replaceSuffix}`
-                  : copy.newSharedDatabase}
               </dd>
               <dt className="tw:border-b tw:border-border tw:py-2 tw:font-mono tw:text-2xs tw:uppercase tw:text-muted-foreground">
                 {copy.credentials}
@@ -603,21 +503,14 @@ export function ProviderResourcePicker({
         >
           {copy.previous}
         </ControlButton>
-        {step < 4 ? (
+        {step < 3 ? (
           <ControlButton
             tone="primary"
-            onClick={() => setStep((current) => Math.min(4, current + 1))}
+            onClick={() => setStep((current) => Math.min(3, current + 1))}
             disabled={
               mutation !== ""
               || (step === 1 && !selectedIntegration)
               || (step === 2 && !resourceComplete)
-              || (
-                step === 3
-                && (
-                  !intent
-                  || (intent === "replace" && !selectedConnectionId)
-                )
-              )
             }
           >
             {copy.continue}
@@ -634,9 +527,7 @@ export function ProviderResourcePicker({
           >
             {mutation.startsWith("import:")
               ? copy.registeringButton
-              : intent === "replace"
-                ? copy.replaceButton
-                : copy.createButton}
+              : copy.createButton}
           </ControlButton>
         )}
       </footer>

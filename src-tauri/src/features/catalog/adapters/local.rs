@@ -16,7 +16,7 @@ use crate::kernel::TerminalAuthority;
 use crate::model::{Provider, WorkspaceCredentialMode};
 use crate::store::Store;
 
-use super::super::domain::{Catalog, CatalogOverview, CatalogReadPolicy, DatabaseSummary};
+use super::super::domain::{CatalogOverview, CatalogReadPolicy, DatabaseSummary};
 use super::super::ports::CatalogGatewayPort;
 
 const CATALOG_OVERVIEW_TIMEOUT: Duration = Duration::from_secs(20);
@@ -33,18 +33,6 @@ fn database_bound_authority(pin: &crate::kernel::access::PinnedConnection) -> bo
         || (pin.requires_remote_rbac
             && profile.credential_mode == WorkspaceCredentialMode::MemberLocal
             && matches!(profile.provider, Provider::Neon | Provider::GcpCloudSql))
-}
-
-fn scope_catalog(mut catalog: Catalog, database: &str) -> Catalog {
-    for table in &mut catalog.tables {
-        table.database = Some(database.to_owned());
-    }
-    catalog
-}
-
-fn scope_overview(mut overview: CatalogOverview, database: &str) -> CatalogOverview {
-    overview.database = Some(database.to_owned());
-    overview
 }
 
 async fn bounded_catalog_read<T>(
@@ -140,26 +128,6 @@ impl ScopedCatalogGateway {
 }
 
 impl CatalogGatewayPort for ScopedCatalogGateway {
-    async fn load(
-        &self,
-        connection_id: ConnectionId,
-        policy: CatalogReadPolicy,
-    ) -> AppResult<Catalog> {
-        bounded_catalog_read("catalog metadata", CATALOG_DETAIL_TIMEOUT, async {
-            let context = self
-                .connections
-                .pin(connection_id.into(), ConnectionAccess::Read)
-                .await?;
-            let database = context.pin().profile.database.clone();
-            let _load = self.loads.acquire(connection_id).await;
-            let _read = self.reads.acquire(connection_id).await?;
-            introspect::load_catalog_in_context(&self.store, context, policy.into())
-                .await
-                .map(|catalog| scope_catalog(catalog, &database))
-        })
-        .await
-    }
-
     async fn load_snapshot(
         &self,
         connection_id: ConnectionId,
@@ -189,9 +157,7 @@ impl CatalogGatewayPort for ScopedCatalogGateway {
             let database = context.pin().profile.database.clone();
             let _read = self.reads.acquire(connection_id).await?;
             let lease = context.connect().await?;
-            introspect::overview(lease.live())
-                .await
-                .map(|overview| scope_overview(overview, &database))
+            introspect::overview(lease.live(), &database).await
         })
         .await
     }
@@ -213,29 +179,6 @@ impl CatalogGatewayPort for ScopedCatalogGateway {
             let lease = context.connect().await?;
             introspect::databases(lease.live(), &configured).await
         })
-        .await
-    }
-
-    async fn load_database(
-        &self,
-        connection_id: ConnectionId,
-        database: String,
-    ) -> AppResult<Catalog> {
-        bounded_catalog_read(
-            "database catalog metadata",
-            CATALOG_DETAIL_TIMEOUT,
-            async move {
-                let context = self
-                    .connections
-                    .pin(connection_id.into(), ConnectionAccess::Read)
-                    .await?;
-                let _read = self.reads.acquire(connection_id).await?;
-                let lease = context.connect_to_database(Some(database.clone())).await?;
-                introspect::introspect(lease.live())
-                    .await
-                    .map(|catalog| scope_catalog(catalog, &database))
-            },
-        )
         .await
     }
 
@@ -278,9 +221,7 @@ impl CatalogGatewayPort for ScopedCatalogGateway {
                     .await?;
                 let _read = self.reads.acquire(connection_id).await?;
                 let lease = context.connect_to_database(Some(database.clone())).await?;
-                introspect::overview(lease.live())
-                    .await
-                    .map(|overview| scope_overview(overview, &database))
+                introspect::overview(lease.live(), &database).await
             },
         )
         .await

@@ -88,8 +88,8 @@ const context = {
   relative,
   sourceFiles,
   walk,
-  // This retained ceiling catches new monoliths while ownership migrations split
-  // the existing Provider modules under their separately reviewed workstream.
+  // This retained ceiling catches new monoliths while the Provider modules stay
+  // within their separately reviewed ownership boundaries.
   ratchet: { featureFileLineLimit: 2_200 },
 };
 

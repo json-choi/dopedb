@@ -9,7 +9,7 @@ import {
   isUuid,
   jsonError,
   mutationAllowed,
-  privateRevisionMutationJson,
+  privateJson,
 } from "../../../../../../../../lib/http";
 import { workspaceMetadataBackup } from "../../../../../../../../lib/schema";
 import {
@@ -99,7 +99,7 @@ export async function POST(request: Request, context: RouteContext) {
     snapshot,
   });
   if (!restored) return jsonError("Workspace metadata changed concurrently. Retry restore.", 409);
-  return privateRevisionMutationJson(request, {
+  return privateJson({
     restored: restored.restored,
     conflictIds: restored.conflictIds,
   }, { status: 201 });

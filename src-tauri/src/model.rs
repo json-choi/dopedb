@@ -161,9 +161,6 @@ pub struct ConnectionProfile {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SafetySettings {
-    /// Legacy persisted compatibility field. Exact Operation approval is always
-    /// required for target mutations regardless of this value.
-    pub require_approval: bool,
     pub allow_writes: bool,
     /// Device-local opt-in for DDL. This can only narrow a local owner credential
     /// or a workspace-managed schema lease authorized by an exact manage grant.
@@ -199,7 +196,6 @@ pub struct MonitoringStatus {
 impl Default for SafetySettings {
     fn default() -> Self {
         SafetySettings {
-            require_approval: true,
             allow_writes: false,
             allow_schema_changes: false,
             wrap_writes_in_tx: true,
@@ -242,10 +238,8 @@ pub struct Classification {
     pub tables: Vec<String>,
     pub notes: Vec<String>,
     /// True only for one cleanly parsed top-level INSERT/UPDATE/DELETE. This
-    /// remains classification metadata for consumers that require rollback-safe
-    /// DML; the current L3 preview path is EXPLAIN-only and never executes it.
-    #[serde(default)]
-    pub rollback_safe: bool,
+    /// remains classification metadata for consumers that require direct DML.
+    pub direct_dml: bool,
 }
 
 /// How an impact preview was produced (L3).
@@ -254,9 +248,6 @@ pub struct Classification {
 pub enum PreviewMode {
     /// Read path: EXPLAIN plan only, never executed.
     Explain,
-    /// Legacy wire value retained for older preview reports. The current preview
-    /// path never executes a mutation before approval.
-    ExecRollback,
     /// No plan was requested for this statement or because preview is disabled.
     Skipped,
 }
@@ -268,8 +259,6 @@ pub struct PreviewReport {
     pub mode: PreviewMode,
     /// EXPLAIN-derived row estimate.
     pub estimated_rows: Option<i64>,
-    /// Legacy exact-row field retained for older preview reports.
-    pub exact_rows: Option<i64>,
     /// Raw/formatted plan text, if captured.
     pub plan: Option<String>,
     /// Human note describing the preview result or why no plan was requested.
@@ -408,7 +397,7 @@ pub struct HistoryEntry {
     pub duration_ms: Option<i64>,
     pub error: Option<String>,
     pub executed_at: DateTime<Utc>,
-    /// "agent" | "manual" | "analysis_article" | "migration" | surface id.
+    /// "agent" | "manual" | "analysis_article" | surface id.
     pub origin: String,
 }
 

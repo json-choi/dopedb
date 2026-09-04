@@ -468,7 +468,7 @@ mod tests {
             no_where: false,
             tables: vec!["t".into()],
             notes: vec![],
-            rollback_safe: false,
+            direct_dml: false,
         };
         let enabled = crate::safety::preview(
             PoolRef::Sqlite(&pool),
@@ -498,7 +498,7 @@ mod tests {
                 None,
                 &crate::model::Classification {
                     kind,
-                    rollback_safe: matches!(kind, crate::model::QueryKind::Write),
+                    direct_dml: matches!(kind, crate::model::QueryKind::Write),
                     ..classification.clone()
                 },
                 &settings,

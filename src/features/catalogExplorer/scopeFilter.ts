@@ -24,16 +24,14 @@ export function selectedSchemaScope(profile: ConnectionProfile): string[] {
   if (!value) return [];
   try {
     const parsed = JSON.parse(value);
-    if (Array.isArray(parsed)) {
-      return parsed
-        .filter((schema): schema is string => typeof schema === "string")
-        .map((schema) => schema.trim())
-        .filter(Boolean);
-    }
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((schema): schema is string => typeof schema === "string")
+      .map((schema) => schema.trim())
+      .filter(Boolean);
   } catch {
-    // Read the original comma-separated preview format if it exists.
+    return [];
   }
-  return value.split(",").map((schema) => schema.trim()).filter(Boolean);
 }
 
 export function nextSchemaScopeSelection(

@@ -59,7 +59,7 @@ pnpm benchmark:packaged-release -- --output src-tauri/benchmarks/packaged-releas
 | Interactions | 1,000-node ERD, 50,000행 grid, Services pane, 긴 Workbench document | drag, column resize, Services/main resize → 두 번째 frame, resize 뒤 grid/document scroll과 마지막 action focus 보존 |
 | Idle | workload 화면을 10초간 그대로 유지 | IPC 호출 수를 분당 값으로 정규화 |
 
-Cold는 migration을 마친 sealed fixture를 새 process가 처음 여는 상태다. Warm은 그
+Cold는 현재 MVP schema로 sealed한 fixture를 새 process가 처음 여는 상태다. Warm은 그
 process가 정상 종료한 같은 clone을 새 process가 다시 여는 상태다. 두 상태 모두
 OS file cache 자체를 강제로 비우지는 않으므로 hardware와 OS가 다른 artifact끼리
 절대 수치를 직접 비교하지 않는다.

@@ -23,9 +23,7 @@ impl AcpRuntime {
                         || scope.connections.iter().any(|connection| {
                             ConnectionId::from(connection.connection_id) == connection_id
                         })
-                }) || summary.environment_connections.iter().any(
-                    |connection| ConnectionId::from(connection.connection_id) == connection_id,
-                );
+                });
                 ((entry.value().connection_id == connection_id
                     || summary.write_connection_id.map(ConnectionId::from) == Some(connection_id)
                     || connection_selected)
@@ -51,15 +49,12 @@ impl AcpRuntime {
                 .iter()
                 .filter_map(|entry| {
                     let summary = entry.value().summary();
-                    ((summary.knowledge_scopes.iter().any(|scope| {
+                    (summary.knowledge_scopes.iter().any(|scope| {
                         project_environment_ids.contains(&scope.project_environment_id)
-                    }) || summary
-                        .project_environment_id
-                        .is_some_and(|id| project_environment_ids.contains(&id)))
-                        && !matches!(
-                            summary.lifecycle,
-                            AcpSessionLifecycle::Closed | AcpSessionLifecycle::Failed
-                        ))
+                    }) && !matches!(
+                        summary.lifecycle,
+                        AcpSessionLifecycle::Closed | AcpSessionLifecycle::Failed
+                    ))
                     .then_some(*entry.key())
                 })
                 .collect::<Vec<_>>();

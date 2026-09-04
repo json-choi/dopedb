@@ -120,15 +120,6 @@
       }
     },
     {
-      "eventId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-      "name": "analysis_article_proposal_completed",
-      "occurredAt": "2026-08-14T00:00:00Z",
-      "actorKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      "workspaceKey": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-      "workspaceKind": "team",
-      "properties": {}
-    },
-    {
       "eventId": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
       "name": "analysis_article_run_completed",
       "occurredAt": "2026-08-14T00:00:00Z",

@@ -1,6 +1,6 @@
 // Workspace provider integration inventory and OAuth initiation. Secret material is
 // omitted by explicit projection and OAuth state is single-use, hashed server data.
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { and, eq, gt, inArray, isNull, lt } from "drizzle-orm";
 import { db } from "../../../../../../lib/db";
 import { env } from "../../../../../../lib/env";
@@ -60,7 +60,6 @@ import {
 } from "../../../../../../lib/providers/neon-core";
 import {
   openProviderBootstrapTicket,
-  openProviderCredential,
   sealProviderCredential,
 } from "../../../../../../lib/secret-envelope";
 import {
@@ -76,12 +75,6 @@ import { logProviderConnectionFailure } from "../../../../../../lib/workspace-se
 type RouteContext = { params: Promise<{ workspaceId: string }> };
 
 export const maxDuration = 300;
-
-function sameSecret(left: string, right: string) {
-  const leftBytes = Buffer.from(left, "utf8");
-  const rightBytes = Buffer.from(right, "utf8");
-  return leftBytes.length === rightBytes.length && timingSafeEqual(leftBytes, rightBytes);
-}
 
 function postgresErrorCode(error: unknown) {
   const seen = new Set<unknown>();
@@ -549,39 +542,6 @@ export async function POST(request: Request, context: RouteContext) {
           grantedScope: true,
         },
       });
-      if (!existing && provider === "neon") {
-        // One-time compatibility path for integrations created before Neon replaced
-        // /auth with scoped user/organization identity. The secret never leaves this
-        // server-side comparison and the row is rewritten to the v2 identity below.
-        const legacyRows = await db.select({
-          id: workspaceProviderIntegration.id,
-          externalAccountId: workspaceProviderIntegration.externalAccountId,
-          encryptedCredential: workspaceProviderIntegration.encryptedCredential,
-          status: workspaceProviderIntegration.status,
-          revokedAt: workspaceProviderIntegration.revokedAt,
-          revocationPendingAt: workspaceProviderIntegration.revocationPendingAt,
-          generation: workspaceProviderIntegration.generation,
-          updatedAt: workspaceProviderIntegration.updatedAt,
-        }).from(workspaceProviderIntegration).where(and(
-          eq(workspaceProviderIntegration.organizationId, workspaceId),
-          eq(workspaceProviderIntegration.provider, "neon"),
-          eq(workspaceProviderIntegration.status, "active"),
-          isNull(workspaceProviderIntegration.revokedAt),
-        ));
-        existing = legacyRows.find((row) => {
-          if (row.externalAccountId.startsWith("neon:v2:")) return false;
-          try {
-            const stored = parseNeonCredential(openProviderCredential<unknown>(
-              row.id,
-              row.encryptedCredential,
-            ));
-            return neonConfigurationCredential !== null
-              && sameSecret(stored.apiKey, neonConfigurationCredential.apiKey);
-          } catch {
-            return false;
-          }
-        });
-      }
     }
     if (
       requestedRepairIntegrationId

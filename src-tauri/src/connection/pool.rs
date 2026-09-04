@@ -1,6 +1,5 @@
-//! Live connection pools. A write-capable [`LiveConnection`] holds TWO pools: a normal
-//! read/write pool and a separate read-only pool. A read acquisition holds ONLY the
-//! read-only pool and aliases it into the legacy `write_pool` field for API compatibility.
+//! Live connection pools. A write-capable [`LiveConnection`] holds a mutation pool
+//! and a separate read-only pool. A read acquisition holds only the read-only pool.
 //! The read-only pool is the first line of L2 enforcement at the connection level — but
 //! the authoritative boundary remains the per-request read-only transaction the executor opens:
 //!   - Postgres: `after_connect` sets `default_transaction_read_only = on`.
@@ -81,21 +80,15 @@ impl DbPool {
     }
 }
 
-/// An open connection. Write acquisitions contain separate read/write and read-only
+/// An open connection. Write acquisitions contain separate mutation and read-only
 /// pools; read acquisitions contain only the L2-enforced read-only pool. Each `DbPool`
 /// variant is self-describing and cheaply cloned through its inner `Arc`.
-///
-/// Field names are the executor's legacy contract: for a read-only live value,
-/// `write_pool` aliases `read_pool` and remains DB-enforced read-only. `DbPool` is
-/// also re-exported as `connection::Pool` for that module.
 #[derive(Clone)]
 pub struct LiveConnection {
     /// L2-enforced read-only pool. Reads and read previews route through this.
     pub read_pool: DbPool,
-    /// Read/write pool for write acquisitions; aliases the read-only pool for reads.
-    pub write_pool: DbPool,
-    /// Whether `write_pool` is a separately opened write-capable target pool.
-    pub(crate) has_writable_pool: bool,
+    /// Separately opened write-capable target pool for mutation acquisitions.
+    mutation_pool: Option<DbPool>,
     /// True for PlanetScale/Vitess — introspection must skip FK metadata.
     pub skip_fk_metadata: bool,
 }
@@ -104,9 +97,8 @@ impl LiveConnection {
     pub(crate) fn bigquery(connection: crate::bigquery::BigQueryConnection) -> Self {
         let read_pool = DbPool::Bigquery(connection);
         Self {
-            write_pool: read_pool.clone(),
             read_pool,
-            has_writable_pool: false,
+            mutation_pool: None,
             skip_fk_metadata: false,
         }
     }
@@ -116,6 +108,14 @@ impl LiveConnection {
         &self.read_pool
     }
 
+    pub(crate) fn rw(&self) -> AppResult<&DbPool> {
+        self.mutation_pool
+            .as_ref()
+            .ok_or_else(|| AppError::Blocked {
+                reason: "this connection was opened without mutation authority".into(),
+            })
+    }
+
     /// `SELECT 1` against the live server.
     pub async fn test(&self) -> AppResult<()> {
         self.read_pool.ping().await
@@ -123,11 +123,11 @@ impl LiveConnection {
 
     /// Close both underlying pools for a lease or connection that is no longer valid.
     pub async fn close(&self) {
-        if self.has_writable_pool {
-            tokio::join!(self.read_pool.close(), self.write_pool.close());
-        } else {
-            self.read_pool.close().await;
+        if let Some(mutation_pool) = self.mutation_pool.as_ref() {
+            tokio::join!(self.read_pool.close(), mutation_pool.close());
+            return;
         }
+        self.read_pool.close().await;
     }
 
     fn start_keep_alive(&self, interval: Option<Duration>) {
@@ -135,7 +135,7 @@ impl LiveConnection {
             return;
         };
         let read_pool = self.read_pool.clone();
-        let write_pool = self.has_writable_pool.then(|| self.write_pool.clone());
+        let mutation_pool = self.mutation_pool.clone();
         tokio::spawn(async move {
             let mut ticker = tokio::time::interval(interval);
             ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
@@ -148,11 +148,11 @@ impl LiveConnection {
                     break;
                 }
                 let _ = read_pool.ping().await;
-                if let Some(write_pool) = write_pool.as_ref() {
-                    if write_pool.is_closed() {
+                if let Some(mutation_pool) = mutation_pool.as_ref() {
+                    if mutation_pool.is_closed() {
                         break;
                     }
-                    let _ = write_pool.ping().await;
+                    let _ = mutation_pool.ping().await;
                 }
             }
         });
@@ -194,7 +194,7 @@ pub(crate) async fn connect_sqlx(
     let max_connections = pool_connection_limit(profile.credential_mode);
     let runtime = providers::connection_runtime_options(profile)?;
 
-    let (write_pool, read_pool, has_writable_pool) = match adapter_engine {
+    let (mutation_pool, read_pool) = match adapter_engine {
         Engine::Postgres => {
             let base = PgConnectOptions::new()
                 .host(&profile.host)
@@ -258,9 +258,9 @@ pub(crate) async fn connect_sqlx(
                         .await,
                 )
                 .await?;
-                (DbPool::Postgres(rw), ro, true)
+                (Some(DbPool::Postgres(rw)), ro)
             } else {
-                (ro.clone(), ro, false)
+                (None, ro)
             }
         }
         Engine::Mysql => {
@@ -282,7 +282,7 @@ pub(crate) async fn connect_sqlx(
                     let startup = read_startup.clone();
                     Box::pin(async move {
                         // Fail CLOSED: the read pool must be genuinely read-only. Try the
-                        // modern variable, then the legacy MariaDB name; if neither exists,
+                        // MySQL's current variable, then MariaDB's server-specific name; if neither exists,
                         // reject the connection rather than hand back a writable read pool.
                         if conn
                             .execute("SET SESSION transaction_read_only = 1")
@@ -339,9 +339,9 @@ pub(crate) async fn connect_sqlx(
                         .await,
                 )
                 .await?;
-                (DbPool::Mysql(rw), ro, true)
+                (Some(DbPool::Mysql(rw)), ro)
             } else {
-                (ro.clone(), ro, false)
+                (None, ro)
             }
         }
         Engine::Sqlite => {
@@ -368,9 +368,9 @@ pub(crate) async fn connect_sqlx(
                         .await,
                 )
                 .await?;
-                (DbPool::Sqlite(rw), ro, true)
+                (Some(DbPool::Sqlite(rw)), ro)
             } else {
-                (ro.clone(), ro, false)
+                (None, ro)
             }
         }
         Engine::Mongodb => {
@@ -387,8 +387,7 @@ pub(crate) async fn connect_sqlx(
 
     let live = LiveConnection {
         read_pool,
-        write_pool,
-        has_writable_pool,
+        mutation_pool,
         skip_fk_metadata,
     };
     live.start_keep_alive(runtime.keep_alive_interval);

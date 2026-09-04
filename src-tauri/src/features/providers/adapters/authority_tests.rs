@@ -196,39 +196,3 @@ fn accepts_only_the_exact_gcp_target_receipt() {
     wrong_scope.granted_scope = "adcWif:guessed".into();
     assert!(parse_integration(wrong_scope).is_err());
 }
-
-#[test]
-fn keeps_legacy_gcp_rows_visible_only_as_reconnect_required() {
-    let legacy = RemoteIntegration {
-        id: uuid::Uuid::new_v4().to_string(),
-        provider: "gcpCloudSql".into(),
-        display_name: "GCP read access".into(),
-        status: "reconnect_required".into(),
-        generation: "7".into(),
-        granted_scope: "adcWif".into(),
-        reconnect_required: true,
-        verification_target: None,
-    };
-    let parsed = parse_integration(legacy).expect("legacy target is reconnect-only");
-    assert_eq!(
-        parsed.state,
-        crate::features::providers::domain::ProviderIntegrationState::ReconnectRequired
-    );
-    assert!(parsed.verification_target.is_none());
-
-    let active_without_target = RemoteIntegration {
-        status: "active".into(),
-        reconnect_required: false,
-        ..RemoteIntegration {
-            id: uuid::Uuid::new_v4().to_string(),
-            provider: "gcpCloudSql".into(),
-            display_name: "GCP read access".into(),
-            status: "reconnect_required".into(),
-            generation: "7".into(),
-            granted_scope: "adcWif".into(),
-            reconnect_required: true,
-            verification_target: None,
-        }
-    };
-    assert!(parse_integration(active_without_target).is_err());
-}

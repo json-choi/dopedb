@@ -1,7 +1,7 @@
 // Coordinates the four bounded setup workflows rendered by Agent Tools settings.
 // Keeping effects and native commands here leaves the screen as a composition root.
 import { useEffect, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 
 import {
   agentCliDetectionQuery,
@@ -15,7 +15,6 @@ import {
 } from "../../agents/tauriAdapter";
 import type { AcpPluginId } from "../../agents/domain";
 import {
-  legacyMcpCleanupApply,
   installSkill,
   removeSkill,
   repairSkill,
@@ -29,18 +28,13 @@ import {
   type SkillTargetSelection,
 } from "../../../ipc/types";
 import { useToast } from "../../../components/Toast";
-import {
-  legacyMcpCleanupStatusQuery,
-  qk,
-  skillStatusQuery,
-} from "../../../lib/queries";
+import { skillStatusQuery } from "../../../lib/queries";
 import { useI18n } from "../../../lib/i18n";
 import type { AgentToolsBusyAction, AgentToolsMutation } from "./model";
 
 export function useAgentToolsController() {
   const { t } = useI18n();
   const toast = useToast();
-  const queryClient = useQueryClient();
   const statusQuery = useQuery(skillStatusQuery());
   const pluginQuery = useQuery(agentPluginStatusQuery());
   const refetchPlugins = pluginQuery.refetch;
@@ -49,7 +43,6 @@ export function useAgentToolsController() {
     staleTime: 5 * 60_000,
     refetchOnWindowFocus: false,
   });
-  const cleanupQuery = useQuery(legacyMcpCleanupStatusQuery());
   const [busy, setBusy] = useState<AgentToolsBusyAction | null>(null);
   const [selectedPlugins, setSelectedPlugins] = useState<AcpPluginId[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -198,35 +191,6 @@ export function useAgentToolsController() {
     }
   }
 
-  async function runLegacyCleanup() {
-    const expectations =
-      cleanupQuery.data?.targets.flatMap((target) =>
-        target.state === "ready" && target.fingerprint
-          ? [{ id: target.id, fingerprint: target.fingerprint }]
-          : [],
-      ) ?? [];
-    if (expectations.length === 0) return;
-    setBusy("legacy-cleanup");
-    setError(null);
-    try {
-      const receipt = await legacyMcpCleanupApply(expectations);
-      queryClient.setQueryData(qk.legacyMcpCleanup(), receipt.status);
-      for (const backup of receipt.backups) {
-        toast(t("agentTools.legacyCleanupBackup", { path: backup.path }));
-      }
-      toast(
-        t("agentTools.legacyCleanupComplete", {
-          count: receipt.removedTargetIds.length,
-        }),
-      );
-    } catch (reason) {
-      reportError(reason);
-      await cleanupQuery.refetch();
-    } finally {
-      setBusy(null);
-    }
-  }
-
   function showBackups(receipt: SkillMutationReceipt) {
     for (const backup of receipt.backups) {
       toast(t("agentTools.backupCreated", { path: backup.path }));
@@ -258,7 +222,6 @@ export function useAgentToolsController() {
         statusQuery.refetch(),
         checkAgentAcpPluginUpdates(),
         cliQuery.refetch(),
-        cleanupQuery.refetch(),
       ]);
       await pluginQuery.refetch();
     } catch (reason) {
@@ -268,13 +231,6 @@ export function useAgentToolsController() {
     }
   }
 
-  const cleanupReady =
-    cleanupQuery.data?.targets.filter((target) => target.state === "ready") ?? [];
-  const cleanupManual =
-    cleanupQuery.data?.targets.filter(
-      (target) => target.state === "manual_review",
-    ) ?? [];
-
   return {
     busy,
     error,
@@ -282,7 +238,6 @@ export function useAgentToolsController() {
     statusQuery,
     pluginQuery,
     cliQuery,
-    cleanupQuery,
     selectedPlugins,
     setSelectedPlugins,
     installPlugins,
@@ -291,14 +246,11 @@ export function useAgentToolsController() {
     runMutation,
     runInstall,
     runSelfTest,
-    runLegacyCleanup,
     refresh,
     combinedSetupPlan: status ? buildSkillSetupPlan(status.targets) : null,
     anyCurrent: status?.targets.some(
       (target) => target.state === "managed_current",
     ),
-    cleanupReady,
-    cleanupManual,
   };
 }
 

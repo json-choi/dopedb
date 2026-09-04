@@ -356,7 +356,7 @@ try {
         erdNodes: 1_000,
       },
       coldDefinition:
-        "A fresh clone of a sealed migrated fixture is opened by a new packaged release process.",
+        "A fresh clone of a sealed current-schema fixture is opened by a new packaged release process.",
       warmDefinition:
         "The same isolated fixture is reopened after the paired cold process exits cleanly.",
       observationWindow:

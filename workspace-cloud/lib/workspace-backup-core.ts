@@ -4,9 +4,6 @@ import { openEnvelope, sealEnvelope } from "./secret-envelope-core";
 import { parseSharedConnection } from "./workspace-connections";
 import { canonicalHash, canonicalJson } from "./workspace-versioning";
 
-// These identify the backup-only HKDF domain, not the provider credential master key.
-export const WORKSPACE_BACKUP_KEY_REFERENCE = "dopedb-workspace-backup-hkdf-sha256";
-export const WORKSPACE_BACKUP_KEY_VERSION = "v1";
 export const WORKSPACE_DATA_KEY_REFERENCE = "dopedb-workspace-data-key";
 
 export function workspaceDataKeyVersion(version: number) {
@@ -130,36 +127,8 @@ export function parseWorkspaceMetadataSnapshot(
       return {
         id,
         contentRevision: Number(contentRevision),
-        ...parseBackupConnection(template),
+        ...parseSharedConnection(template),
       };
     }),
   };
-}
-
-/**
- * Backups created before the member-local read-only migration may contain an
- * old write preference. They are encrypted and hash-verified as their exact
- * historical bytes, then normalized only when restore writes a new projection.
- * Every other field still goes through the same strict secret/unknown-key parser.
- */
-function parseBackupConnection(template: Record<string, unknown>) {
-  const readonlyDefault = template.readonlyDefault;
-  const allowWrites = template.allowWrites;
-  if (
-    (readonlyDefault === undefined || typeof readonlyDefault === "boolean")
-    && (allowWrites === undefined || typeof allowWrites === "boolean")
-    && (readonlyDefault === false || allowWrites === true)
-  ) {
-    const safe = parseSharedConnection({
-      ...template,
-      readonlyDefault: true,
-      allowWrites: false,
-    });
-    return {
-      ...safe,
-      readonlyDefault: readonlyDefault ?? true,
-      allowWrites: allowWrites ?? false,
-    };
-  }
-  return parseSharedConnection(template);
 }

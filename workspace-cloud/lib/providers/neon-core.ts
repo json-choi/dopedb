@@ -83,29 +83,16 @@ export type NeonCredential = {
   organizationId: string | null;
 };
 
-/**
- * Opens both the original unversioned API-key envelope and the current
- * schema-versioned envelope. Callers always receive the current shape so no
- * provider operation can accidentally treat a future credential kind as an
- * API key.
- */
 export function parseNeonCredential(value: unknown): NeonCredential {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("Invalid Neon credential");
   }
   const row = value as Record<string, unknown>;
   const fields = Object.keys(row).sort();
-  const legacy = fields.join(",") === "apiKey,organizationId";
-  const versionOne = fields.join(",")
-    === "apiKey,kind,organizationId,schemaVersion";
   const current = fields.join(",")
     === "apiKey,kind,organizationId,projectId,schemaVersion";
   if (
-    (!legacy && !versionOne && !current)
-    || (versionOne && (
-      row.kind !== "apiKey"
-      || row.schemaVersion !== 1
-    ))
+    (!current)
     || (current && (
       row.kind !== "apiKey"
       || row.schemaVersion !== NEON_CREDENTIAL_SCHEMA_VERSION
@@ -118,7 +105,7 @@ export function parseNeonCredential(value: unknown): NeonCredential {
       typeof row.organizationId !== "string"
       || !neonSegment(row.organizationId)
     ))
-    || (current && row.projectId !== null && (
+    || (row.projectId !== null && (
       typeof row.projectId !== "string"
       || !neonSegment(row.projectId)
     ))
@@ -129,7 +116,7 @@ export function parseNeonCredential(value: unknown): NeonCredential {
     kind: "apiKey",
     schemaVersion: NEON_CREDENTIAL_SCHEMA_VERSION,
     apiKey: row.apiKey,
-    projectId: current ? row.projectId as string | null : null,
+    projectId: row.projectId as string | null,
     organizationId: row.organizationId as string | null,
   };
 }
@@ -207,15 +194,12 @@ export function parseNeonResource(value: unknown): NeonResource {
     throw new Error("Neon resource is required");
   }
   const body = value as Record<string, unknown>;
-  const legacyDatabaseId = body.databaseId === undefined;
   if (
     !neonSegment(body.project)
     || !neonSegment(body.branch)
     || !neonDatabaseName(body.database)
-    || (!legacyDatabaseId && (
-      typeof body.databaseId !== "string"
-      || !/^[0-9]{1,19}$/.test(body.databaseId)
-    ))
+    || typeof body.databaseId !== "string"
+    || !/^[0-9]{1,19}$/.test(body.databaseId)
     || body.engine !== "postgres"
   ) {
     throw new Error("Invalid Neon resource");
@@ -223,9 +207,7 @@ export function parseNeonResource(value: unknown): NeonResource {
   return {
     project: body.project,
     branch: body.branch,
-    // Existing encrypted resources predate stable database IDs. They remain
-    // readable by their exact old name and are upgraded on the next import.
-    databaseId: legacyDatabaseId ? body.database : body.databaseId as string,
+    databaseId: body.databaseId,
     database: body.database,
     engine: "postgres",
     schemas: neonSchemas(body.schemas),

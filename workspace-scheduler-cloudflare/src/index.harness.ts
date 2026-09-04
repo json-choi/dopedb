@@ -41,7 +41,7 @@ function fakeDatabase(row: SchedulerRow) {
           return null;
         },
         async run() {
-          if (query.includes("INSERT INTO workspace_background_task_v1")) {
+          if (query.includes("INSERT INTO workspace_background_task")) {
             row.dueAtMs = Math.min(row.dueAtMs, Number(values[1]));
             row.generation += 1;
             row.failureCount = 0;

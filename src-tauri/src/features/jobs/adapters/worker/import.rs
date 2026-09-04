@@ -199,7 +199,7 @@ impl JobWorker {
                             .map(|(_, statement)| statement.clone())
                             .collect::<Vec<_>>();
                         if let Err(batch_error) = execute_transaction(
-                            &live.write_pool,
+                            live.rw()?,
                             &sql,
                             claimed.grant(),
                             &cancellation,
@@ -252,7 +252,7 @@ impl JobWorker {
                             let mut fallback_committed = false;
                             for (item, statement) in executable {
                                 match execute_transaction(
-                                    &live.write_pool,
+                                    live.rw()?,
                                     &[statement],
                                     claimed.grant(),
                                     &cancellation,

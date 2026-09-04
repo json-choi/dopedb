@@ -1,9 +1,7 @@
-//! Concrete desktop adapters for CLI discovery and retired archives.
+//! Concrete desktop adapter for CLI discovery.
 
-mod archive;
 mod cli_probe;
 
-pub(crate) use archive::SqliteRetiredChatArchive;
 pub(crate) use cli_probe::ProcessAgentCliProbe;
 
 #[cfg(test)]

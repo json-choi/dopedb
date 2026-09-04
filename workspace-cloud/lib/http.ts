@@ -5,33 +5,12 @@ export function privateJson(data: unknown, init: ResponseInit = {}) {
   return Response.json(data, { ...init, headers });
 }
 
-/**
- * Vercel evaluates a legacy `If-Match` request against the response ETag after
- * a Route Handler has already run. Older Desktop builds therefore received a
- * synthetic 412 after a successful mutation. Echo the legacy validator only
- * on the non-cacheable success response while new clients use DopeDB's
- * dedicated expected-revision header.
- */
-export function privateRevisionMutationJson(
-  request: Request,
-  data: unknown,
-  init: ResponseInit = {},
-) {
-  const headers = new Headers(init.headers);
-  const legacyValidator = request.headers.get("if-match");
-  if (legacyValidator !== null) headers.set("etag", legacyValidator);
-  return privateJson(data, { ...init, headers });
-}
-
-export function privateRevisionMutationResponse(
-  request: Request,
+export function privateResponse(
   body: BodyInit | null,
   init: ResponseInit = {},
 ) {
   const headers = new Headers(init.headers);
   headers.set("cache-control", "private, no-store");
-  const legacyValidator = request.headers.get("if-match");
-  if (legacyValidator !== null) headers.set("etag", legacyValidator);
   return new Response(body, { ...init, headers });
 }
 

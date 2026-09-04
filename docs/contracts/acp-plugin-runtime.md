@@ -65,9 +65,8 @@ identities. The version is user-facing compatibility information, the release ID
 selects an immutable published asset set, and the manifest digest is the local
 installation directory and activation-receipt key. Rebuilding an unchanged
 upstream version therefore creates a distinct candidate without overwriting or
-conflicting with the current bundle. Desktop continues to resolve legacy
-version-keyed installation directories so an upgrade does not strand an existing
-last-known-good adapter.
+conflicting with the current bundle. Installations resolve only through their signed
+manifest digest; version-keyed pre-MVP directories are unsupported.
 
 The first new ACP session launches a candidate. Successful initialization
 promotes it to current and last-known-good; failure quarantines it and retries

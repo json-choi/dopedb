@@ -99,7 +99,7 @@ impl DesktopSqlInspectionReceipt {
 }
 
 /// Successful desktop execution retaining the exact connection lease until Tauri
-/// has serialized the legacy [`ExecOutcome`] response.
+/// has serialized the current [`ExecOutcome`] response.
 pub(crate) struct DesktopSqlRunReceipt {
     pub(super) outcome: ExecOutcome,
     pub(super) _lease: ConnectionLease,

@@ -47,7 +47,6 @@ import {
   preloadSqlEditor,
   useActivitySeen,
   usePersistentSelectedConnection,
-  useRestoredWorkbenchState,
   useSqlEditorPreload,
 } from "./navigationHooks";
 import {
@@ -100,7 +99,6 @@ export function useAppShellWorkbenchController({
     accept: acceptSafety,
     clear: clearSafety,
   } = useSafetySettings(selectedId);
-  const { legacyAuditOpen, restoredDocumentKind } = useRestoredWorkbenchState();
   const selected =
     connections.find((connection) => connection.id === selectedId) ?? null;
   const mainRoute = navigation.route;
@@ -157,7 +155,6 @@ export function useAppShellWorkbenchController({
     selectedConnectionId: selected?.id ?? null,
     selectedConnectionDatabase: selected?.database ?? null,
     supportsSql,
-    restoredDocumentKind,
     sqlDocuments: tauriSqlDocumentGateway,
     onRestoreError: (error) => {
       console.error("could not restore SQL documents:", error);
@@ -457,7 +454,6 @@ export function useAppShellWorkbenchController({
       active: activeDocument,
       activeId: activeDocumentId,
       selectedTable,
-      initialAuditOpen: legacyAuditOpen.current,
     },
     commands: {
       route: {
@@ -501,9 +497,6 @@ export function useAppShellWorkbenchController({
         setResolveMode: setActiveQueryResolveMode,
         persisted: applySavedQuery,
         loadSql,
-        consumeInitialAudit: () => {
-          legacyAuditOpen.current = false;
-        },
       },
     },
   };

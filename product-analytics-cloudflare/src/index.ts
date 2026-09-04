@@ -91,7 +91,6 @@ const EVENTS = {
     },
     identity: "workspace",
   },
-  analysis_article_proposal_completed: { properties: {}, identity: "workspace" },
   analysis_article_run_completed: {
     properties: {
       outcome: ["success", "failed", "cancelled", "stale"],
@@ -320,11 +319,11 @@ async function consumeIngestBudget(
 ) {
   const minuteBucket = Math.floor(nowMs / INGEST_BUDGET_WINDOW_MS);
   const receipt = await database.prepare(`
-    INSERT INTO product_analytics_ingest_budget_v1 (minute_bucket, event_count)
+    INSERT INTO product_analytics_ingest_budget (minute_bucket, event_count)
     VALUES (?, ?)
     ON CONFLICT(minute_bucket) DO UPDATE SET
-      event_count = product_analytics_ingest_budget_v1.event_count + excluded.event_count
-    WHERE product_analytics_ingest_budget_v1.event_count + excluded.event_count <= ?
+      event_count = product_analytics_ingest_budget.event_count + excluded.event_count
+    WHERE product_analytics_ingest_budget.event_count + excluded.event_count <= ?
     RETURNING event_count
   `).bind(minuteBucket, eventCount, INGEST_BUDGET_EVENTS).first<{ event_count: number }>();
   return receipt !== null;
@@ -362,7 +361,7 @@ async function ingest(request: Request, env: Env) {
     );
   }
   const statements = envelope.events.map((event) => env.ANALYTICS_DB.prepare(`
-    INSERT OR IGNORE INTO product_analytics_event_v1 (
+    INSERT OR IGNORE INTO product_analytics_event (
       event_id, name, occurred_at, occurred_at_ms, received_at_ms,
       installation_id, session_id, app_version, platform, locale,
       actor_key, workspace_key, workspace_kind, properties_json
@@ -397,11 +396,11 @@ async function maintain(env: Env, nowMs = Date.now()) {
   const refreshDay = new Date(refreshCutoff).toISOString().slice(0, 10);
   await env.ANALYTICS_DB.batch([
     env.ANALYTICS_DB.prepare(
-      "DELETE FROM product_analytics_ingest_budget_v1 WHERE minute_bucket < ?",
+      "DELETE FROM product_analytics_ingest_budget WHERE minute_bucket < ?",
     ).bind(Math.floor(refreshCutoff / INGEST_BUDGET_WINDOW_MS)),
-    env.ANALYTICS_DB.prepare("DELETE FROM product_analytics_daily_v1 WHERE day >= ?").bind(refreshDay),
+    env.ANALYTICS_DB.prepare("DELETE FROM product_analytics_daily WHERE day >= ?").bind(refreshDay),
     env.ANALYTICS_DB.prepare(`
-      INSERT INTO product_analytics_daily_v1 (
+      INSERT INTO product_analytics_daily (
         day, name, workspace_kind, platform, locale, outcome, event_count
       )
       SELECT
@@ -412,14 +411,14 @@ async function maintain(env: Env, nowMs = Date.now()) {
         locale,
         coalesce(json_extract(properties_json, '$.outcome'), ''),
         count(*)
-      FROM product_analytics_event_v1
+      FROM product_analytics_event
       WHERE occurred_at_ms >= ?
       GROUP BY 1, 2, 3, 4, 5, 6
     `).bind(refreshCutoff),
     env.ANALYTICS_DB.prepare(`
-      DELETE FROM product_analytics_event_v1
+      DELETE FROM product_analytics_event
       WHERE event_id IN (
-        SELECT event_id FROM product_analytics_event_v1
+        SELECT event_id FROM product_analytics_event
         WHERE received_at_ms < ?
         ORDER BY received_at_ms, event_id
         LIMIT ?

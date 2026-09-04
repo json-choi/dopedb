@@ -15,10 +15,6 @@ pub enum OperationKind {
     SchemaChange,
     Import,
     Export,
-    Migration,
-    /// Non-executable audit identity retained after a removed product artifact is
-    /// migrated out of the active command and storage model.
-    RetiredArtifact,
     PluginAction,
     ProviderAction,
 }
@@ -43,7 +39,6 @@ impl OperationKind {
                 | Self::TableDataChange
                 | Self::SchemaChange
                 | Self::Import
-                | Self::Migration
                 | Self::PluginAction
                 | Self::ProviderAction
         )

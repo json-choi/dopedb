@@ -65,7 +65,7 @@ pub(crate) fn ensure_terminal_pin(
 
 /// Resolve the credential item referenced by a profile. Shared templates must carry
 /// an account-specific binding; they never fall back to the connection UUID where a
-/// different signed-in account's legacy credential could exist.
+/// different signed-in account's stale credential could exist.
 pub fn fetch_profile_secret(profile: &ConnectionProfile) -> AppResult<String> {
     if profile.credential_mode == WorkspaceCredentialMode::Managed {
         return Err(AppError::Config(

@@ -135,7 +135,7 @@ pub async fn set_postgres_role(
         });
     }
     let _exact_payload_hash = grant.payload_sha256();
-    let Pool::Postgres(pool) = &live.write_pool else {
+    let Pool::Postgres(pool) = live.rw()? else {
         return Err(AppError::Config(
             "pg_monitor is only available for PostgreSQL connections".into(),
         ));

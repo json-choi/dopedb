@@ -1,7 +1,6 @@
 // Runtime-neutral validation for one explicit Desktop-triggered Analysis run.
 // The control plane stores authority receipts only; result rows remain local.
 
-import { parseLegacyAnalysisRunCompletionEnvelope } from "./workspace-analysis-run-compat";
 import type { AnalysisArticleDefinition } from "./workspace-analysis-article-contracts";
 import { canonicalHash } from "./workspace-versioning";
 
@@ -128,8 +127,7 @@ export function parseAnalysisRunCompletion(
   value: unknown,
   definition: AnalysisArticleDefinition,
 ): AnalysisRunCompletion {
-  const row = exactRecord(value, ["state", "queryReceipts", "error"])
-    ?? parseLegacyAnalysisRunCompletionEnvelope(value);
+  const row = exactRecord(value, ["state", "queryReceipts", "error"]);
   if (!row || typeof row.state !== "string"
     || !["succeeded", "failed", "cancelled", "stale"].includes(row.state)
     || !Array.isArray(row.queryReceipts) || row.queryReceipts.length > 1) {

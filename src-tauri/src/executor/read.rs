@@ -368,7 +368,7 @@ pub(crate) async fn run_read_registered(
         return connection.query(sql, max_rows, cancellation).await;
     }
 
-    // ponytail: read_pool is the L2-enforced (read-only) pool; reads never touch write_pool.
+    // ponytail: read_pool is the L2-enforced pool; reads never touch mutation authority.
     let inner = async {
         let (columns, rows, truncated) = match &live.read_pool {
             Pool::Postgres(pool) => {

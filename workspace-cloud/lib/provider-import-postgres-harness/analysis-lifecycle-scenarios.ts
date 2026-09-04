@@ -26,7 +26,6 @@ export async function runAnalysisLifecycleScenarios(
   const query = {
     id: "active_rows",
     title: "Active rows",
-    connectionRole: "primary",
     sql: "SELECT count(*) AS active_rows FROM users WHERE active = TRUE",
     maxRows: 5,
     maxBytes: 16_384,
@@ -39,20 +38,13 @@ export async function runAnalysisLifecycleScenarios(
       masking: "none",
     }],
   } as const;
-  const legacyQuery = { ...query, parameterIds: [], cacheTtlSeconds: 0 } as const;
   const articleId = randomUUID();
   const article = articleContract.parseSharedAnalysisArticleCreate({
     id: articleId,
     projectEnvironmentId: developmentEnvironment.id,
     environmentRevision: developmentEnvironment.revision,
-    sourceKnowledgeGrantId: null,
-    graphRevisionIds: [],
-    connections: [{
-      connectionId: imported.connection.id,
-      connectionRevision: imported.connection.contentRevision,
-      role: "primary",
-      alias: "Harness",
-    }],
+    connectionId: imported.connection.id,
+    connectionRevision: imported.connection.contentRevision,
     definition: {
       version: 3,
       source: "human",
@@ -64,77 +56,6 @@ export async function runAnalysisLifecycleScenarios(
   expect(Object.keys(article.definition).sort()).toEqual([
     "html", "query", "source", "title", "version",
   ]);
-
-  // The compatibility adapter may read the normalized expanded v2 payload,
-  // but it must immediately return the compact current DTO.
-  const compatible = articleContract.parseSharedAnalysisArticleCreate({
-    ...article,
-    definition: {
-      version: 2,
-      source: "human",
-      title: "Compatible analysis",
-      html: "<h2>Compatible</h2>",
-      question: "",
-      summary: "",
-      timezone: "UTC",
-      parameters: [],
-      queries: [legacyQuery],
-      transforms: [],
-      metrics: [],
-      blocks: [{
-        id: "query_result",
-        kind: "table",
-        title: "Query result",
-        sourceNodeId: query.id,
-        width: 12,
-        config: { columns: ["active_rows"], pageSize: 10 },
-      }],
-      claims: [],
-      refresh: {
-        mode: "manual",
-        cron: null,
-        timezone: "UTC",
-        runnerId: null,
-        maxStalenessSeconds: 86_400,
-        resultRetentionDays: 30,
-        shareReviewedResults: false,
-      },
-      warnings: [],
-    },
-  });
-  expect(compatible.definition).toEqual({
-    version: 3,
-    source: "human",
-    title: "Compatible analysis",
-    html: "<h2>Compatible</h2>",
-    query,
-  });
-  expect(() => articleContract.parseSharedAnalysisArticleCreate({
-    ...article,
-    definition: {
-      version: 2,
-      source: "human",
-      title: "Scheduled retired analysis",
-      html: "<h2>Scheduled</h2>",
-      question: "",
-      summary: "",
-      timezone: "UTC",
-      parameters: [],
-      queries: [legacyQuery],
-      transforms: [],
-      metrics: [],
-      blocks: [{
-        id: "query_result", kind: "table", title: "Query result",
-        sourceNodeId: legacyQuery.id, width: 12, config: {},
-      }],
-      claims: [],
-      refresh: {
-        mode: "scheduled", cron: "0 * * * *", timezone: "UTC", runnerId: randomUUID(),
-        maxStalenessSeconds: 86_400, resultRetentionDays: 30, shareReviewedResults: false,
-      },
-      warnings: [],
-    },
-  })).toThrow(/retired|Invalid/);
 
   const created = await articleStore.commitAnalysisArticleCreate({
     organizationId,
@@ -223,15 +144,12 @@ export async function runAnalysisLifecycleScenarios(
         runnerId: registration.id,
         trigger: "manual",
       },
-      parameterHash: versioning.canonicalHash({}),
       definitionHash: versioning.canonicalHash(revisedArticle.definition),
       runnerCapabilityHash,
       authority,
     });
     expect(started?.run).toMatchObject({ id: runId, state: "running", trigger: "manual" });
-    expect(started?.connectionContentRevisions).toEqual({
-      [imported.connection.id]: imported.connection.contentRevision,
-    });
+    expect(started?.connectionContentRevision).toBe(imported.connection.contentRevision);
     expectRfc3339Timestamp(started?.run.startedAt);
     return runId;
   };
@@ -242,7 +160,6 @@ export async function runAnalysisLifecycleScenarios(
       id: randomUUID(), articleRevision: 2, runnerId: registration.id,
       trigger: "manual",
     },
-    parameterHash: versioning.canonicalHash({}),
     definitionHash: versioning.canonicalHash(revisedArticle.definition),
     runnerCapabilityHash: runnerCapabilityContract.hashAnalysisRunnerCapability("f".repeat(64)),
     authority,
@@ -297,22 +214,18 @@ export async function runAnalysisLifecycleScenarios(
   });
   await expect(runStore.commitAnalysisRunCompletion(completionInput))
     .resolves.toMatchObject({ id: runId, state: "succeeded" });
-  const durability = await sql<{ fragments: number; receipts: number; audits: number }[]>`
+  const durability = await sql<{ receipts: number; audits: number }[]>`
     SELECT
-      (SELECT count(*)::int
-       FROM "workspace_control"."workspace_analysis_result_fragment"
-       WHERE "organization_id" = ${organizationId} AND "run_id" = ${runId}::uuid)
-        AS "fragments",
       (SELECT count(*)::int
        FROM "workspace_control"."workspace_analysis_article_query_receipt"
        WHERE "organization_id" = ${organizationId} AND "run_id" = ${runId}::uuid)
         AS "receipts",
       (SELECT count(*)::int FROM "workspace_control"."workspace_audit_event"
        WHERE "organization_id" = ${organizationId}
-         AND "action" = 'analysis_article.run_complete' AND "resource_id" = ${runId})
+        AND "action" = 'analysis_article.run_complete' AND "resource_id" = ${runId})
         AS "audits"
   `;
-  expect(durability[0]).toEqual({ fragments: 0, receipts: 1, audits: 1 });
+  expect(durability[0]).toEqual({ receipts: 1, audits: 1 });
 
   const cancelledRunId = await createRun();
   await expect(runStore.requestAnalysisRunCancellation({

@@ -35,7 +35,7 @@ function publicAnalysisRun(run: typeof workspaceAnalysisArticleRun.$inferSelect)
     articleRevision: run.articleRevision,
     runnerId: run.runnerId,
     runnerCapabilityGeneration: run.runnerCapabilityGeneration,
-    trigger: run.trigger,
+    trigger: "manual" as const,
     state: run.state,
     definitionHash: run.definitionHash,
     schemaFingerprints: run.schemaFingerprints,
@@ -139,7 +139,6 @@ export async function POST(request: Request, context: RouteContext) {
     organizationId: workspaceId,
     articleId,
     run,
-    parameterHash: canonicalHash({}),
     definitionHash: canonicalHash(article.definition),
     runnerCapabilityHash: hashAnalysisRunnerCapability(runnerCapability),
     authority: authority(authorization),
@@ -147,16 +146,8 @@ export async function POST(request: Request, context: RouteContext) {
   if (!created) {
     return jsonError("Analysis run authority changed. Refresh the Article, grants, and runner.", 409);
   }
-  const executionConnections = article.connections.map((connection) => {
-    const connectionRevision = created.connectionContentRevisions[connection.connectionId];
-    if (typeof connectionRevision !== "number"
-      || !Number.isSafeInteger(connectionRevision) || connectionRevision < 1) {
-      throw new Error("Analysis run omitted exact connection content authority");
-    }
-    return { ...connection, connectionRevision };
-  });
   return privateJson({
     run: created.run,
-    article: { ...article, connections: executionConnections },
+    article: { ...article, connectionRevision: created.connectionContentRevision },
   }, { status: 201 });
 }

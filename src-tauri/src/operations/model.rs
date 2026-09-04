@@ -179,8 +179,6 @@ pub(super) const fn operation_kind_str(value: OperationKind) -> &'static str {
         OperationKind::SchemaChange => "schema_change",
         OperationKind::Import => "import",
         OperationKind::Export => "export",
-        OperationKind::Migration => "migration",
-        OperationKind::RetiredArtifact => "retired_artifact",
         OperationKind::PluginAction => "plugin_action",
         OperationKind::ProviderAction => "provider_action",
     }
@@ -198,8 +196,6 @@ pub(super) fn parse_operation_kind(value: &str) -> Option<OperationKind> {
         "schema_change" => Some(OperationKind::SchemaChange),
         "import" => Some(OperationKind::Import),
         "export" => Some(OperationKind::Export),
-        "migration" => Some(OperationKind::Migration),
-        "retired_artifact" => Some(OperationKind::RetiredArtifact),
         "plugin_action" => Some(OperationKind::PluginAction),
         "provider_action" => Some(OperationKind::ProviderAction),
         _ => None,

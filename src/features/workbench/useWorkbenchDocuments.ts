@@ -30,7 +30,6 @@ interface UseWorkbenchDocumentsOptions {
   selectedConnectionId: string | null;
   selectedConnectionDatabase: string | null;
   supportsSql: boolean;
-  restoredDocumentKind: WorkbenchDocument["kind"];
   sqlDocuments: SqlDocumentGateway;
   onRestoreError?: (error: unknown) => void;
 }
@@ -47,7 +46,6 @@ export function useWorkbenchDocuments({
   selectedConnectionId,
   selectedConnectionDatabase,
   supportsSql,
-  restoredDocumentKind,
   sqlDocuments,
   onRestoreError,
 }: UseWorkbenchDocumentsOptions) {
@@ -66,30 +64,14 @@ export function useWorkbenchDocuments({
       return;
     }
 
-    const preferred = supportsSql
-      ? restoredDocumentKind === "documents"
-        ? "welcome"
-        : restoredDocumentKind
-      : restoredDocumentKind === "sql"
-        ? "documents"
-        : restoredDocumentKind;
     const queued = pendingInitial.current;
     pendingInitial.current = null;
     const initial =
       queued?.connectionId === selectedConnectionId
         ? queued
-        : preferred === "sql"
+        : supportsSql
           ? stableDocument(selectedConnectionId, "welcome")
-          : preferred === "documents"
-            ? queryDocument(selectedConnectionId, "documents")
-            : stableDocument(
-                selectedConnectionId,
-                preferred === "activity"
-                  ? "activity"
-                  : preferred === "schema"
-                    ? "schema"
-                    : "welcome",
-              );
+          : queryDocument(selectedConnectionId, "documents");
     dispatch({ type: "initialize", document: initial });
 
     if (!supportsSql) return;
@@ -97,35 +79,22 @@ export function useWorkbenchDocuments({
       .list(connectionId(selectedConnectionId))
       .then(async (stored) => {
         if (token !== loadToken.current) return;
-        let restored = stored;
-        if (preferred === "sql" && restored.length === 0) {
-          restored = [
-            await sqlDocuments.create({
-              connectionId: connectionId(selectedConnectionId),
-              title: t("sql.untitledQuery"),
-              selectedDatabase: selectedConnectionDatabase,
-              content: "SELECT 1;",
-            }),
-          ];
-        }
         if (token !== loadToken.current) return;
         dispatch({
           type: "restoreSql",
           connectionId: selectedConnectionId,
-          documents: restored,
-          activateFirst: preferred === "sql",
+          documents: stored,
+          activateFirst: false,
         });
       })
       .catch((error) => {
         if (token === loadToken.current) restoreError.current?.(error);
       });
   }, [
-    restoredDocumentKind,
     selectedConnectionDatabase,
     selectedConnectionId,
     sqlDocuments,
     supportsSql,
-    t,
   ]);
 
   const selectedDocuments = useMemo(

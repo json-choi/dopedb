@@ -50,7 +50,6 @@ export async function openProviderImportPostgresHarness(
       AND to_regclass('workspace_control.workspace_analysis_article') IS NOT NULL
       AND to_regclass('workspace_control.workspace_analysis_article_revision') IS NOT NULL
       AND to_regclass('workspace_control.workspace_analysis_article_run') IS NOT NULL
-      AND to_regclass('workspace_control.workspace_analysis_result_fragment') IS NOT NULL
       AND EXISTS (
         SELECT 1 FROM information_schema.columns
         WHERE table_schema = 'workspace_control'
@@ -62,7 +61,7 @@ export async function openProviderImportPostgresHarness(
         WHERE table_schema = 'workspace_control'
           AND table_name = 'workspace_analysis_runner'
           AND column_name = 'runner_capability_generation'
-          AND is_nullable = 'YES'
+          AND is_nullable = 'NO'
       )
       AND EXISTS (
         SELECT 1 FROM information_schema.columns

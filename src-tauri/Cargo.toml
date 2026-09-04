@@ -65,7 +65,6 @@ chacha20poly1305 = "0.10.1"
 subtle = "2.6"
 zeroize = "1.9"
 dirs = "6"
-toml_edit = "0.25"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 unicode-normalization = "0.1.25"
@@ -92,7 +91,6 @@ tree-sitter-typescript = "0.23.2"
 tree-sitter-rust = "0.24.2"
 
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
-tauri-plugin-autostart = "2.5.1"
 tauri-plugin-process = "2.3.1"
 tauri-plugin-single-instance = "2.4.3"
 tauri-plugin-updater = "2.10.1"

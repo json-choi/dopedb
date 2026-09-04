@@ -5,7 +5,7 @@ use super::*;
 impl ScriptPlatformAdapter {
     /// Persist one exact multi-statement proposal after classifying every statement.
     /// All-read scripts become ready single-use plans; any mutation always waits for
-    /// exact approval regardless of the legacy prompt preference.
+    /// exact approval regardless of the persisted prompt preference.
     pub(crate) async fn propose_desktop(
         &self,
         request: DesktopScriptProposalRequest,
@@ -186,7 +186,7 @@ impl ScriptPlatformAdapter {
                 }));
             }
             if classifications.iter().any(|classification| {
-                classification.kind != QueryKind::Write || !classification.rollback_safe
+                classification.kind != QueryKind::Write || !classification.direct_dml
             }) {
                 return Err(DesktopScriptRunError::Scoped(DesktopScriptScopedFailure {
                     error: AppError::Blocked {

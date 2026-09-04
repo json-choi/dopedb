@@ -1,11 +1,9 @@
 //! Runtime validation for the current one-query Analysis Article contract.
 
-use std::collections::HashSet;
-
 use crate::error::{AppError, AppResult};
 use dopedb_protocol::{
-    AnalysisArticleConnection, AnalysisArticleDefinition, AnalysisColumn, AnalysisColumnMasking,
-    AnalysisColumnRole, AnalysisColumnSensitivity, AnalysisColumnType, SharedAnalysisArticleCreate,
+    AnalysisArticleDefinition, AnalysisColumn, AnalysisColumnMasking, AnalysisColumnRole,
+    AnalysisColumnSensitivity, AnalysisColumnType, SharedAnalysisArticleCreate,
 };
 
 pub(crate) const MAX_ARTICLE_RESULT_BYTES: usize = 16 * 1024 * 1024;
@@ -57,38 +55,18 @@ fn valid_column(column: &AnalysisColumn) -> bool {
             && column.column_type != AnalysisColumnType::String)
 }
 
-pub(crate) fn validate_definition(
-    definition: &AnalysisArticleDefinition,
-    connections: &[AnalysisArticleConnection],
-) -> AppResult<()> {
+pub(crate) fn validate_definition(definition: &AnalysisArticleDefinition) -> AppResult<()> {
     let query = &definition.query;
-    let connection_ids = connections
-        .iter()
-        .map(|connection| connection.connection_id)
-        .collect::<HashSet<_>>();
-    let connection_roles = connections
-        .iter()
-        .map(|connection| connection.role.as_str())
-        .collect::<HashSet<_>>();
     let column_names = query
         .columns
         .iter()
         .map(|column| column.name.as_str())
-        .collect::<HashSet<_>>();
+        .collect::<std::collections::HashSet<_>>();
     if definition.version != 3
         || !safe_text(&definition.title, 160, false)
         || !safe_text(&definition.html, 262_144, true)
-        || connections.len() != 1
-        || connection_ids.len() != connections.len()
-        || connection_roles.len() != connections.len()
-        || connections.iter().any(|connection| {
-            connection.connection_revision < 1
-                || !valid_id(&connection.role)
-                || !safe_text(&connection.alias, 128, false)
-        })
         || !valid_id(&query.id)
         || !safe_text(&query.title, 256, false)
-        || !connection_roles.contains(query.connection_role.as_str())
         || query.sql.trim().is_empty()
         || query.sql.len() > 100_000
         || query.sql.contains('\0')
@@ -114,5 +92,5 @@ pub(crate) fn validate_shared_create(article: &SharedAnalysisArticleCreate) -> A
             "Analysis Article create contract is invalid".into(),
         ));
     }
-    validate_definition(&article.definition, &article.connections)
+    validate_definition(&article.definition)
 }

@@ -198,6 +198,17 @@ impl ScriptPlatformAdapter {
                 )));
             }
         };
+        let mutation_pool = match live.rw() {
+            Ok(pool) => pool,
+            Err(error) => {
+                return Err(DesktopScriptRunError::Execution(Box::new(
+                    DesktopScriptExecutionFailure {
+                        error,
+                        _lease: lease,
+                    },
+                )))
+            }
+        };
         let cancellation = executor::cancel::register(operation_id);
         let expected_affected = payload
             .table_change
@@ -230,7 +241,7 @@ impl ScriptPlatformAdapter {
                     Some(&cancellation),
                     executor::cancel::QUERY_TIMEOUT,
                     execute_script_transaction(
-                        &live.write_pool,
+                        mutation_pool,
                         &statements,
                         payload.namespace.clone(),
                         expected_affected,

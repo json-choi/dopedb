@@ -1,6 +1,6 @@
 /*
  * Tailwind v4 utilities share the workspace design tokens. Preflight stays
- * disabled until the existing auth and console resets are fully migrated.
+ * disabled because the auth and console surfaces own their explicit resets.
  */
 @layer theme, base, components, utilities;
 @import "tailwindcss/theme.css" layer(theme) prefix(tw);

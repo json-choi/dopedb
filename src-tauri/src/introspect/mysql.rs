@@ -360,7 +360,7 @@ pub async fn introspect(pool: &MySqlPool, skip_fk: bool) -> AppResult<Catalog> {
 /// List MySQL/MariaDB relations without invoking the complete metadata scan.
 /// `information_schema.tables` is sufficient to render the connection tree;
 /// detailed metadata remains explicitly deferred to [`introspect`].
-pub(crate) async fn overview(pool: &MySqlPool) -> AppResult<CatalogOverview> {
+pub(crate) async fn overview(pool: &MySqlPool, database: &str) -> AppResult<CatalogOverview> {
     let namespaces = sqlx::query_scalar::<_, Option<String>>("SELECT DATABASE()")
         .fetch_one(pool)
         .await?
@@ -393,7 +393,7 @@ pub(crate) async fn overview(pool: &MySqlPool) -> AppResult<CatalogOverview> {
         .collect::<AppResult<Vec<_>>>()?;
 
     Ok(CatalogOverview {
-        database: None,
+        database: database.to_owned(),
         namespaces,
         relations,
         detail_state: CatalogOverviewDetailState::Deferred,

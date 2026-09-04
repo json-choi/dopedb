@@ -9,7 +9,7 @@ WITH workspace_steps AS (
         AND json_extract(properties_json, '$.outcome') = 'success') AS successful_query,
     MAX(name = 'agent_turn_completed'
         AND json_extract(properties_json, '$.outcome') = 'success') AS successful_agent_turn
-  FROM product_analytics_event_v1
+  FROM product_analytics_event
   WHERE workspace_kind = 'team'
     AND workspace_key IS NOT NULL
     AND occurred_at_ms >= unixepoch('now', '-30 days') * 1000

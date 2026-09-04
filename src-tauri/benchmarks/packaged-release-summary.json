@@ -59,7 +59,7 @@
       },
       "erdNodes": 1000
     },
-    "coldDefinition": "A fresh clone of a sealed migrated fixture is opened by a new packaged release process.",
+    "coldDefinition": "A fresh clone of a sealed current-schema fixture is opened by a new packaged release process.",
     "warmDefinition": "The same isolated fixture is reopened after the paired cold process exits cleanly.",
     "observationWindow": "Renderer module load through first shell commit plus 1500 ms of visible post-paint recovery.",
     "rss": "Maximum resident bytes sampled from the application process and its descendant process tree. Platform WebView helpers outside that tree are not claimed.",

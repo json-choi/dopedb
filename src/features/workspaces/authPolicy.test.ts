@@ -100,7 +100,6 @@ const analyticsPropertyKeys = {
   knowledge_source_sync_completed: ["outcome", "sourceKind", "syncReason"],
   agent_session_initialization_completed: ["outcome", "provider"],
   agent_turn_completed: ["outcome", "provider", "durationBucket"],
-  analysis_article_proposal_completed: [],
   analysis_article_run_completed: ["outcome", "trigger", "durationBucket"],
   workspace_membership_ready: ["role"],
   shared_connection_access_ready: ["accessMode", "engine"],
@@ -382,27 +381,29 @@ describe("workspace auth lifecycle", () => {
       id: installation.id,
       createdAt: "2026-08-13T00:00:00Z",
     }));
-    const migratedAnalyticsStore = new ProductAnalyticsLocalStore(
+    const strictAnalyticsStore = new ProductAnalyticsLocalStore(
       analyticsStorage,
       analyticsNow,
     );
-    migratedAnalyticsStore.applyConsent("granted", 0);
-    expect(migratedAnalyticsStore.installation()).toEqual({
+    strictAnalyticsStore.applyConsent("granted", 0);
+    expect(strictAnalyticsStore.installation()).toBeNull();
+    expect(analyticsMemory.size).toBe(0);
+    expect(strictAnalyticsStore.ensureInstallation(allocateInstallation)).toEqual({
       id: installation.id,
       generation: 0,
       readyRecorded: false,
     });
-    expect(migratedAnalyticsStore.enqueue(analyticsEvent(
+    expect(strictAnalyticsStore.enqueue(analyticsEvent(
       "10000000-0000-4000-8000-000000000001",
       "018f1f7e-7b44-7cc1-8d4e-4f31b7315fe7",
     ))).toBe(false);
-    expect(migratedAnalyticsStore.enqueue(firstAnalyticsEvent)).toBe(true);
-    expect(migratedAnalyticsStore.enqueue(firstAnalyticsEvent)).toBe(true);
-    expect(migratedAnalyticsStore.getSnapshot().queueSize).toBe(1);
+    expect(strictAnalyticsStore.enqueue(firstAnalyticsEvent)).toBe(true);
+    expect(strictAnalyticsStore.enqueue(firstAnalyticsEvent)).toBe(true);
+    expect(strictAnalyticsStore.getSnapshot().queueSize).toBe(1);
     expect(
-      migratedAnalyticsStore.markInstallationReadyRecorded(installation.id),
+      strictAnalyticsStore.markInstallationReadyRecorded(installation.id),
     ).toBe(true);
-    expect(migratedAnalyticsStore.installation()?.readyRecorded).toBe(true);
+    expect(strictAnalyticsStore.installation()?.readyRecorded).toBe(true);
     if (firstAnalyticsEvent.event.name !== "desktop_installation_ready") {
       throw new Error("unexpected product analytics event");
     }

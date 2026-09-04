@@ -53,16 +53,16 @@ impl AnalysisReadExecutionPort for DesktopAnalysisReadExecution {
         let operation_scope = self.connections.begin_operation_scope().await;
         let local_connection_id = if let Some(workspace_id) = request.workspace_id {
             self.knowledge
-                .local_connection_id_for_remote(workspace_id, request.authority.connection_id)
+                .local_connection_id_for_remote(workspace_id, request.connection_id)
                 .await?
                 .ok_or_else(|| AppError::Blocked {
                     reason: format!(
                         "Analysis Article connection '{}' needs a local credential binding on this device",
-                        request.authority.alias
+                        request.connection_id
                     ),
                 })?
         } else {
-            request.authority.connection_id
+            request.connection_id
         };
         let pin = operation_scope.pin_connection(local_connection_id).await?;
         let expected_authority_revision =
@@ -80,18 +80,18 @@ impl AnalysisReadExecutionPort for DesktopAnalysisReadExecution {
                             account_id,
                             workspace_id,
                             environment_id,
-                            request.authority.connection_id,
-                            request.authority.connection_revision,
+                            request.connection_id,
+                            request.connection_revision,
                         )
                         .await?
                 }
-                _ => request.authority.connection_revision,
+                _ => request.connection_revision,
             };
         if pin.connection_revision != expected_authority_revision {
             return Err(AppError::Blocked {
                 reason: format!(
                     "Analysis Article connection '{}' changed from revision {} to {}",
-                    request.authority.alias, expected_authority_revision, pin.connection_revision
+                    request.connection_id, expected_authority_revision, pin.connection_revision
                 ),
             });
         }
@@ -184,8 +184,8 @@ impl AnalysisReadExecutionPort for DesktopAnalysisReadExecution {
         .await;
         let receipt = AnalysisQueryReceipt {
             query_node_id: request.query.id.clone(),
-            connection_id: request.authority.connection_id,
-            connection_revision: request.authority.connection_revision,
+            connection_id: request.connection_id,
+            connection_revision: request.connection_revision,
             query_run_id: request.run_id,
             query_hash: canonical_hash(&serde_json::json!({ "sql": request.query.sql }))?,
             schema_fingerprint: schema_fingerprint(&request.query.columns)?,

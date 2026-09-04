@@ -1,6 +1,6 @@
-//! Store repository integration and migration characterization tests.
+//! Store repository integration tests against the current schema.
 
-pub(super) use super::super::{migrations, CacheWriteOutcome, Store};
+pub(super) use super::super::{schema, CacheWriteOutcome, Store};
 pub(super) use crate::error::AppError;
 pub(super) use crate::features::workspaces::{WorkspaceAuthUser, WorkspaceRole};
 pub(super) use crate::kernel::access::CatalogCachePolicy;
@@ -76,31 +76,4 @@ pub(super) fn catalog_snapshot(
         },
     )
     .unwrap()
-}
-
-pub(super) async fn seed_legacy_chat_thread(
-    store: &Store,
-    connection_id: Uuid,
-    title: &str,
-) -> Uuid {
-    let id = Uuid::new_v4();
-    let workspace_id = store.active_workspace_id().await.unwrap();
-    let account_scope = store.active_local_scope().await.unwrap();
-    let now = Utc::now();
-    sqlx::query(
-        r#"INSERT INTO agent_chat_threads
-               (id, provider, connection_id, workspace_id, account_scope, title,
-                cli_session_id, model, effort, created_at, updated_at)
-               VALUES (?1,'codex',?2,?3,?4,?5,'legacy-session','legacy-model','high',?6,?6)"#,
-    )
-    .bind(id.to_string())
-    .bind(connection_id.to_string())
-    .bind(workspace_id.to_string())
-    .bind(account_scope)
-    .bind(title)
-    .bind(now)
-    .execute(store.pool())
-    .await
-    .unwrap();
-    id
 }

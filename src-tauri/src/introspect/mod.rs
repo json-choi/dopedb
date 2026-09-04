@@ -1,5 +1,5 @@
 //! Schema introspection into a serde [`Catalog`]. Always reads through the
-//! connection's READ-ONLY pool. The catalog backs `get_schema`/`get_table_ddl`
+//! connection's READ-ONLY pool. The catalog backs snapshots and table DDL
 //! and the local CLI catalog commands.
 
 mod catalog_v2;
@@ -8,8 +8,7 @@ mod pg;
 mod sqlite;
 
 pub(crate) use catalog_v2::{
-    load_catalog_in_context, load_catalog_snapshot_in_context, snapshot_from_catalog,
-    CatalogReadMode,
+    load_catalog_snapshot_in_context, snapshot_from_catalog, CatalogReadMode,
 };
 
 use crate::connection::{DbPool, Live};
@@ -36,15 +35,15 @@ pub async fn introspect(conn: &Live) -> AppResult<Catalog> {
 ///
 /// This must remain independent of the full snapshot path: callers intentionally
 /// avoid the detail scan and never persist this response in the CatalogSnapshot cache.
-pub(crate) async fn overview(conn: &Live) -> AppResult<CatalogOverview> {
+pub(crate) async fn overview(conn: &Live, database: &str) -> AppResult<CatalogOverview> {
     match conn {
         Live::Sql(live) => match live.ro() {
-            DbPool::Postgres(pool) => pg::overview(pool).await,
-            DbPool::Mysql(pool) => mysql::overview(pool).await,
-            DbPool::Sqlite(pool) => sqlite::overview(pool).await,
+            DbPool::Postgres(pool) => pg::overview(pool, database).await,
+            DbPool::Mysql(pool) => mysql::overview(pool, database).await,
+            DbPool::Sqlite(pool) => sqlite::overview(pool, database).await,
             DbPool::Bigquery(connection) => connection.overview().await,
         },
-        Live::Mongo(conn) => crate::mongo::introspect::overview(conn).await,
+        Live::Mongo(conn) => crate::mongo::introspect::overview(conn, database).await,
     }
 }
 

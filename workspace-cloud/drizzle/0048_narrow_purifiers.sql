@@ -1,4 +1,0 @@
-ALTER TABLE "workspace_control"."workspace_analysis_signal_receipt" DROP CONSTRAINT "workspace_analysis_signal_receipt_hashes";--> statement-breakpoint
-ALTER TABLE "workspace_control"."workspace_analysis_signal_receipt" ALTER COLUMN "result_hash" DROP NOT NULL;--> statement-breakpoint
-ALTER TABLE "workspace_control"."workspace_analysis_signal_receipt" ADD CONSTRAINT "workspace_analysis_signal_receipt_hashes" CHECK (("workspace_control"."workspace_analysis_signal_receipt"."result_hash" IS NULL OR "workspace_control"."workspace_analysis_signal_receipt"."result_hash" ~ '^[0-9a-f]{64}$')
-        AND "workspace_control"."workspace_analysis_signal_receipt"."schema_fingerprint" ~ '^[0-9a-f]{64}$');

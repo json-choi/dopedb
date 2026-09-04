@@ -472,7 +472,6 @@ function Shell() {
           agent: {
             open: openOrFocusAgentDock,
             openTask: openAgentTask,
-            openArchive: () => commands.route.openSettings("archive"),
             widthChanged: agentDock.resize,
             close: agentDock.close,
           },

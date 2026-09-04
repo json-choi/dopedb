@@ -1,11 +1,9 @@
 // Current credential-free Analysis Article wire contract.
-// Retired expanded definitions live only in the bounded compatibility parser.
 
 export const analysisArticleSources = [
   "human",
   "dopedb.acp.claude",
   "dopedb.acp.codex",
-  "migration",
 ] as const;
 export const analysisColumnTypes = [
   "string",
@@ -39,13 +37,6 @@ export type AnalysisColumnRole = (typeof analysisColumnRoles)[number];
 export type AnalysisColumnSensitivity = (typeof analysisColumnSensitivities)[number];
 export type AnalysisColumnMasking = (typeof analysisColumnMasking)[number];
 
-export type AnalysisArticleConnection = Readonly<{
-  connectionId: string;
-  connectionRevision: number;
-  role: string;
-  alias: string;
-}>;
-
 export type AnalysisColumn = Readonly<{
   name: string;
   type: AnalysisColumnType;
@@ -58,7 +49,6 @@ export type AnalysisColumn = Readonly<{
 export type AnalysisQueryNode = Readonly<{
   id: string;
   title: string;
-  connectionRole: string;
   sql: string;
   maxRows: number;
   maxBytes: number;
@@ -77,9 +67,8 @@ export type SharedAnalysisArticleCreate = Readonly<{
   id: string;
   projectEnvironmentId: string;
   environmentRevision: number;
-  sourceKnowledgeGrantId: string | null;
-  graphRevisionIds: readonly string[];
-  connections: readonly AnalysisArticleConnection[];
+  connectionId: string;
+  connectionRevision: number;
   definition: AnalysisArticleDefinition;
 }>;
 

@@ -1,3 +1,0 @@
-DROP INDEX "workspace_control"."knowledge_project_org_name_idx";--> statement-breakpoint
-ALTER TABLE "workspace_control"."knowledge_project" ADD COLUMN "deleted_at" timestamp with time zone;--> statement-breakpoint
-CREATE UNIQUE INDEX "knowledge_project_org_name_idx" ON "workspace_control"."knowledge_project" USING btree ("organization_id","name") WHERE "workspace_control"."knowledge_project"."deleted_at" IS NULL;

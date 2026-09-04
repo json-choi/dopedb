@@ -535,13 +535,12 @@ fn analysis_article_input_schema(include_revision: bool) -> Value {
                 "properties": {
                     "id": id(),
                     "title": required_display(256),
-                    "connectionRole": id(),
                     "sql": { "type": "string", "minLength": 1, "maxLength": 100_000 },
                     "maxRows": { "type": "integer", "minimum": 1, "maximum": 50_000 },
                     "maxBytes": { "type": "integer", "minimum": 1_024, "maximum": 16_777_216 },
                     "columns": { "type": "array", "minItems": 1, "maxItems": 256, "items": column }
                 },
-                "required": ["id", "title", "connectionRole", "sql", "maxRows", "maxBytes", "columns"],
+                "required": ["id", "title", "sql", "maxRows", "maxBytes", "columns"],
                 "additionalProperties": false
             }
         },

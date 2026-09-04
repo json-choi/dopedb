@@ -1,6 +1,6 @@
 PRAGMA foreign_keys = ON;
 
-CREATE TABLE product_analytics_event_v1 (
+CREATE TABLE product_analytics_event (
   event_id TEXT PRIMARY KEY NOT NULL CHECK (length(event_id) = 64),
   name TEXT NOT NULL CHECK (name IN (
     'desktop_installation_ready',
@@ -13,9 +13,7 @@ CREATE TABLE product_analytics_event_v1 (
     'knowledge_source_sync_completed',
     'agent_session_initialization_completed',
     'agent_turn_completed',
-    'analysis_article_proposal_completed',
     'analysis_article_run_completed',
-    'analysis_article_state_transitioned',
     'workspace_membership_ready',
     'shared_connection_access_ready'
   )),
@@ -33,17 +31,7 @@ CREATE TABLE product_analytics_event_v1 (
   properties_json TEXT NOT NULL CHECK (json_valid(properties_json))
 ) STRICT;
 
-CREATE INDEX product_analytics_event_received_idx
-  ON product_analytics_event_v1 (received_at_ms, event_id);
-CREATE INDEX product_analytics_event_installation_idx
-  ON product_analytics_event_v1 (installation_id, occurred_at_ms, event_id);
-CREATE INDEX product_analytics_event_workspace_idx
-  ON product_analytics_event_v1 (workspace_key, occurred_at_ms, event_id)
-  WHERE workspace_key IS NOT NULL;
-CREATE INDEX product_analytics_event_name_idx
-  ON product_analytics_event_v1 (name, occurred_at_ms, event_id);
-
-CREATE TABLE product_analytics_daily_v1 (
+CREATE TABLE product_analytics_daily (
   day TEXT NOT NULL,
   name TEXT NOT NULL,
   workspace_kind TEXT NOT NULL,
@@ -52,4 +40,9 @@ CREATE TABLE product_analytics_daily_v1 (
   outcome TEXT NOT NULL,
   event_count INTEGER NOT NULL CHECK (event_count >= 0),
   PRIMARY KEY (day, name, workspace_kind, platform, locale, outcome)
+) WITHOUT ROWID, STRICT;
+
+CREATE TABLE product_analytics_ingest_budget (
+  minute_bucket INTEGER PRIMARY KEY NOT NULL,
+  event_count INTEGER NOT NULL CHECK (event_count BETWEEN 1 AND 16)
 ) WITHOUT ROWID, STRICT;

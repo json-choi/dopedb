@@ -963,13 +963,7 @@ async function resolveNeonResourceIdentity(
     resource.project,
     resource.branch,
   );
-  const legacyDatabaseAuthority = resource.databaseId === resource.database
-    && !/^[0-9]{1,19}$/.test(resource.databaseId);
-  const database = databases.find((item) => (
-    legacyDatabaseAuthority
-      ? item.value === resource.database
-      : item.id === resource.databaseId
-  ));
+  const database = databases.find((item) => item.id === resource.databaseId);
   if (!database) {
     throw new ProviderRequestError("neon", "Neon database was not found", 404);
   }

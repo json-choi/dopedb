@@ -5,7 +5,6 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import {
-  canUseLocalProviderCredential,
   providerImportDisplayName,
   type Integration,
   type PendingProviderImport,
@@ -36,7 +35,6 @@ export function useSharedDatabaseAccess(
     integrations,
     connections,
     managedConnections,
-    selectedConnectionId,
     selectedIntegrationId,
     selection,
     resourceOptions,
@@ -54,7 +52,6 @@ export function useSharedDatabaseAccess(
   const setConnections = setField("connections");
   const setManagedConnections = setField("managedConnections");
   const setManagedConnectionsLoaded = setField("managedConnectionsLoaded");
-  const setSelectedConnectionId = setField("selectedConnectionId");
   const setSelectedIntegrationId = setField("selectedIntegrationId");
   const setSelection = setField("selection");
   const setResourceOptions = setField("resourceOptions");
@@ -75,18 +72,11 @@ export function useSharedDatabaseAccess(
     setError,
   });
   const pendingImportRef = useRef<PendingProviderImport | null>(null);
-  const selectedConnection = useMemo(
-    () => connections.find((item) => item.id === selectedConnectionId) ?? null,
-    [connections, selectedConnectionId],
-  );
   const selectedIntegration = integrations.find(
     (item) => item.id === selectedIntegrationId,
   ) ?? null;
   const selectedProvider = providers.find(
     (item) => item.id === selectedIntegration?.provider,
-  ) ?? null;
-  const currentManagedConnection = managedConnections.find(
-    (item) => item.connectionId === selectedConnectionId,
   ) ?? null;
   const importReceipt = useMemo(() => {
     if (selectedProvider?.id === "neon") {
@@ -111,17 +101,12 @@ export function useSharedDatabaseAccess(
       pending
       && (
         pending.integrationId !== selectedIntegrationId
-        || pending.connectionId !== (
-          selectedConnection?.credentialMode === "member_local"
-            ? selectedConnection.id
-            : null
-        )
         || pending.receipt !== importReceipt
       )
     ) {
       pendingImportRef.current = null;
     }
-  }, [importReceipt, selectedConnection, selectedIntegrationId]);
+  }, [importReceipt, selectedIntegrationId]);
 
   const clearPendingImport = useCallback(() => {
     pendingImportRef.current = null;
@@ -183,11 +168,6 @@ export function useSharedDatabaseAccess(
     setManagedConnections(providerSnapshot.data.managedConnections);
     setManagedConnectionsLoaded(true);
     setConnections(nextConnections);
-    setSelectedConnectionId((current) => (
-      nextConnections.some((item) => item.id === current)
-        ? current
-        : nextConnections[0]?.id ?? ""
-    ));
     setSelectedIntegrationId((current) => (
       nextIntegrations.some((item) => item.id === current)
         ? current
@@ -208,7 +188,6 @@ export function useSharedDatabaseAccess(
     setManagedConnections,
     setManagedConnectionsLoaded,
     setProviders,
-    setSelectedConnectionId,
     setSelectedIntegrationId,
     workspaceId,
   ]);
@@ -345,31 +324,6 @@ export function useSharedDatabaseAccess(
     }
   }
 
-  async function switchToMemberLocal() {
-    if (!selectedConnection || mutation) return;
-    setMutation(`mode:${selectedConnection.id}`);
-    setError("");
-    try {
-      const response = await fetch(
-        `/api/v1/workspaces/${workspaceId}/connections/${
-          selectedConnection.id
-        }/managed-access`,
-        {
-          method: "PUT",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ mode: "member_local" }),
-        },
-      ).catch(() => null);
-      if (!response?.ok) {
-        setError(await providerResponseError(response, copy.accessModeError, locale));
-        return;
-      }
-      await loadSharedDatabaseAccess();
-    } finally {
-      setMutation("");
-    }
-  }
-
   async function importDiscoveredResource() {
     if (!selectedIntegration || !selectedProvider || mutation) return;
     const finalLevel = selectedProvider.resourceLevels.at(-1)!;
@@ -400,20 +354,11 @@ export function useSharedDatabaseAccess(
     const productionApproved = isNeon
       ? neonBootstrap.report?.production === true
       : finalResource.production === true;
-    const replacementConnection =
-      selectedConnection?.credentialMode === "member_local"
-        ? selectedConnection
-        : null;
-    const connectionId = replacementConnection?.id ?? null;
-    const name = replacementConnection
-      ? replacementConnection.name
-      : providerImportDisplayName(selectedProvider.name, finalResource.name);
+    const name = providerImportDisplayName(selectedProvider.name, finalResource.name);
     if (!name) return;
     const confirmation = productionApproved
       ? `${copy.productionConfirmPrefix}${finalResource.name}${copy.productionConfirmBody}`
-      : replacementConnection
-        ? `${replacementConnection.name}${copy.replaceConfirmMiddle}${finalResource.name}${copy.replaceConfirmSuffix}`
-        : null;
+      : null;
     if (confirmation && !window.confirm(confirmation)) return;
     setMutation(`import:${selectedIntegration.id}`);
     setError("");
@@ -473,18 +418,15 @@ export function useSharedDatabaseAccess(
       if (
         !pending
         || pending.integrationId !== selectedIntegration.id
-        || pending.connectionId !== connectionId
         || pending.receipt !== receipt
         || pending.name !== name
       ) {
         const idempotencyKey = crypto.randomUUID();
         pending = {
           integrationId: selectedIntegration.id,
-          connectionId,
           receipt,
           name,
           body: JSON.stringify({
-            connectionId,
             receipt,
             idempotencyKey,
             name,
@@ -530,31 +472,11 @@ export function useSharedDatabaseAccess(
         ),
       ),
   );
-  const currentProvider = providers.find(
-    (item) => item.id === currentManagedConnection?.provider,
-  ) ?? null;
-  const currentResourceLabel = currentManagedConnection && currentProvider
-    ? currentProvider.resourceLevels
-      .map((level) => currentManagedConnection.resource[level.key])
-      .filter(Boolean)
-      .join(" / ")
-    : "";
-  // Only the managed projection returned for a canonical provider import may
-  // offer a member-local handoff. The server repeats this proof atomically;
-  // this predicate merely keeps generic managed templates out of the UI.
-  const mayUseLocalProviderCredential = canUseLocalProviderCredential(
-    selectedConnection,
-    currentManagedConnection,
-  );
-  const willReplaceConnection =
-    selectedConnection?.credentialMode === "member_local";
-
   return {
     providers,
     integrations,
     connections,
     managedConnections,
-    selectedConnectionId,
     selectedIntegrationId,
     selection,
     resourceOptions,
@@ -566,13 +488,9 @@ export function useSharedDatabaseAccess(
     resourcePending,
     mutation,
     error,
-    selectedConnection,
     selectedIntegration,
     selectedProvider,
     resourceComplete,
-    currentResourceLabel,
-    mayUseLocalProviderCredential,
-    willReplaceConnection,
     applyNeonBootstrap,
     classifyNeonEnvironment,
     deleteSharedConnection,
@@ -584,9 +502,7 @@ export function useSharedDatabaseAccess(
     setNeonEnvironmentClassification,
     setNeonPublicAclApproved,
     setNeonProductionApproved,
-    setSelectedConnectionId,
     setSelectedIntegrationId,
-    switchToMemberLocal,
   };
 }
 

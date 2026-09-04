@@ -86,10 +86,8 @@ async function markLeaseRevoked(
   const action = lease.cleanupClaim
     ? "credential.lease.cleanup"
     : "credential.lease.revoke";
-  // Serializing by the same connection advisory key used by revocation gates
-  // ensures the second statement gets a post-lock READ COMMITTED snapshot. Two
-  // workers cleaning the last two legacy leases can no longer both observe the
-  // other's pre-revoke row and skip the final deterministic demotion.
+  // Serialize by the same connection advisory key used by revocation gates so
+  // revocation observes the latest connection authority.
   const [, result] = await db.batch([
     db.execute(sql`
       SELECT pg_advisory_xact_lock(hashtextextended(
@@ -111,30 +109,6 @@ async function markLeaseRevoked(
                 lease."provider", lease."provider_audit_id",
                 lease."external_credential_id", lease."external_credential_kind",
                 lease."cleanup_attempts"
-    ), demoted_legacy_connection AS (
-      UPDATE ${workspaceConnection} AS connection
-      SET "credential_mode" = 'member_local',
-          "provider_integration_id" = NULL,
-          "provider_resource" = NULL,
-          "provider_resource_id" = NULL,
-          "readonly_default" = TRUE,
-          "allow_writes" = FALSE,
-          "revision" = connection."revision" + 1,
-          "updated_at" = ${now}
-      FROM revoked
-      WHERE connection."id" = revoked."connection_id"
-        AND connection."organization_id" = revoked."organization_id"
-        AND connection."credential_mode" = 'managed'
-        AND connection."provider_resource_id" IS NULL
-        AND NOT EXISTS (
-          SELECT 1 FROM ${workspaceCredentialLease} AS live_lease
-          WHERE live_lease."organization_id" = connection."organization_id"
-            AND live_lease."connection_id" = connection."id"
-            -- DML CTE siblings share a snapshot; exclude this returned row.
-            AND live_lease."id" <> revoked."id"
-            AND live_lease."revoked_at" IS NULL
-        )
-      RETURNING connection."id"
     ), audited AS (
       INSERT INTO ${workspaceAuditEvent}
         ("organization_id", "actor_user_id", "action", "resource_type",

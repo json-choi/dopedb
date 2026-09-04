@@ -4,9 +4,6 @@ import { invoke } from "../../ipc/core";
 import type {
   CliInstallReceipt,
   CliInstallationStatus,
-  LegacyMcpCleanupExpectation,
-  LegacyMcpCleanupReceipt,
-  LegacyMcpCleanupStatus,
   SkillMutationReceipt,
   SkillSelfTestReceipt,
   SkillStatus,
@@ -52,14 +49,4 @@ export function removeSkill(
 
 export function skillSelfTest(): Promise<SkillSelfTestReceipt> {
   return invoke("skill_self_test");
-}
-
-export function legacyMcpCleanupStatus(): Promise<LegacyMcpCleanupStatus> {
-  return invoke("legacy_mcp_cleanup_status");
-}
-
-export function legacyMcpCleanupApply(
-  expectations: LegacyMcpCleanupExpectation[],
-): Promise<LegacyMcpCleanupReceipt> {
-  return invoke("legacy_mcp_cleanup_apply", { expectations });
 }

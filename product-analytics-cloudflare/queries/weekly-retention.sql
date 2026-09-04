@@ -10,7 +10,7 @@ WITH weekly_activity AS (
       WHEN name = 'agent_turn_completed'
        AND json_extract(properties_json, '$.outcome') = 'success'
       THEN installation_id END) AS agent_installations
-  FROM product_analytics_event_v1
+  FROM product_analytics_event
   WHERE occurred_at_ms >= unixepoch('now', '-30 days') * 1000
   GROUP BY week
 )

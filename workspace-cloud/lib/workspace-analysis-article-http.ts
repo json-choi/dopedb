@@ -6,29 +6,19 @@ import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { db } from "./db";
 import {
   workspaceAnalysisArticle,
-  workspaceAnalysisArticleConnection,
-  workspaceAnalysisArticleGraph,
   workspaceConnectionGrant,
 } from "./schema";
-import {
-  publicAnalysisArticle,
-  type AnalysisArticleConnection,
-} from "./workspace-analysis-articles";
+import { publicAnalysisArticle } from "./workspace-analysis-articles";
 
 type ArticleRow = typeof workspaceAnalysisArticle.$inferSelect;
 
-function projection(
-  article: ArticleRow,
-  connections: readonly AnalysisArticleConnection[],
-  graphRevisionIds: readonly string[],
-) {
+function projection(article: ArticleRow) {
   return publicAnalysisArticle({
     id: article.id,
     projectEnvironmentId: article.projectEnvironmentId,
     environmentRevision: article.environmentRevision,
-    sourceKnowledgeGrantId: article.sourceKnowledgeGrantId,
-    graphRevisionIds,
-    connections,
+    connectionId: article.connectionId,
+    connectionRevision: article.connectionRevision,
     definition: article.definition,
     ownerMemberId: article.ownerMemberId,
     updatedByMemberId: article.updatedByMemberId,
@@ -54,26 +44,8 @@ export async function listAccessibleAnalysisArticles(input: {
     isNull(workspaceAnalysisArticle.deletedAt),
   )).orderBy(desc(workspaceAnalysisArticle.updatedAt), desc(workspaceAnalysisArticle.id));
   if (rows.length === 0) return [];
-  const articleIds = rows.map((article) => article.id);
-  const revisionByArticle = new Map(rows.map((article) => [article.id, article.revision]));
-  const [allConnectionRows, allGraphRows] = await Promise.all([
-    db.select().from(workspaceAnalysisArticleConnection).where(and(
-      eq(workspaceAnalysisArticleConnection.organizationId, input.organizationId),
-      inArray(workspaceAnalysisArticleConnection.articleId, articleIds),
-    )),
-    db.select().from(workspaceAnalysisArticleGraph).where(and(
-      eq(workspaceAnalysisArticleGraph.organizationId, input.organizationId),
-      inArray(workspaceAnalysisArticleGraph.articleId, articleIds),
-    )),
-  ]);
-  const connectionRows = allConnectionRows.filter(
-    (row) => revisionByArticle.get(row.articleId) === row.articleRevision,
-  );
-  const graphRows = allGraphRows.filter(
-    (row) => revisionByArticle.get(row.articleId) === row.articleRevision,
-  );
-  const requiredConnectionIds = [...new Set(connectionRows.map((row) => row.connectionId))];
-  const grants = requiredConnectionIds.length === 0 ? [] : await db.select({
+  const requiredConnectionIds = [...new Set(rows.map((article) => article.connectionId))];
+  const grants = await db.select({
     connectionId: workspaceConnectionGrant.connectionId,
   }).from(workspaceConnectionGrant).where(and(
     eq(workspaceConnectionGrant.organizationId, input.organizationId),
@@ -81,23 +53,9 @@ export async function listAccessibleAnalysisArticles(input: {
     inArray(workspaceConnectionGrant.connectionId, requiredConnectionIds),
   ));
   const granted = new Set(grants.map((grant) => grant.connectionId));
-  return rows.flatMap((article) => {
-    const connections = connectionRows
-      .filter((row) => row.articleId === article.id)
-      .map((row) => ({
-        connectionId: row.connectionId,
-        connectionRevision: row.connectionRevision,
-        role: row.role,
-        alias: row.alias,
-      }));
-    if (connections.length === 0 || connections.some((connection) => !granted.has(connection.connectionId))) {
-      return [];
-    }
-    const graphRevisionIds = graphRows
-      .filter((row) => row.articleId === article.id)
-      .map((row) => row.graphRevisionId);
-    return [projection(article, connections, graphRevisionIds)];
-  });
+  return rows
+    .filter((article) => granted.has(article.connectionId))
+    .map(projection);
 }
 
 export async function accessibleAnalysisArticle(input: {

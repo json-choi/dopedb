@@ -84,7 +84,7 @@ struct StoredDesktopDocumentPayload {
 pub(crate) struct DocumentReadEventContext {
     pub(crate) connection_id: Uuid,
     pub(crate) connection_name: String,
-    /// Canonical JSON stored in the legacy audit/history `sql` column.
+    /// Canonical JSON stored in the shared audit/history `sql` column.
     pub(crate) query_text: String,
 }
 

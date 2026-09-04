@@ -43,7 +43,6 @@ const TableData = lazy(() => import("../../screens/Tables"));
 // The editor may render while policy storage is unavailable, but all execution
 // remains disabled until the authoritative connection policy arrives.
 const BLOCKED_SAFETY_SETTINGS: SafetySettings = {
-  requireApproval: true,
   allowWrites: false,
   allowSchemaChanges: false,
   wrapWritesInTx: true,
@@ -76,7 +75,6 @@ type WorkbenchContentModel = {
     items: WorkbenchDocument[];
     active: WorkbenchDocument | null;
     activeId: string | null;
-    initialAuditOpen: boolean;
   };
   update: { snapshot: AppUpdaterSnapshot };
 };
@@ -122,7 +120,6 @@ type WorkbenchContentCommands = {
     openTable: (connection: ConnectionProfile, table: CatalogTable) => void;
     openStable: (kind: "schema" | "activity") => void;
     loadSql: (sql: string) => Promise<void>;
-    consumeInitialAudit: () => void;
   };
   queryServices: {
     updateSession: (session: QueryServiceSession) => void;
@@ -394,8 +391,6 @@ function WorkbenchContentResolved({ model, commands }: Props) {
             key={activeDocument.id}
             connection={selected}
             onLoadSql={commands.documents.loadSql}
-            initialAuditOpen={workbench.initialAuditOpen}
-            onInitialAuditOpenConsumed={commands.documents.consumeInitialAudit}
           />
         )}
       </section>

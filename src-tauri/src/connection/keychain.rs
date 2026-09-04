@@ -31,7 +31,6 @@ use crate::kernel::sync::lock_unpoisoned;
 const SERVICE: &str = "dev.dopedb.desktop.dev";
 #[cfg(all(not(debug_assertions), not(feature = "packaged-benchmark")))]
 const SERVICE: &str = "dev.dopedb.desktop";
-const LEGACY_WORKSPACE_SESSION_ACCOUNT: &str = "workspace-session";
 const ANALYSIS_RESULT_CACHE_KEY_ACCOUNT: &str = "analysis-result-cache-key:v1";
 static SESSION_CACHE: LazyLock<Mutex<HashMap<String, Zeroizing<String>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
@@ -240,25 +239,6 @@ pub async fn delete_workspace_session(user_id: &str) -> AppResult<()> {
     workspace_session_keychain_task(move || delete_workspace_session_account(&account)).await
 }
 
-/// Upgrade helper for releases that stored exactly one session under a fixed account.
-/// Callers validate and copy the token before removing this legacy item.
-pub(crate) async fn fetch_legacy_workspace_session() -> AppResult<Option<String>> {
-    if let Some(token) = cached_secret(LEGACY_WORKSPACE_SESSION_ACCOUNT) {
-        return Ok(Some(token));
-    }
-    bounded_workspace_session_read(move || {
-        fetch_workspace_session_account(LEGACY_WORKSPACE_SESSION_ACCOUNT)
-    })
-    .await
-}
-
-pub(crate) async fn delete_legacy_workspace_session() -> AppResult<()> {
-    workspace_session_keychain_task(move || {
-        delete_workspace_session_account(LEGACY_WORKSPACE_SESSION_ACCOUNT)
-    })
-    .await
-}
-
 #[cfg(test)]
 pub(crate) async fn assert_workspace_session_keychain_async_contract() {
     let source = include_str!("keychain.rs");
@@ -267,8 +247,6 @@ pub(crate) async fn assert_workspace_session_keychain_async_contract() {
         "pub async fn store_workspace_session",
         "pub async fn fetch_workspace_session",
         "pub async fn delete_workspace_session",
-        "pub(crate) async fn fetch_legacy_workspace_session",
-        "pub(crate) async fn delete_legacy_workspace_session",
     ] {
         assert!(source.contains(signature), "missing {signature}");
     }
@@ -517,15 +495,11 @@ fn fallback_dir() -> AppResult<std::path::PathBuf> {
 
 #[cfg(any(debug_assertions, feature = "packaged-benchmark"))]
 fn fallback_path_in(dir: &std::path::Path, account: &str) -> std::path::PathBuf {
-    // Connection ids were historically stored as their UUID filename. Preserve that
-    // debug-only layout, but encode namespaced session accounts because `:` is not a
-    // valid filename character on Windows and separators must never escape `dir`.
-    let filename =
-        if Uuid::parse_str(account).is_ok() || account == LEGACY_WORKSPACE_SESSION_ACCOUNT {
-            account.to_owned()
-        } else {
-            format!("account-{}", hex::encode(account.as_bytes()))
-        };
+    let filename = if Uuid::parse_str(account).is_ok() {
+        account.to_owned()
+    } else {
+        format!("account-{}", hex::encode(account.as_bytes()))
+    };
     dir.join(format!("{filename}.secret"))
 }
 

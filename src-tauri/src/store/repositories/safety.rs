@@ -43,7 +43,7 @@ impl Store {
     pub async fn get_safety(&self, connection_id: Uuid) -> AppResult<SafetySettings> {
         self.get_connection(connection_id).await?;
         let row = sqlx::query(
-            "SELECT require_approval, allow_writes, allow_schema_changes,
+            "SELECT allow_writes, allow_schema_changes,
                     wrap_writes_in_tx, explain_preview,
                     auto_run_reads, max_rows, exec_preview_row_limit
              FROM connection_safety WHERE connection_id = ?1",
@@ -55,7 +55,6 @@ impl Store {
         Ok(match row {
             None => SafetySettings::default(),
             Some(r) => SafetySettings {
-                require_approval: r.try_get("require_approval")?,
                 allow_writes: r.try_get("allow_writes")?,
                 allow_schema_changes: r.try_get("allow_schema_changes")?,
                 wrap_writes_in_tx: r.try_get("wrap_writes_in_tx")?,
@@ -161,17 +160,16 @@ impl Store {
         }
         sqlx::query(
             r#"INSERT INTO connection_safety
-                (connection_id, require_approval, allow_writes, allow_schema_changes,
+                (connection_id, allow_writes, allow_schema_changes,
                  wrap_writes_in_tx, explain_preview, auto_run_reads, max_rows,
                  exec_preview_row_limit)
-               VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)
+               VALUES (?1,?2,?3,?4,?5,?6,?7,?8)
                ON CONFLICT(connection_id) DO UPDATE SET
-                 require_approval=?2, allow_writes=?3, allow_schema_changes=?4,
-                 wrap_writes_in_tx=?5, explain_preview=?6, auto_run_reads=?7,
-                 max_rows=?8, exec_preview_row_limit=?9"#,
+                 allow_writes=?2, allow_schema_changes=?3,
+                 wrap_writes_in_tx=?4, explain_preview=?5, auto_run_reads=?6,
+                 max_rows=?7, exec_preview_row_limit=?8"#,
         )
         .bind(connection_id.to_string())
-        .bind(s.require_approval)
         .bind(s.allow_writes)
         .bind(s.allow_schema_changes)
         .bind(s.wrap_writes_in_tx)

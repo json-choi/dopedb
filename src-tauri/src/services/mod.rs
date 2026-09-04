@@ -91,7 +91,7 @@ impl ApplicationServices {
         );
         Self {
             activity: activity::compose(store.clone()),
-            agents: agents::compose(store.clone()),
+            agents: agents::compose(),
             analysis_article,
             connections: connection_feature,
             catalog,

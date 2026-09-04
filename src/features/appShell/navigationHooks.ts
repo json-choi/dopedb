@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+
 import type { WorkbenchDocument } from "../workbench/domain";
 
 export function preloadSqlEditor() {
@@ -29,26 +30,6 @@ export function usePersistentSelectedConnection() {
     else localStorage.removeItem("selectedId");
   }, [selectedId]);
   return [selectedId, setSelectedId] as const;
-}
-
-export function useRestoredWorkbenchState() {
-  const legacyAuditOpen = useRef(localStorage.getItem("tab") === "audit");
-  const restoredDocumentKind = useRef<WorkbenchDocument["kind"]>(
-    (() => {
-      const saved = localStorage.getItem("tab");
-      if (saved === "history" || saved === "audit") return "activity";
-      if (
-        saved === "sql" ||
-        saved === "documents" ||
-        saved === "schema" ||
-        saved === "welcome"
-      ) {
-        return saved;
-      }
-      return "welcome";
-    })(),
-  ).current;
-  return { legacyAuditOpen, restoredDocumentKind };
 }
 
 export function useActivitySeen(

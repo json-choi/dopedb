@@ -67,7 +67,6 @@ The Rust core owns the trust boundary:
 - `features/terminals/`: optional developer PTY runtime and process-tree cleanup;
   its only Desktop entry is the explicit Settings → Command line advanced Shell
   dialog, and it is not the ACP Agent execution path
-- `legacy_mcp_cleanup.rs`: explicit preview, backup, and targeted cleanup for retired client entries
 - `store/`: local SQLite app store under the platform app data directory; feature-owned
   repositories such as Knowledge keep their SQL adapters inside the owning feature
 
@@ -82,9 +81,8 @@ The hosted control plane keeps HTTP routes thin. The current compact Analysis Ar
 payload is defined in `dopedb-protocol`, mirrored by the Cloud contract module, and
 verified against one golden fixture plus representative semantic-rejection mutations.
 The corpus protects named cross-language invariants but is not an exhaustive proof that
-independent parsers are equivalent. A private, bounded compatibility adapter may read the
-immediately preceding stored definition and completion envelope, but every public response
-uses the current sanitized-HTML-plus-one-query shape. Provider routes parse and authorize
+independent parsers are equivalent. Every stored definition, completion envelope, and
+public response uses the current sanitized-HTML-plus-one-query shape. Provider routes parse and authorize
 transport input, then delegate to provider-owned application workflows; provider
 persistence and provider API adapters stay behind that application boundary.
 
@@ -174,8 +172,9 @@ Outside built-in AI Chat, the signed `dopedb` CLI discovers an owner-only Unix s
 Windows named pipe. Direct database commands require either the ephemeral
 connection-pinned capability of the explicit advanced Terminal or the exact
 Project-resource capability of a Desktop-approved `dopedb agent start` process tree.
-The protocol retains the historical `TerminalSession` wire name for compatibility. A
-capability is never a database credential and cannot be moved to another process. ACP does
+The protocol's `TerminalSession` authority binds both explicit advanced terminals and
+Desktop-approved Agent process trees. A capability is never a database credential and
+cannot be moved to another process. ACP does
 not execute the public CLI. Registration
 consumes the same bearer shape only as a one-time, descriptor-bound capability inside the
 app-only Agent bridge launcher; stdio MCP settings and Agent descendants carry a session identifier,
@@ -216,12 +215,9 @@ Schema aggregates; SQLite reports basic local coverage.
 The app-start Agent selector only controls which official Claude/Codex provider appears in
 AI Chat; missing DopeDB Skills never block ACP. Settings -> Agent tools optionally installs
 the version-matched discovery Skill for agents operating from external terminals and keeps
-known managed older revisions updated without overwriting conflicts. It also offers a separate legacy cleanup flow: inspect exact retired DopeDB
-MCP client entries, show a redacted diff, require confirmation, preserve unrelated
-settings, and back up edited client files. Retired app-owned bearer metadata is erased
-without copying the secret into a backup. The retired external MCP configuration remains
-unsupported; AI Chat instead supplies its bounded stdio tool only inside each official
-ACP session and stores a bounded local transcript for explicit history/resume.
+managed revisions updated without overwriting conflicts. External MCP configuration is
+unsupported; AI Chat supplies its bounded stdio tool only inside each official ACP session
+and stores a bounded local transcript for explicit history/resume.
 Live message chunks are projected once per animation frame and persisted by an ordered
 session worker in bounded batches. Permission decisions, errors, and turn boundaries close
 the current batch immediately. Both in-memory and SQLite replay are capped by event count
@@ -235,7 +231,6 @@ The important rules are enforced in Rust:
 - Writes are off by default per connection.
 - A write or DDL path requires `allow_writes = true`.
 - Manual writes require an approval card unless the connection policy explicitly disables approval.
-- Migrations also run through the same write gate.
 - Successful and blocked execution paths are audited.
 
 Skill text, agent prompts, and CLI output are guidance, not security boundaries.

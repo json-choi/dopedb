@@ -36,8 +36,8 @@ layers. A folder move alone would not prevent the same drift.
   private platform-adapter concerns while the central service module only composes them.
 - Compose large static catalogues from bounded namespace owners and enforce exact
   language parity, collision freedom, and a fixed compatibility contract in tests.
-- Preserve retired persisted data through read-only adapters and immutable migrations;
-  delete its former runtime, command, service, and compatibility-facade paths.
+- Before MVP, reject superseded persisted data and delete its decoder, migration,
+  runtime, command, service, fixture, and compatibility facade together.
 - Model resumable or concurrent work with explicit state machines.
 - Delete the previous runtime path, central wrappers, and compatibility re-exports in the
   same completed feature slice.

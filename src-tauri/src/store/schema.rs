@@ -1,18 +1,15 @@
-//! Baseline DDL for the local app.db. `bootstrap::migrate_local_store` runs this
-//! only while advancing `PRAGMA user_version`, not on every application start.
+//! Current DDL baseline for a fresh local app database.
 //! Secrets never live here — connections hold only a `secret_ref` (credential-store id).
 
-/// Stable id for the offline-first Personal Workspace created during migration.
-/// A deterministic value lets fresh installs, upgrades, and restored backups converge
-/// without changing any pre-existing resource UUIDs.
+/// Stable id for the offline-first Personal Workspace created at bootstrap.
 pub const PERSONAL_WORKSPACE_ID: &str = "00000000-0000-0000-0000-000000000001";
 
-/// Project Knowledge stays in a separate idempotent migration block so an older
-/// local store and the test store both receive exactly the same constraints.
+/// Project Knowledge stays in a separate baseline block so focused tests can
+/// create that domain independently while receiving the same constraints.
 /// Absolute Local Folder paths, repository credentials, and source bodies are
 /// intentionally absent.
 pub const KNOWLEDGE_SCHEMA: &str = r#"
-CREATE TABLE IF NOT EXISTS knowledge_projects (
+CREATE TABLE knowledge_projects (
     id           TEXT PRIMARY KEY,
     workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
     name         TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND 512),
@@ -22,7 +19,7 @@ CREATE TABLE IF NOT EXISTS knowledge_projects (
     UNIQUE(workspace_id, name)
 );
 
-CREATE TABLE IF NOT EXISTS knowledge_project_environments (
+CREATE TABLE knowledge_project_environments (
     id         TEXT PRIMARY KEY,
     project_id TEXT NOT NULL REFERENCES knowledge_projects(id) ON DELETE CASCADE,
     name       TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND 512),
@@ -35,7 +32,7 @@ CREATE TABLE IF NOT EXISTS knowledge_project_environments (
     UNIQUE(project_id, name)
 );
 
-CREATE TABLE IF NOT EXISTS knowledge_sources (
+CREATE TABLE knowledge_sources (
     id                     TEXT PRIMARY KEY,
     project_id             TEXT NOT NULL REFERENCES knowledge_projects(id) ON DELETE CASCADE,
     project_environment_id TEXT NOT NULL REFERENCES knowledge_project_environments(id) ON DELETE CASCADE,
@@ -53,10 +50,10 @@ CREATE TABLE IF NOT EXISTS knowledge_sources (
     created_at             TEXT NOT NULL,
     updated_at             TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_knowledge_sources_environment
+CREATE INDEX idx_knowledge_sources_environment
     ON knowledge_sources(project_environment_id, provider, updated_at DESC);
 
-CREATE TABLE IF NOT EXISTS knowledge_environment_connections (
+CREATE TABLE knowledge_environment_connections (
     id                     TEXT PRIMARY KEY,
     workspace_id           TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
     project_environment_id TEXT NOT NULL REFERENCES knowledge_project_environments(id) ON DELETE CASCADE,
@@ -68,16 +65,16 @@ CREATE TABLE IF NOT EXISTS knowledge_environment_connections (
     created_at             TEXT NOT NULL,
     revoked_at             TEXT
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_environment_connection_active
+CREATE UNIQUE INDEX idx_knowledge_environment_connection_active
     ON knowledge_environment_connections(project_environment_id, connection_id)
     WHERE revoked_at IS NULL;
-CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_environment_connection_workspace_active
+CREATE UNIQUE INDEX idx_knowledge_environment_connection_workspace_active
     ON knowledge_environment_connections(workspace_id, connection_id)
     WHERE revoked_at IS NULL;
-CREATE INDEX IF NOT EXISTS idx_knowledge_environment_connection_scope
+CREATE INDEX idx_knowledge_environment_connection_scope
     ON knowledge_environment_connections(workspace_id, project_environment_id, revoked_at);
 
-CREATE TABLE IF NOT EXISTS knowledge_graph_revisions (
+CREATE TABLE knowledge_graph_revisions (
     graph_revision_id        TEXT PRIMARY KEY,
     source_id                TEXT NOT NULL REFERENCES knowledge_sources(id) ON DELETE CASCADE,
     project_environment_id   TEXT NOT NULL REFERENCES knowledge_project_environments(id) ON DELETE CASCADE,
@@ -93,10 +90,10 @@ CREATE TABLE IF NOT EXISTS knowledge_graph_revisions (
     generated_at             TEXT NOT NULL,
     staged_at                TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_knowledge_graph_revisions_environment
+CREATE INDEX idx_knowledge_graph_revisions_environment
     ON knowledge_graph_revisions(project_environment_id, staged_at DESC);
 
-CREATE TABLE IF NOT EXISTS knowledge_environment_heads (
+CREATE TABLE knowledge_environment_heads (
     project_environment_id TEXT NOT NULL
                            REFERENCES knowledge_project_environments(id) ON DELETE CASCADE,
     source_id              TEXT NOT NULL
@@ -108,7 +105,7 @@ CREATE TABLE IF NOT EXISTS knowledge_environment_heads (
     PRIMARY KEY (project_environment_id, source_id)
 );
 
-CREATE TABLE IF NOT EXISTS knowledge_grants (
+CREATE TABLE knowledge_grants (
     id                     TEXT PRIMARY KEY,
     workspace_id           TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
     account_user_id        TEXT NOT NULL CHECK(account_user_id <> ''),
@@ -120,16 +117,16 @@ CREATE TABLE IF NOT EXISTS knowledge_grants (
     created_at             TEXT NOT NULL,
     UNIQUE(workspace_id, account_user_id, project_environment_id, graph_revision_id)
 );
-CREATE INDEX IF NOT EXISTS idx_knowledge_grants_account
+CREATE INDEX idx_knowledge_grants_account
     ON knowledge_grants(workspace_id, account_user_id, expires_at);
 
-CREATE TABLE IF NOT EXISTS knowledge_grant_graph_revisions (
+CREATE TABLE knowledge_grant_graph_revisions (
     grant_id          TEXT NOT NULL REFERENCES knowledge_grants(id) ON DELETE CASCADE,
     graph_revision_id TEXT NOT NULL REFERENCES knowledge_graph_revisions(graph_revision_id),
     PRIMARY KEY (grant_id, graph_revision_id)
 );
 
-CREATE TABLE IF NOT EXISTS knowledge_mapping_proposals (
+CREATE TABLE knowledge_mapping_proposals (
     id                     TEXT PRIMARY KEY,
     project_environment_id TEXT NOT NULL REFERENCES knowledge_project_environments(id) ON DELETE CASCADE,
     graph_revision_id      TEXT NOT NULL REFERENCES knowledge_graph_revisions(graph_revision_id),
@@ -145,17 +142,15 @@ CREATE TABLE IF NOT EXISTS knowledge_mapping_proposals (
     proposed_at            TEXT NOT NULL,
     decided_at             TEXT
 );
-CREATE INDEX IF NOT EXISTS idx_knowledge_mapping_proposals_review
+CREATE INDEX idx_knowledge_mapping_proposals_review
     ON knowledge_mapping_proposals(project_environment_id, state, proposed_at DESC);
 
-DROP TRIGGER IF EXISTS knowledge_graph_revisions_reject_update;
 CREATE TRIGGER knowledge_graph_revisions_reject_update
 BEFORE UPDATE ON knowledge_graph_revisions
 BEGIN
     SELECT RAISE(ABORT, 'knowledge graph revisions are immutable');
 END;
 
-DROP TRIGGER IF EXISTS knowledge_graph_revisions_reject_delete_active;
 CREATE TRIGGER knowledge_graph_revisions_reject_delete_active
 BEFORE DELETE ON knowledge_graph_revisions
 WHEN EXISTS (
@@ -167,9 +162,9 @@ BEGIN
 END;
 "#;
 
-/// All migrations as one script; executed via `sqlx::raw_sql` (multi-statement).
+/// Current application schema, executed once for a new store.
 pub const SCHEMA: &str = r#"
-CREATE TABLE IF NOT EXISTS workspaces (
+CREATE TABLE workspaces (
     id              TEXT PRIMARY KEY,
     name            TEXT NOT NULL,
     kind            TEXT NOT NULL,       -- personal|team
@@ -178,7 +173,7 @@ CREATE TABLE IF NOT EXISTS workspaces (
     updated_at      TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS workspace_members (
+CREATE TABLE workspace_members (
     id           TEXT PRIMARY KEY,
     workspace_id TEXT NOT NULL REFERENCES workspaces(id),
     user_id      TEXT,                   -- NULL for the offline local owner
@@ -187,17 +182,17 @@ CREATE TABLE IF NOT EXISTS workspace_members (
     status       TEXT NOT NULL,
     joined_at    TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_workspace_members_workspace
+CREATE INDEX idx_workspace_members_workspace
     ON workspace_members(workspace_id, status);
-CREATE INDEX IF NOT EXISTS idx_workspace_members_user_status
+CREATE INDEX idx_workspace_members_user_status
     ON workspace_members(user_id, status, workspace_id);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_workspace_members_remote_identity
+CREATE UNIQUE INDEX idx_workspace_members_remote_identity
     ON workspace_members(workspace_id, user_id)
     WHERE user_id IS NOT NULL;
 
 -- Non-secret account index for the unified account/workspace switcher. Better Auth
 -- Bearer tokens stay in per-account OS credential-store entries and never enter SQLite.
-CREATE TABLE IF NOT EXISTS workspace_accounts (
+CREATE TABLE workspace_accounts (
     user_id           TEXT PRIMARY KEY,
     email             TEXT NOT NULL,
     display_name      TEXT NOT NULL,
@@ -206,10 +201,10 @@ CREATE TABLE IF NOT EXISTS workspace_accounts (
     updated_at        TEXT NOT NULL,
     last_used_at      TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_workspace_accounts_last_used
+CREATE INDEX idx_workspace_accounts_last_used
     ON workspace_accounts(last_used_at DESC);
 
-CREATE TABLE IF NOT EXISTS app_settings (
+CREATE TABLE app_settings (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
@@ -230,18 +225,20 @@ VALUES ('active_workspace_id', '00000000-0000-0000-0000-000000000001');
 INSERT OR IGNORE INTO app_settings (key, value)
 VALUES ('active_scope_generation', '0');
 
-CREATE TABLE IF NOT EXISTS connections (
+CREATE TABLE connections (
     id                TEXT PRIMARY KEY,
     name              TEXT NOT NULL,
     engine            TEXT NOT NULL,
     provider          TEXT NOT NULL DEFAULT 'auto', -- control-plane overlay
     driver_id         TEXT,                          -- NULL = registry recommendation
     host              TEXT NOT NULL,
-    port              INTEGER NOT NULL,
+    port              INTEGER NOT NULL
+                      CHECK(typeof(port) = 'integer' AND port BETWEEN 0 AND 65535),
     db_name           TEXT NOT NULL,
     username          TEXT NOT NULL,
     sslmode           TEXT NOT NULL,
-    extra_params      TEXT NOT NULL DEFAULT '{}',   -- JSON map
+    extra_params      TEXT NOT NULL DEFAULT '{}'
+                      CHECK(json_valid(extra_params) AND json_type(extra_params) = 'object'),
     secret_ref        TEXT,                          -- credential-store item id, NOT the password
     readonly_default  INTEGER NOT NULL DEFAULT 1,
     allow_writes      INTEGER NOT NULL DEFAULT 0,
@@ -255,7 +252,9 @@ CREATE TABLE IF NOT EXISTS connections (
     sync_status       TEXT NOT NULL DEFAULT 'local', -- local|dirty|synced|conflict
     workspace_access  TEXT NOT NULL DEFAULT 'local', -- view|read|write|manage|local
     credential_mode   TEXT NOT NULL DEFAULT 'local', -- local|member_local|managed
-    provider_target   TEXT,                          -- redacted provider target JSON
+    provider_target   TEXT
+                      CHECK(provider_target IS NULL OR
+                        (json_valid(provider_target) AND json_type(provider_target) = 'object')),
     deleted_at        TEXT,
     created_at        TEXT NOT NULL,
     updated_at        TEXT NOT NULL
@@ -264,11 +263,12 @@ CREATE TABLE IF NOT EXISTS connections (
 -- Per-account local overlay for a redacted shared connection template. The secret
 -- value itself stays in the OS credential store; this table stores only its opaque
 -- credential-item id, member-local fields, and the last server-verified RBAC view.
-CREATE TABLE IF NOT EXISTS workspace_connection_bindings (
+CREATE TABLE workspace_connection_bindings (
     connection_id  TEXT NOT NULL REFERENCES connections(id) ON DELETE CASCADE,
     account_user_id TEXT NOT NULL,
     username       TEXT NOT NULL DEFAULT '',
-    extra_params   TEXT NOT NULL DEFAULT '{}',
+    extra_params   TEXT NOT NULL DEFAULT '{}'
+                   CHECK(json_valid(extra_params) AND json_type(extra_params) = 'object'),
     secret_ref     TEXT,
     workspace_access TEXT NOT NULL DEFAULT 'view',
     allow_writes   INTEGER NOT NULL DEFAULT 0,
@@ -276,12 +276,11 @@ CREATE TABLE IF NOT EXISTS workspace_connection_bindings (
     updated_at     TEXT NOT NULL,
     PRIMARY KEY (connection_id, account_user_id)
 );
-CREATE INDEX IF NOT EXISTS idx_workspace_connection_bindings_account
+CREATE INDEX idx_workspace_connection_bindings_account
     ON workspace_connection_bindings(account_user_id, connection_id);
 
-CREATE TABLE IF NOT EXISTS connection_safety (
+CREATE TABLE connection_safety (
     connection_id         TEXT PRIMARY KEY REFERENCES connections(id) ON DELETE CASCADE,
-    require_approval      INTEGER NOT NULL DEFAULT 1,
     allow_writes          INTEGER NOT NULL DEFAULT 0,
     allow_schema_changes  INTEGER NOT NULL DEFAULT 0,
     wrap_writes_in_tx     INTEGER NOT NULL DEFAULT 1,
@@ -291,7 +290,7 @@ CREATE TABLE IF NOT EXISTS connection_safety (
     exec_preview_row_limit INTEGER NOT NULL DEFAULT 50000
 );
 
-CREATE TABLE IF NOT EXISTS query_history (
+CREATE TABLE query_history (
     id            TEXT PRIMARY KEY,
     connection_id TEXT NOT NULL REFERENCES connections(id) ON DELETE CASCADE,
     account_scope TEXT NOT NULL DEFAULT 'personal', -- personal or authenticated account id
@@ -302,11 +301,12 @@ CREATE TABLE IF NOT EXISTS query_history (
     duration_ms   INTEGER,
     error         TEXT,
     executed_at   TEXT NOT NULL,
-    origin        TEXT NOT NULL            -- agent|manual|analysis_article|migration|surface id
+    origin        TEXT NOT NULL            -- agent|manual|analysis_article|surface id
 );
-CREATE INDEX IF NOT EXISTS idx_history_conn ON query_history(connection_id, executed_at);
+CREATE INDEX idx_history_scope_recent
+    ON query_history(connection_id, account_scope, executed_at DESC);
 
-CREATE TABLE IF NOT EXISTS query_service_sessions (
+CREATE TABLE query_service_sessions (
     workspace_id  TEXT NOT NULL,
     account_scope TEXT NOT NULL,
     id            TEXT NOT NULL,
@@ -316,15 +316,15 @@ CREATE TABLE IF NOT EXISTS query_service_sessions (
     snapshot_json TEXT NOT NULL,
     PRIMARY KEY (workspace_id, account_scope, id)
 );
-CREATE INDEX IF NOT EXISTS idx_query_service_sessions_scope_updated
+CREATE INDEX idx_query_service_sessions_scope_updated
     ON query_service_sessions(workspace_id, account_scope, updated_at DESC);
 
 -- Append-only, hash-chained compliance log. Rows are never updated or deleted;
 -- `verify_chain` recomputes hashes to make post-hoc edits evident (tamper-EVIDENT,
 -- not tamper-proof — anyone with write access to this file could rebuild the chain).
 -- Deliberately NO foreign key: audit rows must SURVIVE connection deletion (a deleted
--- connection must not erase its compliance history). See `migrate_audit_no_cascade`.
-CREATE TABLE IF NOT EXISTS audit_log (
+-- connection must not erase its compliance history).
+CREATE TABLE audit_log (
     id                TEXT PRIMARY KEY,
     connection_id     TEXT NOT NULL,
     ts                TEXT NOT NULL,
@@ -339,12 +339,13 @@ CREATE TABLE IF NOT EXISTS audit_log (
     prev_hash         TEXT,
     hash              TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_audit_conn ON audit_log(connection_id, ts);
+CREATE INDEX idx_audit_conn ON audit_log(connection_id, ts);
+CREATE INDEX idx_audit_connection_row ON audit_log(connection_id);
 
 -- Durable Operation Runtime projection. Target connection/workspace rows are
 -- intentionally not foreign keys: deleting or archiving a resource must not erase
 -- the provenance of an already planned or executed operation.
-CREATE TABLE IF NOT EXISTS operations (
+CREATE TABLE operations (
     id                       TEXT PRIMARY KEY,
     runtime_id               TEXT NOT NULL,
     workspace_id             TEXT NOT NULL,
@@ -362,8 +363,8 @@ CREATE TABLE IF NOT EXISTS operations (
                              CHECK(operation_kind IN (
                                  'read_query', 'document_read', 'write_sql', 'ddl',
                                  'privilege', 'sql_script', 'table_data_change',
-                                 'schema_change', 'import', 'export', 'migration',
-                                 'retired_artifact', 'plugin_action', 'provider_action'
+                                 'schema_change', 'import', 'export',
+                                 'plugin_action', 'provider_action'
                              )),
     payload_schema_version   INTEGER NOT NULL CHECK(payload_schema_version > 0),
     payload_json             TEXT NOT NULL CHECK(json_valid(payload_json)),
@@ -394,13 +395,13 @@ CREATE TABLE IF NOT EXISTS operations (
     created_at               TEXT NOT NULL,
     updated_at               TEXT NOT NULL
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_operations_idempotency
+CREATE UNIQUE INDEX idx_operations_idempotency
     ON operations(workspace_id, actor_kind, actor_id, idempotency_key);
-CREATE INDEX IF NOT EXISTS idx_operations_state_expiry
+CREATE INDEX idx_operations_state_expiry
     ON operations(state, expires_at);
-CREATE INDEX IF NOT EXISTS idx_operations_connection_created
+CREATE INDEX idx_operations_connection_created
     ON operations(connection_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_operations_runtime_state
+CREATE INDEX idx_operations_runtime_state
     ON operations(runtime_id, state);
 
 -- Every field that gives an operation its meaning is immutable. `runtime_id` is
@@ -408,7 +409,6 @@ CREATE INDEX IF NOT EXISTS idx_operations_runtime_state
 -- process-local owner after restart while its payload hash and approval stay fixed.
 -- Recreate the trigger on open so installations made before job recovery support
 -- receive the corrected invariant as well.
-DROP TRIGGER IF EXISTS operations_reject_immutable_update;
 CREATE TRIGGER operations_reject_immutable_update
 BEFORE UPDATE ON operations
 WHEN OLD.workspace_id IS NOT NEW.workspace_id
@@ -436,13 +436,13 @@ BEGIN
     SELECT RAISE(ABORT, 'operation immutable fields cannot be changed');
 END;
 
-CREATE TRIGGER IF NOT EXISTS operations_reject_delete
+CREATE TRIGGER operations_reject_delete
 BEFORE DELETE ON operations
 BEGIN
     SELECT RAISE(ABORT, 'operation provenance cannot be deleted');
 END;
 
-CREATE TABLE IF NOT EXISTS operation_approvals (
+CREATE TABLE operation_approvals (
     id                TEXT PRIMARY KEY,
     operation_id      TEXT NOT NULL REFERENCES operations(id),
     payload_hash      TEXT NOT NULL
@@ -456,16 +456,16 @@ CREATE TABLE IF NOT EXISTS operation_approvals (
     created_at        TEXT NOT NULL,
     expires_at        TEXT
 );
-CREATE INDEX IF NOT EXISTS idx_operation_approvals_operation_created
+CREATE INDEX idx_operation_approvals_operation_created
     ON operation_approvals(operation_id, created_at);
 
-CREATE TRIGGER IF NOT EXISTS operation_approvals_reject_update
+CREATE TRIGGER operation_approvals_reject_update
 BEFORE UPDATE ON operation_approvals
 BEGIN
     SELECT RAISE(ABORT, 'operation approvals are append-only');
 END;
 
-CREATE TRIGGER IF NOT EXISTS operation_approvals_reject_delete
+CREATE TRIGGER operation_approvals_reject_delete
 BEFORE DELETE ON operation_approvals
 BEGIN
     SELECT RAISE(ABORT, 'operation approvals are append-only');
@@ -473,7 +473,7 @@ END;
 
 -- Per-operation append-only lifecycle ledger. `sequence` and `prev_hash` make a
 -- missing/reordered row detectable without changing the existing compliance chain.
-CREATE TABLE IF NOT EXISTS operation_events (
+CREATE TABLE operation_events (
     id             TEXT PRIMARY KEY,
     operation_id   TEXT NOT NULL REFERENCES operations(id),
     sequence       INTEGER NOT NULL CHECK(sequence > 0),
@@ -501,22 +501,22 @@ CREATE TABLE IF NOT EXISTS operation_events (
                      AND hash NOT GLOB '*[^0-9a-f]*'),
     UNIQUE(operation_id, sequence)
 );
-CREATE INDEX IF NOT EXISTS idx_operation_events_operation_sequence
+CREATE INDEX idx_operation_events_operation_sequence
     ON operation_events(operation_id, sequence);
 
-CREATE TRIGGER IF NOT EXISTS operation_events_reject_update
+CREATE TRIGGER operation_events_reject_update
 BEFORE UPDATE ON operation_events
 BEGIN
     SELECT RAISE(ABORT, 'operation events are append-only');
 END;
 
-CREATE TRIGGER IF NOT EXISTS operation_events_reject_delete
+CREATE TRIGGER operation_events_reject_delete
 BEFORE DELETE ON operation_events
 BEGIN
     SELECT RAISE(ABORT, 'operation events are append-only');
 END;
 
-CREATE TABLE IF NOT EXISTS snippets (
+CREATE TABLE snippets (
     id            TEXT PRIMARY KEY,
     connection_id TEXT REFERENCES connections(id) ON DELETE CASCADE,
     title         TEXT NOT NULL,
@@ -533,7 +533,7 @@ CREATE TABLE IF NOT EXISTS snippets (
 
 -- Persistent SQL workbench documents. `local_revision` is the optimistic-lock
 -- token used by autosave; remote revision fields are reserved for hosted sync.
-CREATE TABLE IF NOT EXISTS sql_documents (
+CREATE TABLE sql_documents (
     id                TEXT PRIMARY KEY,
     workspace_id      TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
     account_scope     TEXT NOT NULL,
@@ -555,13 +555,13 @@ CREATE TABLE IF NOT EXISTS sql_documents (
     created_at        TEXT NOT NULL,
     updated_at        TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_sql_documents_scope_updated
+CREATE INDEX idx_sql_documents_scope_updated
     ON sql_documents(workspace_id, account_scope, connection_id, updated_at DESC)
     WHERE deleted_at IS NULL;
 
 -- A bounded revision journal makes a committed autosave recoverable even if the
 -- current row is later conflicted or the renderer crashes while switching documents.
-CREATE TABLE IF NOT EXISTS sql_document_revisions (
+CREATE TABLE sql_document_revisions (
     document_id    TEXT NOT NULL REFERENCES sql_documents(id) ON DELETE CASCADE,
     local_revision INTEGER NOT NULL CHECK(local_revision > 0),
     content_hash   TEXT NOT NULL
@@ -571,14 +571,14 @@ CREATE TABLE IF NOT EXISTS sql_document_revisions (
     created_at     TEXT NOT NULL,
     PRIMARY KEY (document_id, local_revision)
 );
-CREATE INDEX IF NOT EXISTS idx_sql_document_revisions_recent
+CREATE INDEX idx_sql_document_revisions_recent
     ON sql_document_revisions(document_id, local_revision DESC);
 
 -- Local recovery for privacy-minimized Analysis Article query results. The
 -- content is authenticated-encrypted with a device key held by the OS credential
 -- store; only authority metadata, nonce, ciphertext, and retention timestamps are
 -- representable here. This table never participates in workspace sync.
-CREATE TABLE IF NOT EXISTS analysis_article_local_results (
+CREATE TABLE analysis_article_local_results (
     workspace_id     TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
     account_scope    TEXT NOT NULL CHECK(account_scope <> ''),
     article_id       TEXT NOT NULL,
@@ -594,17 +594,17 @@ CREATE TABLE IF NOT EXISTS analysis_article_local_results (
     expires_at       TEXT NOT NULL,
     PRIMARY KEY (workspace_id, account_scope, article_id, run_id)
 );
-CREATE INDEX IF NOT EXISTS idx_analysis_article_local_result_latest
+CREATE INDEX idx_analysis_article_local_result_latest
     ON analysis_article_local_results(
         workspace_id, account_scope, article_id, created_at DESC
     );
-CREATE INDEX IF NOT EXISTS idx_analysis_article_local_result_expiry
+CREATE INDEX idx_analysis_article_local_result_expiry
     ON analysis_article_local_results(expires_at);
 
 -- Hosted pull checkpoints are account-scoped. Two accounts in the same team
 -- workspace can have different grants and must never share a cursor merely because
--- they share the local SQLite file. The legacy table remains for rollback safety.
-CREATE TABLE IF NOT EXISTS workspace_sync_state (
+-- they share the local SQLite file.
+CREATE TABLE workspace_sync_state (
     workspace_id  TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
     account_scope TEXT NOT NULL CHECK(account_scope <> ''),
     pull_cursor   INTEGER NOT NULL CHECK(pull_cursor >= 0),
@@ -612,18 +612,8 @@ CREATE TABLE IF NOT EXISTS workspace_sync_state (
     PRIMARY KEY (workspace_id, account_scope)
 );
 
-CREATE TABLE IF NOT EXISTS schema_cache (
-    connection_id   TEXT NOT NULL REFERENCES connections(id) ON DELETE CASCADE,
-    account_scope   TEXT NOT NULL DEFAULT 'personal',
-    introspected_at TEXT NOT NULL,
-    catalog_json    TEXT NOT NULL,
-    PRIMARY KEY (connection_id, account_scope)
-);
-
--- Security-scoped Catalog V2 cache. Keep the legacy table above intact so an older
--- desktop binary can still start after a rollback. Legacy rows are deliberately not
--- copied here because they cannot prove workspace, connection, or binding revision.
-CREATE TABLE IF NOT EXISTS schema_cache_v2 (
+-- Security-scoped canonical catalog cache.
+CREATE TABLE catalog_cache (
     workspace_id          TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
     account_scope         TEXT NOT NULL,
     connection_id         TEXT NOT NULL REFERENCES connections(id) ON DELETE CASCADE,
@@ -639,7 +629,7 @@ CREATE TABLE IF NOT EXISTS schema_cache_v2 (
 
 -- ERD layouts keep physical metadata immutable and store only presentation state
 -- plus workspace-scoped virtual relationships.
-CREATE TABLE IF NOT EXISTS erd_layouts (
+CREATE TABLE erd_layouts (
     id                  TEXT PRIMARY KEY,
     workspace_id        TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
     account_scope       TEXT NOT NULL,
@@ -661,13 +651,13 @@ CREATE TABLE IF NOT EXISTS erd_layouts (
     created_at          TEXT NOT NULL,
     updated_at          TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_erd_layouts_scope_updated
+CREATE INDEX idx_erd_layouts_scope_updated
     ON erd_layouts(workspace_id, account_scope, connection_id, updated_at DESC)
     WHERE deleted_at IS NULL;
 
 -- Durable import/export scheduler projection. Plans are immutable and hash pinned;
 -- mutable state is constrained to lifecycle/progress fields.
-CREATE TABLE IF NOT EXISTS jobs (
+CREATE TABLE jobs (
     id                   TEXT PRIMARY KEY,
     operation_id         TEXT NOT NULL UNIQUE REFERENCES operations(id),
     workspace_id         TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
@@ -703,14 +693,13 @@ CREATE TABLE IF NOT EXISTS jobs (
     finished_at          TEXT,
     updated_at           TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_jobs_scope_created
+CREATE INDEX idx_jobs_scope_created
     ON jobs(workspace_id, account_scope, connection_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_jobs_state_created
+CREATE INDEX idx_jobs_state_created
     ON jobs(state, created_at);
 
 -- Scope, approved plan, and source/target summaries never change after insertion.
 -- Mutable lifecycle/progress fields remain available to the scheduler.
-DROP TRIGGER IF EXISTS jobs_reject_immutable_update;
 CREATE TRIGGER jobs_reject_immutable_update
 BEFORE UPDATE ON jobs
 WHEN OLD.operation_id IS NOT NEW.operation_id
@@ -731,7 +720,7 @@ END;
 
 -- Native file selections become opaque, scope-bound capabilities. Plans persist
 -- only the random capability id; renderer processes never receive a local path.
-CREATE TABLE IF NOT EXISTS job_file_capabilities (
+CREATE TABLE job_file_capabilities (
     id                 TEXT PRIMARY KEY,
     workspace_id       TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
     account_scope      TEXT NOT NULL,
@@ -747,11 +736,10 @@ CREATE TABLE IF NOT EXISTS job_file_capabilities (
     revoked_at         TEXT,
     created_at         TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_job_file_capabilities_scope
+CREATE INDEX idx_job_file_capabilities_scope
     ON job_file_capabilities(workspace_id, account_scope, connection_id, expires_at)
     WHERE revoked_at IS NULL;
 
-DROP TRIGGER IF EXISTS job_file_capabilities_reject_immutable_update;
 CREATE TRIGGER job_file_capabilities_reject_immutable_update
 BEFORE UPDATE ON job_file_capabilities
 WHEN OLD.workspace_id IS NOT NEW.workspace_id
@@ -769,7 +757,7 @@ BEGIN
     SELECT RAISE(ABORT, 'job file capability immutable fields cannot be changed');
 END;
 
-CREATE TABLE IF NOT EXISTS job_checkpoints (
+CREATE TABLE job_checkpoints (
     job_id               TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
     sequence             INTEGER NOT NULL CHECK(sequence > 0),
     source_fingerprint   TEXT NOT NULL,
@@ -779,7 +767,7 @@ CREATE TABLE IF NOT EXISTS job_checkpoints (
     PRIMARY KEY (job_id, sequence)
 );
 
-CREATE TABLE IF NOT EXISTS job_events (
+CREATE TABLE job_events (
     id          TEXT PRIMARY KEY,
     job_id      TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
     sequence    INTEGER NOT NULL CHECK(sequence > 0),
@@ -792,22 +780,22 @@ CREATE TABLE IF NOT EXISTS job_events (
     created_at  TEXT NOT NULL,
     UNIQUE(job_id, sequence)
 );
-CREATE INDEX IF NOT EXISTS idx_job_events_job_sequence
+CREATE INDEX idx_job_events_job_sequence
     ON job_events(job_id, sequence);
 
-CREATE TRIGGER IF NOT EXISTS job_events_reject_update
+CREATE TRIGGER job_events_reject_update
 BEFORE UPDATE ON job_events
 BEGIN
     SELECT RAISE(ABORT, 'job events are append-only');
 END;
 
-CREATE TRIGGER IF NOT EXISTS job_events_reject_delete
+CREATE TRIGGER job_events_reject_delete
 BEFORE DELETE ON job_events
 BEGIN
     SELECT RAISE(ABORT, 'job events are append-only');
 END;
 
-CREATE TABLE IF NOT EXISTS job_artifacts (
+CREATE TABLE job_artifacts (
     id              TEXT PRIMARY KEY,
     job_id          TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
     artifact_type   TEXT NOT NULL
@@ -823,47 +811,14 @@ CREATE TABLE IF NOT EXISTS job_artifacts (
                     CHECK(retention_state IN ('retained', 'expired', 'deleted')),
     created_at      TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_job_artifacts_job
+CREATE INDEX idx_job_artifacts_job
     ON job_artifacts(job_id, created_at);
-
--- In-app agent chat: one row per conversation thread. `cli_session_id` is the
--- underlying CLI's own resume token (Claude Code `--resume` / Codex `resume <id>`),
--- persisted here so a conversation survives across app restarts. `model`/`effort`
--- hold the values used by the most recent turn, seeding the picker on thread switch.
--- `connection_id` binds every new thread to one DopeDB connection for context
--- injection. Upgraded databases may retain NULL in historical rows; the UI excludes
--- those legacy threads. Deliberately no FK so deleting a connection does not erase
--- its conversation record.
-CREATE TABLE IF NOT EXISTS agent_chat_threads (
-    id             TEXT PRIMARY KEY,
-    provider       TEXT NOT NULL,
-    connection_id  TEXT,
-    workspace_id   TEXT NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
-    account_scope  TEXT NOT NULL DEFAULT 'personal',
-    title          TEXT NOT NULL DEFAULT '',
-    cli_session_id TEXT,
-    model          TEXT,
-    effort         TEXT,
-    created_at     TEXT NOT NULL,
-    updated_at     TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_agent_chat_threads_updated ON agent_chat_threads(updated_at DESC);
-
-CREATE TABLE IF NOT EXISTS agent_chat_messages (
-    id         TEXT PRIMARY KEY,
-    thread_id  TEXT NOT NULL REFERENCES agent_chat_threads(id) ON DELETE CASCADE,
-    role       TEXT NOT NULL,      -- user|assistant
-    text       TEXT NOT NULL,
-    error      TEXT,
-    created_at TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_agent_chat_messages_thread ON agent_chat_messages(thread_id, created_at);
 
 -- Current ACP conversations. Authentication and provider credentials are never
 -- stored here: `acp_session_id` is only the official adapter's opaque resume
 -- identity. Events are bounded projections used to restore the observation and
 -- approval surface after an app restart.
-CREATE TABLE IF NOT EXISTS agent_acp_sessions (
+CREATE TABLE agent_acp_sessions (
     id             TEXT PRIMARY KEY,
     connection_id  TEXT NOT NULL,
     workspace_id   TEXT NOT NULL,
@@ -875,29 +830,23 @@ CREATE TABLE IF NOT EXISTS agent_acp_sessions (
                        'failed', 'closed'
                    )),
     acp_session_id TEXT,
-    project_environment_id TEXT,
-    knowledge_grant_id TEXT,
-    environment_revision INTEGER CHECK(environment_revision IS NULL OR environment_revision > 0),
-    knowledge_sources TEXT NOT NULL DEFAULT '[]',
-    graph_revision_ids TEXT NOT NULL DEFAULT '[]',
-    environment_connections TEXT NOT NULL DEFAULT '[]',
     knowledge_scopes TEXT NOT NULL DEFAULT '[]',
     write_connection_id TEXT,
     error          TEXT,
     created_at     TEXT NOT NULL,
     updated_at     TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_agent_acp_sessions_scope
+CREATE INDEX idx_agent_acp_sessions_scope
     ON agent_acp_sessions(workspace_id, account_scope, updated_at DESC);
 
-CREATE TABLE IF NOT EXISTS agent_acp_events (
+CREATE TABLE agent_acp_events (
     session_id  TEXT NOT NULL REFERENCES agent_acp_sessions(id) ON DELETE CASCADE,
     sequence    INTEGER NOT NULL CHECK(sequence > 0),
     created_at  TEXT NOT NULL,
     payload     TEXT NOT NULL CHECK(length(payload) <= 524288),
     PRIMARY KEY(session_id, sequence)
 );
-CREATE INDEX IF NOT EXISTS idx_agent_acp_events_session
+CREATE INDEX idx_agent_acp_events_session
     ON agent_acp_events(session_id, sequence);
 
 -- Provider API credentials are intentionally local-only. `keyring_ref` is an
@@ -905,7 +854,7 @@ CREATE INDEX IF NOT EXISTS idx_agent_acp_events_session
 -- refresh credential, endpoint, or provider response is ever persisted here
 -- or queued for synchronization. A tombstone survives a failed OS-store delete
 -- so retry can be explicit without resurrecting provider access.
-CREATE TABLE IF NOT EXISTS workspace_provider_bindings (
+CREATE TABLE workspace_provider_bindings (
     binding_id           TEXT PRIMARY KEY,
     workspace_id         TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
     account_user_id      TEXT NOT NULL,
@@ -923,14 +872,14 @@ CREATE TABLE IF NOT EXISTS workspace_provider_bindings (
     updated_at           TEXT NOT NULL,
     UNIQUE(workspace_id, account_user_id, provider, integration_id)
 );
-CREATE INDEX IF NOT EXISTS idx_workspace_provider_bindings_scope
+CREATE INDEX idx_workspace_provider_bindings_scope
     ON workspace_provider_bindings(workspace_id, account_user_id, tombstoned_at);
 
 -- Durable, secret-free work queue for exact OS credential-store deletion.
 -- A row is inserted in the same SQLite transaction that tombstones a binding
 -- or replaces its keyring pointer, so a failed OS-store call cannot restore
 -- access or lose the identity needed to retry after restart.
-CREATE TABLE IF NOT EXISTS workspace_provider_credential_cleanup (
+CREATE TABLE workspace_provider_credential_cleanup (
     workspace_id           TEXT NOT NULL,
     account_user_id        TEXT NOT NULL,
     provider               TEXT NOT NULL CHECK(provider IN ('neon', 'gcp_cloud_sql', 'planetscale')),
@@ -944,7 +893,7 @@ CREATE TABLE IF NOT EXISTS workspace_provider_credential_cleanup (
         integration_generation, keyring_ref
     )
 );
-CREATE INDEX IF NOT EXISTS idx_workspace_provider_credential_cleanup_scope
+CREATE INDEX idx_workspace_provider_credential_cleanup_scope
     ON workspace_provider_credential_cleanup(workspace_id, account_user_id, created_at);
 
 -- Secret-free checkpoint for the provider-neutral Managed Access provisioning
@@ -952,7 +901,7 @@ CREATE INDEX IF NOT EXISTS idx_workspace_provider_credential_cleanup_scope
 -- Provider responses have no representable column. Immutable target ownership is
 -- separated from the mutable operation/plan used for an explicitly approved
 -- apply, repair, or destroy attempt.
-CREATE TABLE IF NOT EXISTS provider_provisioning_receipts (
+CREATE TABLE provider_provisioning_receipts (
     receipt_id          TEXT PRIMARY KEY,
     workspace_id        TEXT NOT NULL,
     account_scope       TEXT NOT NULL CHECK(account_scope <> ''),
@@ -983,12 +932,11 @@ CREATE TABLE IF NOT EXISTS provider_provisioning_receipts (
     updated_at          TEXT NOT NULL,
     UNIQUE(workspace_id, account_scope, provider, target_fingerprint)
 );
-CREATE INDEX IF NOT EXISTS idx_provider_provisioning_scope_updated
+CREATE INDEX idx_provider_provisioning_scope_updated
     ON provider_provisioning_receipts(workspace_id, account_scope, updated_at DESC);
-CREATE INDEX IF NOT EXISTS idx_provider_provisioning_state
+CREATE INDEX idx_provider_provisioning_state
     ON provider_provisioning_receipts(state, updated_at);
 
-DROP TRIGGER IF EXISTS provider_provisioning_reject_target_rewrite;
 CREATE TRIGGER provider_provisioning_reject_target_rewrite
 BEFORE UPDATE ON provider_provisioning_receipts
 WHEN OLD.workspace_id IS NOT NEW.workspace_id

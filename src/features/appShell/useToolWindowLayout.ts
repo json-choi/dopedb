@@ -3,7 +3,6 @@ import { useCallback, useState } from "react";
 import { createFrameCoalescer } from "../../lib/frameCoalescer";
 
 const STORAGE_KEY = "dopedb:tool-window-layout:v1";
-const DEFAULT_HEIGHT_MIGRATION_KEY = "dopedb:services-default:v3";
 
 type LeftToolWindow = "databaseExplorer" | "localHistory";
 
@@ -50,8 +49,6 @@ function defaultLayout(): StoredToolWindowLayout {
 
 function readLayout(): StoredToolWindowLayout {
   const fallback = defaultLayout();
-  const needsDefaultMigration =
-    localStorage.getItem(DEFAULT_HEIGHT_MIGRATION_KEY) !== "1";
   try {
     const parsed: unknown = JSON.parse(
       localStorage.getItem(STORAGE_KEY) ?? "null",
@@ -60,48 +57,24 @@ function readLayout(): StoredToolWindowLayout {
       parsed &&
       typeof parsed === "object" &&
       "databaseExplorerOpen" in parsed &&
-      typeof parsed.databaseExplorerOpen === "boolean"
+      typeof parsed.databaseExplorerOpen === "boolean" &&
+      "leftToolWindow" in parsed &&
+      (parsed.leftToolWindow === "databaseExplorer" ||
+        parsed.leftToolWindow === "localHistory") &&
+      "servicesOpen" in parsed &&
+      typeof parsed.servicesOpen === "boolean" &&
+      "servicesHeight" in parsed &&
+      typeof parsed.servicesHeight === "number"
     ) {
-      const storedServicesHeight =
-        "servicesHeight" in parsed &&
-        typeof parsed.servicesHeight === "number"
-          ? parsed.servicesHeight
-          : null;
-      const migrateDefaultHeight =
-        needsDefaultMigration &&
-        (storedServicesHeight === 280 ||
-          storedServicesHeight === DEFAULT_SERVICES_HEIGHT);
-      const layout: StoredToolWindowLayout = {
+      return {
         databaseExplorerOpen: parsed.databaseExplorerOpen,
-        leftToolWindow:
-          "leftToolWindow" in parsed &&
-            parsed.leftToolWindow === "localHistory"
-            ? "localHistory"
-            : fallback.leftToolWindow,
-        servicesOpen:
-          "servicesOpen" in parsed && typeof parsed.servicesOpen === "boolean"
-            ? parsed.servicesOpen
-            : fallback.servicesOpen,
-        servicesHeight:
-          storedServicesHeight !== null
-            ? clampServicesHeight(
-                migrateDefaultHeight
-                  ? defaultServicesHeight()
-                  : storedServicesHeight,
-              )
-            : fallback.servicesHeight,
+        leftToolWindow: parsed.leftToolWindow,
+        servicesOpen: parsed.servicesOpen,
+        servicesHeight: clampServicesHeight(parsed.servicesHeight),
       };
-      if (needsDefaultMigration) {
-        localStorage.setItem(DEFAULT_HEIGHT_MIGRATION_KEY, "1");
-        if (migrateDefaultHeight) storeLayout(layout);
-      }
-      return layout;
     }
   } catch {
     // A corrupt layout preference must never block the workbench.
-  }
-  if (needsDefaultMigration) {
-    localStorage.setItem(DEFAULT_HEIGHT_MIGRATION_KEY, "1");
   }
   return fallback;
 }

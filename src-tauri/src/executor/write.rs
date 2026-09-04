@@ -41,7 +41,7 @@ pub(crate) async fn run_write(
     // Cancel/timeout guard: aborting drops the in-flight txn future (uncommitted →
     // rolled back) and closes the pooled connection, so a hung write frees the tab.
     let inner = async {
-        let affected: u64 = match &live.write_pool {
+        let affected: u64 = match live.rw()? {
             Pool::Postgres(pool) => {
                 let mut tx = pool.begin().await?;
                 if let Some(namespace) = namespace.as_deref() {

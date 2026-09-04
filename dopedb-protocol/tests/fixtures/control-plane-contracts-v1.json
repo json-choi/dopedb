@@ -78,16 +78,8 @@
     "id": "22222222-2222-4222-8222-222222222222",
     "projectEnvironmentId": "33333333-3333-4333-8333-333333333333",
     "environmentRevision": 7,
-    "sourceKnowledgeGrantId": null,
-    "graphRevisionIds": [],
-    "connections": [
-      {
-        "connectionId": "44444444-4444-4444-8444-444444444444",
-        "connectionRevision": 3,
-        "role": "primary",
-        "alias": "Application"
-      }
-    ],
+    "connectionId": "44444444-4444-4444-8444-444444444444",
+    "connectionRevision": 3,
     "definition": {
       "version": 3,
       "source": "human",
@@ -96,7 +88,6 @@
       "query": {
         "id": "active_accounts",
         "title": "Active accounts",
-        "connectionRole": "primary",
         "sql": "SELECT count(*) AS active_accounts FROM accounts WHERE active = TRUE",
         "maxRows": 5,
         "maxBytes": 16384,
@@ -269,15 +260,7 @@
       "name": "Analysis Article rejects a simple connection UUID representation",
       "contract": "analysisArticleCreate",
       "mutations": [
-        { "path": ["connections", 0, "connectionId"], "value": "44444444444444448444444444444444" }
-      ]
-    },
-    {
-      "name": "Analysis Article rejects a simple graph UUID representation",
-      "contract": "analysisArticleCreate",
-      "mutations": [
-        { "path": ["sourceKnowledgeGrantId"], "value": "66666666-6666-4666-8666-666666666666" },
-        { "path": ["graphRevisionIds"], "value": ["77777777777747778777777777777777"] }
+        { "path": ["connectionId"], "value": "44444444444444448444444444444444" }
       ]
     },
     {
@@ -291,22 +274,7 @@
       "name": "Analysis Article rejects a non-positive connection revision",
       "contract": "analysisArticleCreate",
       "mutations": [
-        { "path": ["connections", 0, "connectionRevision"], "value": 0 }
-      ]
-    },
-    {
-      "name": "Analysis Article rejects duplicate graph revisions",
-      "contract": "analysisArticleCreate",
-      "mutations": [
-        { "path": ["sourceKnowledgeGrantId"], "value": "66666666-6666-4666-8666-666666666666" },
-        { "path": ["graphRevisionIds"], "value": ["77777777-7777-4777-8777-777777777777", "77777777-7777-4777-8777-777777777777"] }
-      ]
-    },
-    {
-      "name": "Analysis Article requires complete Knowledge authority",
-      "contract": "analysisArticleCreate",
-      "mutations": [
-        { "path": ["sourceKnowledgeGrantId"], "value": "66666666-6666-4666-8666-666666666666" }
+        { "path": ["connectionRevision"], "value": 0 }
       ]
     },
     {
@@ -335,27 +303,6 @@
       "contract": "analysisArticleCreate",
       "mutations": [
         { "path": ["definition", "query", "maxRows"], "value": 50001 }
-      ]
-    },
-    {
-      "name": "Analysis Article binds queries to declared connection roles",
-      "contract": "analysisArticleCreate",
-      "mutations": [
-        { "path": ["definition", "query", "connectionRole"], "value": "missing" }
-      ]
-    },
-    {
-      "name": "Analysis Article rejects the retired parameter-id field",
-      "contract": "analysisArticleCreate",
-      "mutations": [
-        { "path": ["definition", "query", "parameterIds"], "value": [] }
-      ]
-    },
-    {
-      "name": "Analysis Article rejects the retired cache-policy field",
-      "contract": "analysisArticleCreate",
-      "mutations": [
-        { "path": ["definition", "query", "cacheTtlSeconds"], "value": 0 }
       ]
     }
   ]

@@ -7,7 +7,6 @@ import {
 } from "@tanstack/react-query";
 import {
   useEffect,
-  useEffectEvent,
   useMemo,
   useState,
   type SyntheticEvent,
@@ -71,7 +70,6 @@ function actionTone(action: string) {
 
 function originTone(origin: string) {
   if (origin === "agent") return "primary";
-  if (origin === "migration") return "warning";
   return "neutral";
 }
 
@@ -187,13 +185,9 @@ function AuditRow({
 export default function Activity({
   connection,
   onLoadSql,
-  initialAuditOpen = false,
-  onInitialAuditOpenConsumed,
 }: {
   connection: ConnectionProfile;
   onLoadSql: (sql: string) => void;
-  initialAuditOpen?: boolean;
-  onInitialAuditOpenConsumed?: () => void;
 }) {
   const { t } = useI18n();
   const toast = useToast();
@@ -203,20 +197,10 @@ export default function Activity({
   const [statusFilter, setStatusFilter] = useState("");
   const [originFilter, setOriginFilter] = useState("");
   const [historyCursors, setHistoryCursors] = useState<(HistoryCursor | null)[]>([null]);
-  const [auditOpen, setAuditOpen] = useState(initialAuditOpen);
-  const [auditWanted, setAuditWanted] = useState(initialAuditOpen);
+  const [auditOpen, setAuditOpen] = useState(false);
+  const [auditWanted, setAuditWanted] = useState(false);
   const [auditCursors, setAuditCursors] = useState<(AuditCursor | null)[]>([null]);
   const [selectedAuditId, setSelectedAuditId] = useState<string | null>(null);
-
-  const consumeInitialAuditIntent = useEffectEvent(() => {
-    if (initialAuditOpen) onInitialAuditOpenConsumed?.();
-  });
-
-  useEffect(() => {
-    consumeInitialAuditIntent();
-    // Initial navigation intent is consumed once on mount. The Effect Event reads
-    // the committed initial props without making later callback identities reactive.
-  }, []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedText(text.trim()), 250);

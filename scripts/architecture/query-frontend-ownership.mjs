@@ -422,7 +422,7 @@ export function collectQueryFrontendOwnershipDiagnostics({
       "dynamic Query feature imports bypass static command ownership",
     ],
     [
-      "legacy query invoke",
+      "removed query invoke",
       'import { invoke } from "@tauri-apps/api/core"; invoke("preview_sql", { id: "x", sql: "select 1" });',
       "removed SQL command preview_sql returned",
     ],

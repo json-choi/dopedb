@@ -139,15 +139,13 @@ export function useAgentScopeSelection({
   useEffect(() => {
     if (!inventory.success) return;
     if (active) {
-      const scopes = active.knowledgeScopes ?? [];
-      const databaseIds = (scopes.length > 0
-        ? scopes.flatMap((scope) => scope.connections)
-        : active.environmentConnections
-      ).map((connection) => connection.connectionId);
-      const sourceIds = (scopes.length > 0
-        ? scopes.flatMap((scope) => scope.sources)
-        : active.knowledgeSources ?? []
-      ).map((source) => source.sourceId);
+      const scopes = active.knowledgeScopes;
+      const databaseIds = scopes
+        .flatMap((scope) => scope.connections)
+        .map((connection) => connection.connectionId);
+      const sourceIds = scopes
+        .flatMap((scope) => scope.sources)
+        .map((source) => source.sourceId);
       const project = inventoryProjects.find((candidate) =>
         scopes.some((scope) => scope.projectId === candidate.id) ||
         candidate.databases.some((database) =>

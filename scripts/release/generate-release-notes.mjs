@@ -46,7 +46,7 @@ const SECTION_ORDER = [
   ["fix", "해결된 문제"],
   ["security", "관리자·보안"],
 ];
-const LEGACY_RELEASE_BODY = [
+const PREPARED_RELEASE_BODY = [
   "Download the macOS or Windows installer from the assets below.",
   "",
   "The Tauri updater uses `latest.json` from this release to detect and install signed updates.",
@@ -411,7 +411,7 @@ async function runPreview(config) {
 async function runRender(config, options) {
   assertReleaseIdentity(options.version, options.tag);
   if (config.mode === "prepared") {
-    await emit(LEGACY_RELEASE_BODY, options.output);
+    await emit(PREPARED_RELEASE_BODY, options.output);
     return;
   }
   const entries = await activeRangeEntries(config, options.from, options.to);

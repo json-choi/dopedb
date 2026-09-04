@@ -215,7 +215,6 @@ export function useActionSearchItems({
     [
       ["agent-tools", t("settings.agentTools"), false],
       ["cli", t("settings.cli"), false],
-      ["archive", t("settings.retiredArchive"), false],
       ["privacy", t("settings.privacy"), false],
       ["safety", t("settings.safety"), !selected],
       ["language", t("settings.languageTitle"), false],

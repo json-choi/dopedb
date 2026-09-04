@@ -190,15 +190,12 @@ impl KnowledgeSessionSource {
 }
 
 /// Immutable Knowledge authority copied into one ACP session. GitHub source
-/// revisions are browsed directly at their exact commit. Graph revision fields
-/// remain only for dormant/legacy graphs and optional future graph products.
+/// revisions are browsed directly at their exact commit; locally activated
+/// graphs remain pinned to exact revisions.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct KnowledgeSessionScope {
-    /// Project identity shared by every exact Environment scope in one Agent
-    /// context. Legacy persisted sessions omit it and are accepted only as a
-    /// single-Environment scope.
-    #[serde(default)]
+    /// Project identity shared by every exact Environment scope in one Agent context.
     pub(crate) project_id: Uuid,
     /// Exact hosted authority when this Environment has active GitHub knowledge.
     /// Local-only and database-only Environments deliberately carry no cloud grant.
@@ -207,9 +204,7 @@ pub(crate) struct KnowledgeSessionScope {
     pub(crate) environment_revision: u64,
     /// A connection bound to this exact Environment revision that may authorize
     /// source reads. It is not automatically part of the selected DB allowlist.
-    #[serde(default)]
     pub(crate) authority_connection_id: Uuid,
-    #[serde(default)]
     pub(crate) authority_connection_revision: i64,
     pub(crate) sources: Vec<KnowledgeSessionSource>,
     pub(crate) graph_revision_ids: Vec<Uuid>,

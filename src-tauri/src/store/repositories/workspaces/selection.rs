@@ -118,20 +118,20 @@ impl Store {
               AND w.lifecycle_state = 'active'",
         )
         .bind(user_id)
-        .bind(migrations::PERSONAL_WORKSPACE_ID)
+        .bind(schema::PERSONAL_WORKSPACE_ID)
         .fetch_one(&self.pool)
         .await?;
         let id = Uuid::parse_str(
             workspace_id
                 .as_deref()
-                .unwrap_or(migrations::PERSONAL_WORKSPACE_ID),
+                .unwrap_or(schema::PERSONAL_WORKSPACE_ID),
         )
         .map_err(|error| AppError::Config(error.to_string()))?;
         self.activate_workspace(id, Some(user_id)).await
     }
 
     pub async fn remove_workspace_account(&self, user_id: &str) -> AppResult<()> {
-        let personal_id = migrations::PERSONAL_WORKSPACE_ID;
+        let personal_id = schema::PERSONAL_WORKSPACE_ID;
         let now = Utc::now();
         let mut tx = self.pool.begin().await?;
         sqlx::query("DELETE FROM workspace_members WHERE user_id = ?1")

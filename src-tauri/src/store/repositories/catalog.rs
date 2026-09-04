@@ -1,4 +1,4 @@
-//! Catalog V2 cache persistence and legacy schema-cache compatibility.
+//! Canonical catalog cache persistence.
 
 use super::super::*;
 use crate::kernel::access::{CatalogCachePolicy, PinnedConnection};
@@ -19,7 +19,7 @@ impl Store {
                     cache.fingerprint,
                     cache.captured_at,
                     cache.catalog_json
-             FROM schema_cache_v2 cache
+             FROM catalog_cache cache
              JOIN app_settings workspace
                ON workspace.key = 'active_workspace_id'
               AND workspace.value = cache.workspace_id
@@ -44,11 +44,6 @@ impl Store {
                AND cache.binding_revision = ?5
                AND cache.binding_updated_at = ?6
                AND cache.catalog_schema_version = ?7
-               AND NOT EXISTS(
-                   SELECT 1 FROM schema_cache legacy
-                   WHERE legacy.connection_id = cache.connection_id
-                     AND legacy.account_scope = cache.account_scope
-               )
                AND w.kind = ?8
                AND account.value IS ?9
                AND generation.value = ?10
@@ -141,7 +136,7 @@ impl Store {
         let catalog_json = serde_json::to_string(snapshot)?;
         let mut tx = self.pool.begin().await?;
         let result = sqlx::query(
-            "INSERT INTO schema_cache_v2
+            "INSERT INTO catalog_cache
                 (workspace_id, account_scope, connection_id, connection_revision,
                  binding_revision, binding_updated_at, catalog_schema_version,
                  fingerprint, captured_at, catalog_json)
@@ -217,58 +212,8 @@ impl Store {
             tx.rollback().await?;
             return Ok(CacheWriteOutcome::Stale);
         }
-        // An older binary must refresh rather than consume a less precisely scoped
-        // legacy row after the new runtime has published an authoritative snapshot.
-        sqlx::query(
-            "DELETE FROM schema_cache
-             WHERE connection_id = ?1 AND account_scope = ?2",
-        )
-        .bind(pin.connection_id.to_string())
-        .bind(pin.scope.account_scope.storage_key())
-        .execute(&mut *tx)
-        .await?;
         tx.commit().await?;
         Ok(CacheWriteOutcome::Stored)
-    }
-    // ── schema cache ───────────────────────────────────────────────────────
-
-    /// Returns the cached catalog JSON for a connection, if any.
-    #[cfg(test)]
-    pub async fn get_schema_cache(&self, connection_id: Uuid) -> AppResult<Option<String>> {
-        self.get_connection(connection_id).await?;
-        let account_scope = self.active_local_scope().await?;
-        let row = sqlx::query(
-            "SELECT catalog_json FROM schema_cache
-             WHERE connection_id = ?1 AND account_scope = ?2",
-        )
-        .bind(connection_id.to_string())
-        .bind(account_scope)
-        .fetch_optional(&self.pool)
-        .await?;
-        Ok(match row {
-            Some(r) => Some(r.try_get("catalog_json")?),
-            None => None,
-        })
-    }
-
-    #[cfg(test)]
-    pub async fn set_schema_cache(&self, connection_id: Uuid, catalog_json: &str) -> AppResult<()> {
-        self.get_connection(connection_id).await?;
-        let account_scope = self.active_local_scope().await?;
-        sqlx::query(
-            r#"INSERT INTO schema_cache
-                (connection_id, account_scope, introspected_at, catalog_json)
-               VALUES (?1, ?2, ?3, ?4)
-               ON CONFLICT(connection_id, account_scope) DO UPDATE SET
-                 introspected_at=?3, catalog_json=?4"#,
-        )
-        .bind(connection_id.to_string())
-        .bind(account_scope)
-        .bind(Utc::now())
-        .bind(catalog_json)
-        .execute(&self.pool)
-        .await?;
-        Ok(())
     }
 
     /// Drop the cached catalog so the next introspection reads live — after a
@@ -277,13 +222,8 @@ impl Store {
         let pin = self.pin_connection_for_read(connection_id).await?;
         let account_scope = pin.scope.account_scope.storage_key();
         let mut tx = self.pool.begin().await?;
-        sqlx::query("DELETE FROM schema_cache WHERE connection_id = ?1 AND account_scope = ?2")
-            .bind(connection_id.to_string())
-            .bind(account_scope)
-            .execute(&mut *tx)
-            .await?;
         sqlx::query(
-            "DELETE FROM schema_cache_v2
+            "DELETE FROM catalog_cache
              WHERE workspace_id = ?1 AND account_scope = ?2 AND connection_id = ?3",
         )
         .bind(pin.scope.workspace_id.to_string())

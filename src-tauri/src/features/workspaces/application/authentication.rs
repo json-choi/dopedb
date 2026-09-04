@@ -43,13 +43,6 @@ where
     /// rendering wait on the OS credential store or network. Cached public identity
     /// remains stable during outages; sensitive commands still authorize online.
     pub(crate) async fn refresh_auth_state(&self) -> AppResult<WorkspaceAuthState> {
-        if self.repository.accounts().await?.is_empty() {
-            if let Some(user) = self.control_plane.migrate_legacy_session().await? {
-                self.sync_account_memberships(&user).await?;
-                self.runtime.activate_account(&user.id).await?;
-            }
-        }
-
         self.ensure_active_account().await?;
         if let Some(user_id) = self.repository.active_account_id().await? {
             match self.control_plane.auth_user(&user_id).await {

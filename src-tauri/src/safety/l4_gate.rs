@@ -9,9 +9,6 @@
 //!   operations such as `pg_monitor` use their own exact Operation service;
 //! - `> 1` statement → always [`GateDecision::Block`].
 //!
-//! The persisted `require_approval` field is retained only for storage compatibility.
-//! It can never bypass the exact Operation approval required for target mutations.
-//!
 //! This layer only *decides*; it never touches the DB. The approval-card payload
 //! (plain-English restatement, risk badge) is assembled frontend-side.
 
@@ -63,8 +60,7 @@ pub fn decide(settings: &SafetySettings, c: &Classification) -> GateDecision {
                     ),
                 }
             } else {
-                // Target mutations always become exact Operation proposals. The
-                // legacy persisted setting must never turn a write into auto-run.
+                // Target mutations always become exact Operation proposals.
                 GateDecision::RequireApproval
             }
         }
@@ -103,7 +99,7 @@ mod tests {
             no_where: false,
             tables: vec!["orders".into()],
             notes: vec![],
-            rollback_safe: matches!(kind, QueryKind::Write),
+            direct_dml: matches!(kind, QueryKind::Write),
         }
     }
 
@@ -138,7 +134,7 @@ mod tests {
     }
 
     #[test]
-    fn target_mutations_require_approval_when_legacy_setting_is_off() {
+    fn target_mutations_require_approval() {
         let dml_only = SafetySettings {
             allow_writes: true,
             ..SafetySettings::default()
@@ -151,7 +147,6 @@ mod tests {
             let s = SafetySettings {
                 allow_writes: true,
                 allow_schema_changes: true,
-                require_approval: false,
                 ..SafetySettings::default()
             };
             assert!(
@@ -165,7 +160,6 @@ mod tests {
     fn arbitrary_privilege_sql_is_blocked_even_when_writes_are_enabled() {
         let s = SafetySettings {
             allow_writes: true,
-            require_approval: false,
             ..SafetySettings::default()
         };
         assert!(matches!(
@@ -175,11 +169,9 @@ mod tests {
     }
 
     #[test]
-    fn write_blocked_even_when_approval_off_if_writes_off() {
-        // allow_writes gates first: no writes means block regardless of require_approval.
+    fn write_blocked_when_writes_are_off() {
         let s = SafetySettings {
             allow_writes: false,
-            require_approval: false,
             ..SafetySettings::default()
         };
         assert!(matches!(

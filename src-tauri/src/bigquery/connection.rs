@@ -292,7 +292,7 @@ impl BigQueryConnection {
         }
         relations.sort_by(|left, right| left.name.cmp(&right.name));
         Ok(CatalogOverview {
-            database: Some(self.dataset().into()),
+            database: self.dataset().into(),
             namespaces: vec![self.dataset().into()],
             relations,
             detail_state: CatalogOverviewDetailState::Deferred,

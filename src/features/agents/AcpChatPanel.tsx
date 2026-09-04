@@ -40,7 +40,6 @@ import {
 } from "./useAcpChatController";
 
 type AcpChatPanelProps = AcpChatControllerInput & {
-  onOpenArchive: () => void;
   onOpenKnowledgeAnalysis: (environmentId: string, articleId?: string) => void;
   onClose: () => void;
   returnFocusRef: RefObject<HTMLElement | null>;
@@ -79,7 +78,6 @@ function AcpChatPanelContent({
   compact = false,
   width,
   onWidthChange,
-  onOpenArchive,
   onOpenKnowledgeAnalysis,
   onClose,
   returnFocusRef,
@@ -153,9 +151,6 @@ function AcpChatPanelContent({
                 onClick={commands.setup.openAgentSetup}
               >
                 {t("agent.acpAgentSetup")}
-              </ToolbarMenuItem>
-              <ToolbarMenuItem icon="history" onClick={onOpenArchive}>
-                {t("agent.acpArchive")}
               </ToolbarMenuItem>
               {active &&
               active.lifecycle !== "closed" &&

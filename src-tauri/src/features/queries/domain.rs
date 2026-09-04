@@ -85,7 +85,7 @@ pub(crate) fn validate_query_service_session_snapshot(
         ));
     }
     let envelope: QueryServiceSessionEnvelope = serde_json::from_slice(&encoded)?;
-    if !matches!(envelope.schema_version, 1 | 2) {
+    if envelope.schema_version != 2 {
         return Err(QueryDomainError::Invalid(
             "Services snapshot schema version is unsupported".into(),
         ));
@@ -140,10 +140,9 @@ pub(crate) fn validate_query_service_session_snapshot(
         .and_then(Value::as_str)
         .ok_or_else(|| QueryDomainError::Invalid("Services result kind is missing".into()))?;
     let valid_result = match status {
-        QueryServiceSessionStatus::Completed => matches!(
-            result_kind,
-            "materialized" | "stream" | "script" | "unavailable"
-        ),
+        QueryServiceSessionStatus::Completed => {
+            matches!(result_kind, "materialized" | "stream" | "script")
+        }
         QueryServiceSessionStatus::Failed => result_kind == "error",
         QueryServiceSessionStatus::Cancelled => result_kind == "none",
     };
@@ -152,13 +151,8 @@ pub(crate) fn validate_query_service_session_snapshot(
             "Services status and result kind are inconsistent".into(),
         ));
     }
-    if envelope.schema_version == 2 && result_kind == "stream" {
+    if result_kind == "stream" {
         validate_disk_backed_stream_snapshot(&envelope.result)?;
-    }
-    if envelope.schema_version == 1 && result_kind == "unavailable" {
-        return Err(QueryDomainError::Invalid(
-            "legacy Services snapshots cannot declare unavailable results".into(),
-        ));
     }
     Ok(QueryServiceSessionSnapshot {
         id: envelope.id,
@@ -167,33 +161,6 @@ pub(crate) fn validate_query_service_session_snapshot(
         status,
         snapshot,
     })
-}
-
-/// Retire legacy row-owning stream snapshots before they cross IPC again.
-/// The Services entry remains visible, but its old row chunks are discarded.
-pub(crate) fn project_query_service_session_snapshot(mut snapshot: Value) -> (Value, bool) {
-    if snapshot.get("schemaVersion").and_then(Value::as_u64) != Some(1)
-        || snapshot.pointer("/result/kind").and_then(Value::as_str) != Some("stream")
-    {
-        return (snapshot, false);
-    }
-    let sql = snapshot
-        .pointer("/result/sql")
-        .and_then(Value::as_str)
-        .or_else(|| snapshot.get("sql").and_then(Value::as_str))
-        .unwrap_or_default()
-        .to_string();
-    snapshot["schemaVersion"] = Value::from(2);
-    if snapshot.get("status").and_then(Value::as_str) == Some("cancelled") {
-        snapshot["result"] = serde_json::json!({"kind": "none"});
-        return (snapshot, true);
-    }
-    snapshot["result"] = serde_json::json!({
-        "kind": "unavailable",
-        "sql": sql,
-        "reason": "legacyResultFormat"
-    });
-    (snapshot, true)
 }
 
 fn validate_disk_backed_stream_snapshot(result: &Value) -> QueryDomainResult<()> {

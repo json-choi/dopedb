@@ -21,12 +21,10 @@ const routeImportBaseline = Object.freeze({
 });
 
 // The reviewed runtime baseline is zero dependency cycles and zero lib-internal
-// imports through the provider integration public barrel. Keep these explicit:
-// legacy route persistence is ratcheted below, while new cycles are never
-// accepted as another legacy exception.
+// imports through the provider integration public barrel.
 const workspaceCloudDependencyCycleBaseline = new Set();
 
-const migratedNeonOperationsRoute =
+const neonOperationsRoute =
   "workspace-cloud/app/api/v1/workspaces/[workspaceId]/provider-integrations/[integrationId]/neon-branches/operations/route.ts";
 const neonOperationsApplication =
   "workspace-cloud/lib/providers/neon-branch-operation-application.ts";
@@ -326,8 +324,8 @@ export function collectWorkspaceCloudHttpDiagnostics({ lineCount, read, relative
     "validCapability(env.KICK_TOKEN)",
     'redirect: "manual"',
     "redirectDiagnostic(upstream, expectedUrl)",
-    "due_at_ms = min(workspace_background_task_v1.due_at_ms, excluded.due_at_ms)",
-    "generation = workspace_background_task_v1.generation + 1",
+    "due_at_ms = min(workspace_background_task.due_at_ms, excluded.due_at_ms)",
+    "generation = workspace_background_task.generation + 1",
     "failure_count = 0",
     "CIRCUIT_BREAKER_FAILURES",
     "CIRCUIT_BREAKER_RETRY_MS",
@@ -445,9 +443,9 @@ export function collectWorkspaceCloudHttpDiagnostics({ lineCount, read, relative
     }
   }
 
-  const migratedRouteSource = read(migratedNeonOperationsRoute);
-  if (lineCount(migratedRouteSource) > 140) {
-    diagnostics.push(`${migratedNeonOperationsRoute}: migrated transport must remain below 140 lines`);
+  const neonOperationsRouteSource = read(neonOperationsRoute);
+  if (lineCount(neonOperationsRouteSource) > 140) {
+    diagnostics.push(`${neonOperationsRoute}: transport must remain below 140 lines`);
   }
   for (const forbidden of [
     "drizzle-orm",
@@ -458,8 +456,8 @@ export function collectWorkspaceCloudHttpDiagnostics({ lineCount, read, relative
     "claimProviderOperationExecution",
     "completeNeonBranchSwitch",
   ]) {
-    if (migratedRouteSource.includes(forbidden)) {
-      diagnostics.push(`${migratedNeonOperationsRoute}: transport regained application or persistence responsibility (${forbidden})`);
+    if (neonOperationsRouteSource.includes(forbidden)) {
+      diagnostics.push(`${neonOperationsRoute}: transport regained application or persistence responsibility (${forbidden})`);
     }
   }
   for (const required of [
@@ -469,8 +467,8 @@ export function collectWorkspaceCloudHttpDiagnostics({ lineCount, read, relative
     "listNeonBranchOperations",
     "runNeonBranchOperation",
   ]) {
-    if (!migratedRouteSource.includes(required)) {
-      diagnostics.push(`${migratedNeonOperationsRoute}: required transport boundary is missing (${required})`);
+    if (!neonOperationsRouteSource.includes(required)) {
+      diagnostics.push(`${neonOperationsRoute}: required transport boundary is missing (${required})`);
     }
   }
   const neonOperationModules = [

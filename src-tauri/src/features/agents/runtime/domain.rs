@@ -66,7 +66,6 @@ pub(crate) struct AcpPluginLaunchPlan {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct PersistedPluginRecord {
-    #[serde(default)]
     pub(super) enabled: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(super) current: Option<InstalledPluginVersion>,
@@ -83,10 +82,6 @@ pub(super) struct PersistedPluginRecord {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct InstalledPluginVersion {
-    // Keep the legacy JSON key so existing Desktop versions can still read
-    // activation state after an upgrade. Filesystem identity is the signed
-    // manifest digest, never this human-facing package version.
-    #[serde(rename = "version")]
     pub(super) adapter_bundle_version: String,
     pub(super) manifest_sha256: String,
     pub(super) entrypoint_sha256: String,
@@ -105,7 +100,6 @@ pub(super) struct AvailablePluginVersion {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct PersistedAvailableUpdates {
     pub(super) schema_version: u16,
-    #[serde(default)]
     pub(super) plugins: BTreeMap<AcpPluginId, AvailablePluginVersion>,
 }
 
@@ -122,7 +116,6 @@ impl Default for PersistedAvailableUpdates {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct PersistedRuntimeState {
     pub(super) schema_version: u16,
-    #[serde(default)]
     pub(super) plugins: BTreeMap<AcpPluginId, PersistedPluginRecord>,
 }
 
@@ -138,7 +131,6 @@ impl Default for PersistedRuntimeState {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct QuarantinedPluginVersion {
-    #[serde(rename = "version")]
     pub(super) adapter_bundle_version: String,
     pub(super) manifest_sha256: String,
     pub(super) reason: String,
@@ -148,7 +140,6 @@ pub(super) struct QuarantinedPluginVersion {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct PersistedQuarantineState {
     pub(super) schema_version: u16,
-    #[serde(default)]
     pub(super) plugins: BTreeMap<AcpPluginId, Vec<QuarantinedPluginVersion>>,
 }
 

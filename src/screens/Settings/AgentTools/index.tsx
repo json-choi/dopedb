@@ -1,9 +1,8 @@
-// Composes the bounded Agent plugin, local CLI, Skill, and legacy cleanup settings.
+// Composes the bounded Agent plugin, local CLI, and Skill settings.
 import InfoTip from "../../../components/InfoTip";
 import { Button } from "../../../design-system/components/Button";
 import { AgentPluginSection } from "../../../features/settings/agentTools/AgentPluginSection";
 import { AgentSkillSection } from "../../../features/settings/agentTools/AgentSkillSection";
-import { LegacyMcpCleanupSection } from "../../../features/settings/agentTools/LegacyMcpCleanupSection";
 import { useAgentToolsController } from "../../../features/settings/agentTools/useAgentToolsController";
 import { useI18n } from "../../../lib/i18n";
 
@@ -15,7 +14,6 @@ export default function AgentTools() {
     statusQuery,
     pluginQuery,
     cliQuery,
-    cleanupQuery,
     combinedSetupPlan,
     anyCurrent,
     runInstall,
@@ -35,8 +33,6 @@ export default function AgentTools() {
 
       <AgentPluginSection controller={controller} />
       <AgentSkillSection controller={controller} />
-      <LegacyMcpCleanupSection controller={controller} />
-
       <div className="ds-control-row tw:mt-4 tw:flex tw:flex-wrap tw:items-center tw:gap-[var(--ds-control-gap)]">
         {combinedSetupPlan?.selection ? (
           <Button
@@ -64,8 +60,7 @@ export default function AgentTools() {
             busy !== null ||
             statusQuery.isFetching ||
             pluginQuery.isFetching ||
-            cliQuery.isFetching ||
-            cleanupQuery.isFetching
+            cliQuery.isFetching
           }
           onClick={() => void refresh()}
         >

@@ -195,7 +195,6 @@ pub(crate) struct JobInputInspection {
 pub(crate) struct JobFieldMapping {
     pub(crate) source: String,
     pub(crate) target: String,
-    #[serde(default)]
     pub(crate) required: bool,
 }
 
@@ -218,7 +217,6 @@ pub(crate) enum JobConsistency {
 pub(crate) struct JobValidation {
     pub(crate) on_error: JobErrorPolicy,
     pub(crate) max_errors: u64,
-    #[serde(default)]
     pub(crate) null_values: Vec<String>,
 }
 
@@ -233,33 +231,26 @@ impl Default for JobValidation {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+#[serde(
+    tag = "kind",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
 pub(crate) enum JobPlan {
     Export {
-        #[serde(alias = "capabilityId")]
         capability_id: JobFileCapabilityId,
         relation: ObjectRef,
-        #[serde(default)]
         consistency: JobConsistency,
-        #[serde(default)]
         columns: Vec<String>,
-        #[serde(default)]
-        #[serde(alias = "fieldNames")]
         field_names: Vec<JobFieldMapping>,
-        #[serde(alias = "batchSize")]
         batch_size: u32,
     },
     Import {
-        #[serde(alias = "capabilityId")]
         capability_id: JobFileCapabilityId,
-        #[serde(default)]
-        #[serde(alias = "targetRelation")]
         target_relation: Option<ObjectRef>,
-        #[serde(default)]
         mapping: Vec<JobFieldMapping>,
-        #[serde(default)]
         validation: JobValidation,
-        #[serde(alias = "batchSize")]
         batch_size: u32,
     },
 }

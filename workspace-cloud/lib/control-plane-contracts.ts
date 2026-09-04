@@ -3,8 +3,6 @@
 // by Rust so independently deployed clients cannot drift silently.
 
 export const CONTROL_PLANE_CONTRACTS_SCHEMA_VERSION = 1 as const;
-export const LEGACY_MANAGED_LEASE_CONTRACT_VERSION = "access-v3" as const;
-export const PREVIOUS_MANAGED_LEASE_CONTRACT_VERSION = "access-v4" as const;
 export const MANAGED_LEASE_CONTRACT_VERSION = "access-v5" as const;
 
 export type ManagedAccessMode = "read" | "write" | "schema";

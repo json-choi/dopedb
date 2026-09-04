@@ -258,7 +258,7 @@ pub async fn introspect(pool: &SqlitePool) -> AppResult<Catalog> {
 
 /// List SQLite relations without parsing DDL or issuing per-relation PRAGMAs.
 /// The root page is the only stable native identity SQLite exposes in this path.
-pub(crate) async fn overview(pool: &SqlitePool) -> AppResult<CatalogOverview> {
+pub(crate) async fn overview(pool: &SqlitePool, database: &str) -> AppResult<CatalogOverview> {
     let relations = sqlx::query(OVERVIEW_SQL)
         .fetch_all(pool)
         .await?
@@ -279,7 +279,7 @@ pub(crate) async fn overview(pool: &SqlitePool) -> AppResult<CatalogOverview> {
         .collect::<AppResult<Vec<_>>>()?;
 
     Ok(CatalogOverview {
-        database: None,
+        database: database.to_owned(),
         namespaces: vec!["main".into()],
         relations,
         detail_state: CatalogOverviewDetailState::Deferred,

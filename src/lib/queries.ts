@@ -29,7 +29,6 @@ import { runDocumentRead } from "../features/documentQueries/tauriAdapter";
 import { getMonitoringStatus } from "../features/monitoring/tauriAdapter";
 import {
   cliInstallationStatus,
-  legacyMcpCleanupStatus,
   skillStatus,
 } from "../features/skills/tauriAdapter";
 import type {
@@ -234,7 +233,6 @@ export const qk = {
   drivers: () => ["drivers"] as const,
   cliInstallation: () => ["cliInstallation"] as const,
   skillStatus: () => ["skillStatus"] as const,
-  legacyMcpCleanup: () => ["legacyMcpCleanup"] as const,
   tableRows: (args: TableRowsArgs) =>
     [
       "tableRows",
@@ -302,17 +300,6 @@ export function skillStatusQuery(enabled = true) {
     refetchInterval: enabled ? 30_000 : false,
     refetchIntervalInBackground: false,
     queryFn: () => skillStatus("all"),
-  });
-}
-
-export function legacyMcpCleanupStatusQuery() {
-  return queryOptions({
-    queryKey: qk.legacyMcpCleanup(),
-    staleTime: 30_000,
-    gcTime: Infinity,
-    retry: false,
-    refetchOnWindowFocus: true,
-    queryFn: legacyMcpCleanupStatus,
   });
 }
 

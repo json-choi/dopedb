@@ -3,15 +3,12 @@ import type { JsonValue, QueryResult } from "../../ipc/types";
 
 const MAX_COLUMNS = 18;
 const MAX_ROWS = 100;
-const MAX_CHART_ROWS = 8;
 
 export default function AcpStructuredResult({ value }: { value: unknown }) {
   const result = tabularResult(value);
   if (!result) return null;
-  const chart = chartProjection(result);
   return (
     <div className="tw:grid tw:max-w-full tw:min-w-0 tw:gap-2 tw:overflow-hidden">
-      {chart ? <MiniBarChart {...chart} /> : null}
       <div className="tw:max-h-52 tw:max-w-full tw:min-h-0 tw:min-w-0 tw:overflow-auto tw:rounded-sm tw:border tw:border-border-subtle">
         <DataGrid result={result} />
       </div>
@@ -91,102 +88,6 @@ function unwrapResult(value: unknown): unknown {
   return current;
 }
 
-function chartProjection(result: QueryResult): {
-  labels: string[];
-  values: number[];
-  valueLabel: string;
-} | null {
-  if (result.rows.length < 2) return null;
-  const numericColumn = result.columns.findIndex((_, index) =>
-    result.rows.every((row) => finiteNumber(row[index]) !== null)
-  );
-  const labelColumn = result.columns.findIndex(
-    (_, index) =>
-      index !== numericColumn &&
-      result.rows.every((row) =>
-        ["string", "number", "boolean"].includes(typeof row[index])
-      ),
-  );
-  if (numericColumn < 0 || labelColumn < 0) return null;
-  const rows = result.rows.slice(0, MAX_CHART_ROWS);
-  const values = rows.map((row) => finiteNumber(row[numericColumn]) ?? 0);
-  if (values.every((value) => value === values[0])) return null;
-  return {
-    labels: rows.map((row) => String(row[labelColumn] ?? "NULL")),
-    values,
-    valueLabel: result.columns[numericColumn],
-  };
-}
-
-function MiniBarChart({
-  labels,
-  values,
-  valueLabel,
-}: {
-  labels: string[];
-  values: number[];
-  valueLabel: string;
-}) {
-  const maximum = Math.max(...values.map(Math.abs), 1);
-  const width = 280;
-  const height = 92;
-  const gap = 5;
-  const barWidth = (width - gap * (values.length - 1)) / values.length;
-  return (
-    <figure className="tw:m-0 tw:grid tw:gap-1 tw:rounded-sm tw:border tw:border-border-subtle tw:bg-background tw:p-2">
-      <figcaption className="tw:text-xs tw:font-medium tw:text-muted-foreground">
-        {valueLabel}
-      </figcaption>
-      <svg
-        viewBox={`0 0 ${width} ${height}`}
-        className="tw:h-24 tw:w-full tw:overflow-visible tw:text-primary"
-        role="img"
-        aria-label={`${valueLabel}: ${labels
-          .map((label, index) => `${label} ${values[index]}`)
-          .join(", ")}`}
-      >
-        {values.map((value, index) => {
-          const barHeight = Math.max(2, (Math.abs(value) / maximum) * 68);
-          const x = index * (barWidth + gap);
-          const y = 72 - barHeight;
-          return (
-            <g key={`${labels[index]}:${index}`}>
-              <rect
-                x={x}
-                y={y}
-                width={barWidth}
-                height={barHeight}
-                rx={2}
-                fill="currentColor"
-                opacity={0.8}
-              />
-              <text
-                x={x + barWidth / 2}
-                y={88}
-                textAnchor="middle"
-                fill="currentColor"
-                className="tw:text-[8px] tw:text-muted-foreground"
-              >
-                {truncate(labels[index], 8)}
-              </text>
-            </g>
-          );
-        })}
-      </svg>
-    </figure>
-  );
-}
-
-function finiteNumber(value: unknown): number | null {
-  const number =
-    typeof value === "number"
-      ? value
-      : typeof value === "string" && value.trim() !== ""
-        ? Number(value)
-        : Number.NaN;
-  return Number.isFinite(number) ? number : null;
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
@@ -211,8 +112,4 @@ function toJsonValue(value: unknown): JsonValue {
     );
   }
   return String(value);
-}
-
-function truncate(value: string, max: number) {
-  return value.length > max ? `${value.slice(0, max - 1)}…` : value;
 }

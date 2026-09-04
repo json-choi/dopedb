@@ -7,7 +7,6 @@ import {
   jsonError,
   mutationAllowed,
   privateJson,
-  privateRevisionMutationJson,
 } from "../../../../../../lib/http";
 import { authorizeWorkspace } from "../../../../../../lib/workspace-authorization";
 import {
@@ -96,12 +95,8 @@ export async function POST(request: Request, context: RouteContext) {
         409,
       );
     }
-    return privateRevisionMutationJson(request, {
-      article: publicAnalysisArticle({
-        ...created,
-        graphRevisionIds: article.graphRevisionIds,
-        connections: article.connections,
-      }),
+    return privateJson({
+      article: publicAnalysisArticle(created),
     }, { status: 201 });
   } catch (error) {
     if (uniqueViolation(error)) return jsonError("Analysis Article already exists", 409);

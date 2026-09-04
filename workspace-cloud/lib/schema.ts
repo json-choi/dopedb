@@ -12,6 +12,7 @@ import {
   primaryKey,
   text,
   timestamp,
+  unique,
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
@@ -109,7 +110,7 @@ export const member = workspaceControl.table(
   (table) => [
     uniqueIndex("member_organization_user_idx").on(table.organizationId, table.userId),
     // Makes a connection grant's tenant/member composite foreign key enforceable.
-    uniqueIndex("member_organization_id_idx").on(table.organizationId, table.id),
+    unique("member_organization_id_idx").on(table.organizationId, table.id),
     index("member_user_idx").on(table.userId),
     check(
       "member_revocation_claim_consistent",
@@ -260,7 +261,7 @@ export const workspaceAuditEvent = workspaceControl.table(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex("workspace_audit_org_id_idx").on(table.organizationId, table.id),
+    unique("workspace_audit_org_id_idx").on(table.organizationId, table.id),
     index("workspace_audit_org_created_idx").on(table.organizationId, table.createdAt),
   ],
 );
@@ -383,11 +384,11 @@ export const workspaceProviderIntegration = workspaceControl.table(
       table.provider,
       table.externalAccountId,
     ),
-    uniqueIndex("provider_integration_org_id_idx").on(
+    unique("provider_integration_org_id_idx").on(
       table.organizationId,
       table.id,
     ),
-    uniqueIndex("provider_integration_org_id_provider_idx").on(
+    unique("provider_integration_org_id_provider_idx").on(
       table.organizationId,
       table.id,
       table.provider,
@@ -406,10 +407,8 @@ export const workspaceProviderIntegration = workspaceControl.table(
     check("provider_integration_generation_positive", sql`${table.generation} >= 1`),
     // Never permit a credential envelope (or arbitrary provider metadata) to
     // masquerade as the desktop-local GCP verification projection. Active,
-    // non-revoked GCP rows must have this exact target: otherwise a mixed
-    // version deployment could recreate an issuable pre-projection row after
-    // 0011 demoted the historical ones. Reconnect/revoked legacy rows remain
-    // visible with NULL until an explicit reconnect verifies the target.
+    // non-revoked GCP rows must have an exact verified target. Inactive rows
+    // may omit it because they cannot issue credentials.
     check(
       "provider_integration_local_verification_target_shape",
       sql`(
@@ -514,7 +513,7 @@ export const workspaceProviderOperation = workspaceControl.table(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex("provider_operation_org_id_idx").on(table.organizationId, table.id),
+    unique("provider_operation_org_id_idx").on(table.organizationId, table.id),
     uniqueIndex("provider_operation_org_idempotency_idx").on(
       table.organizationId,
       table.idempotencyKey,
@@ -721,7 +720,7 @@ export const workspaceProviderResource = workspaceControl.table(
   (table) => [
     // PostgreSQL requires this exact non-partial unique target for every tenant
     // composite FK which names a provider resource.
-    uniqueIndex("provider_resource_org_id_idx").on(table.organizationId, table.id),
+    unique("provider_resource_org_id_idx").on(table.organizationId, table.id),
     uniqueIndex("provider_resource_org_provider_fingerprint_idx").on(
       table.organizationId, table.provider, table.resourceFingerprint,
     ),
@@ -919,7 +918,7 @@ export const workspaceConnection = workspaceControl.table(
       table.organizationId,
       table.updatedAt,
     ),
-    uniqueIndex("workspace_connection_org_id_idx").on(
+    unique("workspace_connection_org_id_idx").on(
       table.organizationId,
       table.id,
     ),
@@ -1056,7 +1055,7 @@ export const workspaceResourceVersion = workspaceControl.table(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex("workspace_resource_version_org_id_idx").on(table.organizationId, table.id),
+    unique("workspace_resource_version_org_id_idx").on(table.organizationId, table.id),
     uniqueIndex("workspace_resource_version_main_revision_idx")
       .on(table.organizationId, table.resourceType, table.resourceId, table.revision)
       .where(sql`"branch" = 'main'`),
@@ -1115,7 +1114,7 @@ export const workspaceResourceConflict = workspaceControl.table(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex("workspace_resource_conflict_org_id_idx").on(table.organizationId, table.id),
+    unique("workspace_resource_conflict_org_id_idx").on(table.organizationId, table.id),
     index("workspace_resource_conflict_org_resource_idx").on(
       table.organizationId,
       table.resourceType,
@@ -1204,7 +1203,7 @@ export const workspaceDataKey = workspaceControl.table(
     destroyedAt: timestamp("destroyed_at", { withTimezone: true }),
   },
   (table) => [
-    uniqueIndex("workspace_data_key_org_id_idx").on(table.organizationId, table.id),
+    unique("workspace_data_key_org_id_idx").on(table.organizationId, table.id),
     uniqueIndex("workspace_data_key_org_version_idx").on(
       table.organizationId,
       table.version,
@@ -1262,7 +1261,7 @@ export const workspaceDataKeyRotation = workspaceControl.table(
     completedAt: timestamp("completed_at", { withTimezone: true }),
   },
   (table) => [
-    uniqueIndex("workspace_data_key_rotation_org_id_idx").on(table.organizationId, table.id),
+    unique("workspace_data_key_rotation_org_id_idx").on(table.organizationId, table.id),
     uniqueIndex("workspace_data_key_rotation_org_idempotency_idx").on(
       table.organizationId,
       table.idempotencyKey,
@@ -1396,7 +1395,7 @@ export const workspaceCredentialLease = workspaceControl.table(
     externalCredentialId: text("external_credential_id").notNull(),
     externalCredentialKind: text("external_credential_kind").notNull(),
     // Exact redacted resource identity returned by the live Provider proof.
-    // Nullable only for legacy and pre-verification pending reservations.
+    // Pending reservations have no completed Provider proof yet.
     providerAuditId: text("provider_audit_id"),
     activeSlot: integer("active_slot"),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
@@ -1480,7 +1479,7 @@ export const knowledgeProject = workspaceControl.table(
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
   },
   (table) => [
-    uniqueIndex("knowledge_project_org_id_idx").on(table.organizationId, table.id),
+    unique("knowledge_project_org_id_idx").on(table.organizationId, table.id),
     uniqueIndex("knowledge_project_org_name_idx")
       .on(table.organizationId, table.name)
       .where(sql`${table.deletedAt} IS NULL`),
@@ -1507,7 +1506,7 @@ export const knowledgeProjectEnvironment = workspaceControl.table(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex("knowledge_environment_org_id_idx").on(table.organizationId, table.id),
+    unique("knowledge_environment_org_id_idx").on(table.organizationId, table.id),
     uniqueIndex("knowledge_environment_project_name_idx").on(table.projectId, table.name),
     foreignKey({
       columns: [table.organizationId, table.projectId],
@@ -1596,7 +1595,7 @@ export const knowledgeGithubInstallation = workspaceControl.table(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex("knowledge_github_installation_org_id_idx").on(table.organizationId, table.id),
+    unique("knowledge_github_installation_org_id_idx").on(table.organizationId, table.id),
     uniqueIndex("knowledge_github_installation_org_external_idx").on(
       table.organizationId,
       table.installationId,
@@ -1663,7 +1662,7 @@ export const knowledgeSource = workspaceControl.table(
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
   },
   (table) => [
-    uniqueIndex("knowledge_source_org_id_idx").on(table.organizationId, table.id),
+    unique("knowledge_source_org_id_idx").on(table.organizationId, table.id),
     index("knowledge_source_environment_idx").on(
       table.organizationId,
       table.projectEnvironmentId,
@@ -1736,7 +1735,7 @@ export const knowledgeGraphRevision = workspaceControl.table(
     stagedAt: timestamp("staged_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex("knowledge_graph_revision_org_id_idx").on(table.organizationId, table.id),
+    unique("knowledge_graph_revision_org_id_idx").on(table.organizationId, table.id),
     index("knowledge_graph_revision_environment_idx").on(
       table.organizationId,
       table.projectEnvironmentId,
@@ -1839,7 +1838,7 @@ export const knowledgeGrant = workspaceControl.table(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex("knowledge_grant_org_id_idx").on(table.organizationId, table.id),
+    unique("knowledge_grant_org_id_idx").on(table.organizationId, table.id),
     index("knowledge_grant_member_active_idx").on(
       table.organizationId,
       table.memberId,
@@ -1957,8 +1956,6 @@ export const knowledgeMappingProposal = workspaceControl.table(
 // Analysis Articles share sanitized HTML, one exact query, immutable authority
 // pins, run metadata, and receipts. Database traffic and result rows remain on
 // Desktop. Public publications contain only an explicitly approved HTML snapshot.
-// Columns and tables marked historical below stay represented until an explicit
-// retention migration can remove deployed data without silently destroying it.
 export const workspaceAnalysisRunner = workspaceControl.table(
   "workspace_analysis_runner",
   {
@@ -1969,15 +1966,14 @@ export const workspaceAnalysisRunner = workspaceControl.table(
     memberId: text("member_id"),
     deviceId: text("device_id").notNull(),
     displayName: text("display_name").notNull(),
-    runnerCapabilityHash: text("runner_capability_hash"),
-    runnerCapabilityGeneration: bigint("runner_capability_generation", { mode: "number" }),
-    backgroundAllowed: boolean("background_allowed").notNull().default(false),
+    runnerCapabilityHash: text("runner_capability_hash").notNull(),
+    runnerCapabilityGeneration: bigint("runner_capability_generation", { mode: "number" }).notNull(),
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
   },
   (table) => [
-    uniqueIndex("workspace_analysis_runner_org_id_idx").on(table.organizationId, table.id),
+    unique("workspace_analysis_runner_org_id_idx").on(table.organizationId, table.id),
     uniqueIndex("workspace_analysis_runner_org_device_idx").on(
       table.organizationId,
       table.deviceId,
@@ -2003,15 +1999,9 @@ export const workspaceAnalysisRunner = workspaceControl.table(
     ),
     check(
       "workspace_analysis_runner_capability",
-      sql`(
-          ${table.runnerCapabilityHash} ~ '^[0-9a-f]{64}$'
-          AND ${table.runnerCapabilityGeneration} >= 1
-          AND ${table.runnerCapabilityGeneration} <= 9007199254740991
-        ) OR (
-          ${table.runnerCapabilityHash} IS NULL
-          AND ${table.runnerCapabilityGeneration} IS NULL
-          AND ${table.revokedAt} IS NOT NULL
-        )`,
+      sql`${table.runnerCapabilityHash} ~ '^[0-9a-f]{64}$'
+        AND ${table.runnerCapabilityGeneration} >= 1
+        AND ${table.runnerCapabilityGeneration} <= 9007199254740991`,
     ),
   ],
 );
@@ -2025,33 +2015,27 @@ export const workspaceAnalysisArticle = workspaceControl.table(
     }),
     projectEnvironmentId: uuid("project_environment_id").notNull(),
     environmentRevision: bigint("environment_revision", { mode: "number" }).notNull(),
-    sourceKnowledgeGrantId: uuid("source_knowledge_grant_id"),
+    connectionId: uuid("connection_id").notNull(),
+    connectionRevision: bigint("connection_revision", { mode: "number" }).notNull(),
     definition: jsonb("definition").notNull(),
-    state: text("state").notNull().default("draft"),
     ownerMemberId: text("owner_member_id").notNull(),
     updatedByMemberId: text("updated_by_member_id").notNull(),
     revision: bigint("revision", { mode: "number" }).notNull().default(1),
-    liveRevision: bigint("live_revision", { mode: "number" }),
-    liveRunId: uuid("live_run_id"),
-    // Historical scheduler column. Migration 0057 nulls it and current code
-    // never schedules from it.
-    nextRefreshAt: timestamp("next_refresh_at", { withTimezone: true }),
     latestSuccessfulRunId: uuid("latest_successful_run_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
   },
   (table) => [
-    uniqueIndex("workspace_analysis_article_org_id_idx").on(table.organizationId, table.id),
+    unique("workspace_analysis_article_org_id_idx").on(table.organizationId, table.id),
     index("workspace_analysis_article_environment_idx").on(
       table.organizationId,
       table.projectEnvironmentId,
-      table.state,
       table.updatedAt,
     ),
-    index("workspace_analysis_article_refresh_due_idx").on(
+    index("workspace_analysis_article_connection_idx").on(
       table.organizationId,
-      table.nextRefreshAt,
+      table.connectionId,
     ),
     foreignKey({
       columns: [table.organizationId, table.projectEnvironmentId],
@@ -2062,96 +2046,20 @@ export const workspaceAnalysisArticle = workspaceControl.table(
       name: "workspace_analysis_article_org_environment_fk",
     }).onDelete("cascade"),
     foreignKey({
-      columns: [table.organizationId, table.sourceKnowledgeGrantId],
-      foreignColumns: [knowledgeGrant.organizationId, knowledgeGrant.id],
-      name: "workspace_analysis_article_org_grant_fk",
+      columns: [table.organizationId, table.connectionId],
+      foreignColumns: [workspaceConnection.organizationId, workspaceConnection.id],
+      name: "workspace_analysis_article_org_connection_fk",
     }).onDelete("restrict"),
     check(
       "workspace_analysis_article_revisions",
       sql`${table.environmentRevision} >= 1
+        AND ${table.connectionRevision} >= 1
         AND ${table.revision} >= 1
-        AND ${table.revision} <= 9007199254740991
-        AND (${table.liveRevision} IS NULL
-          OR (${table.liveRevision} >= 1 AND ${table.liveRevision} <= ${table.revision}))`,
-    ),
-    check(
-      "workspace_analysis_article_state",
-      sql`${table.state} IN ('draft', 'review', 'live', 'archived')`,
+        AND ${table.revision} <= 9007199254740991`,
     ),
     check(
       "workspace_analysis_article_definition",
       sql`jsonb_typeof(${table.definition}) = 'object'`,
-    ),
-  ],
-);
-
-export const workspaceAnalysisArticleConnection = workspaceControl.table(
-  "workspace_analysis_article_connection",
-  {
-    organizationId: text("organization_id").notNull().references(() => organization.id, {
-      onDelete: "cascade",
-    }),
-    articleId: uuid("article_id").notNull(),
-    articleRevision: bigint("article_revision", { mode: "number" }).notNull(),
-    connectionId: uuid("connection_id").notNull(),
-    connectionRevision: bigint("connection_revision", { mode: "number" }).notNull(),
-    role: text("role").notNull(),
-    alias: text("alias").notNull(),
-  },
-  (table) => [
-    primaryKey({ columns: [table.articleId, table.articleRevision, table.connectionId] }),
-    uniqueIndex("workspace_analysis_article_connection_role_idx").on(
-      table.articleId,
-      table.articleRevision,
-      table.role,
-    ),
-    foreignKey({
-      columns: [table.organizationId, table.articleId],
-      foreignColumns: [workspaceAnalysisArticle.organizationId, workspaceAnalysisArticle.id],
-      name: "workspace_analysis_article_connection_org_article_fk",
-    }).onDelete("cascade"),
-    foreignKey({
-      columns: [table.organizationId, table.connectionId],
-      foreignColumns: [workspaceConnection.organizationId, workspaceConnection.id],
-      name: "workspace_analysis_article_connection_org_connection_fk",
-    }).onDelete("restrict"),
-    check(
-      "workspace_analysis_article_connection_revision",
-      sql`${table.articleRevision} >= 1 AND ${table.connectionRevision} >= 1`,
-    ),
-    check(
-      "workspace_analysis_article_connection_text",
-      sql`${table.role} ~ '^[A-Za-z][A-Za-z0-9_-]{0,63}$'
-        AND char_length(${table.alias}) BETWEEN 1 AND 128`,
-    ),
-  ],
-);
-
-export const workspaceAnalysisArticleGraph = workspaceControl.table(
-  "workspace_analysis_article_graph",
-  {
-    organizationId: text("organization_id").notNull().references(() => organization.id, {
-      onDelete: "cascade",
-    }),
-    articleId: uuid("article_id").notNull(),
-    articleRevision: bigint("article_revision", { mode: "number" }).notNull(),
-    graphRevisionId: uuid("graph_revision_id").notNull(),
-  },
-  (table) => [
-    primaryKey({ columns: [table.articleId, table.articleRevision, table.graphRevisionId] }),
-    foreignKey({
-      columns: [table.organizationId, table.articleId],
-      foreignColumns: [workspaceAnalysisArticle.organizationId, workspaceAnalysisArticle.id],
-      name: "workspace_analysis_article_graph_org_article_fk",
-    }).onDelete("cascade"),
-    foreignKey({
-      columns: [table.organizationId, table.graphRevisionId],
-      foreignColumns: [knowledgeGraphRevision.organizationId, knowledgeGraphRevision.id],
-      name: "workspace_analysis_article_graph_org_graph_fk",
-    }).onDelete("restrict"),
-    check(
-      "workspace_analysis_article_graph_revision",
-      sql`${table.articleRevision} >= 1`,
     ),
   ],
 );
@@ -2176,7 +2084,7 @@ export const workspaceAnalysisArticleRevision = workspaceControl.table(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex("workspace_analysis_article_revision_unique_idx").on(
+    unique("workspace_analysis_article_revision_unique_idx").on(
       table.organizationId,
       table.articleId,
       table.revision,
@@ -2199,83 +2107,12 @@ export const workspaceAnalysisArticleRevision = workspaceControl.table(
     ),
     check(
       "workspace_analysis_article_revision_operation",
-      sql`${table.operation} IN (
-        'create', 'propose', 'update', 'submit_review', 'return_draft',
-        'publish_live', 'archive', 'restore', 'transfer', 'delete', 'migrate'
-      )`,
+      sql`${table.operation} IN ('create', 'propose', 'update', 'delete')`,
     ),
     check(
       "workspace_analysis_article_revision_payload",
       sql`jsonb_typeof(${table.payload}) = 'object'
         AND ${table.payloadHash} ~ '^[0-9a-f]{64}$'`,
-    ),
-  ],
-);
-
-// Historical scheduler lease rows. No current route or worker issues leases.
-export const workspaceAnalysisRefreshLease = workspaceControl.table(
-  "workspace_analysis_refresh_lease",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    organizationId: text("organization_id").notNull().references(() => organization.id, {
-      onDelete: "cascade",
-    }),
-    articleId: uuid("article_id").notNull(),
-    articleRevision: bigint("article_revision", { mode: "number" }).notNull(),
-    runnerId: uuid("runner_id").notNull(),
-    runnerCapabilityGeneration: bigint("runner_capability_generation", { mode: "number" }),
-    idempotencyKey: text("idempotency_key").notNull(),
-    parameterHash: text("parameter_hash").notNull(),
-    leaseCapabilityHash: text("lease_capability_hash").notNull(),
-    scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull(),
-    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-    completedAt: timestamp("completed_at", { withTimezone: true }),
-    revokedAt: timestamp("revoked_at", { withTimezone: true }),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => [
-    uniqueIndex("workspace_analysis_refresh_lease_org_id_idx").on(
-      table.organizationId,
-      table.id,
-    ),
-    uniqueIndex("workspace_analysis_refresh_lease_idempotency_idx").on(
-      table.organizationId,
-      table.idempotencyKey,
-    ),
-    index("workspace_analysis_refresh_lease_due_idx").on(
-      table.organizationId,
-      table.runnerId,
-      table.expiresAt,
-    ),
-    foreignKey({
-      columns: [table.organizationId, table.articleId, table.articleRevision],
-      foreignColumns: [
-        workspaceAnalysisArticleRevision.organizationId,
-        workspaceAnalysisArticleRevision.articleId,
-        workspaceAnalysisArticleRevision.revision,
-      ],
-      name: "workspace_analysis_refresh_lease_org_revision_fk",
-    }).onDelete("restrict"),
-    foreignKey({
-      columns: [table.organizationId, table.runnerId],
-      foreignColumns: [workspaceAnalysisRunner.organizationId, workspaceAnalysisRunner.id],
-      name: "workspace_analysis_refresh_lease_org_runner_fk",
-    }).onDelete("cascade"),
-    check(
-      "workspace_analysis_refresh_lease_hashes",
-      sql`${table.parameterHash} ~ '^[0-9a-f]{64}$'
-        AND ${table.leaseCapabilityHash} ~ '^[0-9a-f]{64}$'`,
-    ),
-    check(
-      "workspace_analysis_refresh_lease_time",
-      sql`${table.articleRevision} >= 1 AND ${table.expiresAt} > ${table.scheduledAt}`,
-    ),
-    check(
-      "workspace_analysis_refresh_lease_runner_capability",
-      sql`(${table.runnerCapabilityGeneration} >= 1
-          AND ${table.runnerCapabilityGeneration} <= 9007199254740991)
-        OR (${table.runnerCapabilityGeneration} IS NULL
-          AND (${table.completedAt} IS NOT NULL OR ${table.revokedAt} IS NOT NULL))`,
     ),
   ],
 );
@@ -2290,13 +2127,9 @@ export const workspaceAnalysisArticleRun = workspaceControl.table(
     articleId: uuid("article_id").notNull(),
     articleRevision: bigint("article_revision", { mode: "number" }).notNull(),
     runnerId: uuid("runner_id").notNull(),
-    runnerCapabilityGeneration: bigint("runner_capability_generation", { mode: "number" }),
-    leaseId: uuid("lease_id"),
+    runnerCapabilityGeneration: bigint("runner_capability_generation", { mode: "number" }).notNull(),
     requestedByMemberId: text("requested_by_member_id"),
-    trigger: text("trigger").notNull(),
     state: text("state").notNull().default("queued"),
-    parameterValues: jsonb("parameter_values").notNull().default(sql`'{}'::jsonb`),
-    parameterHash: text("parameter_hash").notNull(),
     definitionHash: text("definition_hash").notNull(),
     schemaFingerprints: jsonb("schema_fingerprints").notNull().default(sql`'{}'::jsonb`),
     rowCount: bigint("row_count", { mode: "number" }).notNull().default(0),
@@ -2311,7 +2144,7 @@ export const workspaceAnalysisArticleRun = workspaceControl.table(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex("workspace_analysis_article_run_org_id_idx").on(table.organizationId, table.id),
+    unique("workspace_analysis_article_run_org_id_idx").on(table.organizationId, table.id),
     index("workspace_analysis_article_run_article_idx").on(
       table.organizationId,
       table.articleId,
@@ -2332,11 +2165,6 @@ export const workspaceAnalysisArticleRun = workspaceControl.table(
       name: "workspace_analysis_article_run_org_runner_fk",
     }).onDelete("restrict"),
     foreignKey({
-      columns: [table.organizationId, table.leaseId],
-      foreignColumns: [workspaceAnalysisRefreshLease.organizationId, workspaceAnalysisRefreshLease.id],
-      name: "workspace_analysis_article_run_org_lease_fk",
-    }).onDelete("restrict"),
-    foreignKey({
       columns: [table.organizationId, table.requestedByMemberId],
       foreignColumns: [member.organizationId, member.id],
       name: "workspace_analysis_article_run_org_requester_fk",
@@ -2351,13 +2179,8 @@ export const workspaceAnalysisArticleRun = workspaceControl.table(
       sql`${table.state} IN ('queued', 'running', 'succeeded', 'failed', 'cancelled', 'stale')`,
     ),
     check(
-      "workspace_analysis_article_run_trigger",
-      sql`${table.trigger} IN ('manual', 'schedule', 'signal', 'publication')`,
-    ),
-    check(
       "workspace_analysis_article_run_hashes",
-      sql`${table.parameterHash} ~ '^[0-9a-f]{64}$'
-        AND ${table.definitionHash} ~ '^[0-9a-f]{64}$'
+      sql`${table.definitionHash} ~ '^[0-9a-f]{64}$'
         AND (${table.resultHash} IS NULL OR ${table.resultHash} ~ '^[0-9a-f]{64}$')`,
     ),
     check(
@@ -2366,8 +2189,7 @@ export const workspaceAnalysisArticleRun = workspaceControl.table(
     ),
     check(
       "workspace_analysis_article_run_json",
-      sql`jsonb_typeof(${table.parameterValues}) = 'object'
-        AND jsonb_typeof(${table.schemaFingerprints}) = 'object'`,
+      sql`jsonb_typeof(${table.schemaFingerprints}) = 'object'`,
     ),
     check(
       "workspace_analysis_article_run_terminal",
@@ -2389,10 +2211,8 @@ export const workspaceAnalysisArticleRun = workspaceControl.table(
     ),
     check(
       "workspace_analysis_article_run_runner_capability",
-      sql`(${table.runnerCapabilityGeneration} >= 1
-          AND ${table.runnerCapabilityGeneration} <= 9007199254740991)
-        OR (${table.runnerCapabilityGeneration} IS NULL
-          AND ${table.state} IN ('succeeded', 'failed', 'cancelled', 'stale'))`,
+      sql`${table.runnerCapabilityGeneration} >= 1
+        AND ${table.runnerCapabilityGeneration} <= 9007199254740991`,
     ),
   ],
 );
@@ -2454,71 +2274,6 @@ export const workspaceAnalysisArticleQueryReceipt = workspaceControl.table(
   ],
 );
 
-// Historical hosted result rows. Current result rows are local to Desktop.
-export const workspaceAnalysisResultFragment = workspaceControl.table(
-  "workspace_analysis_result_fragment",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    organizationId: text("organization_id").notNull().references(() => organization.id, {
-      onDelete: "cascade",
-    }),
-    runId: uuid("run_id").notNull(),
-    blockId: text("block_id").notNull(),
-    ordinal: integer("ordinal").notNull(),
-    dataKeyId: uuid("data_key_id").notNull(),
-    keyReference: text("key_reference").notNull(),
-    keyVersion: text("key_version").notNull(),
-    ciphertext: text("ciphertext").notNull(),
-    payloadHash: text("payload_hash").notNull(),
-    rowCount: integer("row_count").notNull(),
-    plaintextBytes: integer("plaintext_bytes").notNull(),
-    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => [
-    uniqueIndex("workspace_analysis_result_fragment_unique_idx").on(
-      table.organizationId,
-      table.runId,
-      table.blockId,
-      table.ordinal,
-    ),
-    index("workspace_analysis_result_fragment_expiry_idx").on(
-      table.organizationId,
-      table.expiresAt,
-    ),
-    foreignKey({
-      columns: [table.organizationId, table.runId],
-      foreignColumns: [workspaceAnalysisArticleRun.organizationId, workspaceAnalysisArticleRun.id],
-      name: "workspace_analysis_result_fragment_org_run_fk",
-    }).onDelete("cascade"),
-    foreignKey({
-      columns: [table.organizationId, table.dataKeyId],
-      foreignColumns: [workspaceDataKey.organizationId, workspaceDataKey.id],
-      name: "workspace_analysis_result_fragment_org_data_key_fk",
-    }).onDelete("restrict"),
-    check(
-      "workspace_analysis_result_fragment_block",
-      sql`${table.blockId} ~ '^[A-Za-z][A-Za-z0-9_-]{0,63}$'`,
-    ),
-    check(
-      "workspace_analysis_result_fragment_hash",
-      sql`${table.payloadHash} ~ '^[0-9a-f]{64}$'`,
-    ),
-    check(
-      "workspace_analysis_result_fragment_bounds",
-      sql`${table.ordinal} BETWEEN 0 AND 255
-        AND ${table.rowCount} BETWEEN 0 AND 5000
-        AND ${table.plaintextBytes} BETWEEN 2 AND 1048576
-        AND ${table.expiresAt} > ${table.createdAt}`,
-    ),
-    check(
-      "workspace_analysis_result_fragment_key",
-      sql`${table.keyReference} = 'dopedb-workspace-data-key'
-        AND ${table.keyVersion} ~ '^v[1-9][0-9]*$'`,
-    ),
-  ],
-);
-
 export const workspaceAnalysisPublication = workspaceControl.table(
   "workspace_analysis_publication",
   {
@@ -2542,7 +2297,7 @@ export const workspaceAnalysisPublication = workspaceControl.table(
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
   },
   (table) => [
-    uniqueIndex("workspace_analysis_publication_org_id_idx").on(table.organizationId, table.id),
+    unique("workspace_analysis_publication_org_id_idx").on(table.organizationId, table.id),
     uniqueIndex("workspace_analysis_publication_slug_version_idx").on(table.slug, table.version),
     uniqueIndex("workspace_analysis_publication_active_slug_idx")
       .on(table.slug)
@@ -2594,345 +2349,6 @@ export const workspaceAnalysisPublication = workspaceControl.table(
       "workspace_analysis_publication_text",
       sql`char_length(btrim(${table.title})) BETWEEN 1 AND 160
         AND char_length(${table.description}) <= 2000`,
-    ),
-  ],
-);
-
-// Historical automation records retained only for audit-safe migration.
-export const workspaceAnalysisSignal = workspaceControl.table(
-  "workspace_analysis_signal",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    organizationId: text("organization_id").notNull().references(() => organization.id, {
-      onDelete: "cascade",
-    }),
-    articleId: uuid("article_id").notNull(),
-    articleRevision: bigint("article_revision", { mode: "number" }).notNull(),
-    blockId: text("block_id").notNull(),
-    definition: jsonb("definition").notNull(),
-    ownerMemberId: text("owner_member_id"),
-    enabled: boolean("enabled").notNull().default(false),
-    revision: bigint("revision", { mode: "number" }).notNull().default(1),
-    lastEvaluatedRunId: uuid("last_evaluated_run_id"),
-    lastObservedState: text("last_observed_state").notNull().default("unknown"),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-    deletedAt: timestamp("deleted_at", { withTimezone: true }),
-  },
-  (table) => [
-    uniqueIndex("workspace_analysis_signal_org_id_idx").on(table.organizationId, table.id),
-    index("workspace_analysis_signal_article_idx").on(
-      table.organizationId,
-      table.articleId,
-      table.enabled,
-    ),
-    foreignKey({
-      columns: [table.organizationId, table.articleId, table.articleRevision],
-      foreignColumns: [
-        workspaceAnalysisArticleRevision.organizationId,
-        workspaceAnalysisArticleRevision.articleId,
-        workspaceAnalysisArticleRevision.revision,
-      ],
-      name: "workspace_analysis_signal_org_revision_fk",
-    }).onDelete("restrict"),
-    foreignKey({
-      columns: [table.organizationId, table.ownerMemberId],
-      foreignColumns: [member.organizationId, member.id],
-      name: "workspace_analysis_signal_org_owner_fk",
-    }).onDelete("set null"),
-    foreignKey({
-      columns: [table.organizationId, table.lastEvaluatedRunId],
-      foreignColumns: [workspaceAnalysisArticleRun.organizationId, workspaceAnalysisArticleRun.id],
-      name: "workspace_analysis_signal_org_run_fk",
-    }).onDelete("restrict"),
-    check(
-      "workspace_analysis_signal_block",
-      sql`${table.blockId} ~ '^[A-Za-z][A-Za-z0-9_-]{0,63}$'`,
-    ),
-    check(
-      "workspace_analysis_signal_definition",
-      sql`jsonb_typeof(${table.definition}) = 'object'`,
-    ),
-    check(
-      "workspace_analysis_signal_state",
-      sql`${table.lastObservedState} IN ('unknown', 'normal', 'firing', 'recovered', 'no_data', 'error', 'stale')`,
-    ),
-    check(
-      "workspace_analysis_signal_revision",
-      sql`${table.articleRevision} >= 1 AND ${table.revision} >= 1`,
-    ),
-  ],
-);
-
-export const workspaceAnalysisSignalRevision = workspaceControl.table(
-  "workspace_analysis_signal_revision",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    organizationId: text("organization_id").notNull().references(() => organization.id, {
-      onDelete: "cascade",
-    }),
-    signalId: uuid("signal_id").notNull(),
-    revision: bigint("revision", { mode: "number" }).notNull(),
-    baseRevision: bigint("base_revision", { mode: "number" }),
-    operation: text("operation").notNull(),
-    payload: jsonb("payload").notNull(),
-    payloadHash: text("payload_hash").notNull(),
-    createdByMemberId: text("created_by_member_id"),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => [
-    uniqueIndex("workspace_analysis_signal_revision_unique_idx").on(
-      table.organizationId,
-      table.signalId,
-      table.revision,
-    ),
-    foreignKey({
-      columns: [table.organizationId, table.signalId],
-      foreignColumns: [workspaceAnalysisSignal.organizationId, workspaceAnalysisSignal.id],
-      name: "workspace_analysis_signal_revision_org_signal_fk",
-    }).onDelete("cascade"),
-    foreignKey({
-      columns: [table.organizationId, table.createdByMemberId],
-      foreignColumns: [member.organizationId, member.id],
-      name: "workspace_analysis_signal_revision_org_member_fk",
-    }).onDelete("set null"),
-    check(
-      "workspace_analysis_signal_revision_number",
-      sql`${table.revision} >= 1 AND ${table.revision} <= 9007199254740991`,
-    ),
-    check(
-      "workspace_analysis_signal_revision_operation",
-      sql`${table.operation} IN ('create', 'update', 'enable', 'disable', 'delete')`,
-    ),
-    check(
-      "workspace_analysis_signal_revision_payload",
-      sql`jsonb_typeof(${table.payload}) = 'object'
-        AND ${table.payloadHash} ~ '^[0-9a-f]{64}$'`,
-    ),
-  ],
-);
-
-export const workspaceAnalysisSignalReceipt = workspaceControl.table(
-  "workspace_analysis_signal_receipt",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    organizationId: text("organization_id").notNull().references(() => organization.id, {
-      onDelete: "cascade",
-    }),
-    signalId: uuid("signal_id").notNull(),
-    signalRevision: bigint("signal_revision", { mode: "number" }).notNull(),
-    runId: uuid("run_id").notNull(),
-    runnerId: uuid("runner_id").notNull(),
-    observedState: text("observed_state").notNull(),
-    state: text("state").notNull(),
-    resultHash: text("result_hash"),
-    schemaFingerprint: text("schema_fingerprint").notNull(),
-    dedupeKey: text("dedupe_key").notNull(),
-    transitionSequence: bigint("transition_sequence", { mode: "number" }).notNull(),
-    errorKind: text("error_kind"),
-    evaluatedAt: timestamp("evaluated_at", { withTimezone: true }).notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => [
-    uniqueIndex("workspace_analysis_signal_receipt_org_id_idx").on(table.organizationId, table.id),
-    uniqueIndex("workspace_analysis_signal_receipt_dedupe_idx").on(
-      table.organizationId,
-      table.dedupeKey,
-    ),
-    index("workspace_analysis_signal_receipt_history_idx").on(
-      table.organizationId,
-      table.signalId,
-      table.transitionSequence,
-    ),
-    foreignKey({
-      columns: [table.organizationId, table.signalId, table.signalRevision],
-      foreignColumns: [
-        workspaceAnalysisSignalRevision.organizationId,
-        workspaceAnalysisSignalRevision.signalId,
-        workspaceAnalysisSignalRevision.revision,
-      ],
-      name: "workspace_analysis_signal_receipt_org_revision_fk",
-    }).onDelete("restrict"),
-    foreignKey({
-      columns: [table.organizationId, table.runId],
-      foreignColumns: [workspaceAnalysisArticleRun.organizationId, workspaceAnalysisArticleRun.id],
-      name: "workspace_analysis_signal_receipt_org_run_fk",
-    }).onDelete("restrict"),
-    foreignKey({
-      columns: [table.organizationId, table.runnerId],
-      foreignColumns: [workspaceAnalysisRunner.organizationId, workspaceAnalysisRunner.id],
-      name: "workspace_analysis_signal_receipt_org_runner_fk",
-    }).onDelete("restrict"),
-    check(
-      "workspace_analysis_signal_receipt_states",
-      sql`${table.observedState} IN ('normal', 'firing', 'no_data', 'error', 'stale')
-        AND ${table.state} IN ('normal', 'firing', 'recovered', 'no_data', 'error', 'stale')`,
-    ),
-    check(
-      "workspace_analysis_signal_receipt_hashes",
-      sql`(${table.resultHash} IS NULL OR ${table.resultHash} ~ '^[0-9a-f]{64}$')
-        AND ${table.schemaFingerprint} ~ '^[0-9a-f]{64}$'`,
-    ),
-    check(
-      "workspace_analysis_signal_receipt_numbers",
-      sql`${table.signalRevision} >= 1 AND ${table.transitionSequence} >= 1`,
-    ),
-    check(
-      "workspace_analysis_signal_receipt_text",
-      sql`char_length(${table.dedupeKey}) BETWEEN 1 AND 256
-        AND (${table.errorKind} IS NULL OR char_length(${table.errorKind}) BETWEEN 1 AND 128)`,
-    ),
-  ],
-);
-
-export const workspaceAnalysisSignalNotification = workspaceControl.table(
-  "workspace_analysis_signal_notification",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    organizationId: text("organization_id").notNull().references(() => organization.id, {
-      onDelete: "cascade",
-    }),
-    receiptId: uuid("receipt_id").notNull(),
-    recipientMemberId: text("recipient_member_id").notNull(),
-    channel: text("channel").notNull(),
-    state: text("state").notNull().default("pending"),
-    deliveryAttempt: integer("delivery_attempt").notNull().default(0),
-    claimId: uuid("claim_id"),
-    claimedAt: timestamp("claimed_at", { withTimezone: true }),
-    nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).notNull().defaultNow(),
-    deliveredAt: timestamp("delivered_at", { withTimezone: true }),
-    readAt: timestamp("read_at", { withTimezone: true }),
-    errorKind: text("error_kind"),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => [
-    uniqueIndex("workspace_analysis_signal_notification_delivery_idx").on(
-      table.organizationId,
-      table.receiptId,
-      table.recipientMemberId,
-      table.channel,
-    ),
-    index("workspace_analysis_signal_notification_inbox_idx").on(
-      table.organizationId,
-      table.recipientMemberId,
-      table.readAt,
-      table.createdAt,
-    ),
-    index("workspace_analysis_signal_notification_due_idx").on(
-      table.channel,
-      table.state,
-      table.nextAttemptAt,
-      table.claimedAt,
-    ),
-    foreignKey({
-      columns: [table.organizationId, table.receiptId],
-      foreignColumns: [
-        workspaceAnalysisSignalReceipt.organizationId,
-        workspaceAnalysisSignalReceipt.id,
-      ],
-      name: "workspace_analysis_signal_notification_org_receipt_fk",
-    }).onDelete("cascade"),
-    foreignKey({
-      columns: [table.organizationId, table.recipientMemberId],
-      foreignColumns: [member.organizationId, member.id],
-      name: "workspace_analysis_signal_notification_org_member_fk",
-    }).onDelete("cascade"),
-    check(
-      "workspace_analysis_signal_notification_channel",
-      sql`${table.channel} IN ('desktop', 'workspace_web', 'email')`,
-    ),
-    check(
-      "workspace_analysis_signal_notification_state",
-      sql`${table.state} IN ('pending', 'delivered', 'failed')`,
-    ),
-    check(
-      "workspace_analysis_signal_notification_attempt",
-      sql`${table.deliveryAttempt} BETWEEN 0 AND 20`,
-    ),
-    check(
-      "workspace_analysis_signal_notification_claim",
-      sql`(${table.claimId} IS NULL AND ${table.claimedAt} IS NULL)
-        OR (${table.claimId} IS NOT NULL AND ${table.claimedAt} IS NOT NULL)`,
-    ),
-    check(
-      "workspace_analysis_signal_notification_terminal",
-      sql`(${table.state} = 'pending' AND ${table.deliveredAt} IS NULL)
-        OR (${table.state} = 'delivered' AND ${table.deliveredAt} IS NOT NULL
-          AND ${table.claimId} IS NULL AND ${table.claimedAt} IS NULL)
-        OR (${table.state} = 'failed' AND ${table.deliveredAt} IS NULL
-          AND ${table.claimId} IS NULL AND ${table.claimedAt} IS NULL)`,
-    ),
-  ],
-);
-
-// One-way archive for legacy BI records that cannot be converted into an
-// executable Analysis Article without inventing output schema, sensitivity, or
-// Environment authority. The original projection, immutable revisions, and
-// evidence are retained as one integrity-hashed JSON object for explicit human
-// recovery. No query runner reads this table.
-export const workspaceAnalysisMigrationFailure = workspaceControl.table(
-  "workspace_analysis_migration_failure",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    organizationId: text("organization_id").notNull().references(() => organization.id, {
-      onDelete: "cascade",
-    }),
-    sourceKind: text("source_kind").notNull(),
-    sourceId: uuid("source_id").notNull(),
-    sourceRevision: bigint("source_revision", { mode: "number" }).notNull(),
-    title: text("title").notNull(),
-    projectEnvironmentId: uuid("project_environment_id"),
-    ownerMemberId: text("owner_member_id"),
-    payload: jsonb("payload").notNull(),
-    payloadHash: text("payload_hash").notNull(),
-    failureReason: text("failure_reason").notNull(),
-    originalCreatedAt: timestamp("original_created_at", { withTimezone: true }),
-    archivedAt: timestamp("archived_at", { withTimezone: true }).notNull().defaultNow(),
-    resolvedArticleId: uuid("resolved_article_id"),
-    resolvedByMemberId: text("resolved_by_member_id"),
-    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
-  },
-  (table) => [
-    uniqueIndex("workspace_analysis_migration_failure_org_id_idx").on(
-      table.organizationId,
-      table.id,
-    ),
-    uniqueIndex("workspace_analysis_migration_failure_source_idx").on(
-      table.organizationId,
-      table.sourceKind,
-      table.sourceId,
-    ),
-    index("workspace_analysis_migration_failure_unresolved_idx").on(
-      table.organizationId,
-      table.resolvedAt,
-      table.archivedAt,
-    ),
-    check(
-      "workspace_analysis_migration_failure_kind",
-      sql`${table.sourceKind} IN ('dashboard', 'funnel_analysis', 'report', 'signal')`,
-    ),
-    check(
-      "workspace_analysis_migration_failure_revision",
-      sql`${table.sourceRevision} >= 1 AND ${table.sourceRevision} <= 9007199254740991`,
-    ),
-    check(
-      "workspace_analysis_migration_failure_text",
-      sql`char_length(btrim(${table.title})) BETWEEN 1 AND 256
-        AND char_length(${table.failureReason}) BETWEEN 1 AND 2000`,
-    ),
-    check(
-      "workspace_analysis_migration_failure_payload",
-      sql`jsonb_typeof(${table.payload}) = 'object'
-        AND ${table.payloadHash} ~ '^[0-9a-f]{64}$'`,
-    ),
-    check(
-      "workspace_analysis_migration_failure_resolution",
-      sql`(${table.resolvedArticleId} IS NULL
-          AND ${table.resolvedByMemberId} IS NULL
-          AND ${table.resolvedAt} IS NULL)
-        OR (${table.resolvedArticleId} IS NOT NULL
-          AND ${table.resolvedByMemberId} IS NOT NULL
-          AND ${table.resolvedAt} IS NOT NULL)`,
     ),
   ],
 );
@@ -3021,8 +2437,8 @@ export const knowledgeSourceSyncJob = workspaceControl.table(
     finishedAt: timestamp("finished_at", { withTimezone: true }),
   },
   (table) => [
-    uniqueIndex("knowledge_source_sync_job_org_id_idx").on(table.organizationId, table.id),
-    uniqueIndex("knowledge_source_sync_job_org_id_source_idx").on(
+    unique("knowledge_source_sync_job_org_id_idx").on(table.organizationId, table.id),
+    unique("knowledge_source_sync_job_org_id_source_idx").on(
       table.organizationId,
       table.id,
       table.sourceId,

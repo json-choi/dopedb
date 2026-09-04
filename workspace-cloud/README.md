@@ -52,7 +52,7 @@ The URL must be the dedicated `dopedb-product-analytics.*.workers.dev/v1/events`
 endpoint; the server relays bounded, schema-v1 outcome enums without an analytics
 vendor SDK or the caller's IP. The Cloudflare Worker stores them in a dedicated
 EU-jurisdiction D1 database, not the workspace database. The anonymous endpoint requires the exact
-`x-dopedb-product-analytics-contract: 1` compatibility header; that version marker is
+`x-dopedb-product-analytics-contract: 1` contract-version header; that marker is
 not authentication. Independent one-minute budgets apply to the one-way source-IP
 hash (60 requests), one-way installation UUID hash (60 requests), a 400-request global
 circuit, and a 16-event global circuit sized for D1's free write and storage
@@ -83,12 +83,6 @@ code against an older control-plane schema.
 
 Due maintenance deletes at most 1,000 expired rate-limit rows per invocation, so
 retention never adds an unbounded delete to the public request path.
-
-The older `/api/v1/providers/gcp-cloud-sql/callback` route remains only because an
-already registered Google OAuth client may still reference it. The canonical callback
-is `/api/auth/callback/google`. Remove the compatibility route only after the Google
-Cloud console no longer lists the older URI and production authorization has been
-verified against the canonical callback.
 
 ## Shared Project Knowledge
 
@@ -132,11 +126,10 @@ session start, so a branch move makes an old session fail closed rather than sil
 changing its code view.
 
 Graph construction is not shipped by the control plane. Webhook pushes advance only
-the source's pinned commit and no recurring Knowledge task exists. Migration 0054
-supersedes unfinished graph jobs and removes their staging rows while preserving every
-previously activated graph/head for data compatibility. A future paid or experimental
-graph product requires a new entitlement, scheduler, storage, and benchmarked execution
-design rather than restoring the retired implementation.
+the source's pinned commit and no recurring Knowledge task exists. The MVP baseline
+contains no upgrade path for unfinished pre-MVP graph jobs. A future paid or
+experimental graph product requires a new entitlement, scheduler, storage, and
+benchmarked execution design.
 
 Local Folder remains strictly device-local because the cloud cannot observe an
 offline path. Desktop indexes and watches it locally; the hosted source inventory and
@@ -264,13 +257,12 @@ database-side login, ownership, membership, ACL, and timeout boundary before Des
 permits SQL. Cloud SQL MySQL remains read/write-only because this ownership boundary is
 PostgreSQL-specific.
 
-When an admin selects an existing member-local shared connection during a receipt-bound
-provider import, the service converts that connection in place instead of creating a
-second template. Its connection UUID, grants, Analysis Articles, and history references remain
-stable; the content and authority revisions advance atomically, and the next desktop
-sync removes obsolete member-local credential references from that device. Personal
-workspaces do not issue managed credentials. Local GCP ADC is created by Google tooling
-and can only verify member-local access for an existing team-workspace integration.
+A receipt-bound provider import always creates a new managed connection. It never
+repurposes an existing member-local connection or carries that connection's grants and
+Analysis Article references forward. Importing an already registered provider resource
+fails as a conflict. Personal workspaces do not issue managed credentials. Local GCP ADC
+is created by Google tooling and can only verify member-local access for an existing
+team-workspace integration.
 
 Cloud SQL instances explicitly labeled `environment=prod` or
 `environment=production` may be imported only by a current workspace Admin/Owner after
@@ -303,12 +295,6 @@ pins the existing project and instance; the setup rechecks required permissions,
 database authentication, and dedicated database users. The final mutation must resolve
 to the same integration before it updates credentials, and then returns to the same
 database row without replacing its connection ID or grants.
-GCP managed connections saved before the explicit network-path field or PostgreSQL
-schema principal was introduced are intentionally not given the missing capability. A
-workspace admin must use **Repair managed access** (or reconnect and re-import) so
-current discovery supplies the exact path and provisions the schema principal; the
-server does not guess either boundary for legacy records.
-
 ## Analysis Articles
 
 An Analysis Article is a versioned sanitized HTML document with exactly one bounded,
@@ -334,13 +320,10 @@ The public HTML and snapshot API are private `no-store` responses because a slug
 revocable access: every request rechecks publication state and a revoked slug becomes
 unavailable without a browser or shared-cache grace period.
 
-Migration `0057_retire_analysis_automation` disables dormant background runners,
-refresh leases, signals, and notification attempts. Those historical rows remain only
-for audit-safe data migration; no route, scheduler, or UI reads them. The bounded
-definition compatibility adapter converts supported old records to the compact current
-shape and never re-emits retired behavior. A separate response-only compatibility
-adapter may append inert lifecycle fields for supported older Desktop builds; current
-domain DTOs discard them, and they never decide Article visibility or execution.
+The MVP schema contains only foreground runners, manual runs, receipts, revisions, and
+publications. It has no background-runner flag, refresh lease, signal, notification,
+hosted result fragment, migration archive, or old-definition decoder. Pre-MVP Article
+data must be reset instead of upgraded.
 
 ## Trust boundary
 
@@ -403,11 +386,7 @@ domain DTOs discard them, and they never decide Article visibility or execution.
   minutes, while the desktop retires its pool earlier when workspace authority changes.
 - Managed lease POSTs send
   `x-dopedb-managed-lease-contract: access-v5` and an explicit `read`, `write`, or
-  `schema` access mode. The service temporarily accepts `access-v4` and `access-v3`
-  for read/write compatibility and keeps the previously released `access-v4` Neon
-  schema path. GCP schema credentials fail with HTTP 426 unless Desktop sends
-  `access-v5`. This preserves existing access while the control plane is deployed
-  before the matching Desktop release.
+  `schema` access mode. Any other contract version fails with HTTP 426.
 - Independently deployed Desktop and Workspace Cloud decode the same versioned
   `dopedb-protocol/tests/fixtures/control-plane-contracts-v1.json` golden for ordered
   workspace sync, managed lease request/response, and Analysis Article creation.
@@ -429,8 +408,7 @@ domain DTOs discard them, and they never decide Article visibility or execution.
   events carry both identifiers plus the non-secret external credential id, so an
   operator can reconcile Provider and workspace audit trails without opening a token
   or password. Cleanup state changes and their system-authored audit events commit in
-  one database statement. Legacy rows keep a null Provider audit id rather than using
-  a guessed backfill.
+  one database statement.
 - Shared connection rows contain endpoint metadata, safety defaults, credential mode,
   the administrator-owned write policy, and a redacted provider-resource selector. Usernames,
   passwords, tokens, certificates, connection URLs, SQLite paths, advanced parameters,
@@ -441,8 +419,7 @@ domain DTOs discard them, and they never decide Article visibility or execution.
   or URLs with embedded credentials. A random 256-bit workspace data-encryption key (DEK)
   seals each snapshot with AES-256-GCM and AAD bound to the workspace and opaque backup id.
   Only the Cloud KMS-wrapped DEK is durable. The plaintext DEK exists in request memory for
-  the envelope operation and is zeroized before return. Backups created by the former
-  backup-only HKDF v1 domain remain readable until an Owner rotation re-encrypts them.
+  the envelope operation and is zeroized before return.
 - KMS authentication is keyless. A Vercel Function request receives an
   `x-vercel-oidc-token`, exchanges it through the configured GCP Workload Identity Federation
   provider, and impersonates a dedicated service account with encrypt/decrypt access scoped
@@ -457,10 +434,8 @@ domain DTOs discard them, and they never decide Article visibility or execution.
   handle. Backup create/list/restore/delete require the server-side Admin/Owner `manage`
   capability and each action writes a redacted audit event.
 - Shared connection writes use `x-dopedb-expected-revision` (`0` for a new row).
-  The server temporarily accepts quoted `If-Match` revisions and echoes that
-  validator as a non-cacheable response ETag for released Desktop compatibility;
-  new clients must use the dedicated header so hosting-layer HTTP precondition
-  handling cannot replace an already-applied mutation response with 412.
+  Hosting-layer HTTP precondition handling therefore cannot replace an already-applied
+  mutation response with 412.
   A stale offline update or delete never overwrites the current projection: the server
   persists its redacted candidate plus parent/base revision and returns HTTP 409 with an
   opaque conflict id. Connection version history is append-only at the database boundary.

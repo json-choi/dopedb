@@ -1,4 +1,4 @@
-//! ACP runtime, local CLI readiness, and read-only retired chat archive slice.
+//! ACP runtime and local CLI readiness slice.
 
 pub(crate) mod acp;
 pub(crate) mod adapters;
@@ -9,16 +9,12 @@ mod ports;
 pub(crate) mod runtime;
 pub(crate) mod transport;
 
-use crate::store::Store;
-
-use adapters::{ProcessAgentCliProbe, SqliteRetiredChatArchive};
+use adapters::ProcessAgentCliProbe;
 pub(crate) use application::AgentsUseCases;
-pub(crate) use domain::{AgentProvider, RetiredChatArchiveMessage, RetiredChatArchiveThread};
+pub(crate) type AgentsFeature = AgentsUseCases<ProcessAgentCliProbe>;
 
-pub(crate) type AgentsFeature = AgentsUseCases<ProcessAgentCliProbe, SqliteRetiredChatArchive>;
-
-pub(crate) fn compose(store: Store) -> AgentsFeature {
-    AgentsUseCases::new(ProcessAgentCliProbe, SqliteRetiredChatArchive::new(store))
+pub(crate) fn compose() -> AgentsFeature {
+    AgentsUseCases::new(ProcessAgentCliProbe)
 }
 
 #[cfg(test)]

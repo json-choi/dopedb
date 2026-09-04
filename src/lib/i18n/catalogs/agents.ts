@@ -49,10 +49,6 @@ export const agentsCatalog = defineCatalog(
     "agent.succeeded": "{count} succeeded",
     "agent.timeline": "Timeline",
     "agent.workspace": "Agent workspace",
-    "agent.acpArchive": "Legacy conversation archive",
-    "agent.archiveEmpty": "No saved conversations for this database.",
-    "agent.archiveLoadFailed": "Could not load saved conversations: {error}",
-    "agent.archiveNoMessages": "This conversation has no saved messages.",
     "agent.you": "You",
     "agent.acpCancel": "Cancel",
     "agent.acpCancelFailed": "Could not cancel the Agent turn: {error}",
@@ -337,21 +333,6 @@ export const agentsCatalog = defineCatalog(
     "agentTools.installAll": "Install DopeDB Skill",
     "agentTools.installAndUpdate": "Install & update",
     "agentTools.installedRevision": "Installed revision {revision}",
-    "agentTools.legacyCleanupAbsent": "Already clean",
-    "agentTools.legacyCleanupAction": "Clean up legacy MCP",
-    "agentTools.legacyCleanupBackup": "Configuration backup preserved at {path}",
-    "agentTools.legacyCleanupComplete": "Removed {count} legacy MCP entry(s).",
-    "agentTools.legacyCleanupConfirm":
-      "Back up configuration and remove {count} exact DopeDB MCP entry(s)?",
-    "agentTools.legacyCleanupDescription":
-      "Review and remove retired DopeDB MCP entries. Other settings and formatting are preserved; app-owned bearer metadata is erased without a backup.",
-    "agentTools.legacyCleanupError":
-      "Could not inspect legacy MCP settings: {error}",
-    "agentTools.legacyCleanupManual": "Manual review",
-    "agentTools.legacyCleanupManualHint":
-      "Manual-review files were not changed. Resolve their format or file-type warning before retrying.",
-    "agentTools.legacyCleanupReady": "Cleanup available",
-    "agentTools.legacyCleanupTitle": "Legacy MCP cleanup",
     "agentTools.notAuthenticated": "Sign-in required",
     "agentTools.path": "Install path",
     "agentTools.reasonFilesDifferFromManagedSnapshot":
@@ -471,10 +452,6 @@ export const agentsCatalog = defineCatalog(
     "agent.succeeded": "성공 {count}개",
     "agent.timeline": "타임라인",
     "agent.workspace": "에이전트 작업공간",
-    "agent.acpArchive": "이전 대화 보관함",
-    "agent.archiveEmpty": "이 데이터베이스에 저장된 대화가 없습니다.",
-    "agent.archiveLoadFailed": "저장된 대화를 불러오지 못했습니다: {error}",
-    "agent.archiveNoMessages": "이 대화에는 저장된 메시지가 없습니다.",
     "agent.you": "나",
     "agent.acpCancel": "취소",
     "agent.acpCancelFailed": "Agent 작업을 취소하지 못했습니다: {error}",
@@ -758,21 +735,6 @@ export const agentsCatalog = defineCatalog(
     "agentTools.installAll": "DopeDB 스킬 설치",
     "agentTools.installAndUpdate": "설치 및 업데이트",
     "agentTools.installedRevision": "설치된 리비전 {revision}",
-    "agentTools.legacyCleanupAbsent": "정리됨",
-    "agentTools.legacyCleanupAction": "레거시 MCP 정리",
-    "agentTools.legacyCleanupBackup": "설정 백업을 {path}에 보존했습니다.",
-    "agentTools.legacyCleanupComplete": "레거시 MCP 항목 {count}개를 제거했습니다.",
-    "agentTools.legacyCleanupConfirm":
-      "설정을 백업하고 표시된 DopeDB MCP 항목 {count}개만 제거할까요?",
-    "agentTools.legacyCleanupDescription":
-      "더 이상 사용하지 않는 DopeDB MCP 항목을 검토하고 제거합니다. 다른 설정과 서식은 보존하며 앱 소유 bearer 메타데이터는 백업 없이 삭제합니다.",
-    "agentTools.legacyCleanupError":
-      "레거시 MCP 설정을 확인하지 못했습니다: {error}",
-    "agentTools.legacyCleanupManual": "수동 확인 필요",
-    "agentTools.legacyCleanupManualHint":
-      "수동 확인이 필요한 파일은 변경하지 않았습니다. 형식 또는 파일 유형 경고를 해결한 뒤 다시 시도하세요.",
-    "agentTools.legacyCleanupReady": "정리 가능",
-    "agentTools.legacyCleanupTitle": "레거시 MCP 정리",
     "agentTools.notAuthenticated": "로그인 필요",
     "agentTools.path": "설치 경로",
     "agentTools.reasonFilesDifferFromManagedSnapshot":

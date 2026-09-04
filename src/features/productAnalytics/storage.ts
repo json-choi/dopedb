@@ -90,47 +90,31 @@ function readJson(storage: ProductAnalyticsStorage | null, key: string) {
 function normalizeInstallation(value: unknown): InstallationRecord | null {
   if (!isObject(value)) return null;
   const keys = Object.keys(value);
-  if (keys.length < 2 || keys.length > 3) return null;
+  if (keys.length !== 3) return null;
   if (!keys.every((key) => (
     key === "id" ||
-    key === "createdAt" ||
     key === "generation" ||
     key === "readyRecorded"
   ))) {
-    return null;
-  }
-  const legacyCreatedAt = "createdAt" in value;
-  const hasGeneration = "generation" in value;
-  const hasReadyMarker = "readyRecorded" in value;
-  if (
-    (!legacyCreatedAt && !hasReadyMarker) ||
-    (legacyCreatedAt && hasGeneration)
-  ) {
     return null;
   }
   if (typeof value.id !== "string" || !isProductAnalyticsUuid(value.id)) {
     return null;
   }
   if (
-    (legacyCreatedAt && (
-      typeof value.createdAt !== "string" ||
-      !Number.isFinite(Date.parse(value.createdAt))
-    )) ||
-    (hasReadyMarker && typeof value.readyRecorded !== "boolean") ||
-    (hasGeneration && (
+    typeof value.readyRecorded !== "boolean" ||
+    (
       !Number.isInteger(value.generation) ||
       (value.generation as number) < 0 ||
       (value.generation as number) > MAX_CONSENT_GENERATION
-    ))
+    )
   ) {
     return null;
   }
   return {
     id: value.id,
-    generation: hasGeneration ? value.generation as number : 0,
-    // Records written before the exactly-once marker carried a local creation
-    // timestamp. It was never a real install timestamp, so migrate it away.
-    readyRecorded: value.readyRecorded === true,
+    generation: value.generation as number,
+    readyRecorded: value.readyRecorded,
   };
 }
 

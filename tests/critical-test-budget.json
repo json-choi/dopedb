@@ -15,7 +15,7 @@
     },
     "src/features/providers/tauriAdapter.test.ts": {
       "tests": 6,
-      "protects": "Provider authority receipts, connection-bound provisioning discovery, exact managed-target authority, actionable control-plane errors, catalog capability projection, parseable managed-import SQL, role-gated managed writes, safe Neon branch soft-delete, legacy backup compatibility, identity rejection, restart-free Cloud SQL IAM approval, propagation-safe administrator bootstrap with exact cleanup, active-lease-aware Cloud SQL reconnect preflight and retry timing, and keyless GCP bootstrap boundaries"
+      "protects": "Provider authority receipts, connection-bound provisioning discovery, exact managed-target authority, actionable control-plane errors, catalog capability projection, parseable managed-import SQL, role-gated managed writes, safe Neon branch soft-delete, strict current backup parsing, identity rejection, restart-free Cloud SQL IAM approval, propagation-safe administrator bootstrap with exact cleanup, active-lease-aware Cloud SQL reconnect preflight and retry timing, and keyless GCP bootstrap boundaries"
     },
     "src/features/queries/tauriAdapter.test.ts": {
       "tests": 13,
@@ -60,12 +60,12 @@
       "protects": "Analysis Article result-cache encryption, exact-authority binding, tamper rejection, and invalid-envelope denial"
     },
     "src-tauri/src/features/providers/adapters/authority_tests.rs": {
-      "tests": 5,
+      "tests": 4,
       "protects": "Provider inventory authority, duplicate-key-safe CLI JSON/exit status, literal fixed argv, Unicode/path/executable drift rejection, exact managed-target and connection-pinned receipts, cross-workspace/account scope CAS, restart-safe recovery, deterministic partial destroy repair, and Provider-audit hash-chain correlation"
     },
     "src-tauri/src/features/queries/domain_tests.rs": {
       "tests": 1,
-      "protects": "Production guidance, namespace safety, row-free Services migration, ephemeral table-page retention, exact fail-closed Skill installation/conflict handling, credential-free cross-platform Agent CLI probing, and secret-free typed connection-test receipts"
+      "protects": "Production guidance, namespace safety, current Services result shape, ephemeral table-page retention, exact fail-closed Skill installation/conflict handling, credential-free cross-platform Agent CLI probing, and secret-free typed connection-test receipts"
     },
     "src-tauri/src/operations/canonicalize.rs": {
       "tests": 3,
@@ -89,7 +89,7 @@
     },
     "src-tauri/src/store/tests/connections_scope.rs": {
       "tests": 4,
-      "protects": "Account isolation, credential binding, managed write projection, scope ABA rejection, Knowledge source revision IPC casing, bounded History/Audit metadata and exact detail reads, streamed audit verification identity, ACP provider migration, legacy connection-snapshot recovery, unreadable-session isolation, active-session-preserving history pruning, and ordered count/byte-bounded ACP replay batches"
+      "protects": "Account isolation, credential binding, managed write projection, scope ABA rejection, Knowledge source revision IPC casing, bounded History/Audit metadata and exact detail reads, streamed audit verification identity, current ACP provider state, strict connection snapshots, unreadable-session isolation, active-session-preserving history pruning, and ordered count/byte-bounded ACP replay batches"
     },
     "tools/release-updater-verify/src/main.rs": {
       "tests": 4,

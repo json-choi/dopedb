@@ -637,9 +637,6 @@ export async function restoreWorkspaceSnapshot({
   snapshot: WorkspaceMetadataSnapshot;
 }) {
   const items = snapshot.connections.map((item) => {
-    // Historical encrypted snapshots can predate #23's member-local read-only
-    // invariant. Their hash was checked before this point; restore creates a new,
-    // safe immutable version rather than replaying the obsolete write preference.
     const normalized = {
       ...item,
       readonlyDefault: true,

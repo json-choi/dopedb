@@ -1,2 +1,0 @@
-ALTER TABLE "workspace_control"."workspace_credential_lease" ADD COLUMN "provider_audit_id" text;--> statement-breakpoint
-ALTER TABLE "workspace_control"."workspace_credential_lease" ADD CONSTRAINT "credential_lease_provider_audit_id_length" CHECK ("workspace_control"."workspace_credential_lease"."provider_audit_id" IS NULL OR char_length("workspace_control"."workspace_credential_lease"."provider_audit_id") BETWEEN 1 AND 512);

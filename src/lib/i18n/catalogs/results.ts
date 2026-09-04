@@ -25,7 +25,6 @@ export const resultsCatalog = defineCatalog(
     "results.exportJson": "Export {scope} (JSON)",
     "results.exportFailed": "Result export failed",
     "results.exportProgress": "Exporting {current} / {total}",
-    "results.legacyUnavailable": "This older result format has expired. Run the query again.",
     "results.partialExportUnavailable": "Partial result — export unavailable",
   },
   {
@@ -51,7 +50,6 @@ export const resultsCatalog = defineCatalog(
     "results.exportJson": "{scope} 내보내기 (JSON)",
     "results.exportFailed": "결과 내보내기 실패",
     "results.exportProgress": "내보내는 중 {current} / {total}",
-    "results.legacyUnavailable": "이전 형식의 결과가 만료되었습니다. 쿼리를 다시 실행하세요.",
     "results.partialExportUnavailable": "부분 결과 — 내보내기 불가",
   },
 );

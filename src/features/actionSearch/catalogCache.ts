@@ -52,8 +52,8 @@ function cachedCatalogOverviews(
     });
   }
 
-  // Keep a legacy configured-database overview searchable when it was filled by
-  // another surface. Database-scoped Explorer data wins when both exist.
+  // Keep the configured-database overview searchable when another surface has
+  // already loaded it. Database-scoped Explorer data wins when both exist.
   for (const [queryKey, overview] of queryClient.getQueriesData<CatalogOverview>(
     { queryKey: ["catalogOverview"] },
   )) {
@@ -61,7 +61,7 @@ function cachedCatalogOverviews(
     const connectionId = String(rawConnectionId ?? "");
     const connection = connectionById.get(connectionId);
     if (!overview || rawScope !== scopeKey || !connection) continue;
-    const database = overview.database ?? connection.database;
+    const database = overview.database;
     const key = `${connectionId}\u0000${database}`;
     if (!indexed.has(key)) {
       indexed.set(key, {

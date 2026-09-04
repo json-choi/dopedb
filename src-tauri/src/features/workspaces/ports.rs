@@ -134,10 +134,6 @@ pub(crate) trait WorkspaceControlPlanePort: Clone + Send + Sync + 'static {
         account_id: &AccountId,
     ) -> impl Future<Output = AppResult<Option<WorkspaceAuthUser>>> + Send;
 
-    fn migrate_legacy_session(
-        &self,
-    ) -> impl Future<Output = AppResult<Option<WorkspaceAuthUser>>> + Send;
-
     fn sign_out(&self, account_id: &AccountId) -> impl Future<Output = AppResult<()>> + Send;
 
     fn remote_workspaces(

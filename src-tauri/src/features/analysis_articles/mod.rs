@@ -4,7 +4,6 @@ pub(crate) mod adapters;
 mod domain;
 mod facade;
 mod ports;
-mod result_compat;
 mod runner;
 pub(crate) mod transport;
 mod validation;
@@ -13,8 +12,9 @@ use crate::connection::ConnectionManager;
 use crate::features::knowledge::KnowledgeFeature;
 use crate::store::Store;
 
-pub(crate) use domain::{AnalysisDefinitionRunReceipt, AnalysisDefinitionRunRequest};
-pub(crate) use result_compat::deserialize_local_result;
+pub(crate) use domain::{
+    deserialize_local_result, AnalysisDefinitionRunReceipt, AnalysisDefinitionRunRequest,
+};
 #[cfg(test)]
 pub(crate) use runner::assert_runner_safety_contract;
 

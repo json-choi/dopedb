@@ -9,11 +9,10 @@
 
 mod agent_acp;
 mod bootstrap;
-mod migrations;
 mod projections;
 mod query_services;
 mod repositories;
-mod retired_chat_archive;
+mod schema;
 mod workspace_codec;
 
 #[cfg(test)]
@@ -32,8 +31,7 @@ use projections::*;
 use repositories::*;
 
 pub(crate) use projections::{
-    engine_str, kind_str, parse_engine, parse_kind, parse_provider, parse_uuid, parse_uuid_opt,
-    provider_str,
+    engine_str, kind_str, parse_engine, parse_kind, parse_provider, parse_uuid, provider_str,
 };
 
 use std::collections::{HashMap, HashSet};
@@ -43,7 +41,7 @@ use std::sync::Arc;
 use chrono::{DateTime, Utc};
 use dopedb_protocol::catalog::{CatalogSnapshot, DatabaseEngine, CATALOG_SCHEMA_VERSION};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
-use sqlx::{AssertSqlSafe, Executor, Row, Sqlite, SqlitePool, Transaction};
+use sqlx::{Executor, Row, Sqlite, SqlitePool, Transaction};
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
@@ -77,7 +75,7 @@ pub(crate) enum CacheWriteOutcome {
 }
 
 impl Store {
-    /// Open (creating if needed) the app.db and run migrations.
+    /// Open (creating if needed) the current app.db schema.
     pub async fn open() -> AppResult<Store> {
         let dir = crate::app_paths::data_root()?;
         std::fs::create_dir_all(&dir)?;
@@ -90,7 +88,7 @@ impl Store {
             .foreign_keys(true);
 
         let pool = SqlitePoolOptions::new().connect_with(opts).await?;
-        migrate_local_store(&pool).await?;
+        bootstrap_local_store(&pool).await?;
         repair_active_scope_on_open(&pool).await?;
         Ok(Store {
             pool,
@@ -119,7 +117,7 @@ impl Store {
     }
 
     /// Open the production schema in an isolated, single-connection SQLite store.
-    /// Cross-feature security tests use this instead of duplicating migration SQL.
+    /// Cross-feature security tests use this instead of duplicating schema SQL.
     #[cfg(test)]
     pub(crate) async fn in_memory_for_test() -> AppResult<Store> {
         let opts = SqliteConnectOptions::from_str("sqlite::memory:")?
@@ -129,8 +127,8 @@ impl Store {
             .max_connections(1)
             .connect_with(opts)
             .await?;
-        sqlx::raw_sql(migrations::SCHEMA).execute(&pool).await?;
-        sqlx::raw_sql(migrations::KNOWLEDGE_SCHEMA)
+        sqlx::raw_sql(schema::SCHEMA).execute(&pool).await?;
+        sqlx::raw_sql(schema::KNOWLEDGE_SCHEMA)
             .execute(&pool)
             .await?;
         Ok(Self::from_pool_for_test(pool))

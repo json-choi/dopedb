@@ -49,8 +49,6 @@ const CATALOG_REFS_URL: &str =
     "https://api.github.com/repos/json-choi/dopedb/git/matching-refs/tags/acp-bundle-v?per_page=100";
 const CATALOG_RESOLUTION_TTL: Duration = Duration::from_secs(15 * 60);
 const UPDATE_CHECK_INTERVAL: chrono::Duration = chrono::Duration::hours(24);
-const OBSOLETE_VERSION_COLLISION_FAILURE: &str =
-    "blocked: an installed ACP plugin version conflicts with the signed artifact";
 
 #[derive(Clone)]
 pub(crate) struct AcpPluginManager {
@@ -619,12 +617,6 @@ fn record_has_ready_fallback(record: &PersistedPluginRecord) -> bool {
         && (record.current.is_some() || record.last_known_good.is_some())
 }
 
-fn clear_obsolete_version_collision_failure(record: &mut PersistedPluginRecord) {
-    if record.failure.as_deref() == Some(OBSOLETE_VERSION_COLLISION_FAILURE) {
-        record.failure = None;
-    }
-}
-
 fn take_failed_candidate(
     record: &mut PersistedPluginRecord,
     installation_id: &str,
@@ -720,37 +712,11 @@ pub(super) fn assert_installation_identity_contract() {
         &rebuilt.manifest_sha256,
     ));
 
-    let legacy =
-        manager.legacy_version_directory(AcpPluginId::Claude, &stable.adapter_bundle_version);
-    prepare_directory(&legacy).expect("legacy version directory can be represented");
-    assert_eq!(
-        manager.installed_directory(AcpPluginId::Claude, &stable),
-        legacy,
-        "an existing version-keyed install remains launchable"
-    );
-
     let content = manager.content_directory(AcpPluginId::Claude, &stable.manifest_sha256);
     prepare_directory(&content).expect("content-addressed directory can be represented");
     assert_eq!(
         manager.installed_directory(AcpPluginId::Claude, &stable),
         content,
-        "content-addressed storage takes precedence after migration"
-    );
-    let mut migrated = PersistedPluginRecord {
-        failure: Some(OBSOLETE_VERSION_COLLISION_FAILURE.into()),
-        ..PersistedPluginRecord::default()
-    };
-    clear_obsolete_version_collision_failure(&mut migrated);
-    assert!(migrated.failure.is_none());
-
-    let mut preserved = PersistedPluginRecord {
-        failure: Some("network: artifact download failed".into()),
-        ..PersistedPluginRecord::default()
-    };
-    clear_obsolete_version_collision_failure(&mut preserved);
-    assert_eq!(
-        preserved.failure.as_deref(),
-        Some("network: artifact download failed"),
-        "unrelated install failures remain visible"
+        "installed plugins use content-addressed storage"
     );
 }

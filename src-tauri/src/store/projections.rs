@@ -211,7 +211,3 @@ pub(crate) fn parse_kind(s: String) -> AppResult<QueryKind> {
 pub(crate) fn parse_uuid(s: String) -> AppResult<Uuid> {
     Uuid::from_str(&s).map_err(|e| AppError::Config(format!("bad uuid '{s}': {e}")))
 }
-
-pub(crate) fn parse_uuid_opt(s: Option<String>) -> AppResult<Option<Uuid>> {
-    s.map(parse_uuid).transpose()
-}

@@ -74,11 +74,10 @@ not change the CLI, dashboard, table pagination, or public ACP wire.
   row count matches the immutable manifest. Cancellation and failure remove the
   partial file.
 
-## Retention and compatibility
+## Retention
 
 - Incomplete directories older than 24 hours are swept. Completed results are
   capped at 40 and seven days; an expired Services entry remains display-only
   and reports that its result page is unavailable.
-- Services schema v2 persists only disk handles. A schema v1 in-memory stream
-  snapshot is shown as an explicit “run again” result instead of loading its
-  row chunks back into the WebView.
+- Services persists only current disk handles. Pre-MVP in-memory stream snapshots
+  are unsupported and are not decoded into the WebView.

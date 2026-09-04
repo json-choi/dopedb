@@ -84,21 +84,8 @@ export function providerImportDisplayName(providerName: string, resourceName: st
     .trim();
 }
 
-/** UI-only eligibility; the route rechecks canonical import authority atomically. */
-export function canUseLocalProviderCredential(
-  connection: Pick<SharedConnection, "credentialMode"> | null,
-  managed: Pick<ManagedConnection, "integrationId" | "resource"> | null,
-) {
-  return Boolean(
-    connection?.credentialMode === "managed"
-      && managed?.integrationId
-      && Object.keys(managed.resource).length > 0,
-  );
-}
-
 export type PendingProviderImport = {
   integrationId: string;
-  connectionId: string | null;
   receipt: string;
   name: string;
   body: string;

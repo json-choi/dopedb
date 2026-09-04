@@ -89,14 +89,9 @@ There is no parameter surface, transform graph, visualization block registry,
 multi-query join, schedule, background runner selection, freshness monitor, result
 upload, metric signal, or hosted database execution.
 
-The current serializer emits only the compact definition. A private bounded adapter
-may read supported old definitions and immediately converts them to that compact
-shape. A separate HTTP compatibility adapter temporarily appends inert lifecycle
-markers for supported older Desktop builds and projects them away on current reads.
-Neither adapter restores retired behavior. Migration `0057_retire_analysis_automation`
-disables dormant background runners, refresh leases, signals, and notification
-attempts. Historical tables remain temporarily for audit-safe production migration;
-no current route, scheduler, or UI reads them.
+The serializer and every storage boundary accept only the compact current definition.
+Pre-MVP Article definitions, lifecycle fields, automation records, result fragments,
+and migration archives are unsupported and have no parser, table, route, or UI path.
 
 ## Authorization model
 
@@ -184,9 +179,8 @@ bounded by [Product Positioning](./PRODUCT_POSITIONING.md).
   does not erase it.
 - Verify publication creates and revokes one immutable HTML snapshot and exposes no
   saved SQL, private result, workspace enumeration, or rerun path.
-- After production migration evidence confirms no rollback need, decide separately
-  whether dormant historical tables and the bounded compatibility adapter can be
-  deleted. That decision must include a data-retention and recovery plan.
+- Verify unsupported pre-MVP Article payloads fail closed at both HTTP and Desktop
+  boundaries while current manual-run and publication records remain round-trippable.
 
 ### Sync, backup, and recovery
 

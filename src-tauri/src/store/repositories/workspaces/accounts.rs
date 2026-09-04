@@ -10,8 +10,7 @@ use crate::kernel::access::ActiveResourceScope;
 impl Store {
     // ── workspaces ─────────────────────────────────────────────────────────
 
-    /// List locally available, active workspaces. Milestone 0 normally returns
-    /// only the account-free Personal Workspace created by the migration.
+    /// List locally available, active workspaces.
     pub async fn list_workspaces(&self) -> AppResult<Vec<Workspace>> {
         let rows = sqlx::query(
             "SELECT * FROM workspaces WHERE lifecycle_state = 'active' ORDER BY kind, name",
@@ -138,7 +137,7 @@ impl Store {
         user: &WorkspaceAuthUser,
         workspaces: &[(Uuid, String, WorkspaceRole)],
     ) -> AppResult<()> {
-        let personal_id = Uuid::parse_str(migrations::PERSONAL_WORKSPACE_ID)
+        let personal_id = Uuid::parse_str(schema::PERSONAL_WORKSPACE_ID)
             .map_err(|_| AppError::Config("invalid personal workspace id".into()))?;
         if workspaces.iter().any(|(id, _, _)| *id == personal_id) {
             return Err(AppError::Config(
@@ -191,83 +190,6 @@ impl Store {
             .execute(&mut *tx)
             .await?;
         }
-        // Upgrade legacy team-local ownership and the previous global credential
-        // overlay only after this exact account's server membership was refreshed.
-        // This prevents an unrelated account that signs in first from inheriting data.
-        sqlx::query(
-            "UPDATE connections SET account_user_id = ?1
-             WHERE remote_id IS NULL AND account_user_id IS NULL
-               AND workspace_id IN (
-                   SELECT workspace_id FROM workspace_members
-                   WHERE user_id = ?1 AND status = 'active'
-               )",
-        )
-        .bind(user.id.as_str())
-        .execute(&mut *tx)
-        .await?;
-        sqlx::query(
-            "INSERT OR IGNORE INTO workspace_connection_bindings
-                (connection_id, account_user_id, username, extra_params, secret_ref, updated_at)
-             SELECT c.id, ?1, c.username, c.extra_params, c.secret_ref, ?2
-             FROM connections c
-             JOIN workspace_members m
-               ON m.workspace_id = c.workspace_id
-              AND m.user_id = ?1 AND m.status = 'active'
-             WHERE c.remote_id IS NOT NULL
-               AND (c.username != '' OR c.extra_params != '{}' OR c.secret_ref IS NOT NULL)",
-        )
-        .bind(user.id.as_str())
-        .bind(now)
-        .execute(&mut *tx)
-        .await?;
-        sqlx::query(
-            "UPDATE connections SET username = '', extra_params = '{}', secret_ref = NULL
-             WHERE remote_id IS NOT NULL
-               AND workspace_id IN (
-                   SELECT workspace_id FROM workspace_members
-                   WHERE user_id = ?1 AND status = 'active'
-               )
-               AND (username != '' OR extra_params != '{}' OR secret_ref IS NOT NULL)",
-        )
-        .bind(user.id.as_str())
-        .execute(&mut *tx)
-        .await?;
-        for table in ["query_history", "query_service_sessions", "schema_cache"] {
-            let statement = format!(
-                "UPDATE {table} SET account_scope = ?1
-                 WHERE account_scope = 'personal' AND connection_id IN (
-                     SELECT c.id FROM connections c
-                     JOIN workspace_members m
-                       ON m.workspace_id = c.workspace_id
-                      AND m.user_id = ?1 AND m.status = 'active'
-                     JOIN workspaces w ON w.id = c.workspace_id AND w.kind = 'team'
-                 )"
-            );
-            sqlx::query(AssertSqlSafe(statement))
-                .bind(user.id.as_str())
-                .execute(&mut *tx)
-                .await?;
-        }
-        sqlx::query(
-            "UPDATE agent_chat_threads
-             SET account_scope = ?1,
-                 workspace_id = COALESCE(
-                     (SELECT c.workspace_id FROM connections c
-                      WHERE c.id = agent_chat_threads.connection_id),
-                     workspace_id
-                 )
-             WHERE account_scope = 'personal'
-               AND connection_id IN (
-                   SELECT c.id FROM connections c
-                   JOIN workspace_members m
-                     ON m.workspace_id = c.workspace_id
-                    AND m.user_id = ?1 AND m.status = 'active'
-                   JOIN workspaces w ON w.id = c.workspace_id AND w.kind = 'team'
-               )",
-        )
-        .bind(user.id.as_str())
-        .execute(&mut *tx)
-        .await?;
         sqlx::query(
             "UPDATE workspaces SET lifecycle_state = 'archived', updated_at = ?1
              WHERE kind = 'team' AND NOT EXISTS (

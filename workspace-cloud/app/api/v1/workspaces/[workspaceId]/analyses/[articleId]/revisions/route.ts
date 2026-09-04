@@ -8,7 +8,6 @@ import { workspaceAnalysisArticleRevision } from "../../../../../../../../lib/sc
 import { authorizeWorkspace } from "../../../../../../../../lib/workspace-authorization";
 import { accessibleAnalysisArticle } from "../../../../../../../../lib/workspace-analysis-article-http";
 import { parseAnalysisArticleVersionPayload } from "../../../../../../../../lib/workspace-analysis-articles";
-import { withRetiredVersionPayloadState } from "../../../../../../../../lib/workspace-analysis-version-compat";
 import { hasWorkspaceCapability } from "../../../../../../../../lib/workspace-permissions";
 
 type RouteContext = { params: Promise<{ workspaceId: string; articleId: string }> };
@@ -40,9 +39,7 @@ export async function GET(request: Request, context: RouteContext) {
         revision: revision.revision,
         baseRevision: revision.baseRevision,
         operation: revision.operation,
-        payload: withRetiredVersionPayloadState(
-          parseAnalysisArticleVersionPayload(revision.payload),
-        ),
+        payload: parseAnalysisArticleVersionPayload(revision.payload),
         payloadHash: revision.payloadHash,
         createdByMemberId: revision.createdByMemberId,
         createdAt: revision.createdAt.toISOString(),

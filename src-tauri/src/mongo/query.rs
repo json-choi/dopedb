@@ -86,7 +86,7 @@ pub fn classify(query: &DocumentQuery) -> Classification {
             no_where: false,
             tables: vec![collection.clone()],
             notes: Vec::new(),
-            rollback_safe: false,
+            direct_dml: false,
         },
         Some(note) => Classification {
             kind: QueryKind::Write,
@@ -95,7 +95,7 @@ pub fn classify(query: &DocumentQuery) -> Classification {
             no_where: false,
             tables: vec![collection.clone()],
             notes: vec![note],
-            rollback_safe: false,
+            direct_dml: false,
         },
     }
 }

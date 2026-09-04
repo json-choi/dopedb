@@ -27,7 +27,6 @@ export type ProviderAccessState = {
   connections: SharedConnection[];
   managedConnections: ManagedConnection[];
   managedConnectionsLoaded: boolean;
-  selectedConnectionId: string;
   selectedIntegrationId: string;
   selection: Record<string, string>;
   resourceOptions: Record<string, Resource[]>;
@@ -73,7 +72,6 @@ export const initialProviderAccessState: ProviderAccessState = {
   connections: [],
   managedConnections: [],
   managedConnectionsLoaded: false,
-  selectedConnectionId: "",
   selectedIntegrationId: "",
   selection: {},
   resourceOptions: {},

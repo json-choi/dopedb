@@ -71,7 +71,6 @@ impl AcpPluginManager {
         } else {
             updates.plugins.remove(&plugin_id);
         }
-        clear_obsolete_version_collision_failure(record);
         record.last_checked_at = Some(chrono::Utc::now().to_rfc3339());
         self.write_available_updates(&updates)?;
         self.write_state(&state)
@@ -521,26 +520,12 @@ impl AcpPluginManager {
         self.provider_directory(plugin_id).join(manifest_sha256)
     }
 
-    pub(super) fn legacy_version_directory(
-        &self,
-        plugin_id: AcpPluginId,
-        adapter_bundle_version: &str,
-    ) -> PathBuf {
-        self.provider_directory(plugin_id)
-            .join(adapter_bundle_version)
-    }
-
     pub(super) fn installed_directory(
         &self,
         plugin_id: AcpPluginId,
         installed: &InstalledPluginVersion,
     ) -> PathBuf {
-        let content = self.content_directory(plugin_id, &installed.manifest_sha256);
-        if fs::symlink_metadata(&content).is_ok() {
-            content
-        } else {
-            self.legacy_version_directory(plugin_id, &installed.adapter_bundle_version)
-        }
+        self.content_directory(plugin_id, &installed.manifest_sha256)
     }
 
     pub(super) fn read_installed_marker(
@@ -581,19 +566,10 @@ impl AcpPluginManager {
         .into_iter()
         .flatten()
         .collect::<Vec<_>>();
-        let mut keep = referenced
+        let keep = referenced
             .iter()
             .map(|installed| installed.manifest_sha256.as_str())
             .collect::<BTreeSet<_>>();
-        for installed in referenced {
-            let content = self.content_directory(plugin_id, &installed.manifest_sha256);
-            if fs::symlink_metadata(content).is_err() {
-                // Preserve the legacy path even when its marker is damaged. The
-                // launch verifier will fail closed, while pruning must not turn
-                // a diagnosable installation into silent data loss.
-                keep.insert(installed.adapter_bundle_version.as_str());
-            }
-        }
         let provider = self.provider_directory(plugin_id);
         let entries = match fs::read_dir(&provider) {
             Ok(entries) => entries,

@@ -9,8 +9,7 @@ import {
   jsonError,
   mutationAllowed,
   privateJson,
-  privateRevisionMutationJson,
-  privateRevisionMutationResponse,
+  privateResponse,
 } from "../../../../../../../lib/http";
 import { revokeActiveLeases } from "../../../../../../../lib/provider-integrations";
 import {
@@ -316,7 +315,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     await abandonClaim(claim);
     return jsonError("Connection access changed concurrently. Retry the update.", 409);
   }
-  return privateRevisionMutationJson(request, {
+  return privateJson({
     connection: publicConnection(
       updated,
       authorization.role,
@@ -408,7 +407,7 @@ export async function DELETE(request: Request, context: RouteContext) {
     await abandonClaim(claim);
     return jsonError("Connection access changed concurrently. Retry deletion.", 409);
   }
-  return privateRevisionMutationResponse(request, null, {
+  return privateResponse(null, {
     status: 204,
   });
 }

@@ -5,7 +5,6 @@
 pub mod acp_plugin;
 pub mod analysis_article;
 pub mod analysis_article_command;
-mod analysis_article_compat;
 mod analysis_article_sql;
 mod analysis_article_validation;
 pub mod catalog;

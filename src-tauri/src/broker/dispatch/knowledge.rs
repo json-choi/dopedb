@@ -39,7 +39,7 @@ pub(super) async fn handle(
         Err((code, retryable)) => return failure(request_id, code, retryable),
     };
     let scopes = &session.knowledge_scopes;
-    let Some(primary_scope) = scopes.first() else {
+    let Some(project_id) = scopes.first().map(|scope| scope.project_id) else {
         return failure(request_id, ErrorCode::ScopeDenied, false);
     };
     let services = match dispatcher.services() {
@@ -70,9 +70,7 @@ pub(super) async fn handle(
             respond(
                 request_id,
                 Ok::<_, ErrorCode>(EnvironmentContextResult {
-                    project_id: primary_scope.project_id,
-                    project_environment_id: primary_scope.project_environment_id,
-                    environment_revision: primary_scope.environment_revision,
+                    project_id,
                     environments: scopes
                         .iter()
                         .map(|scope| EnvironmentRevisionScope {

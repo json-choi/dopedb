@@ -1,4 +1,0 @@
-ALTER TABLE "workspace_control"."workspace_signal_evaluation_receipt" DROP CONSTRAINT "workspace_signal_receipt_state";--> statement-breakpoint
-ALTER TABLE "workspace_control"."workspace_signal_evaluation_receipt" ADD COLUMN "observed_state" text DEFAULT 'normal' NOT NULL;--> statement-breakpoint
-ALTER TABLE "workspace_control"."workspace_signal_evaluation_receipt" ADD CONSTRAINT "workspace_signal_receipt_state" CHECK ("workspace_control"."workspace_signal_evaluation_receipt"."observed_state" IN ('normal', 'firing', 'no_data', 'error', 'stale')
-        AND "workspace_control"."workspace_signal_evaluation_receipt"."state" IN ('normal', 'firing', 'recovered', 'no_data', 'error', 'stale', 'runner_offline'));

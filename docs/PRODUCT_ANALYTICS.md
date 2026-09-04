@@ -165,7 +165,7 @@ analytics.
 
 ## Event dictionary
 
-There are exactly 15 v1 product events. A caller cannot add properties beyond the
+There are exactly 13 v1 product events. A caller cannot add properties beyond the
 listed object. `completed` means one terminal outcome is emitted after the owning
 operation finishes; it is not an event for every intermediate UI click.
 
@@ -181,7 +181,6 @@ operation finishes; it is not an event for every intermediate UI click.
 | `knowledge_source_sync_completed` | A renderer-owned GitHub or Local Folder initial connection or manual synchronization reaches an observed terminal result | `outcome`: `success`, `failed`; `sourceKind`: `github`, `local_folder`; `syncReason`: `initial`, `manual` | Workspace context |
 | `agent_session_initialization_completed` | The official ACP adapter initialization reaches a terminal result | `outcome`: `success`, `failed`; `provider`: `claude`, `codex` | Workspace context |
 | `agent_turn_completed` | One ACP user turn reaches a terminal result | `outcome`: `success`, `failed`, `cancelled`; `provider`: `claude`, `codex`; `durationBucket`: shared duration enum | Workspace context |
-| `analysis_article_proposal_completed` | Reserved in the v1 wire contract; no current producer exists until an authoritative proposal receipt carries its exact workspace/account scope | No properties | Workspace context |
 | `analysis_article_run_completed` | A manually started exact-source article run reaches an observed terminal result | `outcome`: `success`, `failed`, `cancelled`, `stale`; `trigger`: `manual`; `durationBucket`: shared duration enum | Workspace context |
 | `workspace_membership_ready` | Once per app session when the selected team workspace membership and its current role are visible in the local auth projection; this is not a membership-join receipt | `role`: `viewer`, `analyst`, `editor`, `admin`, `owner` | Team workspace context |
 | `shared_connection_access_ready` | The first successful team SQL workbench query observed per workspace, engine, and access mode in an app session; this is a verified-access proxy, not a local-binding or managed-lease issuance receipt | `accessMode`: `local`, `managed`; `engine`: `postgres`, `mysql`, `sqlite`, `mongodb` | Team workspace context |
@@ -258,9 +257,7 @@ The v1 vocabulary is intentionally narrower than future producer coverage:
   prove that a hosted synchronization completed or distinguish a deliberately
   deferred synchronization.
 - Knowledge events cover initial source connection and manual sync only. Webhook
-  and scheduled sync have no v1 producer. The reserved proposal event has no
-  current producer because the global article-change notification lacks an
-  authoritative workspace/account scope. Analysis Article runs are manual-only;
+  and scheduled sync have no v1 producer. Analysis Article runs are manual-only;
   proposal validation failures and Agent-test runs have no v1 producer.
 - `workspace_membership_ready` is a once-per-session observation, so it cannot
   measure invitation acceptance or exact join time.
@@ -366,8 +363,8 @@ As of 2026-08-14 the Cloudflare storage path is provisioned but Desktop collecti
 remains deliberately dormant until the official release workflow compiles in the
 feature. Source and development builds remain off. Activation order is fail-closed:
 
-1. Verify the D1 database reports `jurisdiction=eu`, apply every checked-in
-   migration, and deploy the Worker with preview URLs disabled.
+1. Verify the D1 database reports `jurisdiction=eu`, apply the checked-in MVP
+   baseline, and deploy the Worker with preview URLs disabled.
 2. Store the same 32-byte ingestion capability only as the Worker's
    `INGEST_TOKEN` secret and the protected workspace-cloud
    `PRODUCT_ANALYTICS_CLOUDFLARE_TOKEN`; never expose it to Desktop or JavaScript.

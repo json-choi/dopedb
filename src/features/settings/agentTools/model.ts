@@ -19,8 +19,7 @@ export type AgentToolsBusyAction =
   | AcpPluginId
   | "plugin-batch"
   | "plugin-check"
-  | "self-test"
-  | "legacy-cleanup";
+  | "self-test";
 
 export interface AgentToolPluginDescriptor {
   id: AcpPluginId;

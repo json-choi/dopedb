@@ -44,7 +44,6 @@ export default function QueryServiceResult({
   onOpenSafety: (connectionId: ConnectionProfile["id"]) => void;
   scriptStatementIndex?: number;
 }) {
-  const { t } = useI18n();
   if (result.kind === "none") {
     return (
       <WorkbenchEmptyState icon="table">
@@ -80,17 +79,6 @@ export default function QueryServiceResult({
         connection={connection}
         onOpenSafety={onOpenSafety}
       />
-    );
-  }
-  if (result.kind === "unavailable") {
-    return (
-      <WorkbenchEmptyState icon="table">
-        <span>
-          {result.reason === "legacyResultFormat"
-            ? t("results.legacyUnavailable")
-            : result.reason}
-        </span>
-      </WorkbenchEmptyState>
     );
   }
   return (

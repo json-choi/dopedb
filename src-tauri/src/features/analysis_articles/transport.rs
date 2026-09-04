@@ -260,7 +260,8 @@ pub(crate) async fn run_analysis_article_command(
         article_id,
         article_revision,
         definition: article.definition.clone(),
-        connections: article.connections.clone(),
+        connection_id: article.connection_id,
+        connection_revision: article.connection_revision,
         run_id,
         persist_local_result: true,
     };

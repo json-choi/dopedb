@@ -198,7 +198,7 @@ pub(super) async fn repair_active_scope_after_membership_change(
 
     // Membership repair never chooses a different Team on the user's behalf.
     // Authentication and workspace navigation are independent decisions.
-    let fallback_workspace_id = migrations::PERSONAL_WORKSPACE_ID.to_owned();
+    let fallback_workspace_id = schema::PERSONAL_WORKSPACE_ID.to_owned();
 
     sqlx::query(
         "UPDATE app_settings SET value = ?1
@@ -218,7 +218,7 @@ pub(super) async fn repair_active_scope_after_membership_change(
              WHERE user_id = ?4",
         )
         .bind(&fallback_workspace_id)
-        .bind(migrations::PERSONAL_WORKSPACE_ID)
+        .bind(schema::PERSONAL_WORKSPACE_ID)
         .bind(now)
         .bind(user_id)
         .execute(&mut **tx)

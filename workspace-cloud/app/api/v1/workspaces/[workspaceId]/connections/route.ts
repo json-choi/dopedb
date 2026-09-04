@@ -9,7 +9,6 @@ import {
   jsonError,
   mutationAllowed,
   privateJson,
-  privateRevisionMutationJson,
 } from "../../../../../../lib/http";
 import {
   workspaceConnection,
@@ -141,7 +140,7 @@ export async function POST(request: Request, context: RouteContext) {
     input: connectionVersionPayload(input),
   });
   if (!created) return jsonError("Connection changed concurrently. Retry creation.", 409);
-  return privateRevisionMutationJson(request, {
+  return privateJson({
     connection: publicConnection(created, authorization.role, authorization.accessMode),
   }, { status: 201 });
 }

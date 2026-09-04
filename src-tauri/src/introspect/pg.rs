@@ -59,9 +59,8 @@ ORDER BY n.nspname, c.relname, a.attnum
 "#;
 
 // PostgreSQL 10 introduced generated identity columns and `pg_attribute.attidentity`.
-// Keep the catalog scan compatible with the PostgreSQL 9.6 object-query fallback:
-// identity is necessarily false there because the server cannot define one.
-const COLS_LEGACY_SQL: &str = r#"
+// Identity is necessarily false on PostgreSQL 9.6 because the server cannot define one.
+const COLS_PRE_10_SQL: &str = r#"
 SELECT n.nspname AS table_schema,
        c.relname AS table_name,
        a.attname AS column_name,
@@ -100,7 +99,7 @@ fn columns_sql_for_version(server_version_num: u32) -> &'static str {
     if server_version_num >= 100_000 {
         COLS_SQL
     } else {
-        COLS_LEGACY_SQL
+        COLS_PRE_10_SQL
     }
 }
 
@@ -171,8 +170,7 @@ pub(crate) async fn databases(pool: &PgPool) -> AppResult<Vec<String>> {
 
 // FK edges resolved on pg_catalog so composite keys stay per-column-correct. Zipping
 // conkey/confkey WITH ORDINALITY pairs each local column to the matching referenced
-// column (the old key-name join produced NxN garbage for composite FKs and cross-joined
-// same-named constraints across tables).
+// column without cross-joining composite or same-named constraints.
 const FK_SQL: &str = r#"
 SELECT cn.nspname   AS table_schema,
        cl.relname   AS table_name,
@@ -337,7 +335,7 @@ async fn fetch_relation_overview(
 
 /// Fetch only the complete relation tree under the core timeout. This response has
 /// no full-catalog persistence path, so deferred details cannot poison snapshots.
-pub(crate) async fn overview(pool: &PgPool) -> AppResult<CatalogOverview> {
+pub(crate) async fn overview(pool: &PgPool, database: &str) -> AppResult<CatalogOverview> {
     let mut tx = pool.begin().await?;
     sqlx::query(AssertSqlSafe(statement_timeout_sql(CORE_RELATION_TIMEOUT)))
         .execute(&mut *tx)
@@ -367,7 +365,7 @@ pub(crate) async fn overview(pool: &PgPool) -> AppResult<CatalogOverview> {
         .collect();
     tx.commit().await?;
     Ok(CatalogOverview {
-        database: None,
+        database: database.to_owned(),
         namespaces,
         relations,
         detail_state: CatalogOverviewDetailState::Deferred,

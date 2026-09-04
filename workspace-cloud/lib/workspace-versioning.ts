@@ -105,22 +105,12 @@ export function persistedConnectionVersionPayload(
 
 export function parseExpectedRevision(request: Request): number | null {
   const dedicated = request.headers.get(EXPECTED_REVISION_HEADER);
-  const legacy = request.headers.get("if-match");
-  if (dedicated === null && legacy === null) return null;
+  if (dedicated === null) return null;
   const dedicatedMatch = dedicated === null ? null : /^([0-9]+)$/.exec(dedicated.trim());
   if (dedicated !== null && !dedicatedMatch) {
     throw new Error(`${EXPECTED_REVISION_HEADER} must be a non-negative revision`);
   }
-  // Keep accepting strong legacy validators while released Desktop versions
-  // migrate away from Vercel's response-level If-Match enforcement.
-  const legacyMatch = legacy === null ? null : /^"([0-9]+)"$/.exec(legacy.trim());
-  if (legacy !== null && !legacyMatch) {
-    throw new Error("If-Match must be a quoted non-negative revision");
-  }
-  if (dedicatedMatch && legacyMatch && dedicatedMatch[1] !== legacyMatch[1]) {
-    throw new Error("Expected revision headers disagree");
-  }
-  const revision = Number((dedicatedMatch ?? legacyMatch)![1]);
+  const revision = Number(dedicatedMatch![1]);
   if (!Number.isSafeInteger(revision)) throw new Error("Invalid expected revision");
   return revision;
 }

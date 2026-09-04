@@ -150,7 +150,6 @@ type ShellLayoutCommands = {
       environmentId?: string,
       prompt?: string,
     ) => void;
-    openArchive: () => void;
     widthChanged: (width: number) => void;
     close: () => void;
   };
@@ -498,7 +497,6 @@ function ShellLayoutContent({ model, commands }: Props) {
           compact={viewport.compact}
           width={rightDockWidth}
           onWidthChange={commands.agent.widthChanged}
-          onOpenArchive={commands.agent.openArchive}
           onOpenKnowledgeAnalysis={(environmentId, articleId) =>
             commands.explorer.openProjectEnvironment(
               environmentId,

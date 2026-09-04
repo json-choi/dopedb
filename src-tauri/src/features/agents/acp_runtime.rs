@@ -138,8 +138,6 @@ impl AcpRuntime {
         resume_seed: Option<ResumeSeed>,
     ) -> AppResult<AcpSessionFocus> {
         let AcpResourceRequest {
-            project_environment_id: requested_environment_id,
-            environment_connection_ids: requested_connection_ids,
             resource_scopes: requested_resource_scopes,
             write_connection_id: requested_write_connection_id,
         } = resources;
@@ -171,10 +169,8 @@ impl AcpRuntime {
                 knowledge_scope::summary_scopes(&seed.summary)?,
                 seed.summary.write_connection_id,
             ),
-            None if requested_resource_scopes.is_some() => {
-                let selections = requested_resource_scopes
-                    .as_ref()
-                    .expect("guarded Project resource selections");
+            None => {
+                let selections = &requested_resource_scopes;
                 if selections.is_empty() || selections.len() > 16 {
                     return Err(AppError::Blocked {
                         reason: "select at least one Project resource before starting the Agent"
@@ -266,18 +262,6 @@ impl AcpRuntime {
                 }
                 (scopes, requested_write_connection_id)
             }
-            None => {
-                let mut scope = self
-                    .knowledge_scope
-                    .resolve(&connection, requested_environment_id)
-                    .await?;
-                narrow_knowledge_scope(
-                    &mut scope,
-                    Uuid::from(connection_id),
-                    requested_connection_ids,
-                )?;
-                (scope.into_iter().collect(), requested_write_connection_id)
-            }
         };
         let knowledge_account_scope = connection
             .scope
@@ -339,25 +323,6 @@ impl AcpRuntime {
                         title: "New Agent session".into(),
                         lifecycle: AcpSessionLifecycle::Starting,
                         acp_session_id: None,
-                        knowledge_grant_id: (knowledge_scopes.len() == 1)
-                            .then(|| knowledge_scopes[0].knowledge_grant_id)
-                            .flatten(),
-                        project_environment_id: (knowledge_scopes.len() == 1)
-                            .then(|| knowledge_scopes[0].project_environment_id),
-                        environment_revision: (knowledge_scopes.len() == 1)
-                            .then(|| knowledge_scopes[0].environment_revision),
-                        knowledge_sources: knowledge_scopes
-                            .iter()
-                            .flat_map(|scope| scope.sources.iter().cloned())
-                            .collect(),
-                        graph_revision_ids: knowledge_scopes
-                            .iter()
-                            .flat_map(|scope| scope.graph_revision_ids.iter().copied())
-                            .collect(),
-                        environment_connections: knowledge_scopes
-                            .iter()
-                            .flat_map(|scope| scope.connections.iter().cloned())
-                            .collect(),
                         knowledge_scopes: knowledge_scopes.clone(),
                         write_connection_id,
                         error: None,
@@ -375,11 +340,8 @@ impl AcpRuntime {
             .unwrap_or(0)
             .checked_add(1)
             .ok_or_else(|| AppError::Config("the ACP event sequence was exhausted".into()))?;
-        let selected_resource_context = knowledge_scope::resource_context(
-            &connection.profile,
-            &knowledge_scopes,
-            write_connection_id,
-        );
+        let selected_resource_context =
+            knowledge_scope::resource_context(&knowledge_scopes, write_connection_id);
         let broker_session_id = TerminalSessionId::from(Uuid::new_v4());
         let issued = self.broker.sessions().issue_agent_with_knowledge(
             broker_session_id,

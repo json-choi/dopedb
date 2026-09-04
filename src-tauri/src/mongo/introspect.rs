@@ -67,7 +67,7 @@ pub async fn introspect(conn: &MongoConnection) -> AppResult<Catalog> {
 /// List MongoDB collections and views without sampling documents, requesting
 /// indexes, or estimating document counts. Those probes belong exclusively to
 /// the complete catalog path.
-pub(crate) async fn overview(conn: &MongoConnection) -> AppResult<CatalogOverview> {
+pub(crate) async fn overview(conn: &MongoConnection, database: &str) -> AppResult<CatalogOverview> {
     let mut specs: Vec<_> = conn
         .database()
         .list_collections()
@@ -86,7 +86,7 @@ pub(crate) async fn overview(conn: &MongoConnection) -> AppResult<CatalogOvervie
     specs.sort_by(|left, right| left.name.cmp(&right.name));
 
     Ok(CatalogOverview {
-        database: None,
+        database: database.to_owned(),
         namespaces: Vec::new(),
         relations: specs,
         detail_state: CatalogOverviewDetailState::Deferred,

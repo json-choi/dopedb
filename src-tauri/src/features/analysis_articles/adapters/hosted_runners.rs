@@ -8,8 +8,7 @@ pub(crate) struct RemoteAnalysisRunner {
     pub(crate) id: Uuid,
     pub(crate) device_id: String,
     pub(crate) display_name: String,
-    #[serde(default)]
-    pub(crate) runner_capability_generation: Option<u64>,
+    pub(crate) runner_capability_generation: u64,
     pub(crate) last_seen_at: DateTime<Utc>,
     pub(crate) online: bool,
 }
@@ -24,8 +23,6 @@ struct RunnerResponse {
         deserialize_with = "deserialize_optional_secret"
     )]
     runner_capability: Option<Zeroizing<String>>,
-    #[serde(rename = "runnerCapabilityGeneration", default)]
-    runner_capability_generation: Option<u64>,
 }
 
 pub(crate) struct RegisteredAnalysisRunner {
@@ -39,9 +36,7 @@ impl RegisteredAnalysisRunner {
     }
 
     pub(crate) fn generation(&self) -> u64 {
-        self.runner
-            .runner_capability_generation
-            .expect("registered Analysis runners always have a validated generation")
+        self.runner.runner_capability_generation
     }
 }
 
@@ -152,17 +147,7 @@ pub(crate) async fn register_analysis_runner(
             "Analysis runner registration changed local identity".into(),
         ));
     }
-    let generation = body
-        .runner
-        .runner_capability_generation
-        .or(body.runner_capability_generation)
-        .ok_or_else(|| {
-            AppError::Network("Analysis runner registration omitted possession generation".into())
-        })?;
-    if generation == 0
-        || body.runner.runner_capability_generation != Some(generation)
-        || body.runner_capability_generation != Some(generation)
-    {
+    if body.runner.runner_capability_generation == 0 {
         return Err(AppError::Network(
             "Analysis runner registration changed possession generation".into(),
         ));

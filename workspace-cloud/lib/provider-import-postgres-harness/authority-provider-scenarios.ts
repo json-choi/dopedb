@@ -268,7 +268,6 @@ export async function runAuthorityProviderScenarios(
     integrationId,
     receiptId,
     idempotencyKey: `harness-key-${suffix}`,
-    connectionId: null,
     name: "Harness Neon",
     productionApproved: false,
     authority,

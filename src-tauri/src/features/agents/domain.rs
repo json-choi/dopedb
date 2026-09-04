@@ -1,11 +1,9 @@
-//! ACP conversation, local CLI status, and read-only retired-chat contracts.
+//! ACP conversation and local CLI status contracts.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::kernel::identity::{
-    AcpSessionId, ConnectionId, RetiredChatMessageId, RetiredChatThreadId,
-};
+use crate::kernel::identity::{AcpSessionId, ConnectionId};
 
 /// One internal Environment slice of the Project resource set chosen in AI Chat.
 /// IDs are untrusted transport input and are resolved again against local and
@@ -15,9 +13,7 @@ use crate::kernel::identity::{
 pub(crate) struct AgentResourceScopeSelection {
     pub(crate) project_environment_id: uuid::Uuid,
     pub(crate) authority_connection_id: uuid::Uuid,
-    #[serde(default)]
     pub(crate) connection_ids: Vec<uuid::Uuid>,
-    #[serde(default)]
     pub(crate) source_ids: Vec<uuid::Uuid>,
 }
 
@@ -42,33 +38,6 @@ pub(crate) struct AgentCliInfo {
     pub(crate) note: String,
 }
 
-/// A thread persisted by the retired in-app Agent chat; it has no mutation path.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct RetiredChatArchiveThread {
-    pub(crate) id: RetiredChatThreadId,
-    pub(crate) provider: AgentProvider,
-    pub(crate) connection_id: Option<ConnectionId>,
-    pub(crate) title: String,
-    pub(crate) cli_session_id: Option<String>,
-    pub(crate) model: Option<String>,
-    pub(crate) effort: Option<String>,
-    pub(crate) created_at: DateTime<Utc>,
-    pub(crate) updated_at: DateTime<Utc>,
-}
-
-/// One immutable message row in a retired chat archive thread.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct RetiredChatArchiveMessage {
-    pub(crate) id: RetiredChatMessageId,
-    pub(crate) thread_id: RetiredChatThreadId,
-    pub(crate) role: String,
-    pub(crate) text: String,
-    pub(crate) error: Option<String>,
-    pub(crate) created_at: DateTime<Utc>,
-}
-
 /// Lifecycle of one ACP conversation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -91,24 +60,7 @@ pub(crate) struct AcpSessionSummary {
     pub(crate) title: String,
     pub(crate) lifecycle: AcpSessionLifecycle,
     pub(crate) acp_session_id: Option<String>,
-    #[serde(default)]
-    pub(crate) knowledge_grant_id: Option<uuid::Uuid>,
-    #[serde(default)]
-    pub(crate) project_environment_id: Option<uuid::Uuid>,
-    #[serde(default)]
-    pub(crate) environment_revision: Option<u64>,
-    #[serde(default)]
-    pub(crate) knowledge_sources: Vec<crate::features::knowledge::domain::KnowledgeSessionSource>,
-    #[serde(default)]
-    pub(crate) graph_revision_ids: Vec<uuid::Uuid>,
-    #[serde(default)]
-    pub(crate) environment_connections:
-        Vec<crate::features::knowledge::domain::KnowledgeSessionConnection>,
-    /// Current resource-set representation. Legacy scalar fields above remain
-    /// readable so existing local transcripts can still resume safely.
-    #[serde(default)]
     pub(crate) knowledge_scopes: Vec<crate::features::knowledge::domain::KnowledgeSessionScope>,
-    #[serde(default)]
     pub(crate) write_connection_id: Option<uuid::Uuid>,
     pub(crate) error: Option<String>,
     pub(crate) created_at: DateTime<Utc>,
@@ -148,24 +100,24 @@ pub(crate) enum AcpSessionEventPayload {
         update: serde_json::Value,
     },
     SessionConfiguration {
-        #[serde(rename = "configOptions", alias = "config_options")]
+        #[serde(rename = "configOptions")]
         config_options: Vec<serde_json::Value>,
     },
     PermissionRequest {
-        #[serde(rename = "requestId", alias = "request_id")]
+        #[serde(rename = "requestId")]
         request_id: String,
-        #[serde(rename = "toolCall", alias = "tool_call")]
+        #[serde(rename = "toolCall")]
         tool_call: serde_json::Value,
         options: Vec<AcpPermissionOption>,
     },
     PermissionResponse {
-        #[serde(rename = "requestId", alias = "request_id")]
+        #[serde(rename = "requestId")]
         request_id: String,
-        #[serde(rename = "optionId", alias = "option_id")]
+        #[serde(rename = "optionId")]
         option_id: Option<String>,
     },
     TurnEnd {
-        #[serde(rename = "stopReason", alias = "stop_reason")]
+        #[serde(rename = "stopReason")]
         stop_reason: String,
     },
     Status {
@@ -234,7 +186,6 @@ pub(crate) struct AcpPromptContext {
     pub(crate) document_name: Option<String>,
     pub(crate) document_text: Option<String>,
     pub(crate) table: Option<AcpTableContext>,
-    #[serde(default)]
     pub(crate) response_language: AgentResponseLanguage,
 }
 
@@ -273,15 +224,13 @@ pub(crate) fn assert_agent_event_wire_contract() {
     assert_eq!(turn_end["stopReason"], "cancelled");
     assert!(turn_end.get("stop_reason").is_none());
 
-    let legacy_turn_end: AcpSessionEventPayload = serde_json::from_value(serde_json::json!({
-        "type": "turnEnd",
-        "stop_reason": "end_turn"
-    }))
-    .expect("read a pre-camelCase ACP event");
-    assert!(matches!(
-        legacy_turn_end,
-        AcpSessionEventPayload::TurnEnd { stop_reason } if stop_reason == "end_turn"
-    ));
+    assert!(
+        serde_json::from_value::<AcpSessionEventPayload>(serde_json::json!({
+            "type": "turnEnd",
+            "stop_reason": "end_turn"
+        }))
+        .is_err()
+    );
 
     let korean_context: AcpPromptContext = serde_json::from_value(serde_json::json!({
         "database": null,
@@ -292,7 +241,5 @@ pub(crate) fn assert_agent_event_wire_contract() {
     }))
     .expect("read the closed Agent response language");
     assert_eq!(korean_context.response_language, AgentResponseLanguage::Ko);
-    let legacy_context: AcpPromptContext =
-        serde_json::from_value(serde_json::json!({})).expect("read legacy Agent context");
-    assert_eq!(legacy_context.response_language, AgentResponseLanguage::En);
+    assert!(serde_json::from_value::<AcpPromptContext>(serde_json::json!({})).is_err());
 }

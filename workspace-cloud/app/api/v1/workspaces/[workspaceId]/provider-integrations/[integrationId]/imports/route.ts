@@ -43,19 +43,18 @@ export async function POST(request: Request, context: RouteContext) {
     );
   }
   const body = parsed.value as {
-    connectionId?: unknown;
     receipt?: unknown;
     idempotencyKey?: unknown;
     name?: unknown;
     productionApproved?: unknown;
   } | null;
   const name = importName(body?.name);
-  const connectionId = body?.connectionId === null || body?.connectionId === undefined
-    ? null
-    : body.connectionId;
+  const fields = ["receipt", "idempotencyKey", "name", "productionApproved"];
   if (
-    !body || typeof body.receipt !== "string" || !isUuid(body.receipt)
-    || (connectionId !== null && (typeof connectionId !== "string" || !isUuid(connectionId)))
+    !body
+    || Object.keys(body).length !== fields.length
+    || fields.some((field) => !Object.hasOwn(body, field))
+    || typeof body.receipt !== "string" || !isUuid(body.receipt)
     || typeof body.idempotencyKey !== "string"
     || !/^[A-Za-z0-9_-]{16,128}$/.test(body.idempotencyKey)
     || typeof body.productionApproved !== "boolean"
@@ -68,7 +67,6 @@ export async function POST(request: Request, context: RouteContext) {
     integrationId,
     receiptId: body.receipt,
     idempotencyKey: body.idempotencyKey,
-    connectionId,
     name,
     productionApproved: body.productionApproved,
     authority: {
@@ -89,5 +87,5 @@ export async function POST(request: Request, context: RouteContext) {
   }
   return privateJson({
     connection: publicConnection(result.connection, authorization.role, authorization.accessMode),
-  }, { status: connectionId ? 200 : 201 });
+  }, { status: 201 });
 }

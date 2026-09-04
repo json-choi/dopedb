@@ -328,7 +328,7 @@ pub(super) async fn verify_gcp_cloud_sql_policy(
 ) -> AppResult<()> {
     let sql = live.sql()?;
     let policy_pool = if access == ConnectionAccess::Schema {
-        &sql.write_pool
+        sql.rw()?
     } else {
         &sql.read_pool
     };

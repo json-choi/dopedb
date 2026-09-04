@@ -47,13 +47,9 @@ connection existence, revocation gate, runner capability, local credential, and
 local read-only policy. The internal revocation/lease epoch is not a content pin
 and must not invalidate an unchanged saved query.
 
-Version-1 Articles created before the content-pin contract stored that internal
-epoch in the connection pin column. The compatibility boundary recognizes those
-rows only from their immutable version-1 revision payload. It may resolve the
-current content revision only when the immutable current connection version was
-created before the Article revision; a later connection-content edit remains
-stale and fails closed. The resolved content revision, not the legacy epoch, is
-returned to Desktop and recorded in the new run receipt.
+Pre-MVP Article payloads that do not carry the current content revision are
+unsupported. They fail closed rather than inferring authority from an internal
+epoch or another historical field.
 
 The query executes only after an authenticated person explicitly requests a
 manual rerun in Desktop. There is no cron, signal-triggered run, publication run,
@@ -62,10 +58,7 @@ service may retain run metadata and audit receipts but is not a result warehouse
 Failure never erases the last recoverable successful local result.
 
 Saving creates the current shared workspace revision immediately. There is no separate
-draft/review/live workflow in the current product; those values survive only in old
-stored rows and, temporarily, in a bounded HTTP response adapter for supported older
-Desktop builds. They are projected away before entering the current domain DTO and do
-not control visibility or execution.
+draft/review/live workflow, and those fields are rejected at the contract boundary.
 
 ## HTML contract
 
@@ -93,13 +86,9 @@ The current product does not expose or create:
 - block/result selection, sensitivity confirmation, or a separate publication
   preview workflow.
 
-Existing version-1 definitions are read through a bounded compatibility adapter:
-the first saved query is retained and safe narrative content is converted to the
-HTML body. The original immutable revision payload remains available for audit,
-but editing writes the current simple definition. Legacy schedules and signals do
-not execute. Once production data has been migrated and verified, their dormant
-tables and compatibility parser may be removed in a separate data migration; they
-must not remain as hidden enabled product paths.
+Pre-MVP definitions, schedules, signals, result fragments, and lifecycle records are
+not read or retained. The current schema contains no compatibility parser or dormant
+automation tables.
 
 ## Agent and human ownership
 

@@ -12,7 +12,7 @@ use crate::error::{AppError, AppResult};
 use crate::features::agents::domain::{
     AcpSessionEvent, AcpSessionFocus, AcpSessionLifecycle, AcpSessionSummary, AgentProvider,
 };
-use crate::features::knowledge::domain::{KnowledgeSessionConnection, KnowledgeSessionScope};
+use crate::features::knowledge::domain::KnowledgeSessionScope;
 use crate::kernel::access::ActiveResourceScope;
 use crate::kernel::identity::{AcpSessionId, ConnectionId};
 
@@ -23,23 +23,6 @@ const MAX_PERSISTED_BYTES: i64 = 4 * 1024 * 1024;
 const MAX_EVENT_BYTES: usize = 512 * 1024;
 const MAX_PERSISTED_SESSIONS_PER_SCOPE: i64 = 100;
 const ACP_SESSION_METADATA_UNAVAILABLE: &str = "agent_session_metadata_unavailable";
-
-/// Local ACP snapshots written before connection content revisions were split
-/// from execution authority revisions omit the two hosted fields. This shape is
-/// intentionally private to the durable-store boundary so current domain and
-/// IPC inputs keep their strict schema.
-#[derive(serde::Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct PersistedKnowledgeSessionConnection {
-    connection_id: uuid::Uuid,
-    connection_revision: i64,
-    #[serde(default)]
-    remote_connection_id: Option<uuid::Uuid>,
-    #[serde(default)]
-    connection_content_revision: Option<i64>,
-    role: String,
-    alias: String,
-}
 
 impl Store {
     pub(crate) async fn recover_interrupted_agent_acp_sessions(&self) -> AppResult<()> {
@@ -296,11 +279,9 @@ where
     sqlx::query(
         "INSERT INTO agent_acp_sessions(
              id, connection_id, workspace_id, account_scope, provider, title,
-             lifecycle, acp_session_id, project_environment_id,
-             knowledge_grant_id, environment_revision, knowledge_sources, graph_revision_ids,
-             environment_connections, knowledge_scopes, write_connection_id,
+             lifecycle, acp_session_id, knowledge_scopes, write_connection_id,
              error, created_at, updated_at
-         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
          ON CONFLICT(id) DO UPDATE SET
              title = excluded.title,
              lifecycle = excluded.lifecycle,
@@ -317,22 +298,6 @@ where
     .bind(&summary.title)
     .bind(lifecycle_str(summary.lifecycle))
     .bind(&summary.acp_session_id)
-    .bind(
-        summary
-            .project_environment_id
-            .map(|value| value.to_string()),
-    )
-    .bind(summary.knowledge_grant_id.map(|value| value.to_string()))
-    .bind(
-        summary
-            .environment_revision
-            .map(i64::try_from)
-            .transpose()
-            .map_err(|_| AppError::Config("the ACP Environment revision is too large".into()))?,
-    )
-    .bind(serde_json::to_string(&summary.knowledge_sources)?)
-    .bind(serde_json::to_string(&summary.graph_revision_ids)?)
-    .bind(serde_json::to_string(&summary.environment_connections)?)
     .bind(serde_json::to_string(&summary.knowledge_scopes)?)
     .bind(summary.write_connection_id.map(|value| value.to_string()))
     .bind(&summary.error)
@@ -351,12 +316,6 @@ fn row_to_summary(row: &sqlx::sqlite::SqliteRow) -> AppResult<AcpSessionSummary>
         title: row.try_get("title")?,
         lifecycle: parse_lifecycle(row.try_get("lifecycle")?)?,
         acp_session_id: row.try_get("acp_session_id")?,
-        knowledge_grant_id: None,
-        project_environment_id: None,
-        environment_revision: None,
-        knowledge_sources: Vec::new(),
-        graph_revision_ids: Vec::new(),
-        environment_connections: Vec::new(),
         knowledge_scopes: Vec::new(),
         write_connection_id: None,
         error: row.try_get("error")?,
@@ -371,12 +330,6 @@ fn row_to_summary(row: &sqlx::sqlite::SqliteRow) -> AppResult<AcpSessionSummary>
         );
         summary.lifecycle = AcpSessionLifecycle::Failed;
         summary.acp_session_id = None;
-        summary.knowledge_grant_id = None;
-        summary.project_environment_id = None;
-        summary.environment_revision = None;
-        summary.knowledge_sources.clear();
-        summary.graph_revision_ids.clear();
-        summary.environment_connections.clear();
         summary.knowledge_scopes.clear();
         summary.write_connection_id = None;
         summary.error = Some(ACP_SESSION_METADATA_UNAVAILABLE.into());
@@ -388,30 +341,6 @@ fn hydrate_session_metadata(
     row: &sqlx::sqlite::SqliteRow,
     summary: &mut AcpSessionSummary,
 ) -> AppResult<()> {
-    summary.knowledge_grant_id = row
-        .try_get::<Option<String>, _>("knowledge_grant_id")?
-        .map(parse_uuid)
-        .transpose()?;
-    summary.project_environment_id = row
-        .try_get::<Option<String>, _>("project_environment_id")?
-        .map(parse_uuid)
-        .transpose()?;
-    summary.environment_revision = row
-        .try_get::<Option<i64>, _>("environment_revision")?
-        .map(|value| {
-            u64::try_from(value)
-                .map_err(|_| AppError::Config("invalid persisted ACP Environment revision".into()))
-        })
-        .transpose()?;
-    summary.knowledge_sources =
-        serde_json::from_str(&row.try_get::<String, _>("knowledge_sources")?)?;
-    summary.graph_revision_ids =
-        serde_json::from_str::<Vec<String>>(&row.try_get::<String, _>("graph_revision_ids")?)?
-            .into_iter()
-            .map(parse_uuid)
-            .collect::<AppResult<Vec<_>>>()?;
-    summary.environment_connections =
-        decode_environment_connections(&row.try_get::<String, _>("environment_connections")?)?;
     summary.knowledge_scopes = serde_json::from_str::<Vec<KnowledgeSessionScope>>(
         &row.try_get::<String, _>("knowledge_scopes")?,
     )?;
@@ -420,30 +349,6 @@ fn hydrate_session_metadata(
         .map(parse_uuid)
         .transpose()?;
     Ok(())
-}
-
-fn decode_environment_connections(value: &str) -> AppResult<Vec<KnowledgeSessionConnection>> {
-    serde_json::from_str::<Vec<PersistedKnowledgeSessionConnection>>(value)?
-        .into_iter()
-        .map(|connection| {
-            let connection_content_revision = connection
-                .connection_content_revision
-                .unwrap_or(connection.connection_revision);
-            if connection.connection_revision <= 0 || connection_content_revision <= 0 {
-                return Err(AppError::Config(
-                    "invalid persisted ACP connection revision".into(),
-                ));
-            }
-            Ok(KnowledgeSessionConnection {
-                connection_id: connection.connection_id,
-                connection_revision: connection.connection_revision,
-                remote_connection_id: connection.remote_connection_id,
-                connection_content_revision,
-                role: connection.role,
-                alias: connection.alias,
-            })
-        })
-        .collect()
 }
 
 fn row_to_event(

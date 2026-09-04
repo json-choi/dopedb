@@ -2,16 +2,10 @@
 
 use super::*;
 
-// Read compatibility for run rows created before Analysis became manual-only.
-// New requests below serialize the literal `manual` and cannot select these
-// retired trigger values.
 #[derive(Debug, Clone, Copy, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub(crate) enum HistoricalAnalysisRunTrigger {
+pub(crate) enum AnalysisRunTrigger {
     Manual,
-    Schedule,
-    Signal,
-    Publication,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -21,9 +15,8 @@ pub(crate) struct RemoteAnalysisRun {
     pub(crate) article_id: Uuid,
     pub(crate) article_revision: i64,
     pub(crate) runner_id: Uuid,
-    #[serde(default)]
-    pub(crate) runner_capability_generation: Option<u64>,
-    pub(crate) trigger: HistoricalAnalysisRunTrigger,
+    pub(crate) runner_capability_generation: u64,
+    pub(crate) trigger: AnalysisRunTrigger,
     pub(crate) state: AnalysisRunState,
     pub(crate) definition_hash: String,
     pub(crate) schema_fingerprints: BTreeMap<String, String>,
@@ -126,7 +119,7 @@ pub(crate) async fn start_analysis_run(
     validate_run(&body.run, input.article_id, Some(input.run_id))?;
     validate_article(&body.article, Some(input.article_id))?;
     if body.run.runner_id != input.runner_id
-        || body.run.runner_capability_generation != Some(input.runner_capability_generation)
+        || body.run.runner_capability_generation != input.runner_capability_generation
         || body.run.article_revision != input.article_revision
         || body.run.state != AnalysisRunState::Running
         || body.article.revision != input.article_revision

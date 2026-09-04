@@ -45,8 +45,7 @@ const NUMBERS: { key: keyof SafetySettings; label: I18nKey; hint: I18nKey }[] = 
 ];
 
 function sameSafetySettings(left: SafetySettings, right: SafetySettings) {
-  return left.requireApproval === right.requireApproval
-    && left.allowWrites === right.allowWrites
+  return left.allowWrites === right.allowWrites
     && left.allowSchemaChanges === right.allowSchemaChanges
     && left.wrapWritesInTx === right.wrapWritesInTx
     && left.explainPreview === right.explainPreview

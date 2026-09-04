@@ -12,7 +12,6 @@ import {
   knowledgeProject,
   knowledgeProjectEnvironment,
   workspaceAnalysisArticle,
-  workspaceAnalysisArticleConnection,
   workspaceAnalysisArticleRevision,
   workspaceAuditEvent,
   workspaceConnection,
@@ -35,7 +34,8 @@ export type StoredAnalysisArticle = Readonly<{
   id: string;
   projectEnvironmentId: string;
   environmentRevision: number;
-  sourceKnowledgeGrantId: string | null;
+  connectionId: string;
+  connectionRevision: number;
   definition: unknown;
   ownerMemberId: string;
   updatedByMemberId: string;
@@ -60,7 +60,7 @@ export function returnedAnalysisArticle(row: RawRow | undefined): StoredAnalysis
   const updatedAt = row.updatedAt instanceof Date ? row.updatedAt : new Date(String(row.updatedAt));
   if (typeof row.id !== "string" || typeof row.projectEnvironmentId !== "string"
     || environmentRevision === null || revision === null
-    || !(row.sourceKnowledgeGrantId === null || typeof row.sourceKnowledgeGrantId === "string")
+    || typeof row.connectionId !== "string" || safeRevision(row.connectionRevision) === null
     || typeof row.ownerMemberId !== "string" || typeof row.updatedByMemberId !== "string"
     || !(row.latestSuccessfulRunId === null || typeof row.latestSuccessfulRunId === "string")
     || Number.isNaN(createdAt.valueOf()) || Number.isNaN(updatedAt.valueOf())) return null;
@@ -68,7 +68,8 @@ export function returnedAnalysisArticle(row: RawRow | undefined): StoredAnalysis
     id: row.id,
     projectEnvironmentId: row.projectEnvironmentId,
     environmentRevision,
-    sourceKnowledgeGrantId: row.sourceKnowledgeGrantId as string | null,
+    connectionId: row.connectionId,
+    connectionRevision: safeRevision(row.connectionRevision)!,
     definition: row.definition,
     ownerMemberId: row.ownerMemberId,
     updatedByMemberId: row.updatedByMemberId,
@@ -84,7 +85,8 @@ function articleColumns() {
     article."id"::text AS "id",
     article."project_environment_id"::text AS "projectEnvironmentId",
     article."environment_revision" AS "environmentRevision",
-    article."source_knowledge_grant_id"::text AS "sourceKnowledgeGrantId",
+    article."connection_id"::text AS "connectionId",
+    article."connection_revision" AS "connectionRevision",
     article."definition" AS "definition",
     article."owner_member_id" AS "ownerMemberId",
     article."updated_by_member_id" AS "updatedByMemberId",
@@ -106,21 +108,11 @@ function memberLockKey(input: {
   });
 }
 
-function requestedConnections(article: SharedAnalysisArticleCreate) {
-  return article.connections.map((connection) => ({
-    connection_id: connection.connectionId,
-    connection_revision: connection.connectionRevision,
-    role: connection.role,
-    alias: connection.alias,
-  }));
-}
-
 export async function commitAnalysisArticleCreate(input: {
   organizationId: string;
   article: SharedAnalysisArticleCreate;
   authority: AnalysisArticleMutationAuthority;
 }): Promise<StoredAnalysisArticle | null> {
-  const connections = requestedConnections(input.article);
   const payload = analysisArticleVersionPayload({
     ...input.article,
     ownerMemberId: input.authority.membershipId,
@@ -153,25 +145,19 @@ export async function commitAnalysisArticleCreate(input: {
         AND member."revocation_pending_at" IS NULL
         AND member."revocation_claim_id" IS NULL
       FOR UPDATE OF session, member, project, environment
-    ), requested_connection AS MATERIALIZED (
-      SELECT * FROM jsonb_to_recordset(${JSON.stringify(connections)}::jsonb)
-        AS requested(connection_id uuid, connection_revision bigint, role text, alias text)
     ), connection_authority AS MATERIALIZED (
-      SELECT requested.connection_id
-      FROM requested_connection requested
-      JOIN ${knowledgeEnvironmentConnection} binding
+      SELECT connection."id"
+      FROM ${knowledgeEnvironmentConnection} binding
+      JOIN ${workspaceConnection} connection
         ON binding."organization_id" = ${input.organizationId}
        AND binding."project_environment_id" = ${input.article.projectEnvironmentId}::uuid
        AND binding."environment_revision" = ${input.article.environmentRevision}
-       AND binding."connection_id" = requested.connection_id
-       AND binding."role" = requested.role
-       AND binding."alias" = requested.alias
+       AND binding."connection_id" = ${input.article.connectionId}::uuid
        AND binding."revoked_at" IS NULL
-      JOIN ${workspaceConnection} connection
-       ON connection."organization_id" = binding."organization_id"
+       AND connection."organization_id" = binding."organization_id"
        AND connection."id" = binding."connection_id"
        AND connection."revision" = binding."connection_revision"
-       AND connection."content_revision" = requested.connection_revision
+       AND connection."content_revision" = ${input.article.connectionRevision}
        AND connection."deleted_at" IS NULL
        AND connection."revocation_pending_at" IS NULL
       JOIN ${workspaceConnectionGrant} connection_grant
@@ -184,25 +170,16 @@ export async function commitAnalysisArticleCreate(input: {
     ), inserted AS MATERIALIZED (
       INSERT INTO ${workspaceAnalysisArticle} AS inserted_article
         ("id", "organization_id", "project_environment_id", "environment_revision",
-         "source_knowledge_grant_id", "definition", "state", "owner_member_id",
-         "updated_by_member_id", "revision", "live_revision")
+         "connection_id", "connection_revision", "definition", "owner_member_id",
+         "updated_by_member_id", "revision")
       SELECT ${input.article.id}::uuid, ${input.organizationId},
         ${input.article.projectEnvironmentId}::uuid, ${input.article.environmentRevision},
-        ${input.article.sourceKnowledgeGrantId}::uuid,
-        ${JSON.stringify(input.article.definition)}::jsonb, 'live', authority."id",
-        authority."id", 1, 1
+        ${input.article.connectionId}::uuid, ${input.article.connectionRevision},
+        ${JSON.stringify(input.article.definition)}::jsonb, authority."id",
+        authority."id", 1
       FROM authority
       WHERE (SELECT count(*) FROM connection_authority) = 1
-        AND ${connections.length} = 1
       RETURNING inserted_article.*
-    ), inserted_connections AS MATERIALIZED (
-      INSERT INTO ${workspaceAnalysisArticleConnection}
-        ("organization_id", "article_id", "article_revision", "connection_id",
-         "connection_revision", "role", "alias")
-      SELECT ${input.organizationId}, inserted."id", inserted."revision", requested.connection_id,
-        requested.connection_revision, requested.role, requested.alias
-      FROM inserted CROSS JOIN requested_connection requested
-      RETURNING "article_id"
     ), revision AS MATERIALIZED (
       INSERT INTO ${workspaceAnalysisArticleRevision}
         ("organization_id", "article_id", "revision", "base_revision", "operation",
@@ -211,7 +188,6 @@ export async function commitAnalysisArticleCreate(input: {
         ${JSON.stringify(payload)}::jsonb, ${canonicalHash(payload)},
         ${input.authority.userId}, ${input.authority.membershipId}
       FROM inserted
-      WHERE (SELECT count(*) FROM inserted_connections) = 1
       RETURNING "article_id"
     ), audit AS MATERIALIZED (
       INSERT INTO ${workspaceAuditEvent}
@@ -222,7 +198,7 @@ export async function commitAnalysisArticleCreate(input: {
         jsonb_build_object(
           'environmentId', inserted."project_environment_id",
           'environmentRevision', inserted."environment_revision",
-          'connectionCount', 1,
+          'connectionId', inserted."connection_id",
           'queryCount', 1,
           'revision', 1
         ), ${requestId}::uuid
@@ -248,7 +224,6 @@ export async function commitAnalysisArticleMutation(input: {
   authority: AnalysisArticleMutationAuthority;
   operation: AnalysisArticleMutationOperation;
 }): Promise<StoredAnalysisArticle | null> {
-  const connections = requestedConnections(input.article);
   const payload = analysisArticleVersionPayload({
     ...input.article,
     ownerMemberId: input.ownerMemberId,
@@ -303,24 +278,19 @@ export async function commitAnalysisArticleMutation(input: {
         AND article."deleted_at" IS NULL
         AND (article."owner_member_id" = authority."id" OR authority."role" IN ('admin', 'owner'))
       FOR UPDATE OF article
-    ), requested_connection AS MATERIALIZED (
-      SELECT * FROM jsonb_to_recordset(${JSON.stringify(connections)}::jsonb)
-        AS requested(connection_id uuid, connection_revision bigint, role text, alias text)
     ), connection_authority AS MATERIALIZED (
-      SELECT requested.connection_id
-      FROM requested_connection requested
-      JOIN ${knowledgeEnvironmentConnection} binding
+      SELECT connection."id"
+      FROM ${knowledgeEnvironmentConnection} binding
+      JOIN ${workspaceConnection} connection
         ON binding."organization_id" = ${input.organizationId}
        AND binding."project_environment_id" = ${input.article.projectEnvironmentId}::uuid
        AND binding."environment_revision" = ${input.article.environmentRevision}
-       AND binding."connection_id" = requested.connection_id
-       AND binding."role" = requested.role AND binding."alias" = requested.alias
+       AND binding."connection_id" = ${input.article.connectionId}::uuid
        AND binding."revoked_at" IS NULL
-      JOIN ${workspaceConnection} connection
-       ON connection."organization_id" = binding."organization_id"
+       AND connection."organization_id" = binding."organization_id"
        AND connection."id" = binding."connection_id"
        AND connection."revision" = binding."connection_revision"
-       AND connection."content_revision" = requested.connection_revision
+       AND connection."content_revision" = ${input.article.connectionRevision}
        AND connection."deleted_at" IS NULL AND connection."revocation_pending_at" IS NULL
       JOIN ${workspaceConnectionGrant} connection_grant
         ON connection_grant."organization_id" = connection."organization_id"
@@ -333,13 +303,12 @@ export async function commitAnalysisArticleMutation(input: {
       UPDATE ${workspaceAnalysisArticle} article
       SET "project_environment_id" = ${input.article.projectEnvironmentId}::uuid,
         "environment_revision" = ${input.article.environmentRevision},
-        "source_knowledge_grant_id" = ${input.article.sourceKnowledgeGrantId}::uuid,
+        "connection_id" = ${input.article.connectionId}::uuid,
+        "connection_revision" = ${input.article.connectionRevision},
         "definition" = ${JSON.stringify(input.article.definition)}::jsonb,
-        "state" = 'live', "owner_member_id" = ${input.ownerMemberId},
+        "owner_member_id" = ${input.ownerMemberId},
         "updated_by_member_id" = ${input.authority.membershipId},
         "revision" = article."revision" + 1, "updated_at" = now(),
-        "live_revision" = article."revision" + 1,
-        "live_run_id" = NULL,
         -- Every mutation creates a new immutable Article revision. A run from
         -- the previous revision must never authorize a public HTML publication.
         "latest_successful_run_id" = NULL,
@@ -348,16 +317,7 @@ export async function commitAnalysisArticleMutation(input: {
       WHERE article."organization_id" = current."organization_id"
         AND article."id" = current."id"
         AND (SELECT count(*) FROM connection_authority) = 1
-        AND ${connections.length} = 1
       RETURNING article.*
-    ), inserted_connections AS MATERIALIZED (
-      INSERT INTO ${workspaceAnalysisArticleConnection}
-        ("organization_id", "article_id", "article_revision", "connection_id",
-         "connection_revision", "role", "alias")
-      SELECT ${input.organizationId}, updated."id", updated."revision", requested.connection_id,
-        requested.connection_revision, requested.role, requested.alias
-      FROM updated CROSS JOIN requested_connection requested
-      RETURNING "article_id"
     ), revision AS MATERIALIZED (
       INSERT INTO ${workspaceAnalysisArticleRevision}
         ("organization_id", "article_id", "revision", "base_revision", "operation",
@@ -366,7 +326,6 @@ export async function commitAnalysisArticleMutation(input: {
         ${input.operation}, ${JSON.stringify(payload)}::jsonb, ${canonicalHash(payload)},
         ${input.authority.userId}, ${input.authority.membershipId}
       FROM updated
-      WHERE (SELECT count(*) FROM inserted_connections) = 1
       RETURNING "article_id"
     ), audit AS MATERIALIZED (
       INSERT INTO ${workspaceAuditEvent}
@@ -378,7 +337,7 @@ export async function commitAnalysisArticleMutation(input: {
           'environmentId', updated."project_environment_id",
           'revision', updated."revision",
           'ownerMemberId', updated."owner_member_id",
-          'connectionCount', 1
+          'connectionId', updated."connection_id"
         ), ${requestId}::uuid
       FROM updated JOIN revision ON revision."article_id" = updated."id"
       RETURNING "resource_id"
@@ -398,7 +357,7 @@ export async function commitAnalysisArticleMutation(input: {
  * Deletion is a workspace cleanup action, not a database execution. It keeps
  * optimistic Article ownership and session checks atomic while deliberately
  * avoiding Environment, connection, Knowledge, mapping, and runner authority.
- * Otherwise a revoked or legacy source could make an orphaned Article
+ * Otherwise a revoked source could make an orphaned Article
  * impossible for its owner or a workspace administrator to remove.
  */
 export async function commitAnalysisArticleDelete(input: {
@@ -449,8 +408,7 @@ export async function commitAnalysisArticleDelete(input: {
       FOR UPDATE OF article
     ), updated AS MATERIALIZED (
       UPDATE ${workspaceAnalysisArticle} article
-      SET "state" = 'archived',
-        "updated_by_member_id" = authority."id",
+      SET "updated_by_member_id" = authority."id",
         "revision" = article."revision" + 1,
         "latest_successful_run_id" = NULL,
         "deleted_at" = now(),

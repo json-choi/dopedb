@@ -4,7 +4,6 @@
 export type SettingsSection =
   | "agent-tools"
   | "advanced"
-  | "archive"
   | "cli"
   | "privacy"
   | "safety"

@@ -102,39 +102,6 @@ export interface SkillSelfTestReceipt {
   guideBytes: number;
 }
 
-// Manual contract outside issue #10's generated boundary (retired MCP cleanup).
-export type LegacyMcpCleanupState = "absent" | "ready" | "manual_review";
-
-export interface LegacyMcpCleanupTarget {
-  id: string;
-  displayName: string;
-  path: string;
-  state: LegacyMcpCleanupState;
-  fingerprint: string | null;
-  redactedDiff: string | null;
-  reason: string | null;
-}
-
-export interface LegacyMcpCleanupStatus {
-  targets: LegacyMcpCleanupTarget[];
-}
-
-export interface LegacyMcpCleanupExpectation {
-  id: string;
-  fingerprint: string;
-}
-
-export interface LegacyMcpCleanupBackup {
-  targetId: string;
-  path: string;
-}
-
-export interface LegacyMcpCleanupReceipt {
-  removedTargetIds: string[];
-  backups: LegacyMcpCleanupBackup[];
-  status: LegacyMcpCleanupStatus;
-}
-
 // Shared Operation projections used by feature-owned SQL, document, script, and
 // monitoring adapters. SQL appears only in the proposal request, never run.
 export type { OperationState } from "./generated/protocol-contracts";

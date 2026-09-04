@@ -47,24 +47,21 @@ export async function runAnalysisMemberRemovalScenarios(
     await tx`
       INSERT INTO "workspace_control"."workspace_analysis_runner"
         ("id", "organization_id", "member_id", "device_id", "display_name",
-         "runner_capability_hash", "runner_capability_generation", "background_allowed")
+         "runner_capability_hash", "runner_capability_generation")
       VALUES (${runnerId}::uuid, ${organizationId}, ${removableMemberId},
               ${`removable-runner-${suffix}`}, 'Removable foreground runner',
-              ${runnerCapabilityHash}, 1, FALSE)
+              ${runnerCapabilityHash}, 1)
     `;
     await tx`
       INSERT INTO "workspace_control"."workspace_analysis_article_run"
         ("id", "organization_id", "article_id", "article_revision", "runner_id",
-         "runner_capability_generation", "lease_id", "requested_by_member_id", "trigger",
-         "state", "parameter_values", "parameter_hash", "definition_hash", "started_at",
-         "finished_at")
+         "runner_capability_generation", "requested_by_member_id", "state",
+         "definition_hash", "started_at", "finished_at")
       VALUES (${activeRunId}::uuid, ${organizationId}, ${articleId}::uuid, 2,
-              ${runnerId}::uuid, 1, NULL, ${removableMemberId}, 'manual', 'running',
-              '{}'::jsonb, ${versioning.canonicalHash({})},
+              ${runnerId}::uuid, 1, ${removableMemberId}, 'running',
               ${versioning.canonicalHash(revisedArticle.definition)}, now(), NULL),
              (${historicalRunId}::uuid, ${organizationId}, ${articleId}::uuid, 2,
-              ${runnerId}::uuid, 1, NULL, ${removableMemberId}, 'manual', 'succeeded',
-              '{}'::jsonb, ${versioning.canonicalHash({})},
+              ${runnerId}::uuid, 1, ${removableMemberId}, 'succeeded',
               ${versioning.canonicalHash(revisedArticle.definition)}, now(), now())
     `;
     await tx`
@@ -115,7 +112,6 @@ export async function runAnalysisMemberRemovalScenarios(
     memberPresent: boolean;
     runnerMemberId: string | null;
     runnerRevoked: boolean;
-    runnerBackgroundAllowed: boolean;
     activeState: string;
     activeReceipts: number;
     activeRequester: string | null;
@@ -134,7 +130,6 @@ export async function runAnalysisMemberRemovalScenarios(
                 AND "organization_id" = ${organizationId}) AS "memberPresent",
       runner."member_id" AS "runnerMemberId",
       runner."revoked_at" IS NOT NULL AS "runnerRevoked",
-      runner."background_allowed" AS "runnerBackgroundAllowed",
       active_run."state" AS "activeState",
       (SELECT count(*)::int
        FROM "workspace_control"."workspace_analysis_article_query_receipt" receipt
@@ -171,7 +166,6 @@ export async function runAnalysisMemberRemovalScenarios(
     memberPresent: false,
     runnerMemberId: null,
     runnerRevoked: true,
-    runnerBackgroundAllowed: false,
     activeState: "stale",
     activeReceipts: 0,
     activeRequester: null,

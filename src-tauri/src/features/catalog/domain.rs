@@ -1,8 +1,7 @@
 //! Catalog wire values and read policy.
 //!
 //! These values stay independent from Tauri, SQLx, connection pools, and the
-//! introspection implementation. Serde defaults preserve the versioned cache and IPC
-//! contract.
+//! introspection implementation. Current IPC values use one exact shape.
 
 use serde::{Deserialize, Serialize};
 
@@ -68,10 +67,8 @@ pub struct CatalogOverviewRelation {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CatalogOverview {
-    /// Exact target database used for this overview. Older cache-era payloads omit
-    /// it and are interpreted by the caller as the connection's configured default.
-    #[serde(default)]
-    pub database: Option<String>,
+    /// Exact target database used for this overview.
+    pub database: String,
     /// Namespaces visible inside the profile's configured database. This list is
     /// independent of relations so empty PostgreSQL schemas remain selectable.
     #[serde(default)]

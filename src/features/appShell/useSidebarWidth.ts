@@ -8,8 +8,6 @@ const EXPLORER_MIN = 180;
 const LOCAL_HISTORY_MIN = 300;
 const MAX = 520;
 const VIEWPORT_RATIO = 0.4;
-const LEGACY_EXPLORER_DEFAULT_WIDTHS = new Set([240, 304, 384]);
-const LEGACY_LOCAL_HISTORY_DEFAULT_WIDTHS = new Set([360, 456]);
 export const DEFAULT_SIDEBAR_WIDTH = 396;
 export const DEFAULT_LOCAL_HISTORY_WIDTH = 459;
 
@@ -31,31 +29,12 @@ function storageKey(kind: SidebarKind) {
     : EXPLORER_STORAGE_KEY;
 }
 
-function defaultMigrationKey(kind: SidebarKind) {
-  return `dopedb:${kind}-default:v3`;
-}
-
-function legacyDefaultWidths(kind: SidebarKind) {
-  return kind === "localHistory"
-    ? LEGACY_LOCAL_HISTORY_DEFAULT_WIDTHS
-    : LEGACY_EXPLORER_DEFAULT_WIDTHS;
-}
-
 function clamp(kind: SidebarKind, width: number) {
   return Math.min(MAX, Math.max(minimum(kind), width));
 }
 
 function readWidth(kind: SidebarKind) {
   const saved = Number(localStorage.getItem(storageKey(kind)));
-  const migrationKey = defaultMigrationKey(kind);
-  if (localStorage.getItem(migrationKey) !== "1") {
-    localStorage.setItem(migrationKey, "1");
-    if (legacyDefaultWidths(kind).has(saved)) {
-      const next = defaultWidth(kind);
-      localStorage.setItem(storageKey(kind), String(next));
-      return next;
-    }
-  }
   return saved >= minimum(kind) && saved <= MAX
     ? saved
     : defaultWidth(kind);

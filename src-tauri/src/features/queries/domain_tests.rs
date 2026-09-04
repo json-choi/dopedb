@@ -3,10 +3,7 @@ use std::collections::HashMap;
 use chrono::Utc;
 use uuid::Uuid;
 
-use super::domain::{
-    planning_guidance, project_query_service_session_snapshot,
-    validate_query_service_session_snapshot,
-};
+use super::domain::{planning_guidance, validate_query_service_session_snapshot};
 use crate::executor::namespace::{postgres_search_path_statement, resolve_sql_namespace};
 use crate::model::{
     ConnectionProfile, Engine, Provider, WorkspaceConnectionAccess, WorkspaceCredentialMode,
@@ -81,7 +78,7 @@ async fn query_and_skill_security_contracts_stay_fail_closed() {
 
     let connection_id = Uuid::new_v4();
     let services_snapshot = serde_json::json!({
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "id": "document-1:1",
         "documentId": "document-1",
         "connectionId": connection_id,
@@ -102,46 +99,6 @@ async fn query_and_skill_security_contracts_stay_fail_closed() {
     let mut running_snapshot = services_snapshot;
     running_snapshot["status"] = serde_json::json!("running");
     assert!(validate_query_service_session_snapshot(running_snapshot).is_err());
-
-    let legacy_stream = serde_json::json!({
-        "schemaVersion": 1,
-        "id": "document-1:legacy",
-        "documentId": "document-1",
-        "connectionId": connection_id,
-        "connectionName": "Fixture",
-        "consoleTitle": "Legacy",
-        "database": "app",
-        "namespace": "public",
-        "sql": "SELECT secret_value",
-        "startedAt": "2026-01-01T00:00:00Z",
-        "startedLabel": "00:00:00",
-        "updatedAt": 2,
-        "status": "completed",
-        "result": {
-            "kind": "stream",
-            "sql": "SELECT secret_value",
-            "stream": {"rowSource": {"chunkIndex": {"chunks": [{"rows": [["row-secret"]]}]}}},
-            "maxRows": 1000
-        }
-    });
-    let mut legacy_cancelled = legacy_stream.clone();
-    legacy_cancelled["status"] = serde_json::json!("cancelled");
-    let (projected, migrated) = project_query_service_session_snapshot(legacy_stream);
-    assert!(migrated);
-    assert_eq!(projected["schemaVersion"], 2);
-    assert_eq!(projected["result"]["kind"], "unavailable");
-    assert_eq!(projected["result"]["reason"], "legacyResultFormat");
-    assert!(!serde_json::to_string(&projected)
-        .unwrap()
-        .contains("row-secret"));
-    let (cancelled, migrated) = project_query_service_session_snapshot(legacy_cancelled);
-    assert!(migrated);
-    assert_eq!(cancelled["schemaVersion"], 2);
-    assert_eq!(cancelled["status"], "cancelled");
-    assert_eq!(cancelled["result"]["kind"], "none");
-    assert!(!serde_json::to_string(&cancelled)
-        .unwrap()
-        .contains("row-secret"));
 
     #[cfg(not(feature = "packaged-benchmark"))]
     crate::app_paths::assert_application_data_root_contract();

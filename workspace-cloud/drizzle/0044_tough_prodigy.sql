@@ -1,2 +1,0 @@
-ALTER TABLE "workspace_control"."workspace_analysis_article" ADD COLUMN "next_refresh_at" timestamp with time zone;--> statement-breakpoint
-CREATE INDEX "workspace_analysis_article_refresh_due_idx" ON "workspace_control"."workspace_analysis_article" USING btree ("organization_id","next_refresh_at");

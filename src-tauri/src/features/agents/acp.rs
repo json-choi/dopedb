@@ -48,7 +48,7 @@ use crate::store::Store;
 
 pub(crate) use desktop::DesktopAcpRuntimePorts;
 use event_sink::SharedAcpSessionEventSink;
-pub(crate) use knowledge_scope::{narrow_knowledge_scope, narrow_resource_scope};
+pub(crate) use knowledge_scope::narrow_resource_scope;
 use knowledge_scope::{AcpKnowledgeScopePort, FeatureKnowledgeScopePort};
 use persistence::{
     AcpSessionPersistencePort, PersistenceCommand, PersistenceRequest, PersistenceTracker,
@@ -91,9 +91,7 @@ pub(crate) struct AcpRuntime {
 
 #[derive(Clone, Default)]
 pub(crate) struct AcpResourceRequest {
-    pub(crate) project_environment_id: Option<Uuid>,
-    pub(crate) environment_connection_ids: Option<Vec<Uuid>>,
-    pub(crate) resource_scopes: Option<Vec<AgentResourceScopeSelection>>,
+    pub(crate) resource_scopes: Vec<AgentResourceScopeSelection>,
     pub(crate) write_connection_id: Option<Uuid>,
 }
 

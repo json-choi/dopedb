@@ -519,7 +519,7 @@ export async function inspectNeonBootstrap(input: {
         "SELECT current_setting('server_version_num')::integer AS version",
       );
       const membershipOptionsSupported = Number(version?.version) >= 160_000;
-      const legacyMembershipRows = membershipOptionsSupported
+      const pre16MembershipRows = membershipOptionsSupported
         ? []
         : await sql.query(
           "SELECT count(*)::integer AS member_count FROM pg_auth_members membership "
@@ -553,7 +553,7 @@ export async function inspectNeonBootstrap(input: {
       const grantCount = Number(membership?.grant_count ?? 0);
       const inactive = membershipOptionsSupported
         ? grantCount === 0 && unexpectedMembers.length === 0
-        : Number(legacyMembershipRows[0]?.member_count ?? 0) === 0;
+        : Number(pre16MembershipRows[0]?.member_count ?? 0) === 0;
       const active = membershipOptionsSupported
         && unexpectedMembers.length === 0
         && ownerMembershipRows.length === 1
