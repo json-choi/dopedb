@@ -8,8 +8,8 @@ import { CheckboxField } from "../../design-system/components/FormControls";
 import {
   ModalBackdrop,
   ModalFooter,
+  ModalHeader,
   ModalSurface,
-  ModalTitleBar,
 } from "../../design-system/components/Modal";
 import { ProgressBar } from "../../design-system/components/Progress";
 import { StatusBadge } from "../../design-system/components/Status";
@@ -151,12 +151,9 @@ export default function SkillStartupGate() {
         onRequestClose={saveForLater}
         dismissible={busy === null}
       >
-        <ModalTitleBar
+        <ModalHeader
           title={t("agentTools.startupTitle")}
           titleId="agent-startup-title"
-          closeLabel={t("common.close")}
-          onClose={saveForLater}
-          closeDisabled={busy !== null}
         />
         <div className="tw:min-h-0 tw:flex-1 tw:overflow-auto tw:px-5 tw:py-5">
           <div className="tw:flex tw:items-start tw:gap-3">

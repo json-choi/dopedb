@@ -13,6 +13,14 @@ export type ProjectEnvironmentResource<T> = {
 
 export type ProjectDatabaseOrderPlacement = "before" | "after";
 
+export type ProjectDatabaseBlockPosition = {
+  firstBindingId: string;
+  lastBindingId: string;
+  connectionIds: readonly string[];
+  previousBlockBindingId: string | null;
+  nextBlockBindingId: string | null;
+};
+
 const ENVIRONMENT_RISK_ORDER: Record<KnowledgeEnvironment["riskClass"], number> = {
   production: 0,
   staging: 1,
@@ -251,17 +259,34 @@ export function orderProjectDatabaseResources<T extends ProjectDatabaseResource>
 export function projectDatabaseBlockBounds<T extends ProjectDatabaseResource>(
   orderedRows: readonly ProjectEnvironmentResource<T>[],
   connections: readonly ConnectionProfile[],
-): Map<string, { firstBindingId: string; lastBindingId: string }> {
-  const result = new Map<
-    string,
-    { firstBindingId: string; lastBindingId: string }
-  >();
-  for (const block of projectDatabaseBlocks(orderedRows, connections)) {
+): Map<string, ProjectDatabaseBlockPosition> {
+  const result = new Map<string, ProjectDatabaseBlockPosition>();
+  const blocks = projectDatabaseBlocks(orderedRows, connections);
+  for (const [index, block] of blocks.entries()) {
     const firstBindingId = block.rows[0]?.resource.id;
     const lastBindingId = block.rows[block.rows.length - 1]?.resource.id;
     if (!firstBindingId || !lastBindingId) continue;
+    const connectionIds = Array.from(
+      new Set(
+        block.rows.flatMap(({ resource }) =>
+          resource.connectionId ? [resource.connectionId] : [],
+        ),
+      ),
+    );
+    const previousBlock = blocks[index - 1];
+    const nextBlock = blocks[index + 1];
+    const previousBlockBindingId =
+      previousBlock?.rows[0]?.resource.id ?? null;
+    const nextBlockBindingId =
+      nextBlock?.rows[nextBlock.rows.length - 1]?.resource.id ?? null;
     for (const { resource } of block.rows) {
-      result.set(resource.id, { firstBindingId, lastBindingId });
+      result.set(resource.id, {
+        firstBindingId,
+        lastBindingId,
+        connectionIds,
+        previousBlockBindingId,
+        nextBlockBindingId,
+      });
     }
   }
   return result;

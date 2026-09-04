@@ -52,10 +52,12 @@ DopeDB의 제품 축, 실제 사용자 작업, 접근성, 운영 안전성, 지�
   필터와 Article 선택도 Explorer가 소유하며, 중앙 Analysis document는 선택한
   Article만 표시하고 별도의 collection
   rail을 만들지 않는다.
-  Project의 `Databases` 목록은 행 pointer drag로 구성원별 표시 순서를 바꿀 수 있지만
+  Project의 `Databases` 목록은 행 pointer drag, 행 메뉴, 또는
+  `Option/Alt+위/아래 화살표`로 구성원별 표시 순서를 바꿀 수 있지만
   Project·Environment binding 자체는 변경하지 않는다. 같은 schema group은 하나의
   연속된 이동 블록으로 유지하며 블록 안에서는 production, staging, development,
-  test/custom 순서로 표시한다.
+  test/custom 순서로 표시한다. pointer preview와 이동 완료 안내도 블록 전체를
+  하나의 대상으로 표현한다.
 - Project의 `Databases +`에서 시작한 PostgreSQL, MySQL, SQLite, MongoDB,
   BigQuery 연결은 저장 성공과 같은 흐름에서 그 Project의 현재 preferred exact
   Environment에 binding한다. 연결만 만들고 `Unassigned`에 남기는 중간 상태를
@@ -115,7 +117,8 @@ DopeDB의 제품 축, 실제 사용자 작업, 접근성, 운영 안전성, 지�
 - Action Search는 672px 이하의 non-modal surface다. 빈 질의는 scope와 input만
   보이고, Database·Documents·Actions·Settings처럼 실제 결과가 있는 범주만 둔다.
 - popup, menu, modal은 viewport collision, keyboard 이동, focus containment와
-  trigger 복구를 책임진다.
+  trigger 복구를 책임진다. 앱 내부 modal은 native 창처럼 보이는 drag header나
+  `X`를 만들지 않고 footer의 명시적인 취소·닫기·완료 action으로 종료한다.
 - data grid의 header/row/row number는 28px, 기본 column은 144px을 기준으로 한다.
   virtualization 여부와 무관하게 selection, resize, sort, filter 계약은 같다.
 - 사용자가 편집기에서 작성한 SQL은 Run 동작 자체를 exact payload 승인으로 사용해

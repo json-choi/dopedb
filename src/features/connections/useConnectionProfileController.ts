@@ -13,9 +13,7 @@ import {
   deleteWorkspaceConnection,
   updateWorkspaceConnection,
 } from "../workspaces/tauriAdapter";
-import {
-  type ConnectionTab,
-} from "./connectionEditorModel";
+import type { ConnectionTab } from "./connectionEditorModel";
 import {
   connectionTestFailureRecovery,
   connectionTestFailureTarget,
@@ -152,7 +150,7 @@ export function useConnectionProfileController({
     });
   }
   const validation = {
-    name: fieldValidation("connection-name"),
+    name: form.nameInteracted ? fieldValidation("connection-name") : undefined,
     driver: fieldValidation("connection-driver"),
     host: fieldValidation("connection-host"),
     port: fieldValidation("connection-port"),
@@ -466,6 +464,7 @@ export function useConnectionProfileController({
       },
       bigQuery,
       validation,
+      revealNameValidation: form.revealNameValidation,
     },
     problems: {
       items: problemItems,

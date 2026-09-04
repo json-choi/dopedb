@@ -3,8 +3,8 @@ import { Button } from "../../design-system/components/Button";
 import {
   ModalBackdrop,
   ModalFooter,
+  ModalHeader,
   ModalSurface,
-  ModalTitleBar,
 } from "../../design-system/components/Modal";
 import { LoadingLabel } from "../../design-system/components/Status";
 import { useTableDdl } from "../../features/catalog/useTableDdl";
@@ -36,13 +36,11 @@ export default function DdlModal({
         aria-busy={text == null && !error}
         onRequestClose={onClose}
       >
-        <ModalTitleBar
+        <ModalHeader
           title={t("connections.ddlTitle", {
             table: tableLabel(connection.engine, table),
           })}
           titleId="ddl-dialog-title"
-          closeLabel={t("common.close")}
-          onClose={onClose}
         />
         <div className="tw:min-h-[280px] tw:min-w-0 tw:flex-1 tw:overflow-auto tw:bg-background tw:p-3">
           {error ? (

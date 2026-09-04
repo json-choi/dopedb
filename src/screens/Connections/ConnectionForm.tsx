@@ -2,8 +2,8 @@
 // workflow; this screen only composes grouped presentation models.
 import {
   ModalBackdrop,
+  ModalHeader,
   ModalSurface,
-  ModalTitleBar,
 } from "../../design-system/components/Modal";
 import {
   useConnectionEditorController,
@@ -54,12 +54,9 @@ export function ConnectionForm(props: ConnectionEditorProps) {
             }
           }}
         >
-          <ModalTitleBar
+          <ModalHeader
             title={t("connections.dataSourcesAndDrivers")}
             titleId="connection-editor-title"
-            closeLabel={t("common.close")}
-            onClose={() => void commands.cancel()}
-            closeDisabled={commands.busy}
           />
 
           <div className="tw:flex tw:min-h-0 tw:flex-1 tw:@max-[760px]:flex-col">

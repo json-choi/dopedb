@@ -107,6 +107,13 @@ export const connectionsCatalog = defineCatalog(
     "connections.environmentRiskCustom": "Custom",
     "connections.projectSetupNextStep":
       "After creation, add databases and source code inside this Environment.",
+    "connections.projectDatabaseCount": "{count} databases",
+    "connections.projectDatabaseMoveDown": "Move down",
+    "connections.projectDatabaseMoveUp": "Move up",
+    "connections.projectDatabaseOrderUpdated":
+      "Moved {item} to position {position} of {total}.",
+    "connections.projectDatabaseReorderHint":
+      "Drag to reorder. For keyboard control, use Option/Alt+Up or Option/Alt+Down, or open Connection actions.",
     "connections.environmentAddDatabase": "Add database…",
     "connections.environmentAddSource": "Add data source…",
     "connections.environmentAnalysisLoadFailed":
@@ -547,6 +554,13 @@ export const connectionsCatalog = defineCatalog(
     "connections.environmentRiskCustom": "사용자 지정",
     "connections.projectSetupNextStep":
       "만든 다음 이 환경 안에 데이터베이스와 소스 코드를 추가합니다.",
+    "connections.projectDatabaseCount": "데이터베이스 {count}개",
+    "connections.projectDatabaseMoveDown": "아래로 이동",
+    "connections.projectDatabaseMoveUp": "위로 이동",
+    "connections.projectDatabaseOrderUpdated":
+      "{item}을(를) {total}개 중 {position}번째로 옮겼습니다.",
+    "connections.projectDatabaseReorderHint":
+      "드래그해 순서를 바꿉니다. 키보드는 Option/Alt+위/아래 화살표 또는 연결 메뉴를 사용하세요.",
     "connections.environmentAddDatabase": "데이터베이스 추가…",
     "connections.environmentAddSource": "데이터 소스 추가…",
     "connections.environmentAnalysisLoadFailed":

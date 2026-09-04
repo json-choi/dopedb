@@ -50,6 +50,7 @@ export function useConnectionProfileState({
   });
   const [isNew, setIsNew] = useState(initial === null);
   const [persisted, setPersisted] = useState(initial !== null);
+  const [nameInteracted, setNameInteracted] = useState(initial !== null);
   const [password, setPassword] = useState("");
   const [portDraft, setPortDraftState] = useState(() => String(form.port));
   const [connectionInputMode, setConnectionInputMode] =
@@ -84,6 +85,7 @@ export function useConnectionProfileState({
     key: K,
     value: ConnectionProfile[K],
   ) {
+    if (key === "name") setNameInteracted(true);
     setForm((current) => ({ ...current, [key]: value }));
   }
 
@@ -295,6 +297,8 @@ export function useConnectionProfileState({
       value: form,
       setValue: setForm,
       set,
+      nameInteracted,
+      revealNameValidation: () => setNameInteracted(true),
       portDraft,
       setPortDraft,
       flags,

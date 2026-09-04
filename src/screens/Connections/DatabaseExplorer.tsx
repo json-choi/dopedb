@@ -316,7 +316,7 @@ export function DatabaseExplorer({
   });
   const {
     groupByConnectionId,
-    draggingId,
+    draggingIds,
     dropTarget,
     dragPreview,
     suppressClickRef,
@@ -432,6 +432,9 @@ export function DatabaseExplorer({
     binding?: EnvironmentConnection,
   ) {
     const schemaGroup = groupByConnectionId.get(connection.id);
+    const databaseOrder = binding
+      ? projectDatabaseOrder.dragContext(binding)
+      : undefined;
     const openConnectionSchemaDiff =
       schemaGroup && schemaGroup.connections.length > 1
         ? () => {
@@ -447,15 +450,13 @@ export function DatabaseExplorer({
         connection={connection}
         environmentBadge={environmentBadge}
         environmentDropId={environmentDropId}
-        projectDatabaseOrder={
-          binding ? projectDatabaseOrder.dragContext(binding) : undefined
-        }
+        projectDatabaseOrder={databaseOrder}
         treeKey={treeKey}
         nested={nested}
         selected={connection.id === selectedId}
         selectedTableKey={selectedTableKey}
         expanded={open.has(connection.id) || globalFilter.trim().length > 0}
-        draggingId={draggingId}
+        draggingIds={draggingIds}
         dropTarget={dropTarget}
         suppressClickRef={suppressClickRef}
         openMenuId={openMenuId}
@@ -489,6 +490,11 @@ export function DatabaseExplorer({
         onPointerMove={pointerMoveConnection}
         onPointerUp={pointerUpConnection}
         onPointerCancel={pointerCancelConnection}
+        onMoveProjectDatabase={
+          databaseOrder
+            ? (direction) => projectDatabaseOrder.move(databaseOrder, direction)
+            : undefined
+        }
         onToggleOpen={() => toggleOpen(connection.id)}
         onSelect={() => onSelectConn(connection.id)}
         onEdit={() => onEdit(connection)}
@@ -771,6 +777,7 @@ export function DatabaseExplorer({
         projectSetupOpen={projectSetupOpen}
         environmentSetupProjectId={environmentSetupProjectId}
         dragPreview={dragPreview}
+        orderAnnouncement={projectDatabaseOrder.announcement}
         connections={connections}
         ddlDialog={ddlDialog}
         workspaceDialog={workspaceDialog}

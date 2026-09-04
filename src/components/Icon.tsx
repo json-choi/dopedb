@@ -29,6 +29,16 @@ const glyphs = {
       <circle cx="19" cy="12" r="1.5" fill="currentColor" stroke="none" />
     </>
   ),
+  gripVertical: (
+    <>
+      <circle cx="9" cy="5" r="1" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="5" r="1" fill="currentColor" stroke="none" />
+      <circle cx="9" cy="12" r="1" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="12" r="1" fill="currentColor" stroke="none" />
+      <circle cx="9" cy="19" r="1" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="19" r="1" fill="currentColor" stroke="none" />
+    </>
+  ),
   search: (
     <>
       <circle cx="11" cy="11" r="8" />

@@ -5,8 +5,8 @@ import { Button } from "../../design-system/components/Button";
 import {
   ModalBackdrop,
   ModalFooter,
+  ModalHeader,
   ModalSurface,
-  ModalTitleBar,
 } from "../../design-system/components/Modal";
 import { InlineNotice, LoadingLabel } from "../../design-system/components/Status";
 import { useI18n } from "../../lib/i18n";
@@ -39,12 +39,9 @@ export function ExternalAgentUnavailableDialog({
         dismissible={!submitting}
         onRequestClose={onReject}
       >
-        <ModalTitleBar
+        <ModalHeader
           title={t("agent.externalRequestTitle")}
           titleId="external-agent-unavailable-title"
-          closeLabel={t("common.close")}
-          closeDisabled={submitting}
-          onClose={onReject}
         />
         <div className="tw:grid tw:gap-3 tw:p-5">
           <InlineNotice tone="danger" icon="alert" role="alert">
@@ -99,16 +96,13 @@ export function ExternalAgentRequestDialog({
         dismissible={!submitting}
         onRequestClose={onReject}
       >
-        <ModalTitleBar
+        <ModalHeader
           title={
             request.kind === "configure"
               ? t("agent.externalConfigureTitle")
               : t("agent.externalStartTitle")
           }
           titleId="external-agent-request-title"
-          closeLabel={t("common.close")}
-          closeDisabled={submitting}
-          onClose={onReject}
         />
         <div className="tw:grid tw:min-h-0 tw:flex-1 tw:grid-cols-[minmax(0,1fr)_minmax(260px,0.42fr)] tw:overflow-hidden tw:max-[760px]:grid-cols-1">
           <div className="tw:min-h-0 tw:overflow-auto tw:p-5">

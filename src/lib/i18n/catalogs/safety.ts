@@ -41,6 +41,8 @@ export const safetyCatalog = defineCatalog(
     "safety.noUnsavedChanges": "Current settings are applied.",
     "safety.appliedWithSchemaUnavailable":
       "The selected read and data-change permissions are applied. Schema changes remain unavailable for the reason shown above.",
+    "safety.appliedReadOnlyWithSchemaUnavailable":
+      "Read-only access is applied. Data changes are off, and schema changes remain unavailable for the reason shown above.",
     "safety.monitoringAdminHint":
       "This account may need a DBA to grant the role. You can still try or copy the fixed SQL.",
     "safety.monitoringApproveApply": "Approve exact change",
@@ -129,6 +131,8 @@ export const safetyCatalog = defineCatalog(
     "safety.noUnsavedChanges": "현재 설정이 적용되어 있습니다.",
     "safety.appliedWithSchemaUnavailable":
       "선택한 읽기·데이터 변경 권한은 적용됐습니다. 위에 표시된 이유로 스키마 변경은 계속 사용할 수 없습니다.",
+    "safety.appliedReadOnlyWithSchemaUnavailable":
+      "읽기 전용 접근이 적용됐습니다. 데이터 변경은 꺼져 있고, 위에 표시된 이유로 스키마 변경은 계속 사용할 수 없습니다.",
     "safety.monitoringAdminHint":
       "이 계정은 역할 부여에 DBA 권한이 필요할 수 있습니다. 버튼을 시도하거나 고정 SQL을 복사할 수 있습니다.",
     "safety.monitoringApproveApply": "정확한 변경 승인",

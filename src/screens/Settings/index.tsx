@@ -13,8 +13,8 @@ import {
 import {
   ModalBackdrop,
   ModalFooter,
+  ModalHeader,
   ModalSurface,
-  ModalTitleBar,
 } from "../../design-system/components/Modal";
 import { TreeSearch } from "../../design-system/components/TreeControls";
 import { useI18n } from "../../lib/i18n";
@@ -191,11 +191,9 @@ export default function Settings({
           data-settings
           className="tw:flex tw:h-full tw:min-h-0 tw:flex-col tw:bg-background"
         >
-          <ModalTitleBar
+          <ModalHeader
             title={t("common.settings")}
             titleId="settings-dialog-title"
-            closeLabel={t("common.close")}
-            onClose={close}
           />
 
           <div className="tw:grid tw:min-h-0 tw:flex-1 tw:grid-cols-[202px_minmax(0,1fr)] tw:@max-[700px]:grid-cols-1 tw:@max-[700px]:grid-rows-[auto_minmax(0,1fr)]">

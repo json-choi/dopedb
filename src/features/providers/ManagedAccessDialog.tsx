@@ -12,8 +12,8 @@ import { Button } from "../../design-system/components/Button";
 import {
   ModalBackdrop,
   ModalFooter,
+  ModalHeader,
   ModalSurface,
-  ModalTitleBar,
 } from "../../design-system/components/Modal";
 import {
   InlineNotice,
@@ -360,12 +360,9 @@ export function ManagedAccessDialog({
         dismissible={pending === null}
         returnFocusRef={returnFocusRef}
       >
-        <ModalTitleBar
+        <ModalHeader
           title={t("managedAccess.title")}
           titleId="managed-access-title"
-          closeLabel={t("managedAccess.close")}
-          onClose={close}
-          closeDisabled={pending !== null}
         />
         <div className="tw:grid tw:min-h-0 tw:flex-1 tw:grid-cols-[220px_minmax(0,1fr)] tw:@max-[700px]:grid-cols-1">
           <aside className="tw:min-h-0 tw:overflow-y-auto tw:border-r tw:border-border-subtle tw:bg-card tw:p-2 tw:@max-[700px]:max-h-44 tw:@max-[700px]:border-r-0 tw:@max-[700px]:border-b">
@@ -605,7 +602,7 @@ export function ManagedAccessDialog({
               {t("managedAccess.cancelOperation")}
             </Button>
           ) : null}
-          <Button size="compact" onClick={close} disabled={pending === "approve" || pending === "plan"}>
+          <Button size="compact" onClick={close} disabled={pending !== null}>
             {t("managedAccess.close")}
           </Button>
           {!plan && selectedTarget ? (

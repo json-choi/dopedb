@@ -60,10 +60,13 @@ export function useSchemaGroupDrag(
 ) {
   const { t } = useI18n();
   const toast = useToast();
-  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [draggingIds, setDraggingIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
   const [dragPreview, setDragPreview] = useState<{
     id: string;
+    connectionIds: readonly string[];
     x: number;
     y: number;
   } | null>(null);
@@ -346,7 +349,7 @@ export function useSchemaGroupDrag(
   function clearDrag() {
     dragStartRef.current = null;
     activeDragIdRef.current = null;
-    setDraggingId(null);
+    setDraggingIds(new Set());
     setDropTarget(null);
     setDragPreview(null);
   }
@@ -387,10 +390,20 @@ export function useSchemaGroupDrag(
     if (!activeDragIdRef.current) {
       activeDragIdRef.current = start.id;
       suppressClickRef.current = true;
-      setDraggingId(start.id);
+      setDraggingIds(
+        new Set(
+          start.projectDatabaseOrder?.blockConnectionIds ?? [start.id],
+        ),
+      );
     }
     event.preventDefault();
-    setDragPreview({ id: start.id, x: event.clientX, y: event.clientY });
+    setDragPreview({
+      id: start.id,
+      connectionIds:
+        start.projectDatabaseOrder?.blockConnectionIds ?? [start.id],
+      x: event.clientX,
+      y: event.clientY,
+    });
     const next = dropTargetFromPoint(start.id, event.clientX, event.clientY);
     setDropTarget((current) =>
       sameDropTarget(current, next) ? current : next,
@@ -432,7 +445,7 @@ export function useSchemaGroupDrag(
   return {
     sections,
     groupByConnectionId,
-    draggingId,
+    draggingIds,
     dropTarget,
     dragPreview,
     suppressClickRef,

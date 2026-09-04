@@ -31,6 +31,9 @@ export type ProjectDatabaseOrderDrag = {
   bindingId: string;
   blockFirstBindingId: string;
   blockLastBindingId: string;
+  blockConnectionIds: readonly string[];
+  previousBlockBindingId: string | null;
+  nextBlockBindingId: string | null;
 };
 
 export type CatalogLoadIssue = Pick<AppErrorDetails, "kind" | "message">;

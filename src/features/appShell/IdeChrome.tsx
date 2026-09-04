@@ -51,7 +51,7 @@ export function IdeTopBar({
   onToggleDatabaseExplorer,
   onToggleLocalHistory,
   onToggleServices,
-  onOpenAgent,
+  onToggleAgent,
   agentButtonRef,
   actionSearchButtonRef,
   onActionSearch,
@@ -71,7 +71,7 @@ export function IdeTopBar({
   onToggleDatabaseExplorer: () => void;
   onToggleLocalHistory: () => void;
   onToggleServices: () => void;
-  onOpenAgent: () => void;
+  onToggleAgent: () => void;
   agentButtonRef: RefObject<HTMLButtonElement | null>;
   actionSearchButtonRef: RefObject<HTMLButtonElement | null>;
   onActionSearch: (returnFocus?: HTMLElement | null) => void;
@@ -79,6 +79,9 @@ export function IdeTopBar({
 }) {
   const { t } = useI18n();
   const queryDisabled = !selected || !supportsSql;
+  const agentLauncherLabel = selected
+    ? t("agent.acpTitle")
+    : t("agent.acpSelectDatabaseToOpen");
 
   return (
     <IdeTitleToolbar
@@ -109,9 +112,9 @@ export function IdeTopBar({
           buttonRef={agentButtonRef}
           active={agentDockOpen}
           disabled={!selected}
-          onClick={onOpenAgent}
-          title={t("agent.acpTitle")}
-          aria-label={t("agent.acpTitle")}
+          onClick={onToggleAgent}
+          title={agentLauncherLabel}
+          aria-label={agentLauncherLabel}
         >
           <Icon name="user" />
         </IdeToolbarLauncher>
@@ -228,6 +231,9 @@ export function IdeStatusBar({
     },
   ];
   if (selected) {
+    const selectedDatabaseLabel = selectedDatabase
+      ? databaseDisplayLabel(selected.engine, selectedDatabase)
+      : null;
     breadcrumbs.push({
       id: `connection:${selected.id}`,
       label: selected.name || t("app.unnamed"),
@@ -247,11 +253,17 @@ export function IdeStatusBar({
     if (selectedDatabase) {
       breadcrumbs.push({
         id: `database:${selectedDatabase}`,
-        label: databaseDisplayLabel(selected.engine, selectedDatabase),
+        label: selectedDatabaseLabel ?? selectedDatabase,
         onSelect: onRevealDatabaseContext,
       });
     }
-    if (selectedNamespace) {
+    if (
+      selectedNamespace &&
+      selectedNamespace.toLocaleLowerCase() !==
+        selectedDatabase?.toLocaleLowerCase() &&
+      selectedNamespace.toLocaleLowerCase() !==
+        selectedDatabaseLabel?.toLocaleLowerCase()
+    ) {
       breadcrumbs.push({
         id: `namespace:${selectedNamespace}`,
         label: selectedNamespace,

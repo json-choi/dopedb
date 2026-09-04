@@ -1,6 +1,6 @@
 // Owns driver/source catalog queries, search and selection state, driver
 // installation, and the add-data-source command menu.
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import type { Engine, Provider } from "../../ipc/types";
@@ -27,15 +27,11 @@ type OpenProviderCredentials = (
 ) => void;
 
 export function useConnectionCatalogController({
-  initial,
-  preset,
   connections,
   onNewConnection,
   openProviderCredentials,
   profileState,
 }: {
-  initial: ConnectionProfile | null;
-  preset: ConnectionLaunchPreset | null;
   connections: ConnectionProfile[];
   onNewConnection: (preset?: ConnectionLaunchPreset) => void;
   openProviderCredentials: OpenProviderCredentials;
@@ -61,12 +57,6 @@ export function useConnectionCatalogController({
   const [addSearch, setAddSearch] = useState("");
   const addMenuAnchorRef = useRef<HTMLDivElement | null>(null);
   const addButtonRef = useRef<HTMLButtonElement | null>(null);
-
-  useEffect(() => {
-    if (initial !== null || preset !== null) return;
-    const frame = window.requestAnimationFrame(() => setAddMenuOpen(true));
-    return () => window.cancelAnimationFrame(frame);
-  }, [initial, preset]);
 
   const drivers = compatibleDrivers(
     driverCatalog.data ?? [],

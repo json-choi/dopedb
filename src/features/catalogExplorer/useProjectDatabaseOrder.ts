@@ -6,6 +6,7 @@ import type {
   KnowledgeProject,
 } from "../knowledge/domain";
 import type { CatalogScope } from "../../lib/queries";
+import { useI18n } from "../../lib/i18n";
 import type { ProjectDatabaseOrderDrag } from "./catalogDomain";
 import {
   flattenProjectEnvironmentResources,
@@ -88,11 +89,16 @@ export function useProjectDatabaseOrder(
   bindings: readonly EnvironmentConnection[] | undefined,
   connections: readonly ConnectionProfile[],
 ) {
+  const { t } = useI18n();
   const scopeKey = preferenceScope(scope);
   const [memory, setMemory] = useState<MemoryOrders>({
     scope: scopeKey,
     byProject: {},
   });
+  const [announcement, setAnnouncement] = useState<{
+    id: number;
+    message: string;
+  } | null>(null);
   const memoryOrders = useMemo(
     () => (memory.scope === scopeKey ? memory.byProject : {}),
     [memory, scopeKey],
@@ -142,6 +148,9 @@ export function useProjectDatabaseOrder(
             bindingId: resource.id,
             blockFirstBindingId: bounds.firstBindingId,
             blockLastBindingId: bounds.lastBindingId,
+            blockConnectionIds: bounds.connectionIds,
+            previousBlockBindingId: bounds.previousBlockBindingId,
+            nextBlockBindingId: bounds.nextBlockBindingId,
           });
         }
       }
@@ -158,7 +167,7 @@ export function useProjectDatabaseOrder(
       placement: ProjectDatabaseOrderPlacement,
     ) => {
       const rows = orderedRowsByProject.get(projectId);
-      if (!rows) return;
+      if (!rows) return false;
       const current = rows.map(({ resource }) => resource.id);
       const next = moveProjectDatabaseResource(
         rows,
@@ -167,7 +176,7 @@ export function useProjectDatabaseOrder(
         targetBindingId,
         placement,
       );
-      if (current.every((id, index) => id === next[index])) return;
+      if (current.every((id, index) => id === next[index])) return false;
       setMemory((previous) => ({
         scope: scopeKey,
         byProject: {
@@ -176,8 +185,71 @@ export function useProjectDatabaseOrder(
         },
       }));
       writeStoredOrder(scopeKey, projectId, next);
+      const reorderedRows = orderProjectDatabaseResources(
+        rows,
+        connections,
+        next,
+      );
+      const nextBounds = projectDatabaseBlockBounds(
+        reorderedRows,
+        connections,
+      );
+      const movedBounds = nextBounds.get(draggedBindingId);
+      const blockFirstIds = Array.from(
+        new Set(
+          reorderedRows.flatMap(({ resource }) => {
+            const bounds = nextBounds.get(resource.id);
+            return bounds ? [bounds.firstBindingId] : [];
+          }),
+        ),
+      );
+      const position = movedBounds
+        ? blockFirstIds.indexOf(movedBounds.firstBindingId) + 1
+        : 0;
+      const blockConnections = (movedBounds?.connectionIds ?? []).flatMap(
+        (connectionId) => {
+          const connection = connections.find(
+            (candidate) => candidate.id === connectionId,
+          );
+          return connection ? [connection] : [];
+        },
+      );
+      const firstConnection = blockConnections[0];
+      const schemaGroup = firstConnection?.schemaGroup?.trim();
+      const item =
+        blockConnections.length > 1 && schemaGroup
+          ? t("connections.schemaGroupTitle", { group: schemaGroup })
+          : firstConnection?.name ||
+            firstConnection?.database ||
+            t("app.unnamed");
+      setAnnouncement((currentAnnouncement) => ({
+        id: (currentAnnouncement?.id ?? 0) + 1,
+        message: t("connections.projectDatabaseOrderUpdated", {
+          item,
+          position,
+          total: blockFirstIds.length,
+        }),
+      }));
+      return true;
     },
-    [connections, orderedRowsByProject, scopeKey],
+    [connections, orderedRowsByProject, scopeKey, t],
+  );
+
+  const move = useCallback(
+    (context: ProjectDatabaseOrderDrag, direction: "up" | "down") => {
+      const targetBindingId =
+        direction === "up"
+          ? context.previousBlockBindingId
+          : context.nextBlockBindingId;
+      if (!targetBindingId) return false;
+      return reorder(
+        context.projectId,
+        context.bindingId,
+        targetBindingId,
+        direction === "up" ? "before" : "after",
+      );
+    },
+    [reorder],
   );
 
   const bindingOrder = useCallback(
@@ -191,5 +263,5 @@ export function useProjectDatabaseOrder(
     [dragContextByBindingId],
   );
 
-  return { bindingOrder, dragContext, reorder };
+  return { bindingOrder, dragContext, reorder, move, announcement };
 }

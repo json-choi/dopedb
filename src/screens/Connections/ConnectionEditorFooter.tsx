@@ -25,7 +25,11 @@ export function ConnectionEditorFooter({
       {view === "dataSources" ? (
         canEditConnection ? (
           <>
-            <Button size="compact" onClick={onCancel}>
+            <Button
+              size="compact"
+              disabled={commands.busy}
+              onClick={onCancel}
+            >
               {t("common.cancel")}
             </Button>
             <Button
@@ -49,16 +53,30 @@ export function ConnectionEditorFooter({
             </Button>
           </>
         ) : (
-          <Button variant="primary" size="compact" onClick={onCancel}>
+          <Button
+            variant="primary"
+            size="compact"
+            disabled={commands.busy}
+            onClick={onCancel}
+          >
             {t("common.ok")}
           </Button>
         )
       ) : (
         <>
-          <Button size="compact" onClick={onCancel}>
+          <Button
+            size="compact"
+            disabled={commands.busy}
+            onClick={onCancel}
+          >
             {t("common.cancel")}
           </Button>
-          <Button size="compact" variant="primary" onClick={onCancel}>
+          <Button
+            size="compact"
+            variant="primary"
+            disabled={commands.busy}
+            onClick={onCancel}
+          >
             {t("common.ok")}
           </Button>
         </>

@@ -224,6 +224,8 @@ export const agentsCatalog = defineCatalog(
     "agent.acpActivityToolSearch": "Finding the right Agent tools",
     "agent.acpThought": "Agent progress",
     "agent.acpTitle": "AI Chat",
+    "agent.acpSelectDatabaseToOpen":
+      "Select a database to open AI Chat",
     "agent.acpToolDetails": "Tool input and result",
     "agent.acpToolOutput": "Tool output",
     "agent.acpToolRequest": "Tool request",
@@ -628,6 +630,8 @@ export const agentsCatalog = defineCatalog(
     "agent.acpActivityToolSearch": "필요한 Agent 도구 찾기",
     "agent.acpThought": "Agent 진행 상황",
     "agent.acpTitle": "AI Chat",
+    "agent.acpSelectDatabaseToOpen":
+      "데이터베이스를 선택하면 AI Chat을 열 수 있습니다",
     "agent.acpToolDetails": "도구 입력 및 결과",
     "agent.acpToolOutput": "도구 출력",
     "agent.acpToolRequest": "도구 요청",

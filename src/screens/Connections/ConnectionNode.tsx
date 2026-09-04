@@ -46,6 +46,11 @@ import { databaseCatalogKey } from "./useCatalogTree";
 
 const EMPTY_SCHEMA_GROUPS = new Map<string, SchemaConnectionGroup>();
 const EMPTY_CATALOGS: Record<string, Catalog> = {};
+const MOVE_KEY_MODIFIER =
+  typeof navigator !== "undefined" &&
+  /Macintosh|Mac OS X/.test(navigator.userAgent)
+    ? "⌥"
+    : "Alt+";
 
 type Props = {
   connection: ConnectionProfile;
@@ -57,7 +62,7 @@ type Props = {
   selected: boolean;
   selectedTableKey: string | null;
   expanded: boolean;
-  draggingId: string | null;
+  draggingIds: ReadonlySet<string>;
   dropTarget: DropTarget | null;
   suppressClickRef: RefObject<boolean>;
   openMenuId: string | null;
@@ -96,6 +101,7 @@ type Props = {
   onPointerMove: (event: PointerEvent<HTMLDivElement>) => void;
   onPointerUp: (event: PointerEvent<HTMLDivElement>) => void;
   onPointerCancel: (event: PointerEvent<HTMLDivElement>) => void;
+  onMoveProjectDatabase?: (direction: "up" | "down") => void;
   onToggleOpen: () => void;
   onSelect: () => void;
   onEdit: () => void;
@@ -186,6 +192,12 @@ export default function ConnectionNode(props: Props) {
     "-",
   )}`;
   const schemaGroup = props.groupByConnectionId.get(connection.id);
+  const canMoveProjectDatabaseUp = Boolean(
+    props.projectDatabaseOrder?.previousBlockBindingId,
+  );
+  const canMoveProjectDatabaseDown = Boolean(
+    props.projectDatabaseOrder?.nextBlockBindingId,
+  );
 
   return (
     <div className="tw:relative">
@@ -201,13 +213,18 @@ export default function ConnectionNode(props: Props) {
           props.projectDatabaseOrder?.blockLastBindingId
         }
         data-nested={props.nested}
-        data-dragging={props.draggingId === connection.id}
+        data-dragging={props.draggingIds.has(connection.id)}
         data-drop-target={isDropTarget}
         className="ds-object-row tw:group tw:relative tw:h-control-sm tw:min-h-control-sm tw:cursor-grab tw:touch-none tw:select-none tw:gap-1 tw:rounded-xs tw:py-0 tw:pr-[calc(var(--ds-control-xs)+var(--ds-space-1))] tw:text-sm tw:font-normal tw:leading-ui tw:active:cursor-grabbing tw:data-[nested=true]:pl-2 tw:data-[dragging=true]:opacity-50 tw:data-[drop-target=true]:bg-muted tw:data-[drop-target=true]:ring-2 tw:data-[drop-target=true]:ring-ring"
         role="treeitem"
         aria-expanded={props.expanded}
         aria-level={props.treeLevel}
         aria-selected={props.selected}
+        aria-keyshortcuts={
+          props.projectDatabaseOrder
+            ? "Alt+ArrowUp Alt+ArrowDown"
+            : undefined
+        }
         aria-label={`${connection.name || t("app.unnamed")} · ${description}${environmentBadge ? ` · ${environmentBadge}` : ""}`}
         data-explorer-tree-item
         data-explorer-tree-key={connectionTreeKey}
@@ -220,6 +237,29 @@ export default function ConnectionNode(props: Props) {
         onPointerMove={props.onPointerMove}
         onPointerUp={props.onPointerUp}
         onPointerCancel={props.onPointerCancel}
+        onKeyDown={(event) => {
+          if (
+            !props.projectDatabaseOrder ||
+            !props.onMoveProjectDatabase ||
+            !event.altKey ||
+            event.ctrlKey ||
+            event.metaKey
+          ) {
+            return;
+          }
+          if (event.key === "ArrowUp" && canMoveProjectDatabaseUp) {
+            event.preventDefault();
+            event.stopPropagation();
+            props.onMoveProjectDatabase("up");
+          } else if (
+            event.key === "ArrowDown" &&
+            canMoveProjectDatabaseDown
+          ) {
+            event.preventDefault();
+            event.stopPropagation();
+            props.onMoveProjectDatabase("down");
+          }
+        }}
         onClick={(event) => {
           event.currentTarget.focus({ preventScroll: true });
           if (props.suppressClickRef.current) {
@@ -236,6 +276,15 @@ export default function ConnectionNode(props: Props) {
             data-placement={orderDropPlacement}
             className="tw:pointer-events-none tw:absolute tw:right-0 tw:left-0 tw:z-[var(--ds-z-base)] tw:h-[var(--ds-border-width-strong)] tw:bg-ring tw:data-[placement=before]:top-0 tw:data-[placement=after]:bottom-0"
           />
+        ) : null}
+        {props.projectDatabaseOrder ? (
+          <span
+            data-project-database-drag-handle
+            className="tw:grid tw:w-3 tw:shrink-0 tw:cursor-grab tw:place-items-center tw:text-sm tw:text-muted-foreground tw:opacity-70 tw:group-hover:opacity-100 tw:active:cursor-grabbing"
+            title={t("connections.projectDatabaseReorderHint")}
+          >
+            <Icon name="gripVertical" />
+          </span>
         ) : null}
         <span
           className="tw:grid tw:w-3 tw:shrink-0 tw:place-items-center tw:text-2xs tw:text-muted-foreground"
@@ -414,6 +463,35 @@ export default function ConnectionNode(props: Props) {
           </Button>
           {props.openMenuId === connectionMenuKey ? (
             <PopupMenu id={connectionMenuId}>
+              {props.projectDatabaseOrder &&
+              props.onMoveProjectDatabase ? (
+                <>
+                  <PopupMenuItem
+                    disabled={!canMoveProjectDatabaseUp}
+                    onClick={() => {
+                      props.onOpenMenu(null);
+                      props.onMoveProjectDatabase?.("up");
+                    }}
+                  >
+                    {t("connections.projectDatabaseMoveUp")}
+                    <span className="tw:ml-auto tw:text-xs tw:text-muted-foreground">
+                      {MOVE_KEY_MODIFIER}↑
+                    </span>
+                  </PopupMenuItem>
+                  <PopupMenuItem
+                    disabled={!canMoveProjectDatabaseDown}
+                    onClick={() => {
+                      props.onOpenMenu(null);
+                      props.onMoveProjectDatabase?.("down");
+                    }}
+                  >
+                    {t("connections.projectDatabaseMoveDown")}
+                    <span className="tw:ml-auto tw:text-xs tw:text-muted-foreground">
+                      {MOVE_KEY_MODIFIER}↓
+                    </span>
+                  </PopupMenuItem>
+                </>
+              ) : null}
               {connection.workspaceAccess === "local" ||
               connection.workspaceAccess === "manage" ? (
                 <PopupMenuItem

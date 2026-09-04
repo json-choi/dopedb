@@ -470,7 +470,7 @@ function Shell() {
             resetHeight: toolWindows.resetServicesHeight,
           },
           agent: {
-            open: openOrFocusAgentDock,
+            toggle: showAgentDock ? agentDock.close : openOrFocusAgentDock,
             openTask: openAgentTask,
             widthChanged: agentDock.resize,
             close: agentDock.close,

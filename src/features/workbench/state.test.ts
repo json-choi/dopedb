@@ -98,6 +98,7 @@ import {
   flattenProjectEnvironmentResources,
   moveProjectDatabaseResource,
   orderProjectDatabaseResources,
+  projectDatabaseBlockBounds,
   preferredProjectEnvironment,
   preferredProjectDatabaseDropTarget,
   projectConnectionAssignment,
@@ -107,10 +108,7 @@ import {
 } from "../catalogExplorer/projectResources";
 import { knowledgeEnvironmentBadge } from "../knowledge/presentation";
 import type { Catalog, CatalogObject, CatalogTable } from "../../ipc/types";
-import {
-  modalMouseDownShouldReachNativeDragRegion,
-  ModalTitleBar,
-} from "../../design-system/components/Modal";
+import { ModalHeader } from "../../design-system/components/Modal";
 import { queryResultPhase } from "../../lib/queryResultPhase";
 import { compareCatalogs, diffCounts } from "../../lib/schemaDiff";
 import { tableRef } from "../../lib/tableRef";
@@ -1001,6 +999,21 @@ describe("workbench state ownership", () => {
       "binding-dev-mirai",
       "binding-mirai-log",
     ]);
+    expect(
+      projectDatabaseBlockBounds(
+        contiguousProjectDatabaseRows,
+        groupedConnections,
+      ).get("binding-dev-mirai"),
+    ).toEqual({
+      firstBindingId: "binding-prod-mirai",
+      lastBindingId: "binding-dev-mirai",
+      connectionIds: [
+        connectionProfileId("connection-prod-mirai"),
+        connectionProfileId("connection-dev-mirai"),
+      ],
+      previousBlockBindingId: null,
+      nextBlockBindingId: "binding-mirai-log",
+    });
     const movedProjectDatabaseOrder = moveProjectDatabaseResource(
       contiguousProjectDatabaseRows,
       groupedConnections,
@@ -1302,35 +1315,14 @@ describe("workbench state ownership", () => {
       "recent_orders",
     ]);
 
-    const modalTitleBar = renderToStaticMarkup(
-      createElement(ModalTitleBar, {
+    const modalHeader = renderToStaticMarkup(
+      createElement(ModalHeader, {
         title: "Data Sources",
         titleId: "data-sources-title",
-        closeLabel: "Close",
-        onClose: () => undefined,
       }),
     );
-    expect(modalTitleBar).toContain('data-tauri-drag-region="deep"');
-    expect(modalTitleBar).toContain('data-tauri-drag-region="false"');
-    expect(modalTitleBar).not.toContain('role="presentation"');
-    const dragTarget = (value: string | null) => ({
-      getAttribute: (name: string) =>
-        name === "data-tauri-drag-region" ? value : null,
-    }) as unknown as EventTarget;
-    expect(
-      modalMouseDownShouldReachNativeDragRegion([
-        dragTarget(null),
-        dragTarget("deep"),
-      ]),
-    ).toBe(true);
-    expect(
-      modalMouseDownShouldReachNativeDragRegion([
-        dragTarget("false"),
-        dragTarget("deep"),
-      ]),
-    ).toBe(false);
-    expect(
-      modalMouseDownShouldReachNativeDragRegion([dragTarget(null)]),
-    ).toBe(false);
+    expect(modalHeader).toContain('<h1 id="data-sources-title"');
+    expect(modalHeader).not.toContain("data-tauri-drag-region");
+    expect(modalHeader).not.toContain("<button");
   });
 });

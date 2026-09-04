@@ -94,10 +94,10 @@ export const sqlCatalog = defineCatalog(
     "sql.resultsTab": "Results",
     "sql.resultsEmpty": "Run a query to see results here",
     "sql.resolveMode": "Resolve mode",
-    "sql.resolveModePlayground": "Playground",
+    "sql.resolveModePlayground": "Use selected schema",
     "sql.resolveModePlaygroundHint":
       "Resolve every statement against the selected schema context.",
-    "sql.resolveModeScript": "Script",
+    "sql.resolveModeScript": "Follow script changes",
     "sql.resolveModeScriptHint":
       "Let USE or SET search_path change completion context for later statements.",
     "sql.run": "Run",
@@ -248,10 +248,10 @@ export const sqlCatalog = defineCatalog(
     "sql.resultsTab": "결과",
     "sql.resultsEmpty": "쿼리를 실행하면 결과가 여기에 표시됩니다",
     "sql.resolveMode": "객체 해석 모드",
-    "sql.resolveModePlayground": "Playground",
+    "sql.resolveModePlayground": "선택 스키마 사용",
     "sql.resolveModePlaygroundHint":
       "모든 문장을 선택한 스키마 문맥에서 각각 해석합니다.",
-    "sql.resolveModeScript": "Script",
+    "sql.resolveModeScript": "스크립트 변경 반영",
     "sql.resolveModeScriptHint":
       "USE 또는 SET search_path 이후 문장의 자동완성 문맥을 전환합니다.",
     "sql.run": "실행",

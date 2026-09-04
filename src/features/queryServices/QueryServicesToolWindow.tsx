@@ -155,7 +155,7 @@ export default function QueryServicesToolWindow({
           >
             {serviceConnections.length === 0 ? (
               <p className="tw:m-0 tw:p-3 tw:text-sm tw:text-muted-foreground">
-                {t("services.empty")}
+                {t("services.sessionsEmpty")}
               </p>
             ) : (
               <>
@@ -284,7 +284,7 @@ export default function QueryServicesToolWindow({
             {!active ? (
               <div className="tw:m-auto tw:grid tw:justify-items-center tw:gap-2 tw:p-6 tw:text-center tw:text-sm tw:text-muted-foreground">
                 <Icon name="list" className="tw:text-xl" />
-                {t("services.empty")}
+                {t("services.outputEmpty")}
               </div>
             ) : tab === "output" ? (
               <ServiceOutput session={active} />

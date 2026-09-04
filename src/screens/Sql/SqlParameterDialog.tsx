@@ -3,8 +3,8 @@ import { useMemo, useState, type FormEvent } from "react";
 import {
   ModalBackdrop,
   ModalFooter,
+  ModalHeader,
   ModalSurface,
-  ModalTitleBar,
 } from "../../design-system/components/Modal";
 import { Button } from "../../design-system/components/Button";
 import { TextInput } from "../../design-system/components/FormControls";
@@ -51,11 +51,9 @@ export default function SqlParameterDialog({
         onRequestClose={onCancel}
       >
         <form className="tw:flex tw:min-h-0 tw:flex-1 tw:flex-col" onSubmit={submit}>
-          <ModalTitleBar
+          <ModalHeader
             title={t("sql.parameters")}
             titleId="sql-parameters-title"
-            closeLabel={t("common.close")}
-            onClose={onCancel}
           />
 
           <div className="tw:grid tw:max-h-[50dvh] tw:gap-2 tw:overflow-auto tw:p-4">

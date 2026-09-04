@@ -16,8 +16,8 @@ import { Button } from "../../design-system/components/Button";
 import {
   ModalBackdrop,
   ModalFooter,
+  ModalHeader,
   ModalSurface,
-  ModalTitleBar,
 } from "../../design-system/components/Modal";
 import {
   StatusBadge,
@@ -227,12 +227,9 @@ export function ProviderCredentialDialog({
         dismissible={pending === null && revoking === null}
         returnFocusRef={returnFocusRef}
       >
-        <ModalTitleBar
+        <ModalHeader
           title={t("providerCredentials.title")}
           titleId="provider-credential-title"
-          closeLabel={t("common.close")}
-          onClose={close}
-          closeDisabled={pending !== null || revoking !== null}
         />
         <div className="tw:min-h-0 tw:min-w-0 tw:flex-1 tw:overflow-auto tw:bg-background tw:p-4">
           <div className="tw:border-b tw:border-border-subtle tw:pb-3">
@@ -393,7 +390,11 @@ export function ProviderCredentialDialog({
           ) : null}
         </div>
         <ModalFooter>
-          <Button size="compact" onClick={close}>
+          <Button
+            size="compact"
+            disabled={pending !== null || revoking !== null}
+            onClick={close}
+          >
             {t("common.close")}
           </Button>
           {selectedIntegration ? (

@@ -10,8 +10,8 @@ import {
 import {
   ModalBackdrop,
   ModalFooter,
+  ModalHeader,
   ModalSurface,
-  ModalTitleBar,
 } from "../../design-system/components/Modal";
 import { InlineNotice } from "../../design-system/components/Status";
 import { useI18n } from "../../lib/i18n";
@@ -87,11 +87,9 @@ export function AnalysisArticleEditor({
   return (
     <ModalBackdrop onMouseDown={onClose}>
       <ModalSurface size="wide" aria-labelledby="analysis-editor-title" onRequestClose={onClose}>
-        <ModalTitleBar
+        <ModalHeader
           title={t("analysis.simpleEditorTitle")}
           titleId="analysis-editor-title"
-          closeLabel={t("analysis.editorClose")}
-          onClose={onClose}
         />
         <div className="scrollbar-sleek tw:grid tw:min-h-0 tw:flex-1 tw:gap-4 tw:overflow-auto tw:p-5">
           {error ? <InlineNotice tone="danger" icon="alert" role="alert">{error}</InlineNotice> : null}

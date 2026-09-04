@@ -10,8 +10,8 @@ import {
 import {
   ModalBackdrop,
   ModalFooter,
+  ModalHeader,
   ModalSurface,
-  ModalTitleBar,
 } from "../../../design-system/components/Modal";
 import { InlineNotice } from "../../../design-system/components/Status";
 import { errMessage } from "../../../ipc/types";
@@ -107,14 +107,9 @@ export function ProjectSetupDialog({
             });
           }}
         >
-          <ModalTitleBar
+          <ModalHeader
             title={t("connections.projectSetupTitle")}
             titleId={PROJECT_SETUP_TITLE_ID}
-            closeLabel={t("common.close")}
-            onClose={() => {
-              if (!createProject.isPending) onClose();
-            }}
-            closeDisabled={createProject.isPending}
           />
           <div className="tw:grid tw:min-h-0 tw:flex-1 tw:content-start tw:gap-5 tw:overflow-y-auto tw:p-5 tw:max-[640px]:p-4">
             <p className="tw:m-0 tw:text-sm tw:leading-relaxed tw:text-muted-foreground">

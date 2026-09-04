@@ -12,9 +12,6 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 
-import { Icon } from "../../components/Icon";
-import { Button } from "./Button";
-
 const MODAL_FOCUSABLE_SELECTOR = [
   "a[href]",
   "button:not([disabled])",
@@ -43,25 +40,6 @@ function isTopmostModal(surface: HTMLElement) {
     '[role="dialog"][aria-modal="true"]',
   );
   return modals.item(modals.length - 1) === surface;
-}
-
-export function modalMouseDownShouldReachNativeDragRegion(
-  composedPath: readonly EventTarget[],
-) {
-  for (const target of composedPath) {
-    if (
-      typeof target !== "object" ||
-      target === null ||
-      !("getAttribute" in target) ||
-      typeof target.getAttribute !== "function"
-    ) {
-      continue;
-    }
-    const dragRegion = target.getAttribute("data-tauri-drag-region");
-    if (dragRegion === null) continue;
-    return dragRegion === "deep";
-  }
-  return false;
 }
 
 export function useModalBehavior({
@@ -206,6 +184,7 @@ export const ModalSurface = forwardRef<
     onRequestClose,
     dismissible = true,
     returnFocusRef,
+    onMouseDown,
     onKeyDown,
     tabIndex,
     ...props
@@ -231,13 +210,8 @@ export const ModalSurface = forwardRef<
       tabIndex={tabIndex ?? -1}
       className="ds-panel tw:flex tw:max-h-[calc(100dvh-(var(--ds-space-4)*2))] tw:w-[min(640px,100%)] tw:flex-col tw:overflow-hidden tw:p-0 tw:shadow-popover tw:[container-type:inline-size] tw:data-[fill=true]:h-[min(760px,calc(100dvh-(var(--ds-space-4)*2)))] tw:data-[size=dataSources]:h-[min(731px,calc(100dvh-(var(--ds-space-4)*2)))] tw:data-[size=dataSources]:w-[min(980px,100%)] tw:data-[size=settings]:h-[min(722px,calc(100dvh-(var(--ds-space-4)*2)))] tw:data-[size=settings]:w-[min(982px,100%)] tw:data-[size=wide]:w-[min(1120px,100%)] tw:max-[640px]:max-h-[calc(100dvh-(var(--ds-space-2)*2))] tw:max-[640px]:data-[fill=true]:h-[calc(100dvh-(var(--ds-space-2)*2))] tw:max-[640px]:data-[size=dataSources]:h-[calc(100dvh-(var(--ds-space-2)*2))] tw:max-[640px]:data-[size=settings]:h-[calc(100dvh-(var(--ds-space-2)*2))]"
       onMouseDown={(event) => {
-        if (
-          !modalMouseDownShouldReachNativeDragRegion(
-            event.nativeEvent.composedPath(),
-          )
-        ) {
-          event.stopPropagation();
-        }
+        event.stopPropagation();
+        onMouseDown?.(event);
       }}
       onKeyDown={onKeyDown}
       {...props}
@@ -247,43 +221,21 @@ export const ModalSurface = forwardRef<
   );
 });
 
-export function ModalTitleBar({
+export function ModalHeader({
   title,
   titleId,
-  closeLabel,
-  onClose,
-  closeDisabled = false,
 }: {
   title: ReactNode;
   titleId: string;
-  closeLabel: string;
-  onClose: () => void;
-  closeDisabled?: boolean;
 }) {
   return (
-    <header
-      className="tw:grid tw:h-[30px] tw:min-h-[30px] tw:shrink-0 tw:select-none tw:grid-cols-[28px_minmax(0,1fr)_28px] tw:items-center tw:border-b tw:border-border-subtle tw:bg-card tw:px-1"
-      data-tauri-drag-region="deep"
-    >
-      <span aria-hidden="true" />
+    <header className="tw:flex tw:h-[44px] tw:min-h-[44px] tw:shrink-0 tw:items-center tw:border-b tw:border-border-subtle tw:bg-card tw:px-5 tw:max-[640px]:px-4">
       <h1
         id={titleId}
-        className="tw:m-0 tw:overflow-hidden tw:text-center tw:text-sm tw:font-semibold tw:text-ellipsis tw:whitespace-nowrap"
+        className="tw:m-0 tw:min-w-0 tw:overflow-hidden tw:text-left tw:text-sm tw:font-semibold tw:text-ellipsis tw:whitespace-nowrap"
       >
         {title}
       </h1>
-      <Button
-        iconOnly
-        size="xs"
-        variant="ghost"
-        onClick={onClose}
-        disabled={closeDisabled}
-        title={closeLabel}
-        aria-label={closeLabel}
-        data-tauri-drag-region="false"
-      >
-        <Icon name="close" />
-      </Button>
     </header>
   );
 }

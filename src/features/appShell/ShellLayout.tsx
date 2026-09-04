@@ -144,7 +144,7 @@ type ShellLayoutCommands = {
     resetHeight: () => void;
   };
   agent: {
-    open: () => void;
+    toggle: () => void;
     openTask: (
       connectionId: string,
       environmentId?: string,
@@ -322,7 +322,7 @@ function ShellLayoutContent({ model, commands }: Props) {
         onToggleDatabaseExplorer={commands.explorer.toggleDatabase}
         onToggleLocalHistory={commands.explorer.toggleLocalHistory}
         onToggleServices={commands.services.toggle}
-        onOpenAgent={commands.agent.open}
+        onToggleAgent={commands.agent.toggle}
         agentButtonRef={agent.buttonRef}
         actionSearchButtonRef={search.buttonRef}
         onActionSearch={commands.search.open}

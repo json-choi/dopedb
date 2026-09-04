@@ -22,7 +22,13 @@ interface DatabaseExplorerOverlaysProps {
   projects: KnowledgeProject[];
   projectSetupOpen: boolean;
   environmentSetupProjectId: string | null;
-  dragPreview: { id: string; x: number; y: number } | null;
+  dragPreview: {
+    id: string;
+    connectionIds: readonly string[];
+    x: number;
+    y: number;
+  } | null;
+  orderAnnouncement: { id: number; message: string } | null;
   connections: ConnectionProfile[];
   ddlDialog: DdlDialogState | null;
   workspaceDialog: WorkspaceDialogState | null;
@@ -45,6 +51,7 @@ export function DatabaseExplorerOverlays({
   projectSetupOpen,
   environmentSetupProjectId,
   dragPreview,
+  orderAnnouncement,
   connections,
   ddlDialog,
   workspaceDialog,
@@ -63,6 +70,18 @@ export function DatabaseExplorerOverlays({
   const draggedConnection = dragPreview
     ? connections.find((connection) => connection.id === dragPreview.id) ?? null
     : null;
+  const draggedConnections = dragPreview
+    ? dragPreview.connectionIds.flatMap((connectionId) => {
+        const connection = connections.find(
+          (candidate) => candidate.id === connectionId,
+        );
+        return connection ? [connection] : [];
+      })
+    : [];
+  const draggedSchemaGroup =
+    draggedConnections.length > 1
+      ? draggedConnections[0]?.schemaGroup?.trim()
+      : null;
   return (
     <>
       {workspaceAccount ? (
@@ -98,9 +117,31 @@ export function DatabaseExplorerOverlays({
         >
           <EngineMark engine={draggedConnection.engine} />
           <span className="tw:min-w-0 tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap">
-            {draggedConnection.name || t("app.unnamed")}
+            {draggedSchemaGroup
+              ? t("connections.schemaGroupTitle", {
+                  group: draggedSchemaGroup,
+                })
+              : draggedConnection.name || t("app.unnamed")}
           </span>
+          {draggedConnections.length > 1 ? (
+            <span className="tw:shrink-0 tw:rounded-xs tw:border tw:border-border-subtle tw:px-1.5 tw:py-px tw:font-mono tw:text-2xs tw:text-muted-foreground">
+              {t("connections.projectDatabaseCount", {
+                count: draggedConnections.length,
+              })}
+            </span>
+          ) : null}
         </div>
+      ) : null}
+
+      {orderAnnouncement ? (
+        <span
+          key={orderAnnouncement.id}
+          className="tw:sr-only"
+          role="status"
+          aria-live="polite"
+        >
+          {orderAnnouncement.message}
+        </span>
       ) : null}
 
       {ddlDialog ? (

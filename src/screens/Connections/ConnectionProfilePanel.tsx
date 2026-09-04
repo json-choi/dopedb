@@ -54,6 +54,7 @@ export function ConnectionProfilePanel({
               profile.validation.name?.tone === "danger" || undefined
             }
             onChange={(event) => profile.set("name", event.target.value)}
+            onBlur={profile.revealNameValidation}
             placeholder="prod-readonly"
             autoFocus
           />

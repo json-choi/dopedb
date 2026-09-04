@@ -34,8 +34,6 @@ export function useConnectionEditorController(props: ConnectionEditorProps) {
   });
   const dialogState = useConnectionEditorDialogs();
   const catalog = useConnectionCatalogController({
-    initial: props.initial,
-    preset: props.preset,
     connections: props.connections,
     onNewConnection: props.onNewConnection,
     openProviderCredentials: dialogState.providerCredentials.show,

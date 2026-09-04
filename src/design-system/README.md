@@ -415,9 +415,9 @@ Elevation은 세 단계만 허용한다.
   범위만 `Button` tab으로 표시한다. `/`는 실제 action catalog를
   열며 Files·Code·Text 같은 범위 밖 category placeholder를 만들지
   않는다.
-- `ModalBackdrop`, `ModalSurface`, `ModalTitleBar`, `ModalDetailActionBar`,
+- `ModalBackdrop`, `ModalSurface`, `ModalHeader`, `ModalDetailActionBar`,
   `ModalFooter`: background interaction을 차단하는 공용 viewport backdrop,
-  responsive dialog frame과 30px title/48px detail action/50px primary action
+  responsive dialog frame과 44px header/48px detail action/50px primary action
   bar. SQL parameter, DDL viewer, provider credential처럼 background interaction을
   막는 feature dialog도 이 frame을 사용하고 별도 modal CSS를 만들지 않는다.
   `ModalSurface`는 열릴 때 `[data-modal-initial-focus]` 또는 첫 control로 focus를
@@ -425,14 +425,13 @@ Elevation은 세 단계만 허용한다.
   programmatic focus를 다시 포함한다. 닫힐 때는 아직 존재하는 원래 trigger로
   focus를 복구한다. Escape는 최상위 surface 하나에서만 `onRequestClose`를
   호출하고 event를 소비한다. pending operation처럼 닫을 수 없는 상태는
-  `dismissible={false}`와 disabled title close action으로 명시한다. 첫 작업
+  `dismissible={false}`와 disabled footer dismiss action으로 명시한다. 첫 작업
   control을 명시해야 하는 feature만
   `data-modal-initial-focus`를 사용한다.
-  `ModalTitleBar`의 빈 영역과 제목은 공용 Tauri deep drag region으로 현재 앱
-  창을 이동하고 close button은 명시적인 non-drag region으로 남긴다. 전체
-  backdrop이나 modal body에 drag region을 확장하지 않는다. 이 mouse 계약은
-  macOS·Windows·Linux가 공유한다. Windows touch/pen 전용 `app-region: drag`는
-  title control의 click을 가로챌 수 있으므로 현재 적용하지 않는다.
+  `ModalHeader`는 앱 내부 sheet의 왼쪽 정렬 제목만 소유한다. native title bar처럼
+  보이는 close glyph나 Tauri drag region을 만들지 않고, 취소·닫기·완료는
+  `ModalFooter`의 명시적인 text action이 소유한다. 실제 앱 창의 macOS traffic
+  light와 tool-window의 오른쪽 hide action은 이 modal 계약과 분리한다.
   `size="settings"`는 제품 계약의 982×722 설정 dialog를,
   `size="dataSources"`는
   제품 계약의 980×731 frame을 compact full-height fallback과 함께
@@ -456,7 +455,8 @@ Elevation은 세 단계만 허용한다.
   제목은 tab을 더블 클릭해 편집한다. SQL schema selector는 catalog에서 발견한
   namespace만 표시하는 compact native control이며, 선택값을 문서에 영속하고
   Explain/read/write/script 실행과 status/Services projection이 같은 값을
-  사용한다. Playground/Script resolve mode도 같은 `WorkbenchSelect`를 사용하고
+  사용한다. `선택 스키마 사용`/`스크립트 변경 반영` resolve mode도 같은
+  `WorkbenchSelect`를 사용하고
   문서에 영속하며, SQL editor의 engine dialect와 caret 기준 schema completion
   context를 바꾼다. selector를 위해 feature CSS나 style map을 만들지 않는다.
   SQL 실행 상태는 실행 당시 document snapshot과 정확한 CodeMirror source
@@ -611,7 +611,7 @@ DopeDB의 실제 작업 흐름과 접근성, supported viewport를 위한 제품
 - Query parameter dialog는 parameter token/이름과 SQL expression 값을 한 행에
   대응시키고, 빈 값에서는 primary 실행 action을 비활성화한다. 치환 설명은
   divider surface에 두며 feature 전용 CSS나 style map을 만들지 않는다. title과
-  action row는 feature-local header/footer가 아니라 `ModalTitleBar`와
+  action row는 feature-local header/footer가 아니라 `ModalHeader`와
   `ModalFooter`가 소유한다.
 - Explain과 Services 오류는 결과 영역 안에 별도 rounded card를 만들지 않는다.
   `ResultMeta`와 divider 기반의 평평한 workbench row를 사용하고 SQL/error

@@ -13,7 +13,7 @@ function readAgentDockWidth() {
 
 export function useAgentDock() {
   const [open, setOpen] = useState(() => {
-    return localStorage.getItem("agentDockOpen") !== "0";
+    return localStorage.getItem("agentDockOpen") === "1";
   });
   const [width, setWidth] = useState(readAgentDockWidth);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
