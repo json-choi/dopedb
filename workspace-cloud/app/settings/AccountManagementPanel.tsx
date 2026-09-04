@@ -16,9 +16,9 @@ export function AccountManagementPanel({
   const locale = useWorkspaceLocale();
   const copy = workspaceMessages[locale].account;
   return (
-    <section className="tw:grid tw:overflow-hidden tw:rounded-panel tw:border tw:border-border tw:bg-surface tw:shadow-panel">
-      <header className="tw:grid tw:grid-cols-[auto_minmax(0,1fr)] tw:items-center tw:gap-4 tw:border-b tw:border-border tw:bg-surface-inset/70 tw:p-6">
-        <span className="tw:grid tw:size-12 tw:place-items-center tw:rounded-surface tw:bg-selection tw:text-sm tw:font-semibold tw:text-primary">
+    <section className="tw:grid tw:overflow-hidden tw:rounded-surface tw:border tw:border-border tw:bg-surface">
+      <header className="tw:grid tw:grid-cols-[auto_minmax(0,1fr)] tw:items-center tw:gap-3 tw:border-b tw:border-border tw:px-5 tw:py-4">
+        <span className="tw:grid tw:size-10 tw:place-items-center tw:rounded-control tw:bg-selection tw:text-sm tw:font-semibold tw:text-primary">
           {user.name.slice(0, 1).toUpperCase()}
         </span>
         <div className="tw:grid tw:min-w-0 tw:gap-1">
@@ -28,19 +28,16 @@ export function AccountManagementPanel({
           </small>
         </div>
       </header>
-      <section className="tw:grid tw:p-6">
-        <header className="tw:mb-3 tw:flex tw:items-start tw:justify-between tw:gap-4 tw:max-[720px]:block">
+      <section className="tw:grid tw:p-5">
+        <header className="tw:mb-3 tw:grid tw:gap-1">
           <div className="tw:grid tw:gap-1">
-            <strong className="tw:text-sm tw:text-foreground">
+            <h2 className="tw:m-0 tw:text-sm tw:font-semibold tw:text-foreground">
               {copy.sessionsTitle}
-            </strong>
+            </h2>
             <small className="tw:text-xs tw:leading-body tw:text-muted-foreground">
               {copy.sessionsDescription}
             </small>
           </div>
-          <span className="tw:font-mono tw:text-2xs tw:uppercase tw:text-primary tw:max-[720px]:mt-2 tw:max-[720px]:block">
-            Better Auth
-          </span>
         </header>
         <ActiveSessions currentSessionId={currentSessionId} />
       </section>

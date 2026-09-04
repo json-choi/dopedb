@@ -43,17 +43,14 @@ export function CreateWorkspaceForm() {
 
   return (
     <form
-      className="tw:sticky tw:top-[148px] tw:relative tw:grid tw:gap-4 tw:overflow-hidden tw:rounded-panel tw:border tw:border-border tw:bg-surface tw:p-6 tw:shadow-panel tw:before:absolute tw:before:top-0 tw:before:left-0 tw:before:h-1 tw:before:w-full tw:before:bg-signal tw:before:content-[''] tw:max-[980px]:static"
+      className="tw:sticky tw:top-[126px] tw:grid tw:gap-4 tw:rounded-surface tw:border tw:border-border tw:bg-surface tw:p-5 tw:max-[900px]:static"
       onSubmit={submit}
     >
-      <header className="tw:grid tw:gap-2">
-        <span className="tw:font-mono tw:text-2xs tw:font-medium tw:tracking-[0.08em] tw:text-primary tw:uppercase">
-          {copy.eyebrow}
-        </span>
-        <h3 className="tw:font-serif tw:text-[28px] tw:leading-tight tw:font-normal tw:tracking-[-0.03em]">
+      <header className="tw:grid tw:gap-1">
+        <h3 className="tw:m-0 tw:text-base tw:font-semibold tw:text-foreground">
           {copy.title}
         </h3>
-        <p className="tw:text-xs tw:leading-[1.65] tw:text-muted-foreground">
+        <p className="tw:m-0 tw:text-xs tw:leading-body tw:text-muted-foreground">
           {copy.description}
         </p>
       </header>

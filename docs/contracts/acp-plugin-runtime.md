@@ -87,8 +87,9 @@ through `CLAUDE_CODE_EXECUTABLE`; Codex uses `CODEX_PATH`.
 
 `acp-adapter-release.yml` builds and signs candidate or stable adapter bundles
 without changing the app, CLI, or Skill version. Compatibility CI starts each
-entrypoint with bundled Node. The pin watcher opens an exact source/lock update
-PR when an official adapter changes. A candidate uses the owner-created
+entrypoint with bundled Node. The read-only pin watcher uploads an exact binary
+source/lock patch for owner review when an official adapter changes; it never
+creates a branch or pull request with a workflow token. A candidate uses the owner-created
 `acp-bundle-vYYYY.MM.DD.N-candidate` tag. Stable promotion uses the matching
 owner-created `acp-bundle-vYYYY.MM.DD.N` tag, requires both tags to resolve to
 the same commit, and compares each rebuilt archive and normalized build metadata

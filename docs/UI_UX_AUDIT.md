@@ -58,3 +58,22 @@
 실행하지 않았다. 이 경계는 위 결함의 미수정 상태가 아니라 각 기능의 기존 packaged
 acceptance이며, [`UI_IMPLEMENTATION_TRACKER.md`](./UI_IMPLEMENTATION_TRACKER.md)의
 `partial` 항목에서 계속 추적한다.
+
+## Workspace Web 0.4.1 점검
+
+인증된 production Workspace Web을 1512×863에서 accessibility tree와 함께
+확인하고 Desktop의 소유 경계와 대조했다. 실계정 이름, 이메일, workspace ID는
+검수 기록에 남기지 않았다.
+
+| ID | 상태 | 발견 사항과 닫힌 동작 |
+| --- | --- | --- |
+| WW-001 | `완료` | 8개 번호형 최상위 메뉴를 Workspaces, Access, Providers, Workspace settings, My account 5개로 줄였다. 역할상 사용할 수 없는 목적지는 계속 숨긴다. |
+| WW-002 | `완료` | 멤버와 DB별 grant를 Access 한 화면에, provider 승인과 managed DB 등록·복구를 Providers 한 화면에 배치해 한 작업을 위해 메뉴를 왕복하지 않게 했다. |
+| WW-003 | `완료` | Workspace Web의 Analysis 관리 화면을 제거했다. Article 작성·조회·수동 재실행·공개 관리는 Desktop이 소유하고 immutable 공개 HTML 읽기 경로만 Web에 남긴다. |
+| WW-004 | `완료` | 같은 페이지에서 최대 세 번 반복되던 번호·제목·설명·workspace 요약을 한 개의 compact page header와 한 줄 context로 축소했다. 첫 실제 command가 초기 viewport 안에 나타난다. |
+| WW-005 | `완료` | 1480px 폭의 장식 중심 hero와 큰 빈 공간, shadow panel과 card-in-card를 제거하고 1120px의 flat 관리 surface, 짧은 문장과 일정한 divider를 사용한다. |
+| WW-006 | `완료` | provider 목록은 연결된 계정과 새 계정 연결을 분리하되 setup form은 사용자가 provider를 선택했을 때만 연다. managed DB 목록과 recovery는 같은 Providers 문맥에 유지한다. |
+| WW-007 | `완료` | 백업·암호화와 삭제 위험 영역을 분리하고 삭제 control은 접힌 위험 영역에서만 공개한다. 차단 항목의 복구 link는 Providers 또는 Access의 실제 목적지로 연결한다. |
+| WW-008 | `완료` | Desktop의 exact managed DB 복구 deep link와 OAuth callback을 새 Providers URL로 통일하고, 사용하지 않는 과거 settings section alias와 Analysis 관리 component를 제거했다. |
+| WW-009 | `완료` | AI Chat의 Environment binding은 공개 connection content revision을 pin한다. 내부 lease/revocation epoch 변경을 콘텐츠 변경으로 오인해 409를 반복하던 경로를 차단했다. |
+| WW-010 | `완료` | 페이지별 단일 h1과 실제 관리 영역의 h2 계층, keyboard-native details, 가로 overflow를 지원하는 compact navigation을 유지해 좁은 화면과 보조기기에서도 구조를 읽을 수 있게 했다. |

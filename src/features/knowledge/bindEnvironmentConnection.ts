@@ -6,7 +6,7 @@ import type {
 } from "./domain";
 import { bindKnowledgeEnvironmentConnection } from "./tauriAdapter";
 
-function isExactRevisionConflict(error: unknown): boolean {
+export function isKnowledgeEnvironmentRevisionConflict(error: unknown): boolean {
   const details = errDetails(error);
   return details.kind === "network"
     && details.message.includes("409 Conflict")
@@ -24,7 +24,7 @@ export async function bindKnowledgeEnvironmentConnectionWithRefresh(
   try {
     return await bindKnowledgeEnvironmentConnection(input);
   } catch (error) {
-    if (!isExactRevisionConflict(error)) throw error;
+    if (!isKnowledgeEnvironmentRevisionConflict(error)) throw error;
     await refreshWorkspaceAuthState();
     return bindKnowledgeEnvironmentConnection(input);
   }

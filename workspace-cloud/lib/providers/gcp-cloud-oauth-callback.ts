@@ -31,7 +31,7 @@ function settingsUrl(request: Request, workspaceId: string | null, setupId?: str
   const target = new URL(localizedWorkspacePath("/settings", locale), env.appOrigin());
   target.searchParams.set("provider", "gcpCloudSql");
   target.searchParams.set("status", setupId ? "authorised" : "failed");
-  target.searchParams.set("section", "cloud-accounts");
+  target.searchParams.set("section", "providers");
   if (workspaceId) target.searchParams.set("workspace", workspaceId);
   if (setupId) target.searchParams.set("gcpSetup", setupId);
   return target;

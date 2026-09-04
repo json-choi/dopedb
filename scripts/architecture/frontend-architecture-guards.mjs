@@ -609,8 +609,6 @@ export function checkFrontendArchitecture(harness) {
   }
 
   for (const [filePath, limit] of [
-    ["workspace-cloud/app/settings/AnalysisManagementPanel.tsx", 60],
-    ["workspace-cloud/features/analysisManagement/AnalysisManagementView.tsx", 400],
     ["workspace-cloud/features/providerAccess/NeonBranchManager.tsx", 750],
     ["workspace-cloud/features/providerAccess/useProviderAccountAccess.ts", 240],
     ["workspace-cloud/features/providerAccess/useSharedDatabaseAccess.ts", 600],
@@ -623,10 +621,8 @@ export function checkFrontendArchitecture(harness) {
     }
   }
   for (const filePath of [
-    "workspace-cloud/app/settings/AnalysisManagementPanel.tsx",
     "workspace-cloud/app/settings/CloudAccountPanel.tsx",
     "workspace-cloud/app/settings/SharedDatabasePanel.tsx",
-    "workspace-cloud/features/analysisManagement/AnalysisManagementView.tsx",
     "workspace-cloud/features/providerAccess/NeonBranchManager.tsx",
   ]) {
     if (/\bfetch\s*\(/.test(read(filePath))) {

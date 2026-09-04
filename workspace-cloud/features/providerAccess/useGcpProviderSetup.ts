@@ -407,7 +407,7 @@ export function useGcpProviderSetup({
       nextUrl.searchParams.delete("provider");
       nextUrl.searchParams.delete("status");
       nextUrl.searchParams.delete("gcpSetup");
-      nextUrl.searchParams.set("section", "databases");
+      nextUrl.searchParams.set("section", "providers");
       if (gcpRecoveryTarget) {
         clearGcpRecoveryIntent();
         nextUrl.searchParams.delete("integration");

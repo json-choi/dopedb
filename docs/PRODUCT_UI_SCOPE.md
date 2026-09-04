@@ -103,6 +103,18 @@ DopeDB의 제품 축, 실제 사용자 작업, 접근성, 운영 안전성, 지�
   중단하는 곳이다.
 - status surface는 현재 database/source/schema/object, transaction과 background
   상태를 보여주되 이미 document가 소유한 설명을 반복하지 않는다.
+- Workspace Web은 Desktop의 보조 관리면이다. 최상위 목적지는
+  `Workspaces / Access / Providers / Workspace settings / My account` 다섯 개만
+  둔다. `Access`는 멤버 초대·역할과 DB별 grant를 한 흐름으로, `Providers`는
+  브라우저 OAuth·broker 승인과 그 계정에서 고른 managed DB 등록·복구를 한
+  흐름으로 묶는다. 서버 소유 백업·키 회전·삭제는 Owner 전용
+  `Workspace settings`에, 브라우저와 Desktop 세션 종료는 `My account`에 둔다.
+  연결 생성·편집, query, Agent, Safety, Analysis Article 작성·조회·수동 재실행·
+  공개 발행 관리는 Desktop이 소유하며 Workspace Web에 중복 화면을 만들지
+  않는다. 공개된 immutable Analysis HTML을 읽는 페이지는 이 관리 화면과 별개로
+  유지한다. 인증된 관리 화면은 한 번의 page title과 workspace context 뒤에 실제
+  command를 바로 보여 주며 번호 장식, 중복 제목·설명, card-in-card를 사용하지
+  않는다.
 
 ### 밀도와 상호작용
 

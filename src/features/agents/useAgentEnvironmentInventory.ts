@@ -12,7 +12,10 @@ import {
   type ConnectionId,
   type ConnectionProfile,
 } from "../connections/domain";
-import { bindKnowledgeEnvironmentConnectionWithRefresh } from "../knowledge/bindEnvironmentConnection";
+import {
+  bindKnowledgeEnvironmentConnectionWithRefresh,
+  isKnowledgeEnvironmentRevisionConflict,
+} from "../knowledge/bindEnvironmentConnection";
 import type { EnvironmentConnection } from "../knowledge/domain";
 import { knowledgeInventoryQuery } from "../knowledge/inventory";
 import { knowledgeQueryKeys } from "../knowledge/queryKeys";
@@ -298,11 +301,11 @@ export function useAgentEnvironmentInventory({
         if (!ready) onError(t("agent.acpEnvironmentReconfirmFailed"));
         return ready;
       } catch (reason) {
-        onError(
-          t("agent.acpEnvironmentReconfirmFailedWithError", {
-            error: errMessage(reason),
-          }),
-        );
+        onError(isKnowledgeEnvironmentRevisionConflict(reason)
+          ? t("agent.acpEnvironmentReconfirmFailed")
+          : t("agent.acpEnvironmentReconfirmFailedWithError", {
+              error: errMessage(reason),
+            }));
         return false;
       } finally {
         setUpdatingEnvironmentId(null);

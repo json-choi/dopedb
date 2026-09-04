@@ -44,9 +44,9 @@ export function SharedDatabasePanel({
     <section className="tw:grid tw:gap-5 tw:p-6 tw:max-[640px]:p-4">
       <header className="tw:flex tw:items-start tw:justify-between tw:gap-4 tw:max-[640px]:grid">
         <div className="tw:grid tw:gap-1">
-          <strong className="tw:text-sm tw:text-foreground">
+          <h2 className="tw:m-0 tw:text-sm tw:font-semibold tw:text-foreground">
             {copy.title}
-          </strong>
+          </h2>
           <small className="tw:max-w-[44rem] tw:text-2xs tw:leading-body tw:text-muted-foreground">
             {copy.description}
           </small>
@@ -74,7 +74,7 @@ export function SharedDatabasePanel({
             <div>
               <ControlLink
                 href={localizedWorkspacePath(
-                  `/settings?workspace=${encodeURIComponent(workspaceId)}&section=cloud-accounts`,
+                  `/settings?workspace=${encodeURIComponent(workspaceId)}&section=providers`,
                   locale,
                 )}
                 data-tone="primary"
@@ -146,7 +146,7 @@ export function SharedDatabasePanel({
                       <a
                         className="tw:text-2xs tw:text-muted-foreground tw:hover:text-foreground"
                         href={localizedWorkspacePath(
-                          `/settings?workspace=${encodeURIComponent(workspaceId)}&section=cloud-accounts`,
+                          `/settings?workspace=${encodeURIComponent(workspaceId)}&section=providers`,
                           locale,
                         )}
                       >
@@ -156,7 +156,7 @@ export function SharedDatabasePanel({
                     <a
                       className="tw:text-2xs tw:text-muted-foreground tw:hover:text-foreground"
                       href={localizedWorkspacePath(
-                        `/settings?workspace=${encodeURIComponent(workspaceId)}&section=database-access`,
+                        `/settings?workspace=${encodeURIComponent(workspaceId)}&section=access`,
                         locale,
                       )}
                     >
@@ -229,7 +229,7 @@ export function SharedDatabasePanel({
           || /reconnect/i.test(controller.error) ? (
             <ControlLink
               href={localizedWorkspacePath(
-                `/settings?workspace=${encodeURIComponent(workspaceId)}&section=cloud-accounts`,
+                `/settings?workspace=${encodeURIComponent(workspaceId)}&section=providers`,
                 locale,
               )}
             >

@@ -13,11 +13,7 @@ import {
 import { member, workspaceProfile } from "../../lib/schema";
 import { Brand } from "../components/Brand";
 import { LocaleSwitcher } from "../components/LocaleSwitcher";
-import {
-  ConsoleNotice,
-  ConsoleSectionHeading,
-} from "../components/Console";
-import { IdentityEyebrow } from "../components/Identity";
+import { ConsoleNotice } from "../components/Console";
 import { CreateWorkspaceForm } from "./CreateWorkspaceForm";
 import { AccountSwitcher } from "./AccountSwitcher";
 import { AccountManagementPanel } from "./AccountManagementPanel";
@@ -46,9 +42,7 @@ export default async function SettingsPage({
     status?: string | string[];
     gcpSetup?: string | string[];
     integration?: string | string[];
-    article?: string | string[];
     connection?: string | string[];
-    block?: string | string[];
     section?: string | string[];
   }>;
 }) {
@@ -73,12 +67,6 @@ export default async function SettingsPage({
     && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
       .test(params.integration)
       ? params.integration
-      : null;
-  const requestedArticleId =
-    typeof params.article === "string"
-    && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-      .test(params.article)
-      ? params.article
       : null;
   const requestedConnectionId =
     typeof params.connection === "string"
@@ -164,39 +152,35 @@ export default async function SettingsPage({
     : null;
   const workspaceDeletionPending = activeWorkspaceLifecycleState === "deletion_pending";
   const canDeleteActiveWorkspace = activeWorkspaceRole === "owner";
-  const activeSection: SettingsSection =
-    workspaceDeletionPending
-      && requestedSection !== "account"
-      && requestedSection !== "workspaces"
-      ? "lifecycle"
-      : requestedGcpSetupId || typeof params.provider === "string"
-      ? "cloud-accounts"
-      : requestedSection;
-  const activeManagementArea: WorkspaceManagementArea | null =
-    activeSection === "members"
-    || activeSection === "database-access"
-    || activeSection === "cloud-accounts"
-    || activeSection === "databases"
-    || activeSection === "analyses"
-    || activeSection === "lifecycle"
-      ? activeSection
-      : null;
   const canManageActiveWorkspace = Boolean(
     activeWorkspace
     && ["admin", "owner"].includes(activeWorkspaceRole ?? ""),
   );
-  const canEditActiveWorkspace = Boolean(
-    activeWorkspace
-    && ["editor", "admin", "owner"].includes(activeWorkspaceRole ?? ""),
-  );
+  const activeSection: SettingsSection =
+    requestedSection === "account"
+      ? "account"
+      : workspaceDeletionPending
+        ? requestedSection === "workspaces" ? "workspaces" : "workspace-settings"
+        : requestedSection === "workspaces"
+          ? "workspaces"
+          : (requestedGcpSetupId || typeof params.provider === "string")
+              && canManageActiveWorkspace
+            ? "providers"
+            : requestedSection === "workspace-settings" && canDeleteActiveWorkspace
+              ? "workspace-settings"
+              : (requestedSection === "access" || requestedSection === "providers")
+                  && canManageActiveWorkspace
+                ? requestedSection
+                : "workspaces";
+  const activeManagementArea: WorkspaceManagementArea | null =
+    activeSection === "access"
+    || activeSection === "providers"
+    || activeSection === "workspace-settings"
+      ? activeSection
+      : null;
   const activeManagementDetails = activeManagementArea
     ? workspaceManagementAreas.find((item) => item.id === activeManagementArea)
     : null;
-  const pageIndex = activeSection === "account"
-    ? "08"
-    : activeSection === "workspaces"
-      ? "01"
-      : activeManagementDetails?.index ?? "01";
   const pageTitle = activeSection === "account"
     ? copy.settings.accountTitle
     : activeSection === "workspaces"
@@ -206,24 +190,20 @@ export default async function SettingsPage({
     ? copy.settings.accountDescription
     : activeSection === "workspaces"
       ? copy.settings.workspacesDescription
-      : activeManagementDetails?.description ?? copy.settings.sharedBoundaryDescription;
-  const activeRole = activeWorkspace
-    ? activeWorkspaceRole ?? "member"
-    : copy.common.notSelected;
+      : activeManagementDetails?.description ?? copy.settings.workspacesDescription;
   const roleLabels = copy.members.roles;
-  const localizedActiveRole = activeWorkspace && activeRole in roleLabels
-    ? roleLabels[activeRole as keyof typeof roleLabels]
-    : activeRole;
+  const localizedRole = (role: string | null | undefined) => (
+    role && role in roleLabels
+      ? roleLabels[role as keyof typeof roleLabels]
+      : role ?? copy.common.notSelected
+  );
+  const localizedActiveRole = localizedRole(activeWorkspaceRole);
 
   return (
     <main className="tw:min-h-[100dvh]" id="main-content">
-      <header className="tw:sticky tw:top-0 tw:z-20 tw:border-b tw:border-chrome-border tw:bg-chrome tw:text-chrome-foreground tw:shadow-[0_14px_40px_color-mix(in_srgb,var(--ds-chrome)_20%,transparent)]">
-        <div className="tw:mx-auto tw:flex tw:min-h-[74px] tw:w-full tw:max-w-[1480px] tw:items-center tw:justify-between tw:gap-5 tw:px-[clamp(20px,4vw,64px)]">
+      <header className="tw:sticky tw:top-0 tw:z-20 tw:border-b tw:border-chrome-border tw:bg-chrome tw:text-chrome-foreground">
+        <div className="tw:mx-auto tw:flex tw:min-h-16 tw:w-full tw:max-w-[1200px] tw:items-center tw:justify-between tw:gap-5 tw:px-[clamp(20px,4vw,48px)]">
           <Brand tone="inverse" />
-          <span className="tw:flex tw:items-center tw:gap-2 tw:font-mono tw:text-2xs tw:text-chrome-muted tw:max-[860px]:hidden">
-            <i className="tw:size-1.5 tw:rounded-full tw:bg-signal" />
-            {copy.settings.headerStatus}
-          </span>
           <div className="tw:flex tw:items-center tw:gap-2">
             <LocaleSwitcher tone="inverse" />
             <AccountSwitcher
@@ -246,56 +226,58 @@ export default async function SettingsPage({
           locale={locale}
         />
       </header>
-      <div className="tw:relative tw:mx-auto tw:w-full tw:max-w-[1480px] tw:px-[clamp(22px,5vw,76px)] tw:pt-[clamp(48px,7vw,88px)] tw:pb-[110px]">
-        <header className="tw:grid tw:grid-cols-[minmax(0,1fr)_minmax(300px,0.54fr)] tw:items-end tw:gap-[clamp(36px,7vw,100px)] tw:border-b tw:border-border tw:pb-[clamp(38px,5vw,64px)] tw:max-[820px]:grid-cols-1">
-          <div>
-            <IdentityEyebrow>CONTROL PLANE / {pageIndex}</IdentityEyebrow>
-            <h1 className="tw:mt-4 tw:font-serif tw:text-[clamp(46px,6vw,76px)] tw:leading-[0.98] tw:font-normal tw:tracking-[-0.055em] tw:text-balance">
+      <div className="tw:relative tw:mx-auto tw:w-full tw:max-w-[1120px] tw:px-[clamp(20px,4vw,40px)] tw:pt-[clamp(30px,4vw,48px)] tw:pb-24">
+        <header className="tw:flex tw:flex-wrap tw:items-end tw:justify-between tw:gap-6 tw:border-b tw:border-border tw:pb-6">
+          <div className="tw:min-w-0">
+            <h1 className="tw:m-0 tw:text-[clamp(30px,4vw,42px)] tw:leading-tight tw:font-semibold tw:tracking-[-0.035em] tw:text-balance">
               {pageTitle}
             </h1>
-            <p className="tw:mt-5 tw:max-w-[680px] tw:text-[15px] tw:leading-[1.75] tw:text-muted-foreground">
+            <p className="tw:mt-2 tw:mb-0 tw:max-w-[680px] tw:text-sm tw:leading-body tw:text-muted-foreground">
               {pageDescription}
             </p>
           </div>
-          <dl className="tw:m-0 tw:grid tw:overflow-hidden tw:rounded-surface tw:border tw:border-border tw:bg-surface/85 tw:shadow-[0_16px_50px_color-mix(in_srgb,var(--ds-text)_6%,transparent)] tw:backdrop-blur">
-            <div className="tw:grid tw:grid-cols-[110px_minmax(0,1fr)] tw:items-center tw:border-b tw:border-border tw:px-4 tw:py-3.5">
-              <dt className="tw:font-mono tw:text-2xs tw:font-medium tw:text-muted-foreground">{activeSection === "account" ? copy.settings.summaryAccount : copy.settings.summaryWorkspace}</dt>
-              <dd className="tw:m-0 tw:truncate tw:text-right tw:text-xs tw:font-medium tw:text-foreground">
-                {activeSection === "account"
-                  ? session.user.name
-                  : activeWorkspace?.name ?? copy.common.notSelected}
-              </dd>
+          {activeWorkspace
+          && activeSection !== "account"
+          && activeSection !== "workspaces" ? (
+            <div className="tw:flex tw:flex-wrap tw:items-center tw:justify-end tw:gap-x-3 tw:gap-y-2 tw:text-xs">
+              <strong className="tw:max-w-56 tw:truncate tw:font-medium tw:text-foreground">
+                {activeWorkspace.name}
+              </strong>
+              <span className="tw:text-muted-foreground">{localizedActiveRole}</span>
+              <a
+                className="tw:font-medium tw:text-primary tw:no-underline tw:hover:underline tw:focus-visible:outline-2 tw:focus-visible:outline-offset-2 tw:focus-visible:outline-ring"
+                href={localizedWorkspacePath(
+                  `/settings?workspace=${encodeURIComponent(activeWorkspace.id)}&section=workspaces`,
+                  locale,
+                )}
+              >
+                {copy.settings.changeWorkspace}
+              </a>
             </div>
-            <div className="tw:grid tw:grid-cols-[110px_minmax(0,1fr)] tw:items-center tw:px-4 tw:py-3.5">
-              <dt className="tw:font-mono tw:text-2xs tw:font-medium tw:text-muted-foreground">{activeSection === "account" ? copy.settings.summaryIdentity : copy.settings.summaryAccess}</dt>
-              <dd className="tw:m-0 tw:truncate tw:text-right tw:text-xs tw:text-primary">
-                {activeSection === "account" ? session.user.email : localizedActiveRole}
-              </dd>
-            </div>
-          </dl>
+          ) : null}
         </header>
-        {activeSection === "cloud-accounts"
+        {activeSection === "providers"
         && params.provider === "planetScale"
         && params.status === "connected" ? (
           <ConsoleNotice>
             {copy.settings.planetScaleConnected}
           </ConsoleNotice>
         ) : null}
-        {activeSection === "cloud-accounts"
+        {activeSection === "providers"
         && params.provider === "planetScale"
         && params.status === "failed" ? (
           <ConsoleNotice tone="danger">
             {copy.settings.planetScaleFailed}
           </ConsoleNotice>
         ) : null}
-        {activeSection === "cloud-accounts"
+        {activeSection === "providers"
         && params.provider === "gcpCloudSql"
         && params.status === "authorised" ? (
           <ConsoleNotice>
             {copy.settings.gcpConnected}
           </ConsoleNotice>
         ) : null}
-        {activeSection === "cloud-accounts"
+        {activeSection === "providers"
         && params.provider === "gcpCloudSql"
         && params.status === "failed" ? (
           <ConsoleNotice tone="danger">
@@ -303,10 +285,7 @@ export default async function SettingsPage({
           </ConsoleNotice>
         ) : null}
         {activeSection === "account" ? (
-          <section id="account" className="tw:scroll-mt-32 tw:pt-[clamp(56px,7vw,88px)]">
-            <ConsoleSectionHeading index="10" title={copy.settings.accountManagementTitle}>
-              {copy.settings.accountManagementDescription}
-            </ConsoleSectionHeading>
+          <section id="account" className="tw:scroll-mt-28 tw:pt-8">
             <AccountManagementPanel
               currentSessionId={session.session.id}
               user={{ name: session.user.name, email: session.user.email }}
@@ -315,12 +294,9 @@ export default async function SettingsPage({
         ) : null}
 
         {activeSection === "workspaces" ? (
-          <section id="workspaces" className="tw:scroll-mt-32 tw:pt-[clamp(56px,7vw,88px)]">
-            <ConsoleSectionHeading index="01" title={copy.settings.workspacesTitle}>
-              {copy.settings.workspaceSectionDescription}
-            </ConsoleSectionHeading>
-            <div className="tw:grid tw:grid-cols-[minmax(0,1.45fr)_minmax(300px,0.62fr)] tw:items-start tw:gap-6 tw:max-[980px]:grid-cols-1">
-              <div className="tw:overflow-hidden tw:rounded-panel tw:border tw:border-border tw:bg-surface tw:shadow-panel">
+          <section id="workspaces" className="tw:scroll-mt-28 tw:pt-8">
+            <div className="tw:grid tw:grid-cols-[minmax(0,1.45fr)_minmax(300px,0.62fr)] tw:items-start tw:gap-5 tw:max-[900px]:grid-cols-1">
+              <div className="tw:overflow-hidden tw:rounded-surface tw:border tw:border-border tw:bg-surface">
                 {orderedWorkspaces.map((workspace) => (
                   <article
                     className="tw:scroll-mt-32 tw:border-b tw:border-border tw:last:border-b-0 tw:data-[focused=true]:bg-selection"
@@ -329,15 +305,13 @@ export default async function SettingsPage({
                     key={workspace.id}
                   >
                     <a
-                      className="tw:grid tw:min-h-[106px] tw:grid-cols-[auto_minmax(0,1fr)_auto] tw:items-center tw:gap-4 tw:px-5 tw:py-4 tw:transition-colors tw:hover:bg-surface-raised tw:focus-visible:outline-2 tw:focus-visible:outline-offset-[-3px] tw:focus-visible:outline-ring tw:max-[560px]:grid-cols-[auto_minmax(0,1fr)]"
+                      className="tw:grid tw:min-h-20 tw:grid-cols-[auto_minmax(0,1fr)_auto] tw:items-center tw:gap-3 tw:px-4 tw:py-3 tw:transition-colors tw:hover:bg-surface-raised tw:focus-visible:outline-2 tw:focus-visible:outline-offset-[-3px] tw:focus-visible:outline-ring tw:max-[560px]:grid-cols-[auto_minmax(0,1fr)]"
                       href={localizedWorkspacePath(
                         `/settings?workspace=${encodeURIComponent(workspace.id)}&section=${
                           workspaceLifecycleStates.get(workspace.id) === "deletion_pending"
-                            ? "lifecycle"
+                            ? "workspace-settings"
                             : ["admin", "owner"].includes(workspaceRoles.get(workspace.id) ?? "")
-                            ? "members"
-                            : workspaceRoles.get(workspace.id) === "editor"
-                              ? "analyses"
+                            ? "access"
                               : "workspaces"
                         }`,
                         locale,
@@ -346,7 +320,7 @@ export default async function SettingsPage({
                         workspace.id === activeWorkspaceId ? "true" : undefined
                       }
                     >
-                      <div className="tw:grid tw:size-12 tw:place-items-center tw:rounded-surface tw:border tw:border-primary/20 tw:bg-surface-inset tw:font-mono tw:text-xs tw:font-medium tw:text-primary">
+                      <div className="tw:grid tw:size-10 tw:place-items-center tw:rounded-control tw:border tw:border-primary/20 tw:bg-surface-inset tw:font-mono tw:text-2xs tw:font-medium tw:text-primary">
                         {workspace.name.slice(0, 2).toUpperCase()}
                       </div>
                       <div>
@@ -365,14 +339,14 @@ export default async function SettingsPage({
                         {workspaceLifecycleStates.get(workspace.id) === "deletion_pending"
                           ? copy.workspaceLifecycle.deletionPending
                           : workspace.id === activeWorkspaceId
-                            ? `${workspaceRoles.get(workspace.id)} · ${copy.settings.currentSuffix}`
-                            : workspaceRoles.get(workspace.id)}
+                            ? `${localizedRole(workspaceRoles.get(workspace.id))} · ${copy.settings.currentSuffix}`
+                            : localizedRole(workspaceRoles.get(workspace.id))}
                       </span>
                     </a>
                   </article>
                 ))}
                 {visibleWorkspaces.length === 0 ? (
-                  <div className="tw:px-7 tw:py-16 tw:text-center">
+                  <div className="tw:px-7 tw:py-12 tw:text-center">
                     <span className="tw:mx-auto tw:mb-4 tw:grid tw:size-12 tw:place-items-center tw:rounded-full tw:bg-selection tw:text-primary">＋</span>
                     <strong className="tw:block tw:text-sm tw:font-medium tw:text-foreground">
                       {copy.settings.emptyTitle}
@@ -391,32 +365,19 @@ export default async function SettingsPage({
         {activeManagementArea
         && activeManagementDetails
         && activeWorkspace
-        && (activeManagementArea === "lifecycle"
+        && (activeManagementArea === "workspace-settings"
           ? canDeleteActiveWorkspace
-          : activeManagementArea === "analyses"
-            ? true
-            : canManageActiveWorkspace) ? (
+          : canManageActiveWorkspace) ? (
           <section
-            className="tw:scroll-mt-32 tw:pt-[clamp(56px,7vw,88px)]"
-            id="workspace-settings"
+            className="tw:scroll-mt-28 tw:pt-8"
+            id={activeManagementArea}
           >
-            <ConsoleSectionHeading
-              index={activeManagementDetails.index}
-              title={activeManagementDetails.label}
-            >
-              {activeWorkspace.name} · {activeManagementDetails.description}
-            </ConsoleSectionHeading>
             <WorkspaceManagementPanel
               workspaceId={activeWorkspace.id}
-              workspaceName={activeWorkspace.name}
-              workspaceSlug={activeWorkspace.slug}
               gcpSetupId={requestedGcpSetupId}
               initialIntegrationId={requestedIntegrationId}
-              initialArticleId={requestedArticleId}
               initialConnectionId={requestedConnectionId}
               area={activeManagementArea}
-              canEditWorkspace={canEditActiveWorkspace}
-              locale={locale}
             />
           </section>
         ) : null}

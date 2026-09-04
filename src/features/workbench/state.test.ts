@@ -83,6 +83,7 @@ import {
   selectGuidedDemoEnvironment,
 } from "../onboarding/demoSetup";
 import { findAgentSqlProposal, isSqlProposalTool } from "../agents/sqlProposal";
+import { isKnowledgeEnvironmentRevisionConflict } from "../knowledge/bindEnvironmentConnection";
 import { actionSearchShortcutTargetIsEditable } from "../actionSearch/useActionSearchDialog";
 import { tabFocusTargetIndex } from "../../design-system/tabKeyboard";
 import {
@@ -185,9 +186,17 @@ describe("workbench state ownership", () => {
     expect(recoveryUrl.searchParams.get("workspace")).toBe(
       "11111111-1111-4111-8111-111111111111",
     );
-    expect(recoveryUrl.searchParams.get("section")).toBe("databases");
+    expect(recoveryUrl.searchParams.get("section")).toBe("providers");
     expect(recoveryUrl.searchParams.get("connection")).toBe(managedConnectionId);
     expect(recoveryUrl.hash).toBe(`#database-${managedConnectionId}`);
+    expect(isKnowledgeEnvironmentRevisionConflict({
+      kind: "network",
+      message: "workspace service returned 409 Conflict: Environment or connection changed",
+    })).toBe(true);
+    expect(isKnowledgeEnvironmentRevisionConflict({
+      kind: "authentication",
+      message: "workspace service returned 409 Conflict: Environment or connection changed",
+    })).toBe(false);
 
     const selectedDraft = "SELECT 1;\n  SELECT 2;  \nSELECT 3;";
     const selectedStart = selectedDraft.indexOf("  SELECT 2;");

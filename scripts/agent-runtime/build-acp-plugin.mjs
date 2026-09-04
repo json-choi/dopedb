@@ -17,6 +17,7 @@ import { spawn } from "node:child_process";
 const repository = resolve(import.meta.dirname, "../..");
 const catalogPath = join(repository, "agent-runtime/plugins/catalog.json");
 const pinsPath = join(repository, "agent-runtime/plugins/package.json");
+const applicationPackagePath = join(repository, "package.json");
 const acpPublicKeyPath = join(
   repository,
   "src-tauri/resources/agent-runtime/acp-plugin.pub",
@@ -34,7 +35,8 @@ for (let index = 2; index < process.argv.length; index += 2) {
 const checkOnly = process.argv.includes("--check-config");
 const catalog = JSON.parse(await readFile(catalogPath, "utf8"));
 const pins = JSON.parse(await readFile(pinsPath, "utf8"));
-validateCatalog(catalog, pins);
+const applicationPackage = JSON.parse(await readFile(applicationPackagePath, "utf8"));
+validateCatalog(catalog, pins, applicationPackage);
 await validateSigningPublicKey(catalog);
 if (checkOnly) {
   console.log(`verified ${catalog.plugins.length} pinned ACP adapter bundles`);
@@ -155,9 +157,21 @@ try {
   await rm(temporary, { recursive: true, force: true });
 }
 
-function validateCatalog(value, pinPackage) {
+function validateCatalog(value, pinPackage, applicationPackage) {
   if (value.schemaVersion !== 1 || value.keyId !== "71F10E6488C84C71" || value.plugins?.length !== 2) {
     fail("invalid ACP plugin catalog header");
+  }
+  const applicationVersion = parseReleaseVersion(applicationPackage.version, "DopeDB application");
+  const minimumVersion = parseReleaseVersion(value.dopedbVersionMin, "minimum DopeDB compatibility");
+  const maximumVersion = parseReleaseVersion(value.dopedbVersionMax, "maximum DopeDB compatibility");
+  if (compareVersions(minimumVersion, maximumVersion) > 0) {
+    fail("invalid DopeDB compatibility range");
+  }
+  if (
+    compareVersions(applicationVersion, minimumVersion) < 0
+    || compareVersions(applicationVersion, maximumVersion) > 0
+  ) {
+    fail(`ACP plugin catalog does not support DopeDB ${applicationPackage.version}`);
   }
   const ids = new Set();
   for (const plugin of value.plugins) {
@@ -168,6 +182,19 @@ function validateCatalog(value, pinPackage) {
     if (plugin.upstreamTag !== `v${plugin.adapterVersion}` || !/^[0-9a-f]{40}$/.test(plugin.upstreamCommit)) fail("invalid upstream pin");
     if (!/^\d+\.\d+\.\d+$/.test(plugin.adapterBundleVersion)) fail("invalid adapter bundle version");
   }
+}
+
+function parseReleaseVersion(value, label) {
+  const match = /^(\d+)\.(\d+)\.(\d+)$/u.exec(value);
+  if (!match) fail(`${label} version is invalid`);
+  return match.slice(1).map(Number);
+}
+
+function compareVersions(left, right) {
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) return left[index] - right[index];
+  }
+  return 0;
 }
 
 async function validateSigningPublicKey(value) {

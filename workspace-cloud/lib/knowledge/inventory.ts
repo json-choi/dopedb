@@ -103,7 +103,9 @@ export async function listKnowledgeEnvironmentConnections(workspaceId: string) {
     environmentRevision: knowledgeEnvironmentConnection.environmentRevision,
     connectionId: knowledgeEnvironmentConnection.connectionId,
     connectionRevision: knowledgeEnvironmentConnection.connectionRevision,
-    currentConnectionRevision: workspaceConnection.revision,
+    // Knowledge grants pin the public connection content revision. The
+    // revocation/lease epoch remains an internal execution-time authority.
+    currentConnectionRevision: workspaceConnection.contentRevision,
     connectionContentRevision: workspaceConnection.contentRevision,
     connectionName: workspaceConnection.name,
     role: knowledgeEnvironmentConnection.role,

@@ -42,11 +42,13 @@ stable upgrade targets:
 
 ## Audit record
 
-The 2026-09-04 refresh aligned pnpm 11.25.0 across every JavaScript project and
-CI workflow. The desktop, Workspace Cloud, site, analytics Worker, scheduler
+The 2026-09-05 review kept pnpm 11.25.0 aligned across every JavaScript project
+and CI workflow. The desktop, Workspace Cloud, site, analytics Worker, scheduler
 Worker, and official ACP adapter pins have no update eligible under the
-1,440-minute policy. Notable reviewed upgrades include ESLint 10, Vite 8.2,
-Next.js 16.3, Better Auth 1.7, and the current Claude and Codex ACP adapters.
+1,440-minute policy. Claude ACP 0.74.0 and Codex ACP 1.9.0 were intentionally
+held because they were less than 24 hours old. Notable reviewed upgrades include
+ESLint 10, Vite 8.2, Next.js 16.3, Better Auth 1.7, and the current eligible
+Claude and Codex ACP adapters.
 
 Better Auth 1.7 changes account identity storage. Because this repository is
 still on its resettable pre-MVP baseline, the schema now declares the required

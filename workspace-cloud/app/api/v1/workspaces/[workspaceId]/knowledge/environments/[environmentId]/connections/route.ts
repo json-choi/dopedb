@@ -39,7 +39,9 @@ export async function GET(request: Request, context: RouteContext) {
     environmentRevision: knowledgeEnvironmentConnection.environmentRevision,
     connectionId: knowledgeEnvironmentConnection.connectionId,
     connectionRevision: knowledgeEnvironmentConnection.connectionRevision,
-    currentConnectionRevision: workspaceConnection.revision,
+    // Desktop pins the public content revision. The internal revocation/lease
+    // epoch must never leak into or invalidate a Project resource binding.
+    currentConnectionRevision: workspaceConnection.contentRevision,
     connectionContentRevision: workspaceConnection.contentRevision,
     connectionName: workspaceConnection.name,
     role: knowledgeEnvironmentConnection.role,
@@ -115,7 +117,7 @@ export async function POST(request: Request, context: RouteContext) {
     ), scope AS MATERIALIZED (
       SELECT environment."id", environment."revision" AS environment_revision,
         connection."id" AS connection_id,
-        connection."revision" AS connection_revision,
+        connection."content_revision" AS connection_revision,
         connection."content_revision" AS connection_content_revision,
         connection."name" AS connection_name
       FROM ${knowledgeProjectEnvironment} AS environment
@@ -130,7 +132,7 @@ export async function POST(request: Request, context: RouteContext) {
        AND connection."revocation_pending_at" IS NULL
        AND connection."revocation_claim_id" IS NULL
        AND (${expectedConnectionRevision === null}
-         OR connection."revision" = ${expectedConnectionRevision ?? 0})
+         OR connection."content_revision" = ${expectedConnectionRevision ?? 0})
       CROSS JOIN actor_authority
       WHERE environment."organization_id" = ${workspaceId}
         AND environment."id" = ${environmentId}::uuid

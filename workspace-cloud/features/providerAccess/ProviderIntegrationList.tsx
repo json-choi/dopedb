@@ -39,6 +39,7 @@ export function ProviderIntegrationList({
     setNeonConfiguration,
     setVaultConfiguration,
   } = controller;
+  const configuredProviders = providers.filter((provider) => provider.configured);
   return (
     <div className="tw:grid tw:content-start tw:gap-7">
       <section className="tw:grid tw:gap-2">
@@ -136,7 +137,7 @@ export function ProviderIntegrationList({
           </small>
         </div>
         <div className="tw:grid tw:border-t tw:border-border">
-          {providers.map((provider) => {
+          {configuredProviders.map((provider) => {
             const connectedCount = integrations.filter(
               (item) => item.provider === provider.id,
             ).length;
@@ -172,19 +173,22 @@ export function ProviderIntegrationList({
                     </span>
                   ) : null}
                   <ControlButton
-                    disabled={!provider.configured || mutation !== ""}
+                    disabled={mutation !== ""}
                     onClick={() => beginConnect(provider)}
                   >
-                    {provider.configured
-                      ? connectedCount > 0
-                        ? copy.addAccount
-                        : copy.connectAccount
-                      : copy.serverSetup}
+                    {connectedCount > 0
+                      ? copy.addAccount
+                      : copy.connectAccount}
                   </ControlButton>
                 </div>
               </div>
             );
           })}
+          {configuredProviders.length === 0 ? (
+            <p className="tw:m-0 tw:border-b tw:border-border tw:py-6 tw:text-2xs tw:leading-body tw:text-muted-foreground">
+              {copy.unavailable}
+            </p>
+          ) : null}
         </div>
       </section>
 

@@ -380,7 +380,7 @@ export function WorkspaceLifecyclePanel({
     <div className="tw:grid tw:gap-5 tw:p-6 tw:max-[640px]:p-4">
       <div className="tw:flex tw:flex-wrap tw:items-start tw:justify-between tw:gap-4">
         <div>
-          <h3 className="tw:m-0 tw:text-base tw:font-medium tw:text-foreground">{copy.title}</h3>
+          <h2 className="tw:m-0 tw:text-base tw:font-semibold tw:text-foreground">{copy.title}</h2>
           <p className="tw:mt-2 tw:mb-0 tw:max-w-[720px] tw:text-xs tw:leading-body tw:text-muted-foreground">{copy.description}</p>
         </div>
         <span className="tw:rounded-full tw:border tw:border-primary/20 tw:bg-selection tw:px-3 tw:py-1.5 tw:font-mono tw:text-2xs tw:text-primary">{copy.proof}</span>
@@ -388,11 +388,11 @@ export function WorkspaceLifecyclePanel({
 
       {error ? <p className="tw:m-0 tw:rounded-surface tw:border tw:border-danger/25 tw:bg-danger/5 tw:px-4 tw:py-3 tw:text-xs tw:text-danger" role="alert">{error}</p> : null}
 
-      <div className="tw:grid tw:grid-cols-2 tw:gap-5 tw:max-[900px]:grid-cols-1">
-        <section className="tw:min-w-0 tw:rounded-panel tw:border tw:border-border tw:bg-surface-inset/45 tw:p-5">
+      <div className="tw:grid tw:grid-cols-2 tw:gap-8 tw:max-[900px]:grid-cols-1">
+        <section className="tw:min-w-0">
           <div className="tw:flex tw:items-start tw:justify-between tw:gap-4">
             <div>
-              <h4 className="tw:m-0 tw:text-sm tw:font-medium tw:text-foreground">{copy.backupTitle}</h4>
+              <h3 className="tw:m-0 tw:text-sm tw:font-medium tw:text-foreground">{copy.backupTitle}</h3>
               <p className="tw:mt-2 tw:mb-0 tw:text-xs tw:leading-body tw:text-muted-foreground">{copy.backupDescription}</p>
             </div>
             <ControlButton tone="primary" onClick={() => void mutate("create", "/backups", { method: "POST" })} disabled={mutation !== ""}>
@@ -438,9 +438,9 @@ export function WorkspaceLifecyclePanel({
           </div>
         </section>
 
-        <div className="tw:grid tw:content-start tw:gap-5">
-          <section className="tw:rounded-panel tw:border tw:border-border tw:bg-surface-inset/45 tw:p-5">
-            <h4 className="tw:m-0 tw:text-sm tw:font-medium tw:text-foreground">{copy.encryptionTitle}</h4>
+        <div className="tw:grid tw:content-start tw:gap-7">
+          <section>
+            <h3 className="tw:m-0 tw:text-sm tw:font-medium tw:text-foreground">{copy.encryptionTitle}</h3>
             <p className="tw:mt-2 tw:mb-0 tw:text-xs tw:leading-body tw:text-muted-foreground">{copy.encryptionDescription}</p>
             {rotation?.activeVersion ? (
               <div className="tw:mt-5 tw:flex tw:flex-wrap tw:items-center tw:justify-between tw:gap-4 tw:rounded-surface tw:border tw:border-border tw:bg-surface tw:p-4">
@@ -462,8 +462,8 @@ export function WorkspaceLifecyclePanel({
             ) : null}
           </section>
 
-          <section className="tw:rounded-panel tw:border tw:border-border tw:bg-surface-inset/45 tw:p-5">
-            <h4 className="tw:m-0 tw:text-sm tw:font-medium tw:text-foreground">{copy.retentionTitle}</h4>
+          <section className="tw:border-t tw:border-border tw:pt-6">
+            <h3 className="tw:m-0 tw:text-sm tw:font-medium tw:text-foreground">{copy.retentionTitle}</h3>
             <p className="tw:mt-2 tw:mb-0 tw:text-xs tw:leading-body tw:text-muted-foreground">{copy.retentionDescription}</p>
             <dl className="tw:mt-5 tw:grid tw:grid-cols-[minmax(0,1fr)_auto] tw:gap-x-5 tw:gap-y-3 tw:text-xs">
               <dt className="tw:text-muted-foreground">{copy.activeBackups}</dt><dd className="tw:m-0 tw:font-medium">{lifecycle.backupCount}</dd>
@@ -474,35 +474,42 @@ export function WorkspaceLifecyclePanel({
         </div>
       </div>
 
-      <section className="tw:rounded-panel tw:border tw:border-danger/30 tw:bg-danger/5 tw:p-5">
-        <h4 className="tw:m-0 tw:text-sm tw:font-medium tw:text-danger">{copy.dangerTitle}</h4>
-        <p className="tw:mt-2 tw:mb-0 tw:max-w-[800px] tw:text-xs tw:leading-body tw:text-muted-foreground">{copy.dangerDescription}</p>
-        {blockerRows.some(([, count]) => count > 0) ? (
-          <div className="tw:mt-5 tw:rounded-surface tw:border tw:border-danger/20 tw:bg-surface tw:p-4">
-            <strong className="tw:text-xs tw:font-medium tw:text-foreground">{copy.blockersTitle}</strong>
-            <ul className="tw:mt-3 tw:mb-0 tw:grid tw:gap-2 tw:pl-5 tw:text-xs tw:text-muted-foreground">
-              {blockerRows.filter(([, count]) => count > 0).map(([label, count]) => <li key={label}>{count} · {label}</li>)}
-            </ul>
-            <div className="tw:mt-4 tw:flex tw:flex-wrap tw:gap-2">
-              {lifecycle.blockers.providerIntegrations > 0 || lifecycle.blockers.credentialLeases > 0 || lifecycle.blockers.providerOperations > 0 ? (
-                <ControlLink href={localizedWorkspacePath(`/settings?workspace=${encodeURIComponent(workspaceId)}&section=cloud-accounts`, locale)}>{copy.manageCloudAccounts}</ControlLink>
-              ) : null}
-              {lifecycle.blockers.memberRevocations > 0 ? (
-                <ControlLink href={localizedWorkspacePath(`/settings?workspace=${encodeURIComponent(workspaceId)}&section=members`, locale)}>{copy.manageMembers}</ControlLink>
-              ) : null}
+      <details className="tw:group tw:overflow-hidden tw:rounded-surface tw:border tw:border-danger/30 tw:bg-danger/5">
+        <summary className="tw:flex tw:cursor-pointer tw:list-none tw:items-center tw:justify-between tw:gap-5 tw:p-5 tw:[&::-webkit-details-marker]:hidden tw:focus-visible:outline-2 tw:focus-visible:outline-offset-[-3px] tw:focus-visible:outline-ring">
+          <span className="tw:grid tw:gap-1">
+            <strong className="tw:text-sm tw:font-medium tw:text-danger">{copy.dangerTitle}</strong>
+            <small className="tw:max-w-[800px] tw:text-xs tw:leading-body tw:text-muted-foreground">{copy.dangerDescription}</small>
+          </span>
+          <span className="tw:grid tw:size-7 tw:shrink-0 tw:place-items-center tw:rounded-full tw:border tw:border-danger/30 tw:text-base tw:text-danger tw:transition-transform tw:group-open:rotate-45" aria-hidden="true">+</span>
+        </summary>
+        <div className="tw:border-t tw:border-danger/20 tw:p-5">
+          {blockerRows.some(([, count]) => count > 0) ? (
+            <div className="tw:rounded-surface tw:border tw:border-danger/20 tw:bg-surface tw:p-4">
+              <strong className="tw:text-xs tw:font-medium tw:text-foreground">{copy.blockersTitle}</strong>
+              <ul className="tw:mt-3 tw:mb-0 tw:grid tw:gap-2 tw:pl-5 tw:text-xs tw:text-muted-foreground">
+                {blockerRows.filter(([, count]) => count > 0).map(([label, count]) => <li key={label}>{count} · {label}</li>)}
+              </ul>
+              <div className="tw:mt-4 tw:flex tw:flex-wrap tw:gap-2">
+                {lifecycle.blockers.providerIntegrations > 0 || lifecycle.blockers.credentialLeases > 0 || lifecycle.blockers.providerOperations > 0 ? (
+                  <ControlLink href={localizedWorkspacePath(`/settings?workspace=${encodeURIComponent(workspaceId)}&section=providers`, locale)}>{copy.manageCloudAccounts}</ControlLink>
+                ) : null}
+                {lifecycle.blockers.memberRevocations > 0 ? (
+                  <ControlLink href={localizedWorkspacePath(`/settings?workspace=${encodeURIComponent(workspaceId)}&section=access`, locale)}>{copy.manageMembers}</ControlLink>
+                ) : null}
+              </div>
             </div>
+          ) : null}
+          <label className="tw:mt-5 tw:grid tw:max-w-[520px] tw:gap-2">
+            <span className="tw:font-mono tw:text-2xs tw:font-medium tw:tracking-[0.06em] tw:text-muted-foreground tw:uppercase">{copy.exactName}</span>
+            <ControlInput value={confirmation} onChange={(event) => setConfirmation(event.target.value)} placeholder={lifecycle.workspaceName} autoComplete="off" />
+          </label>
+          <div className="tw:mt-4">
+            <ControlButton tone="danger" onClick={() => void scheduleDeletion()} disabled={mutation !== "" || !lifecycle.canScheduleDeletion || confirmation !== lifecycle.workspaceName}>
+              {mutation === "schedule" ? copy.schedulingDeletion : copy.scheduleDeletion}
+            </ControlButton>
           </div>
-        ) : null}
-        <label className="tw:mt-5 tw:grid tw:max-w-[520px] tw:gap-2">
-          <span className="tw:font-mono tw:text-2xs tw:font-medium tw:tracking-[0.06em] tw:text-muted-foreground tw:uppercase">{copy.exactName}</span>
-          <ControlInput value={confirmation} onChange={(event) => setConfirmation(event.target.value)} placeholder={lifecycle.workspaceName} autoComplete="off" />
-        </label>
-        <div className="tw:mt-4">
-          <ControlButton tone="danger" onClick={() => void scheduleDeletion()} disabled={mutation !== "" || !lifecycle.canScheduleDeletion || confirmation !== lifecycle.workspaceName}>
-            {mutation === "schedule" ? copy.schedulingDeletion : copy.scheduleDeletion}
-          </ControlButton>
         </div>
-      </section>
+      </details>
     </div>
   );
 }

@@ -37,6 +37,9 @@ const knowledgeSourceBrowseRoute =
   "workspace-cloud/app/api/v1/workspaces/[workspaceId]/knowledge/sources/[sourceId]/browse/route.ts";
 const knowledgeSourceBrowseApplication =
   "workspace-cloud/lib/knowledge/source-browser-application.ts";
+const knowledgeEnvironmentConnectionsRoute =
+  "workspace-cloud/app/api/v1/workspaces/[workspaceId]/knowledge/environments/[environmentId]/connections/route.ts";
+const knowledgeInventory = "workspace-cloud/lib/knowledge/inventory.ts";
 const workspaceSchedulerService = "workspace-cloud/lib/workspace-background-scheduler.ts";
 const workspaceSchedulerWorker = "workspace-scheduler-cloudflare/src/index.ts";
 
@@ -291,6 +294,36 @@ export function collectWorkspaceCloudHttpDiagnostics({ lineCount, read, relative
     if (!sourceBrowseApplicationSource.includes(token)) {
       diagnostics.push(`${knowledgeSourceBrowseApplication}: exact source authority is missing ${token}`);
     }
+  }
+
+  const knowledgeEnvironmentConnectionsSource = read(knowledgeEnvironmentConnectionsRoute);
+  const knowledgeInventorySource = read(knowledgeInventory);
+  if (
+    knowledgeEnvironmentConnectionsSource.includes("workspaceConnection.revision")
+    || knowledgeEnvironmentConnectionsSource.includes('connection."revision"')
+  ) {
+    diagnostics.push(
+      `${knowledgeEnvironmentConnectionsRoute}: Knowledge bindings must not pin the internal connection lease epoch`,
+    );
+  }
+  for (const [filePath, source, requiredToken] of [
+    [
+      knowledgeEnvironmentConnectionsRoute,
+      knowledgeEnvironmentConnectionsSource,
+      "workspaceConnection.contentRevision",
+    ],
+    [knowledgeInventory, knowledgeInventorySource, "workspaceConnection.contentRevision"],
+  ]) {
+    if (!source.includes(requiredToken)) {
+      diagnostics.push(
+        `${filePath}: Knowledge bindings must pin the public connection content revision`,
+      );
+    }
+  }
+  if (knowledgeInventorySource.includes("workspaceConnection.revision")) {
+    diagnostics.push(
+      `${knowledgeInventory}: Knowledge inventory must not expose the internal connection lease epoch`,
+    );
   }
 
   const schedulerServiceSource = read(workspaceSchedulerService);

@@ -367,9 +367,9 @@ export function ConnectionAccessPanel({ workspaceId }: { workspaceId: string }) 
     <section className="tw:grid tw:gap-3 tw:p-6 tw:max-[640px]:p-4">
       <header className="tw:flex tw:items-start tw:justify-between tw:gap-3">
         <div className="tw:grid tw:gap-1">
-          <strong className="tw:text-ui tw:text-foreground">
+          <h2 className="tw:m-0 tw:text-ui tw:font-semibold tw:text-foreground">
             {copy.title}
-          </strong>
+          </h2>
           <small className="tw:text-xs tw:leading-body tw:text-muted-foreground">
             {copy.description}
           </small>

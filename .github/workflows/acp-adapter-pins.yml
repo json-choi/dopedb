@@ -14,8 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -37,14 +36,33 @@ jobs:
             --no-fund
           node scripts/agent-runtime/build-acp-plugin.mjs --check-config
 
-      - uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
-        with:
-          branch: automation/acp-adapter-pins
-          delete-branch: true
-          commit-message: "build(agent-runtime): 공식 ACP 어댑터 핀을 갱신한다"
-          title: "build(agent-runtime): 공식 ACP 어댑터 핀 갱신"
-          body: |
-            공식 Claude/Codex ACP 릴리스의 exact npm version, upstream tag/commit, lockfile을 함께 갱신합니다.
+      - name: Prepare a reviewable patch when pins changed
+        id: diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "ACP adapter pins already match the latest verified upstream releases." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git diff --binary > "$RUNNER_TEMP/acp-adapter-pins.patch"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          {
+            echo "## ACP adapter pin update available"
+            echo
+            echo "Download the patch artifact, review it, and apply it through the repository's owner-approved direct-main flow."
+            echo
+            echo '```text'
+            git diff --stat
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
-            병합 전 ACP adapter compatibility workflow와 candidate 초기화 검증이 필요합니다. 이 PR은 앱, CLI, Skill 버전을 올리지 않습니다.
-          labels: dependencies,agent-runtime
+      - name: Upload the review patch
+        if: steps.diff.outputs.changed == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: acp-adapter-pins-${{ github.run_id }}
+          path: ${{ runner.temp }}/acp-adapter-pins.patch
+          if-no-files-found: error
+          retention-days: 14

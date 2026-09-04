@@ -22,9 +22,9 @@ export function CloudAccountPanel({
     <section className="tw:grid tw:gap-5 tw:p-6 tw:max-[640px]:p-4">
       <header className="tw:flex tw:items-start tw:justify-between tw:gap-4 tw:max-[640px]:grid">
         <div className="tw:grid tw:gap-1">
-          <strong className="tw:text-sm tw:text-foreground">
+          <h2 className="tw:m-0 tw:text-sm tw:font-semibold tw:text-foreground">
             {copy.title}
-          </strong>
+          </h2>
           <small className="tw:max-w-[44rem] tw:text-2xs tw:leading-body tw:text-muted-foreground">
             {copy.description}
           </small>

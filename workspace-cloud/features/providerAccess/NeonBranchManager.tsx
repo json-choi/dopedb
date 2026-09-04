@@ -255,7 +255,7 @@ export function NeonBranchManager({
                     <ControlLink
                       href={localizedWorkspacePath(
                         `/settings?workspace=${encodeURIComponent(workspaceId)}`
-                          + `&section=databases&integration=${encodeURIComponent(selectedTarget?.integration.id ?? "")}`,
+                          + `&section=providers&integration=${encodeURIComponent(selectedTarget?.integration.id ?? "")}`,
                         locale,
                       )}
                       data-tone="primary"

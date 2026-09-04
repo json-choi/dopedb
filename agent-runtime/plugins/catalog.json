@@ -5,7 +5,7 @@
   "nodeVersionMin": "24.0.0",
   "nodeVersionMax": "24.99.99",
   "dopedbVersionMin": "0.3.33",
-  "dopedbVersionMax": "0.3.99",
+  "dopedbVersionMax": "0.4.99",
   "plugins": [
     {
       "id": "dopedb.acp.claude",

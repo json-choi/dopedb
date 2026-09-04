@@ -2223,7 +2223,7 @@ describe("provider credential Tauri adapter", () => {
       'confirmation !== lifecycle.workspaceName',
     );
     expect(workspaceSettingsNavigationSource).toContain(
-      'item.id === "lifecycle" && !canDeleteWorkspace',
+      'item.id === "workspace-settings" && !canDeleteWorkspace',
     );
     expect(workspaceVersioningStoreSource).toContain("readonlyDefault: true");
     expect(workspaceVersioningStoreSource).toContain("allowWrites: false");
