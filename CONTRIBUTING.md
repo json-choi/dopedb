@@ -130,6 +130,13 @@ macOS 서명 활성화는 `.release/macos-distribution.json`의 체크인된
 요구·주장하지 않는다. 활성화한 뒤에는 ARM64/x64 모두 Developer ID·공증·
 staple·Gatekeeper와 동일 app payload 영수증을 통과하지 못하면 실패한다.
 
+카나리 설치 파일은 같은 저장소의 `work/<github-login>/<topic>` PR에 `canary`
+라벨을 붙여 비권한 `canary-build` 워크플로에서만 빌드한다. 발행은 `main`의 수동
+`canary-publish` 워크플로에 성공한 build run ID를 전달하며, 호출자가 소유한 PR의
+현재 head인지 확인한 뒤 `canary-<github-login>` 환경 승인을 거친다. 발행 job은
+다운로드한 설치 파일을 실행하지 않고 updater metadata와 stable-channel asset이
+없는 unsigned prerelease로만 공개한다.
+
 사용자용 릴리스 노트 파이프라인은 정식 MVP 전까지 `prepared` 모드다.
 `.release-notes/config.json`이 `prepared`인 동안 production fragment를 요구하거나
 적립하지 않고 기존 다운로드 안내문을 그대로 발행한다. 정식 MVP 이후 사용자의

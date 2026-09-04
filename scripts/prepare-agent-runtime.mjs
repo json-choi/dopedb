@@ -4,15 +4,12 @@ import {
   chmodSync,
   copyFileSync,
   existsSync,
-  closeSync,
   mkdirSync,
   mkdtempSync,
-  openSync,
   readFileSync,
   renameSync,
   rmSync,
   statSync,
-  writeSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -21,6 +18,26 @@ import { fileURLToPath } from "node:url";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const NODE_DIST_ORIGIN = "https://nodejs.org";
+const PINNED_NODE_RUNTIME_VERSION = "24.19.0";
+const PINNED_NODE_DIST_SOURCE =
+  `${NODE_DIST_ORIGIN}/dist/v${PINNED_NODE_RUNTIME_VERSION}/`;
+const PINNED_NODE_LAYOUTS = {
+  "aarch64-apple-darwin": {
+    archive: `node-v${PINNED_NODE_RUNTIME_VERSION}-darwin-arm64.tar.gz`,
+    executable: `node-v${PINNED_NODE_RUNTIME_VERSION}-darwin-arm64/bin/node`,
+    licenseFile: `node-v${PINNED_NODE_RUNTIME_VERSION}-darwin-arm64/LICENSE`,
+  },
+  "x86_64-apple-darwin": {
+    archive: `node-v${PINNED_NODE_RUNTIME_VERSION}-darwin-x64.tar.gz`,
+    executable: `node-v${PINNED_NODE_RUNTIME_VERSION}-darwin-x64/bin/node`,
+    licenseFile: `node-v${PINNED_NODE_RUNTIME_VERSION}-darwin-x64/LICENSE`,
+  },
+  "x86_64-pc-windows-msvc": {
+    archive: `node-v${PINNED_NODE_RUNTIME_VERSION}-win-x64.zip`,
+    executable: `node-v${PINNED_NODE_RUNTIME_VERSION}-win-x64/node.exe`,
+    licenseFile: `node-v${PINNED_NODE_RUNTIME_VERSION}-win-x64/LICENSE`,
+  },
+};
 const catalogPath = join(
   repositoryRoot,
   "src-tauri/resources/agent-runtime/runtime-catalog.json",
@@ -77,38 +94,21 @@ if (!existsSync(archivePath) || sha256File(archivePath) !== platform.archiveSha2
   );
   rmSync(temporaryArchive, { force: true });
   try {
-    // validateCatalog pins the HTTPS origin and exact per-target filename.
-    // codeql[js/file-access-to-http]
-    const response = await fetch(new URL(platform.archive, catalog.source), {
+    const response = await fetch(nodeRuntimeDownloadUrl(targetTriple), {
       redirect: "error",
     });
     if (!response.ok || !response.body) {
       throw new Error(`Node runtime download failed with HTTP ${response.status}`);
     }
-    const file = openSync(temporaryArchive, "wx", 0o600);
-    let written = 0;
-    try {
-      for await (const chunk of response.body) {
-        written += chunk.byteLength;
-        if (written > platform.archiveBytes) {
-          throw new Error("Node runtime response exceeded its pinned byte length");
-        }
-        let offset = 0;
-        while (offset < chunk.byteLength) {
-          // Length and SHA-256 are pinned before this temporary file is promoted.
-          // codeql[js/http-to-file-access]
-          offset += writeSync(file, chunk, offset);
-        }
-      }
-    } finally {
-      closeSync(file);
-    }
-    if (written !== platform.archiveBytes) {
-      throw new Error(
-        `Node runtime archive size mismatch: ${written} != ${platform.archiveBytes}`,
-      );
-    }
-    assertDigest(temporaryArchive, platform.archiveSha256, "Node runtime archive");
+    const verifiedArchive = await readPinnedArchive(
+      response,
+      platform.archiveBytes,
+      platform.archiveSha256,
+    );
+    writeFileSync(temporaryArchive, verifiedArchive, {
+      flag: "wx",
+      mode: 0o600,
+    });
     renameSync(temporaryArchive, archivePath);
   } finally {
     rmSync(temporaryArchive, { force: true });
@@ -169,7 +169,7 @@ try {
     executableBytes,
     archive: platform.archive,
     archiveSha256: platform.archiveSha256,
-    sourceUrl: new URL(platform.archive, catalog.source).href,
+    sourceUrl: nodeRuntimeDownloadUrl(targetTriple),
     license: catalog.license,
     licenseFile: "LICENSE.txt",
     sbomFile: "sbom.spdx.json",
@@ -216,11 +216,10 @@ function validateCatalog(value) {
   if (
     value?.schemaVersion !== 1 ||
     value.runtime !== "node" ||
-    !/^\d+\.\d+\.\d+$/.test(value.version) ||
+    value.version !== PINNED_NODE_RUNTIME_VERSION ||
     !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(value.releasedAt) ||
     value.license !== "MIT" ||
-    source.origin !== NODE_DIST_ORIGIN ||
-    source.pathname !== `/dist/v${value.version}/` ||
+    source.href !== PINNED_NODE_DIST_SOURCE ||
     source.username ||
     source.password ||
     source.search ||
@@ -230,33 +229,12 @@ function validateCatalog(value) {
   ) {
     throw new Error("invalid Node runtime catalog header");
   }
-  const requiredTargets = [
-    "aarch64-apple-darwin",
-    "x86_64-apple-darwin",
-    "x86_64-pc-windows-msvc",
-  ];
+  const requiredTargets = Object.keys(PINNED_NODE_LAYOUTS);
   if (Object.keys(value.platforms).sort().join("\n") !== requiredTargets.sort().join("\n")) {
     throw new Error("Node runtime catalog must contain exactly the supported release targets");
   }
-  const expectedLayouts = {
-    "aarch64-apple-darwin": {
-      archive: `node-v${value.version}-darwin-arm64.tar.gz`,
-      executable: `node-v${value.version}-darwin-arm64/bin/node`,
-      licenseFile: `node-v${value.version}-darwin-arm64/LICENSE`,
-    },
-    "x86_64-apple-darwin": {
-      archive: `node-v${value.version}-darwin-x64.tar.gz`,
-      executable: `node-v${value.version}-darwin-x64/bin/node`,
-      licenseFile: `node-v${value.version}-darwin-x64/LICENSE`,
-    },
-    "x86_64-pc-windows-msvc": {
-      archive: `node-v${value.version}-win-x64.zip`,
-      executable: `node-v${value.version}-win-x64/node.exe`,
-      licenseFile: `node-v${value.version}-win-x64/LICENSE`,
-    },
-  };
   for (const [target, platform] of Object.entries(value.platforms)) {
-    const expected = expectedLayouts[target];
+    const expected = PINNED_NODE_LAYOUTS[target];
     if (
       !platform ||
       typeof platform !== "object" ||
@@ -272,6 +250,53 @@ function validateCatalog(value) {
       throw new Error(`invalid Node runtime catalog entry for ${target}`);
     }
   }
+}
+
+function nodeRuntimeDownloadUrl(targetTriple) {
+  switch (targetTriple) {
+    case "aarch64-apple-darwin":
+      return "https://nodejs.org/dist/v24.19.0/node-v24.19.0-darwin-arm64.tar.gz";
+    case "x86_64-apple-darwin":
+      return "https://nodejs.org/dist/v24.19.0/node-v24.19.0-darwin-x64.tar.gz";
+    case "x86_64-pc-windows-msvc":
+      return "https://nodejs.org/dist/v24.19.0/node-v24.19.0-win-x64.zip";
+    default:
+      throw new Error(`bundled Node runtime is not available for target ${targetTriple}`);
+  }
+}
+
+async function readPinnedArchive(response, expectedBytes, expectedSha256) {
+  const declaredLength = response.headers.get("content-length");
+  if (
+    declaredLength !== null
+    && (!/^\d+$/.test(declaredLength) || Number(declaredLength) !== expectedBytes)
+  ) {
+    throw new Error("Node runtime response did not match its pinned byte length");
+  }
+  const reader = response.body.getReader();
+  const chunks = [];
+  let received = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    received += value.byteLength;
+    if (received > expectedBytes) {
+      await reader.cancel();
+      throw new Error("Node runtime response exceeded its pinned byte length");
+    }
+    chunks.push(Buffer.from(value));
+  }
+  if (received !== expectedBytes) {
+    throw new Error(
+      `Node runtime archive size mismatch: ${received} != ${expectedBytes}`,
+    );
+  }
+  const archive = Buffer.concat(chunks, received);
+  const actualSha256 = sha256Bytes(archive);
+  if (actualSha256 !== expectedSha256) {
+    throw new Error("Node runtime archive checksum mismatch");
+  }
+  return archive;
 }
 
 function preparedRuntimeIsCurrent(executable, manifestPath, platform) {
@@ -332,7 +357,7 @@ function createSpdxSbom({
         name: "Node.js",
         SPDXID: "SPDXRef-Package-Nodejs",
         versionInfo: catalog.version,
-        downloadLocation: catalog.source,
+        downloadLocation: PINNED_NODE_DIST_SOURCE,
         filesAnalyzed: true,
         licenseConcluded: "MIT",
         licenseDeclared: "MIT",

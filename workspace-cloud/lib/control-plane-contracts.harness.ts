@@ -582,7 +582,7 @@ describe("GitHub installation authorization state", () => {
       );
       expect(new URLSearchParams(
         String(fetchSpy.mock.calls[0]?.[1]?.body),
-      ).get("code_verifier")).toBe(parsedState.codeVerifier);
+      ).get("code_verifier")).toBe(parsedState.pkceEntropy);
       expect(String(fetchSpy.mock.calls[1]?.[0])).toContain(
         "/user/installations?per_page=100&page=1",
       );
@@ -1053,7 +1053,10 @@ describe("Desktop control-plane contracts", () => {
     expect(JSON.stringify(firstIngressPlan)).not.toContain("203.0.113.7");
     expect(JSON.stringify(firstEnvelopePlan)).not.toContain(firstInstallation);
 
-    const relayEnvelope = parseProductAnalyticsEnvelope(productAnalyticsGolden, analyticsNow);
+    const relayEnvelope = parseProductAnalyticsEnvelope(
+      analyticsEnvelope("desktop_installation_ready", {}),
+      analyticsNow,
+    );
     expect(relayEnvelope).not.toBeNull();
     const previousToken = process.env.PRODUCT_ANALYTICS_CLOUDFLARE_TOKEN;
     const previousUrl = process.env.PRODUCT_ANALYTICS_CLOUDFLARE_URL;

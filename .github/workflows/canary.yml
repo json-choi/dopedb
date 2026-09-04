@@ -1,79 +1,26 @@
-name: canary
+name: canary-build
 
 on:
-  workflow_dispatch:
-    inputs:
-      source_ref:
-        description: "Branch to build (work/<your-github-login>/<topic>)"
-        required: true
-        type: string
+  pull_request:
+    branches:
+      - main
+    types:
+      - labeled
+      - reopened
+      - synchronize
 
 concurrency:
-  group: canary-${{ github.actor }}
+  group: canary-build-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 permissions: {}
 
 jobs:
-  validate:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      contents: read
-    outputs:
-      actor_slug: ${{ steps.release.outputs.actor_slug }}
-      source_ref: ${{ steps.release.outputs.source_ref }}
-      source_sha: ${{ steps.release.outputs.source_sha }}
-      tag: ${{ steps.release.outputs.tag }}
-      version: ${{ steps.release.outputs.version }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          ref: main
-          fetch-depth: 0
-
-      - name: Validate the caller and resolve an immutable source commit
-        id: release
-        shell: bash
-        env:
-          SOURCE_REF: ${{ inputs.source_ref }}
-        run: |
-          set -euo pipefail
-
-          if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
-            echo "Run this workflow from main so the protected workflow definition is used." >&2
-            exit 1
-          fi
-
-          expected_prefix="work/${GITHUB_ACTOR}/"
-          if [[ "$SOURCE_REF" != "$expected_prefix"* ]]; then
-            echo "source_ref must start with $expected_prefix" >&2
-            exit 1
-          fi
-
-          git check-ref-format --branch "$SOURCE_REF" >/dev/null
-          source_sha="$(git ls-remote --exit-code --heads origin "refs/heads/$SOURCE_REF" | awk 'NR == 1 { print $1 }')"
-          if [[ ! "$source_sha" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "Could not resolve $SOURCE_REF to a commit." >&2
-            exit 1
-          fi
-
-          actor_slug="$(printf '%s' "$GITHUB_ACTOR" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9-' '-')"
-          actor_slug="${actor_slug%-}"
-          base_version="$(node -p "require('./src-tauri/tauri.conf.json').version.split('-')[0]")"
-          version="${base_version}-canary.${actor_slug}.${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
-          tag="canary-${actor_slug}-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
-
-          {
-            echo "actor_slug=$actor_slug"
-            echo "source_ref=$SOURCE_REF"
-            echo "source_sha=$source_sha"
-            echo "tag=$tag"
-            echo "version=$version"
-          } >> "$GITHUB_OUTPUT"
-
   build:
-    needs: validate
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      startsWith(github.head_ref, 'work/') &&
+      contains(github.event.pull_request.labels.*.name, 'canary')
     permissions:
       contents: read
     timeout-minutes: 60
@@ -98,12 +45,30 @@ jobs:
             slug: windows-x64
     runs-on: ${{ matrix.platform }}
     steps:
-      # This intentionally builds the caller's canary branch in a read-only job.
-      # It receives no secrets, writes no shared cache, and cannot publish.
-      # codeql[actions/untrusted-checkout/medium]
+      - name: Validate the pull request source
+        shell: bash
+        env:
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          SOURCE_REF: ${{ github.head_ref }}
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          expected_prefix="work/${PR_AUTHOR}/"
+          if [[ "$SOURCE_REF" != "$expected_prefix"* ]]; then
+            echo "Canary branches must start with $expected_prefix" >&2
+            exit 1
+          fi
+          git check-ref-format --branch "$SOURCE_REF" >/dev/null
+          if [[ ! "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "The pull request head must resolve to an immutable commit." >&2
+            exit 1
+          fi
+
+      # Pull-request scope keeps untrusted build code away from the default
+      # branch cache and from every publishing credential.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ needs.validate.outputs.source_sha }}
+          ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
 
       - name: Setup pnpm
@@ -128,13 +93,29 @@ jobs:
       - name: Set isolated canary version
         shell: bash
         env:
-          CANARY_VERSION: ${{ needs.validate.outputs.version }}
+          CANARY_ACTOR: ${{ github.event.pull_request.user.login }}
+          CANARY_RUN_ATTEMPT: ${{ github.run_attempt }}
+          CANARY_RUN_ID: ${{ github.run_id }}
         run: |
           set -euo pipefail
           node --input-type=module <<'NODE'
           import { readFileSync, writeFileSync } from "node:fs";
 
-          const version = process.env.CANARY_VERSION;
+          const actorSlug = process.env.CANARY_ACTOR
+            .toLowerCase()
+            .replace(/[^a-z0-9-]/g, "-")
+            .replace(/-+$/g, "");
+          const runId = process.env.CANARY_RUN_ID;
+          const runAttempt = process.env.CANARY_RUN_ATTEMPT;
+          if (!actorSlug || !/^\d+$/.test(runId) || !/^\d+$/.test(runAttempt)) {
+            throw new Error("Invalid canary version context");
+          }
+          const packageJson = JSON.parse(readFileSync("package.json", "utf8"));
+          const baseVersion = String(packageJson.version).split("-", 1)[0];
+          if (!/^\d+\.\d+\.\d+$/.test(baseVersion)) {
+            throw new Error("Invalid base version");
+          }
+          const version = `${baseVersion}-canary.${actorSlug}.${runId}.${runAttempt}`;
           for (const path of ["package.json", "src-tauri/tauri.conf.json"]) {
             const data = JSON.parse(readFileSync(path, "utf8"));
             data.version = version;
@@ -169,60 +150,10 @@ jobs:
           mkdir -p canary-dist
           cp -- "${files[0]}" "canary-dist/${{ matrix.asset_name }}"
 
-      - name: Upload canary installer
+      - name: Upload untrusted canary installer
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: canary-${{ matrix.slug }}
           path: canary-dist/${{ matrix.asset_name }}
           if-no-files-found: error
           retention-days: 14
-
-  publish:
-    needs:
-      - validate
-      - build
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: write
-    environment:
-      name: canary-${{ needs.validate.outputs.actor_slug }}
-      url: https://github.com/${{ github.repository }}/releases/tag/${{ needs.validate.outputs.tag }}
-    steps:
-      - name: Download installers
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          pattern: canary-*
-          path: release-assets
-          merge-multiple: true
-
-      - name: Publish immutable canary prerelease
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SOURCE_REF: ${{ needs.validate.outputs.source_ref }}
-          SOURCE_SHA: ${{ needs.validate.outputs.source_sha }}
-          TAG: ${{ needs.validate.outputs.tag }}
-          VERSION: ${{ needs.validate.outputs.version }}
-        run: |
-          set -euo pipefail
-          shopt -s nullglob
-          assets=(release-assets/*)
-          if [[ "${#assets[@]}" -ne 3 ]]; then
-            echo "Expected three canary installers, found ${#assets[@]}." >&2
-            exit 1
-          fi
-
-          notes="Canary build from \`${SOURCE_REF}\` at \`${SOURCE_SHA}\`.
-
-          This prerelease is unsigned, does not contain updater metadata, and never enters the stable update channel."
-
-          gh release create "$TAG" \
-            --draft \
-            --prerelease \
-            --latest=false \
-            --target "$SOURCE_SHA" \
-            --title "DopeDB ${VERSION}" \
-            --notes "$notes"
-          gh release upload "$TAG" "${assets[@]}"
-          gh release edit "$TAG" --draft=false --prerelease --latest=false

@@ -5,16 +5,17 @@ import {
 } from "./sqlDraftAnalysis";
 
 const workerScope = self as unknown as {
+  location: { origin: string };
   onmessage:
     | ((event: MessageEvent<SqlDraftAnalysisRequest>) => void)
     | null;
   postMessage(message: SqlDraftAnalysisResult): void;
 };
 
-// This is a dedicated Worker, not a Window message channel: only its creating
-// document can send messages and MessageEvent.origin is empty by specification.
-// codeql[js/missing-origin-check]
 workerScope.onmessage = (event) => {
+  // Dedicated workers normally receive an empty origin. Accept a populated
+  // origin only when it matches the worker's own immutable script origin.
+  if (event.origin !== "" && event.origin !== workerScope.location.origin) return;
   workerScope.postMessage(analyzeSqlDraft(event.data));
 };
 

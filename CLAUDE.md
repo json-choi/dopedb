@@ -237,6 +237,12 @@ control에는 실제 command와 state owner가 있어야 한다.
   선택하기 전에는 `legacy-unsigned`를 유지하며 Apple 자격 증명이나 공증 완료를
   요구·주장하지 않는다. 활성화한 뒤에는 ARM64/x64 모두 Developer ID·공증·
   staple·Gatekeeper와 동일 app payload 영수증을 통과하지 못하면 실패한다.
+- 카나리 설치 파일은 같은 저장소의 `work/<github-login>/<topic>` PR에
+  `canary` 라벨을 붙여 비권한 `canary-build` 워크플로에서만 빌드한다. 발행은
+  `main`의 수동 `canary-publish` 워크플로로 분리하고, 호출자가 소유한 PR의 현재
+  head에서 성공한 build run만 `canary-<github-login>` 환경 승인 뒤 받는다.
+  발행 job은 다운로드한 설치 파일을 신뢰하거나 실행하지 않으며 updater metadata와
+  stable-channel asset이 없는 unsigned prerelease로만 공개한다.
 
 ## 릴리스 노트 준비 상태
 

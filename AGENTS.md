@@ -256,6 +256,15 @@ fragment under `.release-notes/fragments/`; commit and issue links remain eviden
 rather than the explanation itself. The contract and activation checklist live
 in [`.release-notes/README.md`](.release-notes/README.md).
 
+Canary installers must be built only by the unprivileged `canary-build`
+pull-request workflow. A same-repository `work/<github-login>/<topic>` pull
+request opts in with the `canary` label. Publishing is a separate manual
+`canary-publish` workflow from `main`, accepts only the successful current-head
+build run owned by the caller, and remains gated by that caller's
+`canary-<github-login>` environment. The publishing job treats all downloaded
+installers as untrusted, never executes them, and may expose them only as an
+unsigned prerelease without updater metadata or stable-channel assets.
+
 ## graphify
 
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.

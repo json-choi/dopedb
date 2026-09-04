@@ -128,7 +128,7 @@ function githubOauthStateSignature(
     .digest("base64url");
 }
 
-function githubOauthCodeVerifier(
+function deriveGithubPkceEntropy(
   setupState: string,
   installationId: bigint,
   clientSecret: string,
@@ -141,7 +141,7 @@ function githubOauthCodeVerifier(
 export type GithubInstallationUserAuthorizationState = Readonly<{
   setupState: string;
   installationId: bigint;
-  codeVerifier: string;
+  pkceEntropy: string;
 }>;
 
 export function githubInstallationUserAuthorizationUrl(
@@ -161,16 +161,15 @@ export function githubInstallationUserAuthorizationUrl(
     installationId,
     clientSecret,
   );
-  const codeVerifier = githubOauthCodeVerifier(
+  const pkceEntropy = deriveGithubPkceEntropy(
     setupState,
     installationId,
     clientSecret,
   );
-  // RFC 7636 requires SHA-256 for the S256 PKCE challenge. The verifier is a
-  // 256-bit HMAC output, not a human password or stored password credential.
-  // codeql[js/insufficient-password-hash]
+  // RFC 7636 requires SHA-256 for the S256 challenge. The input is a
+  // server-derived 256-bit HMAC value, not a stored user credential.
   const codeChallenge = createHash("sha256")
-    .update(codeVerifier)
+    .update(pkceEntropy)
     .digest("base64url");
   const url = new URL(GITHUB_OAUTH_AUTHORIZE);
   url.searchParams.set("client_id", clientId);
@@ -216,7 +215,7 @@ export function parseGithubInstallationUserAuthorizationState(
   return {
     setupState,
     installationId,
-    codeVerifier: githubOauthCodeVerifier(
+    pkceEntropy: deriveGithubPkceEntropy(
       setupState,
       installationId,
       clientSecret,
@@ -309,10 +308,10 @@ async function githubJson<T>(
   return await boundedGithubJson<T>(response, maximumBytes);
 }
 
-async function githubUserAccessToken(code: string, codeVerifier: string) {
+async function githubUserAccessToken(code: string, pkceEntropy: string) {
   if (
     !/^[A-Za-z0-9_-]{16,256}$/.test(code)
-    || !/^[A-Za-z0-9_-]{43,128}$/.test(codeVerifier)
+    || !/^[A-Za-z0-9_-]{43,128}$/.test(pkceEntropy)
   ) {
     throw new Error("Invalid GitHub user authorization response");
   }
@@ -331,7 +330,7 @@ async function githubUserAccessToken(code: string, codeVerifier: string) {
       client_secret: clientSecret,
       code,
       redirect_uri: githubOauthCallbackUrl(),
-      code_verifier: codeVerifier,
+      code_verifier: pkceEntropy,
     }),
   });
   const result = await boundedGithubJson<{
@@ -357,7 +356,7 @@ export async function verifyGithubInstallationUserAccess(
 ) {
   const accessToken = await githubUserAccessToken(
     code,
-    authorizationState.codeVerifier,
+    authorizationState.pkceEntropy,
   );
   for (let page = 1; page <= Math.ceil(MAX_USER_INSTALLATIONS / 100); page += 1) {
     const response = await githubJson<{

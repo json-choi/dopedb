@@ -302,7 +302,7 @@ Stable release runs only on an owner-created `app-v*` tag whose commit is alread
 - upload installers, updater archives, signatures, and `latest.json`
 - keep the release as a draft until every matrix build and stable alias upload succeeds, then publish it for immutable tag and asset protection
 
-Contributors use `work/<github-login>/<topic>` branches and may manually dispatch `.github/workflows/canary.yml` from `main` for their own branch only. Canary builds publish through a per-user `canary-<github-login>` environment as unsigned prereleases without updater artifacts, updater signatures, or `latest.json`. See `CONTRIBUTING.md` for the exact commands.
+Contributors use same-repository `work/<github-login>/<topic>` pull requests and opt in to the unprivileged `canary-build` workflow with the `canary` label. After a successful build of the current pull-request head, the contributor may manually dispatch `canary-publish` from `main` with that run ID. Publication stays behind the per-user `canary-<github-login>` environment, never executes the downloaded installers, and creates only an unsigned prerelease without updater artifacts, updater signatures, or `latest.json`. See `CONTRIBUTING.md` for the security boundary.
 
 Required protected `stable-release` environment secrets:
 

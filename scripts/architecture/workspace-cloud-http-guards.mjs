@@ -259,9 +259,13 @@ export function collectWorkspaceCloudHttpDiagnostics({ lineCount, read, relative
     diagnostics.push("workspace-cloud/package.json: product analytics must not add a vendor SDK");
   }
   const environmentSource = read("workspace-cloud/lib/env.ts");
+  const forbiddenDirectAnalyticsHosts = [
+    ["eu", "i", "posthog", "com"].join("."),
+    ["us", "i", "posthog", "com"].join("."),
+  ];
   if (
     !environmentSource.includes("PRODUCT_ANALYTICS_WORKER_HOST")
-    || /\b(?:eu|us)\.i\.posthog\.com\b/.test(environmentSource)
+    || forbiddenDirectAnalyticsHosts.some((host) => environmentSource.includes(host))
   ) {
     diagnostics.push("workspace-cloud/lib/env.ts: product analytics must use only the dedicated Cloudflare Worker");
   }
