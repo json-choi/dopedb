@@ -471,6 +471,11 @@
       "appVersion": "0.3.97",
       "releaseRevision": 24,
       "packageDigest": "2204aa1bdda2c590dd76f08b30381ec131dffbf484dbd75b7cfd01c25c28bcb5"
+    },
+    {
+      "appVersion": "0.3.98",
+      "releaseRevision": 24,
+      "packageDigest": "2204aa1bdda2c590dd76f08b30381ec131dffbf484dbd75b7cfd01c25c28bcb5"
     }
   ]
 }
