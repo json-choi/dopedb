@@ -9,7 +9,6 @@ type WelcomeCommand = {
   id: string;
   icon: IconName;
   label: string;
-  shortcut?: string;
   disabled?: boolean;
   onClick: (returnFocus: HTMLButtonElement) => void;
 };
@@ -22,7 +21,6 @@ export default function Onboarding({
   onCreateDemoDatabase,
   onNewConnection,
   onNewQuery,
-  onActionSearch,
 }: {
   connectionName?: string;
   creatingDemo?: boolean;
@@ -37,7 +35,6 @@ export default function Onboarding({
   onCreateDemoDatabase?: () => void;
   onNewConnection: () => void;
   onNewQuery?: () => void;
-  onActionSearch: (returnFocus?: HTMLElement | null) => void;
 }) {
   const { t } = useI18n();
   const connected = Boolean(connectionName);
@@ -67,47 +64,32 @@ export default function Onboarding({
           : guidedDemo.onOpenSafety,
       },
     );
-  }
-  if (connected && onNewQuery) {
+  } else if (connected && onNewQuery) {
     commands.push({
       id: "new-query",
       icon: "play",
       label: t("ide.action.newQuery"),
       onClick: onNewQuery,
     });
-  }
-  commands.push({
-    id: "new-data-source",
-    icon: "database",
-    label: t("connections.new"),
-    onClick: onNewConnection,
-  });
-  if (!connected && onCreateDemoDatabase) {
+  } else if (!connected) {
     commands.push({
-      id: "create-demo-sqlite",
-      icon: "download",
-      label: creatingDemo
-        ? t(
-            guidedDemoAvailable
-              ? "onboarding.demoStarting"
-              : "connections.demoCreating",
-          )
-        : t(
-            guidedDemoAvailable
-              ? "onboarding.demoStart"
-              : "connections.demoSqlite",
-          ),
-      disabled: creatingDemo,
-      onClick: onCreateDemoDatabase,
+      id: "new-data-source",
+      icon: "database",
+      label: t("connections.new"),
+      onClick: onNewConnection,
     });
+    if (guidedDemoAvailable && onCreateDemoDatabase) {
+      commands.push({
+        id: "create-demo-sqlite",
+        icon: "download",
+        label: t(
+          creatingDemo ? "onboarding.demoStarting" : "onboarding.demoStart",
+        ),
+        disabled: creatingDemo,
+        onClick: onCreateDemoDatabase,
+      });
+    }
   }
-  commands.push({
-    id: "search-everywhere",
-    icon: "search",
-    label: t("ide.action.actionSearch"),
-    shortcut: "Shift ×2",
-    onClick: onActionSearch,
-  });
 
   return (
     <div className="tw:flex tw:h-full tw:min-h-0 tw:flex-col tw:overflow-hidden tw:bg-editor">
@@ -145,14 +127,7 @@ export default function Onboarding({
                   }}
                 >
                   <Icon name={command.icon} />
-                  <span className="tw:flex tw:w-full tw:min-w-0 tw:items-center tw:justify-between tw:gap-4">
-                    <span className="tw:truncate">{command.label}</span>
-                    {command.shortcut ? (
-                      <span className="tw:shrink-0 tw:font-mono tw:text-xs tw:font-normal tw:text-muted-foreground">
-                        {command.shortcut}
-                      </span>
-                    ) : null}
-                  </span>
+                  <span className="tw:min-w-0 tw:truncate">{command.label}</span>
                 </Button>
               </div>
             ))}

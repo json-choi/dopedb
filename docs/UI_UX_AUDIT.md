@@ -39,6 +39,8 @@
 | UX-016 | `완료` | 활성 Agent adapter가 없으면 composer 전체를 숨기고 중앙 빈 상태의 설정 CTA 하나만 남긴다. |
 | UX-017 | `완료` | Welcome command를 icon과 행 경계가 있는 flat menu로 바꿨다. connection overview는 같은 SQLite basename/endpoint를 중복하지 않고 안전 상태를 함께 표시한다. |
 | UX-018 | `완료` | MongoDB limit는 입력 중 문자열 draft를 보존한다. 빈 값·0·소수·상한 초과는 blur/실행 때 가까운 오류로 표시하고 조용히 `100`으로 바꾸지 않는다. pure validation 회귀 검사를 추가했다. |
+| UX-019 | `완료` | Welcome command를 상태별로 분리했다. 준비된 Demo는 실제 학습 command 3개만, 연결된 일반 상태는 New Query만, 미연결 상태는 New connection과 사용 가능한 Guided Demo만 표시한다. 전역 chrome이 소유한 Action Search를 Welcome에서 반복하지 않는다. |
+| UX-020 | `완료` | 700px 이하 Settings의 검색·tree·breadcrumb를 한 줄 section select로 줄여 실제 설정을 바로 보이게 했다. 680px에서는 select만, 920px에서는 기존 search/tree/breadcrumb가 유지되는 것을 실행 확인했다. |
 
 ## 유지할 영구 계약
 
@@ -77,3 +79,6 @@ acceptance이며, [`UI_IMPLEMENTATION_TRACKER.md`](./UI_IMPLEMENTATION_TRACKER.m
 | WW-008 | `완료` | Desktop의 exact managed DB 복구 deep link와 OAuth callback을 새 Providers URL로 통일하고, 사용하지 않는 과거 settings section alias와 Analysis 관리 component를 제거했다. |
 | WW-009 | `완료` | AI Chat의 Environment binding은 공개 connection content revision을 pin한다. 내부 lease/revocation epoch 변경을 콘텐츠 변경으로 오인해 409를 반복하던 경로를 차단했다. |
 | WW-010 | `완료` | 페이지별 단일 h1과 실제 관리 영역의 h2 계층, keyboard-native details, 가로 overflow를 지원하는 compact navigation을 유지해 좁은 화면과 보조기기에서도 구조를 읽을 수 있게 했다. |
+| WW-011 | `완료` | Workspace settings의 일반 제목과 lifecycle 내부 제목 반복을 실제 lifecycle h1 하나로 합쳤다. 불필요한 외곽 card를 제거하고 Backup → encryption key → retention → danger zone을 선행 조건 순서의 단일 세로 흐름으로 배치했다. |
+| WW-012 | `완료` | workspace 삭제 blocker가 있으면 이름 입력과 삭제 command를 숨기고 해결 항목과 Access/Providers 복구 link만 보여 준다. blocker 해소 뒤에는 exact-name 입력을 유일한 확인으로 사용하며 같은 동작에 browser confirm을 겹치지 않는다. |
+| WW-013 | `완료` | Access의 revision conflict는 conflict article 하나만 경계로 유지하고 두 version과 field를 무테 column·row divider로 평탄화해 관리 panel 안의 중첩 surface를 줄였다. |

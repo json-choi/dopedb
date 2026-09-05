@@ -106,7 +106,6 @@ type WorkbenchContentCommands = {
     rename: (id: string, title: string) => void;
     close: (id: string) => void;
     newQuery: () => void;
-    actionSearch: (returnFocus?: HTMLElement | null) => void;
     openAgentTask: (
       connectionId: string,
       environmentId?: string,
@@ -274,7 +273,6 @@ function WorkbenchContentResolved({ model, commands }: Props) {
         guidedDemoAvailable={connection.guidedDemoAvailable}
         onCreateDemoDatabase={commands.connections.createDemo}
         onNewConnection={() => commands.connections.new()}
-        onActionSearch={commands.documents.actionSearch}
       />,
     );
   }
@@ -335,7 +333,6 @@ function WorkbenchContentResolved({ model, commands }: Props) {
             guidedDemo={guidedDemo}
             onNewConnection={() => commands.connections.new()}
             onNewQuery={commands.documents.newQuery}
-            onActionSearch={commands.documents.actionSearch}
           />
         ) : activeDocument.kind === "data" ? (
           effectiveSafety ? (

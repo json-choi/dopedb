@@ -19,6 +19,63 @@ DopeDB의 제품 축, 실제 사용자 작업, 접근성, 운영 안전성, 지�
 
 ## UI 계약
 
+### 전체 작업 흐름과 단일 소유권
+
+한 작업은 아래 흐름에서 한 surface만 소유한다. 다른 surface는 현재 상태와 정확한
+이동 link만 보여 주며 같은 command를 다시 만들지 않는다.
+
+```mermaid
+flowchart LR
+  subgraph Web[Workspace Web · 공유 관리]
+    W0[로그인 · Workspace 선택]
+    W1[Access<br/>초대 · 역할 · DB grant]
+    W2[Providers<br/>계정 승인 · managed DB 등록/복구]
+    W3[Workspace settings<br/>Backup → Key → Retention → Delete]
+    W4[My account<br/>브라우저 · Desktop session 종료]
+    W0 --> W1
+    W0 --> W2
+    W0 --> W3
+    W0 --> W4
+  end
+
+  subgraph Desktop[Desktop · 실제 데이터 작업]
+    D0[Workspace · Project 선택]
+    D1{연결 준비 여부}
+    D2[가이드 데모 또는 새 연결]
+    D3[Explorer에서 exact DB 선택]
+    D4[Query · Data · Analysis]
+    D5[Agent exact grant]
+    D6[제안 1회 승인/거절]
+    D7[Services에서 결과 · 진행 · 취소]
+    D0 --> D1
+    D1 -- 미준비 --> D2 --> D3
+    D1 -- 준비됨 --> D3
+    D3 --> D4 --> D7
+    D3 --> D5 --> D6 --> D7
+  end
+
+  W1 --> D0
+  W2 --> D0
+```
+
+| 사용자 목적 | 유일한 command 소유자 | 다른 surface의 역할 |
+| --- | --- | --- |
+| 구성원·역할·DB grant | Workspace Web `Access` | Desktop은 적용된 권한과 복구 link만 표시 |
+| provider 승인·managed DB 등록/복구 | Workspace Web `Providers` | Desktop은 연결 상태와 exact DB 복구 link만 표시 |
+| server backup·key rotation·retention·workspace 삭제 | Workspace Web `Workspace settings` | Desktop에는 별도 lifecycle control을 만들지 않음 |
+| member-local credential·연결 profile·연결 검사 | Desktop connection editor | Web은 credential 입력·편집을 소유하지 않음 |
+| Project binding·schema/object 탐색 | Desktop Explorer | Agent와 Services는 별도 resource tree를 만들지 않음 |
+| SQL·조회·Article 작업 | Desktop 중앙 document | Services는 결과와 실행 상태만 소유 |
+| Agent resource 선택·제안·승인 | Desktop Agent | 중앙 document는 Agent grant나 승인 control을 복제하지 않음 |
+| 실행 결과·background 진행·취소 | Desktop Services | Agent는 요약과 결과 이동만 제공 |
+| write 실행 상한 | Desktop `Settings → Safety` | 연결 편집기와 실행 오류는 상태와 이 화면의 link만 제공 |
+
+화면 진입 뒤에는 `현재 맥락 → 지금 할 한 작업 → 결과/복구` 순서만 둔다. 선행
+조건이 충족되지 않은 위험 command는 비활성 form으로 미리 노출하지 않고, 해결할
+항목과 실제 목적지부터 보여 준다. 같은 위험 동작에 exact-name 입력과 별도 browser
+confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적인 고급 설정 disclosure로
+접는다.
+
 ### 화면 구조
 
 - 상단은 workspace와 현재 문맥, document tab, 실제 전역 command를 제공한다.

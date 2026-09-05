@@ -99,20 +99,20 @@ function ConflictVersionCard({
     },
   ];
   return (
-    <section className="tw:min-w-0 tw:rounded-surface tw:border tw:border-border tw:bg-surface tw:p-3">
+    <section className="tw:min-w-0">
       <header className="tw:mb-2 tw:flex tw:items-center tw:justify-between tw:gap-3">
         <strong className="tw:text-xs tw:text-foreground">{title}</strong>
         <span className="tw:font-mono tw:text-2xs tw:text-muted-foreground">
           r{version.revision}
         </span>
       </header>
-      <dl className="tw:grid tw:gap-px tw:overflow-hidden tw:rounded-control tw:border tw:border-border tw:bg-border">
+      <dl className="tw:grid tw:divide-y tw:divide-border">
         {fields.map((field) => {
           const value = field.value(version.payload);
           const changed = value !== field.value(comparison.payload);
           return (
             <div
-              className="tw:grid tw:grid-cols-[minmax(84px,0.34fr)_minmax(0,1fr)] tw:gap-2 tw:bg-surface-inset tw:px-2.5 tw:py-1.5"
+              className="tw:grid tw:grid-cols-[minmax(84px,0.34fr)_minmax(0,1fr)] tw:gap-2 tw:py-2"
               key={field.key}
             >
               <dt className="tw:text-2xs tw:text-muted-foreground">{field.label}</dt>
@@ -380,7 +380,7 @@ export function ConnectionAccessPanel({ workspaceId }: { workspaceId: string }) 
       </header>
 
       {conflicts.length > 0 ? (
-        <section className="tw:grid tw:gap-3 tw:rounded-surface tw:border tw:border-warning/45 tw:bg-warning/5 tw:p-3.5">
+        <section className="tw:grid tw:gap-3 tw:border-t tw:border-warning/45 tw:bg-warning/5 tw:px-3.5 tw:py-4">
           <header className="tw:flex tw:items-start tw:justify-between tw:gap-3 tw:max-[640px]:grid tw:max-[640px]:justify-stretch">
             <div className="tw:grid tw:gap-1">
               <strong className="tw:text-ui tw:text-foreground">
@@ -399,7 +399,7 @@ export function ConnectionAccessPanel({ workspaceId }: { workspaceId: string }) 
               const busy = mutatingId === `conflict:${conflict.id}`;
               return (
                 <article
-                  className="tw:grid tw:gap-3 tw:rounded-surface tw:border tw:border-border tw:bg-surface-inset tw:p-3.5"
+                  className="tw:grid tw:gap-4 tw:rounded-surface tw:border tw:border-border tw:bg-surface tw:p-4"
                   key={conflict.id}
                 >
                   <header className="tw:flex tw:items-start tw:justify-between tw:gap-3 tw:max-[640px]:grid">
@@ -421,7 +421,7 @@ export function ConnectionAccessPanel({ workspaceId }: { workspaceId: string }) 
                       </span>
                     ) : null}
                   </header>
-                  <div className="tw:grid tw:grid-cols-2 tw:gap-3 tw:max-[760px]:grid-cols-1">
+                  <div className="tw:grid tw:grid-cols-2 tw:gap-5 tw:max-[760px]:grid-cols-1">
                     <ConflictVersionCard
                       title={copy.conflictCurrentVersion}
                       version={conflict.current}

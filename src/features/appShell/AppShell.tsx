@@ -339,7 +339,6 @@ function Shell() {
         safety: commands.safety,
         documents: {
           ...commands.documents,
-          actionSearch: search.show,
           openAgentTask,
         },
         queryServices: {

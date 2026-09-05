@@ -303,8 +303,7 @@ export function WorkspaceLifecyclePanel({
   }
 
   async function scheduleDeletion() {
-    if (!lifecycle || confirmation !== lifecycle.workspaceName
-      || !window.confirm(copy.scheduleConfirm)) return;
+    if (!lifecycle || confirmation !== lifecycle.workspaceName) return;
     setMutation("schedule");
     setError("");
     const response = await fetch(`${base}/lifecycle`, {
@@ -353,13 +352,14 @@ export function WorkspaceLifecyclePanel({
     [copy.blockerKeyRotations, lifecycle.blockers.keyRotations],
     [copy.blockerMemberRevocations, lifecycle.blockers.memberRevocations],
   ] as const;
+  const hasDeletionBlockers = blockerRows.some(([, count]) => count > 0);
 
   if (lifecycle.lifecycleState === "deletion_pending") {
     return (
-      <div className="tw:grid tw:gap-5 tw:p-6 tw:max-[640px]:p-4">
+      <div className="tw:grid tw:gap-5">
         <section className="tw:rounded-panel tw:border tw:border-danger/30 tw:bg-danger/5 tw:p-6 tw:max-[640px]:p-5">
           <span className="tw:font-mono tw:text-2xs tw:font-medium tw:tracking-[0.08em] tw:text-danger tw:uppercase">{copy.ownerBoundary}</span>
-          <h3 className="tw:mt-2 tw:mb-0 tw:text-lg tw:font-medium tw:text-foreground">{copy.deletionPending}</h3>
+          <h2 className="tw:mt-2 tw:mb-0 tw:text-lg tw:font-medium tw:text-foreground">{copy.deletionPending}</h2>
           <p className="tw:mt-3 tw:mb-0 tw:max-w-[720px] tw:text-xs tw:leading-body tw:text-muted-foreground">{copy.deletionPendingDescription}</p>
           <dl className="tw:mt-6 tw:grid tw:grid-cols-[minmax(0,1fr)_auto] tw:gap-x-6 tw:gap-y-2 tw:border-t tw:border-danger/20 tw:pt-4 tw:text-xs">
             <dt className="tw:text-muted-foreground">{copy.purgeAt}</dt>
@@ -377,102 +377,90 @@ export function WorkspaceLifecyclePanel({
   }
 
   return (
-    <div className="tw:grid tw:gap-5 tw:p-6 tw:max-[640px]:p-4">
-      <div className="tw:flex tw:flex-wrap tw:items-start tw:justify-between tw:gap-4">
-        <div>
-          <h2 className="tw:m-0 tw:text-base tw:font-semibold tw:text-foreground">{copy.title}</h2>
-          <p className="tw:mt-2 tw:mb-0 tw:max-w-[720px] tw:text-xs tw:leading-body tw:text-muted-foreground">{copy.description}</p>
-        </div>
-        <span className="tw:rounded-full tw:border tw:border-primary/20 tw:bg-selection tw:px-3 tw:py-1.5 tw:font-mono tw:text-2xs tw:text-primary">{copy.proof}</span>
-      </div>
-
+    <div className="tw:grid tw:gap-8">
       {error ? <p className="tw:m-0 tw:rounded-surface tw:border tw:border-danger/25 tw:bg-danger/5 tw:px-4 tw:py-3 tw:text-xs tw:text-danger" role="alert">{error}</p> : null}
 
-      <div className="tw:grid tw:grid-cols-2 tw:gap-8 tw:max-[900px]:grid-cols-1">
-        <section className="tw:min-w-0">
-          <div className="tw:flex tw:items-start tw:justify-between tw:gap-4">
-            <div>
-              <h3 className="tw:m-0 tw:text-sm tw:font-medium tw:text-foreground">{copy.backupTitle}</h3>
-              <p className="tw:mt-2 tw:mb-0 tw:text-xs tw:leading-body tw:text-muted-foreground">{copy.backupDescription}</p>
-            </div>
-            <ControlButton tone="primary" onClick={() => void mutate("create", "/backups", { method: "POST" })} disabled={mutation !== ""}>
-              {mutation === "create" ? copy.creatingBackup : copy.createBackup}
-            </ControlButton>
+      <section className="tw:min-w-0">
+        <div className="tw:flex tw:items-start tw:justify-between tw:gap-4">
+          <div>
+            <h2 className="tw:m-0 tw:text-sm tw:font-medium tw:text-foreground">{copy.backupTitle}</h2>
+            <p className="tw:mt-2 tw:mb-0 tw:text-xs tw:leading-body tw:text-muted-foreground">{copy.backupDescription}</p>
           </div>
-          <div className="tw:mt-5 tw:grid tw:gap-2">
-            {backups.length === 0 ? (
-              <p className="tw:m-0 tw:rounded-surface tw:border tw:border-dashed tw:border-border tw:px-4 tw:py-8 tw:text-center tw:text-xs tw:text-muted-foreground">{copy.noBackups}</p>
-            ) : backups.map((backup) => (
-              <article className="tw:grid tw:gap-3 tw:rounded-surface tw:border tw:border-border tw:bg-surface tw:p-4" key={backup.id}>
-                <div className="tw:flex tw:items-start tw:justify-between tw:gap-3">
-                  <div className="tw:min-w-0">
-                    <strong className="tw:block tw:text-xs tw:font-medium tw:text-foreground">{copy.sourceRevision} {backup.sourceRevision}</strong>
-                    <span className="tw:mt-1 tw:block tw:font-mono tw:text-2xs tw:text-muted-foreground">{formatter.format(new Date(backup.createdAt))} · {backup.keyVersion}</span>
-                  </div>
+          <ControlButton tone="primary" onClick={() => void mutate("create", "/backups", { method: "POST" })} disabled={mutation !== ""}>
+            {mutation === "create" ? copy.creatingBackup : copy.createBackup}
+          </ControlButton>
+        </div>
+        <div className="tw:mt-5 tw:grid tw:gap-2">
+          {backups.length === 0 ? (
+            <p className="tw:m-0 tw:rounded-surface tw:border tw:border-dashed tw:border-border tw:px-4 tw:py-8 tw:text-center tw:text-xs tw:text-muted-foreground">{copy.noBackups}</p>
+          ) : backups.map((backup) => (
+            <article className="tw:grid tw:gap-3 tw:rounded-surface tw:border tw:border-border tw:bg-surface tw:p-4" key={backup.id}>
+              <div className="tw:flex tw:items-start tw:justify-between tw:gap-3">
+                <div className="tw:min-w-0">
+                  <strong className="tw:block tw:text-xs tw:font-medium tw:text-foreground">{copy.sourceRevision} {backup.sourceRevision}</strong>
+                  <span className="tw:mt-1 tw:block tw:font-mono tw:text-2xs tw:text-muted-foreground">{formatter.format(new Date(backup.createdAt))} · {backup.keyVersion}</span>
                 </div>
-                <div className="tw:flex tw:flex-wrap tw:gap-2">
-                  <ControlButton onClick={() => void mutate(
-                    `restore:${backup.id}`,
-                    `/backups/${backup.id}/restore`,
-                    {
-                      method: "POST",
-                      headers: {
-                        "x-dopedb-expected-revision": String(lifecycle.revision),
-                      },
+              </div>
+              <div className="tw:flex tw:flex-wrap tw:gap-2">
+                <ControlButton onClick={() => void mutate(
+                  `restore:${backup.id}`,
+                  `/backups/${backup.id}/restore`,
+                  {
+                    method: "POST",
+                    headers: {
+                      "x-dopedb-expected-revision": String(lifecycle.revision),
                     },
-                    copy.restoreConfirm,
-                  )} disabled={mutation !== ""}>
-                    {mutation === `restore:${backup.id}` ? copy.restoring : copy.restore}
-                  </ControlButton>
-                  <ControlButton tone="danger" onClick={() => void mutate(
-                    `delete:${backup.id}`,
-                    `/backups/${backup.id}`,
-                    { method: "DELETE" },
-                    copy.deleteBackupConfirm,
-                  )} disabled={mutation !== ""}>
-                    {mutation === `delete:${backup.id}` ? copy.deletingBackup : copy.deleteBackup}
-                  </ControlButton>
-                </div>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <div className="tw:grid tw:content-start tw:gap-7">
-          <section>
-            <h3 className="tw:m-0 tw:text-sm tw:font-medium tw:text-foreground">{copy.encryptionTitle}</h3>
-            <p className="tw:mt-2 tw:mb-0 tw:text-xs tw:leading-body tw:text-muted-foreground">{copy.encryptionDescription}</p>
-            {rotation?.activeVersion ? (
-              <div className="tw:mt-5 tw:flex tw:flex-wrap tw:items-center tw:justify-between tw:gap-4 tw:rounded-surface tw:border tw:border-border tw:bg-surface tw:p-4">
-                <div>
-                  <span className="tw:block tw:font-mono tw:text-2xs tw:text-muted-foreground">{copy.activeKeyVersion}</span>
-                  <strong className="tw:mt-1 tw:block tw:text-lg tw:font-medium tw:text-foreground">v{rotation.activeVersion}</strong>
-                </div>
-                <ControlButton onClick={() => void rotateKey()} disabled={mutation !== ""}>
-                  {mutation === "rotate" ? copy.rotatingKey : copy.rotateKey}
+                  },
+                  copy.restoreConfirm,
+                )} disabled={mutation !== ""}>
+                  {mutation === `restore:${backup.id}` ? copy.restoring : copy.restore}
+                </ControlButton>
+                <ControlButton tone="danger" onClick={() => void mutate(
+                  `delete:${backup.id}`,
+                  `/backups/${backup.id}`,
+                  { method: "DELETE" },
+                  copy.deleteBackupConfirm,
+                )} disabled={mutation !== ""}>
+                  {mutation === `delete:${backup.id}` ? copy.deletingBackup : copy.deleteBackup}
                 </ControlButton>
               </div>
-            ) : <p className="tw:mt-5 tw:mb-0 tw:rounded-surface tw:border tw:border-dashed tw:border-border tw:px-4 tw:py-5 tw:text-xs tw:text-muted-foreground">{copy.keyNotInitialized}</p>}
-            {rotation?.rotation ? (
-              <p className="tw:mt-3 tw:mb-0 tw:text-2xs tw:leading-body tw:text-muted-foreground">
-                {rotation.rotation.status === "running" ? copy.rotationRunning : copy.rotationCompleted}
-                {" · "}{rotation.rotation.processedBackups} {copy.rotationProgress}
-                {rotation.rotation.remainingBackups > 0 ? ` · ${rotation.rotation.remainingBackups} ${copy.rotationRemaining}` : ""}
-              </p>
-            ) : null}
-          </section>
-
-          <section className="tw:border-t tw:border-border tw:pt-6">
-            <h3 className="tw:m-0 tw:text-sm tw:font-medium tw:text-foreground">{copy.retentionTitle}</h3>
-            <p className="tw:mt-2 tw:mb-0 tw:text-xs tw:leading-body tw:text-muted-foreground">{copy.retentionDescription}</p>
-            <dl className="tw:mt-5 tw:grid tw:grid-cols-[minmax(0,1fr)_auto] tw:gap-x-5 tw:gap-y-3 tw:text-xs">
-              <dt className="tw:text-muted-foreground">{copy.activeBackups}</dt><dd className="tw:m-0 tw:font-medium">{lifecycle.backupCount}</dd>
-              <dt className="tw:text-muted-foreground">{copy.pendingBackupPurge}</dt><dd className="tw:m-0 tw:font-medium">{lifecycle.tombstonedBackupCount}</dd>
-              <dt className="tw:text-muted-foreground">{copy.retentionWindow}</dt><dd className="tw:m-0 tw:font-medium">{lifecycle.backupRetentionDays} {copy.days}</dd>
-            </dl>
-          </section>
+            </article>
+          ))}
         </div>
-      </div>
+      </section>
+
+      <section className="tw:border-t tw:border-border tw:pt-7">
+        <h2 className="tw:m-0 tw:text-sm tw:font-medium tw:text-foreground">{copy.encryptionTitle}</h2>
+        <p className="tw:mt-2 tw:mb-0 tw:text-xs tw:leading-body tw:text-muted-foreground">{copy.encryptionDescription}</p>
+        {rotation?.activeVersion ? (
+          <div className="tw:mt-5 tw:flex tw:flex-wrap tw:items-center tw:justify-between tw:gap-4 tw:border-y tw:border-border tw:py-4">
+            <div>
+              <span className="tw:block tw:font-mono tw:text-2xs tw:text-muted-foreground">{copy.activeKeyVersion}</span>
+              <strong className="tw:mt-1 tw:block tw:text-lg tw:font-medium tw:text-foreground">v{rotation.activeVersion}</strong>
+            </div>
+            <ControlButton onClick={() => void rotateKey()} disabled={mutation !== ""}>
+              {mutation === "rotate" ? copy.rotatingKey : copy.rotateKey}
+            </ControlButton>
+          </div>
+        ) : <p className="tw:mt-5 tw:mb-0 tw:rounded-surface tw:border tw:border-dashed tw:border-border tw:px-4 tw:py-5 tw:text-xs tw:text-muted-foreground">{copy.keyNotInitialized}</p>}
+        {rotation?.rotation ? (
+          <p className="tw:mt-3 tw:mb-0 tw:text-2xs tw:leading-body tw:text-muted-foreground">
+            {rotation.rotation.status === "running" ? copy.rotationRunning : copy.rotationCompleted}
+            {" · "}{rotation.rotation.processedBackups} {copy.rotationProgress}
+            {rotation.rotation.remainingBackups > 0 ? ` · ${rotation.rotation.remainingBackups} ${copy.rotationRemaining}` : ""}
+          </p>
+        ) : null}
+      </section>
+
+      <section className="tw:border-t tw:border-border tw:pt-7">
+        <h2 className="tw:m-0 tw:text-sm tw:font-medium tw:text-foreground">{copy.retentionTitle}</h2>
+        <p className="tw:mt-2 tw:mb-0 tw:text-xs tw:leading-body tw:text-muted-foreground">{copy.retentionDescription}</p>
+        <dl className="tw:mt-5 tw:grid tw:max-w-[560px] tw:grid-cols-[minmax(0,1fr)_auto] tw:gap-x-5 tw:gap-y-3 tw:text-xs">
+          <dt className="tw:text-muted-foreground">{copy.activeBackups}</dt><dd className="tw:m-0 tw:font-medium">{lifecycle.backupCount}</dd>
+          <dt className="tw:text-muted-foreground">{copy.pendingBackupPurge}</dt><dd className="tw:m-0 tw:font-medium">{lifecycle.tombstonedBackupCount}</dd>
+          <dt className="tw:text-muted-foreground">{copy.retentionWindow}</dt><dd className="tw:m-0 tw:font-medium">{lifecycle.backupRetentionDays} {copy.days}</dd>
+        </dl>
+      </section>
 
       <details className="tw:group tw:overflow-hidden tw:rounded-surface tw:border tw:border-danger/30 tw:bg-danger/5">
         <summary className="tw:flex tw:cursor-pointer tw:list-none tw:items-center tw:justify-between tw:gap-5 tw:p-5 tw:[&::-webkit-details-marker]:hidden tw:focus-visible:outline-2 tw:focus-visible:outline-offset-[-3px] tw:focus-visible:outline-ring">
@@ -483,7 +471,7 @@ export function WorkspaceLifecyclePanel({
           <span className="tw:grid tw:size-7 tw:shrink-0 tw:place-items-center tw:rounded-full tw:border tw:border-danger/30 tw:text-base tw:text-danger tw:transition-transform tw:group-open:rotate-45" aria-hidden="true">+</span>
         </summary>
         <div className="tw:border-t tw:border-danger/20 tw:p-5">
-          {blockerRows.some(([, count]) => count > 0) ? (
+          {hasDeletionBlockers ? (
             <div className="tw:rounded-surface tw:border tw:border-danger/20 tw:bg-surface tw:p-4">
               <strong className="tw:text-xs tw:font-medium tw:text-foreground">{copy.blockersTitle}</strong>
               <ul className="tw:mt-3 tw:mb-0 tw:grid tw:gap-2 tw:pl-5 tw:text-xs tw:text-muted-foreground">
@@ -498,16 +486,19 @@ export function WorkspaceLifecyclePanel({
                 ) : null}
               </div>
             </div>
-          ) : null}
-          <label className="tw:mt-5 tw:grid tw:max-w-[520px] tw:gap-2">
-            <span className="tw:font-mono tw:text-2xs tw:font-medium tw:tracking-[0.06em] tw:text-muted-foreground tw:uppercase">{copy.exactName}</span>
-            <ControlInput value={confirmation} onChange={(event) => setConfirmation(event.target.value)} placeholder={lifecycle.workspaceName} autoComplete="off" />
-          </label>
-          <div className="tw:mt-4">
-            <ControlButton tone="danger" onClick={() => void scheduleDeletion()} disabled={mutation !== "" || !lifecycle.canScheduleDeletion || confirmation !== lifecycle.workspaceName}>
-              {mutation === "schedule" ? copy.schedulingDeletion : copy.scheduleDeletion}
-            </ControlButton>
-          </div>
+          ) : (
+            <>
+              <label className="tw:grid tw:max-w-[520px] tw:gap-2">
+                <span className="tw:font-mono tw:text-2xs tw:font-medium tw:tracking-[0.06em] tw:text-muted-foreground tw:uppercase">{copy.exactName}</span>
+                <ControlInput value={confirmation} onChange={(event) => setConfirmation(event.target.value)} placeholder={lifecycle.workspaceName} autoComplete="off" />
+              </label>
+              <div className="tw:mt-4">
+                <ControlButton tone="danger" onClick={() => void scheduleDeletion()} disabled={mutation !== "" || !lifecycle.canScheduleDeletion || confirmation !== lifecycle.workspaceName}>
+                  {mutation === "schedule" ? copy.schedulingDeletion : copy.scheduleDeletion}
+                </ControlButton>
+              </div>
+            </>
+          )}
         </div>
       </details>
     </div>

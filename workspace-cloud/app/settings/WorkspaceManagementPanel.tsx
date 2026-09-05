@@ -39,6 +39,10 @@ export function WorkspaceManagementPanel({
   initialConnectionId: string | null;
   area: WorkspaceManagementArea;
 }) {
+  if (area === "workspace-settings") {
+    return <WorkspaceLifecyclePanel workspaceId={workspaceId} />;
+  }
+
   return (
     <div className="tw:min-w-0 tw:divide-y tw:divide-border tw:overflow-hidden tw:rounded-surface tw:border tw:border-border tw:bg-surface">
         {area === "access" ? (
@@ -59,9 +63,6 @@ export function WorkspaceManagementPanel({
             initialIntegrationId={initialIntegrationId}
             initialConnectionId={initialConnectionId}
           />
-        ) : null}
-        {area === "workspace-settings" ? (
-          <WorkspaceLifecyclePanel workspaceId={workspaceId} />
         ) : null}
     </div>
   );

@@ -185,12 +185,16 @@ export default async function SettingsPage({
     ? copy.settings.accountTitle
     : activeSection === "workspaces"
       ? copy.settings.workspacesTitle
-      : activeManagementDetails?.label ?? copy.settings.workspacesTitle;
+      : activeSection === "workspace-settings"
+        ? copy.workspaceLifecycle.title
+        : activeManagementDetails?.label ?? copy.settings.workspacesTitle;
   const pageDescription = activeSection === "account"
     ? copy.settings.accountDescription
     : activeSection === "workspaces"
       ? copy.settings.workspacesDescription
-      : activeManagementDetails?.description ?? copy.settings.workspacesDescription;
+      : activeSection === "workspace-settings"
+        ? copy.workspaceLifecycle.description
+        : activeManagementDetails?.description ?? copy.settings.workspacesDescription;
   const roleLabels = copy.members.roles;
   const localizedRole = (role: string | null | undefined) => (
     role && role in roleLabels

@@ -196,8 +196,8 @@ export default function Settings({
             titleId="settings-dialog-title"
           />
 
-          <div className="tw:grid tw:min-h-0 tw:flex-1 tw:grid-cols-[202px_minmax(0,1fr)] tw:@max-[700px]:grid-cols-1 tw:@max-[700px]:grid-rows-[auto_minmax(0,1fr)]">
-            <aside className="tw:flex tw:min-h-0 tw:flex-col tw:border-r tw:border-border-subtle tw:bg-card tw:@max-[700px]:max-h-[188px] tw:@max-[700px]:border-r-0 tw:@max-[700px]:border-b">
+          <div className="tw:grid tw:min-h-0 tw:flex-1 tw:grid-cols-[202px_minmax(0,1fr)] tw:@max-[700px]:grid-cols-1">
+            <aside className="tw:flex tw:min-h-0 tw:flex-col tw:border-r tw:border-border-subtle tw:bg-card tw:@max-[700px]:hidden">
               <div className="tw:p-2">
                 <TreeSearch
                   value={filter}
@@ -271,7 +271,44 @@ export default function Settings({
             </aside>
 
             <section className="tw:flex tw:min-h-0 tw:min-w-0 tw:flex-col">
-              <div className="tw:flex tw:h-[42px] tw:min-h-[42px] tw:shrink-0 tw:items-center tw:gap-2 tw:bg-background tw:px-4 tw:text-ui tw:font-semibold">
+              <div className="tw:hidden tw:h-title-toolbar tw:shrink-0 tw:items-center tw:border-b tw:border-border-subtle tw:bg-background tw:px-3 tw:@max-[700px]:flex">
+                <SelectInput
+                  density="compact"
+                  aria-label={t("common.settings")}
+                  value={section}
+                  onChange={(event) => {
+                    setFilter("");
+                    setSection(event.target.value as SettingsSection);
+                  }}
+                >
+                  {(["application", "dataSource"] as const).map((scope) => (
+                    <optgroup
+                      key={scope}
+                      label={t(
+                        scope === "application"
+                          ? "settings.scopeApplication"
+                          : "settings.scopeDataSource",
+                      )}
+                    >
+                      {settingsEntries
+                        .filter((entry) => entry.scope === scope)
+                        .map((entry) => (
+                          <option
+                            key={entry.id}
+                            value={entry.id}
+                            disabled={entry.disabled}
+                          >
+                            {entry.label}
+                            {entry.id === "updates" && updateNavigationStatus
+                              ? ` · ${updateNavigationStatus}`
+                              : ""}
+                          </option>
+                        ))}
+                    </optgroup>
+                  ))}
+                </SelectInput>
+              </div>
+              <div className="tw:flex tw:h-[42px] tw:min-h-[42px] tw:shrink-0 tw:items-center tw:gap-2 tw:bg-background tw:px-4 tw:text-ui tw:font-semibold tw:@max-[700px]:hidden">
                 <span className="tw:text-muted-foreground">
                   {t(
                     activeEntry?.scope === "dataSource"
