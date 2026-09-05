@@ -104,7 +104,9 @@ pub(super) async fn call_tool(
             if arguments.line_end < arguments.line_start
                 || arguments.line_end - arguments.line_start >= MAX_SOURCE_READ_LINES
             {
-                return Err("the source line range is invalid".into());
+                return Err(format!(
+                    "source lineEnd must be at least lineStart and the inclusive range must not exceed {MAX_SOURCE_READ_LINES} lines"
+                ));
             }
             validate_text(&arguments.path, MAX_SOURCE_PATH_BYTES, "source path")?;
             let result = broker_request::<SourceReadCommand>(client, &arguments).await?;

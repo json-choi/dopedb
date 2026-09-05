@@ -19,7 +19,7 @@ const checkOnly = process.argv.includes("--check");
 
 const discoveryStub = `---
 name: dopedb-cli
-description: Use the local DopeDB Desktop runtime safely through the version-matched dopedb CLI.
+description: Set up or use the direct dopedb CLI outside an existing DopeDB Agent session. Do not load when a session-scoped DopeDB MCP server is already available.
 ---
 
 When DopeDB supplies a session-scoped MCP server through built-in AI Chat or \`dopedb agent start\`, use its typed tools and do not run the public CLI or fetch this guide.

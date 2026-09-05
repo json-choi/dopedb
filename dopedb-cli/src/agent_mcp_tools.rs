@@ -147,14 +147,14 @@ pub(super) fn tools_result() -> Value {
             tool_definition(
                 TOOL_SOURCE_READ,
                 "Read pinned GitHub source lines",
-                "Reads bounded UTF-8 lines from one repository-relative path at the exact commit pinned to this session. Use it to verify the exact definition or writer before translating application concepts into database filters.",
+                &format!("Reads at most {MAX_SOURCE_READ_LINES} inclusive UTF-8 lines from one repository-relative path at the exact commit pinned to this session. Use it to verify the exact definition or writer before translating application concepts into database filters."),
                 json!({
                     "type": "object",
                     "properties": {
                         "sourceId": { "type": "string", "format": "uuid" },
                         "path": { "type": "string", "minLength": 1, "maxLength": MAX_SOURCE_PATH_BYTES },
                         "lineStart": { "type": "integer", "minimum": 1, "default": 1 },
-                        "lineEnd": { "type": "integer", "minimum": 1, "default": 200 }
+                        "lineEnd": { "type": "integer", "minimum": 1, "default": 200, "description": format!("Inclusive end line. Must be between lineStart and lineStart + {}.", MAX_SOURCE_READ_LINES - 1) }
                     },
                     "required": ["sourceId", "path"],
                     "additionalProperties": false

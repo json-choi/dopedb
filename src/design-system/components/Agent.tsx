@@ -3,7 +3,7 @@
 // repeated card geometry, spacing, and status treatment.
 import type { ReactNode } from "react";
 import claudeIcon from "../../assets/agent-icons/claude.svg";
-import codexIcon from "../../assets/agent-icons/codex.png";
+import codexIcon from "../../assets/agent-icons/codex.svg";
 
 import { Icon } from "../../components/Icon";
 import { StatusDot, type StatusTone } from "./Status";

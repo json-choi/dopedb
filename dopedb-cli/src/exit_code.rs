@@ -24,7 +24,7 @@ pub(crate) fn for_client_error(error: &ClientError) -> u8 {
         ClientError::AgentProviderUnavailable => RUNTIME_UNAVAILABLE,
         ClientError::AgentExited(Some(code)) if (1..=255).contains(code) => *code as u8,
         ClientError::AgentExited(_) => TARGET_EXECUTION_FAILED,
-        ClientError::RuntimeUnavailable => RUNTIME_UNAVAILABLE,
+        ClientError::RuntimeUnavailable | ClientError::ResponseUnavailable => RUNTIME_UNAVAILABLE,
         ClientError::AuthenticationUnavailable => AUTHENTICATION_DENIED,
         ClientError::ProtocolMismatch => PROTOCOL_MISMATCH,
         ClientError::InvalidResponse | ClientError::Internal => INTERNAL,

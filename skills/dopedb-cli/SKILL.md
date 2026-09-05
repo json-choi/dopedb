@@ -1,11 +1,11 @@
 ---
 name: dopedb-cli
-description: Safely inspect and operate databases through the version-matched DopeDB CLI and its running Desktop authorization boundary.
+description: Set up or use the direct dopedb CLI outside an existing DopeDB Agent session. Do not load when a session-scoped DopeDB MCP server is already available.
 ---
 
 # DopeDB CLI
 
-Use the `dopedb` CLI whenever a task concerns a database managed by DopeDB. The
+Use this guide for direct CLI work outside an existing DopeDB Agent session. The
 CLI talks only to the running DopeDB Desktop runtime. It never reads database
 credentials, opens a database driver, or approves its own mutation.
 
@@ -15,10 +15,9 @@ When built-in AI Chat or `dopedb agent start` supplies the session-scoped DopeDB
 MCP server, its typed tools and session prompt are authoritative. Do not run the
 public `dopedb` CLI, fetch this guide, repeat version/status checks, or list all
 connections before ordinary work. The exact Project resource set is already
-pinned. Call `environment_context` once, prefer `catalog_search` over a full
-catalog dump, and use `query_read` for SQL reads; it preserves the exact Broker
-plan/run boundary in one tool call. Use `sql_propose` for mutations, and only
-against the optional single write target reported by `environment_context`.
+pinned. Use the selectors already supplied in the session context and load
+`environment_context` only if a required selector is missing. The typed tool
+contract owns reads, proposals, and the optional single write target.
 
 ## Configure an official AI CLI outside Desktop
 

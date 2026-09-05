@@ -421,12 +421,7 @@ const TranscriptItemView = memo(function TranscriptItemView({
   }
   if (item.kind === "thought") {
     if (!debugDetails) {
-      return (
-        <AgentActivityLine
-          label={t("agent.acpActivityReasoning")}
-          tone="neutral"
-        />
-      );
+      return null;
     }
     return (
       <details className="tw:max-w-full tw:min-w-0 tw:overflow-hidden tw:rounded-sm tw:border tw:border-border-subtle tw:bg-card tw:px-2 tw:py-1 tw:text-xs">

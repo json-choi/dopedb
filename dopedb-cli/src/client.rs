@@ -156,8 +156,13 @@ fn response_timeout(command: dopedb_protocol::CommandName) -> Duration {
         | CommandName::TableDescribe
         | CommandName::DocumentRun
         | CommandName::QueryPlan
-        | CommandName::SqlPropose => CONTROL_DATABASE_TIMEOUT,
-        CommandName::QueryRun => CONTROL_QUERY_RUN_TIMEOUT,
+        | CommandName::SqlPropose
+        | CommandName::SourceSearch
+        | CommandName::SourceRead
+        | CommandName::AnalysisArticleList
+        | CommandName::AnalysisArticlePropose
+        | CommandName::AnalysisArticleUpdate => CONTROL_DATABASE_TIMEOUT,
+        CommandName::QueryRun | CommandName::AnalysisArticleVerify => CONTROL_QUERY_RUN_TIMEOUT,
         CommandName::OperationWait => CONTROL_OPERATION_WAIT_TIMEOUT,
         CommandName::ExternalAgentConfigCreate | CommandName::ExternalAgentSessionStart => {
             EXTERNAL_AGENT_APPROVAL_TIMEOUT
@@ -187,6 +192,7 @@ pub(crate) enum ClientError {
     AgentProviderUnavailable,
     AgentExited(Option<i32>),
     RuntimeUnavailable,
+    ResponseUnavailable,
     AuthenticationUnavailable,
     #[allow(
         dead_code,
@@ -230,6 +236,9 @@ impl fmt::Display for ClientError {
             }
             Self::RuntimeUnavailable => formatter
                 .write_str("the DopeDB Desktop runtime is unavailable; open the app and try again"),
+            Self::ResponseUnavailable => formatter.write_str(
+                "Desktop did not return a complete response; the operation may still be running or may have completed. Check its state in Desktop before retrying",
+            ),
             Self::AuthenticationUnavailable => {
                 formatter.write_str("this command requires an approved in-app Terminal session")
             }
@@ -269,6 +278,7 @@ impl fmt::Debug for ClientError {
             Self::AgentProviderUnavailable => formatter.write_str("AgentProviderUnavailable"),
             Self::AgentExited(code) => formatter.debug_tuple("AgentExited").field(code).finish(),
             Self::RuntimeUnavailable => formatter.write_str("RuntimeUnavailable"),
+            Self::ResponseUnavailable => formatter.write_str("ResponseUnavailable"),
             Self::AuthenticationUnavailable => formatter.write_str("AuthenticationUnavailable"),
             Self::ConnectionNotFound => formatter.write_str("ConnectionNotFound"),
             Self::AmbiguousConnection(candidates) => formatter
@@ -700,22 +710,22 @@ where
     let frame = Zeroizing::new(encode_request(request)?);
     tokio::time::timeout(CONTROL_WRITE_TIMEOUT, stream.write_all(frame.as_slice()))
         .await
-        .map_err(|_| ClientError::RuntimeUnavailable)?
-        .map_err(|_| ClientError::RuntimeUnavailable)?;
+        .map_err(|_| ClientError::ResponseUnavailable)?
+        .map_err(|_| ClientError::ResponseUnavailable)?;
     let response_deadline = tokio::time::Instant::now() + response_timeout;
     let mut prefix = [0u8; 4];
     tokio::time::timeout_at(response_deadline, stream.read_exact(&mut prefix))
         .await
-        .map_err(|_| ClientError::RuntimeUnavailable)?
-        .map_err(|_| ClientError::RuntimeUnavailable)?;
+        .map_err(|_| ClientError::ResponseUnavailable)?
+        .map_err(|_| ClientError::ResponseUnavailable)?;
     let length =
         parse_frame_length(prefix, MAX_RESPONSE_BYTES).map_err(|_| ClientError::InvalidResponse)?;
     let mut response = Vec::from(prefix);
     response.resize(4 + length, 0);
     tokio::time::timeout_at(response_deadline, stream.read_exact(&mut response[4..]))
         .await
-        .map_err(|_| ClientError::RuntimeUnavailable)?
-        .map_err(|_| ClientError::RuntimeUnavailable)?;
+        .map_err(|_| ClientError::ResponseUnavailable)?
+        .map_err(|_| ClientError::ResponseUnavailable)?;
     decode_frame(&response, MAX_RESPONSE_BYTES).map_err(|_| ClientError::InvalidResponse)
 }
 
