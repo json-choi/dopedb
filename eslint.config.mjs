@@ -18,6 +18,16 @@ export default [
     ],
   },
   {
+    files: ["scripts/benchmark-packaged-release.mjs", "scripts/benchmark/*.mjs"],
+    languageOptions: {
+      globals: Object.fromEntries([
+        "Buffer", "process", "console", "URL", "performance",
+        "setTimeout", "clearTimeout", "setInterval", "clearInterval",
+      ].map((name) => [name, "readonly"])),
+    },
+    rules: { "no-undef": "error" },
+  },
+  {
     files: typedReactFiles,
     languageOptions: {
       parser: babelParser,

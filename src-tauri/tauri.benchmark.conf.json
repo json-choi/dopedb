@@ -29,7 +29,10 @@
     ]
   },
   "bundle": {
-    "createUpdaterArtifacts": false
+    "createUpdaterArtifacts": false,
+    "macOS": {
+      "signingIdentity": "-"
+    }
   },
   "plugins": {
     "deep-link": {

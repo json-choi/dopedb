@@ -6,7 +6,7 @@
   "packageManager": "pnpm@11.25.0",
   "scripts": {
     "dev": "vite --config vite.config.ts",
-    "build": "pnpm check:skills && pnpm check:agent-runtime && pnpm check:issue-review && pnpm check:workspace-logs && pnpm check:release-notes && pnpm check:architecture && pnpm check:code-structure && pnpm lint:hooks && pnpm check:ui-primitives && pnpm check:ui-palette && tsc -p tsconfig.node.json && tsc && vite build --config vite.config.ts",
+    "build": "pnpm check:skills && pnpm check:agent-runtime && pnpm check:issue-review && pnpm check:workspace-logs && pnpm check:release-notes && pnpm check:architecture && pnpm check:code-structure && pnpm lint:hooks && pnpm lint:benchmark && pnpm check:ui-primitives && pnpm check:ui-palette && tsc -p tsconfig.node.json && tsc && vite build --config vite.config.ts",
     "benchmark:data-surfaces": "node --expose-gc --no-warnings scripts/benchmark-data-surfaces.mjs",
     "benchmark:packaged-release": "node --no-warnings scripts/benchmark-packaged-release.mjs",
     "benchmark:render-hot-paths": "node --no-warnings scripts/benchmark-render-hot-paths.mjs",
@@ -26,6 +26,7 @@
     "check:test-budget": "node scripts/check-critical-test-budget.mjs",
     "lint": "pnpm lint:hooks",
     "lint:hooks": "eslint src workspace-cloud site --ext .ts,.tsx --max-warnings 0",
+    "lint:benchmark": "eslint scripts/benchmark-packaged-release.mjs scripts/benchmark --max-warnings 0",
     "issue:review": "node scripts/issue-review/local-issue-review.mjs --once",
     "issue:review:initialize": "node scripts/issue-review/local-issue-review.mjs --initialize",
     "issue:review:one": "node scripts/issue-review/local-issue-review.mjs --issue",

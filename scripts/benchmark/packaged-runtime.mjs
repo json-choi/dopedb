@@ -2,9 +2,14 @@ export function createBenchmarkRuntime(harness) {
   const {
     root,
     tauriCli,
+    marker,
     fixtureMarker,
     failureMarker,
     progressMarker,
+    workloadScenarios,
+    requiredActionsByScenario,
+    round,
+    isInterrupted,
     activeChildren,
     execFileSync,
     spawn,
@@ -401,7 +406,7 @@ export function createBenchmarkRuntime(harness) {
         if (sampler !== null) clearInterval(sampler);
         await latestRssSample;
         if (pending) inspect("\n");
-        if (interrupted) {
+        if (isInterrupted()) {
           reject(new Error("packaged benchmark interrupted"));
         } else if (timedOut) {
           reject(new Error([
