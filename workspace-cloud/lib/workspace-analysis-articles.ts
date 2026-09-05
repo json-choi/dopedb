@@ -173,11 +173,8 @@ export function parseSharedAnalysisArticleCreate(value: unknown): SharedAnalysis
   };
 }
 
-export function analysisArticleVersionPayload(input: SharedAnalysisArticleCreate & {
-  ownerMemberId: string;
-  deleted?: boolean;
-}): AnalysisArticleVersionPayload {
-  const parsed = parseSharedAnalysisArticleCreate({
+function parseArticleFields(input: Record<string, unknown>): SharedAnalysisArticleCreate {
+  return parseSharedAnalysisArticleCreate({
     id: input.id,
     projectEnvironmentId: input.projectEnvironmentId,
     environmentRevision: input.environmentRevision,
@@ -185,6 +182,13 @@ export function analysisArticleVersionPayload(input: SharedAnalysisArticleCreate
     connectionRevision: input.connectionRevision,
     definition: input.definition,
   });
+}
+
+export function analysisArticleVersionPayload(input: SharedAnalysisArticleCreate & {
+  ownerMemberId: string;
+  deleted?: boolean;
+}): AnalysisArticleVersionPayload {
+  const parsed = parseArticleFields(input);
   if (!input.ownerMemberId) {
     throw new Error("Invalid Analysis Article version authority");
   }
@@ -198,7 +202,7 @@ export function parseAnalysisArticleVersionPayload(value: unknown): AnalysisArti
   ]);
   if (row && typeof row.ownerMemberId === "string"
     && row.ownerMemberId.length > 0 && typeof row.deleted === "boolean") {
-    const article = parseSharedAnalysisArticleCreate(row);
+    const article = parseArticleFields(row);
     return { ...article, ownerMemberId: row.ownerMemberId, deleted: row.deleted };
   }
   throw new Error("Invalid Analysis Article revision payload");
@@ -218,7 +222,7 @@ export function publicAnalysisArticle(row: {
   createdAt: Date;
   updatedAt: Date;
 }) {
-  const parsed = parseSharedAnalysisArticleCreate(row);
+  const parsed = parseArticleFields(row);
   if (!row.ownerMemberId || !row.updatedByMemberId
     || safeInteger(row.revision, 1, Number.MAX_SAFE_INTEGER) === null
     || !(row.latestSuccessfulRunId === null || UUID.test(row.latestSuccessfulRunId))

@@ -27,7 +27,12 @@ import {
   type ProductAnalyticsEnvelope,
   type ProductEventName,
 } from "./product-analytics";
-import { parseSharedAnalysisArticleCreate } from "./workspace-analysis-articles";
+import {
+  analysisArticleVersionPayload,
+  parseAnalysisArticleVersionPayload,
+  parseSharedAnalysisArticleCreate,
+  publicAnalysisArticle,
+} from "./workspace-analysis-articles";
 import {
   workspaceSchedulerBoundedWakeAt,
   workspaceSchedulerReceipt,
@@ -714,6 +719,27 @@ describe("Desktop control-plane contracts", () => {
     expect(managedLeaseResponse(brokeredGeneric).lease.provider).toBe("generic");
     expect(parseSharedAnalysisArticleCreate(fixture.analysisArticleCreate))
       .toEqual(fixture.analysisArticleCreate);
+    const articleCreate = parseSharedAnalysisArticleCreate(fixture.analysisArticleCreate);
+    const articleVersion = analysisArticleVersionPayload({
+      ...articleCreate, ownerMemberId: "article-owner",
+    });
+    expect(parseAnalysisArticleVersionPayload(articleVersion)).toEqual(articleVersion);
+    const storedArticle = {
+      ...articleCreate,
+      ownerMemberId: "article-owner",
+      updatedByMemberId: "article-owner",
+      revision: 1,
+      latestSuccessfulRunId: null,
+      createdAt: new Date("2026-09-01T00:00:00.000Z"),
+      updatedAt: new Date("2026-09-01T00:00:00.000Z"),
+    };
+    expect(publicAnalysisArticle(storedArticle)).toEqual({
+      ...storedArticle,
+      createdAt: "2026-09-01T00:00:00.000Z",
+      updatedAt: "2026-09-01T00:00:00.000Z",
+    });
+    expect(() => parseSharedAnalysisArticleCreate(storedArticle)).toThrow();
+    expect(() => parseAnalysisArticleVersionPayload({ ...articleVersion, extra: true })).toThrow();
 
     const connectionVersion = {
       name: "Primary",

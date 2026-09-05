@@ -74,15 +74,28 @@ export async function runAnalysisLifecycleScenarios(
     authority,
   })).resolves.toBeNull();
 
-  const created = await articleStore.commitAnalysisArticleCreate({
-    organizationId,
-    article,
-    authority,
-  });
+  const articleRoute = await import("../../app/api/v1/workspaces/[workspaceId]/analyses/route");
+  const articleUrl = `https://dopedb.invalid/api/v1/workspaces/${organizationId}/analyses`;
+  const createdResponse = await articleRoute.POST(new Request(articleUrl, {
+    method: "POST",
+    headers: {
+      authorization: fixture.authState.bearer,
+      "content-type": "application/json",
+      "x-dopedb-expected-revision": "0",
+    },
+    body: JSON.stringify(article),
+  }), { params: Promise.resolve({ workspaceId: organizationId }) });
+  expect(createdResponse.status).toBe(201);
+  const { article: created } = await createdResponse.json();
   expect(created).toMatchObject({
     id: articleId,
     revision: 1,
   });
+  const listedResponse = await articleRoute.GET(new Request(articleUrl, {
+    headers: { authorization: fixture.authState.bearer },
+  }), { params: Promise.resolve({ workspaceId: organizationId }) });
+  expect(listedResponse.status).toBe(200);
+  expect((await listedResponse.json()).articles).toEqual([created]);
   const revisedArticle = articleContract.parseSharedAnalysisArticleCreate({
     ...article,
     definition: {

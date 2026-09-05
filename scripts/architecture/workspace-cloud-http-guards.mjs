@@ -287,7 +287,7 @@ export function collectWorkspaceCloudHttpDiagnostics({ lineCount, read, relative
     "personalKnowledgeOrganizationId(",
     "isPersonalKnowledgeMetadata(",
     "knowledgeEnvironmentConnection.connectionRevision",
-    "workspaceConnection.revision",
+    "workspaceConnection.contentRevision",
     "knowledgeSource.commitSha",
     "knowledgeGithubInstallation.status",
   ]) {
@@ -297,6 +297,11 @@ export function collectWorkspaceCloudHttpDiagnostics({ lineCount, read, relative
   }
 
   const knowledgeEnvironmentConnectionsSource = read(knowledgeEnvironmentConnectionsRoute);
+  if (sourceBrowseApplicationSource.includes("workspaceConnection.revision")) {
+    diagnostics.push(
+      `${knowledgeSourceBrowseApplication}: source browsing must pin the public connection content revision`,
+    );
+  }
   const knowledgeInventorySource = read(knowledgeInventory);
   if (
     knowledgeEnvironmentConnectionsSource.includes("workspaceConnection.revision")
