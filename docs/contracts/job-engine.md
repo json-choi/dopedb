@@ -90,3 +90,10 @@ Table 화면의 우측 context panel에서 포맷과 파일을 고르고, 최대
 target column, NULL 표현, error policy와 error limit은 실행 전에 검증한다. 최근 Job은
 실시간 진행률, 일시정지/재개/취소, exact import 승인, retained output/error artifact
 열기를 같은 패널에서 제공한다.
+
+`job:changed`는 connection, Job ID, kind, state, 처리 행·바이트 수를 전달한다.
+import가 `succeeded`, `paused`, `cancelled`, `failed`로 정리되면 해당 연결의
+열린 table page와 total count를 함께 다시 읽고 닫힌 page의 cache도 무효화한다.
+실패나 중단 전에 완료된 batch가 있을 수 있으므로 성공 때만 갱신하지 않는다.
+진행률 event와 export는 table read를 다시 실행하지 않는다. 갱신하는 동안 기존
+행을 유지하며, 다른 연결의 query cache는 건드리지 않는다.

@@ -347,6 +347,7 @@ pub(crate) struct JobDetail {
 pub(crate) struct JobChangedEvent {
     pub(crate) connection_id: ConnectionId,
     pub(crate) job_id: JobId,
+    pub(crate) kind: JobKind,
     pub(crate) state: JobState,
     pub(crate) rows_processed: u64,
     pub(crate) bytes_processed: u64,

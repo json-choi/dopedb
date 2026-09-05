@@ -26,12 +26,14 @@ import { closedBeforeTurnCompleted } from "../agents/transcript";
 import { retainInertShellChildren } from "../appShell/useInertShellBackground";
 import {
   cancelWorkspaceResourceQueries,
+  invalidateJobQueries,
   resetConnectionResourceQueries,
   resetWorkspaceResourceQueries,
   resumePendingWorkspaceResourceQueries,
 } from "../../lib/queryClient";
 import { sharedWorkspaceScopeAvailable, useCatalogScope, type CatalogScope } from "../../lib/queries";
 import { queryServiceSessionProjection } from "../queryServices/useQueryServices";
+import { jobConnectionId, type JobChangedEvent } from "../jobs/domain";
 import {
   shouldRevalidateWorkspaceAuth,
   workspaceAuthRetryDelay,
@@ -778,6 +780,43 @@ describe("workspace auth lifecycle", () => {
       ...validQueryAnalyticsInput,
       error: "private error detail",
     })).toBe(false);
+
+    const importClient = new QueryClient();
+    let storedRowCount = 2;
+    const rowsKey = ["tableRows", "import-connection", "qa_records"];
+    const countKey = ["tableCount", "import-connection", "qa_records"];
+    const unrelatedKey = ["tableCount", "other-connection", "qa_records"];
+    const importObservers = [rowsKey, countKey, unrelatedKey].map((queryKey) =>
+      new QueryObserver(importClient, {
+        queryKey,
+        initialData: 2,
+        staleTime: Infinity,
+        queryFn: async () => storedRowCount,
+      })
+    );
+    const stopImportObservers = importObservers.map((observer) => observer.subscribe(() => {}));
+    const jobEvent: JobChangedEvent = {
+      connectionId: jobConnectionId("import-connection"),
+      jobId: "import-job" as JobChangedEvent["jobId"],
+      kind: "import",
+      state: "running",
+      rowsProcessed: 2,
+      bytesProcessed: 40,
+    };
+    storedRowCount = 4;
+    await invalidateJobQueries(importClient, jobEvent);
+    await invalidateJobQueries(importClient, { ...jobEvent, kind: "export", state: "succeeded" });
+    expect(importClient.getQueryData(rowsKey)).toBe(2);
+    expect(importClient.getQueryData(countKey)).toBe(2);
+    for (const state of ["succeeded", "paused", "cancelled", "failed"] as const) {
+      await invalidateJobQueries(importClient, { ...jobEvent, state });
+      expect(importClient.getQueryData(rowsKey)).toBe(storedRowCount);
+      expect(importClient.getQueryData(countKey)).toBe(storedRowCount);
+      expect(importClient.getQueryData(unrelatedKey)).toBe(2);
+      storedRowCount++;
+    }
+    stopImportObservers.forEach((stop) => stop());
+    importClient.clear();
 
     const accountA = authState("account-a");
     const workspaceA = workspaceContext("workspace-a");

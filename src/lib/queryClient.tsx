@@ -143,8 +143,25 @@ type CacheInvalidationLease = {
 
 const cacheInvalidationLeases = new WeakMap<QueryClient, CacheInvalidationLease>();
 
+/** Settled imports can leave committed batches even when paused, cancelled, or failed. */
+export async function invalidateJobQueries(queryClient: QueryClient, event: JobChangedEvent) {
+  const refresh = [queryClient.invalidateQueries({ queryKey: qk.jobs(event.connectionId) })];
+  if (
+    event.kind === "import"
+    && ["succeeded", "paused", "cancelled", "failed"].includes(event.state)
+  ) {
+    // Progress and exports do not change the visible table. Refresh settled
+    // imports once so existing rows stay visible while rows and totals converge.
+    refresh.push(
+      queryClient.invalidateQueries({ queryKey: ["tableRows", event.connectionId] }),
+      queryClient.invalidateQueries({ queryKey: ["tableCount", event.connectionId] }),
+    );
+  }
+  await Promise.all(refresh);
+}
+
 // Backend events name the connection they concern, so each one invalidates exactly that
-// connection's logs. One reference-counted lease also prevents React StrictMode's
+// connection's data and logs. One reference-counted lease also prevents React StrictMode's
 // setup-cleanup-setup probe from registering two native listener sets.
 function retainCacheInvalidation(queryClient: QueryClient) {
   let lease = cacheInvalidationLeases.get(queryClient);
@@ -166,9 +183,7 @@ function retainCacheInvalidation(queryClient: QueryClient) {
       }),
       listen<JobChangedEvent>("job:changed", (event) => {
         if (!active()) return;
-        void queryClient.invalidateQueries({
-          queryKey: qk.jobs(event.payload.connectionId),
-        });
+        void invalidateJobQueries(queryClient, event.payload);
       }),
       listen<ManualTransactionChangedEvent>(
         "manual-transaction:changed",

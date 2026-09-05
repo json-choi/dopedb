@@ -94,6 +94,7 @@ where
         let _ = self.events.send(JobChangedEvent {
             connection_id: job.connection_id,
             job_id: job.id,
+            kind: job.kind,
             state: job.state,
             rows_processed: job.rows_processed,
             bytes_processed: job.bytes_processed,

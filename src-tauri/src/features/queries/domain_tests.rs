@@ -13,6 +13,18 @@ use crate::monitoring::HealthSnapshot;
 #[tokio::test]
 async fn query_and_skill_security_contracts_stay_fail_closed() {
     crate::features::connections::assert_connection_test_failure_contract();
+    let job_event = crate::features::jobs::JobChangedEvent {
+        connection_id: Uuid::new_v4().into(),
+        job_id: Uuid::new_v4().into(),
+        kind: crate::features::jobs::JobKind::Import,
+        state: crate::features::jobs::JobState::Succeeded,
+        rows_processed: 2,
+        bytes_processed: 40,
+    };
+    let job_wire = serde_json::to_value(job_event).unwrap();
+    assert_eq!(job_wire["kind"], "import");
+    assert_eq!(job_wire["state"], "succeeded");
+    assert_eq!(job_wire["rowsProcessed"], 2);
     let production = ConnectionProfile {
         id: Uuid::new_v4(),
         name: "query-feature-test".into(),

@@ -197,6 +197,7 @@ export interface JobDetail {
 export interface JobChangedEvent {
   connectionId: ConnectionId;
   jobId: JobId;
+  kind: JobKind;
   state: JobState;
   rowsProcessed: number;
   bytesProcessed: number;
