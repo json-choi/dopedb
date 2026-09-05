@@ -57,6 +57,23 @@ export async function runAnalysisLifecycleScenarios(
     "html", "query", "source", "title", "version",
   ]);
 
+  // A lease/revocation epoch can advance without editing the shared connection.
+  // Article creation, editing, rerun, and completion must keep the content pin.
+  const [connectionEpoch] = await sql<{ revision: number; contentRevision: number }[]>`
+    UPDATE "workspace_control"."workspace_connection"
+    SET "revision" = "revision" + 1
+    WHERE "organization_id" = ${organizationId}
+      AND "id" = ${imported.connection.id}::uuid
+    RETURNING "revision"::int, "content_revision"::int AS "contentRevision"
+  `;
+  expect(connectionEpoch.revision).toBeGreaterThan(connectionEpoch.contentRevision);
+  expect(connectionEpoch.contentRevision).toBe(article.connectionRevision);
+  await expect(articleStore.commitAnalysisArticleCreate({
+    organizationId,
+    article: { ...article, connectionRevision: article.connectionRevision + 1 },
+    authority,
+  })).resolves.toBeNull();
+
   const created = await articleStore.commitAnalysisArticleCreate({
     organizationId,
     article,

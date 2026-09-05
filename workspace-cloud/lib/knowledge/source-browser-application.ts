@@ -103,7 +103,7 @@ async function exactSource(request: Request, input: ExactSourceInput) {
       and(
         eq(workspaceConnection.organizationId, knowledgeEnvironmentConnection.organizationId),
         eq(workspaceConnection.id, knowledgeEnvironmentConnection.connectionId),
-        eq(workspaceConnection.revision, knowledgeEnvironmentConnection.connectionRevision),
+        eq(workspaceConnection.contentRevision, knowledgeEnvironmentConnection.connectionRevision),
         isNull(workspaceConnection.deletedAt),
         isNull(workspaceConnection.revocationPendingAt),
       ),

@@ -520,6 +520,7 @@ export function checkFrontendArchitecture(harness) {
     ["src/features/agents/AcpChatComposer.tsx", 350],
     ["src/features/agents/useAcpChatController.ts", 850],
     ["src/features/agents/acpTranscriptPresentation.ts", 350],
+    ["src/features/agents/acpActivityLabels.ts", 160],
     ["src/features/agents/acpPromptContext.ts", 150],
   ];
   for (const [filePath, limit] of acpChatBoundaries) {
@@ -535,6 +536,7 @@ export function checkFrontendArchitecture(harness) {
     "src/features/agents/AcpChatTranscript.tsx",
     "src/features/agents/AcpChatComposer.tsx",
     "src/features/agents/acpTranscriptPresentation.ts",
+    "src/features/agents/acpActivityLabels.ts",
     "src/features/agents/acpPromptContext.ts",
   ]) {
     const source = read(filePath);
@@ -598,13 +600,17 @@ export function checkFrontendArchitecture(harness) {
   for (const token of [
     "selectRichTranscriptKeys",
     "findAnalysisArticle",
-    "progressActivityLabel",
-    "toolActivityLabel",
   ]) {
     if (!acpTranscriptPresentation.includes(token)) {
       failures.push(
         `src/features/agents/acpTranscriptPresentation.ts: transcript presentation lost ${token}`,
       );
+    }
+  }
+  const acpActivityLabels = read("src/features/agents/acpActivityLabels.ts");
+  for (const token of ["progressActivityLabel", "toolActivityLabel"]) {
+    if (!acpActivityLabels.includes(token)) {
+      failures.push(`src/features/agents/acpActivityLabels.ts: activity presentation lost ${token}`);
     }
   }
 

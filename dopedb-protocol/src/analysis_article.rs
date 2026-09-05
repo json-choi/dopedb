@@ -7,6 +7,23 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
+/// Shared delivery instructions for Desktop prompts and its typed MCP bridge.
+pub const ANALYSIS_ARTICLE_AGENT_INSTRUCTIONS: &str = concat!(
+    "ANALYSIS DELIVERY: DopeDB displays Markdown, tables, code fences, and Mermaid in chat. ",
+    "When asked to create an analysis report, funnel, chart, or Article, save it with the DopeDB Analysis Article tools unless the user asks for a chat-only response. ",
+    "Use analysis_article_verify on the complete definition, then analysis_article_propose to save a new workspace Article. ",
+    "Check analysis_article_list to avoid duplicates; use analysis_article_update only when editing an existing Article at its exact revision. ",
+    "An Article contains ordinary sanitized HTML and exactly one bounded read-only saved query on one selected connectionId. ",
+    "Use headings, paragraphs, lists, and tables; omit scripts, styles, inline styles, forms, and remote embeds. ",
+    "Keep measured values grounded in actual query receipts. Never replace the saved query with constant copies of its results. ",
+    "For an analysis using several reads, state which part the single saved query reruns and date the other observations; never imply that it reruns every source. ",
+    "A local HTML file, localhost preview, or host-specific visualization directive is not a DopeDB Article and cannot be displayed as one. ",
+    "Do not use external artifact-rendering skills or browser tools to deliver it. ",
+    "Report an Article as saved only after a successful propose or update returns its Article ID and revision. ",
+    "If verification or saving fails, preserve the analysis in chat and explain the exact failure without claiming completion. ",
+    "Do not automatically retry an operation conflict, enable automation, publish query rows, or publish a public snapshot."
+);
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AnalysisArticleSource {

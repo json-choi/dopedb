@@ -47,6 +47,13 @@ connection existence, revocation gate, runner capability, local credential, and
 local read-only policy. The internal revocation/lease epoch is not a content pin
 and must not invalidate an unchanged saved query.
 
+Project connection bindings also store this public content revision. Article
+create/update, manual run authorization/completion, and pinned source browsing
+compare a binding to `content_revision`; the internal `revision` epoch is checked
+only by the execution and revocation authority that owns it. The PostgreSQL
+lifecycle harness advances that epoch while keeping content unchanged and still
+requires Article saving and reruns to succeed, while rejecting a stale content pin.
+
 Pre-MVP Article payloads that do not carry the current content revision are
 unsupported. They fail closed rather than inferring authority from an internal
 epoch or another historical field.
@@ -95,6 +102,16 @@ automation tables.
 An exact-grant ACP Agent may propose or update the HTML body and the one read-only
 query, and may perform a bounded pre-save read. It cannot publish or revoke a public
 page, broaden the connection grant, or run a query from the hosted service.
+
+Desktop prompt context and the typed bridge share the same Article delivery
+instructions. A requested saved analysis, report, funnel, or chart uses the Article
+verify/propose tools; a local HTML file, localhost preview, or host-specific render
+directive is not a saved workspace resource. Only a successful propose/update
+receipt establishes an Article ID and revision. When several reads inform the
+body, it names the portion that its one saved query reruns and dates the remaining
+observations. A failed save leaves the analysis in chat with its failure explained.
+Chat activity labels identify Article operations by the actual Article tool name,
+not by visualization words in a shell command or file path.
 
 The screen owns database selection, SQL/result inspection, manual rerun,
 publication, revocation, deletion, and conflict recovery.

@@ -129,7 +129,7 @@ export async function getAnalysisRunControl(input: {
          AND environment_binding."project_environment_id" = article."project_environment_id"
          AND environment_binding."environment_revision" = article."environment_revision"
          AND environment_binding."connection_id" = connection."id"
-         AND environment_binding."connection_revision" = connection."revision"
+         AND environment_binding."connection_revision" = connection."content_revision"
          AND environment_binding."revoked_at" IS NULL
         JOIN ${workspaceConnectionGrant} connection_grant
           ON connection_grant."organization_id" = connection."organization_id"
@@ -280,7 +280,7 @@ export async function commitAnalysisRunCreate(input: {
        AND environment_binding."project_environment_id" = article_authority."project_environment_id"
        AND environment_binding."environment_revision" = article_authority."environment_revision"
        AND environment_binding."connection_id" = connection."id"
-       AND environment_binding."connection_revision" = connection."revision"
+       AND environment_binding."connection_revision" = connection."content_revision"
        AND environment_binding."revoked_at" IS NULL
       JOIN ${workspaceConnectionGrant} connection_grant
         ON connection_grant."organization_id" = connection."organization_id"
@@ -423,7 +423,7 @@ export async function commitAnalysisRunCompletion(input: {
        AND environment_binding."project_environment_id" = article."project_environment_id"
        AND environment_binding."environment_revision" = article."environment_revision"
        AND environment_binding."connection_id" = connection."id"
-       AND environment_binding."connection_revision" = connection."revision"
+       AND environment_binding."connection_revision" = connection."content_revision"
        AND environment_binding."revoked_at" IS NULL
       JOIN ${workspaceConnectionGrant} connection_grant
         ON connection_grant."organization_id" = connection."organization_id"

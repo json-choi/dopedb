@@ -156,7 +156,7 @@ export async function commitAnalysisArticleCreate(input: {
        AND binding."revoked_at" IS NULL
        AND connection."organization_id" = binding."organization_id"
        AND connection."id" = binding."connection_id"
-       AND connection."revision" = binding."connection_revision"
+       AND connection."content_revision" = binding."connection_revision"
        AND connection."content_revision" = ${input.article.connectionRevision}
        AND connection."deleted_at" IS NULL
        AND connection."revocation_pending_at" IS NULL
@@ -289,7 +289,7 @@ export async function commitAnalysisArticleMutation(input: {
        AND binding."revoked_at" IS NULL
        AND connection."organization_id" = binding."organization_id"
        AND connection."id" = binding."connection_id"
-       AND connection."revision" = binding."connection_revision"
+       AND connection."content_revision" = binding."connection_revision"
        AND connection."content_revision" = ${input.article.connectionRevision}
        AND connection."deleted_at" IS NULL AND connection."revocation_pending_at" IS NULL
       JOIN ${workspaceConnectionGrant} connection_grant

@@ -32,17 +32,16 @@ import {
   findAnalysisArticle,
   loginCommand,
   planEntryLabel,
-  progressActivityLabel,
   providerLabel,
   recordString,
   safeJson,
   showProviderHeading,
   stopReasonLabel,
-  toolActivityLabel,
   toolContentText,
   toolStatusLabel,
   toolStatusTone,
 } from "./acpTranscriptPresentation";
+import { progressActivityLabel, toolActivityLabel } from "./acpActivityLabels";
 import type { AcpPermissionOption, AgentProvider } from "./domain";
 import { findAgentSqlProposal, isSqlProposalTool } from "./sqlProposal";
 import {
