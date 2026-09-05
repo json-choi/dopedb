@@ -10,7 +10,6 @@ import ToolbarMenu, {
 } from "../../components/ToolbarMenu";
 import { Button } from "../../design-system/components/Button";
 import { useModalBehavior } from "../../design-system/components/Modal";
-import { ProgressBar } from "../../design-system/components/Progress";
 import RenderRecoveryBoundary from "../../design-system/components/RenderRecoveryBoundary";
 import {
   InlineNotice,
@@ -170,12 +169,6 @@ function AcpChatPanelContent({
           </>
         }
       />
-
-      {session.busy ? (
-        <div className="tw:mx-6 tw:mt-2 tw:shrink-0">
-          <ProgressBar value={null} label={t("agent.acpWorking")} />
-        </div>
-      ) : null}
 
       {feedback.error || session.loadError ? (
         <InlineNotice

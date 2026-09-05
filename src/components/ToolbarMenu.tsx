@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   type KeyboardEvent,
+  type ReactElement,
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
@@ -267,7 +268,7 @@ export default function ToolbarMenu({
   return (
     <span
       data-variant={triggerVariant}
-      className="tw:inline-flex tw:shrink-0 tw:data-[variant=statusBar]:h-full"
+      className="tw:inline-flex tw:min-w-0 tw:max-w-full tw:shrink-0 tw:data-[variant=statusBar]:h-full tw:[&>button]:max-w-full"
     >
       {trigger ? (
         triggerButton
@@ -284,7 +285,7 @@ export function ToolbarMenuItem({
   children,
   ...props
 }: {
-  icon: IconName;
+  icon: IconName | ReactElement;
   children: ReactNode;
 } & Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children" | "className">) {
   return (
@@ -294,7 +295,9 @@ export function ToolbarMenuItem({
       className="tw:flex tw:min-h-control-md tw:w-full tw:min-w-[var(--ds-menu-min-width)] tw:cursor-pointer tw:items-center tw:justify-start tw:gap-2 tw:rounded-sm tw:border-0 tw:bg-transparent tw:px-2 tw:font-sans tw:text-left tw:text-ui tw:leading-ui tw:text-inherit tw:whitespace-nowrap tw:aria-checked:bg-selection tw:aria-checked:text-selection-foreground tw:disabled:cursor-default tw:disabled:opacity-45 tw:hover:bg-muted tw:hover:text-foreground tw:focus-visible:bg-muted tw:focus-visible:text-foreground tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-inset tw:focus-visible:ring-ring"
       {...props}
     >
-      <Icon name={icon} className="tw:shrink-0 tw:text-sm" />
+      {typeof icon === "string" ? (
+        <Icon name={icon} className="tw:shrink-0 tw:text-sm" />
+      ) : icon}
       {children}
     </button>
   );

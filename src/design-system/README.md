@@ -186,7 +186,7 @@ color를 거부한다.
 | core chrome | `tokens.css`의 surface/foreground/selection/focus/status 역할 | 모든 제품 화면과 공용 primitive | neutral surface가 기본이며 다른 palette의 색을 navigation·button·panel에 사용하지 않음 |
 | Agent syntax | `scoped-palettes.css`의 `--ds-syntax-*` | `agentSyntax`의 완료된 code fence | grammar/highlighter가 없으면 색 없는 escaped code를 표시하며 terminal ANSI 역할을 빌리지 않음 |
 | terminal ANSI | `scoped-palettes.css`의 `--ds-terminal-*` | `resolvePtyTheme` | xterm host의 background/foreground/selection은 core 역할을 별도 주입하고 ANSI 색은 terminal 밖에서 사용하지 않음 |
-| provider/engine brand | `src/assets/db-icons/`와 `AgentProviderMark`의 로컬 정본 SVG | `EngineMark`, `AgentProviderMark` | asset이 없으면 accessible text/neutral glyph를 사용하고 brand pigment를 chrome 상태색으로 승격하지 않음 |
+| provider/engine brand | `src/assets/db-icons/`, `src/assets/agent-icons/`의 로컬 정본과 공식 브랜드 SVG | `EngineMark`, `AgentProviderMark` | asset이 없으면 accessible text/neutral glyph를 사용하고 brand pigment를 chrome 상태색으로 승격하지 않음 |
 | ERD export artifact | `artifactPalettes.ts`의 `ERD_EXPORT_PALETTE` | `erdExport.ts` | live CSS와 무관한 deterministic SVG/PNG/PDF 출력 전용이며 앱 surface에서는 사용하지 않음 |
 
 새 scoped palette를 만들 때는 namespace, 단일 소비자 경계, 색 없는 fallback을 이
@@ -232,6 +232,12 @@ Elevation은 세 단계만 허용한다.
 
 ### React primitive
 
+- `Marketing`의 `WebLink`, `WebNavLink`, `WebBrand`, `WebSection`,
+  `WebEyebrow`, `WebHeading`: 제품 소개 페이지의 링크 상태, 중립 D 마크,
+  넓은 section 간격과 제목 위계를 공유한다. 기존 Desktop token과 Pretendard를
+  사용하며 새 palette나 screen CSS는 만들지 않는다. `src/productSite/`는
+  `product-site/index.html`에서 시작하는 독립 소개 페이지이며 기존 웹이나 Desktop
+  진입점에서는 import하지 않는다. 앱 목업, 가짜 계정이나 데이터 상태를 만들지 않는다.
 - `workspace-cloud/app/components/Brand`와 `site/app/DopeDBMark`: workspace의
   선형 D 마크를 DopeDB 브랜드 정본으로 공유한다. 공개 사이트 header/footer와
   workspace navigation은 이 도형을 사용하고, favicon·OAuth·Tauri bundle
@@ -320,10 +326,18 @@ Elevation은 세 단계만 허용한다.
   `ToolWindowComposerContext`: AI Chat의 multiline 입력면, 내부 context row와
   외부 Agent/model row. 입력면의 `expanded` 상태는 실제 확대·복원 action과
   연결되고 `busy` 상태는 Agent가 응답·승인을 기다리는 동안 활성 작업 경계를
-  유지한다. 화면별 textarea 크기 CSS를 만들지 않는다.
+  유지한다. textarea의 기본 focus shadow는 제거하고 바깥 composer 경계 하나로
+  입력 focus를 표시한다. 화면별 textarea 크기 CSS를 만들지 않는다.
 - `AgentProviderMark`: AI Chat과 Agent 설치 흐름에서 Claude와 Codex를 구분하는
-  16px 단색 브랜드 마크. Iconify Simple Icons의 `claude`와 `openai` 정본을
-  로컬 번들로 사용하고 feature별 임시 SVG나 상태색 대용 브랜드색을 만들지 않는다.
+  16px 공식 제품 아이콘. OpenAI의 Codex 확장과 Anthropic 프레스 키트 원본을
+  비율·색상 변경 없이 로컬 번들로 사용한다. 출처는
+  [`src/assets/agent-icons/README.md`](../assets/agent-icons/README.md)에 기록한다.
+  provider 선택은 아이콘·현재 이름·chevron을 하나의 `ToolbarMenu` trigger로
+  정렬한다. `ToolbarMenuItem`은 일반 `IconName` 또는 공용 브랜드 마크를 받는다.
+  좁은 context row에서는 model과 resource 이름이 가용 폭 안에서 줄어들고,
+  resource 선택의 count·chevron은 유지한다. `InlineSelect`와 `ToolbarMenu` trigger는
+  부모가 할당한 폭을 넘지 않는다.
+  feature별 임시 SVG나 상태색 대용 브랜드색을 만들지 않는다.
 - `AgentCliStatusBadges`, `AgentCliDetectionNotice`: 시작 모달과 Agent Tools가
   공유하고 AI Chat도 같은 상태 어휘를 따르는 feature composition. 로컬 CLI의
   탐지 중, probe 실패, 미설치, 로그인 필요, 준비 상태를 구분하며 실패를
@@ -526,7 +540,9 @@ DopeDB의 실제 작업 흐름과 접근성, supported viewport를 위한 제품
   사용 가능하게 유지하고 focus나 layout을 바꾸지 않는다. 선택 변경은 즉시
   반영하며 이전 exact grant의 준비 결과는 닫고 마지막 선택만 채택한다.
   초기화와 동시에 제출된 첫 prompt도 같은 준비 작업을 기다린 뒤 한 번만
-  전송한다. session 전용 tab action menu는 활성 session이 있을 때만 표시하며
+  전송한다. 실행 중 상태는 transcript의 작업 행과 취소 action으로 표시하며,
+  완료율이 없는 상단 진행 막대를 중복해서 표시하지 않는다.
+  session 전용 tab action menu는 활성 session이 있을 때만 표시하며
   빈 AI Chat에 disabled kebab을 남기지 않는다.
 - AI Chat의 desktop dock은 modeless tool surface다. 좁은 desktop의 오른쪽
   overlay도 `role="dialog"`인 modeless side sheet로 유지해 background focus와

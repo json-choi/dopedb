@@ -2,8 +2,8 @@
 // Protocol adapters provide semantic state and actions; these primitives own
 // repeated card geometry, spacing, and status treatment.
 import type { ReactNode } from "react";
-import ClaudeIcon from "@iconify-react/simple-icons/claude";
-import OpenAiIcon from "@iconify-react/simple-icons/openai";
+import claudeIcon from "../../assets/agent-icons/claude.svg";
+import codexIcon from "../../assets/agent-icons/codex.png";
 
 import { Icon } from "../../components/Icon";
 import { StatusDot, type StatusTone } from "./Status";
@@ -13,17 +13,18 @@ export function AgentProviderMark({
 }: {
   provider: "claude" | "codex";
 }) {
-  const ProviderIcon = provider === "claude" ? ClaudeIcon : OpenAiIcon;
   return (
     <span
       className="tw:grid tw:size-4 tw:shrink-0 tw:place-items-center tw:text-foreground"
       aria-hidden="true"
     >
-      <ProviderIcon
-        width="1em"
-        height="1em"
-        className="tw:size-4"
-        focusable="false"
+      <img
+        src={provider === "claude" ? claudeIcon : codexIcon}
+        alt=""
+        width={16}
+        height={16}
+        className="tw:block tw:size-4 tw:object-contain"
+        draggable={false}
       />
     </span>
   );

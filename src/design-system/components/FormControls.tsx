@@ -132,7 +132,7 @@ export const InlineSelect = forwardRef<
   return (
     <select
       ref={ref}
-      className="tw:h-control-sm tw:min-w-0 tw:max-w-[240px] tw:cursor-pointer tw:appearance-none tw:truncate tw:border-0 tw:bg-transparent tw:p-0 tw:font-sans tw:text-sm tw:font-medium tw:text-info tw:outline-none tw:focus-visible:rounded-xs tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:disabled:cursor-default tw:disabled:text-muted-foreground"
+      className="tw:block tw:h-control-sm tw:min-w-0 tw:max-w-full tw:cursor-pointer tw:appearance-none tw:truncate tw:border-0 tw:bg-transparent tw:p-0 tw:font-sans tw:text-sm tw:font-medium tw:text-info tw:outline-none tw:focus-visible:rounded-xs tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:disabled:cursor-default tw:disabled:text-muted-foreground"
       {...props}
     >
       {children}

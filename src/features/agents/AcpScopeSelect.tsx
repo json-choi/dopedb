@@ -56,7 +56,7 @@ export function AcpScopeSelect({
     : t("agent.acpSelectResources");
 
   return (
-    <span className="tw:ml-auto tw:min-w-0 tw:max-w-[18rem]">
+    <span className="tw:col-start-3 tw:w-full tw:min-w-[4rem] tw:max-w-[18rem] tw:justify-self-end">
       <ToolbarMenu
         label={accessibleSelection}
         align="end"

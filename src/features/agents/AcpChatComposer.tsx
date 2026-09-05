@@ -2,6 +2,7 @@
 // to controller-owned command groups. It owns no session/query/transport state.
 
 import { Icon } from "../../components/Icon";
+import ToolbarMenu, { ToolbarMenuItem } from "../../components/ToolbarMenu";
 import { AgentProviderMark } from "../../design-system/components/Agent";
 import { Button } from "../../design-system/components/Button";
 import { InlineSelect } from "../../design-system/components/FormControls";
@@ -13,10 +14,8 @@ import {
 } from "../../design-system/components/ToolWindow";
 import { useI18n } from "../../lib/i18n";
 import { AcpScopeSelect } from "./AcpScopeSelect";
-import type {
-  AcpSessionConfigOption,
-  AgentProvider,
-} from "./domain";
+import { providerLabel } from "./acpTranscriptPresentation";
+import type { AcpSessionConfigOption } from "./domain";
 import type { AcpChatController } from "./useAcpChatController";
 
 type AcpChatComposerProps = Pick<
@@ -206,27 +205,30 @@ export default function AcpChatComposer({
         </div>
       </ToolWindowComposer>
       <ToolWindowComposerContext>
-        <AgentProviderMark provider={setup.selectedProvider} />
-        <span className="tw:max-w-[10rem]">
-          <InlineSelect
-            value={setup.selectedProvider}
-            disabled={session.starting}
-            onChange={(event) =>
-              void commands.setup.changeProvider(
-                event.target.value as AgentProvider,
-              )
-            }
-            aria-label={t("agent.acpProvider")}
-            title={t("agent.acpLocalAuth")}
-          >
-            {setup.enabledProviders.includes("claude") ? (
-              <option value="claude">Claude Agent</option>
-            ) : null}
-            {setup.enabledProviders.includes("codex") ? (
-              <option value="codex">Codex</option>
-            ) : null}
-          </InlineSelect>
-        </span>
+        <ToolbarMenu
+          align="start"
+          label={`${t("agent.acpProvider")}: ${providerLabel(setup.selectedProvider)}`}
+          disabled={session.starting}
+          trigger={
+            <>
+              <AgentProviderMark provider={setup.selectedProvider} />
+              <span>{providerLabel(setup.selectedProvider)}</span>
+              <Icon name="chevronDown" />
+            </>
+          }
+        >
+          {setup.enabledProviders.map((provider) => (
+            <ToolbarMenuItem
+              key={provider}
+              icon={<AgentProviderMark provider={provider} />}
+              role="menuitemradio"
+              aria-checked={provider === setup.selectedProvider}
+              onClick={() => void commands.setup.changeProvider(provider)}
+            >
+              {providerLabel(provider)}
+            </ToolbarMenuItem>
+          ))}
+        </ToolbarMenu>
         {composer.modelOption ? (
           <ConfigSelect
             option={composer.modelOption}
@@ -268,7 +270,7 @@ function ConfigSelect({
     return null;
   }
   return (
-    <span className="tw:max-w-[11rem]">
+    <span className="tw:min-w-0 tw:max-w-[11rem]">
       <InlineSelect
         value={option.currentValue}
         disabled={changing}
