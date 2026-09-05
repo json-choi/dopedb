@@ -96,6 +96,15 @@ pub(super) fn command_environment() -> AppResult<CommandEnvironment> {
 }
 
 pub(crate) async fn install_managed_cli() -> AppResult<()> {
+    // A cancelled catalog request must not abandon a verified download/extraction
+    // halfway through. The owned task keeps the install lock and always cleans its
+    // private staging tree; concurrent callers reuse the published runtime.
+    tokio::spawn(install_managed_cli_owned())
+        .await
+        .map_err(|_| AppError::Config("Google connection tool preparation stopped".into()))?
+}
+
+async fn install_managed_cli_owned() -> AppResult<()> {
     let _guard = install_lock().lock().await;
     if managed_sdk_root_if_ready().is_some() {
         return Ok(());

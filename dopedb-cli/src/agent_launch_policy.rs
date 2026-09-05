@@ -128,12 +128,58 @@ pub fn adapter_command(
 ) -> Result<Command, AgentLaunchPolicyError> {
     verify_launch_files(registration)?;
     let mut command = Command::new(&registration.runtime_executable);
-    command
-        .arg(&registration.adapter_entrypoint)
-        .env(
-            registration.plugin_id.local_cli_environment(),
-            &registration.provider_cli_executable,
-        )
-        .env_remove("DOPEDB_SESSION_TOKEN");
+    // A GUI can inherit stale terminal hooks and unrelated credentials from
+    // its launcher or updater. Only OS discovery and this exact session belong
+    // in the official adapter; its CLI still owns login in the user's home.
+    command.env_clear();
+    for name in [
+        "HOME",
+        "USER",
+        "LOGNAME",
+        "USERPROFILE",
+        "HOMEDRIVE",
+        "HOMEPATH",
+        "APPDATA",
+        "LOCALAPPDATA",
+        "SystemRoot",
+        "WINDIR",
+        "COMSPEC",
+        "PATHEXT",
+        "PATH",
+        "SHELL",
+        "TMPDIR",
+        "TMP",
+        "TEMP",
+        "LANG",
+        "LC_ALL",
+        "LC_CTYPE",
+        "TZ",
+        "TERM",
+        "TERM_PROGRAM",
+        "TERM_PROGRAM_VERSION",
+        "SSH_AUTH_SOCK",
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "NO_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "all_proxy",
+        "no_proxy",
+        "SSL_CERT_FILE",
+        "SSL_CERT_DIR",
+        "NODE_EXTRA_CA_CERTS",
+        "DOPEDB_TERMINAL_SESSION_ID",
+        "DOPEDB_CONNECTION_SCOPE",
+        "DOPEDB_RUNTIME_FILE",
+    ] {
+        if let Some(value) = std::env::var_os(name) {
+            command.env(name, value);
+        }
+    }
+    command.arg(&registration.adapter_entrypoint).env(
+        registration.plugin_id.local_cli_environment(),
+        &registration.provider_cli_executable,
+    );
     Ok(command)
 }

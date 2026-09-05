@@ -311,7 +311,9 @@ pub fn run() {
                     .state::<state::AppState>()
                     .startup_trace
                     .mark_once("window_shown", "critical", true);
-                #[cfg(feature = "packaged-benchmark")]
+                // The updater relaunches the binary directly. Activate the production
+                // window too so macOS does not suspend its first WebView paint until
+                // the user manually brings the app to the foreground.
                 if let Some(window) = app_handle.get_webview_window("main") {
                     let _ = window.show();
                     let _ = window.set_focus();

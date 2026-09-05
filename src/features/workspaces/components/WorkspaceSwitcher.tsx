@@ -8,9 +8,8 @@ import {
   workspaceConsoleUrl,
 } from "../tauriAdapter";
 import {
-  fetchWorkspaceContext,
-  invalidateWorkspaceAuth,
   runWorkspaceAuthorityTransition,
+  synchronizeWorkspaceScope,
 } from "../cache";
 import { workspaceAuthStateQuery, workspaceContextQuery } from "../queries";
 import { onWorkspaceSelectionRequested } from "../selectionRequest";
@@ -79,8 +78,7 @@ export default function WorkspaceSwitcher({
         queryClient,
         () => setActiveWorkspace(choice.workspaceId, accountUserId),
         async () => {
-          await invalidateWorkspaceAuth(queryClient);
-          await fetchWorkspaceContext(queryClient);
+          await synchronizeWorkspaceScope(queryClient);
           await onChanged();
         },
       );

@@ -1,5 +1,5 @@
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import capability from "../../../src-tauri/capabilities/default.json";
 import tauriBenchmarkConfig from "../../../src-tauri/tauri.benchmark.conf.json";
 import tauriConfig from "../../../src-tauri/tauri.conf.json";
@@ -38,6 +38,7 @@ import {
 } from "./authPolicy";
 import {
   runWorkspaceAuthorityTransition,
+  synchronizeWorkspaceScope,
   workspaceAuthorityChanged,
   workspaceResourceQueryScopeChanged,
 } from "./cache";
@@ -48,6 +49,8 @@ import {
   type WorkspaceRole,
 } from "./domain";
 import type { WorkspaceContextState } from "./queries";
+import * as workspaceQueries from "./queries";
+import * as workspaceAdapter from "./tauriAdapter";
 import {
   ProductAnalyticsLocalStore,
   productAnalyticsInstallationReadyInput,
@@ -937,5 +940,47 @@ describe("workspace auth lifecycle", () => {
     stopPrivate();
     stopCatalog();
     queryClient.clear();
+
+    // A slower workspace read must never expose the new account/generation with
+    // the previous workspace. Services and catalog readers share this boundary.
+    const accountB = authState("account-b");
+    const workspaceB = workspaceContext("workspace-b");
+    const keys = workspaceQueries.workspaceQueryKeys;
+    queryClient.setQueryData(keys.auth(), accountA);
+    queryClient.setQueryData(keys.context(), workspaceA);
+    let releaseContext!: (context: WorkspaceContextState) => void;
+    let contextRequested!: () => void;
+    const requested = new Promise<void>((resolve) => { contextRequested = resolve; });
+    const pendingContext = new Promise<WorkspaceContextState>((resolve) => {
+      releaseContext = resolve;
+    });
+    const authRead = vi.spyOn(workspaceAdapter, "workspaceAuthState")
+      .mockResolvedValue(accountB);
+    const contextRead = vi.spyOn(workspaceQueries, "readWorkspaceContext")
+      .mockImplementation(() => {
+        contextRequested();
+        return pendingContext;
+      });
+    try {
+      const synchronized = synchronizeWorkspaceScope(queryClient);
+      await requested;
+      expect(queryClient.getQueryData(keys.auth())).toEqual(accountA);
+      expect(queryClient.getQueryData(keys.context())).toEqual(workspaceA);
+      releaseContext(workspaceB);
+      await synchronized;
+      expect(queryClient.getQueryData(keys.auth())).toEqual(accountB);
+      expect(queryClient.getQueryData(keys.context())).toEqual(workspaceB);
+
+      authRead.mockResolvedValue(accountA);
+      contextRead.mockRejectedValue(new Error("workspace unavailable"));
+      await expect(synchronizeWorkspaceScope(queryClient))
+        .rejects.toThrow("workspace unavailable");
+      expect(queryClient.getQueryData(keys.auth())).toEqual(accountB);
+      expect(queryClient.getQueryData(keys.context())).toEqual(workspaceB);
+    } finally {
+      authRead.mockRestore();
+      contextRead.mockRestore();
+      queryClient.clear();
+    }
   });
 });

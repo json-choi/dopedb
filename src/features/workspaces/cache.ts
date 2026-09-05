@@ -5,7 +5,7 @@
  * Every authoritative replacement and scope transition passes through this module.
  */
 
-import type { QueryClient } from "@tanstack/react-query";
+import { notifyManager, type QueryClient } from "@tanstack/react-query";
 
 import {
   cancelWorkspaceResourceQueries,
@@ -13,10 +13,12 @@ import {
 } from "../../lib/queryClient";
 import type { WorkspaceAuthState } from "./domain";
 import {
+  readWorkspaceContext,
   workspaceContextQuery,
   workspaceQueryKeys,
   type WorkspaceContextState,
 } from "./queries";
+import { workspaceAuthState } from "./tauriAdapter";
 
 export function replaceWorkspaceAuth(
   queryClient: QueryClient,
@@ -30,6 +32,20 @@ export function replaceWorkspaceContext(
   state: WorkspaceContextState,
 ) {
   queryClient.setQueryData(workspaceQueryKeys.context(), state);
+}
+
+/** Publish one native authority snapshot without exposing a mixed account/workspace. */
+export async function synchronizeWorkspaceScope(queryClient: QueryClient) {
+  await Promise.all([
+    queryClient.cancelQueries({ queryKey: workspaceQueryKeys.auth(), exact: true }),
+    queryClient.cancelQueries({ queryKey: workspaceQueryKeys.context(), exact: true }),
+  ]);
+  const auth = await workspaceAuthState();
+  const context = await readWorkspaceContext();
+  notifyManager.batch(() => {
+    replaceWorkspaceAuth(queryClient, auth);
+    replaceWorkspaceContext(queryClient, context);
+  });
 }
 
 function workspaceAuthorityKey(

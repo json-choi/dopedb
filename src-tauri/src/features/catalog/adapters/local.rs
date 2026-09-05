@@ -13,7 +13,7 @@ use crate::error::{AppError, AppResult};
 use crate::introspect::{self, CatalogReadMode};
 use crate::kernel::identity::ConnectionId;
 use crate::kernel::TerminalAuthority;
-use crate::model::{Provider, WorkspaceCredentialMode};
+use crate::model::{Engine, Provider, WorkspaceCredentialMode};
 use crate::store::Store;
 
 use super::super::domain::{CatalogOverview, CatalogReadPolicy, DatabaseSummary};
@@ -117,6 +117,19 @@ impl CatalogReadCoordinator {
 }
 
 impl ScopedCatalogGateway {
+    async fn prepare_runtime(&self, connection_id: ConnectionId) -> AppResult<()> {
+        // Tool preparation has its own download deadline. It must complete before
+        // the foreground database deadline starts; the read then re-pins authority.
+        let pin = self
+            .store
+            .pin_connection_for_read(connection_id.into())
+            .await?;
+        if pin.profile.engine == Engine::Bigquery {
+            crate::bigquery::install_managed_cli().await?;
+        }
+        Ok(())
+    }
+
     pub(crate) fn new(store: Store, connections: ConnectionManager) -> Self {
         Self {
             store,
@@ -133,6 +146,7 @@ impl CatalogGatewayPort for ScopedCatalogGateway {
         connection_id: ConnectionId,
         policy: CatalogReadPolicy,
     ) -> AppResult<CatalogSnapshot> {
+        self.prepare_runtime(connection_id).await?;
         bounded_catalog_read("catalog snapshot", CATALOG_DETAIL_TIMEOUT, async {
             let context = self
                 .connections
@@ -149,6 +163,7 @@ impl CatalogGatewayPort for ScopedCatalogGateway {
         // An overview deliberately has no Store path. It may be displayed while the
         // detailed catalog is still deferred, so persisting it as a CatalogSnapshot
         // would let a partial shape poison full-catalog consumers.
+        self.prepare_runtime(connection_id).await?;
         bounded_catalog_read("catalog overview", CATALOG_OVERVIEW_TIMEOUT, async move {
             let context = self
                 .connections
@@ -163,6 +178,7 @@ impl CatalogGatewayPort for ScopedCatalogGateway {
     }
 
     async fn list_databases(&self, connection_id: ConnectionId) -> AppResult<Vec<DatabaseSummary>> {
+        self.prepare_runtime(connection_id).await?;
         bounded_catalog_read("database discovery", CATALOG_OVERVIEW_TIMEOUT, async move {
             let context = self
                 .connections
@@ -187,6 +203,7 @@ impl CatalogGatewayPort for ScopedCatalogGateway {
         connection_id: ConnectionId,
         database: String,
     ) -> AppResult<CatalogSnapshot> {
+        self.prepare_runtime(connection_id).await?;
         bounded_catalog_read(
             "database catalog snapshot",
             CATALOG_DETAIL_TIMEOUT,
@@ -211,6 +228,7 @@ impl CatalogGatewayPort for ScopedCatalogGateway {
         connection_id: ConnectionId,
         database: String,
     ) -> AppResult<CatalogOverview> {
+        self.prepare_runtime(connection_id).await?;
         bounded_catalog_read(
             "database catalog overview",
             CATALOG_OVERVIEW_TIMEOUT,
@@ -232,6 +250,7 @@ impl CatalogGatewayPort for ScopedCatalogGateway {
         authority: &TerminalAuthority,
         policy: CatalogReadPolicy,
     ) -> AppResult<CatalogSnapshot> {
+        self.prepare_runtime(authority.connection_id).await?;
         bounded_catalog_read("terminal catalog snapshot", CATALOG_DETAIL_TIMEOUT, async {
             let authority_context = self
                 .connections
@@ -254,6 +273,7 @@ impl CatalogGatewayPort for ScopedCatalogGateway {
         &self,
         authority: &TerminalAuthority,
     ) -> AppResult<Vec<DatabaseSummary>> {
+        self.prepare_runtime(authority.connection_id).await?;
         bounded_catalog_read(
             "terminal database discovery",
             CATALOG_OVERVIEW_TIMEOUT,
@@ -283,6 +303,7 @@ impl CatalogGatewayPort for ScopedCatalogGateway {
         authority: &TerminalAuthority,
         database: String,
     ) -> AppResult<CatalogSnapshot> {
+        self.prepare_runtime(authority.connection_id).await?;
         bounded_catalog_read(
             "terminal database catalog snapshot",
             CATALOG_DETAIL_TIMEOUT,
@@ -309,6 +330,7 @@ impl CatalogGatewayPort for ScopedCatalogGateway {
         schema: Option<&str>,
         table: &str,
     ) -> AppResult<String> {
+        self.prepare_runtime(connection_id).await?;
         bounded_catalog_read("table DDL", CATALOG_DDL_TIMEOUT, async move {
             let context = self
                 .connections
@@ -329,6 +351,7 @@ impl CatalogGatewayPort for ScopedCatalogGateway {
         schema: Option<&str>,
         table: &str,
     ) -> AppResult<String> {
+        self.prepare_runtime(connection_id).await?;
         bounded_catalog_read("database table DDL", CATALOG_DDL_TIMEOUT, async move {
             let context = self
                 .connections

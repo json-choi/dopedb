@@ -45,6 +45,12 @@ bearer를 즉시 zeroize해 process-bound authority로 교체한다. bridge는 �
 따라서 Windows bridge가 process ancestry root로 계속 살아 있어도 재사용 가능한
 bearer는 남지 않는다.
 
+Desktop ACP launcher는 부모 프로세스의 환경을 그대로 복제하지 않는다. OS의
+사용자 홈·실행 경로·임시 경로·locale·proxy/CA 설정과 정확한 DopeDB session의
+식별자만 허용 목록으로 전달한다. 이전 터미널의 Agent hook 상태와 무관한 자격
+정보는 공식 adapter에 전달하지 않으며, 공식 CLI의 로컬 로그인은 사용자 홈에서
+그 CLI가 계속 소유한다.
+
 외부 공식 Agent도 bearer를 받지 않는다. `.dopedb/agent.json`은 provider,
 Project/resource UUID, 선택적인 단일 write target만 가진 secret-free config다.
 `dopedb agent start` 때 Desktop이 그 exact set을 현재 revision과 권한으로 다시

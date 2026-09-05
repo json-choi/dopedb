@@ -742,7 +742,7 @@ pub(super) fn run() {
     let launcher_target = temp.path().join("verified-node-target");
     fs::write(
         &launcher_target,
-        b"#!/bin/sh\nif env | grep -q '^DOPEDB_SESSION_TOKEN='; then exit 91; fi\nprintf '%s\\n%s\\n%s\\n' \"$1\" \"$CODEX_PATH\" \"$DOPEDB_TERMINAL_SESSION_ID\" > \"$DOPEDB_TEST_LAUNCH_OUTPUT\"\n",
+        b"#!/bin/sh\nif env | grep -Eq '^(DOPEDB_SESSION_TOKEN|DOPEDB_TEST_PARENT_HOOK|DOPEDB_TEST_SECRET)='; then exit 91; fi\nprintf '%s\\n%s\\n%s\\n%s\\n' \"$1\" \"$CODEX_PATH\" \"$DOPEDB_TERMINAL_SESSION_ID\" \"$HOME\"\n",
     )
     .unwrap();
     fs::set_permissions(&launcher_target, fs::Permissions::from_mode(0o700)).unwrap();
@@ -760,7 +760,6 @@ pub(super) fn run() {
     let provider_cli_resolved = fs::canonicalize(&provider_cli).unwrap();
     let provider_cli_sha256 =
         hex::encode(Sha256::digest(fs::read(&provider_cli_resolved).unwrap()));
-    let launcher_output = temp.path().join("launcher-output.txt");
     let launcher_session_id = Uuid::from_u128(12);
     let expected_launcher = launcher.to_string_lossy().into_owned();
     let expected_resolved_launcher = launcher_resolved.to_string_lossy().into_owned();
@@ -818,18 +817,21 @@ pub(super) fn run() {
             launcher_session_id.to_string(),
         )
         .env("DOPEDB_SESSION_TOKEN", "cd".repeat(32))
-        .env("DOPEDB_TEST_LAUNCH_OUTPUT", &launcher_output)
-        .status()
+        .env("DOPEDB_TEST_PARENT_HOOK", "stale-terminal-session")
+        .env("DOPEDB_TEST_SECRET", "unrelated-parent-credential")
+        .env("HOME", temp.path())
+        .output()
         .unwrap();
-    assert!(launcher_status.success());
+    assert!(launcher_status.status.success());
     launcher_server.join().unwrap();
-    let inherited = fs::read_to_string(launcher_output).unwrap();
+    let inherited = String::from_utf8(launcher_status.stdout).unwrap();
     assert_eq!(
         inherited.lines().collect::<Vec<_>>(),
         [
             adapter.to_string_lossy().as_ref(),
             provider_cli.to_string_lossy().as_ref(),
             launcher_session_id.to_string().as_str(),
+            temp.path().to_string_lossy().as_ref(),
         ]
     );
 
@@ -1155,7 +1157,7 @@ mod platform {
         }));
         assert!(command
             .get_envs()
-            .any(|(name, value)| { name == "DOPEDB_SESSION_TOKEN" && value.is_none() }));
+            .all(|(name, _)| name != "DOPEDB_SESSION_TOKEN"));
 
         let mut changed = registration;
         changed.runtime_sha256 = "00".repeat(32);
