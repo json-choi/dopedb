@@ -81,6 +81,20 @@ production command requires `DATABASE_URL_UNPOOLED` and does not fall back to th
 runtime URL; a missing URL or migration failure stops the deployment instead of serving
 code against an older control-plane schema.
 
+`pnpm db:preflight` checks the configured database without changing its schema.
+Migration files are checked against the applied hashes and timestamps before any
+schema change. A different baseline fails with `MIGRATION_BASELINE_MISMATCH`;
+recover the database deliberately before deploying. Do not skip migrations, erase
+existing data, or record a baseline that the schema does not match.
+The isolated PostgreSQL CI harness exercises fresh production migrations, replay,
+and rejection of an incompatible migration history.
+
+A local build is not a production deployment receipt. After a requested deployment,
+run `pnpm workspace:cloud:verify-deployment <new-deployment-url-or-id>` from the
+repository root. It waits for that exact deployment, requires `READY`, and verifies
+that `app.dopedb.dev` points to its ID. A failed build or an older production alias
+exits nonzero; an upload acknowledgment is insufficient.
+
 Due maintenance deletes at most 1,000 expired rate-limit rows per invocation, so
 retention never adds an unbounded delete to the public request path.
 

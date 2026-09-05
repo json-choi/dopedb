@@ -79,7 +79,40 @@ test_url="$(node -e '
 ' "$admin_url" "$fixture_database")"
 
 DATABASE_URL="$test_url" DATABASE_URL_UNPOOLED="$test_url" \
-  pnpm --dir "$repository_root/workspace-cloud" db:migrate
+  pnpm --dir "$repository_root/workspace-cloud" db:preflight
+
+# Exercise the production entry point on a fresh database and on its existing
+# baseline. A replaced migration lineage must stop before changing that database.
+for migration_pass in 1 2; do
+  VERCEL_ENV=production DATABASE_URL_UNPOOLED="$test_url" \
+    pnpm --dir "$repository_root/workspace-cloud" db:migrate:production
+done
+migration_hash="$(psql --no-psqlrc --set=ON_ERROR_STOP=1 --dbname="$test_url" \
+  --tuples-only --no-align \
+  --command='SELECT hash FROM drizzle.__drizzle_migrations ORDER BY created_at LIMIT 1')"
+if [[ ! "$migration_hash" =~ ^[0-9a-f]{64}$ ]]; then
+  echo "Workspace migration baseline was not recorded" >&2
+  exit 1
+fi
+psql --no-psqlrc --set=ON_ERROR_STOP=1 --dbname="$test_url" --quiet \
+  --command="UPDATE drizzle.__drizzle_migrations SET hash = repeat('0', 64) WHERE hash = '$migration_hash'"
+if migration_output="$(VERCEL_ENV=production DATABASE_URL_UNPOOLED="$test_url" \
+  pnpm --dir "$repository_root/workspace-cloud" db:migrate:production 2>&1)"; then
+  echo "Workspace production migration accepted an incompatible baseline" >&2
+  exit 1
+fi
+if [[ "$migration_output" != *MIGRATION_BASELINE_MISMATCH* ]]; then
+  echo "Workspace production migration omitted its baseline diagnostic" >&2
+  exit 1
+fi
+psql --no-psqlrc --set=ON_ERROR_STOP=1 --dbname="$test_url" --quiet \
+  --command="DO \$\$ BEGIN
+    IF (SELECT hash FROM drizzle.__drizzle_migrations ORDER BY created_at LIMIT 1) <> repeat('0', 64) THEN
+      RAISE EXCEPTION 'Rejected migration changed the recorded baseline';
+    END IF;
+  END \$\$" \
+  --command="UPDATE drizzle.__drizzle_migrations SET hash = '$migration_hash' WHERE hash = repeat('0', 64)"
+echo "Workspace migration fresh/replay/incompatible-baseline checks passed"
 
 sentinel="provider-import-${fixture_database}-isolated"
 psql --no-psqlrc --set=ON_ERROR_STOP=1 --dbname="$test_url" --quiet \

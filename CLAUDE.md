@@ -193,6 +193,11 @@ control에는 실제 command와 state owner가 있어야 한다.
 
 변경 범위에 맞는 명령만 실행한다. UI 변경은 build 뒤 해당 화면을 수동으로
 확인하고, Windows 또는 전체 릴리스 검증은 플랫폼·릴리스 변경일 때만 수행한다.
+Workspace Web 변경은 `pnpm workspace:cloud:build`도 실행한다. DB 배포 경로를
+바꾸면 `bash scripts/test-provider-import-postgres.sh`로 격리 DB에서 production
+migration 진입점을 검증한다. 로컬 build만으로는 운영 반영을 확인할 수 없다.
+`pnpm workspace:cloud:verify-deployment <new-deployment-url-or-id>`로 요청한 Vercel 배포가
+`Ready`이고 production alias가 그 배포를 가리키는지 확인한 뒤에만 배포 성공을 보고한다.
 
 테스트는 208개 고정 예산을 사용한다. 보안·안전 불변식, 공개 wire contract,
 핵심 end-to-end 흐름만 테스트하고 구현 세부, 중복 DOM, snapshot, 성능 수치

@@ -33,6 +33,11 @@ Project-resource grant와 process ancestry에만 묶인 runtime-only endpoint이
    때나 사용자가 요청할 때만 만든다.
 3. 변경 범위에 맞춰 `pnpm build`, `pnpm test`, `pnpm test:rust` 중 필요한
    검증을 실행한다.
+   Workspace Web 변경은 `pnpm workspace:cloud:build`도 실행한다. DB 배포 경로를
+   바꾸면 `bash scripts/test-provider-import-postgres.sh`로 격리 DB에서 production
+   migration 진입점을 검증한다. 로컬 build만으로는 운영 반영을 확인할 수 없다.
+   `pnpm workspace:cloud:verify-deployment <new-deployment-url-or-id>`로 요청한 Vercel 배포가
+   `Ready`이고 production alias가 그 배포를 가리키는지 확인한 뒤에만 배포 성공을 보고한다.
 4. 커밋은 실제 기여자의 기존 Git identity와
    [`docs/commit.md`](docs/commit.md)를 사용한다. Agent와 저장소 스크립트는
    contributor의 `user.name`·`user.email`을 덮어쓰지 않는다. 저장소 소유자가

@@ -1,7 +1,7 @@
 {
   "name": "dopedb",
   "private": true,
-  "version": "0.4.2",
+  "version": "0.4.3",
   "type": "module",
   "packageManager": "pnpm@11.25.0",
   "scripts": {
@@ -40,6 +40,7 @@
     "workspace:migrate": "bash scripts/migrate-workspace-service.sh",
     "workspace:cloud:dev": "pnpm --dir workspace-cloud dev",
     "workspace:cloud:build": "pnpm --dir workspace-cloud build",
+    "workspace:cloud:verify-deployment": "node scripts/check-workspace-deployment.mjs",
     "analytics:cloudflare:build": "pnpm --dir product-analytics-cloudflare build",
     "analytics:cloudflare:test": "pnpm --dir product-analytics-cloudflare test",
     "analytics:cloudflare:deploy": "pnpm --dir product-analytics-cloudflare deploy",

@@ -142,7 +142,7 @@ jobs:
       - name: Test Provider import harness guard
         run: pnpm --dir workspace-cloud test:postgres-harness-guard
 
-      - name: Test Provider import concurrency
+      - name: Test production migration safety and Provider import concurrency
         env:
           PROVIDER_IMPORT_POSTGRES_ADMIN_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
         run: bash scripts/test-provider-import-postgres.sh
