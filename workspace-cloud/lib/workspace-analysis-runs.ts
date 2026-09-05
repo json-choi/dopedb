@@ -146,7 +146,8 @@ export function parseAnalysisRunCompletion(
     ? { kind: errorRow.kind, message: errorRow.message }
     : null;
   const succeeded = row.state === "succeeded";
-  if ((succeeded && (receipts.length !== 1 || receipts[0]?.state !== "succeeded" || error !== null))
+  if ((row.error !== null && error === null)
+    || (succeeded && (receipts.length !== 1 || receipts[0]?.state !== "succeeded" || error !== null))
     || (!succeeded && (receipts.length !== 0 || error === null))) {
     throw new Error("Analysis Article completion state is inconsistent");
   }

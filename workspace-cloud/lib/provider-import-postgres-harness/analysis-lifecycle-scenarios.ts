@@ -96,6 +96,35 @@ export async function runAnalysisLifecycleScenarios(
   }), { params: Promise.resolve({ workspaceId: organizationId }) });
   expect(listedResponse.status).toBe(200);
   expect((await listedResponse.json()).articles).toEqual([created]);
+  const postArticle = (body: unknown, revision: string | null = "0", authenticated = true) => {
+    const headers = new Headers({ "content-type": "application/json" });
+    if (authenticated) headers.set("authorization", fixture.authState.bearer);
+    if (revision !== null) headers.set("x-dopedb-expected-revision", revision);
+    return articleRoute.POST(new Request(articleUrl, {
+      method: "POST", headers, body: JSON.stringify(body),
+    }), { params: Promise.resolve({ workspaceId: organizationId }) });
+  };
+  for (const [body, revision, authenticated, status] of [
+    [article, "0", true, 409],
+    [{ ...article, unexpected: true }, "0", true, 400],
+    [{ ...article, environmentRevision: article.environmentRevision + 1 }, "0", true, 409],
+    [{ ...article, connectionRevision: article.connectionRevision + 1 }, "0", true, 409],
+    [article, null, true, 428],
+    [article, "1", true, 409],
+    [article, "0", false, 403],
+  ] as const) {
+    expect((await postArticle(body, revision, authenticated)).status).toBe(status);
+  }
+  expect((await articleRoute.GET(new Request(articleUrl), {
+    params: Promise.resolve({ workspaceId: organizationId }),
+  })).status).toBe(401);
+  expect((await articleRoute.GET(new Request(articleUrl, {
+    headers: { authorization: fixture.authState.bearer },
+  }), { params: Promise.resolve({ workspaceId: randomUUID() }) })).status).toBe(403);
+  const afterRetries = await articleRoute.GET(new Request(articleUrl, {
+    headers: { authorization: fixture.authState.bearer },
+  }), { params: Promise.resolve({ workspaceId: organizationId }) });
+  expect((await afterRetries.json()).articles).toEqual([created]);
   const revisedArticle = articleContract.parseSharedAnalysisArticleCreate({
     ...article,
     definition: {
@@ -220,6 +249,19 @@ export async function runAnalysisLifecycleScenarios(
     queryReceipts: [queryReceipt],
     error: null,
   }, revisedArticle.definition);
+  for (const malformed of [
+    { ...completion, queryReceipts: [] },
+    { ...completion, queryReceipts: [queryReceipt, queryReceipt] },
+    { ...completion, queryReceipts: [{ ...queryReceipt, rowCount: query.maxRows + 1 }] },
+    { ...completion, queryReceipts: [{ ...queryReceipt, byteCount: query.maxBytes + 1 }] },
+    { ...completion, error: {} },
+    { ...completion, error: { kind: "failed", message: "Invalid", unexpected: true } },
+    { ...completion, error: false },
+    { state: "failed", queryReceipts: [], error: null },
+  ]) {
+    expect(() => runContract.parseAnalysisRunCompletion(malformed, revisedArticle.definition))
+      .toThrow();
+  }
   expect(() => runContract.parseAnalysisRunCompletion({
     state: "succeeded",
     queryReceipts: [queryReceipt],
@@ -256,6 +298,29 @@ export async function runAnalysisLifecycleScenarios(
         AS "audits"
   `;
   expect(durability[0]).toEqual({ receipts: 1, audits: 1 });
+
+  const emptyRunId = await createRun();
+  const emptyCompletion = runContract.parseAnalysisRunCompletion({
+    state: "succeeded",
+    queryReceipts: [{ ...queryReceipt, queryRunId: randomUUID(), rowCount: 0, byteCount: 0 }],
+    error: null,
+  }, revisedArticle.definition);
+  await expect(runStore.commitAnalysisRunCompletion({
+    ...completionInput, runId: emptyRunId, completion: emptyCompletion,
+  })).resolves.toMatchObject({ id: emptyRunId, state: "succeeded", rowCount: 0, byteCount: 0 });
+  const failedRunId = await createRun();
+  const failedCompletion = runContract.parseAnalysisRunCompletion({
+    state: "failed", queryReceipts: [], error: { kind: "query_failed", message: "Harness failure" },
+  }, revisedArticle.definition);
+  await expect(runStore.commitAnalysisRunCompletion({
+    ...completionInput, runId: failedRunId, completion: failedCompletion,
+  })).resolves.toMatchObject({ id: failedRunId, state: "failed" });
+  const [afterFailure] = await sql<{ latestSuccessfulRunId: string }[]>`
+    SELECT "latest_successful_run_id"::text AS "latestSuccessfulRunId"
+    FROM "workspace_control"."workspace_analysis_article"
+    WHERE "organization_id" = ${organizationId} AND "id" = ${articleId}::uuid
+  `;
+  expect(afterFailure.latestSuccessfulRunId).toBe(emptyRunId);
 
   const cancelledRunId = await createRun();
   await expect(runStore.requestAnalysisRunCancellation({
