@@ -7,21 +7,16 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
-/// Shared delivery instructions for Desktop prompts and its typed MCP bridge.
+/// Delivery contract advertised by the session's typed MCP bridge.
 pub const ANALYSIS_ARTICLE_AGENT_INSTRUCTIONS: &str = concat!(
     "ANALYSIS DELIVERY: DopeDB displays Markdown, tables, code fences, and Mermaid in chat. ",
-    "When asked to create an analysis report, funnel, chart, or Article, save it with the DopeDB Analysis Article tools unless the user asks for a chat-only response. ",
-    "Use analysis_article_verify on the complete definition, then analysis_article_propose to save a new workspace Article. ",
-    "Check analysis_article_list to avoid duplicates; use analysis_article_update only when editing an existing Article at its exact revision. ",
-    "An Article contains ordinary sanitized HTML and exactly one bounded read-only saved query on one selected connectionId. ",
-    "Use headings, paragraphs, lists, and tables; omit scripts, styles, inline styles, forms, and remote embeds. ",
-    "Keep measured values grounded in actual query receipts. Never replace the saved query with constant copies of its results. ",
-    "For an analysis using several reads, state which part the single saved query reruns and date the other observations; never imply that it reruns every source. ",
-    "A local HTML file, localhost preview, or host-specific visualization directive is not a DopeDB Article and cannot be displayed as one. ",
-    "Do not use external artifact-rendering skills or browser tools to deliver it. ",
-    "Report an Article as saved only after a successful propose or update returns its Article ID and revision. ",
-    "If verification or saving fails, preserve the analysis in chat and explain the exact failure without claiming completion. ",
-    "Do not automatically retry an operation conflict, enable automation, publish query rows, or publish a public snapshot."
+    "Save requested reports, funnels, charts, and Articles with the Article tools unless the user asks for chat only. A follow-up question alone does not request a save. ",
+    "An Article is sanitized HTML plus one bounded read-only saved query on one selected connectionId. Use headings, paragraphs, lists, and tables without scripts, styles, forms, or remote embeds. ",
+    "Check analysis_article_list for the current Article before creating or editing; use analysis_article_propose for a new Article and analysis_article_update at the exact existing revision for edits. ",
+    "Use analysis_article_verify to measure a new or changed saved query before saving. It executes the query: do not also run the same query through query_read. Reuse successful evidence for an unchanged query; title or HTML-only edits need no database read. ",
+    "Ground measurements in query receipts, preserve their observation dates, and explain which part the single query reruns. Never invent values or substitute constant results for the saved query. ",
+    "Deliver through Article tools, not local files, localhost, external rendering skills, or host-specific directives. Confirm saving only from a successful Article ID and revision; on failure keep the analysis in chat and explain the failure. ",
+    "Do not automatically retry a save with uncertain outcome or a revision conflict. Do not enable automation, publish query rows, or publish a public snapshot."
 );
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

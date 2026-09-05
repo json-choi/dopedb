@@ -102,10 +102,17 @@ automation tables.
 An exact-grant ACP Agent may propose or update the HTML body and the one read-only
 query, and may perform a bounded pre-save read. It cannot publish or revoke a public
 page, broaden the connection grant, or run a query from the hosted service.
+The Broker filters Article lists to the exact selected shared connection IDs,
+content revisions, and Environment revision before returning definitions to the Agent;
+the member's broader workspace visibility does not enlarge the session grant.
 
-Desktop prompt context and the typed bridge share the same Article delivery
-instructions. A requested saved analysis, report, funnel, or chart uses the Article
-verify/propose tools; a local HTML file, localhost preview, or host-specific render
+The typed bridge owns the Article delivery instructions; Desktop's per-turn context
+identifies the exact resource grant and refers to that contract without repeating it.
+A requested saved analysis, report, funnel, or chart uses the Article tools.
+Verification executes the saved query and is needed for new or changed query evidence;
+an unchanged query can reuse successful evidence, so title and HTML-only edits do not
+trigger another database read. A follow-up explanation alone does not save an Article.
+A local HTML file, localhost preview, or host-specific render
 directive is not a saved workspace resource. Only a successful propose/update
 receipt establishes an Article ID and revision. When several reads inform the
 body, it names the portion that its one saved query reruns and dates the remaining

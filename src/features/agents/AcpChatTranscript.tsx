@@ -41,7 +41,7 @@ import {
   toolStatusLabel,
   toolStatusTone,
 } from "./acpTranscriptPresentation";
-import { progressActivityLabel, toolActivityLabel } from "./acpActivityLabels";
+import { toolActivityLabel } from "./acpActivityLabels";
 import type { AcpPermissionOption, AgentProvider } from "./domain";
 import { findAgentSqlProposal, isSqlProposalTool } from "./sqlProposal";
 import {
@@ -423,7 +423,7 @@ const TranscriptItemView = memo(function TranscriptItemView({
     if (!debugDetails) {
       return (
         <AgentActivityLine
-          label={progressActivityLabel(item.activityText, t)}
+          label={t("agent.acpActivityReasoning")}
           tone="neutral"
         />
       );

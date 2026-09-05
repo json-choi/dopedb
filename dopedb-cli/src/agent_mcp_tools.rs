@@ -32,7 +32,7 @@ pub(super) fn tools_result() -> Value {
             tool_definition(
                 TOOL_ENVIRONMENT_CONTEXT,
                 "Get selected Project context",
-                "Call once before a substantive analysis to choose database evidence, source evidence, or both. Returns the immutable Project resource revisions, exact GitHub source IDs and commits, selected database connection IDs, and optional single write target captured at session start.",
+                "Returns the immutable Project resource revisions, exact GitHub source IDs and commits, selected database connection IDs, and optional single write target captured at session start. Use when these selectors are not already known; the context does not change between turns.",
                 no_arguments.clone(),
                 true,
                 true,
@@ -307,7 +307,7 @@ pub(super) fn tools_result() -> Value {
             tool_definition(
                 TOOL_ANALYSIS_ARTICLE_VERIFY,
                 "Verify an Analysis Article",
-                "Executes one bounded read-only saved query for a simple HTML Article without saving or publishing it. connectionId must name one exact database already selected in this session.",
+                "Executes one bounded read-only saved query for an HTML Article without saving it. Use for new or changed query evidence, not title or HTML-only edits. connectionId must name one exact selected database.",
                 analysis_article_input_schema(false),
                 true,
                 false,

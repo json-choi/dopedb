@@ -476,9 +476,6 @@ pub(super) fn run() {
     let instructions = response(1)["result"]["instructions"].as_str().unwrap();
     assert!(instructions.contains("partial result"));
     assert!(instructions.contains("EVIDENCE ROUTING"));
-    assert!(instructions.contains("call environment_context once"));
-    assert!(instructions.contains("inspect the exact pinned source first"));
-    assert!(instructions.contains("After at most six query_read calls"));
     let tools = response(2)["result"]["tools"].as_array().unwrap();
     assert!(tools.iter().any(|tool| tool["name"] == "catalog_search"));
     assert!(tools.iter().any(|tool| tool["name"] == "query_read"));

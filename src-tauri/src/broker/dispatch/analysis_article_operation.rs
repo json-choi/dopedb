@@ -80,6 +80,18 @@ pub(super) async fn handle(
                             return failure(request_id, map_application_error(error), false)
                         }
                     };
+                    // Workspace membership can expose more Articles than this
+                    // Agent's exact selected database grant permits.
+                    environment_articles.retain(|article| {
+                        article.project_environment_id == scope.project_environment_id
+                            && u64::try_from(article.environment_revision).ok()
+                                == Some(scope.environment_revision)
+                            && scope.connections.iter().any(|connection| {
+                                connection.remote_connection_id == Some(article.connection_id)
+                                    && connection.connection_content_revision
+                                        == article.connection_revision
+                            })
+                    });
                     articles.append(&mut environment_articles);
                 }
                 serde_json::to_value(AnalysisArticleListResult { articles })

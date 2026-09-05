@@ -608,10 +608,8 @@ export function checkFrontendArchitecture(harness) {
     }
   }
   const acpActivityLabels = read("src/features/agents/acpActivityLabels.ts");
-  for (const token of ["progressActivityLabel", "toolActivityLabel"]) {
-    if (!acpActivityLabels.includes(token)) {
-      failures.push(`src/features/agents/acpActivityLabels.ts: activity presentation lost ${token}`);
-    }
+  if (!acpActivityLabels.includes("toolActivityLabel")) {
+    failures.push("src/features/agents/acpActivityLabels.ts: activity presentation lost toolActivityLabel");
   }
 
   for (const [filePath, limit] of [
