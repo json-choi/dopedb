@@ -26,7 +26,8 @@ use super::domain::{
     PersistedRuntimeState, QuarantinedPluginVersion, RUNTIME_STATE_SCHEMA_VERSION,
 };
 use super::verification::{
-    sha256_file, verify_artifact, verify_bundled_node, verify_compatibility, verify_manifest,
+    sha256_file, verify_app_compatibility, verify_artifact, verify_bundled_node,
+    verify_compatibility, verify_manifest,
 };
 
 #[path = "manager_install.rs"]
@@ -352,6 +353,16 @@ impl AcpPluginManager {
             .plugins
             .get(&plugin_id)
             .filter(|available| !record_contains_manifest(&record, &available.manifest_sha256));
+        let installed = record
+            .candidate
+            .as_ref()
+            .or(record.current.as_ref())
+            .or(record.last_known_good.as_ref())
+            .map(|installed| self.installed_status(plugin_id, installed));
+        let installation_failure = installed.as_ref().and_then(|result| match result {
+            Ok((_, failure)) => failure.clone(),
+            Err(error) => Some(bounded_failure(&error.to_string())),
+        });
         let phase = self
             .inner
             .phases
@@ -359,29 +370,26 @@ impl AcpPluginManager {
             .map_err(|_| AppError::Config("the ACP plugin phase registry is unavailable".into()))?
             .get(&plugin_id)
             .copied();
-        let state = phase.unwrap_or_else(|| {
-            if record.candidate.is_some() {
-                AcpPluginInstallationState::Staged
-            } else if available.is_some() {
-                AcpPluginInstallationState::UpdateAvailable
-            } else if record.current.is_some() || record.last_known_good.is_some() {
-                AcpPluginInstallationState::Ready
-            } else if record.failure.is_some() {
-                AcpPluginInstallationState::Failed
-            } else {
-                AcpPluginInstallationState::NotInstalled
-            }
-        });
-        let installed_release_id = record
-            .candidate
-            .as_ref()
-            .or(record.current.as_ref())
-            .or(record.last_known_good.as_ref())
-            .and_then(|installed| {
-                self.release_id_for_installed(plugin_id, installed)
-                    .ok()
-                    .flatten()
-            });
+        let state = if installation_failure.is_some() {
+            AcpPluginInstallationState::Failed
+        } else {
+            phase.unwrap_or_else(|| {
+                if record.candidate.is_some() {
+                    AcpPluginInstallationState::Staged
+                } else if available.is_some() {
+                    AcpPluginInstallationState::UpdateAvailable
+                } else if record.current.is_some() || record.last_known_good.is_some() {
+                    AcpPluginInstallationState::Ready
+                } else if record.failure.is_some() {
+                    AcpPluginInstallationState::Failed
+                } else {
+                    AcpPluginInstallationState::NotInstalled
+                }
+            })
+        };
+        let installed_release_id = installed
+            .and_then(|result| result.ok())
+            .and_then(|value| value.0);
         Ok(AcpPluginStatus {
             plugin_id,
             state,
@@ -401,19 +409,25 @@ impl AcpPluginManager {
                 .map(|version| version.adapter_bundle_version.clone()),
             available_version: available.map(|version| version.adapter_version.clone()),
             available_release_id: available.map(|version| version.release_id.clone()),
-            failure: record.failure,
+            failure: installation_failure.or(record.failure),
         })
     }
 
-    fn release_id_for_installed(
+    fn installed_status(
         &self,
         plugin_id: AcpPluginId,
         installed: &InstalledPluginVersion,
-    ) -> AppResult<Option<String>> {
+    ) -> AppResult<(Option<String>, Option<String>)> {
         let directory = self.installed_directory(plugin_id, installed);
         let marker = self.read_installed_marker(&directory)?;
         verify_manifest(&marker.envelope)?;
-        Ok(release_id_from_manifest(&marker.envelope, plugin_id))
+        let failure = verify_app_compatibility(&marker.envelope.manifest)
+            .err()
+            .map(|error| bounded_failure(&error.to_string()));
+        Ok((
+            release_id_from_manifest(&marker.envelope, plugin_id),
+            failure,
+        ))
     }
 
     fn record_failure(&self, plugin_id: AcpPluginId, failure: &str) -> AppResult<()> {
@@ -718,5 +732,22 @@ pub(super) fn assert_installation_identity_contract() {
         manager.installed_directory(AcpPluginId::Claude, &stable),
         content,
         "installed plugins use content-addressed storage"
+    );
+    let state = PersistedRuntimeState {
+        plugins: BTreeMap::from([(
+            AcpPluginId::Claude,
+            PersistedPluginRecord {
+                enabled: true,
+                candidate: Some(stable),
+                ..PersistedPluginRecord::default()
+            },
+        )]),
+        ..PersistedRuntimeState::default()
+    };
+    let status = manager.project_status(AcpPluginId::Claude, &state).unwrap();
+    assert_eq!(status.state, AcpPluginInstallationState::Failed);
+    assert!(
+        status.failure.is_some(),
+        "unverified installations are never ready"
     );
 }

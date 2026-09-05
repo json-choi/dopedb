@@ -1,7 +1,7 @@
 {
   "name": "dopedb",
   "private": true,
-  "version": "0.4.3",
+  "version": "0.4.4",
   "type": "module",
   "packageManager": "pnpm@11.25.0",
   "scripts": {
@@ -13,6 +13,7 @@
     "generate:skills": "node scripts/generate-skill-bundle.mjs",
     "check:skills": "node scripts/generate-skill-bundle.mjs --check",
     "check:agent-runtime": "node scripts/prepare-agent-runtime.mjs --check-config && node scripts/agent-runtime/build-acp-plugin.mjs --check-config",
+    "check:agent-runtime:published": "node scripts/agent-runtime/verify-published-acp.mjs",
     "check:knowledge": "pnpm --dir workspace-cloud test:contracts",
     "check:issue-review": "node scripts/issue-review/local-issue-review.mjs --self-test",
     "check:workspace-logs": "node scripts/check-workspace-server-logs.mjs",

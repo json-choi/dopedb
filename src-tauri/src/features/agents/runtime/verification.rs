@@ -117,13 +117,19 @@ pub(super) fn verify_compatibility(
             reason: "the ACP plugin protocol range is incompatible with this app".into(),
         });
     }
+    verify_app_compatibility(manifest)
+}
+
+pub(super) fn verify_app_compatibility(manifest: &AcpPluginManifestV1) -> AppResult<()> {
     let app = Version::parse(env!("CARGO_PKG_VERSION"))
         .map_err(|_| AppError::Config("the app version is not valid semver".into()))?;
     let app_min = parse_version(&manifest.compatibility.dopedb_version_min, "minimum DopeDB")?;
     let app_max = parse_version(&manifest.compatibility.dopedb_version_max, "maximum DopeDB")?;
     if app < app_min || app > app_max {
         return Err(AppError::Blocked {
-            reason: "the ACP plugin requires another DopeDB version".into(),
+            reason: format!(
+                "update the ACP adapter for DopeDB {app}; this adapter supports {app_min} through {app_max}"
+            ),
         });
     }
     Ok(())

@@ -56,6 +56,7 @@ if [[ -n "$(git status --porcelain=v1 --untracked-files=all)" ]]; then
 fi
 
 node scripts/release/verify-release-version.mjs "$version"
+pnpm check:agent-runtime:published
 git fetch origin main --tags
 
 head_sha="$(git rev-parse HEAD)"

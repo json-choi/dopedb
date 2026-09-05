@@ -159,7 +159,7 @@ struct DryRun {
 /// Synchronous presence probe used by the driver catalog. Connection-time hashing
 /// and version validation remain authoritative.
 pub(crate) fn is_cli_available() -> bool {
-    sdk_roots().into_iter().any(|root| {
+    runtime::managed_sdk_root_if_ready().is_some_and(|root| {
         let bq = root
             .join("bin")
             .join(if cfg!(windows) { "bq.cmd" } else { "bq" });

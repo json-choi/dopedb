@@ -1,4 +1,4 @@
-//! Audited BigQuery SDK executable discovery and bounded process I/O.
+//! Audited app-managed BigQuery SDK entrypoints and bounded process I/O.
 
 use super::*;
 
@@ -65,49 +65,18 @@ pub(super) async fn discover_sdk_executable(
             .copied()
     }
     .ok_or_else(|| AppError::Config(format!("the {label} executable name is invalid")))?;
-    for root in sdk_roots() {
-        let candidate = root.join("bin").join(file_name);
-        if !candidate.is_file() {
-            continue;
-        }
-        if let Ok(identity) =
-            ExecutableIdentity::audit_named(&candidate, &root, allowed_names).await
-        {
-            return Ok(ResolvedSdkExecutable {
-                identity,
-                environment: runtime::command_environment_for_sdk_root(&root),
-            });
-        }
-    }
-    Err(AppError::Config(format!(
-        "{label} is unavailable; reconnect so DopeDB can prepare the official Google tools"
-    )))
-}
-
-pub(super) fn sdk_roots() -> Vec<PathBuf> {
-    let mut roots = Vec::new();
-    if let Some(home) = dirs::home_dir() {
-        roots.extend([
-            home.join("google-cloud-sdk"),
-            home.join(".local/share/google-cloud-sdk"),
-            home.join("Library/google-cloud-sdk"),
-        ]);
-    }
-    #[cfg(not(windows))]
-    roots.extend([
-        PathBuf::from("/opt/homebrew/Caskroom/google-cloud-sdk/latest/google-cloud-sdk"),
-        PathBuf::from("/usr/local/Caskroom/google-cloud-sdk/latest/google-cloud-sdk"),
-        PathBuf::from("/usr/lib/google-cloud-sdk"),
-        PathBuf::from("/opt/google-cloud-sdk"),
-    ]);
-    #[cfg(windows)]
-    if let Some(local) = dirs::data_local_dir() {
-        roots.push(local.join("Google/Cloud SDK/google-cloud-sdk"));
-    }
-    if let Some(managed) = runtime::managed_sdk_root_if_ready() {
-        roots.push(managed);
-    }
-    roots
+    runtime::install_managed_cli().await?;
+    let root = runtime::managed_sdk_root_if_ready().ok_or_else(|| {
+        AppError::Config("DopeDB needs to prepare its Google connection tools".into())
+    })?;
+    let identity =
+        ExecutableIdentity::audit_named(&root.join("bin").join(file_name), &root, allowed_names)
+            .await
+            .map_err(command_failure)?;
+    Ok(ResolvedSdkExecutable {
+        identity,
+        environment: runtime::command_environment()?,
+    })
 }
 
 async fn hash_regular_file(path: &Path) -> Result<(String, u64), CommandFailure> {

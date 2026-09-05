@@ -133,6 +133,7 @@ export function useAcpChatController({
     select: selectScopedConnection,
   } = useAgentScopeConnection(connection, connections);
   const activeIdRef = useRef<AcpSessionId | null>(null);
+  const restoredScopeRef = useRef<string | null>(null);
   const selectionGenerationRef = useRef(0);
   const focusRequestIdRef = useRef(0);
   const catalogScopeKeyRef = useRef(catalogScope.key);
@@ -162,6 +163,7 @@ export function useAcpChatController({
         );
         return (
           plugin?.enabled === true &&
+          plugin.state !== "failed" &&
           (plugin.installedVersion !== null ||
             plugin.candidateVersion !== null ||
             plugin.lastKnownGoodVersion !== null)
@@ -273,8 +275,8 @@ export function useAcpChatController({
   });
 
   useEffect(() => {
-    selectScopedConnection(active?.connectionId ?? connection.id);
-  }, [active?.connectionId, connection.id, selectScopedConnection]);
+    selectScopedConnection(active?.connectionId ?? agentScope.anchorConnectionId ?? connection.id);
+  }, [active?.connectionId, agentScope.anchorConnectionId, connection.id, selectScopedConnection]);
 
   const selectActiveSession = useCallback((next: AcpSessionId | null) => {
     if (activeIdRef.current === next) return;
@@ -311,7 +313,6 @@ export function useAcpChatController({
     starting,
     onSelectSession: selectActiveSession,
     setError,
-    setStarting,
     toggleResource: agentScope.toggle,
     selectWriteTarget: agentScope.selectWriteTarget,
   });
@@ -347,18 +348,20 @@ export function useAcpChatController({
   );
 
   useEffect(() => {
-    if (sessionSnapshot.loading) return;
+    selectActiveSession(null);
+    setStarting(false);
+  }, [catalogScope.key, selectActiveSession]);
+
+  useEffect(() => {
+    if (sessionSnapshot.loading || !pluginStatusQuery.isSuccess || restoredScopeRef.current === catalogScope.key) return;
+    restoredScopeRef.current = catalogScope.key;
     const next = workspaceSessions.find((session) =>
       isLiveSession(session.lifecycle),
     );
     if (activeIdRef.current === null) {
       selectActiveSession(next?.id ?? null);
     }
-  }, [selectActiveSession, sessionSnapshot.loading, workspaceSessions]);
-
-  useEffect(() => {
-    selectActiveSession(null);
-  }, [catalogScope.key, selectActiveSession]);
+  }, [catalogScope.key, pluginStatusQuery.isSuccess, selectActiveSession, sessionSnapshot.loading, workspaceSessions]);
 
   useEffect(() => {
     const next =
@@ -413,10 +416,10 @@ export function useAcpChatController({
     [selectActiveSession],
   );
   const startSession = useAcpSessionStartup({
-    activeSessionId: activeId,
+    activeSessionId,
     beginFocusRequest,
     catalogScope,
-    connectionId: scopedConnection.id,
+    connectionId: agentScope.anchorConnectionId ?? scopedConnection.id,
     currentFocusRequest,
     resourceScopeReady: newEnvironmentScopeReady,
     ensureSelectedResources: agentScope.ensureSelected,
@@ -534,7 +537,9 @@ export function useAcpChatController({
 
   function beginNewChat() {
     if (starting) return;
-    selectActiveSession(null);
+    if (active?.lifecycle !== "ready" || transcript.length > 0) {
+      selectActiveSession(null);
+    }
     setHistoryOpen(false);
     setPrompt("");
     setError(null);

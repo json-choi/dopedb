@@ -813,5 +813,53 @@ mod tests {
         assert!(workflow.contains("-candidate"));
         assert!(workflow.contains("Verify stable artifacts match the candidate"));
         assert!(!workflow.contains("acp-bundle-stable"));
+
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let availability = std::process::Command::new("node")
+            .args(["--input-type=module", "-e", r#"
+                import assert from 'node:assert/strict';
+                import { createHash } from 'node:crypto';
+                import { readFileSync } from 'node:fs';
+                import { assertPublishedCompatibility, stableReleaseTags } from './scripts/agent-runtime/verify-published-acp.mjs';
+                const read = path => JSON.parse(readFileSync(path, 'utf8'));
+                const catalog = read('agent-runtime/plugins/catalog.json');
+                const runtime = read('src-tauri/resources/agent-runtime/runtime-catalog.json');
+                const app = read('package.json').version;
+                const plugin = catalog.plugins[0];
+                const tag = 'acp-bundle-v2026.09.05.1';
+                const manifest = {
+                    schemaVersion: 1, pluginId: plugin.id, provider: plugin.provider,
+                    adapterVersion: plugin.adapterVersion, adapterBundleVersion: plugin.adapterBundleVersion,
+                    compatibility: {
+                        dopedbVersionMin: app, dopedbVersionMax: app,
+                        nodeVersionMin: runtime.version, nodeVersionMax: runtime.version,
+                        acpProtocolMin: catalog.acpProtocol, acpProtocolMax: catalog.acpProtocol,
+                    },
+                    artifact: { keyId: catalog.keyId, packedBytes: 100,
+                        url: `https://github.com/json-choi/dopedb/releases/download/${tag}/${plugin.provider}.tar.gz` },
+                    rolloutBasisPoints: 10000,
+                };
+                const envelope = value => ({ manifest: value, keyId: catalog.keyId, signature: 'availability-fixture',
+                    manifestSha256: createHash('sha256').update(JSON.stringify(value)).digest('hex') });
+                const check = value => assertPublishedCompatibility(envelope(value), plugin, catalog, runtime, app, tag);
+                check(manifest);
+                const old = structuredClone(manifest);
+                old.compatibility.dopedbVersionMin = '0.3.33';
+                old.compatibility.dopedbVersionMax = '0.3.99';
+                assert.throws(() => check(old), /publish a compatible ACP bundle first/);
+                assert.throws(() => check({ ...manifest, adapterVersion: '0.0.1' }), /checked-in pins/);
+                assert.throws(() => check({ ...manifest, revokedAt: '2026-09-05T00:00:00Z' }), /revoked/);
+                assert.throws(() => assertPublishedCompatibility({ ...envelope(manifest), manifestSha256: 'a'.repeat(64) }, plugin, catalog, runtime, app, tag), /digest mismatch/);
+                assert.deepEqual(stableReleaseTags([
+                    { ref: `refs/tags/${tag}-candidate` },
+                    { ref: `refs/tags/${tag}` },
+                    { ref: 'refs/tags/acp-bundle-v2026.02.30.1' },
+                    { ref: 'refs/tags/acp-bundle-v2026.09.05.10' },
+                ]), ['acp-bundle-v2026.09.05.10', tag]);
+            "#])
+            .current_dir(root)
+            .output()
+            .expect("Node is available for the release availability gate");
+        assert!(availability.status.success(), "{}", String::from_utf8_lossy(&availability.stderr));
     }
 }

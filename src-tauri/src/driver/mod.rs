@@ -109,11 +109,11 @@ const DEFINITIONS: &[DriverDefinition] = &[
     },
     DriverDefinition {
         id: "google-bq-cli",
-        name: "Google BigQuery CLI",
+        name: "Google BigQuery",
         engine: Engine::Bigquery,
         version: ">=2.0.29",
-        // Reuse a verified system SDK when present; otherwise DopeDB prepares one
-        // pinned official Google archive in app-owned local data on first sign-in.
+        // The app owns the pinned Google SDK and Python runtime together, so
+        // workstation installations cannot change authentication or JSON output.
         install_mode: DriverInstallMode::Managed,
         // `descriptor` replaces this with a live verified-path presence probe.
         install_state: DriverInstallState::Available,
@@ -232,7 +232,9 @@ pub fn install(id: &str) -> AppResult<DriverDescriptor> {
     }
     match driver.install_mode {
         DriverInstallMode::Bundled => Ok(driver.descriptor()),
-        DriverInstallMode::Managed if driver.descriptor().install_state == DriverInstallState::Installed => {
+        DriverInstallMode::Managed
+            if driver.descriptor().install_state == DriverInstallState::Installed =>
+        {
             Ok(driver.descriptor())
         }
         DriverInstallMode::Managed => Err(AppError::Config(format!(
@@ -240,8 +242,7 @@ pub fn install(id: &str) -> AppResult<DriverDescriptor> {
             driver.id
         ))),
         DriverInstallMode::System => Err(AppError::Config(
-            "install Google Cloud CLI with the BigQuery `bq` component outside DopeDB, then restart the app"
-                .into(),
+            "this driver requires an externally managed installation".into(),
         )),
     }
 }
@@ -254,6 +255,10 @@ pub async fn connect(
     access: ConnectionAccess,
     bigquery_auth_scope: Option<&crate::bigquery::BigQueryAuthScope>,
 ) -> AppResult<Live> {
+    if profile.engine == Engine::Bigquery {
+        crate::bigquery::validate_profile(profile)?;
+        crate::bigquery::install_managed_cli().await?;
+    }
     let driver = resolve(profile)?;
     let adapter = driver.adapter.ok_or_else(|| {
         AppError::Config(format!(

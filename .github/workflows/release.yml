@@ -25,6 +25,10 @@ jobs:
         with:
           fetch-depth: 0
 
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+
       - name: Verify owner, version, and main ancestry
         shell: bash
         run: |
@@ -50,6 +54,9 @@ jobs:
             echo "Stable releases must point to a commit already merged into main." >&2
             exit 1
           fi
+
+      - name: Verify publicly available ACP compatibility
+        run: node scripts/agent-runtime/verify-published-acp.mjs
 
       - name: Resolve macOS distribution mode
         id: macos_distribution

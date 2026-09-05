@@ -522,8 +522,11 @@ DopeDB의 실제 작업 흐름과 접근성, supported viewport를 위한 제품
   외부 Agent/model context row의 세 층을 사용한다. 첨부 chip과 popup은
   semantic token과 기존 button/icon 규칙으로 조합하며 feature CSS를 만들지
   않는다. Project Environment와 공식 adapter가 준비되면 panel이 ACP session을
-  선행 초기화하고, 초기화와 동시에 제출된 첫 prompt도 준비 완료 뒤 같은 제출
-  흐름에서 이어서 전송한다. session 전용 tab action menu는 활성 session이 있을 때만 표시하며
+  백그라운드에서 선행 초기화한다. 이 과정에서 composer와 resource 선택은
+  사용 가능하게 유지하고 focus나 layout을 바꾸지 않는다. 선택 변경은 즉시
+  반영하며 이전 exact grant의 준비 결과는 닫고 마지막 선택만 채택한다.
+  초기화와 동시에 제출된 첫 prompt도 같은 준비 작업을 기다린 뒤 한 번만
+  전송한다. session 전용 tab action menu는 활성 session이 있을 때만 표시하며
   빈 AI Chat에 disabled kebab을 남기지 않는다.
 - AI Chat의 desktop dock은 modeless tool surface다. 좁은 desktop의 오른쪽
   overlay도 `role="dialog"`인 modeless side sheet로 유지해 background focus와

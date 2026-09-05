@@ -91,16 +91,8 @@ pub(crate) fn managed_sdk_root_if_ready() -> Option<PathBuf> {
     Some(root.join("google-cloud-sdk"))
 }
 
-pub(super) fn command_environment_for_sdk_root(sdk_root: &Path) -> CommandEnvironment {
-    let Some(runtime_root) = sdk_root.parent() else {
-        return sdk_environment(sdk_root);
-    };
-    if sdk_root.file_name().and_then(|name| name.to_str()) != Some("google-cloud-sdk")
-        || verify_installed(runtime_root).is_err()
-    {
-        return sdk_environment(sdk_root);
-    }
-    managed_environment(runtime_root)
+pub(super) fn command_environment() -> AppResult<CommandEnvironment> {
+    Ok(managed_environment(&target_root()?))
 }
 
 pub(crate) async fn install_managed_cli() -> AppResult<()> {
@@ -686,6 +678,18 @@ pub(super) fn assert_runtime_contract() {
     }
     #[cfg(target_os = "macos")]
     {
+        let root = Path::new("/private/dopedb-google-runtime");
+        let environment = managed_environment(root);
+        for (key, expected) in [
+            ("CLOUDSDK_PYTHON", root.join("bin/python-launcher.sh")),
+            ("DOPEDB_MANAGED_PYTHON", managed_python_path(root)),
+            ("DOPEDB_MANAGED_FRAMEWORK_PATH", root.join("python")),
+        ] {
+            assert!(environment
+                .variables
+                .iter()
+                .any(|(name, value)| { name == key && value == expected.as_os_str() }));
+        }
         assert!(valid_digest(PYTHON_ARCHIVE.sha256));
         assert_eq!(
             PYTHON_INSTALLER_TEAM,

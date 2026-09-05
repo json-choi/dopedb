@@ -44,7 +44,7 @@ owns a separate manifest digest, signature, and key ID. Shape validation is not
 signature verification; the installer must verify both signatures against the
 bundled DopeDB key before any archive is extracted or activated.
 
-The command schema is version 8. Agent registration carries the closed
+The command schema is version 17. Agent registration carries the closed
 `pluginId`, bundle version, the verified bundled Node path and hash, the signed
 adapter entrypoint and hash, and the independently verified local provider CLI
 path and hash. The private bridge re-verifies all three executables before it
@@ -114,6 +114,14 @@ The ACP trust anchor is the exact public half of that protected updater signing
 key. Configuration validation compares the complete decoded updater public key
 with `acp-plugin.pub`, not only its key ID, so a drifted or mistyped key fails
 before a bundle is built.
+
+Stable app draft creation and the unprivileged release verification job also
+run `pnpm check:agent-runtime:published`. This anonymous availability check
+resolves the same bounded stable tag catalog as Desktop, checks the public
+manifest digest, app/Node/protocol compatibility and checked-in adapter pins,
+and requires each exact archive to be publicly downloadable at its declared
+size. A successful local catalog build cannot replace this receipt. This gate
+does not install code or replace the installer's Minisign and payload checks.
 
 At runtime, startup schedules (but does not await) a 24-hour-coalesced signed
 manifest check for installed plugins only. The check records an available release

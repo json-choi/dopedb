@@ -49,9 +49,9 @@ their own workspaces instead of being flattened into SQL tables.
 and SQLite currently use this mode through SQLx, so selecting them requires no download.
 
 `system` drivers delegate to an official CLI installed and authenticated by the OS user.
-BigQuery uses an official-CLI managed variant: it first reuses a verified fixed-path Google
-Cloud SDK and otherwise prepares an unmodified, version/size/SHA-256-pinned Google archive
-in app-owned local data. macOS also verifies the pinned Python.org installer team and Apple
+BigQuery uses an app-managed official runtime: it prepares an unmodified,
+version/size/SHA-256-pinned Google archive in app-owned local data on first use.
+It never selects a workstation SDK or Python installation. macOS also verifies the pinned Python.org installer team and Apple
 notarization before extracting its framework without a system install; the Windows x64
 archive already contains Python. Activation is staged and atomic, and neither path changes
 PATH or needs administrator access. DopeDB neither reads Google tokens nor calls the provider

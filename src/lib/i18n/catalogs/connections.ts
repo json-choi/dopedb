@@ -153,7 +153,7 @@ export const connectionsCatalog = defineCatalog(
     "connections.bigQueryAuthenticationMode": "Sign-in method",
     "connections.bigQueryGoogleAccount": "Google account",
     "connections.bigQueryServiceAccount": "Service account",
-    "connections.bigQueryAuthenticating": "Connecting with Google Cloud CLI…",
+    "connections.bigQueryAuthenticating": "Connecting your Google account…",
     "connections.bigQueryPreparingTools": "Preparing verified Google tools…",
     "connections.bigQueryConnected": "Connected",
     "connections.bigQueryNotConnected": "Not connected",
@@ -203,7 +203,7 @@ export const connectionsCatalog = defineCatalog(
       "Prepared automatically on the first connection",
     "connections.bigQueryCliStatus": "Google tools",
     "connections.bigQuerySecurityNote":
-      "Google sign-in and service-account import run inside the unmodified official Google Cloud CLI. DopeDB reuses a verified system installation or prepares a pinned app-owned copy; it never reads or stores Google tokens or key contents. Every SELECT is server dry-run and must stay under this connection's byte-billing ceiling.",
+      "DopeDB prepares everything needed to connect. Sign in with Google in your browser, or choose a service-account file. Your credentials stay on this device. Queries are read-only and must stay under this connection's billing limit.",
     "connections.bigQuerySharedSecurityNote":
       "This shared record contains only the BigQuery project and dataset identity. Each member connects Google credentials locally; no token or service-account key is shared through the workspace.",
     "connections.discoveredSchemaCount": "{count} schemas",
@@ -610,7 +610,7 @@ export const connectionsCatalog = defineCatalog(
     "connections.bigQueryAuthenticationMode": "로그인 방식",
     "connections.bigQueryGoogleAccount": "Google 계정",
     "connections.bigQueryServiceAccount": "서비스 계정",
-    "connections.bigQueryAuthenticating": "Google Cloud CLI로 연결 중…",
+    "connections.bigQueryAuthenticating": "Google 계정 연결 중…",
     "connections.bigQueryPreparingTools": "검증된 Google 도구 준비 중…",
     "connections.bigQueryConnected": "연결됨",
     "connections.bigQueryNotConnected": "연결되지 않음",
@@ -659,7 +659,7 @@ export const connectionsCatalog = defineCatalog(
     "connections.bigQueryCliRequired": "첫 연결 때 자동으로 준비됨",
     "connections.bigQueryCliStatus": "Google 도구",
     "connections.bigQuerySecurityNote":
-      "Google 로그인과 서비스 계정 가져오기는 수정하지 않은 공식 Google Cloud CLI 안에서 실행됩니다. DopeDB는 검증된 시스템 설치를 재사용하거나 버전이 고정된 앱 전용 사본을 준비하며, Google 토큰이나 키 내용을 읽거나 저장하지 않습니다. 모든 SELECT를 서버에서 dry-run한 뒤 연결별 최대 과금 바이트를 넘지 않을 때만 실행합니다.",
+      "연결에 필요한 도구는 DopeDB가 자동으로 준비합니다. 브라우저에서 Google에 로그인하거나 서비스 계정 파일을 선택하세요. 인증 정보는 이 기기에만 보관됩니다. 조회만 실행할 수 있으며 연결별 과금 한도를 적용합니다.",
     "connections.bigQuerySharedSecurityNote":
       "이 공유 레코드에는 BigQuery 프로젝트와 데이터셋 식별자만 들어갑니다. 각 멤버가 Google 자격 증명을 로컬에서 연결하며, 토큰이나 서비스 계정 키는 워크스페이스를 통해 공유되지 않습니다.",
     "connections.discoveredSchemaCount": "스키마 {count}개",

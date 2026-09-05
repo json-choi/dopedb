@@ -125,8 +125,12 @@ DopeDB가 소유한 요구사항으로만 기록한다. 법적 저작자 표시,
 정식 릴리스는 사용자가 명시적으로 요청한 경우에만 `json-choi`가 수행한다.
 모든 버전 소스를 같은 값으로 맞추고 `main`의 검증된 커밋에
 `pnpm release:stable:draft -- X.Y.Z`를 실행해 annotated `app-vX.Y.Z` 태그와
-owner draft release를 함께 만든다. draft를 확인한 뒤에만 `stable-release`
-환경을 승인한다. Actions는 owner-only tag 규칙을 우회해 release를 만들지
+owner draft release를 함께 만든다. 사람인 소유자가 draft를 확인한 뒤에만
+`stable-release` 환경을 승인하며 Agent는 대신 승인하거나 우회하지 않는다.
+draft 생성과 release 검증은 `pnpm check:agent-runtime:published`로 공개 다운로드
+가능한 ACP manifest의 앱·내장 Node 호환성과 체크인된 pin 일치를 요구한다.
+로컬 catalog 검사만으로 배포 호환성을 주장하지 않는다.
+Actions는 owner-only tag 규칙을 우회해 release를 만들지
 않으며 draft가 없으면 build 전에 실패한다. 보호된 환경, tag 규칙, signing
 key를 우회하거나 노출하지 않는다.
 macOS 서명 활성화는 `.release/macos-distribution.json`의 체크인된

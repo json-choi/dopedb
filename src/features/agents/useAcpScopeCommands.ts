@@ -1,5 +1,5 @@
-// Context changes replace only a prepared, empty ACP session. Once a turn has
-// started, the immutable Project resource set is intentionally locked.
+// Resource changes update the draft immediately and retire its old prepared
+// session in the background. A conversation's exact grant remains immutable.
 
 import type { Dispatch, SetStateAction } from "react";
 
@@ -15,7 +15,6 @@ export function useAcpScopeCommands({
   starting,
   onSelectSession,
   setError,
-  setStarting,
   toggleResource,
   selectWriteTarget,
 }: {
@@ -24,7 +23,6 @@ export function useAcpScopeCommands({
   starting: boolean;
   onSelectSession: (id: AcpSessionId | null) => void;
   setError: Dispatch<SetStateAction<string | null>>;
-  setStarting: Dispatch<SetStateAction<boolean>>;
   toggleResource: (resourceKey: string) => void;
   selectWriteTarget: (connectionId: ConnectionId | null) => void;
 }) {
@@ -32,20 +30,16 @@ export function useAcpScopeCommands({
 
   async function replacePreparedSession(action: () => void) {
     if (starting || !scopeChangeAllowed) return;
+    setError(null);
+    onSelectSession(null);
+    action();
     if (active) {
-      setStarting(true);
-      setError(null);
       try {
         await closeAgentAcpSession(active.id);
-        onSelectSession(null);
       } catch (reason) {
         setError(t("agent.acpCloseFailed", { error: errMessage(reason) }));
-        setStarting(false);
-        return;
       }
     }
-    action();
-    if (active) setStarting(false);
   }
 
   return {

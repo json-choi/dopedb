@@ -388,6 +388,14 @@ pub(super) fn assert_archive_security_contract() {
         revoked_at: None,
         rollout_basis_points: 10_000,
     };
+    assert!(super::verification::verify_app_compatibility(&manifest).is_err());
+    let mut compatible = manifest.clone();
+    compatible.compatibility.dopedb_version_min = env!("CARGO_PKG_VERSION").into();
+    compatible.compatibility.dopedb_version_max = env!("CARGO_PKG_VERSION").into();
+    assert!(super::verification::verify_app_compatibility(&compatible).is_ok());
+    compatible.compatibility.dopedb_version_min = "999.0.0".into();
+    compatible.compatibility.dopedb_version_max = "999.99.99".into();
+    assert!(super::verification::verify_app_compatibility(&compatible).is_err());
     let stage = temp.path().join("stage");
     fs::create_dir(&stage).unwrap();
     assert!(!extract_verified_archive(&archive_path, &stage, &manifest)

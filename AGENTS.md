@@ -241,8 +241,11 @@ may do so, from `main`, with every version source synchronized and an
 `app-vX.Y.Z` tag. Do not approve or bypass the protected release environment,
 handle signing material, or create a plain `vX.Y.Z` release tag.
 Create the annotated tag and owner-attributed draft together with
-`pnpm release:stable:draft -- X.Y.Z`; review that draft before approving the
-`stable-release` environment. The build jobs must refuse to compile when the
+`pnpm release:stable:draft -- X.Y.Z`; the human owner reviews that draft and
+approves the `stable-release` environment. Both draft preparation and release
+verification require `pnpm check:agent-runtime:published`: publicly downloadable
+ACP manifests must support the app and bundled Node and match the checked-in pins.
+A local catalog check alone is not release evidence. The build jobs must refuse to compile when the
 matching non-prerelease draft is absent, because GitHub Actions is deliberately
 not allowed to bypass the owner-only tag ruleset and create it.
 The checked-in `distributionMode` in `.release/macos-distribution.json` owns

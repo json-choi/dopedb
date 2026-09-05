@@ -234,7 +234,11 @@ migration 진입점을 검증한다. 로컬 build만으로는 운영 반영을 �
   않는다.
 - 버전 정합성과 깨끗하게 push된 `main`을 확인한 뒤
   `pnpm release:stable:draft -- X.Y.Z`로 annotated tag와 owner draft를 함께
-  만든다. draft를 확인한 뒤에만 `stable-release` 환경을 승인한다. Actions는
+  만든다. 사람인 소유자가 draft를 확인한 뒤에만 `stable-release` 환경을
+  승인하며 Agent는 대신 승인하거나 우회하지 않는다. draft 생성과 release 검증은
+  `pnpm check:agent-runtime:published`로 공개 다운로드 가능한 ACP manifest의
+  앱·내장 Node 호환성과 체크인된 pin 일치를 요구한다. 로컬 catalog 검사만으로
+  배포 호환성을 주장하지 않는다. Actions는
   owner-only tag ruleset을 우회해 release를 만들지 않으며 draft가 없으면
   build 전에 실패해야 한다.
 - macOS 서명 활성화는 `.release/macos-distribution.json`의 체크인된
