@@ -1,11 +1,10 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "keyId": "71F10E6488C84C71",
   "acpProtocol": "2025-11-25",
   "nodeVersionMin": "24.0.0",
   "nodeVersionMax": "24.99.99",
-  "dopedbVersionMin": "0.3.33",
-  "dopedbVersionMax": "0.4.99",
+  "runtimeContractVersion": 1,
   "plugins": [
     {
       "id": "dopedb.acp.claude",

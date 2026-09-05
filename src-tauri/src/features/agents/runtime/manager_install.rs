@@ -81,7 +81,7 @@ impl AcpPluginManager {
         app: &AppHandle,
         plugin_id: AcpPluginId,
         expected: Option<&AvailablePluginVersion>,
-    ) -> AppResult<(String, SignedAcpPluginManifestV1)> {
+    ) -> AppResult<(String, SignedAcpPluginManifestV2)> {
         let (release_id, manifest_bytes) = if let Some(expected) = expected {
             let bytes = self
                 .try_download_manifest(&expected.release_id, plugin_id)
@@ -93,7 +93,7 @@ impl AcpPluginManager {
         } else {
             self.download_manifest(plugin_id).await?
         };
-        let envelope: SignedAcpPluginManifestV1 = serde_json::from_slice(&manifest_bytes)
+        let envelope: SignedAcpPluginManifestV2 = serde_json::from_slice(&manifest_bytes)
             .map_err(|_| AppError::Network("the ACP plugin manifest is invalid".into()))?;
         if envelope.manifest.plugin_id != plugin_id {
             return Err(AppError::Blocked {
@@ -392,7 +392,7 @@ impl AcpPluginManager {
 
     pub(super) async fn download_artifact(
         &self,
-        envelope: &SignedAcpPluginManifestV1,
+        envelope: &SignedAcpPluginManifestV2,
     ) -> AppResult<PathBuf> {
         let path = self.inner.root.join("downloads").join(format!(
             "{}-{}.partial",

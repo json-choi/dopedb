@@ -3,7 +3,7 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read};
 use std::path::{Component, Path, PathBuf};
 
-use dopedb_protocol::{AcpPluginManifestV1, MAX_ACP_PLUGIN_UNPACKED_BYTES};
+use dopedb_protocol::{AcpPluginManifestV2, MAX_ACP_PLUGIN_UNPACKED_BYTES};
 use flate2::read::GzDecoder;
 use sha2::{Digest, Sha256};
 
@@ -19,7 +19,7 @@ const MAX_ARCHIVE_FILE_BYTES: u64 = 128 * 1024 * 1024;
 pub(super) fn extract_verified_archive(
     archive_path: &Path,
     stage: &Path,
-    manifest: &AcpPluginManifestV1,
+    manifest: &AcpPluginManifestV2,
 ) -> AppResult<String> {
     let stage_metadata = fs::symlink_metadata(stage)?;
     if !stage_metadata.file_type().is_dir() || fs::read_dir(stage)?.next().is_some() {
@@ -320,6 +320,7 @@ pub(super) fn assert_archive_security_contract() {
     use dopedb_protocol::{
         AcpPluginArtifact, AcpPluginCompatibility, AcpPluginId, AcpPluginLicense,
         AcpPluginProvider, AcpPluginUpstream, ACP_PLUGIN_MANIFEST_SCHEMA_VERSION,
+        ACP_PLUGIN_RUNTIME_CONTRACT_VERSION,
     };
     use flate2::write::GzEncoder;
     use flate2::Compression;
@@ -350,7 +351,7 @@ pub(super) fn assert_archive_security_contract() {
     let unpacked_bytes = fs::read(source.join("dist/index.js")).unwrap().len()
         + fs::read(source.join("sbom.spdx.json")).unwrap().len()
         + fs::read(source.join("licenses/NOTICE.txt")).unwrap().len();
-    let manifest = AcpPluginManifestV1 {
+    let manifest = AcpPluginManifestV2 {
         schema_version: ACP_PLUGIN_MANIFEST_SCHEMA_VERSION,
         plugin_id: AcpPluginId::Claude,
         provider: AcpPluginProvider::Claude,
@@ -367,8 +368,7 @@ pub(super) fn assert_archive_security_contract() {
             acp_protocol_max: "2025-11-25".into(),
             node_version_min: "24.0.0".into(),
             node_version_max: "24.99.99".into(),
-            dopedb_version_min: "0.3.0".into(),
-            dopedb_version_max: "0.3.99".into(),
+            runtime_contract_version: ACP_PLUGIN_RUNTIME_CONTRACT_VERSION,
         },
         artifact: AcpPluginArtifact {
             url: "https://github.com/json-choi/dopedb/releases/download/acp-bundle-fixture/claude.tar.gz".into(),
@@ -388,14 +388,21 @@ pub(super) fn assert_archive_security_contract() {
         revoked_at: None,
         rollout_basis_points: 10_000,
     };
-    assert!(super::verification::verify_app_compatibility(&manifest).is_err());
-    let mut compatible = manifest.clone();
-    compatible.compatibility.dopedb_version_min = env!("CARGO_PKG_VERSION").into();
-    compatible.compatibility.dopedb_version_max = env!("CARGO_PKG_VERSION").into();
-    assert!(super::verification::verify_app_compatibility(&compatible).is_ok());
-    compatible.compatibility.dopedb_version_min = "999.0.0".into();
-    compatible.compatibility.dopedb_version_max = "999.99.99".into();
-    assert!(super::verification::verify_app_compatibility(&compatible).is_err());
+    let runtime = super::verification::VerifiedNodeRuntime {
+        version: semver::Version::new(24, 19, 0),
+        executable: source.join("node"),
+        executable_sha256: "ab".repeat(32),
+    };
+    assert!(super::verification::verify_compatibility(&manifest, &runtime).is_ok());
+    let mut incompatible = manifest.clone();
+    incompatible.compatibility.runtime_contract_version += 1;
+    assert!(super::verification::verify_compatibility(&incompatible, &runtime).is_err());
+    incompatible = manifest.clone();
+    incompatible.compatibility.acp_protocol_min = "2099-01-01".into();
+    assert!(super::verification::verify_host_compatibility(&incompatible).is_err());
+    incompatible = manifest.clone();
+    incompatible.compatibility.node_version_min = "25.0.0".into();
+    assert!(super::verification::verify_compatibility(&incompatible, &runtime).is_err());
     let stage = temp.path().join("stage");
     fs::create_dir(&stage).unwrap();
     assert!(!extract_verified_archive(&archive_path, &stage, &manifest)

@@ -238,13 +238,19 @@ branch, commit or uncommitted state, checks run, and any failures accurately.
 
 Publish a stable release only after an explicit user request. Only `json-choi`
 may do so, from `main`, with every version source synchronized and an
-`app-vX.Y.Z` tag. Do not approve or bypass the protected release environment,
-handle signing material, or create a plain `vX.Y.Z` release tag.
+`app-vX.Y.Z` tag. Do not bypass release protection, handle signing material,
+or create a plain `vX.Y.Z` release tag.
 Create the annotated tag and owner-attributed draft together with
-`pnpm release:stable:draft -- X.Y.Z`; the human owner reviews that draft and
-approves the `stable-release` environment. Both draft preparation and release
+`pnpm release:stable:draft -- X.Y.Z`. An explicit user request to release
+authorizes the agent to review the exact draft, commit, artifacts, and required
+checks, then approve that release's `stable-release` deployment through
+`pnpm gh:owner`. This includes its required ACP adapter releases; it does not
+authorize unrelated environment, database-write, or access approvals. Never
+disable protection or attest to a check that has not been performed.
+Both draft preparation and release
 verification require `pnpm check:agent-runtime:published`: publicly downloadable
-ACP manifests must support the app and bundled Node and match the checked-in pins.
+ACP manifests must support the adapter runtime contract, ACP protocol, and bundled
+Node and match the checked-in pins. App release numbers are not adapter compatibility keys.
 A local catalog check alone is not release evidence. The build jobs must refuse to compile when the
 matching non-prerelease draft is absent, because GitHub Actions is deliberately
 not allowed to bypass the owner-only tag ruleset and create it.

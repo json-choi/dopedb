@@ -1,8 +1,13 @@
+//! Signature, host contract, and bundled runtime verification for ACP plugins.
+
 use std::fs::{self, File};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
-use dopedb_protocol::{AcpPluginManifestV1, SignedAcpPluginManifestV1};
+use dopedb_protocol::{
+    AcpPluginManifestV2, SignedAcpPluginManifestV2, ACP_PLUGIN_PROTOCOL_VERSION,
+    ACP_PLUGIN_RUNTIME_CONTRACT_VERSION,
+};
 use minisign_verify::{PublicKey, Signature};
 use semver::Version;
 use serde::Deserialize;
@@ -17,7 +22,6 @@ const ACP_PLUGIN_PUBLIC_KEY: &str =
 const NODE_RUNTIME_CATALOG: &str =
     include_str!("../../../../resources/agent-runtime/runtime-catalog.json");
 pub(super) const ACP_PLUGIN_KEY_ID: &str = "71F10E6488C84C71";
-const ACP_PROTOCOL_VERSION: &str = "2025-11-25";
 const MAX_RUNTIME_MANIFEST_BYTES: u64 = 64 * 1024;
 const MAX_BUNDLED_NODE_BYTES: u64 = 130 * 1024 * 1024;
 
@@ -71,7 +75,7 @@ struct NodeRuntimeManifest {
     sbom_sha256: String,
 }
 
-pub(super) fn verify_manifest(envelope: &SignedAcpPluginManifestV1) -> AppResult<Vec<u8>> {
+pub(super) fn verify_manifest(envelope: &SignedAcpPluginManifestV2) -> AppResult<Vec<u8>> {
     if !envelope.validate_shape()
         || envelope.key_id != ACP_PLUGIN_KEY_ID
         || envelope.manifest.artifact.key_id != ACP_PLUGIN_KEY_ID
@@ -96,7 +100,7 @@ pub(super) fn verify_manifest(envelope: &SignedAcpPluginManifestV1) -> AppResult
 }
 
 pub(super) fn verify_compatibility(
-    manifest: &AcpPluginManifestV1,
+    manifest: &AcpPluginManifestV2,
     runtime: &VerifiedNodeRuntime,
 ) -> AppResult<()> {
     let node_min = parse_version(&manifest.compatibility.node_version_min, "minimum Node")?;
@@ -110,32 +114,27 @@ pub(super) fn verify_compatibility(
             ),
         });
     }
-    if ACP_PROTOCOL_VERSION < manifest.compatibility.acp_protocol_min.as_str()
-        || ACP_PROTOCOL_VERSION > manifest.compatibility.acp_protocol_max.as_str()
+    verify_host_compatibility(manifest)
+}
+
+pub(super) fn verify_host_compatibility(manifest: &AcpPluginManifestV2) -> AppResult<()> {
+    if manifest.compatibility.runtime_contract_version != ACP_PLUGIN_RUNTIME_CONTRACT_VERSION {
+        return Err(AppError::Blocked {
+            reason: "update the ACP adapter: its runtime contract is incompatible with this app"
+                .into(),
+        });
+    }
+    if ACP_PLUGIN_PROTOCOL_VERSION < manifest.compatibility.acp_protocol_min.as_str()
+        || ACP_PLUGIN_PROTOCOL_VERSION > manifest.compatibility.acp_protocol_max.as_str()
     {
         return Err(AppError::Blocked {
             reason: "the ACP plugin protocol range is incompatible with this app".into(),
         });
     }
-    verify_app_compatibility(manifest)
-}
-
-pub(super) fn verify_app_compatibility(manifest: &AcpPluginManifestV1) -> AppResult<()> {
-    let app = Version::parse(env!("CARGO_PKG_VERSION"))
-        .map_err(|_| AppError::Config("the app version is not valid semver".into()))?;
-    let app_min = parse_version(&manifest.compatibility.dopedb_version_min, "minimum DopeDB")?;
-    let app_max = parse_version(&manifest.compatibility.dopedb_version_max, "maximum DopeDB")?;
-    if app < app_min || app > app_max {
-        return Err(AppError::Blocked {
-            reason: format!(
-                "update the ACP adapter for DopeDB {app}; this adapter supports {app_min} through {app_max}"
-            ),
-        });
-    }
     Ok(())
 }
 
-pub(super) fn verify_artifact(path: &Path, manifest: &AcpPluginManifestV1) -> AppResult<()> {
+pub(super) fn verify_artifact(path: &Path, manifest: &AcpPluginManifestV2) -> AppResult<()> {
     let metadata = fs::symlink_metadata(path)?;
     if !metadata.file_type().is_file() || metadata.len() != manifest.artifact.packed_bytes {
         return Err(signature_error(

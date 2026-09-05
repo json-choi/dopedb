@@ -15,7 +15,7 @@ if (!validReleaseTag(releaseTag)) fail("invalid ACP adapter release tag");
 if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(releasedAt)) fail("released-at must be UTC seconds");
 
 const metadata = JSON.parse(await readFile(join(input, "build-metadata.json"), "utf8"));
-if (metadata.schemaVersion !== 1 || metadata.keyId !== "71F10E6488C84C71") fail("invalid ACP build metadata");
+if (metadata.schemaVersion !== 2 || metadata.keyId !== "71F10E6488C84C71") fail("invalid ACP build metadata");
 const artifact = resolve(metadata.artifact.path);
 if (!artifact.startsWith(`${input}/`) || basename(artifact) !== `${metadata.plugin.provider}.tar.gz`) {
   fail("ACP artifact escaped its build directory");
@@ -24,7 +24,7 @@ const artifactSignaturePath = `${artifact}.minisig`;
 await sign(key, artifact, artifactSignaturePath);
 const artifactSignature = await readFile(artifactSignaturePath, "utf8");
 const manifest = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   pluginId: metadata.plugin.id,
   provider: metadata.plugin.provider,
   adapterVersion: metadata.plugin.adapterVersion,

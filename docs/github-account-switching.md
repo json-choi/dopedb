@@ -50,6 +50,11 @@ Normal reads and non-owner GitHub operations keep using `jaesong-blip`. Direct
 repository-administration calls use the wrapper so GitHub records
 `json-choi` as the actor.
 
+For an explicitly requested release, an agent may approve that release's
+`stable-release` deployment after reviewing its exact draft, commit, artifacts,
+and required checks. This includes required ACP adapter releases. The wrapper
+does not grant authority for unrelated approvals or waive release checks.
+
 If a process is killed before cleanup completes, first confirm that no wrapper
 process is still active, then recover the default account and stale lock:
 

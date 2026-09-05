@@ -824,14 +824,13 @@ mod tests {
                 const read = path => JSON.parse(readFileSync(path, 'utf8'));
                 const catalog = read('agent-runtime/plugins/catalog.json');
                 const runtime = read('src-tauri/resources/agent-runtime/runtime-catalog.json');
-                const app = read('package.json').version;
                 const plugin = catalog.plugins[0];
                 const tag = 'acp-bundle-v2026.09.05.1';
                 const manifest = {
-                    schemaVersion: 1, pluginId: plugin.id, provider: plugin.provider,
+                    schemaVersion: 2, pluginId: plugin.id, provider: plugin.provider,
                     adapterVersion: plugin.adapterVersion, adapterBundleVersion: plugin.adapterBundleVersion,
                     compatibility: {
-                        dopedbVersionMin: app, dopedbVersionMax: app,
+                        runtimeContractVersion: catalog.runtimeContractVersion,
                         nodeVersionMin: runtime.version, nodeVersionMax: runtime.version,
                         acpProtocolMin: catalog.acpProtocol, acpProtocolMax: catalog.acpProtocol,
                     },
@@ -841,15 +840,24 @@ mod tests {
                 };
                 const envelope = value => ({ manifest: value, keyId: catalog.keyId, signature: 'availability-fixture',
                     manifestSha256: createHash('sha256').update(JSON.stringify(value)).digest('hex') });
-                const check = value => assertPublishedCompatibility(envelope(value), plugin, catalog, runtime, app, tag);
+                const check = value => assertPublishedCompatibility(envelope(value), plugin, catalog, runtime, tag);
                 check(manifest);
                 const old = structuredClone(manifest);
-                old.compatibility.dopedbVersionMin = '0.3.33';
-                old.compatibility.dopedbVersionMax = '0.3.99';
+                old.compatibility.runtimeContractVersion += 1;
                 assert.throws(() => check(old), /publish a compatible ACP bundle first/);
+                assert.throws(() => check({ ...manifest, schemaVersion: 1 }), /incompatible manifest schema/);
+                const appCoupled = structuredClone(manifest);
+                appCoupled.compatibility.dopedbVersionMin = '0.4.4';
+                assert.throws(() => check(appCoupled), /invalid compatibility contract/);
+                const incompatibleNode = structuredClone(manifest);
+                incompatibleNode.compatibility.nodeVersionMin = '99.0.0';
+                assert.throws(() => check(incompatibleNode), /incompatible bundled Node/);
+                const incompatibleProtocol = structuredClone(manifest);
+                incompatibleProtocol.compatibility.acpProtocolMax = '2000-01-01';
+                assert.throws(() => check(incompatibleProtocol), /incompatible ACP protocol/);
                 assert.throws(() => check({ ...manifest, adapterVersion: '0.0.1' }), /checked-in pins/);
                 assert.throws(() => check({ ...manifest, revokedAt: '2026-09-05T00:00:00Z' }), /revoked/);
-                assert.throws(() => assertPublishedCompatibility({ ...envelope(manifest), manifestSha256: 'a'.repeat(64) }, plugin, catalog, runtime, app, tag), /digest mismatch/);
+                assert.throws(() => assertPublishedCompatibility({ ...envelope(manifest), manifestSha256: 'a'.repeat(64) }, plugin, catalog, runtime, tag), /digest mismatch/);
                 assert.deepEqual(stableReleaseTags([
                     { ref: `refs/tags/${tag}-candidate` },
                     { ref: `refs/tags/${tag}` },

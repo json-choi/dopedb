@@ -6,7 +6,11 @@
 
 use serde::{Deserialize, Serialize};
 
-pub const ACP_PLUGIN_MANIFEST_SCHEMA_VERSION: u16 = 1;
+pub const ACP_PLUGIN_MANIFEST_SCHEMA_VERSION: u16 = 2;
+// Bump only when the adapter launch/initialization contract breaks, independently
+// of Desktop releases and the private Desktop/CLI command schema.
+pub const ACP_PLUGIN_RUNTIME_CONTRACT_VERSION: u16 = 1;
+pub const ACP_PLUGIN_PROTOCOL_VERSION: &str = "2025-11-25";
 pub const MAX_ACP_PLUGIN_STRING_BYTES: usize = 4 * 1024;
 pub const MAX_ACP_PLUGIN_LICENSES: usize = 64;
 pub const MAX_ACP_PLUGIN_PACKED_BYTES: u64 = 30 * 1024 * 1024;
@@ -87,8 +91,7 @@ pub struct AcpPluginCompatibility {
     pub acp_protocol_max: String,
     pub node_version_min: String,
     pub node_version_max: String,
-    pub dopedb_version_min: String,
-    pub dopedb_version_max: String,
+    pub runtime_contract_version: u16,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -111,7 +114,7 @@ pub struct AcpPluginLicense {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct AcpPluginManifestV1 {
+pub struct AcpPluginManifestV2 {
     pub schema_version: u16,
     pub plugin_id: AcpPluginId,
     pub provider: AcpPluginProvider,
@@ -130,7 +133,7 @@ pub struct AcpPluginManifestV1 {
     pub rollout_basis_points: u16,
 }
 
-impl AcpPluginManifestV1 {
+impl AcpPluginManifestV2 {
     pub fn validate(&self) -> bool {
         self.schema_version == ACP_PLUGIN_MANIFEST_SCHEMA_VERSION
             && self.provider == self.plugin_id.provider()
@@ -149,12 +152,7 @@ impl AcpPluginManifestV1 {
                 &self.compatibility.node_version_min,
                 &self.compatibility.node_version_max,
             )
-            && valid_version(&self.compatibility.dopedb_version_min)
-            && valid_version(&self.compatibility.dopedb_version_max)
-            && version_at_most(
-                &self.compatibility.dopedb_version_min,
-                &self.compatibility.dopedb_version_max,
-            )
+            && self.compatibility.runtime_contract_version > 0
             && valid_artifact_url(&self.artifact.url)
             && valid_sha256(&self.artifact.sha256)
             && valid_signature(&self.artifact.signature)
@@ -179,14 +177,14 @@ impl AcpPluginManifestV1 {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct SignedAcpPluginManifestV1 {
-    pub manifest: AcpPluginManifestV1,
+pub struct SignedAcpPluginManifestV2 {
+    pub manifest: AcpPluginManifestV2,
     pub manifest_sha256: String,
     pub signature: String,
     pub key_id: String,
 }
 
-impl SignedAcpPluginManifestV1 {
+impl SignedAcpPluginManifestV2 {
     pub fn validate_shape(&self) -> bool {
         self.manifest.validate()
             && valid_sha256(&self.manifest_sha256)

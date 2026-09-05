@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use dopedb_protocol::{AcpPluginId, SignedAcpPluginManifestV1};
+use dopedb_protocol::{AcpPluginId, SignedAcpPluginManifestV2};
 use futures::StreamExt;
 use reqwest::redirect::{Attempt, Policy};
 use serde::de::DeserializeOwned;
@@ -26,8 +26,8 @@ use super::domain::{
     PersistedRuntimeState, QuarantinedPluginVersion, RUNTIME_STATE_SCHEMA_VERSION,
 };
 use super::verification::{
-    sha256_file, verify_app_compatibility, verify_artifact, verify_bundled_node,
-    verify_compatibility, verify_manifest,
+    sha256_file, verify_artifact, verify_bundled_node, verify_compatibility,
+    verify_host_compatibility, verify_manifest,
 };
 
 #[path = "manager_install.rs"]
@@ -421,7 +421,7 @@ impl AcpPluginManager {
         let directory = self.installed_directory(plugin_id, installed);
         let marker = self.read_installed_marker(&directory)?;
         verify_manifest(&marker.envelope)?;
-        let failure = verify_app_compatibility(&marker.envelope.manifest)
+        let failure = verify_host_compatibility(&marker.envelope.manifest)
             .err()
             .map(|error| bounded_failure(&error.to_string()));
         Ok((
@@ -576,7 +576,7 @@ fn emit_telemetry(
 
 fn installation_matches(
     installed: &Option<InstalledPluginVersion>,
-    envelope: &SignedAcpPluginManifestV1,
+    envelope: &SignedAcpPluginManifestV2,
 ) -> bool {
     installed.as_ref().is_some_and(|installed| {
         installed.adapter_bundle_version == envelope.manifest.adapter_bundle_version
@@ -598,7 +598,7 @@ fn record_contains_manifest(record: &PersistedPluginRecord, manifest_sha256: &st
 fn available_update(
     record: &PersistedPluginRecord,
     release_id: String,
-    envelope: &SignedAcpPluginManifestV1,
+    envelope: &SignedAcpPluginManifestV2,
 ) -> Option<AvailablePluginVersion> {
     (!record_contains_manifest(record, &envelope.manifest_sha256)).then(|| AvailablePluginVersion {
         adapter_version: envelope.manifest.adapter_version.clone(),
@@ -609,7 +609,7 @@ fn available_update(
 }
 
 fn release_id_from_manifest(
-    envelope: &SignedAcpPluginManifestV1,
+    envelope: &SignedAcpPluginManifestV2,
     plugin_id: AcpPluginId,
 ) -> Option<String> {
     let prefix = "https://github.com/json-choi/dopedb/releases/download/";

@@ -17,7 +17,7 @@ import { spawn } from "node:child_process";
 const repository = resolve(import.meta.dirname, "../..");
 const catalogPath = join(repository, "agent-runtime/plugins/catalog.json");
 const pinsPath = join(repository, "agent-runtime/plugins/package.json");
-const applicationPackagePath = join(repository, "package.json");
+const runtimeCatalogPath = join(repository, "src-tauri/resources/agent-runtime/runtime-catalog.json");
 const acpPublicKeyPath = join(
   repository,
   "src-tauri/resources/agent-runtime/acp-plugin.pub",
@@ -35,8 +35,8 @@ for (let index = 2; index < process.argv.length; index += 2) {
 const checkOnly = process.argv.includes("--check-config");
 const catalog = JSON.parse(await readFile(catalogPath, "utf8"));
 const pins = JSON.parse(await readFile(pinsPath, "utf8"));
-const applicationPackage = JSON.parse(await readFile(applicationPackagePath, "utf8"));
-validateCatalog(catalog, pins, applicationPackage);
+const runtimeCatalog = JSON.parse(await readFile(runtimeCatalogPath, "utf8"));
+validateCatalog(catalog, pins, runtimeCatalog);
 await validateSigningPublicKey(catalog);
 if (checkOnly) {
   console.log(`verified ${catalog.plugins.length} pinned ACP adapter bundles`);
@@ -127,7 +127,7 @@ try {
     fail(`ACP artifact exceeds ${MAX_PACKED_BYTES} packed bytes`);
   }
   const metadata = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     keyId: catalog.keyId,
     plugin,
     compatibility: {
@@ -135,8 +135,7 @@ try {
       acpProtocolMax: catalog.acpProtocol,
       nodeVersionMin: catalog.nodeVersionMin,
       nodeVersionMax: catalog.nodeVersionMax,
-      dopedbVersionMin: catalog.dopedbVersionMin,
-      dopedbVersionMax: catalog.dopedbVersionMax,
+      runtimeContractVersion: catalog.runtimeContractVersion,
     },
     artifact: {
       path: artifact,
@@ -157,21 +156,25 @@ try {
   await rm(temporary, { recursive: true, force: true });
 }
 
-function validateCatalog(value, pinPackage, applicationPackage) {
-  if (value.schemaVersion !== 1 || value.keyId !== "71F10E6488C84C71" || value.plugins?.length !== 2) {
+function validateCatalog(value, pinPackage, runtimeCatalog) {
+  if (value.schemaVersion !== 2 || value.keyId !== "71F10E6488C84C71" || value.plugins?.length !== 2) {
     fail("invalid ACP plugin catalog header");
   }
-  const applicationVersion = parseReleaseVersion(applicationPackage.version, "DopeDB application");
-  const minimumVersion = parseReleaseVersion(value.dopedbVersionMin, "minimum DopeDB compatibility");
-  const maximumVersion = parseReleaseVersion(value.dopedbVersionMax, "maximum DopeDB compatibility");
+  if (value.runtimeContractVersion !== 1 || value.acpProtocol !== "2025-11-25"
+      || "dopedbVersionMin" in value || "dopedbVersionMax" in value) {
+    fail("invalid ACP host contract; compatibility must not depend on the app release number");
+  }
+  const nodeVersion = parseReleaseVersion(runtimeCatalog.version, "bundled Node");
+  const minimumVersion = parseReleaseVersion(value.nodeVersionMin, "minimum Node compatibility");
+  const maximumVersion = parseReleaseVersion(value.nodeVersionMax, "maximum Node compatibility");
   if (compareVersions(minimumVersion, maximumVersion) > 0) {
-    fail("invalid DopeDB compatibility range");
+    fail("invalid Node compatibility range");
   }
   if (
-    compareVersions(applicationVersion, minimumVersion) < 0
-    || compareVersions(applicationVersion, maximumVersion) > 0
+    compareVersions(nodeVersion, minimumVersion) < 0
+    || compareVersions(nodeVersion, maximumVersion) > 0
   ) {
-    fail(`ACP plugin catalog does not support DopeDB ${applicationPackage.version}`);
+    fail(`ACP plugin catalog does not support bundled Node ${runtimeCatalog.version}`);
   }
   const ids = new Set();
   for (const plugin of value.plugins) {

@@ -160,6 +160,8 @@ are never selected by normal clients. A signed manifest must point back to the e
 stable release that supplied it, and a missing newest release falls back only across a
 bounded list of older stable tags. Adapter publication therefore stays independent of
 app, CLI, and Skill versions without relying on a mutable GitHub Release alias.
+Signed compatibility is tied to the adapter runtime contract, ACP protocol, and
+bundled Node, so changing the app release number alone never invalidates an adapter.
 The Desktop exposes AI Chat, approval, result, and recovery surfaces rather than a
 general shell tool window. The optional developer PTY is an explicit advanced dialog
 under Settings → Command line, not the ACP execution path. A connection, account,

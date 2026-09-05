@@ -34,8 +34,9 @@ There is no user-provided ID, executable, package name, URL, or provider field
 on the Agent registration command. The ID fixes the provider and the local CLI
 environment variable (`CLAUDE_CODE_EXECUTABLE` or `CODEX_PATH`).
 
-`SignedAcpPluginManifestV1` is the catalog wire shape. Its inner manifest owns
-the exact upstream package version, tag and commit, compatibility ranges,
+`SignedAcpPluginManifestV2` is the catalog wire shape. Its inner manifest owns
+the exact upstream package version, tag and commit, ACP/Node compatibility ranges,
+and a separate adapter runtime contract version,
 relative adapter entrypoint,
 artifact URL and independent signature, packed archive hash, canonical unpacked
 content-tree hash, size budgets, license inventory, SBOM digest,
@@ -43,6 +44,15 @@ release/revocation timestamps, and rollout cohort. The outer envelope
 owns a separate manifest digest, signature, and key ID. Shape validation is not
 signature verification; the installer must verify both signatures against the
 bundled DopeDB key before any archive is extracted or activated.
+
+Manifest schema 2 has no app-version range. `runtimeContractVersion` identifies
+the host's adapter launch and initialization behavior and changes only when that
+behavior breaks compatibility. It is independent of app/CLI/Skill release numbers
+and the private command schema. Matching this contract, the ACP protocol range,
+and the bundled Node range lets one signed adapter survive app releases without
+republication. Unknown contracts and older manifest schemas require installing a
+current signed bundle; they are never treated as compatible by default. The Rust
+wire contract test keeps the checked-in catalog aligned with the compiled host.
 
 The command schema is version 17. Agent registration carries the closed
 `pluginId`, bundle version, the verified bundled Node path and hash, the signed
@@ -118,7 +128,7 @@ before a bundle is built.
 Stable app draft creation and the unprivileged release verification job also
 run `pnpm check:agent-runtime:published`. This anonymous availability check
 resolves the same bounded stable tag catalog as Desktop, checks the public
-manifest digest, app/Node/protocol compatibility and checked-in adapter pins,
+manifest digest, runtime-contract/Node/protocol compatibility and checked-in adapter pins,
 and requires each exact archive to be publicly downloadable at its declared
 size. A successful local catalog build cannot replace this receipt. This gate
 does not install code or replace the installer's Minisign and payload checks.

@@ -36,17 +36,19 @@ export function stableReleaseTags(refs) {
   }).sort((a, b) => b.date - a.date || b.sequence - a.sequence).slice(0, 8).map(({ tag }) => tag);
 }
 
-export function assertPublishedCompatibility(envelope, plugin, catalog, runtime, appVersion, tag) {
+export function assertPublishedCompatibility(envelope, plugin, catalog, runtime, tag) {
   const manifest = envelope?.manifest;
   const label = `${tag}/${plugin.provider}`;
-  assert(manifest?.schemaVersion === 1 && manifest.pluginId === plugin.id && manifest.provider === plugin.provider, `${label}: wrong plugin identity`);
+  assert(manifest?.schemaVersion === 2 && manifest.pluginId === plugin.id && manifest.provider === plugin.provider, `${label}: incompatible manifest schema or plugin identity; publish a current ACP bundle first`);
   assert(envelope.keyId === catalog.keyId && manifest.artifact?.keyId === catalog.keyId, `${label}: wrong signing key identity`);
   assert(typeof envelope.signature === "string" && envelope.signature.length > 0, `${label}: missing manifest signature`);
   assert(createHash("sha256").update(JSON.stringify(manifest)).digest("hex") === envelope.manifestSha256, `${label}: manifest digest mismatch`);
   assert(!manifest.revokedAt && manifest.rolloutBasisPoints === 10_000, `${label}: release is revoked or not fully available`);
   const compatibility = manifest.compatibility;
-  assert(compatibility && compare(appVersion, compatibility.dopedbVersionMin) >= 0 && compare(appVersion, compatibility.dopedbVersionMax) <= 0,
-    `${label}: published adapter supports DopeDB ${compatibility?.dopedbVersionMin}–${compatibility?.dopedbVersionMax}, not ${appVersion}; publish a compatible ACP bundle first`);
+  assert(compatibility && Object.keys(compatibility).sort().join(",") === "acpProtocolMax,acpProtocolMin,nodeVersionMax,nodeVersionMin,runtimeContractVersion", `${label}: invalid compatibility contract`);
+  assert(Number.isInteger(compatibility.runtimeContractVersion) && compatibility.runtimeContractVersion > 0
+    && compatibility.runtimeContractVersion === catalog.runtimeContractVersion,
+    `${label}: incompatible adapter runtime contract; publish a compatible ACP bundle first`);
   assert(compare(runtime.version, compatibility.nodeVersionMin) >= 0 && compare(runtime.version, compatibility.nodeVersionMax) <= 0, `${label}: incompatible bundled Node`);
   assert(catalog.acpProtocol >= compatibility.acpProtocolMin && catalog.acpProtocol <= compatibility.acpProtocolMax, `${label}: incompatible ACP protocol`);
   assert(manifest.adapterVersion === plugin.adapterVersion && manifest.adapterBundleVersion === plugin.adapterBundleVersion, `${label}: published adapter does not match the checked-in pins`);
@@ -88,8 +90,8 @@ async function json(url, maximum) {
 
 async function main() {
   assert(process.argv.length === 2, "usage: pnpm check:agent-runtime:published");
-  const [catalog, runtime, app] = await Promise.all([
-    "agent-runtime/plugins/catalog.json", "src-tauri/resources/agent-runtime/runtime-catalog.json", "package.json",
+  const [catalog, runtime] = await Promise.all([
+    "agent-runtime/plugins/catalog.json", "src-tauri/resources/agent-runtime/runtime-catalog.json",
   ].map(async (path) => JSON.parse(await readFile(resolve(root, path), "utf8"))));
   const refs = await json(`https://api.github.com/repos/${repository}/git/matching-refs/tags/acp-bundle-v?per_page=100`, 256 * 1024);
   const tags = stableReleaseTags(refs);
@@ -101,10 +103,10 @@ async function main() {
       if (!envelope) continue;
       // Match Desktop resolution: an incompatible published manifest is a
       // failure, not permission to silently fall back to an older adapter.
-      const manifest = assertPublishedCompatibility(envelope, plugin, catalog, runtime, app.version, tag);
+      const manifest = assertPublishedCompatibility(envelope, plugin, catalog, runtime, tag);
       const artifact = await request(manifest.artifact.url, "HEAD");
       assert(artifact.ok && Number(artifact.headers.get("content-length")) === manifest.artifact.packedBytes, `${tag}/${plugin.provider}: public bundle is missing or has the wrong size`);
-      console.log(`${plugin.provider}: ${tag}, adapter ${manifest.adapterVersion}, DopeDB ${app.version} compatible and publicly downloadable`);
+      console.log(`${plugin.provider}: ${tag}, adapter ${manifest.adapterVersion}, runtime contract ${catalog.runtimeContractVersion} compatible and publicly downloadable`);
       found = true;
       break;
     }

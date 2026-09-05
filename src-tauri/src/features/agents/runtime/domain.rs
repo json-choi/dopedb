@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use dopedb_protocol::{AcpPluginId, SignedAcpPluginManifestV1};
+use dopedb_protocol::{AcpPluginId, SignedAcpPluginManifestV2};
 use serde::{Deserialize, Serialize};
 
 pub(super) const RUNTIME_STATE_SCHEMA_VERSION: u16 = 1;
@@ -156,6 +156,6 @@ impl Default for PersistedQuarantineState {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct InstalledPluginMarker {
     pub(super) schema_version: u16,
-    pub(super) envelope: SignedAcpPluginManifestV1,
+    pub(super) envelope: SignedAcpPluginManifestV2,
     pub(super) entrypoint_sha256: String,
 }
