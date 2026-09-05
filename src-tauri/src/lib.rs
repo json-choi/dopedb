@@ -51,9 +51,6 @@ pub fn run() {
         )
         .init();
 
-    let state = tauri::async_runtime::block_on(state::AppState::new(startup_trace))
-        .expect("failed to initialize app state");
-
     let builder = tauri::Builder::default();
     #[cfg(any(target_os = "macos", windows, target_os = "linux"))]
     let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -73,8 +70,12 @@ pub fn run() {
         )
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .manage(state)
-        .setup(|app| {
+        .setup(move |app| {
+            // Plugins reject secondary launches before setup. Opening AppState
+            // earlier would let a duplicate process expire the live app's work
+            // as interrupted before the single-instance plugin can stop it.
+            let state = tauri::async_runtime::block_on(state::AppState::new(startup_trace))?;
+            app.manage(state);
             #[cfg(any(target_os = "macos", windows, target_os = "linux"))]
             features::workspaces::adapters::register_workspace_login_callback(app);
             let state = app.state::<state::AppState>();

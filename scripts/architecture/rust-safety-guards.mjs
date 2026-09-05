@@ -1,5 +1,18 @@
 const poisonPanicLock = /\.lock\(\)\s*\.(?:unwrap|expect)\s*\(/;
 
+export function collectApplicationStartupDiagnostics({ read }) {
+  const entrypoint = read("src-tauri/src/lib.rs");
+  const setup = entrypoint.indexOf(".setup(");
+  const singleInstance = entrypoint.indexOf("tauri_plugin_single_instance::init(");
+  const initialization = entrypoint.indexOf("state::AppState::new(");
+  if (singleInstance < 0 || setup < singleInstance || initialization < setup) {
+    return [
+      "Desktop must acquire the single-instance boundary before setup opens AppState and recovers durable operations",
+    ];
+  }
+  return [];
+}
+
 function productionRust(read, filePath) {
   return read(filePath)
     .replace(/\r\n/g, "\n")

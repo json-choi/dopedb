@@ -29,7 +29,10 @@ import {
   collectRemovedQueryRuntimeDiagnostics,
   collectRuntimeIdDiagnostics,
 } from "./architecture/query-rust-runtime-guards.mjs";
-import { collectPoisonMutexDiagnostics } from "./architecture/rust-safety-guards.mjs";
+import {
+  collectApplicationStartupDiagnostics,
+  collectPoisonMutexDiagnostics,
+} from "./architecture/rust-safety-guards.mjs";
 import { collectWorkspaceCloudHttpDiagnostics } from "./architecture/workspace-cloud-http-guards.mjs";
 import { checkAnalysisArchitecture } from "./architecture/analysis-architecture-guards.mjs";
 import { checkFrontendArchitecture } from "./architecture/frontend-architecture-guards.mjs";
@@ -139,6 +142,7 @@ const harness = {
 checkFrontendArchitecture(harness);
 checkKnowledgeArchitecture(harness);
 checkAnalysisArchitecture(harness);
+failures.push(...collectApplicationStartupDiagnostics(context));
 
 if (failures.length > 0) {
   for (const failure of [...new Set(failures)].sort()) console.error(`architecture: ${failure}`);
