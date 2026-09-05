@@ -37,7 +37,7 @@
     "release:notes:preview": "node scripts/release/generate-release-notes.mjs preview",
     "test": "node scripts/check-critical-test-budget.mjs && vitest run src/features/queryResults/DataGridVirtual.test.ts src/features/providers/tauriAdapter.test.ts src/features/queries/tauriAdapter.test.ts src/features/query/runSignal.test.ts src/features/skills/setupPolicy.test.ts src/features/agents/sessionStore.test.ts src/features/workbench/state.test.ts src/features/workspaces/authPolicy.test.ts",
     "test:smoke": "vitest run src/features/queryResults/DataGridVirtual.test.ts src/features/providers/tauriAdapter.test.ts src/features/queries/tauriAdapter.test.ts src/features/query/runSignal.test.ts src/features/skills/setupPolicy.test.ts src/features/agents/sessionStore.test.ts src/features/workbench/state.test.ts src/features/workspaces/authPolicy.test.ts",
-    "test:rust": "cargo test --package dopedb --lib && cargo test --package dopedb-protocol --test golden && cargo test --package dopedb-cli --test terminal_session_e2e",
+    "test:rust": "cargo fmt --all -- --check && cargo test --package dopedb --lib && cargo test --package dopedb-protocol --test golden && cargo test --package dopedb-cli --test terminal_session_e2e",
     "workspace:migrate": "bash scripts/migrate-workspace-service.sh",
     "workspace:cloud:dev": "pnpm --dir workspace-cloud dev",
     "workspace:cloud:build": "pnpm --dir workspace-cloud build",

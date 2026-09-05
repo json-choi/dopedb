@@ -860,6 +860,10 @@ mod tests {
             .current_dir(root)
             .output()
             .expect("Node is available for the release availability gate");
-        assert!(availability.status.success(), "{}", String::from_utf8_lossy(&availability.stderr));
+        assert!(
+            availability.status.success(),
+            "{}",
+            String::from_utf8_lossy(&availability.stderr)
+        );
     }
 }
