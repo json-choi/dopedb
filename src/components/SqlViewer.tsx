@@ -122,7 +122,10 @@ class SqlExecutionWidget extends WidgetType {
     root.className =
       "tw:ml-3 tw:inline-flex tw:select-none tw:items-center tw:gap-1.5 tw:font-sans tw:text-xs tw:text-muted-foreground tw:data-[state=completed]:text-success tw:data-[state=failed]:text-danger tw:data-[state=waiting]:text-warning";
     root.title = this.status.label;
-    root.setAttribute("aria-label", this.status.label);
+    // This decoration is not SQL. Keep it out of the editor's accessible value
+    // so assistive text replacement cannot insert execution labels into a query.
+    root.setAttribute("aria-hidden", "true");
+    root.contentEditable = "false";
 
     const mark = document.createElement("span");
     mark.className = "tw:font-bold";

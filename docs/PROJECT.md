@@ -104,14 +104,14 @@ so a wide schema cannot overflow the local Broker frame.
 
 The ACP server description contains no capability or credential, and the MCP child never
 receives the bearer capability. Desktop pins a closed Claude/Codex adapter descriptor,
-the launcher invocation path, its canonical resolved target, and the target SHA-256 when it
-issues an Agent bootstrap session. Keeping the invocation path preserves shim dispatch such
-as Volta's `npx`, while pinning the resolved target prevents a symlink swap.
+the bundled Node executable, signed adapter entrypoint, and independently verified local
+provider CLI, including their canonical paths and SHA-256 hashes, when it issues an Agent
+bootstrap session.
 The Agent bridge scrubs the inherited bearer before its first await, re-verifies that
 descriptor, and uses the capability exactly once to bind its OS process id and start marker.
 The Broker atomically zeroizes the bootstrap token and changes the session to process-bound
-authentication. The transitional package names and versions come from the private bridge's
-closed plugin-ID mapping, not launcher arguments. Unix replaces the bridge with the adapter;
+authentication. The closed plugin ID and signed manifest determine the adapter entrypoint;
+there is no package-manager launcher. Unix replaces the bridge with the adapter;
 Windows may retain the bridge as the ancestry root, but neither it nor the adapter environment
 retains a usable bearer. The Broker accepts tokenless Agent requests only from that process or
 a verified descendant. The global discovery file contains only runtime metadata. The app opens
@@ -131,9 +131,10 @@ Stable builds also reconstruct a pinned Node LTS executable for each release
 target from the official archive SHA-256 and bundle only that executable, its
 license, manifest, and SPDX SBOM as a read-only Tauri resource. npm, npx, and
 provider native binaries are not part of this core runtime. The signed adapter
-installer and activation path are tracked separately; until that service
-replaces the launcher, the private bridge retains its closed transitional npx
-mapping. See the [ACP plugin runtime contract](./contracts/acp-plugin-runtime.md).
+installer downloads and verifies immutable adapter releases independently of the app
+version. The private bridge launches their verified entrypoint with bundled Node and a
+minimal environment that excludes parent terminal hooks and unrelated credentials.
+See the [ACP plugin runtime contract](./contracts/acp-plugin-runtime.md).
 
 The stdio server continues reading MCP notifications while one serialized database tool
 is active. Cancelling a `query_read` aborts the tool future and sends `query.cancel` with
@@ -232,7 +233,9 @@ The important rules are enforced in Rust:
 - Reads run through read-only database sessions.
 - Writes are off by default per connection.
 - A write or DDL path requires `allow_writes = true`.
-- Manual writes require an approval card unless the connection policy explicitly disables approval.
+- The editable SQL workbench's deliberate Run action approves its exact manual SQL
+  payload. Native code rechecks its hash, scope, and policy; Agent proposals require
+  their separate explicit approval flow.
 - Successful and blocked execution paths are audited.
 
 Skill text, agent prompts, and CLI output are guidance, not security boundaries.
@@ -272,12 +275,10 @@ The site lives in `site/`.
 - Framework: Next.js app router
 - SEO files: `site/app/robots.ts`, `site/app/sitemap.ts`
 - Product preview image: `site/public/dopedb-desktop.png`
-- Preview generator: `site/scripts/generate-preview.py`
 
 Local commands:
 
 ```sh
-pnpm site:preview-image
 pnpm site:dev
 pnpm site:build
 ```
@@ -418,6 +419,6 @@ the macOS Developer ID work in #133.
 
 - Clean-device online/offline verification for Developer ID distribution (#133)
 - More structured Agent proposal types beyond SQL
-- SSH tunnel support
+- Cross-platform verification of the shipped system-SSH host-alias tunnel
 - More granular Agent and plugin origin handling
-- Virtualized result grid for very large result sets
+- Broader large-result performance measurements for the shipped virtualized grid

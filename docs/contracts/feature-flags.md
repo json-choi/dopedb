@@ -1,35 +1,17 @@
-# CLI·Terminal Platform feature flags
+# Desktop feature activation
 
-정본 이름은 `src-tauri/src/features/platform_flags.rs`다. 모든 flag는 기본 `off`다.
+Desktop에는 공통 platform rollout flag 레지스트리가 없다. CLI, Local Broker,
+SQL 문서, Catalog, Jobs, ACP plugin의 사용 가능 여부는 각 기능의 구현,
+설치 상태와 권한 검사로 결정한다. 제품 범위는
+[`PRODUCT_UI_SCOPE.md`](../PRODUCT_UI_SCOPE.md)가 소유한다.
 
-| Flag | 활성화 전 gate |
-| --- | --- |
-| `operation_runtime_v1` | recovery/exact approval 검증 |
-| `local_broker_v1` | peer identity, framing limit, stale discovery 검증 |
-| `cli_v1` | protocol/secret snapshot/platform packaging 검증 |
-| `skill_manager_v1` | atomic install과 user-modified 보존 검증 |
-| `terminal_dock_v1` | CSP, PTY/process-tree/session revocation 검증 |
-| `catalog_v2` | canonical Catalog V2 DTO를 CLI/ERD/DDL 소비자에 노출하기 전 engine fixture/fingerprint 검증 |
-| `ddl_ir_v1` | engine renderer/fail-closed 검증 |
-| `table_changes_v1` | key/concurrency/exact proposal 검증 |
-| `erd_v1` | Catalog V2/layout 성능 검증 |
-| `jobs_v1` | checkpoint/file capability/bounded memory 검증 |
-| `plugins_v1` | signature/capability/isolation 검증 |
-| `workspace_resources_v1` | revision/conflict/RBAC 검증 |
-| `realtime_collaboration_v1` | short-lived token/reconnect/compaction 검증 |
+Workspace의 환경 설정은
+[`workspace_feature_enabled`](../../src-tauri/src/features/workspaces/domain.rs)가
+정의한다. `DOPEDB_WORKSPACES_ENABLED`는 기본 활성화이며, 공백을 제거하고
+소문자로 변환한 값이 `0`, `false`, `off`이면 비활성화한다.
+이 설정은 Desktop 프로세스 환경에서 읽으며 request field나 Agent/Plugin이
+변경할 수 없다. 활성화는 계정 인증, workspace 역할, exact resource grant를
+대신하지 않는다.
 
-request field나 Agent/Plugin이 flag를 켤 수 없다. 로컬 저장소는 단일 MVP
-기준선만 지원하며 과거 개발 스키마는 자동 변환하지 않고 명시적으로 거부한다.
-
-현재 desktop composition root는 검증을 마친 platform flag를 명시적으로
-활성화한다. `plugins_v1`, `workspace_resources_v1`,
-`realtime_collaboration_v1`은 계속 비활성 상태다.
-
-SQL 문서 기능은 autosave, crash recovery, optimistic conflict 경로를 검증하고
-`src-tauri/src/features/sql_documents/` 수직 슬라이스로 졸업했다. 따라서 항상 켜진
-분기였던 이전 rollout flag는 제거했으며 새 adapter가 과거 경로로 되돌아가는
-fallback도 제공하지 않는다.
-
-현재 UI와 CLI는 canonical `CatalogSnapshot`과 권한 범위가 고정된
-`catalog_cache`만 사용한다. 이 flag는 새 CLI/ERD/DDL consumer를 노출하는 경로를
-gate하며 과거 Catalog wire나 cache adapter를 되살리지 않는다.
+로컬 저장소는 단일 MVP 기준선만 지원한다. 과거 개발 스키마나 Catalog wire를
+되살리는 호환 경로는 제공하지 않는다.

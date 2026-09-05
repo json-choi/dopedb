@@ -152,9 +152,9 @@ row는 exact-grant Desktop에 남긴다. public article은 immutable HTML snapsh
 schedule, signal, hosted DB proxy, 추측한 cross-database join은 금지한다.
 
 각 기능의 결정 상태는 `docs/PRODUCT_UI_SCOPE.md`의 기능 범위
-결정 표가 소유한다. `AI가 대체`와 `범위 밖`으로 정한 기능은 트래커의
+결정 표가 소유한다. `구현 안 함`과 `범위 밖`으로 정한 기능은 트래커의
 우선순위와 무관하게 구현하지 않고 label, icon, disabled placeholder도 만들지
-않는다. 결정을 뒤집을 때는 그 표를 먼저 고친다.
+않는다. `미결`인 기능은 시작하지 않는다. 결정을 뒤집을 때는 그 표를 먼저 고친다.
 
 `docs/PRODUCT_UI_SCOPE.md`는 제품 UI 구조, 밀도, 상호작용의 정본이다. 제3자
 제품의 화면, 기능 목록, 명칭, 코드와 자산은 구현 기준이 아니다. Tailwind v4와

@@ -115,7 +115,9 @@ export function useCatalogScope(): CatalogScope {
     key,
     ready: settledKey === key && (prerequisiteReady || error !== undefined),
     workspaceId: workspace?.id ?? null,
-    accountScope: workspace ? auth.data?.user?.id ?? null : null,
+    // The cache key still follows login changes, but local resources have no
+    // team account owner. Never send a selected account as their storage scope.
+    accountScope: workspace?.kind === "team" ? auth.data?.user?.id ?? null : null,
     workspaceKind: workspace?.kind ?? null,
     error,
     recover: error === undefined

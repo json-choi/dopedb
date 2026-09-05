@@ -1,7 +1,8 @@
 # Database capability matrix
 
-`supported`는 바로 실행한다는 뜻이 아니다. 모든 mutation은 DDL IR 검증, preview,
-exact Operation Proposal, 승인, 실행 순서를 거친다. `blocked`는 raw SQL fallback을
+`supported`는 바로 실행한다는 뜻이 아니다. 모든 mutation은 해당 typed operation의
+검증, preview, exact Operation Proposal, 승인, 실행 순서를 거친다. DDL은 DDL IR을
+검증한다. `blocked`는 raw SQL fallback을
 만들지 않고 fail closed한다는 뜻이다.
 
 | Capability | PostgreSQL | MySQL/MariaDB | SQLite | MongoDB | Google BigQuery |
@@ -19,8 +20,8 @@ exact Operation Proposal, 승인, 실행 순서를 거친다. `blocked`는 raw S
 | Expression/partial index | supported | capability checked | capability checked | blocked | blocked |
 | Transactional DDL | engine/version dependent | implicit commit caveat | transaction where supported | blocked | blocked |
 | Table row editor | stable key required | stable key required | stable key required | separate document editor later | blocked; result inspection only |
-| Streaming export | planned | planned | planned | planned typed document export | current bounded result only; bulk job blocked |
-| Streaming import | planned | planned | planned | planned typed document import | blocked |
+| Streaming export | supported through Jobs | supported through Jobs | supported through Jobs | planned typed document export | current bounded result only; bulk job blocked |
+| Streaming import | supported through Jobs | supported through Jobs | supported through Jobs | planned typed document import | blocked |
 
 ## DDL renderer 원칙
 

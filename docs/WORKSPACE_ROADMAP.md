@@ -168,8 +168,9 @@ bounded by [Product Positioning](./PRODUCT_POSITIONING.md).
   databases, BigQuery resources, and source repositories.
 - Prove a stale resource revision, account change, workspace switch, process exit, or
   grant revoke stops the exact session without affecting unrelated work.
-- Complete signed adapter distribution and remove transitional launcher code only
-  after independently verified parity.
+- Validate the shipped signed adapter installer, candidate promotion, and rollback
+  on every supported release target; the launcher uses bundled Node and the verified
+  adapter entrypoint described in the [runtime contract](contracts/acp-plugin-runtime.md).
 
 ### Analysis Article validation
 

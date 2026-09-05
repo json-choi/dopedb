@@ -1,4 +1,6 @@
-import { QueryClient, QueryObserver } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, QueryObserver } from "@tanstack/react-query";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import capability from "../../../src-tauri/capabilities/default.json";
 import tauriBenchmarkConfig from "../../../src-tauri/tauri.benchmark.conf.json";
@@ -28,7 +30,8 @@ import {
   resetWorkspaceResourceQueries,
   resumePendingWorkspaceResourceQueries,
 } from "../../lib/queryClient";
-import { sharedWorkspaceScopeAvailable } from "../../lib/queries";
+import { sharedWorkspaceScopeAvailable, useCatalogScope, type CatalogScope } from "../../lib/queries";
+import { queryServiceSessionProjection } from "../queryServices/useQueryServices";
 import {
   shouldRevalidateWorkspaceAuth,
   workspaceAuthRetryDelay,
@@ -634,6 +637,36 @@ describe("workspace auth lifecycle", () => {
       workspaceKind: "team",
       accountScope: analyticsActorId,
     })).toBe(true);
+    const scopeClient = new QueryClient();
+    const signedInScope = workspaceContext(analyticsWorkspaceId);
+    scopeClient.setQueryData(workspaceQueries.workspaceQueryKeys.auth(), {
+      authenticated: true,
+      user: { id: accountId(analyticsActorId), email: "member@dopedb.example", displayName: "Member" },
+      accounts: [],
+      authorityGeneration: 1,
+    } satisfies WorkspaceAuthState);
+    const renderScope = () => {
+      const scopes: CatalogScope[] = [];
+      function ScopeProbe() {
+        scopes.push(useCatalogScope());
+        return null;
+      }
+      renderToStaticMarkup(createElement(QueryClientProvider, { client: scopeClient }, createElement(ScopeProbe)));
+      return scopes[0];
+    };
+    scopeClient.setQueryData(workspaceQueries.workspaceQueryKeys.context(), {
+      ...signedInScope,
+      active: { ...signedInScope.active, kind: "personal" },
+    });
+    const localScope = renderScope();
+    expect(localScope.accountScope).toBeNull();
+    expect(localScope.key).toContain(`account:${analyticsActorId}`);
+    expect(queryServiceSessionProjection(localScope, localScope.key)).toBe("memory");
+    scopeClient.setQueryData(workspaceQueries.workspaceQueryKeys.context(), signedInScope);
+    const teamScope = renderScope();
+    expect(teamScope.accountScope).toBe(analyticsActorId);
+    expect(queryServiceSessionProjection(teamScope, teamScope.key)).toBe("persistent");
+    scopeClient.clear();
     const personalAnalyticsContext = productAnalyticsWorkspaceContext({
       key: "personal-ready",
       ready: true,
