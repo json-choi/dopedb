@@ -124,7 +124,7 @@ export default function AnalysisArticles({
 
   const selected = controller.selected;
   return (
-    <div className="tw:flex tw:min-h-[calc(100dvh-90px)] tw:min-w-0 tw:flex-col tw:bg-background">
+    <div className="tw:flex tw:h-full tw:min-h-0 tw:min-w-0 tw:flex-col tw:bg-background">
       <WorkbenchToolbar label={t("analysis.title")}>
         {controller.agentBinding?.connectionId && onOpenAgent ? (
           <>

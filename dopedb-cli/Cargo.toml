@@ -1,6 +1,6 @@
 [package]
 name = "dopedb-cli"
-version = "0.4.14"
+version = "0.4.15"
 edition = "2021"
 rust-version = "1.94"
 description = "Local CLI client for the DopeDB Desktop runtime"
