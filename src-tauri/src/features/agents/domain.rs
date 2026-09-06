@@ -158,7 +158,7 @@ pub(crate) struct AcpTableContext {
     pub(crate) row: Option<serde_json::Value>,
 }
 
-/// Closed UI-language choice supplied by Desktop for each Agent turn.
+/// Closed UI-language fallback when the user has not indicated a response language.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum AgentResponseLanguage {

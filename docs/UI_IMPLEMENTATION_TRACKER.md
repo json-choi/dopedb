@@ -111,7 +111,7 @@ Acceptance: cancel 후 connection을 검증 없이 재사용하지 않고 write 
 1. 한 Project 안에서 필요한 DB·BigQuery·GitHub source를 개별 또는 다중 선택하면 trigger에 Project, DB/source 수와 쓰기 대상 유무를 계속 표시하고 공식 ACP adapter를 선행 준비한 뒤 첫 prompt를 같은 제출 흐름에서 전송한다. 내부 Project Environment identity는 계층으로 노출하지 않고 DB 행의 dev/staging/prod marker로만 설명한다.
 2. Desktop이 선택한 connection/source/Environment revision 집합과 선택적인 단일 write target을 하나의 exact grant로 immutable pin한다. 선택하지 않은 resource는 접근할 수 없고 여러 DB read는 독립 operation으로 실행한다.
 3. 화면은 tool 진행, permission, result, 중단과 복구를 보여준다. 중간 추론은 기본 화면에서 숨기며 debug details에서만 확인한다. 추론 문장의 단어로 DB 실행이나 변경을 추정하지 않으며, 실제 operation 표시는 tool identity에서만 만든다.
-4. provider 인증은 로컬 CLI가 소유하며 앱은 token을 읽거나 login UI를 만들지 않는다.
+4. provider 인증은 로컬 CLI가 소유하며 앱은 token을 읽거나 login UI를 만들지 않는다. 응답 언어는 사용자의 명시 요청, 메시지 언어 순으로 따르고 언어를 알 수 없을 때만 앱 UI 언어를 기본값으로 사용한다.
 5. Desktop 밖에서는 Project root에서 `dopedb agent init --provider codex|claude`로
    secret-free config를 만들고 `dopedb agent start -- <provider args>`를 실행한다.
    Desktop은 시작 때마다 저장된 exact resource set을 현재 상태로 다시 보여주며,
