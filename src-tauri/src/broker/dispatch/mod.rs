@@ -55,8 +55,9 @@ const MAX_TABLE_SELECTOR_BYTES: usize = 512;
 const MAX_OPERATION_WAIT: Duration = Duration::from_secs(30);
 
 #[cfg(test)]
-pub(crate) fn assert_catalog_search_contract() {
+pub(crate) fn assert_dispatch_contract() {
     connection_catalog::assert_catalog_search_contract();
+    projection::assert_execution_error_contract();
 }
 
 #[derive(Clone, Serialize)]

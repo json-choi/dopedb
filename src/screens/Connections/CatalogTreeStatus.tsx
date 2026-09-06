@@ -130,8 +130,8 @@ export function CatalogTreeStatus({
         </div>
       ) : null}
       {primaryErrorMessage ? (
-        <div className="tw:flex tw:items-start tw:gap-2 tw:px-2 tw:py-1 tw:text-sm tw:text-danger">
-          <span className="tw:min-w-0 tw:flex-1 tw:wrap-break-word">
+        <div className="tw:grid tw:min-w-0 tw:justify-items-start tw:gap-1 tw:px-2 tw:py-1 tw:text-sm tw:text-danger">
+          <span className="tw:min-w-0 tw:wrap-break-word">
             {primaryErrorMessage}
           </span>
           {primaryAction ? (
@@ -163,8 +163,8 @@ export function CatalogTreeStatus({
         </div>
       ) : null}
       {uniqueDetailError && !authenticationIssue && !managedRecoveryIssue ? (
-        <div className="tw:flex tw:items-start tw:gap-2 tw:px-2 tw:py-1 tw:text-sm tw:text-muted-foreground">
-          <span className="tw:min-w-0 tw:flex-1 tw:wrap-break-word">
+        <div className="tw:grid tw:min-w-0 tw:justify-items-start tw:gap-1 tw:px-2 tw:py-1 tw:text-sm tw:text-muted-foreground">
+          <span className="tw:min-w-0 tw:wrap-break-word">
             {uniqueDetailError.message}
           </span>
           <Button

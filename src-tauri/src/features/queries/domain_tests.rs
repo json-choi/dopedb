@@ -114,7 +114,7 @@ async fn query_and_skill_security_contracts_stay_fail_closed() {
 
     #[cfg(not(feature = "packaged-benchmark"))]
     crate::app_paths::assert_application_data_root_contract();
-    crate::broker::assert_catalog_search_contract();
+    crate::broker::assert_dispatch_contract();
     crate::features::agents::acp::assert_editor_context_scope_contract();
     crate::features::agents::domain::assert_agent_event_wire_contract();
     crate::features::agents::assert_agent_cli_probe_contract();

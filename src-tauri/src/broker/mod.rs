@@ -169,6 +169,6 @@ pub(crate) fn start(
 }
 
 #[cfg(test)]
-pub(crate) fn assert_catalog_search_contract() {
-    dispatch::assert_catalog_search_contract();
+pub(crate) fn assert_dispatch_contract() {
+    dispatch::assert_dispatch_contract();
 }

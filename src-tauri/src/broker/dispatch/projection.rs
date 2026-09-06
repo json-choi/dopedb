@@ -233,7 +233,14 @@ pub(super) fn map_document_error(error: AgentDocumentReadError) -> ErrorCode {
 
 pub(super) fn map_query_execution_error(error: &AppError) -> ErrorCode {
     match error {
-        AppError::Timeout(_) => ErrorCode::Timeout,
+        AppError::Timeout(_) | AppError::Db(sqlx::Error::PoolTimedOut) => ErrorCode::Timeout,
+        AppError::Db(sqlx::Error::Database(error)) if error.code().as_deref() == Some("57014") => {
+            if error.message() == "canceling statement due to statement timeout" {
+                ErrorCode::Timeout
+            } else {
+                ErrorCode::Cancelled
+            }
+        }
         AppError::Safety(reason) if reason == "query cancelled" => ErrorCode::Cancelled,
         AppError::Safety(reason) if reason.starts_with("query timed out after ") => {
             ErrorCode::Timeout
@@ -250,10 +257,8 @@ pub(super) fn map_target_error(error: AppError) -> ErrorCode {
         | AppError::ManagedConnectionRecoveryRequired
         | AppError::Config(_)
         | AppError::Parse(_) => ErrorCode::InvalidRequest,
-        AppError::Timeout(_) => ErrorCode::Timeout,
-        AppError::Db(_) | AppError::Mongo(_) | AppError::Network(_) => {
-            ErrorCode::TargetExecutionFailed
-        }
+        AppError::Db(_) | AppError::Timeout(_) => map_query_execution_error(&error),
+        AppError::Mongo(_) | AppError::Network(_) => ErrorCode::TargetExecutionFailed,
         _ => ErrorCode::Internal,
     }
 }
@@ -278,8 +283,8 @@ pub(super) fn map_application_error(error: AppError) -> ErrorCode {
         | AppError::NotFound(_)
         | AppError::Config(_)
         | AppError::Parse(_) => ErrorCode::InvalidRequest,
-        AppError::Db(_) | AppError::Mongo(_) => ErrorCode::TargetExecutionFailed,
-        AppError::Timeout(_) => ErrorCode::Timeout,
+        AppError::Db(_) | AppError::Timeout(_) => map_query_execution_error(&error),
+        AppError::Mongo(_) => ErrorCode::TargetExecutionFailed,
         AppError::OutcomeUnknown(_) => ErrorCode::OperationConflict,
         AppError::Agent(_)
         | AppError::Network(_)
@@ -287,6 +292,96 @@ pub(super) fn map_application_error(error: AppError) -> ErrorCode {
         | AppError::Io(_)
         | AppError::Serialization(_) => ErrorCode::Internal,
     }
+}
+
+#[cfg(test)]
+pub(super) fn assert_execution_error_contract() {
+    use std::borrow::Cow;
+    use std::error::Error;
+
+    #[derive(Debug, thiserror::Error)]
+    #[error("{message}")]
+    struct DriverFailure {
+        code: Option<&'static str>,
+        message: &'static str,
+    }
+
+    impl sqlx::error::DatabaseError for DriverFailure {
+        fn message(&self) -> &str {
+            self.message
+        }
+        fn code(&self) -> Option<Cow<'_, str>> {
+            self.code.map(Cow::Borrowed)
+        }
+        fn as_error(&self) -> &(dyn Error + Send + Sync + 'static) {
+            self
+        }
+        fn as_error_mut(&mut self) -> &mut (dyn Error + Send + Sync + 'static) {
+            self
+        }
+        fn into_error(self: Box<Self>) -> Box<dyn Error + Send + Sync + 'static> {
+            self
+        }
+        fn kind(&self) -> sqlx::error::ErrorKind {
+            sqlx::error::ErrorKind::Other
+        }
+    }
+
+    for (code, message, expected) in [
+        (
+            Some("57014"),
+            "canceling statement due to statement timeout",
+            ErrorCode::Timeout,
+        ),
+        (
+            Some("57014"),
+            "canceling statement due to user request",
+            ErrorCode::Cancelled,
+        ),
+        (
+            Some("57014"),
+            "query interrupted: private-diagnostic",
+            ErrorCode::Cancelled,
+        ),
+        (
+            Some("42601"),
+            "syntax error near private-diagnostic",
+            ErrorCode::TargetExecutionFailed,
+        ),
+        (
+            Some("P0001"),
+            "canceling statement due to statement timeout",
+            ErrorCode::TargetExecutionFailed,
+        ),
+        (
+            None,
+            "canceling statement due to statement timeout",
+            ErrorCode::TargetExecutionFailed,
+        ),
+    ] {
+        let failure = || {
+            AppError::Db(sqlx::Error::Database(Box::new(DriverFailure {
+                code,
+                message,
+            })))
+        };
+        for actual in [
+            map_query_execution_error(&failure()),
+            map_target_error(failure()),
+            map_application_error(failure()),
+        ] {
+            assert_eq!(actual, expected);
+            let envelope = ProtocolError::new(actual, false);
+            assert!(!envelope.is_retryable());
+            let wire = serde_json::to_string(&envelope).unwrap();
+            assert!(!wire.contains("private-diagnostic"));
+            assert!(!wire.contains(message));
+        }
+    }
+    assert_eq!(
+        map_application_error(AppError::Db(sqlx::Error::PoolTimedOut)),
+        ErrorCode::Timeout,
+    );
 }
 
 #[derive(Clone, Copy)]

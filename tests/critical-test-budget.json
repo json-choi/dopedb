@@ -65,7 +65,7 @@
     },
     "src-tauri/src/features/queries/domain_tests.rs": {
       "tests": 1,
-      "protects": "Production guidance, namespace safety, current Services result shape, ephemeral table-page retention, exact fail-closed Skill installation/conflict handling, credential-free cross-platform Agent CLI probing, and secret-free typed connection-test receipts"
+      "protects": "Production guidance, namespace safety, current Services result shape, ephemeral table-page retention, exact fail-closed Skill installation/conflict handling, credential-free cross-platform Agent CLI probing, secret-free typed connection-test receipts, and redacted non-retryable database timeout/cancellation classification across query, Article, and target operations"
     },
     "src-tauri/src/operations/canonicalize.rs": {
       "tests": 3,
