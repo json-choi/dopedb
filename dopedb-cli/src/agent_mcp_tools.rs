@@ -297,6 +297,14 @@ pub(super) fn tools_result() -> Value {
                 true,
             ),
             tool_definition(
+                TOOL_ANALYSIS_ARTICLE_GUIDE,
+                "Read the Analysis Article authoring skill",
+                "Returns the built-in skill for visual HTML Articles, static SVG charts, funnels, and presentation edits. Load when authoring an Article if this guide is not already in the conversation.",
+                no_arguments.clone(),
+                true,
+                true,
+            ),
+            tool_definition(
                 TOOL_ANALYSIS_ARTICLE_LIST,
                 "List Analysis Articles",
                 "Lists Analysis Articles only across the exact selected Project resource set pinned to this Agent session.",

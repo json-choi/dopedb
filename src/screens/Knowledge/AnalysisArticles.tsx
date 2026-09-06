@@ -13,6 +13,7 @@ import type {
 import { useAnalysisArticlesController } from "../../features/analysisArticles/useAnalysisArticlesController";
 import type { EnvironmentConnection, KnowledgeEnvironment } from "../../features/knowledge/domain";
 import { Button } from "../../design-system/components/Button";
+import { AnalysisArticleBody } from "../../design-system/components/AnalysisArticleBody";
 import { PanelTabs } from "../../design-system/components/PanelTabs";
 import { InlineNotice, LoadingLabel, StatusBadge } from "../../design-system/components/Status";
 import {
@@ -86,7 +87,7 @@ export default function AnalysisArticles({
   sharedWorkspace: boolean;
   scopeKey: string;
   focusId?: string | null;
-  onOpenAgent?: (connectionId: string, environmentId?: string, prompt?: string) => void;
+  onOpenAgent?: (connectionId: string, environmentId?: string, prompt?: string, articleId?: string) => void;
   onNewConnection?: () => void;
   onRequestTeamWorkspace?: () => void;
   teamWorkspaceAction?: "signIn" | "select";
@@ -129,7 +130,7 @@ export default function AnalysisArticles({
           <>
             <WorkbenchButton onClick={controller.askAgent}>
               <Icon name="terminal" />
-              {t("analysis.askAgent")}
+              {t(selected ? "analysis.editWithAgent" : "analysis.askAgent")}
             </WorkbenchButton>
             <WorkbenchDivider />
           </>
@@ -267,10 +268,7 @@ function ArticleDocument({
   const query = article.definition.query;
   return (
     <div className="tw:mx-auto tw:grid tw:w-full tw:max-w-[1100px] tw:gap-8 tw:p-6 tw:@max-[760px]:p-3">
-      <article
-        className="tw:grid tw:gap-4 tw:text-base tw:leading-relaxed tw:[&_a]:text-primary tw:[&_a]:underline tw:[&_blockquote]:border-l-2 tw:[&_blockquote]:border-border tw:[&_blockquote]:pl-4 tw:[&_code]:font-mono tw:[&_h2]:font-serif tw:[&_h2]:text-3xl tw:[&_h2]:font-medium tw:[&_h3]:text-xl tw:[&_h3]:font-semibold tw:[&_h4]:text-base tw:[&_h4]:font-semibold tw:[&_ol]:pl-6 tw:[&_p]:m-0 tw:[&_pre]:overflow-auto tw:[&_pre]:rounded-surface tw:[&_pre]:bg-surface-inset tw:[&_pre]:p-4 tw:[&_table]:w-full tw:[&_table]:border-collapse tw:[&_td]:border tw:[&_td]:border-border tw:[&_td]:p-2 tw:[&_th]:border tw:[&_th]:border-border tw:[&_th]:p-2 tw:[&_ul]:pl-6"
-        dangerouslySetInnerHTML={{ __html: article.definition.html }}
-      />
+      <AnalysisArticleBody html={article.definition.html} />
 
       <section className="tw:grid tw:gap-3 tw:border-t tw:border-border-subtle tw:pt-5">
         <div className="tw:flex tw:flex-wrap tw:items-center tw:justify-between tw:gap-2">

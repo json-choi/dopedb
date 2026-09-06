@@ -18,16 +18,13 @@ import { useI18n } from "../../lib/i18n";
 import { AGENT_SETUP_URLS } from "../../lib/externalLinks";
 import { useCatalogScope } from "../../lib/queries";
 import type { ConnectionProfile } from "../connections/domain";
+import type { KnowledgeEnvironmentFocus } from "../knowledge/domain";
 import {
   openAgentSetup,
   useEnabledAgentProviders,
 } from "../skills/agentPreferences";
 import type { WorkbenchDocument } from "../workbench/domain";
-import {
-  buildAcpPromptContext,
-  EMPTY_ACP_PROMPT_CONTEXT,
-  summarizeAcpPromptContext,
-} from "./acpPromptContext";
+import { EMPTY_ACP_PROMPT_CONTEXT } from "./acpPromptContext";
 import {
   loginCommand,
   selectRichTranscriptKeys,
@@ -45,7 +42,6 @@ import {
   agentCliDetectionQuery,
   agentPluginStatusQuery,
 } from "./queryOptions";
-import { useAgentSelection } from "./selectionContext";
 import {
   isCurrentAcpFocusRequest,
   isLiveSession,
@@ -80,12 +76,14 @@ import {
 import { useAcpSessionStartup } from "./useAcpSessionStartup";
 import { useAcpScopeCommands } from "./useAcpScopeCommands";
 import { useAcpChatViewport } from "./useAcpChatViewport";
+import { useAcpComposerContext } from "./useAcpComposerContext";
 
 const MAX_PROMPT_CHARS = 8 * 1024;
 export type AcpChatControllerInput = {
   connection: ConnectionProfile;
   connections: ConnectionProfile[];
   composerRequest: AgentComposerRequest | null;
+  knowledgeFocus: KnowledgeEnvironmentFocus | null;
   documents: WorkbenchDocument[];
   activeDocumentId: string | null;
   selectedTable: CatalogTable | null;
@@ -99,6 +97,7 @@ export function useAcpChatController({
   connection,
   connections,
   composerRequest,
+  knowledgeFocus,
   documents,
   activeDocumentId,
   selectedTable,
@@ -110,7 +109,6 @@ export function useAcpChatController({
   const { lang, t } = useI18n();
   const catalogScope = useCatalogScope();
   const sessionSnapshot = useAcpSessionSnapshot(catalogScope.key);
-  const { selection } = useAgentSelection();
   const debugDetails = useAgentDebugDetails();
   const configuredProviders = useEnabledAgentProviders();
   const [activeId, setActiveId] = useState<AcpSessionId | null>(null);
@@ -118,7 +116,6 @@ export function useAcpChatController({
   const [historyOpen, setHistoryOpen] = useState(false);
   const [selectedProvider, setSelectedProvider] =
     useState<AgentProvider>("claude");
-  const [includeEditorContext, setIncludeEditorContext] = useState(false);
   const [composerExpanded, setComposerExpanded] = useState(false);
   const [configChanging, setConfigChanging] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
@@ -208,30 +205,12 @@ export function useAcpChatController({
       option.type === "select" &&
       typeof option.currentValue === "string",
   );
-  const activeDocument =
-    documents.find((document) => document.id === activeDocumentId) ?? null;
-  const editorConnectionSelected = agentScope.selectedDatabases.some(
-    (database) => database.connectionId === connection.id,
-  );
-  const context = useMemo(
-    () =>
-      editorConnectionSelected
-        ? buildAcpPromptContext(
-            connection,
-            activeDocument,
-            selectedTable,
-            selection,
-          )
-        : EMPTY_ACP_PROMPT_CONTEXT,
-    [
-      activeDocument,
-      connection,
-      editorConnectionSelected,
-      selectedTable,
-      selection,
-    ],
-  );
-  const contextLabels = useMemo(() => summarizeAcpPromptContext(context), [context]);
+  const composerContext = useAcpComposerContext({
+    scopeKey: catalogScope.key, focus: knowledgeFocus, scopes: active?.knowledgeScopes ?? [],
+    connection, documents, activeDocumentId, selectedTable,
+    editorConnectionSelected: agentScope.selectedDatabases.some((database) => database.connectionId === connection.id),
+  });
+  const { setIncludeEditorContext } = composerContext;
   const pendingPermissionId =
     active?.lifecycle === "waitingPermission"
       ? activeProjection?.pendingPermissionId ?? null
@@ -344,7 +323,7 @@ export function useAcpChatController({
         setIncludeEditorContext(false);
       }
     },
-    [activeProvider, selectActiveSession, selectedProvider],
+    [activeProvider, selectActiveSession, selectedProvider, setIncludeEditorContext],
   );
 
   useEffect(() => {
@@ -508,9 +487,10 @@ export function useAcpChatController({
       (active !== null && !["ready", "closed", "failed"].includes(active.lifecycle))
     ) return;
     consumedComposerRequestRef.current = composerRequest.id;
+    setHistoryOpen(false);
+    if (!composerRequest.prompt) return;
     const submitted = composerRequest.prompt.slice(0, MAX_PROMPT_CHARS);
     setPrompt(submitted);
-    setHistoryOpen(false);
     setError(null);
     setComposerExpanded(false);
     setIncludeEditorContext(false);
@@ -530,6 +510,7 @@ export function useAcpChatController({
     prerequisitesReady,
     selectActiveSession,
     agentScope.resourceScopes,
+    setIncludeEditorContext,
     starting,
     submitPromptText,
     t,
@@ -589,8 +570,8 @@ export function useAcpChatController({
     const submitted = prompt;
     setError(null);
     try {
-      const submittedContext = includeEditorContext
-        ? context
+      const submittedContext = composerContext.included
+        ? composerContext.context
         : EMPTY_ACP_PROMPT_CONTEXT;
       if (await submitPromptText(submitted, submittedContext)) setPrompt("");
     } catch (reason) {
@@ -732,8 +713,8 @@ export function useAcpChatController({
       prompt,
       maxPromptChars: MAX_PROMPT_CHARS,
       expanded: composerExpanded,
-      includeEditorContext,
-      contextLabels,
+      includeEditorContext: composerContext.included,
+      contextLabels: composerContext.labels,
       environmentScopeReady,
       modelOption,
       configChanging,
@@ -756,8 +737,7 @@ export function useAcpChatController({
         submit: sendPrompt,
         setPrompt,
         toggleExpanded: () => setComposerExpanded((current) => !current),
-        toggleEditorContext: () =>
-          setIncludeEditorContext((current) => !current),
+        toggleEditorContext: composerContext.toggle,
         selectEnvironment: scopeCommands.toggle,
         selectWriteTarget: scopeCommands.write,
         changeConfigOption,

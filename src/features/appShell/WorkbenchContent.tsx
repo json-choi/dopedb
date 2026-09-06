@@ -110,6 +110,7 @@ type WorkbenchContentCommands = {
       connectionId: string,
       environmentId?: string,
       prompt?: string,
+      articleId?: string,
     ) => void;
     setTitle: (value: string) => void;
     setDatabase: (value: string) => void;

@@ -328,6 +328,14 @@ Elevation은 세 단계만 허용한다.
   연결되고 `busy` 상태는 Agent가 응답·승인을 기다리는 동안 활성 작업 경계를
   유지한다. textarea의 기본 focus shadow는 제거하고 바깥 composer 경계 하나로
   입력 focus를 표시한다. 화면별 textarea 크기 CSS를 만들지 않는다.
+- `AnalysisArticleBody`: Desktop과 Workspace Web이 공유하는 정제된 HTML 문서 본문.
+  Workspace의 독립 빌드도 이 정본을 직접 읽으며 JSX 타입은 Workspace에 설치된
+  React 타입으로 해석한다.
+  문서 타이포그래피, 가로로 스크롤되는 표, 정적 SVG figure와 caption, 의미 기반
+  `article-metrics`/`article-metric`/`article-kicker`/`article-value`/`article-note`
+  역할을 정적 Tailwind utility로 소유한다. `article-accent`와 `article-muted`는
+  SVG의 `currentColor`에 의미 색을 제공한다. 작성자가 화면 CSS나 실행 스크립트를
+  주입하지 않으며, 허용 문법은 Workspace HTML sanitizer와 내장 아티클 스킬이 소유한다.
 - `AgentProviderMark`: AI Chat과 Agent 설치 흐름에서 Claude와 Codex를 구분하는
   16px 공식 제품 아이콘. OpenAI의 Codex 확장과 Anthropic 프레스 키트 원본을
   비율·색상 변경 없이 로컬 번들로 사용한다. 출처는

@@ -154,6 +154,13 @@ pub(super) async fn call_tool(
             let result = broker_request::<FunnelTraceCommand>(client, &arguments).await?;
             tool_success(&result)
         }
+        TOOL_ANALYSIS_ARTICLE_GUIDE => {
+            let _: EmptyArguments = tool_arguments(params)?;
+            tool_success(&json!({
+                "name": "dopedb-analysis-article",
+                "content": include_str!("../../skills/dopedb-analysis-article/SKILL.md"),
+            }))
+        }
         TOOL_ANALYSIS_ARTICLE_LIST => {
             let _: EmptyArguments = tool_arguments(params)?;
             let result =

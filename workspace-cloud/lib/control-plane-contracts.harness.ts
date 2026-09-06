@@ -903,6 +903,28 @@ describe("Desktop control-plane contracts", () => {
     }));
     expect(sanitized.definition.html).not.toContain("<script");
     expect(sanitized.definition.html).not.toContain("javascript:");
+    const articleHtml = (html: string) => parseSharedAnalysisArticleCreate(malformedArticle((article) => {
+      article.definition.html = html;
+    })).definition.html;
+    const visual = articleHtml('<section class="article-metrics unknown"><div class="article-metric"><span class="article-value">80</span></div></section><figure><svg viewBox="0 0 600 150" role="img" aria-label="80 starters"><title>Conversion</title><rect x="170" y="8" width="400" height="32" fill="currentColor" class="article-accent"/><text x="0" y="28" font-size="18" fill="currentColor">Started · 80</text></svg><figcaption>Measured starters</figcaption></figure>');
+    expect(visual).toContain('viewBox="0 0 600 150"');
+    expect(visual).toContain('class="article-metrics"');
+    expect(visual).toContain('class="article-accent"');
+    expect(visual).toContain('<text x="0" y="28"');
+    expect(articleHtml(visual)).toBe(visual);
+    for (const unsafe of [
+      '<svg onload="alert(1)"><script>alert(1)</script><foreignObject><iframe src="https://example.invalid/leak"></iframe></foreignObject></svg>',
+      '<svg><use href="https://example.invalid/leak#shape"/><image href="data:image/svg+xml,payload"/><animate attributeName="href" values="javascript:alert(1)"/></svg>',
+      '<svg><rect fill="url(https://example.invalid/leak)" stroke="url(#x)" style="filter:url(https://example.invalid/leak)" onclick="alert(1)"/></svg>',
+      '<svg><a xlink:href="javascript:alert(1)"><text>Link</text></a><rect fill="&#117;rl(https://example.invalid/leak)"/></svg>',
+      '<math><annotation-xml encoding="text/html"><svg><foreignObject><style><img src=x onerror=alert(1)></style></foreignObject></svg></annotation-xml></math>',
+    ]) {
+      const clean = articleHtml(unsafe);
+      expect(clean).not.toMatch(/script|foreignobject|iframe|<use|<image|<animate|onload|onclick|onerror|style=|url\(|javascript:|example\.invalid|xlink:/i);
+      expect(articleHtml(clean)).toBe(clean);
+    }
+    const invalidGeometry = articleHtml('<svg viewBox="0 0 0 10"><rect width="1e999" x="NaN" d="url(x)" class="fixed"/></svg>');
+    expect(invalidGeometry).not.toMatch(/viewBox|width=|x=|d=|class=/);
 
     expect(Object.keys(productAnalyticsGolden).sort()).toEqual([
       "appVersion",

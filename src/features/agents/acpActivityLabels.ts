@@ -18,8 +18,11 @@ export function toolActivityLabel(
     recordString(data, "tool_name"),
   ].filter((value): value is string => value !== null);
   const articleOperation = identifiers.map((value) => value.toLocaleLowerCase().match(
-    /^(?:(?:mcp[._]+)?dopedb[\w-]*[._]+)?analysis_article_(list|verify|propose|update)$/,
+    /^(?:(?:mcp[._]+)?dopedb[\w-]*[._]+)?analysis_article_(guide|list|verify|propose|update)$/,
   )?.[1]).find(Boolean);
+  if (articleOperation === "guide") {
+    return t("agent.acpActivityArticleGuide");
+  }
   if (articleOperation === "list") {
     return t("agent.acpActivityArticleList");
   }

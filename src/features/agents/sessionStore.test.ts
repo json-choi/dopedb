@@ -9,7 +9,9 @@ import type {
   AcpSessionChanged,
   AcpSessionEvent,
   AcpSessionSummary,
+  AgentKnowledgeScope,
 } from "./domain";
+import { buildAcpArticleContext } from "./useAcpComposerContext";
 import { listAgentAcpSessions, onAgentAcpChanged } from "./tauriAdapter";
 import {
   AcpSessionStore,
@@ -121,6 +123,35 @@ describe("ACP session store", () => {
       selectionGeneration: startRequest.selectionGeneration + 1,
       selectedSessionId: session("two").id,
     }, selected)).toBe(false);
+    const article = {
+      id: "article-one", revision: 3, projectEnvironmentId: "environment-one",
+      environmentRevision: 2, connectionId: "remote-one", connectionRevision: 4,
+      definition: { title: "Conversion analysis" },
+    };
+    const grant: AgentKnowledgeScope = {
+      projectId: "project-one", projectEnvironmentId: article.projectEnvironmentId,
+      environmentRevision: article.environmentRevision, knowledgeGrantId: null,
+      authorityConnectionId: session("one").connectionId, authorityConnectionRevision: 1,
+      sources: [], graphRevisionIds: [],
+      connections: [{
+        connectionId: session("one").connectionId, connectionRevision: 1,
+        remoteConnectionId: article.connectionId, connectionContentRevision: article.connectionRevision,
+        role: "primary", alias: "Analysis database",
+      }],
+    };
+    const context = buildAcpArticleContext(article, [grant]);
+    expect(context?.connectionId).toBe(grant.connections[0].connectionId);
+    expect(JSON.parse(context!.documentText!)).toEqual({
+      kind: "analysis_article", articleId: article.id, revision: article.revision,
+      title: article.definition.title, projectEnvironmentId: article.projectEnvironmentId,
+    });
+    expect(context?.table).toBeNull();
+    expect(buildAcpArticleContext(article, [])).toBeNull();
+    expect(buildAcpArticleContext(article, [{ ...grant, connections: [] }])).toBeNull();
+    expect(buildAcpArticleContext({ ...article, connectionId: "remote-other" }, [grant])).toBeNull();
+    expect(buildAcpArticleContext({ ...article, connectionRevision: 5 }, [grant])).toBeNull();
+    expect(buildAcpArticleContext({ ...article, environmentRevision: 3 }, [grant])).toBeNull();
+    expect(buildAcpArticleContext({ ...article, projectEnvironmentId: "environment-other" }, [grant])).toBeNull();
   });
 
   it("rejects an older event for the same exact session", () => {

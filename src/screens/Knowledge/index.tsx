@@ -61,6 +61,7 @@ export default function Knowledge({
     connectionId: string,
     environmentId?: string,
     prompt?: string,
+    articleId?: string,
   ) => void;
   onNewConnection?: () => void;
 }) {

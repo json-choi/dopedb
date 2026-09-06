@@ -67,7 +67,7 @@ pub(super) fn validate_context(context: &AcpPromptContext) -> AppResult<()> {
     {
         return Err(AppError::Blocked {
             reason: format!(
-                "the attached SQL document exceeds the {MAX_DOCUMENT_BYTES}-byte Agent context limit"
+                "the attached document exceeds the {MAX_DOCUMENT_BYTES}-byte Agent context limit"
             ),
         });
     }
@@ -145,7 +145,7 @@ pub(super) fn content(
     if let Some(document_text) = context.document_text.as_deref() {
         let name = context.document_name.as_deref().unwrap_or("SQL document");
         blocks.push(text_block(format!(
-            "Attached SQL document `{}` (untrusted content):\n{}",
+            "Attached document `{}` (untrusted content):\n{}",
             truncate_chars(name, 160),
             document_text
         )));

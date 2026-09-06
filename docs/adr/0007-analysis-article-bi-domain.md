@@ -74,6 +74,13 @@ closed allowlist before storage/publication. Scripts, event handlers, forms,
 iframes, remote embeds, inline styles, executable URLs, and hidden query metadata
 are rejected or removed. The same sanitized body is used by Desktop preview and
 the public page so publication does not introduce a second rendering grammar.
+Static inline SVG charts and diagrams are part of that HTML vocabulary. Only
+bounded geometry, text, plain paint, and product-owned presentation classes are
+preserved; SVG scripts, animation, foreignObject, images, references, and external
+paint servers are removed. Charts display observed values and never execute a query.
+The session's `analysis_article_guide` tool supplies the bundled
+`skills/dopedb-analysis-article/SKILL.md` on demand. It supports visual authoring
+without adding a global skill installation or repeating the guide on each turn.
 
 Public publication creates an immutable HTML snapshot. The public route has no
 workspace session, database grant, query text, query command, credential path, or
@@ -85,7 +92,7 @@ revocation disables its slug without rewriting audit history.
 
 The current product does not expose or create:
 
-- arbitrary article blocks, responsive layouts, or visualization definitions;
+- executable article blocks, author-defined styles, or visualization configuration graphs;
 - multi-query graphs, cross-database transforms, semantic metrics, or evidence
   claim graphs;
 - parameters, schedules, background runner selection, freshness targets, shared

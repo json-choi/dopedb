@@ -78,6 +78,7 @@ const TOOL_OPERATION_STATUS: &str = "operation_status";
 const TOOL_OPERATION_WAIT: &str = "operation_wait";
 const TOOL_OPERATION_CANCEL: &str = "operation_cancel";
 const TOOL_ANALYSIS_ARTICLE_LIST: &str = "analysis_article_list";
+const TOOL_ANALYSIS_ARTICLE_GUIDE: &str = "analysis_article_guide";
 const TOOL_ANALYSIS_ARTICLE_PROPOSE: &str = "analysis_article_propose";
 const TOOL_ANALYSIS_ARTICLE_UPDATE: &str = "analysis_article_update";
 const TOOL_ANALYSIS_ARTICLE_VERIFY: &str = "analysis_article_verify";

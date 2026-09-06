@@ -481,6 +481,9 @@ pub(super) fn run() {
     assert!(tools.iter().any(|tool| tool["name"] == "query_read"));
     assert!(tools.iter().any(|tool| tool["name"] == "source_search"));
     assert!(tools.iter().any(|tool| tool["name"] == "source_read"));
+    let article_guide = tools.iter().find(|tool| tool["name"] == "analysis_article_guide").unwrap();
+    assert_eq!(article_guide["annotations"]["readOnlyHint"], true);
+    assert_eq!(article_guide["inputSchema"]["additionalProperties"], false);
     assert!(!tools.iter().any(|tool| {
         tool["name"].as_str().is_some_and(|name| name.starts_with("knowledge_") || name == "funnel_trace")
     }));

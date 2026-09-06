@@ -149,6 +149,7 @@ type ShellLayoutCommands = {
       connectionId: string,
       environmentId?: string,
       prompt?: string,
+      articleId?: string,
     ) => void;
     widthChanged: (width: number) => void;
     close: () => void;
@@ -496,6 +497,7 @@ function ShellLayoutContent({ model, commands }: Props) {
           connection={workspace.selected}
           connections={workspace.connections}
           composerRequest={agent.composerRequest}
+          knowledgeFocus={explorer.knowledgeFocus}
           documents={workbench.documents}
           activeDocumentId={workbench.activeDocumentId}
           selectedTable={workbench.selectedTable}

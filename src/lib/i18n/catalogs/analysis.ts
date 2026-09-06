@@ -24,7 +24,8 @@ export const analysisCatalog = defineCatalog(
     "analysis.edit": "Edit",
     "analysis.deleteLabel": "Delete Article",
     "analysis.simpleAgentPrompt":
-      "Create a simple Analysis Article with sanitized HTML and one bounded read-only query for this database.",
+      "Create an Analysis Article for this database, using charts where they help explain the findings and one bounded read-only saved query.",
+    "analysis.editWithAgent": "Edit with AI Chat",
     "analysis.simpleEmptyBody":
       "Create a regular HTML Article with one saved query that can be run again on demand.",
     "analysis.manualOnly": "manual rerun",
@@ -108,7 +109,8 @@ export const analysisCatalog = defineCatalog(
     "analysis.edit": "편집",
     "analysis.deleteLabel": "분석 아티클 삭제",
     "analysis.simpleAgentPrompt":
-      "이 데이터베이스를 대상으로 안전한 HTML과 제한된 읽기 전용 쿼리 하나로 단순 분석 아티클을 만들어줘.",
+      "이 데이터베이스를 대상으로 차트가 해석에 도움이 되면 활용하고, 제한된 읽기 전용 저장 쿼리 하나를 가진 분석 아티클을 만들어줘.",
+    "analysis.editWithAgent": "AI Chat으로 수정",
     "analysis.simpleEmptyBody":
       "일반 HTML과 필요할 때 다시 실행할 수 있는 저장 쿼리 하나로 분석 아티클을 만드세요.",
     "analysis.manualOnly": "수동 재조회",

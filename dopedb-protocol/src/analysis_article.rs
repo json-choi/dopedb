@@ -11,11 +11,11 @@ use uuid::Uuid;
 pub const ANALYSIS_ARTICLE_AGENT_INSTRUCTIONS: &str = concat!(
     "ANALYSIS DELIVERY: DopeDB displays Markdown, tables, code fences, and Mermaid in chat. ",
     "Save requested reports, funnels, charts, and Articles with the Article tools unless the user asks for chat only. A follow-up question alone does not request a save. ",
-    "An Article is sanitized HTML plus one bounded read-only saved query on one selected connectionId. Use headings, paragraphs, lists, and tables without scripts, styles, forms, or remote embeds. ",
+    "An Article is sanitized HTML plus one bounded read-only saved query on one selected connectionId. Load analysis_article_guide when authoring if its skill is not already in context; it describes the visual HTML and static SVG chart vocabulary. Scripts, author styles, forms, and remote embeds are not allowed. ",
     "Check analysis_article_list for the current Article before creating or editing; use analysis_article_propose for a new Article and analysis_article_update at the exact existing revision for edits. ",
     "Use analysis_article_verify to measure a new or changed saved query before saving. It executes the query: do not also run the same query through query_read. Reuse successful evidence for an unchanged query; title or HTML-only edits need no database read. ",
     "Ground measurements in query receipts, preserve their observation dates, and explain which part the single query reruns. Never invent values or substitute constant results for the saved query. ",
-    "Deliver through Article tools, not local files, localhost, external rendering skills, or host-specific directives. Confirm saving only from a successful Article ID and revision; on failure keep the analysis in chat and explain the failure. ",
+    "Authoring skills may help produce HTML and SVG; deliver the saved result through Article tools. A local file, localhost page, or host-specific render directive is not a saved Article. Confirm saving only from a successful Article ID and revision; on failure keep the analysis in chat and explain the failure. ",
     "Do not automatically retry a save with uncertain outcome or a revision conflict. Do not enable automation, publish query rows, or publish a public snapshot."
 );
 

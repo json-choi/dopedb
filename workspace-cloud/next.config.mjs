@@ -1,14 +1,16 @@
-/** @type {import('next').NextConfig} */
+import { fileURLToPath } from "node:url";
+
 const scriptPolicy = process.env.NODE_ENV === "production"
   ? "script-src 'self' 'unsafe-inline'"
   : "script-src 'self' 'unsafe-inline' 'unsafe-eval'";
 
+/** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
     useTypeScriptCli: true,
   },
   poweredByHeader: false,
-  turbopack: { root: process.cwd() },
+  turbopack: { root: fileURLToPath(new URL("..", import.meta.url)) },
   async rewrites() {
     return [
       {

@@ -35,7 +35,7 @@ type Params = {
   sharedWorkspace: boolean;
   scopeKey: string;
   focusId?: string | null;
-  onOpenAgent?: (connectionId: string, environmentId?: string, prompt?: string) => void;
+  onOpenAgent?: (connectionId: string, environmentId?: string, prompt?: string, articleId?: string) => void;
 };
 
 export function useAnalysisArticlesController({
@@ -183,10 +183,18 @@ export function useAnalysisArticlesController({
     onError: (error) => setActionError(errMessage(error)),
   });
 
-  const agentBinding = bindings.find((binding) => binding.connectionId);
+  const agentBinding = bindings.find((binding) =>
+    binding.connectionId && !binding.stale && (
+      !selected || (
+        binding.remoteConnectionId === selected.connectionId
+        && binding.connectionContentRevision === selected.connectionRevision
+      )
+    ),
+  );
   const askAgent = () => {
     if (!agentBinding?.connectionId || !onOpenAgent) return;
-    onOpenAgent(agentBinding.connectionId, environment.id, t("analysis.simpleAgentPrompt"));
+    onOpenAgent(agentBinding.connectionId, environment.id,
+      selected ? undefined : t("analysis.simpleAgentPrompt"), selected?.id);
   };
 
   return {

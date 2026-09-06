@@ -1,4 +1,5 @@
 import type { AnalysisPublicSnapshot } from "../../../lib/workspace-analysis-publications";
+import { AnalysisArticleBody } from "../../../../src/design-system/components/AnalysisArticleBody";
 
 export function AnalysisArticleDocument({
   article,
@@ -28,12 +29,7 @@ export function AnalysisArticleDocument({
           </time>
         </div>
       </header>
-      <div
-        className="tw:grid tw:gap-4 tw:text-base tw:leading-relaxed tw:[&_a]:text-primary tw:[&_a]:underline tw:[&_blockquote]:border-l-2 tw:[&_blockquote]:border-border tw:[&_blockquote]:pl-4 tw:[&_code]:font-mono tw:[&_h2]:font-serif tw:[&_h2]:text-3xl tw:[&_h2]:font-medium tw:[&_h3]:text-xl tw:[&_h3]:font-semibold tw:[&_h4]:text-base tw:[&_h4]:font-semibold tw:[&_ol]:pl-6 tw:[&_p]:m-0 tw:[&_pre]:overflow-auto tw:[&_pre]:rounded-surface tw:[&_pre]:bg-surface-inset tw:[&_pre]:p-4 tw:[&_table]:w-full tw:[&_table]:border-collapse tw:[&_td]:border tw:[&_td]:border-border tw:[&_td]:p-2 tw:[&_th]:border tw:[&_th]:border-border tw:[&_th]:p-2 tw:[&_ul]:pl-6"
-        // Workspace Cloud sanitized this immutable string with a closed tag and
-        // attribute allowlist before it entered the publication snapshot.
-        dangerouslySetInnerHTML={{ __html: article.html }}
-      />
+      <AnalysisArticleBody html={article.html} />
     </article>
   );
 }

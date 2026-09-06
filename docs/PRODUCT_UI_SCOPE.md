@@ -281,7 +281,7 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
 | PD-28 | safe branch checkpoint/restore | `구현` | 승인된 격리 생성, connection revision 전환, 복귀·폐기와 audit를 하나의 durable operation으로 묶는다. |
 | PD-29 | engine별 native query cancellation | `구현 안 함` | exact operation signal, timeout, connection-close fallback과 unknown outcome 보존을 유지한다. |
 | PD-30 | disk-backed query result | `구현` | Rust가 bounded page artifact와 streaming CSV/JSON export를 소유한다. |
-| PD-31 | HTML Analysis Article | `구현` | sanitized HTML 본문과 exact connection에 고정된 읽기 전용 쿼리 하나만 저장하고 Desktop에서 수동 재조회한다. 저장한 최신 revision은 별도 draft/review/live 단계 없이 해당 connection grant를 가진 워크스페이스 멤버에게 공유된다. |
+| PD-31 | HTML Analysis Article | `구현` | sanitized HTML 본문과 exact connection에 고정된 읽기 전용 쿼리 하나만 저장하고 Desktop에서 수동 재조회한다. 본문은 공용 문서 스타일과 닫힌 allowlist의 정적 SVG 차트·도표를 지원하며, Agent는 내장 아티클 작성 스킬을 필요할 때 읽는다. 열린 아티클의 AI 수정은 그 아티클과 연결을 대상으로 한다. 저장한 최신 revision은 별도 draft/review/live 단계 없이 해당 connection grant를 가진 워크스페이스 멤버에게 공유된다. |
 | PD-32 | enterprise shared-secret suite | `구현 안 함` | 중앙 static secret 배포·SSO·SCIM·self-hosted 묶음을 별도 수요 없이 예약하지 않는다. PD-18의 좁은 Vault Database Secrets 동적 발급 adapter는 이 suite에 포함되지 않는다. |
 | PD-33 | general Plugin Platform | `구현 안 함` | app-owned driver, provider, ACP adapter의 닫힌 목록만 지원한다. |
 | PD-34 | realtime SQL CRDT/presence | `구현 안 함` | 일반 SQL text와 cursor는 로컬에 두고 공유할 가치가 있는 결과만 HTML Analysis Article로 저장한다. |

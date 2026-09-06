@@ -158,30 +158,32 @@ function Shell() {
     connectionId: string,
     environmentId?: string,
     prompt?: string,
+    articleId?: string,
   ) {
     const returnFocus =
       document.activeElement instanceof HTMLElement
         ? document.activeElement
         : null;
-    const target = connections.items.find(
-      (connection) => connection.id === connectionId,
-    );
+    const target = connections.items.find((connection) => connection.id === connectionId);
     if (!target) return;
     setAgentComposerRequest(
-      environmentId && prompt
+      environmentId
         ? {
             id: crypto.randomUUID(),
             connectionId: target.id,
             projectEnvironmentId: environmentId,
-            prompt,
+            prompt: prompt ?? "",
           }
         : null,
     );
-    if (connections.selected?.id !== connectionId) {
-      commands.connections.select(connectionId);
-    }
+    if (connections.selected?.id !== connectionId) commands.connections.select(connectionId);
     if (compactShell) toolWindows.closeServices();
-    commands.route.focusToolWindow();
+    const analysisFocus = route.knowledgeEnvironmentFocus;
+    if (environmentId && (articleId || (analysisFocus?.view === "analyses" && analysisFocus.environmentId === environmentId))) {
+      commands.route.openKnowledge(environmentId, "analyses", articleId ?? analysisFocus?.resourceId);
+    } else {
+      commands.route.focusToolWindow();
+    }
     setMobileExplorerOpen(false);
     if (!showAgentDock) agentDock.show(returnFocus);
     focusActiveAgentControl();
