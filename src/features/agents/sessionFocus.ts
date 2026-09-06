@@ -1,9 +1,22 @@
+// Keeps session focus and screen handoffs inside the exact requested resource
+// set; another database in the same Environment is not an interchangeable scope.
 import type {
   AcpSessionId,
   AcpSessionLifecycle,
   AcpSessionSummary,
   AgentProvider,
+  AgentComposerRequest,
 } from "./domain";
+
+export function ownsAcpComposerRequest(
+  session: AcpSessionSummary,
+  request: AgentComposerRequest,
+) {
+  return isLiveSession(session.lifecycle) && session.knowledgeScopes.some((scope) =>
+    scope.projectEnvironmentId === request.projectEnvironmentId
+    && scope.connections.some((connection) => connection.connectionId === request.connectionId),
+  );
+}
 
 export function isLiveSession(lifecycle: AcpSessionLifecycle) {
   return ["starting", "ready", "running", "waitingPermission"].includes(

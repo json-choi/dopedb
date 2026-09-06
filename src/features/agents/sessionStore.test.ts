@@ -20,6 +20,7 @@ import {
 import {
   isCurrentAcpFocusRequest,
   ownsStartedAcpSession,
+  ownsAcpComposerRequest,
 } from "./sessionFocus";
 
 function session(
@@ -152,6 +153,16 @@ describe("ACP session store", () => {
     expect(buildAcpArticleContext({ ...article, connectionRevision: 5 }, [grant])).toBeNull();
     expect(buildAcpArticleContext({ ...article, environmentRevision: 3 }, [grant])).toBeNull();
     expect(buildAcpArticleContext({ ...article, projectEnvironmentId: "environment-other" }, [grant])).toBeNull();
+    const handoff = {
+      id: "handoff-one", connectionId: grant.connections[0].connectionId,
+      projectEnvironmentId: grant.projectEnvironmentId, prompt: "",
+    };
+    const ready = { ...session("one"), lifecycle: "ready" as const, knowledgeScopes: [grant] };
+    expect(ownsAcpComposerRequest(ready, handoff)).toBe(true);
+    expect(ownsAcpComposerRequest({ ...ready, lifecycle: "failed" }, handoff)).toBe(false);
+    expect(ownsAcpComposerRequest({ ...ready, knowledgeScopes: [{ ...grant, connections: [] }] }, handoff)).toBe(false);
+    expect(ownsAcpComposerRequest(ready, { ...handoff, projectEnvironmentId: "environment-other" })).toBe(false);
+    expect(ownsAcpComposerRequest(ready, { ...handoff, connectionId: "database-other" as typeof handoff.connectionId })).toBe(false);
   });
 
   it("rejects an older event for the same exact session", () => {

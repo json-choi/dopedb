@@ -45,6 +45,7 @@ import {
 import {
   isCurrentAcpFocusRequest,
   isLiveSession,
+  ownsAcpComposerRequest,
   selectWorkspaceSessions,
   type AcpFocusRequest,
 } from "./sessionFocus";
@@ -135,7 +136,7 @@ export function useAcpChatController({
   const focusRequestIdRef = useRef(0);
   const catalogScopeKeyRef = useRef(catalogScope.key);
   catalogScopeKeyRef.current = catalogScope.key;
-  const consumedComposerRequestRef = useRef<string | null>(null);
+  const [consumedComposerRequestId, setConsumedComposerRequestId] = useState<string | null>(null);
   const cliStatusQuery = useQuery({
     ...agentCliDetectionQuery(),
     refetchOnWindowFocus: false,
@@ -190,7 +191,7 @@ export function useAcpChatController({
   const scopeChangeAllowed = active === null || (active.lifecycle === "ready" && transcript.length === 0);
   const agentScope = useAgentScopeSelection({
     active,
-    composerRequest,
+    composerRequest: composerRequest?.id === consumedComposerRequestId ? null : composerRequest,
     connectionId: scopedConnection.id,
     inventory: environmentInventory,
     onClearError: () => setError(null),
@@ -455,38 +456,31 @@ export function useAcpChatController({
   useEffect(() => {
     if (
       composerRequest === null ||
-      composerRequest.connectionId !== scopedConnection.id ||
-      consumedComposerRequestRef.current === composerRequest.id ||
+      consumedComposerRequestId === composerRequest.id ||
       !environmentInventory.success
     ) return;
     const environment = availableKnowledgeEnvironments.find(
       (candidate) => candidate.id === composerRequest.projectEnvironmentId,
     );
     if (!environment) {
-      consumedComposerRequestRef.current = composerRequest.id;
+      setConsumedComposerRequestId(composerRequest.id);
       setError(t("agent.acpEnvironmentRequiredBody"));
       return;
     }
-    if (
-      !agentScope.resourceScopes.some(
-        (scope) => scope.projectEnvironmentId === environment.id,
-      )
-    ) return;
-    if (
-      active?.knowledgeScopes.length &&
-      !active.knowledgeScopes.some(
-        (scope) => scope.projectEnvironmentId === environment.id,
-      )
-    ) {
+    if (active && !ownsAcpComposerRequest(active, composerRequest)) {
       selectActiveSession(null);
       return;
     }
+    if (!agentScope.resourceScopes.some((scope) =>
+      scope.projectEnvironmentId === environment.id
+      && scope.connectionIds.includes(composerRequest.connectionId),
+    )) return;
     if (
       starting ||
       !prerequisitesReady ||
       (active !== null && !["ready", "closed", "failed"].includes(active.lifecycle))
     ) return;
-    consumedComposerRequestRef.current = composerRequest.id;
+    setConsumedComposerRequestId(composerRequest.id);
     setHistoryOpen(false);
     if (!composerRequest.prompt) return;
     const submitted = composerRequest.prompt.slice(0, MAX_PROMPT_CHARS);
@@ -505,7 +499,7 @@ export function useAcpChatController({
     active,
     availableKnowledgeEnvironments,
     composerRequest,
-    scopedConnection.id,
+    consumedComposerRequestId,
     environmentInventory.success,
     prerequisitesReady,
     selectActiveSession,
