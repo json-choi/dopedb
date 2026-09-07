@@ -255,6 +255,14 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
 - enabled control은 반드시 실제 command와 state owner를 가진다. 아직 없는 기능은
   tracker에 `missing`으로 기록하고 가짜 control을 만들지 않는다.
 
+- 직접 권한 변경 SQL과 안전하게 분류할 수 없는 SQL은 실행 전에 차단하고,
+  구문 위치와 DB 관리자 검토 경로를 안내한다. 이 차단에 쓰기·DDL 설정이나 연결
+  복구를 해결책으로 제시하지 않는다.
+- Desktop에서 시작한 웹 권한 변경·관리형 연결 복구는 같은 계정·Workspace·DB의
+  실제 저장 성공 뒤 앱 복귀를 한 번 시도하고 수동 복귀 버튼을 유지한다. OAuth
+  승인만으로 완료를 선언하지 않으며 callback은 token·SQL·권한을 전달하지 않는다.
+  앱은 기존 연결 상태를 새로 확인하고 SQL을 자동 재실행하지 않는다.
+
 ### 구현 시스템
 
 - Tailwind v4의 정적 `tw:` utility와 `src/design-system/index.css`의 semantic role이

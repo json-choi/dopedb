@@ -6,7 +6,7 @@ import capability from "../../../src-tauri/capabilities/default.json";
 import tauriBenchmarkConfig from "../../../src-tauri/tauri.benchmark.conf.json";
 import tauriConfig from "../../../src-tauri/tauri.conf.json";
 import tauriDevConfig from "../../../src-tauri/tauri.dev.conf.json";
-import { desktopWorkspaceLoginCallbackUrl } from "../../../workspace-cloud/lib/desktop-deep-link";
+import { completeDesktopAccessReturn, desktopWorkspaceAccessCallbackUrl, desktopWorkspaceLoginCallbackUrl, readDesktopAccessReturn, saveDesktopAccessReturn, type DesktopAccessReturnIntent } from "../../../workspace-cloud/lib/desktop-deep-link";
 import {
   AGENT_SETUP_URLS,
   DOPEDB_RELEASES_URL,
@@ -210,6 +210,23 @@ describe("workspace auth lifecycle", () => {
     expect(allowedUrls).not.toContain("https://github.com/*");
 
     const loginCallback = new URL(desktopWorkspaceLoginCallbackUrl);
+    expect(desktopWorkspaceAccessCallbackUrl).toBe("dopedb://workspace/access-complete");
+    const values = new Map<string, string>();
+    const storage = { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => { values.set(key, value); }, removeItem: (key: string) => { values.delete(key); } };
+    const intent: DesktopAccessReturnIntent = { userId: "member-a", workspaceId: "workspace-a", connectionId: "10000000-0000-4000-8000-000000000001", phase: "pending", createdAt: Date.now() };
+    saveDesktopAccessReturn(storage, intent);
+    expect(readDesktopAccessReturn(storage, intent.userId, intent.workspaceId)).toEqual(intent);
+    expect(completeDesktopAccessReturn(intent, "other")).toBeNull();
+    const completed = completeDesktopAccessReturn(intent, intent.connectionId)!;
+    expect(completed.phase).toBe("complete");
+    expect(completeDesktopAccessReturn(completed, intent.connectionId)).toBeNull();
+    saveDesktopAccessReturn(storage, { ...completed, phase: "opened" });
+    expect(readDesktopAccessReturn(storage, intent.userId, intent.workspaceId)?.phase).toBe("opened");
+    for (const [user, workspace, now] of [["other", intent.workspaceId, intent.createdAt], [intent.userId, "other", intent.createdAt], [intent.userId, intent.workspaceId, intent.createdAt + 31 * 60_000], [intent.userId, intent.workspaceId, intent.createdAt - 1]] as const) {
+      saveDesktopAccessReturn(storage, intent);
+      expect(readDesktopAccessReturn(storage, user, workspace, now)).toBeNull();
+      expect(values.size).toBe(0);
+    }
     expect(loginCallback.protocol).toBe("dopedb:");
     expect(loginCallback.host).toBe("auth");
     expect(loginCallback.pathname).toBe("/device-complete");

@@ -74,6 +74,10 @@ pub enum AppError {
     #[error("blocked: {reason}")]
     Blocked { reason: String },
 
+    /// A query cannot use the generic SQL runner, regardless of connection settings.
+    #[error("SQL is blocked before execution: direct privilege changes and statements that cannot be safely classified are unsupported. Write and schema settings do not enable them. Review the indicated statement; a database administrator must perform privilege administration through the database provider's administration tools.")]
+    SqlPolicyBlocked { position: Option<usize> },
+
     /// The combined desktop read endpoint stopped before any target access
     /// because this statement must use the explicit proposal UI. This is not a
     /// general policy block and is the only failure a client may safely retry
@@ -107,6 +111,7 @@ impl AppError {
             AppError::AuthenticationRequired(_) => "authenticationRequired",
             AppError::ManagedConnectionRecoveryRequired => "managedConnectionRecoveryRequired",
             AppError::Blocked { .. } => "blocked",
+            AppError::SqlPolicyBlocked { .. } => "sqlPolicyBlocked",
             AppError::ProposalRequired => "proposalRequired",
             AppError::OutcomeUnknown(_) => "outcomeUnknown",
         }
@@ -115,6 +120,9 @@ impl AppError {
     /// 1-based character offset into the executed SQL where the error occurred,
     /// when the driver reports one (Postgres only; MySQL/SQLite don't expose it).
     fn position(&self) -> Option<usize> {
+        if let Self::SqlPolicyBlocked { position } = self {
+            return *position;
+        }
         let AppError::Db(sqlx::Error::Database(db)) = self else {
             return None;
         };

@@ -186,13 +186,17 @@ impl ScriptPlatformAdapter {
                 }))
             }
         };
-        if kinds
+        if let Some(index) = kinds
             .iter()
-            .any(|kind| matches!(kind, QueryKind::Privilege))
+            .position(|kind| matches!(kind, QueryKind::Privilege))
         {
             return Err(DesktopScriptRunError::Scoped(DesktopScriptScopedFailure {
-                error: AppError::Blocked {
-                    reason: "stored script contains blocked arbitrary privilege SQL".into(),
+                error: AppError::SqlPolicyBlocked {
+                    position: crate::sql_script::statement_position(
+                        &payload.sql,
+                        &statements,
+                        index,
+                    ),
                 },
                 _scope: Box::new(operation_scope),
             }));

@@ -54,6 +54,10 @@ export function onWorkspaceLoginCallback(
   return listen(WORKSPACE_LOGIN_CALLBACK_EVENT, handler);
 }
 
+export function onWorkspaceAccessCallback(handler: () => void): Promise<UnlistenFn> {
+  return listen("workspace-access:callback", handler);
+}
+
 export function workspaceConsoleUrl(workspaceId?: WorkspaceId): Promise<string> {
   return invoke("workspace_console_url", { workspaceId: workspaceId ?? null });
 }

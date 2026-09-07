@@ -84,14 +84,17 @@ impl ScriptPlatformAdapter {
             .iter()
             .map(|classification| classification.kind)
             .collect::<Vec<_>>();
-        if kinds
+        if let Some(index) = kinds
             .iter()
-            .any(|kind| matches!(kind, QueryKind::Privilege))
+            .position(|kind| matches!(kind, QueryKind::Privilege))
         {
             return Err(DesktopScriptRunError::Scoped(DesktopScriptScopedFailure {
-                error: AppError::Blocked {
-                    reason: "arbitrary privilege SQL is blocked; use a supported, narrowly scoped administrative action"
-                        .into(),
+                error: AppError::SqlPolicyBlocked {
+                    position: crate::sql_script::statement_position(
+                        &request.sql,
+                        &statements,
+                        index,
+                    ),
                 },
                 _scope: Box::new(operation_scope),
             }));

@@ -188,6 +188,7 @@ describe("workbench state ownership", () => {
     );
     expect(recoveryUrl.searchParams.get("section")).toBe("providers");
     expect(recoveryUrl.searchParams.get("connection")).toBe(managedConnectionId);
+    expect(recoveryUrl.searchParams.get("desktop")).toBe("1");
     expect(recoveryUrl.hash).toBe(`#database-${managedConnectionId}`);
     expect(isKnowledgeEnvironmentRevisionConflict({
       kind: "network",

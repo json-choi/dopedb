@@ -4,6 +4,7 @@
 // makes a template visible only when a manager grants view, read, use, or manage.
 import { useCallback, useEffect, useState } from "react";
 import { changeConnectionGrant } from "../../features/connectionAccess/grants";
+import { useDesktopAccessReturn } from "../../features/connectionAccess/DesktopAccessReturn";
 import { ControlButton } from "../components/Controls";
 import { useWorkspaceLocale } from "../components/WorkspaceLocale";
 import { candidateConflictResolution } from "../../lib/connection-conflict-decision";
@@ -143,6 +144,7 @@ async function responseError(
 }
 
 export function ConnectionAccessPanel({ workspaceId }: { workspaceId: string }) {
+  const desktopReturn = useDesktopAccessReturn();
   const locale = useWorkspaceLocale();
   const copy = workspaceMessages[locale].connectionAccess;
   const common = workspaceMessages[locale].common;
@@ -154,6 +156,9 @@ export function ConnectionAccessPanel({ workspaceId }: { workspaceId: string }) 
   const [loading, setLoading] = useState(true);
   const [mutatingId, setMutatingId] = useState("");
   const [error, setError] = useState("");
+  useEffect(() => {
+    setSelectedId(desktopReturn.connectionId ?? "");
+  }, [workspaceId, desktopReturn.connectionId]);
 
   const loadConflicts = useCallback(async (signal?: AbortSignal) => {
     const response = await fetch(
@@ -197,11 +202,11 @@ export function ConnectionAccessPanel({ workspaceId }: { workspaceId: string }) 
     setSelectedId((current) => (
       next.some((item) => item.id === current)
         ? current
-        : next[0]?.id ?? ""
+        : next.find((item) => item.id === desktopReturn.connectionId)?.id ?? next[0]?.id ?? ""
     ));
     setError("");
     setLoading(false);
-  }, [copy, locale, workspaceId]);
+  }, [copy, locale, workspaceId, desktopReturn.connectionId]);
 
   const loadGrants = useCallback(async (
     connectionId: string,
@@ -268,6 +273,7 @@ export function ConnectionAccessPanel({ workspaceId }: { workspaceId: string }) 
         return;
       }
       await loadGrants(selectedId);
+      if (memberId === actorMemberId && capability) desktopReturn.complete(selectedId);
     } finally {
       setMutatingId("");
     }

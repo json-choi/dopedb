@@ -14,6 +14,7 @@ import type { ProviderAccessFieldSetter, ProviderAccessState } from "./state";
 import type { GcpManagedConnectionRecoveryTarget } from "./managedConnectionRecovery";
 import { providerResponseError } from "./transport";
 import { requestGcpBootstrap } from "./gcpBootstrapTransport";
+import { useDesktopAccessReturn } from "../connectionAccess/DesktopAccessReturn";
 import type { WorkspaceLocale } from "../../lib/workspace-locale";
 import { localizedProviderMessage } from "../../lib/workspace-provider-copy";
 import { workspaceMessages } from "../../lib/workspace-messages";
@@ -57,6 +58,7 @@ export function useGcpProviderSetup({
   gcpRecoveryTargetMissing: boolean;
   clearGcpRecoveryIntent: () => void;
 }) {
+  const desktopReturn = useDesktopAccessReturn();
   const {
     providers,
     gcpSetupInventory,
@@ -424,6 +426,7 @@ export function useGcpProviderSetup({
       nextUrl.searchParams.delete("gcpSetup");
       nextUrl.searchParams.set("section", "providers");
       if (gcpRecoveryTarget) {
+        desktopReturn.complete(gcpRecoveryTarget.intent.connectionId);
         clearGcpRecoveryIntent();
         nextUrl.searchParams.set("provider", "gcpCloudSql");
         nextUrl.searchParams.set("status", "repaired");

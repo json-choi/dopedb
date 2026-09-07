@@ -461,6 +461,10 @@ describe("SQL run guidance", () => {
   });
 
   it("describes a multi-statement read without granting execution", () => {
+    const enabled = { ...safety, allowWrites: true, allowSchemaChanges: true };
+    expect(analyzeRunSignal("GRANT SELECT ON events TO reader", [], enabled)?.text.key).toBe("sql.signalPrivilegeBlocked");
+    expect(analyzeRunSignal("SELECT 1; REVOKE SELECT ON events FROM reader", ["SELECT 1", "REVOKE SELECT ON events FROM reader"], enabled)?.text.key).toBe("sql.signalPrivilegeBlocked");
+    expect(analyzeRunSignal("SELECT 'GRANT SELECT'", [], enabled)?.text.key).not.toBe("sql.signalPrivilegeBlocked");
     expect(
       buildRunSignal(
         "SELECT 1; SELECT 2;",

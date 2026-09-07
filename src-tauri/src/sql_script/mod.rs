@@ -12,6 +12,20 @@ pub(crate) fn split_statements(sql: &str, engine: Engine) -> Vec<String> {
     split_statements_impl(sql, matches!(engine, Engine::Mysql))
 }
 
+/// Locate an already split statement without confusing repeated text inside literals.
+/// The public error position counts Unicode characters, matching PostgreSQL errors.
+pub(crate) fn statement_position(sql: &str, statements: &[String], index: usize) -> Option<usize> {
+    let mut offset = 0;
+    for (current, statement) in statements.iter().enumerate() {
+        let start = offset + sql[offset..].find(statement.as_str())?;
+        if current == index {
+            return Some(sql[..start].chars().count() + 1);
+        }
+        offset = start + statement.len();
+    }
+    None
+}
+
 fn split_statements_impl(sql: &str, backslash_escapes: bool) -> Vec<String> {
     let bytes = sql.as_bytes();
     let mut out = Vec::new();

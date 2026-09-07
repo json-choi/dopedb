@@ -15,6 +15,9 @@ export const sqlCatalog = defineCatalog(
     "sql.errorPosition": "Position",
     "sql.errorPositionAt": "Line {line}, column {column}",
     "sql.errorTitle": "Query error",
+    "sql.policyBlock.title": "Blocked by SQL execution policy",
+    "sql.policyBlock.message": "DopeDB stopped this SQL before execution. Direct privilege changes such as GRANT and REVOKE, and statements that cannot be safely classified, are unsupported.\nEnabling data or schema changes, or repairing the connection, does not permit these statements.\nReview the indicated statement. For privilege administration, ask a database administrator to review and apply the required change using the database provider’s administration tools.",
+    "sql.signalPrivilegeBlocked": "Privilege SQL is unsupported in this editor",
     "sql.writeBlock.requiredPermission": "Required permission",
     "sql.writeBlock.permissionDeviceSafety": "Data-change permission",
     "sql.writeBlock.guidanceDeviceSafety":
@@ -171,6 +174,9 @@ export const sqlCatalog = defineCatalog(
     "sql.errorPosition": "위치",
     "sql.errorPositionAt": "{line}줄 {column}열",
     "sql.errorTitle": "쿼리 오류",
+    "sql.policyBlock.title": "SQL 실행 정책에 따른 차단",
+    "sql.policyBlock.message": "DopeDB가 SQL 실행 전에 중단했습니다. GRANT·REVOKE 같은 직접적인 권한 변경과 안전하게 분류할 수 없는 SQL은 지원하지 않습니다.\n데이터·스키마 변경을 허용하거나 연결을 복구해도 이 제한은 해제되지 않습니다.\n아래 표시된 구문을 확인하세요. DB 권한 변경은 DB 관리자가 필요한 내용을 검토한 뒤 데이터베이스 공급자의 관리 도구에서 수행해야 합니다.",
+    "sql.signalPrivilegeBlocked": "이 편집기에서는 권한 변경 SQL을 지원하지 않습니다",
     "sql.writeBlock.requiredPermission": "필요한 권한",
     "sql.writeBlock.permissionDeviceSafety": "데이터 변경 권한",
     "sql.writeBlock.guidanceDeviceSafety":

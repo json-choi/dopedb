@@ -47,8 +47,7 @@ pub fn decide(settings: &SafetySettings, c: &Classification) -> GateDecision {
             }
         }
         QueryKind::Privilege => GateDecision::Block {
-            reason: "arbitrary privilege SQL is blocked; use a supported, narrowly scoped administrative action"
-                .into(),
+            reason: crate::error::AppError::SqlPolicyBlocked { position: None }.to_string(),
         },
         QueryKind::Write => {
             if !settings.allow_writes {
@@ -164,6 +163,41 @@ mod tests {
         };
         assert!(matches!(
             decide(&s, &cls(QueryKind::Privilege, 1)),
+            GateDecision::Block { .. }
+        ));
+        let sql = "SELECT '한글 GRANT SELECT ON events TO reader';\nGRANT SELECT ON events TO reader;\nSELECT 1;";
+        let statements = crate::sql_script::split_statements(sql, crate::model::Engine::Postgres);
+        let index = statements
+            .iter()
+            .position(|statement| {
+                crate::safety::classify(statement, crate::model::Engine::Postgres)
+                    .unwrap()
+                    .kind
+                    == QueryKind::Privilege
+            })
+            .unwrap();
+        assert_eq!(index, 1);
+        let position = crate::sql_script::statement_position(sql, &statements, index);
+        assert_eq!(
+            position,
+            Some(
+                sql.find('\n')
+                    .map(|offset| sql[..offset].chars().count() + 2)
+                    .unwrap()
+            )
+        );
+        let error =
+            serde_json::to_value(crate::error::AppError::SqlPolicyBlocked { position }).unwrap();
+        assert_eq!(error["kind"], "sqlPolicyBlocked");
+        assert_eq!(error["position"], position.unwrap());
+        assert!(matches!(
+            decide(
+                &SafetySettings {
+                    allow_schema_changes: true,
+                    ..s
+                },
+                &cls(QueryKind::Privilege, 1)
+            ),
             GateDecision::Block { .. }
         ));
     }

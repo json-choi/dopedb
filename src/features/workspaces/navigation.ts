@@ -9,6 +9,7 @@ export function workspaceManagedConnectionSettingsUrl(
   const target = new URL(consoleUrl);
   target.searchParams.set("section", "providers");
   target.searchParams.set("connection", connectionId);
+  target.searchParams.set("desktop", "1");
   target.hash = `database-${connectionId}`;
   return target.toString();
 }

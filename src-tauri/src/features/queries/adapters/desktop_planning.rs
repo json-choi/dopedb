@@ -96,6 +96,9 @@ impl QueryPlatformAdapter {
             Err(error) => return Err(inspection.into_error(error)),
         };
         if let safety::GateDecision::Block { reason } = safety::decide(&settings, &classification) {
+            if classification.kind == QueryKind::Privilege {
+                return Err(inspection.into_error(AppError::SqlPolicyBlocked { position: Some(1) }));
+            }
             return Err(inspection.into_error(AppError::Blocked { reason }));
         }
         let history_origin = request.origin.unwrap_or_else(|| "manual".into());

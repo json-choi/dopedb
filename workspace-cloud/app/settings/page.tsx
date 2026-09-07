@@ -30,6 +30,7 @@ import {
 import { localizedWorkspacePath } from "../../lib/workspace-locale";
 import { getWorkspaceLocale } from "../../lib/workspace-locale-server";
 import { workspaceMessages } from "../../lib/workspace-messages";
+import { DesktopAccessReturn } from "../../features/connectionAccess/DesktopAccessReturn";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +45,7 @@ export default async function SettingsPage({
     integration?: string | string[];
     connection?: string | string[];
     section?: string | string[];
+    desktop?: string | string[];
   }>;
 }) {
   const params = await searchParams;
@@ -85,7 +87,7 @@ export default async function SettingsPage({
     requestedConnectionId
       ? `&connection=${encodeURIComponent(requestedConnectionId)}`
       : ""
-  }`, locale);
+  }${params.desktop === "1" && requestedConnectionId ? "&desktop=1" : ""}`, locale);
   if (!session) {
     redirect(localizedWorkspacePath(
       `/auth/sign-in?returnTo=${encodeURIComponent(settingsPath)}`,
@@ -384,6 +386,12 @@ export default async function SettingsPage({
             className="tw:scroll-mt-28 tw:pt-8"
             id={activeManagementArea}
           >
+            <DesktopAccessReturn
+              userId={session.user.id}
+              workspaceId={activeWorkspace.id}
+              connectionId={requestedConnectionId}
+              fromDesktop={params.desktop === "1" && requestedWorkspaceId === activeWorkspace.id}
+            >
             <WorkspaceManagementPanel
               workspaceId={activeWorkspace.id}
               gcpSetupId={requestedGcpSetupId}
@@ -391,6 +399,7 @@ export default async function SettingsPage({
               initialConnectionId={requestedConnectionId}
               area={activeManagementArea}
             />
+            </DesktopAccessReturn>
           </section>
         ) : null}
       </div>

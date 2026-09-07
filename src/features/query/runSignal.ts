@@ -79,6 +79,14 @@ export function analyzeRunSignal(
 ): RunSignalAnalysis | null {
   if (!sql.trim()) return null;
   const effectiveStatements = statements.length > 0 ? statements : [sql];
+  if (effectiveStatements.some((statement) => /^(grant|revoke|deny)\b|^(create|alter)\s+(role|user|policy)\b/i.test(compactSql(statement)))) {
+    return {
+      tone: "danger",
+      icon: "alert",
+      text: { key: "sql.signalPrivilegeBlocked" },
+      title: { key: "sql.policyBlock.message" },
+    };
+  }
   const writes = effectiveStatements.some(likelyMutates);
   const changesSchema = effectiveStatements.some(likelyChangesSchema);
 

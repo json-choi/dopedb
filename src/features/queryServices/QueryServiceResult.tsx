@@ -357,7 +357,7 @@ function SqlErrorCard({
     >
       <ResultMeta>
         <Icon name="alert" className="tw:text-danger" />
-        <strong className="tw:text-danger">{t("sql.errorTitle")}</strong>
+        <strong className="tw:text-danger">{t(error.kind === "sqlPolicyBlocked" ? "sql.policyBlock.title" : "sql.errorTitle")}</strong>
         <span className="tw:text-muted-foreground"> · {error.at}</span>
       </ResultMeta>
       {error.kind === "managedConnectionRecoveryRequired" && connection ? (
@@ -372,9 +372,15 @@ function SqlErrorCard({
         </dd>
         <dt>{t("sql.errorMessage")}</dt>
         <dd>
+          {error.kind === "sqlPolicyBlocked" ? (
+            <p className="tw:m-0 tw:text-ui tw:leading-relaxed tw:whitespace-pre-wrap">
+              {t("sql.policyBlock.message")}
+            </p>
+          ) : (
           <pre className="tw:m-0 tw:overflow-auto tw:font-mono tw:text-sm tw:whitespace-pre-wrap tw:[overflow-wrap:anywhere]">
             {error.message}
           </pre>
+          )}
         </dd>
         {writeRecovery && connection ? (
           <WriteBlockRecoveryRow
