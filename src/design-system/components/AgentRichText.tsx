@@ -130,7 +130,7 @@ function AgentRichTextContent({
   );
 
   return (
-    <div className="tw:grid tw:max-w-full tw:min-w-0 tw:gap-3 tw:break-words tw:text-sm tw:leading-body tw:text-foreground">
+    <div className="tw:grid tw:max-w-full tw:min-w-0 tw:gap-3 tw:break-words tw:text-body tw:leading-body tw:text-foreground">
       <ReactMarkdown
         components={components}
         rehypePlugins={REHYPE_PLUGINS}
@@ -151,19 +151,30 @@ export function AgentStreamingText({
   chunks: string[];
   revision: number;
 }) {
-  return <AgentPlainText text={chunks.join("")} />;
+  return <AgentPlainText text={chunks.join("")} streaming />;
 }
 
 export function AgentPlainText({
   notice,
   text,
+  streaming = false,
 }: {
   notice?: string;
   text: string;
+  streaming?: boolean;
 }) {
   return (
-    <div className="tw:grid tw:max-w-full tw:min-w-0 tw:gap-3 tw:break-words tw:text-sm tw:leading-body tw:text-foreground">
-      <p className="tw:m-0 tw:min-w-0 tw:whitespace-pre-wrap">{text}</p>
+    <div className="tw:grid tw:max-w-full tw:min-w-0 tw:gap-3 tw:break-words tw:text-body tw:leading-body tw:text-foreground">
+      <p className="tw:m-0 tw:min-w-0 tw:whitespace-pre-wrap">
+        {text}
+        {streaming ? (
+          <span
+            aria-hidden="true"
+            data-streaming-cursor
+            className="tw:ml-0.5 tw:inline-block tw:h-[1em] tw:w-0.5 tw:translate-y-[2px] tw:bg-current"
+          />
+        ) : null}
+      </p>
       {notice ? (
         <small className="tw:text-xs tw:leading-body tw:text-muted-foreground" role="status">
           {notice}
@@ -215,7 +226,7 @@ function createMarkdownComponents(
       const block = Boolean(language) || raw.includes("\n");
       if (!block) {
         return (
-          <code className="tw:rounded-xs tw:bg-muted tw:px-1 tw:py-px tw:font-mono tw:text-xs tw:text-foreground">
+          <code className="tw:rounded-xs tw:bg-muted tw:px-1 tw:py-px tw:font-mono tw:text-sm tw:text-foreground">
             {children}
           </code>
         );
@@ -256,18 +267,18 @@ function createMarkdownComponents(
       </h2>
     ),
     h3: ({ children }) => (
-      <h3 className="tw:m-0 tw:pt-1 tw:text-sm tw:font-semibold tw:leading-tight">
+      <h3 className="tw:m-0 tw:pt-1 tw:text-body tw:font-semibold tw:leading-tight">
         {children}
       </h3>
     ),
     h4: ({ children }) => (
-      <h4 className="tw:m-0 tw:text-sm tw:font-semibold">{children}</h4>
+      <h4 className="tw:m-0 tw:text-body tw:font-semibold">{children}</h4>
     ),
     h5: ({ children }) => (
-      <h5 className="tw:m-0 tw:text-xs tw:font-semibold">{children}</h5>
+      <h5 className="tw:m-0 tw:text-ui tw:font-semibold">{children}</h5>
     ),
     h6: ({ children }) => (
-      <h6 className="tw:m-0 tw:text-xs tw:font-medium tw:text-muted-foreground">
+      <h6 className="tw:m-0 tw:text-ui tw:font-medium tw:text-muted-foreground">
         {children}
       </h6>
     ),
@@ -300,7 +311,7 @@ function createMarkdownComponents(
     ),
     table: ({ children }) => (
       <div className="tw:max-w-full tw:min-w-0 tw:overflow-auto tw:rounded-sm tw:border tw:border-border-subtle">
-        <table className="tw:w-full tw:min-w-max tw:border-collapse tw:text-left tw:text-xs">
+        <table className="tw:w-full tw:min-w-max tw:border-collapse tw:text-left tw:text-sm">
           {children}
         </table>
       </div>
@@ -431,7 +442,7 @@ function AgentCodeBlock({
           {copied ? copiedLabel : ""}
         </span>
       </div>
-      <pre className="tw:m-0 tw:max-h-96 tw:max-w-full tw:overflow-auto tw:p-3 tw:font-mono tw:text-xs tw:leading-body tw:whitespace-pre tw:[tab-size:2]">
+      <pre className="tw:m-0 tw:max-h-96 tw:max-w-full tw:overflow-auto tw:p-3 tw:font-mono tw:text-sm tw:leading-body tw:whitespace-pre tw:[tab-size:2]">
         <code className="tw:block tw:min-w-max">
           {lines ? <HighlightedCode lines={lines} /> : code}
         </code>

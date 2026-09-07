@@ -206,6 +206,9 @@ export function useAcpChatController({
       option.type === "select" &&
       typeof option.currentValue === "string",
   );
+  const modeOption = configOptions.find((option) =>
+    option.category === "mode" && option.type === "select" && typeof option.currentValue === "string",
+  );
   const composerContext = useAcpComposerContext({
     scopeKey: catalogScope.key, focus: knowledgeFocus, scopes: active?.knowledgeScopes ?? [],
     connection, documents, activeDocumentId, selectedTable,
@@ -711,6 +714,7 @@ export function useAcpChatController({
       contextLabels: composerContext.labels,
       environmentScopeReady,
       modelOption,
+      modeOption,
       configChanging,
     },
     feedback: {

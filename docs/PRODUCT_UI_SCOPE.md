@@ -82,11 +82,11 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
 - Desktop은 시스템 설정을 기본으로 따르며 Settings → 화면에서 시스템·라이트·다크를
   즉시 선택하고 기기에 저장한다. 시스템 모드는 OS 변경도 자동 반영한다. 기존 다크
   palette와 밝은 중립 palette가 같은 semantic role과 평평한 pane 배치를 공유한다.
-  title toolbar는 40px 높이와 32px action을 사용하고 기존 선형 D 마크를 표시한다.
-  검색 옆 왼쪽 패널 토글은 현재 Explorer·Local History를 닫고 같은 패널을 복원한다.
+  title toolbar는 검색 위아래 여백 없이 32px 높이와 32px action을 사용하고 기존 선형 D 마크를 표시한다.
+  헤더 왼쪽의 브랜드 오른쪽 패널 토글은 현재 Explorer·Local History를 닫고 같은 패널을 복원한다.
   AI Chat은 계정과 구분되는 말풍선 아이콘을 사용한다.
-  왼쪽의 Workspace 선택과 Databases / Articles / Agent 진입은 같은 실제
-  Explorer·Knowledge·Agent command를 호출한다. Article 읽기에서는 큰 serif 제목,
+  왼쪽은 Workspace 선택과 Databases / Articles 진입을 소유하고 AI Chat 진입은
+  헤더 오른쪽 한 곳에 둔다. 탐색 메뉴와 도구·검색·트리는 같은 12px gutter를 공유한다. Article 읽기에서는 큰 serif 제목,
   본문, 본문에서 추출한 목차와 exact DB·저장 쿼리·수동 재조회 도구를 나란히 둔다.
   좁은 중앙 pane에서는 같은 도구를 본문 위로 접고 목차를 disclosure로 제공한다.
   공유와 편집은 상단, 공개 발행·history·삭제는 더보기로 정리한다. 예시 작성자,
@@ -95,7 +95,10 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
   Explorer 상단에 두고 Explorer를 숨기거나 Local History를 열면 title toolbar에
   표시한다. 각 작업 면은 해당 문맥과 document tab을 소유한다.
 - 왼쪽 Explorer는 `Project → Databases / Data sources / Analyses`의 계층과 실제
-  catalog를 소유한다. Environment는 exact grant와 binding을 소유하는 domain으로
+  catalog를 소유한다. 상단 도구는 Project 추가·Environment 추가·새로고침·검색 네 개만
+  두고, 닫기는 헤더의 패널 토글이 소유한다. 별도 닫기와 보기 옵션 메뉴는 두지 않는다.
+  활성 아이콘은 hover 시 중립 배경과 선명한 glyph로 반응하며 비활성 아이콘은 반응하지 않는다.
+  Environment는 exact grant와 binding을 소유하는 domain으로
   유지하되 Project 아래 시각적 folder로 반복하지 않는다. `Databases`는 Project의
   모든 환경 binding을 한 목록으로 투영하고 각 DB 행에만 exact Environment의
   dev/staging/prod marker를 표시한다. Data source와 Analysis Article 행은 같은
@@ -168,6 +171,13 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
   전체 surface를 로딩으로 바꾸지 않는다. 준비 중 선택이 바뀌면 이전 세션을
   정리하고 마지막 선택만 준비한다. 첫 prompt는 같은 준비 작업을 기다려 한 번만
   전송하며, 대화가 시작된 뒤에는 resource grant를 변경하지 않는다.
+  답변 조각은 수신 후 다음 화면 frame에 반영하고, 생성 중 커서를 표시한다.
+  최종 완료·권한 요청은 대기 중인 조각까지 즉시 반영하며 사용자가 위로 스크롤해
+  읽는 중에는 강제로 아래로 이동하지 않는다.
+  입력창 아래는 provider·model과 resource·승인 모드를 두 행의 동일한 28px control로
+  표시한다. 승인 모드는 공식 ACP adapter가 광고한 선택지만 제공하고 세션이 준비된
+  상태에서 명시적으로 변경한다. 자동 승인은 adapter의 도구 권한 요청에 적용되며
+  exact resource grant, 단일 write target과 DB 변경의 별도 승인을 대체하지 않는다.
 - 외부 공식 Codex/Claude CLI는 `dopedb agent init`으로 Project root의
   `.dopedb/agent.json`을 만든다. 이 파일은 provider와 Project/resource UUID, 선택적인
   단일 쓰기 대상만 가지며 credential, URL, capability를 저장하지 않는다. 초기

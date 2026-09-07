@@ -383,36 +383,7 @@ fn push_session_configuration(
     }
     match bounded_json_value(&config_options, "ACP session configuration") {
         Ok(serde_json::Value::Array(config_options)) => {
-            let mut allowed = HashMap::<String, HashSet<String>>::new();
-            let config_options = config_options
-                .into_iter()
-                .filter_map(|option| {
-                    let object = option.as_object()?;
-                    if object.get("category")?.as_str()? != "model"
-                        || object.get("type")?.as_str()? != "select"
-                    {
-                        return None;
-                    }
-                    let id = object.get("id")?.as_str()?.to_owned();
-                    if id.is_empty() || id.len() > MAX_CONFIG_OPTION_ID_BYTES {
-                        return None;
-                    }
-                    let mut values = HashSet::new();
-                    collect_config_select_values(object.get("options"), &mut values);
-                    if let Some(current) =
-                        object.get("currentValue").and_then(|value| value.as_str())
-                    {
-                        if !current.is_empty() && current.len() <= MAX_CONFIG_OPTION_VALUE_BYTES {
-                            values.insert(current.to_owned());
-                        }
-                    }
-                    if values.is_empty() {
-                        return None;
-                    }
-                    allowed.insert(id, values);
-                    Some(serde_json::Value::Object(object.clone()))
-                })
-                .collect::<Vec<_>>();
+            let (config_options, allowed) = configuration::project_options(config_options);
             *lock_unpoisoned(&session.config_options) = allowed;
             session.push(AcpSessionEventPayload::SessionConfiguration { config_options });
         }
@@ -425,24 +396,6 @@ fn push_session_configuration(
         Err(message) => {
             lock_unpoisoned(&session.config_options).clear();
             session.push(AcpSessionEventPayload::Error { message });
-        }
-    }
-}
-
-fn collect_config_select_values(value: Option<&serde_json::Value>, values: &mut HashSet<String>) {
-    let Some(entries) = value.and_then(serde_json::Value::as_array) else {
-        return;
-    };
-    for entry in entries {
-        let Some(object) = entry.as_object() else {
-            continue;
-        };
-        if let Some(value) = object.get("value").and_then(serde_json::Value::as_str) {
-            if !value.is_empty() && value.len() <= MAX_CONFIG_OPTION_VALUE_BYTES {
-                values.insert(value.to_owned());
-            }
-        } else {
-            collect_config_select_values(object.get("options"), values);
         }
     }
 }

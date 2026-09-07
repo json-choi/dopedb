@@ -10,12 +10,14 @@ import { Tooltip } from "./Tooltip";
 
 export function IdeTitleToolbar({
   macosInset,
+  contextAction,
   context,
   launchers,
   launchersLabel,
   actions,
 }: {
   macosInset: boolean;
+  contextAction?: ReactNode;
   context: ReactNode;
   launchers: ReactNode;
   launchersLabel: string;
@@ -23,13 +25,14 @@ export function IdeTitleToolbar({
 }) {
   return (
     <header
-      className="tw:relative tw:col-[1/-1] tw:row-start-1 tw:z-[var(--ds-z-sticky)] tw:flex tw:h-title-toolbar tw:min-w-0 tw:select-none tw:items-center tw:gap-2 tw:border-b tw:border-border-subtle tw:bg-background tw:px-4 tw:text-muted-foreground"
+      className="tw:relative tw:col-[1/-1] tw:row-start-1 tw:z-[var(--ds-z-sticky)] tw:flex tw:h-title-toolbar tw:min-w-0 tw:select-none tw:items-center tw:gap-2 tw:bg-background tw:shadow-[inset_0_-1px_0_var(--ds-border-subtle)] tw:px-4 tw:text-muted-foreground"
       data-tauri-drag-region="deep"
     >
       {macosInset ? (
         <div className="tw:w-[68px] tw:shrink-0" aria-hidden="true" />
       ) : null}
       <div className="tw:min-w-0 tw:shrink-0 tw:max-[561px]:hidden">{context}</div>
+      {contextAction}
       <div
         className="tw:flex tw:min-w-0 tw:flex-1 tw:items-center tw:justify-center tw:gap-1"
         role="toolbar"

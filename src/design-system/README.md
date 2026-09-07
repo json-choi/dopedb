@@ -66,13 +66,14 @@ packaged runtime 증거가 아니다.
 
 - 앱 chrome은 눈에 띄지 않고 사용자의 데이터와 도구를 감싼다.
 - macOS native menu와 별도로 WebView 안에 File/Edit/View 계열 메뉴를 만들지
-  않는다. 40px title toolbar는 DopeDB 브랜드, 실제 Action Search(Shift 두 번),
-  왼쪽 패널 토글, 계정과 설정을 소유한다. 헤더 action과 compact 계정 trigger는
+  않는다. 32px title toolbar는 DopeDB 브랜드, 실제 Action Search(Shift 두 번),
+  브랜드 오른쪽의 왼쪽 패널 토글, 계정과 설정을 소유한다. 헤더 action과 compact 계정 trigger는
   모두 32px 정사각형으로 같은 중앙선에 정렬한다. 패널 토글은 현재 Explorer 또는
   Local History를 숨기고 같은 패널로 복원하며 compact 창에서는 drawer를 제어한다.
-- Workspace selector와 `WorkspaceNavButton`의 Databases·Articles·Agent는
+- Workspace selector와 `WorkspaceNavButton`의 Databases·Articles는
   296px 기본 Explorer 상단에 둔다. Articles는 현재 또는 첫 Project Environment의
-  실제 collection을 열고 Agent는 기존 선택 DB와 session command를 사용한다.
+  실제 collection을 연다. AI Chat은 헤더 오른쪽 launcher에서 연다.
+  Explorer의 상단 탐색, 도구, 검색, 트리는 같은 12px 좌우 gutter를 사용한다.
   Explorer가 숨겨졌거나 Local History로 바뀌면 workspace selector를 title toolbar에
   표시한다. 보조 tool window와 문서 생성은 실제 `ToolbarMenu`가 소유한다.
   이전 Explorer 기본값 396px만 296px로 이전하며 다른 사용자 저장 폭은 보존한다.
@@ -117,16 +118,16 @@ packaged runtime 증거가 아니다.
   하나의 layout 문법으로 구현한다.
 - Database Explorer는 별도 제목 header나 누적 section header를 두지 않고 한 개의
   compact command strip만 사용한다. 고정 action은 Project 추가(`folderPlus`),
-  Environment 추가(`plus`), 전체 refresh, view option이며 hide는 strip hover 또는
-  keyboard focus에서만 나타난다. expand/collapse, 검색, 현재 editor 객체 동기화,
-  row count는 view option 안에 둔다. 연결 생성·설정·query·relation data/DDL·schema
+  Environment 추가(`plus`), 전체 refresh, 검색 네 개만 둔다. Explorer 닫기는
+  title toolbar의 패널 토글이 소유하며 별도 닫기와 보기 옵션 메뉴는 두지 않는다.
+  행 수 표시는 connection row menu가 소유한다. 연결 생성·설정·query·relation data/DDL·schema
   compare는 각각 Environment 상세, connection row/menu, 전역 workbench, relation
   surface가 소유하며 Explorer 상단에 중복하지 않는다.
   SQL data source 행의 작은 범위 badge는 발견한 namespace 중 현재 선택 수를
   표시하고 portal `ToolbarMenu`의 실제 checklist를 연다. 이 checklist는 Data
   Sources의 Schemas 탭과 같은 저장 값을 사용하며 화면별 popup이나 별도 style
   map을 만들지 않는다.
-  검색 input은 view option이 열었을 때만 하나만 표시하며 connection subtree에
+  검색 input은 검색 action으로 열었을 때만 하나만 표시하며 connection subtree에
   검색 input을 중복하지 않는다. backend disconnect lifecycle이 없는 동안
   소유자 없는 Deactivate를 모양만 있는 action으로 추가하지 않는다.
 - 색상보다 `muted`, `selection`, `border`를 먼저 사용한다.
@@ -272,7 +273,9 @@ Elevation은 세 단계만 허용한다.
   요약과 우측 action은 확장 상태에서도 첫 2열을 유지하고, 복구 안내처럼 길어지는
   보조 내용은 그 아래 전체 폭 grid row가 소유한다.
 - `IdeTitleToolbar`, `IdeStatusBarSurface`: title/status chrome의
-  고정 높이와 좌·중앙·우 slot. feature shell은 command와 state만 제공한다.
+  고정 높이와 좌·중앙·우 slot. `contextAction` slot은 브랜드 바로 오른쪽에
+  항상 보이는 왼쪽 패널 토글을 둔다. 32px 검색과 헤더의 위아래 경계를 맞추고,
+  하단 구분선은 inset shadow로 그려 control 높이를 침범하지 않는다. feature shell은 command와 state만 제공한다.
 - `IdeToolbarLauncher`: title toolbar의 32px launcher와 중립적인 open/pressed
   상태. tool window가 열렸다는 이유만으로 primary 파랑을 사용하지 않는다.
 - `IdeTabStrip`, `IdeTab`: 평평한 document strip과 strip 안쪽의 둥근 active
@@ -335,7 +338,8 @@ Elevation은 세 단계만 허용한다.
   wrapper 크기를 다시 지정하지 않는다.
 - `ToolWindowComposer`, `ToolWindowComposerDock`, `ToolWindowComposerInput`,
   `ToolWindowComposerContext`: AI Chat의 multiline 입력면, 내부 context row와
-  외부 Agent/model row. 입력면의 `expanded` 상태는 실제 확대·복원 action과
+  외부 2열·2행 context grid. 첫 행은 Agent·model, 둘째 행은 resource·승인 모드다.
+  입력면의 `expanded` 상태는 실제 확대·복원 action과
   연결되고 `busy` 상태는 Agent가 응답·승인을 기다리는 동안 활성 작업 경계를
   유지한다. textarea의 기본 focus shadow는 제거하고 바깥 composer 경계 하나로
   입력 focus를 표시한다. 화면별 textarea 크기 CSS를 만들지 않는다.
@@ -357,8 +361,10 @@ Elevation은 세 단계만 허용한다.
   provider 선택은 아이콘·현재 이름·chevron을 하나의 `ToolbarMenu` trigger로
   정렬한다. `ToolbarMenuItem`은 일반 `IconName` 또는 공용 브랜드 마크를 받는다.
   좁은 context row에서는 model과 resource 이름이 가용 폭 안에서 줄어들고,
-  resource 선택의 count·chevron은 유지한다. `InlineSelect`와 `ToolbarMenu` trigger는
-  부모가 할당한 폭을 넘지 않는다.
+  resource 선택의 count·chevron은 유지한다. `ToolbarMenu triggerVariant="composer"`는
+  이 네 선택기의 28px 높이·14px medium 글자·14px chevron과 가용 폭 내 줄임을
+  소유한다. 승인 모드는 어댑터가 실제 제공한 선택지만 보이고, 현재 세션이 ready일
+  때 변경한다. UI가 자동 승인을 기본값으로 저장하거나 DB 쓰기 승인을 생략하지 않는다.
   feature별 임시 SVG나 상태색 대용 브랜드색을 만들지 않는다.
 - `AgentCliStatusBadges`, `AgentCliDetectionNotice`: 시작 모달과 Agent Tools가
   공유하고 AI Chat도 같은 상태 어휘를 따르는 feature composition. 로컬 CLI의
@@ -368,6 +374,8 @@ Elevation은 세 단계만 허용한다.
 - `ToolbarMenu menuSize="scope"`: Explorer schema scope popover의 outer
   frame을 300px로 고정한다. feature child가 popover padding과 border를
   중복 계산하지 않는다.
+- `ToolbarMenu triggerVariant="compact"`: AI Chat header처럼 28px control이
+  나란히 있는 tool window에서 같은 높이의 icon-only menu를 제공한다.
 - `ToolbarMenu triggerVariant="treeAction"`: 28px tree row 안의 24px overflow
   action. `triggerVariant="gridHeader"`: 28px data-grid header 안의
   filter action을 24px로 제한해 header를 늘리지 않는다.
@@ -784,15 +792,20 @@ ACP처럼 protocol이 작업 상태를 소유하는 화면은
 첫 번째는 일반 사용자에게 ACP 내부 작업을 의미 있는 한 줄 상태로 축약한다.
 두 번째는 디버깅 화면에서 tool의 제목, 진행 상태, 구조화 결과와 상세
 입력/출력을 한 observation surface에 묶고, 세 번째는 protocol이 실제로 제공한
-선택지만 approval action으로 받는다. 화면별로
+선택지만 approval action으로 받는다. 카드 제목은 14px semibold, 본문은 15px
+normal, 상태는 12px이며 승인 action은 공용 `Button size="xs"`의 28px·14px를 따른다.
+화면별로
 승인 card의 warning border, status dot, icon/본문/action grid를 복제하지 않는다.
 Agent provider나 model 선택은 이 primitive의 책임이 아니며, 지원 결정이 없는
 provider를 disabled option으로 노출하지 않는다.
 
-Agent의 최종 답변과 streaming 답변 본문은
+채팅 입력·사용자 메시지·Agent 답변은 15px 본문을 사용하며, 14px control과
+12px 보조 상태로 계층을 구분한다. Agent의 최종 답변과 streaming 답변 본문은
 [`src/design-system/components/AgentRichText.tsx`](components/AgentRichText.tsx)의
 `AgentRichText`, `AgentStreamingText`, `AgentPlainText`를 사용한다. streaming
-중에는 React가 소유하는 escaped plain text만 표시하며, turn boundary 뒤
+중에는 React가 소유하는 escaped plain text와 정적인 작성 커서를 표시한다.
+들어온 조각은 최대 한 frame에 한 번 반영하고 숨겨진 WebView도 50ms 타이머로
+대기 queue를 비운다. turn boundary 뒤
 `react-markdown` + `remark-gfm`으로 최종 본문을 한 번 렌더링한다. rich parsing은
 답변당 64KiB·1,000줄, transcript당 최근 12개·192KiB·2,400줄 안에서만 허용하고
 이전 답변과 한도 초과 답변은 내용 손실 없이 일반 텍스트로 표시한다. Markdown render가
@@ -837,6 +850,9 @@ canonical `Tooltip`의 hover/focus 문구를 함께 제공한다. `pnpm
 check:ui-primitives`는 raw icon-only button의 재도입과 이름 없는 `Button
 iconOnly`를 차단한다. 보통 icon action은 투명한 surface로 시작하고
 hover/active에서만 중립 배경을 드러낸다.
+`Button`의 enabled hover는 variant의 기본 배경보다 우선해 중립 배경과 선명한
+glyph를 표시한다. disabled 버튼에는 hover 색상을 적용하지 않으며 reduced motion에서는
+색상 전환을 생략한다.
 삭제 icon도 idle 상태에서는 빨간 채움 상자로 만들지 않고 의미색 glyph를 사용하며,
 최종 확인 action만 `variant="danger"`의 채움 surface를 사용한다. 변경한 화면에서는
 단일 아이콘 `Button`의 정사각형 규격과 접근 가능한 이름을 직접 확인한다.

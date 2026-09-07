@@ -68,7 +68,7 @@ export function ToolWindowSearchRow({
   children: ReactNode;
 }) {
   return (
-    <div className="tw:flex tw:shrink-0 tw:items-center tw:gap-1 tw:border-b tw:border-border-subtle tw:px-1 tw:pt-1 tw:pb-[3px]">
+    <div className="tw:flex tw:shrink-0 tw:items-center tw:gap-1 tw:px-3 tw:py-2">
       {children}
     </div>
   );
@@ -209,7 +209,7 @@ export function ToolWindowComposerInput(
 ) {
   return (
     <textarea
-      className="tw:min-h-16 tw:w-full tw:flex-1 tw:resize-none tw:border-0 tw:bg-transparent tw:pt-3 tw:pr-10 tw:pb-2 tw:pl-3 tw:font-sans tw:text-sm tw:leading-body tw:text-foreground tw:shadow-none tw:outline-none tw:placeholder:text-muted-foreground"
+      className="tw:min-h-16 tw:w-full tw:flex-1 tw:resize-none tw:border-0 tw:bg-transparent tw:pt-3 tw:pr-10 tw:pb-2 tw:pl-3 tw:font-sans tw:text-body tw:leading-body tw:text-foreground tw:shadow-none tw:outline-none tw:placeholder:text-muted-foreground"
       {...textareaProps}
     />
   );
@@ -221,7 +221,7 @@ export function ToolWindowComposerContext({
   children: ReactNode;
 }) {
   return (
-    <div className="tw:grid tw:h-control-md tw:shrink-0 tw:grid-cols-[auto_minmax(0,max-content)_minmax(4rem,1fr)] tw:items-center tw:gap-1 tw:px-2">
+    <div className="tw:grid tw:shrink-0 tw:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] tw:items-center tw:gap-x-1 tw:gap-y-1 tw:py-2">
       {children}
     </div>
   );

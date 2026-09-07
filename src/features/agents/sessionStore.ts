@@ -75,7 +75,11 @@ export class AcpSessionStore {
       events: NonNullable<AcpSessionChanged["event"]>[];
     }
   >();
-  private flushScheduled = false;
+  private cancelFlush: (() => void) | null = null;
+
+  constructor(
+    private readonly scheduleFlush = scheduleStreamingFrame,
+  ) {}
 
   subscribe = (listener: Listener) => {
     this.listeners.add(listener);
@@ -100,7 +104,8 @@ export class AcpSessionStore {
     this.unlisten?.();
     this.unlisten = null;
     this.pendingChanges.clear();
-    this.flushScheduled = false;
+    this.cancelFlush?.();
+    this.cancelFlush = null;
     this.publish({
       scopeKey,
       sessions: [],
@@ -208,21 +213,20 @@ export class AcpSessionStore {
         : change.session;
     this.pendingChanges.set(change.session.id, {
       session,
-      events: change.event
-        ? [...(pending?.events ?? []), change.event]
-        : pending?.events ?? [],
+      events: pending?.events ?? [],
     });
+    if (change.event) this.pendingChanges.get(change.session.id)!.events.push(change.event);
     if (isProjectionBoundary(change.event)) {
       this.flushChanges();
       return;
     }
-    if (this.flushScheduled) return;
-    this.flushScheduled = true;
-    queueMicrotask(() => this.flushChanges());
+    if (this.cancelFlush) return;
+    this.cancelFlush = this.scheduleFlush(() => this.flushChanges());
   }
 
   private flushChanges() {
-    this.flushScheduled = false;
+    this.cancelFlush?.();
+    this.cancelFlush = null;
     if (this.pendingChanges.size === 0) return;
     const pending = [...this.pendingChanges.values()];
     this.pendingChanges.clear();
@@ -233,6 +237,28 @@ export class AcpSessionStore {
     this.snapshot = snapshot;
     for (const listener of this.listeners) listener();
   }
+}
+
+// Token bursts share one paint, while permission/turn boundaries flush at once.
+// A bounded timer also drains the queue when a hidden WebView suspends frames.
+function scheduleStreamingFrame(flush: () => void): () => void {
+  let completed = false;
+  let frame: number | null = null;
+  const finish = () => {
+    if (completed) return;
+    cancel();
+    flush();
+  };
+  const timer = setTimeout(finish, 50);
+  const cancel = () => {
+    completed = true;
+    clearTimeout(timer);
+    if (frame !== null) cancelAnimationFrame(frame);
+  };
+  if (typeof requestAnimationFrame === "function") {
+    frame = requestAnimationFrame(finish);
+  }
+  return cancel;
 }
 
 export const acpSessionStore = new AcpSessionStore();

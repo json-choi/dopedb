@@ -361,10 +361,7 @@ function ShellLayoutContent({ model, commands }: Props) {
             workspaceHeader={<WorkspaceNavigation
               workspace={<WorkspaceSwitcher onNew={commands.workspace.newConnection} onChanged={commands.workspace.scopeChanged} />}
               focus={explorer.knowledgeFocus}
-              agentOpen={agent.open}
-              agentAvailable={workspace.selected !== null}
               onNavigate={commands.explorer.openProjectEnvironment}
-              onAgent={commands.agent.toggle}
             />}
             connections={workspace.connections}
             selectedId={
@@ -385,7 +382,6 @@ function ShellLayoutContent({ model, commands }: Props) {
             onDeleted={commands.workspace.deleteConnection}
             onConnectionUpdated={commands.workspace.updateConnection}
             onNewConnection={commands.workspace.newConnection}
-            onClose={commands.explorer.toggleDatabase}
             onCreateDemoDatabase={commands.workspace.createDemo}
             creatingDemo={workspace.creatingDemo}
             compact={viewport.compact}

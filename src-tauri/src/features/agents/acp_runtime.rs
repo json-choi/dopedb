@@ -547,7 +547,7 @@ impl AcpRuntime {
         validate_config_option_value(&config_id, &value)?;
         if !session.allows_config_option(&config_id, &value) {
             return Err(AppError::Blocked {
-                reason: "the ACP adapter did not advertise that model option".into(),
+                reason: "the ACP adapter did not advertise that configuration option".into(),
             });
         }
         if session.summary().lifecycle != AcpSessionLifecycle::Ready {

@@ -198,7 +198,7 @@ export function planEntryLabel(entry: unknown): string {
 }
 
 export function providerLabel(provider: AgentProvider) {
-  return provider === "claude" ? "Claude Agent" : "Codex";
+  return provider === "claude" ? "Claude" : "Codex";
 }
 
 export function loginCommand(provider: AgentProvider) {

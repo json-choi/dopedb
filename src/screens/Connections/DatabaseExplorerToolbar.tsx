@@ -1,12 +1,8 @@
 // Toolbar and scoped search controls for the Database Explorer tool window.
 import type { ReactNode } from "react";
 import { Icon } from "../../components/Icon";
-import ToolbarMenu, { ToolbarMenuItem } from "../../components/ToolbarMenu";
 import { Button } from "../../design-system/components/Button";
-import {
-  ToolWindowHideButton,
-  ToolWindowSearchRow,
-} from "../../design-system/components/ToolWindow";
+import { ToolWindowSearchRow } from "../../design-system/components/ToolWindow";
 import { TreeSearch } from "../../design-system/components/TreeControls";
 import type { ConnectionProfile } from "../../features/connections/domain";
 import { useI18n } from "../../lib/i18n";
@@ -27,9 +23,6 @@ interface DatabaseExplorerToolbarProps {
   activeEnvironmentView: string | null;
   analysisAvailable: boolean;
   analysisFilter: string;
-  selectedTableKey: string | null;
-  showRowCounts: boolean;
-  hasExpandedItems: boolean;
   workspaceHeader?: ReactNode;
   onAddProject: () => void;
   onAddEnvironment: () => void;
@@ -40,12 +33,7 @@ interface DatabaseExplorerToolbarProps {
   onMoveSearchResult: (direction: 1 | -1) => void;
   onOpenSearchResult: (result: CatalogTreeSearchResult) => void;
   onFocusSearchResult: (treeKey: string) => void;
-  onRevealEditorObject: () => void;
-  onExpandAll: () => void;
-  onCollapseAll: () => void;
-  onToggleRowCounts: () => void;
   onAnalysisFilterChange: (value: string) => void;
-  onClose: () => void;
 }
 
 export function DatabaseExplorerToolbar({
@@ -63,9 +51,6 @@ export function DatabaseExplorerToolbar({
   activeEnvironmentView,
   analysisAvailable,
   analysisFilter,
-  selectedTableKey,
-  showRowCounts,
-  hasExpandedItems,
   workspaceHeader,
   onAddProject,
   onAddEnvironment,
@@ -76,19 +61,14 @@ export function DatabaseExplorerToolbar({
   onMoveSearchResult,
   onOpenSearchResult,
   onFocusSearchResult,
-  onRevealEditorObject,
-  onExpandAll,
-  onCollapseAll,
-  onToggleRowCounts,
   onAnalysisFilterChange,
-  onClose,
 }: DatabaseExplorerToolbarProps) {
   const { t } = useI18n();
   return (
     <>
       {workspaceHeader}
       <div
-        className="tw:group tw:flex tw:min-h-control-md tw:shrink-0 tw:items-center tw:gap-[2px] tw:border-b tw:border-border-subtle tw:bg-background tw:px-1"
+        className="tw:flex tw:min-h-control-md tw:shrink-0 tw:items-center tw:gap-1 tw:border-y tw:border-border-subtle tw:bg-background tw:px-3 tw:py-1"
         role="toolbar"
         aria-label={t("connections.databaseExplorerActions")}
       >
@@ -138,45 +118,6 @@ export function DatabaseExplorerToolbar({
         >
           <Icon name="search" />
         </Button>
-        <ToolbarMenu icon="view" label={t("connections.viewOptions")}>
-          <ToolbarMenuItem
-            icon="target"
-            disabled={!selectedTableKey}
-            onClick={onRevealEditorObject}
-          >
-            {t("connections.scrollFromEditor")}
-          </ToolbarMenuItem>
-          <ToolbarMenuItem
-            icon="chevronsRight"
-            disabled={connections.length === 0 && projectCount === 0}
-            onClick={onExpandAll}
-          >
-            {t("connections.expandAll")}
-          </ToolbarMenuItem>
-          <ToolbarMenuItem
-            icon="chevronsLeft"
-            disabled={!hasExpandedItems}
-            onClick={onCollapseAll}
-          >
-            {t("connections.collapseAll")}
-          </ToolbarMenuItem>
-          <ToolbarMenuItem
-            icon="search"
-            disabled={connections.length === 0}
-            onClick={onOpenSearch}
-          >
-            {t("connections.filterTables")}
-          </ToolbarMenuItem>
-          <ToolbarMenuItem
-            icon={showRowCounts ? "check" : "list"}
-            onClick={onToggleRowCounts}
-          >
-            {t("connections.showRowCounts")}
-          </ToolbarMenuItem>
-        </ToolbarMenu>
-        <span className="tw:pointer-events-none tw:ml-auto tw:opacity-0 tw:transition-opacity tw:group-hover:pointer-events-auto tw:group-hover:opacity-100 tw:group-focus-within:pointer-events-auto tw:group-focus-within:opacity-100">
-          <ToolWindowHideButton label={t("common.close")} onClick={onClose} />
-        </span>
       </div>
 
       {connections.length > 0 && searchOpen ? (

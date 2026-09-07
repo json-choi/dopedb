@@ -174,9 +174,64 @@ describe("ACP session store", () => {
     expect(merged).toEqual([current]);
   });
 
-  it("retains independent session identities", () => {
+  it("streams partial replies before turn end without crossing session or account boundaries", async () => {
     expect(mergeAcpSessionSummaries([session("one")], [session("two")]))
       .toHaveLength(2);
+    let frame: (() => void) | null = null;
+    const cancelFrame = vi.fn();
+    const schedule = vi.fn((flush: () => void) => {
+      frame = flush;
+      return cancelFrame;
+    });
+    const store = new AcpSessionStore(schedule);
+    store.activate("workspace:a");
+    await settle();
+    const active = session("streaming");
+    const delta = (sequence: number, text: string): AcpSessionEvent => ({
+      sessionId: active.id,
+      sequence,
+      createdAt: active.updatedAt,
+      type: "sessionUpdate",
+      update: {
+        sessionUpdate: "agent_message_chunk",
+        content: { type: "text", text },
+      },
+    });
+    change?.({ session: active, event: messageEvent(active.id, 1, "Explain the schema") });
+    const beforeTokens = store.getSnapshot();
+    change?.({ session: active, event: delta(2, "First") });
+    change?.({ session: active, event: delta(3, " words") });
+    expect(schedule).toHaveBeenCalledTimes(1);
+    expect(store.getSnapshot()).toBe(beforeTokens);
+    (frame as (() => void) | null)?.();
+    const partial = store.getSnapshot().projections.get(active.id)!;
+    expect(partial.items.slice(-1)[0]).toMatchObject({ kind: "agent", chunks: ["First", " words"] });
+    expect(store.getSnapshot().sessions[0].lifecycle).toBe("running");
+    expect(partial.items.some((item) => item.kind === "turnEnd")).toBe(false);
+
+    change?.({ session: active, event: delta(4, " arrive live.") });
+    (frame as (() => void) | null)?.();
+    expect(store.getSnapshot().projections.get(active.id)!.items.slice(-1)[0])
+      .toMatchObject({ kind: "agent", chunks: ["First", " words", " arrive live."] });
+    // The last queued token and turn boundary publish together without waiting
+    // for another frame; the final answer contains no duplicated chunks.
+    change?.({ session: active, event: delta(5, " Done.") });
+    change?.({
+      session: { ...active, lifecycle: "ready" },
+      event: { sessionId: active.id, sequence: 6, createdAt: active.updatedAt, type: "turnEnd", stopReason: "end_turn" },
+    });
+    expect(store.getSnapshot().projections.get(active.id)!.items.slice(-2)[0])
+      .toMatchObject({ kind: "agent", chunks: ["First words arrive live. Done."] });
+    expect(store.getSnapshot().sessions[0].lifecycle).toBe("ready");
+    expect(cancelFrame).toHaveBeenCalledTimes(3);
+
+    // An obsolete scheduled callback cannot publish a prior account's text.
+    change?.({ session: active, event: delta(7, "Old account") });
+    const obsoleteFrame = frame as (() => void) | null;
+    store.activate("workspace:b");
+    expect(cancelFrame).toHaveBeenCalledTimes(4);
+    obsoleteFrame?.();
+    expect(store.getSnapshot().projections.size).toBe(0);
   });
 
   it("registers one listener before reading the initial snapshot", async () => {

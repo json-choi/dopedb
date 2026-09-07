@@ -11,7 +11,7 @@ export const SUPPORTED_AGENT_TARGETS = [
   {
     provider: "claude",
     target: "claude-code",
-    label: "Claude Agent",
+    label: "Claude",
   },
   {
     provider: "codex",

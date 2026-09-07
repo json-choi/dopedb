@@ -24,7 +24,6 @@ import type {
 import {
   projectConnectionAssignment,
   projectDatabasesDropTargets,
-  projectResourceKey,
   toggledResourceKeys,
 } from "../../features/catalogExplorer/projectResources";
 import {
@@ -75,12 +74,11 @@ export function DatabaseExplorer({
   workspaceAccount,
   workspaceHeader,
   onNewConnection,
-  onClose,
   onCreateDemoDatabase,
   creatingDemo = false,
   compact = false,
   compactOpen = false,
-  revealRequest: externalRevealRequest = 0,
+  revealRequest = 0,
   revealDatabase = null,
   revealNamespace = null,
   activeProjectEnvironmentId = null,
@@ -101,7 +99,6 @@ export function DatabaseExplorer({
   workspaceAccount?: ReactNode;
   workspaceHeader?: ReactNode;
   onNewConnection: (preset?: ConnectionLaunchPreset) => void;
-  onClose: () => void;
   onCreateDemoDatabase: () => void;
   creatingDemo?: boolean;
   compact?: boolean;
@@ -169,7 +166,6 @@ export function DatabaseExplorer({
     onResultsChange: onSearchResultsChange,
     move: moveSearchResult,
   } = useDatabaseExplorerSearch(treeKeyboard.restoreFocus);
-  const [localRevealRequest, setLocalRevealRequest] = useState(0);
   const [providerCredentialsOpen, setProviderCredentialsOpen] =
     useState<ProviderKind | null>(null);
   const providerReturnFocusRef = useRef<HTMLElement | null>(null);
@@ -356,39 +352,6 @@ export function DatabaseExplorer({
     forgetConnection(id);
   }
 
-  function expandAllConnections() {
-    for (const connection of connections) ensureGroupLoaded(connection.id);
-    const projectIds = (knowledgeProjects.data ?? []).map(
-      (project) => project.id,
-    );
-    setExpandedProjectIds(new Set(projectIds));
-    setExpandedResourceKeys(
-      new Set(
-        ["unassigned", ...projectIds.flatMap((projectId) => [
-          projectResourceKey(projectId, "databases"),
-          projectResourceKey(projectId, "sources"),
-          projectResourceKey(projectId, "analyses"),
-        ])],
-      ),
-    );
-    commands.patch({
-      openConnections: new Set(
-        connections.map((connection) => connection.id),
-      ),
-    });
-  }
-
-  function collapseAllConnections() {
-    for (const id of readableWantedIds) forgetConnection(id);
-    setExpandedProjectIds(new Set());
-    setExpandedResourceKeys(new Set());
-    commands.patch({
-      openConnections: new Set(),
-      wanted: new Set(),
-      objectSectionsOpen: new Set(),
-    });
-  }
-
   const openSelectedConnection = useEffectEvent((id: string) => {
     commands.openConnection(id);
     ensureGroupLoaded(id);
@@ -532,7 +495,7 @@ export function DatabaseExplorer({
         onToggleObjectSection={(kind) =>
           toggleObjectSection(connection.id, kind)
         }
-        revealRequest={externalRevealRequest + localRevealRequest}
+        revealRequest={revealRequest}
         revealDatabase={revealDatabase}
         revealNamespace={revealNamespace}
         treeParentKey={treeParentKey}
@@ -558,19 +521,6 @@ export function DatabaseExplorer({
     );
   }
 
-  const selectedConnection =
-    connections.find((connection) => connection.id === selectedId) ?? null;
-
-  function revealEditorObject() {
-    if (!selectedConnection || !selectedTableKey) return;
-    setGlobalFilter("");
-    closeExplorerSearch();
-    commands.openConnection(selectedConnection.id);
-    ensureGroupLoaded(selectedConnection.id);
-    setLocalRevealRequest((request) => request + 1);
-  }
-
-
   return (
     <ToolWindowSideSurface
       compact={compact}
@@ -592,13 +542,6 @@ export function DatabaseExplorer({
         activeEnvironmentView={activeProjectEnvironmentView}
         analysisAvailable={sharedKnowledgeWorkspace}
         analysisFilter={analysisFilter}
-        selectedTableKey={selectedTableKey}
-        showRowCounts={showRowCounts}
-        hasExpandedItems={
-          open.size > 0 ||
-          expandedProjectIds.size > 0 ||
-          expandedResourceKeys.size > 0
-        }
         workspaceHeader={workspaceHeader}
         onAddProject={() => setProjectSetupOpen(true)}
         onAddEnvironment={openEnvironmentSetup}
@@ -619,20 +562,13 @@ export function DatabaseExplorer({
           );
         }}
         onFocusSearchResult={treeKeyboard.focusKey}
-        onRevealEditorObject={revealEditorObject}
-        onExpandAll={expandAllConnections}
-        onCollapseAll={collapseAllConnections}
-        onToggleRowCounts={() =>
-          commands.patch({ showRowCounts: !showRowCounts })
-        }
         onAnalysisFilterChange={setAnalysisFilter}
-        onClose={onClose}
       />
 
       <div
         ref={setTreeScrollElement}
         data-catalog-tree-scroll
-        className="tw:min-h-0 tw:flex-1 tw:overflow-x-hidden tw:overflow-y-auto tw:p-1 tw:[container-name:db-sidebar] tw:[container-type:inline-size]"
+        className="tw:min-h-0 tw:flex-1 tw:overflow-x-hidden tw:overflow-y-auto tw:px-3 tw:pt-1 tw:pb-3 tw:[container-name:db-sidebar] tw:[container-type:inline-size]"
       >
         {knowledgeEnabled && knowledgeProjects.isPending ? (
           <div className="tw:min-h-control-md tw:px-2 tw:py-1 tw:text-xs">

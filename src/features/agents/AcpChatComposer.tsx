@@ -5,7 +5,6 @@ import { Icon } from "../../components/Icon";
 import ToolbarMenu, { ToolbarMenuItem } from "../../components/ToolbarMenu";
 import { AgentProviderMark } from "../../design-system/components/Agent";
 import { Button } from "../../design-system/components/Button";
-import { InlineSelect } from "../../design-system/components/FormControls";
 import {
   ToolWindowComposer,
   ToolWindowComposerContext,
@@ -13,9 +12,9 @@ import {
   ToolWindowComposerInput,
 } from "../../design-system/components/ToolWindow";
 import { useI18n } from "../../lib/i18n";
+import { AcpConfigSelect } from "./AcpConfigSelect";
 import { AcpScopeSelect } from "./AcpScopeSelect";
 import { providerLabel } from "./acpTranscriptPresentation";
-import type { AcpSessionConfigOption } from "./domain";
 import type { AcpChatController } from "./useAcpChatController";
 
 type AcpChatComposerProps = Pick<
@@ -37,6 +36,10 @@ export default function AcpChatComposer({
   const { t } = useI18n();
   const active = session.active;
   if (setup.enabledProviders.length === 0) return null;
+  const configDisabled =
+    session.starting ||
+    active?.lifecycle !== "ready" ||
+    composer.configChanging !== null;
   const composerDisabled =
     session.starting ||
     !setup.prerequisitesReady ||
@@ -56,7 +59,7 @@ export default function AcpChatComposer({
               : t("agent.acpResumeBody")}
           </p>
           <Button
-            size="compact"
+            size="xs"
             variant="primary"
             disabled={
               session.starting ||
@@ -207,12 +210,15 @@ export default function AcpChatComposer({
       <ToolWindowComposerContext>
         <ToolbarMenu
           align="start"
+          triggerVariant="composer"
           label={`${t("agent.acpProvider")}: ${providerLabel(setup.selectedProvider)}`}
           disabled={session.starting}
           trigger={
             <>
               <AgentProviderMark provider={setup.selectedProvider} />
-              <span>{providerLabel(setup.selectedProvider)}</span>
+              <span className="tw:min-w-0 tw:flex-1 tw:truncate">
+                {providerLabel(setup.selectedProvider)}
+              </span>
               <Icon name="chevronDown" />
             </>
           }
@@ -230,9 +236,10 @@ export default function AcpChatComposer({
           ))}
         </ToolbarMenu>
         {composer.modelOption ? (
-          <ConfigSelect
+          <AcpConfigSelect
+            provider={setup.selectedProvider}
             option={composer.modelOption}
-            changing={composer.configChanging === composer.modelOption.id}
+            disabled={configDisabled}
             onChange={(value) =>
               void commands.composer.changeConfigOption(
                 composer.modelOption!,
@@ -240,7 +247,7 @@ export default function AcpChatComposer({
               )
             }
           />
-        ) : null}
+        ) : <span />}
         <AcpScopeSelect
           knowledge={setup.knowledge}
           starting={session.starting}
@@ -251,46 +258,17 @@ export default function AcpChatComposer({
             void commands.composer.selectWriteTarget(connectionId)
           }
         />
+        {composer.modeOption ? (
+          <AcpConfigSelect
+            provider={setup.selectedProvider}
+            option={composer.modeOption}
+            disabled={configDisabled}
+            onChange={(value) =>
+              void commands.composer.changeConfigOption(composer.modeOption!, value)
+            }
+          />
+        ) : null}
       </ToolWindowComposerContext>
     </ToolWindowComposerDock>
-  );
-}
-
-function ConfigSelect({
-  option,
-  changing,
-  onChange,
-}: {
-  option: AcpSessionConfigOption;
-  changing: boolean;
-  onChange: (value: string) => void;
-}) {
-  const options = flattenConfigSelectOptions(option);
-  if (typeof option.currentValue !== "string" || options.length === 0) {
-    return null;
-  }
-  return (
-    <span className="tw:min-w-0 tw:max-w-[11rem]">
-      <InlineSelect
-        value={option.currentValue}
-        disabled={changing}
-        onChange={(event) => onChange(event.target.value)}
-        aria-label={option.name}
-        title={option.description ?? option.name}
-      >
-        {options.map((entry) => (
-          <option key={entry.value} value={entry.value}>
-            {entry.name}
-          </option>
-        ))}
-      </InlineSelect>
-    </span>
-  );
-}
-
-function flattenConfigSelectOptions(option: AcpSessionConfigOption) {
-  if (!Array.isArray(option.options)) return [];
-  return option.options.flatMap((entry) =>
-    "options" in entry ? entry.options : [entry],
   );
 }

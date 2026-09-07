@@ -47,7 +47,7 @@ export function AgentToolCallCard({
     <section className="tw:grid tw:max-w-full tw:min-w-0 tw:gap-2 tw:overflow-hidden tw:rounded-md tw:border tw:border-border-subtle tw:bg-card tw:p-3">
       <div className="tw:flex tw:min-w-0 tw:items-center tw:gap-2">
         <StatusDot tone={tone} />
-        <strong className="tw:min-w-0 tw:flex-1 tw:truncate tw:text-sm">
+        <strong className="tw:min-w-0 tw:flex-1 tw:truncate tw:text-ui tw:font-semibold">
           {title}
         </strong>
         <span className="tw:shrink-0 tw:whitespace-nowrap tw:text-xs tw:text-muted-foreground">
@@ -114,7 +114,7 @@ export function AgentPermissionCard({
           className="tw:shrink-0 tw:data-[pending=true]:text-muted-foreground"
           data-pending={pending || undefined}
         />
-        <strong className="tw:min-w-0 tw:flex-1 tw:truncate tw:text-sm">
+        <strong className="tw:min-w-0 tw:flex-1 tw:truncate tw:text-ui tw:font-semibold">
           {title}
         </strong>
         {status ? (
@@ -123,7 +123,7 @@ export function AgentPermissionCard({
           </span>
         ) : null}
       </div>
-      <div className="tw:min-w-0 tw:break-words tw:text-sm tw:font-medium tw:leading-body">
+      <div className="tw:min-w-0 tw:break-words tw:text-body tw:font-normal tw:leading-body">
         {description}
       </div>
       {actions}

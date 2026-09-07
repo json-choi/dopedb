@@ -91,7 +91,7 @@ export default function AcpChatTranscript({
   return (
     <div
       ref={viewport.transcriptRef}
-      className="tw:min-h-0 tw:min-w-0 tw:flex-1 tw:overflow-x-hidden tw:overflow-y-auto tw:overscroll-contain tw:bg-background tw:px-6 tw:pt-10 tw:pb-5"
+      className="tw:min-h-0 tw:min-w-0 tw:flex-1 tw:overflow-x-hidden tw:overflow-y-auto tw:overscroll-contain tw:bg-background tw:px-4 tw:pt-4 tw:pb-4"
       aria-live="polite"
       onScroll={viewport.onTranscriptScroll}
     >
@@ -113,7 +113,7 @@ export default function AcpChatTranscript({
           <strong>{t("agent.acpPluginRequired")}</strong>
           <p>{t("agent.acpPluginRequiredBody")}</p>
           <Button
-            size="compact"
+            size="xs"
             variant="primary"
             onClick={commands.setup.openAgentSetup}
           >
@@ -130,7 +130,7 @@ export default function AcpChatTranscript({
             })}
           </p>
           <Button
-            size="compact"
+            size="xs"
             variant="ghost"
             disabled={setup.cliFetching}
             onClick={() => void commands.setup.refreshCli()}
@@ -165,7 +165,7 @@ export default function AcpChatTranscript({
             })}
           </p>
           <Button
-            size="compact"
+            size="xs"
             variant="ghost"
             onClick={() =>
               void commands.setup.refreshKnowledgeEnvironments()
@@ -266,7 +266,7 @@ export default function AcpChatTranscript({
 
 function AgentEmpty({ children }: { children: ReactNode }) {
   return (
-    <div className="tw:m-auto tw:flex tw:min-h-full tw:w-[min(360px,calc(100%_-_var(--ds-space-6)))] tw:flex-col tw:items-center tw:justify-center tw:gap-3 tw:text-center tw:text-sm tw:text-muted-foreground tw:[&>.icon]:size-7 tw:[&>.icon]:text-foreground tw:[&>strong]:text-title tw:[&>strong]:text-foreground tw:[&>p]:m-0 tw:[&>p]:leading-body tw:[&>small]:max-w-[320px] tw:[&>small]:leading-body">
+    <div className="tw:m-auto tw:flex tw:min-h-full tw:w-[min(360px,calc(100%_-_var(--ds-space-6)))] tw:flex-col tw:items-center tw:justify-center tw:gap-3 tw:text-center tw:text-ui tw:text-muted-foreground tw:[&>.icon]:size-7 tw:[&>.icon]:text-foreground tw:[&>strong]:text-title tw:[&>strong]:text-foreground tw:[&>p]:m-0 tw:[&>p]:leading-body tw:[&>small]:max-w-[320px] tw:[&>small]:leading-body">
       {children}
     </div>
   );
@@ -304,7 +304,7 @@ function AgentSetupGuidance({
         status={t("agent.acpSetupRequired")}
         actions={
           <div className="tw:flex tw:flex-wrap tw:gap-2">
-            <Button size="compact" variant="primary" onClick={onPrimary}>
+            <Button size="xs" variant="primary" onClick={onPrimary}>
               {cli.installed
                 ? copied
                   ? t("agent.acpSetupCopied")
@@ -312,7 +312,7 @@ function AgentSetupGuidance({
                 : t("agent.acpSetupOpenGuide")}
             </Button>
             <Button
-              size="compact"
+              size="xs"
               variant="ghost"
               disabled={checking}
               onClick={onCheck}
@@ -338,7 +338,7 @@ function ProviderHeading({ provider }: { provider: AgentProvider }) {
   return (
     <div className="tw:flex tw:items-center tw:gap-2 tw:pt-1">
       <AgentProviderMark provider={provider} />
-      <strong className="tw:text-sm tw:text-foreground">
+      <strong className="tw:text-ui tw:font-semibold tw:text-foreground">
         {providerLabel(provider)}
       </strong>
     </div>
@@ -375,7 +375,7 @@ const TranscriptItemView = memo(function TranscriptItemView({
   if (item.kind === "user") {
     return (
       <article className="tw:ml-6 tw:grid tw:max-w-full tw:min-w-0 tw:gap-1 tw:overflow-hidden tw:justify-items-end">
-        <div className="tw:max-w-[92%] tw:min-w-0 tw:overflow-hidden tw:break-words tw:rounded-md tw:bg-selection tw:px-3 tw:py-2 tw:text-sm tw:leading-body tw:whitespace-pre-wrap tw:text-selection-foreground">
+        <div className="tw:max-w-[92%] tw:min-w-0 tw:overflow-hidden tw:break-words tw:rounded-md tw:bg-selection tw:px-3 tw:py-2 tw:text-body tw:leading-body tw:whitespace-pre-wrap tw:text-selection-foreground">
           {item.text}
         </div>
         {item.attachments.length > 0 ? (
@@ -480,7 +480,7 @@ const TranscriptItemView = memo(function TranscriptItemView({
                 option.kind.startsWith("reject")
               ) ? null : (
                 <Button
-                  size="compact"
+                  size="xs"
                   variant="ghost"
                   disabled={permissionSubmitting === item.event.requestId}
                   onClick={() => onPermission(item.event.requestId, null)}
@@ -490,7 +490,7 @@ const TranscriptItemView = memo(function TranscriptItemView({
               )}
             </div>
           ) : (
-            <small className="tw:text-muted-foreground">
+            <small className="tw:text-xs tw:text-muted-foreground">
               {t("agent.acpPermissionResolved")}
             </small>
           )
@@ -590,7 +590,7 @@ function ToolCallCard({
         />
         {article ? (
           <Button
-            size="compact"
+            size="xs"
             variant="primary"
             onClick={() =>
               onOpenKnowledgeAnalysis(
@@ -645,7 +645,7 @@ function ToolCallCard({
         <AcpStructuredResult value={rawOutput ?? data.content} />
         {article ? (
           <Button
-            size="compact"
+            size="xs"
             variant="primary"
             onClick={() =>
               onOpenKnowledgeAnalysis(
@@ -682,7 +682,7 @@ function PermissionButton({
   const reject = option.kind.startsWith("reject");
   return (
     <Button
-      size="compact"
+      size="xs"
       variant={reject ? "dangerGhost" : "primary"}
       disabled={disabled}
       onClick={onClick}

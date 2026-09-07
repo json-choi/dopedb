@@ -5,6 +5,7 @@
 //! offers a login flow.
 
 mod authority;
+mod configuration;
 mod desktop;
 mod event_sink;
 mod knowledge_scope;
@@ -46,6 +47,8 @@ use crate::kernel::identity::{AcpSessionId, ConnectionId, TerminalSessionId};
 use crate::kernel::sync::lock_unpoisoned;
 use crate::store::Store;
 
+#[cfg(test)]
+pub(crate) use configuration::assert_session_configuration_contract;
 pub(crate) use desktop::DesktopAcpRuntimePorts;
 use event_sink::SharedAcpSessionEventSink;
 pub(crate) use knowledge_scope::narrow_resource_scope;

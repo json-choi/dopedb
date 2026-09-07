@@ -56,10 +56,11 @@ export function AcpScopeSelect({
     : t("agent.acpSelectResources");
 
   return (
-    <span className="tw:col-start-3 tw:w-full tw:min-w-[4rem] tw:max-w-[18rem] tw:justify-self-end">
+    <span className="tw:col-start-1 tw:row-start-2 tw:min-w-0">
       <ToolbarMenu
         label={accessibleSelection}
-        align="end"
+        align="start"
+        triggerVariant="composer"
         menuSize="scope"
         disabled={
           starting ||
@@ -68,10 +69,10 @@ export function AcpScopeSelect({
         }
         trigger={
           <span
-            className="tw:flex tw:min-w-0 tw:max-w-[17rem] tw:items-center tw:gap-1.5"
+            className="tw:flex tw:w-full tw:min-w-0 tw:items-center tw:gap-1.5"
             title={accessibleSelection}
           >
-            <span className="tw:min-w-0 tw:truncate">{visibleSelection}</span>
+            <span className="tw:min-w-0 tw:flex-1 tw:truncate">{visibleSelection}</span>
             {selectedCount > 0 ? (
               <span className="tw:shrink-0 tw:rounded-full tw:bg-muted tw:px-1.5 tw:text-2xs tw:font-semibold tw:text-muted-foreground">
                 {selectedCount}
