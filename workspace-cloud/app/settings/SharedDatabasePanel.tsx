@@ -181,7 +181,7 @@ export function SharedDatabasePanel({
                       className="tw:max-w-[48rem] tw:text-2xs tw:leading-body tw:text-foreground"
                       role="status"
                     >
-                      {copy.desktopRecovery}
+                      {copy.focusedManagedAccess}
                     </small>
                     {managed.provider === "gcpCloudSql"
                     && connection.accessMode === "manage" ? (

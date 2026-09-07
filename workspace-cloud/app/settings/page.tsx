@@ -283,6 +283,14 @@ export default async function SettingsPage({
         ) : null}
         {activeSection === "providers"
         && params.provider === "gcpCloudSql"
+        && params.status === "repaired"
+        && requestedConnectionId ? (
+          <ConsoleNotice>
+            {copy.settings.gcpRepaired}
+          </ConsoleNotice>
+        ) : null}
+        {activeSection === "providers"
+        && params.provider === "gcpCloudSql"
         && params.status === "failed" ? (
           <ConsoleNotice tone="danger">
             {copy.settings.gcpFailed}

@@ -425,6 +425,8 @@ export function useGcpProviderSetup({
       nextUrl.searchParams.set("section", "providers");
       if (gcpRecoveryTarget) {
         clearGcpRecoveryIntent();
+        nextUrl.searchParams.set("provider", "gcpCloudSql");
+        nextUrl.searchParams.set("status", "repaired");
         nextUrl.searchParams.delete("integration");
         nextUrl.searchParams.set(
           "connection",
