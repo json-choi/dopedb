@@ -11,4 +11,4 @@ export {
   revokeTemporaryGcpSetupPermissions,
   type GcpTemporaryPermissionGrant,
 } from "./gcp-cloud-bootstrap-iam";
-export { bootstrapGcpCloudSql } from "./gcp-cloud-bootstrap-application";
+export { bootstrapGcpCloudSql, GcpIamPropagationPendingError } from "./gcp-cloud-bootstrap-application";

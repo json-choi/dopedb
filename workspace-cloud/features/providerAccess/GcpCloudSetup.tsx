@@ -57,7 +57,8 @@ export function GcpCloudSetup({
     setGcpProductionApproved,
     setGcpIamAuthenticationChangeApproved,
   } = controller;
-  const configuring = mutation === "gcp:bootstrap";
+  const iamPending = mutation === "gcp:iamPropagation";
+  const configuring = mutation === "gcp:bootstrap" || iamPending;
   const recovering = Boolean(gcpRecoveryIntent) || gcpRecoveryTargetPending;
   const recoveryTargetMissing = gcpRecoveryTargetMissing;
   const [configurationElapsedSeconds, setConfigurationElapsedSeconds] =
@@ -474,7 +475,7 @@ export function GcpCloudSetup({
           <div className="tw:grid tw:gap-2.5 tw:border tw:border-primary/40 tw:bg-primary/10 tw:p-3">
             <div className="tw:flex tw:items-center tw:justify-between tw:gap-3">
               <strong className="tw:text-xs tw:font-semibold tw:text-foreground">
-                {copy.configuringTitle}
+                {iamPending ? copy.iamPropagationTitle : copy.configuringTitle}
               </strong>
               <span className="tw:shrink-0 tw:font-mono tw:text-2xs tw:text-primary">
                 {configurationElapsedSeconds}{locale === "ko" ? "" : " "}{copy.elapsedSuffix}
@@ -489,9 +490,7 @@ export function GcpCloudSetup({
               <span className="tw:block tw:h-full tw:w-full tw:animate-pulse tw:rounded-pill tw:bg-primary/50 tw:motion-reduce:animate-none" />
             </div>
             <small className="tw:text-2xs tw:leading-body tw:text-muted-foreground">
-              {configurationElapsedSeconds < 30
-                ? copy.configuringEarly
-                : copy.configuringLate}
+              {iamPending ? copy.iamPropagationDescription : copy.configuringEarly}
             </small>
           </div>
         ) : null}
@@ -517,7 +516,7 @@ export function GcpCloudSetup({
               disabled={!approvalsComplete || busy}
               onClick={() => void completeGcpSetup()}
             >
-              {mutation === "gcp:bootstrap"
+              {configuring
                 ? copy.configuringButton
                 : recovering
                   ? copy.repairConfigure

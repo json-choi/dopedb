@@ -2,6 +2,7 @@
 // Desktop. The fixture contains fake secrets; assertions never print or snapshot it.
 
 import { readFileSync } from "node:fs";
+import { assertGcpBootstrapReadinessContract } from "./providers/gcp-cloud-bootstrap.harness";
 
 import { describe, expect, it, vi } from "vitest";
 
@@ -624,6 +625,7 @@ function analyticsEnvelope(
 
 describe("Desktop control-plane contracts", () => {
   it("decodes the same strict sync, lease, and Analysis Article goldens as Rust", async () => {
+    await assertGcpBootstrapReadinessContract();
     expect(fixture.schemaVersion).toBe(CONTROL_PLANE_CONTRACTS_SCHEMA_VERSION);
     const schedulerNow = new Date("2026-08-15T18:12:30Z");
     expect(workspaceSchedulerBoundedWakeAt(null, schedulerNow)).toBeNull();

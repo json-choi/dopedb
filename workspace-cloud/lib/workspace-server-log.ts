@@ -17,6 +17,18 @@ const CONNECTION_STAGES = new Set([
 const GCP_REQUEST_STAGES = new Set([
   "federation",
   "serviceAccount",
+  "iam.serviceAccountPolicy",
+  "setup.serviceUsage",
+  "setup.workloadIdentity",
+  "setup.serviceAccount",
+  "setup.projectIam",
+  "setup.sqlUser.create",
+  "setup.sqlUser.update",
+  "setup.sqlUser.delete",
+  "setup.sqlUser.read",
+  "setup.sqlOperation",
+  "setup.sqlInstance",
+  "setup.sqlExecution",
   "cloudSqlAdmin.connectSettings",
   "cloudSqlAdmin.instance",
 ]);

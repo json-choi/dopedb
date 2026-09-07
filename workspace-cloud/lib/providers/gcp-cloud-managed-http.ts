@@ -22,6 +22,21 @@ export type GcpRequestStage =
   | "cloudSqlAdmin.connectSettings"
   | "cloudSqlAdmin.instance";
 
+// Keep Google's failure separate from the public HTTP status. Upstream auth
+// failures map to 424 so they cannot be mistaken for a workspace login failure.
+export class GcpManagedAccessRequestError extends ProviderRequestError {
+  constructor(
+    message: string,
+    status: number,
+    readonly stage: GcpRequestStage,
+    readonly upstreamStatus: number,
+    readonly googleReason: string | null,
+  ) {
+    super("gcpCloudSql", message, status);
+    this.name = "GcpManagedAccessRequestError";
+  }
+}
+
 function object(value: unknown): JsonObject {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new ProviderRequestError("gcpCloudSql", "GCP returned an invalid response", 502);
@@ -127,5 +142,5 @@ export async function gcpJsonRequest(
         : stage === "iam.serviceAccountPolicy"
           ? "GCP schema service-account policy could not be verified"
           : "Cloud SQL Admin denied the managed access check";
-  throw new ProviderRequestError("gcpCloudSql", message, status);
+  throw new GcpManagedAccessRequestError(message, status, stage, response.status, googleReason);
 }

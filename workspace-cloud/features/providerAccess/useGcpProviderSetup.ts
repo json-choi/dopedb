@@ -1,7 +1,7 @@
 "use client";
 
 // GCP setup owns its OAuth-session inventory, permission checks, and bootstrap use case.
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 import {
   gcpActiveLeaseRetryMessage,
@@ -13,6 +13,7 @@ import {
 import type { ProviderAccessFieldSetter, ProviderAccessState } from "./state";
 import type { GcpManagedConnectionRecoveryTarget } from "./managedConnectionRecovery";
 import { providerResponseError } from "./transport";
+import { requestGcpBootstrap } from "./gcpBootstrapTransport";
 import type { WorkspaceLocale } from "../../lib/workspace-locale";
 import { localizedProviderMessage } from "../../lib/workspace-provider-copy";
 import { workspaceMessages } from "../../lib/workspace-messages";
@@ -83,6 +84,12 @@ export function useGcpProviderSetup({
   const setGcpSetupError = setField("gcpSetupError");
   const setGcpSetupReconnectRequired = setField("gcpSetupReconnectRequired");
   const setMutation = setField("mutation");
+  const bootstrapController = useRef<AbortController | null>(null);
+  useEffect(() => () => {
+    bootstrapController.current?.abort();
+    bootstrapController.current = null;
+    setMutation((current) => current.startsWith("gcp:") ? "" : current);
+  }, [workspaceId, gcpSetupId, setMutation]);
   const repairProjectId = gcpRecoveryTarget?.resource.project ?? "";
   const repairInstanceId = gcpRecoveryTarget?.resource.instance ?? "";
 
@@ -273,7 +280,7 @@ export function useGcpProviderSetup({
   }
 
   async function completeGcpSetup() {
-    if (!gcpSetupId || mutation || !gcpSetupInventory) return;
+    if (!gcpSetupId || mutation || bootstrapController.current || !gcpSetupInventory) return;
     const project = gcpSetupInventory.projects.find((item) => item.id === selectedGcpProjectId);
     const instance = gcpSetupInstances.find((item) => item.id === selectedGcpInstanceId);
     if (
@@ -303,33 +310,36 @@ export function useGcpProviderSetup({
       setGcpSetupError(copy.gcpApprovalsRequired);
       return;
     }
+    const controller = new AbortController();
+    bootstrapController.current = controller;
     setMutation("gcp:bootstrap");
     setGcpSetupError("");
     try {
-      const bootstrapResponse = await fetch(
-        `/api/v1/workspaces/${workspaceId}/provider-integrations/gcp-setup/${gcpSetupId}`,
-        {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            projectId: project.id,
-            projectNumber: project.number,
-            instanceId: instance.id,
-            environmentClassification: instance.production === "unknown"
-              ? gcpEnvironmentClassification
-              : null,
-            approveProduction: gcpProductionApproved,
-            approveIamAuthenticationChange:
-              gcpIamAuthenticationChangeApproved,
-            approveIamRoleGrant: gcpIamRoleGrantApproved,
-            ...(gcpRecoveryTarget ? {
-              repairIntegrationId: gcpRecoveryTarget.intent.integrationId,
-            } : {}),
-          }),
-        },
-      ).catch(() => null);
+      const bootstrapResponse = await requestGcpBootstrap({
+        url: `/api/v1/workspaces/${workspaceId}/provider-integrations/gcp-setup/${gcpSetupId}`,
+        expiresAt: gcpSetupInventory.expiresAt,
+        signal: controller.signal,
+        onIamPending: () => setMutation("gcp:iamPropagation"),
+        body: JSON.stringify({
+          projectId: project.id,
+          projectNumber: project.number,
+          instanceId: instance.id,
+          environmentClassification: instance.production === "unknown"
+            ? gcpEnvironmentClassification
+            : null,
+          approveProduction: gcpProductionApproved,
+          approveIamAuthenticationChange:
+            gcpIamAuthenticationChangeApproved,
+          approveIamRoleGrant: gcpIamRoleGrantApproved,
+          ...(gcpRecoveryTarget ? {
+            repairIntegrationId: gcpRecoveryTarget.intent.integrationId,
+          } : {}),
+        }),
+      }).catch(() => null);
+      if (controller.signal.aborted) return;
       if (!bootstrapResponse?.ok) {
         const failure = await bootstrapResponse?.json().catch(() => null);
+        if (controller.signal.aborted) return;
         if (bootstrapResponse?.status === 401 || bootstrapResponse?.status === 410) {
           setGcpSetupReconnectRequired(true);
           setGcpSetupError(copy.gcpSessionExpired);
@@ -351,6 +361,7 @@ export function useGcpProviderSetup({
         return;
       }
       const bootstrap = await bootstrapResponse.json().catch(() => null);
+      if (controller.signal.aborted) return;
       if (typeof bootstrap?.bootstrapTicket !== "string" || bootstrap.bootstrapTicket.length < 80) {
         setGcpSetupError(copy.gcpBootstrapShapeError);
         return;
@@ -360,6 +371,7 @@ export function useGcpProviderSetup({
         {
           method: "POST",
           headers: { "content-type": "application/json" },
+          signal: controller.signal,
           body: JSON.stringify({
             provider: "gcpCloudSql",
             setupId: gcpSetupId,
@@ -370,8 +382,10 @@ export function useGcpProviderSetup({
           }),
         },
       ).catch(() => null);
+      if (controller.signal.aborted) return;
       if (!integrationResponse?.ok) {
         const failure = await integrationResponse?.json().catch(() => null);
+        if (controller.signal.aborted) return;
         setGcpSetupError(
           activeGcpLeaseError(failure, copy, locale)
             ?? (typeof failure?.error === "string"
@@ -385,6 +399,7 @@ export function useGcpProviderSetup({
         return;
       }
       const integrationBody = await integrationResponse.json().catch(() => null);
+      if (controller.signal.aborted) return;
       const integrationId = typeof integrationBody?.integration?.id === "string"
         ? integrationBody.integration.id
         : "";
@@ -420,7 +435,10 @@ export function useGcpProviderSetup({
       }
       window.location.replace(nextUrl);
     } finally {
-      setMutation("");
+      if (bootstrapController.current === controller) {
+        bootstrapController.current = null;
+        setMutation("");
+      }
     }
   }
 

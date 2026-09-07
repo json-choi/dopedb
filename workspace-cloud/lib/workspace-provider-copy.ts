@@ -1,6 +1,10 @@
 import type { WorkspaceLocale } from "./workspace-locale";
 
 const koreanByEnglish: Readonly<Record<string, string>> = {
+  "The setup account database role already exists outside Cloud SQL user management. A database administrator must resolve the conflicting role before reconnecting.":
+    "Cloud SQL 사용자 목록에 없는 기존 DB 역할이 설정 계정 이름과 충돌합니다. DB 관리자가 기존 역할을 확인해 충돌을 해결한 뒤 다시 연결하세요.",
+  "Google Cloud runtime access is still denied after setup. Retry shortly; if this persists, check the Workload Identity and service-account IAM policies.":
+    "Google Cloud 설정 후에도 실제 접근이 거부되고 있습니다. 잠시 뒤 다시 시도하고, 계속되면 Workload Identity와 서비스 계정 IAM 정책을 확인하세요.",
   "Neon API key is invalid or revoked":
     "Neon API 키가 유효하지 않거나 폐기되었습니다. Neon Console에서 새 키를 발급해 다시 연결하세요.",
   "Neon API key cannot access the requested scope":

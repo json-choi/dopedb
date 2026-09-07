@@ -447,7 +447,7 @@ describe("provider credential Tauri adapter", () => {
     expect(enableIamAuthenticationSource).not.toContain("/restart");
   });
 
-  it("avoids the IAM Credentials propagation retry dead end during Cloud SQL setup", () => {
+  it("keeps Cloud SQL privilege bootstrap on the setup identity with cleanup and lease preflight", () => {
     expect(gcpBootstrapCoreSource).toContain(
       '"cloudsql.instances.executeSql"',
     );

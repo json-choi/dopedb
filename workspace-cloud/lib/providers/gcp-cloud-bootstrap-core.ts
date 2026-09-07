@@ -4,6 +4,7 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
+import { logGcpManagedAccessUpstreamRejection } from "../workspace-server-log";
 import { boundedJsonResponse } from "../bounded-json-response";
 import {
   gcpCloudSqlEngine,
@@ -312,10 +313,37 @@ export function upstreamMessage(status: number, url: string, body: unknown) {
     }
     return "Google Cloud에서 이 설정 작업을 거부했습니다.";
   }
+  if (matchesGoogleApiBase(location, SQL_ADMIN_ORIGIN)
+    && location?.pathname.endsWith("/users")
+    && /role .{1,200} already exists/i.test(googleErrorMessage(body))) {
+    return "The setup account database role already exists outside Cloud SQL user management. A database administrator must resolve the conflicting role before reconnecting.";
+  }
   if (status === 404) return "선택한 Google Cloud 리소스를 찾지 못했습니다.";
   if (status === 409) return "기존 Google Cloud 리소스가 이 DopeDB 설정과 충돌합니다.";
   if (status === 429) return "Google Cloud 요청 한도에 도달했습니다. 잠시 뒤 다시 시도하세요.";
   return "Google Cloud 설정을 완료하지 못했습니다.";
+}
+
+// Classify only a known API responsibility, never a resource name or URL.
+function setupRequestStage(url: string, method: string | undefined) {
+  const location = googleApiLocation(url);
+  const path = location?.pathname ?? "";
+  if (matchesGoogleApiBase(location, SERVICE_USAGE_ORIGIN)) return "setup.serviceUsage";
+  if (matchesGoogleApiBase(location, RESOURCE_MANAGER_ORIGIN)) return "setup.projectIam";
+  if (matchesGoogleApiBase(location, IAM_ORIGIN)) {
+    return path.includes("workloadIdentityPools") ? "setup.workloadIdentity" : "setup.serviceAccount";
+  }
+  if (location?.origin === "https://sqladmin.googleapis.com") {
+    if (path.endsWith("/users")) {
+      return method === "POST" ? "setup.sqlUser.create"
+        : method === "PUT" ? "setup.sqlUser.update"
+        : method === "DELETE" ? "setup.sqlUser.delete" : "setup.sqlUser.read";
+    }
+    if (path.includes("/operations/")) return "setup.sqlOperation";
+    if (path.endsWith("/executeSql")) return "setup.sqlExecution";
+    return "setup.sqlInstance";
+  }
+  return "unknown";
 }
 
 export async function googleRequest(
@@ -350,6 +378,15 @@ export async function googleRequest(
   const body = await boundedJsonResponse(response, MAX_GOOGLE_RESPONSE_BYTES)
     .catch(() => null);
   if (!response.ok || !body) {
+    const googleError = body && typeof body === "object" && !Array.isArray(body)
+      ? (body as JsonObject).error : null;
+    logGcpManagedAccessUpstreamRejection({
+      stage: setupRequestStage(url, init.method),
+      upstreamStatus: response.status,
+      googleReason: googleErrorInfo(body).reason,
+      googleStatus: googleError && typeof googleError === "object"
+        ? (googleError as JsonObject).status : null,
+    });
     throw new GcpUpstreamRequestError(
       upstreamMessage(response.status, url, body),
       response.status === 401 || response.status === 403 || response.status === 404

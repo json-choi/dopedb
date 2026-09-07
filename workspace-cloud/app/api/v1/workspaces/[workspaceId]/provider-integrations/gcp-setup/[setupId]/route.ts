@@ -12,6 +12,7 @@ import {
 } from "../../../../../../../../lib/http";
 import {
   bootstrapGcpCloudSql,
+  GcpIamPropagationPendingError,
   checkGcpSetupPermissions,
   grantTemporaryGcpSetupPermissions,
   revokeTemporaryGcpSetupPermissions,
@@ -375,6 +376,13 @@ export async function POST(request: Request, context: RouteContext) {
           409,
         );
       }
+    }
+    if (error instanceof GcpIamPropagationPendingError) {
+      return privateJson({
+        error: error.message,
+        code: error.code,
+        retryAfterMs: error.retryAfterMs,
+      }, { status: error.status, headers: { "retry-after": String(error.retryAfterMs / 1_000) } });
     }
     if (error instanceof ProviderRequestError) {
       return jsonError(error.message, error.status);

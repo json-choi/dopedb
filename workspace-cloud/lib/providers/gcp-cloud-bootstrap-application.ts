@@ -1,3 +1,5 @@
+// Explicit Google setup provisions the approved target, verifies runtime access,
+// and only then applies database privileges and returns a durable configuration.
 import "server-only";
 
 import {
@@ -8,6 +10,7 @@ import {
 import { listGcpOAuthInstances, type GcpSetupCredential } from "./gcp-cloud-oauth";
 import { validateGcpCloudSqlCredential } from "./gcp-cloud-sql";
 import { ProviderRequestError } from "./provider-types";
+import { GcpManagedAccessRequestError } from "./gcp-cloud-managed-http";
 import { verifyVercelOidcToken } from "./vercel-oidc";
 import {
   POOL_ID,
@@ -39,29 +42,44 @@ import {
 } from "./gcp-cloud-bootstrap-database";
 import { configureDatabasePrivileges } from "./gcp-cloud-bootstrap-sql";
 
+export class GcpIamPropagationPendingError extends ProviderRequestError {
+  readonly code = "gcp_iam_propagation_pending";
+  readonly retryAfterMs = 5_000;
+
+  constructor() {
+    super("gcpCloudSql",
+      "Google Cloud runtime access is still denied after setup. Retry shortly; if this persists, check the Workload Identity and service-account IAM policies.",
+      503);
+    this.name = "GcpIamPropagationPendingError";
+  }
+}
+
 export async function waitForFederation(
   credential: GcpCloudSqlCredential,
   oidcToken: string,
 ) {
-  let lastError: unknown;
-  for (let attempt = 0; attempt < 20; attempt += 1) {
+  // Leave room for the remaining bootstrap and temporary-grant cleanup inside
+  // the route's 300s limit. The session-bound browser can continue pending IAM
+  // propagation across requests, each rechecking the same target and approvals.
+  const deadline = Date.now() + 45_000;
+  for (;;) {
     try {
       await validateGcpCloudSqlCredential(credential, oidcToken);
       return;
     } catch (error) {
-      lastError = error;
-      if (
-        !(error instanceof ProviderRequestError)
-        || ![403, 409, 502, 503].includes(error.status)
-      ) {
-        throw error;
+      const iamPending = error instanceof GcpManagedAccessRequestError
+        && error.upstreamStatus === 403
+        && (error.googleReason === null || error.googleReason === "IAM_PERMISSION_DENIED");
+      const unavailable = error instanceof ProviderRequestError && error.status === 503;
+      // Local 409 policy drift and malformed responses are not propagation.
+      // Live credential issuance never enters this setup-only wait loop.
+      if (!iamPending && !unavailable) throw error;
+      if (Date.now() + 5_000 >= deadline) {
+        throw iamPending ? new GcpIamPropagationPendingError() : error;
       }
-      if (attempt < 19) {
-        await new Promise((resolve) => setTimeout(resolve, 5_000));
-      }
+      await new Promise((resolve) => setTimeout(resolve, 5_000));
     }
   }
-  throw lastError;
 }
 
 export async function bootstrapGcpCloudSql(input: {
