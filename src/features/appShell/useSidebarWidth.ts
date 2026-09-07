@@ -8,7 +8,7 @@ const EXPLORER_MIN = 180;
 const LOCAL_HISTORY_MIN = 300;
 const MAX = 520;
 const VIEWPORT_RATIO = 0.4;
-export const DEFAULT_SIDEBAR_WIDTH = 396;
+export const DEFAULT_SIDEBAR_WIDTH = 296;
 export const DEFAULT_LOCAL_HISTORY_WIDTH = 459;
 
 type SidebarKind = "databaseExplorer" | "localHistory";
@@ -35,6 +35,7 @@ function clamp(kind: SidebarKind, width: number) {
 
 function readWidth(kind: SidebarKind) {
   const saved = Number(localStorage.getItem(storageKey(kind)));
+  if (kind === "databaseExplorer" && saved === 396) return DEFAULT_SIDEBAR_WIDTH;
   return saved >= minimum(kind) && saved <= MAX
     ? saved
     : defaultWidth(kind);

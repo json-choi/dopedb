@@ -36,6 +36,7 @@ import type { WorkbenchDocument } from "../workbench/domain";
 import WorkspaceAccount from "../workspaces/components/WorkspaceAccount";
 import WorkspaceSwitcher from "../workspaces/components/WorkspaceSwitcher";
 import { IdeStatusBar, IdeTopBar } from "./IdeChrome";
+import { WorkspaceNavigation } from "./WorkspaceNavigation";
 import { useInertShellBackground } from "./useInertShellBackground";
 
 const IS_MACOS =
@@ -76,7 +77,6 @@ type ShellLayoutModel = {
   agent: {
     open: boolean;
     composerRequest: AgentComposerRequest | null;
-    overlay: boolean;
     width: number;
     buttonRef: RefObject<HTMLButtonElement | null>;
     returnFocusRef: RefObject<HTMLElement | null>;
@@ -89,6 +89,7 @@ type ShellLayoutModel = {
     unseenOperationCount: number;
   };
   viewport: {
+    width: number;
     compact: boolean;
     mobileExplorerOpen: boolean;
     sidebarWidth: number;
@@ -115,6 +116,7 @@ type ShellLayoutCommands = {
     openUpdateSettings: () => void;
   };
   explorer: {
+    togglePanel: () => void;
     toggleDatabase: () => void;
     toggleLocalHistory: () => void;
     closeLocalHistory: () => void;
@@ -234,9 +236,9 @@ function ShellLayoutContent({ model, commands }: Props) {
     databaseExplorerVisible || localHistoryVisible;
   const servicesVisible = services.open;
   const agentOverlay =
-    agent.overlay ||
+    viewport.compact ||
     (agent.open && shouldOverlayAgentDock({
-      viewportWidth: typeof window === "undefined" ? 1_280 : window.innerWidth,
+      viewportWidth: viewport.width,
       leftToolWindowWidth: leftToolWindowVisible ? viewport.sidebarWidth : 0,
       requestedAgentWidth: agent.width,
     }));
@@ -254,7 +256,8 @@ function ShellLayoutContent({ model, commands }: Props) {
   const rightDockWidth = agent.open && !agentOverlay
     ? clampAgentDockWidth(
         agent.width,
-        typeof window === "undefined" ? 1_280 : window.innerWidth,
+        viewport.width,
+        leftToolWindowVisible ? viewport.sidebarWidth : 0,
       )
     : 0;
   const activeWorkbenchDocument =
@@ -305,8 +308,8 @@ function ShellLayoutContent({ model, commands }: Props) {
       <IdeTopBar
         selected={workspace.selected}
         supportsSql={workspace.supportsSql}
-        databaseExplorerOpen={
-          databaseExplorerVisible &&
+        leftPanelOpen={
+          leftToolWindowVisible &&
           (!viewport.compact || viewport.mobileExplorerOpen)
         }
         localHistoryOpen={
@@ -317,6 +320,7 @@ function ShellLayoutContent({ model, commands }: Props) {
         agentDockOpen={agent.open}
         actionSearchOpen={search.open}
         settingsOpen={workspace.settingsOpen}
+        workspace={!databaseExplorerVisible || localHistoryVisible ? <WorkspaceSwitcher onNew={commands.workspace.newConnection} onChanged={commands.workspace.scopeChanged} /> : undefined}
         account={
           <WorkspaceAccount
             compact
@@ -325,7 +329,7 @@ function ShellLayoutContent({ model, commands }: Props) {
           />
         }
         onNewQuery={commands.workbench.newQuery}
-        onToggleDatabaseExplorer={commands.explorer.toggleDatabase}
+        onToggleLeftPanel={commands.explorer.togglePanel}
         onToggleLocalHistory={commands.explorer.toggleLocalHistory}
         onToggleServices={commands.services.toggle}
         onToggleAgent={commands.agent.toggle}
@@ -333,15 +337,10 @@ function ShellLayoutContent({ model, commands }: Props) {
         actionSearchButtonRef={search.buttonRef}
         onActionSearch={commands.search.open}
         onSettings={commands.workspace.settings}
-        workspace={
-          <WorkspaceSwitcher
-            onNew={commands.workspace.newConnection}
-            onChanged={commands.workspace.scopeChanged}
-          />
-        }
       />
 
       <div
+        id="left-tool-window"
         className="tw:col-start-1 tw:row-start-2 tw:min-h-0 tw:min-w-0 tw:overflow-hidden tw:max-[561px]:contents"
         aria-hidden={!leftToolWindowVisible}
         inert={!leftToolWindowVisible ? true : undefined}
@@ -359,6 +358,14 @@ function ShellLayoutContent({ model, commands }: Props) {
           />
         ) : (
           <DatabaseExplorer
+            workspaceHeader={<WorkspaceNavigation
+              workspace={<WorkspaceSwitcher onNew={commands.workspace.newConnection} onChanged={commands.workspace.scopeChanged} />}
+              focus={explorer.knowledgeFocus}
+              agentOpen={agent.open}
+              agentAvailable={workspace.selected !== null}
+              onNavigate={commands.explorer.openProjectEnvironment}
+              onAgent={commands.agent.toggle}
+            />}
             connections={workspace.connections}
             selectedId={
               environmentDetailOpen ? null : workspace.selectedId
@@ -425,7 +432,7 @@ function ShellLayoutContent({ model, commands }: Props) {
       <main
         ref={viewport.mainRef}
         data-compact={viewport.compact}
-        className="main tw:col-start-3 tw:row-start-2 tw:mt-0 tw:mr-panel-gutter tw:mb-panel-gutter tw:ml-0 tw:flex tw:min-w-0 tw:flex-col tw:overflow-hidden tw:rounded-md tw:border tw:border-border-subtle tw:bg-background tw:outline-none tw:[container-name:main-pane] tw:[container-type:inline-size] tw:data-[compact=true]:col-start-1 tw:data-[compact=true]:m-0 tw:data-[compact=true]:min-h-0 tw:data-[compact=true]:rounded-none tw:data-[compact=true]:border-0"
+        className="main tw:col-start-3 tw:row-start-2 tw:flex tw:min-h-0 tw:min-w-0 tw:flex-col tw:overflow-hidden tw:border-0 tw:border-l tw:border-border-subtle tw:bg-background tw:outline-none tw:[container-name:main-pane] tw:[container-type:inline-size] tw:data-[compact=true]:col-start-1 tw:data-[compact=true]:border-0"
         tabIndex={-1}
         inert={viewport.mobileExplorerOpen ? true : undefined}
       >

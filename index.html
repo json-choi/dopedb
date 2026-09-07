@@ -4,6 +4,15 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light dark" />
+    <script>
+      // Apply the saved appearance before bundled styles paint; theme.ts owns live updates.
+      (() => {
+        let theme = "system";
+        try { theme = localStorage.getItem("dopedb.theme") || "system"; } catch {}
+        document.documentElement.dataset.theme = theme === "light" || theme === "dark"
+          ? theme : matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      })();
+    </script>
     <link rel="icon" href="/src-tauri/icons/32x32.png" type="image/png" />
     <title>DopeDB</title>
   </head>

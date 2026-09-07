@@ -9,6 +9,59 @@
 
 :root {
   /* xterm ANSI theme. resolvePtyTheme is the only consumer. */
+  --ds-terminal-ansi-black: #343842;
+  --ds-terminal-ansi-bright-black: #666d78;
+  --ds-terminal-ansi-red: #ad3936;
+  --ds-terminal-ansi-bright-red: #bd4541;
+  --ds-terminal-ansi-green: #276749;
+  --ds-terminal-ansi-bright-green: #387154;
+  --ds-terminal-ansi-yellow: #855b12;
+  --ds-terminal-ansi-bright-yellow: #90651e;
+  --ds-terminal-ansi-blue: #2c5f99;
+  --ds-terminal-ansi-bright-blue: #396fa7;
+  --ds-terminal-ansi-magenta: #775291;
+  --ds-terminal-ansi-bright-magenta: #89679f;
+  --ds-terminal-ansi-cyan: #276e75;
+  --ds-terminal-ansi-bright-cyan: #387b82;
+  --ds-terminal-ansi-white: #616670;
+  --ds-terminal-ansi-bright-white: #343944;
+
+  /* Completed Agent code fences. */
+  --ds-syntax-background: #f3f4f4;
+  --ds-syntax-foreground: #343944;
+  --ds-syntax-comment: #6d7480;
+  --ds-syntax-changed: #855b12;
+  --ds-syntax-constant: #90651e;
+  --ds-syntax-deleted: #bd4541;
+  --ds-syntax-function: #396fa7;
+  --ds-syntax-inserted: #276749;
+  --ds-syntax-keyword: #2c5f99;
+  --ds-syntax-link: #2c5f99;
+  --ds-syntax-parameter: #276e75;
+  --ds-syntax-punctuation: #666d78;
+  --ds-syntax-string: #387154;
+  --ds-syntax-string-expression: #387b82;
+  --ds-syntax-ansi-black: #343842;
+  --ds-syntax-ansi-bright-black: #666d78;
+  --ds-syntax-ansi-red: #ad3936;
+  --ds-syntax-ansi-bright-red: #bd4541;
+  --ds-syntax-ansi-green: #276749;
+  --ds-syntax-ansi-bright-green: #387154;
+  --ds-syntax-ansi-yellow: #855b12;
+  --ds-syntax-ansi-bright-yellow: #90651e;
+  --ds-syntax-ansi-blue: #2c5f99;
+  --ds-syntax-ansi-bright-blue: #396fa7;
+  --ds-syntax-ansi-magenta: #775291;
+  --ds-syntax-ansi-bright-magenta: #89679f;
+  --ds-syntax-ansi-cyan: #276e75;
+  --ds-syntax-ansi-bright-cyan: #387b82;
+  --ds-syntax-ansi-white: #616670;
+  --ds-syntax-ansi-bright-white: #343944;
+}
+
+/* Preserve the original dark ANSI and syntax colors. */
+:root[data-theme="dark"] {
+  /* xterm ANSI theme. resolvePtyTheme is the only consumer. */
   --ds-terminal-ansi-black: #26282c;
   --ds-terminal-ansi-bright-black: #548af7;
   --ds-terminal-ansi-red: #db5c5c;

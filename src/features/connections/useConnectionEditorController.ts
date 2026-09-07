@@ -38,6 +38,7 @@ export function useConnectionEditorController(props: ConnectionEditorProps) {
     onNewConnection: props.onNewConnection,
     openProviderCredentials: dialogState.providerCredentials.show,
     profileState,
+    selectSourceOnOpen: props.initial === null && !props.preset?.engine,
   });
   const bigQuery = useBigQueryOnboardingController(
     profileState,

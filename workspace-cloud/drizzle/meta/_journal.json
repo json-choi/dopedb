@@ -8,6 +8,13 @@
       "when": 1788495508374,
       "tag": "0000_mvp_baseline",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788751204344,
+      "tag": "0001_article_sharing",
+      "breakpoints": true
     }
   ]
 }

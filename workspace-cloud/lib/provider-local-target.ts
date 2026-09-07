@@ -205,7 +205,7 @@ export async function loadProviderLocalTarget(input: {
       WHERE member_grant."organization_id" = ${input.organizationId}
         AND member_grant."connection_id" = ${input.connectionId}::uuid
         AND member_grant."member_id" = ${input.authority.membershipId}
-        AND member_grant."capability" IN ('use', 'manage')
+        AND member_grant."capability" IN ('read', 'use', 'manage')
         AND connection."deleted_at" IS NULL
         AND connection."revocation_pending_at" IS NULL
         AND connection."revocation_claim_id" IS NULL

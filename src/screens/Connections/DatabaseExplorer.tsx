@@ -656,7 +656,7 @@ export function DatabaseExplorer({
             </p>
           </div>
         ) : null}
-        {connections.length === 0 ? (
+        {connections.length === 0 && activeProjectEnvironmentView !== "analyses" ? (
           <DatabaseExplorerEmptyState
             creatingDemo={creatingDemo}
             onNewConnection={onNewConnection}
@@ -726,7 +726,7 @@ export function DatabaseExplorer({
               }
             />
           ))}
-          {knowledgeEnabled &&
+          {activeProjectEnvironmentView !== "analyses" && knowledgeEnabled &&
           (knowledgeProjects.data?.length ?? 0) > 0 &&
           unassignedSections.length > 0 ? (
             <div className="tw:grid tw:pt-1">

@@ -8,4 +8,5 @@ export type SettingsSection =
   | "privacy"
   | "safety"
   | "updates"
-  | "language";
+  | "language"
+  | "appearance";

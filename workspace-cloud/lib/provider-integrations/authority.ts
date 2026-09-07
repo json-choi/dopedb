@@ -36,6 +36,7 @@ export type ProviderMutationAuthority = {
     connectionId: string;
     connectionRevision: number;
     providerResourceId: string;
+    accessMode?: "read" | "write" | "schema";
   };
 };
 
@@ -89,7 +90,8 @@ export function providerMutationAuthoritySql(input: ProviderMutationAuthority & 
         ON lease_grant."organization_id" = lease_connection."organization_id"
        AND lease_grant."connection_id" = lease_connection."id"
        AND lease_grant."member_id" = ${input.membershipId}
-       AND lease_grant."capability" IN ('use', 'manage')
+       AND (lease_grant."capability" IN ('use', 'manage')
+         OR (lease_grant."capability" = 'read' AND ${lease.accessMode ?? 'write'} = 'read'))
       WHERE lease_connection."id" = ${lease.connectionId}::uuid
         AND lease_connection."organization_id" = ${input.organizationId}
         AND lease_connection."provider_integration_id" = ${integration?.id ?? ""}::uuid

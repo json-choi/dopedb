@@ -233,6 +233,7 @@ export function useActionSearchItems({
       ["privacy", t("settings.privacy"), false],
       ["safety", t("settings.safety"), !selected],
       ["language", t("settings.languageTitle"), false],
+      ["appearance", t("settings.appearance"), false],
       ["updates", t("settings.updates"), false],
     ] satisfies ReadonlyArray<readonly [SettingsSection, string, boolean]>
   ).map(([section, label, disabled]) => ({

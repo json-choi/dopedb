@@ -24,6 +24,7 @@ import {
   type AppUpdaterSnapshot,
 } from "../../features/updater/controller";
 import AdvancedSettings from "./Advanced";
+import Appearance from "./Appearance";
 import AgentTools from "./AgentTools";
 import CliSettings from "./Cli";
 import PrivacySettings from "./Privacy";
@@ -83,6 +84,13 @@ export default function Settings({
           scope: "application",
           disabled: false,
           keywords: "command line terminal path cli",
+        },
+        {
+          id: "appearance",
+          label: t("settings.appearance"),
+          scope: "application",
+          disabled: false,
+          keywords: "theme appearance light dark system 테마 화면 라이트 다크 시스템",
         },
         {
           id: "language",
@@ -334,6 +342,7 @@ export default function Settings({
                     onInstall={onUpdateInstall}
                   />
                 )}
+                {section === "appearance" && <Appearance />}
                 {section === "language" && (
                   <div className="tw:grid tw:max-w-[560px] tw:gap-4 tw:p-4">
                     <div className="tw:inline-flex tw:items-center tw:gap-2">

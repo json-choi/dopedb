@@ -308,7 +308,7 @@ export default function ConnectionNode(props: Props) {
           <EngineMark engine={connection.engine} size="tree" />
         )}
         <span className="tw:flex tw:min-w-0 tw:flex-1 tw:items-center tw:gap-1.5 tw:overflow-hidden">
-          <span className="tw:min-w-0 tw:flex-1 tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap">
+          <span className="tw:min-w-0 tw:flex-1 tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap" title={connection.name || t("app.unnamed")}>
             {connection.name || t("app.unnamed")}
           </span>
           {connection.providerTarget ? (
@@ -394,35 +394,16 @@ export default function ConnectionNode(props: Props) {
         ) : null}
         {accessLabel && (
           <span
-            data-access={connection.workspaceAccess}
-            className="tw:inline-flex tw:shrink-0 tw:items-center tw:justify-center tw:gap-[2px] tw:rounded-xs tw:border tw:border-border-subtle tw:px-1.5 tw:py-px tw:font-mono tw:text-2xs tw:text-muted-foreground tw:uppercase tw:data-[access=write]:border-primary tw:data-[access=write]:text-primary tw:data-[access=manage]:border-primary tw:data-[access=manage]:text-primary tw:@max-[270px]:size-[18px] tw:@max-[270px]:rounded-full tw:@max-[270px]:p-0"
+            className="tw:inline-flex tw:size-4 tw:shrink-0 tw:items-center tw:justify-center tw:text-muted-foreground"
             aria-label={accessLabel}
+            role="img"
             title={accessLabel}
           >
-            <span
-              className="tw:hidden tw:size-1.5 tw:rounded-full tw:bg-current tw:@max-[270px]:block"
-              aria-hidden="true"
-            />
-            <span className="tw:inline-flex tw:items-center tw:gap-1 tw:@max-[270px]:hidden">
-              {usesManagedCredentials ? (
-                <Icon
-                  name="key"
-                  className="tw:size-3 tw:shrink-0"
-                  aria-hidden="true"
-                />
-              ) : null}
-              {accessLabelBase}
-            </span>
+            <Icon name={usesManagedCredentials ? "key" : "user"} aria-hidden="true" />
           </span>
         )}
-        <SchemaDiffTrigger
-          connection={connection}
-          groupsByConnectionId={props.groupByConnectionId}
-          catalogs={props.catalogs}
-          onOpen={props.onOpenSchemaDiff}
-        />
         <div
-          className="db-menu tw:pointer-events-none tw:absolute tw:top-1/2 tw:right-1 tw:-translate-y-1/2 tw:opacity-0 tw:transition-opacity tw:group-hover:pointer-events-auto tw:group-hover:opacity-100 tw:group-focus-within:pointer-events-auto tw:group-focus-within:opacity-100 tw:focus-within:pointer-events-auto tw:focus-within:opacity-100 tw:data-[open=true]:pointer-events-auto tw:data-[open=true]:z-[var(--ds-z-popover)] tw:data-[open=true]:opacity-100"
+          className="db-menu tw:pointer-events-none tw:absolute tw:top-1/2 tw:right-1 tw:flex tw:-translate-y-1/2 tw:items-center tw:gap-1 tw:rounded-xs tw:bg-background tw:opacity-0 tw:transition-opacity tw:group-hover:pointer-events-auto tw:group-hover:opacity-100 tw:group-focus-within:pointer-events-auto tw:group-focus-within:opacity-100 tw:focus-within:pointer-events-auto tw:focus-within:opacity-100 tw:data-[open=true]:pointer-events-auto tw:data-[open=true]:z-[var(--ds-z-popover)] tw:data-[open=true]:opacity-100"
           data-open={props.openMenuId === connectionMenuKey}
           onPointerDown={(event) => event.stopPropagation()}
           onPointerUp={(event) => event.stopPropagation()}
@@ -440,6 +421,12 @@ export default function ConnectionNode(props: Props) {
             }
           }}
         >
+          <SchemaDiffTrigger
+            connection={connection}
+            groupsByConnectionId={props.groupByConnectionId}
+            catalogs={props.catalogs}
+            onOpen={props.onOpenSchemaDiff}
+          />
           <Button
             data-connection-menu-trigger
             data-tree-context-action

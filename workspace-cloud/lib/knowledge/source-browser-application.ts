@@ -93,7 +93,7 @@ async function exactSource(request: Request, input: ExactSourceInput) {
       request,
       input.workspaceId,
       input.connectionId,
-      "use",
+      "read",
     );
     if (!authorization.ok) return authorization;
     const [binding] = await db.select({ id: knowledgeEnvironmentConnection.id }).from(

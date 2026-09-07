@@ -1,8 +1,10 @@
-import { useState } from "react";
+// Composes Article commands, editorial reading and immutable execution history.
+import { useState, type ReactNode } from "react";
 
 import ConfirmButton from "../../components/ConfirmButton";
 import { Icon } from "../../components/Icon";
 import { AnalysisArticleEditor } from "../../features/analysisArticles/AnalysisArticleEditor";
+import { AnalysisShareButton } from "../../features/analysisArticles/AnalysisShareButton";
 import { AnalysisPublicationPanel } from "../../features/analysisArticles/AnalysisPublicationPanel";
 import type {
   AnalysisArticleRecord,
@@ -13,14 +15,13 @@ import type {
 import { useAnalysisArticlesController } from "../../features/analysisArticles/useAnalysisArticlesController";
 import type { EnvironmentConnection, KnowledgeEnvironment } from "../../features/knowledge/domain";
 import { Button } from "../../design-system/components/Button";
-import { AnalysisArticleBody } from "../../design-system/components/AnalysisArticleBody";
-import { PanelTabs } from "../../design-system/components/PanelTabs";
+import { ModalBackdrop, ModalFooter, ModalHeader, ModalSurface } from "../../design-system/components/Modal";
+import { errMessage } from "../../ipc/types";
+import { AnalysisArticleReader } from "../../features/analysisArticles/AnalysisArticleReader";
+import ToolbarMenu, { ToolbarMenuItem } from "../../components/ToolbarMenu";
 import { InlineNotice, LoadingLabel, StatusBadge } from "../../design-system/components/Status";
 import {
-  WorkbenchButton,
-  WorkbenchDivider,
   WorkbenchEmptyState,
-  WorkbenchToolbar,
 } from "../../design-system/components/Workbench";
 import { useI18n } from "../../lib/i18n";
 import type { I18nKey } from "../../lib/i18n";
@@ -125,25 +126,6 @@ export default function AnalysisArticles({
   const selected = controller.selected;
   return (
     <div className="tw:flex tw:h-full tw:min-h-0 tw:min-w-0 tw:flex-col tw:bg-background">
-      <WorkbenchToolbar label={t("analysis.title")}>
-        {controller.agentBinding?.connectionId && onOpenAgent ? (
-          <>
-            <WorkbenchButton onClick={controller.askAgent}>
-              <Icon name="terminal" />
-              {t(selected ? "analysis.editWithAgent" : "analysis.askAgent")}
-            </WorkbenchButton>
-            <WorkbenchDivider />
-          </>
-        ) : null}
-        <WorkbenchButton
-          iconOnly
-          title={t("analysis.refresh")}
-          aria-label={t("analysis.refresh")}
-          onClick={() => void controller.articles.refetch()}
-        >
-          <Icon name="refresh" className={controller.articles.isFetching ? "tw:animate-spin tw:motion-reduce:animate-none" : undefined} />
-        </WorkbenchButton>
-      </WorkbenchToolbar>
 
       {controller.actionError ? (
         <div className="tw:px-3 tw:pt-3">
@@ -152,7 +134,7 @@ export default function AnalysisArticles({
       ) : null}
 
       <main className="tw:flex tw:min-h-0 tw:min-w-0 tw:flex-1 tw:flex-col tw:overflow-hidden">
-        {!selected ? (
+        {!selected && controller.articles.isPending ? <div className="tw:p-8"><LoadingLabel>{t("analysis.loading")}</LoadingLabel></div> : !selected && controller.articles.isError ? <WorkbenchEmptyState icon="alert"><strong>{t("analysis.loadFailed")}</strong><span>{errMessage(controller.articles.error)}</span><Button onClick={() => void controller.articles.refetch()}>{t("analysis.refresh")}</Button></WorkbenchEmptyState> : !selected ? (
           <WorkbenchEmptyState icon="chart">
             <strong>{projectName}</strong>
             <span>{t("analysis.simpleEmptyBody")}</span>
@@ -171,55 +153,39 @@ export default function AnalysisArticles({
           </WorkbenchEmptyState>
         ) : (
           <>
-            <header className="tw:flex tw:shrink-0 tw:flex-wrap tw:items-start tw:justify-between tw:gap-3 tw:border-b tw:border-border-subtle tw:px-4 tw:py-3">
-              <div className="tw:grid tw:min-w-0 tw:gap-1">
-                <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
-                  <h1 className="tw:m-0 tw:truncate tw:text-title tw:font-semibold tw:tracking-tight">{selected.definition.title}</h1>
-                  <StatusBadge density="compact">{sourceLabel(selected, t)}</StatusBadge>
-                  <span className="tw:font-mono tw:text-2xs tw:text-muted-foreground">r{selected.revision}</span>
-                </div>
-                <span className="tw:text-xs tw:text-muted-foreground">
-                  {connectionLabel(selected, bindings)} · {t("analysis.manualOnly")}
-                </span>
+            <header className="tw:flex tw:shrink-0 tw:items-center tw:justify-between tw:gap-3 tw:px-[clamp(20px,4.5cqw,60px)] tw:pt-5 tw:pb-2">
+              <div className="tw:flex tw:min-w-0 tw:items-center tw:gap-2 tw:text-sm tw:text-muted-foreground">
+                <span className="tw:truncate">{projectName}</span><span aria-hidden="true">/</span><span>{t("analysis.navigation")}</span>
               </div>
-              <div className="ds-control-row tw:flex tw:flex-wrap tw:items-center tw:justify-end tw:gap-1">
-                {controller.running?.articleId === selected.id ? (
-                  <Button variant="danger" size="compact" onClick={() => controller.running && controller.cancel.mutate(controller.running)}>
-                    <Icon name="stop" /> {t("analysis.cancelRun")}
-                  </Button>
-                ) : (
-                  <Button variant="primary" size="compact" disabled={controller.execute.isPending} onClick={() => controller.startRun(selected)}>
-                    <Icon name="play" /> {t("analysis.runAgain")}
-                  </Button>
-                )}
-                <Button size="compact" onClick={() => controller.setEditorArticle(selected)}>
-                  <Icon name="pencil" /> {t("analysis.edit")}
-                </Button>
-                <Button size="compact" onClick={() => setShowPublication((value) => !value)}>
-                  <Icon name="upload" /> {t("analysis.publishHtml")}
-                </Button>
-                <ConfirmButton
-                  iconOnly
-                  size="xs"
-                  variant="ghost"
-                  label={t("analysis.deleteLabel")}
-                  disabled={controller.remove.isPending}
-                  onConfirm={() => controller.remove.mutate(selected)}
-                >
-                  <Icon name="trash" />
-                </ConfirmButton>
+              <div className="ds-control-row tw:flex tw:shrink-0 tw:items-center tw:gap-2">
+                <ToolbarMenu label={t("ide.action.more")} icon="moreHorizontal">
+                  {controller.agentBinding?.connectionId && onOpenAgent ? <ToolbarMenuItem icon="terminal" onClick={controller.askAgent}>{t("analysis.editWithAgent")}</ToolbarMenuItem> : null}
+                  <ToolbarMenuItem icon="history" onClick={() => controller.setTab(controller.tab === "history" ? "article" : "history")}>{t(controller.tab === "history" ? "analysis.tabArticle" : "analysis.tabHistory")}</ToolbarMenuItem>
+                  <ToolbarMenuItem icon="upload" onClick={() => { controller.setTab("article"); setShowPublication((value) => !value); }}>{t("analysis.publishHtml")}</ToolbarMenuItem>
+                  <ToolbarMenuItem icon="refresh" onClick={() => void controller.articles.refetch()}>{t("analysis.refresh")}</ToolbarMenuItem>
+                  <div role="none" data-menu-keep-open>
+                    <ConfirmButton presentation="menuItem" variant="ghost" tone="danger" disabled={controller.remove.isPending} onConfirm={() => controller.remove.mutate(selected)}>{t("analysis.deleteLabel")}</ConfirmButton>
+                  </div>
+                </ToolbarMenu>
+                <Button size="compact" onClick={() => controller.setEditorArticle(selected)}><Icon name="pencil" />{t("analysis.edit")}</Button>
+                <AnalysisShareButton key={`${scopeKey}:${selected.id}`} articleId={selected.id} />
               </div>
             </header>
-            <PanelTabs tabs={controller.detailTabs} active={controller.tab} onChange={controller.setTab} label={t("analysis.details")} />
-            <div className="scrollbar-sleek tw:min-h-0 tw:flex-1 tw:overflow-auto tw:overscroll-contain">
+            <div className="tw:min-h-0 tw:flex-1 tw:overflow-hidden">
               {controller.tab === "article" ? (
                 <ArticleDocument
+                  key={`${scopeKey}:${selected.id}`}
                   article={selected}
+                  projectName={projectName}
+                  source={sourceLabel(selected, t)}
+                  runAction={controller.running?.articleId === selected.id ? (
+                    <Button variant="danger" size="compact" onClick={() => controller.running && controller.cancel.mutate(controller.running)}><Icon name="stop" />{t("analysis.cancelRun")}</Button>
+                  ) : (
+                    <Button size="compact" disabled={controller.execute.isPending} onClick={() => controller.startRun(selected)}><Icon name="play" />{t("analysis.runAgain")}</Button>
+                  )}
                   result={controller.resultData}
                   resultLoading={controller.recoveredResult.isFetching || controller.execute.isPending}
                   ranAt={controller.localResult?.finishedAt ?? null}
-                  showPublication={showPublication}
-                  scopeKey={scopeKey}
                   connectionLabel={connectionLabel(selected, bindings)}
                 />
               ) : (
@@ -233,6 +199,14 @@ export default function AnalysisArticles({
           </>
         )}
       </main>
+
+      {selected && showPublication ? <ModalBackdrop onMouseDown={() => setShowPublication(false)}>
+        <ModalSurface aria-labelledby="article-publication-title" onRequestClose={() => setShowPublication(false)}>
+          <ModalHeader title={t("analysis.publishHtml")} titleId="article-publication-title" />
+          <div className="scrollbar-sleek tw:min-h-0 tw:overflow-auto tw:p-5"><AnalysisPublicationPanel key={`${scopeKey}:${selected.id}`} article={selected} scopeKey={scopeKey} /></div>
+          <ModalFooter><Button onClick={() => setShowPublication(false)}>{t("common.close")}</Button></ModalFooter>
+        </ModalSurface>
+      </ModalBackdrop> : null}
 
       {controller.editorArticle ? (
         <AnalysisArticleEditor
@@ -249,33 +223,33 @@ export default function AnalysisArticles({
 
 function ArticleDocument({
   article,
+  projectName,
+  source,
+  runAction,
   result,
   resultLoading,
   ranAt,
-  showPublication,
-  scopeKey,
   connectionLabel,
 }: {
   article: AnalysisArticleRecord;
+  projectName: string;
+  source: string;
+  runAction: ReactNode;
   result: AnalysisResultData | null;
   resultLoading: boolean;
   ranAt: string | null;
-  showPublication: boolean;
-  scopeKey: string;
   connectionLabel: string;
 }) {
   const { t } = useI18n();
   const query = article.definition.query;
   return (
-    <div className="tw:mx-auto tw:grid tw:w-full tw:max-w-[1100px] tw:gap-8 tw:p-6 tw:@max-[760px]:p-3">
-      <AnalysisArticleBody html={article.definition.html} />
-
-      <section className="tw:grid tw:gap-3 tw:border-t tw:border-border-subtle tw:pt-5">
+    <AnalysisArticleReader article={article} projectName={projectName} source={source} connectionName={connectionLabel} runAction={runAction}>
+      <section data-article-saved-query tabIndex={-1} className="tw:grid tw:scroll-mt-8 tw:gap-3 tw:border-t tw:border-border-subtle tw:pt-6 tw:outline-none">
         <div className="tw:flex tw:flex-wrap tw:items-center tw:justify-between tw:gap-2">
           <h2 className="tw:m-0 tw:text-sm tw:font-semibold">{t("analysis.savedQuery")}</h2>
           <span className="tw:text-xs tw:text-muted-foreground">{connectionLabel}</span>
         </div>
-        <pre className="tw:m-0 tw:max-h-72 tw:overflow-auto tw:rounded-surface tw:border tw:border-border-subtle tw:bg-surface-inset tw:p-4 tw:text-xs tw:leading-relaxed"><code>{query.sql}</code></pre>
+        <pre className="tw:m-0 tw:max-h-72 tw:overflow-auto tw:rounded-md tw:border tw:border-border-subtle tw:bg-card tw:p-4 tw:text-xs tw:leading-relaxed"><code>{query.sql}</code></pre>
       </section>
 
       <section className="tw:grid tw:gap-3 tw:border-t tw:border-border-subtle tw:pt-5">
@@ -290,30 +264,25 @@ function ArticleDocument({
         ) : null}
       </section>
 
-      {showPublication ? (
-        <section className="tw:grid tw:gap-4 tw:border-t tw:border-border-subtle tw:pt-5">
-          <AnalysisPublicationPanel article={article} scopeKey={scopeKey} />
-        </section>
-      ) : null}
-    </div>
+    </AnalysisArticleReader>
   );
 }
 
 function ResultTable({ result, title }: { result: AnalysisResultData; title: string }) {
   const { t } = useI18n();
   return (
-    <div className="tw:max-h-[520px] tw:overflow-auto tw:rounded-surface tw:border tw:border-border">
+    <div className="tw:max-h-[520px] tw:overflow-auto tw:rounded-md tw:border tw:border-border-subtle">
       <table className="tw:w-full tw:min-w-max tw:border-collapse tw:text-left tw:text-xs">
         <caption className="tw:sr-only">{title}</caption>
-        <thead className="tw:sticky tw:top-0 tw:bg-surface">
+        <thead className="tw:sticky tw:top-0 tw:bg-background">
           <tr>{result.columns.map((column) => (
-            <th className="tw:border-r tw:border-b tw:border-border tw:px-2 tw:py-1.5 tw:font-medium tw:text-muted-foreground" key={column.name}>{column.name}</th>
+            <th className="tw:border-r tw:border-b tw:border-border-subtle tw:px-2 tw:py-1.5 tw:font-medium tw:text-muted-foreground" key={column.name}>{column.name}</th>
           ))}</tr>
         </thead>
         <tbody>{result.rows.slice(0, 500).map((row, rowIndex) => (
-          <tr className="tw:odd:bg-surface-inset" key={rowIndex}>{result.columns.map((column, index) => {
+          <tr className="tw:odd:bg-card" key={rowIndex}>{result.columns.map((column, index) => {
             const value = cellText(row[index] ?? null);
-            return <td className="tw:max-w-[420px] tw:truncate tw:border-r tw:border-b tw:border-border tw:px-2 tw:py-1.5 tw:font-mono tw:tabular-nums" title={value} key={column.name}>{value}</td>;
+            return <td className="tw:max-w-[420px] tw:truncate tw:border-r tw:border-b tw:border-border-subtle tw:px-2 tw:py-1.5 tw:font-mono tw:tabular-nums" title={value} key={column.name}>{value}</td>;
           })}</tr>
         ))}</tbody>
       </table>
@@ -334,7 +303,8 @@ function HistoryView({
   const { t } = useI18n();
   if (loading) return <div className="tw:p-5"><LoadingLabel>{t("analysis.loadingHistory")}</LoadingLabel></div>;
   return (
-    <div className="tw:mx-auto tw:grid tw:w-full tw:max-w-[900px] tw:gap-6 tw:p-5">
+    <div className="scrollbar-sleek tw:mx-auto tw:grid tw:h-full tw:w-full tw:max-w-[1000px] tw:content-start tw:gap-8 tw:overflow-auto tw:p-8">
+      <h1 className="tw:m-0 tw:font-serif tw:text-4xl tw:font-normal">{t("analysis.tabHistory")}</h1>
       <section className="tw:grid tw:gap-2">
         <h2 className="tw:m-0 tw:text-sm tw:font-semibold">{t("analysis.revisions")}</h2>
         {revisions.map((revision) => (

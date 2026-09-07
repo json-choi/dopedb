@@ -86,6 +86,7 @@ export function DatabaseExplorerToolbar({
   const { t } = useI18n();
   return (
     <>
+      {workspaceHeader}
       <div
         className="tw:group tw:flex tw:min-h-control-md tw:shrink-0 tw:items-center tw:gap-[2px] tw:border-b tw:border-border-subtle tw:bg-background tw:px-1"
         role="toolbar"
@@ -177,8 +178,6 @@ export function DatabaseExplorerToolbar({
           <ToolWindowHideButton label={t("common.close")} onClick={onClose} />
         </span>
       </div>
-
-      {workspaceHeader}
 
       {connections.length > 0 && searchOpen ? (
         <ToolWindowSearchRow>

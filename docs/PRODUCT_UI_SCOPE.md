@@ -67,6 +67,7 @@ flowchart LR
 | Project binding·schema/object 탐색 | Desktop Explorer | Agent와 Services는 별도 resource tree를 만들지 않음 |
 | SQL·조회·Article 작업 | Desktop 중앙 document | Services는 결과와 실행 상태만 소유 |
 | Agent resource 선택·제안·승인 | Desktop Agent | 중앙 document는 Agent grant나 승인 control을 복제하지 않음 |
+| Article 공유·이메일 지정 초대 | Desktop Article의 공유 dialog와 Workspace의 Article invitation application | 기존 Access는 참여한 멤버와 DB grant의 변경·회수를 계속 소유 |
 | 실행 결과·background 진행·취소 | Desktop Services | Agent는 요약과 결과 이동만 제공 |
 | write 실행 상한 | Desktop `Settings → Safety` | 연결 편집기와 실행 오류는 상태와 이 화면의 link만 제공 |
 
@@ -78,7 +79,21 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
 
 ### 화면 구조
 
-- 상단은 workspace와 현재 문맥, document tab, 실제 전역 command를 제공한다.
+- Desktop은 시스템 설정을 기본으로 따르며 Settings → 화면에서 시스템·라이트·다크를
+  즉시 선택하고 기기에 저장한다. 시스템 모드는 OS 변경도 자동 반영한다. 기존 다크
+  palette와 밝은 중립 palette가 같은 semantic role과 평평한 pane 배치를 공유한다.
+  title toolbar는 40px 높이와 32px action을 사용하고 기존 선형 D 마크를 표시한다.
+  검색 옆 왼쪽 패널 토글은 현재 Explorer·Local History를 닫고 같은 패널을 복원한다.
+  AI Chat은 계정과 구분되는 말풍선 아이콘을 사용한다.
+  왼쪽의 Workspace 선택과 Databases / Articles / Agent 진입은 같은 실제
+  Explorer·Knowledge·Agent command를 호출한다. Article 읽기에서는 큰 serif 제목,
+  본문, 본문에서 추출한 목차와 exact DB·저장 쿼리·수동 재조회 도구를 나란히 둔다.
+  좁은 중앙 pane에서는 같은 도구를 본문 위로 접고 목차를 disclosure로 제공한다.
+  공유와 편집은 상단, 공개 발행·history·삭제는 더보기로 정리한다. 예시 작성자,
+  pinned 상태, member count는 서버나 로컬 state가 실제 제공할 때만 표시한다.
+- 상단은 브랜드와 검색·계정·설정, 실제 전역 command를 제공한다. Workspace 선택은
+  Explorer 상단에 두고 Explorer를 숨기거나 Local History를 열면 title toolbar에
+  표시한다. 각 작업 면은 해당 문맥과 document tab을 소유한다.
 - 왼쪽 Explorer는 `Project → Databases / Data sources / Analyses`의 계층과 실제
   catalog를 소유한다. Environment는 exact grant와 binding을 소유하는 domain으로
   유지하되 Project 아래 시각적 folder로 반복하지 않는다. `Databases`는 Project의
@@ -292,6 +307,7 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
 | PD-39 | metric signal monitoring | `구현 안 함` | Article은 수동 재조회 문서이며 cron·signal·background runner를 소유하지 않는다. |
 | PD-40 | Analysis Article 삭제·공개 발행 | `구현` | optimistic revision 기반 삭제와 ADR 0007의 immutable public HTML 발행·해지를 제공한다. 별도 archive 상태 전환은 만들지 않는다. |
 | PD-41 | External official Agent CLI | `구현` | `dopedb agent init/start`가 secret-free Project resource config, 매 실행 Desktop 검토, process-bound runtime-only typed bridge로 공식 로컬 Codex/Claude를 실행한다. 저장된 범용 MCP와 provider token 접근은 허용하지 않는다. |
+| PD-42 | 조직 내부 Article 링크와 읽기 초대 | `구현` | 기존 구성원용 링크는 현재 계정의 Workspace membership와 해당 DB grant를 매번 확인한다. Workspace 관리자이면서 해당 DB의 manage 권한을 가진 사람만 이메일 하나에 고정된 48시간 초대 링크를 만든다. 검증된 수신 계정의 명시적 수락은 멤버 참여와 지정 DB의 read grant를 원자적으로 처리하며 기존의 더 높은 역할·grant는 보존한다. 링크 소지만으로 접근할 수 없고 회사 도메인을 조직 권한으로 추정하지 않는다. 앱 설치·로그인 안내 후 인증된 Desktop의 원래 Article로 연결하며 OS 설치 동의, member-local credential 입력과 Google CLI 인증을 대신하지 않는다. 브라우저는 초대와 앱 진입만 소유하고 Article query나 결과를 실행·제공하지 않는다. |
 
 ## 변경 규칙
 

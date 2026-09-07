@@ -17,6 +17,7 @@ import type { WorkspaceManualTransaction } from "../queries/useWorkspaceManualTr
 import { SQL_EDITOR_INDENT_SIZE } from "../queries/editorStatus";
 import { useSqlEditorCursor } from "../queries/editorStatusStore";
 import { Icon } from "../../components/Icon";
+import { DopeDBMark } from "../../design-system/components/DopeDBMark";
 import ToolbarMenu, {
   ToolbarMenuItem,
 } from "../../components/ToolbarMenu";
@@ -40,7 +41,7 @@ const IS_MACOS =
 export function IdeTopBar({
   selected,
   supportsSql,
-  databaseExplorerOpen,
+  leftPanelOpen,
   localHistoryOpen,
   servicesOpen,
   agentDockOpen,
@@ -49,7 +50,7 @@ export function IdeTopBar({
   workspace,
   account,
   onNewQuery,
-  onToggleDatabaseExplorer,
+  onToggleLeftPanel,
   onToggleLocalHistory,
   onToggleServices,
   onToggleAgent,
@@ -60,16 +61,16 @@ export function IdeTopBar({
 }: {
   selected: ConnectionProfile | null;
   supportsSql: boolean;
-  databaseExplorerOpen: boolean;
+  leftPanelOpen: boolean;
   localHistoryOpen: boolean;
   servicesOpen: boolean;
   agentDockOpen: boolean;
   actionSearchOpen: boolean;
   settingsOpen: boolean;
-  workspace: ReactNode;
+  workspace?: ReactNode;
   account: ReactNode;
   onNewQuery: () => void;
-  onToggleDatabaseExplorer: () => void;
+  onToggleLeftPanel: () => void;
   onToggleLocalHistory: () => void;
   onToggleServices: () => void;
   onToggleAgent: () => void;
@@ -83,47 +84,39 @@ export function IdeTopBar({
   const agentLauncherLabel = selected
     ? t("agent.acpTitle")
     : t("agent.acpSelectDatabaseToOpen");
+  const panelLabel = t(leftPanelOpen ? "ide.action.hideLeftPanel" : "ide.action.showLeftPanel");
 
   return (
     <IdeTitleToolbar
       macosInset={IS_MACOS}
-      context={workspace}
+      context={workspace ?? <span className="tw:flex tw:items-center tw:gap-1.5 tw:text-foreground"><DopeDBMark /><span className="tw:font-serif tw:text-lg tw:leading-none tw:font-bold tw:tracking-tight">DopeDB</span></span>}
       launchersLabel={t("ide.mainToolbar")}
       launchers={
         <>
         <IdeToolbarLauncher
-          active={databaseExplorerOpen}
-          onClick={() => {
-            onToggleDatabaseExplorer();
-          }}
-          title={t("ide.action.databaseExplorer")}
-          aria-label={t("ide.action.databaseExplorer")}
+          active={leftPanelOpen}
+          onClick={onToggleLeftPanel}
+          title={panelLabel}
+          aria-label={panelLabel}
+          aria-expanded={leftPanelOpen}
+          aria-controls="left-tool-window"
         >
-          <Icon name="database" />
+          <Icon name="sidebar" />
         </IdeToolbarLauncher>
-        <IdeToolbarLauncher
-          active={servicesOpen}
-          onClick={onToggleServices}
-          title={t("services.title")}
-          aria-label={t("services.title")}
-        >
-          <Icon name="list" />
-        </IdeToolbarLauncher>
-        <IdeToolbarLauncher
-          buttonRef={agentButtonRef}
-          active={agentDockOpen}
-          disabled={!selected}
-          onClick={onToggleAgent}
-          title={agentLauncherLabel}
-          aria-label={agentLauncherLabel}
-        >
-          <Icon name="user" />
-        </IdeToolbarLauncher>
+        <button
+          ref={actionSearchButtonRef}
+          type="button"
+          aria-pressed={actionSearchOpen}
+          aria-label={t("ide.action.actionSearch")}
+          className="tw:flex tw:h-control-md tw:w-[min(320px,30vw)] tw:cursor-pointer tw:items-center tw:gap-2 tw:rounded-sm tw:border tw:border-border-subtle tw:bg-card tw:px-3 tw:font-sans tw:text-sm tw:text-muted-foreground tw:hover:border-border-strong tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:max-[760px]:w-control-md tw:max-[760px]:justify-center tw:max-[760px]:px-0"
+          onClick={(event) => onActionSearch(event.currentTarget)}
+        ><Icon name="search" /><span className="tw:truncate tw:max-[760px]:hidden">{t("ide.action.actionSearch")}</span><kbd className="tw:ml-auto tw:font-sans tw:text-xs tw:max-[760px]:hidden">⇧ ⇧</kbd></button>
         <ToolbarMenu
           align="start"
           icon="moreHorizontal"
           label={t("ide.action.more")}
         >
+          <ToolbarMenuItem icon="list" onClick={onToggleServices} aria-pressed={servicesOpen}>{t("services.title")}</ToolbarMenuItem>
           <ToolbarMenuItem
             icon={localHistoryOpen ? "check" : "history"}
             disabled={!selected || !supportsSql}
@@ -144,18 +137,8 @@ export function IdeTopBar({
       }
       actions={
         <>
-        <div className="tw:size-8 tw:shrink-0">{account}</div>
-        <IdeToolbarLauncher
-          buttonRef={actionSearchButtonRef}
-          active={actionSearchOpen}
-          onClick={(event) => {
-            onActionSearch(event.currentTarget);
-          }}
-          title={t("ide.action.actionSearch")}
-          aria-label={t("ide.action.actionSearch")}
-        >
-          <Icon name="search" />
-        </IdeToolbarLauncher>
+        <IdeToolbarLauncher buttonRef={agentButtonRef} active={agentDockOpen} disabled={!selected} onClick={onToggleAgent} title={agentLauncherLabel} aria-label={agentLauncherLabel}><Icon name="chat" /></IdeToolbarLauncher>
+        {account}
         <IdeToolbarLauncher
           active={settingsOpen}
           onClick={onSettings}

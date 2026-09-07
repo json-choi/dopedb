@@ -27,7 +27,7 @@ export function ToolWindowSideSurface({
   return (
     <aside
       {...asideProps}
-      className="sidebar tw:mt-0 tw:mr-0 tw:mb-1 tw:ml-[2px] tw:flex tw:h-[calc(100%_-_var(--ds-space-1))] tw:min-h-0 tw:w-[calc(100%_-_2px)] tw:flex-col tw:overflow-hidden tw:rounded-md tw:border tw:border-border-subtle tw:bg-background tw:data-[compact=true]:fixed tw:data-[compact=true]:top-title-toolbar tw:data-[compact=true]:right-0 tw:data-[compact=true]:bottom-status-bar tw:data-[compact=true]:left-0 tw:data-[compact=true]:z-[var(--ds-z-modal)] tw:data-[compact=true]:m-0 tw:data-[compact=true]:h-auto tw:data-[compact=true]:w-screen tw:data-[compact=true]:rounded-none tw:data-[compact=true]:border-x-0 tw:data-[compact=true]:shadow-popover tw:data-[compact=true]:transition-transform tw:data-[compact=true]:duration-150 tw:data-[open=false]:pointer-events-none tw:data-[open=false]:-translate-x-full"
+      className="sidebar tw:m-0 tw:flex tw:h-full tw:min-h-0 tw:w-full tw:flex-col tw:overflow-hidden tw:border-0 tw:bg-[var(--ds-worktree-sidebar)] tw:data-[compact=true]:fixed tw:data-[compact=true]:top-title-toolbar tw:data-[compact=true]:right-0 tw:data-[compact=true]:bottom-status-bar tw:data-[compact=true]:left-0 tw:data-[compact=true]:z-[var(--ds-z-modal)] tw:data-[compact=true]:h-auto tw:data-[compact=true]:w-screen tw:data-[compact=true]:shadow-popover tw:data-[compact=true]:transition-transform tw:data-[compact=true]:duration-150 tw:data-[open=false]:pointer-events-none tw:data-[open=false]:-translate-x-full"
       data-compact={compact}
       data-open={open}
       aria-hidden={!open || asideProps["aria-hidden"]}

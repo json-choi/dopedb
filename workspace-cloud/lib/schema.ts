@@ -992,7 +992,7 @@ export const workspaceConnectionGrant = workspaceControl.table(
     }).onDelete("cascade"),
     check(
       "workspace_connection_grant_capability",
-      sql`${table.capability} IN ('view', 'use', 'manage')`,
+      sql`${table.capability} IN ('view', 'read', 'use', 'manage')`,
     ),
   ],
 );
@@ -2062,6 +2062,50 @@ export const workspaceAnalysisArticle = workspaceControl.table(
       "workspace_analysis_article_definition",
       sql`jsonb_typeof(${table.definition}) = 'object'`,
     ),
+  ],
+);
+
+// Private invitations carry identity and resource pins, never query text or secrets.
+export const workspaceArticleInvitation = workspaceControl.table(
+  "workspace_article_invitation",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: text("organization_id").notNull(),
+    articleId: uuid("article_id").notNull(),
+    connectionId: uuid("connection_id").notNull(),
+    connectionRevision: bigint("connection_revision", { mode: "number" }).notNull(),
+    inviterMemberId: text("inviter_member_id").notNull(),
+    recipientEmail: text("recipient_email").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+    acceptedByUserId: text("accepted_by_user_id").references(() => user.id, { onDelete: "cascade" }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("workspace_article_invitation_article_idx").on(table.organizationId, table.articleId),
+    foreignKey({
+      columns: [table.organizationId, table.articleId],
+      foreignColumns: [workspaceAnalysisArticle.organizationId, workspaceAnalysisArticle.id],
+      name: "workspace_article_invitation_article_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.organizationId, table.connectionId],
+      foreignColumns: [workspaceConnection.organizationId, workspaceConnection.id],
+      name: "workspace_article_invitation_connection_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.organizationId, table.inviterMemberId],
+      foreignColumns: [member.organizationId, member.id],
+      name: "workspace_article_invitation_inviter_fk",
+    }).onDelete("cascade"),
+    check("workspace_article_invitation_identity", sql`
+      ${table.recipientEmail} = lower(btrim(${table.recipientEmail}))
+      AND length(${table.recipientEmail}) BETWEEN 3 AND 254
+      AND ${table.connectionRevision} >= 1
+      AND ${table.expiresAt} > ${table.createdAt}
+      AND ((${table.acceptedAt} IS NULL) = (${table.acceptedByUserId} IS NULL))
+    `),
   ],
 );
 

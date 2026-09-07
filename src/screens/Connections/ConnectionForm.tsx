@@ -1,5 +1,6 @@
 // Compact connection and driver editor. Feature controllers own the
 // workflow; this screen only composes grouped presentation models.
+import { useRef } from "react";
 import {
   ModalBackdrop,
   ModalHeader,
@@ -15,10 +16,12 @@ import { ConnectionCatalogDetail } from "./ConnectionCatalogDetail";
 import { ConnectionCatalogNavigation } from "./ConnectionCatalogNavigation";
 import { ConnectionEditorDialogs } from "./ConnectionEditorDialogs";
 import { ConnectionEditorFooter } from "./ConnectionEditorFooter";
+import { ConnectionSourcePicker } from "./ConnectionSourcePicker";
 import { ConnectionProfilePanel } from "./ConnectionProfilePanel";
 
 export function ConnectionForm(props: ConnectionEditorProps) {
   const { t } = useI18n();
+  const nameInputRef = useRef<HTMLInputElement>(null);
   const { profile, catalog, schema, dialogs, commands } =
     useConnectionEditorController(props);
   const { creatingDemo, onCreateDemoDatabase } = props;
@@ -65,8 +68,6 @@ export function ConnectionForm(props: ConnectionEditorProps) {
               profile={profile}
               dialogs={dialogs}
               commands={commands}
-              creatingDemo={creatingDemo}
-              onCreateDemoDatabase={onCreateDemoDatabase}
               onEditConnection={props.onEditConnection}
             />
 
@@ -79,6 +80,8 @@ export function ConnectionForm(props: ConnectionEditorProps) {
               />
               {catalog.navigation.view === "dataSources" ? (
                 <ConnectionProfilePanel
+                  nameInputRef={nameInputRef}
+                  autoFocus={!catalog.addMenu.open}
                   profile={profile}
                   sources={catalog.sources}
                   drivers={catalog.drivers}
@@ -102,6 +105,14 @@ export function ConnectionForm(props: ConnectionEditorProps) {
             commands={commands}
             onCancel={() => void commands.cancel()}
           />
+          {catalog.addMenu.open ? (
+            <ConnectionSourcePicker
+              catalog={catalog}
+              nameInputRef={nameInputRef}
+              creatingDemo={creatingDemo}
+              onCreateDemoDatabase={onCreateDemoDatabase}
+            />
+          ) : null}
           <ConnectionEditorDialogs
             profile={profile}
             dialogs={dialogs}

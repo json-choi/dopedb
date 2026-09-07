@@ -16,6 +16,7 @@ export const CommandMenu = forwardRef<
   HTMLDivElement,
   {
     id?: string;
+    placement?: "anchor" | "center";
     label: string;
     searchLabel: string;
     searchPlaceholder: string;
@@ -28,6 +29,7 @@ export const CommandMenu = forwardRef<
 >(function CommandMenu(
   {
     id,
+    placement = "anchor",
     label,
     searchLabel,
     searchPlaceholder,
@@ -64,9 +66,10 @@ export const CommandMenu = forwardRef<
     <div
       ref={setRefs}
       id={id}
+      data-placement={placement}
       role="dialog"
       aria-label={label}
-      className="tw:absolute tw:top-[calc(100%+var(--ds-popover-offset))] tw:left-0 tw:z-[var(--ds-z-popover)] tw:flex tw:max-h-[min(440px,calc(100dvh-var(--ds-space-6)))] tw:w-[min(320px,calc(100vw-var(--ds-space-6)))] tw:flex-col tw:overflow-hidden tw:rounded-md tw:border tw:border-border-strong tw:bg-popover tw:text-popover-foreground tw:shadow-popover"
+      className="tw:absolute tw:top-[calc(100%+var(--ds-popover-offset))] tw:left-0 tw:z-[var(--ds-z-popover)] tw:flex tw:max-h-[min(440px,calc(100dvh-var(--ds-space-6)))] tw:w-[min(320px,calc(100vw-var(--ds-space-6)))] tw:flex-col tw:overflow-hidden tw:rounded-md tw:border tw:border-border-strong tw:bg-popover tw:text-popover-foreground tw:shadow-popover tw:data-[placement=center]:fixed tw:data-[placement=center]:top-1/2 tw:data-[placement=center]:left-1/2 tw:data-[placement=center]:-translate-x-1/2 tw:data-[placement=center]:-translate-y-1/2"
       onKeyDown={(event) => {
         if (event.key !== "Escape") return;
         event.preventDefault();
@@ -90,6 +93,7 @@ export const CommandMenu = forwardRef<
           aria-label={searchLabel}
           placeholder={searchPlaceholder}
           autoFocus
+          data-modal-initial-focus
           className="tw:h-control-lg tw:w-full tw:rounded-sm tw:border tw:border-input tw:bg-background tw:px-3 tw:font-sans tw:text-ui tw:text-foreground tw:shadow-control tw:outline-none tw:placeholder:text-muted-foreground tw:focus:border-ring tw:focus:ring-2 tw:focus:ring-ring/30"
         />
       </div>

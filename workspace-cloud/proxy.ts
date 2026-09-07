@@ -24,9 +24,9 @@ export function proxy(request: NextRequest) {
     path: "/",
     maxAge: 60 * 60 * 24 * 365,
   });
-  if (/^\/analyses\/[^/]+\/?$/.test(localeIndependentPath)) {
-    // Public publication slugs can be revoked. Explicitly forbid downstream
-    // browser and shared-cache reuse of HTML rendered before that revocation.
+  if (/^\/(?:analyses|article-invitations|open-article)\//.test(localeIndependentPath)) {
+    // Publications can be revoked; private handoffs contain account identity.
+    // Neither may survive in browser or shared caches after an access change.
     response.headers.set("cache-control", "private, no-store");
   }
   return response;

@@ -11,6 +11,7 @@ import {
 import type { FitAddon } from "@xterm/addon-fit";
 import type { Terminal } from "@xterm/xterm";
 
+import { useTheme } from "../../design-system/theme";
 import { errMessage } from "../../ipc/types";
 import { useI18n } from "../../lib/i18n";
 import type {
@@ -109,9 +110,13 @@ const PtySurface = forwardRef<PtySurfaceHandle, PtySurfaceProps>(
     forwardedRef,
   ) {
     const { t } = useI18n();
+    const { resolved: colorScheme } = useTheme();
     const hostRef = useRef<HTMLDivElement>(null);
     const terminalRef = useRef<Terminal | null>(null);
     const fitRef = useRef<FitAddon | null>(null);
+    useEffect(() => {
+      if (terminalRef.current) terminalRef.current.options.theme = resolvePtyTheme(getComputedStyle(document.documentElement));
+    }, [colorScheme]);
     const inputChainRef = useRef(Promise.resolve());
     const lifecycleRef = useRef(session.lifecycle);
     lifecycleRef.current = session.lifecycle;

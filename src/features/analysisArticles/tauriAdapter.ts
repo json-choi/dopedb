@@ -116,3 +116,30 @@ export function revokeAnalysisPublication(
 export function analysisPublicationUrl(slug: string): Promise<string> {
   return invoke("analysis_publication_url_command", { slug });
 }
+
+export type ArticleSharingScope = { accountId: string; workspaceId: string; articleId: string };
+export type ArticleInvitation = { id: string; recipientEmail: string; expiresAt: string; acceptedAt: string | null; revokedAt: string | null };
+export type ArticleSharing = {
+  workspaceId: string; articleId: string; projectEnvironmentId: string;
+  title: string; workspaceName: string; connectionName: string; credentialMode: string;
+  canInvite: boolean; url: string; invitations: ArticleInvitation[];
+};
+export function getArticleSharing(scope: ArticleSharingScope): Promise<ArticleSharing> {
+  return invoke("article_sharing_command", scope);
+}
+export function createArticleInvitation(scope: ArticleSharingScope, email: string): Promise<{ id: string; url: string }> {
+  return invoke("create_article_invitation_command", { ...scope, email });
+}
+export function revokeArticleInvitation(scope: ArticleSharingScope, invitationId: string): Promise<void> {
+  return invoke("revoke_article_invitation_command", { ...scope, invitationId });
+}
+export type DesktopArticleLink = { requestId: string; workspaceId: string; articleId: string };
+export function pendingArticleLink(): Promise<DesktopArticleLink | null> {
+  return invoke("pending_article_link_command");
+}
+export function dismissArticleLink(requestId: string): Promise<void> {
+  return invoke("dismiss_article_link_command", { requestId });
+}
+export function onArticleLink(listener: () => void): Promise<UnlistenFn> {
+  return listen("analysis-article:open-link", listener);
+}

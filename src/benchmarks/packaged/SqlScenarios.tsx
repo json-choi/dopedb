@@ -106,7 +106,7 @@ export function SqlEditorScenario() {
     <BenchmarkSurface title={`SQL editor · ${value.length} bytes · runs ${runCount}`}>
       <div
         data-workbench-scroll-owner="sql-editor"
-        className="tw:min-h-0 tw:flex-1 tw:overflow-hidden tw:bg-background tw:[&>.cm-theme-dark]:h-full tw:[&_.cm-editor]:h-full tw:[&_.cm-editor]:bg-background tw:[&_.cm-scroller]:min-h-0 tw:[&_.cm-scroller]:overflow-auto tw:[&_.cm-scroller]:overscroll-contain"
+        className="tw:min-h-0 tw:flex-1 tw:overflow-hidden tw:bg-background tw:[&>.dopedb-sql-viewer]:h-full tw:[&_.cm-editor]:h-full tw:[&_.cm-editor]:bg-background tw:[&_.cm-scroller]:min-h-0 tw:[&_.cm-scroller]:overflow-auto tw:[&_.cm-scroller]:overscroll-contain"
       >
         <SqlViewer
           value={value}

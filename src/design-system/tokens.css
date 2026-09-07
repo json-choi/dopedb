@@ -7,13 +7,14 @@
  */
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 
   /* Typography */
   --ds-font-sans:
     "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
     system-ui, Roboto, "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo",
     "Noto Sans KR", "Malgun Gothic", sans-serif;
+  --ds-font-serif: Georgia, "Iowan Old Style", "Palatino Linotype", "AppleMyungjo", Batang, serif;
   --ds-font-mono:
     "SF Mono", SFMono-Regular, ui-monospace, "Cascadia Code", Menlo, Consolas,
     "Liberation Mono", monospace;
@@ -24,9 +25,9 @@
   --ds-font-size-body: 15px;
   --ds-font-size-title: 17px;
   --ds-font-size-heading: 23px;
-  --ds-font-weight-readable: 450;
-  --ds-font-weight-medium: 550;
-  --ds-font-weight-semibold: 650;
+  --ds-font-weight-readable: 400;
+  --ds-font-weight-medium: 500;
+  --ds-font-weight-semibold: 600;
   --ds-font-weight-bold: 700;
   --ds-line-tight: 1.2;
   --ds-line-ui: 1.35;
@@ -76,9 +77,9 @@
   --ds-z-toast: 1000;
 
   /* Ordinary surfaces stay flat; only floating surfaces receive elevation. */
-  --ds-shadow-control: 0 1px 2px rgb(0 0 0 / 0.18);
+  --ds-shadow-control: 0 1px 2px rgb(25 29 35 / 0.03);
   --ds-shadow-panel: none;
-  --ds-shadow-popover: 0 10px 24px rgb(0 0 0 / 0.18);
+  --ds-shadow-popover: 0 12px 40px rgb(25 29 35 / 0.12);
 
   /* Compact workbench control sizes. */
   --ds-control-xs: 24px;
@@ -97,37 +98,37 @@
   --ds-document-tab-height: 40px;
   --ds-workbench-toolbar-height: 36px;
   --ds-status-bar-height: 32px;
-  --ds-panel-gutter: 4px;
+  --ds-panel-gutter: 0px;
   --ds-tool-window-primary-ratio: 46%;
   --ds-pane-pad: 16px;
   --ds-line: var(--ds-border-width) solid var(--ds-border-subtle);
 
   /*
-   * Canonical dark roles. The aliases below keep DopeDB's existing
+   * Canonical light roles. The aliases below keep DopeDB's existing
    * semantic API while preserving the surface/foreground pair contract.
    */
-  --ds-background: #191a1c;
-  --ds-foreground: #dfe1e5;
-  --ds-card: #26282c;
-  --ds-card-foreground: #dfe1e5;
-  --ds-popover: #26282c;
-  --ds-popover-foreground: #dfe1e5;
-  --ds-primary: #3574f0;
+  --ds-background: #fcfcfb;
+  --ds-foreground: #20232a;
+  --ds-card: #f8f8f7;
+  --ds-card-foreground: #20232a;
+  --ds-popover: #ffffff;
+  --ds-popover-foreground: #20232a;
+  --ds-primary: #171c24;
   --ds-primary-foreground: #ffffff;
-  --ds-primary-hover: #467ff2;
-  --ds-secondary: #393b40;
-  --ds-secondary-foreground: #dfe1e5;
-  --ds-muted: #2b2d30;
-  --ds-muted-foreground: #9da0a8;
-  --ds-selection: #30426e;
+  --ds-primary-hover: #333943;
+  --ds-secondary: #fcfcfb;
+  --ds-secondary-foreground: #20232a;
+  --ds-muted: #edeeef;
+  --ds-muted-foreground: #666b76;
+  --ds-selection: #e9eaec;
   --ds-selection-foreground: var(--ds-foreground);
-  --ds-destructive: #db5c5c;
+  --ds-destructive: #b7433e;
   --ds-destructive-foreground: #ffffff;
-  --ds-input: #43454a;
-  --ds-ring: #548af7;
-  --ds-editor-surface: #191a1c;
-  --ds-worktree-sidebar: #191a1c;
-  --ds-worktree-sidebar-accent: #2b2d30;
+  --ds-input: #dfe1e4;
+  --ds-ring: #426b9e;
+  --ds-editor-surface: #fcfcfb;
+  --ds-worktree-sidebar: #f6f6f5;
+  --ds-worktree-sidebar-accent: #edeeef;
 
   /* DopeDB surface aliases */
   --ds-bg-app: var(--ds-card);
@@ -136,30 +137,30 @@
   --ds-surface-1: var(--ds-background);
   --ds-surface-2: var(--ds-secondary);
   --ds-surface-elevated: var(--ds-popover);
-  --ds-border-subtle: rgb(255 255 255 / 0.08);
-  --ds-border-strong: #4e5157;
+  --ds-border-subtle: #e7e7e6;
+  --ds-border-strong: #d4d6d9;
   --ds-text: var(--ds-foreground);
   --ds-text-muted: var(--ds-muted-foreground);
-  --ds-text-subtle: #6f737a;
+  --ds-text-subtle: #777d87;
   --ds-text-inverse: var(--ds-primary-foreground);
-  --ds-overlay: rgb(0 0 0 / 0.62);
+  --ds-overlay: rgb(25 29 35 / 0.24);
 
   /*
    * Primary is the single affirmative action. Accent is a neutral selection
    * surface; strong color remains reserved for state.
    */
   --ds-accent: var(--ds-primary);
-  --ds-accent-text: #6b9bfa;
-  --ds-accent-soft: #25324d;
+  --ds-accent-text: #375f91;
+  --ds-accent-soft: #ecf0f5;
   --ds-hover: var(--ds-muted);
 
   /* Status colors keep state-only use of color. */
-  --ds-info: #60a5fa;
-  --ds-positive: #86efac;
+  --ds-info: #356da8;
+  --ds-positive: #327151;
   --ds-positive-soft: color-mix(in srgb, var(--ds-positive) 10%, transparent);
-  --ds-caution: #fbbf24;
+  --ds-caution: #956924;
   --ds-critical: var(--ds-destructive);
-  --ds-critical-emphasis: #df2225;
+  --ds-critical-emphasis: #972b29;
   --ds-critical-soft: color-mix(in srgb, var(--ds-critical) 10%, transparent);
   --ds-success: var(--ds-positive);
   --ds-warning: var(--ds-caution);
@@ -184,7 +185,47 @@
 /* The explorer has its own dense tree surface role. */
 .sidebar {
   --ds-surface-0: var(--ds-worktree-sidebar);
-  --ds-surface-1: #252629;
+  --ds-surface-1: var(--ds-background);
   --ds-surface-2: var(--ds-worktree-sidebar-accent);
   --ds-surface-elevated: var(--ds-popover);
+}
+
+/* Original dark palette; theme.ts resolves the system or explicit preference. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ds-shadow-control: 0 1px 2px rgb(0 0 0 / 0.18);
+  --ds-shadow-popover: 0 10px 24px rgb(0 0 0 / 0.18);
+  --ds-background: #191a1c;
+  --ds-foreground: #dfe1e5;
+  --ds-card: #26282c;
+  --ds-card-foreground: #dfe1e5;
+  --ds-popover: #26282c;
+  --ds-popover-foreground: #dfe1e5;
+  --ds-primary: #3574f0;
+  --ds-primary-hover: #467ff2;
+  --ds-secondary: #393b40;
+  --ds-secondary-foreground: #dfe1e5;
+  --ds-muted: #2b2d30;
+  --ds-muted-foreground: #9da0a8;
+  --ds-selection: #30426e;
+  --ds-destructive: #db5c5c;
+  --ds-input: #43454a;
+  --ds-ring: #548af7;
+  --ds-editor-surface: #191a1c;
+  --ds-worktree-sidebar: #191a1c;
+  --ds-worktree-sidebar-accent: #2b2d30;
+  --ds-border-subtle: rgb(255 255 255 / 0.08);
+  --ds-border-strong: #4e5157;
+  --ds-text-subtle: #6f737a;
+  --ds-overlay: rgb(0 0 0 / 0.62);
+  --ds-accent-text: #6b9bfa;
+  --ds-accent-soft: #25324d;
+  --ds-info: #60a5fa;
+  --ds-positive: #86efac;
+  --ds-caution: #fbbf24;
+  --ds-critical-emphasis: #df2225;
+}
+
+:root[data-theme="dark"] .sidebar {
+  --ds-surface-1: #252629;
 }

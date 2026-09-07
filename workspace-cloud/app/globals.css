@@ -12,6 +12,9 @@
   --color-transparent: transparent;
   --color-current: currentColor;
   --color-background: var(--ds-background);
+  /* Shared AnalysisArticleBody uses the Desktop canonical roles. */
+  --color-card: var(--ds-surface-inset);
+  --color-border-subtle: var(--ds-border);
   --color-foreground: var(--ds-text);
   --color-surface: var(--ds-surface);
   --color-surface-inset: var(--ds-surface-inset);
@@ -44,6 +47,7 @@
   --text-xs: var(--ds-font-size-xs);
   --text-sm: var(--ds-font-size-sm);
   --text-ui: var(--ds-font-size-ui);
+  --text-body: 15px;
   --leading-body: var(--ds-line-body);
   --radius-full: var(--ds-radius-pill);
   --radius-control: var(--ds-radius-control);

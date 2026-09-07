@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export function useResponsiveShell() {
-  const [agentOverlay, setAgentOverlay] = useState(
-    () => window.matchMedia("(max-width: 900px)").matches,
-  );
+  const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
   const [compact, setCompact] = useState(
     () => window.matchMedia("(max-width: 560px)").matches,
   );
@@ -31,10 +29,9 @@ export function useResponsiveShell() {
   }, []);
 
   useEffect(() => {
-    const media = window.matchMedia("(max-width: 900px)");
-    const sync = () => setAgentOverlay(media.matches);
-    media.addEventListener("change", sync);
-    return () => media.removeEventListener("change", sync);
+    const sync = () => setViewportWidth(window.innerWidth);
+    window.addEventListener("resize", sync);
+    return () => window.removeEventListener("resize", sync);
   }, []);
 
   useEffect(() => {
@@ -57,7 +54,7 @@ export function useResponsiveShell() {
   }, [dismissMobileExplorer, mobileExplorerOpen]);
 
   return {
-    agentOverlay,
+    viewportWidth,
     compact,
     mobileExplorerOpen,
     setMobileExplorerOpen,

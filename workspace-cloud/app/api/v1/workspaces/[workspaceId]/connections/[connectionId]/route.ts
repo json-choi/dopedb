@@ -88,7 +88,7 @@ export async function POST(request: Request, context: RouteContext) {
     request,
     workspaceId,
     connectionId,
-    body.action === "schema" ? "manage" : "use",
+    body.action === "schema" ? "manage" : body.action === "write" ? "use" : "read",
   );
   if (!authorization.ok) return jsonError(authorization.error, authorization.status);
   const connection = authorization.connection;

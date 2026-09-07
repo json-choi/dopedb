@@ -65,17 +65,17 @@ packaged runtime 증거가 아니다.
 ## 시각 방향
 
 - 앱 chrome은 눈에 띄지 않고 사용자의 데이터와 도구를 감싼다.
-- macOS native menu와 별도로 WebView 안에 File/Edit/View 계열 텍스트 메뉴를
-  만들지 않는다. 앱 내부 title toolbar는 project context, tool-window launcher,
-  search와 settings를 소유한다. project context의 chevron은 단순 화면 이동
-  button에 붙이지 않는다. 실제 활성 workspace 이름과 전환, 새 연결, workspace
-  관리 action을 제공하는 portal menu여야 하며 Explorer 안에 같은 selector를
-  중복 배치하지 않는다.
-- title toolbar 중앙에는 현재 주요 tool window의 직접 launcher만 둔다.
-  보조 tool window와 document 생성 action은 끝단의 실제 `ToolbarMenu`에
-  배치하고, 구현되지 않은 Files/VCS를 모양만 있는 launcher로 만들지 않는다.
-  Analysis Article도 별도 직접 launcher로
-  승격하지 않고 Environment의 `Analyses` folder와 More menu가 소유한다.
+- macOS native menu와 별도로 WebView 안에 File/Edit/View 계열 메뉴를 만들지
+  않는다. 40px title toolbar는 DopeDB 브랜드, 실제 Action Search(Shift 두 번),
+  왼쪽 패널 토글, 계정과 설정을 소유한다. 헤더 action과 compact 계정 trigger는
+  모두 32px 정사각형으로 같은 중앙선에 정렬한다. 패널 토글은 현재 Explorer 또는
+  Local History를 숨기고 같은 패널로 복원하며 compact 창에서는 drawer를 제어한다.
+- Workspace selector와 `WorkspaceNavButton`의 Databases·Articles·Agent는
+  296px 기본 Explorer 상단에 둔다. Articles는 현재 또는 첫 Project Environment의
+  실제 collection을 열고 Agent는 기존 선택 DB와 session command를 사용한다.
+  Explorer가 숨겨졌거나 Local History로 바뀌면 workspace selector를 title toolbar에
+  표시한다. 보조 tool window와 문서 생성은 실제 `ToolbarMenu`가 소유한다.
+  이전 Explorer 기본값 396px만 296px로 이전하며 다른 사용자 저장 폭은 보존한다.
 - generic `새 연결` 진입은 특정 engine form을 임의 선택하지 않고 검색 가능한
   provider/driver `CommandMenu`를 즉시 연다. engine/provider preset이 명시된
   진입만 해당 속성 form을 바로 표시한다. 실제 생성하지 않는 demo나 지원하지
@@ -155,12 +155,22 @@ packaged runtime 증거가 아니다.
 | `--ds-editor-surface` | SQL editor와 코드 인접 surface |
 | `--ds-worktree-sidebar*` | database explorer와 navigation |
 
-`--ds-background`는 editor와 tool-window 내부의 가장 어두운 작업 면,
-`--ds-card`와 `--ds-bg-app`은 title/status chrome 및 panel gutter를 소유한다.
-따라서 화면별 wrapper가 임의의 어두운 배경을 다시 만들지 않는다.
-title toolbar는 `--ds-card`의 평평한 chrome surface를 사용한다. project context를
-장식용 tint나 gradient로 강조하지 않고 실제 선택·focus 상태만 semantic token으로
-표시한다.
+Desktop 테마는 `theme.ts`가 기기별 `dopedb.theme` preference를 소유한다. 기본값은
+`system`이며 OS `prefers-color-scheme` 변경을 즉시 따라간다. `light`와 `dark`는
+시스템 설정과 독립적으로 유지하며 다시 시작해도 복원한다. `index.html`의 작은
+bootstrap은 같은 키의 저장값만 첫 paint 전에 적용하고, live state는 복제하지 않는다.
+`data-theme`에는 해석된 light/dark만 두고 `tokens.css`와 `scoped-palettes.css`의
+동일 role을 바꾼다. 다크는 기존 중립 surface·파란 primary를, 라이트는 밝은 중립
+surface·ink primary를 사용하며 화면 배치는 공유한다.
+
+`useTheme`은 CodeMirror를 재구성하고 xterm의 theme option만 갱신해 문서·선택·
+terminal session을 보존한다. Agent code fence는 CSS 역할을 사용하고 Mermaid는
+테마 변경 시 같은 코드를 다시 렌더링한다. AppProviders는 Tauri의 제한된
+`core:app:allow-set-app-theme`로 native chrome에도 선택을 적용하며 system은 null로
+해제한다. Settings → 화면 및 Action Search가 같은 preference command를 사용한다.
+Article은 기존 `chart` glyph를 유지하고, Agent는 계정의 `user`와 구분되는
+`chat` 말풍선 glyph를 사용한다. 외부 glyph의 저작권·사용 허가는 bundle의
+`resources/licenses/phosphor-icons-LICENSE.txt`에 포함한다.
 
 DopeDB 기존 화면은 `--ds-surface-*`, `--ds-text*`, `--ds-accent*` 별칭을 사용한다.
 이 별칭은 위 역할 토큰에 연결되어 있으므로 새 화면에서는 역할이 더 명확한 정본
@@ -198,21 +208,22 @@ color를 거부한다.
   package `pretendard`의 dynamic-subset Variable WOFF2를 고정 버전으로 포함하며
   CDN이나 설치된 시스템 폰트에 의존하지 않는다. 같은 UI 글꼴을 Desktop,
   Workspace, 소개 사이트에서 사용한다.
+- Serif: `--ds-font-serif`. Article 제목과 본문 heading, 앱 브랜드에 사용한다.
 - Mono: `--ds-font-mono`. 경로, SQL, 값, 식별자, 숫자 비교에 사용한다.
 - Body: 15px.
 - Dense UI: 14px.
 - 보조 텍스트: 13px.
-- 기본 본문과 일반 leaf row는 최소 450, tree section·일반 control·DB row는 550,
-  section emphasis는 650, heading과 강한 category label은 700 weight를 사용한다.
+- 기본 본문과 일반 leaf row는 400, tree section·일반 control·DB row는 500,
+  section emphasis는 600, heading과 강한 category label은 700 weight를 사용한다.
   `font-normal/medium/semibold/bold`는 이 네 semantic token에 대응하며 화면별
   임의 숫자 weight로 가독성을 보정하지 않는다.
-- uppercase category label: 12px, 650–700 weight, `0.05em` tracking.
+- uppercase category label: 12px, 500–700 weight, `0.05em` tracking.
 - 큰 제목은 `-0.02em`, 패널 제목은 `-0.01em` tracking을 사용한다.
 - 데이터 숫자는 `font-variant-numeric: tabular-nums`를 사용한다.
 
 ## Radius와 elevation
 
-compact control과 둥근 outer tool-window geometry를 역할별 scale로 표현한다.
+compact control과 dialog의 radius를 역할별 scale로 표현한다. 작업 pane은 평평한 경계를 사용한다.
 
 - 작은 내부 요소: `--ds-radius-xs` (4px)
 - button/input: `--ds-radius-sm` (6px)
@@ -238,9 +249,9 @@ Elevation은 세 단계만 허용한다.
   사용하며 새 palette나 screen CSS는 만들지 않는다. `src/productSite/`는
   `product-site/index.html`에서 시작하는 독립 소개 페이지이며 기존 웹이나 Desktop
   진입점에서는 import하지 않는다. 앱 목업, 가짜 계정이나 데이터 상태를 만들지 않는다.
-- `workspace-cloud/app/components/Brand`와 `site/app/DopeDBMark`: workspace의
+- `DopeDBMark`, `workspace-cloud/app/components/Brand`와 `site/app/DopeDBMark`: workspace의
   선형 D 마크를 DopeDB 브랜드 정본으로 공유한다. 공개 사이트 header/footer와
-  workspace navigation은 이 도형을 사용하고, favicon·OAuth·Tauri bundle
+  workspace navigation과 Desktop title toolbar는 이 도형을 사용하고, favicon·OAuth·Tauri bundle
   아이콘은 `scripts/generate-icons.py`가 같은 D 마크에서 생성한다. database
   engine이나 외부 Agent provider 로고는 이 브랜드 자산으로 대체하지 않는다.
 - `site/app/MarketingButton`: 공개 마케팅 사이트의 다운로드·소스 CTA가 공유하는
@@ -334,7 +345,9 @@ Elevation은 세 단계만 허용한다.
   문서 타이포그래피, 가로로 스크롤되는 표, 정적 SVG figure와 caption, 의미 기반
   `article-metrics`/`article-metric`/`article-kicker`/`article-value`/`article-note`
   역할을 정적 Tailwind utility로 소유한다. `article-accent`와 `article-muted`는
-  SVG의 `currentColor`에 의미 색을 제공한다. 작성자가 화면 CSS나 실행 스크립트를
+  SVG의 `currentColor`에 의미 색을 제공한다. 공용 `card`·`border-subtle`·
+  `text-body` 역할은 Workspace Web의 theme bridge에도 정의한다. memo는 HTML이
+  그대로일 때 DOM을 보존해 목차 observer와 focus가 가리키는 heading을 유지한다. 작성자가 화면 CSS나 실행 스크립트를
   주입하지 않으며, 허용 문법은 Workspace HTML sanitizer와 내장 아티클 스킬이 소유한다.
 - `AgentProviderMark`: AI Chat과 Agent 설치 흐름에서 Claude와 Codex를 구분하는
   16px 공식 제품 아이콘. OpenAI의 Codex 확장과 Anthropic 프레스 키트 원본을
@@ -398,8 +411,8 @@ Elevation은 세 단계만 허용한다.
   상시 표시하지 않는다. `TreeRowActions`는 행의
   실제 command만 받아 hover/focus에서 표시하고 title 폭을 상시 차지하지 않는다.
   Workspace Explorer의 Project/resource 행은 28px로 고정한다. Project는
-  14px·650 weight, resource folder는 13px·550 weight,
-  DB·source·article leaf는 13px·450 weight를 사용한다. DB의 24px tree
+  14px·600 weight, resource folder는 13px·500 weight,
+  DB·source·article leaf는 13px·400 weight를 사용한다. DB의 24px tree
   action과 provider target metadata는 같은 한 줄 안에 머물러 Diff·관리 action의
   유무나 target 길이가 행 높이를 바꾸지 않는다.
   toggle은 native button이고 interactive row action은 그 sibling이므로 nested
@@ -515,8 +528,10 @@ DopeDB의 실제 작업 흐름과 접근성, supported viewport를 위한 제품
   Agent의 desktop 기본 폭은 396px이다. 검수된
   `1385×918` AI Chat 상세 참조처럼 약 595px까지 넓힌 값도
   `agentDockWidth`에 독립 저장한다.
-  다만 열린 왼쪽 tool window와 저장된 Agent 폭을 함께 적용했을 때 중앙
-  workbench가 520px보다 좁아지면 Agent는 modeless 오른쪽 overlay로 투영한다.
+  열린 왼쪽 tool window와 중앙 workbench의 420px, pane gutter를 먼저 예약하고
+  Agent를 최소 360px까지 일시적으로 줄여 같은 화면에서 함께 읽게 한다.
+  이 최소 폭도 확보할 수 없을 때만 Agent는 396px 이내의 modeless 오른쪽
+  overlay로 투영한다. overlay는 title toolbar 아래와 status bar 위에만 놓인다.
   창 폭만 보는 고정 breakpoint로 세 pane을 강제로 유지하거나 중앙 pane을
   0에 가깝게 축소하지 않는다.
   compact Agent가 modal일 때 배경 shell은 실제 grid 형제에 `inert`를 적용한다.
@@ -557,7 +572,7 @@ DopeDB의 실제 작업 흐름과 접근성, supported viewport를 위한 제품
   작업을 막지 않으며, focus가 sheet 안에 있을 때만 Escape로 닫는다. compact
   fullscreen projection만 `aria-modal="true"`, background `inert`, 공용 topmost
   modal focus·Tab·Escape 계약을 사용한다. 두 projection은 실제 opener를
-  복원하고, 위에 열린 nested modal의 Escape를 먼저 소비하게 한다.
+  복원하고, 위에 열린 popup과 nested modal의 Escape를 먼저 소비하게 한다.
 - Workspace Explorer는 `Project → Databases / Data sources / Analyses`를 실제
   folder hierarchy로 표시한다. Environment는 exact grant와 binding identity로
   유지하지만 Project 아래에 별도 folder를 만들지 않는다. `Databases`는 Project의
@@ -606,8 +621,9 @@ DopeDB의 실제 작업 흐름과 접근성, supported viewport를 위한 제품
   배정된 DB 행을 같은 Project의 `Databases` 목록 안에서 pointer drag하면 구성원·기기별
   표시 순서만 바꾸며 binding을 옮기지 않는다. 같은 schema group은 하나의 연속된 이동
   블록이고, 그 안의 행은 production, staging, development, test/custom 순서를 유지한다.
-  같은 schema group의 DB는 단일
-  `Databases` 목록 안에서 각 DB row의 `diff` command와 connection menu로 동일한
+  연결명과 Environment marker가 행의 폭을 먼저 사용한다. 접근 권한은 이름 있는
+  작은 glyph로 축약하고, 같은 schema group의 DB는 단일
+  `Databases` 목록 안에서 각 DB row의 hover/focus `diff` command와 connection menu로 동일한
   Schema Diff workbench를 열 수 있어야 한다. 중앙 환경 상세나 AI Chat 안내에 같은
   생성 form을 중복하지 않는다. Dashboard, Funnel Analysis, Agent Report는 별도
   navigation이나 screen을 갖지 않는다.
@@ -935,7 +951,7 @@ Tauri 최소 창 크기에서는 explorer와 main을 세로로 고정 분할하�
   desktop과 같은 `IdeTitleToolbar`가 소유한다.
 - main과 열린 compact tool window는 title toolbar 아래부터 32px status bar
   바로 위까지의 전체 높이를 소유한다.
-- explorer는 왼쪽 drawer이며 title toolbar의 현재 Explorer launcher, 바깥
+- explorer는 왼쪽 drawer이며 title toolbar의 왼쪽 패널 토글, 바깥
   scrim, `Esc`로 열고 닫는다.
 - table/connection을 선택하면 drawer를 닫아 결과에 초점을 돌린다.
 - macOS overlay title bar의 높이는 닫힌 drawer에서도 main 위쪽에 구조적으로
@@ -980,3 +996,27 @@ Tauri 최소 창 크기에서는 explorer와 main을 세로로 고정 분할하�
 
 - [`docs/PRODUCT_UI_SCOPE.md`](../../docs/PRODUCT_UI_SCOPE.md)
 - [`docs/UI_IMPLEMENTATION_TRACKER.md`](../../docs/UI_IMPLEMENTATION_TRACKER.md)
+
+### Article 공유와 연결 소스 선택
+
+- Article 공유는 `ModalSurface` 안에서 기존 권한용 링크와 이메일 지정 초대를
+  나눈다. 읽기 권한의 대상 DB, 48시간 만료, 수락 후 Access 관리 경계를 명시한다.
+  링크 생성·복사·취소는 실제 command 결과를 표시하고 실패를 숨기지 않는다.
+- `CommandMenu`의 `placement="center"`는 좁은 창에도 같은 source picker를
+  제공한다. 연결의 새 초안은 이 선택기를 먼저 열고 검색에 focus를 준다.
+  picker는 숨겨진 sidebar 안에 렌더링하지 않으며 뒤의 이름 입력란은 focus를
+  빼앗지 않는다. 일반 anchored command menu의 placement는 그대로 유지한다.
+
+### Article 문서 중심 화면
+
+- `AnalysisArticleReader`는 중앙 문서와 216px 오른쪽 도구 열을 소유한다.
+  제목은 36–64px serif, 본문은 15px/1.75, h2/h3는 28px/23px serif다.
+  실제 Project, 작성 source, 수정일과 revision만 표시한다.
+- `useArticleOutline`은 이미 정제되어 렌더링된 h2/h3에서 최대 64개 목차를 만들고
+  본문 scroll container를 관찰한다. HTML을 재작성하지 않는다. 목차 선택은 실제
+  heading으로 스크롤하고 keyboard focus도 옮긴다.
+- 읽는 면 폭이 920px 이하면 목차를 접을 수 있는 `details`로, DB·저장 쿼리·수동
+  재조회 도구를 제목 아래로 옮긴다. 폭은 viewport가 아닌 main container를 따른다.
+- 문서 위에는 breadcrumb, More, Edit, primary Share만 둔다. More의 HTML 공개는
+  기존 publication 기능을 bounded modal에서 열며, History와 삭제도 실제 command다.
+  빈 목록·로딩·실패를 구분하고 실패 상태에서 새로고침할 수 있다.

@@ -327,7 +327,9 @@ function capabilityPredicate(input: ManagedLeaseAuthority) {
 function connectionGrantPredicate(input: ManagedLeaseAuthority) {
   const capability = input.accessMode === "schema"
     ? sql`${workspaceConnectionGrant.capability} = 'manage'`
-    : sql`${workspaceConnectionGrant.capability} IN ('use', 'manage')`;
+    : input.accessMode === "write"
+      ? sql`${workspaceConnectionGrant.capability} IN ('use', 'manage')`
+      : sql`${workspaceConnectionGrant.capability} IN ('read', 'use', 'manage')`;
   return sql`
     ${workspaceConnectionGrant.organizationId} = ${input.organizationId}
     AND ${workspaceConnectionGrant.connectionId} = ${input.connectionId}::uuid

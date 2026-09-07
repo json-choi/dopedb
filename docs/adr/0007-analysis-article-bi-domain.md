@@ -129,6 +129,28 @@ not by visualization words in a shell command or file path.
 
 The screen owns database selection, SQL/result inspection, manual rerun,
 publication, revocation, deletion, and conflict recovery.
+
+### Authenticated sharing and invitation
+
+An internal Article link opens the current Article in Desktop after checking the
+selected account's current membership and connection grant. Its browser landing
+page owns sign-in, installation guidance and Desktop handoff, not a query runner.
+It is separate from the existing immutable public HTML publication.
+
+A workspace administrator who also manages the exact Article connection may
+create a 48-hour invitation bound to one verified recipient email. Acceptance
+rechecks the inviter, workspace lifecycle, live Article connection/content revision,
+and revocation gates. It atomically establishes membership and a connection `read`
+grant. The read grant cannot become write access when an existing member is an
+editor or administrator. Existing higher roles and grants are preserved. Expired,
+revoked and previously consumed invitations cannot restore removed access.
+Invitations do not infer organization identity from an email domain, distribute
+credentials, start an Agent, or run the saved query. Revoking an invitation stops
+future acceptance; existing member access is managed in Workspace Access. Lowering a
+connection grant first drains existing credentials through the grant-removal gate.
+
+### Deletion
+
 Deletion is workspace-resource cleanup rather than database execution. It still
 requires an active write-capable workspace session, exact optimistic Article
 revision, and Article ownership or workspace administrator authority, but does

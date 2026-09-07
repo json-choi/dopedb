@@ -58,6 +58,7 @@
   --spacing-panel-gutter: var(--ds-panel-gutter);
 
   --font-sans: var(--ds-font-sans);
+  --font-serif: var(--ds-font-serif);
   --font-mono: var(--ds-font-mono);
   --font-weight-normal: var(--ds-font-weight-readable);
   --font-weight-medium: var(--ds-font-weight-medium);

@@ -135,7 +135,7 @@ export async function getAnalysisRunControl(input: {
           ON connection_grant."organization_id" = connection."organization_id"
          AND connection_grant."connection_id" = connection."id"
          AND connection_grant."member_id" = ${input.membershipId}
-         AND connection_grant."capability" IN ('use', 'manage')
+         AND connection_grant."capability" IN ('read', 'use', 'manage')
         JOIN ${workspaceAnalysisArticleRevision} revision
           ON revision."organization_id" = run."organization_id"
          AND revision."article_id" = run."article_id"
@@ -286,7 +286,7 @@ export async function commitAnalysisRunCreate(input: {
         ON connection_grant."organization_id" = connection."organization_id"
        AND connection_grant."connection_id" = connection."id"
        AND connection_grant."member_id" = ${input.authority.membershipId}
-       AND connection_grant."capability" IN ('use', 'manage')
+       AND connection_grant."capability" IN ('read', 'use', 'manage')
       FOR UPDATE OF connection, environment_binding, connection_grant
     ), inserted AS MATERIALIZED (
       INSERT INTO ${workspaceAnalysisArticleRun}
@@ -429,7 +429,7 @@ export async function commitAnalysisRunCompletion(input: {
         ON connection_grant."organization_id" = connection."organization_id"
        AND connection_grant."connection_id" = connection."id"
        AND connection_grant."member_id" = ${input.authority.membershipId}
-       AND connection_grant."capability" IN ('use', 'manage')
+       AND connection_grant."capability" IN ('read', 'use', 'manage')
       FOR UPDATE OF connection, environment_binding, connection_grant
     ), eligible AS MATERIALIZED (
       SELECT current."id" FROM current

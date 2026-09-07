@@ -1,5 +1,6 @@
 // Composes the profile editor header, tabs, diagnostics, and action status from
 // narrow grouped presentation models.
+import type { RefObject } from "react";
 import { DiagnosticSummary } from "../../design-system/components/Diagnostics";
 import { Button } from "../../design-system/components/Button";
 import {
@@ -17,6 +18,8 @@ import { ConnectionSchemaTab } from "./ConnectionSchemaTab";
 import { ConnectionSecurityTab } from "./ConnectionSecurityTab";
 
 export function ConnectionProfilePanel({
+  nameInputRef,
+  autoFocus = true,
   profile,
   sources,
   drivers,
@@ -25,6 +28,8 @@ export function ConnectionProfilePanel({
   workspaceDialog,
   commands,
 }: {
+  nameInputRef: RefObject<HTMLInputElement | null>;
+  autoFocus?: boolean;
   profile: ConnectionEditorController["profile"];
   sources: ConnectionEditorController["catalog"]["sources"];
   drivers: ConnectionEditorController["catalog"]["drivers"];
@@ -46,6 +51,7 @@ export function ConnectionProfilePanel({
         </label>
         <span className="tw:grid tw:min-w-0 tw:max-w-[360px] tw:gap-1">
           <TextInput
+            ref={nameInputRef}
             id="connection-name"
             density="compact"
             value={profile.form.name}
@@ -55,12 +61,10 @@ export function ConnectionProfilePanel({
             }
             onChange={(event) => profile.set("name", event.target.value)}
             placeholder="prod-readonly"
-            autoFocus
+            autoFocus={autoFocus}
           />
           {profile.validation.name ? (
-            <FieldValidationMessage
-              validation={profile.validation.name}
-            />
+            <FieldValidationMessage validation={profile.validation.name} />
           ) : null}
         </span>
       </div>

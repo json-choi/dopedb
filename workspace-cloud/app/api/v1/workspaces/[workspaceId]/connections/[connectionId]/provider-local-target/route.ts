@@ -17,7 +17,7 @@ export async function GET(request: Request, context: RouteContext) {
     request,
     workspaceId,
     connectionId,
-    "use",
+    "read",
   );
   if (!authorization.ok) return jsonError(authorization.error, authorization.status);
   try {

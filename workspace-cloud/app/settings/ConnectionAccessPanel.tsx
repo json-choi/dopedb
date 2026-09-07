@@ -1,8 +1,9 @@
 "use client";
 
 // Connection grants are intentionally separate from workspace roles: membership
-// makes a template visible only when a manager grants view, use, or manage.
+// makes a template visible only when a manager grants view, read, use, or manage.
 import { useCallback, useEffect, useState } from "react";
+import { changeConnectionGrant } from "../../features/connectionAccess/grants";
 import { ControlButton } from "../components/Controls";
 import { useWorkspaceLocale } from "../components/WorkspaceLocale";
 import { candidateConflictResolution } from "../../lib/connection-conflict-decision";
@@ -10,7 +11,7 @@ import type { WorkspaceLocale } from "../../lib/workspace-locale";
 import { workspaceMessages } from "../../lib/workspace-messages";
 import { localizedProviderMessage } from "../../lib/workspace-provider-copy";
 
-type ConnectionCapability = "view" | "use" | "manage";
+type ConnectionCapability = "view" | "read" | "use" | "manage";
 type SharedConnection = {
   id: string;
   name: string;
@@ -256,19 +257,13 @@ export function ConnectionAccessPanel({ workspaceId }: { workspaceId: string }) 
     setMutatingId(memberId);
     setError("");
     try {
-      const endpoint =
-        `/api/v1/workspaces/${workspaceId}/connections/${selectedId}/grants`;
-      const response = await fetch(
-        capability ? endpoint : `${endpoint}?memberId=${encodeURIComponent(memberId)}`,
-        capability
-          ? {
-              method: "POST",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify({ memberId, capability }),
-            }
-          : { method: "DELETE" },
-      ).catch(() => null);
+      const response = await changeConnectionGrant({
+        workspaceId, connectionId: selectedId, memberId,
+        previous: grants.find((grant) => grant.memberId === memberId)?.capability ?? null,
+        next: capability,
+      });
       if (!response?.ok) {
+        await loadGrants(selectedId);
         setError(await responseError(response, copy.changeGrantError, locale));
         return;
       }
@@ -540,6 +535,7 @@ export function ConnectionAccessPanel({ workspaceId }: { workspaceId: string }) 
               >
                 <option value="">{copy.noAccess}</option>
                 <option value="view">{copy.view}</option>
+                <option value="read">{copy.read}</option>
                 <option value="use">
                   {selected?.credentialMode === "managed"
                     ? copy.useManaged

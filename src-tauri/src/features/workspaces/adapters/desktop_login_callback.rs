@@ -12,22 +12,38 @@ const LOGIN_CALLBACK_PATH: &str = "/device-complete";
 pub(crate) fn register_workspace_login_callback<R: Runtime>(app: &App<R>) {
     let identifier = app.config().identifier.clone();
     let handle = app.handle().clone();
+    // Retain cold-start links until the renderer has mounted its listener.
+    if let Ok(Some(urls)) = app.deep_link().get_current() {
+        for url in urls {
+            crate::features::analysis_articles::desktop_links::receive_article_link(
+                &url,
+                callback_scheme(&identifier),
+            );
+        }
+    }
     app.deep_link().on_open_url(move |event| {
-        let recognized = event
-            .urls()
-            .iter()
-            .any(|url| is_workspace_login_callback(url, &identifier));
-        if !recognized {
-            tracing::warn!("ignored an unrecognized desktop callback URL");
-            return;
+        let mut recognized = false;
+        for url in event.urls() {
+            let event_name = if is_workspace_login_callback(&url, &identifier) {
+                Some(LOGIN_CALLBACK_EVENT)
+            } else if crate::features::analysis_articles::desktop_links::receive_article_link(
+                &url,
+                callback_scheme(&identifier),
+            ) {
+                Some(crate::features::analysis_articles::desktop_links::ARTICLE_LINK_EVENT)
+            } else {
+                None
+            };
+            if let Some(event_name) = event_name {
+                recognized = true;
+                let _ = handle.emit(event_name, ());
+            }
         }
-
-        if let Some(window) = handle.get_webview_window("main") {
-            let _ = window.show();
-            let _ = window.set_focus();
-        }
-        if handle.emit(LOGIN_CALLBACK_EVENT, ()).is_err() {
-            tracing::warn!("could not notify the renderer about the workspace login callback");
+        if recognized {
+            if let Some(window) = handle.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
         }
     });
 }
@@ -54,6 +70,7 @@ fn is_workspace_login_callback(url: &Url, identifier: &str) -> bool {
 
 #[cfg(test)]
 pub(crate) fn assert_workspace_login_callback_contract() {
+    crate::features::analysis_articles::desktop_links::assert_article_link_contract();
     for (identifier, scheme) in [
         ("dev.dopedb.desktop", "dopedb"),
         ("dev.dopedb.desktop.dev", "dopedb-dev"),

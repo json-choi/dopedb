@@ -23,15 +23,15 @@ export function IdeTitleToolbar({
 }) {
   return (
     <header
-      className="tw:relative tw:col-[1/-1] tw:row-start-1 tw:z-[var(--ds-z-sticky)] tw:flex tw:h-title-toolbar tw:min-w-0 tw:select-none tw:items-center tw:gap-1 tw:border-b tw:border-border-subtle tw:bg-card tw:px-2 tw:text-muted-foreground"
+      className="tw:relative tw:col-[1/-1] tw:row-start-1 tw:z-[var(--ds-z-sticky)] tw:flex tw:h-title-toolbar tw:min-w-0 tw:select-none tw:items-center tw:gap-2 tw:border-b tw:border-border-subtle tw:bg-background tw:px-4 tw:text-muted-foreground"
       data-tauri-drag-region="deep"
     >
       {macosInset ? (
         <div className="tw:w-[68px] tw:shrink-0" aria-hidden="true" />
       ) : null}
-      <div className="tw:min-w-0 tw:max-[561px]:hidden">{context}</div>
+      <div className="tw:min-w-0 tw:shrink-0 tw:max-[561px]:hidden">{context}</div>
       <div
-        className="tw:absolute tw:left-1/2 tw:flex tw:-translate-x-1/2 tw:items-center tw:gap-1"
+        className="tw:flex tw:min-w-0 tw:flex-1 tw:items-center tw:justify-center tw:gap-1"
         role="toolbar"
         aria-label={launchersLabel}
       >
@@ -42,6 +42,19 @@ export function IdeTitleToolbar({
       </div>
     </header>
   );
+}
+
+export function WorkspaceNavButton({ active, icon, children, ...props }: {
+  active: boolean;
+  icon: ReactNode;
+  children: ReactNode;
+} & Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children" | "className">) {
+  return <button
+    type="button"
+    aria-pressed={active}
+    className="tw:flex tw:min-h-control-xl tw:w-full tw:min-w-0 tw:cursor-pointer tw:items-center tw:gap-3 tw:rounded-sm tw:border-0 tw:bg-transparent tw:px-3 tw:font-sans tw:text-left tw:text-ui tw:text-muted-foreground tw:aria-pressed:bg-selection tw:aria-pressed:text-foreground tw:hover:bg-muted tw:hover:text-foreground tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:disabled:cursor-default tw:disabled:opacity-40"
+    {...props}
+  >{icon}<span className="tw:truncate">{children}</span></button>;
 }
 
 export function IdeToolbarLauncher({

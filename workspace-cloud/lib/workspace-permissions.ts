@@ -8,12 +8,13 @@ const workspaceRoleNames = [
 
 export type WorkspaceRoleName = (typeof workspaceRoleNames)[number];
 export type WorkspaceCapability = "view" | "read" | "write" | "manage" | "delete";
-export type WorkspaceConnectionCapability = "view" | "use" | "manage";
+export type WorkspaceConnectionCapability = "view" | "read" | "use" | "manage";
 
 const workspaceConnectionCapabilityRank: Record<WorkspaceConnectionCapability, number> = {
   view: 0,
-  use: 1,
-  manage: 2,
+  read: 1,
+  use: 2,
+  manage: 3,
 };
 
 const roleRank: Record<WorkspaceRoleName, number> = {
@@ -39,7 +40,7 @@ export function isWorkspaceRole(value: string): value is WorkspaceRoleName {
 export function isWorkspaceConnectionCapability(
   value: string,
 ): value is WorkspaceConnectionCapability {
-  return value === "view" || value === "use" || value === "manage";
+  return value === "view" || value === "read" || value === "use" || value === "manage";
 }
 
 export function hasWorkspaceConnectionCapability(
@@ -77,6 +78,6 @@ export function accessModeForConnectionGrant(
   ) {
     return "write" as const;
   }
-  if (capability === "use" || capability === "manage") return "read" as const;
+  if (capability === "read" || capability === "use" || capability === "manage") return "read" as const;
   return "view" as const;
 }

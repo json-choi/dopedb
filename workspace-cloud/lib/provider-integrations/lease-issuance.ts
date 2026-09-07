@@ -226,6 +226,7 @@ export async function issueManagedLease(input: {
                 connectionId: input.connectionId,
                 connectionRevision: input.connectionRevision,
                 providerResourceId: input.providerResourceId,
+                accessMode,
               },
             });
             // Re-read the exact canonical branch immediately before the provider

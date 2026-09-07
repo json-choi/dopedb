@@ -2,6 +2,7 @@
 // screen. Read-only by default; when a `catalog` is passed it feeds schema-aware
 // autocomplete (table + column names), and `onRun` binds Mod-Enter to execute.
 import { useCallback, useMemo } from "react";
+import { useTheme } from "../design-system/theme";
 import CodeMirror from "@uiw/react-codemirror";
 import {
   MySQL,
@@ -181,6 +182,7 @@ export default function SqlViewer({
   executionStatus,
   onEditorReady,
 }: SqlViewerProps) {
+  const { resolved: colorScheme } = useTheme();
   const richLanguageEditing = value.length <= SQL_RICH_EDITING_MAX_BYTES;
   const extensions = useMemo(() => {
     const dialect = editorDialect(engine);
@@ -287,7 +289,7 @@ export default function SqlViewer({
   return (
     <CodeMirror
       value={value}
-      theme="dark"
+      theme={colorScheme}
       editable={editable}
       readOnly={!editable}
       onChange={onChange}
@@ -299,7 +301,7 @@ export default function SqlViewer({
         foldGutter: false,
         tabSize: SQL_EDITOR_INDENT_SIZE,
       }}
-      className="tw:text-ui"
+      className="dopedb-sql-viewer tw:text-ui"
       style={{ minHeight }}
     />
   );

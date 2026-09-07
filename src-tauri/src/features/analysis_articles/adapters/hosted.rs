@@ -37,6 +37,10 @@ mod runners;
 #[path = "hosted_runs.rs"]
 mod runs;
 
+#[path = "hosted_sharing.rs"]
+mod sharing;
+pub(crate) use sharing::*;
+
 pub(crate) use articles::*;
 pub(crate) use results::complete_analysis_run;
 pub(crate) use runners::*;

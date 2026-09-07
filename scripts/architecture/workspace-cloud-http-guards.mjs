@@ -283,7 +283,7 @@ export function collectWorkspaceCloudHttpDiagnostics({ lineCount, read, relative
   for (const token of [
     "authorizeWorkspace(",
     "authorizeWorkspaceConnection(",
-    '"use"',
+    '"read"',
     "personalKnowledgeOrganizationId(",
     "isPersonalKnowledgeMetadata(",
     "knowledgeEnvironmentConnection.connectionRevision",

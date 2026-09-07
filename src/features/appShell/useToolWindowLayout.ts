@@ -86,6 +86,14 @@ function storeLayout(layout: StoredToolWindowLayout) {
 export function useToolWindowLayout() {
   const [layout, setLayout] = useState(readLayout);
 
+  const toggleLeftToolWindow = useCallback(() => {
+    setLayout((current) => {
+      const next = { ...current, databaseExplorerOpen: !current.databaseExplorerOpen };
+      storeLayout(next);
+      return next;
+    });
+  }, []);
+
   const setDatabaseExplorerOpen = useCallback((open: boolean) => {
     setLayout((current) => {
       if (
@@ -251,6 +259,7 @@ export function useToolWindowLayout() {
     servicesMinimumHeight: MIN_SERVICES_HEIGHT,
     servicesMaximumHeight: clampServicesHeight(MAX_SERVICES_HEIGHT),
     showDatabaseExplorer,
+    toggleLeftToolWindow,
     toggleDatabaseExplorer,
     showLocalHistory,
     closeLocalHistory,

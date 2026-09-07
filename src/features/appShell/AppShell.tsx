@@ -1,5 +1,5 @@
 // Desktop workbench shell composes workspace, tool-window, search, and Agent controllers.
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 
 import { ToastProvider, useToast } from "../../components/Toast";
 import { errMessage } from "../../ipc/types";
@@ -9,6 +9,7 @@ import { useActionSearchItems } from "../actionSearch/useActionSearchItems";
 import type { BackgroundTask } from "../backgroundTasks/domain";
 import { useBackgroundTasks } from "../backgroundTasks/useBackgroundTasks";
 import type { AgentComposerRequest } from "../agents/domain";
+import { ArticleLinkGate } from "../analysisArticles/ArticleLinkGate";
 import { ExternalAgentRequestGate } from "../agents/ExternalAgentRequestGate";
 import { useGuidedDemoCommands } from "../onboarding/useGuidedDemoCommands";
 import { useQueryServices } from "../queryServices/useQueryServices";
@@ -51,9 +52,8 @@ function Shell() {
   useSkillStartupObserver();
 
   const toolWindows = useToolWindowLayout();
-  const { closeServices, servicesOpen } = toolWindows;
   const {
-    agentOverlay,
+    viewportWidth,
     compact: compactShell,
     mobileExplorerOpen,
     setMobileExplorerOpen,
@@ -113,16 +113,6 @@ function Shell() {
   const showAgentDock =
     agentDock.open && !!connections.selected && route.editing === null;
 
-  useEffect(() => {
-    if (compactShell && showAgentDock && servicesOpen) {
-      closeServices();
-    }
-  }, [
-    compactShell,
-    showAgentDock,
-    closeServices,
-    servicesOpen,
-  ]);
 
   const notifyOperation = useCallback(
     () => toast(t("app.toastAgentQuery")),
@@ -229,33 +219,25 @@ function Shell() {
     }
   }
 
-  function toggleDatabaseExplorer() {
+  function toggleLeftPanel(panel: "current" | "database" | "history") {
+    if (panel === "current" && route.knowledgeEnvironmentFocus) panel = "database";
+    const open = panel === "database" ? toolWindows.databaseExplorerOpen
+      : panel === "history" ? toolWindows.localHistoryOpen
+      : toolWindows.databaseExplorerOpen || toolWindows.localHistoryOpen;
+    const toggle = panel === "database" ? toolWindows.toggleDatabaseExplorer
+      : panel === "history" ? toolWindows.toggleLocalHistory
+      : toolWindows.toggleLeftToolWindow;
     if (!compactShell) {
-      toolWindows.toggleDatabaseExplorer();
+      toggle();
       return;
     }
     toolWindows.closeServices();
     agentDock.close();
-    if (toolWindows.databaseExplorerOpen && mobileExplorerOpen) {
+    if (open && mobileExplorerOpen) {
       dismissMobileExplorer();
       return;
     }
-    toolWindows.showDatabaseExplorer();
-    setMobileExplorerOpen(true);
-  }
-
-  function toggleLocalHistory() {
-    if (!compactShell) {
-      toolWindows.toggleLocalHistory();
-      return;
-    }
-    toolWindows.closeServices();
-    agentDock.close();
-    if (toolWindows.localHistoryOpen && mobileExplorerOpen) {
-      dismissMobileExplorer();
-      return;
-    }
-    toolWindows.showLocalHistory();
+    if (!open) toggle();
     setMobileExplorerOpen(true);
   }
 
@@ -365,6 +347,10 @@ function Shell() {
 
   return (
     <>
+      <ArticleLinkGate
+        onScopeChanged={commands.connections.reloadWorkspaceScope}
+        onOpen={(environmentId, articleId) => commands.route.openKnowledge(environmentId, "analyses", articleId)}
+      />
       <ExternalAgentRequestGate
         catalogScopeKey={catalogScope.key}
         connections={connections.items}
@@ -405,7 +391,6 @@ function Shell() {
           agent: {
             open: showAgentDock,
             composerRequest: agentComposerRequest,
-            overlay: agentOverlay,
             width: agentDock.width,
             buttonRef: agentDock.buttonRef,
             returnFocusRef: agentDock.returnFocusRef,
@@ -418,6 +403,7 @@ function Shell() {
             unseenOperationCount: activity.unseen,
           },
           viewport: {
+            width: viewportWidth,
             compact: compactShell,
             mobileExplorerOpen,
             sidebarWidth,
@@ -444,8 +430,9 @@ function Shell() {
             openUpdateSettings: () => commands.route.openSettings("updates"),
           },
           explorer: {
-            toggleDatabase: toggleDatabaseExplorer,
-            toggleLocalHistory,
+            togglePanel: () => toggleLeftPanel("current"),
+            toggleDatabase: () => toggleLeftPanel("database"),
+            toggleLocalHistory: () => toggleLeftPanel("history"),
             closeLocalHistory: toolWindows.closeLocalHistory,
             selectConnection: commands.connections.select,
             openTable: commands.documents.openTable,

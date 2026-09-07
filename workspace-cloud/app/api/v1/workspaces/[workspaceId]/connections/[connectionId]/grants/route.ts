@@ -26,7 +26,7 @@ import {
 import { authorizeWorkspaceConnection } from "../../../../../../../../lib/workspace-authorization";
 
 type RouteContext = { params: Promise<{ workspaceId: string; connectionId: string }> };
-type GrantCapability = "view" | "use" | "manage";
+type GrantCapability = "view" | "read" | "use" | "manage";
 
 function validMemberId(value: unknown): value is string {
   return typeof value === "string" && value.length > 0 && value.length <= 128;
@@ -97,7 +97,7 @@ export async function POST(request: Request, context: RouteContext) {
   const body = parsed.value as { memberId?: unknown; capability?: unknown } | null;
   if (!validMemberId(body?.memberId)
     || typeof body?.capability !== "string"
-    || !["view", "use", "manage"].includes(body.capability)) {
+    || !["view", "read", "use", "manage"].includes(body.capability)) {
     return jsonError("Invalid connection grant", 400);
   }
   const authorization = await liveManageGrant(request, workspaceId, connectionId);
@@ -145,11 +145,14 @@ export async function POST(request: Request, context: RouteContext) {
         AND member."revocation_pending_at" IS NULL AND member."revocation_claim_id" IS NULL
       FOR UPDATE OF member
     ), granted AS MATERIALIZED (
-      INSERT INTO "workspace_control"."workspace_connection_grant"
+      INSERT INTO "workspace_control"."workspace_connection_grant" AS current_grant
         ("organization_id", "connection_id", "member_id", "capability")
       SELECT ${workspaceId}, ${connectionId}::uuid, target."id", ${capability} FROM target
       ON CONFLICT ("organization_id", "connection_id", "member_id")
       DO UPDATE SET "capability" = EXCLUDED."capability", "updated_at" = now()
+      -- Reductions must use DELETE's synchronous lease-revocation gate first.
+      WHERE CASE current_grant."capability" WHEN 'view' THEN 0 WHEN 'read' THEN 1 WHEN 'use' THEN 2 ELSE 3 END
+        <= CASE EXCLUDED."capability" WHEN 'view' THEN 0 WHEN 'read' THEN 1 WHEN 'use' THEN 2 ELSE 3 END
       RETURNING "capability"
     ), audit AS MATERIALIZED (
       INSERT INTO "workspace_control"."workspace_audit_event"
@@ -160,7 +163,7 @@ export async function POST(request: Request, context: RouteContext) {
       RETURNING "resource_id"
     ) SELECT "capability" FROM granted JOIN audit ON TRUE
   `);
-  if (!result.rows[0]) return jsonError("Connection grant changed concurrently. Retry.", 409);
+  if (!result.rows[0]) return jsonError("Access changed or needs a lower level. Remove the current grant before granting less access.", 409);
   return privateJson({ memberId: body.memberId, capability: result.rows[0].capability });
 }
 

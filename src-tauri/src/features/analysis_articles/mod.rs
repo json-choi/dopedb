@@ -1,10 +1,12 @@
 //! Analysis Article vertical slice and adapter composition boundary.
 
 pub(crate) mod adapters;
+pub(crate) mod desktop_links;
 mod domain;
 mod facade;
 mod ports;
 mod runner;
+pub(crate) mod sharing_transport;
 pub(crate) mod transport;
 mod validation;
 

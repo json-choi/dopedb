@@ -327,6 +327,7 @@ function KnowledgeProjectResources({
 
   return (
     <div className="tw:grid">
+      {activeView !== "analyses" ? <>
       <div
         data-knowledge-project-databases-drop-id={project.id}
         data-drop-target={dropTargetProjectId === project.id}
@@ -479,7 +480,7 @@ function KnowledgeProjectResources({
               <button
                 key={source.sourceId}
                 type="button"
-                className="tw:flex tw:h-control-sm tw:min-h-control-sm tw:w-full tw:min-w-0 tw:items-center tw:gap-1.5 tw:border-0 tw:bg-transparent tw:px-1 tw:py-0 tw:pl-5 tw:text-left tw:font-sans tw:text-sm tw:font-normal tw:leading-ui tw:text-foreground tw:hover:bg-muted tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring"
+                className="tw:flex tw:min-h-control-lg tw:w-full tw:min-w-0 tw:items-center tw:gap-2.5 tw:rounded-sm tw:border-0 tw:bg-transparent tw:px-2 tw:py-2 tw:pl-5 tw:text-left tw:font-sans tw:text-sm tw:font-normal tw:leading-ui tw:text-foreground tw:hover:bg-muted tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring"
                 onClick={() => onOpenEnvironment(environment.id, "sources")}
                 title={`${environment.name} · ${source.provider === "github" ? "GitHub" : t("connections.environmentLocalFolder")} · ${knowledgeRevisionLabel(source.revision, {
                   dirty: t("knowledge.revisionDirty"),
@@ -513,6 +514,8 @@ function KnowledgeProjectResources({
           )}
         </div>
       ) : null}
+
+      </> : null}
 
       <TreeSectionButton
         expanded={analysisExpanded}
@@ -560,7 +563,7 @@ function KnowledgeProjectResources({
                 key={article.id}
                 type="button"
                 data-selected={activeResourceId === article.id}
-                className="tw:flex tw:h-control-sm tw:min-h-control-sm tw:w-full tw:min-w-0 tw:items-center tw:gap-1.5 tw:border-0 tw:bg-transparent tw:px-1 tw:py-0 tw:pl-5 tw:text-left tw:font-sans tw:text-sm tw:font-normal tw:leading-ui tw:text-foreground tw:data-[selected=true]:bg-selection tw:hover:bg-muted tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring"
+                className="tw:flex tw:min-h-control-lg tw:w-full tw:min-w-0 tw:items-center tw:gap-2.5 tw:rounded-sm tw:border-0 tw:bg-transparent tw:px-2 tw:py-2 tw:pl-5 tw:text-left tw:font-sans tw:text-sm tw:font-normal tw:leading-ui tw:text-foreground tw:data-[selected=true]:bg-selection tw:hover:bg-muted tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring"
                 onClick={() =>
                   onOpenEnvironment(environment.id, "analyses", article.id)
                 }

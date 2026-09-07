@@ -2,7 +2,7 @@
 export const AGENT_DOCK_DEFAULT_WIDTH = 396;
 export const AGENT_DOCK_MIN_WIDTH = 360;
 export const AGENT_DOCK_MAX_WIDTH = 680;
-export const AGENT_DOCK_MIN_WORKBENCH_WIDTH = 520;
+export const AGENT_DOCK_MIN_WORKBENCH_WIDTH = 420;
 
 export type AgentDockLayout = "compact" | "docked" | "overlay";
 
@@ -45,10 +45,14 @@ export function normalizeAgentDockWidth(requestedWidth: number): number {
 export function clampAgentDockWidth(
   requestedWidth: number,
   viewportWidth: number,
+  leftToolWindowWidth?: number,
 ): number {
+  const availableWidth = leftToolWindowWidth === undefined
+    ? viewportWidth
+    : viewportWidth - Math.max(0, leftToolWindowWidth) - 12 - AGENT_DOCK_MIN_WORKBENCH_WIDTH;
   const viewportMaximum = Math.max(
     AGENT_DOCK_MIN_WIDTH,
-    Math.floor(viewportWidth * 0.55),
+    Math.min(Math.floor(viewportWidth * 0.55), availableWidth),
   );
   return Math.round(
     Math.min(
@@ -67,9 +71,9 @@ export function shouldOverlayAgentDock({
   leftToolWindowWidth: number;
   requestedAgentWidth: number;
 }): boolean {
-  const agentWidth = clampAgentDockWidth(requestedAgentWidth, viewportWidth);
+  const agentWidth = clampAgentDockWidth(requestedAgentWidth, viewportWidth, leftToolWindowWidth);
   return (
-    viewportWidth - Math.max(0, leftToolWindowWidth) - agentWidth <
+    viewportWidth - Math.max(0, leftToolWindowWidth) - 12 - agentWidth <
     AGENT_DOCK_MIN_WORKBENCH_WIDTH
   );
 }

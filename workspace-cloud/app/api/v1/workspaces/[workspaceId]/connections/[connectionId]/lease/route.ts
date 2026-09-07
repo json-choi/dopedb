@@ -116,7 +116,8 @@ export async function POST(request: Request, context: RouteContext) {
     return jsonError("Managed access mode must be read, write, or schema", 400);
   }
   const authorization = await authorizeWorkspaceConnection(
-    request, workspaceId, connectionId, "use",
+    request, workspaceId, connectionId,
+    requestedAccessMode === "schema" ? "manage" : requestedAccessMode === "write" ? "use" : "read",
   );
   if (!authorization.ok) return jsonError(authorization.error, authorization.status);
   const connection = await db.query.workspaceConnection.findFirst({

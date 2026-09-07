@@ -365,7 +365,7 @@ export const connectionsCatalog = defineCatalog(
     "connections.objectNamePatternHint":
       "Use * and ? wildcards. This filter is shared by Explorer, Search, and schema diagrams.",
     "connections.password": "Password",
-    "connections.passwordStored": "stored securely",
+    "connections.passwordStored": "Enter password",
     "connections.passwordStoredExisting": "stored",
     "connections.options": "Options",
     "connections.notNull": "Not null",
@@ -820,7 +820,7 @@ export const connectionsCatalog = defineCatalog(
     "connections.objectNamePatternHint":
       "*와 ? 와일드카드를 사용합니다. 탐색기, 전체 검색, 스키마 다이어그램이 같은 필터를 사용합니다.",
     "connections.password": "비밀번호",
-    "connections.passwordStored": "보안 저장소에 저장됨",
+    "connections.passwordStored": "비밀번호 입력",
     "connections.passwordStoredExisting": "저장됨",
     "connections.options": "옵션",
     "connections.notNull": "NULL 불가",

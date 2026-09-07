@@ -172,7 +172,7 @@ export const agentsCatalog = defineCatalog(
       "Could not reconfirm the selected Project scope: {error}",
     "agent.acpProtocol": "ACP v1 · official Claude and Codex adapters",
     "agent.acpReadyBody":
-      "The selected Project resources are attached as one exact, immutable ACP scope.",
+      "Work stays within your selected resources. Describe what you need below.",
     "agent.acpReadyTitle": "Ready to work",
     "agent.acpRenderFailed": "AI Chat could not be displayed",
     "agent.acpRenderFailedBody":
@@ -583,7 +583,7 @@ export const agentsCatalog = defineCatalog(
       "선택한 프로젝트 범위를 재확인하지 못했습니다: {error}",
     "agent.acpProtocol": "ACP v1 · 공식 Claude·Codex 어댑터",
     "agent.acpReadyBody":
-      "선택한 프로젝트 리소스를 변경할 수 없는 하나의 정확한 ACP 범위로 첨부합니다.",
+      "선택한 리소스 안에서 작업합니다. 아래에 필요한 작업을 입력하세요.",
     "agent.acpReadyTitle": "작업 준비 완료",
     "agent.acpRenderFailed": "AI Chat 화면을 표시하지 못했습니다",
     "agent.acpRenderFailedBody":

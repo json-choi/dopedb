@@ -4,6 +4,7 @@ import {
   assertProviderSecretIsNotDurable,
   runProviderImportSupportAssertions,
 } from "./provider-import-postgres-harness/assertions";
+import { runArticleSharingScenarios } from "./provider-import-postgres-harness/article-sharing-scenarios";
 import { runAnalysisLifecycleScenarios } from "./provider-import-postgres-harness/analysis-lifecycle-scenarios";
 import { runAnalysisMemberRemovalScenarios } from "./provider-import-postgres-harness/analysis-member-removal-scenarios";
 import { runAuthorityProviderScenarios } from "./provider-import-postgres-harness/authority-provider-scenarios";
@@ -52,6 +53,7 @@ describe.runIf(enabled)("provider import PostgreSQL concurrency harness", () => 
       const provider = await runAuthorityProviderScenarios(fixture);
       const analysis = await runAnalysisLifecycleScenarios(fixture, provider);
 
+      await runArticleSharingScenarios(fixture, provider, analysis);
       await runAnalysisMemberRemovalScenarios(fixture, provider, analysis);
       await runSyncScenarios(fixture, provider);
       await runProviderOperationScenarios(fixture, provider);

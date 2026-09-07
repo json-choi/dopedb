@@ -31,11 +31,13 @@ export function useConnectionCatalogController({
   onNewConnection,
   openProviderCredentials,
   profileState,
+  selectSourceOnOpen,
 }: {
   connections: ConnectionProfile[];
   onNewConnection: (preset?: ConnectionLaunchPreset) => void;
   openProviderCredentials: OpenProviderCredentials;
   profileState: ConnectionProfileState;
+  selectSourceOnOpen: boolean;
 }) {
   const { t } = useI18n();
   const driverCatalog = useQuery(driversQuery());
@@ -53,7 +55,7 @@ export function useConnectionCatalogController({
   const [catalogDriverId, setCatalogDriverId] = useState<string | null>(
     null,
   );
-  const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const [addMenuOpen, setAddMenuOpen] = useState(selectSourceOnOpen);
   const [addSearch, setAddSearch] = useState("");
   const addMenuAnchorRef = useRef<HTMLDivElement | null>(null);
   const addButtonRef = useRef<HTMLButtonElement | null>(null);

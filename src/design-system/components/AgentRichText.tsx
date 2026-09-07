@@ -19,6 +19,7 @@ import rehypeSanitize from "rehype-sanitize";
 import remarkGfm from "remark-gfm";
 
 import { Icon } from "../../components/Icon";
+import { useTheme } from "../theme";
 import {
   highlightAgentCode,
   type AgentSyntaxLine,
@@ -466,6 +467,7 @@ function AgentMermaidBlock({
   labels: AgentRichTextLabels;
   streaming: boolean;
 }) {
+  const { resolved: colorScheme } = useTheme();
   const reactId = useId();
   const diagramId = useMemo(
     () => `dopedb-agent-${reactId.replace(/[^a-zA-Z0-9_-]/g, "")}`,
@@ -491,7 +493,7 @@ function AgentMermaidBlock({
     return () => {
       current = false;
     };
-  }, [code, diagramId, streaming]);
+  }, [code, diagramId, streaming, colorScheme]);
 
   if (streaming) {
     return (
@@ -550,45 +552,52 @@ type MermaidApi = Awaited<typeof import("mermaid")>["default"];
 let mermaidPromise: Promise<MermaidApi> | null = null;
 
 function getMermaid() {
-  if (!mermaidPromise) {
-    mermaidPromise = import("mermaid").then(({ default: mermaid }) => {
-      const roles = getComputedStyle(document.documentElement);
-      const role = (name: string) => roles.getPropertyValue(name).trim();
-      mermaid.initialize({
-        fontFamily: role("--ds-font-sans"),
-        htmlLabels: false,
-        securityLevel: "strict",
-        startOnLoad: false,
-        suppressErrorRendering: true,
-        theme: "base",
-        themeVariables: {
-          background: role("--ds-background"),
-          lineColor: role("--ds-muted-foreground"),
-          primaryBorderColor: role("--ds-border-strong"),
-          primaryColor: role("--ds-muted"),
-          primaryTextColor: role("--ds-foreground"),
-          secondaryColor: role("--ds-card"),
-          tertiaryColor: role("--ds-selection"),
-        },
-      });
-      return mermaid;
-    });
-  }
+  mermaidPromise ??= import("mermaid").then(({ default: mermaid }) => mermaid);
   return mermaidPromise;
 }
 
-async function renderMermaid(id: string, code: string) {
+// Mermaid keeps global configuration. Serialize initialization and rendering so
+// diagrams created while appearance changes cannot mix two palettes.
+let mermaidRenderQueue: Promise<unknown> = Promise.resolve();
+function renderMermaid(id: string, code: string) {
+  const render = mermaidRenderQueue.then(() => renderThemedMermaid(id, code));
+  mermaidRenderQueue = render.catch(() => undefined);
+  return render;
+}
+
+async function renderThemedMermaid(id: string, code: string) {
   const mermaid = await getMermaid();
+  const roles = getComputedStyle(document.documentElement);
+  const role = (name: string) => roles.getPropertyValue(name).trim();
+  const colorScheme = document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+  mermaid.initialize({
+    fontFamily: role("--ds-font-sans"),
+    htmlLabels: false,
+    securityLevel: "strict",
+    startOnLoad: false,
+    suppressErrorRendering: true,
+    theme: "base",
+    themeVariables: {
+      darkMode: colorScheme === "dark",
+      background: role("--ds-background"),
+      lineColor: role("--ds-muted-foreground"),
+      primaryBorderColor: role("--ds-border-strong"),
+      primaryColor: role("--ds-muted"),
+      primaryTextColor: role("--ds-foreground"),
+      secondaryColor: role("--ds-card"),
+      tertiaryColor: role("--ds-selection"),
+    },
+  });
   const { svg } = await mermaid.render(id, code);
   const background = getComputedStyle(document.documentElement)
     .getPropertyValue("--ds-background")
     .trim();
-  return diagramSourceDocument(svg, background);
+  return diagramSourceDocument(svg, background, colorScheme);
 }
 
-function diagramSourceDocument(svg: string, background: string) {
+function diagramSourceDocument(svg: string, background: string, colorScheme: "light" | "dark") {
   const surface = background || "transparent";
-  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:"><style>html,body{margin:0;min-height:100%;background:${surface};color-scheme:dark;overflow:auto}body{box-sizing:border-box;display:grid;place-items:center;padding:8px}svg{display:block;max-width:100%;height:auto;margin:auto;background:transparent!important}</style></head><body>${svg}</body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:"><style>html,body{margin:0;min-height:100%;background:${surface};color-scheme:${colorScheme};overflow:auto}body{box-sizing:border-box;display:grid;place-items:center;padding:8px}svg{display:block;max-width:100%;height:auto;margin:auto;background:transparent!important}</style></head><body>${svg}</body></html>`;
 }
 
 function fenceLanguage(className?: string) {
