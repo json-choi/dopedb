@@ -76,6 +76,11 @@ root. Generate/check migrations with `pnpm db:generate` and `pnpm db:check` here
 them through the unpooled URL with `pnpm workspace:migrate` from the repository root.
 `pnpm build` intentionally succeeds without production secrets: database and auth
 clients resolve configuration on the first request, where missing values fail closed.
+Shared JSX outside this directory resolves its React declarations through
+`tsconfig.json`'s local `typeRoots`, so an independent Workspace install needs no
+Desktop dependencies. React runtime imports retain their normal package resolution:
+Next.js also applies `paths` aliases to browser bundles, so mapping `react/jsx-runtime`
+to a declaration file removes its executable JSX functions and breaks hydration.
 Production Vercel builds run that migration before the Next.js build. The dedicated
 production command requires `DATABASE_URL_UNPOOLED` and does not fall back to the pooled
 runtime URL; a missing URL or migration failure stops the deployment instead of serving
