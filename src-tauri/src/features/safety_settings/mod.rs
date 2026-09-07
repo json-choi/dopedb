@@ -5,7 +5,7 @@ mod ports;
 
 use uuid::Uuid;
 
-use crate::connection::ConnectionManager;
+use crate::connection::{ConnectionAccess, ConnectionManager};
 use crate::error::AppResult;
 use crate::model::{SafetySettings, WorkspaceCredentialMode};
 use crate::store::Store;
@@ -97,6 +97,14 @@ impl SafetyPlatformAdapter {
             } else {
                 update_local_write_ceiling && local_mutations_supported
             };
+        if profile.credential_mode == WorkspaceCredentialMode::Managed && settings.allow_writes {
+            let access = if settings.allow_schema_changes {
+                ConnectionAccess::Schema
+            } else {
+                ConnectionAccess::Write
+            };
+            operation_scope.check_access(&pin, access).await?;
+        }
         let expected_connection_revision = pin.connection_revision;
         settings.max_rows = settings.max_rows.clamp(1, 100_000);
         settings.exec_preview_row_limit = settings.exec_preview_row_limit.clamp(0, 1_000_000);

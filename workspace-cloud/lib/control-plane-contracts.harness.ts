@@ -39,6 +39,7 @@ import {
 } from "./workspace-background-scheduler";
 import {
   parseSharedConnection,
+  providerSchemaSetupRequired,
   publicConnection,
 } from "./workspace-connections";
 import {
@@ -646,6 +647,12 @@ describe("Desktop control-plane contracts", () => {
       .toEqual(fixture.managedLease.request);
     expect(parseManagedLeaseRequest({ accessMode: "schema" }))
       .toEqual({ accessMode: "schema" });
+    for (const scope of [null, "", "cloudsql.read cloudsql.write", "cloudsql.schema.extra"]) {
+      expect(providerSchemaSetupRequired("gcpCloudSql", scope)).toBe(true);
+    }
+    expect(providerSchemaSetupRequired("gcpCloudSql", "cloudsql.read cloudsql.write cloudsql.schema"))
+      .toBe(false);
+    expect(providerSchemaSetupRequired("neon", null)).toBe(false);
     const lease = managedLeaseResponse(fixture.managedLease.response);
     expect(lease.lease.provider).toBe("gcpCloudSql");
     expect(lease.lease.connector?.kind).toBe("gcpCloudSqlAuthProxy");

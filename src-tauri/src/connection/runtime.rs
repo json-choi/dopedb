@@ -343,6 +343,26 @@ impl ConnectionOperationScope {
         self.manager.inner.store.pin_connection_for_view(id).await
     }
 
+    /// Verify the exact online grant without opening a database or minting a lease.
+    /// Safety uses this before persisting a wider device permission.
+    pub(crate) async fn check_access(
+        &self,
+        pin: &PinnedConnection,
+        access: ConnectionAccess,
+    ) -> AppResult<()> {
+        authorize_pin(
+            self.manager.inner.remote_authority.as_ref(),
+            self.manager.inner.provider_local.as_ref(),
+            pin,
+            access,
+        )
+        .await?;
+        if !self.manager.pin_is_current(pin).await? {
+            return Err(scope_changed());
+        }
+        Ok(())
+    }
+
     /// Upgrade this operation boundary into a live connection without reacquiring
     /// the writer-preferred scope lock. Re-entering `ConnectionManager::pin` while
     /// this scope owns a read guard can deadlock behind a queued mutation.

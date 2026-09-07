@@ -2,7 +2,7 @@
 import { useEffect, useId, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { SafetySettings } from "../../../ipc/types";
-import { errMessage } from "../../../ipc/types";
+import { errDetails, errMessage } from "../../../ipc/types";
 import InfoTip from "../../../components/InfoTip";
 import { useToast } from "../../../components/Toast";
 import { Button } from "../../../design-system/components/Button";
@@ -25,6 +25,7 @@ import {
 } from "../../../features/safetySettings/persistence";
 import { useI18n, type I18nKey } from "../../../lib/i18n";
 import type { ConnectionProfile } from "../../../features/connections/domain";
+import ManagedConnectionRecoveryNotice from "../../../features/connections/ManagedConnectionRecoveryNotice";
 import { setWorkspaceConnectionWritePolicy } from "../../../features/workspaces/tauriAdapter";
 import MonitoringAccess from "./MonitoringAccess";
 import { setSafetySettings } from "../../../features/safetySettings/tauriAdapter";
@@ -72,7 +73,9 @@ export default function Safety({
   const memberLocalReadOnly = connection.credentialMode === "memberLocal";
   const [settings, setSettings] = useState<SafetySettings | null>(null);
   const [busy, setBusy] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<{
+    connectionId: string; kind: string | null; message: string;
+  } | null>(null);
   const accessPermissionsLabelId = useId();
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -176,7 +179,7 @@ export default function Safety({
           allowSchemaChanges: false,
         });
       }
-      setSaveError(message);
+      setSaveError({ connectionId, kind: errDetails(e).kind, message });
       toast(message, "error");
     } finally {
       setBusy(false);
@@ -247,9 +250,11 @@ export default function Safety({
           {t("safety.refreshFailed", { error: errMessage(safetyQuery.error) })}
         </InlineNotice>
       ) : null}
-      {saveError ? (
+      {saveError?.connectionId === connectionId && saveError.kind === "managedConnectionRecoveryRequired" ? (
+        <ManagedConnectionRecoveryNotice connection={connection} />
+      ) : saveError?.connectionId === connectionId ? (
         <InlineNotice tone="danger" icon="alert" role="alert">
-          {saveError}
+          {saveError.message}
         </InlineNotice>
       ) : null}
       <div className="tw:inline-flex tw:items-center tw:gap-2 tw:max-[640px]:flex-col tw:max-[640px]:items-start">

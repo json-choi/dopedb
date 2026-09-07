@@ -350,6 +350,21 @@ describe("SQL run guidance", () => {
     ]);
 
     persistenceOrder.length = 0;
+    const schemaSetupError = {
+      kind: "managedConnectionRecoveryRequired",
+      message: "managed workspace connection repair is required",
+    };
+    await expect(persistConnectionSafety(
+      managedProfile,
+      { ...safety, allowWrites: true, allowSchemaChanges: true },
+      {
+        setDeviceSafety: async () => { throw schemaSetupError; },
+        setWorkspaceWritePolicy,
+      },
+    )).rejects.toBe(schemaSetupError);
+    expect(persistenceOrder).toEqual(["workspace:true", "workspace:false"]);
+
+    persistenceOrder.length = 0;
     await expect(persistConnectionSafety(
       { ...managedProfile, allowWrites: true },
       safety,

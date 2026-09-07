@@ -29,6 +29,7 @@ import {
   parseSharedConnection,
   providerResourceSupportsSchema,
   providerResourceSupportsWrite,
+  providerSchemaSetupRequired,
   publicConnection,
 } from "../../../../../../../lib/workspace-connections";
 import { hasWorkspaceCapability } from "../../../../../../../lib/workspace-permissions";
@@ -137,6 +138,16 @@ export async function POST(request: Request, context: RouteContext) {
     return jsonError(
       "Managed schema access requires connection manage permission and a supported provider",
       403,
+    );
+  }
+  if (body.action === "schema" && providerSchemaSetupRequired(
+    connection.integrationProvider ?? "",
+    connection.integrationGrantedScope,
+  )) {
+    return jsonError(
+      "Reconnect this Cloud SQL integration to configure managed schema access",
+      409,
+      MANAGED_CONNECTION_RECOVERY_REQUIRED,
     );
   }
   return privateJson({

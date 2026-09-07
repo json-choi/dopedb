@@ -1,3 +1,4 @@
+// Displays query outcomes and the recovery command owned by their exact connection.
 import { useMemo, useState } from "react";
 
 import { Button } from "../../design-system/components/Button";
@@ -20,6 +21,7 @@ import { Icon } from "../../components/Icon";
 import { stamp } from "../../lib/export";
 import { useI18n } from "../../lib/i18n";
 import type { ConnectionProfile } from "../connections/domain";
+import ManagedConnectionRecoveryNotice from "../connections/ManagedConnectionRecoveryNotice";
 import {
   writeBlockRecoveryKind,
   writeBlockRecoveryOpensSafety,
@@ -358,6 +360,9 @@ function SqlErrorCard({
         <strong className="tw:text-danger">{t("sql.errorTitle")}</strong>
         <span className="tw:text-muted-foreground"> · {error.at}</span>
       </ResultMeta>
+      {error.kind === "managedConnectionRecoveryRequired" && connection ? (
+        <ManagedConnectionRecoveryNotice connection={connection} />
+      ) : null}
       <dl className="tw:m-0 tw:grid tw:grid-cols-[max-content_minmax(0,1fr)] tw:items-stretch tw:[&>*]:m-0 tw:[&>*]:border-b tw:[&>*]:border-border-subtle tw:[&>*]:px-3 tw:[&>*]:py-2 tw:[&>dd]:min-w-0 tw:[&>dt]:text-muted-foreground tw:max-[760px]:grid-cols-1 tw:max-[760px]:[&>dt]:border-b-0 tw:max-[760px]:[&>dt]:pb-0">
         <dt>{t("sql.errorKind")}</dt>
         <dd>

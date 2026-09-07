@@ -66,6 +66,13 @@ export function providerResourceSupportsSchema(input: {
     && providerResourceSupportsWrite(input.capabilityManifest);
 }
 
+/** Cloud SQL schema access needs its own verified service account. The stored
+ * scopes are emitted only after provider setup validates those identities. */
+export function providerSchemaSetupRequired(provider: string, grantedScope: string | null): boolean {
+  return provider === "gcpCloudSql"
+    && !grantedScope?.split(/\s+/).includes("cloudsql.schema");
+}
+
 const neonBranchStates = ["init", "resetting", "ready", "archived", "unknown"] as const;
 
 function safeProviderTargetText(value: unknown, maxLength: number) {
