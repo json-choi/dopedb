@@ -274,7 +274,12 @@ The site lives in `site/`.
   [`docs/PRODUCT_POSITIONING.md`](./PRODUCT_POSITIONING.md)
 - Framework: Next.js app router
 - SEO files: `site/app/robots.ts`, `site/app/sitemap.ts`
-- Product preview image: `site/public/dopedb-desktop.png`
+- Product preview images: `site/public/dopedb-desktop-0.4.21.png` (English) and
+  `site/public/dopedb-desktop-0.4.21-ko.png` (Korean). Both are unaltered 2400 × 1600
+  captures of the 0.4.21 Desktop development bundle, using Personal Workspace and
+  the bundled Demo SQLite orders table with column and foreign-key metadata open.
+  They contain no customer data or account session. Recapture the current app when
+  its visible UI changes; do not reuse demonstrations of removed screens.
 
 Local commands:
 

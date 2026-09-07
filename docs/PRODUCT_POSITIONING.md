@@ -1,6 +1,6 @@
 # DopeDB Product Positioning
 
-Status: accepted product decision, updated 2026-08-26.
+Status: accepted product decision, updated 2026-09-08.
 
 This document owns DopeDB's market category, competitive boundary, and public
 message. Architecture documents prove how the promise is enforced; the landing
@@ -134,8 +134,10 @@ Public copy may describe these implemented foundations:
   issued secret or distributing the broker AppRole to Desktop;
 - managed schema changes for Neon and GCP Cloud SQL PostgreSQL through a separate
   schema principal with short-lived credentials and a stable provider-bound owner;
-- official Claude and Codex ACP sessions pinned to workspace/account/connection
-  revision and local policy;
+- official Claude and Codex ACP sessions pinned to workspace/account/selected
+  Project resource revisions and local policy, with at most one database write target;
+- bundled Node and independently installed signed ACP adapter bundles whose public
+  manifests are checked against the runtime contract before each stable release;
 - read-only execution, exact write proposals and approvals, cancellation, manual
   transaction rollback, durable local results, and audit receipts;
 - local query execution without routing database traffic through the workspace
@@ -165,7 +167,6 @@ open roadmap work is complete:
   contract, manual rerun recovery, and fixed public HTML publication flow;
 - the remaining Local Folder Project Knowledge and any paid/experimental graph product;
   GitHub exact-commit source browsing is the default source path, not a completed graph;
-- bundled Node and independently installed first-party ACP adapter distribution;
 - arbitrary cloud providers, database engines, credential brokers, or provider
   branching abstractions beyond the closed adapters named above.
 

@@ -27,18 +27,18 @@
 
 <p align="center">
   <a href="https://github.com/json-choi/dopedb/actions/workflows/ci.yml"><img alt="CI status" src="https://img.shields.io/github/actions/workflow/status/json-choi/dopedb/ci.yml?branch=main&amp;style=flat-square&amp;label=CI&amp;labelColor=151a16&amp;color=ccf36b" /></a>
-  <a href="https://github.com/json-choi/dopedb/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/json-choi/dopedb?include_prereleases&amp;style=flat-square&amp;label=release&amp;labelColor=151a16&amp;color=ccf36b" /></a>
+  <a href="https://github.com/json-choi/dopedb/releases/latest"><img alt="Latest stable release" src="https://img.shields.io/github/v/release/json-choi/dopedb?style=flat-square&amp;label=release&amp;labelColor=151a16&amp;color=ccf36b" /></a>
   <a href="./LICENSE"><img alt="MIT License" src="https://img.shields.io/github/license/json-choi/dopedb?style=flat-square&amp;labelColor=151a16&amp;color=ccf36b" /></a>
   <img alt="Project status: alpha" src="https://img.shields.io/badge/status-alpha-ccf36b?style=flat-square&amp;labelColor=151a16" />
 </p>
 
 <p align="center">
   <a href="https://dopedb.dev">
-    <img src="./site/public/dopedb-desktop.png" width="100%" alt="DopeDB Desktop showing an orders table in Personal Workspace" />
+    <img src="./site/public/dopedb-desktop-0.4.21.png" width="100%" alt="DopeDB 0.4.21 showing the Demo SQLite orders table, columns, and foreign key in Personal Workspace" />
   </a>
 </p>
 
-<p align="center"><sub>DopeDB Desktop · Personal Workspace · local database execution</sub></p>
+<p align="center"><sub>DopeDB 0.4.21 · Personal Workspace · bundled Demo SQLite · dark theme</sub></p>
 
 ## Before you hand an Agent your production database
 
@@ -51,7 +51,7 @@ database traffic, approval, stop, recovery, and audit stay at the Desktop bounda
 
 | Share the access path | Keep credentials personal | Pin every Agent session |
 | --- | --- | --- |
-| The workspace owns connection identity, provider resource, environment policy, grants, and revisions. | Each member uses an OS-stored local credential or a least-privilege, short-lived managed credential held only in process memory. | Codex or Claude works inside one session bound to the exact workspace, account, connection revision, and local policy. |
+| The workspace owns connection identity, provider resource, environment policy, grants, and revisions. | Each member uses an OS-stored local credential or a least-privilege, short-lived managed credential held only in process memory. | Codex or Claude works with explicitly selected databases, BigQuery resources, and sources from one Project, with at most one database as a write target. |
 
 ## The boundary at a glance
 
@@ -72,9 +72,10 @@ flowchart LR
     D -->|local database traffic| DB
 ```
 
-The workspace service is a control plane, not a hosted database proxy. Queries and
-result rows stay on the member's machine. An Analysis Article shares sanitized HTML
-and one exact read-only query; only its immutable HTML publication is public.
+Database execution and result rows stay on the member's machine. Sharing an
+Analysis Article uploads its sanitized HTML and one saved read-only query
+definition. Public readers see only an immutable HTML snapshot and cannot run the
+query. Authenticated members rerun it manually in Desktop with their own access.
 
 ## What ships in the alpha
 
@@ -85,9 +86,16 @@ and one exact read-only query; only its immutable HTML publication is public.
 | Managed access | Member-specific, expiring credentials for PlanetScale, Neon, and GCP Cloud SQL |
 | Databases | PostgreSQL, MySQL/MariaDB, SQLite, MongoDB, and read-only Google BigQuery through the official `bq` CLI, with schema introspection |
 | Agent runtime | Official Codex and Claude ACP sessions plus Desktop-approved external official CLI sessions, each pinned to an exact selected Project resource set |
+| Articles and invitations | Sanitized HTML with one saved read-only query; a recipient-specific invitation can join the workspace and register read access after explicit acceptance |
 | Safety | Read-only defaults, immutable write proposals, exact human approval, cancellation, manual transaction rollback, durable results, and hash-chained audit |
+| Desktop experience | Live Agent text streaming, configurable Agent tool approvals, and System (default) / Light / Dark themes; database writes still require separate approval |
 | Local tools | A version-matched `dopedb` CLI Broker with no listening port, secret-free `.dopedb/agent.json` setup, and an explicit connection-pinned advanced Shell under Settings → Command line |
 | Languages | English and Korean across the website, Desktop client, and GitHub README |
+
+Article invitations require the intended signed-in recipient. Installing the app
+and supplying a member-local credential still require that person's action.
+After a permission save or managed-access repair started from Desktop finishes,
+the browser opens the app again, with a manual return link as a fallback.
 
 ## Intentionally focused
 
@@ -113,8 +121,8 @@ dopedb agent init --provider codex # or: claude
 Choose the Project databases, BigQuery resources, source repositories, and
 optional single write target in the Desktop approval window. The generated
 `.dopedb/agent.json` contains identifiers only, so it can be reviewed and checked
-in without distributing database or AI-provider credentials. Start the configured
-official CLI with:
+in without distributing database or AI-provider credentials. A generated
+configuration looks like this:
 
 ```json
 {
@@ -140,10 +148,11 @@ every start resolves the current revisions and fails closed if the Project set
 changed.
 
 ```sh
-dopedb agent start -- <provider arguments>
+dopedb agent start
 ```
 
-Desktop reviews the exact current resource set on every start. The Broker grants
+Optional provider arguments can follow `--`. Desktop reviews the exact current
+resource set on every start. The Broker grants
 only that process tree a runtime-only session and revokes it when the CLI exits;
 it does not install an always-on MCP server or read the provider's local login.
 
@@ -158,6 +167,10 @@ it does not install an always-on MCP server or read the provider's local login.
 DopeDB is currently an alpha. Review the
 [latest release](https://github.com/json-choi/dopedb/releases/latest) before using
 it with an important database.
+
+Current macOS releases are Developer ID signed and notarized. Windows installers
+are not yet code-signed and may show a SmartScreen warning. Download only from the
+release links above.
 
 ## Run from source
 

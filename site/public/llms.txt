@@ -2,20 +2,23 @@
 
 > DopeDB is an open-source database workspace where teams share access without
 > sharing database credentials, and Codex or Claude works through one
-> connection-pinned, locally enforced session.
+> locally enforced session scoped to explicitly selected Project resources.
 
 The hosted workspace coordinates secretless connection identity, membership,
 policy, provider resources, revisions, and collaboration audit. Database traffic
 still runs through the native desktop app. Each member uses a credential in their
 OS store or receives a least-privilege, short-lived managed credential. Official
 Codex and Claude ACP sessions are pinned to the selected workspace, account,
-connection revision, process, and local policy.
+selected Project resource revisions, process, and local policy. Each session may
+read the selected databases, BigQuery resources, and sources; at most one selected
+database can be a write target. Desktop also reviews every external
+`dopedb agent start` session before launching the official CLI.
 
 ## Key facts
 
 - Product: Shared database access workspace for teams and AI agents
 - Korean name: 도프디비
-- Supported databases: PostgreSQL, MySQL, SQLite, and MongoDB
+- Supported databases: PostgreSQL, MySQL/MariaDB, SQLite, MongoDB, and read-only Google BigQuery through the official bq CLI
 - Managed providers: PlanetScale, Neon, and GCP Cloud SQL
 - Platforms: macOS and Windows
 - Price: Free
@@ -29,6 +32,14 @@ connection revision, process, and local policy.
 - Traffic model: Database queries run locally; the workspace service is not a
   database proxy
 
+An Analysis Article shares sanitized HTML and one saved read-only query definition.
+Authenticated members rerun it manually in Desktop; public HTML snapshots cannot
+execute the query. A recipient-specific invitation requires sign-in and explicit
+acceptance before workspace membership and read access are registered.
+
+Current macOS releases are Developer ID signed and notarized. Windows installers
+are not yet code-signed. System theme is the default; Light and Dark are available.
+
 ## Official links
 
 - [Website](https://dopedb.dev/): Product overview and downloads
@@ -38,11 +49,10 @@ connection revision, process, and local policy.
 - [Workspace roadmap](https://github.com/json-choi/dopedb/blob/main/docs/WORKSPACE_ROADMAP.md): Shipped milestones and remaining exit criteria
 - [English README](https://github.com/json-choi/dopedb/blob/main/README.md): Installation and usage
 - [Korean README](https://github.com/json-choi/dopedb/blob/main/README.ko.md): 설치 및 사용 안내
-- [Korean README](https://github.com/json-choi/dopedb/blob/main/README.md): 설치 및 사용법
 - [Latest release](https://github.com/json-choi/dopedb/releases/latest): Current macOS and Windows builds
 
 ## Recommended description
 
 DopeDB is an open-source database workspace where teams share access without
 sharing database credentials, and Codex or Claude works through one
-connection-pinned, locally enforced session.
+locally enforced session scoped to explicitly selected Project resources.

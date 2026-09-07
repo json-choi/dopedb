@@ -37,7 +37,7 @@ export const homeCopy = {
       headline: "Before you hand Codex",
       accent: "your prod database.",
       text:
-        "An Agent can ignore a system prompt. It cannot ignore authority. DopeDB pins every Agent to one connection at one revision, and a write runs only as the exact payload a human approved.",
+        "An Agent can ignore a system prompt. It cannot ignore authority. DopeDB limits each Agent to the resources you select from one Project, with at most one database as a write target. Database writes require approval of the exact SQL.",
       primary: "Download the alpha",
       secondary: "Open team workspace",
       proof:
@@ -64,7 +64,7 @@ export const homeCopy = {
     proofs: [
       { label: "Shared record", value: "Carries no password" },
       { label: "Managed access", value: "Neon · GCP · PlanetScale" },
-      { label: "Agent authority", value: "Exact connection revision" },
+      { label: "Agent authority", value: "Selected Project resources" },
       { label: "Query path", value: "Runs from your desktop" },
     ],
     boundary: {
@@ -89,52 +89,23 @@ export const homeCopy = {
         },
         {
           index: "03",
-          overline: "Connection-pinned Agent",
+          overline: "Project-scoped Agent",
           title: "Every Agent inherits an exact grant, never the connection list.",
           body:
-            "Official Codex and Claude sessions are launched against one workspace, account, connection revision, process, and local policy.",
+            "Official Codex and Claude use explicitly selected databases, BigQuery resources, and sources from one Project. The workspace, account, resource revisions, process, and local policy bind that grant.",
         },
       ],
     },
     product: {
       eyebrow: "02 / Desktop boundary",
-      title: "Your queries never pass through our servers.",
+      title: "Your database work runs on your machine.",
       body:
-        "DopeDB is not a database proxy. We know who may reach what; credentials, queries, results, cancellation, and rollback all happen on your machine. Analysis Articles share sanitized HTML and execution receipts, while result rows stay local. With a connection already synchronized, our service going down does not stop your database work.",
+        "Database execution, results, cancellation, and supported transaction rollback stay in Desktop. An Analysis Article shares sanitized HTML and one saved read-only query definition. Members rerun it locally with their own access; public snapshots cannot execute the query.",
+      imageSrc: "/dopedb-desktop-0.4.21.png",
       imageAlt:
-        "DopeDB Desktop showing the bundled Demo SQLite orders table in the local data workbench",
-      captureLabel: "Captured from DopeDB Desktop",
-      captureDetail: "Bundled demo data · no customer data",
-      demoPickerLabel: "Three verified product flows",
-      demos: [
-        {
-          index: "01",
-          title: "Compare Development with Production",
-          body:
-            "One schema group surfaces the exact table, column, and index drift between two verified connections.",
-          duration: "00:08 · REAL UI",
-          src: "/guided-demo/01-workspace-schema-diff.mp4",
-          poster: "/guided-demo/01-workspace-schema-diff.jpg",
-        },
-        {
-          index: "02",
-          title: "Create and share an Analysis Article",
-          body:
-            "A versioned Article shares sanitized HTML and one saved query; each member reruns it locally with their own access.",
-          duration: "00:08 · REAL UI",
-          src: "/guided-demo/02-agent-analysis-article.mp4",
-          poster: "/guided-demo/02-agent-analysis-article.jpg",
-        },
-        {
-          index: "03",
-          title: "Stop a write at the exact SQL",
-          body:
-            "The guided demo queues the first Agent task, verifies the target row, and waits for a human before one row changes.",
-          duration: "00:30 · REAL UI",
-          src: "/guided-demo/03-exact-write-approval.mp4",
-          poster: "/guided-demo/03-exact-write-approval.jpg",
-        },
-      ],
+        "DopeDB 0.4.21 showing the Demo SQLite orders table, columns, and foreign key in Personal Workspace",
+      captureLabel: "DopeDB 0.4.21 · Desktop capture",
+      captureDetail: "Demo SQLite · sample data · dark theme",
       labels: [
         { title: "Control plane", body: "Identity · policy · revisions" },
         { title: "Local boundary", body: "Credentials · queries · recovery" },
@@ -168,9 +139,11 @@ export const homeCopy = {
     },
     workflow: {
       eyebrow: "03 / Exact operation",
-      title: "An approval screen makes the Agent faster.",
+      consoleLabel: "SQL approval example",
+      approvalLabel: "Awaiting approval",
+      title: "Review what the Agent changes.",
       body:
-        "When what is allowed and what can be undone are settled in advance, nobody has to confirm every step. Stop only the dangerous ones.",
+        "Choose the Agent’s resources before it starts. Review the exact SQL for database changes, and keep the controls to stop work and inspect results close at hand.",
       steps: [
         {
           index: "01",
@@ -185,7 +158,7 @@ export const homeCopy = {
         {
           index: "03",
           title: "Launch the Agent",
-          body: "Start the official adapter against that exact connection revision.",
+          body: "Select databases and sources from one Project, choose an optional single write target, then start Claude or Codex.",
         },
         {
           index: "04",
@@ -217,7 +190,7 @@ receipt         pending human decision`,
         {
           question: "Do my queries pass through your servers?",
           answer:
-            "No. The workspace service coordinates membership, connection metadata, policy, provider resources, revisions, and collaboration audit. Database traffic continues to run from your Desktop.",
+            "Database traffic runs from Desktop. The workspace stores membership, connection metadata, policy, provider resources, revisions, and collaboration audit. Sharing an Article also uploads its sanitized HTML and saved query definition, without query result rows.",
         },
         {
           question: "If I share a connection, does my database password go up with it?",
@@ -232,7 +205,15 @@ receipt         pending human decision`,
         {
           question: "If DopeDB goes down, do we lose our database?",
           answer:
-            "No. An already synchronized connection with your own credential keeps working, and Personal Workspace never needed an account. New managed credentials and membership or policy changes wait until the service is back.",
+            "No. An already synchronized connection with your member-local credential keeps working, and Personal Workspace never needed an account. New managed credentials and membership or policy changes wait until the service is back.",
+        },
+        {
+          question: "How do I invite someone to an Article?",
+          answer: "A workspace manager with management access to the database creates an invitation for one recipient. That person signs in and explicitly accepts to join the workspace and receive read access. They still install Desktop and supply any member-local credential themselves.",
+        },
+        {
+          question: "Can I use Claude or Codex from my terminal?",
+          answer: "Yes. Install the matching dopedb command from Desktop Settings, then run dopedb agent init in your Project. Each dopedb agent start shows the exact selected resources for Desktop approval before launching your official, locally authenticated CLI.",
         },
         {
           question: "Can I use it in production today?",
@@ -264,6 +245,7 @@ receipt         pending human decision`,
       detectedMacIntel: "Intel Mac detected · x64 DMG selected",
       detectedMacUnknown: "macOS detected · choose Apple Silicon or Intel",
       detectedUnsupported: "No installer for this device · choose a desktop build",
+      macSigning: "Current macOS releases are Developer ID signed and notarized.",
       windowsWarningTitle: "Windows alpha installers may show a SmartScreen warning.",
       windowsWarningBody:
         "The installer is not code-signed yet. Confirm the file came from GitHub Releases, then choose More info → Run anyway.",
@@ -296,7 +278,7 @@ receipt         pending human decision`,
       terms: "Terms",
     },
     jsonDescription:
-      "DopeDB is an open-source database workspace where teams share access without sharing database credentials, and Codex or Claude works through one connection-pinned, locally enforced session.",
+      "DopeDB is an open-source database workspace where teams share access without sharing database credentials, and Codex or Claude works through one locally enforced session scoped to selected Project resources.",
   },
   ko: {
     nav: {
@@ -314,7 +296,7 @@ receipt         pending human decision`,
       headline: "Codex에게 prod DB를",
       accent: "맡기기 전에.",
       text:
-        "Agent는 system prompt를 무시할 수 있습니다. 권한은 무시할 수 없습니다. DopeDB는 연결 하나·revision 하나에 Agent를 고정하고, write는 사람이 승인한 payload만 통과시킵니다.",
+        "Agent는 system prompt를 무시할 수 있습니다. 권한은 무시할 수 없습니다. DopeDB는 한 Project에서 직접 선택한 리소스만 Agent에게 허용하고, DB 하나까지 쓰기 대상으로 지정합니다. DB 변경은 정확한 SQL을 승인해야 실행됩니다.",
       primary: "Alpha 다운로드",
       secondary: "팀 워크스페이스 열기",
       proof: "Personal Workspace는 무계정 · macOS와 Windows · MIT 라이선스",
@@ -340,7 +322,7 @@ receipt         pending human decision`,
     proofs: [
       { label: "공유 record", value: "Password를 포함하지 않음" },
       { label: "Managed access", value: "Neon · GCP · PlanetScale" },
-      { label: "Agent 권한", value: "정확한 connection revision" },
+      { label: "Agent 권한", value: "선택한 Project 리소스" },
       { label: "Query 경로", value: "사용자 Desktop에서 실행" },
     ],
     boundary: {
@@ -365,52 +347,23 @@ receipt         pending human decision`,
         },
         {
           index: "03",
-          overline: "연결에 고정된 Agent",
+          overline: "Project 범위에 고정된 Agent",
           title: "Agent는 연결 목록이 아니라 정확한 grant 하나를 받습니다.",
           body:
-            "공식 Codex와 Claude session은 workspace, account, connection revision, process, local policy 하나에 고정됩니다.",
+            "공식 Codex와 Claude는 한 Project에서 직접 선택한 DB·BigQuery·소스만 사용합니다. 계정, 워크스페이스, 리소스 버전, 실행 프로세스와 로컬 정책이 그 권한을 제한합니다.",
         },
       ],
     },
     product: {
       eyebrow: "02 / Desktop 경계",
-      title: "당신의 쿼리는 우리 서버를 지나가지 않습니다.",
+      title: "DB 작업은 내 기기에서 실행됩니다.",
       body:
-        "DopeDB는 proxy가 아닙니다. 우리는 누가 무엇에 접근할 수 있는지를 알고, 자격 증명·쿼리·결과·중단·rollback은 당신 기기에서 벌어집니다. Analysis Article은 정제된 HTML과 실행 영수증만 공유하고 결과 행은 로컬에 둡니다. 이미 동기화된 연결이라면 우리 서비스가 멈춰도 당신의 DB 작업은 멈추지 않습니다.",
+        "DB 실행, 결과, 중단과 지원 트랜잭션 되돌리기는 Desktop에서 처리합니다. Analysis Article은 정제된 HTML과 읽기 전용 저장 쿼리 하나의 정의를 공유합니다. 구성원은 자신의 권한으로 로컬에서 다시 실행하며, 공개 HTML에서는 쿼리를 실행할 수 없습니다.",
+      imageSrc: "/dopedb-desktop-0.4.21-ko.png",
       imageAlt:
-        "로컬 데이터 워크벤치에서 번들 Demo SQLite 주문 테이블을 보여주는 실제 DopeDB Desktop 화면",
-      captureLabel: "실제 DopeDB Desktop 캡처",
-      captureDetail: "번들 데모 데이터 · 고객 데이터 없음",
-      demoPickerLabel: "검증한 핵심 플로우 3가지",
-      demos: [
-        {
-          index: "01",
-          title: "Development와 Production 비교",
-          body:
-            "하나의 schema group에서 검증된 두 연결 사이의 table·column·index 차이를 정확히 보여줍니다.",
-          duration: "00:08 · 실제 UI",
-          src: "/guided-demo/01-workspace-schema-diff.mp4",
-          poster: "/guided-demo/01-workspace-schema-diff.jpg",
-        },
-        {
-          index: "02",
-          title: "Analysis Article 생성과 공유",
-          body:
-            "버전이 있는 Article은 정제된 HTML과 하나의 저장 쿼리를 공유하고, 각 구성원이 자신의 권한으로 로컬에서 다시 실행합니다.",
-          duration: "00:08 · 실제 UI",
-          src: "/guided-demo/02-agent-analysis-article.mp4",
-          poster: "/guided-demo/02-agent-analysis-article.jpg",
-        },
-        {
-          index: "03",
-          title: "정확한 SQL에서 write 중단",
-          body:
-            "Guided demo가 첫 Agent 작업을 자동 전송하고 대상 행을 검증한 뒤, 한 행을 바꾸기 전에 사람의 승인을 기다립니다.",
-          duration: "00:30 · 실제 UI",
-          src: "/guided-demo/03-exact-write-approval.mp4",
-          poster: "/guided-demo/03-exact-write-approval.jpg",
-        },
-      ],
+        "개인 워크스페이스에서 Demo SQLite의 주문 테이블·컬럼·외래 키를 보여주는 DopeDB 0.4.21",
+      captureLabel: "DopeDB 0.4.21 · Desktop 캡처",
+      captureDetail: "Demo SQLite · 샘플 데이터 · 다크 테마",
       labels: [
         { title: "Control plane", body: "Identity · policy · revisions" },
         { title: "Local boundary", body: "Credentials · queries · recovery" },
@@ -444,9 +397,11 @@ receipt         pending human decision`,
     },
     workflow: {
       eyebrow: "03 / 정확한 Operation",
-      title: "승인 화면이 있으면 Agent는 더 빨라집니다.",
+      consoleLabel: "SQL 승인 예시",
+      approvalLabel: "승인 대기",
+      title: "Agent의 변경 내용을 직접 확인하세요.",
       body:
-        "무엇이 허용되는지, 되돌릴 수 있는지가 미리 정해져 있으면 사람이 매번 확인할 이유가 없어집니다. 위험한 것만 멈춰 세우세요.",
+        "Agent가 시작하기 전에 사용할 리소스를 고릅니다. DB 변경은 정확한 SQL을 검토하고, 실행 중단과 결과 확인은 같은 작업 화면에서 처리합니다.",
       steps: [
         {
           index: "01",
@@ -461,7 +416,7 @@ receipt         pending human decision`,
         {
           index: "03",
           title: "Agent 시작",
-          body: "정확한 connection revision을 대상으로 공식 adapter를 시작합니다.",
+          body: "한 Project의 DB와 소스를 선택하고, 필요하면 쓰기 대상 DB 하나를 지정한 뒤 Claude나 Codex를 시작합니다.",
         },
         {
           index: "04",
@@ -493,7 +448,7 @@ receipt         pending human decision`,
         {
           question: "내 쿼리가 당신들 서버를 지나가나요?",
           answer:
-            "아니요. Workspace service는 membership, connection metadata, policy, provider resource, revision, collaboration audit만 조정합니다. DB traffic은 계속 당신의 Desktop에서 실행됩니다.",
+            "DB 통신은 Desktop에서 실행됩니다. 워크스페이스는 구성원, 연결 정보, 정책, 클라우드 리소스, 버전과 협업 감사 기록을 관리합니다. Article 공유 시 정제된 HTML과 저장 쿼리 정의도 업로드하며, 쿼리 결과 행은 업로드하지 않습니다.",
         },
         {
           question: "연결을 공유하면 내 DB 비번도 같이 올라가나요?",
@@ -508,7 +463,15 @@ receipt         pending human decision`,
         {
           question: "DopeDB가 내려가면 우리 DB도 못 쓰나요?",
           answer:
-            "아니요. 이미 동기화된 연결과 각자의 credential로는 그대로 작업할 수 있고, Personal Workspace는 애초에 계정이 필요 없습니다. 새 managed credential 발급과 멤버십·정책 변경 반영만 service가 돌아온 뒤로 밀립니다.",
+            "아니요. 이미 동기화된 연결과 기기에 저장한 개인 인증정보로는 계속 작업할 수 있고, Personal Workspace는 애초에 계정이 필요 없습니다. 새 managed credential 발급과 멤버십·정책 변경 반영만 service가 돌아온 뒤로 밀립니다.",
+        },
+        {
+          question: "Article에 다른 사람을 초대하려면 어떻게 하나요?",
+          answer: "해당 DB의 관리 권한이 있는 워크스페이스 관리자가 수신자 한 명을 지정해 초대합니다. 수신자가 로그인하고 직접 수락하면 워크스페이스 참여와 읽기 권한 등록을 함께 처리합니다. Desktop 설치와 개인 로컬 인증정보 입력은 수신자가 직접 진행합니다.",
+        },
+        {
+          question: "터미널의 Claude나 Codex에서도 사용할 수 있나요?",
+          answer: "네. Desktop 설정에서 버전이 같은 dopedb 명령을 설치하고 Project에서 dopedb agent init을 실행하세요. dopedb agent start를 실행할 때마다 선택한 리소스를 Desktop에서 검토한 뒤, 이미 로그인한 공식 CLI를 시작합니다.",
         },
         {
           question: "지금 production에 써도 되나요?",
@@ -540,6 +503,7 @@ receipt         pending human decision`,
       detectedMacIntel: "Intel Mac 감지 · x64 DMG를 선택했습니다",
       detectedMacUnknown: "macOS 감지 · Apple Silicon 또는 Intel을 선택하세요",
       detectedUnsupported: "이 기기용 설치 파일 없음 · 데스크톱 설치 파일을 선택하세요",
+      macSigning: "현재 macOS 정식 배포본은 Developer ID 서명과 Apple 공증을 거칩니다.",
       windowsWarningTitle: "Windows Alpha 설치본에는 SmartScreen 경고가 표시될 수 있습니다.",
       windowsWarningBody:
         "설치 파일에 아직 코드 서명이 없습니다. GitHub Releases에서 받은 파일인지 확인한 뒤 추가 정보 → 실행을 선택하세요.",
@@ -572,7 +536,7 @@ receipt         pending human decision`,
       terms: "이용약관",
     },
     jsonDescription:
-      "DopeDB는 팀이 DB 인증정보 대신 연결과 정책을 공유하고, Codex와 Claude가 정확한 연결에 고정된 로컬 권한 경계 안에서 일하게 하는 오픈소스 데이터베이스 워크스페이스입니다.",
+      "DopeDB는 팀이 DB 인증정보 대신 연결과 정책을 공유하고, Codex와 Claude가 한 Project에서 선택한 리소스의 로컬 권한 경계 안에서 일하게 하는 오픈소스 데이터베이스 워크스페이스입니다.",
   },
 };
 

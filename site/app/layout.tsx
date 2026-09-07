@@ -22,7 +22,7 @@ export const metadata: Metadata = {
     template: "%s - DopeDB",
   },
   description:
-    "An open-source database workspace where teams share access without sharing credentials, and Codex or Claude works inside one connection-pinned local boundary.",
+    "An open-source database workspace where teams share access without sharing credentials, and Codex or Claude works inside one local session scoped to selected Project resources.",
   keywords: [
     "DopeDB",
     "도프디비",
@@ -31,10 +31,10 @@ export const metadata: Metadata = {
     "AI agent database access",
     "managed database credentials",
     "secretless connections",
-    "connection-pinned agent",
+    "Project-scoped agent",
   ],
-  authors: [{ name: "Jaesong Choi", url: "https://github.com/json-choi" }],
-  creator: "Jaesong Choi",
+  authors: [{ name: "DopeDB", url: siteUrl }],
+  creator: "DopeDB",
   publisher: "DopeDB",
   category: "Developer Tools",
   alternates: {
@@ -65,17 +65,17 @@ export const metadata: Metadata = {
   openGraph: {
     title: "DopeDB - Share database access without sharing credentials",
     description:
-      "A shared database access workspace with member-specific credentials and connection-pinned Codex or Claude sessions.",
+      "A shared database access workspace with member-specific credentials and Project-scoped Codex or Claude sessions.",
     url: siteUrl,
     siteName: "DopeDB",
     type: "website",
     locale: "en_US",
     images: [
       {
-        url: "/dopedb-desktop.png",
+        url: "/dopedb-desktop-0.4.21.png",
         width: 2400,
-        height: 1536,
-        alt: "DopeDB Desktop showing the bundled Demo SQLite orders table",
+        height: 1600,
+        alt: "DopeDB 0.4.21 showing Demo SQLite orders, columns, and a foreign key",
       },
     ],
   },
@@ -84,7 +84,7 @@ export const metadata: Metadata = {
     title: "DopeDB - Shared database access",
     description:
       "Share a database connection and policy while credentials stay personal and every Agent stays pinned to exact authority.",
-    images: ["/dopedb-desktop.png"],
+    images: ["/dopedb-desktop-0.4.21.png"],
   },
 };
 

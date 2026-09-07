@@ -40,11 +40,11 @@ export function HomeActionSections({ c }: { c: HomeCopy }) {
             <div className="tw:flex tw:h-10 tw:items-center tw:justify-between tw:border-b tw:border-hairline tw:px-3.5">
               <div className="tw:flex tw:items-center tw:gap-2 tw:font-mono tw:text-[9px] tw:font-semibold tw:tracking-[0.12em] tw:text-cream-muted tw:uppercase">
                 <SquareTerminal className="tw:text-signal" size={14} />
-                Operation console
+                {c.workflow.consoleLabel}
               </div>
               <span className="tw:flex tw:items-center tw:gap-2 tw:font-mono tw:text-[9px] tw:text-warning tw:uppercase">
                 <span className="tw:size-1.5 tw:rounded-full tw:bg-warning" />
-                Awaiting approval
+                {c.workflow.approvalLabel}
               </span>
             </div>
             <pre className="tw:m-0 tw:overflow-x-auto tw:p-[clamp(18px,3vw,30px)] tw:font-mono tw:text-[clamp(11px,1.05vw,14px)] tw:leading-[1.72] tw:text-cream-muted">
@@ -143,6 +143,10 @@ export function HomeActionSections({ c }: { c: HomeCopy }) {
           </p>
 
           <PlatformDownloadOptions copy={c.download} />
+
+          <p className="tw:mt-4 tw:text-xs tw:leading-relaxed tw:text-cream-muted">
+            {c.download.macSigning}
+          </p>
 
           <div className="tw:mt-5 tw:flex tw:gap-3 tw:border tw:border-warning/30 tw:bg-warning/5 tw:p-4">
             <LockKeyhole className="tw:mt-0.5 tw:shrink-0 tw:text-warning" size={17} />
