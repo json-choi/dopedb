@@ -1,12 +1,16 @@
 // Editorial Article reading surface: document, derived outline and exact query tools.
 // Commands and results remain owned by the existing Article controller.
-import type { ReactNode } from "react";
+import { memo, type ReactNode } from "react";
 import { Icon } from "../../components/Icon";
 import { AnalysisArticleBody } from "../../design-system/components/AnalysisArticleBody";
 import { Button } from "../../design-system/components/Button";
 import { useI18n } from "../../lib/i18n";
 import type { AnalysisArticleRecord } from "./domain";
 import { useArticleOutline } from "./useArticleOutline";
+
+// Desktop owns DOM retention for its outline; the shared markup stays import-free
+// so Workspace can compile it using only its own installed React runtime and types.
+const StableArticleBody = memo(AnalysisArticleBody);
 
 export function AnalysisArticleReader({ article, projectName, source, connectionName, runAction, children }: {
   article: AnalysisArticleRecord;
@@ -52,7 +56,7 @@ export function AnalysisArticleReader({ article, projectName, source, connection
             </div>
           </header>
           <div className="tw:col-start-1 tw:row-start-2 tw:min-w-0 tw:@max-[920px]:row-start-3">
-            <AnalysisArticleBody ref={outline.bodyRef} html={article.definition.html} />
+            <StableArticleBody bodyRef={outline.bodyRef} html={article.definition.html} />
             <div className="tw:mt-12 tw:grid tw:min-w-0 tw:gap-9">{children}</div>
           </div>
         <aside className="tw:sticky tw:top-8 tw:col-start-2 tw:row-start-1 tw:row-span-2 tw:grid tw:min-w-0 tw:gap-8 tw:@max-[920px]:static tw:@max-[920px]:col-start-1 tw:@max-[920px]:row-start-2 tw:@max-[920px]:row-span-1 tw:@max-[920px]:gap-5 tw:@max-[920px]:border-y tw:@max-[920px]:border-border-subtle tw:@max-[920px]:py-4">

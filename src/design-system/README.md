@@ -341,12 +341,13 @@ Elevation은 세 단계만 허용한다.
   입력 focus를 표시한다. 화면별 textarea 크기 CSS를 만들지 않는다.
 - `AnalysisArticleBody`: Desktop과 Workspace Web이 공유하는 정제된 HTML 문서 본문.
   Workspace의 독립 빌드도 이 정본을 직접 읽으며 JSX 타입은 Workspace에 설치된
-  React 타입으로 해석한다.
+  React 타입으로 해석한다. 공용 본문은 React import 없이 DOM ref만 받아서
+  Workspace 배포가 Desktop 루트의 node_modules에 의존하지 않는다.
   문서 타이포그래피, 가로로 스크롤되는 표, 정적 SVG figure와 caption, 의미 기반
   `article-metrics`/`article-metric`/`article-kicker`/`article-value`/`article-note`
   역할을 정적 Tailwind utility로 소유한다. `article-accent`와 `article-muted`는
   SVG의 `currentColor`에 의미 색을 제공한다. 공용 `card`·`border-subtle`·
-  `text-body` 역할은 Workspace Web의 theme bridge에도 정의한다. memo는 HTML이
+  `text-body` 역할은 Workspace Web의 theme bridge에도 정의한다. Desktop reader의 memo는 HTML이
   그대로일 때 DOM을 보존해 목차 observer와 focus가 가리키는 heading을 유지한다. 작성자가 화면 CSS나 실행 스크립트를
   주입하지 않으며, 허용 문법은 Workspace HTML sanitizer와 내장 아티클 스킬이 소유한다.
 - `AgentProviderMark`: AI Chat과 Agent 설치 흐름에서 Claude와 Codex를 구분하는
