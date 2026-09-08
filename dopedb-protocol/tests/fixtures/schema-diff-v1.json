@@ -1,0 +1,350 @@
+{
+  "engine": "postgres",
+  "baseline": {
+    "connectionId": "00000000-0000-0000-0000-000000000007",
+    "database": "commerce_prod",
+    "relations": [
+      {
+        "object": {
+          "namespace": "public",
+          "name": "archived_orders",
+          "kind": "table",
+          "catalog": "commerce_prod",
+          "nativeId": "commerce_prod0"
+        },
+        "partitionChildren": [],
+        "columns": [],
+        "constraints": [],
+        "indexes": [],
+        "rowEstimate": 42
+      },
+      {
+        "object": {
+          "namespace": "public",
+          "name": "orders",
+          "kind": "table",
+          "catalog": "commerce_prod",
+          "nativeId": "commerce_prod1"
+        },
+        "partitionChildren": [],
+        "columns": [
+          {
+            "name": "id",
+            "ordinal": 1,
+            "nativeType": " BIGINT ",
+            "typeFamily": "text",
+            "nullable": false,
+            "identity": false,
+            "autoIncrement": false
+          },
+          {
+            "name": "status",
+            "ordinal": 2,
+            "nativeType": "text",
+            "typeFamily": "text",
+            "nullable": true,
+            "identity": false,
+            "autoIncrement": false
+          },
+          {
+            "name": "obsolete",
+            "ordinal": 3,
+            "nativeType": "text",
+            "typeFamily": "text",
+            "nullable": true,
+            "identity": false,
+            "autoIncrement": false
+          },
+          {
+            "name": "account_id",
+            "ordinal": 4,
+            "nativeType": "bigint",
+            "typeFamily": "text",
+            "nullable": false,
+            "identity": false,
+            "autoIncrement": false
+          },
+          {
+            "name": "customer_profile_extended_extended_extended_extended_extended_extended_extended_extended_extended_extended_extended_extended_extended_extended_extended_extended_extended_extended_설명",
+            "ordinal": 5,
+            "nativeType": "varchar(2048)",
+            "typeFamily": "text",
+            "nullable": true,
+            "identity": false,
+            "autoIncrement": false
+          }
+        ],
+        "constraints": [
+          {
+            "name": "orders_pk",
+            "kind": "primary",
+            "columns": [
+              "id"
+            ],
+            "referencedColumns": [],
+            "deferrable": false,
+            "validated": true
+          },
+          {
+            "name": "account_fk",
+            "kind": "foreign",
+            "columns": [
+              "account_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ],
+            "deferrable": false,
+            "validated": true,
+            "referencedRelation": {
+              "namespace": "public",
+              "name": "accounts",
+              "kind": "table"
+            }
+          }
+        ],
+        "indexes": [
+          {
+            "name": "orders_status_idx",
+            "keys": [
+              {
+                "column": "status"
+              }
+            ],
+            "includedColumns": [],
+            "unique": false,
+            "valid": true
+          }
+        ],
+        "rowEstimate": 42
+      },
+      {
+        "object": {
+          "namespace": "public",
+          "name": "orders_summary",
+          "kind": "view",
+          "catalog": "commerce_prod",
+          "nativeId": "commerce_prod2"
+        },
+        "partitionChildren": [],
+        "columns": [],
+        "constraints": [],
+        "indexes": [],
+        "rowEstimate": 42
+      }
+    ]
+  },
+  "target": {
+    "connectionId": "00000000-0000-0000-0000-000000000008",
+    "database": "commerce_dev",
+    "relations": [
+      {
+        "object": {
+          "namespace": "public",
+          "name": "audit_events",
+          "kind": "table",
+          "catalog": "commerce_dev",
+          "nativeId": "commerce_dev0"
+        },
+        "partitionChildren": [],
+        "columns": [],
+        "constraints": [],
+        "indexes": [],
+        "rowEstimate": 999
+      },
+      {
+        "object": {
+          "namespace": "public",
+          "name": "orders",
+          "kind": "table",
+          "catalog": "commerce_dev",
+          "nativeId": "commerce_dev1"
+        },
+        "partitionChildren": [],
+        "columns": [
+          {
+            "name": "id",
+            "ordinal": 1,
+            "nativeType": "bigint",
+            "typeFamily": "text",
+            "nullable": false,
+            "identity": false,
+            "autoIncrement": false
+          },
+          {
+            "name": "status",
+            "ordinal": 2,
+            "nativeType": "varchar(64)",
+            "typeFamily": "text",
+            "nullable": false,
+            "identity": false,
+            "autoIncrement": false
+          },
+          {
+            "name": "fulfillment_channel",
+            "ordinal": 3,
+            "nativeType": "text",
+            "typeFamily": "text",
+            "nullable": true,
+            "identity": false,
+            "autoIncrement": false
+          },
+          {
+            "name": "account_id",
+            "ordinal": 4,
+            "nativeType": "bigint",
+            "typeFamily": "text",
+            "nullable": false,
+            "identity": false,
+            "autoIncrement": false
+          },
+          {
+            "name": "customer_profile_extended_extended_extended_extended_extended_extended_extended_extended_extended_extended_extended_extended_extended_extended_extended_extended_extended_extended_설명",
+            "ordinal": 5,
+            "nativeType": "text",
+            "typeFamily": "text",
+            "nullable": true,
+            "identity": false,
+            "autoIncrement": false
+          }
+        ],
+        "constraints": [
+          {
+            "name": "orders_pk",
+            "kind": "primary",
+            "columns": [
+              "id"
+            ],
+            "referencedColumns": [],
+            "deferrable": false,
+            "validated": true
+          },
+          {
+            "name": "account_fk",
+            "kind": "foreign",
+            "columns": [
+              "account_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ],
+            "deferrable": false,
+            "validated": true,
+            "referencedRelation": {
+              "namespace": "public",
+              "name": "workspace_accounts",
+              "kind": "table"
+            }
+          }
+        ],
+        "indexes": [
+          {
+            "name": "orders_status_idx",
+            "keys": [
+              {
+                "column": "status"
+              }
+            ],
+            "includedColumns": [],
+            "unique": true,
+            "valid": true
+          }
+        ],
+        "rowEstimate": 999
+      },
+      {
+        "object": {
+          "namespace": "public",
+          "name": "orders_summary",
+          "kind": "table",
+          "catalog": "commerce_dev",
+          "nativeId": "commerce_dev2"
+        },
+        "partitionChildren": [],
+        "columns": [],
+        "constraints": [],
+        "indexes": [],
+        "rowEstimate": 999
+      }
+    ]
+  },
+  "counts": {
+    "added": 2,
+    "missing": 2,
+    "changed": 5
+  },
+  "objects": [
+    {
+      "table": "public.archived_orders",
+      "objectType": "table",
+      "name": "archived_orders",
+      "status": "missing",
+      "baselineValue": "table",
+      "targetValue": "—"
+    },
+    {
+      "table": "public.audit_events",
+      "objectType": "table",
+      "name": "audit_events",
+      "status": "added",
+      "baselineValue": "—",
+      "targetValue": "table"
+    },
+    {
+      "table": "public.orders",
+      "objectType": "column",
+      "name": "customer_profile_extended_extended_extended_extended_extended_extended_extended_extended_extended_extended_extended_extended_extended_extended_extended_extended_extended_extended_설명",
+      "status": "changed",
+      "baselineValue": "varchar(2048) · NULL",
+      "targetValue": "text · NULL"
+    },
+    {
+      "table": "public.orders",
+      "objectType": "column",
+      "name": "fulfillment_channel",
+      "status": "added",
+      "baselineValue": "—",
+      "targetValue": "text · NULL"
+    },
+    {
+      "table": "public.orders",
+      "objectType": "column",
+      "name": "obsolete",
+      "status": "missing",
+      "baselineValue": "text · NULL",
+      "targetValue": "—"
+    },
+    {
+      "table": "public.orders",
+      "objectType": "column",
+      "name": "status",
+      "status": "changed",
+      "baselineValue": "text · NULL",
+      "targetValue": "varchar(64) · NOT NULL"
+    },
+    {
+      "table": "public.orders",
+      "objectType": "index",
+      "name": "orders_status_idx",
+      "status": "changed",
+      "baselineValue": "(status)",
+      "targetValue": "UNIQUE (status)"
+    },
+    {
+      "table": "public.orders",
+      "objectType": "foreignKey",
+      "name": "account_id",
+      "status": "changed",
+      "baselineValue": "account_id → public.accounts.id",
+      "targetValue": "account_id → public.workspace_accounts.id"
+    },
+    {
+      "table": "public.orders_summary",
+      "objectType": "table",
+      "name": "orders_summary",
+      "status": "changed",
+      "baselineValue": "view",
+      "targetValue": "table"
+    }
+  ]
+}

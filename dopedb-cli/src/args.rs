@@ -38,7 +38,7 @@ pub(crate) enum Command {
     Database(DatabaseArguments),
     /// Load the canonical database catalog.
     Catalog(CatalogArguments),
-    /// List database schemas or namespaces.
+    /// List namespaces or compare two authorized database schemas.
     Schema(SchemaArguments),
     /// Inspect one exact table or view.
     Table(TableArguments),
@@ -267,6 +267,23 @@ pub(crate) struct SchemaArguments {
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum SchemaCommand {
+    /// Compare fresh catalogs. Added/missing are relative to the baseline.
+    Diff {
+        /// Baseline connection: id:<uuid>, name:<exact-name>, or current.
+        #[arg(long)]
+        baseline: String,
+        /// Comparison connection, authorized by the same Desktop session.
+        #[arg(long)]
+        target: String,
+        /// Exact baseline database; defaults to the connection's configured database.
+        #[arg(long)]
+        baseline_database: Option<String>,
+        /// Exact target database; defaults to the connection's configured database.
+        #[arg(long)]
+        target_database: Option<String>,
+        #[command(flatten)]
+        output: OutputArguments,
+    },
     List {
         #[arg(long)]
         connection: String,

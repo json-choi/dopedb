@@ -109,6 +109,8 @@ server가 아닙니다. 앱은 AI provider token을 읽거나 갱신하지 않�
 
 ## 공식 AI CLI에서 사용하기
 
+CLI와 승인된 Agent 세션에서의 스키마 비교는 [CLI 스키마 Diff 안내](docs/contracts/cli-schema-diff.md)를 참고하세요.
+
 Desktop 설정에서 앱과 버전이 같은 `dopedb` 명령을 설치하고, Project 루트에서
 한 번 실행합니다.
 

@@ -1,12 +1,91 @@
+//! CLI catalog inspection and complete human/JSON schema comparison output.
+
 use dopedb_protocol::{
     CatalogArguments, CatalogShowCommand, CatalogSnapshot, DatabaseListArguments,
-    DatabaseListCommand, DatabaseListResult, SchemaListCommand, SchemaListResult,
-    TableDescribeArguments, TableDescribeCommand, TableDescribeResult,
+    DatabaseListCommand, DatabaseListResult, SchemaDiffObjectType, SchemaDiffStatus,
+    SchemaListCommand, SchemaListResult, TableDescribeArguments, TableDescribeCommand,
+    TableDescribeResult,
 };
 
 use crate::client::{BrokerClient, ClientError};
 use crate::commands::connection::{parse_selector, resolve_selector};
 use crate::output::{self, OutputMode};
+
+pub(crate) async fn diff(
+    baseline: &str,
+    target: &str,
+    baseline_database: Option<String>,
+    target_database: Option<String>,
+    mode: OutputMode,
+) -> Result<(), ClientError> {
+    let client = BrokerClient::discover()?;
+    let baseline = resolve_selector(&client, parse_selector(baseline)?).await?;
+    let target = resolve_selector(&client, parse_selector(target)?).await?;
+    let result = crate::schema_diff::load(
+        &client,
+        CatalogArguments {
+            connection: baseline,
+            database: baseline_database,
+        },
+        CatalogArguments {
+            connection: target,
+            database: target_database,
+        },
+    )
+    .await?;
+    if mode == OutputMode::Json {
+        return output::write_json(&result);
+    }
+    let mut lines = vec![
+        format!(
+            "Baseline: {} ({})",
+            result.baseline.database, result.baseline.connection_id
+        ),
+        format!(
+            "Target:   {} ({})",
+            result.target.database, result.target.connection_id
+        ),
+        format!(
+            "{} added · {} missing · {} changed",
+            result.counts.added, result.counts.missing, result.counts.changed
+        ),
+    ];
+    if result.total == 0 {
+        lines.push("Schemas match (compared structural fields).".into());
+    }
+    let mut previous_table = String::new();
+    for object in result.objects {
+        if object.table != previous_table {
+            lines.push(String::new());
+            lines.push(object.table.clone());
+            previous_table = object.table;
+        }
+        let (symbol, status) = match object.status {
+            SchemaDiffStatus::Added => ("+", "added"),
+            SchemaDiffStatus::Missing => ("−", "missing"),
+            SchemaDiffStatus::Changed => ("~", "changed"),
+        };
+        let kind = match object.object_type {
+            SchemaDiffObjectType::Table => "table",
+            SchemaDiffObjectType::View => "view",
+            SchemaDiffObjectType::Column => "column",
+            SchemaDiffObjectType::Index => "index",
+            SchemaDiffObjectType::ForeignKey => "foreign key",
+        };
+        if matches!(
+            object.object_type,
+            SchemaDiffObjectType::Table | SchemaDiffObjectType::View
+        ) && object.status != SchemaDiffStatus::Changed
+        {
+            lines.push(format!("  {symbol} {kind} {status}"));
+        } else {
+            lines.push(format!("  {symbol} {kind} {} ({status})", object.name));
+            lines.push(format!("    − {}", object.baseline_value));
+            lines.push(format!("    + {}", object.target_value));
+        }
+    }
+    output::write_human(&lines)
+}
 
 pub(crate) async fn databases(connection: &str, mode: OutputMode) -> Result<(), ClientError> {
     let client = BrokerClient::discover()?;

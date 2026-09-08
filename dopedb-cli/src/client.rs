@@ -186,6 +186,7 @@ fn remove_stale_discovery(runtime_file: &Path, runtime_id: Uuid) {
 )]
 pub(crate) enum ClientError {
     InvalidArguments,
+    SchemaDiffUnavailable(&'static str),
     AgentConfigExists,
     AgentConfigNotFound,
     AgentConfigInvalid,
@@ -213,6 +214,7 @@ pub(crate) enum ClientError {
 impl fmt::Display for ClientError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::SchemaDiffUnavailable(message) => formatter.write_str(message),
             Self::InvalidArguments => formatter.write_str(
                 "the command arguments are invalid; use --help for the supported syntax",
             ),
@@ -270,6 +272,10 @@ impl fmt::Display for ClientError {
 impl fmt::Debug for ClientError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::SchemaDiffUnavailable(message) => formatter
+                .debug_tuple("SchemaDiffUnavailable")
+                .field(message)
+                .finish(),
             Self::Remote(error) => formatter.debug_tuple("Remote").field(error).finish(),
             Self::InvalidArguments => formatter.write_str("InvalidArguments"),
             Self::AgentConfigExists => formatter.write_str("AgentConfigExists"),

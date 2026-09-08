@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import schemaDiffFixture from "../../../dopedb-protocol/tests/fixtures/schema-diff-v1.json";
+import { catalogFromSnapshot } from "../catalog/tauriAdapter";
 import {
   connectionId,
   retrySqlDocumentConflict,
@@ -1236,6 +1238,18 @@ describe("workbench state ownership", () => {
         comment: null,
       },
     ];
+    // The CLI and Desktop must agree on the same canonical environment pair.
+    const comparisonCatalog = (side: typeof schemaDiffFixture.baseline) => catalogFromSnapshot({
+      ...side, schemaVersion: 2, engine: "postgres", capturedAt: "2026-09-08T00:00:00Z",
+      fingerprint: "fixture", namespaces: [], routines: [], otherObjects: [],
+    } as Parameters<typeof catalogFromSnapshot>[0]);
+    const sharedDiff = compareCatalogs(comparisonCatalog(schemaDiffFixture.target), comparisonCatalog(schemaDiffFixture.baseline));
+    const normalizeDiff = (objects: unknown[]) => objects.map((object) => JSON.stringify(object)).sort();
+    expect(normalizeDiff(sharedDiff.objects.map((object) => ({
+      table: object.tableKey.replace(/^commerce_(dev|prod)\./, ""),
+      objectType: object.objectType, name: object.label, status: object.status,
+      baselineValue: object.baselineValue, targetValue: object.targetValue,
+    })))).toEqual(normalizeDiff(schemaDiffFixture.objects));
     const environmentDiff = compareCatalogs(
       {
         tables: [

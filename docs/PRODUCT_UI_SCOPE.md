@@ -151,6 +151,10 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
   구분한다. 전체 텍스트는 선택 가능하며 검색·펼치기·별도 안내 도구 행은 두지 않는다.
   두 값의 나란한 배치와 세로 배치는 viewport가 아니라 실제 workbench 폭을 따른다.
   스키마 조회·검증 화면이며 migration 작성이나 실행 command를 추가하지 않는다.
+- CLI의 `schema diff`와 Project 고정 Agent의 `schema_diff`는 같은 읽기 전용
+  비교를 제공한다. 두 DB를 명시하고 각 grant를 기존 Broker 경계에서 검증하며,
+  비교 실패를 빈 스키마로 취급하거나 scope를 자동 확장하지 않는다. CLI 계약과
+  실제 비교 속성은 [`contracts/cli-schema-diff.md`](contracts/cli-schema-diff.md)를 따른다.
 - Personal Workspace의 첫 Welcome은 실제 파일 기반 SQLite, 로컬 Project와
   development Environment, 그 연결의 versioned binding을 한 번에 준비하는
   `가이드 데모` command 하나를 제공할 수 있다. 이 명령은 재실행해도 같은 데모

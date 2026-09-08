@@ -68,6 +68,7 @@ const TOOL_SESSION_CONTEXT: &str = "session_context";
 const TOOL_CONNECTION_TEST: &str = "connection_test";
 const TOOL_DATABASE_LIST: &str = "database_list";
 const TOOL_SCHEMA_LIST: &str = "schema_list";
+const TOOL_SCHEMA_DIFF: &str = "schema_diff";
 const TOOL_CATALOG_SEARCH: &str = "catalog_search";
 const TOOL_TABLE_DESCRIBE: &str = "table_describe";
 const TOOL_QUERY_READ: &str = "query_read";
@@ -102,6 +103,25 @@ struct DatabaseArguments {
     connection_id: Option<Uuid>,
     #[serde(default)]
     database: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct SchemaDiffArguments {
+    baseline_connection_id: Uuid,
+    target_connection_id: Uuid,
+    #[serde(default)]
+    baseline_database: Option<String>,
+    #[serde(default)]
+    target_database: Option<String>,
+    #[serde(default)]
+    offset: u32,
+    #[serde(default)]
+    limit: Option<u32>,
+    #[serde(default)]
+    baseline_fingerprint: Option<String>,
+    #[serde(default)]
+    target_fingerprint: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]

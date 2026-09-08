@@ -35,7 +35,7 @@
     },
     "src/features/workbench/state.test.ts": {
       "tests": 4,
-      "protects": "Workbench document identity, save ownership, SQL resolve context, mutually exclusive AppShell route transitions, first-connection Test/engine/Demo contracts including managed BigQuery tooling, typed authentication recovery, and discovered-resource selector fallback, immutable Analysis snapshot controls, editable-target-safe Action Search shortcuts, Project-level Explorer resource flattening with exact Environment DB badges, member-local drag ordering with contiguous prod/dev schema groups, preferred-Environment Databases-folder drops, and exact shared-connection replacement receipts, 5,000-item loaded-only Explorer search and tree keyboard navigation, common modal title-only native drag isolation, durable Knowledge sync progress projection, and app-lifetime updater single-flight, retry, progress, relaunch, and resource cleanup"
+      "protects": "Workbench document identity, save ownership, SQL resolve context, mutually exclusive AppShell route transitions, first-connection Test/engine/Demo contracts including managed BigQuery tooling, typed authentication recovery, and discovered-resource selector fallback, immutable Analysis snapshot controls, editable-target-safe Action Search shortcuts, Project-level Explorer resource flattening with exact Environment DB badges, member-local drag ordering with contiguous prod/dev schema groups, preferred-Environment Databases-folder drops, and exact shared-connection replacement receipts, 5,000-item loaded-only Explorer search and tree keyboard navigation, common modal title-only native drag isolation, durable Knowledge sync progress projection, and app-lifetime updater single-flight, retry, progress, relaunch, and resource cleanup; Desktop and CLI schema diff parity against one canonical environment fixture"
     },
     "src/features/workspaces/authPolicy.test.ts": {
       "tests": 3,
@@ -45,11 +45,11 @@
   "rust": {
     "dopedb-cli/tests/terminal_session_e2e.rs": {
       "tests": 1,
-      "protects": "Typed ACP MCP direct-Broker catalog search and single-call plan/run journey without bearer or public CLI"
+      "protects": "Typed ACP MCP direct-Broker catalog search and single-call plan/run journey without bearer or public CLI; complete CLI/schema_diff Agent journeys with exact dual selectors, no partial output after denial/read failure/revocation, snapshot identity validation, and fingerprint-bound result paging"
     },
     "dopedb-protocol/tests/golden.rs": {
       "tests": 8,
-      "protects": "Versioned public CLI and Cloud↔Desktop sync, managed lease, and Analysis Article wire contracts with fail-closed decoding"
+      "protects": "Versioned public CLI and Cloud↔Desktop sync, managed lease, and Analysis Article wire contracts with fail-closed decoding; schema diff JSON and shared Desktop comparison fixture"
     },
     "src-tauri/src/broker/session.rs": {
       "tests": 4,

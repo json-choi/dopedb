@@ -111,6 +111,8 @@ boundary and open roadmap limits.
 
 ## Use DopeDB from an official AI CLI
 
+Schema comparison from the CLI and approved Agent sessions is described in the [CLI schema Diff guide](docs/contracts/cli-schema-diff.md).
+
 Install the version-matched `dopedb` command from Desktop Settings, then run this
 once from a Project root:
 

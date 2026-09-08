@@ -8,6 +8,7 @@ mod acp_launch;
 mod agent_mcp;
 mod client;
 mod exit_code;
+mod schema_diff;
 
 use std::process::ExitCode;
 

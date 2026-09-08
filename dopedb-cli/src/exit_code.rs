@@ -16,6 +16,7 @@ pub(crate) const INTERNAL: u8 = 10;
 pub(crate) fn for_client_error(error: &ClientError) -> u8 {
     match error {
         ClientError::InvalidArguments
+        | ClientError::SchemaDiffUnavailable(_)
         | ClientError::AgentConfigExists
         | ClientError::AgentConfigNotFound
         | ClientError::AgentConfigInvalid

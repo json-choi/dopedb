@@ -4,6 +4,7 @@ mod client;
 mod commands;
 mod exit_code;
 mod output;
+mod schema_diff;
 
 use std::process::ExitCode;
 
@@ -108,6 +109,22 @@ async fn main() -> ExitCode {
             }
         },
         Command::Schema(arguments) => match arguments.command {
+            SchemaCommand::Diff {
+                baseline,
+                target,
+                baseline_database,
+                target_database,
+                output,
+            } => {
+                commands::catalog::diff(
+                    &baseline,
+                    &target,
+                    baseline_database,
+                    target_database,
+                    OutputMode::from_json_flag(output.json),
+                )
+                .await
+            }
             SchemaCommand::List {
                 connection,
                 database,

@@ -1,4 +1,8 @@
 #[cfg(unix)]
+#[path = "support/schema_diff.rs"]
+mod schema_diff;
+
+#[cfg(unix)]
 #[rustfmt::skip]
 mod platform {
 
@@ -1168,4 +1172,6 @@ mod platform {
 #[test]
 fn typed_agent_bridge_searches_catalog_and_pins_the_launcher_security_boundary() {
     platform::run();
+    #[cfg(unix)]
+    schema_diff::run();
 }

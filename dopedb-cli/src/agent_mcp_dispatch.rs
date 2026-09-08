@@ -74,6 +74,7 @@ pub(super) async fn call_tool(
             tool_success(&result)
         }
         TOOL_CATALOG_SEARCH => catalog_search(client, tool_arguments(params)?).await,
+        TOOL_SCHEMA_DIFF => schema_diff(client, tool_arguments(params)?).await,
         TOOL_TABLE_DESCRIBE => {
             let arguments: TableDescribeToolArguments = tool_arguments(params)?;
             validate_database(arguments.database.as_deref())?;
@@ -386,6 +387,72 @@ async fn query_read(
         }
     };
     tool_success(&json!({ "plan": plan, "run": run }))
+}
+
+async fn schema_diff(
+    client: &BrokerClient,
+    arguments: SchemaDiffArguments,
+) -> Result<Value, String> {
+    let limit = arguments.limit.unwrap_or(100);
+    if limit == 0 || limit > 200 {
+        return Err("schema diff limit must be between 1 and 200".into());
+    }
+    if arguments.offset > 0
+        && (arguments.baseline_fingerprint.is_none() || arguments.target_fingerprint.is_none())
+    {
+        return Err("continuing a schema diff requires both returned catalog fingerprints".into());
+    }
+    let mut result = crate::schema_diff::load(
+        client,
+        CatalogArguments {
+            connection: ConnectionSelector::Id(arguments.baseline_connection_id),
+            database: arguments.baseline_database,
+        },
+        CatalogArguments {
+            connection: ConnectionSelector::Id(arguments.target_connection_id),
+            database: arguments.target_database,
+        },
+    )
+    .await
+    .map_err(|error| error.to_string())?;
+    if arguments
+        .baseline_fingerprint
+        .as_ref()
+        .is_some_and(|value| value != &result.baseline.fingerprint)
+        || arguments
+            .target_fingerprint
+            .as_ref()
+            .is_some_and(|value| value != &result.target.fingerprint)
+    {
+        return Err("a catalog changed between schema diff pages; restart from offset 0".into());
+    }
+    let offset = arguments.offset as usize;
+    if offset > result.total {
+        return Err("schema diff offset exceeds the total difference count".into());
+    }
+    let mut bytes = 0;
+    let mut page = Vec::new();
+    for object in result.objects.into_iter().skip(offset).take(limit as usize) {
+        let length = serde_json::to_vec(&object)
+            .map_err(|_| "invalid schema diff result")?
+            .len();
+        if bytes + length > MAX_REQUEST_BYTES / 4 {
+            if page.is_empty() {
+                return Err("one schema difference exceeds the Agent output limit; inspect that relation with table_describe".into());
+            }
+            break;
+        }
+        bytes += length;
+        page.push(object);
+    }
+    let end = offset + page.len();
+    result.objects = page;
+    tool_success(&json!({
+        "diff": result,
+        "offset": offset,
+        "nextOffset": if end < result.total { Some(end) } else { None },
+        "truncated": end < result.total
+    }))
 }
 
 async fn catalog_search(

@@ -1007,6 +1007,57 @@ fn command_names_match_the_v17_catalog() {
 
 #[test]
 fn catalog_snapshot_matches_the_v2_golden_contract() {
+    let fixture: Value =
+        serde_json::from_str(include_str!("fixtures/schema-diff-v1.json")).unwrap();
+    let capture = |side: &str, engine| {
+        let value = &fixture[side];
+        CatalogSnapshot::capture(
+            value["connectionId"].as_str().unwrap().parse().unwrap(),
+            engine,
+            value["database"].as_str().unwrap(),
+            chrono::Utc::now(),
+            dopedb_protocol::CatalogContents {
+                relations: serde_json::from_value(value["relations"].clone()).unwrap(),
+                ..Default::default()
+            },
+        )
+        .unwrap()
+    };
+    let baseline = capture("baseline", dopedb_protocol::DatabaseEngine::Postgres);
+    let target = capture("target", dopedb_protocol::DatabaseEngine::Postgres);
+    let diff = dopedb_protocol::compare_schema_catalogs(&baseline, &target).unwrap();
+    assert_eq!(
+        serde_json::to_value(&diff.objects).unwrap(),
+        fixture["objects"]
+    );
+    assert_eq!(
+        serde_json::to_value(&diff.counts).unwrap(),
+        fixture["counts"]
+    );
+    assert_eq!(diff.total, 9);
+    assert_eq!(
+        serde_json::from_value::<dopedb_protocol::SchemaDiff>(serde_json::to_value(&diff).unwrap())
+            .unwrap(),
+        diff
+    );
+    assert_eq!(
+        dopedb_protocol::compare_schema_catalogs(&baseline, &baseline)
+            .unwrap()
+            .total,
+        0
+    );
+    let reverse = dopedb_protocol::compare_schema_catalogs(&target, &baseline).unwrap();
+    assert_eq!(reverse.counts.added, diff.counts.missing);
+    assert_eq!(reverse.counts.missing, diff.counts.added);
+    assert_eq!(reverse.counts.changed, diff.counts.changed);
+    assert!(dopedb_protocol::compare_schema_catalogs(
+        &baseline,
+        &capture("target", dopedb_protocol::DatabaseEngine::Mysql)
+    )
+    .is_err());
+    let mongo = capture("target", dopedb_protocol::DatabaseEngine::Mongodb);
+    assert!(dopedb_protocol::compare_schema_catalogs(&mongo, &mongo).is_err());
+
     let source = include_str!("fixtures/catalog-snapshot-v2.json");
     let snapshot: CatalogSnapshot =
         serde_json::from_str(source).expect("Catalog V2 fixture must decode");
