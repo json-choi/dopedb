@@ -7,20 +7,15 @@ import type { Catalog } from "../../ipc/types";
 import { errMessage } from "../../ipc/types";
 import type { ConnectionProfile } from "../../features/connections/domain";
 import EngineMark from "../../components/EngineMark";
-import { EnvironmentBadge } from "../../design-system/components/EnvironmentBadge";
 import { Button } from "../../design-system/components/Button";
-import { TextInput } from "../../design-system/components/FormControls";
+import { SelectInput } from "../../design-system/components/FormControls";
 import {
   IdeTab,
   IdeTabStrip,
-  IdeToolTab,
-  IdeToolTabStrip,
 } from "../../design-system/components/IdeTabs";
 import {
   WorkbenchEmptyState,
   WorkbenchPane,
-  WorkbenchSelect,
-  WorkbenchToolbar,
 } from "../../design-system/components/Workbench";
 import { Icon } from "../../components/Icon";
 import Skeleton from "../../components/Skeleton";
@@ -37,26 +32,11 @@ import {
   schemaGroupIsCompatible,
   type SchemaConnectionGroup,
   type SchemaDiffStatus,
-  type SchemaObjectDiff,
-  type SchemaObjectType,
 } from "../../lib/schemaDiff";
-import { useI18n, type I18nKey } from "../../lib/i18n";
+import { useI18n } from "../../lib/i18n";
+import { SchemaDiffResults, STATUS_LABELS } from "./SchemaDiffResults";
 
 type StatusFilter = Exclude<SchemaDiffStatus, "same"> | "all";
-
-const OBJECT_LABELS: Record<SchemaObjectType, I18nKey> = {
-  table: "schemaDiff.objectTable",
-  view: "schemaDiff.objectView",
-  column: "schemaDiff.objectColumn",
-  index: "schemaDiff.objectIndex",
-  foreignKey: "schemaDiff.objectForeignKey",
-};
-
-const STATUS_LABELS: Record<Exclude<SchemaDiffStatus, "same">, I18nKey> = {
-  added: "schemaDiff.statusAdded",
-  missing: "schemaDiff.statusMissing",
-  changed: "schemaDiff.statusChanged",
-};
 
 function connectionName(connection: ConnectionProfile) {
   return connection.name || connection.database || connection.host;
@@ -64,12 +44,6 @@ function connectionName(connection: ConnectionProfile) {
 
 function baselineStorageKey(groupKey: string) {
   return `dopedb.schemaDiffBaseline.${groupKey}`;
-}
-
-function statusSymbol(status: Exclude<SchemaDiffStatus, "same">) {
-  if (status === "added") return "+";
-  if (status === "missing") return "−";
-  return "~";
 }
 
 export default function SchemaDiff({
@@ -93,7 +67,6 @@ export default function SchemaDiff({
   const [baselineId, setBaselineId] = useState("");
   const [targetId, setTargetId] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [search, setSearch] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [refreshErrors, setRefreshErrors] = useState<Record<string, string>>({});
 
@@ -154,6 +127,7 @@ export default function SchemaDiff({
 
   const selectedTarget = targets.find((connection) => connection.id === targetId) ?? null;
   const selectedDiff = selectedTarget ? comparisons.get(selectedTarget.id) : undefined;
+  const counts = selectedDiff ? diffCounts(selectedDiff) : null;
   const baselineLoadError = baseline
     ? refreshErrors[baseline.id] ?? queryById.get(baseline.id)?.error
     : null;
@@ -167,16 +141,12 @@ export default function SchemaDiff({
     }
     return null;
   })();
-  const visibleObjects = useMemo(() => {
-    const normalizedSearch = search.trim().toLocaleLowerCase();
-    return (selectedDiff?.objects ?? []).filter((object) => {
-      if (statusFilter !== "all" && object.status !== statusFilter) return false;
-      if (!normalizedSearch) return true;
-      return `${object.path} ${object.objectType} ${object.baselineValue} ${object.targetValue}`
-        .toLocaleLowerCase()
-        .includes(normalizedSearch);
-    });
-  }, [search, selectedDiff, statusFilter]);
+  const visibleObjects = useMemo(
+    () => (selectedDiff?.objects ?? []).filter(
+      (object) => statusFilter === "all" || object.status === statusFilter,
+    ),
+    [selectedDiff, statusFilter],
+  );
 
   function changeBaseline(nextId: string) {
     setBaselineId(nextId);
@@ -230,50 +200,31 @@ export default function SchemaDiff({
     <WorkbenchPane>
       <SchemaDiffDocumentStrip group={group} onClose={onClose} />
 
-      <WorkbenchToolbar label={t("schemaDiff.detailTitle")}>
-        <span className="tw:shrink-0 tw:text-xs tw:text-muted-foreground">
-          {t("schemaDiff.baseline")}
-        </span>
-        <WorkbenchSelect
-          label={t("schemaDiff.baseline")}
-          value={baseline?.id ?? ""}
-          onChange={changeBaseline}
-        >
-          {group.connections.map((connection) => (
-            <option key={connection.id} value={connection.id}>
-              {connectionName(connection)}
-              {connection.env ? ` · ${connection.env}` : ""}
-            </option>
-          ))}
-        </WorkbenchSelect>
-        <span className="tw:ml-2 tw:shrink-0 tw:text-xs tw:text-muted-foreground">
-          {t("schemaDiff.target")}
-        </span>
-        <WorkbenchSelect
-          label={t("schemaDiff.target")}
-          value={targetId}
-          onChange={setTargetId}
-          disabled={targets.length === 0}
-        >
-          {targets.map((connection) => (
-            <option key={connection.id} value={connection.id}>
-              {connectionName(connection)}
-              {connection.env ? ` · ${connection.env}` : ""}
-            </option>
-          ))}
-        </WorkbenchSelect>
-        <span className="ds-toolbar-spacer" />
-        <Button
-          disabled={refreshing}
-          iconOnly
-          onClick={() => void refreshAll()}
-          size="compact"
-          title={refreshing ? t("schemaDiff.refreshing") : t("schemaDiff.refreshAll")}
-          aria-label={refreshing ? t("schemaDiff.refreshing") : t("schemaDiff.refreshAll")}
-        >
+      <div className="ds-control-row tw:grid tw:shrink-0 tw:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] tw:items-end tw:gap-2 tw:border-b tw:border-border-subtle tw:px-3 tw:py-2">
+        <label className="tw:grid tw:min-w-0 tw:gap-1 tw:text-xs tw:text-muted-foreground">
+          <span>{t("schemaDiff.baseline")}</span>
+          <SelectInput density="compact" value={baseline?.id ?? ""} title={baseline ? connectionName(baseline) : undefined} onChange={(event) => changeBaseline(event.target.value)}>
+            {group.connections.map((connection) => (
+              <option key={connection.id} value={connection.id}>
+                {connectionName(connection)}{connection.env ? ` · ${connection.env}` : ""}
+              </option>
+            ))}
+          </SelectInput>
+        </label>
+        <label className="tw:grid tw:min-w-0 tw:gap-1 tw:text-xs tw:text-muted-foreground">
+          <span>{t("schemaDiff.target")}</span>
+          <SelectInput density="compact" value={targetId} title={selectedTarget ? connectionName(selectedTarget) : undefined} onChange={(event) => setTargetId(event.target.value)} disabled={targets.length === 0}>
+            {targets.map((connection) => (
+              <option key={connection.id} value={connection.id}>
+                {connectionName(connection)}{connection.env ? ` · ${connection.env}` : ""}
+              </option>
+            ))}
+          </SelectInput>
+        </label>
+        <Button disabled={refreshing} iconOnly onClick={() => void refreshAll()} size="compact" variant="ghost" aria-label={refreshing ? t("schemaDiff.refreshing") : t("schemaDiff.refreshAll")}>
           <Icon name="refresh" />
         </Button>
-      </WorkbenchToolbar>
+      </div>
 
       {targets.length === 0 ? (
         <WorkbenchEmptyState icon="database">
@@ -282,46 +233,9 @@ export default function SchemaDiff({
         </WorkbenchEmptyState>
       ) : (
         <section className="tw:flex tw:min-h-0 tw:flex-1 tw:flex-col tw:overflow-hidden">
-          <IdeToolTabStrip label={t("schemaDiff.groupOverview")}>
-            {targets.map((target) => {
-              const result = queryById.get(target.id);
-              const targetError = refreshErrors[target.id] ?? result?.error;
-              const error = baselineLoadError ?? targetError;
-              const diff = comparisons.get(target.id);
-              const counts = diff ? diffCounts(diff) : null;
-              const selected = target.id === targetId;
-              return (
-                <IdeToolTab
-                  key={target.id}
-                  active={selected}
-                  size="document"
-                  onClick={() => setTargetId(target.id)}
-                >
-                  <span className="tw:min-w-0 tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap">
-                    {connectionName(target)}
-                  </span>
-                  {target.env ? <EnvironmentBadge environment={target.env} /> : null}
-                  {error ? (
-                    <Icon name="alert" className="tw:shrink-0 tw:text-danger" />
-                  ) : !diff ? (
-                    <span className="tw:shrink-0 tw:text-muted-foreground">…</span>
-                  ) : diff.total === 0 ? (
-                    <Icon name="check" className="tw:shrink-0 tw:text-success" />
-                  ) : (
-                    <span className="tw:flex tw:shrink-0 tw:items-center tw:gap-1 tw:font-mono tw:text-xs tw:font-bold tw:tabular-nums">
-                      <span className="tw:text-success">+{counts?.added ?? 0}</span>
-                      <span className="tw:text-danger">−{counts?.missing ?? 0}</span>
-                      <span className="tw:text-warning">~{counts?.changed ?? 0}</span>
-                    </span>
-                  )}
-                </IdeToolTab>
-              );
-            })}
-          </IdeToolTabStrip>
-
-          {Object.entries(refreshErrors).length > 0 ? (
+          {Object.entries(refreshErrors).some(([id]) => id !== baseline?.id && id !== selectedTarget?.id) ? (
             <div className="tw:grid tw:shrink-0 tw:gap-1 tw:border-b tw:border-danger-border tw:bg-danger-muted tw:px-3 tw:py-2 tw:text-ui tw:text-danger">
-              {[...Object.entries(refreshErrors)].map(([connectionId, error]) => {
+              {Object.entries(refreshErrors).filter(([id]) => id !== baseline?.id && id !== selectedTarget?.id).map(([connectionId, error]) => {
                 const connection = group.connections.find(
                   (candidate) => candidate.id === connectionId,
                 );
@@ -340,31 +254,16 @@ export default function SchemaDiff({
           ) : null}
 
           <div className="tw:flex tw:min-h-0 tw:flex-1 tw:flex-col tw:overflow-hidden">
-            <WorkbenchToolbar label={t("schemaDiff.filterStatus")} compact>
-              <div className="ds-control-row tw:inline-flex tw:gap-2" role="group" aria-label={t("schemaDiff.filterStatus")}>
+            <div className="ds-control-row tw:flex tw:shrink-0 tw:flex-wrap tw:items-center tw:gap-2 tw:border-b tw:border-border-subtle tw:px-3 tw:py-2">
+              <div className="ds-control-row tw:flex tw:flex-wrap tw:gap-1" role="group" aria-label={t("schemaDiff.filterStatus")}>
                 {(["all", "added", "missing", "changed"] as const).map((status) => (
-                  <button
-                    key={status}
-                    type="button"
-                    className="tw:min-h-control-sm tw:cursor-pointer tw:border-0 tw:border-b-2 tw:border-b-transparent tw:bg-transparent tw:px-2 tw:font-sans tw:text-xs tw:font-bold tw:text-muted-foreground tw:aria-pressed:border-b-primary tw:aria-pressed:text-primary"
-                    aria-pressed={statusFilter === status}
-                    onClick={() => setStatusFilter(status)}
-                  >
+                  <Button key={status} size="xs" variant={statusFilter === status ? "selected" : "ghost"} aria-pressed={statusFilter === status} onClick={() => setStatusFilter(status)}>
                     {status === "all" ? t("schemaDiff.statusAll") : t(STATUS_LABELS[status])}
-                  </button>
+                    <span className="tw:font-mono tw:tabular-nums">{selectedLoadError ? "—" : status === "all" ? selectedDiff?.total ?? "—" : counts?.[status] ?? "—"}</span>
+                  </Button>
                 ))}
               </div>
-              <label className="tw:ml-auto tw:flex tw:w-[min(320px,42%)] tw:items-center tw:gap-2 tw:text-muted-foreground">
-                <Icon name="search" />
-                <TextInput
-                  density="compact"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder={t("schemaDiff.searchPlaceholder")}
-                  aria-label={t("schemaDiff.searchPlaceholder")}
-                />
-              </label>
-            </WorkbenchToolbar>
+            </div>
 
             {selectedLoadError ? (
               <WorkbenchEmptyState icon="alert">
@@ -394,10 +293,9 @@ export default function SchemaDiff({
                 {t("schemaDiff.noMatches")}
               </WorkbenchEmptyState>
             ) : (
-              <SchemaDiffGrid
+              <SchemaDiffResults
+                key={`${catalogScope.key}:${baseline?.id}:${selectedTarget?.id}`}
                 objects={visibleObjects}
-                baseline={baseline}
-                target={selectedTarget}
               />
             )}
           </div>
@@ -438,73 +336,8 @@ function SchemaDiffDocumentStrip({
         }
       >
         {engine ? <EngineMark engine={engine} /> : null}
-        <span>{group.label}</span>
-        <span className="ds-context-badge tw:shrink-0">
-          {t("schemaDiff.groupBadge", { count: group.connections.length })}
-        </span>
+        <span>{t("schemaDiff.tabTitle")}</span>
       </IdeTab>
     </IdeTabStrip>
-  );
-}
-
-function SchemaDiffGrid({
-  objects,
-  baseline,
-  target,
-}: {
-  objects: SchemaObjectDiff[];
-  baseline: ConnectionProfile | null;
-  target: ConnectionProfile | null;
-}) {
-  const { t } = useI18n();
-  return (
-    <div
-      className="tw:flex tw:min-h-0 tw:flex-1 tw:flex-col tw:overflow-hidden tw:[&_[role=columnheader]]:min-w-0 tw:[&_[role=columnheader]]:border-r tw:[&_[role=columnheader]]:border-border-subtle tw:[&_[role=columnheader]]:px-3 tw:[&_[role=columnheader]]:py-2 tw:[&_[role=columnheader]:last-child]:border-r-0 tw:[&_[role=row]]:grid tw:[&_[role=row]]:grid-cols-[minmax(220px,1.2fr)_112px_minmax(160px,1fr)_minmax(160px,1fr)] tw:[&_[role=row]]:items-stretch tw:[&_[role=cell]]:min-w-0 tw:[&_[role=cell]]:border-r tw:[&_[role=cell]]:border-border-subtle tw:[&_[role=cell]]:px-3 tw:[&_[role=cell]]:py-2 tw:[&_[role=cell]:last-child]:border-r-0 tw:max-[920px]:overflow-auto tw:max-[920px]:[&_[role=row]]:min-w-[760px]"
-      role="table"
-      aria-label={t("schemaDiff.detailTitle")}
-    >
-      <div
-        className="tw:shrink-0 tw:border-b tw:border-border-strong tw:bg-muted tw:text-xs tw:font-bold tw:text-muted-foreground"
-        role="row"
-      >
-        <span role="columnheader">{t("schemaDiff.object")}</span>
-        <span role="columnheader">{t("schemaDiff.change")}</span>
-        <span role="columnheader">{baseline ? connectionName(baseline) : t("schemaDiff.baseline")}</span>
-        <span role="columnheader">{target ? connectionName(target) : t("schemaDiff.target")}</span>
-      </div>
-      <div className="tw:min-h-0 tw:overflow-auto">
-        {objects.map((object) => (
-          <div
-            data-status={object.status}
-            className="tw:min-h-12 tw:border-b tw:border-border-subtle tw:bg-background tw:data-[status=added]:shadow-[inset_var(--ds-border-width-bold)_0_0_var(--ds-success)] tw:data-[status=changed]:shadow-[inset_var(--ds-border-width-bold)_0_0_var(--ds-warning)] tw:data-[status=missing]:shadow-[inset_var(--ds-border-width-bold)_0_0_var(--ds-danger)] tw:hover:bg-muted"
-            role="row"
-            key={object.id}
-          >
-            <span className="tw:grid tw:content-center tw:gap-1 tw:overflow-hidden" role="cell">
-              <span className="tw:text-2xs tw:font-bold tw:tracking-[0.04em] tw:text-muted-foreground tw:uppercase">
-                {t(OBJECT_LABELS[object.objectType])}
-              </span>
-              <code className="tw:overflow-hidden tw:font-mono tw:text-sm tw:text-ellipsis tw:whitespace-nowrap">
-                {object.path}
-              </code>
-            </span>
-            <span
-              data-status={object.status}
-              className="tw:flex tw:items-center tw:gap-1 tw:text-xs tw:font-bold tw:data-[status=added]:text-success tw:data-[status=changed]:text-warning tw:data-[status=missing]:text-danger"
-              role="cell"
-            >
-              <span aria-hidden="true">{statusSymbol(object.status)}</span>
-              {t(STATUS_LABELS[object.status])}
-            </span>
-            <code className="tw:flex tw:items-center tw:overflow-hidden tw:font-mono tw:text-sm tw:text-muted-foreground tw:text-ellipsis tw:whitespace-nowrap" role="cell">
-              {object.baselineValue}
-            </code>
-            <code className="tw:flex tw:items-center tw:overflow-hidden tw:font-mono tw:text-sm tw:text-muted-foreground tw:text-ellipsis tw:whitespace-nowrap" role="cell">
-              {object.targetValue}
-            </code>
-          </div>
-        ))}
-      </div>
-    </div>
   );
 }

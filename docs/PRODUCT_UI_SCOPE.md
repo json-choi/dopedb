@@ -145,6 +145,12 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
   마지막 MongoDB 조회 tab을 닫아도 모호한 문서 생성 화면을 만들지 않고 새
   MongoDB 조회 surface를 즉시 유지하며, 조회 가능한 collection이 없으면
   `조회할 컬렉션이 없습니다`라는 정확한 빈 상태만 표시한다.
+- 스키마 비교는 기준 DB·비교 대상을 한 번만 선택하고 변경 건수는 상태 필터에
+  합친다. 관계별 경로를 한 번 표시하고 하위 객체 이름은 말줄임 없이 줄바꿈한다.
+  기준·대상 값을 클릭 없이 나란히 보여 주고, 기준·대상 값은 색과 기호로
+  구분한다. 전체 텍스트는 선택 가능하며 검색·펼치기·별도 안내 도구 행은 두지 않는다.
+  두 값의 나란한 배치와 세로 배치는 viewport가 아니라 실제 workbench 폭을 따른다.
+  스키마 조회·검증 화면이며 migration 작성이나 실행 command를 추가하지 않는다.
 - Personal Workspace의 첫 Welcome은 실제 파일 기반 SQLite, 로컬 Project와
   development Environment, 그 연결의 versioned binding을 한 번에 준비하는
   `가이드 데모` command 하나를 제공할 수 있다. 이 명령은 재실행해도 같은 데모
