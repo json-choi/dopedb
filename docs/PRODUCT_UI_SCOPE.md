@@ -84,6 +84,10 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
   palette와 밝은 중립 palette가 같은 semantic role과 평평한 pane 배치를 공유한다.
   title toolbar는 검색 위아래 여백 없이 32px 높이와 32px action을 사용하고 기존 선형 D 마크를 표시한다.
   헤더 왼쪽의 브랜드 오른쪽 패널 토글은 현재 Explorer·Local History를 닫고 같은 패널을 복원한다.
+  Local History의 선행 뒤로 버튼과 상단 메뉴 재선택은 Explorer로 돌아간다.
+  기록을 보는 동안 Explorer의 검색·펼침·스크롤 상태와 중앙 작업 문맥을 보존하며,
+  좁은 창에서도 같은 drawer 안에서 복귀한다. 이는 SQL revision 비교·이동 기능이
+  아니라 shell의 기본 복귀 경로다.
   AI Chat은 계정과 구분되는 말풍선 아이콘을 사용한다.
   왼쪽은 Workspace 선택과 Databases / Articles 진입을 소유하고 AI Chat 진입은
   헤더 오른쪽 한 곳에 둔다. 탐색 메뉴와 도구·검색·트리는 같은 12px gutter를 공유한다. Article 읽기에서는 큰 serif 제목,

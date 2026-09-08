@@ -96,6 +96,9 @@ fn invoke(scenario: &str, tool_arguments: Option<Value>, human: bool) -> Output 
                 }
                 Err(error) => panic!("{error}"),
             };
+            // macOS can inherit O_NONBLOCK from the listening socket. The
+            // fixture reads complete frames with a bounded blocking timeout.
+            stream.set_nonblocking(false).unwrap();
             stream
                 .set_read_timeout(Some(Duration::from_secs(5)))
                 .unwrap();

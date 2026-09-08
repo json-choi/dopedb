@@ -1,3 +1,5 @@
+// Persisted tool-window selection, visibility, and independently sized Services.
+// Local History is a temporary Explorer view; leaving it restores navigation.
 import { useCallback, useState } from "react";
 
 import { createFrameCoalescer } from "../../lib/frameCoalescer";
@@ -152,7 +154,11 @@ export function useToolWindowLayout() {
       ) {
         return current;
       }
-      const next = { ...current, databaseExplorerOpen: false };
+      const next = {
+        ...current,
+        databaseExplorerOpen: true,
+        leftToolWindow: "databaseExplorer" as const,
+      };
       storeLayout(next);
       return next;
     });
@@ -161,11 +167,10 @@ export function useToolWindowLayout() {
     setLayout((current) => {
       const next = {
         ...current,
-        databaseExplorerOpen:
-          current.leftToolWindow === "localHistory"
-            ? !current.databaseExplorerOpen
-            : true,
-        leftToolWindow: "localHistory" as const,
+        databaseExplorerOpen: true,
+        leftToolWindow: current.databaseExplorerOpen && current.leftToolWindow === "localHistory"
+          ? "databaseExplorer" as const
+          : "localHistory" as const,
       };
       storeLayout(next);
       return next;

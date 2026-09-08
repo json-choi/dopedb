@@ -1,3 +1,4 @@
+// SQL revision selection and restoration, with an explicit return to Explorer.
 import { useEffect, useMemo, useState } from "react";
 
 import { Icon } from "../../components/Icon";
@@ -5,7 +6,6 @@ import { Button } from "../../design-system/components/Button";
 import { LoadingLabel } from "../../design-system/components/Status";
 import {
   ToolWindowHeader,
-  ToolWindowHideButton,
   ToolWindowSearchRow,
   ToolWindowSideSurface,
   ToolWindowVerticalSplit,
@@ -31,7 +31,7 @@ export default function LocalHistoryToolWindow({
   activeDocumentId,
   onActivateDocument,
   onRestoreRevision,
-  onClose,
+  onBack,
   compact = false,
   compactOpen = false,
 }: {
@@ -40,7 +40,7 @@ export default function LocalHistoryToolWindow({
   activeDocumentId: string | null;
   onActivateDocument: (id: string) => void;
   onRestoreRevision: (id: string, content: string) => void;
-  onClose: () => void;
+  onBack: () => void;
   compact?: boolean;
   compactOpen?: boolean;
 }) {
@@ -183,14 +183,19 @@ export default function LocalHistoryToolWindow({
     <ToolWindowSideSurface compact={compact} compactOpen={compactOpen}>
       <ToolWindowHeader
         title={
-          <span className="tw:flex tw:min-w-0 tw:items-center tw:gap-6">
+          <span className="tw:flex tw:min-w-0 tw:items-center tw:gap-1">
+            <Button
+              iconOnly
+              size="xs"
+              variant="ghost"
+              title={t("localHistory.backToExplorer")}
+              onClick={onBack}
+            >
+              <Icon name="arrowLeft" />
+            </Button>
             <span className="tw:truncate">{t("localHistory.title")}</span>
-            <span className="tw:truncate tw:font-medium tw:text-muted-foreground">
-              {t("localHistory.recent")}
-            </span>
           </span>
         }
-        actions={<ToolWindowHideButton label={t("common.close")} onClick={onClose} />}
       />
       <ToolWindowSearchRow>
         <div className="tw:min-w-0 tw:flex-1">

@@ -121,7 +121,7 @@ export function IdeTopBar({
           <ToolbarMenuItem icon="list" onClick={onToggleServices} aria-pressed={servicesOpen}>{t("services.title")}</ToolbarMenuItem>
           <ToolbarMenuItem
             icon={localHistoryOpen ? "check" : "history"}
-            disabled={!selected || !supportsSql}
+            disabled={!localHistoryOpen && (!selected || !supportsSql)}
             onClick={onToggleLocalHistory}
             aria-pressed={localHistoryOpen}
           >

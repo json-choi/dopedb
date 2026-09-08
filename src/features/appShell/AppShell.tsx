@@ -234,7 +234,8 @@ function Shell() {
     toolWindows.closeServices();
     agentDock.close();
     if (open && mobileExplorerOpen) {
-      dismissMobileExplorer();
+      if (panel === "history") toolWindows.closeLocalHistory();
+      else dismissMobileExplorer();
       return;
     }
     if (!open) toggle();
@@ -284,7 +285,14 @@ function Shell() {
       newConnection: () => commands.connections.new(),
       newQuery: commands.documents.openQuery,
       toggleDatabaseExplorer: toolWindows.toggleDatabaseExplorer,
-      showLocalHistory: toolWindows.showLocalHistory,
+      showLocalHistory: () => {
+        toolWindows.showLocalHistory();
+        if (compactShell) {
+          toolWindows.closeServices();
+          agentDock.close();
+          setMobileExplorerOpen(true);
+        }
+      },
       toggleServices: toolWindows.toggleServices,
       openAgent: openOrFocusAgentDock,
       openSettings: (section) => {

@@ -231,7 +231,7 @@ function ShellLayoutContent({ model, commands }: Props) {
   const databaseExplorerVisible = explorer.databaseOpen;
   const environmentDetailOpen = explorer.knowledgeFocus !== null;
   const localHistoryVisible =
-    !environmentDetailOpen && explorer.localHistoryOpen;
+    explorer.localHistoryOpen;
   const leftToolWindowVisible =
     databaseExplorerVisible || localHistoryVisible;
   const servicesVisible = services.open;
@@ -352,11 +352,20 @@ function ShellLayoutContent({ model, commands }: Props) {
             activeDocumentId={workbench.activeDocumentId}
             onActivateDocument={commands.workbench.activateDocument}
             onRestoreRevision={commands.workbench.restoreDocument}
-            onClose={commands.explorer.closeLocalHistory}
+            onBack={() => {
+              commands.explorer.closeLocalHistory();
+              requestAnimationFrame(() => {
+                const target = document.querySelector<HTMLElement>(
+                  '#left-tool-window [role="treeitem"][tabindex="0"]',
+                ) ?? document.querySelector<HTMLElement>('[aria-controls="left-tool-window"]');
+                target?.focus({ preventScroll: true });
+              });
+            }}
             compact={viewport.compact}
             compactOpen={viewport.mobileExplorerOpen}
           />
-        ) : (
+        ) : null}
+        <div hidden={localHistoryVisible} className="tw:h-full tw:min-h-0">
           <DatabaseExplorer
             workspaceHeader={<WorkspaceNavigation
               workspace={<WorkspaceSwitcher onNew={commands.workspace.newConnection} onChanged={commands.workspace.scopeChanged} />}
@@ -400,7 +409,7 @@ function ShellLayoutContent({ model, commands }: Props) {
             }
             onOpenProjectEnvironment={commands.explorer.openProjectEnvironment}
           />
-        )}
+        </div>
       </div>
 
       <button

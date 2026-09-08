@@ -546,9 +546,13 @@ DopeDB의 실제 작업 흐름과 접근성, supported viewport를 위한 제품
 - Services 기본 높이는 동일 상태 참조처럼 viewport의 33%로 시작하고, 사용자가
   조절한 높이는 독립 저장한다. 이전 고정 기본값 280/284px만 새 비율로 한 번
   이관하며 다른 수동 높이는 보존한다.
-- Local History의 현재 `Recent` view는 tool-window header가 소유한다. 실제
-  revision 복원 action은 검색/필터 문맥과 같은 command row에 두고 panel
-  close와 섞지 않는다. project external-change 기능이 생기기 전에는 빈 file
+- Local History header는 선행 뒤로 버튼과 제목 하나를 표시한다. 뒤로 버튼과
+  상단 Local History 메뉴 재선택은 같은 왼쪽 anchor의 Explorer로 복귀한다.
+  Explorer는 숨겨 둔 채 검색·펼침·스크롤 상태를 보존하고, 복귀 시 tree의
+  현재 항목으로 키보드 focus를 돌린다. 항목이 없으면 헤더 패널 토글로 복원한다.
+  패널 숨기기·재표시는 기존 title toolbar 토글만 소유하며 compact drawer도
+  같은 복귀 경로를 사용한다. 실제 revision 복원 action은 검색/필터 문맥과
+  같은 command row에 둔다. project external-change 기능이 생기기 전에는 빈 file
   tree나 가짜 view action을 추가하지 않는다.
 - Services는 tool window 이름과 닫기 action을 전체 폭 `ToolWindowHeader`가
   소유한다. 그 아래에서 실행 가능한 database/document/session tree와
