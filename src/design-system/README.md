@@ -244,12 +244,6 @@ Elevation은 세 단계만 허용한다.
 
 ### React primitive
 
-- `Marketing`의 `WebLink`, `WebNavLink`, `WebBrand`, `WebSection`,
-  `WebEyebrow`, `WebHeading`: 제품 소개 페이지의 링크 상태, 중립 D 마크,
-  넓은 section 간격과 제목 위계를 공유한다. 기존 Desktop token과 Pretendard를
-  사용하며 새 palette나 screen CSS는 만들지 않는다. `src/productSite/`는
-  `product-site/index.html`에서 시작하는 독립 소개 페이지이며 기존 웹이나 Desktop
-  진입점에서는 import하지 않는다. 앱 목업, 가짜 계정이나 데이터 상태를 만들지 않는다.
 - `DopeDBMark`, `workspace-cloud/app/components/Brand`와 `site/app/DopeDBMark`: workspace의
   선형 D 마크를 DopeDB 브랜드 정본으로 공유한다. 공개 사이트 header/footer와
   workspace navigation과 Desktop title toolbar는 이 도형을 사용하고, favicon·OAuth·Tauri bundle
