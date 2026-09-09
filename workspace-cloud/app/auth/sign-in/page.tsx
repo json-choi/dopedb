@@ -110,7 +110,6 @@ export default async function SignInPage({
       </section>
       <footer className="tw:relative tw:z-[1] tw:flex tw:items-center tw:justify-between tw:border-t tw:border-border tw:pt-4 tw:font-mono tw:text-2xs tw:text-muted-foreground">
         <span>DopeDB workspace control plane</span>
-        <span className="tw:max-[800px]:hidden">Seoul · Virginia</span>
       </footer>
     </main>
   );

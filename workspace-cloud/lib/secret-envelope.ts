@@ -5,9 +5,11 @@ import "server-only";
 import { env } from "./env";
 import {
   decodeEnvelopeKey,
-  openEnvelope,
-  sealEnvelope,
 } from "./secret-envelope-core";
+import {
+  openProviderEnvelope as openEnvelope,
+  sealProviderEnvelope as sealEnvelope,
+} from "./provider-credential-envelope";
 
 function key(): Buffer {
   return decodeEnvelopeKey(env.credentialKey());

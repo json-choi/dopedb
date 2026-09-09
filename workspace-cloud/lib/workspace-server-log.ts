@@ -128,6 +128,10 @@ function safeStatus(value: unknown) {
 }
 
 function databaseFailureKind(value: unknown) {
+  if (value === "SQLITE_UNIQUE") return "unique_conflict";
+  if (value === "SQLITE_SCHEMA") return "database_schema";
+  if (value === "SQLITE_BUSY") return "database_unavailable";
+  if (value === "SQLITE_CONSTRAINT") return "other";
   if (typeof value !== "string" || !/^[0-9A-Z]{5}$/.test(value)) return null;
   if (value === "23505") return "unique_conflict";
   if (DATABASE_SCHEMA_ERROR_CODES.has(value)) return "database_schema";
@@ -141,9 +145,21 @@ export function databaseErrorCode(error: unknown) {
     if (!current || typeof current !== "object") return null;
     const code = "code" in current ? current.code : null;
     if (typeof code === "string" && /^[0-9A-Z]{5}$/.test(code)) return code;
+    // D1 wraps SQLite classifications in an Error message. Return only a
+    // closed category; SQL, constraint names and values never enter the log.
+    const message = "message" in current && typeof current.message === "string" ? current.message : "";
+    if (/SQLITE_CONSTRAINT_(UNIQUE|PRIMARYKEY)\b|(?:UNIQUE|PRIMARY KEY) constraint failed:/i.test(message)) return "SQLITE_UNIQUE";
+    if (/SQLITE_CONSTRAINT\b/.test(message)) return "SQLITE_CONSTRAINT";
+    if (/SQLITE_BUSY\b|D1_ERROR:.*overloaded/i.test(message)) return "SQLITE_BUSY";
+    if (/SQLITE_ERROR\b/.test(message)) return "SQLITE_SCHEMA";
     current = "cause" in current ? current.cause : null;
   }
   return null;
+}
+
+export function isUniqueDatabaseConflict(error: unknown) {
+  const code = databaseErrorCode(error);
+  return code === "23505" || code === "SQLITE_UNIQUE";
 }
 
 function emitServerFailure(

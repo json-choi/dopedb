@@ -4,7 +4,9 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
-import { db } from "./db";
+import { queryD1 } from "./d1/database";
+import { atomicD1 } from "./d1/atomic";
+import { utcNow } from "./d1/schema/values";
 import {
   member,
   session,
@@ -13,7 +15,8 @@ import {
   workspaceCredentialLease,
   workspaceProviderIntegration,
   workspaceProviderResource,
-} from "./schema";
+  workspaceProfile,
+} from "./d1/schema";
 import {
   isWorkspaceRole,
   type WorkspaceRoleName,
@@ -114,89 +117,24 @@ export async function claimRevocationGate(
   const claimedAt = new Date();
   const staleBefore = new Date(claimedAt.valueOf() - REVOCATION_CLAIM_STALE_MS);
   const claimId = randomUUID();
-  let rows: ClaimedRow[];
-
-  if (target.kind === "member") {
-    const result = await db.execute<ClaimedRow>(sql`
-      WITH gate_lock AS (
-        SELECT pg_advisory_xact_lock(hashtextextended(${revocationGateLockKey(target)}, 0))
-      ),
-      claimed AS (
-        UPDATE ${member} AS target
-        SET "revocation_pending_at" =
-              COALESCE(target."revocation_pending_at", ${claimedAt}),
-            "revocation_claimed_at" = ${claimedAt},
-            "revocation_claim_id" = ${claimId}::uuid
-        FROM gate_lock
-        WHERE target."id" = ${target.memberId}
-          AND target."organization_id" = ${target.organizationId}
-          AND target."user_id" = ${target.userId}
-          AND (
-            target."revocation_claim_id" IS NULL
-            OR target."revocation_claimed_at" < ${staleBefore}
-          )
-        RETURNING target."revocation_pending_at" AS "pendingAt",
-                  target."role" AS "memberRole"
-      )
-      SELECT * FROM claimed
-    `);
-    rows = result.rows;
-  } else if (target.kind === "connection") {
-    const result = await db.execute<ClaimedRow>(sql`
-      WITH gate_lock AS (
-        SELECT pg_advisory_xact_lock(hashtextextended(${revocationGateLockKey(target)}, 0))
-      ),
-      claimed AS (
-        UPDATE ${workspaceConnection} AS target
-        SET "revision" = CASE
-              WHEN target."revocation_pending_at" IS NULL
-                THEN target."revision" + 1
-              ELSE target."revision"
-            END,
-            "revocation_pending_at" =
-              COALESCE(target."revocation_pending_at", ${claimedAt}),
-            "revocation_claimed_at" = ${claimedAt},
-            "revocation_claim_id" = ${claimId}::uuid
-        FROM gate_lock
-        WHERE target."id" = ${target.connectionId}::uuid
-          AND target."organization_id" = ${target.organizationId}
-          AND target."deleted_at" IS NULL
-          AND (
-            target."revocation_claim_id" IS NULL
-            OR target."revocation_claimed_at" < ${staleBefore}
-          )
-        RETURNING target."revocation_pending_at" AS "pendingAt",
-                  target."revision" AS "connectionRevision"
-      )
-      SELECT * FROM claimed
-    `);
-    rows = result.rows;
-  } else {
-    const result = await db.execute<ClaimedRow>(sql`
-      WITH gate_lock AS (
-        SELECT pg_advisory_xact_lock(hashtextextended(${revocationGateLockKey(target)}, 0))
-      ),
-      claimed AS (
-        UPDATE ${workspaceProviderIntegration} AS target
-        SET "revocation_pending_at" =
-              COALESCE(target."revocation_pending_at", ${claimedAt}),
-            "revocation_claimed_at" = ${claimedAt},
-            "revocation_claim_id" = ${claimId}::uuid
-        FROM gate_lock
-        WHERE target."id" = ${target.integrationId}::uuid
-          AND target."organization_id" = ${target.organizationId}
-          AND target."status" = 'active'
-          AND target."revoked_at" IS NULL
-          AND (
-            target."revocation_claim_id" IS NULL
-            OR target."revocation_claimed_at" < ${staleBefore}
-          )
-        RETURNING target."revocation_pending_at" AS "pendingAt"
-      )
-      SELECT * FROM claimed
-    `);
-    rows = result.rows;
-  }
+  const table = target.kind === "member" ? member
+    : target.kind === "connection" ? workspaceConnection : workspaceProviderIntegration;
+  const identity = target.kind === "member"
+    ? sql`id = ${target.memberId} AND user_id = ${target.userId}`
+    : target.kind === "connection"
+      ? sql`id = ${target.connectionId} AND deleted_at IS NULL`
+      : sql`id = ${target.integrationId} AND status = 'active' AND revoked_at IS NULL`;
+  const revision = target.kind === "connection"
+    ? sql`revision = CASE WHEN revocation_pending_at IS NULL THEN revision + 1 ELSE revision END,`
+    : sql``;
+  const projection = target.kind === "member" ? sql`, role AS memberRole`
+    : target.kind === "connection" ? sql`, revision AS connectionRevision` : sql``;
+  const rows = await queryD1<ClaimedRow>(sql`UPDATE ${table} SET ${revision}
+      revocation_pending_at = COALESCE(revocation_pending_at, ${claimedAt}),
+      revocation_claimed_at = ${claimedAt}, revocation_claim_id = ${claimId}
+    WHERE organization_id = ${target.organizationId} AND ${identity}
+      AND (revocation_claim_id IS NULL OR revocation_claimed_at < ${staleBefore})
+    RETURNING revocation_pending_at AS pendingAt ${projection}`);
   return parsedClaim(target, claimId, claimedAt, rows[0]);
 }
 
@@ -214,42 +152,42 @@ async function updateClaim(
       ? sql`"revocation_claimed_at" = NULL,
             "revocation_claim_id" = NULL`
       : sql`"revocation_claimed_at" = ${nextClaimedAt},
-            "revocation_claim_id" = ${nextClaimId}::uuid`;
+            "revocation_claim_id" = ${nextClaimId}`;
   let result;
   if (claim.kind === "member") {
-    result = await db.execute<{ id: string }>(sql`
+    result = await queryD1<{ id: string }>(sql`
       UPDATE ${member}
       SET ${values}
       WHERE "id" = ${claim.memberId}
         AND "organization_id" = ${claim.organizationId}
         AND "user_id" = ${claim.userId}
         AND "revocation_pending_at" IS NOT NULL
-        AND "revocation_claim_id" = ${claim.claimId}::uuid
+        AND "revocation_claim_id" = ${claim.claimId}
       RETURNING "id"
     `);
   } else if (claim.kind === "connection") {
-    result = await db.execute<{ id: string }>(sql`
+    result = await queryD1<{ id: string }>(sql`
       UPDATE ${workspaceConnection}
       SET ${values}
-      WHERE "id" = ${claim.connectionId}::uuid
+      WHERE "id" = ${claim.connectionId}
         AND "organization_id" = ${claim.organizationId}
         AND "deleted_at" IS NULL
         AND "revocation_pending_at" IS NOT NULL
-        AND "revocation_claim_id" = ${claim.claimId}::uuid
-      RETURNING "id"::text AS "id"
+        AND "revocation_claim_id" = ${claim.claimId}
+      RETURNING "id" AS "id"
     `);
   } else {
-    result = await db.execute<{ id: string }>(sql`
+    result = await queryD1<{ id: string }>(sql`
       UPDATE ${workspaceProviderIntegration}
       SET ${values}
-      WHERE "id" = ${claim.integrationId}::uuid
+      WHERE "id" = ${claim.integrationId}
         AND "organization_id" = ${claim.organizationId}
         AND "revocation_pending_at" IS NOT NULL
-        AND "revocation_claim_id" = ${claim.claimId}::uuid
-      RETURNING "id"::text AS "id"
+        AND "revocation_claim_id" = ${claim.claimId}
+      RETURNING "id" AS "id"
     `);
   }
-  if (result.rows.length !== 1) return false;
+  if (result.length !== 1) return false;
   if (action !== "renew") return true;
   return {
     ...claim,
@@ -295,30 +233,18 @@ export type ManagedLeaseAuthority = {
   accessMode: ManagedAccessMode;
 };
 
-function memberGateKey(input: ManagedLeaseAuthority) {
-  return `member:${input.organizationId}:${input.userId}`;
-}
-
-function connectionGateKey(input: ManagedLeaseAuthority) {
-  return `connection:${input.organizationId}:${input.connectionId}`;
-}
-
-function integrationGateKey(input: ManagedLeaseAuthority) {
-  return `integration:${input.organizationId}:${input.integrationId}`;
-}
-
 function capabilityPredicate(input: ManagedLeaseAuthority) {
   if (input.accessMode === "schema") {
     return sql`${member.role} IN ('admin', 'owner')
         AND ${workspaceConnection.allowWrites} = TRUE
         AND ${workspaceProviderIntegration.provider} IN ('neon', 'gcpCloudSql')
         AND ${workspaceConnection.engine} = 'postgres'
-        AND ${workspaceProviderResource.capabilityManifest} -> 'write' = 'true'::jsonb`;
+        AND json_type(${workspaceProviderResource.capabilityManifest}, '$.write') = 'true'`;
   }
   return input.accessMode === "write"
     ? sql`${member.role} IN ('editor', 'admin', 'owner')
         AND ${workspaceConnection.allowWrites} = TRUE
-        AND ${workspaceProviderResource.capabilityManifest} -> 'write' = 'true'::jsonb`
+        AND json_type(${workspaceProviderResource.capabilityManifest}, '$.write') = 'true'`
     // Target-database access is granted separately from workspace roles. A live
     // workspace viewer with a `use` grant is therefore eligible for a read lease.
     : sql`${member.role} IN ('viewer', 'analyst', 'editor', 'admin', 'owner')`;
@@ -332,7 +258,7 @@ function connectionGrantPredicate(input: ManagedLeaseAuthority) {
       : sql`${workspaceConnectionGrant.capability} IN ('read', 'use', 'manage')`;
   return sql`
     ${workspaceConnectionGrant.organizationId} = ${input.organizationId}
-    AND ${workspaceConnectionGrant.connectionId} = ${input.connectionId}::uuid
+    AND ${workspaceConnectionGrant.connectionId} = ${input.connectionId}
     AND ${workspaceConnectionGrant.memberId} = ${input.memberId}
     AND ${capability}
   `;
@@ -342,7 +268,7 @@ function authorityPredicate(input: ManagedLeaseAuthority) {
   return sql`
     ${session.id} = ${input.sessionId}
     AND ${session.userId} = ${input.userId}
-    AND ${session.expiresAt} > clock_timestamp()
+    AND ${session.expiresAt} > ${utcNow}
     AND ${member.id} = ${input.memberId}
     AND ${member.organizationId} = ${input.organizationId}
     AND ${member.userId} = ${input.userId}
@@ -351,18 +277,18 @@ function authorityPredicate(input: ManagedLeaseAuthority) {
     AND ${member.revocationClaimId} IS NULL
     AND ${capabilityPredicate(input)}
     AND ${connectionGrantPredicate(input)}
-    AND ${workspaceConnection.id} = ${input.connectionId}::uuid
+    AND ${workspaceConnection.id} = ${input.connectionId}
     AND ${workspaceConnection.organizationId} = ${input.organizationId}
     AND ${workspaceConnection.deletedAt} IS NULL
     AND ${workspaceConnection.revocationPendingAt} IS NULL
     AND ${workspaceConnection.revocationClaimId} IS NULL
     AND ${workspaceConnection.credentialMode} = 'managed'
-    AND ${workspaceConnection.providerIntegrationId} = ${input.integrationId}::uuid
-    AND ${workspaceConnection.providerResourceId} = ${input.providerResourceId}::uuid
+    AND ${workspaceConnection.providerIntegrationId} = ${input.integrationId}
+    AND ${workspaceConnection.providerResourceId} = ${input.providerResourceId}
     AND ${workspaceConnection.revision} = ${input.connectionRevision}
     AND ${workspaceConnection.engine} = ${input.engine}
     AND ${workspaceConnection.provider} = ${input.connectionProvider}
-    AND ${workspaceProviderIntegration.id} = ${input.integrationId}::uuid
+    AND ${workspaceProviderIntegration.id} = ${input.integrationId}
     AND ${workspaceProviderIntegration.organizationId} = ${input.organizationId}
     AND ${workspaceProviderIntegration.provider} = ${input.provider}
     AND ${workspaceProviderIntegration.generation} = ${input.integrationGeneration}
@@ -371,9 +297,11 @@ function authorityPredicate(input: ManagedLeaseAuthority) {
     AND ${workspaceProviderIntegration.revokedAt} IS NULL
     AND ${workspaceProviderIntegration.revocationPendingAt} IS NULL
     AND ${workspaceProviderIntegration.revocationClaimId} IS NULL
-    AND ${workspaceProviderResource.id} = ${input.providerResourceId}::uuid
+    AND ${workspaceProviderResource.id} = ${input.providerResourceId}
     AND ${workspaceProviderResource.organizationId} = ${input.organizationId}
     AND ${workspaceProviderResource.provider} = ${input.provider}
+    AND ${workspaceProfile.organizationId} = ${input.organizationId}
+    AND ${workspaceProfile.lifecycleState} = 'active'
   `;
 }
 
@@ -381,101 +309,43 @@ function durableAuthorityStatement(input: ManagedLeaseAuthority) {
   return sql`
     SELECT 1 AS "allowed"
     FROM ${session}, ${member}, ${workspaceConnection}, ${workspaceConnectionGrant},
-         ${workspaceProviderIntegration}, ${workspaceProviderResource}
+         ${workspaceProviderIntegration}, ${workspaceProviderResource}, ${workspaceProfile}
     WHERE ${authorityPredicate(input)}
-    FOR UPDATE
   `;
 }
 
-function authorityLockStatement(input: ManagedLeaseAuthority) {
-  const connectionLock = input.accessMode === "schema"
-    ? sql`pg_advisory_xact_lock(hashtextextended(${connectionGateKey(input)}, 0))`
-    : sql`pg_advisory_xact_lock_shared(hashtextextended(${connectionGateKey(input)}, 0))`;
-  return sql`
-    member_gate_lock AS MATERIALIZED (
-      SELECT pg_advisory_xact_lock_shared(
-        hashtextextended(${memberGateKey(input)}, 0)
-      )
-    ),
-    connection_gate_lock AS MATERIALIZED (
-      SELECT ${connectionLock}
-      FROM member_gate_lock
-    ),
-    integration_gate_lock AS MATERIALIZED (
-      SELECT pg_advisory_xact_lock_shared(
-        hashtextextended(${integrationGateKey(input)}, 0)
-      )
-      FROM connection_gate_lock
-    )
-    SELECT 1 AS "locked" FROM integration_gate_lock
-  `;
-}
-
-export async function reserveManagedLeaseIfUnblocked(
-  input: ManagedLeaseAuthority,
-) {
+export async function reserveManagedLeaseIfUnblocked(input: ManagedLeaseAuthority) {
   const pendingExpiresAt = new Date(Date.now() + PENDING_LEASE_SECONDS * 1_000);
-  const [, result] = await db.batch([
-    db.execute(sql`WITH ${authorityLockStatement(input)}`),
-    db.execute<{ status: string }>(sql`
-    WITH authority AS MATERIALIZED (${durableAuthorityStatement(input)}),
-    schema_authority AS MATERIALIZED (
-      SELECT * FROM authority
-      WHERE ${input.accessMode} <> 'schema'
-         OR NOT EXISTS (
-           SELECT 1 FROM ${workspaceCredentialLease} AS schema_lease
-           WHERE schema_lease."organization_id" = ${input.organizationId}
-             AND schema_lease."connection_id" = ${input.connectionId}::uuid
-             AND schema_lease."access_mode" = 'schema'
-             AND schema_lease."revoked_at" IS NULL
-         )
-    ),
-    free_slots AS (
-      SELECT slot."value" AS "value"
-      FROM schema_authority
-      CROSS JOIN generate_series(1, 5) AS slot("value")
-      WHERE NOT EXISTS (
-        SELECT 1
-        FROM ${workspaceCredentialLease} AS active_lease
-        WHERE active_lease."organization_id" = ${input.organizationId}
-          AND active_lease."connection_id" = ${input.connectionId}::uuid
-          AND active_lease."user_id" = ${input.userId}
-          AND active_lease."active_slot" = slot."value"
-          AND active_lease."revoked_at" IS NULL
-      )
-      ORDER BY slot."value"
-    ),
-    inserted AS (
-      INSERT INTO ${workspaceCredentialLease}
-        ("id", "organization_id", "connection_id", "integration_id", "user_id",
-         "provider", "access_mode", "external_credential_id",
-         "external_credential_kind", "active_slot", "expires_at")
-      SELECT ${input.leaseId}::uuid, ${input.organizationId},
-             ${input.connectionId}::uuid, ${input.integrationId}::uuid,
-             ${input.userId}, ${input.provider}, ${input.accessMode},
-             ${input.leaseId}, 'pending', free_slots."value", ${pendingExpiresAt}
-      FROM free_slots
-      ORDER BY free_slots."value"
-      ON CONFLICT DO NOTHING
-      RETURNING "id"
-    )
-    SELECT CASE
-      WHEN EXISTS (SELECT 1 FROM inserted) THEN 'reserved'
-      WHEN NOT EXISTS (SELECT 1 FROM authority) THEN 'blocked'
-      WHEN NOT EXISTS (SELECT 1 FROM schema_authority) THEN 'schema_busy'
-      ELSE 'limit'
-    END AS "status"
-  `),
-  ]);
-  const status = result.rows[0]?.status;
-  if (
-    status !== "reserved"
-    && status !== "blocked"
-    && status !== "schema_busy"
-    && status !== "limit"
-  ) {
+  const result = await atomicD1({
+    scope: sql`WITH slots(value) AS (VALUES (1), (2), (3), (4), (5))
+      SELECT json_object('allowed', EXISTS (${durableAuthorityStatement(input)}),
+        'schemaBusy', ${input.accessMode} = 'schema' AND EXISTS (
+          SELECT 1 FROM workspace_credential_lease WHERE organization_id = ${input.organizationId}
+            AND connection_id = ${input.connectionId} AND access_mode = 'schema' AND revoked_at IS NULL),
+        'duplicate', EXISTS (SELECT 1 FROM workspace_credential_lease WHERE id = ${input.leaseId}),
+        'slot', (SELECT value FROM slots WHERE NOT EXISTS (
+          SELECT 1 FROM workspace_credential_lease active WHERE active.organization_id = ${input.organizationId}
+            AND active.connection_id = ${input.connectionId} AND active.user_id = ${input.userId}
+            AND active.active_slot = slots.value AND active.revoked_at IS NULL)
+          ORDER BY value LIMIT 1)) AS payload`,
+    statements: (scope) => [
+      sql`INSERT INTO workspace_credential_lease (id, organization_id, connection_id, integration_id,
+          user_id, provider, access_mode, external_credential_id, external_credential_kind, active_slot, expires_at)
+        SELECT ${input.leaseId}, ${input.organizationId}, ${input.connectionId}, ${input.integrationId},
+          ${input.userId}, ${input.provider}, ${input.accessMode}, ${input.leaseId}, 'pending', payload ->> 'slot',
+          ${pendingExpiresAt} FROM (${scope}) WHERE payload ->> 'allowed' = 1 AND payload ->> 'schemaBusy' = 0
+          AND payload ->> 'duplicate' = 0 AND payload ->> 'slot' IS NOT NULL RETURNING id`,
+      sql`SELECT CASE WHEN payload ->> 'allowed' = 0 THEN 'blocked'
+        WHEN payload ->> 'schemaBusy' = 1 THEN 'schema_busy'
+        WHEN payload ->> 'duplicate' = 1 OR payload ->> 'slot' IS NULL THEN 'limit'
+        ELSE 'reserved' END AS status FROM (${scope})`,
+    ],
+  });
+  const status = result.rows[1]?.[0]?.status;
+  if (status !== "reserved" && status !== "blocked" && status !== "schema_busy" && status !== "limit") {
     throw new Error("Invalid managed lease reservation result");
   }
+  if (status === "reserved" && result.rows[0].length !== 1) throw new Error("Managed lease reservation was incomplete");
   return status;
 }
 
@@ -486,9 +356,7 @@ export async function finalizeManagedLeaseIfUnblocked(
 ) {
   const expiresAt = new Date(lease.expiresAt);
   if (Number.isNaN(expiresAt.valueOf())) return false;
-  const [, result] = await db.batch([
-    db.execute(sql`WITH ${authorityLockStatement(input)}`),
-    db.execute<{ id: string }>(sql`
+  const result = await queryD1<{ id: string }>(sql`
     WITH authority AS MATERIALIZED (${durableAuthorityStatement(input)})
     UPDATE ${workspaceCredentialLease} AS lease
     SET "external_credential_id" = ${lease.externalCredentialId},
@@ -496,21 +364,20 @@ export async function finalizeManagedLeaseIfUnblocked(
         "provider_audit_id" = ${providerAuditId},
         "expires_at" = ${expiresAt}
     FROM authority
-    WHERE lease."id" = ${input.leaseId}::uuid
+    WHERE lease."id" = ${input.leaseId}
       AND lease."organization_id" = ${input.organizationId}
-      AND lease."connection_id" = ${input.connectionId}::uuid
-      AND lease."integration_id" = ${input.integrationId}::uuid
+      AND lease."connection_id" = ${input.connectionId}
+      AND lease."integration_id" = ${input.integrationId}
       AND lease."user_id" = ${input.userId}
       AND lease."provider" = ${input.provider}
       AND lease."access_mode" = ${input.accessMode}
       AND lease."external_credential_kind" = 'pending'
       AND lease."revoked_at" IS NULL
-      AND lease."expires_at" > clock_timestamp()
-      AND ${expiresAt} > clock_timestamp()
-    RETURNING lease."id"::text AS "id"
-  `),
-  ]);
-  return result.rows.length === 1;
+      AND lease."expires_at" > ${utcNow}
+      AND ${expiresAt} > ${utcNow}
+    RETURNING "id"
+  `);
+  return result.length === 1;
 }
 
 export async function managedLeaseStillDeliverable(
@@ -520,16 +387,14 @@ export async function managedLeaseStillDeliverable(
 ) {
   const expiresAt = new Date(lease.expiresAt);
   if (Number.isNaN(expiresAt.valueOf())) return false;
-  const [, result] = await db.batch([
-    db.execute(sql`WITH ${authorityLockStatement(input)}`),
-    db.execute<{ id: string }>(sql`
+  const result = await queryD1<{ id: string }>(sql`
     WITH authority AS MATERIALIZED (${durableAuthorityStatement(input)})
-    SELECT lease."id"::text AS "id"
+    SELECT lease."id" AS "id"
     FROM authority, ${workspaceCredentialLease} AS lease
-    WHERE lease."id" = ${input.leaseId}::uuid
+    WHERE lease."id" = ${input.leaseId}
       AND lease."organization_id" = ${input.organizationId}
-      AND lease."connection_id" = ${input.connectionId}::uuid
-      AND lease."integration_id" = ${input.integrationId}::uuid
+      AND lease."connection_id" = ${input.connectionId}
+      AND lease."integration_id" = ${input.integrationId}
       AND lease."user_id" = ${input.userId}
       AND lease."provider" = ${input.provider}
       AND lease."access_mode" = ${input.accessMode}
@@ -538,10 +403,9 @@ export async function managedLeaseStillDeliverable(
       AND lease."external_credential_kind" <> 'pending'
       AND lease."provider_audit_id" = ${providerAuditId}
       AND lease."expires_at" = ${expiresAt}
-      AND lease."expires_at" > clock_timestamp()
+      AND lease."expires_at" > ${utcNow}
       AND lease."revoked_at" IS NULL
     LIMIT 1
-  `),
-  ]);
-  return result.rows.length === 1;
+  `);
+  return result.length === 1;
 }

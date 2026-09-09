@@ -22,6 +22,8 @@ const IGNORED_DIRECTORIES = new Set([
   ".codex",
   ".git",
   ".next",
+  ".open-next",
+  ".wrangler",
   ".turbo",
   "coverage",
   "dist",

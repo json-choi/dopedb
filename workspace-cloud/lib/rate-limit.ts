@@ -2,19 +2,16 @@
 
 import "server-only";
 
-import { sql } from "drizzle-orm";
-
-import { db } from "./db";
-import { rateLimit } from "./schema";
+import { workspaceD1 } from "./d1/database";
+import { consumeD1Budget } from "./d1/rate-limits";
 import { canonicalHash } from "./workspace-versioning";
 
 const DEFAULT_RETENTION_MS = 24 * 60 * 60 * 1_000;
-const OPPORTUNISTIC_CLEANUP_ROWS = 16;
 
 export function forwardedClientKey(headers: Pick<Headers, "get">) {
-  const forwarded = headers.get("x-forwarded-for")?.split(",")[0]?.trim()
-    || headers.get("x-real-ip")?.trim()
-    || "unknown";
+  // Workers supplies this header at the edge. Forwarded chains can contain
+  // caller-supplied prefixes; never let them select a fresh rate-limit bucket.
+  const forwarded = headers.get("cf-connecting-ip")?.trim() || "unknown";
   return canonicalHash({ forwarded });
 }
 
@@ -48,32 +45,12 @@ export async function consumeRateLimit(input: {
   // A fixed-window bucket must encode the window itself. Reusing one row while
   // moving `last_request` on every hit turns low steady traffic into an eternal
   // lockout because the reset condition is never reached. Reclaim a tiny,
-  // oldest-first batch inside this same already-active database statement so
+  // oldest-first batch inside this same already-active atomic database batch so
   // rate-limit hygiene never needs an idle background wake-up.
   const windowStartedAt = Math.floor(now / windowMs) * windowMs;
   const key = `${input.namespace}:${input.discriminator}:${windowStartedAt}`;
   const cutoff = now - retentionMs;
-  const result = await db.execute<{ value: number }>(sql`
-    WITH expired AS MATERIALIZED (
-      SELECT ${rateLimit.id}
-      FROM ${rateLimit}
-      WHERE ${rateLimit.lastRequest} < ${cutoff}
-      ORDER BY ${rateLimit.lastRequest} ASC, ${rateLimit.id} ASC
-      LIMIT ${OPPORTUNISTIC_CLEANUP_ROWS}
-      FOR UPDATE SKIP LOCKED
-    ), deleted AS (
-      DELETE FROM ${rateLimit}
-      USING expired
-      WHERE ${rateLimit.id} = expired."id"
-    ), consumed AS (
-      INSERT INTO ${rateLimit} ("id", "key", "count", "last_request")
-      VALUES (${crypto.randomUUID()}, ${key}, ${cost}, ${now})
-      ON CONFLICT ("key") DO UPDATE SET
-        "count" = ${rateLimit.count} + ${cost},
-        "last_request" = ${now}
-      RETURNING "count" AS "value"
-    )
-    SELECT "value" FROM consumed
-  `);
-  return Number(result.rows[0]?.value ?? Number.POSITIVE_INFINITY) <= input.limit;
+  return consumeD1Budget(workspaceD1(), {
+    id: crypto.randomUUID(), key, now, cutoff, cost, limit: input.limit,
+  });
 }

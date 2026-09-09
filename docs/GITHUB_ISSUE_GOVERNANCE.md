@@ -20,7 +20,7 @@ runner로 연결하는 것도 외부 기여자의 입력과 workflow가 로컬 �
 있어 허용하지 않는다.
 
 대신 로컬 worker가 GitHub Issues API를 60초마다 읽는다. 이슈와 댓글 자체가
-durable queue이므로 별도 DB, GitHub App private key, webhook secret, Vercel cron이
+durable queue이므로 별도 DB, GitHub App private key, webhook secret, Workspace cron이
 필요 없다. Mac이 꺼져 있으면 아무 작업도 하지 않다가 다시 켜졌을 때 변경된
 이슈를 처리한다. 60초보다 짧은 지연이 실제로 필요해질 때만 webhook은 이슈 번호를
 보관하는 비권한 mailbox로 추가하며, 판정과 Codex 로그인은 계속 로컬에 둔다.

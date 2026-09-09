@@ -1,4 +1,5 @@
-import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { inD1Strings } from "@/lib/d1/json";
+import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { verifyGithubWebhook } from "@/lib/knowledge/github-app";
 import { recordGithubSourceRevisions } from "@/lib/knowledge/source-revisions";
@@ -112,7 +113,7 @@ export async function POST(request: Request) {
       id: knowledgeSource.id,
       organizationId: knowledgeSource.organizationId,
     }).from(knowledgeSource).where(and(
-      inArray(knowledgeSource.githubInstallationId, installationIds),
+      inD1Strings(knowledgeSource.githubInstallationId, installationIds),
       eq(knowledgeSource.repositoryId, repositoryId.toString()),
       or(
         eq(knowledgeSource.refName, refName),
@@ -153,7 +154,7 @@ export async function POST(request: Request) {
             : "github_installation_suspended",
           revokedAt: status === "revoked" ? new Date() : null,
           updatedAt: new Date(),
-        }).where(inArray(knowledgeSource.githubInstallationId, installationIds));
+        }).where(inD1Strings(knowledgeSource.githubInstallationId, installationIds));
       } else {
         await db.update(knowledgeSource).set({
           syncState: "ready",
@@ -161,7 +162,7 @@ export async function POST(request: Request) {
           lastFailureCode: null,
           revokedAt: null,
           updatedAt: new Date(),
-        }).where(inArray(
+        }).where(inD1Strings(
           knowledgeSource.githubInstallationId,
           installationIds,
         ));
@@ -185,8 +186,8 @@ export async function POST(request: Request) {
           : null,
         updatedAt: new Date(),
       }).where(and(
-        inArray(knowledgeSource.githubInstallationId, installationIds),
-        inArray(knowledgeSource.repositoryId, changed.map((repository) => repository.id)),
+        inD1Strings(knowledgeSource.githubInstallationId, installationIds),
+        inD1Strings(knowledgeSource.repositoryId, changed.map((repository) => repository.id)),
       ));
     }
   } else if (event === "repository") {
@@ -207,7 +208,7 @@ export async function POST(request: Request) {
           lastFailureCode: unavailable ? "github_repository_unavailable" : null,
           updatedAt: new Date(),
         }).where(and(
-          inArray(knowledgeSource.githubInstallationId, installationIds),
+          inD1Strings(knowledgeSource.githubInstallationId, installationIds),
           eq(knowledgeSource.repositoryId, repository.id),
         ));
       }

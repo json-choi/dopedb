@@ -25,6 +25,7 @@ import {
 import {
   gcpSchemaDatabasePolicySql,
   gcpSchemaOwnerInventorySql,
+  gcpSchemaPolicyPreflightSql,
 } from "./gcp-cloud-schema-policy";
 
 export function responseStatusFailed(value: unknown) {
@@ -39,6 +40,7 @@ export async function executeSql(
   instanceId: string,
   database: string,
   statement: string,
+  rejectionMessage = "Cloud SQL rejected the least-privilege database grant",
 ) {
   const startedAt = Date.now();
   for (;;) {
@@ -73,7 +75,7 @@ export async function executeSql(
       ) {
         throw new ProviderRequestError(
           "gcpCloudSql",
-          "Cloud SQL rejected the least-privilege database grant",
+          rejectionMessage,
           409,
         );
       }
@@ -224,6 +226,15 @@ export async function configurePostgresPrivileges(input: {
     for (const database of input.databases.filter(
       (name) => !["template0", "template1"].includes(name),
     )) {
+      // Check every database before granting roles or configuring any database.
+      await executeSql(
+        input.executor,
+        input.projectId,
+        input.instanceId,
+        database,
+        gcpSchemaPolicyPreflightSql(schemaName),
+        "Cloud SQL schema setup requires a reviewed ownership and application-access policy. Existing object owners and application permissions were not changed.",
+      );
       const inventory = await executeSql(
         input.executor,
         input.projectId,

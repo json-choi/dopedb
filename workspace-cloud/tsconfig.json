@@ -16,7 +16,9 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "react-jsx",
-    "typeRoots": ["./node_modules/@types"],
+    "typeRoots": [
+      "./node_modules/@types"
+    ],
     "incremental": true,
     "plugins": [
       {
@@ -37,6 +39,8 @@
     ".next/dev/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "identity-env.d.ts",
+    "infrastructure/identity-worker.ts"
   ]
 }

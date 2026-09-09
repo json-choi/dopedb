@@ -128,7 +128,7 @@ export async function POST(request: Request, context: RouteContext) {
          "environment_revision", "provider", "display_name", "visibility",
          "github_installation_id", "repository_id", "repository_full_name",
          "ref_name", "commit_sha", "sync_state")
-      SELECT ${body.sourceId}::uuid, ${workspaceId}, environment."project_id",
+      SELECT ${body.sourceId}, ${workspaceId}, environment."project_id",
         environment."id", environment."revision", 'github', ${body.displayName.trim()},
         'shared_graph', installation."id", ${body.repositoryId}, ${repository.full_name},
         ${body.refName}, ${commitSha}, 'ready'
@@ -139,16 +139,16 @@ export async function POST(request: Request, context: RouteContext) {
        AND project."deleted_at" IS NULL
       JOIN ${knowledgeGithubInstallation} AS installation
         ON installation."organization_id" = environment."organization_id"
-       AND installation."id" = ${installation.id}::uuid
+       AND installation."id" = ${installation.id}
        AND installation."status" = 'active'
       WHERE environment."organization_id" = ${workspaceId}
-        AND environment."id" = ${body.projectEnvironmentId}::uuid
-        AND environment."project_id" = ${body.projectId}::uuid
+        AND environment."id" = ${body.projectEnvironmentId}
+        AND environment."project_id" = ${body.projectId}
         AND environment."revision" = ${environment.revision}
         AND ${knowledgeMutationAuthoritySql(authority, workspaceId)}
       ON CONFLICT DO NOTHING
-      RETURNING "id"::text, "sync_revision"::integer AS "syncRevision",
-        "environment_revision"::integer AS "environmentRevision", "commit_sha" AS "commitSha"
+      RETURNING "id", "sync_revision" AS "syncRevision",
+        "environment_revision" AS "environmentRevision", "commit_sha" AS "commitSha"
     `);
     const inserted = insertedResult.rows[0];
     const [source] = inserted ? [inserted] : await db.select({

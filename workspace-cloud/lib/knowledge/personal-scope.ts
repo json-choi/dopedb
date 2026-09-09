@@ -3,8 +3,9 @@
 import "server-only";
 
 import { createHash, randomUUID } from "node:crypto";
-import { neonSql } from "../db";
-import { revocationGateLockKey } from "../revocation-gates";
+import { sql } from "drizzle-orm";
+import { atomicD1 } from "../d1/atomic";
+import { utcNow } from "../d1/schema/values";
 
 const PERSONAL_KNOWLEDGE_NAMESPACE = "dopedb.personal-knowledge.v1";
 const PERSONAL_KNOWLEDGE_METADATA = JSON.stringify({
@@ -22,13 +23,6 @@ export type PersonalKnowledgeProject = {
     riskClass: "production" | "staging" | "development" | "test" | "custom";
     revision: number;
   }>;
-};
-
-type PersonalKnowledgeScopeRow = {
-  workspaceId: string;
-  memberId: string;
-  projectCount: string | number;
-  environmentCount: string | number;
 };
 
 function deterministicUuid(kind: "workspace" | "member", userId: string) {
@@ -64,184 +58,77 @@ export function isPersonalKnowledgeMetadata(metadata: string | null | undefined)
   }
 }
 
-/**
- * Ensure one private server authority per signed-in account and mirror only the
- * Personal Workspace Project/Environment identities needed by GitHub indexing.
- * One SQL statement keeps first-use provisioning and scope projection atomic on
- * the Neon HTTP driver.
- */
+/** Provision the private projection and revalidate its session in one D1 batch. */
 export async function ensurePersonalKnowledgeScope(input: {
   userId: string;
   sessionId: string;
   projects: PersonalKnowledgeProject[];
 }) {
+  const projectIds = input.projects.map((project) => project.id);
+  const environmentIds = input.projects.flatMap((project) => project.environments.map((environment) => environment.id));
+  if (new Set(projectIds).size !== projectIds.length || new Set(environmentIds).size !== environmentIds.length) {
+    throw new Error("Duplicate Personal Knowledge identity");
+  }
   const workspaceId = personalKnowledgeOrganizationId(input.userId);
   const memberId = deterministicUuid("member", input.userId);
   const slugHash = createHash("sha256").update(input.userId, "utf8").digest("hex").slice(0, 24);
   const projects = JSON.stringify(input.projects);
-  const expectedEnvironmentCount = input.projects.reduce(
-    (count, project) => count + project.environments.length,
-    0,
-  );
-  const memberGateLockKey = revocationGateLockKey({
-    kind: "member",
-    organizationId: workspaceId,
-    memberId,
-    userId: input.userId,
-  });
-  const rows = await neonSql.query(
-    `WITH member_gate AS MATERIALIZED (
-       SELECT pg_advisory_xact_lock(hashtextextended($9, 0))
-     ), live_session AS MATERIALIZED (
-       SELECT session."id"
-       FROM "workspace_control"."session" session
-       CROSS JOIN member_gate
-       WHERE session."id" = $10
-         AND session."user_id" = $6
-         AND session."expires_at" > now()
-       FOR UPDATE OF session
-     ), requested_project AS MATERIALIZED (
-       SELECT requested."id", requested."name", requested."revision",
-         requested."environments"
-       FROM jsonb_to_recordset($7::jsonb)
-         AS requested("id" uuid, "name" text, "revision" bigint, "environments" jsonb)
-     ), requested_environment AS MATERIALIZED (
-       SELECT project."id" AS "project_id", environment."id", environment."name",
-         environment."riskClass" AS "risk_class", environment."revision"
-       FROM requested_project project
-       CROSS JOIN LATERAL jsonb_to_recordset(project."environments")
-         AS environment("id" uuid, "name" text, "riskClass" text, "revision" bigint)
-     ), requested_identity_conflict AS MATERIALIZED (
-       SELECT project."id"::text AS "id"
-       FROM requested_project project
-       JOIN "workspace_control"."knowledge_project" existing
-         ON existing."id" = project."id"
-        AND existing."organization_id" <> $1
-       UNION ALL
-       SELECT environment."id"::text AS "id"
-       FROM requested_environment environment
-       JOIN "workspace_control"."knowledge_project_environment" existing
-         ON existing."id" = environment."id"
-        AND existing."organization_id" <> $1
-     ), inserted_organization AS MATERIALIZED (
-       INSERT INTO "workspace_control"."organization"
-         ("id", "name", "slug", "metadata")
-       SELECT $1, 'Personal Knowledge', $3, $4 FROM live_session
-       WHERE NOT EXISTS (SELECT 1 FROM requested_identity_conflict)
-       ON CONFLICT ("id") DO NOTHING
-       RETURNING "id"
-     ), current_organization AS MATERIALIZED (
-       SELECT "id" FROM inserted_organization
-       UNION ALL
-       SELECT organization."id"
-       FROM "workspace_control"."organization" organization
-       CROSS JOIN live_session
-       WHERE organization."id" = $1
-       LIMIT 1
-     ), ensured_profile AS MATERIALIZED (
-       INSERT INTO "workspace_control"."workspace_profile"
-         ("organization_id", "encryption_key_ref", "residency_region")
-       SELECT organization."id", 'pending://' || organization."id", $5
-       FROM current_organization organization
-       WHERE NOT EXISTS (SELECT 1 FROM requested_identity_conflict)
-       ON CONFLICT ("organization_id") DO NOTHING
-       RETURNING "organization_id"
-     ), existing_active_profile AS MATERIALIZED (
-       SELECT profile."organization_id"
-       FROM "workspace_control"."workspace_profile" profile
-       JOIN current_organization organization
-         ON organization."id" = profile."organization_id"
-       CROSS JOIN live_session
-       WHERE profile."lifecycle_state" = 'active'
-       FOR UPDATE OF profile
-     ), active_profile AS MATERIALIZED (
-       SELECT profile."organization_id"
-       FROM ensured_profile profile
-       UNION ALL
-       SELECT profile."organization_id"
-       FROM existing_active_profile profile
-     ), ensured_member AS MATERIALIZED (
-       INSERT INTO "workspace_control"."member"
-         ("id", "organization_id", "user_id", "role")
-       SELECT $2, profile."organization_id", $6, 'owner'
-       FROM active_profile profile
-       WHERE NOT EXISTS (SELECT 1 FROM requested_identity_conflict)
-       ON CONFLICT ("organization_id", "user_id") DO UPDATE SET
-         "role" = 'owner'
-       WHERE "workspace_control"."member"."revocation_pending_at" IS NULL
-       RETURNING "id", "organization_id"
-     ), created_audit AS MATERIALIZED (
-       INSERT INTO "workspace_control"."workspace_audit_event"
-         ("organization_id", "actor_user_id", "action", "resource_type",
-          "resource_id", "redacted_summary", "request_id")
-       SELECT organization."id", $6, 'workspace.create', 'workspace',
-         organization."id", jsonb_build_object('kind', 'personal_knowledge'), $8::uuid
-       FROM inserted_organization organization
-       RETURNING "id"
-     ), ensured_project AS MATERIALIZED (
-       INSERT INTO "workspace_control"."knowledge_project"
-         ("id", "organization_id", "name", "revision", "updated_at")
-       SELECT project."id", organization."organization_id", project."name", project."revision", now()
-       FROM requested_project project
-       CROSS JOIN active_profile organization
-       WHERE NOT EXISTS (SELECT 1 FROM requested_identity_conflict)
-       ON CONFLICT ("id") DO UPDATE SET
-         "name" = EXCLUDED."name",
-         "revision" = EXCLUDED."revision",
-         "updated_at" = now(),
-         "deleted_at" = NULL
-       WHERE "workspace_control"."knowledge_project"."organization_id"
-         = EXCLUDED."organization_id"
-       RETURNING "id", "organization_id"
-     ), ensured_environment AS MATERIALIZED (
-       INSERT INTO "workspace_control"."knowledge_project_environment"
-         ("id", "organization_id", "project_id", "name", "production",
-          "risk_class", "revision", "updated_at")
-       SELECT environment."id", project."organization_id", environment."project_id",
-         environment."name", environment."risk_class" = 'production',
-         environment."risk_class", environment."revision", now()
-       FROM requested_environment environment
-       JOIN ensured_project project ON project."id" = environment."project_id"
-       ON CONFLICT ("id") DO UPDATE SET
-         "name" = EXCLUDED."name",
-         "production" = EXCLUDED."production",
-         "risk_class" = EXCLUDED."risk_class",
-         "revision" = EXCLUDED."revision",
-         "updated_at" = now()
-       WHERE "workspace_control"."knowledge_project_environment"."organization_id"
-           = EXCLUDED."organization_id"
-         AND "workspace_control"."knowledge_project_environment"."project_id"
-           = EXCLUDED."project_id"
-       RETURNING "id"
-     )
-     SELECT organization."id" AS "workspaceId", member."id" AS "memberId",
-       (SELECT count(*) FROM ensured_project)::text AS "projectCount",
-       (SELECT count(*) FROM ensured_environment)::text AS "environmentCount"
-     FROM current_organization organization
-     JOIN active_profile profile ON profile."organization_id" = organization."id"
-     JOIN ensured_member member ON member."organization_id" = organization."id"
-     WHERE NOT EXISTS (SELECT 1 FROM requested_identity_conflict)`,
-    [
-      workspaceId,
-      memberId,
-      `personal-knowledge-${slugHash}`,
-      PERSONAL_KNOWLEDGE_METADATA,
-      process.env.VERCEL_REGION ?? null,
-      input.userId,
-      projects,
-      randomUUID(),
-      memberGateLockKey,
-      input.sessionId,
+  const requestedProjects = sql`SELECT value ->> 'id' AS id, value ->> 'name' AS name,
+    value ->> 'revision' AS revision, value -> 'environments' AS environments
+    FROM json_each(${projects})`;
+  const requestedEnvironments = sql`SELECT project.id AS project_id, environment.value ->> 'id' AS id,
+    environment.value ->> 'name' AS name, environment.value ->> 'riskClass' AS risk_class,
+    environment.value ->> 'revision' AS revision
+    FROM (${requestedProjects}) project, json_each(project.environments) environment`;
+  const outcome = await atomicD1({
+    scope: sql`SELECT json_object('created', NOT EXISTS (SELECT 1 FROM organization WHERE id = ${workspaceId})) AS payload
+      FROM session WHERE id = ${input.sessionId} AND user_id = ${input.userId} AND expires_at > ${utcNow}
+      AND NOT EXISTS (SELECT 1 FROM workspace_profile WHERE organization_id = ${workspaceId} AND lifecycle_state <> 'active')
+      AND NOT EXISTS (SELECT 1 FROM member WHERE organization_id = ${workspaceId} AND user_id = ${input.userId}
+        AND (revocation_pending_at IS NOT NULL OR revocation_claim_id IS NOT NULL))
+      AND NOT EXISTS (SELECT 1 FROM (${requestedProjects}) requested JOIN knowledge_project existing
+        ON existing.id = requested.id WHERE existing.organization_id <> ${workspaceId})
+      AND NOT EXISTS (SELECT 1 FROM (${requestedEnvironments}) requested JOIN knowledge_project_environment existing
+        ON existing.id = requested.id WHERE existing.organization_id <> ${workspaceId} OR existing.project_id <> requested.project_id)`,
+    statements: (scope) => [
+      sql`INSERT INTO organization (id, name, slug, metadata)
+        SELECT ${workspaceId}, 'Personal Knowledge', ${`personal-knowledge-${slugHash}`}, ${PERSONAL_KNOWLEDGE_METADATA}
+        FROM (${scope}) WHERE TRUE ON CONFLICT (id) DO NOTHING`,
+      sql`INSERT INTO workspace_profile (organization_id, encryption_key_ref, residency_region)
+        SELECT ${workspaceId}, ${`pending://${workspaceId}`}, ${process.env.WORKSPACE_DATA_REGION ?? null}
+        FROM (${scope}) WHERE TRUE ON CONFLICT (organization_id) DO NOTHING`,
+      sql`INSERT INTO member (id, organization_id, user_id, role)
+        SELECT ${memberId}, ${workspaceId}, ${input.userId}, 'owner' FROM (${scope}) WHERE TRUE
+        ON CONFLICT (organization_id, user_id) DO UPDATE SET role = 'owner'
+        WHERE member.revocation_pending_at IS NULL AND member.revocation_claim_id IS NULL`,
+      sql`INSERT INTO workspace_audit_event (organization_id, actor_user_id, action, resource_type,
+          resource_id, redacted_summary, request_id)
+        SELECT ${workspaceId}, ${input.userId}, 'workspace.create', 'workspace', ${workspaceId},
+          '{"kind":"personal_knowledge"}', ${randomUUID()} FROM (${scope}) WHERE payload ->> 'created' = 1`,
+      sql`INSERT INTO knowledge_project (id, organization_id, name, revision, updated_at)
+        SELECT requested.id, ${workspaceId}, requested.name, requested.revision, ${utcNow}
+        FROM (${requestedProjects}) requested CROSS JOIN (${scope}) WHERE TRUE
+        ON CONFLICT (id) DO UPDATE SET name = excluded.name, revision = excluded.revision,
+          updated_at = excluded.updated_at, deleted_at = NULL
+        WHERE knowledge_project.organization_id = excluded.organization_id RETURNING id`,
+      sql`INSERT INTO knowledge_project_environment
+          (id, organization_id, project_id, name, production, risk_class, revision, updated_at)
+        SELECT requested.id, ${workspaceId}, requested.project_id, requested.name,
+          requested.risk_class = 'production', requested.risk_class, requested.revision, ${utcNow}
+        FROM (${requestedEnvironments}) requested CROSS JOIN (${scope}) WHERE TRUE
+        ON CONFLICT (id) DO UPDATE SET name = excluded.name, production = excluded.production,
+          risk_class = excluded.risk_class, revision = excluded.revision, updated_at = excluded.updated_at
+        WHERE knowledge_project_environment.organization_id = excluded.organization_id
+          AND knowledge_project_environment.project_id = excluded.project_id RETURNING id`,
+      sql`SELECT member.id AS memberId FROM member CROSS JOIN (${scope})
+        WHERE member.organization_id = ${workspaceId} AND member.user_id = ${input.userId}`,
     ],
-  ) as PersonalKnowledgeScopeRow[];
-  const scope = rows[0];
-  if (
-    !scope
-    || scope.workspaceId !== workspaceId
-    || Number(scope.projectCount) !== input.projects.length
-    || Number(scope.environmentCount) !== expectedEnvironmentCount
-  ) {
+  });
+  const expectedEnvironments = input.projects.reduce((count, project) => count + project.environments.length, 0);
+  const actualMemberId = outcome.rows[6]?.[0]?.memberId;
+  if (!outcome.matched || outcome.rows[4]?.length !== input.projects.length
+    || outcome.rows[5]?.length !== expectedEnvironments || typeof actualMemberId !== "string") {
     throw new Error("Personal Knowledge scope projection was incomplete");
   }
-  return { workspaceId: scope.workspaceId, memberId: scope.memberId };
+  return { workspaceId, memberId: actualMemberId };
 }

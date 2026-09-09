@@ -98,8 +98,9 @@ import workspaceLifecyclePanelSource from "../../../workspace-cloud/app/settings
 import workspaceConnectionsSource from "../../../workspace-cloud/lib/workspace-connections.ts?raw";
 import workspacePermissionsSource from "../../../workspace-cloud/lib/workspace-permissions.ts?raw";
 import workspaceRevocationGatesSource from "../../../workspace-cloud/lib/revocation-gates.ts?raw";
-import workspaceSchemaSource from "../../../workspace-cloud/lib/schema.ts?raw";
+import workspaceSchemaSource from "../../../workspace-cloud/lib/d1/schema/leases.ts?raw";
 import workspaceVersioningStoreSource from "../../../workspace-cloud/lib/workspace-versioning-store.ts?raw";
+import workspaceSnapshotRestoreSource from "../../../workspace-cloud/lib/workspace-snapshot-restore.ts?raw";
 import workspaceSettingsNavigationSource from "../../../workspace-cloud/app/settings/SettingsNavigation.tsx?raw";
 import safetySettingsScreenSource from "../../../src/screens/Settings/Safety/index.tsx?raw";
 import desktopSharedConnectionSource from "../../../src-tauri/src/features/workspaces/adapters/control_plane/connections.rs?raw";
@@ -1116,7 +1117,7 @@ describe("provider credential Tauri adapter", () => {
     expect(providerIntegrationRouteSource).not.toContain("...provider,");
     expect(gcpOAuthSource).toContain('"/api/auth/callback/google"');
     expect(authRouteSource).toContain("isGcpCloudSetupCallback");
-    expect(gcpBootstrapSource).toContain("verifyVercelOidcToken");
+    expect(gcpBootstrapSource).toContain("verifyWorkloadOidcToken");
     expect(gcpBootstrapSource).toContain("roles/iam.workloadIdentityUser");
     expect(gcpBootstrapSource).toContain("configureDatabasePrivileges");
     expect(gcpBootstrapSource).toContain("pg_write_all_data");
@@ -1155,7 +1156,7 @@ describe("provider credential Tauri adapter", () => {
       schemaServiceAccountEmail:
         "dopedb-s-0123456789abcd@example-project.iam.gserviceaccount.com",
       workloadIdentitySubject:
-        "owner:user_1:project:project_1:environment:production",
+        "dopedb:workspace:production",
       databaseNames: ["app"],
       dedicatedServiceAccountsConfirmed: true,
       instanceScopedIamConfirmed: true,
@@ -1186,15 +1187,17 @@ describe("provider credential Tauri adapter", () => {
       writeRole: null,
     });
     expect(schemaPolicySql).toContain("BEGIN; SET LOCAL ROLE NONE");
-    expect(schemaPolicySql).toContain("REVOKE CREATE ON SCHEMA public FROM PUBLIC");
+    expect(schemaPolicySql).not.toContain("REVOKE CREATE ON SCHEMA public FROM PUBLIC");
+    expect(schemaPolicySql).toContain("reviewed PUBLIC privileges");
     expect(schemaPolicySql).toContain(
       "Cloud SQL IAM service-account role exceeds the schema boundary",
     );
-    expect(schemaPolicySql).toContain("owner_row.rolname <> 'cloudsqlsuperuser'");
-    expect(schemaPolicySql).toContain("ALTER TABLE %I.%I OWNER TO %I");
-    expect(schemaPolicySql).toContain("Cloud SQL setup role cannot transfer schema ownership");
+    expect(schemaPolicySql).not.toContain("OWNER TO");
+    expect(schemaPolicySql).toContain("reviewed application ownership migration");
+    expect(schemaPolicySql).toContain("Cloud SQL setup role cannot configure the schema owner");
     expect(schemaPolicySql).toContain("schema login role has an unexpected member");
-    expect(schemaPolicySql).toContain("REVOKE EXECUTE ON ROUTINE %I.%I(%s)");
+    expect(schemaPolicySql).not.toContain("REVOKE EXECUTE ON ROUTINE");
+    expect(schemaPolicySql).toContain("reviewed routine access");
     expect(schemaPolicySql).not.toContain("REVOKE EXECUTE ON ALL FUNCTIONS");
     expect(schemaPolicySql).toContain(
       "ALTER DEFAULT PRIVILEGES REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC",
@@ -1217,8 +1220,8 @@ describe("provider credential Tauri adapter", () => {
       readRole: "dopedb_r_0123456789abcd",
       writeRole: "dopedb_w_0123456789abcd",
     });
-    expect(postgres9SchemaPolicySql).toContain("routine.proisagg");
-    expect(postgres9SchemaPolicySql).toContain("REVOKE EXECUTE ON FUNCTION");
+    expect(postgres9SchemaPolicySql).not.toContain("routine.prokind");
+    expect(postgres9SchemaPolicySql).not.toContain("REVOKE EXECUTE ON FUNCTION %I");
     expect(postgres9SchemaPolicySql).not.toContain("idle_session_timeout");
     expect(gcpBootstrapDatabaseSource).toContain("originalRoles");
     expect(gcpBootstrapSqlSource).toContain("input.bootstrapUser.user");
@@ -1274,7 +1277,6 @@ describe("provider credential Tauri adapter", () => {
     expect(gcpSetupRouteSource).toContain("writeAccess: true");
     expect(gcpSetupRouteSource).toContain("matchesManagedGcpRepairTarget");
     expect(gcpSetupRouteSource).toContain('eq(workspaceConnection.credentialMode, "managed")');
-    expect(connectionGrantsRouteSource).toContain("${workspaceId}::text");
     expect(sharedDatabasePanelSource).toContain("repairManagedConnection");
     expect(managedConnectionRecoveryControllerSource).toContain(
       "saveManagedConnectionRecoveryIntent",
@@ -1326,10 +1328,10 @@ describe("provider credential Tauri adapter", () => {
       'providerAuditId: text("provider_audit_id")',
     );
     expect(providerLeaseCleanupSource).toContain(
-      "'credential.lease.cleanup_deferred'",
+      '"credential.lease.cleanup_deferred"',
     );
     expect(providerLeaseCleanupSource).toContain(
-      "'providerAuditId', deferred.\"provider_audit_id\"",
+      "'providerAuditId', provider_audit_id",
     );
     expect(providerLeaseCleanupSource).toContain('lease.provider !== "vault"');
     expect(managedAccessTargetRouteSource).toContain(
@@ -1351,7 +1353,7 @@ describe("provider credential Tauri adapter", () => {
       "workspaceProviderImportRequest.connectionId, workspaceConnection.id",
     );
     expect(providerProvisioningTargetSource).toContain(
-      "workspaceConnection.providerResource} = ${workspaceProviderResource.resource}",
+      "jsonEqual(workspaceConnection.providerResource, workspaceProviderResource.resource)",
     );
     expect(providerProvisioningTargetSource).toContain(
       "createHash(\"sha256\").update(row.externalAccountId).digest(\"hex\")",
@@ -1521,18 +1523,11 @@ describe("provider credential Tauri adapter", () => {
       ),
     );
     expect(remoteStartFence).toContain("WITH authorized_operation AS MATERIALIZED");
-    expect(remoteStartFence).toContain("), branch_lock AS MATERIALIZED (");
-    expect(remoteStartFence).toContain("'provider-branch:'");
+    expect(remoteStartFence).toContain("await atomicD1({");
     expect(remoteStartFence).toContain("authorized_operation.\"resource_scope\"");
     expect(remoteStartFence).toContain("authorized_operation.\"source_resource_id\"");
     expect(remoteStartFence).toContain("workspaceCredentialLease");
-    expect(remoteStartFence).toContain("active_lease.\"expires_at\" > now()");
-    expect(remoteStartFence.indexOf("WITH authorized_operation")).toBeLessThan(
-      remoteStartFence.indexOf("), branch_lock AS MATERIALIZED ("),
-    );
-    expect(remoteStartFence.indexOf("), branch_lock AS MATERIALIZED (")).toBeLessThan(
-      remoteStartFence.indexOf("), candidate AS MATERIALIZED ("),
-    );
+    expect(remoteStartFence).toContain('active_lease."expires_at" > ${utcNow}');
     expect(providerOperationStoreSource).toContain(
       'key === "credentialFenceFingerprint"',
     );
@@ -1545,17 +1540,10 @@ describe("provider credential Tauri adapter", () => {
     const bootstrapCompletionStart = providerOperationStoreSource.indexOf(
       "export async function completeProviderOperationBootstrap",
     );
-    const bootstrapAuditStart = providerOperationStoreSource.indexOf(
-      "), audited AS (",
-      bootstrapCompletionStart,
-    );
-    const bootstrapUpdateStart = providerOperationStoreSource.indexOf(
-      "), updated AS MATERIALIZED (",
-      bootstrapCompletionStart,
-    );
     expect(bootstrapCompletionStart).toBeGreaterThanOrEqual(0);
-    expect(bootstrapAuditStart).toBeGreaterThan(bootstrapCompletionStart);
-    expect(bootstrapUpdateStart).toBeGreaterThan(bootstrapAuditStart);
+    // Atomic audit rollback and concurrent claims run in the native D1 harness;
+    // PostgreSQL CTE ordering is no longer the persistence contract.
+    expect(providerOperationBootstrapSource).toContain("await atomicD1({");
     expect(neonBootstrapRouteSource).toContain("completeProviderOperationBootstrap");
     expect(neonBootstrapRouteSource).toContain("neonBranchDatabaseFingerprint");
     expect(providerResourcesRouteSource).toContain(
@@ -1569,12 +1557,12 @@ describe("provider credential Tauri adapter", () => {
       'operation."approval_policy" <> \'separate_admin\'',
     );
     expect(providerOperationStoreSource).toContain(
-      'operation."plan_expires_at" > now()',
+      'operation."plan_expires_at" > ${utcNow}',
     );
     expect(providerOperationStoreSource).toContain(
-      'ON CONFLICT ("organization_id", "idempotency_key") DO UPDATE',
+      'idempotency_key = ${input.idempotencyKey}',
     );
-    expect(providerOperationStoreSource).toContain("JOIN audit");
+    expect(providerOperationStoreSource).toContain("INSERT INTO workspace_audit_event");
     expect(providerOperationStoreSource).toContain("canonicalHash(input.plan)");
     expect(providerOperationMarkerSource).toContain("hkdfSync");
     expect(providerOperationMarkerSource).toContain("timingSafeEqual");
@@ -1600,8 +1588,8 @@ describe("provider credential Tauri adapter", () => {
     const switchCompletion = providerOperationStoreSource.slice(switchCompletionStart);
     expect(switchCompletion).toContain("workspaceCredentialLease");
     expect(switchCompletion).toContain('live_lease."revoked_at" IS NULL');
-    expect(switchCompletion).toContain('"content_revision" = connection."content_revision" + 1');
-    expect(switchCompletion).toContain('"provider_resource_id" = target_scope."id"');
+    expect(switchCompletion).toContain("content_revision = content_revision + 1");
+    expect(switchCompletion).toContain("provider_resource_id = (SELECT json_extract(payload, '$.targetId') FROM (${scope}))");
     expect(switchCompletion).toContain("connection.provider_target.switch");
     expect(workspaceBaselineSource).toContain(
       '"approval_policy" text NOT NULL',
@@ -2102,7 +2090,7 @@ describe("provider credential Tauri adapter", () => {
       '"connection.write_policy.update"',
     );
     expect(workspaceVersioningStoreSource).toContain(
-      `member."role" IN ('admin', 'owner')`,
+      "member.role IN ('admin', 'owner')",
     );
     const rawConnectionGrantSql = [
       connectionGrantsRouteSource,
@@ -2117,27 +2105,20 @@ describe("provider credential Tauri adapter", () => {
       );
       expect(source).not.toMatch(/FOR UPDATE OF[^\n]*\bgrant\b/);
     }
-    const providerImportAuditSql = providerImportStoreSource.slice(
-      providerImportStoreSource.indexOf("), audit AS MATERIALIZED ("),
-      providerImportStoreSource.indexOf("), recorded AS MATERIALIZED ("),
-    );
-    expect(providerImportAuditSql).toContain("JOIN fresh ON TRUE");
-    expect(providerImportStoreSource.match(
-      /'productionApproved', \$\{input\.productionApproved\}::boolean/g,
-    )).toHaveLength(2);
-    expect(providerImportStoreSource).toContain("), branch_lock AS MATERIALIZED (");
-    expect(providerImportStoreSource).toContain("'provider-branch:'");
-    expect(providerImportStoreSource).toContain('AS "deletionBlocked"');
+    expect(providerImportStoreSource).toContain("FROM (${fresh})");
+    expect(providerImportStoreSource).toContain("productionApproved: input.productionApproved");
+    expect(providerImportStoreSource).toContain("await atomicD1({");
+    expect(providerImportStoreSource).toContain("WHEN valid.blocked OR EXISTS");
     expect(providerImportStoreSource).toContain(
-      'mutation."kind" = \'neon.branch.delete\'',
+      "mutation.kind = 'neon.branch.delete'",
     );
     expect(providerImportStoreSource).toContain(
-      'mutation."kind" = \'neon.branch.switch\'',
+      "mutation.kind = 'neon.branch.switch'",
     );
     expect(providerImportStoreSource).toContain(
       "'approved', 'claimed', 'remote_started', 'reconciling', 'succeeded'",
     );
-    expect(providerImportAuditSql).toContain("'connection.provider_import'");
+    expect(providerImportStoreSource).toContain("'connection.provider_import'");
     expect(providerImportStoreSource).not.toMatch(
       /connection\.provider_migrate|preservedConnectionId|\breplacing\b|input\.connectionId/,
     );
@@ -2151,7 +2132,8 @@ describe("provider credential Tauri adapter", () => {
 
     expect(workspaceBackupCoreSource).toContain("...parseSharedConnection(template)");
     expect(workspaceBackupCoreSource).not.toContain("parseBackupConnection");
-    expect(workspaceKmsSource).toContain('request.headers.get("x-vercel-oidc-token")');
+    expect(workspaceKmsSource).toContain("await workloadOidcToken()");
+    expect(workspaceKmsSource).not.toContain("request.headers");
     expect(workspaceKmsSource).toContain("https://sts.googleapis.com/v1/token");
     expect(workspaceKmsSource).toContain(":generateAccessToken");
     expect(workspaceKmsSource).not.toMatch(
@@ -2160,8 +2142,8 @@ describe("provider credential Tauri adapter", () => {
     expect(workspaceDataKeySource).toContain("plaintextKey.fill(0)");
     expect(workspaceDataKeySource).toContain("workspace-data-key:");
     expect(workspaceBackupSource).toContain("openWorkspaceMetadataBackupWithKms");
-    expect(workspaceDataKeyRotationSource).toContain("member.\"role\" = 'owner'");
-    expect(workspaceDataKeyRotationSource).toContain('"wrapped_key" = NULL');
+    expect(workspaceDataKeyRotationSource).toContain('role: "owner" }, ["owner"]');
+    expect(workspaceDataKeyRotationSource).toContain("SET wrapped_key = NULL");
     expect(workspaceBaselineSource).toContain(
       'CREATE EXTENSION IF NOT EXISTS "pgcrypto"',
     );
@@ -2202,16 +2184,16 @@ describe("provider credential Tauri adapter", () => {
       "member.revocation_claim_id IS NOT NULL",
     );
     expect(workspaceLifecycleSource).toContain(
-      'AND member."role" = \'owner\'',
+      'role: "owner" }, ["owner"]',
     );
     expect(workspaceLifecycleSource).toContain(
-      'AND organization."name" = ${input.confirmation}',
+      "AND name = ${input.confirmation}",
     );
     expect(workspaceLifecycleSource).toContain(
-      'SET "lifecycle_state" = \'deletion_pending\'',
+      "SET lifecycle_state = 'deletion_pending'",
     );
     expect(workspaceLifecycleSource).toContain(
-      'SET "active_organization_id" = NULL',
+      "SET active_organization_id = NULL",
     );
     expect(workspaceAuthorizationSource).toContain(
       'authority.lifecycleState !== "active"',
@@ -2225,7 +2207,7 @@ describe("provider credential Tauri adapter", () => {
     expect(workspaceSettingsNavigationSource).toContain(
       'item.id === "workspace-settings" && !canDeleteWorkspace',
     );
-    expect(workspaceVersioningStoreSource).toContain("readonlyDefault: true");
-    expect(workspaceVersioningStoreSource).toContain("allowWrites: false");
+    expect(workspaceSnapshotRestoreSource).toContain("readonlyDefault: true");
+    expect(workspaceSnapshotRestoreSource).toContain("allowWrites: false");
   });
 });

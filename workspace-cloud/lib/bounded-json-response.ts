@@ -24,13 +24,22 @@ function jsonMediaType(value: string | null) {
   return mediaType === "application/json" || mediaType.endsWith("+json");
 }
 
-async function cancel(body: ReadableStream<Uint8Array> | null) {
+// Keep the consumed interface structural across browser, Node and Workers types.
+type JsonResponseBody = {
+  cancel(reason?: unknown): Promise<void>;
+  getReader(): {
+    read(): Promise<{ done: true; value?: unknown } | { done: false; value: Uint8Array }>;
+    cancel(reason?: unknown): Promise<void>;
+  };
+} | null;
+
+async function cancel(body: JsonResponseBody) {
   await body?.cancel().catch(() => undefined);
 }
 
 /** Reads and parses one JSON response under an exact streamed byte cap. */
 export async function boundedJsonResponse(
-  response: Response,
+  response: { headers: Pick<Headers, "get">; body: JsonResponseBody },
   maxBytes: number,
 ): Promise<unknown> {
   if (!Number.isSafeInteger(maxBytes) || maxBytes < 1) {

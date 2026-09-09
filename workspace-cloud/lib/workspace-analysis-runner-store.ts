@@ -1,18 +1,11 @@
 // Possession-bound registration for member-owned, foreground-only Desktop runners.
 import "server-only";
 
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 
-import { db } from "./db";
-import { revocationGateLockKey } from "./revocation-gates";
-import {
-  member,
-  workspaceAnalysisArticle,
-  workspaceAnalysisArticleQueryReceipt,
-  workspaceAnalysisArticleRun,
-  workspaceAnalysisRunner,
-  workspaceAuditEvent,
-} from "./schema";
+import { atomicD1 } from "./d1/atomic";
+import { utcNow } from "./d1/schema/values";
+import { workspaceMemberAuthority } from "./d1/member-authority";
 import type { AnalysisRunnerRegistration } from "./workspace-analysis-runs";
 import type { AnalysisRunAuthority } from "./workspace-analysis-run-store";
 import {
@@ -21,14 +14,7 @@ import {
   issueAnalysisRunnerCapability,
 } from "./workspace-analysis-runner-capability";
 
-function memberLockKey(input: { organizationId: string; authority: AnalysisRunAuthority }) {
-  return revocationGateLockKey({
-    kind: "member",
-    organizationId: input.organizationId,
-    memberId: input.authority.membershipId,
-    userId: input.authority.userId,
-  });
-}
+const allRoles = ["viewer", "analyst", "editor", "admin", "owner"] as const;
 
 export async function registerAnalysisRunner(input: {
   organizationId: string;
@@ -48,79 +34,37 @@ export async function registerAnalysisRunner(input: {
   const providedCapabilityHash = input.runnerCapability
     ? hashAnalysisRunnerCapability(input.runnerCapability)
     : null;
-  const requestId = crypto.randomUUID();
-  const result = await db.execute<Record<string, unknown>>(sql`
-    WITH authority_lock AS MATERIALIZED (
-      SELECT pg_advisory_xact_lock(hashtextextended(${memberLockKey(input)}, 0))
-    ), authority AS MATERIALIZED (
-      SELECT member."id" FROM "workspace_control"."session" session
-      JOIN ${member} member
-        ON member."id" = ${input.authority.membershipId}
-       AND member."organization_id" = ${input.organizationId}
-       AND member."user_id" = ${input.authority.userId}
-      JOIN authority_lock ON TRUE
-      WHERE session."id" = ${input.authority.sessionId}
-        AND session."user_id" = ${input.authority.userId}
-        AND session."expires_at" > now()
-        AND member."role" = ${input.authority.role}
-        AND member."revocation_pending_at" IS NULL
-        AND member."revocation_claim_id" IS NULL
-      FOR UPDATE OF session, member
-    ), inserted AS MATERIALIZED (
-      INSERT INTO ${workspaceAnalysisRunner} AS inserted_runner
-        ("organization_id", "member_id", "device_id", "display_name",
-         "runner_capability_hash", "runner_capability_generation",
-         "last_seen_at", "revoked_at")
-      SELECT ${input.organizationId}, authority."id", ${input.registration.deviceId},
-        ${input.registration.displayName}, ${issuedCapabilityHash}, 1, now(), NULL
-      FROM authority
-      ON CONFLICT ("organization_id", "device_id") WHERE "revoked_at" IS NULL DO NOTHING
-      RETURNING inserted_runner.*
-    ), verified AS MATERIALIZED (
-      UPDATE ${workspaceAnalysisRunner} runner
-      SET "display_name" = ${input.registration.displayName},
-        "last_seen_at" = now()
-      FROM authority
-      WHERE runner."organization_id" = ${input.organizationId}
-        AND runner."device_id" = ${input.registration.deviceId}
-        AND runner."member_id" = authority."id" AND runner."revoked_at" IS NULL
-        AND runner."runner_capability_hash" = ${providedCapabilityHash}
-        AND NOT EXISTS (SELECT 1 FROM inserted)
-      RETURNING runner.*
-    ), stored AS MATERIALIZED (
-      SELECT inserted.*, TRUE AS "created" FROM inserted
-      UNION ALL SELECT verified.*, FALSE AS "created" FROM verified
-    ), conflict AS MATERIALIZED (
-      SELECT CASE WHEN runner."member_id" = authority."id"
-            AND ${providedCapabilityHash}::text IS NULL
-            THEN 'missing'
-          ELSE 'invalid' END AS "status"
-      FROM ${workspaceAnalysisRunner} runner JOIN authority ON TRUE
-      WHERE runner."organization_id" = ${input.organizationId}
-        AND runner."device_id" = ${input.registration.deviceId}
-        AND runner."revoked_at" IS NULL
-        AND NOT EXISTS (SELECT 1 FROM stored)
-      LIMIT 1
-    ), audit AS MATERIALIZED (
-      INSERT INTO ${workspaceAuditEvent}
-        ("organization_id", "actor_user_id", "action", "resource_type", "resource_id",
-         "redacted_summary", "request_id")
-      SELECT ${input.organizationId}, ${input.authority.userId}, 'analysis_runner.register',
-        'analysis_runner', stored."id"::text,
-        jsonb_build_object('foregroundOnly', TRUE,
-          'capabilityGeneration', stored."runner_capability_generation",
-          'created', stored."created"), ${requestId}::uuid
-      FROM stored RETURNING "resource_id"
-    )
-    SELECT CASE WHEN stored."created" THEN 'created' ELSE 'verified' END AS "status",
-      stored."id"::text AS "id", stored."device_id" AS "deviceId",
-      stored."display_name" AS "displayName",
-      stored."runner_capability_generation"::double precision AS "runnerCapabilityGeneration",
-      stored."last_seen_at" AS "lastSeenAt"
-    FROM stored JOIN audit ON audit."resource_id" = stored."id"::text
-    UNION ALL SELECT conflict."status", NULL, NULL, NULL, NULL, NULL FROM conflict
-  `);
-  const row = result.rows[0];
+  const runnerId = crypto.randomUUID();
+  const result = await atomicD1({
+    scope: sql`SELECT json_object('id', COALESCE(runner.id, ${runnerId}), 'status', CASE
+        WHEN runner.id IS NULL THEN 'created'
+        WHEN runner.member_id = actor.id AND runner.runner_capability_hash = ${providedCapabilityHash} THEN 'verified'
+        WHEN runner.member_id = actor.id AND ${providedCapabilityHash} IS NULL THEN 'missing'
+        ELSE 'invalid' END) AS payload FROM (${workspaceMemberAuthority(input.organizationId, input.authority, allRoles)}) actor
+      LEFT JOIN workspace_analysis_runner runner ON runner.organization_id = ${input.organizationId}
+        AND runner.device_id = ${input.registration.deviceId} AND runner.revoked_at IS NULL`,
+    statements: (scope) => [
+      sql`INSERT INTO workspace_analysis_runner (id, organization_id, member_id, device_id, display_name,
+          runner_capability_hash, runner_capability_generation, last_seen_at, revoked_at)
+        SELECT ${runnerId}, ${input.organizationId}, ${input.authority.membershipId}, ${input.registration.deviceId},
+          ${input.registration.displayName}, ${issuedCapabilityHash}, 1, ${utcNow}, NULL
+          FROM (${scope}) WHERE payload ->> 'status' = 'created'`,
+      sql`UPDATE workspace_analysis_runner SET display_name = ${input.registration.displayName}, last_seen_at = ${utcNow}
+        WHERE id = (SELECT payload ->> 'id' FROM (${scope}) WHERE payload ->> 'status' = 'verified')`,
+      sql`INSERT INTO workspace_audit_event (organization_id, actor_user_id, action, resource_type,
+          resource_id, redacted_summary, request_id)
+        SELECT ${input.organizationId}, ${input.authority.userId}, 'analysis_runner.register', 'analysis_runner', runner.id,
+          json_object('foregroundOnly', json('true'), 'capabilityGeneration', runner.runner_capability_generation,
+            'created', json(CASE WHEN payload ->> 'status' = 'created' THEN 'true' ELSE 'false' END)),
+          ${crypto.randomUUID()} FROM workspace_analysis_runner runner CROSS JOIN (${scope})
+          WHERE runner.id = payload ->> 'id' AND payload ->> 'status' IN ('created', 'verified')`,
+      sql`SELECT payload ->> 'status' AS status, runner.id, runner.device_id AS deviceId, runner.display_name AS displayName,
+        runner.runner_capability_generation AS runnerCapabilityGeneration, runner.last_seen_at AS lastSeenAt
+        FROM (${scope}) LEFT JOIN workspace_analysis_runner runner ON runner.id = payload ->> 'id'
+          AND payload ->> 'status' IN ('created', 'verified')`,
+    ],
+  });
+  const row = result.rows[3][0];
   if (row?.status === "missing" || row?.status === "invalid"
     || row?.status === "unsupported") return { status: row.status } as const;
   const lastSeenAt = row?.lastSeenAt instanceof Date
@@ -142,68 +86,66 @@ export async function registerAnalysisRunner(input: {
     : row ? ({ status: "invalid" } as const) : null;
 }
 
-export async function revokeAnalysisRunner(input: {
-  organizationId: string;
-  runnerId: string;
-  authority: AnalysisRunAuthority;
+function cleanupSnapshot(runners: SQL) {
+  return sql`SELECT json_object('runnerIds', (SELECT json_group_array(id) FROM (${runners})),
+      'runIds', (SELECT json_group_array(id) FROM workspace_analysis_article_run
+        WHERE runner_id IN (${runners}) AND state IN ('queued', 'running')),
+      'receiptCount', (SELECT count(*) FROM workspace_analysis_article_query_receipt
+        WHERE run_id IN (SELECT id FROM workspace_analysis_article_run WHERE runner_id IN (${runners}) AND state IN ('queued', 'running')))
+    ) AS payload`;
+}
+
+async function cleanupRunnerWork(input: { organizationId: string; authority: AnalysisRunAuthority }, options: {
+  scope: SQL; targetId: string; removal?: { previousRole: string; revokedLeases: number; deferredRevocations: number };
 }) {
-  const requestId = crypto.randomUUID();
-  const result = await db.execute<Record<string, unknown>>(sql`
-    WITH authority_lock AS MATERIALIZED (
-      SELECT pg_advisory_xact_lock(hashtextextended(${memberLockKey(input)}, 0))
-    ), authority AS MATERIALIZED (
-      SELECT member."id" FROM "workspace_control"."session" session
-      JOIN ${member} member
-        ON member."id" = ${input.authority.membershipId}
-       AND member."organization_id" = ${input.organizationId}
-       AND member."user_id" = ${input.authority.userId}
-      JOIN authority_lock ON TRUE
-      WHERE session."id" = ${input.authority.sessionId}
-        AND session."user_id" = ${input.authority.userId}
-        AND session."expires_at" > now() AND member."role" = ${input.authority.role}
-        AND member."revocation_pending_at" IS NULL AND member."revocation_claim_id" IS NULL
-      FOR UPDATE OF session, member
-    ), revoked AS MATERIALIZED (
-      UPDATE ${workspaceAnalysisRunner} runner SET "revoked_at" = now()
-      FROM authority
-      WHERE runner."organization_id" = ${input.organizationId}
-        AND runner."id" = ${input.runnerId}::uuid
-        AND runner."member_id" = authority."id" AND runner."revoked_at" IS NULL
-      RETURNING runner."id"
-    ), stopped_runs AS MATERIALIZED (
-      UPDATE ${workspaceAnalysisArticleRun} run
-      SET "state" = 'stale', "finished_at" = now(),
-        "error_kind" = 'runner_revoked',
-        "error_message" = 'The Desktop runner was revoked before this run completed.'
-      FROM revoked
-      WHERE run."organization_id" = ${input.organizationId}
-        AND run."runner_id" = revoked."id" AND run."state" IN ('queued', 'running')
-      RETURNING run."id"
-    ), discarded_receipts AS MATERIALIZED (
-      DELETE FROM ${workspaceAnalysisArticleQueryReceipt} receipt USING stopped_runs
-      WHERE receipt."organization_id" = ${input.organizationId}
-        AND receipt."run_id" = stopped_runs."id" RETURNING receipt."run_id"
-    ), audit AS MATERIALIZED (
-      INSERT INTO ${workspaceAuditEvent}
-        ("organization_id", "actor_user_id", "action", "resource_type", "resource_id",
-         "redacted_summary", "request_id")
-      SELECT ${input.organizationId}, ${input.authority.userId}, 'analysis_runner.revoke',
-        'analysis_runner', revoked."id"::text,
-        jsonb_build_object('activeRunCount', (SELECT count(*) FROM stopped_runs),
-          'discardedReceiptCount', (SELECT count(*) FROM discarded_receipts)),
-        ${requestId}::uuid
-      FROM revoked RETURNING "resource_id"
-    )
-    SELECT revoked."id"::text AS "id",
-      (SELECT count(*)::int FROM stopped_runs) AS "activeRunCount"
-    FROM revoked JOIN audit ON audit."resource_id" = revoked."id"::text
-  `);
-  const row = result.rows[0];
-  const activeRunCount = Number(row?.activeRunCount);
-  return row && typeof row.id === "string"
-    && Number.isSafeInteger(activeRunCount) && activeRunCount >= 0
-    ? { id: row.id, activeRunCount }
-    : null;
+  const result = await atomicD1({
+    scope: options.scope,
+    statements: (scope) => {
+      const ids = (field: "runIds" | "runnerIds") => sql`SELECT value FROM (${scope}), json_each(payload, ${`$.${field}`})`;
+      return [
+        sql`UPDATE workspace_analysis_runner SET revoked_at = COALESCE(revoked_at, ${utcNow})
+          WHERE organization_id = ${input.organizationId} AND id IN (${ids("runnerIds")})`,
+        sql`UPDATE workspace_analysis_article_run SET state = 'stale', finished_at = ${utcNow}, error_kind = 'runner_revoked',
+            error_message = ${options.removal
+              ? "The Desktop runner owner was removed before this run completed."
+              : "The Desktop runner was revoked before this run completed."}
+          WHERE organization_id = ${input.organizationId} AND id IN (${ids("runIds")})`,
+        sql`DELETE FROM workspace_analysis_article_query_receipt WHERE organization_id = ${input.organizationId}
+          AND run_id IN (${ids("runIds")})`,
+        ...(options.removal ? [sql`DELETE FROM member WHERE organization_id = ${input.organizationId}
+          AND id = ${options.targetId} AND EXISTS (${scope})`] : []),
+        sql`INSERT INTO workspace_audit_event (organization_id, actor_user_id, action, resource_type,
+            resource_id, redacted_summary, request_id)
+          SELECT ${input.organizationId}, ${input.authority.userId}, ${options.removal ? "member.remove" : "analysis_runner.revoke"},
+            ${options.removal ? "member" : "analysis_runner"}, ${options.targetId},
+            ${options.removal
+              ? sql`json_object('previousRole', ${options.removal.previousRole}, 'revokedLeases', ${options.removal.revokedLeases},
+                'deferredRevocations', ${options.removal.deferredRevocations}, 'analysisRunnerCount', json_array_length(payload, '$.runnerIds'),
+                'analysisActiveRunCount', json_array_length(payload, '$.runIds'), 'analysisDiscardedReceiptCount', payload ->> 'receiptCount')`
+              : sql`json_object('activeRunCount', json_array_length(payload, '$.runIds'), 'discardedReceiptCount', payload ->> 'receiptCount')`},
+            ${crypto.randomUUID()} FROM (${scope})`,
+        sql`SELECT json_array_length(payload, '$.runnerIds') AS runnerCount,
+          json_array_length(payload, '$.runIds') AS activeRunCount, payload ->> 'receiptCount' AS discardedReceiptCount FROM (${scope})`,
+      ];
+    },
+  });
+  const row = result.rows.at(-1)?.[0];
+  if (!row) return null;
+  const counts = { runnerCount: Number(row.runnerCount), activeRunCount: Number(row.activeRunCount),
+    discardedReceiptCount: Number(row.discardedReceiptCount) };
+  return Object.values(counts).every((value) => Number.isSafeInteger(value) && value >= 0)
+    ? { id: options.targetId, ...counts } : null;
+}
+
+export async function revokeAnalysisRunner(input: { organizationId: string; runnerId: string; authority: AnalysisRunAuthority }) {
+  const runners = sql`SELECT id FROM workspace_analysis_runner WHERE organization_id = ${input.organizationId}
+    AND id = ${input.runnerId} AND member_id = ${input.authority.membershipId} AND revoked_at IS NULL`;
+  const result = await cleanupRunnerWork(input, {
+    targetId: input.runnerId,
+    scope: sql`SELECT payload FROM (${cleanupSnapshot(runners)}) WHERE EXISTS (${runners})
+      AND EXISTS (${workspaceMemberAuthority(input.organizationId, input.authority, allRoles)})`,
+  });
+  return result ? { id: result.id, activeRunCount: result.activeRunCount } : null;
 }
 
 export async function removeMemberAfterAnalysisRunnerCleanup(input: {
@@ -212,113 +154,18 @@ export async function removeMemberAfterAnalysisRunnerCleanup(input: {
   externalLeaseRevocation: { revoked: number; deferred: number };
   authority: AnalysisRunAuthority;
 }) {
-  const [actorGateLock, targetGateLock = actorGateLock] = [...new Set([
-    memberLockKey(input),
-    revocationGateLockKey({
-      kind: "member",
-      organizationId: input.organizationId,
-      memberId: input.target.memberId,
-      userId: input.target.userId,
-    }),
-  ])].sort();
-  const requestId = crypto.randomUUID();
-  const result = await db.execute<Record<string, unknown>>(sql`
-    WITH actor_gate_lock AS MATERIALIZED (
-      SELECT pg_advisory_xact_lock(hashtextextended(${actorGateLock}, 0))
-    ), target_gate_lock AS MATERIALIZED (
-      SELECT pg_advisory_xact_lock(hashtextextended(${targetGateLock}, 0)) FROM actor_gate_lock
-    ), actor_authority AS MATERIALIZED (
-      SELECT actor_member."id" FROM "workspace_control"."session" actor_session
-      JOIN ${member} actor_member
-        ON actor_member."id" = ${input.authority.membershipId}
-       AND actor_member."organization_id" = ${input.organizationId}
-       AND actor_member."user_id" = ${input.authority.userId}
-      JOIN actor_gate_lock ON TRUE JOIN target_gate_lock ON TRUE
-      WHERE actor_session."id" = ${input.authority.sessionId}
-        AND actor_session."user_id" = ${input.authority.userId}
-        AND actor_session."expires_at" > now()
-        AND actor_member."role" = ${input.authority.role}
-        AND actor_member."role" IN ('admin', 'owner')
-        AND actor_member."revocation_pending_at" IS NULL
-        AND actor_member."revocation_claim_id" IS NULL
-      FOR UPDATE OF actor_session, actor_member
-    ), target_authority AS MATERIALIZED (
-      SELECT target."id", target."organization_id", target."role" FROM ${member} target
-      JOIN actor_authority ON TRUE
-      WHERE target."id" = ${input.target.memberId}
-        AND target."organization_id" = ${input.organizationId}
-        AND target."user_id" = ${input.target.userId}
-        AND target."role" = ${input.target.role} AND target."role" <> 'owner'
-        AND target."revocation_claim_id" = ${input.target.claimId}::uuid
-        AND NOT EXISTS (
-          SELECT 1 FROM ${workspaceAnalysisArticle} owned_article
-          WHERE owned_article."organization_id" = target."organization_id"
-            AND owned_article."owner_member_id" = target."id"
-            AND owned_article."deleted_at" IS NULL
-        )
-      FOR UPDATE OF target
-    ), target_runners AS MATERIALIZED (
-      SELECT runner."id" FROM ${workspaceAnalysisRunner} runner
-      JOIN target_authority
-        ON runner."organization_id" = target_authority."organization_id"
-       AND runner."member_id" = target_authority."id"
-      FOR UPDATE OF runner
-    ), revoked_runners AS MATERIALIZED (
-      UPDATE ${workspaceAnalysisRunner} runner
-      SET "revoked_at" = COALESCE(runner."revoked_at", now())
-      FROM target_runners
-      WHERE runner."organization_id" = ${input.organizationId}
-        AND runner."id" = target_runners."id" RETURNING runner."id"
-    ), stopped_runs AS MATERIALIZED (
-      UPDATE ${workspaceAnalysisArticleRun} run
-      SET "state" = 'stale', "finished_at" = now(),
-        "error_kind" = 'runner_revoked',
-        "error_message" = 'The Desktop runner owner was removed before this run completed.'
-      FROM revoked_runners
-      WHERE run."organization_id" = ${input.organizationId}
-        AND run."runner_id" = revoked_runners."id" AND run."state" IN ('queued', 'running')
-      RETURNING run."id"
-    ), discarded_receipts AS MATERIALIZED (
-      DELETE FROM ${workspaceAnalysisArticleQueryReceipt} receipt USING stopped_runs
-      WHERE receipt."organization_id" = ${input.organizationId}
-        AND receipt."run_id" = stopped_runs."id" RETURNING receipt."run_id"
-    ), cleanup_barrier AS MATERIALIZED (
-      SELECT (SELECT count(*)::int FROM revoked_runners) AS "runnerCount",
-        (SELECT count(*)::int FROM stopped_runs) AS "activeRunCount",
-        (SELECT count(*)::int FROM discarded_receipts) AS "discardedReceiptCount"
-    ), deleted_member AS MATERIALIZED (
-      DELETE FROM ${member} target USING target_authority, cleanup_barrier
-      WHERE target."id" = target_authority."id"
-        AND target."organization_id" = target_authority."organization_id"
-      RETURNING target."id", target."organization_id", target."role"
-    ), audit AS MATERIALIZED (
-      INSERT INTO ${workspaceAuditEvent}
-        ("organization_id", "actor_user_id", "action", "resource_type", "resource_id",
-         "redacted_summary", "request_id")
-      SELECT deleted_member."organization_id", ${input.authority.userId},
-        'member.remove', 'member', deleted_member."id",
-        jsonb_build_object('previousRole', deleted_member."role",
-          'revokedLeases', ${input.externalLeaseRevocation.revoked}::integer,
-          'deferredRevocations', ${input.externalLeaseRevocation.deferred}::integer,
-          'analysisRunnerCount', cleanup_barrier."runnerCount",
-          'analysisActiveRunCount', cleanup_barrier."activeRunCount",
-          'analysisDiscardedReceiptCount', cleanup_barrier."discardedReceiptCount"),
-        ${requestId}::uuid
-      FROM deleted_member CROSS JOIN cleanup_barrier RETURNING "resource_id"
-    )
-    SELECT deleted_member."id"::text AS "id", cleanup_barrier."runnerCount",
-      cleanup_barrier."activeRunCount", cleanup_barrier."discardedReceiptCount"
-    FROM deleted_member CROSS JOIN cleanup_barrier
-    JOIN audit ON audit."resource_id" = deleted_member."id"
-  `);
-  const row = result.rows[0];
-  if (!row || typeof row.id !== "string") return null;
-  const counts = {
-    runnerCount: Number(row.runnerCount),
-    activeRunCount: Number(row.activeRunCount),
-    discardedReceiptCount: Number(row.discardedReceiptCount),
-  };
-  return Object.values(counts).every((value) => Number.isSafeInteger(value) && value >= 0)
-    ? { id: row.id, ...counts }
-    : null;
+  const runners = sql`SELECT id FROM workspace_analysis_runner WHERE organization_id = ${input.organizationId}
+    AND member_id = ${input.target.memberId}`;
+  return cleanupRunnerWork(input, {
+    targetId: input.target.memberId,
+    removal: { previousRole: input.target.role, revokedLeases: input.externalLeaseRevocation.revoked,
+      deferredRevocations: input.externalLeaseRevocation.deferred },
+    scope: sql`SELECT payload FROM (${cleanupSnapshot(runners)}) WHERE
+      EXISTS (${workspaceMemberAuthority(input.organizationId, input.authority, ["admin", "owner"])})
+      AND EXISTS (SELECT 1 FROM member target WHERE target.id = ${input.target.memberId}
+        AND target.organization_id = ${input.organizationId} AND target.user_id = ${input.target.userId}
+        AND target.role = ${input.target.role} AND target.role <> 'owner' AND target.revocation_claim_id = ${input.target.claimId}
+        AND NOT EXISTS (SELECT 1 FROM workspace_analysis_article WHERE organization_id = target.organization_id
+          AND owner_member_id = target.id AND deleted_at IS NULL))`,
+  });
 }

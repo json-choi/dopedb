@@ -1,8 +1,9 @@
 import "server-only";
 
 import { sql } from "drizzle-orm";
-import { db } from "./db";
-import { workspaceProviderDiscoveryReceipt } from "./schema";
+import { queryD1 } from "./d1/database";
+import { utcNow } from "./d1/schema/values";
+import { workspaceProviderDiscoveryReceipt } from "./d1/schema";
 
 const DISCOVERY_RECEIPT_CLEANUP_LIMIT = 50;
 const CONSUMED_RECEIPT_REPLAY_GRACE_MINUTES = 10;
@@ -15,32 +16,16 @@ const CONSUMED_RECEIPT_REPLAY_GRACE_MINUTES = 10;
 export async function cleanupProviderDiscoveryReceipts(
   organizationId?: string,
 ): Promise<number> {
-  const result = await db.execute<{ deleted: number }>(sql`
-    WITH candidates AS MATERIALIZED (
-      SELECT receipt."id"
-      FROM ${workspaceProviderDiscoveryReceipt} AS receipt
-      WHERE (
-          (
-            receipt."consumed_at" IS NULL
-            AND receipt."expires_at" <= clock_timestamp()
-          )
-          OR receipt."consumed_at" <= clock_timestamp()
-            - (${CONSUMED_RECEIPT_REPLAY_GRACE_MINUTES} * interval '1 minute')
-        )
-        ${organizationId
-          ? sql`AND receipt."organization_id" = ${organizationId}`
-          : sql``}
-      ORDER BY COALESCE(receipt."consumed_at", receipt."expires_at"),
-               receipt."id"
-      FOR UPDATE SKIP LOCKED
+  const rows = await queryD1<{ id: string }>(sql`
+    DELETE FROM ${workspaceProviderDiscoveryReceipt} WHERE id IN (
+      SELECT receipt.id FROM ${workspaceProviderDiscoveryReceipt} receipt
+      WHERE ((receipt.consumed_at IS NULL AND receipt.expires_at <= ${utcNow})
+        OR receipt.consumed_at <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now',
+          '-' || ${CONSUMED_RECEIPT_REPLAY_GRACE_MINUTES} || ' minutes'))
+        ${organizationId ? sql`AND receipt.organization_id = ${organizationId}` : sql``}
+      ORDER BY COALESCE(receipt.consumed_at, receipt.expires_at), receipt.id
       LIMIT ${DISCOVERY_RECEIPT_CLEANUP_LIMIT}
-    ), deleted AS (
-      DELETE FROM ${workspaceProviderDiscoveryReceipt} AS receipt
-      USING candidates
-      WHERE receipt."id" = candidates."id"
-      RETURNING receipt."id"
-    )
-    SELECT count(*)::int AS "deleted" FROM deleted
+    ) RETURNING id
   `);
-  return Number(result.rows[0]?.deleted ?? 0);
+  return rows.length;
 }

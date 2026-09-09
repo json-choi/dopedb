@@ -6,6 +6,7 @@ const scriptPolicy = process.env.NODE_ENV === "production"
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  outputFileTracingRoot: fileURLToPath(new URL(process.env.NEXT_PRIVATE_STANDALONE === "true" ? "." : "..", import.meta.url)),
   experimental: {
     useTypeScriptCli: true,
   },

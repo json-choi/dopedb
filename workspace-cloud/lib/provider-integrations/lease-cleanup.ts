@@ -9,13 +9,15 @@ import {
   sql,
 } from "drizzle-orm";
 
-import { db } from "../db";
+import { d1Db as db } from "../d1/database";
+import { atomicD1 } from "../d1/atomic";
+import { utcNow } from "../d1/schema/values";
 import {
   workspaceAuditEvent,
   workspaceConnection,
   workspaceCredentialLease,
   workspaceProviderIntegration,
-} from "../schema";
+} from "../d1/schema";
 import {
   revokePlanetScaleLease,
   type PlanetScaleResource,
@@ -76,107 +78,41 @@ export function managedLeaseAuthorityMatches(input: {
     && input.integrationProvider === input.leaseProvider;
 }
 
-async function markLeaseRevoked(
-  lease: LeaseCleanupRow,
-) {
-  const now = new Date();
+async function persistLeaseCleanup(lease: LeaseCleanupRow, nextAttemptAt?: Date) {
   const cleanupFence = lease.cleanupClaim ? sql`
-      AND lease."cleanup_attempts" = ${lease.cleanupClaim.attempt}
-      AND lease."cleanup_claimed_at" IS NOT NULL` : sql``;
-  const action = lease.cleanupClaim
-    ? "credential.lease.cleanup"
-    : "credential.lease.revoke";
-  // Serialize by the same connection advisory key used by revocation gates so
-  // revocation observes the latest connection authority.
-  const [, result] = await db.batch([
-    db.execute(sql`
-      SELECT pg_advisory_xact_lock(hashtextextended(
-        'connection:' || lease."organization_id" || ':' || lease."connection_id"::text,
-        0
-      ))
-      FROM ${workspaceCredentialLease} AS lease
-      WHERE lease."id" = ${lease.id}::uuid
-    `),
-    db.execute<{ id: string }>(sql`
-    WITH revoked AS (
-      UPDATE ${workspaceCredentialLease} AS lease
-      SET "revoked_at" = ${now}, "cleanup_claimed_at" = NULL,
-          "cleanup_next_attempt_at" = NULL
-      WHERE lease."id" = ${lease.id}::uuid
-        AND lease."revoked_at" IS NULL
-        ${cleanupFence}
-      RETURNING lease."id", lease."organization_id", lease."connection_id",
-                lease."provider", lease."provider_audit_id",
-                lease."external_credential_id", lease."external_credential_kind",
-                lease."cleanup_attempts"
-    ), audited AS (
-      INSERT INTO ${workspaceAuditEvent}
-        ("organization_id", "actor_user_id", "action", "resource_type",
-         "resource_id", "redacted_summary", "request_id", "created_at")
-      SELECT revoked."organization_id", NULL, ${action}, 'credentialLease',
-             revoked."id"::text,
-             jsonb_strip_nulls(jsonb_build_object(
-               'connectionId', revoked."connection_id"::text,
-               'provider', revoked."provider",
-               'providerAuditId', revoked."provider_audit_id",
-               'externalCredentialId', revoked."external_credential_id",
-               'externalCredentialKind', revoked."external_credential_kind",
-               'cleanupAttempt', revoked."cleanup_attempts",
-               'outcome', 'revoked'
-             )),
-             gen_random_uuid(), ${now}
-      FROM revoked
-      RETURNING "id"
-    )
-    SELECT revoked."id"::text AS "id" FROM revoked, audited
-  `),
-  ]);
-  return result.rows.length === 1;
+    AND cleanup_attempts = ${lease.cleanupClaim.attempt} AND cleanup_claimed_at IS NOT NULL` : sql``;
+  const action = nextAttemptAt ? "credential.lease.cleanup_deferred"
+    : lease.cleanupClaim ? "credential.lease.cleanup" : "credential.lease.revoke";
+  const result = await atomicD1({
+    scope: sql`SELECT json_object('summary', json_patch(json_object(
+        'connectionId', connection_id, 'provider', provider,
+        'externalCredentialId', external_credential_id, 'externalCredentialKind', external_credential_kind,
+        'cleanupAttempt', cleanup_attempts, 'outcome', ${nextAttemptAt ? "deferred" : "revoked"}),
+        json_object('providerAuditId', provider_audit_id, 'nextAttemptAt', ${nextAttemptAt ?? null}))) AS payload
+      FROM workspace_credential_lease WHERE id = ${lease.id} AND organization_id = ${lease.organizationId}
+        AND connection_id = ${lease.connectionId} AND integration_id = ${lease.integrationId}
+        AND revoked_at IS NULL ${cleanupFence}`,
+    statements: (scope) => [
+      sql`UPDATE workspace_credential_lease SET cleanup_claimed_at = NULL,
+          cleanup_next_attempt_at = ${nextAttemptAt ?? null},
+          revoked_at = ${nextAttemptAt ? sql`revoked_at` : utcNow}
+        WHERE id = ${lease.id} AND EXISTS (${scope}) RETURNING id`,
+      sql`INSERT INTO workspace_audit_event (organization_id, actor_user_id, action, resource_type,
+          resource_id, redacted_summary, request_id)
+        SELECT ${lease.organizationId}, NULL, ${action}, 'credentialLease', ${lease.id},
+          payload -> 'summary', ${crypto.randomUUID()} FROM (${scope})`,
+    ],
+  });
+  return result.rows[0].length === 1;
+}
+
+async function markLeaseRevoked(lease: LeaseCleanupRow) {
+  return persistLeaseCleanup(lease);
 }
 
 async function scheduleLeaseCleanupRetry(lease: LeaseCleanupRow) {
-  const cleanupClaim = lease.cleanupClaim;
-  if (!cleanupClaim) return false;
-  const nextAttemptAt = new Date(
-    Date.now() + managedLeaseCleanupRetryDelayMs(cleanupClaim.attempt),
-  );
-  const result = await db.execute<{ id: string }>(sql`
-    WITH deferred AS (
-      UPDATE ${workspaceCredentialLease} AS lease
-      SET "cleanup_claimed_at" = NULL,
-          "cleanup_next_attempt_at" = ${nextAttemptAt}
-      WHERE lease."id" = ${lease.id}::uuid
-        AND lease."cleanup_attempts" = ${cleanupClaim.attempt}
-        AND lease."cleanup_claimed_at" IS NOT NULL
-        AND lease."revoked_at" IS NULL
-      RETURNING lease."id", lease."organization_id", lease."connection_id",
-                lease."provider", lease."provider_audit_id",
-                lease."external_credential_id", lease."external_credential_kind",
-                lease."cleanup_attempts"
-    ), audited AS (
-      INSERT INTO ${workspaceAuditEvent}
-        ("organization_id", "actor_user_id", "action", "resource_type",
-         "resource_id", "redacted_summary", "request_id")
-      SELECT deferred."organization_id", NULL,
-             'credential.lease.cleanup_deferred', 'credentialLease',
-             deferred."id"::text,
-             jsonb_strip_nulls(jsonb_build_object(
-               'connectionId', deferred."connection_id"::text,
-               'provider', deferred."provider",
-               'providerAuditId', deferred."provider_audit_id",
-               'externalCredentialId', deferred."external_credential_id",
-               'externalCredentialKind', deferred."external_credential_kind",
-               'cleanupAttempt', deferred."cleanup_attempts",
-               'nextAttemptAt', ${nextAttemptAt},
-               'outcome', 'deferred'
-             )),
-             gen_random_uuid()
-      FROM deferred
-      RETURNING "id"
-    )
-    SELECT deferred."id"::text AS "id" FROM deferred, audited
-  `);
-  return result.rows.length === 1;
+  if (!lease.cleanupClaim) return false;
+  return persistLeaseCleanup(lease, new Date(Date.now() + managedLeaseCleanupRetryDelayMs(lease.cleanupClaim.attempt)));
 }
 
 async function recordLeaseRevocationDeferred(lease: LeaseCleanupRow) {
@@ -214,7 +150,7 @@ async function revokeLeaseRows(
     generation: workspaceProviderIntegration.generation,
     updatedAt: workspaceProviderIntegration.updatedAt,
   }).from(workspaceProviderIntegration).where(and(
-    inArray(workspaceProviderIntegration.id, integrationIds),
+    sql`${workspaceProviderIntegration.id} IN (SELECT value FROM json_each(${JSON.stringify(integrationIds)}))`,
     inArray(workspaceProviderIntegration.status, ["active", "reconnect_required"]),
     isNull(workspaceProviderIntegration.revokedAt),
   ));
@@ -398,113 +334,36 @@ async function claimExpiredManagedLeases(input: {
   integrationId?: string;
   limit: number;
 }): Promise<LeaseCleanupRow[]> {
-  const rankedIntegrationFilter = input.integrationId
-    ? sql`AND ranked_lease."integration_id" = ${input.integrationId}::uuid`
-    : sql``;
-  const candidateIntegrationFilter = input.integrationId
-    ? sql`AND lease."integration_id" = ${input.integrationId}::uuid`
-    : sql``;
-  const result = await db.execute<ClaimedLeaseRow>(sql`
-    WITH ranked AS (
-      SELECT ranked_lease."id",
-             ranked_lease."cleanup_attempts",
-             COALESCE(
-               ranked_lease."cleanup_next_attempt_at",
-               ranked_lease."expires_at"
-             ) AS ready_at,
-             ROW_NUMBER() OVER (
-               PARTITION BY ranked_lease."organization_id"
-               ORDER BY ranked_lease."cleanup_attempts" ASC,
-                        COALESCE(
-                          ranked_lease."cleanup_next_attempt_at",
-                          ranked_lease."expires_at"
-                        ) ASC,
-                        ranked_lease."expires_at" ASC,
-                        ranked_lease."id" ASC
-             ) AS tenant_rank
-      FROM ${workspaceCredentialLease} AS ranked_lease
-      INNER JOIN ${workspaceConnection} AS ranked_connection
-        ON ranked_connection."id" = ranked_lease."connection_id"
-      WHERE ranked_lease."revoked_at" IS NULL
-        AND ranked_lease."expires_at" <= CURRENT_TIMESTAMP
-        AND (
-          ranked_lease."cleanup_next_attempt_at" IS NULL
-          OR ranked_lease."cleanup_next_attempt_at" <= CURRENT_TIMESTAMP
-        )
-        AND (
-          ranked_lease."cleanup_claimed_at" IS NULL
-          OR ranked_lease."cleanup_claimed_at"
-            < CURRENT_TIMESTAMP
-              - (${CLEANUP_CLAIM_STALE_SECONDS} * INTERVAL '1 second')
-        )
-        ${rankedIntegrationFilter}
-    ),
-    candidates AS (
-      SELECT lease."id"
-      FROM ${workspaceCredentialLease} AS lease
-      INNER JOIN ranked ON ranked."id" = lease."id"
-      WHERE lease."revoked_at" IS NULL
-        AND lease."expires_at" <= CURRENT_TIMESTAMP
-        AND (
-          lease."cleanup_next_attempt_at" IS NULL
-          OR lease."cleanup_next_attempt_at" <= CURRENT_TIMESTAMP
-        )
-        AND (
-          lease."cleanup_claimed_at" IS NULL
-          OR lease."cleanup_claimed_at"
-            < CURRENT_TIMESTAMP
-              - (${CLEANUP_CLAIM_STALE_SECONDS} * INTERVAL '1 second')
-        )
-        ${candidateIntegrationFilter}
-      ORDER BY ranked."cleanup_attempts" ASC,
-               ranked.tenant_rank ASC,
-               ranked.ready_at ASC,
-               lease."id" ASC
-      FOR UPDATE OF lease SKIP LOCKED
-      LIMIT ${input.limit}
-    ),
-    claimed AS (
-      UPDATE ${workspaceCredentialLease} AS lease
-      SET "cleanup_claimed_at" = CURRENT_TIMESTAMP,
-          "cleanup_attempts" = lease."cleanup_attempts" + 1
-      FROM candidates
-      WHERE lease."id" = candidates."id"
-      RETURNING lease."id",
-                lease."organization_id",
-                lease."integration_id",
-                lease."user_id",
-                lease."provider",
-                lease."external_credential_id",
-                lease."external_credential_kind",
-                lease."provider_audit_id",
-                lease."expires_at",
-                lease."connection_id",
-                lease."cleanup_attempts"
-    )
-    SELECT claimed."id" AS "id",
-           claimed."organization_id" AS "organizationId",
-           claimed."connection_id"::text AS "connectionId",
-           connection."organization_id" AS "connectionOrganizationId",
-           connection."provider_integration_id"::text AS "connectionIntegrationId",
-           claimed."integration_id" AS "integrationId",
-           claimed."user_id" AS "userId",
-           claimed."provider" AS "provider",
-           claimed."external_credential_id" AS "credentialId",
-           claimed."external_credential_kind" AS "credentialKind",
-           claimed."provider_audit_id" AS "providerAuditId",
-           claimed."expires_at" AS "expiresAt",
-           connection."provider_resource" AS "providerResource",
-           claimed."cleanup_attempts" AS "cleanupAttempt"
-    FROM claimed
-    INNER JOIN ${workspaceConnection} AS connection
-      ON connection."id" = claimed."connection_id"
-    INNER JOIN ranked ON ranked."id" = claimed."id"
-    ORDER BY ranked."cleanup_attempts" ASC,
-             ranked.tenant_rank ASC,
-             ranked.ready_at ASC,
-             claimed."id" ASC
-  `);
-  return result.rows.map((row) => {
+  const integrationFilter = input.integrationId ? sql`AND lease.integration_id = ${input.integrationId}` : sql``;
+  const result = await atomicD1({
+    scope: sql`WITH ranked AS (
+      SELECT lease.id, lease.cleanup_attempts, COALESCE(lease.cleanup_next_attempt_at, lease.expires_at) AS ready_at,
+        row_number() OVER (PARTITION BY lease.organization_id ORDER BY lease.cleanup_attempts,
+          COALESCE(lease.cleanup_next_attempt_at, lease.expires_at), lease.expires_at, lease.id) AS tenant_rank
+      FROM workspace_credential_lease lease JOIN workspace_connection connection ON connection.id = lease.connection_id
+      WHERE lease.revoked_at IS NULL AND lease.expires_at <= ${utcNow}
+        AND (lease.cleanup_next_attempt_at IS NULL OR lease.cleanup_next_attempt_at <= ${utcNow})
+        AND (lease.cleanup_claimed_at IS NULL OR lease.cleanup_claimed_at <
+          strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ${`-${CLEANUP_CLAIM_STALE_SECONDS} seconds`})) ${integrationFilter}
+      ) SELECT json_object('ids', json_group_array(id)) AS payload FROM (
+        SELECT id FROM ranked ORDER BY cleanup_attempts, tenant_rank, ready_at, id LIMIT ${input.limit})`,
+    statements: (scope) => {
+      const ids = sql`SELECT selected.value FROM (${scope}), json_each(payload, '$.ids') selected`;
+      return [
+        sql`UPDATE workspace_credential_lease SET cleanup_claimed_at = ${utcNow}, cleanup_attempts = cleanup_attempts + 1
+          WHERE id IN (${ids})`,
+        sql`SELECT lease.id, lease.organization_id AS organizationId, lease.connection_id AS connectionId,
+          connection.organization_id AS connectionOrganizationId, connection.provider_integration_id AS connectionIntegrationId,
+          lease.integration_id AS integrationId, lease.user_id AS userId, lease.provider,
+          lease.external_credential_id AS credentialId, lease.external_credential_kind AS credentialKind,
+          lease.provider_audit_id AS providerAuditId, lease.expires_at AS expiresAt,
+          connection.provider_resource AS providerResource, lease.cleanup_attempts AS cleanupAttempt
+          FROM workspace_credential_lease lease JOIN workspace_connection connection ON connection.id = lease.connection_id
+          CROSS JOIN (${scope}), json_each(payload, '$.ids') selected WHERE lease.id = selected.value ORDER BY selected.key`,
+      ];
+    },
+  });
+  return (result.rows[1] as ClaimedLeaseRow[]).map((row) => {
     const expiresAt = row.expiresAt instanceof Date
       ? row.expiresAt
       : new Date(row.expiresAt);
@@ -529,7 +388,7 @@ async function claimExpiredManagedLeases(input: {
       credentialKind: row.credentialKind,
       providerAuditId: row.providerAuditId,
       expiresAt,
-      providerResource: row.providerResource,
+      providerResource: typeof row.providerResource === "string" ? JSON.parse(row.providerResource) : row.providerResource,
       cleanupClaim: { attempt: cleanupAttempt },
     };
   });

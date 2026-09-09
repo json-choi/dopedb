@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { sql } from "drizzle-orm";
-import { db } from "@/lib/db";
+import { atomicD1 } from "@/lib/d1/atomic";
+import { utcNow } from "@/lib/d1/schema/values";
 import { env } from "@/lib/env";
 import { isUuid, jsonError, mutationAllowed, privateJson } from "@/lib/http";
 import {
@@ -11,7 +12,6 @@ import {
   knowledgeMutationAuthority,
   knowledgeMutationAuthoritySql,
 } from "@/lib/knowledge/mutation-authority";
-import { knowledgeGithubSetupState } from "@/lib/schema";
 import { authorizeWorkspace } from "@/lib/workspace-authorization";
 
 type RouteContext = { params: Promise<{ workspaceId: string }> };
@@ -28,23 +28,17 @@ export async function POST(request: Request, context: RouteContext) {
   }
   const state = randomBytes(32).toString("base64url");
   const stateHash = createHash("sha256").update(state).digest("hex");
-  const setupResult = await db.execute<{ stateHash: string }>(sql`
-    WITH actor_authority AS MATERIALIZED (
-      SELECT 1 WHERE ${knowledgeMutationAuthoritySql(authority, workspaceId)}
-    ), expired AS (
-      DELETE FROM ${knowledgeGithubSetupState}
-      WHERE "expires_at" < now()
-        AND EXISTS (SELECT 1 FROM actor_authority)
-    ), inserted AS (
-      INSERT INTO ${knowledgeGithubSetupState}
-        ("state_hash", "organization_id", "user_id", "expires_at")
-      SELECT ${stateHash}, ${workspaceId}, ${authorization.session.user.id},
-        now() + interval '10 minutes'
-      FROM actor_authority
-      RETURNING "state_hash" AS "stateHash"
-    )
-    SELECT "stateHash" FROM inserted
-  `);
-  if (setupResult.rows.length !== 1) return jsonError("Workspace access changed", 409);
+  const setupResult = await atomicD1({
+    scope: sql`SELECT '{}' AS payload WHERE ${knowledgeMutationAuthoritySql(authority, workspaceId)}`,
+    statements: (scope) => [
+      sql`DELETE FROM knowledge_github_setup_state WHERE state_hash IN (
+          SELECT state_hash FROM knowledge_github_setup_state WHERE expires_at < ${utcNow} ORDER BY expires_at LIMIT 100)
+        AND EXISTS (${scope})`,
+      sql`INSERT INTO knowledge_github_setup_state (state_hash, organization_id, user_id, expires_at)
+        SELECT ${stateHash}, ${workspaceId}, ${authorization.session.user.id},
+          strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+10 minutes') FROM (${scope}) RETURNING state_hash`,
+    ],
+  });
+  if (setupResult.rows[1].length !== 1) return jsonError("Workspace access changed", 409);
   return privateJson({ authorizationUrl: githubInstallationUrl(state) });
 }

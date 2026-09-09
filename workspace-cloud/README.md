@@ -1,19 +1,19 @@
 # DopeDB Workspace Cloud
 
 This is the authenticated web and API control plane for DopeDB workspaces. It is a
-separate Next.js application intended for its own Vercel project at `app.dopedb.dev`;
+separate Next.js application built with OpenNext for Cloudflare Workers at `app.dopedb.dev`;
 the marketing `site/` deployment remains independent.
 
-It is a separate trust boundary from the Tauri desktop. PostgreSQL stores identity,
+It is a separate trust boundary from the Tauri desktop. Cloudflare D1 stores identity,
 membership, audit metadata, secret-free shared connection templates, and encrypted
 provider integration material. It never stores member-local database passwords,
-terminal capabilities, or ordinary query result rows. Runtime requests use the pooled
-URL; schema migrations use only the unpooled URL.
+terminal capabilities, or ordinary query result rows. Requests use the native `WORKSPACE_DB`
+binding; database URLs and PostgreSQL transaction emulation are not used.
 
 ## Local setup
 
-Copy `.env.example` to the ignored `workspace-cloud/.env.local` and provide the Neon
-pooler/unpooled URLs, Google OAuth web client credentials, a Better Auth secret, the
+Copy `.env.example` to the ignored `workspace-cloud/.env.local` and provide
+Google OAuth web client credentials, a Better Auth secret, the
 exact Better Auth URL, and a random 32-byte base64url `WORKSPACE_CREDENTIAL_KEY`.
 PlanetScale managed access additionally requires `PLANETSCALE_CLIENT_ID` and
 `PLANETSCALE_CLIENT_SECRET`. Generic PostgreSQL/MySQL dynamic access through
@@ -24,11 +24,10 @@ integrations and let all durable lease revocations complete; removing it first
 deliberately makes future broker calls fail closed. Neon and GCP Cloud SQL do not add application
 environment secrets. Set a separate random `CRON_SECRET` for the authenticated
 credential-cleanup and retention routes. Background work is coordinated by the
-separate `workspace-scheduler-cloudflare/` Worker: D1 holds only the credential and
-maintenance due times, while leases, authority, and audit state remain in PostgreSQL.
+separate `workspace-scheduler-cloudflare/` Worker: its own D1 database holds credential and
+maintenance due times, while the Workspace D1 database owns leases, authority, and audit state.
 Event producers record an exact due time; a null receipt leaves the task dormant, so
-an idle workspace makes no periodic Neon query. Do not add an independent Vercel cron:
-polling PostgreSQL prevents Neon from suspending. Managed credentials always expire at
+an idle workspace makes no periodic metadata query. Keep scheduling owned by that Worker. Managed credentials always expire at
 the provider; a missed scheduler wake-up never rejects an otherwise valid lease, and
 the next managed-access request performs a bounded cleanup repair before issuing more
 access. Register this PlanetScale callback:
@@ -73,7 +72,9 @@ http://localhost:3000/api/auth/callback/google
 
 Then run `pnpm install` in this directory and `pnpm workspace:cloud:dev` from the repo
 root. Generate/check migrations with `pnpm db:generate` and `pnpm db:check` here; apply
-them through the unpooled URL with `pnpm workspace:migrate` from the repository root.
+them locally with `pnpm db:migrate --local`, or remotely with
+`WORKSPACE_DEPLOYMENT_ENV=production pnpm db:migrate:production` after verifying the account.
+For a disposable local database, append `--local --persist-to /absolute/local/state`.
 `pnpm build` intentionally succeeds without production secrets: database and auth
 clients resolve configuration on the first request, where missing values fail closed.
 Shared JSX outside this directory resolves its React declarations through
@@ -81,24 +82,32 @@ Shared JSX outside this directory resolves its React declarations through
 Desktop dependencies. React runtime imports retain their normal package resolution:
 Next.js also applies `paths` aliases to browser bundles, so mapping `react/jsx-runtime`
 to a declaration file removes its executable JSX functions and breaks hydration.
-Production Vercel builds run that migration before the Next.js build. The dedicated
-production command requires `DATABASE_URL_UNPOOLED` and does not fall back to the pooled
-runtime URL; a missing URL or migration failure stops the deployment instead of serving
-code against an older control-plane schema.
+The Cloudflare deployment command builds without production secrets, rejects PostgreSQL-only
+runtime SQL, applies the exact D1 migration history, and uploads runtime secrets through stdin.
+Keep production values outside the application directory so Next.js never loads them during a build.
 
-`pnpm db:preflight` checks the configured database without changing its schema.
-Migration files are checked against the applied hashes and timestamps before any
-schema change. A different baseline fails with `MIGRATION_BASELINE_MISMATCH`;
-recover the database deliberately before deploying. Do not skip migrations, erase
-existing data, or record a baseline that the schema does not match.
-The isolated PostgreSQL CI harness exercises fresh production migrations, replay,
-and rejection of an incompatible migration history.
+`pnpm db:preflight` checks the configured D1 database without changing its schema.
+Migration files are compared with both the ordered Wrangler history and exact SHA-256 receipts.
+A changed migration, unknown nonempty database, or incomplete ledger stops deployment.
+Applied files are immutable; add a new migration for schema changes. Historical PostgreSQL
+migration material under `drizzle/` is recovery evidence, not the deployment source.
+`bash scripts/test-provider-import-d1.sh` exercises the production migration entry point on a
+disposable workerd database, rejects tampered receipts and unknown databases, and runs native D1
+atomic mutation and public contract scenarios. The older PostgreSQL-named shell entry point
+forwards to this same harness for existing check callers.
+
+Encrypted metadata backups larger than one D1 row use bounded encrypted chunks. Their manifest,
+chunks, metadata and audit commit in one batch; key rotation and retention keep the same boundary.
+No plaintext backup or member-local credential is added to shared storage.
 
 A local build is not a production deployment receipt. After a requested deployment,
-run `pnpm workspace:cloud:verify-deployment <new-deployment-url-or-id>` from the
-repository root. It waits for that exact deployment, requires `READY`, and verifies
-that `app.dopedb.dev` points to its ID. A failed build or an older production alias
-exits nonzero; an upload acknowledgment is insufficient.
+run `pnpm workspace:cloud:verify-deployment <worker-version-id>` from the
+repository root. It requires that exact version to receive 100% of Worker traffic
+and that `app.dopedb.dev/api/internal/deployment` return its version ID.
+An upload acknowledgment or a different production version is insufficient.
+See [the Cloudflare migration and deployment runbook](../docs/CLOUDFLARE_MIGRATION.md)
+for initial cutover, secret preservation, GCP trust conversion, and rollback.
+The checked-in Worker configuration is the target; that runbook records live rollout status.
 
 Due maintenance deletes at most 1,000 expired rate-limit rows per invocation, so
 retention never adds an unbounded delete to the public request path.
@@ -152,7 +161,7 @@ benchmarked execution design.
 
 Local Folder remains strictly device-local because the cloud cannot observe an
 offline path. Desktop indexes and watches it locally; the hosted source inventory and
-Vercel queue accept GitHub sources only.
+Cloudflare control plane accept GitHub sources only.
 
 ## Neon managed access
 
@@ -253,7 +262,7 @@ shows the permission diff before making those changes. Existing resources are
 revalidated and reused by deterministic identity; a partially completed setup can be
 retried without adding duplicate principals.
 
-At lease time Vercel OIDC is exchanged through GCP STS and IAM Credentials for
+At lease time a service-binding-issued workload ID token is exchanged through GCP STS and IAM Credentials for
 15-minute read/write tokens or a 10-minute PostgreSQL schema token. They reach only the
 native desktop process. The app starts the pinned Google Cloud SQL Auth Proxy from its
 signed bundle, binds it to a random loopback port for that pool, and gives the database
@@ -439,8 +448,8 @@ data must be reset instead of upgraded.
   seals each snapshot with AES-256-GCM and AAD bound to the workspace and opaque backup id.
   Only the Cloud KMS-wrapped DEK is durable. The plaintext DEK exists in request memory for
   the envelope operation and is zeroized before return.
-- KMS authentication is keyless. A Vercel Function request receives an
-  `x-vercel-oidc-token`, exchanges it through the configured GCP Workload Identity Federation
+- KMS uses no Google service-account key. The Workspace Worker obtains a short-lived
+  signed token only through its private identity service binding, exchanges it through GCP Workload Identity Federation
   provider, and impersonates a dedicated service account with encrypt/decrypt access scoped
   to the configured CryptoKey. JSON service-account keys and reusable Google credentials are
   not accepted by the application. A rotation creates a new wrapped DEK version, processes
@@ -515,7 +524,7 @@ hard deletion.
 
 Production must define `WORKSPACE_KMS_KEY_NAME`, `WORKSPACE_KMS_WIF_AUDIENCE`, and
 `WORKSPACE_KMS_SERVICE_ACCOUNT_EMAIL`. The WIF provider must accept only the immutable
-Vercel project/team/environment claims for this production deployment. Grant its principal
+Cloudflare account/workload/environment claims and fixed subject for this production deployment. Grant its principal
 `roles/iam.workloadIdentityUser` on the dedicated service account, and grant that service
 account `roles/cloudkms.cryptoKeyEncrypterDecrypter` on the single backup CryptoKey rather
 than at project scope.
@@ -538,10 +547,9 @@ than at project scope.
   for SCRAM verifiers and the password-only semantics of `VALID UNTIL`.
 - [Cloudflare Cron Triggers](https://developers.cloudflare.com/workers/configuration/cron-triggers/)
   and [D1](https://developers.cloudflare.com/d1/) for the payload-free due-time
-  coordinator; `CRON_SECRET` remains the Bearer boundary on Vercel.
-- [Vercel OIDC for GCP](https://vercel.com/docs/oidc/gcp) and
-  [Vercel OIDC claims](https://vercel.com/docs/oidc/reference) for the exact
-  production-project trust condition, and
+  coordinator; `CRON_SECRET` remains the Bearer boundary on the Workspace Worker.
+- [Cloudflare service bindings](https://developers.cloudflare.com/workers/runtime-apis/bindings/service-bindings/)
+  for private workload token delivery and
   [GCP Workload Identity Federation](https://docs.cloud.google.com/iam/docs/workload-identity-federation)
   for keyless service-account impersonation.
 - [Cloud SQL IAM database authentication](https://docs.cloud.google.com/sql/docs/postgres/iam-authentication)

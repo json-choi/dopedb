@@ -1,1 +1,4 @@
 .vercel
+.open-next/
+.wrangler/
+.dev.vars*

@@ -71,6 +71,9 @@ export function bootstrapResultProjection(
   | "bootstrapPlanHash"
   | "bootstrapReadyAt"
 > | null {
+  if (typeof value === "string") {
+    try { value = JSON.parse(value); } catch { return null; }
+  }
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const result = value as Record<string, unknown>;
   const providerAuditId = result.bootstrapProviderAuditId ?? null;
@@ -172,14 +175,14 @@ export async function listNeonBranchManagedAccessBoundaries(input: {
     throw new Error("Invalid Neon branch managed-access scope");
   }
   const result = await db.execute<NeonBranchManagedAccessRow>(sql`
-    SELECT operation."id"::text AS "id", operation."state" AS "state",
+    SELECT operation."id" AS "id", operation."state" AS "state",
       operation."plan_hash" AS "planHash",
       operation."ownership_marker" AS "ownershipMarker",
       operation."provider_resource_id" AS "providerResourceId",
       operation."redacted_result" AS "redactedResult"
     FROM ${workspaceProviderOperation} AS operation
     WHERE operation."organization_id" = ${input.organizationId}
-      AND operation."integration_id" = ${input.integrationId}::uuid
+      AND operation."integration_id" = ${input.integrationId}
       AND operation."provider" = 'neon'
       AND operation."kind" = 'neon.branch.create'
       AND operation."integration_generation" = ${input.integrationGeneration}

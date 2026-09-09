@@ -4,3 +4,6 @@ overrides:
   sharp: ^0.35.3
 minimumReleaseAge: 1440
 minimumReleaseAgeStrict: true
+allowBuilds:
+  esbuild: true
+  workerd: true

@@ -1,6 +1,7 @@
 // Server-only workspace snapshot encryption. Plaintext exists only between a DB read
 // and envelope operation or restore validation, and is never returned from a route.
 import "server-only";
+import { readBackupEnvelope } from "./d1/backup-chunks";
 
 import {
   openWorkspaceSnapshot,
@@ -84,8 +85,9 @@ export async function openWorkspaceMetadataBackupWithKms(
   if (!dataKey || workspaceDataKeyVersion(dataKey.version) !== binding.keyVersion) {
     throw new WorkspaceKmsError("integrity", 409);
   }
+  const ciphertext = await readBackupEnvelope(input.workspaceId, input.backupId, input.ciphertext);
   return withWorkspaceDataKey(kms, dataKey, (key) =>
-    openWorkspaceSnapshot(key, input.workspaceId, input.backupId, input.ciphertext));
+    openWorkspaceSnapshot(key, input.workspaceId, input.backupId, ciphertext));
 }
 
 export async function openWorkspaceMetadataBackup(input: {

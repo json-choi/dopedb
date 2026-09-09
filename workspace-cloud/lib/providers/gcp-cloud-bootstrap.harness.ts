@@ -1,6 +1,7 @@
 // Behavioral coverage of the Google response → setup readiness boundary.
 // All identities and tokens are synthetic; no cloud resources are contacted.
 import { expect, vi } from "vitest";
+import { configurePostgresPrivileges } from "./gcp-cloud-bootstrap-sql";
 import { googleRequest } from "./gcp-cloud-bootstrap-core";
 import { requestGcpBootstrap } from "../../features/providerAccess/gcpBootstrapTransport";
 import { gcpJsonRequest, GcpManagedAccessRequestError } from "./gcp-cloud-managed-http";
@@ -10,13 +11,13 @@ import { gcpWifPrincipal, parseGcpCloudSqlCredential } from "./gcp-cloud-sql-cor
 const credential = parseGcpCloudSqlCredential({
   projectId: "dopedb-fixture",
   projectNumber: "123456789012",
-  workloadIdentityPoolId: "dopedb-vercel",
-  workloadIdentityProviderId: "vercel",
+  workloadIdentityPoolId: "dopedb-workspace",
+  workloadIdentityProviderId: "dopedb-workspace",
   instanceId: "workspace-db",
   readServiceAccountEmail: "dopedb-read@dopedb-fixture.iam.gserviceaccount.com",
   writeServiceAccountEmail: "dopedb-write@dopedb-fixture.iam.gserviceaccount.com",
   schemaServiceAccountEmail: "dopedb-schema@dopedb-fixture.iam.gserviceaccount.com",
-  workloadIdentitySubject: "owner:dopedb-fixture:project:dopedb-workspace:environment:production",
+  workloadIdentitySubject: "dopedb:workspace:production",
   databaseNames: ["workspace"],
   dedicatedServiceAccountsConfirmed: true,
   instanceScopedIamConfirmed: true,
@@ -26,6 +27,15 @@ const credential = parseGcpCloudSqlCredential({
 const oidcToken = `${"a".repeat(60)}.${"b".repeat(60)}.${"c".repeat(60)}`;
 
 export async function assertGcpBootstrapReadinessContract() {
+  expect(gcpWifPrincipal(credential)).toBe(
+    "principal://iam.googleapis.com/projects/123456789012/locations/global/"
+    + "workloadIdentityPools/dopedb-workspace/subject/dopedb:workspace:production",
+  );
+  for (const subject of ["dopedb:workspace:preview", "dopedb:other:production", ""]) {
+    expect(() => parseGcpCloudSqlCredential({
+      ...credential, workloadIdentitySubject: subject,
+    })).toThrow("Invalid GCP trust configuration");
+  }
   vi.useFakeTimers();
   const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
   let schemaAttempts = 0;
@@ -112,6 +122,7 @@ export async function assertGcpBootstrapReadinessContract() {
     expect(schemaAttempts).toBe(1);
 
     await assertBootstrapContinuation(pendingError);
+    await assertSchemaPreflightPreservesApplications();
 
     // Setup API diagnostics retain categorical causes, never the role name,
     // token, SQL, or Google response body that carried them.
@@ -200,4 +211,36 @@ async function assertBootstrapContinuation(pendingError: GcpIamPropagationPendin
   expired.expiresAt = new Date(Date.now() + 60_000).toISOString();
   expect((await requestGcpBootstrap(expired))?.status).toBe(410);
   expect(transport).not.toHaveBeenCalled();
+}
+
+// A conflict in a later database must prevent policy installation in earlier ones.
+async function assertSchemaPreflightPreservesApplications() {
+  const requests: { database: string; sqlStatement: string }[] = [];
+  const transport = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+    expect(String(url)).toMatch(/\/executeSql$/);
+    const request = JSON.parse(String(init?.body));
+    requests.push(request);
+    if (request.database === "application") {
+      return Response.json({ results: [{ status: { code: 3 } }] });
+    }
+    if (request.sqlStatement.startsWith("DO $dopedb_preflight$")) {
+      return Response.json({ results: [{ status: { code: 0 } }] });
+    }
+    return Response.json({ results: [{ columns: [{ name: "owner_role" }], rows: [] }] });
+  });
+  vi.stubGlobal("fetch", transport);
+  const setup = { accessToken: "fixture-token", email: "admin@dopedb.dev",
+    expiresAt: new Date(Date.now() + 60_000).toISOString() };
+  await expect(configurePostgresPrivileges({ control: setup, executor: setup,
+    projectId: "dopedb-fixture", instanceId: "workspace-db", databaseVersion: "POSTGRES_17",
+    databases: ["isolated", "application"], readUser: { name: "fixture_read" },
+    writeUser: { name: "fixture_write" }, schemaUser: { name: "fixture_schema" },
+    bootstrapUser: { user: { name: "fixture_setup" }, created: true,
+      engine: "postgres", originalRoles: [] }, fingerprint: "fixture",
+  })).rejects.toMatchObject({ status: 409,
+    message: expect.stringContaining("reviewed ownership and application-access policy") });
+  expect(requests.map(request => request.database)).toEqual(["isolated", "isolated", "application"]);
+  expect(requests.every(request => request.sqlStatement.startsWith("SELECT")
+    || request.sqlStatement.startsWith("DO $dopedb_preflight$"))).toBe(true);
+  expect(transport).toHaveBeenCalledTimes(3);
 }

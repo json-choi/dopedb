@@ -1,3 +1,4 @@
+import { workloadOidcToken } from "../../../../../../../../lib/workload-identity";
 // Native-client-only one-time credential issuance. The provider secret is returned
 // over HTTPS exactly once and is absent from all database and audit writes.
 import { and, count, eq, gt, isNull, sql } from "drizzle-orm";
@@ -19,7 +20,6 @@ import {
   parseManagedProviderResource,
   revokeActiveLeases,
 } from "../../../../../../../../lib/provider-integrations";
-import { vercelOidcToken } from "../../../../../../../../lib/providers/gcp-cloud-sql";
 import { ProviderRequestError } from "../../../../../../../../lib/providers/provider-types";
 import type { VaultManagedResource } from "../../../../../../../../lib/providers/vault";
 import { consumeRateLimit } from "../../../../../../../../lib/rate-limit";
@@ -275,7 +275,7 @@ export async function POST(request: Request, context: RouteContext) {
       accessMode,
       integration,
       resource,
-      oidcToken: vercelOidcToken(request),
+      oidcToken: await workloadOidcToken(),
     });
     try {
       await db.insert(workspaceAuditEvent).values({

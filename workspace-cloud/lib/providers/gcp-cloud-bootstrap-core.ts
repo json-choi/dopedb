@@ -19,7 +19,6 @@ import {
 } from "./gcp-cloud-oauth";
 import { validateGcpCloudSqlCredential } from "./gcp-cloud-sql";
 import { ProviderRequestError } from "./provider-types";
-import { verifyVercelOidcToken } from "./vercel-oidc";
 
 export const IAM_ORIGIN = "https://iam.googleapis.com";
 export const IAM_CREDENTIALS_ORIGIN = "https://iamcredentials.googleapis.com";
@@ -32,8 +31,8 @@ export const CLOUD_SQL_IDENTITY_PROPAGATION_TIMEOUT_MS = 90_000;
 export const DATA_API_PROPAGATION_TIMEOUT_MS = 30_000;
 export const PROPAGATION_RETRY_INTERVAL_MS = 5_000;
 export const MAX_GOOGLE_RESPONSE_BYTES = 2 * 1_024 * 1_024;
-export const POOL_ID = "dopedb-vercel";
-export const PROVIDER_ID = "dopedb-vercel";
+export const POOL_ID = "dopedb-workspace";
+export const PROVIDER_ID = "dopedb-workspace";
 export const REQUIRED_SERVICES = [
   "cloudresourcemanager.googleapis.com",
   "iam.googleapis.com",

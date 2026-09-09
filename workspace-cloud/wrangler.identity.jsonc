@@ -1,0 +1,36 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "dopedb-workspace-identity",
+  "main": "infrastructure/identity-worker.ts",
+  "account_id": "0af3820c996f277b2f17ee446d03f60a",
+  "compatibility_date": "2026-09-08",
+  "compatibility_flags": [
+    "nodejs_compat",
+    "global_fetch_strictly_public"
+  ],
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [
+    { "pattern": "identity.dopedb.dev", "custom_domain": true }
+  ],
+  "vars": {
+    "OIDC_ISSUER": "https://identity.dopedb.dev",
+    "OIDC_AUDIENCE": "https://iam.googleapis.com",
+    "OIDC_ACCOUNT_ID": "0af3820c996f277b2f17ee446d03f60a",
+    "OIDC_WORKLOAD_ID": "e9cdd314-e94a-4827-9777-ec4068daf494",
+    "OIDC_SUBJECT": "dopedb:workspace:production"
+  },
+  "secrets": {
+    "required": [
+      "OIDC_SIGNING_KEY",
+      "OIDC_PUBLIC_KEYS"
+    ]
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 0.01,
+    "logs": {
+      "invocation_logs": false
+    }
+  }
+}

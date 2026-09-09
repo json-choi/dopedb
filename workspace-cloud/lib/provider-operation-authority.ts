@@ -1,6 +1,7 @@
 import "server-only";
 
 import { sql } from "drizzle-orm";
+import { utcNow } from "./d1/schema/values";
 
 import { db } from "./db";
 import {
@@ -85,7 +86,7 @@ export function currentExecutionAuthoritySql(input: ProviderOperationExecutionId
     JOIN ${session} AS requester_session
       ON requester_session."id" = operation."requested_by_session_id"
      AND requester_session."user_id" = operation."requested_by_user_id"
-     AND requester_session."expires_at" > now()
+     AND requester_session."expires_at" > ${utcNow}
     JOIN ${member} AS requester_member
       ON requester_member."id" = operation."requested_by_member_id"
      AND requester_member."organization_id" = operation."organization_id"
@@ -97,7 +98,7 @@ export function currentExecutionAuthoritySql(input: ProviderOperationExecutionId
     JOIN ${session} AS approver_session
       ON approver_session."id" = operation_approval."actor_session_id"
      AND approver_session."user_id" = operation_approval."actor_user_id"
-     AND approver_session."expires_at" > now()
+     AND approver_session."expires_at" > ${utcNow}
     JOIN ${member} AS approver_member
       ON approver_member."id" = operation_approval."actor_member_id"
      AND approver_member."organization_id" = operation_approval."organization_id"
@@ -117,7 +118,5 @@ export function currentExecutionAuthoritySql(input: ProviderOperationExecutionId
           AND operation_approval."actor_user_id" <> operation."requested_by_user_id"
         )
       )
-    FOR UPDATE OF operation_approval, requester_session, requester_member,
-      approver_session, approver_member
   )`;
 }

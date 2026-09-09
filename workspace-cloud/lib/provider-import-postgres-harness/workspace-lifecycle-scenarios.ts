@@ -42,7 +42,7 @@ export async function runWorkspaceLifecycleScenarios(
   const kmsSession = {
     configuration: {
       keyName: kmsKeyName,
-      workloadIdentityAudience: "//iam.googleapis.com/projects/123456789012/locations/global/workloadIdentityPools/vercel/providers/workspace",
+      workloadIdentityAudience: "//iam.googleapis.com/projects/123456789012/locations/global/workloadIdentityPools/dopedb-workspace/providers/dopedb-workspace",
       serviceAccountEmail: "workspace-kms@dopedb-harness.iam.gserviceaccount.com",
     },
     accessToken: "harness-access-token",

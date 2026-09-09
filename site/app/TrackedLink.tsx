@@ -2,7 +2,7 @@
 
 // Public-site tracking accepts only the reviewed CTA names and property pairs;
 // links without an analytics event remain ordinary anchors.
-import { track } from "@vercel/analytics";
+import { trackSiteEvent } from "../lib/analytics";
 import type { AnchorHTMLAttributes, ReactNode } from "react";
 
 export type DownloadSource =
@@ -57,7 +57,7 @@ export function TrackedLink({
       {...props}
       onClick={(clickEvent) => {
         if (event) {
-          track(event, properties);
+          trackSiteEvent(event, properties);
         }
         onClick?.(clickEvent);
       }}

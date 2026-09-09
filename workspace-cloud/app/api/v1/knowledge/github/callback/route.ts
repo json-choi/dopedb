@@ -1,3 +1,4 @@
+import { utcNow } from "@/lib/d1/schema/values";
 import { createHash } from "node:crypto";
 import { and, eq, gt, sql } from "drizzle-orm";
 import { authoritativeSession } from "@/lib/authoritative-session";
@@ -244,8 +245,8 @@ export async function GET(request: Request) {
         "account_id" = EXCLUDED."account_id",
         "account_login" = EXCLUDED."account_login",
         "status" = 'active',
-        "updated_at" = now()
-      RETURNING "id"::text AS "id"
+        "updated_at" = ${utcNow}
+      RETURNING "id" AS "id"
     `);
     if (connected.rows.length !== 1) {
       logGithubKnowledgeSetupFailure({

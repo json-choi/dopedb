@@ -6,16 +6,23 @@
   "packageManager": "pnpm@11.25.0",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start",
-    "db:generate": "drizzle-kit generate --config=drizzle.config.ts",
-    "db:migrate": "node scripts/migrate.mjs",
-    "db:preflight": "node scripts/migrate.mjs --check",
+    "db:generate": "drizzle-kit generate --config=drizzle.d1.config.ts",
+    "db:migrate": "node scripts/migrate-d1.mjs",
+    "db:preflight": "node scripts/migrate-d1.mjs --check",
     "db:migrate:production": "bash scripts/migrate-production.sh",
-    "db:check": "drizzle-kit check --config=drizzle.config.ts",
+    "db:check": "drizzle-kit check --config=drizzle.d1.config.ts",
     "test:contracts": "vitest run --config vitest.contracts.config.ts",
     "test:postgres-harness-guard": "node --test scripts/provider-import-postgres-harness-guard.node.mjs",
-    "test:postgres-import": "node scripts/run-provider-import-postgres-harness.mjs"
+    "test:postgres-import": "node scripts/run-provider-import-postgres-harness.mjs",
+    "build:cloudflare": "opennextjs-cloudflare build",
+    "preview:cloudflare": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "deploy:cloudflare": "node ../scripts/deploy-workspace-cloudflare.mjs",
+    "cf:typegen": "wrangler types cloudflare-env.d.ts --env-interface CloudflareEnv --include-runtime false",
+    "build:identity": "tsc -p infrastructure/tsconfig.identity.json && wrangler deploy --dry-run -c wrangler.identity.jsonc",
+    "deploy:identity": "wrangler deploy -c wrangler.identity.jsonc",
+    "test:d1-import": "node scripts/test-d1-migrations.mjs"
   },
   "dependencies": {
     "@better-auth/drizzle-adapter": "^1.7.2",
@@ -29,16 +36,21 @@
     "sanitize-html": "^2.17.7"
   },
   "devDependencies": {
+    "@babel/parser": "8.0.4",
+    "@cloudflare/workers-types": "5.20260907.1",
+    "@opennextjs/cloudflare": "1.20.6",
     "@tailwindcss/postcss": "4.3.3",
     "@types/node": "^26.4.1",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.5",
     "@types/sanitize-html": "^2.16.1",
     "drizzle-kit": "^0.31.10",
+    "miniflare": "5.20260903.0-alpha",
     "postcss": "8.5.26",
     "postgres": "3.4.9",
     "tailwindcss": "4.3.3",
     "typescript": "^7.0.2",
-    "vitest": "4.1.11"
+    "vitest": "4.1.11",
+    "wrangler": "4.129.0"
   }
 }

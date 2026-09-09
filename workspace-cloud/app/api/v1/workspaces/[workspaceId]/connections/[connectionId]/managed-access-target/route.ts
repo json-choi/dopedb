@@ -1,3 +1,4 @@
+import { workloadOidcToken } from "../../../../../../../../lib/workload-identity";
 // Returns one expiring, secret-free canonical target for the desktop Managed
 // Access planner. POST may refresh workspace-owned OAuth before pinning; DELETE
 // is the cleanup-only revocation boundary. Neither endpoint delivers a secret.
@@ -20,7 +21,6 @@ import {
 import { loadProviderProvisioningTarget } from "../../../../../../../../lib/provider-provisioning-target";
 import {
   validateGcpCloudSqlResource,
-  vercelOidcToken,
 } from "../../../../../../../../lib/providers/gcp-cloud-sql";
 import type {
   GcpCloudSqlResource,
@@ -171,7 +171,7 @@ export async function POST(request: Request, context: RouteContext) {
           )
         : await validateGcpCloudSqlResource(
           gcpCredential(integration),
-          requiredOidcToken(vercelOidcToken(request)),
+          requiredOidcToken(await workloadOidcToken()),
           resource as GcpCloudSqlResource,
         );
     const target = await loadProviderProvisioningTarget({
@@ -334,7 +334,7 @@ export async function DELETE(request: Request, context: RouteContext) {
           )
         : await validateGcpCloudSqlResource(
           gcpCredential(integration),
-          requiredOidcToken(vercelOidcToken(request)),
+          requiredOidcToken(await workloadOidcToken()),
           resource as GcpCloudSqlResource,
         );
     if (verification.providerAuditId !== pins.providerAuditId) {

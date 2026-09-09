@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { vi } from "vitest";
-import * as workspaceSchema from "../schema";
+import * as workspaceSchema from "../../drizzle/schema.postgres";
 
 type ProviderHarnessCleanupTargets = {
   organizationId: string;

@@ -1,12 +1,10 @@
 // Provider disconnection revokes live database credentials first, then the OAuth
 // grant, and finally returns affected connections to member-local credential mode.
-import { sql } from "drizzle-orm";
-import { db } from "../../../../../../../lib/db";
+import { finalizeProviderIntegrationDisconnect } from "../../../../../../../lib/provider-integration-disconnect-store";
 import { env } from "../../../../../../../lib/env";
 import { isUuid, jsonError, mutationAllowed } from "../../../../../../../lib/http";
 import {
   providerIntegrationForRevocation,
-  providerMutationAuthoritySql,
   revokeActiveLeases,
   revokeProviderAuthorization,
 } from "../../../../../../../lib/provider-integrations";
@@ -21,12 +19,6 @@ import {
   resumeProviderIntegrationDisconnect,
 } from "../../../../../../../lib/provider-integration-mutation-store";
 import { sealProviderCredential } from "../../../../../../../lib/secret-envelope";
-import {
-  workspaceAuditEvent,
-  workspaceConnection,
-  workspaceProviderIntegration,
-  workspaceProviderPrincipalClaim,
-} from "../../../../../../../lib/schema";
 import { authorizeWorkspace } from "../../../../../../../lib/workspace-authorization";
 
 type RouteContext = {
@@ -141,80 +133,11 @@ export async function DELETE(request: Request, context: RouteContext) {
   const scrubbedCredential = sealProviderCredential(integrationId, {
     revokedAt: disconnectedAt.toISOString(),
   });
-  const result = await db.execute<{ id: string }>(sql`
-    WITH revoked_integration AS (
-      UPDATE ${workspaceProviderIntegration} AS integration
-      SET "status" = 'revoked',
-          "encrypted_credential" = ${scrubbedCredential},
-          "credential_expires_at" = NULL,
-          "granted_scope" = NULL,
-          "revoked_at" = ${disconnectedAt},
-          "generation" = integration."generation" + 1,
-          "updated_at" = ${disconnectedAt},
-          "revocation_pending_at" = NULL,
-          "revocation_claimed_at" = NULL,
-          "revocation_claim_id" = NULL,
-          "disconnect_phase" = 'finalized'
-      WHERE integration."id" = ${integrationId}::uuid
-        AND integration."organization_id" = ${workspaceId}
-        AND integration."status" IN ('active', 'reconnect_required')
-        AND integration."revoked_at" IS NULL
-        AND integration."revocation_claim_id" = ${activeClaimId}::uuid
-        AND integration."generation" = ${disconnectGeneration}
-        AND integration."disconnect_generation" = ${disconnectGeneration}
-        AND integration."disconnect_phase" = 'provider_revoked'
-        -- The original claim remains the durable fence, but finalizing a
-        -- user-initiated disconnect after lease/provider I/O still requires a
-        -- current exact manager.  A fresh manager can resume this claim.
-        AND ${providerMutationAuthoritySql({
-          ...authority,
-          integration: {
-            id: integrationId,
-            provider: integration.provider,
-            generation: disconnectGeneration,
-            claimId: activeClaimId,
-          },
-        })}
-      RETURNING integration."id", integration."organization_id"
-    ),
-    detached_connections AS (
-      UPDATE ${workspaceConnection} AS connection
-      SET "credential_mode" = 'member_local',
-          "provider_integration_id" = NULL,
-          "provider_resource" = NULL,
-          "provider_resource_id" = NULL,
-          "revision" = connection."revision" + 1,
-          "updated_at" = ${disconnectedAt}
-      FROM revoked_integration
-      WHERE connection."organization_id" = revoked_integration."organization_id"
-        AND connection."provider_integration_id" = revoked_integration."id"
-        AND connection."deleted_at" IS NULL
-      RETURNING connection."id"
-    ),
-    deleted_principal_claims AS (
-      DELETE FROM ${workspaceProviderPrincipalClaim} AS claim
-      USING revoked_integration
-      WHERE claim."integration_id" = revoked_integration."id"
-      RETURNING claim."principal_fingerprint"
-    ),
-    audit_event AS (
-      INSERT INTO ${workspaceAuditEvent}
-        ("organization_id", "actor_user_id", "action", "resource_type",
-         "resource_id", "redacted_summary", "request_id")
-      SELECT revoked_integration."organization_id",
-             ${authorization.session.user.id}, 'provider.disconnect',
-             'provider_integration', revoked_integration."id"::text,
-             jsonb_build_object(
-               'provider', ${integration.provider},
-               'revokedLeases', ${revocation.revoked}
-             ),
-             ${crypto.randomUUID()}::uuid
-      FROM revoked_integration
-      RETURNING "resource_id"
-    )
-    SELECT "id"::text AS "id" FROM revoked_integration
-  `);
-  if (result.rows.length !== 1) {
+  const finalized = await finalizeProviderIntegrationDisconnect({ authority, integrationId,
+    provider: integration.provider, generation: disconnectGeneration, claimId: activeClaimId,
+    scrubbedCredential, revokedLeases: revocation.revoked,
+  });
+  if (!finalized) {
     return jsonError("Provider disconnect requires reconciliation", 409);
   }
   return new Response(null, {

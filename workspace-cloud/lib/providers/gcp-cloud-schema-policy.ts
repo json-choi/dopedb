@@ -62,16 +62,15 @@ function ownedObjectUnion() {
 }
 
 function requiredOwnerUnion() {
-  return ownedObjectUnion()
-    + ` UNION SELECT database.datdba FROM pg_catalog.pg_database database `
+  return `SELECT database.datdba AS owner_oid FROM pg_catalog.pg_database database `
     + `WHERE database.datname = current_database() `
     + `UNION SELECT schema.nspowner FROM pg_catalog.pg_namespace schema `
     + `WHERE schema.nspname = 'public'`;
 }
 
 /** Enumerate only the roles the temporary setup user must inherit while it
- * revokes database/schema ACLs and transfers existing public objects. Reserved
- * owners are intentionally omitted here and rejected transactionally below. */
+ * configures the dedicated role’s database/schema ACLs. Application object
+ * owners are never inherited; unmanageable database/schema ACLs fail in SQL. */
 export function gcpSchemaOwnerInventorySql(schemaUser: string) {
   const owner = postgresRole(schemaUser);
   return `SELECT DISTINCT role.rolname AS owner_role `
@@ -99,9 +98,35 @@ function roleGrantSql(role: string | null, write: boolean) {
       + `EXECUTE 'ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON SEQUENCES TO ${identifier}'; `;
 }
 
-/** Move every non-extension object in public to the dedicated IAM database role
- * and install its object defaults. Any unmanageable owner aborts the whole
- * transaction, so a repair cannot leave a partial ownership takeover. */
+/** Read-only admission check, repeated inside the policy transaction. Setup is
+ * not an application ownership migration: neither owner-only powers (DDL/RLS/
+ * SECURITY DEFINER) nor access inherited from PUBLIC can be preserved by a GRANT. */
+export function gcpSchemaPolicyPreflightSql(schemaUser: string) {
+  const owner = pgLiteral(postgresRole(schemaUser));
+  return `DO $dopedb_preflight$ BEGIN `
+    + `IF EXISTS (${ownedObjectUnion()} EXCEPT SELECT oid FROM pg_catalog.pg_roles `
+    + `WHERE rolname = ${owner}) THEN `
+    + `RAISE EXCEPTION 'Cloud SQL schema setup requires a reviewed application ownership migration; existing object owners were not changed'; END IF; `
+    + `IF EXISTS (SELECT 1 FROM pg_catalog.pg_database database `
+    + `CROSS JOIN LATERAL aclexplode(COALESCE(database.datacl, acldefault('d', database.datdba))) acl `
+    + `WHERE database.datname = current_database() AND acl.grantee = 0 `
+    + `AND acl.privilege_type IN ('CREATE', 'TEMPORARY')) `
+    + `OR EXISTS (SELECT 1 FROM pg_catalog.pg_namespace schema `
+    + `CROSS JOIN LATERAL aclexplode(COALESCE(schema.nspacl, acldefault('n', schema.nspowner))) acl `
+    + `WHERE schema.nspname = 'public' AND acl.grantee = 0 AND acl.privilege_type = 'CREATE') THEN `
+    + `RAISE EXCEPTION 'Cloud SQL schema setup requires reviewed PUBLIC privileges; existing application access was not revoked'; END IF; `
+    + `IF EXISTS (SELECT 1 FROM pg_catalog.pg_proc routine `
+    + `JOIN pg_catalog.pg_namespace schema ON schema.oid = routine.pronamespace `
+    + `CROSS JOIN LATERAL aclexplode(COALESCE(routine.proacl, acldefault('f', routine.proowner))) acl `
+    + `WHERE schema.nspname = 'public' AND routine.proowner = `
+    + `(SELECT oid FROM pg_catalog.pg_roles WHERE rolname = ${owner}) `
+    + `AND acl.grantee = 0 AND acl.privilege_type = 'EXECUTE') THEN `
+    + `RAISE EXCEPTION 'Cloud SQL schema setup requires reviewed routine access; existing application execution was not revoked'; END IF; `
+    + `END $dopedb_preflight$;`;
+}
+
+/** Configure an already isolated stable owner. Existing application owners and
+ * ACLs are never rewritten. Application default grants on this role survive repair. */
 export function gcpSchemaDatabasePolicySql(input: {
   postgresMajorVersion: number;
   database: string;
@@ -120,19 +145,14 @@ export function gcpSchemaDatabasePolicySql(input: {
     ? `EXECUTE format('ALTER ROLE %I IN DATABASE %I SET idle_session_timeout = %L', `
       + `${pgLiteral(schemaUser)}, ${pgLiteral(database)}, '5min'); `
     : "";
-  const routineKind = majorVersion >= 11
-    ? "CASE routine.prokind WHEN 'p' THEN 'PROCEDURE' WHEN 'a' THEN 'AGGREGATE' ELSE 'FUNCTION' END"
-    : "CASE WHEN routine.proisagg THEN 'AGGREGATE' ELSE 'FUNCTION' END";
-  const routinePrivilegeKind = majorVersion >= 11 ? "ROUTINE" : "FUNCTION";
   return `BEGIN; SET LOCAL ROLE NONE; `
-    + `REVOKE CREATE, TEMPORARY ON DATABASE ${pgIdentifier(database)} FROM PUBLIC; `
-    + `REVOKE CREATE ON SCHEMA public FROM PUBLIC; `
+    + gcpSchemaPolicyPreflightSql(schemaUser)
+    + ` SET LOCAL lock_timeout = '5s'; SET LOCAL statement_timeout = '30s'; `
     + `REVOKE ALL PRIVILEGES ON DATABASE ${pgIdentifier(database)} FROM ${pgIdentifier(schemaUser)}; `
     + `GRANT CONNECT ON DATABASE ${pgIdentifier(database)} TO ${pgIdentifier(schemaUser)}; `
     + `REVOKE ALL PRIVILEGES ON SCHEMA public FROM ${pgIdentifier(schemaUser)}; `
     + `GRANT USAGE, CREATE ON SCHEMA public TO ${pgIdentifier(schemaUser)}; `
-    + `DO $dopedb$ DECLARE setup_role text := session_user; owner_row record; `
-    + `object_row record; BEGIN `
+    + `DO $dopedb$ DECLARE setup_role text := session_user; BEGIN `
     + `IF current_user <> session_user OR current_database() <> ${pgLiteral(database)} THEN `
     + `RAISE EXCEPTION 'Cloud SQL setup session identity changed'; END IF; `
     + `IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles role `
@@ -142,7 +162,7 @@ export function gcpSchemaDatabasePolicySql(input: {
     + `AND NOT role.rolbypassrls) THEN `
     + `RAISE EXCEPTION 'DopeDB schema login role is unsafe'; END IF; `
     + `IF NOT pg_has_role(setup_role, ${pgLiteral(schemaUser)}, ${pgLiteral(targetMembershipMode)}) THEN `
-    + `RAISE EXCEPTION 'Cloud SQL setup role cannot transfer schema ownership'; END IF; `
+    + `RAISE EXCEPTION 'Cloud SQL setup role cannot configure the schema owner'; END IF; `
     + `IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles role `
     + `WHERE role.rolname = 'cloudsqliamserviceaccount' `
     + `AND NOT role.rolcanlogin AND NOT role.rolsuper `
@@ -189,55 +209,6 @@ export function gcpSchemaDatabasePolicySql(input: {
     + `OR has_schema_privilege('cloudsqliamserviceaccount', schema.oid, 'USAGE') `
     + `OR has_schema_privilege('cloudsqliamserviceaccount', schema.oid, 'CREATE'))) THEN `
     + `RAISE EXCEPTION 'Cloud SQL schema principal can access another user schema'; END IF; `
-    + `FOR owner_row IN SELECT DISTINCT role.oid, role.rolname, role.rolsuper `
-    + `FROM pg_catalog.pg_roles role JOIN (${ownedObjectUnion()}) owners `
-    + `ON owners.owner_oid = role.oid WHERE role.rolname <> ${pgLiteral(schemaUser)} `
-    + `ORDER BY role.rolname LOOP `
-    + `IF owner_row.rolsuper `
-    + `OR (owner_row.rolname ~ '^(pg_|cloudsql)' `
-    + `AND owner_row.rolname <> 'cloudsqlsuperuser') THEN `
-    + `RAISE EXCEPTION 'Cloud SQL object has a reserved owner'; END IF; `
-    + `IF NOT pg_has_role(setup_role, owner_row.oid, 'USAGE') THEN `
-    + `RAISE EXCEPTION 'Cloud SQL setup role cannot inherit an object owner'; END IF; `
-    + `FOR object_row IN SELECT CASE object.relkind `
-    + `WHEN 'r' THEN format('ALTER TABLE %I.%I OWNER TO %I', schema.nspname, object.relname, ${pgLiteral(schemaUser)}) `
-    + `WHEN 'p' THEN format('ALTER TABLE %I.%I OWNER TO %I', schema.nspname, object.relname, ${pgLiteral(schemaUser)}) `
-    + `WHEN 'v' THEN format('ALTER VIEW %I.%I OWNER TO %I', schema.nspname, object.relname, ${pgLiteral(schemaUser)}) `
-    + `WHEN 'm' THEN format('ALTER MATERIALIZED VIEW %I.%I OWNER TO %I', schema.nspname, object.relname, ${pgLiteral(schemaUser)}) `
-    + `WHEN 'f' THEN format('ALTER FOREIGN TABLE %I.%I OWNER TO %I', schema.nspname, object.relname, ${pgLiteral(schemaUser)}) `
-    + `WHEN 'S' THEN format('ALTER SEQUENCE %I.%I OWNER TO %I', schema.nspname, object.relname, ${pgLiteral(schemaUser)}) `
-    + `WHEN 'c' THEN format('ALTER TYPE %I.%I OWNER TO %I', schema.nspname, object.relname, ${pgLiteral(schemaUser)}) END AS ddl `
-    + `FROM pg_catalog.pg_class object JOIN pg_catalog.pg_namespace schema `
-    + `ON schema.oid = object.relnamespace WHERE schema.nspname = 'public' `
-    + `AND object.relowner = owner_row.oid AND object.relkind IN ('r','p','v','m','f','S','c') `
-    + `AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_depend dependency `
-    + `WHERE dependency.classid = 'pg_class'::regclass AND dependency.objid = object.oid `
-    + `AND dependency.deptype = 'e') `
-    + `AND (object.relkind <> 'S' OR NOT EXISTS (SELECT 1 FROM pg_catalog.pg_depend owned_sequence `
-    + `WHERE owned_sequence.classid = 'pg_class'::regclass `
-    + `AND owned_sequence.objid = object.oid `
-    + `AND owned_sequence.refclassid = 'pg_class'::regclass `
-    + `AND owned_sequence.deptype IN ('a','i'))) LOOP EXECUTE object_row.ddl; END LOOP; `
-    + `FOR object_row IN SELECT format('ALTER %s %I.%I(%s) OWNER TO %I', `
-    + `${routineKind}, schema.nspname, routine.proname, `
-    + `pg_get_function_identity_arguments(routine.oid), ${pgLiteral(schemaUser)}) AS ddl `
-    + `FROM pg_catalog.pg_proc routine JOIN pg_catalog.pg_namespace schema `
-    + `ON schema.oid = routine.pronamespace WHERE schema.nspname = 'public' `
-    + `AND routine.proowner = owner_row.oid `
-    + `AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_depend dependency `
-    + `WHERE dependency.classid = 'pg_proc'::regclass AND dependency.objid = routine.oid `
-    + `AND dependency.deptype = 'e') LOOP EXECUTE object_row.ddl; END LOOP; `
-    + `FOR object_row IN SELECT format('ALTER %s %I.%I OWNER TO %I', `
-    + `CASE type.typtype WHEN 'd' THEN 'DOMAIN' ELSE 'TYPE' END, `
-    + `schema.nspname, type.typname, ${pgLiteral(schemaUser)}) AS ddl `
-    + `FROM pg_catalog.pg_type type JOIN pg_catalog.pg_namespace schema `
-    + `ON schema.oid = type.typnamespace WHERE schema.nspname = 'public' `
-    + `AND type.typowner = owner_row.oid AND type.typrelid = 0 AND type.typelem = 0 `
-    + `AND type.typtype IN ('b','c','d','e','m','r') `
-    + `AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_depend dependency `
-    + `WHERE dependency.classid = 'pg_type'::regclass AND dependency.objid = type.oid `
-    + `AND dependency.deptype = 'e') LOOP EXECUTE object_row.ddl; END LOOP; `
-    + `END LOOP; `
     + `EXECUTE format('SET LOCAL ROLE %I', ${pgLiteral(schemaUser)}); `
     + `EXECUTE format('ALTER ROLE %I IN DATABASE %I RESET ALL', `
     + `${pgLiteral(schemaUser)}, ${pgLiteral(database)}); `
@@ -252,13 +223,6 @@ export function gcpSchemaDatabasePolicySql(input: {
     + `EXECUTE format('ALTER ROLE %I IN DATABASE %I SET default_transaction_read_only = %L', `
     + `${pgLiteral(schemaUser)}, ${pgLiteral(database)}, 'off'); `
     + idleSessionDefault
-    + `FOR object_row IN SELECT format('REVOKE EXECUTE ON ${routinePrivilegeKind} %I.%I(%s) FROM PUBLIC', `
-    + `schema.nspname, routine.proname, pg_get_function_identity_arguments(routine.oid)) AS ddl `
-    + `FROM pg_catalog.pg_proc routine JOIN pg_catalog.pg_namespace schema `
-    + `ON schema.oid = routine.pronamespace WHERE schema.nspname = 'public' `
-    + `AND routine.proowner = (SELECT role.oid FROM pg_catalog.pg_roles role `
-    + `WHERE role.rolname = ${pgLiteral(schemaUser)}) `
-    + `LOOP EXECUTE object_row.ddl; END LOOP; `
     + `EXECUTE 'ALTER DEFAULT PRIVILEGES REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC'; `
     + `EXECUTE 'ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC'; `
     + grants
@@ -274,6 +238,6 @@ export function gcpSchemaDatabasePolicySql(input: {
     + `RAISE EXCEPTION 'Cloud SQL schema principal privilege boundary is unavailable'; END IF; `
     + `IF EXISTS (${ownedObjectUnion()} EXCEPT SELECT role.oid `
     + `FROM pg_catalog.pg_roles role WHERE role.rolname = ${pgLiteral(schemaUser)}) THEN `
-    + `RAISE EXCEPTION 'Cloud SQL schema ownership transfer is incomplete'; END IF; `
+    + `RAISE EXCEPTION 'Cloud SQL schema ownership changed during setup'; END IF; `
     + `END $dopedb$; COMMIT;`;
 }

@@ -2,7 +2,9 @@ import "server-only";
 
 import { sql } from "drizzle-orm";
 
-import { db } from "./db";
+import { atomicD1 } from "./d1/atomic";
+import { jsonEqual } from "./d1/json";
+import { uuidDefault } from "./d1/schema/values";
 import {
   providerMutationAuthoritySql,
   type ProviderMutationAuthority,
@@ -177,56 +179,26 @@ export async function completeNeonBranchSwitch(
     "provider-operation:switch-complete",
     input.claimId,
   );
-  const sourceLockId = input.plan.source.branchId < input.plan.target.branchId
-    ? input.plan.source.branchId
-    : input.plan.target.branchId;
-  const targetLockId = input.plan.source.branchId < input.plan.target.branchId
-    ? input.plan.target.branchId
-    : input.plan.source.branchId;
-  const result = await db.execute<NeonBranchSwitchCompletionRow>(sql`
-    WITH operation_scope AS MATERIALIZED (
+  const targetResourceId = crypto.randomUUID();
+  const result = await atomicD1({
+    scope: sql`    WITH operation_scope AS MATERIALIZED (
       SELECT operation."id", operation."organization_id",
         operation."integration_id", operation."risk",
         operation."approval_policy"
       FROM ${workspaceProviderOperation} AS operation
-      WHERE operation."id" = ${input.operationId}::uuid
+      WHERE operation."id" = ${input.operationId}
         AND operation."organization_id" = ${input.authority.organizationId}
-        AND operation."integration_id" = ${input.integrationId}::uuid
+        AND operation."integration_id" = ${input.integrationId}
         AND operation."integration_generation" = ${input.integrationGeneration}
         AND operation."provider" = 'neon'
         AND operation."kind" = 'neon.branch.switch'
         AND operation."state" IN ('remote_started', 'reconciling')
-        AND operation."claim_id" = ${input.claimId}::uuid
+        AND operation."claim_id" = ${input.claimId}
         AND operation."plan_hash" = ${input.planHash}
         AND operation."ownership_marker" = ${input.ownershipMarker}
-        AND operation."redacted_plan" = ${JSON.stringify(input.plan)}::jsonb
+        AND ${jsonEqual(sql`operation."redacted_plan"`, sql`${canonicalJson(input.plan)}`)}
         AND ${authority}
-      FOR UPDATE OF operation
-    ), source_branch_lock AS MATERIALIZED (
-      SELECT pg_advisory_xact_lock(hashtextextended(
-        'provider-branch:' || operation_scope."organization_id" || ':'
-        || operation_scope."integration_id"::text || ':neon:'
-        || ${input.plan.source.projectId} || ':' || ${sourceLockId},
-        0
-      ))
-      FROM operation_scope
-    ), target_branch_lock AS MATERIALIZED (
-      SELECT pg_advisory_xact_lock(hashtextextended(
-        'provider-branch:' || operation_scope."organization_id" || ':'
-        || operation_scope."integration_id"::text || ':neon:'
-        || ${input.plan.source.projectId} || ':' || ${targetLockId},
-        0
-      ))
-      FROM operation_scope
-      JOIN source_branch_lock ON TRUE
-    ), connection_lock AS MATERIALIZED (
-      SELECT pg_advisory_xact_lock(hashtextextended(
-        'connection:' || operation_scope."organization_id" || ':'
-        || ${input.plan.source.connectionId},
-        0
-      ))
-      FROM operation_scope
-      JOIN target_branch_lock ON TRUE
+
     ), connection_scope AS MATERIALIZED (
       SELECT connection."id", connection."organization_id",
         connection."content_revision", connection."revision",
@@ -234,7 +206,6 @@ export async function completeNeonBranchSwitch(
       FROM ${workspaceConnection} AS connection
       JOIN operation_scope
         ON operation_scope."organization_id" = connection."organization_id"
-      JOIN connection_lock ON TRUE
       JOIN ${workspaceConnectionGrant} AS manager_grant
         ON manager_grant."organization_id" = connection."organization_id"
        AND manager_grant."connection_id" = connection."id"
@@ -250,12 +221,12 @@ export async function completeNeonBranchSwitch(
        AND parent."resource_id" = connection."id"
        AND parent."branch" = 'main'
        AND parent."revision" = connection."content_revision"
-      WHERE connection."id" = ${input.plan.source.connectionId}::uuid
+      WHERE connection."id" = ${input.plan.source.connectionId}
         AND connection."provider" = 'neon'
         AND connection."credential_mode" = 'managed'
         AND connection."provider_integration_id" = operation_scope."integration_id"
-        AND connection."provider_resource_id" = ${input.plan.source.providerResourceId}::uuid
-        AND source_resource."resource" = connection."provider_resource"
+        AND connection."provider_resource_id" = ${input.plan.source.providerResourceId}
+        AND ${jsonEqual(sql`source_resource."resource"`, sql`connection."provider_resource"`)}
         AND connection."provider_resource"->>'project' = ${input.plan.source.projectId}
         AND connection."provider_resource"->>'branch' = ${input.plan.source.branchId}
         AND connection."provider_resource"->>'databaseId' = ${input.plan.source.databaseId}
@@ -263,12 +234,12 @@ export async function completeNeonBranchSwitch(
         AND connection."name" = ${input.plan.source.connectionName}
         AND connection."readonly_default" = ${input.plan.source.readonlyDefault}
         AND connection."allow_writes" = ${input.plan.source.allowWrites}
-        AND connection."schema_group" IS NOT DISTINCT FROM ${input.plan.source.schemaGroup}
+        AND connection."schema_group" IS ${input.plan.source.schemaGroup}
         AND connection."environment" = ${input.plan.source.environment}
         AND connection."content_revision" = ${input.plan.source.contentRevision}
         AND connection."revision" = ${expectedAuthorityRevision}
         AND connection."revocation_pending_at" IS NOT NULL
-        AND connection."revocation_claim_id" = ${input.connectionClaimId}::uuid
+        AND connection."revocation_claim_id" = ${input.connectionClaimId}
         AND connection."deleted_at" IS NULL
         AND NOT EXISTS (
           SELECT 1
@@ -277,154 +248,51 @@ export async function completeNeonBranchSwitch(
             AND live_lease."connection_id" = connection."id"
             AND live_lease."revoked_at" IS NULL
         )
-      FOR UPDATE OF connection, manager_grant, source_resource, parent
-    ), canonical_resource AS MATERIALIZED (
-      INSERT INTO ${workspaceProviderResource} AS existing_resource
-        ("organization_id", "provider", "resource_fingerprint", "resource",
-         "redacted_metadata", "capability_manifest", "updated_at")
-      SELECT connection_scope."organization_id", 'neon', ${projection.fingerprint},
-        ${JSON.stringify(projection.resource)}::jsonb,
-        ${JSON.stringify(projection.metadata)}::jsonb,
-        ${JSON.stringify(projection.capabilities)}::jsonb, ${committedAt}::timestamptz
-      FROM connection_scope
-      ON CONFLICT ("organization_id", "provider", "resource_fingerprint")
-      DO UPDATE SET
-        "resource" = EXCLUDED."resource",
-        "redacted_metadata" = EXCLUDED."redacted_metadata",
-        "capability_manifest" = EXCLUDED."capability_manifest",
-        "updated_at" = EXCLUDED."updated_at"
-      WHERE existing_resource."resource" = EXCLUDED."resource"
-      RETURNING "id", "organization_id"
-    ), target_scope AS MATERIALIZED (
-      SELECT canonical_resource."id", canonical_resource."organization_id"
-      FROM canonical_resource
-      WHERE NOT EXISTS (
-        SELECT 1
-        FROM ${workspaceConnection} AS target_connection
-        WHERE target_connection."organization_id" = canonical_resource."organization_id"
-          AND target_connection."provider_resource_id" = canonical_resource."id"
-          AND target_connection."id" <> ${input.plan.source.connectionId}::uuid
-          AND target_connection."deleted_at" IS NULL
-      )
-    ), updated_connection AS MATERIALIZED (
-      UPDATE ${workspaceConnection} AS connection
-      SET "host" = ${projection.host},
-        "port" = ${projection.port},
-        "database_name" = ${projection.database},
-        "sslmode" = ${projection.sslmode},
-        "environment" = ${input.plan.target.environment},
-        "provider_resource_id" = target_scope."id",
-        "provider_resource" = ${JSON.stringify(projection.resource)}::jsonb,
-        "content_revision" = connection."content_revision" + 1,
-        "revocation_pending_at" = NULL,
-        "revocation_claimed_at" = NULL,
-        "revocation_claim_id" = NULL,
-        "updated_at" = ${committedAt}::timestamptz
-      FROM connection_scope, target_scope
-      WHERE connection."id" = connection_scope."id"
-        AND connection."organization_id" = connection_scope."organization_id"
-        AND connection."content_revision" = connection_scope."content_revision"
-        AND connection."revision" = connection_scope."revision"
-        AND connection."revocation_claim_id" = ${input.connectionClaimId}::uuid
-      RETURNING connection."id", connection."organization_id",
-        connection."content_revision", connection."revision",
-        connection_scope."parentVersionId"
-    ), version AS MATERIALIZED (
-      INSERT INTO ${workspaceResourceVersion}
-        ("id", "organization_id", "resource_type", "resource_id", "revision",
-         "base_revision", "parent_version_id", "branch", "operation", "payload",
-         "payload_hash", "created_by_user_id")
-      SELECT gen_random_uuid(), updated_connection."organization_id", 'connection',
-        updated_connection."id", updated_connection."content_revision",
-        ${input.plan.source.contentRevision}, updated_connection."parentVersionId",
-        'main', 'update', ${JSON.stringify(versionPayload)}::jsonb,
-        ${canonicalHash(versionPayload)}, ${input.authority.userId}
-      FROM updated_connection
-      RETURNING "resource_id"
-    ), completed_operation AS MATERIALIZED (
-      UPDATE ${workspaceProviderOperation} AS operation
-      SET "state" = 'succeeded',
-        "provider_resource_id" = ${input.plan.target.branchId},
-        "redacted_result" = ${JSON.stringify(redactedResult)}::jsonb,
-        "failure_code" = NULL,
-        "reconcile_after" = NULL,
-        "completed_at" = ${committedAt}::timestamptz,
-        "updated_at" = ${committedAt}::timestamptz
-      FROM operation_scope, updated_connection, version
-      WHERE operation."id" = operation_scope."id"
-        AND operation."organization_id" = operation_scope."organization_id"
-        AND version."resource_id" = updated_connection."id"
-        AND operation."state" IN ('remote_started', 'reconciling')
-      RETURNING operation."id", operation."organization_id",
-        operation."risk", operation."approval_policy"
-    ), connection_audit AS (
-      INSERT INTO ${workspaceAuditEvent} AS existing
-        ("id", "organization_id", "actor_user_id", "action", "resource_type",
-         "resource_id", "redacted_summary", "request_id")
-      SELECT ${connectionAuditId}::uuid, updated_connection."organization_id",
-        ${input.authority.userId}, 'connection.provider_target.switch', 'connection',
-        updated_connection."id"::text,
-        jsonb_build_object(
-          'provider', 'neon',
-          'sourceBranchId', ${input.plan.source.branchId}::text,
-          'targetBranchId', ${input.plan.target.branchId}::text,
-          'contentRevision', updated_connection."content_revision",
-          'authorityRevision', updated_connection."revision",
-          'activeLeaseCount', ${input.plan.impact.activeLeaseCount}::int
-        ), ${input.claimId}::uuid
-      FROM updated_connection
-      JOIN completed_operation ON TRUE
-      ON CONFLICT ("id") DO UPDATE SET "id" = existing."id"
-      WHERE existing."organization_id" = EXCLUDED."organization_id"
-        AND existing."actor_user_id" = EXCLUDED."actor_user_id"
-        AND existing."action" = EXCLUDED."action"
-        AND existing."resource_type" = EXCLUDED."resource_type"
-        AND existing."resource_id" = EXCLUDED."resource_id"
-        AND existing."redacted_summary" = EXCLUDED."redacted_summary"
-        AND existing."request_id" = EXCLUDED."request_id"
-      RETURNING "resource_id"
-    ), operation_audit AS (
-      INSERT INTO ${workspaceAuditEvent} AS existing
-        ("id", "organization_id", "actor_user_id", "action", "resource_type",
-         "resource_id", "redacted_summary", "request_id")
-      SELECT ${operationAuditId}::uuid, completed_operation."organization_id",
-        ${input.authority.userId}, 'provider.operation.succeeded',
-        'provider_operation', completed_operation."id"::text,
-        jsonb_build_object(
-          'provider', 'neon',
-          'kind', 'neon.branch.switch',
-          'connectionId', updated_connection."id"::text,
-          'sourceBranchId', ${input.plan.source.branchId}::text,
-          'targetBranchId', ${input.plan.target.branchId}::text,
-          'resourceFingerprint', ${input.plan.target.resourceFingerprint}::text,
-          'risk', completed_operation."risk",
-          'approvalPolicy', completed_operation."approval_policy"
-        ), ${input.claimId}::uuid
-      FROM completed_operation
-      JOIN updated_connection ON TRUE
-      ON CONFLICT ("id") DO UPDATE SET "id" = existing."id"
-      WHERE existing."organization_id" = EXCLUDED."organization_id"
-        AND existing."actor_user_id" = EXCLUDED."actor_user_id"
-        AND existing."action" = EXCLUDED."action"
-        AND existing."resource_type" = EXCLUDED."resource_type"
-        AND existing."resource_id" = EXCLUDED."resource_id"
-        AND existing."redacted_summary" = EXCLUDED."redacted_summary"
-        AND existing."request_id" = EXCLUDED."request_id"
-      RETURNING "resource_id"
-    )
-    SELECT completed_operation."id"::text AS "operationId",
-      updated_connection."id"::text AS "connectionId",
-      updated_connection."content_revision" AS "contentRevision",
-      updated_connection."revision" AS "authorityRevision",
-      ${input.plan.target.branchId}::text AS "targetBranchId"
-    FROM completed_operation
-    JOIN updated_connection ON TRUE
-    JOIN connection_audit
-      ON connection_audit."resource_id" = updated_connection."id"::text
-    JOIN operation_audit
-      ON operation_audit."resource_id" = completed_operation."id"::text
-  `);
-  const row = result.rows[0];
+
+    ), target_resource AS (SELECT id, resource FROM workspace_provider_resource
+        WHERE organization_id = ${input.authority.organizationId} AND provider = 'neon' AND resource_fingerprint = ${projection.fingerprint})
+      SELECT json_object('targetId', COALESCE((SELECT id FROM target_resource), ${targetResourceId}),
+        'parentVersionId', connection_scope.parentVersionId, 'risk', operation_scope.risk, 'approvalPolicy', operation_scope.approval_policy) AS payload
+      FROM connection_scope JOIN operation_scope ON TRUE
+      WHERE (NOT EXISTS (SELECT 1 FROM target_resource) OR EXISTS (SELECT 1 FROM target_resource
+        WHERE ${jsonEqual(sql`resource`, sql`${canonicalJson(projection.resource)}`)}))
+        AND NOT EXISTS (SELECT 1 FROM workspace_connection WHERE organization_id = ${input.authority.organizationId}
+          AND provider_resource_id = (SELECT id FROM target_resource) AND id <> ${input.plan.source.connectionId} AND deleted_at IS NULL)`,
+    statements: (scope) => [
+      sql`INSERT INTO workspace_provider_resource (id, organization_id, provider, resource_fingerprint, resource, redacted_metadata, capability_manifest, updated_at)
+        SELECT json_extract(payload, '$.targetId'), ${input.authority.organizationId}, 'neon', ${projection.fingerprint},
+          ${canonicalJson(projection.resource)}, ${canonicalJson(projection.metadata)}, ${canonicalJson(projection.capabilities)}, ${committedAt}
+        FROM (${scope}) WHERE TRUE ON CONFLICT (organization_id, provider, resource_fingerprint) DO UPDATE SET
+          resource = excluded.resource, redacted_metadata = excluded.redacted_metadata, capability_manifest = excluded.capability_manifest, updated_at = excluded.updated_at`,
+      sql`UPDATE workspace_connection SET host = ${projection.host}, port = ${projection.port}, database_name = ${projection.database},
+          sslmode = ${projection.sslmode}, environment = ${input.plan.target.environment},
+          provider_resource_id = (SELECT json_extract(payload, '$.targetId') FROM (${scope})), provider_resource = ${canonicalJson(projection.resource)},
+          content_revision = content_revision + 1, revocation_pending_at = NULL, revocation_claimed_at = NULL, revocation_claim_id = NULL, updated_at = ${committedAt}
+        WHERE id = ${input.plan.source.connectionId} AND EXISTS (${scope})`,
+      sql`INSERT INTO workspace_resource_version (id, organization_id, resource_type, resource_id, revision, base_revision,
+          parent_version_id, branch, operation, payload, payload_hash, created_by_user_id)
+        SELECT ${uuidDefault}, ${input.authority.organizationId}, 'connection', ${input.plan.source.connectionId}, ${nextContentRevision},
+          ${input.plan.source.contentRevision}, json_extract(payload, '$.parentVersionId'), 'main', 'update',
+          ${canonicalJson(versionPayload)}, ${canonicalHash(versionPayload)}, ${input.authority.userId} FROM (${scope})`,
+      sql`UPDATE workspace_provider_operation SET state = 'succeeded', provider_resource_id = ${input.plan.target.branchId},
+          redacted_result = ${canonicalJson(redactedResult)}, failure_code = NULL, reconcile_after = NULL, completed_at = ${committedAt}, updated_at = ${committedAt}
+        WHERE id = ${input.operationId} AND EXISTS (${scope})`,
+      sql`INSERT INTO workspace_audit_event (id, organization_id, actor_user_id, action, resource_type, resource_id, redacted_summary, request_id)
+        SELECT ${connectionAuditId}, ${input.authority.organizationId}, ${input.authority.userId}, 'connection.provider_target.switch', 'connection', ${input.plan.source.connectionId},
+          json_object('provider', 'neon', 'sourceBranchId', ${input.plan.source.branchId}, 'targetBranchId', ${input.plan.target.branchId},
+            'contentRevision', ${nextContentRevision}, 'authorityRevision', ${expectedAuthorityRevision}, 'activeLeaseCount', ${input.plan.impact.activeLeaseCount}), ${input.claimId}
+        FROM (${scope})`,
+      sql`INSERT INTO workspace_audit_event (id, organization_id, actor_user_id, action, resource_type, resource_id, redacted_summary, request_id)
+        SELECT ${operationAuditId}, ${input.authority.organizationId}, ${input.authority.userId}, 'provider.operation.succeeded', 'provider_operation', ${input.operationId},
+          json_object('provider', 'neon', 'kind', 'neon.branch.switch', 'connectionId', ${input.plan.source.connectionId},
+            'sourceBranchId', ${input.plan.source.branchId}, 'targetBranchId', ${input.plan.target.branchId},
+            'resourceFingerprint', ${input.plan.target.resourceFingerprint}, 'risk', json_extract(payload, '$.risk'),
+            'approvalPolicy', json_extract(payload, '$.approvalPolicy')), ${input.claimId} FROM (${scope})`,
+      sql`SELECT ${input.operationId} AS operationId, id AS connectionId, content_revision AS contentRevision, revision AS authorityRevision,
+          ${input.plan.target.branchId} AS targetBranchId FROM workspace_connection WHERE id = ${input.plan.source.connectionId} AND EXISTS (${scope})`,
+    ],
+  });
+  const row = result.rows[6][0];
   const contentRevision = row ? Number(row.contentRevision) : Number.NaN;
   const authorityRevision = row ? Number(row.authorityRevision) : Number.NaN;
   if (

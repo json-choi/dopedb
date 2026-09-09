@@ -1,6 +1,6 @@
 // Admin-only ciphertext backup inventory. Public responses deliberately expose only
 // backup metadata; plaintext and envelope bytes never cross this boundary.
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 
 import { db } from "../../../../../../lib/db";
 import { env } from "../../../../../../lib/env";
@@ -17,7 +17,7 @@ import {
   WORKSPACE_DATA_KEY_REFERENCE,
 } from "../../../../../../lib/workspace-backup";
 import { authorizeWorkspace } from "../../../../../../lib/workspace-authorization";
-import { revocationGateLockKey } from "../../../../../../lib/revocation-gates";
+import { insertWorkspaceBackup } from "../../../../../../lib/workspace-backup-store";
 import { parseSharedConnection } from "../../../../../../lib/workspace-connections";
 import { WorkspaceKmsError } from "../../../../../../lib/workspace-kms-core";
 import { logWorkspaceKmsFailure } from "../../../../../../lib/workspace-server-log";
@@ -139,6 +139,7 @@ export async function POST(request: Request, context: RouteContext) {
     )),
   ]);
   if (!profile) return jsonError("Workspace metadata is unavailable", 409);
+  if (connections.length > 1_000) return jsonError("Workspace backup connection limit exceeded", 409);
   const snapshot = {
     version: 1 as const,
     workspace: {
@@ -204,98 +205,13 @@ export async function POST(request: Request, context: RouteContext) {
     provider_integration_id: connection.providerIntegrationId,
     provider_resource: connection.providerResource,
   }));
-  const result = await db.execute<ReturnedBackupRow>(sql`
-    WITH authority_lock AS (
-      SELECT pg_advisory_xact_lock(hashtextextended(${revocationGateLockKey({
-        kind: "member", organizationId: workspaceId, memberId: authorization.membership.id,
-        userId: authorization.session.user.id,
-      })}, 0))
-    ), authority AS (
-      SELECT member."id" FROM "workspace_control"."session" session
-      JOIN "workspace_control"."member" member ON member."id" = ${authorization.membership.id}
-        AND member."organization_id" = ${workspaceId} AND member."user_id" = ${authorization.session.user.id}
-      JOIN authority_lock ON TRUE
-      WHERE session."id" = ${authorization.session.session.id} AND session."user_id" = ${authorization.session.user.id}
-        AND session."expires_at" > now() AND member."role" = ${authorization.role}
-        AND member."role" IN ('admin', 'owner') AND member."revocation_pending_at" IS NULL
-        AND member."revocation_claim_id" IS NULL
-      FOR UPDATE OF session, member
-    ), profile_snapshot AS MATERIALIZED (
-      SELECT profile."organization_id", profile."revision"
-      FROM "workspace_control"."workspace_profile" profile
-      JOIN authority ON TRUE
-      WHERE profile."organization_id" = ${workspaceId}
-        AND profile."revision" = ${profile.revision}
-        AND profile."lifecycle_state" IS NOT DISTINCT FROM ${profile.lifecycleState}
-        AND profile."residency_region" IS NOT DISTINCT FROM ${profile.residencyRegion}
-      FOR UPDATE OF profile
-    ), data_key_gate AS MATERIALIZED (
-      SELECT key."id"
-      FROM "workspace_control"."workspace_data_key" key
-      JOIN profile_snapshot ON TRUE
-      WHERE key."id" = ${sealed.dataKeyId}::uuid
-        AND key."organization_id" = ${workspaceId}
-        AND key."retired_at" IS NULL
-        AND key."destroyed_at" IS NULL
-      FOR SHARE OF key
-    ), supplied_connections AS MATERIALIZED (
-      SELECT * FROM jsonb_to_recordset(${JSON.stringify(snapshotConnections)}::jsonb) AS supplied(
-        "id" uuid, "content_revision" bigint, "name" text, "engine" text,
-        "provider" text, "driver_id" text, "host" text, "port" integer,
-        "database_name" text, "sslmode" text, "readonly_default" boolean,
-        "allow_writes" boolean, "environment" text, "schema_group" text,
-        "credential_mode" text, "provider_integration_id" uuid, "provider_resource" jsonb
-      )
-    ), current_connections AS MATERIALIZED (
-      SELECT connection."id", connection."content_revision", connection."name",
-        connection."engine", connection."provider", connection."driver_id",
-        connection."host", connection."port", connection."database_name",
-        connection."sslmode", connection."readonly_default", connection."allow_writes",
-        connection."environment", connection."schema_group", connection."credential_mode",
-        connection."provider_integration_id", connection."provider_resource"
-      FROM "workspace_control"."workspace_connection" connection
-      JOIN profile_snapshot ON TRUE
-      WHERE connection."organization_id" = ${workspaceId}
-        AND connection."deleted_at" IS NULL
-      FOR UPDATE OF connection
-    ), snapshot_matches AS MATERIALIZED (
-      SELECT 1 FROM profile_snapshot
-      JOIN data_key_gate ON TRUE
-      WHERE NOT EXISTS (
-        (SELECT * FROM supplied_connections)
-        EXCEPT
-        (SELECT * FROM current_connections)
-      )
-      AND NOT EXISTS (
-        (SELECT * FROM current_connections)
-        EXCEPT
-        (SELECT * FROM supplied_connections)
-      )
-    ), inserted AS (
-      INSERT INTO "workspace_control"."workspace_metadata_backup"
-        ("id", "organization_id", "source_revision", "key_reference", "key_version",
-         "data_key_id", "ciphertext", "snapshot_hash", "created_by_user_id")
-      SELECT ${backupId}::uuid, ${workspaceId}, ${profile.revision}, ${sealed.keyReference},
-        ${sealed.keyVersion}, ${sealed.dataKeyId}::uuid, ${sealed.ciphertext},
-        ${snapshotHash(snapshot)}, ${authorization.session.user.id}
-      FROM snapshot_matches
-      RETURNING "id" AS "id", "source_revision" AS "sourceRevision",
-        "key_reference" AS "keyReference", "key_version" AS "keyVersion",
-        "snapshot_hash" AS "snapshotHash", "created_at" AS "createdAt"
-    ), audit AS (
-      INSERT INTO "workspace_control"."workspace_audit_event"
-        ("organization_id", "actor_user_id", "action", "resource_type", "resource_id", "redacted_summary", "request_id")
-      SELECT ${workspaceId}, ${authorization.session.user.id}, 'workspace.backup.create', 'workspace_backup',
-        inserted."id"::text,
-        jsonb_build_object(
-          'connectionCount', ${snapshot.connections.length}::integer,
-          'sourceRevision', ${profile.revision}::integer
-        ),
-        gen_random_uuid()
-      FROM inserted RETURNING "id"
-    ) SELECT inserted.* FROM inserted JOIN audit ON TRUE
-  `);
-  const backup = result.rows[0] && returnedBackupMetadata(result.rows[0]);
+  const row = await insertWorkspaceBackup({ organizationId: workspaceId, backupId,
+    authority: { sessionId: authorization.session.session.id, userId: authorization.session.user.id,
+      membershipId: authorization.membership.id, role: authorization.role },
+    revision: profile.revision, lifecycleState: profile.lifecycleState, residencyRegion: profile.residencyRegion,
+    connections: snapshotConnections, sealed, snapshotHash: snapshotHash(snapshot),
+  });
+  const backup = row && returnedBackupMetadata(row as ReturnedBackupRow);
   if (!backup) return jsonError("Workspace metadata changed concurrently. Retry backup.", 409);
   return privateJson({ backup }, { status: 201 });
 }

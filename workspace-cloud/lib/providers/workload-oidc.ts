@@ -1,6 +1,6 @@
-// Vercel injects this token into Functions, but the request header is still an
-// external boundary. Bootstrap mutations use claims only after RS256/JWKS
-// verification against the token's exact team or global issuer.
+// Bootstrap accepts the fixed production workload only after RS256/JWKS
+// verification against the configured identity Worker. Client headers never
+// supply this credential and issuer discovery cannot redirect to another origin.
 import "server-only";
 
 import { createPublicKey, verify } from "node:crypto";
@@ -9,17 +9,16 @@ import { ProviderRequestError } from "./provider-types";
 
 type JsonObject = Record<string, unknown>;
 
-const MAX_VERCEL_TOKEN_LIFETIME_SECONDS = (12 * 60 * 60) + 60;
+const MAX_WORKLOAD_TOKEN_LIFETIME_SECONDS = 900;
 const MAX_DISCOVERY_RESPONSE_BYTES = 32 * 1_024;
 const MAX_JWKS_RESPONSE_BYTES = 256 * 1_024;
 
-export type VerifiedVercelOidc = {
+export type VerifiedWorkloadOidc = {
   issuer: string;
   audience: string;
   subject: string;
-  owner: string;
-  project: string;
-  projectId: string;
+  accountId: string;
+  workloadId: string;
   environment: "production";
 };
 
@@ -55,6 +54,7 @@ async function publicKey(issuer: string, kid: string) {
   const discoveryUrl = new URL(".well-known/openid-configuration", `${issuer}/`);
   const discoveryResponse = await fetch(discoveryUrl, {
     cache: "no-store",
+    redirect: "error",
     signal: AbortSignal.timeout(10_000),
   });
   const discoveryValue = await boundedJsonResponse(
@@ -73,17 +73,20 @@ async function publicKey(issuer: string, kid: string) {
     || typeof discovery.jwks_uri !== "string"
     || discovery.jwks_uri.length > 2_048
   ) {
-    throw new Error("invalid Vercel OIDC discovery");
+    throw new Error("invalid workload OIDC discovery");
   }
   const jwksUrl = new URL(discovery.jwks_uri);
   if (
     jwksUrl.protocol !== "https:"
-    || jwksUrl.hostname !== "oidc.vercel.com"
+    || jwksUrl.origin !== issuer
+    || jwksUrl.pathname !== "/.well-known/jwks.json"
+    || jwksUrl.username || jwksUrl.password || jwksUrl.search || jwksUrl.hash
   ) {
-    throw new Error("invalid Vercel JWKS origin");
+    throw new Error("invalid workload JWKS origin");
   }
   const jwksResponse = await fetch(jwksUrl, {
     cache: "no-store",
+    redirect: "error",
     signal: AbortSignal.timeout(10_000),
   });
   const jwksValue = await boundedJsonResponse(jwksResponse, MAX_JWKS_RESPONSE_BYTES)
@@ -110,14 +113,14 @@ async function publicKey(issuer: string, kid: string) {
     || typeof (key as JsonObject).e !== "string"
     || !/^[A-Za-z0-9_-]{1,8}$/.test((key as JsonObject).e as string)
   ) {
-    throw new Error("Vercel signing key was not found");
+    throw new Error("workload signing key was not found");
   }
   return createPublicKey({ key: key as JsonWebKey, format: "jwk" });
 }
 
-export async function verifyVercelOidcToken(
+export async function verifyWorkloadOidcToken(
   token: string,
-): Promise<VerifiedVercelOidc> {
+): Promise<VerifiedWorkloadOidc> {
   try {
     if (
       token.length < 100
@@ -142,31 +145,18 @@ export async function verifyVercelOidcToken(
     ) {
       throw new Error("invalid JWT algorithm");
     }
-    const issuer = requiredClaim(
-      claims,
-      "iss",
-      /^https:\/\/oidc\.vercel\.com(?:\/[A-Za-z0-9_-]{1,100})?$/,
-    );
-    const owner = requiredClaim(claims, "owner", /^[A-Za-z0-9_-]{1,100}$/);
-    const project = requiredClaim(claims, "project", /^[A-Za-z0-9_-]{1,100}$/);
-    const projectId = requiredClaim(claims, "project_id", /^prj_[A-Za-z0-9]{8,100}$/);
-    const audience = requiredClaim(
-      claims,
-      "aud",
-      /^https:\/\/vercel\.com\/[A-Za-z0-9_-]{1,100}$/,
-    );
-    const subject = requiredClaim(
-      claims,
-      "sub",
-      /^owner:[A-Za-z0-9_-]{1,100}:project:[A-Za-z0-9_-]{1,100}:environment:production$/,
-      360,
-    );
-    if (
-      claims.environment !== "production"
-      || audience !== `https://vercel.com/${owner}`
-      || subject !== `owner:${owner}:project:${project}:environment:production`
-    ) {
-      throw new Error("unexpected Vercel deployment identity");
+    const issuer = requiredClaim(claims, "iss", /^https:\/\/identity\.dopedb\.dev$/);
+    const audience = requiredClaim(claims, "aud", /^https:\/\/iam\.googleapis\.com$/);
+    const subject = requiredClaim(claims, "sub", /^dopedb:workspace:production$/);
+    const accountId = requiredClaim(claims, "account_id", /^[a-f0-9]{32}$/);
+    const workloadId = requiredClaim(claims, "workload_id", /^[a-f0-9-]{36}$/);
+    if (claims.environment !== "production"
+      || issuer !== process.env.OIDC_ISSUER
+      || audience !== process.env.OIDC_AUDIENCE
+      || subject !== process.env.OIDC_SUBJECT
+      || accountId !== process.env.OIDC_ACCOUNT_ID
+      || workloadId !== process.env.OIDC_WORKLOAD_ID) {
+      throw new Error("unexpected production workload identity");
     }
     const now = Math.floor(Date.now() / 1_000);
     const issuedAt = claims.iat;
@@ -183,9 +173,9 @@ export async function verifyVercelOidcToken(
       || notBefore > now + 60
       || expiresAt <= now + 30
       || expiresAt <= issuedAt
-      || expiresAt - issuedAt > MAX_VERCEL_TOKEN_LIFETIME_SECONDS
+      || expiresAt - issuedAt > MAX_WORKLOAD_TOKEN_LIFETIME_SECONDS
     ) {
-      throw new Error("invalid Vercel token lifetime");
+      throw new Error("invalid workload token lifetime");
     }
     const key = await publicKey(issuer, kid);
     const signature = Buffer.from(encodedSignature, "base64url");
@@ -200,21 +190,20 @@ export async function verifyVercelOidcToken(
         signature,
       )
     ) {
-      throw new Error("invalid Vercel token signature");
+      throw new Error("invalid workload token signature");
     }
     return {
       issuer,
       audience,
       subject,
-      owner,
-      project,
-      projectId,
+      accountId,
+      workloadId,
       environment: "production",
     };
   } catch {
     throw new ProviderRequestError(
       "gcpCloudSql",
-      "The production Vercel deployment identity could not be verified",
+      "The production workload deployment identity could not be verified",
       503,
     );
   }

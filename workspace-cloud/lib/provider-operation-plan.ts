@@ -2,7 +2,8 @@ import "server-only";
 
 import { sql } from "drizzle-orm";
 
-import { db } from "./db";
+import { atomicD1 } from "./d1/atomic";
+import { utcNow } from "./d1/schema/values";
 import {
   providerMutationAuthoritySql,
   type ProviderMutationAuthority,
@@ -187,81 +188,39 @@ export async function recordProviderOperationPlan(input: {
       claimId: null,
     },
   });
-  const result = await db.execute<ProviderOperationPlanRow>(sql`
-    WITH live_integration AS MATERIALIZED (
-      SELECT integration."id"
-      FROM ${workspaceProviderIntegration} AS integration
-      WHERE integration."id" = ${input.integrationId}::uuid
-        AND integration."organization_id" = ${input.authority.organizationId}
-        AND integration."provider" = 'neon'
-        AND integration."generation" = ${input.integrationGeneration}
-        AND integration."status" = 'active'
-        AND integration."refresh_phase" = 'idle'
-        AND integration."revoked_at" IS NULL
-        AND integration."revocation_pending_at" IS NULL
-        AND integration."revocation_claim_id" IS NULL
-        AND ${authority}
-      FOR UPDATE OF integration
-    ), recorded AS (
-      INSERT INTO ${workspaceProviderOperation} AS existing
-        ("id", "organization_id", "integration_id", "provider",
-         "integration_generation", "kind", "state", "idempotency_key",
-         "request_hash", "plan_hash", "plan_version", "plan_expires_at",
-         "risk", "approval_policy", "requested_by_member_id",
-         "requested_by_user_id", "requested_by_session_id", "requested_by_role",
-         "resource_scope", "source_resource_id", "target_name",
-         "ownership_marker", "redacted_plan", "created_at", "updated_at")
-      SELECT ${input.operationId}::uuid, ${input.authority.organizationId},
-        live_integration."id", 'neon', ${input.integrationGeneration},
-        ${input.plan.kind}, 'awaiting_approval', ${input.idempotencyKey}::uuid,
-        ${input.requestHash}, ${input.planHash}, 1,
-        ${new Date(input.plan.expiresAt)}, ${input.plan.risk},
-        ${input.plan.approvalPolicy}, ${input.authority.membershipId},
-        ${input.authority.userId}, ${input.authority.sessionId},
-        ${input.authority.role}, ${planStorage.projectId},
-        ${planStorage.sourceResourceId}, ${planStorage.targetName},
-        ${input.ownershipMarker}, ${JSON.stringify(input.plan)}::jsonb,
-        ${input.now}, ${input.now}
-      FROM live_integration
-      ON CONFLICT ("organization_id", "idempotency_key") DO UPDATE
-      SET "id" = existing."id"
-      WHERE existing."request_hash" = EXCLUDED."request_hash"
-        AND existing."provider" = EXCLUDED."provider"
-        AND existing."kind" = EXCLUDED."kind"
-        AND existing."integration_id" = EXCLUDED."integration_id"
-        AND existing."integration_generation" = EXCLUDED."integration_generation"
-      RETURNING existing."id"::text AS "id", existing."kind" AS "kind",
-        existing."state" AS "state",
-        existing."plan_hash" AS "planHash",
-        existing."plan_expires_at" AS "planExpiresAt",
-        existing."risk" AS "risk",
-        existing."approval_policy" AS "approvalPolicy",
-        existing."redacted_plan" AS "redactedPlan",
-        existing."ownership_marker" AS "ownershipMarker"
-    ), audit AS (
-      INSERT INTO ${workspaceAuditEvent} AS existing
-        ("id", "organization_id", "actor_user_id", "action", "resource_type",
-         "resource_id", "redacted_summary", "request_id")
-      SELECT ${auditId}::uuid, ${input.authority.organizationId},
-        ${input.authority.userId}, 'provider.operation.plan',
-        'provider_operation', recorded."id",
-        ${JSON.stringify({ ...planStorage.audit, planHash: input.planHash })}::jsonb,
-        ${input.idempotencyKey}::uuid
-      FROM recorded
-      ON CONFLICT ("id") DO UPDATE SET "id" = existing."id"
-      WHERE existing."organization_id" = EXCLUDED."organization_id"
-        AND existing."actor_user_id" = EXCLUDED."actor_user_id"
-        AND existing."action" = EXCLUDED."action"
-        AND existing."resource_type" = EXCLUDED."resource_type"
-        AND existing."resource_id" = EXCLUDED."resource_id"
-        AND existing."redacted_summary" = EXCLUDED."redacted_summary"
-        AND existing."request_id" = EXCLUDED."request_id"
-      RETURNING "resource_id"
-    )
-    SELECT recorded.* FROM recorded JOIN audit
-      ON audit."resource_id" = recorded."id"
-  `);
-  return planRecord(result.rows[0], {
+  const result = await atomicD1({
+    scope: sql`WITH existing AS (SELECT * FROM workspace_provider_operation
+        WHERE organization_id = ${input.authority.organizationId} AND idempotency_key = ${input.idempotencyKey})
+      SELECT json_object('id', COALESCE((SELECT id FROM existing), ${input.operationId}),
+        'created', NOT EXISTS (SELECT 1 FROM existing)) AS payload FROM workspace_provider_integration integration
+      WHERE integration.id = ${input.integrationId} AND integration.organization_id = ${input.authority.organizationId}
+        AND integration.provider = 'neon' AND integration.generation = ${input.integrationGeneration}
+        AND integration.status = 'active' AND integration.refresh_phase = 'idle' AND integration.revoked_at IS NULL
+        AND integration.revocation_pending_at IS NULL AND integration.revocation_claim_id IS NULL AND ${authority}
+        AND (NOT EXISTS (SELECT 1 FROM existing) OR EXISTS (SELECT 1 FROM existing
+          WHERE request_hash = ${input.requestHash} AND provider = 'neon' AND kind = ${input.plan.kind}
+            AND integration_id = ${input.integrationId} AND integration_generation = ${input.integrationGeneration}))`,
+    statements: (scope) => [
+      sql`INSERT INTO workspace_provider_operation (id, organization_id, integration_id, provider, integration_generation,
+          kind, state, idempotency_key, request_hash, plan_hash, plan_version, plan_expires_at, risk, approval_policy,
+          requested_by_member_id, requested_by_user_id, requested_by_session_id, requested_by_role,
+          resource_scope, source_resource_id, target_name, ownership_marker, redacted_plan, created_at, updated_at)
+        SELECT ${input.operationId}, ${input.authority.organizationId}, ${input.integrationId}, 'neon', ${input.integrationGeneration},
+          ${input.plan.kind}, 'awaiting_approval', ${input.idempotencyKey}, ${input.requestHash}, ${input.planHash}, 1,
+          ${new Date(input.plan.expiresAt)}, ${input.plan.risk}, ${input.plan.approvalPolicy}, ${input.authority.membershipId},
+          ${input.authority.userId}, ${input.authority.sessionId}, ${input.authority.role}, ${planStorage.projectId},
+          ${planStorage.sourceResourceId}, ${planStorage.targetName}, ${input.ownershipMarker}, ${canonicalJson(input.plan)}, ${input.now}, ${input.now}
+        FROM (${scope}) WHERE json_extract(payload, '$.created') = 1`,
+      sql`INSERT INTO workspace_audit_event (id, organization_id, actor_user_id, action, resource_type, resource_id, redacted_summary, request_id)
+        SELECT ${auditId}, ${input.authority.organizationId}, ${input.authority.userId}, 'provider.operation.plan', 'provider_operation',
+          ${input.operationId}, ${canonicalJson({ ...planStorage.audit, planHash: input.planHash })}, ${input.idempotencyKey}
+        FROM (${scope}) WHERE json_extract(payload, '$.created') = 1`,
+      sql`SELECT id, kind, state, plan_hash AS planHash, plan_expires_at AS planExpiresAt, risk, approval_policy AS approvalPolicy,
+          redacted_plan AS redactedPlan, ownership_marker AS ownershipMarker FROM workspace_provider_operation
+        WHERE id = (SELECT json_extract(payload, '$.id') FROM (${scope}))`,
+    ],
+  });
+  return planRecord(result.rows[2][0] as ProviderOperationPlanRow | undefined, {
     organizationId: input.authority.organizationId,
     integrationId: input.integrationId,
     integrationGeneration: input.integrationGeneration,
@@ -331,14 +290,14 @@ export async function decideProviderOperation(input: {
       claimId: null,
     },
   });
-  const result = await db.execute<ProviderOperationDecisionRow>(sql`
-    WITH live_operation AS MATERIALIZED (
+  const result = await atomicD1({
+    scope: sql`    WITH live_operation AS MATERIALIZED (
       SELECT operation.*
       FROM ${workspaceProviderOperation} AS operation
       JOIN ${session} AS requester_session
         ON requester_session."id" = operation."requested_by_session_id"
        AND requester_session."user_id" = operation."requested_by_user_id"
-       AND requester_session."expires_at" > now()
+       AND requester_session."expires_at" > ${utcNow}
       JOIN ${member} AS requester_member
         ON requester_member."id" = operation."requested_by_member_id"
        AND requester_member."organization_id" = operation."organization_id"
@@ -347,9 +306,9 @@ export async function decideProviderOperation(input: {
        AND requester_member."role" IN ('admin', 'owner')
        AND requester_member."revocation_pending_at" IS NULL
        AND requester_member."revocation_claim_id" IS NULL
-      WHERE operation."id" = ${input.operationId}::uuid
+      WHERE operation."id" = ${input.operationId}
         AND operation."organization_id" = ${input.authority.organizationId}
-        AND operation."integration_id" = ${input.integrationId}::uuid
+        AND operation."integration_id" = ${input.integrationId}
         AND operation."provider" = 'neon'
         AND operation."kind" = ${input.kind}
         AND operation."integration_generation" = ${input.integrationGeneration}
@@ -377,7 +336,7 @@ export async function decideProviderOperation(input: {
         AND (
           ${input.decision} <> 'approved'
           OR operation."state" <> 'awaiting_approval'
-          OR operation."plan_expires_at" > now()
+          OR operation."plan_expires_at" > ${utcNow}
         )
         AND (
           ${input.decision} <> 'approved'
@@ -388,90 +347,36 @@ export async function decideProviderOperation(input: {
           )
         )
         AND ${authority}
-      FOR UPDATE OF operation, requester_session, requester_member
-    ), recorded_approval AS MATERIALIZED (
-      INSERT INTO ${workspaceProviderOperationApproval} AS existing
-        ("id", "organization_id", "operation_id", "plan_hash", "decision",
-         "actor_member_id", "actor_user_id", "actor_session_id", "actor_role",
-         "created_at")
-      SELECT ${approvalId}::uuid, live_operation."organization_id",
-        live_operation."id", live_operation."plan_hash", ${input.decision},
-        ${input.authority.membershipId}, ${input.authority.userId},
-        ${input.authority.sessionId}, ${input.authority.role}, ${input.now}
-      FROM live_operation
-      ON CONFLICT ("organization_id", "operation_id") DO UPDATE
-      SET "id" = existing."id"
-      WHERE existing."plan_hash" = EXCLUDED."plan_hash"
-        AND existing."decision" = EXCLUDED."decision"
-        AND existing."actor_member_id" = EXCLUDED."actor_member_id"
-        AND existing."actor_user_id" = EXCLUDED."actor_user_id"
-        AND existing."actor_session_id" = EXCLUDED."actor_session_id"
-        AND existing."actor_role" = EXCLUDED."actor_role"
-      RETURNING existing."id"::text AS "approvalId",
-        existing."operation_id" AS "operationId",
-        existing."decision" AS "decision"
-    ), updated AS MATERIALIZED (
-      UPDATE ${workspaceProviderOperation} AS operation
-      SET "state" = CASE
-          WHEN operation."state" = 'awaiting_approval' THEN ${expectedState}
-          ELSE operation."state"
-        END,
-        "completed_at" = CASE
-          WHEN operation."state" = 'awaiting_approval'
-            AND ${input.decision} = 'rejected' THEN ${input.now}
-          ELSE operation."completed_at"
-        END,
-        "updated_at" = CASE
-          WHEN operation."state" = 'awaiting_approval' THEN ${input.now}
-          ELSE operation."updated_at"
-        END
-      FROM live_operation, recorded_approval
-      WHERE operation."id" = live_operation."id"
-        AND operation."organization_id" = live_operation."organization_id"
-        AND recorded_approval."operationId" = operation."id"
-        AND (
-          operation."state" = 'awaiting_approval'
-          OR ${input.decision} = 'approved'
-          OR operation."state" = 'cancelled'
-        )
-      RETURNING operation."id"::text AS "id", operation."state" AS "state",
-        operation."organization_id" AS "organizationId",
-        operation."plan_hash" AS "planHash",
-        operation."risk" AS "risk",
-        operation."approval_policy" AS "approvalPolicy"
-    ), audit AS (
-      INSERT INTO ${workspaceAuditEvent} AS existing
-        ("id", "organization_id", "actor_user_id", "action", "resource_type",
-         "resource_id", "redacted_summary", "request_id")
-      SELECT ${auditId}::uuid, updated."organizationId",
-        ${input.authority.userId}, 'provider.operation.decision',
-        'provider_operation', updated."id",
-        jsonb_build_object(
-          'provider', 'neon',
-          'kind', ${input.kind}::text,
-          'decision', ${input.decision}::text,
-          'planHash', updated."planHash",
-          'risk', updated."risk",
-          'approvalPolicy', updated."approvalPolicy"
-        ), ${input.operationId}::uuid
-      FROM updated
-      ON CONFLICT ("id") DO UPDATE SET "id" = existing."id"
-      WHERE existing."organization_id" = EXCLUDED."organization_id"
-        AND existing."actor_user_id" = EXCLUDED."actor_user_id"
-        AND existing."action" = EXCLUDED."action"
-        AND existing."resource_type" = EXCLUDED."resource_type"
-        AND existing."resource_id" = EXCLUDED."resource_id"
-        AND existing."redacted_summary" = EXCLUDED."redacted_summary"
-        AND existing."request_id" = EXCLUDED."request_id"
-      RETURNING "resource_id"
+
     )
-    SELECT updated."id", updated."state", recorded_approval."decision",
-      recorded_approval."approvalId"
-    FROM updated
-    JOIN recorded_approval ON recorded_approval."operationId" = updated."id"::uuid
-    JOIN audit ON audit."resource_id" = updated."id"
-  `);
-  const row = result.rows[0];
+      SELECT json_object('id', operation.id, 'created', NOT EXISTS (SELECT 1 FROM workspace_provider_operation_approval
+        WHERE organization_id = operation.organization_id AND operation_id = operation.id)) AS payload
+      FROM live_operation operation WHERE NOT EXISTS (SELECT 1 FROM workspace_provider_operation_approval prior
+        WHERE prior.organization_id = operation.organization_id AND prior.operation_id = operation.id
+          AND NOT (prior.plan_hash = ${input.planHash} AND prior.decision = ${input.decision}
+            AND prior.actor_member_id = ${input.authority.membershipId} AND prior.actor_user_id = ${input.authority.userId}
+            AND prior.actor_session_id = ${input.authority.sessionId} AND prior.actor_role = ${input.authority.role}))`,
+    statements: (scope) => [
+      sql`INSERT INTO workspace_provider_operation_approval (id, organization_id, operation_id, plan_hash, decision,
+          actor_member_id, actor_user_id, actor_session_id, actor_role, created_at)
+        SELECT ${approvalId}, ${input.authority.organizationId}, ${input.operationId}, ${input.planHash}, ${input.decision},
+          ${input.authority.membershipId}, ${input.authority.userId}, ${input.authority.sessionId}, ${input.authority.role}, ${input.now}
+        FROM (${scope}) WHERE json_extract(payload, '$.created') = 1`,
+      sql`UPDATE workspace_provider_operation SET state = ${expectedState},
+          completed_at = CASE WHEN ${input.decision} = 'rejected' THEN ${input.now} ELSE completed_at END, updated_at = ${input.now}
+        WHERE id = ${input.operationId} AND state = 'awaiting_approval' AND EXISTS (${scope})`,
+      sql`INSERT INTO workspace_audit_event (id, organization_id, actor_user_id, action, resource_type, resource_id, redacted_summary, request_id)
+        SELECT ${auditId}, ${input.authority.organizationId}, ${input.authority.userId}, 'provider.operation.decision', 'provider_operation', ${input.operationId},
+          json_object('provider', 'neon', 'kind', ${input.kind}, 'decision', ${input.decision}, 'planHash', operation.plan_hash,
+            'risk', operation.risk, 'approvalPolicy', operation.approval_policy), ${input.operationId}
+        FROM workspace_provider_operation operation WHERE id = ${input.operationId}
+          AND EXISTS (SELECT 1 FROM (${scope}) WHERE json_extract(payload, '$.created') = 1)`,
+      sql`SELECT operation.id, operation.state, approval.decision, approval.id AS approvalId FROM workspace_provider_operation operation
+        JOIN workspace_provider_operation_approval approval ON approval.organization_id = operation.organization_id AND approval.operation_id = operation.id
+        WHERE operation.id = ${input.operationId} AND EXISTS (${scope})`,
+    ],
+  });
+  const row = result.rows[3][0] as ProviderOperationDecisionRow | undefined;
   if (
     !row
     || row.id !== input.operationId

@@ -7,6 +7,7 @@ import { createHash } from "node:crypto";
 import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { db } from "./db";
+import { jsonEqual } from "./d1/json";
 import { providerImportAdapters } from "./providers/import-projection";
 import {
   workspaceConnection,
@@ -190,18 +191,18 @@ export async function loadProviderProvisioningTarget(input: {
 }): Promise<ProviderProvisioningTarget | null> {
   const productionPolicy = input.cleanup
     ? sql`(
-        ${workspaceProviderResource.redactedMetadata}->'production' = 'false'::jsonb
+        json_type(${workspaceProviderResource.redactedMetadata}, '$.production') = 'false'
         OR ${workspaceProviderImportRequest.productionApproved} = TRUE
       )`
     : sql`(
-        ${workspaceProviderResource.redactedMetadata}->'production' = 'false'::jsonb
+        json_type(${workspaceProviderResource.redactedMetadata}, '$.production') = 'false'
         OR (
           ${workspaceProviderResource.provider} IN ('gcpCloudSql', 'planetScale', 'neon')
-          AND ${workspaceProviderResource.redactedMetadata}->'production' = 'true'::jsonb
+          AND json_type(${workspaceProviderResource.redactedMetadata}, '$.production') = 'true'
           AND (
             ${workspaceProviderResource.provider} <> 'planetScale'
             OR ${workspaceProviderResource.resource}->>'engine' = 'postgres'
-            OR ${workspaceProviderResource.redactedMetadata}->'safeMigrations' = 'true'::jsonb
+            OR json_type(${workspaceProviderResource.redactedMetadata}, '$.safeMigrations') = 'true'
           )
           AND ${workspaceProviderImportRequest.productionApproved} = TRUE
         )
@@ -246,11 +247,11 @@ export async function loadProviderProvisioningTarget(input: {
       eq(workspaceProviderIntegration.refreshPhase, "idle"),
       isNull(workspaceProviderIntegration.revokedAt),
       isNull(workspaceProviderIntegration.revocationPendingAt),
-      sql`${workspaceConnection.providerResource} = ${workspaceProviderResource.resource}`,
-      sql`${workspaceProviderResource.capabilityManifest}->'discover' = 'true'::jsonb`,
-      sql`${workspaceProviderResource.capabilityManifest}->'importReadOnly' = 'true'::jsonb`,
-      sql`${workspaceProviderResource.capabilityManifest}->'managedLease' = 'true'::jsonb`,
-      sql`jsonb_typeof(${workspaceProviderResource.capabilityManifest}->'write') = 'boolean'`,
+      jsonEqual(workspaceConnection.providerResource, workspaceProviderResource.resource),
+      sql`json_type(${workspaceProviderResource.capabilityManifest}, '$.discover') = 'true'`,
+      sql`json_type(${workspaceProviderResource.capabilityManifest}, '$.importReadOnly') = 'true'`,
+      sql`json_type(${workspaceProviderResource.capabilityManifest}, '$.managedLease') = 'true'`,
+      sql`json_type(${workspaceProviderResource.capabilityManifest}, '$.write') IN ('true', 'false')`,
       productionPolicy,
     ))
     .limit(2);

@@ -96,11 +96,8 @@ export function parseGcpCloudSqlCredential(
     || schemaServiceAccountEmail === body.readServiceAccountEmail
     || (schemaServiceAccountEmail !== null
       && schemaServiceAccountEmail === writeServiceAccountEmail)
-    || (workloadIdentitySubject !== null && (
-      typeof workloadIdentitySubject !== "string"
-      || !/^owner:[A-Za-z0-9_-]{1,100}:project:[A-Za-z0-9_-]{1,100}:environment:production$/
-        .test(workloadIdentitySubject)
-    ))
+    || (workloadIdentitySubject !== null
+      && workloadIdentitySubject !== "dopedb:workspace:production")
     || (schemaServiceAccountEmail !== null && workloadIdentitySubject === null)
     || !Array.isArray(databaseNames)
     || databaseNames.length > 200

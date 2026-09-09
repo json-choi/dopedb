@@ -2,6 +2,7 @@
 // -> exact plan approval -> apply/verify -> receipt. No SQL or secret crosses it.
 import { sql } from "drizzle-orm";
 
+import { jsonEqual } from "../../../../../../../../lib/d1/json";
 import { db } from "../../../../../../../../lib/db";
 import { env } from "../../../../../../../../lib/env";
 import {
@@ -218,9 +219,9 @@ async function recordBootstrapAudit(input: {
       ("id", "organization_id", "actor_user_id", "action", "resource_type",
        "resource_id", "redacted_summary", "request_id")
     VALUES (
-      ${id}::uuid, ${input.organizationId}, ${input.actorUserId}, ${input.action},
+      ${id}, ${input.organizationId}, ${input.actorUserId}, ${input.action},
       'provider_resource', ${input.resourceId},
-      ${JSON.stringify(input.summary)}::jsonb, ${input.requestId}::uuid
+      ${JSON.stringify(input.summary)}, ${input.requestId}
     )
     ON CONFLICT ("id") DO UPDATE SET "id" = existing."id"
     WHERE existing."organization_id" = EXCLUDED."organization_id"
@@ -228,7 +229,7 @@ async function recordBootstrapAudit(input: {
       AND existing."action" = EXCLUDED."action"
       AND existing."resource_type" = EXCLUDED."resource_type"
       AND existing."resource_id" = EXCLUDED."resource_id"
-      AND existing."redacted_summary" = EXCLUDED."redacted_summary"
+      AND ${jsonEqual(sql`existing."redacted_summary"`, sql`EXCLUDED."redacted_summary"`)}
       AND existing."request_id" = EXCLUDED."request_id"
     RETURNING "id"
   `);

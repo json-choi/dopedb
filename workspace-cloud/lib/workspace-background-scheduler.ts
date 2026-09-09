@@ -3,7 +3,8 @@
 import "server-only";
 
 import { boundedJsonResponse } from "./bounded-json-response";
-import { neonSql } from "./db";
+import { sql } from "drizzle-orm";
+import { queryD1 } from "./d1/database";
 import { env } from "./env";
 
 const CONTRACT_VERSION = "2";
@@ -34,7 +35,7 @@ function checkedNotBefore(value: Date) {
 }
 
 /**
- * Producer wake-up. PostgreSQL remains the durable work authority while D1
+ * Producer wake-up. The Workspace D1 database remains the durable work authority while the scheduler D1 database
  * stores only the earliest task-level due time. Provider-enforced lease expiry
  * is independent of this best-effort wake-up, and active requests repair missed
  * credential cleanup without reintroducing an idle polling loop.
@@ -88,37 +89,37 @@ export function workspaceSchedulerBoundedWakeAt(candidate: unknown, now = new Da
 }
 
 export async function nextCredentialBackgroundRunAt() {
-  const rows = await neonSql.query(
-    `SELECT min(CASE
+  const rows = await queryD1<{ nextRunAt: string | null }>(
+    sql`SELECT min(CASE
        WHEN lease."cleanup_claimed_at" IS NOT NULL
-         AND lease."cleanup_claimed_at" > now() - interval '2 minutes'
-         THEN lease."cleanup_claimed_at" + interval '2 minutes'
+         AND lease."cleanup_claimed_at" > strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-2 minutes')
+         THEN strftime('%Y-%m-%dT%H:%M:%fZ', lease."cleanup_claimed_at", '+2 minutes')
        ELSE COALESCE(lease."cleanup_next_attempt_at", lease."expires_at")
      END) AS "nextRunAt"
-     FROM "workspace_control"."workspace_credential_lease" lease
+     FROM "workspace_credential_lease" lease
      WHERE lease."revoked_at" IS NULL`,
   );
   return workspaceSchedulerBoundedWakeAt(rows[0]?.nextRunAt);
 }
 
 export async function nextMaintenanceBackgroundRunAt() {
-  const rows = await neonSql.query(
-    `SELECT min(due."nextRunAt") AS "nextRunAt"
+  const rows = await queryD1<{ nextRunAt: string | null }>(
+    sql`SELECT min(due."nextRunAt") AS "nextRunAt"
      FROM (
-       SELECT receipt."expires_at"
-       FROM "workspace_control"."workspace_provider_discovery_receipt" receipt
+       SELECT receipt."expires_at" AS "nextRunAt"
+       FROM "workspace_provider_discovery_receipt" receipt
        WHERE receipt."consumed_at" IS NULL
        UNION ALL
-       SELECT receipt."consumed_at" + interval '10 minutes'
-       FROM "workspace_control"."workspace_provider_discovery_receipt" receipt
+       SELECT strftime('%Y-%m-%dT%H:%M:%fZ', receipt."consumed_at", '+10 minutes')
+       FROM "workspace_provider_discovery_receipt" receipt
        WHERE receipt."consumed_at" IS NOT NULL
        UNION ALL
        SELECT backup."purge_after"
-       FROM "workspace_control"."workspace_metadata_backup" backup
+       FROM "workspace_metadata_backup" backup
        WHERE backup."deleted_at" IS NOT NULL
        UNION ALL
        SELECT profile."purge_after"
-       FROM "workspace_control"."workspace_profile" profile
+       FROM "workspace_profile" profile
        WHERE profile."lifecycle_state" = 'deletion_pending'
      ) due`,
   );

@@ -2,7 +2,8 @@ import "server-only";
 
 import { sql } from "drizzle-orm";
 
-import { db } from "./db";
+import { atomicD1 } from "./d1/atomic";
+import { jsonEqual } from "./d1/json";
 import {
   providerMutationAuthoritySql,
   type ProviderMutationAuthority,
@@ -85,19 +86,15 @@ export async function completeProviderOperationBootstrap(
     input.operationId,
   );
   const readyAt = input.now.toISOString();
-  const result = await db.execute<{
-    id: string;
-    previousManagedAccessState: string;
-    managedAccessState: string;
-  }>(sql`
-    WITH candidate AS MATERIALIZED (
+  const result = await atomicD1({
+    scope: sql`    WITH candidate AS MATERIALIZED (
       SELECT operation."id", operation."organization_id",
         operation."redacted_result"->>'managedAccessState'
           AS "previousManagedAccessState"
       FROM ${workspaceProviderOperation} AS operation
-      WHERE operation."id" = ${input.operationId}::uuid
+      WHERE operation."id" = ${input.operationId}
         AND operation."organization_id" = ${input.authority.organizationId}
-        AND operation."integration_id" = ${input.integrationId}::uuid
+        AND operation."integration_id" = ${input.integrationId}
         AND operation."provider" = 'neon'
         AND operation."kind" = ${input.kind}
         AND operation."integration_generation" = ${input.integrationGeneration}
@@ -124,76 +121,49 @@ export async function completeProviderOperationBootstrap(
           )
         )
         AND ${authority}
-      FOR UPDATE OF operation
-    ), audited AS (
-      INSERT INTO ${workspaceAuditEvent} AS existing
+
+    )
+      SELECT json_object('id', id, 'organization_id', organization_id, 'previousManagedAccessState', previousManagedAccessState) AS payload FROM candidate`,
+    statements: (scope) => {
+      const candidate = sql`SELECT json_extract(payload, '$.id') AS id, json_extract(payload, '$.organization_id') AS organization_id,
+        json_extract(payload, '$.previousManagedAccessState') AS previousManagedAccessState FROM (${scope})`;
+      return [sql`INSERT INTO ${workspaceAuditEvent} AS existing
         ("id", "organization_id", "actor_user_id", "action", "resource_type",
          "resource_id", "redacted_summary", "request_id")
-      SELECT ${auditId}::uuid, candidate."organization_id",
+      SELECT ${auditId}, candidate."organization_id",
         ${input.authority.userId}, 'provider.operation.bootstrap_ready',
         'provider_operation', candidate."id",
-        jsonb_build_object(
+        json_object(
           'provider', 'neon',
-          'kind', ${input.kind}::text,
-          'branchId', ${input.branchId}::text,
-          'providerAuditId', ${input.providerAuditId}::text,
-          'resourceFingerprint', ${input.resourceFingerprint}::text,
-          'bootstrapPlanHash', ${input.bootstrapPlanHash}::text,
-          'databaseFingerprint', ${input.databaseFingerprint}::text,
-          'credentialFenceFingerprint', ${input.credentialFenceFingerprint}::text,
+          'kind', ${input.kind},
+          'branchId', ${input.branchId},
+          'providerAuditId', ${input.providerAuditId},
+          'resourceFingerprint', ${input.resourceFingerprint},
+          'bootstrapPlanHash', ${input.bootstrapPlanHash},
+          'databaseFingerprint', ${input.databaseFingerprint},
+          'credentialFenceFingerprint', ${input.credentialFenceFingerprint},
           'managedAccessState', 'ready'
-        ), ${input.operationId}::uuid
-      FROM candidate
+        ), ${input.operationId}
+      FROM (${candidate}) AS candidate
       WHERE candidate."previousManagedAccessState" = 'bootstrap_required'
-      ON CONFLICT ("id") DO UPDATE SET "id" = existing."id"
-      WHERE existing."organization_id" = EXCLUDED."organization_id"
+      ON CONFLICT ("id") DO UPDATE SET "id" = CASE WHEN existing."organization_id" = EXCLUDED."organization_id"
         AND existing."actor_user_id" = EXCLUDED."actor_user_id"
         AND existing."action" = EXCLUDED."action"
         AND existing."resource_type" = EXCLUDED."resource_type"
         AND existing."resource_id" = EXCLUDED."resource_id"
-        AND existing."redacted_summary" = EXCLUDED."redacted_summary"
-        AND existing."request_id" = EXCLUDED."request_id"
-      RETURNING "resource_id"
-    ), updated AS MATERIALIZED (
-      UPDATE ${workspaceProviderOperation} AS operation
-      SET "redacted_result" = operation."redacted_result" || jsonb_build_object(
-          'managedAccessState', 'ready',
-          'bootstrapProviderAuditId', ${input.providerAuditId}::text,
-          'bootstrapResourceFingerprint', ${input.resourceFingerprint}::text,
-          'bootstrapPlanHash', ${input.bootstrapPlanHash}::text,
-          'bootstrapReadyAt', CASE
-            WHEN candidate."previousManagedAccessState" = 'ready'
-              THEN operation."redacted_result"->>'bootstrapReadyAt'
-            ELSE ${readyAt}::text
-          END
-        ),
-        "updated_at" = CASE
-          WHEN candidate."previousManagedAccessState" = 'ready'
-            THEN operation."updated_at"
-          ELSE ${input.now}
-        END
-      FROM candidate
-      WHERE operation."id" = candidate."id"
-        AND operation."organization_id" = candidate."organization_id"
-        AND operation."state" = 'succeeded'
-        AND operation."redacted_result"->>'managedAccessState'
-          = candidate."previousManagedAccessState"
-        AND (
-          candidate."previousManagedAccessState" = 'ready'
-          OR EXISTS (
-            SELECT 1 FROM audited
-            WHERE audited."resource_id" = candidate."id"::text
-          )
-        )
-      RETURNING operation."id"::text AS "id",
-        candidate."previousManagedAccessState" AS "previousManagedAccessState",
-        operation."redacted_result"->>'managedAccessState' AS "managedAccessState"
-    )
-    SELECT updated."id", updated."previousManagedAccessState",
-      updated."managedAccessState"
-    FROM updated
-  `);
-  const row = result.rows[0];
+        AND ${jsonEqual(sql`existing."redacted_summary"`, sql`EXCLUDED."redacted_summary"`)}
+        AND existing."request_id" = EXCLUDED."request_id" THEN existing."id" ELSE NULL END`,
+        sql`UPDATE workspace_provider_operation SET redacted_result = json_set(redacted_result,
+            '$.managedAccessState', 'ready', '$.bootstrapProviderAuditId', ${input.providerAuditId},
+            '$.bootstrapResourceFingerprint', ${input.resourceFingerprint}, '$.bootstrapPlanHash', ${input.bootstrapPlanHash},
+            '$.bootstrapReadyAt', ${readyAt}), updated_at = ${input.now}
+          WHERE id = ${input.operationId} AND EXISTS (SELECT 1 FROM (${candidate}) WHERE previousManagedAccessState = 'bootstrap_required')`,
+        sql`SELECT operation.id, candidate.previousManagedAccessState, operation.redacted_result ->> 'managedAccessState' AS managedAccessState
+          FROM workspace_provider_operation operation JOIN (${candidate}) candidate ON candidate.id = operation.id`,
+      ];
+    },
+  });
+  const row = result.rows[2][0];
   if (
     !row
     || row.id !== input.operationId

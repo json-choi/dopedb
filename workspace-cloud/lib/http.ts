@@ -77,8 +77,8 @@ function* jsonTokens(value: unknown, ancestors: Set<object>): Generator<string> 
 }
 
 /**
- * Incrementally serializes private JSON. This avoids both Vercel's buffered
- * response ceiling and a second full-size stringify/UTF-8 allocation while the
+ * Incrementally serializes private JSON. This avoids a second full-size
+ * stringify/UTF-8 allocation while the
  * stream's pull contract provides downstream backpressure.
  */
 export function privateJsonStream(data: unknown, init: ResponseInit = {}) {

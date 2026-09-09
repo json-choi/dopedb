@@ -5,7 +5,7 @@ import { LegalDocument, type LegalSection } from "../components/LegalDocument";
 
 const operatorName = { en: "Jaesong Choi", ko: "최재송" } as const;
 const contactEmail = "cjs5241@gmail.com";
-const effectiveDate = { en: "August 14, 2026", ko: "2026년 8월 14일" } as const;
+const effectiveDate = { en: "September 9, 2026", ko: "2026년 9월 9일" } as const;
 
 type PrivacyProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
@@ -44,16 +44,16 @@ const content: Record<"en" | "ko", {
           "Local desktop and Agent data: other than the separately described diagnostics and optional product analytics, database credentials, certificates, advanced connection parameters, query history, full execution records, and provider CLI authentication remain on the device or in its operating-system credential store unless you deliberately publish supported metadata or send selected context to an Agent provider.",
           "Desktop error diagnostics: production builds send Sentry a sanitized exception type and stack structure or code location, app release and runtime, a bounded React component-name chain, and closed Agent-plugin provider, operation, and failure outcome tags. User, request, breadcrumb, free-form message, extra context, logs, replay, tracing, and default PII are disabled or removed before sending.",
           "Optional Desktop product analytics: only after explicit opt-in, the app sends random installation and session identifiers, a one-way event identifier, app version, operating-system family, language, an installation-scoped sign-in key, workspace-scoped team member and workspace keys when applicable, workspace kind, and closed event outcomes such as database engine, local or managed access, statement class, provider, approval flag, role, and bucketed duration or row count.",
-          "Website data: hosting requests and Vercel Web Analytics data such as page, referral, browser/device, approximate location, and configured download or call-to-action events. DopeDB does not use this information to build advertising profiles.",
+          "Website data: hosting and security requests, plus closed page/language and download or workspace-button event categories stored in Cloudflare Analytics Engine for three months. Website metrics contain no visitor identifier, full URL, query string, referrer, device, or location field and are not used for advertising profiles.",
         ],
       },
       {
         title: "Desktop diagnostics and analytics choices",
         paragraphs: [
           "Sentry error diagnostics and optional product analytics are separate. Sentry receives only the sanitized production error projection described above and is not used to build product funnels. Optional product analytics remains off while your choice is pending or denied and is sent through app.dopedb.dev to DopeDB's dedicated Cloudflare analytics service only after you choose to allow it.",
-          "The first-party relay validates a closed event schema and does not store raw analytics in the workspace database. The dedicated Cloudflare Worker stores the normalized event in an EU-jurisdiction D1 database without the original client IP, person profiles, autocapture, cookies, replay, heatmaps, surveys, or free-form properties. Vercel and Cloudflare may separately process request metadata and IP addresses as hosting and security data.",
+          "The first-party relay validates a closed event schema and does not store raw analytics in the workspace database. The dedicated Cloudflare Worker stores the normalized event in an EU-jurisdiction D1 database without the original client IP, person profiles, autocapture, cookies, replay, heatmaps, surveys, or free-form properties. Cloudflare may separately process request metadata and IP addresses as hosting and security data.",
           "Neither diagnostics nor product analytics is allowed to contain SQL or query text, parameters, database results, database, host, connection, schema, table, column or project names, credentials, tokens, certificates, Agent prompts or transcripts, repository names or source, local paths, email, display name, raw account or workspace identifiers, request or response bodies, or raw product errors. DopeDB does not use these systems for advertising or general-purpose AI training.",
-          "Withdrawing Desktop product-analytics consent stops future collection and deletes the pending local queue and random installation identifier immediately. If you opt in again, the app creates new installation, session, and sign-in keys. Workspace-scoped team member and workspace keys may still group separately consented events inside that team. Installation-only, Personal Workspace, and sign-in events already accepted by the relay cannot be individually located because DopeDB keeps no account-to-installation map; they expire under the raw-event retention limit. This choice does not change Sentry diagnostics or the public website's separate Vercel Web Analytics.",
+          "Withdrawing Desktop product-analytics consent stops future collection and deletes the pending local queue and random installation identifier immediately. If you opt in again, the app creates new installation, session, and sign-in keys. Workspace-scoped team member and workspace keys may still group separately consented events inside that team. Installation-only, Personal Workspace, and sign-in events already accepted by the relay cannot be individually located because DopeDB keeps no account-to-installation map; they expire under the raw-event retention limit. This choice does not change Sentry diagnostics or the public website's separate website metrics.",
         ],
       },
       {
@@ -84,10 +84,11 @@ const content: Record<"en" | "ko", {
       {
         title: "Service providers and sharing",
         items: [
-          "Vercel Inc. hosts and secures the website and workspace application, provides workload identity, and measures website use. It may process request, session, device, workspace-traffic, and analytics data. Contact: privacy@vercel.com; policy: https://vercel.com/legal/privacy-notice.",
+          "Cloudflare hosts and secures the public website, Workspace application, background coordinator, and workload identity service. Its D1 database stores account and workspace records, including encrypted integration and backup records. It stores closed public website events in Analytics Engine and may process request and security metadata. Policy: https://www.cloudflare.com/privacypolicy/.",
+          "Vercel Inc. previously hosted the website and Workspace application. Prior hosting records and website analytics may remain until their applicable retention or deletion cycle; new production requests are served by Cloudflare. Contact: privacy@vercel.com; policy: https://vercel.com/legal/privacy-notice.",
           "Sentry provides production Desktop error diagnostics through its United States ingest service. It receives only the sanitized error projection described above. Policy: https://sentry.io/privacy/.",
           "Cloudflare hosts the dedicated product-analytics Worker and an EU-jurisdiction D1 database only after Desktop opt-in. DopeDB's first-party relay sends the closed event projection without the original client IP. Policy: https://www.cloudflare.com/privacypolicy/.",
-          "Neon, LLC (Neon) provides the hosted PostgreSQL database for account and workspace records, including encrypted integration and backup records. Contact: privacy@neon.tech; policy: https://neon.com/privacy-policy.",
+          "Neon, LLC (Neon) previously stored account and workspace records in PostgreSQL. Restricted recovery copies remain during migration cleanup; the active Workspace database is Cloudflare D1. Contact: privacy@neon.tech; policy: https://neon.com/privacy-policy.",
           "Plus Five Five, Inc. (Resend) sends workspace invitations only when email delivery is configured. It receives recipient and inviter name/email, workspace name, and the invitation link. Contact: privacy@resend.com; policy: https://resend.com/legal/privacy-policy.",
           "Google receives sign-in and optional Cloud API requests; a user-selected Agent, cloud, or database provider receives only the requests the user initiates. Each independent provider applies its own terms and privacy policy.",
           "Workspace data is visible to members according to their current roles and connection grants. Information may also be disclosed when required by applicable law, a valid legal order, or an urgent need to protect rights and safety. DopeDB does not sell personal information or share it for cross-context behavioral advertising.",
@@ -96,8 +97,8 @@ const content: Record<"en" | "ko", {
       {
         title: "International processing and transfer",
         paragraphs: [
-          "DopeDB is operated in the Republic of Korea, while the current hosted workspace uses a US-East deployment. Authenticated requests and workspace records are transferred over encrypted connections when you sign in or use a hosted feature: application computation runs in Vercel's Northern Virginia region, and workspace records are stored in the United States in the configured Neon database. Vercel and Neon may use subprocessors in the locations identified in their current legal notices.",
-          "Sanitized production Desktop errors are sent directly to Sentry's United States ingest service. Optional Desktop product analytics first reaches the Vercel-hosted workspace relay in the United States and is then sent to a Cloudflare Worker; Cloudflare restricts the dedicated D1 database that persists the normalized event to its European Union jurisdiction. Worker request processing and hosting-security metadata may occur outside that D1 storage jurisdiction.",
+          "DopeDB is operated in the Republic of Korea. Public website and Workspace requests run on Cloudflare’s distributed network, which is not restricted to one country. The Workspace D1 database requests placement in Eastern North America; this placement preference does not guarantee a country or legal jurisdiction. Restricted legacy recovery copies remain in the United States during migration cleanup. Authenticated requests and records are transferred over encrypted connections. These providers may use subprocessors in the locations identified in their legal notices.",
+          "Sanitized production Desktop errors are sent directly to Sentry’s United States ingest service. Optional Desktop product analytics reaches the Cloudflare-hosted Workspace relay and then the dedicated Cloudflare analytics Worker. Cloudflare restricts the D1 database that persists normalized Desktop events to its European Union jurisdiction. Worker processing and hosting-security metadata may occur outside that storage jurisdiction.",
           "If invitation email is enabled, the invitation data listed above is sent by encrypted API request to Resend in the United States when an administrator sends or resends an invitation. Google and user-selected Agent, cloud, and database providers may process data in the countries shown in their own policies or the region selected for the connected resource.",
           "Recipients process information for the purposes described above for the service relationship, account or workspace lifecycle, provider backup cycle, and any period required by law. You can refuse core overseas processing by not signing in to or creating a hosted workspace; this prevents hosted sharing and managed access but does not prevent local-only desktop use. You can separately refuse an optional integration by not connecting it or by disconnecting and revoking it with the provider.",
         ],
@@ -117,8 +118,8 @@ const content: Record<"en" | "ko", {
         title: "Cookies and automatic collection",
         paragraphs: [
           "The hosted workspace uses secure, essential authentication cookies to maintain the selected session, including a short cookie cache. Current sessions can last up to 30 days. Blocking or deleting these cookies prevents or ends hosted sign-in but does not prevent local-only desktop use.",
-          "The public website uses Vercel Web Analytics and configured click events to understand aggregate page and download flow. DopeDB does not use advertising cookies or cross-site behavioral tracking. Browser and device controls can limit this collection, although hosting security logs may still be created when a request reaches the service.",
-          "Optional Desktop product analytics does not use a website cookie and is not linked to Vercel website visitors. It starts only after the in-app consent action. Sentry diagnostics is a separate error-monitoring path and is not used for funnel measurement.",
+          "The public website uses same-origin Cloudflare Analytics Engine collection for bounded page and click counts. It creates no website visitor identifier and uses no advertising cookies or cross-site behavioral tracking. Do Not Track and Global Privacy Control disable collection. Hosting security metadata may still be processed when a request reaches the service.",
+          "Optional Desktop product analytics does not use a website cookie and is not linked to website event counts. It starts only after the in-app consent action. Sentry diagnostics is a separate error-monitoring path and is not used for funnel measurement.",
         ],
       },
       {
@@ -131,7 +132,7 @@ const content: Record<"en" | "ko", {
         title: "Your rights and complaints",
         items: [
           `You or an authorized representative may request access, correction, deletion, suspension or restriction of processing, withdrawal of consent, or a copy of applicable personal information by emailing ${contactEmail}. You may also object or appeal when a request is denied. We may verify identity and authority and will explain a refusal required or permitted by law.`,
-          "You can withdraw optional Desktop product-analytics consent in the app. This immediately clears its local queue and installation identifier. DopeDB keeps no account mapping for that random identifier, so already relayed installation-only, Personal Workspace, and sign-in events cannot be individually located and expire within the stated 30-day raw-event limit. For applicable team events, an authorized request may let us recompute that team's scoped member and workspace pseudonyms and delete matching rows from the dedicated D1 database. Sentry and Vercel requests are handled separately because their identifiers are not joined to the Desktop analytics identifier.",
+          "You can withdraw optional Desktop product-analytics consent in the app. This immediately clears its local queue and installation identifier. DopeDB keeps no account mapping for that random identifier, so already relayed installation-only, Personal Workspace, and sign-in events cannot be individually located and expire within the stated 30-day raw-event limit. For applicable team events, an authorized request may let us recompute that team's scoped member and workspace pseudonyms and delete matching rows from the dedicated D1 database. Sentry and Cloudflare requests are handled separately because their identifiers are not joined to the Desktop analytics identifier.",
           "You can disconnect an integration, revoke DopeDB in Google Account permissions, sign out a session, or ask a workspace administrator to change or remove membership. Optional provider integration is not required for local-only desktop use.",
           "You may seek additional help from Korea's Personal Information Infringement Report Center at https://privacy.kisa.or.kr or the Personal Information Dispute Mediation Committee at https://www.kopico.go.kr.",
         ],
@@ -174,16 +175,16 @@ const content: Record<"en" | "ko", {
           "로컬 데스크톱·Agent 정보: 아래에서 별도로 설명하는 진단·선택형 제품 분석을 제외한 DB 자격 증명, 인증서, 고급 연결 파라미터, 쿼리 기록, 전체 실행 기록과 공급자 CLI 인증은 사용자가 지원되는 메타데이터를 명시적으로 게시하거나 선택한 맥락을 Agent 공급자에게 보내지 않는 한 기기 또는 운영체제 자격 증명 저장소에 남습니다.",
           "데스크톱 오류 진단: 정식 빌드는 정제된 예외 종류와 스택 구조 또는 코드 위치, 앱 릴리스·런타임, 제한된 React 컴포넌트 이름 연결, 폐쇄형 Agent 플러그인 공급자·작업·실패 결과 태그를 Sentry에 전송합니다. 사용자, 요청, breadcrumb, 자유 형식 메시지, 추가 맥락, 로그, replay, tracing과 기본 개인정보는 전송 전에 비활성화하거나 제거합니다.",
           "선택형 데스크톱 제품 분석: 명시적 동의 후에만 임의 생성한 설치·세션 식별자, 일방향 이벤트 식별자, 앱 버전, 운영체제 종류, 언어, 설치 범위 로그인 키, 필요한 경우 워크스페이스 범위의 팀 멤버·워크스페이스 가명 키, 워크스페이스 종류, DB 엔진·로컬 또는 관리형 접근·명령 종류·Agent 공급자·승인 여부·역할·구간화한 실행 시간이나 행 수 등 폐쇄형 결과를 전송합니다.",
-          "웹사이트 정보: 호스팅 요청과 페이지, 유입 경로, 브라우저·기기, 대략적 위치, 설정된 다운로드·주요 버튼 이벤트 등 Vercel Web Analytics 정보. DopeDB는 이를 광고 프로필 생성에 사용하지 않습니다.",
+          "웹사이트 정보: 호스팅·보안 요청과 Cloudflare Analytics Engine에 3개월 보관하는 정해진 페이지·언어·다운로드·워크스페이스 버튼 이벤트 분류. 웹사이트 집계에는 방문자 식별자, 전체 URL, 쿼리 문자열, 유입 경로, 기기 또는 위치 항목을 넣지 않으며 광고 프로필에 사용하지 않습니다.",
         ],
       },
       {
         title: "데스크톱 진단과 분석 선택",
         paragraphs: [
           "Sentry 오류 진단과 선택형 제품 분석은 서로 별개입니다. Sentry에는 위에서 설명한 정식 앱의 정제된 오류 정보만 전송하며 제품 퍼널을 만드는 데 사용하지 않습니다. 선택형 제품 분석은 선택이 미정이거나 거부된 동안 꺼져 있고, 이용자가 허용한 뒤에만 app.dopedb.dev의 중계 서버를 거쳐 DopeDB 전용 Cloudflare 분석 서비스로 전송됩니다.",
-          "중계 서버는 폐쇄형 이벤트 스키마를 검증하고 원본 분석 이벤트를 워크스페이스 DB에 저장하지 않습니다. 전용 Cloudflare Worker는 원래 이용자의 IP, 개인 프로필, 자동 수집, 쿠키, replay, heatmap, 설문 또는 자유 형식 속성 없이 정규화된 이벤트를 EU 관할 D1 데이터베이스에 저장합니다. Vercel과 Cloudflare는 요청 메타데이터와 IP를 별도의 호스팅·보안 정보로 처리할 수 있습니다.",
+          "중계 서버는 폐쇄형 이벤트 스키마를 검증하고 원본 분석 이벤트를 워크스페이스 DB에 저장하지 않습니다. 전용 Cloudflare Worker는 원래 이용자의 IP, 개인 프로필, 자동 수집, 쿠키, replay, heatmap, 설문 또는 자유 형식 속성 없이 정규화된 이벤트를 EU 관할 D1 데이터베이스에 저장합니다. Cloudflare는 요청 메타데이터와 IP를 별도의 호스팅·보안 정보로 처리할 수 있습니다.",
           "진단과 제품 분석에는 SQL·쿼리 본문이나 파라미터, DB 결과, DB·호스트·연결·스키마·테이블·컬럼·프로젝트 이름, 자격 증명·토큰·인증서, Agent 프롬프트·대화, 저장소 이름·소스 코드, 로컬 경로, 이메일·표시 이름, 원본 계정·워크스페이스 식별자, 요청·응답 본문 또는 원본 제품 오류를 넣지 않습니다. 광고나 범용 AI 모델 학습에도 사용하지 않습니다.",
-          "데스크톱 제품 분석 동의를 철회하면 향후 수집이 즉시 중단되고 전송 대기열과 임의 설치 식별자가 로컬에서 삭제됩니다. 다시 동의하면 새 설치·세션·로그인 키를 만듭니다. 워크스페이스 범위의 팀 멤버·워크스페이스 키는 해당 팀 안에서 별도로 동의한 이벤트를 계속 묶을 수 있습니다. DopeDB는 계정과 설치 식별자를 연결한 표를 보관하지 않으므로 이미 중계된 설치 전용·Personal Workspace·로그인 이벤트는 개별 조회할 수 없고 원본 이벤트 보유 기간 뒤 만료됩니다. 이 선택은 별도 Sentry 진단이나 공개 웹사이트의 Vercel Web Analytics 설정을 변경하지 않습니다.",
+          "데스크톱 제품 분석 동의를 철회하면 향후 수집이 즉시 중단되고 전송 대기열과 임의 설치 식별자가 로컬에서 삭제됩니다. 다시 동의하면 새 설치·세션·로그인 키를 만듭니다. 워크스페이스 범위의 팀 멤버·워크스페이스 키는 해당 팀 안에서 별도로 동의한 이벤트를 계속 묶을 수 있습니다. DopeDB는 계정과 설치 식별자를 연결한 표를 보관하지 않으므로 이미 중계된 설치 전용·Personal Workspace·로그인 이벤트는 개별 조회할 수 없고 원본 이벤트 보유 기간 뒤 만료됩니다. 이 선택은 별도 Sentry 진단이나 공개 웹사이트의 별도 이용 분석 설정을 변경하지 않습니다.",
         ],
       },
       {
@@ -214,10 +215,11 @@ const content: Record<"en" | "ko", {
       {
         title: "처리 위탁과 정보 제공",
         items: [
-          "Vercel Inc.는 웹사이트·워크스페이스 앱 호스팅과 보호, 워크로드 신원, 웹사이트 이용 측정을 제공합니다. 요청, 세션, 기기, 워크스페이스 통신과 분석 정보를 처리할 수 있습니다. 연락처: privacy@vercel.com, 방침: https://vercel.com/legal/privacy-notice.",
+          "Cloudflare는 공개 웹사이트, 워크스페이스 앱, 백그라운드 작업 조정과 워크로드 신원 서비스를 호스팅하고 보호합니다. D1 데이터베이스에 계정·워크스페이스 레코드와 암호화된 연동·백업 레코드를 저장합니다. 정해진 웹사이트 이벤트를 Analytics Engine에 저장하며 요청과 보안 메타데이터를 처리할 수 있습니다. 방침: https://www.cloudflare.com/privacypolicy/.",
+          "Vercel Inc.는 이전 웹사이트와 워크스페이스 앱을 호스팅했습니다. 과거 호스팅 기록과 웹사이트 분석 정보는 해당 보유 기간이나 삭제 주기까지 남을 수 있으며, 새 운영 요청은 Cloudflare에서 처리합니다. 연락처: privacy@vercel.com, 방침: https://vercel.com/legal/privacy-notice.",
           "Sentry는 미국 수집 서비스를 통해 정식 데스크톱 앱의 오류 진단을 제공합니다. 위에서 설명한 정제된 오류 정보만 수신합니다. 방침: https://sentry.io/privacy/.",
           "Cloudflare는 데스크톱에서 명시적으로 동의한 경우에만 전용 제품 분석 Worker와 EU 관할 D1 데이터베이스를 호스팅합니다. DopeDB 중계 서버는 원래 이용자의 IP 없이 폐쇄형 이벤트만 전송합니다. 방침: https://www.cloudflare.com/privacypolicy/.",
-          "Neon, LLC(Neon)는 계정·워크스페이스 레코드와 암호화된 연동·백업 레코드를 위한 호스팅 PostgreSQL DB를 제공합니다. 연락처: privacy@neon.tech, 방침: https://neon.com/privacy-policy.",
+          "Neon, LLC(Neon)는 이전 계정·워크스페이스 레코드를 PostgreSQL에 저장했습니다. 이전 정리 중에는 접근을 제한한 복구 사본이 남으며, 현재 워크스페이스 데이터베이스는 Cloudflare D1입니다. 연락처: privacy@neon.tech, 방침: https://neon.com/privacy-policy.",
           "Plus Five Five, Inc.(Resend)는 이메일 전송이 구성된 경우에만 워크스페이스 초대를 발송합니다. 수신자·초대자 이름과 이메일, 워크스페이스 이름, 초대 링크를 받습니다. 연락처: privacy@resend.com, 방침: https://resend.com/legal/privacy-policy.",
           "Google은 로그인·선택형 Cloud API 요청을 수신하고, 사용자가 선택한 Agent·클라우드·DB 공급자는 사용자가 시작한 요청만 수신합니다. 각 독립 공급자의 약관과 개인정보처리방침이 적용됩니다.",
           "워크스페이스 정보는 현재 역할과 연결 권한에 따라 구성원에게 표시됩니다. 관련 법률, 유효한 법적 명령 또는 권리·안전을 보호할 긴급한 필요가 있는 경우에도 정보를 제공할 수 있습니다. 개인정보를 판매하거나 맞춤형 행태 광고 목적으로 공유하지 않습니다.",
@@ -226,8 +228,8 @@ const content: Record<"en" | "ko", {
       {
         title: "개인정보의 국외 처리와 이전",
         paragraphs: [
-          "DopeDB 운영자는 대한민국에 있지만 현재 호스팅 워크스페이스는 미국 동부 배포를 사용합니다. 로그인하거나 호스팅 기능을 이용할 때 인증 요청과 워크스페이스 레코드가 암호화된 통신으로 이전됩니다. 애플리케이션 연산은 Vercel의 미국 버지니아 북부 리전에서 수행되고 워크스페이스 레코드는 미국에 구성된 Neon DB에 저장됩니다. Vercel과 Neon은 최신 법적 고지에 표시된 위치의 하위 처리자를 이용할 수 있습니다.",
-          "정제된 정식 데스크톱 오류는 Sentry의 미국 수집 서비스로 직접 전송됩니다. 선택형 데스크톱 제품 분석은 먼저 미국의 Vercel 워크스페이스 중계 서버에 도달한 다음 Cloudflare Worker로 전송되며, 정규화된 이벤트를 영속 저장하는 전용 D1 데이터베이스는 Cloudflare의 유럽연합 관할로 제한됩니다. Worker 요청 처리와 호스팅 보안 메타데이터는 이 D1 저장 관할 밖에서 처리될 수 있습니다.",
+          "DopeDB 운영자는 대한민국에 있습니다. 공개 웹사이트와 워크스페이스 요청은 단일 국가로 제한되지 않는 Cloudflare 분산 네트워크에서 처리됩니다. 워크스페이스 D1 데이터베이스는 북미 동부 배치를 요청하지만, 이 배치 선호가 특정 국가나 법적 관할을 보장하지는 않습니다. 이전 정리 중에는 미국에 접근을 제한한 과거 복구 사본이 남습니다. 인증 요청과 레코드는 암호화된 통신으로 전송됩니다. 각 공급자는 법적 고지에 표시된 위치의 하위 처리자를 이용할 수 있습니다.",
+          "정제된 정식 데스크톱 오류는 Sentry의 미국 수집 서비스로 직접 전송됩니다. 선택형 데스크톱 제품 분석은 Cloudflare의 워크스페이스 중계 서버를 거쳐 전용 Cloudflare 분석 Worker로 전송됩니다. 정규화된 Desktop 이벤트를 영속 저장하는 D1 데이터베이스는 Cloudflare의 유럽연합 관할로 제한됩니다. Worker 처리와 호스팅 보안 메타데이터는 이 저장 관할 밖에서 처리될 수 있습니다.",
           "초대 이메일이 활성화된 경우 관리자가 초대를 보내거나 다시 보낼 때 위에 적은 초대 정보가 암호화된 API 요청으로 미국의 Resend에 전송됩니다. Google과 사용자가 선택한 Agent·클라우드·DB 공급자는 자체 방침에 표시된 국가 또는 연결 리소스에서 선택한 리전에서 정보를 처리할 수 있습니다.",
           "수신자는 위 목적을 위해 서비스 계약, 계정·워크스페이스 생애주기, 공급자 백업 주기와 법률상 필요한 기간 동안 정보를 처리합니다. 핵심 국외 처리를 거부하려면 호스팅 워크스페이스에 로그인하거나 이를 생성하지 않을 수 있습니다. 이 경우 호스팅 공유·관리형 접근은 이용할 수 없지만 로컬 전용 데스크톱 기능은 사용할 수 있습니다. 선택형 연동은 연결하지 않거나 연결 해제 후 공급자 측 권한을 철회하여 별도로 거부할 수 있습니다.",
         ],
@@ -247,8 +249,8 @@ const content: Record<"en" | "ko", {
         title: "쿠키와 자동 수집",
         paragraphs: [
           "호스팅 워크스페이스는 선택한 세션을 유지하기 위해 짧은 쿠키 캐시를 포함한 보안·필수 인증 쿠키를 사용합니다. 현재 세션은 최대 30일간 유지될 수 있습니다. 쿠키를 차단하거나 삭제하면 호스팅 로그인이 불가능하거나 종료되지만 로컬 전용 데스크톱 이용에는 영향이 없습니다.",
-          "공개 웹사이트는 페이지와 다운로드 흐름을 집계하기 위해 Vercel Web Analytics와 설정된 클릭 이벤트를 사용합니다. 광고 쿠키나 사이트 간 행태 추적은 사용하지 않습니다. 브라우저·기기 설정으로 수집을 제한할 수 있지만 요청이 서비스에 도달하면 호스팅 보안 로그가 생성될 수 있습니다.",
-          "선택형 데스크톱 제품 분석은 웹사이트 쿠키를 사용하지 않고 Vercel 웹사이트 방문자와 연결하지 않으며 앱 안에서 동의한 뒤에만 시작합니다. Sentry 진단은 별도 오류 관측 경로이며 퍼널 측정에 사용하지 않습니다.",
+          "공개 웹사이트는 페이지·클릭 수를 제한된 항목으로 집계하기 위해 동일 출처의 Cloudflare Analytics Engine 수집 경로를 사용합니다. 웹사이트 방문자 식별자를 만들지 않고 광고 쿠키나 사이트 간 행태 추적을 사용하지 않습니다. Do Not Track과 Global Privacy Control 설정 시 수집을 중단합니다. 요청이 서비스에 도달하면 호스팅 보안 메타데이터는 처리될 수 있습니다.",
+          "선택형 데스크톱 제품 분석은 웹사이트 쿠키를 사용하지 않고 웹사이트 이벤트 집계와 연결하지 않으며 앱 안에서 동의한 뒤에만 시작합니다. Sentry 진단은 별도 오류 관측 경로이며 퍼널 측정에 사용하지 않습니다.",
         ],
       },
       {
@@ -261,7 +263,7 @@ const content: Record<"en" | "ko", {
         title: "이용자의 권리와 구제",
         items: [
           `이용자 또는 적법한 대리인은 ${contactEmail}으로 개인정보 열람, 정정, 삭제, 처리 정지·제한, 동의 철회 또는 해당 정보의 사본을 요청할 수 있습니다. 요청이 거절된 경우 이의 제기도 할 수 있습니다. 처리 전에 신원과 권한을 확인할 수 있으며 법률상 요청을 거절해야 하거나 거절할 수 있는 경우 이유를 설명합니다.`,
-          "앱에서 선택형 데스크톱 제품 분석 동의를 철회할 수 있으며, 전송 대기열과 설치 식별자가 즉시 삭제됩니다. DopeDB는 임의 설치 식별자와 계정을 연결한 표를 보관하지 않으므로 이미 중계된 설치 전용·Personal Workspace·로그인 이벤트는 개별 조회할 수 없고 안내된 최대 30일의 원본 이벤트 보유 기간 뒤 만료됩니다. 해당 팀 이벤트는 권한이 확인된 요청에 따라 그 팀 범위의 멤버·워크스페이스 가명 키를 다시 계산해 전용 D1 데이터베이스에서 삭제할 수 있습니다. Sentry와 Vercel은 Desktop 분석 식별자와 연결하지 않으므로 각 공급자 요청을 별도로 처리합니다.",
+          "앱에서 선택형 데스크톱 제품 분석 동의를 철회할 수 있으며, 전송 대기열과 설치 식별자가 즉시 삭제됩니다. DopeDB는 임의 설치 식별자와 계정을 연결한 표를 보관하지 않으므로 이미 중계된 설치 전용·Personal Workspace·로그인 이벤트는 개별 조회할 수 없고 안내된 최대 30일의 원본 이벤트 보유 기간 뒤 만료됩니다. 해당 팀 이벤트는 권한이 확인된 요청에 따라 그 팀 범위의 멤버·워크스페이스 가명 키를 다시 계산해 전용 D1 데이터베이스에서 삭제할 수 있습니다. Sentry와 Cloudflare는 Desktop 분석 식별자와 연결하지 않으므로 각 공급자 요청을 별도로 처리합니다.",
           "연동 해제, Google 계정에서 DopeDB 권한 철회, 세션 로그아웃 또는 워크스페이스 관리자에게 멤버십 변경·삭제 요청을 할 수 있습니다. 로컬 전용 데스크톱 이용에는 선택형 공급자 연동이 필요하지 않습니다.",
           "추가 구제가 필요하면 개인정보침해 신고센터(https://privacy.kisa.or.kr) 또는 개인정보분쟁조정위원회(https://www.kopico.go.kr)에 도움을 요청할 수 있습니다.",
         ],

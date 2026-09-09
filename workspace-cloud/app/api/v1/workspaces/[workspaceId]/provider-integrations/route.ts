@@ -1,7 +1,9 @@
+import { inD1Strings } from "../../../../../../lib/d1/json";
+import { workloadOidcToken } from "../../../../../../lib/workload-identity";
 // Workspace provider integration inventory and OAuth initiation. Secret material is
 // omitted by explicit projection and OAuth state is single-use, hashed server data.
 import { createHash, randomBytes } from "node:crypto";
-import { and, eq, gt, inArray, isNull, lt } from "drizzle-orm";
+import { and, eq, gt, isNull, lt } from "drizzle-orm";
 import { db } from "../../../../../../lib/db";
 import { env } from "../../../../../../lib/env";
 import {
@@ -41,7 +43,6 @@ import {
 } from "../../../../../../lib/providers/gcp-cloud-sql-core";
 import {
   validateGcpCloudSqlCredential,
-  vercelOidcToken,
 } from "../../../../../../lib/providers/gcp-cloud-sql";
 import {
   gcpCloudAuthorizationUrl,
@@ -70,23 +71,13 @@ import {
   workspaceProviderPrincipalClaim,
 } from "../../../../../../lib/schema";
 import { authorizeWorkspace } from "../../../../../../lib/workspace-authorization";
-import { logProviderConnectionFailure } from "../../../../../../lib/workspace-server-log";
+import { logProviderConnectionFailure, databaseErrorCode, isUniqueDatabaseConflict } from "../../../../../../lib/workspace-server-log";
 
 type RouteContext = { params: Promise<{ workspaceId: string }> };
 
 export const maxDuration = 300;
 
-function postgresErrorCode(error: unknown) {
-  const seen = new Set<unknown>();
-  let current = error;
-  while (current && typeof current === "object" && !seen.has(current)) {
-    seen.add(current);
-    const record = current as { code?: unknown; cause?: unknown };
-    if (typeof record.code === "string") return record.code;
-    current = record.cause;
-  }
-  return null;
-}
+
 
 export async function GET(request: Request, context: RouteContext) {
   const { workspaceId } = await context.params;
@@ -108,7 +99,7 @@ export async function GET(request: Request, context: RouteContext) {
     updatedAt: workspaceProviderIntegration.updatedAt,
   }).from(workspaceProviderIntegration).where(and(
     eq(workspaceProviderIntegration.organizationId, workspaceId),
-    inArray(workspaceProviderIntegration.status, ["active", "reconnect_required"]),
+    inD1Strings(workspaceProviderIntegration.status, ["active", "reconnect_required"]),
   ));
   const managedRows = includeManagedConnections
     ? await db.select({
@@ -136,6 +127,7 @@ export async function GET(request: Request, context: RouteContext) {
       return [];
     }
   });
+  const workloadIdentityConfigured = process.env.WORKSPACE_RUNTIME === "cloudflare";
   return privateJson({
     // Explicit browser projection: internal adapter/provisioning fields must not
     // become a public contract through object spreading.
@@ -152,7 +144,7 @@ export async function GET(request: Request, context: RouteContext) {
         : provider.id === "neon"
           ? true
           : provider.id === "gcpCloudSql"
-            ? Boolean(vercelOidcToken(request))
+            ? workloadIdentityConfigured
             : provider.id === "vault"
               ? env.vaultBrokerOrigins().length > 0
               : false,
@@ -356,9 +348,9 @@ export async function POST(request: Request, context: RouteContext) {
       } catch {
         return jsonError("Invalid Google Cloud setup ticket", 400);
       }
-      const oidcToken = vercelOidcToken(request);
+      const oidcToken = await workloadOidcToken();
       if (!oidcToken) {
-        return jsonError("Vercel OIDC is not enabled for this deployment", 503);
+        return jsonError("Workspace workload identity is not enabled for this deployment", 503);
       }
       stage = "gcp_credential_validation";
       await validateGcpCloudSqlCredential(credential, oidcToken);
@@ -413,7 +405,7 @@ export async function POST(request: Request, context: RouteContext) {
           workspaceProviderPrincipalClaim.integrationId,
           workspaceProviderIntegration.id,
         ),
-      ).where(inArray(
+      ).where(inD1Strings(
         workspaceProviderPrincipalClaim.principalFingerprint,
         principalClaims.map((claim) => claim.principalFingerprint),
       ));
@@ -689,7 +681,7 @@ export async function POST(request: Request, context: RouteContext) {
     }, { status: existing ? 200 : 201 });
 
   } catch (error) {
-    const postgresCode = postgresErrorCode(error);
+    const postgresCode = databaseErrorCode(error);
     logProviderConnectionFailure({
       provider: body.provider,
       stage,
@@ -698,7 +690,7 @@ export async function POST(request: Request, context: RouteContext) {
         ? error.status
         : null,
     });
-    if (body.provider === "gcpCloudSql" && postgresCode === "23505") {
+    if (body.provider === "gcpCloudSql" && isUniqueDatabaseConflict(error)) {
       return jsonError(
         "Cloud SQL service accounts or target are already connected",
         409,

@@ -21,6 +21,8 @@ const ignoredDirectories = new Set([
   ".agents",
   ".codex",
   ".next",
+  ".open-next",
+  ".wrangler",
   ".vercel",
   "dist",
   "node_modules",

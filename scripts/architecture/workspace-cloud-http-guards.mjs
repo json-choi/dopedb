@@ -333,9 +333,9 @@ export function collectWorkspaceCloudHttpDiagnostics({ lineCount, read, relative
 
   const schedulerServiceSource = read(workspaceSchedulerService);
   const schedulerWorkerSource = read(workspaceSchedulerWorker);
-  const vercelConfiguration = read("workspace-cloud/vercel.json");
-  if (/"crons"\s*:/.test(vercelConfiguration)) {
-    diagnostics.push("workspace-cloud/vercel.json: PostgreSQL background work must not regain an independent Vercel cron");
+  const workspaceDeploymentConfiguration = read("workspace-cloud/wrangler.jsonc");
+  if (/"crons"\s*:/.test(workspaceDeploymentConfiguration)) {
+    diagnostics.push("workspace-cloud/wrangler.jsonc: PostgreSQL background work must not regain an independent Workspace Worker cron");
   }
   for (const token of [
     'const CONTRACT_VERSION = "2"',

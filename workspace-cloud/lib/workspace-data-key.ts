@@ -6,6 +6,8 @@ import { and, desc, eq, isNull, max, sql } from "drizzle-orm";
 import { randomBytes } from "node:crypto";
 
 import { db } from "./db";
+import { atomicD1 } from "./d1/atomic";
+import { utcNow } from "./d1/schema/values";
 import { workspaceDataKey } from "./schema";
 import {
   unwrapWorkspaceDataKey,
@@ -97,7 +99,7 @@ export async function createWorkspaceKmsSession(request: Request): Promise<Works
   const configuration = workspaceKmsConfiguration();
   const accessToken = await workspaceKmsAccessToken(
     configuration,
-    workspaceKmsOidcToken(request),
+    await workspaceKmsOidcToken(),
   );
   return { configuration, accessToken };
 }
@@ -142,56 +144,28 @@ export async function ensureActiveWorkspaceDataKey(input: {
         version,
         plaintextKey,
       });
-      const result = await db.execute<ReturnedDataKeyRow>(sql`
-        WITH key_lock AS (
-          SELECT pg_advisory_xact_lock(hashtextextended(
-            ${`workspace-data-key:${input.organizationId}`}, 0
-          ))
-        ), existing AS MATERIALIZED (
-          SELECT key."id" AS "id", key."organization_id" AS "organizationId",
-            key."version" AS "version", key."key_reference" AS "keyReference",
-            key."kms_key_version" AS "kmsKeyVersion", key."wrapped_key" AS "wrappedKey",
-            key."created_by_user_id" AS "createdByUserId", key."created_at" AS "createdAt",
-            key."retired_at" AS "retiredAt", key."destroyed_at" AS "destroyedAt"
-          FROM "workspace_control"."workspace_data_key" key
-          JOIN key_lock ON TRUE
-          WHERE key."organization_id" = ${input.organizationId}
-            AND key."retired_at" IS NULL AND key."destroyed_at" IS NULL
-          FOR UPDATE OF key
-        ), inserted AS (
-          INSERT INTO "workspace_control"."workspace_data_key"
-            ("id", "organization_id", "version", "key_reference", "kms_key_version",
-             "wrapped_key", "created_by_user_id")
-          SELECT ${dataKeyId}::uuid, ${input.organizationId}, ${version},
-            ${input.kms.configuration.keyName}, ${wrapped.kmsKeyVersion},
-            ${wrapped.wrappedKey}, ${input.actorUserId}
-          FROM key_lock
-          WHERE NOT EXISTS (SELECT 1 FROM existing)
-            AND ${version} = COALESCE((
-              SELECT max(key."version") + 1
-              FROM "workspace_control"."workspace_data_key" key
-              WHERE key."organization_id" = ${input.organizationId}
-            ), 1)
-          ON CONFLICT DO NOTHING
-          RETURNING "id" AS "id", "organization_id" AS "organizationId",
-            "version" AS "version", "key_reference" AS "keyReference",
-            "kms_key_version" AS "kmsKeyVersion", "wrapped_key" AS "wrappedKey",
-            "created_by_user_id" AS "createdByUserId", "created_at" AS "createdAt",
-            "retired_at" AS "retiredAt", "destroyed_at" AS "destroyedAt"
-        ), profile_updated AS (
-          UPDATE "workspace_control"."workspace_profile" profile
-          SET "encryption_key_ref" = 'workspace-data-key:' || inserted."id"::text,
-              "updated_at" = now()
-          FROM inserted
-          WHERE profile."organization_id" = ${input.organizationId}
-          RETURNING profile."organization_id"
-        )
-        SELECT * FROM inserted
-        UNION ALL
-        SELECT * FROM existing
-        LIMIT 1
-      `);
-      const row = result.rows[0] && returnedDataKey(result.rows[0]);
+      const result = await atomicD1({
+        scope: sql`WITH existing AS (SELECT id FROM workspace_data_key WHERE organization_id = ${input.organizationId}
+            AND retired_at IS NULL AND destroyed_at IS NULL)
+          SELECT json_object('id', COALESCE((SELECT id FROM existing), ${dataKeyId}),
+            'created', NOT EXISTS (SELECT 1 FROM existing)) AS payload
+          WHERE EXISTS (SELECT 1 FROM existing) OR (
+            EXISTS (SELECT 1 FROM workspace_profile WHERE organization_id = ${input.organizationId} AND lifecycle_state = 'active')
+            AND ${version} = COALESCE((SELECT max(version) + 1 FROM workspace_data_key WHERE organization_id = ${input.organizationId}), 1))`,
+        statements: (scope) => [
+          sql`INSERT INTO workspace_data_key (id, organization_id, version, key_reference, kms_key_version, wrapped_key, created_by_user_id)
+            SELECT ${dataKeyId}, ${input.organizationId}, ${version}, ${input.kms.configuration.keyName},
+              ${wrapped.kmsKeyVersion}, ${wrapped.wrappedKey}, ${input.actorUserId} FROM (${scope}) WHERE payload ->> 'created' = 1`,
+          sql`UPDATE workspace_profile SET encryption_key_ref = ${`workspace-data-key:${dataKeyId}`}, updated_at = ${utcNow}
+            WHERE organization_id = ${input.organizationId} AND EXISTS (SELECT 1 FROM (${scope}) WHERE payload ->> 'created' = 1)`,
+          sql`SELECT key.id, key.organization_id AS organizationId, key.version, key.key_reference AS keyReference,
+              key.kms_key_version AS kmsKeyVersion, key.wrapped_key AS wrappedKey, key.created_by_user_id AS createdByUserId,
+              key.created_at AS createdAt, key.retired_at AS retiredAt, key.destroyed_at AS destroyedAt
+            FROM workspace_data_key key CROSS JOIN (${scope}) WHERE key.id = payload ->> 'id'`,
+        ],
+      });
+      const raw = result.rows[2][0] as ReturnedDataKeyRow | undefined;
+      const row = raw && returnedDataKey(raw);
       if (row) return assertUsableDataKey(row, input.kms.configuration);
     } finally {
       plaintextKey.fill(0);

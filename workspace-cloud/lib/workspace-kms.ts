@@ -1,10 +1,11 @@
 // Cloud KMS envelope boundary for workspace data keys. Authentication uses only
-// the request-scoped Vercel OIDC token and GCP Workload Identity Federation;
+// the service-bound production workload OIDC token and GCP Workload Identity Federation;
 // service-account keys and reusable Google credentials have no representation.
 import "server-only";
 
 import { boundedJsonResponse } from "./bounded-json-response";
 import { env } from "./env";
+import { workloadOidcToken } from "./workload-identity";
 import {
   crc32c,
   parseKmsDecryptResponse,
@@ -69,12 +70,8 @@ export function workspaceKmsConfiguration(): WorkspaceKmsConfiguration {
   });
 }
 
-export function workspaceKmsOidcToken(request: Request) {
-  const value = process.env.VERCEL === "1"
-    ? request.headers.get("x-vercel-oidc-token")
-    : process.env.NODE_ENV !== "production"
-      ? process.env.VERCEL_OIDC_TOKEN?.trim() ?? null
-      : null;
+export async function workspaceKmsOidcToken() {
+  const value = await workloadOidcToken();
   if (
     !value
     || value.length < 100

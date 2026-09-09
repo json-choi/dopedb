@@ -8,9 +8,10 @@ import {
   workspaceConnection,
   workspaceConnectionGrant,
   workspaceProviderIntegration,
-} from "../schema";
+  workspaceProfile,
+} from "../d1/schema";
 import type { GcpLocalVerificationTarget } from "../providers/gcp-cloud-sql-core";
-import { revocationGateLockKey } from "../revocation-gates";
+import { utcNow } from "../d1/schema/values";
 import type { WorkspaceRoleName } from "../workspace-permissions";
 
 export type ActiveProviderIntegration = {
@@ -53,8 +54,7 @@ export function hasStrictGcpLocalVerificationTarget(value: unknown): value is Gc
 }
 
 // Every durable provider mutation uses this predicate in its final SQL
-// statement, after provider/lease I/O.  The member advisory lock shares the
-// revocation-gate ordering, and the exact live session, member and optional
+// statement or atomic D1 batch, after provider/lease I/O. The exact live session, member and optional
 // integration generation are checked in that same database transaction.
 export function providerMutationAuthoritySql(input: ProviderMutationAuthority & {
   // Refreshing the shared provider credential is a provider-integration
@@ -73,14 +73,13 @@ export function providerMutationAuthoritySql(input: ProviderMutationAuthority & 
   const integrationGuard = integration ? sql`
     AND EXISTS (
       SELECT 1 FROM ${workspaceProviderIntegration} AS guarded_integration
-      WHERE guarded_integration."id" = ${integration.id}::uuid
+      WHERE guarded_integration."id" = ${integration.id}
         AND guarded_integration."organization_id" = ${input.organizationId}
         ${integration.provider ? sql`AND guarded_integration."provider" = ${integration.provider}` : sql``}
         ${integration.generation !== undefined ? sql`AND guarded_integration."generation" = ${integration.generation}` : sql``}
         ${integration.claimId === undefined ? sql`` : integration.claimId === null
           ? sql`AND guarded_integration."revocation_claim_id" IS NULL`
-          : sql`AND guarded_integration."revocation_claim_id" = ${integration.claimId}::uuid`}
-      FOR UPDATE
+          : sql`AND guarded_integration."revocation_claim_id" = ${integration.claimId}`}
     )` : sql``;
   const leaseGuard = lease ? sql`
     AND EXISTS (
@@ -92,37 +91,32 @@ export function providerMutationAuthoritySql(input: ProviderMutationAuthority & 
        AND lease_grant."member_id" = ${input.membershipId}
        AND (lease_grant."capability" IN ('use', 'manage')
          OR (lease_grant."capability" = 'read' AND ${lease.accessMode ?? 'write'} = 'read'))
-      WHERE lease_connection."id" = ${lease.connectionId}::uuid
+      WHERE lease_connection."id" = ${lease.connectionId}
         AND lease_connection."organization_id" = ${input.organizationId}
-        AND lease_connection."provider_integration_id" = ${integration?.id ?? ""}::uuid
-        AND lease_connection."provider_resource_id" = ${lease.providerResourceId}::uuid
+        AND lease_connection."provider_integration_id" = ${integration?.id ?? ""}
+        AND lease_connection."provider_resource_id" = ${lease.providerResourceId}
         AND lease_connection."revision" = ${lease.connectionRevision}
         AND lease_connection."credential_mode" = 'managed'
         AND lease_connection."deleted_at" IS NULL
         AND lease_connection."revocation_pending_at" IS NULL
         AND lease_connection."revocation_claim_id" IS NULL
-      FOR UPDATE OF lease_connection, lease_grant
     )` : sql``;
   return sql`EXISTS (
     SELECT 1
-    FROM (SELECT pg_advisory_xact_lock(hashtextextended(${revocationGateLockKey({
-      kind: "member", organizationId: input.organizationId,
-      memberId: input.membershipId, userId: input.userId,
-    })}, 0))) AS member_lock
-    JOIN ${session} AS live_session ON TRUE
+    FROM ${session} AS live_session
     JOIN ${member} AS live_member
       ON live_member."id" = ${input.membershipId}
      AND live_member."organization_id" = ${input.organizationId}
      AND live_member."user_id" = ${input.userId}
-    WHERE live_session."id" = ${input.sessionId}
+    JOIN ${workspaceProfile} AS live_workspace ON live_workspace.organization_id = live_member.organization_id
+    WHERE live_workspace.lifecycle_state = 'active' AND live_session."id" = ${input.sessionId}
       AND live_session."user_id" = ${input.userId}
-      AND live_session."expires_at" > now()
+      AND live_session."expires_at" > ${utcNow}
       AND live_member."role" = ${input.role}
       AND live_member."role" IN (${lease ? sql`'viewer', 'analyst', 'editor', 'admin', 'owner'` : sql`'admin', 'owner'`})
       AND live_member."revocation_pending_at" IS NULL
       AND live_member."revocation_claim_id" IS NULL
       ${integrationGuard}
       ${leaseGuard}
-    FOR UPDATE OF live_session, live_member
   )`;
 }

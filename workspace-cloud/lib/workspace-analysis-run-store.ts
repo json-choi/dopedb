@@ -5,7 +5,10 @@ import "server-only";
 import { sql } from "drizzle-orm";
 
 import { db } from "./db";
-import { revocationGateLockKey } from "./revocation-gates";
+import { atomicD1 } from "./d1/atomic";
+import { utcNow } from "./d1/schema/values";
+import { jsonEqual } from "./d1/json";
+import { workspaceMemberAuthority } from "./d1/member-authority";
 import {
   knowledgeEnvironmentConnection,
   workspaceAnalysisArticle,
@@ -62,43 +65,33 @@ function returnedAnalysisRunStart(row: RawRow | undefined): AnalysisRunStart | n
   if (!Number.isSafeInteger(connectionContentRevision) || connectionContentRevision < 1) {
     throw new Error("Analysis run start returned invalid connection content authority");
   }
-  const run = { ...row };
+  const run = { ...returnedRun(row)! };
   delete run.connectionContentRevision;
   return { run, connectionContentRevision };
 }
 
-function memberLockKey(input: { organizationId: string; authority: AnalysisRunAuthority }) {
-  return revocationGateLockKey({
-    kind: "member",
-    organizationId: input.organizationId,
-    memberId: input.authority.membershipId,
-    userId: input.authority.userId,
-  });
-}
+const allRoles = ["viewer", "analyst", "editor", "admin", "owner"] as const;
 
 function runProjection() {
-  return sql`
-    run."id"::text AS "id", run."article_id"::text AS "articleId",
-    run."article_revision"::double precision AS "articleRevision",
-    run."runner_id"::text AS "runnerId",
-    run."runner_capability_generation"::double precision AS "runnerCapabilityGeneration",
-    'manual'::text AS "trigger", run."state" AS "state",
-    run."definition_hash" AS "definitionHash",
-    run."schema_fingerprints" AS "schemaFingerprints", run."row_count"::integer AS "rowCount",
-    run."byte_count"::integer AS "byteCount", run."result_hash" AS "resultHash",
-    run."error_kind" AS "errorKind", run."error_message" AS "errorMessage",
-    CASE WHEN run."cancel_requested_at" IS NULL THEN NULL ELSE
-      to_char(run."cancel_requested_at" AT TIME ZONE 'UTC',
-        'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') END AS "cancelRequestedAt",
-    run."cancel_requested_by_member_id" AS "cancelRequestedByMemberId",
-    CASE WHEN run."started_at" IS NULL THEN NULL ELSE
-      to_char(run."started_at" AT TIME ZONE 'UTC',
-        'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') END AS "startedAt",
-    CASE WHEN run."finished_at" IS NULL THEN NULL ELSE
-      to_char(run."finished_at" AT TIME ZONE 'UTC',
-        'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') END AS "finishedAt",
-    to_char(run."created_at" AT TIME ZONE 'UTC',
-      'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "createdAt"`;
+  return sql`run.id, run.article_id AS articleId, run.article_revision AS articleRevision, run.runner_id AS runnerId,
+    run.runner_capability_generation AS runnerCapabilityGeneration, 'manual' AS trigger, run.state,
+    run.definition_hash AS definitionHash, run.schema_fingerprints AS schemaFingerprints, run.row_count AS rowCount,
+    run.byte_count AS byteCount, run.result_hash AS resultHash, run.error_kind AS errorKind, run.error_message AS errorMessage,
+    run.cancel_requested_at AS cancelRequestedAt, run.cancel_requested_by_member_id AS cancelRequestedByMemberId,
+    run.started_at AS startedAt, run.finished_at AS finishedAt, run.created_at AS createdAt`;
+}
+
+function returnedRun(row: RawRow | undefined): RawRow | null {
+  return row ? { ...row, schemaFingerprints: typeof row.schemaFingerprints === "string"
+    ? JSON.parse(row.schemaFingerprints) : row.schemaFingerprints } : null;
+}
+
+function requestedReceipts(receipts: ReturnType<typeof receiptRows>) {
+  return sql`SELECT value ->> 'query_node_id' AS query_node_id, value ->> 'connection_id' AS connection_id,
+    value ->> 'connection_revision' AS connection_revision, value ->> 'query_run_id' AS query_run_id,
+    value ->> 'query_hash' AS query_hash, value ->> 'schema_fingerprint' AS schema_fingerprint,
+    value ->> 'state' AS state, value ->> 'row_count' AS row_count, value ->> 'byte_count' AS byte_count,
+    value ->> 'duration_ms' AS duration_ms FROM json_each(${JSON.stringify(receipts)})`;
 }
 
 export async function getAnalysisRunControl(input: {
@@ -108,11 +101,9 @@ export async function getAnalysisRunControl(input: {
   membershipId: string;
   runnerCapabilityHash: string;
 }): Promise<AnalysisRunControl | null> {
-  const result = await db.execute<AnalysisRunControl>(sql`
+  const result = await db.execute<{ state: string; cancelRequestedAt: string | null; authorized: number }>(sql`
     SELECT run."state" AS "state",
-      CASE WHEN run."cancel_requested_at" IS NULL THEN NULL ELSE
-        to_char(run."cancel_requested_at" AT TIME ZONE 'UTC',
-          'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') END AS "cancelRequestedAt",
+      run."cancel_requested_at" AS "cancelRequestedAt",
       EXISTS (
         SELECT 1 FROM ${workspaceAnalysisRunner} runner
         JOIN ${workspaceAnalysisArticle} article
@@ -150,11 +141,11 @@ export async function getAnalysisRunControl(input: {
       ) AS "authorized"
     FROM ${workspaceAnalysisArticleRun} run
     WHERE run."organization_id" = ${input.organizationId}
-      AND run."article_id" = ${input.articleId}::uuid
-      AND run."id" = ${input.runId}::uuid
+      AND run."article_id" = ${input.articleId}
+      AND run."id" = ${input.runId}
     LIMIT 1
   `);
-  return result.rows[0] ?? null;
+  return result.rows[0] ? { ...result.rows[0], authorized: result.rows[0].authorized === 1 } : null;
 }
 
 export async function requestAnalysisRunCancellation(input: {
@@ -164,58 +155,34 @@ export async function requestAnalysisRunCancellation(input: {
   authority: AnalysisRunAuthority;
 }) {
   const requestId = crypto.randomUUID();
-  const result = await db.execute<RawRow>(sql`
-    WITH authority_lock AS MATERIALIZED (
-      SELECT pg_advisory_xact_lock(hashtextextended(${memberLockKey(input)}, 0))
-    ), authority AS MATERIALIZED (
-      SELECT member."id", member."role"
-      FROM "workspace_control"."session" session
-      JOIN "workspace_control"."member" member
-        ON member."id" = ${input.authority.membershipId}
-       AND member."organization_id" = ${input.organizationId}
-       AND member."user_id" = ${input.authority.userId}
-      JOIN authority_lock ON TRUE
-      WHERE session."id" = ${input.authority.sessionId}
-        AND session."user_id" = ${input.authority.userId}
-        AND session."expires_at" > now()
-        AND member."role" = ${input.authority.role}
-        AND member."revocation_pending_at" IS NULL
-        AND member."revocation_claim_id" IS NULL
-      FOR UPDATE OF session, member
-    ), current AS MATERIALIZED (
-      SELECT run."id" FROM ${workspaceAnalysisArticleRun} run
+  const result = await atomicD1({
+    scope: sql`    WITH authority AS (${workspaceMemberAuthority(input.organizationId, input.authority, allRoles)}    ), current AS MATERIALIZED (
+      SELECT run."id", run."article_revision" FROM ${workspaceAnalysisArticleRun} run
       JOIN ${workspaceAnalysisRunner} runner
         ON runner."organization_id" = run."organization_id" AND runner."id" = run."runner_id"
       JOIN authority ON TRUE
       WHERE run."organization_id" = ${input.organizationId}
-        AND run."article_id" = ${input.articleId}::uuid
-        AND run."id" = ${input.runId}::uuid
+        AND run."article_id" = ${input.articleId}
+        AND run."id" = ${input.runId}
         AND run."state" IN ('queued', 'running')
         AND run."cancel_requested_at" IS NULL
         AND (run."requested_by_member_id" = authority."id"
           OR runner."member_id" = authority."id"
           OR authority."role" IN ('editor', 'admin', 'owner'))
-      FOR UPDATE OF run, runner
-    ), updated AS MATERIALIZED (
-      UPDATE ${workspaceAnalysisArticleRun} run SET
-        "cancel_requested_at" = now(), "cancel_requested_by_member_id" = authority."id"
-      FROM current CROSS JOIN authority
-      WHERE run."organization_id" = ${input.organizationId} AND run."id" = current."id"
-      RETURNING run.*
-    ), audit AS MATERIALIZED (
-      INSERT INTO ${workspaceAuditEvent}
-        ("organization_id", "actor_user_id", "action", "resource_type", "resource_id",
-         "redacted_summary", "request_id")
-      SELECT ${input.organizationId}, ${input.authority.userId},
-        'analysis_article.run_cancel_requested', 'analysis_article_run', updated."id"::text,
-        jsonb_build_object('articleId', updated."article_id", 'articleRevision',
-          updated."article_revision"), ${requestId}::uuid
-      FROM updated RETURNING "resource_id"
-    )
-    SELECT ${runProjection()} FROM updated run
-    JOIN audit ON audit."resource_id" = run."id"::text
-  `);
-  return result.rows[0] ?? null;
+
+    ) SELECT json_object('revision', article_revision) AS payload FROM current`,
+    statements: (scope) => [
+      sql`UPDATE workspace_analysis_article_run SET cancel_requested_at = ${utcNow},
+        cancel_requested_by_member_id = ${input.authority.membershipId} WHERE id = ${input.runId} AND EXISTS (${scope})`,
+      sql`INSERT INTO workspace_audit_event (organization_id, actor_user_id, action, resource_type,
+          resource_id, redacted_summary, request_id)
+        SELECT ${input.organizationId}, ${input.authority.userId}, 'analysis_article.run_cancel_requested', 'analysis_article_run',
+          ${input.runId}, json_object('articleId', ${input.articleId}, 'articleRevision', payload ->> 'revision'),
+          ${requestId} FROM (${scope})`,
+      sql`SELECT ${runProjection()} FROM workspace_analysis_article_run run CROSS JOIN (${scope}) WHERE run.id = ${input.runId}`,
+    ],
+  });
+  return returnedRun(result.rows[2][0]);
 }
 
 export async function commitAnalysisRunCreate(input: {
@@ -227,33 +194,15 @@ export async function commitAnalysisRunCreate(input: {
   authority: AnalysisRunAuthority;
 }) {
   const requestId = crypto.randomUUID();
-  const result = await db.execute<RawRow>(sql`
-    WITH authority_lock AS MATERIALIZED (
-      SELECT pg_advisory_xact_lock(hashtextextended(${memberLockKey(input)}, 0))
-    ), authority AS MATERIALIZED (
-      SELECT member."id", member."role"
-      FROM "workspace_control"."session" session
-      JOIN "workspace_control"."member" member
-        ON member."id" = ${input.authority.membershipId}
-       AND member."organization_id" = ${input.organizationId}
-       AND member."user_id" = ${input.authority.userId}
-      JOIN authority_lock ON TRUE
-      WHERE session."id" = ${input.authority.sessionId}
-        AND session."user_id" = ${input.authority.userId}
-        AND session."expires_at" > now()
-        AND member."role" = ${input.authority.role}
-        AND member."revocation_pending_at" IS NULL
-        AND member."revocation_claim_id" IS NULL
-      FOR UPDATE OF session, member
-    ), runner_authority AS MATERIALIZED (
+  const result = await atomicD1({
+    scope: sql`    WITH authority AS (${workspaceMemberAuthority(input.organizationId, input.authority, allRoles)}    ), runner_authority AS MATERIALIZED (
       SELECT runner."id", runner."runner_capability_generation"
       FROM ${workspaceAnalysisRunner} runner
       JOIN authority ON runner."member_id" = authority."id"
       WHERE runner."organization_id" = ${input.organizationId}
-        AND runner."id" = ${input.run.runnerId}::uuid
+        AND runner."id" = ${input.run.runnerId}
         AND runner."revoked_at" IS NULL
         AND runner."runner_capability_hash" = ${input.runnerCapabilityHash}
-      FOR UPDATE OF runner
     ), article_authority AS MATERIALIZED (
       SELECT article."id", article."organization_id", article."project_environment_id",
         article."environment_revision", article."connection_id", article."connection_revision"
@@ -264,9 +213,8 @@ export async function commitAnalysisRunCreate(input: {
        AND revision."revision" = ${input.run.articleRevision}
       JOIN authority ON TRUE
       WHERE article."organization_id" = ${input.organizationId}
-        AND article."id" = ${input.articleId}::uuid AND article."deleted_at" IS NULL
+        AND article."id" = ${input.articleId} AND article."deleted_at" IS NULL
         AND article."revision" = ${input.run.articleRevision}
-      FOR UPDATE OF article, revision
     ), connection_authority AS MATERIALIZED (
       SELECT connection."id" AS "connection_id", connection."content_revision"
       FROM article_authority
@@ -287,35 +235,25 @@ export async function commitAnalysisRunCreate(input: {
        AND connection_grant."connection_id" = connection."id"
        AND connection_grant."member_id" = ${input.authority.membershipId}
        AND connection_grant."capability" IN ('read', 'use', 'manage')
-      FOR UPDATE OF connection, environment_binding, connection_grant
-    ), inserted AS MATERIALIZED (
-      INSERT INTO ${workspaceAnalysisArticleRun}
-        ("id", "organization_id", "article_id", "article_revision", "runner_id",
-         "runner_capability_generation", "requested_by_member_id", "state",
-         "definition_hash", "started_at")
-      SELECT ${input.run.id}::uuid, ${input.organizationId}, ${input.articleId}::uuid,
-        ${input.run.articleRevision}, runner_authority."id",
-        runner_authority."runner_capability_generation", authority."id", 'running',
-        ${input.definitionHash}, now()
-      FROM authority JOIN runner_authority ON TRUE JOIN article_authority ON TRUE
-      WHERE (SELECT count(*) FROM connection_authority) = 1
-      RETURNING *
-    ), audit AS MATERIALIZED (
-      INSERT INTO ${workspaceAuditEvent}
-        ("organization_id", "actor_user_id", "action", "resource_type", "resource_id",
-         "redacted_summary", "request_id")
-      SELECT ${input.organizationId}, ${input.authority.userId}, 'analysis_article.run_start',
-        'analysis_article_run', inserted."id"::text,
-        jsonb_build_object('articleId', inserted."article_id", 'articleRevision',
-          inserted."article_revision", 'trigger', 'manual'), ${requestId}::uuid
-      FROM inserted RETURNING "resource_id"
-    )
-    SELECT ${runProjection()}, (
-      SELECT connection_authority."content_revision" FROM connection_authority
-    ) AS "connectionContentRevision"
-    FROM inserted run JOIN audit ON audit."resource_id" = run."id"::text
-  `);
-  return returnedAnalysisRunStart(result.rows[0]);
+
+    ) SELECT json_object('runnerGeneration', runner_authority.runner_capability_generation,
+      'connectionRevision', (SELECT content_revision FROM connection_authority)) AS payload
+      FROM runner_authority WHERE EXISTS (SELECT 1 FROM article_authority) AND (SELECT count(*) FROM connection_authority) = 1`,
+    statements: (scope) => [
+      sql`INSERT INTO workspace_analysis_article_run (id, organization_id, article_id, article_revision, runner_id,
+          runner_capability_generation, requested_by_member_id, state, definition_hash, started_at)
+        SELECT ${input.run.id}, ${input.organizationId}, ${input.articleId}, ${input.run.articleRevision}, ${input.run.runnerId},
+          payload ->> 'runnerGeneration', ${input.authority.membershipId}, 'running', ${input.definitionHash}, ${utcNow} FROM (${scope})`,
+      sql`INSERT INTO workspace_audit_event (organization_id, actor_user_id, action, resource_type,
+          resource_id, redacted_summary, request_id)
+        SELECT ${input.organizationId}, ${input.authority.userId}, 'analysis_article.run_start', 'analysis_article_run',
+          ${input.run.id}, ${JSON.stringify({ articleId: input.articleId, articleRevision: input.run.articleRevision, trigger: "manual" })},
+          ${requestId} FROM (${scope})`,
+      sql`SELECT ${runProjection()}, payload ->> 'connectionRevision' AS connectionContentRevision
+        FROM workspace_analysis_article_run run CROSS JOIN (${scope}) WHERE run.id = ${input.run.id}`,
+    ],
+  });
+  return returnedAnalysisRunStart(result.rows[2][0]);
 }
 
 function receiptRows(receipts: readonly AnalysisQueryReceiptInput[]) {
@@ -358,24 +296,8 @@ export async function commitAnalysisRunCompletion(input: {
     ? analysisRunResultHash(input.completion.queryReceipts)
     : null;
   const requestId = crypto.randomUUID();
-  const result = await db.execute<RawRow>(sql`
-    WITH authority_lock AS MATERIALIZED (
-      SELECT pg_advisory_xact_lock(hashtextextended(${memberLockKey(input)}, 0))
-    ), authority AS MATERIALIZED (
-      SELECT member."id" FROM "workspace_control"."session" session
-      JOIN "workspace_control"."member" member
-        ON member."id" = ${input.authority.membershipId}
-       AND member."organization_id" = ${input.organizationId}
-       AND member."user_id" = ${input.authority.userId}
-      JOIN authority_lock ON TRUE
-      WHERE session."id" = ${input.authority.sessionId}
-        AND session."user_id" = ${input.authority.userId}
-        AND session."expires_at" > now()
-        AND member."role" = ${input.authority.role}
-        AND member."revocation_pending_at" IS NULL
-        AND member."revocation_claim_id" IS NULL
-      FOR UPDATE OF session, member
-    ), current AS MATERIALIZED (
+  const result = await atomicD1({
+    scope: sql`    WITH authority AS (${workspaceMemberAuthority(input.organizationId, input.authority, allRoles)}    ), current AS MATERIALIZED (
       SELECT run.*
       FROM ${workspaceAnalysisArticleRun} run
       JOIN ${workspaceAnalysisRunner} runner
@@ -395,17 +317,13 @@ export async function commitAnalysisRunCompletion(input: {
        AND revision."article_id" = run."article_id"
        AND revision."revision" = run."article_revision"
       WHERE run."organization_id" = ${input.organizationId}
-        AND run."id" = ${input.runId}::uuid
-        AND run."article_id" = ${input.articleId}::uuid
-        AND run."runner_id" = ${input.runnerId}::uuid
+        AND run."id" = ${input.runId}
+        AND run."article_id" = ${input.articleId}
+        AND run."runner_id" = ${input.runnerId}
         AND run."state" = 'running'
         AND (run."cancel_requested_at" IS NULL OR ${input.completion.state} <> 'succeeded')
-      FOR UPDATE OF run, runner, article, revision
     ), requested_receipt AS MATERIALIZED (
-      SELECT * FROM jsonb_to_recordset(${JSON.stringify(receipts)}::jsonb)
-        AS requested(query_node_id text, connection_id uuid, connection_revision bigint,
-          query_run_id uuid, query_hash text, schema_fingerprint text, state text,
-          row_count bigint, byte_count bigint, duration_ms bigint)
+      ${requestedReceipts(receipts)}
     ), receipt_authority AS MATERIALIZED (
       SELECT requested.query_node_id FROM requested_receipt requested
       JOIN current ON TRUE
@@ -430,65 +348,36 @@ export async function commitAnalysisRunCompletion(input: {
        AND connection_grant."connection_id" = connection."id"
        AND connection_grant."member_id" = ${input.authority.membershipId}
        AND connection_grant."capability" IN ('read', 'use', 'manage')
-      FOR UPDATE OF connection, environment_binding, connection_grant
     ), eligible AS MATERIALIZED (
       SELECT current."id" FROM current
       WHERE ${input.completion.state} <> 'succeeded'
         OR ((SELECT count(*) FROM receipt_authority) = ${receipts.length}
           AND ${receipts.length} = 1)
-    ), inserted_receipts AS MATERIALIZED (
-      INSERT INTO ${workspaceAnalysisArticleQueryReceipt}
-        ("organization_id", "run_id", "query_node_id", "connection_id",
-         "connection_revision", "query_run_id", "query_hash", "schema_fingerprint",
-         "state", "row_count", "byte_count", "duration_ms")
-      SELECT ${input.organizationId}, eligible."id", requested.query_node_id,
-        requested.connection_id, requested.connection_revision, requested.query_run_id,
-        requested.query_hash, requested.schema_fingerprint, requested.state,
-        requested.row_count, requested.byte_count, requested.duration_ms
-      FROM eligible CROSS JOIN requested_receipt requested
-      WHERE ${input.completion.state} = 'succeeded'
-      RETURNING "run_id"
-    ), updated AS MATERIALIZED (
-      UPDATE ${workspaceAnalysisArticleRun} run
-      SET "state" = ${input.completion.state},
-        "schema_fingerprints" = ${JSON.stringify(schemaFingerprints)}::jsonb,
-        "row_count" = ${rowCount}, "byte_count" = ${byteCount}, "result_hash" = ${resultHash},
-        "error_kind" = ${input.completion.error?.kind ?? null},
-        "error_message" = ${input.completion.error?.message ?? null}, "finished_at" = now()
-      FROM current JOIN eligible ON eligible."id" = current."id"
-      WHERE run."organization_id" = current."organization_id" AND run."id" = current."id"
-        AND (${input.completion.state} <> 'succeeded'
-          OR (SELECT count(*) FROM inserted_receipts) = ${receipts.length})
-      RETURNING run.*
-    ), article_updated AS MATERIALIZED (
-      UPDATE ${workspaceAnalysisArticle} article
-      SET "latest_successful_run_id" = CASE
-          WHEN ${input.completion.state} = 'succeeded'
-            AND article."revision" = updated."article_revision" THEN updated."id"
-          ELSE article."latest_successful_run_id" END,
-        "updated_at" = CASE
-          WHEN ${input.completion.state} = 'succeeded'
-            AND article."revision" = updated."article_revision" THEN now()
-          ELSE article."updated_at" END
-      FROM updated
-      WHERE article."organization_id" = updated."organization_id"
-        AND article."id" = updated."article_id"
-      RETURNING article."id"
-    ), audit AS MATERIALIZED (
-      INSERT INTO ${workspaceAuditEvent}
-        ("organization_id", "actor_user_id", "action", "resource_type", "resource_id",
-         "redacted_summary", "request_id")
-      SELECT ${input.organizationId}, ${input.authority.userId}, 'analysis_article.run_complete',
-        'analysis_article_run', updated."id"::text,
-        jsonb_build_object('articleId', updated."article_id", 'articleRevision',
-          updated."article_revision", 'state', updated."state", 'rowCount', updated."row_count",
-          'byteCount', updated."byte_count"), ${requestId}::uuid
-      FROM updated JOIN article_updated ON TRUE RETURNING "resource_id"
-    )
-    SELECT ${runProjection()} FROM updated run
-    JOIN audit ON audit."resource_id" = run."id"::text
-  `);
-  if (result.rows[0]) return result.rows[0];
+
+    ) SELECT json_object('revision', current.article_revision) AS payload FROM current JOIN eligible ON eligible.id = current.id`,
+    statements: (scope) => [
+      sql`INSERT INTO workspace_analysis_article_query_receipt (organization_id, run_id, query_node_id, connection_id,
+          connection_revision, query_run_id, query_hash, schema_fingerprint, state, row_count, byte_count, duration_ms)
+        SELECT ${input.organizationId}, ${input.runId}, requested.query_node_id, requested.connection_id,
+          requested.connection_revision, requested.query_run_id, requested.query_hash, requested.schema_fingerprint,
+          requested.state, requested.row_count, requested.byte_count, requested.duration_ms
+        FROM (${requestedReceipts(receipts)}) requested CROSS JOIN (${scope}) WHERE ${input.completion.state} = 'succeeded'`,
+      sql`UPDATE workspace_analysis_article_run SET state = ${input.completion.state}, schema_fingerprints = ${JSON.stringify(schemaFingerprints)},
+          row_count = ${rowCount}, byte_count = ${byteCount}, result_hash = ${resultHash}, error_kind = ${input.completion.error?.kind ?? null},
+          error_message = ${input.completion.error?.message ?? null}, finished_at = ${utcNow}
+        WHERE id = ${input.runId} AND EXISTS (${scope})`,
+      sql`UPDATE workspace_analysis_article SET latest_successful_run_id = ${input.runId}, updated_at = ${utcNow}
+        WHERE organization_id = ${input.organizationId} AND id = ${input.articleId} AND ${input.completion.state} = 'succeeded'
+          AND revision = (SELECT payload ->> 'revision' FROM (${scope}))`,
+      sql`INSERT INTO workspace_audit_event (organization_id, actor_user_id, action, resource_type,
+          resource_id, redacted_summary, request_id)
+        SELECT ${input.organizationId}, ${input.authority.userId}, 'analysis_article.run_complete', 'analysis_article_run', ${input.runId},
+          json_object('articleId', ${input.articleId}, 'articleRevision', payload ->> 'revision', 'state', ${input.completion.state},
+            'rowCount', ${rowCount}, 'byteCount', ${byteCount}), ${requestId} FROM (${scope})`,
+      sql`SELECT ${runProjection()} FROM workspace_analysis_article_run run CROSS JOIN (${scope}) WHERE run.id = ${input.runId}`,
+    ],
+  });
+  if (result.rows[4][0]) return returnedRun(result.rows[4][0]);
   return replayAnalysisRunCompletion({
     ...input, receipts, schemaFingerprints, rowCount, byteCount, resultHash,
   });
@@ -509,27 +398,8 @@ async function replayAnalysisRunCompletion(input: {
   resultHash: string | null;
 }) {
   const result = await db.execute<RawRow>(sql`
-    WITH authority_lock AS MATERIALIZED (
-      SELECT pg_advisory_xact_lock(hashtextextended(${memberLockKey(input)}, 0))
-    ), authority AS MATERIALIZED (
-      SELECT member."id" FROM "workspace_control"."session" session
-      JOIN "workspace_control"."member" member
-        ON member."id" = ${input.authority.membershipId}
-       AND member."organization_id" = ${input.organizationId}
-       AND member."user_id" = ${input.authority.userId}
-      JOIN authority_lock ON TRUE
-      WHERE session."id" = ${input.authority.sessionId}
-        AND session."user_id" = ${input.authority.userId}
-        AND session."expires_at" > now()
-        AND member."role" = ${input.authority.role}
-        AND member."revocation_pending_at" IS NULL
-        AND member."revocation_claim_id" IS NULL
-      FOR UPDATE OF session, member
-    ), requested_receipt AS MATERIALIZED (
-      SELECT * FROM jsonb_to_recordset(${JSON.stringify(input.receipts)}::jsonb)
-        AS requested(query_node_id text, connection_id uuid, connection_revision bigint,
-          query_run_id uuid, query_hash text, schema_fingerprint text, state text,
-          row_count bigint, byte_count bigint, duration_ms bigint)
+    WITH authority AS (${workspaceMemberAuthority(input.organizationId, input.authority, allRoles)}    ), requested_receipt AS MATERIALIZED (
+      ${requestedReceipts(input.receipts)}
     ), replay AS MATERIALIZED (
       SELECT run.* FROM ${workspaceAnalysisArticleRun} run
       JOIN ${workspaceAnalysisRunner} runner
@@ -540,14 +410,14 @@ async function replayAnalysisRunCompletion(input: {
        AND runner."runner_capability_generation" = run."runner_capability_generation"
       JOIN authority ON TRUE
       WHERE run."organization_id" = ${input.organizationId}
-        AND run."article_id" = ${input.articleId}::uuid
-        AND run."id" = ${input.runId}::uuid AND run."runner_id" = ${input.runnerId}::uuid
+        AND run."article_id" = ${input.articleId}
+        AND run."id" = ${input.runId} AND run."runner_id" = ${input.runnerId}
         AND run."state" = ${input.completion.state} AND run."finished_at" IS NOT NULL
-        AND run."schema_fingerprints" = ${JSON.stringify(input.schemaFingerprints)}::jsonb
+        AND ${jsonEqual(sql`run.schema_fingerprints`, sql`${JSON.stringify(input.schemaFingerprints)}`)}
         AND run."row_count" = ${input.rowCount} AND run."byte_count" = ${input.byteCount}
-        AND run."result_hash" IS NOT DISTINCT FROM ${input.resultHash}
-        AND run."error_kind" IS NOT DISTINCT FROM ${input.completion.error?.kind ?? null}
-        AND run."error_message" IS NOT DISTINCT FROM ${input.completion.error?.message ?? null}
+        AND run."result_hash" IS ${input.resultHash}
+        AND run."error_kind" IS ${input.completion.error?.kind ?? null}
+        AND run."error_message" IS ${input.completion.error?.message ?? null}
         AND (SELECT count(*) FROM ${workspaceAnalysisArticleQueryReceipt} stored
           WHERE stored."organization_id" = run."organization_id"
             AND stored."run_id" = run."id") = CASE
@@ -567,9 +437,8 @@ async function replayAnalysisRunCompletion(input: {
            AND stored."byte_count" = requested.byte_count
            AND stored."duration_ms" = requested.duration_ms) = CASE
              WHEN ${input.completion.state} = 'succeeded' THEN ${input.receipts.length} ELSE 0 END
-      FOR UPDATE OF run, runner
     )
     SELECT ${runProjection()} FROM replay run
   `);
-  return result.rows[0] ?? null;
+  return returnedRun(result.rows[0]);
 }

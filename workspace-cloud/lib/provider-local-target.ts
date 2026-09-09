@@ -4,8 +4,10 @@
 import "server-only";
 
 import { sql } from "drizzle-orm";
-import { db } from "./db";
-import { revocationGateLockKey } from "./revocation-gates";
+import { queryD1 } from "./d1/database";
+import { jsonEqual } from "./d1/json";
+import { utcNow } from "./d1/schema/values";
+import { canonicalHash } from "./workspace-versioning";
 import { providerImportAdapters } from "./providers/import-projection";
 
 const AUTHORITY_TTL_MS = 5 * 60 * 1_000;
@@ -137,73 +139,52 @@ export function parseProviderLocalTarget(
   }
 }
 
-function memberLock(input: { organizationId: string; authority: ProviderLocalTargetAuthority }) {
-  return revocationGateLockKey({
-    kind: "member",
-    organizationId: input.organizationId,
-    memberId: input.authority.membershipId,
-    userId: input.authority.userId,
-  });
-}
-
-/**
- * Revalidates all durable authority in one locked query. It intentionally has
- * no receipt creation or other write: the returned target is an ephemeral
- * desktop hint and cannot be replayed as cloud import authority.
- */
+/** Recheck all durable authority in one read snapshot before returning a desktop hint. */
 export async function loadProviderLocalTarget(input: {
   organizationId: string;
   connectionId: string;
   authority: ProviderLocalTargetAuthority;
   now?: Date;
 }): Promise<ProviderLocalTarget | null> {
-  const result = await db.execute<RawTargetRow>(sql`
-    WITH member_lock AS MATERIALIZED (
-      SELECT pg_advisory_xact_lock(hashtextextended(${memberLock(input)}, 0))
-    ), authority AS MATERIALIZED (
-      SELECT member."id"
-      FROM "workspace_control"."session" session
-      JOIN "workspace_control"."member" member
-        ON member."id" = ${input.authority.membershipId}
-       AND member."organization_id" = ${input.organizationId}
-       AND member."user_id" = ${input.authority.userId}
-      JOIN member_lock ON TRUE
-      WHERE session."id" = ${input.authority.sessionId}
-        AND session."user_id" = ${input.authority.userId}
-        AND session."expires_at" > now()
-        AND member."revocation_pending_at" IS NULL
-        AND member."revocation_claim_id" IS NULL
-      FOR UPDATE OF session, member
+  const rows = await queryD1<RawTargetRow>(sql`
+    WITH authority AS (
+      SELECT member.id FROM session JOIN member ON member.user_id = session.user_id
+      JOIN workspace_profile profile ON profile.organization_id = member.organization_id
+      WHERE member.id = ${input.authority.membershipId} AND member.organization_id = ${input.organizationId}
+        AND member.user_id = ${input.authority.userId} AND session.id = ${input.authority.sessionId}
+        AND session.expires_at > ${utcNow} AND member.revocation_pending_at IS NULL
+        AND member.revocation_claim_id IS NULL AND profile.lifecycle_state = 'active'
     ), target AS MATERIALIZED (
       SELECT
         connection."id" AS "connectionId",
-        connection."revision" AS "connectionRevision",
+        CAST(connection."revision" AS TEXT) AS "connectionRevision",
         integration."id" AS "integrationId",
-        integration."generation" AS "integrationGeneration",
+        CAST(integration."generation" AS TEXT) AS "integrationGeneration",
         integration."provider" AS "provider",
-        resource."resource_fingerprint" AS "resourceFingerprint",
-        resource."resource" AS "resource"
-      FROM "workspace_control"."workspace_connection_grant" member_grant
-      JOIN "workspace_control"."workspace_connection" connection
+        resource."resource_fingerprint" AS "resourceFingerprint", resource.id AS resourceId,
+        resource."resource" AS "resource", connection.name, imported.request_hash AS requestHash,
+        json_type(resource.redacted_metadata, '$.production') = 'true' AS production
+      FROM "workspace_connection_grant" member_grant
+      JOIN "workspace_connection" connection
         ON connection."organization_id" = member_grant."organization_id"
        AND connection."id" = member_grant."connection_id"
-      JOIN "workspace_control"."workspace_provider_integration" integration
+      JOIN "workspace_provider_integration" integration
         ON integration."organization_id" = connection."organization_id"
        AND integration."id" = connection."provider_integration_id"
-      JOIN "workspace_control"."workspace_provider_resource" resource
+      JOIN "workspace_provider_resource" resource
         ON resource."organization_id" = connection."organization_id"
        AND resource."id" = connection."provider_resource_id"
       -- The import record is the durable receipt-derived witness.  Its hash
       -- binds the original managed import to this exact integration generation,
       -- resource, organization, and immutable connection name before a
       -- member-local desktop credential may use the target.
-      JOIN "workspace_control"."workspace_provider_import_request" imported
+      JOIN "workspace_provider_import_request" imported
         ON imported."organization_id" = connection."organization_id"
        AND imported."connection_id" = connection."id"
        AND imported."resource_id" = resource."id"
       JOIN authority ON authority."id" = member_grant."member_id"
       WHERE member_grant."organization_id" = ${input.organizationId}
-        AND member_grant."connection_id" = ${input.connectionId}::uuid
+        AND member_grant."connection_id" = ${input.connectionId}
         AND member_grant."member_id" = ${input.authority.membershipId}
         AND member_grant."capability" IN ('read', 'use', 'manage')
         AND connection."deleted_at" IS NULL
@@ -214,27 +195,7 @@ export async function loadProviderLocalTarget(input: {
         AND connection."credential_mode" = 'member_local'
         AND connection."provider" = integration."provider"
         AND connection."provider" = resource."provider"
-        AND connection."provider_resource" = resource."resource"
-        AND imported."request_hash" IN (
-          encode(digest(jsonb_build_object(
-            'integrationGeneration', integration."generation"::text,
-            'integrationId', integration."id"::text,
-            'mode', 'managed',
-            'name', connection."name",
-            'organizationId', connection."organization_id",
-            'resourceId', resource."id"::text
-          )::text, 'sha256'), 'hex'),
-          encode(digest(jsonb_build_object(
-            'integrationGeneration', integration."generation"::text,
-            'integrationId', integration."id"::text,
-            'mode', 'managed',
-            'name', connection."name",
-            'organizationId', connection."organization_id",
-            'productionApproved',
-              resource."redacted_metadata" -> 'production' = 'true'::jsonb,
-            'resourceId', resource."id"::text
-          )::text, 'sha256'), 'hex')
-        )
+        AND ${jsonEqual(sql`connection.provider_resource`, sql`resource.resource`)}
         AND integration."status" = 'active'
         AND integration."refresh_phase" = 'idle'
         AND integration."revoked_at" IS NULL
@@ -243,18 +204,28 @@ export async function loadProviderLocalTarget(input: {
         AND resource."provider" = integration."provider"
         AND integration."provider" IN ('neon', 'gcpCloudSql')
         AND (
-          resource."redacted_metadata" -> 'production' = 'false'::jsonb
+          json_type(resource.redacted_metadata, '$.production') = 'false'
           OR (
             resource."provider" IN ('gcpCloudSql', 'neon')
-            AND resource."redacted_metadata" -> 'production' = 'true'::jsonb
+            AND json_type(resource.redacted_metadata, '$.production') = 'true'
             AND imported."production_approved" = TRUE
           )
         )
-        AND resource."capability_manifest" -> 'importReadOnly' = 'true'::jsonb
-        AND jsonb_typeof(resource."capability_manifest" -> 'write') = 'boolean'
-        AND resource."capability_manifest" -> 'managedLease' = 'true'::jsonb
-      FOR UPDATE OF member_grant, connection, integration, resource, imported
+        AND json_type(resource.capability_manifest, '$.importReadOnly') = 'true'
+        AND json_type(resource.capability_manifest, '$.write') IN ('true', 'false')
+        AND json_type(resource.capability_manifest, '$.managedLease') = 'true'
     ) SELECT * FROM target
   `);
-  return parseProviderLocalTarget(result.rows[0], input.now);
+  const row = rows[0];
+  if (!row || row.requestHash !== canonicalHash({
+    integrationGeneration: row.integrationGeneration, integrationId: row.integrationId,
+    mode: "managed", name: row.name, organizationId: input.organizationId,
+    productionApproved: row.production === 1, resourceId: row.resourceId,
+  })) return null;
+  return parseProviderLocalTarget({
+    connectionId: row.connectionId, connectionRevision: row.connectionRevision,
+    integrationId: row.integrationId, integrationGeneration: row.integrationGeneration,
+    provider: row.provider, resourceFingerprint: row.resourceFingerprint,
+    resource: JSON.parse(String(row.resource)),
+  }, input.now);
 }

@@ -1,4 +1,4 @@
-// GCP Cloud SQL adapter using Vercel OIDC and Workload Identity Federation.
+// GCP Cloud SQL adapter using Workspace workload identity and Workload Identity Federation.
 // Customer service-account keys are never created, uploaded, or persisted.
 import "server-only";
 
@@ -80,21 +80,11 @@ function requestOidcToken(value: string | null) {
   ) {
     throw new ProviderRequestError(
       "gcpCloudSql",
-      "Vercel OIDC is not available for GCP federation",
+      "Workspace workload identity is not available for GCP federation",
       503,
     );
   }
   return value;
-}
-
-export function vercelOidcToken(request: Request): string | null {
-  if (process.env.VERCEL === "1") {
-    return request.headers.get("x-vercel-oidc-token");
-  }
-  if (process.env.NODE_ENV !== "production") {
-    return process.env.VERCEL_OIDC_TOKEN?.trim() || null;
-  }
-  return null;
 }
 
 async function federatedToken(

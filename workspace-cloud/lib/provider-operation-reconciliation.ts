@@ -2,7 +2,9 @@ import "server-only";
 
 import { sql } from "drizzle-orm";
 
-import { db } from "./db";
+import { atomicD1 } from "./d1/atomic";
+import { utcNow } from "./d1/schema/values";
+import { jsonEqual } from "./d1/json";
 import {
   providerMutationAuthoritySql,
   type ProviderMutationAuthority,
@@ -192,7 +194,7 @@ export async function applyProviderOperationReconciliation(
   const targetState = sql`CASE
     WHEN ${input.result.status} = 'ready' THEN 'succeeded'
     WHEN ${input.result.status} = 'conflict' THEN 'needs_repair'
-    WHEN ${input.result.status} = 'failed' AND ${input.result.branchId}::text IS NULL
+    WHEN ${input.result.status} = 'failed' AND ${input.result.branchId} IS NULL
       THEN 'failed'
     WHEN ${input.result.status} = 'failed' THEN 'needs_repair'
     WHEN ${input.result.status} = 'missing'
@@ -201,7 +203,7 @@ export async function applyProviderOperationReconciliation(
   END`;
   const targetFailureCode = sql`CASE
     WHEN ${input.result.status} IN ('conflict', 'failed')
-      THEN ${input.result.failureCode}::text
+      THEN ${input.result.failureCode}
     WHEN ${input.result.status} = 'missing'
       AND operation."remote_started_at" <= ${missingCutoff}
       THEN 'NEON_CREATE_RESULT_AMBIGUOUS'
@@ -221,20 +223,20 @@ export async function applyProviderOperationReconciliation(
       claimId: null,
     },
   });
-  const result = await db.execute<ProviderOperationReconciliationRow>(sql`
-    WITH candidate AS MATERIALIZED (
+  const result = await atomicD1({
+    scope: sql`    WITH candidate AS MATERIALIZED (
       SELECT operation."id", operation."organization_id", operation."state",
         operation."claim_id", operation."risk", operation."approval_policy"
       FROM ${workspaceProviderOperation} AS operation
-      WHERE operation."id" = ${input.operationId}::uuid
+      WHERE operation."id" = ${input.operationId}
         AND operation."organization_id" = ${input.authority.organizationId}
-        AND operation."integration_id" = ${input.integrationId}::uuid
+        AND operation."integration_id" = ${input.integrationId}
         AND operation."provider" = 'neon'
         AND operation."kind" = ${input.kind}
         AND operation."integration_generation" = ${input.integrationGeneration}
         AND operation."plan_hash" = ${input.planHash}
         AND operation."ownership_marker" = ${input.ownershipMarker}
-        AND operation."claim_id" = ${input.claimId}::uuid
+        AND operation."claim_id" = ${input.claimId}
         AND (
           operation."state" IN ('remote_started', 'reconciling')
           OR (
@@ -243,43 +245,58 @@ export async function applyProviderOperationReconciliation(
             AND operation."redacted_result"->>'credentialFenceFingerprint' IS NULL
             AND ${input.result.status} = 'ready'
             AND ${input.result.managedAccessState} = 'bootstrap_required'
-            AND ${input.result.credentialFenceFingerprint}::text IS NOT NULL
+            AND ${input.result.credentialFenceFingerprint} IS NOT NULL
           )
         )
         AND (
           operation."provider_operation_id" IS NULL
-          OR ${input.result.providerOperationId}::text IS NULL
+          OR ${input.result.providerOperationId} IS NULL
           OR operation."provider_operation_id" = ${input.result.providerOperationId}
         )
         AND (
           operation."provider_resource_id" IS NULL
-          OR ${input.result.branchId}::text IS NULL
+          OR ${input.result.branchId} IS NULL
           OR operation."provider_resource_id" = ${input.result.branchId}
         )
         AND (
           operation."redacted_result" IS NULL
           OR operation."redacted_result"->>'endpointId' IS NULL
-          OR ${input.result.endpointId}::text IS NULL
+          OR ${input.result.endpointId} IS NULL
           OR operation."redacted_result"->>'endpointId' = ${input.result.endpointId}
         )
         AND (
           operation."redacted_result" IS NULL
           OR operation."redacted_result"->>'databaseFingerprint' IS NULL
-          OR ${input.result.databaseFingerprint}::text IS NULL
+          OR ${input.result.databaseFingerprint} IS NULL
           OR operation."redacted_result"->>'databaseFingerprint'
             = ${input.result.databaseFingerprint}
         )
         AND (
           operation."redacted_result" IS NULL
           OR operation."redacted_result"->>'credentialFenceFingerprint' IS NULL
-          OR ${input.result.credentialFenceFingerprint}::text IS NULL
+          OR ${input.result.credentialFenceFingerprint} IS NULL
           OR operation."redacted_result"->>'credentialFenceFingerprint'
             = ${input.result.credentialFenceFingerprint}
         )
         AND ${authority}
-      FOR UPDATE OF operation
-    ), updated AS MATERIALIZED (
-      UPDATE ${workspaceProviderOperation} AS operation
+
+    )
+      SELECT json_object('id', candidate."id", 'organization_id', candidate."organization_id", 'state', candidate."state", 'claim_id', candidate."claim_id", 'risk', candidate."risk", 'approval_policy', candidate."approval_policy") AS payload FROM candidate`,
+    statements: (scope) => {
+      const candidate = sql`SELECT json_extract(payload, '$.id') AS "id", json_extract(payload, '$.organization_id') AS "organization_id", json_extract(payload, '$.state') AS "state", json_extract(payload, '$.claim_id') AS "claim_id", json_extract(payload, '$.risk') AS "risk", json_extract(payload, '$.approval_policy') AS "approval_policy" FROM (${scope})`;
+      const updated = sql`SELECT operation."id" AS "id", operation."state" AS "state",
+        operation."claim_id" AS "claimId",
+        operation."provider_operation_id" AS "providerOperationId",
+        operation."provider_resource_id" AS "providerResourceId",
+        operation."reconcile_after" AS "reconcileAfter",
+        operation."redacted_result" AS "redactedResult",
+        operation."failure_code" AS "failureCode",
+        operation."organization_id" AS "organizationId",
+        candidate."state" AS "previousState",
+        candidate."risk" AS "risk",
+        candidate."approval_policy" AS "approvalPolicy"
+        FROM ${workspaceProviderOperation} AS operation JOIN (${candidate}) AS candidate ON operation.id = candidate.id`;
+      return [sql`UPDATE ${workspaceProviderOperation} AS operation
       SET "state" = ${targetState},
         "provider_operation_id" = COALESCE(
           operation."provider_operation_id", ${input.result.providerOperationId}
@@ -287,10 +304,8 @@ export async function applyProviderOperationReconciliation(
         "provider_resource_id" = COALESCE(
           operation."provider_resource_id", ${input.result.branchId}
         ),
-        "redacted_result" = ${JSON.stringify(redactedResult)}::jsonb
-          || jsonb_build_object(
-            'endpointId', COALESCE(
-              ${input.result.endpointId}::text,
+        "redacted_result" = json_set(${JSON.stringify(redactedResult)}, '$.endpointId', COALESCE(
+              ${input.result.endpointId},
               operation."redacted_result"->>'endpointId'
             )
           ),
@@ -305,59 +320,42 @@ export async function applyProviderOperationReconciliation(
           ELSE ${input.now}
         END,
         "updated_at" = ${input.now}
-      FROM candidate
+      FROM (${candidate}) AS candidate
       WHERE operation."id" = candidate."id"
         AND operation."organization_id" = candidate."organization_id"
-        AND operation."state" = candidate."state"
-      RETURNING operation."id"::text AS "id", operation."state" AS "state",
-        operation."claim_id"::text AS "claimId",
-        operation."provider_operation_id" AS "providerOperationId",
-        operation."provider_resource_id" AS "providerResourceId",
-        operation."reconcile_after" AS "reconcileAfter",
-        operation."redacted_result" AS "redactedResult",
-        operation."failure_code" AS "failureCode",
-        operation."organization_id" AS "organizationId",
-        candidate."state" AS "previousState",
-        candidate."risk" AS "risk",
-        candidate."approval_policy" AS "approvalPolicy"
-    ), reconcile_audit AS (
-      INSERT INTO ${workspaceAuditEvent} AS existing
+        AND operation."state" = candidate."state"`, sql`INSERT INTO ${workspaceAuditEvent} AS existing
         ("id", "organization_id", "actor_user_id", "action", "resource_type",
          "resource_id", "redacted_summary", "request_id")
-      SELECT ${reconcileAuditId}::uuid, updated."organizationId",
+      SELECT ${reconcileAuditId}, updated."organizationId",
         ${input.authority.userId}, 'provider.operation.reconciling',
         'provider_operation', updated."id",
-        jsonb_build_object(
+        json_object(
           'provider', 'neon',
-          'kind', ${input.kind}::text,
-          'observation', ${input.result.status}::text,
-          'branchId', ${input.result.branchId}::text,
-          'providerOperationId', ${input.result.providerOperationId}::text,
+          'kind', ${input.kind},
+          'observation', ${input.result.status},
+          'branchId', ${input.result.branchId},
+          'providerOperationId', ${input.result.providerOperationId},
           'risk', updated."risk",
           'approvalPolicy', updated."approvalPolicy"
-        ), updated."claimId"::uuid
-      FROM updated
+        ), updated."claimId"
+      FROM (${updated}) AS updated
       WHERE updated."previousState" = 'remote_started'
-      ON CONFLICT ("id") DO UPDATE SET "id" = existing."id"
-      WHERE existing."organization_id" = EXCLUDED."organization_id"
+      ON CONFLICT ("id") DO UPDATE SET "id" = CASE WHEN existing."organization_id" = EXCLUDED."organization_id"
         AND existing."actor_user_id" = EXCLUDED."actor_user_id"
         AND existing."action" = EXCLUDED."action"
         AND existing."resource_type" = EXCLUDED."resource_type"
         AND existing."resource_id" = EXCLUDED."resource_id"
-        AND existing."redacted_summary" = EXCLUDED."redacted_summary"
-        AND existing."request_id" = EXCLUDED."request_id"
-      RETURNING "resource_id"
-    ), completion_audit AS (
-      INSERT INTO ${workspaceAuditEvent} AS existing
+        AND ${jsonEqual(sql`existing."redacted_summary"`, sql`EXCLUDED."redacted_summary"`)}
+        AND existing."request_id" = EXCLUDED."request_id" THEN existing."id" ELSE NULL END`, sql`INSERT INTO ${workspaceAuditEvent} AS existing
         ("id", "organization_id", "actor_user_id", "action", "resource_type",
          "resource_id", "redacted_summary", "request_id")
-      SELECT ${completionAuditId}::uuid, updated."organizationId",
+      SELECT ${completionAuditId}, updated."organizationId",
         ${input.authority.userId},
         'provider.operation.' || updated."state",
         'provider_operation', updated."id",
-        jsonb_build_object(
+        json_object(
           'provider', 'neon',
-          'kind', ${input.kind}::text,
+          'kind', ${input.kind},
           'state', updated."state",
           'branchId', updated."providerResourceId",
           'providerOperationId', updated."providerOperationId",
@@ -372,37 +370,19 @@ export async function applyProviderOperationReconciliation(
           'failureCode', updated."failureCode",
           'risk', updated."risk",
           'approvalPolicy', updated."approvalPolicy"
-        ), updated."claimId"::uuid
-      FROM updated
+        ), updated."claimId"
+      FROM (${updated}) AS updated
       WHERE updated."state" <> 'reconciling'
-      ON CONFLICT ("id") DO UPDATE SET "id" = existing."id"
-      WHERE existing."organization_id" = EXCLUDED."organization_id"
+      ON CONFLICT ("id") DO UPDATE SET "id" = CASE WHEN existing."organization_id" = EXCLUDED."organization_id"
         AND existing."actor_user_id" = EXCLUDED."actor_user_id"
         AND existing."action" = EXCLUDED."action"
         AND existing."resource_type" = EXCLUDED."resource_type"
         AND existing."resource_id" = EXCLUDED."resource_id"
-        AND existing."redacted_summary" = EXCLUDED."redacted_summary"
-        AND existing."request_id" = EXCLUDED."request_id"
-      RETURNING "resource_id"
-    )
-    SELECT updated."id", updated."state", updated."claimId",
-      updated."providerOperationId", updated."providerResourceId",
-      updated."reconcileAfter", updated."redactedResult",
-      updated."failureCode"
-    FROM updated
-    LEFT JOIN reconcile_audit
-      ON reconcile_audit."resource_id" = updated."id"
-    LEFT JOIN completion_audit
-      ON completion_audit."resource_id" = updated."id"
-    WHERE (
-      updated."previousState" <> 'remote_started'
-      OR reconcile_audit."resource_id" IS NOT NULL
-    ) AND (
-      updated."state" = 'reconciling'
-      OR completion_audit."resource_id" IS NOT NULL
-    )
-  `);
-  const row = result.rows[0];
+        AND ${jsonEqual(sql`existing."redacted_summary"`, sql`EXCLUDED."redacted_summary"`)}
+        AND existing."request_id" = EXCLUDED."request_id" THEN existing."id" ELSE NULL END`, updated];
+    },
+  });
+  const row = result.rows.at(-1)?.[0] as ProviderOperationReconciliationRow | undefined;
   const reconcileAfter = row ? optionalDate(row.reconcileAfter) : null;
   const executionResult = row ? executionResultProjection(row.redactedResult) : null;
   if (

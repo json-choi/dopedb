@@ -266,6 +266,13 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
   command를 소유한다. GCP Cloud SQL 복구는 기존 integration·project·instance를
   고정한 채 OAuth를 다시 받고 IAM DB 인증 flag와 전용 DB 사용자를 재검증·복구한
   뒤 같은 DB 행으로 돌아온다. 기존 connection ID와 멤버 grant는 유지한다.
+- GCP Cloud SQL 연결·복구 승인은 기존 애플리케이션 객체의 소유권 이전이나
+  `PUBLIC` 접근 회수를 승인하지 않는다. 관리형 스키마 정책은 이미 격리된 안정적
+  owner에만 적용하며, 기존 객체·함수·공유 권한을 바꿔야 하면 모든 DB를 사전 검사한
+  뒤 중단한다. 기존 서버의 DML·DDL·RLS·함수 실행 및 신규 객체 권한을 검토한 별도
+  마이그레이션 없이 자동 인수하지 않는다. 이 조건에서는 연결·복구가 완료되지
+  않으며, 오류를 숨기거나 Desktop의 owner 검증을 완화하지 않는다. 상세 경계는
+  [`GCP_SCHEMA_ACCESS_SAFETY.md`](GCP_SCHEMA_ACCESS_SAFETY.md)를 따른다.
 - enabled control은 반드시 실제 command와 state owner를 가진다. 아직 없는 기능은
   tracker에 `missing`으로 기록하고 가짜 control을 만들지 않는다.
 

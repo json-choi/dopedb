@@ -12,6 +12,10 @@ export default [
     ignores: [
       "**/node_modules/**",
       "**/.next/**",
+      "**/.open-next/**",
+      "**/.wrangler/**",
+      "**/cloudflare-env.d.ts",
+      "workspace-cloud/identity-env.d.ts",
       "**/dist/**",
       "**/target/**",
       "graphify-out/**",

@@ -211,10 +211,10 @@ Run checks proportional to the change:
 
 - `pnpm build` for frontend changes.
 - `pnpm workspace:cloud:build` for Workspace Web changes. For database deployment
-  changes, also run `bash scripts/test-provider-import-postgres.sh`; it exercises
+  changes, also run `bash scripts/test-provider-import-d1.sh`; it exercises
   the production migration entry point on an isolated database. A local build is
-  not a deployment receipt: run `pnpm workspace:cloud:verify-deployment <new-deployment-url-or-id>`
-  to require `Ready` and the matching production alias before reporting deployment success.
+  not a deployment receipt: run `pnpm workspace:cloud:verify-deployment <worker-version-id>`
+  to require 100% traffic on the requested Worker version and a matching live production-domain receipt before reporting deployment success.
 - `pnpm test` for the critical frontend smoke suite.
 - `pnpm test:rust` for Rust behavior or wire-contract changes.
 - A manual app check for changed UI flows.

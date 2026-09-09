@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Analytics } from "@vercel/analytics/next";
+import { SitePageEffects } from "./SitePageEffects";
 import { headers } from "next/headers";
 import { IBM_Plex_Mono } from "next/font/google";
 import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
@@ -102,7 +102,7 @@ export default async function RootLayout({
     >
       <body className="tw:min-h-[100dvh] tw:bg-paper tw:text-ink tw:antialiased">
         {children}
-        <Analytics />
+        <SitePageEffects />
       </body>
     </html>
   );

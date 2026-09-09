@@ -1,6 +1,7 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
+import { atomicD1 } from "@/lib/d1/atomic";
 import { env } from "@/lib/env";
 import {
   knowledgeMutationAuthority,
@@ -99,89 +100,45 @@ export async function POST(request: Request, context: RouteContext) {
   const expectedConnectionRevision = body.expectedConnectionRevision === undefined
     ? null
     : body.expectedConnectionRevision as number;
+  const bindingRole = body.role.trim();
+  const bindingAlias = body.alias.trim();
 
-  const bindingResult = await db.execute<{
-    id: string;
-    projectEnvironmentId: string;
-    environmentRevision: number;
-    connectionId: string;
-    connectionRevision: number;
-    connectionContentRevision: number;
-    connectionName: string;
-    role: string;
-    alias: string;
-    inserted: boolean;
-  }>(sql`
-    WITH actor_authority AS MATERIALIZED (
-      SELECT 1 WHERE ${knowledgeMutationAuthoritySql(authority, workspaceId)}
-    ), scope AS MATERIALIZED (
-      SELECT environment."id", environment."revision" AS environment_revision,
-        connection."id" AS connection_id,
-        connection."content_revision" AS connection_revision,
-        connection."content_revision" AS connection_content_revision,
-        connection."name" AS connection_name
-      FROM ${knowledgeProjectEnvironment} AS environment
-      JOIN ${knowledgeProject} AS project
-        ON project."organization_id" = environment."organization_id"
-       AND project."id" = environment."project_id"
-       AND project."deleted_at" IS NULL
-      JOIN ${workspaceConnection} AS connection
-        ON connection."organization_id" = environment."organization_id"
-       AND connection."id" = ${body.connectionId}::uuid
-       AND connection."deleted_at" IS NULL
-       AND connection."revocation_pending_at" IS NULL
-       AND connection."revocation_claim_id" IS NULL
-       AND (${expectedConnectionRevision === null}
-         OR connection."content_revision" = ${expectedConnectionRevision ?? 0})
-      CROSS JOIN actor_authority
-      WHERE environment."organization_id" = ${workspaceId}
-        AND environment."id" = ${environmentId}::uuid
-      FOR UPDATE OF project, environment, connection
-    ), active_assignment AS MATERIALIZED (
-      SELECT binding."project_environment_id"
-      FROM ${knowledgeEnvironmentConnection} AS binding
-      JOIN scope ON scope.connection_id = binding."connection_id"
-      WHERE binding."organization_id" = ${workspaceId}
-        AND binding."revoked_at" IS NULL
-    ), updated AS MATERIALIZED (
-      UPDATE ${knowledgeEnvironmentConnection} AS binding
-      SET "environment_revision" = scope.environment_revision,
-        "connection_revision" = scope.connection_revision,
-        "role" = ${body.role.trim()}, "alias" = ${body.alias.trim()}
-      FROM scope
-      WHERE binding."organization_id" = ${workspaceId}
-        AND binding."project_environment_id" = scope."id"
-        AND binding."connection_id" = scope.connection_id
-        AND binding."revoked_at" IS NULL
-      RETURNING binding.*, scope.connection_name, scope.connection_content_revision
-    ), inserted AS MATERIALIZED (
-      INSERT INTO ${knowledgeEnvironmentConnection}
-        ("id", "organization_id", "project_environment_id", "environment_revision",
-         "connection_id", "connection_revision", "role", "alias")
-      SELECT ${body.bindingId}::uuid, ${workspaceId}, scope."id", scope.environment_revision,
-        scope.connection_id, scope.connection_revision, ${body.role.trim()}, ${body.alias.trim()}
-      FROM scope
-      WHERE NOT EXISTS (SELECT 1 FROM updated)
-        AND NOT EXISTS (SELECT 1 FROM active_assignment)
-      ON CONFLICT DO NOTHING
-      RETURNING *
-    )
-    SELECT updated."id"::text, updated."project_environment_id"::text AS "projectEnvironmentId",
-      updated."environment_revision"::integer AS "environmentRevision",
-      updated."connection_id"::text AS "connectionId",
-      updated."connection_revision"::integer AS "connectionRevision",
-      updated.connection_content_revision::integer AS "connectionContentRevision",
-      updated.connection_name AS "connectionName", updated."role", updated."alias", false AS inserted
-    FROM updated
-    UNION ALL
-    SELECT inserted."id"::text, inserted."project_environment_id"::text,
-      inserted."environment_revision"::integer, inserted."connection_id"::text,
-      inserted."connection_revision"::integer, scope.connection_content_revision::integer,
-      scope.connection_name,
-      inserted."role", inserted."alias", true
-    FROM inserted JOIN scope ON scope."id" = inserted."project_environment_id"
-  `);
-  const binding = bindingResult.rows[0];
+  const bindingResult = await atomicD1({
+    scope: sql`SELECT json_object('id', COALESCE(binding.id, ${body.bindingId}), 'inserted', binding.id IS NULL,
+        'environmentRevision', environment.revision, 'connectionRevision', connection.content_revision,
+        'connectionName', connection.name) AS payload
+      FROM knowledge_project_environment environment JOIN knowledge_project project
+        ON project.organization_id = environment.organization_id AND project.id = environment.project_id AND project.deleted_at IS NULL
+      JOIN workspace_connection connection ON connection.organization_id = environment.organization_id
+        AND connection.id = ${body.connectionId} AND connection.deleted_at IS NULL
+        AND connection.revocation_pending_at IS NULL AND connection.revocation_claim_id IS NULL
+        AND (${expectedConnectionRevision === null} OR connection.content_revision = ${expectedConnectionRevision ?? 0})
+      LEFT JOIN knowledge_environment_connection binding ON binding.organization_id = environment.organization_id
+        AND binding.project_environment_id = environment.id AND binding.connection_id = connection.id AND binding.revoked_at IS NULL
+      WHERE environment.organization_id = ${workspaceId} AND environment.id = ${environmentId}
+        AND ${knowledgeMutationAuthoritySql(authority, workspaceId)}
+        AND NOT EXISTS (SELECT 1 FROM knowledge_environment_connection WHERE organization_id = ${workspaceId}
+          AND connection_id = connection.id AND project_environment_id <> environment.id AND revoked_at IS NULL)
+        AND (binding.id IS NOT NULL OR NOT EXISTS (SELECT 1 FROM knowledge_environment_connection WHERE id = ${body.bindingId}))`,
+    statements: (scope) => [
+      sql`UPDATE knowledge_environment_connection SET
+          environment_revision = (SELECT payload ->> 'environmentRevision' FROM (${scope})),
+          connection_revision = (SELECT payload ->> 'connectionRevision' FROM (${scope})),
+          role = ${bindingRole}, alias = ${bindingAlias}
+        WHERE id = (SELECT payload ->> 'id' FROM (${scope}) WHERE payload ->> 'inserted' = 0)`,
+      sql`INSERT INTO knowledge_environment_connection (id, organization_id, project_environment_id, environment_revision,
+          connection_id, connection_revision, role, alias)
+        SELECT ${body.bindingId}, ${workspaceId}, ${environmentId}, payload ->> 'environmentRevision',
+          ${body.connectionId}, payload ->> 'connectionRevision', ${bindingRole}, ${bindingAlias}
+          FROM (${scope}) WHERE payload ->> 'inserted' = 1`,
+      sql`SELECT binding.id, project_environment_id AS projectEnvironmentId, environment_revision AS environmentRevision,
+          connection_id AS connectionId, connection_revision AS connectionRevision,
+          payload ->> 'connectionRevision' AS connectionContentRevision, payload ->> 'connectionName' AS connectionName,
+          role, alias, payload ->> 'inserted' AS inserted
+        FROM knowledge_environment_connection binding CROSS JOIN (${scope}) WHERE binding.id = payload ->> 'id'`,
+    ],
+  });
+  const binding = bindingResult.rows[2][0];
   if (!binding) {
     const [activeAssignment] = await db.select({
       projectEnvironmentId: knowledgeEnvironmentConnection.projectEnvironmentId,

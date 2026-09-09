@@ -2,14 +2,14 @@
 // clients, creation fails explicitly, and revocation remains available so old
 // persisted grants can still be retired safely.
 import { sql } from "drizzle-orm";
-import { db } from "@/lib/db";
+import { atomicD1 } from "@/lib/d1/atomic";
+import { utcNow } from "@/lib/d1/schema/values";
 import { env } from "@/lib/env";
 import { boundedJsonBody, isUuid, jsonError, mutationAllowed, privateJson } from "@/lib/http";
 import {
   knowledgeMutationAuthority,
   knowledgeMutationAuthoritySql,
 } from "@/lib/knowledge/mutation-authority";
-import { knowledgeGrant, workspaceAuditEvent } from "@/lib/schema";
 import { authorizeWorkspace } from "@/lib/workspace-authorization";
 
 type RouteContext = { params: Promise<{ workspaceId: string }> };
@@ -49,39 +49,19 @@ export async function DELETE(request: Request, context: RouteContext) {
     return jsonError("Invalid Knowledge grant revocation", 400);
   }
   const grantId = body.grantId;
-  const revokedResult = await db.execute<{
-    id: string;
-    memberId: string;
-    projectEnvironmentId: string;
-  }>(sql`
-    WITH actor_authority AS MATERIALIZED (
-      SELECT 1 WHERE ${knowledgeMutationAuthoritySql(authority, workspaceId)}
-    ), revoked AS MATERIALIZED (
-      UPDATE ${knowledgeGrant} AS issued_grant
-      SET "revoked_at" = ${new Date()}
-      WHERE issued_grant."organization_id" = ${workspaceId}
-        AND issued_grant."id" = ${grantId}::uuid
-        AND issued_grant."revoked_at" IS NULL
-        AND EXISTS (SELECT 1 FROM actor_authority)
-      RETURNING issued_grant."id"::text AS "id",
-        issued_grant."member_id" AS "memberId",
-        issued_grant."project_environment_id"::text AS "projectEnvironmentId"
-    ), audited AS (
-      INSERT INTO ${workspaceAuditEvent}
-        ("organization_id", "actor_user_id", "action", "resource_type",
-         "resource_id", "redacted_summary", "request_id")
-      SELECT ${workspaceId}, ${authorization.session.user.id},
-        'knowledge.grant.revoke', 'knowledge_grant', revoked."id",
-        jsonb_build_object(
-          'memberId', revoked."memberId",
-          'projectEnvironmentId', revoked."projectEnvironmentId"
-        ), ${crypto.randomUUID()}::uuid
-      FROM revoked
-      RETURNING "id"
-    )
-    SELECT revoked.* FROM revoked, audited
-  `);
-  const revoked = revokedResult.rows;
+  const revokedResult = await atomicD1({
+    scope: sql`SELECT json_object('memberId', member_id, 'projectEnvironmentId', project_environment_id) AS payload
+      FROM knowledge_grant WHERE organization_id = ${workspaceId} AND id = ${grantId} AND revoked_at IS NULL
+        AND ${knowledgeMutationAuthoritySql(authority, workspaceId)}`,
+    statements: (scope) => [
+      sql`UPDATE knowledge_grant SET revoked_at = ${utcNow} WHERE id = ${grantId} AND EXISTS (${scope}) RETURNING id`,
+      sql`INSERT INTO workspace_audit_event (organization_id, actor_user_id, action, resource_type,
+          resource_id, redacted_summary, request_id)
+        SELECT ${workspaceId}, ${authorization.session.user.id}, 'knowledge.grant.revoke', 'knowledge_grant',
+          ${grantId}, payload, ${crypto.randomUUID()} FROM (${scope})`,
+    ],
+  });
+  const revoked = revokedResult.rows[0];
   if (revoked.length !== 1) return jsonError("Knowledge grant was not found", 404);
   return privateJson({ revoked: true });
 }

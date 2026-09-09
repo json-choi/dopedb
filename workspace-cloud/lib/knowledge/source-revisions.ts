@@ -2,7 +2,10 @@
 // the pinned commit; graph construction is intentionally outside this path.
 import "server-only";
 
-import { neonSql } from "../db";
+import { randomUUID } from "node:crypto";
+import { sql } from "drizzle-orm";
+import { batchD1 } from "../d1/database";
+import { utcNow } from "../d1/schema/values";
 
 const SHA1 = /^[0-9a-f]{40}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -21,7 +24,7 @@ function checkedSha(value: string) {
   return value;
 }
 
-// The delivery row makes webhook replay idempotent and the locked before-SHA
+// The delivery row makes webhook replay idempotent and the batch-validated before-SHA
 // prevents an older delivery from rolling a source back after a newer push.
 export async function recordGithubSourceRevisions(
   inputs: readonly GithubSourceRevisionInput[],
@@ -44,69 +47,43 @@ export async function recordGithubSourceRevisions(
     });
   }
   if (requested.size === 0) return [];
-  return await neonSql.query(
-    `WITH requested AS MATERIALIZED (
-       SELECT *
-       FROM jsonb_to_recordset($1::text::jsonb) AS item(
-         "organizationId" text, "sourceId" text, "deliveryId" text,
-         "beforeCommitSha" text, "afterCommitSha" text
-       )
-     ), current_source AS MATERIALIZED (
-       SELECT source."organization_id", source."id", source."commit_sha",
-         requested."deliveryId", requested."beforeCommitSha", requested."afterCommitSha"
-       FROM requested
-       JOIN "workspace_control"."knowledge_source" source
-         ON source."organization_id" = requested."organizationId"
-        AND source."id" = requested."sourceId"::uuid
-       WHERE source."provider" = 'github'
-         AND source."revoked_at" IS NULL
-       ORDER BY source."organization_id", source."id"
-       FOR UPDATE OF source
-     ), inserted_event AS MATERIALIZED (
-       INSERT INTO "workspace_control"."knowledge_source_event" (
-         "organization_id", "source_id", "delivery_id", "event_kind",
-         "before_commit_sha", "after_commit_sha", "changed_files", "state", "consumed_at"
-       )
-       SELECT current_source."organization_id", current_source."id",
-         current_source."deliveryId", 'push', current_source."beforeCommitSha",
-         current_source."afterCommitSha", '[]'::jsonb,
-         CASE WHEN current_source."commit_sha" = current_source."beforeCommitSha"
-           THEN 'consumed' ELSE 'failed' END,
-         now()
-       FROM current_source
-       ON CONFLICT ("delivery_id", "source_id") DO NOTHING
-       RETURNING "organization_id", "source_id", "id", "state"
-     ), advanced AS (
-       UPDATE "workspace_control"."knowledge_source" source
-       SET "commit_sha" = COALESCE(current_source."afterCommitSha", source."commit_sha"),
-         "sync_state" = CASE WHEN current_source."afterCommitSha" IS NULL
-           THEN 'stale' ELSE 'ready' END,
-         "sync_revision" = source."sync_revision" + 1,
-         "last_failure_code" = CASE
-           WHEN current_source."afterCommitSha" IS NULL THEN 'github_ref_deleted'
-           ELSE NULL
-         END,
-         "last_reconciled_at" = CASE WHEN current_source."afterCommitSha" IS NULL
-           THEN NULL ELSE now() END,
-         "updated_at" = now()
-       FROM current_source
-       JOIN inserted_event
-         ON inserted_event."organization_id" = current_source."organization_id"
-        AND inserted_event."source_id" = current_source."id"
-       WHERE source."organization_id" = current_source."organization_id"
-         AND source."id" = current_source."id"
-         AND current_source."commit_sha" = current_source."beforeCommitSha"
-         AND inserted_event."state" = 'consumed'
-       RETURNING source."organization_id", source."id"
-     )
-     SELECT inserted_event."id"::text AS "eventId",
-       inserted_event."source_id"::text AS "sourceId",
-       EXISTS(
-         SELECT 1 FROM advanced
-         WHERE advanced."organization_id" = inserted_event."organization_id"
-           AND advanced."id" = inserted_event."source_id"
-       ) AS "advanced"
-     FROM inserted_event`,
-    [JSON.stringify([...requested.values()])],
-  ) as Array<{ eventId: string; sourceId: string; advanced: boolean }>;
+  const entries = [...requested.values()];
+  const result: Array<{ eventId: string; sourceId: string; advanced: boolean }> = [];
+  // Each source is independent. Bounded batches stay below D1 payload limits;
+  // delivery IDs make retry after a partially completed webhook idempotent.
+  for (let offset = 0; offset < entries.length; offset += 256) {
+    const batch = JSON.stringify(entries.slice(offset, offset + 256).map((entry) => ({
+      ...entry, organizationId: entry.organizationId.toLowerCase(), sourceId: entry.sourceId.toLowerCase(),
+      eventId: randomUUID(),
+    })));
+    const inputs = sql`SELECT value ->> 'organizationId' AS organization_id,
+      value ->> 'sourceId' AS source_id, value ->> 'deliveryId' AS delivery_id,
+      value ->> 'beforeCommitSha' AS before_sha, value ->> 'afterCommitSha' AS after_sha,
+      value ->> 'eventId' AS event_id FROM json_each(${batch})`;
+    const rows = await batchD1([
+      sql`INSERT INTO knowledge_source_event (id, organization_id, source_id, delivery_id, event_kind,
+          before_commit_sha, after_commit_sha, changed_files, state, consumed_at)
+        SELECT requested.event_id, source.organization_id, source.id, requested.delivery_id, 'push',
+          requested.before_sha, requested.after_sha, '[]',
+          CASE WHEN source.commit_sha = requested.before_sha THEN 'consumed' ELSE 'failed' END, ${utcNow}
+        FROM (${inputs}) requested JOIN knowledge_source source
+          ON source.organization_id = requested.organization_id AND source.id = requested.source_id
+        WHERE source.provider = 'github' AND source.revoked_at IS NULL
+        ON CONFLICT (delivery_id, source_id) DO NOTHING`,
+      sql`UPDATE knowledge_source AS source SET
+          commit_sha = COALESCE(requested.after_sha, source.commit_sha),
+          sync_state = CASE WHEN requested.after_sha IS NULL THEN 'stale' ELSE 'ready' END,
+          sync_revision = source.sync_revision + 1,
+          last_failure_code = CASE WHEN requested.after_sha IS NULL THEN 'github_ref_deleted' ELSE NULL END,
+          last_reconciled_at = CASE WHEN requested.after_sha IS NULL THEN NULL ELSE ${utcNow} END,
+          updated_at = ${utcNow}
+        FROM (${inputs}) requested JOIN knowledge_source_event event ON event.id = requested.event_id
+        WHERE source.id = requested.source_id AND source.organization_id = requested.organization_id
+          AND source.commit_sha = requested.before_sha AND event.state = 'consumed'`,
+      sql`SELECT event.id AS eventId, event.source_id AS sourceId, event.state = 'consumed' AS advanced
+        FROM knowledge_source_event event JOIN (${inputs}) requested ON event.id = requested.event_id`,
+    ]);
+    for (const row of rows[2]) result.push({ eventId: String(row.eventId), sourceId: String(row.sourceId), advanced: row.advanced === 1 });
+  }
+  return result;
 }

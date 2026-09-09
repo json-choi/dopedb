@@ -11,7 +11,7 @@ import { listGcpOAuthInstances, type GcpSetupCredential } from "./gcp-cloud-oaut
 import { validateGcpCloudSqlCredential } from "./gcp-cloud-sql";
 import { ProviderRequestError } from "./provider-types";
 import { GcpManagedAccessRequestError } from "./gcp-cloud-managed-http";
-import { verifyVercelOidcToken } from "./vercel-oidc";
+import { verifyWorkloadOidcToken } from "./workload-oidc";
 import {
   POOL_ID,
   PROVIDER_ID,
@@ -112,7 +112,7 @@ export async function bootstrapGcpCloudSql(input: {
     input.credential,
     configuration.projectId,
   );
-  const identity = await verifyVercelOidcToken(input.oidcToken);
+  const identity = await verifyWorkloadOidcToken(input.oidcToken);
   await confirmProject(
     credential,
     configuration.projectId,

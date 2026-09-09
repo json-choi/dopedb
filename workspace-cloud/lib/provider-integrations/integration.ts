@@ -285,7 +285,7 @@ export function requiredOidcToken(value: string | null | undefined) {
   if (!value) {
     throw new ProviderRequestError(
       "gcpCloudSql",
-      "Vercel OIDC is not available for GCP federation",
+      "Workspace workload identity is not available for GCP federation",
       503,
     );
   }

@@ -1,0 +1,55 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1788873401091,
+      "tag": "0000_workspace_baseline",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1788873401092,
+      "tag": "0001_workspace_guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1788873401093,
+      "tag": "0002_storage_types",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1788873401094,
+      "tag": "0003_atomic_scope",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1788873401095,
+      "tag": "0004_member_evidence_detachment",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1788883200005,
+      "tag": "0005_backup_chunks",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1788883200006,
+      "tag": "0006_retention_purge",
+      "breakpoints": true
+    }
+  ]
+}

@@ -131,7 +131,7 @@ export async function runProviderImportSupportAssertions() {
   const kmsKeyName = "projects/dopedb-harness/locations/global/keyRings/workspace/cryptoKeys/backup";
   expect(kmsCore.parseWorkspaceKmsConfiguration({
     keyName: kmsKeyName,
-    workloadIdentityAudience: "//iam.googleapis.com/projects/123456789012/locations/global/workloadIdentityPools/vercel/providers/workspace",
+    workloadIdentityAudience: "//iam.googleapis.com/projects/123456789012/locations/global/workloadIdentityPools/dopedb-workspace/providers/dopedb-workspace",
     serviceAccountEmail: "workspace-kms@dopedb-harness.iam.gserviceaccount.com",
   })).toMatchObject({ keyName: kmsKeyName });
   expect(() => kmsCore.parseWorkspaceKmsConfiguration({

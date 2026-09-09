@@ -33,14 +33,21 @@ Do not join these systems by silently copying identifiers between them.
 
 | System | Purpose | Current boundary |
 | --- | --- | --- |
-| Vercel Web Analytics on `dopedb.dev` | Aggregate public page, download, and workspace CTA flow | Automatic website measurement with `Download Clicked` and `Workspace Opened`; no Desktop installation identifier |
+| Cloudflare Analytics Engine on `dopedb.dev` | Aggregate public page, download, and workspace CTA flow | Closed page/language and CTA enums only; no visitor, Desktop, account, URL, referrer, device, or location identifier |
 | Sentry Desktop diagnostics | Investigate sanitized production renderer failures and allowlisted Agent-plugin failures | Error diagnostics only; no product funnel events, replay, tracing, logs, breadcrumbs, default PII, request, user, free-form message, or customer payload |
 | Desktop product analytics | Measure explicitly approved product outcomes | Explicit opt-in, closed schema, first-party relay, dedicated Cloudflare EU D1, no vendor autocapture or person profiles |
 
 Website activity and Desktop activation are reported as separate aggregate
 stages. A download click must not carry a visitor identifier into an installer,
-and the Desktop installation identifier must not be sent back to Vercel Web
-Analytics.
+and the Desktop installation identifier must not be sent back to website metrics.
+
+Website metrics use the `dopedb_site` Analytics Engine dataset. The same-origin
+`/api/site-events` route bounds each request to 1 KiB and an edge-IP request budget;
+the IP is not written into the dataset. Browser Do Not Track and Global Privacy
+Control disable collection. Dataset points expire after three months under the
+[Analytics Engine retention limit](https://developers.cloudflare.com/analytics/analytics-engine/limits/).
+These are sampled aggregate event counts, not unique visitors or cross-session funnels.
+Production cutover status is recorded in [Cloudflare migration](CLOUDFLARE_MIGRATION.md).
 
 ## Consent contract
 
@@ -67,7 +74,7 @@ Desktop product analytics is optional and fail-closed.
   the public Cloud envelope.
 - A release-time feature flag and a configured relay are additional kill
   switches, not substitutes for user consent.
-- Sentry error diagnostics and public-site Vercel Analytics are separate systems
+- Sentry error diagnostics and public-site Cloudflare website metrics are separate systems
   and must be described separately wherever the product analytics choice is
   shown.
 
@@ -136,7 +143,7 @@ batch, event older than seven days, or event more than five minutes in the futur
 
 The following values are prohibited in the event name, properties, analytics
 identifier, URL, application log, retry key, or vendor context. The relay's
-one-way transport rate-limit key and Vercel's separate hosting/security metadata
+one-way transport rate-limit key and Cloudflare's separate hosting/security metadata
 are the explicit source-IP processing exceptions described below:
 
 - SQL, query text or fragments, query hashes derived from content, parameters,
@@ -208,7 +215,7 @@ Connection is optional and must not be required for activation.
 
 The canonical aggregate funnels are:
 
-1. **Public acquisition, reported separately:** Vercel page view -> `Download
+1. **Public acquisition, reported separately:** Website page view -> `Download
    Clicked`. Do not person-join it to Desktop.
 2. **Direct first value:** `desktop_installation_ready` -> successful
    `workspace_authentication_completed` when sign-in is chosen ->
@@ -314,7 +321,7 @@ security audit, individual customer attribution, or an externally asserted
 adoption number. Authentication would exclude the pre-auth stage but would not by
 itself make client-originated analytics a security receipt.
 
-Vercel may process the inbound request and its IP as hosting/security data. That
+Cloudflare may process the inbound request and its IP as hosting/security data. That
 transport metadata remains outside the stored product event and is governed by the
 separate hosting-log boundary.
 
@@ -328,7 +335,7 @@ separate hosting-log boundary.
   with the newest outcomes. Older high-volume query and Agent-turn events yield
   first. This is bounded priority sampling during offline bursts, not lossless
   event storage.
-- The Vercel first-party relay does not persist raw analytics. The dedicated
+- The Cloudflare first-party relay does not persist raw analytics. The dedicated
   Cloudflare Worker persists the normalized v1 event only in analytics D1.
 - One-way rate-limit bucket keys are operational abuse-control data, not product
   events. They use the shared 24-hour expiry eligibility and reclaim a bounded
@@ -351,9 +358,9 @@ separate hosting-log boundary.
   maintainers. Exporting raw events into spreadsheets, issue trackers, support
   tools, or Analysis Articles is prohibited.
 - D1 analytics data is not merged into the workspace audit log, Neon account records,
-  Sentry issues, Vercel visitor profiles, or Agent memory.
+  Sentry issues, website event counts, or Agent memory.
 
-Vercel may retain inbound hosting/security metadata under its separate service
+Cloudflare may retain inbound hosting/security metadata under its separate service
 policy. That transport metadata is not a product event and is outside the local
 queue and D1 raw-event retention promises above.
 
@@ -411,7 +418,7 @@ For an access or deletion request:
 3. Verify the provider deletion job. There is no product-analytics row to delete
    from Neon, and deleting an actor/workspace pseudonym does not locate unrelated
    installation-only rows.
-4. Handle Vercel website analytics and Sentry diagnostics as separate provider
+4. Handle Cloudflare website metrics and Sentry diagnostics as separate provider
    requests; never infer their identities from the analytics installation ID.
 5. Record only the request, verification, provider job reference, completion, and
    any legally required retention exception. Do not copy deleted event payloads
@@ -451,7 +458,7 @@ Every release that changes analytics must verify:
   analytics is unavailable;
 - public-relay data is labeled as directional consenting-installation evidence,
   never a trusted security, billing, customer-attribution, or all-user measure;
-- Sentry, Vercel site analytics, workspace audit, and local tracing cannot enter
+- Sentry, Cloudflare website metrics, workspace audit, and local tracing cannot enter
   the Cloudflare D1 projection;
 - the EN and KO privacy text describe the same implemented paths; and
 - Site TypeScript/build checks reject event names or properties outside the

@@ -1,0 +1,57 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "dopedb-workspace",
+  "main": ".open-next/worker.js",
+  "account_id": "0af3820c996f277b2f17ee446d03f60a",
+  "compatibility_date": "2026-09-08",
+  "compatibility_flags": [
+    "nodejs_compat",
+    "global_fetch_strictly_public"
+  ],
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [
+    { "pattern": "app.dopedb.dev", "custom_domain": true }
+  ],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "services": [
+    {
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "dopedb-workspace"
+    },
+    {
+      "binding": "WORKLOAD_IDENTITY",
+      "service": "dopedb-workspace-identity",
+      "entrypoint": "WorkspaceIdentity"
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 0.01,
+    "logs": {
+      "invocation_logs": false
+    }
+  },
+  "version_metadata": {
+    "binding": "CF_VERSION_METADATA"
+  },
+  "vars": {
+    "OIDC_ISSUER": "https://identity.dopedb.dev",
+    "OIDC_AUDIENCE": "https://iam.googleapis.com",
+    "OIDC_ACCOUNT_ID": "0af3820c996f277b2f17ee446d03f60a",
+    "OIDC_WORKLOAD_ID": "e9cdd314-e94a-4827-9777-ec4068daf494",
+    "OIDC_SUBJECT": "dopedb:workspace:production",
+    "WORKSPACE_RUNTIME": "cloudflare"
+  },
+  "d1_databases": [
+    {
+      "binding": "WORKSPACE_DB",
+      "database_name": "dopedb-workspace",
+      "database_id": "5ef469d0-db9f-45cb-bbce-99dfbe68c181",
+      "migrations_dir": "d1-migrations"
+    }
+  ]
+}

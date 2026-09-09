@@ -3,7 +3,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 import type { GcpSetupCredential } from "./gcp-cloud-oauth";
 import { ProviderRequestError } from "./provider-types";
-import { verifyVercelOidcToken } from "./vercel-oidc";
+import { verifyWorkloadOidcToken } from "./workload-oidc";
 import {
   IAM_ORIGIN,
   POOL_ID,
@@ -63,7 +63,7 @@ export async function ensurePool(
       {
         method: "POST",
         body: JSON.stringify({
-          displayName: "DopeDB Vercel",
+          displayName: "DopeDB Workspace",
           description: "Keyless DopeDB production deployment identities",
           disabled: false,
         }),
@@ -87,7 +87,7 @@ export async function ensurePool(
 export async function ensureProvider(
   credential: GcpSetupCredential,
   projectNumber: string,
-  identity: Awaited<ReturnType<typeof verifyVercelOidcToken>>,
+  identity: Awaited<ReturnType<typeof verifyWorkloadOidcToken>>,
 ) {
   const pool = `projects/${projectNumber}/locations/global/workloadIdentityPools/${POOL_ID}`;
   const name = `${pool}/providers/${PROVIDER_ID}`;
@@ -105,10 +105,10 @@ export async function ensureProvider(
       {
         method: "POST",
         body: JSON.stringify({
-          displayName: "DopeDB Vercel",
-          description: "DopeDB production Vercel Functions only",
+          displayName: "DopeDB Workspace",
+          description: "DopeDB production Workspace identity only",
           attributeMapping: { "google.subject": "assertion.sub" },
-          attributeCondition: `assertion.project_id == '${identity.projectId}' && assertion.environment == 'production'`,
+          attributeCondition: `assertion.account_id == '${identity.accountId}' && assertion.workload_id == '${identity.workloadId}' && assertion.environment == 'production' && assertion.sub == '${identity.subject}'`,
           oidc: {
             issuerUri: identity.issuer,
             allowedAudiences: [identity.audience],
@@ -134,7 +134,7 @@ export async function ensureProvider(
     ? oidc.allowedAudiences
     : [];
   const requiredCondition =
-    `assertion.project_id == '${identity.projectId}' && assertion.environment == 'production'`;
+    `assertion.account_id == '${identity.accountId}' && assertion.workload_id == '${identity.workloadId}' && assertion.environment == 'production' && assertion.sub == '${identity.subject}'`;
   if (
     provider?.name !== name
     || provider.state !== "ACTIVE"

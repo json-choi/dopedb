@@ -1,3 +1,4 @@
+import { workloadOidcToken } from "../../../../../../../../lib/workload-identity";
 // Session-bound Google Cloud setup inventory and bootstrap boundary. The opaque
 // setup id never authorizes access by itself; membership and user are rechecked.
 import { and, eq, gt, inArray, isNull } from "drizzle-orm";
@@ -23,7 +24,6 @@ import {
   listGcpOAuthProjects,
   type GcpSetupCredential,
 } from "../../../../../../../../lib/providers/gcp-cloud-oauth";
-import { vercelOidcToken } from "../../../../../../../../lib/providers/gcp-cloud-sql";
 import { ProviderRequestError } from "../../../../../../../../lib/providers/provider-types";
 import {
   gcpCloudSqlTargetFingerprint,
@@ -264,9 +264,9 @@ export async function POST(request: Request, context: RouteContext) {
   if (repairIntegrationId === "invalid") {
     return jsonError("Invalid managed connection repair target", 400);
   }
-  const oidcToken = vercelOidcToken(request);
+  const oidcToken = await workloadOidcToken();
   if (!oidcToken) {
-    return jsonError("Vercel OIDC is not enabled for this deployment", 503);
+    return jsonError("Workspace workload identity is not enabled for this deployment", 503);
   }
   let temporaryGrant: GcpTemporaryPermissionGrant | null = null;
   try {

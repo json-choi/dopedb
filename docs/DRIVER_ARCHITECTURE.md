@@ -91,7 +91,7 @@ control-plane client:
   Vitess deploy requests must be capability-gated because PlanetScale PostgreSQL does not
   share that workflow.
 - GCP Cloud SQL: SQLx PostgreSQL/MySQL data plane plus a provider adapter that exchanges
-  Vercel OIDC through Workload Identity Federation for short-lived IAM DB login tokens.
+  Cloudflare workload identity through Workload Identity Federation for short-lived IAM DB login tokens.
   The version- and digest-pinned official Cloud SQL Auth Proxy owns instance
   authorization and TLS on a per-pool loopback transport; MySQL cleartext
   authentication is therefore confined to that local verified connector path.

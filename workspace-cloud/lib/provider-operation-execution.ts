@@ -2,7 +2,9 @@ import "server-only";
 
 import { sql } from "drizzle-orm";
 
-import { db } from "./db";
+import { atomicD1 } from "./d1/atomic";
+import { utcNow } from "./d1/schema/values";
+import { jsonEqual } from "./d1/json";
 import {
   providerMutationAuthoritySql,
   type ProviderMutationAuthority,
@@ -78,14 +80,14 @@ export async function cancelExpiredProviderOperationExecution(
       claimId: null,
     },
   });
-  const result = await db.execute<ProviderOperationCancellationRow>(sql`
-    WITH candidate AS MATERIALIZED (
+  const result = await atomicD1({
+    scope: sql`    WITH candidate AS MATERIALIZED (
       SELECT operation."id", operation."organization_id", operation."state",
         operation."risk", operation."approval_policy"
       FROM ${workspaceProviderOperation} AS operation
-      WHERE operation."id" = ${input.operationId}::uuid
+      WHERE operation."id" = ${input.operationId}
         AND operation."organization_id" = ${input.authority.organizationId}
-        AND operation."integration_id" = ${input.integrationId}::uuid
+        AND operation."integration_id" = ${input.integrationId}
         AND operation."provider" = 'neon'
         AND operation."kind" = ${input.kind}
         AND operation."integration_generation" = ${input.integrationGeneration}
@@ -93,20 +95,14 @@ export async function cancelExpiredProviderOperationExecution(
         AND operation."ownership_marker" = ${input.ownershipMarker}
         AND operation."state" IN ('approved', 'claimed')
         AND operation."remote_started_at" IS NULL
-        AND operation."plan_expires_at" <= now()
+        AND operation."plan_expires_at" <= ${utcNow}
         AND ${authority}
-      FOR UPDATE OF operation
-    ), updated AS MATERIALIZED (
-      UPDATE ${workspaceProviderOperation} AS operation
-      SET "state" = 'cancelled',
-        "reconcile_after" = NULL,
-        "completed_at" = ${input.now},
-        "updated_at" = ${input.now}
-      FROM candidate
-      WHERE operation."id" = candidate."id"
-        AND operation."organization_id" = candidate."organization_id"
-        AND operation."state" = candidate."state"
-      RETURNING operation."id"::text AS "id", operation."state" AS "state",
+
+    )
+      SELECT json_object('id', candidate."id", 'organization_id', candidate."organization_id", 'state', candidate."state", 'risk', candidate."risk", 'approval_policy', candidate."approval_policy") AS payload FROM candidate`,
+    statements: (scope) => {
+      const candidate = sql`SELECT json_extract(payload, '$.id') AS "id", json_extract(payload, '$.organization_id') AS "organization_id", json_extract(payload, '$.state') AS "state", json_extract(payload, '$.risk') AS "risk", json_extract(payload, '$.approval_policy') AS "approval_policy" FROM (${scope})`;
+      const updated = sql`SELECT operation."id" AS "id", operation."state" AS "state",
         operation."provider_operation_id" AS "providerOperationId",
         operation."provider_resource_id" AS "providerResourceId",
         operation."reconcile_after" AS "reconcileAfter",
@@ -114,38 +110,39 @@ export async function cancelExpiredProviderOperationExecution(
         operation."organization_id" AS "organizationId",
         candidate."risk" AS "risk",
         candidate."approval_policy" AS "approvalPolicy"
-    ), audit AS (
-      INSERT INTO ${workspaceAuditEvent} AS existing
+        FROM ${workspaceProviderOperation} AS operation JOIN (${candidate}) AS candidate ON operation.id = candidate.id`;
+      return [sql`UPDATE ${workspaceProviderOperation} AS operation
+      SET "state" = 'cancelled',
+        "reconcile_after" = NULL,
+        "completed_at" = ${input.now},
+        "updated_at" = ${input.now}
+      FROM (${candidate}) AS candidate
+      WHERE operation."id" = candidate."id"
+        AND operation."organization_id" = candidate."organization_id"
+        AND operation."state" = candidate."state"`, sql`INSERT INTO ${workspaceAuditEvent} AS existing
         ("id", "organization_id", "actor_user_id", "action", "resource_type",
          "resource_id", "redacted_summary", "request_id")
-      SELECT ${auditId}::uuid, updated."organizationId",
+      SELECT ${auditId}, updated."organizationId",
         ${input.authority.userId}, 'provider.operation.cancelled',
         'provider_operation', updated."id",
-        jsonb_build_object(
+        json_object(
           'provider', 'neon',
-          'kind', ${input.kind}::text,
+          'kind', ${input.kind},
           'reason', 'plan_expired_before_remote_start',
           'risk', updated."risk",
           'approvalPolicy', updated."approvalPolicy"
-        ), ${input.operationId}::uuid
-      FROM updated
-      ON CONFLICT ("id") DO UPDATE SET "id" = existing."id"
-      WHERE existing."organization_id" = EXCLUDED."organization_id"
+        ), ${input.operationId}
+      FROM (${updated}) AS updated WHERE TRUE
+      ON CONFLICT ("id") DO UPDATE SET "id" = CASE WHEN existing."organization_id" = EXCLUDED."organization_id"
         AND existing."actor_user_id" = EXCLUDED."actor_user_id"
         AND existing."action" = EXCLUDED."action"
         AND existing."resource_type" = EXCLUDED."resource_type"
         AND existing."resource_id" = EXCLUDED."resource_id"
-        AND existing."redacted_summary" = EXCLUDED."redacted_summary"
-        AND existing."request_id" = EXCLUDED."request_id"
-      RETURNING "resource_id"
-    )
-    SELECT updated."id", updated."state", updated."providerOperationId",
-      updated."providerResourceId", updated."reconcileAfter",
-      updated."failureCode"
-    FROM updated
-    JOIN audit ON audit."resource_id" = updated."id"
-  `);
-  const row = result.rows[0];
+        AND ${jsonEqual(sql`existing."redacted_summary"`, sql`EXCLUDED."redacted_summary"`)}
+        AND existing."request_id" = EXCLUDED."request_id" THEN existing."id" ELSE NULL END`, updated];
+    },
+  });
+  const row = result.rows.at(-1)?.[0] as ProviderOperationCancellationRow | undefined;
   if (
     !row
     || row.id !== input.operationId
@@ -183,14 +180,14 @@ export async function claimProviderOperationExecution(
   const claimId = crypto.randomUUID();
   const auditId = workspaceAuditEventId("provider-operation:claim", claimId);
   const authority = currentExecutionAuthoritySql(input);
-  const result = await db.execute<ProviderOperationClaimRow>(sql`
-    WITH candidate AS MATERIALIZED (
+  const result = await atomicD1({
+    scope: sql`    WITH candidate AS MATERIALIZED (
       SELECT operation."id", operation."organization_id", operation."state",
         operation."claim_id", operation."risk", operation."approval_policy"
       FROM ${workspaceProviderOperation} AS operation
-      WHERE operation."id" = ${input.operationId}::uuid
+      WHERE operation."id" = ${input.operationId}
         AND operation."organization_id" = ${input.authority.organizationId}
-        AND operation."integration_id" = ${input.integrationId}::uuid
+        AND operation."integration_id" = ${input.integrationId}
         AND operation."provider" = 'neon'
         AND operation."kind" = ${input.kind}
         AND operation."integration_generation" = ${input.integrationGeneration}
@@ -201,18 +198,28 @@ export async function claimProviderOperationExecution(
         )
         AND (
           operation."state" <> 'approved'
-          OR operation."plan_expires_at" > now()
+          OR operation."plan_expires_at" > ${utcNow}
         )
         AND ${authority}
-      FOR UPDATE OF operation
-    ), updated AS MATERIALIZED (
-      UPDATE ${workspaceProviderOperation} AS operation
+
+    )
+      SELECT json_object('id', candidate."id", 'organization_id', candidate."organization_id", 'state', candidate."state", 'risk', candidate."risk", 'approval_policy', candidate."approval_policy", 'claim_id', candidate."claim_id") AS payload FROM candidate`,
+    statements: (scope) => {
+      const candidate = sql`SELECT json_extract(payload, '$.id') AS "id", json_extract(payload, '$.organization_id') AS "organization_id", json_extract(payload, '$.state') AS "state", json_extract(payload, '$.risk') AS "risk", json_extract(payload, '$.approval_policy') AS "approval_policy", json_extract(payload, '$.claim_id') AS "claim_id" FROM (${scope})`;
+      const updated = sql`SELECT operation."id" AS "id", operation."state" AS "state",
+        operation."claim_id" AS "claimId",
+        candidate."state" AS "previousState",
+        operation."organization_id" AS "organizationId",
+        candidate."risk" AS "risk",
+        candidate."approval_policy" AS "approvalPolicy"
+        FROM ${workspaceProviderOperation} AS operation JOIN (${candidate}) AS candidate ON operation.id = candidate.id`;
+      return [sql`UPDATE ${workspaceProviderOperation} AS operation
       SET "state" = CASE
           WHEN candidate."state" = 'approved' THEN 'claimed'
           ELSE operation."state"
         END,
         "claim_id" = CASE
-          WHEN candidate."state" = 'approved' THEN ${claimId}::uuid
+          WHEN candidate."state" = 'approved' THEN ${claimId}
           ELSE operation."claim_id"
         END,
         "claimed_at" = CASE
@@ -223,48 +230,33 @@ export async function claimProviderOperationExecution(
           WHEN candidate."state" = 'approved' THEN ${input.now}
           ELSE operation."updated_at"
         END
-      FROM candidate
+      FROM (${candidate}) AS candidate
       WHERE operation."id" = candidate."id"
         AND operation."organization_id" = candidate."organization_id"
-        AND operation."state" = candidate."state"
-      RETURNING operation."id"::text AS "id", operation."state" AS "state",
-        operation."claim_id"::text AS "claimId",
-        candidate."state" AS "previousState",
-        operation."organization_id" AS "organizationId",
-        candidate."risk" AS "risk",
-        candidate."approval_policy" AS "approvalPolicy"
-    ), audit AS (
-      INSERT INTO ${workspaceAuditEvent} AS existing
+        AND operation."state" = candidate."state"`, sql`INSERT INTO ${workspaceAuditEvent} AS existing
         ("id", "organization_id", "actor_user_id", "action", "resource_type",
          "resource_id", "redacted_summary", "request_id")
-      SELECT ${auditId}::uuid, updated."organizationId",
+      SELECT ${auditId}, updated."organizationId",
         ${input.authority.userId}, 'provider.operation.claim',
         'provider_operation', updated."id",
-        jsonb_build_object(
+        json_object(
           'provider', 'neon',
-          'kind', ${input.kind}::text,
+          'kind', ${input.kind},
           'risk', updated."risk",
           'approvalPolicy', updated."approvalPolicy"
-        ), updated."claimId"::uuid
-      FROM updated
+        ), updated."claimId"
+      FROM (${updated}) AS updated
       WHERE updated."previousState" = 'approved'
-      ON CONFLICT ("id") DO UPDATE SET "id" = existing."id"
-      WHERE existing."organization_id" = EXCLUDED."organization_id"
+      ON CONFLICT ("id") DO UPDATE SET "id" = CASE WHEN existing."organization_id" = EXCLUDED."organization_id"
         AND existing."actor_user_id" = EXCLUDED."actor_user_id"
         AND existing."action" = EXCLUDED."action"
         AND existing."resource_type" = EXCLUDED."resource_type"
         AND existing."resource_id" = EXCLUDED."resource_id"
-        AND existing."redacted_summary" = EXCLUDED."redacted_summary"
-        AND existing."request_id" = EXCLUDED."request_id"
-      RETURNING "resource_id"
-    )
-    SELECT updated."id", updated."state", updated."claimId",
-      updated."previousState"
-    FROM updated
-    LEFT JOIN audit ON audit."resource_id" = updated."id"
-    WHERE updated."previousState" <> 'approved' OR audit."resource_id" IS NOT NULL
-  `);
-  const row = result.rows[0];
+        AND ${jsonEqual(sql`existing."redacted_summary"`, sql`EXCLUDED."redacted_summary"`)}
+        AND existing."request_id" = EXCLUDED."request_id" THEN existing."id" ELSE NULL END`, updated];
+    },
+  });
+  const row = result.rows.at(-1)?.[0] as ProviderOperationClaimRow | undefined;
   if (
     !row
     || row.id !== input.operationId
@@ -300,74 +292,33 @@ export async function markProviderOperationRemoteStarted(
     input.claimId,
   );
   const authority = currentExecutionAuthoritySql(input);
-  const result = await db.execute<ProviderOperationRemoteStartRow>(sql`
-    WITH authorized_operation AS MATERIALIZED (
+  const result = await atomicD1({
+    scope: sql`    WITH authorized_operation AS MATERIALIZED (
       SELECT operation."id", operation."organization_id", operation."state",
         operation."claim_id", operation."risk", operation."approval_policy",
         operation."plan_expires_at", operation."integration_id",
         operation."provider", operation."kind", operation."resource_scope",
         operation."source_resource_id", operation."redacted_plan"
       FROM ${workspaceProviderOperation} AS operation
-      WHERE operation."id" = ${input.operationId}::uuid
+      WHERE operation."id" = ${input.operationId}
         AND operation."organization_id" = ${input.authority.organizationId}
-        AND operation."integration_id" = ${input.integrationId}::uuid
+        AND operation."integration_id" = ${input.integrationId}
         AND operation."provider" = 'neon'
         AND operation."kind" = ${input.kind}
         AND operation."integration_generation" = ${input.integrationGeneration}
         AND operation."plan_hash" = ${input.planHash}
         AND operation."ownership_marker" = ${input.ownershipMarker}
-        AND operation."claim_id" = ${input.claimId}::uuid
+        AND operation."claim_id" = ${input.claimId}
         AND operation."state" IN ('claimed', 'remote_started', 'reconciling')
         AND ${authority}
-      FOR UPDATE OF operation
-    ), branch_lock AS MATERIALIZED (
-      -- Managed imports take this same provider identity lock before their
-      -- fresh snapshot. Whichever mutation wins becomes durable before the
-      -- other can decide whether the branch is still safe to reference.
-      SELECT pg_advisory_xact_lock(hashtextextended(
-        'provider-branch:' || authorized_operation."organization_id"::text || ':'
-        || authorized_operation."integration_id"::text || ':'
-        || authorized_operation."provider" || ':'
-        || authorized_operation."resource_scope" || ':'
-        || CASE WHEN authorized_operation."kind" = 'neon.branch.switch'
-          THEN LEAST(
-            authorized_operation."source_resource_id",
-            authorized_operation."redacted_plan"->'target'->>'branchId'
-          )
-          ELSE authorized_operation."source_resource_id"
-        END,
-        0
-      ))
-      FROM authorized_operation
-    ), target_branch_lock AS MATERIALIZED (
-      -- A connection switch owns both branch identities. Managed import uses
-      -- the same target lock, so an approved switch cannot race a second
-      -- connection into the destination between validation and commit.
-      SELECT pg_advisory_xact_lock(hashtextextended(
-        'provider-branch:' || authorized_operation."organization_id"::text || ':'
-        || authorized_operation."integration_id"::text || ':'
-        || authorized_operation."provider" || ':'
-        || authorized_operation."resource_scope" || ':'
-        || CASE WHEN authorized_operation."kind" = 'neon.branch.switch'
-          THEN GREATEST(
-            authorized_operation."source_resource_id",
-            authorized_operation."redacted_plan"->'target'->>'branchId'
-          )
-          ELSE authorized_operation."source_resource_id"
-        END,
-        0
-      ))
-      FROM authorized_operation
-      JOIN branch_lock ON TRUE
     ), switch_connection AS MATERIALIZED (
       SELECT branch_connection."id", authorized_operation."id" AS "operationId"
       FROM authorized_operation
-      JOIN target_branch_lock ON TRUE
       JOIN ${workspaceConnection} AS branch_connection
         ON branch_connection."organization_id" = authorized_operation."organization_id"
        AND branch_connection."id" = (
          authorized_operation."redacted_plan"->'source'->>'connectionId'
-       )::uuid
+       )
       JOIN ${workspaceConnectionGrant} AS manager_grant
         ON manager_grant."organization_id" = branch_connection."organization_id"
        AND manager_grant."connection_id" = branch_connection."id"
@@ -377,7 +328,7 @@ export async function markProviderOperationRemoteStarted(
         AND branch_connection."provider" = 'neon'
         AND branch_connection."credential_mode" = 'managed'
         AND branch_connection."provider_integration_id" = authorized_operation."integration_id"
-        AND branch_connection."provider_resource_id"::text
+        AND branch_connection."provider_resource_id"
           = authorized_operation."redacted_plan"->'source'->>'providerResourceId'
         AND branch_connection."provider_resource"->>'project'
           = authorized_operation."resource_scope"
@@ -387,10 +338,10 @@ export async function markProviderOperationRemoteStarted(
           = authorized_operation."redacted_plan"->'source'->>'databaseId'
         AND branch_connection."content_revision" = (
           authorized_operation."redacted_plan"->'source'->>'contentRevision'
-        )::bigint
+        )
         AND branch_connection."revision" = (
           authorized_operation."redacted_plan"->'source'->>'authorityRevision'
-        )::bigint
+        )
         AND branch_connection."deleted_at" IS NULL
         AND branch_connection."revocation_pending_at" IS NULL
         AND branch_connection."revocation_claim_id" IS NULL
@@ -410,11 +361,9 @@ export async function markProviderOperationRemoteStarted(
               = authorized_operation."redacted_plan"->'target'->>'databaseId'
             AND target_connection."deleted_at" IS NULL
         )
-      FOR UPDATE OF branch_connection, manager_grant
     ), candidate AS MATERIALIZED (
       SELECT authorized_operation.*
       FROM authorized_operation
-      JOIN target_branch_lock ON TRUE
       LEFT JOIN switch_connection
         ON switch_connection."operationId" = authorized_operation."id"
       WHERE (
@@ -441,7 +390,7 @@ export async function markProviderOperationRemoteStarted(
              AND active_lease."connection_id" = leased_connection."id"
              AND active_lease."integration_id" = authorized_operation."integration_id"
              AND active_lease."revoked_at" IS NULL
-             AND active_lease."expires_at" > now()
+             AND active_lease."expires_at" > ${utcNow}
             WHERE leased_connection."organization_id" = authorized_operation."organization_id"
               AND leased_connection."provider_integration_id" = authorized_operation."integration_id"
               AND leased_connection."provider" = authorized_operation."provider"
@@ -457,51 +406,53 @@ export async function markProviderOperationRemoteStarted(
           authorized_operation."kind" <> 'neon.branch.switch'
           OR switch_connection."id" IS NOT NULL
         )
-    ), updated AS MATERIALIZED (
-      UPDATE ${workspaceProviderOperation} AS operation
+    )
+      SELECT json_object('id', candidate."id", 'organization_id', candidate."organization_id", 'state', candidate."state", 'risk', candidate."risk", 'approval_policy', candidate."approval_policy", 'claim_id', candidate."claim_id", 'plan_expires_at', candidate."plan_expires_at") AS payload FROM candidate`,
+    statements: (scope) => {
+      const candidate = sql`SELECT json_extract(payload, '$.id') AS "id", json_extract(payload, '$.organization_id') AS "organization_id", json_extract(payload, '$.state') AS "state", json_extract(payload, '$.risk') AS "risk", json_extract(payload, '$.approval_policy') AS "approval_policy", json_extract(payload, '$.claim_id') AS "claim_id", json_extract(payload, '$.plan_expires_at') AS "plan_expires_at" FROM (${scope})`;
+      const updated = sql`SELECT operation."id" AS "id", operation."state" AS "state",
+        operation."claim_id" AS "claimId",
+        candidate."state" AS "previousState",
+        operation."organization_id" AS "organizationId",
+        candidate."risk" AS "risk",
+        candidate."approval_policy" AS "approvalPolicy"
+        FROM ${workspaceProviderOperation} AS operation JOIN (${candidate}) AS candidate ON operation.id = candidate.id`;
+      return [sql`UPDATE ${workspaceProviderOperation} AS operation
       SET "state" = CASE
           WHEN candidate."state" = 'claimed'
-            AND candidate."plan_expires_at" <= now() THEN 'cancelled'
+            AND candidate."plan_expires_at" <= ${utcNow} THEN 'cancelled'
           WHEN candidate."state" = 'claimed' THEN 'remote_started'
           ELSE operation."state"
         END,
         "remote_started_at" = CASE
           WHEN candidate."state" = 'claimed'
-            AND candidate."plan_expires_at" > now() THEN ${input.now}
+            AND candidate."plan_expires_at" > ${utcNow} THEN ${input.now}
           ELSE operation."remote_started_at"
         END,
         "completed_at" = CASE
           WHEN candidate."state" = 'claimed'
-            AND candidate."plan_expires_at" <= now() THEN ${input.now}
+            AND candidate."plan_expires_at" <= ${utcNow} THEN ${input.now}
           ELSE operation."completed_at"
         END,
         "updated_at" = CASE
           WHEN candidate."state" = 'claimed' THEN ${input.now}
           ELSE operation."updated_at"
         END
-      FROM candidate
+      FROM (${candidate}) AS candidate
       WHERE operation."id" = candidate."id"
         AND operation."organization_id" = candidate."organization_id"
-        AND operation."state" = candidate."state"
-      RETURNING operation."id"::text AS "id", operation."state" AS "state",
-        operation."claim_id"::text AS "claimId",
-        candidate."state" AS "previousState",
-        operation."organization_id" AS "organizationId",
-        candidate."risk" AS "risk",
-        candidate."approval_policy" AS "approvalPolicy"
-    ), audit AS (
-      INSERT INTO ${workspaceAuditEvent} AS existing
+        AND operation."state" = candidate."state"`, sql`INSERT INTO ${workspaceAuditEvent} AS existing
         ("id", "organization_id", "actor_user_id", "action", "resource_type",
          "resource_id", "redacted_summary", "request_id")
-      SELECT ${auditId}::uuid, updated."organizationId",
+      SELECT ${auditId}, updated."organizationId",
         ${input.authority.userId}, CASE
           WHEN updated."state" = 'cancelled' THEN 'provider.operation.cancelled'
           ELSE 'provider.operation.remote_started'
         END,
         'provider_operation', updated."id",
-        jsonb_build_object(
+        json_object(
           'provider', 'neon',
-          'kind', ${input.kind}::text,
+          'kind', ${input.kind},
           'reason', CASE
             WHEN updated."state" = 'cancelled'
               THEN 'plan_expired_before_remote_start'
@@ -509,26 +460,19 @@ export async function markProviderOperationRemoteStarted(
           END,
           'risk', updated."risk",
           'approvalPolicy', updated."approvalPolicy"
-        ), updated."claimId"::uuid
-      FROM updated
+        ), updated."claimId"
+      FROM (${updated}) AS updated
       WHERE updated."previousState" = 'claimed'
-      ON CONFLICT ("id") DO UPDATE SET "id" = existing."id"
-      WHERE existing."organization_id" = EXCLUDED."organization_id"
+      ON CONFLICT ("id") DO UPDATE SET "id" = CASE WHEN existing."organization_id" = EXCLUDED."organization_id"
         AND existing."actor_user_id" = EXCLUDED."actor_user_id"
         AND existing."action" = EXCLUDED."action"
         AND existing."resource_type" = EXCLUDED."resource_type"
         AND existing."resource_id" = EXCLUDED."resource_id"
-        AND existing."redacted_summary" = EXCLUDED."redacted_summary"
-        AND existing."request_id" = EXCLUDED."request_id"
-      RETURNING "resource_id"
-    )
-    SELECT updated."id", updated."state", updated."claimId",
-      updated."previousState"
-    FROM updated
-    LEFT JOIN audit ON audit."resource_id" = updated."id"
-    WHERE updated."previousState" <> 'claimed' OR audit."resource_id" IS NOT NULL
-  `);
-  const row = result.rows[0];
+        AND ${jsonEqual(sql`existing."redacted_summary"`, sql`EXCLUDED."redacted_summary"`)}
+        AND existing."request_id" = EXCLUDED."request_id" THEN existing."id" ELSE NULL END`, updated];
+    },
+  });
+  const row = result.rows.at(-1)?.[0] as ProviderOperationRemoteStartRow | undefined;
   if (
     !row
     || row.id !== input.operationId

@@ -47,7 +47,7 @@ const hostedProviderJsonAdapters = [
   "workspace-cloud/lib/providers/neon-api.ts",
   "workspace-cloud/lib/providers/neon-branch-api.ts",
   "workspace-cloud/lib/providers/planetscale.ts",
-  "workspace-cloud/lib/providers/vercel-oidc.ts",
+  "workspace-cloud/lib/providers/workload-oidc.ts",
   "workspace-cloud/lib/workspace-kms.ts",
 ];
 

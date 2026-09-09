@@ -4,6 +4,7 @@
 import "server-only";
 
 import { sql } from "drizzle-orm";
+import { utcNow } from "./d1/schema/values";
 
 import { db } from "./db";
 import {
@@ -309,6 +310,9 @@ export function planRecord(
     operationId: string;
   },
 ): ProviderOperationPlanRecord | null {
+  if (row && typeof row.redactedPlan === "string") {
+    try { row = { ...row, redactedPlan: JSON.parse(row.redactedPlan) }; } catch { return null; }
+  }
   const expiresAt = row ? planDate(row.planExpiresAt) : null;
   if (
     !row
@@ -370,7 +374,7 @@ export async function loadProviderOperationPlan(input: {
   kind: ProviderOperationKind;
 }): Promise<ProviderOperationPlanRecord | null> {
   const result = await db.execute<ProviderOperationPlanRow>(sql`
-    SELECT operation."id"::text AS "id", operation."kind" AS "kind",
+    SELECT operation."id" AS "id", operation."kind" AS "kind",
       operation."state" AS "state",
       operation."plan_hash" AS "planHash",
       operation."plan_expires_at" AS "planExpiresAt",
@@ -379,9 +383,9 @@ export async function loadProviderOperationPlan(input: {
       operation."redacted_plan" AS "redactedPlan",
       operation."ownership_marker" AS "ownershipMarker"
     FROM ${workspaceProviderOperation} AS operation
-    WHERE operation."id" = ${input.operationId}::uuid
+    WHERE operation."id" = ${input.operationId}
       AND operation."organization_id" = ${input.organizationId}
-      AND operation."integration_id" = ${input.integrationId}::uuid
+      AND operation."integration_id" = ${input.integrationId}
       AND operation."provider" = 'neon'
       AND operation."kind" = ${input.kind}
       AND operation."integration_generation" = ${input.integrationGeneration}
@@ -410,6 +414,9 @@ export function executionResultProjection(value: unknown): Readonly<{
   credentialFenceFingerprint: string | null;
   managedAccessState: ProviderManagedAccessState | null;
 }> | null {
+  if (typeof value === "string") {
+    try { value = JSON.parse(value); } catch { return null; }
+  }
   if (value === null) {
     return {
       endpointId: null,
@@ -536,7 +543,7 @@ export async function loadProviderOperationExecution(input: {
   kind: ProviderOperationKind;
 }): Promise<ProviderOperationExecutionRecord | null> {
   const result = await db.execute<ProviderOperationExecutionRow>(sql`
-    SELECT operation."id"::text AS "id", operation."kind" AS "kind",
+    SELECT operation."id" AS "id", operation."kind" AS "kind",
       operation."state" AS "state",
       operation."plan_hash" AS "planHash",
       operation."plan_expires_at" AS "planExpiresAt",
@@ -544,7 +551,7 @@ export async function loadProviderOperationExecution(input: {
       operation."approval_policy" AS "approvalPolicy",
       operation."redacted_plan" AS "redactedPlan",
       operation."ownership_marker" AS "ownershipMarker",
-      operation."claim_id"::text AS "claimId",
+      operation."claim_id" AS "claimId",
       operation."remote_started_at" AS "remoteStartedAt",
       operation."provider_operation_id" AS "providerOperationId",
       operation."provider_resource_id" AS "providerResourceId",
@@ -552,9 +559,9 @@ export async function loadProviderOperationExecution(input: {
       operation."redacted_result" AS "redactedResult",
       operation."failure_code" AS "failureCode"
     FROM ${workspaceProviderOperation} AS operation
-    WHERE operation."id" = ${input.operationId}::uuid
+    WHERE operation."id" = ${input.operationId}
       AND operation."organization_id" = ${input.organizationId}
-      AND operation."integration_id" = ${input.integrationId}::uuid
+      AND operation."integration_id" = ${input.integrationId}
       AND operation."provider" = 'neon'
       AND operation."kind" = ${input.kind}
       AND operation."integration_generation" = ${input.integrationGeneration}
@@ -581,7 +588,7 @@ export async function listProviderOperationExecutions(input: {
   currentUserId: string;
 }): Promise<ProviderOperationListRecord[]> {
   const result = await db.execute<ProviderOperationListRow>(sql`
-    SELECT operation."id"::text AS "id", operation."kind" AS "kind",
+    SELECT operation."id" AS "id", operation."kind" AS "kind",
       operation."state" AS "state",
       operation."plan_hash" AS "planHash",
       operation."plan_expires_at" AS "planExpiresAt",
@@ -589,7 +596,7 @@ export async function listProviderOperationExecutions(input: {
       operation."approval_policy" AS "approvalPolicy",
       operation."redacted_plan" AS "redactedPlan",
       operation."ownership_marker" AS "ownershipMarker",
-      operation."claim_id"::text AS "claimId",
+      operation."claim_id" AS "claimId",
       operation."remote_started_at" AS "remoteStartedAt",
       operation."provider_operation_id" AS "providerOperationId",
       operation."provider_resource_id" AS "providerResourceId",
@@ -604,7 +611,7 @@ export async function listProviderOperationExecutions(input: {
         JOIN ${session} AS requester_session
           ON requester_session."id" = operation."requested_by_session_id"
          AND requester_session."user_id" = operation."requested_by_user_id"
-         AND requester_session."expires_at" > now()
+         AND requester_session."expires_at" > ${utcNow}
         JOIN ${member} AS requester_member
           ON requester_member."id" = operation."requested_by_member_id"
          AND requester_member."organization_id" = operation."organization_id"
@@ -616,7 +623,7 @@ export async function listProviderOperationExecutions(input: {
         JOIN ${session} AS approver_session
           ON approver_session."id" = operation_approval."actor_session_id"
          AND approver_session."user_id" = operation_approval."actor_user_id"
-         AND approver_session."expires_at" > now()
+         AND approver_session."expires_at" > ${utcNow}
         JOIN ${member} AS approver_member
           ON approver_member."id" = operation_approval."actor_member_id"
          AND approver_member."organization_id" = operation_approval."organization_id"
@@ -639,7 +646,7 @@ export async function listProviderOperationExecutions(input: {
       ) AS "executionAuthorityLive"
     FROM ${workspaceProviderOperation} AS operation
     WHERE operation."organization_id" = ${input.organizationId}
-      AND operation."integration_id" = ${input.integrationId}::uuid
+      AND operation."integration_id" = ${input.integrationId}
       AND operation."provider" = 'neon'
       AND operation."kind" IN (
         'neon.branch.create', 'neon.branch.delete', 'neon.branch.switch'
@@ -655,7 +662,8 @@ export async function listProviderOperationExecutions(input: {
       409,
     );
   }
-  return result.rows.map((row) => {
+  return result.rows.map((raw) => {
+    const row = { ...raw, executionAuthorityLive: (raw.executionAuthorityLive as unknown) === 1 ? true : (raw.executionAuthorityLive as unknown) === 0 ? false : raw.executionAuthorityLive };
     const operation = executionRecord(row, {
       organizationId: input.organizationId,
       integrationId: input.integrationId,

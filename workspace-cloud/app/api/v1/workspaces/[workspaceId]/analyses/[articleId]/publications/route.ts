@@ -4,6 +4,7 @@
 import { and, desc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
+import { isUniqueDatabaseConflict } from "../../../../../../../../lib/workspace-server-log";
 import { db } from "../../../../../../../../lib/db";
 import { env } from "../../../../../../../../lib/env";
 import {
@@ -132,9 +133,7 @@ export async function POST(request: Request, context: RouteContext) {
     revalidatePath(`/api/v1/public/analyses/${created.slug}`);
     return privateJson({ publication: created }, { status: 201 });
   } catch (error) {
-    const row = error && typeof error === "object"
-      ? error as { code?: unknown; cause?: { code?: unknown } } : null;
-    if (row?.code === "23505" || row?.cause?.code === "23505") {
+    if (isUniqueDatabaseConflict(error)) {
       return jsonError("Analysis Article publication id or slug already exists", 409);
     }
     throw error;

@@ -3,20 +3,10 @@
 // before it writes projection, history, and audit atomically.
 import "server-only";
 
-import { sql } from "drizzle-orm";
-
-import { db } from "./db";
-import { revocationGateLockKey } from "./revocation-gates";
-import {
-  knowledgeEnvironmentConnection,
-  knowledgeProject,
-  knowledgeProjectEnvironment,
-  workspaceAnalysisArticle,
-  workspaceAnalysisArticleRevision,
-  workspaceAuditEvent,
-  workspaceConnection,
-  workspaceConnectionGrant,
-} from "./schema";
+import { sql, type SQL } from "drizzle-orm";
+import { atomicD1 } from "./d1/atomic";
+import { utcNow } from "./d1/schema/values";
+import { workspaceMemberAuthority } from "./d1/member-authority";
 import {
   analysisArticleVersionPayload,
   type SharedAnalysisArticleCreate,
@@ -70,7 +60,7 @@ export function returnedAnalysisArticle(row: RawRow | undefined): StoredAnalysis
     environmentRevision,
     connectionId: row.connectionId,
     connectionRevision: safeRevision(row.connectionRevision)!,
-    definition: row.definition,
+    definition: typeof row.definition === "string" ? JSON.parse(row.definition) : row.definition,
     ownerMemberId: row.ownerMemberId,
     updatedByMemberId: row.updatedByMemberId,
     revision,
@@ -82,371 +72,124 @@ export function returnedAnalysisArticle(row: RawRow | undefined): StoredAnalysis
 
 function articleColumns() {
   return sql`
-    article."id"::text AS "id",
-    article."project_environment_id"::text AS "projectEnvironmentId",
+    article."id" AS "id",
+    article."project_environment_id" AS "projectEnvironmentId",
     article."environment_revision" AS "environmentRevision",
-    article."connection_id"::text AS "connectionId",
+    article."connection_id" AS "connectionId",
     article."connection_revision" AS "connectionRevision",
     article."definition" AS "definition",
     article."owner_member_id" AS "ownerMemberId",
     article."updated_by_member_id" AS "updatedByMemberId",
     article."revision" AS "revision",
-    article."latest_successful_run_id"::text AS "latestSuccessfulRunId",
+    article."latest_successful_run_id" AS "latestSuccessfulRunId",
     article."created_at" AS "createdAt",
     article."updated_at" AS "updatedAt"`;
 }
 
-function memberLockKey(input: {
-  organizationId: string;
-  authority: AnalysisArticleMutationAuthority;
+const editorRoles = ["editor", "admin", "owner"] as const;
+type ArticleInput = { organizationId: string; article: SharedAnalysisArticleCreate; authority: AnalysisArticleMutationAuthority };
+
+function connectionScope(input: ArticleInput) {
+  return sql`SELECT 1 FROM knowledge_project_environment environment
+    JOIN knowledge_project project ON project.organization_id = environment.organization_id
+      AND project.id = environment.project_id AND project.deleted_at IS NULL
+    JOIN knowledge_environment_connection binding ON binding.organization_id = environment.organization_id
+      AND binding.project_environment_id = environment.id AND binding.environment_revision = environment.revision
+      AND binding.connection_id = ${input.article.connectionId} AND binding.revoked_at IS NULL
+    JOIN workspace_connection connection ON connection.organization_id = binding.organization_id
+      AND connection.id = binding.connection_id AND connection.content_revision = binding.connection_revision
+      AND connection.content_revision = ${input.article.connectionRevision} AND connection.deleted_at IS NULL
+      AND connection.revocation_pending_at IS NULL AND connection.revocation_claim_id IS NULL
+    JOIN workspace_connection_grant connection_grant ON connection_grant.organization_id = connection.organization_id
+      AND connection_grant.connection_id = connection.id AND connection_grant.member_id = ${input.authority.membershipId}
+      AND connection_grant.capability IN ('use', 'manage')
+    WHERE environment.organization_id = ${input.organizationId} AND environment.id = ${input.article.projectEnvironmentId}
+      AND environment.revision = ${input.article.environmentRevision}`;
+}
+
+async function commitArticleChange(input: ArticleInput, options: {
+  scope: SQL; mutation: (scope: SQL) => SQL; ownerMemberId: string; revision: number;
+  operation: "create" | "update" | "propose" | "delete";
 }) {
-  return revocationGateLockKey({
-    kind: "member",
-    organizationId: input.organizationId,
-    memberId: input.authority.membershipId,
-    userId: input.authority.userId,
+  const payload = analysisArticleVersionPayload({ ...input.article, ownerMemberId: options.ownerMemberId,
+    ...(options.operation === "delete" ? { deleted: true } : {}) });
+  const summary = options.operation === "create" ? {
+    environmentId: input.article.projectEnvironmentId, environmentRevision: input.article.environmentRevision,
+    connectionId: input.article.connectionId, queryCount: 1, revision: options.revision,
+  } : { environmentId: input.article.projectEnvironmentId, revision: options.revision, ownerMemberId: options.ownerMemberId,
+    ...(options.operation === "delete" ? {} : { connectionId: input.article.connectionId }) };
+  const result = await atomicD1({
+    scope: options.scope,
+    statements: (scope) => [
+      options.mutation(scope),
+      sql`INSERT INTO workspace_analysis_article_revision (organization_id, article_id, revision, base_revision, operation,
+          payload, payload_hash, created_by_user_id, created_by_member_id)
+        SELECT ${input.organizationId}, ${input.article.id}, ${options.revision}, ${options.revision - 1}, ${options.operation},
+          ${JSON.stringify(payload)}, ${canonicalHash(payload)}, ${input.authority.userId}, ${input.authority.membershipId} FROM (${scope})`,
+      sql`INSERT INTO workspace_audit_event (organization_id, actor_user_id, action, resource_type,
+          resource_id, redacted_summary, request_id)
+        SELECT ${input.organizationId}, ${input.authority.userId}, ${`analysis_article.${options.operation}`}, 'analysis_article',
+          ${input.article.id}, ${JSON.stringify(summary)}, ${crypto.randomUUID()} FROM (${scope})`,
+      sql`SELECT ${articleColumns()} FROM workspace_analysis_article article CROSS JOIN (${scope})
+        WHERE article.id = ${input.article.id}`,
+    ],
+  });
+  return returnedAnalysisArticle(result.rows[3][0]);
+}
+
+export async function commitAnalysisArticleCreate(input: ArticleInput): Promise<StoredAnalysisArticle | null> {
+  return commitArticleChange(input, {
+    ownerMemberId: input.authority.membershipId, revision: 1, operation: "create",
+    scope: sql`SELECT '{}' AS payload WHERE EXISTS (${workspaceMemberAuthority(input.organizationId, input.authority, editorRoles)})
+      AND (SELECT count(*) FROM (${connectionScope(input)})) = 1`,
+    mutation: (scope) => sql`INSERT INTO workspace_analysis_article (id, organization_id, project_environment_id, environment_revision,
+        connection_id, connection_revision, definition, owner_member_id, updated_by_member_id, revision)
+      SELECT ${input.article.id}, ${input.organizationId}, ${input.article.projectEnvironmentId}, ${input.article.environmentRevision},
+        ${input.article.connectionId}, ${input.article.connectionRevision}, ${JSON.stringify(input.article.definition)},
+        ${input.authority.membershipId}, ${input.authority.membershipId}, 1 FROM (${scope})`,
   });
 }
 
-export async function commitAnalysisArticleCreate(input: {
-  organizationId: string;
-  article: SharedAnalysisArticleCreate;
-  authority: AnalysisArticleMutationAuthority;
+export type AnalysisArticleMutationOperation = "propose" | "update";
+
+export async function commitAnalysisArticleMutation(input: ArticleInput & {
+  expectedRevision: number; ownerMemberId: string; operation: AnalysisArticleMutationOperation;
 }): Promise<StoredAnalysisArticle | null> {
-  const payload = analysisArticleVersionPayload({
-    ...input.article,
-    ownerMemberId: input.authority.membershipId,
+  return commitArticleChange(input, {
+    ownerMemberId: input.ownerMemberId, revision: input.expectedRevision + 1, operation: input.operation,
+    scope: sql`SELECT '{}' AS payload FROM workspace_analysis_article article
+      JOIN (${workspaceMemberAuthority(input.organizationId, input.authority, editorRoles)}) actor
+        ON article.owner_member_id = actor.id OR actor.role IN ('admin', 'owner')
+      JOIN member owner ON owner.organization_id = article.organization_id AND owner.id = ${input.ownerMemberId}
+        AND owner.role IN ('editor', 'admin', 'owner') AND owner.revocation_pending_at IS NULL AND owner.revocation_claim_id IS NULL
+      WHERE article.organization_id = ${input.organizationId} AND article.id = ${input.article.id}
+        AND article.project_environment_id = ${input.article.projectEnvironmentId}
+        AND article.revision = ${input.expectedRevision} AND article.deleted_at IS NULL
+        AND (SELECT count(*) FROM (${connectionScope(input)})) = 1`,
+    mutation: (scope) => sql`UPDATE workspace_analysis_article SET project_environment_id = ${input.article.projectEnvironmentId},
+        environment_revision = ${input.article.environmentRevision}, connection_id = ${input.article.connectionId},
+        connection_revision = ${input.article.connectionRevision}, definition = ${JSON.stringify(input.article.definition)},
+        owner_member_id = ${input.ownerMemberId}, updated_by_member_id = ${input.authority.membershipId},
+        revision = revision + 1, updated_at = ${utcNow}, latest_successful_run_id = NULL, deleted_at = NULL
+      WHERE id = ${input.article.id} AND EXISTS (${scope})`,
   });
-  const requestId = crypto.randomUUID();
-  const result = await db.execute<RawRow>(sql`
-    WITH authority_lock AS MATERIALIZED (
-      SELECT pg_advisory_xact_lock(hashtextextended(${memberLockKey(input)}, 0))
-    ), authority AS MATERIALIZED (
-      SELECT member."id", member."role"
-      FROM "workspace_control"."session" session
-      JOIN "workspace_control"."member" member
-        ON member."id" = ${input.authority.membershipId}
-       AND member."organization_id" = ${input.organizationId}
-       AND member."user_id" = ${input.authority.userId}
-      JOIN ${knowledgeProjectEnvironment} environment
-        ON environment."organization_id" = member."organization_id"
-       AND environment."id" = ${input.article.projectEnvironmentId}::uuid
-       AND environment."revision" = ${input.article.environmentRevision}
-      JOIN ${knowledgeProject} project
-        ON project."organization_id" = environment."organization_id"
-       AND project."id" = environment."project_id"
-       AND project."deleted_at" IS NULL
-      JOIN authority_lock ON TRUE
-      WHERE session."id" = ${input.authority.sessionId}
-        AND session."user_id" = ${input.authority.userId}
-        AND session."expires_at" > now()
-        AND member."role" = ${input.authority.role}
-        AND member."role" IN ('editor', 'admin', 'owner')
-        AND member."revocation_pending_at" IS NULL
-        AND member."revocation_claim_id" IS NULL
-      FOR UPDATE OF session, member, project, environment
-    ), connection_authority AS MATERIALIZED (
-      SELECT connection."id"
-      FROM ${knowledgeEnvironmentConnection} binding
-      JOIN ${workspaceConnection} connection
-        ON binding."organization_id" = ${input.organizationId}
-       AND binding."project_environment_id" = ${input.article.projectEnvironmentId}::uuid
-       AND binding."environment_revision" = ${input.article.environmentRevision}
-       AND binding."connection_id" = ${input.article.connectionId}::uuid
-       AND binding."revoked_at" IS NULL
-       AND connection."organization_id" = binding."organization_id"
-       AND connection."id" = binding."connection_id"
-       AND connection."content_revision" = binding."connection_revision"
-       AND connection."content_revision" = ${input.article.connectionRevision}
-       AND connection."deleted_at" IS NULL
-       AND connection."revocation_pending_at" IS NULL
-      JOIN ${workspaceConnectionGrant} connection_grant
-        ON connection_grant."organization_id" = connection."organization_id"
-       AND connection_grant."connection_id" = connection."id"
-       AND connection_grant."member_id" = ${input.authority.membershipId}
-       AND connection_grant."capability" IN ('use', 'manage')
-      JOIN authority ON TRUE
-      FOR UPDATE OF binding, connection, connection_grant
-    ), inserted AS MATERIALIZED (
-      INSERT INTO ${workspaceAnalysisArticle} AS inserted_article
-        ("id", "organization_id", "project_environment_id", "environment_revision",
-         "connection_id", "connection_revision", "definition", "owner_member_id",
-         "updated_by_member_id", "revision")
-      SELECT ${input.article.id}::uuid, ${input.organizationId},
-        ${input.article.projectEnvironmentId}::uuid, ${input.article.environmentRevision},
-        ${input.article.connectionId}::uuid, ${input.article.connectionRevision},
-        ${JSON.stringify(input.article.definition)}::jsonb, authority."id",
-        authority."id", 1
-      FROM authority
-      WHERE (SELECT count(*) FROM connection_authority) = 1
-      RETURNING inserted_article.*
-    ), revision AS MATERIALIZED (
-      INSERT INTO ${workspaceAnalysisArticleRevision}
-        ("organization_id", "article_id", "revision", "base_revision", "operation",
-         "payload", "payload_hash", "created_by_user_id", "created_by_member_id")
-      SELECT ${input.organizationId}, inserted."id", 1, 0, 'create',
-        ${JSON.stringify(payload)}::jsonb, ${canonicalHash(payload)},
-        ${input.authority.userId}, ${input.authority.membershipId}
-      FROM inserted
-      RETURNING "article_id"
-    ), audit AS MATERIALIZED (
-      INSERT INTO ${workspaceAuditEvent}
-        ("organization_id", "actor_user_id", "action", "resource_type", "resource_id",
-         "redacted_summary", "request_id")
-      SELECT ${input.organizationId}, ${input.authority.userId}, 'analysis_article.create',
-        'analysis_article', inserted."id"::text,
-        jsonb_build_object(
-          'environmentId', inserted."project_environment_id",
-          'environmentRevision', inserted."environment_revision",
-          'connectionId', inserted."connection_id",
-          'queryCount', 1,
-          'revision', 1
-        ), ${requestId}::uuid
-      FROM inserted JOIN revision ON revision."article_id" = inserted."id"
-      RETURNING "resource_id"
-    )
-    SELECT ${articleColumns()}
-    FROM inserted article
-    JOIN audit ON audit."resource_id" = article."id"::text
-  `);
-  return returnedAnalysisArticle(result.rows[0]);
 }
 
-export type AnalysisArticleMutationOperation =
-  | "propose"
-  | "update";
-
-export async function commitAnalysisArticleMutation(input: {
-  organizationId: string;
-  article: SharedAnalysisArticleCreate;
-  expectedRevision: number;
-  ownerMemberId: string;
-  authority: AnalysisArticleMutationAuthority;
-  operation: AnalysisArticleMutationOperation;
+/** Cleanup remains possible after the original Environment or connection was revoked. */
+export async function commitAnalysisArticleDelete(input: ArticleInput & {
+  expectedRevision: number; ownerMemberId: string;
 }): Promise<StoredAnalysisArticle | null> {
-  const payload = analysisArticleVersionPayload({
-    ...input.article,
-    ownerMemberId: input.ownerMemberId,
+  return commitArticleChange(input, {
+    ownerMemberId: input.ownerMemberId, revision: input.expectedRevision + 1, operation: "delete",
+    scope: sql`SELECT '{}' AS payload FROM workspace_analysis_article article
+      JOIN (${workspaceMemberAuthority(input.organizationId, input.authority, editorRoles)}) actor
+        ON article.owner_member_id = actor.id OR actor.role IN ('admin', 'owner')
+      WHERE article.organization_id = ${input.organizationId} AND article.id = ${input.article.id}
+        AND article.project_environment_id = ${input.article.projectEnvironmentId}
+        AND article.environment_revision = ${input.article.environmentRevision} AND article.owner_member_id = ${input.ownerMemberId}
+        AND article.revision = ${input.expectedRevision} AND article.deleted_at IS NULL`,
+    mutation: (scope) => sql`UPDATE workspace_analysis_article SET updated_by_member_id = ${input.authority.membershipId},
+        revision = revision + 1, latest_successful_run_id = NULL, deleted_at = ${utcNow}, updated_at = ${utcNow}
+      WHERE id = ${input.article.id} AND EXISTS (${scope})`,
   });
-  const requestId = crypto.randomUUID();
-  const result = await db.execute<RawRow>(sql`
-    WITH authority_lock AS MATERIALIZED (
-      SELECT pg_advisory_xact_lock(hashtextextended(${memberLockKey(input)}, 0))
-    ), authority AS MATERIALIZED (
-      SELECT member."id", member."role"
-      FROM "workspace_control"."session" session
-      JOIN "workspace_control"."member" member
-        ON member."id" = ${input.authority.membershipId}
-       AND member."organization_id" = ${input.organizationId}
-       AND member."user_id" = ${input.authority.userId}
-      JOIN ${knowledgeProjectEnvironment} environment
-        ON environment."organization_id" = member."organization_id"
-       AND environment."id" = ${input.article.projectEnvironmentId}::uuid
-       AND environment."revision" = ${input.article.environmentRevision}
-      JOIN ${knowledgeProject} project
-        ON project."organization_id" = environment."organization_id"
-       AND project."id" = environment."project_id"
-       AND project."deleted_at" IS NULL
-      JOIN authority_lock ON TRUE
-      WHERE session."id" = ${input.authority.sessionId}
-        AND session."user_id" = ${input.authority.userId}
-        AND session."expires_at" > now()
-        AND member."role" = ${input.authority.role}
-        AND member."role" IN ('editor', 'admin', 'owner')
-        AND member."revocation_pending_at" IS NULL
-        AND member."revocation_claim_id" IS NULL
-      FOR UPDATE OF session, member, project, environment
-    ), target_owner AS MATERIALIZED (
-      SELECT owner."id"
-      FROM "workspace_control"."member" owner
-      JOIN authority ON TRUE
-      WHERE owner."organization_id" = ${input.organizationId}
-        AND owner."id" = ${input.ownerMemberId}
-        AND owner."role" IN ('editor', 'admin', 'owner')
-        AND owner."revocation_pending_at" IS NULL
-        AND owner."revocation_claim_id" IS NULL
-      FOR UPDATE OF owner
-    ), current AS MATERIALIZED (
-      SELECT article."id", article."organization_id"
-      FROM ${workspaceAnalysisArticle} article
-      JOIN authority ON TRUE
-      JOIN target_owner ON TRUE
-      WHERE article."organization_id" = ${input.organizationId}
-        AND article."id" = ${input.article.id}::uuid
-        AND article."project_environment_id" = ${input.article.projectEnvironmentId}::uuid
-        AND article."revision" = ${input.expectedRevision}
-        AND article."deleted_at" IS NULL
-        AND (article."owner_member_id" = authority."id" OR authority."role" IN ('admin', 'owner'))
-      FOR UPDATE OF article
-    ), connection_authority AS MATERIALIZED (
-      SELECT connection."id"
-      FROM ${knowledgeEnvironmentConnection} binding
-      JOIN ${workspaceConnection} connection
-        ON binding."organization_id" = ${input.organizationId}
-       AND binding."project_environment_id" = ${input.article.projectEnvironmentId}::uuid
-       AND binding."environment_revision" = ${input.article.environmentRevision}
-       AND binding."connection_id" = ${input.article.connectionId}::uuid
-       AND binding."revoked_at" IS NULL
-       AND connection."organization_id" = binding."organization_id"
-       AND connection."id" = binding."connection_id"
-       AND connection."content_revision" = binding."connection_revision"
-       AND connection."content_revision" = ${input.article.connectionRevision}
-       AND connection."deleted_at" IS NULL AND connection."revocation_pending_at" IS NULL
-      JOIN ${workspaceConnectionGrant} connection_grant
-        ON connection_grant."organization_id" = connection."organization_id"
-       AND connection_grant."connection_id" = connection."id"
-       AND connection_grant."member_id" = ${input.authority.membershipId}
-       AND connection_grant."capability" IN ('use', 'manage')
-      JOIN current ON TRUE
-      FOR UPDATE OF binding, connection, connection_grant
-    ), updated AS MATERIALIZED (
-      UPDATE ${workspaceAnalysisArticle} article
-      SET "project_environment_id" = ${input.article.projectEnvironmentId}::uuid,
-        "environment_revision" = ${input.article.environmentRevision},
-        "connection_id" = ${input.article.connectionId}::uuid,
-        "connection_revision" = ${input.article.connectionRevision},
-        "definition" = ${JSON.stringify(input.article.definition)}::jsonb,
-        "owner_member_id" = ${input.ownerMemberId},
-        "updated_by_member_id" = ${input.authority.membershipId},
-        "revision" = article."revision" + 1, "updated_at" = now(),
-        -- Every mutation creates a new immutable Article revision. A run from
-        -- the previous revision must never authorize a public HTML publication.
-        "latest_successful_run_id" = NULL,
-        "deleted_at" = NULL
-      FROM current
-      WHERE article."organization_id" = current."organization_id"
-        AND article."id" = current."id"
-        AND (SELECT count(*) FROM connection_authority) = 1
-      RETURNING article.*
-    ), revision AS MATERIALIZED (
-      INSERT INTO ${workspaceAnalysisArticleRevision}
-        ("organization_id", "article_id", "revision", "base_revision", "operation",
-         "payload", "payload_hash", "created_by_user_id", "created_by_member_id")
-      SELECT ${input.organizationId}, updated."id", updated."revision", ${input.expectedRevision},
-        ${input.operation}, ${JSON.stringify(payload)}::jsonb, ${canonicalHash(payload)},
-        ${input.authority.userId}, ${input.authority.membershipId}
-      FROM updated
-      RETURNING "article_id"
-    ), audit AS MATERIALIZED (
-      INSERT INTO ${workspaceAuditEvent}
-        ("organization_id", "actor_user_id", "action", "resource_type", "resource_id",
-         "redacted_summary", "request_id")
-      SELECT ${input.organizationId}, ${input.authority.userId},
-        ${`analysis_article.${input.operation}`}, 'analysis_article', updated."id"::text,
-        jsonb_build_object(
-          'environmentId', updated."project_environment_id",
-          'revision', updated."revision",
-          'ownerMemberId', updated."owner_member_id",
-          'connectionId', updated."connection_id"
-        ), ${requestId}::uuid
-      FROM updated JOIN revision ON revision."article_id" = updated."id"
-      RETURNING "resource_id"
-    )
-    SELECT ${articleColumns()}
-    FROM updated article
-    JOIN audit ON audit."resource_id" = article."id"::text
-  `);
-  const article = returnedAnalysisArticle(result.rows[0]);
-  if (article && article.revision !== input.expectedRevision + 1) {
-    throw new Error("Analysis Article revision did not advance exactly once");
-  }
-  return article;
-}
-
-/**
- * Deletion is a workspace cleanup action, not a database execution. It keeps
- * optimistic Article ownership and session checks atomic while deliberately
- * avoiding Environment, connection, Knowledge, mapping, and runner authority.
- * Otherwise a revoked source could make an orphaned Article
- * impossible for its owner or a workspace administrator to remove.
- */
-export async function commitAnalysisArticleDelete(input: {
-  organizationId: string;
-  article: SharedAnalysisArticleCreate;
-  expectedRevision: number;
-  ownerMemberId: string;
-  authority: AnalysisArticleMutationAuthority;
-}): Promise<StoredAnalysisArticle | null> {
-  const payload = analysisArticleVersionPayload({
-    ...input.article,
-    ownerMemberId: input.ownerMemberId,
-    deleted: true,
-  });
-  const requestId = crypto.randomUUID();
-  const result = await db.execute<RawRow>(sql`
-    WITH authority_lock AS MATERIALIZED (
-      SELECT pg_advisory_xact_lock(hashtextextended(${memberLockKey(input)}, 0))
-    ), authority AS MATERIALIZED (
-      SELECT member."id", member."role"
-      FROM "workspace_control"."session" session
-      JOIN "workspace_control"."member" member
-        ON member."id" = ${input.authority.membershipId}
-       AND member."organization_id" = ${input.organizationId}
-       AND member."user_id" = ${input.authority.userId}
-      JOIN authority_lock ON TRUE
-      WHERE session."id" = ${input.authority.sessionId}
-        AND session."user_id" = ${input.authority.userId}
-        AND session."expires_at" > now()
-        AND member."role" = ${input.authority.role}
-        AND member."role" IN ('editor', 'admin', 'owner')
-        AND member."revocation_pending_at" IS NULL
-        AND member."revocation_claim_id" IS NULL
-      FOR UPDATE OF session, member
-    ), current AS MATERIALIZED (
-      SELECT article."id", article."organization_id"
-      FROM ${workspaceAnalysisArticle} article
-      JOIN authority ON TRUE
-      WHERE article."organization_id" = ${input.organizationId}
-        AND article."id" = ${input.article.id}::uuid
-        AND article."project_environment_id" = ${input.article.projectEnvironmentId}::uuid
-        AND article."environment_revision" = ${input.article.environmentRevision}
-        AND article."owner_member_id" = ${input.ownerMemberId}
-        AND article."revision" = ${input.expectedRevision}
-        AND article."deleted_at" IS NULL
-        AND (article."owner_member_id" = authority."id"
-          OR authority."role" IN ('admin', 'owner'))
-      FOR UPDATE OF article
-    ), updated AS MATERIALIZED (
-      UPDATE ${workspaceAnalysisArticle} article
-      SET "updated_by_member_id" = authority."id",
-        "revision" = article."revision" + 1,
-        "latest_successful_run_id" = NULL,
-        "deleted_at" = now(),
-        "updated_at" = now()
-      FROM current CROSS JOIN authority
-      WHERE article."organization_id" = current."organization_id"
-        AND article."id" = current."id"
-      RETURNING article.*
-    ), revision AS MATERIALIZED (
-      INSERT INTO ${workspaceAnalysisArticleRevision}
-        ("organization_id", "article_id", "revision", "base_revision", "operation",
-         "payload", "payload_hash", "created_by_user_id", "created_by_member_id")
-      SELECT ${input.organizationId}, updated."id", updated."revision", ${input.expectedRevision},
-        'delete', ${JSON.stringify(payload)}::jsonb, ${canonicalHash(payload)},
-        ${input.authority.userId}, authority."id"
-      FROM updated CROSS JOIN authority
-      RETURNING "article_id"
-    ), audit AS MATERIALIZED (
-      INSERT INTO ${workspaceAuditEvent}
-        ("organization_id", "actor_user_id", "action", "resource_type", "resource_id",
-         "redacted_summary", "request_id")
-      SELECT ${input.organizationId}, ${input.authority.userId}, 'analysis_article.delete',
-        'analysis_article', updated."id"::text,
-        jsonb_build_object(
-          'environmentId', updated."project_environment_id",
-          'revision', updated."revision",
-          'ownerMemberId', updated."owner_member_id"
-        ), ${requestId}::uuid
-      FROM updated JOIN revision ON revision."article_id" = updated."id"
-      RETURNING "resource_id"
-    )
-    SELECT ${articleColumns()}
-    FROM updated article
-    JOIN audit ON audit."resource_id" = article."id"::text
-  `);
-  const article = returnedAnalysisArticle(result.rows[0]);
-  if (article && article.revision !== input.expectedRevision + 1) {
-    throw new Error("Analysis Article deletion revision did not advance exactly once");
-  }
-  return article;
 }

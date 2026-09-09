@@ -1,6 +1,7 @@
+import { inD1Strings } from "../../lib/d1/json";
 // Authenticated workspace and device-session console. Server rendering resolves the
 // current Better Auth identity before exposing any organization administration UI.
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "../../lib/auth";
@@ -114,7 +115,7 @@ export default async function SettingsPage({
         )
         .where(and(
           eq(member.userId, session.user.id),
-          inArray(member.organizationId, workspaces.map((workspace) => workspace.id)),
+          inD1Strings(member.organizationId, workspaces.map((workspace) => workspace.id)),
         ))
     : [];
   const workspaceRoles = new Map(roleRows.map((row) => [row.organizationId, row.role]));

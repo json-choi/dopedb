@@ -1,6 +1,6 @@
 # DopeDB Workspace Background Scheduler
 
-This Cloudflare Worker is a small wake-up coordinator for the Vercel workspace
+This Cloudflare Worker is a small wake-up coordinator for the Cloudflare Workspace
 control plane. Its D1 database stores exactly two rows (`credential` and
 `maintenance`) containing a due time, a short execution lease, a generation,
 and a closed error kind. It stores no workspace, member, repository, provider,
@@ -46,6 +46,6 @@ pnpm deploy
 ```
 
 Provision a fresh pre-MVP D1 database from the checked-in baseline before deploy.
-Do not schedule the two Vercel routes independently. The Cloudflare cron
+Do not schedule the two Workspace routes independently. The Cloudflare cron
 is the only recurring timer, and it reads D1 only; a dormant system never calls
 the workspace control plane.

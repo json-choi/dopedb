@@ -6,10 +6,10 @@ import { randomUUID } from "node:crypto";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "@better-auth/drizzle-adapter";
 import { bearer, deviceAuthorization, multiSession, organization } from "better-auth/plugins";
-import { db } from "./db";
+import { d1Db as db } from "./d1/database";
 import { env } from "./env";
 import { sendWorkspaceInvitation } from "./invitation-email";
-import { authSchema, workspaceAuditEvent, workspaceProfile } from "./schema";
+import { authSchema, workspaceAuditEvent, workspaceProfile } from "./d1/schema";
 import { ac, workspaceRoles } from "./access";
 
 function withoutProviderTokens<T extends Record<string, unknown>>(account: T): T {
@@ -38,7 +38,7 @@ function createAuth() {
       "/organization/leave",
     ],
     database: drizzleAdapter(db, {
-      provider: "pg",
+      provider: "sqlite",
       schema: authSchema,
     }),
     socialProviders: {
@@ -68,6 +68,7 @@ function createAuth() {
     },
     advanced: {
       database: { generateId: "uuid" },
+      ipAddress: { ipAddressHeaders: ["cf-connecting-ip"] },
       useSecureCookies: process.env.NODE_ENV === "production",
     },
     databaseHooks: {
@@ -108,7 +109,7 @@ function createAuth() {
               .values({
                 organizationId: organization.id,
                 encryptionKeyRef: `pending://${organization.id}`,
-                residencyRegion: process.env.VERCEL_REGION ?? null,
+                residencyRegion: process.env.WORKSPACE_DATA_REGION ?? null,
               })
               .onConflictDoNothing();
             await db.insert(workspaceAuditEvent).values({

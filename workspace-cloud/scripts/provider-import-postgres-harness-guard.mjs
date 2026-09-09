@@ -10,6 +10,7 @@ export const PROVIDER_IMPORT_POSTGRES_HARNESS_SOURCE_LIMITS = Object.freeze({
   "lib/provider-import-postgres-harness/assertions.ts": 200,
   "lib/provider-import-postgres-harness/authority-provider-scenarios.ts": 380,
   "lib/provider-import-postgres-harness/connection-versioning-scenarios.ts": 54,
+  "lib/provider-import-postgres-harness/credential-key-rotation-scenarios.ts": 90,
   "lib/provider-import-postgres-harness/analysis-lifecycle-scenarios.ts": 380,
   "lib/provider-import-postgres-harness/article-sharing-scenarios.ts": 150,
   "lib/provider-import-postgres-harness/analysis-member-removal-scenarios.ts": 210,
@@ -20,8 +21,9 @@ export const PROVIDER_IMPORT_POSTGRES_HARNESS_SOURCE_LIMITS = Object.freeze({
   "lib/provider-import-postgres-harness/workspace-lifecycle-scenarios.ts": 320,
 });
 
-// Article invitation scenarios add exact-email, atomic membership/grant, and replay-revocation coverage.
-export const PROVIDER_IMPORT_POSTGRES_HARNESS_TOTAL_LINE_LIMIT = 2_940;
+// The existing journey also verifies lossless credential rotation, rollback,
+// stale preflight rejection, and writes from retired deployment keys.
+export const PROVIDER_IMPORT_POSTGRES_HARNESS_TOTAL_LINE_LIMIT = 3_000;
 export const PROVIDER_POSTGRES_HARNESS_CONFIG_PATH =
   "vitest.provider-harness.config.ts";
 

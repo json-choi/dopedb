@@ -1,7 +1,8 @@
 // Admin-only membership management. Better Auth remains the source of truth for
 // invitation acceptance and role changes; this route adds strict role choices and audit.
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { auth } from "../../../../../../lib/auth";
+import { changeWorkspaceMemberRole } from "../../../../../../lib/workspace-member-store";
 import { db } from "../../../../../../lib/db";
 import { env } from "../../../../../../lib/env";
 import {
@@ -20,7 +21,6 @@ import {
   claimRevocationGate,
   clearRevocationGate,
   releaseRevocationGateClaim,
-  revocationGateLockKey,
   renewRevocationGateClaim,
 } from "../../../../../../lib/revocation-gates";
 import {
@@ -48,17 +48,6 @@ async function abandonMemberClaim(
   await (claim.firstPending
     ? clearRevocationGate(claim)
     : releaseRevocationGateClaim(claim)).catch(() => false);
-}
-
-function orderedMemberGateLocks(
-  workspaceId: string,
-  actor: { memberId: string; userId: string },
-  target: { memberId: string; userId: string },
-) {
-  return [...new Set([
-    revocationGateLockKey({ kind: "member", organizationId: workspaceId, ...actor }),
-    revocationGateLockKey({ kind: "member", organizationId: workspaceId, ...target }),
-  ])].sort();
 }
 
 export async function GET(request: Request, context: RouteContext) {
@@ -243,92 +232,15 @@ export async function PATCH(request: Request, context: RouteContext) {
     await abandonMemberClaim(renewedClaim);
     return jsonError("Member access changed concurrently. Retry the update.", 409);
   }
-  const [actorGateLock, targetGateLock = actorGateLock] = orderedMemberGateLocks(
-    workspaceId,
-    { memberId: authorization.membership.id, userId: authorization.session.user.id },
-    { memberId, userId: renewedClaim.userId },
-  );
-  const result = await db.execute<{
-    id: string;
-    organizationId: string;
-    userId: string;
-    role: string;
-    createdAt: Date | string;
-  }>(sql`
-    WITH actor_gate_lock AS MATERIALIZED (
-      SELECT pg_advisory_xact_lock(hashtextextended(${actorGateLock}, 0))
-    ), target_gate_lock AS MATERIALIZED (
-      SELECT pg_advisory_xact_lock(hashtextextended(${targetGateLock}, 0))
-      FROM actor_gate_lock
-    ), actor_authority AS MATERIALIZED (
-      SELECT actor_member."id"
-      FROM "workspace_control"."session" actor_session
-      JOIN "workspace_control"."member" actor_member
-        ON actor_member."id" = ${authorization.membership.id}
-       AND actor_member."organization_id" = ${workspaceId}
-       AND actor_member."user_id" = ${authorization.session.user.id}
-      JOIN actor_gate_lock ON TRUE
-      JOIN target_gate_lock ON TRUE
-      WHERE actor_session."id" = ${authorization.session.session.id}
-        AND actor_session."user_id" = ${authorization.session.user.id}
-        AND actor_session."expires_at" > now()
-        AND actor_member."role" = ${authorization.role}
-        AND actor_member."role" IN ('admin', 'owner')
-        AND actor_member."revocation_pending_at" IS NULL
-        AND actor_member."revocation_claim_id" IS NULL
-      FOR UPDATE OF actor_session, actor_member
-    ), updated_member AS (
-      UPDATE ${member} AS target
-      SET "role" = ${body.role},
-          "revocation_pending_at" = NULL,
-          "revocation_claimed_at" = NULL,
-          "revocation_claim_id" = NULL
-      FROM actor_authority
-      WHERE target."id" = ${memberId}
-        AND target."organization_id" = ${workspaceId}
-        AND target."user_id" = ${renewedClaim.userId}
-        AND target."role" = ${renewedClaim.memberRole}
-        AND target."role" <> 'owner'
-        AND target."revocation_claim_id" = ${renewedClaim.claimId}::uuid
-        AND (
-          ${canOwnSharedContent}
-          OR (
-            NOT EXISTS (
-              SELECT 1 FROM ${workspaceAnalysisArticle} AS owned_article
-              WHERE owned_article."organization_id" = target."organization_id"
-                AND owned_article."owner_member_id" = target."id"
-                AND owned_article."deleted_at" IS NULL
-            )
-          )
-        )
-      RETURNING target."id", target."organization_id", target."user_id",
-                target."role", target."created_at"
-    ),
-    audit_event AS (
-      INSERT INTO ${workspaceAuditEvent}
-        ("organization_id", "actor_user_id", "action", "resource_type",
-         "resource_id", "redacted_summary", "request_id")
-      SELECT updated_member."organization_id",
-             ${authorization.session.user.id}, 'member.role.update', 'member',
-             updated_member."id",
-             jsonb_build_object(
-               'from', ${renewedClaim.memberRole},
-               'to', updated_member."role",
-               'revokedLeases', ${revocation.revoked},
-               'deferredRevocations', ${revocation.deferred}
-             ),
-             ${crypto.randomUUID()}::uuid
-      FROM updated_member
-      RETURNING "resource_id"
-    )
-    SELECT "id" AS "id", "organization_id" AS "organizationId",
-           "user_id" AS "userId", "role" AS "role",
-           "created_at" AS "createdAt"
-    FROM updated_member
-  `).catch(async (error) => {
+  const result = { rows: await changeWorkspaceMemberRole({ organizationId: workspaceId, memberId,
+    authority: { sessionId: authorization.session.session.id, userId: authorization.session.user.id,
+      membershipId: authorization.membership.id, role: authorization.role },
+    userId: renewedClaim.userId, claimId: renewedClaim.claimId, previousRole: renewedClaim.memberRole!, role: body.role,
+    revokedLeases: revocation.revoked, deferredRevocations: revocation.deferred,
+  }).catch(async (error) => {
     await abandonMemberClaim(renewedClaim);
     throw error;
-  });
+  }) };
   const updated = result.rows[0];
   if (!updated) {
     await abandonMemberClaim(renewedClaim);

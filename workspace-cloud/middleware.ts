@@ -6,7 +6,7 @@ import {
   workspaceLocaleHeader,
 } from "./lib/workspace-locale";
 
-export function proxy(request: NextRequest) {
+export function middleware(request: NextRequest) {
   const locale = workspaceLocaleFromPathname(request.nextUrl.pathname);
   const localeIndependentPath = request.nextUrl.pathname.replace(/^\/ko(?=\/|$)/, "") || "/";
   const requestHeaders = new Headers(request.headers);

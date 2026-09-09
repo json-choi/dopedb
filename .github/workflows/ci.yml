@@ -90,23 +90,6 @@ jobs:
     name: provider-postgres
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    env:
-      PGHOST: localhost
-      PGPORT: 5432
-      PGUSER: postgres
-      PGPASSWORD: postgres
-    services:
-      postgres:
-        image: postgres:18-alpine
-        env:
-          POSTGRES_PASSWORD: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -126,26 +109,20 @@ jobs:
       - name: Install workspace cloud dependencies
         run: pnpm --dir workspace-cloud install --frozen-lockfile
 
-      - name: Build workspace cloud without production secrets
-        run: pnpm --dir workspace-cloud build
-
-      - name: Test Workspace public contracts
-        run: pnpm --dir workspace-cloud test:contracts
-
-      - name: Ensure PostgreSQL client
+      - name: Build Workspace Workers without production secrets
         run: |
-          if ! command -v psql >/dev/null; then
-            sudo apt-get update
-            sudo apt-get install --yes postgresql-client
-          fi
+          pnpm --dir workspace-cloud build:cloudflare
+          pnpm --dir workspace-cloud build:identity
+          pnpm --dir workspace-cloud exec wrangler deploy --dry-run
 
-      - name: Test Provider import harness guard
-        run: pnpm --dir workspace-cloud test:postgres-harness-guard
+      - name: Verify native Workspace D1 runtime
+        run: pnpm --dir workspace-cloud exec node scripts/check-d1-runtime.mjs
 
-      - name: Test production migration safety and Provider import concurrency
-        env:
-          PROVIDER_IMPORT_POSTGRES_ADMIN_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
-        run: bash scripts/test-provider-import-postgres.sh
+      - name: Test production D1 migrations and atomic Workspace journeys
+        run: bash scripts/test-provider-import-d1.sh
+
+      - name: Verify Cloud SQL setup preserves application access
+        run: PG_BIN="$(pg_config --bindir)" node scripts/test-gcp-schema-policy.mjs
 
   site_build:
     name: site-build
@@ -170,8 +147,10 @@ jobs:
       - name: Install site dependencies
         run: pnpm --dir site install --frozen-lockfile
 
-      - name: Build marketing site
-        run: pnpm --dir site build
+      - name: Build marketing Worker
+        run: |
+          pnpm --dir site build:cloudflare
+          pnpm --dir site exec wrangler deploy --dry-run
 
   analytics_cloudflare:
     name: analytics-cloudflare

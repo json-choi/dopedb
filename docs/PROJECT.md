@@ -288,7 +288,9 @@ pnpm site:dev
 pnpm site:build
 ```
 
-Vercel should use `site` as the root directory.
+Build the Cloudflare Worker with `pnpm --dir site build:cloudflare`;
+`site/wrangler.jsonc` owns its bindings. See
+[Cloudflare migration](CLOUDFLARE_MIGRATION.md) for production cutover status.
 
 ## CI and Releases
 

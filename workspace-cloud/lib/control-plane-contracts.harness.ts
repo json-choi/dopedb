@@ -3,6 +3,8 @@
 
 import { readFileSync } from "node:fs";
 import { assertGcpBootstrapReadinessContract } from "./providers/gcp-cloud-bootstrap.harness";
+import { assertWorkloadIdentityContract } from "./providers/workload-identity.harness";
+import { assertSiteAnalyticsContract } from "./site-analytics.harness";
 
 import { describe, expect, it, vi } from "vitest";
 
@@ -626,6 +628,8 @@ function analyticsEnvelope(
 describe("Desktop control-plane contracts", () => {
   it("decodes the same strict sync, lease, and Analysis Article goldens as Rust", async () => {
     await assertGcpBootstrapReadinessContract();
+    await assertWorkloadIdentityContract();
+    await assertSiteAnalyticsContract();
     expect(fixture.schemaVersion).toBe(CONTROL_PLANE_CONTRACTS_SCHEMA_VERSION);
     const schedulerNow = new Date("2026-08-15T18:12:30Z");
     expect(workspaceSchedulerBoundedWakeAt(null, schedulerNow)).toBeNull();
@@ -1071,12 +1075,18 @@ describe("Desktop control-plane contracts", () => {
 
     const firstInstallation = "018f1f7e-7b44-7cc1-8d4e-4f31b7315fe8";
     const secondInstallation = "018f1f7e-7b44-7cc1-8d4e-4f31b7315fea";
-    const sourceHeaders = new Headers({ "x-forwarded-for": "203.0.113.7, 10.0.0.1" });
+    const sourceHeaders = new Headers({ "cf-connecting-ip": "203.0.113.7" });
     const firstIngressPlan = productAnalyticsIngressBudgetPlan(sourceHeaders);
     const rotatedIngressPlan = productAnalyticsIngressBudgetPlan(sourceHeaders);
     const otherSourceIngressPlan = productAnalyticsIngressBudgetPlan(
-      new Headers({ "x-forwarded-for": "198.51.100.9" }),
+      new Headers({ "cf-connecting-ip": "198.51.100.9" }),
     );
+    const spoofedHeaders = new Headers(sourceHeaders);
+    spoofedHeaders.set("x-forwarded-for", "198.51.100.9");
+    spoofedHeaders.set("x-real-ip", "198.51.100.9");
+    expect(productAnalyticsIngressBudgetPlan(spoofedHeaders)).toEqual(firstIngressPlan);
+    expect(productAnalyticsIngressBudgetPlan(new Headers({ "x-forwarded-for": "203.0.113.7" })))
+      .toEqual(productAnalyticsIngressBudgetPlan(new Headers()));
     const firstEnvelopePlan = productAnalyticsEnvelopeBudgetPlan(firstInstallation, 1);
     const rotatedEnvelopePlan = productAnalyticsEnvelopeBudgetPlan(secondInstallation, 1);
     expect(firstIngressPlan.map(({ namespace, limit, windowMs }) => ({

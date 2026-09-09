@@ -376,7 +376,7 @@ export async function liveSwitchPlanContext(input: {
       eq(workspaceConnection.provider, "neon"),
       eq(workspaceConnection.credentialMode, "managed"),
       isNull(workspaceConnection.deletedAt),
-      sql`${workspaceConnection.id} <> ${input.connectionId}::uuid`,
+      sql`${workspaceConnection.id} <> ${input.connectionId}`,
       sql`${workspaceConnection.providerResource} ->> 'project' = ${input.projectId}`,
       sql`${workspaceConnection.providerResource} ->> 'branch' = ${input.targetBranchId}`,
       sql`${workspaceConnection.providerResource} ->> 'database' = ${source.database}`,

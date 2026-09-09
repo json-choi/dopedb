@@ -1,73 +1,47 @@
-// Confirm the exact deployment reached Ready and owns the production domain.
+// Match the uploaded version, the 100% Workers deployment, and the public domain.
 import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 const run = promisify(execFile);
 const cwd = fileURLToPath(new URL("../workspace-cloud", import.meta.url));
-const productionDomain = "app.dopedb.dev";
+const productionOrigin = "https://app.dopedb.dev";
 
-async function inspect(reference, wait = false) {
-  const args = ["inspect", reference, "--format=json"];
-  if (wait) args.push("--wait", "--timeout", "3m");
-  let output;
-  try {
-    ({ stdout: output } = await run("vercel", args, {
-      cwd,
-      timeout: 200_000,
-      maxBuffer: 8 * 1024 * 1024,
-    }));
-  } catch (error) {
-    // Vercel returns nonzero for a failed deployment, with its receipt on stdout.
-    output = error.stdout;
-  }
-  try {
-    const receipt = JSON.parse(output);
-    if (!receipt?.id || !receipt?.readyState) throw new Error();
-    return receipt;
-  } catch {
-    throw new Error("Could not read the Vercel deployment receipt. Check the CLI login and project access.");
-  }
-}
-
-function assertReady(receipt) {
-  if (receipt.name !== "dopedb-workspace" || receipt.target !== "production") {
-    throw new Error("The receipt is not a Workspace production deployment.");
-  }
-  if (receipt.readyState !== "READY") {
-    const state = /^[A-Z_]+$/.test(receipt.readyState) ? receipt.readyState : "UNKNOWN";
-    throw new Error(`Workspace deployment is ${state}; the production deployment has not succeeded.`);
-  }
+async function wrangler(...args) {
+  const { stdout } = await run("pnpm", ["exec", "wrangler", ...args, "--json"], {
+    cwd, timeout: 60_000, maxBuffer: 2 * 1024 * 1024,
+  });
+  const start = stdout.search(/^[\t ]*[\[{][\t ]*$/m);
+  if (start < 0) throw new Error("Wrangler did not return a deployment receipt.");
+  return JSON.parse(stdout.slice(start));
 }
 
 async function main() {
-  const [reference, ...extra] = process.argv.slice(2);
-  if (extra.length || !reference || !(
-    /^dpl_[A-Za-z0-9]+$/.test(reference)
-    || /^https:\/\/[a-z0-9-]+\.vercel\.app\/?$/.test(reference)
-  )) {
-    throw new Error("Usage: pnpm workspace:cloud:verify-deployment <new-deployment-url-or-id>");
+  const [versionId, ...extra] = process.argv.slice(2);
+  if (extra.length || !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(versionId || "")) {
+    throw new Error("Usage: pnpm workspace:cloud:verify-deployment <worker-version-id>");
   }
-  const deployment = await inspect(reference, true);
-  assertReady(deployment);
-  const production = await inspect(`https://${productionDomain}`);
-  assertReady(production);
-  // Resolve the live domain directly: the deployment's stored aliases can omit
-  // domains assigned later by `vercel promote`.
-  if (production.id !== deployment.id) {
-    throw new Error("The requested deployment is Ready, but app.dopedb.dev still serves a different deployment.");
+  const version = await wrangler("versions", "view", versionId);
+  if (version.id !== versionId) throw new Error("The requested Worker version is unavailable.");
+  const deployments = await wrangler("deployments", "list");
+  const current = deployments.toSorted((a, b) => Date.parse(b.created_on) - Date.parse(a.created_on))[0];
+  if (current?.versions?.length !== 1 || current.versions[0].version_id !== versionId
+    || current.versions[0].percentage !== 100) {
+    throw new Error("The requested version does not receive 100% of Workspace traffic.");
   }
-  console.log(JSON.stringify({
-    status: "ready",
-    deploymentId: deployment.id,
-    deploymentUrl: deployment.url,
-    productionUrl: `https://${productionDomain}`,
-  }, null, 2));
+  const response = await fetch(`${productionOrigin}/api/internal/deployment`, {
+    redirect: "error", cache: "no-store", signal: AbortSignal.timeout(15_000),
+  });
+  if (!response.ok) throw new Error("The production deployment receipt is unavailable.");
+  const receipt = await response.json();
+  if (receipt.service !== "dopedb-workspace" || receipt.versionId !== versionId) {
+    throw new Error("The production domain still serves a different Workspace version.");
+  }
+  console.log(JSON.stringify({ status: "active", versionId, deploymentId: current.id,
+    productionUrl: productionOrigin }, null, 2));
 }
 
-try {
-  await main();
-} catch (error) {
-  console.error(error.message);
+try { await main(); } catch (error) {
+  console.error(error instanceof Error ? error.message : "Workspace deployment verification failed.");
   process.exitCode = 1;
 }

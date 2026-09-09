@@ -2,20 +2,20 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.join(__dirname, "..");
 
 const scriptPolicy = process.env.NODE_ENV === "production"
   ? "script-src 'self' 'unsafe-inline'"
-  : "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://va.vercel-scripts.com";
+  : "script-src 'self' 'unsafe-inline' 'unsafe-eval'";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  outputFileTracingRoot: fileURLToPath(new URL(".", import.meta.url)),
   poweredByHeader: false,
   experimental: {
     useTypeScriptCli: true,
   },
   turbopack: {
-    root: repoRoot,
+    root: __dirname,
   },
   async rewrites() {
     return [
@@ -45,7 +45,7 @@ const nextConfig = {
             "style-src 'self' 'unsafe-inline'",
             "img-src 'self' data:",
             "font-src 'self'",
-            "connect-src 'self' https://vitals.vercel-insights.com",
+            "connect-src 'self'",
             "base-uri 'self'",
             "form-action 'self'",
             "frame-ancestors 'none'",
@@ -72,7 +72,7 @@ const nextConfig = {
     return [
       {
         source: "/:path*",
-        has: [{ type: "host", value: "dopedb-cjs1301.vercel.app" }],
+        has: [{ type: "host", value: "www.dopedb.dev" }],
         destination: "https://dopedb.dev/:path*",
         permanent: true,
       },

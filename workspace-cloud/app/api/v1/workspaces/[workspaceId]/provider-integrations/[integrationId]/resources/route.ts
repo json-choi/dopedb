@@ -1,3 +1,4 @@
+import { workloadOidcToken } from "../../../../../../../../lib/workload-identity";
 // Provider listing is read-only. Only the guarded POST can exchange one opaque,
 // server-issued final-leaf proof for one durable, single-use import receipt.
 import { env } from "../../../../../../../../lib/env";
@@ -16,7 +17,6 @@ import {
   revalidateProviderDiscoveryAuthority,
   vaultCredential,
 } from "../../../../../../../../lib/provider-integrations";
-import { vercelOidcToken } from "../../../../../../../../lib/providers/gcp-cloud-sql";
 import { parseNeonResource } from "../../../../../../../../lib/providers/neon-core";
 import { ProviderRequestError } from "../../../../../../../../lib/providers/provider-types";
 import { vaultManagedResource } from "../../../../../../../../lib/providers/vault";
@@ -158,7 +158,7 @@ export async function GET(request: Request, context: RouteContext) {
       integration,
       kind: query.kind,
       selection,
-      oidcToken: vercelOidcToken(request),
+      oidcToken: await workloadOidcToken(),
     });
     const branchBoundary = provider === "neon"
       && query.kind === "databases"
@@ -293,7 +293,7 @@ export async function POST(request: Request, context: RouteContext) {
       integration,
       kind: proof.kind,
       selection: proof.selection,
-      oidcToken: vercelOidcToken(request),
+      oidcToken: await workloadOidcToken(),
     });
     if (
       integration.generation !== proof.integrationGeneration

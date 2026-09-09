@@ -1,7 +1,8 @@
+import { inD1Strings } from "./d1/json";
 // Tenant-scoped Analysis Article projection helpers shared by API routes.
 import "server-only";
 
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 
 import { db } from "./db";
 import {
@@ -50,7 +51,7 @@ export async function listAccessibleAnalysisArticles(input: {
   }).from(workspaceConnectionGrant).where(and(
     eq(workspaceConnectionGrant.organizationId, input.organizationId),
     eq(workspaceConnectionGrant.memberId, input.memberId),
-    inArray(workspaceConnectionGrant.connectionId, requiredConnectionIds),
+    inD1Strings(workspaceConnectionGrant.connectionId, requiredConnectionIds),
   ));
   const granted = new Set(grants.map((grant) => grant.connectionId));
   return rows

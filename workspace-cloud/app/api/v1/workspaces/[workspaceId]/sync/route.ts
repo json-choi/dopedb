@@ -14,7 +14,7 @@ type RawSyncEvent = Readonly<{
   head: number | string;
   sequence: number | string | null;
   resourceType: string | null;
-  tombstone: boolean | null;
+  tombstone: number | null;
 }>;
 
 const PAGE_LIMIT = 128;
@@ -51,17 +51,17 @@ export async function GET(request: Request, context: RouteContext) {
     WITH head AS MATERIALIZED (
       SELECT COALESCE((
         SELECT "last_sequence"
-        FROM "workspace_control"."workspace_sync_head"
+        FROM "workspace_sync_head"
         WHERE "organization_id" = ${workspaceId}
-      ), 0)::bigint AS "value"
+      ), 0) AS "value"
     ), page AS MATERIALIZED (
       SELECT event."sequence", event."resource_type", event."tombstone"
-      FROM "workspace_control"."workspace_sync_event" event
+      FROM "workspace_sync_event" event
       JOIN head ON TRUE
-      WHERE ${cursor}::bigint IS NOT NULL
-        AND ${cursor}::bigint <= head."value"
+      WHERE ${cursor} IS NOT NULL
+        AND ${cursor} <= head."value"
         AND event."organization_id" = ${workspaceId}
-        AND event."sequence" > ${cursor}::bigint
+        AND event."sequence" > ${cursor}
         AND event."sequence" <= head."value"
       ORDER BY event."sequence" ASC
       LIMIT ${PAGE_LIMIT}
@@ -101,10 +101,10 @@ export async function GET(request: Request, context: RouteContext) {
       if (row.resourceType === "connection") {
         refreshConnections = true;
         refreshAnalyses = true;
-        connectionTombstone ||= row.tombstone === true;
+        connectionTombstone ||= row.tombstone === 1;
       } else if (row.resourceType === "analysis_article") {
         refreshAnalyses = true;
-        analysisTombstone ||= row.tombstone === true;
+        analysisTombstone ||= row.tombstone === 1;
       } else {
         // Membership, workspace, and provider authority changes can narrow any
         // projection. Reconcile all secret-free collections rather than guessing.

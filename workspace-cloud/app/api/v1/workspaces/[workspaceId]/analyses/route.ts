@@ -1,5 +1,6 @@
 // Workspace Analysis Article library. Definitions and exact authority pins are
 // shared here; query result rows always remain on Desktop.
+import { isUniqueDatabaseConflict } from "../../../../../../lib/workspace-server-log";
 import { env } from "../../../../../../lib/env";
 import {
   boundedJsonBody,
@@ -34,11 +35,6 @@ function authority(authorization: {
     membershipId: authorization.membership.id,
     role: authorization.role,
   };
-}
-function uniqueViolation(error: unknown) {
-  if (!error || typeof error !== "object") return false;
-  const row = error as { code?: unknown; cause?: { code?: unknown } };
-  return row.code === "23505" || row.cause?.code === "23505";
 }
 
 export async function GET(request: Request, context: RouteContext) {
@@ -99,7 +95,7 @@ export async function POST(request: Request, context: RouteContext) {
       article: publicAnalysisArticle(created),
     }, { status: 201 });
   } catch (error) {
-    if (uniqueViolation(error)) return jsonError("Analysis Article already exists", 409);
+    if (isUniqueDatabaseConflict(error)) return jsonError("Analysis Article already exists", 409);
     throw error;
   }
 }
