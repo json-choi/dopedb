@@ -1,4 +1,5 @@
-import { useEffect, useRef, type ReactNode, type RefObject } from "react";
+// Positions the left Explorer, central documents, Agent, and persistent status bar.
+import { useRef, type ReactNode, type RefObject } from "react";
 
 import { Icon } from "../../components/Icon";
 import { ResizeSeparator } from "../../design-system/components/ResizeSeparator";
@@ -24,8 +25,6 @@ import type {
   KnowledgeEnvironmentView,
 } from "../knowledge/domain";
 import LocalHistoryToolWindow from "../localHistory/LocalHistoryToolWindow";
-import QueryServicesToolWindow from "../queryServices/QueryServicesToolWindow";
-import type { QueryServiceStore } from "../queryServices/store";
 import { defaultSqlNamespace } from "../queries/namespace";
 import type { WorkspaceManualTransaction } from "../queries/useWorkspaceManualTransactions";
 import {
@@ -66,13 +65,6 @@ type ShellLayoutModel = {
     activeDocumentId: string | null;
     selectedTable: CatalogTable | null;
     content: ReactNode;
-  };
-  services: {
-    open: boolean;
-    height: number;
-    minimumHeight: number;
-    maximumHeight: number;
-    store: QueryServiceStore;
   };
   agent: {
     open: boolean;
@@ -135,16 +127,6 @@ type ShellLayoutCommands = {
     restoreDocument: (id: string, content: string) => void;
     newQuery: () => void;
   };
-  services: {
-    toggle: () => void;
-    close: () => void;
-    startResize: (event: {
-      preventDefault(): void;
-      clientY: number;
-    }) => void;
-    resize: (height: number) => void;
-    resetHeight: () => void;
-  };
   agent: {
     toggle: () => void;
     openTask: (
@@ -157,6 +139,7 @@ type ShellLayoutCommands = {
     close: () => void;
   };
   status: {
+    openQueryResult: (sessionId: string) => void;
     cancelBackgroundTask: (task: BackgroundTask) => Promise<void>;
     openManualTransaction: (transaction: WorkspaceManualTransaction) => void;
     commitManualTransaction: (
@@ -201,7 +184,6 @@ function ShellLayoutContent({ model, commands }: Props) {
     workspace,
     explorer,
     workbench,
-    services,
     agent,
     status,
     viewport,
@@ -234,7 +216,6 @@ function ShellLayoutContent({ model, commands }: Props) {
     explorer.localHistoryOpen;
   const leftToolWindowVisible =
     databaseExplorerVisible || localHistoryVisible;
-  const servicesVisible = services.open;
   const agentOverlay =
     viewport.compact ||
     (agent.open && shouldOverlayAgentDock({
@@ -243,11 +224,6 @@ function ShellLayoutContent({ model, commands }: Props) {
       requestedAgentWidth: agent.width,
     }));
   const agentLayout = agentDockLayout(viewport.compact, agentOverlay);
-  useEffect(() => {
-    if (agent.open && agentOverlay && services.open) {
-      commands.services.close();
-    }
-  }, [agent.open, agentOverlay, commands.services, services.open]);
   const compactAgentModalOpen =
     agent.open &&
     workspace.selected !== null &&
@@ -291,18 +267,13 @@ function ShellLayoutContent({ model, commands }: Props) {
       data-mobile-explorer-open={viewport.mobileExplorerOpen}
       data-database-explorer-open={databaseExplorerVisible}
       data-local-history-open={localHistoryVisible}
-      data-services-open={servicesVisible}
       style={{
         gridTemplateColumns: viewport.compact
           ? "minmax(0, 1fr)"
           : leftToolWindowVisible
             ? `${viewport.sidebarWidth}px 4px minmax(0, 1fr) ${rightDockWidth}px`
             : `0 0 minmax(0, 1fr) ${rightDockWidth}px`,
-        gridTemplateRows: viewport.compact
-          ? "var(--ds-title-toolbar-height) minmax(0, 1fr) var(--ds-status-bar-height)"
-          : `var(--ds-title-toolbar-height) minmax(0, 1fr) ${
-              servicesVisible ? services.height : 0
-            }px var(--ds-status-bar-height)`,
+        gridTemplateRows: "var(--ds-title-toolbar-height) minmax(0, 1fr) var(--ds-status-bar-height)",
       }}
     >
       <IdeTopBar
@@ -316,7 +287,6 @@ function ShellLayoutContent({ model, commands }: Props) {
           localHistoryVisible &&
           (!viewport.compact || viewport.mobileExplorerOpen)
         }
-        servicesOpen={servicesVisible}
         agentDockOpen={agent.open}
         actionSearchOpen={search.open}
         settingsOpen={workspace.settingsOpen}
@@ -331,7 +301,6 @@ function ShellLayoutContent({ model, commands }: Props) {
         onNewQuery={commands.workbench.newQuery}
         onToggleLeftPanel={commands.explorer.togglePanel}
         onToggleLocalHistory={commands.explorer.toggleLocalHistory}
-        onToggleServices={commands.services.toggle}
         onToggleAgent={commands.agent.toggle}
         agentButtonRef={agent.buttonRef}
         actionSearchButtonRef={search.buttonRef}
@@ -459,25 +428,6 @@ function ShellLayoutContent({ model, commands }: Props) {
         )}
       </main>
 
-      {servicesVisible && (
-        <QueryServicesToolWindow
-          store={services.store}
-          connections={workspace.connections}
-          documents={workbench.documents}
-          activeDocumentId={workbench.activeDocumentId}
-          onActivateDocument={commands.workbench.activateDocument}
-          onOpenSafety={commands.workspace.safetySettings}
-          onClose={commands.services.close}
-          onStartResize={commands.services.startResize}
-          height={services.height}
-          minimumHeight={services.minimumHeight}
-          maximumHeight={services.maximumHeight}
-          onHeightChange={commands.services.resize}
-          onResetHeight={commands.services.resetHeight}
-          compact={viewport.compact}
-        />
-      )}
-
       <IdeStatusBar
         selected={workspace.selected}
         selectedTable={workbench.selectedTable}
@@ -491,10 +441,7 @@ function ShellLayoutContent({ model, commands }: Props) {
         settlingManualTransactionIds={status.settlingManualTransactionIds}
         writeEnabled={workspace.writeEnabled}
         unseenOperationCount={status.unseenOperationCount}
-        onOpenQueryTask={(sessionId) => {
-          services.store.activate(sessionId);
-          if (!servicesVisible) commands.services.toggle();
-        }}
+        onOpenQueryTask={commands.status.openQueryResult}
         onOpenAgentTask={commands.agent.openTask}
         onOpenManualTransaction={commands.status.openManualTransaction}
         onCommitManualTransaction={commands.status.commitManualTransaction}

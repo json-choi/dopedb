@@ -28,9 +28,9 @@ type ActionSearchItemsInput = {
   commands: {
     newConnection: () => void;
     newQuery: () => void | Promise<void>;
+    openResults: () => void;
     toggleDatabaseExplorer: () => void;
     showLocalHistory: () => void;
-    toggleServices: () => void;
     openAgent: () => void;
     openSettings: (section?: SettingsSection) => void;
     selectConnection: (id: string) => void;
@@ -94,11 +94,12 @@ export function useActionSearchItems({
       run: commands.showLocalHistory,
     },
     {
-      id: "action:services",
+      id: "action:query-results",
       kind: "action",
-      label: t("services.title"),
-      keywords: ["tool window", "output", "result", "session"],
-      run: commands.toggleServices,
+      label: t("sql.executionResults"),
+      keywords: ["query", "results", "output", "결과"],
+      disabled: !selected || !supportsSql,
+      run: commands.openResults,
     },
     {
       id: "action:ai-chat",
@@ -155,6 +156,8 @@ export function useActionSearchItems({
             ? t("tabs.schema")
             : document.kind === "welcome"
               ? t("onboarding.title")
+              : document.kind === "results"
+                ? t("sql.executionResults")
               : document.kind === "activity"
                 ? t("tabs.activity")
                 : t("tabs.documents");

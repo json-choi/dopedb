@@ -100,7 +100,7 @@ export type SqlWorkbenchProps = {
   recovered: boolean;
   onPersisted: (document: SqlDocument) => void;
   onQueryServiceSessionChange: (session: QueryServiceSession) => void;
-  onShowQueryServices: (sessionId: string) => void;
+  onShowResult: (sessionId: string) => void;
   onOpenHistory: () => void;
   onRetrySafety: () => void;
 };
@@ -124,7 +124,7 @@ export function useSqlWorkbenchController({
   recovered,
   onPersisted,
   onQueryServiceSessionChange,
-  onShowQueryServices,
+  onShowResult,
 }: SqlWorkbenchProps) {
   const { t } = useI18n();
   const shellSnapshot = useWorkbenchDraft(documentId, draftSnapshot);
@@ -312,7 +312,7 @@ export function useSqlWorkbenchController({
       status: "running",
       result: { kind: "none" },
     });
-    onShowQueryServices(sessionId);
+    onShowResult(sessionId);
     setRunErr(null);
     setRun(null);
     setScriptOut(null);

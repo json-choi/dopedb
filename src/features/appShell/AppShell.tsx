@@ -132,7 +132,6 @@ function Shell() {
         : null;
     setAgentComposerRequest(null);
     if (compactShell) {
-      toolWindows.closeServices();
       setMobileExplorerOpen(false);
     }
     if (showAgentDock) {
@@ -167,7 +166,6 @@ function Shell() {
         : null,
     );
     if (connections.selected?.id !== connectionId) commands.connections.select(connectionId);
-    if (compactShell) toolWindows.closeServices();
     const analysisFocus = route.knowledgeEnvironmentFocus;
     if (environmentId && (articleId || (analysisFocus?.view === "analyses" && analysisFocus.environmentId === environmentId))) {
       commands.route.openKnowledge(environmentId, "analyses", articleId ?? analysisFocus?.resourceId);
@@ -193,6 +191,19 @@ function Shell() {
     } catch (error) {
       toast(errMessage(error), "error");
     }
+  }
+
+  function openQueryResult(sessionId: string) {
+    const session = queryServices.store.session(sessionId);
+    if (!session) return;
+    queryServices.store.activate(sessionId);
+    const source = documents.items.find((document) => document.id === session.documentId);
+    if (source && (session.status === "running" || session.status === "waiting")) {
+      commands.documents.activate(source);
+    } else {
+      commands.documents.openResults(session.connectionId);
+    }
+    setMobileExplorerOpen(false);
   }
 
   function openManualTransaction(transaction: WorkspaceManualTransaction) {
@@ -231,7 +242,6 @@ function Shell() {
       toggle();
       return;
     }
-    toolWindows.closeServices();
     agentDock.close();
     if (open && mobileExplorerOpen) {
       if (panel === "history") toolWindows.closeLocalHistory();
@@ -242,14 +252,6 @@ function Shell() {
     setMobileExplorerOpen(true);
   }
 
-  function toggleServices() {
-    if (compactShell && !toolWindows.servicesOpen) {
-      agentDock.close();
-      setMobileExplorerOpen(false);
-    }
-    toolWindows.toggleServices();
-  }
-
   function openShellSettings(section?: "safety", connectionId?: string) {
     if (connectionId && !connections.items.some(({ id }) => id === connectionId)) return;
     if (connectionId && connections.selectedId !== connectionId) {
@@ -258,7 +260,6 @@ function Shell() {
     commands.route.openSettings(section);
     setMobileExplorerOpen(false);
     if (compactShell) {
-      toolWindows.closeServices();
       agentDock.close();
     }
   }
@@ -267,7 +268,6 @@ function Shell() {
     commands.route.showWorkbench();
     toolWindows.showDatabaseExplorer();
     if (compactShell) {
-      toolWindows.closeServices();
       agentDock.close();
       setMobileExplorerOpen(true);
     }
@@ -284,16 +284,15 @@ function Shell() {
     commands: {
       newConnection: () => commands.connections.new(),
       newQuery: commands.documents.openQuery,
+      openResults: () => commands.documents.openStable("results"),
       toggleDatabaseExplorer: toolWindows.toggleDatabaseExplorer,
       showLocalHistory: () => {
         toolWindows.showLocalHistory();
         if (compactShell) {
-          toolWindows.closeServices();
           agentDock.close();
           setMobileExplorerOpen(true);
         }
       },
-      toggleServices: toolWindows.toggleServices,
       openAgent: openOrFocusAgentDock,
       openSettings: (section) => {
         commands.route.openSettings(section);
@@ -324,6 +323,7 @@ function Shell() {
       }}
       commands={{
         route: {
+          openSafety: (connectionId: string) => openShellSettings("safety", connectionId),
           closeSettings: commands.route.closeSettings,
           closeSurface: commands.route.showWorkbench,
         },
@@ -335,14 +335,7 @@ function Shell() {
         },
         queryServices: {
           updateSession: queryServices.updateSession,
-          show: (sessionId) => {
-            queryServices.activateNewestSession(sessionId);
-            if (compactShell) {
-              agentDock.close();
-              setMobileExplorerOpen(false);
-            }
-            toolWindows.showServices();
-          },
+          store: queryServices.store,
         },
         update: {
           refresh: updater.refresh,
@@ -388,13 +381,6 @@ function Shell() {
             activeDocumentId: documents.activeId,
             selectedTable: documents.selectedTable,
             content: mainContent,
-          },
-          services: {
-            open: toolWindows.servicesOpen,
-            height: toolWindows.servicesHeight,
-            minimumHeight: toolWindows.servicesMinimumHeight,
-            maximumHeight: toolWindows.servicesMaximumHeight,
-            store: queryServices.store,
           },
           agent: {
             open: showAgentDock,
@@ -458,13 +444,6 @@ function Shell() {
             restoreDocument: commands.documents.restoreDraft,
             newQuery: commands.documents.newQuery,
           },
-          services: {
-            toggle: toggleServices,
-            close: toolWindows.closeServices,
-            startResize: toolWindows.startServicesResize,
-            resize: toolWindows.resizeServicesHeight,
-            resetHeight: toolWindows.resetServicesHeight,
-          },
           agent: {
             toggle: showAgentDock ? agentDock.close : openOrFocusAgentDock,
             openTask: openAgentTask,
@@ -472,6 +451,7 @@ function Shell() {
             close: agentDock.close,
           },
           status: {
+            openQueryResult,
             cancelBackgroundTask,
             openManualTransaction,
             commitManualTransaction: (transaction) =>

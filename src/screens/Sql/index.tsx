@@ -1,7 +1,10 @@
 // Manual SQL console. Editable CodeMirror. Run is the human approval action;
-// execution sessions and Output/Result live in the shell-owned Services window.
+// execution results and output occupy the central document.
 // Multi-statement scripts execute through the backend script runner and preserve
 // per-statement results. ⌘↩ runs the current draft or selected SQL.
+import { useState } from "react";
+import QueryResultsPane from "../../features/queryServices/QueryResultsPane";
+import type { QueryServiceStore } from "../../features/queryServices/store";
 import { Icon } from "../../components/Icon";
 import LazySqlViewer from "../../components/LazySqlViewer";
 import {
@@ -22,8 +25,13 @@ import { databaseDisplayLabel } from "../../features/connections/domain";
 import { useI18n } from "../../lib/i18n";
 import SqlParameterDialog from "./SqlParameterDialog";
 
-export default function Sql(props: SqlWorkbenchProps) {
+export default function Sql(props: Omit<SqlWorkbenchProps, "onShowResult"> & {
+  resultStore: QueryServiceStore;
+  onOpenResults: () => void;
+  onOpenSafety: (connectionId: string) => void;
+}) {
   const { t } = useI18n();
+  const [view, setView] = useState<"editor" | "result">("editor");
   const {
     connection,
     safety,
@@ -76,12 +84,18 @@ export default function Sql(props: SqlWorkbenchProps) {
     resolveModeHint,
     running,
     setDraft,
-  } = useSqlWorkbenchController(props);
+  } = useSqlWorkbenchController({
+    ...props,
+    onShowResult: (sessionId) => {
+      props.resultStore.activate(sessionId);
+      setView("result");
+    },
+  });
 
   return (
     <WorkbenchPane>
       <WorkbenchToolbar label={t("sql.documentTitle")} compact>
-        <div className="ds-control-row scrollbar-sleek tw:flex tw:min-h-0 tw:min-w-0 tw:flex-[0_1_auto] tw:flex-nowrap tw:items-center tw:gap-1 tw:overflow-x-auto tw:overflow-y-hidden tw:max-[760px]:shrink-0">
+        <div className="ds-control-row scrollbar-sleek tw:flex tw:min-h-0 tw:min-w-0 tw:flex-[0_1_auto] tw:flex-nowrap tw:items-center tw:gap-1 tw:overflow-x-auto tw:overflow-y-hidden">
           <WorkbenchButton
             iconOnly
             tone="success"
@@ -129,7 +143,10 @@ export default function Sql(props: SqlWorkbenchProps) {
               draftIsScript ? t("sql.explainSingle") : t("sql.explainTitle")
             }
             aria-label={t("sql.explain")}
-            onClick={explain}
+            onClick={() => {
+              setView("editor");
+              explain();
+            }}
           >
             <Icon name={explaining ? "refresh" : "target"} />
           </WorkbenchButton>
@@ -163,21 +180,6 @@ export default function Sql(props: SqlWorkbenchProps) {
               disabled={running}
             />
           )}
-          <WorkbenchButton
-            iconOnly
-            disabled={!running}
-            onClick={cancelRun}
-            title={
-              running
-                ? `${t("sql.cancel")} · ${t("sql.runningFor", {
-                    seconds: elapsed,
-                  })}`
-                : t("sql.cancel")
-            }
-            aria-label={t("sql.cancel")}
-          >
-            <Icon name="stop" />
-          </WorkbenchButton>
           <WorkbenchSelect
             label={t("sql.resolveMode")}
             title={resolveModeHint}
@@ -200,6 +202,32 @@ export default function Sql(props: SqlWorkbenchProps) {
             </span>
           ) : null}
         </div>
+        <WorkbenchButton
+          iconOnly
+          disabled={!running}
+          onClick={cancelRun}
+          title={
+            running
+              ? `${t("sql.cancel")} · ${t("sql.runningFor", {
+                  seconds: elapsed,
+                })}`
+              : t("sql.cancel")
+          }
+          aria-label={t("sql.cancel")}
+        >
+          <Icon name="stop" />
+        </WorkbenchButton>
+        <WorkbenchButton active={view === "editor"} onClick={() => setView("editor")}>SQL</WorkbenchButton>
+        <WorkbenchButton active={view === "result"} onClick={() => setView("result")}>{t("services.resultTab")}</WorkbenchButton>
+        <WorkbenchButton
+          iconOnly
+          disabled={running}
+          onClick={props.onOpenResults}
+          title={t("sql.executionResults")}
+          aria-label={t("sql.executionResults")}
+        >
+          <Icon name="table" />
+        </WorkbenchButton>
         <span className="tw:min-w-1 tw:flex-1" />
         <WorkbenchSelect
           label={t("sql.databaseSelector")}
@@ -269,100 +297,110 @@ export default function Sql(props: SqlWorkbenchProps) {
           </span>
         ) : null}
       </WorkbenchToolbar>
-      <WorkbenchContainedBody>
-        <div
-          data-workbench-scroll-owner="sql-editor"
-          className="tw:min-h-0 tw:flex-1 tw:overflow-hidden tw:bg-background tw:[&>.dopedb-sql-viewer]:h-full tw:[&_.cm-editor]:h-full tw:[&_.cm-editor]:bg-background tw:[&_.cm-scroller]:min-h-0 tw:[&_.cm-scroller]:overflow-auto tw:[&_.cm-scroller]:overscroll-contain"
-        >
-          <LazySqlViewer
-            value={draft}
-            editable
-            onChange={setDraft}
-            onRun={executeSqlFromEditor}
-            catalog={catalog}
-            engine={connection.engine}
-            resolveMode={resolveMode}
-            defaultSchema={effectiveNamespace}
-            namespaceOptions={namespaceOptions}
-            minHeight="0px"
-            onCursorChange={handleCursorChange}
-            onBlur={flushEditorState}
-            executionStatus={editorExecutionStatus}
-          />
-        </div>
+      <div data-active={view === "editor"} className="tw:flex tw:min-h-0 tw:flex-1 tw:flex-col tw:overflow-hidden tw:data-[active=false]:hidden" data-sql-editor-view>
+        <WorkbenchContainedBody>
+          <div
+            data-workbench-scroll-owner="sql-editor"
+            className="tw:min-h-0 tw:flex-1 tw:overflow-hidden tw:bg-background tw:[&>.dopedb-sql-viewer]:h-full tw:[&_.cm-editor]:h-full tw:[&_.cm-editor]:bg-background tw:[&_.cm-scroller]:min-h-0 tw:[&_.cm-scroller]:overflow-auto tw:[&_.cm-scroller]:overscroll-contain"
+          >
+            <LazySqlViewer
+              value={draft}
+              editable
+              onChange={setDraft}
+              onRun={executeSqlFromEditor}
+              catalog={catalog}
+              engine={connection.engine}
+              resolveMode={resolveMode}
+              defaultSchema={effectiveNamespace}
+              namespaceOptions={namespaceOptions}
+              minHeight="0px"
+              onCursorChange={handleCursorChange}
+              onBlur={flushEditorState}
+              executionStatus={editorExecutionStatus}
+            />
+          </div>
 
-        <div
-          data-workbench-scroll-owner="document-details"
-          className="scrollbar-sleek tw:max-h-[50%] tw:min-h-0 tw:shrink-0 tw:overflow-auto tw:overscroll-contain tw:bg-background"
-        >
-          {documentConflict && (
-            <div
-              className="tw:mx-3 tw:flex tw:min-h-control-lg tw:items-center tw:justify-between tw:gap-3 tw:border-y tw:border-warning tw:py-2 tw:text-sm tw:text-warning tw:max-[760px]:flex-col tw:max-[760px]:items-start"
-              role="alert"
-            >
-              <span>{t("sql.saveConflictBody")}</span>
-              <div className="ds-control-row">
-                <WorkbenchButton
-                  variant="default"
-                  onClick={loadSavedConflictVersion}
-                >
-                  {t("sql.loadSaved")}
-                </WorkbenchButton>
-                <WorkbenchButton
-                  variant="default"
-                  onClick={keepLocalConflictVersion}
-                >
-                  {t("sql.keepMine")}
-                </WorkbenchButton>
-              </div>
-            </div>
-          )}
-          {documentSaveError && documentSaveState === "error" && (
-            <div className="tw:mx-3 tw:mt-2 tw:text-ui tw:text-danger">
-              {t("sql.saveFailed")}: {documentSaveError}
-            </div>
-          )}
-          {planErr && (
-            <div className="tw:mx-3 tw:mt-2 tw:text-ui tw:text-danger">
-              {planErr}
-            </div>
-          )}
-          {plan && (
-            <details
-              open
-              className="tw:my-2 tw:border-y tw:border-border-subtle tw:bg-background"
-            >
-              <summary className="tw:flex tw:min-h-workbench-toolbar tw:cursor-pointer tw:items-center tw:gap-2 tw:px-3 tw:py-1 tw:font-semibold">
-                {t("sql.queryPlan")}
-                <span className="tw:ml-auto">
+          <div
+            data-workbench-scroll-owner="document-details"
+            className="scrollbar-sleek tw:max-h-[50%] tw:min-h-0 tw:shrink-0 tw:overflow-auto tw:overscroll-contain tw:bg-background"
+          >
+            {documentConflict && (
+              <div
+                className="tw:mx-3 tw:flex tw:min-h-control-lg tw:items-center tw:justify-between tw:gap-3 tw:border-y tw:border-warning tw:py-2 tw:text-sm tw:text-warning tw:max-[760px]:flex-col tw:max-[760px]:items-start"
+                role="alert"
+              >
+                <span>{t("sql.saveConflictBody")}</span>
+                <div className="ds-control-row">
                   <WorkbenchButton
-                    iconOnly
-                    size="xs"
-                    onClick={(event) => {
-                      event.preventDefault();
-                      closePlan();
-                    }}
-                    title={t("common.close")}
-                    aria-label={t("common.close")}
+                    variant="default"
+                    onClick={loadSavedConflictVersion}
                   >
-                    <Icon name="close" />
+                    {t("sql.loadSaved")}
                   </WorkbenchButton>
-                </span>
-              </summary>
-              {plan.plan ? (
-                <pre className="tw:m-0 tw:overflow-x-auto tw:border-t tw:border-border-subtle tw:bg-background tw:p-3 tw:font-mono tw:text-sm tw:whitespace-pre">
-                  {plan.plan}
-                </pre>
-              ) : (
-                <div className="tw:border-t tw:border-border-subtle tw:px-3 tw:py-2 tw:text-muted-foreground">
-                  {t("sql.noPlan", { mode: plan.mode })}
+                  <WorkbenchButton
+                    variant="default"
+                    onClick={keepLocalConflictVersion}
+                  >
+                    {t("sql.keepMine")}
+                  </WorkbenchButton>
                 </div>
-              )}
-            </details>
-          )}
+              </div>
+            )}
+            {documentSaveError && documentSaveState === "error" && (
+              <div className="tw:mx-3 tw:mt-2 tw:text-ui tw:text-danger">
+                {t("sql.saveFailed")}: {documentSaveError}
+              </div>
+            )}
+            {planErr && (
+              <div className="tw:mx-3 tw:mt-2 tw:text-ui tw:text-danger">
+                {planErr}
+              </div>
+            )}
+            {plan && (
+              <details
+                open
+                className="tw:my-2 tw:border-y tw:border-border-subtle tw:bg-background"
+              >
+                <summary className="tw:flex tw:min-h-workbench-toolbar tw:cursor-pointer tw:items-center tw:gap-2 tw:px-3 tw:py-1 tw:font-semibold">
+                  {t("sql.queryPlan")}
+                  <span className="tw:ml-auto">
+                    <WorkbenchButton
+                      iconOnly
+                      size="xs"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        closePlan();
+                      }}
+                      title={t("common.close")}
+                      aria-label={t("common.close")}
+                    >
+                      <Icon name="close" />
+                    </WorkbenchButton>
+                  </span>
+                </summary>
+                {plan.plan ? (
+                  <pre className="tw:m-0 tw:overflow-x-auto tw:border-t tw:border-border-subtle tw:bg-background tw:p-3 tw:font-mono tw:text-sm tw:whitespace-pre">
+                    {plan.plan}
+                  </pre>
+                ) : (
+                  <div className="tw:border-t tw:border-border-subtle tw:px-3 tw:py-2 tw:text-muted-foreground">
+                    {t("sql.noPlan", { mode: plan.mode })}
+                  </div>
+                )}
+              </details>
+            )}
 
-        </div>
-      </WorkbenchContainedBody>
+          </div>
+        </WorkbenchContainedBody>
+      </div>
+      {view === "result" ? (
+        <QueryResultsPane
+          store={props.resultStore}
+          connection={connection}
+          documentId={props.documentId}
+          onOpenSafety={props.onOpenSafety}
+        />
+      ) : null}
       {parameterDialog ? (
         <SqlParameterDialog
           parameters={parameterDialog.parameters}

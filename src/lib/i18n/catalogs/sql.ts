@@ -96,6 +96,7 @@ export const sqlCatalog = defineCatalog(
     "sql.recovered": "Recovered draft",
     "sql.resultsTab": "Results",
     "sql.resultsEmpty": "Run a query to see results here",
+    "sql.executionResults": "Execution results",
     "sql.resolveMode": "Resolve mode",
     "sql.resolveModePlayground": "Use selected schema",
     "sql.resolveModePlaygroundHint":
@@ -253,6 +254,7 @@ export const sqlCatalog = defineCatalog(
     "sql.recovered": "복구된 초안",
     "sql.resultsTab": "결과",
     "sql.resultsEmpty": "쿼리를 실행하면 결과가 여기에 표시됩니다",
+    "sql.executionResults": "실행 결과",
     "sql.resolveMode": "객체 해석 모드",
     "sql.resolveModePlayground": "선택 스키마 사용",
     "sql.resolveModePlaygroundHint":

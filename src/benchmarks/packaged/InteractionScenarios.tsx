@@ -8,7 +8,7 @@ import {
 } from "../../design-system/components/Workbench";
 import ErdCanvas from "../../features/erd/ErdCanvas";
 import DataGrid from "../../features/queryResults/DataGrid";
-import { useToolWindowLayout } from "../../features/appShell/useToolWindowLayout";
+import { useSidebarWidth } from "../../features/appShell/useSidebarWidth";
 import type { CatalogSnapshot } from "../../ipc/types";
 import { measurePackagedIdle, waitForPackagedPaint } from "../packagedMetrics";
 import {
@@ -26,7 +26,7 @@ export function InteractionSurfacesScenario() {
   const result = useMemo(() => queryResult(50_000), []);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [surface, setSurface] = useState<"erd" | "workbench">("erd");
-  const layout = useToolWindowLayout();
+  const layout = useSidebarWidth("databaseExplorer");
 
   useScenarioRunner(true, async () => {
     await waitForSelector("[data-erd-neighborhood-toggle]");
@@ -47,9 +47,9 @@ export function InteractionSurfacesScenario() {
       const handle = document.querySelector<HTMLElement>("[data-grid-resize-handle]");
       if (!handle) throw new Error("grid resize handle unavailable");
       mouseDrag(handle, 200, 200 + (index % 5) * 24, 300, 300);
-      layout.startServicesResize({ preventDefault: () => undefined, clientY: 500 });
-      document.dispatchEvent(new MouseEvent("mousemove", { clientY: 420 - index }));
-      document.dispatchEvent(new MouseEvent("mouseup", { clientY: 400 - index }));
+      layout.startDrag({ preventDefault: () => undefined, clientX: 300 });
+      document.dispatchEvent(new MouseEvent("mousemove", { clientX: 320 + index }));
+      document.dispatchEvent(new MouseEvent("mouseup", { clientX: 340 + index }));
     });
     await samples("workbench-scroll-continuity", ACTION_SAMPLES, async (index) => {
       const documentScroller = document.querySelector<HTMLElement>(
@@ -67,9 +67,9 @@ export function InteractionSurfacesScenario() {
       gridScroller.dispatchEvent(new Event("scroll", { bubbles: true }));
       lastAction.focus();
 
-      layout.startServicesResize({ preventDefault: () => undefined, clientY: 500 });
-      document.dispatchEvent(new MouseEvent("mousemove", { clientY: 360 + index * 8 }));
-      document.dispatchEvent(new MouseEvent("mouseup", { clientY: 360 + index * 8 }));
+      layout.startDrag({ preventDefault: () => undefined, clientX: 300 });
+      document.dispatchEvent(new MouseEvent("mousemove", { clientX: 320 + index * 8 }));
+      document.dispatchEvent(new MouseEvent("mouseup", { clientX: 320 + index * 8 }));
       await waitForPackagedPaint();
 
       const documentBottom = documentScroller.scrollHeight
@@ -86,7 +86,7 @@ export function InteractionSurfacesScenario() {
   });
 
   return (
-    <BenchmarkSurface title="Interactions · 1,000-node ERD · grid and Services resize">
+    <BenchmarkSurface title="Interactions · 1,000-node ERD · grid and sidebar resize">
       <div className="tw:flex tw:min-h-0 tw:flex-1">
         {surface === "erd" ? (
           <div className="tw:flex tw:min-h-0 tw:flex-1 tw:flex-col">
@@ -100,15 +100,8 @@ export function InteractionSurfacesScenario() {
           </div>
         ) : (
           <>
-            <div className="tw:flex tw:min-h-0 tw:w-1/2 tw:flex-col tw:border-r tw:border-border-subtle">
+            <div style={{ width: layout.width }} className="tw:flex tw:min-h-0 tw:shrink-0 tw:flex-col tw:border-r tw:border-border-subtle">
               <DataGrid result={result} surface="workbench" />
-              <div
-                className="tw:relative tw:shrink-0 tw:border-t tw:border-border-subtle tw:bg-card"
-                style={{ height: layout.servicesHeight }}
-              >
-                <div className="tw:absolute tw:-top-1 tw:h-2 tw:w-full tw:cursor-row-resize" />
-                <span className="tw:p-3 tw:text-sm">Services</span>
-              </div>
             </div>
             <WorkbenchScrollBody aria-label="Scrollable workbench document">
               <div className="tw:flex tw:shrink-0 tw:flex-col tw:gap-2 tw:p-3">

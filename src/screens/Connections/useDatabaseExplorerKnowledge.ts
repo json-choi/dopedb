@@ -99,6 +99,7 @@ export function useDatabaseExplorerKnowledge({
         queryFn: () => listAnalysisArticles(environmentId),
         enabled:
           sharedWorkspace &&
+          activeEnvironmentView === "analyses" &&
           projectId !== undefined &&
           (expandedResourceKeys.has(projectResourceKey(projectId, "analyses")) ||
             (activeEnvironmentId === environmentId &&

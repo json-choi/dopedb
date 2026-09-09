@@ -20,7 +20,7 @@ export type WorkbenchDocument =
   | {
       id: string;
       connectionId: string;
-      kind: "welcome" | "schema" | "activity";
+      kind: "welcome" | "schema" | "activity" | "results";
     }
   | {
       id: string;
@@ -51,7 +51,7 @@ let sequence = 0;
 
 export function stableDocument(
   connectionId: string,
-  kind: "welcome" | "schema" | "activity",
+  kind: "welcome" | "schema" | "activity" | "results",
 ): WorkbenchDocument {
   return { id: `${connectionId}:${kind}`, connectionId, kind };
 }

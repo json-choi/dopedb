@@ -274,7 +274,7 @@ export function useAppShellWorkbenchController({
   }
 
   function openStableDocument(
-    kind: "schema" | "activity",
+    kind: "schema" | "activity" | "results",
     closeMobileExplorer = true,
   ) {
     if (!selected) return;
@@ -489,6 +489,15 @@ export function useAppShellWorkbenchController({
         newQuery: () => void openQueryDocument(),
         openQuery: openQueryDocument,
         openTable,
+        openResults: (connectionId: string) => {
+          if (!connections.some((connection) => connection.id === connectionId)) return;
+          const document = stableDocument(connectionId, "results");
+          if (selectedId !== connectionId) {
+            workbench.prime(document);
+            setSelectedId(connectionId);
+          }
+          activateDocument(document);
+        },
         openStable: openStableDocument,
         restoreDraft: publishWorkbenchDraft,
         setTitle: setActiveQueryTitle,

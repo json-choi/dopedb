@@ -109,7 +109,7 @@ export function IdeStatusBarSurface({
 }) {
   return (
     <footer
-      className="tw:col-[1/-1] tw:row-start-4 tw:z-[var(--ds-z-sticky)] tw:flex tw:h-status-bar tw:min-w-0 tw:items-center tw:overflow-hidden tw:border-t tw:border-border-subtle tw:bg-card tw:text-xs tw:leading-none tw:text-muted-foreground tw:max-[561px]:row-start-3"
+      className="tw:col-[1/-1] tw:row-start-3 tw:z-[var(--ds-z-sticky)] tw:flex tw:h-status-bar tw:min-w-0 tw:items-center tw:overflow-hidden tw:border-t tw:border-border-subtle tw:bg-card tw:text-xs tw:leading-none tw:text-muted-foreground"
       aria-label={label}
     >
       {breadcrumbs}

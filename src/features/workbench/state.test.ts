@@ -280,6 +280,18 @@ describe("workbench state ownership", () => {
     expect(second.documents).toHaveLength(1);
     expect(second.activeDocumentId).toBe(query.id);
 
+    // Result documents remain reachable after closing their originating editor.
+    const results = stableDocument("db-1", "results");
+    const withResults = workbenchReducer(second, { type: "activate", document: results });
+    const editorClosed = workbenchReducer(withResults, {
+      type: "close", id: query.id, connectionId: "db-1", fallbackKind: "welcome",
+    });
+    expect(editorClosed.documents).toEqual([results]);
+    expect(editorClosed.activeDocumentId).toBe(results.id);
+    const reopenedResults = workbenchReducer(editorClosed, { type: "activate", document: results });
+    expect(reopenedResults.documents).toHaveLength(1);
+    expect(workbenchReducer(reopenedResults, { type: "reset" })).toEqual(emptyWorkbenchState);
+
     seedWorkbenchDraft(query.id, query.draft ?? "");
     publishWorkbenchDraft(query.id, "SELECT 42;");
     expect(readWorkbenchDraft(query.id, "SELECT 0;")).toBe("SELECT 42;");

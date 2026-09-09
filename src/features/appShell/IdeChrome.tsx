@@ -43,7 +43,6 @@ export function IdeTopBar({
   supportsSql,
   leftPanelOpen,
   localHistoryOpen,
-  servicesOpen,
   agentDockOpen,
   actionSearchOpen,
   settingsOpen,
@@ -52,7 +51,6 @@ export function IdeTopBar({
   onNewQuery,
   onToggleLeftPanel,
   onToggleLocalHistory,
-  onToggleServices,
   onToggleAgent,
   agentButtonRef,
   actionSearchButtonRef,
@@ -63,7 +61,6 @@ export function IdeTopBar({
   supportsSql: boolean;
   leftPanelOpen: boolean;
   localHistoryOpen: boolean;
-  servicesOpen: boolean;
   agentDockOpen: boolean;
   actionSearchOpen: boolean;
   settingsOpen: boolean;
@@ -72,7 +69,6 @@ export function IdeTopBar({
   onNewQuery: () => void;
   onToggleLeftPanel: () => void;
   onToggleLocalHistory: () => void;
-  onToggleServices: () => void;
   onToggleAgent: () => void;
   agentButtonRef: RefObject<HTMLButtonElement | null>;
   actionSearchButtonRef: RefObject<HTMLButtonElement | null>;
@@ -118,7 +114,6 @@ export function IdeTopBar({
           icon="moreHorizontal"
           label={t("ide.action.more")}
         >
-          <ToolbarMenuItem icon="list" onClick={onToggleServices} aria-pressed={servicesOpen}>{t("services.title")}</ToolbarMenuItem>
           <ToolbarMenuItem
             icon={localHistoryOpen ? "check" : "history"}
             disabled={!localHistoryOpen && (!selected || !supportsSql)}

@@ -162,7 +162,7 @@ export function KnowledgeProjectTree(props: KnowledgeProjectTreeProps) {
         selected={activeEnvironmentBelongsToProject && !expanded}
         actions={(
           <TreeRowActions>
-            <Button
+            {props.activeView !== "analyses" ? <Button
               iconOnly
               size="tree"
               variant="ghost"
@@ -173,7 +173,7 @@ export function KnowledgeProjectTree(props: KnowledgeProjectTreeProps) {
               onClick={onAddEnvironment}
             >
               <Icon name="plus" />
-            </Button>
+            </Button> : null}
             <ToolbarMenu
               icon="moreVertical"
               label={t("connections.projectMenu")}
@@ -517,6 +517,7 @@ function KnowledgeProjectResources({
 
       </> : null}
 
+      {activeView === "analyses" ? <>
       <TreeSectionButton
         expanded={analysisExpanded}
         icon="chart"
@@ -531,7 +532,7 @@ function KnowledgeProjectResources({
           openProjectResource("analyses");
         }}
       >
-        {t("connections.environmentAnalyses")}
+        {t("analysis.navigation")}
       </TreeSectionButton>
       {analysisExpanded ? (
         <div className="tw:grid tw:border-l tw:border-border-subtle tw:pl-1">
@@ -597,6 +598,7 @@ function KnowledgeProjectResources({
           ) : null}
         </div>
       ) : null}
+      </> : null}
     </div>
   );
 }

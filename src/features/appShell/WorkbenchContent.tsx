@@ -16,6 +16,8 @@ import {
   type ConnectionLaunchPreset,
 } from "../connections/presets";
 import type { KnowledgeEnvironmentFocus } from "../knowledge/domain";
+import QueryResultsPane from "../queryServices/QueryResultsPane";
+import type { QueryServiceStore } from "../queryServices/store";
 import type { QueryServiceSession } from "../queryServices/domain";
 import type { SqlResolveMode } from "../queries/resolveMode";
 import { effectiveSafetySettings } from "../safetySettings/policy";
@@ -83,6 +85,7 @@ type WorkbenchContentCommands = {
   route: {
     closeSettings: () => void;
     closeSurface: () => void;
+    openSafety: (connectionId: string) => void;
   };
   connections: {
     retry: () => void;
@@ -118,12 +121,12 @@ type WorkbenchContentCommands = {
     setResolveMode: (value: SqlResolveMode) => void;
     persisted: (document: SqlDocument) => void;
     openTable: (connection: ConnectionProfile, table: CatalogTable) => void;
-    openStable: (kind: "schema" | "activity") => void;
+    openStable: (kind: "schema" | "activity" | "results") => void;
     loadSql: (sql: string) => Promise<void>;
   };
   queryServices: {
     updateSession: (session: QueryServiceSession) => void;
-    show: (sessionId: string) => void;
+    store: QueryServiceStore;
   };
   update: {
     refresh: () => Promise<void>;
@@ -374,9 +377,17 @@ function WorkbenchContentResolved({ model, commands }: Props) {
             recovered={activeDocument.recovered}
             onPersisted={commands.documents.persisted}
             onQueryServiceSessionChange={commands.queryServices.updateSession}
-            onShowQueryServices={commands.queryServices.show}
+            resultStore={commands.queryServices.store}
+            onOpenResults={() => commands.documents.openStable("results")}
+            onOpenSafety={commands.route.openSafety}
             onOpenHistory={() => commands.documents.openStable("activity")}
             onRetrySafety={commands.safety.refresh}
+          />
+        ) : activeDocument.kind === "results" ? (
+          <QueryResultsPane
+            store={commands.queryServices.store}
+            connection={selected}
+            onOpenSafety={commands.route.openSafety}
           />
         ) : activeDocument.kind === "documents" ? (
           <Documents

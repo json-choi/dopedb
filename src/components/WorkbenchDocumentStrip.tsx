@@ -46,6 +46,7 @@ export default function WorkbenchDocumentStrip({
     if (document.kind === "welcome") return t("onboarding.title");
     if (document.kind === "schema") return t("tabs.schema");
     if (document.kind === "activity") return t("tabs.activity");
+    if (document.kind === "results") return t("sql.executionResults");
     if (document.kind === "documents") return `${t("tabs.documents")} ${index + 1}`;
     if (document.kind === "sql") {
       const title = document.title || `${t("tabs.sql")} ${index + 1}`;
@@ -55,7 +56,7 @@ export default function WorkbenchDocumentStrip({
   }
 
   function icon(document: WorkbenchDocument): IconName {
-    if (document.kind === "data") return "table";
+    if (document.kind === "data" || document.kind === "results") return "table";
     if (document.kind === "welcome") return "gear";
     if (document.kind === "schema") return "grid";
     if (document.kind === "activity") return "chart";

@@ -2,7 +2,7 @@
 
 DopeDB의 UI/UX는 제품 작업 흐름, 접근성, 지원 플랫폼 동작을 정본으로 한다.
 app chrome, tool window, document tab, toolbar, data editor, query console,
-Services와 status bar는 이 문서의 제품 소유 구조·밀도·상호작용을 따른다.
+결과 문서와 status bar는 이 문서의 제품 소유 구조·밀도·상호작용을 따른다.
 안전 승인·감사 기능도 같은 UI 문법 안에서 확장한다.
 
 DopeDB는 Tailwind CSS v4를 화면 배치의 기본 도구로 사용한다. Tailwind는 별도
@@ -114,7 +114,7 @@ packaged runtime 증거가 아니다.
   경로만 사용하지 않아 empty PostgreSQL schema도 선택할 수 있어야 한다.
   PostgreSQL/MySQL의 다른 database는 별도 pool과 catalog identity가 구현되기
   전까지 현재 database 아래의 가짜 node로 추가하지 않는다.
-- tool window는 좌·우·하단 anchor, tab stack, resize와 persistence를 공유하는
+- tool window는 좌·우 anchor, tab stack, resize와 persistence를 공유하는
   하나의 layout 문법으로 구현한다.
 - Database Explorer는 별도 제목 header나 누적 section header를 두지 않고 한 개의
   compact command strip만 사용한다. 고정 action은 Project 추가(`folderPlus`),
@@ -279,8 +279,8 @@ Elevation은 세 단계만 허용한다.
 - query toolbar는 정상 autosave 완료 아이콘을 상시 반복하지 않는다. 저장 중,
   미저장, conflict, 실패처럼 사용자가 알아야 하는 예외 상태만 schema selector
   뒤의 status slot에 표시하고, 실행 결과는 editor inline marker가 소유한다.
-- `IdeToolTabStrip`, `IdeToolTab`: Services 같은 tool window의 tab row와
-  둥근 selected capsule. 일반 document 전환은 40px `document`, Services처럼
+- `IdeToolTabStrip`, `IdeToolTab`: 중앙 결과 문서의 tab row와
+  둥근 selected capsule. 일반 document 전환은 40px `document`, 결과처럼
   36px command row와 나란히 놓이는 tab은 `compact` density를 사용한다. 다중
   결과 tab이 가용 폭을 넘으면 strip 안에서 수평 이동하고 바깥 pane을
   밀어내지 않는다. horizontal roving keyboard 규칙은 `IdeTab`과 동일하다.
@@ -288,7 +288,7 @@ Elevation은 세 단계만 허용한다.
   icon geometry, tone, active/expanded state를 semantic prop으로 소유한다.
   popup 내부 full-width action은 화면별 class를 만들지 않고
   `presentation="menuItem"`을 사용한다.
-- `ResizeSeparator`: shell sidebar, Services 높이, data-grid column이 공유하는
+- `ResizeSeparator`: shell sidebar와 data-grid column이 공유하는
   keyboard/pointer resize 경계. 실제 dimension과 min/max/now ARIA를 연결하고,
   방향키의 bounded step, Home/End 경계 이동, double-click reset을 소유한다.
   저장과 pointer drag lifecycle은 각 feature의 기존 state owner가 유지한다.
@@ -303,7 +303,7 @@ Elevation은 세 단계만 허용한다.
 - `ManualTransactionControls`: query/data toolbar가 공유하는 feature composition.
   `WorkbenchButton`만 합성해 Auto/Manual/failed 상태와 commit/rollback command를
   같은 밀도로 표시하며 화면별 Tx utility나 style map을 만들지 않는다.
-- `ProgressBar`: 업데이트 다운로드, Services 작업, 결과 내보내기가 공유하는
+- `ProgressBar`: 업데이트 다운로드, 쿼리 작업, 결과 내보내기가 공유하는
   determinate/indeterminate 진행률 primitive. `default`와 `compact` 밀도만
   허용하고 화면별 track/fill utility나 임의 최소 진행률을 다시 만들지 않는다.
 - `RenderRecoveryBoundary`: Markdown, diagram, provider payload처럼 선택적인
@@ -492,14 +492,14 @@ Elevation은 세 단계만 허용한다.
   않고 document tab, context toolbar, status bar에 나눠 표시한다. SQL 문서
   제목은 tab을 더블 클릭해 편집한다. SQL schema selector는 catalog에서 발견한
   namespace만 표시하는 compact native control이며, 선택값을 문서에 영속하고
-  Explain/read/write/script 실행과 status/Services projection이 같은 값을
+  Explain/read/write/script 실행과 status/result projection이 같은 값을
   사용한다. `선택 스키마 사용`/`스크립트 변경 반영` resolve mode도 같은
   `WorkbenchSelect`를 사용하고
   문서에 영속하며, SQL editor의 engine dialect와 caret 기준 schema completion
   context를 바꾼다. selector를 위해 feature CSS나 style map을 만들지 않는다.
   SQL 실행 상태는 실행 당시 document snapshot과 정확한 CodeMirror source
   range가 현재 문서에 그대로 남아 있을 때만 문장 끝 inline widget으로
-  표시한다. 성공 duration과 running/waiting/failed/cancelled label은 Services와
+  표시한다. 성공 duration과 running/waiting/failed/cancelled label은 결과 문서와
   같은 lifecycle projection을 사용한다. 동일한 SQL이 여러 번 있어도 단순
   문자열 검색으로 첫 occurrence에 붙이지 않으며, widget은 정적 Tailwind
   utility와 semantic token만 사용한다.
@@ -527,8 +527,8 @@ DopeDB의 실제 작업 흐름과 접근성, supported viewport를 위한 제품
 - Explorer와 Local History는 같은 왼쪽 anchor를 쓰되 서로 다른 저장 폭을
   가진다. AI Chat도 오른쪽 anchor 폭을 별도로 저장해 한 tool window의 수동
   resize가 다른 종류의 기본 비율을 훼손하지 않게 한다.
-  supported desktop viewport의 Explorer/center/Agent 3분할에 맞춰 Explorer와
-  Agent의 desktop 기본 폭은 396px이다. 검수된
+  supported desktop viewport의 Explorer/center/Agent 3분할에 맞춰 Explorer 기본 폭은
+  296px, Agent의 desktop 기본 폭은 396px이다. 검수된
   `1385×918` AI Chat 상세 참조처럼 약 595px까지 넓힌 값도
   `agentDockWidth`에 독립 저장한다.
   열린 왼쪽 tool window와 중앙 workbench의 420px, pane gutter를 먼저 예약하고
@@ -543,9 +543,8 @@ DopeDB의 실제 작업 흐름과 접근성, supported viewport를 위한 제품
   상태는 desktop 선호 폭을 소유하고 shell projection만 현재 viewport에 맞춰
   clamp한다. 따라서 compact viewport에서 처음 mount되거나 왕복해도 저장된
   desktop 폭과 다음 desktop projection은 변경되지 않는다.
-- Services 기본 높이는 동일 상태 참조처럼 viewport의 33%로 시작하고, 사용자가
-  조절한 높이는 독립 저장한다. 이전 고정 기본값 280/284px만 새 비율로 한 번
-  이관하며 다른 수동 높이는 보존한다.
+- Shell은 title toolbar, 중앙 작업 영역, status bar의 세 행만 사용한다. 하단 Services
+  panel·보조 보기·resize·표시 상태 저장은 제공하지 않는다.
 - Local History header는 선행 뒤로 버튼과 제목 하나를 표시한다. 뒤로 버튼과
   상단 Local History 메뉴 재선택은 같은 왼쪽 anchor의 Explorer로 복귀한다.
   Explorer는 숨겨 둔 채 검색·펼침·스크롤 상태를 보존하고, 복귀 시 tree의
@@ -554,10 +553,10 @@ DopeDB의 실제 작업 흐름과 접근성, supported viewport를 위한 제품
   같은 복귀 경로를 사용한다. 실제 revision 복원 action은 검색/필터 문맥과
   같은 command row에 둔다. project external-change 기능이 생기기 전에는 빈 file
   tree나 가짜 view action을 추가하지 않는다.
-- Services는 tool window 이름과 닫기 action을 전체 폭 `ToolWindowHeader`가
-  소유한다. 그 아래에서 실행 가능한 database/document/session tree와
-  Output/Result tab surface를 약 `32% / 68%`로 나눈다. Schema·Activity처럼
-  query lifecycle에 속하지 않는 열린 문서는 Services tree에 투영하지 않는다.
+- `QueryResultsPane`은 SQL 문서의 SQL/결과 전환과 중앙 실행 결과 문서가 공유한다.
+  실행 기록 selector, 다중 statement 결과 tab, Output과 기존 DataGrid를 사용한다.
+  SQL 실행 중 editor/controller는 mount 상태를 유지하고 취소 action은 toolbar에 남는다.
+  shell은 result row 갱신을 구독하지 않으며 전역 상태 표시는 기존 lifecycle projection만 구독한다.
 - tabular Result는 `WorkbenchToolbar`에 현재 grid 표시, 실제 전체 셀 검색,
   복사·CSV·JSON action을 놓고 `DataGrid` 아래 고정 footer에
   visible/filtered row count와 duration을 표시한다. 다른 제품에 보인다는 이유만으로
@@ -580,8 +579,9 @@ DopeDB의 실제 작업 흐름과 접근성, supported viewport를 위한 제품
   fullscreen projection만 `aria-modal="true"`, background `inert`, 공용 topmost
   modal focus·Tab·Escape 계약을 사용한다. 두 projection은 실제 opener를
   복원하고, 위에 열린 popup과 nested modal의 Escape를 먼저 소비하게 한다.
-- Workspace Explorer는 `Project → Databases / Data sources / Analyses`를 실제
-  folder hierarchy로 표시한다. Environment는 exact grant와 binding identity로
+- Workspace Explorer는 Databases에서 `Project → Databases / Data sources`, Articles에서
+  `Project → Articles`를 표시한다. 두 탐색 범위는 배타적이며 Databases 안에 분석
+  folder나 Article을 중복 표시하지 않는다. Article 조회와 검색도 Articles 진입에서만 활성화한다. Environment는 exact grant와 binding identity로
   유지하지만 Project 아래에 별도 folder를 만들지 않는다. `Databases`는 Project의
   모든 Environment binding을 한 목록으로 투영하고 DB row에만 해당 Environment의
   neutral badge를 표시한다. `Data sources`는 GitHub와 Local Folder source binding을,
@@ -663,7 +663,7 @@ DopeDB의 실제 작업 흐름과 접근성, supported viewport를 위한 제품
   divider surface에 두며 feature 전용 CSS나 style map을 만들지 않는다. title과
   action row는 feature-local header/footer가 아니라 `ModalHeader`와
   `ModalFooter`가 소유한다.
-- Explain과 Services 오류는 결과 영역 안에 별도 rounded card를 만들지 않는다.
+- Explain과 쿼리 오류는 결과 영역 안에 별도 rounded card를 만들지 않는다.
   `ResultMeta`와 divider 기반의 평평한 workbench row를 사용하고 SQL/error
   원문만 monospace scroll surface로 표시한다.
 - SQL toolbar의 실행은 채움 primary button이 아니라 compact command 문법의
@@ -962,7 +962,7 @@ Tauri 최소 창 크기에서는 explorer와 main을 세로로 고정 분할하�
 분할은 header와 toolbar가 본문 높이를 모두 소비해 데이터 행을 볼 수 없게 만든다.
 
 - 560px 이하에서도 별도 product rail이나 bottom navigation을 만들지 않는다.
-  workspace, Explorer, Services, AI Chat, account, search, settings 진입은
+  workspace, Explorer, AI Chat, account, search, settings 진입은
   desktop과 같은 `IdeTitleToolbar`가 소유한다.
 - main과 열린 compact tool window는 title toolbar 아래부터 32px status bar
   바로 위까지의 전체 높이를 소유한다.

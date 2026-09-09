@@ -46,7 +46,7 @@ flowchart LR
     D4[Query · Data · Analysis]
     D5[Agent exact grant]
     D6[제안 1회 승인/거절]
-    D7[Services에서 결과 · 진행 · 취소]
+    D7[중앙 결과 · 상태 표시에서 진행과 취소]
     D0 --> D1
     D1 -- 미준비 --> D2 --> D3
     D1 -- 준비됨 --> D3
@@ -64,11 +64,11 @@ flowchart LR
 | provider 승인·managed DB 등록/복구 | Workspace Web `Providers` | Desktop은 연결 상태와 exact DB 복구 link만 표시 |
 | server backup·key rotation·retention·workspace 삭제 | Workspace Web `Workspace settings` | Desktop에는 별도 lifecycle control을 만들지 않음 |
 | member-local credential·연결 profile·연결 검사 | Desktop connection editor | Web은 credential 입력·편집을 소유하지 않음 |
-| Project binding·schema/object 탐색 | Desktop Explorer | Agent와 Services는 별도 resource tree를 만들지 않음 |
-| SQL·조회·Article 작업 | Desktop 중앙 document | Services는 결과와 실행 상태만 소유 |
+| Project binding·schema/object 탐색 | Desktop Explorer | Agent와 결과 문서는 별도 resource tree를 만들지 않음 |
+| SQL·조회·Article 작업 | Desktop 중앙 document | 실행 결과·출력도 같은 중앙 작업 영역에서 확인 |
 | Agent resource 선택·제안·승인 | Desktop Agent | 중앙 document는 Agent grant나 승인 control을 복제하지 않음 |
 | Article 공유·이메일 지정 초대 | Desktop Article의 공유 dialog와 Workspace의 Article invitation application | 기존 Access는 참여한 멤버와 DB grant의 변경·회수를 계속 소유 |
-| 실행 결과·background 진행·취소 | Desktop Services | Agent는 요약과 결과 이동만 제공 |
+| 실행 결과·background 진행·취소 | 중앙 결과 문서 및 하단 상태 표시 | Agent는 요약과 결과 이동만 제공 |
 | write 실행 상한 | Desktop `Settings → Safety` | 연결 편집기와 실행 오류는 상태와 이 화면의 link만 제공 |
 
 화면 진입 뒤에는 `현재 맥락 → 지금 할 한 작업 → 결과/복구` 순서만 둔다. 선행
@@ -98,7 +98,10 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
 - 상단은 브랜드와 검색·계정·설정, 실제 전역 command를 제공한다. Workspace 선택은
   Explorer 상단에 두고 Explorer를 숨기거나 Local History를 열면 title toolbar에
   표시한다. 각 작업 면은 해당 문맥과 document tab을 소유한다.
-- 왼쪽 Explorer는 `Project → Databases / Data sources / Analyses`의 계층과 실제
+- 왼쪽 Databases와 Articles는 서로 배타적인 탐색 범위를 소유한다. Databases에는
+  `Project → Databases / Data sources`와 미배정 연결만, Articles에는 Project별
+  Article collection만 표시한다. Databases 안에는 분석 folder나 Article을 표시하지 않는다.
+  Project·Environment·binding identity는 두 진입에서 동일하게 유지한다. Explorer는 실제
   catalog를 소유한다. 상단 도구는 Project 추가·Environment 추가·새로고침·검색 네 개만
   두고, 닫기는 헤더의 패널 토글이 소유한다. 별도 닫기와 보기 옵션 메뉴는 두지 않는다.
   활성 아이콘은 hover 시 중립 배경과 선명한 glyph로 반응하며 비활성 아이콘은 반응하지 않는다.
@@ -200,8 +203,9 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
   승인받는다. config에서 사라졌거나 권한이 바뀐 resource는 승인 control을
   비활성화한다. 이 modal은 범위를 넓히지 않으며 실행 중인 공식 CLI가 끝나면 해당
   process-bound session도 폐기한다.
-- 하단 Services surface는 실행, result, output, job, background task를 관찰하고
-  중단하는 곳이다.
+- 하단 Services 패널과 보조 보기는 제공하지 않는다. SQL 문서는 SQL/결과를 전환하며
+  실행 중에도 editor와 controller를 유지한다. 중앙 실행 결과 문서는 같은 연결의 보존된
+  결과·출력·다중 statement를 열고, 하단 상태 표시가 background 진행·취소를 소유한다.
 - status surface는 현재 database/source/schema/object, transaction과 background
   상태를 보여주되 이미 document가 소유한 설명을 반복하지 않는다.
 - Workspace Web은 Desktop의 보조 관리면이다. 최상위 목적지는
@@ -306,7 +310,7 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
 | ID | 기능 | 결정 | 제품 계약 |
 | --- | --- | --- | --- |
 | PD-01 | Version Control | `범위 밖` | 일반 project VCS는 DB 접근 workspace의 책임이 아니다. |
-| PD-02 | 자유 dock/move/detach | `구현 안 함` | left/right/bottom 고정 anchor와 resize를 유지한다. |
+| PD-02 | 자유 dock/move/detach | `구현 안 함` | left/right 고정 anchor와 resize를 유지한다. |
 | PD-03 | project Local History | `범위 밖` | SQL document revision만 제품이 소유한다. |
 | PD-04 | manual transaction | `구현` | query, table edit, Agent의 명시적 단일 write-target DB가 같은 물리 세션과 commit/rollback 경계를 공유한다. |
 | PD-05 | structured Agent conversation | `구현` | 공식 ACP adapter와 로컬 CLI 로그인을 사용하고 앱은 provider token이나 login UI를 소유하지 않는다. |
@@ -315,7 +319,7 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
 | PD-08 | 범용 cloud resource browser | `구현 안 함` | 연결 onboarding 중 검증된 target selector만 허용한다. |
 | PD-09 | multi-database introspection | `구현` | Explorer, query, data editor와 Agent가 같은 정확한 database scope를 사용한다. |
 | PD-10 | background task model | `구현` | SQL, 승인, ACP turn, import/export Job을 관찰하고 실제 backend cancel로 중단한다. |
-| PD-11 | Services session command bar | `구현 안 함` | tree toggle과 document/session 활성화만 유지한다. |
+| PD-11 | 하단 Services 패널 및 보조 보기 | `구현 안 함` | 하단 패널·실행 트리·토글·resize를 제거한다. 결과와 출력은 중앙 SQL 문서 및 결과 문서가, 진행·취소는 기존 상태 표시가 소유한다. |
 | PD-12 | result의 광범위한 IDE command set | `구현 안 함` | bounded inspect/copy/export를 유지하고 재조회는 SQL이나 Agent가 소유한다. |
 | PD-13 | Local History compare/navigation | `구현 안 함` | SQL revision 선택·검색·복원만 제공한다. |
 | PD-14 | inline AI editor assistance | `구현 안 함` | Project-resource-pinned Agent와 명시적 SQL context attachment가 소유한다. |

@@ -83,7 +83,7 @@ export function DatabaseExplorerToolbar({
         >
           <Icon name="folderPlus" />
         </Button>
-        <Button
+        {activeEnvironmentView !== "analyses" ? <Button
           iconOnly
           size="xs"
           variant="ghost"
@@ -93,7 +93,7 @@ export function DatabaseExplorerToolbar({
           aria-label={t("connections.addEnvironment")}
         >
           <Icon name="plus" />
-        </Button>
+        </Button> : null}
         <Button
           iconOnly
           size="xs"
@@ -105,7 +105,7 @@ export function DatabaseExplorerToolbar({
         >
           <Icon name="refresh" />
         </Button>
-        <Button
+        {activeEnvironmentView !== "analyses" ? <Button
           iconOnly
           size="xs"
           variant="ghost"
@@ -117,10 +117,10 @@ export function DatabaseExplorerToolbar({
           aria-pressed={searchOpen}
         >
           <Icon name="search" />
-        </Button>
+        </Button> : null}
       </div>
 
-      {connections.length > 0 && searchOpen ? (
+      {activeEnvironmentView !== "analyses" && connections.length > 0 && searchOpen ? (
         <ToolWindowSearchRow>
           <div className="tw:min-w-0 tw:flex-1">
             <TreeSearch
