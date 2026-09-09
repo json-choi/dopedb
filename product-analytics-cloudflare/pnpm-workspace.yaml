@@ -5,3 +5,7 @@ allowBuilds:
 
 minimumReleaseAge: 1440
 minimumReleaseAgeStrict: true
+
+# GHSA-rgj7-g3m4-5g8c: use the patched libheif binary shipped by sharp.
+overrides:
+  'sharp@<0.35.4': 0.35.4
