@@ -10,8 +10,6 @@ export const downloadUrls = {
 };
 export const siteUrl = "https://dopedb.dev";
 // Keep in sync with the required local tools in docs/PROJECT.md#development.
-export const buildToolchain = "Rust 1.94+ · Node.js 24 · pnpm 11.25.0";
-
 export type Lang = "en" | "ko";
 
 export const workspaceUrls: Record<Lang, string> = {
@@ -45,26 +43,21 @@ export const homeCopy = {
       "reduced": "System reduced motion is enabled",
       "scroll": "Next, your actual workspace",
       "desktopTitle": "Where you meet your data.",
-      "desktopBody": "Inspect schemas, review your agent’s proposal,\nand check results in one desktop workspace.",
+      "desktopBody": "Inspect schemas · approve changes · review results.",
       "desktopLabel": "Actual app · DopeDB 0.4.21",
       "desktopSample": "Demo SQLite · public sample data",
       "enlarge": "Enlarge the screenshot",
       "close": "Close",
       "imageDialog": "Actual DopeDB screenshot, enlarged",
-      "detailOne": "Connections and policies are shared",
-      "detailTwo": "Credentials stay individual",
-      "detailThree": "Run and review from Desktop",
       "flowLabel": "02 / INSIDE YOUR ORBIT",
       "flowTitle": "Room to explore.\nA precise boundary.",
-      "flowBody": "Choose what your agent can access before it starts. Walk through four steps to see where DopeDB draws the line.",
+      "flowBody": "Choose resources, then approve the proposed SQL.",
       "demoNotice": "Illustrative demo · No database connection or SQL execution.",
-      "faqLabel": "03 / BUILT ON CLEAR BOUNDARIES",
-      "faqTitle": "Good questions.\nClear answers.",
-      "faqBody": "Know exactly what is shared, what stays local, and who can approve a change.",
+      "faqLabel": "03 / FAQ",
+      "faqTitle": "Questions,\nanswered.",
       "docs": "Product boundaries and project docs",
-      "ready": "YOUR NEXT ORBIT STARTS HERE",
       "downloadTitle": "Try one real connection.\nThe account can wait.",
-      "downloadBody": "Start in Personal without signing in. Sign in to a workspace when you need shared connections or managed access.",
+      "downloadBody": "Personal needs no sign-in. Sign in for team sharing or managed access.",
       "install": "Before you install",
       "alpha": "Alpha · Verify least privilege and recovery before touching production.",
       "privacy": "Privacy",
@@ -88,7 +81,7 @@ export const homeCopy = {
         },
         {
           "question": "Can an Agent approve the write it just wrote?",
-          "answer": "No. Risky SQL becomes an immutable proposal. A human approves the exact payload in Desktop before the operation can proceed."
+          "answer": "No. A person must approve the proposed SQL in Desktop before it runs."
         },
         {
           "question": "If DopeDB goes down, do we lose our database?",
@@ -100,7 +93,7 @@ export const homeCopy = {
         },
         {
           "question": "Can I use Claude or Codex from my terminal?",
-          "answer": "Yes. Install the matching dopedb command from Desktop Settings, then run dopedb agent init in your Project. Each dopedb agent start shows the exact selected resources for Desktop approval before launching your official, locally authenticated CLI."
+          "answer": "Yes. Each run asks Desktop to approve the selected resources, then starts your locally authenticated official CLI."
         },
         {
           "question": "Can I use it in production today?",
@@ -116,7 +109,6 @@ export const homeCopy = {
       "chooseMac": "Choose your Mac build",
       "chooseDesktop": "Choose a desktop build",
       "source": "Build from source",
-      "sourceNote": `Building from source needs ${buildToolchain}.`,
       "windows": "Windows x64",
       "macApple": "macOS Apple Silicon",
       "macIntel": "macOS Intel",
@@ -158,26 +150,21 @@ export const homeCopy = {
       "reduced": "시스템 동작 줄이기 사용 중",
       "scroll": "이제, 실제 작업 화면으로",
       "desktopTitle": "당신의 데이터에 닿는 곳.",
-      "desktopBody": "스키마를 확인하고, Agent의 제안을 검토하고,\n결과를 살펴보는 하나의 Desktop.",
+      "desktopBody": "스키마 확인 · 변경 승인 · 결과 검토",
       "desktopLabel": "실제 앱 화면 · DopeDB 0.4.21",
       "desktopSample": "Demo SQLite · 공개 샘플 데이터",
       "enlarge": "화면 크게 보기",
       "close": "닫기",
       "imageDialog": "DopeDB 실제 화면 확대",
-      "detailOne": "공유하는 것은 연결과 정책",
-      "detailTwo": "인증정보는 구성원별로",
-      "detailThree": "실행과 결과 확인은 Desktop에서",
       "flowLabel": "02 / INSIDE YOUR ORBIT",
       "flowTitle": "가능성은 넓게.\n권한은 정확하게.",
-      "flowBody": "Agent가 무엇을 할 수 있는지, 시작 전에 정하세요. 네 단계를 직접 눌러보면 DopeDB의 작업 경계를 이해할 수 있습니다.",
+      "flowBody": "리소스를 고르고, 제안된 SQL을 승인해보세요.",
       "demoNotice": "설명용 데모 · 실제 DB에 연결하거나 SQL을 실행하지 않습니다.",
-      "faqLabel": "03 / BUILT ON CLEAR BOUNDARIES",
-      "faqTitle": "좋은 질문에는,\n명확한 답을.",
-      "faqBody": "멋진 약속보다 중요한 건, 어디까지 공유하고 어디서 멈추는지 아는 것.",
+      "faqLabel": "03 / FAQ",
+      "faqTitle": "자주 묻는 질문",
       "docs": "제품 경계와 프로젝트 문서",
-      "ready": "YOUR NEXT ORBIT STARTS HERE",
       "downloadTitle": "진짜 연결 하나를 넣어보세요.\n계정은 그다음입니다.",
-      "downloadBody": "Personal은 로그인 없이 시작합니다. 팀과 연결을 공유하거나 관리형 접근이 필요해질 때 워크스페이스에 로그인하세요.",
+      "downloadBody": "Personal은 로그인 없이 시작합니다. 팀 공유·관리형 접근은 로그인 후.",
       "install": "설치 전 확인",
       "alpha": "Alpha · 프로덕션 사용 전 최소 권한과 복구 흐름을 확인하세요.",
       "privacy": "개인정보처리방침",
@@ -201,7 +188,7 @@ export const homeCopy = {
         },
         {
           "question": "Agent가 자기가 만든 write를 자기가 승인할 수 있나요?",
-          "answer": "아니요. 위험한 SQL은 불변 proposal이 됩니다. 사람이 Desktop에서 exact payload를 승인해야 operation이 진행됩니다."
+          "answer": "아니요. 제안한 SQL은 사람이 Desktop에서 직접 승인해야 실행됩니다."
         },
         {
           "question": "DopeDB가 내려가면 우리 DB도 못 쓰나요?",
@@ -213,7 +200,7 @@ export const homeCopy = {
         },
         {
           "question": "터미널의 Claude나 Codex에서도 사용할 수 있나요?",
-          "answer": "네. Desktop 설정에서 버전이 같은 dopedb 명령을 설치하고 Project에서 dopedb agent init을 실행하세요. dopedb agent start를 실행할 때마다 선택한 리소스를 Desktop에서 검토한 뒤, 이미 로그인한 공식 CLI를 시작합니다."
+          "answer": "네. 실행할 때마다 Desktop에서 선택한 리소스를 승인한 뒤, 로그인된 공식 CLI를 시작합니다."
         },
         {
           "question": "지금 production에 써도 되나요?",
@@ -229,7 +216,6 @@ export const homeCopy = {
       "chooseMac": "Mac 설치 파일 선택",
       "chooseDesktop": "데스크톱 설치 파일 선택",
       "source": "소스에서 빌드",
-      "sourceNote": `소스에서 빌드하려면 ${buildToolchain}이 필요합니다.`,
       "windows": "Windows x64",
       "macApple": "macOS Apple Silicon",
       "macIntel": "macOS Intel",

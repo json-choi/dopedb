@@ -142,7 +142,6 @@ export function HomeScopeWalkthrough({
           <p className="tw:sr-only" role="status">{t("현재 단계", "Current step")}: {stages[state.phase]}</p>
 
           {state.phase === 0 && <>
-            <p className="tw:mt-3 tw:text-[13px] tw:leading-[1.8] tw:text-cream-muted">{t("한 프로젝트의 DB와 소스를 선택합니다. 이 예시의 쓰기 대상은 Demo SQLite 하나입니다.", "Select a database and source from one project. Demo SQLite is the only write target in this example.")}</p>
             <p className="tw:mt-7 tw:font-mono tw:text-[10px] tw:tracking-widest tw:text-cream-muted">PROJECT / DEMO COMMERCE</p>
             {[{
               key: "database" as const,
