@@ -40,6 +40,7 @@ import {
   ensureEnvironmentClassification,
   instanceDetails,
 } from "./gcp-cloud-bootstrap-database";
+import type { GcpDatabaseBootstrapRecoveryWriter } from "./gcp-cloud-bootstrap-recovery";
 import { configureDatabasePrivileges } from "./gcp-cloud-bootstrap-sql";
 
 export class GcpIamPropagationPendingError extends ProviderRequestError {
@@ -86,6 +87,7 @@ export async function bootstrapGcpCloudSql(input: {
   credential: GcpSetupCredential;
   oidcToken: string;
   configuration: GcpCloudBootstrapInput;
+  writeDatabaseRecovery: GcpDatabaseBootstrapRecoveryWriter;
 }): Promise<GcpCloudBootstrapResult> {
   const configuration = input.configuration;
   safeSegment(
@@ -324,6 +326,7 @@ export async function bootstrapGcpCloudSql(input: {
     writeUser: writeDatabaseUser,
     schemaUser: schemaDatabaseUser,
     fingerprint,
+    writeRecovery: input.writeDatabaseRecovery,
   });
   return {
     configuration: durableConfiguration,

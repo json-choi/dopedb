@@ -5,11 +5,14 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
-import { and, eq, gt, lt } from "drizzle-orm";
+import { and, eq, gt, isNull } from "drizzle-orm";
 import { authoritativeSession } from "../authoritative-session";
 import { db } from "../db";
 import { env } from "../env";
-import { sealProviderSetupCredential } from "../secret-envelope";
+import {
+  openProviderSetupCredential,
+  sealProviderSetupCredential,
+} from "../secret-envelope";
 import {
   providerOauthState,
   providerSetupSession,
@@ -18,7 +21,12 @@ import { authorizeWorkspace } from "../workspace-authorization";
 import {
   exchangeGcpCloudCode,
   GCP_SETUP_SESSION_SECONDS,
+  type GcpSetupCredential,
 } from "./gcp-cloud-oauth";
+import {
+  recoverDatabaseBootstrapUser,
+} from "./gcp-cloud-bootstrap-database";
+import { parseDatabaseBootstrapState } from "./gcp-cloud-bootstrap-journal";
 import { ProviderRequestError } from "./provider-types";
 import {
   localizedWorkspacePath,
@@ -41,6 +49,53 @@ function stateHash(request: Request) {
   const state = new URL(request.url).searchParams.get("state") ?? "";
   if (state.length < 32 || state.length > 256) return null;
   return createHash("sha256").update(state).digest("base64url");
+}
+
+async function reconcilePriorSetupSessions(input: {
+  organizationId: string;
+  userId: string;
+  credential: GcpSetupCredential;
+}) {
+  const expired = await db.query.providerSetupSession.findMany({
+    where: and(
+      eq(providerSetupSession.organizationId, input.organizationId),
+      eq(providerSetupSession.userId, input.userId),
+      eq(providerSetupSession.provider, "gcpCloudSql"),
+      eq(providerSetupSession.accountLabel, input.credential.email),
+      isNull(providerSetupSession.consumedAt),
+    ),
+    columns: {
+      id: true,
+      accountLabel: true,
+      encryptedCredential: true,
+    },
+    limit: 25,
+  });
+  for (const row of expired) {
+    const secret = openProviderSetupCredential<GcpSetupCredential & {
+      databaseBootstrap?: unknown;
+    }>(row.id, row.encryptedCredential);
+    const bootstrap = parseDatabaseBootstrapState(secret.databaseBootstrap);
+    if (bootstrap.lease && Date.parse(bootstrap.lease.expiresAt) > Date.now()) {
+      throw new ProviderRequestError(
+        "gcpCloudSql",
+        "Another Cloud SQL setup operation is still running",
+        409,
+      );
+    }
+    if (bootstrap.recovery) {
+      const sameAccount = row.accountLabel.toLowerCase()
+          === input.credential.email.toLowerCase()
+        && secret.email.toLowerCase() === input.credential.email.toLowerCase();
+      if (!sameAccount) continue;
+      await recoverDatabaseBootstrapUser(input.credential, bootstrap.recovery);
+    }
+    await db.delete(providerSetupSession).where(and(
+      eq(providerSetupSession.id, row.id),
+      eq(providerSetupSession.organizationId, input.organizationId),
+      eq(providerSetupSession.userId, input.userId),
+    ));
+  }
 }
 
 export async function isGcpCloudSetupCallback(request: Request) {
@@ -104,14 +159,15 @@ export async function gcpCloudSetupCallbackResponse(request: Request) {
     ));
     stage = "credential_sealing";
     const encryptedCredential = sealProviderSetupCredential(setupId, credential);
-    // Expired rows cannot be consumed because every reader checks expiresAt. Cleanup
-    // is independent housekeeping and must not use the callback transaction API,
-    // which drizzle-orm's neon-http driver deliberately does not support.
+    // A terminated Worker may have left an encrypted database-role recovery
+    // record. A fresh token from the same workspace user and Google account must
+    // compensate that mutation before an older setup row can be removed.
     stage = "expired_session_cleanup";
-    await db.delete(providerSetupSession).where(lt(
-      providerSetupSession.expiresAt,
-      new Date(),
-    ));
+    await reconcilePriorSetupSessions({
+      organizationId: oauthState.organizationId,
+      userId: session.user.id,
+      credential,
+    });
     stage = "setup_session_insert";
     await db.insert(providerSetupSession).values({
       id: setupId,

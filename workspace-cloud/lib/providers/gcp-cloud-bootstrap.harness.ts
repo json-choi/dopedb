@@ -1,7 +1,15 @@
 // Behavioral coverage of the Google response → setup readiness boundary.
 // All identities and tokens are synthetic; no cloud resources are contacted.
 import { expect, vi } from "vitest";
-import { configurePostgresPrivileges } from "./gcp-cloud-bootstrap-sql";
+import {
+  configureMysqlPrivileges,
+  configurePostgresPrivileges,
+} from "./gcp-cloud-bootstrap-sql";
+import {
+  prepareDatabaseBootstrapUser,
+  recoverDatabaseBootstrapUser,
+} from "./gcp-cloud-bootstrap-database";
+import { parseDatabaseBootstrapRecovery } from "./gcp-cloud-bootstrap-recovery";
 import { googleRequest } from "./gcp-cloud-bootstrap-core";
 import { requestGcpBootstrap } from "../../features/providerAccess/gcpBootstrapTransport";
 import { gcpJsonRequest, GcpManagedAccessRequestError } from "./gcp-cloud-managed-http";
@@ -123,6 +131,10 @@ export async function assertGcpBootstrapReadinessContract() {
 
     await assertBootstrapContinuation(pendingError);
     await assertSchemaPreflightPreservesApplications();
+    await assertDedicatedPostgresRolesAreNormalized();
+    await assertDedicatedMysqlPrivilegesAreNormalized();
+    await assertDatabaseBootstrapRecoveryIsDurableBeforeElevation();
+    await assertDatabaseBootstrapRecoveryPreservesConcurrentRoles();
 
     // Setup API diagnostics retain categorical causes, never the role name,
     // token, SQL, or Google response body that carried them.
@@ -146,6 +158,154 @@ export async function assertGcpBootstrapReadinessContract() {
     log.mockRestore();
     vi.useRealTimers();
   }
+}
+
+async function assertDedicatedMysqlPrivilegesAreNormalized() {
+  const statements: string[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+    const url = new URL(String(input));
+    if (url.pathname.endsWith("/executeSql") && init?.method === "POST") {
+      const request = JSON.parse(String(init.body));
+      statements.push(request.sqlStatement);
+      return Response.json({ results: [{ status: { code: 0 } }] });
+    }
+    throw new Error(`Unexpected MySQL fixture request: ${url.origin}`);
+  }));
+  await configureMysqlPrivileges({
+    executor: { accessToken: "fixture-token", email: "admin@dopedb.dev",
+      expiresAt: new Date(Date.now() + 60_000).toISOString() },
+    projectId: "dopedb-fixture",
+    instanceId: "workspace-db",
+    databases: ["workspace"],
+    readUser: { name: "fixture-read", host: "%" },
+    writeUser: { name: "fixture-write", host: "%" },
+  });
+  expect(statements).toHaveLength(2);
+  expect(statements[0]).toContain("REVOKE ALL PRIVILEGES, GRANT OPTION FROM");
+  expect(statements[1]).toContain("GRANT SELECT ON `workspace`.*");
+  expect(statements[1]).toContain("GRANT SELECT, INSERT, UPDATE, DELETE");
+}
+
+async function assertDedicatedPostgresRolesAreNormalized() {
+  const updates: URL[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+    const url = new URL(String(input));
+    if (url.pathname.endsWith("/users") && init?.method === "PUT") {
+      updates.push(url);
+      return Response.json({ name: "fixture-operation", status: "DONE" });
+    }
+    if (url.pathname.endsWith("/executeSql") && init?.method === "POST") {
+      return Response.json({ results: [{ status: { code: 0 } }] });
+    }
+    throw new Error(`Unexpected role fixture request: ${url.origin}`);
+  }));
+  const setup = { accessToken: "fixture-token", email: "admin@dopedb.dev",
+    expiresAt: new Date(Date.now() + 60_000).toISOString() };
+  await configurePostgresPrivileges({ control: setup, executor: setup,
+    projectId: "dopedb-fixture", instanceId: "workspace-db", databaseVersion: "POSTGRES_17",
+    databases: ["workspace"],
+    readUser: { name: "fixture_read", type: "CLOUD_IAM_SERVICE_ACCOUNT" },
+    writeUser: { name: "fixture_write", type: "CLOUD_IAM_SERVICE_ACCOUNT" },
+    schemaUser: null,
+    bootstrapUser: { user: { name: "fixture_setup" }, created: false,
+      engine: "postgres", originalRoles: [], temporaryRoles: [] },
+    fingerprint: "fixture", writeRecovery: async () => undefined,
+  });
+  expect(updates).toHaveLength(2);
+  expect(updates.every((url) =>
+    url.searchParams.get("revokeExistingRoles") === "true"
+  )).toBe(true);
+  expect(updates.map((url) => url.searchParams.getAll("databaseRoles"))).toEqual([
+    ["pg_read_all_data"],
+    ["pg_read_all_data", "pg_write_all_data"],
+  ]);
+}
+
+async function assertDatabaseBootstrapRecoveryIsDurableBeforeElevation() {
+  const events: string[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+    const url = new URL(String(input));
+    if (url.pathname.endsWith("/users") && !init?.method) {
+      return Response.json({ items: [{
+        name: "admin@dopedb.dev",
+        type: "CLOUD_IAM_USER",
+        databaseRoles: ["baseline_role"],
+      }] });
+    }
+    if (url.pathname.endsWith("/users") && init?.method === "PUT") {
+      events.push("database-role-update");
+      return Response.json({ name: "fixture-operation", status: "DONE" });
+    }
+    throw new Error(`Unexpected journal fixture request: ${url.origin}`);
+  }));
+  const bootstrap = await prepareDatabaseBootstrapUser({
+    accessToken: "fixture-token",
+    email: "admin@dopedb.dev",
+    expiresAt: new Date(Date.now() + 60_000).toISOString(),
+  }, "dopedb-fixture", "workspace-db", "postgres", async (recovery) => {
+    events.push(recovery ? "recovery-journal" : "recovery-clear");
+  });
+  expect(events.slice(0, 2)).toEqual([
+    "recovery-journal",
+    "database-role-update",
+  ]);
+  expect(bootstrap).toMatchObject({
+    originalRoles: ["baseline_role"],
+    temporaryRoles: ["cloudsqlsuperuser"],
+  });
+}
+
+async function assertDatabaseBootstrapRecoveryPreservesConcurrentRoles() {
+  const updates: URL[] = [];
+  const transport = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+    const url = new URL(String(input));
+    if (url.pathname.endsWith("/users") && !init?.method) {
+      return Response.json({ items: [{
+        name: "admin@dopedb.dev",
+        type: "CLOUD_IAM_USER",
+        databaseRoles: [
+          "baseline_role",
+          "cloudsqlsuperuser",
+          "fixture_owner",
+          "concurrent_role",
+        ],
+      }] });
+    }
+    if (url.pathname.endsWith("/users") && init?.method === "PUT") {
+      updates.push(url);
+      return Response.json({ name: "fixture-operation", status: "DONE" });
+    }
+    throw new Error(`Unexpected recovery fixture request: ${url.origin}`);
+  });
+  vi.stubGlobal("fetch", transport);
+  const recovery = parseDatabaseBootstrapRecovery({
+    version: 1,
+    projectId: "dopedb-fixture",
+    instanceId: "workspace-db",
+    setupEmail: "admin@dopedb.dev",
+    userName: "admin@dopedb.dev",
+    userHost: "",
+    created: false,
+    engine: "postgres",
+    originalRoles: ["baseline_role"],
+    temporaryRoles: ["cloudsqlsuperuser", "fixture_owner"],
+  });
+  expect(recovery).not.toBeNull();
+  await recoverDatabaseBootstrapUser({
+    accessToken: "fixture-token",
+    email: "admin@dopedb.dev",
+    expiresAt: new Date(Date.now() + 60_000).toISOString(),
+  }, recovery!);
+  expect(updates).toHaveLength(1);
+  expect(updates[0].searchParams.get("revokeExistingRoles")).toBe("true");
+  expect(updates[0].searchParams.getAll("databaseRoles")).toEqual([
+    "baseline_role",
+    "concurrent_role",
+  ]);
+
+  expect(parseDatabaseBootstrapRecovery({ ...recovery,
+    temporaryRoles: ["baseline_role"],
+  })).toBeNull();
 }
 
 async function assertBootstrapContinuation(pendingError: GcpIamPropagationPendingError) {
@@ -236,7 +396,8 @@ async function assertSchemaPreflightPreservesApplications() {
     databases: ["isolated", "application"], readUser: { name: "fixture_read" },
     writeUser: { name: "fixture_write" }, schemaUser: { name: "fixture_schema" },
     bootstrapUser: { user: { name: "fixture_setup" }, created: true,
-      engine: "postgres", originalRoles: [] }, fingerprint: "fixture",
+      engine: "postgres", originalRoles: [], temporaryRoles: ["cloudsqlsuperuser"] },
+    fingerprint: "fixture", writeRecovery: async () => undefined,
   })).rejects.toMatchObject({ status: 409,
     message: expect.stringContaining("reviewed ownership and application-access policy") });
   expect(requests.map(request => request.database)).toEqual(["isolated", "isolated", "application"]);

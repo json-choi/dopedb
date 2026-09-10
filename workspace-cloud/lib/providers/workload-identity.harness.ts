@@ -23,9 +23,13 @@ export async function assertWorkloadIdentityContract() {
   };
   for (const [key, value] of Object.entries(configuration)) vi.stubEnv(key, value);
   try {
-    vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
-      const request = input instanceof Request ? input : new Request(input);
+    vi.stubGlobal("fetch", vi.fn(async (
+      input: string | URL | Request,
+      init?: RequestInit,
+    ) => {
+      const request = new Request(input, init);
       expect(new URL(request.url).origin).toBe(configuration.OIDC_ISSUER);
+      expect(request.redirect).toBe("manual");
       return identityMetadataResponse(request, configuration);
     }));
     const token = await issueWorkloadIdentity(configuration);

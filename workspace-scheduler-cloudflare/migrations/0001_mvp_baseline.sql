@@ -19,7 +19,7 @@ CREATE TABLE workspace_background_task (
   )
 ) WITHOUT ROWID, STRICT;
 
--- Deployment explicitly kicks both tasks after the Vercel receipt contract is
+-- Deployment explicitly kicks both tasks after the Workspace receipt contract is
 -- live. A far-future seed prevents a newly deployed Worker from touching the
 -- workspace database before that hand-off has completed.
 INSERT INTO workspace_background_task (

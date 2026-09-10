@@ -290,7 +290,7 @@ pnpm site:build
 
 Build the Cloudflare Worker with `pnpm --dir site build:cloudflare`;
 `site/wrangler.jsonc` owns its bindings. See
-[Cloudflare migration](CLOUDFLARE_MIGRATION.md) for production cutover status.
+[Cloudflare operations](CLOUDFLARE_OPERATIONS.md) for production deployment and verification.
 
 ## CI and Releases
 
