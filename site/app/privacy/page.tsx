@@ -85,7 +85,6 @@ const content: Record<"en" | "ko", {
         title: "Service providers and sharing",
         items: [
           "Cloudflare hosts and secures the public website, Workspace application, background coordinator, and workload identity service. Its D1 database stores account and workspace records, including encrypted integration and backup records. It stores closed public website events in Analytics Engine and may process request and security metadata. Policy: https://www.cloudflare.com/privacypolicy/.",
-          "Vercel Inc. previously hosted the website and Workspace application. Prior hosting records and website analytics may remain until their applicable retention or deletion cycle; new production requests are served by Cloudflare. Contact: privacy@vercel.com; policy: https://vercel.com/legal/privacy-notice.",
           "Sentry provides production Desktop error diagnostics through its United States ingest service. It receives only the sanitized error projection described above. Policy: https://sentry.io/privacy/.",
           "Cloudflare hosts the dedicated product-analytics Worker and an EU-jurisdiction D1 database only after Desktop opt-in. DopeDB's first-party relay sends the closed event projection without the original client IP. Policy: https://www.cloudflare.com/privacypolicy/.",
           "Neon, LLC (Neon) previously stored account and workspace records in PostgreSQL. Restricted recovery copies remain during migration cleanup; the active Workspace database is Cloudflare D1. Contact: privacy@neon.tech; policy: https://neon.com/privacy-policy.",
@@ -216,7 +215,6 @@ const content: Record<"en" | "ko", {
         title: "처리 위탁과 정보 제공",
         items: [
           "Cloudflare는 공개 웹사이트, 워크스페이스 앱, 백그라운드 작업 조정과 워크로드 신원 서비스를 호스팅하고 보호합니다. D1 데이터베이스에 계정·워크스페이스 레코드와 암호화된 연동·백업 레코드를 저장합니다. 정해진 웹사이트 이벤트를 Analytics Engine에 저장하며 요청과 보안 메타데이터를 처리할 수 있습니다. 방침: https://www.cloudflare.com/privacypolicy/.",
-          "Vercel Inc.는 이전 웹사이트와 워크스페이스 앱을 호스팅했습니다. 과거 호스팅 기록과 웹사이트 분석 정보는 해당 보유 기간이나 삭제 주기까지 남을 수 있으며, 새 운영 요청은 Cloudflare에서 처리합니다. 연락처: privacy@vercel.com, 방침: https://vercel.com/legal/privacy-notice.",
           "Sentry는 미국 수집 서비스를 통해 정식 데스크톱 앱의 오류 진단을 제공합니다. 위에서 설명한 정제된 오류 정보만 수신합니다. 방침: https://sentry.io/privacy/.",
           "Cloudflare는 데스크톱에서 명시적으로 동의한 경우에만 전용 제품 분석 Worker와 EU 관할 D1 데이터베이스를 호스팅합니다. DopeDB 중계 서버는 원래 이용자의 IP 없이 폐쇄형 이벤트만 전송합니다. 방침: https://www.cloudflare.com/privacypolicy/.",
           "Neon, LLC(Neon)는 이전 계정·워크스페이스 레코드를 PostgreSQL에 저장했습니다. 이전 정리 중에는 접근을 제한한 복구 사본이 남으며, 현재 워크스페이스 데이터베이스는 Cloudflare D1입니다. 연락처: privacy@neon.tech, 방침: https://neon.com/privacy-policy.",

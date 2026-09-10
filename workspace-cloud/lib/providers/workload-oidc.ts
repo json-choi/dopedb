@@ -54,7 +54,9 @@ async function publicKey(issuer: string, kid: string) {
   const discoveryUrl = new URL(".well-known/openid-configuration", `${issuer}/`);
   const discoveryResponse = await fetch(discoveryUrl, {
     cache: "no-store",
-    redirect: "error",
+    // Workers rejects the Fetch-standard `error` mode at runtime. `manual`
+    // exposes redirects as non-ok responses, which the validation below rejects.
+    redirect: "manual",
     signal: AbortSignal.timeout(10_000),
   });
   const discoveryValue = await boundedJsonResponse(
@@ -86,7 +88,7 @@ async function publicKey(issuer: string, kid: string) {
   }
   const jwksResponse = await fetch(jwksUrl, {
     cache: "no-store",
-    redirect: "error",
+    redirect: "manual",
     signal: AbortSignal.timeout(10_000),
   });
   const jwksValue = await boundedJsonResponse(jwksResponse, MAX_JWKS_RESPONSE_BYTES)

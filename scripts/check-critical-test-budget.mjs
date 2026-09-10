@@ -23,7 +23,6 @@ const ignoredDirectories = new Set([
   ".next",
   ".open-next",
   ".wrangler",
-  ".vercel",
   "dist",
   "node_modules",
   "target",

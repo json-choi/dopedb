@@ -47,7 +47,7 @@ the IP is not written into the dataset. Browser Do Not Track and Global Privacy
 Control disable collection. Dataset points expire after three months under the
 [Analytics Engine retention limit](https://developers.cloudflare.com/analytics/analytics-engine/limits/).
 These are sampled aggregate event counts, not unique visitors or cross-session funnels.
-Production cutover status is recorded in [Cloudflare migration](CLOUDFLARE_MIGRATION.md).
+Production operations are documented in [Cloudflare operations](CLOUDFLARE_OPERATIONS.md).
 
 ## Consent contract
 

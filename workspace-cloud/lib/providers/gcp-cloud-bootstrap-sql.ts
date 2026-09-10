@@ -20,8 +20,12 @@ import {
   restoreDatabaseBootstrapUser,
   setDataApiAccess,
   setDatabaseRoles,
-  type GcpDatabaseBootstrapUser,
 } from "./gcp-cloud-bootstrap-database";
+import {
+  updateDatabaseBootstrapRecovery,
+  type GcpDatabaseBootstrapUser,
+  type GcpDatabaseBootstrapRecoveryWriter,
+} from "./gcp-cloud-bootstrap-recovery";
 import {
   gcpSchemaDatabasePolicySql,
   gcpSchemaOwnerInventorySql,
@@ -182,6 +186,7 @@ export async function configurePostgresPrivileges(input: {
   schemaUser: JsonObject | null;
   bootstrapUser: GcpDatabaseBootstrapUser;
   fingerprint: string;
+  writeRecovery: GcpDatabaseBootstrapRecoveryWriter;
 }) {
   const version = Number(/^POSTGRES_(\d+)/.exec(input.databaseVersion)?.[1] ?? "0");
   const bootstrapDatabase = input.databases.includes("postgres")
@@ -265,6 +270,14 @@ export async function configurePostgresPrivileges(input: {
         409,
       );
     }
+    await updateDatabaseBootstrapRecovery(
+      input.control,
+      input.projectId,
+      input.instanceId,
+      input.bootstrapUser,
+      temporaryRoles,
+      input.writeRecovery,
+    );
     await setDatabaseRoles(
       input.control,
       input.projectId,
@@ -280,6 +293,7 @@ export async function configurePostgresPrivileges(input: {
       input.instanceId,
       input.readUser,
       ["pg_read_all_data"],
+      true,
     );
     if (input.writeUser) {
       await setDatabaseRoles(
@@ -288,6 +302,7 @@ export async function configurePostgresPrivileges(input: {
         input.instanceId,
         input.writeUser,
         ["pg_read_all_data", "pg_write_all_data"],
+        true,
       );
     }
     if (typeof input.readUser.name !== "string") {
@@ -387,6 +402,7 @@ export async function configurePostgresPrivileges(input: {
     input.instanceId,
     input.readUser,
     [readRole],
+    true,
   );
   if (input.writeUser) {
     await setDatabaseRoles(
@@ -395,6 +411,7 @@ export async function configurePostgresPrivileges(input: {
       input.instanceId,
       input.writeUser,
       [writeRole],
+      true,
     );
   }
   if (schemaName) {
@@ -438,18 +455,40 @@ export async function configureMysqlPrivileges(input: {
       typeof user.host === "string" && user.host ? user.host : "%",
     )}`;
   };
-  for (const database of input.databases.filter(
+  const databases = input.databases.filter(
     (name) => !["information_schema", "mysql", "performance_schema", "sys"].includes(name),
-  )) {
+  );
+  if (databases.length === 0) {
+    throw new ProviderRequestError(
+      "gcpCloudSql",
+      "Cloud SQL has no database to configure",
+      409,
+    );
+  }
+  const readAccount = account(input.readUser);
+  const writeAccount = input.writeUser ? account(input.writeUser) : null;
+  // These are fingerprinted DopeDB-owned accounts. Clear stale direct grants
+  // before rebuilding the exact read/write boundary; IAM login remains intact.
+  await executeSql(
+    input.executor,
+    input.projectId,
+    input.instanceId,
+    databases[0],
+    `REVOKE ALL PRIVILEGES, GRANT OPTION FROM ${readAccount};`
+      + (writeAccount
+        ? ` REVOKE ALL PRIVILEGES, GRANT OPTION FROM ${writeAccount};`
+        : ""),
+  );
+  for (const database of databases) {
     await executeSql(
       input.executor,
       input.projectId,
       input.instanceId,
       database,
-      `GRANT SELECT ON ${mysqlIdentifier(database)}.* TO ${account(input.readUser)};`
-        + (input.writeUser
+      `GRANT SELECT ON ${mysqlIdentifier(database)}.* TO ${readAccount};`
+        + (writeAccount
           ? ` GRANT SELECT, INSERT, UPDATE, DELETE ON ${mysqlIdentifier(database)}.* TO ${
-              account(input.writeUser)
+              writeAccount
             };`
           : ""),
     );
@@ -466,6 +505,7 @@ export async function configureDatabasePrivileges(input: {
   writeUser: JsonObject | null;
   schemaUser: JsonObject | null;
   fingerprint: string;
+  writeRecovery: GcpDatabaseBootstrapRecoveryWriter;
 }) {
   const databases = input.databases;
   const details = await instanceDetails(
@@ -488,6 +528,7 @@ export async function configureDatabasePrivileges(input: {
       input.configuration.projectId,
       input.configuration.instanceId,
       input.engine,
+      input.writeRecovery,
     );
     if (input.engine === "postgres") {
       await configurePostgresPrivileges({
@@ -502,6 +543,7 @@ export async function configureDatabasePrivileges(input: {
         schemaUser: input.schemaUser,
         bootstrapUser,
         fingerprint: input.fingerprint,
+        writeRecovery: input.writeRecovery,
       });
     } else {
       await configureMysqlPrivileges({
@@ -541,6 +583,7 @@ export async function configureDatabasePrivileges(input: {
       409,
     );
   }
+  if (bootstrapUser) await input.writeRecovery(null);
   if (failure) throw failure;
   return databases;
 }

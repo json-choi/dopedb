@@ -13,14 +13,12 @@
 /product-analytics-cloudflare/.dev.vars*
 /workspace-cloud/tsconfig.tsbuildinfo
 /site/tsconfig.tsbuildinfo
-/site/.vercel
 src-tauri/target
 .DS_Store
 *.db
 src-tauri/binaries/
 src-tauri/resources/agent-runtime/node/
 src-tauri/gen/
-.vercel
 .env*.local
 /.agents
 

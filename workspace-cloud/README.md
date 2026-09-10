@@ -105,9 +105,9 @@ run `pnpm workspace:cloud:verify-deployment <worker-version-id>` from the
 repository root. It requires that exact version to receive 100% of Worker traffic
 and that `app.dopedb.dev/api/internal/deployment` return its version ID.
 An upload acknowledgment or a different production version is insufficient.
-See [the Cloudflare migration and deployment runbook](../docs/CLOUDFLARE_MIGRATION.md)
-for initial cutover, secret preservation, GCP trust conversion, and rollback.
-The checked-in Worker configuration is the target; that runbook records live rollout status.
+See [the Cloudflare operations runbook](../docs/CLOUDFLARE_OPERATIONS.md)
+for secret preservation, deployment verification, identity boundaries, and rollback.
+The checked-in Worker configuration is the production target.
 
 Due maintenance deletes at most 1,000 expired rate-limit rows per invocation, so
 retention never adds an unbounded delete to the public request path.

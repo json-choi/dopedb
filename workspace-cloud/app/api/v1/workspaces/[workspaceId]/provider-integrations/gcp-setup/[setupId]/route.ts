@@ -16,13 +16,18 @@ import {
   GcpIamPropagationPendingError,
   checkGcpSetupPermissions,
   grantTemporaryGcpSetupPermissions,
+  recoverDatabaseBootstrapUser,
   revokeTemporaryGcpSetupPermissions,
   type GcpTemporaryPermissionGrant,
 } from "../../../../../../../../lib/providers/gcp-cloud-bootstrap";
 import {
+  createDatabaseBootstrapJournal,
+  parseDatabaseBootstrapState,
+  type GcpSetupSessionSecret,
+} from "../../../../../../../../lib/providers/gcp-cloud-bootstrap-journal";
+import {
   listGcpOAuthInstances,
   listGcpOAuthProjects,
-  type GcpSetupCredential,
 } from "../../../../../../../../lib/providers/gcp-cloud-oauth";
 import { ProviderRequestError } from "../../../../../../../../lib/providers/provider-types";
 import {
@@ -72,12 +77,14 @@ async function setupCredential(
     },
   });
   if (!row) return null;
+  const secret = openProviderSetupCredential<GcpSetupSessionSecret>(
+    setupId,
+    row.encryptedCredential,
+  );
   return {
     ...row,
-    credential: openProviderSetupCredential<GcpSetupCredential>(
-      setupId,
-      row.encryptedCredential,
-    ),
+    credential: secret,
+    databaseBootstrap: parseDatabaseBootstrapState(secret.databaseBootstrap),
   };
 }
 
@@ -268,11 +275,28 @@ export async function POST(request: Request, context: RouteContext) {
   if (!oidcToken) {
     return jsonError("Workspace workload identity is not enabled for this deployment", 503);
   }
+  const databaseJournal = createDatabaseBootstrapJournal({
+    workspaceId,
+    setupId,
+    userId: authorization.session.user.id,
+    encryptedCredential: setup.encryptedCredential,
+    credential: setup.credential,
+    initialState: setup.databaseBootstrap,
+  });
   let temporaryGrant: GcpTemporaryPermissionGrant | null = null;
   try {
+    await databaseJournal.claim();
+    if (databaseJournal.recovery) {
+      await recoverDatabaseBootstrapUser(
+        setup.credential,
+        databaseJournal.recovery,
+      );
+      await databaseJournal.writeRecovery(null);
+    }
     const projects = await listGcpOAuthProjects(setup.credential);
     const project = projects.find((item) => item.id === body.projectId);
     if (!project || project.number !== body.projectNumber) {
+      await databaseJournal.release();
       return jsonError("Google Cloud project identity changed during setup", 409);
     }
     if (repairIntegrationId && !await matchesManagedGcpRepairTarget({
@@ -281,6 +305,7 @@ export async function POST(request: Request, context: RouteContext) {
       projectId: body.projectId,
       instanceId: body.instanceId,
     })) {
+      await databaseJournal.release();
       return jsonError(
         "The managed Cloud SQL repair target changed. Start repair again from the database.",
         409,
@@ -298,6 +323,7 @@ export async function POST(request: Request, context: RouteContext) {
         integrationId: targetIntegrationId,
       });
       if (activeLeaseWindow) {
+        await databaseJournal.release();
         return privateJson(
           gcpActiveDatabaseAccessConflict(
             activeLeaseWindow,
@@ -312,6 +338,7 @@ export async function POST(request: Request, context: RouteContext) {
       body.projectId,
     );
     if (permissionCheck.missing.length > 0 && !body.approveIamRoleGrant) {
+      await databaseJournal.release();
       return privateJson({
         error: "Google Cloud 자동 설정에 필요한 권한을 확인하세요.",
         code: "gcp_setup_permissions_required",
@@ -342,6 +369,8 @@ export async function POST(request: Request, context: RouteContext) {
         approveProduction: body.approveProduction,
         approveIamAuthenticationChange: body.approveIamAuthenticationChange,
       },
+      writeDatabaseRecovery: (recovery) =>
+        databaseJournal.writeRecovery(recovery),
     });
     if (temporaryGrant) {
       await revokeTemporaryGcpSetupPermissions(
@@ -350,6 +379,7 @@ export async function POST(request: Request, context: RouteContext) {
       );
       temporaryGrant = null;
     }
+    await databaseJournal.release();
     return privateJson({
       bootstrapTicket: sealProviderBootstrapTicket(
         setupId,
@@ -364,6 +394,7 @@ export async function POST(request: Request, context: RouteContext) {
       databaseUsers: result.databaseUsers,
     });
   } catch (error) {
+    let temporaryGrantCleanupFailed = false;
     if (temporaryGrant) {
       try {
         await revokeTemporaryGcpSetupPermissions(
@@ -371,11 +402,22 @@ export async function POST(request: Request, context: RouteContext) {
           temporaryGrant,
         );
       } catch {
-        return jsonError(
-          "임시 Google Cloud 설정 권한을 바로 제거하지 못했습니다. 해당 권한은 15분 뒤 자동 만료됩니다.",
-          409,
-        );
+        temporaryGrantCleanupFailed = true;
       }
+    }
+    try {
+      await databaseJournal.release();
+    } catch {
+      return jsonError(
+        "Cloud SQL 권한 복구 상태를 저장하지 못했습니다. 잠시 뒤 다시 시도하세요.",
+        409,
+      );
+    }
+    if (temporaryGrantCleanupFailed) {
+      return jsonError(
+        "임시 Google Cloud 설정 권한을 바로 제거하지 못했습니다. 해당 권한은 15분 뒤 자동 만료됩니다.",
+        409,
+      );
     }
     if (error instanceof GcpIamPropagationPendingError) {
       return privateJson({
