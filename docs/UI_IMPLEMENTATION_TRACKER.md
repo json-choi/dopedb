@@ -15,6 +15,32 @@ runtime과 성능 수치로 수행한다.
 - `missing`: 범위에는 속하지만 아직 구현하지 않음
 - `out-of-scope`: 제품 범위 결정상 화면이나 placeholder를 만들지 않음
 
+## 공개 소개 사이트
+
+- 상태: `partial` — 승인된 은하 디자인을 기존 Next.js/OpenNext 사이트에 적용했다.
+  검색 수집·실사용 Core Web Vitals 검증은 아직 하지 않았다. 운영 반영은
+  Git 푸시와 별개로 Worker 배포 및 운영 도메인의 배포 영수증 일치로 확인한다.
+- 소유자: `site/app/page.tsx`는 언어·metadata·JSON-LD,
+  `HomeSections.tsx`는 서버 본문, `GalaxyHero.tsx`는 지연 로드 장식,
+  `HomeScopeWalkthrough.tsx`는 실제 DB와 연결되지 않는 설명용 reducer를 소유한다.
+- 2026-09-10 로컬 production build 검수: 한·영 초기 HTTP HTML의 H1·FAQ 4개,
+  canonical·hreflang·OG·WebSite/SoftwareApplication JSON-LD와 정상 404를 확인했다.
+  기존 한·영 정책 문서, robots.txt, sitemap.xml은 HTTP 200을 유지한다.
+  Chrome 1440×960 및 390×844 모바일 에뮬레이션에서 가로 넘침 없이 동작하며,
+  선택 해제 시 진행 차단, 승인·거절·재시작, 이미지 dialog의 Escape/focus 복구,
+  은하 탐험·정지·Escape를 확인했다. 실제 Safari·모바일 기기 성능 검증은 남아 있다.
+- 동작 줄이기를 모의한 환경과 화면 아래로 이동한 상태에서는 GPU draw 호출이
+  증가하지 않았다. WebGL 미지원 모의 환경은 정적 canvas로 대체했고,
+  context loss 이후에도 페이지 재로딩 없이 데모 상태가 유지됐다.
+  모바일은 37,503개 입자와 DPR 1.4 상한, 데스크톱은 87,653개와 DPR 1.75 상한을
+  사용한다. 이 값은 렌더링 예산이지 FPS·검색 순위 보장이 아니다.
+- 검증: `pnpm --dir site build:cloudflare`, `pnpm build`, `pnpm test`
+  (42개), 구조·hooks·UI primitive/palette 검사 통과. 기존 Next.js의
+  middleware 명칭 폐기 예정 및 tracing/turbopack root 설정 경고는 남아 있다.
+- 재검수 시 루트 pnpm의 workspace 설치 기록 불일치가 자동 재설치를 요구했다.
+  의존성을 변경하지 않고 `pnpm_config_verify_deps_before_run=warn`으로
+  루트 build·test를 실행해 통과했다. 사이트의 독립 Cloudflare 빌드는 그대로 통과했다.
+
 ## 공용 브랜드 아이콘
 
 - 상태: `partial` — 저장소의 활성 브랜드 사용처와 생성물은 고리형 D로 통일했다.

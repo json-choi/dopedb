@@ -1,5 +1,4 @@
 // Public-site URLs and bilingual copy are the landing page's stable content contract.
-import { FileClock, Fingerprint, ShieldCheck } from "lucide-react";
 
 export const repoUrl = "https://github.com/json-choi/dopedb";
 export const releasesUrl = `${repoUrl}/releases/latest`;
@@ -21,524 +20,233 @@ export const workspaceUrls: Record<Lang, string> = {
 };
 
 export const homeCopy = {
-  en: {
-    nav: {
-      access: "Shared access",
-      boundary: "Control boundary",
-      flow: "How it works",
-      workspace: "Open workspace",
-      download: "Get the alpha",
-      github: "Open GitHub repository",
-      home: "DopeDB home",
-      skip: "Skip to main content",
+  "en": {
+    "landing": {
+      "skip": "Skip to content",
+      "productNav": "Product",
+      "flowNav": "How it works",
+      "trustNav": "FAQ",
+      "workspace": "Open team workspace",
+      "download": "Download",
+      "heroLineOne": "Before Codex",
+      "heroLineTwo": "meets prod",
+      "heroSuffix": ".",
+      "heroLineThree": "Set the boundary.",
+      "category": "Shared database access for teams and AI agents",
+      "description": "Share connections and policies. Keep credentials individual.\nYour agent works only with the resources you select.",
+      "seeProduct": "See the actual app",
+      "proof": "Runs locally · Personal needs no account · macOS & Windows · Open-source alpha",
+      "explore": "Explore the galaxy",
+      "return": "Back to the default view",
+      "exploreHelp": "Drag or ← → · Esc to return",
+      "moveHelp": "Move your cursor to explore",
+      "pause": "Pause galaxy animation",
+      "play": "Resume galaxy animation",
+      "reduced": "System reduced motion is enabled",
+      "scroll": "Next, your actual workspace",
+      "desktopTitle": "Where you meet your data.",
+      "desktopBody": "Inspect schemas, review your agent’s proposal,\nand check results in one desktop workspace.",
+      "desktopLabel": "Actual app · DopeDB 0.4.21",
+      "desktopSample": "Demo SQLite · public sample data",
+      "enlarge": "Enlarge the screenshot",
+      "close": "Close",
+      "imageDialog": "Actual DopeDB screenshot, enlarged",
+      "detailOne": "Connections and policies are shared",
+      "detailTwo": "Credentials stay individual",
+      "detailThree": "Run and review from Desktop",
+      "flowLabel": "02 / INSIDE YOUR ORBIT",
+      "flowTitle": "Room to explore.\nA precise boundary.",
+      "flowBody": "Choose what your agent can access before it starts. Walk through four steps to see where DopeDB draws the line.",
+      "demoNotice": "Illustrative demo · No database connection or SQL execution.",
+      "faqLabel": "03 / BUILT ON CLEAR BOUNDARIES",
+      "faqTitle": "Good questions.\nClear answers.",
+      "faqBody": "Know exactly what is shared, what stays local, and who can approve a change.",
+      "docs": "Product boundaries and project docs",
+      "ready": "YOUR NEXT ORBIT STARTS HERE",
+      "downloadTitle": "Try one real connection.\nThe account can wait.",
+      "downloadBody": "Start in Personal without signing in. Sign in to a workspace when you need shared connections or managed access.",
+      "install": "Before you install",
+      "alpha": "Alpha · Verify least privilege and recovery before touching production.",
+      "privacy": "Privacy",
+      "terms": "Terms"
     },
-    hero: {
-      eyebrow: "Open source · Alpha · Local execution",
-      headline: "Before you hand Codex",
-      accent: "your prod database.",
-      text:
-        "An Agent can ignore a system prompt. It cannot ignore authority. DopeDB limits each Agent to the resources you select from one Project, with at most one database as a write target. Database writes require approval of the exact SQL.",
-      primary: "Download the alpha",
-      secondary: "Open team workspace",
-      proof:
-        "Personal Workspace needs no account · macOS and Windows · MIT licensed",
+    "product": {
+      "imageSrc": "/dopedb-desktop-0.4.21.png",
+      "imageAlt": "DopeDB 0.4.21 showing the Demo SQLite orders table, columns, and foreign key in Personal Workspace"
     },
-    topology: {
-      eyebrow: "Access boundary / reference flow",
-      status: "Exact scope",
-      workspaceLabel: "Team workspace",
-      workspaceValue: "billing-prod · revision 12",
-      workspaceMeta: "Connection identity + policy · no password",
-      memberLabel: "Member access",
-      memberValue: "Individual credential",
-      memberMeta: "OS store or short-lived managed lease",
-      agentLabel: "Agent session",
-      agentValue: "Codex · pinned",
-      agentMeta: "Workspace + account + revision + process",
-      databaseLabel: "Local execution",
-      databaseValue: "PostgreSQL · production",
-      databaseMeta: "Database traffic never crosses the workspace service",
-      seal: "No shared secret",
-      receipt: "Operation receipt",
+    "faq": {
+      "eyebrow": "Before you trust it",
+      "title": "Not convinced? Ask these first.",
+      "items": [
+        {
+          "question": "Do my queries pass through your servers?",
+          "answer": "Database traffic runs from Desktop. The workspace stores membership, connection metadata, policy, provider resources, revisions, and collaboration audit. Sharing an Article also uploads its sanitized HTML and saved query definition, without query result rows."
+        },
+        {
+          "question": "If I share a connection, does my database password go up with it?",
+          "answer": "No. Member-local credentials remain in that member's OS store. Supported managed access returns an expiring member-specific credential and does not persist the issued secret."
+        },
+        {
+          "question": "Can an Agent approve the write it just wrote?",
+          "answer": "No. Risky SQL becomes an immutable proposal. A human approves the exact payload in Desktop before the operation can proceed."
+        },
+        {
+          "question": "If DopeDB goes down, do we lose our database?",
+          "answer": "No. An already synchronized connection with your member-local credential keeps working, and Personal Workspace never needed an account. New managed credentials and membership or policy changes wait until the service is back."
+        },
+        {
+          "question": "How do I invite someone to an Article?",
+          "answer": "A workspace manager with management access to the database creates an invitation for one recipient. That person signs in and explicitly accepts to join the workspace and receive read access. They still install Desktop and supply any member-local credential themselves."
+        },
+        {
+          "question": "Can I use Claude or Codex from my terminal?",
+          "answer": "Yes. Install the matching dopedb command from Desktop Settings, then run dopedb agent init in your Project. Each dopedb agent start shows the exact selected resources for Desktop approval before launching your official, locally authenticated CLI."
+        },
+        {
+          "question": "Can I use it in production today?",
+          "answer": "It is still an alpha. Verify the supported provider and recovery scope, use least-privilege database roles, and validate your workflow before it touches production data."
+        }
+      ]
     },
-    proofs: [
-      { label: "Shared record", value: "Carries no password" },
-      { label: "Managed access", value: "Neon · GCP · PlanetScale" },
-      { label: "Agent authority", value: "Selected Project resources" },
-      { label: "Query path", value: "Runs from your desktop" },
-    ],
-    boundary: {
-      eyebrow: "01 / Shared access",
-      title: "Share the connection, not the key.",
-      body:
-        "One shared account makes every audit entry look like the same person. DopeDB gives the team what the database is and leaves how to open it with each member.",
-      items: [
-        {
-          index: "01",
-          overline: "Secretless record",
-          title: "Sharing another connection never creates another secret to rotate.",
-          body:
-            "Provider resource, environment, policy, and revision travel with the workspace connection. A long-lived database secret does not.",
-        },
-        {
-          index: "02",
-          overline: "Member-specific access",
-          title: "Every teammate arrives through their own credential path.",
-          body:
-            "Bind a credential in the member's OS store or issue a least-privilege, expiring managed credential for a supported provider.",
-        },
-        {
-          index: "03",
-          overline: "Project-scoped Agent",
-          title: "Every Agent inherits an exact grant, never the connection list.",
-          body:
-            "Official Codex and Claude use explicitly selected databases, BigQuery resources, and sources from one Project. The workspace, account, resource revisions, process, and local policy bind that grant.",
-        },
-      ],
+    "download": {
+      "primary": "Open the latest release",
+      "downloadWindows": "Download for Windows",
+      "downloadMacApple": "Download for Apple Silicon",
+      "downloadMacIntel": "Download for Intel Mac",
+      "chooseMac": "Choose your Mac build",
+      "chooseDesktop": "Choose a desktop build",
+      "source": "Build from source",
+      "sourceNote": `Building from source needs ${buildToolchain}.`,
+      "windows": "Windows x64",
+      "macApple": "macOS Apple Silicon",
+      "macIntel": "macOS Intel",
+      "recommended": "Recommended",
+      "detectionPending": "Choose a build · this browser will mark the best match",
+      "detectedWindows": "Windows detected · x64 installer selected",
+      "detectedMacApple": "Apple Silicon Mac detected · ARM64 DMG selected",
+      "detectedMacIntel": "Intel Mac detected · x64 DMG selected",
+      "detectedMacUnknown": "macOS detected · choose Apple Silicon or Intel",
+      "detectedUnsupported": "No installer for this device · choose a desktop build",
+      "macSigning": "Current macOS releases are Developer ID signed and notarized.",
+      "windowsWarningTitle": "Windows alpha installers may show a SmartScreen warning.",
+      "windowsWarningBody": "The installer is not code-signed yet. Confirm the file came from GitHub Releases, then choose More info → Run anyway."
     },
-    product: {
-      eyebrow: "02 / Desktop boundary",
-      title: "Your database work runs on your machine.",
-      body:
-        "Database execution, results, cancellation, and supported transaction rollback stay in Desktop. An Analysis Article shares sanitized HTML and one saved read-only query definition. Members rerun it locally with their own access; public snapshots cannot execute the query.",
-      imageSrc: "/dopedb-desktop-0.4.21.png",
-      imageAlt:
-        "DopeDB 0.4.21 showing the Demo SQLite orders table, columns, and foreign key in Personal Workspace",
-      captureLabel: "DopeDB 0.4.21 · Desktop capture",
-      captureDetail: "Demo SQLite · sample data · dark theme",
-      labels: [
-        { title: "Control plane", body: "Identity · policy · revisions" },
-        { title: "Local boundary", body: "Credentials · queries · recovery" },
-      ],
-    },
-    principles: {
-      eyebrow: "Enforced, not prompted",
-      title: "Safety lives outside the Agent.",
-      body:
-        "Authority, approval, and recovery are not promises the Agent keeps for you. They are bound to the operation itself, and the handles a human needs stay on screen.",
-      items: [
-        {
-          icon: Fingerprint,
-          title: "Exact authority",
-          body:
-            "Workspace role, connection grant, database privilege, revision, and local policy must agree.",
-        },
-        {
-          icon: ShieldCheck,
-          title: "Exact approval",
-          body:
-            "Writes and DDL become immutable proposals. The Agent cannot approve its own payload.",
-        },
-        {
-          icon: FileClock,
-          title: "Human recovery",
-          body:
-            "Observe active work, cancel execution, roll back a supported transaction, and inspect the receipt.",
-        },
-      ],
-    },
-    workflow: {
-      eyebrow: "03 / Exact operation",
-      consoleLabel: "SQL approval example",
-      approvalLabel: "Awaiting approval",
-      title: "Review what the Agent changes.",
-      body:
-        "Choose the Agent’s resources before it starts. Review the exact SQL for database changes, and keep the controls to stop work and inspect results close at hand.",
-      steps: [
-        {
-          index: "01",
-          title: "Share the connection",
-          body: "Create a secretless workspace definition with one verified target.",
-        },
-        {
-          index: "02",
-          title: "Resolve member access",
-          body: "Bind a local credential or receive a member-specific managed lease.",
-        },
-        {
-          index: "03",
-          title: "Launch the Agent",
-          body: "Select databases and sources from one Project, choose an optional single write target, then start Claude or Codex.",
-        },
-        {
-          index: "04",
-          title: "Approve and recover",
-          body: "Review exact writes, stop work, roll back, and retain the result trail.",
-        },
-      ],
-      terminal: `BOUNDARY / OPERATION 0194
-
-workspace     team / production
-connection    billing@revision-12
-member grant  use + write
-agent          codex / process verified
-
-PROPOSED WRITE
-UPDATE customers
-SET plan = 'pro'
-WHERE id = 1842;
-
-classification  write
-approval        exact payload required
-recovery        manual transaction rollback
-receipt         pending human decision`,
-    },
-    faq: {
-      eyebrow: "Before you trust it",
-      title: "Not convinced? Ask these first.",
-      items: [
-        {
-          question: "Do my queries pass through your servers?",
-          answer:
-            "Database traffic runs from Desktop. The workspace stores membership, connection metadata, policy, provider resources, revisions, and collaboration audit. Sharing an Article also uploads its sanitized HTML and saved query definition, without query result rows.",
-        },
-        {
-          question: "If I share a connection, does my database password go up with it?",
-          answer:
-            "No. Member-local credentials remain in that member's OS store. Supported managed access returns an expiring member-specific credential and does not persist the issued secret.",
-        },
-        {
-          question: "Can an Agent approve the write it just wrote?",
-          answer:
-            "No. Risky SQL becomes an immutable proposal. A human approves the exact payload in Desktop before the operation can proceed.",
-        },
-        {
-          question: "If DopeDB goes down, do we lose our database?",
-          answer:
-            "No. An already synchronized connection with your member-local credential keeps working, and Personal Workspace never needed an account. New managed credentials and membership or policy changes wait until the service is back.",
-        },
-        {
-          question: "How do I invite someone to an Article?",
-          answer: "A workspace manager with management access to the database creates an invitation for one recipient. That person signs in and explicitly accepts to join the workspace and receive read access. They still install Desktop and supply any member-local credential themselves.",
-        },
-        {
-          question: "Can I use Claude or Codex from my terminal?",
-          answer: "Yes. Install the matching dopedb command from Desktop Settings, then run dopedb agent init in your Project. Each dopedb agent start shows the exact selected resources for Desktop approval before launching your official, locally authenticated CLI.",
-        },
-        {
-          question: "Can I use it in production today?",
-          answer:
-            "It is still an alpha. Verify the supported provider and recovery scope, use least-privilege database roles, and validate your workflow before it touches production data.",
-        },
-      ],
-    },
-    download: {
-      eyebrow: "Open-source alpha",
-      title: "Put one real connection in. The account can wait.",
-      body:
-        "Personal Workspace runs without signing in. Sign in only when you want team sharing or managed provider access.",
-      primary: "Open the latest release",
-      downloadWindows: "Download for Windows",
-      downloadMacApple: "Download for Apple Silicon",
-      downloadMacIntel: "Download for Intel Mac",
-      chooseMac: "Choose your Mac build",
-      chooseDesktop: "Choose a desktop build",
-      source: "Build from source",
-      sourceNote: `Building from source needs ${buildToolchain}.`,
-      windows: "Windows x64",
-      macApple: "macOS Apple Silicon",
-      macIntel: "macOS Intel",
-      recommended: "Recommended",
-      detectionPending: "Choose a build · this browser will mark the best match",
-      detectedWindows: "Windows detected · x64 installer selected",
-      detectedMacApple: "Apple Silicon Mac detected · ARM64 DMG selected",
-      detectedMacIntel: "Intel Mac detected · x64 DMG selected",
-      detectedMacUnknown: "macOS detected · choose Apple Silicon or Intel",
-      detectedUnsupported: "No installer for this device · choose a desktop build",
-      macSigning: "Current macOS releases are Developer ID signed and notarized.",
-      windowsWarningTitle: "Windows alpha installers may show a SmartScreen warning.",
-      windowsWarningBody:
-        "The installer is not code-signed yet. Confirm the file came from GitHub Releases, then choose More info → Run anyway.",
-    },
-    docs: {
-      eyebrow: "Product evidence",
-      title: "Read the boundary, architecture, and open gaps.",
-      items: [
-        {
-          title: "Product direction",
-          href: `${repoUrl}/blob/main/docs/PRODUCT_POSITIONING.md`,
-          body: "Audience, competitive boundary, claim limits, and priorities.",
-        },
-        {
-          title: "Project guide",
-          href: `${repoUrl}/blob/main/docs/PROJECT.md`,
-          body: "Architecture, safety model, development, and releases.",
-        },
-        {
-          title: "Workspace roadmap",
-          href: `${repoUrl}/blob/main/docs/WORKSPACE_ROADMAP.md`,
-          body: "Shipped milestones and remaining exit criteria.",
-        },
-      ],
-    },
-    footer: {
-      statement: "Kill the shared password. Keep the access. Pin the Agent.",
-      workspace: "Team workspace",
-      privacy: "Privacy",
-      terms: "Terms",
-    },
-    jsonDescription:
-      "DopeDB is an open-source database workspace where teams share access without sharing database credentials, and Codex or Claude works through one locally enforced session scoped to selected Project resources.",
+    "jsonDescription": "DopeDB is an open-source database workspace where teams share access without sharing database credentials, and Codex or Claude works through one locally enforced session scoped to selected Project resources."
   },
-  ko: {
-    nav: {
-      access: "공유 접근",
-      boundary: "통제 경계",
-      flow: "작동 방식",
-      workspace: "워크스페이스 열기",
-      download: "Alpha 받기",
-      github: "GitHub 저장소 열기",
-      home: "DopeDB 홈",
-      skip: "본문으로 건너뛰기",
+  "ko": {
+    "landing": {
+      "skip": "본문으로 이동",
+      "productNav": "제품",
+      "flowNav": "작동 방식",
+      "trustNav": "FAQ",
+      "workspace": "팀 워크스페이스 열기",
+      "download": "다운로드",
+      "heroLineOne": "Codex에게",
+      "heroLineTwo": "prod DB",
+      "heroSuffix": "를",
+      "heroLineThree": "맡기기 전에.",
+      "category": "팀과 AI Agent를 위한 공유 DB 접근 워크스페이스",
+      "description": "연결과 정책은 함께. 인증정보는 각자.\nAgent는 직접 선택한 리소스에서만 일합니다.",
+      "seeProduct": "실제 화면 보기",
+      "proof": "로컬 실행 · Personal은 계정 없이 · macOS & Windows · 오픈소스 Alpha",
+      "explore": "은하 탐험하기",
+      "return": "기본 시점으로",
+      "exploreHelp": "드래그 또는 ← → · Esc로 돌아가기",
+      "moveHelp": "마우스를 움직여보세요",
+      "pause": "은하 애니메이션 일시정지",
+      "play": "은하 애니메이션 재생",
+      "reduced": "시스템 동작 줄이기 사용 중",
+      "scroll": "이제, 실제 작업 화면으로",
+      "desktopTitle": "당신의 데이터에 닿는 곳.",
+      "desktopBody": "스키마를 확인하고, Agent의 제안을 검토하고,\n결과를 살펴보는 하나의 Desktop.",
+      "desktopLabel": "실제 앱 화면 · DopeDB 0.4.21",
+      "desktopSample": "Demo SQLite · 공개 샘플 데이터",
+      "enlarge": "화면 크게 보기",
+      "close": "닫기",
+      "imageDialog": "DopeDB 실제 화면 확대",
+      "detailOne": "공유하는 것은 연결과 정책",
+      "detailTwo": "인증정보는 구성원별로",
+      "detailThree": "실행과 결과 확인은 Desktop에서",
+      "flowLabel": "02 / INSIDE YOUR ORBIT",
+      "flowTitle": "가능성은 넓게.\n권한은 정확하게.",
+      "flowBody": "Agent가 무엇을 할 수 있는지, 시작 전에 정하세요. 네 단계를 직접 눌러보면 DopeDB의 작업 경계를 이해할 수 있습니다.",
+      "demoNotice": "설명용 데모 · 실제 DB에 연결하거나 SQL을 실행하지 않습니다.",
+      "faqLabel": "03 / BUILT ON CLEAR BOUNDARIES",
+      "faqTitle": "좋은 질문에는,\n명확한 답을.",
+      "faqBody": "멋진 약속보다 중요한 건, 어디까지 공유하고 어디서 멈추는지 아는 것.",
+      "docs": "제품 경계와 프로젝트 문서",
+      "ready": "YOUR NEXT ORBIT STARTS HERE",
+      "downloadTitle": "진짜 연결 하나를 넣어보세요.\n계정은 그다음입니다.",
+      "downloadBody": "Personal은 로그인 없이 시작합니다. 팀과 연결을 공유하거나 관리형 접근이 필요해질 때 워크스페이스에 로그인하세요.",
+      "install": "설치 전 확인",
+      "alpha": "Alpha · 프로덕션 사용 전 최소 권한과 복구 흐름을 확인하세요.",
+      "privacy": "개인정보처리방침",
+      "terms": "이용약관"
     },
-    hero: {
-      eyebrow: "오픈소스 · Alpha · 로컬 실행",
-      headline: "Codex에게 prod DB를",
-      accent: "맡기기 전에.",
-      text:
-        "Agent는 system prompt를 무시할 수 있습니다. 권한은 무시할 수 없습니다. DopeDB는 한 Project에서 직접 선택한 리소스만 Agent에게 허용하고, DB 하나까지 쓰기 대상으로 지정합니다. DB 변경은 정확한 SQL을 승인해야 실행됩니다.",
-      primary: "Alpha 다운로드",
-      secondary: "팀 워크스페이스 열기",
-      proof: "Personal Workspace는 무계정 · macOS와 Windows · MIT 라이선스",
+    "product": {
+      "imageSrc": "/dopedb-desktop-0.4.21-ko.png",
+      "imageAlt": "개인 워크스페이스에서 Demo SQLite의 주문 테이블·컬럼·외래 키를 보여주는 DopeDB 0.4.21"
     },
-    topology: {
-      eyebrow: "접근 경계 / 예시 흐름",
-      status: "정확한 범위",
-      workspaceLabel: "팀 Workspace",
-      workspaceValue: "billing-prod · revision 12",
-      workspaceMeta: "연결 정체성 + 정책 · password 없음",
-      memberLabel: "구성원 접근",
-      memberValue: "개인별 credential",
-      memberMeta: "OS 저장소 또는 단기 managed lease",
-      agentLabel: "Agent session",
-      agentValue: "Codex · 연결 고정",
-      agentMeta: "Workspace + account + revision + process",
-      databaseLabel: "로컬 실행",
-      databaseValue: "PostgreSQL · production",
-      databaseMeta: "DB traffic은 workspace service를 지나지 않음",
-      seal: "공유 secret 없음",
-      receipt: "Operation receipt",
+    "faq": {
+      "eyebrow": "신뢰하기 전에",
+      "title": "못 믿겠으면, 이것부터 물어보세요.",
+      "items": [
+        {
+          "question": "내 쿼리가 당신들 서버를 지나가나요?",
+          "answer": "DB 통신은 Desktop에서 실행됩니다. 워크스페이스는 구성원, 연결 정보, 정책, 클라우드 리소스, 버전과 협업 감사 기록을 관리합니다. Article 공유 시 정제된 HTML과 저장 쿼리 정의도 업로드하며, 쿼리 결과 행은 업로드하지 않습니다."
+        },
+        {
+          "question": "연결을 공유하면 내 DB 비번도 같이 올라가나요?",
+          "answer": "아니요. Member-local credential은 각자의 OS 저장소에 남습니다. 지원되는 managed access는 만료되는 구성원별 credential을 반환하며 발급된 secret을 저장하지 않습니다."
+        },
+        {
+          "question": "Agent가 자기가 만든 write를 자기가 승인할 수 있나요?",
+          "answer": "아니요. 위험한 SQL은 불변 proposal이 됩니다. 사람이 Desktop에서 exact payload를 승인해야 operation이 진행됩니다."
+        },
+        {
+          "question": "DopeDB가 내려가면 우리 DB도 못 쓰나요?",
+          "answer": "아니요. 이미 동기화된 연결과 기기에 저장한 개인 인증정보로는 계속 작업할 수 있고, Personal Workspace는 애초에 계정이 필요 없습니다. 새 managed credential 발급과 멤버십·정책 변경 반영만 service가 돌아온 뒤로 밀립니다."
+        },
+        {
+          "question": "Article에 다른 사람을 초대하려면 어떻게 하나요?",
+          "answer": "해당 DB의 관리 권한이 있는 워크스페이스 관리자가 수신자 한 명을 지정해 초대합니다. 수신자가 로그인하고 직접 수락하면 워크스페이스 참여와 읽기 권한 등록을 함께 처리합니다. Desktop 설치와 개인 로컬 인증정보 입력은 수신자가 직접 진행합니다."
+        },
+        {
+          "question": "터미널의 Claude나 Codex에서도 사용할 수 있나요?",
+          "answer": "네. Desktop 설정에서 버전이 같은 dopedb 명령을 설치하고 Project에서 dopedb agent init을 실행하세요. dopedb agent start를 실행할 때마다 선택한 리소스를 Desktop에서 검토한 뒤, 이미 로그인한 공식 CLI를 시작합니다."
+        },
+        {
+          "question": "지금 production에 써도 되나요?",
+          "answer": "아직 Alpha입니다. 지원 provider와 복구 범위를 확인하고 최소 권한 DB role을 사용하며 production data에 닿기 전에 workflow를 검증하세요."
+        }
+      ]
     },
-    proofs: [
-      { label: "공유 record", value: "Password를 포함하지 않음" },
-      { label: "Managed access", value: "Neon · GCP · PlanetScale" },
-      { label: "Agent 권한", value: "선택한 Project 리소스" },
-      { label: "Query 경로", value: "사용자 Desktop에서 실행" },
-    ],
-    boundary: {
-      eyebrow: "01 / 공유 접근",
-      title: "연결은 공유하고, key는 공유하지 않습니다.",
-      body:
-        "공용 계정 하나를 돌려쓰면 감사 로그가 전부 같은 사람이 됩니다. DopeDB는 무슨 DB인지만 팀에 공유하고, 그 DB를 여는 방법은 개인에게 남깁니다.",
-      items: [
-        {
-          index: "01",
-          overline: "비밀값 없는 record",
-          title: "연결을 하나 더 공유해도 돌려야 할 비밀값이 하나 더 생기지 않습니다.",
-          body:
-            "Provider resource, environment, policy, revision은 workspace connection을 따라가지만 장기 DB 비밀값은 따라가지 않습니다.",
-        },
-        {
-          index: "02",
-          overline: "구성원별 접근",
-          title: "모든 구성원은 자신의 credential 경로로 접속합니다.",
-          body:
-            "구성원의 OS 저장소에 credential을 연결하거나 지원 provider에서 최소 권한의 만료되는 managed credential을 발급합니다.",
-        },
-        {
-          index: "03",
-          overline: "Project 범위에 고정된 Agent",
-          title: "Agent는 연결 목록이 아니라 정확한 grant 하나를 받습니다.",
-          body:
-            "공식 Codex와 Claude는 한 Project에서 직접 선택한 DB·BigQuery·소스만 사용합니다. 계정, 워크스페이스, 리소스 버전, 실행 프로세스와 로컬 정책이 그 권한을 제한합니다.",
-        },
-      ],
+    "download": {
+      "primary": "최신 Release 열기",
+      "downloadWindows": "Windows용 다운로드",
+      "downloadMacApple": "Apple Silicon용 다운로드",
+      "downloadMacIntel": "Intel Mac용 다운로드",
+      "chooseMac": "Mac 설치 파일 선택",
+      "chooseDesktop": "데스크톱 설치 파일 선택",
+      "source": "소스에서 빌드",
+      "sourceNote": `소스에서 빌드하려면 ${buildToolchain}이 필요합니다.`,
+      "windows": "Windows x64",
+      "macApple": "macOS Apple Silicon",
+      "macIntel": "macOS Intel",
+      "recommended": "추천",
+      "detectionPending": "설치 파일을 선택하세요 · 브라우저가 권장 항목을 표시합니다",
+      "detectedWindows": "Windows 감지 · x64 설치 파일을 선택했습니다",
+      "detectedMacApple": "Apple Silicon Mac 감지 · ARM64 DMG를 선택했습니다",
+      "detectedMacIntel": "Intel Mac 감지 · x64 DMG를 선택했습니다",
+      "detectedMacUnknown": "macOS 감지 · Apple Silicon 또는 Intel을 선택하세요",
+      "detectedUnsupported": "이 기기용 설치 파일 없음 · 데스크톱 설치 파일을 선택하세요",
+      "macSigning": "현재 macOS 정식 배포본은 Developer ID 서명과 Apple 공증을 거칩니다.",
+      "windowsWarningTitle": "Windows Alpha 설치본에는 SmartScreen 경고가 표시될 수 있습니다.",
+      "windowsWarningBody": "설치 파일에 아직 코드 서명이 없습니다. GitHub Releases에서 받은 파일인지 확인한 뒤 추가 정보 → 실행을 선택하세요."
     },
-    product: {
-      eyebrow: "02 / Desktop 경계",
-      title: "DB 작업은 내 기기에서 실행됩니다.",
-      body:
-        "DB 실행, 결과, 중단과 지원 트랜잭션 되돌리기는 Desktop에서 처리합니다. Analysis Article은 정제된 HTML과 읽기 전용 저장 쿼리 하나의 정의를 공유합니다. 구성원은 자신의 권한으로 로컬에서 다시 실행하며, 공개 HTML에서는 쿼리를 실행할 수 없습니다.",
-      imageSrc: "/dopedb-desktop-0.4.21-ko.png",
-      imageAlt:
-        "개인 워크스페이스에서 Demo SQLite의 주문 테이블·컬럼·외래 키를 보여주는 DopeDB 0.4.21",
-      captureLabel: "DopeDB 0.4.21 · Desktop 캡처",
-      captureDetail: "Demo SQLite · 샘플 데이터 · 다크 테마",
-      labels: [
-        { title: "Control plane", body: "Identity · policy · revisions" },
-        { title: "Local boundary", body: "Credentials · queries · recovery" },
-      ],
-    },
-    principles: {
-      eyebrow: "Prompt가 아니라 집행",
-      title: "안전 경계는 Agent 밖에 있습니다.",
-      body:
-        "권한, 승인, 복구는 Agent가 알아서 지키겠다고 약속하는 대상이 아닙니다. operation 자체에 묶여 있고, 사람이 쓸 손잡이는 화면에 남아 있습니다.",
-      items: [
-        {
-          icon: Fingerprint,
-          title: "정확한 권한",
-          body:
-            "Workspace role, connection grant, DB privilege, revision, local policy가 모두 맞아야 합니다.",
-        },
-        {
-          icon: ShieldCheck,
-          title: "정확한 승인",
-          body:
-            "Write와 DDL은 불변 proposal이 되며 Agent는 자신의 payload를 승인할 수 없습니다.",
-        },
-        {
-          icon: FileClock,
-          title: "사람의 복구 수단",
-          body:
-            "진행 중인 작업을 보고, 실행을 멈추고, 지원 transaction을 rollback하고 receipt를 확인합니다.",
-        },
-      ],
-    },
-    workflow: {
-      eyebrow: "03 / 정확한 Operation",
-      consoleLabel: "SQL 승인 예시",
-      approvalLabel: "승인 대기",
-      title: "Agent의 변경 내용을 직접 확인하세요.",
-      body:
-        "Agent가 시작하기 전에 사용할 리소스를 고릅니다. DB 변경은 정확한 SQL을 검토하고, 실행 중단과 결과 확인은 같은 작업 화면에서 처리합니다.",
-      steps: [
-        {
-          index: "01",
-          title: "연결 공유",
-          body: "검증된 target 하나로 비밀값 없는 workspace 정의를 만듭니다.",
-        },
-        {
-          index: "02",
-          title: "구성원 접근 결정",
-          body: "로컬 credential을 연결하거나 구성원별 managed lease를 받습니다.",
-        },
-        {
-          index: "03",
-          title: "Agent 시작",
-          body: "한 Project의 DB와 소스를 선택하고, 필요하면 쓰기 대상 DB 하나를 지정한 뒤 Claude나 Codex를 시작합니다.",
-        },
-        {
-          index: "04",
-          title: "승인과 복구",
-          body: "정확한 write를 검토하고, 중단·rollback·결과 기록을 수행합니다.",
-        },
-      ],
-      terminal: `BOUNDARY / OPERATION 0194
-
-workspace     team / production
-connection    billing@revision-12
-member grant  use + write
-agent          codex / process verified
-
-PROPOSED WRITE
-UPDATE customers
-SET plan = 'pro'
-WHERE id = 1842;
-
-classification  write
-approval        exact payload required
-recovery        manual transaction rollback
-receipt         pending human decision`,
-    },
-    faq: {
-      eyebrow: "신뢰하기 전에",
-      title: "못 믿겠으면, 이것부터 물어보세요.",
-      items: [
-        {
-          question: "내 쿼리가 당신들 서버를 지나가나요?",
-          answer:
-            "DB 통신은 Desktop에서 실행됩니다. 워크스페이스는 구성원, 연결 정보, 정책, 클라우드 리소스, 버전과 협업 감사 기록을 관리합니다. Article 공유 시 정제된 HTML과 저장 쿼리 정의도 업로드하며, 쿼리 결과 행은 업로드하지 않습니다.",
-        },
-        {
-          question: "연결을 공유하면 내 DB 비번도 같이 올라가나요?",
-          answer:
-            "아니요. Member-local credential은 각자의 OS 저장소에 남습니다. 지원되는 managed access는 만료되는 구성원별 credential을 반환하며 발급된 secret을 저장하지 않습니다.",
-        },
-        {
-          question: "Agent가 자기가 만든 write를 자기가 승인할 수 있나요?",
-          answer:
-            "아니요. 위험한 SQL은 불변 proposal이 됩니다. 사람이 Desktop에서 exact payload를 승인해야 operation이 진행됩니다.",
-        },
-        {
-          question: "DopeDB가 내려가면 우리 DB도 못 쓰나요?",
-          answer:
-            "아니요. 이미 동기화된 연결과 기기에 저장한 개인 인증정보로는 계속 작업할 수 있고, Personal Workspace는 애초에 계정이 필요 없습니다. 새 managed credential 발급과 멤버십·정책 변경 반영만 service가 돌아온 뒤로 밀립니다.",
-        },
-        {
-          question: "Article에 다른 사람을 초대하려면 어떻게 하나요?",
-          answer: "해당 DB의 관리 권한이 있는 워크스페이스 관리자가 수신자 한 명을 지정해 초대합니다. 수신자가 로그인하고 직접 수락하면 워크스페이스 참여와 읽기 권한 등록을 함께 처리합니다. Desktop 설치와 개인 로컬 인증정보 입력은 수신자가 직접 진행합니다.",
-        },
-        {
-          question: "터미널의 Claude나 Codex에서도 사용할 수 있나요?",
-          answer: "네. Desktop 설정에서 버전이 같은 dopedb 명령을 설치하고 Project에서 dopedb agent init을 실행하세요. dopedb agent start를 실행할 때마다 선택한 리소스를 Desktop에서 검토한 뒤, 이미 로그인한 공식 CLI를 시작합니다.",
-        },
-        {
-          question: "지금 production에 써도 되나요?",
-          answer:
-            "아직 Alpha입니다. 지원 provider와 복구 범위를 확인하고 최소 권한 DB role을 사용하며 production data에 닿기 전에 workflow를 검증하세요.",
-        },
-      ],
-    },
-    download: {
-      eyebrow: "오픈소스 Alpha",
-      title: "진짜 연결 하나를 넣어보세요. 계정은 그다음입니다.",
-      body:
-        "Personal Workspace는 로그인 없이 동작합니다. 팀 공유나 managed provider가 필요해질 때만 로그인하면 됩니다.",
-      primary: "최신 Release 열기",
-      downloadWindows: "Windows용 다운로드",
-      downloadMacApple: "Apple Silicon용 다운로드",
-      downloadMacIntel: "Intel Mac용 다운로드",
-      chooseMac: "Mac 설치 파일 선택",
-      chooseDesktop: "데스크톱 설치 파일 선택",
-      source: "소스에서 빌드",
-      sourceNote: `소스에서 빌드하려면 ${buildToolchain}이 필요합니다.`,
-      windows: "Windows x64",
-      macApple: "macOS Apple Silicon",
-      macIntel: "macOS Intel",
-      recommended: "추천",
-      detectionPending: "설치 파일을 선택하세요 · 브라우저가 권장 항목을 표시합니다",
-      detectedWindows: "Windows 감지 · x64 설치 파일을 선택했습니다",
-      detectedMacApple: "Apple Silicon Mac 감지 · ARM64 DMG를 선택했습니다",
-      detectedMacIntel: "Intel Mac 감지 · x64 DMG를 선택했습니다",
-      detectedMacUnknown: "macOS 감지 · Apple Silicon 또는 Intel을 선택하세요",
-      detectedUnsupported: "이 기기용 설치 파일 없음 · 데스크톱 설치 파일을 선택하세요",
-      macSigning: "현재 macOS 정식 배포본은 Developer ID 서명과 Apple 공증을 거칩니다.",
-      windowsWarningTitle: "Windows Alpha 설치본에는 SmartScreen 경고가 표시될 수 있습니다.",
-      windowsWarningBody:
-        "설치 파일에 아직 코드 서명이 없습니다. GitHub Releases에서 받은 파일인지 확인한 뒤 추가 정보 → 실행을 선택하세요.",
-    },
-    docs: {
-      eyebrow: "제품 근거",
-      title: "경계, 아키텍처, 아직 열린 범위를 확인하세요.",
-      items: [
-        {
-          title: "제품 방향",
-          href: `${repoUrl}/blob/main/docs/PRODUCT_POSITIONING.md`,
-          body: "대상 사용자, 경쟁 경계, 공개 claim, 우선순위.",
-        },
-        {
-          title: "프로젝트 가이드",
-          href: `${repoUrl}/blob/main/docs/PROJECT.md`,
-          body: "아키텍처, 안전 모델, 개발, 릴리스.",
-        },
-        {
-          title: "Workspace 로드맵",
-          href: `${repoUrl}/blob/main/docs/WORKSPACE_ROADMAP.md`,
-          body: "구현된 milestone과 남은 exit criteria.",
-        },
-      ],
-    },
-    footer: {
-      statement: "비번은 없애고. 접근은 남기고. Agent는 묶어두고.",
-      workspace: "팀 워크스페이스",
-      privacy: "개인정보처리방침",
-      terms: "이용약관",
-    },
-    jsonDescription:
-      "DopeDB는 팀이 DB 인증정보 대신 연결과 정책을 공유하고, Codex와 Claude가 한 Project에서 선택한 리소스의 로컬 권한 경계 안에서 일하게 하는 오픈소스 데이터베이스 워크스페이스입니다.",
-  },
+    "jsonDescription": "DopeDB는 팀이 DB 인증정보 대신 연결과 정책을 공유하고, Codex와 Claude가 한 Project에서 선택한 리소스의 로컬 권한 경계 안에서 일하게 하는 오픈소스 데이터베이스 워크스페이스입니다."
+  }
 };
 
-
 export type HomeCopy = (typeof homeCopy)[Lang];
+export type LandingCopy = HomeCopy["landing"];

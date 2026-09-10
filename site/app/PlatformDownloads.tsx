@@ -247,7 +247,7 @@ export function RecommendedHeaderDownload({
     <TrackedLink
       {...tracking}
       aria-label={label}
-      className="tw:hidden tw:min-h-9 tw:items-center tw:gap-2 tw:bg-signal tw:px-3.5 tw:font-mono tw:text-[10px] tw:font-semibold tw:tracking-[0.08em] tw:text-night tw:uppercase tw:transition-colors tw:hover:bg-signal-strong tw:min-[720px]:inline-flex"
+      className="tw:flex tw:min-h-11 tw:items-center tw:gap-2 tw:text-[12px] tw:font-medium tw:text-signal tw:hover:text-signal-strong"
       data-download-recommendation={current.platform}
       href={current.href}
       title={label}

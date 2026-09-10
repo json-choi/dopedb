@@ -1,7 +1,6 @@
 // Public landing route owns language resolution, metadata, structured data, and section composition.
 import type { Metadata } from "next";
-import { HomeActionSections } from "./HomeActionSections";
-import { HomeAccessSections } from "./HomeAccessSections";
+import { HomeSections } from "./HomeSections";
 import { HomeFooter, HomeHeader } from "./HomeChrome";
 import {
   downloadUrls,
@@ -121,7 +120,7 @@ export default async function Home({ searchParams }: HomeProps) {
   };
 
   return (
-    <main className="tw:overflow-clip tw:bg-night tw:text-cream" lang={lang}>
+    <main className="tw:isolate tw:min-h-screen tw:overflow-clip tw:bg-night tw:font-sans tw:text-cream tw:scheme-dark" lang={lang}>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }}
@@ -134,14 +133,13 @@ export default async function Home({ searchParams }: HomeProps) {
         className="tw:fixed tw:top-3 tw:left-3 tw:z-50 tw:-translate-y-24 tw:bg-signal tw:px-4 tw:py-3 tw:font-mono tw:text-xs tw:font-semibold tw:text-night tw:uppercase tw:focus:translate-y-0"
         href="#content"
       >
-        {c.nav.skip}
+        {c.landing.skip}
       </a>
 
       <HomeHeader c={c} lang={lang} />
 
       <div id="content">
-        <HomeAccessSections c={c} lang={lang} />
-        <HomeActionSections c={c} />
+        <HomeSections c={c} lang={lang} />
       </div>
 
       <HomeFooter c={c} lang={lang} />

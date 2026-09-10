@@ -266,6 +266,23 @@ Elevation은 세 단계만 허용한다.
   event와 동일한 반응형 폭·상태를 소유하며 page에서 CTA utility를 복사하지
   않는다. 사이트 전용 색·배경·그림자는 `site/app/globals.css`의 theme token만
   소유하고 화면 selector는 두지 않는다.
+- 같은 `site/app/MarketingButton` 모듈의 `MarketingAction`은 native button의
+  primary/quiet 상태와 default/orbit/icon 형태, 44px 최소 hit target,
+  disabled·focus·reduced-motion 경계를 소유한다. `Arrow`, `SectionLabel`,
+  `Detail`도 이 공개 사이트 primitive 모듈에서 재사용하며, page나 데모에서
+  control·label utility 목록을 다시 만들지 않는다.
+- `site/app/HomeSections`는 소개·실제 Desktop 캡처·FAQ·설치 안내를 서버에서
+  조합한다. H1과 제품 본문을 JavaScript 실행이나 WebGL 준비 뒤에 숨기지 않는다.
+  `GalaxyHero`는 서버 children 위에 장식만 더하는 client island이며,
+  `site/lib/galaxyRenderer`를 첫 paint 뒤에 지연 로드한다. shader의 색은
+  `--landing-cream`, `--landing-signal`, `--landing-electric`에서 읽고,
+  veil·reading·halo는 사이트 theme의 paint role이다. 한 canvas·한 GPU buffer를
+  사용하며 mobile DPR/입자 수 제한, 화면 밖·숨겨진 탭 정지, 동작 줄이기,
+  pause·Escape·pointer cleanup을 소유한다. WebGL 불가 시 정적 canvas 또는
+  CSS 배경을 남기며 context loss 때문에 페이지를 새로고침하지 않는다.
+  `HomeScopeWalkthrough`는 실제 DB·SQL 실행·저장 없이 reducer로만 움직이는
+  설명용 데모다. `HomeDemoShowcase`는 native dialog의 focus/scroll 복구를
+  소유하며 JavaScript가 없으면 원본 이미지 anchor로 열 수 있다.
 - `site/app/PlatformDownloads`: 공개 사이트의 header·hero·download CTA가 공유하는
   OS/CPU 추천 경계. Windows와 브라우저가 확실히 밝힌 Mac architecture만 안정된
   latest-download 별칭으로 직접 연결하고, Mac CPU가 숨겨지거나 지원하지 않는

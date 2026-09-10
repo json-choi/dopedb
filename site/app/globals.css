@@ -45,10 +45,11 @@
   --shadow-inset-highlight: var(--inset-highlight);
   --background-image-hero: var(--hero-background);
   --background-image-download: var(--download-background);
-  --background-image-control-grid: var(--landing-control-grid);
-  --background-image-signal-grid: var(--landing-signal-grid);
-  --background-image-ambient: var(--landing-ambient);
-  --background-image-diagonal: var(--landing-diagonal);
+  --background-image-galaxy-veil: var(--galaxy-veil);
+  --background-image-galaxy-bottom: var(--galaxy-bottom);
+  --background-image-galaxy-halo: var(--galaxy-halo);
+  --background-image-galaxy-reading: var(--galaxy-reading);
+  --background-image-galaxy-orbit-light: var(--galaxy-orbit-light);
 }
 
 :root {
@@ -95,31 +96,19 @@
   --landing-night-soft: #171d15;
   --landing-cream: #f1f4e9;
   --landing-cream-muted: #b5bcae;
-  --landing-signal: #b7ff5d;
-  --landing-signal-strong: #80ed45;
+  --landing-signal: #ccf36b;
+  --landing-signal-strong: #d9ff82;
   --landing-electric: #66d9ff;
   --landing-hairline: rgba(241, 244, 233, 0.14);
   --landing-hairline-strong: rgba(241, 244, 233, 0.28);
   --landing-signal-shadow: 0 18px 70px rgba(128, 237, 69, 0.18);
   --landing-stage-shadow: 0 44px 120px rgba(0, 0, 0, 0.52);
-  --landing-control-grid:
-    linear-gradient(rgba(241, 244, 233, 0.055) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(241, 244, 233, 0.055) 1px, transparent 1px);
-  --landing-signal-grid:
-    linear-gradient(rgba(7, 9, 6, 0.11) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(7, 9, 6, 0.11) 1px, transparent 1px);
-  --landing-ambient:
-    radial-gradient(circle at 72% 24%, rgba(183, 255, 93, 0.18), transparent 28%),
-    radial-gradient(circle at 22% 82%, rgba(102, 217, 255, 0.09), transparent 26%),
-    var(--landing-night);
-  --landing-diagonal:
-    repeating-linear-gradient(
-      -45deg,
-      rgba(7, 9, 6, 0.06) 0,
-      rgba(7, 9, 6, 0.06) 1px,
-      transparent 1px,
-      transparent 8px
-    );
+  /* Galaxy paint is a palette role; layout and interaction remain static tw: utilities. */
+  --galaxy-veil: linear-gradient(90deg, var(--landing-night) 0%, color-mix(in srgb, var(--landing-night) 88%, transparent) 24%, color-mix(in srgb, var(--landing-night) 28%, transparent) 49%, transparent 70%);
+  --galaxy-bottom: linear-gradient(0deg, var(--landing-night), transparent);
+  --galaxy-halo: radial-gradient(ellipse at center, color-mix(in srgb, var(--landing-signal) 7%, transparent), transparent 65%);
+  --galaxy-reading: linear-gradient(180deg, color-mix(in srgb, var(--landing-night) 76%, transparent), var(--landing-night) 24%);
+  --galaxy-orbit-light: radial-gradient(ellipse at 55% 45%, color-mix(in srgb, var(--landing-signal) 10%, transparent), transparent 63%);
   font-family:
     var(--font-site-sans);
 }
@@ -148,6 +137,16 @@ a {
 button,
 a {
   -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: default;
 }
 
 :focus-visible {
@@ -165,37 +164,6 @@ p {
 /* Korean copy breaks between 어절, never inside one. keep-all is inert for Latin text. */
 :lang(ko) {
   word-break: keep-all;
-}
-
-@keyframes landing-rise {
-  from {
-    opacity: 0;
-    transform: translateY(18px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes landing-dash {
-  to {
-    stroke-dashoffset: -32;
-  }
-}
-
-@keyframes landing-breathe {
-  0%,
-  100% {
-    opacity: 0.38;
-    transform: scale(0.96);
-  }
-
-  50% {
-    opacity: 0.72;
-    transform: scale(1.04);
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

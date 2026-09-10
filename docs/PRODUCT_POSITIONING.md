@@ -1,6 +1,6 @@
 # DopeDB Product Positioning
 
-Status: accepted product decision, updated 2026-09-08.
+Status: accepted product decision, updated 2026-09-10.
 
 This document owns DopeDB's market category, competitive boundary, and public
 message. Architecture documents prove how the promise is enforced; the landing
@@ -210,15 +210,15 @@ connection" needs a measured onboarding source, so prefer a verifiable low-cost 
 
 The hero opens on the reader's situation rather than on architecture:
 
-> Before you hand Codex your prod database.
+> Before Codex meets prod. Set the boundary.
 >
-> An Agent can ignore a system prompt. It cannot ignore authority.
+> Share connections and policies. Keep credentials individual.
 
 Korean:
 
 > Codex에게 prod DB를 맡기기 전에.
 >
-> Agent는 system prompt를 무시할 수 있습니다. 권한은 무시할 수 없습니다.
+> 연결과 정책은 함께. 인증정보는 각자.
 
 Rules for changing the hook:
 
@@ -228,6 +228,12 @@ Rules for changing the hook:
 - Say what the reader does not have to experience, not what the system internally owns.
 - Every trust section stays answerable by the [Proof and claim discipline](#proof-and-claim-discipline)
   list, including the availability and result-locality boundaries.
+
+The galaxy is decorative, not the product surface. Product copy, real Desktop
+imagery, factual FAQ, download links, and language-specific SEO metadata remain
+server-rendered at the existing English and Korean URLs. The interactive
+walkthrough is explicitly illustrative: selecting a resource or approving its
+sample SQL never connects to a database or executes a query.
 
 ## Success measure
 
