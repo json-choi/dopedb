@@ -703,9 +703,16 @@ describe("Desktop control-plane contracts", () => {
     expect(schemaStatements).toContain(
       `GRANT ${schemaRole} TO "app_owner" WITH INHERIT TRUE, SET TRUE`,
     );
-    expect(schemaStatements).toContain(
-      `ALTER DEFAULT PRIVILEGES FOR ROLE "${policyOwner}" IN SCHEMA "public" REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC`,
-    );
+    expect(schemaStatements.join(";")).not.toMatch(/ALTER DEFAULT PRIVILEGES|FROM PUBLIC|OWNER TO/);
+    for (const accessMode of ["read", "write"] as const) {
+      const statements = neonRoleStatements({
+        role: schemaRole, owner: "app_owner", policyOwner,
+        passwordVerifier: createNeonScramVerifier("a".repeat(43)),
+        expiresAt: new Date(Date.now() + 5 * 60_000).toISOString(),
+        accessMode, database: schemaResource.database, schemas: schemaResource.schemas,
+      });
+      expect(statements.join(";")).not.toMatch(/ALTER DEFAULT PRIVILEGES|FROM PUBLIC|OWNER TO/);
+    }
     expect(schemaStatements).toContain(
       `ALTER ROLE ${schemaRole} SET role = '${policyOwner}'`,
     );
@@ -724,6 +731,32 @@ describe("Desktop control-plane contracts", () => {
       `REASSIGN OWNED BY ${schemaRole} TO "${policyOwner}"`,
     );
     expect(schemaCleanup[schemaCleanup.length - 1]).toBe(`DROP ROLE ${schemaRole}`);
+    expect(schemaCleanup.join(";")).not.toMatch(/ALTER DEFAULT PRIVILEGES|FROM PUBLIC/);
+    const neonApi = await import("./providers/neon-api");
+    const { retireInheritedNeonLeaseRoles } = await import("./providers/neon-managed-access");
+    const ownerLookup = vi.spyOn(neonApi, "ownerConnection").mockResolvedValue({
+      connectionUri: "postgresql://fixture.invalid/app",
+    } as Awaited<ReturnType<typeof neonApi.ownerConnection>>);
+    const queries = vi.fn().mockResolvedValue([{ rolname: schemaRole }]);
+    const transaction = vi.fn();
+    const client = vi.spyOn(neonApi, "sqlClient").mockReturnValue({
+      query: queries, transaction,
+    } as unknown as ReturnType<typeof neonApi.sqlClient>);
+    try {
+      const branchInput = {
+        credential: { kind: "apiKey", schemaVersion: 2, apiKey: "fixture", projectId: null, organizationId: null },
+        projectId: "project-1", branchId: "branch-1",
+        databases: [{ id: "42", name: "app", value: "app" }],
+      } satisfies Parameters<typeof retireInheritedNeonLeaseRoles>[0];
+      await expect(retireInheritedNeonLeaseRoles(branchInput))
+        .rejects.toBeInstanceOf(neonApi.NeonInheritedCredentialFenceConflictError);
+      expect(transaction).not.toHaveBeenCalled();
+      expect(queries).toHaveBeenCalledTimes(1);
+      expect(queries.mock.calls[0][0]).toMatch(/^SELECT /);
+      queries.mockResolvedValue([]);
+      expect((await retireInheritedNeonLeaseRoles(branchInput)).retiredInheritedRoleCount).toBe(0);
+      expect(transaction).not.toHaveBeenCalled();
+    } finally { ownerLookup.mockRestore(); client.mockRestore(); }
     const brokeredGeneric = structuredClone(
       fixture.managedLease.response,
     ) as { lease: Record<string, unknown> };

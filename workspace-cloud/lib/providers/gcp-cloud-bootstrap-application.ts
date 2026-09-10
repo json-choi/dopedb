@@ -1,5 +1,5 @@
 // Explicit Google setup provisions the approved target, verifies runtime access,
-// and only then applies database privileges and returns a durable configuration.
+// creates data-only accounts without rewriting existing users or database ACLs.
 import "server-only";
 
 import {
@@ -20,14 +20,12 @@ import {
   safeSegment,
   type GcpCloudBootstrapInput,
   type GcpCloudBootstrapResult,
-  type JsonObject,
 } from "./gcp-cloud-bootstrap-core";
 import {
   ensurePool,
   ensureProvider,
   ensureServiceAccount,
   grantCloudSqlRoles,
-  grantSchemaPolicyInspection,
   grantWorkloadIdentity,
   serviceAccountId,
   setupFingerprint,
@@ -40,8 +38,7 @@ import {
   ensureEnvironmentClassification,
   instanceDetails,
 } from "./gcp-cloud-bootstrap-database";
-import type { GcpDatabaseBootstrapRecoveryWriter } from "./gcp-cloud-bootstrap-recovery";
-import { configureDatabasePrivileges } from "./gcp-cloud-bootstrap-sql";
+import { gcpConnectionDatabaseRoles } from "./gcp-cloud-connection-policy";
 
 export class GcpIamPropagationPendingError extends ProviderRequestError {
   readonly code = "gcp_iam_propagation_pending";
@@ -87,7 +84,6 @@ export async function bootstrapGcpCloudSql(input: {
   credential: GcpSetupCredential;
   oidcToken: string;
   configuration: GcpCloudBootstrapInput;
-  writeDatabaseRecovery: GcpDatabaseBootstrapRecoveryWriter;
 }): Promise<GcpCloudBootstrapResult> {
   const configuration = input.configuration;
   safeSegment(
@@ -132,6 +128,13 @@ export async function bootstrapGcpCloudSql(input: {
       409,
     );
   }
+  // Reject engines requiring SQL privilege surgery before any provider mutation.
+  const initialDetails = await instanceDetails(
+    credential, configuration.projectId, configuration.instanceId,
+  );
+  const expectedVersion = String(initialDetails.databaseVersion);
+  const readRoles = gcpConnectionDatabaseRoles(expectedVersion, false);
+  const writeRoles = gcpConnectionDatabaseRoles(expectedVersion, true);
   let selectedProduction = selected.production;
   if (selectedProduction === "unknown" && !configuration.environmentClassification) {
     throw new ProviderRequestError(
@@ -189,15 +192,9 @@ export async function bootstrapGcpCloudSql(input: {
         `DopeDB write · ${configuration.instanceId}`.slice(0, 100),
       )
     : null;
-  const schemaEmail = selected.engine === "postgres"
-    ? await ensureServiceAccount(
-        credential,
-        configuration.projectId,
-        serviceAccountId("schema", fingerprint),
-        description,
-        `DopeDB schema · ${configuration.instanceId}`.slice(0, 100),
-      )
-    : null;
+  // Connecting grants data access only. Schema ownership must never be acquired
+  // by changing an existing application or shared ACL during setup/repair.
+  const schemaEmail = null;
   const principal = `principal://iam.googleapis.com/projects/${
     configuration.projectNumber
   }/locations/global/workloadIdentityPools/${POOL_ID}/subject/${
@@ -218,23 +215,7 @@ export async function bootstrapGcpCloudSql(input: {
         principal,
       ),
     ] : []),
-    ...(schemaEmail ? [
-      grantWorkloadIdentity(
-        credential,
-        configuration.projectId,
-        schemaEmail,
-        principal,
-      ),
-    ] : []),
   ]);
-  if (schemaEmail) {
-    await grantSchemaPolicyInspection(
-      credential,
-      configuration.projectId,
-      schemaEmail,
-      readEmail,
-    );
-  }
   await grantCloudSqlRoles(
     credential,
     configuration,
@@ -262,38 +243,17 @@ export async function bootstrapGcpCloudSql(input: {
     engine,
     details,
   );
-  const readDatabaseUser = await ensureDatabaseUser(
-    credential,
-    configuration.projectId,
-    configuration.instanceId,
-    readEmail,
-    engine,
+  if (details.databaseVersion !== expectedVersion) {
+    throw new ProviderRequestError("gcpCloudSql", "Cloud SQL database version changed during setup", 409);
+  }
+  await ensureDatabaseUser(
+    credential, configuration.projectId, configuration.instanceId,
+    readEmail, engine, readRoles,
   );
-  let writeDatabaseUser: JsonObject | null = null;
   if (writeEmail) {
-    writeDatabaseUser = await ensureDatabaseUser(
-      credential,
-      configuration.projectId,
-      configuration.instanceId,
-      writeEmail,
-      engine,
-    );
-  }
-  let schemaDatabaseUser: JsonObject | null = null;
-  if (schemaEmail) {
-    schemaDatabaseUser = await ensureDatabaseUser(
-      credential,
-      configuration.projectId,
-      configuration.instanceId,
-      schemaEmail,
-      engine,
-    );
-  }
-  if (typeof details.databaseVersion !== "string") {
-    throw new ProviderRequestError(
-      "gcpCloudSql",
-      "Cloud SQL database version is unavailable",
-      409,
+    await ensureDatabaseUser(
+      credential, configuration.projectId, configuration.instanceId,
+      writeEmail, engine, writeRoles,
     );
   }
   const configuredDatabases = await databaseNames(
@@ -316,18 +276,6 @@ export async function bootstrapGcpCloudSql(input: {
     instanceScopedIamConfirmed: true,
   });
   await waitForFederation(durableConfiguration, input.oidcToken);
-  await configureDatabasePrivileges({
-    credential,
-    configuration,
-    engine,
-    databaseVersion: details.databaseVersion,
-    databases: configuredDatabases,
-    readUser: readDatabaseUser,
-    writeUser: writeDatabaseUser,
-    schemaUser: schemaDatabaseUser,
-    fingerprint,
-    writeRecovery: input.writeDatabaseRecovery,
-  });
   return {
     configuration: durableConfiguration,
     engine,

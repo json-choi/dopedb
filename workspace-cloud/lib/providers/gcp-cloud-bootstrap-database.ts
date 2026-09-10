@@ -1,26 +1,24 @@
+// Cloud SQL connection setup preserves every existing database user and ACL.
 import "server-only";
+
+import { assertDatabaseUserRoles } from "./gcp-cloud-connection-policy";
 
 import { gcpDatabaseUsername } from "./gcp-cloud-sql-core";
 import { gcpCloudSqlProduction, type GcpSetupCredential } from "./gcp-cloud-oauth";
 import { ProviderRequestError } from "./provider-types";
 import {
   CLOUD_SQL_IDENTITY_PROPAGATION_TIMEOUT_MS,
-  DATA_API_PROPAGATION_TIMEOUT_MS,
   GcpUpstreamRequestError,
   PROPAGATION_RETRY_INTERVAL_MS,
   SQL_ADMIN_ORIGIN,
   googleRequest,
   object,
-  quotaProjectCredential,
   waitSqlOperation,
   type GcpCloudBootstrapInput,
   type JsonObject,
 } from "./gcp-cloud-bootstrap-core";
 import {
-  databaseBootstrapRecovery,
   type GcpDatabaseBootstrapRecovery,
-  type GcpDatabaseBootstrapRecoveryWriter,
-  type GcpDatabaseBootstrapUser,
 } from "./gcp-cloud-bootstrap-recovery";
 
 export function databaseFlag(
@@ -227,6 +225,7 @@ export async function ensureDatabaseUserOnce(
         409,
       );
     }
+    assertDatabaseUserRoles(existing as JsonObject, databaseRoles);
     return existing as JsonObject;
   }
   const operation = (await googleRequest(
@@ -261,6 +260,7 @@ export async function ensureDatabaseUserOnce(
       502,
     );
   }
+  assertDatabaseUserRoles(created as JsonObject, databaseRoles);
   return created as JsonObject;
 }
 
@@ -312,376 +312,17 @@ export async function ensureDatabaseUser(
   }
 }
 
-function databaseRoles(user: JsonObject) {
-  if (user.databaseRoles === undefined) return [];
-  if (
-    !Array.isArray(user.databaseRoles)
-    || user.databaseRoles.length > 100
-    || user.databaseRoles.some((role) => (
-      typeof role !== "string"
-      || role.length === 0
-      || role.length > 63
-      || /[\u0000-\u001f\u007f]/.test(role)
-    ))
-  ) {
-    throw new ProviderRequestError(
-      "gcpCloudSql",
-      "Cloud SQL returned invalid database roles",
-      502,
-    );
-  }
-  return [...new Set(user.databaseRoles)].sort();
-}
-
-function bootstrapDatabaseUsername(
-  email: string,
-  engine: "postgres" | "mysql",
-) {
-  if (!/^[^@\s]{1,128}@[^@\s]{1,190}$/.test(email)) {
-    throw new ProviderRequestError(
-      "gcpCloudSql",
-      "Google Cloud setup account is invalid",
-      403,
-    );
-  }
-  return engine === "postgres" ? email : email.slice(0, email.indexOf("@"));
-}
-
-function findBootstrapDatabaseUser(
-  rows: unknown[],
-  email: string,
-  engine: "postgres" | "mysql",
-) {
-  const expectedName = bootstrapDatabaseUsername(email, engine).toLowerCase();
-  const normalizedEmail = email.toLowerCase();
-  const candidates = rows.flatMap((value) => (
-    value && typeof value === "object" && !Array.isArray(value)
-      ? [value as JsonObject]
-      : []
-  ));
-  const exact = candidates.find((row) => (
-    row.type === "CLOUD_IAM_USER"
-    && (typeof row.iamEmail === "string"
-      ? row.iamEmail.toLowerCase() === normalizedEmail
-      : typeof row.name === "string"
-        && row.name.toLowerCase() === expectedName)
-  ));
-  const collision = candidates.find((row) => (
-    row !== exact
-    && typeof row.name === "string"
-    && row.name.toLowerCase() === expectedName
-  ));
-  if (collision) {
-    throw new ProviderRequestError(
-      "gcpCloudSql",
-      "The setup account database user name is already in use",
-      409,
-    );
-  }
-  return exact ?? null;
-}
-
-async function listDatabaseUsers(
-  credential: GcpSetupCredential,
-  projectId: string,
-  instanceId: string,
-) {
-  const body = (await googleRequest(
-    credential,
-    `${SQL_ADMIN_ORIGIN}/projects/${encodeURIComponent(projectId)}/instances/${
-      encodeURIComponent(instanceId)
-    }/users`,
-  ))!;
-  return Array.isArray(body.items) ? body.items : [];
-}
-
-async function deleteDatabaseUser(
-  credential: GcpSetupCredential,
-  projectId: string,
-  instanceId: string,
-  user: JsonObject,
-) {
-  if (typeof user.name !== "string") return;
-  const query = new URLSearchParams({
-    name: user.name,
-    host: typeof user.host === "string" ? user.host : "",
-  });
-  const operation = (await googleRequest(
-    credential,
-    `${SQL_ADMIN_ORIGIN}/projects/${encodeURIComponent(projectId)}/instances/${
-      encodeURIComponent(instanceId)
-    }/users?${query}`,
-    { method: "DELETE" },
-  ))!;
-  await waitSqlOperation(credential, projectId, operation);
-}
-
-export async function prepareDatabaseBootstrapUser(
-  credential: GcpSetupCredential,
-  projectId: string,
-  instanceId: string,
-  engine: "postgres" | "mysql",
-  writeRecovery: GcpDatabaseBootstrapRecoveryWriter,
-): Promise<GcpDatabaseBootstrapUser> {
-  const rows = await listDatabaseUsers(credential, projectId, instanceId);
-  const existing = findBootstrapDatabaseUser(
-    rows,
-    credential.email,
-    engine,
-  );
-  if (existing) {
-    const originalRoles = databaseRoles(existing);
-    const elevated = !originalRoles.includes("cloudsqlsuperuser");
-    const bootstrap = {
-      user: existing,
-      created: false,
-      engine,
-      originalRoles,
-      temporaryRoles: elevated ? ["cloudsqlsuperuser"] : [],
-    } satisfies GcpDatabaseBootstrapUser;
-    await writeRecovery(databaseBootstrapRecovery(
-      projectId,
-      instanceId,
-      credential.email,
-      bootstrap,
-    ));
-    if (elevated) {
-      try {
-        await setDatabaseRoles(
-          credential,
-          projectId,
-          instanceId,
-          existing,
-          ["cloudsqlsuperuser"],
-        );
-      } catch (error) {
-        await restoreDatabaseBootstrapUser(
-          credential,
-          projectId,
-          instanceId,
-          bootstrap,
-        ).catch(() => {
-          throw new ProviderRequestError(
-            "gcpCloudSql",
-            "Temporary Cloud SQL setup account cleanup failed",
-            409,
-          );
-        });
-        await writeRecovery(null);
-        throw error;
-      }
-    }
-    return bootstrap;
-  }
-
-  const planned = {
-    user: {
-      name: bootstrapDatabaseUsername(credential.email, engine),
-      type: "CLOUD_IAM_USER",
-      host: "",
-    },
-    created: true,
-    engine,
-    originalRoles: [],
-    temporaryRoles: ["cloudsqlsuperuser"],
-  } satisfies GcpDatabaseBootstrapUser;
-  await writeRecovery(databaseBootstrapRecovery(
-    projectId,
-    instanceId,
-    credential.email,
-    planned,
-  ));
-
-  const operation = (await googleRequest(
-    credential,
-    `${SQL_ADMIN_ORIGIN}/projects/${encodeURIComponent(projectId)}/instances/${
-      encodeURIComponent(instanceId)
-    }/users`,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        name: credential.email,
-        type: "CLOUD_IAM_USER",
-        databaseRoles: ["cloudsqlsuperuser"],
-      }),
-    },
-  ))!;
-  try {
-    await waitSqlOperation(credential, projectId, operation);
-    const created = findBootstrapDatabaseUser(
-      await listDatabaseUsers(credential, projectId, instanceId),
-      credential.email,
-      engine,
-    );
-    if (!created) {
-      throw new ProviderRequestError(
-        "gcpCloudSql",
-        "Cloud SQL did not create the temporary setup user",
-        502,
-      );
-    }
-    return {
-      user: created,
-      created: true,
-      engine,
-      originalRoles: [],
-      temporaryRoles: ["cloudsqlsuperuser"],
-    };
-  } catch (error) {
-    const created = findBootstrapDatabaseUser(
-      await listDatabaseUsers(credential, projectId, instanceId).catch(() => []),
-      credential.email,
-      engine,
-    );
-    if (created) {
-      await deleteDatabaseUser(
-        credential,
-        projectId,
-        instanceId,
-        created,
-      ).catch(() => {
-        throw new ProviderRequestError(
-          "gcpCloudSql",
-          "Temporary Cloud SQL setup account cleanup failed",
-          409,
-        );
-      });
-    }
-    await writeRecovery(null);
-    throw error;
-  }
-}
-
+// Old interrupted setup journals are retained for a separate administrator review.
+// A connection retry must not revoke roles or delete an existing login account.
 export async function recoverDatabaseBootstrapUser(
-  credential: GcpSetupCredential,
-  recovery: GcpDatabaseBootstrapRecovery,
+  _credential: GcpSetupCredential,
+  _recovery: GcpDatabaseBootstrapRecovery,
 ) {
-  if (credential.email.toLowerCase() !== recovery.setupEmail.toLowerCase()) {
-    throw new ProviderRequestError(
-      "gcpCloudSql",
-      "Pending Cloud SQL privilege cleanup belongs to another Google account",
-      409,
-    );
-  }
-  const scopedCredential = quotaProjectCredential(
-    credential,
-    recovery.projectId,
+  throw new ProviderRequestError(
+    "gcpCloudSql",
+    "An earlier setup left a database privilege recovery record. An administrator must review it separately; reconnect will not change existing users or permissions.",
+    409,
   );
-  await restoreDatabaseBootstrapUser(
-    scopedCredential,
-    recovery.projectId,
-    recovery.instanceId,
-    {
-      user: {
-        name: recovery.userName,
-        type: "CLOUD_IAM_USER",
-        host: recovery.userHost,
-      },
-      created: recovery.created,
-      engine: recovery.engine,
-      originalRoles: recovery.originalRoles,
-      temporaryRoles: recovery.temporaryRoles,
-    },
-  );
-}
-
-export async function restoreDatabaseBootstrapUser(
-  credential: GcpSetupCredential,
-  projectId: string,
-  instanceId: string,
-  bootstrap: GcpDatabaseBootstrapUser,
-) {
-  if (bootstrap.created) {
-    const current = findBootstrapDatabaseUser(
-      await listDatabaseUsers(credential, projectId, instanceId),
-      credential.email,
-      bootstrap.engine,
-    );
-    if (current) {
-      await deleteDatabaseUser(
-        credential,
-        projectId,
-        instanceId,
-        current,
-      );
-    }
-    return;
-  }
-  const current = findBootstrapDatabaseUser(
-    await listDatabaseUsers(credential, projectId, instanceId),
-    credential.email,
-    bootstrap.engine,
-  );
-  if (!current) return;
-  const currentRoles = databaseRoles(current);
-  const temporaryRoles = new Set(bootstrap.temporaryRoles);
-  // Subtract only roles this operation recorded before granting. This preserves
-  // concurrent additions and never resurrects a role another administrator
-  // intentionally removed while setup was running.
-  const restoredRoles = currentRoles.filter((role) => !temporaryRoles.has(role));
-  if (
-    currentRoles.length !== restoredRoles.length
-    || currentRoles.some((role, index) => role !== restoredRoles[index])
-  ) {
-    await setDatabaseRoles(
-      credential,
-      projectId,
-      instanceId,
-      current,
-      restoredRoles,
-      true,
-    );
-  }
-}
-
-export async function setDatabaseRoles(
-  credential: GcpSetupCredential,
-  projectId: string,
-  instanceId: string,
-  user: JsonObject,
-  roles: string[],
-  revokeExistingRoles = false,
-) {
-  const userType = user.type;
-  if (
-    typeof user.name !== "string"
-    || (
-      userType !== "CLOUD_IAM_SERVICE_ACCOUNT"
-      && userType !== "CLOUD_IAM_USER"
-    )
-    || roles.length > 100
-    || new Set(roles).size !== roles.length
-    || roles.some((role) => (
-      role.length === 0
-      || role.length > 63
-      || /[\u0000-\u001f\u007f]/.test(role)
-    ))
-  ) {
-    throw new ProviderRequestError(
-      "gcpCloudSql",
-      "Invalid Cloud SQL database role assignment",
-      409,
-    );
-  }
-  const query = new URLSearchParams({
-    name: user.name,
-    host: typeof user.host === "string" ? user.host : "",
-    revokeExistingRoles: String(revokeExistingRoles),
-  });
-  for (const role of roles) query.append("databaseRoles", role);
-  const operation = (await googleRequest(
-    credential,
-    `https://sqladmin.googleapis.com/v1/projects/${encodeURIComponent(projectId)
-    }/instances/${encodeURIComponent(instanceId)}/users?${query}`,
-    {
-      method: "PUT",
-      body: JSON.stringify({
-        name: user.name,
-        type: userType,
-      }),
-    },
-  ))!;
-  await waitSqlOperation(credential, projectId, operation);
 }
 
 export async function databaseNames(
@@ -717,68 +358,4 @@ export async function databaseNames(
     );
   }
   return names;
-}
-
-export function dataApiState(details: JsonObject) {
-  const settings = details.settings && typeof details.settings === "object"
-    && !Array.isArray(details.settings)
-    ? details.settings as JsonObject
-    : null;
-  if (!settings || typeof settings.settingsVersion !== "string") {
-    throw new ProviderRequestError(
-      "gcpCloudSql",
-      "Cloud SQL settings version is unavailable",
-      409,
-    );
-  }
-  return {
-    enabled: settings.dataApiAccess === "ALLOW_DATA_API",
-    settingsVersion: settings.settingsVersion,
-  };
-}
-
-export async function setDataApiAccess(
-  credential: GcpSetupCredential,
-  projectId: string,
-  instanceId: string,
-  allow: boolean,
-) {
-  const details = await instanceDetails(credential, projectId, instanceId);
-  const state = dataApiState(details);
-  if (state.enabled !== allow) {
-    const operation = (await googleRequest(
-      credential,
-      `${SQL_ADMIN_ORIGIN}/projects/${encodeURIComponent(projectId)}/instances/${
-        encodeURIComponent(instanceId)
-      }`,
-      {
-        method: "PATCH",
-        body: JSON.stringify({
-          settings: {
-            settingsVersion: state.settingsVersion,
-            dataApiAccess: allow ? "ALLOW_DATA_API" : "DISALLOW_DATA_API",
-          },
-        }),
-      },
-    ))!;
-    await waitSqlOperation(credential, projectId, operation);
-  }
-
-  const startedAt = Date.now();
-  for (;;) {
-    const confirmed = dataApiState(
-      await instanceDetails(credential, projectId, instanceId),
-    );
-    if (confirmed.enabled === allow) return;
-    if (Date.now() - startedAt >= DATA_API_PROPAGATION_TIMEOUT_MS) {
-      throw new ProviderRequestError(
-        "gcpCloudSql",
-        "Cloud SQL Data API 설정 반영이 지연되고 있습니다. 잠시 뒤 다시 시도하세요.",
-        503,
-      );
-    }
-    await new Promise((resolve) =>
-      setTimeout(resolve, PROPAGATION_RETRY_INTERVAL_MS)
-    );
-  }
 }

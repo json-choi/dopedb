@@ -21,6 +21,9 @@ import {
   type JsonObject,
 } from "./gcp-cloud-bootstrap-core";
 
+// Creation authority belongs to one setup credential object, never a name prefix.
+const createdAccounts = new WeakMap<GcpSetupCredential, Set<string>>();
+
 export async function confirmProject(
   credential: GcpSetupCredential,
   projectId: string,
@@ -155,7 +158,7 @@ export async function ensureProvider(
 
 export function setupFingerprint(input: GcpCloudBootstrapInput) {
   return createHash("sha256")
-    .update(`${input.workspaceId}:${input.projectId}:${input.instanceId}`)
+    .update(`data-access:v2:${input.workspaceId}:${input.projectId}:${input.instanceId}`)
     .digest("hex")
     .slice(0, 14);
 }
@@ -195,6 +198,9 @@ export async function ensureServiceAccount(
         }),
       },
     );
+    const created = createdAccounts.get(credential) ?? new Set<string>();
+    created.add(email);
+    createdAccounts.set(credential, created);
   }
   if (
     account?.email !== email
@@ -303,6 +309,7 @@ export async function updateIamPolicy(
           method: "POST",
           body: JSON.stringify({
             policy: {
+              ...policy,
               version: 3,
               bindings,
               ...(typeof policy.etag === "string" ? { etag: policy.etag } : {}),
@@ -378,6 +385,7 @@ export async function removeIamPolicyBindings(
           method: "POST",
           body: JSON.stringify({
             policy: {
+              ...policy,
               version: 3,
               bindings,
               ...(typeof policy.etag === "string" ? { etag: policy.etag } : {}),
@@ -489,24 +497,36 @@ export async function grantWorkloadIdentity(
 ) {
   const resource = `${IAM_ORIGIN}/v1/projects/${encodeURIComponent(projectId)
   }/serviceAccounts/${encodeURIComponent(serviceAccountEmail)}`;
-  await updateIamPolicy(credential, resource, [{
-    role: "roles/iam.workloadIdentityUser",
-    members: [principal],
-  }]);
-}
-
-export async function grantSchemaPolicyInspection(
-  credential: GcpSetupCredential,
-  projectId: string,
-  schemaServiceAccountEmail: string,
-  readServiceAccountEmail: string,
-) {
-  const resource = `${IAM_ORIGIN}/v1/projects/${encodeURIComponent(projectId)
-  }/serviceAccounts/${encodeURIComponent(schemaServiceAccountEmail)}`;
-  await updateIamPolicy(credential, resource, [{
-    role: "roles/iam.serviceAccountViewer",
-    members: [`serviceAccount:${readServiceAccountEmail}`],
-  }]);
+  const policy = (await googleRequest(credential, `${resource}:getIamPolicy`, {
+    method: "POST",
+    body: JSON.stringify({ options: { requestedPolicyVersion: 3 } }),
+  }))!;
+  const bindings = policyBindings(policy);
+  if (bindings.length === 1
+    && bindings[0].role === "roles/iam.workloadIdentityUser"
+    && !bindings[0].condition && bindings[0].members.length === 1
+    && bindings[0].members[0] === principal) return;
+  if (!createdAccounts.get(credential)?.has(serviceAccountEmail)
+    || bindings.length !== 0) {
+    throw new ProviderRequestError("gcpCloudSql",
+      "The dedicated service account has a different trust policy. Existing access was preserved; an administrator must review it separately.",
+      409);
+  }
+  // Bind only the empty policy just inspected. An etag conflict must stop setup;
+  // retrying by merging could silently accept a concurrently changed trust policy.
+  if (typeof policy.etag !== "string" || !policy.etag) {
+    throw new ProviderRequestError("gcpCloudSql",
+      "The new service-account policy version is unavailable; trust was not changed.", 409);
+  }
+  await googleRequest(credential, `${resource}:setIamPolicy`, {
+    method: "POST",
+    body: JSON.stringify({ policy: {
+      ...policy,
+      version: 3,
+      bindings: [{ role: "roles/iam.workloadIdentityUser", members: [principal] }],
+    } }),
+  });
+  createdAccounts.get(credential)?.delete(serviceAccountEmail);
 }
 
 export async function grantCloudSqlRoles(

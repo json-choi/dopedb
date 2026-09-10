@@ -7,12 +7,11 @@ import gcpBootstrapApplicationSource from "../../../workspace-cloud/lib/provider
 import gcpBootstrapCoreSource from "../../../workspace-cloud/lib/providers/gcp-cloud-bootstrap-core.ts?raw";
 import gcpBootstrapDatabaseSource from "../../../workspace-cloud/lib/providers/gcp-cloud-bootstrap-database.ts?raw";
 import gcpBootstrapIamSource from "../../../workspace-cloud/lib/providers/gcp-cloud-bootstrap-iam.ts?raw";
-import gcpBootstrapSqlSource from "../../../workspace-cloud/lib/providers/gcp-cloud-bootstrap-sql.ts?raw";
 import gcpCloudSqlSource from "../../../workspace-cloud/lib/providers/gcp-cloud-sql.ts?raw";
 import gcpCloudSqlCoreSource from "../../../workspace-cloud/lib/providers/gcp-cloud-sql-core.ts?raw";
 import gcpCloudSqlHttpSource from "../../../workspace-cloud/lib/providers/gcp-cloud-managed-http.ts?raw";
 import gcpSchemaAuthoritySource from "../../../workspace-cloud/lib/providers/gcp-cloud-schema-authority.ts?raw";
-import gcpSchemaPolicySource from "../../../workspace-cloud/lib/providers/gcp-cloud-schema-policy.ts?raw";
+import gcpConnectionPolicySource from "../../../workspace-cloud/lib/providers/gcp-cloud-connection-policy.ts?raw";
 import vaultProviderSource from "../../../workspace-cloud/lib/providers/vault.ts?raw";
 import boundedJsonResponseSource from "../../../workspace-cloud/lib/bounded-json-response.ts?raw";
 import neonFacadeSource from "../../../workspace-cloud/lib/providers/neon.ts?raw";
@@ -149,9 +148,9 @@ import {
   parseGcpCloudSqlCredential,
 } from "../../../workspace-cloud/lib/providers/gcp-cloud-sql-core";
 import {
-  gcpSchemaDatabasePolicySql,
-  gcpSchemaOwnerInventorySql,
-} from "../../../workspace-cloud/lib/providers/gcp-cloud-schema-policy";
+  gcpConnectionDatabaseRoles,
+  assertDatabaseUserRoles,
+} from "../../../workspace-cloud/lib/providers/gcp-cloud-connection-policy";
 const neonBranchOperationsApplicationSource = [
   neonBranchOperationsApplicationEntrySource,
   neonBranchOperationsContractsSource,
@@ -189,7 +188,7 @@ const gcpBootstrapSource = [
   gcpBootstrapCoreSource,
   gcpBootstrapDatabaseSource,
   gcpBootstrapIamSource,
-  gcpBootstrapSqlSource,
+  gcpConnectionPolicySource,
 ].join("\n");
 const neonSource = [
   neonFacadeSource,
@@ -448,29 +447,15 @@ describe("provider credential Tauri adapter", () => {
     expect(enableIamAuthenticationSource).not.toContain("/restart");
   });
 
-  it("keeps Cloud SQL privilege bootstrap on the setup identity with cleanup and lease preflight", () => {
-    expect(gcpBootstrapCoreSource).toContain(
-      '"cloudsql.instances.executeSql"',
-    );
-    expect(gcpBootstrapDatabaseSource).toContain(
-      "prepareDatabaseBootstrapUser",
-    );
-    expect(gcpBootstrapDatabaseSource).toContain('type: "CLOUD_IAM_USER"');
-    expect(gcpBootstrapDatabaseSource).toContain(
-      "restoreDatabaseBootstrapUser",
-    );
-    expect(gcpBootstrapDatabaseSource).toContain(
-      "revokeExistingRoles = false",
-    );
-    expect(gcpBootstrapSqlSource).toContain("executor: input.credential");
-    expect(gcpBootstrapSqlSource).toContain(
-      "restoreDatabaseBootstrapUser",
-    );
-    expect(gcpBootstrapSqlSource).not.toContain("bootstrapAccessToken");
-    expect(gcpBootstrapIamSource).not.toContain(
-      "roles/iam.serviceAccountTokenCreator",
-    );
-
+  it("preserves existing Cloud SQL users and retains the active lease preflight", () => {
+    expect(gcpBootstrapDatabaseSource).not.toMatch(/method: "(PUT|DELETE)"|revokeExistingRoles|cloudsqlsuperuser/);
+    expect(gcpBootstrapApplicationSource).not.toContain("configureDatabasePrivileges");
+    expect(gcpBootstrapApplicationSource).toContain("const schemaEmail = null");
+    expect(gcpConnectionDatabaseRoles("POSTGRES_17", false)).toEqual(["pg_read_all_data"]);
+    expect(gcpConnectionDatabaseRoles("POSTGRES_17", true)).toEqual(["pg_read_all_data", "pg_write_all_data"]);
+    const original = { type: "CLOUD_IAM_SERVICE_ACCOUNT", databaseRoles: ["application_role"] };
+    expect(() => assertDatabaseUserRoles(original, ["pg_read_all_data"])).toThrow("Existing roles were preserved");
+    expect(original.databaseRoles).toEqual(["application_role"]);
     const setupPreflight = gcpSetupRouteSource.indexOf(
       "const activeLeaseWindow = await activeIntegrationLeaseRevocationWindow",
     );
@@ -1119,11 +1104,11 @@ describe("provider credential Tauri adapter", () => {
     expect(authRouteSource).toContain("isGcpCloudSetupCallback");
     expect(gcpBootstrapSource).toContain("verifyWorkloadOidcToken");
     expect(gcpBootstrapSource).toContain("roles/iam.workloadIdentityUser");
-    expect(gcpBootstrapSource).toContain("configureDatabasePrivileges");
+    expect(gcpBootstrapSource).not.toContain("configureDatabasePrivileges");
     expect(gcpBootstrapSource).toContain("pg_write_all_data");
-    expect(gcpBootstrapApplicationSource).toContain('serviceAccountId("schema", fingerprint)');
-    expect(gcpBootstrapIamSource).toContain("grantSchemaPolicyInspection");
-    expect(gcpBootstrapIamSource).toContain('roles/iam.serviceAccountViewer');
+    expect(gcpBootstrapApplicationSource).toContain("const schemaEmail = null");
+    expect(gcpBootstrapIamSource).not.toContain("grantSchemaPolicyInspection");
+    expect(gcpBootstrapIamSource).toContain("createdAccounts.get(credential)?.delete");
     expect(gcpBootstrapIamSource).toContain("expected.members.filter");
     expect(gcpBootstrapIamSource).toContain("matching.members.push(...missingMembers)");
     expect(gcpCloudSqlCoreSource).toContain("GCP_SCHEMA_LEASE_SECONDS = 10 * 60");
@@ -1142,7 +1127,7 @@ describe("provider credential Tauri adapter", () => {
       "GCP Cloud SQL schema credential exceeded its approved PostgreSQL policy",
     );
     expect(workspaceBaselineSource).toContain("'read', 'write', 'schema'");
-    expect(gcpSchemaPolicySource).not.toContain("cloudsqlsuperuser TO");
+    expect(gcpConnectionPolicySource).not.toContain("cloudsqlsuperuser TO");
     const schemaCredential = parseGcpCloudSqlCredential({
       projectId: "example-project",
       projectNumber: "123456789012",
@@ -1172,60 +1157,6 @@ describe("provider credential Tauri adapter", () => {
       schemaServiceAccountEmail: null,
       workloadIdentitySubject: null,
     });
-    const schemaUser = "dopedb-s-0123456789abcd@example-project.iam";
-    const ownerInventorySql = gcpSchemaOwnerInventorySql(schemaUser);
-    expect(ownerInventorySql).toContain("pg_database");
-    expect(ownerInventorySql).toContain("database.datdba");
-    expect(ownerInventorySql).toContain("schema.nspowner");
-    expect(ownerInventorySql).toContain("role.rolname = 'cloudsqlsuperuser'");
-    expect(ownerInventorySql).toContain("LIMIT 101");
-    const schemaPolicySql = gcpSchemaDatabasePolicySql({
-      postgresMajorVersion: 18,
-      database: "app",
-      schemaUser,
-      readRole: null,
-      writeRole: null,
-    });
-    expect(schemaPolicySql).toContain("BEGIN; SET LOCAL ROLE NONE");
-    expect(schemaPolicySql).not.toContain("REVOKE CREATE ON SCHEMA public FROM PUBLIC");
-    expect(schemaPolicySql).toContain("reviewed PUBLIC privileges");
-    expect(schemaPolicySql).toContain(
-      "Cloud SQL IAM service-account role exceeds the schema boundary",
-    );
-    expect(schemaPolicySql).not.toContain("OWNER TO");
-    expect(schemaPolicySql).toContain("reviewed application ownership migration");
-    expect(schemaPolicySql).toContain("Cloud SQL setup role cannot configure the schema owner");
-    expect(schemaPolicySql).toContain("schema login role has an unexpected member");
-    expect(schemaPolicySql).not.toContain("REVOKE EXECUTE ON ROUTINE");
-    expect(schemaPolicySql).toContain("reviewed routine access");
-    expect(schemaPolicySql).not.toContain("REVOKE EXECUTE ON ALL FUNCTIONS");
-    expect(schemaPolicySql).toContain(
-      "ALTER DEFAULT PRIVILEGES REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC",
-    );
-    expect(schemaPolicySql).toContain(
-      "IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS",
-    );
-    expect(schemaPolicySql).not.toContain("CREATE ROLE");
-    expect(schemaPolicySql).not.toContain("dopedb_a_");
-    expect(schemaPolicySql).not.toContain("dopedb_s_");
-    expect(schemaPolicySql).toContain("IN DATABASE %I RESET ALL");
-    expect(schemaPolicySql).toContain("SET role = %L");
-    expect(schemaPolicySql).toContain("SET statement_timeout = %L");
-    expect(schemaPolicySql).toContain("SET idle_session_timeout = %L");
-    expect(schemaPolicySql).toMatch(/COMMIT;$/);
-    const postgres9SchemaPolicySql = gcpSchemaDatabasePolicySql({
-      postgresMajorVersion: 9,
-      database: "app",
-      schemaUser,
-      readRole: "dopedb_r_0123456789abcd",
-      writeRole: "dopedb_w_0123456789abcd",
-    });
-    expect(postgres9SchemaPolicySql).not.toContain("routine.prokind");
-    expect(postgres9SchemaPolicySql).not.toContain("REVOKE EXECUTE ON FUNCTION %I");
-    expect(postgres9SchemaPolicySql).not.toContain("idle_session_timeout");
-    expect(gcpBootstrapDatabaseSource).toContain("originalRoles");
-    expect(gcpBootstrapSqlSource).toContain("input.bootstrapUser.user");
-    expect(gcpBootstrapSqlSource).toContain("schemaName");
     expect(gcpCloudSqlSource).not.toContain("gcpSchemaDatabaseExecutor");
     expect(desktopRuntimePolicySource).toContain("exact_schema_owner");
     expect(desktopRuntimePolicySource).toContain("sql.rw()?");
@@ -1236,7 +1167,7 @@ describe("provider credential Tauri adapter", () => {
     expect(desktopRuntimePolicySource).toContain("safe_system_role");
     expect(desktopRuntimePolicySource).toContain("no_public_managed_routine");
     expect(gcpBootstrapSource).toContain("roles/serviceusage.serviceUsageConsumer");
-    expect(gcpBootstrapSource).toContain("Temporary Cloud SQL privilege bootstrap cleanup failed");
+    expect(gcpBootstrapSource).toContain("reconnect will not change existing users or permissions");
     expect(gcpCloudSqlHttpSource).toContain("logGcpManagedAccessUpstreamRejection");
     expect(gcpCloudSqlHttpSource).toContain("MAX_TRANSIENT_REQUEST_ATTEMPTS = 3");
     expect(gcpCloudSqlHttpSource).toContain("waitForTransientRetry(attempt, deadline)");
@@ -1365,7 +1296,7 @@ describe("provider credential Tauri adapter", () => {
     expect(providerResourcesRouteSource).not.toContain(
       'integration.provider === "planetScale" || integration.provider === "neon"',
     );
-    expect(neonCoreSource).toContain("ALTER DEFAULT PRIVILEGES FOR ROLE");
+    expect(neonCoreSource).not.toContain("ALTER DEFAULT PRIVILEGES FOR ROLE");
     expect(neonCoreSource).toContain("NEON_CREDENTIAL_SCHEMA_VERSION = 2");
     expect(neonCoreSource).toContain("parseNeonCredential");
     expect(neonCoreSource).toContain(
@@ -1373,8 +1304,8 @@ describe("provider credential Tauri adapter", () => {
     );
     expect(neonCoreSource).not.toContain("row.schemaVersion !== 1");
     expect(neonCoreSource).toContain("projectId: row.projectId as string | null");
-    expect(neonCoreSource).toContain("GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES");
-    expect(neonCoreSource).toContain("REVOKE ALL PRIVILEGES ON TABLES");
+    expect(neonCoreSource).toContain("GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES");
+    expect(neonManagedAccessSource).toContain("Existing ownership and role memberships were preserved");
     expect(neonCoreSource).toContain("REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA");
     expect(neonCoreSource).toContain("NEON_SCHEMA_LEASE_SECONDS = 5 * 60");
     expect(neonManagedAccessSource).toContain(
@@ -1655,7 +1586,7 @@ describe("provider credential Tauri adapter", () => {
     expect(providerResourcePickerSource).toContain("copy.publicApproval");
     expect(workspaceMessagesSource).toContain("Prepare Neon least-privilege access");
     expect(workspaceMessagesSource).toContain("Neon 최소권한 준비");
-    expect(workspaceMessagesSource).toContain("표시된 PUBLIC 권한 회수를 승인합니다");
+    expect(workspaceMessagesSource).toContain("기존 PUBLIC 권한은 별도 관리자 검토가 필요합니다");
     expect(providerResourcePickerSource).not.toMatch(/setup terminal|SQL 입력/);
     expect(neonBranchManagerSource).toContain("copy.createNoChangePlan");
     expect(neonBranchManagerSource).toContain("copy.productionCopyNotice");

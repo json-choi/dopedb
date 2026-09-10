@@ -49,6 +49,7 @@ import {
   workspaceProviderPrincipalClaim,
 } from "../../../../../../../../lib/schema";
 import { authorizeWorkspace } from "../../../../../../../../lib/workspace-authorization";
+import { logProviderConnectionFailure } from "../../../../../../../../lib/workspace-server-log";
 
 type RouteContext = {
   params: Promise<{ workspaceId: string; setupId: string }>;
@@ -369,8 +370,6 @@ export async function POST(request: Request, context: RouteContext) {
         approveProduction: body.approveProduction,
         approveIamAuthenticationChange: body.approveIamAuthenticationChange,
       },
-      writeDatabaseRecovery: (recovery) =>
-        databaseJournal.writeRecovery(recovery),
     });
     if (temporaryGrant) {
       await revokeTemporaryGcpSetupPermissions(
@@ -395,6 +394,12 @@ export async function POST(request: Request, context: RouteContext) {
     });
   } catch (error) {
     let temporaryGrantCleanupFailed = false;
+    logProviderConnectionFailure({
+      provider: "gcpCloudSql",
+      stage: "gcp_setup_ticket",
+      postgresCode: null,
+      providerStatus: error instanceof ProviderRequestError ? error.status : 502,
+    });
     if (temporaryGrant) {
       try {
         await revokeTemporaryGcpSetupPermissions(

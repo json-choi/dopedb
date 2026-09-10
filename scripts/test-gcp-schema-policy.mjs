@@ -37,90 +37,68 @@ const snapshot = () => query(`SELECT json_build_object(
   'defaults', (SELECT json_agg(row(d.defaclrole,d.defaclnamespace,d.defaclobjtype,d.defaclacl) ORDER BY d.oid)
     FROM pg_default_acl d));`);
 try {
-  // Compile the actual policy and its error type, without rewriting their logic.
+  // Execute the roles supplied by the production Cloud SQL users.insert body.
   writeFileSync(path.join(scratch, "package.json"), '{"type":"module"}');
-  for (const name of ["gcp-cloud-schema-policy", "provider-types"]) {
+  for (const name of ["gcp-cloud-connection-policy", "provider-types"]) {
     const source = readFileSync(path.join(root, "workspace-cloud/lib/providers", `${name}.ts`), "utf8");
     writeFileSync(path.join(scratch, `${name}.js`), stripTypeScriptTypes(source, { mode: "transform" })
       .replace('"./provider-types"', '"./provider-types.js"'));
   }
-  const { gcpSchemaDatabasePolicySql, gcpSchemaOwnerInventorySql } =
-    await import(pathToFileURL(path.join(scratch, "gcp-cloud-schema-policy.js")));
+  const { gcpConnectionDatabaseRoles, assertDatabaseUserRoles } =
+    await import(pathToFileURL(path.join(scratch, "gcp-cloud-connection-policy.js")));
   run("initdb", ["-D", data, "-U", "policy_admin", "-A", "trust", "--no-locale", "--encoding=UTF8"]);
   run("pg_ctl", ["-D", data, "-l", path.join(scratch, "server.log"), "-o",
     `-k ${scratch} -p 55479 -c listen_addresses=''`, "-w", "start"]);
   started = true;
-  query(`CREATE ROLE app_runtime LOGIN; CREATE ROLE app_reader;
-    CREATE ROLE cloudsqliamserviceaccount;
-    CREATE ROLE schema_owner LOGIN;
-    GRANT cloudsqliamserviceaccount TO schema_owner;
-    GRANT schema_owner TO policy_admin WITH ADMIN FALSE;
-    CREATE DATABASE app OWNER app_runtime;`, "postgres");
-  const policy = gcpSchemaDatabasePolicySql({ postgresMajorVersion: 17,
-    database: "app", schemaUser: "schema_owner", readRole: null, writeRole: null });
-  query(`GRANT CREATE ON SCHEMA public TO PUBLIC;
-    SET ROLE app_runtime;
-    CREATE TABLE app_data(id bigserial PRIMARY KEY, value text);
-    INSERT INTO app_data(value) VALUES ('preserved');
-    ALTER TABLE app_data ENABLE ROW LEVEL SECURITY;
-    CREATE VIEW app_view AS SELECT * FROM app_data;
-    CREATE TYPE app_state AS ENUM ('ready');
-    CREATE FUNCTION app_count() RETURNS bigint LANGUAGE SQL SECURITY DEFINER
-      AS 'SELECT count(*) FROM public.app_data';
-    GRANT SELECT ON app_data TO app_reader;
-    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO app_reader;`);
+  query(`CREATE ROLE app_migration LOGIN; CREATE ROLE app_runtime LOGIN;
+    CREATE DATABASE app OWNER app_migration;`, "postgres");
+  query(`SET ROLE app_migration;
+    ALTER DEFAULT PRIVILEGES GRANT USAGE ON SCHEMAS TO app_runtime;
+    ALTER DEFAULT PRIVILEGES GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_runtime;
+    ALTER DEFAULT PRIVILEGES GRANT USAGE, SELECT ON SEQUENCES TO app_runtime;
+    CREATE SCHEMA existing;
+    CREATE TABLE existing.events(id bigserial PRIMARY KEY, value text);
+    INSERT INTO existing.events(value) VALUES ('preserved');
+    CREATE TABLE public.owner_data(id int);
+    ALTER TABLE public.owner_data ENABLE ROW LEVEL SECURITY;
+    CREATE FUNCTION public.app_count() RETURNS bigint LANGUAGE SQL SECURITY DEFINER
+      AS 'SELECT count(*) FROM existing.events';`);
   const before = snapshot();
-  query(policy, "app", "policy_admin", /reviewed application ownership migration/);
-  assert.equal(snapshot(), before, "Rejected setup changed application ownership or ACLs");
-  assert.equal(query("SELECT app_count(), (SELECT count(*) FROM app_data);", "app", "app_runtime"), "1|1");
-  assert.equal(query("BEGIN; ALTER TABLE app_data ADD COLUMN migration_probe text; ROLLBACK;", "app", "app_runtime"), "BEGIN\nALTER TABLE\nROLLBACK");
-  assert.match(query(gcpSchemaOwnerInventorySql("schema_owner")), /app_runtime/);
+  const memberships = () => query(`SELECT rolname, rolcreaterole, rolcreatedb, rolbypassrls,
+    (SELECT string_agg(roleid::text, ',' ORDER BY roleid) FROM pg_auth_members WHERE member=r.oid)
+    FROM pg_roles r WHERE rolname IN ('app_runtime','app_migration') ORDER BY rolname`);
+  const originalMemberships = memberships();
+  const readRoles = gcpConnectionDatabaseRoles("POSTGRES_17", false);
+  const writeRoles = gcpConnectionDatabaseRoles("POSTGRES_17", true);
+  // Cloud SQL assigns these at creation; no existing role is a GRANT target.
+  query(`CREATE ROLE dopedb_read LOGIN; CREATE ROLE dopedb_write LOGIN;
+    GRANT ${readRoles.join(",")} TO dopedb_read;
+    GRANT ${writeRoles.join(",")} TO dopedb_write;`);
+  assert.equal(snapshot(), before);
+  assert.equal(memberships(), originalMemberships);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    assertDatabaseUserRoles({ type: "CLOUD_IAM_SERVICE_ACCOUNT", databaseRoles: readRoles }, readRoles);
+    assert.throws(() => assertDatabaseUserRoles({
+      type: "CLOUD_IAM_SERVICE_ACCOUNT", databaseRoles: ["application_role"],
+    }, readRoles), /Existing roles were preserved/);
+    assert.equal(snapshot(), before, "Repair or refusal changed application ACLs/defaults/owners");
+  }
+  query(`SET ROLE app_migration; CREATE SCHEMA future;
+    CREATE TABLE future.events(id bigserial PRIMARY KEY, value text);
+    INSERT INTO future.events(value) VALUES ('new schema');
+    ALTER TABLE public.owner_data ADD COLUMN migration_probe text;`);
+  for (const user of ["app_runtime", "dopedb_read", "dopedb_write"]) {
+    assert.equal(query("SELECT count(*) FROM existing.events;", "app", user), "1");
+    assert.equal(query("SELECT count(*) FROM future.events;", "app", user), "1");
+  }
+  query("INSERT INTO future.events(value) VALUES ('still writable');", "app", "app_runtime");
+  query("INSERT INTO future.events(value) VALUES ('managed write');", "app", "dopedb_write");
+  query("INSERT INTO future.events(value) VALUES ('denied');", "app", "dopedb_read", /permission denied/);
+  assert.equal(query("SELECT app_count();", "app", "app_runtime"), "1");
+  assert.equal(query("SELECT has_database_privilege('app_runtime',current_database(),'TEMPORARY');"), "t");
+  assert.equal(memberships(), originalMemberships);
+  console.log("PASS: existing application users, owners, RLS, PUBLIC, defaults, repair refusal, future schemas and data-only managed roles");
 
-  // Empty databases still must not lose inherited PUBLIC access during setup.
-  query("CREATE DATABASE empty_app OWNER app_runtime;", "postgres");
-  const emptyPolicy = gcpSchemaDatabasePolicySql({ postgresMajorVersion: 17,
-    database: "empty_app", schemaUser: "schema_owner", readRole: null, writeRole: null });
-  query(emptyPolicy, "empty_app", "policy_admin", /reviewed PUBLIC privileges/);
-  assert.equal(query("SELECT has_database_privilege('app_reader', current_database(), 'TEMPORARY');", "empty_app"), "t");
-
-  // A separately reviewed, isolated schema owner may be configured repeatedly.
-  // Fixture-only migration is explicit; production setup never performs it.
-  query(`DROP DATABASE app; CREATE DATABASE app OWNER app_runtime;`, "postgres");
-  query(`REVOKE TEMPORARY, CREATE ON DATABASE app FROM PUBLIC;
-    GRANT USAGE, CREATE ON SCHEMA public TO schema_owner;
-    SET ROLE schema_owner;
-    ALTER DEFAULT PRIVILEGES REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
-    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_runtime;
-    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO app_runtime;
-    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO app_runtime;
-    CREATE TABLE existing_data(id bigserial PRIMARY KEY, value text);
-    CREATE FUNCTION managed_count() RETURNS bigint LANGUAGE SQL AS 'SELECT 1::bigint';`);
-  query(policy);
-  const approved = snapshot();
-  query(policy);
-  assert.equal(snapshot(), approved, "Repair changed approved runtime grants or creator defaults");
-  query(`CREATE TABLE future_data(id bigserial PRIMARY KEY, value text);
-    CREATE FUNCTION future_count() RETURNS bigint LANGUAGE SQL AS 'SELECT 2::bigint';`, "app", "schema_owner");
-  query(`BEGIN;
-    INSERT INTO existing_data(value) VALUES ('existing');
-    INSERT INTO future_data(value) VALUES ('future');
-    UPDATE future_data SET value='updated';
-    DO $$ BEGIN
-      IF (SELECT count(*) FROM future_data WHERE value='updated') <> 1
-        OR managed_count() <> 1 OR future_count() <> 2 THEN
-        RAISE EXCEPTION 'Runtime access failed'; END IF;
-    END $$;
-    DELETE FROM future_data; ROLLBACK;`, "app", "app_runtime");
-  assert.equal(query(`SELECT pg_has_role('app_runtime','schema_owner','MEMBER'),
-    has_table_privilege('app_reader','future_data','SELECT'),
-    has_table_privilege('app_reader','future_data','INSERT');`), "f|f|f");
-
-  // Repair also preserves callers of existing routines instead of revoking PUBLIC.
-  query("GRANT EXECUTE ON FUNCTION managed_count() TO PUBLIC;");
-  const publicRoutine = snapshot();
-  query(policy, "app", "policy_admin", /reviewed routine access/);
-  assert.equal(snapshot(), publicRoutine);
-  console.log("PASS: application ownership, RLS, DDL, routine access, PUBLIC access, repair, future runtime grants, and unrelated-role isolation");
 } finally {
   if (started) run("pg_ctl", ["-D", data, "-m", "fast", "-w", "stop"]);
   rmSync(scratch, { recursive: true, force: true });

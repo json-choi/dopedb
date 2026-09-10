@@ -331,12 +331,7 @@ export function neonRoleStatements(input: {
   const database = identifier(input.database);
   const scopedGrants = input.schemas.flatMap((schemaName) => {
     const schema = identifier(schemaName);
-    if (input.accessMode === "schema") {
-      return [
-        `ALTER DEFAULT PRIVILEGES FOR ROLE ${policyOwner} IN SCHEMA ${schema} `
-          + `REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC`,
-      ];
-    }
+    if (input.accessMode === "schema") return [];
     return input.accessMode === "write"
       ? [
         `GRANT USAGE ON SCHEMA ${schema} TO ${input.role}`,
@@ -344,19 +339,11 @@ export function neonRoleStatements(input: {
           + `TO ${input.role}`,
         `GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA ${schema} `
           + `TO ${input.role}`,
-        `ALTER DEFAULT PRIVILEGES FOR ROLE ${policyOwner} IN SCHEMA ${schema} `
-          + `GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ${input.role}`,
-        `ALTER DEFAULT PRIVILEGES FOR ROLE ${policyOwner} IN SCHEMA ${schema} `
-          + `GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO ${input.role}`,
       ]
       : [
         `GRANT USAGE ON SCHEMA ${schema} TO ${input.role}`,
         `GRANT SELECT ON ALL TABLES IN SCHEMA ${schema} TO ${input.role}`,
         `GRANT SELECT ON ALL SEQUENCES IN SCHEMA ${schema} TO ${input.role}`,
-        `ALTER DEFAULT PRIVILEGES FOR ROLE ${policyOwner} IN SCHEMA ${schema} `
-          + `GRANT SELECT ON TABLES TO ${input.role}`,
-        `ALTER DEFAULT PRIVILEGES FOR ROLE ${policyOwner} IN SCHEMA ${schema} `
-          + `GRANT SELECT ON SEQUENCES TO ${input.role}`,
       ];
   });
   return [
@@ -411,17 +398,6 @@ export function neonRoleRevokeStatements(input: {
   const scopedRevokes = input.schemas.flatMap((schemaName) => {
     const schema = identifier(schemaName);
     return [
-      ...(!input.schemaLease
-        ? input.defaultPrivilegeOwners.flatMap((defaultOwner) => {
-          const defaultOwnerIdentifier = identifier(defaultOwner);
-          return [
-            `ALTER DEFAULT PRIVILEGES FOR ROLE ${defaultOwnerIdentifier} IN SCHEMA ${schema} `
-              + `REVOKE ALL PRIVILEGES ON TABLES FROM ${input.role}`,
-            `ALTER DEFAULT PRIVILEGES FOR ROLE ${defaultOwnerIdentifier} IN SCHEMA ${schema} `
-              + `REVOKE ALL PRIVILEGES ON SEQUENCES FROM ${input.role}`,
-          ];
-        })
-        : []),
       `REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA ${schema} FROM ${input.role}`,
       `REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA ${schema} FROM ${input.role}`,
       `REVOKE ALL PRIVILEGES ON SCHEMA ${schema} FROM ${input.role}`,

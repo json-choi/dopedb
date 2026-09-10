@@ -149,6 +149,17 @@ change that table first and the screen second.
 
 ## Work safely
 
+- Connecting, reconnecting, importing, repairing, issuing/revoking credentials,
+  or disconnecting must never change pre-existing application users, role
+  memberships, passwords, grants, default privileges, PUBLIC/shared-role ACLs,
+  or object ownership. A connection/repair approval is not an application access
+  migration. Provision new, verifiably DopeDB-owned principals instead; inspect
+  existing ones without rewriting them. Stop with a specific diagnostic when
+  safe access cannot be established. Cleanup may undo only changes whose exact
+  ownership is proven; never normalize a pre-existing account or infer recovery
+  authority from a name prefix. Test that existing applications can still read
+  both existing and newly created schemas/objects after setup and failed repair.
+
 - Inspect `git status` before editing. Preserve unrelated and untracked work.
 - Work on the current `main` checkout unless the user explicitly requests a
   branch or pull request. A GitHub Issue is optional.

@@ -172,6 +172,12 @@ export async function inspectNeonBootstrap(input: {
   const actions: BootstrapAction[] = [];
   const findings: NeonBootstrapFinding[] = [];
   const addAction = (action: BootstrapAction) => {
+    if (action.finding.requiresApproval === "publicAcl") {
+      findings.push(blocker(action.finding.code,
+        "기존 PUBLIC 접근 권한은 연결 과정에서 변경하지 않습니다. 별도 DBA 검토가 필요합니다.",
+        action.finding.target));
+      return;
+    }
     actions.push(action);
     findings.push(action.finding);
   };

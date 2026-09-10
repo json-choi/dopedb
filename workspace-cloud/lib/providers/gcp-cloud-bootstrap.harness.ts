@@ -1,14 +1,11 @@
 // Behavioral coverage of the Google response → setup readiness boundary.
 // All identities and tokens are synthetic; no cloud resources are contacted.
 import { expect, vi } from "vitest";
-import {
-  configureMysqlPrivileges,
-  configurePostgresPrivileges,
-} from "./gcp-cloud-bootstrap-sql";
-import {
-  prepareDatabaseBootstrapUser,
-  recoverDatabaseBootstrapUser,
-} from "./gcp-cloud-bootstrap-database";
+import { ensureDatabaseUser, recoverDatabaseBootstrapUser } from "./gcp-cloud-bootstrap-database";
+import { gcpConnectionDatabaseRoles } from "./gcp-cloud-connection-policy";
+import { grantWorkloadIdentity, setupFingerprint } from "./gcp-cloud-bootstrap-iam";
+import * as workloadIdentity from "./workload-oidc";
+import { bootstrapGcpCloudSql } from "./gcp-cloud-bootstrap-application";
 import { parseDatabaseBootstrapRecovery } from "./gcp-cloud-bootstrap-recovery";
 import { googleRequest } from "./gcp-cloud-bootstrap-core";
 import { requestGcpBootstrap } from "../../features/providerAccess/gcpBootstrapTransport";
@@ -130,11 +127,8 @@ export async function assertGcpBootstrapReadinessContract() {
     expect(schemaAttempts).toBe(1);
 
     await assertBootstrapContinuation(pendingError);
-    await assertSchemaPreflightPreservesApplications();
-    await assertDedicatedPostgresRolesAreNormalized();
-    await assertDedicatedMysqlPrivilegesAreNormalized();
-    await assertDatabaseBootstrapRecoveryIsDurableBeforeElevation();
-    await assertDatabaseBootstrapRecoveryPreservesConcurrentRoles();
+    await assertExistingAccessIsNeverRewritten();
+    await assertConnectionPreservesExistingPrincipals();
 
     // Setup API diagnostics retain categorical causes, never the role name,
     // token, SQL, or Google response body that carried them.
@@ -160,152 +154,165 @@ export async function assertGcpBootstrapReadinessContract() {
   }
 }
 
-async function assertDedicatedMysqlPrivilegesAreNormalized() {
-  const statements: string[] = [];
-  vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
-    const url = new URL(String(input));
-    if (url.pathname.endsWith("/executeSql") && init?.method === "POST") {
-      const request = JSON.parse(String(init.body));
-      statements.push(request.sqlStatement);
-      return Response.json({ results: [{ status: { code: 0 } }] });
-    }
-    throw new Error(`Unexpected MySQL fixture request: ${url.origin}`);
-  }));
-  await configureMysqlPrivileges({
-    executor: { accessToken: "fixture-token", email: "admin@dopedb.dev",
-      expiresAt: new Date(Date.now() + 60_000).toISOString() },
-    projectId: "dopedb-fixture",
-    instanceId: "workspace-db",
-    databases: ["workspace"],
-    readUser: { name: "fixture-read", host: "%" },
-    writeUser: { name: "fixture-write", host: "%" },
-  });
-  expect(statements).toHaveLength(2);
-  expect(statements[0]).toContain("REVOKE ALL PRIVILEGES, GRANT OPTION FROM");
-  expect(statements[1]).toContain("GRANT SELECT ON `workspace`.*");
-  expect(statements[1]).toContain("GRANT SELECT, INSERT, UPDATE, DELETE");
-}
-
-async function assertDedicatedPostgresRolesAreNormalized() {
-  const updates: URL[] = [];
-  vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
-    const url = new URL(String(input));
-    if (url.pathname.endsWith("/users") && init?.method === "PUT") {
-      updates.push(url);
-      return Response.json({ name: "fixture-operation", status: "DONE" });
-    }
-    if (url.pathname.endsWith("/executeSql") && init?.method === "POST") {
-      return Response.json({ results: [{ status: { code: 0 } }] });
-    }
-    throw new Error(`Unexpected role fixture request: ${url.origin}`);
-  }));
+async function assertExistingAccessIsNeverRewritten() {
   const setup = { accessToken: "fixture-token", email: "admin@dopedb.dev",
     expiresAt: new Date(Date.now() + 60_000).toISOString() };
-  await configurePostgresPrivileges({ control: setup, executor: setup,
-    projectId: "dopedb-fixture", instanceId: "workspace-db", databaseVersion: "POSTGRES_17",
-    databases: ["workspace"],
-    readUser: { name: "fixture_read", type: "CLOUD_IAM_SERVICE_ACCOUNT" },
-    writeUser: { name: "fixture_write", type: "CLOUD_IAM_SERVICE_ACCOUNT" },
-    schemaUser: null,
-    bootstrapUser: { user: { name: "fixture_setup" }, created: false,
-      engine: "postgres", originalRoles: [], temporaryRoles: [] },
-    fingerprint: "fixture", writeRecovery: async () => undefined,
-  });
-  expect(updates).toHaveLength(2);
-  expect(updates.every((url) =>
-    url.searchParams.get("revokeExistingRoles") === "true"
-  )).toBe(true);
-  expect(updates.map((url) => url.searchParams.getAll("databaseRoles"))).toEqual([
-    ["pg_read_all_data"],
-    ["pg_read_all_data", "pg_write_all_data"],
-  ]);
-}
-
-async function assertDatabaseBootstrapRecoveryIsDurableBeforeElevation() {
-  const events: string[] = [];
-  vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
-    const url = new URL(String(input));
-    if (url.pathname.endsWith("/users") && !init?.method) {
-      return Response.json({ items: [{
-        name: "admin@dopedb.dev",
-        type: "CLOUD_IAM_USER",
-        databaseRoles: ["baseline_role"],
-      }] });
-    }
-    if (url.pathname.endsWith("/users") && init?.method === "PUT") {
-      events.push("database-role-update");
-      return Response.json({ name: "fixture-operation", status: "DONE" });
-    }
-    throw new Error(`Unexpected journal fixture request: ${url.origin}`);
-  }));
-  const bootstrap = await prepareDatabaseBootstrapUser({
-    accessToken: "fixture-token",
-    email: "admin@dopedb.dev",
-    expiresAt: new Date(Date.now() + 60_000).toISOString(),
-  }, "dopedb-fixture", "workspace-db", "postgres", async (recovery) => {
-    events.push(recovery ? "recovery-journal" : "recovery-clear");
-  });
-  expect(events.slice(0, 2)).toEqual([
-    "recovery-journal",
-    "database-role-update",
-  ]);
-  expect(bootstrap).toMatchObject({
-    originalRoles: ["baseline_role"],
-    temporaryRoles: ["cloudsqlsuperuser"],
-  });
-}
-
-async function assertDatabaseBootstrapRecoveryPreservesConcurrentRoles() {
-  const updates: URL[] = [];
+  const email = "dopedb-r-fixture@dopedb-fixture.iam.gserviceaccount.com";
+  const roles = gcpConnectionDatabaseRoles("POSTGRES_17", false);
+  let existing: Record<string, unknown> | null = {
+    name: email.replace(".gserviceaccount.com", ""), type: "CLOUD_IAM_SERVICE_ACCOUNT",
+    databaseRoles: ["application_role", "cloudsqlsuperuser"],
+  };
+  const before = JSON.stringify(existing);
+  const mutations: string[] = [];
   const transport = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
     const url = new URL(String(input));
-    if (url.pathname.endsWith("/users") && !init?.method) {
-      return Response.json({ items: [{
-        name: "admin@dopedb.dev",
-        type: "CLOUD_IAM_USER",
-        databaseRoles: [
-          "baseline_role",
-          "cloudsqlsuperuser",
-          "fixture_owner",
-          "concurrent_role",
-        ],
-      }] });
+    if (url.pathname.endsWith(":getIamPolicy")) {
+      return Response.json({ bindings: [
+        { role: "roles/iam.workloadIdentityUser", members: ["prior-subject", "current-subject"] },
+      ] });
     }
-    if (url.pathname.endsWith("/users") && init?.method === "PUT") {
-      updates.push(url);
+    if (url.pathname.endsWith("/users") && !init?.method) {
+      return Response.json({ items: existing ? [existing] : [] });
+    }
+    if (url.pathname.endsWith("/users") && init?.method === "POST") {
+      mutations.push("create");
+      existing = JSON.parse(String(init.body));
       return Response.json({ name: "fixture-operation", status: "DONE" });
     }
-    throw new Error(`Unexpected recovery fixture request: ${url.origin}`);
+    throw new Error("Unexpected mutation in preservation fixture");
   });
   vi.stubGlobal("fetch", transport);
+  await expect(ensureDatabaseUser(setup, "dopedb-fixture", "workspace-db",
+    email, "postgres", roles)).rejects.toMatchObject({ status: 409 });
+  expect(JSON.stringify(existing)).toBe(before);
+  expect(mutations).toEqual([]);
+
+  // Old trust stays untouched; it is not made acceptable by weakening validation.
+  await expect(grantWorkloadIdentity(setup, "dopedb-fixture", email, "current-subject"))
+    .rejects.toMatchObject({ status: 409 });
+  expect(mutations).toEqual([]);
+
+  // Fresh accounts receive data-only roles at creation, never via users.update.
+  existing = null;
+  await ensureDatabaseUser(setup, "dopedb-fixture", "workspace-db", email, "postgres", roles);
+  expect(mutations).toEqual(["create"]);
+  expect(existing).toMatchObject({ databaseRoles: ["pg_read_all_data"] });
+  await ensureDatabaseUser(setup, "dopedb-fixture", "workspace-db", email, "postgres", roles);
+  expect(mutations).toEqual(["create"]);
+  for (const version of ["POSTGRES_13", "MYSQL_8_0", "unknown"]) {
+    expect(() => gcpConnectionDatabaseRoles(version, false)).toThrow("member-local");
+  }
+
+  // A journal is evidence for manual review, not authority over an existing login.
   const recovery = parseDatabaseBootstrapRecovery({
-    version: 1,
-    projectId: "dopedb-fixture",
-    instanceId: "workspace-db",
-    setupEmail: "admin@dopedb.dev",
-    userName: "admin@dopedb.dev",
-    userHost: "",
-    created: false,
-    engine: "postgres",
-    originalRoles: ["baseline_role"],
-    temporaryRoles: ["cloudsqlsuperuser", "fixture_owner"],
+    version: 1, projectId: "dopedb-fixture", instanceId: "workspace-db",
+    setupEmail: setup.email, userName: setup.email, userHost: "", created: false,
+    engine: "postgres", originalRoles: ["application_role"], temporaryRoles: ["cloudsqlsuperuser"],
   });
   expect(recovery).not.toBeNull();
-  await recoverDatabaseBootstrapUser({
-    accessToken: "fixture-token",
-    email: "admin@dopedb.dev",
-    expiresAt: new Date(Date.now() + 60_000).toISOString(),
-  }, recovery!);
-  expect(updates).toHaveLength(1);
-  expect(updates[0].searchParams.get("revokeExistingRoles")).toBe("true");
-  expect(updates[0].searchParams.getAll("databaseRoles")).toEqual([
-    "baseline_role",
-    "concurrent_role",
-  ]);
+  transport.mockClear();
+  await expect(recoverDatabaseBootstrapUser(setup, recovery!)).rejects.toMatchObject({ status: 409 });
+  expect(transport).not.toHaveBeenCalled();
+  expect(setupFingerprint({
+    workspaceId: "fixture-workspace", projectId: "dopedb-fixture", instanceId: "workspace-db",
+  } as Parameters<typeof setupFingerprint>[0])).not.toBe(
+    // Former fingerprint had no policy generation; never adopt those principals.
+    (await import("node:crypto")).createHash("sha256")
+      .update("fixture-workspace:dopedb-fixture:workspace-db").digest("hex").slice(0, 14),
+  );
+}
 
-  expect(parseDatabaseBootstrapRecovery({ ...recovery,
-    temporaryRoles: ["baseline_role"],
-  })).toBeNull();
+async function assertConnectionPreservesExistingPrincipals() {
+  const identity = { issuer: "https://identity.dopedb.dev", audience: "https://iam.googleapis.com",
+    subject: "dopedb:workspace:production", accountId: "a".repeat(32),
+    workloadId: "11111111-1111-4111-8111-111111111111", environment: "production" as const };
+  const oidc = vi.spyOn(workloadIdentity, "verifyWorkloadOidcToken").mockResolvedValue(identity);
+  const config = { workspaceId: "11111111-1111-4111-8111-111111111111",
+    projectId: "dopedb-fixture", projectNumber: "123456789012", instanceId: "workspace-db",
+    environmentClassification: null, writeAccess: true, approveProduction: false,
+    approveIamAuthenticationChange: false };
+  const setup = { accessToken: "fixture-token", email: "admin@dopedb.dev",
+    expiresAt: new Date(Date.now() + 60_000).toISOString() };
+  const instance = { name: config.instanceId, databaseVersion: "POSTGRES_17", state: "RUNNABLE",
+    settings: { settingsVersion: "1", userLabels: { environment: "development" },
+      databaseFlags: [{ name: "cloudsql.iam_authentication", value: "on" }] } };
+  const users: Record<string, unknown>[] = [
+    { name: "app_runtime", type: "BUILT_IN", databaseRoles: ["app_data"] },
+    { name: setup.email, type: "CLOUD_IAM_USER", databaseRoles: ["app_admin"] },
+  ];
+  const baseline = JSON.stringify(users);
+  const policies = new Map<string, { bindings: unknown[]; auditConfigs?: unknown[] }>();
+  const projectPolicy = `/v1/projects/${config.projectId}`;
+  const existingBinding = { role: "roles/viewer", members: ["serviceAccount:app@dopedb-fixture.iam.gserviceaccount.com"] };
+  const auditConfigs = [{ service: "allServices", auditLogConfigs: [{ logType: "ADMIN_READ" }] }];
+  policies.set(projectPolicy, { bindings: [existingBinding], auditConfigs });
+  const accounts = new Map<string, Record<string, unknown>>();
+  const writes: string[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+    const url = new URL(String(input));
+    const path = decodeURIComponent(url.pathname);
+    const method = init?.method ?? "GET";
+    const body = init?.body && String(init.body).startsWith("{") ? JSON.parse(String(init.body)) : {};
+    if (url.hostname === "sts.googleapis.com") return Response.json({ access_token: "federated" });
+    if (url.hostname === "iamcredentials.googleapis.com") return Response.json({
+      accessToken: "runtime", expireTime: new Date(Date.now() + parseInt(body.lifetime) * 1000).toISOString(),
+    });
+    if (path.endsWith(":getIamPolicy")) return Response.json(policies.get(path.slice(0, -13)) ?? { etag: "new-policy", bindings: [] });
+    if (path.endsWith(":setIamPolicy")) {
+      writes.push("iam-policy");
+      policies.set(path.slice(0, -13), body.policy);
+      return Response.json(body.policy);
+    }
+    if (path.endsWith("/services:batchEnable")) return Response.json({ name: "operations/fixture", done: true });
+    if (url.hostname === "cloudresourcemanager.googleapis.com") return Response.json({
+      state: "ACTIVE", projectId: config.projectId, name: `projects/${config.projectNumber}`,
+    });
+    if (path.includes("/workloadIdentityPools/")) {
+      const name = path.slice(4);
+      if (path.includes("/providers/")) return Response.json({
+        name, state: "ACTIVE", attributeMapping: { "google.subject": "assertion.sub" },
+        attributeCondition: `assertion.account_id == '${identity.accountId}' && assertion.workload_id == '${identity.workloadId}' && assertion.environment == 'production' && assertion.sub == '${identity.subject}'`,
+        oidc: { issuerUri: identity.issuer, allowedAudiences: [identity.audience] },
+      });
+      return Response.json({ name, state: "ACTIVE" });
+    }
+    if (path.endsWith("/serviceAccounts") && method === "POST") {
+      const email = `${body.accountId}@${config.projectId}.iam.gserviceaccount.com`;
+      const account = { ...body.serviceAccount, email };
+      accounts.set(email, account); writes.push("create-service-account");
+      return Response.json(account);
+    }
+    if (path.includes("/serviceAccounts/")) {
+      const account = accounts.get(path.split("/serviceAccounts/")[1]);
+      return account ? Response.json(account) : Response.json({ error: { status: "NOT_FOUND" } }, { status: 404 });
+    }
+    if (path.endsWith("/users") && method === "POST") {
+      users.push(body); writes.push("create-db-user");
+      return Response.json({ name: "fixture-operation", status: "DONE" });
+    }
+    if (path.endsWith("/users") && method === "GET") return Response.json({ items: users });
+    if (path.endsWith("/databases")) return Response.json({ items: [{ name: "workspace" }] });
+    if (path.endsWith("/instances")) return Response.json({ items: [instance] });
+    if (path.endsWith("/instances/workspace-db")) return Response.json(instance);
+    throw new Error(`Unexpected setup request: ${method} ${path}`);
+  }));
+  try {
+    const result = await bootstrapGcpCloudSql({ credential: setup, oidcToken, configuration: config });
+    expect(result.configuration.schemaServiceAccountEmail).toBeNull();
+    expect(JSON.stringify(users.slice(0, 2))).toBe(baseline);
+    expect(users.slice(2).map(user => user.databaseRoles)).toEqual([
+      ["pg_read_all_data"], ["pg_read_all_data", "pg_write_all_data"],
+    ]);
+    expect(writes.filter(write => write === "create-db-user")).toHaveLength(2);
+    expect(policies.get(projectPolicy)?.bindings).toContainEqual(existingBinding);
+    expect(policies.get(projectPolicy)?.auditConfigs).toEqual(auditConfigs);
+    const before = JSON.stringify(users);
+    writes.length = 0;
+    await bootstrapGcpCloudSql({ credential: setup, oidcToken, configuration: config });
+    expect(JSON.stringify(users)).toBe(before);
+    expect(writes).toEqual([]);
+  } finally { oidc.mockRestore(); }
 }
 
 async function assertBootstrapContinuation(pendingError: GcpIamPropagationPendingError) {
@@ -371,37 +378,4 @@ async function assertBootstrapContinuation(pendingError: GcpIamPropagationPendin
   expired.expiresAt = new Date(Date.now() + 60_000).toISOString();
   expect((await requestGcpBootstrap(expired))?.status).toBe(410);
   expect(transport).not.toHaveBeenCalled();
-}
-
-// A conflict in a later database must prevent policy installation in earlier ones.
-async function assertSchemaPreflightPreservesApplications() {
-  const requests: { database: string; sqlStatement: string }[] = [];
-  const transport = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
-    expect(String(url)).toMatch(/\/executeSql$/);
-    const request = JSON.parse(String(init?.body));
-    requests.push(request);
-    if (request.database === "application") {
-      return Response.json({ results: [{ status: { code: 3 } }] });
-    }
-    if (request.sqlStatement.startsWith("DO $dopedb_preflight$")) {
-      return Response.json({ results: [{ status: { code: 0 } }] });
-    }
-    return Response.json({ results: [{ columns: [{ name: "owner_role" }], rows: [] }] });
-  });
-  vi.stubGlobal("fetch", transport);
-  const setup = { accessToken: "fixture-token", email: "admin@dopedb.dev",
-    expiresAt: new Date(Date.now() + 60_000).toISOString() };
-  await expect(configurePostgresPrivileges({ control: setup, executor: setup,
-    projectId: "dopedb-fixture", instanceId: "workspace-db", databaseVersion: "POSTGRES_17",
-    databases: ["isolated", "application"], readUser: { name: "fixture_read" },
-    writeUser: { name: "fixture_write" }, schemaUser: { name: "fixture_schema" },
-    bootstrapUser: { user: { name: "fixture_setup" }, created: true,
-      engine: "postgres", originalRoles: [], temporaryRoles: ["cloudsqlsuperuser"] },
-    fingerprint: "fixture", writeRecovery: async () => undefined,
-  })).rejects.toMatchObject({ status: 409,
-    message: expect.stringContaining("reviewed ownership and application-access policy") });
-  expect(requests.map(request => request.database)).toEqual(["isolated", "isolated", "application"]);
-  expect(requests.every(request => request.sqlStatement.startsWith("SELECT")
-    || request.sqlStatement.startsWith("DO $dopedb_preflight$"))).toBe(true);
-  expect(transport).toHaveBeenCalledTimes(3);
 }

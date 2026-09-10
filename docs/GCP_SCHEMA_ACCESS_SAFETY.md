@@ -1,64 +1,63 @@
-# GCP PostgreSQL 스키마 설정과 기존 서버 접근
+# 관리형 연결과 기존 애플리케이션 접근 보존
 
-Cloud SQL 연결·복구는 애플리케이션 소유권 마이그레이션이 아니다. 설정 SQL은
-이미 격리된 DopeDB 스키마 owner의 권한만 구성한다.
+연결·재연결·가져오기·복구·자격 증명 발급/회수·연결 해제는 기존 서버의 접근 권한을
+마이그레이션하는 작업이 아니다. 기존 사용자, membership, 비밀번호, PUBLIC/공유 role
+ACL, 객체 소유권, 애플리케이션 기본 권한은 보존한다. 연결 승인으로 이 경계를
+넘지 않으며, 안전하게 진행할 수 없으면 구체적인 원인으로 중단한다.
 
-## 자동 설정의 경계
+## GCP 자동 구성
 
-- 모든 대상 DB에서 먼저 읽기 전용 사전 검사를 한다. 하나라도 충돌하면 어느
-  DB에도 스키마 정책을 설치하지 않는다. 임시 설정 계정과 Data API의 기존
-  정리 경로는 실패 시에도 유지한다.
-- `public`의 비확장 객체에 다른 owner가 있으면 중단한다. 테이블·시퀀스·뷰·
-  materialized view·함수·타입을 `ALTER … OWNER TO`로 자동 인수하지 않는다.
-- 기존 `PUBLIC`의 DB `CREATE`/`TEMPORARY`, schema `CREATE`, 관리형 owner의
-  기존 함수 `EXECUTE`를 회수하지 않는다. 이 권한이 스키마 격리 정책과 충돌하면
-  서버 접근을 바꾸는 대신 설정을 중단한다.
-- 실제 정책 transaction 안에서도 사전 검사를 반복한다. 이미 검토된 owner에
-  설정한 서버 역할의 객체 GRANT와 기본 권한은 복구를 반복해도 유지한다.
-- Desktop의 정확한 owner·membership·PUBLIC 실행 권한 검사는 유지한다.
-  충돌하는 기존 DB는 연결·복구 완료로 보고하지 않는다. 이 변경은 기존 DB의
-  DDL 지원을 자동 마이그레이션으로 해결하지 않는다.
+PostgreSQL 14 이상에서 현재 정책 세대에 고정된 DopeDB 전용 read/write 서비스 계정을
+생성한다. 이전 정책 세대의 계정과 신뢰 항목은 수정하거나 삭제하지 않는다.
+새 IAM DB 사용자 생성 시 `pg_read_all_data`, 쓰기 계정에는 추가로
+`pg_write_all_data`를 지정한다. 이 역할은 앞으로 생성되는 스키마와 테이블에도
+적용되므로 애플리케이션의 owner/default ACL을 수정할 필요가 없다. RLS를 우회하지
+않으며 DB CONNECT가 제한된 DB에는 별도의 관리자 검토가 필요하다.
 
-기존 owner를 바꾸면 단순한 DML 권한뿐 아니라 DDL 권한, RLS owner 예외,
-`SECURITY DEFINER` 함수와 뷰의 실행 권한도 달라질 수 있다. 따라서 기존 역할을
-추측해 일괄 GRANT하거나 스키마 owner의 member로 만드는 방식은 사용하지 않는다.
+기존 전용 계정은 신뢰 정책 및 DB 역할이 정확히 일치하는지만 읽어 검증한다.
+다른 역할이 있거나 필요한 역할이 없으면 PUT/REVOKE/권한 정규화 없이 중단한다.
+사용자가 로그인한 기존 IAM DB 사용자를 임시 관리자로 승격하거나 그 역할을
+회수하지 않는다. Data API 활성화와 권한 설정 SQL 경로도 사용하지 않는다.
 
-## 이미 영향을 받은 DB의 복구
+일반 연결·복구는 schema principal을 구성하지 않는다. 이미 별도 구성된 schema
+credential의 엄격한 IAM·Desktop owner 검증은 유지한다. 스키마 관리 권한을
+확보하기 위해 기존 객체를 인수하거나 PUBLIC 권한을 회수하지 않는다. 기존
+PostgreSQL/MySQL 중 안전한 자동 구성이 없는 엔진은 외부 변경 전에 중단하고
+member-local 자격 증명 연결을 안내한다.
 
-관리자는 먼저 정확한 provider project·instance·database·접속 계정을 확인한다.
-기존 소유권은 현재 catalog만으로 원래 owner를 복원할 수 없으므로 변경 기록과
-애플리케이션 migration 역할을 별도로 확인해야 한다.
+이전 버전이 남긴 복구 journal은 관리자 검토를 위한 증거로 보존한다. 재연결로
+기존 사용자 권한을 추정해 복원하거나 사용자를 삭제하지 않는다.
 
-서버 데이터 접근 복구는 다음 범위를 따로 검토한다.
+## 다른 공급자에도 적용되는 경계
 
-1. 해당 서버 역할의 기존 테이블 DML, 시퀀스 사용, 실제 사용하는 함수 실행 권한.
-2. **실제 객체 생성 역할**의 `public` 기본 권한: 테이블 DML, 시퀀스 사용,
-   필요한 함수 실행. 서버 역할 자체의 기본 권한만 설정해도 다른 역할이 만드는
-   객체에는 적용되지 않는다.
-3. 기존 RLS, 함수·뷰 실행 문맥, migration의 ALTER/DROP, readonly 역할 및 CDC 등
-   다른 소비자. DML GRANT 성공을 이들의 복구 완료로 간주하지 않는다.
-4. transaction 안에서 필요한 객체에만 변경하고, 서버 자격 증명으로 사후 검증한다.
-   향후 객체의 권한은 격리 DB에서 동일 생성 역할과 서버 역할로 검증한다.
+Neon preflight에서 PUBLIC 접근을 바꿔야 하면 실행 가능한 변경안이 아니라 blocker로
+반환한다. 스키마 자격 증명 발급은 이미 준비된 owner를 검증하며 기존 객체 소유권이나
+기존 사용자 membership을 자동 변경하지 않는다. 데이터 lease는 새 DopeDB 임시 role의
+직접 GRANT만 구성하고, 기존 생성 역할의 기본 권한은 발급/회수 모두에서 바꾸지 않는다.
+따라서 해당 lease가 발급된 뒤 만들어진 객체는 다음 lease에서 다시 확인해야 한다.
+복제한 브랜치의 기존 role도 이름만 보고 비밀번호를 지우거나 세션을 종료하지 않는다.
+이전 자격 증명 흔적이 있으면 관리자가 별도 확인할 때까지 관리형 접근을 차단한다.
 
-원래 owner로 돌려야 하는 경우에는 Desktop의 owner 정책까지 포함한 별도 검토가
-필요하다. 서버를 스키마 owner의 member로 만들거나 runtime 검증을 완화하지 않는다.
+임시 lease가 직접 만든 객체의 정리와 명시적으로 요청한 DDL은 연결 과정의 기존
+애플리케이션 객체 인수와 구별한다. prefix만으로 소유권을 추정하지 않는다.
 
-## 회귀 검증
+## 이미 영향을 받은 DB
 
-`node scripts/test-gcp-schema-policy.mjs`는 실제 production SQL 생성기를 사용해
-로컬 PostgreSQL cluster를 만들고 종료·삭제한다. PostgreSQL 16 이상과 Node 24가
-필요하며, 바이너리가 PATH에 없으면 `PG_BIN`으로 bin 디렉터리를 지정한다.
+실제 서버 계정의 변경 이력과 원래 객체 생성 역할을 별도로 확인해야 한다. 현재
+catalog만 보고 원래 owner나 기본 ACL을 추정해 복원하지 않는다. 기존 테이블,
+향후 스키마/테이블, sequence, 함수 실행, RLS, migration DDL, 다른 소비자까지
+검토한 명시적인 관리자 작업으로만 복구한다.
 
-- 거부된 설정 전후의 객체 owner·ACL·기본 권한·RLS가 동일한지 비교한다.
-- 기존 서버의 DDL과 SECURITY DEFINER 함수 호출이 유지되는지 확인한다.
-- 기존 PUBLIC 접근을 설정이 회수하지 않는지 확인한다.
-- 사전 검토된 schema owner의 반복 설정 후에도 기존 및 새 객체의 실제 서버
-  INSERT/UPDATE/SELECT/DELETE, sequence와 함수 접근이 작동하는지 확인한다.
-- 관련 없는 역할에 새 권한이나 schema-owner membership이 생기지 않는지 확인한다.
+## 검증
 
-Workspace 계약 테스트는 뒤쪽 DB의 충돌이 앞쪽 DB의 정책 설치보다 먼저 검출되는지
-검증한다. 이 테스트는 클라우드 계정이나 실제 DB를 사용하지 않는다.
+`pnpm --dir workspace-cloud test:contracts`는 기존 역할/신뢰 충돌에서 mutation이
+발생하지 않는지, 새 DB 사용자만 생성 시 필요한 역할을 받는지, 반복 연결이 기존
+역할을 재작성하지 않는지, 복구 journal로 사용자 변경을 시작하지 않는지 확인한다.
 
-PostgreSQL의 [기본 권한](https://www.postgresql.org/docs/current/sql-alterdefaultprivileges.html),
-[행 보안](https://www.postgresql.org/docs/current/ddl-rowsecurity.html),
-[ALTER TABLE](https://www.postgresql.org/docs/current/sql-altertable.html) 계약을 따른다.
+`PG_BIN=/path/to/postgresql/bin node scripts/test-gcp-schema-policy.mjs`는 실제 역할
+선택 함수를 사용해 격리 PostgreSQL cluster에서 기존 owner·RLS·ACL·기본 권한·
+membership 보존, 기존 및 새 스키마의 서버 읽기/쓰기, 관리형 read/write 권한 구분을
+검증한다. 실제 Cloud SQL API와 사용자 OAuth→Desktop 연결 성공은 별도 운영 검증이다.
+
+근거: [Cloud SQL IAM 사용자 역할 지정](https://docs.cloud.google.com/sql/docs/postgres/add-manage-iam-users),
+[PostgreSQL predefined roles](https://www.postgresql.org/docs/current/predefined-roles.html).

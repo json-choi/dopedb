@@ -28,6 +28,14 @@ Project-resource grant와 process ancestry에만 묶인 runtime-only endpoint이
 
 ## 기본 흐름
 
+연결·재연결·가져오기·복구·자격 증명 발급/회수·연결 해제는 기존 애플리케이션
+사용자의 role membership, 비밀번호, 권한, 기본 권한, PUBLIC/공유 role ACL,
+객체 소유권을 바꾸지 않는다. 연결 승인은 접근 권한 마이그레이션 승인이 아니다.
+새 DopeDB 전용 principal만 구성하고 기존 principal은 변경 없이 검증한다.
+정확한 소유권이 입증된 변경만 정리하며 이름 prefix만으로 복구 권한을 추정하지
+않는다. 안전한 연결이 불가능하면 구체적인 이유로 중단한다. 연결과 실패한 복구
+뒤에도 기존 서버가 기존 및 새 스키마/객체를 읽는지 회귀 검증한다.
+
 1. `git status --short --branch`로 다른 작업을 확인하고 보존한다.
 2. 현재 `main`에서 요청 범위만 변경한다. Issue, 별도 branch, PR은 필요할
    때나 사용자가 요청할 때만 만든다.

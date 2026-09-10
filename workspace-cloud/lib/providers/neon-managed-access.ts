@@ -11,7 +11,6 @@ import {
   NEON_PUBLIC_SCHEMA_ESCAPE_SQL,
   NEON_ROLE_CONNECTION_LIMIT,
   createNeonScramVerifier,
-  neonInheritedRoleRetirementStatement,
   neonLeaseRole,
   neonLeaseRoleName,
   neonOwnerRoleName,
@@ -40,20 +39,6 @@ import {
 } from "./neon-api";
 import { listNeonBranches } from "./neon-branch-inventory-api";
 
-const MAX_INHERITED_NEON_LEASE_ROLES = 200;
-
-function safeInheritedLeaseRoleRow(row: Record<string, unknown>) {
-  return neonLeaseRoleName(row.role_name)
-    && row.superuser === false
-    && row.inherits === true
-    && row.create_role === false
-    && row.create_database === false
-    && row.replication === false
-    && row.bypass_rls === false
-    && row.connection_limit === NEON_ROLE_CONNECTION_LIMIT
-    && row.no_memberships === true
-    && row.no_members === true;
-}
 
 export async function retireInheritedNeonLeaseRoles(input: {
   credential: NeonCredential;
@@ -78,81 +63,15 @@ export async function retireInheritedNeonLeaseRoles(input: {
   const connection = await ownerConnection(input.credential, resource);
   const sql = sqlClient(connection.connectionUri);
   try {
+    // A copied role name is not proof that DopeDB owns the existing account.
+    // Keep the branch fenced without disabling accounts or terminating sessions.
     const rows = await sql.query(
-      "SELECT r.rolname AS role_name, r.rolsuper AS superuser, "
-        + "r.rolinherit AS inherits, r.rolcreaterole AS create_role, "
-        + "r.rolcreatedb AS create_database, r.rolreplication AS replication, "
-        + "r.rolbypassrls AS bypass_rls, r.rolconnlimit AS connection_limit, "
-        + "NOT EXISTS (SELECT 1 FROM pg_auth_members m WHERE m.member = r.oid) "
-        + "AS no_memberships, "
-        + "NOT EXISTS (SELECT 1 FROM pg_auth_members m WHERE m.roleid = r.oid) "
-        + "AS no_members FROM pg_roles r "
-        + "WHERE r.rolname ~ '^dopedb_[a-z0-9]{1,8}_[a-z0-9]{1,32}$' "
-        + "AND r.rolname !~ '^dopedb_policy_[0-9a-f]{16}$' "
-        + "ORDER BY r.rolname LIMIT 201",
+      "SELECT rolname FROM pg_roles "
+        + "WHERE rolname ~ '^dopedb_[a-z0-9]{1,8}_[a-z0-9]{1,32}$' "
+        + "AND rolname !~ '^dopedb_policy_[0-9a-f]{16}$' LIMIT 1",
     );
-    if (
-      rows.length > MAX_INHERITED_NEON_LEASE_ROLES
-      || rows.some((row) => !safeInheritedLeaseRoleRow(row))
-    ) {
-      throw new NeonInheritedCredentialFenceConflictError();
-    }
-    const roles = rows.map((row) => row.role_name as string);
-    if (roles.length > 0) {
-      await sql.transaction(
-        roles.map((role) => sql.query(
-          neonInheritedRoleRetirementStatement(role),
-        )),
-      );
-      // Commit NOLOGIN/password removal before terminating sessions. Otherwise
-      // a preserved password could open one last session between termination
-      // and the transaction commit.
-      await sql.query(
-        "SELECT pg_terminate_backend(pid) AS terminated FROM pg_stat_activity "
-          + "WHERE pid <> pg_backend_pid() AND usename = ANY($1::text[])",
-        [roles],
-      );
-    }
-    const verified = await sql.query(
-      "SELECT r.rolname AS role_name, r.rolcanlogin AS can_login, "
-        + "r.rolvaliduntil <= now() AS expired, r.rolsuper AS superuser, "
-        + "r.rolinherit AS inherits, r.rolcreaterole AS create_role, "
-        + "r.rolcreatedb AS create_database, r.rolreplication AS replication, "
-        + "r.rolbypassrls AS bypass_rls, r.rolconnlimit AS connection_limit, "
-        + "NOT EXISTS (SELECT 1 FROM pg_auth_members m WHERE m.member = r.oid) "
-        + "AS no_memberships, "
-        + "NOT EXISTS (SELECT 1 FROM pg_auth_members m WHERE m.roleid = r.oid) "
-        + "AS no_members FROM pg_roles r "
-        + "WHERE r.rolname ~ '^dopedb_[a-z0-9]{1,8}_[a-z0-9]{1,32}$' "
-        + "AND r.rolname !~ '^dopedb_policy_[0-9a-f]{16}$' "
-        + "ORDER BY r.rolname LIMIT 201",
-    );
-    const verifiedRoles = verified.map((row) => row.role_name);
-    if (
-      verified.length !== roles.length
-      || verified.some((row) => (
-        !safeInheritedLeaseRoleRow(row)
-        || row.can_login !== false
-        || row.expired !== true
-      ))
-      || verifiedRoles.some((role, index) => role !== roles[index])
-    ) {
-      throw new NeonInheritedCredentialFenceConflictError();
-    }
-    if (roles.length > 0) {
-      const sessions = await sql.query(
-        "SELECT 1 AS active FROM pg_stat_activity "
-          + "WHERE pid <> pg_backend_pid() AND usename = ANY($1::text[]) LIMIT 1",
-        [roles],
-      );
-      if (sessions.length > 0) {
-        throw new ProviderRequestError(
-          "neon",
-          "Neon inherited credential sessions are still closing",
-          503,
-        );
-      }
-    }
+    if (rows.length > 0) throw new NeonInheritedCredentialFenceConflictError();
+    const roles: string[] = [];
     return {
       retiredInheritedRoleCount: roles.length,
       credentialFenceFingerprint: createHash("sha256")
@@ -341,31 +260,10 @@ async function ensureNeonSchemaPolicy(
   const marker = neonPolicyRoleIdentity(resource);
   const state = await neonPolicyOwner(sql, resource, expectedOwner);
   const ownership = await generatedOwnershipStatements(sql, resource, marker.name);
-  if (state.active) {
-    if (ownership.length > 0) {
-      await sql.transaction(ownership.map((statement) => sql.query(statement)));
-    }
-    return marker.name;
-  }
-
-  const existing = await sql.query(
-    "SELECT 1 AS present FROM pg_roles WHERE rolname = $1",
-    [marker.name],
-  );
-  const setup = existing.length === 0
-    ? [
-      `CREATE ROLE ${identifier(marker.name)} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`,
-      `COMMENT ON ROLE ${identifier(marker.name)} IS '${marker.comment}'`,
-    ]
-    : [];
-  await sql.transaction([
-    ...setup,
-    `GRANT ${identifier(marker.name)} TO ${identifier(expectedOwner)} WITH INHERIT TRUE, SET TRUE`,
-    ...ownership,
-  ].map((statement) => sql.query(statement)));
-  const active = await neonPolicyOwner(sql, resource, expectedOwner);
-  if (!active.active || active.name !== marker.name) {
-    throw new NeonBoundaryError("Neon schema policy owner could not be activated");
+  if (!state.active || ownership.length > 0) {
+    throw new NeonBoundaryError(
+      "Neon schema access requires a separately prepared owner. Existing ownership and role memberships were preserved",
+    );
   }
   return marker.name;
 }

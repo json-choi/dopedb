@@ -81,7 +81,6 @@ export const GCP_SETUP_ROLE_REQUIREMENTS = [
     purpose: "연결 전용 서비스 계정 생성과 IAM 정책 구성",
     permissions: [
       "iam.serviceAccounts.create",
-      "iam.serviceAccounts.delete",
       "iam.serviceAccounts.getIamPolicy",
       "iam.serviceAccounts.setIamPolicy",
     ],
@@ -100,12 +99,9 @@ export const GCP_SETUP_ROLE_REQUIREMENTS = [
     label: "Cloud SQL Admin",
     purpose: "IAM DB 인증과 전용 데이터베이스 사용자 구성",
     permissions: [
-      "cloudsql.instances.executeSql",
       "cloudsql.instances.update",
       "cloudsql.users.create",
-      "cloudsql.users.delete",
       "cloudsql.users.list",
-      "cloudsql.users.update",
     ],
   },
 ] as const;

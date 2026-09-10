@@ -1,15 +1,4 @@
-import type { GcpSetupCredential } from "./gcp-cloud-oauth";
-import { ProviderRequestError } from "./provider-types";
-import type { JsonObject } from "./gcp-cloud-bootstrap-core";
-
-export type GcpDatabaseBootstrapUser = {
-  user: JsonObject;
-  created: boolean;
-  engine: "postgres" | "mysql";
-  originalRoles: string[];
-  temporaryRoles: string[];
-};
-
+// Parse prior interrupted setup records for manual review only; no role mutation.
 export type GcpDatabaseBootstrapRecovery = {
   version: 1;
   projectId: string;
@@ -22,10 +11,6 @@ export type GcpDatabaseBootstrapRecovery = {
   originalRoles: string[];
   temporaryRoles: string[];
 };
-
-export type GcpDatabaseBootstrapRecoveryWriter = (
-  recovery: GcpDatabaseBootstrapRecovery | null,
-) => Promise<void>;
 
 function validDatabaseRoleList(value: unknown): value is string[] {
   return Array.isArray(value)
@@ -68,51 +53,4 @@ export function parseDatabaseBootstrapRecovery(
   ) return null;
   if (temporaryRoles.some((role) => originalRoles.includes(role))) return null;
   return recovery as GcpDatabaseBootstrapRecovery;
-}
-
-export function databaseBootstrapRecovery(
-  projectId: string,
-  instanceId: string,
-  setupEmail: string,
-  bootstrap: GcpDatabaseBootstrapUser,
-): GcpDatabaseBootstrapRecovery {
-  if (typeof bootstrap.user.name !== "string") {
-    throw new ProviderRequestError(
-      "gcpCloudSql",
-      "Cloud SQL setup database user is unavailable",
-      409,
-    );
-  }
-  return {
-    version: 1,
-    projectId,
-    instanceId,
-    setupEmail,
-    userName: bootstrap.user.name,
-    userHost: typeof bootstrap.user.host === "string" ? bootstrap.user.host : "",
-    created: bootstrap.created,
-    engine: bootstrap.engine,
-    originalRoles: bootstrap.originalRoles,
-    temporaryRoles: bootstrap.temporaryRoles,
-  };
-}
-
-export async function updateDatabaseBootstrapRecovery(
-  credential: GcpSetupCredential,
-  projectId: string,
-  instanceId: string,
-  bootstrap: GcpDatabaseBootstrapUser,
-  temporaryRoles: string[],
-  writeRecovery: GcpDatabaseBootstrapRecoveryWriter,
-) {
-  bootstrap.temporaryRoles = [...new Set([
-    ...bootstrap.temporaryRoles,
-    ...temporaryRoles.filter((role) => !bootstrap.originalRoles.includes(role)),
-  ])].sort();
-  await writeRecovery(databaseBootstrapRecovery(
-    projectId,
-    instanceId,
-    credential.email,
-    bootstrap,
-  ));
 }

@@ -272,12 +272,17 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
   고정한 채 OAuth를 다시 받고 IAM DB 인증 flag와 전용 DB 사용자를 재검증·복구한
   뒤 같은 DB 행으로 돌아온다. 기존 connection ID와 멤버 grant는 유지한다.
 - GCP Cloud SQL 연결·복구 승인은 기존 애플리케이션 객체의 소유권 이전이나
-  `PUBLIC` 접근 회수를 승인하지 않는다. 관리형 스키마 정책은 이미 격리된 안정적
-  owner에만 적용하며, 기존 객체·함수·공유 권한을 바꿔야 하면 모든 DB를 사전 검사한
-  뒤 중단한다. 기존 서버의 DML·DDL·RLS·함수 실행 및 신규 객체 권한을 검토한 별도
-  마이그레이션 없이 자동 인수하지 않는다. 이 조건에서는 연결·복구가 완료되지
-  않으며, 오류를 숨기거나 Desktop의 owner 검증을 완화하지 않는다. 상세 경계는
+  `PUBLIC` 접근 회수, 기존 사용자 승격/권한 정규화, 기본 권한 변경을 승인하지
+  않는다. PostgreSQL 14 이상은 새 전용 데이터 계정 생성 시 predefined data role만
+  부여하고 기존 계정은 변경 없이 검증한다. 과거 신뢰 정책의 principal은 보존하고
+  정책 세대가 분리된 새 계정을 사용한다. 일반 연결·복구는 schema principal을
+  자동 구성하지 않으며, 기존에 별도 검증된 schema credential의 엄격한 런타임
+  검증은 유지한다. 안전한 자동 구성이 없는 이전 PostgreSQL/MySQL은 변경 전에
+  중단하고 member-local 연결을 안내한다. 상세 경계는
   [`GCP_SCHEMA_ACCESS_SAFETY.md`](GCP_SCHEMA_ACCESS_SAFETY.md)를 따른다.
+- Neon 역시 연결 과정에서 PUBLIC·기본 권한·기존 객체 소유권을 바꾸지 않는다.
+  스키마 접근은 별도 준비된 정책 owner가 있을 때만 제공하며, 복제 브랜치의 기존
+  계정을 이름만으로 비활성화하지 않고 관리형 접근을 차단해 관리자 검토를 요청한다.
 - enabled control은 반드시 실제 command와 state owner를 가진다. 아직 없는 기능은
   tracker에 `missing`으로 기록하고 가짜 control을 만들지 않는다.
 
@@ -327,7 +332,7 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
 | PD-15 | project/files tool window | `범위 밖` | 일반 filesystem 탐색은 제품 밖이다. |
 | PD-16 | data source template lifecycle | `구현` | workspace가 redacted template과 grant를 공유하고 자격 증명은 member-local 또는 단기 managed lease로 분리한다. MVP의 provider import는 항상 새 managed connection을 만들며 기존 member-local connection을 ID 보존 방식으로 전환하는 migration UI/API는 두지 않는다. |
 | PD-17 | DDL file data source/mapping | `범위 밖` | 파일을 data source로 취급하지 않는다. |
-| PD-18 | 검증된 DBMS/driver/credential broker 확장 | `구현` | 실제 수요가 있고 discovery·발급·TTL·회수·drift·E2E 경계를 닫은 adapter만 추가한다. 일반 PostgreSQL/MySQL은 서버 allowlist의 HashiCorp Vault Database Secrets AppRole로 구성원별 15분 이하 동적 자격증명을 발급할 수 있으며, 공용 static DB 비밀번호 배포는 금지한다. 관리형 DDL은 stable provider-bound owner, 구성원별 단기 schema lease, exact `manage` grant, 객체 소유권 회수와 drift 검증을 모두 구현한 adapter에서만 `Settings → Safety`의 스키마 단계로 제공한다. 현재 이 경계를 닫은 adapter는 Neon과 GCP Cloud SQL PostgreSQL이며, GCP의 기존 연결은 별도 schema principal을 전용 IAM database owner로 프로비저닝하는 관리형 접근 복구 뒤에만 DDL을 허용한다. Cloud SQL MySQL에는 schema lease를 발급하지 않는다. BigQuery는 수정하지 않은 공식 `bq`/`gcloud` CLI와 구성원별 인증만 사용하고 server dry-run·SELECT 제한·과금 바이트 상한·exact job 취소를 갖춘 read-only managed official-CLI driver로 한정한다. 시스템 SDK나 Python 설치를 탐색하지 않고, macOS arm64/x64 또는 Windows x64용 버전·크기·SHA-256 고정 공식 archive와 macOS Python installer 서명을 검증해 앱 전용 런타임을 최초 사용 때 원자적으로 준비한다. 사용자는 앱의 Google 로그인만 실행하며 별도 CLI 설치·명령 입력·버전 관리를 하지 않는다. 연결 onboarding은 project/dataset ID 직접 입력, exact Workspace·구성원 범위의 `gcloud auth login` 브라우저 인증, 서비스 계정 JSON 경로를 개별 member-local connection binding 범위의 `gcloud auth login --cred-file`에 일회성으로 넘기는 세 경로를 제공하며, 인증 뒤 `gcloud` project/`bq` dataset 결과를 실제 selector로 표시한다. 비밀값 없는 BigQuery identity는 Team Project에 공유할 수 있고 각 구성원은 자신의 Google 계정 또는 서비스 계정 credential을 로컬에서 선택한다. 앱은 Google OAuth client, token, refresh token, service-account key 내용이나 경로를 읽거나 저장하지 않는다. |
+| PD-18 | 검증된 DBMS/driver/credential broker 확장 | `구현` | 실제 수요가 있고 discovery·발급·TTL·회수·drift·E2E 경계를 닫은 adapter만 추가한다. 일반 PostgreSQL/MySQL은 서버 allowlist의 HashiCorp Vault Database Secrets AppRole로 구성원별 15분 이하 동적 자격증명을 발급할 수 있으며, 공용 static DB 비밀번호 배포는 금지한다. 관리형 DDL은 stable provider-bound owner, 구성원별 단기 schema lease, exact `manage` grant, 객체 소유권 회수와 drift 검증을 모두 구현한 adapter에서만 `Settings → Safety`의 스키마 단계로 제공한다. Neon과 기존에 별도 검증된 GCP Cloud SQL PostgreSQL schema credential만 이 경계를 통과할 수 있다. GCP 일반 연결·복구는 기존 권한과 소유권을 보존하기 위해 data access만 구성하고 DDL 권한은 자동 확보하지 않는다. 안전한 자동 데이터 계정 구성은 PostgreSQL 14 이상으로 제한한다. Cloud SQL MySQL에는 schema lease를 발급하지 않는다. BigQuery는 수정하지 않은 공식 `bq`/`gcloud` CLI와 구성원별 인증만 사용하고 server dry-run·SELECT 제한·과금 바이트 상한·exact job 취소를 갖춘 read-only managed official-CLI driver로 한정한다. 시스템 SDK나 Python 설치를 탐색하지 않고, macOS arm64/x64 또는 Windows x64용 버전·크기·SHA-256 고정 공식 archive와 macOS Python installer 서명을 검증해 앱 전용 런타임을 최초 사용 때 원자적으로 준비한다. 사용자는 앱의 Google 로그인만 실행하며 별도 CLI 설치·명령 입력·버전 관리를 하지 않는다. 연결 onboarding은 project/dataset ID 직접 입력, exact Workspace·구성원 범위의 `gcloud auth login` 브라우저 인증, 서비스 계정 JSON 경로를 개별 member-local connection binding 범위의 `gcloud auth login --cred-file`에 일회성으로 넘기는 세 경로를 제공하며, 인증 뒤 `gcloud` project/`bq` dataset 결과를 실제 selector로 표시한다. 비밀값 없는 BigQuery identity는 Team Project에 공유할 수 있고 각 구성원은 자신의 Google 계정 또는 서비스 계정 credential을 로컬에서 선택한다. 앱은 Google OAuth client, token, refresh token, service-account key 내용이나 경로를 읽거나 저장하지 않는다. |
 | PD-19 | 고급 connection/session option | `구현` | direct TLS와 시스템 OpenSSH Host alias 하나만 제공하며 키와 passphrase는 OS가 소유한다. |
 | PD-20 | Explorer object authoring | `구현 안 함` | DDL은 Agent가 작성하고 사람은 승인한다. |
 | PD-21 | Settings staged apply/scope | `구현 안 함` | 즉시 또는 section별 저장을 유지한다. |
