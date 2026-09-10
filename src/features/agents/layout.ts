@@ -2,7 +2,7 @@
 export const AGENT_DOCK_DEFAULT_WIDTH = 396;
 export const AGENT_DOCK_MIN_WIDTH = 360;
 export const AGENT_DOCK_MAX_WIDTH = 680;
-export const AGENT_DOCK_MIN_WORKBENCH_WIDTH = 420;
+export const AGENT_DOCK_MIN_WORKBENCH_WIDTH = 480;
 
 export type AgentDockLayout = "compact" | "docked" | "overlay";
 

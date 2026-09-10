@@ -274,6 +274,11 @@ describe("workspace auth lifecycle", () => {
       viewportWidth: 1_200,
       leftToolWindowWidth: 355,
       requestedAgentWidth: 466,
+    })).toBe(true);
+    expect(shouldOverlayAgentDock({
+      viewportWidth: 1_200,
+      leftToolWindowWidth: 296,
+      requestedAgentWidth: 466,
     })).toBe(false);
     expect(shouldOverlayAgentDock({
       viewportWidth: 1_000,

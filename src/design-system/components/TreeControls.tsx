@@ -1,10 +1,45 @@
 // Dense tree controls shared by Database Explorer-style tool windows. These
 // primitives own keyboard toggling and search chrome so feature trees only
 // provide domain labels and results.
-import type { KeyboardEventHandler, ReactNode } from "react";
+import type { HTMLAttributes, KeyboardEventHandler, ReactNode } from "react";
 
 import { Icon, type IconName } from "../../components/Icon";
 import type { TreeKeyboardItem } from "../treeKeyboard";
+
+export function TreeInlineStatus({
+  tone = "neutral",
+  icon,
+  children,
+  action,
+  ...props
+}: {
+  tone?: "neutral" | "danger";
+  icon?: IconName;
+  children: ReactNode;
+  action?: ReactNode;
+} & Omit<HTMLAttributes<HTMLDivElement>, "children" | "className">) {
+  return (
+    <div
+      data-tone={tone}
+      className="tw:grid tw:min-w-0 tw:grid-cols-[var(--ds-icon-sm)_minmax(0,1fr)] tw:items-start tw:gap-x-1.5 tw:gap-y-1 tw:px-2 tw:py-1.5 tw:text-xs tw:leading-body tw:text-muted-foreground tw:data-[tone=danger]:text-danger"
+      {...props}
+    >
+      {icon ? (
+        <Icon
+          name={icon}
+          className="tw:mt-[2px] tw:shrink-0"
+          aria-hidden="true"
+        />
+      ) : (
+        <span aria-hidden="true" />
+      )}
+      <span className="tw:min-w-0 tw:wrap-break-word">{children}</span>
+      {action ? (
+        <span className="tw:col-start-2 tw:justify-self-start">{action}</span>
+      ) : null}
+    </div>
+  );
+}
 
 export function TreeSectionButton({
   expanded,

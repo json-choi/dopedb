@@ -76,9 +76,19 @@ MVP의 provider import는 항상 새 managed connection을 만든다. 기존
 member-local connection을 선택해 ID와 참조를 보존하는 전환 단계는 UI/API 범위에
 없다. 이미 관리형인 exact DB의 provider 권한 복구는 별도 현재 기능으로 유지한다.
 
+2026-09-10 실제 1200px Desktop 화면 검수에서 중앙 작업면의 최소 읽기 폭을
+480px로 보정하고, Explorer 복구 상태를 공용 `TreeInlineStatus`의 짧은 메시지와
+평평한 action으로 정리했다. Welcome command 목록의 불필요한 card 경계도 제거했다.
+AI Chat dock의 하단·오른쪽 4px 여백과 둥근 card 경계를 제거해 title/status
+chrome에 정확히 맞췄다.
+공용 Tooltip과 portal ToolbarMenu의 수동 viewport 계산은 Floating UI 기반의
+자동 갱신·flip·shift·size·숨김 감지로 교체하고 기존 semantic token과 공개 API를
+유지했다.
+같은 상태의 Windows packaged 검수는 남아 있다.
+
 | 영역 | 상태 | 현재 소유자 | 남은 acceptance gap |
 | --- | --- | --- | --- |
-| App shell/chrome | `partial` | `features/appShell`, design-system chrome primitives | 시스템·라이트·다크 semantic palette, 검색의 위아래 여백을 없앤 32px title toolbar와 같은 중앙선의 32px action, 296px Explorer, Workspace·Databases·Articles 탐색과 평평한 main pane을 적용했다. 공용 고리형 D 마크, Agent 말풍선, 브랜드 오른쪽에서 현재 왼쪽 패널을 복원하는 토글을 적용했다. AI Chat 진입은 헤더 오른쪽에만 두고, Explorer 탐색·도구·검색·트리는 12px gutter를 공유한다. 새 macOS 개발 bundle에서 토글 위치·닫기·복원과 헤더 AI Chat 진입을 확인했다. macOS 개발 bundle의 넓은·좁은 창에서 정렬, Explorer·Local History 복원, drawer Escape, 검색, 라이트·다크를 확인했다. 실제 컴포넌트 fixture의 로그인 계정 버튼도 32px와 동일 중앙선을 측정했다. 새 macOS 개발 bundle에서 탐색·검색·Workspace fallback·SQL editor·Agent pane을 확인했다. Local History header의 뒤로 버튼과 상단 메뉴 재선택은 Explorer로 복귀하며, 기존 Explorer를 유지해 검색·트리 상태와 중앙 문서를 보존한다. 실제 macOS 개발 앱의 1200px·520px 창에서 복귀·메뉴 재선택·패널 숨김/복원·검색어 유지·tree focus와 compact Action Search 진입을 확인했다. Windows packaged의 새 palette와 compact 검수는 남아 있다. Knowledge 화면에서는 과거 DB breadcrumb를 제거한다. Agent는 왼쪽 pane과 중앙 420px를 예약한 뒤 360px까지 줄여 dock하며, 공간 부족 시 제목 표시줄과 상태 표시줄 사이의 396px overlay로 전환한다. 하단 Services 패널·토글·resize·저장 상태를 제거하고 중앙 본문과 32px 상태 표시만 유지한다. 브라우저 shell에서 본문이 title/status 사이를 채우는 것을 확인했다. packaged macOS·Windows에서 keyboard launcher와 compact window를 정기 확인 |
+| App shell/chrome | `partial` | `features/appShell`, design-system chrome primitives | 시스템·라이트·다크 semantic palette, 검색의 위아래 여백을 없앤 32px title toolbar와 같은 중앙선의 32px action, 296px Explorer, Workspace·Databases·Articles 탐색과 평평한 main pane을 적용했다. 공용 고리형 D 마크, Agent 말풍선, 브랜드 오른쪽에서 현재 왼쪽 패널을 복원하는 토글을 적용했다. AI Chat 진입은 헤더 오른쪽에만 두고, Explorer 탐색·도구·검색·트리는 12px gutter를 공유한다. 새 macOS 개발 bundle에서 토글 위치·닫기·복원과 헤더 AI Chat 진입을 확인했다. macOS 개발 bundle의 넓은·좁은 창에서 정렬, Explorer·Local History 복원, drawer Escape, 검색, 라이트·다크를 확인했다. 실제 컴포넌트 fixture의 로그인 계정 버튼도 32px와 동일 중앙선을 측정했다. 새 macOS 개발 bundle에서 탐색·검색·Workspace fallback·SQL editor·Agent pane을 확인했다. Local History header의 뒤로 버튼과 상단 메뉴 재선택은 Explorer로 복귀하며, 기존 Explorer를 유지해 검색·트리 상태와 중앙 문서를 보존한다. 실제 macOS 개발 앱의 1200px·520px 창에서 복귀·메뉴 재선택·패널 숨김/복원·검색어 유지·tree focus와 compact Action Search 진입을 확인했다. Windows packaged의 새 palette와 compact 검수는 남아 있다. Knowledge 화면에서는 과거 DB breadcrumb를 제거한다. Agent는 왼쪽 pane과 중앙 480px를 예약한 뒤 360px까지 줄여 dock하며, 공간 부족 시 제목 표시줄과 상태 표시줄 사이의 396px overlay로 전환한다. 하단 Services 패널·토글·resize·저장 상태를 제거하고 중앙 본문과 32px 상태 표시만 유지한다. 브라우저 shell에서 본문이 title/status 사이를 채우는 것을 확인했다. packaged macOS·Windows에서 keyboard launcher와 compact window를 정기 확인 |
 | Action Search | `complete` | `features/actionSearch` | cached catalog scope, `/` action mode, focus 복구와 bounded top-k를 유지 |
 | Welcome document | `complete` | `screens/Onboarding`, `features/onboarding` | 준비된 Demo는 학습 command 3개만, 연결된 상태는 New Query만, 미연결 상태는 New connection과 사용 가능한 Guided Demo만 보여 준다. 전역 Action Search를 반복하지 않고 command 행의 아이콘·경계·focus 상태를 유지한다. Personal 가이드 데모의 idempotent DB·Project·Environment·binding 준비와 상태별 command 집합을 packaged smoke에서 확인 |
 | Workspace account authentication | `partial` | `features/workspaces/WorkspaceAccount`, native workspace deep-link adapter, `workspace-cloud/app/auth/device` | 브라우저 승인 완료 화면은 비밀값 없는 `dopedb://auth/device-complete`로 기존 앱을 활성화하고 즉시 서버 polling을 실행하며 자동 호출이 막힐 때 수동 앱 열기 action을 유지한다. production/dev/benchmark URL scheme 분리와 payload 거절은 자동 검수한다. 실제 Google 승인 왕복을 packaged macOS·Windows에서 확인하면 `complete`로 전환한다. |

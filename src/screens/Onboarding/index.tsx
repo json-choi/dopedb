@@ -107,14 +107,14 @@ export default function Onboarding({
             </p>
           ) : null}
           <div
-            className="tw:overflow-hidden tw:rounded-md tw:border tw:border-border-subtle tw:bg-card"
+            className="tw:grid tw:gap-[2px]"
             aria-label={t("onboarding.title")}
             role="group"
           >
             {commands.map((command) => (
               <div
                 key={command.id}
-                className="tw:border-b tw:border-border-subtle tw:last:border-b-0"
+                className="tw:min-w-0"
               >
                 <Button
                   presentation="menuItem"

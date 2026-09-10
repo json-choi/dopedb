@@ -24,7 +24,7 @@ export function DiagnosticCount({
   return (
     <span
       data-errors={hasErrors || undefined}
-      className="tw:inline-flex tw:min-w-5 tw:items-center tw:justify-center tw:rounded-pill tw:bg-muted tw:px-1.5 tw:text-2xs tw:font-semibold tw:text-muted-foreground tw:data-[errors]:bg-danger-muted tw:data-[errors]:text-danger"
+      className="tw:inline-flex tw:min-w-5 tw:items-center tw:justify-center tw:rounded-xs tw:border tw:border-border-subtle tw:bg-transparent tw:px-1.5 tw:font-mono tw:text-2xs tw:font-medium tw:text-muted-foreground tw:data-[errors]:border-l-2 tw:data-[errors]:border-l-danger tw:data-[errors]:text-danger"
       aria-label={String(count)}
     >
       {count}

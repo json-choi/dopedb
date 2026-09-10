@@ -41,7 +41,7 @@ export function AnalysisArticleReader({ article, projectName, source, connection
     <div ref={outline.scrollRef} className="scrollbar-sleek tw:h-full tw:min-h-0 tw:overflow-y-auto tw:overscroll-contain tw:motion-safe:scroll-smooth">
       <div className="tw:mx-auto tw:grid tw:w-full tw:max-w-[1440px] tw:grid-cols-[minmax(0,1fr)_216px] tw:items-start tw:gap-y-8 tw:gap-x-[clamp(32px,6cqw,88px)] tw:px-[clamp(24px,4.5cqw,60px)] tw:pt-9 tw:pb-20 tw:@max-[920px]:grid-cols-1 tw:@max-[920px]:gap-y-8 tw:@max-[560px]:px-5 tw:@max-[560px]:pt-5">
           <header className="tw:col-start-1 tw:row-start-1 tw:grid tw:gap-5">
-            <span className="tw:w-fit tw:rounded-full tw:bg-muted tw:px-2.5 tw:py-1 tw:text-xs tw:text-muted-foreground">{projectName}</span>
+            <span className="ds-context-badge tw:w-fit">{projectName}</span>
             <h1 className="tw:m-0 tw:max-w-[850px] tw:font-serif tw:text-[clamp(36px,4.7cqw,64px)] tw:leading-[1.08] tw:font-normal tw:tracking-[-0.035em] tw:text-balance tw:[overflow-wrap:anywhere]">{article.definition.title}</h1>
             {article.definition.query.title !== article.definition.title ? <p className="tw:m-0 tw:max-w-[680px] tw:text-[clamp(16px,1.6cqw,20px)] tw:leading-body tw:text-muted-foreground">{article.definition.query.title}</p> : null}
             <div className="tw:mt-1 tw:flex tw:items-center tw:gap-3">

@@ -1,17 +1,18 @@
 import {
   type ButtonHTMLAttributes,
+  useCallback,
   useEffect,
   useId,
-  useLayoutEffect,
   useRef,
   useState,
   type KeyboardEvent,
   type ReactElement,
   type ReactNode,
 } from "react";
+import { autoUpdate, useFloating } from "@floating-ui/react-dom";
 import { createPortal } from "react-dom";
 import { Tooltip } from "../design-system/components/Tooltip";
-import { placeFloatingMenu, type FloatingMenuPosition } from "../lib/floatingMenu";
+import { floatingSurfaceMiddleware } from "../design-system/floating";
 import { Icon, type IconName } from "./Icon";
 
 function menuItems(root: HTMLElement | null) {
@@ -63,7 +64,33 @@ export default function ToolbarMenu({
   const focusFirstOnOpen = useRef(false);
   const lastOpenRequest = useRef(openRequest);
   const [open, setOpen] = useState(false);
-  const [position, setPosition] = useState<FloatingMenuPosition | null>(null);
+  const {
+    refs,
+    floatingStyles,
+    placement,
+    isPositioned,
+    middlewareData,
+  } = useFloating({
+    open,
+    placement: align === "start" ? "bottom-start" : "bottom-end",
+    strategy: "fixed",
+    middleware: floatingSurfaceMiddleware(),
+    whileElementsMounted: autoUpdate,
+  });
+  const setTrigger = useCallback(
+    (node: HTMLButtonElement | null) => {
+      triggerRef.current = node;
+      refs.setReference(node);
+    },
+    [refs],
+  );
+  const setMenu = useCallback(
+    (node: HTMLDivElement | null) => {
+      menuRef.current = node;
+      refs.setFloating(node);
+    },
+    [refs],
+  );
 
   useEffect(() => {
     if (
@@ -75,76 +102,20 @@ export default function ToolbarMenu({
     if (disabled) return;
     lastOpenRequest.current = openRequest;
     focusFirstOnOpen.current = true;
-    setPosition(null);
     setOpen(true);
   }, [disabled, openRequest]);
 
   function close({ restoreFocus = false } = {}) {
     setOpen(false);
-    setPosition(null);
     if (restoreFocus) {
       window.requestAnimationFrame(() => triggerRef.current?.focus());
     }
   }
 
-  useLayoutEffect(() => {
-    if (!open) return;
-    let frame = 0;
-    const update = () => {
-      window.cancelAnimationFrame(frame);
-      frame = window.requestAnimationFrame(() => {
-        const trigger = triggerRef.current?.getBoundingClientRect();
-        const menu = menuRef.current?.getBoundingClientRect();
-        if (!trigger || !menu) return;
-        if (
-          trigger.width === 0 ||
-          trigger.height === 0 ||
-          trigger.right <= 0 ||
-          trigger.bottom <= 0 ||
-          trigger.left >= window.innerWidth ||
-          trigger.top >= window.innerHeight
-        ) {
-          close();
-          return;
-        }
-        const rootStyle = getComputedStyle(document.documentElement);
-        const gap =
-          Number.parseFloat(rootStyle.getPropertyValue("--ds-popover-offset-lg")) || 6;
-        const margin =
-          Number.parseFloat(rootStyle.getPropertyValue("--ds-viewport-gutter")) || 8;
-        setPosition(
-          placeFloatingMenu(
-            trigger,
-            menu,
-            { width: window.innerWidth, height: window.innerHeight },
-            { align, gap, margin },
-          ),
-        );
-      });
-    };
-    update();
-    const observer = new ResizeObserver(update);
-    if (triggerRef.current) observer.observe(triggerRef.current);
-    if (menuRef.current) observer.observe(menuRef.current);
-    window.addEventListener("resize", update);
-    document.addEventListener("scroll", update, true);
-    return () => {
-      window.cancelAnimationFrame(frame);
-      observer.disconnect();
-      window.removeEventListener("resize", update);
-      document.removeEventListener("scroll", update, true);
-    };
-  }, [align, open]);
-
   useEffect(() => {
-    const trigger = triggerRef.current;
-    if (!open || !trigger) return;
-    const observer = new IntersectionObserver(([entry]) => {
-      if (!entry?.isIntersecting) close();
-    });
-    observer.observe(trigger);
-    return () => observer.disconnect();
-  }, [open]);
+    if (!open || !middlewareData.hide?.referenceHidden) return;
+    close();
+  }, [middlewareData.hide?.referenceHidden, open]);
 
   useEffect(() => {
     if (!open) return;
@@ -173,10 +144,10 @@ export default function ToolbarMenu({
   }, [open]);
 
   useEffect(() => {
-    if (!open || !position || !focusFirstOnOpen.current) return;
+    if (!open || !isPositioned || !focusFirstOnOpen.current) return;
     focusFirstOnOpen.current = false;
     menuItems(menuRef.current)[0]?.focus();
-  }, [open, position]);
+  }, [isPositioned, open]);
 
   function moveFocus(event: KeyboardEvent<HTMLDivElement>) {
     if (event.target instanceof HTMLTextAreaElement) {
@@ -206,18 +177,16 @@ export default function ToolbarMenu({
   const menu = open
     ? createPortal(
         <div
-          ref={menuRef}
+          ref={setMenu}
           id={menuId}
           role="menu"
           aria-label={label}
-          data-placement={position?.placement}
+          data-placement={placement.split("-")[0]}
           data-size={menuSize}
           className="tw:fixed tw:z-[var(--ds-z-popover)] tw:grid tw:max-h-[calc(100dvh-(var(--ds-viewport-gutter)*2))] tw:min-w-[var(--ds-menu-min-width)] tw:max-w-[min(var(--ds-menu-max-width),calc(100vw-(var(--ds-viewport-gutter)*2)))] tw:gap-[var(--ds-segment-gap)] tw:overflow-auto tw:overscroll-contain tw:rounded-md tw:border tw:border-border-strong tw:bg-popover tw:p-1 tw:text-popover-foreground tw:shadow-popover tw:data-[size=scope]:w-[min(var(--ds-schema-scope-menu-width),calc(100vw-(var(--ds-viewport-gutter)*2)))] tw:data-[size=tasks]:w-[min(380px,calc(100vw-(var(--ds-viewport-gutter)*2)))] tw:data-[size=tasks]:max-w-none"
           style={{
-            left: position?.left ?? 0,
-            top: position?.top ?? 0,
-            maxHeight: position?.maxHeight,
-            visibility: position ? "visible" : "hidden",
+            ...floatingStyles,
+            visibility: isPositioned ? "visible" : "hidden",
           }}
           onKeyDown={moveFocus}
           onClick={(event) => {
@@ -237,7 +206,7 @@ export default function ToolbarMenu({
 
   const triggerButton = (
     <button
-      ref={triggerRef}
+      ref={setTrigger}
       type="button"
       data-custom={Boolean(trigger)}
       data-variant={triggerVariant}
@@ -252,7 +221,6 @@ export default function ToolbarMenu({
       onClick={() => {
         if (open) close();
         else {
-          setPosition(null);
           setOpen(true);
         }
       }}
@@ -260,7 +228,6 @@ export default function ToolbarMenu({
         if (event.key !== "ArrowDown") return;
         event.preventDefault();
         focusFirstOnOpen.current = true;
-        setPosition(null);
         setOpen(true);
       }}
     >

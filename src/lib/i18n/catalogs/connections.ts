@@ -50,6 +50,10 @@ export const connectionsCatalog = defineCatalog(
       "This managed database connection needs repair. Open its Workspace settings; short-lived credentials resume automatically after repair.",
     "connections.managedWorkspace.recoveryRequiredMember":
       "This managed database connection needs repair. Ask a Workspace manager to repair its provider connection.",
+    "connections.managedWorkspace.recoveryRequiredManagerCompact":
+      "Managed connection repair is required.",
+    "connections.managedWorkspace.recoveryRequiredMemberCompact":
+      "A Workspace manager must repair this connection.",
     "connections.managedWorkspace.openFailed":
       "Could not open this database in Workspace Web: {error}",
     "connections.connectionSaved": "Connection saved",
@@ -502,6 +506,10 @@ export const connectionsCatalog = defineCatalog(
       "이 관리형 DB 연결을 복구해야 합니다. 워크스페이스 설정에서 복구하면 단기 자격 증명은 다시 자동 갱신됩니다.",
     "connections.managedWorkspace.recoveryRequiredMember":
       "이 관리형 DB 연결을 복구해야 합니다. 워크스페이스 관리자에게 공급자 연결 복구를 요청하세요.",
+    "connections.managedWorkspace.recoveryRequiredManagerCompact":
+      "관리형 연결 복구가 필요합니다.",
+    "connections.managedWorkspace.recoveryRequiredMemberCompact":
+      "워크스페이스 관리자가 이 연결을 복구해야 합니다.",
     "connections.managedWorkspace.openFailed":
       "워크스페이스 웹에서 이 DB를 열지 못했습니다: {error}",
     "connections.connectionSaved": "연결이 저장되었습니다",

@@ -74,7 +74,7 @@ export function AcpScopeSelect({
           >
             <span className="tw:min-w-0 tw:flex-1 tw:truncate">{visibleSelection}</span>
             {selectedCount > 0 ? (
-              <span className="tw:shrink-0 tw:rounded-full tw:bg-muted tw:px-1.5 tw:text-2xs tw:font-semibold tw:text-muted-foreground">
+              <span className="tw:shrink-0 tw:rounded-xs tw:border tw:border-border-subtle tw:bg-transparent tw:px-1.5 tw:font-mono tw:text-2xs tw:font-medium tw:text-muted-foreground">
                 {selectedCount}
               </span>
             ) : null}

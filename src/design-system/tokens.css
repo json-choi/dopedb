@@ -168,7 +168,7 @@
   --ds-danger-emphasis: var(--ds-critical-emphasis);
 
   /* Trust/risk surfaces for agent-native workflows. */
-  --ds-trust-bg: var(--ds-positive-soft);
+  --ds-trust-bg: var(--ds-surface-1);
   --ds-trust-border: color-mix(in srgb, var(--ds-positive) 25%, transparent);
   --ds-danger-bg: var(--ds-critical-soft);
   --ds-danger-border: color-mix(in srgb, var(--ds-critical) 25%, transparent);
@@ -190,36 +190,36 @@
   --ds-surface-elevated: var(--ds-popover);
 }
 
-/* Original dark palette; theme.ts resolves the system or explicit preference. */
+/* Deep neutral dark palette; theme.ts resolves the system or explicit preference. */
 :root[data-theme="dark"] {
   color-scheme: dark;
   --ds-shadow-control: 0 1px 2px rgb(0 0 0 / 0.18);
-  --ds-shadow-popover: 0 10px 24px rgb(0 0 0 / 0.18);
-  --ds-background: #191a1c;
-  --ds-foreground: #dfe1e5;
-  --ds-card: #26282c;
-  --ds-card-foreground: #dfe1e5;
-  --ds-popover: #26282c;
-  --ds-popover-foreground: #dfe1e5;
+  --ds-shadow-popover: 0 16px 36px rgb(0 0 0 / 0.42);
+  --ds-background: #0c0e12;
+  --ds-foreground: #e5e7eb;
+  --ds-card: #111419;
+  --ds-card-foreground: #e5e7eb;
+  --ds-popover: #171a20;
+  --ds-popover-foreground: #e5e7eb;
   --ds-primary: #3574f0;
   --ds-primary-hover: #467ff2;
-  --ds-secondary: #393b40;
-  --ds-secondary-foreground: #dfe1e5;
-  --ds-muted: #2b2d30;
-  --ds-muted-foreground: #9da0a8;
-  --ds-selection: #30426e;
+  --ds-secondary: #191d24;
+  --ds-secondary-foreground: #e5e7eb;
+  --ds-muted: #171a20;
+  --ds-muted-foreground: #9aa1ab;
+  --ds-selection: #1c2941;
   --ds-destructive: #db5c5c;
-  --ds-input: #43454a;
+  --ds-input: #2a2e36;
   --ds-ring: #548af7;
-  --ds-editor-surface: #191a1c;
-  --ds-worktree-sidebar: #191a1c;
-  --ds-worktree-sidebar-accent: #2b2d30;
+  --ds-editor-surface: #0c0e12;
+  --ds-worktree-sidebar: #090b0e;
+  --ds-worktree-sidebar-accent: #15181d;
   --ds-border-subtle: rgb(255 255 255 / 0.08);
-  --ds-border-strong: #4e5157;
-  --ds-text-subtle: #6f737a;
-  --ds-overlay: rgb(0 0 0 / 0.62);
+  --ds-border-strong: #343942;
+  --ds-text-subtle: #747b86;
+  --ds-overlay: rgb(0 0 0 / 0.72);
   --ds-accent-text: #6b9bfa;
-  --ds-accent-soft: #25324d;
+  --ds-accent-soft: #172137;
   --ds-info: #60a5fa;
   --ds-positive: #86efac;
   --ds-caution: #fbbf24;
@@ -227,5 +227,5 @@
 }
 
 :root[data-theme="dark"] .sidebar {
-  --ds-surface-1: #252629;
+  --ds-surface-1: #101318;
 }

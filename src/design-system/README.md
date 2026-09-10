@@ -25,6 +25,7 @@ packaged runtime 증거가 아니다.
 | Tailwind theme bridge와 진입점 | `src/design-system/index.css` |
 | 버튼·배지·카드·폼·toolbar·상태 | `src/design-system/system.css` |
 | 반복되는 React UI primitive | `src/design-system/components/` |
+| portal surface 위치·충돌 처리 | `src/design-system/floating.ts` + `@floating-ui/react-dom` |
 | 앱 shell과 workbench 레이아웃 | shell·tool-window TSX의 정적 Tailwind utility |
 | 새 화면 고유 배치 | TSX에 직접 작성한 정적 `tw:` utility |
 | React Flow generated DOM | `src/features/erd/ErdCanvas.css` vendor integration |
@@ -325,6 +326,9 @@ Elevation은 세 단계만 허용한다.
   짧은 hover/focus delay, viewport collision, 위·아래 flip, `Esc` dismiss를
   소유한다. `Button iconOnly`는 `title` 또는 `aria-label`을 이 primitive에
   전달해 native tooltip과 화면별 hover popup을 만들지 않는다.
+  portal 위치는 공용 `floatingSurfaceMiddleware`를 통해 Floating UI의
+  `autoUpdate`, `flip`, `shift`, `size`, `hide`를 사용한다. CSS token이 spacing과
+  viewport gutter를 계속 소유하며 feature는 vendor package를 직접 import하지 않는다.
 - `WorkbenchButton`: `Button`을 합성한 query, table, result command row의
   32px label/icon action.
   `variant`, `tone`, `active`, `collapse` data contract로 상태와 compact overflow를
@@ -434,7 +438,7 @@ Elevation은 세 단계만 허용한다.
   folder 아래 DB connection row에만 두고 Data source·Analysis Article·Project
   행에는 반복하지 않는다. Environment는 Explorer folder가 아니라 exact binding
   identity로 유지하며 production도 채운 danger pill로 강조하지 않는다.
-- `TreeSectionButton`, `TreeRowActions`, `TreeSearch`, `VirtualTreeRows`: 객체 트리의
+- `TreeSectionButton`, `TreeRowActions`, `TreeSearch`, `TreeInlineStatus`, `VirtualTreeRows`: 객체 트리의
   일반 문장형 hierarchy row, keyboard toggle, dense object search와 대형 leaf
   row windowing. `TreeSectionButton`의 `selected`는 현재 Project나
   resource folder를 같은 tree selection 문법으로 표시하고 `trailing`은 실제
@@ -449,6 +453,9 @@ Elevation은 세 단계만 허용한다.
   유무나 target 길이가 행 높이를 바꾸지 않는다.
   toggle은 native button이고 interactive row action은 그 sibling이므로 nested
   button을 만들지 않으며, action은 접근성 트리와 keyboard tab 순서에 독립 노출한다.
+  `TreeInlineStatus`는 좁은 트리 안의 오류·접근·재시도 상태를 작은 아이콘,
+  한 개의 읽을 수 있는 메시지와 평평한 보조 action으로 정렬한다. 화면에서 긴
+  본문과 박스형 버튼을 따로 쌓아 resource hierarchy를 끊지 않는다.
   `VirtualTreeRows`의
   inline height/translate는 TanStack React
   Virtual이 측정한 viewport geometry를 적용하는 vendor integration 예외이며,
@@ -560,7 +567,7 @@ DopeDB의 실제 작업 흐름과 접근성, supported viewport를 위한 제품
   296px, Agent의 desktop 기본 폭은 396px이다. 검수된
   `1385×918` AI Chat 상세 참조처럼 약 595px까지 넓힌 값도
   `agentDockWidth`에 독립 저장한다.
-  열린 왼쪽 tool window와 중앙 workbench의 420px, pane gutter를 먼저 예약하고
+  열린 왼쪽 tool window와 중앙 workbench의 480px, pane gutter를 먼저 예약하고
   Agent를 최소 360px까지 일시적으로 줄여 같은 화면에서 함께 읽게 한다.
   이 최소 폭도 확보할 수 없을 때만 Agent는 396px 이내의 modeless 오른쪽
   overlay로 투영한다. overlay는 title toolbar 아래와 status bar 위에만 놓인다.
@@ -608,6 +615,8 @@ DopeDB의 실제 작업 흐름과 접근성, supported viewport를 위한 제품
   fullscreen projection만 `aria-modal="true"`, background `inert`, 공용 topmost
   modal focus·Tab·Escape 계약을 사용한다. 두 projection은 실제 opener를
   복원하고, 위에 열린 popup과 nested modal의 Escape를 먼저 소비하게 한다.
+  docked surface는 별도 card처럼 둥글게 띄우지 않고 title toolbar 아래부터
+  status bar 위까지 정확히 붙으며, 중앙 pane과의 왼쪽 divider 하나만 그린다.
 - Workspace Explorer는 Databases에서 `Project → Databases / Data sources`, Articles에서
   `Project → Articles`를 표시한다. 두 탐색 범위는 배타적이며 Databases 안에 분석
   folder나 Article을 중복 표시하지 않는다. Article 조회와 검색도 Articles 진입에서만 활성화한다. Environment는 exact grant와 binding identity로
@@ -858,19 +867,21 @@ database ERD는 이 renderer가 아니라 기존 React Flow + ELK surface가 소
 | `variant="ghost"` | icon button과 list-row action |
 | `variant="danger"` | 삭제·폐기·되돌릴 수 없는 최종 action |
 | `variant="dangerGhost"` | toolbar의 삭제 후보 action; 최종 확인 전에는 채우지 않음 |
+| 기본 `size` | 36px form·dialog의 일반 text action |
 | `size="compact"` | 32px dense toolbar control |
 | `size="compact" iconOnly` | 32px toolbar icon action; padding 없는 정사각형 |
-| `size="xs" iconOnly` | 24px close·dismiss·inline remove action |
+| `size="xs"` | 28px tool-window header·composer의 compact action |
+| `size="xs" iconOnly` | 28px compact icon action; padding 없는 정사각형 |
 | `size="tree"` | 24px tree-row action; 28px resource row 안에서만 사용 |
 
 Cancel, Close, Dismiss는 destructive가 아니다. 기본 variant 또는 `ghost`를
 사용한다.
 
-아이콘 버튼은 중요도에 따라 세 단계만 사용한다.
+아이콘 버튼은 문맥 밀도에 따라 세 단계만 사용한다.
 
-1. 24px: 패널 닫기, tab/목록의 제거처럼 주변 문맥이 분명한 보조 action
-2. 32px: toolbar, pagination, refresh, overflow menu의 기본 icon action
-3. 36px: title toolbar의 workspace처럼 앱의 주 navigation action
+1. 24px: tree row와 tab·목록 안의 제거처럼 행 높이에 묶인 보조 action
+2. 28px: tool-window header와 composer 안의 compact icon action
+3. 32px: title/workbench toolbar, pagination, refresh, overflow menu의 기본 icon action
 
 아이콘 명령은 `Button iconOnly`를 사용한다. `title` 또는 `aria-label`은 접근 가능한 이름과
 canonical `Tooltip`의 hover/focus 문구를 함께 제공한다. `pnpm
@@ -901,6 +912,9 @@ Surface는 기본적으로 `card + border + rounded-lg + no shadow`다. floating
 - `StatusBadge tone="success"`: 성공/trust
 - `StatusBadge tone="warning"`: warning/review
 - `StatusBadge tone="danger"`: 오류/차단
+- badge는 `radius-xs + neutral surface + 2px left status rule`의 평평한
+  metadata flag를 사용한다. 전체 면을 상태색으로 채우거나 pill 형태로 만들지 않는다.
+- `StatusDot`과 environment dot처럼 단독 상태 indicator인 작은 점만 원형을 허용한다.
 
 ### Form
 

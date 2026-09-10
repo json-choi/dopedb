@@ -59,7 +59,7 @@
   --ds-syntax-ansi-bright-white: #343944;
 }
 
-/* Preserve the original dark ANSI and syntax colors. */
+/* Dark artifact surfaces share the neutral editor canvas. */
 :root[data-theme="dark"] {
   /* xterm ANSI theme. resolvePtyTheme is the only consumer. */
   --ds-terminal-ansi-black: #26282c;
@@ -80,8 +80,8 @@
   --ds-terminal-ansi-bright-white: #dfe1e5;
 
   /* Completed Agent code fences. */
-  --ds-syntax-background: #2b2d30;
-  --ds-syntax-foreground: #dfe1e5;
+  --ds-syntax-background: #0c0e12;
+  --ds-syntax-foreground: #e5e7eb;
   --ds-syntax-comment: #6f737a;
   --ds-syntax-changed: #fbbf24;
   --ds-syntax-constant: #fde68a;

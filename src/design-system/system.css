@@ -151,11 +151,14 @@ h3 {
   gap: var(--ds-space-1);
   padding: 0 var(--ds-space-2);
   border: var(--ds-border-width) solid var(--ds-border-subtle);
-  border-radius: var(--ds-radius-pill);
-  background: var(--ds-secondary);
+  border-left-width: var(--ds-border-width-strong);
+  border-left-color: var(--ds-border-strong);
+  border-radius: var(--ds-radius-xs);
+  background: transparent;
   color: var(--ds-text-muted);
-  font-size: var(--ds-font-size-xs);
-  font-weight: var(--ds-font-weight-semibold);
+  font-family: var(--ds-font-mono);
+  font-size: var(--ds-font-size-2xs);
+  font-weight: var(--ds-font-weight-medium);
   line-height: 1;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -163,7 +166,7 @@ h3 {
 }
 
 .badge.kind {
-  background: var(--ds-selection);
+  background: transparent;
   color: var(--ds-text);
 }
 
@@ -175,11 +178,13 @@ h3 {
   gap: var(--ds-space-2);
   max-width: 240px;
   padding: 0 var(--ds-space-2);
-  border-radius: var(--ds-radius-pill);
-  background: var(--ds-accent-soft);
+  border: var(--ds-border-width) solid var(--ds-border-subtle);
+  border-left: var(--ds-border-width-strong) solid var(--ds-accent-text);
+  border-radius: var(--ds-radius-xs);
+  background: transparent;
   color: var(--ds-accent-text);
   font-size: var(--ds-font-size-xs);
-  font-weight: var(--ds-font-weight-semibold);
+  font-weight: var(--ds-font-weight-medium);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -187,9 +192,9 @@ h3 {
 
 .ds-context-badge::before {
   content: "";
-  width: var(--ds-space-2);
-  height: var(--ds-space-2);
-  border-radius: var(--ds-radius-pill);
+  width: 6px;
+  height: 6px;
+  border-radius: 1px;
   background: currentColor;
   flex-shrink: 0;
 }
@@ -412,7 +417,8 @@ h3 {
   gap: var(--ds-space-2);
   padding: 0 var(--ds-space-3);
   border: var(--ds-border-width) solid var(--ds-border-subtle);
-  border-radius: var(--ds-radius-pill);
+  border-left-width: var(--ds-border-width-strong);
+  border-radius: var(--ds-radius-sm);
   background: var(--ds-surface-0);
   color: var(--ds-text);
   box-shadow: var(--ds-shadow-popover);
