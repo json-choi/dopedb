@@ -29,17 +29,24 @@ runtime과 성능 수치로 수행한다.
   Chrome 1440×960 및 390×844 모바일 에뮬레이션에서 가로 넘침 없이 동작하며,
   선택 해제 시 진행 차단, 승인·거절·재시작, 이미지 dialog의 Escape/focus 복구,
   은하 탐험·정지·Escape를 확인했다. 실제 Safari·모바일 기기 성능 검증은 남아 있다.
-- 동작 줄이기를 모의한 환경과 화면 아래로 이동한 상태에서는 GPU draw 호출이
+- 이전 입자 장면 검수에서 동작 줄이기를 모의한 환경과 화면 아래로 이동한 상태에서는 GPU draw 호출이
   증가하지 않았다. WebGL 미지원 모의 환경은 정적 canvas로 대체했고,
   context loss 이후에도 페이지 재로딩 없이 데모 상태가 유지됐다.
-  모바일은 38,403개 입자와 DPR 1.4 상한, 데스크톱은 79,953개와 DPR 1.75 상한을
-  사용한다. 이 값은 렌더링 예산이지 FPS·검색 순위 보장이 아니다.
-- 2026-09-11 은하 개선: 로그 나선과 확산 원반, 따뜻한 중심부와 푸른 외곽,
-  불규칙한 먼지 소광과 구름 노이즈를 한 GPU buffer에 담았다. 큰 JS number 배열
-  대신 고정 Float32Array를 사용하고 30fps 스케줄·400만 backing pixel 상한을 둔다.
-  로컬 Chromium에서 실제 canvas 움직임·드래그·Escape, pause/화면 밖/동작 줄이기의
-  draw 증가 0, 390px 가로 넘침 없음, context loss·WebGL 미지원 fallback을 확인했다.
-  천문 관측 데이터나 물리 시뮬레이션이 아닌 장식용 은하이며 실제 기기 FPS는 미검증이다.
+  당시 모바일 38,403개·데스크톱 79,953개 입자 renderer는 아래 사진 기반 장면으로 대체했다.
+- 2026-09-11 사진 기반 은하: 이미지 생성으로 만든 짙은 먼지띠·조밀한 별빛·따뜻한
+  중심부 artwork를 1672×941, 460,516바이트 WebP로 사용한다. 실제 관측 사진이 아니다.
+  SSR poster와 같은 source를 한 GPU texture로 공유하며 camera pan/zoom·미세한 깊이
+  시차·전경 별만 합성하는 2.5D 장면이다. RGBA texture 6,293,408바이트와 24바이트
+  정점 buffer 외에 image decode·framebuffer·driver 비용이 있다. 30fps 스케줄,
+  400만 backing pixel·DPR desktop 1.75/mobile 1.4 상한을 유지한다.
+  hero 밖으로 사진이 새지 않도록 clip하고 mobile 본문 대비는 전용 veil로 유지한다.
+  로컬 Chromium에서 1440px/390px 레이아웃, 실제 시차·확대·드래그·Escape,
+  pause 정지 픽셀 일치와 draw 증가 0, 화면 밖/동작 줄이기 draw 증가 0,
+  WebGL loss→동일 사진→context 복구와 미지원 사진 fallback을 확인했다.
+  직접 renderer 생성/폐기 3회에서 texture와 buffer 각각 생성 3·해제 3,
+  dispose 이후 draw 증가 0을 확인했다. 사진 변경 후 site Cloudflare build·root build·
+  hooks/palette/구조 검사도 통과했다.
+  실제 모바일 기기 FPS는 미검증이다.
 - 검증: `pnpm --dir site build:cloudflare`, `pnpm build`, `pnpm test`
   (42개), 구조·hooks·UI primitive/palette 검사 통과. 기존 Next.js의
   middleware 명칭 폐기 예정 및 tracing/turbopack root 설정 경고는 남아 있다.

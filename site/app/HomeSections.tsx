@@ -50,7 +50,7 @@ function HomeAccessSections({ c: existing, lang }: { c: HomeCopy; lang: Lang }) 
       </div>
       <p className="tw:mt-4 tw:text-[11px] tw:leading-[1.8] tw:text-cream-muted/65">{c.proof}</p>
     </GalaxyHero>
-    <section id="product" className="tw:relative tw:z-10 tw:scroll-mt-24 tw:bg-galaxy-reading tw:px-6 tw:pt-5 tw:pb-24 tw:md:px-12 tw:lg:pb-28">
+    <section id="product" className="tw:relative tw:z-10 tw:scroll-mt-24 tw:bg-night tw:px-6 tw:pt-5 tw:pb-24 tw:md:px-12 tw:lg:pb-28">
       <div className="tw:mx-auto tw:max-w-[1264px]">
         <div className="tw:mb-9 tw:grid tw:items-end tw:gap-5 tw:md:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
           <div>

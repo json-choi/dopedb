@@ -46,9 +46,9 @@
   --background-image-hero: var(--hero-background);
   --background-image-download: var(--download-background);
   --background-image-galaxy-veil: var(--galaxy-veil);
+  --background-image-galaxy-mobile-veil: var(--galaxy-mobile-veil);
   --background-image-galaxy-bottom: var(--galaxy-bottom);
   --background-image-galaxy-halo: var(--galaxy-halo);
-  --background-image-galaxy-reading: var(--galaxy-reading);
   --background-image-galaxy-orbit-light: var(--galaxy-orbit-light);
 }
 
@@ -100,16 +100,15 @@
   --landing-signal-strong: #d9ff82;
   --landing-electric: #66d9ff;
   --galaxy-starlight: #f5e9d5;
-  --galaxy-core: #d6b69a;
   --landing-hairline: rgba(241, 244, 233, 0.14);
   --landing-hairline-strong: rgba(241, 244, 233, 0.28);
   --landing-signal-shadow: 0 18px 70px rgba(128, 237, 69, 0.18);
   --landing-stage-shadow: 0 44px 120px rgba(0, 0, 0, 0.52);
   /* Galaxy paint is a palette role; layout and interaction remain static tw: utilities. */
   --galaxy-veil: linear-gradient(90deg, var(--landing-night) 0%, color-mix(in srgb, var(--landing-night) 88%, transparent) 24%, color-mix(in srgb, var(--landing-night) 28%, transparent) 49%, transparent 70%);
+  --galaxy-mobile-veil: linear-gradient(180deg, transparent 8%, color-mix(in srgb, var(--landing-night) 24%, transparent) 22%, color-mix(in srgb, var(--landing-night) 90%, transparent) 34%, color-mix(in srgb, var(--landing-night) 95%, transparent) 76%, var(--landing-night));
   --galaxy-bottom: linear-gradient(0deg, var(--landing-night), transparent);
   --galaxy-halo: radial-gradient(ellipse at center, color-mix(in srgb, var(--landing-signal) 7%, transparent), transparent 65%);
-  --galaxy-reading: linear-gradient(180deg, color-mix(in srgb, var(--landing-night) 76%, transparent), var(--landing-night) 24%);
   --galaxy-orbit-light: radial-gradient(ellipse at 55% 45%, color-mix(in srgb, var(--landing-signal) 10%, transparent), transparent 63%);
   font-family:
     var(--font-site-sans);

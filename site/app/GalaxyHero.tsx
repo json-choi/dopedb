@@ -17,6 +17,7 @@ export function GalaxyHero({
   lang: Lang;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
+  const poster = useRef<HTMLImageElement>(null);
   const galaxy = useRef<GalaxyController | null>(null);
   const exploreButton = useRef<HTMLButtonElement>(null);
   const [available, setAvailable] = useState(false);
@@ -36,8 +37,8 @@ export function GalaxyHero({
       void import("../lib/galaxyRenderer").then(({
         createGalaxy
       }) => {
-        if (disposed || !canvas.current) return;
-        galaxy.current = createGalaxy(canvas.current, value => {
+        if (disposed || !canvas.current || !poster.current) return;
+        galaxy.current = createGalaxy(canvas.current, poster.current, value => {
           if (disposed) return;
           setAvailable(value);
           if (!value) setExploring(false);
@@ -97,8 +98,11 @@ export function GalaxyHero({
     };
   }, [exploring]);
   return <section id="top" data-exploring={exploring} className="tw:relative tw:min-h-[830px] tw:bg-galaxy-orbit-light tw:px-6 tw:pt-[156px] tw:pb-28 tw:data-[exploring=true]:cursor-grab tw:data-[exploring=true]:touch-none tw:md:px-12 tw:max-md:min-h-[940px] tw:max-md:pt-[300px]">
-    <canvas ref={canvas} className="tw:pointer-events-none tw:fixed tw:inset-0 tw:z-0 tw:h-svh tw:w-full tw:opacity-0 tw:transition-opacity tw:duration-700 tw:data-[rendered=true]:opacity-100 tw:motion-reduce:transition-none" aria-hidden="true" />
-    <div data-exploring={exploring} className="tw:pointer-events-none tw:absolute tw:inset-0 tw:bg-galaxy-veil tw:transition-opacity tw:duration-700 tw:data-[exploring=true]:opacity-0 tw:motion-reduce:transition-none tw:max-md:opacity-65" />
+    <div className="tw:pointer-events-none tw:absolute tw:inset-0 tw:overflow-hidden">
+      <img ref={poster} src="/images/galaxy-photographic-v2.webp" width={1672} height={941} alt="" aria-hidden="true" fetchPriority="high" decoding="async" className="tw:absolute tw:inset-0 tw:z-0 tw:h-svh tw:w-full tw:object-cover tw:object-center tw:max-md:object-[65%_center]" />
+      <canvas ref={canvas} className="tw:absolute tw:inset-0 tw:z-0 tw:h-svh tw:w-full tw:opacity-0 tw:transition-opacity tw:duration-700 tw:data-[rendered=true]:opacity-100 tw:motion-reduce:transition-none" aria-hidden="true" />
+    </div>
+    <div data-exploring={exploring} className="tw:pointer-events-none tw:absolute tw:inset-0 tw:bg-galaxy-veil tw:transition-opacity tw:duration-700 tw:data-[exploring=true]:opacity-0 tw:motion-reduce:transition-none tw:max-md:bg-galaxy-mobile-veil" />
     <div className="tw:pointer-events-none tw:absolute tw:inset-x-0 tw:bottom-0 tw:h-44 tw:bg-galaxy-bottom" />
     <div className="tw:relative tw:z-10 tw:mx-auto tw:max-w-[1264px]">
       <div inert={exploring} aria-hidden={exploring} data-exploring={exploring} className="tw:max-w-[720px] tw:transition-[opacity,transform] tw:duration-700 tw:data-[exploring=true]:translate-y-3 tw:data-[exploring=true]:opacity-0 tw:motion-reduce:transition-none">
@@ -111,7 +115,7 @@ export function GalaxyHero({
       </MarketingAction>
       <p className="tw:mt-3 tw:text-center tw:text-[10px] tw:tracking-[0.03em] tw:text-cream-muted/65">
         <span className="tw:max-md:hidden">{exploring ? c.exploreHelp : c.moveHelp}</span>
-        <span className="tw:md:hidden">{exploring ? lang === "ko" ? "손가락으로 드래그하면 회전합니다" : "Drag with your finger to orbit" : lang === "ko" ? "터치해서 은하를 둘러보세요" : "Tap to explore the galaxy"}</span>
+        <span className="tw:md:hidden">{exploring ? lang === "ko" ? "손가락으로 드래그해 둘러보세요" : "Drag with your finger to look around" : lang === "ko" ? "터치해서 은하를 둘러보세요" : "Tap to explore the galaxy"}</span>
       </p>
     </div>}
     <div className="tw:absolute tw:inset-x-6 tw:bottom-8 tw:z-10 tw:flex tw:items-center tw:justify-between tw:gap-5 tw:md:inset-x-12">

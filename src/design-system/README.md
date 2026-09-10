@@ -277,14 +277,18 @@ Elevation은 세 단계만 허용한다.
 - `site/app/HomeSections`는 소개·실제 Desktop 캡처·FAQ·설치 안내를 서버에서
   조합한다. H1과 제품 본문을 JavaScript 실행이나 WebGL 준비 뒤에 숨기지 않는다.
   `GalaxyHero`는 서버 children 위에 장식만 더하는 client island이며,
-  `site/lib/galaxyRenderer`를 첫 paint 뒤에 지연 로드한다. shader의 색은
-  `--galaxy-starlight`, `--galaxy-core`, `--landing-electric`에서 읽고,
-  veil·reading·halo는 사이트 theme의 paint role이다. 한 canvas·한 GPU buffer를
-  사용하며 불규칙한 먼지 소광·구름 노이즈와 중심부/외곽 별 집단을 같은 고정
-  geometry에 담는다. 30fps 스케줄·400만 backing pixel 상한, mobile DPR/입자 수
-  제한, 화면 밖·숨겨진 탭 정지, 동작 줄이기,
-  pause·Escape·pointer cleanup을 소유한다. WebGL 불가 시 정적 canvas 또는
-  CSS 배경을 남기며 context loss 때문에 페이지를 새로고침하지 않는다.
+  `site/lib/galaxyRenderer`를 첫 paint 뒤에 지연 로드한다. 은하의 질감은
+  `site/public/images/galaxy-photographic-v2.webp`의 생성 천체사진 스타일 artwork를
+  사용한다. 실제 관측 이미지나 물리 시뮬레이션이 아니다. 같은 `<img>`를 SSR
+  poster와 WebGL texture source로 공유하고 기존 입자 나선 renderer는 유지하지 않는다.
+  `galaxyScene`은 한 texture·24바이트 triangle buffer와 두 sample로 작은 깊이 시차,
+  camera zoom/pan, 소수의 전경 별을 합성한다. 추가 별빛은 `--galaxy-starlight`,
+  데스크톱/mobile veil·halo는 사이트 theme paint role을 사용한다. WebP는 460,516바이트,
+  1672×941 RGBA texture는 6,293,408바이트이며 브라우저 image decode·framebuffer·driver
+  비용은 별도다. 30fps 스케줄·400만 backing pixel 상한·mobile DPR 1.4,
+  화면 밖·숨겨진 탭 정지, 동작 줄이기, pause·Escape·pointer cleanup을 소유한다.
+  WebGL 실패/context loss 중에는 같은 사진을 유지하고 복구 시 GPU만 다시 만든다.
+  배경은 hero 내부에서 clip하고 mobile 본문 아래는 전용 veil로 대비를 유지한다.
   `HomeScopeWalkthrough`는 실제 DB·SQL 실행·저장 없이 reducer로만 움직이는
   설명용 데모다. `HomeDemoShowcase`는 native dialog의 focus/scroll 복구를
   소유하며 JavaScript가 없으면 원본 이미지 anchor로 열 수 있다.
