@@ -11,10 +11,17 @@ import {
   SQL_ADMIN_ORIGIN,
   googleRequest,
   object,
+  quotaProjectCredential,
   waitSqlOperation,
   type GcpCloudBootstrapInput,
   type JsonObject,
 } from "./gcp-cloud-bootstrap-core";
+import {
+  databaseBootstrapRecovery,
+  type GcpDatabaseBootstrapRecovery,
+  type GcpDatabaseBootstrapRecoveryWriter,
+  type GcpDatabaseBootstrapUser,
+} from "./gcp-cloud-bootstrap-recovery";
 
 export function databaseFlag(
   details: JsonObject,
@@ -305,13 +312,6 @@ export async function ensureDatabaseUser(
   }
 }
 
-export type GcpDatabaseBootstrapUser = {
-  user: JsonObject;
-  created: boolean;
-  engine: "postgres" | "mysql";
-  originalRoles: string[];
-};
-
 function databaseRoles(user: JsonObject) {
   if (user.databaseRoles === undefined) return [];
   if (
@@ -421,6 +421,7 @@ export async function prepareDatabaseBootstrapUser(
   projectId: string,
   instanceId: string,
   engine: "postgres" | "mysql",
+  writeRecovery: GcpDatabaseBootstrapRecoveryWriter,
 ): Promise<GcpDatabaseBootstrapUser> {
   const rows = await listDatabaseUsers(credential, projectId, instanceId);
   const existing = findBootstrapDatabaseUser(
@@ -431,6 +432,19 @@ export async function prepareDatabaseBootstrapUser(
   if (existing) {
     const originalRoles = databaseRoles(existing);
     const elevated = !originalRoles.includes("cloudsqlsuperuser");
+    const bootstrap = {
+      user: existing,
+      created: false,
+      engine,
+      originalRoles,
+      temporaryRoles: elevated ? ["cloudsqlsuperuser"] : [],
+    } satisfies GcpDatabaseBootstrapUser;
+    await writeRecovery(databaseBootstrapRecovery(
+      projectId,
+      instanceId,
+      credential.email,
+      bootstrap,
+    ));
     if (elevated) {
       try {
         await setDatabaseRoles(
@@ -445,12 +459,7 @@ export async function prepareDatabaseBootstrapUser(
           credential,
           projectId,
           instanceId,
-          {
-            user: existing,
-            created: false,
-            engine,
-            originalRoles,
-          },
+          bootstrap,
         ).catch(() => {
           throw new ProviderRequestError(
             "gcpCloudSql",
@@ -458,11 +467,30 @@ export async function prepareDatabaseBootstrapUser(
             409,
           );
         });
+        await writeRecovery(null);
         throw error;
       }
     }
-    return { user: existing, created: false, engine, originalRoles };
+    return bootstrap;
   }
+
+  const planned = {
+    user: {
+      name: bootstrapDatabaseUsername(credential.email, engine),
+      type: "CLOUD_IAM_USER",
+      host: "",
+    },
+    created: true,
+    engine,
+    originalRoles: [],
+    temporaryRoles: ["cloudsqlsuperuser"],
+  } satisfies GcpDatabaseBootstrapUser;
+  await writeRecovery(databaseBootstrapRecovery(
+    projectId,
+    instanceId,
+    credential.email,
+    planned,
+  ));
 
   const operation = (await googleRequest(
     credential,
@@ -497,6 +525,7 @@ export async function prepareDatabaseBootstrapUser(
       created: true,
       engine,
       originalRoles: [],
+      temporaryRoles: ["cloudsqlsuperuser"],
     };
   } catch (error) {
     const created = findBootstrapDatabaseUser(
@@ -518,8 +547,42 @@ export async function prepareDatabaseBootstrapUser(
         );
       });
     }
+    await writeRecovery(null);
     throw error;
   }
+}
+
+export async function recoverDatabaseBootstrapUser(
+  credential: GcpSetupCredential,
+  recovery: GcpDatabaseBootstrapRecovery,
+) {
+  if (credential.email.toLowerCase() !== recovery.setupEmail.toLowerCase()) {
+    throw new ProviderRequestError(
+      "gcpCloudSql",
+      "Pending Cloud SQL privilege cleanup belongs to another Google account",
+      409,
+    );
+  }
+  const scopedCredential = quotaProjectCredential(
+    credential,
+    recovery.projectId,
+  );
+  await restoreDatabaseBootstrapUser(
+    scopedCredential,
+    recovery.projectId,
+    recovery.instanceId,
+    {
+      user: {
+        name: recovery.userName,
+        type: "CLOUD_IAM_USER",
+        host: recovery.userHost,
+      },
+      created: recovery.created,
+      engine: recovery.engine,
+      originalRoles: recovery.originalRoles,
+      temporaryRoles: recovery.temporaryRoles,
+    },
+  );
 }
 
 export async function restoreDatabaseBootstrapUser(
@@ -529,12 +592,19 @@ export async function restoreDatabaseBootstrapUser(
   bootstrap: GcpDatabaseBootstrapUser,
 ) {
   if (bootstrap.created) {
-    await deleteDatabaseUser(
-      credential,
-      projectId,
-      instanceId,
-      bootstrap.user,
+    const current = findBootstrapDatabaseUser(
+      await listDatabaseUsers(credential, projectId, instanceId),
+      credential.email,
+      bootstrap.engine,
     );
+    if (current) {
+      await deleteDatabaseUser(
+        credential,
+        projectId,
+        instanceId,
+        current,
+      );
+    }
     return;
   }
   const current = findBootstrapDatabaseUser(
@@ -544,16 +614,21 @@ export async function restoreDatabaseBootstrapUser(
   );
   if (!current) return;
   const currentRoles = databaseRoles(current);
+  const temporaryRoles = new Set(bootstrap.temporaryRoles);
+  // Subtract only roles this operation recorded before granting. This preserves
+  // concurrent additions and never resurrects a role another administrator
+  // intentionally removed while setup was running.
+  const restoredRoles = currentRoles.filter((role) => !temporaryRoles.has(role));
   if (
-    currentRoles.length !== bootstrap.originalRoles.length
-    || currentRoles.some((role, index) => role !== bootstrap.originalRoles[index])
+    currentRoles.length !== restoredRoles.length
+    || currentRoles.some((role, index) => role !== restoredRoles[index])
   ) {
     await setDatabaseRoles(
       credential,
       projectId,
       instanceId,
       current,
-      bootstrap.originalRoles,
+      restoredRoles,
       true,
     );
   }

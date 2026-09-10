@@ -11,4 +11,11 @@ export {
   revokeTemporaryGcpSetupPermissions,
   type GcpTemporaryPermissionGrant,
 } from "./gcp-cloud-bootstrap-iam";
+export {
+  recoverDatabaseBootstrapUser,
+} from "./gcp-cloud-bootstrap-database";
+export {
+  parseDatabaseBootstrapRecovery,
+  type GcpDatabaseBootstrapRecovery,
+} from "./gcp-cloud-bootstrap-recovery";
 export { bootstrapGcpCloudSql, GcpIamPropagationPendingError } from "./gcp-cloud-bootstrap-application";
