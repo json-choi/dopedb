@@ -28,10 +28,12 @@ function connectionEndpoint(connection: ConnectionProfile) {
 
 export default function ConnectionPicker({
   connections,
+  projectNamesByConnectionId,
   onSelect,
   onNew,
 }: {
   connections: ConnectionProfile[];
+  projectNamesByConnectionId: ReadonlyMap<string, string>;
   onSelect: (id: string) => void;
   onNew: () => void;
 }) {
@@ -42,6 +44,9 @@ export default function ConnectionPicker({
 
   function renderConnectionCard(connection: ConnectionProfile, grouped = false) {
     const name = connection.name || t("app.unnamed");
+    const projectName = grouped
+      ? undefined
+      : projectNamesByConnectionId.get(connection.id);
     const databaseLabel =
       databaseDisplayLabel(connection.engine, connection.database)
       || t("common.unknown");
@@ -50,14 +55,21 @@ export default function ConnectionPicker({
     const safetyLabel = connection.allowWrites && !connection.readonlyDefault
       ? t("ide.writeEnabled")
       : t("ide.readOnly");
+    const projectLabel = projectName
+      ? `${t("connections.projectName")}: ${projectName}`
+      : undefined;
     return (
       <button
         key={connection.id}
         type="button"
         className="tw:flex tw:min-h-[76px] tw:min-w-0 tw:cursor-pointer tw:flex-col tw:items-stretch tw:justify-between tw:gap-2 tw:rounded-md tw:border tw:border-border-subtle tw:bg-card tw:p-3 tw:font-sans tw:text-left tw:text-foreground tw:transition-[border-color,background] tw:duration-150 tw:hover:border-border-strong tw:hover:bg-selection/40 tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring"
         onClick={() => onSelect(connection.id)}
-        title={`${connection.engine} · ${endpoint} · ${safetyLabel}`}
-        aria-label={t("app.openConnection", { name })}
+        title={[projectLabel, connection.engine, endpoint, safetyLabel]
+          .filter(Boolean)
+          .join(" · ")}
+        aria-label={[t("app.openConnection", { name }), projectLabel]
+          .filter(Boolean)
+          .join(" · ")}
       >
         <span className="tw:flex tw:min-w-0 tw:items-center tw:gap-2">
           {!grouped && <EngineMark engine={connection.engine} />}
@@ -70,6 +82,11 @@ export default function ConnectionPicker({
             </span>
           ) : null}
         </span>
+        {projectName ? (
+          <span className="tw:min-w-0 tw:overflow-hidden tw:text-ui tw:text-ellipsis tw:whitespace-nowrap tw:text-muted-foreground">
+            {projectName}
+          </span>
+        ) : null}
         <span className="tw:flex tw:min-w-0 tw:items-center tw:gap-2 tw:text-sm tw:text-muted-foreground tw:[&>span:not(.ds-meta-dot)]:min-w-0 tw:[&>span:not(.ds-meta-dot)]:overflow-hidden tw:[&>span:not(.ds-meta-dot)]:text-ellipsis tw:[&>span:not(.ds-meta-dot)]:whitespace-nowrap">
           <span>{databaseLabel}</span>
           {connection.providerTarget ? (

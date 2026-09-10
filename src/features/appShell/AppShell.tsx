@@ -33,6 +33,7 @@ import { useSidebarWidth } from "./useSidebarWidth";
 import { useAgentDock } from "./useAgentDock";
 import { useToolWindowLayout } from "./useToolWindowLayout";
 import { useAppShellWorkbenchController } from "./useAppShellWorkbenchController";
+import { useConnectionProjectNames } from "./useConnectionProjectNames";
 
 export default function App() {
   return (
@@ -92,6 +93,10 @@ function Shell() {
     documents,
     commands,
   } = controller;
+  const projectNamesByConnectionId = useConnectionProjectNames(
+    catalogScope,
+    connections.selected === null,
+  );
   const backgroundTasks = useBackgroundTasks({
     connections: connections.items,
     queryServiceStore: queryServices.store,
@@ -314,6 +319,7 @@ function Shell() {
         connection: {
           selected: connections.selected,
           items: connections.items,
+          projectNamesByConnectionId,
           loadError: connections.loadError,
           supportsSql: connections.supportsSql,
           creatingDemo: connections.creatingDemo,

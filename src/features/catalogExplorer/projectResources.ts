@@ -130,6 +130,45 @@ export function projectConnectionAssignment(
   };
 }
 
+export function projectNameByConnectionId(
+  projects: readonly KnowledgeProject[],
+  bindings: readonly Pick<
+    EnvironmentConnection,
+    "projectEnvironmentId" | "connectionId"
+  >[],
+) {
+  const projectByEnvironmentId = new Map<string, { id: string; name: string }>(
+    projects.flatMap((project) =>
+      project.environments.map(
+        (environment) =>
+          [
+            environment.id,
+            { id: project.id, name: project.name },
+          ] as const,
+      ),
+    ),
+  );
+  const projectsByConnectionId = new Map<string, Map<string, string>>();
+
+  for (const binding of bindings) {
+    if (binding.connectionId === null) continue;
+    const project = projectByEnvironmentId.get(binding.projectEnvironmentId);
+    if (!project) continue;
+    const candidates =
+      projectsByConnectionId.get(binding.connectionId) ?? new Map<string, string>();
+    candidates.set(project.id, project.name);
+    projectsByConnectionId.set(binding.connectionId, candidates);
+  }
+
+  const namesByConnectionId = new Map<string, string>();
+  for (const [connectionId, candidates] of projectsByConnectionId) {
+    if (candidates.size === 1) {
+      namesByConnectionId.set(connectionId, candidates.values().next().value!);
+    }
+  }
+  return namesByConnectionId;
+}
+
 /**
  * Team Project assignment may replace a device-local connection with the newly
  * synchronized shared profile. A different binding id is the native command's

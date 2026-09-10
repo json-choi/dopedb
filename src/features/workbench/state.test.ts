@@ -110,6 +110,7 @@ import {
   preferredProjectDatabaseDropTarget,
   projectConnectionAssignment,
   projectDatabasesDropTargets,
+  projectNameByConnectionId,
   projectResourceKey,
   promotedProjectConnectionSourceId,
 } from "../catalogExplorer/projectResources";
@@ -1184,6 +1185,109 @@ describe("workbench state ownership", () => {
     // Deleting the final Project removes bindings, not workspace connections.
     expect(projectConnectionAssignment([demo, bigQuery], true, new Map())
       .unassignedConnections).toEqual([demo, bigQuery]);
+    expect(
+      projectNameByConnectionId(
+        [
+          {
+            id: "project-commerce",
+            name: "Commerce",
+            revision: 1,
+            environments: [
+              {
+                id: "environment-development",
+                name: "Development",
+                riskClass: "development",
+                revision: 1,
+              },
+              {
+                id: "environment-production",
+                name: "Production",
+                riskClass: "production",
+                revision: 1,
+              },
+            ],
+          },
+          {
+            id: "project-other",
+            name: "Other",
+            revision: 1,
+            environments: [
+              {
+                id: "environment-other",
+                name: "Development",
+                riskClass: "development",
+                revision: 1,
+              },
+            ],
+          },
+        ],
+        [
+          {
+            projectEnvironmentId: "environment-development",
+            connectionId: demo.id,
+          },
+          {
+            projectEnvironmentId: "environment-production",
+            connectionId: demo.id,
+          },
+          {
+            projectEnvironmentId: "environment-other",
+            connectionId: bigQuery.id,
+          },
+          {
+            projectEnvironmentId: "missing-environment",
+            connectionId: bigQuery.id,
+          },
+        ],
+      ),
+    ).toEqual(
+      new Map([
+        [demo.id, "Commerce"],
+        [bigQuery.id, "Other"],
+      ]),
+    );
+    expect(
+      projectNameByConnectionId(
+        [
+          {
+            id: "project-commerce",
+            name: "Commerce",
+            revision: 1,
+            environments: [
+              {
+                id: "environment-development",
+                name: "Development",
+                riskClass: "development",
+                revision: 1,
+              },
+            ],
+          },
+          {
+            id: "project-other",
+            name: "Other",
+            revision: 1,
+            environments: [
+              {
+                id: "environment-other",
+                name: "Development",
+                riskClass: "development",
+                revision: 1,
+              },
+            ],
+          },
+        ],
+        [
+          {
+            projectEnvironmentId: "environment-development",
+            connectionId: demo.id,
+          },
+          {
+            projectEnvironmentId: "environment-other",
+            connectionId: demo.id,
+          },
+        ],
+      ),
+    ).toEqual(new Map());
     expect(
       promotedProjectConnectionSourceId(bigQuery, {
         connectionId: "shared-bigquery",
