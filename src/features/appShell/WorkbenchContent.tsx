@@ -66,6 +66,7 @@ type WorkbenchContentModel = {
   connection: {
     selected: ConnectionProfile | null;
     items: ConnectionProfile[];
+    projectNamesByConnectionId: ReadonlyMap<string, string>;
     loadError: string | null;
     supportsSql: boolean;
     creatingDemo: boolean;
@@ -316,6 +317,7 @@ function WorkbenchContentResolved({ model, commands }: Props) {
         {!selected ? (
           <ConnectionPicker
             connections={connection.items}
+            projectNamesByConnectionId={connection.projectNamesByConnectionId}
             onSelect={commands.connections.select}
             onNew={commands.connections.new}
           />

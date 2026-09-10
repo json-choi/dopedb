@@ -1,6 +1,7 @@
 // Desktop workbench shell composes workspace, tool-window, search, and Agent controllers.
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
+import { useQuery } from "@tanstack/react-query";
 import { ToastProvider, useToast } from "../../components/Toast";
 import { errMessage } from "../../ipc/types";
 import ActionSearch from "../actionSearch/ActionSearch";
@@ -12,6 +13,10 @@ import type { AgentComposerRequest } from "../agents/domain";
 import { ArticleLinkGate } from "../analysisArticles/ArticleLinkGate";
 import { ExternalAgentRequestGate } from "../agents/ExternalAgentRequestGate";
 import { useGuidedDemoCommands } from "../onboarding/useGuidedDemoCommands";
+import { projectNameByConnectionId } from "../catalogExplorer/projectResources";
+import { knowledgeInventoryQuery } from "../knowledge/inventory";
+import { knowledgeQueryKeys } from "../knowledge/queryKeys";
+import { listKnowledgeEnvironmentConnections } from "../knowledge/tauriAdapter";
 import { useQueryServices } from "../queryServices/useQueryServices";
 import SkillStartupGate from "../skills/SkillStartupGate";
 import { useSkillStartupObserver } from "../skills/useSkillStartupObserver";
@@ -90,6 +95,31 @@ function Shell() {
     documents,
     commands,
   } = controller;
+  const pickerKnowledgeEnabled =
+    connections.selected === null &&
+    catalogScope.ready &&
+    (catalogScope.workspaceKind === "personal" || catalogScope.accountScope !== null);
+  const pickerKnowledgeInventory = useQuery(
+    knowledgeInventoryQuery(catalogScope.key, pickerKnowledgeEnabled),
+  );
+  const pickerEnvironmentConnections = useQuery({
+    queryKey: knowledgeQueryKeys.environmentConnections(
+      undefined,
+      catalogScope.key,
+    ),
+    queryFn: () => listKnowledgeEnvironmentConnections(),
+    enabled: pickerKnowledgeEnabled,
+    retry: false,
+    staleTime: 60_000,
+  });
+  const projectNamesByConnectionId = useMemo(
+    () =>
+      projectNameByConnectionId(
+        pickerKnowledgeInventory.data?.projects ?? [],
+        pickerEnvironmentConnections.data ?? [],
+      ),
+    [pickerEnvironmentConnections.data, pickerKnowledgeInventory.data],
+  );
   const backgroundTasks = useBackgroundTasks({
     connections: connections.items,
     queryServiceStore: queryServices.store,
@@ -311,6 +341,7 @@ function Shell() {
         connection: {
           selected: connections.selected,
           items: connections.items,
+          projectNamesByConnectionId,
           loadError: connections.loadError,
           supportsSql: connections.supportsSql,
           creatingDemo: connections.creatingDemo,
