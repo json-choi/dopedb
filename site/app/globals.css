@@ -50,6 +50,7 @@
   --background-image-galaxy-bottom: var(--galaxy-bottom);
   --background-image-galaxy-halo: var(--galaxy-halo);
   --background-image-galaxy-orbit-light: var(--galaxy-orbit-light);
+  --background-image-galaxy-fallback: var(--galaxy-fallback);
 }
 
 :root {
@@ -100,6 +101,10 @@
   --landing-signal-strong: #d9ff82;
   --landing-electric: #66d9ff;
   --galaxy-starlight: #f5e9d5;
+  --galaxy-cloud: #bfa88c;
+  --galaxy-cool: #b4c6dc;
+  --galaxy-depth: #080f1b;
+  --galaxy-fallback: radial-gradient(ellipse at 75% 20%, color-mix(in srgb, var(--galaxy-cloud) 22%, transparent), transparent 55%), radial-gradient(ellipse at 25% 75%, var(--galaxy-depth), var(--landing-night));
   --landing-hairline: rgba(241, 244, 233, 0.14);
   --landing-hairline-strong: rgba(241, 244, 233, 0.28);
   --landing-signal-shadow: 0 18px 70px rgba(128, 237, 69, 0.18);

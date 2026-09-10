@@ -1,100 +1,65 @@
-// One photographic texture plus sparse foreground stars; no particle cloud or postprocessing buffers.
-const vertex = `
-attribute vec2 aPosition;
-varying vec2 vUv;
-void main() { vUv=aPosition*0.5+0.5; gl_Position=vec4(aPosition,0.0,1.0); }
-`;
-const fragment = `
-precision highp float;
-varying vec2 vUv;
-uniform sampler2D uImage;
-uniform vec2 uResolution;
-uniform vec2 uCover;
-uniform vec2 uCenter;
-uniform vec2 uPointer;
-uniform vec3 uStarlight;
-uniform float uZoom;
-uniform float uTime;
-uniform float uFade;
-float hash(vec2 p) { return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
-float stars(vec2 p, float scale) {
-  vec2 grid=p*scale, cell=floor(grid), local=fract(grid);
-  float seed=hash(cell);
-  vec2 location=vec2(0.15)+vec2(hash(cell+17.0),hash(cell+43.0))*0.7;
-  float distance=length((local-location)*uResolution.y/scale);
-  float light=exp(-distance*distance*1.5)+exp(-distance*distance*0.10)*0.045;
-  return light*step(0.987,seed)*(0.5+0.5*hash(cell+71.0))*(0.94+0.06*sin(uTime*0.7+seed*90.0));
-}
-void main() {
-  vec2 screen=vec2(vUv.x,1.0-vUv.y);
-  float breathe=1.0+sin(uTime*0.045)*0.003;
-  vec2 uv=(screen-0.5)*uCover/(uZoom*breathe)+uCenter;
-  // Very small image-space depth cue; dust filaments must not turn into liquid distortion.
-  vec3 sampleColor=texture2D(uImage,uv).rgb;
-  float depth=dot(sampleColor,vec3(0.2126,0.7152,0.0722));
-  uv+=uPointer*uCover*(0.006+depth*0.004);
-  vec3 color=texture2D(uImage,clamp(uv,0.001,0.999)).rgb;
-  vec2 sky=(screen-0.5)*vec2(uResolution.x/uResolution.y,1.0);
-  float foreground=stars(sky+uPointer*0.026,43.0)+stars(sky+uPointer*0.013,71.0)*0.5;
-  color+=uStarlight*foreground*0.35;
-  gl_FragColor=vec4(color*uFade,1.0);
-}
-`;
-export type GalaxyFrame = {
-  width: number; height: number; centerX: number; centerY: number;
-  pointerX: number; pointerY: number; zoom: number; time: number; fade: number;
-};
-export function createGalaxyScene(gl: WebGLRenderingContext, image: HTMLImageElement) {
-  const shaders: WebGLShader[] = [];
-  const program = gl.createProgram(), buffer = gl.createBuffer(), texture = gl.createTexture();
-  const dispose = () => {
-    shaders.forEach(shader => gl.deleteShader(shader));
-    gl.deleteTexture(texture); gl.deleteBuffer(buffer); gl.deleteProgram(program);
-  };
-  try {
-    if (!program || !buffer || !texture) throw new Error("Galaxy GPU allocation unavailable");
-    for (const [type, source] of [[gl.VERTEX_SHADER, vertex], [gl.FRAGMENT_SHADER, fragment]] as const) {
-      const shader = gl.createShader(type);
-      if (!shader) throw new Error("Galaxy shader allocation unavailable");
-      shaders.push(shader); gl.shaderSource(shader, source); gl.compileShader(shader);
-      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(shader) ?? "Galaxy shader failed");
-      gl.attachShader(program, shader);
+// Owns the bounded GPU scene and semantic palette; buffers are generated once, never per frame.
+import {
+  AdditiveBlending, BufferAttribute, BufferGeometry, Color, Group, Mesh,
+  PlaneGeometry, Points, ShaderMaterial, Vector3,
+} from "three";
+import { cloudFragment, cloudVertex, starFragment, starVertex } from "./galaxyShaders";
+
+export function createGalaxyScene(style: CSSStyleDeclaration, compact: boolean) {
+  const color = (role: string) => new Color(style.getPropertyValue(role).trim());
+  const warm = color("--galaxy-starlight"), cool = color("--galaxy-cool");
+  const night = color("--landing-night");
+  const group = new Group();
+  // The disk's normal is tilted like a globe axis; only its child spins around that normal.
+  group.rotation.set(1.08, 0, 0.44, "ZXY");
+  const disk = new Group();
+  group.add(disk);
+  const axis = new Vector3(0, 0, 1).applyQuaternion(group.quaternion);
+  const cloudMaterial = new ShaderMaterial({
+    vertexShader: cloudVertex, fragmentShader: cloudFragment, transparent: true,
+    depthWrite: false, uniforms: { uWarm: { value: color("--galaxy-cloud") }, uCool: { value: cool }, uTime: { value: 0 }, uJourney: { value: 0 } },
+  });
+  const cloudGeometry = new PlaneGeometry(120, 120);
+  const clouds = new Mesh(cloudGeometry, cloudMaterial);
+  clouds.position.z = -2;
+  disk.add(clouds);
+  const starMaterial = new ShaderMaterial({
+    vertexShader: starVertex, fragmentShader: starFragment,
+    vertexColors: true, transparent: true, depthWrite: false,
+    blending: AdditiveBlending, uniforms: { uPixelRatio: { value: 1 }, uTime: { value: 0 } },
+  });
+  let seed = 1937;
+  const random = () => ((seed = (1664525 * seed + 1013904223) >>> 0) / 4294967296);
+  const normal = () => Math.sqrt(-2 * Math.log(Math.max(random(), 0.0001))) * Math.cos(random() * Math.PI * 2);
+  function stars(count: number, foreground: boolean) {
+    const positions = new Float32Array(count * 3), colors = new Float32Array(count * 3);
+    const sizes = new Float32Array(count), lights = new Float32Array(count);
+    const tint = new Color();
+    for (let i = 0; i < count; i++) {
+      const radius = Math.pow(random(), 0.65) * 48;
+      const angle = i % 5 === 0 ? random() * Math.PI * 2 : (i % 2) * Math.PI + Math.log(radius + 2) * 2.4 + normal() * 0.34;
+      const x = foreground ? (random() - 0.5) * 150 : Math.cos(angle) * radius;
+      const y = foreground ? (random() - 0.5) * 90 : Math.sin(angle) * radius;
+      positions.set([x, y, foreground ? -65 + random() * 65 : normal() * 0.65], i * 3);
+      tint.copy(warm).lerp(cool, random() * 0.7).toArray(colors, i * 3);
+      sizes[i] = foreground ? 0.8 + random() ** 7 * 3 : 0.6 + random() ** 6 * 2.8;
+      lights[i] = (0.2 + random() * 0.7) * (foreground ? 0.7 : Math.exp(-radius / 55));
     }
-    gl.linkProgram(program);
-    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(program) ?? "Galaxy program failed");
-    gl.useProgram(program);
-    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
-    const position = gl.getAttribLocation(program, "aPosition");
-    gl.enableVertexAttribArray(position); gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
-    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
-    gl.disable(gl.BLEND); gl.disable(gl.DEPTH_TEST);
-    const uniform = (name: string) => gl.getUniformLocation(program, name);
-    const names = ["uResolution", "uCover", "uCenter", "uPointer", "uZoom", "uTime", "uFade"];
-    const locations = Object.fromEntries(names.map(name => [name, uniform(name)]));
-    gl.uniform1i(uniform("uImage"), 0);
-    const hex = getComputedStyle(document.documentElement).getPropertyValue("--galaxy-starlight").trim().replace("#", "");
-    gl.uniform3fv(uniform("uStarlight"), [0, 2, 4].map(i => Number.parseInt(hex.slice(i, i + 2), 16) / 255));
-    const imageAspect = image.naturalWidth / image.naturalHeight;
-    return {
-      dispose,
-      draw(f: GalaxyFrame) {
-        const aspect = f.width / f.height;
-        const coverX = Math.min(1, aspect / imageAspect), coverY = Math.min(1, imageAspect / aspect);
-        const marginX = coverX / f.zoom * 0.5 + 0.013, marginY = coverY / f.zoom * 0.5 + 0.013;
-        const clampCenter = (value: number, margin: number) => Math.max(margin, Math.min(1 - margin, value));
-        gl.uniform2f(locations.uResolution, f.width, f.height);
-        gl.uniform2f(locations.uCover, coverX, coverY);
-        gl.uniform2f(locations.uCenter, clampCenter(f.centerX, marginX), clampCenter(f.centerY, marginY));
-        gl.uniform2f(locations.uPointer, f.pointerX, f.pointerY);
-        gl.uniform1f(locations.uZoom, f.zoom); gl.uniform1f(locations.uTime, f.time); gl.uniform1f(locations.uFade, f.fade);
-        gl.drawArrays(gl.TRIANGLES, 0, 3);
-      }
-    };
-  } catch (error) { dispose(); throw error; }
+    const geometry = new BufferGeometry();
+    geometry.setAttribute("position", new BufferAttribute(positions, 3));
+    geometry.setAttribute("color", new BufferAttribute(colors, 3));
+    geometry.setAttribute("aSize", new BufferAttribute(sizes, 1));
+    geometry.setAttribute("aLight", new BufferAttribute(lights, 1));
+    geometry.setAttribute("aGalaxy", new BufferAttribute(new Float32Array(count).fill(foreground ? 0 : 1), 1));
+    return new Points(geometry, starMaterial);
+  }
+  const distant = stars(compact ? 10000 : 22000, false), field = stars(compact ? 600 : 1200, true);
+  disk.add(distant);
+  return {
+    group, disk, axis, field, night, cloudMaterial, starMaterial,
+    dispose() {
+      cloudGeometry.dispose(); cloudMaterial.dispose(); starMaterial.dispose();
+      distant.geometry.dispose(); field.geometry.dispose();
+    },
+  };
 }

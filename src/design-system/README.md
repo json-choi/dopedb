@@ -275,20 +275,26 @@ Elevation은 세 단계만 허용한다.
   `Detail`도 이 공개 사이트 primitive 모듈에서 재사용하며, page나 데모에서
   control·label utility 목록을 다시 만들지 않는다.
 - `site/app/HomeSections`는 소개·실제 Desktop 캡처·FAQ·설치 안내를 서버에서
-  조합한다. H1과 제품 본문을 JavaScript 실행이나 WebGL 준비 뒤에 숨기지 않는다.
-  `GalaxyHero`는 서버 children 위에 장식만 더하는 client island이며,
-  `site/lib/galaxyRenderer`를 첫 paint 뒤에 지연 로드한다. 은하의 질감은
-  `site/public/images/galaxy-photographic-v2.webp`의 생성 천체사진 스타일 artwork를
-  사용한다. 실제 관측 이미지나 물리 시뮬레이션이 아니다. 같은 `<img>`를 SSR
-  poster와 WebGL texture source로 공유하고 기존 입자 나선 renderer는 유지하지 않는다.
-  `galaxyScene`은 한 texture·24바이트 triangle buffer와 두 sample로 작은 깊이 시차,
-  camera zoom/pan, 소수의 전경 별을 합성한다. 추가 별빛은 `--galaxy-starlight`,
-  데스크톱/mobile veil·halo는 사이트 theme paint role을 사용한다. WebP는 460,516바이트,
-  1672×941 RGBA texture는 6,293,408바이트이며 브라우저 image decode·framebuffer·driver
-  비용은 별도다. 30fps 스케줄·400만 backing pixel 상한·mobile DPR 1.4,
-  화면 밖·숨겨진 탭 정지, 동작 줄이기, pause·Escape·pointer cleanup을 소유한다.
-  WebGL 실패/context loss 중에는 같은 사진을 유지하고 복구 시 GPU만 다시 만든다.
-  배경은 hero 내부에서 clip하고 mobile 본문 아래는 전용 veil로 대비를 유지한다.
+  조합한다. H1과 제품 본문을 JavaScript 실행이나 장식 준비 뒤에 숨기지 않는다.
+  `GalaxyHero`는 서버 children 위에 장식만 더하는 client island다.
+  사용자의 Three.js 전환 요청에 따라 `galaxyRenderer`가 페이지 전체의 고정 canvas와
+  native section scroll을 소유한다. `galaxyScene`은 별 buffer와 먼지 면을 한 번 생성하고,
+  `galaxyShaders`는 사진 없이 불규칙한 먼지 흡광·별빛·중심 방향 말림을 그린다.
+  독립 CSS 은하 renderer와 shadow 목록은 제거한다. WebGL 준비 전·실패 시에는
+  `--galaxy-fallback`의 정적 밤 gradient와 서버 본문·다운로드를 그대로 유지한다.
+  `--galaxy-starlight/cloud/cool/depth`는 장식 전용 palette이며 앱 chrome에 사용하지 않는다.
+  원반의 기울기는 부모 group에 고정하고, 별·먼지 자식만 원반의 local normal 축으로
+  공전한다. 화면의 정면 Z축이나 camera roll로 은하 전체를 돌리지 않는다.
+  스크롤은 좌우 왕복 대신 같은 3D 축의 단방향 공전과 전진하는 시점을 제어한다.
+  기본 회전·먼지 변화·전경 별의 이동은 입력 없이도 계속된다. 흰색 노출 효과는 없고
+  landing의 HTML/body 및 GPU clear 색은 같은 night 역할을 사용한다.
+  `galaxyControls`의 탐험 드래그·방향키·휠·+/−와 Escape/focus 복원은 기존
+  `MarketingAction`을 사용한다. native 스크롤은 탐험 모드 밖에서 가로채지 않는다.
+  고정 pause 버튼은 하단 섹션에서도 동작한다. 동작 줄이기는 정지 장면을 표시하고,
+  숨긴 탭 정지, context loss/fallback·복구와 unmount GPU/listener cleanup을 제공한다.
+  기본 상한은 DPR 1.5·200만 drawing-buffer pixel·30fps이며, 초기 compact viewport는
+  별 10,600개, desktop은 23,200개다. 실기기 성능이나 총 GPU 메모리를 보장하는 수치는
+  아니며 물리 시뮬레이션·실제 관측 데이터로 소개하지 않는다.
   `HomeScopeWalkthrough`는 실제 DB·SQL 실행·저장 없이 reducer로만 움직이는
   설명용 데모다. `HomeDemoShowcase`는 native dialog의 focus/scroll 복구를
   소유하며 JavaScript가 없으면 원본 이미지 anchor로 열 수 있다.

@@ -2,6 +2,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+// Turbopack dev must see the shared brand graphic in ../src. The production
+// webpack/OpenNext pipeline retains the site's independently packaged output root.
+const buildRoot = process.env.NODE_ENV === "development" ? path.resolve(__dirname, "..") : __dirname;
 
 const scriptPolicy = process.env.NODE_ENV === "production"
   ? "script-src 'self' 'unsafe-inline'"
@@ -9,13 +12,13 @@ const scriptPolicy = process.env.NODE_ENV === "production"
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  outputFileTracingRoot: fileURLToPath(new URL(".", import.meta.url)),
+  outputFileTracingRoot: buildRoot,
   poweredByHeader: false,
   experimental: {
     useTypeScriptCli: true,
   },
   turbopack: {
-    root: __dirname,
+    root: buildRoot,
   },
   async rewrites() {
     return [

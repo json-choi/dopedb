@@ -50,7 +50,7 @@ function HomeAccessSections({ c: existing, lang }: { c: HomeCopy; lang: Lang }) 
       </div>
       <p className="tw:mt-4 tw:text-[11px] tw:leading-[1.8] tw:text-cream-muted/65">{c.proof}</p>
     </GalaxyHero>
-    <section id="product" className="tw:relative tw:z-10 tw:scroll-mt-24 tw:bg-night tw:px-6 tw:pt-5 tw:pb-24 tw:md:px-12 tw:lg:pb-28">
+    <section id="product" className="tw:relative tw:z-10 tw:scroll-mt-24 tw:bg-night/45 tw:px-6 tw:pt-5 tw:pb-24 tw:md:px-12 tw:lg:pb-28">
       <div className="tw:mx-auto tw:max-w-[1264px]">
         <div className="tw:mb-9 tw:grid tw:items-end tw:gap-5 tw:md:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
           <div>
@@ -72,7 +72,7 @@ function HomeActionSections({ c: existing, lang }: { c: HomeCopy; lang: Lang }) 
   const c = existing.landing;
   const questions = [0, 1, 2, 5].map(index => existing.faq.items[index]);
   return <>
-    <section id="trust" className="tw:relative tw:z-10 tw:scroll-mt-24 tw:bg-night tw:px-6 tw:py-24 tw:md:px-12 tw:lg:py-32">
+    <section id="trust" className="tw:relative tw:z-10 tw:scroll-mt-24 tw:bg-night/45 tw:px-6 tw:py-24 tw:md:px-12 tw:lg:py-32">
       <div className="tw:mx-auto tw:grid tw:max-w-[1264px] tw:gap-12 tw:lg:grid-cols-[minmax(0,.7fr)_minmax(0,1.3fr)] tw:lg:gap-20">
         <div><SectionLabel>{c.faqLabel}</SectionLabel><h2 className="tw:mt-7 tw:whitespace-pre-line tw:text-[clamp(36px,4vw,54px)] tw:leading-[1.17] tw:font-medium tw:tracking-[-0.05em]">{c.faqTitle}</h2><a href={`${repoUrl}/blob/main/docs/PRODUCT_POSITIONING.md`} target="_blank" rel="noreferrer" className="tw:mt-8 tw:inline-flex tw:min-h-11 tw:items-center tw:gap-3 tw:text-[12px] tw:text-signal tw:hover:underline">{c.docs} <Arrow diagonal /></a></div>
         <div className="tw:grid tw:gap-x-8 tw:gap-y-10 tw:sm:grid-cols-2">
@@ -81,7 +81,7 @@ function HomeActionSections({ c: existing, lang }: { c: HomeCopy; lang: Lang }) 
       </div>
     </section>
 
-    <section id="download" className="tw:relative tw:z-10 tw:scroll-mt-24 tw:border-t tw:border-hairline tw:bg-galaxy-halo tw:px-6 tw:py-24 tw:md:px-12 tw:lg:py-32">
+    <section id="download" className="tw:relative tw:z-10 tw:scroll-mt-24 tw:border-t tw:border-hairline tw:bg-night/65 tw:bg-galaxy-halo tw:px-6 tw:py-24 tw:md:px-12 tw:lg:py-32">
       <div className="tw:mx-auto tw:grid tw:max-w-[1264px] tw:items-center tw:gap-12 tw:lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] tw:lg:gap-20">
         <div><div className="tw:text-signal"><DopeDBMark className="tw:size-16" /></div><h2 className="tw:mt-6 tw:whitespace-pre-line tw:text-[clamp(34px,4.1vw,58px)] tw:leading-[1.18] tw:font-medium tw:tracking-[-0.05em]">{c.downloadTitle}</h2><p className="tw:mt-6 tw:max-w-[450px] tw:text-[14px] tw:leading-[1.9] tw:text-cream-muted">{c.downloadBody}</p><a href={workspaceUrls[lang]} target="_blank" rel="noreferrer" className="tw:mt-6 tw:inline-flex tw:min-h-11 tw:items-center tw:gap-3 tw:text-[13px] tw:text-signal tw:hover:underline">{c.workspace} <Arrow diagonal /></a></div>
         <div>

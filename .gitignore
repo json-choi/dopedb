@@ -5,6 +5,7 @@
 /target
 /tsconfig*.tsbuildinfo
 /site/.next
+/.next
 /site/node_modules
 /workspace-cloud/.next
 /workspace-cloud/node_modules

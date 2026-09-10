@@ -1,8 +1,8 @@
 "use client";
 
-// This island decorates server-rendered children; the first paint never waits for WebGL.
+// A lazy Three.js backdrop follows the whole landing page; server content never waits for WebGL.
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import type { GalaxyController } from "../lib/galaxyRenderer";
+import type { createGalaxyRenderer } from "../lib/galaxyRenderer";
 import type { LandingCopy, Lang } from "./homeContent";
 import { DopeDBMark } from "./DopeDBMark";
 import { Arrow, MarketingAction } from "./MarketingButton";
@@ -16,50 +16,26 @@ export function GalaxyHero({
   c: GalaxyLabels;
   lang: Lang;
 }) {
-  const canvas = useRef<HTMLCanvasElement>(null);
-  const poster = useRef<HTMLImageElement>(null);
-  const galaxy = useRef<GalaxyController | null>(null);
+  const scene = useRef<HTMLCanvasElement>(null);
+  const galaxy = useRef<ReturnType<typeof createGalaxyRenderer> | null>(null);
   const exploreButton = useRef<HTMLButtonElement>(null);
   const [available, setAvailable] = useState(false);
   const [exploring, setExploring] = useState(false);
   const [paused, setPaused] = useState(false);
   const [reduced, setReduced] = useState(false);
   useEffect(() => {
-    let disposed = false,
-      secondFrame = 0,
-      idle = 0;
-    let timeout: ReturnType<typeof globalThis.setTimeout> | undefined;
     const media = window.matchMedia("(prefers-reduced-motion: reduce)");
     const preference = () => setReduced(media.matches);
     preference();
     media.addEventListener("change", preference);
-    const initialize = () => {
-      void import("../lib/galaxyRenderer").then(({
-        createGalaxy
-      }) => {
-        if (disposed || !canvas.current || !poster.current) return;
-        galaxy.current = createGalaxy(canvas.current, poster.current, value => {
-          if (disposed) return;
-          setAvailable(value);
-          if (!value) setExploring(false);
-        });
-      }).catch(() => {
-        if (!disposed) setAvailable(false);
+    let disposed = false;
+    void import("../lib/galaxyRenderer").then(({ createGalaxyRenderer }) => {
+      if (!disposed && scene.current) galaxy.current = createGalaxyRenderer(scene.current, ready => {
+        if (!disposed) { setAvailable(ready); if (!ready) setExploring(false); }
       });
-    };
-    const firstFrame = requestAnimationFrame(() => {
-      secondFrame = requestAnimationFrame(() => {
-        if ("requestIdleCallback" in window) idle = window.requestIdleCallback(initialize, {
-          timeout: 1200
-        });else timeout = globalThis.setTimeout(initialize, 120);
-      });
-    });
+    }).catch(() => { if (!disposed) setAvailable(false); });
     return () => {
       disposed = true;
-      cancelAnimationFrame(firstFrame);
-      cancelAnimationFrame(secondFrame);
-      if (idle) window.cancelIdleCallback(idle);
-      clearTimeout(timeout);
       media.removeEventListener("change", preference);
       galaxy.current?.dispose();
       galaxy.current = null;
@@ -97,10 +73,9 @@ export function GalaxyHero({
       window.removeEventListener("click", navigate);
     };
   }, [exploring]);
-  return <section id="top" data-exploring={exploring} className="tw:relative tw:min-h-[830px] tw:bg-galaxy-orbit-light tw:px-6 tw:pt-[156px] tw:pb-28 tw:data-[exploring=true]:cursor-grab tw:data-[exploring=true]:touch-none tw:md:px-12 tw:max-md:min-h-[940px] tw:max-md:pt-[300px]">
-    <div className="tw:pointer-events-none tw:absolute tw:inset-0 tw:overflow-hidden">
-      <img ref={poster} src="/images/galaxy-photographic-v2.webp" width={1672} height={941} alt="" aria-hidden="true" fetchPriority="high" decoding="async" className="tw:absolute tw:inset-0 tw:z-0 tw:h-svh tw:w-full tw:object-cover tw:object-center tw:max-md:object-[65%_center]" />
-      <canvas ref={canvas} className="tw:absolute tw:inset-0 tw:z-0 tw:h-svh tw:w-full tw:opacity-0 tw:transition-opacity tw:duration-700 tw:data-[rendered=true]:opacity-100 tw:motion-reduce:transition-none" aria-hidden="true" />
+  return <section id="top" data-exploring={exploring} className="tw:relative tw:min-h-[max(830px,100svh)] tw:px-6 tw:pt-[156px] tw:pb-28 tw:data-[exploring=true]:cursor-grab tw:data-[exploring=true]:touch-none tw:md:px-12 tw:max-md:min-h-[940px] tw:max-md:pt-[300px]">
+    <div data-galaxy-backdrop data-ready={available} className="tw:pointer-events-none tw:fixed tw:inset-0 tw:-z-10 tw:bg-galaxy-fallback" aria-hidden="true">
+      <canvas ref={scene} data-ready={available} className="tw:block tw:size-full tw:opacity-0 tw:transition-opacity tw:duration-1000 tw:data-[ready=true]:opacity-100 tw:motion-reduce:transition-none" />
     </div>
     <div data-exploring={exploring} className="tw:pointer-events-none tw:absolute tw:inset-0 tw:bg-galaxy-veil tw:transition-opacity tw:duration-700 tw:data-[exploring=true]:opacity-0 tw:motion-reduce:transition-none tw:max-md:bg-galaxy-mobile-veil" />
     <div className="tw:pointer-events-none tw:absolute tw:inset-x-0 tw:bottom-0 tw:h-44 tw:bg-galaxy-bottom" />
@@ -120,9 +95,9 @@ export function GalaxyHero({
     </div>}
     <div className="tw:absolute tw:inset-x-6 tw:bottom-8 tw:z-10 tw:flex tw:items-center tw:justify-between tw:gap-5 tw:md:inset-x-12">
       <a href="#product" className="tw:flex tw:min-h-11 tw:items-center tw:gap-3 tw:text-[11px] tw:text-cream-muted/65"><span className="tw:h-6 tw:w-px tw:bg-hairline-strong" />{c.scroll}<span>↓</span></a>
-      {available && <MarketingAction shape="icon" aria-pressed={paused || reduced} aria-label={reduced ? c.reduced : paused ? c.play : c.pause} disabled={reduced} onClick={() => setPaused(value => !value)}>
-        <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor" aria-hidden="true">{paused || reduced ? <path d="M2 1 9 5 2 9Z" /> : <path d="M2 1h2v8H2ZM6 1h2v8H6Z" />}</svg>
-      </MarketingAction>}
     </div>
+    {available && <div className="tw:fixed tw:right-6 tw:bottom-6 tw:z-30 tw:md:right-12"><MarketingAction shape="icon" aria-pressed={paused || reduced} aria-label={reduced ? c.reduced : paused ? c.play : c.pause} disabled={reduced} onClick={() => setPaused(value => !value)}>
+      <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor" aria-hidden="true">{paused || reduced ? <path d="M2 1 9 5 2 9Z" /> : <path d="M2 1h2v8H2ZM6 1h2v8H6Z" />}</svg>
+    </MarketingAction></div>}
   </section>;
 }

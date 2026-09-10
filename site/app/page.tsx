@@ -120,7 +120,7 @@ export default async function Home({ searchParams }: HomeProps) {
   };
 
   return (
-    <main className="tw:isolate tw:min-h-screen tw:overflow-clip tw:bg-night tw:font-sans tw:text-cream tw:scheme-dark" lang={lang}>
+    <main data-galaxy-page className="tw:isolate tw:min-h-screen tw:overflow-clip tw:bg-night tw:font-sans tw:text-cream tw:scheme-dark" lang={lang}>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }}

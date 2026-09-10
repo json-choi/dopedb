@@ -121,7 +121,7 @@ export function HomeScopeWalkthrough({
     }
     previousPhase.current = state.phase;
   }, [state.phase]);
-  return <section id="flow" className="tw:relative tw:z-10 tw:scroll-mt-24 tw:border-y tw:border-hairline tw:bg-night/95 tw:px-6 tw:py-24 tw:md:px-12 tw:lg:py-32">
+  return <section id="flow" className="tw:relative tw:z-10 tw:scroll-mt-24 tw:border-y tw:border-hairline tw:bg-night/60 tw:px-6 tw:py-24 tw:md:px-12 tw:lg:py-32">
     <div className="tw:mx-auto tw:grid tw:max-w-[1264px] tw:gap-12 tw:lg:grid-cols-[minmax(0,.85fr)_minmax(0,1.15fr)] tw:lg:gap-20">
       <div>
         <SectionLabel>{c.flowLabel}</SectionLabel>

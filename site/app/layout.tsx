@@ -97,10 +97,10 @@ export default async function RootLayout({
 
   return (
     <html
-      className={monoFont.variable}
+      className={`${monoFont.variable} tw:has-[main[data-galaxy-page]]:bg-night tw:has-[main[data-galaxy-page]]:scheme-dark`}
       lang={lang}
     >
-      <body className="tw:min-h-[100dvh] tw:bg-paper tw:text-ink tw:antialiased">
+      <body className="tw:min-h-[100dvh] tw:bg-paper tw:text-ink tw:antialiased tw:has-[main[data-galaxy-page]]:bg-night">
         {children}
         <SitePageEffects />
       </body>

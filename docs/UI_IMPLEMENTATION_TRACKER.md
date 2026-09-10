@@ -17,42 +17,42 @@ runtime과 성능 수치로 수행한다.
 
 ## 공개 소개 사이트
 
-- 상태: `partial` — 승인된 은하 디자인을 기존 Next.js/OpenNext 사이트에 적용했다.
-  검색 수집·실사용 Core Web Vitals 검증은 아직 하지 않았다. 운영 반영은
-  Git 푸시와 별개로 Worker 배포 및 운영 도메인의 배포 영수증 일치로 확인한다.
-- 소유자: `site/app/page.tsx`는 언어·metadata·JSON-LD,
-  `HomeSections.tsx`는 서버 본문, `GalaxyHero.tsx`는 지연 로드 장식,
-  `HomeScopeWalkthrough.tsx`는 실제 DB와 연결되지 않는 설명용 reducer를 소유한다.
-- 2026-09-10 로컬 production build 검수: 한·영 초기 HTTP HTML의 H1·FAQ 4개,
-  canonical·hreflang·OG·WebSite/SoftwareApplication JSON-LD와 정상 404를 확인했다.
-  기존 한·영 정책 문서, robots.txt, sitemap.xml은 HTTP 200을 유지한다.
-  Chrome 1440×960 및 390×844 모바일 에뮬레이션에서 가로 넘침 없이 동작하며,
-  선택 해제 시 진행 차단, 승인·거절·재시작, 이미지 dialog의 Escape/focus 복구,
-  은하 탐험·정지·Escape를 확인했다. 실제 Safari·모바일 기기 성능 검증은 남아 있다.
-- 이전 입자 장면 검수에서 동작 줄이기를 모의한 환경과 화면 아래로 이동한 상태에서는 GPU draw 호출이
-  증가하지 않았다. WebGL 미지원 모의 환경은 정적 canvas로 대체했고,
-  context loss 이후에도 페이지 재로딩 없이 데모 상태가 유지됐다.
-  당시 모바일 38,403개·데스크톱 79,953개 입자 renderer는 아래 사진 기반 장면으로 대체했다.
-- 2026-09-11 사진 기반 은하: 이미지 생성으로 만든 짙은 먼지띠·조밀한 별빛·따뜻한
-  중심부 artwork를 1672×941, 460,516바이트 WebP로 사용한다. 실제 관측 사진이 아니다.
-  SSR poster와 같은 source를 한 GPU texture로 공유하며 camera pan/zoom·미세한 깊이
-  시차·전경 별만 합성하는 2.5D 장면이다. RGBA texture 6,293,408바이트와 24바이트
-  정점 buffer 외에 image decode·framebuffer·driver 비용이 있다. 30fps 스케줄,
-  400만 backing pixel·DPR desktop 1.75/mobile 1.4 상한을 유지한다.
-  hero 밖으로 사진이 새지 않도록 clip하고 mobile 본문 대비는 전용 veil로 유지한다.
-  로컬 Chromium에서 1440px/390px 레이아웃, 실제 시차·확대·드래그·Escape,
-  pause 정지 픽셀 일치와 draw 증가 0, 화면 밖/동작 줄이기 draw 증가 0,
-  WebGL loss→동일 사진→context 복구와 미지원 사진 fallback을 확인했다.
-  직접 renderer 생성/폐기 3회에서 texture와 buffer 각각 생성 3·해제 3,
-  dispose 이후 draw 증가 0을 확인했다. 사진 변경 후 site Cloudflare build·root build·
-  hooks/palette/구조 검사도 통과했다.
-  실제 모바일 기기 FPS는 미검증이다.
-- 검증: `pnpm --dir site build:cloudflare`, `pnpm build`, `pnpm test`
-  (42개), 구조·hooks·UI primitive/palette 검사 통과. 기존 Next.js의
-  middleware 명칭 폐기 예정 및 tracing/turbopack root 설정 경고는 남아 있다.
-- 재검수 시 루트 pnpm의 workspace 설치 기록 불일치가 자동 재설치를 요구했다.
-  의존성을 변경하지 않고 `pnpm_config_verify_deps_before_run=warn`으로
-  루트 build·test를 실행해 통과했다. 사이트의 독립 Cloudflare 빌드는 그대로 통과했다.
+- 상태: `partial` — Three.js 은하 배경은 로컬 검수 후 사용자 요청에 따라
+  Cloudflare 운영 사이트에 반영했다. 실제 Safari·모바일 기기 성능,
+  실사용 Core Web Vitals와 검색 수집 확인도 남아 있다.
+- 소유자: `site/app/page.tsx`는 언어·metadata·JSON-LD, `HomeSections.tsx`는
+  서버 본문, `GalaxyHero.tsx`는 지연 로드와 탐험·정지 상태를 소유한다.
+  `galaxyRenderer`는 페이지 전체의 고정 canvas·native scroll·GPU 수명주기를,
+  `galaxyScene/Shaders`는 사진 없는 별 buffer와 불규칙한 먼지띠를 소유한다.
+  설명용 walkthrough는 기존 reducer만 사용하며 실제 DB에는 연결하지 않는다.
+- 2026-09-11 사용자 요청으로 CSS 전용 시안을 Three.js로 전환했다. 생성 사진과
+  CSS shadow renderer는 제거했다. 기본 회전·먼지 변화·전경 별 이동은 입력 없이
+  계속되며 스크롤은 좌우 왕복 대신 고정된 원반 normal 축의 공전과 중심으로
+  전진하는 시점을 만든다. 부모의 기울기와 자식의 공전을 분리해 화면 정면을
+  기준으로 돌던 camera-facing 회전을 제거했다.
+  HTML/body와 GPU clear는 night 색을 유지하며 밝은 전체 화면 전환은 없다.
+  이것은 시각적 근사이고 실제 천체 관측·물리 시뮬레이션이 아니다.
+- 로컬 기본 Turbopack Chromium의 1440×960/390×844에서 29개 브라우저 진단을
+  통과했다: 기울어진 3D 축과 네 섹션에서의 축 고정, idle 공전,
+  네 섹션의 고정 배경·전진·단방향 공전, HTML/body night,
+  200만 pixel 상한, 하단 pause와 정지 픽셀 일치, 키보드 확대, Escape focus 복원,
+  reduced motion, 모의 visibilitychange 정지·복귀, 모바일 넘침 없음·스크롤 추종,
+  은하 사진 요청 없음, runtime 오류 없음, WebGL context loss fallback·복구.
+  드래그는 화면에서 실행했으며 실제 모바일 터치·Safari 성능 승인은 남아 있다.
+  별도 production Chromium의 JavaScript 비활성 상태에서도 night fallback·H1·본문을
+  확인했다. 다운로드 구간에도 night veil을 적용해 접근 시 밝아진 먼지층과 텍스트를 분리한다.
+- 검증: `pnpm --dir site build:cloudflare`, site TypeScript·ESLint,
+  구조·UI palette 검사 통과. 공용 마크 import 오류는 개발 root를 저장소로 넓히고
+  production tracing root는 독립 site에 유지해 수정했다. 기본 Turbopack /ko와
+  Cloudflare bundle 생성을 확인했다. Next middleware 명칭 폐기 예정 경고는 남아 있다.
+  소개 사이트 검수에는 Next 서버만 사용하며 Desktop/Tauri는 실행하지 않는다.
+  2026-09-11 운영 배포 후 `site:cloud:verify-deployment`로 새 Worker의 트래픽 100%와
+  운영 도메인의 배포 영수증 일치를 확인했다. 운영 Chromium에서 idle 공전, 수정된
+  기울어진 축, night 배경, 축을 유지하는 스크롤 전진, 고정 viewport, 일시정지,
+  모바일 가로 넘침 없음과 상호작용 중 page runtime 예외 없음의 8개 진단을 통과했다.
+  별도로 Cloudflare 방문 통계 beacon의 기존 CSP 정책에 의한 차단 로그와 font preload
+  경고는 남아 있다. 보안 정책·통계 설정은 이번 배포에서 변경하지 않았다.
+  운영 배포는 당시 검수한 작업 트리에서 직접 수행했으며 Git 푸시·앱 릴리스와 분리했다.
 
 ## 공용 브랜드 아이콘
 
