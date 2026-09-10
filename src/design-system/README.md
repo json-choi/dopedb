@@ -244,11 +244,23 @@ Elevation은 세 단계만 허용한다.
 
 ### React primitive
 
-- `DopeDBMark`, `workspace-cloud/app/components/Brand`와 `site/app/DopeDBMark`: workspace의
-  선형 D 마크를 DopeDB 브랜드 정본으로 공유한다. 공개 사이트 header/footer와
-  workspace navigation과 Desktop title toolbar는 이 도형을 사용하고, favicon·OAuth·Tauri bundle
-  아이콘은 `scripts/generate-icons.py`가 같은 D 마크에서 생성한다. database
-  engine이나 외부 Agent provider 로고는 이 브랜드 자산으로 대체하지 않는다.
+- DopeDB 브랜드는 좁은 D를 −24° 행성 고리가 감싸는 마크로 통일한다.
+  [`assets/brand/dopedb-icon.svg`](../../assets/brand/dopedb-icon.svg)가 도형과
+  타일 배경 `#151a16`·마크 `#ccf36b`의 단일 정본이다. `pnpm icons`는 이 SVG를
+  직접 렌더링해 favicon·OAuth·Tauri PNG/ICO/ICNS와 `DopeDBMarkGraphic`을 생성한다.
+  별도의 좌표나 Pillow drawing으로 도형을 재구현하지 않는다.
+  `pnpm icons --check`는 생성물 17개의 일치 여부를 파일 변경 없이 검사한다.
+  생성 환경과 사용처는 [`브랜드 자산 안내`](../../assets/brand/README.md)를 따른다.
+- Desktop의 `DopeDBMark`, `site/app/DopeDBMark`, Workspace의 `Brand`는 같은
+  `DopeDBMarkGraphic`을 사용하고 크기·주변 테마 색·각 앱의 `useId()`만 제공한다.
+  Desktop은 title toolbar의 24px 기본형과 Workspace selector의 20px `compact`를
+  사용하며 selector의 문자 D placeholder를 별도로 유지하지 않는다.
+  공용 graphic은 React import나 hook 없이 JSX만 소유해 두 Next 앱의 독립 빌드가
+  Desktop React 설치에 의존하지 않는다. instance별 ID는 SSR/hydration과 한 화면의
+  여러 마크 사이에서 SVG mask 충돌을 막는다. inline 마크는 배경 없이
+  `currentColor`를 따르며 mask의 흑백은 가시성 연산 전용이다.
+  database engine·외부 Agent provider 로고와 과거 버전의 실제 screenshot은
+  이 브랜드 자산으로 대체하거나 덧그리지 않는다.
 - `site/app/MarketingButton`: 공개 마케팅 사이트의 다운로드·소스 CTA가 공유하는
   primary/secondary anchor primitive. `TrackedLink`를 합성해 선택적인 analytics
   event와 동일한 반응형 폭·상태를 소유하며 page에서 CTA utility를 복사하지

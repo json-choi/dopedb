@@ -15,6 +15,35 @@ runtime과 성능 수치로 수행한다.
 - `missing`: 범위에는 속하지만 아직 구현하지 않음
 - `out-of-scope`: 제품 범위 결정상 화면이나 placeholder를 만들지 않음
 
+## 공용 브랜드 아이콘
+
+- 상태: `partial` — 저장소의 활성 브랜드 사용처와 생성물은 고리형 D로 통일했다.
+  공개 웹 배포, 외부 콘솔의 업로드 이미지 교체, 새 macOS·Windows 설치 파일의
+  Dock/시작 메뉴/installer 검수는 별도 릴리스·배포 뒤 확인한다.
+- 단일 원본은 `assets/brand/dopedb-icon.svg`다. 기존 배경 `#151a16`과
+  마크 `#ccf36b`, 승인된 좁은 D·−24° 고리·위성 점을 유지한다.
+  `scripts/generate-icons.py`는 공용 `DopeDBMarkGraphic`과 PNG/SVG/ICO/ICNS
+  17개 생성물을 같은 원본에서 만들며 `pnpm icons --check`로 불일치를 차단한다.
+- Desktop title toolbar 24px, Workspace selector 20px(문자 D placeholder 제거),
+  소개 사이트와 Workspace `Brand`, 한·영 README, 약관·개인정보 문서,
+  favicon·홈 화면·OAuth·Tauri bundle/Windows installer 자산이 이 원본을 사용한다.
+  과거 버전의 실제 스크린샷과 외부 DB/Agent 로고는 변경하지 않았다.
+- 2026-09-10 로컬 검수: PNG 10개의 규격·RGBA·투명 모서리·배경색,
+  ICO의 16–256px 프레임과 ICNS 프레임을 확인했다. 두 웹 앱의 아이콘 HTTP 응답이
+  동일 생성물 hash와 일치했고 한·영 초기 HTML에도 마크가 포함된다.
+  소개·정책·Workspace 로그인·기기 승인 완료 화면은 HTTP 200을 유지한다.
+  1440px 및 390px 모바일 에뮬레이션에서 새 아이콘을 확인했고,
+  한 화면의 여러 SVG ID·mask 참조가 충돌하지 않는다.
+  Desktop은 브라우저의 실제 header·selector를 라이트/다크에서 확인한 범위이며,
+  Tauri IPC를 제공하지 않는 이 실행은 native 동작·packaged 검수의 대체가 아니다.
+- 검증: `pnpm icons --check`, `pnpm build`, `pnpm workspace:cloud:build`,
+  소개 사이트·Workspace의 `build:cloudflare`, `pnpm test`(42개),
+  `git diff --check` 통과. 원본 SVG의 1024px 렌더 결과는 승인된 오른쪽 시안과
+  픽셀 단위로 동일하다. Graphify AST도 갱신했다. 기존 Next.js의 middleware/root
+  설정 경고와 Graphify의 `Cargo.toml` zero-node 경고는 남아 있다.
+- 사용처·생성 환경·외부 반영 경계는
+  [`브랜드 자산 안내`](../assets/brand/README.md)를 따른다.
+
 ## 화면 상태
 
 MVP의 provider import는 항상 새 managed connection을 만든다. 기존
@@ -23,7 +52,7 @@ member-local connection을 선택해 ID와 참조를 보존하는 전환 단계�
 
 | 영역 | 상태 | 현재 소유자 | 남은 acceptance gap |
 | --- | --- | --- | --- |
-| App shell/chrome | `partial` | `features/appShell`, design-system chrome primitives | 시스템·라이트·다크 semantic palette, 검색의 위아래 여백을 없앤 32px title toolbar와 같은 중앙선의 32px action, 296px Explorer, Workspace·Databases·Articles 탐색과 평평한 main pane을 적용했다. 기존 D 마크, Agent 말풍선, 브랜드 오른쪽에서 현재 왼쪽 패널을 복원하는 토글을 적용했다. AI Chat 진입은 헤더 오른쪽에만 두고, Explorer 탐색·도구·검색·트리는 12px gutter를 공유한다. 새 macOS 개발 bundle에서 토글 위치·닫기·복원과 헤더 AI Chat 진입을 확인했다. macOS 개발 bundle의 넓은·좁은 창에서 정렬, Explorer·Local History 복원, drawer Escape, 검색, 라이트·다크를 확인했다. 실제 컴포넌트 fixture의 로그인 계정 버튼도 32px와 동일 중앙선을 측정했다. 새 macOS 개발 bundle에서 탐색·검색·Workspace fallback·SQL editor·Agent pane을 확인했다. Local History header의 뒤로 버튼과 상단 메뉴 재선택은 Explorer로 복귀하며, 기존 Explorer를 유지해 검색·트리 상태와 중앙 문서를 보존한다. 실제 macOS 개발 앱의 1200px·520px 창에서 복귀·메뉴 재선택·패널 숨김/복원·검색어 유지·tree focus와 compact Action Search 진입을 확인했다. Windows packaged의 새 palette와 compact 검수는 남아 있다. Knowledge 화면에서는 과거 DB breadcrumb를 제거한다. Agent는 왼쪽 pane과 중앙 420px를 예약한 뒤 360px까지 줄여 dock하며, 공간 부족 시 제목 표시줄과 상태 표시줄 사이의 396px overlay로 전환한다. 하단 Services 패널·토글·resize·저장 상태를 제거하고 중앙 본문과 32px 상태 표시만 유지한다. 브라우저 shell에서 본문이 title/status 사이를 채우는 것을 확인했다. packaged macOS·Windows에서 keyboard launcher와 compact window를 정기 확인 |
+| App shell/chrome | `partial` | `features/appShell`, design-system chrome primitives | 시스템·라이트·다크 semantic palette, 검색의 위아래 여백을 없앤 32px title toolbar와 같은 중앙선의 32px action, 296px Explorer, Workspace·Databases·Articles 탐색과 평평한 main pane을 적용했다. 공용 고리형 D 마크, Agent 말풍선, 브랜드 오른쪽에서 현재 왼쪽 패널을 복원하는 토글을 적용했다. AI Chat 진입은 헤더 오른쪽에만 두고, Explorer 탐색·도구·검색·트리는 12px gutter를 공유한다. 새 macOS 개발 bundle에서 토글 위치·닫기·복원과 헤더 AI Chat 진입을 확인했다. macOS 개발 bundle의 넓은·좁은 창에서 정렬, Explorer·Local History 복원, drawer Escape, 검색, 라이트·다크를 확인했다. 실제 컴포넌트 fixture의 로그인 계정 버튼도 32px와 동일 중앙선을 측정했다. 새 macOS 개발 bundle에서 탐색·검색·Workspace fallback·SQL editor·Agent pane을 확인했다. Local History header의 뒤로 버튼과 상단 메뉴 재선택은 Explorer로 복귀하며, 기존 Explorer를 유지해 검색·트리 상태와 중앙 문서를 보존한다. 실제 macOS 개발 앱의 1200px·520px 창에서 복귀·메뉴 재선택·패널 숨김/복원·검색어 유지·tree focus와 compact Action Search 진입을 확인했다. Windows packaged의 새 palette와 compact 검수는 남아 있다. Knowledge 화면에서는 과거 DB breadcrumb를 제거한다. Agent는 왼쪽 pane과 중앙 420px를 예약한 뒤 360px까지 줄여 dock하며, 공간 부족 시 제목 표시줄과 상태 표시줄 사이의 396px overlay로 전환한다. 하단 Services 패널·토글·resize·저장 상태를 제거하고 중앙 본문과 32px 상태 표시만 유지한다. 브라우저 shell에서 본문이 title/status 사이를 채우는 것을 확인했다. packaged macOS·Windows에서 keyboard launcher와 compact window를 정기 확인 |
 | Action Search | `complete` | `features/actionSearch` | cached catalog scope, `/` action mode, focus 복구와 bounded top-k를 유지 |
 | Welcome document | `complete` | `screens/Onboarding`, `features/onboarding` | 준비된 Demo는 학습 command 3개만, 연결된 상태는 New Query만, 미연결 상태는 New connection과 사용 가능한 Guided Demo만 보여 준다. 전역 Action Search를 반복하지 않고 command 행의 아이콘·경계·focus 상태를 유지한다. Personal 가이드 데모의 idempotent DB·Project·Environment·binding 준비와 상태별 command 집합을 packaged smoke에서 확인 |
 | Workspace account authentication | `partial` | `features/workspaces/WorkspaceAccount`, native workspace deep-link adapter, `workspace-cloud/app/auth/device` | 브라우저 승인 완료 화면은 비밀값 없는 `dopedb://auth/device-complete`로 기존 앱을 활성화하고 즉시 서버 polling을 실행하며 자동 호출이 막힐 때 수동 앱 열기 action을 유지한다. production/dev/benchmark URL scheme 분리와 payload 거절은 자동 검수한다. 실제 Google 승인 왕복을 packaged macOS·Windows에서 확인하면 `complete`로 전환한다. |

@@ -1,107 +1,142 @@
+"""Generate every DopeDB brand projection from the approved SVG, never redraw it.
+
+The hook-free React graphic shares the same geometry as the app/web assets.
+PNG/ICO/ICNS rendering uses the site's installed Sharp, Pillow and macOS iconutil.
+All outputs are staged first; --check compares without changing repository files.
+"""
+
 from __future__ import annotations
 
+import argparse
+import hashlib
+import io
+import json
+import re
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
+from xml.etree import ElementTree
 
-from PIL import Image, ImageDraw
+from PIL import Image
 
 
 ROOT = Path(__file__).resolve().parents[1]
-BRAND_ASSETS = ROOT / "assets" / "brand"
-SITE_PUBLIC = ROOT / "site" / "public"
-WORKSPACE_APP = ROOT / "workspace-cloud" / "app"
-TAURI_ICONS = ROOT / "src-tauri" / "icons"
-SOURCE_SIZE = 2048
-
-ICON_BACKGROUND = "#151a16"
-ICON_FOREGROUND = "#ccf36b"
-
-ICON_SVG = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 28" role="img" aria-label="DopeDB">
-  <rect width="28" height="28" rx="6.125" fill="{ICON_BACKGROUND}"/>
-  <path d="M4 6.5h11.25c5.1 0 8.75 3.28 8.75 7.5s-3.65 7.5-8.75 7.5H4V6.5Z" fill="none" stroke="{ICON_FOREGROUND}" stroke-width="1.5"/>
-  <path d="M4 11h12M4 16h9" fill="none" stroke="{ICON_FOREGROUND}" stroke-width="1.5"/>
-  <circle cx="20.5" cy="18.5" r="2.25" fill="{ICON_FOREGROUND}"/>
-</svg>
-"""
-
-
-def rounded_mask(size: int, radius: int) -> Image.Image:
-    mask = Image.new("L", (size, size), 0)
-    ImageDraw.Draw(mask).rounded_rectangle((0, 0, size, size), radius=radius, fill=255)
-    return mask
-
-
-def cubic_points(
-    start: tuple[float, float],
-    control_a: tuple[float, float],
-    control_b: tuple[float, float],
-    end: tuple[float, float],
-    steps: int = 96,
-) -> list[tuple[float, float]]:
-    points: list[tuple[float, float]] = []
-    for index in range(steps + 1):
-        t = index / steps
-        inverse = 1 - t
-        x = (
-            inverse**3 * start[0]
-            + 3 * inverse**2 * t * control_a[0]
-            + 3 * inverse * t**2 * control_b[0]
-            + t**3 * end[0]
-        )
-        y = (
-            inverse**3 * start[1]
-            + 3 * inverse**2 * t * control_a[1]
-            + 3 * inverse * t**2 * control_b[1]
-            + t**3 * end[1]
-        )
-        points.append((x, y))
-    return points
+SOURCE = ROOT / "assets/brand/dopedb-icon.svg"
+GRAPHIC = Path("src/design-system/components/DopeDBMarkGraphic.tsx")
+SVG_OUTPUTS = (Path("site/public/favicon.svg"), Path("workspace-cloud/app/icon.svg"))
+PNG_OUTPUTS = {
+    "src-tauri/icons/icon.png": 1024,
+    "src-tauri/icons/32x32.png": 32,
+    "src-tauri/icons/128x128.png": 128,
+    "src-tauri/icons/128x128@2x.png": 256,
+    "site/public/favicon-48x48.png": 48,
+    "site/public/apple-touch-icon.png": 180,
+    "site/public/icon-192.png": 192,
+    "site/public/icon-512.png": 512,
+    "site/public/oauth-logo-120.png": 120,
+    "workspace-cloud/app/apple-icon.png": 180,
+}
+ICO_OUTPUTS = {
+    "src-tauri/icons/icon.ico": (16, 32, 48, 64, 128, 256),
+    "site/public/favicon.ico": (16, 32, 48, 64),
+    "workspace-cloud/app/favicon.ico": (16, 32, 48, 64),
+}
+ICNS_OUTPUT = Path("src-tauri/icons/icon.icns")
 
 
-def render_icon() -> Image.Image:
-    scale = SOURCE_SIZE / 28
-    tile = Image.new("RGBA", (SOURCE_SIZE, SOURCE_SIZE), ICON_BACKGROUND)
-    draw = ImageDraw.Draw(tile)
-    stroke = round(1.5 * scale)
+def render_graphic(svg: bytes) -> str:
+    document = ElementTree.fromstring(svg)
+    if document.attrib.get("viewBox") != "0 0 32 32":
+        raise ValueError("The approved brand viewBox must remain 0 0 32 32")
+    tile = next(child for child in document if child.attrib.get("id") == "tile")
+    document.remove(tile)
+    ids = {node.attrib["id"] for node in document.iter() if "id" in node.attrib}
 
-    def point(value: tuple[float, float]) -> tuple[float, float]:
-        return value[0] * scale, value[1] * scale
+    def attribute(name: str, value: str) -> str:
+        prop = re.sub(r"-([a-z])", lambda match: match[1].upper(), name)
+        if name == "id":
+            return f'{prop}={{`${{prefix}}-{value}`}}'
+        if name == "href" and value.startswith("#"):
+            reference = value[1:]
+            if reference not in ids:
+                raise ValueError(f"Unknown SVG reference: {value}")
+            return f'{prop}={{`#${{prefix}}-{reference}`}}'
+        if value.startswith("url(#"):
+            reference = value[5:-1]
+            if reference not in ids:
+                raise ValueError(f"Unknown SVG reference: {value}")
+            return f'{prop}={{`url(#${{prefix}}-{reference})`}}'
+        return f"{prop}={json.dumps(value)}"
 
-    outline = [point((4, 6.5)), point((15.25, 6.5))]
-    outline.extend(
-        point(value)
-        for value in cubic_points((15.25, 6.5), (20.35, 6.5), (24, 9.78), (24, 14))[1:]
+    def element(node: ElementTree.Element, depth: int = 3) -> str:
+        tag = node.tag.rsplit("}", 1)[-1]
+        indent = "  " * depth
+        props = " ".join(attribute(name, value) for name, value in node.attrib.items())
+        opening = f"{indent}<{tag}" + (f" {props}" if props else "")
+        if not len(node):
+            return opening + " />"
+        children = "\n".join(element(child, depth + 1) for child in node)
+        return f"{opening}>\n{children}\n{indent}</{tag}>"
+
+    geometry = "\n".join(element(child) for child in document)
+    fingerprint = hashlib.sha256(svg).hexdigest()
+    return f'''// Generated from assets/brand/dopedb-icon.svg by pnpm icons; do not edit.
+// Hook-free shared SVG: each app passes its own React useId() for isolated masks.
+// Mask black/white values encode opacity; visible artwork inherits currentColor.
+// Source SHA-256: {fingerprint}
+export function DopeDBMarkGraphic({{
+  instanceId,
+  className,
+  size = 28,
+}}: {{
+  instanceId: string;
+  className?: string;
+  size?: number;
+}}) {{
+  const prefix = `dopedb-${{instanceId.replace(/:/g, "")}}`;
+  return (
+    <svg
+      className={{className}}
+      width={{size}}
+      height={{size}}
+      viewBox="0 0 32 32"
+      fill="none"
+      aria-hidden="true"
+      focusable="false"
+      data-dopedb-mark="orbital"
+    >
+{geometry}
+    </svg>
+  );
+}}
+'''
+
+
+def render_icon(svg: bytes) -> Image.Image:
+    # Resolve Sharp from its declared Next dependency, without installing a second
+    # rasterizer or depending on pnpm's private store path. SVG masks stay intact.
+    script = '''
+const { createRequire } = require("node:module");
+const { resolve } = require("node:path");
+const siteRequire = createRequire(resolve("site/package.json"));
+const nextRequire = createRequire(siteRequire.resolve("next/package.json"));
+const sharp = nextRequire("sharp");
+const chunks = [];
+for await (const chunk of process.stdin) chunks.push(chunk);
+const png = await sharp(Buffer.concat(chunks), { density: 4608 })
+  .resize(1024, 1024).png().toBuffer();
+process.stdout.write(png);
+'''
+    result = subprocess.run(
+        ["node", "--input-type=commonjs", "-e", f"(async () => {{ {script} }})().catch(error => {{ console.error(error); process.exitCode = 1; }});"],
+        cwd=ROOT,
+        input=svg,
+        stdout=subprocess.PIPE,
+        check=True,
     )
-    outline.extend(
-        point(value)
-        for value in cubic_points((24, 14), (24, 18.22), (20.35, 21.5), (15.25, 21.5))[1:]
-    )
-    outline.extend([point((4, 21.5)), point((4, 6.5))])
-    draw.line(outline, fill=ICON_FOREGROUND, width=stroke)
-    stroke_radius = stroke / 2
-    for x, y in outline:
-        draw.ellipse(
-            (x - stroke_radius, y - stroke_radius, x + stroke_radius, y + stroke_radius),
-            fill=ICON_FOREGROUND,
-        )
-    draw.line([point((4, 11)), point((16, 11))], fill=ICON_FOREGROUND, width=stroke)
-    draw.line([point((4, 16)), point((13, 16))], fill=ICON_FOREGROUND, width=stroke)
-
-    dot_x, dot_y = point((20.5, 18.5))
-    dot_radius = 2.25 * scale
-    draw.ellipse(
-        (
-            dot_x - dot_radius,
-            dot_y - dot_radius,
-            dot_x + dot_radius,
-            dot_y + dot_radius,
-        ),
-        fill=ICON_FOREGROUND,
-    )
-
-    tile.putalpha(rounded_mask(SOURCE_SIZE, round(6.125 * scale)))
-    return tile.resize((1024, 1024), Image.Resampling.LANCZOS)
+    with Image.open(io.BytesIO(result.stdout)) as image:
+        return image.convert("RGBA")
 
 
 def save_png(source: Image.Image, path: Path, size: int) -> None:
@@ -109,81 +144,58 @@ def save_png(source: Image.Image, path: Path, size: int) -> None:
     source.resize((size, size), Image.Resampling.LANCZOS).save(path)
 
 
-def save_ico(source: Image.Image, path: Path, sizes: list[tuple[int, int]]) -> None:
+def generate_icns(source: Image.Image, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    source.save(path, sizes=sizes)
+    with tempfile.TemporaryDirectory(prefix="dopedb-", suffix=".iconset") as directory:
+        iconset = Path(directory)
+        for size in (16, 32, 128, 256, 512):
+            save_png(source, iconset / f"icon_{size}x{size}.png", size)
+            save_png(source, iconset / f"icon_{size}x{size}@2x.png", size * 2)
+        subprocess.run(["iconutil", "-c", "icns", str(iconset), "-o", str(path)], check=True)
 
 
-def generate_icns(source: Image.Image) -> None:
-    iconset = TAURI_ICONS / "icon.iconset"
-    if iconset.exists():
-        shutil.rmtree(iconset)
-    iconset.mkdir(parents=True)
-    specs = {
-        "icon_16x16.png": 16,
-        "icon_16x16@2x.png": 32,
-        "icon_32x32.png": 32,
-        "icon_32x32@2x.png": 64,
-        "icon_128x128.png": 128,
-        "icon_128x128@2x.png": 256,
-        "icon_256x256.png": 256,
-        "icon_256x256@2x.png": 512,
-        "icon_512x512.png": 512,
-        "icon_512x512@2x.png": 1024,
-    }
-    for name, size in specs.items():
-        save_png(source, iconset / name, size)
-    subprocess.run(
-        ["iconutil", "-c", "icns", str(iconset), "-o", str(TAURI_ICONS / "icon.icns")],
-        check=True,
-    )
-    shutil.rmtree(iconset)
-
-
-def write_svg_assets() -> None:
-    for path in (
-        BRAND_ASSETS / "dopedb-icon.svg",
-        SITE_PUBLIC / "favicon.svg",
-        WORKSPACE_APP / "icon.svg",
-    ):
+def generate_assets(staging: Path) -> list[Path]:
+    svg = SOURCE.read_bytes()
+    graphic = render_graphic(svg)
+    source = render_icon(svg)
+    for relative in SVG_OUTPUTS:
+        path = staging / relative
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(ICON_SVG, encoding="utf-8")
+        path.write_bytes(svg)
+    graphic_path = staging / GRAPHIC
+    graphic_path.parent.mkdir(parents=True, exist_ok=True)
+    graphic_path.write_text(graphic, encoding="utf-8")
+    for relative, size in PNG_OUTPUTS.items():
+        save_png(source, staging / relative, size)
+    for relative, sizes in ICO_OUTPUTS.items():
+        path = staging / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        source.save(path, sizes=[(size, size) for size in sizes])
+    generate_icns(source, staging / ICNS_OUTPUT)
+    return [GRAPHIC, *SVG_OUTPUTS, *(Path(path) for path in PNG_OUTPUTS),
+            *(Path(path) for path in ICO_OUTPUTS), ICNS_OUTPUT]
 
 
 def main() -> None:
-    source = render_icon()
-    write_svg_assets()
-
-    save_png(source, TAURI_ICONS / "icon.png", 1024)
-    save_png(source, TAURI_ICONS / "32x32.png", 32)
-    save_png(source, TAURI_ICONS / "128x128.png", 128)
-    save_png(source, TAURI_ICONS / "128x128@2x.png", 256)
-    save_ico(
-        source,
-        TAURI_ICONS / "icon.ico",
-        [(16, 16), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)],
-    )
-    generate_icns(source)
-
-    save_png(source, SITE_PUBLIC / "favicon-48x48.png", 48)
-    save_png(source, SITE_PUBLIC / "apple-touch-icon.png", 180)
-    save_png(source, SITE_PUBLIC / "icon-192.png", 192)
-    save_png(source, SITE_PUBLIC / "icon-512.png", 512)
-    save_png(source, SITE_PUBLIC / "oauth-logo-120.png", 120)
-    save_ico(
-        source,
-        SITE_PUBLIC / "favicon.ico",
-        [(16, 16), (32, 32), (48, 48), (64, 64)],
-    )
-
-    save_png(source, WORKSPACE_APP / "apple-icon.png", 180)
-    save_ico(
-        source,
-        WORKSPACE_APP / "favicon.ico",
-        [(16, 16), (32, 32), (48, 48), (64, 64)],
-    )
-
-    print("generated DopeDB D-mark app and web icons")
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--check", action="store_true", help="Fail on stale assets without modifying them")
+    args = parser.parse_args()
+    with tempfile.TemporaryDirectory(prefix="dopedb-icons-") as directory:
+        staging = Path(directory)
+        outputs = generate_assets(staging)
+        stale = [relative for relative in outputs
+                 if not (ROOT / relative).exists()
+                 or (ROOT / relative).read_bytes() != (staging / relative).read_bytes()]
+        if args.check:
+            if stale:
+                raise SystemExit("Stale DopeDB icons; run pnpm icons:\n" + "\n".join(map(str, stale)))
+            print(f"DopeDB orbital brand: all {len(outputs)} generated files match the SVG source")
+            return
+        for relative in stale:
+            target = ROOT / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(staging / relative, target)
+        print(f"Generated DopeDB orbital brand: {len(stale)} updated, {len(outputs)} verified")
 
 
 if __name__ == "__main__":

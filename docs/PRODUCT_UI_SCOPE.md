@@ -82,7 +82,8 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
 - Desktop은 시스템 설정을 기본으로 따르며 Settings → 화면에서 시스템·라이트·다크를
   즉시 선택하고 기기에 저장한다. 시스템 모드는 OS 변경도 자동 반영한다. 기존 다크
   palette와 밝은 중립 palette가 같은 semantic role과 평평한 pane 배치를 공유한다.
-  title toolbar는 검색 위아래 여백 없이 32px 높이와 32px action을 사용하고 기존 선형 D 마크를 표시한다.
+  title toolbar는 검색 위아래 여백 없이 32px 높이와 32px action을 사용하고
+  좁은 D를 기울어진 행성 고리가 감싸는 공용 브랜드 마크를 표시한다.
   헤더 왼쪽의 브랜드 오른쪽 패널 토글은 현재 Explorer·Local History를 닫고 같은 패널을 복원한다.
   Local History의 선행 뒤로 버튼과 상단 메뉴 재선택은 Explorer로 돌아간다.
   기록을 보는 동안 Explorer의 검색·펼침·스크롤 상태와 중앙 작업 문맥을 보존하며,

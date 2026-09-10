@@ -22,6 +22,7 @@ import { errMessage } from "../../../ipc/types";
 import { useI18n } from "../../../lib/i18n";
 import { Icon } from "../../../components/Icon";
 import { useToast } from "../../../components/Toast";
+import { DopeDBMark } from "../../../design-system/components/DopeDBMark";
 import ToolbarMenu, {
   ToolbarMenuItem,
 } from "../../../components/ToolbarMenu";
@@ -120,8 +121,8 @@ export default function WorkspaceSwitcher({
       openRequest={openRequest}
       trigger={
         <>
-          <span className="tw:grid tw:size-5 tw:shrink-0 tw:place-items-center tw:rounded-xs tw:bg-secondary tw:font-mono tw:text-xs tw:font-bold tw:text-foreground">
-            D
+          <span className="tw:grid tw:size-5 tw:shrink-0 tw:place-items-center tw:rounded-xs tw:bg-secondary tw:text-foreground">
+            <DopeDBMark size="compact" />
           </span>
           <span className="tw:max-w-[170px] tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap">
             {activeLabel}
