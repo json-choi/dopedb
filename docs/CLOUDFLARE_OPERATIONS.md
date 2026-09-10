@@ -76,6 +76,37 @@ known version explicitly, run:
 pnpm workspace:cloud:verify-deployment <worker-version-id>
 ```
 
+## Public site deployment
+
+Pull requests and disabled production runs build the public site and execute a
+Wrangler dry run. On a `main` push, the `site-deploy` CI job deploys only after
+`site-build` succeeds. The job rebuilds from that exact commit, checks that the
+Cloudflare account matches `site/wrangler.jsonc`, and fails unless the uploaded
+version receives 100% of traffic and matches the live `dopedb.dev` deployment
+receipt.
+
+Production deployment is fail-closed behind both of these GitHub settings:
+
+- the `site-production` environment contains an environment secret named
+  `CLOUDFLARE_API_TOKEN`; the token is limited to the declared account and the
+  minimum Worker and route permissions needed by `dopedb-site`
+- the repository variable `SITE_DEPLOY_ENABLED` is exactly `true`
+
+Keep the variable unset or `false` until the environment secret and main-only
+deployment policy have been reviewed. Never use a local Wrangler OAuth session
+as the CI credential or store the token in a repository file. To deploy the
+checked-out commit manually through the same fail-closed path, run:
+
+```sh
+pnpm site:cloud:deploy --commit "$(git rev-parse HEAD)"
+```
+
+To re-check a known public-site version without deploying, run:
+
+```sh
+pnpm site:cloud:verify-deployment <worker-version-id>
+```
+
 ## Identity changes
 
 Deploy `dopedb-workspace-identity` only when its source, keys, or checked-in
