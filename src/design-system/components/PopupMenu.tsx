@@ -3,24 +3,78 @@
 import type {
   ButtonHTMLAttributes,
   InputHTMLAttributes,
+  KeyboardEventHandler,
+  MouseEventHandler,
   ReactNode,
+  RefObject,
 } from "react";
+import { useEffect } from "react";
+import { createPortal } from "react-dom";
+
+import { useAnchoredFloatingSurface } from "../floating";
+
+type PopupMenuPlacement = "bottom-end" | "right-end" | "top-start";
 
 export function PopupMenu({
   id,
   children,
+  anchorRef,
+  placement = "bottom-end",
+  size = "default",
+  ariaLabel,
+  onClick,
+  onKeyDown,
+  onReferenceHidden,
 }: {
   id?: string;
   children: ReactNode;
+  anchorRef: RefObject<HTMLElement | null>;
+  placement?: PopupMenuPlacement;
+  size?: "account" | "default";
+  ariaLabel?: string;
+  onClick?: MouseEventHandler<HTMLDivElement>;
+  onKeyDown?: KeyboardEventHandler<HTMLDivElement>;
+  onReferenceHidden?: () => void;
 }) {
-  return (
+  const {
+    refs,
+    floatingStyles,
+    placement: resolvedPlacement,
+    isPositioned,
+    middlewareData,
+  } = useAnchoredFloatingSurface({ open: true, placement });
+
+  useEffect(() => {
+    refs.setReference(anchorRef.current);
+    return () => refs.setReference(null);
+  }, [anchorRef, refs]);
+
+  useEffect(() => {
+    if (!middlewareData.hide?.referenceHidden) return;
+    onReferenceHidden?.();
+  }, [middlewareData.hide?.referenceHidden, onReferenceHidden]);
+
+  if (typeof document === "undefined") return null;
+  return createPortal(
     <div
+      ref={refs.setFloating}
       id={id}
       role="menu"
-      className="tw:absolute tw:top-[calc(100%+var(--ds-popover-offset))] tw:right-0 tw:z-[var(--ds-z-popover)] tw:grid tw:max-h-[min(360px,calc(100dvh-var(--ds-space-6)))] tw:w-[min(220px,calc(100cqw-var(--ds-space-6)))] tw:min-w-[176px] tw:gap-[2px] tw:overflow-y-auto tw:overscroll-contain tw:rounded-sm tw:border tw:border-border-subtle tw:bg-popover tw:p-1 tw:shadow-popover"
+      aria-label={ariaLabel}
+      data-placement={resolvedPlacement.split("-")[0]}
+      data-popup-menu=""
+      data-size={size}
+      className="tw:fixed tw:z-[var(--ds-z-popover)] tw:grid tw:max-h-[min(420px,calc(100dvh-(var(--ds-viewport-gutter)*2)))] tw:w-[min(220px,calc(100vw-(var(--ds-viewport-gutter)*2)))] tw:min-w-[var(--ds-menu-min-width)] tw:gap-[2px] tw:overflow-y-auto tw:overscroll-contain tw:rounded-sm tw:border tw:border-border-subtle tw:bg-popover tw:p-1 tw:text-popover-foreground tw:shadow-popover tw:data-[size=account]:w-[min(284px,calc(100vw-(var(--ds-viewport-gutter)*2)))]"
+      style={{
+        ...floatingStyles,
+        visibility: isPositioned ? "visible" : "hidden",
+      }}
+      onClick={onClick}
+      onKeyDown={onKeyDown}
     >
       {children}
-    </div>
+    </div>,
+    document.body,
   );
 }
 

@@ -2,6 +2,7 @@ import type {
   PointerEvent,
   RefObject,
 } from "react";
+import { useRef } from "react";
 
 import ConfirmButton from "../../components/ConfirmButton";
 import EngineMark from "../../components/EngineMark";
@@ -132,6 +133,7 @@ type Props = {
 
 export default function ConnectionNode(props: Props) {
   const { t } = useI18n();
+  const connectionMenuTriggerRef = useRef<HTMLButtonElement>(null);
   const { connection } = props;
   const environmentBadge =
     props.environmentBadge === undefined
@@ -428,6 +430,7 @@ export default function ConnectionNode(props: Props) {
             onOpen={props.onOpenSchemaDiff}
           />
           <Button
+            ref={connectionMenuTriggerRef}
             data-connection-menu-trigger
             data-tree-context-action
             iconOnly
@@ -449,7 +452,11 @@ export default function ConnectionNode(props: Props) {
             <Icon name="moreVertical" />
           </Button>
           {props.openMenuId === connectionMenuKey ? (
-            <PopupMenu id={connectionMenuId}>
+            <PopupMenu
+              id={connectionMenuId}
+              anchorRef={connectionMenuTriggerRef}
+              onReferenceHidden={() => props.onOpenMenu(null)}
+            >
               {props.projectDatabaseOrder &&
               props.onMoveProjectDatabase ? (
                 <>

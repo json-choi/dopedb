@@ -1,7 +1,6 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 
 import { Icon, type IconName } from "../../../components/Icon";
-import InfoTip from "../../../components/InfoTip";
 import { useToast } from "../../../components/Toast";
 import { Button } from "../../../design-system/components/Button";
 import { ProgressBar } from "../../../design-system/components/Progress";
@@ -95,11 +94,7 @@ export default function Updates({
 
   return (
     <div className="tw:w-full tw:max-w-[720px] tw:p-4 tw:max-[760px]:max-w-none">
-      <div className="tw:mb-3 tw:flex tw:items-start tw:justify-between tw:gap-4 tw:max-[760px]:flex-col tw:max-[760px]:items-stretch">
-        <div className="tw:inline-flex tw:items-center tw:gap-2">
-          <h2>{t("updates.title")}</h2>
-          <InfoTip label={t("updates.description")} />
-        </div>
+      <div className="tw:mb-3 tw:flex tw:min-h-control-xl tw:items-center tw:justify-end">
         <Button
           size="compact"
           disabled={busy}
@@ -183,6 +178,7 @@ export default function Updates({
 
         <div className="ds-action-row ds-control-row tw:pt-3">
           <Button
+            size="compact"
             variant="primary"
             disabled={!snapshot.availableVersion || busy}
             onClick={() => void onInstall()}
@@ -195,7 +191,7 @@ export default function Updates({
                 ? stateLabel
                 : t("updates.updateAndRelaunch")}
           </Button>
-          <Button onClick={() => void openReleases()}>
+          <Button size="compact" onClick={() => void openReleases()}>
             {t("updates.openReleases")}
           </Button>
         </div>

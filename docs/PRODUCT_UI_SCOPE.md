@@ -147,6 +147,9 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
   성공으로 표시하지 않으며 binding 실패는 connection editor에서 복구 가능하게
   유지한다. 전역 `New connection`으로 만든 연결은 사용자가 Project를 정하지
   않았으므로 계속 `Unassigned`에 둔다.
+- Project 삭제는 Project와 그 binding만 제거한다. 연결 identity·credential·DB
+  권한은 보존하며, 다른 Project에 속하지 않은 연결은 `Unassigned`로 표시한다.
+  Project가 하나도 없으면 같은 연결을 탐색기 최상위에 표시한다.
 - 중앙 document surface는 welcome, query, data, schema, analysis처럼 현재 작업
   하나를 소유한다. MongoDB 연결은 BSON `find`/`aggregate`/`count`를 수행하는
   조회 surface를 유지하되 이를 범용 `문서` 작성 기능으로 표현하지 않는다.
@@ -170,6 +173,9 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
   준비된 Welcome은 sample table 탐색, exact Environment에 고정된 Agent 읽기,
   `Settings → Safety`를 거치는 Agent 쓰기 승인의 실제 command 세 개만 flat
   목록으로 보여준다.
+- 시작 화면은 연결 유무와 관계없이 상단 Home command와 Action Search로 다시
+  열 수 있다. 돌아갈 때 기존 쿼리 문서를 삭제하거나 연결을 해제하지 않는다.
+  마지막 연결을 삭제한 뒤에는 이전 Project 화면 대신 시작 화면을 연다.
 - 오른쪽 Agent surface는 한 Project의 명시적으로 선택된 resource set에 고정된
   대화, 도구 진행, 승인과 복구를 소유한다. context control은 Project 안의 DB,
   BigQuery, GitHub source revision을 같은 평평한 선택 surface에서 개별 또는 다중

@@ -49,6 +49,7 @@ export function IdeTopBar({
   workspace,
   account,
   onNewQuery,
+  onWelcome,
   onToggleLeftPanel,
   onToggleLocalHistory,
   onToggleAgent,
@@ -67,6 +68,7 @@ export function IdeTopBar({
   workspace?: ReactNode;
   account: ReactNode;
   onNewQuery: () => void;
+  onWelcome: () => void;
   onToggleLeftPanel: () => void;
   onToggleLocalHistory: () => void;
   onToggleAgent: () => void;
@@ -101,12 +103,15 @@ export function IdeTopBar({
       launchersLabel={t("ide.mainToolbar")}
       launchers={
         <>
+        <IdeToolbarLauncher onClick={onWelcome} title={t("onboarding.openWelcome")} aria-label={t("onboarding.openWelcome")}>
+          <Icon name="home" />
+        </IdeToolbarLauncher>
         <button
           ref={actionSearchButtonRef}
           type="button"
           aria-pressed={actionSearchOpen}
           aria-label={t("ide.action.actionSearch")}
-          className="tw:flex tw:h-control-md tw:w-[min(320px,30vw)] tw:cursor-pointer tw:items-center tw:gap-2 tw:rounded-sm tw:border tw:border-border-subtle tw:bg-card tw:px-3 tw:py-0 tw:font-sans tw:text-sm tw:text-muted-foreground tw:hover:border-border-strong tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:max-[760px]:w-control-md tw:max-[760px]:justify-center tw:max-[760px]:px-0"
+          className="tw:flex tw:h-control-md tw:w-[min(320px,30vw)] tw:cursor-pointer tw:items-center tw:gap-2 tw:rounded-none tw:border tw:border-border-subtle tw:bg-card tw:px-3 tw:py-0 tw:font-sans tw:text-sm tw:text-muted-foreground tw:hover:border-border-strong tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:max-[760px]:w-control-md tw:max-[760px]:justify-center tw:max-[760px]:px-0"
           onClick={(event) => onActionSearch(event.currentTarget)}
         ><Icon name="search" /><span className="tw:truncate tw:max-[760px]:hidden">{t("ide.action.actionSearch")}</span><kbd className="tw:ml-auto tw:font-sans tw:text-xs tw:max-[760px]:hidden">⇧ ⇧</kbd></button>
         <ToolbarMenu

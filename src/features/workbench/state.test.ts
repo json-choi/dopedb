@@ -325,6 +325,19 @@ describe("workbench state ownership", () => {
         requestId: 1,
       },
     });
+    const welcome = appShellNavigationReducer(knowledge, { type: "showWelcome" });
+    expect(welcome).toEqual({ kind: "content", route: { kind: "welcome" } });
+    expect(appShellNavigationReducer(
+      appShellNavigationReducer(welcome, { type: "openSettings" }),
+      { type: "closeSettings" },
+    )).toEqual(welcome);
+    expect(appShellNavigationReducer(knowledge, {
+      type: "connectionDeleted", connectionId: "db-1", remainingConnections: 0,
+    })).toEqual(welcome);
+    expect(appShellNavigationReducer(knowledge, {
+      type: "connectionDeleted", connectionId: "db-1", remainingConnections: 1,
+    })).toEqual(knowledge);
+    expect(appShellNavigationReducer(welcome, { type: "showWorkbench" })).toEqual(initialAppShellMode);
     expect(
       appShellNavigationReducer(knowledge, {
         type: "openSchemaDiff",
@@ -1168,6 +1181,9 @@ describe("workbench state ownership", () => {
     expect(explorerAssignment.unassignedConnectionIds).toEqual(
       new Set([bigQuery.id]),
     );
+    // Deleting the final Project removes bindings, not workspace connections.
+    expect(projectConnectionAssignment([demo, bigQuery], true, new Map())
+      .unassignedConnections).toEqual([demo, bigQuery]);
     expect(
       promotedProjectConnectionSourceId(bigQuery, {
         connectionId: "shared-bigquery",

@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import type { ConnectionProfile } from "../../features/connections/domain";
 import type { SafetySettings } from "../../ipc/types";
 import { Icon } from "../../components/Icon";
-import InfoTip from "../../components/InfoTip";
 import { Button } from "../../design-system/components/Button";
 import {
   Field,
@@ -345,10 +344,6 @@ export default function Settings({
                 {section === "appearance" && <Appearance />}
                 {section === "language" && (
                   <div className="tw:grid tw:max-w-[560px] tw:gap-4 tw:p-4">
-                    <div className="tw:inline-flex tw:items-center tw:gap-2">
-                      <h2>{t("settings.languageTitle")}</h2>
-                      <InfoTip label={t("settings.languageBody")} />
-                    </div>
                     <Field label={t("language.label")}>
                       <SelectInput
                         value={lang}

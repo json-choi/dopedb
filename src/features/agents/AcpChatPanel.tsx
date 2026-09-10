@@ -39,6 +39,7 @@ import {
 } from "./useAcpChatController";
 
 type AcpChatPanelProps = AcpChatControllerInput & {
+  open: boolean;
   onOpenKnowledgeAnalysis: (environmentId: string, articleId?: string) => void;
   onClose: () => void;
   returnFocusRef: RefObject<HTMLElement | null>;
@@ -50,6 +51,7 @@ export default function AcpChatPanel(props: AcpChatPanelProps) {
       fallback={({ retry }) => (
         <AcpChatPanelRecovery
           compact={props.compact ?? false}
+          open={props.open}
           onClose={props.onClose}
           onRetry={retry}
           overlay={props.overlay}
@@ -74,6 +76,7 @@ function AcpChatPanelContent({
   documents,
   activeDocumentId,
   selectedTable,
+  open,
   overlay,
   compact = false,
   width,
@@ -103,6 +106,7 @@ function AcpChatPanelContent({
     <AcpChatSurface
       label={t("agent.acpTitle")}
       layout={viewport.layout}
+      open={open}
       onClose={onClose}
       returnFocusRef={returnFocusRef}
     >
@@ -165,10 +169,7 @@ function AcpChatPanelContent({
                 </ToolbarMenuItem>
               ) : null}
             </ToolbarMenu>
-            <ToolWindowHideButton
-              label={t("common.close")}
-              onClick={onClose}
-            />
+            <ToolWindowHideButton label={t("common.close")} onClick={onClose} />
           </>
         }
       />
@@ -255,12 +256,14 @@ function AcpChatPanelContent({
 
 function AcpChatPanelRecovery({
   compact,
+  open,
   onClose,
   onRetry,
   overlay,
   returnFocusRef,
 }: {
   compact: boolean;
+  open: boolean;
   onClose: () => void;
   onRetry: () => void;
   overlay: boolean;
@@ -271,6 +274,7 @@ function AcpChatPanelRecovery({
     <AcpChatSurface
       label={t("agent.acpTitle")}
       layout={compact ? "compact" : overlay ? "overlay" : "docked"}
+      open={open}
       onClose={onClose}
       returnFocusRef={returnFocusRef}
     >
@@ -292,9 +296,7 @@ function AcpChatPanelRecovery({
         <strong className="tw:text-title tw:text-foreground">
           {t("agent.acpRenderFailed")}
         </strong>
-        <p className="tw:m-0 tw:leading-body">
-          {t("agent.acpRenderFailedBody")}
-        </p>
+        <p className="tw:m-0 tw:leading-body">{t("agent.acpRenderFailedBody")}</p>
         <Button
           data-agent-focus-target="recovery"
           data-modal-initial-focus
@@ -314,26 +316,28 @@ function AcpChatSurface({
   children,
   label,
   layout,
+  open,
   onClose,
   returnFocusRef,
 }: {
   children: ReactNode;
   label: string;
   layout: AgentDockLayout;
+  open: boolean;
   onClose: () => void;
   returnFocusRef: RefObject<HTMLElement | null>;
 }) {
   const surfaceRef = useRef<HTMLElement>(null);
   const interaction = agentDockInteraction(layout);
   useModalBehavior({
-    enabled: interaction.shellInert,
+    enabled: open && interaction.shellInert,
     onRequestClose: onClose,
     returnFocusRef,
     surfaceRef,
   });
 
   useLayoutEffect(() => {
-    if (layout !== "overlay") return;
+    if (!open || layout !== "overlay") return;
     const surface = surfaceRef.current;
     if (!surface || surface.contains(document.activeElement)) return;
     const preferred =
@@ -345,10 +349,10 @@ function AcpChatSurface({
       ) ??
       surface;
     preferred.focus({ preventScroll: true });
-  }, [layout]);
+  }, [layout, open]);
 
   useLayoutEffect(() => {
-    if (layout !== "overlay") return;
+    if (!open || layout !== "overlay") return;
     const handleEscape = (event: KeyboardEvent) => {
       const surface = surfaceRef.current;
       if (event.key !== "Escape" || !surface) return;
@@ -372,16 +376,19 @@ function AcpChatSurface({
     };
     document.addEventListener("keydown", handleEscape);
     return () => document.removeEventListener("keydown", handleEscape);
-  }, [layout, onClose]);
+  }, [layout, onClose, open]);
 
   return (
     <aside
       ref={surfaceRef}
-      className="tw:relative tw:col-start-4 tw:row-start-2 tw:m-0 tw:flex tw:min-h-0 tw:min-w-0 tw:flex-col tw:overflow-hidden tw:rounded-none tw:border-0 tw:border-l tw:border-border-subtle tw:bg-background tw:data-[layout=overlay]:fixed tw:data-[layout=overlay]:top-title-toolbar tw:data-[layout=overlay]:right-0 tw:data-[layout=overlay]:bottom-status-bar tw:data-[layout=overlay]:z-[var(--ds-z-modal)] tw:data-[layout=overlay]:w-[min(396px,calc(100vw_-_44px))] tw:data-[layout=overlay]:shadow-popover tw:data-[layout=compact]:fixed tw:data-[layout=compact]:top-title-toolbar tw:data-[layout=compact]:right-0 tw:data-[layout=compact]:bottom-status-bar tw:data-[layout=compact]:left-0 tw:data-[layout=compact]:z-[var(--ds-z-modal)] tw:data-[layout=compact]:w-screen tw:data-[layout=compact]:border-x-0"
+      className="tw:relative tw:col-start-4 tw:row-start-2 tw:m-0 tw:hidden tw:min-h-0 tw:min-w-0 tw:flex-col tw:overflow-hidden tw:rounded-none tw:border-0 tw:border-l tw:border-border-subtle tw:bg-background tw:data-[open=true]:flex tw:data-[layout=overlay]:fixed tw:data-[layout=overlay]:top-title-toolbar tw:data-[layout=overlay]:right-0 tw:data-[layout=overlay]:bottom-status-bar tw:data-[layout=overlay]:z-[var(--ds-z-modal)] tw:data-[layout=overlay]:w-[min(396px,calc(100vw_-_44px))] tw:data-[layout=overlay]:shadow-popover tw:data-[layout=compact]:fixed tw:data-[layout=compact]:top-title-toolbar tw:data-[layout=compact]:right-0 tw:data-[layout=compact]:bottom-status-bar tw:data-[layout=compact]:left-0 tw:data-[layout=compact]:z-[var(--ds-z-modal)] tw:data-[layout=compact]:w-screen tw:data-[layout=compact]:border-x-0"
       aria-label={label}
+      aria-hidden={!open || undefined}
       aria-modal={interaction.ariaModal}
       data-agent-surface
       data-layout={layout}
+      data-open={open}
+      inert={!open ? true : undefined}
       role={interaction.role}
       tabIndex={-1}
     >

@@ -9,6 +9,7 @@ import { useActionSearchItems } from "../actionSearch/useActionSearchItems";
 import type { BackgroundTask } from "../backgroundTasks/domain";
 import { useBackgroundTasks } from "../backgroundTasks/useBackgroundTasks";
 import type { AgentComposerRequest } from "../agents/domain";
+import { useAgentReadinessWarmup } from "../agents/useAgentReadinessWarmup";
 import { ArticleLinkGate } from "../analysisArticles/ArticleLinkGate";
 import { ExternalAgentRequestGate } from "../agents/ExternalAgentRequestGate";
 import { useGuidedDemoCommands } from "../onboarding/useGuidedDemoCommands";
@@ -48,6 +49,7 @@ function Shell() {
   const toast = useToast();
   const catalogScope = useCatalogScope();
   useWorkspaceResourceQueryRecovery(catalogScope.key, catalogScope.ready);
+  useAgentReadinessWarmup(catalogScope.key, catalogScope.ready);
   const activity = useOperationActivity();
   useSkillStartupObserver();
 
@@ -282,6 +284,7 @@ function Shell() {
     documents: documents.items,
     supportsSql: connections.supportsSql,
     commands: {
+      showWelcome: commands.route.showWelcome,
       newConnection: () => commands.connections.new(),
       newQuery: commands.documents.openQuery,
       openResults: () => commands.documents.openStable("results"),
@@ -440,6 +443,7 @@ function Shell() {
             dismissMobile: () => dismissMobileExplorer(true),
           },
           workbench: {
+            showWelcome: commands.route.showWelcome,
             activateDocument: commands.documents.activateId,
             restoreDocument: commands.documents.restoreDraft,
             newQuery: commands.documents.newQuery,

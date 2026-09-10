@@ -123,6 +123,7 @@ type ShellLayoutCommands = {
     dismissMobile: () => void;
   };
   workbench: {
+    showWelcome: () => void;
     activateDocument: (id: string) => void;
     restoreDocument: (id: string, content: string) => void;
     newQuery: () => void;
@@ -299,6 +300,7 @@ function ShellLayoutContent({ model, commands }: Props) {
           />
         }
         onNewQuery={commands.workbench.newQuery}
+        onWelcome={commands.workbench.showWelcome}
         onToggleLeftPanel={commands.explorer.togglePanel}
         onToggleLocalHistory={commands.explorer.toggleLocalHistory}
         onToggleAgent={commands.agent.toggle}
@@ -451,7 +453,9 @@ function ShellLayoutContent({ model, commands }: Props) {
         onOpenNotifications={commands.status.openNotifications}
         onSafetySettings={commands.workspace.safetySettings}
       />
-      {agent.open && workspace.selected && (
+      {/* Keep the exact-resource controller mounted while hidden so its
+          read-only ACP session is ready before the user opens AI Chat. */}
+      {workspace.selected && (
         <AcpChatPanel
           connection={workspace.selected}
           connections={workspace.connections}
@@ -460,6 +464,7 @@ function ShellLayoutContent({ model, commands }: Props) {
           documents={workbench.documents}
           activeDocumentId={workbench.activeDocumentId}
           selectedTable={workbench.selectedTable}
+          open={agent.open}
           overlay={agentOverlay}
           compact={viewport.compact}
           width={rightDockWidth}

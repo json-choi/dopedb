@@ -16,6 +16,7 @@ import { knowledgeQueryKeys } from "../knowledge/queryKeys";
 import {
   agentDockInteraction,
   agentDockLayout,
+  clampAgentDockWidth,
   shouldOverlayAgentDock,
   shouldDismissAgentOverlayFromEscape,
 } from "../agents/layout";
@@ -270,6 +271,7 @@ describe("workspace auth lifecycle", () => {
     expect(agentDockLayout(false, false)).toBe("docked");
     expect(agentDockLayout(false, true)).toBe("overlay");
     expect(agentDockLayout(true, true)).toBe("compact");
+    expect(clampAgentDockWidth(680, 1_200)).toBe(600);
     expect(shouldOverlayAgentDock({
       viewportWidth: 1_200,
       leftToolWindowWidth: 355,

@@ -83,9 +83,9 @@ export const connectionsCatalog = defineCatalog(
     "connections.addProject": "Add Project",
     "connections.addEnvironment": "Add Environment",
     "connections.deleteProject": "Delete Project",
-    "connections.reallyDeleteProject": "Delete this Project?",
+    "connections.reallyDeleteProject": "Delete this Project? Database connections will be kept outside the Project.",
     "connections.projectDeleted":
-      "Deleted {project}. Its database connections are now Unassigned.",
+      "Deleted {project}. Database connections were preserved outside this Project.",
     "connections.createProject": "Create Project",
     "connections.createFirstProject": "Create your first Project",
     "connections.creatingProject": "Creating…",
@@ -539,9 +539,9 @@ export const connectionsCatalog = defineCatalog(
     "connections.addProject": "프로젝트 추가",
     "connections.addEnvironment": "환경 추가",
     "connections.deleteProject": "프로젝트 삭제",
-    "connections.reallyDeleteProject": "이 프로젝트를 삭제할까요?",
+    "connections.reallyDeleteProject": "프로젝트를 삭제할까요? DB 연결은 프로젝트 밖에 보존됩니다.",
     "connections.projectDeleted":
-      "{project} 프로젝트를 삭제했습니다. 데이터베이스 연결은 미분류로 이동했습니다.",
+      "{project} 프로젝트를 삭제했습니다. DB 연결은 프로젝트 밖에 보존했습니다.",
     "connections.createProject": "프로젝트 만들기",
     "connections.createFirstProject": "첫 프로젝트 만들기",
     "connections.creatingProject": "만드는 중…",

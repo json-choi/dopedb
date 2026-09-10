@@ -9,6 +9,7 @@ import type {
   Ref,
   TextareaHTMLAttributes,
 } from "react";
+import { useLayoutEffect, useRef } from "react";
 
 import { Icon } from "../../components/Icon";
 import { Button } from "./Button";
@@ -185,18 +186,15 @@ export function ToolWindowComposerDock({
 
 export function ToolWindowComposer({
   children,
-  expanded = false,
   busy = false,
   ...formProps
 }: FormHTMLAttributes<HTMLFormElement> & {
-  expanded?: boolean;
   busy?: boolean;
 }) {
   return (
     <form
-      data-expanded={expanded || undefined}
       data-busy={busy || undefined}
-      className="tw:relative tw:flex tw:min-h-[108px] tw:flex-col tw:rounded-md tw:border tw:border-input tw:bg-background tw:focus-within:border-ring tw:data-[busy=true]:border-ring tw:data-[expanded=true]:min-h-[240px]"
+      className="tw:relative tw:flex tw:flex-col tw:rounded-none tw:border tw:border-input tw:bg-background tw:focus-within:border-ring tw:data-[busy=true]:border-ring"
       {...formProps}
     >
       {children}
@@ -207,9 +205,27 @@ export function ToolWindowComposer({
 export function ToolWindowComposerInput(
   textareaProps: TextareaHTMLAttributes<HTMLTextAreaElement>,
 ) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useLayoutEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    textarea.style.height = "auto";
+    const computed = window.getComputedStyle(textarea);
+    const lineHeight = Number.parseFloat(computed.lineHeight);
+    const padding =
+      Number.parseFloat(computed.paddingTop) +
+      Number.parseFloat(computed.paddingBottom);
+    const maxHeight = lineHeight * 3 + padding;
+    textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`;
+    textarea.style.overflowY = textarea.scrollHeight > maxHeight ? "auto" : "hidden";
+  }, [textareaProps.value]);
+
   return (
     <textarea
-      className="tw:min-h-16 tw:w-full tw:flex-1 tw:resize-none tw:border-0 tw:bg-transparent tw:pt-3 tw:pr-10 tw:pb-2 tw:pl-3 tw:font-sans tw:text-body tw:leading-body tw:text-foreground tw:shadow-none tw:outline-none tw:placeholder:text-muted-foreground"
+      ref={textareaRef}
+      rows={1}
+      className="tw:min-h-control-lg tw:w-full tw:resize-none tw:border-0 tw:bg-transparent tw:px-9 tw:py-2 tw:font-sans tw:text-body tw:leading-body tw:text-foreground tw:shadow-none tw:outline-none tw:placeholder:text-muted-foreground"
       {...textareaProps}
     />
   );
@@ -221,7 +237,7 @@ export function ToolWindowComposerContext({
   children: ReactNode;
 }) {
   return (
-    <div className="tw:grid tw:shrink-0 tw:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] tw:items-center tw:gap-x-1 tw:gap-y-1 tw:py-2">
+    <div className="tw:grid tw:shrink-0 tw:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] tw:items-center tw:gap-1 tw:py-1">
       {children}
     </div>
   );

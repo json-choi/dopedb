@@ -45,6 +45,38 @@ export function StatusDot({ tone = "neutral" }: { tone?: StatusTone }) {
   );
 }
 
+export function StatusIndicator({
+  tone = "neutral",
+  icon,
+  label,
+  spinning = false,
+}: {
+  tone?: StatusTone;
+  icon: IconName;
+  label: string;
+  spinning?: boolean;
+}) {
+  return (
+    <Tooltip label={label}>
+      <span
+        role="img"
+        aria-label={label}
+        data-tone={tone}
+        className="tw:inline-grid tw:size-control-xs tw:shrink-0 tw:place-items-center tw:rounded-full tw:bg-muted tw:text-muted-foreground tw:data-[tone=danger]:bg-danger-muted tw:data-[tone=danger]:text-danger tw:data-[tone=success]:text-success tw:data-[tone=warning]:text-warning"
+      >
+        <Icon
+          name={icon}
+          className={
+            spinning
+              ? "tw:size-3.5 tw:animate-spin tw:motion-reduce:animate-none"
+              : "tw:size-3.5"
+          }
+        />
+      </span>
+    </Tooltip>
+  );
+}
+
 export function StatusBarItem({
   children,
   onClick,

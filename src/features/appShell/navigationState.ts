@@ -7,6 +7,7 @@ import type { SettingsSection } from "../settings/domain";
 
 export type AppShellRoute =
   | { kind: "workbench" }
+  | { kind: "welcome" }
   | {
       kind: "connectionEditor";
       target:
@@ -27,6 +28,7 @@ export type AppShellMode =
 export type AppShellNavigationCommand =
   | { type: "workspaceScopeChanged" }
   | { type: "showWorkbench" }
+  | { type: "showWelcome" }
   | {
       type: "openConnectionEditor";
       target: Extract<AppShellRoute, { kind: "connectionEditor" }>[
@@ -39,7 +41,7 @@ export type AppShellNavigationCommand =
   | { type: "closeSettings" }
   | { type: "focusToolWindow" }
   | { type: "schemaGroupUnavailable"; groupKey: string }
-  | { type: "connectionDeleted"; connectionId: string };
+  | { type: "connectionDeleted"; connectionId: string; remainingConnections?: number };
 
 const WORKBENCH_ROUTE: AppShellRoute = { kind: "workbench" };
 
@@ -75,6 +77,8 @@ export function appShellNavigationReducer(
     case "workspaceScopeChanged":
     case "showWorkbench":
       return initialAppShellMode;
+    case "showWelcome":
+      return { kind: "content", route: { kind: "welcome" } };
     case "openConnectionEditor":
       return {
         kind: "content",
@@ -113,6 +117,9 @@ export function appShellNavigationReducer(
         : mode;
     }
     case "connectionDeleted": {
+      if (command.remainingConnections === 0) {
+        return { kind: "content", route: { kind: "welcome" } };
+      }
       const route = routeOf(mode);
       const editingDeletedConnection =
         route.kind === "connectionEditor" &&

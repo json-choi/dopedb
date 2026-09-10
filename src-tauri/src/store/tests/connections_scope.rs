@@ -509,11 +509,33 @@ async fn assert_current_store_baseline_and_invariants() {
             .graph_revision_id,
         artifact.graph_revision_id
     );
+    let retained_connection_id = Uuid::from_u128(0x1266);
+    let mut retained_profile = sqlite_profile(retained_connection_id, "project-retained");
+    retained_profile.secret_ref = Some("fixture-credential-reference".into());
+    store.upsert_connection(&retained_profile).await.unwrap();
+    let retained_pin = store
+        .pin_connection_for_read(retained_connection_id)
+        .await
+        .unwrap();
+    knowledge
+        .bind_environment_connection(
+            Uuid::from_u128(0x1267),
+            &retained_pin,
+            environment.id,
+            "primary",
+            "Retained",
+        )
+        .await
+        .unwrap();
+    let safety_before_project_delete =
+        serde_json::to_value(store.get_safety(retained_connection_id).await.unwrap()).unwrap();
     let connection_count_before_project_delete: i64 =
         sqlx::query_scalar("SELECT count(*) FROM connections")
             .fetch_one(&pool)
             .await
             .unwrap();
+    let connections_before_project_delete =
+        serde_json::to_value(store.list_connections().await.unwrap()).unwrap();
     assert!(matches!(
         knowledge
             .delete_knowledge_project(personal_workspace_id, project.id, project.revision + 1)
@@ -525,6 +547,14 @@ async fn assert_current_store_baseline_and_invariants() {
         .await
         .unwrap()
         .is_some());
+    assert_eq!(
+        knowledge
+            .environment_connections(personal_workspace_id, Some(environment.id))
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
     knowledge
         .delete_knowledge_project(personal_workspace_id, project.id, project.revision)
         .await
@@ -554,6 +584,20 @@ async fn assert_current_store_baseline_and_invariants() {
         connection_count_after_project_delete,
         connection_count_before_project_delete
     );
+    assert_eq!(
+        serde_json::to_value(store.list_connections().await.unwrap()).unwrap(),
+        connections_before_project_delete,
+        "Project deletion must preserve complete connection identities and credential references"
+    );
+    assert_eq!(
+        serde_json::to_value(store.get_safety(retained_connection_id).await.unwrap()).unwrap(),
+        safety_before_project_delete,
+    );
+    assert!(knowledge
+        .environment_connections(personal_workspace_id, Some(environment.id))
+        .await
+        .unwrap()
+        .is_empty());
     assert!(matches!(
         knowledge
             .delete_knowledge_project(personal_workspace_id, project.id, project.revision)

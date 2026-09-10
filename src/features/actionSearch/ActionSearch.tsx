@@ -230,7 +230,7 @@ export default function ActionSearch({
         </div>
 
         <div className="tw:shrink-0 tw:p-1.5">
-          <div className="tw:flex tw:h-control-md tw:items-center tw:gap-2 tw:rounded-sm tw:border tw:border-input tw:bg-background tw:px-2 tw:shadow-control tw:focus-within:border-ring tw:focus-within:ring-2 tw:focus-within:ring-ring/30">
+          <div className="tw:flex tw:h-control-md tw:items-center tw:gap-2 tw:rounded-none tw:border tw:border-input tw:bg-background tw:px-2 tw:shadow-control tw:focus-within:border-ring tw:focus-within:ring-2 tw:focus-within:ring-ring/30">
             <Icon
               name="search"
               className="tw:shrink-0 tw:text-muted-foreground"

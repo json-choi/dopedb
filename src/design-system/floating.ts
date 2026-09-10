@@ -1,12 +1,15 @@
 // Shared Floating UI middleware for portalled design-system surfaces. CSS
 // tokens remain the source of truth for viewport gutter and surface spacing.
 import {
+  autoUpdate,
   flip,
   hide,
   offset,
   shift,
   size,
   type Middleware,
+  type Placement,
+  useFloating,
 } from "@floating-ui/react-dom";
 
 function cssLength(name: string, fallback: number) {
@@ -34,4 +37,20 @@ export function floatingSurfaceMiddleware(): Middleware[] {
     })),
     hide({ strategy: "referenceHidden" }),
   ];
+}
+
+export function useAnchoredFloatingSurface({
+  open,
+  placement,
+}: {
+  open: boolean;
+  placement: Placement;
+}) {
+  return useFloating({
+    open,
+    placement,
+    strategy: "fixed",
+    middleware: floatingSurfaceMiddleware(),
+    whileElementsMounted: autoUpdate,
+  });
 }

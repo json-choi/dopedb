@@ -1,4 +1,5 @@
 import type { StatusTone } from "../../design-system/components/Status";
+import type { IconName } from "../../components/Icon";
 import type { SkillInstallState } from "../../ipc/types";
 import type { I18nKey } from "../../lib/i18n";
 
@@ -20,4 +21,11 @@ export function skillStateTone(state: SkillInstallState): StatusTone {
     return "warning";
   }
   return "danger";
+}
+
+export function skillStateIndicator(state: SkillInstallState): IconName {
+  if (state === "managed_current" || state === "newer_known") return "check";
+  if (state === "missing") return "download";
+  if (state === "managed_older") return "refresh";
+  return "alert";
 }

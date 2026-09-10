@@ -117,7 +117,6 @@ export function useAcpChatController({
   const [historyOpen, setHistoryOpen] = useState(false);
   const [selectedProvider, setSelectedProvider] =
     useState<AgentProvider>("claude");
-  const [composerExpanded, setComposerExpanded] = useState(false);
   const [configChanging, setConfigChanging] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -489,7 +488,6 @@ export function useAcpChatController({
     const submitted = composerRequest.prompt.slice(0, MAX_PROMPT_CHARS);
     setPrompt(submitted);
     setError(null);
-    setComposerExpanded(false);
     setIncludeEditorContext(false);
     void submitPromptText(submitted, EMPTY_ACP_PROMPT_CONTEXT)
       .then((sent) => {
@@ -521,7 +519,6 @@ export function useAcpChatController({
     setHistoryOpen(false);
     setPrompt("");
     setError(null);
-    setComposerExpanded(false);
     setIncludeEditorContext(false);
   }
 
@@ -709,7 +706,6 @@ export function useAcpChatController({
     composer: {
       prompt,
       maxPromptChars: MAX_PROMPT_CHARS,
-      expanded: composerExpanded,
       includeEditorContext: composerContext.included,
       contextLabels: composerContext.labels,
       environmentScopeReady,
@@ -734,7 +730,6 @@ export function useAcpChatController({
       composer: {
         submit: sendPrompt,
         setPrompt,
-        toggleExpanded: () => setComposerExpanded((current) => !current),
         toggleEditorContext: composerContext.toggle,
         selectEnvironment: scopeCommands.toggle,
         selectWriteTarget: scopeCommands.write,

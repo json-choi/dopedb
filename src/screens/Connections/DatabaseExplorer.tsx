@@ -226,7 +226,12 @@ export function DatabaseExplorer({
     if (!openMenuId) return;
     const closeOnOutsidePointer = (event: globalThis.PointerEvent) => {
       const target = event.target;
-      if (target instanceof Element && target.closest(".db-menu")) return;
+      if (
+        target instanceof Element &&
+        target.closest(".db-menu, [data-popup-menu]")
+      ) {
+        return;
+      }
       closeOpenMenu();
     };
     document.addEventListener("pointerdown", closeOnOutsidePointer);
@@ -697,7 +702,8 @@ export function DatabaseExplorer({
                 </div>
               ) : null}
             </div>
-          ) : !knowledgeEnabled ? (
+          ) : activeProjectEnvironmentView !== "analyses" &&
+          (!knowledgeEnabled || (knowledgeProjects.isSuccess && knowledgeProjects.data.length === 0)) ? (
             unassignedSections.map((section) =>
               section.kind === "group"
                 ? renderGroup(section.group)

@@ -43,7 +43,10 @@ import { errMessage } from "../../../ipc/types";
 import { useI18n } from "../../../lib/i18n";
 import { Icon } from "../../../components/Icon";
 import { useToast } from "../../../components/Toast";
-import { PopupMenuItem } from "../../../design-system/components/PopupMenu";
+import {
+  PopupMenu,
+  PopupMenuItem,
+} from "../../../design-system/components/PopupMenu";
 import { Button } from "../../../design-system/components/Button";
 import {
   cancelWorkspaceResourceQueries,
@@ -270,7 +273,11 @@ export default function WorkspaceAccount({
   useEffect(() => {
     if (!menuOpen) return;
     const close = (event: MouseEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setMenuOpen(false);
+      const target = event.target;
+      if (target instanceof Element && target.closest("[data-popup-menu]")) {
+        return;
+      }
+      if (!rootRef.current?.contains(target as Node)) setMenuOpen(false);
     };
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
@@ -568,6 +575,12 @@ export default function WorkspaceAccount({
         : t("workspace.login");
 
   const user = auth.data?.authenticated ? auth.data.user : null;
+  const accountMenuPlacement =
+    menuPlacement === "topbar"
+      ? "bottom-end"
+      : compact
+        ? "right-end"
+        : "top-start";
 
   return (
     <div
@@ -629,12 +642,12 @@ export default function WorkspaceAccount({
             </Button>
           ) : null}
           {menuOpen ? (
-            <div
-              data-compact={compact}
-              data-menu-placement={menuPlacement}
-              className="tw:absolute tw:bottom-[calc(100%+var(--ds-space-2))] tw:left-0 tw:z-[var(--ds-z-popover)] tw:max-h-[min(420px,calc(100vh_-_var(--ds-space-8)))] tw:w-[calc(100%+var(--ds-control-md)+var(--ds-space-2))] tw:max-w-[calc(100vw_-_var(--ds-space-6))] tw:overflow-auto tw:rounded-md tw:border tw:border-border-strong tw:bg-popover tw:p-1 tw:shadow-popover tw:data-[compact=true]:bottom-0 tw:data-[compact=true]:left-[calc(100%+var(--ds-space-2))] tw:data-[compact=true]:w-[min(284px,calc(100vw_-_64px))] tw:data-[menu-placement=topbar]:top-[calc(100%+var(--ds-space-2))] tw:data-[menu-placement=topbar]:right-0 tw:data-[menu-placement=topbar]:bottom-auto tw:data-[menu-placement=topbar]:left-auto tw:max-[561px]:data-[compact=true]:right-0 tw:max-[561px]:data-[compact=true]:bottom-[calc(100%+var(--ds-space-2))] tw:max-[561px]:data-[compact=true]:left-auto"
-              role="menu"
-              aria-label={t("workspace.accountMenu")}
+            <PopupMenu
+              anchorRef={triggerRef}
+              placement={accountMenuPlacement}
+              size="account"
+              ariaLabel={t("workspace.accountMenu")}
+              onReferenceHidden={() => setMenuOpen(false)}
             >
               <p className="tw:m-0 tw:p-2 tw:text-2xs tw:font-bold tw:tracking-[0.05em] tw:text-muted-foreground tw:uppercase">
                 {t("workspace.accounts")}
@@ -707,7 +720,7 @@ export default function WorkspaceAccount({
                   {t("workspace.logoutAll")}
                 </PopupMenuItem>
               ) : null}
-            </div>
+            </PopupMenu>
           ) : null}
           {providerCredentialsOpen ? (
             <ProviderCredentialDialog

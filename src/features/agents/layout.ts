@@ -52,7 +52,7 @@ export function clampAgentDockWidth(
     : viewportWidth - Math.max(0, leftToolWindowWidth) - 12 - AGENT_DOCK_MIN_WORKBENCH_WIDTH;
   const viewportMaximum = Math.max(
     AGENT_DOCK_MIN_WIDTH,
-    Math.min(Math.floor(viewportWidth * 0.55), availableWidth),
+    Math.min(Math.floor(viewportWidth * 0.5), availableWidth),
   );
   return Math.round(
     Math.min(

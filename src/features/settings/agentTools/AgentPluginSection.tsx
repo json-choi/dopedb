@@ -1,14 +1,21 @@
 // Renders ACP plugin lifecycle and the matching official local CLI inventory.
 import ConfirmButton from "../../../components/ConfirmButton";
+import { Icon } from "../../../components/Icon";
+import InfoTip from "../../../components/InfoTip";
 import Skeleton from "../../../components/Skeleton";
 import { AgentProviderMark } from "../../../design-system/components/Agent";
 import { Button } from "../../../design-system/components/Button";
 import { CheckboxField } from "../../../design-system/components/FormControls";
 import { ProgressBar } from "../../../design-system/components/Progress";
-import { StatusBadge } from "../../../design-system/components/Status";
+import {
+  SettingsList,
+  SettingsRow,
+  SettingsSectionHeader,
+} from "../../../design-system/components/SettingsList";
+import { StatusIndicator } from "../../../design-system/components/Status";
 import {
   AgentCliDetectionNotice,
-  AgentCliStatusBadges,
+  AgentCliStatusIndicators,
 } from "../../agents/AgentCliStatus";
 import { errMessage } from "../../../ipc/types";
 import { useI18n } from "../../../lib/i18n";
@@ -16,6 +23,7 @@ import {
   activePluginStates,
   agentToolPlugins,
   pluginStateLabel,
+  pluginStateIndicator,
   pluginTone,
 } from "./model";
 import type { AgentToolsController } from "./useAgentToolsController";
@@ -39,22 +47,21 @@ export function AgentPluginSection({ controller }: AgentPluginSectionProps) {
 
   return (
     <>
-      <section className="tw:mt-5 tw:border-t tw:border-border-subtle tw:pt-5">
-        <div className="tw:flex tw:items-start tw:justify-between tw:gap-4 tw:@max-[520px]:flex-col">
-          <div>
-            <h3 className="tw:m-0">{t("agentTools.pluginsTitle")}</h3>
-            <p className="tw:mt-1 tw:mb-0 tw:text-muted-foreground">
-              {t("agentTools.pluginsDescription")}
-            </p>
-          </div>
-          <Button
-            variant="primary"
-            disabled={busy !== null || selectedPlugins.length === 0}
-            onClick={() => void installPlugins(selectedPlugins)}
-          >
-            {t("agentTools.installSelected", { count: selectedPlugins.length })}
-          </Button>
-        </div>
+      <section>
+        <SettingsSectionHeader
+          title={t("agentTools.pluginsTitle")}
+          info={<InfoTip label={t("agentTools.pluginsDescription")} />}
+          trailing={(
+            <Button
+              size="compact"
+              variant="primary"
+              disabled={busy !== null || selectedPlugins.length === 0}
+              onClick={() => void installPlugins(selectedPlugins)}
+            >
+              {t("agentTools.installSelected", { count: selectedPlugins.length })}
+            </Button>
+          )}
+        />
 
         {pluginQuery.isPending ? (
           <Skeleton lines={4} />
@@ -65,7 +72,7 @@ export function AgentPluginSection({ controller }: AgentPluginSectionProps) {
             })}
           </div>
         ) : (
-          <div className="tw:mt-3 tw:divide-y tw:divide-border-subtle tw:border-y tw:border-border-subtle">
+          <SettingsList>
             {agentToolPlugins.map((plugin) => {
               const pluginStatus = pluginQuery.data?.find(
                 (candidate) => candidate.pluginId === plugin.id,
@@ -103,9 +110,11 @@ export function AgentPluginSection({ controller }: AgentPluginSectionProps) {
                         release: pluginStatus.installedReleaseId,
                       })
                     : activeVersion;
+              const stateIndicator = pluginStateIndicator(pluginStatus.state);
               return (
-                <div className="tw:grid tw:gap-3 tw:py-4" key={plugin.id}>
-                  <div className="tw:flex tw:items-center tw:justify-between tw:gap-4 tw:@max-[520px]:flex-col tw:@max-[520px]:items-start">
+                <SettingsRow
+                  key={plugin.id}
+                  identity={
                     <div className="tw:flex tw:min-w-0 tw:items-center tw:gap-2">
                       {selectable ? (
                         <CheckboxField
@@ -126,20 +135,91 @@ export function AgentPluginSection({ controller }: AgentPluginSectionProps) {
                           }
                         />
                       ) : (
-                        <span className="tw:flex tw:items-center tw:gap-2">
+                        <span className="tw:flex tw:items-center tw:gap-2 tw:pl-6">
                           <AgentProviderMark provider={plugin.provider} />
                           <strong>{plugin.label}</strong>
                         </span>
                       )}
-                      <StatusBadge tone={pluginTone(pluginStatus.state)}>
-                        {t(pluginStateLabel[pluginStatus.state])}
-                      </StatusBadge>
                     </div>
-                    <span className="tw:text-ui tw:text-muted-foreground">
-                      {versionLabel ??
-                        t("agentTools.pluginDownload", { size: plugin.download })}
-                    </span>
-                  </div>
+                  }
+                  details={
+                    <div className="tw:flex tw:min-w-0 tw:items-center tw:gap-2">
+                      <StatusIndicator
+                        tone={pluginTone(pluginStatus.state)}
+                        icon={stateIndicator.icon}
+                        spinning={stateIndicator.spinning}
+                        label={t(pluginStateLabel[pluginStatus.state])}
+                      />
+                      <span
+                        className="tw:min-w-0 tw:truncate tw:font-mono tw:text-xs tw:text-muted-foreground"
+                        title={versionLabel ?? plugin.download}
+                      >
+                        {versionLabel ??
+                          t("agentTools.pluginDownload", { size: plugin.download })}
+                      </span>
+                    </div>
+                  }
+                  actions={
+                    <>
+                      {selectable ? (
+                        <Button
+                          iconOnly
+                          size="compact"
+                          disabled={busy !== null}
+                          onClick={() => void installPlugins([plugin.id])}
+                          title={t(
+                            pluginStatus.state === "update_available"
+                              ? "agentTools.updatePlugin"
+                              : installed
+                                ? "agentTools.retryPlugin"
+                                : "agentTools.installPlugin",
+                          )}
+                        >
+                          <Icon
+                            name={
+                              pluginStatus.state === "update_available" || installed
+                                ? "refresh"
+                                : "download"
+                            }
+                          />
+                        </Button>
+                      ) : (
+                        <Button
+                          iconOnly
+                          size="compact"
+                          disabled={busy !== null}
+                          onClick={() =>
+                            void togglePlugin(plugin.id, !pluginStatus.enabled)
+                          }
+                          title={t(
+                            pluginStatus.enabled
+                              ? "agentTools.disablePlugin"
+                              : "agentTools.enablePlugin",
+                          )}
+                        >
+                          <Icon
+                            name={pluginStatus.enabled ? "circleSlash" : "play"}
+                          />
+                        </Button>
+                      )}
+                      {installed ? (
+                        <ConfirmButton
+                          iconOnly
+                          label={t("agentTools.removePlugin")}
+                          size="compact"
+                          tone="danger"
+                          disabled={busy !== null}
+                          confirmLabel={t("agentTools.removePluginConfirm", {
+                            provider: plugin.label,
+                          })}
+                          onConfirm={() => void removePlugin(plugin.id)}
+                        >
+                          <Icon name="trash" />
+                        </ConfirmButton>
+                      ) : null}
+                    </>
+                  }
+                >
                   {operationActive ? (
                     <ProgressBar
                       value={null}
@@ -169,84 +249,46 @@ export function AgentPluginSection({ controller }: AgentPluginSectionProps) {
                       })}
                     </p>
                   ) : null}
-                  <div className="ds-control-row tw:flex tw:flex-wrap tw:items-center tw:gap-[var(--ds-control-gap)]">
-                    {selectable ? (
-                      <Button
-                        disabled={busy !== null}
-                        onClick={() => void installPlugins([plugin.id])}
-                      >
-                        {t(
-                          pluginStatus.state === "update_available"
-                            ? "agentTools.updatePlugin"
-                            : installed
-                              ? "agentTools.retryPlugin"
-                              : "agentTools.installPlugin",
-                        )}
-                      </Button>
-                    ) : (
-                      <Button
-                        disabled={busy !== null}
-                        onClick={() =>
-                          void togglePlugin(plugin.id, !pluginStatus.enabled)
-                        }
-                      >
-                        {t(
-                          pluginStatus.enabled
-                            ? "agentTools.disablePlugin"
-                            : "agentTools.enablePlugin",
-                        )}
-                      </Button>
-                    )}
-                    {installed ? (
-                      <ConfirmButton
-                        disabled={busy !== null}
-                        confirmLabel={t("agentTools.removePluginConfirm", {
-                          provider: plugin.label,
-                        })}
-                        onConfirm={() => void removePlugin(plugin.id)}
-                      >
-                        {t("agentTools.removePlugin")}
-                      </ConfirmButton>
-                    ) : null}
-                  </div>
-                </div>
+                </SettingsRow>
               );
             })}
-          </div>
+          </SettingsList>
         )}
       </section>
 
-      <section className="tw:border-t tw:border-border-subtle tw:pt-5 tw:pb-2">
-        <h3 className="tw:m-0">{t("agentTools.localClisTitle")}</h3>
-        <p className="tw:mt-1 tw:mb-0 tw:text-muted-foreground">
-          {t("agentTools.localClisDescription")}
-        </p>
-        <div className="tw:mt-3 tw:divide-y tw:divide-border-subtle tw:border-y tw:border-border-subtle">
+      <section className="tw:mt-3">
+        <SettingsSectionHeader
+          title={t("agentTools.localClisTitle")}
+          info={<InfoTip label={t("agentTools.localClisDescription")} />}
+        />
+        <SettingsList>
           {agentToolPlugins.map((plugin) => {
             const cli = cliQuery.data?.find(
               (item) => item.id === plugin.provider,
             );
             return (
-              <div
-                className="tw:flex tw:items-start tw:justify-between tw:gap-4 tw:py-3 tw:@max-[520px]:flex-col"
+              <SettingsRow
                 key={plugin.provider}
-              >
-                <div className="tw:flex tw:min-w-0 tw:items-center tw:gap-2">
-                  <AgentProviderMark provider={plugin.provider} />
-                  <strong>{cli?.name ?? plugin.label}</strong>
-                </div>
-                <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
-                  <AgentCliStatusBadges
+                identity={
+                  <div className="tw:flex tw:min-w-0 tw:items-center tw:gap-2 tw:pl-6">
+                    <AgentProviderMark provider={plugin.provider} />
+                    <strong>{cli?.name ?? plugin.label}</strong>
+                  </div>
+                }
+                details={
+                  <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-1">
+                  <AgentCliStatusIndicators
                     cli={cli}
                     detecting={cliQuery.isPending || cliQuery.isFetching}
                     queryFailed={cliQuery.isError}
                     showDetected
                   />
-                </div>
-              </div>
+                  </div>
+                }
+              />
             );
           })}
-        </div>
+        </SettingsList>
         <AgentCliDetectionNotice
           clis={cliQuery.data}
           queryError={cliQuery.error}

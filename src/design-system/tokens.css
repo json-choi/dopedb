@@ -145,6 +145,16 @@
   --ds-text-inverse: var(--ds-primary-foreground);
   --ds-overlay: rgb(25 29 35 / 0.24);
 
+  /* Welcome artwork pairs warm accretion light with a cool interstellar sky. */
+  --ds-cosmic-night: #080e17;
+  --ds-cosmic-night-raised: #183449;
+  --ds-cosmic-night-soft: #202f40;
+  --ds-cosmic-cream: #fff4e1;
+  --ds-cosmic-muted: #bec9d2;
+  --ds-cosmic-electric: #6a9dc5;
+  --ds-cosmic-warm: #e6ab83;
+  --ds-cosmic-veil: linear-gradient(180deg, transparent 52%, color-mix(in srgb, var(--ds-cosmic-night) 85%, transparent) 82%, var(--ds-cosmic-night));
+
   /*
    * Primary is the single affirmative action. Accent is a neutral selection
    * surface; strong color remains reserved for state.
@@ -190,36 +200,36 @@
   --ds-surface-elevated: var(--ds-popover);
 }
 
-/* Deep neutral dark palette; theme.ts resolves the system or explicit preference. */
+/* Soft charcoal dark palette; theme.ts resolves the system or explicit preference. */
 :root[data-theme="dark"] {
   color-scheme: dark;
   --ds-shadow-control: 0 1px 2px rgb(0 0 0 / 0.18);
-  --ds-shadow-popover: 0 16px 36px rgb(0 0 0 / 0.42);
-  --ds-background: #0c0e12;
-  --ds-foreground: #e5e7eb;
-  --ds-card: #111419;
-  --ds-card-foreground: #e5e7eb;
-  --ds-popover: #171a20;
-  --ds-popover-foreground: #e5e7eb;
+  --ds-shadow-popover: 0 16px 36px rgb(0 0 0 / 0.34);
+  --ds-background: #17191d;
+  --ds-foreground: #e4e6e2;
+  --ds-card: #1c1f24;
+  --ds-card-foreground: #e4e6e2;
+  --ds-popover: #24272d;
+  --ds-popover-foreground: #e4e6e2;
   --ds-primary: #3574f0;
   --ds-primary-hover: #467ff2;
-  --ds-secondary: #191d24;
-  --ds-secondary-foreground: #e5e7eb;
-  --ds-muted: #171a20;
-  --ds-muted-foreground: #9aa1ab;
-  --ds-selection: #1c2941;
+  --ds-secondary: #282c33;
+  --ds-secondary-foreground: #e4e6e2;
+  --ds-muted: #23262c;
+  --ds-muted-foreground: #a7acb3;
+  --ds-selection: #293957;
   --ds-destructive: #db5c5c;
-  --ds-input: #2a2e36;
+  --ds-input: #343942;
   --ds-ring: #548af7;
-  --ds-editor-surface: #0c0e12;
-  --ds-worktree-sidebar: #090b0e;
-  --ds-worktree-sidebar-accent: #15181d;
-  --ds-border-subtle: rgb(255 255 255 / 0.08);
-  --ds-border-strong: #343942;
-  --ds-text-subtle: #747b86;
-  --ds-overlay: rgb(0 0 0 / 0.72);
-  --ds-accent-text: #6b9bfa;
-  --ds-accent-soft: #172137;
+  --ds-editor-surface: #17191d;
+  --ds-worktree-sidebar: #14161a;
+  --ds-worktree-sidebar-accent: #22252b;
+  --ds-border-subtle: rgb(255 255 255 / 0.1);
+  --ds-border-strong: #454a53;
+  --ds-text-subtle: #858b94;
+  --ds-overlay: rgb(0 0 0 / 0.6);
+  --ds-accent-text: #6f9df8;
+  --ds-accent-soft: #263652;
   --ds-info: #60a5fa;
   --ds-positive: #86efac;
   --ds-caution: #fbbf24;
@@ -227,5 +237,5 @@
 }
 
 :root[data-theme="dark"] .sidebar {
-  --ds-surface-1: #101318;
+  --ds-surface-1: #1a1d22;
 }

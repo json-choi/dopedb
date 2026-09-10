@@ -9,6 +9,7 @@ pub(crate) mod agents;
 pub(crate) mod analysis_articles;
 pub(crate) mod catalog;
 pub(crate) mod connections;
+pub(crate) mod cosmic_scene;
 pub(crate) mod documents;
 pub(crate) mod erd;
 pub(crate) mod jobs;

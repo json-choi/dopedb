@@ -78,6 +78,7 @@ export function AdvancedShellTerminalLauncher({
       </div>
       <div className="ds-control-row">
         <Button
+          size="compact"
           disabled={!connection}
           onClick={() => setOpen(true)}
         >

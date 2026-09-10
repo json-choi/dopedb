@@ -212,6 +212,10 @@ export function useAppShellWorkbenchController({
     view: KnowledgeEnvironmentView,
     resourceId: string | null = null,
   ) {
+    if (environmentId === null && view === "databases") {
+      showWorkbench();
+      return;
+    }
     navigate({
       type: "openKnowledge",
       focus: {
@@ -402,12 +406,12 @@ export function useAppShellWorkbenchController({
   }
 
   async function deletedConnection(id: string) {
-    await refresh();
+    const remaining = await refresh();
     if (selectedId === id) {
       setSelectedId(null);
       workbench.reset();
     }
-    navigate({ type: "connectionDeleted", connectionId: id });
+    navigate({ type: "connectionDeleted", connectionId: id, remainingConnections: remaining?.length });
   }
 
   function updateConnection(updated: ConnectionProfile) {
@@ -424,6 +428,7 @@ export function useAppShellWorkbenchController({
 
   return {
     route: {
+      welcomeOpen: mainRoute.kind === "welcome",
       settingsOpen,
       settingsSection,
       schemaDiffGroupKey,
@@ -458,6 +463,11 @@ export function useAppShellWorkbenchController({
     commands: {
       route: {
         showWorkbench,
+        showWelcome: () => {
+          navigate({ type: "showWelcome" });
+          mobileExplorer.setOpen(false);
+          mobileExplorer.focusMainAfterSelection();
+        },
         closeSettings: () => navigate({ type: "closeSettings" }),
         openSettings,
         focusToolWindow: () => navigate({ type: "focusToolWindow" }),

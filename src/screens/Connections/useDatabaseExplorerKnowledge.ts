@@ -197,13 +197,16 @@ export function useDatabaseExplorerKnowledge({
 
   const environmentConnectionsById = useMemo(() => {
     const byEnvironment = new Map<string, EnvironmentConnection[]>();
+    const currentEnvironmentIds = new Set(projectEnvironmentIds);
     for (const binding of environmentConnections.data ?? []) {
+      // A confirmed Project deletion may arrive before the binding refetch.
+      if (projects.isSuccess && !currentEnvironmentIds.has(binding.projectEnvironmentId)) continue;
       const current = byEnvironment.get(binding.projectEnvironmentId) ?? [];
       current.push(binding);
       byEnvironment.set(binding.projectEnvironmentId, current);
     }
     return byEnvironment;
-  }, [environmentConnections.data]);
+  }, [environmentConnections.data, projectEnvironmentIds, projects.isSuccess]);
 
   return {
     enabled,

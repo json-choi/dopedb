@@ -144,7 +144,7 @@ export function TreeSearch({
       />
       <input
         type="search"
-        className="tw:h-control-sm tw:min-h-control-sm tw:w-full tw:rounded-xs tw:border tw:border-input tw:bg-background tw:pr-7 tw:pl-7 tw:font-sans tw:text-sm tw:text-foreground tw:outline-none tw:placeholder:text-muted-foreground tw:focus:border-ring"
+        className="tw:h-control-sm tw:min-h-control-sm tw:w-full tw:rounded-none tw:border tw:border-input tw:bg-background tw:pr-7 tw:pl-7 tw:font-sans tw:text-sm tw:text-foreground tw:outline-none tw:placeholder:text-muted-foreground tw:focus:border-ring"
         value={value}
         autoFocus={autoFocus}
         placeholder={placeholder}

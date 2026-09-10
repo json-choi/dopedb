@@ -3,13 +3,13 @@
 import { Button } from "../../design-system/components/Button";
 import {
   InlineNotice,
-  StatusBadge,
+  StatusIndicator,
 } from "../../design-system/components/Status";
 import { errMessage } from "../../ipc/types";
 import { useI18n } from "../../lib/i18n";
 import type { AgentCliInfo } from "./domain";
 
-export function AgentCliStatusBadges({
+export function AgentCliStatusIndicators({
   cli,
   detecting,
   queryFailed,
@@ -22,30 +22,50 @@ export function AgentCliStatusBadges({
 }) {
   const { t } = useI18n();
   if (detecting) {
-    return <StatusBadge>{t("agentTools.detecting")}</StatusBadge>;
+    return (
+      <StatusIndicator
+        icon="refresh"
+        label={t("agentTools.detecting")}
+        spinning
+      />
+    );
   }
   if (queryFailed || !cli || Boolean(cli.detectionError)) {
     return (
-      <StatusBadge tone="danger" title={cli?.detectionError ?? undefined}>
-        {t("agentTools.detectionFailed")}
-      </StatusBadge>
+      <StatusIndicator
+        icon="alert"
+        tone="danger"
+        label={cli?.detectionError ?? t("agentTools.detectionFailed")}
+      />
     );
   }
   if (!cli.installed) {
-    return <StatusBadge tone="warning">{t("agentTools.cliMissing")}</StatusBadge>;
+    return (
+      <StatusIndicator
+        icon="terminal"
+        tone="warning"
+        label={t("agentTools.cliMissing")}
+      />
+    );
   }
   return (
     <>
       {showDetected ? (
-        <StatusBadge tone="success">{t("agentTools.detected")}</StatusBadge>
+        <StatusIndicator
+          icon="terminal"
+          tone="success"
+          label={t("agentTools.detected")}
+        />
       ) : null}
-      <StatusBadge tone={cli.authenticated ? "success" : "warning"}>
-        {t(
+      <StatusIndicator
+        icon={cli.authenticated ? "check" : "user"}
+        tone={cli.authenticated ? "success" : "warning"}
+        label={t(
           cli.authenticated
             ? "agentTools.authenticated"
             : "agentTools.notAuthenticated",
         )}
-      </StatusBadge>
+      />
     </>
   );
 }

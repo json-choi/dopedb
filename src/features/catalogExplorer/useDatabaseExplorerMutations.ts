@@ -1,3 +1,4 @@
+// Explorer mutations preserve workspace connections when only Project bindings go away.
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -317,6 +318,7 @@ export function useDatabaseExplorerMutations({
     setDeletingProjectId(project.id);
     try {
       await deleteKnowledgeProject(project.id, project.revision);
+      if (currentScopeKeyRef.current !== catalogScope.key) return;
       const environmentIds = new Set(
         project.environments.map((environment) => environment.id),
       );
@@ -339,6 +341,7 @@ export function useDatabaseExplorerMutations({
         next.delete(projectResourceKey(project.id, "databases"));
         next.delete(projectResourceKey(project.id, "sources"));
         next.delete(projectResourceKey(project.id, "analyses"));
+        next.add("unassigned");
         return next;
       });
       for (const environmentId of environmentIds) {

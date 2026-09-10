@@ -6,7 +6,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { installCli } from "../../../features/skills/tauriAdapter";
 import { errMessage } from "../../../ipc/types";
 import ConfirmButton from "../../../components/ConfirmButton";
-import InfoTip from "../../../components/InfoTip";
 import Skeleton from "../../../components/Skeleton";
 import { useToast } from "../../../components/Toast";
 import { Button } from "../../../design-system/components/Button";
@@ -65,11 +64,6 @@ export default function CliSettings({
 
   return (
     <div className="tw:w-full tw:max-w-[760px] tw:p-4">
-      <div className="tw:flex tw:items-center tw:gap-2">
-        <h2>{t("cli.title")}</h2>
-        <InfoTip label={t("cli.description")} />
-      </div>
-
       {(error || statusQ.error) && (
         <div className="tw:mt-3 tw:text-ui tw:text-danger">
           {t("cli.error", { error: error ?? errMessage(statusQ.error) })}
@@ -131,6 +125,7 @@ export default function CliSettings({
             <div className="ds-action-row ds-control-row tw:mt-4">
               {status.conflict ? (
                 <ConfirmButton
+                  size="compact"
                   disabled={busy || !status.bundledAvailable}
                   variant="primary"
                   confirmLabel={t("cli.replaceConfirm")}
@@ -140,6 +135,7 @@ export default function CliSettings({
                 </ConfirmButton>
               ) : (
                 <Button
+                  size="compact"
                   variant="primary"
                   disabled={busy || !status.bundledAvailable || ready}
                   onClick={() => void install()}
@@ -148,6 +144,7 @@ export default function CliSettings({
                 </Button>
               )}
               <Button
+                size="compact"
                 disabled={busy || statusQ.isFetching}
                 onClick={() => {
                   setError(null);

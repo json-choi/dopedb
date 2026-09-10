@@ -15,7 +15,7 @@ import { ProgressBar } from "../../design-system/components/Progress";
 import { StatusBadge } from "../../design-system/components/Status";
 import {
   AgentCliDetectionNotice,
-  AgentCliStatusBadges,
+  AgentCliStatusIndicators,
 } from "../agents/AgentCliStatus";
 import type {
   AcpPluginId,
@@ -211,7 +211,7 @@ export default function SkillStartupGate() {
                           {t(pluginStateLabel[status.state])}
                         </StatusBadge>
                       ) : null}
-                      <AgentCliStatusBadges
+                      <AgentCliStatusIndicators
                         cli={cli}
                         detecting={agentsQ.isPending || agentsQ.isFetching}
                         queryFailed={agentsQ.isError}

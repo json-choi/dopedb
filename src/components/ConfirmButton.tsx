@@ -88,7 +88,7 @@ export default function ConfirmButton({
         {confirmLabel ?? t("common.reallyDelete")}
       </span>
       <Button
-        size="compact"
+        size={size}
         variant="danger"
         disabled={disabled}
         onClick={() => {
@@ -100,7 +100,7 @@ export default function ConfirmButton({
         {t("common.yes")}
       </Button>
       <Button
-        size="compact"
+        size={size}
         autoFocus
         disabled={disabled}
         onClick={() => {

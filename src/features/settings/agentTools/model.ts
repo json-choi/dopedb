@@ -11,6 +11,7 @@ import type {
   SkillTargetSelection,
 } from "../../../ipc/types";
 import type { I18nKey } from "../../../lib/i18n";
+import type { IconName } from "../../../components/Icon";
 
 export type AgentToolsMutation = "repair" | "remove";
 
@@ -68,6 +69,22 @@ export function pluginTone(state: AcpPluginInstallationState) {
   if (state === "failed" || state === "rollback_required") return "danger" as const;
   if (state === "not_installed") return "neutral" as const;
   return "warning" as const;
+}
+
+export function pluginStateIndicator(state: AcpPluginInstallationState): {
+  icon: IconName;
+  spinning: boolean;
+} {
+  if (activePluginStates.has(state)) {
+    return { icon: "refresh", spinning: true };
+  }
+  if (state === "ready" || state === "staged") {
+    return { icon: "check", spinning: false };
+  }
+  if (state === "failed" || state === "rollback_required") {
+    return { icon: "alert", spinning: false };
+  }
+  return { icon: "download", spinning: false };
 }
 
 export const skillConflictLabel: Record<SkillConflictKind, I18nKey> = {

@@ -81,10 +81,37 @@ member-local connection을 선택해 ID와 참조를 보존하는 전환 단계�
 평평한 action으로 정리했다. Welcome command 목록의 불필요한 card 경계도 제거했다.
 AI Chat dock의 하단·오른쪽 4px 여백과 둥근 card 경계를 제거해 title/status
 chrome에 정확히 맞췄다.
-공용 Tooltip과 portal ToolbarMenu의 수동 viewport 계산은 Floating UI 기반의
-자동 갱신·flip·shift·size·숨김 감지로 교체하고 기존 semantic token과 공개 API를
-유지했다.
+공용 Tooltip·ToolbarMenu·PopupMenu와 workspace account menu의 수동 viewport
+계산은 Floating UI 기반의 자동 갱신·flip·shift·size·숨김 감지로 교체하고 기존
+semantic token과 공개 API를 유지했다. 중앙 modal·toast·pointer drag preview는
+trigger에 연결된 surface가 아니므로 이 경계에 포함하지 않는다.
 같은 상태의 Windows packaged 검수는 남아 있다.
+
+Welcome은 중앙 작업면의 padding을 제거한 우주 배경을 사용한다. Rust는 고정 크기
+레시피만 만들고 GPU의 곡선 광선 근사가 회전하는 강착 원반과 위·아래 렌즈,
+별·성운을 그린다. 목표 30fps·최대 DPR 2·400만 pixel이며 대형 particle 배열이나
+프레임 IPC 복사는 없다. 장식 준비·WebGL2 실패가 실제 command를 차단하지 않는다.
+2026-09-11 Chromium의 실제 Welcome component fixture에서 1040×700·480×500 배치,
+32px 버튼, 계속 바뀌는 픽셀·드래그·휠·초기화·정지·동작 줄이기·context 복구를
+확인했다. 문서 숨김은 합성 visibility 이벤트로 추가 draw 0회를 확인한 것이며
+실제 OS 창 숨김 검수와 동일하지 않다. 새 macOS·Windows packaged 렌더링과 GPU
+메모리 실측은 남아 있다.
+같은 날짜의 격리된 실제 controller·Explorer·Workbench fixture에서 Welcome canvas와
+중앙 pane의 경계가 일치함을 측정했다. 마지막 Project 삭제 뒤 연결 identity를
+보존하고 최상위 level 1로 표시하며, 상단 시작 화면 command와 마지막 연결 삭제가
+기존 Knowledge route를 벗어나는 것을 확인했다. 실제 DB에는 삭제를 실행하지 않았다.
+기존 Rust 저장소 회귀도 실제 Project binding 삭제 뒤 전체 연결 profile·credential
+reference·safety 값 보존을 검증한다.
+
+이번 Agent UI 정리에서는 AI Chat 입력을 직각 1~3줄 자동 높이로 제한하고 dock의
+최대 폭을 전체 창의 50%로 맞췄다. 앱 시작 시에는 CLI 탐지·adapter 검증·기존
+session 목록·Project inventory를 읽기 전용으로 예열한다. persisted connection으로
+exact resource가 확정되면 닫힌 panel을 mount한 채 write target 없는 ACP session까지
+선행 준비하고, exact resource 선택 전에는 ACP process나 Broker grant를 만들지 않는다.
+Agent Tools는 중복 page title과 상시
+설명 문단을 제거하고, checkbox 자리를 예약한 고정 identity/state/action grid와
+32px 반복 action, tooltip 상태 아이콘을 사용한다. 전역 작업 검색과 설정·Explorer·
+목록 검색 입력은 같은 직각 경계를 사용한다.
 
 | 영역 | 상태 | 현재 소유자 | 남은 acceptance gap |
 | --- | --- | --- | --- |
@@ -105,7 +132,7 @@ chrome에 정확히 맞췄다.
 | Knowledge graph | `partial` | Rust `features/knowledge`, frontend Knowledge source projection | exact-commit GitHub 탐색과 Local source revision은 유지한다. 그래프 구성·매핑 검토 UI·exact graph grant는 benchmark와 entitlement 결정 뒤 새 실행 설계로 구현하고 packaged 검수한다. |
 | Analysis Article | `partial` | `features/analysisArticles`, cloud analysis application | unavailable Personal 범위에서는 Explorer 필터를 숨기고 로그인/Workspace 선택 복구 동작과 중립 Project/Analysis status context를 보여 준다. 사용자 상태·revision·결과 제한 문구는 i18n presentation mapping을 거친다. Explorer 소유 문자 필터와 단일 중앙 HTML document를 유지한다. Serif 제목·본문, 실제 h2/h3 목차, 216px query 도구 열, 상단 Edit·Share·More와 publication modal을 적용했다. 본문 DOM은 memo로 보존해 목차 관찰과 keyboard focus가 유지된다. 실제 컴포넌트의 로컬 fixture에서 1536/1200/860/740px 배치, 목차 이동·포커스, 공유·편집·공개 modal·Escape, 로딩 실패 복구를 확인했다. authenticated Article의 packaged 검수는 남아 있다. exact 단일 query의 로컬 수동 재조회, immutable public HTML 발행과 raw run timestamp의 RFC3339 응답을 실제 환경에서 검수 |
 | Article private sharing / invitations | `partial` | `features/analysisArticles`, `workspace-cloud/features/articleSharing` | 이메일 지정 48시간 초대, verified-email 수락 시 membership + 정확한 DB read grant, 기존 높은 권한 유지, 취소·만료·권한 변경·동시 수락·소비한 링크의 권한 복원 차단은 격리 PostgreSQL harness로 검수했다. Desktop 공유 dialog의 생성·복사·취소·앱 복귀 UI는 로컬 fixture로 검수했다. 브라우저의 Article deep link가 packaged macOS 개발 앱을 열고 비로그인 계정의 로그인 복구 화면으로 연결되는 것을 확인했다. 새 Cloud 배포와 Desktop 배포를 연결한 실제 설치→로그인→원래 Article 복귀는 아직 배포 전이며, query 자동 실행은 없다. |
-| Appearance/theme | `partial` | `design-system/theme.ts`, `screens/Settings/Appearance`, `lib/appProviders` | 시스템 기본값·명시적 라이트/다크·기기별 저장과 복원을 구현했다. 기존 다크 palette를 복원했다. 탐색 아이콘과 헤더 정렬은 App shell/chrome 항목에서 관리한다. macOS 개발 bundle에서 기본 선택·다크 적용·앱 재시작 후 복원·시스템 복귀를 확인했다. 실제 컴포넌트 fixture에서 OS 변경 event 반영과 고정 테마 유지, SQL 편집 내용·터미널 출력 보존, Agent 코드·Mermaid 재렌더링을 확인했다. Windows packaged 및 실제 OS 자동 전환 검수는 남아 있다. |
+| Appearance/theme | `partial` | `design-system/theme.ts`, `screens/Settings/Appearance`, `lib/appProviders` | 시스템 기본값·명시적 라이트/다크·기기별 저장과 복원을 구현했다. 다크 palette의 큰 면은 near-black 대신 soft charcoal surface를 사용하고 파랑은 선택·focus·실행 역할에만 남긴다. 탐색 아이콘과 헤더 정렬은 App shell/chrome 항목에서 관리한다. macOS 개발 bundle에서 기본 선택·다크 적용·앱 재시작 후 복원·시스템 복귀를 확인했다. 실제 컴포넌트 fixture에서 OS 변경 event 반영과 고정 테마 유지, SQL 편집 내용·터미널 출력 보존, Agent 코드·Mermaid 재렌더링을 확인했다. Windows packaged 및 실제 OS 자동 전환 검수는 남아 있다. |
 | Settings | `complete` | `features/settings`, `features/safetySettings` | 개인정보 설명은 수집 제외·공유·전송/보관·철회 효과를 의미별 description list로 유지한다. 700px 이하에서는 검색·tree·breadcrumb 대신 한 줄 section select를 사용한다. Desktop `Settings → Safety` 하나에서 항상 켜진 읽기와 누적 DML·DDL 권한을 체크박스로 표시한다. DDL은 DML을 필요로 하고 DML 해제 시 함께 꺼지며, 중복 상태 badge 없이 관리자용 workspace 상한 + 기기 gate를 한 번의 적용 동작으로 fail-closed 저장하고 미적용 변경을 표시한다. 관리형 DDL은 exact `manage` grant와 검증된 Neon 또는 GCP Cloud SQL PostgreSQL schema lease가 있을 때만 열고, 지원하지 않는 provider·engine과 복구 전 GCP 연결은 DDL 적용 전에 online 권한과 검증된 schema 설정을 확인해 기기 gate 저장을 차단한다. Safety와 SQL 실행 오류는 exact 연결의 Workspace Web 복구 command를 제공하며, 관리 권한이 없는 구성원에게는 관리자 복구 요청을 안내한다. provider/연결/오류 화면은 별도 변경 control을 만들지 않으며 웹 DB 접근 화면은 같은 상한을 상태로만 표시한다. compact viewport 검수 |
 | Diagnostics/Recovery | `complete` | design-system diagnostics, feature recovery boundaries | failure injection에서 오류 owner와 retry가 유지되는지 확인한다. Workspace managed lease·provider 실패는 로컬 host/password 오류와 구분하고 관리자용 exact Web recovery와 일반 구성원용 관리자 요청을 유지한다. |
 

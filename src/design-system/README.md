@@ -162,8 +162,10 @@ Desktop 테마는 `theme.ts`가 기기별 `dopedb.theme` preference를 소유한
 시스템 설정과 독립적으로 유지하며 다시 시작해도 복원한다. `index.html`의 작은
 bootstrap은 같은 키의 저장값만 첫 paint 전에 적용하고, live state는 복제하지 않는다.
 `data-theme`에는 해석된 light/dark만 두고 `tokens.css`와 `scoped-palettes.css`의
-동일 role을 바꾼다. 다크는 기존 중립 surface·파란 primary를, 라이트는 밝은 중립
-surface·ink primary를 사용하며 화면 배치는 공유한다.
+동일 role을 바꾼다. 다크의 큰 면은 near-black 대신 soft charcoal surface를
+사용하고 파랑은 선택·focus·실행 역할에만 남긴다. 앱 배경·에디터·사이드바의 낮은
+명도 차와 WCAG AA 이상의 텍스트 대비로 장시간 작업의 대비 피로를 줄인다. 라이트는
+밝은 중립 surface·ink primary를 사용하며 화면 배치는 공유한다.
 
 `useTheme`은 CodeMirror를 재구성하고 xterm의 theme option만 갱신해 문서·선택·
 terminal session을 보존한다. Agent code fence는 CSS 역할을 사용하고 Mermaid는
@@ -284,6 +286,20 @@ Elevation은 세 단계만 허용한다.
   `HomeScopeWalkthrough`는 실제 DB·SQL 실행·저장 없이 reducer로만 움직이는
   설명용 데모다. `HomeDemoShowcase`는 native dialog의 focus/scroll 복구를
   소유하며 JavaScript가 없으면 원본 이미지 anchor로 열 수 있다.
+- `features/cosmicScene/CosmicBackdrop`은 Welcome 문서의 장식용 우주 장면이다.
+  Rust `cosmic_scene` slice가 할당 없는 결정론적 seed·spin·tilt·horizon 레시피만
+  제공하고, WebGL2 fragment shader가 휘어진 광선의 경로와 회전하는 가스 원반의
+  교차를 계산해 블랙홀·앞쪽 원반·위아래 렌즈·별·성운을 그린다. 이는 시각적
+  근사이며 과학적 Kerr 해석기가 아니다. 프레임이나 입자 배열을 IPC로 보내지
+  않고 fullscreen triangle 1개·24바이트 정점 buffer·draw call 1개를 유지한다.
+  총 GPU 메모리에는 별도의 framebuffer와 driver 비용이 있다. 목표 30fps,
+  최대 DPR 2·400만 pixel, 화면 밖·숨긴 문서 정지, ResizeObserver·context
+  복구·unmount cleanup을 소유한다. 동작 줄이기는 기본 정지이며 명시적인 재생은
+  허용한다. 드래그·방향키 회전, 휠·+/− 확대, Space 정지, 0 초기화를 지원한다.
+  하단 조작은 공용 32px Button이며 DB command의 pointer·keyboard 입력과 분리한다.
+  Welcome은 중앙 작업면을 padding 없이 채우며, canvas 준비나 WebGL2 실패가
+  본문을 차단하지 않는다. 정적 fallback과 cream·warm·electric·night 색은
+  `--ds-cosmic-*` token이 소유한다. 읽기 영역의 veil도 canonical paint role이다.
 - `site/app/PlatformDownloads`: 공개 사이트의 header·hero·download CTA가 공유하는
   OS/CPU 추천 경계. Windows와 브라우저가 확실히 밝힌 Mac architecture만 안정된
   latest-download 별칭으로 직접 연결하고, Mac CPU가 숨겨지거나 지원하지 않는
@@ -366,10 +382,16 @@ Elevation은 세 단계만 허용한다.
 - `ToolWindowComposer`, `ToolWindowComposerDock`, `ToolWindowComposerInput`,
   `ToolWindowComposerContext`: AI Chat의 multiline 입력면, 내부 context row와
   외부 2열·2행 context grid. 첫 행은 Agent·model, 둘째 행은 resource·승인 모드다.
-  입력면의 `expanded` 상태는 실제 확대·복원 action과
-  연결되고 `busy` 상태는 Agent가 응답·승인을 기다리는 동안 활성 작업 경계를
-  유지한다. textarea의 기본 focus shadow는 제거하고 바깥 composer 경계 하나로
-  입력 focus를 표시한다. 화면별 textarea 크기 CSS를 만들지 않는다.
+  입력면은 한 줄에서 시작해 내용에 따라 최대 세 줄까지만 자동 확장하며 수동 확대
+  action을 제공하지 않는다. 첨부와 전송 action은 textarea 안쪽 양 끝에 overlay해
+  비어 있는 composer 전체도 실제 한 줄 높이를 유지한다. composer 경계는
+  tool-window와 같은 직각 surface이고,
+  `busy` 상태는 Agent가 응답·승인을 기다리는 동안 활성 작업 경계를 유지한다.
+  textarea의 기본 focus shadow는 제거하고 바깥 composer 경계 하나로 입력 focus를
+  표시한다. 화면별 textarea 크기 CSS를 만들지 않는다.
+- `type="search"`인 `TextInput`과 `TreeSearch`, 전역 작업 검색 trigger/input은
+  모두 `rounded-none` 직각 경계를 사용한다. 검색 화면마다 radius를 다시 지정하지
+  않는다.
 - `AnalysisArticleBody`: Desktop과 Workspace Web이 공유하는 정제된 HTML 문서 본문.
   Workspace의 독립 빌드도 이 정본을 직접 읽으며 JSX 타입은 Workspace에 설치된
   React 타입으로 해석한다. 공용 본문은 React import 없이 DOM ref만 받아서
@@ -393,7 +415,7 @@ Elevation은 세 단계만 허용한다.
   소유한다. 승인 모드는 어댑터가 실제 제공한 선택지만 보이고, 현재 세션이 ready일
   때 변경한다. UI가 자동 승인을 기본값으로 저장하거나 DB 쓰기 승인을 생략하지 않는다.
   feature별 임시 SVG나 상태색 대용 브랜드색을 만들지 않는다.
-- `AgentCliStatusBadges`, `AgentCliDetectionNotice`: 시작 모달과 Agent Tools가
+- `AgentCliStatusIndicators`, `AgentCliDetectionNotice`: 시작 모달과 Agent Tools가
   공유하고 AI Chat도 같은 상태 어휘를 따르는 feature composition. 로컬 CLI의
   탐지 중, probe 실패, 미설치, 로그인 필요, 준비 상태를 구분하며 실패를
   미설치로 축약하지 않는다. probe 상세와 재시도는 같은 inline 상태 surface가
@@ -470,8 +492,10 @@ Elevation은 세 단계만 허용한다.
   연다. 검색은 원래 펼침 상태와 focus key를
   변경하지 않고 임시 visible set만 투영한다. 가상화 row의 이동은
   전체 모델 순서로 대상을 계산한 뒤 해당 row를 pin·scroll·focus한다.
-- `PopupMenu`, `PopupMenuItem`, `PopupMenuCheckbox`: 평평한 popover menu
-  surface와 keyboard-focus 가능한 command/check row.
+- `PopupMenu`, `PopupMenuItem`, `PopupMenuCheckbox`: trigger에 연결된 portal
+  popover surface와 keyboard-focus 가능한 command/check row. 공용 Floating UI
+  hook이 rail·topbar·tree row에서 viewport 충돌, flip, shift, size, 숨김 감지를
+  처리하며 feature는 위치별 Tailwind 분기를 만들지 않는다.
 - `ToolbarMenu triggerVariant="statusBar"`와 `menuSize="tasks"`: status bar
   높이를 유지하는 background-task trigger와 380px 이내의 관찰·중단 popup.
   실제 전역 작업 모델에 있는 task만 표시하고 지원되지 않는 중단 control은
@@ -597,15 +621,16 @@ DopeDB의 실제 작업 흐름과 접근성, supported viewport를 위한 제품
   복사·CSV·JSON action을 놓고 `DataGrid` 아래 고정 footer에
   visible/filtered row count와 duration을 표시한다. 다른 제품에 보인다는 이유만으로
   transaction, DDL, edit action을 handler 없이 추가하지 않는다.
-- AI Chat composer는 큰 multiline surface, 내부 context chip/action row,
-  외부 Agent/model context row의 세 층을 사용한다. 첨부 chip과 popup은
+- AI Chat composer는 한 줄에서 최대 세 줄까지 자동으로 자라는 직각 입력면과
+  외부 Agent/model context grid를 사용한다. 첨부·전송 action은 입력면 안쪽에
+  overlay하고, 첨부된 context chip만 필요한 동안 입력면 아래에 표시한다.
   semantic token과 기존 button/icon 규칙으로 조합하며 feature CSS를 만들지
-  않는다. Project Environment와 공식 adapter가 준비되면 panel이 ACP session을
-  백그라운드에서 선행 초기화한다. 이 과정에서 composer와 resource 선택은
-  사용 가능하게 유지하고 focus나 layout을 바꾸지 않는다. 선택 변경은 즉시
-  반영하며 이전 exact grant의 준비 결과는 닫고 마지막 선택만 채택한다.
-  초기화와 동시에 제출된 첫 prompt도 같은 준비 작업을 기다린 뒤 한 번만
-  전송한다. 실행 중 상태는 transcript의 작업 행과 취소 action으로 표시하며,
+  않는다. 앱 시작 시 CLI·adapter·기존 session·Project inventory를 읽기 전용으로
+  예열한다. persisted connection으로 exact Project resource가 확정되면 닫힌 AI Chat도
+  mount 상태를 유지해 쓰기 대상이 없는 ACP session을 미리 시작하며, resource가 아직
+  선택되지 않았을 때는 ACP process나 Broker grant를 만들지 않는다. 선택 변경은 즉시
+  반영하며 이전 exact grant의 준비 결과는 닫고 마지막 선택만 채택한다. 실행 중 상태는
+  transcript의 작업 행과 취소 action으로 표시하며,
   완료율이 없는 상단 진행 막대를 중복해서 표시하지 않는다.
   session 전용 tab action menu는 활성 session이 있을 때만 표시하며
   빈 AI Chat에 disabled kebab을 남기지 않는다.
@@ -790,7 +815,7 @@ DopeDB의 실제 작업 흐름과 접근성, supported viewport를 위한 제품
   경로에서도 실제 호출자를 return-focus owner로 캡처하게 한다. 선택 가능한
   `menuitemradio`·`menuitemcheckbox`는 `aria-checked`와 semantic selection surface로
   현재 값을 메뉴 안에서도 명확히 표시한다.
-- `StatusBadge`, `StatusDot`, `StatusBarItem`, `StatusBarBreadcrumbs`,
+- `StatusBadge`, `StatusIndicator`, `StatusDot`, `StatusBarItem`, `StatusBarBreadcrumbs`,
   `StatusBarIconButton`, `LoadingLabel`, `InlineNotice`: lifecycle 상태 점,
   semantic success/warning/danger badge, IDE 하단 상태 segment, database
   breadcrumb, icon action, 비동기 진행 label, warning/danger inline 상태 행.
@@ -808,6 +833,15 @@ DopeDB의 실제 작업 흐름과 접근성, supported viewport를 위한 제품
   중복하지 않는다.
   잠금 action은 해당 data source의 Safety 설정을, bell action은 실제 Activity
   문서를 연다. 화면 전용 status CSS나 style map은 만들지 않는다.
+- `SettingsSectionHeader`, `SettingsList`, `SettingsRow`: 설정 inventory의 고정
+  제목과 `identity / state·meta / action` 열을 소유한다. action 유무로 앞 두
+  열의 기준선이 움직이지 않으며, 소분류 제목은 40px 바깥 기준선에 두고 항목
+  묶음만 얇은 border frame으로 구분한다. 기본 행은 최소 56px와 12px 좌우
+  여백을 공유하고, 반복 행은 같은 32px action과 상태 아이콘을 사용한다. 정상
+  상태 설명은 tooltip과
+  접근 가능한 이름에 두고, 실패·충돌·복구처럼 행동이 필요한 문장만 행 아래에
+  남긴다. 선택 불가능한 행도 checkbox 한 칸을 예약해 같은 종류의 이름 기준선을
+  유지한다.
 - `DiagnosticSummary`, `DiagnosticCount`: 설정·속성 편집기의 Problems 목록과
   오류/경고 개수를 같은 compact hierarchy로 표시.
 - `SettingsGroup`: 설정·정책 화면의 제목, 상단 divider, dense spacing을 공유하는
@@ -873,6 +907,10 @@ database ERD는 이 renderer가 아니라 기존 React Flow + ELK surface가 소
 | `size="xs"` | 28px tool-window header·composer의 compact action |
 | `size="xs" iconOnly` | 28px compact icon action; padding 없는 정사각형 |
 | `size="tree"` | 24px tree-row action; 28px resource row 안에서만 사용 |
+
+`Button`의 명시적 `size`는 `.ds-control-row` 안에서도 항상 우선한다. 설정 inventory의
+반복 action은 `compact` 32px, tool-window header와 composer action은 `xs` 28px,
+tree action은 `tree` 24px를 사용한다. 같은 행의 작업은 같은 단계만 섞는다.
 
 Cancel, Close, Dismiss는 destructive가 아니다. 기본 variant 또는 `ghost`를
 사용한다.

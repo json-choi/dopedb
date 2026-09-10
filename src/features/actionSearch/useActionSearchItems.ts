@@ -1,18 +1,13 @@
+// Search projection of real shell commands, documents and cached database objects.
 import { useQueryClient } from "@tanstack/react-query";
 
 import type { CatalogTable } from "../../ipc/types";
 import { errMessage } from "../../ipc/types";
 import { useToast } from "../../components/Toast";
 import { useI18n } from "../../lib/i18n";
-import {
-  databaseCatalogQuery,
-  type CatalogScope,
-} from "../../lib/queries";
+import { databaseCatalogQuery, type CatalogScope } from "../../lib/queries";
 import { filterCatalogOverview } from "../catalogExplorer/scopeFilter";
-import {
-  databaseDisplayLabel,
-  type ConnectionProfile,
-} from "../connections/domain";
+import { databaseDisplayLabel, type ConnectionProfile } from "../connections/domain";
 import type { SettingsSection } from "../settings/domain";
 import type { WorkbenchDocument } from "../workbench/domain";
 import { useCachedCatalogOverviews } from "./catalogCache";
@@ -26,6 +21,7 @@ type ActionSearchItemsInput = {
   documents: readonly WorkbenchDocument[];
   supportsSql: boolean;
   commands: {
+    showWelcome: () => void;
     newConnection: () => void;
     newQuery: () => void | Promise<void>;
     openResults: () => void;
@@ -62,6 +58,13 @@ export function useActionSearchItems({
     databaseDisplayLabel(connection.engine, database);
 
   const actions: ActionSearchItem[] = [
+    {
+      id: "action:welcome",
+      kind: "action",
+      label: t("onboarding.openWelcome"),
+      keywords: ["welcome", "home", "onboarding", "시작", "홈", "온보딩"],
+      run: commands.showWelcome,
+    },
     {
       id: "action:new-data-source",
       kind: "action",
@@ -249,11 +252,5 @@ export function useActionSearchItems({
     run: () => commands.openSettings(section),
   }));
 
-  return [
-    ...actions,
-    ...connectionItems,
-    ...documentItems,
-    ...databaseObjects,
-    ...settings,
-  ];
+  return [...actions, ...connectionItems, ...documentItems, ...databaseObjects, ...settings];
 }

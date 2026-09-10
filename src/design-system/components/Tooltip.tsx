@@ -12,10 +12,9 @@ import {
   useRef,
   useState,
 } from "react";
-import { autoUpdate, useFloating } from "@floating-ui/react-dom";
 import { createPortal } from "react-dom";
 
-import { floatingSurfaceMiddleware } from "../floating";
+import { useAnchoredFloatingSurface } from "../floating";
 
 type DescribedElement = ReactElement<{
   "aria-describedby"?: string;
@@ -44,12 +43,9 @@ export function Tooltip({
     placement,
     isPositioned,
     middlewareData,
-  } = useFloating({
+  } = useAnchoredFloatingSurface({
     open,
     placement: "bottom",
-    strategy: "fixed",
-    middleware: floatingSurfaceMiddleware(),
-    whileElementsMounted: autoUpdate,
   });
 
   function clearPending() {

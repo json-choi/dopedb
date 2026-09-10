@@ -9,10 +9,9 @@ import {
   type ReactElement,
   type ReactNode,
 } from "react";
-import { autoUpdate, useFloating } from "@floating-ui/react-dom";
 import { createPortal } from "react-dom";
 import { Tooltip } from "../design-system/components/Tooltip";
-import { floatingSurfaceMiddleware } from "../design-system/floating";
+import { useAnchoredFloatingSurface } from "../design-system/floating";
 import { Icon, type IconName } from "./Icon";
 
 function menuItems(root: HTMLElement | null) {
@@ -70,12 +69,9 @@ export default function ToolbarMenu({
     placement,
     isPositioned,
     middlewareData,
-  } = useFloating({
+  } = useAnchoredFloatingSurface({
     open,
     placement: align === "start" ? "bottom-start" : "bottom-end",
-    strategy: "fixed",
-    middleware: floatingSurfaceMiddleware(),
-    whileElementsMounted: autoUpdate,
   });
   const setTrigger = useCallback(
     (node: HTMLButtonElement | null) => {

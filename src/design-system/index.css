@@ -43,6 +43,7 @@
   --color-danger-muted: var(--ds-danger-bg);
   --color-danger-border: var(--ds-danger-border);
   --color-overlay: var(--ds-overlay);
+  --background-image-cosmic-veil: var(--ds-cosmic-veil);
 
   --spacing: var(--ds-space-1);
   --spacing-control-xs: var(--ds-control-xs);

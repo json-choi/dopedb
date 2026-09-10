@@ -257,11 +257,6 @@ export default function Safety({
           {saveError.message}
         </InlineNotice>
       ) : null}
-      <div className="tw:inline-flex tw:items-center tw:gap-2 tw:max-[640px]:flex-col tw:max-[640px]:items-start">
-        <h2>{t("safety.title")}</h2>
-        <InfoTip label={t("safety.body")} />
-      </div>
-
       <div className="tw:grid tw:grid-cols-[minmax(0,1.2fr)_minmax(264px,0.8fr)] tw:gap-4 tw:max-[1180px]:grid-cols-2 tw:max-[860px]:grid-cols-1">
         <SettingsGroup title={t("safety.guardrails")}>
           <div className="tw:grid tw:gap-2 tw:pb-3">
@@ -359,6 +354,7 @@ export default function Safety({
 
       <div className="tw:flex tw:items-center tw:gap-3 tw:max-[640px]:flex-col tw:max-[640px]:items-stretch tw:max-[640px]:[&>button]:w-full">
         <Button
+          size="compact"
           variant="primary"
           disabled={busy || !hasUnsavedChanges}
           onClick={save}

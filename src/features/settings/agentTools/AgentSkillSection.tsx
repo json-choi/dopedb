@@ -1,12 +1,21 @@
 // Renders Skill inventory, conflicts, and explicit install/repair/remove actions.
 import ConfirmButton from "../../../components/ConfirmButton";
+import { Icon } from "../../../components/Icon";
+import InfoTip from "../../../components/InfoTip";
 import Skeleton from "../../../components/Skeleton";
+import { AgentProviderMark } from "../../../design-system/components/Agent";
 import { Button } from "../../../design-system/components/Button";
-import { StatusBadge } from "../../../design-system/components/Status";
+import {
+  SettingsList,
+  SettingsRow,
+  SettingsSectionHeader,
+} from "../../../design-system/components/SettingsList";
+import { StatusIndicator } from "../../../design-system/components/Status";
 import { errMessage } from "../../../ipc/types";
 import { useI18n } from "../../../lib/i18n";
 import {
   skillStateLabel,
+  skillStateIndicator,
   skillStateTone,
 } from "../../skills/presentation";
 import { skillConflictLabel, skillReasonLabel } from "./model";
@@ -29,21 +38,20 @@ export function AgentSkillSection({ controller }: AgentSkillSectionProps) {
 
   return (
     <>
-      <section className="tw:border-t tw:border-border-subtle tw:pt-5">
-        <h3 className="tw:m-0">{t("agentTools.skillTitle")}</h3>
-        <p className="tw:mt-1 tw:mb-0 tw:text-muted-foreground">
-          {t("agentTools.skillDescription")}
-        </p>
+      <section className="tw:mt-3">
+        <SettingsSectionHeader
+          title={t("agentTools.skillTitle")}
+          info={<InfoTip label={t("agentTools.skillDescription")} />}
+          trailing={status ? (
+            <span className="tw:font-mono tw:text-xs tw:text-muted-foreground">
+              {t("agentTools.version", {
+                version: status.skill.appVersion,
+                revision: status.skill.releaseRevision,
+              })}
+            </span>
+          ) : undefined}
+        />
       </section>
-
-      {status ? (
-        <p className="tw:mt-1 tw:mb-4 tw:text-muted-foreground">
-          {t("agentTools.version", {
-            version: status.skill.appVersion,
-            revision: status.skill.releaseRevision,
-          })}
-        </p>
-      ) : null}
 
       {error || statusQuery.error ? (
         <div className="tw:text-ui tw:text-danger" role="alert">
@@ -55,7 +63,7 @@ export function AgentSkillSection({ controller }: AgentSkillSectionProps) {
       {!status && statusQuery.isPending ? (
         <Skeleton lines={6} />
       ) : status ? (
-        <div className="tw:mt-3 tw:divide-y tw:divide-border-subtle tw:border-y tw:border-border-subtle">
+        <SettingsList>
           {status.targets.map((target) => {
             const canInstall =
               target.state === "missing" || target.state === "managed_older";
@@ -73,65 +81,125 @@ export function AgentSkillSection({ controller }: AgentSkillSectionProps) {
               "newer_known",
             ].includes(target.state);
             return (
-              <section className="tw:py-4" key={target.target}>
-                <div className="tw:flex tw:items-center tw:justify-between tw:gap-4 tw:@max-[520px]:flex-col tw:@max-[520px]:items-start tw:@max-[520px]:gap-2">
-                  <div className="tw:flex tw:min-w-0 tw:items-center tw:gap-2">
+              <SettingsRow
+                key={target.target}
+                identity={
+                  <div className="tw:flex tw:min-w-0 tw:items-center tw:gap-2 tw:pl-6">
+                    <AgentProviderMark
+                      provider={target.target === "codex" ? "codex" : "claude"}
+                    />
                     <h3 className="tw:m-0 tw:text-title tw:leading-ui tw:font-bold tw:tracking-normal tw:text-foreground tw:normal-case">
                       {target.displayName}
                     </h3>
-                    <StatusBadge tone={skillStateTone(target.state)}>
-                      {t(skillStateLabel[target.state])}
-                    </StatusBadge>
                   </div>
-                </div>
-
-                <dl className="tw:mt-3 tw:mb-0 tw:grid tw:gap-2">
-                  <div className="tw:grid tw:grid-cols-[minmax(120px,0.3fr)_minmax(0,1fr)] tw:gap-3 tw:@max-[520px]:grid-cols-[minmax(0,1fr)] tw:@max-[520px]:gap-1">
-                    <dt className="tw:text-muted-foreground">
-                      {t("agentTools.path")}
-                    </dt>
-                    <dd className="tw:m-0 tw:min-w-0">
-                      <code className="tw:[overflow-wrap:anywhere]">
+                }
+                details={
+                  <div className="tw:flex tw:min-w-0 tw:items-center tw:gap-2">
+                    <div className="tw:flex tw:min-w-0 tw:items-center tw:gap-2">
+                      <StatusIndicator
+                        tone={skillStateTone(target.state)}
+                        icon={skillStateIndicator(target.state)}
+                        label={t(skillStateLabel[target.state])}
+                      />
+                      <Icon name="folder" className="tw:shrink-0 tw:text-muted-foreground" />
+                      <span className="tw:sr-only">{t("agentTools.path")}</span>
+                      <code
+                        className="tw:min-w-0 tw:truncate tw:text-xs tw:text-muted-foreground"
+                        title={target.installPath}
+                      >
                         {target.installPath}
                       </code>
-                    </dd>
-                  </div>
-                  {target.installedRevision !== null ? (
-                    <div className="tw:grid tw:grid-cols-[minmax(120px,0.3fr)_minmax(0,1fr)] tw:gap-3 tw:@max-[520px]:grid-cols-[minmax(0,1fr)] tw:@max-[520px]:gap-1">
-                      <dt className="tw:text-muted-foreground">
-                        {t("cli.binaryStatus")}
-                      </dt>
-                      <dd className="tw:m-0 tw:min-w-0">
-                        {t("agentTools.installedRevision", {
-                          revision: target.installedRevision,
-                        })}
-                      </dd>
                     </div>
-                  ) : null}
-                  <div className="tw:grid tw:grid-cols-[minmax(120px,0.3fr)_minmax(0,1fr)] tw:gap-3 tw:@max-[520px]:grid-cols-[minmax(0,1fr)] tw:@max-[520px]:gap-1">
-                    <dt className="tw:text-muted-foreground">
-                      {t("agentTools.currentRevision")}
-                    </dt>
-                    <dd className="tw:m-0 tw:min-w-0">
-                      {target.currentRevision}
-                    </dd>
+                    <span className="tw:h-4 tw:w-px tw:shrink-0 tw:bg-border-subtle" />
+                    <div className="tw:flex tw:shrink-0 tw:items-center tw:gap-1.5 tw:text-xs tw:text-muted-foreground">
+                      <Icon name="branch" className="tw:shrink-0" />
+                      <span className="tw:sr-only">{t("agentTools.currentRevision")}</span>
+                      <span
+                        className="tw:min-w-0 tw:truncate tw:font-mono"
+                        title={String(target.currentRevision)}
+                      >
+                        {target.installedRevision !== null
+                          ? `${target.installedRevision} → ${target.currentRevision}`
+                          : target.currentRevision}
+                      </span>
+                    </div>
                   </div>
-                </dl>
+                }
+                actions={
+                  canInstall || canRepair || canRemove ? (
+                    <>
+                      {canInstall ? (
+                        <Button
+                          iconOnly
+                          size="compact"
+                          disabled={busy !== null}
+                          onClick={() => void runInstall(target.target)}
+                          title={t(
+                            target.state === "managed_older"
+                              ? "agentTools.update"
+                              : "agentTools.install",
+                          )}
+                        >
+                          <Icon
+                            name={
+                              target.state === "managed_older"
+                                ? "refresh"
+                                : "download"
+                            }
+                          />
+                        </Button>
+                      ) : null}
+                      {canRepair ? (
+                        <ConfirmButton
+                          iconOnly
+                          label={t("agentTools.repair")}
+                          size="compact"
+                          disabled={busy !== null}
+                          confirmLabel={t("agentTools.repairConfirm", {
+                            count: target.conflicts.length,
+                          })}
+                          onConfirm={() =>
+                            void runMutation("repair", target.target)
+                          }
+                        >
+                          <Icon name="refresh" />
+                        </ConfirmButton>
+                      ) : null}
+                      {canRemove ? (
+                        <ConfirmButton
+                          iconOnly
+                          label={t("agentTools.remove")}
+                          size="compact"
+                          tone="danger"
+                          disabled={busy !== null}
+                          confirmLabel={t("agentTools.removeConfirm")}
+                          onConfirm={() =>
+                            void runMutation("remove", target.target)
+                          }
+                        >
+                          <Icon name="trash" />
+                        </ConfirmButton>
+                      ) : null}
+                    </>
+                  ) : undefined
+                }
+              >
                 {target.reason ? (
-                  <p className="tw:mt-2 tw:text-muted-foreground">
+                  <p className="tw:m-0 tw:text-xs tw:text-muted-foreground">
                     {t(skillReasonLabel[target.reason])}
                   </p>
                 ) : null}
                 {target.conflicts.length > 0 ? (
-                  <>
-                    <p className="tw:mt-2 tw:font-semibold tw:text-foreground">
+                  <div className="tw:mt-1 tw:grid tw:gap-1">
+                    <p className="tw:m-0 tw:flex tw:items-center tw:gap-1.5 tw:text-xs tw:font-semibold tw:text-danger">
+                      <Icon name="alert" />
                       {t("agentTools.conflicts", {
                         count: target.conflicts.length,
                       })}
                     </p>
                     {target.conflicts.map((conflict) => (
                       <p
-                        className="tw:mt-2 tw:flex tw:items-baseline tw:gap-2 tw:text-muted-foreground tw:@max-[520px]:flex-col tw:@max-[520px]:items-start tw:@max-[520px]:gap-1"
+                        className="tw:m-0 tw:flex tw:min-w-0 tw:items-baseline tw:gap-2 tw:text-xs tw:text-muted-foreground"
                         key={`${conflict.kind}:${conflict.path}`}
                       >
                         <span>{t(skillConflictLabel[conflict.kind])}</span>
@@ -140,53 +208,12 @@ export function AgentSkillSection({ controller }: AgentSkillSectionProps) {
                         </code>
                       </p>
                     ))}
-                  </>
-                ) : null}
-
-                {canInstall || canRepair || canRemove ? (
-                  <div className="ds-control-row tw:mt-3 tw:flex tw:flex-wrap tw:items-center tw:gap-[var(--ds-control-gap)]">
-                    {canInstall ? (
-                      <Button
-                        disabled={busy !== null}
-                        onClick={() => void runInstall(target.target)}
-                      >
-                        {t(
-                          target.state === "managed_older"
-                            ? "agentTools.update"
-                            : "agentTools.install",
-                        )}
-                      </Button>
-                    ) : null}
-                    {canRepair ? (
-                      <ConfirmButton
-                        disabled={busy !== null}
-                        confirmLabel={t("agentTools.repairConfirm", {
-                          count: target.conflicts.length,
-                        })}
-                        onConfirm={() =>
-                          void runMutation("repair", target.target)
-                        }
-                      >
-                        {t("agentTools.repair")}
-                      </ConfirmButton>
-                    ) : null}
-                    {canRemove ? (
-                      <ConfirmButton
-                        disabled={busy !== null}
-                        confirmLabel={t("agentTools.removeConfirm")}
-                        onConfirm={() =>
-                          void runMutation("remove", target.target)
-                        }
-                      >
-                        {t("agentTools.remove")}
-                      </ConfirmButton>
-                    ) : null}
                   </div>
                 ) : null}
-              </section>
+              </SettingsRow>
             );
           })}
-        </div>
+        </SettingsList>
       ) : null}
     </>
   );
