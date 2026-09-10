@@ -750,4 +750,25 @@ pub(super) fn assert_installation_identity_contract() {
         status.failure.is_some(),
         "unverified installations are never ready"
     );
+
+    let legacy: InstalledPluginVersion = serde_json::from_str(&format!(
+        r#"{{"version":"1.0.0","manifestSha256":"{}","entrypointSha256":"{}"}}"#,
+        "a".repeat(64),
+        "b".repeat(64),
+    ))
+    .expect("legacy ACP activation state remains readable");
+    assert_eq!(legacy.adapter_bundle_version, "1.0.0");
+    let canonical = serde_json::to_value(&legacy).expect("plugin state serializes");
+    assert_eq!(canonical["adapterBundleVersion"], "1.0.0");
+    assert!(canonical.get("version").is_none());
+
+    let legacy_quarantine: QuarantinedPluginVersion = serde_json::from_str(&format!(
+        r#"{{"version":"1.0.0","manifestSha256":"{}","reason":"startup timed out"}}"#,
+        "a".repeat(64),
+    ))
+    .expect("legacy ACP quarantine state remains readable");
+    assert_eq!(legacy_quarantine.adapter_bundle_version, "1.0.0");
+    let canonical = serde_json::to_value(&legacy_quarantine).expect("quarantine state serializes");
+    assert_eq!(canonical["adapterBundleVersion"], "1.0.0");
+    assert!(canonical.get("version").is_none());
 }

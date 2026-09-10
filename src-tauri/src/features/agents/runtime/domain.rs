@@ -82,6 +82,7 @@ pub(super) struct PersistedPluginRecord {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct InstalledPluginVersion {
+    #[serde(alias = "version")]
     pub(super) adapter_bundle_version: String,
     pub(super) manifest_sha256: String,
     pub(super) entrypoint_sha256: String,
@@ -131,6 +132,7 @@ impl Default for PersistedRuntimeState {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct QuarantinedPluginVersion {
+    #[serde(alias = "version")]
     pub(super) adapter_bundle_version: String,
     pub(super) manifest_sha256: String,
     pub(super) reason: String,
