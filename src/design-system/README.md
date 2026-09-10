@@ -278,9 +278,11 @@ Elevation은 세 단계만 허용한다.
   조합한다. H1과 제품 본문을 JavaScript 실행이나 WebGL 준비 뒤에 숨기지 않는다.
   `GalaxyHero`는 서버 children 위에 장식만 더하는 client island이며,
   `site/lib/galaxyRenderer`를 첫 paint 뒤에 지연 로드한다. shader의 색은
-  `--landing-cream`, `--landing-signal`, `--landing-electric`에서 읽고,
+  `--galaxy-starlight`, `--galaxy-core`, `--landing-electric`에서 읽고,
   veil·reading·halo는 사이트 theme의 paint role이다. 한 canvas·한 GPU buffer를
-  사용하며 mobile DPR/입자 수 제한, 화면 밖·숨겨진 탭 정지, 동작 줄이기,
+  사용하며 불규칙한 먼지 소광·구름 노이즈와 중심부/외곽 별 집단을 같은 고정
+  geometry에 담는다. 30fps 스케줄·400만 backing pixel 상한, mobile DPR/입자 수
+  제한, 화면 밖·숨겨진 탭 정지, 동작 줄이기,
   pause·Escape·pointer cleanup을 소유한다. WebGL 불가 시 정적 canvas 또는
   CSS 배경을 남기며 context loss 때문에 페이지를 새로고침하지 않는다.
   `HomeScopeWalkthrough`는 실제 DB·SQL 실행·저장 없이 reducer로만 움직이는

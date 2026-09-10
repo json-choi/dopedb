@@ -13,8 +13,8 @@ export function createGalaxy(canvas: HTMLCanvasElement, onAvailability: (availab
     return [0, 2, 4].map(i => Number.parseInt(hex.slice(i, i + 2), 16) / 255);
   };
   const palette: GalaxyPalette = {
-    cream: color("--landing-cream"),
-    signal: color("--landing-signal"),
+    cream: color("--galaxy-starlight"),
+    warm: color("--galaxy-core"),
     electric: color("--landing-electric")
   };
   const compact = window.innerWidth < 760;
@@ -80,6 +80,7 @@ export function createGalaxy(canvas: HTMLCanvasElement, onAvailability: (availab
     contextLost = false;
   let inView = true;
   let frame = 0,
+    timer = 0,
     clock = 0,
     lastTime = 0,
     turn = 0,
@@ -97,7 +98,7 @@ export function createGalaxy(canvas: HTMLCanvasElement, onAvailability: (availab
   function resize() {
     width = window.innerWidth;
     height = window.innerHeight;
-    dpr = Math.min(window.devicePixelRatio || 1, width < 760 ? 1.4 : 1.75);
+    dpr = Math.min(window.devicePixelRatio || 1, width < 760 ? 1.4 : 1.75, Math.sqrt(4_000_000 / (width * height)));
     canvas.width = Math.round(width * dpr);
     canvas.height = Math.round(height * dpr);
     gl!.viewport(0, 0, canvas.width, canvas.height);
@@ -133,7 +134,16 @@ export function createGalaxy(canvas: HTMLCanvasElement, onAvailability: (availab
     if (!paused && !reduced && inView) requestDraw();
   }
   function requestDraw() {
-    if (!frame && !disposed && !contextLost && !document.hidden) frame = requestAnimationFrame(draw);
+    if (frame || timer || disposed || contextLost || document.hidden) return;
+    timer = window.setTimeout(() => {
+      timer = 0;
+      frame = requestAnimationFrame(draw);
+    }, Math.max(0, 1000 / 30 - (performance.now() - lastTime)));
+  }
+  function stop() {
+    clearTimeout(timer);
+    cancelAnimationFrame(frame);
+    timer = frame = 0;
   }
   function scroll() {
     const next = window.scrollY < height * 1.6;
@@ -163,8 +173,7 @@ export function createGalaxy(canvas: HTMLCanvasElement, onAvailability: (availab
     requestDraw();
   }
   function visibility() {
-    cancelAnimationFrame(frame);
-    frame = 0;
+    stop();
     lastTime = 0;
     if (!document.hidden) requestDraw();
   }
@@ -175,8 +184,7 @@ export function createGalaxy(canvas: HTMLCanvasElement, onAvailability: (availab
   // A lost decorative context must never reload the page or reset the user's demo.
   const loss = () => {
     contextLost = true;
-    cancelAnimationFrame(frame);
-    frame = 0;
+    stop();
     canvas.dataset.rendered = "false";
     onAvailability(false);
   };
@@ -213,7 +221,7 @@ export function createGalaxy(canvas: HTMLCanvasElement, onAvailability: (availab
     },
     dispose() {
       disposed = true;
-      cancelAnimationFrame(frame);
+      stop();
       window.removeEventListener("resize", resize);
       window.removeEventListener("scroll", scroll);
       window.removeEventListener("pointermove", pointer);
@@ -227,6 +235,9 @@ export function createGalaxy(canvas: HTMLCanvasElement, onAvailability: (availab
       gl!.deleteBuffer(buffer);
       gl!.deleteProgram(program);
       shaders.forEach(shader => gl!.deleteShader(shader));
+      queueMicrotask(() => {
+        if (!canvas.isConnected) gl!.getExtension("WEBGL_lose_context")?.loseContext();
+      });
     }
   };
 }

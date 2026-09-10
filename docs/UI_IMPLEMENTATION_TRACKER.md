@@ -32,8 +32,14 @@ runtime과 성능 수치로 수행한다.
 - 동작 줄이기를 모의한 환경과 화면 아래로 이동한 상태에서는 GPU draw 호출이
   증가하지 않았다. WebGL 미지원 모의 환경은 정적 canvas로 대체했고,
   context loss 이후에도 페이지 재로딩 없이 데모 상태가 유지됐다.
-  모바일은 37,503개 입자와 DPR 1.4 상한, 데스크톱은 87,653개와 DPR 1.75 상한을
+  모바일은 38,403개 입자와 DPR 1.4 상한, 데스크톱은 79,953개와 DPR 1.75 상한을
   사용한다. 이 값은 렌더링 예산이지 FPS·검색 순위 보장이 아니다.
+- 2026-09-11 은하 개선: 로그 나선과 확산 원반, 따뜻한 중심부와 푸른 외곽,
+  불규칙한 먼지 소광과 구름 노이즈를 한 GPU buffer에 담았다. 큰 JS number 배열
+  대신 고정 Float32Array를 사용하고 30fps 스케줄·400만 backing pixel 상한을 둔다.
+  로컬 Chromium에서 실제 canvas 움직임·드래그·Escape, pause/화면 밖/동작 줄이기의
+  draw 증가 0, 390px 가로 넘침 없음, context loss·WebGL 미지원 fallback을 확인했다.
+  천문 관측 데이터나 물리 시뮬레이션이 아닌 장식용 은하이며 실제 기기 FPS는 미검증이다.
 - 검증: `pnpm --dir site build:cloudflare`, `pnpm build`, `pnpm test`
   (42개), 구조·hooks·UI primitive/palette 검사 통과. 기존 Next.js의
   middleware 명칭 폐기 예정 및 tracing/turbopack root 설정 경고는 남아 있다.
