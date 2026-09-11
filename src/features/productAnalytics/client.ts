@@ -138,6 +138,7 @@ let sending = false;
 let retryAttempt = 0;
 let retryTimer: number | null = null;
 let retryNotBefore = 0;
+let consentRefresh: Promise<boolean> | null = null;
 let initialized = false;
 let initializePromise: Promise<void> | null = null;
 let snapshot: ProductAnalyticsSnapshot = {
@@ -243,16 +244,51 @@ function scheduleRetry(retryAfterMs?: number) {
   armRetryTimer();
 }
 
+// Native storage owns the version and seven-day deadline. Refresh even when
+// denied or offline so an open app can show the next choice without a restart.
+async function refreshConsentState(): Promise<boolean> {
+  if (availability !== "available" || localStore.revocationPending()) return false;
+  if (consentRefresh) return consentRefresh;
+  const epoch = consentEpoch;
+  consentRefresh = (async () => {
+    try {
+      const status = await productAnalyticsStatus();
+      if (epoch !== consentEpoch || localStore.revocationPending()) return false;
+      availability = status.enabled ? "available" : "unavailable";
+      applyConsentState(status.consent, status.generation);
+      if (status.consent !== "granted") {
+        clearRetry();
+        completedSessionCaptures.clear();
+        pendingSessionCaptures.clear();
+        sessionId = newSessionId();
+      }
+      publish();
+      return status.enabled;
+    } catch {
+      return false;
+    } finally {
+      consentRefresh = null;
+    }
+  })();
+  return consentRefresh;
+}
+
 function attachLifecycleListeners() {
-  window.addEventListener("online", () => void flushProductAnalytics());
+  const refresh = () => {
+    if (document.visibilityState === "hidden") return;
+    void refreshConsentState().then((ready) => {
+      if (ready) void flushProductAnalytics();
+    });
+  };
+  window.setInterval(refresh, 60_000);
+  window.addEventListener("focus", refresh);
+  window.addEventListener("online", refresh);
   window.addEventListener("storage", () => {
     localStore.reload();
     if (snapshot.consent !== "granted") clearRetry();
     else void flushProductAnalytics();
   });
-  document.addEventListener("visibilitychange", () => {
-    void flushProductAnalytics();
-  });
+  document.addEventListener("visibilitychange", refresh);
 }
 
 export function initializeProductAnalytics() {
@@ -344,6 +380,7 @@ async function captureDesktopInstallationReady() {
 
 export async function grantProductAnalyticsConsent() {
   if (availability !== "available") return false;
+  consentEpoch += 1;
   try {
     if (localStore.revocationPending()) {
       const denied = await setProductAnalyticsConsent("denied");
@@ -409,6 +446,7 @@ async function captureProductEventInternal(
   oncePerSession: boolean,
   flushAfterCapture = true,
 ) {
+  if (!(await refreshConsentState())) return false;
   if (
     snapshot.consent !== "granted" ||
     availability !== "available" ||
@@ -524,6 +562,7 @@ export function captureProductEventOncePerSession(
 }
 
 export async function flushProductAnalytics() {
+  if (!(await refreshConsentState())) return;
   if (productAnalyticsRetryIsBlocked(Date.now(), retryNotBefore)) {
     armRetryTimer();
     return;

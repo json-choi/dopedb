@@ -18,9 +18,13 @@ credentials stay outside the repository. Never copy them into a build-visible
 | Workload identity metadata and binding-only token delivery | `workspace-cloud/wrangler.identity.jsonc` | `identity.dopedb.dev` |
 | Public site and website analytics ingress | `site/wrangler.jsonc` | `dopedb.dev`, `www.dopedb.dev` |
 | Due-time coordination | `workspace-scheduler-cloudflare/wrangler.jsonc` | authenticated service binding |
-| Optional Desktop analytics | `product-analytics-cloudflare/wrangler.jsonc` | authenticated service binding |
+| Optional Desktop analytics | `product-analytics-cloudflare/wrangler.jsonc` | private service binding; BigQuery EU storage |
 
 The Workspace Worker binds to the identity Worker through `WORKLOAD_IDENTITY`.
+Desktop analytics uses the separate `AnalyticsIdentity` entrypoint and
+`dopedb:analytics:production` subject. Its dedicated GCP pool and service account
+can append to the analytics dataset, without Workspace KMS or customer-resource
+grants. See [analytics operations](../product-analytics-cloudflare/README.md).
 The public identity origin serves discovery metadata and JWKS only; token delivery
 must remain inaccessible over the public route. The production OIDC issuer,
 audience, account, workload ID, and subject must match in both Wrangler files.
@@ -43,6 +47,20 @@ databases. Contract tests exercise native workerd behavior, atomic mutations,
 authentication, provider operations, managed leases, backups, and retention.
 
 ## Workspace deployment
+
+For a code-only deployment that preserves the existing production secrets:
+
+```sh
+pnpm --dir workspace-cloud deploy:cloudflare --preserve-secrets
+```
+
+This checks the configured account, required secret names and exact D1 migration
+receipts without applying migrations or uploading secrets. It then builds,
+deploys and verifies the production version. Public build configuration comes
+only from `workspace-cloud/deployment-public.json`; the deployment wrapper passes
+its allowlisted Clarity ID to the build without exposing production secrets.
+Pending migrations fail this path; use the environment-file workflow below when
+a deployment actually requires migration or runtime-secret changes.
 
 Use a private environment file with mode `0600`. It must contain only names from
 `workspace-cloud/.env.example`, include every required production value, use

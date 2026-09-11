@@ -4,20 +4,21 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-08-14",
   "account_id": "0af3820c996f277b2f17ee446d03f60a",
-  "workers_dev": true,
+  "workers_dev": false,
   "preview_urls": false,
-  "secrets": {
-    "required": ["INGEST_TOKEN"]
+  "durable_objects": { "bindings": [{ "name": "INGEST_BUDGET", "class_name": "AnalyticsBudget" }] },
+  "migrations": [{ "tag": "analytics-budget-v1", "new_sqlite_classes": ["AnalyticsBudget"] }],
+  "services": [{
+    "binding": "ANALYTICS_IDENTITY",
+    "service": "dopedb-workspace-identity",
+    "entrypoint": "AnalyticsIdentity"
+  }],
+  "vars": {
+    "BIGQUERY_PROJECT": "dopedb-503203",
+    "BIGQUERY_DATASET": "product_analytics",
+    "BIGQUERY_TABLE": "events_raw",
+    "BIGQUERY_SERVICE_ACCOUNT": "dopedb-analytics-ingest@dopedb-503203.iam.gserviceaccount.com",
+    "BIGQUERY_WIF_AUDIENCE": "//iam.googleapis.com/projects/461953058911/locations/global/workloadIdentityPools/dopedb-analytics/providers/cloudflare"
   },
-  "d1_databases": [
-    {
-      "binding": "ANALYTICS_DB",
-      "database_name": "dopedb-product-analytics",
-      "database_id": "b07a4643-7e4b-4f57-b0ad-14dd99b812ec",
-      "migrations_dir": "migrations"
-    }
-  ],
-  "triggers": {
-    "crons": ["17 3 * * *"]
-  }
+  "observability": { "enabled": false }
 }

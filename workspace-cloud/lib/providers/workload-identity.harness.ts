@@ -5,6 +5,7 @@ import { expect, vi } from "vitest";
 import {
   identityMetadataResponse,
   issueWorkloadIdentity,
+  issueAnalyticsIdentity,
 } from "../../infrastructure/workload-identity-core";
 import { verifyWorkloadOidcToken } from "./workload-oidc";
 import { workloadOidcToken } from "../workload-identity";
@@ -39,6 +40,10 @@ export async function assertWorkloadIdentityContract() {
       workloadId: configuration.OIDC_WORKLOAD_ID,
       subject: configuration.OIDC_SUBJECT,
     });
+    const analyticsToken = await issueAnalyticsIdentity(configuration);
+    const analyticsClaims = JSON.parse(Buffer.from(analyticsToken.split(".")[1], "base64url").toString());
+    expect(analyticsClaims.sub).toBe("dopedb:analytics:production");
+    await expect(verifyWorkloadOidcToken(analyticsToken)).rejects.toThrow();
     const claims = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString());
     expect(claims.exp - claims.iat).toBe(900);
     const altered = `${token.split(".").slice(0, 2).join(".")}.${"A".repeat(342)}`;

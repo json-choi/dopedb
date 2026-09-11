@@ -1,10 +1,10 @@
 //! Strict product-outcome validation and the optional Cloudflare analytics sink.
 //! This boundary accepts only the reviewed v1 enums and never persists raw analytics.
 import "server-only";
+import { productAnalyticsBindingFetch } from "./product-analytics-binding";
 
 import { createHash } from "node:crypto";
 
-import { env } from "./env";
 import { consumeRateLimit, forwardedClientKey } from "./rate-limit";
 
 const EVENT_TTL_MS = 7 * 24 * 60 * 60 * 1_000;
@@ -13,7 +13,7 @@ const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_REQUESTS = 60;
 const GLOBAL_RATE_LIMIT_REQUESTS = 400;
 const GLOBAL_RATE_LIMIT_EVENTS = 16;
-const CLOUDFLARE_TIMEOUT_MS = 5_000;
+const CLOUDFLARE_TIMEOUT_MS = 15_000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const HEX_64 = /^[0-9a-f]{64}$/;
 const RFC3339 = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?(Z|([+-])(\d{2}):(\d{2}))$/;
@@ -183,7 +183,7 @@ export type ProductAnalyticsRelayResult =
   | "retryable_failure"
   | "rejected";
 
-export const PRODUCT_ANALYTICS_CONTRACT_VERSION = "1";
+export const PRODUCT_ANALYTICS_CONTRACT_VERSION = "2";
 
 type ProductAnalyticsBudget = Readonly<{
   namespace: string;
@@ -471,28 +471,16 @@ export function consumeProductAnalyticsEnvelopeBudget(
 export async function relayProductAnalytics(
   envelope: ProductAnalyticsEnvelope,
 ): Promise<ProductAnalyticsRelayResult> {
-  let token: string | null;
-  let url: string | null;
   try {
-    token = env.productAnalyticsCloudflareToken();
-    url = env.productAnalyticsCloudflareUrl();
-  } catch {
-    return "not_configured";
-  }
-  if (!token || !url) return "not_configured";
-  try {
-    const response = await fetch(url, {
+    const response = await productAnalyticsBindingFetch(new Request("https://analytics.internal/v1/events", {
       method: "POST",
       headers: {
-        authorization: `Bearer ${token}`,
         "content-type": "application/json",
         "x-dopedb-product-analytics-contract": PRODUCT_ANALYTICS_CONTRACT_VERSION,
       },
       body: JSON.stringify(envelope),
-      cache: "no-store",
-      redirect: "error",
       signal: AbortSignal.timeout(CLOUDFLARE_TIMEOUT_MS),
-    });
+    }));
     const accepted = response.status === 202;
     const status = response.status;
     await response.body?.cancel().catch(() => undefined);

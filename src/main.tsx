@@ -14,6 +14,7 @@ import {
 } from "./features/monitoring/client";
 import { initializeProductAnalytics } from "./features/productAnalytics/client";
 import { ProductAnalyticsWorkspaceScopeObserver } from "./features/productAnalytics/WorkspaceScopeObserver";
+import { ProductAnalyticsConsentPrompt } from "./features/productAnalytics/ConsentPrompt";
 import { AppProviders } from "./lib/appProviders";
 
 void initializeProductAnalytics();
@@ -45,6 +46,7 @@ if (benchmarkConfig?.kind === "workload" || benchmarkConfig?.kind === "qa") {
     <AppProviders>
       {!packagedBenchmark ? <ProductAnalyticsWorkspaceScopeObserver /> : null}
       <App />
+      {!packagedBenchmark ? <ProductAnalyticsConsentPrompt /> : null}
     </AppProviders>
   );
 }

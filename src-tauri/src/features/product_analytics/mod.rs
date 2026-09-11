@@ -42,3 +42,6 @@ pub(crate) fn compose(store: Store) -> ProductAnalyticsFeature {
 
 #[cfg(test)]
 pub(crate) use domain::assert_product_analytics_contract;
+
+#[cfg(test)]
+pub(crate) use adapters::assert_consent_policy_contract;

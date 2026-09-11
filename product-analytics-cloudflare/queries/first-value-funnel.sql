@@ -1,20 +1,21 @@
 WITH installation_steps AS (
   SELECT
     installation_id,
-    MAX(name = 'desktop_installation_ready') AS installed,
-    MAX(name = 'workspace_authentication_completed'
-        AND json_extract(properties_json, '$.outcome') = 'success') AS authenticated,
-    MAX(name = 'workspace_scope_ready') AS scope_ready,
-    MAX(name = 'query_execution_completed'
-        AND json_extract(properties_json, '$.outcome') = 'success') AS first_value
-  FROM product_analytics_event
-  WHERE occurred_at_ms >= unixepoch('now', '-30 days') * 1000
+    LOGICAL_OR(name = 'desktop_installation_ready') AS installed,
+    LOGICAL_OR(name = 'workspace_authentication_completed'
+        AND JSON_VALUE(properties_json, '$.outcome') = 'success') AS authenticated,
+    LOGICAL_OR(name = 'workspace_scope_ready') AS scope_ready,
+    LOGICAL_OR(name = 'query_execution_completed'
+        AND JSON_VALUE(properties_json, '$.outcome') = 'success') AS first_value
+  FROM `dopedb-503203.product_analytics.events`
+  WHERE app_version != '0.0.0-analytics-verification'
+    AND occurred_at_ms >= UNIX_MILLIS(TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 30 DAY))
   GROUP BY installation_id
 )
 SELECT
   COUNT(*) AS consenting_installations,
-  SUM(installed) AS installation_ready,
-  SUM(authenticated) AS authenticated,
-  SUM(scope_ready) AS workspace_ready,
-  SUM(first_value) AS successful_query
+  COUNTIF(installed) AS installation_ready,
+  COUNTIF(authenticated) AS authenticated,
+  COUNTIF(scope_ready) AS workspace_ready,
+  COUNTIF(first_value) AS successful_query
 FROM installation_steps;

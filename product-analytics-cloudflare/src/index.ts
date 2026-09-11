@@ -1,11 +1,11 @@
+export { AnalyticsBudget } from "./ingest-budget";
+import { consumeIngestBudget, type BudgetNamespace } from "./ingest-budget";
+import { appendBigQuery, BigQueryDeliveryError, type BigQueryEnv } from "./bigquery";
+
 const MAX_BODY_BYTES = 32 * 1024;
 const EVENT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const EVENT_FUTURE_SKEW_MS = 5 * 60 * 1000;
-const RAW_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
-const REFRESH_WINDOW_MS = 8 * 24 * 60 * 60 * 1000;
 const INGEST_BUDGET_WINDOW_MS = 60_000;
-const INGEST_BUDGET_EVENTS = 16;
-const MAX_DELETE_ROWS = 30_000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const HEX_64 = /^[0-9a-f]{64}$/;
 const RFC3339 = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?(Z|([+-])(\d{2}):(\d{2}))$/;
@@ -60,22 +60,10 @@ function isSemanticVersion(value: string) {
     || prerelease.split(".").every((part) => isSemverLabel(part, true));
 }
 
-type D1Result = { meta?: { changes?: number } };
-type D1Statement = {
-  bind(...values: unknown[]): D1Statement;
-  first<T = Record<string, unknown>>(): Promise<T | null>;
-};
-type D1Database = {
-  prepare(query: string): D1Statement;
-  batch<T = D1Result>(statements: D1Statement[]): Promise<T[]>;
+type Env = BigQueryEnv & {
+  INGEST_BUDGET: BudgetNamespace;
 };
 
-type Env = {
-  ANALYTICS_DB: D1Database;
-  INGEST_TOKEN: string;
-};
-
-type ExecutionContext = { waitUntil(promise: Promise<unknown>): void };
 
 type PropertyRule = readonly (string | boolean)[] | "boolean";
 type EventRule = {
@@ -335,21 +323,6 @@ async function boundedJson(request: Request): Promise<unknown | null> {
   }
 }
 
-async function sameSecret(candidate: string, expected: string) {
-  const encoder = new TextEncoder();
-  const [left, right] = await Promise.all([
-    crypto.subtle.digest("SHA-256", encoder.encode(candidate)),
-    crypto.subtle.digest("SHA-256", encoder.encode(expected)),
-  ]);
-  const a = new Uint8Array(left);
-  const b = new Uint8Array(right);
-  let mismatch = a.length ^ b.length;
-  for (let index = 0; index < Math.max(a.length, b.length); index += 1) {
-    mismatch |= (a[index] ?? 0) ^ (b[index] ?? 0);
-  }
-  return mismatch === 0;
-}
-
 function json(
   body: Record<string, unknown>,
   status: number,
@@ -361,30 +334,8 @@ function json(
   });
 }
 
-async function consumeIngestBudget(
-  database: D1Database,
-  eventCount: number,
-  nowMs: number,
-) {
-  const minuteBucket = Math.floor(nowMs / INGEST_BUDGET_WINDOW_MS);
-  const receipt = await database.prepare(`
-    INSERT INTO product_analytics_ingest_budget (minute_bucket, event_count)
-    VALUES (?, ?)
-    ON CONFLICT(minute_bucket) DO UPDATE SET
-      event_count = product_analytics_ingest_budget.event_count + excluded.event_count
-    WHERE product_analytics_ingest_budget.event_count + excluded.event_count <= ?
-    RETURNING event_count
-  `).bind(minuteBucket, eventCount, INGEST_BUDGET_EVENTS).first<{ event_count: number }>();
-  return receipt !== null;
-}
-
 async function ingest(request: Request, env: Env) {
-  const authorization = request.headers.get("authorization") ?? "";
-  const match = /^Bearer ([0-9a-f]{64})$/.exec(authorization);
-  if (!match || !env.INGEST_TOKEN || !await sameSecret(match[1], env.INGEST_TOKEN)) {
-    return json({ accepted: false, retryable: false }, 401);
-  }
-  if (request.headers.get("x-dopedb-product-analytics-contract") !== "1") {
+  if (request.headers.get("x-dopedb-product-analytics-contract") !== "2") {
     return json({ accepted: false, retryable: false }, 400);
   }
   if (request.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase() !== "application/json") {
@@ -395,7 +346,7 @@ async function ingest(request: Request, env: Env) {
   if (!envelope) return json({ accepted: false, retryable: false }, 400);
   const receivedAtMs = Date.now();
   try {
-    if (!await consumeIngestBudget(env.ANALYTICS_DB, envelope.events.length, receivedAtMs)) {
+    if (!await consumeIngestBudget(env.INGEST_BUDGET, envelope.events.length)) {
       return json(
         { accepted: false, retryable: true, retryAfterMs: INGEST_BUDGET_WINDOW_MS },
         429,
@@ -409,71 +360,25 @@ async function ingest(request: Request, env: Env) {
       { "retry-after": "60" },
     );
   }
-  const statements = envelope.events.map((event) => env.ANALYTICS_DB.prepare(`
-    INSERT OR IGNORE INTO product_analytics_event (
-      event_id, name, occurred_at, occurred_at_ms, received_at_ms,
-      installation_id, session_id, app_version, platform, locale,
-      actor_key, workspace_key, workspace_kind, properties_json
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).bind(
-    event.eventId,
-    event.name,
-    event.occurredAt,
-    Date.parse(event.occurredAt),
-    receivedAtMs,
-    envelope.installationId,
-    envelope.sessionId,
-    envelope.appVersion,
-    envelope.platform,
-    envelope.locale,
-    event.actorKey ?? null,
-    event.workspaceKey ?? null,
-    event.workspaceKind ?? null,
-    JSON.stringify(event.properties),
-  ));
+  const rows = envelope.events.map((event) => ({
+    event_id: event.eventId, name: event.name, occurred_at: event.occurredAt,
+    occurred_at_ms: Date.parse(event.occurredAt), received_at_ms: receivedAtMs,
+    received_at: new Date(receivedAtMs).toISOString(),
+    installation_id: envelope.installationId, session_id: envelope.sessionId,
+    app_version: envelope.appVersion, platform: envelope.platform, locale: envelope.locale,
+    actor_key: event.actorKey ?? null, workspace_key: event.workspaceKey ?? null,
+    workspace_kind: event.workspaceKind ?? null, properties_json: JSON.stringify(event.properties),
+  }));
   try {
-    await env.ANALYTICS_DB.batch(statements);
+    await appendBigQuery(env, rows);
     return json({ accepted: true, retryable: false }, 202);
-  } catch {
+  } catch (error) {
+    // Closed operational categories only: never log events, credentials, URLs,
+    // upstream response bodies, or arbitrary exception messages.
+    console.warn("product-analytics-delivery", error instanceof BigQueryDeliveryError
+      ? { stage: error.stage, status: error.status } : { stage: "unavailable", status: 0 });
     return json({ accepted: false, retryable: true, retryAfterMs: 60_000 }, 503);
   }
-}
-
-async function maintain(env: Env, nowMs = Date.now()) {
-  const refreshCutoff = nowMs - REFRESH_WINDOW_MS;
-  const rawCutoff = nowMs - RAW_RETENTION_MS;
-  const refreshDay = new Date(refreshCutoff).toISOString().slice(0, 10);
-  await env.ANALYTICS_DB.batch([
-    env.ANALYTICS_DB.prepare(
-      "DELETE FROM product_analytics_ingest_budget WHERE minute_bucket < ?",
-    ).bind(Math.floor(refreshCutoff / INGEST_BUDGET_WINDOW_MS)),
-    env.ANALYTICS_DB.prepare("DELETE FROM product_analytics_daily WHERE day >= ?").bind(refreshDay),
-    env.ANALYTICS_DB.prepare(`
-      INSERT INTO product_analytics_daily (
-        day, name, workspace_kind, platform, locale, outcome, event_count
-      )
-      SELECT
-        substr(occurred_at, 1, 10),
-        name,
-        coalesce(workspace_kind, ''),
-        platform,
-        locale,
-        coalesce(json_extract(properties_json, '$.outcome'), ''),
-        count(*)
-      FROM product_analytics_event
-      WHERE occurred_at_ms >= ?
-      GROUP BY 1, 2, 3, 4, 5, 6
-    `).bind(refreshCutoff),
-    env.ANALYTICS_DB.prepare(`
-      DELETE FROM product_analytics_event
-      WHERE event_id IN (
-        SELECT event_id FROM product_analytics_event
-        WHERE received_at_ms < ?
-        ORDER BY received_at_ms, event_id
-        LIMIT ?
-      )
-    `).bind(rawCutoff, MAX_DELETE_ROWS),
-  ]);
 }
 
 export default {
@@ -487,9 +392,4 @@ export default {
     }
     return json({ accepted: false, retryable: false }, 404);
   },
-  scheduled(_controller: unknown, env: Env, context: ExecutionContext) {
-    context.waitUntil(maintain(env));
-  },
 };
-
-export const __test = { maintain };

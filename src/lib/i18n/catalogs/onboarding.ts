@@ -5,12 +5,6 @@ export const onboardingCatalog = defineCatalog(
   {
     "onboarding.openWelcome": "Start page",
     "onboarding.cosmicScene": "Interactive space. Drag or use arrow keys to orbit; plus/minus to zoom; Space to pause; 0 to reset.",
-    "onboarding.cosmicHint": "Drag to orbit · Scroll to zoom",
-    "onboarding.cosmicZoomIn": "Zoom in",
-    "onboarding.cosmicZoomOut": "Zoom out",
-    "onboarding.cosmicReset": "Reset view",
-    "onboarding.cosmicPause": "Pause space animation",
-    "onboarding.cosmicPlay": "Play space animation",
     "onboarding.demoAgentReadPrompt":
       "Using only Demo SQLite, compare paid or shipped revenue by month and identify the highest-value customer segment. Show the SQL and keep this read-only.",
     "onboarding.demoAgentWritePrompt":
@@ -34,12 +28,6 @@ export const onboardingCatalog = defineCatalog(
   {
     "onboarding.openWelcome": "시작 화면",
     "onboarding.cosmicScene": "인터랙티브 우주. 드래그 또는 방향키로 회전, 더하기·빼기로 확대·축소, 스페이스로 정지, 0으로 시점 초기화.",
-    "onboarding.cosmicHint": "드래그로 회전 · 휠로 확대",
-    "onboarding.cosmicZoomIn": "확대",
-    "onboarding.cosmicZoomOut": "축소",
-    "onboarding.cosmicReset": "시점 초기화",
-    "onboarding.cosmicPause": "우주 움직임 정지",
-    "onboarding.cosmicPlay": "우주 움직임 재생",
     "onboarding.demoAgentReadPrompt":
       "Demo SQLite만 사용해서 paid 또는 shipped 주문의 월별 매출을 비교하고, 매출이 가장 큰 고객 segment를 찾아줘. 사용한 SQL을 보여주고 읽기 전용으로 진행해.",
     "onboarding.demoAgentWritePrompt":

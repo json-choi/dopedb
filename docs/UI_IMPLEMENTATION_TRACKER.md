@@ -15,6 +15,22 @@ runtime과 성능 수치로 수행한다.
 - `missing`: 범위에는 속하지만 아직 구현하지 않음
 - `out-of-scope`: 제품 범위 결정상 화면이나 placeholder를 만들지 않음
 
+## Desktop 제품 분석 동의
+
+- 상태: `partial` — 전역 우측 하단 동의 카드와 BigQuery 전송 경로를 구현했다.
+  `main.tsx`가 전역 배치를, `ConsentPrompt`가 선택 UI를, native consent generation이
+  전송 권한을 소유한다. 동의·거절 모두 앱 버전 변경 또는 마지막 선택 후 7일에
+  만료되어 다시 묻는다. 기존 선택 시각·버전이 없을 때도 새로 묻는다. 대기 중에는
+  수집하지 않고 기존 대기열·설치 식별자를 삭제한다. 열린 앱은 포커스 복귀와
+  최대 1분 간격으로 확인하며 수집·전송 직전에도 확인한다. Privacy 설정에서 변경할 수 있다.
+- 팝업은 두 문장 설명과 `허용`·`닫기`만 표시한다. `닫기`는 수집 거절로 저장하며,
+  상세 수집 항목과 개인정보 처리방침은 기존 Privacy 설정에서 확인한다.
+- 검증: 실제 컴포넌트·제품 CSS를 사용한 브라우저 fixture에서 한국어·영어
+  1280×800, 360×640, 320×320, 640×360, 320×240 배치에서 버튼·문구 잘림 없음,
+  설명 영역 독립 스크롤 및 고정 선택 버튼, 저장 실패, 선택 후 닫힘, 선택 유효 기간 내 재표시 방지,
+  비활성 빌드 숨김을 확인했다. native 정책·wire contract와 전송 실패 테스트를
+  통과했다. 공식 packaged 앱 전체 화면의 검수와 새 Desktop 릴리스는 남아 있다.
+
 ## 공개 소개 사이트
 
 - 상태: `partial` — Three.js 은하 배경은 로컬 검수 후 사용자 요청에 따라
@@ -109,6 +125,8 @@ Welcome은 중앙 작업면의 padding을 제거한 우주 배경을 사용한�
 확인했다. 문서 숨김은 합성 visibility 이벤트로 추가 draw 0회를 확인한 것이며
 실제 OS 창 숨김 검수와 동일하지 않다. 새 macOS·Windows packaged 렌더링과 GPU
 메모리 실측은 남아 있다.
+이후 사용자 요청으로 하단 드래그·휠 안내와 축소·확대·초기화·정지 버튼을
+제거했다. 포인터·키보드 조작과 시스템 동작 줄이기 설정은 renderer가 계속 소유한다.
 같은 날짜의 격리된 실제 controller·Explorer·Workbench fixture에서 Welcome canvas와
 중앙 pane의 경계가 일치함을 측정했다. 마지막 Project 삭제 뒤 연결 identity를
 보존하고 최상위 level 1로 표시하며, 상단 시작 화면 command와 마지막 연결 삭제가
@@ -239,6 +257,18 @@ focus가 없어야 한다.
 
 Acceptance: public article은 query, result row, credential 없이 immutable sanitized
 HTML snapshot만 읽고 재조회 command는 인증된 Desktop에만 존재한다.
+
+### Workspace Web 사용 분석
+
+- 상태: `partial`; owner: `WebAnalyticsProvider`, `lib/web-analytics.ts`,
+  `lib/clarity-plugin.ts`.
+- 공통 플러그인 수명주기, enum 이벤트 계약, 명시적 브라우저 동의·철회,
+  DNT/GPC 우선, 전체 본문 마스킹, query/hash 없는 설정 경로 제한을 구현한다.
+- 공개 프로젝트 ID를 운영 빌드에 연결하고 운영 도메인의 버전·ID·CSP·본문
+  마스킹 속성 반영을 확인했다. 동의한 실제 세션의 수집·녹화 마스킹 검증은 남아 있다.
+  BigQuery는 확장 계약만 제공하며 전송 경로나 클라우드 리소스를 만들지 않는다.
+- 실제 컴포넌트의 격리된 브라우저 fixture에서 동의 전 SDK 미로드, 허용 후
+  광고 거부·분석 허용 신호와 enum 이벤트, 철회 후 SDK 미로드를 확인했다.
 
 ## 트래커 갱신 규칙
 

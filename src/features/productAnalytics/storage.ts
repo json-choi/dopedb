@@ -470,7 +470,7 @@ export class ProductAnalyticsLocalStore {
       // The relay already accepted these IDs. Remove them from this process so
       // a failed WebView persistence write cannot create a hot resend loop.
       // A later process may replay the stale disk copy, which remains safe
-      // because analytics D1 uses the stable event ID as its primary key.
+      // because the canonical BigQuery view deduplicates the stable event ID.
       this.queue = next;
       this.publish();
       return false;

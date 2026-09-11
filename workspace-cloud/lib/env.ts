@@ -2,7 +2,6 @@
 // without production secrets; request handlers fail closed when configuration is absent.
 import "server-only";
 
-const PRODUCT_ANALYTICS_WORKER_HOST = /^dopedb-product-analytics\.[a-z0-9-]+\.workers\.dev$/;
 const WORKSPACE_SCHEDULER_WORKER_HOST = /^dopedb-workspace-scheduler\.[a-z0-9-]+\.workers\.dev$/;
 
 function required(name: string): string {
@@ -90,15 +89,6 @@ function githubKnowledgePrivateKey(): string | null {
   return key;
 }
 
-function productAnalyticsCloudflareToken(): string | null {
-  const value = optional("PRODUCT_ANALYTICS_CLOUDFLARE_TOKEN");
-  if (!value) return null;
-  if (!/^[0-9a-f]{64}$/.test(value)) {
-    throw new Error("PRODUCT_ANALYTICS_CLOUDFLARE_TOKEN is invalid");
-  }
-  return value;
-}
-
 function productAnalyticsRelayEnabled(): boolean {
   const value = optional("PRODUCT_ANALYTICS_RELAY_ENABLED");
   if (value === null || value === "0") return false;
@@ -106,28 +96,6 @@ function productAnalyticsRelayEnabled(): boolean {
   throw new Error("PRODUCT_ANALYTICS_RELAY_ENABLED must be 0 or 1");
 }
 
-function productAnalyticsCloudflareUrl(): string | null {
-  const value = optional("PRODUCT_ANALYTICS_CLOUDFLARE_URL");
-  if (!value) return null;
-  let url: URL;
-  try {
-    url = new URL(value);
-  } catch {
-    throw new Error("PRODUCT_ANALYTICS_CLOUDFLARE_URL is invalid");
-  }
-  if (
-    url.protocol !== "https:"
-    || !PRODUCT_ANALYTICS_WORKER_HOST.test(url.hostname)
-    || url.username
-    || url.password
-    || url.pathname !== "/v1/events"
-    || url.search
-    || url.hash
-  ) {
-    throw new Error("PRODUCT_ANALYTICS_CLOUDFLARE_URL must be the approved analytics Worker endpoint");
-  }
-  return url.toString();
-}
 
 function workspaceBackgroundSchedulerEnabled(): boolean {
   const value = optional("WORKSPACE_BACKGROUND_SCHEDULER_ENABLED");
@@ -184,8 +152,6 @@ export const env = {
   githubKnowledgeWebhookSecret: () => optional("GITHUB_KNOWLEDGE_WEBHOOK_SECRET"),
   planetScaleClientId: () => optional("PLANETSCALE_CLIENT_ID"),
   planetScaleClientSecret: () => optional("PLANETSCALE_CLIENT_SECRET"),
-  productAnalyticsCloudflareToken,
-  productAnalyticsCloudflareUrl,
   productAnalyticsRelayEnabled,
   resendApiKey: () => optional("RESEND_API_KEY"),
   vaultBrokerOrigins,

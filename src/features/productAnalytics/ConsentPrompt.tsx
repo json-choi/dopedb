@@ -1,3 +1,4 @@
+// Global consent card with a short explanation and always-visible choices.
 import { useState } from "react";
 
 import { Button } from "../../design-system/components/Button";
@@ -7,7 +8,6 @@ import {
   grantProductAnalyticsConsent,
   useProductAnalyticsSnapshot,
 } from "./client";
-import { openProductAnalyticsPrivacyPolicy } from "./privacyPolicy";
 
 export function ProductAnalyticsConsentPrompt() {
   const { t } = useI18n();
@@ -35,53 +35,29 @@ export function ProductAnalyticsConsentPrompt() {
   return (
     <section
       aria-labelledby="product-analytics-consent-title"
-      className="tw:mb-4 tw:grid tw:gap-2 tw:border-b tw:border-border-subtle tw:pb-4"
+      className="tw:fixed tw:right-4 tw:bottom-12 tw:z-40 tw:grid tw:grid-rows-[auto_minmax(0,1fr)_auto] tw:max-h-[calc(100dvh-80px)] tw:w-[min(360px,calc(100vw-32px))] tw:gap-3 tw:overflow-hidden tw:rounded-lg tw:border tw:border-border-subtle tw:bg-popover tw:p-4 tw:shadow-popover"
     >
       <h2 id="product-analytics-consent-title" className="tw:m-0 tw:text-base">
         {t("productAnalytics.onboardingTitle")}
       </h2>
-      <p className="tw:m-0 tw:text-sm tw:leading-body tw:text-muted-foreground">
-        {t("productAnalytics.onboardingBody")}
-      </p>
-      <p className="tw:m-0 tw:text-xs tw:leading-body tw:text-muted-foreground">
-        {t("productAnalytics.description")}
-      </p>
-      <p className="tw:m-0 tw:text-xs tw:leading-body tw:text-muted-foreground">
-        {t("productAnalytics.identityDescription")}
-      </p>
-      <p className="tw:m-0 tw:text-xs tw:leading-body tw:text-muted-foreground">
-        {t("productAnalytics.retentionDescription")}
-      </p>
+      <div className="tw:grid tw:min-h-0 tw:gap-3 tw:overflow-y-auto tw:overscroll-contain">
+        <p className="tw:m-0 tw:text-sm tw:leading-body tw:text-muted-foreground">
+          {t("productAnalytics.onboardingBody")}
+        </p>
+        {error ? (
+          <p role="alert" className="tw:m-0 tw:text-xs tw:text-danger">
+            {t("productAnalytics.updateFailed")}
+          </p>
+        ) : null}
+      </div>
       <div className="tw:grid tw:grid-cols-2 tw:gap-2">
-        <Button
-          size="compact"
-          disabled={busy}
-          onClick={() => void choose(true)}
-        >
-          {t("productAnalytics.accept")}
-        </Button>
-        <Button
-          size="compact"
-          disabled={busy}
-          onClick={() => void choose(false)}
-        >
+        <Button size="compact" disabled={busy} onClick={() => void choose(false)}>
           {t("productAnalytics.decline")}
         </Button>
-      </div>
-      <div className="tw:flex tw:justify-start">
-        <Button
-          size="compact"
-          variant="ghost"
-          onClick={() => void openProductAnalyticsPrivacyPolicy()}
-        >
-          {t("productAnalytics.privacyPolicy")}
+        <Button size="compact" disabled={busy} onClick={() => void choose(true)}>
+          {t("productAnalytics.accept")}
         </Button>
       </div>
-      {error ? (
-        <p role="alert" className="tw:m-0 tw:text-xs tw:text-danger">
-          {t("productAnalytics.updateFailed")}
-        </p>
-      ) : null}
     </section>
   );
 }

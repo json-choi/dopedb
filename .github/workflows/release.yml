@@ -285,6 +285,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          DOPEDB_PRODUCT_ANALYTICS_ENABLED: "1"
           DOPEDB_SENTRY_UPLOAD_SOURCE_MAPS: ${{ matrix.sentry_sourcemaps }}
           SENTRY_AUTH_TOKEN: ${{ matrix.sentry_sourcemaps == '1' && secrets.SENTRY_AUTH_TOKEN || '' }}
         with:

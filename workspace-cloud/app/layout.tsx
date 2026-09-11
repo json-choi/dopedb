@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Mono } from "next/font/google";
 import { WorkspaceLocaleProvider } from "./components/WorkspaceLocale";
+import { WorkspaceWebAnalytics } from "./components/WebAnalyticsProvider";
 import { getWorkspaceLocale } from "../lib/workspace-locale-server";
 import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 import "./globals.css";
@@ -42,7 +43,7 @@ export default async function RootLayout({
   const locale = await getWorkspaceLocale();
   return (
     <html className={monoFont.variable} lang={locale}>
-      <body className="tw:min-h-[100dvh] tw:bg-background tw:text-foreground">
+      <body data-clarity-mask="true" className="tw:min-h-[100dvh] tw:bg-background tw:text-foreground">
         <a
           className="tw:fixed tw:top-3 tw:left-3 tw:z-50 tw:-translate-y-24 tw:rounded-control tw:bg-signal tw:px-4 tw:py-2.5 tw:text-xs tw:font-semibold tw:text-chrome tw:focus:translate-y-0"
           href="#main-content"
@@ -54,7 +55,9 @@ export default async function RootLayout({
           aria-hidden="true"
         />
         <WorkspaceLocaleProvider locale={locale}>
-          {children}
+          <WorkspaceWebAnalytics projectId={process.env.NEXT_PUBLIC_CLARITY_PROJECT_ID ?? ""}>
+            {children}
+          </WorkspaceWebAnalytics>
         </WorkspaceLocaleProvider>
       </body>
     </html>

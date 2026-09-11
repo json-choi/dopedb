@@ -1098,9 +1098,9 @@ describe("Desktop control-plane contracts", () => {
       workspaceKind: "personal",
     }), analyticsNow)).toBeNull();
     expect(acceptsProductAnalyticsContract(new Headers({
-      "x-dopedb-product-analytics-contract": "1",
+      "x-dopedb-product-analytics-contract": "2",
     }))).toBe(true);
-    for (const value of [undefined, "01", "2", "1, 1"]) {
+    for (const value of [undefined, "01", "1", "1, 1"]) {
       const headers = new Headers();
       if (value !== undefined) headers.set("x-dopedb-product-analytics-contract", value);
       expect(acceptsProductAnalyticsContract(headers), value).toBe(false);
@@ -1158,30 +1158,25 @@ describe("Desktop control-plane contracts", () => {
       analyticsNow,
     );
     expect(relayEnvelope).not.toBeNull();
-    const previousToken = process.env.PRODUCT_ANALYTICS_CLOUDFLARE_TOKEN;
-    const previousUrl = process.env.PRODUCT_ANALYTICS_CLOUDFLARE_URL;
     const previousRelayEnabled = process.env.PRODUCT_ANALYTICS_RELAY_ENABLED;
     process.env.PRODUCT_ANALYTICS_RELAY_ENABLED = "1";
-    process.env.PRODUCT_ANALYTICS_CLOUDFLARE_TOKEN = "a".repeat(64);
-    process.env.PRODUCT_ANALYTICS_CLOUDFLARE_URL =
-      "https://dopedb-product-analytics.test.workers.dev/v1/events";
+    const binding = await import("./product-analytics-binding");
     let relayTarget = "";
     let relayBody: unknown;
     let relayHeaders = new Headers();
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
-      relayTarget = String(input);
-      relayHeaders = new Headers(init?.headers);
-      if (typeof init?.body !== "string") throw new Error("Expected a JSON relay body");
-      relayBody = JSON.parse(init.body) as unknown;
+    const fetchMock = vi.spyOn(binding, "productAnalyticsBindingFetch").mockImplementation(async (request) => {
+      relayTarget = request.url;
+      relayHeaders = request.headers;
+      relayBody = await request.json();
       return new Response(null, { status: 202 });
     });
     try {
       expect(await relayProductAnalytics(relayEnvelope!)).toBe("accepted");
       expect(relayTarget).toBe(
-        "https://dopedb-product-analytics.test.workers.dev/v1/events",
+        "https://analytics.internal/v1/events",
       );
-      expect(relayHeaders.get("authorization")).toBe(`Bearer ${"a".repeat(64)}`);
-      expect(relayHeaders.get("x-dopedb-product-analytics-contract")).toBe("1");
+      expect(relayHeaders.has("authorization")).toBe(false);
+      expect(relayHeaders.get("x-dopedb-product-analytics-contract")).toBe("2");
       expect(relayBody).toEqual(relayEnvelope);
       expect(JSON.stringify(relayBody)).not.toContain("consentGeneration");
 
@@ -1216,7 +1211,7 @@ describe("Desktop control-plane contracts", () => {
             method: "POST",
             headers: {
               "content-type": "application/json",
-              "x-dopedb-product-analytics-contract": "1",
+              "x-dopedb-product-analytics-contract": "2",
             },
             body: JSON.stringify(currentEnvelope),
           },
@@ -1233,10 +1228,6 @@ describe("Desktop control-plane contracts", () => {
       }
     } finally {
       fetchMock.mockRestore();
-      if (previousToken === undefined) delete process.env.PRODUCT_ANALYTICS_CLOUDFLARE_TOKEN;
-      else process.env.PRODUCT_ANALYTICS_CLOUDFLARE_TOKEN = previousToken;
-      if (previousUrl === undefined) delete process.env.PRODUCT_ANALYTICS_CLOUDFLARE_URL;
-      else process.env.PRODUCT_ANALYTICS_CLOUDFLARE_URL = previousUrl;
       if (previousRelayEnabled === undefined) delete process.env.PRODUCT_ANALYTICS_RELAY_ENABLED;
       else process.env.PRODUCT_ANALYTICS_RELAY_ENABLED = previousRelayEnabled;
     }

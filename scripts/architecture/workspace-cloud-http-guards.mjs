@@ -195,11 +195,6 @@ export function collectWorkspaceCloudHttpDiagnostics({ lineCount, read, relative
 
   const analyticsRouteSource = read(productAnalyticsRoute);
   const analyticsServiceSource = read(productAnalyticsService);
-  const analyticsAuthorizationSource = [
-    "authorization: `Bearer ",
-    "$",
-    "{token}`",
-  ].join("");
   for (const token of [
     "const MAX_BODY_BYTES = 32 * 1_024",
     "boundedJsonBody(request, MAX_BODY_BYTES)",
@@ -242,11 +237,8 @@ export function collectWorkspaceCloudHttpDiagnostics({ lineCount, read, relative
     "productAnalyticsEnvelopeBudgetPlan(installationId, eventCount)",
     "for (const budget of budgets)",
     "if (!await consumeRateLimit(budget)) return false",
-    "env.productAnalyticsCloudflareToken()",
-    "env.productAnalyticsCloudflareUrl()",
-    analyticsAuthorizationSource,
+    "productAnalyticsBindingFetch(new Request(\"https://analytics.internal/v1/events\"",
     "body: JSON.stringify(envelope)",
-    "redirect: \"error\"",
     "AbortSignal.timeout(CLOUDFLARE_TIMEOUT_MS)",
   ]) {
     if (!analyticsServiceSource.includes(token)) {
@@ -262,15 +254,17 @@ export function collectWorkspaceCloudHttpDiagnostics({ lineCount, read, relative
     diagnostics.push("workspace-cloud/package.json: product analytics must not add a vendor SDK");
   }
   const environmentSource = read("workspace-cloud/lib/env.ts");
-  const forbiddenDirectAnalyticsHosts = [
-    ["eu", "i", "posthog", "com"].join("."),
-    ["us", "i", "posthog", "com"].join("."),
-  ];
-  if (
-    !environmentSource.includes("PRODUCT_ANALYTICS_WORKER_HOST")
-    || forbiddenDirectAnalyticsHosts.some((host) => environmentSource.includes(host))
-  ) {
-    diagnostics.push("workspace-cloud/lib/env.ts: product analytics must use only the dedicated Cloudflare Worker");
+  const sinkConfiguration = JSON.parse(read("product-analytics-cloudflare/wrangler.jsonc"));
+  const workspaceConfiguration = JSON.parse(read("workspace-cloud/wrangler.jsonc"));
+  const bindingSource = read("workspace-cloud/lib/product-analytics-binding.ts");
+  if (sinkConfiguration.workers_dev !== false || sinkConfiguration.preview_urls !== false
+    || sinkConfiguration.routes?.length || sinkConfiguration.d1_databases?.length
+    || !workspaceConfiguration.services?.some((binding) =>
+      binding.binding === "PRODUCT_ANALYTICS" && binding.service === sinkConfiguration.name)
+    || workspaceConfiguration.account_id !== sinkConfiguration.account_id
+    || !bindingSource.includes("getCloudflareContext().env.PRODUCT_ANALYTICS.fetch(")
+    || /\bfetch\(/.test(analyticsServiceSource)) {
+    diagnostics.push("product analytics must use only its private service binding and no raw D1 storage");
   }
 
   const sourceBrowseRouteSource = read(knowledgeSourceBrowseRoute);

@@ -108,7 +108,7 @@ pub async fn submit_product_analytics_batch(
     );
     let response = hosted_control_plane::client()?
         .post(endpoint)
-        .header("x-dopedb-product-analytics-contract", "1")
+        .header("x-dopedb-product-analytics-contract", "2")
         .json(&batch)
         .send()
         .await

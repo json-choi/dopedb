@@ -3,7 +3,6 @@
 import { Icon, type IconName } from "../../components/Icon";
 import { useI18n } from "../../lib/i18n";
 import { Button } from "../../design-system/components/Button";
-import { ProductAnalyticsConsentPrompt } from "../../features/productAnalytics/ConsentPrompt";
 import CosmicBackdrop from "../../features/cosmicScene/CosmicBackdrop";
 
 type WelcomeCommand = {
@@ -99,7 +98,6 @@ export default function Onboarding({
       <div className="tw:pointer-events-none tw:relative tw:z-10 tw:flex tw:min-h-0 tw:flex-1 tw:items-end tw:justify-center tw:overflow-auto tw:p-5 tw:pb-16">
         <main className="tw:pointer-events-auto tw:w-full tw:max-w-[320px] tw:cursor-default">
           <h1 className="tw:sr-only">{t("onboarding.title")}</h1>
-          <ProductAnalyticsConsentPrompt />
           {!connected || guidedDemo ? (
             <p className="tw:mt-0 tw:mb-3 tw:text-center tw:text-sm tw:leading-body tw:text-muted-foreground">
               {t(

@@ -7,9 +7,7 @@
   "scripts": {
     "build": "tsc --noEmit",
     "test": "vitest run --config vitest.config.ts",
-    "deploy": "wrangler deploy",
-    "db:migrate:local": "wrangler d1 migrations apply dopedb-product-analytics --local",
-    "db:migrate:remote": "wrangler d1 migrations apply dopedb-product-analytics --remote"
+    "deploy": "wrangler deploy"
   },
   "devDependencies": {
     "@types/node": "26.4.1",
