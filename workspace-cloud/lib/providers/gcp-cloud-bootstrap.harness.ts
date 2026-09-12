@@ -165,6 +165,7 @@ async function assertExistingAccessIsNeverRewritten() {
   };
   const before = JSON.stringify(existing);
   const mutations: string[] = [];
+  let detailOverride: Record<string, unknown> | null = null;
   const transport = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
     const url = new URL(String(input));
     if (url.pathname.endsWith(":getIamPolicy")) {
@@ -173,7 +174,11 @@ async function assertExistingAccessIsNeverRewritten() {
       ] });
     }
     if (url.pathname.endsWith("/users") && !init?.method) {
-      return Response.json({ items: existing ? [existing] : [] });
+      return Response.json({ items: existing ? [{ name: existing.name, type: existing.type }] : [] });
+    }
+    if (url.pathname.includes("/users/") && !init?.method) {
+      expect(decodeURIComponent(url.pathname.split("/users/")[1])).toBe(email.replace(".gserviceaccount.com", ""));
+      return Response.json(detailOverride ?? existing);
     }
     if (url.pathname.endsWith("/users") && init?.method === "POST") {
       mutations.push("create");
@@ -195,8 +200,20 @@ async function assertExistingAccessIsNeverRewritten() {
 
   // Fresh accounts receive data-only roles at creation, never via users.update.
   existing = null;
-  await ensureDatabaseUser(setup, "dopedb-fixture", "workspace-db", email, "postgres", roles);
+  const verified = await ensureDatabaseUser(setup, "dopedb-fixture", "workspace-db", email, "postgres", roles);
   expect(mutations).toEqual(["create"]);
+  for (const invalid of [
+    { ...verified, databaseRoles: undefined },
+    { ...verified, databaseRoles: [] },
+    { ...verified, name: "another-user" },
+    { ...verified, type: "BUILT_IN" },
+  ]) {
+    detailOverride = invalid;
+    await expect(ensureDatabaseUser(setup, "dopedb-fixture", "workspace-db", email, "postgres", roles))
+      .rejects.toMatchObject({ status: 409 });
+    expect(mutations).toEqual(["create"]);
+  }
+  detailOverride = null;
   expect(existing).toMatchObject({ databaseRoles: ["pg_read_all_data"] });
   await ensureDatabaseUser(setup, "dopedb-fixture", "workspace-db", email, "postgres", roles);
   expect(mutations).toEqual(["create"]);
@@ -291,7 +308,12 @@ async function assertConnectionPreservesExistingPrincipals() {
       users.push(body); writes.push("create-db-user");
       return Response.json({ name: "fixture-operation", status: "DONE" });
     }
-    if (path.endsWith("/users") && method === "GET") return Response.json({ items: users });
+    if (path.endsWith("/users") && method === "GET") return Response.json({
+      items: users.map(user => ({ name: user.name, type: user.type })),
+    });
+    if (path.includes("/users/") && method === "GET") {
+      return Response.json(users.find(user => user.name === path.split("/users/")[1]));
+    }
     if (path.endsWith("/databases")) return Response.json({ items: [{ name: "workspace" }] });
     if (path.endsWith("/instances")) return Response.json({ items: [instance] });
     if (path.endsWith("/instances/workspace-db")) return Response.json(instance);

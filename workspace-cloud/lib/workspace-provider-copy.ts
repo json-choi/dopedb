@@ -1,6 +1,10 @@
 import type { WorkspaceLocale } from "./workspace-locale";
 
 const koreanByEnglish: Readonly<Record<string, string>> = {
+  "The dedicated Cloud SQL data account does not have the expected roles. Existing roles were preserved; an administrator must review this account separately.":
+    "DopeDB 전용 Cloud SQL 계정의 역할이 필요한 권한과 일치하지 않습니다. 기존 권한은 변경하지 않았습니다. 관리자가 해당 계정을 확인해 주세요.",
+  "Cloud SQL returned a different database user. Existing access was preserved.":
+    "Cloud SQL이 요청과 다른 DB 사용자 정보를 반환했습니다. 기존 접근 권한은 변경하지 않았습니다.",
   "The setup account database role already exists outside Cloud SQL user management. A database administrator must resolve the conflicting role before reconnecting.":
     "Cloud SQL 사용자 목록에 없는 기존 DB 역할이 설정 계정 이름과 충돌합니다. DB 관리자가 기존 역할을 확인해 충돌을 해결한 뒤 다시 연결하세요.",
   "Google Cloud runtime access is still denied after setup. Retry shortly; if this persists, check the Workload Identity and service-account IAM policies.":

@@ -329,7 +329,7 @@ function setupRequestStage(url: string, method: string | undefined) {
     return path.includes("workloadIdentityPools") ? "setup.workloadIdentity" : "setup.serviceAccount";
   }
   if (location?.origin === "https://sqladmin.googleapis.com") {
-    if (path.endsWith("/users")) {
+    if (path.endsWith("/users") || path.includes("/users/")) {
       return method === "POST" ? "setup.sqlUser.create"
         : method === "PUT" ? "setup.sqlUser.update"
         : method === "DELETE" ? "setup.sqlUser.delete" : "setup.sqlUser.read";

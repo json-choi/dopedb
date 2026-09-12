@@ -207,6 +207,18 @@ export async function ensureDatabaseUserOnce(
   const users = (await googleRequest(credential, `${base}/users`))!;
   const rows = Array.isArray(users.items) ? users.items : [];
   const databaseUsername = gcpDatabaseUsername(email, engine);
+  const verifiedUser = async () => {
+    // users.list omits role memberships; users.get is authoritative for roles.
+    const user = (await googleRequest(credential,
+      `${base}/users/${encodeURIComponent(databaseUsername)}`))!;
+    const name = typeof user.name === "string" ? user.name.toLowerCase() : "";
+    if (name !== databaseUsername.toLowerCase() && name !== email.toLowerCase()) {
+      throw new ProviderRequestError("gcpCloudSql",
+        "Cloud SQL returned a different database user. Existing access was preserved.", 409);
+    }
+    assertDatabaseUserRoles(user, databaseRoles);
+    return user;
+  };
   const existing = rows.find((value) => {
     if (!value || typeof value !== "object" || Array.isArray(value)) return false;
     const row = value as JsonObject;
@@ -225,8 +237,7 @@ export async function ensureDatabaseUserOnce(
         409,
       );
     }
-    assertDatabaseUserRoles(existing as JsonObject, databaseRoles);
-    return existing as JsonObject;
+    return verifiedUser();
   }
   const operation = (await googleRequest(
     credential,
@@ -241,27 +252,7 @@ export async function ensureDatabaseUserOnce(
     },
   ))!;
   await waitSqlOperation(credential, projectId, operation);
-  const refreshed = (await googleRequest(credential, `${base}/users`))!;
-  const created = (Array.isArray(refreshed.items) ? refreshed.items : []).find((value) => {
-    if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-    const row = value as JsonObject;
-    return row.type === "CLOUD_IAM_SERVICE_ACCOUNT"
-      && typeof row.name === "string"
-      && (
-        row.name.toLowerCase() === email.toLowerCase()
-        || row.name.toLowerCase() === databaseUsername.toLowerCase()
-        || `${row.name}.gserviceaccount.com`.toLowerCase() === email.toLowerCase()
-      );
-  });
-  if (!created) {
-    throw new ProviderRequestError(
-      "gcpCloudSql",
-      "Cloud SQL did not create the IAM database user",
-      502,
-    );
-  }
-  assertDatabaseUserRoles(created as JsonObject, databaseRoles);
-  return created as JsonObject;
+  return verifiedUser();
 }
 
 export function cloudSqlIdentityPropagationPending(error: unknown) {
