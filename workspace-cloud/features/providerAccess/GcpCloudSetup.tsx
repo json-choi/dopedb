@@ -126,7 +126,7 @@ export function GcpCloudSetup({
     : gcpSetupError || error;
 
   return (
-    <section className="tw:grid tw:gap-4 tw:border-y tw:border-border tw:bg-surface-inset tw:p-4">
+    <section className="tw:grid tw:gap-5">
       <header className="tw:flex tw:items-start tw:justify-between tw:gap-3">
         <div className="tw:grid tw:gap-1">
           <strong className="tw:text-sm tw:text-foreground">
@@ -160,24 +160,24 @@ export function GcpCloudSetup({
         </span>
       </header>
 
-      <ol className="tw:m-0 tw:grid tw:list-none tw:grid-cols-3 tw:border-y tw:border-border tw:p-0">
+      <ol className="tw:m-0 tw:grid tw:list-none tw:grid-cols-3 tw:border-y tw:border-border tw:p-0" aria-label={copy.title}>
         <li className="tw:grid tw:gap-1 tw:border-r tw:border-border tw:px-3 tw:py-2.5">
-          <span className="tw:font-mono tw:text-2xs tw:text-success">01 · {copy.complete}</span>
+          <span className="tw:text-2xs tw:text-muted-foreground">{gcpSetupInventory && !gcpSetupReconnectRequired ? copy.complete : copy.checking}</span>
           <strong className="tw:text-xs tw:font-medium tw:text-foreground">
             {copy.authorizeAccount}
           </strong>
         </li>
-        <li className="tw:grid tw:gap-1 tw:border-r tw:border-border tw:bg-selection tw:px-3 tw:py-2.5">
+        <li className="tw:grid tw:gap-1 tw:border-r tw:border-border tw:px-3 tw:py-2.5 tw:aria-[current=step]:bg-selection" aria-current={!configuring ? "step" : undefined}>
           <span className="tw:font-mono tw:text-2xs tw:text-selection-foreground">
-            02 · {copy.currentStep}
+            {configuring ? copy.complete : copy.currentStep}
           </span>
           <strong className="tw:text-xs tw:font-medium tw:text-selection-foreground">
             {copy.chooseTarget}
           </strong>
         </li>
-        <li className="tw:grid tw:gap-1 tw:px-3 tw:py-2.5">
+        <li className="tw:grid tw:gap-1 tw:px-3 tw:py-2.5 tw:aria-[current=step]:bg-selection" aria-current={configuring ? "step" : undefined}>
           <span className="tw:font-mono tw:text-2xs tw:text-muted-foreground">
-            03 · {copy.waiting}
+            {configuring ? copy.currentStep : copy.waiting}
           </span>
           <strong className="tw:text-xs tw:font-medium tw:text-muted-foreground">
             {recovering ? copy.repairAfterApproval : copy.configureAfterApproval}

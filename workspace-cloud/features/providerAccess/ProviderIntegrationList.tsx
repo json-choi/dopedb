@@ -2,6 +2,7 @@
 
 // Provider integration list owns setup and removal controls for cloud accounts
 // and allowlisted dynamic-credential brokers; its controller owns their state.
+import { useState } from "react";
 
 import {
   ControlButton,
@@ -40,92 +41,12 @@ export function ProviderIntegrationList({
     setVaultConfiguration,
   } = controller;
   const configuredProviders = providers.filter((provider) => provider.configured);
+  const [selectedProviderId, setSelectedProviderId] = useState("");
+  const selectedProvider = configuredProviders.find((provider) =>
+    provider.id === (setupProvider?.id ?? selectedProviderId)) ?? configuredProviders[0];
   return (
     <div className="tw:grid tw:content-start tw:gap-7">
-      <section className="tw:grid tw:gap-2">
-        <div className="tw:grid tw:gap-1">
-          <strong className="tw:text-xs tw:text-foreground">
-            {copy.connectedTitle}
-          </strong>
-          <small className="tw:text-2xs tw:leading-body tw:text-muted-foreground">
-            {copy.connectedDescription}
-          </small>
-        </div>
-        <div className="tw:grid tw:border-t tw:border-border">
-          {integrations.map((integration) => {
-            const provider = providers.find(
-              (item) => item.id === integration.provider,
-            );
-            const databaseCount = managedConnections.filter(
-              (item) => item.integrationId === integration.id,
-            ).length;
-            return (
-              <article
-                className="tw:grid tw:min-h-[72px] tw:grid-cols-[minmax(0,1fr)_auto] tw:items-center tw:gap-4 tw:border-b tw:border-border tw:py-3 tw:max-[640px]:grid-cols-1"
-                key={integration.id}
-              >
-                <div className="tw:grid tw:min-w-0 tw:gap-1">
-                  <span className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
-                    <strong className="tw:text-sm tw:text-foreground">
-                      {localizedIntegrationDisplayName(
-                        integration.displayName,
-                        locale,
-                      )}
-                    </strong>
-                    <span
-                      className="tw:font-mono tw:text-2xs tw:uppercase tw:data-[status=active]:text-success tw:data-[status=reconnect_required]:text-danger"
-                      data-status={integration.status}
-                    >
-                      {integration.status === "active"
-                        ? copy.active
-                        : common.reconnectRequired}
-                    </span>
-                  </span>
-                  <small className="tw:text-2xs tw:leading-body tw:text-muted-foreground">
-                    {managedConnectionsLoaded
-                      ? locale === "ko"
-                        ? `${copy.databases} ${databaseCount}${common.countSuffix}`
-                        : `${databaseCount} ${copy.databases}`
-                      : copy.databasesUnavailable}
-                    {" · "}{copy.lastChecked}{" "}
-                    {new Date(integration.updatedAt).toLocaleString(
-                      locale === "ko" ? "ko-KR" : "en-US",
-                    )}
-                  </small>
-                  {integration.provider === "neon"
-                    && integration.grantedScope?.includes(":personal:broad:") ? (
-                      <small className="tw:text-2xs tw:leading-body tw:text-danger">
-                        {copy.broadKeyWarning}
-                      </small>
-                    ) : null}
-                </div>
-                <div className="tw:flex tw:flex-wrap tw:justify-end tw:gap-2 tw:max-[640px]:justify-start">
-                  {provider ? (
-                    <ControlButton
-                      disabled={!provider.configured || mutation !== ""}
-                      onClick={() => beginReconnect(integration)}
-                    >
-                      {copy.reconnect}
-                    </ControlButton>
-                  ) : null}
-                  <ControlButton
-                    tone="danger"
-                    disabled={mutation !== ""}
-                    onClick={() => void disconnect(integration)}
-                  >
-                    {copy.disconnect}
-                  </ControlButton>
-                </div>
-              </article>
-            );
-          })}
-          {integrations.length === 0 ? (
-            <p className="tw:m-0 tw:border-b tw:border-border tw:py-6 tw:text-2xs tw:text-muted-foreground">
-              {copy.empty}
-            </p>
-          ) : null}
-        </div>
-      </section>
+
 
       <section className="tw:grid tw:gap-2">
         <div className="tw:grid tw:gap-1">
@@ -136,19 +57,34 @@ export function ProviderIntegrationList({
             {copy.connectDescription}
           </small>
         </div>
-        <div className="tw:grid tw:border-t tw:border-border">
+        <div className="tw:grid tw:grid-cols-[200px_minmax(0,1fr)] tw:gap-6 tw:pt-4 tw:max-[640px]:grid-cols-1">
+          <div className="tw:flex tw:flex-col tw:items-stretch tw:gap-2" role="group" aria-label={copy.connectTitle}>
+            {configuredProviders.map((provider) => (
+              <ControlButton key={provider.id} aria-pressed={selectedProvider?.id === provider.id}
+                disabled={mutation !== ""}
+                onClick={() => {
+                  if (provider.id === selectedProvider?.id) return;
+                  if (setupProvider) beginConnect(setupProvider);
+                  setSelectedProviderId(provider.id);
+                }}>
+                {provider.name}
+              </ControlButton>
+            ))}
+          </div>
+          <div className="tw:min-w-0">
           {configuredProviders.map((provider) => {
+            if (provider.id !== selectedProvider?.id) return null;
             const connectedCount = integrations.filter(
               (item) => item.provider === provider.id,
             ).length;
             return (
               <div
-                className="tw:grid tw:min-h-[78px] tw:grid-cols-[minmax(0,1fr)_auto] tw:items-center tw:gap-4 tw:border-b tw:border-border tw:py-3 tw:max-[640px]:grid-cols-1"
+                className="tw:grid tw:content-start tw:gap-5"
                 key={provider.id}
               >
                 <div className="tw:grid tw:gap-1">
                   <span className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
-                    <strong className="tw:text-sm tw:text-foreground">
+                    <strong className="tw:text-xl tw:font-semibold tw:text-foreground">
                       {provider.name}
                     </strong>
                     {provider.supportedEngines.map((engine) => (
@@ -164,7 +100,7 @@ export function ProviderIntegrationList({
                     {copy.notes[provider.id as keyof typeof copy.notes] ?? provider.note}
                   </small>
                 </div>
-                <div className="tw:flex tw:items-center tw:justify-end tw:gap-2 tw:max-[640px]:justify-start">
+                <div className="tw:flex tw:items-center tw:gap-2">
                   {connectedCount > 0 ? (
                     <span className="tw:font-mono tw:text-2xs tw:uppercase tw:text-primary">
                       {locale === "ko"
@@ -172,14 +108,16 @@ export function ProviderIntegrationList({
                         : `${connectedCount} ${copy.connected}`}
                     </span>
                   ) : null}
-                  <ControlButton
+                  {!setupProvider ? <ControlButton
+                    tone="primary"
+                    size="field"
                     disabled={mutation !== ""}
                     onClick={() => beginConnect(provider)}
                   >
                     {connectedCount > 0
                       ? copy.addAccount
                       : copy.connectAccount}
-                  </ControlButton>
+                  </ControlButton> : null}
                 </div>
               </div>
             );
@@ -189,6 +127,7 @@ export function ProviderIntegrationList({
               {copy.unavailable}
             </p>
           ) : null}
+          </div>
         </div>
       </section>
 
@@ -553,6 +492,87 @@ export function ProviderIntegrationList({
           </div>
         </form>
       ) : null}
+      {integrations.length > 0 ? <details className="tw:border-t tw:border-border tw:pt-4">
+        <summary className="tw:cursor-pointer tw:text-sm tw:font-semibold tw:text-foreground">
+          {copy.connectedTitle} · {integrations.length}
+        </summary>
+      <section className="tw:grid tw:gap-2 tw:pt-3">
+        <div className="tw:grid tw:border-t tw:border-border">
+          {integrations.map((integration) => {
+            const provider = providers.find(
+              (item) => item.id === integration.provider,
+            );
+            const databaseCount = managedConnections.filter(
+              (item) => item.integrationId === integration.id,
+            ).length;
+            return (
+              <article
+                className="tw:grid tw:min-h-[72px] tw:grid-cols-[minmax(0,1fr)_auto] tw:items-center tw:gap-4 tw:border-b tw:border-border tw:py-3 tw:max-[640px]:grid-cols-1"
+                key={integration.id}
+              >
+                <div className="tw:grid tw:min-w-0 tw:gap-1">
+                  <span className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
+                    <strong className="tw:text-sm tw:text-foreground">
+                      {localizedIntegrationDisplayName(
+                        integration.displayName,
+                        locale,
+                      )}
+                    </strong>
+                    <span
+                      className="tw:font-mono tw:text-2xs tw:uppercase tw:data-[status=active]:text-success tw:data-[status=reconnect_required]:text-danger"
+                      data-status={integration.status}
+                    >
+                      {integration.status === "active"
+                        ? copy.active
+                        : common.reconnectRequired}
+                    </span>
+                  </span>
+                  <small className="tw:text-2xs tw:leading-body tw:text-muted-foreground">
+                    {managedConnectionsLoaded
+                      ? locale === "ko"
+                        ? `${copy.databases} ${databaseCount}${common.countSuffix}`
+                        : `${databaseCount} ${copy.databases}`
+                      : copy.databasesUnavailable}
+                    {" · "}{copy.lastChecked}{" "}
+                    {new Date(integration.updatedAt).toLocaleString(
+                      locale === "ko" ? "ko-KR" : "en-US",
+                    )}
+                  </small>
+                  {integration.provider === "neon"
+                    && integration.grantedScope?.includes(":personal:broad:") ? (
+                      <small className="tw:text-2xs tw:leading-body tw:text-danger">
+                        {copy.broadKeyWarning}
+                      </small>
+                    ) : null}
+                </div>
+                <div className="tw:flex tw:flex-wrap tw:justify-end tw:gap-2 tw:max-[640px]:justify-start">
+                  {provider ? (
+                    <ControlButton
+                      disabled={!provider.configured || mutation !== ""}
+                      onClick={() => beginReconnect(integration)}
+                    >
+                      {copy.reconnect}
+                    </ControlButton>
+                  ) : null}
+                  <ControlButton
+                    tone="danger"
+                    disabled={mutation !== ""}
+                    onClick={() => void disconnect(integration)}
+                  >
+                    {copy.disconnect}
+                  </ControlButton>
+                </div>
+              </article>
+            );
+          })}
+          {integrations.length === 0 ? (
+            <p className="tw:m-0 tw:border-b tw:border-border tw:py-6 tw:text-2xs tw:text-muted-foreground">
+              {copy.empty}
+            </p>
+          ) : null}
+        </div>
+      </section>
+      </details> : null}
     </div>
   );
 }

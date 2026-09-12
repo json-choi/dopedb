@@ -258,6 +258,19 @@ focus가 없어야 한다.
 Acceptance: public article은 query, result row, credential 없이 immutable sanitized
 HTML snapshot만 읽고 재조회 command는 인증된 Desktop에만 존재한다.
 
+### Workspace 연결 흐름 검수 (2026-09-12)
+
+- Providers의 공급자 선택/연결 안내, 계정 관리 펼침, DB 보기 전환을 구현했다.
+  GCP OAuth 진행 표시는 실제 구성 상태를 따른다. DB 추가가 닫혀 있으면
+  resource discovery를 실행하지 않고, 계정 변경 뒤 DB inventory는 다시 읽는다.
+- 실제 컴포넌트의 로컬 fixture에서 선택 화면과 계정 관리 펼침을 확인했다.
+  가상 계정 해제→DB 보기→DB 추가→계정 연결 복귀에서 오래된 resource 조회와
+  오류가 발생하지 않는 것도 확인했다. 운영 OAuth→GCP 구성→Desktop DB 연결
+  성공은 아직 확인하지 않았다.
+- 운영 감사 기록에서 GCP 연결 해제와 만료된 미완료 setup을 확인했다.
+  브라우저 console 및 최근 3일 Worker 이벤트에는 이전 설정 실패의 상세 로그가
+  없어 GCP upstream 원인은 확정하지 않았다. 연결 해제 후 화면 오류와 구분한다.
+
 ### Workspace Web 사용 분석
 
 - 상태: `partial`; owner: `WebAnalyticsProvider`, `lib/web-analytics.ts`,

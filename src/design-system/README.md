@@ -324,6 +324,10 @@ Elevation은 세 단계만 허용한다.
   desktop 24px, 640px 이하 16px의 같은 content gutter를 사용한다. Database
   요약과 우측 action은 확장 상태에서도 첫 2열을 유지하고, 복구 안내처럼 길어지는
   보조 내용은 그 아래 전체 폭 grid row가 소유한다.
+  `ControlButton`의 `aria-pressed`는 작업·공급자 선택의 semantic selection
+  surface를 소유한다. Providers는 선택 목록과 선택한 공급자의 연결 안내를
+  2열로 배치하고 640px 이하에서는 한 열로 접는다. 계정 관리는 native details로
+  열며 별도 번호 장식·중복 계정 제목·빈 계정 목록을 쌓지 않는다.
 - `IdeTitleToolbar`, `IdeStatusBarSurface`: title/status chrome의
   고정 높이와 좌·중앙·우 slot. `contextAction` slot은 브랜드 바로 오른쪽에
   항상 보이는 왼쪽 패널 토글을 둔다. 32px 검색과 헤더의 위아래 경계를 맞추고,

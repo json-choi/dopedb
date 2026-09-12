@@ -1,8 +1,7 @@
 // Root settings navigation owns the active workspace concern. This component
 // renders only that concern's command surface and never creates nested settings.
 import { ConnectionAccessPanel } from "./ConnectionAccessPanel";
-import { CloudAccountPanel } from "./CloudAccountPanel";
-import { SharedDatabasePanel } from "./SharedDatabasePanel";
+import { ProviderWorkspacePanel } from "./CloudAccountPanel";
 import { WorkspaceAccessPanel } from "./WorkspaceAccessPanel";
 import { WorkspaceLifecyclePanel } from "./WorkspaceLifecyclePanel";
 import type { WorkspaceLocale } from "../../lib/workspace-locale";
@@ -52,14 +51,10 @@ export function WorkspaceManagementPanel({
           <ConnectionAccessPanel workspaceId={workspaceId} />
         ) : null}
         {area === "providers" ? (
-          <CloudAccountPanel
+          <ProviderWorkspacePanel
+            key={workspaceId}
             workspaceId={workspaceId}
             gcpSetupId={gcpSetupId}
-          />
-        ) : null}
-        {area === "providers" ? (
-          <SharedDatabasePanel
-            workspaceId={workspaceId}
             initialIntegrationId={initialIntegrationId}
             initialConnectionId={initialConnectionId}
           />

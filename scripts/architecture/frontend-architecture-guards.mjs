@@ -657,7 +657,7 @@ export function checkFrontendArchitecture(harness) {
     ],
     [
       sharedDatabasePanelPath,
-      "useSharedDatabaseAccess(workspaceId, initialIntegrationId)",
+      "useSharedDatabaseAccess(workspaceId, initialIntegrationId, adding)",
       ["useProviderAccountAccess", "useProviderAccess("],
     ],
   ]) {

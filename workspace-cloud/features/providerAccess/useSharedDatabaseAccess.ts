@@ -26,6 +26,7 @@ import { workspaceMessages } from "../../lib/workspace-messages";
 export function useSharedDatabaseAccess(
   workspaceId: string,
   initialIntegrationId: string | null = null,
+  discoveryEnabled = true,
 ) {
   const locale = useWorkspaceLocale();
   const copy = workspaceMessages[locale].providerAccess;
@@ -232,7 +233,7 @@ export function useSharedDatabaseAccess(
   const firstResourceLevelLabel = selectedProvider?.resourceLevels[0]?.label ?? "";
 
   useEffect(() => {
-    if (!selectedIntegrationId || !firstResourceLevelKey) {
+    if (!discoveryEnabled || !selectedIntegrationId || !firstResourceLevelKey) {
       resetResources();
       return;
     }
@@ -254,6 +255,7 @@ export function useSharedDatabaseAccess(
     return () => controller.abort();
   }, [
     discover,
+    discoveryEnabled,
     firstResourceLevelKey,
     firstResourceLevelKind,
     firstResourceLevelLabel,

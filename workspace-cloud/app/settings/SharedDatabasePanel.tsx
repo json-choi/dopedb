@@ -13,10 +13,14 @@ export function SharedDatabasePanel({
   workspaceId,
   initialIntegrationId = null,
   initialConnectionId = null,
+  onConnectAccount,
+  onBusyChange,
 }: {
   workspaceId: string;
   initialIntegrationId?: string | null;
   initialConnectionId?: string | null;
+  onConnectAccount?: () => void;
+  onBusyChange?: (busy: boolean) => void;
 }) {
   const locale = useWorkspaceLocale();
   const copy = workspaceMessages[locale].sharedDatabases;
@@ -24,8 +28,11 @@ export function SharedDatabasePanel({
     workspaceMessages.en.providerAccess.gcpSessionExpired,
     workspaceMessages.ko.providerAccess.gcpSessionExpired,
   ];
-  const controller = useSharedDatabaseAccess(workspaceId, initialIntegrationId);
   const [adding, setAdding] = useState(Boolean(initialIntegrationId));
+  const controller = useSharedDatabaseAccess(workspaceId, initialIntegrationId, adding);
+  useEffect(() => {
+    onBusyChange?.(Boolean(controller.mutation));
+  }, [controller.mutation, onBusyChange]);
   const managedByConnection = new Map(
     controller.managedConnections.map((item) => [item.connectionId, item]),
   );
@@ -72,7 +79,11 @@ export function SharedDatabasePanel({
               {copy.connectFirstDescription}
             </p>
             <div>
-              <ControlLink
+              {onConnectAccount ? (
+                <ControlButton tone="primary" onClick={onConnectAccount}>
+                  {copy.connectCloud}
+                </ControlButton>
+              ) : <ControlLink
                 href={localizedWorkspacePath(
                   `/settings?workspace=${encodeURIComponent(workspaceId)}&section=providers`,
                   locale,
@@ -80,7 +91,7 @@ export function SharedDatabasePanel({
                 data-tone="primary"
               >
                 {copy.connectCloud}
-              </ControlLink>
+              </ControlLink>}
             </div>
           </div>
         )
@@ -204,7 +215,7 @@ export function SharedDatabasePanel({
               </article>
             );
           })}
-          {controller.connections.length === 0 ? (
+          {!adding && controller.connections.length === 0 ? (
             <div className="tw:border-b tw:border-border tw:py-10 tw:text-center">
               <strong className="tw:block tw:text-xs tw:text-foreground">
                 {copy.emptyTitle}
