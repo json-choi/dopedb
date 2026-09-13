@@ -33,3 +33,8 @@ src-tauri/gen/
 # Ad-hoc packaged benchmark runs are local diagnostics, not release evidence.
 /src-tauri/benchmarks/*-diagnostic.json
 /src-tauri/benchmarks/packaged-release-local-*.json
+
+# Local agent orchestration state is per-machine; only project skills under .omc/skills are shared.
+/.omc/*
+!/.omc/skills/
+/.claude/settings.local.json
