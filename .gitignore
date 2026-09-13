@@ -34,7 +34,7 @@ src-tauri/gen/
 /src-tauri/benchmarks/*-diagnostic.json
 /src-tauri/benchmarks/packaged-release-local-*.json
 
-# Local agent orchestration state is per-machine; only project skills under .omc/skills are shared.
-/.omc/*
+# Local agent orchestration state is per-machine at any depth; only root project skills under .omc/skills are shared.
+**/.omc/*
 !/.omc/skills/
 /.claude/settings.local.json
