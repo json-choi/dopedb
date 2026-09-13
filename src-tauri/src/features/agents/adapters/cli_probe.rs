@@ -34,6 +34,14 @@ const SAFE_PROBE_ENVIRONMENT: &[&str] = &[
     "ComSpec",
 ];
 
+const NODE_MISSING_MARKERS: &[&str] = &[
+    "env: node: No such file or directory",
+    "env: 'node': No such file or directory",
+    "can't execute 'node'",
+    "node: command not found",
+    "'node' is not recognized",
+];
+
 /// Runs only public CLI status subcommands, with no credential reads or environment copies.
 #[derive(Clone, Copy, Default)]
 pub(crate) struct ProcessAgentCliProbe;
@@ -66,7 +74,7 @@ async fn detect_claude() -> AgentCliInfo {
             return probe_failed(
                 AgentProvider::Claude,
                 "Claude Code",
-                format!("Version probe failed: {error}"),
+                version_probe_error(&error),
             );
         }
     };
@@ -126,7 +134,7 @@ async fn detect_codex() -> AgentCliInfo {
             return probe_failed(
                 AgentProvider::Codex,
                 "Codex CLI",
-                format!("Version probe failed: {error}"),
+                version_probe_error(&error),
             );
         }
     };
@@ -164,6 +172,24 @@ fn probe_failed(id: AgentProvider, name: &str, error: impl Into<String>) -> Agen
         detection_error: Some(error.into()),
         note: "DopeDB found this CLI but could not complete its credential-free status probe."
             .into(),
+    }
+}
+
+/// npm-style shims start with `#!/usr/bin/env node`, so a missing runtime
+/// fails inside `env` before the CLI runs. Name that cause instead of leaving
+/// the screen with a bare exit status 127. The screen prefixes the provider
+/// name itself.
+fn version_probe_error(error: &str) -> String {
+    if NODE_MISSING_MARKERS
+        .iter()
+        .any(|marker| error.contains(marker))
+    {
+        format!(
+            "installed as a Node.js script, but no `node` runtime is on DopeDB's search \
+             path. Install Node.js or link its bin directory, then check again. ({error})"
+        )
+    } else {
+        format!("Version probe failed: {error}")
     }
 }
 
@@ -294,4 +320,18 @@ pub(super) fn assert_agent_cli_probe_contract() {
         OsStr::new("NODE_OPTIONS"),
         true
     ));
+    let missing_node = version_probe_error(
+        "command failed with status exit status: 127: env: node: No such file or directory",
+    );
+    assert!(missing_node.starts_with("installed as a Node.js script"));
+    assert!(missing_node.contains("no `node` runtime is on DopeDB's search path"));
+    assert!(missing_node.ends_with("env: node: No such file or directory)"));
+    assert!(
+        version_probe_error("env: 'node': No such file or directory")
+            .starts_with("installed as a Node.js script")
+    );
+    assert_eq!(
+        version_probe_error("command timed out after 4000 ms"),
+        "Version probe failed: command timed out after 4000 ms"
+    );
 }
