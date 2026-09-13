@@ -6,7 +6,9 @@
     "frontendFileCap": 16,
     "rustCap": 128,
     "rustFileCap": 26,
-    "rule": "A new test must replace a lower-value test. Raise a cap only after an explicit user request."
+    "rule": "A new test must replace a lower-value test. Raise a cap only after an explicit user request.",
+    "harnessRule": "The caps above count only suffix-discovered frontend tests and Rust #[test] functions. Every *.harness.* file runs under its own vitest config and is tracked in the harness section outside the 208 budget, with an exact case count and a role of entry-point or helper.",
+    "harnessOpenDecision": "Folding harness cases into frontendCap and totalCap is option 2 of issue #198 and remains an open repository-owner decision. This manifest records the current scope honestly and does not pre-empt that choice."
   },
   "frontend": {
     "src/features/queryResults/DataGridVirtual.test.ts": {
@@ -94,6 +96,134 @@
     "tools/release-updater-verify/src/main.rs": {
       "tests": 4,
       "protects": "Updater digest, signature, and asset closure integrity plus non-interactive ACP signing and draft-first immutable publication"
+    }
+  },
+  "harness": {
+    "product-analytics-cloudflare/src/index.harness.ts": {
+      "role": "entry-point",
+      "runner": "product-analytics-cloudflare/vitest.config.ts",
+      "tests": 1,
+      "protects": "Product-analytics v1 event envelope: the shared golden fixture is accepted while free-form or stale mutations are rejected at the Cloudflare Worker boundary"
+    },
+    "workspace-cloud/lib/control-plane-contracts.harness.ts": {
+      "role": "entry-point",
+      "runner": "workspace-cloud/vitest.contracts.config.ts",
+      "tests": 8,
+      "protects": "Desktop control-plane wire contracts: connection conflict decisions, the dedicated expected-revision header and its malformed-value rejection, the Vault dynamic database credential allowlist with bounded issue, synchronous revoke and queued cleanup of an unsafe lease, GitHub installation nonce and installation-id binding to an exact PKCE callback, and strict sync, lease and Analysis Article goldens decoded identically to Rust"
+    },
+    "workspace-cloud/lib/d1-storage.harness.ts": {
+      "role": "entry-point",
+      "runner": "workspace-cloud/vitest.contracts.config.ts",
+      "tests": 1,
+      "protects": "Workspace D1 safety over a Miniflare-backed database: relational guards, atomic rollback, and the shared concurrent request budget"
+    },
+    "workspace-cloud/lib/provider-import-postgres.harness.ts": {
+      "role": "entry-point",
+      "runner": "workspace-cloud/vitest.provider-harness.config.ts",
+      "tests": 1,
+      "protects": "PostgreSQL provider import end to end against an independently confirmed-isolated database: exactly-once import, exact replay, stale-authority rejection, and no credential leakage. Opt-in; the run-provider-import-postgres-harness runner refuses to start without an isolated database"
+    },
+    "workspace-scheduler-cloudflare/src/index.harness.ts": {
+      "role": "entry-point",
+      "runner": "workspace-scheduler-cloudflare/vitest.config.ts",
+      "tests": 3,
+      "protects": "Workspace scheduler wire contract: only bounded closed kicks and a closed receipt are accepted, a concurrent producer kick is preserved instead of overwritten by an idle receipt, and a redirect carrying the workspace cron capability is never followed"
+    },
+    "workspace-cloud/lib/d1-analysis-run-scenarios.harness.ts": {
+      "role": "helper",
+      "importedBy": "workspace-cloud/lib/d1-analysis-scenarios.harness.ts",
+      "tests": 0,
+      "protects": "Exports verifyD1AnalysisRuns; owns the Analysis run assertions executed inside the Analysis Article scenarios"
+    },
+    "workspace-cloud/lib/d1-analysis-scenarios.harness.ts": {
+      "role": "helper",
+      "importedBy": "workspace-cloud/lib/d1-workspace-scenarios.harness.ts",
+      "tests": 0,
+      "protects": "Exports verifyD1AnalysisArticles; owns Analysis Article create, mutate, delete and shared-create parsing assertions"
+    },
+    "workspace-cloud/lib/d1-backup-scenarios.harness.ts": {
+      "role": "helper",
+      "importedBy": "workspace-cloud/lib/d1-workspace-scenarios.harness.ts",
+      "tests": 0,
+      "protects": "Exports verifyD1Backups; owns the workspace backup record assertions"
+    },
+    "workspace-cloud/lib/d1-integration-scenarios.harness.ts": {
+      "role": "helper",
+      "importedBy": "workspace-cloud/lib/d1-workspace-scenarios.harness.ts",
+      "tests": 0,
+      "protects": "Exports verifyD1IntegrationMutations; owns the provider integration mutation assertions"
+    },
+    "workspace-cloud/lib/d1-lifecycle-scenarios.harness.ts": {
+      "role": "helper",
+      "importedBy": "workspace-cloud/lib/d1-workspace-scenarios.harness.ts",
+      "tests": 0,
+      "protects": "Exports verifyD1Retention; owns the workspace record retention and lifecycle assertions"
+    },
+    "workspace-cloud/lib/d1-managed-lease-scenarios.harness.ts": {
+      "role": "helper",
+      "importedBy": "workspace-cloud/lib/d1-workspace-scenarios.harness.ts",
+      "tests": 0,
+      "protects": "Exports verifyD1ManagedLeaseAuthority; owns the managed short-lived credential lease authority assertions"
+    },
+    "workspace-cloud/lib/d1-operation-scenarios.harness.ts": {
+      "role": "helper",
+      "importedBy": "workspace-cloud/lib/d1-workspace-scenarios.harness.ts",
+      "tests": 0,
+      "protects": "Exports verifyD1Operations; owns provider operation plan, execution claim, reconciliation and bootstrap assertions"
+    },
+    "workspace-cloud/lib/d1-permission-scenarios.harness.ts": {
+      "role": "helper",
+      "importedBy": "workspace-cloud/lib/d1-workspace-scenarios.harness.ts",
+      "tests": 0,
+      "protects": "Exports verifyD1PermissionChanges; owns the member permission change assertions"
+    },
+    "workspace-cloud/lib/d1-route-scenarios.harness.ts": {
+      "role": "helper",
+      "importedBy": "workspace-cloud/lib/d1-workspace-scenarios.harness.ts",
+      "tests": 0,
+      "protects": "Exports verifyD1WorkspaceRoutes; owns the workspace route authorization assertions"
+    },
+    "workspace-cloud/lib/d1-runner-scenarios.harness.ts": {
+      "role": "helper",
+      "importedBy": "workspace-cloud/lib/d1-analysis-scenarios.harness.ts",
+      "tests": 0,
+      "protects": "Exports verifyD1AnalysisRunners; owns the Analysis runner assignment assertions"
+    },
+    "workspace-cloud/lib/d1-switch-scenarios.harness.ts": {
+      "role": "helper",
+      "importedBy": "workspace-cloud/lib/d1-operation-scenarios.harness.ts",
+      "tests": 0,
+      "protects": "Exports verifyD1BranchSwitch; owns the provider branch switch assertions"
+    },
+    "workspace-cloud/lib/d1-versioning-scenarios.harness.ts": {
+      "role": "helper",
+      "importedBy": "workspace-cloud/lib/d1-workspace-scenarios.harness.ts",
+      "tests": 0,
+      "protects": "Exports verifyD1ConnectionVersioning; owns the connection revision and canonical hash assertions"
+    },
+    "workspace-cloud/lib/d1-workspace-scenarios.harness.ts": {
+      "role": "helper",
+      "importedBy": "workspace-cloud/lib/d1-storage.harness.ts",
+      "tests": 0,
+      "protects": "Exports verifyD1WorkspaceMutations; the root scenario aggregator that fans out to the permission, operation, lifecycle, backup, lease, integration, versioning, route and analysis helpers"
+    },
+    "workspace-cloud/lib/providers/gcp-cloud-bootstrap.harness.ts": {
+      "role": "helper",
+      "importedBy": "workspace-cloud/lib/control-plane-contracts.harness.ts",
+      "tests": 0,
+      "protects": "Exports assertGcpBootstrapReadinessContract; owns the keyless GCP bootstrap readiness assertions"
+    },
+    "workspace-cloud/lib/providers/workload-identity.harness.ts": {
+      "role": "helper",
+      "importedBy": "workspace-cloud/lib/control-plane-contracts.harness.ts",
+      "tests": 0,
+      "protects": "Exports assertWorkloadIdentityContract; owns the workload identity federation contract assertions"
+    },
+    "workspace-cloud/lib/site-analytics.harness.ts": {
+      "role": "helper",
+      "importedBy": "workspace-cloud/lib/control-plane-contracts.harness.ts",
+      "tests": 0,
+      "protects": "Exports assertSiteAnalyticsContract; owns the site analytics envelope contract assertions"
     }
   }
 }

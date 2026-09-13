@@ -29,9 +29,11 @@ database is used.
 ### Working In This Directory
 - This suite launches the actual compiled `dopedb-cli` and `dopedb-agent-bridge` binaries as subprocesses over a fake Unix-socket Broker; it does not mock `BrokerClient` in-process. Keep new scenarios consistent with that approach rather than adding a unit-style mock.
 - Unix-only: guard new platform-specific code with the same `#[cfg(unix)]` gating already used at the top of `terminal_session_e2e.rs`.
+- `terminal_session_e2e.rs` holds exactly one `#[test]` that drives every journey through a named `stage(...)` wrapper, so a panic or timeout reports which journey broke. Add a scenario as a new stage inside that test; adding a second `#[test]` breaks the 208-test budget manifest.
 
 ### Testing Requirements
 - `cargo test --package dopedb-cli --test terminal_session_e2e` — part of `pnpm test:rust`. Protects one test slot in the repository's 208-test critical budget (`tests/critical-test-budget.json`); see `../../tests/AGENTS.md`.
+- Waits are liveness bounds, never performance assertions. Every socket accept, frame read, and process-exit deadline resolves through `e2e_timeout()`, which defaults to 30 seconds and is overridden with `DOPEDB_E2E_TIMEOUT_SECS` (whole seconds; zero or unparsable falls back to the default). Raise that variable on a contended runner instead of editing a deadline, so a genuine hang still fails deterministically.
 
 ### Common Patterns
 - A scenario creates a temporary directory and `UnixListener`, spawns a thread that answers Broker requests, then runs the built binary with `Command::new(...)` pointed at that socket — see `support/schema_diff.rs`.

@@ -1,0 +1,17 @@
+# The workspace crates (src-tauri, dopedb-cli, dopedb-protocol) declare
+# `rust-version = "1.94"`. rustup's `stable` channel resolves to whatever the
+# latest release happens to be on a given machine or CI runner on a given day
+# (1.87 on this Mac, which is below the MSRV and fails `cargo check` with a
+# rust-version gate error), so `channel = "stable"` would not reliably build
+# this workspace and could regress silently on a future stable bump. Pin an
+# exact, known-good version instead so every contributor and CI job resolves
+# to the same compiler without needing `cargo +1.98.1 ...` or
+# `RUSTUP_TOOLCHAIN=1.98.1` by hand.
+#
+# `components` mirrors what CI's `cargo fmt --all -- --check` and
+# `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+# steps require, so rustup installs them automatically alongside the pinned
+# toolchain the first time `cargo`/`rustc` runs in this repo.
+[toolchain]
+channel = "1.98.1"
+components = ["rustfmt", "clippy"]

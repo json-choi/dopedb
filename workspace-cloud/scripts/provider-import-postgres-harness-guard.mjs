@@ -6,6 +6,11 @@ const workspaceCloudDirectory = dirname(dirname(fileURLToPath(import.meta.url)))
 
 export const PROVIDER_IMPORT_POSTGRES_HARNESS_SOURCE_LIMITS = Object.freeze({
   "lib/provider-import-postgres.harness.ts": 70,
+  // Boots the Miniflare D1 binding the harness needs now that the control plane
+  // writes through D1. It cannot live in lib/provider-import-postgres-harness/,
+  // because the support-file manifest below requires that directory's .ts files
+  // to match exactly, so it is ratcheted here instead of going uncounted.
+  "lib/provider-import-postgres-harness.setup.ts": 57,
   "lib/provider-import-postgres-harness/fixture.ts": 380,
   "lib/provider-import-postgres-harness/assertions.ts": 200,
   "lib/provider-import-postgres-harness/authority-provider-scenarios.ts": 380,
@@ -23,7 +28,11 @@ export const PROVIDER_IMPORT_POSTGRES_HARNESS_SOURCE_LIMITS = Object.freeze({
 
 // The existing journey also verifies lossless credential rotation, rollback,
 // stale preflight rejection, and writes from retired deployment keys.
-export const PROVIDER_IMPORT_POSTGRES_HARNESS_TOTAL_LINE_LIMIT = 3_000;
+// Raised from 3,000 by exactly the 57 lines of the D1 setup file added above,
+// which this ratchet previously did not see at all. This widened what the
+// ratchet covers; it did not buy headroom for new code, which still stands at
+// 8 lines, the same as before. Do not raise this constant to make code fit.
+export const PROVIDER_IMPORT_POSTGRES_HARNESS_TOTAL_LINE_LIMIT = 3_057;
 export const PROVIDER_POSTGRES_HARNESS_CONFIG_PATH =
   "vitest.provider-harness.config.ts";
 

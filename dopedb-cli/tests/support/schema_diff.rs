@@ -88,7 +88,7 @@ fn invoke(scenario: &str, tool_arguments: Option<Value>, human: bool) -> Output 
                         break;
                     }
                     assert!(
-                        start.elapsed() < Duration::from_secs(35),
+                        start.elapsed() < crate::e2e_timeout(),
                         "schema diff journey timed out"
                     );
                     thread::sleep(Duration::from_millis(5));
@@ -99,9 +99,7 @@ fn invoke(scenario: &str, tool_arguments: Option<Value>, human: bool) -> Output 
             // macOS can inherit O_NONBLOCK from the listening socket. The
             // fixture reads complete frames with a bounded blocking timeout.
             stream.set_nonblocking(false).unwrap();
-            stream
-                .set_read_timeout(Some(Duration::from_secs(5)))
-                .unwrap();
+            stream.set_read_timeout(Some(crate::e2e_timeout())).unwrap();
             let mut prefix = [0u8; 4];
             stream.read_exact(&mut prefix).unwrap();
             let size = parse_frame_length(prefix, MAX_REQUEST_BYTES).unwrap();
@@ -232,6 +230,20 @@ fn invoke(scenario: &str, tool_arguments: Option<Value>, human: bool) -> Output 
 }
 
 pub(super) fn run() {
+    let diff = crate::stage("schema-diff-cli-json", cli_json_journey);
+    crate::stage("schema-diff-cli-human", cli_human_journey);
+    crate::stage("schema-diff-refusal-exit-codes", refusal_exit_codes_journey);
+    let arguments = crate::stage("schema-diff-agent-first-page", agent_first_page_journey);
+    crate::stage("schema-diff-agent-fingerprint-paging", || {
+        agent_fingerprint_paging_journey(&diff, arguments.clone())
+    });
+    crate::stage("schema-diff-agent-invalid-page", || {
+        agent_invalid_page_journey(arguments)
+    });
+}
+
+/// The `--json` comparison reproduces the fixture objects and counts exactly.
+fn cli_json_journey() -> Value {
     let output = invoke("ok", None, false);
     assert!(
         output.status.success(),
@@ -242,6 +254,12 @@ pub(super) fn run() {
     let diff: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(diff["objects"], fixture()["objects"]);
     assert_eq!(diff["counts"], fixture()["counts"]);
+
+    diff
+}
+
+/// The human-readable rendering keeps the same counts and per-object detail.
+fn cli_human_journey() {
     let human = invoke("ok", None, true);
     assert!(human.status.success());
     let human = String::from_utf8(human.stdout).unwrap();
@@ -249,6 +267,12 @@ pub(super) fn run() {
     assert!(human.contains(fixture()["objects"][2]["name"].as_str().unwrap()));
     assert!(human.contains("− (status)"));
     assert!(human.contains("+ UNIQUE (status)"));
+}
+
+/// Every refusal -- scope denial, target read failure, revocation after read,
+/// engine mismatch, snapshot identity mismatch -- must use its own exit code,
+/// emit no partial result on stdout, and never echo the session token.
+fn refusal_exit_codes_journey() {
     for (scenario, code) in [
         ("denied_target", 4),
         ("failed_target", 8),
@@ -268,6 +292,10 @@ pub(super) fn run() {
             !String::from_utf8_lossy(&output.stderr).contains("fixture-only-schema-diff-session")
         );
     }
+}
+
+/// The Agent-side first page is bounded by `limit` and reports its own offset.
+fn agent_first_page_journey() -> Value {
     let arguments = json!({ "baselineConnectionId": snapshot("baseline").connection_id(),
         "targetConnectionId": snapshot("target").connection_id(), "limit": 2 });
     let output = invoke("ok", Some(arguments.clone()), false);
@@ -278,6 +306,13 @@ pub(super) fn run() {
     assert_eq!(page["diff"]["total"], 9);
     assert_eq!(page["nextOffset"], 2);
     assert_eq!(page["diff"]["objects"].as_array().unwrap().len(), 2);
+
+    arguments
+}
+
+/// A continued page is bound to both snapshot fingerprints; a stale
+/// fingerprint must fail instead of silently paging a different comparison.
+fn agent_fingerprint_paging_journey(diff: &Value, arguments: Value) {
     let mut next = arguments.clone();
     next["offset"] = json!(2);
     next["baselineFingerprint"] = diff["baseline"]["fingerprint"].clone();
@@ -293,6 +328,10 @@ pub(super) fn run() {
         serde_json::from_slice::<Value>(&output.stdout).unwrap()["result"]["isError"],
         true
     );
+}
+
+/// An out-of-range page size is refused before any Broker request is made.
+fn agent_invalid_page_journey(arguments: Value) {
     let mut invalid = arguments;
     invalid["limit"] = json!(0);
     let output = invoke("invalid_page", Some(invalid), false);

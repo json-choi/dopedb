@@ -59,5 +59,14 @@ catalog만 보고 원래 owner나 기본 ACL을 추정해 복원하지 않는다
 membership 보존, 기존 및 새 스키마의 서버 읽기/쓰기, 관리형 read/write 권한 구분을
 검증한다. 실제 Cloud SQL API와 사용자 OAuth→Desktop 연결 성공은 별도 운영 검증이다.
 
+`PG_BIN`은 서버 프로그램(`initdb`, `pg_ctl`, `psql`)이 포함된 PostgreSQL 설치의
+bindir을 가리켜야 한다. conda/anaconda의 `postgresql` 패키지처럼 `pg_config`와
+`psql`만 있고 서버 바이너리가 없는 libpq 전용 client 배포판은 사용할 수 없으며,
+스크립트는 이를 실행 전에 감지해 중단한다. 서버가 포함된 설치에서
+`PG_BIN="$(pg_config --bindir)" node scripts/test-gcp-schema-policy.mjs`로 실행한다.
+최소 버전은 PostgreSQL 14다. 이 스크립트가 부여하는 `pg_read_all_data`·
+`pg_write_all_data`가 PostgreSQL 14부터 추가된 predefined role이라 `gcpConnectionDatabaseRoles`가
+이미 이 버전 미만을 거부하며, 스크립트도 실행 전에 같은 기준으로 서버 버전을 확인한다.
+
 근거: [Cloud SQL IAM 사용자 역할 지정](https://docs.cloud.google.com/sql/docs/postgres/add-manage-iam-users),
 [PostgreSQL predefined roles](https://www.postgresql.org/docs/current/predefined-roles.html).

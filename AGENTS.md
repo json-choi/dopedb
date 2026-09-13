@@ -218,6 +218,16 @@ operations are documented in
 
 ## Validation
 
+Three prerequisites gate these commands. Use the pinned pnpm 11.25.0 through
+`corepack enable` or `corepack pnpm ...`; repository scripts resolve their own
+pinned binaries from `node_modules/.bin`, so a nested call no longer needs a
+bare `pnpm`, but package scripts still do. `rust-toolchain.toml` pins the exact
+Rust version, so no `+toolchain` argument is needed and CI's `Install Rust` step
+names the same version; bump both together. `scripts/test-gcp-schema-policy.mjs`
+needs a PostgreSQL 14 or later install that includes the server, named by
+`PG_BIN`; a libpq-only client package has no `initdb` and the script now says so
+and stops.
+
 Run checks proportional to the change:
 
 - `pnpm build` for frontend changes.
@@ -227,7 +237,15 @@ Run checks proportional to the change:
   not a deployment receipt: run `pnpm workspace:cloud:verify-deployment <worker-version-id>`
   to require 100% traffic on the requested Worker version and a matching live production-domain receipt before reporting deployment success.
 - `pnpm test` for the critical frontend smoke suite.
-- `pnpm test:rust` for Rust behavior or wire-contract changes.
+- `pnpm test:rust` for Rust behavior or wire-contract changes. It runs the same
+  commands in the same order as CI's `rust-smoke`, including
+  `cargo clippy --workspace --all-targets --all-features -- -D warnings` and
+  `cargo test --package release-updater-verify`, and it needs staged sidecars.
+- `pnpm test:ci` reproduces the whole CI verification matrix locally through
+  `scripts/test-all.sh`, one named phase per CI job, with a prerequisite
+  preflight and a per-phase pass/fail summary. `--preflight` checks
+  prerequisites only. The Windows, deployment, and vulnerability-scan jobs
+  cannot run on a developer machine and are out of scope by design.
 - A manual app check for changed UI flows.
 - `pnpm check:code-structure` keeps reviewed mixed-responsibility hotspots and
   coupled fragment clusters from growing; use `pnpm audit:code-structure` for
@@ -241,6 +259,12 @@ Prefer extending an existing test, and replace a lower-value test instead of
 increasing the count. Never raise
 [`tests/critical-test-budget.json`](tests/critical-test-budget.json) limits
 without an explicit user request. Run `pnpm check:test-budget` for test changes.
+Contract harnesses matching `*.harness.*` run under their own vitest configs and
+sit outside the 208 budget, but the manifest's `harness` section pins their file
+list and exact case counts, so adding, removing, or renaming a harness entry
+point must update that section in the same change. Whether those cases should
+instead be folded into the caps is an open owner decision recorded in the
+manifest, not something to settle while making another change.
 
 For documentation-only changes, a diff and link review is enough. Report the
 branch, commit or uncommitted state, checks run, and any failures accurately.

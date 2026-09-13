@@ -191,13 +191,27 @@ control에는 실제 command와 state owner가 있어야 한다.
 
 - `pnpm build`: skill bundle 검증, TypeScript, Vite build.
 - `pnpm test`: 가장 중요한 frontend smoke suite.
-- `pnpm test:rust`: Rust workspace 핵심 테스트.
+- `pnpm test:rust`: Rust workspace 핵심 테스트. CI의 `rust-smoke`와 같은 명령을
+  같은 순서로 실행하므로 clippy `-D warnings`와 `release-updater-verify`를
+  포함한다.
+- `pnpm test:ci`: `scripts/test-all.sh`로 CI 검증 matrix를 로컬에서 재현한다.
+  전제 조건을 먼저 확인하고 단계별 통과·실패를 요약하며, `--preflight`로
+  전제 조건만 검사할 수 있다. Windows, 배포, 취약점 scan job은 이 머신에서
+  실행할 수 없어 범위 밖이다.
 - `pnpm dev:app`: 데스크톱 앱 개발 실행.
 - `pnpm check:code-structure`: 검토된 혼합 책임 hotspot과 결합된 fragment
   cluster가 늘어나지 않는지 확인한다. 전체 순위는 `pnpm audit:code-structure`로
   보고 baseline 변경 전에 직접 검토한다. 300줄은 강제 분리 한도가 아니라
   응집도 검토 기준이며, 내부 왕복만 늘리는 작은 sibling은 다시 합칠 수 있다.
   상세 판단은 `docs/CODE_STRUCTURE.md`를 따른다.
+
+명령을 실행하려면 전제 조건 세 가지가 필요하다. pnpm은 `packageManager`가
+고정한 11.25.0을 `corepack enable`로 PATH에 두거나 `corepack pnpm ...`으로
+실행한다. Rust는 `rust-toolchain.toml`이 정확한 버전을 고정하므로 `+toolchain`
+인자가 필요 없고, CI의 `Install Rust` 단계도 같은 버전을 명시하니 둘을 함께
+올린다. `scripts/test-gcp-schema-policy.mjs`는 `initdb`가 포함된 PostgreSQL 14
+이상 설치가 필요하며 `PG_BIN`으로 그 bindir를 지정한다. libpq만 있는 client
+package로는 실행되지 않는다.
 
 변경 범위에 맞는 명령만 실행한다. UI 변경은 build 뒤 해당 화면을 수동으로
 확인하고, Windows 또는 전체 릴리스 검증은 플랫폼·릴리스 변경일 때만 수행한다.
@@ -211,7 +225,10 @@ migration 진입점을 검증한다. 로컬 build만으로는 운영 반영을 �
 핵심 end-to-end 흐름만 테스트하고 구현 세부, 중복 DOM, snapshot, 성능 수치
 테스트는 추가하지 않는다. 새 테스트가 필요하면 기존의 가치가 낮은 테스트를
 대체하고 `tests/critical-test-budget.json`에 보호 이유를 기록한다. 사용자의
-명시적 요청 없이 예산을 늘리지 않는다.
+명시적 요청 없이 예산을 늘리지 않는다. `*.harness.*` 계약 harness는 전용 vitest
+설정으로 실행되어 208개 예산에 포함되지 않지만 같은 manifest의 `harness` 섹션이
+파일 목록과 정확한 case 수를 강제하므로, harness 진입점을 추가·삭제·이름 변경할
+때는 같은 변경에서 그 섹션을 갱신한다.
 
 ## 코드 규칙
 
