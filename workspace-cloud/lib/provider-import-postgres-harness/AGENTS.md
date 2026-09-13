@@ -12,6 +12,24 @@ safety check and an environment/database-target check both pass. No production U
 is used anywhere in this suite; fixtures and scenarios use only synthetic identities and
 `randomUUID()`-generated data.
 
+## Status: the control plane moved to D1 and this suite did not
+
+The application control plane now reads and writes D1 (`../d1/atomic`, `../d1/database`), not the
+PostgreSQL client this fixture mocks in as `../db`. Of the 38 `workspace_control` identifiers these
+scenarios use, 37 are tables that exist in `../../d1-migrations/` and are written by D1 today; the
+only PostgreSQL-only identifier left is the `purge_due_workspace` function, referenced solely by the
+fixture's pre-migration readiness probe. The suite is therefore split-brain: preconditions seeded
+into PostgreSQL are invisible to the code under test, and results written to D1 are invisible to the
+PostgreSQL assertions.
+
+`../provider-import-postgres-harness.setup.ts` supplies a disposable Miniflare D1 with the real
+migrations applied, so the D1 calls no longer crash on `getCloudflareContext`. That removes the boot
+failure but does not reconcile the split: from `runPersonalKnowledgeScenarios` onward the scenarios
+fail on assertions, not on infrastructure. Only `runProviderImportSupportAssertions` (no database)
+and `runCredentialKeyRotationScenarios` (PostgreSQL-only `../../drizzle/provider-credential-key-rotation`)
+are still self-consistent. Do not "fix" a scenario by loosening its assertion; porting one means
+rewriting its SQL for SQLite, and that decision belongs with the owner.
+
 ## Key Files
 | File | Description |
 |------|-------------|
@@ -40,6 +58,9 @@ is used anywhere in this suite; fixtures and scenarios use only synthetic identi
 - `pnpm test:postgres-import` (`scripts/run-provider-import-postgres-harness.mjs`) runs this suite, but only after `validateHarnessSourceTree` and `validateHarnessEnvironment` (from `scripts/provider-import-postgres-harness-guard.mjs`) both pass.
 - `pnpm test:postgres-harness-guard` (`node --test scripts/provider-import-postgres-harness-guard.node.mjs`) is the guard's own regression test.
 - Requires an isolated, independently provisioned PostgreSQL test database; it is never pointed at production.
+- The isolated cluster must be PostgreSQL 15 or later: `../../drizzle/0000_mvp_baseline.sql` uses `ON DELETE SET NULL (column, ...)`, which PostgreSQL 14 rejects with a syntax error while loading the baseline.
+- `../provider-import-postgres-harness.setup.ts` boots the Miniflare D1 binding. It deliberately lives outside this directory because `validateHarnessSourceTree` requires the `.ts` files here to match its ratchet manifest exactly, so a setup file added here would fail the guard. It is still ratcheted, through its own 57-line entry in `PROVIDER_IMPORT_POSTGRES_HARNESS_SOURCE_LIMITS`.
+- The per-file and total ratchets in `PROVIDER_IMPORT_POSTGRES_HARNESS_SOURCE_LIMITS` are nearly exhausted: 3,049 of 3,057, leaving 8 lines. Any repair that needs new scenario lines needs the owner's decision on the ratchet first; do not raise it to make code fit. The one deliberate raise so far, 3,000 to 3,057, added the setup file to what the ratchet sees and bought no headroom.
 
 ### Common Patterns
 - Scenario functions return a typed result object (e.g. `AuthorityProviderScenarioResult`, `AnalysisLifecycleScenarioResult`) that later scenario functions accept as an input parameter, chaining state across the suite without global variables.

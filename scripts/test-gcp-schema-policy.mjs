@@ -9,9 +9,57 @@ import path from "node:path";
 import { stripTypeScriptTypes } from "node:module";
 import { pathToFileURL } from "node:url";
 
+// gcpConnectionDatabaseRoles() (workspace-cloud/lib/providers/gcp-cloud-connection-policy.ts)
+// already refuses automatic managed access below PostgreSQL 14, because the roles it grants
+// -- pg_read_all_data and pg_write_all_data -- are PostgreSQL 14+ predefined roles. This script
+// grants those same roles against a real cluster, so it cannot run below that floor either; a
+// full pass here (RLS forcing, ALTER DEFAULT PRIVILEGES ... ON SCHEMAS, pg_default_acl behavior
+// for future schemas/tables) has been verified on PostgreSQL 14.18 and 15.15.
+const MIN_SERVER_VERSION = 14;
+const REQUIRED_SERVER_BINARIES = ["initdb", "pg_ctl", "psql"];
+
 const root = path.resolve(import.meta.dirname, "..");
-const scratch = mkdtempSync(path.join(tmpdir(), "dopedb-pg-policy-"));
 const binary = (name) => process.env.PG_BIN ? path.join(process.env.PG_BIN, name) : name;
+const binLocation = () => process.env.PG_BIN ? path.resolve(process.env.PG_BIN) : "the current PATH";
+
+// A libpq-only client package (e.g. a conda/anaconda `postgresql` client build) ships `pg_config`
+// and `psql` but not the server programs, so `initdb` fails with a bare ENOENT and no explanation.
+// Confirm all three server binaries actually resolve and run before touching any cluster state.
+function preflightServerBinaries() {
+  const missing = REQUIRED_SERVER_BINARIES.filter((name) => {
+    const result = spawnSync(binary(name), ["--version"], { encoding: "utf8", stdio: "pipe" });
+    return Boolean(result.error) || result.status !== 0;
+  });
+  if (missing.length > 0) {
+    console.error(
+      `Missing PostgreSQL server binaries (${missing.join(", ")}) at ${binLocation()}.\n` +
+      "PG_BIN (or PATH) must point at the bindir of a PostgreSQL install that includes the " +
+      "server, not a libpq-only client package. For example, from a server-bearing install:\n" +
+      '  PG_BIN="$(pg_config --bindir)" node scripts/test-gcp-schema-policy.mjs',
+    );
+    process.exit(1);
+  }
+}
+
+function preflightServerVersion() {
+  const result = spawnSync(binary("pg_ctl"), ["--version"], { encoding: "utf8", stdio: "pipe" });
+  const major = Number(/PostgreSQL\)?\s+(\d+)/.exec(result.stdout)?.[1]);
+  if (!Number.isInteger(major) || major < MIN_SERVER_VERSION) {
+    console.error(
+      `PostgreSQL server at ${binLocation()} reports "${result.stdout.trim()}"; this policy ` +
+      `requires PostgreSQL ${MIN_SERVER_VERSION} or later, matching the floor ` +
+      "gcpConnectionDatabaseRoles() already enforces for managed access " +
+      "(pg_read_all_data/pg_write_all_data are PostgreSQL 14+ predefined roles). " +
+      "Point PG_BIN at a newer server install.",
+    );
+    process.exit(1);
+  }
+}
+
+preflightServerBinaries();
+preflightServerVersion();
+
+const scratch = mkdtempSync(path.join(tmpdir(), "dopedb-pg-policy-"));
 const data = path.join(scratch, "data");
 let started = false;
 const run = (name, args) => execFileSync(binary(name), args, { encoding: "utf8", stdio: "pipe" });

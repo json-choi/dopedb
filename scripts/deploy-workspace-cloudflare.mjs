@@ -5,20 +5,22 @@ import { readFile, stat } from "node:fs/promises";
 import { parseEnv } from "node:util";
 import { fileURLToPath } from "node:url";
 
+import { localBin, nodeScript, packageScript } from "../workspace-cloud/scripts/local-command.mjs";
+
 const cwd = fileURLToPath(new URL("../workspace-cloud", import.meta.url));
 const example = parseEnv(await readFile(new URL("../workspace-cloud/.env.example", import.meta.url), "utf8"));
 const required = ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET",
   "BETTER_AUTH_SECRET", "BETTER_AUTH_URL", "WORKSPACE_CREDENTIAL_KEY", "CRON_SECRET",
   "WORKSPACE_KMS_KEY_NAME", "WORKSPACE_KMS_WIF_AUDIENCE", "WORKSPACE_KMS_SERVICE_ACCOUNT_EMAIL"];
 
-function run(args, { env = {}, input, capture = false } = {}) {
+function run([command, ...args], { env = {}, input, capture = false, step = args[0] } = {}) {
   return new Promise((resolve, reject) => {
     // Do not inherit production credentials from the invoking shell into builds.
     const clean = Object.fromEntries(Object.entries(process.env).filter(([key]) =>
       !(key in example) && !["DATABASE_URL", "DATABASE_URL_UNPOOLED"].includes(key)
       && !key.startsWith("OIDC_") && !key.startsWith("NEXT_PUBLIC_")
       && !key.startsWith("PRODUCT_ANALYTICS_")));
-    const child = spawn("pnpm", args, { cwd, env: { ...clean, ...env },
+    const child = spawn(command, args, { cwd, env: { ...clean, ...env },
       stdio: [input === undefined ? "ignore" : "pipe", capture ? "pipe" : "inherit", "inherit"] });
     let output = "";
     child.stdout?.on("data", (chunk) => {
@@ -28,10 +30,12 @@ function run(args, { env = {}, input, capture = false } = {}) {
         reject(new Error("Deployment output exceeded its bounded receipt buffer."));
       }
     });
-    child.once("error", reject);
+    // A child that never started reports no exit code, only this error.
+    child.once("error", (error) => reject(new Error(
+      `Deployment step ${step} could not run ${command}: ${error.code ?? error.message}`)));
     child.stdin?.once("error", reject);
     child.once("close", (code) => code === 0 ? resolve(output)
-      : reject(new Error(`Deployment step failed (${args[0]}), exit ${code}`)));
+      : reject(new Error(`Deployment step failed (${step}), exit ${code}`)));
     if (input !== undefined) child.stdin.end(input);
   });
 }
@@ -96,13 +100,13 @@ async function main() {
       }
     }
   }
-  await run(["exec", "node", "scripts/check-d1-runtime.mjs"]);
+  await run(nodeScript("scripts/check-d1-runtime.mjs"), { step: "check-d1-runtime" });
   if (checkOnly) {
     console.log("Deployment inputs accepted; no deployment, IAM, or database changes made.");
     return;
   }
   const configuration = JSON.parse(await readFile(`${cwd}/wrangler.jsonc`, "utf8"));
-  const identityOutput = await run(["exec", "wrangler", "whoami", "--json"], { capture: true });
+  const identityOutput = await run([...localBin(cwd, "wrangler"), "whoami", "--json"], { capture: true, step: "wrangler whoami" });
   const identityStart = identityOutput.search(/^[\t ]*[\[{][\t ]*$/m);
   if (identityStart < 0) throw new Error("Wrangler did not return an account receipt.");
   const identity = JSON.parse(identityOutput.slice(identityStart));
@@ -110,12 +114,12 @@ async function main() {
     throw new Error("The active Wrangler account does not match this project's configured account.");
   }
   if (preserveSecrets) {
-    const secretOutput = await run(["exec", "wrangler", "secret", "list"], { capture: true });
+    const secretOutput = await run([...localBin(cwd, "wrangler"), "secret", "list"], { capture: true, step: "wrangler secret list" });
     const secretStart = secretOutput.search(/^[\t ]*\[[\t ]*$/m);
     if (secretStart < 0) throw new Error("Wrangler did not return the secret inventory.");
     const names = new Set(JSON.parse(secretOutput.slice(secretStart)).map((secret) => secret.name));
     if (required.some((name) => !names.has(name))) throw new Error("Required production secrets are missing.");
-    const migrationReceipt = await run(["exec", "node", "scripts/migrate-d1.mjs", "--check"], { capture: true });
+    const migrationReceipt = await run(nodeScript("scripts/migrate-d1.mjs", "--check"), { capture: true, step: "migrate-d1 --check" });
     if (!/D1 migration preflight passed: \d+ applied, 0 pending\./.test(migrationReceipt)) {
       throw new Error("Code-only deployment requires a fully applied D1 migration history.");
     }
@@ -127,17 +131,17 @@ async function main() {
       throw new Error(`Remove the build-visible ${name}; keep production values outside the app directory.`);
     }
   }
-  await run(["build:cloudflare"], { env: publicBuildEnv });
+  await run(packageScript("build:cloudflare"), { env: publicBuildEnv, step: "build:cloudflare" });
   if (!preserveSecrets) {
-    await run(["exec", "node", "scripts/migrate-d1.mjs"]);
-    await run(["exec", "wrangler", "secret", "bulk"], { input: JSON.stringify(values) });
+    await run(nodeScript("scripts/migrate-d1.mjs"), { step: "migrate-d1" });
+    await run([...localBin(cwd, "wrangler"), "secret", "bulk"], { input: JSON.stringify(values), step: "wrangler secret bulk" });
   }
-  const deployed = await run(["exec", "opennextjs-cloudflare", "deploy"], { capture: true });
+  const deployed = await run([...localBin(cwd, "opennextjs-cloudflare"), "deploy"], { capture: true, step: "opennextjs-cloudflare deploy" });
   const versions = [...deployed.matchAll(/Current Version ID:\s+([a-f0-9-]{36})/g)];
   if (versions.length !== 1) throw new Error("The exact uploaded Worker version was not returned.");
   const versionId = versions[0][1];
   console.log(`Uploaded Workspace Worker version ${versionId}. Verifying the production domain.`);
-  await run(["exec", "node", "../scripts/check-workspace-deployment.mjs", versionId]);
+  await run(nodeScript("../scripts/check-workspace-deployment.mjs", versionId), { step: "check-workspace-deployment" });
 }
 
 try { await main(); } catch (error) {

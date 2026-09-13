@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
-import { describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { Miniflare, convertV4MiniflareOptions } from "miniflare";
 import { sql } from "drizzle-orm";
 import { SQLiteSyncDialect } from "drizzle-orm/sqlite-core";
@@ -16,27 +16,63 @@ vi.mock("@opennextjs/cloudflare", () => ({
   getCloudflareContext: () => ({ env: { WORKSPACE_DB: fixtureBinding.value } }),
 }));
 
-describe("Workspace D1 safety", () => {
-  it("enforces relational guards, atomic rollback and a shared concurrent request budget", async () => {
-    const runtime = new Miniflare(convertV4MiniflareOptions({
+// On failure, re-throws with the stage name and elapsed time in the message
+// (original error kept as `cause`) so a slow-runner timeout or assertion
+// failure names exactly which phase (Miniflare boot, migrations, or which
+// assertion group) it hit instead of surfacing only a bare "Test timed out"
+// (issue #194). No console output on the success path: workspace-cloud/lib
+// is server code and `scripts/check-workspace-server-logs.mjs` forbids
+// console.* there outside the one allowed sink.
+async function withStage<T>(name: string, run: () => Promise<T>): Promise<T> {
+  const label = `[d1-storage.harness:${name}]`;
+  const startedAt = performance.now();
+  try {
+    const result = await run();
+    return result;
+  } catch (error) {
+    const elapsed = (performance.now() - startedAt).toFixed(1);
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`${label} failed after ${elapsed}ms: ${message}`, { cause: error });
+  }
+}
+
+let runtime: Miniflare;
+let db: Awaited<ReturnType<InstanceType<typeof Miniflare>["getD1Database"]>>;
+
+beforeAll(async () => {
+  await withStage("miniflare-boot", async () => {
+    runtime = new Miniflare(convertV4MiniflareOptions({
       modules: true,
       script: 'export default { fetch() { return new Response("test"); } };',
       compatibilityDate: "2026-09-08",
       d1Databases: ["DB"],
     }));
-    try {
-      const db = await runtime.getD1Database("DB");
-      fixtureBinding.value = db;
-      for (const name of ["0000_workspace_baseline.sql", "0001_workspace_guards.sql", "0002_storage_types.sql", "0003_atomic_scope.sql", "0004_member_evidence_detachment.sql", "0005_backup_chunks.sql", "0006_retention_purge.sql"]) {
-        const source = await readFile(new URL(`../d1-migrations/${name}`, import.meta.url), "utf8");
-        const statements = source.includes("--> statement-breakpoint")
-          ? source.split("--> statement-breakpoint")
-          : source.split(/(?=CREATE TRIGGER )/);
-        for (const statement of statements) {
-          const text = statement.replace(/^\s*--.*$/gm, "").trim();
-          if (text) await db.exec(text.replace(/\r?\n/g, " "));
-        }
+    db = await runtime.getD1Database("DB");
+    fixtureBinding.value = db;
+  });
+
+  await withStage("migrations", async () => {
+    for (const name of ["0000_workspace_baseline.sql", "0001_workspace_guards.sql", "0002_storage_types.sql", "0003_atomic_scope.sql", "0004_member_evidence_detachment.sql", "0005_backup_chunks.sql", "0006_retention_purge.sql"]) {
+      const source = await readFile(new URL(`../d1-migrations/${name}`, import.meta.url), "utf8");
+      const statements = source.includes("--> statement-breakpoint")
+        ? source.split("--> statement-breakpoint")
+        : source.split(/(?=CREATE TRIGGER )/);
+      for (const statement of statements) {
+        const text = statement.replace(/^\s*--.*$/gm, "").trim();
+        if (text) await db.exec(text.replace(/\r?\n/g, " "));
       }
+    }
+  });
+});
+
+afterAll(async () => {
+  fixtureBinding.value = null;
+  await runtime?.dispose();
+});
+
+describe("Workspace D1 safety", () => {
+  it("enforces relational guards, atomic rollback and a shared concurrent request budget", async () => {
+    const { org, orm, memberUser } = await withStage("relational-guards", async () => {
       const org = randomUUID();
       await db.prepare("INSERT INTO organization (id, name, slug) VALUES (?, 'Harness', ?)")
         .bind(org, `harness-${org}`).run();
@@ -64,76 +100,81 @@ describe("Workspace D1 safety", () => {
         .rejects.toThrow();
       await expect(db.prepare("UPDATE user SET email_verified = 2").run()).rejects.toThrow();
       await expect(db.prepare("UPDATE user SET created_at = 'invalid'").run()).rejects.toThrow();
-      {
-        const { ensurePersonalKnowledgeScope } = await import("./knowledge/personal-scope");
-        const sessionId = randomUUID();
-        await db.prepare("INSERT INTO session (id, token, user_id, expires_at) VALUES (?, ?, ?, ?)")
-          .bind(sessionId, randomUUID(), memberUser.id, new Date(Date.now() + 60_000).toISOString()).run();
-        const projection = {
-          userId: memberUser.id, sessionId,
-          projects: [{ id: randomUUID(), name: "Project", revision: 1,
-            environments: [{ id: randomUUID(), name: "Development", riskClass: "development" as const, revision: 1 }] }],
-        };
-        const originalEnvironment = {
-          BETTER_AUTH_URL: process.env.BETTER_AUTH_URL,
-          BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET,
-          GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
-          GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
-        };
-        try {
-          process.env.BETTER_AUTH_URL = "https://workspace.dopedb.dev";
-          process.env.BETTER_AUTH_SECRET = "d1-harness-session-secret-" + randomUUID();
-          process.env.GOOGLE_CLIENT_ID = "d1-harness-google-client";
-          process.env.GOOGLE_CLIENT_SECRET = "d1-harness-google-secret";
-          const { getAuth } = await import("./auth");
-          const token = await db.prepare("SELECT token FROM session WHERE id = ?").bind(sessionId).first<string>("token");
-          const authenticated = await getAuth().api.getSession({ headers: new Headers({ authorization: `Bearer ${token}` }) });
-          expect(authenticated?.user.id).toBe(memberUser.id);
-          const organization = await getAuth().api.createOrganization({
-            headers: new Headers({ authorization: `Bearer ${token}` }),
-            body: { name: "D1 Workspace", slug: "d1-workspace" },
-          });
-          expect(organization?.id).toBeTruthy();
-          expect(await db.prepare("SELECT count(*) AS count FROM workspace_profile WHERE organization_id = ?")
-            .bind(organization!.id).first("count")).toBe(1);
-        } finally {
-          for (const [key, value] of Object.entries(originalEnvironment)) {
-            if (value === undefined) delete process.env[key]; else process.env[key] = value;
-          }
+      return { org, orm, memberUser };
+    });
+
+    await withStage("workspace-mutations", async () => {
+      const { ensurePersonalKnowledgeScope } = await import("./knowledge/personal-scope");
+      const sessionId = randomUUID();
+      await db.prepare("INSERT INTO session (id, token, user_id, expires_at) VALUES (?, ?, ?, ?)")
+        .bind(sessionId, randomUUID(), memberUser.id, new Date(Date.now() + 60_000).toISOString()).run();
+      const projection = {
+        userId: memberUser.id, sessionId,
+        projects: [{ id: randomUUID(), name: "Project", revision: 1,
+          environments: [{ id: randomUUID(), name: "Development", riskClass: "development" as const, revision: 1 }] }],
+      };
+      const originalEnvironment = {
+        BETTER_AUTH_URL: process.env.BETTER_AUTH_URL,
+        BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET,
+        GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
+        GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
+      };
+      try {
+        process.env.BETTER_AUTH_URL = "https://workspace.dopedb.dev";
+        process.env.BETTER_AUTH_SECRET = "d1-harness-session-secret-" + randomUUID();
+        process.env.GOOGLE_CLIENT_ID = "d1-harness-google-client";
+        process.env.GOOGLE_CLIENT_SECRET = "d1-harness-google-secret";
+        const { getAuth } = await import("./auth");
+        const token = await db.prepare("SELECT token FROM session WHERE id = ?").bind(sessionId).first<string>("token");
+        const authenticated = await getAuth().api.getSession({ headers: new Headers({ authorization: `Bearer ${token}` }) });
+        expect(authenticated?.user.id).toBe(memberUser.id);
+        const organization = await getAuth().api.createOrganization({
+          headers: new Headers({ authorization: `Bearer ${token}` }),
+          body: { name: "D1 Workspace", slug: "d1-workspace" },
+        });
+        expect(organization?.id).toBeTruthy();
+        expect(await db.prepare("SELECT count(*) AS count FROM workspace_profile WHERE organization_id = ?")
+          .bind(organization!.id).first("count")).toBe(1);
+      } finally {
+        for (const [key, value] of Object.entries(originalEnvironment)) {
+          if (value === undefined) delete process.env[key]; else process.env[key] = value;
         }
-        const first = await ensurePersonalKnowledgeScope(projection);
-        expect(await ensurePersonalKnowledgeScope(projection)).toEqual(first);
-        expect(await db.prepare("SELECT count(*) AS count FROM workspace_audit_event WHERE organization_id = ?")
-          .bind(first.workspaceId).first("count")).toBe(1);
-        const [installation] = await orm.insert(knowledgeGithubInstallation).values({
-          organizationId: first.workspaceId, installationId: 101n, accountId: "101", accountLogin: "fixture",
-        }).returning();
-        const [source] = await orm.insert(knowledgeSource).values({
-          organizationId: first.workspaceId, projectId: projection.projects[0].id,
-          projectEnvironmentId: projection.projects[0].environments[0].id, environmentRevision: 1,
-          provider: "github", displayName: "fixture/source", visibility: "shared_graph",
-          githubInstallationId: installation.id, repositoryId: "1004", repositoryFullName: "fixture/source",
-          refName: "main", commitSha: "6".repeat(40), syncState: "ready",
-        }).returning();
-        const { recordGithubSourceRevisions } = await import("./knowledge/source-revisions");
-        const revision = { organizationId: first.workspaceId, sourceId: source.id, deliveryId: randomUUID(),
-          beforeCommitSha: "6".repeat(40), afterCommitSha: "7".repeat(40) };
-        expect(await recordGithubSourceRevisions([revision])).toEqual([
-          { eventId: expect.any(String), sourceId: source.id, advanced: true },
-        ]);
-        expect(await recordGithubSourceRevisions([revision])).toEqual([]);
-        expect(await recordGithubSourceRevisions([{ ...revision, deliveryId: randomUUID(), afterCommitSha: "8".repeat(40) }]))
-          .toEqual([{ eventId: expect.any(String), sourceId: source.id, advanced: false }]);
-        expect(await db.prepare("SELECT commit_sha FROM knowledge_source WHERE id = ?").bind(source.id).first("commit_sha"))
-          .toBe("7".repeat(40));
-        await verifyD1WorkspaceMutations(db, { ...first, userId: memberUser.id, sessionId });
-        await db.prepare("UPDATE member SET revocation_pending_at = ? WHERE id = ?")
-          .bind(new Date().toISOString(), first.memberId).run();
-        await expect(ensurePersonalKnowledgeScope({ ...projection,
-          projects: [{ ...projection.projects[0], name: "Rejected mutation" }] })).rejects.toThrow();
-        expect(await db.prepare("SELECT name FROM knowledge_project WHERE id = ?")
-          .bind(projection.projects[0].id).first("name")).toBe("Project");
       }
+      const first = await ensurePersonalKnowledgeScope(projection);
+      expect(await ensurePersonalKnowledgeScope(projection)).toEqual(first);
+      expect(await db.prepare("SELECT count(*) AS count FROM workspace_audit_event WHERE organization_id = ?")
+        .bind(first.workspaceId).first("count")).toBe(1);
+      const [installation] = await orm.insert(knowledgeGithubInstallation).values({
+        organizationId: first.workspaceId, installationId: 101n, accountId: "101", accountLogin: "fixture",
+      }).returning();
+      const [source] = await orm.insert(knowledgeSource).values({
+        organizationId: first.workspaceId, projectId: projection.projects[0].id,
+        projectEnvironmentId: projection.projects[0].environments[0].id, environmentRevision: 1,
+        provider: "github", displayName: "fixture/source", visibility: "shared_graph",
+        githubInstallationId: installation.id, repositoryId: "1004", repositoryFullName: "fixture/source",
+        refName: "main", commitSha: "6".repeat(40), syncState: "ready",
+      }).returning();
+      const { recordGithubSourceRevisions } = await import("./knowledge/source-revisions");
+      const revision = { organizationId: first.workspaceId, sourceId: source.id, deliveryId: randomUUID(),
+        beforeCommitSha: "6".repeat(40), afterCommitSha: "7".repeat(40) };
+      expect(await recordGithubSourceRevisions([revision])).toEqual([
+        { eventId: expect.any(String), sourceId: source.id, advanced: true },
+      ]);
+      expect(await recordGithubSourceRevisions([revision])).toEqual([]);
+      expect(await recordGithubSourceRevisions([{ ...revision, deliveryId: randomUUID(), afterCommitSha: "8".repeat(40) }]))
+        .toEqual([{ eventId: expect.any(String), sourceId: source.id, advanced: false }]);
+      expect(await db.prepare("SELECT commit_sha FROM knowledge_source WHERE id = ?").bind(source.id).first("commit_sha"))
+        .toBe("7".repeat(40));
+      await verifyD1WorkspaceMutations(db, { ...first, userId: memberUser.id, sessionId });
+      await db.prepare("UPDATE member SET revocation_pending_at = ? WHERE id = ?")
+        .bind(new Date().toISOString(), first.memberId).run();
+      await expect(ensurePersonalKnowledgeScope({ ...projection,
+        projects: [{ ...projection.projects[0], name: "Rejected mutation" }] })).rejects.toThrow();
+      expect(await db.prepare("SELECT name FROM knowledge_project WHERE id = ?")
+        .bind(projection.projects[0].id).first("name")).toBe("Project");
+    });
+
+    await withStage("atomic-rollback", async () => {
       const audit = randomUUID();
       await db.prepare(`INSERT INTO workspace_audit_event
         (id, organization_id, action, resource_type, resource_id, redacted_summary, request_id)
@@ -169,12 +210,18 @@ describe("Workspace D1 safety", () => {
           SELECT ${org}, 'Duplicate', ${org} FROM (${scope})`],
       }, db)).rejects.toThrow();
       expect(await db.prepare("SELECT count(*) AS count FROM workspace_atomic_scope").first("count")).toBe(0);
+    });
+
+    await withStage("budget", async () => {
       const now = Date.now();
       const accepted = await Promise.all(Array.from({ length: 24 }, () => consumeD1Budget(db, {
         id: randomUUID(), key: "concurrent", now, cutoff: now - 60_000, limit: 7, cost: 1,
       })));
       expect(accepted.filter(Boolean)).toHaveLength(7);
       expect(await db.prepare("SELECT count FROM rate_limit WHERE key = 'concurrent'").first("count")).toBe(7);
+    });
+
+    await withStage("pattern-guards", async () => {
       const dialect = new SQLiteSyncDialect();
       const evaluate = async (expression: ReturnType<typeof matches>) => {
         const query = dialect.sqlToQuery(sql`SELECT ${expression} AS valid`);
@@ -196,9 +243,6 @@ describe("Workspace D1 safety", () => {
           .toBe(value === "src/main.ts" ? 1 : 0);
       }
       expect((await db.prepare("PRAGMA foreign_key_check").all()).results).toHaveLength(0);
-    } finally {
-      fixtureBinding.value = null;
-      await runtime.dispose();
-    }
-  }, 60_000);
+    });
+  });
 });

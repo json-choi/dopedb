@@ -40,7 +40,12 @@ Project-resource grant와 process ancestry에만 묶인 runtime-only endpoint이
 2. 현재 `main`에서 요청 범위만 변경한다. Issue, 별도 branch, PR은 필요할
    때나 사용자가 요청할 때만 만든다.
 3. 변경 범위에 맞춰 `pnpm build`, `pnpm test`, `pnpm test:rust` 중 필요한
-   검증을 실행한다.
+   검증을 실행한다. 전제 조건은 세 가지다. pnpm은 `corepack enable`로 PATH에
+   두거나 `corepack pnpm ...`으로 실행하고, Rust는 `rust-toolchain.toml`이
+   버전을 고정하므로 `+toolchain` 인자가 필요 없으며,
+   `scripts/test-gcp-schema-policy.mjs`는 `PG_BIN`으로 `initdb`가 포함된
+   PostgreSQL 14 이상 설치의 bindir를 가리켜야 한다. CI 전체를 그대로
+   재현하려면 `pnpm test:ci`를 쓰고, 전제 조건만 보려면 `--preflight`를 쓴다.
    Workspace Web 변경은 `pnpm workspace:cloud:build`도 실행한다. DB 배포 경로를
    바꾸면 `bash scripts/test-provider-import-d1.sh`로 격리 DB에서 production
    migration 진입점을 검증한다. 로컬 build만으로는 운영 반영을 확인할 수 없다.
@@ -94,7 +99,10 @@ ID를 확인한다. 자동화의 권한, 판정, 운영 절차는
 테스트는 보안·안전, 공개 계약, 핵심 사용자 여정 중 하나를 보호해야 하며 보호
 이유를 manifest에 기록한다. 기존 테스트를 확장하거나 가치가 낮은 테스트를
 교체하고, 사용자의 명시적 결정 없이 총량이나 파일 수를 늘리지 않는다.
-`pnpm check:test-budget`와 해당 smoke 명령을 실행한다.
+`pnpm check:test-budget`와 해당 smoke 명령을 실행한다. `*.harness.*` 계약
+harness는 전용 vitest 설정으로 실행되어 208개 예산에 포함되지 않지만 manifest의
+`harness` 섹션이 파일 목록과 정확한 case 수를 강제하므로, harness 진입점을
+추가·삭제·이름 변경할 때는 같은 변경에서 그 섹션을 갱신한다.
 
 `pnpm check:code-structure`는 검토된 대형 혼합 책임 module과 결합된 작은 module
 cluster가 더 악화되는 것을 막는다. `pnpm audit:code-structure`의 전체 순위를 사람

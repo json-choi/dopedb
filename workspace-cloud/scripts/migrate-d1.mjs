@@ -6,6 +6,8 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { resolve, isAbsolute } from "node:path";
 
+import { localBin } from "./local-command.mjs";
+
 const cwd = fileURLToPath(new URL("..", import.meta.url));
 const migrationDirectory = resolve(cwd, "d1-migrations");
 
@@ -51,19 +53,23 @@ async function main() {
   if (!binding || binding.database_name !== "dopedb-workspace" || !/^[a-f0-9-]{36}$/.test(binding.database_id)) {
     throw new Error("Workspace D1 deployment binding is not configured");
   }
+  const [wranglerCommand, ...wranglerPrefix] = localBin(cwd, "wrangler");
   function wrangler(parameters, configPath = resolve(cwd, "wrangler.jsonc"), json = true) {
-    const child = spawnSync("pnpm", ["exec", "wrangler", ...parameters, "--config", configPath], {
+    const child = spawnSync(wranglerCommand, [...wranglerPrefix, ...parameters, "--config", configPath], {
       cwd, encoding: "utf8", timeout: 300_000, maxBuffer: 4 * 1024 * 1024,
       env: { ...process.env, CI: "true" },
     });
+    // A child that never started has no status and no streams to report.
+    if (child.error) throw new Error(`Cannot run ${wranglerCommand}: ${child.error.code ?? child.error.message}`);
+    const stdout = String(child.stdout ?? "");
     if (child.status !== 0) {
-      writeFileSync(resolve(cwd, ".wrangler/d1-migration-error.log"), child.stdout + child.stderr, { mode: 0o600 });
+      writeFileSync(resolve(cwd, ".wrangler/d1-migration-error.log"), stdout + String(child.stderr ?? ""), { mode: 0o600 });
       throw new Error(`D1 ${parameters[0]} step failed; inspect the local .wrangler/d1-migration-error.log`);
     }
-    if (!json) return child.stdout;
-    const start = child.stdout.search(/^[\t ]*[\[{][\t ]*$/m);
+    if (!json) return stdout;
+    const start = stdout.search(/^[\t ]*[\[{][\t ]*$/m);
     if (start < 0) throw new Error("Wrangler did not return a JSON receipt");
-    return JSON.parse(child.stdout.slice(start));
+    return JSON.parse(stdout.slice(start));
   }
   if (!local) {
     const identity = wrangler(["whoami", "--json"]);
