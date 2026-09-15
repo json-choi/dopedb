@@ -19,7 +19,7 @@ export function ConnectionAdvancedTab({
   return (
     <div className="tw:mx-auto tw:grid tw:w-full tw:max-w-[840px] tw:gap-5">
       <section className="tw:grid tw:gap-3">
-        <div className="tw:flex tw:items-center tw:justify-between tw:gap-3">
+        <div className="ds-control-row tw:flex tw:min-w-0 tw:flex-wrap tw:items-center tw:justify-between tw:gap-3">
           <h3>{t("connections.advancedParameters")}</h3>
           <Button
             size="compact"
@@ -38,9 +38,10 @@ export function ConnectionAdvancedTab({
             {options.advancedParameters.map(([key, value], index) => (
               <div
                 key={`${index}-${key}`}
-                className="tw:grid tw:grid-cols-[minmax(140px,0.42fr)_minmax(0,1fr)_32px] tw:items-center tw:gap-2"
+                className="ds-control-row tw:grid tw:min-w-0 tw:grid-cols-[minmax(0,0.42fr)_minmax(0,1fr)_auto] tw:items-center tw:gap-2 tw:[--ds-row-control-size:var(--ds-control-md)]"
               >
                 <TextInput
+                  density="compact"
                   value={key}
                   aria-label={t("connections.parameterKey")}
                   onChange={(event) =>
@@ -52,6 +53,7 @@ export function ConnectionAdvancedTab({
                   }
                 />
                 <TextInput
+                  density="compact"
                   value={value}
                   aria-label={t("connections.parameterValue")}
                   onChange={(event) =>
@@ -64,7 +66,7 @@ export function ConnectionAdvancedTab({
                 />
                 <Button
                   iconOnly
-                  size="xs"
+                  size="compact"
                   variant="ghost"
                   onClick={() => options.removeAdvancedParameter(key)}
                   title={t("common.remove")}

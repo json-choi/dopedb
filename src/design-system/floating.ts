@@ -54,3 +54,53 @@ export function useAnchoredFloatingSurface({
     whileElementsMounted: autoUpdate,
   });
 }
+
+export function floatingPortalOwnerId(anchor: Element | null) {
+  return (
+    anchor?.closest<HTMLElement>(
+      '[role="menu"][id], [role="dialog"][aria-modal="true"][id], [role="alertdialog"][aria-modal="true"][id]',
+    )?.id ?? undefined
+  );
+}
+
+export function floatingPortalIsModalOwned(anchor: Element | null) {
+  if (
+    anchor?.closest(
+      '[role="dialog"][aria-modal="true"], [role="alertdialog"][aria-modal="true"]',
+    )
+  ) return true;
+
+  let ownerId = floatingPortalOwnerId(anchor);
+  const visited = new Set<string>();
+  while (ownerId && !visited.has(ownerId)) {
+    visited.add(ownerId);
+    const owner = document.getElementById(ownerId);
+    if (!owner) return false;
+    if (
+      owner.matches(
+        '[role="dialog"][aria-modal="true"], [role="alertdialog"][aria-modal="true"]',
+      )
+    ) return true;
+    ownerId = owner.dataset.floatingOwnerId;
+  }
+  return false;
+}
+
+export function ownsFloatingTarget(owner: HTMLElement, target: Node) {
+  if (owner.contains(target)) return true;
+  if (!(target instanceof Element) || !owner.id) return false;
+
+  let portal = target.closest<HTMLElement>("[data-floating-owner-id]");
+  const visited = new Set<string>();
+  while (portal) {
+    const ownerId = portal.dataset.floatingOwnerId;
+    if (!ownerId || visited.has(ownerId)) return false;
+    if (ownerId === owner.id) return true;
+    visited.add(ownerId);
+    const parentOwner = document.getElementById(ownerId);
+    if (!parentOwner) return false;
+    if (owner.contains(parentOwner)) return true;
+    portal = parentOwner.closest<HTMLElement>("[data-floating-owner-id]");
+  }
+  return false;
+}

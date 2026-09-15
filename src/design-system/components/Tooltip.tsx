@@ -14,7 +14,11 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 
-import { useAnchoredFloatingSurface } from "../floating";
+import {
+  floatingPortalIsModalOwned,
+  floatingPortalOwnerId,
+  useAnchoredFloatingSurface,
+} from "../floating";
 
 type DescribedElement = ReactElement<{
   "aria-describedby"?: string;
@@ -158,7 +162,9 @@ export function Tooltip({
               role="tooltip"
               data-placement={placement.split("-")[0]}
               data-ready={isPositioned ? "true" : undefined}
-              className="tw:pointer-events-none tw:fixed tw:z-[var(--ds-z-popover)] tw:max-w-[min(320px,calc(100vw_-_var(--ds-space-4)))] tw:rounded-xs tw:border tw:border-border-strong tw:bg-popover tw:px-2 tw:py-1 tw:text-xs tw:leading-ui tw:text-popover-foreground tw:opacity-0 tw:shadow-popover tw:transition-opacity tw:duration-100 tw:data-[ready=true]:opacity-100 tw:motion-reduce:transition-none"
+              data-floating-owner-id={floatingPortalOwnerId(wrapperRef.current)}
+              data-modal-owned={floatingPortalIsModalOwned(wrapperRef.current)}
+              className="tw:pointer-events-none tw:fixed tw:z-[var(--ds-z-popover)] tw:max-w-[min(320px,calc(100vw_-_var(--ds-space-4)))] tw:rounded-xs tw:border tw:border-border-strong tw:bg-popover tw:px-2 tw:py-1 tw:text-xs tw:leading-ui tw:text-popover-foreground tw:opacity-0 tw:shadow-popover tw:transition-opacity tw:duration-100 tw:data-[modal-owned=true]:z-[var(--ds-z-modal-popover)] tw:data-[ready=true]:opacity-100 tw:motion-reduce:transition-none"
               style={floatingStyles}
             >
               {label}

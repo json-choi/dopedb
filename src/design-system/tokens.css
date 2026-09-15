@@ -74,6 +74,7 @@
   --ds-z-sticky: 6;
   --ds-z-popover: 8;
   --ds-z-modal: 50;
+  --ds-z-modal-popover: 60;
   --ds-z-toast: 1000;
 
   /* Ordinary surfaces stay flat; only floating surfaces receive elevation. */

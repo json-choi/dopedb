@@ -94,6 +94,30 @@ export function IdentityPrimaryButton({
   );
 }
 
+// Keep both account identifiers readable when an identity card becomes narrow.
+// Authentication commands and navigation remain owned by each calling flow.
+export function IdentityAccountChoice({
+  name,
+  email,
+  ...props
+}: Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children" | "className" | "type"> & {
+  name: string;
+  email: string;
+}) {
+  return (
+    <button
+      {...props}
+      type="button"
+      className="tw:grid tw:min-h-control-field tw:w-full tw:min-w-0 tw:cursor-pointer tw:content-center tw:gap-1 tw:border-0 tw:border-b tw:border-border tw:bg-transparent tw:px-3 tw:py-2 tw:text-left tw:text-xs tw:text-foreground tw:hover:bg-surface-raised tw:focus-visible:outline-2 tw:focus-visible:-outline-offset-2 tw:focus-visible:outline-ring tw:disabled:cursor-wait tw:disabled:opacity-[var(--ds-disabled-opacity)]"
+    >
+      <span className="tw:min-w-0 tw:[overflow-wrap:anywhere]">{name}</span>
+      <small className="tw:min-w-0 tw:text-2xs tw:text-muted-foreground tw:[overflow-wrap:anywhere]">
+        {email}
+      </small>
+    </button>
+  );
+}
+
 export function IdentitySecondaryButton({
   children,
   type = "button",

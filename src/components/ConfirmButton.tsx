@@ -1,10 +1,16 @@
-// Inline two-step confirm: one click arms it ("Really delete? Yes / No"), auto-reverts
-// after 3s if untouched. No window.confirm.
-import { useEffect, useRef, useState, type ReactNode } from "react";
+// Canonical destructive-action confirmation. The trigger keeps its original
+// geometry while the decision moves into a centered, blocking alert dialog.
+import { useId, useRef, useState, type ReactNode } from "react";
 import {
   Button,
   type ButtonProps,
 } from "../design-system/components/Button";
+import {
+  ModalBackdrop,
+  ModalFooter,
+  ModalHeader,
+  ModalSurface,
+} from "../design-system/components/Modal";
 import { useI18n } from "../lib/i18n";
 
 type ConfirmButtonBaseProps = {
@@ -37,79 +43,88 @@ export default function ConfirmButton({
   variant = "default",
 }: ConfirmButtonProps) {
   const { t } = useI18n();
-  const [armed, setArmed] = useState(false);
-  const timer = useRef<number | undefined>(undefined);
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const generatedId = useId().replace(/:/g, "");
+  const dialogId = `confirm-dialog-${generatedId}`;
+  const titleId = `${dialogId}-title`;
+  const descriptionId = `${dialogId}-description`;
+  const actionLabel = label ?? children;
+  const close = () => setOpen(false);
 
-  useEffect(() => () => window.clearTimeout(timer.current), []);
-
-  if (!armed) {
-    const arm = () => {
-      setArmed(true);
-      timer.current = window.setTimeout(() => setArmed(false), 3000);
-    };
-    if (iconOnly) {
-      if (!label?.trim()) {
-        throw new Error("ConfirmButton iconOnly requires a non-empty label");
-      }
-      return (
-        <Button
-          disabled={disabled}
-          iconOnly
-          presentation={presentation}
-          size={size}
-          tone={tone}
-          variant={variant}
-          title={label}
-          aria-label={label}
-          onClick={arm}
-        >
-          {children}
-        </Button>
-      );
-    }
-    return (
-      <Button
-        disabled={disabled}
-        presentation={presentation}
-        size={size}
-        tone={tone}
-        variant={variant}
-        title={label}
-        onClick={arm}
-      >
-        {children}
-      </Button>
-    );
+  if (iconOnly && !label?.trim()) {
+    throw new Error("ConfirmButton iconOnly requires a non-empty label");
   }
 
+  const commonTriggerProps = {
+    ref: triggerRef,
+    disabled,
+    presentation,
+    size,
+    tone,
+    variant,
+    "aria-haspopup": "dialog" as const,
+    "aria-expanded": open,
+    "aria-controls": open ? dialogId : undefined,
+    onClick: () => setOpen(true),
+  };
+  const trigger = iconOnly ? (
+    <Button
+      {...commonTriggerProps}
+      iconOnly
+      title={label ?? ""}
+      aria-label={label ?? ""}
+    >
+      {children}
+    </Button>
+  ) : (
+    <Button {...commonTriggerProps} title={label}>
+      {children}
+    </Button>
+  );
+
   return (
-    <span className="tw:inline-flex tw:items-center tw:gap-[var(--ds-control-gap)]">
-      <span className="tw:text-muted-foreground">
-        {confirmLabel ?? t("common.reallyDelete")}
-      </span>
-      <Button
-        size={size}
-        variant="danger"
-        disabled={disabled}
-        onClick={() => {
-          window.clearTimeout(timer.current);
-          setArmed(false);
-          onConfirm();
-        }}
-      >
-        {t("common.yes")}
-      </Button>
-      <Button
-        size={size}
-        autoFocus
-        disabled={disabled}
-        onClick={() => {
-          window.clearTimeout(timer.current);
-          setArmed(false);
-        }}
-      >
-        {t("common.no")}
-      </Button>
-    </span>
+    <>
+      {trigger}
+      {open ? (
+        <ModalBackdrop onMouseDown={close}>
+          <ModalSurface
+            id={dialogId}
+            size="alert"
+            role="alertdialog"
+            aria-labelledby={titleId}
+            aria-describedby={descriptionId}
+            onRequestClose={close}
+            returnFocusRef={triggerRef}
+          >
+            <ModalHeader title={actionLabel} titleId={titleId} />
+            <div className="tw:grid tw:min-w-0 tw:flex-1 tw:content-center tw:gap-2 tw:overflow-auto tw:px-5 tw:py-6 tw:max-[640px]:px-4 tw:max-[640px]:py-5">
+              <p
+                id={descriptionId}
+                className="tw:m-0 tw:min-w-0 tw:text-sm tw:leading-ui tw:text-foreground tw:[overflow-wrap:anywhere]"
+              >
+                {confirmLabel ?? t("common.reallyDelete")}
+              </p>
+            </div>
+            <ModalFooter>
+              <Button data-modal-initial-focus onClick={close}>
+                {t("common.cancel")}
+              </Button>
+              <Button
+                variant="danger"
+                disabled={disabled}
+                labelBehavior="wrap"
+                onClick={() => {
+                  close();
+                  onConfirm();
+                }}
+              >
+                {actionLabel}
+              </Button>
+            </ModalFooter>
+          </ModalSurface>
+        </ModalBackdrop>
+      ) : null}
+    </>
   );
 }

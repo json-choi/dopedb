@@ -218,7 +218,7 @@ export function KnowledgeDatabaseSection({
               {bindings.map((binding) => (
                 <div
                   key={binding.id}
-                  className="tw:grid tw:grid-cols-[minmax(0,1fr)_auto] tw:items-center tw:gap-3 tw:border-b tw:border-border-subtle tw:px-3 tw:py-2 tw:last:border-b-0"
+                  className="tw:grid tw:min-w-0 tw:grid-cols-[minmax(0,1fr)_auto] tw:items-center tw:gap-3 tw:border-b tw:border-border-subtle tw:px-3 tw:py-2 tw:last:border-b-0 tw:@max-[560px]:grid-cols-1"
                 >
                   <span className="tw:grid tw:min-w-0 tw:gap-0.5">
                     <strong className="tw:truncate tw:text-sm">
@@ -232,7 +232,7 @@ export function KnowledgeDatabaseSection({
                       })}
                     </span>
                   </span>
-                  <span className="tw:flex tw:items-center tw:gap-2">
+                  <span className="ds-control-row tw:flex tw:min-w-0 tw:flex-wrap tw:items-center tw:gap-2 tw:[--ds-row-control-size:var(--ds-control-md)]">
                     {binding.stale && binding.connectionId ? (
                       <Button
                         size="compact"

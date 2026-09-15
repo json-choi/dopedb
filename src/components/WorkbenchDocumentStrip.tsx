@@ -135,7 +135,7 @@ export default function WorkbenchDocumentStrip({
               editing={renaming ? (
                 <input
                   autoFocus
-                  className="tw:m-1 tw:min-w-0 tw:flex-1 tw:border-border-strong tw:bg-background tw:px-1 tw:text-sm tw:text-foreground"
+                  className="tw:[--ds-control-local-size:var(--ds-control-md)] tw:m-1 tw:h-control-md tw:min-h-control-md tw:min-w-0 tw:flex-1 tw:border-border-strong tw:bg-background tw:px-1 tw:text-sm tw:text-foreground"
                   value={renameValue}
                   aria-label={t("sql.documentTitle")}
                   onChange={(event) => setRenameValue(event.target.value)}

@@ -408,7 +408,7 @@ export function ManagedAccessDialog({
             ) : null}
           </aside>
 
-          <main className="tw:min-h-0 tw:overflow-y-auto tw:bg-background">
+          <main className="tw:min-h-0 tw:min-w-0 tw:overflow-y-auto tw:bg-background tw:[container-type:inline-size]">
             <div className="tw:mx-auto tw:grid tw:w-full tw:max-w-[760px] tw:gap-5 tw:p-5 tw:@max-[560px]:p-4">
               <div>
                 <h2 className="tw:m-0 tw:text-base tw:font-semibold">{t("managedAccess.title")}</h2>

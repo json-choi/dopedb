@@ -30,6 +30,8 @@ import {
 } from "../../../design-system/components/FormControls";
 import {
   ModalBackdrop,
+  ModalFooter,
+  ModalHeader,
   ModalSurface,
 } from "../../../design-system/components/Modal";
 
@@ -137,20 +139,20 @@ export default function WorkspaceConnectionDialog({
         returnFocusRef={returnFocusRef}
       >
         <form
-          className="tw:flex tw:min-h-0 tw:flex-col tw:gap-3 tw:overflow-auto tw:p-4"
+          className="tw:flex tw:min-h-0 tw:min-w-0 tw:flex-col"
           onSubmit={submit}
         >
-          <header className="tw:flex tw:items-center tw:justify-between tw:gap-3">
-            <h2 id="workspace-connection-title">
-              {mode === "copy"
+          <ModalHeader
+            titleId="workspace-connection-title"
+            title={mode === "copy"
                 ? t("workspace.copyConnection", {
                     name: connection.name,
                   })
                 : t("workspace.bindCredentials", {
                     name: connection.name,
                   })}
-            </h2>
-          </header>
+          />
+          <div className="tw:grid tw:min-h-0 tw:min-w-0 tw:gap-3 tw:overflow-y-auto tw:p-4">
           {mode === "copy" ? (
             <>
               <p
@@ -248,7 +250,8 @@ export default function WorkspaceConnectionDialog({
               {error}
             </div>
           ) : null}
-          <footer className="ds-control-row tw:flex tw:flex-wrap tw:items-center tw:justify-end tw:gap-2 tw:max-[520px]:[&>button]:w-full">
+          </div>
+          <ModalFooter>
             <Button
               onClick={onClose}
               disabled={pending}
@@ -269,7 +272,7 @@ export default function WorkspaceConnectionDialog({
                   ? t("workspace.copy")
                   : t("workspace.bind")}
             </Button>
-          </footer>
+          </ModalFooter>
         </form>
       </ModalSurface>
     </ModalBackdrop>

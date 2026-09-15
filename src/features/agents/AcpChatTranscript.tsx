@@ -682,8 +682,10 @@ function PermissionButton({
   const reject = option.kind.startsWith("reject");
   return (
     <Button
+      labelBehavior="wrap"
       size="xs"
-      variant={reject ? "dangerGhost" : "primary"}
+      variant={reject ? "ghost" : "primary"}
+      title={option.name}
       disabled={disabled}
       onClick={onClick}
     >

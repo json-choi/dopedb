@@ -53,11 +53,11 @@ export function ToolWindowHeader({
       data-divider={divider || undefined}
       className="tw:flex tw:h-[calc(var(--ds-tool-window-header-height)_-_1px)] tw:min-h-[calc(var(--ds-tool-window-header-height)_-_1px)] tw:shrink-0 tw:items-center tw:justify-between tw:gap-2 tw:border-b tw:border-transparent tw:bg-background tw:px-3 tw:text-ui tw:data-[divider=true]:border-border-subtle"
     >
-      <strong className="tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap">
+      <strong className="tw:min-w-0 tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap">
         {title}
       </strong>
       {actions ? (
-        <div className="tw:flex tw:items-center tw:gap-[2px]">{actions}</div>
+        <div className="ds-control-row tw:flex tw:shrink-0 tw:items-center tw:gap-[2px] tw:[--ds-row-control-size:var(--ds-control-sm)]">{actions}</div>
       ) : null}
     </header>
   );
@@ -178,7 +178,7 @@ export function ToolWindowComposerDock({
   children: ReactNode;
 }) {
   return (
-    <div className="tw:mx-3 tw:flex tw:shrink-0 tw:flex-col">
+    <div className="tw:mx-3 tw:flex tw:min-w-0 tw:shrink-0 tw:flex-col">
       {children}
     </div>
   );
@@ -210,22 +210,34 @@ export function ToolWindowComposerInput(
   useLayoutEffect(() => {
     const textarea = textareaRef.current;
     if (!textarea) return;
-    textarea.style.height = "auto";
-    const computed = window.getComputedStyle(textarea);
-    const lineHeight = Number.parseFloat(computed.lineHeight);
-    const padding =
-      Number.parseFloat(computed.paddingTop) +
-      Number.parseFloat(computed.paddingBottom);
-    const maxHeight = lineHeight * 3 + padding;
-    textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`;
-    textarea.style.overflowY = textarea.scrollHeight > maxHeight ? "auto" : "hidden";
+    function resize() {
+      if (!textarea || textarea.clientWidth === 0) return;
+      textarea.style.height = "auto";
+      const computed = window.getComputedStyle(textarea);
+      const lineHeight = Number.parseFloat(computed.lineHeight);
+      const padding =
+        Number.parseFloat(computed.paddingTop) +
+        Number.parseFloat(computed.paddingBottom);
+      const maxHeight = lineHeight * 3 + padding;
+      textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`;
+      textarea.style.overflowY = textarea.scrollHeight > maxHeight ? "auto" : "hidden";
+    }
+    resize();
+    let width = textarea.clientWidth;
+    const observer = new ResizeObserver(() => {
+      if (textarea.clientWidth === width) return;
+      width = textarea.clientWidth;
+      resize();
+    });
+    observer.observe(textarea);
+    return () => observer.disconnect();
   }, [textareaProps.value]);
 
   return (
     <textarea
       ref={textareaRef}
       rows={1}
-      className="tw:min-h-control-lg tw:w-full tw:resize-none tw:border-0 tw:bg-transparent tw:px-9 tw:py-2 tw:font-sans tw:text-body tw:leading-body tw:text-foreground tw:shadow-none tw:outline-none tw:placeholder:text-muted-foreground"
+      className="tw:block tw:min-h-control-lg tw:w-full tw:min-w-0 tw:resize-none tw:border-0 tw:bg-transparent tw:px-9 tw:py-2 tw:font-sans tw:text-body tw:leading-body tw:text-foreground tw:shadow-none tw:outline-none tw:placeholder:text-muted-foreground"
       {...textareaProps}
     />
   );
@@ -237,7 +249,7 @@ export function ToolWindowComposerContext({
   children: ReactNode;
 }) {
   return (
-    <div className="tw:grid tw:shrink-0 tw:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] tw:items-center tw:gap-1 tw:py-1">
+    <div className="ds-control-row tw:grid tw:min-w-0 tw:shrink-0 tw:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] tw:items-center tw:gap-1 tw:py-1 tw:[--ds-row-control-size:var(--ds-control-sm)]">
       {children}
     </div>
   );

@@ -143,6 +143,22 @@ Agent Tools는 중복 page title과 상시
 설명 문단을 제거하고, checkbox 자리를 예약한 고정 identity/state/action grid와
 32px 반복 action, tooltip 상태 아이콘을 사용한다. 전역 작업 검색과 설정·Explorer·
 목록 검색 입력은 같은 직각 경계를 사용한다.
+2026-09-16 공용 control 정합성 점검에서는 Desktop, Workspace Web, site의 모든
+native button/input/select/textarea 사용처를 다시 분류했다. 의도적인 tab·tree·grid
+composite와 checkbox overlay는 유지하고, form은 36/32/28px, workbench·tool-window는
+각 행의 canonical density로 맞췄다. 긴 validation·계정 identity·Agent 권한 문구는
+줄바꿈하고, 일반 button·grid value는 ellipsis와 accessible title을 사용한다.
+삭제·제거 확인은 좁은 설정/목록 행을 늘리지 않는 중앙 `alertdialog`로
+이동했으며 modal footer는
+긴 번역에서 wrap한다. 정적 primitive guard는 세 frontend root의 icon name과
+fixed-density form 최소 높이를 함께 검사한다.
+같은 날 1200×800 macOS 개발 앱에서 AI Chat의 긴 한글 prompt 자동 높이·
+action 고정, 긴 resource label 줄임, Agent Tools 행 밀도를 확인했다.
+프로젝트 삭제·프로젝트에서 DB 제거·연결 편집 modal 안 DB 삭제가
+모두 화면 중앙 `alertdialog`로 표시되고, 취소로 첫 focus를 이동함을
+확인했다. Escape는 부모 modal을 닫지 않고 원래 action focus를 복구한다.
+새 연결 편집기의 이름·호스트·포트·계정 필드와 하단 action 중심선, 데이터
+grid의 query field·header action·필터 popover 밀도도 같은 앱에서 실제로 확인했다.
 
 | 영역 | 상태 | 현재 소유자 | 남은 acceptance gap |
 | --- | --- | --- | --- |

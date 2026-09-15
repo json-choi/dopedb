@@ -161,15 +161,15 @@ export default function Sql(props: Omit<SqlWorkbenchProps, "onShowResult"> & {
           </WorkbenchButton>
           <WorkbenchDivider />
           {!safetyReady ? (
-            <button
-              type="button"
-              className="badge tw:cursor-pointer tw:border-warning tw:bg-transparent tw:text-warning"
+            <WorkbenchButton
+              size="xs"
+              tone={safetyLoadError ? "danger" : "neutral"}
               onClick={onRetrySafety}
               title={safetyLoadError ?? t("sql.safetyLoading")}
             >
               <Icon name={safetyLoadError ? "alert" : "refresh"} />
               {safetyLoadError ? t("sql.retrySafety") : t("sql.safetyLoading")}
-            </button>
+            </WorkbenchButton>
           ) : (
             <ManualTransactionControls
               controller={manualTransaction}

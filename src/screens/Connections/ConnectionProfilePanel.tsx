@@ -78,7 +78,7 @@ export function ConnectionProfilePanel({
         />
       ) : null}
 
-      <div className="tw:min-h-0 tw:flex-1 tw:overflow-y-auto tw:p-5">
+      <div className="tw:min-h-0 tw:min-w-0 tw:flex-1 tw:overflow-y-auto tw:p-5 tw:[container-type:inline-size]">
         {!problems.open && commands.testFailure ? (
           <section
             className="tw:mx-auto tw:mb-4 tw:grid tw:w-full tw:max-w-[840px] tw:gap-1.5 tw:rounded-sm tw:border tw:border-danger/40 tw:bg-danger-muted tw:p-3"

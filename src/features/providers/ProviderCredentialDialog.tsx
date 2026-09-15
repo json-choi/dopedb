@@ -306,7 +306,7 @@ export function ProviderCredentialDialog({
                       aria-pressed={selected}
                     >
                       <span className="tw:grid tw:min-w-0 tw:gap-[var(--ds-segment-gap)]">
-                        <strong className="tw:text-sm">
+                        <strong className="tw:min-w-0 tw:[overflow-wrap:anywhere] tw:text-sm">
                           {integration.displayName}
                         </strong>
                         <small className="tw:text-2xs tw:text-muted-foreground">

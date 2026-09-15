@@ -130,7 +130,7 @@ function AgentRichTextContent({
   );
 
   return (
-    <div className="tw:grid tw:max-w-full tw:min-w-0 tw:gap-3 tw:break-words tw:text-body tw:leading-body tw:text-foreground">
+    <div className="tw:grid tw:max-w-full tw:min-w-0 tw:grid-cols-[minmax(0,1fr)] tw:gap-3 tw:text-body tw:leading-body tw:text-foreground tw:[overflow-wrap:anywhere]">
       <ReactMarkdown
         components={components}
         rehypePlugins={REHYPE_PLUGINS}
@@ -164,7 +164,7 @@ export function AgentPlainText({
   streaming?: boolean;
 }) {
   return (
-    <div className="tw:grid tw:max-w-full tw:min-w-0 tw:gap-3 tw:break-words tw:text-body tw:leading-body tw:text-foreground">
+    <div className="tw:grid tw:max-w-full tw:min-w-0 tw:grid-cols-[minmax(0,1fr)] tw:gap-3 tw:text-body tw:leading-body tw:text-foreground tw:[overflow-wrap:anywhere]">
       <p className="tw:m-0 tw:min-w-0 tw:whitespace-pre-wrap">
         {text}
         {streaming ? (
@@ -366,7 +366,7 @@ function AgentLink({
       target="_blank"
       title={label}
     >
-      <span>{children}</span>
+      <span className="tw:min-w-0">{children}</span>
       <Icon className="tw:inline tw:shrink-0 tw:text-[length:var(--ds-icon-sm)]" name="externalLink" />
     </a>
   );

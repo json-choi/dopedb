@@ -88,7 +88,7 @@ export function ConnectionCatalogDetail({
           <div className="tw:mx-auto tw:grid tw:w-full tw:max-w-[760px] tw:gap-5">
             <section className="tw:grid tw:gap-3">
               <h3>{t("connections.driverDetails")}</h3>
-              <dl className="tw:grid tw:grid-cols-[140px_minmax(0,1fr)] tw:gap-x-4 tw:text-sm tw:[&>*]:border-b tw:[&>*]:border-border-subtle tw:[&>*]:py-2.5">
+              <dl className="tw:grid tw:min-w-0 tw:grid-cols-[minmax(0,0.4fr)_minmax(0,1fr)] tw:gap-x-4 tw:text-sm tw:[&>*]:min-w-0 tw:[&>*]:border-b tw:[&>*]:border-border-subtle tw:[&>*]:py-2.5 tw:[&>*]:[overflow-wrap:anywhere]">
                 <dt className="tw:text-muted-foreground">
                   {t("connections.engine")}
                 </dt>

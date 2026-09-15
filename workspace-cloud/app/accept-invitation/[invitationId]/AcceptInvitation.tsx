@@ -4,6 +4,7 @@
 
 import { useState } from "react";
 import {
+  IdentityAccountChoice,
   IdentityError,
   IdentityPrimaryButton,
   IdentitySecondaryLink,
@@ -67,20 +68,15 @@ export function AcceptInvitation({
             {copy.otherAccountQuestion}
           </small>
           {accounts.filter((account) => account.user.id !== currentUserId).map((account) => (
-            <button
-              className="tw:flex tw:min-h-control-field tw:cursor-pointer tw:items-center tw:justify-between tw:gap-3 tw:border-0 tw:border-b tw:border-border tw:bg-transparent tw:px-2 tw:text-foreground tw:hover:bg-surface-raised tw:disabled:cursor-wait tw:disabled:opacity-[var(--ds-disabled-opacity)]"
-              type="button"
+            <IdentityAccountChoice
               key={account.user.id}
+              name={account.user.name}
+              email={account.user.email}
               onClick={() =>
                 void switchAccount(account.sessions[0].session.token)
               }
               disabled={pending}
-            >
-              <span>{account.user.name}</span>
-              <small className="tw:text-muted-foreground">
-                {account.user.email}
-              </small>
-            </button>
+            />
           ))}
         </div>
       ) : null}

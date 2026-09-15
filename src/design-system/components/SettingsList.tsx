@@ -42,17 +42,17 @@ export function SettingsRow({
   children?: ReactNode;
 }) {
   return (
-    <div className="tw:grid tw:min-h-[56px] tw:grid-cols-[minmax(180px,32%)_minmax(0,1fr)_76px] tw:items-center tw:gap-x-3 tw:gap-y-1.5 tw:px-3 tw:py-2 tw:@max-[640px]:grid-cols-[minmax(0,1fr)_76px]">
+    <div className="tw:grid tw:min-h-[56px] tw:min-w-0 tw:grid-cols-[minmax(0,32%)_minmax(0,1fr)_76px] tw:items-center tw:gap-x-3 tw:gap-y-1.5 tw:px-3 tw:py-2 tw:@max-[640px]:grid-cols-[minmax(0,1fr)_76px]">
       <div className="tw:min-w-0 tw:@max-[640px]:col-start-1 tw:@max-[640px]:row-start-1">
         {identity}
       </div>
       {details ? (
-        <div className="tw:min-w-0 tw:@max-[640px]:col-start-1 tw:@max-[640px]:row-start-2">
+        <div className="tw:col-start-2 tw:min-w-0 tw:[overflow-wrap:anywhere] tw:@max-[640px]:col-start-1 tw:@max-[640px]:row-start-2">
           {details}
         </div>
       ) : null}
       {actions ? (
-        <div className="tw:flex tw:min-w-0 tw:flex-wrap tw:items-center tw:justify-end tw:gap-[var(--ds-control-gap)] tw:@max-[640px]:col-start-2 tw:@max-[640px]:row-span-2 tw:@max-[640px]:row-start-1">
+        <div className="ds-control-row tw:col-start-3 tw:flex tw:min-w-0 tw:flex-wrap tw:items-center tw:justify-end tw:gap-[var(--ds-control-gap)] tw:[--ds-row-control-size:var(--ds-control-md)] tw:@max-[640px]:col-start-2 tw:@max-[640px]:row-span-2 tw:@max-[640px]:row-start-1">
           {actions}
         </div>
       ) : null}

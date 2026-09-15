@@ -88,106 +88,108 @@ export default function AcpChatComposer({
         onSubmit={commands.composer.submit}
         busy={session.busy}
       >
-        <ToolWindowComposerInput
-          data-agent-focus-target="composer"
-          data-modal-initial-focus={composerDisabled ? undefined : true}
-          value={composer.prompt}
-          maxLength={composer.maxPromptChars}
-          disabled={composerDisabled}
-          placeholder={
-            session.busy ? t("agent.acpWaiting") : t("agent.acpPrompt")
-          }
-          aria-label={t("agent.acpPrompt")}
-          onChange={(event) => commands.composer.setPrompt(event.target.value)}
-          onKeyDown={(event) => {
-            if (
-              event.key === "Enter" &&
-              !event.shiftKey &&
-              !event.nativeEvent.isComposing
-            ) {
-              event.preventDefault();
-              event.currentTarget.form?.requestSubmit();
+        <div className="tw:relative tw:min-w-0">
+          <ToolWindowComposerInput
+            data-agent-focus-target="composer"
+            data-modal-initial-focus={composerDisabled ? undefined : true}
+            value={composer.prompt}
+            maxLength={composer.maxPromptChars}
+            disabled={composerDisabled}
+            placeholder={
+              session.busy ? t("agent.acpWaiting") : t("agent.acpPrompt")
             }
-          }}
-        />
+            aria-label={t("agent.acpPrompt")}
+            onChange={(event) => commands.composer.setPrompt(event.target.value)}
+            onKeyDown={(event) => {
+              if (
+                event.key === "Enter" &&
+                !event.shiftKey &&
+                !event.nativeEvent.isComposing
+              ) {
+                event.preventDefault();
+                event.currentTarget.form?.requestSubmit();
+              }
+            }}
+          />
+          <div className="tw:pointer-events-none tw:absolute tw:right-1 tw:bottom-1 tw:left-1 tw:flex tw:h-control-sm tw:items-center tw:gap-1">
+            {composer.contextLabels.length > 0 ? (
+              <span className="tw:pointer-events-auto tw:inline-flex">
+                <Button
+                  type="button"
+                  iconOnly
+                  size="xs"
+                  variant="ghost"
+                  aria-pressed={composer.includeEditorContext}
+                  onClick={commands.composer.toggleEditorContext}
+                  title={
+                    composer.includeEditorContext
+                      ? t("agent.acpDetachContext")
+                      : t("agent.acpAttachContext")
+                  }
+                  aria-label={
+                    composer.includeEditorContext
+                      ? t("agent.acpDetachContext")
+                      : t("agent.acpAttachContext")
+                  }
+                >
+                  <Icon name="plus" />
+                </Button>
+              </span>
+            ) : null}
+            <span className="tw:flex-1" />
+            <span className="tw:pointer-events-auto tw:inline-flex">
+              {active?.lifecycle === "running" ||
+              active?.lifecycle === "waitingPermission" ? (
+                <Button
+                  iconOnly
+                  size="xs"
+                  variant="ghost"
+                  tone="danger"
+                  onClick={() => void commands.session.cancelTurn()}
+                  title={t("agent.acpCancel")}
+                  aria-label={t("agent.acpCancel")}
+                >
+                  <Icon name="stop" />
+                </Button>
+              ) : (
+                <Button
+                  type="submit"
+                  iconOnly
+                  size="xs"
+                  variant="ghost"
+                  disabled={
+                    session.starting ||
+                    !setup.prerequisitesReady ||
+                    !composer.environmentScopeReady ||
+                    (active !== null &&
+                      active.lifecycle !== "ready" &&
+                      active.lifecycle !== "closed" &&
+                      active.lifecycle !== "failed") ||
+                    !composer.prompt.trim()
+                  }
+                  title={t("agent.acpSend")}
+                  aria-label={t("agent.acpSend")}
+                >
+                  <Icon name="send" />
+                </Button>
+              )}
+            </span>
+          </div>
+        </div>
         {composer.includeEditorContext && composer.contextLabels.length > 0 ? (
-          <div className="tw:flex tw:flex-wrap tw:gap-1 tw:px-2 tw:pb-1">
+          <div className="tw:flex tw:min-w-0 tw:flex-wrap tw:gap-1 tw:px-2 tw:pb-1">
             {composer.contextLabels.map((label) => (
               <span
                 key={label.text}
-                className="tw:inline-flex tw:h-control-sm tw:max-w-full tw:items-center tw:gap-1 tw:rounded-xs tw:bg-muted tw:px-2 tw:text-xs tw:text-foreground"
+                className="tw:inline-flex tw:h-control-sm tw:max-w-full tw:min-w-0 tw:items-center tw:gap-1 tw:rounded-xs tw:bg-muted tw:px-2 tw:text-xs tw:text-foreground"
                 title={label.text}
               >
-                <Icon name={label.icon} />
-                <span className="tw:truncate">{label.text}</span>
+                <Icon name={label.icon} className="tw:shrink-0" />
+                <span className="tw:min-w-0 tw:truncate">{label.text}</span>
               </span>
             ))}
           </div>
         ) : null}
-        <div className="tw:pointer-events-none tw:absolute tw:right-1 tw:bottom-1 tw:left-1 tw:flex tw:h-control-sm tw:items-center tw:gap-1">
-          {composer.contextLabels.length > 0 ? (
-            <span className="tw:pointer-events-auto tw:inline-flex">
-              <Button
-                type="button"
-                iconOnly
-                size="xs"
-                variant="ghost"
-                aria-pressed={composer.includeEditorContext}
-                onClick={commands.composer.toggleEditorContext}
-                title={
-                  composer.includeEditorContext
-                    ? t("agent.acpDetachContext")
-                    : t("agent.acpAttachContext")
-                }
-                aria-label={
-                  composer.includeEditorContext
-                    ? t("agent.acpDetachContext")
-                    : t("agent.acpAttachContext")
-                }
-              >
-                <Icon name="plus" />
-              </Button>
-            </span>
-          ) : null}
-          <span className="tw:flex-1" />
-          <span className="tw:pointer-events-auto tw:inline-flex">
-            {active?.lifecycle === "running" ||
-            active?.lifecycle === "waitingPermission" ? (
-              <Button
-                iconOnly
-                size="xs"
-                variant="ghost"
-                tone="danger"
-                onClick={() => void commands.session.cancelTurn()}
-                title={t("agent.acpCancel")}
-                aria-label={t("agent.acpCancel")}
-              >
-                <Icon name="stop" />
-              </Button>
-            ) : (
-              <Button
-                type="submit"
-                iconOnly
-                size="xs"
-                variant="ghost"
-                disabled={
-                  session.starting ||
-                  !setup.prerequisitesReady ||
-                  !composer.environmentScopeReady ||
-                  (active !== null &&
-                    active.lifecycle !== "ready" &&
-                    active.lifecycle !== "closed" &&
-                    active.lifecycle !== "failed") ||
-                  !composer.prompt.trim()
-                }
-                title={t("agent.acpSend")}
-                aria-label={t("agent.acpSend")}
-              >
-                <Icon name="send" />
-              </Button>
-            )}
-          </span>
-        </div>
       </ToolWindowComposer>
       <ToolWindowComposerContext>
         <ToolbarMenu

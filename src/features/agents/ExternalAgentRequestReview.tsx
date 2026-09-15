@@ -35,7 +35,7 @@ export function ExternalAgentStartReview({
     );
   }
   return (
-    <div className="tw:grid tw:gap-4">
+    <div className="tw:grid tw:min-w-0 tw:grid-cols-[minmax(0,1fr)] tw:gap-4 tw:[overflow-wrap:anywhere]">
       <div>
         <h2 className="tw:m-0 tw:text-base tw:font-semibold">
           {review.project?.name ?? request.config.projectId}
@@ -149,7 +149,7 @@ function ResourceReviewList({
               })}
             </span>
           </span>
-          <span className="tw:text-xs tw:text-muted-foreground">
+          <span className="tw:max-w-[40%] tw:shrink-0 tw:text-xs tw:text-muted-foreground">
             {database.connectionId === writeConnectionId
               ? t("agent.externalWriteTarget")
               : t("agent.acpReadOnlyContext")}

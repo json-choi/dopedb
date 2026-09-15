@@ -7,6 +7,7 @@ import {
 } from "../../design-system/components/Workbench";
 import { useI18n } from "../../lib/i18n";
 import { Icon } from "../../components/Icon";
+import { TextInput } from "../../design-system/components/FormControls";
 import ResultToolbar from "./ResultToolbar";
 
 export function ResultWorkbenchToolbar({
@@ -54,14 +55,17 @@ export function ResultWorkbenchToolbar({
         <Icon name="search" />
       </WorkbenchButton>
       {filterOpen ? (
-        <input
-          autoFocus
-          className="tw:h-control-sm tw:w-[min(260px,34vw)] tw:min-w-0 tw:shrink tw:rounded-sm tw:border tw:border-border-subtle tw:bg-background tw:px-2 tw:font-sans tw:text-sm tw:text-foreground tw:outline-none tw:placeholder:text-muted-foreground tw:focus:border-ring tw:focus:ring-1 tw:focus:ring-ring"
-          value={filter}
-          onChange={(event) => onFilterChange(event.target.value)}
-          placeholder={t("services.resultSearchPlaceholder")}
-          aria-label={t("services.resultSearch")}
-        />
+        <span className="tw:w-[min(260px,34vw)] tw:min-w-24 tw:shrink">
+          <TextInput
+            autoFocus
+            density="xs"
+            type="search"
+            value={filter}
+            onChange={(event) => onFilterChange(event.target.value)}
+            placeholder={t("services.resultSearchPlaceholder")}
+            aria-label={t("services.resultSearch")}
+          />
+        </span>
       ) : null}
       <ResultToolbar
         columns={columns}

@@ -3,7 +3,9 @@ import path from "node:path";
 import { parse } from "@babel/parser";
 
 const root = process.cwd();
-const sourceRoot = path.join(root, "src");
+const sourceRoots = ["src", "workspace-cloud/app", "site/app"].map((directory) =>
+  path.join(root, directory),
+);
 const failures = [];
 let canonicalIconButtons = 0;
 let canonicalConfirmIconButtons = 0;
@@ -43,6 +45,20 @@ function inspectElement(file, opening) {
   if (opening.name.type !== "JSXIdentifier") return;
   const tag = opening.name.name;
   const attributes = opening.attributes;
+
+  if (["input", "select", "textarea"].includes(tag)) {
+    const className = staticString(attribute(attributes, "className"));
+    const density = className?.match(/(?:^|\s)tw:h-control-(xs|sm|md|lg)(?:\s|$)/)?.[1];
+    if (
+      density &&
+      !className?.split(/\s+/).includes(`tw:min-h-control-${density}`) &&
+      !className?.split(/\s+/).includes("tw:min-h-0")
+    ) {
+      failures.push(
+        `${location(file, opening)} ${tag} with h-control-${density} needs matching min height or an explicit min-h-0 escape`,
+      );
+    }
+  }
 
   if (tag === "button") {
     const className = staticString(attribute(attributes, "className"));
@@ -88,7 +104,7 @@ function visit(file, node) {
   }
 }
 
-for (const file of await sourceFiles(sourceRoot)) {
+for (const file of (await Promise.all(sourceRoots.map(sourceFiles))).flat()) {
   const source = await readFile(file, "utf8");
   const parsed = parse(source, {
     sourceFilename: file,

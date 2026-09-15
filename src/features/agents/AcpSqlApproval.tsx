@@ -147,12 +147,12 @@ export default function AcpSqlApproval({
         {error ? <InlineNotice tone="danger" icon="alert" role="alert">{error}</InlineNotice> : null}
         {review && (review.state === "pending_approval" || review.state === "approved") ? (
           <div className="tw:flex tw:flex-wrap tw:gap-2">
-            <Button size="compact" variant="primary" disabled={phase !== "idle"} onClick={() => void approveAndRun()}>
+            <Button size="xs" variant="primary" disabled={phase !== "idle"} onClick={() => void approveAndRun()}>
               <Icon name="play" />
               {review.state === "approved" ? t("agent.acpSqlApprovalRun") : t("agent.acpSqlApprovalApproveRun")}
             </Button>
             {review.state === "pending_approval" ? (
-              <Button size="compact" variant="dangerGhost" disabled={phase !== "idle"} onClick={() => void reject()}>
+              <Button size="xs" variant="ghost" disabled={phase !== "idle"} onClick={() => void reject()}>
                 {t("agent.acpSqlApprovalReject")}
               </Button>
             ) : null}

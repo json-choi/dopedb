@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { changeConnectionGrant } from "../../features/connectionAccess/grants";
 import { useDesktopAccessReturn } from "../../features/connectionAccess/DesktopAccessReturn";
-import { ControlButton } from "../components/Controls";
+import { ControlButton, ControlField, ControlSelect } from "../components/Controls";
 import { useWorkspaceLocale } from "../components/WorkspaceLocale";
 import { candidateConflictResolution } from "../../lib/connection-conflict-decision";
 import type { WorkspaceLocale } from "../../lib/workspace-locale";
@@ -462,12 +462,8 @@ export function ConnectionAccessPanel({ workspaceId }: { workspaceId: string }) 
         </section>
       ) : null}
 
-      <label className="tw:grid tw:gap-1">
-        <span className="tw:font-mono tw:text-2xs tw:text-muted-foreground tw:uppercase">
-          {copy.sharedConnection}
-        </span>
-        <select
-          className="tw:h-control-field tw:w-full tw:border tw:border-border tw:bg-surface-inset tw:px-3 tw:text-ui tw:text-foreground tw:outline-none tw:focus:border-primary"
+      <ControlField label={copy.sharedConnection}>
+        <ControlSelect
           value={selectedId}
           disabled={loading || connections.length === 0}
           onChange={(event) => setSelectedId(event.target.value)}
@@ -480,8 +476,8 @@ export function ConnectionAccessPanel({ workspaceId }: { workspaceId: string }) 
               {connection.name} · {connection.engine}
             </option>
           ))}
-        </select>
-      </label>
+        </ControlSelect>
+      </ControlField>
 
       {selected ? (
         <p className="tw:m-0 tw:text-xs tw:leading-body tw:text-muted-foreground">
@@ -529,8 +525,8 @@ export function ConnectionAccessPanel({ workspaceId }: { workspaceId: string }) 
                   {grant.email} · {grant.role}
                 </small>
               </div>
-              <select
-                className="tw:h-control-sm tw:w-full tw:border tw:border-border tw:bg-surface-inset tw:px-2 tw:text-xs tw:text-foreground tw:outline-none tw:focus:border-primary tw:disabled:cursor-not-allowed tw:disabled:opacity-[var(--ds-disabled-opacity)]"
+              <ControlSelect
+                density="compact"
                 aria-label={`${grant.name} ${copy.permissionLabel}`}
                 value={grant.capability ?? ""}
                 disabled={mutatingId !== "" || isActor}
@@ -548,7 +544,7 @@ export function ConnectionAccessPanel({ workspaceId }: { workspaceId: string }) 
                     : copy.useLocal}
                 </option>
                 <option value="manage">{copy.manage}</option>
-              </select>
+              </ControlSelect>
             </div>
           );
         })}

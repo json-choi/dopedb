@@ -234,7 +234,8 @@ function ResourceCheckbox({
       aria-checked={checked}
       aria-disabled={disabled}
       data-menu-keep-open
-      className="tw:flex tw:min-h-control-md tw:cursor-pointer tw:items-center tw:gap-2 tw:rounded-sm tw:px-2 tw:py-1 tw:text-foreground tw:aria-checked:bg-selection tw:aria-checked:text-selection-foreground tw:aria-disabled:cursor-default tw:aria-disabled:opacity-55 tw:hover:bg-muted"
+      title={`${label} · ${detail}${reconfirm ? ` · ${t("agent.acpEnvironmentReconfirm")}` : ""}`}
+      className="tw:flex tw:min-h-control-md tw:min-w-0 tw:cursor-pointer tw:items-center tw:gap-2 tw:rounded-sm tw:px-2 tw:py-1 tw:text-foreground tw:aria-checked:bg-selection tw:aria-checked:text-selection-foreground tw:aria-disabled:cursor-default tw:aria-disabled:opacity-55 tw:hover:bg-muted"
     >
       <input
         type="checkbox"
@@ -251,7 +252,7 @@ function ResourceCheckbox({
           {reconfirm ? ` · ${t("agent.acpEnvironmentReconfirm")}` : ""}
         </span>
       </span>
-      {suffix}
+      {suffix ? <span className="tw:shrink-0">{suffix}</span> : null}
     </label>
   );
 }
@@ -270,14 +271,15 @@ function WriteTargetRadio({
       role="menuitemradio"
       aria-checked={checked}
       data-menu-keep-open
-      className="tw:flex tw:min-h-control-md tw:cursor-pointer tw:items-center tw:gap-2 tw:rounded-sm tw:px-2 tw:text-sm tw:font-medium tw:text-foreground tw:aria-checked:bg-selection tw:aria-checked:text-selection-foreground tw:hover:bg-muted"
+      title={label}
+      className="tw:flex tw:min-h-control-md tw:min-w-0 tw:cursor-pointer tw:items-center tw:gap-2 tw:rounded-sm tw:px-2 tw:text-sm tw:font-medium tw:text-foreground tw:aria-checked:bg-selection tw:aria-checked:text-selection-foreground tw:hover:bg-muted"
     >
       <input
         type="radio"
         name="agent-write-target"
         checked={checked}
         onChange={onChange}
-        className="tw:size-4 tw:accent-primary"
+        className="tw:size-4 tw:shrink-0 tw:accent-primary"
       />
       <span className="tw:min-w-0 tw:truncate">{label}</span>
     </label>

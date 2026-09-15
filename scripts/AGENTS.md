@@ -23,7 +23,7 @@ root `AGENTS.md` GitHub identity and release sections).
 | `check-critical-test-budget.mjs` | Enforces the repository's fixed 208-test critical-suite budget. | `check:test-budget` |
 | `check-site-deployment.mjs` | Verifies the requested site Worker version has 100% traffic and matches the live production domain. | `site:cloud:verify-deployment` |
 | `check-ui-palette.mjs` | Scans `src/` for raw colors outside the design-system semantic token contract. | `check:ui-palette` |
-| `check-ui-primitives.mjs` | Scans `src/` for unnamed icon-only controls and non-canonical primitive usage. | `check:ui-primitives` |
+| `check-ui-primitives.mjs` | Scans Desktop, Workspace Web, and site frontend roots for unnamed icon-only controls and inconsistent fixed-density form geometry. | `check:ui-primitives` |
 | `check-workspace-deployment.mjs` | Verifies the requested Workspace Cloud Worker version has 100% traffic and matches the live production domain. | `workspace:cloud:verify-deployment` |
 | `check-workspace-server-logs.mjs` | Enforces that server-side logging in `workspace-cloud/` only goes through the allowed log sink. | `check:workspace-logs` |
 | `deploy-site-cloudflare.mjs` | Deploys the public site to Cloudflare Workers. | `site:cloud:deploy` |

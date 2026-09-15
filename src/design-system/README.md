@@ -324,6 +324,10 @@ Elevation은 세 단계만 허용한다.
   desktop 24px, 640px 이하 16px의 같은 content gutter를 사용한다. Database
   요약과 우측 action은 확장 상태에서도 첫 2열을 유지하고, 복구 안내처럼 길어지는
   보조 내용은 그 아래 전체 폭 grid row가 소유한다.
+  `ControlSelect`의 기본 밀도는 44px field, `density="compact"`는 34px
+  inline filter다. 인증·초대 화면의 계정 선택 행은 `IdentityAccountChoice`가
+  최소 44px 높이, 이름·이메일의 수직 계층과 긴 문자열 줄바꿈을 소유하며
+  각 화면은 인증 command만 제공한다.
   `ControlButton`의 `aria-pressed`는 작업·공급자 선택의 semantic selection
   surface를 소유한다. Providers는 선택 목록과 선택한 공급자의 연결 안내를
   2열로 배치하고 640px 이하에서는 한 열로 접는다. 계정 관리는 native details로
@@ -349,7 +353,15 @@ Elevation은 세 단계만 허용한다.
 - `Button`: 전역 `.btn`을 대체하는 Tailwind button primitive. variant, density,
   icon geometry, tone, active/expanded state를 semantic prop으로 소유한다.
   popup 내부 full-width action은 화면별 class를 만들지 않고
-  `presentation="menuItem"`을 사용한다.
+  `presentation="menuItem"`을 사용한다. 기본 label은 고정 높이 안에서 한 줄로
+  줄이고, 권한 요청처럼 원문을 생략할 수 없는 문구만
+  `labelBehavior="wrap"`으로 높이를 늘려 전체 문자열을 표시한다.
+  같은 flat row 외형이 필요하지만 부모가 menu가 아닌 목록이면 ARIA menu 역할을
+  만들지 않는 `presentation="listItem"`을 사용한다.
+- `ConfirmButton`: 삭제·제거 action의 원래 행 크기를 유지한 채 화면 중앙의
+  blocking `alertdialog`에 영향 설명과 취소/파괴적 action을 여는 2단계
+  확인 composition. 취소를 첫 focus로 두고 배경 클릭·Escape로 닫으며,
+  자동으로 사라지지 않고 닫은 뒤 trigger focus를 복구한다.
 - `ResizeSeparator`: shell sidebar와 data-grid column이 공유하는
   keyboard/pointer resize 경계. 실제 dimension과 min/max/now ARIA를 연결하고,
   방향키의 bounded step, Home/End 경계 이동, double-click reset을 소유한다.
@@ -361,6 +373,10 @@ Elevation은 세 단계만 허용한다.
   portal 위치는 공용 `floatingSurfaceMiddleware`를 통해 Floating UI의
   `autoUpdate`, `flip`, `shift`, `size`, `hide`를 사용한다. CSS token이 spacing과
   viewport gutter를 계속 소유하며 feature는 vendor package를 직접 import하지 않는다.
+  menu처럼 focus 가능한 portal은 trigger가 속한 modal/menu ID를 이어받아
+  focus containment와 바깥 클릭 판정에서도 원래 surface의 자식으로 취급한다.
+  modal이 소유한 floating surface는 `--ds-z-modal-popover`를 사용해
+  modal backdrop·surface 위에서도 눈에 보이고 조작 가능해야 한다.
 - `WorkbenchButton`: `Button`을 합성한 query, table, result command row의
   32px label/icon action.
   `variant`, `tone`, `active`, `collapse` data contract로 상태와 compact overflow를
@@ -400,7 +416,9 @@ Elevation은 세 단계만 허용한다.
   외부 2열·2행 context grid. 첫 행은 Agent·model, 둘째 행은 resource·승인 모드다.
   입력면은 한 줄에서 시작해 내용에 따라 최대 세 줄까지만 자동 확장하며 수동 확대
   action을 제공하지 않는다. 첨부와 전송 action은 textarea 안쪽 양 끝에 overlay해
-  비어 있는 composer 전체도 실제 한 줄 높이를 유지한다. composer 경계는
+  context chip이 늘어나도 action의 위치와 클릭 영역을 밀지 않는다. textarea는
+  입력뿐 아니라 dock 폭 변경도 관찰해 1~3줄 높이를 다시 계산하고, 비어 있는
+  composer 전체도 실제 한 줄 높이를 유지한다. composer 경계는
   tool-window와 같은 직각 surface이고,
   `busy` 상태는 Agent가 응답·승인을 기다리는 동안 활성 작업 경계를 유지한다.
   textarea의 기본 focus shadow는 제거하고 바깥 composer 경계 하나로 입력 focus를
@@ -457,7 +475,11 @@ Elevation은 세 단계만 허용한다.
   control. `PropertyRow`는 Data Sources General처럼 100px label과 control을
   가로로 맞추고 compact dialog에서는 세로로 접는다. property
   field는 `density="compact"`의 32px control을 사용하며 feature가 별도
-  input class를 만들지 않는다. `InlineSelect`는 General 상단의 Connection
+  input class를 만들지 않는다. `TextInput`과 `SelectInput`의 기본 밀도는 36px,
+  `compact`는 32px, `xs`는 tool-window 내부의 28px다. 각 밀도는 높이와 최소
+  높이, `--ds-control-local-size`를 함께 소유해 control row의 암묵적인 높이가
+  덮어쓰지 않는다. 모든 field는 portal dialog에서도 자체 `min-width: 0`과
+  최대 폭을 갖고, checkbox는 긴 label 때문에 축소되지 않는다. `InlineSelect`는 General 상단의 Connection
   type·Driver처럼 label과 값이 한 줄에 놓이는 실제 선택 속성을 소유한다.
   SQL/session 설정처럼 여러 줄인 값은 화면별 textarea class를 만들지 않고
   monospace `TextAreaInput`을 사용한다. 계층 checklist의 parent는
@@ -531,8 +553,9 @@ Elevation은 세 단계만 허용한다.
   않는다.
 - `ModalBackdrop`, `ModalSurface`, `ModalHeader`, `ModalDetailActionBar`,
   `ModalFooter`: background interaction을 차단하는 공용 viewport backdrop,
-  responsive dialog frame과 44px header/48px detail action/50px primary action
-  bar. SQL parameter, DDL viewer, provider credential처럼 background interaction을
+  responsive dialog frame과 44px header, 최소 48px detail action, 최소 50px primary
+  action bar. 두 action bar는 좁은 폭이나 긴 번역에서 줄을 바꾸며 높이를 늘린다.
+  SQL parameter, DDL viewer, provider credential처럼 background interaction을
   막는 feature dialog도 이 frame을 사용하고 별도 modal CSS를 만들지 않는다.
   `ModalSurface`는 열릴 때 `[data-modal-initial-focus]` 또는 첫 control로 focus를
   옮기고, Tab/Shift+Tab을 최상위 dialog 안에서 순환시키며, 외부로 이동한
@@ -923,6 +946,7 @@ database ERD는 이 renderer가 아니라 기존 React Flow + ELK surface가 소
 | `size="xs"` | 28px tool-window header·composer의 compact action |
 | `size="xs" iconOnly` | 28px compact icon action; padding 없는 정사각형 |
 | `size="tree"` | 24px tree-row action; 28px resource row 안에서만 사용 |
+| `labelBehavior="wrap"` | 권한 요청처럼 생략할 수 없는 긴 원문; 나머지는 한 줄 ellipsis |
 
 `Button`의 명시적 `size`는 `.ds-control-row` 안에서도 항상 우선한다. 설정 inventory의
 반복 action은 `compact` 32px, tool-window header와 composer action은 `xs` 28px,
@@ -940,7 +964,8 @@ Cancel, Close, Dismiss는 destructive가 아니다. 기본 variant 또는 `ghost
 아이콘 명령은 `Button iconOnly`를 사용한다. `title` 또는 `aria-label`은 접근 가능한 이름과
 canonical `Tooltip`의 hover/focus 문구를 함께 제공한다. `pnpm
 check:ui-primitives`는 raw icon-only button의 재도입과 이름 없는 `Button
-iconOnly`를 차단한다. 보통 icon action은 투명한 surface로 시작하고
+iconOnly`, 고정 density input/select/textarea의 높이·최소 높이 불일치를 Desktop,
+Workspace Web, site 전반에서 차단한다. 보통 icon action은 투명한 surface로 시작하고
 hover/active에서만 중립 배경을 드러낸다.
 `Button`의 enabled hover는 variant의 기본 배경보다 우선해 중립 배경과 선명한
 glyph를 표시한다. disabled 버튼에는 hover 색상을 적용하지 않으며 reduced motion에서는

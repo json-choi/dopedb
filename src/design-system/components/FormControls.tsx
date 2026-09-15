@@ -21,7 +21,7 @@ export function FieldValidationMessage({
   return (
     <span
       data-tone={validation.tone}
-      className="tw:text-xs tw:font-normal tw:text-warning tw:data-[tone=danger]:text-danger"
+      className="tw:min-w-0 tw:[overflow-wrap:anywhere] tw:text-xs tw:font-normal tw:text-warning tw:data-[tone=danger]:text-danger"
       role={validation.tone === "danger" ? "alert" : "status"}
     >
       {validation.message}
@@ -42,7 +42,7 @@ export function Field({
 }) {
   return (
     <label className="tw:grid tw:min-w-0 tw:gap-1.5 tw:text-sm tw:font-medium tw:text-muted-foreground tw:[&>input]:w-full tw:[&>select]:w-full tw:[&>textarea]:w-full">
-      <span className="tw:inline-flex tw:items-center tw:gap-1">
+      <span className="tw:inline-flex tw:min-w-0 tw:items-center tw:gap-1 tw:[overflow-wrap:anywhere]">
         {label}
         {hint}
       </span>
@@ -71,7 +71,7 @@ export function PropertyRow({
     <div className="tw:grid tw:min-h-control-md tw:min-w-0 tw:grid-cols-[100px_minmax(0,1fr)] tw:items-start tw:gap-x-3 tw:gap-y-1.5 tw:@max-[560px]:grid-cols-1">
       <label
         htmlFor={htmlFor}
-        className="tw:inline-flex tw:min-h-control-md tw:items-center tw:gap-1 tw:text-sm tw:text-foreground tw:@max-[560px]:min-h-0"
+        className="tw:inline-flex tw:min-h-control-md tw:min-w-0 tw:items-center tw:gap-1 tw:text-sm tw:text-foreground tw:[overflow-wrap:anywhere] tw:@max-[560px]:min-h-0"
       >
         {label}
         {hint}
@@ -89,7 +89,7 @@ export function PropertyRow({
 export const TextInput = forwardRef<
   HTMLInputElement,
   Omit<InputHTMLAttributes<HTMLInputElement>, "className"> & {
-    density?: "default" | "compact";
+    density?: "default" | "compact" | "xs";
     monospace?: boolean;
   }
 >(function TextInput({ density = "default", monospace = false, ...props }, ref) {
@@ -99,7 +99,7 @@ export const TextInput = forwardRef<
       data-density={density}
       data-monospace={monospace}
       data-search={props.type === "search" || undefined}
-      className="tw:h-control-lg tw:w-full tw:rounded-sm tw:border tw:border-input tw:bg-background tw:px-3 tw:font-sans tw:text-ui tw:text-foreground tw:shadow-control tw:outline-none tw:data-[density=compact]:h-control-md tw:data-[density=compact]:px-2 tw:data-[monospace=true]:font-mono tw:data-[search=true]:rounded-none tw:placeholder:text-muted-foreground tw:focus:border-ring tw:focus:ring-2 tw:focus:ring-ring/30 tw:disabled:cursor-default tw:disabled:opacity-50"
+      className="tw:[--ds-control-local-size:var(--ds-control-lg)] tw:data-[density=compact]:[--ds-control-local-size:var(--ds-control-md)] tw:data-[density=xs]:[--ds-control-local-size:var(--ds-control-sm)] tw:h-control-lg tw:min-h-control-lg tw:w-full tw:min-w-0 tw:max-w-full tw:rounded-sm tw:border tw:border-input tw:bg-background tw:px-3 tw:font-sans tw:text-ui tw:text-foreground tw:shadow-control tw:outline-none tw:data-[density=compact]:h-control-md tw:data-[density=compact]:min-h-control-md tw:data-[density=xs]:h-control-sm tw:data-[density=xs]:min-h-control-sm tw:data-[density=xs]:px-2 tw:data-[density=compact]:px-2 tw:data-[monospace=true]:font-mono tw:data-[search=true]:rounded-none tw:placeholder:text-muted-foreground tw:focus:border-ring tw:focus:ring-2 tw:focus:ring-ring/30 tw:disabled:cursor-default tw:disabled:opacity-50"
       {...props}
     />
   );
@@ -108,7 +108,7 @@ export const TextInput = forwardRef<
 export const SelectInput = forwardRef<
   HTMLSelectElement,
   Omit<SelectHTMLAttributes<HTMLSelectElement>, "className"> & {
-    density?: "default" | "compact";
+    density?: "default" | "compact" | "xs";
   }
 >(function SelectInput(
   { children, density = "default", ...props },
@@ -118,7 +118,7 @@ export const SelectInput = forwardRef<
     <select
       ref={ref}
       data-density={density}
-      className="tw:h-control-lg tw:w-full tw:rounded-sm tw:border tw:border-input tw:bg-background tw:px-3 tw:font-sans tw:text-ui tw:text-foreground tw:shadow-control tw:outline-none tw:data-[density=compact]:h-control-md tw:data-[density=compact]:px-2 tw:focus:border-ring tw:focus:ring-2 tw:focus:ring-ring/30 tw:disabled:cursor-default tw:disabled:opacity-50"
+      className="tw:[--ds-control-local-size:var(--ds-control-lg)] tw:data-[density=compact]:[--ds-control-local-size:var(--ds-control-md)] tw:data-[density=xs]:[--ds-control-local-size:var(--ds-control-sm)] tw:h-control-lg tw:min-h-control-lg tw:w-full tw:min-w-0 tw:max-w-full tw:rounded-sm tw:border tw:border-input tw:bg-background tw:px-3 tw:font-sans tw:text-ui tw:text-foreground tw:shadow-control tw:outline-none tw:data-[density=compact]:h-control-md tw:data-[density=compact]:min-h-control-md tw:data-[density=xs]:h-control-sm tw:data-[density=xs]:min-h-control-sm tw:data-[density=xs]:px-2 tw:data-[density=compact]:px-2 tw:focus:border-ring tw:focus:ring-2 tw:focus:ring-ring/30 tw:disabled:cursor-default tw:disabled:opacity-50"
       {...props}
     >
       {children}
@@ -133,7 +133,7 @@ export const InlineSelect = forwardRef<
   return (
     <select
       ref={ref}
-      className="tw:block tw:h-control-sm tw:min-w-0 tw:max-w-full tw:cursor-pointer tw:appearance-none tw:truncate tw:border-0 tw:bg-transparent tw:p-0 tw:font-sans tw:text-sm tw:font-medium tw:text-info tw:outline-none tw:focus-visible:rounded-xs tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:disabled:cursor-default tw:disabled:text-muted-foreground"
+      className="tw:[--ds-control-local-size:var(--ds-control-sm)] tw:block tw:h-control-sm tw:min-h-control-sm tw:min-w-0 tw:max-w-full tw:cursor-pointer tw:appearance-none tw:truncate tw:border-0 tw:bg-transparent tw:p-0 tw:font-sans tw:text-sm tw:font-medium tw:text-info tw:outline-none tw:focus-visible:rounded-xs tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:disabled:cursor-default tw:disabled:text-muted-foreground"
       {...props}
     >
       {children}
@@ -148,7 +148,7 @@ export const TextAreaInput = forwardRef<
   return (
     <textarea
       ref={ref}
-      className="tw:min-h-24 tw:w-full tw:resize-y tw:rounded-sm tw:border tw:border-input tw:bg-background tw:px-3 tw:py-2 tw:font-mono tw:text-ui tw:text-foreground tw:shadow-control tw:outline-none tw:placeholder:text-muted-foreground tw:focus:border-ring tw:focus:ring-2 tw:focus:ring-ring/30 tw:disabled:cursor-default tw:disabled:opacity-50"
+      className="tw:min-h-24 tw:w-full tw:min-w-0 tw:max-w-full tw:resize-y tw:rounded-sm tw:border tw:border-input tw:bg-background tw:px-3 tw:py-2 tw:font-mono tw:text-ui tw:text-foreground tw:shadow-control tw:outline-none tw:placeholder:text-muted-foreground tw:focus:border-ring tw:focus:ring-2 tw:focus:ring-ring/30 tw:disabled:cursor-default tw:disabled:opacity-50"
       {...props}
     />
   );
@@ -166,7 +166,7 @@ export function CheckboxField({
     <label className="tw:inline-flex tw:min-w-0 tw:cursor-pointer tw:items-center tw:gap-2 tw:text-ui tw:text-foreground">
       <input
         type="checkbox"
-        className="tw:size-4 tw:rounded-xs tw:accent-primary tw:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:focus-visible:ring-offset-2 tw:focus-visible:ring-offset-background"
+        className="tw:size-4 tw:shrink-0 tw:rounded-xs tw:accent-primary tw:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:focus-visible:ring-offset-2 tw:focus-visible:ring-offset-background"
         {...props}
         ref={(node) => {
           if (node) node.indeterminate = indeterminate;
@@ -175,7 +175,7 @@ export function CheckboxField({
           indeterminate ? "mixed" : props["aria-checked"]
         }
       />
-      <span className="tw:inline-flex tw:min-w-0 tw:flex-1 tw:items-center tw:gap-2">
+      <span className="tw:inline-flex tw:min-w-0 tw:flex-1 tw:items-center tw:gap-2 tw:[overflow-wrap:anywhere]">
         {label}
       </span>
     </label>

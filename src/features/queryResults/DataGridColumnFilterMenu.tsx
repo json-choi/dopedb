@@ -109,7 +109,7 @@ export default function DataGridColumnFilterMenu({
             placeholder={t("grid.localFilterSearchPlaceholder")}
             onChange={(event) => setSearch(event.target.value)}
           />
-          <div className="tw:grid tw:grid-cols-[1fr_auto] tw:items-center tw:border-b tw:border-border-subtle tw:px-1 tw:py-1 tw:text-xs tw:text-muted-foreground">
+          <div className="tw:grid tw:min-w-0 tw:grid-cols-[minmax(0,1fr)_auto] tw:items-center tw:border-b tw:border-border-subtle tw:px-1 tw:py-1 tw:text-xs tw:text-muted-foreground">
             <label className="tw:flex tw:min-w-0 tw:items-center tw:gap-2">
               <input
                 type="checkbox"
@@ -130,7 +130,7 @@ export default function DataGridColumnFilterMenu({
             {visibleChoices.map((choice) => (
               <label
                 key={choice.key}
-                className="tw:grid tw:min-h-control-md tw:grid-cols-[1fr_auto] tw:items-center tw:gap-3 tw:rounded-sm tw:px-1 tw:text-sm tw:hover:bg-muted"
+                className="tw:grid tw:min-w-0 tw:min-h-control-md tw:grid-cols-[minmax(0,1fr)_auto] tw:items-center tw:gap-3 tw:rounded-sm tw:px-1 tw:text-sm tw:hover:bg-muted"
               >
                 <span className="tw:flex tw:min-w-0 tw:items-center tw:gap-2">
                   <input
@@ -143,7 +143,10 @@ export default function DataGridColumnFilterMenu({
                       update(next);
                     }}
                   />
-                  <span className="tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap">
+                  <span
+                    className="tw:min-w-0 tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap"
+                    title={choice.label}
+                  >
                     {choice.label}
                   </span>
                 </span>

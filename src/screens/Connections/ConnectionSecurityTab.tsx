@@ -40,7 +40,7 @@ export function ConnectionSecurityTab({
             />
             <div className="tw:grid tw:grid-cols-2 tw:gap-3 tw:@max-[620px]:grid-cols-1">
               <Field label={t("connections.caCertificate")}>
-                <div className="tw:grid tw:grid-cols-[minmax(0,1fr)_auto] tw:gap-2">
+                <div className="ds-control-row tw:grid tw:min-w-0 tw:grid-cols-[minmax(0,1fr)_auto] tw:items-center tw:gap-2">
                   <TextInput
                     value={form.extraParams.tlsCAFile ?? ""}
                     disabled={!flags.mongoTlsEnabled}
@@ -54,7 +54,6 @@ export function ConnectionSecurityTab({
                   />
                   <Button
                     disabled={!flags.mongoTlsEnabled}
-                    size="compact"
                     onClick={() =>
                       void options.pickExtraParameterFile("tlsCAFile")
                     }
@@ -64,7 +63,7 @@ export function ConnectionSecurityTab({
                 </div>
               </Field>
               <Field label={t("connections.clientCertificateKey")}>
-                <div className="tw:grid tw:grid-cols-[minmax(0,1fr)_auto] tw:gap-2">
+                <div className="ds-control-row tw:grid tw:min-w-0 tw:grid-cols-[minmax(0,1fr)_auto] tw:items-center tw:gap-2">
                   <TextInput
                     value={
                       form.extraParams.tlsCertificateKeyFile ?? ""
@@ -80,7 +79,6 @@ export function ConnectionSecurityTab({
                   />
                   <Button
                     disabled={!flags.mongoTlsEnabled}
-                    size="compact"
                     onClick={() =>
                       void options.pickExtraParameterFile(
                         "tlsCertificateKeyFile",
@@ -129,7 +127,7 @@ export function ConnectionSecurityTab({
                 ] as const
               ).map(([key, label, placeholder]) => (
                 <Field key={key} label={t(label)}>
-                  <div className="tw:grid tw:grid-cols-[minmax(0,1fr)_auto] tw:gap-2">
+                  <div className="ds-control-row tw:grid tw:min-w-0 tw:grid-cols-[minmax(0,1fr)_auto] tw:items-center tw:gap-2">
                     <TextInput
                       value={form.extraParams[key] ?? ""}
                       disabled={!flags.sqlTlsEnabled}
@@ -140,7 +138,6 @@ export function ConnectionSecurityTab({
                     />
                     <Button
                       disabled={!flags.sqlTlsEnabled}
-                      size="compact"
                       onClick={() =>
                         void options.pickExtraParameterFile(key)
                       }

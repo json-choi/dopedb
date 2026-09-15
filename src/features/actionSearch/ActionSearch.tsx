@@ -240,7 +240,7 @@ export default function ActionSearch({
               data-modal-initial-focus
               type="search"
               value={query}
-              className="tw:h-full tw:min-w-0 tw:flex-1 tw:border-0 tw:bg-transparent tw:font-sans tw:text-sm tw:text-foreground tw:outline-none tw:placeholder:text-muted-foreground"
+              className="tw:h-full tw:min-h-0 tw:min-w-0 tw:flex-1 tw:border-0 tw:bg-transparent tw:p-0 tw:font-sans tw:text-sm tw:text-foreground tw:shadow-none tw:outline-none tw:placeholder:text-muted-foreground"
               placeholder={t("ide.search.placeholder")}
               aria-controls={
                 hasQuery ? "search-everywhere-results" : undefined

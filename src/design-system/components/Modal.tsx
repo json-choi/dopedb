@@ -7,10 +7,12 @@ import {
   type ReactNode,
   type RefObject,
   useImperativeHandle,
+  useId,
   useLayoutEffect,
   useRef,
 } from "react";
 import { createPortal } from "react-dom";
+import { ownsFloatingTarget } from "../floating";
 
 const MODAL_FOCUSABLE_SELECTOR = [
   "a[href]",
@@ -24,9 +26,10 @@ const MODAL_FOCUSABLE_SELECTOR = [
 
 function focusableModalElements(surface: HTMLElement) {
   return Array.from(
-    surface.querySelectorAll<HTMLElement>(MODAL_FOCUSABLE_SELECTOR),
+    document.querySelectorAll<HTMLElement>(MODAL_FOCUSABLE_SELECTOR),
   ).filter(
     (element) =>
+      ownsFloatingTarget(surface, element) &&
       element.tabIndex >= 0 &&
       !element.hidden &&
       !element.closest("[inert]") &&
@@ -37,7 +40,7 @@ function focusableModalElements(surface: HTMLElement) {
 
 function isTopmostModal(surface: HTMLElement) {
   const modals = document.querySelectorAll<HTMLElement>(
-    '[role="dialog"][aria-modal="true"]',
+    '[role="dialog"][aria-modal="true"], [role="alertdialog"][aria-modal="true"]',
   );
   return modals.item(modals.length - 1) === surface;
 }
@@ -85,7 +88,7 @@ export function useModalBehavior({
       if (
         isTopmostModal(surface) &&
         event.target instanceof Node &&
-        !surface.contains(event.target)
+        !ownsFloatingTarget(surface, event.target)
       ) {
         focusInside();
       }
@@ -133,7 +136,12 @@ export function useModalBehavior({
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
       const active = document.activeElement;
-      if (event.shiftKey && (active === first || !surface.contains(active))) {
+      if (
+        event.shiftKey &&
+        (active === first ||
+          !(active instanceof Node) ||
+          !ownsFloatingTarget(surface, active))
+      ) {
         event.preventDefault();
         event.stopImmediatePropagation();
         last.focus({ preventScroll: true });
@@ -170,7 +178,7 @@ export const ModalSurface = forwardRef<
   HTMLElement,
   {
     children: ReactNode;
-    size?: "medium" | "wide" | "settings" | "dataSources";
+    size?: "alert" | "medium" | "wide" | "settings" | "dataSources";
     fill?: boolean;
     onRequestClose?: () => void;
     dismissible?: boolean;
@@ -187,11 +195,14 @@ export const ModalSurface = forwardRef<
     onMouseDown,
     onKeyDown,
     tabIndex,
+    id,
     ...props
   },
   ref,
 ) {
   const surfaceRef = useRef<HTMLElement>(null);
+  const generatedId = useId();
+  const surfaceId = id ?? `modal-${generatedId.replace(/:/g, "")}`;
   useImperativeHandle(ref, () => surfaceRef.current!);
   useModalBehavior({
     surfaceRef,
@@ -203,12 +214,13 @@ export const ModalSurface = forwardRef<
   return (
     <section
       ref={surfaceRef}
+      id={surfaceId}
       role="dialog"
       aria-modal="true"
       data-size={size}
       data-fill={fill}
       tabIndex={tabIndex ?? -1}
-      className="ds-panel tw:flex tw:max-h-[calc(100dvh-(var(--ds-space-4)*2))] tw:w-[min(640px,100%)] tw:flex-col tw:overflow-hidden tw:p-0 tw:shadow-popover tw:[container-type:inline-size] tw:data-[fill=true]:h-[min(760px,calc(100dvh-(var(--ds-space-4)*2)))] tw:data-[size=dataSources]:h-[min(731px,calc(100dvh-(var(--ds-space-4)*2)))] tw:data-[size=dataSources]:w-[min(980px,100%)] tw:data-[size=settings]:h-[min(722px,calc(100dvh-(var(--ds-space-4)*2)))] tw:data-[size=settings]:w-[min(982px,100%)] tw:data-[size=wide]:w-[min(1120px,100%)] tw:max-[640px]:max-h-[calc(100dvh-(var(--ds-space-2)*2))] tw:max-[640px]:data-[fill=true]:h-[calc(100dvh-(var(--ds-space-2)*2))] tw:max-[640px]:data-[size=dataSources]:h-[calc(100dvh-(var(--ds-space-2)*2))] tw:max-[640px]:data-[size=settings]:h-[calc(100dvh-(var(--ds-space-2)*2))]"
+      className="ds-panel tw:flex tw:max-h-[calc(100dvh-(var(--ds-space-4)*2))] tw:w-[min(640px,100%)] tw:flex-col tw:overflow-hidden tw:p-0 tw:shadow-popover tw:[container-type:inline-size] tw:data-[fill=true]:h-[min(760px,calc(100dvh-(var(--ds-space-4)*2)))] tw:data-[size=alert]:w-[min(440px,100%)] tw:data-[size=dataSources]:h-[min(731px,calc(100dvh-(var(--ds-space-4)*2)))] tw:data-[size=dataSources]:w-[min(980px,100%)] tw:data-[size=settings]:h-[min(722px,calc(100dvh-(var(--ds-space-4)*2)))] tw:data-[size=settings]:w-[min(982px,100%)] tw:data-[size=wide]:w-[min(1120px,100%)] tw:max-[640px]:max-h-[calc(100dvh-(var(--ds-space-2)*2))] tw:max-[640px]:data-[fill=true]:h-[calc(100dvh-(var(--ds-space-2)*2))] tw:max-[640px]:data-[size=dataSources]:h-[calc(100dvh-(var(--ds-space-2)*2))] tw:max-[640px]:data-[size=settings]:h-[calc(100dvh-(var(--ds-space-2)*2))]"
       onMouseDown={(event) => {
         event.stopPropagation();
         onMouseDown?.(event);
@@ -246,7 +258,7 @@ export function ModalDetailActionBar({
   children: ReactNode;
 }) {
   return (
-    <div className="tw:flex tw:h-[48px] tw:min-h-[48px] tw:shrink-0 tw:items-center tw:gap-3 tw:border-t tw:border-border-subtle tw:bg-card tw:px-5">
+    <div className="tw:flex tw:min-h-[48px] tw:shrink-0 tw:flex-wrap tw:items-center tw:gap-2 tw:border-t tw:border-border-subtle tw:bg-card tw:px-5 tw:py-1.5">
       {children}
     </div>
   );
@@ -259,7 +271,7 @@ export function ModalFooter({
 }) {
   return (
     <footer
-      className="tw:flex tw:h-[50px] tw:min-h-[50px] tw:shrink-0 tw:items-center tw:justify-end tw:gap-2 tw:border-t tw:border-border-subtle tw:bg-card tw:px-4"
+      className="tw:flex tw:min-h-[50px] tw:shrink-0 tw:flex-wrap tw:items-center tw:justify-end tw:gap-2 tw:border-t tw:border-border-subtle tw:bg-card tw:px-4 tw:py-1.5"
       data-primary-flow
     >
       {children}

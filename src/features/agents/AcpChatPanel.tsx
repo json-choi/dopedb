@@ -206,11 +206,11 @@ function AcpChatPanelContent({
         <section className="tw:grid tw:max-h-[min(360px,45vh)] tw:shrink-0 tw:overflow-auto tw:border-b tw:border-border-subtle tw:bg-background tw:p-1">
           {session.sessions.length > 0 ? (
             session.sessions.map((candidate) => (
-              <button
+              <Button
                 key={candidate.id}
                 type="button"
-                className="tw:flex tw:min-h-control-lg tw:min-w-0 tw:items-center tw:gap-2 tw:rounded-xs tw:border-0 tw:bg-transparent tw:px-2 tw:text-left tw:text-sm tw:text-foreground tw:hover:bg-muted tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:data-[active=true]:bg-selection tw:data-[active=true]:text-selection-foreground"
-                data-active={candidate.id === active?.id}
+                presentation="listItem"
+                active={candidate.id === active?.id}
                 onClick={() => commands.session.select(candidate.id)}
               >
                 <Icon
@@ -219,14 +219,14 @@ function AcpChatPanelContent({
                 <span className="tw:min-w-0 tw:flex-1 tw:truncate">
                   {candidate.title}
                 </span>
-                <span className="tw:text-xs tw:text-muted-foreground">
+                <span className="tw:max-w-[40%] tw:min-w-0 tw:truncate tw:text-xs tw:text-muted-foreground" title={sessionMetaLabel(candidate, setup.knowledge.projects)}>
                   {sessionMetaLabel(candidate, setup.knowledge.projects)}
                 </span>
                 <StatusDot tone={lifecycleTone(candidate.lifecycle)} />
                 <span className="tw:sr-only">
                   {lifecycleLabel(candidate.lifecycle, t)}
                 </span>
-              </button>
+              </Button>
             ))
           ) : (
             <p className="tw:m-0 tw:px-2 tw:py-3 tw:text-xs tw:text-muted-foreground">
@@ -360,7 +360,7 @@ function AcpChatSurface({
         event.target instanceof Node && surface.contains(event.target);
       const nestedModal =
         event.target instanceof Element &&
-        event.target.closest('[role="dialog"][aria-modal="true"]') !== null;
+        event.target.closest('[role="dialog"][aria-modal="true"], [role="alertdialog"][aria-modal="true"]') !== null;
       if (
         !shouldDismissAgentOverlayFromEscape({
           defaultPrevented: event.defaultPrevented,

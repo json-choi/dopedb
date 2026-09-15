@@ -130,7 +130,7 @@ export function ExternalAgentConfigurationPicker({
   }
 
   return (
-    <div className="tw:grid tw:gap-5">
+    <div className="tw:grid tw:min-w-0 tw:grid-cols-[minmax(0,1fr)] tw:gap-5 tw:[overflow-wrap:anywhere]">
       <div>
         <h2 className="tw:m-0 tw:text-base tw:font-semibold">
           {t("agent.externalChooseResources")}
@@ -193,7 +193,7 @@ export function ExternalAgentConfigurationPicker({
         </section>
       ))}
       {resources.databases.length > 0 ? (
-        <fieldset className="tw:grid tw:gap-2 tw:border-0 tw:p-0">
+        <fieldset className="tw:m-0 tw:grid tw:min-w-0 tw:gap-2 tw:border-0 tw:p-0">
           <legend className="tw:text-sm tw:font-semibold">
             {t("agent.acpWriteTarget")}
           </legend>
