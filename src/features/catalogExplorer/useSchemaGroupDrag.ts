@@ -1,3 +1,6 @@
+// Pointer-drag lifecycle for the explorer tree: regrouping connections into a
+// schema group, reordering databases within a project, and moving one to another
+// environment. Only a committed drop reaches the backend; hover state stays local.
 import { useMemo, useRef, useState, type PointerEvent } from "react";
 
 import type {

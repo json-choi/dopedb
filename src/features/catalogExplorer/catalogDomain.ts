@@ -1,3 +1,6 @@
+// Shared explorer vocabulary: drop targets, the load-issue shape that decides
+// whether a failure is recoverable, the object sections each engine supports, and
+// the filter predicates. Pure contracts only — no queries and no component state.
 import {
   errDetails,
   type AppErrorDetails,

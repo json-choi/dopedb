@@ -1,3 +1,6 @@
+// Pure ordering and grouping rules for a project's environment resources: which
+// environment is preferred, where a dragged database may land, and how a move
+// rewrites the binding order. Risk class fixes environment order, not the caller.
 import type {
   EnvironmentConnection,
   KnowledgeEnvironment,

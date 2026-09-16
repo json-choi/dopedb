@@ -1,3 +1,6 @@
+// The reserved dopedb.* extra parameters that carry connection options, the
+// engines each one applies to, and the bounds a value must satisfy. Validation
+// lives here so the form and the diagnostics share one definition of valid.
 import type {
   ConnectionEngine,
   ConnectionProfile,

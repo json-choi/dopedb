@@ -1,3 +1,6 @@
+// The explorer's view state behind one reducer: which connections are open or
+// wanted, per-connection refresh errors, and collapsed sections. A scope change is
+// itself an action, so per-connection state cannot leak into another workspace.
 import { useReducer } from "react";
 
 import type {

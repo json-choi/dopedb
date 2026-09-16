@@ -1,3 +1,6 @@
+// One relation's generated DDL, cached indefinitely per exact (connection,
+// database, schema, table) and never retried, since a failure here is a permission
+// or engine answer. Only the transient copy acknowledgement is local state.
 import { useState } from "react";
 import { queryOptions, useQuery } from "@tanstack/react-query";
 

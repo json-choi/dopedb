@@ -1,3 +1,6 @@
+// Manual database ordering inside a project, persisted per workspace-and-account
+// scope and bounded in how many bindings are remembered. A binding the preference
+// does not name keeps its derived position rather than dropping out of the tree.
 import { useCallback, useMemo, useState } from "react";
 
 import type { ConnectionProfile } from "../connections/domain";

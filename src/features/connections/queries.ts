@@ -1,3 +1,6 @@
+// Query keys and options for connections and BigQuery onboarding. Every key
+// carries the catalog scope and, for BigQuery, the auth mode, so changing either
+// can never serve an answer cached under the previous one.
 import { queryOptions } from "@tanstack/react-query";
 
 import { isTransientDbError } from "../../lib/queries";

@@ -1,3 +1,6 @@
+// Typed catalog commands plus the single place the Rust snapshot shape is
+// projected into the Catalog the UI renders. The connection-wide and per-database
+// variants share that projection, so the tree never has to handle two shapes.
 import { invoke } from "../../ipc/core";
 import type {
   Catalog,

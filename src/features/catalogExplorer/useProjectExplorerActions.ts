@@ -1,3 +1,6 @@
+// Follow-up navigation after a project or environment mutation: which nodes to
+// expand and which environment view to open. It drives only the expansion setters
+// it is handed, so the explorer keeps sole ownership of that state.
 import type { Dispatch, SetStateAction } from "react";
 
 import type {

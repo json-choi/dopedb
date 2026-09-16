@@ -1,3 +1,6 @@
+// One pass over a draft profile producing coded diagnostics, each carrying the tab
+// and field it belongs to so the form can reveal the cause. Whether a diagnostic
+// blocks Test is a separate rule, not an attribute of the code itself.
 import type {
   ConnectionProfile,
   DriverDescriptor,

@@ -1,3 +1,6 @@
+// Introspection scope is stored on the profile as reserved extra parameters. One
+// set of predicates applies that selection to a full catalog, an overview and a
+// raw snapshot alike, so those three surfaces cannot disagree about what is shown.
 import type { ConnectionProfile } from "../connections/domain";
 import type {
   Catalog,

@@ -1,3 +1,6 @@
+// Renders the provider branch a connection targets, preferring its name and
+// falling back to the id. A pending state outranks the observed one, so the label
+// shows where the connection is heading rather than where it last was.
 import { Icon } from "../../components/Icon";
 import { useI18n } from "../../lib/i18n";
 import type { ConnectionProviderTarget } from "./domain";
