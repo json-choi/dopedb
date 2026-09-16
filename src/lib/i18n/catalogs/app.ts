@@ -145,6 +145,19 @@ export const appCatalog = defineCatalog(
     "settings.themeSystem": "System (default)",
     "settings.themeLight": "Light",
     "settings.themeDark": "Dark",
+    "settings.keywords.agentTools":
+      "agent tools acp adapter plugin claude codex cli skill install",
+    "settings.keywords.advanced":
+      "advanced debug debugging diagnostics developer troubleshooting agent detail",
+    "settings.keywords.appearance": "appearance theme light dark system",
+    "settings.keywords.cli":
+      "command line cli terminal shell path install bundled version",
+    "settings.keywords.language": "language locale korean english",
+    "settings.keywords.privacy":
+      "privacy analytics telemetry consent retention revoke policy",
+    "settings.keywords.safety":
+      "safety permissions read write read only read-only data change schema change approval guardrails row limit monitoring",
+    "settings.keywords.updates": "updates version release notes upgrade install check",
     "settings.noSearchResults": "No settings match this search.",
     "settings.safety": "Safety",
     "settings.scopeApplication": "Application",
@@ -307,6 +320,21 @@ export const appCatalog = defineCatalog(
     "settings.themeSystem": "시스템 설정 (기본값)",
     "settings.themeLight": "라이트",
     "settings.themeDark": "다크",
+    "settings.keywords.agentTools":
+      "에이전트 도구 어댑터 플러그인 스킬 설치 agent acp adapter plugin claude codex skill",
+    "settings.keywords.advanced":
+      "고급 디버깅 진단 문제 해결 개발자 advanced debug diagnostics",
+    "settings.keywords.appearance":
+      "화면 테마 라이트 다크 시스템 밝게 어둡게 appearance theme light dark system",
+    "settings.keywords.cli":
+      "명령줄 터미널 셸 경로 설치 번들 버전 command line cli terminal shell path",
+    "settings.keywords.language": "언어 한국어 영어 로케일 language locale korean english",
+    "settings.keywords.privacy":
+      "개인정보 분석 수집 동의 철회 보관 정책 privacy analytics telemetry consent",
+    "settings.keywords.safety":
+      "안전 권한 쓰기 데이터 변경 스키마 변경 읽기 전용 승인 가드레일 행 제한 모니터링 정책 safety permissions read write schema approval",
+    "settings.keywords.updates":
+      "업데이트 버전 릴리스 노트 설치 확인 updates version release upgrade",
     "settings.noSearchResults": "검색과 일치하는 설정이 없습니다.",
     "settings.safety": "안전",
     "settings.scopeApplication": "애플리케이션",

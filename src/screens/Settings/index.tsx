@@ -19,6 +19,11 @@ import { TreeSearch } from "../../design-system/components/TreeControls";
 import { useI18n } from "../../lib/i18n";
 import type { SettingsSection } from "../../features/settings/domain";
 import {
+  SETTINGS_SEARCH_ENTRIES,
+  settingsSearchTerms,
+  settingsSectionMatches,
+} from "../../features/settings/searchCatalog";
+import {
   appUpdaterProgress,
   type AppUpdaterSnapshot,
 } from "../../features/updater/controller";
@@ -29,8 +34,6 @@ import CliSettings from "./Cli";
 import PrivacySettings from "./Privacy";
 import Safety from "./Safety";
 import Updates from "./Updates";
-
-type SettingsScope = "application" | "dataSource";
 
 export default function Settings({
   connection,
@@ -59,80 +62,30 @@ export default function Settings({
     initialSection ?? "agent-tools",
   );
   const [filter, setFilter] = useState("");
+  // The safety row is the only one whose visible name names the connection it edits,
+  // so the shared catalogue supplies the section name and this screen decorates it.
   const settingsEntries = useMemo(
     () =>
-      [
-        {
-          id: "agent-tools",
-          label: t("settings.agentTools"),
-          scope: "application",
-          keywords: "agent codex claude tools",
-        },
-        {
-          id: "advanced",
-          label: t("settings.advanced"),
-          scope: "application",
-          keywords:
-            "advanced debug debugging diagnostics agent tool input result developer 디버깅 진단",
-        },
-        {
-          id: "cli",
-          label: t("settings.cli"),
-          scope: "application",
-          keywords: "command line terminal path cli",
-        },
-        {
-          id: "appearance",
-          label: t("settings.appearance"),
-          scope: "application",
-          keywords: "theme appearance light dark system 테마 화면 라이트 다크 시스템",
-        },
-        {
-          id: "language",
-          label: t("settings.languageTitle"),
-          scope: "application",
-          keywords: "locale korean english",
-        },
-        {
-          id: "privacy",
-          label: t("settings.privacy"),
-          scope: "application",
-          keywords: "privacy analytics telemetry consent 개인정보 분석 동의",
-        },
-        {
-          id: "updates",
-          label: t("settings.updates"),
-          scope: "application",
-          keywords: "version release upgrade",
-        },
-        {
-          id: "safety",
-          label: `${t("settings.safety")}${
-            connection
-              ? ` · ${connection.name || t("app.unnamed")}`
-              : ""
-          }`,
-          scope: "dataSource",
-          keywords: "read only write approval policy audit",
-        },
-      ] satisfies ReadonlyArray<{
-        id: SettingsSection;
-        label: string;
-        scope: SettingsScope;
-        keywords: string;
-      }>,
+      SETTINGS_SEARCH_ENTRIES.map((entry) => ({
+        id: entry.id,
+        scope: entry.scope,
+        label:
+          entry.id === "safety"
+            ? `${t(entry.label)}${
+                connection ? ` · ${connection.name || t("app.unnamed")}` : ""
+              }`
+            : t(entry.label),
+        terms: settingsSearchTerms(entry, t),
+      })),
     [connection, t],
   );
-  const filteredEntries = useMemo(() => {
-    const query = filter.trim().toLocaleLowerCase().normalize("NFKC");
-    if (!query) return settingsEntries;
-    return settingsEntries.filter((entry) =>
-      `${entry.label} ${entry.keywords}`
-        .toLocaleLowerCase()
-        .normalize("NFKC")
-        .includes(query),
-    );
-  }, [filter, settingsEntries]);
+  const filteredEntries = useMemo(
+    () =>
+      settingsEntries.filter((entry) =>
+        settingsSectionMatches(entry.label, entry.terms, filter),
+      ),
+    [filter, settingsEntries],
+  );
   const filteredIds = filteredEntries
     .map((entry) => entry.id)
     .join(":");

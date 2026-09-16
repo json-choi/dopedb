@@ -9,6 +9,10 @@ import { databaseCatalogQuery, type CatalogScope } from "../../lib/queries";
 import { filterCatalogOverview } from "../catalogExplorer/scopeFilter";
 import { databaseDisplayLabel, type ConnectionProfile } from "../connections/domain";
 import type { SettingsSection } from "../settings/domain";
+import {
+  SETTINGS_SEARCH_ENTRIES,
+  settingsSearchTerms,
+} from "../settings/searchCatalog";
 import type { WorkbenchDocument } from "../workbench/domain";
 import { useCachedCatalogOverviews } from "./catalogCache";
 import type { ActionSearchItem } from "./domain";
@@ -236,24 +240,17 @@ export function useActionSearchItems({
     },
   );
 
-  const settings: ActionSearchItem[] = (
-    [
-      ["agent-tools", t("settings.agentTools"), false],
-      ["cli", t("settings.cli"), false],
-      ["privacy", t("settings.privacy"), false],
-      ["safety", t("settings.safety"), !selected],
-      ["language", t("settings.languageTitle"), false],
-      ["appearance", t("settings.appearance"), false],
-      ["updates", t("settings.updates"), false],
-    ] satisfies ReadonlyArray<readonly [SettingsSection, string, boolean]>
-  ).map(([section, label, disabled]) => ({
-    id: `setting:${section}`,
+  // Both search surfaces read the same localized terms, so a word that reaches a
+  // section here reaches it in the Settings sidebar too. Safety edits one connection's
+  // permissions, so it stays unreachable until a connection is selected.
+  const settings: ActionSearchItem[] = SETTINGS_SEARCH_ENTRIES.map((entry) => ({
+    id: `setting:${entry.id}`,
     kind: "setting",
-    label,
+    label: t(entry.label),
     detail: t("common.settings"),
-    disabled,
-    keywords: [section],
-    run: () => commands.openSettings(section),
+    disabled: entry.scope === "dataSource" && !selected,
+    keywords: settingsSearchTerms(entry, t),
+    run: () => commands.openSettings(entry.id),
   }));
 
   return [...actions, ...connectionItems, ...documentItems, ...closedDocumentItems, ...databaseObjects, ...settings];
