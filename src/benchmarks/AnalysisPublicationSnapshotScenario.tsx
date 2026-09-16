@@ -39,7 +39,7 @@ export function AnalysisPublicationSnapshotScenario() {
       </header>
       <div className="scrollbar-sleek tw:min-h-0 tw:flex-1 tw:overflow-auto tw:p-5">
         <article className="tw:mx-auto tw:grid tw:w-full tw:max-w-[900px] tw:gap-6">
-          <h1 className="tw:m-0 tw:font-serif tw:text-4xl tw:font-medium">Revenue by segment</h1>
+          <h1 className="tw:m-0 tw:font-serif tw:text-[36px] tw:leading-tight tw:font-medium">Revenue by segment</h1>
           <div
             className="tw:grid tw:gap-4 tw:text-sm tw:leading-body"
             data-analysis-publication-snapshot

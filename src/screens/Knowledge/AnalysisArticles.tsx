@@ -304,7 +304,7 @@ function HistoryView({
   if (loading) return <div className="tw:p-5"><LoadingLabel>{t("analysis.loadingHistory")}</LoadingLabel></div>;
   return (
     <div className="scrollbar-sleek tw:mx-auto tw:grid tw:h-full tw:w-full tw:max-w-[1000px] tw:content-start tw:gap-8 tw:overflow-auto tw:p-8">
-      <h1 className="tw:m-0 tw:font-serif tw:text-4xl tw:font-normal">{t("analysis.tabHistory")}</h1>
+      <h1 className="tw:m-0 tw:font-serif tw:text-[36px] tw:leading-tight tw:font-normal">{t("analysis.tabHistory")}</h1>
       <section className="tw:grid tw:gap-2">
         <h2>{t("analysis.revisions")}</h2>
         {revisions.map((revision) => (

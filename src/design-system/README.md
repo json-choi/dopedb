@@ -43,6 +43,9 @@ packaged runtime 증거가 아니다.
   회귀를 확인한 뒤 별도 변경에서만 활성화를 검토한다.
 - `@theme inline`은 semantic token만 노출한다. `tw:bg-[#111]`,
   `tw:text-[rgb(...)]` 같은 raw color utility는 금지한다.
+- 색 scale과 마찬가지로 type scale도 `--text-*: initial`로 비운 뒤 DopeDB
+  7단계만 다시 선언한다. `tw:text-base`, `tw:text-lg`, `tw:text-4xl` 같은
+  Tailwind 기본 크기는 존재하지 않으므로 토큰 밖 글자 크기가 들어올 수 없다.
 - utility class는 TSX에 보이는 정적인 완전한 문자열이어야 한다. 런타임 조각
   조합과 utility 문자열만 감추는 `styles.ts`/style map은 사용하지 않는다.
 - 같은 시각·상호작용 계약이 반복되면 class 문자열을 복사하지 않고

@@ -65,9 +65,16 @@
   --font-weight-medium: var(--ds-font-weight-medium);
   --font-weight-semibold: var(--ds-font-weight-semibold);
   --font-weight-bold: var(--ds-font-weight-bold);
+  /* Only the DopeDB scale may be selected; Tailwind's 16/18/30/36px steps are
+     removed so a screen cannot introduce a size the tokens do not own. The two
+     names that shadowed a Tailwind default keep that default's line-height
+     ratio, so removing the scale changes no existing line box. */
+  --text-*: initial;
   --text-2xs: var(--ds-font-size-2xs);
   --text-xs: var(--ds-font-size-xs);
+  --text-xs--line-height: calc(1 / 0.75);
   --text-sm: var(--ds-font-size-sm);
+  --text-sm--line-height: calc(1.25 / 0.875);
   --text-ui: var(--ds-font-size-ui);
   --text-body: var(--ds-font-size-body);
   --text-title: var(--ds-font-size-title);
