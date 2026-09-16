@@ -356,7 +356,8 @@ export default function Safety({
         <Button
           size="compact"
           variant="primary"
-          disabled={busy || !hasUnsavedChanges}
+          aria-disabled={busy || !hasUnsavedChanges}
+          aria-busy={busy}
           onClick={save}
         >
           {busy ? t("safety.applying") : t("safety.apply")}

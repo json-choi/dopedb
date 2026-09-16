@@ -97,7 +97,8 @@ export default function Updates({
       <div className="tw:mb-3 tw:flex tw:min-h-control-xl tw:items-center tw:justify-end">
         <Button
           size="compact"
-          disabled={busy}
+          aria-disabled={busy}
+          aria-busy={busy}
           onClick={() => void onRefresh()}
         >
           {t("updates.checkAgain")}
@@ -126,15 +127,12 @@ export default function Updates({
           <span className="tw:text-muted-foreground">
             {t("updates.status")}
           </span>
-          <StatusBadge
-            iconOnly
-            tone={stateTone(snapshot.phase)}
-            title={stateLabel}
-            aria-label={stateLabel}
-            role="img"
-          >
-            <Icon name={stateIcon(snapshot.phase)} />
-          </StatusBadge>
+          <span role="status" className="tw:flex tw:min-w-0 tw:justify-end">
+            <StatusBadge tone={stateTone(snapshot.phase)} title={stateLabel}>
+              <Icon name={stateIcon(snapshot.phase)} />
+              {stateLabel}
+            </StatusBadge>
+          </span>
         </div>
 
         {(snapshot.phase === "downloading" ||
@@ -180,7 +178,9 @@ export default function Updates({
           <Button
             size="compact"
             variant="primary"
-            disabled={!snapshot.availableVersion || busy}
+            disabled={!snapshot.availableVersion}
+            aria-disabled={busy || undefined}
+            aria-busy={busy}
             onClick={() => void onInstall()}
           >
             {snapshot.phase === "error" && snapshot.availableVersion

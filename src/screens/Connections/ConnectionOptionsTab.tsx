@@ -4,10 +4,10 @@ import InfoTip from "../../components/InfoTip";
 import {
   CheckboxField,
   Field,
-  FieldValidationMessage,
   SelectInput,
   TextAreaInput,
   TextInput,
+  ValidatedControl,
 } from "../../design-system/components/FormControls";
 import {
   CONNECTION_AUTO_DISCONNECT_MAX_SECONDS,
@@ -104,7 +104,9 @@ export function ConnectionOptionsTab({
                 )
               }
             />
-            <div className="tw:flex tw:items-center tw:gap-2 tw:pl-6">
+            <div className="tw:grid tw:gap-1.5 tw:pl-6">
+              <ValidatedControl validation={validation.keepAlive}>
+              <div className="tw:flex tw:items-center tw:gap-2">
               <div className="tw:w-32">
                 <TextInput
                   id="connection-keep-alive"
@@ -117,9 +119,6 @@ export function ConnectionOptionsTab({
                     CONNECTION_KEEP_ALIVE_SECONDS_PARAMETER,
                   )}
                   disabled={!flags.keepAliveEnabled}
-                  aria-invalid={
-                    validation.keepAlive?.tone === "danger" || undefined
-                  }
                   aria-label={t("connections.keepAliveSeconds")}
                   onChange={(event) =>
                     options.setTimedConnectionOptionValue(
@@ -132,12 +131,9 @@ export function ConnectionOptionsTab({
               <span className="tw:shrink-0 tw:text-sm tw:text-muted-foreground">
                 {t("connections.seconds")}
               </span>
-            </div>
-            {validation.keepAlive ? (
-              <div className="tw:pl-6">
-                <FieldValidationMessage validation={validation.keepAlive} />
               </div>
-            ) : null}
+              </ValidatedControl>
+            </div>
           </div>
         ) : null}
 
@@ -153,7 +149,9 @@ export function ConnectionOptionsTab({
               )
             }
           />
-          <div className="tw:flex tw:items-center tw:gap-2 tw:pl-6">
+          <div className="tw:grid tw:gap-1.5 tw:pl-6">
+            <ValidatedControl validation={validation.autoDisconnect}>
+            <div className="tw:flex tw:items-center tw:gap-2">
             <div className="tw:w-32">
               <TextInput
                 id="connection-auto-disconnect"
@@ -166,9 +164,6 @@ export function ConnectionOptionsTab({
                   CONNECTION_AUTO_DISCONNECT_SECONDS_PARAMETER,
                 )}
                 disabled={!flags.autoDisconnectEnabled}
-                aria-invalid={
-                  validation.autoDisconnect?.tone === "danger" || undefined
-                }
                 aria-label={t("connections.autoDisconnectSeconds")}
                 onChange={(event) =>
                   options.setTimedConnectionOptionValue(
@@ -181,14 +176,9 @@ export function ConnectionOptionsTab({
             <span className="tw:shrink-0 tw:text-sm tw:text-muted-foreground">
               {t("connections.seconds")}
             </span>
-          </div>
-          {validation.autoDisconnect ? (
-            <div className="tw:pl-6">
-              <FieldValidationMessage
-                validation={validation.autoDisconnect}
-              />
             </div>
-          ) : null}
+            </ValidatedControl>
+          </div>
         </div>
 
         {flags.supportsStartupScript ? (

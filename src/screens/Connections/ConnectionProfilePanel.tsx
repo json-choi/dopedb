@@ -4,8 +4,8 @@ import type { RefObject } from "react";
 import { DiagnosticSummary } from "../../design-system/components/Diagnostics";
 import { Button } from "../../design-system/components/Button";
 import {
-  FieldValidationMessage,
   TextInput,
+  ValidatedControl,
 } from "../../design-system/components/FormControls";
 import { ModalDetailActionBar } from "../../design-system/components/Modal";
 import { PanelTabs } from "../../design-system/components/PanelTabs";
@@ -50,22 +50,18 @@ export function ConnectionProfilePanel({
           {t("connections.name")}
         </label>
         <span className="tw:grid tw:min-w-0 tw:max-w-[360px] tw:gap-1">
-          <TextInput
-            ref={nameInputRef}
-            id="connection-name"
-            density="compact"
-            value={profile.form.name}
-            disabled={!profile.flags.canEditConnection}
-            aria-invalid={
-              profile.validation.name?.tone === "danger" || undefined
-            }
-            onChange={(event) => profile.set("name", event.target.value)}
-            placeholder="prod-readonly"
-            autoFocus={autoFocus}
-          />
-          {profile.validation.name ? (
-            <FieldValidationMessage validation={profile.validation.name} />
-          ) : null}
+          <ValidatedControl validation={profile.validation.name}>
+            <TextInput
+              ref={nameInputRef}
+              id="connection-name"
+              density="compact"
+              value={profile.form.name}
+              disabled={!profile.flags.canEditConnection}
+              onChange={(event) => profile.set("name", event.target.value)}
+              placeholder="prod-readonly"
+              autoFocus={autoFocus}
+            />
+          </ValidatedControl>
         </span>
       </div>
 

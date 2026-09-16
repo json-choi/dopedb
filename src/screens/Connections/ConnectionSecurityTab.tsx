@@ -4,7 +4,6 @@ import { Button } from "../../design-system/components/Button";
 import {
   CheckboxField,
   Field,
-  FieldValidationMessage,
   SelectInput,
   TextInput,
 } from "../../design-system/components/FormControls";
@@ -154,15 +153,14 @@ export function ConnectionSecurityTab({
       {!flags.isSqlite ? (
         <section className="tw:grid tw:gap-3 tw:border-t tw:border-border-subtle tw:pt-4">
           <h3>{t("connections.sshTunnel")}</h3>
-          <Field label={t("connections.sshHostAlias")}>
-            <div className="tw:grid tw:gap-1.5">
+          <Field
+            label={t("connections.sshHostAlias")}
+            validation={validation.sshAlias}
+          >
               <TextInput
                 id="connection-ssh-alias"
                 value={
                   form.extraParams[CONNECTION_SSH_ALIAS_PARAMETER] ?? ""
-                }
-                aria-invalid={
-                  validation.sshAlias?.tone === "danger" || undefined
                 }
                 autoCapitalize="none"
                 autoCorrect="off"
@@ -176,10 +174,6 @@ export function ConnectionSecurityTab({
                   )
                 }
               />
-              {validation.sshAlias ? (
-                <FieldValidationMessage validation={validation.sshAlias} />
-              ) : null}
-            </div>
           </Field>
           <p className="tw:m-0 tw:text-sm tw:leading-body tw:text-muted-foreground">
             {t("connections.sshHostAliasHint")}

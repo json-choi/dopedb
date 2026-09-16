@@ -5,11 +5,11 @@ import { useEffect, useRef } from "react";
 import { Button } from "../../design-system/components/Button";
 import {
   CheckboxField,
-  FieldValidationMessage,
   InlineSelect,
   PropertyRow,
   SelectInput,
   TextInput,
+  ValidatedControl,
 } from "../../design-system/components/FormControls";
 import { StatusBadge } from "../../design-system/components/Status";
 import type { ConnectionInputMode } from "../../features/connections/connectionEditorModel";
@@ -122,13 +122,13 @@ export function ConnectionGeneralTab({
             </label>
           ) : null}
 
+          <ValidatedControl validation={validation.driver}>
           <label className="tw:inline-flex tw:min-w-0 tw:items-center tw:gap-1.5">
             <span>{t("connections.driver")}:</span>
             <InlineSelect
               id="connection-driver"
               title={t("connections.driverHint")}
               value={form.driverId ?? ""}
-              aria-invalid={validation.driver?.tone === "danger" || undefined}
               onChange={(event) =>
                 set("driverId", event.target.value || null)
               }
@@ -146,6 +146,7 @@ export function ConnectionGeneralTab({
               ))}
             </InlineSelect>
           </label>
+          </ValidatedControl>
 
           {drivers.active?.installMode === "managed" &&
           drivers.active.installState === "available" ? (
@@ -161,9 +162,6 @@ export function ConnectionGeneralTab({
             </Button>
           ) : null}
         </div>
-        {validation.driver ? (
-          <FieldValidationMessage validation={validation.driver} />
-        ) : null}
       </section>
 
       {!isSharedTemplate && !isBigQuery && url.mode === "urlOnly" ? (
@@ -241,19 +239,15 @@ export function ConnectionGeneralTab({
             >
               <div className="tw:grid tw:grid-cols-[minmax(0,1fr)_auto_112px] tw:items-start tw:gap-3 tw:@max-[560px]:grid-cols-1 tw:@max-[560px]:gap-1.5">
                 <div className="tw:grid tw:gap-1.5">
-                  <TextInput
-                    id="connection-host"
-                    density="compact"
-                    value={form.host}
-                    disabled={!canEditConnection}
-                    aria-invalid={
-                      validation.host?.tone === "danger" || undefined
-                    }
-                    onChange={(event) => set("host", event.target.value)}
-                  />
-                  {validation.host ? (
-                    <FieldValidationMessage validation={validation.host} />
-                  ) : null}
+                  <ValidatedControl validation={validation.host}>
+                    <TextInput
+                      id="connection-host"
+                      density="compact"
+                      value={form.host}
+                      disabled={!canEditConnection}
+                      onChange={(event) => set("host", event.target.value)}
+                    />
+                  </ValidatedControl>
                 </div>
                 <label
                   htmlFor="connection-port"
@@ -262,22 +256,18 @@ export function ConnectionGeneralTab({
                   {t("connections.port")}
                 </label>
                 <div className="tw:grid tw:gap-1.5">
-                  <TextInput
-                    id="connection-port"
-                    density="compact"
-                    type="number"
-                    value={profile.port.draft}
-                    min={1}
-                    max={65_535}
-                    aria-invalid={
-                      validation.port?.tone === "danger" || undefined
-                    }
-                    disabled={!canEditConnection || (isMongo && srv)}
-                    onChange={(event) => profile.port.setDraft(event.target.value)}
-                  />
-                  {validation.port ? (
-                    <FieldValidationMessage validation={validation.port} />
-                  ) : null}
+                  <ValidatedControl validation={validation.port}>
+                    <TextInput
+                      id="connection-port"
+                      density="compact"
+                      type="number"
+                      value={profile.port.draft}
+                      min={1}
+                      max={65_535}
+                      disabled={!canEditConnection || (isMongo && srv)}
+                      onChange={(event) => profile.port.setDraft(event.target.value)}
+                    />
+                  </ValidatedControl>
                 </div>
               </div>
             </PropertyRow>

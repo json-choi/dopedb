@@ -66,14 +66,12 @@ export default function Settings({
           id: "agent-tools",
           label: t("settings.agentTools"),
           scope: "application",
-          disabled: false,
           keywords: "agent codex claude tools",
         },
         {
           id: "advanced",
           label: t("settings.advanced"),
           scope: "application",
-          disabled: false,
           keywords:
             "advanced debug debugging diagnostics agent tool input result developer 디버깅 진단",
         },
@@ -81,35 +79,30 @@ export default function Settings({
           id: "cli",
           label: t("settings.cli"),
           scope: "application",
-          disabled: false,
           keywords: "command line terminal path cli",
         },
         {
           id: "appearance",
           label: t("settings.appearance"),
           scope: "application",
-          disabled: false,
           keywords: "theme appearance light dark system 테마 화면 라이트 다크 시스템",
         },
         {
           id: "language",
           label: t("settings.languageTitle"),
           scope: "application",
-          disabled: false,
           keywords: "locale korean english",
         },
         {
           id: "privacy",
           label: t("settings.privacy"),
           scope: "application",
-          disabled: false,
           keywords: "privacy analytics telemetry consent 개인정보 분석 동의",
         },
         {
           id: "updates",
           label: t("settings.updates"),
           scope: "application",
-          disabled: false,
           keywords: "version release upgrade",
         },
         {
@@ -120,14 +113,12 @@ export default function Settings({
               : ""
           }`,
           scope: "dataSource",
-          disabled: !connection,
           keywords: "read only write approval policy audit",
         },
       ] satisfies ReadonlyArray<{
         id: SettingsSection;
         label: string;
         scope: SettingsScope;
-        disabled: boolean;
         keywords: string;
       }>,
     [connection, t],
@@ -150,7 +141,7 @@ export default function Settings({
     if (!filter || filteredEntries.some((entry) => entry.id === section)) {
       return;
     }
-    const next = filteredEntries.find((entry) => !entry.disabled);
+    const next = filteredEntries[0];
     if (next) setSection(next.id);
   }, [filter, filteredEntries, filteredIds, section]);
 
@@ -246,15 +237,9 @@ export default function Settings({
                         <button
                           key={entry.id}
                           type="button"
-                          data-active={section === entry.id}
-                          className="tw:flex tw:min-h-[var(--ds-tree-row-height)] tw:cursor-pointer tw:items-center tw:justify-between tw:gap-2 tw:rounded-none tw:border-0 tw:bg-transparent tw:pr-3 tw:pl-12 tw:font-sans tw:text-left tw:text-ui tw:text-foreground tw:data-[active=true]:bg-selection tw:data-[active=true]:text-selection-foreground tw:disabled:cursor-default tw:disabled:opacity-50 tw:not-disabled:hover:bg-muted"
+                          aria-current={section === entry.id || undefined}
+                          className="tw:flex tw:min-h-[var(--ds-tree-row-height)] tw:cursor-pointer tw:items-center tw:justify-between tw:gap-2 tw:rounded-none tw:border-0 tw:bg-transparent tw:pr-3 tw:pl-12 tw:font-sans tw:text-left tw:text-ui tw:text-foreground tw:aria-[current=true]:bg-selection tw:aria-[current=true]:text-selection-foreground tw:hover:bg-muted"
                           onClick={() => setSection(entry.id)}
-                          disabled={entry.disabled}
-                          title={
-                            entry.id === "safety" && !connection
-                              ? t("settings.selectConnectionTitle")
-                              : undefined
-                          }
                         >
                           <span className="tw:min-w-0 tw:truncate">
                             {entry.label}
@@ -300,11 +285,7 @@ export default function Settings({
                       {settingsEntries
                         .filter((entry) => entry.scope === scope)
                         .map((entry) => (
-                          <option
-                            key={entry.id}
-                            value={entry.id}
-                            disabled={entry.disabled}
-                          >
+                          <option key={entry.id} value={entry.id}>
                             {entry.label}
                             {entry.id === "updates" && updateNavigationStatus
                               ? ` · ${updateNavigationStatus}`
