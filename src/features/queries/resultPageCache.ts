@@ -3,13 +3,36 @@ import type {
   SqlStreamBatchWire,
   SqlStreamRowSource,
 } from "./domain";
+import type { UnreadableCell } from "../../ipc/types";
+
+/** Columns of one page row the backend could not decode, keyed by column index. */
+type RowUnreadableColumns = ReadonlyMap<number, string>;
+
+/** One retained page: decoded rows plus the cells that are not values at all. */
+type CachedResultPage = {
+  rows: readonly unknown[][];
+  unreadable: ReadonlyMap<number, RowUnreadableColumns>;
+};
+
+function indexPageUnreadable(cells: readonly UnreadableCell[] | undefined) {
+  const rows = new Map<number, Map<number, string>>();
+  for (const cell of cells ?? []) {
+    let columns = rows.get(cell.row);
+    if (!columns) {
+      columns = new Map();
+      rows.set(cell.row, columns);
+    }
+    columns.set(cell.column, cell.typeName);
+  }
+  return rows;
+}
 
 /** Six 512 KiB wire pages plus one in-flight IPC page bounds renderer retention. */
 export const SQL_RESULT_CACHE_MAX_PAGES = 6;
 const SQL_RESULT_CACHE_MAX_RESULTS = 4;
 
 type ResultPageCache = {
-  pages: Map<number, readonly unknown[][]>;
+  pages: Map<number, CachedResultPage>;
   loading: Map<number, Promise<void>>;
   error: string | null;
 };
@@ -81,12 +104,16 @@ function retain(
   source: SqlStreamRowSource,
   sequence: number,
   rows: readonly unknown[][],
+  unreadable: readonly UnreadableCell[] | undefined,
 ) {
   const key = sourceKey(source);
   const cache = cacheFor(source);
   if (!cache || !key) return;
   cache.pages.delete(sequence);
-  cache.pages.set(sequence, rows);
+  cache.pages.set(sequence, {
+    rows,
+    unreadable: indexPageUnreadable(unreadable),
+  });
   while (cache.pages.size > SQL_RESULT_CACHE_MAX_PAGES) {
     const oldest = cache.pages.keys().next().value;
     if (oldest === undefined) break;
@@ -101,7 +128,7 @@ export function retainSqlStreamBatch(
   source: SqlStreamRowSource,
   batch: SqlStreamBatch,
 ) {
-  retain(source, batch.sequence, batch.rows);
+  retain(source, batch.sequence, batch.rows, batch.unreadable);
 }
 
 export function sqlResultRowAt(
@@ -112,11 +139,29 @@ export function sqlResultRowAt(
   const cache = cacheFor(source);
   if (!cache) return undefined;
   const sequence = Math.floor(index / source.pageRows);
-  const rows = cache.pages.get(sequence);
-  if (!rows) return undefined;
+  const page = cache.pages.get(sequence);
+  if (!page) return undefined;
   cache.pages.delete(sequence);
-  cache.pages.set(sequence, rows);
-  return rows[index - sequence * source.pageRows];
+  cache.pages.set(sequence, page);
+  return page.rows[index - sequence * source.pageRows];
+}
+
+/**
+ * Columns of one loaded row the backend could not decode. An absent entry means
+ * the page is not loaded, not that the row is readable — callers that must be
+ * certain use the stream receipt's whole-result failure count.
+ */
+export function sqlResultRowUnreadable(
+  source: SqlStreamRowSource,
+  index: number,
+): RowUnreadableColumns | undefined {
+  if (index < 0 || index >= source.rowCount) return undefined;
+  const cache = cacheFor(source);
+  if (!cache) return undefined;
+  const sequence = Math.floor(index / source.pageRows);
+  const page = cache.pages.get(sequence);
+  if (!page) return undefined;
+  return page.unreadable.get(index - sequence * source.pageRows);
 }
 
 export function subscribeSqlResultPages(
@@ -157,9 +202,36 @@ export function collectCachedSqlResultRows(
     if (!page) return null;
     cache.pages.delete(sequence);
     cache.pages.set(sequence, page);
-    rows.push(...page);
+    rows.push(...page.rows);
   }
   return rows.length === source.rowCount ? rows : null;
+}
+
+/**
+ * Read failures across every cached page, re-addressed to whole-result row
+ * indices. Returns null under the same bound as `collectCachedSqlResultRows`, so
+ * a caller never mistakes an unloaded page for a page without failures.
+ */
+export function collectCachedSqlResultUnreadable(
+  source: SqlStreamRowSource,
+): UnreadableCell[] | null {
+  if (source.rowCount > source.pageRows * SQL_RESULT_CACHE_MAX_PAGES) {
+    return null;
+  }
+  const cache = cacheFor(source);
+  if (!cache) return null;
+  const cells: UnreadableCell[] = [];
+  const pageCount = Math.ceil(source.rowCount / source.pageRows);
+  for (let sequence = 0; sequence < pageCount; sequence += 1) {
+    const page = cache.pages.get(sequence);
+    if (!page) return null;
+    for (const [row, columns] of page.unreadable) {
+      for (const [column, typeName] of columns) {
+        cells.push({ row: sequence * source.pageRows + row, column, typeName });
+      }
+    }
+  }
+  return cells;
 }
 
 export async function ensureSqlResultRange(
@@ -199,11 +271,17 @@ export async function ensureSqlResultRange(
             batch.columns.some(
               (column, index) => column !== expectedColumns[index],
             ) ||
-            batch.rows.some((row) => row.length !== batch.columns.length)
+            batch.rows.some((row) => row.length !== batch.columns.length) ||
+            !Array.isArray(batch.unreadable) ||
+            batch.unreadable.some(
+              (cell) =>
+                cell.row >= batch.rows.length ||
+                cell.column >= batch.columns.length,
+            )
           ) {
             throw new Error("SQL result page did not match its artifact");
           }
-          retain(source, sequence, batch.rows);
+          retain(source, sequence, batch.rows, batch.unreadable);
         })
         .catch((error) => {
           const current = cacheFor(source);

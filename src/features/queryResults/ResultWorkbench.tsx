@@ -16,6 +16,7 @@ export function ResultWorkbenchToolbar({
   rowSource,
   filenameBase,
   partial,
+  unreadableCells,
   filterOpen,
   filter,
   filterDisabled = false,
@@ -27,6 +28,7 @@ export function ResultWorkbenchToolbar({
   rowSource?: SqlStreamRowSource;
   filenameBase: string;
   partial?: boolean;
+  unreadableCells?: number;
   filterOpen: boolean;
   filter: string;
   filterDisabled?: boolean;
@@ -73,6 +75,7 @@ export function ResultWorkbenchToolbar({
         rowSource={rowSource}
         filenameBase={filenameBase}
         partial={partial}
+        unreadableCells={unreadableCells}
         presentation="workbench"
       />
     </WorkbenchToolbar>

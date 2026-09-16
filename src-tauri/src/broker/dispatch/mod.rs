@@ -40,9 +40,10 @@ use dopedb_protocol::{
     SkillInstallCommand, SkillMutationArguments, SkillRemoveCommand, SkillRepairCommand,
     SkillStatusCommand, SkillsGetCommand, SkillsListCommand, SqlProposeArguments,
     SqlProposeCommand, StatusCommand, StatusResult, TableDescribeArguments, TableDescribeCommand,
-    TableDescribeResult, VersionCommand, VersionResult, COMMAND_SCHEMA_VERSION,
-    MAX_CATALOG_SEARCH_KINDS, MAX_CATALOG_SEARCH_MATCHES, MAX_CATALOG_SEARCH_QUERY_BYTES,
-    MAX_RESPONSE_BYTES, MAX_STRING_BYTES, PROTOCOL_MAX, PROTOCOL_MIN,
+    TableDescribeResult, UnreadableCell as ProtocolUnreadableCell, VersionCommand, VersionResult,
+    COMMAND_SCHEMA_VERSION, MAX_CATALOG_SEARCH_KINDS, MAX_CATALOG_SEARCH_MATCHES,
+    MAX_CATALOG_SEARCH_QUERY_BYTES, MAX_RESPONSE_BYTES, MAX_STRING_BYTES, PROTOCOL_MAX,
+    PROTOCOL_MIN,
 };
 use serde::Serialize;
 use std::collections::BTreeMap;

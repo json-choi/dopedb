@@ -89,6 +89,18 @@ impl CommandSpec for QueryRunCommand {
     const AUTHENTICATION: AuthenticationRequirement = AuthenticationRequirement::TerminalSession;
 }
 
+/// One cell whose wire bytes the producer could not decode, addressed inside this
+/// page. A decode failure is never encoded as a value, because every string, object
+/// and sentinel shape can equal a row that genuinely holds it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct UnreadableCell {
+    pub row: usize,
+    pub column: usize,
+    /// Database type name that failed to decode, e.g. "geometry".
+    pub type_name: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct QueryResultPage {
@@ -97,6 +109,11 @@ pub struct QueryResultPage {
     pub row_count: usize,
     pub truncated: bool,
     pub duration_ms: u64,
+    /// Cells in `rows` the producer could not decode. Absent (and empty) is the
+    /// only claim that every `null` in `rows` is a real SQL NULL, so a reader must
+    /// consult it before treating a cell as the column's value.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub unreadable_cells: Vec<UnreadableCell>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

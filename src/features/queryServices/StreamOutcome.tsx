@@ -5,8 +5,12 @@ import { useMemo, useState } from "react";
 import { type SqlStreamViewState } from "../queries/domain";
 import {
   collectCachedSqlResultRows,
+  collectCachedSqlResultUnreadable,
   SQL_RESULT_CACHE_MAX_PAGES,
 } from "../queries/resultPageCache";
+import { remapUnreadableCells } from "../queryResults/cellReadState";
+import ResultCellInspector from "../queryResults/ResultCellInspector";
+import { useResultCellInspector } from "../queryResults/useResultCellInspector";
 import { useSqlResultPages } from "../queries/useSqlResultPages";
 import DataGrid from "../queryResults/DataGrid";
 import {
@@ -19,7 +23,7 @@ import {
   SqlSnippet,
   WorkbenchContainedBody,
 } from "../../design-system/components/Workbench";
-import type { JsonValue } from "../../ipc/types";
+import type { JsonValue, UnreadableCell } from "../../ipc/types";
 import { stamp } from "../../lib/export";
 import { useI18n } from "../../lib/i18n";
 
@@ -51,20 +55,60 @@ export default function StreamOutcome({
   const filterableRows = partial
     ? null
     : collectCachedSqlResultRows(stream.rowSource);
-  const filteredRows = useMemo<JsonValue[][] | null>(() => {
+  const filterableUnreadable = partial
+    ? null
+    : collectCachedSqlResultUnreadable(stream.rowSource);
+  // Filtering renumbers rows, so the read-failure coordinates are re-addressed in
+  // the same pass; a stale coordinate would mark a different row's cell unread.
+  const filtered = useMemo<{
+    rows: JsonValue[][];
+    unreadable: UnreadableCell[];
+  } | null>(() => {
     if (!filterableRows || !normalizedFilter) return null;
     const rows: JsonValue[][] = [];
-    for (const row of filterableRows) {
+    const keptRows: number[] = [];
+    filterableRows.forEach((row, index) => {
       if (
         row.some((value) =>
           resultCellText(value).toLocaleLowerCase().includes(normalizedFilter),
         )
       ) {
         rows.push([...row] as JsonValue[]);
+        keptRows.push(index);
       }
-    }
-    return rows;
-  }, [filterableRows, normalizedFilter]);
+    });
+    return {
+      rows,
+      unreadable: remapUnreadableCells(filterableUnreadable ?? [], keptRows),
+    };
+  }, [filterableRows, filterableUnreadable, normalizedFilter]);
+  const filteredRows = filtered?.rows ?? null;
+  // The grid treats a new result object as a new result, so this identity must
+  // change when the rows do and not on every render.
+  const gridResult = useMemo(
+    () => ({
+      columns: stream.columns,
+      rows: filteredRows ?? [],
+      rowCount: filteredRows?.length ?? stream.rowCount,
+      truncated: stream.truncated,
+      durationMs: stream.durationMs ?? 0,
+      unreadableCells: filtered?.unreadable ?? [],
+    }),
+    [
+      filtered,
+      filteredRows,
+      stream.columns,
+      stream.durationMs,
+      stream.rowCount,
+      stream.truncated,
+    ],
+  );
+  const inspector = useResultCellInspector({
+    result: gridResult,
+    operationId: stream.rowSource.operationId,
+    columnKey: stream.columns.join("\u0000"),
+    startIndex: 0,
+  });
   const phaseLabel =
     stream.phase === "cancelled"
       ? t("sql.cancelled")
@@ -90,6 +134,7 @@ export default function StreamOutcome({
             rowSource={filteredRows === null ? stream.rowSource : undefined}
             filenameBase={`query-${stamp()}`}
             partial={partial}
+            unreadableCells={stream.unreadableCells}
             filterOpen={filterOpen}
             filter={filter}
             filterDisabled={partial || filterableRows === null}
@@ -99,18 +144,21 @@ export default function StreamOutcome({
             }}
             onFilterChange={setFilter}
           />
-          <DataGrid
-            result={{
-              columns: stream.columns,
-              rows: filteredRows ?? [],
-              rowCount: filteredRows?.length ?? stream.rowCount,
-              truncated: stream.truncated,
-              durationMs: stream.durationMs ?? 0,
-            }}
-            rowSource={filteredRows === null ? stream.rowSource : undefined}
-            surface="workbench"
-            footerInset
-          />
+          <div className="tw:flex tw:min-h-0 tw:flex-1 tw:@max-[920px]:flex-col">
+            <DataGrid
+              result={gridResult}
+              rowSource={filteredRows === null ? stream.rowSource : undefined}
+              surface="workbench"
+              footerInset
+              onCellClick={(value, rowIndex, column) =>
+                inspector.open({ value, column, rowNumber: rowIndex + 1 })
+              }
+            />
+            <ResultCellInspector
+              cell={inspector.cell}
+              onClose={inspector.close}
+            />
+          </div>
           <ResultWorkbenchFooter
             visible={filteredRows?.length ?? stream.rowCount}
             total={stream.rowCount}

@@ -28,7 +28,6 @@ export function initialTableDataState(viewKey: string): TableDataState {
     orderByExpression: "",
     appliedOrderByExpression: "",
     selectedRow: null,
-    selectedCell: null,
     editor: null,
     staged: [],
     reviewing: false,
@@ -71,7 +70,6 @@ export function tableDataReducer(
         ...state,
         staged: [...state.staged, action.write],
         editor: null,
-        selectedCell: null,
         reviewing: false,
         proposal: null,
       };

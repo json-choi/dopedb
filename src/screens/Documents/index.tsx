@@ -18,6 +18,8 @@ import type { ConnectionProfile } from "../../features/connections/domain";
 import DataGrid from "../../features/queryResults/DataGrid";
 import { Icon } from "../../components/Icon";
 import ResultToolbar from "../../features/queryResults/ResultToolbar";
+import ResultCellInspector from "../../features/queryResults/ResultCellInspector";
+import { useResultCellInspector } from "../../features/queryResults/useResultCellInspector";
 import { Button } from "../../design-system/components/Button";
 import {
   InlineNotice,
@@ -238,13 +240,26 @@ export default function Documents({
     () => documentsToGrid(result?.page.documents ?? []),
     [result],
   );
-  const gridResult: QueryResult = {
-    columns: grid.columns,
-    rows: grid.rows,
-    rowCount: result?.page.docCount ?? 0,
-    truncated: result?.page.truncated ?? false,
-    durationMs: result?.page.durationMs ?? 0,
-  };
+  const gridResult: QueryResult = useMemo(
+    () => ({
+      columns: grid.columns,
+      rows: grid.rows,
+      rowCount: result?.page.docCount ?? 0,
+      truncated: result?.page.truncated ?? false,
+      durationMs: result?.page.durationMs ?? 0,
+      // Documents arrive as decoded JSON; there is no per-cell wire decode to fail.
+      unreadableCells: [],
+    }),
+    [grid, result],
+  );
+  // Same inspector the SQL and Tables grids use; a new run closes it rather than
+  // re-opening the previous document's value at the same coordinates.
+  const inspector = useResultCellInspector({
+    result: gridResult,
+    operationId: null,
+    columnKey: grid.columns.join("\u0000"),
+    startIndex: 0,
+  });
 
   if (catalogPhase === "loaded" && tables.length === 0) {
     return (
@@ -450,7 +465,19 @@ export default function Documents({
               />
             </ResultMeta>
             {gridResult.columns.length > 0 ? (
-              <DataGrid result={gridResult} surface="workbench" />
+              <div className="tw:flex tw:min-h-0 tw:flex-1 tw:@max-[920px]:flex-col">
+                <DataGrid
+                  result={gridResult}
+                  surface="workbench"
+                  onCellClick={(value, rowIndex, column) =>
+                    inspector.open({ value, column, rowNumber: rowIndex + 1 })
+                  }
+                />
+                <ResultCellInspector
+                  cell={inspector.cell}
+                  onClose={inspector.close}
+                />
+              </div>
             ) : (
               <WorkbenchEmptyState icon="table">
                 {t("documents.noDocuments")}

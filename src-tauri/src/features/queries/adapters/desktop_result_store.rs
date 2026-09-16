@@ -38,7 +38,10 @@ use files::*;
 #[cfg(feature = "packaged-benchmark")]
 pub(crate) use benchmark::{run_packaged_result_store_benchmark, PackagedResultStoreMetric};
 
-const RESULT_STORE_SCHEMA_VERSION: u32 = 1;
+// v2 added per-cell read-failure coordinates. A v1 artifact recorded a decode
+// failure as an indistinguishable text value, so it cannot be reinterpreted; it is
+// rejected and the user re-runs the query deliberately.
+const RESULT_STORE_SCHEMA_VERSION: u32 = 2;
 const RESULT_PAGE_ROWS: usize = 256;
 const MAX_MANIFEST_BYTES: u64 = 2 * 1024 * 1024;
 const MAX_RETAINED_RESULTS: usize = 40;
@@ -81,6 +84,9 @@ struct ResultManifest {
     row_count: usize,
     truncated: bool,
     duration_ms: u64,
+    /// Cells across every page this build could not decode. A non-zero count
+    /// fails the native export closed instead of writing a plausible file.
+    unreadable_cell_count: usize,
     completed_at: DateTime<Utc>,
 }
 
@@ -97,6 +103,7 @@ pub(super) struct DesktopSqlResultWriter {
     columns: Vec<String>,
     pages: Vec<ResultPageMeta>,
     row_count: usize,
+    unreadable_cell_count: usize,
     published: bool,
 }
 
@@ -164,6 +171,7 @@ impl DesktopSqlResultWriter {
             columns: Vec::new(),
             pages: Vec::new(),
             row_count: 0,
+            unreadable_cell_count: 0,
             published: false,
         })
     }
@@ -181,6 +189,7 @@ impl DesktopSqlResultWriter {
                 .rows
                 .iter()
                 .any(|row| row.len() != batch.columns.len())
+            || !unreadable_cells_are_addressable(batch)
         {
             return Err(DesktopSqlStreamSinkError::BatchTooLarge);
         }
@@ -200,6 +209,9 @@ impl DesktopSqlResultWriter {
             sha256: bytes_sha256(encoded),
         });
         self.row_count = self.row_count.saturating_add(batch.rows.len());
+        self.unreadable_cell_count = self
+            .unreadable_cell_count
+            .saturating_add(batch.unreadable.len());
         Ok(())
     }
 
@@ -250,6 +262,7 @@ impl DesktopSqlResultWriter {
             row_count,
             truncated,
             duration_ms,
+            unreadable_cell_count: self.unreadable_cell_count,
             completed_at: Utc::now(),
         };
         let encoded = serde_json::to_vec(&manifest)
@@ -435,6 +448,17 @@ fn export_manifest(
     cancelled: &AtomicBool,
     progress: &mut impl FnMut(DesktopSqlResultExportProgress) -> AppResult<()>,
 ) -> AppResult<usize> {
+    // A page carries cells this build could not decode. Writing them as empty CSV
+    // fields or JSON nulls would hand back a file that claims to be the result, so
+    // the export stops before it creates one.
+    if manifest.unreadable_cell_count > 0 {
+        return Err(AppError::Blocked {
+            reason: format!(
+                "this result has {} cell(s) this build could not read; export is blocked so the file cannot claim they were empty",
+                manifest.unreadable_cell_count
+            ),
+        });
+    }
     let file = OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -518,6 +542,15 @@ fn export_manifest(
         ));
     }
     Ok(rows_written)
+}
+
+/// Every unreadable coordinate must address a real cell of this page; a page that
+/// names a coordinate outside its own rows/columns is rejected rather than trusted.
+fn unreadable_cells_are_addressable(batch: &DesktopSqlStreamBatch) -> bool {
+    batch
+        .unreadable
+        .iter()
+        .all(|cell| cell.row < batch.rows.len() && cell.column < batch.columns.len())
 }
 
 fn csv_cell(value: &serde_json::Value) -> String {

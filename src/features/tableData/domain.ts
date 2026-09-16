@@ -6,8 +6,6 @@ export type RowEditorState = {
   initial: Record<string, string | null>;
 };
 
-export type SelectedCell = { value: unknown; column: string };
-
 export type StagedWrite = {
   id: string;
   sql: string;
@@ -31,7 +29,6 @@ export type TableDataState = {
   orderByExpression: string;
   appliedOrderByExpression: string;
   selectedRow: number | null;
-  selectedCell: SelectedCell | null;
   editor: RowEditorState | null;
   staged: StagedWrite[];
   reviewing: boolean;

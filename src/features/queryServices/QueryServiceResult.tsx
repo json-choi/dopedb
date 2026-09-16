@@ -5,6 +5,9 @@ import { Button } from "../../design-system/components/Button";
 import { InlineNotice } from "../../design-system/components/Status";
 import DataGrid from "../queryResults/DataGrid";
 import ResultToolbar from "../queryResults/ResultToolbar";
+import { remapUnreadableCells } from "../queryResults/cellReadState";
+import ResultCellInspector from "../queryResults/ResultCellInspector";
+import { useResultCellInspector } from "../queryResults/useResultCellInspector";
 import {
   ResultWorkbenchFooter,
   ResultWorkbenchToolbar,
@@ -110,15 +113,61 @@ function MaterializedResult({
   const [filter, setFilter] = useState("");
   const result = outcome.result;
   const normalizedFilter = filter.trim().toLocaleLowerCase();
-  const filteredRows = useMemo(() => {
-    if (!result || !normalizedFilter) return result?.rows ?? [];
-    return result.rows.filter((row) =>
-      row.some((value) =>
-        resultCellText(value).toLocaleLowerCase().includes(normalizedFilter),
-      ),
-    );
+  // Filtering and the Show-more window renumber rows, so read-failure coordinates
+  // are re-addressed with them instead of pointing at whichever row now sits there.
+  const filtered = useMemo(() => {
+    const rows = result?.rows ?? [];
+    if (!result || !normalizedFilter) {
+      return { rows, keptRows: rows.map((_, index) => index) };
+    }
+    const kept: number[] = [];
+    const matched: typeof rows = [];
+    rows.forEach((row, index) => {
+      if (
+        row.some((value) =>
+          resultCellText(value).toLocaleLowerCase().includes(normalizedFilter),
+        )
+      ) {
+        matched.push(row);
+        kept.push(index);
+      }
+    });
+    return { rows: matched, keptRows: kept };
   }, [normalizedFilter, result]);
-  const visibleRows = filteredRows.slice(0, limit);
+  const filteredRows = filtered.rows;
+  const visibleRows = useMemo(
+    () => filteredRows.slice(0, limit),
+    [filteredRows, limit],
+  );
+  const visibleUnreadable = useMemo(
+    () =>
+      remapUnreadableCells(
+        result?.unreadableCells ?? [],
+        filtered.keptRows.slice(0, limit),
+      ),
+    [filtered.keptRows, limit, result],
+  );
+  // A stable identity per rendered window: the grid clears its cell selection when
+  // this object changes, so rebuilding it every render would erase every selection.
+  const gridResult = useMemo(
+    () =>
+      result
+        ? {
+            ...result,
+            rows: visibleRows,
+            rowCount: filteredRows.length,
+            unreadableCells: visibleUnreadable,
+          }
+        : null,
+    [filteredRows.length, result, visibleRows, visibleUnreadable],
+  );
+
+  const inspector = useResultCellInspector({
+    result: gridResult,
+    operationId: null,
+    columnKey: result?.columns.join("\u0000") ?? "",
+    startIndex: 0,
+  });
 
   return (
     <WorkbenchContainedBody>
@@ -128,6 +177,7 @@ function MaterializedResult({
             columns={result.columns}
             rows={filteredRows}
             filenameBase={`query-${stamp()}`}
+            unreadableCells={result.unreadableCells.length}
             filterOpen={filterOpen}
             filter={filter}
             onToggleFilter={() => {
@@ -139,15 +189,22 @@ function MaterializedResult({
               setLimit(PAGE_STEP);
             }}
           />
-          <DataGrid
-            result={{
-              ...result,
-              rows: visibleRows,
-              rowCount: filteredRows.length,
-            }}
-            surface="workbench"
-            footerInset
-          />
+          {gridResult ? (
+            <div className="tw:flex tw:min-h-0 tw:flex-1 tw:@max-[920px]:flex-col">
+              <DataGrid
+                result={gridResult}
+                surface="workbench"
+                footerInset
+                onCellClick={(value, rowIndex, column) =>
+                  inspector.open({ value, column, rowNumber: rowIndex + 1 })
+                }
+              />
+              <ResultCellInspector
+                cell={inspector.cell}
+                onClose={inspector.close}
+              />
+            </div>
+          ) : null}
           <ResultWorkbenchFooter
             visible={visibleRows.length}
             total={result.rows.length}
@@ -288,6 +345,7 @@ function ScriptResults({
                     columns={statement.result.columns}
                     rows={statement.result.rows}
                     filenameBase={`script-stmt${index + 1}-${stamp()}`}
+                    unreadableCells={statement.result.unreadableCells.length}
                   />
                 </div>
                 <DataGrid

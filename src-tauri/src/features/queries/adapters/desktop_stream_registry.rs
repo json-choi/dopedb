@@ -614,6 +614,7 @@ pub(crate) fn assert_ephemeral_page_contract() {
         sequence: 0,
         columns: vec!["id".into()],
         rows: vec![vec![serde_json::json!(1)]],
+        unreadable: Vec::new(),
     };
     session
         .borrow()

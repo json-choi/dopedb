@@ -1,14 +1,36 @@
 //! Lossless JSON decoding for PostgreSQL, MySQL, and SQLite rows.
+//!
+//! A cell this build cannot decode is deliberately NOT representable as a value:
+//! every string, object, and sentinel shape here can equal real user data, so a
+//! caller could never tell the failure apart from a row that genuinely holds it.
+//! Each decoder therefore returns a [`DecodedCell`], and the row assemblers in
+//! `read.rs` carry the failures out of band as `(row, column)` coordinates.
 
 use super::*;
 
 /// JS `Number` loses precision past 2^53; anything larger is emitted as a string.
 const JS_MAX_SAFE_INT: u64 = 1 << 53;
 
+/// One decoded cell.
+///
+/// `Value` includes a real SQL NULL. `Unreadable` is a non-NULL cell whose wire
+/// bytes this build cannot decode; it never becomes a value, so no real value can
+/// imitate it and no consumer can mistake it for data.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum DecodedCell {
+    Value(Value),
+    Unreadable { type_name: String },
+}
+
+/// A decoded value, including a real SQL NULL.
+fn ok<T: Into<Value>>(value: T) -> DecodedCell {
+    DecodedCell::Value(value.into())
+}
+
 /// `Ok` → JSON value; decode error (including SQL NULL on a non-`Option` get) → `Null`.
 /// Only used for exact-type arms where a decode error genuinely means NULL.
-fn jv<T: Into<Value>>(r: Result<T, sqlx::Error>) -> Value {
-    r.map(Into::into).unwrap_or(Value::Null)
+fn jv<T: Into<Value>>(r: Result<T, sqlx::Error>) -> DecodedCell {
+    ok(r.map(Into::into).unwrap_or(Value::Null))
 }
 
 /// Ints outside JS's safe range become JSON strings to avoid silent corruption.
@@ -28,12 +50,12 @@ pub(crate) fn uint_json(v: u64) -> Value {
     }
 }
 
-fn int_or_null(r: Result<i64, sqlx::Error>) -> Value {
-    r.map(int_json).unwrap_or(Value::Null)
+fn int_or_null(r: Result<i64, sqlx::Error>) -> DecodedCell {
+    ok(r.map(int_json).unwrap_or(Value::Null))
 }
 
-fn uint_or_null(r: Result<u64, sqlx::Error>) -> Value {
-    r.map(uint_json).unwrap_or(Value::Null)
+fn uint_or_null(r: Result<u64, sqlx::Error>) -> DecodedCell {
+    ok(r.map(uint_json).unwrap_or(Value::Null))
 }
 
 fn hex_str(b: Vec<u8>) -> String {
@@ -46,16 +68,19 @@ fn iso_dt(t: chrono::NaiveDateTime) -> String {
 }
 
 /// A cell we could not decode: a real SQL NULL stays `Null`, anything else becomes
-/// a VISIBLE marker naming the column type — so real data (money, arrays, interval,
-/// inet, …) never masquerades as NULL in the grid.
-fn null_or_marker<R: Row>(row: &R, i: usize, ty: &str) -> Value
+/// [`DecodedCell::Unreadable`] naming the column type — so real data (money, arrays,
+/// interval, inet, …) neither masquerades as NULL nor arrives as a text value the
+/// grid, clipboard, export, or a generated INSERT would treat as the column's value.
+fn null_or_unreadable<R: Row>(row: &R, i: usize, ty: &str) -> DecodedCell
 where
     usize: sqlx::ColumnIndex<R>,
 {
     if row.try_get_raw(i).map(|v| v.is_null()).unwrap_or(false) {
-        Value::Null
+        DecodedCell::Value(Value::Null)
     } else {
-        Value::String(format!("<unsupported: {}>", ty.to_ascii_lowercase()))
+        DecodedCell::Unreadable {
+            type_name: ty.to_ascii_lowercase(),
+        }
     }
 }
 
@@ -64,7 +89,7 @@ where
 /// set per-connection from `SHOW lc_monetary` (0 for KRW/JPY) if a DB ever needs it.
 const PG_MONEY_FRAC_DIGITS: u32 = 2;
 
-pub(crate) fn pg_value(row: &PgRow, i: usize) -> Value {
+pub(crate) fn pg_value(row: &PgRow, i: usize) -> DecodedCell {
     let ty = row.column(i).type_info().name().to_ascii_uppercase();
     match ty.as_str() {
         "BOOL" => jv(row.try_get::<bool, _>(i)),
@@ -74,33 +99,33 @@ pub(crate) fn pg_value(row: &PgRow, i: usize) -> Value {
         "OID" => jv(row.try_get::<Oid, _>(i).map(|o| o.0)),
         "FLOAT4" => jv(row.try_get::<f32, _>(i).map(|v| v as f64)),
         "FLOAT8" => jv(row.try_get::<f64, _>(i)),
-        // NUMERIC: exact string; out-of-range for Decimal → marker, never NULL.
+        // NUMERIC: exact string; out-of-range for Decimal → unreadable, never NULL.
         "NUMERIC" => match row.try_get::<Decimal, _>(i) {
-            Ok(d) => Value::String(d.to_string()),
-            Err(_) => null_or_marker(row, i, &ty),
+            Ok(d) => ok(d.to_string()),
+            Err(_) => null_or_unreadable(row, i, &ty),
         },
         // MONEY is an i64 of minor units, NOT a Decimal on the wire (rust_decimal only
-        // decodes NUMERIC), so it needs PgMoney; the old NUMERIC|MONEY arm just markered.
+        // decodes NUMERIC), so it needs PgMoney; the old NUMERIC|MONEY arm never decoded it.
         "MONEY" => match row.try_get::<PgMoney, _>(i) {
-            Ok(m) => Value::String(m.to_decimal(PG_MONEY_FRAC_DIGITS).to_string()),
-            Err(_) => null_or_marker(row, i, &ty),
+            Ok(m) => ok(m.to_decimal(PG_MONEY_FRAC_DIGITS).to_string()),
+            Err(_) => null_or_unreadable(row, i, &ty),
         },
         "TEXT" | "VARCHAR" | "BPCHAR" | "CHAR" | "NAME" | "CITEXT" => {
             jv(row.try_get::<String, _>(i))
         }
         "UUID" => jv(row.try_get::<uuid::Uuid, _>(i).map(|u| u.to_string())),
-        "JSON" | "JSONB" => row.try_get::<Value, _>(i).unwrap_or(Value::Null),
+        "JSON" | "JSONB" => ok(row.try_get::<Value, _>(i).unwrap_or(Value::Null)),
         "TIMESTAMPTZ" => jv(row.try_get::<DateTime<Utc>, _>(i).map(|t| t.to_rfc3339())),
         "TIMESTAMP" => jv(row.try_get::<NaiveDateTime, _>(i).map(iso_dt)),
         "DATE" => jv(row.try_get::<NaiveDate, _>(i).map(|t| t.to_string())),
         "TIME" => jv(row.try_get::<NaiveTime, _>(i).map(|t| t.to_string())),
         "TIMETZ" => match row.try_get::<PgTimeTz<NaiveTime, FixedOffset>, _>(i) {
-            Ok(t) => Value::from(fmt_timetz(&t)),
-            Err(_) => null_or_marker(row, i, &ty),
+            Ok(t) => ok(fmt_timetz(&t)),
+            Err(_) => null_or_unreadable(row, i, &ty),
         },
         "INTERVAL" => match row.try_get::<PgInterval, _>(i) {
-            Ok(iv) => Value::from(fmt_interval(&iv)),
-            Err(_) => null_or_marker(row, i, &ty),
+            Ok(iv) => ok(fmt_interval(&iv)),
+            Err(_) => null_or_unreadable(row, i, &ty),
         },
         // Ranges render via PgRange's Display ("[1,5)" canonical form).
         "INT4RANGE" => pg_range::<i32>(row, i, &ty),
@@ -112,16 +137,16 @@ pub(crate) fn pg_value(row: &PgRow, i: usize) -> Value {
         "BYTEA" => jv(row.try_get::<Vec<u8>, _>(i).map(hex_str)),
         // inet/cidr, macaddr, bit/varbit via the sqlx feature decoders enabled in Cargo.toml.
         "INET" | "CIDR" => match row.try_get::<IpNetwork, _>(i) {
-            Ok(n) => Value::from(n.to_string()),
-            Err(_) => null_or_marker(row, i, &ty),
+            Ok(n) => ok(n.to_string()),
+            Err(_) => null_or_unreadable(row, i, &ty),
         },
         "MACADDR" => match row.try_get::<MacAddress, _>(i) {
-            Ok(m) => Value::from(m.to_string()),
-            Err(_) => null_or_marker(row, i, &ty),
+            Ok(m) => ok(m.to_string()),
+            Err(_) => null_or_unreadable(row, i, &ty),
         },
         "BIT" | "VARBIT" => match row.try_get::<BitVec, _>(i) {
-            Ok(b) => Value::from(fmt_bits(&b)),
-            Err(_) => null_or_marker(row, i, &ty),
+            Ok(b) => ok(fmt_bits(&b)),
+            Err(_) => null_or_unreadable(row, i, &ty),
         },
         // arrays (NAME[]/INT4[]/…) and custom enums land here.
         _ if ty.ends_with("[]") => pg_array(row, i, &ty),
@@ -131,22 +156,22 @@ pub(crate) fn pg_value(row: &PgRow, i: usize) -> Value {
 
 /// Render a range column as text via `PgRange<T>`'s `Display`. Generic over the element
 /// so the six range types share one body; each `T` here has an owned `Decode` impl.
-fn pg_range<T>(row: &PgRow, i: usize, ty: &str) -> Value
+fn pg_range<T>(row: &PgRow, i: usize, ty: &str) -> DecodedCell
 where
     T: std::fmt::Display,
     PgRange<T>: sqlx::Type<sqlx::Postgres>,
     for<'a> PgRange<T>: sqlx::Decode<'a, sqlx::Postgres>,
 {
     match row.try_get::<PgRange<T>, _>(i) {
-        Ok(r) => Value::from(r.to_string()),
-        Err(_) => null_or_marker(row, i, ty),
+        Ok(r) => ok(r.to_string()),
+        Err(_) => null_or_unreadable(row, i, ty),
     }
 }
 
 /// Map a decoded `Vec<Option<T>>` to a JSON array, NULL elements → `Value::Null`.
 /// Decoding `Option<T>` per element is what lets an array containing a NULL decode at
 /// all: sqlx runs `T::decode` on every element, so a bare `Vec<T>` errors on the first
-/// NULL and markers the whole cell (a very common shape for real array columns).
+/// NULL and marks the whole cell unreadable (a very common shape for real array columns).
 fn arr<T>(
     r: Result<Vec<Option<T>>, sqlx::Error>,
     f: impl Fn(T) -> Value,
@@ -160,7 +185,7 @@ fn arr<T>(
 
 /// Decode a PG array into a JSON array of the element rendering. sqlx names array types
 /// `<BASE>[]` (display_name), so the element type is the name minus the `[]` suffix.
-fn pg_array(row: &PgRow, i: usize, ty: &str) -> Value {
+fn pg_array(row: &PgRow, i: usize, ty: &str) -> DecodedCell {
     let elem = ty.strip_suffix("[]").unwrap_or(ty);
     let decoded: Result<Vec<Value>, sqlx::Error> = match elem {
         "INT2" => arr(row.try_get(i), |x: i16| Value::from(x as i64)),
@@ -185,44 +210,44 @@ fn pg_array(row: &PgRow, i: usize, ty: &str) -> Value {
         _ => return pg_enum_array(row, i, ty),
     };
     match decoded {
-        Ok(v) => Value::Array(v),
-        Err(_) => null_or_marker(row, i, ty),
+        Ok(v) => ok(Value::Array(v)),
+        Err(_) => null_or_unreadable(row, i, ty),
     }
 }
 
 /// An array whose element type name matched nothing above: if it is structurally an
 /// array-of-enum, decode the labels (via `try_get_unchecked`, which skips the element
-/// compat check that would otherwise reject the enum). Anything else → marker.
-fn pg_enum_array(row: &PgRow, i: usize, ty: &str) -> Value {
+/// compat check that would otherwise reject the enum). Anything else → unreadable.
+fn pg_enum_array(row: &PgRow, i: usize, ty: &str) -> DecodedCell {
     if let PgTypeKind::Array(inner) = row.column(i).type_info().kind() {
         if matches!(inner.kind(), PgTypeKind::Enum(_)) {
             if let Ok(v) = row.try_get_unchecked::<Vec<Option<String>>, _>(i) {
-                return Value::Array(
+                return ok(Value::Array(
                     v.into_iter()
                         .map(|x| x.map(Value::from).unwrap_or(Value::Null))
                         .collect(),
-                );
+                ));
             }
         }
     }
-    null_or_marker(row, i, ty)
+    null_or_unreadable(row, i, ty)
 }
 
-fn pg_fallback(row: &PgRow, i: usize, ty: &str) -> Value {
+fn pg_fallback(row: &PgRow, i: usize, ty: &str) -> DecodedCell {
     if let Ok(s) = row.try_get::<String, _>(i) {
-        return Value::from(s);
+        return ok(s);
     }
     if let Ok(v) = row.try_get::<i64, _>(i) {
-        return int_json(v);
+        return ok(int_json(v));
     }
     if let Ok(v) = row.try_get::<f64, _>(i) {
-        return Value::from(v);
+        return ok(v);
     }
     if let Ok(v) = row.try_get::<bool, _>(i) {
-        return Value::from(v);
+        return ok(v);
     }
     if let Ok(d) = row.try_get::<Decimal, _>(i) {
-        return Value::String(d.to_string());
+        return ok(d.to_string());
     }
     // Custom enum: on the prepared path (the only path dopedb uses) kind() is resolved
     // to Enum and never panics; the enum's wire bytes ARE its label, so a valid-UTF-8
@@ -231,16 +256,16 @@ fn pg_fallback(row: &PgRow, i: usize, ty: &str) -> Value {
         if let Ok(raw) = row.try_get_raw(i) {
             if let Ok(b) = raw.as_bytes() {
                 if let Some(label) = bytes_as_label(b) {
-                    return Value::from(label);
+                    return ok(label);
                 }
             }
         }
     }
-    null_or_marker(row, i, ty)
+    null_or_unreadable(row, i, ty)
 }
 
 /// PG enum wire bytes are the label text (identical in Text and Binary format), so this
-/// is the enum decoder; invalid UTF-8 (a real binary type) returns None → marker.
+/// is the enum decoder; invalid UTF-8 (a real binary type) returns None → unreadable.
 fn bytes_as_label(bytes: &[u8]) -> Option<String> {
     std::str::from_utf8(bytes).ok().map(str::to_owned)
 }
@@ -361,7 +386,7 @@ fn mysql_decode_route(ty: &str) -> MySqlDecodeRoute {
     }
 }
 
-pub(crate) fn mysql_value(row: &MySqlRow, i: usize) -> Value {
+pub(crate) fn mysql_value(row: &MySqlRow, i: usize) -> DecodedCell {
     let ty = row.column(i).type_info().name().to_ascii_uppercase();
     match mysql_decode_route(&ty) {
         // SQLx models YEAR as an unsigned integer even though its type name does
@@ -372,67 +397,76 @@ pub(crate) fn mysql_value(row: &MySqlRow, i: usize) -> Value {
         MySqlDecodeRoute::Float32 => jv(row.try_get::<f32, _>(i).map(|v| v as f64)),
         MySqlDecodeRoute::Float64 => jv(row.try_get::<f64, _>(i)),
         MySqlDecodeRoute::Decimal => match row.try_get::<Decimal, _>(i) {
-            Ok(d) => Value::String(d.to_string()),
-            Err(_) => null_or_marker(row, i, &ty),
+            Ok(d) => ok(d.to_string()),
+            Err(_) => null_or_unreadable(row, i, &ty),
         },
         MySqlDecodeRoute::Text => jv(row.try_get::<String, _>(i)),
         // SET is textual on the wire, but SQLx 0.8 omits ColumnType::Set from
         // String::compatible. The unchecked get skips only that type guard while
         // retaining SQLx's normal UTF-8 decoder.
         MySqlDecodeRoute::Set => match row.try_get_unchecked::<String, _>(i) {
-            Ok(value) => Value::from(value),
-            Err(_) => null_or_marker(row, i, &ty),
+            Ok(value) => ok(value),
+            Err(_) => null_or_unreadable(row, i, &ty),
         },
         MySqlDecodeRoute::DateTime => jv(row.try_get::<chrono::NaiveDateTime, _>(i).map(iso_dt)),
         MySqlDecodeRoute::Date => jv(row
             .try_get::<chrono::NaiveDate, _>(i)
             .map(|t| t.to_string())),
         MySqlDecodeRoute::Time => match row.try_get::<MySqlTime, _>(i) {
-            Ok(t) => Value::from(fmt_mysql_time(&t)),
+            Ok(t) => ok(fmt_mysql_time(&t)),
             Err(_) => mysql_fallback(row, i, &ty),
         },
-        MySqlDecodeRoute::Json => row.try_get::<Value, _>(i).unwrap_or(Value::Null),
+        MySqlDecodeRoute::Json => ok(row.try_get::<Value, _>(i).unwrap_or(Value::Null)),
         // BIT and anything unlisted fall through.
         MySqlDecodeRoute::Fallback => mysql_fallback(row, i, &ty),
     }
 }
 
-fn mysql_fallback(row: &MySqlRow, i: usize, ty: &str) -> Value {
+fn mysql_fallback(row: &MySqlRow, i: usize, ty: &str) -> DecodedCell {
     if let Ok(s) = row.try_get::<String, _>(i) {
-        return Value::from(s);
+        return ok(s);
     }
     if let Ok(v) = row.try_get::<i64, _>(i) {
-        return int_json(v);
+        return ok(int_json(v));
     }
     if let Ok(v) = row.try_get::<u64, _>(i) {
-        return uint_json(v);
+        return ok(uint_json(v));
     }
     if let Ok(v) = row.try_get::<f64, _>(i) {
-        return Value::from(v);
+        return ok(v);
     }
     if let Ok(d) = row.try_get::<Decimal, _>(i) {
-        return Value::String(d.to_string());
+        return ok(d.to_string());
     }
     if let Ok(b) = row.try_get::<Vec<u8>, _>(i) {
-        return Value::from(hex_str(b)); // BIT etc.
+        return ok(hex_str(b)); // BIT etc.
     }
-    null_or_marker(row, i, ty)
+    null_or_unreadable(row, i, ty)
 }
 
-pub(crate) fn sqlite_value(row: &SqliteRow, i: usize) -> Value {
+pub(crate) fn sqlite_value(row: &SqliteRow, i: usize) -> DecodedCell {
+    // SQLite's integer and real decoders read a NULL value as 0 instead of failing,
+    // so a real NULL has to be recognised before any storage-class probe; otherwise
+    // the grid, the clipboard, and an export would all agree on a 0 the column
+    // never held.
+    if row.try_get_raw(i).map(|v| v.is_null()).unwrap_or(false) {
+        return DecodedCell::Value(Value::Null);
+    }
     // ponytail: SQLite is dynamically typed (declared type != stored class), so probe
-    // storage classes in order. The five classes are covered, so all-fail == real NULL.
+    // storage classes in order. The five classes are covered, so a non-NULL value that
+    // matches none of them is genuinely undecodable rather than empty.
     if let Ok(v) = row.try_get::<i64, _>(i) {
-        return int_json(v);
+        return ok(int_json(v));
     }
     if let Ok(v) = row.try_get::<f64, _>(i) {
-        return Value::from(v);
+        return ok(v);
     }
     if let Ok(s) = row.try_get::<String, _>(i) {
-        return Value::from(s);
+        return ok(s);
     }
     if let Ok(b) = row.try_get::<Vec<u8>, _>(i) {
-        return Value::from(hex_str(b));
+        return ok(hex_str(b));
     }
-    Value::Null
+    let ty = row.column(i).type_info().name().to_ascii_uppercase();
+    null_or_unreadable(row, i, &ty)
 }

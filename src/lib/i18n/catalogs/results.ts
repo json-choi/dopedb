@@ -13,11 +13,16 @@ export const resultsCatalog = defineCatalog(
     "grid.localFilterSearchPlaceholder": "Search",
     "grid.localFilterTitle": "Local Filter For '{col}'",
     "grid.localFilterValue": "Value",
+    "grid.copyBlockedUnreadable":
+      "Copy blocked: the selection contains a cell this build could not read.",
     "grid.resizeHint": "Drag to resize · double-click resets all columns",
+    "grid.unreadableCell": "Read failed · {type}",
     "results.copy": "Copy",
     "results.copyFailed": "Copy failed",
     "results.copyBoundedTitle": "Select cells in the grid to copy a large result",
     "results.copyRows": "Copied {count} rows",
+    "results.copyScopeTitle":
+      "Copy the {scope} as tab-separated text (pastes into Excel/Sheets)",
     "results.copyTitle": "Copy all rows as tab-separated text (pastes into Excel/Sheets)",
     "results.downloadCsvTitle": "Download as CSV (opens in Excel)",
     "results.downloadJsonTitle": "Download as JSON",
@@ -25,7 +30,14 @@ export const resultsCatalog = defineCatalog(
     "results.exportJson": "Export {scope} (JSON)",
     "results.exportFailed": "Result export failed",
     "results.exportProgress": "Exporting {current} / {total}",
+    "results.inspectorLabel": "Cell value",
+    "results.scopePage": "current page",
+    "results.inspectorTitle": "{column} · row {row}",
     "results.partialExportUnavailable": "Partial result — export unavailable",
+    "results.unreadableBlocked":
+      "{count} cell(s) could not be read — copy and export are blocked",
+    "results.unreadableBlockedTitle":
+      "This result has {count} cell(s) this build could not read. Copying or exporting them would record a value they do not have.",
   },
   {
     "grid.filterLabel": "{col} 필터",
@@ -38,11 +50,16 @@ export const resultsCatalog = defineCatalog(
     "grid.localFilterSearchPlaceholder": "검색",
     "grid.localFilterTitle": "'{col}' 로컬 필터",
     "grid.localFilterValue": "값",
+    "grid.copyBlockedUnreadable":
+      "복사를 차단했습니다. 선택 범위에 이 빌드가 읽지 못한 셀이 있습니다.",
     "grid.resizeHint": "드래그해 크기 조절 · 더블 클릭하면 모든 컬럼 초기화",
+    "grid.unreadableCell": "읽기 실패 · {type}",
     "results.copy": "복사",
     "results.copyFailed": "복사 실패",
     "results.copyBoundedTitle": "대용량 결과는 그리드에서 복사할 셀을 선택하세요",
     "results.copyRows": "{count}행 복사됨",
+    "results.copyScopeTitle":
+      "{scope}를 탭으로 구분된 텍스트로 복사 (Excel/Sheets에 붙여넣기)",
     "results.copyTitle": "모든 행을 탭으로 구분된 텍스트로 복사 (Excel/Sheets에 붙여넣기)",
     "results.downloadCsvTitle": "CSV로 다운로드 (Excel에서 열기)",
     "results.downloadJsonTitle": "JSON으로 다운로드",
@@ -50,6 +67,13 @@ export const resultsCatalog = defineCatalog(
     "results.exportJson": "{scope} 내보내기 (JSON)",
     "results.exportFailed": "결과 내보내기 실패",
     "results.exportProgress": "내보내는 중 {current} / {total}",
+    "results.inspectorLabel": "셀 값",
+    "results.scopePage": "현재 페이지",
+    "results.inspectorTitle": "{column} · {row}행",
     "results.partialExportUnavailable": "부분 결과 — 내보내기 불가",
+    "results.unreadableBlocked":
+      "읽지 못한 셀 {count}개 — 복사와 내보내기를 차단합니다",
+    "results.unreadableBlockedTitle":
+      "이 결과에는 이 빌드가 읽지 못한 셀이 {count}개 있습니다. 그대로 복사하거나 내보내면 갖지 않은 값을 기록하게 됩니다.",
   },
 );

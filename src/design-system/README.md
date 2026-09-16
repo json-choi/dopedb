@@ -812,6 +812,16 @@ DopeDB의 실제 작업 흐름과 접근성, supported viewport를 위한 제품
   Shift+방향키는 직사각형 범위를 확장하고, 범위 복사는 행을 줄바꿈하고 셀을
   tab으로 구분한 텍스트를 만든다. 선택 배경과 focus ring도 기존
   `selection`/`ring` semantic token만 사용한다.
+- `ResultCellInspector`: SQL, Tables, Documents가 공유하는 단 하나의 셀 값
+  패널. `InspectorHeader` + 복사 + pretty JSON/줄바꿈 텍스트로 구성하고,
+  `presentation`은 자체 inspector aside를 두는지만 고른다. 화면별 값 뷰어를
+  다시 만들지 않는다. 열기는 mouse와 keyboard(Enter) 모두 가능하고 Escape로
+  닫으며 focus는 열었던 grid 셀로 되돌린다.
+- `DataGridNotice`: grid viewport 안에 고정되는 단일 상태 줄. page를 불러오지
+  못한 경우(`danger`)와 읽지 못한 셀 때문에 grid 동작을 거절한 경우(`warning`)를
+  같은 표현으로 알리며, 두 renderer가 각자 sticky banner를 다시 만들지 않는다.
+  읽기에 실패한 셀은 실제 NULL과 구분되는 `warning` 전경색과 italic으로만
+  표시하고, 내부 marker 문자열이나 wire value를 값처럼 그리지 않는다.
   body composite는 rowheader를 첫 열로 포함한 roving tab stop 하나를 사용한다.
   Arrow는 같은 행·열을 이동하고 Home/End는 행 경계, Cmd/Ctrl+Home/End는 전체
   경계, PageUp/PageDown은 viewport 한 페이지를 이동한다. 가상 renderer도 target을

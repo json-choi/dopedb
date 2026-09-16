@@ -263,6 +263,7 @@ describe("query Tauri adapter", () => {
           rowCount: number;
           truncated: boolean;
           durationMs: number;
+          unreadableCells: number;
           benchmarkStages?: {
             operationClaimMs: number;
             poolConnectStartMs: number;
@@ -285,6 +286,7 @@ describe("query Tauri adapter", () => {
           sequence: 0,
           columns: ["id"],
           rows: [[1]],
+          unreadable: [],
         });
       }
       return Promise.resolve(true);
@@ -313,6 +315,7 @@ describe("query Tauri adapter", () => {
       rowCount: 1,
       truncated: false,
       durationMs: 4,
+      unreadableCells: 0,
       benchmarkStages: {
         operationClaimMs: 1,
         poolConnectStartMs: 2,
@@ -329,6 +332,9 @@ describe("query Tauri adapter", () => {
       rowCount: 1,
       truncated: false,
       durationMs: 4,
+      // Coordinates, not values: an empty list is the claim that every cell of
+      // the page was decoded.
+      unreadableCells: [],
     });
     expect(invokeMock.mock.calls.map(([command]) => command)).not.toContain(
       "propose_sql",
@@ -350,6 +356,7 @@ describe("query Tauri adapter", () => {
           rowCount: number;
           truncated: boolean;
           durationMs: number;
+          unreadableCells: number;
         }) => void)
       | undefined;
     invokeMock.mockImplementation((command) => {
@@ -364,6 +371,7 @@ describe("query Tauri adapter", () => {
           sequence: 0,
           columns: ["id"],
           rows: [[1, 2]],
+          unreadable: [],
         });
       }
       return Promise.resolve(true);
@@ -384,6 +392,7 @@ describe("query Tauri adapter", () => {
       rowCount: 1,
       truncated: false,
       durationMs: 4,
+      unreadableCells: 0,
     });
 
     await rejection;
@@ -403,6 +412,7 @@ describe("query Tauri adapter", () => {
           rowCount: number;
           truncated: boolean;
           durationMs: number;
+          unreadableCells: number;
         }) => void)
       | undefined;
     invokeMock.mockImplementation((command, payload) => {
@@ -412,6 +422,7 @@ describe("query Tauri adapter", () => {
           sequence: 0,
           columns: ["id"],
           rows: [[1]],
+          unreadable: [],
         });
       }
       if (command === "run_sql_stream") {
@@ -425,6 +436,7 @@ describe("query Tauri adapter", () => {
           sequence: 0,
           columns: ["id"],
           rows: [[1]],
+          unreadable: [],
         });
       }
       if (command === "export_sql_result") {
@@ -461,6 +473,9 @@ describe("query Tauri adapter", () => {
         sequence: 0,
         columns: ["id"],
         rows: [[1]],
+        // The read-state list travels with every page: without it a cell the
+        // backend could not decode is indistinguishable from a SQL NULL.
+        unreadable: [],
         resultCapability: capability,
       },
     ]);
@@ -474,6 +489,7 @@ describe("query Tauri adapter", () => {
       rowCount: 3,
       truncated: false,
       durationMs: 7,
+      unreadableCells: 0,
     });
     await expect(controller.completion).resolves.toMatchObject({ rowCount: 3 });
 
@@ -526,6 +542,7 @@ describe("query Tauri adapter", () => {
       rowCount: 1,
       truncated: false,
       durationMs: 4,
+      unreadableCells: 0,
     });
     const onBatch = vi.fn();
 
@@ -560,6 +577,7 @@ describe("query Tauri adapter", () => {
           rowCount: number;
           truncated: boolean;
           durationMs: number;
+          unreadableCells: number;
         }) => void)
       | undefined;
     invokeMock.mockImplementation((command) => {
@@ -569,6 +587,7 @@ describe("query Tauri adapter", () => {
           sequence: 0,
           columns: ["id"],
           rows: [[1]],
+          unreadable: [],
         });
       }
       if (command === "run_sql_stream") {
@@ -605,6 +624,7 @@ describe("query Tauri adapter", () => {
       rowCount: 1,
       truncated: false,
       durationMs: 4,
+      unreadableCells: 0,
     });
     await completion;
   });
@@ -616,6 +636,7 @@ describe("query Tauri adapter", () => {
           rowCount: number;
           truncated: boolean;
           durationMs: number;
+          unreadableCells: number;
         }) => void)
       | undefined;
     invokeMock.mockImplementation((command, args) => {
@@ -625,6 +646,7 @@ describe("query Tauri adapter", () => {
           sequence: 1,
           columns: ["id"],
           rows: [[1]],
+          unreadable: [],
         });
       }
       if (command === "run_sql_stream")
@@ -637,6 +659,7 @@ describe("query Tauri adapter", () => {
               rowCount: 0,
               truncated: false,
               durationMs: 1,
+              unreadableCells: 0,
             });
         });
       return Promise.resolve(true);
@@ -664,6 +687,7 @@ describe("query Tauri adapter", () => {
       rowCount: 0,
       truncated: false,
       durationMs: 1,
+      unreadableCells: 0,
     });
     await firstCompletion;
 
@@ -676,6 +700,7 @@ describe("query Tauri adapter", () => {
           rowCount: number;
           truncated: boolean;
           durationMs: number;
+          unreadableCells: number;
         }) => void)
       | undefined;
     invokeMock.mockImplementation((command) => {
@@ -693,6 +718,7 @@ describe("query Tauri adapter", () => {
       rowCount: 0,
       truncated: false,
       durationMs: 1,
+      unreadableCells: 0,
     });
     await expect(controller.completion).rejects.toThrow(
       "completion did not match",
@@ -712,6 +738,7 @@ describe("query Tauri adapter", () => {
           sequence: 0,
           columns: ["id"],
           rows: [[1]],
+          unreadable: [],
         });
       }
       if (command === "run_sql_stream")
@@ -720,6 +747,7 @@ describe("query Tauri adapter", () => {
           rowCount: 1,
           truncated: false,
           durationMs: 1,
+          unreadableCells: 0,
         });
       return Promise.resolve(true);
     });
@@ -750,6 +778,7 @@ describe("query Tauri adapter", () => {
           rowCount: number;
           truncated: boolean;
           durationMs: number;
+          unreadableCells: number;
         }) => void)
       | undefined;
     invokeMock.mockImplementation((command) => {
@@ -798,6 +827,7 @@ describe("query Tauri adapter", () => {
       rowCount: 0,
       truncated: false,
       durationMs: 1,
+      unreadableCells: 0,
     });
     await controller.completion;
     expect(channels[0]?.onmessage).not.toBe(attachedHandler);

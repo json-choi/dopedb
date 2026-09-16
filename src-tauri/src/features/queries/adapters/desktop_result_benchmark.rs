@@ -96,6 +96,7 @@ fn create_packaged_result_artifact() -> AppResult<PackagedResultStoreMetric> {
                     ]
                 })
                 .collect(),
+            unreadable: Vec::new(),
         };
         let encoded = serde_json::to_vec(&batch)?;
         retained_bytes = retained_bytes.saturating_add(encoded.len() as u64);

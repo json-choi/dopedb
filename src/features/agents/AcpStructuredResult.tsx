@@ -35,6 +35,9 @@ function tabularResult(value: unknown): QueryResult | null {
       durationMs: 0,
       truncated:
         candidate.length > MAX_ROWS || allColumns.length > MAX_COLUMNS,
+      // A projected Agent payload carries values only; read failures travel with
+      // the exact result the Broker produced, never with this rendering.
+      unreadableCells: [],
     };
   }
   if (!isRecord(candidate)) return null;
@@ -60,6 +63,7 @@ function tabularResult(value: unknown): QueryResult | null {
         candidate.rows.length > MAX_ROWS ||
         candidate.columns.length > MAX_COLUMNS ||
         candidate.truncated === true,
+      unreadableCells: [],
     };
   }
   return null;

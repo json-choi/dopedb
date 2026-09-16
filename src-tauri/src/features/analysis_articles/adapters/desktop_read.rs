@@ -228,6 +228,17 @@ fn validate_query_result_columns(
             ),
         });
     }
+    // A cell this build could not decode is `null` in `rows`. Retaining it as an
+    // Article result would publish that null as the column's value, so the rerun
+    // stops instead.
+    if !result.unreadable_cells.is_empty() {
+        return Err(AppError::Blocked {
+            reason: format!(
+                "Analysis query '{query_id}' returned {} cell(s) this build could not read; the Article result is not stored so no unread cell is recorded as a value",
+                result.unreadable_cells.len()
+            ),
+        });
+    }
     Ok(())
 }
 

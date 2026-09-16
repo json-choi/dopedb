@@ -115,11 +115,21 @@ plan: string | null,
  * Human note, e.g. "would lock ~120000 rows — preview skipped".
  */
 note: string | null, };
+export type UnreadableCell = { row: number, column: number,
+/**
+ * Database type name that failed to decode, e.g. "geometry".
+ */
+typeName: string, };
 export type QueryResult = { columns: Array<string>, rows: Array<Array<JsonValue>>, rowCount: number,
 /**
  * True if the result was cut off at the row cap.
  */
-truncated: boolean, durationMs: number, };
+truncated: boolean, durationMs: number,
+/**
+ * Cells inside `rows` this build could not decode. A listed cell is `null` in
+ * `rows` but is NOT a SQL NULL.
+ */
+unreadableCells: Array<UnreadableCell>, };
 export type DocumentQuery = { "op": "find", collection: string, filter?: JsonValue | null, projection?: JsonValue | null, sort?: JsonValue | null, skip?: number | null, limit?: number | null, } | { "op": "aggregate", collection: string, pipeline: Array<JsonValue>, } | { "op": "count", collection: string, filter?: JsonValue | null, };
 export type DocumentPage = { documents: Array<JsonValue>, docCount: number,
 /**

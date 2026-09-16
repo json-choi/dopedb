@@ -1,7 +1,13 @@
 // Canonical scroll surface shared by table and virtual data-grid renderers. The
 // caller chooses whether the grid fills a pane, nests in a scrolling document,
 // or sizes as a standalone panel; feature screens never restyle the viewport.
-import { forwardRef, type ComponentPropsWithoutRef } from "react";
+// `DataGridNotice` is the one in-grid status line both renderers use to say why
+// a page is missing or why a grid action was refused.
+import {
+  forwardRef,
+  type ComponentPropsWithoutRef,
+  type ReactNode,
+} from "react";
 
 export type DataGridSurface = "panel" | "workbench" | "embedded";
 
@@ -30,3 +36,26 @@ export const DataGridViewport = forwardRef<HTMLDivElement, Props>(
     );
   },
 );
+
+/**
+ * Sticky status line pinned inside a grid viewport. Both renderers use it for the
+ * same two jobs: a page that could not load, and a grid action refused because
+ * the selection contains a cell the backend could not read.
+ */
+export function DataGridNotice({
+  tone,
+  children,
+}: {
+  tone: "danger" | "warning";
+  children: ReactNode;
+}) {
+  return (
+    <div
+      data-tone={tone}
+      role="status"
+      className="tw:sticky tw:top-control-sm tw:left-0 tw:z-[var(--ds-z-sticky)] tw:w-fit tw:max-w-[min(520px,90%)] tw:px-2 tw:py-1 tw:font-sans tw:text-xs tw:data-[tone=danger]:bg-danger-muted tw:data-[tone=danger]:text-danger tw:data-[tone=warning]:bg-muted tw:data-[tone=warning]:text-foreground"
+    >
+      {children}
+    </div>
+  );
+}

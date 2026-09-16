@@ -276,6 +276,10 @@ impl QueryPlatformAdapter {
             duration_ms = backend_execute_start_ms,
             "desktop query stream phase"
         );
+        // Bounded pages never leave the producer, so the count of cells this build
+        // could not decode is the only whole-result read-failure signal the renderer
+        // can act on before it asks for a page.
+        let mut unreadable_cells = 0_usize;
         let mut consume_batch = |batch: executor::read::ReadBatch| {
             if first_batch_ms.is_none() {
                 first_batch_ms = Some(operation_started.elapsed().as_millis() as u64);
@@ -286,11 +290,13 @@ impl QueryPlatformAdapter {
                 );
             }
             let batch_sequence = sequence;
+            unreadable_cells = unreadable_cells.saturating_add(batch.unreadable.len());
             let event = DesktopSqlStreamBatch {
                 operation_id,
                 sequence: batch_sequence,
                 columns: batch.columns,
                 rows: batch.rows,
+                unreadable: batch.unreadable,
             };
             sequence = sequence.saturating_add(1);
             let send_started = Instant::now();
@@ -429,6 +435,7 @@ impl QueryPlatformAdapter {
                         row_count: summary.row_count,
                         truncated: summary.truncated,
                         duration_ms: summary.duration_ms,
+                        unreadable_cells,
                         #[cfg(feature = "packaged-benchmark")]
                         benchmark_stages: DesktopSqlStreamBenchmarkStages {
                             operation_claim_ms,
@@ -505,6 +512,7 @@ impl QueryPlatformAdapter {
                     row_count: summary.row_count,
                     truncated: summary.truncated,
                     duration_ms: summary.duration_ms,
+                    unreadable_cells,
                     #[cfg(feature = "packaged-benchmark")]
                     benchmark_stages: DesktopSqlStreamBenchmarkStages {
                         operation_claim_ms,

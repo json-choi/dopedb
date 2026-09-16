@@ -156,6 +156,7 @@ function receiptResult(receipt: PackagedBackendReceipt): QueryResult {
     rowCount: receipt.rows.length,
     truncated: receipt.rowCount > receipt.rows.length,
     durationMs: receipt.backendRequestToFirstRowMs ?? 0,
+    unreadableCells: [],
   };
 }
 

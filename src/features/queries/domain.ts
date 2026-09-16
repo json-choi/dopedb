@@ -2,6 +2,7 @@
 // module as the only frontend owner preserves existing imports without a hand-written mirror.
 import { retainSqlStreamBatch } from "./resultPageCache";
 import type { OperationState } from "../../ipc/generated/protocol-contracts";
+import type { UnreadableCell } from "../../ipc/types";
 
 export type {
   Classification,
@@ -35,6 +36,8 @@ export type SqlStreamBatchWire = {
   sequence: number;
   columns: string[];
   rows: unknown[][];
+  /** Cells of THIS page the backend could not decode; never a value in `rows`. */
+  unreadable: UnreadableCell[];
 };
 
 export type SqlStreamBatch = SqlStreamBatchWire & {
@@ -72,6 +75,8 @@ export type SqlStreamReceipt = {
   rowCount: number;
   truncated: boolean;
   durationMs: number;
+  /** Cells across every page the backend could not decode. */
+  unreadableCells: number;
   /** Present only in the isolated packaged-benchmark build. */
   benchmarkStages?: {
     operationClaimMs: number;
@@ -119,6 +124,8 @@ export type SqlStreamViewState = {
   rowSource: SqlStreamRowSource;
   rowCount: number;
   truncated: boolean;
+  /** Cells the backend could not decode, across the whole result. */
+  unreadableCells: number;
   durationMs: number | null;
   error: string | null;
 };
@@ -154,6 +161,7 @@ export function emptySqlStreamView(runId = 0): SqlStreamViewState {
     rowSource: emptySqlStreamRows(),
     rowCount: 0,
     truncated: false,
+    unreadableCells: 0,
     durationMs: null,
     error: null,
   };
@@ -185,6 +193,15 @@ export function acceptSqlStreamBatch(
   if (state.operationId && state.operationId !== batch.operationId) return null;
   if (batch.rows.some((row) => row.length !== batch.columns.length))
     return null;
+  // A read failure is addressed, never valued: a page naming a cell outside its
+  // own rows/columns cannot be projected onto this result.
+  if (
+    batch.unreadable.some(
+      (cell) =>
+        cell.row >= batch.rows.length || cell.column >= batch.columns.length,
+    )
+  )
+    return null;
   if (state.columns.length && !sameColumns(state.columns, batch.columns))
     return null;
   const sourceOperationId = state.rowSource.operationId ?? batch.operationId;
@@ -213,6 +230,7 @@ export function acceptSqlStreamBatch(
     columns: state.columns.length ? state.columns : [...batch.columns],
     rowSource,
     rowCount: state.rowCount + batch.rows.length,
+    unreadableCells: state.unreadableCells + batch.unreadable.length,
   };
 }
 
@@ -242,6 +260,8 @@ export function finishSqlStream(
     operationId: receipt.operationId,
     rowCount: receipt.rowCount,
     truncated: receipt.truncated,
+    // Never under-report: pages already seen are evidence the receipt cannot undo.
+    unreadableCells: Math.max(state.unreadableCells, receipt.unreadableCells),
     durationMs: receipt.durationMs,
     rowSource: {
       ...state.rowSource,
