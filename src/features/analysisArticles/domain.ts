@@ -1,3 +1,6 @@
+// Wire contract for shared analysis. A definition carries sanitized HTML plus
+// exactly one read-only query node, and every stored record is pinned to the
+// environment and connection revisions it was written against.
 export type AnalysisArticleSource =
   | "human"
   | "dopedb.acp.claude"

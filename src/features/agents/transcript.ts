@@ -1,3 +1,6 @@
+// Projects the ordered ACP event stream into the items a session renders.
+// Out-of-order and replayed events are reconciled by sequence, and both the item
+// list and the retained raw events stay bounded by count and by bytes.
 import type {
   AcpSessionLifecycle,
   AcpSessionConfigOption,

@@ -1,3 +1,6 @@
+// Human approval surface for an agent's SQL proposal. The statement and its row
+// estimate are re-read from the Broker by operation id and payload hash rather
+// than from the transcript, and a proposal naming another connection is refused.
 import { useEffect, useState } from "react";
 
 import { Icon } from "../../components/Icon";

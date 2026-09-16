@@ -1,3 +1,6 @@
+// Carries the table the user last selected to whichever agent surface is mounted,
+// so a grid needs no reference to the dock. It holds one selection and nothing
+// durable; the selection does not survive a restart.
 import {
   createContext,
   useCallback,

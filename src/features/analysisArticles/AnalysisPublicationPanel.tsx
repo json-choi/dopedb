@@ -1,3 +1,6 @@
+// Publishes an article as an immutable public snapshot, and revokes one. Each
+// publication is pinned to an already successful run and defaults to unlisted and
+// non-indexable, so publishing never executes or exposes the saved query.
 import { useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";

@@ -1,3 +1,6 @@
+// Recognizes a Broker SQL-proposal receipt anywhere inside an agent tool payload.
+// Only the redacted identifiers are accepted, each shape-checked, so the SQL text
+// is always fetched from the Broker instead of trusted from the transcript.
 import type { OperationState } from "../../ipc/generated/protocol-contracts";
 
 export type AgentSqlProposalReference = {

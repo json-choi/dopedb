@@ -1,3 +1,6 @@
+// Per-recipient invitations to one article inside the current workspace scope.
+// Invitations are addressed by email and stay revocable, and the dialog opens only
+// once both the workspace and the account scope have resolved.
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Icon } from "../../components/Icon";

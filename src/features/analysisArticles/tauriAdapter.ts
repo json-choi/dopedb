@@ -1,3 +1,6 @@
+// Typed Tauri command surface for articles, runs, revisions, publications and
+// invitations. Result rows are fetched separately by run id, so listing or sharing
+// an article never carries its data across this boundary.
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 import { invoke } from "../../ipc/core";

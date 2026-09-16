@@ -1,3 +1,6 @@
+// Renders an agent tool's structured payload as a preview grid bounded in both
+// rows and columns. The projection carries values only: a cell the database could
+// not read belongs to the exact Broker result, never to this rendering.
 import DataGrid from "../queryResults/DataGrid";
 import type { JsonValue, QueryResult } from "../../ipc/types";
 

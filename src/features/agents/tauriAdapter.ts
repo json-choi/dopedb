@@ -1,3 +1,6 @@
+// Typed Tauri command surface for ACP: adapter plugin lifecycle, session
+// start/resume/prompt/cancel, permission responses and the change event stream.
+// Every call names one Rust command and no session state is cached on this side.
 import { invoke } from "../../ipc/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 

@@ -1,3 +1,6 @@
+// Editing surface for one article's title, body HTML and its single saved query.
+// It assembles the definition the workspace will store and hands it to the save
+// callback; nothing here runs the query or publishes the article.
 import { useMemo, useState } from "react";
 
 import { Button } from "../../design-system/components/Button";

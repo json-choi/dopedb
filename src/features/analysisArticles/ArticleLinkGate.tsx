@@ -1,3 +1,6 @@
+// Gate for an article link opened from outside Desktop. It requires a signed-in
+// account, re-verifies that account at the moment of the switch, and moves the
+// active workspace only after the person explicitly confirms the open.
 import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "../../design-system/components/Button";
