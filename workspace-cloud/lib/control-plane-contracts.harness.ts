@@ -72,6 +72,7 @@ import {
   parseExpectedRevision,
   type ConnectionVersionPayload,
 } from "./workspace-versioning";
+import { resolveWorkspaceRequestScope } from "./workspace-request-scope";
 
 type Fixture = Readonly<{
   schemaVersion: number;
@@ -1231,5 +1232,62 @@ describe("Desktop control-plane contracts", () => {
       if (previousRelayEnabled === undefined) delete process.env.PRODUCT_ANALYTICS_RELAY_ENABLED;
       else process.env.PRODUCT_ANALYTICS_RELAY_ENABLED = previousRelayEnabled;
     }
+  });
+});
+
+describe("Desktop workspace deep-link scope", () => {
+  it("refuses an unopenable requested workspace instead of substituting another", () => {
+    const visible = [
+      "11111111-1111-4111-8111-111111111111",
+      "22222222-2222-4222-8222-222222222222",
+    ];
+    const refused = resolveWorkspaceRequestScope({
+      requestedParam: "33333333-3333-4333-8333-333333333333",
+      visibleWorkspaceIds: visible,
+      sessionWorkspaceId: visible[1],
+    });
+    expect(refused).toEqual({
+      activeWorkspaceId: null,
+      unavailable: true,
+      scopeMatched: false,
+    });
+    // A malformed request is refused identically, so the answer never separates
+    // "no such workspace" from "not reachable by this account".
+    expect(resolveWorkspaceRequestScope({
+      requestedParam: "not-a-workspace-id",
+      visibleWorkspaceIds: visible,
+      sessionWorkspaceId: visible[0],
+    })).toEqual(refused);
+    // Only an honored request may carry connection, integration, and gcpSetup
+    // ids into a management panel.
+    expect(resolveWorkspaceRequestScope({
+      requestedParam: visible[0],
+      visibleWorkspaceIds: visible,
+      sessionWorkspaceId: visible[1],
+    })).toEqual({
+      activeWorkspaceId: visible[0],
+      unavailable: false,
+      scopeMatched: true,
+    });
+    // Entry without a request keeps resolving the session workspace and never
+    // reports a matched scope.
+    expect(resolveWorkspaceRequestScope({
+      requestedParam: undefined,
+      visibleWorkspaceIds: visible,
+      sessionWorkspaceId: visible[1],
+    })).toEqual({
+      activeWorkspaceId: visible[1],
+      unavailable: false,
+      scopeMatched: false,
+    });
+    expect(resolveWorkspaceRequestScope({
+      requestedParam: undefined,
+      visibleWorkspaceIds: [],
+      sessionWorkspaceId: null,
+    })).toEqual({
+      activeWorkspaceId: null,
+      unavailable: false,
+      scopeMatched: false,
+    });
   });
 });

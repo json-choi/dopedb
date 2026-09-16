@@ -109,6 +109,8 @@ const en = {
     currentSuffix: "Current",
     emptyTitle: "Create your first workspace",
     emptyDescription: "Shared connections and policy live inside this boundary.",
+    requestedWorkspaceUnavailable: "This account cannot open the requested workspace, so no other workspace was opened in its place.",
+    requestedWorkspaceUnavailableChoice: "Choose a workspace below, or use the account menu above to continue in the account that holds it.",
     areas: {
       access: {
         label: "Access",
@@ -885,6 +887,8 @@ const ko: DeepStringShape<typeof en> = {
     currentSuffix: "현재",
     emptyTitle: "첫 워크스페이스를 만드세요",
     emptyDescription: "공유 연결과 정책이 이 경계 안에 모입니다.",
+    requestedWorkspaceUnavailable: "요청한 워크스페이스를 이 계정에서 열 수 없어 다른 워크스페이스를 대신 열지 않았습니다.",
+    requestedWorkspaceUnavailableChoice: "아래에서 워크스페이스를 직접 선택하거나, 위 계정 메뉴에서 해당 워크스페이스를 가진 계정으로 이동하세요.",
     areas: {
       access: {
         label: "접근 권한",
