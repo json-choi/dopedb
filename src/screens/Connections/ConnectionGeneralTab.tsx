@@ -123,29 +123,29 @@ export function ConnectionGeneralTab({
           ) : null}
 
           <ValidatedControl validation={validation.driver}>
-          <label className="tw:inline-flex tw:min-w-0 tw:items-center tw:gap-1.5">
-            <span>{t("connections.driver")}:</span>
-            <InlineSelect
-              id="connection-driver"
-              title={t("connections.driverHint")}
-              value={form.driverId ?? ""}
-              onChange={(event) =>
-                set("driverId", event.target.value || null)
-              }
-              disabled={
-                !canEditConnection ||
-                drivers.pending ||
-                drivers.compatible.length === 0
-              }
-            >
-              <option value="">{t("connections.driverAutomatic")}</option>
-              {drivers.compatible.map((driver) => (
-                <option key={driver.id} value={driver.id}>
-                  {driver.name} {driver.version}
-                </option>
-              ))}
-            </InlineSelect>
-          </label>
+            <label className="tw:inline-flex tw:min-w-0 tw:items-center tw:gap-1.5">
+              <span>{t("connections.driver")}:</span>
+              <InlineSelect
+                id="connection-driver"
+                title={t("connections.driverHint")}
+                value={form.driverId ?? ""}
+                onChange={(event) =>
+                  set("driverId", event.target.value || null)
+                }
+                disabled={
+                  !canEditConnection ||
+                  drivers.pending ||
+                  drivers.compatible.length === 0
+                }
+              >
+                <option value="">{t("connections.driverAutomatic")}</option>
+                {drivers.compatible.map((driver) => (
+                  <option key={driver.id} value={driver.id}>
+                    {driver.name} {driver.version}
+                  </option>
+                ))}
+              </InlineSelect>
+            </label>
           </ValidatedControl>
 
           {drivers.active?.installMode === "managed" &&

@@ -157,23 +157,21 @@ export function ConnectionSecurityTab({
             label={t("connections.sshHostAlias")}
             validation={validation.sshAlias}
           >
-              <TextInput
-                id="connection-ssh-alias"
-                value={
-                  form.extraParams[CONNECTION_SSH_ALIAS_PARAMETER] ?? ""
-                }
-                autoCapitalize="none"
-                autoCorrect="off"
-                spellCheck={false}
-                maxLength={255}
-                placeholder={t("connections.sshHostAliasPlaceholder")}
-                onChange={(event) =>
-                  options.setExtraParameter(
-                    CONNECTION_SSH_ALIAS_PARAMETER,
-                    event.target.value,
-                  )
-                }
-              />
+            <TextInput
+              id="connection-ssh-alias"
+              value={form.extraParams[CONNECTION_SSH_ALIAS_PARAMETER] ?? ""}
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              maxLength={255}
+              placeholder={t("connections.sshHostAliasPlaceholder")}
+              onChange={(event) =>
+                options.setExtraParameter(
+                  CONNECTION_SSH_ALIAS_PARAMETER,
+                  event.target.value,
+                )
+              }
+            />
           </Field>
           <p className="tw:m-0 tw:text-sm tw:leading-body tw:text-muted-foreground">
             {t("connections.sshHostAliasHint")}

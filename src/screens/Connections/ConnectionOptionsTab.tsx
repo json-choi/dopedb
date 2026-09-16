@@ -106,32 +106,32 @@ export function ConnectionOptionsTab({
             />
             <div className="tw:grid tw:gap-1.5 tw:pl-6">
               <ValidatedControl validation={validation.keepAlive}>
-              <div className="tw:flex tw:items-center tw:gap-2">
-              <div className="tw:w-32">
-                <TextInput
-                  id="connection-keep-alive"
-                  type="number"
-                  inputMode="numeric"
-                  min={CONNECTION_KEEP_ALIVE_MIN_SECONDS}
-                  max={CONNECTION_KEEP_ALIVE_MAX_SECONDS}
-                  value={connectionOption(
-                    form,
-                    CONNECTION_KEEP_ALIVE_SECONDS_PARAMETER,
-                  )}
-                  disabled={!flags.keepAliveEnabled}
-                  aria-label={t("connections.keepAliveSeconds")}
-                  onChange={(event) =>
-                    options.setTimedConnectionOptionValue(
-                      CONNECTION_KEEP_ALIVE_SECONDS_PARAMETER,
-                      event.target.value,
-                    )
-                  }
-                />
-              </div>
-              <span className="tw:shrink-0 tw:text-sm tw:text-muted-foreground">
-                {t("connections.seconds")}
-              </span>
-              </div>
+                <div className="tw:flex tw:items-center tw:gap-2">
+                  <div className="tw:w-32">
+                    <TextInput
+                      id="connection-keep-alive"
+                      type="number"
+                      inputMode="numeric"
+                      min={CONNECTION_KEEP_ALIVE_MIN_SECONDS}
+                      max={CONNECTION_KEEP_ALIVE_MAX_SECONDS}
+                      value={connectionOption(
+                        form,
+                        CONNECTION_KEEP_ALIVE_SECONDS_PARAMETER,
+                      )}
+                      disabled={!flags.keepAliveEnabled}
+                      aria-label={t("connections.keepAliveSeconds")}
+                      onChange={(event) =>
+                        options.setTimedConnectionOptionValue(
+                          CONNECTION_KEEP_ALIVE_SECONDS_PARAMETER,
+                          event.target.value,
+                        )
+                      }
+                    />
+                  </div>
+                  <span className="tw:shrink-0 tw:text-sm tw:text-muted-foreground">
+                    {t("connections.seconds")}
+                  </span>
+                </div>
               </ValidatedControl>
             </div>
           </div>
@@ -151,32 +151,32 @@ export function ConnectionOptionsTab({
           />
           <div className="tw:grid tw:gap-1.5 tw:pl-6">
             <ValidatedControl validation={validation.autoDisconnect}>
-            <div className="tw:flex tw:items-center tw:gap-2">
-            <div className="tw:w-32">
-              <TextInput
-                id="connection-auto-disconnect"
-                type="number"
-                inputMode="numeric"
-                min={CONNECTION_AUTO_DISCONNECT_MIN_SECONDS}
-                max={CONNECTION_AUTO_DISCONNECT_MAX_SECONDS}
-                value={connectionOption(
-                  form,
-                  CONNECTION_AUTO_DISCONNECT_SECONDS_PARAMETER,
-                )}
-                disabled={!flags.autoDisconnectEnabled}
-                aria-label={t("connections.autoDisconnectSeconds")}
-                onChange={(event) =>
-                  options.setTimedConnectionOptionValue(
-                    CONNECTION_AUTO_DISCONNECT_SECONDS_PARAMETER,
-                    event.target.value,
-                  )
-                }
-              />
-            </div>
-            <span className="tw:shrink-0 tw:text-sm tw:text-muted-foreground">
-              {t("connections.seconds")}
-            </span>
-            </div>
+              <div className="tw:flex tw:items-center tw:gap-2">
+                <div className="tw:w-32">
+                  <TextInput
+                    id="connection-auto-disconnect"
+                    type="number"
+                    inputMode="numeric"
+                    min={CONNECTION_AUTO_DISCONNECT_MIN_SECONDS}
+                    max={CONNECTION_AUTO_DISCONNECT_MAX_SECONDS}
+                    value={connectionOption(
+                      form,
+                      CONNECTION_AUTO_DISCONNECT_SECONDS_PARAMETER,
+                    )}
+                    disabled={!flags.autoDisconnectEnabled}
+                    aria-label={t("connections.autoDisconnectSeconds")}
+                    onChange={(event) =>
+                      options.setTimedConnectionOptionValue(
+                        CONNECTION_AUTO_DISCONNECT_SECONDS_PARAMETER,
+                        event.target.value,
+                      )
+                    }
+                  />
+                </div>
+                <span className="tw:shrink-0 tw:text-sm tw:text-muted-foreground">
+                  {t("connections.seconds")}
+                </span>
+              </div>
             </ValidatedControl>
           </div>
         </div>

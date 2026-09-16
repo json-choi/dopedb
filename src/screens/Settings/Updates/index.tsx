@@ -97,7 +97,7 @@ export default function Updates({
       <div className="tw:mb-3 tw:flex tw:min-h-control-xl tw:items-center tw:justify-end">
         <Button
           size="compact"
-          aria-disabled={busy}
+          aria-disabled={busy || undefined}
           aria-busy={busy}
           onClick={() => void onRefresh()}
         >
