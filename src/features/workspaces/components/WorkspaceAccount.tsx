@@ -1,4 +1,4 @@
-// Account-specific Better Auth device login lifecycle and unified local account menu.
+// Account-specific native loopback login lifecycle and unified local account menu.
 // Session tokens stay behind Rust IPC; this component caches public identity only.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -6,9 +6,9 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { ProviderCredentialDialog } from "../../providers/ProviderCredentialDialog";
 import { ProviderCredentialsMenuItem } from "../../providers/ProviderCredentialsMenuItem";
 import {
-  beginWorkspaceLogin,
-  onWorkspaceLoginCallback,
-  pollWorkspaceLogin,
+  beginDesktopWorkspaceLogin,
+  cancelDesktopWorkspaceLogin,
+  completeDesktopWorkspaceLogin,
   refreshWorkspaceAuthState,
   setActiveWorkspaceAccount,
   signOutAllWorkspaces,
@@ -84,20 +84,15 @@ export default function WorkspaceAccount({
   const pendingLogin = useRef<{
     attempt: number;
     analyticsAttemptId: string;
-    deviceCode: string;
+    attemptId?: string;
   } | null>(null);
   const completedLoginAnalyticsAttempts = useRef(new Set<string>());
-  const pollInFlight = useRef<{
-    deviceCode: string;
-    request: Promise<WorkspaceLoginPoll>;
-  } | null>(null);
   const membershipRefreshInFlight = useRef<Promise<void> | null>(null);
   const membershipRefreshRetryTimer = useRef<number | null>(null);
   const membershipRefreshFailures = useRef(0);
   const workspaceAccountMounted = useRef(false);
   const providerCredentialAuthorityVersion = useRef<number | null>(null);
   const membershipRefreshHandler = useRef<(force?: boolean) => void>(() => undefined);
-  const loginCallbackHandler = useRef<() => void>(() => undefined);
   const loginRequestHandler = useRef<() => void>(() => undefined);
   const scopeChangeHandler = useRef<() => void | Promise<void>>(
     () => undefined,
@@ -233,8 +228,8 @@ export default function WorkspaceAccount({
   useEffect(() => {
     workspaceAccountMounted.current = true;
     const onFocus = () => {
-      // Returning from the browser is not a device-flow outcome. The normal poll
-      // loop owns completion; only the visible Cancel action aborts a pending login.
+      // Browser focus or the token-free deep link cannot complete authentication.
+      // Native owns the callback, code exchange and cancellation boundary.
       if (pendingLogin.current) return;
       membershipRefreshHandler.current(membershipRefreshFailures.current > 0);
     };
@@ -262,18 +257,14 @@ export default function WorkspaceAccount({
         membershipRefreshRetryTimer.current = null;
       }
       loginAttempt.current += 1;
+      if (pendingLogin.current?.attemptId) {
+        void cancelDesktopWorkspaceLogin(pendingLogin.current.attemptId).catch(() => undefined);
+      }
       pendingLogin.current = null;
     };
   }, [clearMembershipRefreshRetry]);
 
   useEffect(() => onWorkspaceLoginRequested(() => loginRequestHandler.current()), []);
-
-  useEffect(() => {
-    const pending = onWorkspaceLoginCallback(() => loginCallbackHandler.current());
-    return () => {
-      void pending.then((unlisten) => unlisten()).catch(() => undefined);
-    };
-  }, []);
 
   useEffect(() => {
     if (!auth.data?.authenticated) return;
@@ -307,10 +298,6 @@ export default function WorkspaceAccount({
     refreshWorkspaceAuthority,
   ]);
 
-  async function wait(ms: number) {
-    await new Promise<void>((resolve) => window.setTimeout(resolve, ms));
-  }
-
   function captureLoginOutcome(
     analyticsAttemptId: string,
     outcome: "success" | "denied" | "expired" | "failed",
@@ -336,19 +323,11 @@ export default function WorkspaceAccount({
     }
   }
 
-  async function pollOnce(deviceCode: string) {
-    if (pollInFlight.current?.deviceCode === deviceCode) {
-      return pollInFlight.current.request;
-    }
-    const request = pollWorkspaceLogin(deviceCode).finally(() => {
-      if (pollInFlight.current?.request === request) pollInFlight.current = null;
-    });
-    pollInFlight.current = { deviceCode, request };
-    return request;
-  }
-
   function abortLoginAttempt() {
     loginAttempt.current += 1;
+    if (pendingLogin.current?.attemptId) {
+      void cancelDesktopWorkspaceLogin(pendingLogin.current.attemptId).catch(() => undefined);
+    }
     pendingLogin.current = null;
     setLoginPhase("idle");
   }
@@ -359,19 +338,23 @@ export default function WorkspaceAccount({
     toast(t("workspace.loginCanceled"));
   }
 
-  async function handlePollResult(result: WorkspaceLoginPoll, attempt: number) {
+  async function handleLoginResult(result: WorkspaceLoginPoll, attempt: number) {
     if (pendingLogin.current?.attempt !== attempt) return true;
     if (result.status === "signedIn" && result.user) {
       const analyticsAttemptId = pendingLogin.current.analyticsAttemptId;
       pendingLogin.current = null;
       if (loginAttempt.current === attempt) loginAttempt.current += 1;
       setLoginPhase("idle");
-      // The native poll returns `signedIn` only after the account credential has
+      // Native returns `signedIn` only after the account credential has
       // been durably accepted. Scope synchronization is measured separately and
       // must not turn a successful authentication into a second outcome.
       captureLoginOutcome(analyticsAttemptId, "success", result.user.id);
-      await refreshWorkspaceAuthority(workspaceAuthState);
-      toast(t("workspace.loginComplete", { name: result.user.displayName }), "success");
+      try {
+        await refreshWorkspaceAuthority(workspaceAuthState);
+        toast(t("workspace.loginComplete", { name: result.user.displayName }), "success");
+      } catch (error) {
+        toast(t("workspace.loginFailed", { error: errMessage(error) }), "error");
+      }
       return true;
     }
     if (result.status === "denied" || result.status === "expired") {
@@ -388,20 +371,6 @@ export default function WorkspaceAccount({
     }
     return false;
   }
-
-  loginCallbackHandler.current = () => {
-    const pending = pendingLogin.current;
-    if (!pending) return;
-    void pollOnce(pending.deviceCode)
-      .then((result) => handlePollResult(result, pending.attempt))
-      .catch((error) => {
-        // A wake-up poll is opportunistic. Network failures stay owned by the
-        // scheduled device-flow loop, while a post-acceptance sync failure remains
-        // visible because the pending attempt already reached a terminal state.
-        if (pendingLogin.current?.attempt === pending.attempt) return;
-        toast(t("workspace.loginFailed", { error: errMessage(error) }), "error");
-      });
-  };
 
   membershipRefreshHandler.current = (force = false) => {
     if (!auth.data?.authenticated || membershipRefreshInFlight.current) return;
@@ -434,42 +403,39 @@ export default function WorkspaceAccount({
   };
 
   async function login() {
-    if (loginPhase !== "idle") return;
+    if (loginPhase !== "idle" || pendingLogin.current) return;
+    abortLoginAttempt();
     const attempt = ++loginAttempt.current;
     const analyticsAttemptId = crypto.randomUUID();
+    let attemptId: string | undefined;
+    pendingLogin.current = { attempt, analyticsAttemptId };
     setLoginPhase("starting");
     try {
-      const authorization = await beginWorkspaceLogin();
+      const authorization = await beginDesktopWorkspaceLogin();
+      attemptId = authorization.attemptId;
+      if (loginAttempt.current !== attempt) return;
       pendingLogin.current = {
         attempt,
         analyticsAttemptId,
-        deviceCode: authorization.deviceCode,
+        attemptId,
       };
-      await openUrl(authorization.verificationUriComplete);
+      await openUrl(authorization.authorizationUrl);
       if (loginAttempt.current !== attempt) return;
       setLoginPhase("waiting");
-      const expiresAt = Date.now() + authorization.expiresIn * 1000;
-      let pollInterval = Math.max(authorization.interval, 1) * 1000;
-
-      while (Date.now() < expiresAt) {
-        await wait(pollInterval);
-        if (loginAttempt.current !== attempt) return;
-        const result = await pollOnce(authorization.deviceCode);
-        if (result.status === "pending") continue;
-        if (result.status === "slowDown") {
-          pollInterval += 5_000;
-          continue;
-        }
-        if (await handlePollResult(result, attempt)) return;
+      const result = await completeDesktopWorkspaceLogin(attemptId);
+      if (loginAttempt.current !== attempt) return;
+      if (!(await handleLoginResult(result, attempt))) {
+        throw new Error(t("workspace.loginIncomplete"));
       }
-      pendingLogin.current = null;
-      captureLoginOutcome(analyticsAttemptId, "expired");
-      toast(t("workspace.loginExpired"), "error");
     } catch (error) {
+      if (loginAttempt.current !== attempt) return;
       pendingLogin.current = null;
       captureLoginOutcome(analyticsAttemptId, "failed");
       toast(t("workspace.loginFailed", { error: errMessage(error) }), "error");
     } finally {
+      if (attemptId) {
+        void cancelDesktopWorkspaceLogin(attemptId).catch(() => undefined);
+      }
       if (loginAttempt.current === attempt) setLoginPhase("idle");
     }
   }

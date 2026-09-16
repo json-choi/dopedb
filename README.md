@@ -81,7 +81,7 @@ query. Authenticated members rerun it manually in Desktop with their own access.
 
 | Area | Available today |
 | --- | --- |
-| Workspace | Personal and team workspaces, device sign-in, invitations, membership, and roles |
+| Workspace | Personal and team workspaces, browser sign-in with a local Desktop callback, invitations, membership, and roles |
 | Shared access | Secretless connection templates with per-member local credential bindings |
 | Managed access | Member-specific, expiring credentials for PlanetScale, Neon, and GCP Cloud SQL |
 | Databases | PostgreSQL, MySQL/MariaDB, SQLite, MongoDB, and read-only Google BigQuery through the official `bq` CLI, with schema introspection |

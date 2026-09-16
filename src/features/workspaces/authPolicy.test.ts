@@ -63,6 +63,7 @@ import {
 import type { WorkspaceContextState } from "./queries";
 import * as workspaceQueries from "./queries";
 import * as workspaceAdapter from "./tauriAdapter";
+import * as ipc from "../../ipc/core";
 import {
   ProductAnalyticsLocalStore,
   productAnalyticsInstallationReadyInput,
@@ -215,6 +216,32 @@ describe("workspace auth lifecycle", () => {
     expect(allowedUrls).toContain(DOPEDB_RELEASES_URL);
     expect(allowedUrls).toContain("https://app.dopedb.dev/analyses/*");
     expect(allowedUrls).not.toContain("https://github.com/*");
+    expect(allowedUrls).toContain("https://app.dopedb.dev/auth/desktop?*");
+    expect(allowedUrls).not.toContain("https://app.dopedb.dev/auth/device?user_code=*");
+    expect(allowedUrls.some((url) => url.startsWith("http:"))).toBe(false);
+
+    const desktopAuthorization = {
+      attemptId: "desktop-attempt",
+      authorizationUrl: "https://app.dopedb.dev/auth/desktop?request=public-request",
+      expiresIn: 300,
+    };
+    const desktopLoginInvoke = vi.spyOn(ipc, "invoke")
+      .mockResolvedValueOnce(desktopAuthorization)
+      .mockResolvedValueOnce({ status: "denied", user: null })
+      .mockResolvedValueOnce(undefined);
+    try {
+      expect(await workspaceAdapter.beginDesktopWorkspaceLogin()).toEqual(desktopAuthorization);
+      expect(await workspaceAdapter.completeDesktopWorkspaceLogin(desktopAuthorization.attemptId))
+        .toEqual({ status: "denied", user: null });
+      await workspaceAdapter.cancelDesktopWorkspaceLogin(desktopAuthorization.attemptId);
+      expect(desktopLoginInvoke.mock.calls).toEqual([
+        ["begin_desktop_workspace_login"],
+        ["complete_desktop_workspace_login", { attemptId: "desktop-attempt" }],
+        ["cancel_desktop_workspace_login", { attemptId: "desktop-attempt" }],
+      ]);
+    } finally {
+      desktopLoginInvoke.mockRestore();
+    }
 
     const loginCallback = new URL(desktopWorkspaceLoginCallbackUrl);
     expect(desktopWorkspaceAccessCallbackUrl).toBe("dopedb://workspace/access-complete");

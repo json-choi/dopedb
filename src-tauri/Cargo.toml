@@ -58,6 +58,7 @@ chrono = { version = "0.4", features = ["serde"] }
 csv = "1.4.0"
 flate2 = "1.1.10"
 sha2 = "0.11"
+base64 = "0.22"
 hex = "0.4"
 getrandom = "0.4"
 keyring = "4.2"

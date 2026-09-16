@@ -82,6 +82,15 @@ pub(crate) enum WorkspaceLoginPollStatus {
     Expired,
 }
 
+/// Public Desktop handoff metadata; native PKCE credentials never cross IPC.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct WorkspaceDesktopAuthorization {
+    pub(crate) attempt_id: String,
+    pub(crate) authorization_url: String,
+    pub(crate) expires_in: u64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct WorkspaceLoginPoll {

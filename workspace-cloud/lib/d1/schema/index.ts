@@ -1,4 +1,5 @@
 export * from "./auth";
+export * from "./desktop-auth";
 export * from "./workspace";
 export * from "./integrations";
 export * from "./operations";

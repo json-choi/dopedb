@@ -20,6 +20,8 @@ default privilege, or ACL (see root `CLAUDE.md`/`AGENTS.md`).
 | `access.ts` | Better Auth access-control statement and workspace roles (adds a `view`-only `viewer` role on top of `memberAc`). |
 | `auth-client.ts` | Client-side Better Auth instance (`multiSession`, `deviceAuthorization`, `organization` plugins). |
 | `auth.ts` | Server Better Auth instance: D1 adapter, bearer/device/multi-session/organization plugins; strips provider tokens before persistence. |
+| `desktop-authorization.ts` / `desktop-authorization-store.ts` | Desktop-only S256 PKCE handoff: strict literal loopback requests, session-bound approval proofs, hash-only codes, atomic single-use D1 consumption. Better Auth creates each independent native session. |
+| `desktop-authorization-scenarios.ts` | Security scenarios composed inside the existing D1 test case: request/proof binding, PKCE, expiration, session revocation, concurrent replay. |
 | `authoritative-session.ts` | Session read that keeps browser-cookie and native-Bearer authentication mutually exclusive and observes durable revocation. |
 | `cron-auth.ts` | Constant-time bearer authentication shared by every internal cron route. |
 | `desktop-deep-link.ts` | Stable, token-free `dopedb://` deep-link targets and a short-lived Desktop access-return intent. |

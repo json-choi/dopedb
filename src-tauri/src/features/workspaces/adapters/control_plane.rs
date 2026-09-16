@@ -76,6 +76,14 @@ struct TokenResponse {
     access_token: Zeroizing<String>,
 }
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DesktopTokenResponse {
+    access_token: Zeroizing<String>,
+    token_type: String,
+    expires_in: u64,
+}
+
 #[derive(Debug, Deserialize)]
 struct SessionResponse {
     user: WorkspaceAuthUser,
@@ -327,6 +335,15 @@ impl RemoteConnectionAuthorityPort for HostedWorkspaceControlPlane {
 }
 
 impl WorkspaceControlPlanePort for HostedWorkspaceControlPlane {
+    async fn exchange_desktop_code(
+        &self,
+        code: &str,
+        verifier: &str,
+        redirect_uri: &str,
+    ) -> AppResult<WorkspaceLoginPoll> {
+        authentication::exchange_desktop_code(code, verifier, redirect_uri).await
+    }
+
     async fn begin_login(&self) -> AppResult<WorkspaceDeviceAuthorization> {
         begin_login().await
     }

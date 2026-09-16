@@ -238,11 +238,16 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
 - 작업용 chrome은 낮고 조용하게 유지하며 정보는 실행 문맥 가까이에 둔다.
 - command row와 tree row는 compact density를 사용하고, 선택·focus·위험·실패처럼
   의미가 있는 상태에만 색과 elevation을 사용한다.
-- Desktop workspace 로그인은 브라우저 승인이 끝나면 비밀값 없는 앱 URL로 기존
-  앱을 다시 활성화하고 즉시 device 상태를 확인한다. 앱 URL에는 token, device
-  code, 계정 또는 workspace 식별자를 넣지 않으며 서버 polling만 로그인 완료의
-  정본이다. 브라우저가 자동 앱 호출을 막을 때를 위해 같은 완료 화면에 명시적인
-  `DopeDB 앱 열기` action을 유지한다.
+- Desktop workspace 로그인은 배포된 HTTPS 웹에서 계정 선택과 명시적인 승인을
+  받고, native가 연 `127.0.0.1` 임시 포트의 일회성 callback으로 돌아온다.
+  native는 짧은 만료의 state와 PKCE S256으로 authorization code를 교환하고
+  계정별 OS 자격 증명 저장과 권한 전환을 마친 뒤에만 로그인 완료를 알린다.
+  verifier, code와 session token은 WebView에 전달하지 않는다. 취소·만료·완료·앱
+  종료 시 listener를 닫고, 이전 시도의 callback은 새 로그인에 영향을 주지 않는다.
+  비밀값 없는 `DopeDB 앱 열기` URL은 앱 활성화만 소유하며 인증 완료 근거가 아니다.
+  기존 RFC 8628 device endpoint는 호환 경계로 유지한다. 현재 `dopedb` CLI에는
+  독립 Workspace 로그인 명령이 없으며 `agent start`는 실행 중인 Desktop의 승인과
+  정확한 Project 권한을 사용한다.
 - Action Search는 672px 이하의 non-modal surface다. 빈 질의는 scope와 input만
   보이고, Database·Documents·Actions·Settings처럼 실제 결과가 있는 범주만 둔다.
 - popup, menu, modal은 viewport collision, keyboard 이동, focus containment와

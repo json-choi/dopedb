@@ -18,6 +18,7 @@ See `../AGENTS.md` for how these relate to the other canonical docs.
 | `0005-tailwind-v4-migration.md` | Migrates accumulated per-screen CSS to Tailwind CSS v4 plus semantic tokens incrementally, rather than replacing all CSS at once. |
 | `0006-native-query-cancellation.md` | Defers per-engine native query cancellation; Stop instead cancels via an Operation-Runtime-issued UUID and a process-local cancellation slot checked before connection release. |
 | `0007-analysis-article-bi-domain.md` | Analysis Article is a published sanitized-HTML document with exactly one saved read-only query and a Desktop-only manual rerun; this supersedes the earlier block/graph BI composition model and excludes dashboards, transforms, schedules, and signals. |
+| `0008-desktop-loopback-pkce-login.md` | Desktop Workspace login uses hosted account approval plus an ephemeral IPv4 loopback callback and PKCE S256; native secrets stay outside the WebView while RFC 8628 remains a compatibility boundary. |
 
 ## For AI Agents
 

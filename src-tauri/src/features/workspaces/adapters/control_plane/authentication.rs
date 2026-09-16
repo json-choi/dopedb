@@ -9,6 +9,15 @@ struct OAuthErrorResponse {
     message: Option<String>,
 }
 
+#[derive(Serialize)]
+struct DesktopTokenRequest<'a> {
+    grant_type: &'a str,
+    code: &'a str,
+    client_id: &'a str,
+    redirect_uri: &'a str,
+    code_verifier: &'a str,
+}
+
 /// Start a single-use ten-minute device authorization request.
 pub(super) async fn begin_login() -> AppResult<WorkspaceDeviceAuthorization> {
     let origin = origin()?;
@@ -79,6 +88,61 @@ async fn session_for_token(token: &str) -> AppResult<Option<WorkspaceAuthUser>> 
         ));
     }
     Ok(Some(session.user))
+}
+
+/// Redeem the code with the native-only verifier and persist a verified session.
+pub(super) async fn exchange_desktop_code(
+    code: &str,
+    verifier: &str,
+    redirect_uri: &str,
+) -> AppResult<WorkspaceLoginPoll> {
+    let origin = origin()?;
+    let response = client()?
+        .post(format!("{origin}/api/auth/desktop/token"))
+        .json(&DesktopTokenRequest {
+            grant_type: "authorization_code",
+            code,
+            client_id: DESKTOP_CLIENT_ID,
+            redirect_uri,
+            code_verifier: verifier,
+        })
+        .send()
+        .await
+        .map_err(|_| AppError::Network("exchanging workspace login code failed".into()))?;
+    if !response.status().is_success() {
+        // Never reflect an upstream error that might contain the submitted code.
+        return Err(AppError::Network(
+            "workspace login code was rejected or expired".into(),
+        ));
+    }
+    let payload: DesktopTokenResponse = crate::hosted_control_plane::bounded_json_response(
+        response,
+        "reading workspace session token",
+        MAX_AUTH_RESPONSE_BYTES,
+    )
+    .await?;
+    if payload.token_type != "Bearer" || !(1..=2_592_000).contains(&payload.expires_in) {
+        return Err(AppError::Network(
+            "workspace login returned an invalid token contract".into(),
+        ));
+    }
+    accept_token(payload.access_token).await
+}
+
+async fn accept_token(token: Zeroizing<String>) -> AppResult<WorkspaceLoginPoll> {
+    if token.len() < 20 || token.len() > 4096 || token.chars().any(char::is_whitespace) {
+        return Err(AppError::Network(
+            "workspace login returned an invalid session token".into(),
+        ));
+    }
+    let user = session_for_token(token.as_str())
+        .await?
+        .ok_or_else(|| AppError::Network("workspace login returned an inactive session".into()))?;
+    store_workspace_session(&user.id, token.as_str()).await?;
+    Ok(WorkspaceLoginPoll {
+        status: WorkspaceLoginPollStatus::SignedIn,
+        user: Some(user),
+    })
 }
 
 /// Validate one account-specific session already stored in the OS credential store.
@@ -204,20 +268,7 @@ pub(super) async fn poll_login(device_code: &str) -> AppResult<WorkspaceLoginPol
             MAX_AUTH_RESPONSE_BYTES,
         )
         .await?;
-        let token = payload.access_token;
-        if token.len() < 20 || token.len() > 4096 || token.chars().any(char::is_whitespace) {
-            return Err(AppError::Network(
-                "workspace login returned an invalid session token".into(),
-            ));
-        }
-        let user = session_for_token(token.as_str()).await?.ok_or_else(|| {
-            AppError::Network("workspace login returned an inactive session".into())
-        })?;
-        store_workspace_session(&user.id, token.as_str()).await?;
-        return Ok(WorkspaceLoginPoll {
-            status: WorkspaceLoginPollStatus::SignedIn,
-            user: Some(user),
-        });
+        return accept_token(payload.access_token).await;
     }
 
     let status = response.status();

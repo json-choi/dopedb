@@ -68,6 +68,13 @@ export interface WorkspaceDeviceAuthorization {
   interval: number;
 }
 
+/** Public attempt handle only; native owns the listener and PKCE secrets. */
+export interface DesktopWorkspaceAuthorization {
+  attemptId: string;
+  authorizationUrl: string;
+  expiresIn: number;
+}
+
 export type WorkspaceLoginPollStatus =
   | "pending"
   | "slowDown"

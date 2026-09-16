@@ -50,6 +50,8 @@ const en = {
     legalAfter: ". Your organization’s workspace policy and audit records also apply.",
   },
   device: {
+    desktopDescription: "Connect DopeDB on this computer using the account you choose below.",
+    desktopExpires: "This approval page expires after 10 minutes. Return to DopeDB to start again if needed.",
     invalidRequest: "This authorization request is invalid.",
     invalidCode: "The authorization code is invalid or has expired.",
     codeRequired: "A valid authorization code is required.",
@@ -835,6 +837,8 @@ const ko: DeepStringShape<typeof en> = {
     legalAfter: "을 확인한 것으로 봅니다. 조직의 워크스페이스 정책과 감사 기록도 적용됩니다.",
   },
   device: {
+    desktopDescription: "아래에서 선택한 계정으로 이 컴퓨터의 DopeDB 앱을 연결합니다.",
+    desktopExpires: "이 승인 화면은 10분 후 만료됩니다. 필요하면 DopeDB에서 로그인을 다시 시작하세요.",
     invalidRequest: "올바르지 않은 승인 요청입니다.",
     invalidCode: "승인 코드가 올바르지 않거나 만료되었습니다.",
     codeRequired: "올바른 승인 코드가 필요합니다.",

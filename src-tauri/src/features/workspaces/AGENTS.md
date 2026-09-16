@@ -5,7 +5,7 @@
 
 ## Purpose
 
-Account-aware workspace feature: Better Auth device-code authentication,
+Account-aware workspace feature: Desktop loopback PKCE and device-code authentication,
 account/workspace selection, membership, shared-connection publication, and
 ordered remote-change synchronization. This is the Rust-side home of the
 "workspace owns shared access, members own credentials" product axis — Bearer
@@ -35,6 +35,7 @@ webview, logs, local SQLite, or frontend query caches.
 | `mod.rs` | Concrete workspace adapters (module root). |
 | `local.rs` | Local SQLite, connection-runtime, and process-configuration adapters. |
 | `desktop_login_callback.rs` | Desktop deep-link adapter for returning from browser device authorization; the URL carries no login material, the existing server poll remains authoritative. |
+| `desktop_login.rs` / `desktop_login/` | Desktop-only ephemeral IPv4 loopback listener, bounded callback parser, PKCE handoff, cancellation, and serialized account commit. |
 | `control_plane.rs` | Hosted Better Auth RFC 8628 device authorization adapter; network exchange and credential persistence stay in Rust so Bearer sessions never cross into the webview, logs, local SQLite, or frontend query caches. |
 | `control_plane/` | Split HTTP exchange modules — see below. |
 
@@ -63,9 +64,17 @@ webview, logs, local SQLite, or frontend query caches.
 - A Bearer session or device-grant token must never reach the webview,
   logs, local SQLite, or a frontend query cache — keep it inside
   `adapters/control_plane/` and the in-memory session state it feeds.
-- `adapters/desktop_login_callback.rs`'s deep-link URL must stay free of
-  login material; the server poll (`control_plane/authentication.rs`) is the
-  only source of truth for a completed device authorization.
+- The legacy device flow's `adapters/desktop_login_callback.rs` deep-link URL
+  must stay free of login material. For that device flow only, the server poll
+  (`control_plane/authentication.rs`) is authoritative; a deep link merely
+  focuses the app and cannot establish a session. Desktop PKCE completion uses
+  the validated loopback callback and native token exchange instead.
+- Desktop browser login uses `127.0.0.1` with an OS-assigned port, exact
+  `/callback`, native-only PKCE verifier, and one-use state. The authorization
+  code never crosses IPC. Callback waiting holds no Broker authority gate;
+  token exchange and account activation share the existing authority fence.
+  Replacement, cancellation, and process shutdown close the listener. Device
+  authorization endpoints and token-free deep links remain separate paths.
 - Shared-connection publication (`application/sharing.rs`) must keep
   long-lived secrets out of the shared record — member-local access stays in
   the OS credential store, managed access issues a short-lived,

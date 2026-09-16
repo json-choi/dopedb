@@ -10,6 +10,30 @@ provider integration material. It never stores member-local database passwords,
 terminal capabilities, or ordinary query result rows. Requests use the native `WORKSPACE_DB`
 binding; database URLs and PostgreSQL transaction emulation are not used.
 
+## Desktop login
+
+Desktop opens `/auth/desktop` in the system browser for hosted Google login,
+explicit account selection and approval. It listens on an OS-assigned IPv4
+loopback port and supplies a random state and an S256 PKCE challenge. The only
+accepted redirect is `http://127.0.0.1:<1024..65535>/callback`.
+
+`POST /api/auth/desktop/authorize` requires the exact web Origin, a live browser
+cookie session and a signed nonce bound to that session and the complete request.
+Approval returns only a random, hashed-at-rest 120-second code and state to the
+loopback listener. Denial consumes the same approval proof without issuing a
+usable code. `POST /api/auth/desktop/token` accepts native JSON with
+`grant_type`, `client_id`, `code`, `redirect_uri` and `code_verifier`; it atomically
+consumes the matching code before Better Auth creates a separate 30-day session.
+The existing Bearer/session revocation boundary remains authoritative. Neither
+the browser's session token nor Google tokens cross the callback.
+
+Apply the generated D1 migration before deploying these endpoints. This table
+belongs only to the live D1 authentication path; historical PostgreSQL import
+harness schemas remain unchanged. The existing `/auth/device` RFC 8628 flow is
+retained as a compatibility boundary; the CLI does not gain an independent login.
+Authentication pages never initialize web
+analytics and are served with `private, no-store`.
+
 ## Local setup
 
 ### Optional workspace web analytics
@@ -401,8 +425,8 @@ data must be reset instead of upgraded.
 - Database hooks clear Google access, refresh, and ID tokens before account persistence.
 - Better Auth Multi Session keeps at most ten browser identities available without
   merging their users or organization memberships. The active identity is explicit.
-- Desktop sign-in uses a ten-minute, single-use device code and a Better Auth Bearer
-  session. Sessions expire after 30 days with a one-day refresh age, and the desktop
+- Desktop sign-in uses a local callback, single-use authorization code and S256 PKCE
+  to obtain a separate Better Auth Bearer session. Sessions expire after 30 days with a one-day refresh age, and the desktop
   stores each account in a separate operating-system credential item.
 - All application queries use Drizzle ORM; all schema changes use committed Drizzle Kit
   migrations.

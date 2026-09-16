@@ -123,7 +123,10 @@ authoritative rows before committing.
 
 ## Implemented foundation
 
-- Personal and team workspaces, device sign-in, invitations, roles, and member removal.
+- Personal and team workspaces, Desktop browser sign-in with a short-lived loopback
+  callback and PKCE, invitations, roles, and member removal. Existing RFC 8628
+  endpoints remain compatible; the current CLI has no independent Workspace login
+  command and `agent start` uses Desktop approval and its exact Project grant.
 - Secret-free shared connection templates and member-local credential bindings.
 - Per-connection `view`, `use`, and `manage` grants.
 - Managed PlanetScale, Neon, GCP Cloud SQL, and allowlisted Vault access paths.

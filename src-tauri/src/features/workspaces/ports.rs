@@ -122,6 +122,13 @@ pub(crate) trait WorkspaceRuntimePort: Clone + Send + Sync + 'static {
 }
 
 pub(crate) trait WorkspaceControlPlanePort: Clone + Send + Sync + 'static {
+    fn exchange_desktop_code(
+        &self,
+        code: &str,
+        verifier: &str,
+        redirect_uri: &str,
+    ) -> impl Future<Output = AppResult<WorkspaceLoginPoll>> + Send;
+
     fn begin_login(&self) -> impl Future<Output = AppResult<WorkspaceDeviceAuthorization>> + Send;
 
     fn poll_login(

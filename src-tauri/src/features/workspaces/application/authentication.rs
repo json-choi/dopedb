@@ -113,6 +113,23 @@ where
 
     pub(crate) async fn poll_login(&self, device_code: &str) -> AppResult<WorkspaceLoginPoll> {
         let result = self.control_plane.poll_login(device_code).await?;
+        self.accept_login(result).await
+    }
+
+    pub(crate) async fn complete_desktop_login(
+        &self,
+        code: &str,
+        verifier: &str,
+        redirect_uri: &str,
+    ) -> AppResult<WorkspaceLoginPoll> {
+        let result = self
+            .control_plane
+            .exchange_desktop_code(code, verifier, redirect_uri)
+            .await?;
+        self.accept_login(result).await
+    }
+
+    async fn accept_login(&self, result: WorkspaceLoginPoll) -> AppResult<WorkspaceLoginPoll> {
         if result.status == WorkspaceLoginPollStatus::SignedIn {
             let user = result.user.as_ref().ok_or_else(|| {
                 AppError::Network("workspace login did not return an account".into())

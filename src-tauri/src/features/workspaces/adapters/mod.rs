@@ -1,6 +1,7 @@
 //! Concrete workspace adapters.
 
 pub(crate) mod control_plane;
+pub(crate) mod desktop_login;
 #[cfg(any(target_os = "macos", windows, target_os = "linux"))]
 pub(crate) mod desktop_login_callback;
 mod local;

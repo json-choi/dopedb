@@ -30,6 +30,7 @@ here.
 |------|-------------|
 | `index.ts` | Re-exports every schema module below; this is what `../schema.ts` and `database.ts` import as `* as schema`. |
 | `auth.ts` | Better Auth tables — `user`, `organization`, `session`, `account`, `verification`, `member`, `invitation`, `deviceCode`, `rateLimit` — bundled as `authSchema` for the Better Auth D1 adapter. |
+| `desktop-auth.ts` | `desktopAuthorizationCode`: 120-second hashed code bound to S256 challenge, literal loopback redirect, client and approving browser session; consumed rows retain the approval proof until its ten-minute lifetime ends. |
 | `workspace.ts` | `workspaceDeletionReceipt`, `workspaceProfile`, `workspaceAuditEvent`, `workspaceSyncHead`, `workspaceSyncEvent` — workspace identity, the append-only audit log, and the sync cursor/event tables Desktop polls. |
 | `integrations.ts` | `workspaceProviderIntegration` — one provider (Neon/PlanetScale/GCP Cloud SQL/Vault) connection's durable identity, status, and generation counter. |
 | `operations.ts` | `workspaceProviderOperation`, `workspaceProviderOperationApproval` — durable plan/approve/execute/reconcile state for one provider-side mutation (e.g. a Neon branch switch). |

@@ -10,6 +10,7 @@ import { createWorkspaceD1 } from "./d1/database";
 import { user, workspaceProviderIntegration, knowledgeGithubInstallation, knowledgeSource } from "./d1/schema";
 import { consumeD1Budget } from "./d1/rate-limits";
 import { verifyD1WorkspaceMutations } from "./d1-workspace-scenarios.harness";
+import { verifyDesktopAuthorization, verifyDesktopAuthorizationRoutes } from "./desktop-authorization-scenarios";
 
 const fixtureBinding = vi.hoisted(() => ({ value: null as unknown }));
 vi.mock("@opennextjs/cloudflare", () => ({
@@ -52,7 +53,7 @@ beforeAll(async () => {
   });
 
   await withStage("migrations", async () => {
-    for (const name of ["0000_workspace_baseline.sql", "0001_workspace_guards.sql", "0002_storage_types.sql", "0003_atomic_scope.sql", "0004_member_evidence_detachment.sql", "0005_backup_chunks.sql", "0006_retention_purge.sql"]) {
+    for (const name of ["0000_workspace_baseline.sql", "0001_workspace_guards.sql", "0002_storage_types.sql", "0003_atomic_scope.sql", "0004_member_evidence_detachment.sql", "0005_backup_chunks.sql", "0006_retention_purge.sql", "0007_unusual_lionheart.sql"]) {
       const source = await readFile(new URL(`../d1-migrations/${name}`, import.meta.url), "utf8");
       const statements = source.includes("--> statement-breakpoint")
         ? source.split("--> statement-breakpoint")
@@ -104,6 +105,7 @@ describe("Workspace D1 safety", () => {
     });
 
     await withStage("workspace-mutations", async () => {
+      await verifyDesktopAuthorization(db, memberUser.id);
       const { ensurePersonalKnowledgeScope } = await import("./knowledge/personal-scope");
       const sessionId = randomUUID();
       await db.prepare("INSERT INTO session (id, token, user_id, expires_at) VALUES (?, ?, ?, ?)")
@@ -125,6 +127,7 @@ describe("Workspace D1 safety", () => {
         process.env.GOOGLE_CLIENT_ID = "d1-harness-google-client";
         process.env.GOOGLE_CLIENT_SECRET = "d1-harness-google-secret";
         const { getAuth } = await import("./auth");
+        await verifyDesktopAuthorizationRoutes(memberUser.id);
         const token = await db.prepare("SELECT token FROM session WHERE id = ?").bind(sessionId).first<string>("token");
         const authenticated = await getAuth().api.getSession({ headers: new Headers({ authorization: `Bearer ${token}` }) });
         expect(authenticated?.user.id).toBe(memberUser.id);

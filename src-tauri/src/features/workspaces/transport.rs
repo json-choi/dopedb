@@ -260,12 +260,78 @@ pub async fn poll_workspace_login(
     app: tauri::AppHandle,
     device_code: String,
 ) -> AppResult<WorkspaceLoginPoll> {
+    commit_workspace_login(
+        &state,
+        &app,
+        state.services.workspace.poll_login(&device_code),
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn begin_desktop_workspace_login(
+    state: State<'_, AppState>,
+) -> AppResult<super::domain::WorkspaceDesktopAuthorization> {
+    state.desktop_login.begin().await
+}
+
+#[tauri::command]
+pub async fn cancel_desktop_workspace_login(
+    state: State<'_, AppState>,
+    attempt_id: String,
+) -> AppResult<()> {
+    state.desktop_login.cancel(&attempt_id).await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn complete_desktop_workspace_login(
+    state: State<'_, AppState>,
+    app: tauri::AppHandle,
+    attempt_id: String,
+) -> AppResult<WorkspaceLoginPoll> {
+    use super::adapters::desktop_login::DesktopCallback;
+    let callback = state.desktop_login.wait(&attempt_id).await?;
+    state
+        .desktop_login
+        .commit(&attempt_id, async {
+            match callback {
+                DesktopCallback::Code(value) => {
+                    commit_workspace_login(
+                        &state,
+                        &app,
+                        state.services.workspace.complete_desktop_login(
+                            &value.code,
+                            &value.verifier,
+                            &value.redirect_uri,
+                        ),
+                    )
+                    .await
+                }
+                DesktopCallback::Denied => Ok(WorkspaceLoginPoll {
+                    status: WorkspaceLoginPollStatus::Denied,
+                    user: None,
+                }),
+                DesktopCallback::Expired => Ok(WorkspaceLoginPoll {
+                    status: WorkspaceLoginPollStatus::Expired,
+                    user: None,
+                }),
+            }
+        })
+        .await
+}
+
+async fn commit_workspace_login(
+    state: &AppState,
+    app: &tauri::AppHandle,
+    login: impl std::future::Future<Output = AppResult<WorkspaceLoginPoll>>,
+) -> AppResult<WorkspaceLoginPoll> {
     // Most polls are still pending and must not close unrelated live chats. The
     // Broker gate prevents a new exact-grant operation from crossing the one poll
     // that commits a signed-in account; generation checks fence any old pin.
     let authority_refresh = state.broker.begin_authority_refresh();
     let before = state.services.workspace.authority_fingerprint().await;
-    let result = match state.services.workspace.poll_login(&device_code).await {
+    let result = match login.await {
         Ok(result) => result,
         Err(error) => {
             drop(authority_refresh);
@@ -281,9 +347,9 @@ pub async fn poll_workspace_login(
         }
     };
     match before.as_ref() {
-        Ok(before) => apply_runtime_authority_delta(&state, &app, before, &after),
+        Ok(before) => apply_runtime_authority_delta(state, app, before, &after),
         Err(_) if result.status == WorkspaceLoginPollStatus::SignedIn => {
-            fence_runtime_authority(&state, &app);
+            fence_runtime_authority(state, app);
         }
         Err(_) => {}
     }
@@ -293,7 +359,7 @@ pub async fn poll_workspace_login(
             drop(authority_refresh);
             return Err(error);
         }
-        if let Err(error) = reconcile_provider_grants_after_refresh(&state).await {
+        if let Err(error) = reconcile_provider_grants_after_refresh(state).await {
             state.broker.mark_authority_unverified();
             drop(authority_refresh);
             return Err(error);

@@ -167,6 +167,9 @@ pub fn run() {
             features::workspaces::transport::workspace_sign_out,
             features::workspaces::transport::workspace_sign_out_all,
             features::workspaces::transport::begin_workspace_login,
+            features::workspaces::transport::begin_desktop_workspace_login,
+            features::workspaces::transport::complete_desktop_workspace_login,
+            features::workspaces::transport::cancel_desktop_workspace_login,
             features::workspaces::transport::poll_workspace_login,
             features::workspaces::transport::workspace_console_url,
             features::workspaces::transport::list_workspaces,
@@ -341,6 +344,10 @@ pub fn run() {
             // ordinary command futures. Close them within a bounded window before the
             // app process exits so child trees and runtime endpoints are not orphaned.
             if let tauri::RunEvent::Exit = event {
+                let login = app_handle.state::<state::AppState>().desktop_login.clone();
+                let _ = tauri::async_runtime::block_on(async {
+                    tokio::time::timeout(Duration::from_secs(2), login.shutdown()).await
+                });
                 let queries = app_handle
                     .state::<state::AppState>()
                     .services

@@ -24,7 +24,8 @@ export function middleware(request: NextRequest) {
     path: "/",
     maxAge: 60 * 60 * 24 * 365,
   });
-  if (/^\/(?:analyses|article-invitations|open-article)\//.test(localeIndependentPath)) {
+  if (/^\/(?:analyses|article-invitations|open-article)\//.test(localeIndependentPath)
+    || localeIndependentPath === "/auth/desktop") {
     // Publications can be revoked; private handoffs contain account identity.
     // Neither may survive in browser or shared caches after an access change.
     response.headers.set("cache-control", "private, no-store");

@@ -1,4 +1,4 @@
-// Account selector for RFC 8628 approval. It prevents “add account” on desktop from
+// Account selector shared by Desktop and RFC 8628 approval. It prevents “add account” from
 // silently re-authorizing whichever browser identity happened to be active.
 "use client";
 
@@ -14,9 +14,11 @@ import { useWorkspaceLocale } from "../../components/WorkspaceLocale";
 export function DeviceAccountActions({
   currentUserId,
   userCode,
+  returnPath,
 }: {
   currentUserId: string;
-  userCode: string;
+  userCode?: string;
+  returnPath?: string;
 }) {
   const locale = useWorkspaceLocale();
   const copy = workspaceMessages[locale].device;
@@ -24,7 +26,7 @@ export function DeviceAccountActions({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const returnTo = localizedWorkspacePath(
-    `/auth/device?user_code=${encodeURIComponent(userCode)}`,
+    returnPath ?? `/auth/device?user_code=${encodeURIComponent(userCode ?? "")}`,
     locale,
   );
 

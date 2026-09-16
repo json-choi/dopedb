@@ -23,6 +23,7 @@ new migrations here from `../lib/d1/schema/index.ts`.
 | `0004_member_evidence_detachment.sql` | A `BEFORE DELETE` trigger on `member` that detaches only the nullable actor reference before SQLite's composite-FK `SET NULL` would otherwise also clear `organization_id` — replicating the column-scoped `SET NULL` behavior the Postgres schema relied on. Requires runners to already be revoked. |
 | `0005_backup_chunks.sql` | Adds `workspace_backup_chunk` to hold bounded pieces of encrypted snapshot envelopes that exceed D1's 2 MB row limit, plus insert/update/delete guard triggers keeping chunks in the same transaction and retention cascade as their metadata row. |
 | `0006_retention_purge.sql` | Narrows the append-only delete guards from `0001`/prior so evidence deletion is possible only inside the exact due-workspace retention-purge batch, adding a matching delete guard on `organization` itself. |
+| `0007_unusual_lionheart.sql` | Generated Desktop authorization-code table, hashed code/approval uniqueness, browser-session/user foreign keys, and constrained client/challenge fields. |
 
 ## Subdirectories
 | Directory | Purpose |

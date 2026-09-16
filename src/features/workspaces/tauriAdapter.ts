@@ -9,6 +9,7 @@ import type {
 } from "../connections/domain";
 import type {
   AccountId,
+  DesktopWorkspaceAuthorization,
   Workspace,
   WorkspaceAuthState,
   WorkspaceDeviceAuthorization,
@@ -46,6 +47,18 @@ export function beginWorkspaceLogin(): Promise<WorkspaceDeviceAuthorization> {
 
 export function pollWorkspaceLogin(deviceCode: string): Promise<WorkspaceLoginPoll> {
   return invoke("poll_workspace_login", { deviceCode });
+}
+
+export function beginDesktopWorkspaceLogin(): Promise<DesktopWorkspaceAuthorization> {
+  return invoke("begin_desktop_workspace_login");
+}
+
+export function completeDesktopWorkspaceLogin(attemptId: string): Promise<WorkspaceLoginPoll> {
+  return invoke("complete_desktop_workspace_login", { attemptId });
+}
+
+export function cancelDesktopWorkspaceLogin(attemptId: string): Promise<void> {
+  return invoke("cancel_desktop_workspace_login", { attemptId });
 }
 
 export function onWorkspaceLoginCallback(

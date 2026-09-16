@@ -127,6 +127,7 @@ async fn query_and_skill_security_contracts_stay_fail_closed() {
     crate::features::product_analytics::assert_consent_policy_contract();
     crate::features::product_analytics::transport::assert_product_analytics_response_contract();
     crate::hosted_control_plane::assert_shared_http_client_contract();
+    crate::features::workspaces::adapters::desktop_login::assert_desktop_login_contract().await;
     crate::features::workspaces::adapters::control_plane::assert_hosted_workspace_response_bounds_contract();
     #[cfg(any(target_os = "macos", windows, target_os = "linux"))]
     crate::features::workspaces::adapters::desktop_login_callback::assert_workspace_login_callback_contract();

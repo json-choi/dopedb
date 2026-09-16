@@ -1,6 +1,6 @@
 // Better Auth owns identity, sessions, invitations, and organization records.
 // Membership authority mutations are narrowed to the revocation-gated workspace routes.
-// Provider credentials are stripped before persistence; desktop sessions use RFC 8628.
+// Provider credentials are stripped before persistence; native sessions use Bearer tokens.
 import "server-only";
 import { randomUUID } from "node:crypto";
 import { betterAuth } from "better-auth";
@@ -81,8 +81,8 @@ function createAuth() {
       // Keep several browser identities available without merging their organization
       // boundaries. The active session remains explicit and can be switched atomically.
       multiSession({ maximumSessions: 10 }),
-      // RFC 8628 returns the Better Auth session token directly; the desktop stores it
-      // in the OS credential store and presents it only over HTTPS as a Bearer token.
+      // Desktop PKCE and the compatible device exchange return independent Better Auth
+      // sessions, stored locally and presented only over HTTPS as Bearer tokens.
       bearer(),
       deviceAuthorization({
         verificationUri: "/auth/device",

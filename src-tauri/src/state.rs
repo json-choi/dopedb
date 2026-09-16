@@ -44,6 +44,8 @@ pub struct AppState {
     pub(crate) local_knowledge_sources: LocalFolderAdapter,
     pub(crate) knowledge_watches: KnowledgeWatchRuntime,
     pub(crate) startup_trace: StartupTrace,
+    pub(crate) desktop_login:
+        crate::features::workspaces::adapters::desktop_login::DesktopLoginRuntime,
     store: Store,
     post_paint_recovery: PostPaintRecoveryGate,
 }
@@ -97,6 +99,7 @@ impl AppState {
         );
         provider_recovery?;
         Ok(Self {
+            desktop_login: Default::default(),
             services,
             connections,
             broker,
