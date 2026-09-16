@@ -5,7 +5,7 @@ import type { HTMLAttributes, ReactNode } from "react";
 import { Icon, type IconName } from "../../components/Icon";
 import { Tooltip } from "./Tooltip";
 
-export type StatusTone = "neutral" | "success" | "warning" | "danger";
+export type StatusTone = "neutral" | "info" | "success" | "warning" | "danger";
 
 export function StatusBadge({
   tone = "neutral",
@@ -26,7 +26,7 @@ export function StatusBadge({
       data-tone={tone}
       data-density={density}
       data-icon-only={iconOnly}
-      className="tw:inline-flex tw:min-h-[20px] tw:max-w-full tw:min-w-0 tw:shrink-0 tw:items-center tw:gap-1 tw:overflow-hidden tw:rounded-xs tw:border tw:border-l-2 tw:border-border-subtle tw:border-l-border-strong tw:bg-transparent tw:px-1.5 tw:font-mono tw:text-2xs tw:font-medium tw:leading-none tw:tracking-[0.02em] tw:text-ellipsis tw:whitespace-nowrap tw:text-muted-foreground tw:data-[density=compact]:min-h-[18px] tw:data-[density=compact]:px-1.5 tw:data-[icon-only=true]:size-control-md tw:data-[icon-only=true]:min-w-control-md tw:data-[icon-only=true]:justify-center tw:data-[icon-only=true]:gap-0 tw:data-[icon-only=true]:p-0 tw:data-[tone=danger]:border-l-danger tw:data-[tone=danger]:text-danger tw:data-[tone=success]:border-l-success tw:data-[tone=success]:text-success tw:data-[tone=warning]:border-l-warning tw:data-[tone=warning]:text-warning tw:[&_.icon]:shrink-0"
+      className="tw:inline-flex tw:min-h-[20px] tw:max-w-full tw:min-w-0 tw:shrink-0 tw:items-center tw:gap-1 tw:overflow-hidden tw:rounded-xs tw:border tw:border-l-2 tw:border-border-subtle tw:border-l-border-strong tw:bg-transparent tw:px-1.5 tw:font-mono tw:text-2xs tw:font-medium tw:leading-none tw:tracking-[0.02em] tw:text-ellipsis tw:whitespace-nowrap tw:text-muted-foreground tw:data-[density=compact]:min-h-[18px] tw:data-[density=compact]:px-1.5 tw:data-[icon-only=true]:size-control-md tw:data-[icon-only=true]:min-w-control-md tw:data-[icon-only=true]:justify-center tw:data-[icon-only=true]:gap-0 tw:data-[icon-only=true]:p-0 tw:data-[tone=info]:border-l-info tw:data-[tone=info]:text-info tw:data-[tone=danger]:border-l-danger tw:data-[tone=danger]:text-danger tw:data-[tone=success]:border-l-success tw:data-[tone=success]:text-success tw:data-[tone=warning]:border-l-warning tw:data-[tone=warning]:text-warning tw:[&_.icon]:shrink-0"
       title={title}
       {...props}
     >
@@ -40,7 +40,7 @@ export function StatusDot({ tone = "neutral" }: { tone?: StatusTone }) {
     <span
       data-tone={tone}
       aria-hidden="true"
-      className="tw:size-2 tw:shrink-0 tw:rounded-full tw:bg-muted-foreground tw:data-[tone=danger]:bg-danger tw:data-[tone=success]:bg-success tw:data-[tone=warning]:bg-warning"
+      className="tw:size-2 tw:shrink-0 tw:rounded-full tw:bg-muted-foreground tw:data-[tone=info]:bg-info tw:data-[tone=danger]:bg-danger tw:data-[tone=success]:bg-success tw:data-[tone=warning]:bg-warning"
     />
   );
 }
@@ -62,7 +62,7 @@ export function StatusIndicator({
         role="img"
         aria-label={label}
         data-tone={tone}
-        className="tw:inline-grid tw:size-control-xs tw:shrink-0 tw:place-items-center tw:rounded-full tw:bg-muted tw:text-muted-foreground tw:data-[tone=danger]:bg-danger-muted tw:data-[tone=danger]:text-danger tw:data-[tone=success]:text-success tw:data-[tone=warning]:text-warning"
+        className="tw:inline-grid tw:size-control-xs tw:shrink-0 tw:place-items-center tw:rounded-full tw:bg-muted tw:text-muted-foreground tw:data-[tone=info]:text-info tw:data-[tone=danger]:bg-danger-muted tw:data-[tone=danger]:text-danger tw:data-[tone=success]:text-success tw:data-[tone=warning]:text-warning"
       >
         <Icon
           name={icon}

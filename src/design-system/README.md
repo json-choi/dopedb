@@ -999,9 +999,13 @@ Surface는 기본적으로 `card + border + rounded-lg + no shadow`다. floating
 
 - `.badge`: 중립 metadata
 - `.badge.kind`: 선택보다 약한 category 표기
+- `StatusBadge tone="info"`: 정보와 실행 중 상태
 - `StatusBadge tone="success"`: 성공/trust
 - `StatusBadge tone="warning"`: warning/review
 - `StatusBadge tone="danger"`: 오류/차단
+- 톤이 있는 badge와 icon-only 상태 badge는 모두 `StatusBadge`가 소유한다.
+  `.badge`에 상태색 utility를 얹어 네 면을 칠하거나 `primary`를 상태 톤으로
+  빌려 쓰지 않는다.
 - badge는 `radius-xs + neutral surface + 2px left status rule`의 평평한
   metadata flag를 사용한다. 전체 면을 상태색으로 채우거나 pill 형태로 만들지 않는다.
 - `StatusDot`과 environment dot처럼 단독 상태 indicator인 작은 점만 원형을 허용한다.
@@ -1059,7 +1063,7 @@ Agent/safety:
 
 Utility:
 
-- `.icon`, `.icon-only-badge`
+- `.icon`
 - `.scrollbar-sleek`
 
 텍스트 색·크기·간격 같은 단일 속성을 `.muted`, `.error`, `.loading`, `.form`

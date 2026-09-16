@@ -7,6 +7,7 @@ import QueryResultsPane from "../../features/queryServices/QueryResultsPane";
 import type { QueryServiceStore } from "../../features/queryServices/store";
 import { Icon } from "../../components/Icon";
 import LazySqlViewer from "../../components/LazySqlViewer";
+import { StatusBadge } from "../../design-system/components/Status";
 import {
   WorkbenchButton,
   WorkbenchContainedBody,
@@ -191,15 +192,15 @@ export default function Sql(props: Omit<SqlWorkbenchProps, "onShowResult"> & {
             <option value="script">{t("sql.resolveModeScript")}</option>
           </WorkbenchSelect>
           {!running && draftSignal && draftSignal.tone !== "muted" ? (
-            <span
-              data-tone={draftSignal.tone}
-              className="badge icon-only-badge tw:data-[tone=danger]:border-danger tw:data-[tone=danger]:text-danger tw:data-[tone=warning]:border-warning tw:data-[tone=warning]:text-warning"
+            <StatusBadge
+              iconOnly
+              tone={draftSignal.tone}
               title={draftSignal.title ?? draftSignal.text}
               aria-label={draftSignal.text}
               role="img"
             >
               <Icon name={draftSignal.icon ?? "info"} />
-            </span>
+            </StatusBadge>
           ) : null}
         </div>
         <WorkbenchButton

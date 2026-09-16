@@ -400,16 +400,6 @@ h3 {
   vertical-align: -0.125em;
 }
 
-.icon-only-badge {
-  width: var(--ds-control-md);
-  min-width: var(--ds-control-md);
-  height: var(--ds-control-md);
-  min-height: var(--ds-control-md);
-  padding: 0;
-  justify-content: center;
-  gap: 0;
-}
-
 .ds-attention-stack {
   display: flex;
   flex: 0 0 auto;
