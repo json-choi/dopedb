@@ -4,24 +4,35 @@ import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
+import { localBin } from "./local-command.mjs";
+
 const run = promisify(execFile);
-const cwd = fileURLToPath(new URL("..", import.meta.url));
+const site = fileURLToPath(new URL("../site", import.meta.url));
 const productionOrigin = "https://dopedb.dev";
 
-async function wrangler(...args) {
-  const { stdout } = await run("pnpm", ["--dir", "site", "exec", "wrangler", ...args, "--json"], {
-    cwd, timeout: 60_000, maxBuffer: 2 * 1024 * 1024,
-  });
+async function wrangler([command, ...prefix], ...args) {
+  let stdout;
+  try {
+    ({ stdout } = await run(command, [...prefix, ...args, "--json"], {
+      cwd: site, timeout: 60_000, maxBuffer: 2 * 1024 * 1024,
+    }));
+  } catch (error) {
+    // A child that never started reports an errno string instead of an exit status.
+    if (typeof error?.code === "string") {
+      throw new Error(`Site verification could not run ${command}: ${error.code}`);
+    }
+    throw new Error(`Site verification step failed (wrangler ${args[0]}), exit ${error?.code ?? "unknown"}`);
+  }
   const start = stdout.search(/^[\t ]*[\[{][\t ]*$/m);
   if (start < 0) throw new Error("Wrangler did not return a deployment receipt.");
   return JSON.parse(stdout.slice(start));
 }
 
-async function activeReceipt(versionId) {
-  const version = await wrangler("versions", "view", versionId);
+async function activeReceipt(versionId, wranglerCommand) {
+  const version = await wrangler(wranglerCommand, "versions", "view", versionId);
   if (version.id !== versionId) throw new Error("The requested site Worker version is unavailable.");
 
-  const deployments = await wrangler("deployments", "list");
+  const deployments = await wrangler(wranglerCommand, "deployments", "list");
   const current = deployments.toSorted((a, b) => Date.parse(b.created_on) - Date.parse(a.created_on))[0];
   if (current?.versions?.length !== 1 || current.versions[0].version_id !== versionId
     || current.versions[0].percentage !== 100) {
@@ -47,10 +58,13 @@ async function main() {
     throw new Error("Usage: pnpm site:cloud:verify-deployment <worker-version-id>");
   }
 
+  // Resolve the pinned CLI once, so a missing executable fails with its own
+  // diagnostic instead of being retried as a transient propagation delay.
+  const wranglerCommand = localBin(site, "wrangler");
   let lastError;
   for (let attempt = 1; attempt <= 6; attempt += 1) {
     try {
-      const current = await activeReceipt(versionId);
+      const current = await activeReceipt(versionId, wranglerCommand);
       console.log(JSON.stringify({ status: "active", versionId, deploymentId: current.id,
         traffic: "100%", productionUrl: productionOrigin }, null, 2));
       return;
