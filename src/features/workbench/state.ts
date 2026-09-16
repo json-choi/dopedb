@@ -12,11 +12,14 @@ import {
 
 export interface WorkbenchState {
   documents: WorkbenchDocument[];
+  /** Saved SQL documents the user closed; they stay reopenable, never deleted. */
+  closedDocuments: WorkbenchDocument[];
   activeDocumentId: string | null;
 }
 
 export const emptyWorkbenchState: WorkbenchState = {
   documents: [],
+  closedDocuments: [],
   activeDocumentId: null,
 };
 
@@ -27,6 +30,9 @@ export type WorkbenchAction =
       type: "restoreSql";
       connectionId: string;
       documents: SqlDocument[];
+      /** Recorded open tabs; `null` when this install never recorded any. */
+      openDocumentIds: string[] | null;
+      activeDocumentId: string | null;
       activateFirst: boolean;
     }
   | { type: "activate"; document: WorkbenchDocument }
@@ -53,10 +59,45 @@ export function workbenchReducer(
     case "initialize":
       return {
         documents: [action.document],
+        closedDocuments: [],
         activeDocumentId: action.document.id,
       };
     case "restoreSql": {
-      const restored = action.documents.map(persistedQueryDocument);
+      // Documents closed in this session stay closed even when a slow list
+      // response arrives afterwards, and a recorded tab list decides what a
+      // reconnect or restart reopens.
+      const closedIds = new Set(
+        state.closedDocuments.flatMap((document) =>
+          document.kind === "sql" && document.persistedId !== null
+            ? [document.persistedId]
+            : [],
+        ),
+      );
+      const openIds = action.openDocumentIds;
+      const opened = action.documents.filter(
+        (document) =>
+          !closedIds.has(document.id) &&
+          (openIds === null || openIds.includes(document.id)),
+      );
+      const restored = (
+        openIds === null
+          ? opened
+          : [...opened].sort(
+              (left, right) =>
+                openIds.indexOf(left.id) - openIds.indexOf(right.id),
+            )
+      ).map(persistedQueryDocument);
+      const restoredIds = new Set(restored.map((document) => document.id));
+      const closedDocuments = [
+        ...state.closedDocuments.filter(
+          (document) =>
+            document.connectionId !== action.connectionId ||
+            document.kind !== "sql",
+        ),
+        ...action.documents
+          .map(persistedQueryDocument)
+          .filter((document) => !restoredIds.has(document.id)),
+      ];
       const documents = [
         ...state.documents.filter(
           (document) =>
@@ -64,14 +105,23 @@ export function workbenchReducer(
         ),
         ...restored,
       ];
+      const recordedActive = action.activeDocumentId
+        ? restored.find(
+            (document) =>
+              document.kind === "sql" &&
+              document.persistedId === action.activeDocumentId,
+          )
+        : undefined;
       return {
         documents,
+        closedDocuments,
         activeDocumentId:
-          action.activateFirst && restored[0]
+          recordedActive?.id ??
+          (action.activateFirst && restored[0]
             ? restored[0].id
             : documents.some((document) => document.id === state.activeDocumentId)
               ? state.activeDocumentId
-              : (documents[0]?.id ?? null),
+              : (documents[0]?.id ?? null)),
       };
     }
     case "activate":
@@ -81,6 +131,9 @@ export function workbenchReducer(
         )
           ? state.documents
           : [...state.documents, action.document],
+        closedDocuments: state.closedDocuments.filter(
+          (document) => document.id !== action.document.id,
+        ),
         activeDocumentId: action.document.id,
       };
     case "activateId":
@@ -107,8 +160,21 @@ export function workbenchReducer(
         ),
         ...remaining,
       ];
+      // Closing a tab never deletes the saved document, so a saved one stays
+      // reopenable from the existing document search instead of disappearing.
+      const closed = selected[index];
+      const closedDocuments =
+        closed?.kind === "sql" && closed.persistedId !== null
+          ? [
+              ...state.closedDocuments.filter(
+                (document) => document.id !== closed.id,
+              ),
+              closed,
+            ]
+          : state.closedDocuments;
       return {
         documents,
+        closedDocuments,
         activeDocumentId:
           state.activeDocumentId === action.id
             ? (remaining[Math.min(index, Math.max(0, remaining.length - 1))]?.id ??

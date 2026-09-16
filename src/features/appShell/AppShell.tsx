@@ -287,6 +287,7 @@ function Shell() {
     connections: connections.items,
     selected: connections.selected,
     documents: documents.items,
+    closedDocuments: documents.closed,
     supportsSql: connections.supportsSql,
     commands: {
       showWelcome: commands.route.showWelcome,
