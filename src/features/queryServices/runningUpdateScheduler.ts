@@ -1,3 +1,6 @@
+// Rate limit for the progress updates of a running query, kept per session, so a
+// fast-emitting run cannot drive the renderer. A pending update whose scope is no
+// longer current is dropped rather than published late.
 type TimerHandle = unknown;
 type ScheduleTimer = (callback: () => void, delayMs: number) => TimerHandle;
 type CancelTimer = (handle: TimerHandle) => void;

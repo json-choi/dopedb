@@ -1,3 +1,6 @@
+// Formats a SQL document through the Rust formatter, chunked at statement
+// boundaries. A compound statement must not be chunked, so that case is detected
+// first and falls back to a whole-document path in a worker or inline.
 import type { SqlLanguage } from "sql-formatter";
 import { isTauri } from "@tauri-apps/api/core";
 import { formatSqlFragment } from "../queries/tauriAdapter";

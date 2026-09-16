@@ -1,3 +1,6 @@
+// Module-level LRU of decoded result pages shared by every grid reading one
+// stream. Retention is bounded in both pages and results, and subscriptions are
+// held apart from pages so eviction never strands a live grid on an orphan cache.
 import type {
   SqlStreamBatch,
   SqlStreamBatchWire,

@@ -1,3 +1,6 @@
+// Session contract for the query console: status, the none/materialized/stream
+// result variants, and the error shape. The parser accepts only an exact schema
+// version with validated fields, so an older persisted snapshot fails loudly.
 import type {
   AppErrorDetails,
   ExecOutcome,

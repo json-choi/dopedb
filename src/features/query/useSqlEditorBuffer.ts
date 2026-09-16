@@ -1,3 +1,6 @@
+// Keystrokes stay inside the SQL workbench subtree; the shell learns the text only
+// through a debounced snapshot. That split is why typing in a large document does
+// not re-render AppShell and its tool windows.
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const SHELL_SNAPSHOT_DELAY_MS = 400;

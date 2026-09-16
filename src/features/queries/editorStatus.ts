@@ -1,3 +1,6 @@
+// Contract shared by the SQL editor and its status bar: cursor position, the exact
+// text a run came from, and where the execution marker belongs. The marker is
+// withheld unless the recorded range still holds that same statement.
 export const SQL_EDITOR_INDENT_SIZE = 4;
 
 export interface SqlCursorPosition {

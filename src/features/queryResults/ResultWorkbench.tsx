@@ -1,3 +1,6 @@
+// Toolbar and footer chrome shared by every result surface: counts, truncation and
+// unreadable-cell notices, export and the filter toggle. It renders the counts it
+// is given, and export reads from the row source handed in rather than re-querying.
 import type { SqlStreamRowSource } from "../queries/domain";
 import {
   DataGridStatusPill,

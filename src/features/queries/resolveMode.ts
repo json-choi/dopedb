@@ -1,3 +1,6 @@
+// Decides which namespace editor completion should assume at the caret, masking
+// quoted text before it scans. It informs completion only: Rust stays
+// authoritative for execution, so a UI mode never widens what may run.
 import type { ConnectionEngine } from "../connections/domain";
 
 export type SqlResolveMode = "playground" | "script";

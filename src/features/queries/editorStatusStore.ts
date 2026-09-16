@@ -1,3 +1,6 @@
+// One cursor snapshot lives outside React so typing re-renders the status bar
+// alone, not the editor's parents. A reader gets a position only when it belongs
+// to the document it asked about, so a background tab cannot show another cursor.
 import { useSyncExternalStore } from "react";
 import type {
   SqlCursorPosition,

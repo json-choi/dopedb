@@ -1,3 +1,6 @@
+// Per-column value filter built from the page's own values, with occurrence
+// counts. The choice is encoded back into the single filter string the grid owns,
+// so the menu keeps no filter state of its own between openings.
 import { useMemo, useRef, useState } from "react";
 import { Button } from "../../design-system/components/Button";
 import { TextInput } from "../../design-system/components/FormControls";

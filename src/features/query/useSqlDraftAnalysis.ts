@@ -1,3 +1,6 @@
+// Idle-debounced analysis of the current draft: statement and parameter counts
+// plus the run signal the toolbar shows. Results carry the draft version they were
+// computed from, so an answer for older text is discarded instead of displayed.
 import { useEffect, useRef, useState } from "react";
 import type { SafetySettings } from "../../ipc/types";
 import type { ConnectionEngine } from "../connections/domain";

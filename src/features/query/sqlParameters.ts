@@ -1,3 +1,6 @@
+// Finds named and positional parameter tokens while skipping quoted text,
+// identifiers, comments and dollar quotes, and records exact offsets so the token
+// can be highlighted. Materialized SQL still goes through the normal approval path.
 import type { ConnectionEngine } from "../connections/domain";
 
 export type SqlParameter = {

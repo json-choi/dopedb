@@ -1,3 +1,6 @@
+// Binds the session store to persistence and to the update scheduler for one
+// scope: sessions load per scope, terminal sessions are written back, and entering
+// a scope drops the result page caches the previous scope's sessions held.
 import {
   useCallback,
   useEffect,

@@ -1,3 +1,6 @@
+// Drives one connection's manual transaction and, after a commit or rollback,
+// invalidates exactly the row, count, history and audit queries that could have
+// changed. It also reports whether the open transaction matches the target database.
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 

@@ -1,3 +1,6 @@
+// Begin, commit and rollback for an explicit transaction. Every decision belongs
+// to the controller it is handed; this file maps the reported phase to a control
+// and keeps Begin unavailable while writes are disabled for the connection.
 import { useEffect } from "react";
 
 import { Icon } from "../../components/Icon";

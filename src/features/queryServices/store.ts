@@ -1,3 +1,6 @@
+// External store holding one scope's query-console sessions, capped in count. The
+// console and the background-task list both read it through useSyncExternalStore,
+// so neither can hold a diverging copy of a running session.
 import { useSyncExternalStore } from "react";
 
 import type {
