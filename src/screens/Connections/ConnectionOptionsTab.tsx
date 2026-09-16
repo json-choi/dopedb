@@ -69,25 +69,25 @@ export function ConnectionOptionsTab({
         {flags.supportsSqlSessionOptions ? (
           <Field
             label={t("connections.timeZone")}
+            htmlFor="connection-time-zone"
             validation={validation.timeZone}
           >
-            <TextInput
-              id="connection-time-zone"
-              value={connectionOption(
-                form,
-                CONNECTION_TIME_ZONE_PARAMETER,
-              )}
-              aria-invalid={
-                validation.timeZone?.tone === "danger" || undefined
-              }
-              onChange={(event) =>
-                options.setExtraParameter(
+            {({ controlProps }) => (
+              <TextInput
+                {...controlProps()}
+                value={connectionOption(
+                  form,
                   CONNECTION_TIME_ZONE_PARAMETER,
-                  event.target.value,
-                )
-              }
-              placeholder={t("connections.timeZonePlaceholder")}
-            />
+                )}
+                onChange={(event) =>
+                  options.setExtraParameter(
+                    CONNECTION_TIME_ZONE_PARAMETER,
+                    event.target.value,
+                  )
+                }
+                placeholder={t("connections.timeZonePlaceholder")}
+              />
+            )}
           </Field>
         ) : null}
 
@@ -194,27 +194,28 @@ export function ConnectionOptionsTab({
         {flags.supportsStartupScript ? (
           <Field
             label={t("connections.startupScript")}
+            htmlFor="connection-startup-script"
             hint={<InfoTip label={t("connections.startupScriptHint")} />}
+            description={t("connections.startupScriptHint")}
             validation={validation.startupScript}
           >
-            <TextAreaInput
-              id="connection-startup-script"
-              value={connectionOption(
-                form,
-                CONNECTION_STARTUP_SCRIPT_PARAMETER,
-              )}
-              maxLength={CONNECTION_STARTUP_SCRIPT_MAX_LENGTH}
-              aria-invalid={
-                validation.startupScript?.tone === "danger" || undefined
-              }
-              onChange={(event) =>
-                options.setExtraParameter(
+            {({ controlProps }) => (
+              <TextAreaInput
+                {...controlProps()}
+                value={connectionOption(
+                  form,
                   CONNECTION_STARTUP_SCRIPT_PARAMETER,
-                  event.target.value,
-                )
-              }
-              placeholder={t("connections.startupScriptPlaceholder")}
-            />
+                )}
+                maxLength={CONNECTION_STARTUP_SCRIPT_MAX_LENGTH}
+                onChange={(event) =>
+                  options.setExtraParameter(
+                    CONNECTION_STARTUP_SCRIPT_PARAMETER,
+                    event.target.value,
+                  )
+                }
+                placeholder={t("connections.startupScriptPlaceholder")}
+              />
+            )}
           </Field>
         ) : null}
       </section>

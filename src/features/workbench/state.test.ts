@@ -135,6 +135,10 @@ import {
 import { knowledgeEnvironmentBadge } from "../knowledge/presentation";
 import type { Catalog, CatalogObject, CatalogTable } from "../../ipc/types";
 import { ModalHeader } from "../../design-system/components/Modal";
+import {
+  Field,
+  PropertyRow,
+} from "../../design-system/components/FormControls";
 import { queryResultPhase } from "../../lib/queryResultPhase";
 import { compareCatalogs, diffCounts } from "../../lib/schemaDiff";
 import { tableRef } from "../../lib/tableRef";
@@ -1745,5 +1749,108 @@ describe("workbench state ownership", () => {
     expect(modalHeader).toContain('<h1 id="data-sources-title"');
     expect(modalHeader).not.toContain("data-tauri-drag-region");
     expect(modalHeader).not.toContain("<button");
+
+    const accessibleFields = renderToStaticMarkup(
+      createElement(
+        "div",
+        null,
+        createElement(Field, {
+          label: "Startup script",
+          hint: createElement("span", { "aria-label": "Script help" }, "?"),
+          description: "Runs before each session.",
+          validation: { tone: "danger", message: "Invalid script" },
+          children: ({ controlProps }) =>
+            createElement(
+              "textarea",
+              {
+                ...controlProps({
+                  "aria-describedby": "external external",
+                  "aria-invalid": "grammar",
+                }),
+                "data-field": "danger",
+              },
+            ),
+        }),
+        createElement(PropertyRow, {
+          label: "Database file",
+          validation: { tone: "warning", message: "Check this path" },
+          children: ({ controlProps }) =>
+            createElement(
+              "div",
+              null,
+              createElement(
+                "input",
+                {
+                  ...controlProps({
+                    "aria-describedby": "existing existing",
+                    "aria-invalid": "spelling",
+                  }),
+                  "data-field": "warning",
+                },
+              ),
+              createElement("button", { type: "button" }, "Browse"),
+            ),
+        }),
+        createElement(Field, {
+          label: "No validation",
+          children: ({ controlProps }) =>
+            createElement("input", {
+              ...controlProps({
+                "aria-describedby": "kept kept",
+              }),
+              "data-field": "plain",
+            }),
+        }),
+      ),
+    );
+    const labelTargets = Array.from(
+      accessibleFields.matchAll(/<label for="([^"]+)"/g),
+      (match) => match[1],
+    );
+    expect(labelTargets).toHaveLength(3);
+    expect(new Set(labelTargets).size).toBe(3);
+    expect(accessibleFields).toContain(
+      `<label for="${labelTargets[0]}">Startup script</label><span aria-label="Script help">?</span>`,
+    );
+
+    const dangerTag = accessibleFields.match(
+      /<textarea[^>]*data-field="danger"[^>]*>/,
+    )?.[0];
+    const dangerDescriptionId = accessibleFields.match(
+      /<span id="([^"]+)" class="tw:sr-only">Runs before each session\.<\/span>/,
+    )?.[1];
+    const dangerValidationId = accessibleFields.match(
+      /<span id="([^"]+)" data-tone="danger"[^>]*>Invalid script<\/span>/,
+    )?.[1];
+    expect(dangerTag).toContain(`id="${labelTargets[0]}"`);
+    expect(dangerTag).toContain('aria-invalid="true"');
+    expect(dangerTag?.match(/aria-describedby="([^"]+)"/)?.[1].split(" ")).toEqual([
+      "external",
+      dangerDescriptionId,
+      dangerValidationId,
+    ]);
+
+    const warningTag = accessibleFields.match(
+      /<input[^>]*data-field="warning"[^>]*\/?>/,
+    )?.[0];
+    const warningValidationId = accessibleFields.match(
+      /<span id="([^"]+)" data-tone="warning"[^>]*>Check this path<\/span>/,
+    )?.[1];
+    expect(warningTag).toContain(`id="${labelTargets[1]}"`);
+    expect(warningTag).toContain('aria-invalid="spelling"');
+    expect(warningTag?.match(/aria-describedby="([^"]+)"/)?.[1].split(" ")).toEqual([
+      "existing",
+      warningValidationId,
+    ]);
+    expect(accessibleFields).toMatch(
+      /<input[^>]*data-field="warning"[^>]*\/><button type="button">Browse<\/button>/,
+    );
+
+    const plainTag = accessibleFields.match(
+      /<input[^>]*data-field="plain"[^>]*\/?>/,
+    )?.[0];
+    expect(plainTag).toContain(`id="${labelTargets[2]}"`);
+    expect(plainTag).toContain('aria-describedby="kept"');
+    expect(plainTag).not.toContain("aria-invalid");
   });
 });

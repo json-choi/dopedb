@@ -169,19 +169,18 @@ export function ConnectionGeneralTab({
             htmlFor="connection-url"
             validation={validation.connectionUrl}
           >
-            <TextInput
-              id="connection-url"
-              density="compact"
-              value={url.draft}
-              aria-invalid={
-                validation.connectionUrl?.tone === "danger" || undefined
-              }
-              autoCapitalize="none"
-              autoCorrect="off"
-              spellCheck={false}
-              onChange={(event) => url.edit(event.target.value)}
-              onBlur={(event) => url.normalize(event.target.value)}
-            />
+            {({ controlProps }) => (
+              <TextInput
+                {...controlProps()}
+                density="compact"
+                value={url.draft}
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                onChange={(event) => url.edit(event.target.value)}
+                onBlur={(event) => url.normalize(event.target.value)}
+              />
+            )}
           </PropertyRow>
           <p className="tw:m-0 tw:pl-[112px] tw:text-xs tw:text-muted-foreground tw:@max-[560px]:pl-0">
             {t("connections.connectionUrlOverrides")}

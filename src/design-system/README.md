@@ -484,6 +484,13 @@ Elevation은 세 단계만 허용한다.
   SQL/session 설정처럼 여러 줄인 값은 화면별 textarea class를 만들지 않고
   monospace `TextAreaInput`을 사용한다. 계층 checklist의 parent는
   `CheckboxField`의 native `indeterminate` 상태로 부분 선택을 표현한다.
+  단일 primary control의 설명과 validation을 연결할 때는 `Field` 또는
+  `PropertyRow`의 opt-in render prop에서 받은 `controlProps()`를 그 control에만
+  적용한다. 이 binding은 기존 `aria-describedby` ID를 보존·중복 제거하고,
+  `description`과 현재 mount된 validation ID를 추가하며 danger validation만
+  `aria-invalid=true`로 승격한다. warning은 호출자가 가진 invalid 의미를
+  덮어쓰지 않는다. host/port나 input+button처럼 한 field에 여러 control이 있으면
+  자동으로 자식을 복제하지 말고 각 primary control을 명시적으로 연결한다.
 - `PanelTabs`: 데이터소스 속성·설정 패널의 ARIA tab navigation. 좁은 폭에서는
   가로로 스크롤하며 선택 변경과 viewport resize 뒤에도 active tab을 자동으로
   노출한다. active tab만 Tab 순서에 두고 ArrowLeft/Right/Home/End 이동에서

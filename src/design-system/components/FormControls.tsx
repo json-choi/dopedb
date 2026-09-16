@@ -1,12 +1,13 @@
 // Canonical Tailwind form controls. They replace screen-owned form selectors
 // while preserving semantic labels, focus treatment, and dense desktop sizing.
 import type {
+  AriaAttributes,
   InputHTMLAttributes,
   ReactNode,
   SelectHTMLAttributes,
   TextareaHTMLAttributes,
 } from "react";
-import { forwardRef } from "react";
+import { forwardRef, useId } from "react";
 
 export type FieldValidation = {
   tone: "warning" | "danger";
@@ -14,12 +15,15 @@ export type FieldValidation = {
 };
 
 export function FieldValidationMessage({
+  id,
   validation,
 }: {
+  id?: string;
   validation: FieldValidation;
 }) {
   return (
     <span
+      id={id}
       data-tone={validation.tone}
       className="tw:min-w-0 tw:[overflow-wrap:anywhere] tw:text-xs tw:font-normal tw:text-warning tw:data-[tone=danger]:text-danger"
       role={validation.tone === "danger" ? "alert" : "status"}
@@ -29,17 +33,103 @@ export function FieldValidationMessage({
   );
 }
 
+type ExistingFieldControlAria = Pick<
+  AriaAttributes,
+  "aria-describedby" | "aria-invalid"
+>;
+
+export type FieldControlBinding = {
+  controlProps: (
+    existing?: ExistingFieldControlAria,
+  ) => ExistingFieldControlAria & { id: string };
+};
+
+type FieldChildren = ReactNode | ((binding: FieldControlBinding) => ReactNode);
+
+function mergeIdReferences(...values: Array<string | undefined>) {
+  const ids = values.flatMap((value) => value?.split(/\s+/).filter(Boolean) ?? []);
+  const uniqueIds = [...new Set(ids)];
+  return uniqueIds.length > 0 ? uniqueIds.join(" ") : undefined;
+}
+
+function fieldControlBinding({
+  controlId,
+  descriptionId,
+  validationId,
+  validation,
+}: {
+  controlId: string;
+  descriptionId?: string;
+  validationId?: string;
+  validation?: FieldValidation;
+}): FieldControlBinding {
+  return {
+    controlProps(existing = {}) {
+      return {
+        id: controlId,
+        "aria-describedby": mergeIdReferences(
+          existing["aria-describedby"],
+          descriptionId,
+          validationId,
+        ),
+        "aria-invalid":
+          validation?.tone === "danger"
+            ? true
+            : existing["aria-invalid"],
+      };
+    },
+  };
+}
+
 export function Field({
   label,
+  htmlFor,
   hint,
+  description,
   validation,
   children,
 }: {
   label: ReactNode;
+  htmlFor?: string;
   hint?: ReactNode;
+  description?: ReactNode;
   validation?: FieldValidation;
-  children: ReactNode;
+  children: FieldChildren;
 }) {
+  const generatedId = useId();
+  const controlId = htmlFor ?? `${generatedId}-control`;
+  const descriptionId = description ? `${generatedId}-description` : undefined;
+  const validationId = validation ? `${generatedId}-validation` : undefined;
+
+  if (typeof children === "function") {
+    const binding = fieldControlBinding({
+      controlId,
+      descriptionId,
+      validationId,
+      validation,
+    });
+    return (
+      <div className="tw:grid tw:min-w-0 tw:gap-1.5 tw:text-sm tw:font-medium tw:text-muted-foreground tw:[&>input]:w-full tw:[&>select]:w-full tw:[&>textarea]:w-full">
+        <span className="tw:inline-flex tw:min-w-0 tw:items-center tw:gap-1 tw:[overflow-wrap:anywhere]">
+          <label htmlFor={controlId}>{label}</label>
+          {hint}
+        </span>
+        {description ? (
+          <span id={descriptionId} className="tw:sr-only">
+            {description}
+          </span>
+        ) : null}
+        {children(binding)}
+        {validation ? (
+          <FieldValidationMessage
+            id={validationId}
+            validation={validation}
+          />
+        ) : null}
+      </div>
+    );
+  }
+
   return (
     <label className="tw:grid tw:min-w-0 tw:gap-1.5 tw:text-sm tw:font-medium tw:text-muted-foreground tw:[&>input]:w-full tw:[&>select]:w-full tw:[&>textarea]:w-full">
       <span className="tw:inline-flex tw:min-w-0 tw:items-center tw:gap-1 tw:[overflow-wrap:anywhere]">
@@ -58,15 +148,53 @@ export function PropertyRow({
   label,
   htmlFor,
   hint,
+  description,
   validation,
   children,
 }: {
   label: ReactNode;
   htmlFor?: string;
   hint?: ReactNode;
+  description?: ReactNode;
   validation?: FieldValidation;
-  children: ReactNode;
+  children: FieldChildren;
 }) {
+  const generatedId = useId();
+  const controlId = htmlFor ?? `${generatedId}-control`;
+  const descriptionId = description ? `${generatedId}-description` : undefined;
+  const validationId = validation ? `${generatedId}-validation` : undefined;
+
+  if (typeof children === "function") {
+    const binding = fieldControlBinding({
+      controlId,
+      descriptionId,
+      validationId,
+      validation,
+    });
+    return (
+      <div className="tw:grid tw:min-h-control-md tw:min-w-0 tw:grid-cols-[100px_minmax(0,1fr)] tw:items-start tw:gap-x-3 tw:gap-y-1.5 tw:@max-[560px]:grid-cols-1">
+        <div className="tw:inline-flex tw:min-h-control-md tw:min-w-0 tw:items-center tw:gap-1 tw:text-sm tw:text-foreground tw:[overflow-wrap:anywhere] tw:@max-[560px]:min-h-0">
+          <label htmlFor={controlId}>{label}</label>
+          {hint}
+        </div>
+        <div className="tw:grid tw:min-w-0 tw:gap-1.5 tw:[&>input]:w-full tw:[&>select]:w-full tw:[&>textarea]:w-full">
+          {description ? (
+            <span id={descriptionId} className="tw:sr-only">
+              {description}
+            </span>
+          ) : null}
+          {children(binding)}
+          {validation ? (
+            <FieldValidationMessage
+              id={validationId}
+              validation={validation}
+            />
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="tw:grid tw:min-h-control-md tw:min-w-0 tw:grid-cols-[100px_minmax(0,1fr)] tw:items-start tw:gap-x-3 tw:gap-y-1.5 tw:@max-[560px]:grid-cols-1">
       <label
