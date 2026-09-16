@@ -1,3 +1,6 @@
+// Renders one database subtree as a flat virtualized row list. It owns only the
+// local open/closed view state — expanded tables, collapsed schemas and metadata
+// sections — while catalog data, load issues and search matches cross as props.
 import {
   useCallback,
   useEffect,

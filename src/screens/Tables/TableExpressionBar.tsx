@@ -1,3 +1,6 @@
+// WHERE and ORDER BY entry for the table grid. Typed text is kept apart from the
+// applied text so a pending edit stays visible, and an expression the shared
+// clause validator rejects can never be applied.
 import { Icon } from "../../components/Icon";
 import { Button } from "../../design-system/components/Button";
 import { useI18n } from "../../lib/i18n";

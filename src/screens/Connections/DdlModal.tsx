@@ -1,3 +1,6 @@
+// Read-only viewer for one relation's generated DDL. The text is fetched and
+// copied by useTableDdl, so this dialog only renders the loading, error and
+// copied states that hook reports.
 import LazySqlViewer from "../../components/LazySqlViewer";
 import { Button } from "../../design-system/components/Button";
 import {

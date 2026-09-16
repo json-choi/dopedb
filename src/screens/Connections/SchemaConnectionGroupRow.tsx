@@ -1,3 +1,6 @@
+// Header row for a group of connections compared against one baseline. The
+// added/missing/changed counts are derived from the catalogs handed in, and stay
+// unreported until every non-baseline member of the group has actually loaded.
 import type { ReactNode } from "react";
 
 import EngineMark from "../../components/EngineMark";

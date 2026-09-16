@@ -1,3 +1,5 @@
+// Read-only column, index and foreign-key summary for one catalog relation. It
+// renders the catalog snapshot it is given and never fetches or refreshes it.
 import type { CatalogTable } from "../../ipc/types";
 import { useI18n } from "../../lib/i18n";
 

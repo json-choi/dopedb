@@ -1,3 +1,6 @@
+// Owns which (connection, database) targets the explorer asked to load. Database
+// lists load eagerly while the relation overview and the full metadata catalog
+// stay opt-in per target, and every target set resets when the scope key changes.
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQueries, useQueryClient } from "@tanstack/react-query";
 

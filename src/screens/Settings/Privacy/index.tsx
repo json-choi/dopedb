@@ -1,3 +1,6 @@
+// Consent surface for product analytics. The stored decision lives in the
+// analytics client, so this screen holds only the in-flight request and its
+// failure, and keeps the control usable when consent was already granted.
 import { useState } from "react";
 
 import { Button } from "../../../design-system/components/Button";

@@ -1,3 +1,6 @@
+// Right-hand inspector for the table grid: row editor, delete confirmation,
+// staged-write review and cell inspection, one at a time. Only the drag-resizable
+// width is local and device-persisted; every write decision leaves as a callback.
 import {
   useState,
   type CSSProperties,

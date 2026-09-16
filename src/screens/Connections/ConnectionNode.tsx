@@ -1,3 +1,6 @@
+// The explorer row for one saved connection: badge, row menu, and the nested
+// database subtrees. It owns no connection or catalog state — refresh, delete,
+// unbind, schema scope and drag reorder are all raised as callbacks.
 import type {
   PointerEvent,
   RefObject,

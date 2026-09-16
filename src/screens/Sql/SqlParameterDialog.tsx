@@ -1,3 +1,6 @@
+// Collects one value per named SQL parameter before a run, explain or apply.
+// Values leave as a name/value map for the caller to bind, never spliced into the
+// statement here, and submission stays blocked until every parameter has a value.
 import { useMemo, useState, type FormEvent } from "react";
 
 import {

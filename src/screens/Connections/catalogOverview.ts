@@ -1,3 +1,6 @@
+// Bridges the cheap relation overview and the last persisted full-catalog
+// snapshot into one Catalog. The live overview stays authoritative for relation
+// identity, so a detail row is reused only when its kind and native id match.
 import type {
   Catalog,
   CatalogOverview,

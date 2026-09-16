@@ -1,3 +1,6 @@
+// Document-engine variant of the table grid: paged documents are flattened into
+// grid columns for the shared result surface. Page position is the only state it
+// owns, and the row and count queries stay keyed per collection.
 import { useMemo } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 

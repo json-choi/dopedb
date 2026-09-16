@@ -1,3 +1,6 @@
+// Page navigation for a result surface that may not know its total. With a total
+// it computes the last page; without one it infers "has next" from a full page of
+// rows, so an uncounted source still pages forward without claiming a total.
 import type { ReactNode } from "react";
 
 import { Icon } from "../../components/Icon";

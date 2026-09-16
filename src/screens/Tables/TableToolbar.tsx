@@ -1,3 +1,6 @@
+// Command row above the table grid: paging, edit and delete, staged-write review,
+// filter clearing, export and manual transaction controls. It renders the
+// capability and count props it receives and owns no table state of its own.
 import { Icon } from "../../components/Icon";
 import ToolbarMenu, {
   ToolbarMenuItem,

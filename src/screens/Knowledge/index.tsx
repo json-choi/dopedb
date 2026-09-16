@@ -1,3 +1,6 @@
+// Composition root for the Knowledge screen. It owns the project/environment
+// selection and the in-flight form fields only; sources, repositories and
+// environment connections stay server state read through TanStack Query.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 

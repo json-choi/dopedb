@@ -1,3 +1,6 @@
+// Presents one updater snapshot: phase icon, tone, progress, and the action that
+// phase allows. The updater controller owns the state machine and the download,
+// so this screen only calls back and never advances a phase itself.
 import { openUrl } from "@tauri-apps/plugin-opener";
 
 import { Icon, type IconName } from "../../../components/Icon";

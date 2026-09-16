@@ -1,3 +1,6 @@
+// Per-connection view of a schema group's diff: resolves the group baseline,
+// compares against it, and renders the trigger chip. It yields null rather than a
+// zero diff when there is no comparable baseline or a catalog is still unloaded.
 import type { Catalog } from "../../ipc/types";
 import type { ConnectionProfile } from "../../features/connections/domain";
 import {
