@@ -37,7 +37,7 @@
     },
     "src/features/workbench/state.test.ts": {
       "tests": 4,
-      "protects": "Workbench document identity, save ownership, SQL resolve context, mutually exclusive AppShell route transitions, first-connection Test/engine/Demo contracts including managed BigQuery tooling, typed authentication recovery, and discovered-resource selector fallback, immutable Analysis snapshot controls, editable-target-safe Action Search shortcuts, Project-level Explorer resource flattening with exact Environment DB badges, member-local drag ordering with contiguous prod/dev schema groups, preferred-Environment Databases-folder drops, and exact shared-connection replacement receipts, 5,000-item loaded-only Explorer search and tree keyboard navigation, common modal title-only native drag isolation, durable Knowledge sync progress projection, and app-lifetime updater single-flight, retry, progress, relaunch, and resource cleanup; Desktop and CLI schema diff parity against one canonical environment fixture"
+      "protects": "Workbench document identity, save ownership, SQL resolve context, mutually exclusive AppShell route transitions, first-connection Test/engine/Demo contracts including managed BigQuery tooling, typed authentication recovery, and discovered-resource selector fallback, immutable Analysis snapshot controls, editable-target-safe Action Search shortcuts, Project-level Explorer resource flattening with exact Environment DB badges, member-local drag ordering with contiguous prod/dev schema groups, preferred-Environment Databases-folder drops, and exact shared-connection replacement receipts, 5,000-item loaded-only Explorer search and tree keyboard navigation, common modal title-only native drag isolation, durable Knowledge sync progress projection, and app-lifetime updater single-flight, retry, progress, relaunch, and resource cleanup; Desktop and CLI schema diff parity against one canonical environment fixture; classified connection-failure receipts reaching the Explorer tree instead of raw driver or configuration text, with unknown wire codes rejected and recovery routed to retry only where retrying can work"
     },
     "src/features/workspaces/authPolicy.test.ts": {
       "tests": 3,
@@ -67,7 +67,7 @@
     },
     "src-tauri/src/features/queries/domain_tests.rs": {
       "tests": 1,
-      "protects": "Production guidance, namespace safety, current Services result shape, ephemeral table-page retention, exact fail-closed Skill installation/conflict handling, credential-free cross-platform Agent CLI probing, official ACP model/permission-mode allowlists without default escalation, secret-free typed connection-test receipts, and redacted non-retryable database timeout/cancellation classification across query, Article, and target operations"
+      "protects": "Production guidance, namespace safety, current Services result shape, ephemeral table-page retention, exact fail-closed Skill installation/conflict handling, credential-free cross-platform Agent CLI probing, official ACP model/permission-mode allowlists without default escalation, secret-free typed connection-test receipts shared by every failure exposure path, SSH tunnel causes classified without letting OS ssh output reach the wire, and redacted non-retryable database timeout/cancellation classification across query, Article, and target operations"
     },
     "src-tauri/src/operations/canonicalize.rs": {
       "tests": 3,

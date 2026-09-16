@@ -56,6 +56,7 @@ import {
 import { queryServiceSessionProjection } from "../queryServices/useQueryServices";
 import { parseDocumentLimit } from "../../screens/Documents";
 import {
+  connectionTestFailureAction,
   connectionTestFailureRecovery,
   connectionTestFailureTarget,
   connectionTestFailureTitle,
@@ -876,9 +877,46 @@ describe("workbench state ownership", () => {
       distinctCatalogDetailIssue(expiredAuthentication, {
         kind: "network",
         message: "another failure",
+        failure: null,
       }),
-    ).toEqual({ kind: "network", message: "another failure" });
+    ).toEqual({ kind: "network", message: "another failure", failure: null });
     expect(expiredAuthentication.message).not.toContain("config error:");
+    // The tree renders the classified receipt, never the developer-facing
+    // `message`, so a configuration value or driver string cannot reach it.
+    const rejectedConfiguration = catalogLoadIssue({
+      kind: "config",
+      message: "config error: password=must-not-reach-the-tree",
+      connectionFailure: {
+        code: "databaseConfig",
+        field: "database",
+        detail: "the driver rejected the connection configuration",
+      },
+    });
+    expect(rejectedConfiguration.failure).toEqual({
+      code: "databaseConfig",
+      field: "database",
+      detail: "the driver rejected the connection configuration",
+    });
+    expect(connectionTestFailureAction("databaseConfig")).toBe("edit");
+    expect(connectionTestFailureAction("authentication")).toBe("edit");
+    expect(connectionTestFailureAction("sshAuthentication")).toBe("edit");
+    expect(connectionTestFailureAction("timeoutNetwork")).toBe("retry");
+    expect(connectionTestFailureAction("sshTimeout")).toBe("retry");
+    expect(
+      connectionTestFailureTarget({
+        code: "sshHostKey",
+        field: "sshAlias",
+        detail: "the SSH host key could not be verified",
+      }),
+    ).toEqual({ tab: "sshSsl", fieldId: "connection-ssh-alias" });
+    // An unrecognized wire value is rejected rather than rendered as an enum.
+    expect(
+      catalogLoadIssue({
+        kind: "db",
+        message: "database error: driver text",
+        connectionFailure: { code: "notAKnownCode", field: null, detail: "x" },
+      }).failure,
+    ).toBeNull();
     expect(
       isAuthenticationRequired(catalogLoadIssue(new Error("network"))),
     ).toBe(false);

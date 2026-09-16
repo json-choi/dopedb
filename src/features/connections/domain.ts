@@ -101,17 +101,32 @@ export function databaseDisplayLabel(
   return segments[segments.length - 1] ?? value;
 }
 
+export const CONNECTION_TEST_FAILURE_CODES = [
+  "timeoutNetwork",
+  "authentication",
+  "tls",
+  "databaseConfig",
+  "sshLaunch",
+  "sshHost",
+  "sshAuthentication",
+  "sshHostKey",
+  "sshTimeout",
+  "sshUnclassified",
+  "unknown",
+] as const;
+
 export type ConnectionTestFailureCode =
-  | "timeoutNetwork"
-  | "authentication"
-  | "tls"
-  | "databaseConfig"
-  | "unknown";
+  (typeof CONNECTION_TEST_FAILURE_CODES)[number];
+
+export const CONNECTION_TEST_FAILURE_FIELDS = [
+  "credentials",
+  "tls",
+  "database",
+  "sshAlias",
+] as const;
 
 export type ConnectionTestFailureField =
-  | "credentials"
-  | "tls"
-  | "database";
+  (typeof CONNECTION_TEST_FAILURE_FIELDS)[number];
 
 export interface ConnectionTestFailure {
   code: ConnectionTestFailureCode;
@@ -122,6 +137,37 @@ export interface ConnectionTestFailure {
 export type ConnectionTestReceipt =
   | { ok: true; failure: null }
   | { ok: false; failure: ConnectionTestFailure };
+
+/**
+ * Read the classified failure Rust attaches to a failed connection attempt.
+ *
+ * Every path that reports a connection failure reads this instead of the
+ * `AppError` message, which is a developer-facing rendering that may quote
+ * driver text or a configuration value. Unknown wire values are rejected rather
+ * than passed through, so the screen never renders an internal enum.
+ */
+export function connectionFailureFromError(
+  error: unknown,
+): ConnectionTestFailure | null {
+  if (!error || typeof error !== "object") return null;
+  const payload = (error as { connectionFailure?: unknown }).connectionFailure;
+  if (!payload || typeof payload !== "object") return null;
+  const { code, field, detail } = payload as Record<string, unknown>;
+  if (
+    !CONNECTION_TEST_FAILURE_CODES.includes(code as ConnectionTestFailureCode)
+  ) {
+    return null;
+  }
+  return {
+    code: code as ConnectionTestFailureCode,
+    field: CONNECTION_TEST_FAILURE_FIELDS.includes(
+      field as ConnectionTestFailureField,
+    )
+      ? (field as ConnectionTestFailureField)
+      : null,
+    detail: typeof detail === "string" ? detail : "",
+  };
+}
 
 export type ConnectionAccessIssue = "grant" | "credentials";
 

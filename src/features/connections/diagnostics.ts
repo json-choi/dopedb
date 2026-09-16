@@ -29,6 +29,7 @@ export type ConnectionDiagnosticCode =
   | "hostInvalid"
   | "portInvalid"
   | "sqliteFileRequired"
+  | "databaseRequired"
   | "mongoDatabaseRequired"
   | "bigQueryProjectRequired"
   | "bigQueryProjectInvalid"
@@ -190,13 +191,16 @@ export function diagnoseConnection(
         issue("portInvalid", "danger", "connection-port"),
       );
     }
-    if (
-      profile.engine === "mongodb" &&
-      !profile.database.trim()
-    ) {
+    // Every non-SQLite engine resolves a target database name before it opens a
+    // pool, and `resolve_target_database` rejects an empty one, so a profile saved
+    // without it can never be opened from the Explorer. Discovery does not need the
+    // field, which is why it stays reachable while this diagnostic stands.
+    if (!profile.database.trim()) {
       diagnostics.push(
         issue(
-          "mongoDatabaseRequired",
+          profile.engine === "mongodb"
+            ? "mongoDatabaseRequired"
+            : "databaseRequired",
           "danger",
           "connection-database",
         ),

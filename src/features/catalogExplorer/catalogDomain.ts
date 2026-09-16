@@ -6,7 +6,11 @@ import {
   type CatalogObjectKind,
   type CatalogTable,
 } from "../../ipc/types";
-import type { ConnectionProfile } from "../connections/domain";
+import {
+  connectionFailureFromError,
+  type ConnectionProfile,
+  type ConnectionTestFailure,
+} from "../connections/domain";
 import type { IconName } from "../../components/Icon";
 
 export type DropTarget =
@@ -36,11 +40,21 @@ export type ProjectDatabaseOrderDrag = {
   nextBlockBindingId: string | null;
 };
 
-export type CatalogLoadIssue = Pick<AppErrorDetails, "kind" | "message">;
+/**
+ * A failed catalog read, reduced to what the tree may show.
+ *
+ * `failure` is the classified receipt Rust attaches to the error and is the only
+ * part rendered: `message` is a developer-facing rendering that can carry driver
+ * text or a configuration value, so it stays available for deduplication but
+ * never reaches the screen.
+ */
+export type CatalogLoadIssue = Pick<AppErrorDetails, "kind" | "message"> & {
+  failure: ConnectionTestFailure | null;
+};
 
 export function catalogLoadIssue(error: unknown): CatalogLoadIssue {
   const { kind, message } = errDetails(error);
-  return { kind, message };
+  return { kind, message, failure: connectionFailureFromError(error) };
 }
 
 export function isAuthenticationRequired(

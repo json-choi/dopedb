@@ -4,6 +4,13 @@
 //! passphrases, agents, ProxyJump, and host-key policy remain in the user's
 //! OpenSSH configuration. A profile therefore stores one non-secret Host alias
 //! and never accepts key paths or SSH credentials.
+//!
+//! OS `ssh` output is untrusted input. It may quote a passphrase prompt, a private
+//! key path, a remote banner, or anything else the far side chose to print, and a
+//! control-character filter is not redaction. This module is the only place that
+//! reads it: it matches a closed allowlist of well-known OpenSSH phrases, returns
+//! one [`SshTunnelFailure`] cause, and drops the text. Nothing else — wire payload,
+//! screen, audit trail, or log — ever sees it.
 
 use std::path::Path;
 use std::process::Stdio;
@@ -18,6 +25,7 @@ use tokio::task::JoinHandle;
 use tokio::time::{sleep, Instant};
 
 use crate::error::{AppError, AppResult};
+use crate::kernel::connection_failure::SshTunnelFailure;
 use crate::model::{ConnectionProfile, Engine};
 
 pub(crate) const SSH_ALIAS_PARAMETER: &str = "dopedb.sshAlias";
@@ -111,25 +119,76 @@ fn remote_forward_host(host: &str) -> String {
     }
 }
 
-fn clean_ssh_error(bytes: &[u8]) -> String {
-    let text = String::from_utf8_lossy(bytes);
-    text.chars()
-        .filter(|character| *character == '\n' || *character == '\t' || !character.is_control())
-        .collect::<String>()
-        .trim()
-        .to_owned()
+/// Well-known OpenSSH phrases, lowercase and ASCII. A marker is added only when the
+/// cause it implies is unambiguous; everything else stays `Unclassified` so a remote
+/// banner cannot steer the recovery advice DopeDB shows.
+const SSH_HOST_KEY_MARKERS: [&str; 3] = [
+    "host key verification failed",
+    "remote host identification has changed",
+    "no matching host key type",
+];
+const SSH_AUTHENTICATION_MARKERS: [&str; 6] = [
+    "permission denied",
+    "too many authentication failures",
+    "no supported authentication methods",
+    "incorrect passphrase",
+    "bad passphrase",
+    "unprotected private key file",
+];
+const SSH_HOST_MARKERS: [&str; 7] = [
+    "could not resolve hostname",
+    "name or service not known",
+    "nodename nor servname",
+    "no address associated with hostname",
+    "connection refused",
+    "no route to host",
+    "network is unreachable",
+];
+const SSH_TIMEOUT_MARKERS: [&str; 2] = ["connection timed out", "operation timed out"];
+const SSH_LAUNCH_MARKERS: [&str; 3] = [
+    "bad configuration option",
+    "bad local forwarding specification",
+    "address already in use",
+];
+
+/// Reduce untrusted OS `ssh` output to one stable cause. The returned value is the
+/// only thing derived from that output; the text itself is discarded here.
+fn classify_ssh_output(output: &str) -> SshTunnelFailure {
+    let text = output.to_ascii_lowercase();
+    let matches = |markers: &[&str]| markers.iter().any(|marker| text.contains(marker));
+    if matches(&SSH_HOST_KEY_MARKERS) {
+        SshTunnelFailure::HostKey
+    } else if matches(&SSH_AUTHENTICATION_MARKERS) {
+        SshTunnelFailure::Authentication
+    } else if matches(&SSH_TIMEOUT_MARKERS) {
+        SshTunnelFailure::Timeout
+    } else if matches(&SSH_HOST_MARKERS) {
+        SshTunnelFailure::Host
+    } else if matches(&SSH_LAUNCH_MARKERS) {
+        SshTunnelFailure::Launch
+    } else {
+        SshTunnelFailure::Unclassified
+    }
 }
 
-async fn captured_error(stderr: &Arc<Mutex<Vec<u8>>>) -> String {
-    clean_ssh_error(&stderr.lock().await)
+async fn captured_cause(
+    stderr: &Arc<Mutex<Vec<u8>>>,
+    fallback: SshTunnelFailure,
+) -> SshTunnelFailure {
+    let captured = stderr.lock().await;
+    let text = String::from_utf8_lossy(&captured);
+    if text.trim().is_empty() {
+        fallback
+    } else {
+        classify_ssh_output(&text)
+    }
 }
 
 async fn fail_start(
     child: &mut Child,
     stderr_task: &JoinHandle<()>,
     stderr: &Arc<Mutex<Vec<u8>>>,
-    alias: &str,
-    reason: &str,
+    fallback: SshTunnelFailure,
 ) -> AppError {
     let _ = child.start_kill();
     let _ = child.wait().await;
@@ -139,13 +198,7 @@ async fn fail_start(
         }
         sleep(Duration::from_millis(5)).await;
     }
-    let detail = captured_error(stderr).await;
-    let message = if detail.is_empty() {
-        format!("system ssh could not open Host alias {alias:?}: {reason}")
-    } else {
-        format!("system ssh could not open Host alias {alias:?}: {detail}")
-    };
-    AppError::Network(message)
+    AppError::SshTunnel(captured_cause(stderr, fallback).await)
 }
 
 /// Start one local forward for the target profile and return a driver projection
@@ -171,11 +224,9 @@ async fn open_with_program(
         });
     };
 
-    let listener = TcpListener::bind(("127.0.0.1", 0)).await.map_err(|error| {
-        AppError::Network(format!(
-            "could not reserve a local port for SSH Host alias {alias:?}: {error}"
-        ))
-    })?;
+    let listener = TcpListener::bind(("127.0.0.1", 0))
+        .await
+        .map_err(|_| AppError::SshTunnel(SshTunnelFailure::Launch))?;
     let local_port = listener.local_addr()?.port();
     drop(listener);
 
@@ -202,11 +253,9 @@ async fn open_with_program(
         .arg(forward)
         .arg("--")
         .arg(alias);
-    let mut child = command.spawn().map_err(|error| {
-        AppError::Network(format!(
-            "could not start the system ssh client for Host alias {alias:?}: {error}"
-        ))
-    })?;
+    let mut child = command
+        .spawn()
+        .map_err(|_| AppError::SshTunnel(SshTunnelFailure::Launch))?;
     let stderr = Arc::new(Mutex::new(Vec::new()));
     let stderr_capture = Arc::clone(&stderr);
     let mut stderr_reader = child
@@ -230,17 +279,16 @@ async fn open_with_program(
 
     let deadline = Instant::now() + SSH_START_TIMEOUT;
     loop {
-        if let Some(status) = child.try_wait().map_err(|error| {
-            AppError::Network(format!(
-                "could not inspect system ssh for Host alias {alias:?}: {error}"
-            ))
-        })? {
+        if child
+            .try_wait()
+            .map_err(|_| AppError::SshTunnel(SshTunnelFailure::Unclassified))?
+            .is_some()
+        {
             return Err(fail_start(
                 &mut child,
                 &stderr_task,
                 &stderr,
-                alias,
-                &format!("process exited with {status}"),
+                SshTunnelFailure::Unclassified,
             )
             .await);
         }
@@ -248,14 +296,9 @@ async fn open_with_program(
             break;
         }
         if Instant::now() >= deadline {
-            return Err(fail_start(
-                &mut child,
-                &stderr_task,
-                &stderr,
-                alias,
-                "the local forward did not become ready within 10 seconds",
-            )
-            .await);
+            return Err(
+                fail_start(&mut child, &stderr_task, &stderr, SshTunnelFailure::Timeout).await,
+            );
         }
         sleep(SSH_POLL_INTERVAL).await;
     }
@@ -269,4 +312,64 @@ async fn open_with_program(
         profile,
         tunnel: Some(SshTunnel { child, stderr_task }),
     })
+}
+
+#[cfg(test)]
+pub(crate) fn assert_ssh_failure_classification_contract() {
+    use crate::kernel::connection_failure::{
+        classify_connection_failure, ConnectionFailureCode, ConnectionFailureField,
+    };
+
+    assert_eq!(
+        classify_ssh_output("Host key verification failed."),
+        SshTunnelFailure::HostKey,
+    );
+    assert_eq!(
+        classify_ssh_output("dopedb@10.0.0.4: Permission denied (publickey,password)."),
+        SshTunnelFailure::Authentication,
+    );
+    assert_eq!(
+        classify_ssh_output(
+            "ssh: Could not resolve hostname prod-jump: nodename nor servname provided"
+        ),
+        SshTunnelFailure::Host,
+    );
+    assert_eq!(
+        classify_ssh_output("ssh: connect to host 10.0.0.4 port 22: Operation timed out"),
+        SshTunnelFailure::Timeout,
+    );
+    assert_eq!(
+        classify_ssh_output("command-line: line 0: Bad configuration option: foo"),
+        SshTunnelFailure::Launch,
+    );
+    // An unrecognized remote banner must not be steered into a specific recovery.
+    assert_eq!(
+        classify_ssh_output("Welcome to the corporate gateway. Ticket required."),
+        SshTunnelFailure::Unclassified,
+    );
+
+    // Whatever the far side prints — fake secrets, credential URLs, private paths,
+    // control characters, or a very long banner — must not reach the wire payload.
+    let hostile = format!(
+        "Permission denied\npassword=hunter2\ntoken=ghp_000000000000\n\
+         postgres://admin:hunter2@10.0.0.4:5432/prod\n/Users/someone/.ssh/id_ed25519\n\u{7}\u{1b}[31m{}",
+        "A".repeat(8_192),
+    );
+    let cause = classify_ssh_output(&hostile);
+    assert_eq!(cause, SshTunnelFailure::Authentication);
+    let failure = classify_connection_failure(&AppError::SshTunnel(cause));
+    assert_eq!(failure.code, ConnectionFailureCode::SshAuthentication);
+    assert_eq!(failure.field, Some(ConnectionFailureField::SshAlias));
+    let wire = serde_json::to_string(&AppError::SshTunnel(cause)).unwrap();
+    for leaked in [
+        "hunter2",
+        "ghp_000000000000",
+        "postgres://",
+        "id_ed25519",
+        "AAAA",
+    ] {
+        assert!(!wire.contains(leaked), "ssh output leaked into {wire}");
+    }
+    assert!(wire.contains("\"kind\":\"sshTunnel\""));
+    assert!(wire.contains("\"code\":\"sshAuthentication\""));
 }

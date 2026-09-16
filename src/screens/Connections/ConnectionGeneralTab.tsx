@@ -1,7 +1,6 @@
 // Presents the General connection properties from narrow profile, driver, and
 // workspace-dialog view models without owning runtime queries or mutations.
 import { Icon } from "../../components/Icon";
-import InfoTip from "../../components/InfoTip";
 import { useEffect, useRef } from "react";
 import { Button } from "../../design-system/components/Button";
 import {
@@ -14,6 +13,7 @@ import {
 } from "../../design-system/components/FormControls";
 import { StatusBadge } from "../../design-system/components/Status";
 import type { ConnectionInputMode } from "../../features/connections/connectionEditorModel";
+import { connectionDatabaseDiscoveryStatusKey } from "../../features/connections/useConnectionDatabaseDiscovery";
 import type { ConnectionEditorController } from "../../features/connections/useConnectionEditorController";
 import { useI18n } from "../../lib/i18n";
 import { ConnectionBigQueryFields } from "./ConnectionBigQueryFields";
@@ -54,10 +54,14 @@ export function ConnectionGeneralTab({
     isMongo,
     isBigQuery,
     canEditConnection,
+    requiresDatabase,
     canDiscoverDatabases,
     srv,
     sqlSslModes,
   } = flags;
+
+  const discoveryStatusKey =
+    connectionDatabaseDiscoveryStatusKey(databaseDiscovery);
 
   useEffect(() => {
     if (databaseDiscovery.databases.length === 0) return;
@@ -401,11 +405,6 @@ export function ConnectionGeneralTab({
             label={t("connections.database")}
             htmlFor="connection-database"
             validation={validation.database}
-            hint={
-              isMongo ? (
-                <InfoTip label={t("connections.databaseRequiredHint")} />
-              ) : null
-            }
           >
             <div className="tw:grid tw:gap-1.5">
               <TextInput
@@ -420,7 +419,7 @@ export function ConnectionGeneralTab({
                     : undefined
                 }
                 disabled={!canEditConnection}
-                required={isMongo}
+                required={requiresDatabase}
                 aria-invalid={
                   validation.database?.tone === "danger" || undefined
                 }
@@ -436,6 +435,11 @@ export function ConnectionGeneralTab({
                     </option>
                   ))}
                 </datalist>
+              ) : null}
+              {canDiscoverDatabases && discoveryStatusKey ? (
+                <span className="tw:text-xs tw:text-muted-foreground" role="status">
+                  {t(discoveryStatusKey)}
+                </span>
               ) : null}
             </div>
           </PropertyRow>

@@ -1,8 +1,16 @@
 //! Typed error spine. Every fallible path in the crate returns [`AppError`], which
-//! serializes to a `{ kind, message, position? }` object so `#[tauri::command]` can
-//! hand a structured error straight to the frontend.
+//! serializes to a `{ kind, message, position?, connectionFailure? }` object so
+//! `#[tauri::command]` can hand a structured error straight to the frontend.
+//!
+//! `message` is a developer-facing `Display` rendering and may quote driver text or
+//! configuration values, so screens that report a failed connection read the
+//! classified `connectionFailure` payload instead. That payload is produced by the
+//! single classifier in [`crate::kernel::connection_failure`], which never carries
+//! secrets, connection URLs, or OS output.
 
 use thiserror::Error;
+
+use crate::kernel::connection_failure::{serializable_connection_failure, SshTunnelFailure};
 
 pub type AppResult<T> = Result<T, AppError>;
 
@@ -28,6 +36,12 @@ pub enum AppError {
     /// network failure so clients do not retry a still-running or expensive operation.
     #[error("timeout: {0}")]
     Timeout(String),
+
+    /// The system OpenSSH tunnel could not be opened. OS `ssh` output is untrusted
+    /// input: the transport classifies it into this cause at the boundary and drops
+    /// the text, so no stderr reaches the wire, a screen, or a log.
+    #[error("ssh tunnel error: {0}")]
+    SshTunnel(SshTunnelFailure),
 
     /// A safety-layer violation the DB or classifier rejected before execution.
     #[error("safety violation: {0}")]
@@ -100,6 +114,7 @@ impl AppError {
             AppError::Agent(_) => "agent",
             AppError::Network(_) => "network",
             AppError::Timeout(_) => "timeout",
+            AppError::SshTunnel(_) => "sshTunnel",
             AppError::Safety(_) => "safety",
             AppError::Parse(_) => "parse",
             AppError::Keychain(_) => "keychain",
@@ -137,7 +152,9 @@ impl AppError {
     }
 }
 
-// Serialize to `{ kind, message, position? }` so JS gets a typed, switchable error object.
+// Serialize to `{ kind, message, position?, connectionFailure? }` so JS gets a typed,
+// switchable error object. `connectionFailure` closes the bypass where a screen that
+// only has an `AppError` had to fall back to rendering the untranslated `message`.
 impl serde::Serialize for AppError {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -145,12 +162,18 @@ impl serde::Serialize for AppError {
     {
         use serde::ser::SerializeStruct;
         let position = self.position();
-        let mut st =
-            serializer.serialize_struct("AppError", 2 + usize::from(position.is_some()))?;
+        let connection_failure = serializable_connection_failure(self);
+        let mut st = serializer.serialize_struct(
+            "AppError",
+            2 + usize::from(position.is_some()) + usize::from(connection_failure.is_some()),
+        )?;
         st.serialize_field("kind", self.kind())?;
         st.serialize_field("message", &self.to_string())?;
         if let Some(p) = position {
             st.serialize_field("position", &p)?;
+        }
+        if let Some(failure) = connection_failure.as_ref() {
+            st.serialize_field("connectionFailure", failure)?;
         }
         st.end()
     }

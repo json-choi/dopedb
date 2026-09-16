@@ -151,7 +151,11 @@ export const connectionsCatalog = defineCatalog(
     "connections.dataSourcesAndDrivers": "Data Sources and Drivers",
     "connections.editData": "Edit Data",
     "connections.databaseFile": "Database file path",
-    "connections.databaseRequiredHint": "Required for MongoDB",
+    "connections.databaseDiscoveryPending": "Looking up databases on this server...",
+    "connections.databaseDiscoveryEmpty":
+      "Connected, but this server listed no database you can open.",
+    "connections.databaseDiscoveryFailed":
+      "Could not list databases. Check the connection settings above, then focus this field again.",
     "connections.bigQueryProjectId": "GCP project ID",
     "connections.bigQueryDataset": "Dataset",
     "connections.bigQueryAuthenticationMode": "Sign-in method",
@@ -268,6 +272,8 @@ export const connectionsCatalog = defineCatalog(
       "An SSH tunnel requires one database host.",
     "connections.problemSshTunnelSrvUnsupported":
       "MongoDB SRV discovery cannot use a single-host SSH tunnel.",
+    "connections.problemDatabaseRequired":
+      "Enter the database this connection opens.",
     "connections.problemMongoDatabaseRequired":
       "Enter the MongoDB database name.",
     "connections.problemBigQueryProjectRequired":
@@ -288,7 +294,7 @@ export const connectionsCatalog = defineCatalog(
     "connections.problemRuntime": "Connection check failed",
     "connections.testFailure.timeoutNetworkTitle": "Could not reach the database",
     "connections.testFailure.timeoutNetworkRecovery":
-      "Check the host, port, network access, and SSH Host alias, then test again.",
+      "Check the host, port, and network access, then test again.",
     "connections.testFailure.authenticationTitle": "Authentication failed",
     "connections.testFailure.authenticationRecovery":
       "Check the user and password stored on this device, then test again.",
@@ -298,6 +304,24 @@ export const connectionsCatalog = defineCatalog(
     "connections.testFailure.databaseConfigTitle": "Database configuration was rejected",
     "connections.testFailure.databaseConfigRecovery":
       "Check the database name and connection options, then test again.",
+    "connections.testFailure.sshLaunchTitle": "The SSH tunnel could not be started",
+    "connections.testFailure.sshLaunchRecovery":
+      "The system ssh client did not start. Check that OpenSSH is installed and that the Host alias entry in your SSH config is valid, then test again.",
+    "connections.testFailure.sshHostTitle": "The SSH Host alias could not be reached",
+    "connections.testFailure.sshHostRecovery":
+      "The system ssh client could not resolve or reach that Host alias. Check the alias spelling and its HostName and Port in your SSH config, then test again.",
+    "connections.testFailure.sshAuthenticationTitle": "The SSH server rejected the login",
+    "connections.testFailure.sshAuthenticationRecovery":
+      "DopeDB does not hold your SSH keys or passphrase. Connect once with the system ssh client to unlock the key or fix the account, then test again.",
+    "connections.testFailure.sshHostKeyTitle": "The SSH host key could not be verified",
+    "connections.testFailure.sshHostKeyRecovery":
+      "Verifying a host key is your decision, not the app's. Connect once with the system ssh client, confirm the fingerprint yourself, then test again.",
+    "connections.testFailure.sshTimeoutTitle": "The SSH tunnel did not become ready",
+    "connections.testFailure.sshTimeoutRecovery":
+      "The forward was not ready in time. Check that the SSH host and the database port are reachable, then test again.",
+    "connections.testFailure.sshUnclassifiedTitle": "The SSH tunnel failed",
+    "connections.testFailure.sshUnclassifiedRecovery":
+      "The system ssh client reported a cause DopeDB cannot identify. Run the same connection with the system ssh client to see its own output, then test again.",
     "connections.testFailure.unknownTitle": "Connection check failed",
     "connections.testFailure.unknownRecovery":
       "Review the technical details, correct the connection settings, and test again.",
@@ -608,7 +632,11 @@ export const connectionsCatalog = defineCatalog(
     "connections.dataSourcesAndDrivers": "데이터 소스 및 드라이버",
     "connections.editData": "데이터 편집",
     "connections.databaseFile": "데이터베이스 파일 경로",
-    "connections.databaseRequiredHint": "MongoDB에는 필수입니다",
+    "connections.databaseDiscoveryPending": "서버의 데이터베이스 목록을 찾는 중...",
+    "connections.databaseDiscoveryEmpty":
+      "연결했지만 열 수 있는 데이터베이스가 없습니다.",
+    "connections.databaseDiscoveryFailed":
+      "데이터베이스 목록을 가져오지 못했습니다. 위의 연결 설정을 확인한 뒤 이 칸에 다시 포커스하세요.",
     "connections.bigQueryProjectId": "GCP 프로젝트 ID",
     "connections.bigQueryDataset": "데이터셋",
     "connections.bigQueryAuthenticationMode": "로그인 방식",
@@ -724,6 +752,8 @@ export const connectionsCatalog = defineCatalog(
       "SSH 터널에는 데이터베이스 호스트 하나만 사용할 수 있습니다.",
     "connections.problemSshTunnelSrvUnsupported":
       "MongoDB SRV 검색은 단일 호스트 SSH 터널과 함께 사용할 수 없습니다.",
+    "connections.problemDatabaseRequired":
+      "이 연결이 열 데이터베이스 이름을 입력하세요.",
     "connections.problemMongoDatabaseRequired":
       "MongoDB 데이터베이스 이름을 입력하세요.",
     "connections.problemBigQueryProjectRequired":
@@ -744,7 +774,7 @@ export const connectionsCatalog = defineCatalog(
     "connections.problemRuntime": "연결 검사 실패",
     "connections.testFailure.timeoutNetworkTitle": "데이터베이스에 연결할 수 없습니다",
     "connections.testFailure.timeoutNetworkRecovery":
-      "호스트, 포트, 네트워크 접근과 SSH Host 별칭을 확인한 뒤 다시 테스트하세요.",
+      "호스트, 포트, 네트워크 접근을 확인한 뒤 다시 테스트하세요.",
     "connections.testFailure.authenticationTitle": "인증에 실패했습니다",
     "connections.testFailure.authenticationRecovery":
       "이 기기에 저장된 사용자와 비밀번호를 확인한 뒤 다시 테스트하세요.",
@@ -754,6 +784,24 @@ export const connectionsCatalog = defineCatalog(
     "connections.testFailure.databaseConfigTitle": "데이터베이스 설정이 거부되었습니다",
     "connections.testFailure.databaseConfigRecovery":
       "데이터베이스 이름과 연결 옵션을 확인한 뒤 다시 테스트하세요.",
+    "connections.testFailure.sshLaunchTitle": "SSH 터널을 시작하지 못했습니다",
+    "connections.testFailure.sshLaunchRecovery":
+      "시스템 ssh 클라이언트가 시작되지 않았습니다. OpenSSH가 설치되어 있는지와 SSH config의 Host 별칭 항목이 올바른지 확인한 뒤 다시 테스트하세요.",
+    "connections.testFailure.sshHostTitle": "SSH Host 별칭에 접속하지 못했습니다",
+    "connections.testFailure.sshHostRecovery":
+      "시스템 ssh 클라이언트가 그 Host 별칭을 해석하거나 접속하지 못했습니다. 별칭 철자와 SSH config의 HostName, Port를 확인한 뒤 다시 테스트하세요.",
+    "connections.testFailure.sshAuthenticationTitle": "SSH 서버가 로그인을 거부했습니다",
+    "connections.testFailure.sshAuthenticationRecovery":
+      "DopeDB는 SSH 키와 passphrase를 대신 보관하지 않습니다. 시스템 ssh 클라이언트로 한 번 접속해 키를 해제하거나 계정을 고친 뒤 다시 테스트하세요.",
+    "connections.testFailure.sshHostKeyTitle": "SSH 호스트 키를 검증하지 못했습니다",
+    "connections.testFailure.sshHostKeyRecovery":
+      "호스트 키 확인은 앱이 아니라 사용자의 결정입니다. 시스템 ssh 클라이언트로 한 번 접속해 지문을 직접 확인한 뒤 다시 테스트하세요.",
+    "connections.testFailure.sshTimeoutTitle": "SSH 터널이 준비되지 않았습니다",
+    "connections.testFailure.sshTimeoutRecovery":
+      "정해진 시간 안에 포워딩이 준비되지 않았습니다. SSH 호스트와 데이터베이스 포트에 접근할 수 있는지 확인한 뒤 다시 테스트하세요.",
+    "connections.testFailure.sshUnclassifiedTitle": "SSH 터널이 실패했습니다",
+    "connections.testFailure.sshUnclassifiedRecovery":
+      "시스템 ssh 클라이언트가 DopeDB가 식별할 수 없는 원인을 알렸습니다. 같은 연결을 시스템 ssh 클라이언트로 직접 실행해 출력을 확인한 뒤 다시 테스트하세요.",
     "connections.testFailure.unknownTitle": "연결 검사에 실패했습니다",
     "connections.testFailure.unknownRecovery":
       "기술 상세를 확인하고 연결 설정을 수정한 뒤 다시 테스트하세요.",

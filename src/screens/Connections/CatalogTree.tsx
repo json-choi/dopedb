@@ -67,6 +67,7 @@ type Props = {
   onRequestDetails: () => void;
   onRetryOverview: () => void;
   onResolveAccess?: () => void;
+  onEditConnection?: () => void;
   onRecoverAuthentication?: () => void;
   onRecoverManagedConnection?: () => void;
   managedConnectionRecoveryPending?: boolean;
@@ -735,6 +736,7 @@ export default function CatalogTree(props: Props) {
         {databaseVisible ? (
           <div className="tw:flex tw:flex-col tw:gap-px tw:pl-3">
             <CatalogTreeStatus
+              connection={connection}
               accessIssue={accessIssue}
               error={error}
               detailError={detailError}
@@ -757,6 +759,7 @@ export default function CatalogTree(props: Props) {
               }
               authenticationRecoveryError={props.authenticationRecoveryError}
               onResolveAccess={props.onResolveAccess}
+              onEditConnection={props.onEditConnection}
               onRecoverAuthentication={props.onRecoverAuthentication}
               onRecoverManagedConnection={props.onRecoverManagedConnection}
               managedConnectionRecoveryPending={

@@ -269,7 +269,9 @@ pub(super) fn map_target_error(error: AppError) -> ErrorCode {
         | AppError::Config(_)
         | AppError::Parse(_) => ErrorCode::InvalidRequest,
         AppError::Db(_) | AppError::Timeout(_) => map_query_execution_error(&error),
-        AppError::Mongo(_) | AppError::Network(_) => ErrorCode::TargetExecutionFailed,
+        AppError::Mongo(_) | AppError::Network(_) | AppError::SshTunnel(_) => {
+            ErrorCode::TargetExecutionFailed
+        }
         _ => ErrorCode::Internal,
     }
 }
@@ -299,6 +301,7 @@ pub(super) fn map_application_error(error: AppError) -> ErrorCode {
         AppError::OutcomeUnknown(_) => ErrorCode::OperationConflict,
         AppError::Agent(_)
         | AppError::Network(_)
+        | AppError::SshTunnel(_)
         | AppError::Keychain(_)
         | AppError::Io(_)
         | AppError::Serialization(_) => ErrorCode::Internal,

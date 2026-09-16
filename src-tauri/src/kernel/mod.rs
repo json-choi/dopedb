@@ -2,6 +2,7 @@
 
 pub(crate) mod access;
 pub(crate) mod agent_policy;
+pub(crate) mod connection_failure;
 pub(crate) mod identity;
 pub(crate) mod sql_namespace;
 pub(crate) mod sync;

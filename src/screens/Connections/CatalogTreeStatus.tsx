@@ -1,4 +1,8 @@
 // Renders the database tree's mutually exclusive access, load, and empty states.
+// A failed read is shown through the same classified receipt the connection
+// editor uses, so the tree never renders an untranslated driver or OS string.
+import type { ReactNode } from "react";
+
 import { Button } from "../../design-system/components/Button";
 import { LoadingLabel } from "../../design-system/components/Status";
 import { TreeInlineStatus } from "../../design-system/components/TreeControls";
@@ -8,13 +12,20 @@ import {
   isManagedConnectionRecoveryRequired,
   type CatalogLoadIssue,
 } from "../../features/catalogExplorer/catalogDomain";
+import {
+  connectionTestFailureAction,
+  connectionTestFailureRecovery,
+  connectionTestFailureTitle,
+} from "../../features/connections/connectionTestFailure";
 import type {
   BigQueryAuthMode,
   ConnectionAccessIssue,
+  ConnectionProfile,
 } from "../../features/connections/domain";
-import { useI18n } from "../../lib/i18n";
+import { useI18n, type I18nKey } from "../../lib/i18n";
 
 interface CatalogTreeStatusProps {
+  connection: Pick<ConnectionProfile, "credentialMode" | "workspaceAccess">;
   accessIssue?: ConnectionAccessIssue;
   error?: CatalogLoadIssue;
   detailError?: CatalogLoadIssue;
@@ -30,11 +41,55 @@ interface CatalogTreeStatusProps {
   onRecoverAuthentication?: () => void;
   onRecoverManagedConnection?: () => void;
   managedConnectionRecoveryPending?: boolean;
+  onEditConnection?: () => void;
   onRetryOverview: () => void;
   onRequestDetails: () => void;
 }
 
+/** Title and recovery sentence for a classified load failure. */
+function failureCopy(
+  t: (key: I18nKey) => string,
+  issue: CatalogLoadIssue,
+  connection: CatalogTreeStatusProps["connection"],
+) {
+  const code = issue.failure?.code ?? "unknown";
+  return {
+    code,
+    title: connectionTestFailureTitle(t, code, connection),
+    recovery: connectionTestFailureRecovery(t, code, connection),
+    detail: issue.failure?.detail ?? "",
+  };
+}
+
+function FailureBody({
+  title,
+  recovery,
+  detail,
+  detailsLabel,
+}: {
+  title: string;
+  recovery: string;
+  detail: string;
+  detailsLabel: string;
+}) {
+  return (
+    <span className="tw:grid tw:gap-0.5">
+      <strong className="tw:text-foreground">{title}</strong>
+      <span>{recovery}</span>
+      {detail ? (
+        <details className="tw:min-w-0">
+          <summary className="tw:cursor-pointer tw:text-muted-foreground">
+            {detailsLabel}
+          </summary>
+          <p className="tw:mt-1 tw:mb-0 tw:wrap-break-word">{detail}</p>
+        </details>
+      ) : null}
+    </span>
+  );
+}
+
 export function CatalogTreeStatus({
+  connection,
   accessIssue,
   error,
   detailError,
@@ -50,6 +105,7 @@ export function CatalogTreeStatus({
   onRecoverAuthentication,
   onRecoverManagedConnection,
   managedConnectionRecoveryPending = false,
+  onEditConnection,
   onRetryOverview,
   onRequestDetails,
 }: CatalogTreeStatusProps) {
@@ -79,24 +135,48 @@ export function CatalogTreeStatus({
           ? t("connections.bigQueryAuthenticationPermissionError")
           : t("connections.bigQueryAuthenticationFailed")
     : null;
-  const primaryErrorMessage = managedRecoveryIssue
-    ? canRecoverManagedConnection
+  const loadFailure =
+    !managedRecoveryIssue && !authenticationIssue && error
+      ? failureCopy(t, error, connection)
+      : null;
+  // Managed access and BigQuery keep their own provider recovery. Only a
+  // connection this member can actually edit here may offer the editor.
+  const canOpenEditor = Boolean(onEditConnection);
+  const primaryErrorBody: ReactNode = managedRecoveryIssue ? (
+    canRecoverManagedConnection
       ? t("connections.managedWorkspace.recoveryRequiredManagerCompact")
       : t("connections.managedWorkspace.recoveryRequiredMemberCompact")
-    : authenticationIssue
-      ? authenticationRecoveryMessage
-        ?? t("connections.bigQueryAuthenticationExpired")
-      : error?.message;
-  const uniqueDetailError = distinctCatalogDetailIssue(error, detailError);
+  ) : authenticationIssue ? (
+    authenticationRecoveryMessage ?? t("connections.bigQueryAuthenticationExpired")
+  ) : loadFailure ? (
+    <FailureBody
+      title={loadFailure.title}
+      recovery={loadFailure.recovery}
+      detail={loadFailure.detail}
+      detailsLabel={t("connections.testFailure.technicalDetails")}
+    />
+  ) : null;
+  const opensEditor = Boolean(
+    loadFailure &&
+      canOpenEditor &&
+      connectionTestFailureAction(loadFailure.code) === "edit",
+  );
   const primaryAction = canRecoverManagedConnection && onRecoverManagedConnection
     ? onRecoverManagedConnection
     : canRecoverAuthentication && onRecoverAuthentication
       ? onRecoverAuthentication
       : managedRecoveryIssue
         ? undefined
-        : onRetryOverview;
+        : opensEditor
+          ? onEditConnection
+          : onRetryOverview;
   const primaryActionPending = managedConnectionRecoveryPending
     || authenticationRecoveryPending;
+  const uniqueDetailError = distinctCatalogDetailIssue(error, detailError);
+  const detailFailure =
+    uniqueDetailError && !authenticationIssue && !managedRecoveryIssue
+      ? failureCopy(t, uniqueDetailError, connection)
+      : null;
   return (
     <>
       {accessIssue ? (
@@ -133,7 +213,7 @@ export function CatalogTreeStatus({
           </span>
         </TreeInlineStatus>
       ) : null}
-      {primaryErrorMessage ? (
+      {primaryErrorBody ? (
         <TreeInlineStatus
           tone="danger"
           icon="alert"
@@ -147,7 +227,7 @@ export function CatalogTreeStatus({
               role="treeitem"
               aria-level={treeLevel + 1}
               data-explorer-tree-item
-              data-explorer-tree-key={`${databaseTreeKey}:${canRecoverManagedConnection ? "recover-managed-connection" : canRecoverAuthentication ? "recover-authentication" : "retry-overview"}`}
+              data-explorer-tree-key={`${databaseTreeKey}:${canRecoverManagedConnection ? "recover-managed-connection" : canRecoverAuthentication ? "recover-authentication" : opensEditor ? "edit-connection" : "retry-overview"}`}
               data-explorer-tree-parent-key={databaseTreeKey}
               data-tree-primary-action
               tabIndex={-1}
@@ -162,14 +242,16 @@ export function CatalogTreeStatus({
                     : authenticationMode === "serviceAccount"
                       ? t("connections.bigQueryReplaceCredentialFile")
                       : t("connections.bigQueryReconnectGoogleAccount")
-                  : t("app.retry")}
+                  : opensEditor
+                    ? t("connections.edit")
+                    : t("app.retry")}
             </Button>
           ) : undefined}
         >
-          {primaryErrorMessage}
+          {primaryErrorBody}
         </TreeInlineStatus>
       ) : null}
-      {uniqueDetailError && !authenticationIssue && !managedRecoveryIssue ? (
+      {detailFailure ? (
         <TreeInlineStatus
           icon="alert"
           action={<Button
@@ -187,7 +269,12 @@ export function CatalogTreeStatus({
             {t("app.retry")}
           </Button>}
         >
-          {uniqueDetailError.message}
+          <FailureBody
+            title={detailFailure.title}
+            recovery={detailFailure.recovery}
+            detail={detailFailure.detail}
+            detailsLabel={t("connections.testFailure.technicalDetails")}
+          />
         </TreeInlineStatus>
       ) : null}
       {!catalogLoaded && !error && !detailError && !accessIssue ? (

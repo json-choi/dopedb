@@ -1,6 +1,6 @@
 // Compact connection and driver editor. Feature controllers own the
 // workflow; this screen only composes grouped presentation models.
-import { useRef } from "react";
+import { useRef, type KeyboardEvent } from "react";
 import {
   ModalBackdrop,
   ModalHeader,
@@ -22,13 +22,37 @@ import { ConnectionProfilePanel } from "./ConnectionProfilePanel";
 export function ConnectionForm(props: ConnectionEditorProps) {
   const { t } = useI18n();
   const nameInputRef = useRef<HTMLInputElement>(null);
+  const surfaceRef = useRef<HTMLElement>(null);
   const { profile, catalog, schema, dialogs, commands } =
     useConnectionEditorController(props);
   const { creatingDemo, onCreateDemoDatabase } = props;
 
+  /**
+   * Enter saves only the editor's own form.
+   *
+   * A nested credential dialog or the source picker is a React child of this
+   * editor even though it renders through a portal, so its Enter still bubbles
+   * here as a synthetic event. Ownership is therefore decided by which dialog
+   * surface the keystroke came from, not by where React mounted it. A Korean IME
+   * also reports Enter while a candidate is still being composed; committing that
+   * syllable must never save and close the editor behind it.
+   */
+  const ownsEnter = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) {
+      return false;
+    }
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return false;
+    return (
+      target.closest('[role="dialog"], [role="alertdialog"]') ===
+      surfaceRef.current
+    );
+  };
+
   return (
     <ModalBackdrop>
       <ModalSurface
+        ref={surfaceRef}
         size="dataSources"
         aria-labelledby="connection-editor-title"
         aria-busy={commands.busy}
@@ -38,19 +62,16 @@ export function ConnectionForm(props: ConnectionEditorProps) {
         <div
           className="tw:flex tw:h-full tw:min-h-0 tw:flex-col tw:overflow-hidden tw:bg-background"
           onKeyDown={(event) => {
+            if (event.key !== "Enter" || commands.busy || !ownsEnter(event)) {
+              return;
+            }
             const target = event.target as HTMLInputElement;
-            if (
-              event.key === "Enter" &&
-              target.id === "connection-url" &&
-              !commands.busy
-            ) {
+            if (target.id === "connection-url") {
               event.preventDefault();
               profile.url.normalize(target.value);
             } else if (
-              event.key === "Enter" &&
               target.tagName === "INPUT" &&
-              target.type !== "search" &&
-              !commands.busy
+              target.type !== "search"
             ) {
               event.preventDefault();
               void commands.save(true);

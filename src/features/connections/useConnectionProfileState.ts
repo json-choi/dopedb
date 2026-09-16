@@ -1,6 +1,6 @@
 // Owns the editable profile draft, URL projection, connection options, and
 // local command status shared by the Connection editor controllers.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useToast } from "../../components/Toast";
 import { isDocumentEngine } from "../../lib/capabilities";
@@ -31,6 +31,19 @@ import {
   type ConnectionLaunchPreset,
 } from "./presets";
 import { pickConnectionFile } from "./tauriAdapter";
+
+/**
+ * Fields that cannot change whether this connection opens. Every other edit
+ * discards the last check result, because leaving a success marker next to a
+ * changed setting reads as "this was verified" when nothing verified it.
+ */
+const NON_CONNECTIVITY_FIELDS = new Set<keyof ConnectionProfile>([
+  "name",
+  "env",
+  "readonlyDefault",
+  "allowWrites",
+  "schemaGroup",
+]);
 
 export function useConnectionProfileState({
   initial,
@@ -70,6 +83,11 @@ export function useConnectionProfileState({
   const [message, setMessage] = useState<string | null>(null);
   const [messageIsError, setMessageIsError] = useState(false);
   const [testFailure, setTestFailure] = useState<ConnectionTestFailure | null>(null);
+  // Counts how many times the draft stopped matching what was last checked. A probe
+  // reads it before it starts and again when it returns, so a late answer about the
+  // previous settings cannot mark the edited form as verified. It is a plain counter
+  // and never records a field value, so no secret ends up in state identity.
+  const validityRevision = useRef(0);
   const flags = connectionProfileFlags(form);
   const advancedParameters = Object.entries(form.extraParams).filter(
     ([key]) =>
@@ -81,16 +99,35 @@ export function useConnectionProfileState({
     setPortDraftState(String(form.port));
   }, [form.port]);
 
+  function invalidateCheckedResult() {
+    validityRevision.current += 1;
+    setMessage(null);
+    setMessageIsError(false);
+    setTestFailure(null);
+  }
+
+  function replaceValue(...args: Parameters<typeof setForm>) {
+    invalidateCheckedResult();
+    setForm(...args);
+  }
+
   function set<K extends keyof ConnectionProfile>(
     key: K,
     value: ConnectionProfile[K],
   ) {
     if (key === "name") setNameInteracted(true);
+    if (!NON_CONNECTIVITY_FIELDS.has(key)) invalidateCheckedResult();
     setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function editPassword(value: string) {
+    invalidateCheckedResult();
+    setPassword(value);
   }
 
   function setPortDraft(value: string) {
     setPortDraftState(value);
+    invalidateCheckedResult();
     if (!/^\d+$/u.test(value)) return;
     const port = Number(value);
     if (Number.isSafeInteger(port) && port >= 1 && port <= 65_535) {
@@ -99,7 +136,7 @@ export function useConnectionProfileState({
   }
 
   function setExtraParameter(key: string, value: string) {
-    setForm((current) => {
+    replaceValue((current) => {
       const extraParams = { ...current.extraParams };
       if (value) extraParams[key] = value;
       else delete extraParams[key];
@@ -108,7 +145,7 @@ export function useConnectionProfileState({
   }
 
   function setSrv(checked: boolean) {
-    setForm((current) => {
+    replaceValue((current) => {
       const extraParams = { ...current.extraParams };
       if (checked) extraParams.srv = "true";
       else delete extraParams.srv;
@@ -117,7 +154,7 @@ export function useConnectionProfileState({
   }
 
   function setMongoTls(checked: boolean) {
-    setForm((current) => {
+    replaceValue((current) => {
       const extraParams = { ...current.extraParams };
       if (checked) {
         extraParams.tls = "true";
@@ -137,7 +174,7 @@ export function useConnectionProfileState({
   }
 
   function setTimedConnectionOptionValue(key: string, value: string) {
-    setForm((current) => ({
+    replaceValue((current) => ({
       ...current,
       extraParams: {
         ...current.extraParams,
@@ -161,7 +198,7 @@ export function useConnectionProfileState({
     nextKey: string,
     nextValue: string,
   ) {
-    setForm((current) => {
+    replaceValue((current) => {
       const extraParams = { ...current.extraParams };
       delete extraParams[currentKey];
       if (nextKey.trim()) extraParams[nextKey] = nextValue;
@@ -170,7 +207,7 @@ export function useConnectionProfileState({
   }
 
   function addAdvancedParameter() {
-    setForm((current) => {
+    replaceValue((current) => {
       let suffix = 1;
       let key = "parameter";
       while (key in current.extraParams) {
@@ -185,7 +222,7 @@ export function useConnectionProfileState({
   }
 
   function removeAdvancedParameter(key: string) {
-    setForm((current) => {
+    replaceValue((current) => {
       const extraParams = { ...current.extraParams };
       delete extraParams[key];
       return { ...current, extraParams };
@@ -207,8 +244,7 @@ export function useConnectionProfileState({
       return { ...current, extraParams };
     });
     setConnectionInputMode(mode);
-    setMessage(null);
-    setMessageIsError(false);
+    invalidateCheckedResult();
   }
 
   function applyConnectionUrl(
@@ -246,13 +282,11 @@ export function useConnectionProfileState({
       id: form.id,
       secretRef: form.secretRef,
     };
-    setForm(nextForm);
+    replaceValue(nextForm);
     if (parsed.password != null) setPassword(parsed.password);
     if (normalizeDraft) {
       setConnectionUrlDraft(formatConnectionUrl(nextForm));
     }
-    setMessage(null);
-    setMessageIsError(false);
     if (showFeedback) toast(t("connections.clipboardImported"));
     return true;
   }
@@ -295,7 +329,7 @@ export function useConnectionProfileState({
   return {
     form: {
       value: form,
-      setValue: setForm,
+      setValue: replaceValue,
       set,
       nameInteracted,
       revealNameValidation: () => setNameInteracted(true),
@@ -315,7 +349,7 @@ export function useConnectionProfileState({
       pickExtraParameterFile,
     },
     identity: { isNew, setIsNew, persisted, setPersisted },
-    credentials: { password, setPassword },
+    credentials: { password, setPassword: editPassword },
     tabs: { active: activeTab, setActive: setActiveTab },
     url: {
       mode: connectionInputMode,
@@ -338,6 +372,7 @@ export function useConnectionProfileState({
       setMessageIsError,
       testFailure,
       setTestFailure,
+      readValidityRevision: () => validityRevision.current,
     },
   };
 }
