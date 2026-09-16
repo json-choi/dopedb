@@ -18,7 +18,7 @@ generation, choice) persisted locally before any batch is forwarded.
 | `mod.rs` | Privacy-bounded product analytics transport (module root and the closed-vocabulary invariant). |
 | `domain.rs` | Consent (`ProductAnalyticsConsent`, `ProductAnalyticsConsentState`) and batch event types/validation; bounds a batch to `MAX_BATCH_EVENTS` (16), rejects events older than `MAX_EVENT_AGE` (7 days) or clock-skewed beyond `MAX_FUTURE_SKEW` (5 minutes). |
 | `ports.rs` | `ProductAnalyticsConsentPort` trait (`state`, `set_consent`). |
-| `adapters.rs` | `Store`-backed consent adapter; persists consent/generation/choice under fixed keys and a weekly (`WEEK_MS`) re-prompt bucket. |
+| `adapters.rs` | `Store`-backed consent adapter; persists consent/generation/choice under fixed keys, keeps a grant until explicit revocation, and applies the version-scoped weekly re-prompt bucket only to a denial. |
 | `transport.rs` | Tauri commands forwarding validated batches to `crate::hosted_control_plane`; reads `AppState`. |
 
 ## For AI Agents

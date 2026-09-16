@@ -244,8 +244,9 @@ function scheduleRetry(retryAfterMs?: number) {
   armRetryTimer();
 }
 
-// Native storage owns the version and seven-day deadline. Refresh even when
-// denied or offline so an open app can show the next choice without a restart.
+// Native storage owns the denial re-prompt policy. Refresh even when denied
+// or offline so an open app can show the next choice without a restart; an
+// explicit grant remains current until the user revokes it in Privacy settings.
 async function refreshConsentState(): Promise<boolean> {
   if (availability !== "available" || localStore.revocationPending()) return false;
   if (consentRefresh) return consentRefresh;

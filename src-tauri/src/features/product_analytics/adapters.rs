@@ -7,7 +7,7 @@ use super::ports::ProductAnalyticsConsentPort;
 const CONSENT_KEY: &str = "product_analytics_consent_v1";
 const GENERATION_KEY: &str = "product_analytics_consent_generation_v1";
 const CHOICE_KEY: &str = "product_analytics_consent_choice_v1";
-const WEEK_MS: i64 = 7 * 24 * 60 * 60 * 1_000;
+const DENIED_REPROMPT_MS: i64 = 7 * 24 * 60 * 60 * 1_000;
 
 #[derive(serde::Serialize, serde::Deserialize)]
 struct ConsentChoice {
@@ -146,15 +146,17 @@ fn stored_state(
         .unwrap_or("0")
         .parse::<u32>()
         .map_err(|_| AppError::Config("stored product analytics generation is invalid".into()))?;
-    let current = choice
+    // An explicit grant remains in force until the user revokes it in Privacy
+    // settings. Only a denial is eligible for the bounded re-prompt policy.
+    let denied_choice_is_current = choice
         .and_then(|value| serde_json::from_str::<ConsentChoice>(value).ok())
         .is_some_and(|choice| {
             choice.version == app_version
                 && now_ms
                     .checked_sub(choice.chosen_at_ms)
-                    .is_some_and(|age| (0..WEEK_MS).contains(&age))
+                    .is_some_and(|age| (0..DENIED_REPROMPT_MS).contains(&age))
         });
-    if consent != ProductAnalyticsConsent::Pending && !current {
+    if consent == ProductAnalyticsConsent::Denied && !denied_choice_is_current {
         return Ok(ProductAnalyticsConsentState {
             consent: ProductAnalyticsConsent::Pending,
             generation: next_generation(generation)?,
@@ -174,39 +176,59 @@ pub(crate) fn assert_consent_policy_contract() {
         chosen_at_ms: chosen_at,
     })
     .unwrap();
-    for decision in ["granted", "denied"] {
-        let state = |time, version, metadata| {
-            stored_state(Some(decision), Some("4"), metadata, time, version).unwrap()
-        };
-        assert_eq!(
-            state(chosen_at, "1.2.3", Some(choice.as_str()))
-                .consent
-                .as_str(),
-            decision
-        );
-        assert_eq!(
-            state(chosen_at + WEEK_MS - 1, "1.2.3", Some(choice.as_str()))
-                .consent
-                .as_str(),
-            decision
-        );
-        for (time, version, metadata) in [
-            (chosen_at + WEEK_MS, "1.2.3", Some(choice.as_str())),
-            (chosen_at, "1.2.4", Some(choice.as_str())),
-            (chosen_at - 1, "1.2.3", Some(choice.as_str())),
-            (chosen_at, "1.2.3", None),
-            (chosen_at, "1.2.3", Some("invalid")),
-        ] {
-            let expired = state(time, version, metadata);
-            assert_eq!(expired.consent, ProductAnalyticsConsent::Pending);
-            assert_eq!(expired.generation, 5);
-        }
+    for (time, version, metadata) in [
+        (chosen_at, "1.2.3", Some(choice.as_str())),
+        (
+            chosen_at + DENIED_REPROMPT_MS,
+            "1.2.3",
+            Some(choice.as_str()),
+        ),
+        (chosen_at, "1.2.4", Some(choice.as_str())),
+        (chosen_at - 1, "1.2.3", Some(choice.as_str())),
+        (chosen_at, "1.2.3", None),
+        (chosen_at, "1.2.3", Some("invalid")),
+    ] {
+        let granted = stored_state(Some("granted"), Some("4"), metadata, time, version).unwrap();
+        assert_eq!(granted.consent, ProductAnalyticsConsent::Granted);
+        assert_eq!(granted.generation, 4);
+    }
+
+    let denied = |time, version, metadata| {
+        stored_state(Some("denied"), Some("4"), metadata, time, version).unwrap()
+    };
+    assert_eq!(
+        denied(chosen_at, "1.2.3", Some(choice.as_str())).consent,
+        ProductAnalyticsConsent::Denied
+    );
+    assert_eq!(
+        denied(
+            chosen_at + DENIED_REPROMPT_MS - 1,
+            "1.2.3",
+            Some(choice.as_str())
+        )
+        .consent,
+        ProductAnalyticsConsent::Denied
+    );
+    for (time, version, metadata) in [
+        (
+            chosen_at + DENIED_REPROMPT_MS,
+            "1.2.3",
+            Some(choice.as_str()),
+        ),
+        (chosen_at, "1.2.4", Some(choice.as_str())),
+        (chosen_at - 1, "1.2.3", Some(choice.as_str())),
+        (chosen_at, "1.2.3", None),
+        (chosen_at, "1.2.3", Some("invalid")),
+    ] {
+        let expired = denied(time, version, metadata);
+        assert_eq!(expired.consent, ProductAnalyticsConsent::Pending);
+        assert_eq!(expired.generation, 5);
     }
     let pending = stored_state(
         Some("pending"),
         Some("5"),
         Some(&choice),
-        chosen_at + WEEK_MS,
+        chosen_at + DENIED_REPROMPT_MS,
         "1.2.3",
     )
     .unwrap();
