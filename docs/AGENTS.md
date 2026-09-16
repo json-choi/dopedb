@@ -39,6 +39,7 @@ work-safety rules this directory's files implement in detail.
 | `adr/` | Accepted architecture decision records (see `adr/AGENTS.md`). |
 | `architecture/` | Machine-readable architecture baselines consumed by CI guard scripts (see `architecture/AGENTS.md`). |
 | `contracts/` | Wire/domain contracts shared across CLI, Desktop, and ACP consumers (see `contracts/AGENTS.md`). |
+| `decisions/` | Evidence reports for open repository-owner decisions; they gather measured facts and options without deciding (see `decisions/AGENTS.md`). |
 
 ## For AI Agents
 
