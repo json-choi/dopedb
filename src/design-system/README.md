@@ -1016,12 +1016,25 @@ Surface는 기본적으로 `card + border + rounded-lg + no shadow`다. floating
 
 ### 리스트 행
 
+반복되는 객체·목록 행은 `system.css`의 `.ds-object-row`가 소유한다. 이 primitive가
+24px 행 높이, `--ds-space-1` gap, `--ds-radius-xs`, 투명 배경, hover와 선택
+surface를 모두 선언하므로 화면에서 같은 값을 utility로 다시 쓰지 않는다.
+`tw:` utility는 `important`로 들어오므로 `tw:bg-transparent` 같은 배경 utility를
+행에 얹으면 primitive의 hover·선택 배경이 죽는다.
+
 - idle: 투명
 - hover: `--ds-muted`
 - keyboard selected/current: `--ds-selection`
 - focus: `--ds-ring`
 
-선택 상태를 임의 hex나 primary 버튼 색으로 만들지 않는다.
+선택 상태는 두 의미 중 하나로만 표현한다. tree·listbox 행은 `aria-selected`,
+탐색 목록의 현재 항목은 `aria-current`를 쓰고 primitive가 같은 selection surface를
+칠한다. 선택 상태를 임의 hex, `secondary` 표면색이나 primary 버튼 색으로 만들지
+않는다.
+
+전체 폭 rail처럼 inset pill이 되면 안 되는 목록은 `data-row-shape="flush"`로
+radius만 떨어뜨린다. 이 외의 밀도가 필요하면 화면에서 덮지 말고 primitive에
+variant를 추가하고 이 문서에 기록한다.
 
 ## 공통 클래스
 
@@ -1039,6 +1052,10 @@ Agent/safety:
 
 - `.ds-tone-trust`
 - `.ds-attention-stack`, `.ds-attention-badge`
+
+목록:
+
+- `.ds-object-row`
 
 Utility:
 

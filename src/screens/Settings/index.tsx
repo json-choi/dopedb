@@ -238,7 +238,8 @@ export default function Settings({
                           key={entry.id}
                           type="button"
                           aria-current={section === entry.id || undefined}
-                          className="tw:flex tw:min-h-[var(--ds-tree-row-height)] tw:cursor-pointer tw:items-center tw:justify-between tw:gap-2 tw:rounded-none tw:border-0 tw:bg-transparent tw:pr-3 tw:pl-12 tw:font-sans tw:text-left tw:text-ui tw:text-foreground tw:aria-[current=true]:bg-selection tw:aria-[current=true]:text-selection-foreground tw:hover:bg-muted"
+                          data-row-shape="flush"
+                          className="ds-object-row tw:w-full tw:justify-between tw:border-0 tw:pr-3 tw:pl-12 tw:font-sans tw:text-left tw:text-ui"
                           onClick={() => setSection(entry.id)}
                         >
                           <span className="tw:min-w-0 tw:truncate">

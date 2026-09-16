@@ -296,8 +296,8 @@ export default function LocalHistoryToolWindow({
               <button
                 key={document.id}
                 type="button"
-                data-active={document.id === selectedDocument?.id}
-                className="ds-object-row tw:w-full tw:min-w-0 tw:cursor-pointer tw:gap-1 tw:rounded-xs tw:border-0 tw:bg-transparent tw:font-sans tw:text-left tw:text-ui tw:data-[active=true]:bg-secondary tw:data-[active=true]:text-secondary-foreground tw:hover:bg-muted"
+                aria-current={document.id === selectedDocument?.id || undefined}
+                className="ds-object-row tw:w-full tw:min-w-0 tw:border-0 tw:font-sans tw:text-left tw:text-ui"
                 onClick={() => selectDocument(document)}
               >
                 <Icon name="file" className="tw:shrink-0 tw:text-[length:var(--ds-icon-sm)] tw:text-muted-foreground" />

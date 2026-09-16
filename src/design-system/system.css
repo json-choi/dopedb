@@ -334,22 +334,36 @@ h3 {
   outline: none;
 }
 
+/* Canonical object/list row. The gap and radius match the 24px row height this
+   primitive already declares, so dense trees do not restate them. */
 .ds-object-row {
   min-height: var(--ds-tree-row-height);
   display: flex;
   align-items: center;
-  gap: var(--ds-space-2);
+  gap: var(--ds-space-1);
   padding: var(--ds-tree-row-padding-block) var(--ds-space-2);
-  border-radius: var(--ds-radius-sm);
+  border-radius: var(--ds-radius-xs);
+  /* Declared here so a row rendered as a button never needs an !important
+     transparent utility that would then outrank hover and selection. */
+  background: transparent;
   color: var(--ds-text);
   cursor: pointer;
+}
+
+/* A rail whose selection spans the full pane width stays flat instead of
+   becoming an inset pill. */
+.ds-object-row[data-row-shape="flush"] {
+  border-radius: 0;
 }
 
 .ds-object-row:hover {
   background: var(--ds-hover);
 }
 
+/* Tree and listbox rows say aria-selected, navigation rows say aria-current;
+   both are the same selection surface to the reader. */
 .ds-object-row[aria-selected="true"],
+.ds-object-row[aria-current="true"],
 .ds-object-row.active {
   background: var(--ds-selection);
   color: var(--ds-selection-foreground);
