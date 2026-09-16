@@ -49,6 +49,11 @@ const en = {
     privacy: "Privacy Policy",
     legalAfter: ". Your organization’s workspace policy and audit records also apply.",
   },
+  publicArticle: {
+    chrome: "Published HTML",
+    published: "Published",
+    notFoundTitle: "Analysis Article not found",
+  },
   device: {
     invalidRequest: "This authorization request is invalid.",
     invalidCode: "The authorization code is invalid or has expired.",
@@ -830,6 +835,11 @@ const ko: DeepStringShape<typeof en> = {
     legalBetween: "에 동의하고",
     privacy: "개인정보처리방침",
     legalAfter: "을 확인한 것으로 봅니다. 조직의 워크스페이스 정책과 감사 기록도 적용됩니다.",
+  },
+  publicArticle: {
+    chrome: "발행된 HTML",
+    published: "발행 시각",
+    notFoundTitle: "Analysis Article을 찾을 수 없습니다",
   },
   device: {
     invalidRequest: "올바르지 않은 승인 요청입니다.",
