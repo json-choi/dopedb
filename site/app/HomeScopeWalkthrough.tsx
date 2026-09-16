@@ -88,10 +88,13 @@ function ResourceOrbit({
       selected: state.phase > 0
     }].map(node => <g key={node.label} transform={`translate(${node.x} ${node.y})`} data-selected={node.selected} className="tw:text-cream-muted/45 tw:transition-colors tw:duration-500 tw:data-[selected=true]:text-signal">
       <circle r="12" fill="currentColor" opacity=".08" /><circle r="4" fill="currentColor" /><circle r="9" fill="none" stroke="currentColor" opacity=".5" />
-      <text y="30" textAnchor="middle" fill="currentColor" className="tw:font-mono tw:text-[11px]">{node.label}</text>
-      <text y="48" textAnchor="middle" fill="currentColor" opacity=".7" className="tw:text-[11px]">{node.sub}</text>
+      {/* Node marks stay dimmed; their labels carry the meaning and keep a full-strength token. */}
+      <g data-selected={node.selected} className="tw:text-cream-muted tw:transition-colors tw:duration-500 tw:data-[selected=true]:text-signal">
+        <text y="30" textAnchor="middle" fill="currentColor" className="tw:font-mono tw:text-[11px]">{node.label}</text>
+        <text y="48" textAnchor="middle" fill="currentColor" className="tw:text-[11px]">{node.sub}</text>
+      </g>
     </g>)}
-    <g transform="translate(66 48)" className="tw:text-cream-muted/40"><path d="m-3-3 6 6m0-6-6 6" stroke="currentColor" fill="none" /><text x="14" y="4" fill="currentColor" className="tw:font-mono tw:text-[10px]">Other databases</text><text x="14" y="21" fill="currentColor" className="tw:text-[10px]">{ko ? "범위 밖 · 접근 없음" : "Outside scope · no access"}</text></g>
+    <g transform="translate(66 48)" className="tw:text-cream-muted"><path d="m-3-3 6 6m0-6-6 6" stroke="currentColor" opacity=".4" fill="none" /><text x="14" y="4" fill="currentColor" className="tw:font-mono tw:text-[10px]">Other databases</text><text x="14" y="21" fill="currentColor" className="tw:text-[10px]">{ko ? "범위 밖 · 접근 없음" : "Outside scope · no access"}</text></g>
   </svg>;
 }
 export function HomeScopeWalkthrough({
@@ -135,7 +138,7 @@ export function HomeScopeWalkthrough({
       <div ref={panel} data-demo-phase={state.phase} data-demo-outcome={state.outcome ?? "none"} className="tw:scroll-mt-28 tw:self-center tw:overflow-hidden tw:rounded-xl tw:border tw:border-hairline-strong tw:bg-night-raised tw:scheme-dark">
         <div className="tw:flex tw:items-center tw:justify-between tw:gap-4 tw:border-b tw:border-hairline tw:px-6 tw:py-4 tw:font-mono tw:text-[10px] tw:tracking-[0.08em]"><span className="tw:text-cream-muted">DOPEDB / INTERACTIVE WALKTHROUGH</span><span className="tw:shrink-0 tw:text-signal">DEMO</span></div>
         <ol aria-label={t("데모 진행 단계", "Demo progress")} className="tw:m-0 tw:grid tw:list-none tw:grid-cols-4 tw:gap-2 tw:border-b tw:border-hairline tw:px-6 tw:py-5 tw:max-sm:px-4">
-          {stages.map((stage, index) => <li key={stage} data-active={state.phase === index} data-done={state.phase > index} aria-current={state.phase === index ? "step" : undefined} className="tw:border-t tw:border-hairline-strong tw:pt-3 tw:text-cream-muted/55 tw:transition-colors tw:data-[active=true]:border-signal tw:data-[active=true]:text-signal tw:data-[done=true]:border-signal/40 tw:data-[done=true]:text-cream-muted"><span className="tw:font-mono tw:text-[10px]">0{index + 1}</span><span className="tw:mt-1.5 tw:block tw:text-[12px] tw:leading-tight">{stage}</span></li>)}
+          {stages.map((stage, index) => <li key={stage} data-active={state.phase === index} data-done={state.phase > index} aria-current={state.phase === index ? "step" : undefined} className="tw:border-t tw:border-hairline-strong tw:pt-3 tw:text-cream-muted tw:transition-colors tw:data-[active=true]:border-signal tw:data-[active=true]:text-signal tw:data-[done=true]:border-signal/40 tw:data-[done=true]:text-cream"><span className="tw:font-mono tw:text-[10px]">0{index + 1}</span><span className="tw:mt-1.5 tw:block tw:text-[12px] tw:leading-tight">{stage}</span></li>)}
         </ol>
         <div className="tw:flex tw:min-h-[470px] tw:flex-col tw:p-7 tw:max-sm:p-5">
           <h3 ref={heading} tabIndex={-1} className="tw:m-0 tw:text-[23px] tw:leading-[1.35] tw:font-medium tw:tracking-[-0.035em] tw:outline-none">{titles[state.phase]}</h3>
