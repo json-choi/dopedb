@@ -19,7 +19,7 @@ export function WorkspaceNavigation({ workspace, focus, onNavigate }: {
   const environmentId = focus?.environmentId ?? inventory.data?.projects[0]?.environments[0]?.id ?? null;
   return <div className="tw:grid tw:gap-4 tw:px-3 tw:pt-4 tw:pb-3">
     <div className="tw:min-w-0 tw:px-1 tw:pb-1">{workspace}</div>
-    <nav className="tw:grid tw:gap-1" aria-label={t("ide.mainToolbar")}>
+    <nav className="tw:grid tw:gap-1" aria-label={t("ide.workspaceNavigation")}>
       <WorkspaceNavButton active={focus?.view !== "analyses"} icon={<Icon name="database" />} onClick={() => onNavigate(environmentId, "databases")}>{t("connections.environmentDatabases")}</WorkspaceNavButton>
       <WorkspaceNavButton active={focus?.view === "analyses"} icon={<Icon name="chart" />} onClick={() => onNavigate(environmentId, "analyses")}>{t("analysis.navigation")}</WorkspaceNavButton>
     </nav>
