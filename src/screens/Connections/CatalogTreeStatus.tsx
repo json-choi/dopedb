@@ -12,6 +12,7 @@ import {
   isManagedConnectionRecoveryRequired,
   type CatalogLoadIssue,
 } from "../../features/catalogExplorer/catalogDomain";
+import { connectionFailureDetailMessage } from "../../features/connections/connectionFailureDetail";
 import {
   connectionTestFailureAction,
   connectionTestFailureRecovery,
@@ -57,7 +58,7 @@ function failureCopy(
     code,
     title: connectionTestFailureTitle(t, code, connection),
     recovery: connectionTestFailureRecovery(t, code, connection),
-    detail: issue.failure?.detail ?? "",
+    detail: connectionFailureDetailMessage(t, issue.failure?.detail ?? null),
   };
 }
 

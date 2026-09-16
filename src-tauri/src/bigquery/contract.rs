@@ -359,7 +359,7 @@ pub(crate) fn assert_bigquery_contract() {
             "connectionFailure": {
                 "code": "authentication",
                 "field": "credentials",
-                "detail": "the connection credential is no longer authenticated",
+                "detail": "credentialNotAuthenticated",
             },
         }),
     );

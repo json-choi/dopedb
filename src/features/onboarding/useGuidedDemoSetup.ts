@@ -12,6 +12,8 @@ import {
   upsertConnection,
 } from "../connections/tauriAdapter";
 import { connectionVerificationRecorder } from "../connections/connectionVerificationAnalytics";
+import { connectionFailureDetailMessage } from "../connections/connectionFailureDetail";
+import { connectionTestFailureTitle } from "../connections/connectionTestFailure";
 import {
   demoSqliteConnection,
   findDemoSqliteConnection,
@@ -61,7 +63,10 @@ export function useGuidedDemoSetup({
       });
       if (!receipt.ok) {
         recordVerification("failed");
-        throw new Error(receipt.failure.detail);
+        throw new Error(
+          connectionFailureDetailMessage(t, receipt.failure.detail)
+            || connectionTestFailureTitle(t, receipt.failure.code),
+        );
       }
       recordVerification("success");
 

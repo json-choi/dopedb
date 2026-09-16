@@ -9,6 +9,7 @@ import {
 } from "../../design-system/components/FormControls";
 import { ModalDetailActionBar } from "../../design-system/components/Modal";
 import { PanelTabs } from "../../design-system/components/PanelTabs";
+import { connectionFailureDetailMessage } from "../../features/connections/connectionFailureDetail";
 import type { ConnectionEditorController } from "../../features/connections/useConnectionEditorController";
 import { useI18n } from "../../lib/i18n";
 import { ConnectionAdvancedTab } from "./ConnectionAdvancedTab";
@@ -105,7 +106,7 @@ export function ConnectionProfilePanel({
                 {t("connections.testFailure.technicalDetails")}
               </summary>
               <pre className="tw:mt-2 tw:mb-0 tw:max-h-40 tw:overflow-auto tw:whitespace-pre-wrap tw:[overflow-wrap:anywhere] tw:font-mono tw:text-xs tw:text-foreground">
-                {commands.testFailure.detail}
+                {connectionFailureDetailMessage(t, commands.testFailure.detail)}
               </pre>
             </details>
           </section>

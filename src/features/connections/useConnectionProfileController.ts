@@ -397,7 +397,7 @@ export function useConnectionProfileController({
       status.setTestFailure({
         code: "unknown",
         field: null,
-        detail: t("connections.testFailure.transportDetail"),
+        detail: "transport",
       });
       status.setMessageIsError(true);
       dialogs.problems.setOpen(true);

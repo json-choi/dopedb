@@ -177,7 +177,7 @@ describe("workbench state ownership", () => {
     expect(connectionTestFailureTarget({
       code: "authentication",
       field: "credentials",
-      detail: "redacted",
+      detail: "serverRejectedLogin",
     }, managedManager)).toBeNull();
 
     const managedConnectionId = connectionProfileId(
@@ -889,13 +889,13 @@ describe("workbench state ownership", () => {
       connectionFailure: {
         code: "databaseConfig",
         field: "database",
-        detail: "the driver rejected the connection configuration",
+        detail: "driverRejectedConfiguration",
       },
     });
     expect(rejectedConfiguration.failure).toEqual({
       code: "databaseConfig",
       field: "database",
-      detail: "the driver rejected the connection configuration",
+      detail: "driverRejectedConfiguration",
     });
     expect(connectionTestFailureAction("databaseConfig")).toBe("edit");
     expect(connectionTestFailureAction("authentication")).toBe("edit");
@@ -906,7 +906,7 @@ describe("workbench state ownership", () => {
       connectionTestFailureTarget({
         code: "sshHostKey",
         field: "sshAlias",
-        detail: "the SSH host key could not be verified",
+        detail: "sshHostKey",
       }),
     ).toEqual({ tab: "sshSsl", fieldId: "connection-ssh-alias" });
     // An unrecognized wire value is rejected rather than rendered as an enum.
@@ -917,6 +917,19 @@ describe("workbench state ownership", () => {
         connectionFailure: { code: "notAKnownCode", field: null, detail: "x" },
       }).failure,
     ).toBeNull();
+    // A detail is an identity the catalogue translates, so a sentence the far side
+    // chose is dropped instead of being rendered as the technical detail.
+    expect(
+      catalogLoadIssue({
+        kind: "db",
+        message: "database error: driver text",
+        connectionFailure: {
+          code: "authentication",
+          field: "credentials",
+          detail: 'password authentication failed for user "prod_admin"',
+        },
+      }).failure,
+    ).toEqual({ code: "authentication", field: "credentials", detail: null });
     expect(
       isAuthenticationRequired(catalogLoadIssue(new Error("network"))),
     ).toBe(false);

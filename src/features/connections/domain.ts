@@ -128,10 +128,54 @@ export const CONNECTION_TEST_FAILURE_FIELDS = [
 export type ConnectionTestFailureField =
   (typeof CONNECTION_TEST_FAILURE_FIELDS)[number];
 
+/**
+ * The closed set of technical-detail identities a failed connection can carry.
+ *
+ * Every value except `transport` is produced by the native classifier; `transport` is
+ * this process's own failure to get a typed receipt at all. The wire never carries the
+ * sentence itself, so a driver message or OS output cannot become one and the sentence
+ * follows the user's language.
+ */
+export const CONNECTION_TEST_FAILURE_DETAILS = [
+  "accountDatabaseNotAllowed",
+  "attemptTimedOut",
+  "credentialNotAuthenticated",
+  "credentialStoreUnavailable",
+  "driverRejectedConfiguration",
+  "managedRepairRequired",
+  "mongoRejectedConnection",
+  "networkFailed",
+  "networkRefused",
+  "networkReset",
+  "networkTargetNotFound",
+  "networkTimedOut",
+  "poolDeadlineExhausted",
+  "serverConnectionLostBeforeReady",
+  "serverConnectionUnavailable",
+  "serverMissingDatabase",
+  "serverRejectedAttempt",
+  "serverRejectedAuthorization",
+  "serverRejectedDatabaseName",
+  "serverRejectedLogin",
+  "serverUnreachable",
+  "sshAuthentication",
+  "sshHostKey",
+  "sshHostUnreachable",
+  "sshLaunch",
+  "sshTimeout",
+  "sshUnclassified",
+  "tlsRejected",
+  "transport",
+  "unclassified",
+] as const;
+
+export type ConnectionTestFailureDetail =
+  (typeof CONNECTION_TEST_FAILURE_DETAILS)[number];
+
 export interface ConnectionTestFailure {
   code: ConnectionTestFailureCode;
   field: ConnectionTestFailureField | null;
-  detail: string;
+  detail: ConnectionTestFailureDetail | null;
 }
 
 export type ConnectionTestReceipt =
@@ -165,7 +209,11 @@ export function connectionFailureFromError(
     )
       ? (field as ConnectionTestFailureField)
       : null,
-    detail: typeof detail === "string" ? detail : "",
+    detail: CONNECTION_TEST_FAILURE_DETAILS.includes(
+      detail as ConnectionTestFailureDetail,
+    )
+      ? (detail as ConnectionTestFailureDetail)
+      : null,
   };
 }
 

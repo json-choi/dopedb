@@ -331,6 +331,56 @@ export const connectionsCatalog = defineCatalog(
       "Do not edit the read-only connection values below. Open this database in Workspace Web, check its provider account and database registration, then return here and test again.",
     "connections.testFailure.managedMemberRecovery":
       "This connection is controlled in Workspace Web, not on this device. Ask a Workspace admin to check its provider account, database registration, and your access, then test again.",
+    "connections.failureDetail.accountDatabaseNotAllowed":
+      "The account is not allowed to open the configured database.",
+    "connections.failureDetail.attemptTimedOut": "The bounded connection attempt timed out.",
+    "connections.failureDetail.credentialNotAuthenticated":
+      "The connection credential is no longer authenticated.",
+    "connections.failureDetail.credentialStoreUnavailable":
+      "The OS credential store could not supply this connection.",
+    "connections.failureDetail.driverRejectedConfiguration":
+      "The driver rejected the connection configuration.",
+    "connections.failureDetail.managedRepairRequired":
+      "The managed workspace connection requires provider repair.",
+    "connections.failureDetail.mongoRejectedConnection":
+      "The MongoDB driver rejected the connection.",
+    "connections.failureDetail.networkFailed": "The network connection failed.",
+    "connections.failureDetail.networkRefused": "The network connection was refused.",
+    "connections.failureDetail.networkReset": "The network connection was reset.",
+    "connections.failureDetail.networkTargetNotFound": "The network target was not found.",
+    "connections.failureDetail.networkTimedOut": "The network connection timed out.",
+    "connections.failureDetail.poolDeadlineExhausted":
+      "The connection attempt exhausted its bounded pool deadline.",
+    "connections.failureDetail.serverConnectionLostBeforeReady":
+      "The connection to the database server failed before it was ready.",
+    "connections.failureDetail.serverConnectionUnavailable":
+      "The connection to the database server was not available.",
+    "connections.failureDetail.serverMissingDatabase":
+      "The database server has no database with the configured name.",
+    "connections.failureDetail.serverRejectedAttempt":
+      "The database server rejected the connection attempt.",
+    "connections.failureDetail.serverRejectedAuthorization":
+      "The database server rejected the connection's authorization.",
+    "connections.failureDetail.serverRejectedDatabaseName":
+      "The database server rejected the configured database name.",
+    "connections.failureDetail.serverRejectedLogin":
+      "The database server rejected the user name or password.",
+    "connections.failureDetail.serverUnreachable":
+      "The driver could not establish a connection to the database server.",
+    "connections.failureDetail.sshAuthentication":
+      "The SSH server rejected the system ssh client's authentication.",
+    "connections.failureDetail.sshHostKey": "The SSH host key could not be verified.",
+    "connections.failureDetail.sshHostUnreachable":
+      "The system ssh client could not reach the configured Host alias.",
+    "connections.failureDetail.sshLaunch":
+      "The system ssh client could not be started for this Host alias.",
+    "connections.failureDetail.sshTimeout":
+      "The SSH tunnel did not become ready before its deadline.",
+    "connections.failureDetail.sshUnclassified":
+      "The system ssh client failed without a recognizable cause.",
+    "connections.failureDetail.tlsRejected":
+      "TLS negotiation or certificate verification failed.",
+    "connections.failureDetail.unclassified": "The driver did not provide a safe diagnostic.",
     "connections.testFailure.technicalDetails": "Technical details",
     "connections.testFailure.transportDetail":
       "The Desktop connection-test transport failed before returning a typed receipt.",
@@ -811,6 +861,36 @@ export const connectionsCatalog = defineCatalog(
       "아래 읽기 전용 연결값은 수정하지 마세요. 워크스페이스 웹에서 이 DB를 열어 공급자 계정과 DB 등록 상태를 확인한 뒤 돌아와 다시 테스트하세요.",
     "connections.testFailure.managedMemberRecovery":
       "이 연결은 이 기기가 아니라 워크스페이스 웹에서 관리됩니다. 워크스페이스 관리자에게 공급자 계정, DB 등록과 내 접근 권한 확인을 요청한 뒤 다시 테스트하세요.",
+    "connections.failureDetail.accountDatabaseNotAllowed": "이 계정은 설정된 데이터베이스를 열 권한이 없습니다.",
+    "connections.failureDetail.attemptTimedOut": "제한 시간 안에 연결을 마치지 못했습니다.",
+    "connections.failureDetail.credentialNotAuthenticated": "이 연결의 자격 증명이 더 이상 인증되어 있지 않습니다.",
+    "connections.failureDetail.credentialStoreUnavailable":
+      "OS 자격 증명 저장소에서 이 연결의 자격 증명을 가져오지 못했습니다.",
+    "connections.failureDetail.driverRejectedConfiguration": "드라이버가 연결 구성을 거부했습니다.",
+    "connections.failureDetail.managedRepairRequired": "관리형 워크스페이스 연결은 공급자 복구가 필요합니다.",
+    "connections.failureDetail.mongoRejectedConnection": "MongoDB 드라이버가 연결을 거부했습니다.",
+    "connections.failureDetail.networkFailed": "네트워크 연결에 실패했습니다.",
+    "connections.failureDetail.networkRefused": "네트워크 연결이 거부되었습니다.",
+    "connections.failureDetail.networkReset": "네트워크 연결이 끊겼습니다.",
+    "connections.failureDetail.networkTargetNotFound": "네트워크 대상을 찾지 못했습니다.",
+    "connections.failureDetail.networkTimedOut": "네트워크 연결이 제한 시간을 초과했습니다.",
+    "connections.failureDetail.poolDeadlineExhausted": "연결 시도가 커넥션 풀의 제한 시간을 모두 사용했습니다.",
+    "connections.failureDetail.serverConnectionLostBeforeReady": "데이터베이스 서버 연결이 준비되기 전에 끊겼습니다.",
+    "connections.failureDetail.serverConnectionUnavailable": "데이터베이스 서버 연결을 사용할 수 없습니다.",
+    "connections.failureDetail.serverMissingDatabase": "데이터베이스 서버에 설정된 이름의 데이터베이스가 없습니다.",
+    "connections.failureDetail.serverRejectedAttempt": "데이터베이스 서버가 연결 시도를 거부했습니다.",
+    "connections.failureDetail.serverRejectedAuthorization": "데이터베이스 서버가 이 연결의 권한을 거부했습니다.",
+    "connections.failureDetail.serverRejectedDatabaseName": "데이터베이스 서버가 설정된 데이터베이스 이름을 거부했습니다.",
+    "connections.failureDetail.serverRejectedLogin": "데이터베이스 서버가 사용자 이름 또는 비밀번호를 거부했습니다.",
+    "connections.failureDetail.serverUnreachable": "드라이버가 데이터베이스 서버에 연결하지 못했습니다.",
+    "connections.failureDetail.sshAuthentication": "SSH 서버가 시스템 ssh 클라이언트의 인증을 거부했습니다.",
+    "connections.failureDetail.sshHostKey": "SSH 호스트 키를 검증하지 못했습니다.",
+    "connections.failureDetail.sshHostUnreachable": "시스템 ssh 클라이언트가 설정된 Host 별칭에 접속하지 못했습니다.",
+    "connections.failureDetail.sshLaunch": "이 Host 별칭으로 시스템 ssh 클라이언트를 시작하지 못했습니다.",
+    "connections.failureDetail.sshTimeout": "SSH 터널이 제한 시간 안에 준비되지 않았습니다.",
+    "connections.failureDetail.sshUnclassified": "시스템 ssh 클라이언트가 원인을 알 수 없는 상태로 실패했습니다.",
+    "connections.failureDetail.tlsRejected": "TLS 협상 또는 인증서 검증에 실패했습니다.",
+    "connections.failureDetail.unclassified": "드라이버가 안전하게 표시할 수 있는 진단 정보를 제공하지 않았습니다.",
     "connections.testFailure.technicalDetails": "기술 상세",
     "connections.testFailure.transportDetail":
       "Desktop 연결 테스트 전송이 구조화된 결과를 반환하기 전에 실패했습니다.",

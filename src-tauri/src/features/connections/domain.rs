@@ -43,7 +43,8 @@ impl ConnectionTestReceipt {
 #[cfg(test)]
 pub(crate) fn assert_connection_test_failure_contract() {
     use crate::kernel::connection_failure::{
-        classify_database_identity, ConnectionFailureCode, ConnectionFailureField,
+        classify_database_identity, ConnectionFailureCode, ConnectionFailureDetail,
+        ConnectionFailureField,
     };
 
     crate::connection::ssh::assert_ssh_failure_classification_contract();
@@ -52,16 +53,16 @@ pub(crate) fn assert_connection_test_failure_contract() {
         (
             ConnectionFailureCode::Authentication,
             Some(ConnectionFailureField::Credentials),
-            "the database server rejected the user name or password",
+            ConnectionFailureDetail::ServerRejectedLogin,
         ),
     );
-    // The same class still resolves to a sentence, one class wider.
+    // The same class still resolves to a detail, one class wider.
     assert_eq!(
         classify_database_identity(Some("28000"), None),
         (
             ConnectionFailureCode::Authentication,
             Some(ConnectionFailureField::Credentials),
-            "the database server rejected the connection's authorization",
+            ConnectionFailureDetail::ServerRejectedAuthorization,
         ),
     );
     assert_eq!(
@@ -69,7 +70,7 @@ pub(crate) fn assert_connection_test_failure_contract() {
         (
             ConnectionFailureCode::TimeoutNetwork,
             None,
-            "the connection to the database server failed before it was ready",
+            ConnectionFailureDetail::ServerConnectionLostBeforeReady,
         ),
     );
     assert_eq!(
@@ -77,7 +78,7 @@ pub(crate) fn assert_connection_test_failure_contract() {
         (
             ConnectionFailureCode::DatabaseConfig,
             Some(ConnectionFailureField::Database),
-            "the database server has no database with the configured name",
+            ConnectionFailureDetail::ServerMissingDatabase,
         ),
     );
     assert_eq!(
@@ -85,17 +86,17 @@ pub(crate) fn assert_connection_test_failure_contract() {
         (
             ConnectionFailureCode::DatabaseConfig,
             Some(ConnectionFailureField::Database),
-            "the database server has no database with the configured name",
+            ConnectionFailureDetail::ServerMissingDatabase,
         ),
     );
     // An unrecognized identity reads like unrecognized `ssh` output: the server
-    // does not get to choose the sentence.
+    // does not get to choose the detail a screen translates.
     assert_eq!(
         classify_database_identity(Some("XX000"), None),
         (
             ConnectionFailureCode::Unknown,
             None,
-            "the driver did not provide a safe diagnostic",
+            ConnectionFailureDetail::Unclassified,
         ),
     );
     assert_eq!(
@@ -103,7 +104,7 @@ pub(crate) fn assert_connection_test_failure_contract() {
         (
             ConnectionFailureCode::Unknown,
             None,
-            "the driver did not provide a safe diagnostic",
+            ConnectionFailureDetail::Unclassified,
         ),
     );
     assert_eq!(
@@ -115,7 +116,7 @@ pub(crate) fn assert_connection_test_failure_contract() {
         ConnectionFailure {
             code: ConnectionFailureCode::Authentication,
             field: Some(ConnectionFailureField::Credentials),
-            detail: "the connection credential is no longer authenticated",
+            detail: ConnectionFailureDetail::CredentialNotAuthenticated,
         },
     );
     assert_eq!(
@@ -131,7 +132,7 @@ pub(crate) fn assert_connection_test_failure_contract() {
     );
     assert_eq!(
         classify_connection_failure(&AppError::Config("secret=must-not-serialize".into())).detail,
-        "the driver rejected the connection configuration",
+        ConnectionFailureDetail::DriverRejectedConfiguration,
     );
     let success = serde_json::to_value(ConnectionTestReceipt::from_result(Ok(()))).unwrap();
     assert_eq!(success, serde_json::json!({"ok": true, "failure": null}));
@@ -148,7 +149,7 @@ pub(crate) fn assert_connection_test_failure_contract() {
     assert_eq!(wire["connectionFailure"]["code"], "databaseConfig");
     assert_eq!(
         wire["connectionFailure"]["detail"],
-        "the driver rejected the connection configuration",
+        "driverRejectedConfiguration"
     );
     // A statement-policy decision is not a reachability cause and carries no payload.
     let policy = serde_json::to_value(AppError::SqlPolicyBlocked { position: None }).unwrap();
@@ -161,7 +162,7 @@ pub(crate) fn assert_connection_test_failure_contract() {
 /// driver's SQLSTATE identity and never from its text.
 #[cfg(test)]
 fn assert_driver_message_stays_off_the_wire() {
-    use crate::kernel::connection_failure::ConnectionFailureCode;
+    use crate::kernel::connection_failure::{ConnectionFailureCode, ConnectionFailureDetail};
     use std::borrow::Cow;
 
     #[derive(Debug, thiserror::Error)]
@@ -192,24 +193,27 @@ fn assert_driver_message_stays_off_the_wire() {
         }
     }
 
-    for (sqlstate, message, code, detail) in [
+    for (sqlstate, message, code, detail, wire_detail) in [
         (
             Some("28P01"),
             "password authentication failed for user \"prod_admin\"",
             ConnectionFailureCode::Authentication,
-            "the database server rejected the user name or password",
+            ConnectionFailureDetail::ServerRejectedLogin,
+            "serverRejectedLogin",
         ),
         (
             Some("3D000"),
             "database \"prod_customers\" does not exist",
             ConnectionFailureCode::DatabaseConfig,
-            "the database server has no database with the configured name",
+            ConnectionFailureDetail::ServerMissingDatabase,
+            "serverMissingDatabase",
         ),
         (
             Some("42501"),
             "permission denied for table payroll_salaries",
             ConnectionFailureCode::Unknown,
-            "the driver did not provide a safe diagnostic",
+            ConnectionFailureDetail::Unclassified,
+            "unclassified",
         ),
     ] {
         let error = AppError::Db(sqlx::Error::Database(Box::new(DriverFailure {
@@ -220,7 +224,7 @@ fn assert_driver_message_stays_off_the_wire() {
         assert_eq!(failure.code, code);
         assert_eq!(failure.detail, detail);
         let wire = serde_json::to_value(&error).unwrap();
-        assert_eq!(wire["connectionFailure"]["detail"], detail);
+        assert_eq!(wire["connectionFailure"]["detail"], wire_detail);
         for identifier in ["prod_admin", "prod_customers", "payroll_salaries"] {
             assert!(
                 !wire["connectionFailure"].to_string().contains(identifier),
