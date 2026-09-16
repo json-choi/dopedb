@@ -20,7 +20,6 @@ const en = {
     marketingHome: "DopeDB product overview",
   },
   signIn: {
-    status: "Control plane available",
     eyebrow: "SHARED ACCESS / PERSONAL AUTHORITY",
     headlineFirst: "Share database access.",
     headlineSecond: "Keep authority personal.",
@@ -801,7 +800,6 @@ const ko: DeepStringShape<typeof en> = {
     marketingHome: "DopeDB 제품 소개",
   },
   signIn: {
-    status: "Control plane available",
     eyebrow: "SHARED ACCESS / PERSONAL AUTHORITY",
     headlineFirst: "DB 접근은 함께.",
     headlineSecond: "인증 정보는 각자.",
