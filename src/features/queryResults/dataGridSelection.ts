@@ -1,3 +1,6 @@
+// Pure anchor/focus rectangle model for grid cell selection, plus the clipboard
+// text it produces. A single cell copies through its own formatter so one value
+// is not turned into a one-cell TSV row.
 export type GridCellCoordinate = {
   row: number;
   col: number;
