@@ -100,7 +100,11 @@ export function Field({
     <label className="tw:grid tw:min-w-0 tw:gap-1.5 tw:text-sm tw:font-medium tw:text-muted-foreground tw:[&>input]:w-full tw:[&>select]:w-full tw:[&>textarea]:w-full">
       <span className="tw:inline-flex tw:min-w-0 tw:items-center tw:gap-1 tw:[overflow-wrap:anywhere]">
         <span id={labelId}>{label}</span>
-        {hint ? <span id={hintId}>{hint}</span> : null}
+        {hint ? (
+          <span id={hintId} className="tw:shrink-0">
+            {hint}
+          </span>
+        ) : null}
       </span>
       <FieldDescriptionContext
         value={{ labelledBy: labelId, describedBy, invalid }}
@@ -135,7 +139,11 @@ export function PropertyRow({
         <label id={labelId} htmlFor={htmlFor}>
           {label}
         </label>
-        {hint ? <span id={hintId}>{hint}</span> : null}
+        {hint ? (
+          <span id={hintId} className="tw:shrink-0">
+            {hint}
+          </span>
+        ) : null}
       </div>
       <div className="tw:grid tw:min-w-0 tw:gap-1.5 tw:[&>input]:w-full tw:[&>select]:w-full tw:[&>textarea]:w-full">
         <FieldDescriptionContext
