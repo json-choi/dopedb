@@ -441,6 +441,7 @@ export function useAppShellWorkbenchController({
       items: connections,
       selected,
       selectedId,
+      loaded: connectionsLoaded,
       loadError,
       supportsSql,
       creatingDemo: guidedDemo.creating,

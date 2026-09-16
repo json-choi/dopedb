@@ -142,6 +142,7 @@ export const connectionsCatalog = defineCatalog(
     "connections.environmentLocalFolder": "Local folder",
     "connections.environmentDataSources": "Data sources",
     "connections.environmentNoAnalyses": "No analyses yet",
+    "connections.loadingConnections": "Loading connections…",
     "connections.loadingProjects": "Loading Projects…",
     "connections.unassigned": "Unassigned",
     "connections.dataSourceCatalogNavigation":
@@ -598,6 +599,7 @@ export const connectionsCatalog = defineCatalog(
     "connections.environmentLocalFolder": "로컬 폴더",
     "connections.environmentDataSources": "데이터 소스",
     "connections.environmentNoAnalyses": "아직 분석 아티클이 없습니다",
+    "connections.loadingConnections": "연결 불러오는 중…",
     "connections.loadingProjects": "프로젝트 불러오는 중…",
     "connections.unassigned": "미분류",
     "connections.dataSourceCatalogNavigation":
