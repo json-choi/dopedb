@@ -433,6 +433,30 @@ describe("workbench state ownership", () => {
     expect(downloadCalls).toBe(2);
     expect(closeCalls).toBe(1);
     updater.dispose();
+
+    // A silent background check must not take over the visible phase: the
+    // shell renders its badge from this snapshot, so publishing `checking`
+    // for an unrequested check moves the workbench surface underneath it.
+    const backgroundCheck = deferred<AppUpdateResource | null>();
+    const background = new AppUpdaterController({
+      async currentVersion() {
+        return "0.3.54";
+      },
+      check: () => backgroundCheck.promise,
+      async relaunch() {
+        return undefined;
+      },
+      errorMessage: (error) => String(error),
+    });
+    const backgroundRefresh = background.refresh({ silent: true });
+    expect(background.getSnapshot().phase).toBe("idle");
+    backgroundCheck.resolve(null);
+    await backgroundRefresh;
+    expect(background.getSnapshot()).toMatchObject({
+      phase: "current",
+      currentVersion: "0.3.54",
+    });
+    background.dispose();
   });
 
   it("keeps an engine-specific query surface when the last tab closes", () => {

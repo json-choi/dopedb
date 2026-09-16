@@ -104,7 +104,7 @@ type ShellLayoutCommands = {
     deleteConnection: (id: string) => Promise<void>;
     updateConnection: (connection: ConnectionProfile) => void;
     settings: () => void;
-    safetySettings: (connectionId?: ConnectionProfile["id"]) => void;
+    safetySettings: (connectionId: ConnectionProfile["id"]) => void;
     openUpdateSettings: () => void;
   };
   explorer: {

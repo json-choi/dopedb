@@ -91,7 +91,7 @@ export function StatusBarItem({
       <button
         type="button"
         className="tw:inline-flex tw:h-full tw:min-w-0 tw:shrink-0 tw:cursor-pointer tw:items-center tw:gap-1 tw:whitespace-nowrap tw:border-0 tw:border-l tw:border-border-subtle tw:bg-transparent tw:px-2 tw:font-sans tw:text-inherit tw:hover:bg-muted tw:hover:text-foreground tw:focus-visible:bg-muted tw:focus-visible:text-foreground tw:focus-visible:outline-none"
-        onClick={onClick}
+        onClick={() => onClick()}
         title={title}
       >
         {children}
@@ -181,7 +181,9 @@ export function StatusBarIconButton({
       <button
         type="button"
         className="tw:relative tw:inline-flex tw:h-full tw:min-w-7 tw:shrink-0 tw:cursor-pointer tw:items-center tw:justify-center tw:gap-1 tw:border-0 tw:border-l tw:border-border-subtle tw:bg-transparent tw:px-1.5 tw:font-sans tw:text-inherit tw:disabled:cursor-default tw:disabled:opacity-40 tw:not-disabled:hover:bg-muted tw:not-disabled:hover:text-foreground tw:not-disabled:focus-visible:bg-muted tw:not-disabled:focus-visible:text-foreground tw:focus-visible:outline-none"
-        onClick={onClick}
+        // The declared contract takes no argument, so the DOM click event must
+        // never reach a caller that expects an identifier in that position.
+        onClick={() => onClick()}
         disabled={disabled}
         aria-label={label}
       >
