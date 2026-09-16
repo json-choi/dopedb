@@ -470,7 +470,7 @@ export function ConnectionAccessPanel({ workspaceId }: { workspaceId: string }) 
       <ControlField label={copy.sharedConnection}>
         <ControlSelect
           value={selectedId}
-          disabled={connectionsState !== "ready" || connections.length === 0}
+          disabled={connectionsState === "pending" || connections.length === 0}
           onChange={(event) => setSelectedId(event.target.value)}
         >
           {connections.length === 0 ? (

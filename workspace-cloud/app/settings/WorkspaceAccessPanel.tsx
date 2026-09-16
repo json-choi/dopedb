@@ -206,14 +206,14 @@ export function WorkspaceAccessPanel({ workspaceId }: { workspaceId: string }) {
         </small>
       </header>
       <div className="tw:grid tw:border-t tw:border-border">
-        {membersState !== "ready" ? (
+        {membersState === "pending" ? (
           <p className="tw:m-0 tw:border-b tw:border-border tw:py-5 tw:text-2xs tw:text-muted-foreground">
-            {membersState === "pending" ? copy.loading : copy.unavailable}
+            {copy.loading}
           </p>
         ) : null}
-        {membersState === "ready" && members.length === 0 ? (
+        {members.length === 0 && membersState !== "pending" ? (
           <p className="tw:m-0 tw:border-b tw:border-border tw:py-5 tw:text-2xs tw:text-muted-foreground">
-            {copy.empty}
+            {membersState === "failed" ? copy.unavailable : copy.empty}
           </p>
         ) : null}
         {members.map((item) => (
