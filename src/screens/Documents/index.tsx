@@ -238,13 +238,18 @@ export default function Documents({
     () => documentsToGrid(result?.page.documents ?? []),
     [result],
   );
-  const gridResult: QueryResult = {
-    columns: grid.columns,
-    rows: grid.rows,
-    rowCount: result?.page.docCount ?? 0,
-    truncated: result?.page.truncated ?? false,
-    durationMs: result?.page.durationMs ?? 0,
-  };
+  const gridResult: QueryResult = useMemo(
+    () => ({
+      columns: grid.columns,
+      rows: grid.rows,
+      rowCount: result?.page.docCount ?? 0,
+      truncated: result?.page.truncated ?? false,
+      durationMs: result?.page.durationMs ?? 0,
+      // Documents arrive as decoded JSON; there is no per-cell wire decode to fail.
+      unreadableCells: [],
+    }),
+    [grid, result],
+  );
 
   if (catalogPhase === "loaded" && tables.length === 0) {
     return (

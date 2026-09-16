@@ -30,6 +30,8 @@ export const tablesCatalog = defineCatalog(
     "tables.deleteRow": "Delete row?",
     "tables.discardStaged": "Discard staged changes",
     "tables.duplicate": "Duplicate",
+    "tables.unreadableRowBlocked":
+      "This row has a cell this build could not read; editing, duplicating, deleting, and copying it are blocked.",
     "tables.edit": "Edit",
     "tables.editor": "Data editor",
     "tables.expressionBar": "WHERE and ORDER BY",
@@ -120,6 +122,8 @@ export const tablesCatalog = defineCatalog(
     "tables.deleteRow": "행 삭제?",
     "tables.discardStaged": "준비된 변경 버리기",
     "tables.duplicate": "복제",
+    "tables.unreadableRowBlocked":
+      "이 행에는 이 빌드가 읽지 못한 셀이 있어 편집·복제·삭제·복사를 차단합니다.",
     "tables.edit": "편집",
     "tables.editor": "데이터 편집기",
     "tables.expressionBar": "WHERE 및 ORDER BY",

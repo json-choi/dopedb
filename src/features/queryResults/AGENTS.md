@@ -16,6 +16,7 @@ props. This directory has no IPC of its own.
 |------|-------------|
 | `DataGrid.tsx` | Shared results table: sticky header, row numbers, null styling, opt-in sort/filter/selection callbacks, drag-resizable columns. |
 | `DataGridColumnFilterMenu.tsx` | Compact value/count filter popup opened from a `DataGrid` header filter action. |
+| `cellReadState.ts` | Read-state contract for result cells: indexes the backend's `(row, column)` decode failures and re-addresses them when rows are filtered or sliced. |
 | `DataGridVirtual.test.ts` | Tests virtualization windowing and cell-selection helpers together with `../../lib/sqlBuild` grid query building. |
 | `DataGridVirtual.tsx` | Windowed row-and-column renderer for large query results; only cells intersecting the viewport (+ small overscan) enter the DOM. |
 | `ResultToolbar.tsx` | Compact export/copy controls for any result grid; every action operates on the full result rows, not just the visible window. |
@@ -34,6 +35,11 @@ None.
   consumers (Analysis Article rendering) depend on inert-by-default behavior.
 - `dataGridKeyboard.ts`'s row-header-at-index-0 convention is shared by both
   renderers — do not let one renderer diverge from the other's coordinate model.
+- A cell the backend could not decode is never a value. It arrives as `null` in
+  `rows` plus coordinates in `QueryResult.unreadableCells` (or a stream page's
+  `unreadable`), and every renderer, clipboard, export, and row-editor path reads
+  it through `cellReadState.ts`. Never infer a decode failure from a value's text:
+  any string a marker could use is also real user data.
 
 ### Testing Requirements
 - `DataGridVirtual.test.ts` is part of the `pnpm test` smoke suite

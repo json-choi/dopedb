@@ -510,6 +510,7 @@ mod platform {
                                     row_count: 1,
                                     truncated: false,
                                     duration_ms: 1,
+                                    unreadable_cells: Vec::new(),
                                 },
                             },
                         );

@@ -63,13 +63,20 @@ export default function MongoTableData({
     () => documentsToGrid(documentPage?.documents ?? [], fallbackColumns),
     [documentPage, fallbackColumns],
   );
-  const result: QueryResult = {
-    columns: grid.columns,
-    rows: grid.rows,
-    rowCount: grid.rows.length,
-    truncated: documentPage?.truncated ?? false,
-    durationMs: documentPage?.durationMs ?? 0,
-  };
+  // Stable per loaded page: the grid clears its cell selection when this object
+  // changes, so it must change with the page and not with every render.
+  const result: QueryResult = useMemo(
+    () => ({
+      columns: grid.columns,
+      rows: grid.rows,
+      rowCount: grid.rows.length,
+      truncated: documentPage?.truncated ?? false,
+      durationMs: documentPage?.durationMs ?? 0,
+      // Documents arrive as decoded JSON; there is no per-cell wire decode to fail.
+      unreadableCells: [],
+    }),
+    [documentPage, grid],
+  );
   const rows = result.rows.length;
   const from = rows === 0 ? 0 : page * pageSize + 1;
   const to = page * pageSize + rows;

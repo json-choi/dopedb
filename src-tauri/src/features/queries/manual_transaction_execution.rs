@@ -49,9 +49,9 @@ pub(super) async fn manual_read(
 ) -> AppResult<QueryResult> {
     set_namespace(connection, namespace.as_deref()).await?;
     let max_rows = max_rows as usize;
-    let (columns, rows, truncated) = match connection {
+    let (columns, rows, unreadable_cells, truncated) = match connection {
         ManualConnection::Postgres(connection) => {
-            let (columns, rows, truncated) = executor::read::stream_capped(
+            let (columns, rows, unreadable, truncated) = executor::read::stream_capped(
                 sqlx::query(AssertSqlSafe(sql)).fetch(&mut **connection),
                 max_rows,
                 executor::read::pg_value,
@@ -67,10 +67,10 @@ pub(super) async fn manual_read(
             } else {
                 columns
             };
-            (columns, rows, truncated)
+            (columns, rows, unreadable, truncated)
         }
         ManualConnection::Mysql(connection) => {
-            let (columns, rows, truncated) = executor::read::stream_capped(
+            let (columns, rows, unreadable, truncated) = executor::read::stream_capped(
                 sqlx::query(AssertSqlSafe(sql)).fetch(&mut **connection),
                 max_rows,
                 executor::read::mysql_value,
@@ -86,10 +86,10 @@ pub(super) async fn manual_read(
             } else {
                 columns
             };
-            (columns, rows, truncated)
+            (columns, rows, unreadable, truncated)
         }
         ManualConnection::Sqlite(connection) => {
-            let (columns, rows, truncated) = executor::read::stream_capped(
+            let (columns, rows, unreadable, truncated) = executor::read::stream_capped(
                 sqlx::query(AssertSqlSafe(sql)).fetch(&mut **connection),
                 max_rows,
                 executor::read::sqlite_value,
@@ -105,7 +105,7 @@ pub(super) async fn manual_read(
             } else {
                 columns
             };
-            (columns, rows, truncated)
+            (columns, rows, unreadable, truncated)
         }
     };
     Ok(QueryResult {
@@ -114,6 +114,7 @@ pub(super) async fn manual_read(
         rows,
         truncated,
         duration_ms: 0,
+        unreadable_cells,
     })
 }
 
@@ -203,6 +204,7 @@ where
         on_batch(executor::read::ReadBatch {
             columns: columns.clone(),
             rows: Vec::new(),
+            unreadable: Vec::new(),
         })
         .await?;
     }

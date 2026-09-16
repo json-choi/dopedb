@@ -27,6 +27,7 @@ export type {
   SafetySettings,
   ScriptOutcome,
   ScriptStatement,
+  UnreadableCell,
   WorkspaceConnectionAccess,
   WorkspaceCredentialMode,
 } from "./generated/model";

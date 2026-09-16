@@ -138,6 +138,9 @@ impl BigQueryConnection {
             rows,
             truncated,
             duration_ms: started.elapsed().as_millis() as u64,
+            // BigQuery rows arrive as JSON the client already typed; there is no
+            // per-cell wire decode that can fail the way a SQLx column can.
+            unreadable_cells: Vec::new(),
         })
     }
 

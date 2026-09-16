@@ -21,6 +21,7 @@ import {
   TABLE_PAGE_SIZE,
 } from "../../features/tableData/tableState";
 import DataGrid from "../../features/queryResults/DataGrid";
+import { unreadableCellLookup } from "../../features/queryResults/cellReadState";
 import type { RowEditorSubmission } from "../../components/RowEditor";
 import JobPanel from "../../features/jobs/JobPanel";
 import Skeleton from "../../components/Skeleton";
@@ -216,7 +217,15 @@ export default function SqlTableData({
     });
   }
 
-  const selRow = selected != null && result ? result.rows[selected] : null;
+  // A row holding a cell the backend could not read has no complete value set, so
+  // it cannot seed an editor, a duplicate INSERT, a DELETE guard, or a row copy:
+  // every one of those would record a value the column never returned.
+  const unreadable = unreadableCellLookup(result?.unreadableCells);
+  const selectedRowUnreadable = selected != null && unreadable.hasRow(selected);
+  const selRow =
+    selected != null && result && !selectedRowUnreadable
+      ? result.rows[selected]
+      : null;
 
   function rowMap(row: unknown[]): Record<string, string | null> {
     const m: Record<string, string | null> = {};
@@ -225,6 +234,7 @@ export default function SqlTableData({
   }
 
   function openEdit(mode: RowEditorState["mode"]) {
+    if (mode !== "insert" && !selRow) return;
     const nextEditor =
       mode === "insert"
         ? { mode, initial: {} }
@@ -396,13 +406,15 @@ export default function SqlTableData({
     void refreshRowsAndCount();
   }
 
-  const noEditTitle = catalogQuery.error
-    ? t("tables.catalogLoadFailedShort")
-    : !catalogReady
-      ? t("tables.catalogRequired")
-      : nonScalarPk
-        ? t("tables.nonScalarPk")
-        : t("tables.noTablePk");
+  const noEditTitle = selectedRowUnreadable
+    ? t("tables.unreadableRowBlocked")
+    : catalogQuery.error
+      ? t("tables.catalogLoadFailedShort")
+      : !catalogReady
+        ? t("tables.catalogRequired")
+        : nonScalarPk
+          ? t("tables.nonScalarPk")
+          : t("tables.noTablePk");
   const panelOpen = reviewing || !!editor || !!cellSel || !!pendingDelete;
 
   return (
@@ -410,9 +422,11 @@ export default function SqlTableData({
       <TableToolbar
         table={table}
         result={result}
-        canEdit={canEdit}
+        canEdit={canEdit && !selectedRowUnreadable}
         noEditTitle={noEditTitle}
         selected={selected}
+        selectedRowUnreadable={selectedRowUnreadable}
+        unreadableCells={result?.unreadableCells.length ?? 0}
         stagedCount={staged.length}
         activeFilters={activeFilters}
         page={page}

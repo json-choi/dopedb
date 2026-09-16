@@ -20,6 +20,10 @@ type Props = {
   canEdit: boolean;
   noEditTitle: string;
   selected: number | null;
+  /** The selected row holds a cell the backend could not read. */
+  selectedRowUnreadable: boolean;
+  /** Cells of the current page the backend could not read. */
+  unreadableCells: number;
   stagedCount: number;
   activeFilters: number;
   page: number;
@@ -56,6 +60,8 @@ export default function TableToolbar(props: Props) {
     canEdit,
     noEditTitle,
     selected,
+    selectedRowUnreadable,
+    unreadableCells,
     stagedCount,
     activeFilters,
     page,
@@ -70,8 +76,14 @@ export default function TableToolbar(props: Props) {
     supportsMutationTools,
     supportsBulkJobs,
   } = props;
+  // A page carrying a cell the backend could not read cannot be exported or copied:
+  // the file would show those cells as empty values the column never returned.
+  const unreadable = unreadableCells > 0;
+  const unreadableTitle = t("results.unreadableBlockedTitle", {
+    count: unreadableCells,
+  });
   const exportCsv = () => {
-    if (!result) return;
+    if (!result || unreadable) return;
     downloadCsv(
       `${table.name}-page${page + 1}-${stamp()}`,
       result.columns,
@@ -79,7 +91,7 @@ export default function TableToolbar(props: Props) {
     );
   };
   const exportJson = () => {
-    if (!result) return;
+    if (!result || unreadable) return;
     downloadJson(
       `${table.name}-page${page + 1}-${stamp()}`,
       result.columns,
@@ -310,30 +322,32 @@ export default function TableToolbar(props: Props) {
           </ToolbarMenuItem>
           <ToolbarMenuItem
             icon="copy"
-            disabled={selected == null}
+            disabled={selected == null || selectedRowUnreadable}
+            title={selectedRowUnreadable ? noEditTitle : undefined}
             onClick={() => props.onCopyRow(false)}
           >
             {t("tables.copyTsv")}
           </ToolbarMenuItem>
           <ToolbarMenuItem
             icon="copy"
-            disabled={selected == null}
+            disabled={selected == null || selectedRowUnreadable}
+            title={selectedRowUnreadable ? noEditTitle : undefined}
             onClick={() => props.onCopyRow(true)}
           >
             {t("tables.copyJson")}
           </ToolbarMenuItem>
           <ToolbarMenuItem
             icon="download"
-            disabled={!rows}
-            title={t("tables.exportPageTitle")}
+            disabled={!rows || unreadable}
+            title={unreadable ? unreadableTitle : t("tables.exportPageTitle")}
             onClick={exportCsv}
           >
             {t("tables.exportCsv")}
           </ToolbarMenuItem>
           <ToolbarMenuItem
             icon="download"
-            disabled={!rows}
-            title={t("tables.exportPageTitle")}
+            disabled={!rows || unreadable}
+            title={unreadable ? unreadableTitle : t("tables.exportPageTitle")}
             onClick={exportJson}
           >
             {t("tables.exportJson")}

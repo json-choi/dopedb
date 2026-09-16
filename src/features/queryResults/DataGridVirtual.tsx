@@ -10,7 +10,10 @@ import {
 } from "react";
 import type { QueryResult } from "../../ipc/types";
 import { type SqlStreamRowSource } from "../queries/domain";
-import { sqlResultRowAt } from "../queries/resultPageCache";
+import {
+  sqlResultRowAt,
+  sqlResultRowUnreadable,
+} from "../queries/resultPageCache";
 import { useSqlResultPages } from "../queries/useSqlResultPages";
 import type { GridSort } from "../../lib/sqlBuild";
 import { Icon } from "../../components/Icon";
@@ -18,11 +21,19 @@ import DataGridColumnFilterMenu from "./DataGridColumnFilterMenu";
 import { useI18n } from "../../lib/i18n";
 import {
   extendGridSelection,
+  gridSelectionBounds,
   gridSelectionClipboardText,
   gridSelectionIncludes,
   singleGridCell,
   type GridCellSelection,
 } from "./dataGridSelection";
+import {
+  unreadableCellLookup,
+  unreadableCellLookupFromRows,
+  type UnreadableCellLookup,
+} from "./cellReadState";
+import { numericGridColumns } from "./numericColumns";
+import { useDataGridSelectionReset } from "./useDataGridSelectionReset";
 import {
   DATA_GRID_DEFAULT_COLUMN_WIDTH,
   DATA_GRID_HEADER_HEIGHT,
@@ -30,6 +41,7 @@ import {
   DATA_GRID_ROW_NUMBER_WIDTH,
 } from "../../design-system/dataGridGeometry";
 import {
+  DataGridNotice,
   DataGridViewport,
   type DataGridSurface,
 } from "../../design-system/components/DataGridViewport";
@@ -124,6 +136,7 @@ export default function DataGridVirtual(props: Props) {
     height: 320,
   });
   const [selection, setSelection] = useState<GridCellSelection | null>(null);
+  const [copyBlocked, setCopyBlocked] = useState(false);
   const [focus, setFocus] = useState<DataGridFocus>({ row: 0, column: 0 });
   const focusRequestedRef = useRef(false);
   const [widths, setWidths] = useState<Record<number, number>>({});
@@ -133,6 +146,20 @@ export default function DataGridVirtual(props: Props) {
     props.rowSource
       ? sqlResultRowAt(props.rowSource, index)
       : props.result.rows[index];
+  // Same contract as the table renderer: a cell the backend could not decode has
+  // no value, so it is never rendered, inspected, or copied as one. Streamed rows
+  // carry their read state on the page they came from.
+  const rowSource = props.rowSource;
+  const resultUnreadable = props.result.unreadableCells;
+  const unreadable: UnreadableCellLookup = useMemo(
+    () =>
+      rowSource
+        ? unreadableCellLookupFromRows((row) =>
+            sqlResultRowUnreadable(rowSource, row),
+          )
+        : unreadableCellLookup(resultUnreadable),
+    [resultUnreadable, rowSource],
+  );
   const columnWidths = useMemo(
     () =>
       props.result.columns.map(
@@ -160,6 +187,28 @@ export default function DataGridVirtual(props: Props) {
   );
   const columnSelectionKey = props.result.columns.join("\u0000");
   const visibleColumnWindowKey = visibleColumns.join(",");
+  // A windowed result cannot be scanned end to end, so numeric alignment is judged
+  // from the rows currently loaded and carried forward for the same column set.
+  const numericStickyRef = useRef<{ key: string; columns: boolean[] }>({
+    key: columnSelectionKey,
+    columns: [],
+  });
+  if (numericStickyRef.current.key !== columnSelectionKey) {
+    numericStickyRef.current = { key: columnSelectionKey, columns: [] };
+  }
+  const windowRows = Array.from(
+    { length: Math.max(0, endRow - startRow) },
+    (_, offset) => rowAt(startRow + offset),
+  );
+  const numericColumns = numericGridColumns(
+    props.result.columns.length,
+    windowRows,
+    numericStickyRef.current.columns,
+  );
+  numericStickyRef.current = {
+    key: columnSelectionKey,
+    columns: numericColumns,
+  };
 
   useEffect(() => {
     const element = scrollRef.current;
@@ -185,20 +234,34 @@ export default function DataGridVirtual(props: Props) {
       }
     };
   }, []);
-  useEffect(() => {
-    setSelection(null);
-    setFocus({ row: 0, column: 0 });
-  }, [columnSelectionKey]);
+  // Same rule as the table renderer: columns alone are not the result. Paging a
+  // 19-column table kept the old highlight on a row the user never picked, and ⌘C
+  // then copied the new page's values from under it.
+  useDataGridSelectionReset(
+    {
+      result: props.result,
+      operationId: props.rowSource?.operationId ?? null,
+      columnKey: columnSelectionKey,
+      startIndex: props.startIndex,
+    },
+    () => {
+      setSelection(null);
+      setCopyBlocked(false);
+      setFocus({ row: 0, column: 0 });
+    },
+  );
 
   const activate = (row: number, col: number, extend = false) => {
     focusRequestedRef.current = true;
     setFocus({ row, column: col + 1 });
+    setCopyBlocked(false);
     if (extend && selection) {
       setSelection(extendGridSelection(selection, row, col));
       return;
     }
     setSelection(singleGridCell(row, col));
     props.onSelectRow?.(row);
+    if (unreadable.typeAt(row, col)) return;
     props.onCellClick?.(rowAt(row)?.[col], row, props.result.columns[col]);
   };
   useEffect(() => {
@@ -226,7 +289,11 @@ export default function DataGridVirtual(props: Props) {
     setFocus({ row: Math.min(Math.max(0, startRow), Math.max(0, rowCount - 1)), column: 0 });
   }, [endRow, focus, rowCount, startRow, visibleColumns]);
   const move = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === "Escape") return setSelection(null);
+    if (event.key === "Escape") {
+      setSelection(null);
+      setCopyBlocked(false);
+      return;
+    }
     if (
       (event.metaKey || event.ctrlKey) &&
       event.key.toLowerCase() === "c" &&
@@ -234,6 +301,19 @@ export default function DataGridVirtual(props: Props) {
     ) {
       if (window.getSelection()?.toString()) return;
       event.preventDefault();
+      const bounds = gridSelectionBounds(selection);
+      if (
+        unreadable.hasRange(
+          bounds.firstRow,
+          bounds.lastRow,
+          bounds.firstCol,
+          bounds.lastCol,
+        )
+      ) {
+        setCopyBlocked(true);
+        return;
+      }
+      setCopyBlocked(false);
       void navigator.clipboard.writeText(
         gridSelectionClipboardText(selection, rowAt, display, copy),
       );
@@ -342,12 +422,12 @@ export default function DataGridVirtual(props: Props) {
       }
     >
       {pageError ? (
-        <div
-          className="tw:sticky tw:top-control-sm tw:left-0 tw:z-[var(--ds-z-sticky)] tw:w-fit tw:max-w-[min(520px,90%)] tw:bg-danger-muted tw:px-2 tw:py-1 tw:font-sans tw:text-xs tw:text-danger"
-          role="status"
-        >
-          {pageError}
-        </div>
+        <DataGridNotice tone="danger">{pageError}</DataGridNotice>
+      ) : null}
+      {copyBlocked ? (
+        <DataGridNotice tone="warning">
+          {t("grid.copyBlockedUnreadable")}
+        </DataGridNotice>
       ) : null}
       <div
         className="tw:relative tw:min-w-full tw:font-mono tw:[&_[data-grid-box]]:absolute tw:[&_[data-grid-box]]:box-border tw:[&_[data-grid-box]]:h-control-sm tw:[&_[data-grid-box]]:overflow-hidden tw:[&_[data-grid-box]]:border-b tw:[&_[data-grid-box]]:border-border-subtle tw:[&_[data-grid-box]]:bg-background tw:[&_[data-grid-box]]:px-2 tw:[&_[data-grid-box]]:py-1 tw:[&_[data-grid-box]]:leading-ui tw:[&_[data-grid-box]]:text-ellipsis tw:[&_[data-grid-box]]:whitespace-nowrap"
@@ -454,89 +534,96 @@ export default function DataGridVirtual(props: Props) {
             );
           })}
         </div>
-        {Array.from(
-          { length: Math.max(0, endRow - startRow) },
-          (_, offset) => startRow + offset,
-        ).map((rowIndex) => (
-          <div
-            key={rowIndex}
-            data-selected={props.selectedRow === rowIndex}
-            className="tw:group tw:absolute tw:top-0 tw:left-0 tw:right-0 tw:h-control-sm"
-            role="row"
-            aria-rowindex={props.startIndex + rowIndex + 2}
-            style={{
-              transform: `translateY(${
-                DATA_GRID_HEADER_HEIGHT + rowIndex * DATA_GRID_ROW_HEIGHT
-              }px)`,
-            }}
-          >
+        {windowRows.map((_windowRow, windowOffset) => {
+          const rowIndex = startRow + windowOffset;
+          return (
             <div
-              data-grid-box
-              data-interactive={props.onSelectRow ? "true" : undefined}
-              data-focused={focus.row === rowIndex && focus.column === 0}
-              data-grid-focus={`${rowIndex}:0`}
-              className="tw:left-0 tw:z-[var(--ds-z-base)] tw:border-r tw:!bg-card tw:text-right tw:text-muted-foreground tw:group-data-[selected=true]:!bg-selection tw:data-[interactive=true]:cursor-pointer tw:data-[focused=true]:shadow-[inset_0_0_0_var(--ds-border-width-strong)_var(--ds-ring)]"
-              role="rowheader"
-              aria-colindex={1}
-              aria-selected={props.selectedRow === rowIndex}
-              tabIndex={focus.row === rowIndex && focus.column === 0 ? 0 : -1}
-              style={{ width: DATA_GRID_ROW_NUMBER_WIDTH }}
-              onFocus={() => setFocus({ row: rowIndex, column: 0 })}
-              onClick={() => {
-                focusRequestedRef.current = true;
-                setFocus({ row: rowIndex, column: 0 });
-                props.onSelectRow?.(rowIndex);
+              key={rowIndex}
+              data-selected={props.selectedRow === rowIndex}
+              className="tw:group tw:absolute tw:top-0 tw:left-0 tw:right-0 tw:h-control-sm"
+              role="row"
+              aria-rowindex={props.startIndex + rowIndex + 2}
+              style={{
+                transform: `translateY(${
+                  DATA_GRID_HEADER_HEIGHT + rowIndex * DATA_GRID_ROW_HEIGHT
+                }px)`,
               }}
             >
-              {props.startIndex + rowIndex + 1}
+              <div
+                data-grid-box
+                data-interactive={props.onSelectRow ? "true" : undefined}
+                data-focused={focus.row === rowIndex && focus.column === 0}
+                data-grid-focus={`${rowIndex}:0`}
+                className="tw:left-0 tw:z-[var(--ds-z-base)] tw:border-r tw:!bg-card tw:text-right tw:text-muted-foreground tw:group-data-[selected=true]:!bg-selection tw:data-[interactive=true]:cursor-pointer tw:data-[focused=true]:shadow-[inset_0_0_0_var(--ds-border-width-strong)_var(--ds-ring)]"
+                role="rowheader"
+                aria-colindex={1}
+                aria-selected={props.selectedRow === rowIndex}
+                tabIndex={focus.row === rowIndex && focus.column === 0 ? 0 : -1}
+                style={{ width: DATA_GRID_ROW_NUMBER_WIDTH }}
+                onFocus={() => setFocus({ row: rowIndex, column: 0 })}
+                onClick={() => {
+                  focusRequestedRef.current = true;
+                  setFocus({ row: rowIndex, column: 0 });
+                  props.onSelectRow?.(rowIndex);
+                }}
+              >
+                {props.startIndex + rowIndex + 1}
+              </div>
+              {visibleColumns.map((columnIndex) => {
+                const value = rowAt(rowIndex)?.[columnIndex];
+                const loading = value === undefined && !!props.rowSource;
+                const unreadableType = unreadable.typeAt(rowIndex, columnIndex);
+                const text = loading
+                  ? "…"
+                  : unreadableType
+                    ? t("grid.unreadableCell", { type: unreadableType })
+                    : display(value);
+                const selected = gridSelectionIncludes(
+                  selection,
+                  rowIndex,
+                  columnIndex,
+                );
+                const focused =
+                  focus.row === rowIndex && focus.column === columnIndex + 1;
+                return (
+                  <div
+                    key={columnIndex}
+                    data-grid-cell={`${rowIndex}:${columnIndex}`}
+                    data-grid-focus={`${rowIndex}:${columnIndex + 1}`}
+                    data-grid-box
+                    data-null={value === null && !unreadableType}
+                    data-unreadable={!!unreadableType}
+                    data-numeric={numericColumns[columnIndex]}
+                    data-loading={loading}
+                    data-interactive={interactive}
+                    data-selected={selected}
+                    data-focused={focused}
+                    className="tw:group-data-[selected=true]:!bg-selection tw:data-[null=true]:text-muted-foreground tw:data-[null=true]:italic tw:data-[unreadable=true]:text-warning tw:data-[unreadable=true]:italic tw:data-[numeric=true]:text-right tw:data-[numeric=true]:tabular-nums tw:data-[loading=true]:text-muted-foreground tw:data-[interactive=true]:cursor-pointer tw:data-[selected=true]:!bg-selection tw:data-[focused=true]:shadow-[inset_0_0_0_var(--ds-border-width-strong)_var(--ds-ring)]"
+                    role="gridcell"
+                    aria-colindex={columnIndex + 2}
+                    aria-selected={selected}
+                    tabIndex={focused ? 0 : -1}
+                    title={
+                      text.length > 40 || text.includes("\n") ? text : undefined
+                    }
+                    style={{
+                      left: offsets[columnIndex],
+                      width: columnWidths[columnIndex],
+                    }}
+                    onClick={(event) =>
+                      activate(rowIndex, columnIndex, event.shiftKey)
+                    }
+                    onFocus={() =>
+                      setFocus({ row: rowIndex, column: columnIndex + 1 })
+                    }
+                  >
+                    {text}
+                  </div>
+                );
+              })}
             </div>
-            {visibleColumns.map((columnIndex) => {
-              const value = rowAt(rowIndex)?.[columnIndex];
-              const loading = value === undefined && !!props.rowSource;
-              const text = loading ? "…" : display(value);
-              const selected = gridSelectionIncludes(
-                selection,
-                rowIndex,
-                columnIndex,
-              );
-              const focused =
-                focus.row === rowIndex && focus.column === columnIndex + 1;
-              return (
-                <div
-                  key={columnIndex}
-                  data-grid-cell={`${rowIndex}:${columnIndex}`}
-                  data-grid-focus={`${rowIndex}:${columnIndex + 1}`}
-                  data-grid-box
-                  data-null={value === null}
-                  data-loading={loading}
-                  data-interactive={interactive}
-                  data-selected={selected}
-                  data-focused={focused}
-                  className="tw:group-data-[selected=true]:!bg-selection tw:data-[null=true]:text-muted-foreground tw:data-[null=true]:italic tw:data-[loading=true]:text-muted-foreground tw:data-[interactive=true]:cursor-pointer tw:data-[selected=true]:!bg-selection tw:data-[focused=true]:shadow-[inset_0_0_0_var(--ds-border-width-strong)_var(--ds-ring)]"
-                  role="gridcell"
-                  aria-colindex={columnIndex + 2}
-                  aria-selected={selected}
-                  tabIndex={focused ? 0 : -1}
-                  title={
-                    text.length > 40 || text.includes("\n") ? text : undefined
-                  }
-                  style={{
-                    left: offsets[columnIndex],
-                    width: columnWidths[columnIndex],
-                  }}
-                  onClick={(event) =>
-                    activate(rowIndex, columnIndex, event.shiftKey)
-                  }
-                  onFocus={() =>
-                    setFocus({ row: rowIndex, column: columnIndex + 1 })
-                  }
-                >
-                  {text}
-                </div>
-              );
-            })}
-          </div>
-        ))}
+          );
+        })}
       </div>
     </DataGridViewport>
   );

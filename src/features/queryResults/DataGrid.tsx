@@ -5,6 +5,8 @@
 //   - onFilter   → compact value/count popup from a header filter action
 //   - onSelectRow/onCellClick → row highlight + click-to-open a cell in the side viewer
 //   - startIndex → row numbers continue across pages (rows 101-200, not 1-100 again)
+// A cell the backend could not decode is never rendered or copied as a value: both
+// renderers read its state from `cellReadState` and refuse the copy instead.
 // Columns are drag-resizable: first drag snapshots every rendered width so only the
 // dragged column moves. Double-click resets the compact default widths.
 import {
@@ -25,6 +27,7 @@ import {
   DATA_GRID_ROW_NUMBER_WIDTH,
 } from "../../design-system/dataGridGeometry";
 import {
+  DataGridNotice,
   DataGridViewport,
   type DataGridSurface,
 } from "../../design-system/components/DataGridViewport";
@@ -35,6 +38,7 @@ import DataGridVirtual from "./DataGridVirtual";
 import { useI18n } from "../../lib/i18n";
 import {
   extendGridSelection,
+  gridSelectionBounds,
   gridSelectionClipboardText,
   gridSelectionIncludes,
   singleGridCell,
@@ -44,6 +48,12 @@ import {
   dataGridKeyboardTarget,
   type DataGridFocus,
 } from "./dataGridKeyboard";
+import {
+  unreadableCellLookup,
+  type UnreadableCellLookup,
+} from "./cellReadState";
+import { numericGridColumns } from "./numericColumns";
+import { useDataGridSelectionReset } from "./useDataGridSelectionReset";
 
 function cell(v: unknown): string {
   if (v === null || v === undefined) return "NULL";
@@ -145,6 +155,7 @@ function DataGridTable({
   // Selected cell (click to select, ⌘C to copy, Esc to clear). Independent of onCellClick.
   const [sel, setSel] = useState<GridCellSelection | null>(null);
   const [focus, setFocus] = useState<DataGridFocus>({ row: 0, column: 0 });
+  const [copyBlocked, setCopyBlocked] = useState(false);
   const focusRequestedRef = useRef(false);
   const viewportRef = useRef<HTMLDivElement>(null);
   const tableRef = useRef<HTMLTableElement>(null);
@@ -152,12 +163,14 @@ function DataGridTable({
   useEffect(() => {
     setWidths({}); // new column set → stale widths dropped
   }, [sig]);
-  useEffect(() => {
-    // Sort/filter/pagination swap the rows without changing columns — a selection is
-    // coordinates into rows, so any new result object invalidates it.
-    setSel(null);
-    setFocus({ row: 0, column: 0 });
-  }, [result]);
+  useDataGridSelectionReset(
+    { result, operationId: null, columnKey: sig, startIndex },
+    () => {
+      setSel(null);
+      setFocus({ row: 0, column: 0 });
+      setCopyBlocked(false);
+    },
+  );
   useEffect(() => {
     if (!focusRequestedRef.current) return;
     focusRequestedRef.current = false;
@@ -167,6 +180,12 @@ function DataGridTable({
     target?.focus({ preventScroll: true });
     target?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [focus]);
+  // Read state travels with the exact result, so re-indexing it per result keeps a
+  // stale coordinate from ever describing a different page's cell.
+  const unreadable: UnreadableCellLookup = useMemo(
+    () => unreadableCellLookup(result.unreadableCells),
+    [result],
+  );
   const resized = Object.keys(widths).length > 0;
   const columnWidths = [
     widths[0] ?? DATA_GRID_ROW_NUMBER_WIDTH,
@@ -176,24 +195,12 @@ function DataGridTable({
   ];
   const totalW = columnWidths.reduce((total, width) => total + width, 0);
 
-  // Right-align numeric columns. NUMERIC/MONEY arrive as plain decimal strings (the
-  // Rust side serializes them lossless), so detect by value shape — and per column,
-  // not per cell, so a text column with the odd digit-only value can't render ragged.
-  const numericCols = useMemo(() => {
-    const numRe = /^-?\d+(\.\d+)?$/;
-    return result.columns.map(
-      (_, j) =>
-        result.rows.some((r) => r[j] != null) &&
-        result.rows.every((r) => {
-          const v = r[j];
-          return (
-            v == null ||
-            typeof v === "number" ||
-            (typeof v === "string" && numRe.test(v))
-          );
-        }),
-    );
-  }, [result]);
+  // Right-align numeric columns from the shared judgement the virtual renderer
+  // uses, so the same column is aligned identically in both grids.
+  const numericCols = useMemo(
+    () => numericGridColumns(result.columns.length, result.rows),
+    [result],
+  );
 
   function startResize(
     e: { preventDefault(): void; stopPropagation(): void; clientX: number },
@@ -238,12 +245,16 @@ function DataGridTable({
   function selectCell(i: number, j: number, extend: boolean) {
     focusRequestedRef.current = true;
     setFocus({ row: i, column: j + 1 });
+    setCopyBlocked(false);
     if (extend && sel) {
       setSel(extendGridSelection(sel, i, j));
       return;
     }
     setSel(singleGridCell(i, j));
     onSelectRow?.(i);
+    // An unreadable cell has no value to inspect; handing `null` to the viewer
+    // would show it as a SQL NULL.
+    if (unreadable.typeAt(i, j)) return;
     onCellClick?.(result.rows[i]?.[j], i, result.columns[j]);
   }
 
@@ -252,13 +263,29 @@ function DataGridTable({
   // roving-select a cell (mirrors App.tsx's tab-bar pattern: move sel, then focus the td —
   // valid even at tabIndex=-1, only Tab-order membership depends on that). Enter opens it.
   function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {
-    if (e.key === "Escape" && sel) {
+    if (e.key === "Escape" && (sel || copyBlocked)) {
       setSel(null);
+      setCopyBlocked(false);
       return;
     }
     if ((e.metaKey || e.ctrlKey) && (e.key === "c" || e.key === "C") && sel) {
       if ((window.getSelection()?.toString() ?? "") !== "") return; // real selection wins
       e.preventDefault();
+      const bounds = gridSelectionBounds(sel);
+      // Refuse rather than copy a placeholder: the clipboard must carry the same
+      // thing the grid shows, and an unread cell has no value to carry.
+      if (
+        unreadable.hasRange(
+          bounds.firstRow,
+          bounds.lastRow,
+          bounds.firstCol,
+          bounds.lastCol,
+        )
+      ) {
+        setCopyBlocked(true);
+        return;
+      }
+      setCopyBlocked(false);
       void navigator.clipboard.writeText(
         gridSelectionClipboardText(
           sel,
@@ -321,6 +348,11 @@ function DataGridTable({
       tabIndex={result.rows.length === 0 ? 0 : undefined}
       onKeyDown={onKeyDown}
     >
+      {copyBlocked ? (
+        <DataGridNotice tone="warning">
+          {t("grid.copyBlockedUnreadable")}
+        </DataGridNotice>
+      ) : null}
       <table
         ref={tableRef}
         role="grid"
@@ -454,19 +486,23 @@ function DataGridTable({
                 {startIndex + i + 1}
               </td>
               {row.map((v, j) => {
-                const text = cell(v);
+                const unreadableType = unreadable.typeAt(i, j);
+                const text = unreadableType
+                  ? t("grid.unreadableCell", { type: unreadableType })
+                  : cell(v);
                 const isSel = gridSelectionIncludes(sel, i, j);
                 const isFocus = focus.row === i && focus.column === j + 1;
                 return (
                   <td
                     key={j}
-                    data-null={v === null}
+                    data-null={v === null && !unreadableType}
+                    data-unreadable={!!unreadableType}
                     data-numeric={numericCols[j]}
                     data-interactive={interactive}
                     data-selected={isSel}
                     data-focused={isFocus}
                     data-grid-focus={`${i}:${j + 1}`}
-                    className="tw:max-w-[480px] tw:overflow-hidden tw:bg-background tw:text-ellipsis tw:data-[null=true]:text-muted-foreground tw:data-[null=true]:italic tw:data-[numeric=true]:text-right tw:data-[numeric=true]:tabular-nums tw:data-[interactive=true]:cursor-pointer tw:data-[selected=true]:!bg-selection tw:data-[focused=true]:shadow-[inset_0_0_0_var(--ds-border-width-strong)_var(--ds-ring)]"
+                    className="tw:max-w-[480px] tw:overflow-hidden tw:bg-background tw:text-ellipsis tw:data-[null=true]:text-muted-foreground tw:data-[null=true]:italic tw:data-[unreadable=true]:text-warning tw:data-[unreadable=true]:italic tw:data-[numeric=true]:text-right tw:data-[numeric=true]:tabular-nums tw:data-[interactive=true]:cursor-pointer tw:data-[selected=true]:!bg-selection tw:data-[focused=true]:shadow-[inset_0_0_0_var(--ds-border-width-strong)_var(--ds-ring)]"
                     // Compact fixed columns can truncate any value.
                     title={
                       resized || text.length > 40 || text.includes("\n")

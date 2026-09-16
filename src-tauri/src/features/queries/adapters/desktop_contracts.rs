@@ -112,6 +112,9 @@ pub(crate) struct DesktopSqlStreamReceipt {
     pub(super) row_count: usize,
     pub(super) truncated: bool,
     pub(super) duration_ms: u64,
+    /// How many cells across every page this build could not decode. The renderer
+    /// blocks whole-result copy and export on it without holding any row.
+    pub(super) unreadable_cells: usize,
     #[cfg(feature = "packaged-benchmark")]
     pub(super) benchmark_stages: DesktopSqlStreamBenchmarkStages,
     pub(super) _lease: ConnectionLease,
@@ -160,6 +163,7 @@ impl serde::Serialize for DesktopSqlStreamReceipt {
             row_count: usize,
             truncated: bool,
             duration_ms: u64,
+            unreadable_cells: usize,
             #[cfg(feature = "packaged-benchmark")]
             benchmark_stages: DesktopSqlStreamBenchmarkStages,
         }
@@ -168,6 +172,7 @@ impl serde::Serialize for DesktopSqlStreamReceipt {
             row_count: self.row_count,
             truncated: self.truncated,
             duration_ms: self.duration_ms,
+            unreadable_cells: self.unreadable_cells,
             #[cfg(feature = "packaged-benchmark")]
             benchmark_stages: self.benchmark_stages,
         }

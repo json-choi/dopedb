@@ -28,8 +28,17 @@ import {
   SQL_RESULT_CACHE_MAX_PAGES,
   retainSqlStreamBatch,
   sqlResultRowAt,
+  sqlResultRowUnreadable,
   subscribeSqlResultPages,
 } from "../queries/resultPageCache";
+import {
+  remapUnreadableCells,
+  unreadableCellLookup,
+} from "./cellReadState";
+import {
+  acceptSqlStreamBatch,
+  emptySqlStreamView,
+} from "../queries/domain";
 
 const offsets = Array.from(
   { length: 51 },
@@ -104,6 +113,7 @@ describe("DataGridVirtual window", () => {
         rowCount: 1,
         truncated: false,
         durationMs: 1,
+        unreadableCells: [],
       }),
     ).toBe(true);
     const table = {
@@ -234,6 +244,7 @@ describe("DataGridVirtual window", () => {
         sequence,
         columns: ["id"],
         rows: Array.from({ length: 256 }, (_, row) => [sequence * 256 + row]),
+        unreadable: [],
       });
     }
     expect(sqlResultRowAt(source, 0)).toBeUndefined();
@@ -248,6 +259,7 @@ describe("DataGridVirtual window", () => {
       sequence: 0,
       columns: ["id"],
       rows: [[0]],
+      unreadable: [],
     });
     let evictionNotifications = 0;
     const unsubscribe = subscribeSqlResultPages(source, () => {
@@ -265,11 +277,88 @@ describe("DataGridVirtual window", () => {
         sequence: 0,
         columns: ["id"],
         rows: [[index]],
+        unreadable: [],
       });
     }
     expect(sqlResultRowAt(source, 0)).toBeUndefined();
     expect(evictionNotifications).toBe(1);
     unsubscribe();
+    clearSqlResultPageCache();
+
+    // A cell the backend could not decode is addressed, never valued: the grid,
+    // the clipboard, the export, and a generated INSERT all read it from here.
+    const unreadable = unreadableCellLookup([
+      { row: 1, column: 2, typeName: "geometry" },
+    ]);
+    expect(unreadable.typeAt(1, 2)).toBe("geometry");
+    expect(unreadable.typeAt(1, 1)).toBeNull();
+    expect(unreadable.hasRow(1)).toBe(true);
+    expect(unreadable.hasRow(0)).toBe(false);
+    expect(unreadable.hasRange(0, 2, 2, 3)).toBe(true);
+    expect(unreadable.hasRange(0, 2, 0, 1)).toBe(false);
+    // Filtering renumbers rows; a coordinate whose row is gone is dropped rather
+    // than left pointing at whatever row now sits at that index.
+    expect(
+      remapUnreadableCells(
+        [
+          { row: 1, column: 2, typeName: "geometry" },
+          { row: 3, column: 0, typeName: "money" },
+        ],
+        [3, 1],
+      ),
+    ).toEqual([
+      { row: 1, column: 2, typeName: "geometry" },
+      { row: 0, column: 0, typeName: "money" },
+    ]);
+
+    const readState: SqlStreamRowSource = {
+      operationId: "00000000-0000-0000-0000-000000000456",
+      capability,
+      pageRows: 256,
+      rowCount: 2,
+      complete: true,
+    };
+    retainSqlStreamBatch(readState, {
+      operationId: readState.operationId!,
+      resultCapability: capability,
+      sequence: 0,
+      columns: ["id", "shape"],
+      rows: [
+        [1, null],
+        [2, null],
+      ],
+      unreadable: [{ row: 0, column: 1, typeName: "geometry" }],
+    });
+    expect(sqlResultRowUnreadable(readState, 0)?.get(1)).toBe("geometry");
+    expect(sqlResultRowUnreadable(readState, 1)).toBeUndefined();
+    clearSqlResultPageCache();
+
+    // A page naming a cell outside its own rows/columns cannot be projected onto
+    // the result, so the whole batch is refused instead of partly trusted.
+    const connecting = {
+      ...emptySqlStreamView(7),
+      phase: "connecting" as const,
+    };
+    expect(
+      acceptSqlStreamBatch(connecting, 7, {
+        operationId: "00000000-0000-0000-0000-000000000456",
+        resultCapability: capability,
+        sequence: 0,
+        columns: ["id"],
+        rows: [[1]],
+        unreadable: [{ row: 4, column: 0, typeName: "geometry" }],
+      }),
+    ).toBeNull();
+    expect(
+      acceptSqlStreamBatch(connecting, 7, {
+        operationId: "00000000-0000-0000-0000-000000000456",
+        resultCapability: capability,
+        sequence: 0,
+        columns: ["id"],
+        rows: [[null]],
+        unreadable: [{ row: 0, column: 0, typeName: "geometry" }],
+      })?.unreadableCells,
+    ).toBe(1);
     clearSqlResultPageCache();
   });
 });

@@ -89,7 +89,7 @@ async fn run_read_only_byte_capped_inner(
     let max = max_rows as usize;
     let started = Instant::now();
     let engine = pool.engine();
-    let (columns, rows, truncated) = match pool {
+    let (columns, rows, unreadable_cells, truncated) = match pool {
         PoolRef::Postgres(pool) => {
             let mut connection = pool.acquire().await?;
             let result = async {
@@ -113,7 +113,7 @@ async fn run_read_only_byte_capped_inner(
             }
             .await;
             let _ = sqlx::query("ROLLBACK").execute(&mut *connection).await;
-            let (columns, rows, truncated) =
+            let (columns, rows, unreadable, truncated) =
                 result.map_err(|error| map_readonly_app(engine, error))?;
             let columns = if columns.is_empty() {
                 (&mut *connection)
@@ -125,7 +125,7 @@ async fn run_read_only_byte_capped_inner(
             } else {
                 columns
             };
-            (columns, rows, truncated)
+            (columns, rows, unreadable, truncated)
         }
         PoolRef::Mysql(pool) => {
             let mut connection = pool.acquire().await?;
@@ -149,7 +149,7 @@ async fn run_read_only_byte_capped_inner(
             }
             .await;
             let _ = sqlx::query("ROLLBACK").execute(&mut *connection).await;
-            let (columns, rows, truncated) =
+            let (columns, rows, unreadable, truncated) =
                 result.map_err(|error| map_readonly_app(engine, error))?;
             let columns = if columns.is_empty() {
                 (&mut *connection)
@@ -161,7 +161,7 @@ async fn run_read_only_byte_capped_inner(
             } else {
                 columns
             };
-            (columns, rows, truncated)
+            (columns, rows, unreadable, truncated)
         }
         PoolRef::Sqlite(pool) => {
             let mut connection = pool.acquire().await?;
@@ -182,7 +182,7 @@ async fn run_read_only_byte_capped_inner(
             let _ = sqlx::query("PRAGMA query_only = OFF")
                 .execute(&mut *connection)
                 .await;
-            let (columns, rows, truncated) =
+            let (columns, rows, unreadable, truncated) =
                 result.map_err(|error| map_readonly_app(engine, error))?;
             let columns = if columns.is_empty() {
                 (&mut *connection)
@@ -194,7 +194,7 @@ async fn run_read_only_byte_capped_inner(
             } else {
                 columns
             };
-            (columns, rows, truncated)
+            (columns, rows, unreadable, truncated)
         }
         PoolRef::Bigquery(_) => unreachable!("BigQuery is handled before the SQLx boundary"),
     };
@@ -204,6 +204,7 @@ async fn run_read_only_byte_capped_inner(
         rows,
         truncated,
         duration_ms: started.elapsed().as_millis() as u64,
+        unreadable_cells,
     })
 }
 
@@ -216,7 +217,7 @@ async fn run_read_only_inner(
     let started = Instant::now();
     let engine = pool.engine();
 
-    let (columns, rows, truncated) = match pool {
+    let (columns, rows, unreadable_cells, truncated) = match pool {
         PoolRef::Postgres(p) => {
             let mut conn = p.acquire().await?;
             // Establishing READ ONLY is safety-critical: if any setup statement
@@ -241,7 +242,7 @@ async fn run_read_only_inner(
             }
             .await;
             let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
-            let (c, r, t) = res.map_err(|e| map_readonly(engine, e))?;
+            let (c, r, u, t) = res.map_err(|e| map_readonly(engine, e))?;
             let c = if c.is_empty() {
                 (&mut *conn)
                     .describe(AssertSqlSafe(sql).into_sql_str())
@@ -252,7 +253,7 @@ async fn run_read_only_inner(
             } else {
                 c
             };
-            (c, r, t)
+            (c, r, u, t)
         }
         PoolRef::Mysql(p) => {
             let mut conn = p.acquire().await?;
@@ -274,7 +275,7 @@ async fn run_read_only_inner(
             }
             .await;
             let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
-            let (c, r, t) = res.map_err(|e| map_readonly(engine, e))?;
+            let (c, r, u, t) = res.map_err(|e| map_readonly(engine, e))?;
             let c = if c.is_empty() {
                 (&mut *conn)
                     .describe(AssertSqlSafe(sql).into_sql_str())
@@ -285,7 +286,7 @@ async fn run_read_only_inner(
             } else {
                 c
             };
-            (c, r, t)
+            (c, r, u, t)
         }
         PoolRef::Sqlite(p) => {
             let mut conn = p.acquire().await?;
@@ -305,7 +306,7 @@ async fn run_read_only_inner(
             let _ = sqlx::query("PRAGMA query_only = OFF")
                 .execute(&mut *conn)
                 .await;
-            let (c, r, t) = res.map_err(|e| map_readonly(engine, e))?;
+            let (c, r, u, t) = res.map_err(|e| map_readonly(engine, e))?;
             // Zero-row results yield no columns from the stream; fall back to the
             // prepared statement's metadata so an empty grid still has headers.
             // `describe` prepares without executing — safe on the read-only conn.
@@ -319,7 +320,7 @@ async fn run_read_only_inner(
             } else {
                 c
             };
-            (c, r, t)
+            (c, r, u, t)
         }
         PoolRef::Bigquery(_) => unreachable!("BigQuery is handled before the SQLx boundary"),
     };
@@ -330,6 +331,7 @@ async fn run_read_only_inner(
         rows,
         truncated,
         duration_ms: started.elapsed().as_millis() as u64,
+        unreadable_cells,
     })
 }
 
@@ -555,5 +557,14 @@ mod tests {
             r.rows[0][0],
             serde_json::Value::String("9223372036854775807".into())
         );
+        // A decoded page says so: the empty list is what lets a reader treat every
+        // `null` in `rows` as a real SQL NULL.
+        assert!(r.unreadable_cells.is_empty());
+
+        let nulls = run_read_only(PoolRef::Sqlite(&pool), "SELECT NULL AS n", 10)
+            .await
+            .unwrap();
+        assert_eq!(nulls.rows[0][0], serde_json::Value::Null);
+        assert!(nulls.unreadable_cells.is_empty());
     }
 }

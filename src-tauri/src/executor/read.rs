@@ -30,12 +30,47 @@ use sqlx::types::BitVec;
 use crate::connection::{LiveConnection, Pool};
 use crate::error::{AppError, AppResult};
 use crate::executor::cancel;
-use crate::model::{Engine, QueryResult};
+use crate::model::{Engine, QueryResult, UnreadableCell};
 
 #[path = "read_values.rs"]
 mod values;
 
-pub(crate) use values::{int_json, mysql_value, pg_value, sqlite_value, uint_json};
+pub(crate) use values::{int_json, mysql_value, pg_value, sqlite_value, uint_json, DecodedCell};
+
+/// Decode one row, keeping cells we could not decode out of the value channel.
+/// The caller owns the row coordinate, so the same helper serves a materialized
+/// result (row index inside the result) and a stream page (index inside the page).
+fn decode_row<R: Row>(
+    row: &R,
+    decode: &impl Fn(&R, usize) -> DecodedCell,
+) -> (Vec<Value>, Vec<(usize, String)>) {
+    let mut values = Vec::with_capacity(row.columns().len());
+    let mut unreadable = Vec::new();
+    for column in 0..row.columns().len() {
+        match decode(row, column) {
+            DecodedCell::Value(value) => values.push(value),
+            DecodedCell::Unreadable { type_name } => {
+                unreadable.push((column, type_name));
+                values.push(Value::Null);
+            }
+        }
+    }
+    (values, unreadable)
+}
+
+/// Place one row's decode failures at `row` inside the page that will carry them.
+fn locate_unreadable(
+    row: usize,
+    cells: Vec<(usize, String)>,
+) -> impl Iterator<Item = UnreadableCell> {
+    cells
+        .into_iter()
+        .map(move |(column, type_name)| UnreadableCell {
+            row,
+            column,
+            type_name,
+        })
+}
 
 /// A row-bearing desktop page must remain small enough for a direct IPC callback.
 /// This is intentionally below Tauri's 8KiB fetch-queue threshold only for the
@@ -53,6 +88,8 @@ const DESKTOP_STREAM_ROW_BUDGET_BYTES: usize = DESKTOP_STREAM_BATCH_MAX_BYTES - 
 pub(crate) struct ReadBatch {
     pub columns: Vec<String>,
     pub rows: Vec<Vec<Value>>,
+    /// Cells in `rows` this build could not decode, addressed inside this page.
+    pub unreadable: Vec<UnreadableCell>,
 }
 
 /// Summary retained after a streamed read. Result rows intentionally never enter
@@ -121,6 +158,7 @@ where
                 on_batch(ReadBatch {
                     columns: columns.clone(),
                     rows: std::mem::take(&mut batch),
+                    unreadable: Vec::new(),
                 })
                 .await?;
                 batch = Vec::with_capacity(batch_rows);
@@ -132,6 +170,7 @@ where
                 on_batch(ReadBatch {
                     columns: columns.clone(),
                     rows: std::mem::take(&mut batch),
+                    unreadable: Vec::new(),
                 })
                 .await?;
                 batch = Vec::with_capacity(batch_rows);
@@ -142,6 +181,7 @@ where
             on_batch(ReadBatch {
                 columns: columns.clone(),
                 rows: batch,
+                unreadable: Vec::new(),
             })
             .await?;
         }
@@ -245,6 +285,7 @@ where
             on_batch(ReadBatch {
                 columns: columns.clone(),
                 rows: Vec::new(),
+                unreadable: Vec::new(),
             })
             .await?;
         }
@@ -304,36 +345,51 @@ pub(crate) async fn run_read_byte_capped(
     }
     let max = max_rows as usize;
     let inner = async {
-        let (columns, rows, truncated) = match &live.read_pool {
+        let (columns, rows, unreadable_cells, truncated) = match &live.read_pool {
             Pool::Postgres(pool) => {
-                let (columns, rows, truncated) = stream_byte_capped(
+                let (columns, rows, unreadable, truncated) = stream_byte_capped(
                     sqlx::query(AssertSqlSafe(sql)).fetch(pool),
                     max,
                     max_bytes,
                     pg_value,
                 )
                 .await?;
-                (with_headers(columns, pool, sql).await, rows, truncated)
+                (
+                    with_headers(columns, pool, sql).await,
+                    rows,
+                    unreadable,
+                    truncated,
+                )
             }
             Pool::Mysql(pool) => {
-                let (columns, rows, truncated) = stream_byte_capped(
+                let (columns, rows, unreadable, truncated) = stream_byte_capped(
                     sqlx::query(AssertSqlSafe(sql)).fetch(pool),
                     max,
                     max_bytes,
                     mysql_value,
                 )
                 .await?;
-                (with_headers(columns, pool, sql).await, rows, truncated)
+                (
+                    with_headers(columns, pool, sql).await,
+                    rows,
+                    unreadable,
+                    truncated,
+                )
             }
             Pool::Sqlite(pool) => {
-                let (columns, rows, truncated) = stream_byte_capped(
+                let (columns, rows, unreadable, truncated) = stream_byte_capped(
                     sqlx::query(AssertSqlSafe(sql)).fetch(pool),
                     max,
                     max_bytes,
                     sqlite_value,
                 )
                 .await?;
-                (with_headers(columns, pool, sql).await, rows, truncated)
+                (
+                    with_headers(columns, pool, sql).await,
+                    rows,
+                    unreadable,
+                    truncated,
+                )
             }
             Pool::Bigquery(_) => unreachable!("BigQuery is handled before the SQLx stream"),
         };
@@ -343,6 +399,7 @@ pub(crate) async fn run_read_byte_capped(
             rows,
             truncated,
             duration_ms: 0,
+            unreadable_cells,
         })
     };
     let mut result =
@@ -370,7 +427,7 @@ pub(crate) async fn run_read_registered(
 
     // ponytail: read_pool is the L2-enforced pool; reads never touch mutation authority.
     let inner = async {
-        let (columns, rows, truncated) = match &live.read_pool {
+        let (columns, rows, unreadable_cells, truncated) = match &live.read_pool {
             Pool::Postgres(pool) => {
                 if let Some(namespace) = namespace.as_deref() {
                     let mut transaction = pool.begin().await?;
@@ -379,7 +436,7 @@ pub(crate) async fn run_read_registered(
                     sqlx::query(AssertSqlSafe(context))
                         .execute(&mut *transaction)
                         .await?;
-                    let (columns, rows, truncated) = stream_capped(
+                    let (columns, rows, unreadable, truncated) = stream_capped(
                         sqlx::query(AssertSqlSafe(sql)).fetch(&mut *transaction),
                         max,
                         pg_value,
@@ -396,31 +453,31 @@ pub(crate) async fn run_read_registered(
                         columns
                     };
                     transaction.rollback().await?;
-                    (columns, rows, truncated)
+                    (columns, rows, unreadable, truncated)
                 } else {
-                    let (c, r, t) =
+                    let (c, r, u, t) =
                         stream_capped(sqlx::query(AssertSqlSafe(sql)).fetch(pool), max, pg_value)
                             .await?;
-                    (with_headers(c, pool, sql).await, r, t)
+                    (with_headers(c, pool, sql).await, r, u, t)
                 }
             }
             Pool::Mysql(pool) => {
-                let (c, r, t) = stream_capped(
+                let (c, r, u, t) = stream_capped(
                     sqlx::query(AssertSqlSafe(sql)).fetch(pool),
                     max,
                     mysql_value,
                 )
                 .await?;
-                (with_headers(c, pool, sql).await, r, t)
+                (with_headers(c, pool, sql).await, r, u, t)
             }
             Pool::Sqlite(pool) => {
-                let (c, r, t) = stream_capped(
+                let (c, r, u, t) = stream_capped(
                     sqlx::query(AssertSqlSafe(sql)).fetch(pool),
                     max,
                     sqlite_value,
                 )
                 .await?;
-                (with_headers(c, pool, sql).await, r, t)
+                (with_headers(c, pool, sql).await, r, u, t)
             }
             Pool::Bigquery(_) => unreachable!("BigQuery is handled before the SQLx stream"),
         };
@@ -430,6 +487,7 @@ pub(crate) async fn run_read_registered(
             rows,
             truncated,
             duration_ms: 0,
+            unreadable_cells,
         })
     };
 
@@ -466,14 +524,15 @@ pub(crate) fn describe_cols<DB: sqlx::Database>(d: sqlx::Describe<DB>) -> Vec<St
 pub(crate) async fn stream_capped<S, R>(
     mut stream: S,
     max: usize,
-    f: impl Fn(&R, usize) -> Value,
-) -> Result<(Vec<String>, Vec<Vec<Value>>, bool), sqlx::Error>
+    f: impl Fn(&R, usize) -> DecodedCell,
+) -> Result<(Vec<String>, Vec<Vec<Value>>, Vec<UnreadableCell>, bool), sqlx::Error>
 where
     S: futures::Stream<Item = Result<R, sqlx::Error>> + Unpin,
     R: Row,
 {
     let mut columns: Vec<String> = Vec::new();
     let mut rows: Vec<Vec<Value>> = Vec::new();
+    let mut unreadable: Vec<UnreadableCell> = Vec::new();
     let mut truncated = false;
     while let Some(row) = stream.try_next().await? {
         if columns.is_empty() {
@@ -483,17 +542,18 @@ where
             truncated = true; // one row past the cap exists → more rows remain
             break;
         }
-        let n = row.columns().len();
-        rows.push((0..n).map(|i| f(&row, i)).collect());
+        let (values, failed) = decode_row(&row, &f);
+        unreadable.extend(locate_unreadable(rows.len(), failed));
+        rows.push(values);
     }
-    Ok((columns, rows, truncated))
+    Ok((columns, rows, unreadable, truncated))
 }
 
 pub(crate) async fn stream_batched<S, R, F, Fut>(
     mut stream: S,
     max_rows: usize,
     batch_rows: usize,
-    decode: impl Fn(&R, usize) -> Value,
+    decode: impl Fn(&R, usize) -> DecodedCell,
     started: Instant,
     on_batch: &mut F,
 ) -> AppResult<(Vec<String>, usize, bool, Option<u64>)>
@@ -508,6 +568,7 @@ where
     let batch_rows = batch_rows.clamp(1, 256);
     let mut columns = Vec::new();
     let mut batch = Vec::with_capacity(batch_rows);
+    let mut batch_unreadable: Vec<UnreadableCell> = Vec::new();
     let mut batch_bytes = 0_usize;
     let mut row_count = 0_usize;
     let mut truncated = false;
@@ -525,9 +586,7 @@ where
             truncated = true;
             break;
         }
-        let decoded = (0..row.columns().len())
-            .map(|index| decode(&row, index))
-            .collect::<Vec<_>>();
+        let (decoded, failed) = decode_row(&row, &decode);
         let row_bytes = serde_json::to_vec(&decoded)?.len();
         if row_bytes > DESKTOP_STREAM_ROW_BUDGET_BYTES {
             return Err(AppError::Blocked {
@@ -540,18 +599,21 @@ where
             on_batch(ReadBatch {
                 columns: columns.clone(),
                 rows: std::mem::take(&mut batch),
+                unreadable: std::mem::take(&mut batch_unreadable),
             })
             .await?;
             batch = Vec::with_capacity(batch_rows);
             batch_bytes = 0;
         }
         batch_bytes += row_bytes;
+        batch_unreadable.extend(locate_unreadable(batch.len(), failed));
         batch.push(decoded);
         row_count += 1;
         if batch.len() == batch_rows {
             on_batch(ReadBatch {
                 columns: columns.clone(),
                 rows: std::mem::take(&mut batch),
+                unreadable: std::mem::take(&mut batch_unreadable),
             })
             .await?;
             batch = Vec::with_capacity(batch_rows);
@@ -562,6 +624,7 @@ where
         on_batch(ReadBatch {
             columns: columns.clone(),
             rows: batch,
+            unreadable: batch_unreadable,
         })
         .await?;
     }
@@ -572,14 +635,15 @@ pub(crate) async fn stream_byte_capped<S, R>(
     mut stream: S,
     max_rows: usize,
     max_bytes: usize,
-    decode: impl Fn(&R, usize) -> Value,
-) -> AppResult<(Vec<String>, Vec<Vec<Value>>, bool)>
+    decode: impl Fn(&R, usize) -> DecodedCell,
+) -> AppResult<(Vec<String>, Vec<Vec<Value>>, Vec<UnreadableCell>, bool)>
 where
     S: futures::Stream<Item = Result<R, sqlx::Error>> + Unpin,
     R: Row,
 {
     let mut columns = Vec::new();
     let mut rows = Vec::new();
+    let mut unreadable: Vec<UnreadableCell> = Vec::new();
     let mut retained_bytes = 0_usize;
     let mut truncated = false;
     while let Some(row) = stream.try_next().await? {
@@ -594,9 +658,7 @@ where
             truncated = true;
             break;
         }
-        let decoded = (0..row.columns().len())
-            .map(|index| decode(&row, index))
-            .collect::<Vec<_>>();
+        let (decoded, failed) = decode_row(&row, &decode);
         let row_bytes = serde_json::to_vec(&decoded)?.len();
         if row_bytes > max_bytes {
             return Err(AppError::Blocked {
@@ -611,7 +673,8 @@ where
             break;
         }
         retained_bytes += row_bytes;
+        unreadable.extend(locate_unreadable(rows.len(), failed));
         rows.push(decoded);
     }
-    Ok((columns, rows, truncated))
+    Ok((columns, rows, unreadable, truncated))
 }

@@ -344,6 +344,11 @@ async function pullAcceptAndAcknowledgeStreamBatch(
     ) {
       throw new Error("stream batch did not match its ready notification");
     }
+    // The read-failure list is the only way to tell an unreadable cell from a
+    // SQL NULL, so a page that omits it is rejected rather than read as all-NULL.
+    if (!Array.isArray(batch.unreadable)) {
+      throw new Error("stream batch did not carry its cell read state");
+    }
     if (!isOpen()) return;
     markFirstBatchReceived();
     await onBatch({ ...batch, resultCapability: ready.capability }, {
@@ -449,6 +454,7 @@ export async function runSqlReadPage(
 ): Promise<QueryResult> {
   let columns: string[] | null = null;
   const rows: unknown[][] = [];
+  const unreadableCells: QueryResult["unreadableCells"] = [];
   let firstBatchAccepted = false;
   const controller = startSqlStream("", (batch) => {
     if (
@@ -466,6 +472,11 @@ export async function runSqlReadPage(
       observer?.onFirstBatchAccepted?.(performance.now());
     }
     columns ??= [...batch.columns];
+    // Page coordinates become result coordinates: the caller receives one
+    // materialized result and must still be able to address every unread cell.
+    for (const cell of batch.unreadable) {
+      unreadableCells.push({ ...cell, row: rows.length + cell.row });
+    }
     rows.push(...batch.rows);
   }, (capability, onRows) =>
     invoke<SqlStreamReceipt>("run_sql_read_page_stream", {
@@ -483,11 +494,15 @@ export async function runSqlReadPage(
   if (receipt.rowCount !== rows.length) {
     throw new Error("SQL page stream receipt did not match accepted rows");
   }
+  if (receipt.unreadableCells !== unreadableCells.length) {
+    throw new Error("SQL page stream receipt did not match accepted read failures");
+  }
   return {
     columns: columns ?? [],
     rows: rows as QueryResult["rows"],
     rowCount: rows.length,
     truncated: receipt.truncated,
     durationMs: receipt.durationMs,
+    unreadableCells,
   };
 }

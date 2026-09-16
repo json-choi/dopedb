@@ -13,7 +13,7 @@
   "frontend": {
     "src/features/queryResults/DataGridVirtual.test.ts": {
       "tests": 2,
-      "protects": "Large-grid virtualization, bounded result-page cache eviction, and keyboard reachability"
+      "protects": "Large-grid virtualization, bounded result-page cache eviction, keyboard reachability, and the cell read-state contract: decode failures travel as (row, column) coordinates, survive filtering without re-addressing another row, and a page naming a cell outside itself is refused"
     },
     "src/features/providers/tauriAdapter.test.ts": {
       "tests": 6,
@@ -83,7 +83,7 @@
     },
     "src-tauri/src/safety/l2_enforce.rs": {
       "tests": 4,
-      "protects": "Result caps, truncation, column presence, numeric precision, and the EXPLAIN-preview opt-out before database access"
+      "protects": "Result caps, truncation, column presence, numeric precision, an empty unreadable-cell list as the claim that every null is a real SQL NULL, and the EXPLAIN-preview opt-out before database access"
     },
     "src-tauri/src/safety/l4_gate.rs": {
       "tests": 7,

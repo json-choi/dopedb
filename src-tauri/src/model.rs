@@ -265,7 +265,27 @@ pub struct PreviewReport {
     pub note: Option<String>,
 }
 
+/// One cell whose wire bytes this build could not decode, addressed by its
+/// coordinates inside the exact result (or page) that carries the list.
+///
+/// The failure is never encoded as a value: any string, object, or sentinel shape
+/// could equal a row that genuinely holds it, so a reader could not tell them
+/// apart. `row`/`column` index that page's `rows`/`columns`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnreadableCell {
+    pub row: usize,
+    pub column: usize,
+    /// Database type name that failed to decode, e.g. "geometry".
+    pub type_name: String,
+}
+
 /// A materialized result set (or a page of one).
+///
+/// `rows` holds only decoded values. A cell listed in `unreadable_cells` is
+/// `Null` there but is NOT a SQL NULL: consumers must consult the list before
+/// rendering a cell, copying it, exporting it, or building a write literal from
+/// it. An empty list is the only claim that every `null` in `rows` is a real NULL.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QueryResult {
@@ -275,6 +295,9 @@ pub struct QueryResult {
     /// True if the result was cut off at the row cap.
     pub truncated: bool,
     pub duration_ms: u64,
+    /// Cells inside `rows` this build could not decode.
+    #[serde(default)]
+    pub unreadable_cells: Vec<UnreadableCell>,
 }
 
 /// One typed, read-only MongoDB request — the ONLY way document operations run.

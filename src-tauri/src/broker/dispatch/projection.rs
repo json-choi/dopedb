@@ -113,6 +113,17 @@ pub(super) fn query_result(result: &QueryResult) -> QueryResultPage {
         row_count: result.row_count,
         truncated: result.truncated,
         duration_ms: result.duration_ms,
+        // The Agent reads the same page a person does: a cell we could not decode
+        // travels as its coordinates, never as a value it could quote as data.
+        unreadable_cells: result
+            .unreadable_cells
+            .iter()
+            .map(|cell| ProtocolUnreadableCell {
+                row: cell.row,
+                column: cell.column,
+                type_name: cell.type_name.clone(),
+            })
+            .collect(),
     }
 }
 

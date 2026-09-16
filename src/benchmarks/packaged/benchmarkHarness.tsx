@@ -111,6 +111,7 @@ export function queryResult(rowCount: number): QueryResult {
     rowCount,
     truncated: false,
     durationMs: 0,
+    unreadableCells: [],
   };
 }
 

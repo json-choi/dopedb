@@ -32,8 +32,15 @@ pub(super) fn load_authorized_manifest(
         });
     }
     let manifest: ResultManifest = serde_json::from_reader(File::open(path)?)?;
-    if manifest.schema_version != RESULT_STORE_SCHEMA_VERSION
-        || manifest.operation_id != Uuid::from(operation_id)
+    if manifest.schema_version != RESULT_STORE_SCHEMA_VERSION {
+        // An older artifact cannot be reinterpreted: it recorded a cell this build
+        // could not decode as an ordinary value. Re-running the query is the user's
+        // call, so say so instead of guessing.
+        return Err(AppError::Blocked {
+            reason: "this stored SQL result was written by an earlier build; run the query again to load it".into(),
+        });
+    }
+    if manifest.operation_id != Uuid::from(operation_id)
         || manifest.page_rows != RESULT_PAGE_ROWS
         || manifest.owner_webview != owner_webview
         || !hash_matches(&manifest.capability_sha256, capability)
@@ -95,6 +102,10 @@ pub(super) fn read_verified_page(
         || batch.columns != columns
         || batch.rows.len() != meta.row_count
         || batch.rows.iter().any(|row| row.len() != columns.len())
+        || batch
+            .unreadable
+            .iter()
+            .any(|cell| cell.row >= batch.rows.len() || cell.column >= columns.len())
     {
         return Err(DesktopSqlStreamSinkError::ResultStoreUnavailable);
     }

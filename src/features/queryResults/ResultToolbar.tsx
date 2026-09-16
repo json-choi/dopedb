@@ -1,6 +1,9 @@
 // Compact export/copy controls for any result grid. Workbench surfaces use the
 // product command grammar of Copy + one CSV format menu; inline metadata keeps
 // the explicit text actions. Every action operates on the full result rows.
+// A result holding a cell the backend could not read blocks copy and export
+// outright: a file or clipboard payload that silently empties those cells would
+// claim a value they do not have.
 import { useEffect, useRef, useState } from "react";
 
 import type { SqlStreamRowSource } from "../queries/domain";
@@ -29,12 +32,15 @@ export default function ResultToolbar({
   filenameBase,
   scopeLabel,
   partial,
+  unreadableCells = 0,
   presentation = "inline",
 }: {
   columns: string[];
   rows?: unknown[][];
   rowSource?: SqlStreamRowSource;
   filenameBase: string;
+  /** Cells of this result the backend could not read; any blocks copy/export. */
+  unreadableCells?: number;
   // Optional on-surface scope for page-limited exports (e.g. "page"). Default keeps
   // the bare "CSV"/"JSON" labels so existing callers (Sql, Agent) are unchanged.
   scopeLabel?: string;
@@ -46,7 +52,8 @@ export default function ResultToolbar({
   const { t } = useI18n();
   const toast = useToast();
   const count = rowSource?.rowCount ?? rows?.length ?? 0;
-  const disabled = partial === true;
+  const unreadable = unreadableCells > 0;
+  const disabled = partial === true || unreadable;
   const cachedRows = rowSource ? collectCachedSqlResultRows(rowSource) : null;
   const copyDisabled = disabled || (!!rowSource && cachedRows === null);
   const exportRef = useRef<SqlResultExportController | null>(null);
@@ -114,10 +121,14 @@ export default function ResultToolbar({
     }
     downloadJson(filenameBase, columns, rows ?? []);
   };
-  const copyTitle =
-    copyDisabled && rowSource && !disabled
+  const copyTitle = unreadable
+    ? t("results.unreadableBlockedTitle", { count: unreadableCells })
+    : copyDisabled && rowSource && !disabled
       ? t("results.copyBoundedTitle")
       : t("results.copyTitle");
+  const exportTitle = unreadable
+    ? t("results.unreadableBlockedTitle", { count: unreadableCells })
+    : null;
   return (
     <span
       data-presentation={presentation}
@@ -159,7 +170,7 @@ export default function ResultToolbar({
       </WorkbenchButton>
       {presentation === "workbench" ? (
         <ToolbarMenu
-          label={t("results.downloadCsvTitle")}
+          label={exportTitle ?? t("results.downloadCsvTitle")}
           disabled={disabled || exportProgress !== null}
           trigger={
             <>
@@ -178,7 +189,7 @@ export default function ResultToolbar({
       ) : (
         <>
           <WorkbenchButton
-            title={t("results.downloadCsvTitle")}
+            title={exportTitle ?? t("results.downloadCsvTitle")}
             disabled={disabled || exportProgress !== null}
             onClick={exportCsv}
           >
@@ -187,7 +198,7 @@ export default function ResultToolbar({
               : "CSV"}
           </WorkbenchButton>
           <WorkbenchButton
-            title={t("results.downloadJsonTitle")}
+            title={exportTitle ?? t("results.downloadJsonTitle")}
             disabled={disabled || exportProgress !== null}
             onClick={exportJson}
           >
@@ -197,11 +208,15 @@ export default function ResultToolbar({
           </WorkbenchButton>
         </>
       )}
-      {disabled && (
+      {unreadable ? (
+        <span className="tw:text-warning">
+          {t("results.unreadableBlocked", { count: unreadableCells })}
+        </span>
+      ) : disabled ? (
         <span className="tw:text-muted-foreground">
           {t("results.partialExportUnavailable")}
         </span>
-      )}
+      ) : null}
       {exportProgress ? (
         <span className="tw:inline-grid tw:min-w-36 tw:grid-cols-[minmax(72px,1fr)_auto] tw:items-center tw:gap-x-1 tw:gap-y-0.5 tw:text-xs tw:text-muted-foreground">
           <span className="tw:col-span-2 tw:truncate">

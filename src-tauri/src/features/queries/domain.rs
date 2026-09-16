@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use crate::kernel::identity::{ConnectionId, OperationId, QueryRunId};
 use crate::kernel::TerminalAuthority;
-use crate::model::{ConnectionProfile, QueryResult};
+use crate::model::{ConnectionProfile, QueryResult, UnreadableCell};
 use crate::monitoring::HealthSnapshot;
 
 const MAX_QUERY_SERVICE_SNAPSHOT_BYTES: usize = 16 * 1024 * 1024;
@@ -262,6 +262,10 @@ pub(crate) struct DesktopSqlProposalRequest {
 /// One bounded desktop-only page of a read result. It is intentionally not a
 /// model contract: CLI, Broker, Analysis Articles, and bounded execution retain their
 /// materialized bounded receipt wire.
+///
+/// `unreadable` addresses cells inside THIS page: a decode failure is never a
+/// value, so a `null` in `rows` is a real SQL NULL only when the coordinate is
+/// absent from that list.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct DesktopSqlStreamBatch {
@@ -269,6 +273,8 @@ pub(crate) struct DesktopSqlStreamBatch {
     pub(crate) sequence: u64,
     pub(crate) columns: Vec<String>,
     pub(crate) rows: Vec<Vec<serde_json::Value>>,
+    #[serde(default)]
+    pub(crate) unreadable: Vec<UnreadableCell>,
 }
 
 /// Renderer-requested format for an immutable local SQL result artifact.
