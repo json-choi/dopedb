@@ -120,7 +120,7 @@ export default function Settings({
               : ""
           }`,
           scope: "dataSource",
-          disabled: !connection,
+          disabled: false,
           keywords: "read only write approval policy audit",
         },
       ] satisfies ReadonlyArray<{
@@ -247,14 +247,12 @@ export default function Settings({
                           key={entry.id}
                           type="button"
                           data-active={section === entry.id}
+                          aria-current={
+                            section === entry.id ? "page" : undefined
+                          }
                           className="tw:flex tw:min-h-[var(--ds-tree-row-height)] tw:cursor-pointer tw:items-center tw:justify-between tw:gap-2 tw:rounded-none tw:border-0 tw:bg-transparent tw:pr-3 tw:pl-12 tw:font-sans tw:text-left tw:text-ui tw:text-foreground tw:data-[active=true]:bg-selection tw:data-[active=true]:text-selection-foreground tw:disabled:cursor-default tw:disabled:opacity-50 tw:not-disabled:hover:bg-muted"
                           onClick={() => setSection(entry.id)}
                           disabled={entry.disabled}
-                          title={
-                            entry.id === "safety" && !connection
-                              ? t("settings.selectConnectionTitle")
-                              : undefined
-                          }
                         >
                           <span className="tw:min-w-0 tw:truncate">
                             {entry.label}

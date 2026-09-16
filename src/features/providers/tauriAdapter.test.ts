@@ -101,6 +101,7 @@ import workspaceSchemaSource from "../../../workspace-cloud/lib/d1/schema/leases
 import workspaceVersioningStoreSource from "../../../workspace-cloud/lib/workspace-versioning-store.ts?raw";
 import workspaceSnapshotRestoreSource from "../../../workspace-cloud/lib/workspace-snapshot-restore.ts?raw";
 import workspaceSettingsNavigationSource from "../../../workspace-cloud/app/settings/SettingsNavigation.tsx?raw";
+import desktopSettingsSource from "../../../src/screens/Settings/index.tsx?raw";
 import safetySettingsScreenSource from "../../../src/screens/Settings/Safety/index.tsx?raw";
 import desktopSharedConnectionSource from "../../../src-tauri/src/features/workspaces/adapters/control_plane/connections.rs?raw";
 import desktopControlPlaneSource from "../../../src-tauri/src/features/workspaces/adapters/control_plane.rs?raw";
@@ -2138,6 +2139,13 @@ describe("provider credential Tauri adapter", () => {
     expect(workspaceSettingsNavigationSource).toContain(
       'item.id === "workspace-settings" && !canDeleteWorkspace',
     );
+    expect(desktopSettingsSource).toContain(
+      'section === entry.id ? "page" : undefined',
+    );
+    expect(desktopSettingsSource).toMatch(
+      /id: "safety",[\s\S]*?scope: "dataSource",\s*disabled: false/,
+    );
+    expect(desktopSettingsSource).toContain('t("settings.selectConnection")');
     expect(workspaceSnapshotRestoreSource).toContain("readonlyDefault: true");
     expect(workspaceSnapshotRestoreSource).toContain("allowWrites: false");
   });
