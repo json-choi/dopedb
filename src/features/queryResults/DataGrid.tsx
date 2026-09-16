@@ -44,6 +44,11 @@ import {
   dataGridKeyboardTarget,
   type DataGridFocus,
 } from "./dataGridKeyboard";
+import {
+  cellDecodeFailureAt,
+  firstDecodeFailureInSelection,
+  gridCellInspection,
+} from "./decodeFailures";
 
 function cell(v: unknown): string {
   if (v === null || v === undefined) return "NULL";
@@ -144,6 +149,7 @@ function DataGridTable({
   const [widths, setWidths] = useState<Record<number, number>>({});
   // Selected cell (click to select, ⌘C to copy, Esc to clear). Independent of onCellClick.
   const [sel, setSel] = useState<GridCellSelection | null>(null);
+  const [copyError, setCopyError] = useState<string | null>(null);
   const [focus, setFocus] = useState<DataGridFocus>({ row: 0, column: 0 });
   const focusRequestedRef = useRef(false);
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -156,6 +162,7 @@ function DataGridTable({
     // Sort/filter/pagination swap the rows without changing columns — a selection is
     // coordinates into rows, so any new result object invalidates it.
     setSel(null);
+    setCopyError(null);
     setFocus({ row: 0, column: 0 });
   }, [result]);
   useEffect(() => {
@@ -243,8 +250,24 @@ function DataGridTable({
       return;
     }
     setSel(singleGridCell(i, j));
+    const inspection = gridCellInspection(
+      result.decodeFailures,
+      i,
+      result.rows[i]?.[j],
+    );
+    if (inspection.blocked) {
+      setCopyError(
+        t("grid.decodeFailureInspectionBlocked", {
+          row: inspection.failure.rowIndex + 1,
+          column: inspection.failure.columnIndex + 1,
+          type: inspection.failure.databaseType,
+        }),
+      );
+      return;
+    }
+    setCopyError(null);
     onSelectRow?.(i);
-    onCellClick?.(result.rows[i]?.[j], i, result.columns[j]);
+    onCellClick?.(inspection.value, i, result.columns[j]);
   }
 
   // ⌘C/Ctrl+C copies the selected cell — but yield to a real text selection so users
@@ -259,6 +282,21 @@ function DataGridTable({
     if ((e.metaKey || e.ctrlKey) && (e.key === "c" || e.key === "C") && sel) {
       if ((window.getSelection()?.toString() ?? "") !== "") return; // real selection wins
       e.preventDefault();
+      const failure = firstDecodeFailureInSelection(
+        result.decodeFailures,
+        sel,
+      );
+      if (failure) {
+        setCopyError(
+          t("grid.decodeFailureCopyBlocked", {
+            row: failure.rowIndex + 1,
+            column: failure.columnIndex + 1,
+            type: failure.databaseType,
+          }),
+        );
+        return;
+      }
+      setCopyError(null);
       void navigator.clipboard.writeText(
         gridSelectionClipboardText(
           sel,
@@ -321,6 +359,14 @@ function DataGridTable({
       tabIndex={result.rows.length === 0 ? 0 : undefined}
       onKeyDown={onKeyDown}
     >
+      {copyError ? (
+        <div
+          className="tw:sticky tw:top-0 tw:left-0 tw:z-[var(--ds-z-sticky)] tw:w-fit tw:max-w-[min(520px,90%)] tw:bg-danger-muted tw:px-2 tw:py-1 tw:font-sans tw:text-xs tw:text-danger"
+          role="alert"
+        >
+          {copyError}
+        </div>
+      ) : null}
       <table
         ref={tableRef}
         role="grid"
@@ -454,19 +500,27 @@ function DataGridTable({
                 {startIndex + i + 1}
               </td>
               {row.map((v, j) => {
-                const text = cell(v);
+                const decodeFailure = cellDecodeFailureAt(
+                  result.decodeFailures,
+                  i,
+                  j,
+                );
+                const text = decodeFailure
+                  ? t("grid.decodeFailure", { type: decodeFailure.databaseType })
+                  : cell(v);
                 const isSel = gridSelectionIncludes(sel, i, j);
                 const isFocus = focus.row === i && focus.column === j + 1;
                 return (
                   <td
                     key={j}
-                    data-null={v === null}
+                    data-null={v === null && !decodeFailure}
+                    data-decode-failure={decodeFailure ? "true" : undefined}
                     data-numeric={numericCols[j]}
                     data-interactive={interactive}
                     data-selected={isSel}
                     data-focused={isFocus}
                     data-grid-focus={`${i}:${j + 1}`}
-                    className="tw:max-w-[480px] tw:overflow-hidden tw:bg-background tw:text-ellipsis tw:data-[null=true]:text-muted-foreground tw:data-[null=true]:italic tw:data-[numeric=true]:text-right tw:data-[numeric=true]:tabular-nums tw:data-[interactive=true]:cursor-pointer tw:data-[selected=true]:!bg-selection tw:data-[focused=true]:shadow-[inset_0_0_0_var(--ds-border-width-strong)_var(--ds-ring)]"
+                    className="tw:max-w-[480px] tw:overflow-hidden tw:bg-background tw:text-ellipsis tw:data-[null=true]:text-muted-foreground tw:data-[null=true]:italic tw:data-[decode-failure=true]:text-danger tw:data-[numeric=true]:text-right tw:data-[numeric=true]:tabular-nums tw:data-[interactive=true]:cursor-pointer tw:data-[selected=true]:!bg-selection tw:data-[focused=true]:shadow-[inset_0_0_0_var(--ds-border-width-strong)_var(--ds-ring)]"
                     // Compact fixed columns can truncate any value.
                     title={
                       resized || text.length > 40 || text.includes("\n")

@@ -2,7 +2,7 @@
 
 use dopedb_protocol::catalog::CatalogSnapshot;
 
-use crate::error::AppResult;
+use crate::error::{AppError, AppResult};
 use crate::kernel::identity::ConnectionId;
 use crate::kernel::TerminalAuthority;
 
@@ -27,21 +27,30 @@ where
         connection_id: ConnectionId,
         policy: CatalogReadPolicy,
     ) -> AppResult<CatalogSnapshot> {
-        self.gateway.load_snapshot(connection_id, policy).await
+        self.gateway
+            .load_snapshot(connection_id, policy)
+            .await
+            .map_err(AppError::public_connection_failure)
     }
 
     pub(crate) async fn load_overview(
         &self,
         connection_id: ConnectionId,
     ) -> AppResult<CatalogOverview> {
-        self.gateway.load_overview(connection_id).await
+        self.gateway
+            .load_overview(connection_id)
+            .await
+            .map_err(AppError::public_connection_failure)
     }
 
     pub(crate) async fn list_databases(
         &self,
         connection_id: ConnectionId,
     ) -> AppResult<Vec<DatabaseSummary>> {
-        self.gateway.list_databases(connection_id).await
+        self.gateway
+            .list_databases(connection_id)
+            .await
+            .map_err(AppError::public_connection_failure)
     }
 
     pub(crate) async fn load_database_snapshot(
@@ -52,6 +61,7 @@ where
         self.gateway
             .load_database_snapshot(connection_id, database)
             .await
+            .map_err(AppError::public_connection_failure)
     }
 
     pub(crate) async fn load_database_overview(
@@ -62,6 +72,7 @@ where
         self.gateway
             .load_database_overview(connection_id, database)
             .await
+            .map_err(AppError::public_connection_failure)
     }
 
     pub(crate) async fn load_terminal_snapshot(
@@ -69,14 +80,20 @@ where
         authority: &TerminalAuthority,
         policy: CatalogReadPolicy,
     ) -> AppResult<CatalogSnapshot> {
-        self.gateway.load_terminal_snapshot(authority, policy).await
+        self.gateway
+            .load_terminal_snapshot(authority, policy)
+            .await
+            .map_err(AppError::public_connection_failure)
     }
 
     pub(crate) async fn list_terminal_databases(
         &self,
         authority: &TerminalAuthority,
     ) -> AppResult<Vec<DatabaseSummary>> {
-        self.gateway.list_terminal_databases(authority).await
+        self.gateway
+            .list_terminal_databases(authority)
+            .await
+            .map_err(AppError::public_connection_failure)
     }
 
     pub(crate) async fn load_terminal_database_snapshot(
@@ -87,6 +104,7 @@ where
         self.gateway
             .load_terminal_database_snapshot(authority, database)
             .await
+            .map_err(AppError::public_connection_failure)
     }
 
     pub(crate) async fn table_ddl(
@@ -95,7 +113,10 @@ where
         schema: Option<&str>,
         table: &str,
     ) -> AppResult<String> {
-        self.gateway.table_ddl(connection_id, schema, table).await
+        self.gateway
+            .table_ddl(connection_id, schema, table)
+            .await
+            .map_err(AppError::public_connection_failure)
     }
 
     pub(crate) async fn database_table_ddl(
@@ -108,5 +129,6 @@ where
         self.gateway
             .database_table_ddl(connection_id, database, schema, table)
             .await
+            .map_err(AppError::public_connection_failure)
     }
 }

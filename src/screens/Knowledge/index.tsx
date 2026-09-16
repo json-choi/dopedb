@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { errMessage } from "../../ipc/types";
+import { catalogLoadIssue, catalogLoadIssueAction, catalogLoadIssueMessage } from "../../features/catalogExplorer/catalogDomain";
 import { useI18n } from "../../lib/i18n";
 import { queryResultPhase } from "../../lib/queryResultPhase";
 import {
@@ -430,17 +431,17 @@ export default function Knowledge({
     ? {
         hasData: projectsPhase === "staleError",
         message: t("knowledge.projectsLoadFailed", {
-          error: errMessage(projects.error),
+          error: catalogLoadIssueMessage(t, catalogLoadIssue(projects.error)),
         }),
-        retry: () => projects.refetch(),
+        retry: catalogLoadIssueAction(catalogLoadIssue(projects.error)) === "retry" ? () => projects.refetch() : undefined,
       }
     : sources.error
       ? {
           hasData: sourcesPhase === "staleError",
           message: t("knowledge.sourcesLoadFailed", {
-            error: errMessage(sources.error),
+            error: catalogLoadIssueMessage(t, catalogLoadIssue(sources.error)),
           }),
-          retry: () => sources.refetch(),
+          retry: catalogLoadIssueAction(catalogLoadIssue(sources.error)) === "retry" ? () => sources.refetch() : undefined,
         }
       : view === "databases" && connections.error
         ? {
@@ -449,9 +450,9 @@ export default function Knowledge({
               connectionsPhase === "staleError"
                 ? "knowledge.connectionsRefreshFailed"
                 : "knowledge.connectionsLoadFailed",
-              { error: errMessage(connections.error) },
+              { error: catalogLoadIssueMessage(t, catalogLoadIssue(connections.error)) },
             ),
-            retry: () => connections.refetch(),
+            retry: catalogLoadIssueAction(catalogLoadIssue(connections.error)) === "retry" ? () => connections.refetch() : undefined,
           }
       : null;
   if (view === "analyses" && selectedProject && selectedEnvironment) {

@@ -10,6 +10,7 @@ import {
   ResultWorkbenchToolbar,
   resultCellText,
 } from "../queryResults/ResultWorkbench";
+import { remapDecodeFailures } from "../queryResults/decodeFailures";
 import {
   ResultMeta,
   SqlSnippet,
@@ -110,15 +111,27 @@ function MaterializedResult({
   const [filter, setFilter] = useState("");
   const result = outcome.result;
   const normalizedFilter = filter.trim().toLocaleLowerCase();
-  const filteredRows = useMemo(() => {
-    if (!result || !normalizedFilter) return result?.rows ?? [];
-    return result.rows.filter((row) =>
+  const filteredResult = useMemo(() => {
+    if (!result) return { rows: [], sourceRows: [] as number[] };
+    const sourceRows = result.rows.flatMap((row, index) =>
+      !normalizedFilter ||
       row.some((value) =>
         resultCellText(value).toLocaleLowerCase().includes(normalizedFilter),
-      ),
+      )
+        ? [index]
+        : [],
     );
+    return { rows: sourceRows.map((index) => result.rows[index]), sourceRows };
   }, [normalizedFilter, result]);
+  const filteredRows = filteredResult.rows;
+  const filteredDecodeFailures = remapDecodeFailures(
+    result?.decodeFailures,
+    filteredResult.sourceRows,
+  );
   const visibleRows = filteredRows.slice(0, limit);
+  const visibleDecodeFailures = filteredDecodeFailures.filter(
+    (failure) => failure.rowIndex < visibleRows.length,
+  );
 
   return (
     <WorkbenchContainedBody>
@@ -127,6 +140,7 @@ function MaterializedResult({
           <ResultWorkbenchToolbar
             columns={result.columns}
             rows={filteredRows}
+            decodeFailures={filteredDecodeFailures}
             filenameBase={`query-${stamp()}`}
             filterOpen={filterOpen}
             filter={filter}
@@ -143,6 +157,7 @@ function MaterializedResult({
             result={{
               ...result,
               rows: visibleRows,
+              decodeFailures: visibleDecodeFailures,
               rowCount: filteredRows.length,
             }}
             surface="workbench"
@@ -287,6 +302,7 @@ function ScriptResults({
                   <ResultToolbar
                     columns={statement.result.columns}
                     rows={statement.result.rows}
+                    decodeFailures={statement.result.decodeFailures}
                     filenameBase={`script-stmt${index + 1}-${stamp()}`}
                   />
                 </div>

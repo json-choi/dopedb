@@ -3,6 +3,8 @@ import { Button } from "../../design-system/components/Button";
 import { LoadingLabel } from "../../design-system/components/Status";
 import { TreeInlineStatus } from "../../design-system/components/TreeControls";
 import {
+  catalogLoadIssueAction,
+  catalogLoadIssueMessage,
   distinctCatalogDetailIssue,
   isAuthenticationRequired,
   isManagedConnectionRecoveryRequired,
@@ -29,6 +31,7 @@ interface CatalogTreeStatusProps {
   onResolveAccess?: () => void;
   onRecoverAuthentication?: () => void;
   onRecoverManagedConnection?: () => void;
+  onEdit?: () => void;
   managedConnectionRecoveryPending?: boolean;
   onRetryOverview: () => void;
   onRequestDetails: () => void;
@@ -49,6 +52,7 @@ export function CatalogTreeStatus({
   onResolveAccess,
   onRecoverAuthentication,
   onRecoverManagedConnection,
+  onEdit,
   managedConnectionRecoveryPending = false,
   onRetryOverview,
   onRequestDetails,
@@ -71,11 +75,13 @@ export function CatalogTreeStatus({
     managedRecoveryIssue && onRecoverManagedConnection,
   );
   const authenticationRecoveryMessage = authenticationRecoveryError
-    ? authenticationRecoveryError.kind === "timeout"
+    ? authenticationRecoveryError.code === "timeout"
+      || authenticationRecoveryError.code === "sshTimeout"
       ? t("connections.bigQueryErrorTimeout")
-      : authenticationRecoveryError.kind === "network"
+      : authenticationRecoveryError.code === "network"
+        || authenticationRecoveryError.code === "connectionNetwork"
         ? t("connections.bigQueryErrorNetwork")
-        : authenticationRecoveryError.kind === "blocked"
+        : authenticationRecoveryError.code === "blocked"
           ? t("connections.bigQueryAuthenticationPermissionError")
           : t("connections.bigQueryAuthenticationFailed")
     : null;
@@ -86,15 +92,33 @@ export function CatalogTreeStatus({
     : authenticationIssue
       ? authenticationRecoveryMessage
         ?? t("connections.bigQueryAuthenticationExpired")
-      : error?.message;
+      : error
+        ? catalogLoadIssueMessage(t, error)
+        : undefined;
   const uniqueDetailError = distinctCatalogDetailIssue(error, detailError);
-  const primaryAction = canRecoverManagedConnection && onRecoverManagedConnection
-    ? onRecoverManagedConnection
-    : canRecoverAuthentication && onRecoverAuthentication
-      ? onRecoverAuthentication
-      : managedRecoveryIssue
-        ? undefined
-        : onRetryOverview;
+  const primaryIssue = managedRecoveryIssue ?? authenticationIssue ?? error;
+  const primaryActionKind = primaryIssue
+    ? catalogLoadIssueAction(primaryIssue)
+    : null;
+  const primaryAction = primaryActionKind === "recoverManaged"
+    ? canRecoverManagedConnection ? onRecoverManagedConnection : undefined
+    : primaryActionKind === "recoverAuthentication"
+      ? canRecoverAuthentication ? onRecoverAuthentication : undefined
+      : primaryActionKind === "resolveCredentials"
+        ? onResolveAccess
+        : primaryActionKind === "edit"
+          ? onEdit
+          : primaryActionKind === "retry"
+            ? onRetryOverview
+            : undefined;
+  const detailActionKind = uniqueDetailError
+    ? catalogLoadIssueAction(uniqueDetailError)
+    : null;
+  const detailAction = detailActionKind === "edit"
+    ? onEdit
+    : detailActionKind === "retry"
+      ? onRequestDetails
+      : undefined;
   const primaryActionPending = managedConnectionRecoveryPending
     || authenticationRecoveryPending;
   return (
@@ -152,17 +176,21 @@ export function CatalogTreeStatus({
               data-tree-primary-action
               tabIndex={-1}
             >
-              {canRecoverManagedConnection
+              {primaryActionKind === "recoverManaged"
                 ? managedConnectionRecoveryPending
                   ? t("connections.managedWorkspace.opening")
                   : t("connections.managedWorkspace.recover")
-                : canRecoverAuthentication
+                : primaryActionKind === "recoverAuthentication"
                   ? authenticationRecoveryPending
                     ? t("connections.bigQueryReconnecting")
                     : authenticationMode === "serviceAccount"
                       ? t("connections.bigQueryReplaceCredentialFile")
                       : t("connections.bigQueryReconnectGoogleAccount")
-                  : t("app.retry")}
+                  : primaryActionKind === "resolveCredentials"
+                    ? t("workspace.bindCredentialsShort")
+                    : primaryActionKind === "edit"
+                      ? t("connections.edit")
+                      : t("app.retry")}
             </Button>
           ) : undefined}
         >
@@ -172,10 +200,10 @@ export function CatalogTreeStatus({
       {uniqueDetailError && !authenticationIssue && !managedRecoveryIssue ? (
         <TreeInlineStatus
           icon="alert"
-          action={<Button
+          action={detailAction ? <Button
             size="xs"
             variant="ghost"
-            onClick={onRequestDetails}
+            onClick={detailAction}
             role="treeitem"
             aria-level={treeLevel + 1}
             data-explorer-tree-item
@@ -184,10 +212,12 @@ export function CatalogTreeStatus({
             data-tree-primary-action
             tabIndex={-1}
           >
-            {t("app.retry")}
-          </Button>}
+            {detailActionKind === "edit"
+              ? t("connections.edit")
+              : t("app.retry")}
+          </Button> : undefined}
         >
-          {uniqueDetailError.message}
+          {catalogLoadIssueMessage(t, uniqueDetailError)}
         </TreeInlineStatus>
       ) : null}
       {!catalogLoaded && !error && !detailError && !accessIssue ? (

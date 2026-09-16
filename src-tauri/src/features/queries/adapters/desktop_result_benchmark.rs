@@ -87,6 +87,7 @@ fn create_packaged_result_artifact() -> AppResult<PackagedResultStoreMetric> {
         let batch = DesktopSqlStreamBatch {
             operation_id,
             sequence: sequence as u64,
+            row_start,
             columns: columns.clone(),
             rows: (row_start..row_end)
                 .map(|row| {
@@ -96,6 +97,7 @@ fn create_packaged_result_artifact() -> AppResult<PackagedResultStoreMetric> {
                     ]
                 })
                 .collect(),
+            decode_failures: Vec::new(),
         };
         let encoded = serde_json::to_vec(&batch)?;
         retained_bytes = retained_bytes.saturating_add(encoded.len() as u64);

@@ -4,7 +4,12 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { SqlStreamRowSource } from "../queries/domain";
-import { collectCachedSqlResultRows } from "../queries/resultPageCache";
+import {
+  collectCachedSqlResultDecodeFailures,
+  collectCachedSqlResultRows,
+} from "../queries/resultPageCache";
+import type { CellDecodeFailure } from "../../ipc/types";
+import { errMessage } from "../../ipc/types";
 import {
   exportSqlResult,
   type SqlResultExportController,
@@ -25,6 +30,7 @@ import { useToast } from "../../components/Toast";
 export default function ResultToolbar({
   columns,
   rows,
+  decodeFailures,
   rowSource,
   filenameBase,
   scopeLabel,
@@ -33,6 +39,7 @@ export default function ResultToolbar({
 }: {
   columns: string[];
   rows?: unknown[][];
+  decodeFailures?: CellDecodeFailure[];
   rowSource?: SqlStreamRowSource;
   filenameBase: string;
   // Optional on-surface scope for page-limited exports (e.g. "page"). Default keeps
@@ -48,6 +55,10 @@ export default function ResultToolbar({
   const count = rowSource?.rowCount ?? rows?.length ?? 0;
   const disabled = partial === true;
   const cachedRows = rowSource ? collectCachedSqlResultRows(rowSource) : null;
+  const knownDecodeFailures = rowSource
+    ? collectCachedSqlResultDecodeFailures(rowSource)
+    : (decodeFailures ?? []);
+  const firstDecodeFailure = knownDecodeFailures[0];
   const copyDisabled = disabled || (!!rowSource && cachedRows === null);
   const exportRef = useRef<SqlResultExportController | null>(null);
   const cancelledExportIdRef = useRef<string | null>(null);
@@ -68,8 +79,26 @@ export default function ResultToolbar({
     cancelledExportIdRef.current = controller.exportId;
     void controller.cancel();
   };
+  const failureReason = (action: "copy" | "export") =>
+    firstDecodeFailure
+      ? t(
+          action === "copy"
+            ? "grid.decodeFailureCopyBlocked"
+            : "results.decodeFailureExportBlocked",
+          {
+            row: firstDecodeFailure.rowIndex + 1,
+            column: firstDecodeFailure.columnIndex + 1,
+            type: firstDecodeFailure.databaseType,
+          },
+        )
+      : null;
   const exportStored = (format: "csv" | "json") => {
     if (!rowSource || exportRef.current) return;
+    const blocked = failureReason("export");
+    if (blocked) {
+      toast(blocked, "error");
+      return;
+    }
     const controller = exportSqlResult(
       rowSource,
       format,
@@ -85,9 +114,9 @@ export default function ResultToolbar({
       totalRows: rowSource.rowCount,
     });
     void controller.completion
-      .catch(() => {
+      .catch((error) => {
         if (cancelledExportIdRef.current !== controller.exportId) {
-          toast(t("results.exportFailed"), "error");
+          toast(errMessage(error) || t("results.exportFailed"), "error");
         }
       })
       .finally(() => {
@@ -101,6 +130,11 @@ export default function ResultToolbar({
       });
   };
   const exportCsv = () => {
+    const blocked = failureReason("export");
+    if (blocked) {
+      toast(blocked, "error");
+      return;
+    }
     if (rowSource) {
       exportStored("csv");
       return;
@@ -108,6 +142,11 @@ export default function ResultToolbar({
     downloadCsv(filenameBase, columns, rows ?? []);
   };
   const exportJson = () => {
+    const blocked = failureReason("export");
+    if (blocked) {
+      toast(blocked, "error");
+      return;
+    }
     if (rowSource) {
       exportStored("json");
       return;
@@ -136,8 +175,13 @@ export default function ResultToolbar({
               title: copyTitle,
               "aria-label": t("results.copyTitle"),
             })}
-        onClick={() =>
-          navigator.clipboard
+        onClick={() => {
+          const blocked = failureReason("copy");
+          if (blocked) {
+            toast(blocked, "error");
+            return;
+          }
+          void navigator.clipboard
             .writeText(
               toTsv(
                 columns,
@@ -147,8 +191,8 @@ export default function ResultToolbar({
               ),
             )
             .then(() => toast(t("results.copyRows", { count })))
-            .catch(() => toast(t("results.copyFailed"), "error"))
-        }
+            .catch(() => toast(t("results.copyFailed"), "error"));
+        }}
         disabled={copyDisabled}
       >
         {presentation === "workbench" ? (

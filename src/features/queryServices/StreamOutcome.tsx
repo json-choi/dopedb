@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 
 import { type SqlStreamViewState } from "../queries/domain";
 import {
+  collectCachedSqlResultDecodeFailures,
   collectCachedSqlResultRows,
   SQL_RESULT_CACHE_MAX_PAGES,
 } from "../queries/resultPageCache";
@@ -20,6 +21,7 @@ import {
   WorkbenchContainedBody,
 } from "../../design-system/components/Workbench";
 import type { JsonValue } from "../../ipc/types";
+import { remapDecodeFailures } from "../queryResults/decodeFailures";
 import { stamp } from "../../lib/export";
 import { useI18n } from "../../lib/i18n";
 
@@ -51,20 +53,32 @@ export default function StreamOutcome({
   const filterableRows = partial
     ? null
     : collectCachedSqlResultRows(stream.rowSource);
-  const filteredRows = useMemo<JsonValue[][] | null>(() => {
+  const filteredResult = useMemo<{
+    rows: JsonValue[][];
+    sourceRows: number[];
+  } | null>(() => {
     if (!filterableRows || !normalizedFilter) return null;
     const rows: JsonValue[][] = [];
-    for (const row of filterableRows) {
+    const sourceRows: number[] = [];
+    for (const [index, row] of filterableRows.entries()) {
       if (
         row.some((value) =>
           resultCellText(value).toLocaleLowerCase().includes(normalizedFilter),
         )
       ) {
         rows.push([...row] as JsonValue[]);
+        sourceRows.push(index);
       }
     }
-    return rows;
+    return { rows, sourceRows };
   }, [filterableRows, normalizedFilter]);
+  const filteredRows = filteredResult?.rows ?? null;
+  const filteredDecodeFailures = filteredResult
+    ? remapDecodeFailures(
+        collectCachedSqlResultDecodeFailures(stream.rowSource),
+        filteredResult.sourceRows,
+      )
+    : undefined;
   const phaseLabel =
     stream.phase === "cancelled"
       ? t("sql.cancelled")
@@ -87,6 +101,7 @@ export default function StreamOutcome({
           <ResultWorkbenchToolbar
             columns={stream.columns}
             rows={filteredRows ?? undefined}
+            decodeFailures={filteredDecodeFailures}
             rowSource={filteredRows === null ? stream.rowSource : undefined}
             filenameBase={`query-${stamp()}`}
             partial={partial}
@@ -103,6 +118,7 @@ export default function StreamOutcome({
             result={{
               columns: stream.columns,
               rows: filteredRows ?? [],
+              decodeFailures: filteredDecodeFailures,
               rowCount: filteredRows?.length ?? stream.rowCount,
               truncated: stream.truncated,
               durationMs: stream.durationMs ?? 0,

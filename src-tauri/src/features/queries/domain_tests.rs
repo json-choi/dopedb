@@ -134,4 +134,5 @@ async fn query_and_skill_security_contracts_stay_fail_closed() {
     crate::connection::assert_warm_cache_authorization_contract();
     crate::bigquery::assert_bigquery_contract();
     super::adapters::assert_ephemeral_page_contract();
+    super::adapters::assert_decode_failure_export_contract();
 }

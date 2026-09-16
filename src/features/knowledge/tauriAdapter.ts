@@ -1,4 +1,5 @@
 import { invoke } from "../../ipc/core";
+import { readWithCatalogIssue } from "../catalogExplorer/catalogDomain";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   CreateKnowledgeProjectInput,
@@ -19,16 +20,16 @@ export function listKnowledgeProjects(): Promise<KnowledgeProject[]> {
 }
 
 export function listKnowledgeInventory(): Promise<KnowledgeInventory> {
-  return invoke("list_knowledge_inventory_command");
+  return readWithCatalogIssue(() => invoke("list_knowledge_inventory_command"));
 }
 
 export function listKnowledgeEnvironmentConnections(
   projectEnvironmentId?: string,
 ): Promise<EnvironmentConnection[]> {
-  return invoke(
+  return readWithCatalogIssue(() => invoke(
     "list_knowledge_environment_connections",
     projectEnvironmentId ? { projectEnvironmentId } : {},
-  );
+  ));
 }
 
 export function bindKnowledgeEnvironmentConnection(

@@ -2,7 +2,7 @@ import type {
   PointerEvent,
   RefObject,
 } from "react";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 
 import ConfirmButton from "../../components/ConfirmButton";
 import EngineMark from "../../components/EngineMark";
@@ -44,6 +44,11 @@ import {
   selectedSchemaScope,
 } from "../../features/catalogExplorer/scopeFilter";
 import { databaseCatalogKey } from "./useCatalogTree";
+import {
+  isDialogKeyboardTarget,
+  menuInitialFocusForTriggerKey,
+  type MenuInitialFocus,
+} from "../../design-system/menuInteraction";
 
 const EMPTY_SCHEMA_GROUPS = new Map<string, SchemaConnectionGroup>();
 const EMPTY_CATALOGS: Record<string, Catalog> = {};
@@ -134,6 +139,8 @@ type Props = {
 export default function ConnectionNode(props: Props) {
   const { t } = useI18n();
   const connectionMenuTriggerRef = useRef<HTMLButtonElement>(null);
+  const [connectionMenuInitialFocus, setConnectionMenuInitialFocus] =
+    useState<MenuInitialFocus>(null);
   const { connection } = props;
   const environmentBadge =
     props.environmentBadge === undefined
@@ -411,16 +418,10 @@ export default function ConnectionNode(props: Props) {
           onPointerUp={(event) => event.stopPropagation()}
           onClick={(event) => event.stopPropagation()}
           onKeyDown={(event) => {
+            // React bubbles portalled dialog events through this row. Let its
+            // document listener own Escape and Tab focus containment.
+            if (isDialogKeyboardTarget(event.target)) return;
             event.stopPropagation();
-            if (event.key === "Escape") {
-              event.preventDefault();
-              props.onOpenMenu(null);
-              event.currentTarget
-                .querySelector<HTMLButtonElement>(
-                  "[data-connection-menu-trigger]",
-                )
-                ?.focus();
-            }
           }}
         >
           <SchemaDiffTrigger
@@ -441,13 +442,22 @@ export default function ConnectionNode(props: Props) {
             aria-expanded={props.openMenuId === connectionMenuKey}
             aria-controls={connectionMenuId}
             tabIndex={-1}
-            onClick={() =>
+            onClick={() => {
+              setConnectionMenuInitialFocus(null);
               props.onOpenMenu(
                 props.openMenuId === connectionMenuKey
                   ? null
                   : connectionMenuKey,
-              )
-            }
+              );
+            }}
+            onKeyDown={(event) => {
+              const focus = menuInitialFocusForTriggerKey(event.key);
+              if (!focus) return;
+              event.preventDefault();
+              event.stopPropagation();
+              setConnectionMenuInitialFocus(focus);
+              props.onOpenMenu(connectionMenuKey);
+            }}
           >
             <Icon name="moreVertical" />
           </Button>
@@ -455,6 +465,11 @@ export default function ConnectionNode(props: Props) {
             <PopupMenu
               id={connectionMenuId}
               anchorRef={connectionMenuTriggerRef}
+              initialFocus={connectionMenuInitialFocus}
+              onRequestClose={() => {
+                setConnectionMenuInitialFocus(null);
+                props.onOpenMenu(null);
+              }}
               onReferenceHidden={() => props.onOpenMenu(null)}
             >
               {props.projectDatabaseOrder &&
@@ -633,6 +648,7 @@ export default function ConnectionNode(props: Props) {
                 onRetryOverview={() =>
                   props.onRetryOverview(database.name)
                 }
+                onEdit={props.onEdit}
                 onRecoverAuthentication={props.onRecoverAuthentication}
                 onRecoverManagedConnection={props.onRecoverManagedConnection}
                 managedConnectionRecoveryPending={
@@ -690,6 +706,7 @@ export default function ConnectionNode(props: Props) {
             onRetryOverview={() =>
               props.onRetryOverview(connection.database)
             }
+            onEdit={props.onEdit}
             onRecoverAuthentication={props.onRecoverAuthentication}
             onRecoverManagedConnection={props.onRecoverManagedConnection}
             managedConnectionRecoveryPending={

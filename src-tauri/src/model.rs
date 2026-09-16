@@ -266,11 +266,21 @@ pub struct PreviewReport {
 }
 
 /// A materialized result set (or a page of one).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CellDecodeFailure {
+    pub row_index: usize,
+    pub column_index: usize,
+    pub database_type: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QueryResult {
     pub columns: Vec<String>,
     pub rows: Vec<Vec<serde_json::Value>>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub decode_failures: Vec<CellDecodeFailure>,
     pub row_count: usize,
     /// True if the result was cut off at the row cap.
     pub truncated: bool,

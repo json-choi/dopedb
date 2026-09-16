@@ -4,8 +4,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueries, useQueryClient } from "@tanstack/react-query";
 import type { Catalog } from "../../ipc/types";
-import { errMessage } from "../../ipc/types";
 import type { ConnectionProfile } from "../../features/connections/domain";
+import {
+  catalogLoadIssue,
+  catalogLoadIssueMessage,
+  type CatalogLoadIssue,
+} from "../../features/catalogExplorer/catalogDomain";
 import EngineMark from "../../components/EngineMark";
 import { Button } from "../../design-system/components/Button";
 import { SelectInput } from "../../design-system/components/FormControls";
@@ -68,7 +72,9 @@ export default function SchemaDiff({
   const [targetId, setTargetId] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [refreshing, setRefreshing] = useState(false);
-  const [refreshErrors, setRefreshErrors] = useState<Record<string, string>>({});
+  const [refreshErrors, setRefreshErrors] = useState<
+    Record<string, CatalogLoadIssue>
+  >({});
 
   useEffect(() => {
     catalogScopeKeyRef.current = catalogScope.key;
@@ -133,11 +139,19 @@ export default function SchemaDiff({
     : null;
   const selectedLoadError = (() => {
     if (baseline && baselineLoadError) {
-      return { connection: baseline, error: errMessage(baselineLoadError) };
+      return {
+        connection: baseline,
+        error: catalogLoadIssueMessage(t, catalogLoadIssue(baselineLoadError)),
+      };
     }
     if (selectedTarget) {
       const error = refreshErrors[selectedTarget.id] ?? queryById.get(selectedTarget.id)?.error;
-      if (error) return { connection: selectedTarget, error: errMessage(error) };
+      if (error) {
+        return {
+          connection: selectedTarget,
+          error: catalogLoadIssueMessage(t, catalogLoadIssue(error)),
+        };
+      }
     }
     return null;
   })();
@@ -172,10 +186,10 @@ export default function SchemaDiff({
         return connection.id;
       }),
     );
-    const errors: Record<string, string> = {};
+    const errors: Record<string, CatalogLoadIssue> = {};
     results.forEach((result, index) => {
       if (result.status === "rejected") {
-        errors[group.connections[index].id] = errMessage(result.reason);
+        errors[group.connections[index].id] = catalogLoadIssue(result.reason);
       }
     });
     if (catalogScopeKeyRef.current === scopeKey) {
@@ -245,7 +259,7 @@ export default function SchemaDiff({
                       connection: connection
                         ? connectionName(connection)
                         : connectionId,
-                      error,
+                      error: catalogLoadIssueMessage(t, error),
                     })}
                   </span>
                 );

@@ -286,6 +286,30 @@ impl JobWorker {
                     )
                     .await;
             }
+            if let Some(failure) = result.decode_failures.first() {
+                let failed_row = rows_processed
+                    .saturating_add(u64::try_from(failure.row_index).unwrap_or(u64::MAX));
+                let error = AppError::Blocked {
+                    reason: format!(
+                        "export blocked: cell at source row {}, column {} could not be decoded as {}",
+                        failed_row.saturating_add(1),
+                        failure.column_index + 1,
+                        failure.database_type
+                    ),
+                };
+                drop(sink);
+                match std::fs::remove_file(&partial) {
+                    Ok(()) => return Err(error),
+                    Err(remove_error) if remove_error.kind() == std::io::ErrorKind::NotFound => {
+                        return Err(error);
+                    }
+                    Err(remove_error) => {
+                        return Err(AppError::OutcomeUnknown(format!(
+                            "{error}; failed export partial could not be removed: {remove_error}"
+                        )));
+                    }
+                }
+            }
             if result.rows.is_empty() {
                 break;
             }

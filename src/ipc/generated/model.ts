@@ -115,7 +115,8 @@ plan: string | null,
  * Human note, e.g. "would lock ~120000 rows — preview skipped".
  */
 note: string | null, };
-export type QueryResult = { columns: Array<string>, rows: Array<Array<JsonValue>>, rowCount: number,
+export type CellDecodeFailure = { rowIndex: number, columnIndex: number, databaseType: string, };
+export type QueryResult = { columns: Array<string>, rows: Array<Array<JsonValue>>, decodeFailures?: Array<CellDecodeFailure>, rowCount: number,
 /**
  * True if the result was cut off at the row cap.
  */

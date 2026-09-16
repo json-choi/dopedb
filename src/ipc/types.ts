@@ -12,6 +12,7 @@ import type { OperationState as GeneratedOperationState } from "./generated/prot
 
 export type {
   AuditEntry,
+  CellDecodeFailure,
   ConnectionProviderTarget,
   ConnectionProfile,
   DocumentPage,

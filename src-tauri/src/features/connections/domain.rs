@@ -7,17 +7,23 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::{AppError, AppResult};
+use crate::error::{AppError, AppResult, ConnectionFailureCode};
 use crate::kernel::identity::ConnectionId;
 use crate::model::{ConnectionProfile, Engine};
 
 pub(crate) const MAX_CONNECTION_CREDENTIAL_BYTES: usize = 1 << 16;
-const MAX_CONNECTION_TEST_DETAIL_CHARS: usize = 2_048;
 
 /// Stable, privacy-safe connection probe categories consumed by the editor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) enum ConnectionTestFailureCode {
+    SshClientMissing,
+    SshConfiguration,
+    SshHostKey,
+    SshAuthentication,
+    SshForwarding,
+    SshTimeout,
+    SshUnknown,
     TimeoutNetwork,
     Authentication,
     Tls,
@@ -29,6 +35,7 @@ pub(crate) enum ConnectionTestFailureCode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) enum ConnectionTestFailureField {
+    Ssh,
     Credentials,
     Tls,
     Database,
@@ -68,6 +75,36 @@ impl ConnectionTestReceipt {
 
 fn connection_test_failure(error: &AppError) -> ConnectionTestFailure {
     let (code, field) = match error {
+        AppError::ConnectionFailure(code) => {
+            let mapped = match code {
+                ConnectionFailureCode::SshClientMissing => {
+                    ConnectionTestFailureCode::SshClientMissing
+                }
+                ConnectionFailureCode::SshConfiguration => {
+                    ConnectionTestFailureCode::SshConfiguration
+                }
+                ConnectionFailureCode::SshHostKey => ConnectionTestFailureCode::SshHostKey,
+                ConnectionFailureCode::SshAuthentication => {
+                    ConnectionTestFailureCode::SshAuthentication
+                }
+                ConnectionFailureCode::SshForwarding => ConnectionTestFailureCode::SshForwarding,
+                ConnectionFailureCode::SshTimeout => ConnectionTestFailureCode::SshTimeout,
+                ConnectionFailureCode::SshUnknown => ConnectionTestFailureCode::SshUnknown,
+                ConnectionFailureCode::Network => ConnectionTestFailureCode::TimeoutNetwork,
+                ConnectionFailureCode::Tls => ConnectionTestFailureCode::Tls,
+                ConnectionFailureCode::Authentication => ConnectionTestFailureCode::Authentication,
+                ConnectionFailureCode::Configuration => ConnectionTestFailureCode::DatabaseConfig,
+                ConnectionFailureCode::Cancelled | ConnectionFailureCode::Unknown => {
+                    ConnectionTestFailureCode::Unknown
+                }
+            };
+            let field = if code.kind().starts_with("ssh") {
+                Some(ConnectionTestFailureField::Ssh)
+            } else {
+                None
+            };
+            (mapped, field)
+        }
         AppError::Timeout(_) | AppError::Network(_) | AppError::Io(_) => {
             (ConnectionTestFailureCode::TimeoutNetwork, None)
         }
@@ -138,7 +175,8 @@ fn classify_database_identity(
 
 fn safe_connection_test_detail(error: &AppError) -> String {
     let detail = match error {
-        AppError::Db(sqlx::Error::Database(database)) => database.message(),
+        AppError::ConnectionFailure(code) => code.message(),
+        AppError::Db(sqlx::Error::Database(_)) => "the database rejected the connection request",
         AppError::Db(sqlx::Error::PoolTimedOut) => {
             "the connection attempt exhausted its bounded pool deadline"
         }
@@ -163,15 +201,133 @@ fn safe_connection_test_detail(error: &AppError) -> String {
         AppError::Mongo(_) => "the MongoDB driver rejected the connection",
         _ => "the driver did not provide a safe diagnostic",
     };
-    detail
-        .chars()
-        .filter(|character| !character.is_control() || matches!(character, '\n' | '\t'))
-        .take(MAX_CONNECTION_TEST_DETAIL_CHARS)
-        .collect()
+    detail.to_owned()
 }
 
 #[cfg(test)]
 pub(crate) fn assert_connection_test_failure_contract() {
+    #[derive(Debug, thiserror::Error)]
+    #[error("{0}")]
+    struct HostileDatabaseError(String);
+    impl sqlx::error::DatabaseError for HostileDatabaseError {
+        fn message(&self) -> &str {
+            &self.0
+        }
+        fn code(&self) -> Option<std::borrow::Cow<'_, str>> {
+            Some("28P01".into())
+        }
+        fn as_error(&self) -> &(dyn std::error::Error + Send + Sync + 'static) {
+            self
+        }
+        fn as_error_mut(&mut self) -> &mut (dyn std::error::Error + Send + Sync + 'static) {
+            self
+        }
+        fn into_error(self: Box<Self>) -> Box<dyn std::error::Error + Send + Sync + 'static> {
+            self
+        }
+        fn kind(&self) -> sqlx::error::ErrorKind {
+            sqlx::error::ErrorKind::Other
+        }
+    }
+    let hostile = "postgres://fixture:password@host/db?token=private /Users/fixture/.ssh/key\u{1b}[31m\n\tsecret";
+    let database_error = AppError::Db(sqlx::Error::Database(Box::new(HostileDatabaseError(
+        hostile.into(),
+    ))));
+    let database_failure = connection_test_failure(&database_error);
+    assert_eq!(
+        database_failure.code,
+        ConnectionTestFailureCode::Authentication
+    );
+    assert_eq!(
+        database_failure.detail,
+        "the database rejected the connection request"
+    );
+    let public_database = database_error.public_connection_failure();
+    assert_eq!(public_database.kind(), "connectionAuthentication");
+    assert_eq!(
+        public_database.to_string(),
+        ConnectionFailureCode::Authentication.message()
+    );
+    for (diagnostic, expected) in [
+        (
+            "Host key verification failed",
+            ConnectionFailureCode::SshHostKey,
+        ),
+        (
+            "Permission denied (publickey)",
+            ConnectionFailureCode::SshAuthentication,
+        ),
+        (
+            "Bad configuration option",
+            ConnectionFailureCode::SshConfiguration,
+        ),
+        ("Connection refused", ConnectionFailureCode::SshForwarding),
+        ("Connection timed out", ConnectionFailureCode::SshTimeout),
+        ("unrecognized diagnostic", ConnectionFailureCode::SshUnknown),
+    ] {
+        let stderr = format!("{diagnostic}\n{hostile}");
+        let code = crate::connection::ssh::classify_ssh_failure(stderr.as_bytes());
+        assert_eq!(code, expected);
+        let error = AppError::ConnectionFailure(code);
+        let wire = serde_json::to_string(&error).unwrap();
+        assert!(!wire.contains("password"));
+        assert!(!wire.contains("token="));
+        assert!(!wire.contains("/Users/"));
+        assert!(!error.to_string().chars().any(char::is_control));
+        let receipt = ConnectionTestReceipt::from_result(Err(error));
+        let failure = receipt.failure.unwrap();
+        assert_eq!(failure.field, Some(ConnectionTestFailureField::Ssh));
+        assert_eq!(failure.detail, code.message());
+    }
+    for error in [
+        AppError::Network(hostile.into()),
+        AppError::Config(hostile.into()),
+        AppError::AuthenticationRequired(hostile.into()),
+        AppError::Blocked {
+            reason: hostile.into(),
+        },
+        AppError::Agent(hostile.into()),
+    ] {
+        let public = error.public_connection_failure();
+        let wire = serde_json::to_string(&public).unwrap();
+        assert!(!wire.contains("password"));
+        assert!(!wire.contains("token="));
+        assert!(!wire.contains("/Users/"));
+        assert!(!public.to_string().chars().any(char::is_control));
+    }
+    assert_eq!(
+        AppError::AuthenticationRequired(hostile.into())
+            .public_connection_failure()
+            .kind(),
+        "authenticationRequired"
+    );
+    assert_eq!(
+        AppError::ManagedConnectionRecoveryRequired
+            .public_connection_failure()
+            .kind(),
+        "managedConnectionRecoveryRequired"
+    );
+    assert_eq!(
+        AppError::CredentialBindingRequired
+            .public_connection_failure()
+            .kind(),
+        "credentialBindingRequired"
+    );
+    assert_eq!(
+        AppError::Blocked {
+            reason: hostile.into()
+        }
+        .public_connection_failure()
+        .kind(),
+        "blocked"
+    );
+    assert_eq!(
+        connection_test_failure(&AppError::ConnectionFailure(
+            ConnectionFailureCode::SshClientMissing
+        ))
+        .code,
+        ConnectionTestFailureCode::SshClientMissing
+    );
     assert_eq!(
         classify_database_identity(Some("28P01"), None),
         (

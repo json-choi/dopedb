@@ -4,10 +4,17 @@
 
 use thiserror::Error;
 
+#[path = "connection_failure.rs"]
+mod connection_failure;
+pub(crate) use connection_failure::ConnectionFailureCode;
+
 pub type AppResult<T> = Result<T, AppError>;
 
 #[derive(Debug, Error)]
 pub enum AppError {
+    /// Public connection diagnostics contain only a closed category, never driver output.
+    #[error("{0}")]
+    ConnectionFailure(ConnectionFailureCode),
     /// Errors from the target-database drivers (sqlx).
     #[error("database error: {0}")]
     Db(#[from] sqlx::Error),
@@ -95,6 +102,7 @@ impl AppError {
     /// Stable machine-readable discriminant for the frontend to switch on.
     pub fn kind(&self) -> &'static str {
         match self {
+            AppError::ConnectionFailure(code) => code.kind(),
             AppError::Db(_) => "db",
             AppError::Mongo(_) => "db",
             AppError::Agent(_) => "agent",

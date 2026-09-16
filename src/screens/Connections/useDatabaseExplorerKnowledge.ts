@@ -5,6 +5,10 @@ import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { analysisQueryKeys } from "../../features/analysisArticles/queryKeys";
 import { listAnalysisArticles } from "../../features/analysisArticles/tauriAdapter";
+import {
+  readWithCatalogIssue,
+  retryTransientCatalogIssue,
+} from "../../features/catalogExplorer/catalogDomain";
 import { projectResourceKey } from "../../features/catalogExplorer/projectResources";
 import type {
   EnvironmentConnection,
@@ -75,9 +79,11 @@ export function useDatabaseExplorerKnowledge({
       undefined,
       catalogScope.key,
     ),
-    queryFn: () => listKnowledgeEnvironmentConnections(),
+    queryFn: () => readWithCatalogIssue(
+      () => listKnowledgeEnvironmentConnections(),
+    ),
     enabled,
-    retry: false,
+    retry: retryTransientCatalogIssue,
     staleTime: 60_000,
   });
   const environmentConnectionsPhase = queryResultPhase(
@@ -96,7 +102,9 @@ export function useDatabaseExplorerKnowledge({
       const projectId = projectIdByEnvironmentId.get(environmentId);
       return {
         queryKey: analysisQueryKeys.articles(catalogScope.key, environmentId),
-        queryFn: () => listAnalysisArticles(environmentId),
+        queryFn: () => readWithCatalogIssue(
+          () => listAnalysisArticles(environmentId),
+        ),
         enabled:
           sharedWorkspace &&
           activeEnvironmentView === "analyses" &&
@@ -104,7 +112,7 @@ export function useDatabaseExplorerKnowledge({
           (expandedResourceKeys.has(projectResourceKey(projectId, "analyses")) ||
             (activeEnvironmentId === environmentId &&
               activeEnvironmentView === "analyses")),
-        retry: false,
+        retry: retryTransientCatalogIssue,
       };
     }),
   });

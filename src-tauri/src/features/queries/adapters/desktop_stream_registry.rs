@@ -612,8 +612,26 @@ pub(crate) fn assert_ephemeral_page_contract() {
     let batch = DesktopSqlStreamBatch {
         operation_id,
         sequence: 0,
-        columns: vec!["id".into()],
-        rows: vec![vec![serde_json::json!(1)]],
+        row_start: 0,
+        columns: vec![
+            "null_value".into(),
+            "empty_value".into(),
+            "literal_marker".into(),
+            "sentinel_json".into(),
+            "failed_geometry".into(),
+        ],
+        rows: vec![vec![
+            serde_json::Value::Null,
+            serde_json::json!(""),
+            serde_json::json!("<unsupported: geometry>"),
+            serde_json::json!({"decodeFailure": true, "databaseType": "geometry"}),
+            serde_json::Value::Null,
+        ]],
+        decode_failures: vec![crate::model::CellDecodeFailure {
+            row_index: 0,
+            column_index: 4,
+            database_type: "geometry".into(),
+        }],
     };
     session
         .borrow()
@@ -626,6 +644,7 @@ pub(crate) fn assert_ephemeral_page_contract() {
     assert_eq!(pulled.sequence, batch.sequence);
     assert_eq!(pulled.columns, batch.columns);
     assert_eq!(pulled.rows, batch.rows);
+    assert_eq!(pulled.decode_failures, batch.decode_failures);
     assert!(registry.acknowledge(operation_id, 0, &capability, "main"));
     session.complete(1, false, 1).expect("complete page");
 }

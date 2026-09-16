@@ -88,13 +88,24 @@ pub(super) fn read_verified_page(
     if bytes_sha256(&encoded) != meta.sha256 {
         return Err(DesktopSqlStreamSinkError::ResultStoreUnavailable);
     }
-    let batch: DesktopSqlStreamBatch = serde_json::from_slice(&encoded)
+    let mut batch: DesktopSqlStreamBatch = serde_json::from_slice(&encoded)
         .map_err(|_| DesktopSqlStreamSinkError::ResultStoreUnavailable)?;
+    if batch.row_start == 0 && meta.row_start > 0 && batch.decode_failures.is_empty() {
+        batch.row_start = meta.row_start;
+    }
     if batch.operation_id != operation_id
         || batch.sequence != meta.sequence
+        || batch.row_start != meta.row_start
         || batch.columns != columns
         || batch.rows.len() != meta.row_count
         || batch.rows.iter().any(|row| row.len() != columns.len())
+        || batch.decode_failures.iter().any(|failure| {
+            failure.row_index < meta.row_start
+                || failure.row_index >= meta.row_start.saturating_add(meta.row_count)
+                || failure.column_index >= columns.len()
+                || batch.rows[failure.row_index - meta.row_start][failure.column_index]
+                    != serde_json::Value::Null
+        })
     {
         return Err(DesktopSqlStreamSinkError::ResultStoreUnavailable);
     }

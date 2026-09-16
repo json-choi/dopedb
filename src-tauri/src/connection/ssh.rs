@@ -17,7 +17,7 @@ use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio::time::{sleep, Instant};
 
-use crate::error::{AppError, AppResult};
+use crate::error::{AppError, AppResult, ConnectionFailureCode};
 use crate::model::{ConnectionProfile, Engine};
 
 pub(crate) const SSH_ALIAS_PARAMETER: &str = "dopedb.sshAlias";
@@ -70,8 +70,8 @@ pub(crate) fn validate_profile(profile: &ConnectionProfile) -> AppResult<()> {
         return Ok(());
     };
     if matches!(profile.engine, Engine::Sqlite | Engine::Bigquery) {
-        return Err(AppError::Config(
-            "SQLite and BigQuery connections cannot use an SSH tunnel".into(),
+        return Err(AppError::ConnectionFailure(
+            ConnectionFailureCode::SshConfiguration,
         ));
     }
     if profile.engine == Engine::Mongodb
@@ -80,13 +80,13 @@ pub(crate) fn validate_profile(profile: &ConnectionProfile) -> AppResult<()> {
             .get("srv")
             .is_some_and(|value| value.trim().eq_ignore_ascii_case("true"))
     {
-        return Err(AppError::Config(
-            "MongoDB SRV discovery cannot use a single-host SSH tunnel".into(),
+        return Err(AppError::ConnectionFailure(
+            ConnectionFailureCode::SshConfiguration,
         ));
     }
     if profile.host.contains(',') {
-        return Err(AppError::Config(
-            "multi-host connections cannot use a single-host SSH tunnel".into(),
+        return Err(AppError::ConnectionFailure(
+            ConnectionFailureCode::SshConfiguration,
         ));
     }
     if alias.len() > SSH_ALIAS_LIMIT
@@ -95,9 +95,9 @@ pub(crate) fn validate_profile(profile: &ConnectionProfile) -> AppResult<()> {
             .all(|byte| byte.is_ascii_alphanumeric() || b"._-".contains(&byte))
         || alias.starts_with('-')
     {
-        return Err(AppError::Config(format!(
-            "{SSH_ALIAS_PARAMETER} must be a 1-{SSH_ALIAS_LIMIT} character OpenSSH Host alias using letters, numbers, dot, underscore, or hyphen"
-        )));
+        return Err(AppError::ConnectionFailure(
+            ConnectionFailureCode::SshConfiguration,
+        ));
     }
     Ok(())
 }
@@ -111,25 +111,43 @@ fn remote_forward_host(host: &str) -> String {
     }
 }
 
-fn clean_ssh_error(bytes: &[u8]) -> String {
-    let text = String::from_utf8_lossy(bytes);
-    text.chars()
-        .filter(|character| *character == '\n' || *character == '\t' || !character.is_control())
-        .collect::<String>()
-        .trim()
-        .to_owned()
-}
-
-async fn captured_error(stderr: &Arc<Mutex<Vec<u8>>>) -> String {
-    clean_ssh_error(&stderr.lock().await)
+pub(crate) fn classify_ssh_failure(bytes: &[u8]) -> ConnectionFailureCode {
+    // OpenSSH has no structured error protocol. Match known diagnostic classes,
+    // discard their text, and treat unfamiliar/localized output as unknown.
+    let text = String::from_utf8_lossy(bytes).to_ascii_lowercase();
+    if text.contains("host key verification failed")
+        || text.contains("remote host identification has changed")
+    {
+        ConnectionFailureCode::SshHostKey
+    } else if text.contains("permission denied") || text.contains("authentication failed") {
+        ConnectionFailureCode::SshAuthentication
+    } else if text.contains("bad configuration option")
+        || text.contains("bad owner or permissions")
+        || text.contains("no argument after keyword")
+        || text.contains("terminating, ") && text.contains("bad configuration")
+    {
+        ConnectionFailureCode::SshConfiguration
+    } else if text.contains("connection timed out") || text.contains("operation timed out") {
+        ConnectionFailureCode::SshTimeout
+    } else if text.contains("could not resolve hostname")
+        || text.contains("connection refused")
+        || text.contains("network is unreachable")
+        || text.contains("no route to host")
+        || text.contains("forwarding failed")
+        || text.contains("cannot listen to port")
+        || text.contains("administratively prohibited")
+    {
+        ConnectionFailureCode::SshForwarding
+    } else {
+        ConnectionFailureCode::SshUnknown
+    }
 }
 
 async fn fail_start(
     child: &mut Child,
     stderr_task: &JoinHandle<()>,
     stderr: &Arc<Mutex<Vec<u8>>>,
-    alias: &str,
-    reason: &str,
+    fallback: ConnectionFailureCode,
 ) -> AppError {
     let _ = child.start_kill();
     let _ = child.wait().await;
@@ -139,13 +157,13 @@ async fn fail_start(
         }
         sleep(Duration::from_millis(5)).await;
     }
-    let detail = captured_error(stderr).await;
-    let message = if detail.is_empty() {
-        format!("system ssh could not open Host alias {alias:?}: {reason}")
+    let classified = classify_ssh_failure(&stderr.lock().await);
+    stderr_task.abort();
+    AppError::ConnectionFailure(if classified == ConnectionFailureCode::SshUnknown {
+        fallback
     } else {
-        format!("system ssh could not open Host alias {alias:?}: {detail}")
-    };
-    AppError::Network(message)
+        classified
+    })
 }
 
 /// Start one local forward for the target profile and return a driver projection
@@ -171,12 +189,13 @@ async fn open_with_program(
         });
     };
 
-    let listener = TcpListener::bind(("127.0.0.1", 0)).await.map_err(|error| {
-        AppError::Network(format!(
-            "could not reserve a local port for SSH Host alias {alias:?}: {error}"
-        ))
-    })?;
-    let local_port = listener.local_addr()?.port();
+    let listener = TcpListener::bind(("127.0.0.1", 0))
+        .await
+        .map_err(|_| AppError::ConnectionFailure(ConnectionFailureCode::SshForwarding))?;
+    let local_port = listener
+        .local_addr()
+        .map_err(|_| AppError::ConnectionFailure(ConnectionFailureCode::SshForwarding))?
+        .port();
     drop(listener);
 
     let forward = format!(
@@ -203,9 +222,11 @@ async fn open_with_program(
         .arg("--")
         .arg(alias);
     let mut child = command.spawn().map_err(|error| {
-        AppError::Network(format!(
-            "could not start the system ssh client for Host alias {alias:?}: {error}"
-        ))
+        AppError::ConnectionFailure(if error.kind() == std::io::ErrorKind::NotFound {
+            ConnectionFailureCode::SshClientMissing
+        } else {
+            ConnectionFailureCode::SshUnknown
+        })
     })?;
     let stderr = Arc::new(Mutex::new(Vec::new()));
     let stderr_capture = Arc::clone(&stderr);
@@ -230,17 +251,16 @@ async fn open_with_program(
 
     let deadline = Instant::now() + SSH_START_TIMEOUT;
     loop {
-        if let Some(status) = child.try_wait().map_err(|error| {
-            AppError::Network(format!(
-                "could not inspect system ssh for Host alias {alias:?}: {error}"
-            ))
-        })? {
+        if child
+            .try_wait()
+            .map_err(|_| AppError::ConnectionFailure(ConnectionFailureCode::SshUnknown))?
+            .is_some()
+        {
             return Err(fail_start(
                 &mut child,
                 &stderr_task,
                 &stderr,
-                alias,
-                &format!("process exited with {status}"),
+                ConnectionFailureCode::SshUnknown,
             )
             .await);
         }
@@ -252,8 +272,7 @@ async fn open_with_program(
                 &mut child,
                 &stderr_task,
                 &stderr,
-                alias,
-                "the local forward did not become ready within 10 seconds",
+                ConnectionFailureCode::SshTimeout,
             )
             .await);
         }

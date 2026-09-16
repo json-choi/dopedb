@@ -23,13 +23,24 @@ import { resizeSeparatorNextValue } from "../../design-system/components/ResizeS
 import { dataGridKeyboardTarget } from "./dataGridKeyboard";
 import type { ButtonProps } from "../../design-system/components/Button";
 import type { ConfirmButtonProps } from "../../components/ConfirmButton";
+import { tabularResult } from "../agents/AcpStructuredResult";
 import {
   clearSqlResultPageCache,
+  collectCachedSqlResultRows,
+  ensureSqlResultRange,
   SQL_RESULT_CACHE_MAX_PAGES,
   retainSqlStreamBatch,
+  sqlResultDecodeFailureAt,
+  sqlResultRangeIsCached,
   sqlResultRowAt,
   subscribeSqlResultPages,
 } from "../queries/resultPageCache";
+import {
+  cellDecodeFailureAt,
+  firstDecodeFailureInSelection,
+  firstDecodeFailureInRow,
+  gridCellInspection,
+} from "./decodeFailures";
 
 const offsets = Array.from(
   { length: 51 },
@@ -96,7 +107,7 @@ describe("DataGridVirtual window", () => {
     expect(commits).toEqual([3, 4]);
   });
 
-  it("keeps boundary coordinates and rectangular selection deterministic", () => {
+  it("keeps boundary coordinates and rectangular selection deterministic", async () => {
     expect(
       shouldVirtualizeDataGrid({
         columns: Array.from({ length: 19 }, (_, index) => `column_${index}`),
@@ -207,6 +218,60 @@ describe("DataGridVirtual window", () => {
       ),
     ).toBe("b\tc\ne\tf");
 
+    const ordinaryValues = [
+      null,
+      "",
+      "<unsupported: geometry>",
+      { decodeFailure: true, databaseType: "geometry" },
+      null,
+    ];
+    const decodeFailures = [
+      { rowIndex: 0, columnIndex: 4, databaseType: "geometry" },
+    ];
+    expect(cellDecodeFailureAt(decodeFailures, 0, 0)).toBeUndefined();
+    expect(cellDecodeFailureAt(decodeFailures, 0, 1)).toBeUndefined();
+    expect(cellDecodeFailureAt(decodeFailures, 0, 2)).toBeUndefined();
+    expect(cellDecodeFailureAt(decodeFailures, 0, 3)).toBeUndefined();
+    expect(cellDecodeFailureAt(decodeFailures, 0, 4)).toEqual(
+      decodeFailures[0],
+    );
+    expect(firstDecodeFailureInRow(decodeFailures, 0)).toEqual(
+      decodeFailures[0],
+    );
+    expect(gridCellInspection(decodeFailures, 0, null)).toEqual({
+      blocked: true,
+      failure: decodeFailures[0],
+    });
+    expect(gridCellInspection([], 0, null)).toEqual({
+      blocked: false,
+      value: null,
+    });
+    expect(
+      gridSelectionClipboardText(singleGridCell(0, 2), () => ordinaryValues, String),
+    ).toBe("<unsupported: geometry>");
+    expect(
+      firstDecodeFailureInSelection(
+        decodeFailures,
+        extendGridSelection(singleGridCell(0, 0), 0, 3),
+      ),
+    ).toBeUndefined();
+    expect(
+      firstDecodeFailureInSelection(
+        decodeFailures,
+        extendGridSelection(singleGridCell(0, 3), 0, 4),
+      ),
+    ).toEqual(decodeFailures[0]);
+    expect(
+      tabularResult({
+        columns: ["null", "empty", "marker", "sentinel", "failed"],
+        rows: [ordinaryValues],
+        decodeFailures,
+      }),
+    ).toMatchObject({
+      rows: [ordinaryValues],
+      decodeFailures,
+    });
+
     expect(gridExpressionIssue("where", "city = 'Berlin'")).toBeNull();
     expect(gridExpressionIssue("orderBy", "city DESC, id ASC")).toBeNull();
     expect(gridExpressionIssue("where", "1 = 1; DELETE FROM users")).toBe(
@@ -224,7 +289,15 @@ describe("DataGridVirtual window", () => {
       operationId: "00000000-0000-0000-0000-000000000123",
       capability,
       pageRows: 256,
-      rowCount: 1_000_000,
+      pageRanges: Array.from(
+        { length: SQL_RESULT_CACHE_MAX_PAGES + 1 },
+        (_, sequence) => ({
+          sequence,
+          rowStart: sequence * 256,
+          rowCount: 256,
+        }),
+      ),
+      rowCount: (SQL_RESULT_CACHE_MAX_PAGES + 1) * 256,
       complete: true,
     };
     for (let sequence = 0; sequence <= SQL_RESULT_CACHE_MAX_PAGES; sequence += 1) {
@@ -242,33 +315,116 @@ describe("DataGridVirtual window", () => {
     ]);
 
     clearSqlResultPageCache();
-    retainSqlStreamBatch(source, {
-      operationId: source.operationId!,
-      resultCapability: capability,
-      sequence: 0,
-      columns: ["id"],
-      rows: [[0]],
-    });
+    const variableSource: SqlStreamRowSource = {
+      operationId: "00000000-0000-0000-0000-000000000456",
+      capability: "b".repeat(64),
+      pageRows: 256,
+      pageRanges: [
+        { sequence: 0, rowStart: 0, rowCount: 2 },
+        { sequence: 1, rowStart: 2, rowCount: 3 },
+      ],
+      rowCount: 5,
+      complete: true,
+    };
+    const variableBatches = [
+      {
+        operationId: variableSource.operationId!,
+        resultCapability: variableSource.capability!,
+        sequence: 0,
+        rowStart: 0,
+        columns: ["id"],
+        rows: [[0], [1]],
+      },
+      {
+        operationId: variableSource.operationId!,
+        resultCapability: variableSource.capability!,
+        sequence: 1,
+        rowStart: 2,
+        columns: ["id"],
+        rows: [[2], [null], [4]],
+        decodeFailures: [
+          { rowIndex: 3, columnIndex: 0, databaseType: "geometry" },
+        ],
+      },
+    ];
+    retainSqlStreamBatch(variableSource, variableBatches[0]);
+    retainSqlStreamBatch(variableSource, variableBatches[1]);
+    expect(sqlResultRowAt(variableSource, 1)).toEqual([1]);
+    expect(sqlResultRowAt(variableSource, 2)).toEqual([2]);
+    expect(sqlResultRowAt(variableSource, 4)).toEqual([4]);
+    expect(sqlResultDecodeFailureAt(variableSource, 3, 0)?.databaseType).toBe(
+      "geometry",
+    );
     let evictionNotifications = 0;
-    const unsubscribe = subscribeSqlResultPages(source, () => {
+    const unsubscribe = subscribeSqlResultPages(variableSource, () => {
       evictionNotifications += 1;
     });
     for (let index = 0; index < 4; index += 1) {
       const other = {
-        ...source,
+        ...variableSource,
         operationId: `00000000-0000-0000-0000-${String(index + 200).padStart(12, "0")}`,
         capability: String(index + 1).repeat(64),
+        pageRanges: [{ sequence: 0, rowStart: 0, rowCount: 1 }],
+        rowCount: 1,
       };
       retainSqlStreamBatch(other, {
         operationId: other.operationId,
         resultCapability: other.capability,
         sequence: 0,
+        rowStart: 0,
         columns: ["id"],
         rows: [[index]],
       });
     }
-    expect(sqlResultRowAt(source, 0)).toBeUndefined();
+    expect(sqlResultRowAt(variableSource, 3)).toBeUndefined();
     expect(evictionNotifications).toBe(1);
+    expect(sqlResultRangeIsCached(variableSource, 0, 5)).toBe(false);
+    expect(collectCachedSqlResultRows(variableSource)).toBeNull();
+
+    const reloadedSource = JSON.parse(
+      JSON.stringify(variableSource),
+    ) as SqlStreamRowSource;
+    const loadedSequences: number[] = [];
+    const readPage = async (_source: SqlStreamRowSource, sequence: number) => {
+      loadedSequences.push(sequence);
+      const { resultCapability: _resultCapability, ...wire } =
+        variableBatches[sequence];
+      return wire;
+    };
+    await ensureSqlResultRange(
+      reloadedSource,
+      2,
+      5,
+      ["id"],
+      readPage,
+    );
+    expect(loadedSequences).toEqual([1]);
+    expect(sqlResultRangeIsCached(reloadedSource, 0, 5)).toBe(false);
+    expect(sqlResultRangeIsCached(reloadedSource, 2, 5)).toBe(true);
+    expect(collectCachedSqlResultRows(reloadedSource)).toBeNull();
+    expect(sqlResultRowAt(reloadedSource, 3)).toEqual([null]);
+    expect(sqlResultDecodeFailureAt(reloadedSource, 3, 0)?.databaseType).toBe(
+      "geometry",
+    );
+    await ensureSqlResultRange(
+      reloadedSource,
+      0,
+      5,
+      ["id"],
+      readPage,
+    );
+    expect(loadedSequences).toEqual([1, 0]);
+    expect(sqlResultRangeIsCached(reloadedSource, 0, 5)).toBe(true);
+    expect(collectCachedSqlResultRows(reloadedSource)).toEqual([
+      [0],
+      [1],
+      [2],
+      [null],
+      [4],
+    ]);
+    expect(sqlResultRowAt(reloadedSource, 0)).toEqual([0]);
+    expect(sqlResultRowAt(reloadedSource, 4)).toEqual([4]);
+
     unsubscribe();
     clearSqlResultPageCache();
   });

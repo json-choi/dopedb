@@ -6,6 +6,10 @@ import { errMessage } from "../../ipc/types";
 import { useI18n } from "../../lib/i18n";
 import { catalogQuery, type CatalogScope } from "../../lib/queries";
 import type { ConnectionProfile } from "../connections/domain";
+import {
+  catalogLoadIssueMessage,
+  isCatalogLoadIssue,
+} from "../catalogExplorer/catalogDomain";
 import { isDemoSqliteConnection } from "../connections/presets";
 import { knowledgeQueryKeys } from "../knowledge/queryKeys";
 import { ensureGuidedDemoEnvironment } from "./demoSetup";
@@ -59,7 +63,12 @@ export function useGuidedDemoCommands({
       if (!orders) throw new Error(t("onboarding.demoOrdersMissing"));
       openTable(connection, orders);
     } catch (error) {
-      toast(errMessage(error), "error");
+      toast(
+        isCatalogLoadIssue(error)
+          ? catalogLoadIssueMessage(t, error)
+          : errMessage(error),
+        "error",
+      );
     }
   }
 

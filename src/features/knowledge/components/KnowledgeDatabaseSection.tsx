@@ -13,7 +13,7 @@ import {
   StatusBadge,
 } from "../../../design-system/components/Status";
 import type { ConnectionProfile } from "../../connections/domain";
-import { errMessage } from "../../../ipc/types";
+import { catalogLoadIssue, catalogLoadIssueAction, catalogLoadIssueMessage } from "../../catalogExplorer/catalogDomain";
 import { useI18n } from "../../../lib/i18n";
 import type { QueryResultPhase } from "../../../lib/queryResultPhase";
 import type { EnvironmentConnection } from "../domain";
@@ -181,14 +181,14 @@ export function KnowledgeDatabaseSection({
           tone="danger"
           icon="alert"
           role="alert"
-          action={(
+          action={catalogLoadIssueAction(catalogLoadIssue(bindingsError)) === "retry" ? (
             <Button size="compact" onClick={onRetryBindings}>
               {t("knowledge.retry")}
             </Button>
-          )}
+          ) : undefined}
         >
           {t("knowledge.databaseBindingsLoadFailed", {
-            error: errMessage(bindingsError),
+            error: catalogLoadIssueMessage(t, catalogLoadIssue(bindingsError)),
           })}
         </InlineNotice>
       ) : bindingsLoaded ? (
@@ -198,14 +198,14 @@ export function KnowledgeDatabaseSection({
               tone="warning"
               icon="alert"
               role="status"
-              action={(
+              action={catalogLoadIssueAction(catalogLoadIssue(bindingsError)) === "retry" ? (
                 <Button size="compact" onClick={onRetryBindings}>
                   {t("knowledge.retry")}
                 </Button>
-              )}
+              ) : undefined}
             >
               {t("knowledge.databaseBindingsRefreshFailed", {
-                error: errMessage(bindingsError),
+                error: catalogLoadIssueMessage(t, catalogLoadIssue(bindingsError)),
               })}
             </InlineNotice>
           ) : null}

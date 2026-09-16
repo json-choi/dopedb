@@ -18,7 +18,7 @@ interface KnowledgeWorkspaceHeaderProps {
   loadFailure: {
     hasData: boolean;
     message: string;
-    retry: () => unknown;
+    retry?: () => unknown;
   } | null;
   actionError: string | null;
   projectsEmpty: boolean;
@@ -69,11 +69,11 @@ export function KnowledgeWorkspaceHeader({
           tone={loadFailure.hasData ? "warning" : "danger"}
           icon="alert"
           role={loadFailure.hasData ? "status" : "alert"}
-          action={(
-            <Button size="compact" onClick={() => void loadFailure.retry()}>
+          action={loadFailure.retry ? (
+            <Button size="compact" onClick={() => void loadFailure.retry?.()}>
               {t("knowledge.retry")}
             </Button>
-          )}
+          ) : undefined}
         >
           {loadFailure.message}
         </InlineNotice>

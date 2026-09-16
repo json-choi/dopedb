@@ -1,4 +1,5 @@
 import type { SqlStreamRowSource } from "../queries/domain";
+import type { CellDecodeFailure } from "../../ipc/types";
 import {
   DataGridStatusPill,
   WorkbenchButton,
@@ -13,6 +14,7 @@ import ResultToolbar from "./ResultToolbar";
 export function ResultWorkbenchToolbar({
   columns,
   rows,
+  decodeFailures,
   rowSource,
   filenameBase,
   partial,
@@ -24,6 +26,7 @@ export function ResultWorkbenchToolbar({
 }: {
   columns: string[];
   rows?: unknown[][];
+  decodeFailures?: CellDecodeFailure[];
   rowSource?: SqlStreamRowSource;
   filenameBase: string;
   partial?: boolean;
@@ -70,6 +73,7 @@ export function ResultWorkbenchToolbar({
       <ResultToolbar
         columns={columns}
         rows={rows}
+        decodeFailures={decodeFailures}
         rowSource={rowSource}
         filenameBase={filenameBase}
         partial={partial}

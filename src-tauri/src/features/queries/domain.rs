@@ -267,8 +267,12 @@ pub(crate) struct DesktopSqlProposalRequest {
 pub(crate) struct DesktopSqlStreamBatch {
     pub(crate) operation_id: OperationId,
     pub(crate) sequence: u64,
+    #[serde(default)]
+    pub(crate) row_start: usize,
     pub(crate) columns: Vec<String>,
     pub(crate) rows: Vec<Vec<serde_json::Value>>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) decode_failures: Vec<crate::model::CellDecodeFailure>,
 }
 
 /// Renderer-requested format for an immutable local SQL result artifact.

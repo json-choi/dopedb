@@ -26,6 +26,12 @@ import {
 import { closedBeforeTurnCompleted } from "../agents/transcript";
 import { retainInertShellChildren } from "../appShell/useInertShellBackground";
 import {
+  isDialogKeyboardTarget,
+  menuKeyboardOwner,
+  menuInitialFocusForTriggerKey,
+  menuNavigationTargetIndex,
+} from "../../design-system/menuInteraction";
+import {
   cancelWorkspaceResourceQueries,
   invalidateJobQueries,
   resetConnectionResourceQueries,
@@ -341,6 +347,77 @@ describe("workspace auth lifecycle", () => {
       focusInside: true,
       nestedModal: true,
     })).toBe(false);
+    expect([
+      "Enter",
+      " ",
+      "Spacebar",
+      "ArrowDown",
+      "ArrowUp",
+      "Escape",
+    ].map(menuInitialFocusForTriggerKey)).toEqual([
+      "first",
+      "first",
+      "first",
+      "first",
+      "last",
+      null,
+    ]);
+    expect([
+      menuNavigationTargetIndex({ key: "ArrowDown", currentIndex: 2, itemCount: 3 }),
+      menuNavigationTargetIndex({ key: "ArrowUp", currentIndex: 0, itemCount: 3 }),
+      menuNavigationTargetIndex({ key: "Home", currentIndex: 1, itemCount: 3 }),
+      menuNavigationTargetIndex({ key: "End", currentIndex: 1, itemCount: 3 }),
+      menuNavigationTargetIndex({ key: "ArrowDown", currentIndex: -1, itemCount: 3 }),
+      menuNavigationTargetIndex({ key: "ArrowUp", currentIndex: -1, itemCount: 3 }),
+      menuNavigationTargetIndex({ key: "ArrowDown", currentIndex: 0, itemCount: 0 }),
+    ]).toEqual([0, 2, 0, 2, 0, 2, null]);
+
+    // The smoke runner is Node-only. Exercise the actual scope resolver with
+    // explicit closest/portal answers; real browser focus remains a UI check.
+    class KeyboardScopeElement {
+      dataset: { floatingOwnerId?: string } = {};
+      scope: KeyboardScopeElement | null = null;
+      modal: KeyboardScopeElement | null = null;
+      portal: KeyboardScopeElement | null = null;
+      constructor(readonly role = "button") {}
+      matches(selector: string) {
+        return selector.includes(`[role="${this.role}"]`);
+      }
+      closest(selector: string) {
+        if (selector === "[data-floating-owner-id]") return this.portal;
+        return selector.includes('[role="menu"]') ? this.scope : this.modal;
+      }
+    }
+    vi.stubGlobal("Element", KeyboardScopeElement);
+    const parentMenu = new KeyboardScopeElement("menu");
+    const dialog = new KeyboardScopeElement("alertdialog");
+    dialog.dataset.floatingOwnerId = "parent-menu";
+    const confirm = new KeyboardScopeElement();
+    confirm.scope = dialog;
+    confirm.modal = dialog;
+    confirm.portal = dialog;
+    const nestedMenu = new KeyboardScopeElement("menu");
+    const nestedItem = new KeyboardScopeElement();
+    nestedItem.scope = nestedMenu;
+    nestedItem.modal = dialog;
+    const ownedPortal = new KeyboardScopeElement();
+    ownedPortal.dataset.floatingOwnerId = "parent-menu";
+    const portalledItem = new KeyboardScopeElement();
+    portalledItem.portal = ownedPortal;
+    vi.stubGlobal("document", {
+      getElementById: (id: string) => id === "parent-menu" ? parentMenu : dialog,
+    });
+    try {
+      expect(isDialogKeyboardTarget(confirm as unknown as EventTarget)).toBe(true);
+      expect(isDialogKeyboardTarget(parentMenu as unknown as EventTarget)).toBe(false);
+      expect(menuKeyboardOwner(confirm as unknown as Node)).toBeNull();
+      expect(menuKeyboardOwner(nestedItem as unknown as Node)).toBe(nestedMenu);
+      expect(menuKeyboardOwner(portalledItem as unknown as Node)).toBe(parentMenu);
+      ownedPortal.dataset.floatingOwnerId = "dialog";
+      expect(menuKeyboardOwner(portalledItem as unknown as Node)).toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
+    }
 
     expect(sortedKeys(productAnalyticsGolden)).toEqual([
       "appVersion",

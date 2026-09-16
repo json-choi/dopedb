@@ -1076,6 +1076,29 @@ toolbar의 command overflow menu는 반드시 portal 기반 `ToolbarMenu`를 사
 - 각 항목은 박스형 `Button`을 중첩하지 않고 평평한
   `role="menuitem"` `.ds-menu-item`을 사용한다.
 
+`PopupMenu`와 `ToolbarMenu`는 `menuInteraction.ts`의 하나의 상호작용 계약을
+공유한다.
+
+- trigger의 Enter, Space, ArrowDown은 menu를 열고 첫 enabled item에 focus하며,
+  ArrowUp은 마지막 enabled item에 focus한다. pointer로 열 때는 trigger focus를
+  강제로 옮기지 않는다.
+- ArrowUp/Down은 enabled item 사이를 순환하고 Home/End는 첫/마지막 item으로
+  이동한다. disabled와 `aria-disabled` item은 건너뛴다. text input, textarea와
+  contenteditable에서 Arrow/Home/End는 편집 control이 계속 소유한다.
+- traversal은 현재 `role="menu"`가 직접 소유한 focus target만 포함한다. portal은
+  `data-floating-owner-id` 사슬을 따르되 nested menu의 item을 부모 순서에 섞지
+  않는다. checkbox/radio는 label이 아니라 실제 focus target 하나가 각각
+  `menuitemcheckbox`/`menuitemradio`, `aria-checked`, disabled 상태를 함께 소유한다.
+- Escape는 현재 focus가 속한 가장 안쪽 menu 하나만 닫고 trigger focus를
+  복구한다. capture 단계에서 event를 소비해 부모 menu나 shell handler가 같은
+  Escape를 다시 처리하지 않는다. menu가 연 confirmation `alertdialog`의 Escape는
+  dialog만 닫고 parent menu는 mount 상태와 command 문맥을 보존한다.
+- outside pointer는 menu를 닫지만 trigger에 focus하지 않아 실제 pointer target의
+  focus를 빼앗지 않는다. 선택 command는 modal이 이어서 열릴 수 있도록 닫기 전에
+  trigger를 return-focus owner로 만든다. checkbox/radio,
+  `data-menu-keep-open`, `aria-haspopup="dialog"` item은 선택만으로 owner menu를
+  unmount하지 않는다.
+
 과거의 `.toolbar-menu`와 `.toolbar-menu-panel`은 금지한다.
 
 ## 좁은 창 shell 계약

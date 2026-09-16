@@ -507,6 +507,7 @@ mod platform {
                                 result: QueryResultPage {
                                     columns: vec!["total_users".into()],
                                     rows: vec![vec![serde_json::json!(42)]],
+                                    decode_failures: Vec::new(),
                                     row_count: 1,
                                     truncated: false,
                                     duration_ms: 1,

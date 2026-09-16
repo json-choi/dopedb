@@ -8,6 +8,7 @@ import {
 } from "../../design-system/components/Modal";
 import { LoadingLabel } from "../../design-system/components/Status";
 import { useTableDdl } from "../../features/catalog/useTableDdl";
+import { catalogLoadIssueMessage } from "../../features/catalogExplorer/catalogDomain";
 import type { ConnectionProfile } from "../../features/connections/domain";
 import type { CatalogTable } from "../../ipc/types";
 import { useI18n } from "../../lib/i18n";
@@ -23,7 +24,7 @@ export default function DdlModal({
   onClose: () => void;
 }) {
   const { t } = useI18n();
-  const { text, error, copied, copy } = useTableDdl(
+  const { text, error, copied, copy, retry } = useTableDdl(
     connection.id,
     table.name,
     table.schema,
@@ -44,8 +45,11 @@ export default function DdlModal({
         />
         <div className="tw:min-h-[112px] tw:min-w-0 tw:max-h-[min(60dvh,560px)] tw:flex-none tw:overflow-auto tw:bg-background tw:p-3">
           {error ? (
-            <div className="tw:text-ui tw:text-danger" role="alert">
-              {error}
+            <div className="tw:grid tw:gap-2 tw:text-ui tw:text-danger" role="alert">
+              <span>{catalogLoadIssueMessage(t, error)}</span>
+              <Button size="compact" onClick={() => void retry()}>
+                {t("app.retry")}
+              </Button>
             </div>
           ) : null}
           {!error && text == null && (

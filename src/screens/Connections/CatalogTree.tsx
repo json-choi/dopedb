@@ -66,6 +66,7 @@ type Props = {
   onForgetOverview: () => void;
   onRequestDetails: () => void;
   onRetryOverview: () => void;
+  onEdit: () => void;
   onResolveAccess?: () => void;
   onRecoverAuthentication?: () => void;
   onRecoverManagedConnection?: () => void;
@@ -764,6 +765,7 @@ export default function CatalogTree(props: Props) {
               }
               onRetryOverview={props.onRetryOverview}
               onRequestDetails={props.onRequestDetails}
+              onEdit={props.onEdit}
             />
             {databaseRows.length > 0 ? (
               <VirtualTreeRows

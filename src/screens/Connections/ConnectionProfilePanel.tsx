@@ -104,14 +104,6 @@ export function ConnectionProfilePanel({
                 </Button>
               </div>
             ) : null}
-            <details className="tw:min-w-0 tw:text-xs">
-              <summary className="tw:cursor-pointer tw:text-muted-foreground">
-                {t("connections.testFailure.technicalDetails")}
-              </summary>
-              <pre className="tw:mt-2 tw:mb-0 tw:max-h-40 tw:overflow-auto tw:whitespace-pre-wrap tw:[overflow-wrap:anywhere] tw:font-mono tw:text-xs tw:text-foreground">
-                {commands.testFailure.detail}
-              </pre>
-            </details>
           </section>
         ) : null}
         {problems.open ? (

@@ -2,6 +2,7 @@
 // module as the only frontend owner preserves existing imports without a hand-written mirror.
 import { retainSqlStreamBatch } from "./resultPageCache";
 import type { OperationState } from "../../ipc/generated/protocol-contracts";
+import type { CellDecodeFailure } from "../../ipc/generated/model";
 
 export type {
   Classification,
@@ -33,8 +34,10 @@ export type SqlApprovalReview = {
 export type SqlStreamBatchWire = {
   operationId: string;
   sequence: number;
+  rowStart?: number;
   columns: string[];
   rows: unknown[][];
+  decodeFailures?: CellDecodeFailure[];
 };
 
 export type SqlStreamBatch = SqlStreamBatchWire & {
@@ -128,8 +131,15 @@ export type SqlStreamRowSource = {
   operationId: string | null;
   capability: string | null;
   pageRows: number;
+  pageRanges: SqlStreamPageRange[];
   rowCount: number;
   complete: boolean;
+};
+
+export type SqlStreamPageRange = {
+  sequence: number;
+  rowStart: number;
+  rowCount: number;
 };
 
 export const SQL_STREAM_MAX_ROWS_PER_BATCH = 256;
@@ -139,6 +149,7 @@ export function emptySqlStreamRows(): SqlStreamRowSource {
     operationId: null,
     capability: null,
     pageRows: SQL_STREAM_MAX_ROWS_PER_BATCH,
+    pageRanges: [],
     rowCount: 0,
     complete: false,
   };
@@ -179,11 +190,32 @@ export function acceptSqlStreamBatch(
     return null;
   if (
     batch.sequence !== state.nextSequence ||
+    (batch.rowStart ?? state.rowCount) !== state.rowCount ||
+    (batch.rows.length === 0 &&
+      (batch.sequence !== 0 || state.rowCount !== 0)) ||
     batch.rows.length > SQL_STREAM_MAX_ROWS_PER_BATCH
   )
     return null;
   if (state.operationId && state.operationId !== batch.operationId) return null;
   if (batch.rows.some((row) => row.length !== batch.columns.length))
+    return null;
+  const decodeFailures = batch.decodeFailures ?? [];
+  if (
+    decodeFailures.some(
+      (failure) =>
+        !Number.isSafeInteger(failure.rowIndex) ||
+        !Number.isSafeInteger(failure.columnIndex) ||
+        failure.rowIndex < (batch.rowStart ?? state.rowCount) ||
+        failure.rowIndex >=
+          (batch.rowStart ?? state.rowCount) + batch.rows.length ||
+        failure.columnIndex < 0 ||
+        failure.columnIndex >= batch.columns.length ||
+        batch.rows[
+          failure.rowIndex - (batch.rowStart ?? state.rowCount)
+        ]?.[failure.columnIndex] !== null ||
+        !failure.databaseType,
+    )
+  )
     return null;
   if (state.columns.length && !sameColumns(state.columns, batch.columns))
     return null;
@@ -201,6 +233,14 @@ export function acceptSqlStreamBatch(
     operationId: sourceOperationId,
     capability: sourceCapability,
     pageRows: SQL_STREAM_MAX_ROWS_PER_BATCH,
+    pageRanges: [
+      ...state.rowSource.pageRanges,
+      {
+        sequence: batch.sequence,
+        rowStart: batch.rowStart ?? state.rowCount,
+        rowCount: batch.rows.length,
+      },
+    ],
     rowCount: state.rowCount + batch.rows.length,
     complete: false,
   } satisfies SqlStreamRowSource;

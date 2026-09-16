@@ -179,14 +179,27 @@
       "planningDecision": "allow",
       "result": {
         "columns": [
-          "id",
-          "email"
+          "null_value",
+          "empty_value",
+          "literal_marker",
+          "sentinel_json",
+          "failed_geometry"
         ],
         "rows": [
           [
-            1,
-            "reader@example.test"
+            null,
+            "",
+            "<unsupported: geometry>",
+            { "decodeFailure": true, "databaseType": "geometry" },
+            null
           ]
+        ],
+        "decodeFailures": [
+          {
+            "rowIndex": 0,
+            "columnIndex": 4,
+            "databaseType": "geometry"
+          }
         ],
         "rowCount": 1,
         "truncated": false,

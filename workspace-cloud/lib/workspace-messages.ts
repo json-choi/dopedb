@@ -109,6 +109,11 @@ const en = {
     currentSuffix: "Current",
     emptyTitle: "Create your first workspace",
     emptyDescription: "Shared connections and policy live inside this boundary.",
+    requestedScopeUnavailableTitle: "This workspace link is unavailable for this account",
+    requestedScopeUnavailableDescription: "The requested workspace or resource cannot be opened from the current account. It may have been removed, expired, or had its access changed.",
+    requestedScopeRecoveryTitle: "Choose the scope you want to use",
+    requestedScopeRecoveryDescription: "Use the account menu above to select another signed-in account, or return to your workspace list. No account, workspace, or permission was changed.",
+    requestedScopeChooseWorkspace: "Choose a workspace",
     areas: {
       access: {
         label: "Access",
@@ -885,6 +890,11 @@ const ko: DeepStringShape<typeof en> = {
     currentSuffix: "현재",
     emptyTitle: "첫 워크스페이스를 만드세요",
     emptyDescription: "공유 연결과 정책이 이 경계 안에 모입니다.",
+    requestedScopeUnavailableTitle: "현재 계정에서 이 워크스페이스 링크를 사용할 수 없습니다",
+    requestedScopeUnavailableDescription: "요청한 워크스페이스나 리소스를 현재 계정에서 열 수 없습니다. 삭제·만료되었거나 접근 권한이 변경되었을 수 있습니다.",
+    requestedScopeRecoveryTitle: "사용할 범위를 직접 선택하세요",
+    requestedScopeRecoveryDescription: "위의 계정 메뉴에서 로그인된 다른 계정을 선택하거나 워크스페이스 목록으로 돌아가세요. 계정, 워크스페이스와 권한은 변경하지 않았습니다.",
+    requestedScopeChooseWorkspace: "워크스페이스 선택",
     areas: {
       access: {
         label: "접근 권한",

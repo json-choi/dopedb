@@ -25,6 +25,10 @@ import {
   listConnectionDatabases,
   refreshCatalog,
 } from "../features/catalog/tauriAdapter";
+import {
+  readWithCatalogIssue,
+  retryTransientCatalogIssue,
+} from "../features/catalogExplorer/catalogDomain";
 import { runDocumentRead } from "../features/documentQueries/tauriAdapter";
 import { getMonitoringStatus } from "../features/monitoring/tauriAdapter";
 import {
@@ -40,7 +44,7 @@ import type {
   HistoryPageRequest,
   QueryResult,
 } from "../ipc/types";
-import { errMessage } from "../ipc/types";
+import { errDetails } from "../ipc/types";
 import { listDrivers } from "../features/connections/tauriAdapter";
 import { connectionId as asConnectionId } from "../features/connections/domain";
 import { listErdLayouts } from "../features/erd/tauriAdapter";
@@ -132,10 +136,13 @@ export function useCatalogScope(): CatalogScope {
   };
 }
 
-const TRANSIENT_ERROR = /connection (refused|reset|closed|aborted)|could not connect|unreachable|broken pipe|network|io error/i;
-
 export function isTransientDbError(e: unknown): boolean {
-  return TRANSIENT_ERROR.test(errMessage(e));
+  const kind = errDetails(e).kind;
+  return kind === "network"
+    || kind === "timeout"
+    || kind === "io"
+    || kind === "connectionNetwork"
+    || kind === "sshTimeout";
 }
 
 // Read-only network queries retry; runSql queries never do because they write history.
@@ -310,8 +317,10 @@ export function catalogQuery(connectionId: string, scope?: CatalogScope) {
     queryKey: qk.catalog(connectionId, scope?.key),
     enabled: scope?.ready ?? true,
     staleTime: CATALOG_STALE_MS,
-    retry: false,
-    queryFn: () => readCatalogInScope(scope, () => getCatalog(connectionId)),
+    retry: retryTransientCatalogIssue,
+    queryFn: () => readWithCatalogIssue(
+      () => readCatalogInScope(scope, () => getCatalog(connectionId)),
+    ),
   });
 }
 
@@ -320,9 +329,11 @@ export function catalogOverviewQuery(connectionId: string, scope?: CatalogScope)
     queryKey: qk.catalogOverview(connectionId, scope?.key),
     enabled: scope?.ready ?? true,
     staleTime: CATALOG_STALE_MS,
-    retry: false,
+    retry: retryTransientCatalogIssue,
     queryFn: (): Promise<CatalogOverview> =>
-      readCatalogInScope(scope, () => getCatalogOverview(connectionId)),
+      readWithCatalogIssue(
+        () => readCatalogInScope(scope, () => getCatalogOverview(connectionId)),
+      ),
   });
 }
 
@@ -334,9 +345,11 @@ export function connectionDatabasesQuery(
     queryKey: qk.connectionDatabases(connectionId, scope?.key),
     enabled: scope?.ready ?? true,
     staleTime: CATALOG_STALE_MS,
-    retry: false,
+    retry: retryTransientCatalogIssue,
     queryFn: (): Promise<DatabaseSummary[]> =>
-      readCatalogInScope(scope, () => listConnectionDatabases(connectionId)),
+      readWithCatalogIssue(
+        () => readCatalogInScope(scope, () => listConnectionDatabases(connectionId)),
+      ),
   });
 }
 
@@ -349,11 +362,12 @@ export function databaseCatalogQuery(
     queryKey: qk.databaseCatalog(connectionId, database, scope?.key),
     enabled: scope?.ready ?? true,
     staleTime: CATALOG_STALE_MS,
-    retry: false,
-    queryFn: () =>
-      readCatalogInScope(scope, () =>
+    retry: retryTransientCatalogIssue,
+    queryFn: () => readWithCatalogIssue(
+      () => readCatalogInScope(scope, () =>
         getDatabaseCatalog(connectionId, database)
       ),
+    ),
   });
 }
 
@@ -370,11 +384,12 @@ export function databaseCatalogOverviewQuery(
     ),
     enabled: scope?.ready ?? true,
     staleTime: CATALOG_STALE_MS,
-    retry: false,
-    queryFn: () =>
-      readCatalogInScope(scope, () =>
+    retry: retryTransientCatalogIssue,
+    queryFn: () => readWithCatalogIssue(
+      () => readCatalogInScope(scope, () =>
         getDatabaseCatalogOverview(connectionId, database)
       ),
+    ),
   });
 }
 
@@ -387,8 +402,10 @@ export function catalogSnapshotQuery(
     queryKey: qk.catalogSnapshot(connectionId, scope?.key),
     enabled: enabled && (scope?.ready ?? true),
     staleTime: CATALOG_STALE_MS,
-    retry: false,
-    queryFn: () => readCatalogInScope(scope, () => getCatalogSnapshot(connectionId)),
+    retry: retryTransientCatalogIssue,
+    queryFn: () => readWithCatalogIssue(
+      () => readCatalogInScope(scope, () => getCatalogSnapshot(connectionId)),
+    ),
   });
 }
 
@@ -406,11 +423,12 @@ export function databaseCatalogSnapshotQuery(
     ),
     enabled: enabled && (scope?.ready ?? true),
     staleTime: CATALOG_STALE_MS,
-    retry: false,
-    queryFn: () =>
-      readCatalogInScope(scope, () =>
+    retry: retryTransientCatalogIssue,
+    queryFn: () => readWithCatalogIssue(
+      () => readCatalogInScope(scope, () =>
         getDatabaseCatalogSnapshot(connectionId, database)
       ),
+    ),
   });
 }
 
@@ -434,7 +452,7 @@ export function jobsQuery(connectionId: string) {
 // surface reading the catalog updates at once; a CATALOG_STALE_MS of Infinity means this
 // is the only way a stale table list gets corrected.
 export function fetchFreshCatalog(connectionId: string) {
-  return refreshCatalog(connectionId);
+  return readWithCatalogIssue(() => refreshCatalog(connectionId));
 }
 
 /** Promotes a manual refresh and retires derived overview/snapshot metadata together. */

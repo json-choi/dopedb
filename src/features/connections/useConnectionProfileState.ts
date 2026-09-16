@@ -19,8 +19,7 @@ import {
   formatConnectionUrl,
   parseConnectionUrl,
 } from "./connectionUrl";
-import type { ConnectionProfile } from "./domain";
-import type { ConnectionTestFailure } from "./domain";
+import type { ConnectionProfile, ConnectionTestIssue } from "./domain";
 import {
   CONNECTION_INPUT_MODE_PARAMETER,
   isConnectionOptionParameter,
@@ -69,7 +68,7 @@ export function useConnectionProfileState({
   >(null);
   const [message, setMessage] = useState<string | null>(null);
   const [messageIsError, setMessageIsError] = useState(false);
-  const [testFailure, setTestFailure] = useState<ConnectionTestFailure | null>(null);
+  const [testFailure, setTestFailure] = useState<ConnectionTestIssue | null>(null);
   const flags = connectionProfileFlags(form);
   const advancedParameters = Object.entries(form.extraParams).filter(
     ([key]) =>

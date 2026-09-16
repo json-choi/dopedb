@@ -230,15 +230,17 @@ function ResourceCheckbox({
   const { t } = useI18n();
   return (
     <label
-      role="menuitemcheckbox"
-      aria-checked={checked}
-      aria-disabled={disabled}
+      data-checked={checked}
+      data-disabled={disabled}
       data-menu-keep-open
       title={`${label} · ${detail}${reconfirm ? ` · ${t("agent.acpEnvironmentReconfirm")}` : ""}`}
-      className="tw:flex tw:min-h-control-md tw:min-w-0 tw:cursor-pointer tw:items-center tw:gap-2 tw:rounded-sm tw:px-2 tw:py-1 tw:text-foreground tw:aria-checked:bg-selection tw:aria-checked:text-selection-foreground tw:aria-disabled:cursor-default tw:aria-disabled:opacity-55 tw:hover:bg-muted"
+      className="tw:flex tw:min-h-control-md tw:min-w-0 tw:cursor-pointer tw:items-center tw:gap-2 tw:rounded-sm tw:px-2 tw:py-1 tw:text-foreground tw:data-[checked=true]:bg-selection tw:data-[checked=true]:text-selection-foreground tw:data-[disabled=true]:cursor-default tw:data-[disabled=true]:opacity-55 tw:hover:bg-muted"
     >
       <input
         type="checkbox"
+        role="menuitemcheckbox"
+        aria-checked={checked}
+        aria-disabled={disabled}
         checked={checked}
         disabled={disabled}
         onChange={onChange}
@@ -268,14 +270,15 @@ function WriteTargetRadio({
 }) {
   return (
     <label
-      role="menuitemradio"
-      aria-checked={checked}
+      data-checked={checked}
       data-menu-keep-open
       title={label}
-      className="tw:flex tw:min-h-control-md tw:min-w-0 tw:cursor-pointer tw:items-center tw:gap-2 tw:rounded-sm tw:px-2 tw:text-sm tw:font-medium tw:text-foreground tw:aria-checked:bg-selection tw:aria-checked:text-selection-foreground tw:hover:bg-muted"
+      className="tw:flex tw:min-h-control-md tw:min-w-0 tw:cursor-pointer tw:items-center tw:gap-2 tw:rounded-sm tw:px-2 tw:text-sm tw:font-medium tw:text-foreground tw:data-[checked=true]:bg-selection tw:data-[checked=true]:text-selection-foreground tw:hover:bg-muted"
     >
       <input
         type="radio"
+        role="menuitemradio"
+        aria-checked={checked}
         name="agent-write-target"
         checked={checked}
         onChange={onChange}

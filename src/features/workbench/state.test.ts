@@ -1,4 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { MutationObserver, QueryClient } from "@tanstack/react-query";
+import * as ipcCore from "../../ipc/core";
+import { knowledgeInventoryQuery } from "../knowledge/inventory";
+import { listKnowledgeEnvironmentConnections } from "../knowledge/tauriAdapter";
+import { listAnalysisArticles } from "../analysisArticles/tauriAdapter";
+import { readWithCatalogIssue } from "../catalogExplorer/catalogDomain";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import schemaDiffFixture from "../../../dopedb-protocol/tests/fixtures/schema-diff-v1.json";
@@ -49,6 +55,8 @@ import {
 } from "../connections/connectionUrl";
 import {
   canRecoverBigQueryAuthentication,
+  CONNECTION_TEST_FAILURE_CODES,
+  CONNECTION_TEST_FAILURE_FIELDS,
   databaseDisplayLabel,
   connectionId as connectionProfileId,
   type DriverDescriptor,
@@ -56,6 +64,8 @@ import {
 import { queryServiceSessionProjection } from "../queryServices/useQueryServices";
 import { parseDocumentLimit } from "../../screens/Documents";
 import {
+  connectionOperationErrorTitle,
+  connectionTestIssue,
   connectionTestFailureRecovery,
   connectionTestFailureTarget,
   connectionTestFailureTitle,
@@ -93,11 +103,15 @@ import {
   virtualTreeFocusIndex,
 } from "../../design-system/treeKeyboard";
 import {
+  CATALOG_LOAD_ISSUE_CODES,
   catalogLoadIssue,
+  catalogLoadIssueAction,
+  catalogLoadIssueMessage,
   distinctCatalogDetailIssue,
   filterLoadedCatalogObjects,
   isAuthenticationRequired,
   isManagedConnectionRecoveryRequired,
+  retryTransientCatalogIssue,
   supportedObjectKinds,
 } from "../catalogExplorer/catalogDomain";
 import { isCatalogSearchResultActive } from "../catalogExplorer/state";
@@ -154,7 +168,7 @@ function storedDocument(id = "doc-1"): SqlDocument {
 }
 
 describe("workbench state ownership", () => {
-  it("restores persisted SQL without removing the connection welcome document", () => {
+  it("restores persisted SQL without removing the connection welcome document", async () => {
     const key = (value: I18nKey) => value;
     const managedManager = {
       credentialMode: "managed" as const,
@@ -176,8 +190,163 @@ describe("workbench state ownership", () => {
     expect(connectionTestFailureTarget({
       code: "authentication",
       field: "credentials",
-      detail: "redacted",
     }, managedManager)).toBeNull();
+    expect(CONNECTION_TEST_FAILURE_CODES).toEqual([
+      "sshClientMissing",
+      "sshConfiguration",
+      "sshHostKey",
+      "sshAuthentication",
+      "sshForwarding",
+      "sshTimeout",
+      "sshUnknown",
+      "timeoutNetwork",
+      "authentication",
+      "tls",
+      "databaseConfig",
+      "unknown",
+    ]);
+    expect(CONNECTION_TEST_FAILURE_FIELDS).toEqual([
+      "ssh",
+      "credentials",
+      "tls",
+      "database",
+    ]);
+    for (const code of CONNECTION_TEST_FAILURE_CODES.filter((candidate) =>
+      candidate.startsWith("ssh")
+    )) {
+      const safeIssue = connectionTestIssue({
+        code,
+        field: null,
+        detail: "HOSTILE_PASSWORD=/private/tmp/secret\u0000",
+      });
+      expect(JSON.stringify(safeIssue)).not.toContain("HOSTILE_PASSWORD");
+      expect(connectionTestFailureTarget(safeIssue)).toEqual({
+        tab: "sshSsl",
+        fieldId: "connection-ssh-alias",
+      });
+    }
+    expect(
+      connectionTestFailureRecovery(key, "sshAuthentication"),
+    ).toBe("connections.testFailure.sshAuthenticationRecovery");
+    expect(
+      connectionTestFailureRecovery(key, "sshAuthentication"),
+    ).not.toBe("connections.testFailure.authenticationRecovery");
+    expect(connectionOperationErrorTitle(key, {
+      kind: "sshAuthentication",
+      message: "HOSTILE_PASSWORD=/private/tmp/secret\u0000",
+    })).toBe("connections.testFailure.sshAuthenticationTitle");
+    expect(connectionOperationErrorTitle(key, {
+      kind: "connectionUnknown",
+      message: "HOSTILE_CONNECTION_DETAIL",
+    })).toBe("connections.testFailure.unknownTitle");
+
+    const hostileCatalogIssue = catalogLoadIssue({
+      kind: "sshHostKey",
+      message: "HOSTILE_PASSWORD=/private/tmp/secret\u0000",
+    });
+    expect(hostileCatalogIssue).toEqual({ code: "sshHostKey" });
+    expect(JSON.stringify(hostileCatalogIssue)).not.toContain("HOSTILE_PASSWORD");
+    expect(catalogLoadIssueMessage(key, hostileCatalogIssue)).toBe(
+      "connections.testFailure.sshHostKeyTitle",
+    );
+    expect(catalogLoadIssueAction(hostileCatalogIssue)).toBe("edit");
+    const hostileProjectedIssue = {
+      code: "sshHostKey",
+      message: "HOSTILE_PASSWORD=/private/tmp/secret\u0000",
+    };
+    expect(catalogLoadIssue(hostileProjectedIssue)).toEqual({ code: "sshHostKey" });
+    expect(catalogLoadIssue(hostileProjectedIssue)).not.toBe(hostileProjectedIssue);
+    const safeClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    const invokeFailure = vi.spyOn(ipcCore, "invoke").mockRejectedValue(hostileProjectedIssue);
+    try {
+      const inventoryOptions = knowledgeInventoryQuery("safe-failure-scope");
+      await expect(safeClient.fetchQuery(inventoryOptions)).rejects.toEqual({ code: "sshHostKey" });
+      const retained = safeClient.getQueryState(inventoryOptions.queryKey)?.error;
+      expect(retained).toEqual({ code: "sshHostKey" });
+      expect(catalogLoadIssueMessage(key, catalogLoadIssue(retained))).toBe("connections.testFailure.sshHostKeyTitle");
+      for (const read of [listKnowledgeEnvironmentConnections, listAnalysisArticles]) {
+        await expect(read()).rejects.toEqual({ code: "sshHostKey" });
+      }
+      const recovery = new MutationObserver(safeClient, {
+        mutationFn: () => readWithCatalogIssue(() => Promise.reject(hostileProjectedIssue)),
+      });
+      await expect(recovery.mutate()).rejects.toEqual({ code: "sshHostKey" });
+      expect(recovery.getCurrentResult().error).toEqual({ code: "sshHostKey" });
+      expect(JSON.stringify(safeClient.getMutationCache().getAll().map((mutation) => mutation.state))).not.toContain("HOSTILE_PASSWORD");
+      expect(JSON.stringify(safeClient.getQueryState(inventoryOptions.queryKey))).not.toContain("HOSTILE_PASSWORD");
+    } finally {
+      invokeFailure.mockRestore();
+      safeClient.clear();
+    }
+    expect(CATALOG_LOAD_ISSUE_CODES).toEqual([
+      "sshClientMissing",
+      "sshConfiguration",
+      "sshHostKey",
+      "sshAuthentication",
+      "sshForwarding",
+      "sshTimeout",
+      "sshUnknown",
+      "connectionNetwork",
+      "connectionTls",
+      "connectionAuthentication",
+      "connectionConfiguration",
+      "connectionUnknown",
+      "cancelled",
+      "credentialBindingRequired",
+      "authenticationRequired",
+      "managedConnectionRecoveryRequired",
+      "blocked",
+      "network",
+      "timeout",
+      "notFound",
+      "unknown",
+    ]);
+    for (const code of [
+      "sshClientMissing",
+      "sshConfiguration",
+      "sshHostKey",
+      "sshAuthentication",
+      "sshForwarding",
+      "sshTimeout",
+      "sshUnknown",
+      "connectionTls",
+      "connectionAuthentication",
+      "connectionConfiguration",
+      "connectionUnknown",
+    ] as const) {
+      expect(catalogLoadIssueAction({ code })).toBe("edit");
+      expect(catalogLoadIssueMessage(key, { code })).toMatch(
+        /^connections\.testFailure\./u,
+      );
+    }
+    expect(catalogLoadIssueAction({ code: "connectionNetwork" })).toBe("retry");
+    for (const kind of ["network", "timeout", "connectionNetwork", "sshTimeout"]) {
+      expect(retryTransientCatalogIssue(0, {
+        kind,
+        message: "HOSTILE_TRANSIENT_DETAIL",
+      })).toBe(true);
+    }
+    for (const kind of [
+      "sshClientMissing",
+      "sshHostKey",
+      "sshAuthentication",
+      "sshConfiguration",
+      "sshForwarding",
+      "sshUnknown",
+      "connectionAuthentication",
+      "connectionConfiguration",
+      "connectionTls",
+      "connectionUnknown",
+      "cancelled",
+      "blocked",
+      "notFound",
+      "unknown",
+    ]) {
+      expect(retryTransientCatalogIssue(0, {
+        kind,
+        message: "HOSTILE_DETERMINISTIC_DETAIL",
+      })).toBe(false);
+    }
 
     const managedConnectionId = connectionProfileId(
       "55555555-5555-4555-8555-555555555555",
@@ -770,11 +939,10 @@ describe("workbench state ownership", () => {
     ).toBeUndefined();
     expect(
       distinctCatalogDetailIssue(expiredAuthentication, {
-        kind: "network",
-        message: "another failure",
+        code: "network",
       }),
-    ).toEqual({ kind: "network", message: "another failure" });
-    expect(expiredAuthentication.message).not.toContain("config error:");
+    ).toEqual({ code: "network" });
+    expect(JSON.stringify(expiredAuthentication)).not.toContain("config error:");
     expect(
       isAuthenticationRequired(catalogLoadIssue(new Error("network"))),
     ).toBe(false);

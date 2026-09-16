@@ -1,7 +1,11 @@
 import { useState } from "react";
 import { queryOptions, useQuery } from "@tanstack/react-query";
 
-import { errMessage } from "../../ipc/types";
+import {
+  catalogLoadIssue,
+  readWithCatalogIssue,
+  retryTransientCatalogIssue,
+} from "../catalogExplorer/catalogDomain";
 import { getTableDdl } from "./tauriAdapter";
 
 export const tableDdlQueryKey = (
@@ -19,9 +23,11 @@ export function tableDdlQuery(
 ) {
   return queryOptions({
     queryKey: tableDdlQueryKey(connectionId, table, schema, database),
-    queryFn: () => getTableDdl(connectionId, table, schema, database),
+    queryFn: () => readWithCatalogIssue(
+      () => getTableDdl(connectionId, table, schema, database),
+    ),
     staleTime: Infinity,
-    retry: false,
+    retry: retryTransientCatalogIssue,
   });
 }
 
@@ -36,8 +42,9 @@ export function useTableDdl(
 
   return {
     text: query.data ?? null,
-    error: query.error ? errMessage(query.error) : null,
+    error: query.error ? catalogLoadIssue(query.error) : null,
     copied,
+    retry: query.refetch,
     copy: async () => {
       if (!query.data) return;
       await navigator.clipboard.writeText(query.data);

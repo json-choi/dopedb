@@ -212,6 +212,7 @@ function isStreamViewState(value: unknown) {
     (value.rowSource.capability !== null &&
       typeof value.rowSource.capability !== "string") ||
     !isNonNegativeNumber(value.rowSource.pageRows) ||
+    !Array.isArray(value.rowSource.pageRanges) ||
     typeof value.rowSource.complete !== "boolean"
   ) {
     return false;
@@ -220,10 +221,17 @@ function isStreamViewState(value: unknown) {
     isNonNegativeNumber(value.runId) &&
     (value.operationId === null ||
       typeof value.operationId === "string") &&
-    isNonNegativeNumber(value.nextSequence) &&
+    typeof value.nextSequence === "number" &&
+    Number.isSafeInteger(value.nextSequence) &&
+    value.nextSequence >= 0 &&
     isNonNegativeNumber(value.rowSource.rowCount) &&
     isNonNegativeNumber(value.rowCount) &&
     value.rowSource.rowCount === value.rowCount &&
+    validStreamPageRanges(
+      value.rowSource.pageRanges,
+      value.nextSequence,
+      value.rowCount,
+    ) &&
     value.rowSource.pageRows === 256 &&
     value.rowSource.complete === true &&
     typeof value.rowSource.operationId === "string" &&
@@ -233,6 +241,36 @@ function isStreamViewState(value: unknown) {
     isNullableNumber(value.durationMs) &&
     (value.error === null || typeof value.error === "string")
   );
+}
+
+function validStreamPageRanges(
+  ranges: unknown[],
+  nextSequence: number,
+  rowCount: number,
+) {
+  if (ranges.length !== nextSequence) return false;
+  let expectedStart = 0;
+  for (const [sequence, range] of ranges.entries()) {
+    const rangeRowStart = isRecord(range) ? range.rowStart : undefined;
+    const rangeRowCount = isRecord(range) ? range.rowCount : undefined;
+    if (
+      !isRecord(range) ||
+      range.sequence !== sequence ||
+      typeof rangeRowStart !== "number" ||
+      typeof rangeRowCount !== "number" ||
+      !Number.isSafeInteger(rangeRowStart) ||
+      !Number.isSafeInteger(rangeRowCount) ||
+      rangeRowStart !== expectedStart ||
+      (rangeRowCount === 0 &&
+        (ranges.length !== 1 || sequence !== 0 || rowCount !== 0)) ||
+      rangeRowCount < 0 ||
+      rangeRowCount > 256
+    ) {
+      return false;
+    }
+    expectedStart += rangeRowCount;
+  }
+  return expectedStart === rowCount;
 }
 
 function isQueryServiceError(value: unknown) {
@@ -254,7 +292,7 @@ function isNullableNumber(value: unknown) {
   );
 }
 
-function isNonNegativeNumber(value: unknown) {
+function isNonNegativeNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0;
 }
 

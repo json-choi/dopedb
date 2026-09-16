@@ -136,6 +136,7 @@ impl BigQueryConnection {
             row_count: rows.len(),
             columns: dry_run.columns,
             rows,
+            decode_failures: Vec::new(),
             truncated,
             duration_ms: started.elapsed().as_millis() as u64,
         })

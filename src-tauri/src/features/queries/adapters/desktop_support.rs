@@ -247,6 +247,7 @@ impl QueryPlatformAdapter {
             }
         };
         let mut sequence = 0_u64;
+        let mut row_start = 0_usize;
         let mut first_batch_ms = None;
         let mut first_ipc_batch_ms = None;
         let mut stream = match self.desktop_streams.begin_reserved(
@@ -286,13 +287,18 @@ impl QueryPlatformAdapter {
                 );
             }
             let batch_sequence = sequence;
+            let batch_row_start = row_start;
+            let batch_row_count = batch.rows.len();
             let event = DesktopSqlStreamBatch {
                 operation_id,
                 sequence: batch_sequence,
+                row_start: batch_row_start,
                 columns: batch.columns,
                 rows: batch.rows,
+                decode_failures: batch.decode_failures,
             };
             sequence = sequence.saturating_add(1);
+            row_start = row_start.saturating_add(batch_row_count);
             let send_started = Instant::now();
             let dispatched = stream
                 .borrow()

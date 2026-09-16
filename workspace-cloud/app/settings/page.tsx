@@ -15,6 +15,7 @@ import { member, workspaceProfile } from "../../lib/schema";
 import { Brand } from "../components/Brand";
 import { LocaleSwitcher } from "../components/LocaleSwitcher";
 import { ConsoleNotice } from "../components/Console";
+import { ControlLink } from "../components/Controls";
 import { CreateWorkspaceForm } from "./CreateWorkspaceForm";
 import { AccountSwitcher } from "./AccountSwitcher";
 import { AccountManagementPanel } from "./AccountManagementPanel";
@@ -31,7 +32,17 @@ import {
 import { localizedWorkspacePath } from "../../lib/workspace-locale";
 import { getWorkspaceLocale } from "../../lib/workspace-locale-server";
 import { workspaceMessages } from "../../lib/workspace-messages";
+import {
+  emptyRequestedSettingsResourceEvidence,
+  loadRequestedSettingsResourceEvidence,
+} from "../../lib/settings-requested-scope";
 import { DesktopAccessReturn } from "../../features/connectionAccess/DesktopAccessReturn";
+import {
+  hasRequestedSettingsResource,
+  requestedSettingsScope,
+  requestedSettingsScopeState,
+  selectSettingsWorkspace,
+} from "./requestedScope";
 
 export const dynamic = "force-dynamic";
 
@@ -54,41 +65,41 @@ export default async function SettingsPage({
   const copy = workspaceMessages[locale];
   const workspaceManagementAreas = localizedWorkspaceManagementAreas(locale);
   const requestedSection: SettingsSection = settingsSection(params.section);
-  const requestedWorkspaceId =
-    typeof params.workspace === "string" &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(params.workspace)
-      ? params.workspace
-      : null;
-  const requestedGcpSetupId =
-    typeof params.gcpSetup === "string"
-    && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-      .test(params.gcpSetup)
-      ? params.gcpSetup
-      : null;
-  const requestedIntegrationId =
-    typeof params.integration === "string"
-    && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-      .test(params.integration)
-      ? params.integration
-      : null;
-  const requestedConnectionId =
-    typeof params.connection === "string"
-    && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-      .test(params.connection)
-      ? params.connection
-      : null;
+  const requestedScope = requestedSettingsScope(params);
+  const requestedWorkspaceId = requestedScope.workspace.id;
+  const requestedGcpSetupId = requestedScope.setup.id;
+  const requestedIntegrationId = requestedScope.integration.id;
+  const requestedConnectionId = requestedScope.connection.id;
   const requestHeaders = await headers();
   const session = await auth.api.getSession({ headers: requestHeaders });
-  const encodedWorkspaceId = requestedWorkspaceId
-    ? encodeURIComponent(requestedWorkspaceId)
-    : null;
-  const settingsPath = localizedWorkspacePath(`/settings?${
-    encodedWorkspaceId ? `workspace=${encodedWorkspaceId}&` : ""
-  }section=${requestedSection}${
-    requestedConnectionId
-      ? `&connection=${encodeURIComponent(requestedConnectionId)}`
-      : ""
-  }${params.desktop === "1" && requestedConnectionId ? "&desktop=1" : ""}`, locale);
+  const returnQuery = new URLSearchParams({ section: requestedSection });
+  const preserveRequestedParam = (
+    key: "workspace" | "gcpSetup" | "integration" | "connection",
+    value: string | string[] | undefined,
+  ) => {
+    if (value === undefined) return;
+    returnQuery.set(
+      key,
+      typeof value === "string" && value.length <= 256 ? value : "",
+    );
+  };
+  preserveRequestedParam("workspace", params.workspace);
+  preserveRequestedParam("gcpSetup", params.gcpSetup);
+  preserveRequestedParam("integration", params.integration);
+  preserveRequestedParam("connection", params.connection);
+  if (typeof params.provider === "string" && params.provider.length <= 64) {
+    returnQuery.set("provider", params.provider);
+  }
+  if (typeof params.status === "string" && params.status.length <= 64) {
+    returnQuery.set("status", params.status);
+  }
+  if (params.desktop === "1" && requestedScope.connection.requested) {
+    returnQuery.set("desktop", "1");
+  }
+  const settingsPath = localizedWorkspacePath(
+    `/settings?${returnQuery.toString()}`,
+    locale,
+  );
   if (!session) {
     redirect(localizedWorkspacePath(
       `/auth/sign-in?returnTo=${encodeURIComponent(settingsPath)}`,
@@ -103,8 +114,9 @@ export default async function SettingsPage({
   });
   const workspaces = await auth.api.listOrganizations({ headers: requestHeaders });
   const roleRows = workspaces.length > 0
-    ? await db.select({
+      ? await db.select({
         organizationId: member.organizationId,
+        membershipId: member.id,
         role: member.role,
         lifecycleState: workspaceProfile.lifecycleState,
       })
@@ -119,6 +131,9 @@ export default async function SettingsPage({
         ))
     : [];
   const workspaceRoles = new Map(roleRows.map((row) => [row.organizationId, row.role]));
+  const workspaceMembershipIds = new Map(
+    roleRows.map((row) => [row.organizationId, row.membershipId]),
+  );
   const workspaceLifecycleStates = new Map(
     roleRows.map((row) => [row.organizationId, row.lifecycleState]),
   );
@@ -133,13 +148,11 @@ export default async function SettingsPage({
       )
     )
   ));
-  const requestedWorkspace = visibleWorkspaces.find(
-    (workspace) => workspace.id === requestedWorkspaceId,
-  ) ?? null;
-  const sessionWorkspace = visibleWorkspaces.find(
-    (workspace) => workspace.id === session.session.activeOrganizationId,
-  ) ?? null;
-  const activeWorkspace = requestedWorkspace ?? sessionWorkspace ?? visibleWorkspaces[0] ?? null;
+  const activeWorkspace = selectSettingsWorkspace({
+    requested: requestedScope,
+    visibleWorkspaces,
+    sessionWorkspaceId: session.session.activeOrganizationId,
+  });
   const activeWorkspaceId = activeWorkspace?.id ?? null;
   const orderedWorkspaces = activeWorkspaceId
     ? [
@@ -150,6 +163,9 @@ export default async function SettingsPage({
   const activeWorkspaceRole = activeWorkspace
     ? workspaceRoles.get(activeWorkspace.id) ?? "member"
     : null;
+  const activeMembershipId = activeWorkspace
+    ? workspaceMembershipIds.get(activeWorkspace.id) ?? null
+    : null;
   const activeWorkspaceLifecycleState = activeWorkspace
     ? workspaceLifecycleStates.get(activeWorkspace.id) ?? null
     : null;
@@ -159,6 +175,43 @@ export default async function SettingsPage({
     activeWorkspace
     && ["admin", "owner"].includes(activeWorkspaceRole ?? ""),
   );
+  const resourceRequested = hasRequestedSettingsResource(requestedScope);
+  const requestedResourceSectionAvailable = !resourceRequested || (
+    requestedScope.integration.requested || requestedScope.setup.requested
+      ? requestedSection === "providers"
+      : requestedSection === "access" || requestedSection === "providers"
+  );
+  const requestedWorkspaceSectionAvailable = requestedSection === "account"
+    || requestedSection === "workspaces"
+    || (
+      requestedSection === "workspace-settings"
+        ? canDeleteActiveWorkspace
+        : canManageActiveWorkspace && !workspaceDeletionPending
+  );
+  const canResolveRequestedResources = Boolean(
+    resourceRequested
+    && activeWorkspace
+    && requestedResourceSectionAvailable
+    && requestedWorkspaceSectionAvailable,
+  );
+  const requestedResourceEvidence = canResolveRequestedResources
+    ? await loadRequestedSettingsResourceEvidence({
+        workspaceId: activeWorkspaceId!,
+        membershipId: activeMembershipId!,
+        userId: session.user.id,
+        area: requestedSection as "access" | "providers",
+        connectionId: requestedConnectionId,
+        integrationId: requestedIntegrationId,
+        setupId: requestedGcpSetupId,
+      })
+    : emptyRequestedSettingsResourceEvidence;
+  const requestedScopeUnavailable = requestedSettingsScopeState({
+    requested: requestedScope,
+    activeWorkspaceId,
+    requestedSectionAvailable:
+      requestedResourceSectionAvailable && requestedWorkspaceSectionAvailable,
+    ...requestedResourceEvidence,
+  }) === "unavailable";
   const activeSection: SettingsSection =
     requestedSection === "account"
       ? "account"
@@ -176,22 +229,28 @@ export default async function SettingsPage({
                 ? requestedSection
                 : "workspaces";
   const activeManagementArea: WorkspaceManagementArea | null =
-    activeSection === "access"
-    || activeSection === "providers"
-    || activeSection === "workspace-settings"
+    !requestedScopeUnavailable && (
+      activeSection === "access"
+      || activeSection === "providers"
+      || activeSection === "workspace-settings"
+    )
       ? activeSection
       : null;
   const activeManagementDetails = activeManagementArea
     ? workspaceManagementAreas.find((item) => item.id === activeManagementArea)
     : null;
-  const pageTitle = activeSection === "account"
+  const pageTitle = requestedScopeUnavailable
+    ? copy.settings.requestedScopeUnavailableTitle
+    : activeSection === "account"
     ? copy.settings.accountTitle
     : activeSection === "workspaces"
       ? copy.settings.workspacesTitle
       : activeSection === "workspace-settings"
         ? copy.workspaceLifecycle.title
         : activeManagementDetails?.label ?? copy.settings.workspacesTitle;
-  const pageDescription = activeSection === "account"
+  const pageDescription = requestedScopeUnavailable
+    ? copy.settings.requestedScopeUnavailableDescription
+    : activeSection === "account"
     ? copy.settings.accountDescription
     : activeSection === "workspaces"
       ? copy.settings.workspacesDescription
@@ -224,12 +283,12 @@ export default async function SettingsPage({
           </div>
         </div>
         <SettingsNavigation
-          activeSection={activeSection}
-          workspaceId={activeWorkspaceId}
-          gcpSetupId={requestedGcpSetupId}
-          canManageWorkspace={canManageActiveWorkspace}
-          canDeleteWorkspace={canDeleteActiveWorkspace}
-          workspaceDeletionPending={workspaceDeletionPending}
+          activeSection={requestedScopeUnavailable ? "workspaces" : activeSection}
+          workspaceId={requestedScopeUnavailable ? null : activeWorkspaceId}
+          gcpSetupId={requestedScopeUnavailable ? null : requestedGcpSetupId}
+          canManageWorkspace={!requestedScopeUnavailable && canManageActiveWorkspace}
+          canDeleteWorkspace={!requestedScopeUnavailable && canDeleteActiveWorkspace}
+          workspaceDeletionPending={!requestedScopeUnavailable && workspaceDeletionPending}
           locale={locale}
         />
       </header>
@@ -243,7 +302,8 @@ export default async function SettingsPage({
               {pageDescription}
             </p>
           </div>
-          {activeWorkspace
+          {!requestedScopeUnavailable
+          && activeWorkspace
           && activeSection !== "account"
           && activeSection !== "workspaces" ? (
             <div className="tw:flex tw:flex-wrap tw:items-center tw:justify-end tw:gap-x-3 tw:gap-y-2 tw:text-xs">
@@ -263,28 +323,54 @@ export default async function SettingsPage({
             </div>
           ) : null}
         </header>
-        {activeSection === "providers"
+        {requestedScopeUnavailable ? (
+          <section
+            aria-labelledby="requested-scope-recovery"
+            className="tw:mt-8 tw:flex tw:flex-wrap tw:items-center tw:justify-between tw:gap-5 tw:border-y tw:border-border tw:py-7"
+            data-state="unavailable"
+          >
+            <div className="tw:max-w-[680px]">
+              <h2
+                className="tw:m-0 tw:text-sm tw:font-semibold tw:text-foreground"
+                id="requested-scope-recovery"
+              >
+                {copy.settings.requestedScopeRecoveryTitle}
+              </h2>
+              <p className="tw:mt-2 tw:mb-0 tw:text-xs tw:leading-body tw:text-muted-foreground">
+                {copy.settings.requestedScopeRecoveryDescription}
+              </p>
+            </div>
+            <ControlLink href={localizedWorkspacePath("/settings?section=workspaces", locale)}>
+              {copy.settings.requestedScopeChooseWorkspace}
+            </ControlLink>
+          </section>
+        ) : null}
+        {!requestedScopeUnavailable
+        && activeSection === "providers"
         && params.provider === "planetScale"
         && params.status === "connected" ? (
           <ConsoleNotice>
             {copy.settings.planetScaleConnected}
           </ConsoleNotice>
         ) : null}
-        {activeSection === "providers"
+        {!requestedScopeUnavailable
+        && activeSection === "providers"
         && params.provider === "planetScale"
         && params.status === "failed" ? (
           <ConsoleNotice tone="danger">
             {copy.settings.planetScaleFailed}
           </ConsoleNotice>
         ) : null}
-        {activeSection === "providers"
+        {!requestedScopeUnavailable
+        && activeSection === "providers"
         && params.provider === "gcpCloudSql"
         && params.status === "authorised" ? (
           <ConsoleNotice>
             {copy.settings.gcpConnected}
           </ConsoleNotice>
         ) : null}
-        {activeSection === "providers"
+        {!requestedScopeUnavailable
+        && activeSection === "providers"
         && params.provider === "gcpCloudSql"
         && params.status === "repaired"
         && requestedConnectionId ? (
@@ -292,14 +378,15 @@ export default async function SettingsPage({
             {copy.settings.gcpRepaired}
           </ConsoleNotice>
         ) : null}
-        {activeSection === "providers"
+        {!requestedScopeUnavailable
+        && activeSection === "providers"
         && params.provider === "gcpCloudSql"
         && params.status === "failed" ? (
           <ConsoleNotice tone="danger">
             {copy.settings.gcpFailed}
           </ConsoleNotice>
         ) : null}
-        {activeSection === "account" ? (
+        {!requestedScopeUnavailable && activeSection === "account" ? (
           <section id="account" className="tw:scroll-mt-28 tw:pt-8">
             <AccountManagementPanel
               currentSessionId={session.session.id}
@@ -308,7 +395,7 @@ export default async function SettingsPage({
           </section>
         ) : null}
 
-        {activeSection === "workspaces" ? (
+        {!requestedScopeUnavailable && activeSection === "workspaces" ? (
           <section id="workspaces" className="tw:scroll-mt-28 tw:pt-8">
             <div className="tw:grid tw:grid-cols-[minmax(0,1.45fr)_minmax(300px,0.62fr)] tw:items-start tw:gap-5 tw:max-[900px]:grid-cols-1">
               <div className="tw:overflow-hidden tw:rounded-surface tw:border tw:border-border tw:bg-surface">

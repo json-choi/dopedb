@@ -285,6 +285,27 @@ export const connectionsCatalog = defineCatalog(
     "connections.problemPortInvalid":
       "Enter a port from 1 through 65535.",
     "connections.problemRuntime": "Connection check failed",
+    "connections.testFailure.sshClientMissingTitle": "System SSH is unavailable",
+    "connections.testFailure.sshClientMissingRecovery":
+      "Install or restore the system SSH client, then check the SSH Host alias in SSH/SSL.",
+    "connections.testFailure.sshConfigurationTitle": "SSH configuration was rejected",
+    "connections.testFailure.sshConfigurationRecovery":
+      "Check the Host alias and its entry in your system SSH configuration.",
+    "connections.testFailure.sshHostKeyTitle": "SSH host identity could not be verified",
+    "connections.testFailure.sshHostKeyRecovery":
+      "Verify the host identity with your administrator before changing known-hosts data, then check the SSH Host alias.",
+    "connections.testFailure.sshAuthenticationTitle": "SSH authentication failed",
+    "connections.testFailure.sshAuthenticationRecovery":
+      "Check the system SSH agent, key, and Host alias. The database password does not control SSH authentication.",
+    "connections.testFailure.sshForwardingTitle": "SSH forwarding could not start",
+    "connections.testFailure.sshForwardingRecovery":
+      "Check the SSH Host alias, network route, and the target server's forwarding policy.",
+    "connections.testFailure.sshTimeoutTitle": "SSH tunnel timed out",
+    "connections.testFailure.sshTimeoutRecovery":
+      "Check the SSH Host alias and network reachability, then test again.",
+    "connections.testFailure.sshUnknownTitle": "SSH tunnel could not be established",
+    "connections.testFailure.sshUnknownRecovery":
+      "Review the SSH Host alias and system SSH configuration before testing again.",
     "connections.testFailure.timeoutNetworkTitle": "Could not reach the database",
     "connections.testFailure.timeoutNetworkRecovery":
       "Check the host, port, network access, and SSH Host alias, then test again.",
@@ -309,6 +330,30 @@ export const connectionsCatalog = defineCatalog(
     "connections.testFailure.technicalDetails": "Technical details",
     "connections.testFailure.transportDetail":
       "The Desktop connection-test transport failed before returning a typed receipt.",
+    "connections.catalogIssue.managed":
+      "This workspace-managed connection needs repair before its catalog can be loaded.",
+    "connections.catalogIssue.blocked":
+      "The current workspace policy blocks access to this database.",
+    "connections.catalogIssue.cancelled":
+      "The catalog request was cancelled.",
+    "connections.catalogIssue.network":
+      "The catalog could not be loaded because the network is unavailable.",
+    "connections.catalogIssue.timeout":
+      "The catalog request exceeded its time limit.",
+    "connections.catalogIssue.notFound":
+      "This connection resource is no longer available.",
+    "connections.catalogIssue.unknown":
+      "The catalog could not be loaded safely. Review the connection settings.",
+    "connections.catalogIssue.ddl":
+      "The DDL could not be loaded safely.",
+    "connections.catalogIssue.project":
+      "Projects could not be loaded.",
+    "connections.catalogIssue.bindings":
+      "Project databases could not be loaded.",
+    "connections.catalogIssue.sources":
+      "Project data sources could not be loaded.",
+    "connections.catalogIssue.analyses":
+      "Project analyses could not be loaded.",
     "connections.problems": "Problems",
     "connections.problemsEmpty":
       "No configuration problems were found.",
@@ -740,6 +785,27 @@ export const connectionsCatalog = defineCatalog(
     "connections.problemPortInvalid":
       "1부터 65535 사이의 포트를 입력하세요.",
     "connections.problemRuntime": "연결 검사 실패",
+    "connections.testFailure.sshClientMissingTitle": "시스템 SSH를 사용할 수 없습니다",
+    "connections.testFailure.sshClientMissingRecovery":
+      "시스템 SSH 클라이언트를 설치하거나 복구한 뒤 SSH/SSL에서 SSH Host 별칭을 확인하세요.",
+    "connections.testFailure.sshConfigurationTitle": "SSH 설정이 거부되었습니다",
+    "connections.testFailure.sshConfigurationRecovery":
+      "Host 별칭과 시스템 SSH 설정의 해당 항목을 확인하세요.",
+    "connections.testFailure.sshHostKeyTitle": "SSH 호스트 신원을 확인하지 못했습니다",
+    "connections.testFailure.sshHostKeyRecovery":
+      "known-hosts 데이터를 변경하기 전에 관리자와 호스트 신원을 확인한 뒤 SSH Host 별칭을 점검하세요.",
+    "connections.testFailure.sshAuthenticationTitle": "SSH 인증에 실패했습니다",
+    "connections.testFailure.sshAuthenticationRecovery":
+      "시스템 SSH 에이전트, 키와 Host 별칭을 확인하세요. 데이터베이스 비밀번호는 SSH 인증을 제어하지 않습니다.",
+    "connections.testFailure.sshForwardingTitle": "SSH 포워딩을 시작하지 못했습니다",
+    "connections.testFailure.sshForwardingRecovery":
+      "SSH Host 별칭, 네트워크 경로와 대상 서버의 포워딩 정책을 확인하세요.",
+    "connections.testFailure.sshTimeoutTitle": "SSH 터널 시간이 초과되었습니다",
+    "connections.testFailure.sshTimeoutRecovery":
+      "SSH Host 별칭과 네트워크 연결을 확인한 뒤 다시 테스트하세요.",
+    "connections.testFailure.sshUnknownTitle": "SSH 터널을 설정하지 못했습니다",
+    "connections.testFailure.sshUnknownRecovery":
+      "다시 테스트하기 전에 SSH Host 별칭과 시스템 SSH 설정을 검토하세요.",
     "connections.testFailure.timeoutNetworkTitle": "데이터베이스에 연결할 수 없습니다",
     "connections.testFailure.timeoutNetworkRecovery":
       "호스트, 포트, 네트워크 접근과 SSH Host 별칭을 확인한 뒤 다시 테스트하세요.",
@@ -764,6 +830,30 @@ export const connectionsCatalog = defineCatalog(
     "connections.testFailure.technicalDetails": "기술 상세",
     "connections.testFailure.transportDetail":
       "Desktop 연결 테스트 전송이 구조화된 결과를 반환하기 전에 실패했습니다.",
+    "connections.catalogIssue.managed":
+      "카탈로그를 불러오기 전에 이 워크스페이스 관리형 연결을 복구해야 합니다.",
+    "connections.catalogIssue.blocked":
+      "현재 워크스페이스 정책이 이 데이터베이스 접근을 차단합니다.",
+    "connections.catalogIssue.cancelled":
+      "카탈로그 요청이 취소되었습니다.",
+    "connections.catalogIssue.network":
+      "네트워크를 사용할 수 없어 카탈로그를 불러오지 못했습니다.",
+    "connections.catalogIssue.timeout":
+      "카탈로그 요청 시간이 초과되었습니다.",
+    "connections.catalogIssue.notFound":
+      "이 연결 리소스를 더 이상 사용할 수 없습니다.",
+    "connections.catalogIssue.unknown":
+      "카탈로그를 안전하게 불러오지 못했습니다. 연결 설정을 검토하세요.",
+    "connections.catalogIssue.ddl":
+      "DDL을 안전하게 불러오지 못했습니다.",
+    "connections.catalogIssue.project":
+      "프로젝트를 불러오지 못했습니다.",
+    "connections.catalogIssue.bindings":
+      "프로젝트 데이터베이스를 불러오지 못했습니다.",
+    "connections.catalogIssue.sources":
+      "프로젝트 데이터 소스를 불러오지 못했습니다.",
+    "connections.catalogIssue.analyses":
+      "프로젝트 분석을 불러오지 못했습니다.",
     "connections.problems": "문제",
     "connections.problemsEmpty": "구성 문제를 찾지 못했습니다.",
     "connections.problemSqliteFileRequired":

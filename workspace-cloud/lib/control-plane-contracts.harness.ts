@@ -72,6 +72,11 @@ import {
   parseExpectedRevision,
   type ConnectionVersionPayload,
 } from "./workspace-versioning";
+import {
+  requestedSettingsScope,
+  requestedSettingsScopeState,
+  selectSettingsWorkspace,
+} from "../app/settings/requestedScope";
 
 type Fixture = Readonly<{
   schemaVersion: number;
@@ -192,6 +197,125 @@ describe("Connection conflict decisions", () => {
       currentMatchesServer: false,
       currentMatchesCandidate: false,
     })).toBe("candidate");
+  });
+});
+
+describe("Settings requested-scope boundary", () => {
+  it("keeps ordinary entry fallback while collapsing unavailable exact scopes", () => {
+    const workspaceId = "11111111-1111-4111-8111-111111111111";
+    const otherWorkspaceId = "22222222-2222-4222-8222-222222222222";
+    const connectionId = "33333333-3333-4333-8333-333333333333";
+    const integrationId = "44444444-4444-4444-8444-444444444444";
+    const setupId = "55555555-5555-4555-8555-555555555555";
+    const visibleWorkspaces = [{ id: workspaceId }, { id: otherWorkspaceId }];
+    const ordinary = requestedSettingsScope({});
+    expect(selectSettingsWorkspace({
+      requested: ordinary,
+      visibleWorkspaces,
+      sessionWorkspaceId: otherWorkspaceId,
+    })).toEqual({ id: otherWorkspaceId });
+    expect(requestedSettingsScopeState({
+      requested: ordinary,
+      activeWorkspaceId: otherWorkspaceId,
+      requestedSectionAvailable: true,
+      connection: null,
+      integrationId: null,
+      setupId: null,
+    })).toBe("available");
+
+    const absentWorkspace = requestedSettingsScope({
+      workspace: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    });
+    expect(selectSettingsWorkspace({
+      requested: absentWorkspace,
+      visibleWorkspaces,
+      sessionWorkspaceId: otherWorkspaceId,
+    })).toBeNull();
+
+    const unavailableStates = [
+      requestedSettingsScopeState({
+        requested: absentWorkspace,
+        activeWorkspaceId: null,
+        requestedSectionAvailable: false,
+        connection: null,
+        integrationId: null,
+        setupId: null,
+      }),
+      requestedSettingsScopeState({
+        requested: requestedSettingsScope({ workspace: workspaceId, connection: connectionId }),
+        activeWorkspaceId: workspaceId,
+        requestedSectionAvailable: true,
+        connection: null,
+        integrationId: null,
+        setupId: null,
+      }),
+      requestedSettingsScopeState({
+        requested: requestedSettingsScope({ workspace: workspaceId, integration: integrationId }),
+        activeWorkspaceId: workspaceId,
+        requestedSectionAvailable: true,
+        connection: null,
+        integrationId: null,
+        setupId: null,
+      }),
+      requestedSettingsScopeState({
+        requested: requestedSettingsScope({ workspace: workspaceId, gcpSetup: setupId }),
+        activeWorkspaceId: workspaceId,
+        requestedSectionAvailable: true,
+        connection: null,
+        integrationId: null,
+        setupId: null,
+      }),
+      requestedSettingsScopeState({
+        requested: requestedSettingsScope({
+          workspace: workspaceId,
+          connection: connectionId,
+          integration: integrationId,
+        }),
+        activeWorkspaceId: workspaceId,
+        requestedSectionAvailable: true,
+        connection: { id: connectionId, providerIntegrationId: setupId },
+        integrationId,
+        setupId: null,
+      }),
+      requestedSettingsScopeState({
+        requested: requestedSettingsScope({ connection: connectionId }),
+        activeWorkspaceId: workspaceId,
+        requestedSectionAvailable: true,
+        connection: { id: connectionId, providerIntegrationId: integrationId },
+        integrationId: null,
+        setupId: null,
+      }),
+      requestedSettingsScopeState({
+        requested: requestedSettingsScope({ workspace: [workspaceId] }),
+        activeWorkspaceId: workspaceId,
+        requestedSectionAvailable: true,
+        connection: null,
+        integrationId: null,
+        setupId: null,
+      }),
+    ];
+    expect(unavailableStates).toEqual(Array(unavailableStates.length).fill("unavailable"));
+
+    expect(requestedSettingsScopeState({
+      requested: requestedSettingsScope({
+        workspace: workspaceId,
+        connection: connectionId,
+        integration: integrationId,
+      }),
+      activeWorkspaceId: workspaceId,
+      requestedSectionAvailable: true,
+      connection: { id: connectionId, providerIntegrationId: integrationId },
+      integrationId,
+      setupId: null,
+    })).toBe("available");
+    expect(requestedSettingsScopeState({
+      requested: requestedSettingsScope({ workspace: workspaceId, gcpSetup: setupId }),
+      activeWorkspaceId: workspaceId,
+      requestedSectionAvailable: true,
+      connection: null,
+      integrationId: null,
+      setupId,
+    })).toBe("available");
   });
 });
 

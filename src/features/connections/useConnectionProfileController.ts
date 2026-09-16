@@ -5,7 +5,6 @@ import { useEffect, useRef, useState } from "react";
 import type { DiagnosticItem } from "../../design-system/components/Diagnostics";
 import type { FieldValidation } from "../../design-system/components/FormControls";
 import type { PanelTab } from "../../design-system/components/PanelTabs";
-import { errMessage } from "../../ipc/types";
 import { useI18n } from "../../lib/i18n";
 import { useCatalogScope } from "../../lib/queries";
 import { useToast } from "../../components/Toast";
@@ -15,6 +14,8 @@ import {
 } from "../workspaces/tauriAdapter";
 import type { ConnectionTab } from "./connectionEditorModel";
 import {
+  connectionOperationErrorTitle,
+  connectionTestIssue,
   connectionTestFailureRecovery,
   connectionTestFailureTarget,
   connectionTestFailureTitle,
@@ -271,7 +272,7 @@ export function useConnectionProfileController({
       status.setMessage(t("connections.saved"));
       status.setMessageIsError(false);
     } catch (error) {
-      status.setMessage(errMessage(error));
+      status.setMessage(connectionOperationErrorTitle(t, error));
       status.setMessageIsError(true);
     } finally {
       status.setBusy(false);
@@ -282,7 +283,7 @@ export function useConnectionProfileController({
   function bindWorkspaceConnection(bound: ConnectionProfile) {
     form.setValue(bound);
     void onSaved(bound, false).catch((error) => {
-      status.setMessage(errMessage(error));
+      status.setMessage(connectionOperationErrorTitle(t, error));
       status.setMessageIsError(true);
     });
   }
@@ -335,7 +336,7 @@ export function useConnectionProfileController({
       await onDeletedConnection(form.value.id);
       onCancel();
     } catch (error) {
-      status.setMessage(errMessage(error));
+      status.setMessage(connectionOperationErrorTitle(t, error));
       status.setMessageIsError(true);
       status.setBusy(false);
     }
@@ -350,7 +351,7 @@ export function useConnectionProfileController({
       status.setBusy(false);
       onCancel();
     } catch (error) {
-      status.setMessage(errMessage(error));
+      status.setMessage(connectionOperationErrorTitle(t, error));
       status.setMessageIsError(true);
       status.setBusy(false);
     }
@@ -377,7 +378,7 @@ export function useConnectionProfileController({
         );
       if (!mounted.current) return;
       if (!receipt.ok) {
-        status.setTestFailure(receipt.failure);
+        status.setTestFailure(connectionTestIssue(receipt.failure));
         status.setMessageIsError(true);
         dialogs.problems.setOpen(true);
         recordVerification("failed");
@@ -391,7 +392,6 @@ export function useConnectionProfileController({
       status.setTestFailure({
         code: "unknown",
         field: null,
-        detail: t("connections.testFailure.transportDetail"),
       });
       status.setMessageIsError(true);
       dialogs.problems.setOpen(true);

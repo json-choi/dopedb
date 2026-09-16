@@ -31,6 +31,7 @@ import { deleteWorkspaceConnection } from "../workspaces/tauriAdapter";
 import { errMessage } from "../../ipc/types";
 import { useI18n } from "../../lib/i18n";
 import { qk, type CatalogScope } from "../../lib/queries";
+import { catalogLoadIssue } from "./catalogDomain";
 import {
   projectResourceKey,
   promotedProjectConnectionSourceId,
@@ -226,7 +227,7 @@ export function useDatabaseExplorerMutations({
       commands.want(connectionId);
     } catch (error) {
       if (currentScopeKeyRef.current !== scopeKey) return;
-      commands.setRefreshError(connectionId, errMessage(error));
+      commands.setRefreshError(connectionId, catalogLoadIssue(error));
     } finally {
       if (currentScopeKeyRef.current === scopeKey) {
         commands.patch({ refreshingId: null });

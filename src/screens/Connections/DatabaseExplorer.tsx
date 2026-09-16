@@ -10,7 +10,6 @@ import {
   type ReactNode,
 } from "react";
 import type { CatalogTable } from "../../ipc/types";
-import { errMessage } from "../../ipc/types";
 import {
   connectionAccessIssue,
   type ConnectionProfile,
@@ -28,6 +27,7 @@ import {
 } from "../../features/catalogExplorer/projectResources";
 import {
   catalogLoadIssue,
+  catalogLoadIssueMessage,
   type CatalogLoadIssue,
 } from "../../features/catalogExplorer/catalogDomain";
 import { useCatalogExplorerState } from "../../features/catalogExplorer/state";
@@ -185,10 +185,6 @@ export function DatabaseExplorer({
     },
     commands,
   } = useCatalogExplorerState(catalogScope.key);
-  const closeOpenMenu = useEffectEvent(() => {
-    commands.patch({ openMenuId: null });
-  });
-
   const environmentBindingsReady = environmentConnections.isSuccess;
   const { unassignedConnections, unassignedConnectionIds } =
     projectConnectionAssignment(
@@ -222,22 +218,6 @@ export function DatabaseExplorer({
         : null;
     setProviderCredentialsOpen(provider);
   }
-  useEffect(() => {
-    if (!openMenuId) return;
-    const closeOnOutsidePointer = (event: globalThis.PointerEvent) => {
-      const target = event.target;
-      if (
-        target instanceof Element &&
-        target.closest(".db-menu, [data-popup-menu]")
-      ) {
-        return;
-      }
-      closeOpenMenu();
-    };
-    document.addEventListener("pointerdown", closeOnOutsidePointer);
-    return () => document.removeEventListener("pointerdown", closeOnOutsidePointer);
-  }, [openMenuId]);
-
   // Query observers survive the shell while a workspace changes. Clear the explorer's
   // per-connection intent at the same boundary as its scoped keys so no hidden row can
   // resubscribe an old connection in the newly active account.
@@ -333,8 +313,8 @@ export function DatabaseExplorer({
     onReorderProjectDatabase: projectDatabaseOrder.reorder,
   });
   const errs: Record<string, CatalogLoadIssue> = { ...overviewErrs };
-  for (const [connectionId, message] of Object.entries(refreshErrs)) {
-    errs[connectionId] = catalogLoadIssue(message);
+  for (const [connectionId, issue] of Object.entries(refreshErrs)) {
+    errs[connectionId] = issue;
   }
 
   function ensureGroupLoaded(id: string) {
@@ -585,7 +565,10 @@ export function DatabaseExplorer({
             className="tw:m-0 tw:px-2 tw:py-1 tw:text-xs tw:text-danger"
             role="alert"
           >
-            {errMessage(knowledgeProjects.error)}
+            {catalogLoadIssueMessage(
+              t,
+              catalogLoadIssue(knowledgeProjects.error),
+            )}
           </p>
         ) : null}
         {knowledgeEnabled &&

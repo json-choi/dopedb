@@ -101,23 +101,44 @@ export function databaseDisplayLabel(
   return segments[segments.length - 1] ?? value;
 }
 
+export const CONNECTION_TEST_FAILURE_CODES = [
+  "sshClientMissing",
+  "sshConfiguration",
+  "sshHostKey",
+  "sshAuthentication",
+  "sshForwarding",
+  "sshTimeout",
+  "sshUnknown",
+  "timeoutNetwork",
+  "authentication",
+  "tls",
+  "databaseConfig",
+  "unknown",
+] as const;
+
 export type ConnectionTestFailureCode =
-  | "timeoutNetwork"
-  | "authentication"
-  | "tls"
-  | "databaseConfig"
-  | "unknown";
+  (typeof CONNECTION_TEST_FAILURE_CODES)[number];
+
+export const CONNECTION_TEST_FAILURE_FIELDS = [
+  "ssh",
+  "credentials",
+  "tls",
+  "database",
+] as const;
 
 export type ConnectionTestFailureField =
-  | "credentials"
-  | "tls"
-  | "database";
+  (typeof CONNECTION_TEST_FAILURE_FIELDS)[number];
 
 export interface ConnectionTestFailure {
   code: ConnectionTestFailureCode;
   field: ConnectionTestFailureField | null;
   detail: string;
 }
+
+/** Safe UI identity projected from the wire receipt without backend detail text. */
+export type ConnectionTestIssue = Readonly<
+  Pick<ConnectionTestFailure, "code" | "field">
+>;
 
 export type ConnectionTestReceipt =
   | { ok: true; failure: null }

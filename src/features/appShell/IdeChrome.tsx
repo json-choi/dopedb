@@ -204,7 +204,7 @@ export function IdeStatusBar({
   onCancelBackgroundTask: (task: BackgroundTask) => Promise<void>;
   onRevealDatabaseContext: () => void;
   onOpenNotifications: () => void;
-  onSafetySettings: () => void;
+  onSafetySettings: (connectionId: ConnectionProfile["id"]) => void;
 }) {
   const { t } = useI18n();
   const breadcrumbs: Array<{
@@ -350,7 +350,7 @@ export function IdeStatusBar({
         <StatusBarIconButton
           icon={writeEnabled ? "unlock" : "lock"}
           label={writeEnabled ? t("ide.writeEnabled") : t("ide.readOnly")}
-          onClick={onSafetySettings}
+          onClick={() => onSafetySettings(selected.id)}
         />
       ) : null}
       <StatusBarIconButton

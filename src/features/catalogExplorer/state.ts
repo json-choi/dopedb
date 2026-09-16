@@ -5,6 +5,7 @@ import type {
   DdlDialogState,
   WorkspaceDialogState,
 } from "./domain";
+import type { CatalogLoadIssue } from "./catalogDomain";
 
 type CatalogExplorerAction =
   | { type: "scopeChanged"; scopeKey: string }
@@ -14,7 +15,7 @@ type CatalogExplorerAction =
   | { type: "toggleConnection"; id: string }
   | { type: "openConnection"; id: string }
   | { type: "clearRefreshError"; id: string }
-  | { type: "setRefreshError"; id: string; message: string }
+  | { type: "setRefreshError"; id: string; issue: CatalogLoadIssue }
   | { type: "toggleObjectSection"; key: string }
   | { type: "toggleCollapsedSection"; key: string };
 
@@ -86,7 +87,7 @@ export function catalogExplorerReducer(
         ...state,
         refreshErrors: {
           ...state.refreshErrors,
-          [action.id]: action.message,
+          [action.id]: action.issue,
         },
       };
     case "toggleObjectSection":
@@ -138,8 +139,8 @@ export function useCatalogExplorerState(scopeKey: string) {
         dispatch({ type: "openConnection", id }),
       clearRefreshError: (id: string) =>
         dispatch({ type: "clearRefreshError", id }),
-      setRefreshError: (id: string, message: string) =>
-        dispatch({ type: "setRefreshError", id, message }),
+      setRefreshError: (id: string, issue: CatalogLoadIssue) =>
+        dispatch({ type: "setRefreshError", id, issue }),
       toggleObjectSection: (key: string) =>
         dispatch({ type: "toggleObjectSection", key }),
       toggleCollapsedSection: (key: string) =>

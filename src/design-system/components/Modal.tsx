@@ -12,7 +12,7 @@ import {
   useRef,
 } from "react";
 import { createPortal } from "react-dom";
-import { ownsFloatingTarget } from "../floating";
+import { floatingPortalOwnerId, ownsFloatingTarget } from "../floating";
 
 const MODAL_FOCUSABLE_SELECTOR = [
   "a[href]",
@@ -217,6 +217,7 @@ export const ModalSurface = forwardRef<
       id={surfaceId}
       role="dialog"
       aria-modal="true"
+      data-floating-owner-id={floatingPortalOwnerId(returnFocusRef?.current ?? null)}
       data-size={size}
       data-fill={fill}
       tabIndex={tabIndex ?? -1}

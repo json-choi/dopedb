@@ -5,7 +5,6 @@ import {
   useId,
   useRef,
   useState,
-  type KeyboardEvent,
   type ReactElement,
   type ReactNode,
 } from "react";
@@ -14,19 +13,14 @@ import { Tooltip } from "../design-system/components/Tooltip";
 import {
   floatingPortalOwnerId,
   floatingPortalIsModalOwned,
-  ownsFloatingTarget,
   useAnchoredFloatingSurface,
 } from "../design-system/floating";
+import {
+  menuInitialFocusForTriggerKey,
+  type MenuInitialFocus,
+  useMenuInteractions,
+} from "../design-system/menuInteraction";
 import { Icon, type IconName } from "./Icon";
-
-function menuItems(root: HTMLElement | null) {
-  if (!root) return [];
-  return [
-    ...root.querySelectorAll<HTMLElement>(
-      'button:not(:disabled), [role="menuitem"]:not([aria-disabled="true"]), [role="menuitemcheckbox"] input:not(:disabled), [role="menuitemradio"] input:not(:disabled)',
-    ),
-  ];
-}
 
 export default function ToolbarMenu({
   label,
@@ -65,9 +59,9 @@ export default function ToolbarMenu({
   const menuId = `toolbar-menu-${generatedId.replace(/:/g, "")}`;
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const focusFirstOnOpen = useRef(false);
   const lastOpenRequest = useRef(openRequest);
   const [open, setOpen] = useState(false);
+  const [initialFocus, setInitialFocus] = useState<MenuInitialFocus>(null);
   const {
     refs,
     floatingStyles,
@@ -102,78 +96,28 @@ export default function ToolbarMenu({
     }
     if (disabled) return;
     lastOpenRequest.current = openRequest;
-    focusFirstOnOpen.current = true;
+    setInitialFocus("first");
     setOpen(true);
   }, [disabled, openRequest]);
 
-  function close({ restoreFocus = false } = {}) {
+  function close() {
     setOpen(false);
-    if (restoreFocus) {
-      window.requestAnimationFrame(() => triggerRef.current?.focus());
-    }
+    setInitialFocus(null);
   }
+
+  const interactions = useMenuInteractions({
+    open,
+    ready: isPositioned,
+    menuRef,
+    triggerRef,
+    initialFocus,
+    onRequestClose: close,
+  });
 
   useEffect(() => {
     if (!open || !middlewareData.hide?.referenceHidden) return;
     close();
   }, [middlewareData.hide?.referenceHidden, open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const closeOutside = (event: PointerEvent) => {
-      const target = event.target as Node;
-      if (
-        triggerRef.current?.contains(target) ||
-        (menuRef.current && ownsFloatingTarget(menuRef.current, target))
-      ) {
-        return;
-      }
-      close();
-    };
-    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      close({ restoreFocus: true });
-    };
-    document.addEventListener("pointerdown", closeOutside);
-    document.addEventListener("keydown", closeOnEscape, true);
-    return () => {
-      document.removeEventListener("pointerdown", closeOutside);
-      document.removeEventListener("keydown", closeOnEscape, true);
-    };
-  }, [open]);
-
-  useEffect(() => {
-    if (!open || !isPositioned || !focusFirstOnOpen.current) return;
-    focusFirstOnOpen.current = false;
-    menuItems(menuRef.current)[0]?.focus();
-  }, [isPositioned, open]);
-
-  function moveFocus(event: KeyboardEvent<HTMLDivElement>) {
-    if (event.target instanceof HTMLTextAreaElement) {
-      return;
-    }
-    if (
-      event.target instanceof HTMLInputElement &&
-      event.target.type !== "checkbox" &&
-      event.target.type !== "radio"
-    ) {
-      return;
-    }
-    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
-    const items = menuItems(menuRef.current);
-    if (items.length === 0) return;
-    event.preventDefault();
-    const current = items.indexOf(document.activeElement as HTMLElement);
-    if (event.key === "Home") items[0]?.focus();
-    else if (event.key === "End") items[items.length - 1]?.focus();
-    else {
-      const direction = event.key === "ArrowDown" ? 1 : -1;
-      const next = current < 0 ? (direction > 0 ? 0 : items.length - 1) : current + direction;
-      items[(next + items.length) % items.length]?.focus();
-    }
-  }
 
   const menu = open
     ? createPortal(
@@ -191,14 +135,9 @@ export default function ToolbarMenu({
             ...floatingStyles,
             visibility: isPositioned ? "visible" : "hidden",
           }}
-          onKeyDown={moveFocus}
+          onKeyDown={interactions.onKeyDown}
           onClick={(event) => {
-            const target = event.target as HTMLElement;
-            if (target.closest("[data-menu-keep-open]")) return;
-            if (target.closest('button:not(:disabled), [role="menuitem"]')) {
-              triggerRef.current?.focus({ preventScroll: true });
-              close();
-            }
+            interactions.onClick(event);
           }}
         >
           {children}
@@ -224,13 +163,16 @@ export default function ToolbarMenu({
       onClick={() => {
         if (open) close();
         else {
+          setInitialFocus(null);
           setOpen(true);
         }
       }}
       onKeyDown={(event) => {
-        if (event.key !== "ArrowDown") return;
+        const focus = menuInitialFocusForTriggerKey(event.key);
+        if (!focus) return;
         event.preventDefault();
-        focusFirstOnOpen.current = true;
+        event.stopPropagation();
+        setInitialFocus(focus);
         setOpen(true);
       }}
     >

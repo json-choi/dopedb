@@ -15,7 +15,7 @@ import {
 } from "../connections/domain";
 import { useManagedConnectionRecoveryLauncher } from "../connections/useManagedConnectionRecovery";
 import { qk, type CatalogScope } from "../../lib/queries";
-import { catalogLoadIssue } from "./catalogDomain";
+import { catalogLoadIssue, readWithCatalogIssue } from "./catalogDomain";
 import type { useCatalogExplorerState } from "./state";
 
 type CatalogExplorerCommands = ReturnType<
@@ -34,7 +34,7 @@ export function useCatalogExplorerLoading(
     mutationFn: async ({ connection }: {
       connection: ConnectionProfile;
       scopeKey: string;
-    }) => {
+    }) => readWithCatalogIssue(async () => {
       if (bigQueryAuthMode(connection) === "googleAccount") {
         await authenticateBigQueryGoogleAccount(connection);
         return true;
@@ -43,7 +43,7 @@ export function useCatalogExplorerLoading(
       if (!credentialFile) return false;
       await authenticateBigQueryServiceAccount(connection, credentialFile);
       return true;
-    },
+    }),
     onSuccess: async (recovered, { connection, scopeKey }) => {
       if (!recovered) return;
       await queryClient.invalidateQueries({

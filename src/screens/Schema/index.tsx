@@ -10,8 +10,11 @@ import {
 } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { CatalogRelationV2, CatalogTable } from "../../ipc/types";
-import { errMessage } from "../../ipc/types";
 import type { ConnectionProfile } from "../../features/connections/domain";
+import {
+  catalogLoadIssue,
+  catalogLoadIssueMessage,
+} from "../../features/catalogExplorer/catalogDomain";
 import { Icon } from "../../components/Icon";
 import InfoTip from "../../components/InfoTip";
 import Skeleton from "../../components/Skeleton";
@@ -160,7 +163,7 @@ export default function SchemaExplorer({
       return (
         <SchemaFrame>
           <div className="tw:text-ui tw:text-danger">
-            {errMessage(overviewQuery.error)}
+            {catalogLoadIssueMessage(t, catalogLoadIssue(overviewQuery.error))}
           </div>
           <span className="tw:self-start">
           <Button
@@ -217,7 +220,9 @@ export default function SchemaExplorer({
   if (error) {
     return (
       <SchemaFrame>
-        <div className="tw:text-ui tw:text-danger">{errMessage(error)}</div>
+        <div className="tw:text-ui tw:text-danger">
+          {catalogLoadIssueMessage(t, catalogLoadIssue(error))}
+        </div>
         <span className="tw:self-start">
         <Button
           size="compact"

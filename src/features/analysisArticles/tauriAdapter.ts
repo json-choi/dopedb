@@ -1,6 +1,7 @@
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 import { invoke } from "../../ipc/core";
+import { readWithCatalogIssue } from "../catalogExplorer/catalogDomain";
 import type {
   AnalysisArticleRecord,
   AnalysisArticleChanged,
@@ -16,9 +17,9 @@ import type {
 export function listAnalysisArticles(
   projectEnvironmentId?: string | null,
 ): Promise<AnalysisArticleRecord[]> {
-  return invoke("list_analysis_articles_command", {
+  return readWithCatalogIssue(() => invoke("list_analysis_articles_command", {
     projectEnvironmentId: projectEnvironmentId ?? null,
-  });
+  }));
 }
 
 export function updateAnalysisArticle(

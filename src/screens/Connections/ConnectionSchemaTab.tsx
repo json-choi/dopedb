@@ -8,8 +8,11 @@ import {
   TextInput,
 } from "../../design-system/components/FormControls";
 import { OBJECT_PATTERN_PARAMETER } from "../../features/catalogExplorer/scopeFilter";
+import {
+  catalogLoadIssue,
+  catalogLoadIssueMessage,
+} from "../../features/catalogExplorer/catalogDomain";
 import type { ConnectionEditorController } from "../../features/connections/useConnectionEditorController";
-import { errMessage } from "../../ipc/types";
 import { useI18n } from "../../lib/i18n";
 
 export function ConnectionSchemaTab({
@@ -36,7 +39,10 @@ export function ConnectionSchemaTab({
         ) : schema.status.error ? (
           <div className="tw:flex tw:items-start tw:gap-2 tw:rounded-sm tw:border tw:border-danger tw:bg-card tw:p-3 tw:text-sm tw:text-danger">
             <span className="tw:min-w-0 tw:flex-1 tw:wrap-break-word">
-              {errMessage(schema.status.error)}
+              {catalogLoadIssueMessage(
+                t,
+                catalogLoadIssue(schema.status.error),
+              )}
             </span>
             <Button
               size="compact"

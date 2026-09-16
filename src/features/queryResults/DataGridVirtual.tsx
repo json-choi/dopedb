@@ -10,7 +10,14 @@ import {
 } from "react";
 import type { QueryResult } from "../../ipc/types";
 import { type SqlStreamRowSource } from "../queries/domain";
-import { sqlResultRowAt } from "../queries/resultPageCache";
+import {
+  collectCachedSqlResultDecodeFailures,
+  ensureSqlResultRange,
+  sqlResultDecodeFailureAt,
+  sqlResultRangeIsCached,
+  sqlResultRowAt,
+} from "../queries/resultPageCache";
+import { readSqlResultPage } from "../queries/tauriAdapter";
 import { useSqlResultPages } from "../queries/useSqlResultPages";
 import type { GridSort } from "../../lib/sqlBuild";
 import { Icon } from "../../components/Icon";
@@ -18,6 +25,7 @@ import DataGridColumnFilterMenu from "./DataGridColumnFilterMenu";
 import { useI18n } from "../../lib/i18n";
 import {
   extendGridSelection,
+  gridSelectionBounds,
   gridSelectionClipboardText,
   gridSelectionIncludes,
   singleGridCell,
@@ -42,6 +50,11 @@ import {
   dataGridKeyboardTarget,
   type DataGridFocus,
 } from "./dataGridKeyboard";
+import {
+  cellDecodeFailureAt,
+  firstDecodeFailureInSelection,
+  gridCellInspection,
+} from "./decodeFailures";
 
 const OVERSCAN = 4;
 
@@ -124,6 +137,7 @@ export default function DataGridVirtual(props: Props) {
     height: 320,
   });
   const [selection, setSelection] = useState<GridCellSelection | null>(null);
+  const [copyError, setCopyError] = useState<string | null>(null);
   const [focus, setFocus] = useState<DataGridFocus>({ row: 0, column: 0 });
   const focusRequestedRef = useRef(false);
   const [widths, setWidths] = useState<Record<number, number>>({});
@@ -133,6 +147,14 @@ export default function DataGridVirtual(props: Props) {
     props.rowSource
       ? sqlResultRowAt(props.rowSource, index)
       : props.result.rows[index];
+  const failureAt = (rowIndex: number, columnIndex: number) =>
+    props.rowSource
+      ? sqlResultDecodeFailureAt(props.rowSource, rowIndex, columnIndex)
+      : cellDecodeFailureAt(
+          props.result.decodeFailures,
+          rowIndex,
+          columnIndex,
+        );
   const columnWidths = useMemo(
     () =>
       props.result.columns.map(
@@ -187,6 +209,7 @@ export default function DataGridVirtual(props: Props) {
   }, []);
   useEffect(() => {
     setSelection(null);
+    setCopyError(null);
     setFocus({ row: 0, column: 0 });
   }, [columnSelectionKey]);
 
@@ -198,8 +221,74 @@ export default function DataGridVirtual(props: Props) {
       return;
     }
     setSelection(singleGridCell(row, col));
+    const loadedRow = rowAt(row);
+    if (!loadedRow && props.rowSource) {
+      setCopyError(t("grid.incompleteInspectionBlocked"));
+      return;
+    }
+    const failures = props.rowSource
+      ? collectCachedSqlResultDecodeFailures(props.rowSource)
+      : props.result.decodeFailures;
+    const inspection = gridCellInspection(
+      failures,
+      row,
+      loadedRow?.[col],
+    );
+    if (inspection.blocked) {
+      setCopyError(
+        t("grid.decodeFailureInspectionBlocked", {
+          row: inspection.failure.rowIndex + 1,
+          column: inspection.failure.columnIndex + 1,
+          type: inspection.failure.databaseType,
+        }),
+      );
+      return;
+    }
+    setCopyError(null);
     props.onSelectRow?.(row);
-    props.onCellClick?.(rowAt(row)?.[col], row, props.result.columns[col]);
+    props.onCellClick?.(inspection.value, row, props.result.columns[col]);
+  };
+  const copySelection = async (selected: GridCellSelection) => {
+    if (props.rowSource) {
+      const bounds = gridSelectionBounds(selected);
+      await ensureSqlResultRange(
+        props.rowSource,
+        bounds.firstRow,
+        bounds.lastRow + 1,
+        props.result.columns,
+        readSqlResultPage,
+      );
+      if (
+        !sqlResultRangeIsCached(
+          props.rowSource,
+          bounds.firstRow,
+          bounds.lastRow + 1,
+        )
+      ) {
+        setCopyError(t("grid.incompleteCopyBlocked"));
+        return;
+      }
+    }
+    const failure = firstDecodeFailureInSelection(
+      props.rowSource
+        ? collectCachedSqlResultDecodeFailures(props.rowSource)
+        : props.result.decodeFailures,
+      selected,
+    );
+    if (failure) {
+      setCopyError(
+        t("grid.decodeFailureCopyBlocked", {
+          row: failure.rowIndex + 1,
+          column: failure.columnIndex + 1,
+          type: failure.databaseType,
+        }),
+      );
+      return;
+    }
+    setCopyError(null);
+    await navigator.clipboard.writeText(
+      gridSelectionClipboardText(selected, rowAt, display, copy),
+    );
   };
   useEffect(() => {
     if (!focusRequestedRef.current) return;
@@ -234,9 +323,7 @@ export default function DataGridVirtual(props: Props) {
     ) {
       if (window.getSelection()?.toString()) return;
       event.preventDefault();
-      void navigator.clipboard.writeText(
-        gridSelectionClipboardText(selection, rowAt, display, copy),
-      );
+      void copySelection(selection);
       return;
     }
     if (
@@ -347,6 +434,14 @@ export default function DataGridVirtual(props: Props) {
           role="status"
         >
           {pageError}
+        </div>
+      ) : null}
+      {copyError ? (
+        <div
+          className="tw:sticky tw:top-control-sm tw:left-0 tw:z-[var(--ds-z-sticky)] tw:w-fit tw:max-w-[min(520px,90%)] tw:bg-danger-muted tw:px-2 tw:py-1 tw:font-sans tw:text-xs tw:text-danger"
+          role="alert"
+        >
+          {copyError}
         </div>
       ) : null}
       <div
@@ -493,7 +588,14 @@ export default function DataGridVirtual(props: Props) {
             {visibleColumns.map((columnIndex) => {
               const value = rowAt(rowIndex)?.[columnIndex];
               const loading = value === undefined && !!props.rowSource;
-              const text = loading ? "…" : display(value);
+              const decodeFailure = failureAt(rowIndex, columnIndex);
+              const text = loading
+                ? "…"
+                : decodeFailure
+                  ? t("grid.decodeFailure", {
+                      type: decodeFailure.databaseType,
+                    })
+                  : display(value);
               const selected = gridSelectionIncludes(
                 selection,
                 rowIndex,
@@ -507,12 +609,13 @@ export default function DataGridVirtual(props: Props) {
                   data-grid-cell={`${rowIndex}:${columnIndex}`}
                   data-grid-focus={`${rowIndex}:${columnIndex + 1}`}
                   data-grid-box
-                  data-null={value === null}
+                  data-null={value === null && !decodeFailure}
+                  data-decode-failure={decodeFailure ? "true" : undefined}
                   data-loading={loading}
                   data-interactive={interactive}
                   data-selected={selected}
                   data-focused={focused}
-                  className="tw:group-data-[selected=true]:!bg-selection tw:data-[null=true]:text-muted-foreground tw:data-[null=true]:italic tw:data-[loading=true]:text-muted-foreground tw:data-[interactive=true]:cursor-pointer tw:data-[selected=true]:!bg-selection tw:data-[focused=true]:shadow-[inset_0_0_0_var(--ds-border-width-strong)_var(--ds-ring)]"
+                  className="tw:group-data-[selected=true]:!bg-selection tw:data-[null=true]:text-muted-foreground tw:data-[null=true]:italic tw:data-[decode-failure=true]:text-danger tw:data-[loading=true]:text-muted-foreground tw:data-[interactive=true]:cursor-pointer tw:data-[selected=true]:!bg-selection tw:data-[focused=true]:shadow-[inset_0_0_0_var(--ds-border-width-strong)_var(--ds-ring)]"
                   role="gridcell"
                   aria-colindex={columnIndex + 2}
                   aria-selected={selected}

@@ -10,6 +10,7 @@ import {
 import type { CatalogTable, QueryResult } from "../../ipc/types";
 import { downloadCsv, downloadJson, stamp } from "../../lib/export";
 import { useI18n } from "../../lib/i18n";
+import { useToast } from "../../components/Toast";
 import Pager from "./Pager";
 import ManualTransactionControls from "../../features/queries/ManualTransactionControls";
 import type { ManualTransactionController } from "../../features/queries/useManualTransaction";
@@ -19,6 +20,7 @@ type Props = {
   result: QueryResult | null;
   canEdit: boolean;
   noEditTitle: string;
+  selectedRowBlockedReason: string | null;
   selected: number | null;
   stagedCount: number;
   activeFilters: number;
@@ -50,11 +52,13 @@ type Props = {
 
 export default function TableToolbar(props: Props) {
   const { t } = useI18n();
+  const toast = useToast();
   const {
     table,
     result,
     canEdit,
     noEditTitle,
+    selectedRowBlockedReason,
     selected,
     stagedCount,
     activeFilters,
@@ -72,6 +76,18 @@ export default function TableToolbar(props: Props) {
   } = props;
   const exportCsv = () => {
     if (!result) return;
+    if (result.decodeFailures?.length) {
+      const failure = result.decodeFailures[0];
+      toast(
+        t("results.decodeFailureExportBlocked", {
+          row: failure.rowIndex + 1,
+          column: failure.columnIndex + 1,
+          type: failure.databaseType,
+        }),
+        "error",
+      );
+      return;
+    }
     downloadCsv(
       `${table.name}-page${page + 1}-${stamp()}`,
       result.columns,
@@ -80,6 +96,18 @@ export default function TableToolbar(props: Props) {
   };
   const exportJson = () => {
     if (!result) return;
+    if (result.decodeFailures?.length) {
+      const failure = result.decodeFailures[0];
+      toast(
+        t("results.decodeFailureExportBlocked", {
+          row: failure.rowIndex + 1,
+          column: failure.columnIndex + 1,
+          type: failure.databaseType,
+        }),
+        "error",
+      );
+      return;
+    }
     downloadJson(
       `${table.name}-page${page + 1}-${stamp()}`,
       result.columns,
@@ -117,8 +145,8 @@ export default function TableToolbar(props: Props) {
               </WorkbenchButton>
               <WorkbenchButton
                 iconOnly
-                disabled={!canEdit || selected == null}
-                title={canEdit ? t("tables.edit") : noEditTitle}
+                disabled={!canEdit || selected == null || !!selectedRowBlockedReason}
+                title={selectedRowBlockedReason ?? (canEdit ? t("tables.edit") : noEditTitle)}
                 aria-label={t("tables.edit")}
                 onClick={() => props.onOpenEdit("edit")}
               >
@@ -126,8 +154,8 @@ export default function TableToolbar(props: Props) {
               </WorkbenchButton>
               <WorkbenchButton
                 iconOnly
-                disabled={!canEdit || selected == null}
-                title={canEdit ? t("tables.delete") : noEditTitle}
+                disabled={!canEdit || selected == null || !!selectedRowBlockedReason}
+                title={selectedRowBlockedReason ?? (canEdit ? t("tables.delete") : noEditTitle)}
                 aria-label={t("tables.delete")}
                 onClick={props.onDelete}
               >
@@ -302,22 +330,24 @@ export default function TableToolbar(props: Props) {
           </ToolbarMenuItem>
           <ToolbarMenuItem
             icon="copy"
-            disabled={!canEdit || selected == null}
-            title={canEdit ? undefined : noEditTitle}
+            disabled={!canEdit || selected == null || !!selectedRowBlockedReason}
+            title={selectedRowBlockedReason ?? (canEdit ? undefined : noEditTitle)}
             onClick={() => props.onOpenEdit("duplicate")}
           >
             {t("tables.duplicate")}
           </ToolbarMenuItem>
           <ToolbarMenuItem
             icon="copy"
-            disabled={selected == null}
+            disabled={selected == null || !!selectedRowBlockedReason}
+            title={selectedRowBlockedReason ?? undefined}
             onClick={() => props.onCopyRow(false)}
           >
             {t("tables.copyTsv")}
           </ToolbarMenuItem>
           <ToolbarMenuItem
             icon="copy"
-            disabled={selected == null}
+            disabled={selected == null || !!selectedRowBlockedReason}
+            title={selectedRowBlockedReason ?? undefined}
             onClick={() => props.onCopyRow(true)}
           >
             {t("tables.copyJson")}

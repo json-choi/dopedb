@@ -12,6 +12,7 @@ import {
   ModalSurface,
 } from "../design-system/components/Modal";
 import { useI18n } from "../lib/i18n";
+import { floatingPortalOwnerId } from "../design-system/floating";
 
 type ConfirmButtonBaseProps = {
   children: ReactNode;
@@ -87,7 +88,10 @@ export default function ConfirmButton({
     <>
       {trigger}
       {open ? (
-        <ModalBackdrop onMouseDown={close}>
+        <ModalBackdrop
+          data-floating-owner-id={floatingPortalOwnerId(triggerRef.current)}
+          onMouseDown={close}
+        >
           <ModalSurface
             id={dialogId}
             size="alert"

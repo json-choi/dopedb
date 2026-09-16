@@ -110,6 +110,17 @@ pub(super) fn query_result(result: &QueryResult) -> QueryResultPage {
     QueryResultPage {
         columns: result.columns.clone(),
         rows: result.rows.clone(),
+        decode_failures: result
+            .decode_failures
+            .iter()
+            .map(
+                |failure| dopedb_protocol::query_command::CellDecodeFailure {
+                    row_index: failure.row_index,
+                    column_index: failure.column_index,
+                    database_type: failure.database_type.clone(),
+                },
+            )
+            .collect(),
         row_count: result.row_count,
         truncated: result.truncated,
         duration_ms: result.duration_ms,
@@ -233,6 +244,9 @@ pub(super) fn map_document_error(error: AgentDocumentReadError) -> ErrorCode {
 
 pub(super) fn map_query_execution_error(error: &AppError) -> ErrorCode {
     match error {
+        AppError::ConnectionFailure(crate::error::ConnectionFailureCode::Cancelled) => {
+            ErrorCode::Cancelled
+        }
         AppError::Timeout(_) | AppError::Db(sqlx::Error::PoolTimedOut) => ErrorCode::Timeout,
         AppError::Db(sqlx::Error::Database(error)) if error.code().as_deref() == Some("57014") => {
             if error.message() == "canceling statement due to statement timeout" {
@@ -251,6 +265,7 @@ pub(super) fn map_query_execution_error(error: &AppError) -> ErrorCode {
 
 pub(super) fn map_target_error(error: AppError) -> ErrorCode {
     match error {
+        AppError::ConnectionFailure(code) => map_connection_failure(code),
         AppError::Blocked { .. } => ErrorCode::ScopeDenied,
         AppError::CredentialBindingRequired
         | AppError::AuthenticationRequired(_)
@@ -274,6 +289,7 @@ pub(super) fn map_operation_error(error: AppError) -> ErrorCode {
 
 pub(super) fn map_application_error(error: AppError) -> ErrorCode {
     match error {
+        AppError::ConnectionFailure(code) => map_connection_failure(code),
         AppError::Blocked { .. } | AppError::SqlPolicyBlocked { .. } => ErrorCode::PolicyBlocked,
         AppError::ProposalRequired => ErrorCode::PolicyBlocked,
         AppError::Safety(_) => ErrorCode::PolicyBlocked,
@@ -294,8 +310,38 @@ pub(super) fn map_application_error(error: AppError) -> ErrorCode {
     }
 }
 
+fn map_connection_failure(code: crate::error::ConnectionFailureCode) -> ErrorCode {
+    use crate::error::ConnectionFailureCode as Code;
+    match code {
+        Code::SshTimeout => ErrorCode::Timeout,
+        Code::Cancelled => ErrorCode::Cancelled,
+        Code::SshClientMissing
+        | Code::SshConfiguration
+        | Code::SshHostKey
+        | Code::SshAuthentication
+        | Code::Authentication
+        | Code::Configuration
+        | Code::Tls => ErrorCode::InvalidRequest,
+        Code::SshForwarding | Code::SshUnknown | Code::Network | Code::Unknown => {
+            ErrorCode::TargetExecutionFailed
+        }
+    }
+}
+
 #[cfg(test)]
 pub(super) fn assert_execution_error_contract() {
+    assert_eq!(
+        map_target_error(AppError::ConnectionFailure(
+            crate::error::ConnectionFailureCode::SshTimeout
+        )),
+        ErrorCode::Timeout
+    );
+    assert_eq!(
+        map_application_error(AppError::ConnectionFailure(
+            crate::error::ConnectionFailureCode::SshHostKey
+        )),
+        ErrorCode::InvalidRequest
+    );
     use std::borrow::Cow;
     use std::error::Error;
 
@@ -369,6 +415,9 @@ pub(super) fn assert_execution_error_contract() {
             map_query_execution_error(&failure()),
             map_target_error(failure()),
             map_application_error(failure()),
+            map_query_execution_error(&failure().public_connection_failure()),
+            map_target_error(failure().public_connection_failure()),
+            map_application_error(failure().public_connection_failure()),
         ] {
             assert_eq!(actual, expected);
             let envelope = ProtocolError::new(actual, false);
@@ -377,11 +426,21 @@ pub(super) fn assert_execution_error_contract() {
             assert!(!wire.contains("private-diagnostic"));
             assert!(!wire.contains(message));
         }
+        let sanitized = serde_json::to_string(&failure().public_connection_failure()).unwrap();
+        assert!(!sanitized.contains("private-diagnostic"));
+        assert!(!sanitized.contains(message));
     }
-    assert_eq!(
+    for actual in [
         map_application_error(AppError::Db(sqlx::Error::PoolTimedOut)),
-        ErrorCode::Timeout,
-    );
+        map_query_execution_error(
+            &AppError::Db(sqlx::Error::PoolTimedOut).public_connection_failure(),
+        ),
+        map_target_error(AppError::Db(sqlx::Error::PoolTimedOut).public_connection_failure()),
+        map_application_error(AppError::Db(sqlx::Error::PoolTimedOut).public_connection_failure()),
+    ] {
+        assert_eq!(actual, ErrorCode::Timeout);
+        assert!(!ProtocolError::new(actual, false).is_retryable());
+    }
 }
 
 #[derive(Clone, Copy)]

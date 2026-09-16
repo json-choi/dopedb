@@ -1,6 +1,5 @@
 import {
   errDetails,
-  type AppErrorDetails,
   type Catalog,
   type CatalogObject,
   type CatalogObjectKind,
@@ -8,6 +7,12 @@ import {
 } from "../../ipc/types";
 import type { ConnectionProfile } from "../connections/domain";
 import type { IconName } from "../../components/Icon";
+import type { I18nKey } from "../../lib/i18n";
+
+type Translate = (
+  key: I18nKey,
+  vars?: Record<string, string | number>,
+) => string;
 
 export type DropTarget =
   | { kind: "connection"; id: string }
@@ -36,23 +41,160 @@ export type ProjectDatabaseOrderDrag = {
   nextBlockBindingId: string | null;
 };
 
-export type CatalogLoadIssue = Pick<AppErrorDetails, "kind" | "message">;
+export const CATALOG_LOAD_ISSUE_CODES = [
+  "sshClientMissing",
+  "sshConfiguration",
+  "sshHostKey",
+  "sshAuthentication",
+  "sshForwarding",
+  "sshTimeout",
+  "sshUnknown",
+  "connectionNetwork",
+  "connectionTls",
+  "connectionAuthentication",
+  "connectionConfiguration",
+  "connectionUnknown",
+  "cancelled",
+  "credentialBindingRequired",
+  "authenticationRequired",
+  "managedConnectionRecoveryRequired",
+  "blocked",
+  "network",
+  "timeout",
+  "notFound",
+  "unknown",
+] as const;
+
+export type CatalogLoadIssueCode =
+  (typeof CATALOG_LOAD_ISSUE_CODES)[number];
+
+/** Safe identity only: backend message text must not enter Explorer state or UI. */
+export type CatalogLoadIssue = Readonly<{ code: CatalogLoadIssueCode }>;
+
+const CATALOG_LOAD_ISSUE_CODE_SET = new Set<string>(
+  CATALOG_LOAD_ISSUE_CODES,
+);
+
+function normalizedCatalogIssueCode(kind: string | null): CatalogLoadIssueCode {
+  if (kind && CATALOG_LOAD_ISSUE_CODE_SET.has(kind)) {
+    return kind as CatalogLoadIssueCode;
+  }
+  if (kind === "config") return "connectionConfiguration";
+  if (kind === "safety") return "blocked";
+  return "unknown";
+}
+
+export function isCatalogLoadIssue(error: unknown): error is CatalogLoadIssue {
+  if (!error || typeof error !== "object" || !("code" in error)) return false;
+  return typeof error.code === "string"
+    && CATALOG_LOAD_ISSUE_CODE_SET.has(error.code);
+}
 
 export function catalogLoadIssue(error: unknown): CatalogLoadIssue {
-  const { kind, message } = errDetails(error);
-  return { kind, message };
+  if (isCatalogLoadIssue(error)) return { code: error.code };
+  return { code: normalizedCatalogIssueCode(errDetails(error).kind) };
+}
+
+/** Drops raw transport/driver text before TanStack Query retains a failure. */
+export async function readWithCatalogIssue<T>(
+  read: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await read();
+  } catch (error) {
+    throw catalogLoadIssue(error);
+  }
+}
+
+export function isTransientCatalogIssue(error: unknown): boolean {
+  const { code } = catalogLoadIssue(error);
+  return code === "network"
+    || code === "timeout"
+    || code === "connectionNetwork"
+    || code === "sshTimeout";
+}
+
+export function retryTransientCatalogIssue(
+  failureCount: number,
+  error: unknown,
+): boolean {
+  return failureCount < 3 && isTransientCatalogIssue(error);
+}
+
+export type CatalogIssueAction =
+  | "retry"
+  | "edit"
+  | "resolveCredentials"
+  | "recoverAuthentication"
+  | "recoverManaged";
+
+export function catalogLoadIssueMessage(
+  t: Translate,
+  issue: CatalogLoadIssue,
+): string {
+  switch (issue.code) {
+    case "sshClientMissing": return t("connections.testFailure.sshClientMissingTitle");
+    case "sshConfiguration": return t("connections.testFailure.sshConfigurationTitle");
+    case "sshHostKey": return t("connections.testFailure.sshHostKeyTitle");
+    case "sshAuthentication": return t("connections.testFailure.sshAuthenticationTitle");
+    case "sshForwarding": return t("connections.testFailure.sshForwardingTitle");
+    case "sshTimeout": return t("connections.testFailure.sshTimeoutTitle");
+    case "sshUnknown": return t("connections.testFailure.sshUnknownTitle");
+    case "connectionNetwork": return t("connections.testFailure.timeoutNetworkTitle");
+    case "connectionTls": return t("connections.testFailure.tlsTitle");
+    case "connectionAuthentication": return t("connections.testFailure.authenticationTitle");
+    case "connectionConfiguration": return t("connections.testFailure.databaseConfigTitle");
+    case "connectionUnknown": return t("connections.testFailure.unknownTitle");
+    case "cancelled": return t("connections.catalogIssue.cancelled");
+    case "credentialBindingRequired": return t("workspace.credentialsRequiredBody");
+    case "authenticationRequired": return t("connections.bigQueryAuthenticationExpired");
+    case "managedConnectionRecoveryRequired": return t("connections.catalogIssue.managed");
+    case "blocked": return t("connections.catalogIssue.blocked");
+    case "network": return t("connections.catalogIssue.network");
+    case "timeout": return t("connections.catalogIssue.timeout");
+    case "notFound": return t("connections.catalogIssue.notFound");
+    case "unknown": return t("connections.catalogIssue.unknown");
+  }
+}
+
+export function catalogLoadIssueAction(
+  issue: CatalogLoadIssue,
+): CatalogIssueAction | null {
+  switch (issue.code) {
+    case "credentialBindingRequired": return "resolveCredentials";
+    case "authenticationRequired": return "recoverAuthentication";
+    case "managedConnectionRecoveryRequired": return "recoverManaged";
+    case "network":
+    case "timeout":
+    case "connectionNetwork": return "retry";
+    case "sshClientMissing":
+    case "sshConfiguration":
+    case "sshHostKey":
+    case "sshAuthentication":
+    case "sshForwarding":
+    case "sshTimeout":
+    case "sshUnknown":
+    case "connectionTls":
+    case "connectionAuthentication":
+    case "connectionConfiguration":
+    case "connectionUnknown": return "edit";
+    case "blocked":
+    case "cancelled":
+    case "notFound":
+    case "unknown": return null;
+  }
 }
 
 export function isAuthenticationRequired(
   issue: CatalogLoadIssue | undefined,
 ): boolean {
-  return issue?.kind === "authenticationRequired";
+  return issue?.code === "authenticationRequired";
 }
 
 export function isManagedConnectionRecoveryRequired(
   issue: CatalogLoadIssue | undefined,
 ): boolean {
-  return issue?.kind === "managedConnectionRecoveryRequired";
+  return issue?.code === "managedConnectionRecoveryRequired";
 }
 
 /** One failed backend read may feed both overview and detail observers. */
@@ -60,7 +202,7 @@ export function distinctCatalogDetailIssue(
   overview: CatalogLoadIssue | undefined,
   detail: CatalogLoadIssue | undefined,
 ): CatalogLoadIssue | undefined {
-  return detail?.kind === overview?.kind && detail?.message === overview?.message
+  return detail?.code === overview?.code
     ? undefined
     : detail;
 }

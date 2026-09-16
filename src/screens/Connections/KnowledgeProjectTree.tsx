@@ -34,8 +34,11 @@ import {
   preferredProjectEnvironment,
   projectResourceKey,
 } from "../../features/catalogExplorer/projectResources";
+import {
+  catalogLoadIssue,
+  catalogLoadIssueMessage,
+} from "../../features/catalogExplorer/catalogDomain";
 import type { AnalysisArticleRecord } from "../../features/analysisArticles/domain";
-import { errMessage } from "../../ipc/types";
 import { useI18n } from "../../lib/i18n";
 import type { QueryResultPhase } from "../../lib/queryResultPhase";
 
@@ -371,7 +374,10 @@ function KnowledgeProjectResources({
           environmentConnectionsPhase === "staleError" ? (
             <TreeLoadFailure
               message={t("connections.environmentDatabaseLoadFailed")}
-              detail={errMessage(environmentConnectionsError)}
+              detail={catalogLoadIssueMessage(
+                t,
+                catalogLoadIssue(environmentConnectionsError),
+              )}
               retryLabel={t("app.retry")}
               treeItem={{
                 key: `${databaseTreeKey}:retry`,
@@ -461,7 +467,10 @@ function KnowledgeProjectResources({
           {sourcesPhase === "coldError" || sourcesPhase === "staleError" ? (
             <TreeLoadFailure
               message={t("connections.environmentSourceLoadFailed")}
-              detail={errMessage(sourcesError)}
+              detail={catalogLoadIssueMessage(
+                t,
+                catalogLoadIssue(sourcesError),
+              )}
               retryLabel={t("app.retry")}
               treeItem={{
                 key: `${sourceTreeKey}:retry`,
@@ -544,7 +553,13 @@ function KnowledgeProjectResources({
           {analysisErrors.length > 0 ? (
             <TreeLoadFailure
               message={t("connections.environmentAnalysisLoadFailed")}
-              detail={analysisErrors.map(errMessage).join("\n")}
+              detail={[
+                ...new Set(
+                  analysisErrors.map((error) =>
+                    catalogLoadIssueMessage(t, catalogLoadIssue(error)),
+                  ),
+                ),
+              ].join(" · ")}
               retryLabel={t("app.retry")}
               treeItem={{
                 key: `${analysisTreeKey}:retry`,

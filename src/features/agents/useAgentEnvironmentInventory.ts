@@ -5,6 +5,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { errMessage } from "../../ipc/types";
+import { catalogLoadIssue, catalogLoadIssueMessage } from "../catalogExplorer/catalogDomain";
 import { useI18n } from "../../lib/i18n";
 import {
   connectionId as asConnectionId,
@@ -260,9 +261,9 @@ export function useAgentEnvironmentInventory({
   }, [choices, connection.id, connectionById, knowledgeInventory.data]);
 
   const loadError = environmentConnectionsQuery.isError
-    ? errMessage(environmentConnectionsQuery.error)
+    ? catalogLoadIssueMessage(t, catalogLoadIssue(environmentConnectionsQuery.error))
     : knowledgeInventory.isError
-      ? errMessage(knowledgeInventory.error)
+      ? catalogLoadIssueMessage(t, catalogLoadIssue(knowledgeInventory.error))
       : null;
 
   const ensureAvailable = useCallback(

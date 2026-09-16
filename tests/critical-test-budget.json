@@ -108,8 +108,8 @@
     "workspace-cloud/lib/control-plane-contracts.harness.ts": {
       "role": "entry-point",
       "runner": "workspace-cloud/vitest.contracts.config.ts",
-      "tests": 8,
-      "protects": "Desktop control-plane wire contracts: connection conflict decisions, the dedicated expected-revision header and its malformed-value rejection, the Vault dynamic database credential allowlist with bounded issue, synchronous revoke and queued cleanup of an unsafe lease, GitHub installation nonce and installation-id binding to an exact PKCE callback, and strict sync, lease and Analysis Article goldens decoded identically to Rust"
+      "tests": 9,
+      "protects": "Desktop control-plane wire contracts: exact Workspace settings deep links never fall back across account, Workspace, connection, integration, or setup scope; connection conflict decisions; the dedicated expected-revision header and its malformed-value rejection; the Vault dynamic database credential allowlist with bounded issue, synchronous revoke and queued cleanup of an unsafe lease; GitHub installation nonce and installation-id binding to an exact PKCE callback; and strict sync, lease and Analysis Article goldens decoded identically to Rust"
     },
     "workspace-cloud/lib/d1-storage.harness.ts": {
       "role": "entry-point",

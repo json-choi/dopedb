@@ -1,5 +1,9 @@
 import DataGrid from "../queryResults/DataGrid";
-import type { JsonValue, QueryResult } from "../../ipc/types";
+import type {
+  CellDecodeFailure,
+  JsonValue,
+  QueryResult,
+} from "../../ipc/types";
 
 const MAX_COLUMNS = 18;
 const MAX_ROWS = 100;
@@ -16,7 +20,7 @@ export default function AcpStructuredResult({ value }: { value: unknown }) {
   );
 }
 
-function tabularResult(value: unknown): QueryResult | null {
+export function tabularResult(value: unknown): QueryResult | null {
   const candidate = unwrapResult(value);
   if (Array.isArray(candidate)) {
     const objects = candidate.filter(isRecord);
@@ -50,9 +54,15 @@ function tabularResult(value: unknown): QueryResult | null {
       .map((row) =>
         row.slice(0, columns.length).map((cell) => toJsonValue(cell)),
       );
+    const decodeFailures = parseDecodeFailures(
+      candidate.decodeFailures,
+      rows,
+      columns.length,
+    );
     return {
       columns,
       rows,
+      decodeFailures,
       rowCount: rows.length,
       durationMs:
         typeof candidate.durationMs === "number" ? candidate.durationMs : 0,
@@ -63,6 +73,34 @@ function tabularResult(value: unknown): QueryResult | null {
     };
   }
   return null;
+}
+
+function parseDecodeFailures(
+  value: unknown,
+  rows: readonly (readonly JsonValue[])[],
+  columnCount: number,
+): CellDecodeFailure[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    if (
+      !isRecord(entry) ||
+      !Number.isSafeInteger(entry.rowIndex) ||
+      !Number.isSafeInteger(entry.columnIndex) ||
+      typeof entry.databaseType !== "string"
+    )
+      return [];
+    const rowIndex = entry.rowIndex as number;
+    const columnIndex = entry.columnIndex as number;
+    if (
+      rowIndex < 0 ||
+      rowIndex >= rows.length ||
+      columnIndex < 0 ||
+      columnIndex >= columnCount ||
+      rows[rowIndex]?.[columnIndex] !== null
+    )
+      return [];
+    return [{ rowIndex, columnIndex, databaseType: entry.databaseType }];
+  });
 }
 
 function unwrapResult(value: unknown): unknown {

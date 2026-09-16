@@ -8,7 +8,7 @@ import type {
   ReactNode,
   RefObject,
 } from "react";
-import { useEffect, useId } from "react";
+import { useCallback, useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
 
 import {
@@ -16,6 +16,10 @@ import {
   floatingPortalIsModalOwned,
   useAnchoredFloatingSurface,
 } from "../floating";
+import {
+  type MenuInitialFocus,
+  useMenuInteractions,
+} from "../menuInteraction";
 
 type PopupMenuPlacement = "bottom-end" | "right-end" | "top-start";
 
@@ -28,6 +32,8 @@ export function PopupMenu({
   ariaLabel,
   onClick,
   onKeyDown,
+  initialFocus = null,
+  onRequestClose,
   onReferenceHidden,
 }: {
   id?: string;
@@ -38,10 +44,13 @@ export function PopupMenu({
   ariaLabel?: string;
   onClick?: MouseEventHandler<HTMLDivElement>;
   onKeyDown?: KeyboardEventHandler<HTMLDivElement>;
+  initialFocus?: MenuInitialFocus;
+  onRequestClose?: () => void;
   onReferenceHidden?: () => void;
 }) {
   const generatedId = useId();
   const menuId = id ?? `popup-menu-${generatedId.replace(/:/g, "")}`;
+  const menuRef = useRef<HTMLDivElement>(null);
   const {
     refs,
     floatingStyles,
@@ -49,6 +58,21 @@ export function PopupMenu({
     isPositioned,
     middlewareData,
   } = useAnchoredFloatingSurface({ open: true, placement });
+  const setMenu = useCallback(
+    (node: HTMLDivElement | null) => {
+      menuRef.current = node;
+      refs.setFloating(node);
+    },
+    [refs],
+  );
+  const interactions = useMenuInteractions({
+    open: true,
+    ready: isPositioned,
+    menuRef,
+    triggerRef: anchorRef,
+    initialFocus,
+    onRequestClose: () => onRequestClose?.(),
+  });
 
   useEffect(() => {
     refs.setReference(anchorRef.current);
@@ -63,7 +87,7 @@ export function PopupMenu({
   if (typeof document === "undefined") return null;
   return createPortal(
     <div
-      ref={refs.setFloating}
+      ref={setMenu}
       id={menuId}
       role="menu"
       aria-label={ariaLabel}
@@ -77,8 +101,14 @@ export function PopupMenu({
         ...floatingStyles,
         visibility: isPositioned ? "visible" : "hidden",
       }}
-      onClick={onClick}
-      onKeyDown={onKeyDown}
+      onClick={(event) => {
+        interactions.onClick(event);
+        onClick?.(event);
+      }}
+      onKeyDown={(event) => {
+        interactions.onKeyDown(event);
+        onKeyDown?.(event);
+      }}
     >
       {children}
     </div>,
@@ -106,6 +136,8 @@ export function PopupMenuItem({
 
 export function PopupMenuCheckbox({
   children,
+  checked,
+  disabled,
   ...props
 }: {
   children: ReactNode;
@@ -115,11 +147,20 @@ export function PopupMenuCheckbox({
 >) {
   return (
     <label
-      role="menuitemcheckbox"
-      aria-checked={Boolean(props.checked)}
-      className="tw:flex tw:min-h-control-md tw:cursor-pointer tw:items-center tw:gap-2 tw:rounded-sm tw:px-2 tw:text-sm tw:leading-body tw:text-foreground tw:hover:bg-muted"
+      data-checked={Boolean(checked)}
+      data-disabled={Boolean(disabled)}
+      className="tw:flex tw:min-h-control-md tw:cursor-pointer tw:items-center tw:gap-2 tw:rounded-sm tw:px-2 tw:text-sm tw:leading-body tw:text-foreground tw:data-[checked=true]:bg-selection tw:data-[checked=true]:text-selection-foreground tw:data-[disabled=true]:cursor-default tw:data-[disabled=true]:opacity-40 tw:hover:bg-muted"
     >
-      <input type="checkbox" className="tw:size-4 tw:accent-primary" {...props} />
+      <input
+        {...props}
+        type="checkbox"
+        role="menuitemcheckbox"
+        aria-checked={Boolean(checked)}
+        aria-disabled={Boolean(disabled)}
+        checked={checked}
+        disabled={disabled}
+        className="tw:size-4 tw:accent-primary"
+      />
       <span>{children}</span>
     </label>
   );

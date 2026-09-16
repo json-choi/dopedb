@@ -8,6 +8,10 @@ import type {
 } from "../../ipc/types";
 import { errMessage } from "../../ipc/types";
 import type { ConnectionProfile } from "../../features/connections/domain";
+import {
+  catalogLoadIssue,
+  catalogLoadIssueMessage,
+} from "../../features/catalogExplorer/catalogDomain";
 import { approveOperation, rejectOperation } from "../../features/operations/tauriAdapter";
 import { runScript } from "../../features/queries/tauriAdapter";
 import { proposeTableChanges } from "../../features/tableData/tauriAdapter";
@@ -49,6 +53,7 @@ import TableExpressionBar from "./TableExpressionBar";
 import TableStructure from "./TableStructure";
 import TableToolbar from "./TableToolbar";
 import { useManualTransaction } from "../../features/queries/useManualTransaction";
+import { firstDecodeFailureInRow } from "../../features/queryResults/decodeFailures";
 
 export default function SqlTableData({
   connection,
@@ -217,6 +222,16 @@ export default function SqlTableData({
   }
 
   const selRow = selected != null && result ? result.rows[selected] : null;
+  const selectedDecodeFailure =
+    selected == null
+      ? undefined
+      : firstDecodeFailureInRow(result?.decodeFailures, selected);
+  const selectedRowBlockedReason = selectedDecodeFailure
+    ? t("tables.decodeFailureRowBlocked", {
+        column: selectedDecodeFailure.columnIndex + 1,
+        type: selectedDecodeFailure.databaseType,
+      })
+    : null;
 
   function rowMap(row: unknown[]): Record<string, string | null> {
     const m: Record<string, string | null> = {};
@@ -225,6 +240,10 @@ export default function SqlTableData({
   }
 
   function openEdit(mode: RowEditorState["mode"]) {
+    if (mode !== "insert" && selectedRowBlockedReason) {
+      toast(selectedRowBlockedReason, "error");
+      return;
+    }
     const nextEditor =
       mode === "insert"
         ? { mode, initial: {} }
@@ -241,6 +260,10 @@ export default function SqlTableData({
   // Open a readable confirm (PK pairs) instead of staging a DELETE immediately —
   // Delete sits next to Duplicate, so a mis-click shouldn't be one approval from a wipe.
   function doDelete() {
+    if (selectedRowBlockedReason) {
+      toast(selectedRowBlockedReason, "error");
+      return;
+    }
     if (!selRow || !result) return;
     const pkVals: Record<string, string | null> = {};
     for (const c of pkColumns(table)) {
@@ -284,6 +307,10 @@ export default function SqlTableData({
   }
 
   function copyRow(asJson: boolean) {
+    if (selectedRowBlockedReason) {
+      toast(selectedRowBlockedReason, "error");
+      return;
+    }
     if (!selRow || !result) return;
     const text = asJson
       ? JSON.stringify(
@@ -312,7 +339,7 @@ export default function SqlTableData({
     if (!fingerprint) {
       commands.patch({
         writeError: snapshotQuery.error
-          ? errMessage(snapshotQuery.error)
+          ? catalogLoadIssueMessage(t, catalogLoadIssue(snapshotQuery.error))
           : t("tables.catalogRequired"),
       });
       return;
@@ -412,6 +439,7 @@ export default function SqlTableData({
         result={result}
         canEdit={canEdit}
         noEditTitle={noEditTitle}
+        selectedRowBlockedReason={selectedRowBlockedReason}
         selected={selected}
         stagedCount={staged.length}
         activeFilters={activeFilters}
@@ -504,7 +532,10 @@ export default function SqlTableData({
             )}
           >
             {t("tables.catalogLoadFailed", {
-              error: errMessage(catalogQuery.error),
+              error: catalogLoadIssueMessage(
+                t,
+                catalogLoadIssue(catalogQuery.error),
+              ),
             })}
           </InlineNotice>
         ) : null}
@@ -526,8 +557,34 @@ export default function SqlTableData({
                 filters={filters}
                 onFilter={commands.filter}
                 selectedRow={selected}
-                onSelectRow={(selectedRow) => commands.patch({ selectedRow })}
+                onSelectRow={(selectedRow) => {
+                  commands.patch({ selectedRow, selectedCell: null });
+                  if (
+                    firstDecodeFailureInRow(
+                      result.decodeFailures,
+                      selectedRow,
+                    )
+                  ) {
+                    agentSelection.clear();
+                  }
+                }}
                 onCellClick={(value, i, column) => {
+                  const failure = firstDecodeFailureInRow(
+                    result.decodeFailures,
+                    i,
+                  );
+                  if (failure) {
+                    commands.patch({ selectedCell: null });
+                    agentSelection.clear();
+                    toast(
+                      t("tables.decodeFailureRowBlocked", {
+                        column: failure.columnIndex + 1,
+                        type: failure.databaseType,
+                      }),
+                      "error",
+                    );
+                    return;
+                  }
                   commands.patch({
                     selectedRow: i,
                     selectedCell: { value, column },

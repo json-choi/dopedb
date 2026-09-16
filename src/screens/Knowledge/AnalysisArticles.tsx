@@ -16,7 +16,7 @@ import { useAnalysisArticlesController } from "../../features/analysisArticles/u
 import type { EnvironmentConnection, KnowledgeEnvironment } from "../../features/knowledge/domain";
 import { Button } from "../../design-system/components/Button";
 import { ModalBackdrop, ModalFooter, ModalHeader, ModalSurface } from "../../design-system/components/Modal";
-import { errMessage } from "../../ipc/types";
+import { catalogLoadIssue, catalogLoadIssueAction, catalogLoadIssueMessage } from "../../features/catalogExplorer/catalogDomain";
 import { AnalysisArticleReader } from "../../features/analysisArticles/AnalysisArticleReader";
 import ToolbarMenu, { ToolbarMenuItem } from "../../components/ToolbarMenu";
 import { InlineNotice, LoadingLabel, StatusBadge } from "../../design-system/components/Status";
@@ -134,7 +134,7 @@ export default function AnalysisArticles({
       ) : null}
 
       <main className="tw:flex tw:min-h-0 tw:min-w-0 tw:flex-1 tw:flex-col tw:overflow-hidden">
-        {!selected && controller.articles.isPending ? <div className="tw:p-8"><LoadingLabel>{t("analysis.loading")}</LoadingLabel></div> : !selected && controller.articles.isError ? <WorkbenchEmptyState icon="alert"><strong>{t("analysis.loadFailed")}</strong><span>{errMessage(controller.articles.error)}</span><Button onClick={() => void controller.articles.refetch()}>{t("analysis.refresh")}</Button></WorkbenchEmptyState> : !selected ? (
+        {!selected && controller.articles.isPending ? <div className="tw:p-8"><LoadingLabel>{t("analysis.loading")}</LoadingLabel></div> : !selected && controller.articles.isError ? <WorkbenchEmptyState icon="alert"><strong>{t("analysis.loadFailed")}</strong><span>{catalogLoadIssueMessage(t, catalogLoadIssue(controller.articles.error))}</span>{catalogLoadIssueAction(catalogLoadIssue(controller.articles.error)) === "retry" ? <Button onClick={() => void controller.articles.refetch()}>{t("analysis.refresh")}</Button> : null}</WorkbenchEmptyState> : !selected ? (
           <WorkbenchEmptyState icon="chart">
             <strong>{projectName}</strong>
             <span>{t("analysis.simpleEmptyBody")}</span>

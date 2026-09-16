@@ -15,6 +15,10 @@ import type {
 } from "../../ipc/types";
 import { errMessage } from "../../ipc/types";
 import type { ConnectionProfile } from "../../features/connections/domain";
+import {
+  catalogLoadIssue,
+  catalogLoadIssueMessage,
+} from "../../features/catalogExplorer/catalogDomain";
 import DataGrid from "../../features/queryResults/DataGrid";
 import { Icon } from "../../components/Icon";
 import ResultToolbar from "../../features/queryResults/ResultToolbar";
@@ -336,7 +340,12 @@ export default function Documents({
               catalogPhase === "staleError"
                 ? "documents.catalogRefreshFailed"
                 : "documents.catalogLoadFailed",
-              { error: errMessage(catalog.error) },
+              {
+                error: catalogLoadIssueMessage(
+                  t,
+                  catalogLoadIssue(catalog.error),
+                ),
+              },
             )}
           </InlineNotice>
         ) : catalogPhase === "coldLoading" ? (

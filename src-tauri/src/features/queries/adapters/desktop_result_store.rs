@@ -175,12 +175,20 @@ impl DesktopSqlResultWriter {
     ) -> Result<(), DesktopSqlStreamSinkError> {
         if batch.operation_id != self.operation_id
             || batch.sequence != self.pages.len() as u64
+            || batch.row_start != self.row_count
             || batch.rows.len() > RESULT_PAGE_ROWS
             || encoded.len() > DESKTOP_STREAM_BATCH_MAX_BYTES
             || batch
                 .rows
                 .iter()
                 .any(|row| row.len() != batch.columns.len())
+            || batch.decode_failures.iter().any(|failure| {
+                failure.row_index < self.row_count
+                    || failure.row_index >= self.row_count.saturating_add(batch.rows.len())
+                    || failure.column_index >= batch.columns.len()
+                    || batch.rows[failure.row_index - self.row_count][failure.column_index]
+                        != serde_json::Value::Null
+            })
         {
             return Err(DesktopSqlStreamSinkError::BatchTooLarge);
         }
@@ -419,10 +427,20 @@ impl DesktopSqlResultStore {
                 })
             }
             Err(error) => {
-                let _ = fs::remove_file(&partial);
+                remove_partial_export(&partial)?;
                 Err(error)
             }
         }
+    }
+}
+
+fn remove_partial_export(path: &Path) -> AppResult<()> {
+    match fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(AppError::OutcomeUnknown(format!(
+            "SQL result export failed and partial output cleanup could not be confirmed: {error}"
+        ))),
     }
 }
 
@@ -455,6 +473,7 @@ fn export_manifest(
                     operation_id,
                 )
                 .map_err(|error| AppError::Safety(error.to_string()))?;
+                ensure_page_exportable(&batch)?;
                 for row in batch.rows {
                     writer
                         .write_record(row.iter().map(csv_cell))
@@ -486,6 +505,7 @@ fn export_manifest(
                     operation_id,
                 )
                 .map_err(|error| AppError::Safety(error.to_string()))?;
+                ensure_page_exportable(&batch)?;
                 for row in batch.rows {
                     if rows_written > 0 {
                         writer.write_all(b",")?;
@@ -520,6 +540,20 @@ fn export_manifest(
     Ok(rows_written)
 }
 
+fn ensure_page_exportable(batch: &DesktopSqlStreamBatch) -> AppResult<()> {
+    if let Some(failure) = batch.decode_failures.first() {
+        return Err(AppError::Blocked {
+            reason: format!(
+                "SQL result export blocked: cell at row {}, column {} could not be decoded as {}",
+                failure.row_index + 1,
+                failure.column_index + 1,
+                failure.database_type
+            ),
+        });
+    }
+    Ok(())
+}
+
 fn csv_cell(value: &serde_json::Value) -> String {
     match value {
         serde_json::Value::Null => String::new(),
@@ -541,4 +575,118 @@ fn ensure_export_open(cancelled: &AtomicBool) -> AppResult<()> {
     } else {
         Ok(())
     }
+}
+
+#[cfg(test)]
+pub(crate) fn assert_decode_failure_export_contract() {
+    let operation_id = Uuid::new_v4().into();
+    let capability = "a".repeat(64);
+    let owner_webview = "test-result-export";
+    let mut writer = DesktopSqlResultWriter::begin_with_authority(
+        operation_id,
+        Uuid::new_v4(),
+        "test-account",
+        Uuid::new_v4(),
+        1,
+        owner_webview,
+        &capability,
+    )
+    .expect("begin isolated persisted result");
+    struct TestResultCleanup {
+        partial: PathBuf,
+        completed: PathBuf,
+    }
+    impl Drop for TestResultCleanup {
+        fn drop(&mut self) {
+            if self.partial.exists() {
+                let _ = remove_result_directory(&self.partial);
+            }
+            if self.completed.exists() {
+                let _ = remove_result_directory(&self.completed);
+            }
+        }
+    }
+    let _result_cleanup = TestResultCleanup {
+        partial: writer.partial_directory.clone(),
+        completed: writer.final_directory.clone(),
+    };
+    let ordinary = DesktopSqlStreamBatch {
+        operation_id,
+        sequence: 0,
+        row_start: 0,
+        columns: vec!["value".into()],
+        rows: vec![vec![serde_json::json!("<unsupported: geometry>")]],
+        decode_failures: Vec::new(),
+    };
+    assert!(ensure_page_exportable(&ordinary).is_ok());
+
+    let failed = DesktopSqlStreamBatch {
+        operation_id,
+        sequence: 1,
+        row_start: 1,
+        columns: vec!["value".into()],
+        rows: vec![vec![serde_json::Value::Null]],
+        decode_failures: vec![crate::model::CellDecodeFailure {
+            row_index: 1,
+            column_index: 0,
+            database_type: "geometry".into(),
+        }],
+    };
+    for batch in [&ordinary, &failed] {
+        let encoded = serde_json::to_vec(batch).expect("encode persisted result page");
+        writer
+            .write_page(batch, &encoded)
+            .expect("persist result page");
+    }
+    writer
+        .complete(2, false, 1)
+        .expect("publish result manifest");
+
+    let output_directory = tempfile::tempdir().expect("create isolated export directory");
+    let store = DesktopSqlResultStore::default();
+    for (format, extension) in [
+        (DesktopSqlResultExportFormat::Csv, "csv"),
+        (DesktopSqlResultExportFormat::Json, "json"),
+    ] {
+        let destination = output_directory
+            .path()
+            .join(format!("existing.{extension}"));
+        fs::write(&destination, b"preserve-existing-output")
+            .expect("write pre-existing destination");
+        let export_id = Uuid::new_v4();
+        let partial = output_directory
+            .path()
+            .join(format!(".dopedb-result-{export_id}.partial"));
+        let cancelled = store
+            .start_export(export_id, operation_id, &capability, owner_webview)
+            .expect("authorize persisted result export");
+        let error = store
+            .export_to_path(
+                export_id,
+                operation_id,
+                &capability,
+                owner_webview,
+                format,
+                destination.clone(),
+                cancelled,
+                |_| Ok(()),
+            )
+            .expect_err("failed cell blocks persisted export");
+        store.finish_export(export_id);
+        assert!(error
+            .to_string()
+            .contains("could not be decoded as geometry"));
+        assert_eq!(
+            fs::read(&destination).expect("read preserved destination"),
+            b"preserve-existing-output"
+        );
+        assert!(!partial.exists(), "failed export partial must be removed");
+    }
+
+    let cleanup_directory = output_directory.path().join("cleanup.partial");
+    fs::create_dir(&cleanup_directory).expect("create non-file cleanup target");
+    let cleanup_error = remove_partial_export(&cleanup_directory)
+        .expect_err("unconfirmed partial cleanup fails closed");
+    assert!(matches!(cleanup_error, AppError::OutcomeUnknown(_)));
+    fs::remove_dir(cleanup_directory).expect("remove cleanup target");
 }

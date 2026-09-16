@@ -91,9 +91,19 @@ impl CommandSpec for QueryRunCommand {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CellDecodeFailure {
+    pub row_index: usize,
+    pub column_index: usize,
+    pub database_type: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct QueryResultPage {
     pub columns: Vec<String>,
     pub rows: Vec<Vec<Value>>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub decode_failures: Vec<CellDecodeFailure>,
     pub row_count: usize,
     pub truncated: bool,
     pub duration_ms: u64,

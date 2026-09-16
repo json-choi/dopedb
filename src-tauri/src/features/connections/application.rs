@@ -361,14 +361,19 @@ where
                 "SQLite files have one configured database scope".into(),
             ));
         }
-        self.drivers.validate(&profile)?;
+        self.drivers
+            .validate(&profile)
+            .map_err(AppError::public_connection_failure)?;
         let password = password.unwrap_or_default();
         if password.len() > MAX_CONNECTION_CREDENTIAL_BYTES {
             return Err(AppError::Config(
                 "connection credential exceeds the size limit".into(),
             ));
         }
-        self.tester.discover_databases(&profile, password).await
+        self.tester
+            .discover_databases(&profile, password)
+            .await
+            .map_err(AppError::public_connection_failure)
     }
 
     pub(crate) async fn list_agent_summaries(&self) -> AppResult<Vec<AgentConnectionSummary>> {

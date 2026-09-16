@@ -137,6 +137,27 @@ impl AnalysisReadExecutionPort for DesktopAnalysisReadExecution {
                 return Err(error);
             }
         };
+        if let Some(failure) = result.decode_failures.first() {
+            let error = AppError::Blocked {
+                reason: format!(
+                    "Analysis Article run blocked: cell at row {}, column {} could not be decoded as {}",
+                    failure.row_index + 1,
+                    failure.column_index + 1,
+                    failure.database_type
+                ),
+            };
+            record_query(
+                &self.store,
+                &pin,
+                sql,
+                "error",
+                Some(result.row_count as i64),
+                Some(result.duration_ms as i64),
+                Some(error.to_string()),
+            )
+            .await;
+            return Err(error);
+        }
         if let Err(error) =
             validate_query_result_columns(&request.query.columns, &result, &request.query.id)
         {
