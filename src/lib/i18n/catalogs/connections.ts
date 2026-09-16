@@ -903,7 +903,7 @@ export const connectionsCatalog = defineCatalog(
     "connections.seconds": "초",
     "connections.schemaDiffInSync": "기준 DB와 스키마가 같습니다",
     "connections.schemaDiffMissingSection": "이 환경에 없음 ({count})",
-    "connections.schemaDiffPendingChip": "diff",
+    "connections.schemaDiffPendingChip": "비교",
     "connections.schemaDiffPendingTitle": "스키마 비교 화면을 열면 이 DB를 불러옵니다",
     "connections.schemaDiffTableAdded": "이 DB에만 있으며 기준 DB에는 없습니다",
     "connections.schemaDiffTableChanged":

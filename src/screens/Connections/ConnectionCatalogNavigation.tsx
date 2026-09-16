@@ -264,7 +264,7 @@ export function ConnectionCatalogNavigation({
                     ? "connections.searchDataSources"
                     : "connections.searchDrivers",
                 )}
-                clearLabel={t("common.close")}
+                clearLabel={t("common.clearSearch")}
                 onChange={
                   navigation.view === "dataSources"
                     ? sources.setSearch

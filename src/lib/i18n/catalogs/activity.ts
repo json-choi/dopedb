@@ -78,9 +78,9 @@ export const activityCatalog = defineCatalog(
     "activity.auditDetails": "보안 세부 기록",
     "activity.auditDetailsCount": "보안 세부 기록 ({count})",
     "activity.auditEmpty": "아직 감사 기록이 없습니다.",
-    "activity.auditHash": "hash {hash}",
+    "activity.auditHash": "해시 {hash}",
     "activity.auditLoadError": "보안 세부 기록을 불러오지 못했습니다: {error}",
-    "activity.auditPrev": "prev {hash}",
+    "activity.auditPrev": "이전 {hash}",
     "activity.auditRecordsDescription":
       "실행 시도, 정책 판단, Agent 작업 메타데이터와 해시 연결입니다.",
     "activity.auditRowsEstimate": "~{count}행",

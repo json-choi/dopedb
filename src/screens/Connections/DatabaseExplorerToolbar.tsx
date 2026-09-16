@@ -126,7 +126,7 @@ export function DatabaseExplorerToolbar({
             <TreeSearch
               value={globalFilter}
               placeholder={t("connections.filterLoadedObjectsPlaceholder")}
-              clearLabel={t("common.close")}
+              clearLabel={t("common.clearSearch")}
               onChange={onFilterChange}
               autoFocus
               onEscape={() => {
@@ -172,7 +172,7 @@ export function DatabaseExplorerToolbar({
             <TreeSearch
               value={analysisFilter}
               placeholder={t("analysis.filterPlaceholder")}
-              clearLabel={t("common.close")}
+              clearLabel={t("common.clearSearch")}
               onChange={onAnalysisFilterChange}
               onEscape={() => onAnalysisFilterChange("")}
             />

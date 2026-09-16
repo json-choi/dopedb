@@ -201,7 +201,7 @@ export default function Settings({
                   value={filter}
                   autoFocus
                   placeholder={t("settings.searchPlaceholder")}
-                  clearLabel={t("common.close")}
+                  clearLabel={t("common.clearSearch")}
                   onChange={setFilter}
                   onEscape={() => {
                     if (filter) setFilter("");

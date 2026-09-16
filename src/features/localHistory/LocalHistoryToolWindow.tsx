@@ -201,7 +201,7 @@ export default function LocalHistoryToolWindow({
       <ToolWindowSearchRow>
         <div className="tw:min-w-0 tw:flex-1">
           <TreeSearch
-            clearLabel={t("common.close")}
+            clearLabel={t("common.clearSearch")}
             placeholder={t("localHistory.search")}
             value={filter}
             onChange={setFilter}
