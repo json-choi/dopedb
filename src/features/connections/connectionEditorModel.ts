@@ -184,6 +184,9 @@ export function connectionProfileFlags(form: ConnectionProfile) {
   const isSharedTemplate = form.workspaceAccess !== "local";
   const supportsSqlSessionOptions =
     form.engine === "postgres" || form.engine === "mysql";
+  // SQLite names a file and BigQuery a dataset, each with its own required
+  // diagnostic. The rest resolve a database name the runtime refuses to leave empty.
+  const requiresDatabase = !isSqlite && !isBigQuery;
   const canDiscoverDatabases =
     !isSqlite &&
     !isSharedTemplate &&
@@ -198,6 +201,7 @@ export function connectionProfileFlags(form: ConnectionProfile) {
     canEditConnection:
       !isSharedTemplate || form.workspaceAccess === "manage",
     supportsSqlSessionOptions,
+    requiresDatabase,
     canDiscoverDatabases,
     supportsStartupScript: supportsSqlSessionOptions,
     keepAliveEnabled:

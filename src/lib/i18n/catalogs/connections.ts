@@ -150,7 +150,11 @@ export const connectionsCatalog = defineCatalog(
     "connections.dataSourcesAndDrivers": "Data Sources and Drivers",
     "connections.editData": "Edit Data",
     "connections.databaseFile": "Database file path",
-    "connections.databaseRequiredHint": "Required for MongoDB",
+    "connections.databaseDiscoveryPending": "Looking up databases on this server...",
+    "connections.databaseDiscoveryEmpty":
+      "Connected, but this server listed no database you can open.",
+    "connections.databaseDiscoveryFailed":
+      "Could not list databases. Check the connection settings above, then focus this field again.",
     "connections.bigQueryProjectId": "GCP project ID",
     "connections.bigQueryDataset": "Dataset",
     "connections.bigQueryAuthenticationMode": "Sign-in method",
@@ -267,6 +271,8 @@ export const connectionsCatalog = defineCatalog(
       "An SSH tunnel requires one database host.",
     "connections.problemSshTunnelSrvUnsupported":
       "MongoDB SRV discovery cannot use a single-host SSH tunnel.",
+    "connections.problemDatabaseRequired":
+      "Enter the database this connection opens.",
     "connections.problemMongoDatabaseRequired":
       "Enter the MongoDB database name.",
     "connections.problemBigQueryProjectRequired":
@@ -624,7 +630,11 @@ export const connectionsCatalog = defineCatalog(
     "connections.dataSourcesAndDrivers": "데이터 소스 및 드라이버",
     "connections.editData": "데이터 편집",
     "connections.databaseFile": "데이터베이스 파일 경로",
-    "connections.databaseRequiredHint": "MongoDB에는 필수입니다",
+    "connections.databaseDiscoveryPending": "서버의 데이터베이스 목록을 찾는 중...",
+    "connections.databaseDiscoveryEmpty":
+      "연결했지만 열 수 있는 데이터베이스가 없습니다.",
+    "connections.databaseDiscoveryFailed":
+      "데이터베이스 목록을 가져오지 못했습니다. 위의 연결 설정을 확인한 뒤 이 칸에 다시 포커스하세요.",
     "connections.bigQueryProjectId": "GCP 프로젝트 ID",
     "connections.bigQueryDataset": "데이터셋",
     "connections.bigQueryAuthenticationMode": "로그인 방식",
@@ -740,6 +750,8 @@ export const connectionsCatalog = defineCatalog(
       "SSH 터널에는 데이터베이스 호스트 하나만 사용할 수 있습니다.",
     "connections.problemSshTunnelSrvUnsupported":
       "MongoDB SRV 검색은 단일 호스트 SSH 터널과 함께 사용할 수 없습니다.",
+    "connections.problemDatabaseRequired":
+      "이 연결이 열 데이터베이스 이름을 입력하세요.",
     "connections.problemMongoDatabaseRequired":
       "MongoDB 데이터베이스 이름을 입력하세요.",
     "connections.problemBigQueryProjectRequired":

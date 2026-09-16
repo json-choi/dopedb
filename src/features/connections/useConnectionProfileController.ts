@@ -1,6 +1,6 @@
 // Owns Connection profile validation and save/test/delete lifecycle commands;
 // editable draft mechanics stay in the profile state model.
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 
 import type { DiagnosticItem } from "../../design-system/components/Diagnostics";
 import type { FieldValidation } from "../../design-system/components/FormControls";
@@ -36,11 +36,11 @@ import {
 import { connectionVerificationRecorder } from "./connectionVerificationAnalytics";
 import {
   deleteConnection,
-  discoverConnectionProfileDatabases,
   testConnection,
   testConnectionProfile,
   upsertConnection,
 } from "./tauriAdapter";
+import { useConnectionDatabaseDiscovery } from "./useConnectionDatabaseDiscovery";
 import type { BigQueryOnboardingController } from "./useBigQueryOnboardingController";
 import type { ConnectionCatalogController } from "./useConnectionCatalogController";
 import type { ConnectionEditorDialogs } from "./useConnectionEditorDialogs";
@@ -75,10 +75,6 @@ export function useConnectionProfileController({
   const { form, identity, credentials, tabs: tabState, url, status } =
     profileState;
   const { isSharedTemplate, isMongo, isBigQuery } = form.flags;
-  const [databaseDiscovery, setDatabaseDiscovery] = useState<{
-    pending: boolean;
-    databases: string[];
-  }>({ pending: false, databases: [] });
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
@@ -86,6 +82,11 @@ export function useConnectionProfileController({
       mounted.current = false;
     };
   }, []);
+  const databaseDiscovery = useConnectionDatabaseDiscovery({
+    profile: form.value,
+    password: credentials.password,
+    enabled: form.flags.canDiscoverDatabases,
+  });
   const driverCatalog = catalog.model.driverCatalog;
   const managedConnection = useManagedConnectionRecovery(
     form.value,
@@ -368,6 +369,7 @@ export function useConnectionProfileController({
     status.setMessage(null);
     status.setTestFailure(null);
     dialogs.problems.setOpen(false);
+    const checkedRevision = status.readValidityRevision();
     try {
       const receipt = isSharedTemplate
         ? await testConnection(form.value.id)
@@ -376,6 +378,9 @@ export function useConnectionProfileController({
           credentials.password || undefined,
         );
       if (!mounted.current) return;
+      // A late answer describes the settings that were checked, not the ones on
+      // screen now, so an edited draft must not inherit its verdict.
+      if (status.readValidityRevision() !== checkedRevision) return;
       if (!receipt.ok) {
         status.setTestFailure(receipt.failure);
         status.setMessageIsError(true);
@@ -388,6 +393,7 @@ export function useConnectionProfileController({
       recordVerification("success");
     } catch {
       if (!mounted.current) return;
+      if (status.readValidityRevision() !== checkedRevision) return;
       status.setTestFailure({
         code: "unknown",
         field: null,
@@ -401,26 +407,6 @@ export function useConnectionProfileController({
         status.setBusy(false);
         status.setRunning(null);
       }
-    }
-  }
-
-  async function discoverDatabases() {
-    if (!form.flags.canDiscoverDatabases || databaseDiscovery.pending) return;
-    setDatabaseDiscovery((current) => ({
-      pending: true,
-      databases: current.databases,
-    }));
-    try {
-      const discovered = await discoverConnectionProfileDatabases(
-        form.value,
-        credentials.password || undefined,
-      );
-      setDatabaseDiscovery({
-        pending: false,
-        databases: discovered.map((database) => database.name),
-      });
-    } catch {
-      setDatabaseDiscovery({ pending: false, databases: [] });
     }
   }
 
@@ -464,10 +450,7 @@ export function useConnectionProfileController({
         pickDatabaseFile: form.pickDatabaseFile,
         pickExtraParameterFile: form.pickExtraParameterFile,
       },
-      databaseDiscovery: {
-        ...databaseDiscovery,
-        discover: discoverDatabases,
-      },
+      databaseDiscovery,
       bigQuery,
       validation,
     },
