@@ -39,6 +39,12 @@ export function connectionTestFailureTitle(
     case "authentication": return t("connections.testFailure.authenticationTitle");
     case "tls": return t("connections.testFailure.tlsTitle");
     case "databaseConfig": return t("connections.testFailure.databaseConfigTitle");
+    case "sshLaunch": return t("connections.testFailure.sshLaunchTitle");
+    case "sshHost": return t("connections.testFailure.sshHostTitle");
+    case "sshAuthentication": return t("connections.testFailure.sshAuthenticationTitle");
+    case "sshHostKey": return t("connections.testFailure.sshHostKeyTitle");
+    case "sshTimeout": return t("connections.testFailure.sshTimeoutTitle");
+    case "sshUnclassified": return t("connections.testFailure.sshUnclassifiedTitle");
     case "unknown": return t("connections.testFailure.unknownTitle");
   }
 }
@@ -58,6 +64,12 @@ export function connectionTestFailureRecovery(
     case "authentication": return t("connections.testFailure.authenticationRecovery");
     case "tls": return t("connections.testFailure.tlsRecovery");
     case "databaseConfig": return t("connections.testFailure.databaseConfigRecovery");
+    case "sshLaunch": return t("connections.testFailure.sshLaunchRecovery");
+    case "sshHost": return t("connections.testFailure.sshHostRecovery");
+    case "sshAuthentication": return t("connections.testFailure.sshAuthenticationRecovery");
+    case "sshHostKey": return t("connections.testFailure.sshHostKeyRecovery");
+    case "sshTimeout": return t("connections.testFailure.sshTimeoutRecovery");
+    case "sshUnclassified": return t("connections.testFailure.sshUnclassifiedRecovery");
     case "unknown": return t("connections.testFailure.unknownRecovery");
   }
 }
@@ -76,5 +88,22 @@ export function connectionTestFailureTarget(
   if (failure.field === "tls") {
     return { tab: "sshSsl", fieldId: "connection-tls-control" };
   }
+  if (failure.field === "sshAlias") {
+    return { tab: "sshSsl", fieldId: "connection-ssh-alias" };
+  }
   return null;
+}
+
+/**
+ * What the Database Explorer's single recovery button should do.
+ *
+ * Retrying only helps while the target may simply have been unreachable. Every
+ * other cause needs a settings change or an action the user takes outside the
+ * app, so the tree opens that connection's editor instead of offering a button
+ * that reproduces the same failure.
+ */
+export function connectionTestFailureAction(
+  code: ConnectionTestFailureCode,
+): "retry" | "edit" {
+  return code === "timeoutNetwork" || code === "sshTimeout" ? "retry" : "edit";
 }

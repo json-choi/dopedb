@@ -8,47 +8,21 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 
 use crate::error::{AppError, AppResult};
+use crate::kernel::connection_failure::{classify_connection_failure, ConnectionFailure};
 use crate::kernel::identity::ConnectionId;
 use crate::model::{ConnectionProfile, Engine};
 
 pub(crate) const MAX_CONNECTION_CREDENTIAL_BYTES: usize = 1 << 16;
-const MAX_CONNECTION_TEST_DETAIL_CHARS: usize = 2_048;
-
-/// Stable, privacy-safe connection probe categories consumed by the editor.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) enum ConnectionTestFailureCode {
-    TimeoutNetwork,
-    Authentication,
-    Tls,
-    DatabaseConfig,
-    Unknown,
-}
-
-/// A field is returned only when the driver error identifies it without guessing.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) enum ConnectionTestFailureField {
-    Credentials,
-    Tls,
-    Database,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct ConnectionTestFailure {
-    code: ConnectionTestFailureCode,
-    field: Option<ConnectionTestFailureField>,
-    detail: String,
-}
 
 /// Connection probes resolve to a receipt so the frontend never has to classify
-/// driver message text. Secrets and connection URLs are excluded from `detail`.
+/// driver message text. The classification and its privacy-safe `detail` come from
+/// [`crate::kernel::connection_failure`], the one contract every exposure path
+/// shares; secrets, connection URLs, and OS output are excluded there.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ConnectionTestReceipt {
     ok: bool,
-    failure: Option<ConnectionTestFailure>,
+    failure: Option<ConnectionFailure>,
 }
 
 impl ConnectionTestReceipt {
@@ -60,161 +34,103 @@ impl ConnectionTestReceipt {
             },
             Err(error) => Self {
                 ok: false,
-                failure: Some(connection_test_failure(&error)),
+                failure: Some(classify_connection_failure(&error)),
             },
         }
     }
 }
 
-fn connection_test_failure(error: &AppError) -> ConnectionTestFailure {
-    let (code, field) = match error {
-        AppError::Timeout(_) | AppError::Network(_) | AppError::Io(_) => {
-            (ConnectionTestFailureCode::TimeoutNetwork, None)
-        }
-        AppError::Db(sqlx::Error::PoolTimedOut | sqlx::Error::Io(_)) => {
-            (ConnectionTestFailureCode::TimeoutNetwork, None)
-        }
-        AppError::Db(sqlx::Error::Tls(_)) => (
-            ConnectionTestFailureCode::Tls,
-            Some(ConnectionTestFailureField::Tls),
-        ),
-        AppError::Db(sqlx::Error::Database(database)) => {
-            classify_database_failure(database.as_ref())
-        }
-        AppError::AuthenticationRequired(_) | AppError::ManagedConnectionRecoveryRequired => (
-            ConnectionTestFailureCode::Authentication,
-            Some(ConnectionTestFailureField::Credentials),
-        ),
-        AppError::Config(_) => (ConnectionTestFailureCode::DatabaseConfig, None),
-        _ => (ConnectionTestFailureCode::Unknown, None),
-    };
-    ConnectionTestFailure {
-        code,
-        field,
-        detail: safe_connection_test_detail(error),
-    }
-}
-
-fn classify_database_failure(
-    database: &(dyn sqlx::error::DatabaseError + 'static),
-) -> (
-    ConnectionTestFailureCode,
-    Option<ConnectionTestFailureField>,
-) {
-    let sqlstate = database.code();
-    let sqlstate = sqlstate.as_deref();
-    let mysql_number = database
-        .try_downcast_ref::<sqlx::mysql::MySqlDatabaseError>()
-        .map(sqlx::mysql::MySqlDatabaseError::number);
-    classify_database_identity(sqlstate, mysql_number)
-}
-
-fn classify_database_identity(
-    sqlstate: Option<&str>,
-    mysql_number: Option<u16>,
-) -> (
-    ConnectionTestFailureCode,
-    Option<ConnectionTestFailureField>,
-) {
-    if sqlstate.is_some_and(|code| code.starts_with("28"))
-        || matches!(mysql_number, Some(1_044 | 1_045))
-    {
-        return (
-            ConnectionTestFailureCode::Authentication,
-            Some(ConnectionTestFailureField::Credentials),
-        );
-    }
-    if sqlstate.is_some_and(|code| code.starts_with("08")) {
-        return (ConnectionTestFailureCode::TimeoutNetwork, None);
-    }
-    if sqlstate.is_some_and(|code| code.starts_with("3D")) || mysql_number == Some(1_049) {
-        return (
-            ConnectionTestFailureCode::DatabaseConfig,
-            Some(ConnectionTestFailureField::Database),
-        );
-    }
-    (ConnectionTestFailureCode::Unknown, None)
-}
-
-fn safe_connection_test_detail(error: &AppError) -> String {
-    let detail = match error {
-        AppError::Db(sqlx::Error::Database(database)) => database.message(),
-        AppError::Db(sqlx::Error::PoolTimedOut) => {
-            "the connection attempt exhausted its bounded pool deadline"
-        }
-        AppError::Db(sqlx::Error::Io(io)) => match io.kind() {
-            std::io::ErrorKind::TimedOut => "the network connection timed out",
-            std::io::ErrorKind::ConnectionRefused => "the network connection was refused",
-            std::io::ErrorKind::ConnectionReset => "the network connection was reset",
-            std::io::ErrorKind::NotFound => "the network target was not found",
-            _ => "the network connection failed",
-        },
-        AppError::Db(sqlx::Error::Tls(_)) => "TLS negotiation or certificate verification failed",
-        AppError::Timeout(_) => "the bounded connection attempt timed out",
-        AppError::Network(_) | AppError::Io(_) => "the network connection failed",
-        AppError::AuthenticationRequired(_) => {
-            "the connection credential is no longer authenticated"
-        }
-        AppError::ManagedConnectionRecoveryRequired => {
-            "the managed workspace connection requires provider repair"
-        }
-        AppError::Config(_) => "the driver rejected the connection configuration",
-        AppError::Keychain(_) => "the OS credential store could not supply this connection",
-        AppError::Mongo(_) => "the MongoDB driver rejected the connection",
-        _ => "the driver did not provide a safe diagnostic",
-    };
-    detail
-        .chars()
-        .filter(|character| !character.is_control() || matches!(character, '\n' | '\t'))
-        .take(MAX_CONNECTION_TEST_DETAIL_CHARS)
-        .collect()
-}
-
 #[cfg(test)]
 pub(crate) fn assert_connection_test_failure_contract() {
+    use crate::kernel::connection_failure::{
+        classify_database_identity, ConnectionFailureCode, ConnectionFailureField,
+    };
+
+    crate::connection::ssh::assert_ssh_failure_classification_contract();
     assert_eq!(
         classify_database_identity(Some("28P01"), None),
         (
-            ConnectionTestFailureCode::Authentication,
-            Some(ConnectionTestFailureField::Credentials),
+            ConnectionFailureCode::Authentication,
+            Some(ConnectionFailureField::Credentials),
+            "the database server rejected the user name or password",
+        ),
+    );
+    // The same class still resolves to a sentence, one class wider.
+    assert_eq!(
+        classify_database_identity(Some("28000"), None),
+        (
+            ConnectionFailureCode::Authentication,
+            Some(ConnectionFailureField::Credentials),
+            "the database server rejected the connection's authorization",
         ),
     );
     assert_eq!(
-        classify_database_identity(Some("08006"), None).0,
-        ConnectionTestFailureCode::TimeoutNetwork,
+        classify_database_identity(Some("08006"), None),
+        (
+            ConnectionFailureCode::TimeoutNetwork,
+            None,
+            "the connection to the database server failed before it was ready",
+        ),
+    );
+    assert_eq!(
+        classify_database_identity(Some("3D000"), None),
+        (
+            ConnectionFailureCode::DatabaseConfig,
+            Some(ConnectionFailureField::Database),
+            "the database server has no database with the configured name",
+        ),
     );
     assert_eq!(
         classify_database_identity(None, Some(1_049)),
         (
-            ConnectionTestFailureCode::DatabaseConfig,
-            Some(ConnectionTestFailureField::Database),
+            ConnectionFailureCode::DatabaseConfig,
+            Some(ConnectionFailureField::Database),
+            "the database server has no database with the configured name",
+        ),
+    );
+    // An unrecognized identity reads like unrecognized `ssh` output: the server
+    // does not get to choose the sentence.
+    assert_eq!(
+        classify_database_identity(Some("XX000"), None),
+        (
+            ConnectionFailureCode::Unknown,
+            None,
+            "the driver did not provide a safe diagnostic",
         ),
     );
     assert_eq!(
-        connection_test_failure(&AppError::Timeout("probe".into())).code,
-        ConnectionTestFailureCode::TimeoutNetwork,
+        classify_database_identity(None, None),
+        (
+            ConnectionFailureCode::Unknown,
+            None,
+            "the driver did not provide a safe diagnostic",
+        ),
     );
     assert_eq!(
-        connection_test_failure(&AppError::AuthenticationRequired("Google Cloud".into())),
-        ConnectionTestFailure {
-            code: ConnectionTestFailureCode::Authentication,
-            field: Some(ConnectionTestFailureField::Credentials),
-            detail: "the connection credential is no longer authenticated".into(),
+        classify_connection_failure(&AppError::Timeout("probe".into())).code,
+        ConnectionFailureCode::TimeoutNetwork,
+    );
+    assert_eq!(
+        classify_connection_failure(&AppError::AuthenticationRequired("Google Cloud".into())),
+        ConnectionFailure {
+            code: ConnectionFailureCode::Authentication,
+            field: Some(ConnectionFailureField::Credentials),
+            detail: "the connection credential is no longer authenticated",
         },
     );
     assert_eq!(
-        connection_test_failure(&AppError::Db(sqlx::Error::Tls(Box::new(
+        classify_connection_failure(&AppError::Db(sqlx::Error::Tls(Box::new(
             std::io::Error::other("certificate detail must not serialize"),
         ))))
         .code,
-        ConnectionTestFailureCode::Tls,
+        ConnectionFailureCode::Tls,
     );
     assert_eq!(
-        connection_test_failure(&AppError::NotFound("connection".into())).code,
-        ConnectionTestFailureCode::Unknown,
+        classify_connection_failure(&AppError::NotFound("connection".into())).code,
+        ConnectionFailureCode::Unknown,
     );
     assert_eq!(
-        connection_test_failure(&AppError::Config("secret=must-not-serialize".into())).detail,
+        classify_connection_failure(&AppError::Config("secret=must-not-serialize".into())).detail,
         "the driver rejected the connection configuration",
     );
     let success = serde_json::to_value(ConnectionTestReceipt::from_result(Ok(()))).unwrap();
@@ -225,6 +141,93 @@ pub(crate) fn assert_connection_test_failure_contract() {
     .unwrap();
     assert_eq!(failure["failure"]["code"], "timeoutNetwork");
     assert_eq!(failure["failure"]["field"], serde_json::Value::Null);
+
+    // The Explorer reads the same classification off a serialized `AppError`, so a
+    // configuration string that must not be shown never becomes its only diagnostic.
+    let wire = serde_json::to_value(AppError::Config("secret=must-not-serialize".into())).unwrap();
+    assert_eq!(wire["connectionFailure"]["code"], "databaseConfig");
+    assert_eq!(
+        wire["connectionFailure"]["detail"],
+        "the driver rejected the connection configuration",
+    );
+    // A statement-policy decision is not a reachability cause and carries no payload.
+    let policy = serde_json::to_value(AppError::SqlPolicyBlocked { position: None }).unwrap();
+    assert_eq!(policy.get("connectionFailure"), None);
+    assert_driver_message_stays_off_the_wire();
+}
+
+/// A driver message names application identities. PostgreSQL and MySQL put a user,
+/// database, or table name straight into it, so the receipt is built from the
+/// driver's SQLSTATE identity and never from its text.
+#[cfg(test)]
+fn assert_driver_message_stays_off_the_wire() {
+    use crate::kernel::connection_failure::ConnectionFailureCode;
+    use std::borrow::Cow;
+
+    #[derive(Debug, thiserror::Error)]
+    #[error("{message}")]
+    struct DriverFailure {
+        code: Option<&'static str>,
+        message: &'static str,
+    }
+
+    impl sqlx::error::DatabaseError for DriverFailure {
+        fn message(&self) -> &str {
+            self.message
+        }
+        fn code(&self) -> Option<Cow<'_, str>> {
+            self.code.map(Cow::Borrowed)
+        }
+        fn as_error(&self) -> &(dyn std::error::Error + Send + Sync + 'static) {
+            self
+        }
+        fn as_error_mut(&mut self) -> &mut (dyn std::error::Error + Send + Sync + 'static) {
+            self
+        }
+        fn into_error(self: Box<Self>) -> Box<dyn std::error::Error + Send + Sync + 'static> {
+            self
+        }
+        fn kind(&self) -> sqlx::error::ErrorKind {
+            sqlx::error::ErrorKind::Other
+        }
+    }
+
+    for (sqlstate, message, code, detail) in [
+        (
+            Some("28P01"),
+            "password authentication failed for user \"prod_admin\"",
+            ConnectionFailureCode::Authentication,
+            "the database server rejected the user name or password",
+        ),
+        (
+            Some("3D000"),
+            "database \"prod_customers\" does not exist",
+            ConnectionFailureCode::DatabaseConfig,
+            "the database server has no database with the configured name",
+        ),
+        (
+            Some("42501"),
+            "permission denied for table payroll_salaries",
+            ConnectionFailureCode::Unknown,
+            "the driver did not provide a safe diagnostic",
+        ),
+    ] {
+        let error = AppError::Db(sqlx::Error::Database(Box::new(DriverFailure {
+            code: sqlstate,
+            message,
+        })));
+        let failure = classify_connection_failure(&error);
+        assert_eq!(failure.code, code);
+        assert_eq!(failure.detail, detail);
+        let wire = serde_json::to_value(&error).unwrap();
+        assert_eq!(wire["connectionFailure"]["detail"], detail);
+        for identifier in ["prod_admin", "prod_customers", "payroll_salaries"] {
+            assert!(
+                !wire["connectionFailure"].to_string().contains(identifier),
+                "driver message leaked into the connection failure payload",
+            );
+        }
+    }
 }
 
 /// How a driver reaches the local installation.

@@ -156,6 +156,15 @@ export default function ConnectionNode(props: Props) {
   const usesManagedCredentials =
     Boolean(accessLabelBase) && connection.credentialMode === "managed";
   const accessIssue = connectionAccessIssue(connection);
+  // A failed catalog read may send the user to this connection's editor, but only
+  // where the editor is the real fix. Workspace-managed access keeps its provider
+  // recovery path instead of a local credential edit.
+  const editConnectionFromTree =
+    connection.credentialMode !== "managed" &&
+    (connection.workspaceAccess === "local" ||
+      connection.workspaceAccess === "manage")
+      ? props.onEdit
+      : undefined;
   const databaseLabel = databaseDisplayLabel(
     connection.engine,
     connection.database,
@@ -647,6 +656,7 @@ export default function ConnectionNode(props: Props) {
                     ? () => props.onWorkspaceDialog("credentials")
                     : undefined
                 }
+                onEditConnection={editConnectionFromTree}
                 onToggleRelationSection={props.onToggleRelationSection}
                 onToggleObjectSection={props.onToggleObjectSection}
                 revealRequest={props.revealRequest}
@@ -704,6 +714,7 @@ export default function ConnectionNode(props: Props) {
                 ? () => props.onWorkspaceDialog("credentials")
                 : undefined
             }
+            onEditConnection={editConnectionFromTree}
             onToggleRelationSection={props.onToggleRelationSection}
             onToggleObjectSection={props.onToggleObjectSection}
             revealRequest={props.revealRequest}

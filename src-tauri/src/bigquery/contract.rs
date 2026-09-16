@@ -356,6 +356,11 @@ pub(crate) fn assert_bigquery_contract() {
         serde_json::json!({
             "kind": "authenticationRequired",
             "message": "Google Cloud authentication is required",
+            "connectionFailure": {
+                "code": "authentication",
+                "field": "credentials",
+                "detail": "the connection credential is no longer authenticated",
+            },
         }),
     );
     assert!(valid_project_id("sample-analytics-2026"));
