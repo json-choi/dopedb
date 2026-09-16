@@ -16,6 +16,7 @@ self-contained IPC feature.
 | `persistence.ts` | Coordinates the workspace write ceiling and the device Safety gate with fail-closed ordering; takes IPC functions as injected `SafetyPersistenceCommands`. |
 | `policy.ts` | `ConnectionWriteAuthority` projection and `WriteBlockRecoveryKind` union describing why/how a blocked write can be recovered (device safety, local safety, managed credential, schema safety/unavailable, workspace grant). |
 | `queries.ts` | TanStack Query option loading safety settings with a 5s timeout (`loadSafetyBounded`). |
+| `saveCoordinator.ts` | Process-wide connection-keyed single-flight owner for Safety saves; keeps a claim across Settings screen unmount/remount and exposes a React external-store subscription. |
 | `tauriAdapter.ts` | `getSafetySettings`/`setSafetySettings` — the only two commands this feature owns (`get_safety`, `set_safety`). |
 
 ## Subdirectories

@@ -6,6 +6,13 @@ import {
 } from "../connections/domain";
 import { persistConnectionSafety } from "../safetySettings/persistence";
 import {
+  claimSafetySave,
+  ownsSafetySave,
+  releaseSafetySave,
+  safetySaveInFlight,
+  subscribeSafetySaves,
+} from "../safetySettings/saveCoordinator";
+import {
   canManageWorkspaceWritePolicy,
   effectiveSafetySettings,
   requestedSafetySettings,
@@ -39,6 +46,20 @@ const buildRunSignal = (
 
 describe("SQL run guidance", () => {
   it("warns before a write while one Safety control owns manual approval", async () => {
+    const saveConnectionId = "safety-save-coordinator";
+    const saveListener = vi.fn();
+    const unsubscribeSaveListener = subscribeSafetySaves(saveListener);
+    const firstSave = claimSafetySave(saveConnectionId);
+    expect(firstSave).not.toBeNull();
+    expect(safetySaveInFlight(saveConnectionId)).toBe(true);
+    expect(claimSafetySave(saveConnectionId)).toBeNull();
+    expect(releaseSafetySave(saveConnectionId, Symbol("stale"))).toBe(false);
+    expect(ownsSafetySave(saveConnectionId, firstSave!)).toBe(true);
+    expect(releaseSafetySave(saveConnectionId, firstSave!)).toBe(true);
+    expect(safetySaveInFlight(saveConnectionId)).toBe(false);
+    expect(saveListener).toHaveBeenCalledTimes(2);
+    unsubscribeSaveListener();
+
     const requestedWrites = { ...safety, allowWrites: true };
     expect(
       effectiveSafetySettings(

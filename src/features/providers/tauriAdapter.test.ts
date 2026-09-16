@@ -1611,6 +1611,23 @@ describe("provider credential Tauri adapter", () => {
     expect(safetySettingsScreenSource).toContain("hasUnsavedChanges");
     expect(safetySettingsScreenSource).toContain('variant="primary"');
     expect(safetySettingsScreenSource).toContain('t("safety.unsavedChanges")');
+    expect(safetySettingsScreenSource).toContain(
+      "claimSafetySave(connectionId)",
+    );
+    expect(safetySettingsScreenSource).toContain(
+      "viewRef.current.generation === requestGeneration",
+    );
+    expect(safetySettingsScreenSource).toContain(
+      "draft?.connectionId === connectionId",
+    );
+    expect(safetySettingsScreenSource).toContain('disabledBehavior="focusable"');
+    expect(safetySettingsScreenSource).toContain('aria-busy={busy || undefined}');
+    expect(safetySettingsScreenSource).toContain('role="status"');
+    expect(safetySettingsScreenSource).toContain('aria-atomic="true"');
+    expect(safetySettingsScreenSource).toContain('t("safety.applying")');
+    expect(safetySettingsScreenSource).toContain(
+      "saveError?.connectionId === connectionId",
+    );
     expect(workspaceMessagesSource).toContain("Remove shared database");
     expect(workspaceMessagesSource).toContain("공유 DB 제거");
     expect(neonBranchManagerSource).not.toMatch(/>Switch<|>Restore<|>Delete</);

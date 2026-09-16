@@ -1,5 +1,5 @@
 // Per-connection SafetySettings editor. Loads via get_safety, saves via set_safety.
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { SafetySettings } from "../../../ipc/types";
 import { errDetails, errMessage } from "../../../ipc/types";
@@ -33,6 +33,13 @@ import {
   safetyQueryKeys,
   safetySettingsQuery,
 } from "../../../features/safetySettings/queries";
+import {
+  claimSafetySave,
+  ownsSafetySave,
+  releaseSafetySave,
+  safetySaveInFlight,
+  subscribeSafetySaves,
+} from "../../../features/safetySettings/saveCoordinator";
 import { queryResultPhase } from "../../../lib/queryResultPhase";
 
 const TOGGLES: { key: keyof SafetySettings; label: I18nKey; hint: I18nKey }[] = [
@@ -55,6 +62,11 @@ function sameSafetySettings(left: SafetySettings, right: SafetySettings) {
     && left.execPreviewRowLimit === right.execPreviewRowLimit;
 }
 
+type SafetyDraft = Readonly<{
+  connectionId: string;
+  settings: SafetySettings;
+}>;
+
 export default function Safety({
   connection,
   onConnectionUpdated,
@@ -71,11 +83,24 @@ export default function Safety({
   const writeControlAvailable = safetyWriteControlAvailable(connection);
   const schemaControlAvailable = safetySchemaControlAvailable(connection);
   const memberLocalReadOnly = connection.credentialMode === "memberLocal";
-  const [settings, setSettings] = useState<SafetySettings | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [draft, setDraft] = useState<SafetyDraft | null>(null);
   const [saveError, setSaveError] = useState<{
     connectionId: string; kind: string | null; message: string;
   } | null>(null);
+  const mountedRef = useRef(false);
+  const viewRef = useRef({ connectionId, generation: 0 });
+  if (viewRef.current.connectionId !== connectionId) {
+    viewRef.current = {
+      connectionId,
+      generation: viewRef.current.generation + 1,
+    };
+  }
+  const settings = draft?.connectionId === connectionId ? draft.settings : null;
+  const busy = useSyncExternalStore(
+    subscribeSafetySaves,
+    () => safetySaveInFlight(connectionId),
+    () => false,
+  );
   const accessPermissionsLabelId = useId();
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -83,12 +108,18 @@ export default function Safety({
   const safetyPhase = queryResultPhase(safetyQuery.data, safetyQuery.error);
 
   useEffect(() => {
-    setSettings(
-      safetyQuery.data
-        ? effectiveSafetySettings(connection, safetyQuery.data)
-        : null,
-    );
-  }, [connection, safetyQuery.data]);
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    setDraft(safetyQuery.data ? {
+      connectionId,
+      settings: effectiveSafetySettings(connection, safetyQuery.data),
+    } : null);
+  }, [connection, connectionId, safetyQuery.data]);
 
   if (!settings) {
     if (safetyPhase === "coldError" && safetyQuery.error) {
@@ -121,17 +152,32 @@ export default function Safety({
     && !sameSafetySettings(settings, persistedSettings);
 
   function set<K extends keyof SafetySettings>(key: K, value: SafetySettings[K]) {
-    setSettings((s) => (s ? { ...s, [key]: value } : s));
+    setSaveError((current) => (
+      current?.connectionId === connectionId ? null : current
+    ));
+    setDraft((current) => (
+      current?.connectionId === connectionId
+        ? { ...current, settings: { ...current.settings, [key]: value } }
+        : current
+    ));
   }
 
   async function save() {
     if (!settings || !hasUnsavedChanges) return;
+    const requestToken = claimSafetySave(connectionId);
+    if (!requestToken) return;
+    const requestGeneration = viewRef.current.generation;
+    const requestIsCurrent = () => (
+      mountedRef.current
+      && viewRef.current.connectionId === connectionId
+      && viewRef.current.generation === requestGeneration
+      && ownsSafetySave(connectionId, requestToken)
+    );
     const requested = requestedSafetySettings(connection, settings);
     const localPolicyChange =
       connection.credentialMode === "local" &&
       connection.workspaceAccess === "local" &&
       connection.allowWrites !== requested.allowWrites;
-    setBusy(true);
     setSaveError(null);
     try {
       let persistedConnection = await persistConnectionSafety(
@@ -155,10 +201,12 @@ export default function Safety({
         ...safetySettingsQuery(connectionId),
         staleTime: 0,
       });
-      setSettings(persisted);
       queryClient.setQueryData(safetyQueryKeys.detail(connectionId), persisted);
       onSaved(connectionId, persisted);
-      toast(t("safety.saved"));
+      if (requestIsCurrent()) {
+        setDraft({ connectionId, settings: persisted });
+        toast(t("safety.saved"));
+      }
     } catch (e) {
       let message = errMessage(e);
       if (e instanceof WorkspaceWritePolicyRollbackError) {
@@ -167,22 +215,26 @@ export default function Safety({
           error: errMessage(e.rollbackError),
         });
       }
+      let recovered: SafetySettings;
       try {
-        setSettings(await queryClient.fetchQuery({
+        recovered = await queryClient.fetchQuery({
           ...safetySettingsQuery(connectionId),
           staleTime: 0,
-        }));
+        });
       } catch {
-        setSettings({
+        recovered = {
           ...requested,
           allowWrites: false,
           allowSchemaChanges: false,
-        });
+        };
       }
-      setSaveError({ connectionId, kind: errDetails(e).kind, message });
-      toast(message, "error");
+      if (requestIsCurrent()) {
+        setDraft({ connectionId, settings: recovered });
+        setSaveError({ connectionId, kind: errDetails(e).kind, message });
+        toast(message, "error");
+      }
     } finally {
-      setBusy(false);
+      releaseSafetySave(connectionId, requestToken);
     }
   }
 
@@ -217,10 +269,16 @@ export default function Safety({
       checked: effectiveAllowWrites,
       disabled: busy || !writeControlAvailable,
       onChange: (checked: boolean) => {
-        setSettings((current) => current ? {
+        setSaveError((current) => (
+          current?.connectionId === connectionId ? null : current
+        ));
+        setDraft((current) => current?.connectionId === connectionId ? {
           ...current,
-          allowWrites: checked,
-          allowSchemaChanges: checked && current.allowSchemaChanges,
+          settings: {
+            ...current.settings,
+            allowWrites: checked,
+            allowSchemaChanges: checked && current.settings.allowSchemaChanges,
+          },
         } : current);
       },
     },
@@ -332,6 +390,7 @@ export default function Safety({
               </span>
               <TextInput
                 density="compact"
+                disabled={busy}
                 type="number"
                 min={n.key === "maxRows" ? 1 : 0}
                 step={1}
@@ -356,17 +415,25 @@ export default function Safety({
         <Button
           size="compact"
           variant="primary"
+          aria-busy={busy || undefined}
           disabled={busy || !hasUnsavedChanges}
+          disabledBehavior="focusable"
           onClick={save}
         >
           {busy ? t("safety.applying") : t("safety.apply")}
         </Button>
         <span
+          role="status"
           aria-live="polite"
+          aria-atomic="true"
           className="tw:text-xs tw:leading-body tw:text-muted-foreground tw:data-[pending=true]:font-semibold tw:data-[pending=true]:text-warning"
-          data-pending={hasUnsavedChanges}
+          data-pending={busy || hasUnsavedChanges}
         >
-          {hasUnsavedChanges
+          {busy
+            ? t("safety.applying")
+            : saveError?.connectionId === connectionId
+              ? null
+            : hasUnsavedChanges
             ? t("safety.unsavedChanges")
             : schemaUnavailableHint
               ? t(
