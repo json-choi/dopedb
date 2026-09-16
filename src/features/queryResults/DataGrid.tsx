@@ -61,7 +61,7 @@ function cell(v: unknown): string {
   return String(v);
 }
 
-// Clipboard text for a selected cell — same rules as CellViewer's Copy:
+// Clipboard text for a selected cell — same rules as the result inspector's Copy:
 // null/undefined → "NULL", objects → pretty JSON, JSON-string → pretty JSON, else String.
 function copyText(v: unknown): string {
   if (v === null || v === undefined) return "NULL";

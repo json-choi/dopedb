@@ -9,6 +9,8 @@ import {
   SQL_RESULT_CACHE_MAX_PAGES,
 } from "../queries/resultPageCache";
 import { remapUnreadableCells } from "../queryResults/cellReadState";
+import ResultCellInspector from "../queryResults/ResultCellInspector";
+import { useResultCellInspector } from "../queryResults/useResultCellInspector";
 import { useSqlResultPages } from "../queries/useSqlResultPages";
 import DataGrid from "../queryResults/DataGrid";
 import {
@@ -101,6 +103,12 @@ export default function StreamOutcome({
       stream.truncated,
     ],
   );
+  const inspector = useResultCellInspector({
+    result: gridResult,
+    operationId: stream.rowSource.operationId,
+    columnKey: stream.columns.join("\u0000"),
+    startIndex: 0,
+  });
   const phaseLabel =
     stream.phase === "cancelled"
       ? t("sql.cancelled")
@@ -136,12 +144,21 @@ export default function StreamOutcome({
             }}
             onFilterChange={setFilter}
           />
-          <DataGrid
-            result={gridResult}
-            rowSource={filteredRows === null ? stream.rowSource : undefined}
-            surface="workbench"
-            footerInset
-          />
+          <div className="tw:flex tw:min-h-0 tw:flex-1 tw:@max-[920px]:flex-col">
+            <DataGrid
+              result={gridResult}
+              rowSource={filteredRows === null ? stream.rowSource : undefined}
+              surface="workbench"
+              footerInset
+              onCellClick={(value, rowIndex, column) =>
+                inspector.open({ value, column, rowNumber: rowIndex + 1 })
+              }
+            />
+            <ResultCellInspector
+              cell={inspector.cell}
+              onClose={inspector.close}
+            />
+          </div>
           <ResultWorkbenchFooter
             visible={filteredRows?.length ?? stream.rowCount}
             total={stream.rowCount}

@@ -21,6 +21,8 @@ export const resultsCatalog = defineCatalog(
     "results.copyFailed": "Copy failed",
     "results.copyBoundedTitle": "Select cells in the grid to copy a large result",
     "results.copyRows": "Copied {count} rows",
+    "results.copyScopeTitle":
+      "Copy the {scope} as tab-separated text (pastes into Excel/Sheets)",
     "results.copyTitle": "Copy all rows as tab-separated text (pastes into Excel/Sheets)",
     "results.downloadCsvTitle": "Download as CSV (opens in Excel)",
     "results.downloadJsonTitle": "Download as JSON",
@@ -28,6 +30,9 @@ export const resultsCatalog = defineCatalog(
     "results.exportJson": "Export {scope} (JSON)",
     "results.exportFailed": "Result export failed",
     "results.exportProgress": "Exporting {current} / {total}",
+    "results.inspectorLabel": "Cell value",
+    "results.scopePage": "current page",
+    "results.inspectorTitle": "{column} · row {row}",
     "results.partialExportUnavailable": "Partial result — export unavailable",
     "results.unreadableBlocked":
       "{count} cell(s) could not be read — copy and export are blocked",
@@ -53,6 +58,8 @@ export const resultsCatalog = defineCatalog(
     "results.copyFailed": "복사 실패",
     "results.copyBoundedTitle": "대용량 결과는 그리드에서 복사할 셀을 선택하세요",
     "results.copyRows": "{count}행 복사됨",
+    "results.copyScopeTitle":
+      "{scope}를 탭으로 구분된 텍스트로 복사 (Excel/Sheets에 붙여넣기)",
     "results.copyTitle": "모든 행을 탭으로 구분된 텍스트로 복사 (Excel/Sheets에 붙여넣기)",
     "results.downloadCsvTitle": "CSV로 다운로드 (Excel에서 열기)",
     "results.downloadJsonTitle": "JSON으로 다운로드",
@@ -60,6 +67,9 @@ export const resultsCatalog = defineCatalog(
     "results.exportJson": "{scope} 내보내기 (JSON)",
     "results.exportFailed": "결과 내보내기 실패",
     "results.exportProgress": "내보내는 중 {current} / {total}",
+    "results.inspectorLabel": "셀 값",
+    "results.scopePage": "현재 페이지",
+    "results.inspectorTitle": "{column} · {row}행",
     "results.partialExportUnavailable": "부분 결과 — 내보내기 불가",
     "results.unreadableBlocked":
       "읽지 못한 셀 {count}개 — 복사와 내보내기를 차단합니다",

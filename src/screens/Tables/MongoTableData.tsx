@@ -2,6 +2,9 @@ import { useMemo } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 
 import DataGrid from "../../features/queryResults/DataGrid";
+import ResultCellInspector from "../../features/queryResults/ResultCellInspector";
+import ResultToolbar from "../../features/queryResults/ResultToolbar";
+import { useResultCellInspector } from "../../features/queryResults/useResultCellInspector";
 import { Icon } from "../../components/Icon";
 import Skeleton from "../../components/Skeleton";
 import {
@@ -18,6 +21,7 @@ import { useAgentSelection } from "../../features/agents/selectionContext";
 import type { CatalogTable, QueryResult } from "../../ipc/types";
 import { errMessage } from "../../ipc/types";
 import { documentsToGrid } from "../../lib/documentGrid";
+import { stamp } from "../../lib/export";
 import { useI18n } from "../../lib/i18n";
 import { documentCountQuery, documentRowsQuery } from "../../lib/queries";
 import { tableKey } from "../../lib/tableRef";
@@ -80,6 +84,14 @@ export default function MongoTableData({
   const rows = result.rows.length;
   const from = rows === 0 ? 0 : page * pageSize + 1;
   const to = page * pageSize + rows;
+  // Copy and export cover exactly the rows on screen. Collection browsing is
+  // paged, so nothing here refetches or widens the range.
+  const inspector = useResultCellInspector({
+    result,
+    operationId: null,
+    columnKey: result.columns.join("\u0000"),
+    startIndex: page * pageSize,
+  });
 
   return (
     <WorkbenchPane>
@@ -96,6 +108,13 @@ export default function MongoTableData({
         >
           {busy ? "…" : <Icon name="refresh" />}
         </WorkbenchButton>
+        <ResultToolbar
+          columns={result.columns}
+          rows={result.rows}
+          filenameBase={`${table.name}-page${page + 1}-${stamp()}`}
+          scopeLabel={t("results.scopePage")}
+          presentation="workbench"
+        />
         <span className="tw:flex-1" />
         <Pager
           page={page}
@@ -129,7 +148,12 @@ export default function MongoTableData({
                 surface="workbench"
                 footerInset
                 startIndex={page * pageSize}
-                onCellClick={(_value, rowIndex, column) => {
+                onCellClick={(value, rowIndex, column) => {
+                  inspector.open({
+                    value,
+                    column,
+                    rowNumber: page * pageSize + rowIndex + 1,
+                  });
                   agentSelection.select({
                     connectionId: connection.id,
                     database: table.database ?? connection.database,
@@ -151,6 +175,10 @@ export default function MongoTableData({
                     { dataType: column.dataType, pk: column.pk },
                   ]),
                 )}
+              />
+              <ResultCellInspector
+                cell={inspector.cell}
+                onClose={inspector.close}
               />
               {rows === 0 && !busy && (
                 <div className="tw:pointer-events-none tw:absolute tw:inset-x-0 tw:top-control-md tw:bottom-0 tw:flex tw:items-center tw:justify-center tw:bg-background/90 tw:text-ui tw:text-muted-foreground">
@@ -189,9 +217,16 @@ export default function MongoTableData({
             .filter(Boolean)
             .join(" · ")}
         >
-          {t("ide.queryRows", { count: rows })}
+          {total != null
+            ? t("tables.rowRangeTotal", {
+                from,
+                to,
+                total: total.toLocaleString(),
+              })
+            : t("tables.rowRange", { from, to })}
           {documentPage.truncated ? ` · ${t("tables.truncated")}` : ""}
           {countError ? ` · ${t("tables.countUnavailableShort")}` : ""}
+          {` · ${t("tables.durationMs", { duration: documentPage.durationMs })}`}
         </DataGridStatusPill>
       ) : null}
     </WorkbenchPane>

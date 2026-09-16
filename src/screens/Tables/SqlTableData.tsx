@@ -22,6 +22,7 @@ import {
 } from "../../features/tableData/tableState";
 import DataGrid from "../../features/queryResults/DataGrid";
 import { unreadableCellLookup } from "../../features/queryResults/cellReadState";
+import { useResultCellInspector } from "../../features/queryResults/useResultCellInspector";
 import type { RowEditorSubmission } from "../../components/RowEditor";
 import JobPanel from "../../features/jobs/JobPanel";
 import Skeleton from "../../components/Skeleton";
@@ -90,7 +91,6 @@ export default function SqlTableData({
       orderByExpression,
       appliedOrderByExpression,
       selectedRow: selected,
-      selectedCell: cellSel,
       editor,
       staged,
       reviewing,
@@ -136,6 +136,15 @@ export default function SqlTableData({
     if (pageReady) setCatalogEnabled(true);
   }, [pageReady]);
   const result = rowsQuery.data?.result ?? null;
+  // One owner for the open cell, shared with the SQL and Documents result grids.
+  // A new page or a refetched result closes it instead of re-opening a different
+  // value under the previous coordinates.
+  const inspector = useResultCellInspector({
+    result,
+    operationId: null,
+    columnKey: result?.columns.join("\u0000") ?? "",
+    startIndex: page * pageSize,
+  });
   const total = countQuery.data ?? null;
   const hasMore = rowsQuery.data?.hasMore ?? false;
   const busy = rowsQuery.isFetching;
@@ -150,7 +159,6 @@ export default function SqlTableData({
   const clearSelectionAfterRowsChange = useEffectEvent(() => {
     commands.patch({
       selectedRow: null,
-      selectedCell: null,
       writeError: null,
     });
   });
@@ -241,10 +249,10 @@ export default function SqlTableData({
         : selRow
           ? { mode, initial: rowMap(selRow) }
           : editor;
+    inspector.close();
     commands.patch({
       jobsOpen: false,
       editor: nextEditor,
-      selectedCell: null,
     });
   }
 
@@ -257,10 +265,10 @@ export default function SqlTableData({
       const i = result.columns.indexOf(c.name);
       pkVals[c.name] = i >= 0 ? cellToInput(selRow[i]) : null;
     }
+    inspector.close();
     commands.patch({
       pendingDelete: { key: pkVals, original: rowMap(selRow) },
       editor: null,
-      selectedCell: null,
       jobsOpen: false,
     });
   }
@@ -415,7 +423,7 @@ export default function SqlTableData({
         : nonScalarPk
           ? t("tables.nonScalarPk")
           : t("tables.noTablePk");
-  const panelOpen = reviewing || !!editor || !!cellSel || !!pendingDelete;
+  const panelOpen = reviewing || !!editor || !!inspector.cell || !!pendingDelete;
 
   return (
     <WorkbenchPane>
@@ -444,14 +452,14 @@ export default function SqlTableData({
         supportsBulkJobs={supportsBulkJobs}
         onOpenEdit={openEdit}
         onDelete={doDelete}
-        onReviewStaged={() =>
+        onReviewStaged={() => {
+          inspector.close();
           commands.patch({
             reviewing: true,
             editor: null,
             pendingDelete: null,
-            selectedCell: null,
-          })
-        }
+          });
+        }}
         onDiscardStaged={() =>
           commands.patch({
             staged: [],
@@ -470,15 +478,15 @@ export default function SqlTableData({
         onPage={(nextPage) => commands.patch({ page: nextPage })}
         onRefresh={() => void refreshRowsAndCount()}
         onShowDdl={() => setDdlOpen(true)}
-        onToggleJobs={() =>
+        onToggleJobs={() => {
+          inspector.close();
           commands.patch({
             jobsOpen: !jobsOpen,
             reviewing: false,
             editor: null,
             pendingDelete: null,
-            selectedCell: null,
-          })
-        }
+          });
+        }}
         onToggleStructure={() => commands.patch({ structureOpen: !structure })}
         onCopyRow={copyRow}
       />
@@ -542,9 +550,13 @@ export default function SqlTableData({
                 selectedRow={selected}
                 onSelectRow={(selectedRow) => commands.patch({ selectedRow })}
                 onCellClick={(value, i, column) => {
+                  inspector.open({
+                    value,
+                    column,
+                    rowNumber: page * pageSize + i + 1,
+                  });
                   commands.patch({
                     selectedRow: i,
-                    selectedCell: { value, column },
                     jobsOpen: false,
                   });
                   agentSelection.select({
@@ -615,7 +627,7 @@ export default function SqlTableData({
               proposal={stagedProposal}
               running={stagedRunning}
               catalogPending={snapshotQuery.isPending}
-              selectedCell={cellSel}
+              selectedCell={inspector.cell}
               onSubmit={stageWrite}
               onCloseEditor={() => commands.patch({ editor: null })}
               onCloseDelete={() => commands.patch({ pendingDelete: null })}
@@ -630,7 +642,7 @@ export default function SqlTableData({
               onPrepare={() => void prepareStagedChanges()}
               onApprove={() => void approveStagedChanges()}
               onReject={() => void rejectStagedChanges()}
-              onCloseCell={() => commands.patch({ selectedCell: null })}
+              onCloseCell={inspector.close}
             />
           ) : null}
         </div>

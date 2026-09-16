@@ -6,6 +6,8 @@ import { InlineNotice } from "../../design-system/components/Status";
 import DataGrid from "../queryResults/DataGrid";
 import ResultToolbar from "../queryResults/ResultToolbar";
 import { remapUnreadableCells } from "../queryResults/cellReadState";
+import ResultCellInspector from "../queryResults/ResultCellInspector";
+import { useResultCellInspector } from "../queryResults/useResultCellInspector";
 import {
   ResultWorkbenchFooter,
   ResultWorkbenchToolbar,
@@ -160,6 +162,13 @@ function MaterializedResult({
     [filteredRows.length, result, visibleRows, visibleUnreadable],
   );
 
+  const inspector = useResultCellInspector({
+    result: gridResult,
+    operationId: null,
+    columnKey: result?.columns.join("\u0000") ?? "",
+    startIndex: 0,
+  });
+
   return (
     <WorkbenchContainedBody>
       {result ? (
@@ -181,7 +190,20 @@ function MaterializedResult({
             }}
           />
           {gridResult ? (
-            <DataGrid result={gridResult} surface="workbench" footerInset />
+            <div className="tw:flex tw:min-h-0 tw:flex-1 tw:@max-[920px]:flex-col">
+              <DataGrid
+                result={gridResult}
+                surface="workbench"
+                footerInset
+                onCellClick={(value, rowIndex, column) =>
+                  inspector.open({ value, column, rowNumber: rowIndex + 1 })
+                }
+              />
+              <ResultCellInspector
+                cell={inspector.cell}
+                onClose={inspector.close}
+              />
+            </div>
           ) : null}
           <ResultWorkbenchFooter
             visible={visibleRows.length}

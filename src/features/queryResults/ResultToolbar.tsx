@@ -41,8 +41,9 @@ export default function ResultToolbar({
   filenameBase: string;
   /** Cells of this result the backend could not read; any blocks copy/export. */
   unreadableCells?: number;
-  // Optional on-surface scope for page-limited exports (e.g. "page"). Default keeps
-  // the bare "CSV"/"JSON" labels so existing callers (Sql, Agent) are unchanged.
+  // Name of the exact rows these actions cover (e.g. the current page). Set it
+  // wherever the grid shows part of a larger result, so copy and export never read
+  // as "everything"; leaving it unset keeps the bare labels for whole results.
   scopeLabel?: string;
   /** Running streams are partial snapshots and cannot be exported as complete. */
   partial?: boolean;
@@ -125,7 +126,9 @@ export default function ResultToolbar({
     ? t("results.unreadableBlockedTitle", { count: unreadableCells })
     : copyDisabled && rowSource && !disabled
       ? t("results.copyBoundedTitle")
-      : t("results.copyTitle");
+      : scopeLabel
+        ? t("results.copyScopeTitle", { scope: scopeLabel })
+        : t("results.copyTitle");
   const exportTitle = unreadable
     ? t("results.unreadableBlockedTitle", { count: unreadableCells })
     : null;
@@ -140,12 +143,12 @@ export default function ResultToolbar({
           ? {
               iconOnly: true as const,
               title: copyTitle,
-              "aria-label": t("results.copyTitle"),
+              "aria-label": copyTitle,
             }
           : {
               iconOnly: false as const,
               title: copyTitle,
-              "aria-label": t("results.copyTitle"),
+              "aria-label": copyTitle,
             })}
         onClick={() =>
           navigator.clipboard
@@ -180,10 +183,14 @@ export default function ResultToolbar({
           }
         >
           <ToolbarMenuItem icon="download" onClick={exportCsv}>
-            {t("results.downloadCsvTitle")}
+            {scopeLabel
+              ? t("results.exportCsv", { scope: scopeLabel })
+              : t("results.downloadCsvTitle")}
           </ToolbarMenuItem>
           <ToolbarMenuItem icon="download" onClick={exportJson}>
-            {t("results.downloadJsonTitle")}
+            {scopeLabel
+              ? t("results.exportJson", { scope: scopeLabel })
+              : t("results.downloadJsonTitle")}
           </ToolbarMenuItem>
         </ToolbarMenu>
       ) : (

@@ -4,7 +4,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
 } from "react";
-import CellViewer from "../../components/CellViewer";
+import ResultCellInspector from "../../features/queryResults/ResultCellInspector";
 import { Icon } from "../../components/Icon";
 import { Button } from "../../design-system/components/Button";
 import RowEditor, {
@@ -20,9 +20,9 @@ import type { Engine } from "../../ipc/types";
 import type {
   PendingDelete,
   RowEditorState,
-  SelectedCell,
   StagedWrite,
 } from "../../features/tableData/domain";
+import type { InspectedResultCell } from "../../features/queryResults/useResultCellInspector";
 import { createFrameCoalescer } from "../../lib/frameCoalescer";
 
 const STORAGE_KEY = "dopedb:table-side-panel-width:v1";
@@ -66,7 +66,7 @@ type Props = {
   proposal: ScriptOperationProposal | null;
   running: boolean;
   catalogPending: boolean;
-  selectedCell: SelectedCell | null;
+  selectedCell: InspectedResultCell | null;
   onSubmit: (write: RowEditorSubmission) => void;
   onCloseEditor: () => void;
   onCloseDelete: () => void;
@@ -280,13 +280,13 @@ export default function TableSidePanel(props: Props) {
           </InspectorFooter>
         </div>
       )}
-      {selectedCell && !editor && !reviewing && (
-        <CellViewer
-          value={selectedCell.value}
-          column={selectedCell.column}
+      {!editor && !reviewing ? (
+        <ResultCellInspector
+          cell={selectedCell}
           onClose={props.onCloseCell}
+          presentation="inline"
         />
-      )}
+      ) : null}
     </aside>
   );
 }

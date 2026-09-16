@@ -14,7 +14,6 @@ toolbar menu.
 ## Key Files
 | File | Description |
 |------|-------------|
-| `CellViewer.tsx` | Side panel showing one grid cell's full value: pretty-printed JSON when the value is/parses to an object or array, wrapped plain text otherwise, with a copy-to-clipboard button. |
 | `ConfirmButton.tsx` | Inline two-step confirm ("Really delete? Yes / No") that auto-reverts after 3s if untouched; never uses `window.confirm`. |
 | `EngineMark.tsx` | Renders the small engine logo (`postgres`/`mysql`/`sqlite`/`mongodb` from `src/assets/db-icons/`, `bigquery` from Iconify) at `control` or `tree` size. |
 | `Icon.tsx` | The app's inline-SVG icon set (Feather/Lucide-style 24×24 glyphs, `currentColor`, `em`-sized); no icon-library dependency. Icons are `aria-hidden`; the enclosing control owns the accessible name. |
