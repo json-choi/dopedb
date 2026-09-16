@@ -135,6 +135,7 @@ import {
 import { knowledgeEnvironmentBadge } from "../knowledge/presentation";
 import type { Catalog, CatalogObject, CatalogTable } from "../../ipc/types";
 import { ModalHeader } from "../../design-system/components/Modal";
+import { Button, type ButtonProps } from "../../design-system/components/Button";
 import {
   Field,
   PropertyRow,
@@ -1749,6 +1750,80 @@ describe("workbench state ownership", () => {
     expect(modalHeader).toContain('<h1 id="data-sources-title"');
     expect(modalHeader).not.toContain("data-tauri-drag-region");
     expect(modalHeader).not.toContain("<button");
+
+    const nativeDisabledButton = renderToStaticMarkup(
+      createElement(Button, { disabled: true, children: "Native disabled" }),
+    );
+    expect(nativeDisabledButton).toContain('disabled=""');
+    expect(nativeDisabledButton).not.toContain('aria-disabled="true"');
+    const focusableDisabledButton = renderToStaticMarkup(
+      createElement(Button, {
+        disabled: true,
+        disabledBehavior: "focusable",
+        children: "Focusable disabled",
+      }),
+    );
+    expect(focusableDisabledButton).toContain('aria-disabled="true"');
+    expect(focusableDisabledButton).toContain('data-disabled="true"');
+    expect(focusableDisabledButton).not.toMatch(/\sdisabled=""/);
+
+    const renderButton = (
+      Button as unknown as {
+        render: (
+          props: ButtonProps,
+          ref: null,
+        ) => {
+          props: {
+            onClick?: (event: never) => void;
+            onKeyDown?: (event: never) => void;
+            onKeyUp?: (event: never) => void;
+          };
+        };
+      }
+    ).render;
+    const blockedActivation = vi.fn();
+    const blockedKeyDown = vi.fn();
+    const blockedKeyUp = vi.fn();
+    const focusableButtonElement = renderButton(
+      {
+        disabled: true,
+        disabledBehavior: "focusable",
+        onClick: blockedActivation,
+        onKeyDown: blockedKeyDown,
+        onKeyUp: blockedKeyUp,
+        children: "Focusable disabled",
+      },
+      null,
+    );
+    const pointerEvent = {
+      preventDefault: vi.fn(),
+      stopPropagation: vi.fn(),
+    };
+    focusableButtonElement.props.onClick?.(pointerEvent as never);
+    expect(pointerEvent.preventDefault).toHaveBeenCalledOnce();
+    expect(pointerEvent.stopPropagation).toHaveBeenCalledOnce();
+    for (const key of ["Enter", " "] as const) {
+      const keyEvent = {
+        key,
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn(),
+      };
+      focusableButtonElement.props.onKeyDown?.(keyEvent as never);
+      focusableButtonElement.props.onKeyUp?.(keyEvent as never);
+      expect(keyEvent.preventDefault).toHaveBeenCalledTimes(2);
+      expect(keyEvent.stopPropagation).toHaveBeenCalledTimes(2);
+    }
+    expect(blockedActivation).not.toHaveBeenCalled();
+    expect(blockedKeyDown).not.toHaveBeenCalled();
+    expect(blockedKeyUp).not.toHaveBeenCalled();
+
+    const activeActivation = vi.fn();
+    const activeButtonElement = renderButton(
+      { onClick: activeActivation, children: "Active" },
+      null,
+    );
+    activeButtonElement.props.onClick?.(pointerEvent as never);
+    expect(activeActivation).toHaveBeenCalledOnce();
 
     const accessibleFields = renderToStaticMarkup(
       createElement(

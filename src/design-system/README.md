@@ -352,6 +352,10 @@ Elevation은 세 단계만 허용한다.
   밀어내지 않는다. horizontal roving keyboard 규칙은 `IdeTab`과 동일하다.
 - `Button`: 전역 `.btn`을 대체하는 Tailwind button primitive. variant, density,
   icon geometry, tone, active/expanded state를 semantic prop으로 소유한다.
+  기본 `disabled`는 native 동작을 유지한다. 진행 중 focus를 보존해야 하는
+  command만 `disabledBehavior="focusable"`을 사용하며, 이 opt-in은
+  `aria-disabled`를 노출하고 click·Enter·Space activation을 primitive 안에서
+  차단한다. 화면은 `aria-disabled`만 붙인 채 실행 guard를 생략하지 않는다.
   popup 내부 full-width action은 화면별 class를 만들지 않고
   `presentation="menuItem"`을 사용한다. 기본 label은 고정 높이 안에서 한 줄로
   줄이고, 권한 요청처럼 원문을 생략할 수 없는 문구만

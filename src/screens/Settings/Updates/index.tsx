@@ -80,6 +80,12 @@ export default function Updates({
                 : snapshot.phase === "error"
                   ? t("updates.error")
                   : t("updates.idle");
+  const liveStatus =
+    snapshot.phase === "error"
+      ? ""
+      : snapshot.phase === "downloading" && progress !== null
+        ? `${stateLabel} ${progress}%`
+        : stateLabel;
 
   const openReleases = async () => {
     try {
@@ -94,13 +100,25 @@ export default function Updates({
 
   return (
     <div className="tw:w-full tw:max-w-[720px] tw:p-4 tw:max-[760px]:max-w-none">
+      <div
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        className="tw:sr-only"
+      >
+        {liveStatus}
+      </div>
       <div className="tw:mb-3 tw:flex tw:min-h-control-xl tw:items-center tw:justify-end">
         <Button
           size="compact"
+          aria-busy={busy || undefined}
           disabled={busy}
+          disabledBehavior={busy ? "focusable" : "native"}
           onClick={() => void onRefresh()}
         >
-          {t("updates.checkAgain")}
+          {snapshot.phase === "checking"
+            ? t("updates.checking")
+            : t("updates.checkAgain")}
         </Button>
       </div>
 
@@ -180,7 +198,9 @@ export default function Updates({
           <Button
             size="compact"
             variant="primary"
+            aria-busy={busy || undefined}
             disabled={!snapshot.availableVersion || busy}
+            disabledBehavior={busy ? "focusable" : "native"}
             onClick={() => void onInstall()}
           >
             {snapshot.phase === "error" && snapshot.availableVersion
