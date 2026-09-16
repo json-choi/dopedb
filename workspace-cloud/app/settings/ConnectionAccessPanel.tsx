@@ -12,6 +12,7 @@ import type { WorkspaceLocale } from "../../lib/workspace-locale";
 import { workspaceMessages } from "../../lib/workspace-messages";
 import { localizedProviderMessage } from "../../lib/workspace-provider-copy";
 
+type LoadState = "pending" | "ready" | "failed";
 type ConnectionCapability = "view" | "read" | "use" | "manage";
 type SharedConnection = {
   id: string;
@@ -153,7 +154,7 @@ export function ConnectionAccessPanel({ workspaceId }: { workspaceId: string }) 
   const [selectedId, setSelectedId] = useState("");
   const [grants, setGrants] = useState<MemberGrant[]>([]);
   const [actorMemberId, setActorMemberId] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [connectionsState, setConnectionsState] = useState<LoadState>("pending");
   const [mutatingId, setMutatingId] = useState("");
   const [error, setError] = useState("");
   useEffect(() => {
@@ -171,6 +172,7 @@ export function ConnectionAccessPanel({ workspaceId }: { workspaceId: string }) 
       return;
     }
     const body = await response.json().catch(() => null);
+    if (signal?.aborted) return;
     if (!Array.isArray(body?.conflicts)) {
       setError(copy.conflictsShapeError);
       return;
@@ -180,7 +182,7 @@ export function ConnectionAccessPanel({ workspaceId }: { workspaceId: string }) 
   }, [copy, locale, workspaceId]);
 
   const loadConnections = useCallback(async (signal?: AbortSignal) => {
-    setLoading(true);
+    setConnectionsState("pending");
     const response = await fetch(
       `/api/v1/workspaces/${workspaceId}/connections`,
       { cache: "no-store", signal },
@@ -188,13 +190,15 @@ export function ConnectionAccessPanel({ workspaceId }: { workspaceId: string }) 
     if (signal?.aborted) return;
     if (!response?.ok) {
       setError(await responseError(response, copy.loadConnectionsError, locale));
-      setLoading(false);
+      setConnectionsState("failed");
       return;
     }
     const body = await response.json().catch(() => null);
+    // A reply that arrives after the workspace changed must not be applied.
+    if (signal?.aborted) return;
     if (!Array.isArray(body?.connections)) {
       setError(copy.connectionsShapeError);
-      setLoading(false);
+      setConnectionsState("failed");
       return;
     }
     const next = body.connections as SharedConnection[];
@@ -205,7 +209,7 @@ export function ConnectionAccessPanel({ workspaceId }: { workspaceId: string }) 
         : next.find((item) => item.id === desktopReturn.connectionId)?.id ?? next[0]?.id ?? ""
     ));
     setError("");
-    setLoading(false);
+    setConnectionsState("ready");
   }, [copy, locale, workspaceId, desktopReturn.connectionId]);
 
   const loadGrants = useCallback(async (
@@ -227,6 +231,7 @@ export function ConnectionAccessPanel({ workspaceId }: { workspaceId: string }) 
       return;
     }
     const body = await response.json().catch(() => null);
+    if (signal?.aborted) return;
     if (!Array.isArray(body?.grants) || typeof body?.actorMemberId !== "string") {
       setError(copy.grantsShapeError);
       return;
@@ -465,11 +470,17 @@ export function ConnectionAccessPanel({ workspaceId }: { workspaceId: string }) 
       <ControlField label={copy.sharedConnection}>
         <ControlSelect
           value={selectedId}
-          disabled={loading || connections.length === 0}
+          disabled={connectionsState === "pending" || connections.length === 0}
           onChange={(event) => setSelectedId(event.target.value)}
         >
           {connections.length === 0 ? (
-            <option value="">{copy.noConnections}</option>
+            <option value="">
+              {connectionsState === "pending"
+                ? copy.loadingConnections
+                : connectionsState === "failed"
+                  ? copy.connectionsUnavailable
+                  : copy.noConnections}
+            </option>
           ) : null}
           {connections.map((connection) => (
             <option key={connection.id} value={connection.id}>

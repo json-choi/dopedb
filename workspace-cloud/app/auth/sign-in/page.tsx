@@ -36,13 +36,7 @@ export default async function SignInPage({
     >
       <div className="tw:relative tw:z-[1] tw:flex tw:items-center tw:justify-between">
         <Brand destination="marketing" />
-        <div className="tw:flex tw:items-center tw:gap-2">
-          <span className="tw:inline-flex tw:items-center tw:gap-2 tw:rounded-full tw:border tw:border-border tw:bg-surface/80 tw:px-3 tw:py-2 tw:font-mono tw:text-2xs tw:font-medium tw:text-muted-foreground tw:backdrop-blur tw:max-[720px]:hidden">
-            <i className="tw:size-1.5 tw:rounded-full tw:bg-success" />
-            {copy.status}
-          </span>
-          <LocaleSwitcher />
-        </div>
+        <LocaleSwitcher />
       </div>
       <section className="tw:relative tw:z-[1] tw:m-auto tw:grid tw:w-[min(1280px,100%)] tw:grid-cols-[minmax(0,1.15fr)_minmax(380px,0.72fr)] tw:items-center tw:gap-[clamp(48px,8vw,120px)] tw:py-[clamp(68px,10vh,128px)] tw:max-[860px]:grid-cols-1 tw:max-[860px]:gap-12">
         <div>

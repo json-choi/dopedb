@@ -29,6 +29,10 @@ import {
   type WorkspaceManagementArea,
 } from "./WorkspaceManagementPanel";
 import { localizedWorkspacePath } from "../../lib/workspace-locale";
+import {
+  resolveWorkspaceRequestScope,
+  workspaceIdParam,
+} from "../../lib/workspace-request-scope";
 import { getWorkspaceLocale } from "../../lib/workspace-locale-server";
 import { workspaceMessages } from "../../lib/workspace-messages";
 import { DesktopAccessReturn } from "../../features/connectionAccess/DesktopAccessReturn";
@@ -54,11 +58,7 @@ export default async function SettingsPage({
   const copy = workspaceMessages[locale];
   const workspaceManagementAreas = localizedWorkspaceManagementAreas(locale);
   const requestedSection: SettingsSection = settingsSection(params.section);
-  const requestedWorkspaceId =
-    typeof params.workspace === "string" &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(params.workspace)
-      ? params.workspace
-      : null;
+  const requestedWorkspaceId = workspaceIdParam(params.workspace);
   const requestedGcpSetupId =
     typeof params.gcpSetup === "string"
     && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -133,14 +133,19 @@ export default async function SettingsPage({
       )
     )
   ));
-  const requestedWorkspace = visibleWorkspaces.find(
-    (workspace) => workspace.id === requestedWorkspaceId,
+  const requestScope = resolveWorkspaceRequestScope({
+    requestedParam: params.workspace,
+    visibleWorkspaceIds: visibleWorkspaces.map((workspace) => workspace.id),
+    sessionWorkspaceId: session.session.activeOrganizationId,
+  });
+  const activeWorkspace = visibleWorkspaces.find(
+    (workspace) => workspace.id === requestScope.activeWorkspaceId,
   ) ?? null;
-  const sessionWorkspace = visibleWorkspaces.find(
-    (workspace) => workspace.id === session.session.activeOrganizationId,
-  ) ?? null;
-  const activeWorkspace = requestedWorkspace ?? sessionWorkspace ?? visibleWorkspaces[0] ?? null;
   const activeWorkspaceId = activeWorkspace?.id ?? null;
+  // Ids minted inside the requested workspace never travel into another scope.
+  const scopedGcpSetupId = requestScope.scopeMatched ? requestedGcpSetupId : null;
+  const scopedIntegrationId = requestScope.scopeMatched ? requestedIntegrationId : null;
+  const scopedConnectionId = requestScope.scopeMatched ? requestedConnectionId : null;
   const orderedWorkspaces = activeWorkspaceId
     ? [
         ...visibleWorkspaces.filter((workspace) => workspace.id === activeWorkspaceId),
@@ -166,7 +171,7 @@ export default async function SettingsPage({
         ? requestedSection === "workspaces" ? "workspaces" : "workspace-settings"
         : requestedSection === "workspaces"
           ? "workspaces"
-          : (requestedGcpSetupId || typeof params.provider === "string")
+          : (scopedGcpSetupId || typeof params.provider === "string")
               && canManageActiveWorkspace
             ? "providers"
             : requestedSection === "workspace-settings" && canDeleteActiveWorkspace
@@ -226,7 +231,7 @@ export default async function SettingsPage({
         <SettingsNavigation
           activeSection={activeSection}
           workspaceId={activeWorkspaceId}
-          gcpSetupId={requestedGcpSetupId}
+          gcpSetupId={scopedGcpSetupId}
           canManageWorkspace={canManageActiveWorkspace}
           canDeleteWorkspace={canDeleteActiveWorkspace}
           workspaceDeletionPending={workspaceDeletionPending}
@@ -263,6 +268,14 @@ export default async function SettingsPage({
             </div>
           ) : null}
         </header>
+        {requestScope.unavailable ? (
+          <ConsoleNotice tone="danger">
+            <span className="tw:block">{copy.settings.requestedWorkspaceUnavailable}</span>
+            <span className="tw:mt-2 tw:block">
+              {copy.settings.requestedWorkspaceUnavailableChoice}
+            </span>
+          </ConsoleNotice>
+        ) : null}
         {activeSection === "providers"
         && params.provider === "planetScale"
         && params.status === "connected" ? (
@@ -287,7 +300,7 @@ export default async function SettingsPage({
         {activeSection === "providers"
         && params.provider === "gcpCloudSql"
         && params.status === "repaired"
-        && requestedConnectionId ? (
+        && scopedConnectionId ? (
           <ConsoleNotice>
             {copy.settings.gcpRepaired}
           </ConsoleNotice>
@@ -390,14 +403,14 @@ export default async function SettingsPage({
             <DesktopAccessReturn
               userId={session.user.id}
               workspaceId={activeWorkspace.id}
-              connectionId={requestedConnectionId}
-              fromDesktop={params.desktop === "1" && requestedWorkspaceId === activeWorkspace.id}
+              connectionId={scopedConnectionId}
+              fromDesktop={params.desktop === "1" && requestScope.scopeMatched}
             >
             <WorkspaceManagementPanel
               workspaceId={activeWorkspace.id}
-              gcpSetupId={requestedGcpSetupId}
-              initialIntegrationId={requestedIntegrationId}
-              initialConnectionId={requestedConnectionId}
+              gcpSetupId={scopedGcpSetupId}
+              initialIntegrationId={scopedIntegrationId}
+              initialConnectionId={scopedConnectionId}
               area={activeManagementArea}
             />
             </DesktopAccessReturn>

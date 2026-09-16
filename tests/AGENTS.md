@@ -53,7 +53,7 @@ caps, which needs an explicit owner request.
 
 ### Testing Requirements
 - `pnpm check:test-budget` runs `node scripts/check-critical-test-budget.mjs`, which walks the whole repository (skipping `.git`, `node_modules`, `target`, `dist`, `.next`, `.open-next`, `.wrangler`, and similar build/tooling directories), counts every frontend/Rust/harness file and test case, and fails on any mismatch against `critical-test-budget.json`. Run this whenever a test or harness file is added, removed, or renamed anywhere in the repository.
-- It prints two lines. The first is the 208 budget (`frontend … , Rust … , total …/208`); the second reports the harness suites separately (`harness 14/14 (budget 외 계약 검증, 208에 포함되지 않음): 5 entry points, 16 helper modules`). The harness line never changes the first line's totals.
+- It prints two lines. The first is the 208 budget (`frontend … , Rust … , total …/208`); the second reports the harness suites separately (`harness 15/15 (budget 외 계약 검증, 208에 포함되지 않음): 5 entry points, 16 helper modules`). The harness line never changes the first line's totals.
 - One shared counter serves both the frontend and harness sections, and it ignores member calls such as `/^[0-9a-f]{64}$/.test(value)` or `pattern.test(x)`. An assertion that happens to call `.test()` is never miscounted as a declared case, so a file is never pushed to a wrong number that the manifest then gets "corrected" to match. The Rust side is unaffected: it counts whole-line `#[test]`-shaped attributes, a form no method call can imitate.
 
 ### Common Patterns

@@ -95,3 +95,37 @@ it is not part of the Next.js build.
 - `vitest` (contract and provider-harness test runners).
 
 <!-- MANUAL: Any manually added notes below this line are preserved on regeneration -->
+
+## Vitest 4.1.11 pin (reviewed 2026-09-17)
+
+`vitest` stays at 4.1.11 here while the repository root and the two Worker
+sub-projects are on 5.0.0. The gap is a recorded decision, not an open defect —
+no failing command, flag, timeout, mock, or teardown was reproducible:
+
+- Nothing binds this app to a Vitest major. `@cloudflare/vitest-pool-workers`
+  appears nowhere in the repository, and the two current Miniflare users
+  (`lib/d1-storage.harness.ts` and `lib/provider-import-postgres-harness.setup.ts`)
+  drive it as a plain library under the default Node pool. Both configs set only
+  `resolve.alias`, `test.include`, `setupFiles`, and the explicit 180s timeouts.
+- Every runner is invoked as `vitest run --config <file>`, the same shape the
+  other three projects use, so no CLI flag or timeout behaviour differs by
+  version.
+- No Vitest 5 breaking change reaches these suites: all 91 `.resolves`/
+  `.rejects` assertions are awaited, `vi.mock`/`vi.hoisted` appear only at
+  module top level, every mock and spy is created inside a test or an assertion
+  helper where the new `clearMocks` default drops nothing, and
+  `test.sequential`, `expect.poll`, `resolveConfig`, `VITEST_POOL_ID`,
+  `toHaveTextContent`, and the browser-mode APIs are unused.
+- `pnpm --dir workspace-cloud test:contracts` passes on 4.1.11 (2 files, 10
+  cases, ~28s) with no skipped case, timeout, or leftover `workerd`/`vitest`
+  process.
+- Neither runner is on a CI path: `ci.yml`'s `provider-postgres` job runs the
+  D1 migration, Cloud SQL, and harness-guard scripts, and `scripts/test-all.sh`
+  has no workspace-cloud vitest phase.
+
+Raise the pin when a reproducible failure or a concrete maintenance need
+appears, or let the weekly Dependabot `workspace-cloud-dependencies` group do
+it. Vitest 5 additionally needs Node >= 22.12 (CI uses 24, so that is met) and
+turns `vite` into a required non-optional peer; this package declares no `vite`,
+and pnpm already resolves that peer the same way it does for
+`workspace-scheduler-cloudflare`, which runs 5.0.0 without declaring one.

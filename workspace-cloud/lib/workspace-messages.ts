@@ -20,7 +20,6 @@ const en = {
     marketingHome: "DopeDB product overview",
   },
   signIn: {
-    status: "Control plane available",
     eyebrow: "SHARED ACCESS / PERSONAL AUTHORITY",
     headlineFirst: "Share database access.",
     headlineSecond: "Keep authority personal.",
@@ -49,6 +48,22 @@ const en = {
     legalBetween: "and acknowledge the",
     privacy: "Privacy Policy",
     legalAfter: ". Your organization’s workspace policy and audit records also apply.",
+  },
+  notFound: {
+    title: "This link cannot be opened here",
+    description: "It may have expired, been revoked, or belong to another account. DopeDB does not report whether the record behind it exists.",
+    action: "Go to your workspace",
+  },
+  appError: {
+    title: "This page could not be displayed",
+    description: "Something failed while rendering the page. The failure detail stays on the server and is not shown here.",
+    retry: "Try again",
+    action: "Go to your workspace",
+  },
+  publicArticle: {
+    chrome: "Published HTML",
+    published: "Published",
+    notFoundTitle: "Analysis Article not found",
   },
   device: {
     invalidRequest: "This authorization request is invalid.",
@@ -109,6 +124,8 @@ const en = {
     currentSuffix: "Current",
     emptyTitle: "Create your first workspace",
     emptyDescription: "Shared connections and policy live inside this boundary.",
+    requestedWorkspaceUnavailable: "This account cannot open the requested workspace, so no other workspace was opened in its place.",
+    requestedWorkspaceUnavailableChoice: "Choose a workspace below, or use the account menu above to continue in the account that holds it.",
     areas: {
       access: {
         label: "Access",
@@ -235,6 +252,8 @@ const en = {
     resolvingConflict: "Applying…",
     applyDeleteConfirmation: "Remove this shared database using the preserved candidate deletion? Active managed access will be revoked first.",
     sharedConnection: "Shared connection",
+    loadingConnections: "Checking shared connections",
+    connectionsUnavailable: "Shared connections could not be checked",
     noConnections: "No shared connections are available to manage",
     managedDescription: "Roles and database permissions remain until an administrator changes them; only short-lived credentials rotate automatically.",
     localDescription: "Members with use access connect their database credentials once on their own device.",
@@ -324,6 +343,9 @@ const en = {
     copyError: "Could not copy the invitation link to the clipboard.",
     title: "Workspace members",
     description: "The server verifies permissions again for every API request.",
+    loading: "Checking members and invitations.",
+    unavailable: "Members and invitations could not be checked.",
+    empty: "This workspace has no members to show yet.",
     remove: "Remove",
     createInvite: "Create invitation link",
     creating: "Creating",
@@ -796,7 +818,6 @@ const ko: DeepStringShape<typeof en> = {
     marketingHome: "DopeDB 제품 소개",
   },
   signIn: {
-    status: "Control plane available",
     eyebrow: "SHARED ACCESS / PERSONAL AUTHORITY",
     headlineFirst: "DB 접근은 함께.",
     headlineSecond: "인증 정보는 각자.",
@@ -825,6 +846,22 @@ const ko: DeepStringShape<typeof en> = {
     legalBetween: "에 동의하고",
     privacy: "개인정보처리방침",
     legalAfter: "을 확인한 것으로 봅니다. 조직의 워크스페이스 정책과 감사 기록도 적용됩니다.",
+  },
+  notFound: {
+    title: "이 링크는 여기에서 열 수 없습니다",
+    description: "만료되었거나 회수되었거나 다른 계정의 링크일 수 있습니다. DopeDB는 링크가 가리키는 기록의 존재 여부를 알려 주지 않습니다.",
+    action: "내 워크스페이스로 이동",
+  },
+  appError: {
+    title: "이 페이지를 표시하지 못했습니다",
+    description: "페이지를 그리는 중 문제가 발생했습니다. 실패 상세는 서버에 남으며 이 화면에는 표시하지 않습니다.",
+    retry: "다시 시도",
+    action: "내 워크스페이스로 이동",
+  },
+  publicArticle: {
+    chrome: "발행된 HTML",
+    published: "발행 시각",
+    notFoundTitle: "Analysis Article을 찾을 수 없습니다",
   },
   device: {
     invalidRequest: "올바르지 않은 승인 요청입니다.",
@@ -885,6 +922,8 @@ const ko: DeepStringShape<typeof en> = {
     currentSuffix: "현재",
     emptyTitle: "첫 워크스페이스를 만드세요",
     emptyDescription: "공유 연결과 정책이 이 경계 안에 모입니다.",
+    requestedWorkspaceUnavailable: "요청한 워크스페이스를 이 계정에서 열 수 없어 다른 워크스페이스를 대신 열지 않았습니다.",
+    requestedWorkspaceUnavailableChoice: "아래에서 워크스페이스를 직접 선택하거나, 위 계정 메뉴에서 해당 워크스페이스를 가진 계정으로 이동하세요.",
     areas: {
       access: {
         label: "접근 권한",
@@ -1011,6 +1050,8 @@ const ko: DeepStringShape<typeof en> = {
     resolvingConflict: "적용 중…",
     applyDeleteConfirmation: "보존된 삭제 후보를 적용해 이 공유 DB를 제거할까요? 활성 관리형 접근을 먼저 회수합니다.",
     sharedConnection: "공유 연결",
+    loadingConnections: "공유 연결을 확인하는 중입니다",
+    connectionsUnavailable: "공유 연결을 확인하지 못했습니다",
     noConnections: "관리할 공유 연결이 없습니다",
     managedDescription: "역할과 DB 사용 권한은 관리자가 바꿀 때까지 유지되고, 단기 자격 증명만 앱이 자동 회전합니다.",
     localDescription: "사용 권한이 있는 멤버는 자신의 기기에서 DB 자격 증명을 한 번 연결해야 합니다.",
@@ -1100,6 +1141,9 @@ const ko: DeepStringShape<typeof en> = {
     copyError: "초대 링크를 클립보드에 복사하지 못했습니다.",
     title: "워크스페이스 멤버",
     description: "권한은 모든 API 요청에서 서버가 다시 확인합니다.",
+    loading: "멤버와 초대를 확인하는 중입니다.",
+    unavailable: "멤버와 초대를 확인하지 못했습니다.",
+    empty: "이 워크스페이스에 표시할 멤버가 아직 없습니다.",
     remove: "제거",
     createInvite: "초대 링크 만들기",
     creating: "생성 중",
