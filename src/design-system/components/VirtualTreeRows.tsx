@@ -1,3 +1,6 @@
+// Windowing layer between the explorer's single scroller and its leaf rows. It
+// publishes the full logical item list for keyboard navigation even while most
+// rows are unmounted, so arrow keys and reveal never see only the visible window.
 import {
   Fragment,
   useCallback,

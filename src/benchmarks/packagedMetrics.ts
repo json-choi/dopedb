@@ -1,3 +1,6 @@
+// Module-level accumulator for packaged-benchmark renderer evidence: React
+// commits, IPC timings, long tasks and frame gaps, attributed to whichever action
+// window is open. Every counter stays inert unless the benchmark flag is set.
 import type { ProfilerOnRenderCallback } from "react";
 
 const enabled = import.meta.env.VITE_DOPEDB_PACKAGED_BENCHMARK === "1";

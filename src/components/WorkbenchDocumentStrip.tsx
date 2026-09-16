@@ -1,3 +1,6 @@
+// Tab strip for the open workbench documents. Which documents exist and which one
+// is active belong to the workbench store; only the inline rename draft is local,
+// and every tab's label and glyph are derived from the document kind.
 import { useEffect, useRef, useState } from "react";
 
 import type { ConnectionProfile } from "../features/connections/domain";

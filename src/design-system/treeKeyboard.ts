@@ -1,3 +1,6 @@
+// Tree keyboard navigation reads the live DOM plus the item lists virtualized
+// lists register, so an unmounted row stays a reachable move target. Roving focus
+// comes from data attributes rather than a React-side mirror of the tree.
 import {
   useCallback,
   useLayoutEffect,

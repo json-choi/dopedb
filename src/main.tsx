@@ -1,3 +1,6 @@
+// Renderer entry point. A build flag read at startup decides between the product
+// tree and an isolated packaged-benchmark tree; beyond that choice and the
+// first-commit startup mark, no product state or provider composition lives here.
 import React from "react";
 import { createRoot } from "./reactDomClient";
 import App from "./App";

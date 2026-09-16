@@ -1,3 +1,6 @@
+// Drops superseded values from a high-frequency stream so only the newest one is
+// applied per animation frame. The frame callbacks are injectable, letting a
+// caller drive and assert the commit boundary without a real rAF.
 type RequestFrame = (callback: FrameRequestCallback) => number;
 type CancelFrame = (handle: number) => void;
 

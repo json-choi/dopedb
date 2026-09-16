@@ -1,3 +1,6 @@
+// Consent and disclosure strings for product analytics. These are user-facing
+// commitments about what is collected, where it travels and how long it is kept,
+// so they follow the analytics contract rather than copy preference.
 import { defineCatalog } from "../types";
 
 export const productAnalyticsCatalog = defineCatalog(

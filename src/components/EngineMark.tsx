@@ -1,3 +1,6 @@
+// One engine glyph plus its accessible name, resolved from the engine enum alone.
+// The icon and label tables are exhaustive Records, so adding an engine fails to
+// compile here instead of silently falling back to a generic mark.
 import mysqlIcon from "../assets/db-icons/mysql.svg";
 import mongodbIcon from "../assets/db-icons/mongodb.svg";
 import postgresqlIcon from "../assets/db-icons/postgresql.svg";

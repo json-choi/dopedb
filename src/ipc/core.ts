@@ -1,3 +1,5 @@
+// Every frontend Tauri command call funnels through this one boundary, so the
+// packaged benchmark can time IPC without patching Tauri's window internals.
 import {
   Channel,
   invoke as nativeInvoke,

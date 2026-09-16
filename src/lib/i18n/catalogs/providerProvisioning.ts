@@ -1,3 +1,6 @@
+// Managed-access provisioning strings: one label per provisioning action, state
+// and readiness the setup flow can report. The dialog resolves them through
+// exhaustive Records keyed by the backend unions, so en and ko move together.
 import { defineCatalog } from "../types";
 
 export const providerProvisioningCatalog = defineCatalog(

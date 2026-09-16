@@ -1,3 +1,6 @@
+// Packaged-QA scenario rendering one fixed published article, then asserting the
+// publication contract in the real runtime: sanitized static HTML only, with no
+// control that could re-run or expose the saved query.
 import { useEffect, useState } from "react";
 
 const publishedHtml = [
