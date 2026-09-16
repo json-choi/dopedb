@@ -1,3 +1,6 @@
+// Turns per-target install states into one setup plan: the action to offer, what
+// to preselect, and which targets need attention instead. Only a missing or an
+// outdated managed install is actionable, so a user-modified install is left alone.
 import type {
   SkillInstallState,
   SkillTarget,

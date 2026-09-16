@@ -1,3 +1,6 @@
+// Creates a project and its first environments in one submit, then reports the
+// outcome with workspace context for analytics. Query invalidation is what
+// publishes the new project; only the form draft and its error live here.
 import { useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 

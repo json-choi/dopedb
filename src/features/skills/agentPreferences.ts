@@ -1,3 +1,6 @@
+// Which agent providers this device has enabled, stored locally and broadcast on a
+// window event so every mounted surface re-reads one value. The supported
+// provider/target pairs are fixed here rather than discovered at runtime.
 import { useEffect, useState } from "react";
 
 import type { AgentProvider } from "../agents/domain";

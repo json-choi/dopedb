@@ -1,3 +1,6 @@
+// Creates the demo SQLite connection, verifies it, and records the verification
+// outcome. An existing demo connection is reused rather than duplicated, and no
+// other saved connection is read for credentials or modified.
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 

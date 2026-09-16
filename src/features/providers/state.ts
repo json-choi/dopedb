@@ -1,3 +1,6 @@
+// Phase machine for the credential dialog. Every transition out of verifying also
+// clears the receipt, so an ephemeral credential receipt cannot survive into the
+// next step or be re-rendered once the dialog has moved on.
 import type {
   ProviderCredentialReceipt,
   ProviderCredentialDialogStatus,

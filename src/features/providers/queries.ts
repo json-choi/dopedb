@@ -1,3 +1,6 @@
+// Query options for provider integrations, credential bindings and provisioning
+// status. Every inventory call is raced against a timeout and never retried, so a
+// provider that stops answering surfaces as an error instead of a hung screen.
 import { queryOptions } from "@tanstack/react-query";
 
 import {

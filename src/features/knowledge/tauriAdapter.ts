@@ -1,3 +1,6 @@
+// Typed Tauri surface for knowledge projects, environments, GitHub and local
+// sources, and environment connection bindings, plus the change event other
+// surfaces refetch on. It holds no state and caches no listing of its own.
 import { invoke } from "../../ipc/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {

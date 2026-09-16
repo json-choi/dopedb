@@ -1,3 +1,6 @@
+// Walks managed provider access through discover, plan, approve and execute, plus
+// repair and removal. The plan is the unit of approval, so nothing is applied
+// before it is approved, and the dialog refuses to close while a step is pending.
 import {
   useEffect,
   useMemo,

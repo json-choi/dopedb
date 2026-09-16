@@ -1,3 +1,6 @@
+// Grid view state per table view key behind one reducer: page, sort, typed versus
+// applied filters and expressions, and staged writes. A view key change is itself
+// an action, so filters and staged writes cannot carry into another table.
 import { useEffect, useReducer } from "react";
 
 import type { GridSort } from "../../lib/sqlBuild";

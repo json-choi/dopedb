@@ -1,3 +1,6 @@
+// The update state machine with its Tauri dependencies injected, so phases and
+// download progress can be driven and asserted without a real updater. Every
+// transition happens here; screens only render the snapshot it publishes.
 export type AppUpdaterPhase =
   | "idle"
   | "checking"

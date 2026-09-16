@@ -1,3 +1,6 @@
+// Wire types for projects, environments, sources and environment-to-connection
+// bindings. Environments carry a risk class and a revision, so callers can pin
+// work to an exact revision rather than to a name that may be reused.
 export type KnowledgeEnvironment = {
   id: string;
   name: string;

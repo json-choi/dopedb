@@ -1,3 +1,6 @@
+// Runtime commands the renderer needs from Rust: startup marks, and the packaged
+// benchmark's configuration, workload preparation, completion and failure paths.
+// The metrics type here is the wire contract the benchmark harness reads back.
 import { invoke } from "../../ipc/core";
 
 export type PackagedBenchmarkRendererMetrics = {

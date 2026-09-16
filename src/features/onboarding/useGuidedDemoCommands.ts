@@ -1,3 +1,6 @@
+// The guided demo's actions resolve the real demo resources — connection, catalog
+// entry, knowledge environment — before delegating to the screen that owns each.
+// It yields null until those exist, so no card can offer a command that dead-ends.
 import { useQueryClient } from "@tanstack/react-query";
 
 import { useToast } from "../../components/Toast";

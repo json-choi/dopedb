@@ -1,3 +1,6 @@
+// Binds the controller to the real Tauri updater, a periodic check and a
+// visibility-gated refresh, exposing its snapshot through useSyncExternalStore.
+// Disposal is deferred by generation so a StrictMode remount does not tear it down.
 import { getVersion } from "@tauri-apps/api/app";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check } from "@tauri-apps/plugin-updater";

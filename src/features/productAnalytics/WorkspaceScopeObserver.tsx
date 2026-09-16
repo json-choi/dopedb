@@ -1,3 +1,6 @@
+// Renders nothing; it exists so scope readiness is reported from one place rather
+// than from each screen. Nothing is captured unless analytics is both available
+// and consented, and each scope is reported at most once per app session.
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 

@@ -1,3 +1,6 @@
+// Client-side view of write authority: why a write was blocked, which recovery it
+// points at, and which controls a member may even see. Both the requested and the
+// effective settings only narrow; the server stays the one gate that can widen.
 import type { ConnectionProfile } from "../connections/domain";
 import type { SafetySettings } from "../../ipc/types";
 

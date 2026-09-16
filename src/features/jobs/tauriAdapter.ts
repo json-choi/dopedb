@@ -1,3 +1,6 @@
+// Typed Tauri surface for import and export jobs. File access is granted per
+// exact picked file and referenced afterwards only by capability id, so no path
+// string crosses this boundary once the person has chosen the file.
 import { invoke } from "../../ipc/core";
 
 import type {

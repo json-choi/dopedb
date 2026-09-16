@@ -1,3 +1,6 @@
+// First-run gate that installs the ACP adapter plugins for the providers the
+// person picks and shows whether their local CLIs were detected. Installing a
+// plugin is its only mutation: no login happens and no provider token is read.
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 

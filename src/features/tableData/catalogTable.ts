@@ -1,3 +1,6 @@
+// Bridges a navigation-only relation to its full catalog entry, choosing the
+// connection-wide or per-database query from whether a database is named. The
+// snapshot read waits on the catalog, so the grid never blocks on both at once.
 import { useQuery } from "@tanstack/react-query";
 import type { Catalog, CatalogTable } from "../../ipc/types";
 import {
