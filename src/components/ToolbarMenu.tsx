@@ -1,3 +1,6 @@
+// Portal command/check menu. The keyboard, dismissal and focus-restore contract
+// lives in the shared design-system menu surface module so this trigger and the
+// account PopupMenu behave identically.
 import {
   type ButtonHTMLAttributes,
   useCallback,
@@ -5,7 +8,6 @@ import {
   useId,
   useRef,
   useState,
-  type KeyboardEvent,
   type ReactElement,
   type ReactNode,
 } from "react";
@@ -14,19 +16,15 @@ import { Tooltip } from "../design-system/components/Tooltip";
 import {
   floatingPortalOwnerId,
   floatingPortalIsModalOwned,
-  ownsFloatingTarget,
   useAnchoredFloatingSurface,
 } from "../design-system/floating";
+import {
+  focusMenuEdge,
+  menuTriggerEntryEdge,
+  moveMenuFocus,
+  useMenuDismiss,
+} from "../design-system/menuSurface";
 import { Icon, type IconName } from "./Icon";
-
-function menuItems(root: HTMLElement | null) {
-  if (!root) return [];
-  return [
-    ...root.querySelectorAll<HTMLElement>(
-      'button:not(:disabled), [role="menuitem"]:not([aria-disabled="true"]), [role="menuitemcheckbox"] input:not(:disabled), [role="menuitemradio"] input:not(:disabled)',
-    ),
-  ];
-}
 
 export default function ToolbarMenu({
   label,
@@ -65,7 +63,7 @@ export default function ToolbarMenu({
   const menuId = `toolbar-menu-${generatedId.replace(/:/g, "")}`;
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const focusFirstOnOpen = useRef(false);
+  const focusEdgeOnOpen = useRef<"first" | "last" | null>(null);
   const lastOpenRequest = useRef(openRequest);
   const [open, setOpen] = useState(false);
   const {
@@ -102,7 +100,7 @@ export default function ToolbarMenu({
     }
     if (disabled) return;
     lastOpenRequest.current = openRequest;
-    focusFirstOnOpen.current = true;
+    focusEdgeOnOpen.current = "first";
     setOpen(true);
   }, [disabled, openRequest]);
 
@@ -118,62 +116,19 @@ export default function ToolbarMenu({
     close();
   }, [middlewareData.hide?.referenceHidden, open]);
 
-  useEffect(() => {
-    if (!open) return;
-    const closeOutside = (event: PointerEvent) => {
-      const target = event.target as Node;
-      if (
-        triggerRef.current?.contains(target) ||
-        (menuRef.current && ownsFloatingTarget(menuRef.current, target))
-      ) {
-        return;
-      }
-      close();
-    };
-    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      close({ restoreFocus: true });
-    };
-    document.addEventListener("pointerdown", closeOutside);
-    document.addEventListener("keydown", closeOnEscape, true);
-    return () => {
-      document.removeEventListener("pointerdown", closeOutside);
-      document.removeEventListener("keydown", closeOnEscape, true);
-    };
-  }, [open]);
+  useMenuDismiss({
+    open,
+    menuRef,
+    triggerRef,
+    onDismiss: ({ restoreFocus }) => close({ restoreFocus }),
+  });
 
   useEffect(() => {
-    if (!open || !isPositioned || !focusFirstOnOpen.current) return;
-    focusFirstOnOpen.current = false;
-    menuItems(menuRef.current)[0]?.focus();
+    if (!open || !isPositioned || focusEdgeOnOpen.current === null) return;
+    const edge = focusEdgeOnOpen.current;
+    focusEdgeOnOpen.current = null;
+    focusMenuEdge(menuRef.current, edge);
   }, [isPositioned, open]);
-
-  function moveFocus(event: KeyboardEvent<HTMLDivElement>) {
-    if (event.target instanceof HTMLTextAreaElement) {
-      return;
-    }
-    if (
-      event.target instanceof HTMLInputElement &&
-      event.target.type !== "checkbox" &&
-      event.target.type !== "radio"
-    ) {
-      return;
-    }
-    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
-    const items = menuItems(menuRef.current);
-    if (items.length === 0) return;
-    event.preventDefault();
-    const current = items.indexOf(document.activeElement as HTMLElement);
-    if (event.key === "Home") items[0]?.focus();
-    else if (event.key === "End") items[items.length - 1]?.focus();
-    else {
-      const direction = event.key === "ArrowDown" ? 1 : -1;
-      const next = current < 0 ? (direction > 0 ? 0 : items.length - 1) : current + direction;
-      items[(next + items.length) % items.length]?.focus();
-    }
-  }
 
   const menu = open
     ? createPortal(
@@ -191,7 +146,7 @@ export default function ToolbarMenu({
             ...floatingStyles,
             visibility: isPositioned ? "visible" : "hidden",
           }}
-          onKeyDown={moveFocus}
+          onKeyDown={(event) => moveMenuFocus(event, menuRef.current)}
           onClick={(event) => {
             const target = event.target as HTMLElement;
             if (target.closest("[data-menu-keep-open]")) return;
@@ -221,16 +176,27 @@ export default function ToolbarMenu({
       aria-pressed={pressed}
       aria-controls={open ? menuId : undefined}
       tabIndex={triggerTabIndex}
-      onClick={() => {
-        if (open) close();
-        else {
-          setOpen(true);
+      onClick={(event) => {
+        if (open) {
+          close();
+          return;
         }
+        // detail 0 means Enter/Space activated the trigger, so the keyboard
+        // user must land inside the menu rather than on the trigger.
+        if (event.detail === 0) focusEdgeOnOpen.current = "first";
+        setOpen(true);
       }}
       onKeyDown={(event) => {
-        if (event.key !== "ArrowDown") return;
+        const edge = menuTriggerEntryEdge(event);
+        if (!edge) return;
         event.preventDefault();
-        focusFirstOnOpen.current = true;
+        // An already-open menu does not change state, so move focus directly
+        // instead of waiting for an effect that will not run again.
+        if (open) {
+          focusMenuEdge(menuRef.current, edge);
+          return;
+        }
+        focusEdgeOnOpen.current = edge;
         setOpen(true);
       }}
     >

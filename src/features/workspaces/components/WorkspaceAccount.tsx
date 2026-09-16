@@ -47,6 +47,7 @@ import {
   PopupMenu,
   PopupMenuItem,
 } from "../../../design-system/components/PopupMenu";
+import { menuTriggerEntryEdge } from "../../../design-system/menuSurface";
 import { Button } from "../../../design-system/components/Button";
 import {
   cancelWorkspaceResourceQueries,
@@ -73,7 +74,6 @@ export default function WorkspaceAccount({
   const [switchingAccount, setSwitchingAccount] = useState<AccountId | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [providerCredentialsOpen, setProviderCredentialsOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const loginAttempt = useRef(0);
   const pendingLogin = useRef<{
@@ -269,28 +269,6 @@ export default function WorkspaceAccount({
       void pending.then((unlisten) => unlisten()).catch(() => undefined);
     };
   }, []);
-
-  useEffect(() => {
-    if (!menuOpen) return;
-    const close = (event: MouseEvent) => {
-      const target = event.target;
-      if (target instanceof Element && target.closest("[data-popup-menu]")) {
-        return;
-      }
-      if (!rootRef.current?.contains(target as Node)) setMenuOpen(false);
-    };
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      setMenuOpen(false);
-      window.requestAnimationFrame(() => triggerRef.current?.focus());
-    };
-    window.addEventListener("mousedown", close);
-    window.addEventListener("keydown", closeOnEscape);
-    return () => {
-      window.removeEventListener("mousedown", close);
-      window.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [menuOpen]);
 
   useEffect(() => {
     if (!auth.data?.authenticated) return;
@@ -588,7 +566,6 @@ export default function WorkspaceAccount({
       data-menu-placement={menuPlacement}
       className="tw:relative tw:flex tw:min-h-control-md tw:min-w-0 tw:flex-1 tw:items-center tw:gap-2 tw:p-0 tw:data-[compact=true]:min-h-control-md tw:data-[compact=true]:w-control-md tw:data-[compact=true]:min-w-control-md tw:data-[compact=true]:flex-none tw:data-[compact=true]:justify-center"
       aria-live="polite"
-      ref={rootRef}
     >
       {!authKnown ? (
         <div
@@ -605,6 +582,11 @@ export default function WorkspaceAccount({
             data-compact={compact}
             className="tw:flex tw:min-h-control-md tw:min-w-0 tw:flex-1 tw:cursor-pointer tw:items-center tw:gap-2 tw:rounded-sm tw:border-0 tw:bg-transparent tw:p-0 tw:font-sans tw:text-left tw:text-foreground tw:aria-expanded:bg-muted tw:hover:bg-muted tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:data-[compact=true]:grid tw:data-[compact=true]:size-control-md tw:data-[compact=true]:min-h-control-md tw:data-[compact=true]:min-w-control-md tw:data-[compact=true]:flex-none tw:data-[compact=true]:place-items-center tw:data-[compact=true]:p-0 tw:data-[compact=true]:text-center tw:data-[compact=true]:[&>.icon]:hidden"
             onClick={() => setMenuOpen((open) => !open)}
+            onKeyDown={(event) => {
+              if (!menuTriggerEntryEdge(event)) return;
+              event.preventDefault();
+              setMenuOpen(true);
+            }}
             aria-haspopup="menu"
             aria-expanded={menuOpen}
             aria-label={
@@ -647,6 +629,7 @@ export default function WorkspaceAccount({
               placement={accountMenuPlacement}
               size="account"
               ariaLabel={t("workspace.accountMenu")}
+              onDismiss={() => setMenuOpen(false)}
               onReferenceHidden={() => setMenuOpen(false)}
             >
               <p className="tw:m-0 tw:p-2 tw:text-2xs tw:font-bold tw:tracking-[0.05em] tw:text-muted-foreground tw:uppercase">

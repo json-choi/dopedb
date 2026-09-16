@@ -15,6 +15,7 @@ import {
   PopupMenuCheckbox,
   PopupMenuItem,
 } from "../../design-system/components/PopupMenu";
+import { menuTriggerEntryEdge } from "../../design-system/menuSurface";
 import {
   connectionAccessIssue,
   databaseDisplayLabel,
@@ -419,18 +420,7 @@ export default function ConnectionNode(props: Props) {
           onPointerDown={(event) => event.stopPropagation()}
           onPointerUp={(event) => event.stopPropagation()}
           onClick={(event) => event.stopPropagation()}
-          onKeyDown={(event) => {
-            event.stopPropagation();
-            if (event.key === "Escape") {
-              event.preventDefault();
-              props.onOpenMenu(null);
-              event.currentTarget
-                .querySelector<HTMLButtonElement>(
-                  "[data-connection-menu-trigger]",
-                )
-                ?.focus();
-            }
-          }}
+          onKeyDown={(event) => event.stopPropagation()}
         >
           <SchemaDiffTrigger
             connection={connection}
@@ -457,6 +447,11 @@ export default function ConnectionNode(props: Props) {
                   : connectionMenuKey,
               )
             }
+            onKeyDown={(event) => {
+              if (!menuTriggerEntryEdge(event)) return;
+              event.preventDefault();
+              props.onOpenMenu(connectionMenuKey);
+            }}
           >
             <Icon name="moreVertical" />
           </Button>
@@ -464,6 +459,7 @@ export default function ConnectionNode(props: Props) {
             <PopupMenu
               id={connectionMenuId}
               anchorRef={connectionMenuTriggerRef}
+              onDismiss={() => props.onOpenMenu(null)}
               onReferenceHidden={() => props.onOpenMenu(null)}
             >
               {props.projectDatabaseOrder &&

@@ -1,14 +1,15 @@
 // Canonical flat popup-menu surface and items. Menus use rows, not nested
 // button boxes, and own the same hover/focus/disabled behavior everywhere.
+// The surface also owns the keyboard contract: opening moves focus into the
+// menu, Arrow/Home/End rove between rows, and Escape, an outside pointer or an
+// external close all return focus to the trigger.
 import type {
   ButtonHTMLAttributes,
   InputHTMLAttributes,
-  KeyboardEventHandler,
-  MouseEventHandler,
   ReactNode,
   RefObject,
 } from "react";
-import { useEffect, useId } from "react";
+import { useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
 
 import {
@@ -16,6 +17,12 @@ import {
   floatingPortalIsModalOwned,
   useAnchoredFloatingSurface,
 } from "../floating";
+import {
+  focusMenuEdge,
+  moveMenuFocus,
+  useMenuDismiss,
+  useMenuFocusReturn,
+} from "../menuSurface";
 
 type PopupMenuPlacement = "bottom-end" | "right-end" | "top-start";
 
@@ -26,8 +33,7 @@ export function PopupMenu({
   placement = "bottom-end",
   size = "default",
   ariaLabel,
-  onClick,
-  onKeyDown,
+  onDismiss,
   onReferenceHidden,
 }: {
   id?: string;
@@ -36,12 +42,13 @@ export function PopupMenu({
   placement?: PopupMenuPlacement;
   size?: "account" | "default";
   ariaLabel?: string;
-  onClick?: MouseEventHandler<HTMLDivElement>;
-  onKeyDown?: KeyboardEventHandler<HTMLDivElement>;
+  onDismiss: () => void;
   onReferenceHidden?: () => void;
 }) {
   const generatedId = useId();
   const menuId = id ?? `popup-menu-${generatedId.replace(/:/g, "")}`;
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const entered = useRef(false);
   const {
     refs,
     floatingStyles,
@@ -60,10 +67,32 @@ export function PopupMenu({
     onReferenceHidden?.();
   }, [middlewareData.hide?.referenceHidden, onReferenceHidden]);
 
+  // The surface is portalled to the end of document.body, so leaving focus on
+  // the trigger would put every menu row behind the whole app in Tab order.
+  useEffect(() => {
+    if (!isPositioned || entered.current) return;
+    entered.current = true;
+    focusMenuEdge(menuRef.current, "first");
+  }, [isPositioned]);
+
+  useMenuDismiss({
+    open: true,
+    menuRef,
+    triggerRef: anchorRef,
+    onDismiss: ({ restoreFocus }) => {
+      if (restoreFocus) anchorRef.current?.focus({ preventScroll: true });
+      onDismiss();
+    },
+  });
+  useMenuFocusReturn({ menuRef, triggerRef: anchorRef });
+
   if (typeof document === "undefined") return null;
   return createPortal(
     <div
-      ref={refs.setFloating}
+      ref={(node) => {
+        menuRef.current = node;
+        refs.setFloating(node);
+      }}
       id={menuId}
       role="menu"
       aria-label={ariaLabel}
@@ -77,8 +106,7 @@ export function PopupMenu({
         ...floatingStyles,
         visibility: isPositioned ? "visible" : "hidden",
       }}
-      onClick={onClick}
-      onKeyDown={onKeyDown}
+      onKeyDown={(event) => moveMenuFocus(event, menuRef.current)}
     >
       {children}
     </div>,

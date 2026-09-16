@@ -187,10 +187,6 @@ export function DatabaseExplorer({
     },
     commands,
   } = useCatalogExplorerState(catalogScope.key);
-  const closeOpenMenu = useEffectEvent(() => {
-    commands.patch({ openMenuId: null });
-  });
-
   const environmentBindingsReady = environmentConnections.isSuccess;
   const { unassignedConnections, unassignedConnectionIds } =
     projectConnectionAssignment(
@@ -224,22 +220,6 @@ export function DatabaseExplorer({
         : null;
     setProviderCredentialsOpen(provider);
   }
-  useEffect(() => {
-    if (!openMenuId) return;
-    const closeOnOutsidePointer = (event: globalThis.PointerEvent) => {
-      const target = event.target;
-      if (
-        target instanceof Element &&
-        target.closest(".db-menu, [data-popup-menu]")
-      ) {
-        return;
-      }
-      closeOpenMenu();
-    };
-    document.addEventListener("pointerdown", closeOnOutsidePointer);
-    return () => document.removeEventListener("pointerdown", closeOnOutsidePointer);
-  }, [openMenuId]);
-
   // Query observers survive the shell while a workspace changes. Clear the explorer's
   // per-connection intent at the same boundary as its scoped keys so no hidden row can
   // resubscribe an old connection in the newly active account.
