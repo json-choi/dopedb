@@ -68,36 +68,41 @@ export const homeCopy = {
       "imageAlt": "DopeDB 0.4.21 showing the Demo SQLite orders table, columns, and foreign key in Personal Workspace"
     },
     "faq": {
-      "eyebrow": "Before you trust it",
-      "title": "Not convinced? Ask these first.",
       "items": [
         {
           "question": "Do my queries pass through your servers?",
-          "answer": "Database traffic runs from Desktop. The workspace stores membership, connection metadata, policy, provider resources, revisions, and collaboration audit. Sharing an Article also uploads its sanitized HTML and saved query definition, without query result rows."
+          "answer": "Database traffic runs from Desktop. The workspace stores membership, connection metadata, policy, provider resources, revisions, and collaboration audit. Sharing an Article also uploads its sanitized HTML and saved query definition, without query result rows.",
+          "landing": true
         },
         {
           "question": "If I share a connection, does my database password go up with it?",
-          "answer": "No. Member-local credentials remain in that member's OS store. Supported managed access returns an expiring member-specific credential and does not persist the issued secret."
+          "answer": "No. Member-local credentials remain in that member's OS store. Supported managed access returns an expiring member-specific credential and does not persist the issued secret.",
+          "landing": true
         },
         {
           "question": "Can an Agent approve the write it just wrote?",
-          "answer": "No. A person must approve the proposed SQL in Desktop before it runs."
+          "answer": "No. A person must approve the proposed SQL in Desktop before it runs.",
+          "landing": true
         },
         {
           "question": "If DopeDB goes down, do we lose our database?",
-          "answer": "No. An already synchronized connection with your member-local credential keeps working, and Personal Workspace never needed an account. New managed credentials and membership or policy changes wait until the service is back."
+          "answer": "No. An already synchronized connection with your member-local credential keeps working, and Personal Workspace never needed an account. New managed credentials and membership or policy changes wait until the service is back.",
+          "landing": true
         },
         {
           "question": "How do I invite someone to an Article?",
-          "answer": "A workspace manager with management access to the database creates an invitation for one recipient. That person signs in and explicitly accepts to join the workspace and receive read access. They still install Desktop and supply any member-local credential themselves."
+          "answer": "A workspace manager with management access to the database creates an invitation for one recipient. That person signs in and explicitly accepts to join the workspace and receive read access. They still install Desktop and supply any member-local credential themselves.",
+          "landing": true
         },
         {
           "question": "Can I use Claude or Codex from my terminal?",
-          "answer": "Yes. Each run asks Desktop to approve the selected resources, then starts your locally authenticated official CLI."
+          "answer": "Yes. Each run asks Desktop to approve the selected resources, then starts your locally authenticated official CLI.",
+          "landing": true
         },
         {
           "question": "Can I use it in production today?",
-          "answer": "It is still an alpha. Verify the supported provider and recovery scope, use least-privilege database roles, and validate your workflow before it touches production data."
+          "answer": "It is still an alpha. Verify the supported provider and recovery scope, use least-privilege database roles, and validate your workflow before it touches production data.",
+          "landing": true
         }
       ]
     },
@@ -175,36 +180,41 @@ export const homeCopy = {
       "imageAlt": "개인 워크스페이스에서 Demo SQLite의 주문 테이블·컬럼·외래 키를 보여주는 DopeDB 0.4.21"
     },
     "faq": {
-      "eyebrow": "신뢰하기 전에",
-      "title": "못 믿겠으면, 이것부터 물어보세요.",
       "items": [
         {
           "question": "내 쿼리가 당신들 서버를 지나가나요?",
-          "answer": "DB 통신은 Desktop에서 실행됩니다. 워크스페이스는 구성원, 연결 정보, 정책, 클라우드 리소스, 버전과 협업 감사 기록을 관리합니다. Article 공유 시 정제된 HTML과 저장 쿼리 정의도 업로드하며, 쿼리 결과 행은 업로드하지 않습니다."
+          "answer": "DB 통신은 Desktop에서 실행됩니다. 워크스페이스는 구성원, 연결 정보, 정책, 클라우드 리소스, 버전과 협업 감사 기록을 관리합니다. Article 공유 시 정제된 HTML과 저장 쿼리 정의도 업로드하며, 쿼리 결과 행은 업로드하지 않습니다.",
+          "landing": true
         },
         {
           "question": "연결을 공유하면 내 DB 비번도 같이 올라가나요?",
-          "answer": "아니요. Member-local credential은 각자의 OS 저장소에 남습니다. 지원되는 managed access는 만료되는 구성원별 credential을 반환하며 발급된 secret을 저장하지 않습니다."
+          "answer": "아니요. Member-local credential은 각자의 OS 저장소에 남습니다. 지원되는 managed access는 만료되는 구성원별 credential을 반환하며 발급된 secret을 저장하지 않습니다.",
+          "landing": true
         },
         {
           "question": "Agent가 자기가 만든 write를 자기가 승인할 수 있나요?",
-          "answer": "아니요. 제안한 SQL은 사람이 Desktop에서 직접 승인해야 실행됩니다."
+          "answer": "아니요. 제안한 SQL은 사람이 Desktop에서 직접 승인해야 실행됩니다.",
+          "landing": true
         },
         {
           "question": "DopeDB가 내려가면 우리 DB도 못 쓰나요?",
-          "answer": "아니요. 이미 동기화된 연결과 기기에 저장한 개인 인증정보로는 계속 작업할 수 있고, Personal Workspace는 애초에 계정이 필요 없습니다. 새 managed credential 발급과 멤버십·정책 변경 반영만 service가 돌아온 뒤로 밀립니다."
+          "answer": "아니요. 이미 동기화된 연결과 기기에 저장한 개인 인증정보로는 계속 작업할 수 있고, Personal Workspace는 애초에 계정이 필요 없습니다. 새 managed credential 발급과 멤버십·정책 변경 반영만 service가 돌아온 뒤로 밀립니다.",
+          "landing": true
         },
         {
           "question": "Article에 다른 사람을 초대하려면 어떻게 하나요?",
-          "answer": "해당 DB의 관리 권한이 있는 워크스페이스 관리자가 수신자 한 명을 지정해 초대합니다. 수신자가 로그인하고 직접 수락하면 워크스페이스 참여와 읽기 권한 등록을 함께 처리합니다. Desktop 설치와 개인 로컬 인증정보 입력은 수신자가 직접 진행합니다."
+          "answer": "해당 DB의 관리 권한이 있는 워크스페이스 관리자가 수신자 한 명을 지정해 초대합니다. 수신자가 로그인하고 직접 수락하면 워크스페이스 참여와 읽기 권한 등록을 함께 처리합니다. Desktop 설치와 개인 로컬 인증정보 입력은 수신자가 직접 진행합니다.",
+          "landing": true
         },
         {
           "question": "터미널의 Claude나 Codex에서도 사용할 수 있나요?",
-          "answer": "네. 실행할 때마다 Desktop에서 선택한 리소스를 승인한 뒤, 로그인된 공식 CLI를 시작합니다."
+          "answer": "네. 실행할 때마다 Desktop에서 선택한 리소스를 승인한 뒤, 로그인된 공식 CLI를 시작합니다.",
+          "landing": true
         },
         {
           "question": "지금 production에 써도 되나요?",
-          "answer": "아직 Alpha입니다. 지원 provider와 복구 범위를 확인하고 최소 권한 DB role을 사용하며 production data에 닿기 전에 workflow를 검증하세요."
+          "answer": "아직 Alpha입니다. 지원 provider와 복구 범위를 확인하고 최소 권한 DB role을 사용하며 production data에 닿기 전에 workflow를 검증하세요.",
+          "landing": true
         }
       ]
     },
