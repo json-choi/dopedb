@@ -55,6 +55,7 @@ import {
   firstDecodeFailureInSelection,
   gridCellInspection,
 } from "./decodeFailures";
+import { useDataGridSelectionReset } from "./useDataGridSelectionReset";
 
 const OVERSCAN = 4;
 
@@ -180,7 +181,6 @@ export default function DataGridVirtual(props: Props) {
     endRow,
     props.result.columns,
   );
-  const columnSelectionKey = props.result.columns.join("\u0000");
   const visibleColumnWindowKey = visibleColumns.join(",");
 
   useEffect(() => {
@@ -207,11 +207,13 @@ export default function DataGridVirtual(props: Props) {
       }
     };
   }, []);
-  useEffect(() => {
-    setSelection(null);
-    setCopyError(null);
-    setFocus({ row: 0, column: 0 });
-  }, [columnSelectionKey]);
+  useDataGridSelectionReset({
+    result: props.result,
+    rowSource: props.rowSource,
+    setSelection,
+    setCopyError,
+    setFocus,
+  });
 
   const activate = (row: number, col: number, extend = false) => {
     focusRequestedRef.current = true;

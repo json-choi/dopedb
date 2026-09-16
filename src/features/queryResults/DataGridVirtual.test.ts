@@ -41,6 +41,7 @@ import {
   firstDecodeFailureInRow,
   gridCellInspection,
 } from "./decodeFailures";
+import { dataGridSelectionResetIdentity } from "./useDataGridSelectionReset";
 
 const offsets = Array.from(
   { length: 51 },
@@ -108,15 +109,58 @@ describe("DataGridVirtual window", () => {
   });
 
   it("keeps boundary coordinates and rectangular selection deterministic", async () => {
+    const wideResult = {
+      columns: Array.from({ length: 19 }, (_, index) => `column_${index}`),
+      rows: [[1]],
+      rowCount: 1,
+      truncated: false,
+      durationMs: 1,
+    };
+    expect(shouldVirtualizeDataGrid(wideResult)).toBe(true);
     expect(
-      shouldVirtualizeDataGrid({
-        columns: Array.from({ length: 19 }, (_, index) => `column_${index}`),
-        rows: [[1]],
-        rowCount: 1,
-        truncated: false,
-        durationMs: 1,
+      dataGridSelectionResetIdentity(wideResult).materializedResult,
+    ).toBe(wideResult);
+    const streamIdentity = {
+      operationId: "00000000-0000-0000-0000-000000000001",
+      capability: "a".repeat(64),
+      pageRows: 256,
+      pageRanges: [],
+      rowCount: 1,
+      complete: false,
+    } satisfies SqlStreamRowSource;
+    expect(
+      dataGridSelectionResetIdentity(wideResult, streamIdentity),
+    ).toEqual(
+      dataGridSelectionResetIdentity(wideResult, {
+        ...streamIdentity,
+        rowCount: 200,
+        pageRanges: [{ sequence: 0, rowStart: 0, rowCount: 200 }],
       }),
-    ).toBe(true);
+    );
+    expect(
+      dataGridSelectionResetIdentity(wideResult, streamIdentity).operationId,
+    ).not.toBe(
+      dataGridSelectionResetIdentity(wideResult, {
+        ...streamIdentity,
+        operationId: "00000000-0000-0000-0000-000000000002",
+      }).operationId,
+    );
+    expect(
+      dataGridSelectionResetIdentity(wideResult, streamIdentity).capability,
+    ).not.toBe(
+      dataGridSelectionResetIdentity(wideResult, {
+        ...streamIdentity,
+        capability: "b".repeat(64),
+      }).capability,
+    );
+    expect(
+      dataGridSelectionResetIdentity(wideResult, streamIdentity).columnKey,
+    ).not.toBe(
+      dataGridSelectionResetIdentity(
+        { ...wideResult, columns: ["replacement"] },
+        streamIdentity,
+      ).columnKey,
+    );
     const table = {
       database: null,
       schema: "public",

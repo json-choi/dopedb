@@ -49,6 +49,7 @@ import {
   firstDecodeFailureInSelection,
   gridCellInspection,
 } from "./decodeFailures";
+import { useDataGridSelectionReset } from "./useDataGridSelectionReset";
 
 function cell(v: unknown): string {
   if (v === null || v === undefined) return "NULL";
@@ -139,7 +140,7 @@ function DataGridTable({
   onSelectRow,
   onCellClick,
   columnMeta,
-  rowSource: _rowSource,
+  rowSource,
   surface,
   footerInset,
 }: DataGridProps) {
@@ -158,13 +159,13 @@ function DataGridTable({
   useEffect(() => {
     setWidths({}); // new column set → stale widths dropped
   }, [sig]);
-  useEffect(() => {
-    // Sort/filter/pagination swap the rows without changing columns — a selection is
-    // coordinates into rows, so any new result object invalidates it.
-    setSel(null);
-    setCopyError(null);
-    setFocus({ row: 0, column: 0 });
-  }, [result]);
+  useDataGridSelectionReset({
+    result,
+    rowSource,
+    setSelection: setSel,
+    setCopyError,
+    setFocus,
+  });
   useEffect(() => {
     if (!focusRequestedRef.current) return;
     focusRequestedRef.current = false;
