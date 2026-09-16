@@ -1,3 +1,6 @@
+// Menu listing the running background tasks with status, progress and — only
+// where the task allows it — a cancel action. Status wording and tone come from
+// exhaustive Records, so a new status cannot reach the menu unlabelled.
 import { Icon, type IconName } from "../../components/Icon";
 import ToolbarMenu from "../../components/ToolbarMenu";
 import { Button } from "../../design-system/components/Button";

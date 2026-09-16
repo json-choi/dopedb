@@ -1,3 +1,6 @@
+// The Action Search overlay: scope tabs, a keyboard-driven result list, and the
+// portal it renders into. Candidate items arrive already built, so this file owns
+// only the query text, the scope and the highlighted index, never what an item does.
 import {
   type KeyboardEvent,
   useEffect,

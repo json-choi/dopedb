@@ -1,3 +1,6 @@
+// Viewport-driven shell state: the compact breakpoint, the mobile explorer
+// overlay, and where focus lands after a compact-width selection. Leaving compact
+// width closes the overlay, so it can never survive into a wide layout.
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export function useResponsiveShell() {

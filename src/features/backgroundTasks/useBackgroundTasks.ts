@@ -1,3 +1,6 @@
+// Folds query-service activity, live ACP sessions and job records into that one
+// task list while keeping each source's own identifiers. Only the in-flight cancel
+// requests are owned here; task state stays with each source of truth.
 import { useCallback, useMemo, useState } from "react";
 import { useQueries, useQueryClient } from "@tanstack/react-query";
 

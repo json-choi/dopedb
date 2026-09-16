@@ -1,3 +1,6 @@
+// Open state for Action Search plus the global double-Shift shortcut. Focus is
+// restored to its origin only when the dialog was dismissed, and the shortcut
+// stays inert while the user is typing in any editable surface.
 import {
   useCallback,
   useEffect,

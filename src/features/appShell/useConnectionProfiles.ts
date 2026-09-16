@@ -1,3 +1,6 @@
+// Connection profiles are read through the query cache rather than local state so
+// every surface sees one list. The runtime fingerprint names exactly which fields
+// invalidate a live connection, so a cosmetic edit never forces a reconnect.
 import { useCallback, type SetStateAction } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 

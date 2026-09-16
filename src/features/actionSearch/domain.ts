@@ -1,3 +1,6 @@
+// Pure ranking contract for Action Search. Items are normalized once into an
+// index, then bucketed by where the match landed so an exact label always outranks
+// a keyword hit, and each bucket is capped to keep the final merge bounded.
 export type ActionSearchKind =
   | "action"
   | "connection"

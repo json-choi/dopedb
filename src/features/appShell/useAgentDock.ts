@@ -1,3 +1,6 @@
+// Open state and width of the agent dock, persisted per device. It also remembers
+// which element had focus when the dock opened, so closing returns focus there
+// instead of dropping it on the document body.
 import { useCallback, useRef, useState } from "react";
 
 import {

@@ -1,3 +1,6 @@
+// Single controller behind the shell: route and navigation state, connection
+// profiles, safety and workbench documents are joined into one read shape, and
+// every mutation is exposed as a named command so screens dispatch, never write.
 import {
   useEffect,
   useMemo,

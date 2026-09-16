@@ -1,3 +1,6 @@
+// Makes everything outside the agent surface inert while an agent flow holds the
+// shell, restoring each element's prior value on release so a sibling that was
+// already inert for its own reason is never silently re-enabled.
 import { useLayoutEffect, type RefObject } from "react";
 
 type InertShellChild = {

@@ -1,3 +1,6 @@
+// Unsaved editor text lives outside React so only the mounted SQL surface
+// re-renders while typing. A draft whose editor unmounted is reconciled with the
+// restored document, and inactive drafts are evicted least-recently-touched first.
 import { useCallback, useSyncExternalStore } from "react";
 
 const MAX_RETAINED_DRAFTS = 64;

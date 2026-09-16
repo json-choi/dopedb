@@ -1,3 +1,6 @@
+// Database objects reach Action Search only through metadata some other surface
+// already loaded. This reads the query cache and subscribes to its changes, so
+// opening the dialog never starts introspection against a database.
 import { useEffect, useReducer } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 

@@ -1,3 +1,6 @@
+// One shape for every long-running thing the shell surfaces: query-service runs,
+// agent sessions and import/export jobs. Cancellability is part of each variant,
+// so no surface can offer cancel for a kind the backend will not stop.
 import type { AcpSessionId } from "../agents/domain";
 import type { ConnectionId as AgentConnectionId } from "../connections/domain";
 import type {

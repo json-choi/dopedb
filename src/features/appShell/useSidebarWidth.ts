@@ -1,3 +1,6 @@
+// Per-device width for each sidebar kind. The stored width is clamped to that
+// kind's own range while the rendered width additionally yields to a narrow
+// viewport, and drag plus resize updates commit at most once per frame.
 import { useCallback, useEffect, useState } from "react";
 
 import { createFrameCoalescer } from "../../lib/frameCoalescer";

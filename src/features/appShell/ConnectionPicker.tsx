@@ -1,3 +1,6 @@
+// Empty-workbench chooser listing the saved connections, grouped the way the
+// explorer groups them. It reads the profiles it is handed and raises a selection;
+// nothing here opens, creates or mutates a connection.
 import { useMemo } from "react";
 
 import EngineMark from "../../components/EngineMark";
