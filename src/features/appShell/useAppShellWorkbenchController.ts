@@ -12,6 +12,7 @@ import type { CatalogTable } from "../../ipc/types";
 import { errMessage } from "../../ipc/types";
 import { useToast } from "../../components/Toast";
 import { hasCapability, isDocumentEngine } from "../../lib/capabilities";
+import { useI18n } from "../../lib/i18n";
 import { resetConnectionResourceQueries } from "../../lib/queryClient";
 import {
   driversQuery,
@@ -76,6 +77,7 @@ export function useAppShellWorkbenchController({
   mobileExplorer,
   activity,
 }: WorkbenchControllerInput) {
+  const { t } = useI18n();
   const toast = useToast();
   const queryClient = useQueryClient();
   const {
@@ -156,11 +158,24 @@ export function useAppShellWorkbenchController({
     selectedConnectionDatabase: selected?.database ?? null,
     supportsSql,
     sqlDocuments: tauriSqlDocumentGateway,
+    tabScope: {
+      workspaceId: scope.workspaceId,
+      accountScope: scope.accountScope,
+      ready: scope.ready,
+    },
     onRestoreError: (error) => {
       console.error("could not restore SQL documents:", error);
     },
+    onTabStateError: (error) => {
+      toast(t("tabs.stateNotKept", { error: errMessage(error) }), "error");
+    },
   });
-  const { selectedDocuments, activeDocument, activeDocumentId } = workbench;
+  const {
+    selectedDocuments,
+    closedDocuments,
+    activeDocument,
+    activeDocumentId,
+  } = workbench;
   const selectedTable =
     activeDocument?.kind === "data" ? activeDocument.table : null;
 
@@ -441,6 +456,7 @@ export function useAppShellWorkbenchController({
       items: connections,
       selected,
       selectedId,
+      loaded: connectionsLoaded,
       loadError,
       supportsSql,
       creatingDemo: guidedDemo.creating,
@@ -456,6 +472,7 @@ export function useAppShellWorkbenchController({
     },
     documents: {
       items: selectedDocuments,
+      closed: closedDocuments,
       active: activeDocument,
       activeId: activeDocumentId,
       selectedTable,

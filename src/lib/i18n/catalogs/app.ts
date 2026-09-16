@@ -156,6 +156,9 @@ export const appCatalog = defineCatalog(
     "tabs.data": "Data",
     "tabs.documents": "MongoDB query",
     "tabs.openDocuments": "Open tabs",
+    "tabs.reopenClosed": "{title} (closed)",
+    "tabs.stateNotKept":
+      "Could not keep the open tab list on this device: {error}. Closed tabs may come back the next time you connect.",
     "tabs.schema": "Schema",
     "tabs.sql": "SQL",
   },
@@ -313,6 +316,9 @@ export const appCatalog = defineCatalog(
     "tabs.data": "데이터",
     "tabs.documents": "MongoDB 조회",
     "tabs.openDocuments": "열린 탭",
+    "tabs.reopenClosed": "{title} (닫힘)",
+    "tabs.stateNotKept":
+      "이 기기에 열린 탭 목록을 저장하지 못했습니다: {error}. 다시 연결하면 닫은 탭이 돌아올 수 있습니다.",
     "tabs.schema": "스키마",
     "tabs.sql": "SQL",
   },

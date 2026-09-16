@@ -287,6 +287,7 @@ function Shell() {
     connections: connections.items,
     selected: connections.selected,
     documents: documents.items,
+    closedDocuments: documents.closed,
     supportsSql: connections.supportsSql,
     commands: {
       showWelcome: commands.route.showWelcome,
@@ -319,6 +320,7 @@ function Shell() {
         connection: {
           selected: connections.selected,
           items: connections.items,
+          loaded: connections.loaded,
           projectNamesByConnectionId,
           loadError: connections.loadError,
           supportsSql: connections.supportsSql,
@@ -370,6 +372,7 @@ function Shell() {
         model={{
           workspace: {
             connections: connections.items,
+            connectionsLoaded: connections.loaded,
             selected: connections.selected,
             selectedId: connections.selectedId,
             supportsSql: connections.supportsSql,

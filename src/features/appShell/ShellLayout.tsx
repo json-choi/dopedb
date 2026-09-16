@@ -45,6 +45,7 @@ const IS_MACOS =
 type ShellLayoutModel = {
   workspace: {
     connections: ConnectionProfile[];
+    connectionsLoaded: boolean;
     selected: ConnectionProfile | null;
     selectedId: string | null;
     supportsSql: boolean;
@@ -104,7 +105,7 @@ type ShellLayoutCommands = {
     deleteConnection: (id: string) => Promise<void>;
     updateConnection: (connection: ConnectionProfile) => void;
     settings: () => void;
-    safetySettings: (connectionId?: ConnectionProfile["id"]) => void;
+    safetySettings: (connectionId: ConnectionProfile["id"]) => void;
     openUpdateSettings: () => void;
   };
   explorer: {
@@ -344,6 +345,7 @@ function ShellLayoutContent({ model, commands }: Props) {
               onNavigate={commands.explorer.openProjectEnvironment}
             />}
             connections={workspace.connections}
+            connectionsLoaded={workspace.connectionsLoaded}
             selectedId={
               environmentDetailOpen ? null : workspace.selectedId
             }

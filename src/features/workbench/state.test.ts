@@ -257,6 +257,8 @@ describe("workbench state ownership", () => {
       type: "restoreSql",
       connectionId: "db-1",
       documents: [storedDocument()],
+      openDocumentIds: null,
+      activeDocumentId: null,
       activateFirst: true,
     });
 
@@ -265,6 +267,84 @@ describe("workbench state ownership", () => {
       "sql",
     ]);
     expect(restored.activeDocumentId).toContain(":sql:doc-1");
+
+    // Closing a tab is a decision the product keeps: the saved document stays
+    // reopenable, a recorded tab list decides what a reconnect restores, and a
+    // late list response must not undo the close that already happened.
+    const closedTab = workbenchReducer(restored, {
+      type: "close",
+      id: "db-1:sql:doc-1",
+      connectionId: "db-1",
+      fallbackKind: "welcome",
+    });
+    expect(closedTab.documents.map((document) => document.id)).toEqual([
+      "db-1:welcome",
+    ]);
+    expect(closedTab.closedDocuments.map((document) => document.id)).toEqual([
+      "db-1:sql:doc-1",
+    ]);
+    const lateResponse = workbenchReducer(closedTab, {
+      type: "restoreSql",
+      connectionId: "db-1",
+      documents: [storedDocument()],
+      openDocumentIds: ["doc-1"],
+      activeDocumentId: "doc-1",
+      activateFirst: true,
+    });
+    expect(lateResponse.documents.map((document) => document.id)).toEqual([
+      "db-1:welcome",
+    ]);
+    const reconnected = workbenchReducer(
+      workbenchReducer(emptyWorkbenchState, {
+        type: "initialize",
+        document: welcome,
+      }),
+      {
+        type: "restoreSql",
+        connectionId: "db-1",
+        documents: [storedDocument(), storedDocument("doc-2")],
+        openDocumentIds: ["doc-2"],
+        activeDocumentId: "doc-2",
+        activateFirst: true,
+      },
+    );
+    expect(reconnected.documents.map((document) => document.id)).toEqual([
+      "db-1:welcome",
+      "db-1:sql:doc-2",
+    ]);
+    expect(reconnected.activeDocumentId).toBe("db-1:sql:doc-2");
+    expect(
+      reconnected.closedDocuments.map((document) => document.id),
+    ).toEqual(["db-1:sql:doc-1"]);
+    const reopened = workbenchReducer(reconnected, {
+      type: "activate",
+      document: reconnected.closedDocuments[0]!,
+    });
+    expect(reopened.closedDocuments).toEqual([]);
+    expect(reopened.activeDocumentId).toBe("db-1:sql:doc-1");
+    // An install with no recorded tabs still restores every saved document,
+    // while a recorded empty list keeps every tab closed.
+    const noRecord = workbenchReducer(initialized, {
+      type: "restoreSql",
+      connectionId: "db-1",
+      documents: [storedDocument(), storedDocument("doc-2")],
+      openDocumentIds: null,
+      activeDocumentId: null,
+      activateFirst: false,
+    });
+    expect(noRecord.documents).toHaveLength(3);
+    const allClosed = workbenchReducer(initialized, {
+      type: "restoreSql",
+      connectionId: "db-1",
+      documents: [storedDocument(), storedDocument("doc-2")],
+      openDocumentIds: [],
+      activeDocumentId: null,
+      activateFirst: false,
+    });
+    expect(allClosed.documents.map((document) => document.id)).toEqual([
+      "db-1:welcome",
+    ]);
+    expect(allClosed.closedDocuments).toHaveLength(2);
   });
 
   it("keeps one document instance and moves only the active pointer", async () => {
@@ -433,6 +513,30 @@ describe("workbench state ownership", () => {
     expect(downloadCalls).toBe(2);
     expect(closeCalls).toBe(1);
     updater.dispose();
+
+    // A silent background check must not take over the visible phase: the
+    // shell renders its badge from this snapshot, so publishing `checking`
+    // for an unrequested check moves the workbench surface underneath it.
+    const backgroundCheck = deferred<AppUpdateResource | null>();
+    const background = new AppUpdaterController({
+      async currentVersion() {
+        return "0.3.54";
+      },
+      check: () => backgroundCheck.promise,
+      async relaunch() {
+        return undefined;
+      },
+      errorMessage: (error) => String(error),
+    });
+    const backgroundRefresh = background.refresh({ silent: true });
+    expect(background.getSnapshot().phase).toBe("idle");
+    backgroundCheck.resolve(null);
+    await backgroundRefresh;
+    expect(background.getSnapshot()).toMatchObject({
+      phase: "current",
+      currentVersion: "0.3.54",
+    });
+    background.dispose();
   });
 
   it("keeps an engine-specific query surface when the last tab closes", () => {

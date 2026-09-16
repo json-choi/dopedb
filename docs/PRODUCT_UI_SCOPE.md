@@ -156,6 +156,13 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
   마지막 MongoDB 조회 tab을 닫아도 모호한 문서 생성 화면을 만들지 않고 새
   MongoDB 조회 surface를 즉시 유지하며, 조회 가능한 collection이 없으면
   `조회할 컬렉션이 없습니다`라는 정확한 빈 상태만 표시한다.
+- 열린 탭 목록·순서·활성 탭은 문서 내용과 분리된 기기 상태이며 계정·Workspace·
+  연결 경계로 구분해 보존한다. 탭의 `닫기`는 저장된 SQL 본문, revision 이력,
+  미저장 복구 초안을 삭제하지 않고 그 문서를 목록에서만 제외하며, 연결 전환과
+  재시작은 저장된 문서 전체가 아니라 기록된 열린 탭만 복원한다. 기록이 없는
+  기존 설치는 저장된 문서로 한 번 초기화하고, 모든 탭을 닫은 빈 목록은 그대로
+  보존한다. 탭 상태를 저장하지 못하면 조용히 성공으로 처리하지 않고 복구
+  안내를 표시한다.
 - 스키마 비교는 기준 DB·비교 대상을 한 번만 선택하고 변경 건수는 상태 필터에
   합친다. 관계별 경로를 한 번 표시하고 하위 객체 이름은 말줄임 없이 줄바꿈한다.
   기준·대상 값을 클릭 없이 나란히 보여 주고, 기준·대상 값은 색과 기호로
@@ -245,6 +252,9 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
   `DopeDB 앱 열기` action을 유지한다.
 - Action Search는 672px 이하의 non-modal surface다. 빈 질의는 scope와 input만
   보이고, Database·Documents·Actions·Settings처럼 실제 결과가 있는 범주만 둔다.
+  `Documents`는 현재 연결의 열린 문서와 사용자가 닫은 저장 SQL 문서를 함께
+  나열하고 선택하면 그 탭을 다시 연다. 이 경로는 재열기만 수행하며 문서 삭제,
+  별도 문서 관리 화면, Local History 비교 UI를 만들지 않는다.
 - popup, menu, modal은 viewport collision, keyboard 이동, focus containment와
   trigger 복구를 책임진다. 앱 내부 modal은 native 창처럼 보이는 drag header나
   `X`를 만들지 않고 footer의 명시적인 취소·닫기·완료 action으로 종료한다.

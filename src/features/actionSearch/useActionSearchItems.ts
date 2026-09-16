@@ -19,6 +19,7 @@ type ActionSearchItemsInput = {
   connections: readonly ConnectionProfile[];
   selected: ConnectionProfile | null;
   documents: readonly WorkbenchDocument[];
+  closedDocuments: readonly WorkbenchDocument[];
   supportsSql: boolean;
   commands: {
     showWelcome: () => void;
@@ -42,6 +43,7 @@ export function useActionSearchItems({
   connections,
   selected,
   documents,
+  closedDocuments,
   supportsSql,
   commands,
 }: ActionSearchItemsInput): readonly ActionSearchItem[] {
@@ -147,36 +149,38 @@ export function useActionSearchItems({
     }),
   );
 
-  const documentItems: ActionSearchItem[] = documents.map((document) => {
-    const label =
-      document.kind === "sql"
-        ? document.title
-        : document.kind === "data"
-          ? [document.table.schema, document.table.name]
-              .filter(Boolean)
-              .join(".")
-          : document.kind === "schema"
-            ? t("tabs.schema")
-            : document.kind === "welcome"
-              ? t("onboarding.title")
-              : document.kind === "results"
-                ? t("sql.executionResults")
-              : document.kind === "activity"
-                ? t("tabs.activity")
-                : t("tabs.documents");
-    return {
-      id: `document:${document.id}`,
-      kind: "document",
-      label,
-      detail:
-        selected?.name ||
-        (selected
-          ? visibleDatabase(selected, selected.database)
-          : t("app.unnamed")),
-      keywords: [document.kind],
-      run: () => commands.activateDocument(document),
-    };
-  });
+  const documentDetail =
+    selected?.name ||
+    (selected ? visibleDatabase(selected, selected.database) : t("app.unnamed"));
+  const documentLabel = (document: WorkbenchDocument) => {
+    if (document.kind === "sql") return document.title;
+    if (document.kind === "data") {
+      return [document.table.schema, document.table.name].filter(Boolean).join(".");
+    }
+    if (document.kind === "welcome") return t("onboarding.title");
+    if (document.kind === "results") return t("sql.executionResults");
+    if (document.kind === "schema") return t("tabs.schema");
+    if (document.kind === "activity") return t("tabs.activity");
+    return t("tabs.documents");
+  };
+  const documentItems: ActionSearchItem[] = documents.map((document) => ({
+    id: `document:${document.id}`,
+    kind: "document",
+    label: documentLabel(document),
+    detail: documentDetail,
+    keywords: [document.kind],
+    run: () => commands.activateDocument(document),
+  }));
+  // Closing a tab keeps the saved document, so this same category is its reopen
+  // path. It only reopens a document; it never deletes one.
+  const closedDocumentItems: ActionSearchItem[] = closedDocuments.map((document) => ({
+    id: `document:closed:${document.id}`,
+    kind: "document",
+    label: t("tabs.reopenClosed", { title: documentLabel(document) }),
+    detail: documentDetail,
+    keywords: [document.kind, "closed", "reopen", "닫힌", "다시 열기"],
+    run: () => commands.activateDocument(document),
+  }));
 
   const connectionById = new Map(
     connections.map((connection) => [connection.id, connection]),
@@ -252,5 +256,5 @@ export function useActionSearchItems({
     run: () => commands.openSettings(section),
   }));
 
-  return [...actions, ...connectionItems, ...documentItems, ...databaseObjects, ...settings];
+  return [...actions, ...connectionItems, ...documentItems, ...closedDocumentItems, ...databaseObjects, ...settings];
 }

@@ -68,6 +68,7 @@ type WorkbenchContentModel = {
   connection: {
     selected: ConnectionProfile | null;
     items: ConnectionProfile[];
+    loaded: boolean;
     projectNamesByConnectionId: ReadonlyMap<string, string>;
     loadError: string | null;
     supportsSql: boolean;
@@ -186,6 +187,20 @@ function WorkbenchContentResolved({ model, commands }: Props) {
           onOpenSafety: commands.guidedDemo.openSafety,
         }
       : undefined;
+  // The Home command and the Welcome document open the same screen, so both
+  // describe the current connection with one set of inputs. Onboarding keeps
+  // owning which command set each state shows.
+  const onboarding = {
+    connectionName: selected
+      ? selected.name || selected.database
+      : undefined,
+    creatingDemo: connection.creatingDemo,
+    guidedDemoAvailable: connection.guidedDemoAvailable,
+    guidedDemo,
+    onCreateDemoDatabase: commands.connections.createDemo,
+    onNewConnection: () => commands.connections.new(),
+    onNewQuery: commands.documents.newQuery,
+  };
   const settingsDialog = route.settingsOpen ? (
     <Settings
       connection={selected}
@@ -273,15 +288,18 @@ function WorkbenchContentResolved({ model, commands }: Props) {
     );
   }
 
-  if (route.welcomeOpen || connection.items.length === 0) {
-    return withSettings(
-      <Onboarding
-        creatingDemo={connection.creatingDemo}
-        guidedDemoAvailable={connection.guidedDemoAvailable}
-        onCreateDemoDatabase={commands.connections.createDemo}
-        onNewConnection={() => commands.connections.new()}
-      />,
-    );
+  if (route.welcomeOpen) {
+    return withSettings(<Onboarding {...onboarding} />);
+  }
+
+  // A pending connection list is not an empty workspace. Saying "no connections"
+  // before the list settles makes every launch flash the first-run screen.
+  if (!connection.loaded) {
+    return withSettings(<WorkbenchLoading />);
+  }
+
+  if (connection.items.length === 0) {
+    return withSettings(<Onboarding {...onboarding} />);
   }
 
   const safetyFallback = connection.safetyError ? (
@@ -334,12 +352,7 @@ function WorkbenchContentResolved({ model, commands }: Props) {
             <Documents key={`${selected.id}:mongo-query`} connection={selected} />
           )
         ) : activeDocument.kind === "welcome" ? (
-          <Onboarding
-            connectionName={selected.name || selected.database}
-            guidedDemo={guidedDemo}
-            onNewConnection={() => commands.connections.new()}
-            onNewQuery={commands.documents.newQuery}
-          />
+          <Onboarding {...onboarding} />
         ) : activeDocument.kind === "data" ? (
           effectiveSafety ? (
             <TableData

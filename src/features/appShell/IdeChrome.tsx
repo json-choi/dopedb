@@ -204,7 +204,7 @@ export function IdeStatusBar({
   onCancelBackgroundTask: (task: BackgroundTask) => Promise<void>;
   onRevealDatabaseContext: () => void;
   onOpenNotifications: () => void;
-  onSafetySettings: () => void;
+  onSafetySettings: (connectionId: ConnectionProfile["id"]) => void;
 }) {
   const { t } = useI18n();
   const breadcrumbs: Array<{
@@ -350,7 +350,7 @@ export function IdeStatusBar({
         <StatusBarIconButton
           icon={writeEnabled ? "unlock" : "lock"}
           label={writeEnabled ? t("ide.writeEnabled") : t("ide.readOnly")}
-          onClick={onSafetySettings}
+          onClick={() => onSafetySettings(selected.id)}
         />
       ) : null}
       <StatusBarIconButton
@@ -370,27 +370,23 @@ export function IdeStatusBar({
   );
 }
 
+// Only editor values with a real state owner belong here: the cursor store owns
+// line/column and the editor owns its indent width. Encoding and line endings
+// have no owner in this product, so the status bar does not claim them.
 function SqlEditorStatusItems({ documentId }: { documentId: string | null }) {
   const { t } = useI18n();
   const editorStatus = useSqlEditorCursor(documentId);
+  if (!editorStatus) return null;
   return (
     <>
-      {editorStatus ? (
-        <>
-          <StatusBarItem>
-            {editorStatus.line}:{editorStatus.column}
-          </StatusBarItem>
-          <StatusBarItem>LF</StatusBarItem>
-        </>
-      ) : null}
-      <StatusBarItem>UTF-8</StatusBarItem>
-      {editorStatus ? (
-        <StatusBarItem>
-          {t("ide.indentSpaces", {
-            count: SQL_EDITOR_INDENT_SIZE,
-          })}
-        </StatusBarItem>
-      ) : null}
+      <StatusBarItem>
+        {editorStatus.line}:{editorStatus.column}
+      </StatusBarItem>
+      <StatusBarItem>
+        {t("ide.indentSpaces", {
+          count: SQL_EDITOR_INDENT_SIZE,
+        })}
+      </StatusBarItem>
     </>
   );
 }

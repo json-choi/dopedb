@@ -78,6 +78,7 @@ export class AppUpdaterController {
   private relaunchCompleted = false;
   private disposed = false;
   private lastCheckAt = 0;
+  private checkingSilently = false;
 
   constructor(private readonly dependencies: AppUpdaterDependencies) {}
 
@@ -93,9 +94,18 @@ export class AppUpdaterController {
   refresh(options: { silent?: boolean } = {}) {
     if (this.disposed) return Promise.resolve();
     if (this.installing) return this.installing;
-    if (this.checking) return this.checking;
+    if (this.checking) {
+      // An explicit request that joins a running background check must still be
+      // observable, and its outcome must no longer be swallowed as silent.
+      if (options.silent !== true && this.checkingSilently) {
+        this.checkingSilently = false;
+        this.publishChecking();
+      }
+      return this.checking;
+    }
 
-    const operation = this.runRefresh(options.silent === true).finally(() => {
+    this.checkingSilently = options.silent === true;
+    const operation = this.runRefresh().finally(() => {
       this.lastCheckAt = (this.dependencies.now ?? Date.now)();
       if (this.checking === operation) this.checking = null;
     });
@@ -133,20 +143,21 @@ export class AppUpdaterController {
     if (resource) void this.safeClose(resource);
   }
 
-  private async runRefresh(silent: boolean) {
+  private async runRefresh() {
     const previousSnapshot = this.snapshot;
-    this.publish({
-      ...previousSnapshot,
-      phase: "checking",
-      downloadedBytes: 0,
-      totalBytes: null,
-      error: null,
-    });
+    // A silent check is not a user request, so it never takes over the visible
+    // phase. Only its outcome — an available update, a download, an install or
+    // an explicit failure — is allowed to change what the shell shows.
+    if (!this.checkingSilently) this.publishChecking();
 
     const versionPromise = this.dependencies.currentVersion();
     void versionPromise.then(
       (currentVersion) => {
-        if (!this.disposed && this.snapshot.phase === "checking") {
+        const phase = this.snapshot.phase;
+        if (
+          !this.disposed &&
+          (phase === "checking" || phase === previousSnapshot.phase)
+        ) {
           this.publish({ ...this.snapshot, currentVersion });
         }
       },
@@ -170,7 +181,7 @@ export class AppUpdaterController {
         versionResult.status === "fulfilled"
           ? { ...previousSnapshot, currentVersion: versionResult.value }
           : previousSnapshot;
-      if (silent) {
+      if (this.checkingSilently) {
         this.publish(recoveredSnapshot);
         return;
       }
@@ -289,6 +300,16 @@ export class AppUpdaterController {
     } catch {
       // Resource cleanup cannot replace the authoritative updater outcome.
     }
+  }
+
+  private publishChecking() {
+    this.publish({
+      ...this.snapshot,
+      phase: "checking",
+      downloadedBytes: 0,
+      totalBytes: null,
+      error: null,
+    });
   }
 
   private publish(snapshot: AppUpdaterSnapshot) {
