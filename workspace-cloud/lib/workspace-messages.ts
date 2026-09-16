@@ -49,6 +49,17 @@ const en = {
     privacy: "Privacy Policy",
     legalAfter: ". Your organization’s workspace policy and audit records also apply.",
   },
+  notFound: {
+    title: "This link cannot be opened here",
+    description: "It may have expired, been revoked, or belong to another account. DopeDB does not report whether the record behind it exists.",
+    action: "Go to your workspace",
+  },
+  appError: {
+    title: "This page could not be displayed",
+    description: "Something failed while rendering the page. The failure detail stays on the server and is not shown here.",
+    retry: "Try again",
+    action: "Go to your workspace",
+  },
   publicArticle: {
     chrome: "Published HTML",
     published: "Published",
@@ -835,6 +846,17 @@ const ko: DeepStringShape<typeof en> = {
     legalBetween: "에 동의하고",
     privacy: "개인정보처리방침",
     legalAfter: "을 확인한 것으로 봅니다. 조직의 워크스페이스 정책과 감사 기록도 적용됩니다.",
+  },
+  notFound: {
+    title: "이 링크는 여기에서 열 수 없습니다",
+    description: "만료되었거나 회수되었거나 다른 계정의 링크일 수 있습니다. DopeDB는 링크가 가리키는 기록의 존재 여부를 알려 주지 않습니다.",
+    action: "내 워크스페이스로 이동",
+  },
+  appError: {
+    title: "이 페이지를 표시하지 못했습니다",
+    description: "페이지를 그리는 중 문제가 발생했습니다. 실패 상세는 서버에 남으며 이 화면에는 표시하지 않습니다.",
+    retry: "다시 시도",
+    action: "내 워크스페이스로 이동",
   },
   publicArticle: {
     chrome: "발행된 HTML",
