@@ -12,13 +12,21 @@ SVG 렌더러는 Next의 선언된 Sharp 의존성을 사용하며 런타임 앱
 
 ```sh
 pnpm icons
-pnpm icons --check
+pnpm icons:check
 ```
 
 생성기는 SVG를 직접 렌더링하고 같은 도형에서 배경 없는 React graphic도 생성한다.
 모든 파일을 임시 디렉터리에 완성한 뒤 변경된 생성물만 복사한다. `--check`는
 저장소를 변경하지 않고 누락·불일치 시 실패한다. 도형 수정은 원본 SVG에서만 하고
 생성된 파일이나 공용 graphic을 따로 수정하지 않는다.
+
+## 플랫폼 검증 계약
+
+ICNS 포장은 macOS `iconutil`이 필요하고 이식 가능한 대체 수단이 없다. 그래서
+생성과 `pnpm icons:check`는 macOS 전용 계약이며, CI의 `brand-icons` job도
+macOS runner에서 생성물 17개 전부를 한 번에 검증한다. Linux·Windows job에는
+부분 검증을 따로 만들지 않는다. 전제 조건이 없으면 생성기가 `iconutil`과 사이트
+의존성 중 빠진 것을 이름으로 보고하고 중단한다.
 
 ## 사용처
 

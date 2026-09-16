@@ -78,7 +78,8 @@ runtime과 성능 수치로 수행한다.
 - 단일 원본은 `assets/brand/dopedb-icon.svg`다. 기존 배경 `#151a16`과
   마크 `#ccf36b`, 승인된 좁은 D·−24° 고리·위성 점을 유지한다.
   `scripts/generate-icons.py`는 공용 `DopeDBMarkGraphic`과 PNG/SVG/ICO/ICNS
-  17개 생성물을 같은 원본에서 만들며 `pnpm icons --check`로 불일치를 차단한다.
+  17개 생성물을 같은 원본에서 만들며 CI의 macOS `brand-icons` job이
+  `pnpm icons:check`로 불일치를 차단한다.
 - Desktop title toolbar 24px, Workspace selector 20px(문자 D placeholder 제거),
   소개 사이트와 Workspace `Brand`, 한·영 README, 약관·개인정보 문서,
   favicon·홈 화면·OAuth·Tauri bundle/Windows installer 자산이 이 원본을 사용한다.
@@ -91,7 +92,7 @@ runtime과 성능 수치로 수행한다.
   한 화면의 여러 SVG ID·mask 참조가 충돌하지 않는다.
   Desktop은 브라우저의 실제 header·selector를 라이트/다크에서 확인한 범위이며,
   Tauri IPC를 제공하지 않는 이 실행은 native 동작·packaged 검수의 대체가 아니다.
-- 검증: `pnpm icons --check`, `pnpm build`, `pnpm workspace:cloud:build`,
+- 검증: `pnpm icons:check`, `pnpm build`, `pnpm workspace:cloud:build`,
   소개 사이트·Workspace의 `build:cloudflare`, `pnpm test`(42개),
   `git diff --check` 통과. 원본 SVG의 1024px 렌더 결과는 승인된 오른쪽 시안과
   픽셀 단위로 동일하다. Graphify AST도 갱신했다. 기존 Next.js의 middleware/root

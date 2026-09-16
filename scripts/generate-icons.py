@@ -45,6 +45,21 @@ ICO_OUTPUTS = {
 ICNS_OUTPUT = Path("src-tauri/icons/icon.icns")
 
 
+def require_tools() -> None:
+    """Name every missing prerequisite instead of failing inside a subprocess.
+
+    ICNS packing needs macOS `iconutil`, so full generation and `--check` are a
+    macOS-only contract; Pillow and the site's Sharp cover the other outputs.
+    """
+    missing = []
+    if shutil.which("iconutil") is None:
+        missing.append("iconutil (macOS only; ICNS packing has no portable substitute)")
+    if not (ROOT / "site/node_modules/next").exists():
+        missing.append("site dependencies (run: pnpm --dir site install --frozen-lockfile)")
+    if missing:
+        raise SystemExit("Cannot verify DopeDB icons; missing:\n  " + "\n  ".join(missing))
+
+
 def render_graphic(svg: bytes) -> str:
     document = ElementTree.fromstring(svg)
     if document.attrib.get("viewBox") != "0 0 32 32":
@@ -180,6 +195,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true", help="Fail on stale assets without modifying them")
     args = parser.parse_args()
+    require_tools()
     with tempfile.TemporaryDirectory(prefix="dopedb-icons-") as directory:
         staging = Path(directory)
         outputs = generate_assets(staging)

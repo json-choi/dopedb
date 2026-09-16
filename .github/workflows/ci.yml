@@ -133,6 +133,38 @@ jobs:
       - name: Verify the PostgreSQL harness safety guard
         run: pnpm --dir workspace-cloud test:postgres-harness-guard
 
+  brand_icons:
+    name: brand-icons
+    # ICNS packing needs macOS `iconutil`, which has no portable substitute, so
+    # the whole generated set is verified on macOS rather than split per platform.
+    runs-on: macos-15
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 11.25.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: site/pnpm-lock.yaml
+
+      # The SVG rasteriser is the site's declared Sharp; no second rasteriser is installed.
+      - name: Install site dependencies
+        run: pnpm --dir site install --frozen-lockfile
+
+      - name: Verify generated brand assets match the approved SVG
+        run: |
+          python3 -m venv "$RUNNER_TEMP/brand"
+          "$RUNNER_TEMP/brand/bin/pip" install --disable-pip-version-check --quiet "pillow==12.2.0"
+          PATH="$RUNNER_TEMP/brand/bin:$PATH" pnpm icons:check
+
   site_build:
     name: site-build
     runs-on: ubuntu-latest
@@ -266,6 +298,7 @@ jobs:
       - frontend_smoke
       - rust_smoke
       - provider_postgres
+      - brand_icons
       - site_build
       - site_deploy
       - analytics_cloudflare
@@ -281,6 +314,7 @@ jobs:
           FRONTEND_RESULT: ${{ needs.frontend_smoke.result }}
           RUST_RESULT: ${{ needs.rust_smoke.result }}
           PROVIDER_POSTGRES_RESULT: ${{ needs.provider_postgres.result }}
+          BRAND_ICONS_RESULT: ${{ needs.brand_icons.result }}
           SITE_BUILD_RESULT: ${{ needs.site_build.result }}
           SITE_DEPLOY_RESULT: ${{ needs.site_deploy.result }}
           ANALYTICS_CLOUDFLARE_RESULT: ${{ needs.analytics_cloudflare.result }}
@@ -291,6 +325,7 @@ jobs:
           test "$FRONTEND_RESULT" = success
           test "$RUST_RESULT" = success
           test "$PROVIDER_POSTGRES_RESULT" = success
+          test "$BRAND_ICONS_RESULT" = success
           test "$SITE_BUILD_RESULT" = success
           test "$SITE_DEPLOY_RESULT" = success || test "$SITE_DEPLOY_RESULT" = skipped
           test "$ANALYTICS_CLOUDFLARE_RESULT" = success

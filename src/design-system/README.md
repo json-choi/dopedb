@@ -252,7 +252,8 @@ Elevation은 세 단계만 허용한다.
   타일 배경 `#151a16`·마크 `#ccf36b`의 단일 정본이다. `pnpm icons`는 이 SVG를
   직접 렌더링해 favicon·OAuth·Tauri PNG/ICO/ICNS와 `DopeDBMarkGraphic`을 생성한다.
   별도의 좌표나 Pillow drawing으로 도형을 재구현하지 않는다.
-  `pnpm icons --check`는 생성물 17개의 일치 여부를 파일 변경 없이 검사한다.
+  `pnpm icons:check`는 생성물 17개의 일치 여부를 파일 변경 없이 검사하며,
+  CI의 macOS `brand-icons` job이 같은 명령으로 drift를 차단한다.
   생성 환경과 사용처는 [`브랜드 자산 안내`](../../assets/brand/README.md)를 따른다.
 - Desktop의 `DopeDBMark`, `site/app/DopeDBMark`, Workspace의 `Brand`는 같은
   `DopeDBMarkGraphic`을 사용하고 크기·주변 테마 색·각 앱의 `useId()`만 제공한다.
