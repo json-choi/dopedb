@@ -3,8 +3,6 @@ import { defineCatalog } from "../types";
 
 export const tablesCatalog = defineCatalog(
   {
-    "tables.activeFilters": "{count} filter",
-    "tables.activeFiltersPlural": "{count} filters",
     "tables.applyExpression": "Apply {label}",
     "tables.catalogRequired": "Schema metadata is still loading. Try again in a moment.",
     "tables.catalogLoadFailed":
@@ -15,12 +13,7 @@ export const tablesCatalog = defineCatalog(
       "The staged transaction was rolled back. Reload rows before retrying.",
     "tables.clear": "Clear",
     "tables.clearExpression": "Clear {label}",
-    "tables.cols": "{count} cols",
     "tables.column": "Column",
-    "tables.columnPolicy": "Columns",
-    "tables.columnPolicyCompact": "compact",
-    "tables.columnPolicyHint":
-      "Wide cells are truncated in the grid; click a cell to inspect the full value.",
     "tables.countUnavailable": "Document count unavailable. {error}",
     "tables.countUnavailableShort": "count unavailable",
     "tables.copyJson": "Copy JSON",
@@ -33,7 +26,6 @@ export const tablesCatalog = defineCatalog(
     "tables.unreadableRowBlocked":
       "This row has a cell this build could not read; editing, duplicating, deleting, and copying it are blocked.",
     "tables.edit": "Edit",
-    "tables.editor": "Data editor",
     "tables.expressionBar": "WHERE and ORDER BY",
     "tables.expressionClauseBoundary":
       "Keep the expression inside this clause. Add other clauses in their own field.",
@@ -45,17 +37,14 @@ export const tablesCatalog = defineCatalog(
     "tables.exportCsv": "Export CSV",
     "tables.exportJson": "Export JSON",
     "tables.exportPageTitle": "Exports the current page",
-    "tables.filterState": "Column filters",
     "tables.foreignKeys": "Foreign keys",
     "tables.indexes": "Indexes",
     "tables.insert": "Insert",
     "tables.last": "Last",
     "tables.loadingRows": "Loading rows...",
     "tables.more": "More",
-    "tables.noFilters": "none",
     "tables.noRows": "No rows.",
     "tables.noRowsFilter": "No rows match the current filter.",
-    "tables.noRowsWritten": "No rows matched - nothing was changed",
     "tables.noTablePk": "Table has no primary key - row editing disabled",
     "tables.nonScalarPk":
       "Primary key is a binary/JSON/array/composite type - row editing disabled (value can't be matched safely)",
@@ -73,9 +62,6 @@ export const tablesCatalog = defineCatalog(
     "tables.durationMs": "{duration} ms",
     "tables.rowsWritten": "{count} row(s) written",
     "tables.selectedRow": "row {row} selected",
-    "tables.sortState": "Column sort",
-    "tables.sourceCollection": "collection",
-    "tables.sourceTable": "table",
     "tables.stagedAtomicHelp":
       "All changes commit together. If any row changed since it was loaded, the full transaction rolls back.",
     "tables.stagedChange": "Change {index}",
@@ -86,17 +72,10 @@ export const tablesCatalog = defineCatalog(
     "tables.truncated": "truncated",
     "tables.type": "Type",
     "tables.unique": "unique",
-    "tables.unsorted": "unsorted",
-    "tables.writeCommitted": "Write committed",
-    "tables.writePolicy": "Write policy",
-    "tables.writePolicyReadonly": "read-only",
-    "tables.writePolicyWrites": "writes allowed",
     "tables.whereExpression": "WHERE expression",
     "tables.whereExpressionPlaceholder": "status = 'active'",
   },
   {
-    "tables.activeFilters": "필터 {count}개",
-    "tables.activeFiltersPlural": "필터 {count}개",
     "tables.applyExpression": "{label} 적용",
     "tables.catalogRequired": "스키마 메타데이터를 불러오는 중입니다. 잠시 후 다시 시도하세요.",
     "tables.catalogLoadFailed":
@@ -107,12 +86,7 @@ export const tablesCatalog = defineCatalog(
       "변경 트랜잭션이 롤백되었습니다. 행을 새로고침한 뒤 다시 시도하세요.",
     "tables.clear": "초기화",
     "tables.clearExpression": "{label} 초기화",
-    "tables.cols": "{count}개 컬럼",
     "tables.column": "컬럼",
-    "tables.columnPolicy": "컬럼",
-    "tables.columnPolicyCompact": "compact",
-    "tables.columnPolicyHint":
-      "긴 셀은 그리드에서 줄여 표시합니다. 전체 값은 셀을 클릭해 확인하세요.",
     "tables.countUnavailable": "문서 수를 확인할 수 없습니다. {error}",
     "tables.countUnavailableShort": "문서 수 확인 불가",
     "tables.copyJson": "JSON 복사",
@@ -125,7 +99,6 @@ export const tablesCatalog = defineCatalog(
     "tables.unreadableRowBlocked":
       "이 행에는 이 빌드가 읽지 못한 셀이 있어 편집·복제·삭제·복사를 차단합니다.",
     "tables.edit": "편집",
-    "tables.editor": "데이터 편집기",
     "tables.expressionBar": "WHERE 및 ORDER BY",
     "tables.expressionClauseBoundary":
       "이 입력은 현재 절 안에서만 작성하세요. 다른 절은 별도 입력란에 작성합니다.",
@@ -137,17 +110,14 @@ export const tablesCatalog = defineCatalog(
     "tables.exportCsv": "CSV 내보내기",
     "tables.exportJson": "JSON 내보내기",
     "tables.exportPageTitle": "현재 페이지를 내보냅니다",
-    "tables.filterState": "컬럼 필터",
     "tables.foreignKeys": "외래 키",
     "tables.indexes": "인덱스",
     "tables.insert": "추가",
     "tables.last": "마지막",
     "tables.loadingRows": "행 불러오는 중...",
     "tables.more": "더보기",
-    "tables.noFilters": "없음",
     "tables.noRows": "행이 없습니다.",
     "tables.noRowsFilter": "현재 필터와 일치하는 행이 없습니다.",
-    "tables.noRowsWritten": "일치하는 행이 없어 변경하지 않았습니다",
     "tables.noTablePk": "기본 키가 없어 행 편집이 비활성화되었습니다",
     "tables.nonScalarPk":
       "기본 키가 binary/JSON/array/composite 타입이라 행 편집이 비활성화되었습니다 (값을 안전하게 매칭할 수 없음)",
@@ -165,9 +135,6 @@ export const tablesCatalog = defineCatalog(
     "tables.durationMs": "{duration}ms",
     "tables.rowsWritten": "{count}개 행이 기록되었습니다",
     "tables.selectedRow": "{row}행 선택",
-    "tables.sortState": "컬럼 정렬",
-    "tables.sourceCollection": "컬렉션",
-    "tables.sourceTable": "테이블",
     "tables.stagedAtomicHelp":
       "모든 변경은 함께 커밋됩니다. 불러온 뒤 행 하나라도 바뀌었다면 전체 트랜잭션을 롤백합니다.",
     "tables.stagedChange": "변경 {index}",
@@ -178,11 +145,6 @@ export const tablesCatalog = defineCatalog(
     "tables.truncated": "일부만 표시",
     "tables.type": "타입",
     "tables.unique": "고유",
-    "tables.unsorted": "정렬 없음",
-    "tables.writeCommitted": "쓰기 커밋됨",
-    "tables.writePolicy": "쓰기 정책",
-    "tables.writePolicyReadonly": "읽기 전용",
-    "tables.writePolicyWrites": "쓰기 허용",
     "tables.whereExpression": "WHERE 표현식",
     "tables.whereExpressionPlaceholder": "status = 'active'",
   },

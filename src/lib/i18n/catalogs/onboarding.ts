@@ -12,8 +12,6 @@ export const onboardingCatalog = defineCatalog(
     "onboarding.demoAnalyzeRevenue": "2. Ask Agent to analyze revenue",
     "onboarding.demoBrowseOrders": "1. Browse the sample orders",
     "onboarding.demoEnableWrites": "3. Allow writes for this demo",
-    "onboarding.demoEnvironmentMissing":
-      "The demo Environment is not ready. Run the guided demo setup again.",
     "onboarding.demoLead":
       "Demo ready. Follow these three real product flows.",
     "onboarding.demoOrdersMissing":
@@ -35,8 +33,6 @@ export const onboardingCatalog = defineCatalog(
     "onboarding.demoAnalyzeRevenue": "2. Agent에게 매출 분석 요청",
     "onboarding.demoBrowseOrders": "1. 샘플 주문 데이터 둘러보기",
     "onboarding.demoEnableWrites": "3. 이 데모의 쓰기 허용",
-    "onboarding.demoEnvironmentMissing":
-      "데모 Environment가 준비되지 않았습니다. 데모 설정을 다시 실행하세요.",
     "onboarding.demoLead":
       "데모가 준비됐습니다. 실제 제품 흐름 세 가지를 따라 해보세요.",
     "onboarding.demoOrdersMissing":

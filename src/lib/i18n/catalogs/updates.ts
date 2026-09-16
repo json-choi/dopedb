@@ -7,7 +7,6 @@ export const updatesCatalog = defineCatalog(
     "updates.badge": "Update {version}",
     "updates.badgeTitle": "Open app update",
     "updates.checkAgain": "Check again",
-    "updates.checkFailed": "Update check failed: {error}",
     "updates.checking": "checking...",
     "updates.current": "up to date",
     "updates.description":
@@ -24,7 +23,6 @@ export const updatesCatalog = defineCatalog(
     "updates.none": "none",
     "updates.openReleases": "Open GitHub Releases",
     "updates.openReleasesFailed": "Could not open GitHub Releases: {error}",
-    "updates.ready": "ready",
     "updates.relaunching": "Relaunching...",
     "updates.received": "{amount} received",
     "updates.releaseNotes": "Release notes",
@@ -38,7 +36,6 @@ export const updatesCatalog = defineCatalog(
     "updates.badge": "{version} 업데이트",
     "updates.badgeTitle": "앱 업데이트 열기",
     "updates.checkAgain": "다시 확인",
-    "updates.checkFailed": "업데이트 확인 실패: {error}",
     "updates.checking": "확인 중...",
     "updates.current": "최신 상태",
     "updates.description":
@@ -55,7 +52,6 @@ export const updatesCatalog = defineCatalog(
     "updates.none": "없음",
     "updates.openReleases": "GitHub Releases 열기",
     "updates.openReleasesFailed": "GitHub Releases를 열지 못했습니다: {error}",
-    "updates.ready": "준비됨",
     "updates.relaunching": "다시 실행 중...",
     "updates.received": "{amount} 수신됨",
     "updates.releaseNotes": "릴리스 노트",

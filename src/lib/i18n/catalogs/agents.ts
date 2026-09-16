@@ -3,52 +3,9 @@ import { defineCatalog } from "../types";
 
 export const agentsCatalog = defineCatalog(
   {
-    "agent.activity": "Activity",
-    "agent.audit": "Audit",
-    "agent.auditBlockedWrites": "Unapproved Agent writes are blocked",
-    "agent.auditBlockedWritesBody":
-      "Query reads stay DB-enforced read-only. A write must become an immutable proposal that only the Desktop approval flow can authorize.",
-    "agent.auditErrors": "{count} errors or blocked calls",
-    "agent.auditHashChain": "Audit trail is recorded",
-    "agent.auditHashChainBody":
-      "Agent CLI operations are logged in Activity so database actions can be reviewed after the fact.",
-    "agent.auditNoErrors": "No blocked or failed calls in the current session.",
-    "agent.auditReadOnly": "Read tools use an enforced read-only path",
-    "agent.auditReadOnlyBody":
-      "dopedb query run executes through the read-only database session; replacement SQL and silent writes are rejected.",
-    "agent.context": "Context",
-    "agent.contextExposed": "Recorded operation context",
-    "agent.contextHelp":
-      "This ledger shows bounded metadata emitted by DopeDB after a local CLI command: command, scope identifiers, completion state, and error code. It never records credentials, result rows, or hidden agent reasoning.",
-    "agent.contextSummaryDefault": "Bounded Terminal command metadata.",
-    "agent.contextSummaryError": "Error details from the Agent operation.",
-    "agent.dataAccess": "Data access",
-    "agent.dataAccessBody":
-      "Read commands stay on the enforced read-only path and their completion is recorded here.",
-    "agent.dataModification": "Data modification",
-    "agent.dataModificationBody":
-      "Changes to rows stay blocked unless a reviewed approval flow allows them.",
-    "agent.emptyBody":
-      "Completed and failed Terminal CLI commands appear here as bounded metadata.",
-    "agent.emptyCards": "Agent workspace states",
-    "agent.errorCount": "{count} errors",
-    "agent.jumpLatest": "Jump to latest",
-    "agent.ledgerTitle": "Agent trust ledger",
-    "agent.noSelection": "Select a timeline event to inspect what was exposed.",
-    "agent.operations": "{count} operations",
-    "agent.policy": "Policy",
     "agent.rows": "{count} rows",
     "agent.rowsTruncated": "{count} rows (truncated)",
-    "agent.schemaAccess": "Schema access",
-    "agent.schemaAccessBody":
-      "Metadata commands are recorded without copying schemas or result rows into the ledger.",
-    "agent.schemaModification": "Schema modification",
-    "agent.schemaModificationBody":
-      "DDL is treated as a high-risk request and should pause before execution.",
     "agent.session": "Session",
-    "agent.succeeded": "{count} succeeded",
-    "agent.timeline": "Timeline",
-    "agent.workspace": "Agent workspace",
     "agent.you": "You",
     "agent.acpCancel": "Cancel",
     "agent.acpCancelFailed": "Could not cancel the Agent turn: {error}",
@@ -61,7 +18,6 @@ export const agentsCatalog = defineCatalog(
     "agent.acpConfigFailed": "Could not change {name}: {error}",
     "agent.acpCopied": "Copied",
     "agent.acpCopyCode": "Copy code",
-    "agent.acpDefaultModel": "Default model",
     "agent.acpDiagram": "Diagram",
     "agent.acpDiagramError":
       "The diagram could not be rendered. Review its source below.",
@@ -100,7 +56,6 @@ export const agentsCatalog = defineCatalog(
     "agent.acpNoSessions": "No conversations in this workspace yet.",
     "agent.acpReplayTruncated":
       "Earlier local transcript events were removed by the replay limit.",
-    "agent.acpNoToken": "Local login · no app token",
     "agent.acpOpenLink": "Open link in the system browser",
     "agent.acpOpenSetup": "Set up Agent",
     "agent.acpPluginRequired": "Install an Agent adapter",
@@ -113,7 +68,6 @@ export const agentsCatalog = defineCatalog(
       "Could not answer the permission request: {error}",
     "agent.acpPermissionResolved": "This permission request is no longer pending.",
     "agent.acpPermissionWaiting": "Waiting for your response",
-    "agent.acpPinned": "Pinned to {name}",
     "agent.acpPlan": "Plan",
     "agent.acpPrompt": "Describe the data task for the Agent…",
     "agent.acpApprovalMode": "Approval mode",
@@ -124,7 +78,6 @@ export const agentsCatalog = defineCatalog(
     "agent.acpApprovalBypass": "Auto approve",
     "agent.acpApprovalBoundary": "Database writes still need separate approval.",
     "agent.acpProvider": "Agent",
-    "agent.acpScope": "Agent context",
     "agent.acpSelectResources": "Choose context",
     "agent.acpResourceScopeTrigger":
       "{project} · DB {databases} · Source {sources} · {mode}",
@@ -177,7 +130,6 @@ export const agentsCatalog = defineCatalog(
       "The current connection revision could not be confirmed for the selected Project scope.",
     "agent.acpEnvironmentReconfirmFailedWithError":
       "Could not reconfirm the selected Project scope: {error}",
-    "agent.acpProtocol": "ACP v1 · official Claude and Codex adapters",
     "agent.acpReadyBody":
       "Work stays within your selected resources. Describe what you need below.",
     "agent.acpReadyTitle": "Ready to work",
@@ -195,9 +147,6 @@ export const agentsCatalog = defineCatalog(
     "agent.acpSendFailed": "Could not send the Agent task: {error}",
     "agent.acpSessions": "Agent sessions",
     "agent.acpAgentSetup": "Agent setup",
-    "agent.acpSkillRequiredBody":
-      "This Agent is disabled until its DopeDB Skill is selected and installed in the app-wide Agent setup.",
-    "agent.acpSkillRequiredTitle": "DopeDB Skill required",
     "agent.acpSetupActionFailed":
       "Could not open the Agent setup action: {error}",
     "agent.acpOpenLinkFailed":
@@ -214,7 +163,6 @@ export const agentsCatalog = defineCatalog(
       "The provider processes prompts under its terms. Authentication remains in the local CLI; DopeDB never reads or stores its token.",
     "agent.acpSetupRequired": "Waiting for local setup",
     "agent.acpSetupTitle": "{provider} local access",
-    "agent.acpStartCodex": "Start Agent",
     "agent.acpStartFailed": "Could not start {provider} through ACP: {error}",
     "agent.acpStarting": "Starting the official ACP adapter…",
     "agent.acpActivityConnection": "Checking the database connection",
@@ -271,10 +219,6 @@ export const agentsCatalog = defineCatalog(
     "agent.acpWaiting": "Waiting…",
     "agent.acpWorking": "Agent is working",
     "agentTools.authenticated": "Signed in",
-    "agentTools.autoUpdateFailed":
-      "Could not automatically update {target}: {error}",
-    "agentTools.autoUpdated":
-      "{target} DopeDB Skill updated to revision {revision}.",
     "agentTools.startupBody":
       "Choose the official ACP adapters to install. Each selected adapter is verified separately and uses the provider CLI already signed in on this computer.",
     "agentTools.startupHeading": "Choose Agents for DopeDB",
@@ -283,11 +227,8 @@ export const agentsCatalog = defineCatalog(
       "Adapters do not include Claude or Codex themselves. Their local CLI and login remain untouched; DopeDB never reads or refreshes a provider token.",
     "agentTools.startupInstallSelected": "Install selected adapters",
     "agentTools.startupInstalling": "Installing adapters…",
-    "agentTools.startupSaveSelected": "Save selection",
     "agentTools.startupSelectOne": "Select at least one Agent.",
     "agentTools.startupTitle": "DopeDB Agent setup",
-    "agentTools.startupVerificationFailed":
-      "The installed Skill revision and package digest did not match the current bundle.",
     "agentTools.backupCreated": "Backup preserved at {path}",
     "agentTools.checkAgain": "Check again",
     "agentTools.checkingUpdates": "Checking updates…",
@@ -422,52 +363,9 @@ export const agentsCatalog = defineCatalog(
     "agentTools.version": "DopeDB {version} · Skill revision {revision}",
   },
   {
-    "agent.activity": "활동",
-    "agent.audit": "감사",
-    "agent.auditBlockedWrites": "승인되지 않은 Agent 쓰기는 차단됨",
-    "agent.auditBlockedWritesBody":
-      "조회 쿼리는 DB에서 강제하는 read-only 경로를 유지합니다. 쓰기는 불변 제안으로 만든 뒤 데스크톱 승인 흐름에서만 허용할 수 있습니다.",
-    "agent.auditErrors": "오류 또는 차단된 호출 {count}개",
-    "agent.auditHashChain": "감사 기록 저장",
-    "agent.auditHashChainBody":
-      "Agent CLI 작업은 활동 기록에 남아 나중에 데이터베이스 작업을 검토할 수 있습니다.",
-    "agent.auditNoErrors": "현재 세션에는 차단되거나 실패한 호출이 없습니다.",
-    "agent.auditReadOnly": "읽기 도구는 강제 read-only 경로 사용",
-    "agent.auditReadOnlyBody":
-      "dopedb query run은 read-only 데이터베이스 세션에서 실행되며, SQL 교체와 조용한 쓰기를 거절합니다.",
-    "agent.context": "컨텍스트",
-    "agent.contextExposed": "기록된 작업 컨텍스트",
-    "agent.contextHelp":
-      "이 원장은 로컬 CLI 명령 뒤 DopeDB가 내보낸 제한된 메타데이터만 보여줍니다: 명령, 범위 식별자, 완료 상태, 오류 코드. 인증 정보, 결과 행, 외부 에이전트의 숨은 추론은 기록하지 않습니다.",
-    "agent.contextSummaryDefault": "제한된 Terminal 명령 메타데이터.",
-    "agent.contextSummaryError": "Agent 작업에서 나온 오류 상세.",
-    "agent.dataAccess": "데이터 접근",
-    "agent.dataAccessBody":
-      "조회 명령은 강제 read-only 경로를 유지하며 완료 상태가 여기에 기록됩니다.",
-    "agent.dataModification": "데이터 수정",
-    "agent.dataModificationBody":
-      "행 변경은 검토된 승인 흐름이 허용하기 전까지 차단된 상태로 둡니다.",
-    "agent.emptyBody":
-      "완료되거나 실패한 Terminal CLI 명령이 제한된 메타데이터로 여기에 표시됩니다.",
-    "agent.emptyCards": "에이전트 작업공간 상태",
-    "agent.errorCount": "오류 {count}개",
-    "agent.jumpLatest": "최신으로 이동",
-    "agent.ledgerTitle": "에이전트 신뢰 원장",
-    "agent.noSelection": "타임라인 이벤트를 선택하면 무엇이 노출됐는지 볼 수 있습니다.",
-    "agent.operations": "작업 {count}개",
-    "agent.policy": "정책",
     "agent.rows": "{count}행",
     "agent.rowsTruncated": "{count}행 (잘림)",
-    "agent.schemaAccess": "스키마 접근",
-    "agent.schemaAccessBody":
-      "스키마나 결과 행을 원장에 복사하지 않고 메타데이터 명령만 기록합니다.",
-    "agent.schemaModification": "스키마 수정",
-    "agent.schemaModificationBody":
-      "DDL은 고위험 요청으로 취급하고 실행 전 멈춰 검토해야 합니다.",
     "agent.session": "세션",
-    "agent.succeeded": "성공 {count}개",
-    "agent.timeline": "타임라인",
-    "agent.workspace": "에이전트 작업공간",
     "agent.you": "나",
     "agent.acpCancel": "취소",
     "agent.acpCancelFailed": "Agent 작업을 취소하지 못했습니다: {error}",
@@ -480,7 +378,6 @@ export const agentsCatalog = defineCatalog(
     "agent.acpConfigFailed": "{name} 설정을 바꾸지 못했습니다: {error}",
     "agent.acpCopied": "복사됨",
     "agent.acpCopyCode": "코드 복사",
-    "agent.acpDefaultModel": "기본 모델",
     "agent.acpDiagram": "다이어그램",
     "agent.acpDiagramError":
       "다이어그램을 렌더링하지 못했습니다. 아래 원본을 확인하세요.",
@@ -519,7 +416,6 @@ export const agentsCatalog = defineCatalog(
     "agent.acpNoSessions": "이 워크스페이스에는 아직 대화가 없습니다.",
     "agent.acpReplayTruncated":
       "로컬 재생 한도를 넘은 이전 대화 기록은 정리되었습니다.",
-    "agent.acpNoToken": "로컬 로그인 · 앱 토큰 없음",
     "agent.acpOpenLink": "시스템 브라우저에서 링크 열기",
     "agent.acpOpenSetup": "에이전트 설정",
     "agent.acpPluginRequired": "에이전트 어댑터를 설치하세요",
@@ -531,7 +427,6 @@ export const agentsCatalog = defineCatalog(
     "agent.acpPermissionFailed": "권한 요청에 응답하지 못했습니다: {error}",
     "agent.acpPermissionResolved": "이 권한 요청은 더 이상 대기 중이 아닙니다.",
     "agent.acpPermissionWaiting": "응답 대기 중",
-    "agent.acpPinned": "{name}에 고정됨",
     "agent.acpPlan": "계획",
     "agent.acpPrompt": "Agent가 수행할 데이터 작업을 입력하세요…",
     "agent.acpApprovalMode": "승인 모드",
@@ -542,7 +437,6 @@ export const agentsCatalog = defineCatalog(
     "agent.acpApprovalBypass": "자동 승인",
     "agent.acpApprovalBoundary": "DB 변경은 별도 승인이 필요합니다.",
     "agent.acpProvider": "Agent",
-    "agent.acpScope": "Agent 컨텍스트",
     "agent.acpSelectResources": "컨텍스트 선택",
     "agent.acpResourceScopeTrigger":
       "{project} · DB {databases} · 소스 {sources} · {mode}",
@@ -595,7 +489,6 @@ export const agentsCatalog = defineCatalog(
       "선택한 프로젝트 범위에서 현재 연결 리비전을 확인하지 못했습니다.",
     "agent.acpEnvironmentReconfirmFailedWithError":
       "선택한 프로젝트 범위를 재확인하지 못했습니다: {error}",
-    "agent.acpProtocol": "ACP v1 · 공식 Claude·Codex 어댑터",
     "agent.acpReadyBody":
       "선택한 리소스 안에서 작업합니다. 아래에 필요한 작업을 입력하세요.",
     "agent.acpReadyTitle": "작업 준비 완료",
@@ -613,9 +506,6 @@ export const agentsCatalog = defineCatalog(
     "agent.acpSendFailed": "Agent 작업을 보내지 못했습니다: {error}",
     "agent.acpSessions": "Agent 세션",
     "agent.acpAgentSetup": "Agent 설정",
-    "agent.acpSkillRequiredBody":
-      "앱 전역 Agent 설정에서 이 Agent를 선택하고 DopeDB Skill을 설치할 때까지 사용할 수 없습니다.",
-    "agent.acpSkillRequiredTitle": "DopeDB Skill 필요",
     "agent.acpSetupActionFailed":
       "Agent 설정 작업을 열지 못했습니다: {error}",
     "agent.acpOpenLinkFailed":
@@ -632,7 +522,6 @@ export const agentsCatalog = defineCatalog(
       "프롬프트는 제공자 약관에 따라 처리됩니다. 인증은 로컬 CLI에 남으며 DopeDB는 토큰을 읽거나 저장하지 않습니다.",
     "agent.acpSetupRequired": "로컬 설정 대기 중",
     "agent.acpSetupTitle": "{provider} 로컬 접근",
-    "agent.acpStartCodex": "Agent 시작",
     "agent.acpStartFailed": "ACP로 {provider}를 시작하지 못했습니다: {error}",
     "agent.acpStarting": "공식 ACP 어댑터를 시작하는 중…",
     "agent.acpActivityConnection": "데이터베이스 연결 상태 확인",
@@ -689,10 +578,6 @@ export const agentsCatalog = defineCatalog(
     "agent.acpWaiting": "기다리는 중…",
     "agent.acpWorking": "Agent가 작업 중입니다",
     "agentTools.authenticated": "로그인됨",
-    "agentTools.autoUpdateFailed":
-      "{target}을 자동 업데이트하지 못했습니다: {error}",
-    "agentTools.autoUpdated":
-      "{target} DopeDB Skill을 리비전 {revision}(으)로 업데이트했습니다.",
     "agentTools.startupBody":
       "설치할 공식 ACP 어댑터를 선택하세요. 선택한 어댑터를 각각 검증하고 이 컴퓨터에 이미 로그인된 제공자 CLI를 사용합니다.",
     "agentTools.startupHeading": "DopeDB에서 사용할 Agent 선택",
@@ -701,11 +586,8 @@ export const agentsCatalog = defineCatalog(
       "어댑터에는 Claude나 Codex 자체가 포함되지 않습니다. 로컬 CLI와 로그인은 변경하지 않으며 DopeDB는 제공자 토큰을 읽거나 갱신하지 않습니다.",
     "agentTools.startupInstallSelected": "선택한 어댑터 설치",
     "agentTools.startupInstalling": "어댑터 설치 중…",
-    "agentTools.startupSaveSelected": "선택 저장",
     "agentTools.startupSelectOne": "Agent를 하나 이상 선택하세요.",
     "agentTools.startupTitle": "DopeDB Agent 설정",
-    "agentTools.startupVerificationFailed":
-      "설치된 Skill 리비전과 패키지 다이제스트가 현재 번들과 일치하지 않습니다.",
     "agentTools.backupCreated": "기존 파일을 {path}에 보존했습니다.",
     "agentTools.checkAgain": "다시 확인",
     "agentTools.checkingUpdates": "업데이트 확인 중…",

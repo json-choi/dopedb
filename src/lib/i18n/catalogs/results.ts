@@ -3,8 +3,6 @@ import { defineCatalog } from "../types";
 
 export const resultsCatalog = defineCatalog(
   {
-    "grid.filterLabel": "Filter {col}",
-    "grid.filterPlaceholder": "filter",
     "grid.localFilterClear": "Clear local filter",
     "grid.localFilterCount": "Count",
     "grid.localFilterEmpty": "No values match.",
@@ -40,8 +38,6 @@ export const resultsCatalog = defineCatalog(
       "This result has {count} cell(s) this build could not read. Copying or exporting them would record a value they do not have.",
   },
   {
-    "grid.filterLabel": "{col} 필터",
-    "grid.filterPlaceholder": "필터",
     "grid.localFilterClear": "로컬 필터 초기화",
     "grid.localFilterCount": "개수",
     "grid.localFilterEmpty": "일치하는 값이 없습니다.",

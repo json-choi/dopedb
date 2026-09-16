@@ -64,9 +64,6 @@ export const connectionsCatalog = defineCatalog(
       "Cloud credentials are managed separately from database connection profiles.",
     "connections.cloudCredentialDescription":
       "Configure account credentials",
-    "connections.connectionMethod": "Connection method",
-    "connections.connectionMethodHint":
-      "Controls provider-specific connection behavior. Cloud account credentials are managed separately.",
     "connections.connectionType": "Connection type",
     "connections.connectionTypeDefault": "Default",
     "connections.connectionTypeUrlOnly": "URL only",
@@ -87,7 +84,6 @@ export const connectionsCatalog = defineCatalog(
     "connections.projectDeleted":
       "Deleted {project}. Database connections were preserved outside this Project.",
     "connections.createProject": "Create Project",
-    "connections.createFirstProject": "Create your first Project",
     "connections.creatingProject": "Creating…",
     "connections.projectSetupTitle": "Create Project",
     "connections.projectSetupDescription":
@@ -149,7 +145,6 @@ export const connectionsCatalog = defineCatalog(
       "Data source catalog navigation",
     "connections.dataSources": "Data Sources",
     "connections.dataSourcesAndDrivers": "Data Sources and Drivers",
-    "connections.editData": "Edit Data",
     "connections.databaseFile": "Database file path",
     "connections.databaseDiscoveryPending": "Looking up databases on this server...",
     "connections.databaseDiscoveryEmpty":
@@ -404,7 +399,6 @@ export const connectionsCatalog = defineCatalog(
     "connections.sampleDatabase": "Sample database",
     "connections.expand": "Expand",
     "connections.expandMetadata": "Expand metadata for {table}",
-    "connections.compareSchemaStructure": "Compare Schema Structure",
     "connections.searchLoadedObjects": "Search loaded Explorer objects",
     "connections.filterLoadedObjectsPlaceholder":
       "Search loaded tables, views, and objects",
@@ -424,7 +418,6 @@ export const connectionsCatalog = defineCatalog(
     "connections.keys": "Keys ({count})",
     "connections.name": "Name",
     "connections.new": "New connection",
-    "connections.noConnections": "No connections yet.",
     "connections.noDataSourceResults":
       "No data sources match this search.",
     "connections.noDriverResults":
@@ -476,7 +469,6 @@ export const connectionsCatalog = defineCatalog(
     "connections.schemaDiffInSync": "Schema matches the baseline",
     "connections.schemaDiffMissingSection": "Missing here ({count})",
     "connections.schemaDiffPendingChip": "diff",
-    "connections.schemaDiffPendingTitle": "Open schema comparison to load this database",
     "connections.schemaDiffTableAdded": "Only in this database; missing from the baseline",
     "connections.schemaDiffTableChanged":
       "Compared with the baseline: +{added} columns, -{missing} columns, ~{changed} changed",
@@ -530,7 +522,6 @@ export const connectionsCatalog = defineCatalog(
       "Automatic execution is the default. Query and data toolbars can open a bounded connection-scoped manual transaction for commit or rollback.",
     "connections.unique": "Unique",
     "connections.user": "User",
-    "connections.userPassword": "User & Password",
     "connections.views": "Views ({count})",
   },
   {
@@ -595,9 +586,6 @@ export const connectionsCatalog = defineCatalog(
       "클라우드 자격 증명은 데이터베이스 연결 프로필과 분리해 관리합니다.",
     "connections.cloudCredentialDescription":
       "계정 자격 증명 설정",
-    "connections.connectionMethod": "연결 방식",
-    "connections.connectionMethodHint":
-      "공급자별 연결 동작을 선택합니다. 클라우드 계정 자격 증명은 별도로 관리됩니다.",
     "connections.connectionType": "연결 유형",
     "connections.connectionTypeDefault": "기본",
     "connections.connectionTypeUrlOnly": "URL 전용",
@@ -618,7 +606,6 @@ export const connectionsCatalog = defineCatalog(
     "connections.projectDeleted":
       "{project} 프로젝트를 삭제했습니다. DB 연결은 프로젝트 밖에 보존했습니다.",
     "connections.createProject": "프로젝트 만들기",
-    "connections.createFirstProject": "첫 프로젝트 만들기",
     "connections.creatingProject": "만드는 중…",
     "connections.projectSetupTitle": "프로젝트 만들기",
     "connections.projectSetupDescription":
@@ -680,7 +667,6 @@ export const connectionsCatalog = defineCatalog(
       "데이터 소스 카탈로그 탐색",
     "connections.dataSources": "데이터 소스",
     "connections.dataSourcesAndDrivers": "데이터 소스 및 드라이버",
-    "connections.editData": "데이터 편집",
     "connections.databaseFile": "데이터베이스 파일 경로",
     "connections.databaseDiscoveryPending": "서버의 데이터베이스 목록을 찾는 중...",
     "connections.databaseDiscoveryEmpty":
@@ -913,7 +899,6 @@ export const connectionsCatalog = defineCatalog(
     "connections.sampleDatabase": "샘플 데이터베이스",
     "connections.expand": "펼치기",
     "connections.expandMetadata": "{table} 메타데이터 펼치기",
-    "connections.compareSchemaStructure": "스키마 구조 비교",
     "connections.searchLoadedObjects": "적재된 Explorer 객체 검색",
     "connections.filterLoadedObjectsPlaceholder":
       "적재된 테이블, 뷰, 객체 검색",
@@ -933,7 +918,6 @@ export const connectionsCatalog = defineCatalog(
     "connections.keys": "키 ({count})",
     "connections.name": "이름",
     "connections.new": "새 연결",
-    "connections.noConnections": "아직 연결이 없습니다.",
     "connections.noDataSourceResults":
       "검색과 일치하는 데이터 소스가 없습니다.",
     "connections.noDriverResults":
@@ -984,7 +968,6 @@ export const connectionsCatalog = defineCatalog(
     "connections.schemaDiffInSync": "기준 DB와 스키마가 같습니다",
     "connections.schemaDiffMissingSection": "이 환경에 없음 ({count})",
     "connections.schemaDiffPendingChip": "비교",
-    "connections.schemaDiffPendingTitle": "스키마 비교 화면을 열면 이 DB를 불러옵니다",
     "connections.schemaDiffTableAdded": "이 DB에만 있으며 기준 DB에는 없습니다",
     "connections.schemaDiffTableChanged":
       "기준 DB와 비교: +{added} 컬럼, -{missing} 컬럼, ~{changed} 변경",
@@ -1037,7 +1020,6 @@ export const connectionsCatalog = defineCatalog(
       "기본은 자동 실행입니다. 쿼리와 데이터 툴바에서 연결 단위 수동 트랜잭션을 열어 커밋하거나 롤백할 수 있습니다.",
     "connections.unique": "고유",
     "connections.user": "사용자",
-    "connections.userPassword": "사용자 및 비밀번호",
     "connections.views": "뷰 ({count})",
   },
 );
