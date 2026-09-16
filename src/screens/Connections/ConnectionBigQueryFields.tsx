@@ -101,6 +101,7 @@ export function ConnectionBigQueryFields({
               )}
               <Button
                 size="compact"
+                aria-describedby={bigQuery.authenticationError ? "connection-bigquery-auth-error" : undefined}
                 disabled={!canEditConnection || bigQuery.pending}
                 onClick={
                   bigQuery.mode === "googleAccount"
@@ -119,6 +120,7 @@ export function ConnectionBigQueryFields({
             </div>
             {bigQuery.authenticationError ? (
               <p
+                id="connection-bigquery-auth-error"
                 className="tw:m-0 tw:text-xs tw:leading-body tw:text-danger"
                 role="alert"
               >
@@ -134,14 +136,14 @@ export function ConnectionBigQueryFields({
         htmlFor="connection-host"
         validation={validation.host}
       >
+        {({ controlProps }) => <>
         {useProjectSelector ? (
           <SelectInput
-            id="connection-host"
+            {...controlProps({ "aria-describedby": !isSharedTemplate ? "connection-bigquery-project-status" : undefined })}
             density="compact"
             value={form.host}
             disabled={!canEditConnection}
             required
-            aria-invalid={validation.host?.tone === "danger" || undefined}
             onChange={(event) => bigQuery.selectProject(event.target.value)}
           >
             <option value="">
@@ -160,7 +162,7 @@ export function ConnectionBigQueryFields({
           </SelectInput>
         ) : (
           <TextInput
-            id="connection-host"
+            {...controlProps({ "aria-describedby": !isSharedTemplate ? "connection-bigquery-project-status" : undefined })}
             density="compact"
             value={form.host}
             disabled={!canEditConnection}
@@ -168,11 +170,11 @@ export function ConnectionBigQueryFields({
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
-            aria-invalid={validation.host?.tone === "danger" || undefined}
             placeholder={t("connections.bigQueryProjectPlaceholder")}
             onChange={(event) => bigQuery.selectProject(event.target.value)}
           />
         )}
+        {!isSharedTemplate ? <div id="connection-bigquery-project-status" className="tw:grid tw:gap-1.5" aria-live="polite">
         {!isSharedTemplate && bigQuery.projectsError ? (
           <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
             <p
@@ -181,7 +183,7 @@ export function ConnectionBigQueryFields({
             >
               {bigQuery.projectsError}
             </p>
-            <Button size="xs" onClick={bigQuery.refreshProjects}>
+            <Button size="xs" aria-label={`${t("common.refresh")}: ${t("connections.bigQueryProjectId")}`} onClick={bigQuery.refreshProjects}>
               {t("common.refresh")}
             </Button>
           </div>
@@ -200,6 +202,8 @@ export function ConnectionBigQueryFields({
             {t("connections.bigQueryProjectsLoading")}
           </span>
         ) : null}
+        </div> : null}
+        </>}
       </PropertyRow>
 
       <PropertyRow
@@ -207,16 +211,14 @@ export function ConnectionBigQueryFields({
         htmlFor="connection-database"
         validation={validation.database}
       >
+        {({ controlProps }) => <>
         {useDatasetSelector ? (
           <SelectInput
-            id="connection-database"
+            {...controlProps({ "aria-describedby": !isSharedTemplate ? "connection-bigquery-dataset-status" : undefined })}
             density="compact"
             value={form.database}
             disabled={!canEditConnection}
             required
-            aria-invalid={
-              validation.database?.tone === "danger" || undefined
-            }
             onChange={(event) => bigQuery.selectDataset(event.target.value)}
           >
             <option value="">
@@ -233,7 +235,7 @@ export function ConnectionBigQueryFields({
           </SelectInput>
         ) : (
           <TextInput
-            id="connection-database"
+            {...controlProps({ "aria-describedby": !isSharedTemplate ? "connection-bigquery-dataset-status" : undefined })}
             density="compact"
             value={form.database}
             disabled={!canEditConnection}
@@ -241,13 +243,11 @@ export function ConnectionBigQueryFields({
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
-            aria-invalid={
-              validation.database?.tone === "danger" || undefined
-            }
             placeholder={t("connections.bigQueryDatasetPlaceholder")}
             onChange={(event) => bigQuery.selectDataset(event.target.value)}
           />
         )}
+        {!isSharedTemplate ? <div id="connection-bigquery-dataset-status" className="tw:grid tw:gap-1.5" aria-live="polite">
         {!isSharedTemplate && bigQuery.datasetsError ? (
           <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
             <p
@@ -256,7 +256,7 @@ export function ConnectionBigQueryFields({
             >
               {bigQuery.datasetsError}
             </p>
-            <Button size="xs" onClick={bigQuery.refreshDatasets}>
+            <Button size="xs" aria-label={`${t("common.refresh")}: ${t("connections.bigQueryDataset")}`} onClick={bigQuery.refreshDatasets}>
               {t("common.refresh")}
             </Button>
           </div>
@@ -275,6 +275,8 @@ export function ConnectionBigQueryFields({
             {t("connections.bigQueryDatasetsLoading")}
           </span>
         ) : null}
+        </div> : null}
+        </>}
       </PropertyRow>
 
       {!isSharedTemplate ? (
@@ -283,17 +285,15 @@ export function ConnectionBigQueryFields({
           htmlFor="connection-bigquery-location"
           validation={validation.bigQueryLocation}
         >
+          {({ controlProps }) => (
           <TextInput
-            id="connection-bigquery-location"
+            {...controlProps()}
             density="compact"
             value={form.extraParams[BIGQUERY_LOCATION_PARAMETER] ?? ""}
             disabled={!canEditConnection}
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
-            aria-invalid={
-              validation.bigQueryLocation?.tone === "danger" || undefined
-            }
             placeholder={t("connections.bigQueryLocationPlaceholder")}
             onChange={(event) =>
               options.setExtraParameter(
@@ -302,6 +302,7 @@ export function ConnectionBigQueryFields({
               )
             }
           />
+          )}
         </PropertyRow>
       ) : null}
 
@@ -311,8 +312,9 @@ export function ConnectionBigQueryFields({
           htmlFor="connection-bigquery-maximum-bytes-billed"
           validation={validation.bigQueryMaximumBytesBilled}
         >
+          {({ controlProps }) => (
           <TextInput
-            id="connection-bigquery-maximum-bytes-billed"
+            {...controlProps()}
             density="compact"
             type="number"
             min={1}
@@ -321,10 +323,6 @@ export function ConnectionBigQueryFields({
               form.extraParams[BIGQUERY_MAXIMUM_BYTES_BILLED_PARAMETER] ??
               BIGQUERY_DEFAULT_MAXIMUM_BYTES_BILLED
             }
-            aria-invalid={
-              validation.bigQueryMaximumBytesBilled?.tone === "danger" ||
-              undefined
-            }
             onChange={(event) =>
               options.setExtraParameter(
                 BIGQUERY_MAXIMUM_BYTES_BILLED_PARAMETER,
@@ -332,10 +330,13 @@ export function ConnectionBigQueryFields({
               )
             }
           />
+          )}
         </PropertyRow>
       ) : (
         <PropertyRow label={t("connections.environment")}>
+          {({ controlProps }) => (
           <SelectInput
+            {...controlProps()}
             density="compact"
             value={form.env ?? ""}
             disabled={!canEditConnection}
@@ -346,6 +347,7 @@ export function ConnectionBigQueryFields({
             <option value="staging">staging</option>
             <option value="prod">prod</option>
           </SelectInput>
+          )}
         </PropertyRow>
       )}
 

@@ -85,7 +85,7 @@ export function IdeToolbarLauncher({
       data-active={active || undefined}
       aria-pressed={active === undefined ? undefined : active}
       aria-label={ariaLabel ?? tooltipLabel ?? undefined}
-      className="tw:grid tw:size-control-md tw:shrink-0 tw:cursor-pointer tw:place-items-center tw:rounded-sm tw:border-0 tw:bg-transparent tw:text-base tw:text-muted-foreground tw:hover:bg-muted tw:hover:text-foreground tw:data-[active=true]:bg-muted tw:data-[active=true]:text-foreground tw:disabled:cursor-not-allowed tw:disabled:opacity-40 tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-inset tw:focus-visible:ring-ring"
+      className="tw:grid tw:size-control-md tw:shrink-0 tw:cursor-pointer tw:place-items-center tw:rounded-sm tw:border-0 tw:bg-transparent tw:text-[length:var(--ds-icon-md)] tw:text-muted-foreground tw:hover:bg-muted tw:hover:text-foreground tw:data-[active=true]:bg-muted tw:data-[active=true]:text-foreground tw:disabled:cursor-not-allowed tw:disabled:opacity-40 tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-inset tw:focus-visible:ring-ring"
       {...buttonProps}
     >
       {children}

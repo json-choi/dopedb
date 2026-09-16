@@ -48,7 +48,7 @@ function HomeAccessSections({ c: existing, lang }: { c: HomeCopy; lang: Lang }) 
           {c.seeProduct}<Arrow />
         </a>
       </div>
-      <p className="tw:mt-4 tw:text-[11px] tw:leading-[1.8] tw:text-cream-muted/65">{c.proof}</p>
+      <p className="tw:mt-4 tw:text-[11px] tw:leading-[1.8] tw:text-cream-muted">{c.proof}</p>
     </GalaxyHero>
     <section id="product" className="tw:relative tw:z-10 tw:scroll-mt-24 tw:bg-night/45 tw:px-6 tw:pt-5 tw:pb-24 tw:md:px-12 tw:lg:pb-28">
       <div className="tw:mx-auto tw:max-w-[1264px]">
@@ -70,7 +70,7 @@ function HomeAccessSections({ c: existing, lang }: { c: HomeCopy; lang: Lang }) 
 
 function HomeActionSections({ c: existing, lang }: { c: HomeCopy; lang: Lang }) {
   const c = existing.landing;
-  const questions = [0, 1, 2, 5].map(index => existing.faq.items[index]);
+  const questions = existing.faq.items;
   return <>
     <section id="trust" className="tw:relative tw:z-10 tw:scroll-mt-24 tw:bg-night/45 tw:px-6 tw:py-24 tw:md:px-12 tw:lg:py-32">
       <div className="tw:mx-auto tw:grid tw:max-w-[1264px] tw:gap-12 tw:lg:grid-cols-[minmax(0,.7fr)_minmax(0,1.3fr)] tw:lg:gap-20">

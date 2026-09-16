@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   buildPageQuery,
   gridExpressionIssue,
+  toCsv,
+  toJson,
 } from "../../lib/sqlBuild";
 import type { CatalogTable } from "../../ipc/types";
 import { shouldVirtualizeDataGrid } from "./DataGrid";
@@ -345,6 +347,18 @@ describe("DataGridVirtual window", () => {
       blocked: false,
       value: null,
     });
+    // Selected-cell exports preserve the exact value/type, and a page export
+    // contains only the supplied local rows, including nested Mongo values.
+    const preciseValue = "9007199254740993.0001";
+    expect(JSON.parse(toJson(["amount"], [[preciseValue]]))).toEqual([
+      { amount: preciseValue },
+    ]);
+    expect(toCsv(["note"], [["line one\n\"line two\""]])).toBe(
+      'note\n"line one\n""line two"""',
+    );
+    expect(JSON.parse(toJson(["document"], [[{ nested: [1, null, "x"] }]]))).toEqual([
+      { document: { nested: [1, null, "x"] } },
+    ]);
     expect(
       gridSelectionClipboardText(singleGridCell(0, 2), () => ordinaryValues, String),
     ).toBe("<unsupported: geometry>");

@@ -44,7 +44,7 @@ export function KnowledgeWorkspaceHeader({
           name={view === "databases" ? "database" : "branch"}
           className="tw:shrink-0 tw:text-muted-foreground"
         />
-        <h1 className="tw:m-0 tw:min-w-0 tw:truncate tw:text-base tw:font-semibold tw:tracking-tight">
+        <h1 className="tw:m-0 tw:min-w-0 tw:truncate tw:text-title tw:font-semibold tw:tracking-tight">
           {title}
         </h1>
         {project && environment ? (

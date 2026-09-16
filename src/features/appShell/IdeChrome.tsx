@@ -87,7 +87,7 @@ export function IdeTopBar({
   return (
     <IdeTitleToolbar
       macosInset={IS_MACOS}
-      context={workspace ?? <span className="tw:flex tw:items-center tw:gap-1.5 tw:text-foreground"><DopeDBMark /><span className="tw:font-serif tw:text-lg tw:leading-none tw:font-bold tw:tracking-tight">DopeDB</span></span>}
+      context={workspace ?? <span className="tw:flex tw:items-center tw:gap-1.5 tw:text-foreground"><DopeDBMark /><span className="tw:font-serif tw:text-title tw:leading-none tw:font-bold tw:tracking-tight">DopeDB</span></span>}
       contextAction={
         <IdeToolbarLauncher
           active={leftPanelOpen}
@@ -380,10 +380,8 @@ function SqlEditorStatusItems({ documentId }: { documentId: string | null }) {
           <StatusBarItem>
             {editorStatus.line}:{editorStatus.column}
           </StatusBarItem>
-          <StatusBarItem>LF</StatusBarItem>
         </>
       ) : null}
-      <StatusBarItem>UTF-8</StatusBarItem>
       {editorStatus ? (
         <StatusBarItem>
           {t("ide.indentSpaces", {

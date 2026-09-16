@@ -1,3 +1,5 @@
+// Shares the active connection and table selection with Agent context consumers.
+
 import {
   createContext,
   useCallback,

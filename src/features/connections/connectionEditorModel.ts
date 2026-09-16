@@ -187,6 +187,7 @@ export function connectionProfileFlags(form: ConnectionProfile) {
   const canDiscoverDatabases =
     !isSqlite &&
     !isSharedTemplate &&
+    form.credentialMode === "local" &&
     (form.engine === "postgres" ||
       form.engine === "mysql" ||
       form.engine === "mongodb");

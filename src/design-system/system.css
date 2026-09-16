@@ -135,13 +135,6 @@ h3 {
   padding: var(--ds-space-4);
 }
 
-.grid-panel {
-  background: var(--ds-surface-0);
-  border: var(--ds-border-width) solid var(--ds-border-subtle);
-  border-radius: var(--ds-radius-lg);
-  box-shadow: var(--ds-shadow-panel);
-}
-
 .badge {
   max-width: 100%;
   min-width: 0;
@@ -259,11 +252,6 @@ h3 {
     --ds-control-local-size,
     var(--ds-row-control-size, var(--ds-control-field))
   );
-}
-
-.ds-toolbar-spacer {
-  flex: 1;
-  min-width: var(--ds-space-3);
 }
 
 .ds-tone-trust {
@@ -396,60 +384,6 @@ h3 {
   gap: 0;
 }
 
-.ds-attention-stack {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: var(--ds-space-2);
-  min-height: calc(var(--ds-control-lg) + (var(--ds-space-2) * 2));
-  padding: var(--ds-space-2) var(--ds-space-3);
-  border-top: var(--ds-border-width) solid var(--ds-border-subtle);
-  background: var(--ds-surface-0);
-}
-
-.ds-attention-badge {
-  max-width: min(280px, 100%);
-  min-height: var(--ds-control-lg);
-  display: inline-flex;
-  align-items: center;
-  gap: var(--ds-space-2);
-  padding: 0 var(--ds-space-3);
-  border: var(--ds-border-width) solid var(--ds-border-subtle);
-  border-left-width: var(--ds-border-width-strong);
-  border-radius: var(--ds-radius-sm);
-  background: var(--ds-surface-0);
-  color: var(--ds-text);
-  box-shadow: var(--ds-shadow-popover);
-  cursor: pointer;
-  font: inherit;
-  font-size: var(--ds-font-size-sm);
-  font-weight: var(--ds-font-weight-semibold);
-  line-height: 1;
-  pointer-events: auto;
-}
-
-.ds-attention-badge.ds-tone-trust {
-  color: var(--ds-success);
-}
-
-.ds-attention-badge:hover {
-  border-color: var(--ds-border-strong);
-  background: var(--ds-surface-elevated);
-}
-
-.ds-attention-badge .icon {
-  flex: 0 0 auto;
-  font-size: var(--ds-icon-sm);
-}
-
-.ds-attention-badge span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -498,15 +432,5 @@ h3 {
 
   .ds-action-row button:is([data-variant="danger"], [data-variant="dangerGhost"]) {
     margin-right: 0;
-  }
-}
-
-@media (max-width: 640px) {
-  .ds-attention-stack {
-    padding-inline: var(--ds-space-2);
-  }
-
-  .ds-attention-badge {
-    max-width: 100%;
   }
 }

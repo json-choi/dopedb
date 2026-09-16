@@ -1,3 +1,5 @@
+// Loads one exact relation's DDL through scoped query keys and catalog-error recovery.
+
 import { useState } from "react";
 import { queryOptions, useQuery } from "@tanstack/react-query";
 

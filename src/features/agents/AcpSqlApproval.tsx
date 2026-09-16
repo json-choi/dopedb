@@ -1,3 +1,5 @@
+// Reviews an Agent SQL proposal and coordinates its exact approval or rejection.
+
 import { useEffect, useState } from "react";
 
 import { Icon } from "../../components/Icon";

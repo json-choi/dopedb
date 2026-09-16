@@ -1,3 +1,5 @@
+// Persists independent Explorer and Local History widths with viewport bounds.
+
 import { useCallback, useEffect, useState } from "react";
 
 import { createFrameCoalescer } from "../../lib/frameCoalescer";

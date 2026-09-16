@@ -19,7 +19,7 @@ import {
   catalogLoadIssue,
   catalogLoadIssueMessage,
 } from "../../features/catalogExplorer/catalogDomain";
-import DataGrid from "../../features/queryResults/DataGrid";
+import InspectableResultGrid from "../../features/queryResults/InspectableResultGrid";
 import { Icon } from "../../components/Icon";
 import ResultToolbar from "../../features/queryResults/ResultToolbar";
 import { Button } from "../../design-system/components/Button";
@@ -169,6 +169,7 @@ export default function Documents({
   const [result, setResult] = useState<{
     page: DocumentPage;
     at: string;
+    collection: string;
   } | null>(null);
   const [parseErr, setParseErr] = useState<string | null>(null);
   const [runErr, setRunErr] = useState<string | null>(null);
@@ -230,7 +231,7 @@ export default function Documents({
         );
         track(proposal.operationId);
         const page = await runDocumentQuery(proposal.operationId);
-        setResult({ page, at: new Date().toLocaleTimeString() });
+        setResult({ page, at: new Date().toLocaleTimeString(), collection: query.collection });
       });
     } catch (e) {
       setRunErr(errMessage(e));
@@ -455,11 +456,16 @@ export default function Documents({
               <ResultToolbar
                 columns={gridResult.columns}
                 rows={gridResult.rows}
-                filenameBase={`documents-${collection}-${stamp()}`}
+                scopeLabel={t("results.currentPage")}
+                filenameBase={`documents-${result.collection}-${stamp()}`}
               />
             </ResultMeta>
             {gridResult.columns.length > 0 ? (
-              <DataGrid result={gridResult} surface="workbench" />
+              <InspectableResultGrid
+                result={gridResult}
+                inspectionKey={result.page}
+                surface="workbench"
+              />
             ) : (
               <WorkbenchEmptyState icon="table">
                 {t("documents.noDocuments")}

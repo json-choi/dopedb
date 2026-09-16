@@ -2,7 +2,7 @@
 
 // Workspace membership administration. Mutations are confirmed by the server and
 // the rendered list is then reloaded from Better Auth's organization state.
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import {
   ControlButton,
   ControlInput,
@@ -33,40 +33,64 @@ export function WorkspaceAccessPanel({ workspaceId }: { workspaceId: string }) {
   const roleLabel: Record<string, string> = copy.roles;
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [invitations, setInvitations] = useState<PendingInvitation[]>([]);
+  const [loadedWorkspaceId, setLoadedWorkspaceId] = useState("");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("analyst");
   const [pending, setPending] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [mutatingId, setMutatingId] = useState("");
   const [copiedId, setCopiedId] = useState("");
-  const [error, setError] = useState("");
+  const [errorState, setErrorState] = useState<{
+    workspaceId: string;
+    message: string;
+  } | null>(null);
+  const workspaceRef = useRef(workspaceId);
+  workspaceRef.current = workspaceId;
+  const error = errorState?.workspaceId === workspaceId ? errorState.message : "";
+  const setError = useCallback((message: string) => {
+    setErrorState(message ? { workspaceId, message } : null);
+  }, [workspaceId]);
 
   const load = useCallback(async (signal?: AbortSignal) => {
+    const requestedWorkspaceId = workspaceId;
+    setLoading(true);
+    setLoadedWorkspaceId("");
+    setError("");
     const response = await fetch(`/api/v1/workspaces/${workspaceId}/members`, {
       cache: "no-store",
       signal,
     }).catch(() => null);
-    if (signal?.aborted) return;
+    if (signal?.aborted || workspaceRef.current !== requestedWorkspaceId) return;
     if (!response?.ok) {
       const body = await response?.json().catch(() => null);
+      if (workspaceRef.current !== requestedWorkspaceId) return;
       setError(
         typeof body?.error === "string"
           ? localizedProviderMessage(body.error, locale, copy.loadError)
           : copy.loadError,
       );
+      setLoading(false);
       return;
     }
     const body = await response.json().catch(() => null);
+    if (workspaceRef.current !== requestedWorkspaceId) return;
     if (!body || !Array.isArray(body.members) || !Array.isArray(body.invitations)) {
       setError(copy.shapeError);
+      setLoading(false);
       return;
     }
     setError("");
     setMembers(body.members);
     setInvitations(body.invitations);
-  }, [copy, locale, workspaceId]);
+    setLoadedWorkspaceId(requestedWorkspaceId);
+    setLoading(false);
+  }, [copy, locale, setError, workspaceId]);
 
   useEffect(() => {
     const controller = new AbortController();
+    setPending(false);
+    setMutatingId("");
+    setCopiedId("");
     void load(controller.signal);
     return () => controller.abort();
   }, [load]);
@@ -76,6 +100,7 @@ export function WorkspaceAccessPanel({ workspaceId }: { workspaceId: string }) {
     if (pending || mutatingId) return;
     setPending(true);
     setError("");
+    const requestedWorkspaceId = workspaceId;
     try {
       const response = await fetch(`/api/v1/workspaces/${workspaceId}/members`, {
         method: "POST",
@@ -84,6 +109,7 @@ export function WorkspaceAccessPanel({ workspaceId }: { workspaceId: string }) {
       }).catch(() => null);
       if (!response?.ok) {
         const body = await response?.json().catch(() => null);
+        if (workspaceRef.current !== requestedWorkspaceId) return;
         setError(
           typeof body?.error === "string"
             ? localizedProviderMessage(body.error, locale, copy.inviteError)
@@ -91,10 +117,11 @@ export function WorkspaceAccessPanel({ workspaceId }: { workspaceId: string }) {
         );
         return;
       }
+      if (workspaceRef.current !== requestedWorkspaceId) return;
       setEmail("");
       await load();
     } finally {
-      setPending(false);
+      if (workspaceRef.current === requestedWorkspaceId) setPending(false);
     }
   }
 
@@ -102,6 +129,7 @@ export function WorkspaceAccessPanel({ workspaceId }: { workspaceId: string }) {
     if (mutatingId) return;
     setMutatingId(memberId);
     setError("");
+    const requestedWorkspaceId = workspaceId;
     try {
       const response = await fetch(`/api/v1/workspaces/${workspaceId}/members`, {
         method: "PATCH",
@@ -110,6 +138,7 @@ export function WorkspaceAccessPanel({ workspaceId }: { workspaceId: string }) {
       }).catch(() => null);
       if (!response?.ok) {
         const body = await response?.json().catch(() => null);
+        if (workspaceRef.current !== requestedWorkspaceId) return;
         setError(
           typeof body?.error === "string"
             ? localizedProviderMessage(body.error, locale, copy.updateError)
@@ -117,9 +146,10 @@ export function WorkspaceAccessPanel({ workspaceId }: { workspaceId: string }) {
         );
         return;
       }
+      if (workspaceRef.current !== requestedWorkspaceId) return;
       await load();
     } finally {
-      setMutatingId("");
+      if (workspaceRef.current === requestedWorkspaceId) setMutatingId("");
     }
   }
 
@@ -127,6 +157,7 @@ export function WorkspaceAccessPanel({ workspaceId }: { workspaceId: string }) {
     if (mutatingId) return;
     setMutatingId(id);
     setError("");
+    const requestedWorkspaceId = workspaceId;
     try {
       const response = await fetch(`/api/v1/workspaces/${workspaceId}/members`, {
         method: "DELETE",
@@ -135,6 +166,7 @@ export function WorkspaceAccessPanel({ workspaceId }: { workspaceId: string }) {
       }).catch(() => null);
       if (!response?.ok) {
         const body = await response?.json().catch(() => null);
+        if (workspaceRef.current !== requestedWorkspaceId) return;
         setError(
           typeof body?.error === "string"
             ? localizedProviderMessage(body.error, locale, copy.requestError)
@@ -142,9 +174,10 @@ export function WorkspaceAccessPanel({ workspaceId }: { workspaceId: string }) {
         );
         return;
       }
+      if (workspaceRef.current !== requestedWorkspaceId) return;
       await load();
     } finally {
-      setMutatingId("");
+      if (workspaceRef.current === requestedWorkspaceId) setMutatingId("");
     }
   }
 
@@ -152,6 +185,7 @@ export function WorkspaceAccessPanel({ workspaceId }: { workspaceId: string }) {
     if (mutatingId) return;
     setMutatingId(item.id);
     setError("");
+    const requestedWorkspaceId = workspaceId;
     try {
       const response = await fetch(`/api/v1/workspaces/${workspaceId}/members`, {
         method: "POST",
@@ -160,6 +194,7 @@ export function WorkspaceAccessPanel({ workspaceId }: { workspaceId: string }) {
       }).catch(() => null);
       if (!response?.ok) {
         const body = await response?.json().catch(() => null);
+        if (workspaceRef.current !== requestedWorkspaceId) return;
         setError(
           typeof body?.error === "string"
             ? localizedProviderMessage(body.error, locale, copy.resendError)
@@ -167,9 +202,10 @@ export function WorkspaceAccessPanel({ workspaceId }: { workspaceId: string }) {
         );
         return;
       }
+      if (workspaceRef.current !== requestedWorkspaceId) return;
       await load();
     } finally {
-      setMutatingId("");
+      if (workspaceRef.current === requestedWorkspaceId) setMutatingId("");
     }
   }
 
@@ -187,6 +223,11 @@ export function WorkspaceAccessPanel({ workspaceId }: { workspaceId: string }) {
     }
   }
 
+  const dataCurrent = loadedWorkspaceId === workspaceId;
+  const viewLoading = loading || (!dataCurrent && !error);
+  const visibleMembers = dataCurrent ? members : [];
+  const visibleInvitations = dataCurrent ? invitations : [];
+
   return (
     <section className="tw:grid tw:gap-3 tw:p-6 tw:max-[640px]:p-4">
       <header className="tw:flex tw:items-start tw:justify-between tw:gap-3">
@@ -197,8 +238,25 @@ export function WorkspaceAccessPanel({ workspaceId }: { workspaceId: string }) {
           {copy.description}
         </small>
       </header>
+      {viewLoading ? (
+        <p className="tw:m-0 tw:border-y tw:border-border tw:py-5 tw:text-center tw:text-xs tw:text-muted-foreground" role="status">
+          {copy.loading}
+        </p>
+      ) : null}
+      {!viewLoading && error && visibleMembers.length === 0 ? (
+        <div className="tw:flex tw:flex-wrap tw:items-center tw:justify-between tw:gap-2 tw:border-y tw:border-border tw:py-3" role="alert">
+          <small className="tw:text-2xs tw:text-danger">{error}</small>
+          <ControlButton onClick={() => void load()}>{copy.retry}</ControlButton>
+        </div>
+      ) : null}
+      {!viewLoading && !error && visibleMembers.length === 0 ? (
+        <p className="tw:m-0 tw:border-y tw:border-border tw:py-5 tw:text-center tw:text-xs tw:text-muted-foreground">
+          {copy.emptyMembers}
+        </p>
+      ) : null}
+      {!viewLoading && visibleMembers.length > 0 ? (
       <div className="tw:grid tw:border-t tw:border-border">
-        {members.map((item) => (
+        {visibleMembers.map((item) => (
           <div
             className="tw:flex tw:flex-wrap tw:items-center tw:justify-between tw:gap-3 tw:border-b tw:border-border tw:py-2.5"
             key={item.id}
@@ -241,6 +299,8 @@ export function WorkspaceAccessPanel({ workspaceId }: { workspaceId: string }) {
           </div>
         ))}
       </div>
+      ) : null}
+      {!viewLoading && (visibleMembers.length > 0 || !error) ? (
       <form
         className="tw:grid tw:grid-cols-1 tw:gap-2 tw:md:grid-cols-[minmax(0,1fr)_auto_auto]"
         onSubmit={invite}
@@ -270,9 +330,10 @@ export function WorkspaceAccessPanel({ workspaceId }: { workspaceId: string }) {
           {pending ? copy.creating : copy.createInvite}
         </ControlButton>
       </form>
-      {invitations.length > 0 ? (
+      ) : null}
+      {visibleInvitations.length > 0 ? (
         <div className="tw:grid tw:border-t tw:border-border">
-          {invitations.map((item) => (
+          {visibleInvitations.map((item) => (
             <div
               className="tw:flex tw:flex-wrap tw:items-center tw:justify-between tw:gap-3 tw:border-b tw:border-border tw:py-2.5"
               key={item.id}
@@ -313,7 +374,7 @@ export function WorkspaceAccessPanel({ workspaceId }: { workspaceId: string }) {
           </p>
         </div>
       ) : null}
-      {error ? (
+      {error && (visibleMembers.length > 0 || viewLoading) ? (
         <small className="tw:text-2xs tw:text-danger" role="alert">
           {error}
         </small>

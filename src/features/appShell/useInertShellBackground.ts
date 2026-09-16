@@ -1,3 +1,5 @@
+// Retains and restores shell inert state while a modal Agent surface owns interaction.
+
 import { useLayoutEffect, type RefObject } from "react";
 
 type InertShellChild = {

@@ -78,3 +78,19 @@ than 24 hours old when the lockfiles were regenerated:
 
 A future audited refresh can select them after they satisfy the minimum release
 age and their applicable migration checks pass; no policy bypass is required.
+
+### Vitest isolation check — 2026-09-16 (#242)
+
+The root resolves Vitest 5.0.0 / Vite 8.2.2; Workspace Cloud independently
+resolves Vitest 4.1.11 / Vite 8.2.0. Both frozen installs passed with pnpm
+11.25.0 and Node 24.19.0 without a manifest or lockfile change. Root smoke
+passed 42 tests, and Workspace Cloud contracts passed 10 tests, including its
+isolated Miniflare D1 storage suite. The Workspace Cloud production build passed.
+
+The installed packages' Node/Vite peer ranges accept this environment. The
+[official Vitest 5 migration guide](https://vitest.dev/guide/migration/)
+requires Node 22.12+ and Vite 6.4+, and changes mock clearing and inline-project
+inheritance. These projects invoke separate installed runners/configurations;
+the cloud harness does not inherit the root runner's defaults. A version-number
+difference alone is not an incompatibility. No dependency upgrade is justified
+by this reproduction; future upgrades still need their own migration review.

@@ -1,3 +1,5 @@
+// Boots the shared React providers, monitoring, and normal or packaged-benchmark application.
+
 import React from "react";
 import { createRoot } from "./reactDomClient";
 import App from "./App";

@@ -1,3 +1,5 @@
+// Owns paired English and Korean messages for product-analytics consent and privacy.
+
 import { defineCatalog } from "../types";
 
 export const productAnalyticsCatalog = defineCatalog(

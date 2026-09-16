@@ -1,3 +1,5 @@
+// Publishes document-owned SQL cursor snapshots without subscribing the shell to editor text.
+
 import { useSyncExternalStore } from "react";
 import type {
   SqlCursorPosition,

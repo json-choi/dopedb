@@ -9,7 +9,7 @@ import {
   SQL_RESULT_CACHE_MAX_PAGES,
 } from "../queries/resultPageCache";
 import { useSqlResultPages } from "../queries/useSqlResultPages";
-import DataGrid from "../queryResults/DataGrid";
+import InspectableResultGrid from "../queryResults/InspectableResultGrid";
 import {
   ResultWorkbenchFooter,
   ResultWorkbenchToolbar,
@@ -114,7 +114,7 @@ export default function StreamOutcome({
             }}
             onFilterChange={setFilter}
           />
-          <DataGrid
+          <InspectableResultGrid
             result={{
               columns: stream.columns,
               rows: filteredRows ?? [],
@@ -123,6 +123,7 @@ export default function StreamOutcome({
               truncated: stream.truncated,
               durationMs: stream.durationMs ?? 0,
             }}
+            inspectionKey={stream}
             rowSource={filteredRows === null ? stream.rowSource : undefined}
             surface="workbench"
             footerInset

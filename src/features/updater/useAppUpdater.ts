@@ -1,3 +1,5 @@
+// Connects the update controller to official Tauri checks, downloads, and app relaunch.
+
 import { getVersion } from "@tauri-apps/api/app";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check } from "@tauri-apps/plugin-updater";

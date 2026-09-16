@@ -1,3 +1,5 @@
+// Owns native startup marks and the isolated packaged-benchmark command contract.
+
 import { invoke } from "../../ipc/core";
 
 export type PackagedBenchmarkRendererMetrics = {

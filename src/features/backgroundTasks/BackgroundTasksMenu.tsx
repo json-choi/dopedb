@@ -1,3 +1,5 @@
+// Presents running background tasks and forwards cancellation to their owning features.
+
 import { Icon, type IconName } from "../../components/Icon";
 import ToolbarMenu from "../../components/ToolbarMenu";
 import { Button } from "../../design-system/components/Button";

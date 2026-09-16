@@ -1,7 +1,10 @@
+// Displays one fetched Mongo page; inspection and export stay bound to that page.
 import { useMemo } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 
-import DataGrid from "../../features/queryResults/DataGrid";
+import InspectableResultGrid from "../../features/queryResults/InspectableResultGrid";
+import ResultToolbar from "../../features/queryResults/ResultToolbar";
+import { stamp } from "../../lib/export";
 import { Icon } from "../../components/Icon";
 import Skeleton from "../../components/Skeleton";
 import {
@@ -48,7 +51,8 @@ export default function MongoTableData({
     placeholderData: keepPreviousData,
   });
   const countQuery = useQuery(documentCountQuery(connection.id, table.name));
-  const documentPage = rowsQuery.data ?? null;
+  // Previous-page placeholders do not own the current page number or export scope.
+  const documentPage = rowsQuery.isPlaceholderData ? null : rowsQuery.data ?? null;
   const total = countQuery.data ?? null;
   const countError = countQuery.error
     ? t("tables.countUnavailable", { error: errMessage(countQuery.error) })
@@ -90,6 +94,15 @@ export default function MongoTableData({
           {busy ? "…" : <Icon name="refresh" />}
         </WorkbenchButton>
         <span className="tw:flex-1" />
+        {documentPage && !busy && !error && !rowsQuery.isPlaceholderData ? (
+          <ResultToolbar
+            columns={result.columns}
+            rows={result.rows}
+            scopeLabel={t("results.currentPage")}
+            filenameBase={`documents-${table.name}-page${page + 1}-${stamp()}`}
+            presentation="workbench"
+          />
+        ) : null}
         <Pager
           page={page}
           pageSize={pageSize}
@@ -117,8 +130,10 @@ export default function MongoTableData({
         >
           {documentPage ? (
             <>
-              <DataGrid
+              <InspectableResultGrid
                 result={result}
+                inspectionKey={documentPage}
+                inspectionDisabled={busy || Boolean(error) || rowsQuery.isPlaceholderData}
                 surface="workbench"
                 footerInset
                 startIndex={page * pageSize}
@@ -182,9 +197,12 @@ export default function MongoTableData({
             .filter(Boolean)
             .join(" · ")}
         >
-          {t("ide.queryRows", { count: rows })}
+          {total != null
+            ? t("tables.rowRangeTotal", { from, to, total: total.toLocaleString() })
+            : t("tables.rowRange", { from, to })}
           {documentPage.truncated ? ` · ${t("tables.truncated")}` : ""}
           {countError ? ` · ${t("tables.countUnavailableShort")}` : ""}
+          {` · ${t("tables.durationMs", { duration: documentPage.durationMs })}`}
         </DataGridStatusPill>
       ) : null}
     </WorkbenchPane>

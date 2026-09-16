@@ -1,3 +1,5 @@
+// Presents searchable page-value filters while retaining the opened column's value inventory.
+
 import { useMemo, useRef, useState } from "react";
 import { Button } from "../../design-system/components/Button";
 import { TextInput } from "../../design-system/components/FormControls";

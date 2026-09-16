@@ -1,3 +1,5 @@
+// Wraps native IPC with aggregate timing only in the isolated packaged-benchmark build.
+
 import {
   Channel,
   invoke as nativeInvoke,

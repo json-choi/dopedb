@@ -1,3 +1,5 @@
+// Retains bounded SQL stream pages and serves row, decode-failure, and subscription lookups.
+
 import type {
   SqlStreamBatch,
   SqlStreamBatchWire,

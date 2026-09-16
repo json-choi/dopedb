@@ -1,3 +1,5 @@
+// Hosts cell inspection and staged row editing in a resizable, persisted table side panel.
+
 import {
   useState,
   type CSSProperties,

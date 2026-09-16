@@ -1,3 +1,5 @@
+// Validates and bounds ACP tabular output before passing it to the shared grid.
+
 import DataGrid from "../queryResults/DataGrid";
 import type {
   CellDecodeFailure,

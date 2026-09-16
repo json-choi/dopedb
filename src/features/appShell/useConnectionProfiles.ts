@@ -1,3 +1,5 @@
+// Loads scoped connection profiles and identifies changes to runtime connection identity.
+
 import { useCallback, type SetStateAction } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 

@@ -1,3 +1,5 @@
+// Owns native Project, Environment, database-binding, and source inventory commands.
+
 import { invoke } from "../../ipc/core";
 import { readWithCatalogIssue } from "../catalogExplorer/catalogDomain";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";

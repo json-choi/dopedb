@@ -6,7 +6,7 @@
 
 ## 생성 및 검증
 
-저장소 루트에서 실행한다. macOS `iconutil`, Python 3 + Pillow,
+저장소 루트에서 실행한다. macOS `iconutil`, Python 3 + Pillow 12.2.0,
 `pnpm --dir site install --frozen-lockfile`로 설치한 사이트 의존성이 필요하다.
 SVG 렌더러는 Next의 선언된 Sharp 의존성을 사용하며 런타임 앱에 추가하지 않는다.
 
@@ -31,9 +31,12 @@ pnpm icons --check
 | Desktop 브라우저 탭·Tauri bundle·Dock·Windows installer | `src-tauri/icons/`의 PNG 4개, ICO, ICNS |
 | 소개 사이트 탭·홈 화면 | `site/public/`의 SVG, ICO, 48/180/192/512px PNG |
 | 약관·개인정보 문서·OAuth 업로드 | `site/public/oauth-logo-120.png` |
+| Open Graph·Twitter 공유 카드 | `site/public/og-card.png` (1200×630, 원본 마크·palette와 Pillow 내장 font) |
 | Workspace 탭·홈 화면 | `workspace-cloud/app/icon.svg`, `favicon.ico`, `apple-icon.png` |
 
-총 17개 생성물(공용 TSX 1개, SVG 2개, PNG 10개, ICO 3개, ICNS 1개)을 검증한다.
+총 18개 생성물(공용 TSX 1개, SVG 2개, PNG 11개, ICO 3개, ICNS 1개)을 검증한다.
+CI의 `brand-assets`는 macOS에서 같은 Pillow 버전과 frozen site 의존성을 사용해
+전체 생성물을 검사한다. 이 결과는 필수 `build` 집계에도 포함된다.
 inline 마크는 각 화면의 semantic `currentColor`를 사용해 라이트·다크 테마에
 맞추며, 각 앱의 React `useId()`가 mask 참조를 분리한다.
 

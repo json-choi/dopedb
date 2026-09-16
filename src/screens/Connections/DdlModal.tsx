@@ -1,3 +1,5 @@
+// Presents one relation's read-only DDL with bounded loading and catalog-error feedback.
+
 import LazySqlViewer from "../../components/LazySqlViewer";
 import { Button } from "../../design-system/components/Button";
 import {

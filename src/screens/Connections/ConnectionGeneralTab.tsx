@@ -1,8 +1,6 @@
 // Presents the General connection properties from narrow profile, driver, and
 // workspace-dialog view models without owning runtime queries or mutations.
 import { Icon } from "../../components/Icon";
-import InfoTip from "../../components/InfoTip";
-import { useEffect, useRef } from "react";
 import { Button } from "../../design-system/components/Button";
 import {
   CheckboxField,
@@ -18,6 +16,7 @@ import type { ConnectionEditorController } from "../../features/connections/useC
 import { useI18n } from "../../lib/i18n";
 import { ConnectionBigQueryFields } from "./ConnectionBigQueryFields";
 import { ManagedWorkspaceConnectionField } from "./ManagedWorkspaceConnectionField";
+import { ConnectionDatabaseField } from "./ConnectionDatabaseField";
 
 type Controller = ConnectionEditorController;
 
@@ -37,7 +36,6 @@ export function ConnectionGeneralTab({
   busy: boolean;
 }) {
   const { t } = useI18n();
-  const databaseInputRef = useRef<HTMLInputElement>(null);
   const {
     form,
     set,
@@ -45,7 +43,6 @@ export function ConnectionGeneralTab({
     credentials,
     url,
     options,
-    databaseDiscovery,
     validation,
   } = profile;
   const {
@@ -54,21 +51,9 @@ export function ConnectionGeneralTab({
     isMongo,
     isBigQuery,
     canEditConnection,
-    canDiscoverDatabases,
     srv,
     sqlSslModes,
   } = flags;
-
-  useEffect(() => {
-    if (databaseDiscovery.databases.length === 0) return;
-    const input = databaseInputRef.current;
-    input?.focus();
-    try {
-      input?.showPicker?.();
-    } catch {
-      // Some WebViews require a direct user gesture; focus still exposes the list.
-    }
-  }, [databaseDiscovery.databases]);
 
   return (
     <div className="tw:mx-auto tw:grid tw:w-full tw:max-w-[840px] tw:gap-4">
@@ -125,6 +110,7 @@ export function ConnectionGeneralTab({
               title={t("connections.driverHint")}
               value={form.driverId ?? ""}
               aria-invalid={validation.driver?.tone === "danger" || undefined}
+              aria-describedby={validation.driver ? "connection-driver-validation" : undefined}
               onChange={(event) =>
                 set("driverId", event.target.value || null)
               }
@@ -158,7 +144,7 @@ export function ConnectionGeneralTab({
           ) : null}
         </div>
         {validation.driver ? (
-          <FieldValidationMessage validation={validation.driver} />
+          <FieldValidationMessage id="connection-driver-validation" validation={validation.driver} />
         ) : null}
       </section>
 
@@ -193,31 +179,22 @@ export function ConnectionGeneralTab({
             htmlFor="connection-database"
             validation={validation.database}
           >
-            <div className="tw:grid tw:grid-cols-[minmax(0,1fr)_auto] tw:items-center tw:gap-2">
+            {({ controlProps }) => <div className="tw:grid tw:grid-cols-[minmax(0,1fr)_auto] tw:items-center tw:gap-2">
               <TextInput
-                ref={databaseInputRef}
-                id="connection-database"
+                {...controlProps()}
                 density="compact"
                 value={form.database}
-                list={
-                  canDiscoverDatabases &&
-                  databaseDiscovery.databases.length > 0
-                    ? "connection-database-options"
-                    : undefined
-                }
-                aria-invalid={
-                  validation.database?.tone === "danger" || undefined
-                }
                 onChange={(event) => set("database", event.target.value)}
                 placeholder="/path/to/app.db"
               />
               <Button
                 size="compact"
+                aria-label={`${t("connections.browse")}: ${t("connections.databaseFile")}`}
                 onClick={() => void options.pickDatabaseFile()}
               >
                 {t("connections.browse")}
               </Button>
-            </div>
+            </div>}
           </PropertyRow>
         </section>
       ) : isBigQuery ? (
@@ -244,10 +221,11 @@ export function ConnectionGeneralTab({
                     aria-invalid={
                       validation.host?.tone === "danger" || undefined
                     }
+                    aria-describedby={validation.host ? "connection-host-validation" : undefined}
                     onChange={(event) => set("host", event.target.value)}
                   />
                   {validation.host ? (
-                    <FieldValidationMessage validation={validation.host} />
+                    <FieldValidationMessage id="connection-host-validation" validation={validation.host} />
                   ) : null}
                 </div>
                 <label
@@ -267,11 +245,12 @@ export function ConnectionGeneralTab({
                     aria-invalid={
                       validation.port?.tone === "danger" || undefined
                     }
+                    aria-describedby={validation.port ? "connection-port-validation" : undefined}
                     disabled={!canEditConnection || (isMongo && srv)}
                     onChange={(event) => profile.port.setDraft(event.target.value)}
                   />
                   {validation.port ? (
-                    <FieldValidationMessage validation={validation.port} />
+                    <FieldValidationMessage id="connection-port-validation" validation={validation.port} />
                   ) : null}
                 </div>
               </div>
@@ -396,48 +375,7 @@ export function ConnectionGeneralTab({
             </>
           )}
 
-          <PropertyRow
-            label={t("connections.database")}
-            htmlFor="connection-database"
-            validation={validation.database}
-            hint={
-              isMongo ? (
-                <InfoTip label={t("connections.databaseRequiredHint")} />
-              ) : null
-            }
-          >
-            <div className="tw:grid tw:gap-1.5">
-              <TextInput
-                ref={databaseInputRef}
-                id="connection-database"
-                density="compact"
-                value={form.database}
-                list={
-                  canDiscoverDatabases &&
-                  databaseDiscovery.databases.length > 0
-                    ? "connection-database-options"
-                    : undefined
-                }
-                disabled={!canEditConnection}
-                required={isMongo}
-                aria-invalid={
-                  validation.database?.tone === "danger" || undefined
-                }
-                onChange={(event) => set("database", event.target.value)}
-                onFocus={() => void databaseDiscovery.discover()}
-              />
-              {canDiscoverDatabases &&
-              databaseDiscovery.databases.length > 0 ? (
-                <datalist id="connection-database-options">
-                  {databaseDiscovery.databases.map((database) => (
-                    <option key={database} value={database}>
-                      {database}
-                    </option>
-                  ))}
-                </datalist>
-              ) : null}
-            </div>
-          </PropertyRow>
+          <ConnectionDatabaseField profile={profile} busy={busy} />
         </section>
       )}
     </div>

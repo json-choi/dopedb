@@ -1,3 +1,5 @@
+// Windows tree rows while keeping offscreen keyboard targets available for focus.
+
 import {
   Fragment,
   useCallback,

@@ -1,3 +1,5 @@
+// Presents manual-transaction actions and feedback from the transaction controller.
+
 import { useEffect } from "react";
 
 import { Icon } from "../../components/Icon";

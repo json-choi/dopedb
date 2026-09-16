@@ -1,3 +1,5 @@
+// Presents read-only column and key metadata for the current catalog table.
+
 import type { CatalogTable } from "../../ipc/types";
 import { useI18n } from "../../lib/i18n";
 

@@ -1,3 +1,5 @@
+// Defines query-service sessions and validates persisted result snapshots before recovery.
+
 import type {
   AppErrorDetails,
   ExecOutcome,

@@ -1,3 +1,5 @@
+// Creates or reuses and verifies the demo connection before opening its guided workflow.
+
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 

@@ -1,3 +1,5 @@
+// Combines Job, Agent, and query activity into one cancellable background-task projection.
+
 import { useCallback, useMemo, useState } from "react";
 import { useQueries, useQueryClient } from "@tanstack/react-query";
 

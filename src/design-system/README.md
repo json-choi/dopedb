@@ -217,6 +217,10 @@ color를 거부한다.
 - Body: 15px.
 - Dense UI: 14px.
 - 보조 텍스트: 13px.
+- 일반 section·dialog 제목은 `text-title` 17px, 독립 작업 문서 제목은
+  `text-heading` 23px를 사용한다. `text-base`·`text-lg` 같은 Tailwind 기본
+  크기로 화면마다 제목을 보정하지 않는다. Article 본문의 큰 serif heading은
+  아래 문서 전용 계약을 유지하고, 그 아래 h4는 17px 제목 역할을 사용한다.
 - 기본 본문과 일반 leaf row는 400, tree section·일반 control·DB row는 500,
   section emphasis는 600, heading과 강한 category label은 700 weight를 사용한다.
   `font-normal/medium/semibold/bold`는 이 네 semantic token에 대응하며 화면별
@@ -252,7 +256,7 @@ Elevation은 세 단계만 허용한다.
   타일 배경 `#151a16`·마크 `#ccf36b`의 단일 정본이다. `pnpm icons`는 이 SVG를
   직접 렌더링해 favicon·OAuth·Tauri PNG/ICO/ICNS와 `DopeDBMarkGraphic`을 생성한다.
   별도의 좌표나 Pillow drawing으로 도형을 재구현하지 않는다.
-  `pnpm icons --check`는 생성물 17개의 일치 여부를 파일 변경 없이 검사한다.
+  `pnpm icons --check`는 생성물 18개의 일치 여부를 파일 변경 없이 검사한다.
   생성 환경과 사용처는 [`브랜드 자산 안내`](../../assets/brand/README.md)를 따른다.
 - Desktop의 `DopeDBMark`, `site/app/DopeDBMark`, Workspace의 `Brand`는 같은
   `DopeDBMarkGraphic`을 사용하고 크기·주변 테마 색·각 앱의 `useId()`만 제공한다.
@@ -857,6 +861,12 @@ DopeDB의 실제 작업 흐름과 접근성, supported viewport를 위한 제품
   Tailwind v4 utility로만 구성한다.
 - `InspectorHeader`, `InspectorFooter`: 셀 보기·행 편집·검토 inspector의 제목,
   action cluster, sticky footer 계약.
+- `features/queryResults/InspectableResultGrid`는 SQL·Mongo 결과에 선택 셀 보기를
+  명시적으로 연결하는 composition이다. 기존 `DataGrid`의 decode-failure 차단을
+  통과한 값만 공용 `CellViewer`에 전달하며 결과·페이지가 바뀌면 이전 값을 숨긴다.
+  inspector는 결과 pane의 아래쪽 최대 40%만 사용하고 내부에서 스크롤한다.
+  Mongo 내보내기는 가져온 현재 페이지에 한정하고 페이지 이동·조회 실패 중에는
+  이전 페이지를 새 페이지 이름으로 내보낼 수 없다.
 - `ToolbarMenu`, `ToolbarMenuItem`: portal 기반 floating command/check surface와
   공통 command row. `triggerVariant="badge"`는 Explorer의 선택/전체 수처럼
   조밀한 범위 trigger를 소유한다. trigger가 compact 전환이나 tool-window
@@ -875,8 +885,8 @@ DopeDB의 실제 작업 흐름과 접근성, supported viewport를 위한 제품
   사용하고 database/source/namespace/object 항목은 고정 Explorer의 같은 문맥을
   reveal한다. 열린 document 항목은 현재 문서가 문맥을 소유하므로 정적으로
   유지한다. 오른쪽은 workspace의 실제 manual transaction과
-  running/waiting session 수, CodeMirror가 보고한 `line:column`, line ending,
-  encoding, 동일한 editor indent 설정, 실제 safety allow-write 상태와 unread
+  running/waiting session 수, CodeMirror가 보고한 `line:column`,
+  동일한 editor indent 설정, 실제 safety allow-write 상태와 unread
   operation만 표시한다. manual transaction popup은 active 상태에서
   connection 이동·commit·rollback, failed 상태에서 이동·rollback만 제공한다.
   완료 query 결과, engine/schema 이름과 top toolbar의 Settings action을 하단에
@@ -989,7 +999,6 @@ glyph를 표시한다. disabled 버튼에는 hover 색상을 적용하지 않으
 
 - `.card` / `.ds-card`: 반복 항목과 작은 정보 그룹
 - `.ds-panel`: 넓은 작업 surface
-- `.grid-panel`: job 결과 surface
 - `[data-data-grid-scroll]`: Tailwind로 구성하는 표·쿼리 결과 surface
 
 Surface는 기본적으로 `card + border + rounded-lg + no shadow`다. floating surface만
@@ -1031,14 +1040,15 @@ Surface는 기본적으로 `card + border + rounded-lg + no shadow`다. floating
 
 Toolbar:
 
-- `.ds-toolbar-spacer`
 - `.ds-control-row`
 - `ToolbarMenu`, `.ds-menu-popover`, `.ds-menu-item`
 
 Agent/safety:
 
 - `.ds-tone-trust`
-- `.ds-attention-stack`, `.ds-attention-badge`
+
+업데이트 확인·다운로드 상태는 중앙 작업면의 우측 하단 overlay에서 공용 `Button`으로
+설정을 연다. 확인 중에도 새 레이아웃 행을 만들지 않아 문서와 chrome 높이를 유지한다.
 
 Utility:
 

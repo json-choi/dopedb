@@ -1,3 +1,5 @@
+// Collects each unique SQL parameter expression before returning values to the requested action.
+
 import { useMemo, useState, type FormEvent } from "react";
 
 import {

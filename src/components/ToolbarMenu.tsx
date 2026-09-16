@@ -1,3 +1,5 @@
+// Owns portalled toolbar menus, trigger variants, and shared keyboard focus behavior.
+
 import {
   type ButtonHTMLAttributes,
   useCallback,

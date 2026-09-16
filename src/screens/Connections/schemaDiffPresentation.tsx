@@ -1,3 +1,5 @@
+// Projects schema-comparison labels, counts, and triggers for Explorer connection rows.
+
 import type { Catalog } from "../../ipc/types";
 import type { ConnectionProfile } from "../../features/connections/domain";
 import {

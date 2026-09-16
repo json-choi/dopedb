@@ -2,7 +2,7 @@
 
 // Connection grants are intentionally separate from workspace roles: membership
 // makes a template visible only when a manager grants view, read, use, or manage.
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { changeConnectionGrant } from "../../features/connectionAccess/grants";
 import { useDesktopAccessReturn } from "../../features/connectionAccess/DesktopAccessReturn";
 import { ControlButton, ControlField, ControlSelect } from "../components/Controls";
@@ -149,62 +149,101 @@ export function ConnectionAccessPanel({ workspaceId }: { workspaceId: string }) 
   const copy = workspaceMessages[locale].connectionAccess;
   const common = workspaceMessages[locale].common;
   const [connections, setConnections] = useState<SharedConnection[]>([]);
+  const [connectionsWorkspaceId, setConnectionsWorkspaceId] = useState("");
   const [conflicts, setConflicts] = useState<ConnectionConflict[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [grants, setGrants] = useState<MemberGrant[]>([]);
   const [actorMemberId, setActorMemberId] = useState("");
   const [loading, setLoading] = useState(true);
+  const [connectionsErrorState, setConnectionsErrorState] = useState<{
+    workspaceId: string;
+    message: string;
+  } | null>(null);
   const [mutatingId, setMutatingId] = useState("");
-  const [error, setError] = useState("");
+  const [errorState, setErrorState] = useState<{
+    workspaceId: string;
+    message: string;
+  } | null>(null);
+  const workspaceRef = useRef(workspaceId);
+  const selectedIdRef = useRef(selectedId);
+  workspaceRef.current = workspaceId;
+  selectedIdRef.current = selectedId;
+  const connectionsError = connectionsErrorState?.workspaceId === workspaceId
+    ? connectionsErrorState.message
+    : "";
+  const error = errorState?.workspaceId === workspaceId ? errorState.message : "";
+  const setError = useCallback((message: string) => {
+    setErrorState(message ? { workspaceId, message } : null);
+  }, [workspaceId]);
   useEffect(() => {
     setSelectedId(desktopReturn.connectionId ?? "");
+    setMutatingId("");
+    setConflicts([]);
+    setGrants([]);
+    setActorMemberId("");
   }, [workspaceId, desktopReturn.connectionId]);
 
   const loadConflicts = useCallback(async (signal?: AbortSignal) => {
+    const requestedWorkspaceId = workspaceId;
     const response = await fetch(
       `/api/v1/workspaces/${workspaceId}/connections/conflicts`,
       { cache: "no-store", signal },
     ).catch(() => null);
-    if (signal?.aborted) return;
+    if (signal?.aborted || workspaceRef.current !== requestedWorkspaceId) return;
     if (!response?.ok) {
-      setError(await responseError(response, copy.loadConflictsError, locale));
+      const message = await responseError(response, copy.loadConflictsError, locale);
+      if (workspaceRef.current === requestedWorkspaceId) setError(message);
       return;
     }
     const body = await response.json().catch(() => null);
+    if (workspaceRef.current !== requestedWorkspaceId) return;
     if (!Array.isArray(body?.conflicts)) {
       setError(copy.conflictsShapeError);
       return;
     }
     setConflicts(body.conflicts as ConnectionConflict[]);
     setError("");
-  }, [copy, locale, workspaceId]);
+  }, [copy, locale, setError, workspaceId]);
 
   const loadConnections = useCallback(async (signal?: AbortSignal) => {
+    const requestedWorkspaceId = workspaceId;
     setLoading(true);
+    setConnectionsWorkspaceId("");
+    setConnectionsErrorState(null);
     const response = await fetch(
       `/api/v1/workspaces/${workspaceId}/connections`,
       { cache: "no-store", signal },
     ).catch(() => null);
-    if (signal?.aborted) return;
+    if (signal?.aborted || workspaceRef.current !== requestedWorkspaceId) return;
     if (!response?.ok) {
-      setError(await responseError(response, copy.loadConnectionsError, locale));
-      setLoading(false);
+      const message = await responseError(response, copy.loadConnectionsError, locale);
+      if (workspaceRef.current === requestedWorkspaceId) {
+        setConnections([]);
+        setConnectionsErrorState({ workspaceId: requestedWorkspaceId, message });
+        setLoading(false);
+      }
       return;
     }
     const body = await response.json().catch(() => null);
+    if (workspaceRef.current !== requestedWorkspaceId) return;
     if (!Array.isArray(body?.connections)) {
-      setError(copy.connectionsShapeError);
+      setConnections([]);
+      setConnectionsErrorState({
+        workspaceId: requestedWorkspaceId,
+        message: copy.connectionsShapeError,
+      });
       setLoading(false);
       return;
     }
     const next = body.connections as SharedConnection[];
     setConnections(next);
+    setConnectionsWorkspaceId(requestedWorkspaceId);
     setSelectedId((current) => (
       next.some((item) => item.id === current)
         ? current
         : next.find((item) => item.id === desktopReturn.connectionId)?.id ?? next[0]?.id ?? ""
     ));
-    setError("");
+    setConnectionsErrorState(null);
     setLoading(false);
   }, [copy, locale, workspaceId, desktopReturn.connectionId]);
 
@@ -212,6 +251,7 @@ export function ConnectionAccessPanel({ workspaceId }: { workspaceId: string }) 
     connectionId: string,
     signal?: AbortSignal,
   ) => {
+    const requestedWorkspaceId = workspaceId;
     if (!connectionId) {
       setGrants([]);
       setActorMemberId("");
@@ -221,12 +261,24 @@ export function ConnectionAccessPanel({ workspaceId }: { workspaceId: string }) 
       `/api/v1/workspaces/${workspaceId}/connections/${connectionId}/grants`,
       { cache: "no-store", signal },
     ).catch(() => null);
-    if (signal?.aborted) return;
+    if (
+      signal?.aborted
+      || workspaceRef.current !== requestedWorkspaceId
+      || selectedIdRef.current !== connectionId
+    ) return;
     if (!response?.ok) {
-      setError(await responseError(response, copy.loadGrantsError, locale));
+      const message = await responseError(response, copy.loadGrantsError, locale);
+      if (
+        workspaceRef.current === requestedWorkspaceId
+        && selectedIdRef.current === connectionId
+      ) setError(message);
       return;
     }
     const body = await response.json().catch(() => null);
+    if (
+      workspaceRef.current !== requestedWorkspaceId
+      || selectedIdRef.current !== connectionId
+    ) return;
     if (!Array.isArray(body?.grants) || typeof body?.actorMemberId !== "string") {
       setError(copy.grantsShapeError);
       return;
@@ -234,7 +286,7 @@ export function ConnectionAccessPanel({ workspaceId }: { workspaceId: string }) 
     setGrants(body.grants);
     setActorMemberId(body.actorMemberId);
     setError("");
-  }, [copy, locale, workspaceId]);
+  }, [copy, locale, setError, workspaceId]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -250,36 +302,54 @@ export function ConnectionAccessPanel({ workspaceId }: { workspaceId: string }) 
 
   useEffect(() => {
     const controller = new AbortController();
+    setGrants([]);
+    setActorMemberId("");
+    setError("");
     void loadGrants(selectedId, controller.signal);
     return () => controller.abort();
-  }, [loadGrants, selectedId]);
+  }, [loadGrants, selectedId, setError]);
 
   async function changeGrant(
     memberId: string,
     capability: ConnectionCapability | "",
   ) {
     if (!selectedId || mutatingId) return;
+    const requestedWorkspaceId = workspaceId;
+    const requestedConnectionId = selectedId;
     setMutatingId(memberId);
     setError("");
     try {
       const response = await changeConnectionGrant({
-        workspaceId, connectionId: selectedId, memberId,
+        workspaceId, connectionId: requestedConnectionId, memberId,
         previous: grants.find((grant) => grant.memberId === memberId)?.capability ?? null,
         next: capability,
       });
+      if (
+        workspaceRef.current !== requestedWorkspaceId
+        || selectedIdRef.current !== requestedConnectionId
+      ) return;
       if (!response?.ok) {
-        await loadGrants(selectedId);
+        await loadGrants(requestedConnectionId);
         setError(await responseError(response, copy.changeGrantError, locale));
         return;
       }
-      await loadGrants(selectedId);
-      if (memberId === actorMemberId && capability) desktopReturn.complete(selectedId);
+      await loadGrants(requestedConnectionId);
+      if (memberId === actorMemberId && capability) {
+        desktopReturn.complete(requestedConnectionId);
+      }
     } finally {
-      setMutatingId("");
+      if (
+        workspaceRef.current === requestedWorkspaceId
+        && selectedIdRef.current === requestedConnectionId
+      ) setMutatingId("");
     }
   }
 
-  const selected = connections.find((item) => item.id === selectedId) ?? null;
+  const visibleConnections = connectionsWorkspaceId === workspaceId ? connections : [];
+  const connectionsLoading = loading || (
+    connectionsWorkspaceId !== workspaceId && !connectionsError
+  );
+  const selected = visibleConnections.find((item) => item.id === selectedId) ?? null;
 
   async function postConflictResolution(
     conflictId: string,
@@ -297,6 +367,7 @@ export function ConnectionAccessPanel({ workspaceId }: { workspaceId: string }) 
 
   async function keepCurrentConflict(conflict: ConnectionConflict) {
     if (mutatingId) return;
+    const requestedWorkspaceId = workspaceId;
     setMutatingId(`conflict:${conflict.id}`);
     setError("");
     try {
@@ -304,13 +375,14 @@ export function ConnectionAccessPanel({ workspaceId }: { workspaceId: string }) 
         conflict.id,
         conflict.currentMatchesServer ? "server" : "dismissed",
       );
+      if (workspaceRef.current !== requestedWorkspaceId) return;
       if (!response?.ok) {
         setError(await responseError(response, copy.resolveConflictError, locale));
         return;
       }
       await loadConflicts();
     } finally {
-      setMutatingId("");
+      if (workspaceRef.current === requestedWorkspaceId) setMutatingId("");
     }
   }
 
@@ -320,6 +392,7 @@ export function ConnectionAccessPanel({ workspaceId }: { workspaceId: string }) 
       conflict.candidate.payload.deleted
       && !window.confirm(copy.applyDeleteConfirmation)
     ) return;
+    const requestedWorkspaceId = workspaceId;
     setMutatingId(`conflict:${conflict.id}`);
     setError("");
     try {
@@ -343,6 +416,7 @@ export function ConnectionAccessPanel({ workspaceId }: { workspaceId: string }) 
                 body: JSON.stringify(payload),
               },
         ).catch(() => null);
+        if (workspaceRef.current !== requestedWorkspaceId) return;
         if (!mutation?.ok) {
           setError(await responseError(mutation, copy.applyConflictError, locale));
           await loadConflicts();
@@ -353,6 +427,7 @@ export function ConnectionAccessPanel({ workspaceId }: { workspaceId: string }) 
         conflict.id,
         candidateConflictResolution(conflict),
       );
+      if (workspaceRef.current !== requestedWorkspaceId) return;
       if (!resolution?.ok) {
         setError(await responseError(resolution, copy.resolveConflictError, locale));
         await loadConflicts();
@@ -360,7 +435,7 @@ export function ConnectionAccessPanel({ workspaceId }: { workspaceId: string }) 
       }
       await Promise.all([loadConnections(), loadConflicts()]);
     } finally {
-      setMutatingId("");
+      if (workspaceRef.current === requestedWorkspaceId) setMutatingId("");
     }
   }
 
@@ -465,19 +540,30 @@ export function ConnectionAccessPanel({ workspaceId }: { workspaceId: string }) 
       <ControlField label={copy.sharedConnection}>
         <ControlSelect
           value={selectedId}
-          disabled={loading || connections.length === 0}
+          disabled={connectionsLoading || visibleConnections.length === 0}
           onChange={(event) => setSelectedId(event.target.value)}
         >
-          {connections.length === 0 ? (
-            <option value="">{copy.noConnections}</option>
+          {visibleConnections.length === 0 ? (
+            <option value="">
+              {connectionsLoading ? copy.loadingConnections : copy.noConnections}
+            </option>
           ) : null}
-          {connections.map((connection) => (
+          {visibleConnections.map((connection) => (
             <option key={connection.id} value={connection.id}>
               {connection.name} · {connection.engine}
             </option>
           ))}
         </ControlSelect>
       </ControlField>
+
+      {connectionsError ? (
+        <div className="tw:flex tw:flex-wrap tw:items-center tw:justify-between tw:gap-2" role="alert">
+          <small className="tw:text-xs tw:text-danger">{connectionsError}</small>
+          <ControlButton onClick={() => void loadConnections()}>
+            {copy.retryConnections}
+          </ControlButton>
+        </div>
+      ) : null}
 
       {selected ? (
         <p className="tw:m-0 tw:text-xs tw:leading-body tw:text-muted-foreground">

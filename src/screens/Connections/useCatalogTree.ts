@@ -1,3 +1,5 @@
+// Coordinates per-database catalog reads and exposes their loading and recovery state.
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQueries, useQueryClient } from "@tanstack/react-query";
 

@@ -1,3 +1,5 @@
+// Coordinates pointer drag targets and persistence for connection schema groups.
+
 import { useMemo, useRef, useState, type PointerEvent } from "react";
 
 import type {

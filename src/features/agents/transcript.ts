@@ -1,3 +1,5 @@
+// Projects ACP events into a bounded transcript with replay reconciliation and compaction.
+
 import type {
   AcpSessionLifecycle,
   AcpSessionConfigOption,

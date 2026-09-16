@@ -1,3 +1,5 @@
+// Defines the shared task projection and status vocabulary for background-work consumers.
+
 import type { AcpSessionId } from "../agents/domain";
 import type { ConnectionId as AgentConnectionId } from "../connections/domain";
 import type {

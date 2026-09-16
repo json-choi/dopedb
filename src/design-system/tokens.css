@@ -39,7 +39,6 @@
   --ds-space-3: 12px;
   --ds-space-4: 16px;
   --ds-space-6: 24px;
-  --ds-space-8: 32px;
 
   /* Component rhythm */
   --ds-control-gap: var(--ds-space-2);
@@ -143,7 +142,6 @@
   --ds-text: var(--ds-foreground);
   --ds-text-muted: var(--ds-muted-foreground);
   --ds-text-subtle: #777d87;
-  --ds-text-inverse: var(--ds-primary-foreground);
   --ds-overlay: rgb(25 29 35 / 0.24);
 
   /* Welcome artwork pairs warm accretion light with a cool interstellar sky. */
@@ -168,7 +166,6 @@
   /* Status colors keep state-only use of color. */
   --ds-info: #356da8;
   --ds-positive: #327151;
-  --ds-positive-soft: color-mix(in srgb, var(--ds-positive) 10%, transparent);
   --ds-caution: #956924;
   --ds-critical: var(--ds-destructive);
   --ds-critical-emphasis: #972b29;
@@ -176,7 +173,6 @@
   --ds-success: var(--ds-positive);
   --ds-warning: var(--ds-caution);
   --ds-danger: var(--ds-critical);
-  --ds-danger-emphasis: var(--ds-critical-emphasis);
 
   /* Trust/risk surfaces for agent-native workflows. */
   --ds-trust-bg: var(--ds-surface-1);

@@ -60,10 +60,10 @@ export async function generateMetadata({ searchParams }: HomeProps): Promise<Met
         type: "website",
         images: [
           {
-            url: "/dopedb-desktop-0.4.21-ko.png",
-            width: 2400,
-            height: 1600,
-            alt: "Demo SQLite 주문 테이블·컬럼·외래 키를 보여주는 실제 DopeDB 0.4.21 화면",
+            url: "/og-card.png",
+            width: 1200,
+            height: 630,
+            alt: "DopeDB — 팀과 AI Agent를 위한 공유 DB 접근",
           },
         ],
       },
@@ -71,7 +71,7 @@ export async function generateMetadata({ searchParams }: HomeProps): Promise<Met
         card: "summary_large_image",
         title,
         description,
-        images: ["/dopedb-desktop-0.4.21-ko.png"],
+        images: ["/og-card.png"],
       },
     };
   }

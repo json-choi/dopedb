@@ -72,10 +72,10 @@ export const metadata: Metadata = {
     locale: "en_US",
     images: [
       {
-        url: "/dopedb-desktop-0.4.21.png",
-        width: 2400,
-        height: 1600,
-        alt: "DopeDB 0.4.21 showing Demo SQLite orders, columns, and a foreign key",
+        url: "/og-card.png",
+        width: 1200,
+        height: 630,
+        alt: "DopeDB — shared database access for teams and AI agents",
       },
     ],
   },
@@ -84,7 +84,7 @@ export const metadata: Metadata = {
     title: "DopeDB - Shared database access",
     description:
       "Share a database connection and policy while credentials stay personal and every Agent stays pinned to exact authority.",
-    images: ["/dopedb-desktop-0.4.21.png"],
+    images: ["/og-card.png"],
   },
 };
 

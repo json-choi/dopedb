@@ -1,3 +1,5 @@
+// Presents product-analytics consent state and explicit grant, denial, and privacy-policy actions.
+
 import { useState } from "react";
 
 import { Button } from "../../../design-system/components/Button";

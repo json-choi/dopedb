@@ -1,3 +1,5 @@
+// Validates operation references extracted from ACP SQL proposal tool payloads.
+
 import type { OperationState } from "../../ipc/generated/protocol-contracts";
 
 export type AgentSqlProposalReference = {

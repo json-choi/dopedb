@@ -8,7 +8,7 @@ import { useI18n } from "../../lib/i18n";
 import { databaseCatalogQuery, type CatalogScope } from "../../lib/queries";
 import { filterCatalogOverview } from "../catalogExplorer/scopeFilter";
 import { databaseDisplayLabel, type ConnectionProfile } from "../connections/domain";
-import type { SettingsSection } from "../settings/domain";
+import { settingsSearchKeywords, type SettingsSection } from "../settings/domain";
 import type { WorkbenchDocument } from "../workbench/domain";
 import { useCachedCatalogOverviews } from "./catalogCache";
 import type { ActionSearchItem } from "./domain";
@@ -248,7 +248,7 @@ export function useActionSearchItems({
     label,
     detail: t("common.settings"),
     disabled,
-    keywords: [section],
+    keywords: [section, settingsSearchKeywords[section]],
     run: () => commands.openSettings(section),
   }));
 

@@ -1,3 +1,5 @@
+// Collects Project setup values and coordinates creation of its initial Environment.
+
 import { useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 

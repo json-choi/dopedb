@@ -18,7 +18,7 @@ import tempfile
 from pathlib import Path
 from xml.etree import ElementTree
 
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -43,6 +43,25 @@ ICO_OUTPUTS = {
     "workspace-cloud/app/favicon.ico": (16, 32, 48, 64),
 }
 ICNS_OUTPUT = Path("src-tauri/icons/icon.icns")
+OG_OUTPUT = Path("site/public/og-card.png")
+
+
+def generate_og(source: Image.Image, svg: bytes, path: Path) -> None:
+    # Reuse the approved tile palette and mark; Pillow's bundled font avoids
+    # host-font substitution in this deterministic, static social projection.
+    document = ElementTree.fromstring(svg)
+    tile = next(child for child in document if child.attrib.get("id") == "tile")
+    background = tile.attrib["fill"]
+    foreground = document.attrib["color"]
+    card = Image.new("RGBA", (1200, 630), background)
+    card.alpha_composite(source.resize((256, 256), Image.Resampling.LANCZOS), (72, 100))
+    draw = ImageDraw.Draw(card)
+    draw.text((380, 132), "DopeDB", font=ImageFont.load_default(size=86), fill=foreground)
+    draw.text((380, 258), "Shared database access", font=ImageFont.load_default(size=36), fill=foreground)
+    draw.text((76, 452), "Share access. Keep credentials personal.", font=ImageFont.load_default(size=40), fill=foreground)
+    draw.text((76, 534), "Teams and AI agents  /  Open-source alpha", font=ImageFont.load_default(size=25), fill=foreground)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    card.convert("RGB").save(path)
 
 
 def render_graphic(svg: bytes) -> str:
@@ -172,8 +191,9 @@ def generate_assets(staging: Path) -> list[Path]:
         path.parent.mkdir(parents=True, exist_ok=True)
         source.save(path, sizes=[(size, size) for size in sizes])
     generate_icns(source, staging / ICNS_OUTPUT)
+    generate_og(source, svg, staging / OG_OUTPUT)
     return [GRAPHIC, *SVG_OUTPUTS, *(Path(path) for path in PNG_OUTPUTS),
-            *(Path(path) for path in ICO_OUTPUTS), ICNS_OUTPUT]
+            *(Path(path) for path in ICO_OUTPUTS), ICNS_OUTPUT, OG_OUTPUT]
 
 
 def main() -> None:

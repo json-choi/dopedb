@@ -1,3 +1,5 @@
+// Owns native Article editing, manual runs, publication, sharing, and deep-link transport.
+
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 import { invoke } from "../../ipc/core";

@@ -1,3 +1,5 @@
+// Formats SQL through bounded native fragments or a request-scoped browser worker.
+
 import type { SqlLanguage } from "sql-formatter";
 import { isTauri } from "@tauri-apps/api/core";
 import { formatSqlFragment } from "../queries/tauriAdapter";

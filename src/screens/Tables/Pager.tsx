@@ -1,3 +1,5 @@
+// Presents table-page navigation using the caller's loaded-row and total-count state.
+
 import type { ReactNode } from "react";
 
 import { Icon } from "../../components/Icon";

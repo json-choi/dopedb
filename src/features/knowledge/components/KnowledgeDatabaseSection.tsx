@@ -70,7 +70,7 @@ export function KnowledgeDatabaseSection({
     <section className="tw:grid tw:gap-3 tw:border-b tw:border-border-subtle tw:pb-5">
       <div className="tw:flex tw:min-w-0 tw:flex-wrap tw:items-start tw:justify-between tw:gap-3">
         <div className="tw:grid tw:min-w-0 tw:gap-1">
-          <h2 className="tw:m-0 tw:text-base tw:font-semibold">
+          <h2 className="tw:m-0 tw:text-title tw:font-semibold">
             {t("knowledge.environmentDatabases")}
           </h2>
           <p className="tw:m-0 tw:text-sm tw:text-muted-foreground">

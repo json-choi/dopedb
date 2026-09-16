@@ -88,7 +88,7 @@ export function GalaxyHero({
       <MarketingAction ref={exploreButton} shape="orbit" aria-pressed={exploring} onClick={() => setExploring(value => !value)}>
         <span className="tw:text-signal"><DopeDBMark className="tw:size-6" /></span>{exploring ? c.return : c.explore}<Arrow diagonal className="tw:size-3" />
       </MarketingAction>
-      <p className="tw:mt-3 tw:text-center tw:text-[10px] tw:tracking-[0.03em] tw:text-cream-muted/65">
+      <p className="tw:mt-3 tw:bg-night/90 tw:text-center tw:text-[10px] tw:tracking-[0.03em] tw:text-cream-muted">
         <span className="tw:max-md:hidden">{exploring ? c.exploreHelp : c.moveHelp}</span>
         <span className="tw:md:hidden">{exploring ? lang === "ko" ? "손가락으로 드래그해 둘러보세요" : "Drag with your finger to look around" : lang === "ko" ? "터치해서 은하를 둘러보세요" : "Tap to explore the galaxy"}</span>
       </p>

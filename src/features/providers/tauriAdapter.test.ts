@@ -48,6 +48,12 @@ import neonProviderBootstrapControllerSource from "../../../workspace-cloud/feat
 import providerAccessDomainSource from "../../../workspace-cloud/features/providerAccess/domain.ts?raw";
 import sharedDatabasePanelSource from "../../../workspace-cloud/app/settings/SharedDatabasePanel.tsx?raw";
 import connectionAccessPanelSource from "../../../workspace-cloud/app/settings/ConnectionAccessPanel.tsx?raw";
+import workspaceAccessPanelSource from "../../../workspace-cloud/app/settings/WorkspaceAccessPanel.tsx?raw";
+import publicAnalysisPageSource from "../../../workspace-cloud/app/analyses/[slug]/page.tsx?raw";
+import publicAnalysisArticleSource from "../../../workspace-cloud/app/analyses/[slug]/PublicAnalysisArticle.tsx?raw";
+import workspaceNotFoundSource from "../../../workspace-cloud/app/not-found.tsx?raw";
+import workspaceErrorBoundarySource from "../../../workspace-cloud/app/error.tsx?raw";
+import articleSharingCopySource from "../../../workspace-cloud/features/articleSharing/copy.ts?raw";
 import providerCatalogSource from "../../../workspace-cloud/lib/provider-catalog.ts?raw";
 import workspaceMessagesSource from "../../../workspace-cloud/lib/workspace-messages.ts?raw";
 import workspaceServerLogSource from "../../../workspace-cloud/lib/workspace-server-log.ts?raw";
@@ -1606,8 +1612,31 @@ describe("provider credential Tauri adapter", () => {
     expect(sharedDatabasePanelSource).toContain("copy.manageProvider");
     expect(connectionAccessPanelSource).toContain("copy.writePolicyStatus");
     expect(connectionAccessPanelSource).toContain("copy.writePolicyDesktop");
+    expect(connectionAccessPanelSource).toContain(
+      "workspaceRef.current !== requestedWorkspaceId",
+    );
+    expect(connectionAccessPanelSource).toContain("copy.loadingConnections");
+    expect(connectionAccessPanelSource).toContain("copy.retryConnections");
     expect(connectionAccessPanelSource).not.toContain("changeWritePolicy");
     expect(connectionAccessPanelSource).not.toContain('type="checkbox"');
+    expect(workspaceAccessPanelSource).toContain(
+      "loadedWorkspaceId === workspaceId",
+    );
+    expect(workspaceAccessPanelSource).toContain('role="status"');
+    expect(workspaceAccessPanelSource).toContain("copy.emptyMembers");
+    expect(publicAnalysisPageSource).toContain("copy.publicationDescription");
+    expect(publicAnalysisPageSource).toContain(
+      'dateTime={result.publishedAt.toISOString()}',
+    );
+    expect(publicAnalysisArticleSource).toContain('timeZone: "UTC"');
+    expect(workspaceNotFoundSource).toContain("copy.unavailablePublicBody");
+    expect(workspaceErrorBoundarySource).toContain("copy.unexpectedBody");
+    expect(articleSharingCopySource).toContain(
+      "No Article details or saved query were exposed.",
+    );
+    expect(articleSharingCopySource).toContain(
+      "아티클 정보와 저장된 쿼리는 노출하지 않았습니다.",
+    );
     expect(safetySettingsScreenSource).toContain("hasUnsavedChanges");
     expect(safetySettingsScreenSource).toContain('variant="primary"');
     expect(safetySettingsScreenSource).toContain('t("safety.unsavedChanges")');

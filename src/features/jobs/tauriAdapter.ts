@@ -1,3 +1,5 @@
+// Owns native Job file-capability, planning, lifecycle, and artifact commands.
+
 import { invoke } from "../../ipc/core";
 
 import type {

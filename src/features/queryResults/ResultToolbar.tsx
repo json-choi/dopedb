@@ -156,7 +156,15 @@ export default function ResultToolbar({
   const copyTitle =
     copyDisabled && rowSource && !disabled
       ? t("results.copyBoundedTitle")
-      : t("results.copyTitle");
+      : scopeLabel
+        ? t("results.copyScopeTitle", { scope: scopeLabel })
+        : t("results.copyTitle");
+  const csvTitle = scopeLabel
+    ? t("results.exportCsv", { scope: scopeLabel })
+    : t("results.downloadCsvTitle");
+  const jsonTitle = scopeLabel
+    ? t("results.exportJson", { scope: scopeLabel })
+    : t("results.downloadJsonTitle");
   return (
     <span
       data-presentation={presentation}
@@ -168,12 +176,12 @@ export default function ResultToolbar({
           ? {
               iconOnly: true as const,
               title: copyTitle,
-              "aria-label": t("results.copyTitle"),
+              "aria-label": copyTitle,
             }
           : {
               iconOnly: false as const,
               title: copyTitle,
-              "aria-label": t("results.copyTitle"),
+              "aria-label": copyTitle,
             })}
         onClick={() => {
           const blocked = failureReason("copy");
@@ -203,7 +211,7 @@ export default function ResultToolbar({
       </WorkbenchButton>
       {presentation === "workbench" ? (
         <ToolbarMenu
-          label={t("results.downloadCsvTitle")}
+          label={csvTitle}
           disabled={disabled || exportProgress !== null}
           trigger={
             <>
@@ -213,10 +221,10 @@ export default function ResultToolbar({
           }
         >
           <ToolbarMenuItem icon="download" onClick={exportCsv}>
-            {t("results.downloadCsvTitle")}
+            {csvTitle}
           </ToolbarMenuItem>
           <ToolbarMenuItem icon="download" onClick={exportJson}>
-            {t("results.downloadJsonTitle")}
+            {jsonTitle}
           </ToolbarMenuItem>
         </ToolbarMenu>
       ) : (

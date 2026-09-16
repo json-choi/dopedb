@@ -139,7 +139,8 @@ change.
 | Route | File | Methods | Purpose |
 |-------|------|---------|---------|
 | `/analyses/[slug]` | `app/analyses/[slug]/page.tsx` | page (RSC) | `force-dynamic`, `revalidate: 0`; rate-limits and loads a public Analysis Article publication (memoized per request via `React.cache`), 404s if unavailable, sets SEO metadata from `searchIndexable` |
-| `/analyses/[slug]/PublicAnalysisArticle.tsx` | same dir | page (RSC) | Renders the sanitized HTML body plus title/timestamp header for a public publication |
+| `/analyses/[slug]/PublicAnalysisArticle.tsx` | same dir | page (RSC) | Renders the sanitized HTML body plus localized title and explicit UTC publication timestamp for a public publication |
+| `not-found.tsx` / `error.tsx` | app root | RSC / client boundary | Uses one localized, non-identifying recovery surface for unavailable or failed shared links; never reveals whether an Article, invitation, workspace, or saved query exists |
 | `/open-article/[workspaceId]/[articleId]` | `app/open-article/[workspaceId]/[articleId]/page.tsx` | page (RSC) | `force-dynamic`, `noindex`; validates both UUIDs, renders `HandoffPage` scoped to the workspace+article for opening it in Desktop |
 | `/settings` | `app/settings/page.tsx` | page (RSC) | `force-dynamic`; the full Settings screen — see Settings section below |
 

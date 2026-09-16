@@ -1,3 +1,5 @@
+// Presents grouped connection choices and delegates selection to the shell.
+
 import { useMemo } from "react";
 
 import EngineMark from "../../components/EngineMark";

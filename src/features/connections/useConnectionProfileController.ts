@@ -1,6 +1,6 @@
 // Owns Connection profile validation and save/test/delete lifecycle commands;
 // editable draft mechanics stay in the profile state model.
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 
 import type { DiagnosticItem } from "../../design-system/components/Diagnostics";
 import type { FieldValidation } from "../../design-system/components/FormControls";
@@ -38,7 +38,6 @@ import {
 import { connectionVerificationRecorder } from "./connectionVerificationAnalytics";
 import {
   deleteConnection,
-  discoverConnectionProfileDatabases,
   testConnection,
   testConnectionProfile,
   upsertConnection,
@@ -48,6 +47,7 @@ import type { ConnectionCatalogController } from "./useConnectionCatalogControll
 import type { ConnectionEditorDialogs } from "./useConnectionEditorDialogs";
 import type { ConnectionProfileState } from "./useConnectionProfileState";
 import { useManagedConnectionRecovery } from "./useManagedConnectionRecovery";
+import { useConnectionDatabaseDiscovery } from "./useConnectionDatabaseDiscovery";
 
 export function useConnectionProfileController({
   connections,
@@ -74,9 +74,7 @@ export function useConnectionProfileController({
   const { form, identity, credentials, tabs: tabState, url, status, verification } =
     profileState;
   const { isSharedTemplate, isMongo, isBigQuery } = form.flags;
-  const [databaseDiscovery, setDatabaseDiscovery] = useState<{
-    pending: boolean; databases: string[];
-  }>({ pending: false, databases: [] });
+  const databaseDiscovery = useConnectionDatabaseDiscovery(profileState);
   const mounted = useRef(true);
   const testRequestId = useRef(0);
   useEffect(() => {
@@ -405,26 +403,6 @@ export function useConnectionProfileController({
     }
   }
 
-  async function discoverDatabases() {
-    if (!form.flags.canDiscoverDatabases || databaseDiscovery.pending) return;
-    setDatabaseDiscovery((current) => ({
-      pending: true,
-      databases: current.databases,
-    }));
-    try {
-      const discovered = await discoverConnectionProfileDatabases(
-        form.value,
-        credentials.password || undefined,
-      );
-      setDatabaseDiscovery({
-        pending: false,
-        databases: discovered.map((database) => database.name),
-      });
-    } catch {
-      setDatabaseDiscovery({ pending: false, databases: [] });
-    }
-  }
-
   return {
     view: {
       form: form.value,
@@ -465,10 +443,7 @@ export function useConnectionProfileController({
         pickDatabaseFile: form.pickDatabaseFile,
         pickExtraParameterFile: form.pickExtraParameterFile,
       },
-      databaseDiscovery: {
-        ...databaseDiscovery,
-        discover: discoverDatabases,
-      },
+      databaseDiscovery,
       bigQuery,
       validation,
     },

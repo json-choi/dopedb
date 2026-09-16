@@ -1,3 +1,5 @@
+// Loads full catalog metadata for a navigation-only relation reference in the active scope.
+
 import { useQuery } from "@tanstack/react-query";
 import type { Catalog, CatalogTable } from "../../ipc/types";
 import {

@@ -4,7 +4,6 @@ import { Button } from "../../design-system/components/Button";
 import {
   CheckboxField,
   Field,
-  FieldValidationMessage,
   SelectInput,
   TextInput,
 } from "../../design-system/components/FormControls";
@@ -40,8 +39,10 @@ export function ConnectionSecurityTab({
             />
             <div className="tw:grid tw:grid-cols-2 tw:gap-3 tw:@max-[620px]:grid-cols-1">
               <Field label={t("connections.caCertificate")}>
+                {({ controlProps }) => (
                 <div className="ds-control-row tw:grid tw:min-w-0 tw:grid-cols-[minmax(0,1fr)_auto] tw:items-center tw:gap-2">
                   <TextInput
+                    {...controlProps()}
                     value={form.extraParams.tlsCAFile ?? ""}
                     disabled={!flags.mongoTlsEnabled}
                     onChange={(event) =>
@@ -53,6 +54,7 @@ export function ConnectionSecurityTab({
                     placeholder="/path/to/ca.pem"
                   />
                   <Button
+                    aria-label={`${t("connections.browse")}: ${t("connections.caCertificate")}`}
                     disabled={!flags.mongoTlsEnabled}
                     onClick={() =>
                       void options.pickExtraParameterFile("tlsCAFile")
@@ -61,10 +63,13 @@ export function ConnectionSecurityTab({
                     {t("connections.browse")}
                   </Button>
                 </div>
+                )}
               </Field>
               <Field label={t("connections.clientCertificateKey")}>
+                {({ controlProps }) => (
                 <div className="ds-control-row tw:grid tw:min-w-0 tw:grid-cols-[minmax(0,1fr)_auto] tw:items-center tw:gap-2">
                   <TextInput
+                    {...controlProps()}
                     value={
                       form.extraParams.tlsCertificateKeyFile ?? ""
                     }
@@ -78,6 +83,7 @@ export function ConnectionSecurityTab({
                     placeholder="/path/to/client.pem"
                   />
                   <Button
+                    aria-label={`${t("connections.browse")}: ${t("connections.clientCertificateKey")}`}
                     disabled={!flags.mongoTlsEnabled}
                     onClick={() =>
                       void options.pickExtraParameterFile(
@@ -88,6 +94,7 @@ export function ConnectionSecurityTab({
                     {t("connections.browse")}
                   </Button>
                 </div>
+                )}
               </Field>
             </div>
           </>
@@ -127,8 +134,10 @@ export function ConnectionSecurityTab({
                 ] as const
               ).map(([key, label, placeholder]) => (
                 <Field key={key} label={t(label)}>
+                  {({ controlProps }) => (
                   <div className="ds-control-row tw:grid tw:min-w-0 tw:grid-cols-[minmax(0,1fr)_auto] tw:items-center tw:gap-2">
                     <TextInput
+                      {...controlProps()}
                       value={form.extraParams[key] ?? ""}
                       disabled={!flags.sqlTlsEnabled}
                       onChange={(event) =>
@@ -137,6 +146,7 @@ export function ConnectionSecurityTab({
                       placeholder={placeholder}
                     />
                     <Button
+                      aria-label={`${t("connections.browse")}: ${t(label)}`}
                       disabled={!flags.sqlTlsEnabled}
                       onClick={() =>
                         void options.pickExtraParameterFile(key)
@@ -145,6 +155,7 @@ export function ConnectionSecurityTab({
                       {t("connections.browse")}
                     </Button>
                   </div>
+                  )}
                 </Field>
               ))}
             </div>
@@ -154,15 +165,13 @@ export function ConnectionSecurityTab({
       {!flags.isSqlite ? (
         <section className="tw:grid tw:gap-3 tw:border-t tw:border-border-subtle tw:pt-4">
           <h3>{t("connections.sshTunnel")}</h3>
-          <Field label={t("connections.sshHostAlias")}>
+          <Field label={t("connections.sshHostAlias")} htmlFor="connection-ssh-alias" validation={validation.sshAlias}>
+            {({ controlProps }) => (
             <div className="tw:grid tw:gap-1.5">
               <TextInput
-                id="connection-ssh-alias"
+                {...controlProps({ "aria-describedby": "connection-ssh-alias-description" })}
                 value={
                   form.extraParams[CONNECTION_SSH_ALIAS_PARAMETER] ?? ""
-                }
-                aria-invalid={
-                  validation.sshAlias?.tone === "danger" || undefined
                 }
                 autoCapitalize="none"
                 autoCorrect="off"
@@ -176,12 +185,10 @@ export function ConnectionSecurityTab({
                   )
                 }
               />
-              {validation.sshAlias ? (
-                <FieldValidationMessage validation={validation.sshAlias} />
-              ) : null}
             </div>
+            )}
           </Field>
-          <p className="tw:m-0 tw:text-sm tw:leading-body tw:text-muted-foreground">
+          <p id="connection-ssh-alias-description" className="tw:m-0 tw:text-sm tw:leading-body tw:text-muted-foreground">
             {t("connections.sshHostAliasHint")}
           </p>
         </section>

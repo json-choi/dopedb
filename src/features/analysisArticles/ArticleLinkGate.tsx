@@ -1,3 +1,4 @@
+// Resolves Article deep links through the current workspace and account authority.
 import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "../../design-system/components/Button";
@@ -83,7 +84,7 @@ export function ArticleLinkGate({ onScopeChanged, onOpen }: {
           >{auth.data!.accounts.map((account) => <option key={account.user.id} value={account.user.id}>{account.user.email}</option>)}</SelectInput> : null}
           {user ? <Button onClick={() => void sharing.refetch()}>{t("analysis.retryShared")}</Button> : null}
         </> : sharing.isPending ? <LoadingLabel>{t("analysis.loading")}</LoadingLabel> : <>
-          <strong className="tw:text-base">{sharing.data.title}</strong>
+          <strong className="tw:text-title">{sharing.data.title}</strong>
           <p className="tw:m-0 tw:text-sm tw:leading-body tw:text-muted-foreground">{t("analysis.openSharedBody", { workspace: sharing.data.workspaceName })}</p>
           <Button variant="primary" disabled={open.isPending} onClick={() => open.mutate()}>{t("analysis.openShared")}</Button>
         </>}

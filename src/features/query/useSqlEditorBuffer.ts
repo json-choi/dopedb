@@ -1,3 +1,5 @@
+// Keeps the active SQL text buffer responsive while debouncing document snapshots.
+
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const SHELL_SNAPSHOT_DELAY_MS = 400;

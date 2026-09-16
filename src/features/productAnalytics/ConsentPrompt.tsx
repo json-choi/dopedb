@@ -37,7 +37,7 @@ export function ProductAnalyticsConsentPrompt() {
       aria-labelledby="product-analytics-consent-title"
       className="tw:fixed tw:right-4 tw:bottom-12 tw:z-40 tw:grid tw:grid-rows-[auto_minmax(0,1fr)_auto] tw:max-h-[calc(100dvh-80px)] tw:w-[min(360px,calc(100vw-32px))] tw:gap-3 tw:overflow-hidden tw:rounded-lg tw:border tw:border-border-subtle tw:bg-popover tw:p-4 tw:shadow-popover"
     >
-      <h2 id="product-analytics-consent-title" className="tw:m-0 tw:text-base">
+      <h2 id="product-analytics-consent-title" className="tw:m-0 tw:text-title">
         {t("productAnalytics.onboardingTitle")}
       </h2>
       <div className="tw:grid tw:min-h-0 tw:gap-3 tw:overflow-y-auto tw:overscroll-contain">

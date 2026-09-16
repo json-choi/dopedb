@@ -1,3 +1,5 @@
+// Resolves the caret's SQL namespace from the selected mode and preceding script statements.
+
 import type { ConnectionEngine } from "../connections/domain";
 
 export type SqlResolveMode = "playground" | "script";

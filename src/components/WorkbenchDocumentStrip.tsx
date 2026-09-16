@@ -57,7 +57,7 @@ export default function WorkbenchDocumentStrip({
 
   function icon(document: WorkbenchDocument): IconName {
     if (document.kind === "data" || document.kind === "results") return "table";
-    if (document.kind === "welcome") return "gear";
+    if (document.kind === "welcome") return "home";
     if (document.kind === "schema") return "grid";
     if (document.kind === "activity") return "chart";
     if (document.kind === "documents") return "list";

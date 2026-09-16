@@ -1,3 +1,5 @@
+// Debounces draft analysis and accepts only the current worker request's advisory result.
+
 import { useEffect, useRef, useState } from "react";
 import type { SafetySettings } from "../../ipc/types";
 import type { ConnectionEngine } from "../connections/domain";

@@ -84,7 +84,7 @@ function CatalogTableDetails({
   const metadata = {
     columns: table.columns.map((column) => (
       <div
-        className="ds-object-row tw:cursor-default tw:gap-1 tw:rounded-xs tw:pl-4 tw:text-ui"
+        className="ds-object-row tw:cursor-default tw:pl-4 tw:text-ui"
         key={`${tableKey(table)}:column:${column.ordinal}:${column.name}`}
         title={[
           column.dataType,
@@ -110,7 +110,7 @@ function CatalogTableDetails({
       ? table.constraints
       : table.foreignKeys).map((constraint, index) => (
       <div
-        className="ds-object-row tw:cursor-default tw:gap-1 tw:rounded-xs tw:pl-4 tw:text-ui"
+        className="ds-object-row tw:cursor-default tw:pl-4 tw:text-ui"
         key={`${tableKey(table)}:key:${keyLabel(constraint, index)}:${index}`}
         title={keyLabel(constraint, index)}
       >
@@ -130,7 +130,7 @@ function CatalogTableDetails({
     )),
     indexes: table.indexes.map((index) => (
       <div
-        className="ds-object-row tw:cursor-default tw:gap-1 tw:rounded-xs tw:pl-4 tw:text-ui"
+        className="ds-object-row tw:cursor-default tw:pl-4 tw:text-ui"
         key={`${tableKey(table)}:index:${index.name}`}
         title={indexLabel(index)}
       >
@@ -211,7 +211,7 @@ export function CatalogRelationRow({
   return (
     <div className="tw:flex tw:flex-col tw:gap-px">
       <div
-        className="ds-object-row tw:group tw:relative tw:gap-1 tw:rounded-xs tw:select-none tw:text-ui tw:data-[search-active=true]:bg-selection tw:data-[search-active=true]:text-selection-foreground"
+        className="ds-object-row tw:group tw:relative tw:select-none tw:text-ui tw:data-[search-active=true]:bg-selection tw:data-[search-active=true]:text-selection-foreground"
         data-table-key={key}
         data-explorer-search-result={searchResultKey}
         data-search-active={
@@ -299,7 +299,7 @@ export function CatalogMissingRelationRow({
   const { t } = useI18n();
   return (
     <div
-      className="ds-object-row tw:cursor-default tw:gap-1 tw:rounded-xs tw:text-muted-foreground"
+      className="ds-object-row tw:cursor-default tw:text-muted-foreground"
       title={t("connections.schemaDiffTableMissing")}
     >
       <span className="tw:size-[7px] tw:shrink-0 tw:rounded-full tw:bg-danger" aria-hidden="true" />
@@ -342,7 +342,7 @@ export function CatalogObjectRow({
         : catalogObjectLabel(object);
   return (
     <div
-      className="ds-object-row tw:cursor-default tw:gap-1 tw:rounded-xs tw:text-ui tw:data-[search-active=true]:bg-selection tw:data-[search-active=true]:text-selection-foreground"
+      className="ds-object-row tw:cursor-default tw:text-ui tw:data-[search-active=true]:bg-selection tw:data-[search-active=true]:text-selection-foreground"
       data-explorer-search-result={searchResultKey}
       data-search-active={
         isCatalogSearchResultActive(searchResultKey, activeSearchResultKey)

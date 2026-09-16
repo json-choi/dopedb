@@ -1,3 +1,5 @@
+// Coordinates scoped query-session recovery, running updates, and terminal persistence.
+
 import {
   useCallback,
   useEffect,

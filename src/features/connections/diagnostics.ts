@@ -30,6 +30,8 @@ export type ConnectionDiagnosticCode =
   | "portInvalid"
   | "sqliteFileRequired"
   | "mongoDatabaseRequired"
+  | "targetDatabaseRequired"
+  | "targetDatabaseInvalid"
   | "bigQueryProjectRequired"
   | "bigQueryProjectInvalid"
   | "bigQueryDatasetRequired"
@@ -58,7 +60,9 @@ export type ConnectionDiagnostic = {
 export function connectionDiagnosticBlocksTest(
   diagnostic: ConnectionDiagnostic,
 ): boolean {
-  return diagnostic.tone === "danger" && diagnostic.code !== "nameRequired";
+  return diagnostic.tone === "danger" &&
+    diagnostic.code !== "nameRequired" &&
+    diagnostic.code !== "targetDatabaseRequired";
 }
 
 function issue(
@@ -201,6 +205,20 @@ export function diagnoseConnection(
           "connection-database",
         ),
       );
+    }
+    if (profile.engine === "postgres" || profile.engine === "mysql") {
+      const database = profile.database;
+      if (!database.trim()) {
+        diagnostics.push(issue("targetDatabaseRequired", "danger", "connection-database"));
+      } else if (
+        new TextEncoder().encode(database).length > 255 ||
+        Array.from(database).some((character) => {
+          const code = character.codePointAt(0)!;
+          return code <= 0x1f || (code >= 0x7f && code <= 0x9f);
+        })
+      ) {
+        diagnostics.push(issue("targetDatabaseInvalid", "danger", "connection-database"));
+      }
     }
   }
 

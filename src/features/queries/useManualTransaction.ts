@@ -1,3 +1,5 @@
+// Coordinates one connection's manual transaction commands and query-cache refresh.
+
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 

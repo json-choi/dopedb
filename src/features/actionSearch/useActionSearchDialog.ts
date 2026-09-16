@@ -1,3 +1,5 @@
+// Owns action-search visibility and its shortcut guard for editable surfaces.
+
 import {
   useCallback,
   useEffect,

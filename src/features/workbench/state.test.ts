@@ -7,6 +7,11 @@ import { listAnalysisArticles } from "../analysisArticles/tauriAdapter";
 import { readWithCatalogIssue } from "../catalogExplorer/catalogDomain";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { I18nProvider } from "../../lib/i18n";
+import { ConnectionGeneralTab } from "../../screens/Connections/ConnectionGeneralTab";
+import { ConnectionBigQueryFields } from "../../screens/Connections/ConnectionBigQueryFields";
+import { ConnectionSecurityTab } from "../../screens/Connections/ConnectionSecurityTab";
+import type { ConnectionEditorController } from "../connections/useConnectionEditorController";
 import schemaDiffFixture from "../../../dopedb-protocol/tests/fixtures/schema-diff-v1.json";
 import { catalogFromSnapshot } from "../catalog/tauriAdapter";
 import {
@@ -74,7 +79,7 @@ import {
   connectionEditorEnterCommand,
   connectionTestResultIsCurrent,
 } from "../connections/connectionEditorInteraction";
-import { switchConnectionSource } from "../connections/connectionEditorModel";
+import { connectionProfileFlags, switchConnectionSource } from "../connections/connectionEditorModel";
 import {
   BIGQUERY_AUTH_MODE_PARAMETER,
   bigQueryAuthMode,
@@ -566,6 +571,7 @@ describe("workbench state ownership", () => {
     });
 
     const firstCheck = updater.refresh();
+    expect(updater.getSnapshot().phase).toBe("checking");
     expect(updater.refresh()).toBe(firstCheck);
     await firstCheck;
     expect(checkCalls).toBe(1);
@@ -796,6 +802,27 @@ describe("workbench state ownership", () => {
     expect(
       namelessDiagnostics.some(({ tone }) => tone === "danger"),
     ).toBe(true);
+
+    // Server discovery/testing can use a default database, but the saved grant
+    // must name a target accepted by the native runtime's 255-byte contract.
+    for (const engine of ["postgres", "mysql"] as const) {
+      const targetProfile = { ...nameless, name: "DopeDB development", engine };
+      const diagnoseTarget = (database: string) => diagnoseConnection(
+        { ...targetProfile, database }, [], [], false, true,
+      );
+      expect(diagnoseTarget("").map(({ code }) => code)).toEqual(["targetDatabaseRequired"]);
+      expect(diagnoseTarget("").some(connectionDiagnosticBlocksTest)).toBe(false);
+      expect(diagnoseTarget(" ").map(({ code }) => code)).toEqual(["targetDatabaseRequired"]);
+      expect(diagnoseTarget("x".repeat(255))).toEqual([]);
+      expect(diagnoseTarget("한".repeat(85))).toEqual([]);
+      for (const database of ["x".repeat(256), "한".repeat(86), "app\nother", "app\u0085other"]) {
+        expect(diagnoseTarget(database).map(({ code }) => code)).toEqual(["targetDatabaseInvalid"]);
+        expect(diagnoseTarget(database).some(connectionDiagnosticBlocksTest)).toBe(true);
+      }
+      expect(connectionProfileFlags(targetProfile).canDiscoverDatabases).toBe(true);
+      expect(connectionProfileFlags({ ...targetProfile, credentialMode: "managed" }).canDiscoverDatabases).toBe(false);
+      expect(connectionProfileFlags({ ...targetProfile, workspaceAccess: "manage" }).canDiscoverDatabases).toBe(false);
+    }
 
     const mongo = switchConnectionSource(
       {
@@ -1927,5 +1954,86 @@ describe("workbench state ownership", () => {
     expect(plainTag).toContain(`id="${labelTargets[2]}"`);
     expect(plainTag).toContain('aria-describedby="kept"');
     expect(plainTag).not.toContain("aria-invalid");
+
+    // Render the actual conditional editor surfaces: every current description
+    // must resolve, and validation belongs to the primary input, never Browse.
+    vi.stubGlobal("localStorage", { getItem: () => "en" });
+    vi.stubGlobal("navigator", { language: "en" });
+    try {
+      const form = { ...blankConnection(), name: "DopeDB development", database: "app" };
+      const danger = (message: string) => ({ tone: "danger" as const, message });
+      const profile = {
+        form, set: vi.fn(), flags: connectionProfileFlags(form),
+        identity: { isNew: false, persisted: true },
+        credentials: { password: "", setPassword: vi.fn() },
+        url: { mode: "default" }, options: {}, port: { draft: "0" },
+        databaseDiscovery: { phase: "idle", databases: [], discover: vi.fn() },
+        validation: { host: danger("Host invalid"), port: danger("Port invalid"), database: danger("Target invalid") },
+      } as unknown as ConnectionEditorController["profile"];
+      const drivers = { active: null, compatible: [], pending: false } as unknown as ConnectionEditorController["catalog"]["drivers"];
+      const render = (element: ReturnType<typeof createElement>) => renderToStaticMarkup(createElement(I18nProvider, null, element));
+      const controlTag = (markup: string, id: string) => markup.match(new RegExp(`<(?:input|select)[^>]*id="${id}"[^>]*>`))?.[0] ?? "";
+      const assertReferences = (markup: string) => {
+        for (const match of markup.matchAll(/aria-describedby="([^"]+)"/g)) {
+          for (const id of match[1].split(" ")) expect(markup).toContain(`id="${id}"`);
+        }
+        for (const match of markup.matchAll(/<label for="([^"]+)"/g)) {
+          expect(markup).toContain(`id="${match[1]}"`);
+        }
+        for (const match of markup.matchAll(/<button[^>]*>/g)) expect(match[0]).not.toContain("aria-invalid");
+      };
+      const general = (current: typeof profile) => render(createElement(ConnectionGeneralTab, {
+        profile: current, drivers,
+        sources: {} as ConnectionEditorController["catalog"]["sources"],
+        workspaceDialog: {} as ConnectionEditorController["dialogs"]["workspace"],
+        managedConnection: { active: false } as ConnectionEditorController["commands"]["managedConnection"], busy: false,
+      }));
+      const nativeMarkup = general(profile);
+      assertReferences(nativeMarkup);
+      expect(controlTag(nativeMarkup, "connection-host")).toContain('aria-describedby="connection-host-validation"');
+      expect(controlTag(nativeMarkup, "connection-port")).toContain('aria-describedby="connection-port-validation"');
+      const sqlite = { ...form, engine: "sqlite" as const };
+      const sqliteMarkup = general({ ...profile, form: sqlite, flags: connectionProfileFlags(sqlite) });
+      assertReferences(sqliteMarkup);
+      expect(controlTag(sqliteMarkup, "connection-database")).toContain("aria-describedby");
+      const databaseLabel = sqliteMarkup.match(/<label for="connection-database">([^<]+)<\/label>/)?.[1];
+      expect(sqliteMarkup).toContain(`: ${databaseLabel}"`);
+      for (const engine of ["postgres", "mongodb"] as const) {
+        const secureForm = { ...form, engine };
+        const markup = render(createElement(ConnectionSecurityTab, { profile: {
+          ...profile, form: secureForm, flags: connectionProfileFlags(secureForm),
+        } }));
+        assertReferences(markup);
+        expect(markup).not.toMatch(/<label\b[^>]*>(?:(?!<\/label>)[\s\S])*<button/);
+      }
+      for (const discovered of [false, true]) {
+        const bigQueryForm = { ...form, engine: "bigquery" as const };
+        const bigQueryProfile = { ...profile, form: bigQueryForm, flags: connectionProfileFlags(bigQueryForm), bigQuery: {
+          mode: "googleAccount", auth: { authenticated: discovered },
+          projects: discovered ? [{ id: "dopedb-project", name: "DopeDB" }] : [],
+          datasets: discovered ? [{ id: "app" }] : [],
+          projectsError: "Project discovery failed", datasetsError: "Dataset discovery failed",
+        } } as unknown as typeof profile;
+        const markup = render(createElement(ConnectionBigQueryFields, { profile: bigQueryProfile, drivers }));
+        assertReferences(markup);
+        for (const id of ["connection-host", "connection-database"]) {
+          const tag = controlTag(markup, id);
+          expect(tag.startsWith(discovered ? "<select" : "<input")).toBe(true);
+          expect(tag).toContain('aria-invalid="true"');
+          expect(tag).toContain("aria-describedby");
+        }
+        const sharedForm = { ...bigQueryForm, workspaceAccess: "manage" as const, credentialMode: "managed" as const };
+        const sharedMarkup = render(createElement(ConnectionBigQueryFields, { profile: {
+          ...bigQueryProfile, form: sharedForm, flags: connectionProfileFlags(sharedForm), validation: {},
+        } as typeof profile, drivers }));
+        assertReferences(sharedMarkup);
+        expect(sharedMarkup).not.toContain("connection-bigquery-project-status");
+        expect(sharedMarkup).not.toContain("connection-bigquery-dataset-status");
+        expect(controlTag(sharedMarkup, "connection-host")).not.toContain("aria-describedby");
+        expect(controlTag(sharedMarkup, "connection-database")).not.toContain("aria-invalid");
+      }
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

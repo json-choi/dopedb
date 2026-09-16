@@ -1,3 +1,5 @@
+// Presents a schema group's compatibility and catalog-difference summary with its row actions.
+
 import type { ReactNode } from "react";
 
 import EngineMark from "../../components/EngineMark";

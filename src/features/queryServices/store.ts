@@ -1,3 +1,5 @@
+// Owns bounded, scope-keyed query-service snapshots and lightweight activity subscriptions.
+
 import { useSyncExternalStore } from "react";
 
 import type {

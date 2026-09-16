@@ -1,3 +1,5 @@
+// Renders engine brand marks with shared sizing and accessible engine names.
+
 import mysqlIcon from "../assets/db-icons/mysql.svg";
 import mongodbIcon from "../assets/db-icons/mongodb.svg";
 import postgresqlIcon from "../assets/db-icons/postgresql.svg";

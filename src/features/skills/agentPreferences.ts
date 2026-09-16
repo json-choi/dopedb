@@ -1,3 +1,5 @@
+// Persists supported Agent target preferences and broadcasts setup requests and changes.
+
 import { useEffect, useState } from "react";
 
 import type { AgentProvider } from "../agents/domain";

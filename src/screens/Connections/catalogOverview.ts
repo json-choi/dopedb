@@ -1,3 +1,5 @@
+// Projects lightweight catalog overviews into navigation-only table and object entries.
+
 import type {
   Catalog,
   CatalogOverview,

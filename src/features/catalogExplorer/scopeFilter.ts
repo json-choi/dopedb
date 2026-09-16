@@ -1,3 +1,5 @@
+// Applies saved schema and object-pattern scope consistently to all catalog projections.
+
 import type { ConnectionProfile } from "../connections/domain";
 import type {
   Catalog,

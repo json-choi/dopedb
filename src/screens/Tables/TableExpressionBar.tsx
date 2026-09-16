@@ -1,3 +1,5 @@
+// Presents filter and sort expression drafts with validation and explicit apply or reset actions.
+
 import { Icon } from "../../components/Icon";
 import { Button } from "../../design-system/components/Button";
 import { useI18n } from "../../lib/i18n";

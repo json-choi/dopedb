@@ -1,3 +1,5 @@
+// Presents outstanding Agent Skill setup actions and coordinates guarded installation.
+
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 

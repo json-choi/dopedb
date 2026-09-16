@@ -200,7 +200,7 @@ export default function LocalHistoryToolWindow({
       <ToolWindowSearchRow>
         <div className="tw:min-w-0 tw:flex-1">
           <TreeSearch
-            clearLabel={t("common.close")}
+            clearLabel={t("common.clearSearch")}
             placeholder={t("localHistory.search")}
             value={filter}
             onChange={setFilter}
@@ -293,11 +293,12 @@ export default function LocalHistoryToolWindow({
           </h2>
           <div className="tw:min-h-0 tw:flex-1 tw:overflow-auto tw:p-1">
             {filteredDocuments.map((document) => (
-              <button
+              <Button
                 key={document.id}
                 type="button"
-                data-active={document.id === selectedDocument?.id}
-                className="ds-object-row tw:w-full tw:min-w-0 tw:cursor-pointer tw:gap-1 tw:rounded-xs tw:border-0 tw:bg-transparent tw:font-sans tw:text-left tw:text-ui tw:data-[active=true]:bg-secondary tw:data-[active=true]:text-secondary-foreground tw:hover:bg-muted"
+                presentation="listItem"
+                active={document.id === selectedDocument?.id}
+                aria-current={document.id === selectedDocument?.id ? "page" : undefined}
                 onClick={() => selectDocument(document)}
               >
                 <Icon name="file" className="tw:shrink-0 tw:text-[length:var(--ds-icon-sm)] tw:text-muted-foreground" />
@@ -305,7 +306,7 @@ export default function LocalHistoryToolWindow({
                   {document.title}
                 </span>
                 <span className="tw:text-2xs tw:text-muted-foreground">r{document.revision}</span>
-              </button>
+              </Button>
             ))}
           </div>
         </section>

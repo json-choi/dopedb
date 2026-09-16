@@ -1,3 +1,5 @@
+// Composes the selected Project Environment's sources and Articles within workspace authority.
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 

@@ -3,6 +3,7 @@
 // Multi-statement scripts execute through the backend script runner and preserve
 // per-statement results. ⌘↩ runs the current draft or selected SQL.
 import { useState } from "react";
+import { StatusBadge } from "../../design-system/components/Status";
 import QueryResultsPane from "../../features/queryServices/QueryResultsPane";
 import type { QueryServiceStore } from "../../features/queryServices/store";
 import { Icon } from "../../components/Icon";
@@ -191,15 +192,15 @@ export default function Sql(props: Omit<SqlWorkbenchProps, "onShowResult"> & {
             <option value="script">{t("sql.resolveModeScript")}</option>
           </WorkbenchSelect>
           {!running && draftSignal && draftSignal.tone !== "muted" ? (
-            <span
-              data-tone={draftSignal.tone}
-              className="badge icon-only-badge tw:data-[tone=danger]:border-danger tw:data-[tone=danger]:text-danger tw:data-[tone=warning]:border-warning tw:data-[tone=warning]:text-warning"
+            <StatusBadge
+              tone={draftSignal.tone === "danger" ? "danger" : draftSignal.tone === "warning" ? "warning" : "neutral"}
+              iconOnly
               title={draftSignal.title ?? draftSignal.text}
               aria-label={draftSignal.text}
               role="img"
             >
               <Icon name={draftSignal.icon ?? "info"} />
-            </span>
+            </StatusBadge>
           ) : null}
         </div>
         <WorkbenchButton

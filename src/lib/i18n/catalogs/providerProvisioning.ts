@@ -1,3 +1,5 @@
+// Owns paired English and Korean messages for managed-access provisioning.
+
 import { defineCatalog } from "../types";
 
 export const providerProvisioningCatalog = defineCatalog(

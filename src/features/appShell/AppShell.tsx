@@ -320,6 +320,7 @@ function Shell() {
           selected: connections.selected,
           items: connections.items,
           projectNamesByConnectionId,
+          loaded: connections.loaded,
           loadError: connections.loadError,
           supportsSql: connections.supportsSql,
           creatingDemo: connections.creatingDemo,

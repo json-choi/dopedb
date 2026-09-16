@@ -132,7 +132,7 @@ export function ExternalAgentConfigurationPicker({
   return (
     <div className="tw:grid tw:min-w-0 tw:grid-cols-[minmax(0,1fr)] tw:gap-5 tw:[overflow-wrap:anywhere]">
       <div>
-        <h2 className="tw:m-0 tw:text-base tw:font-semibold">
+        <h2 className="tw:m-0 tw:text-title tw:font-semibold">
           {t("agent.externalChooseResources")}
         </h2>
         <p className="tw:mt-1 tw:mb-0 tw:text-sm tw:leading-body tw:text-muted-foreground">
@@ -141,7 +141,7 @@ export function ExternalAgentConfigurationPicker({
       </div>
       {projects.map((project) => (
         <section key={project.id} className="tw:grid tw:gap-2">
-          <h3 className="tw:m-0 tw:flex tw:items-center tw:gap-2 tw:text-sm tw:font-semibold">
+          <h3 className="tw:m-0 tw:flex tw:items-center tw:gap-2">
             <Icon name="folder" className="tw:text-muted-foreground" />
             {project.name}
           </h3>

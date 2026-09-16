@@ -1,3 +1,5 @@
+// Composes catalog loading and filtered projections into an expandable virtual object tree.
+
 import {
   useCallback,
   useEffect,

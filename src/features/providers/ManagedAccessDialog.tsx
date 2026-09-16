@@ -1,3 +1,4 @@
+// Reviews provider-owned managed access plans and routes explicit setup decisions.
 import {
   useEffect,
   useMemo,
@@ -371,18 +372,18 @@ export function ManagedAccessDialog({
             </p>
             <div className="tw:grid tw:gap-0.5" role="listbox" aria-label={t("managedAccess.provider")}>
               {statuses.data?.map((status) => (
-                <button
+                <Button
                   key={status.provider}
                   type="button"
                   role="option"
                   aria-selected={provider === status.provider}
-                  data-selected={provider === status.provider || undefined}
-                  className="tw:grid tw:min-w-0 tw:cursor-pointer tw:grid-cols-[20px_minmax(0,1fr)] tw:items-center tw:gap-2 tw:rounded-sm tw:border-0 tw:bg-transparent tw:px-2 tw:py-2 tw:text-left tw:text-ui tw:text-foreground tw:data-[selected]:bg-selection tw:data-[selected]:text-selection-foreground tw:hover:bg-muted tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring/30"
+                  presentation="listItem"
+                  active={provider === status.provider}
                   onClick={() => selectProvider(status.provider)}
                 >
                   <Icon name="key" />
                   <span className="tw:min-w-0 tw:truncate">{providerLabel(status.provider)}</span>
-                </button>
+                </Button>
               ))}
             </div>
             {existing.data?.some((entry) => entry.state !== "needsSetup") ? (
@@ -391,18 +392,19 @@ export function ManagedAccessDialog({
                   {t("managedAccess.existing")}
                 </p>
                 {existing.data.filter((entry) => entry.state !== "needsSetup").map((entry) => (
-                  <button
+                  <Button
                     key={entry.receiptId}
                     type="button"
-                    data-selected={plan?.receiptId === entry.receiptId || undefined}
-                    className="tw:flex tw:w-full tw:min-w-0 tw:cursor-pointer tw:items-center tw:gap-2 tw:rounded-sm tw:border-0 tw:bg-transparent tw:px-2 tw:py-2 tw:text-left tw:text-ui tw:data-[selected]:bg-selection tw:hover:bg-muted tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring/30"
+                    presentation="listItem"
+                    active={plan?.receiptId === entry.receiptId}
+                    aria-pressed={plan?.receiptId === entry.receiptId}
                     onClick={() => setPlan(entry)}
                   >
                     <span className="tw:min-w-0 tw:flex-1 tw:truncate">{entry.targetDisplayName}</span>
                     <StatusBadge tone={planTone(entry)} density="compact">
                       {t(stateKey[entry.state])}
                     </StatusBadge>
-                  </button>
+                  </Button>
                 ))}
               </div>
             ) : null}
@@ -411,7 +413,7 @@ export function ManagedAccessDialog({
           <main className="tw:min-h-0 tw:min-w-0 tw:overflow-y-auto tw:bg-background tw:[container-type:inline-size]">
             <div className="tw:mx-auto tw:grid tw:w-full tw:max-w-[760px] tw:gap-5 tw:p-5 tw:@max-[560px]:p-4">
               <div>
-                <h2 className="tw:m-0 tw:text-base tw:font-semibold">{t("managedAccess.title")}</h2>
+                <h2 className="tw:m-0 tw:text-title tw:font-semibold">{t("managedAccess.title")}</h2>
                 <p id="managed-access-description" className="tw:mt-1 tw:mb-0 tw:text-sm tw:leading-body tw:text-muted-foreground">
                   {t("managedAccess.description")}
                 </p>
@@ -432,7 +434,7 @@ export function ManagedAccessDialog({
               {selectedStatus && !plan ? (
                 <section className="tw:grid tw:gap-3" aria-labelledby="managed-access-login">
                   <div className="tw:flex tw:min-w-0 tw:items-center tw:gap-2 tw:border-b tw:border-border-subtle tw:pb-2">
-                    <h3 id="managed-access-login" className="tw:m-0 tw:min-w-0 tw:flex-1 tw:text-sm tw:font-semibold">
+                    <h3 id="managed-access-login" className="tw:m-0 tw:min-w-0 tw:flex-1">
                       {providerLabel(selectedStatus.provider)} · {selectedStatus.prerequisiteName}
                     </h3>
                     <StatusBadge tone={readinessTone(selectedStatus)}>
@@ -457,7 +459,7 @@ export function ManagedAccessDialog({
 
               {selectedStatus?.readiness === "ready" && !plan ? (
                 <section className="tw:grid tw:gap-3" aria-labelledby="managed-access-target">
-                  <h3 id="managed-access-target" className="tw:m-0 tw:text-sm tw:font-semibold">
+                  <h3 id="managed-access-target" className="tw:m-0">
                     {t("managedAccess.target")}
                   </h3>
                   {targets === null ? (
@@ -506,7 +508,7 @@ export function ManagedAccessDialog({
                   <div className="tw:flex tw:min-w-0 tw:items-start tw:gap-3 tw:border-b tw:border-border-subtle tw:pb-3">
                     <Icon name="shield" className="tw:mt-0.5 tw:text-info" />
                     <div className="tw:grid tw:min-w-0 tw:flex-1 tw:gap-0.5">
-                      <h3 id="managed-access-plan" className="tw:m-0 tw:truncate tw:text-sm tw:font-semibold">
+                      <h3 id="managed-access-plan" className="tw:m-0 tw:truncate">
                         {plan.targetDisplayName}
                       </h3>
                       <span className="tw:truncate tw:text-xs tw:text-muted-foreground">{plan.targetDetail}</span>

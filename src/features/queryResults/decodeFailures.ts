@@ -1,3 +1,5 @@
+// Locates and remaps decode failures so invalid cells cannot become inspected values.
+
 import type { CellDecodeFailure } from "../../ipc/types";
 import {
   gridSelectionBounds,

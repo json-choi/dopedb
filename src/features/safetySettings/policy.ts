@@ -1,3 +1,5 @@
+// Projects effective write gates and maps blocked writes to their appropriate recovery path.
+
 import type { ConnectionProfile } from "../connections/domain";
 import type { SafetySettings } from "../../ipc/types";
 

@@ -18,6 +18,7 @@ connection persistence itself.
 | `ConnectionForm.tsx` | Compact connection/driver editor `ConnectionForm(props: ConnectionEditorProps)`; hosts `useConnectionEditorController` and composes the tab/panel files below. |
 | `ConnectionProfilePanel.tsx` | `ConnectionProfilePanel` — editor header, tab strip, diagnostics summary, and action status from grouped view models. |
 | `ConnectionGeneralTab.tsx` | `ConnectionGeneralTab` — General properties (name, engine, host/port/database) from profile/driver/workspace-dialog view models. |
+| `ConnectionDatabaseField.tsx` | Native target-database field and accessible loading/empty/error discovery feedback; late suggestions never move focus from another control. |
 | `ConnectionOptionsTab.tsx` | `ConnectionOptionsTab` — runtime-backed connection/session options; mutation/validation stays in the feature controller. |
 | `ConnectionAdvancedTab.tsx` | `ConnectionAdvancedTab` — free-form driver parameters and capabilities from grouped profile/catalog view models. |
 | `ConnectionSchemaTab.tsx` | `ConnectionSchemaTab` — discovered namespaces and saved introspection scope; does not query catalog adapters directly. |

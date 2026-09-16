@@ -1,3 +1,5 @@
+// Derives a bounded setup plan from each Agent target's verified Skill installation state.
+
 import type {
   SkillInstallState,
   SkillTarget,

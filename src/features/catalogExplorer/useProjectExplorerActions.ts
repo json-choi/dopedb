@@ -1,3 +1,5 @@
+// Connects Project expansion and resource selection to exact Environment navigation.
+
 import type { Dispatch, SetStateAction } from "react";
 
 import type {

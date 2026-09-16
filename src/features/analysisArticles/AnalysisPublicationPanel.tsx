@@ -1,3 +1,4 @@
+// Publishes and revokes immutable Article HTML snapshots within their exact scope.
 import { useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -102,7 +103,7 @@ export function AnalysisPublicationPanel({
     <div className="tw:grid tw:gap-5">
       {error ? <InlineNotice tone="danger" icon="alert" role="alert">{error}</InlineNotice> : null}
       <div className="tw:grid tw:gap-1">
-        <h2 className="tw:m-0 tw:text-base tw:font-semibold">{t("analysis.publishHtmlTitle")}</h2>
+        <h2 className="tw:m-0 tw:text-title tw:font-semibold">{t("analysis.publishHtmlTitle")}</h2>
         <p className="tw:m-0 tw:text-sm tw:leading-body tw:text-muted-foreground">
           {t("analysis.publishHtmlBody")}
         </p>
@@ -146,7 +147,7 @@ export function AnalysisPublicationPanel({
       </div>
 
       <section className="tw:grid tw:gap-2 tw:border-t tw:border-border-subtle tw:pt-4">
-        <h3 className="tw:m-0 tw:text-sm tw:font-semibold">{t("analysis.publicationsTitle")}</h3>
+        <h3 className="tw:m-0">{t("analysis.publicationsTitle")}</h3>
         {publications.isPending ? <LoadingLabel>{t("analysis.loading")}</LoadingLabel> : null}
         {publications.data?.length ? (
           <ul className="tw:m-0 tw:grid tw:list-none tw:gap-2 tw:p-0">

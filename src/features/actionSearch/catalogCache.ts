@@ -1,3 +1,5 @@
+// Projects already-loaded catalog overviews into search without starting new reads.
+
 import { useEffect, useReducer } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 

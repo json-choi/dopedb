@@ -17,7 +17,7 @@ import {
 } from "../../design-system/components/Modal";
 import { TreeSearch } from "../../design-system/components/TreeControls";
 import { useI18n } from "../../lib/i18n";
-import type { SettingsSection } from "../../features/settings/domain";
+import { settingsSearchKeywords, type SettingsSection } from "../../features/settings/domain";
 import {
   appUpdaterProgress,
   type AppUpdaterSnapshot,
@@ -67,50 +67,49 @@ export default function Settings({
           label: t("settings.agentTools"),
           scope: "application",
           disabled: false,
-          keywords: "agent codex claude tools",
+          keywords: settingsSearchKeywords["agent-tools"],
         },
         {
           id: "advanced",
           label: t("settings.advanced"),
           scope: "application",
           disabled: false,
-          keywords:
-            "advanced debug debugging diagnostics agent tool input result developer 디버깅 진단",
+          keywords: settingsSearchKeywords.advanced,
         },
         {
           id: "cli",
           label: t("settings.cli"),
           scope: "application",
           disabled: false,
-          keywords: "command line terminal path cli",
+          keywords: settingsSearchKeywords.cli,
         },
         {
           id: "appearance",
           label: t("settings.appearance"),
           scope: "application",
           disabled: false,
-          keywords: "theme appearance light dark system 테마 화면 라이트 다크 시스템",
+          keywords: settingsSearchKeywords.appearance,
         },
         {
           id: "language",
           label: t("settings.languageTitle"),
           scope: "application",
           disabled: false,
-          keywords: "locale korean english",
+          keywords: settingsSearchKeywords.language,
         },
         {
           id: "privacy",
           label: t("settings.privacy"),
           scope: "application",
           disabled: false,
-          keywords: "privacy analytics telemetry consent 개인정보 분석 동의",
+          keywords: settingsSearchKeywords.privacy,
         },
         {
           id: "updates",
           label: t("settings.updates"),
           scope: "application",
           disabled: false,
-          keywords: "version release upgrade",
+          keywords: settingsSearchKeywords.updates,
         },
         {
           id: "safety",
@@ -121,7 +120,7 @@ export default function Settings({
           }`,
           scope: "dataSource",
           disabled: false,
-          keywords: "read only write approval policy audit",
+          keywords: settingsSearchKeywords.safety,
         },
       ] satisfies ReadonlyArray<{
         id: SettingsSection;
@@ -210,7 +209,7 @@ export default function Settings({
                   value={filter}
                   autoFocus
                   placeholder={t("settings.searchPlaceholder")}
-                  clearLabel={t("common.close")}
+                  clearLabel={t("common.clearSearch")}
                   onChange={setFilter}
                   onEscape={() => {
                     if (filter) setFilter("");

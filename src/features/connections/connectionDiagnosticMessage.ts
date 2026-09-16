@@ -15,6 +15,8 @@ export function connectionDiagnosticMessage(
     portInvalid: "connections.problemPortInvalid",
     sqliteFileRequired: "connections.problemSqliteFileRequired",
     mongoDatabaseRequired: "connections.problemMongoDatabaseRequired",
+    targetDatabaseRequired: "connections.problemTargetDatabaseRequired",
+    targetDatabaseInvalid: "connections.problemTargetDatabaseInvalid",
     bigQueryProjectRequired: "connections.problemBigQueryProjectRequired",
     bigQueryProjectInvalid: "connections.problemBigQueryProjectInvalid",
     bigQueryDatasetRequired: "connections.problemBigQueryDatasetRequired",

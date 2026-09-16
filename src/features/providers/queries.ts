@@ -1,3 +1,5 @@
+// Builds bounded provider inventory and provisioning queries over summary-only adapters.
+
 import { queryOptions } from "@tanstack/react-query";
 
 import {

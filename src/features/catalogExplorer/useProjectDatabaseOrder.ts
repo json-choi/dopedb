@@ -1,3 +1,5 @@
+// Persists member-local Project database ordering and coordinates drag placement.
+
 import { useCallback, useMemo, useState } from "react";
 
 import type { ConnectionProfile } from "../connections/domain";

@@ -1,3 +1,5 @@
+// Composes table commands, current-page export, pagination, and manual-transaction controls.
+
 import { Icon } from "../../components/Icon";
 import ToolbarMenu, {
   ToolbarMenuItem,

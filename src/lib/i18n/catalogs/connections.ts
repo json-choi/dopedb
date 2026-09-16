@@ -269,6 +269,12 @@ export const connectionsCatalog = defineCatalog(
       "MongoDB SRV discovery cannot use a single-host SSH tunnel.",
     "connections.problemMongoDatabaseRequired":
       "Enter the MongoDB database name.",
+    "connections.problemTargetDatabaseRequired": "Choose a target database before saving. You can test the server connection first.",
+    "connections.problemTargetDatabaseInvalid": "Use a database name of at most 255 UTF-8 bytes without control characters.",
+    "connections.databaseDiscoveryLoading": "Finding databases…",
+    "connections.databaseDiscoveryEmpty": "No databases found. Enter a database name manually.",
+    "connections.databaseDiscoveryFailed": "Could not list databases. Check the connection details and retry, or enter a database name manually.",
+    "connections.databaseDiscoveryRetry": "Find databases",
     "connections.problemBigQueryProjectRequired":
       "Enter the GCP project ID.",
     "connections.problemBigQueryProjectInvalid":
@@ -769,6 +775,12 @@ export const connectionsCatalog = defineCatalog(
       "MongoDB SRV 검색은 단일 호스트 SSH 터널과 함께 사용할 수 없습니다.",
     "connections.problemMongoDatabaseRequired":
       "MongoDB 데이터베이스 이름을 입력하세요.",
+    "connections.problemTargetDatabaseRequired": "저장하기 전에 대상 데이터베이스를 선택하세요. 서버 연결은 먼저 검사할 수 있습니다.",
+    "connections.problemTargetDatabaseInvalid": "제어 문자가 없는 255 UTF-8 바이트 이하의 데이터베이스 이름을 입력하세요.",
+    "connections.databaseDiscoveryLoading": "데이터베이스 찾는 중…",
+    "connections.databaseDiscoveryEmpty": "찾은 데이터베이스가 없습니다. 데이터베이스 이름을 직접 입력하세요.",
+    "connections.databaseDiscoveryFailed": "데이터베이스 목록을 불러오지 못했습니다. 연결 정보를 확인하고 다시 시도하거나 이름을 직접 입력하세요.",
+    "connections.databaseDiscoveryRetry": "데이터베이스 찾기",
     "connections.problemBigQueryProjectRequired":
       "GCP 프로젝트 ID를 입력하세요.",
     "connections.problemBigQueryProjectInvalid":
@@ -943,7 +955,7 @@ export const connectionsCatalog = defineCatalog(
     "connections.seconds": "초",
     "connections.schemaDiffInSync": "기준 DB와 스키마가 같습니다",
     "connections.schemaDiffMissingSection": "이 환경에 없음 ({count})",
-    "connections.schemaDiffPendingChip": "diff",
+    "connections.schemaDiffPendingChip": "비교",
     "connections.schemaDiffPendingTitle": "스키마 비교 화면을 열면 이 DB를 불러옵니다",
     "connections.schemaDiffTableAdded": "이 DB에만 있으며 기준 DB에는 없습니다",
     "connections.schemaDiffTableChanged":

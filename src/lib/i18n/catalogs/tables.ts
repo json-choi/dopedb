@@ -175,7 +175,7 @@ export const tablesCatalog = defineCatalog(
     "tables.tableEmpty": "테이블이 비어 있습니다.",
     "tables.truncated": "일부만 표시",
     "tables.type": "타입",
-    "tables.unique": "unique",
+    "tables.unique": "고유",
     "tables.unsorted": "정렬 없음",
     "tables.writeCommitted": "쓰기 커밋됨",
     "tables.writePolicy": "쓰기 정책",

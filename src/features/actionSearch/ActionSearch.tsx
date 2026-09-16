@@ -1,3 +1,5 @@
+// Presents scoped action-search results and commits keyboard or pointer selections.
+
 import {
   type KeyboardEvent,
   useEffect,

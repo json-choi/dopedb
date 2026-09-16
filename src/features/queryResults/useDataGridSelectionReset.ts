@@ -1,3 +1,5 @@
+// Resets grid selection and focus when the materialized or streamed result identity changes.
+
 import {
   useEffect,
   type Dispatch,

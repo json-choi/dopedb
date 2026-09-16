@@ -82,3 +82,38 @@ acceptance이며, [`UI_IMPLEMENTATION_TRACKER.md`](./UI_IMPLEMENTATION_TRACKER.m
 | WW-011 | `완료` | Workspace settings의 일반 제목과 lifecycle 내부 제목 반복을 실제 lifecycle h1 하나로 합쳤다. 불필요한 외곽 card를 제거하고 Backup → encryption key → retention → danger zone을 선행 조건 순서의 단일 세로 흐름으로 배치했다. |
 | WW-012 | `완료` | workspace 삭제 blocker가 있으면 이름 입력과 삭제 command를 숨기고 해결 항목과 Access/Providers 복구 link만 보여 준다. blocker 해소 뒤에는 exact-name 입력을 유일한 확인으로 사용하며 같은 동작에 browser confirm을 겹치지 않는다. |
 | WW-013 | `완료` | Access의 revision conflict는 conflict article 하나만 경계로 유지하고 두 version과 field를 무테 column·row divider로 평탄화해 관리 panel 안의 중첩 surface를 줄였다. |
+
+## 공개 사이트 검수 — 2026-09-16 (#240)
+
+정본 브랜드 생성기는 1200×630 정적 Open Graph 카드를 함께 생성한다.
+한·영 Open Graph와 Twitter metadata는 같은 `/og-card.png`를 가리킨다.
+`brand-assets` CI는 기존 ICNS까지 포함한 18개 생성물의 drift를 검사한다.
+FAQ의 기존 7개 답변을 모두 표시해 서비스 중단 시의 제한, Article 초대,
+Alpha 사용 범위가 실제 페이지에서도 읽히도록 했다. 법률 문구와 역사적
+Desktop screenshot은 이 변경의 대상이 아니다.
+
+로컬 Chromium에서 1440×1000 영어와 390×844 한국어를 확인했다. 애니메이션을
+정지한 실제 합성 배경을 캡처하고 글자만 숨긴 동일 위치의 픽셀과 computed
+foreground/alpha를 sRGB 상대 휘도로 비교했다. 텍스트 영역의 최소 대비이며
+모든 시점·기기에서의 성능이나 접근성 보증은 아니다.
+
+| 대표 영역 | 변경 전 desktop / mobile | 변경 후 desktop / mobile |
+| --- | --- | --- |
+| 큰 hero 제목 | 4.63 / 15.34 | 4.32 / 15.38 |
+| 본문 | 8.12 / 9.93 | 9.34 / 9.87 |
+| 로컬 실행·Alpha 보조 문구 | 3.56 / 2.84 | 8.02 / 8.37 |
+| 은하 탐험 도움말 | 3.95 / 3.52 | 10.01 / 9.93 |
+
+실패한 두 작은 텍스트만 수정했다. 보조 문구의 65% opacity를 제거하고,
+은하 위 도움말에 기존 night 90% 배경과 전체 muted foreground를 사용한다.
+제목은 큰 글자 기준 3:1, 본문·보조 문구는 4.5:1을 넘었다.
+두 캡처의 별 위치 차이가 있어 변경하지 않은 영역도 수치가 조금 다르다.
+
+일반 재생 2.1초 동안 renderer rotation 갱신 46회(약 21.9fps)를 관찰했다.
+DPR 3의 1440×1000 viewport는 drawing buffer 1697×1178(1,999,066 pixel)로
+제한되었다. 이는 30fps·DPR 1.5·200만 pixel 상한을 확인하는 표본이며 GPU
+프레임 시간이나 실기기 성능 벤치마크는 아니다. 기존 초기 compact 10,600개 /
+desktop 23,200개 별과 한 번만 만드는 buffer 계약은 그대로 유지했다.
+reduced-motion은 `running=false`, 강제 WebGL context loss는 fallback과 서버
+본문을 유지했다. JavaScript를 끈 영어 페이지도 제목·FAQ 7개를 렌더링했다.
+두 viewport 모두 가로 overflow가 없었다. 배포는 수행하지 않았다.

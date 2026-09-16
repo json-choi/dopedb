@@ -1,3 +1,5 @@
+// Accumulates numeric-column observations within one result identity for consistent alignment.
+
 import { useEffect, useMemo, useState } from "react";
 
 import type { QueryResult } from "../../ipc/types";

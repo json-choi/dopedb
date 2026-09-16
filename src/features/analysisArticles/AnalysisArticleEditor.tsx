@@ -1,3 +1,5 @@
+// Edits one Article draft and its exact saved-query definition before handing it to the caller.
+
 import { useMemo, useState } from "react";
 
 import { Button } from "../../design-system/components/Button";

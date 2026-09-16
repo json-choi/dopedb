@@ -57,6 +57,29 @@ jobs:
       - name: Test critical frontend paths
         run: pnpm test
 
+  brand_assets:
+    name: brand-assets
+    runs-on: macos-15
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 11.25.0
+          run_install: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: site/pnpm-lock.yaml
+      - name: Install deterministic image tooling
+        run: |
+          pnpm --dir site install --frozen-lockfile
+          python3 -m venv "$RUNNER_TEMP/dopedb-brand-venv"
+          "$RUNNER_TEMP/dopedb-brand-venv/bin/pip" install Pillow==12.2.0
+      - name: Check all generated brand assets
+        run: '"$RUNNER_TEMP/dopedb-brand-venv/bin/python" scripts/generate-icons.py --check'
+
   rust_smoke:
     name: rust-smoke
     runs-on: macos-15
@@ -264,6 +287,7 @@ jobs:
     needs:
       - dependency_vulnerability_scan
       - frontend_smoke
+      - brand_assets
       - rust_smoke
       - provider_postgres
       - site_build
@@ -279,6 +303,7 @@ jobs:
         env:
           DEPENDENCY_VULNERABILITY_SCAN_RESULT: ${{ needs.dependency_vulnerability_scan.result }}
           FRONTEND_RESULT: ${{ needs.frontend_smoke.result }}
+          BRAND_ASSETS_RESULT: ${{ needs.brand_assets.result }}
           RUST_RESULT: ${{ needs.rust_smoke.result }}
           PROVIDER_POSTGRES_RESULT: ${{ needs.provider_postgres.result }}
           SITE_BUILD_RESULT: ${{ needs.site_build.result }}
@@ -289,6 +314,7 @@ jobs:
         run: |
           test "$DEPENDENCY_VULNERABILITY_SCAN_RESULT" = success
           test "$FRONTEND_RESULT" = success
+          test "$BRAND_ASSETS_RESULT" = success
           test "$RUST_RESULT" = success
           test "$PROVIDER_POSTGRES_RESULT" = success
           test "$SITE_BUILD_RESULT" = success

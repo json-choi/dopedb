@@ -36,6 +36,7 @@ rather than calling `invoke` for connection commands directly.
 | `useConnectionEditorController.ts` | Composes `useBigQueryOnboardingController`, `useConnectionCatalogController`, `useConnectionEditorDialogs`, `useConnectionProfileController`, `useConnectionProfileState`, and `useConnectionSchemaController` into one `ConnectionEditorController`. |
 | `useConnectionEditorDialogs.ts` | Dialog visibility and return-focus anchors (provider credentials, workspace copy/credentials, problems panel) kept separate from profile/catalog state. |
 | `useConnectionProfileController.ts` | Profile validation and save/test/delete lifecycle commands; editable draft mechanics stay in `useConnectionProfileState.ts`. |
+| `useConnectionDatabaseDiscovery.ts` | Ephemeral database discovery for one editable draft revision; exposes loading, empty, ready, and error states and rejects late responses. |
 | `useConnectionProfileState.ts` | Owns the editable profile draft, URL projection, connection options, and local command status shared by the editor's other controllers. |
 | `useConnectionSchemaController.ts` | Schema discovery and the persisted introspection scope (`SCHEMA_SCOPE_PARAMETER`) projected by the editor's Schemas tab. |
 | `useManagedConnectionRecovery.ts` | Owns the Desktop-to-Workspace-Web recovery command for one managed shared connection; per its header comment, the trusted console origin still comes from the native adapter, not this hook. |

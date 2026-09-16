@@ -1,3 +1,5 @@
+// Finds SQL parameter tokens and materializes caller-provided expressions at their source ranges.
+
 import type { ConnectionEngine } from "../connections/domain";
 
 export type SqlParameter = {

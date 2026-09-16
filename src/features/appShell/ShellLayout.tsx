@@ -2,6 +2,7 @@
 import { useRef, type ReactNode, type RefObject } from "react";
 
 import { Icon } from "../../components/Icon";
+import { Button } from "../../design-system/components/Button";
 import { ResizeSeparator } from "../../design-system/components/ResizeSeparator";
 import type { CatalogTable } from "../../ipc/types";
 import { useI18n } from "../../lib/i18n";
@@ -408,15 +409,15 @@ function ShellLayoutContent({ model, commands }: Props) {
       <main
         ref={viewport.mainRef}
         data-compact={viewport.compact}
-        className="main tw:col-start-3 tw:row-start-2 tw:flex tw:min-h-0 tw:min-w-0 tw:flex-col tw:overflow-hidden tw:border-0 tw:border-l tw:border-border-subtle tw:bg-background tw:outline-none tw:[container-name:main-pane] tw:[container-type:inline-size] tw:data-[compact=true]:col-start-1 tw:data-[compact=true]:border-0"
+        className="main tw:relative tw:col-start-3 tw:row-start-2 tw:flex tw:min-h-0 tw:min-w-0 tw:flex-col tw:overflow-hidden tw:border-0 tw:border-l tw:border-border-subtle tw:bg-background tw:outline-none tw:[container-name:main-pane] tw:[container-type:inline-size] tw:data-[compact=true]:col-start-1 tw:data-[compact=true]:border-0"
         tabIndex={-1}
         inert={viewport.mobileExplorerOpen ? true : undefined}
       >
         {workbench.content}
         {showUpdateBadge && (
-          <div className="ds-attention-stack">
-            <button
-              className="ds-attention-badge ds-tone-trust"
+          <div className="tw:absolute tw:right-3 tw:bottom-3 tw:z-10 tw:max-w-[min(280px,calc(100%_-_24px))]" role="status" aria-live="polite">
+            <Button
+              size="compact"
               onClick={commands.workspace.openUpdateSettings}
               title={`${t("updates.badgeTitle")}: ${updateBadgeLabel}`}
               aria-label={`${t("updates.badgeTitle")}: ${updateBadgeLabel}`}
@@ -425,7 +426,7 @@ function ShellLayoutContent({ model, commands }: Props) {
                 name={workspace.updater.phase === "error" ? "alert" : "download"}
               />
               <span>{updateBadgeLabel}</span>
-            </button>
+            </Button>
           </div>
         )}
       </main>

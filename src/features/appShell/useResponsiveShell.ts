@@ -1,3 +1,5 @@
+// Tracks compact shell geometry and the mobile Explorer dismissal lifecycle.
+
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export function useResponsiveShell() {

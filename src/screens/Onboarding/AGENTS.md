@@ -18,11 +18,10 @@ here.
 ## For AI Agents
 
 ### Working In This Directory
-- Mounted in three places in `WorkbenchContent.tsx`: as the fallback when
-  `connection.items.length === 0` or `route.welcomeOpen`, and as the
-  `activeDocument.kind === "welcome"` document, each with different prop
-  combinations (`guidedDemo` only appears when a demo SQLite connection is
-  selected).
+- Mounted by `WorkbenchContent.tsx` after initial connection loading, for an
+  empty workspace, the Home route, or a `welcome` document. Home and the
+  document receive the same selected-connection/query/guided-demo commands;
+  `guidedDemo` appears only when a demo SQLite connection is selected.
 - `guidedDemoAvailable` is gated by `catalogScope.workspaceKind ===
   "personal"` in `AppShell.tsx` — do not offer guided-demo commands outside
   that scope.

@@ -1,3 +1,5 @@
+// Presents a provider branch target's display name and optional lifecycle state.
+
 import { Icon } from "../../components/Icon";
 import { useI18n } from "../../lib/i18n";
 import type { ConnectionProviderTarget } from "./domain";

@@ -1,3 +1,5 @@
+// Loads native catalog metadata and projects snapshots into the catalog shapes used by the UI.
+
 import { invoke } from "../../ipc/core";
 import type {
   Catalog,

@@ -1,3 +1,5 @@
+// Owns scope-aware Explorer expansion, selection, dialog, and load-error state.
+
 import { useReducer } from "react";
 
 import type {

@@ -1,3 +1,5 @@
+// Owns view-keyed table selection, filtering, sorting, paging, and staged-edit state.
+
 import { useEffect, useReducer } from "react";
 
 import type { GridSort } from "../../lib/sqlBuild";

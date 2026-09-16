@@ -1,3 +1,5 @@
+// Manages Article sharing invitations within the current account and workspace scope.
+
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Icon } from "../../components/Icon";

@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 
 import { Button } from "../../design-system/components/Button";
 import { InlineNotice } from "../../design-system/components/Status";
-import DataGrid from "../queryResults/DataGrid";
+import InspectableResultGrid from "../queryResults/InspectableResultGrid";
 import ResultToolbar from "../queryResults/ResultToolbar";
 import {
   ResultWorkbenchFooter,
@@ -153,13 +153,14 @@ function MaterializedResult({
               setLimit(PAGE_STEP);
             }}
           />
-          <DataGrid
+          <InspectableResultGrid
             result={{
               ...result,
               rows: visibleRows,
               decodeFailures: visibleDecodeFailures,
               rowCount: filteredRows.length,
             }}
+            inspectionKey={result}
             surface="workbench"
             footerInset
           />
@@ -306,8 +307,9 @@ function ScriptResults({
                     filenameBase={`script-stmt${index + 1}-${stamp()}`}
                   />
                 </div>
-                <DataGrid
+                <InspectableResultGrid
                   result={statement.result}
+                  inspectionKey={statement.result}
                   surface={fillsResultPane ? "workbench" : "embedded"}
                 />
               </>

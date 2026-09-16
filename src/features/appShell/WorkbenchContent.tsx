@@ -69,6 +69,7 @@ type WorkbenchContentModel = {
     selected: ConnectionProfile | null;
     items: ConnectionProfile[];
     projectNamesByConnectionId: ReadonlyMap<string, string>;
+    loaded: boolean;
     loadError: string | null;
     supportsSql: boolean;
     creatingDemo: boolean;
@@ -273,9 +274,16 @@ function WorkbenchContentResolved({ model, commands }: Props) {
     );
   }
 
+  if (!connection.loaded) {
+    return withSettings(<WorkbenchLoading />);
+  }
+
   if (route.welcomeOpen || connection.items.length === 0) {
     return withSettings(
       <Onboarding
+        connectionName={selected ? selected.name || selected.database : undefined}
+        guidedDemo={guidedDemo}
+        onNewQuery={selected ? commands.documents.newQuery : undefined}
         creatingDemo={connection.creatingDemo}
         guidedDemoAvailable={connection.guidedDemoAvailable}
         onCreateDemoDatabase={commands.connections.createDemo}

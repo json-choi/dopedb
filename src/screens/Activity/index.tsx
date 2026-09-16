@@ -15,6 +15,7 @@ import { Icon, type IconName } from "../../components/Icon";
 import Skeleton from "../../components/Skeleton";
 import { useToast } from "../../components/Toast";
 import { Button } from "../../design-system/components/Button";
+import { StatusBadge } from "../../design-system/components/Status";
 import {
   SelectInput,
   TextInput,
@@ -64,13 +65,7 @@ function short(hash: string | null): string {
 function actionTone(action: string) {
   const value = action.toLowerCase();
   if (value.includes("approve")) return "success";
-  if (value.includes("execute")) return "primary";
   if (value.includes("reject") || value.includes("blocked")) return "danger";
-  return "neutral";
-}
-
-function originTone(origin: string) {
-  if (origin === "agent") return "primary";
   return "neutral";
 }
 
@@ -163,12 +158,9 @@ function AuditRow({
         />
         <span className="tw:grid tw:min-w-0 tw:gap-1">
           <span className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
-            <span
-              data-tone={actionTone(entry.action)}
-              className="badge tw:normal-case tw:data-[tone=danger]:border-danger tw:data-[tone=danger]:text-danger tw:data-[tone=primary]:border-primary tw:data-[tone=primary]:text-primary tw:data-[tone=success]:border-success tw:data-[tone=success]:text-success"
-            >
+            <StatusBadge tone={actionTone(entry.action)}>
               {auditActionLabel(t, entry.action)}
-            </span>
+            </StatusBadge>
             {entry.kind.toLowerCase() !== entry.action.toLowerCase() && (
               <span className="badge kind">{queryKindLabel(t, entry.kind)}</span>
             )}
@@ -580,19 +572,19 @@ export default function Activity({
                     >
                       <td className="tw:whitespace-nowrap tw:text-muted-foreground" title={fullTime(row.executedAt)}>{relTime(row.executedAt)}</td>
                       <td>
-                        <span data-tone={originTone(row.origin)} className="badge tw:data-[tone=primary]:border-primary tw:data-[tone=primary]:text-primary tw:data-[tone=warning]:border-warning tw:data-[tone=warning]:text-warning">{activityOriginLabel(t, row.origin)}</span>
+                        <StatusBadge>{activityOriginLabel(t, row.origin)}</StatusBadge>
                       </td>
                       <td><span className="badge kind">{queryKindLabel(t, row.kind)}</span></td>
                       <td>
-                        <span
-                          data-tone={statusTone(row.status)}
-                          className="badge icon-only-badge tw:data-[tone=danger]:border-danger tw:data-[tone=danger]:text-danger tw:data-[tone=success]:border-success tw:data-[tone=success]:text-success"
+                        <StatusBadge
+                          tone={statusTone(row.status)}
+                          iconOnly
                           title={row.errorPreview ? `${activityStatusLabel(t, row.status)}: ${row.errorPreview}` : activityStatusLabel(t, row.status)}
                           aria-label={row.errorPreview ? `${activityStatusLabel(t, row.status)}: ${row.errorPreview}` : activityStatusLabel(t, row.status)}
                           role="img"
                         >
                           <Icon name={statusIcon(row.status)} />
-                        </span>
+                        </StatusBadge>
                       </td>
                       <td className="num">{row.rowCount ?? "—"}</td>
                       <td className="num">{duration(row.durationMs)}</td>

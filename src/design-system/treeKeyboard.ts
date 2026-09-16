@@ -1,3 +1,5 @@
+// Coordinates one roving focus order across mounted and virtual Explorer tree rows.
+
 import {
   useCallback,
   useLayoutEffect,

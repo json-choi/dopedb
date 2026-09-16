@@ -51,7 +51,7 @@ export default function JobPanel({
 
   return (
     <aside
-      className="grid-panel tw:flex tw:w-[clamp(320px,32vw,480px)] tw:max-w-[44%] tw:shrink-0 tw:flex-col tw:overflow-hidden tw:rounded-none tw:border-0 tw:border-l tw:border-border-subtle tw:bg-card tw:p-0 tw:shadow-none tw:@max-[920px]:max-h-[42%] tw:@max-[920px]:w-auto tw:@max-[920px]:max-w-none tw:@max-[760px]:max-h-[44%]"
+      className="tw:flex tw:w-[clamp(320px,32vw,480px)] tw:max-w-[44%] tw:shrink-0 tw:flex-col tw:overflow-hidden tw:rounded-none tw:border-0 tw:border-l tw:border-border-subtle tw:bg-card tw:p-0 tw:shadow-none tw:@max-[920px]:max-h-[42%] tw:@max-[920px]:w-auto tw:@max-[920px]:max-w-none tw:@max-[760px]:max-h-[44%]"
       aria-label={t("jobs.title")}
     >
       <div className="tw:shrink-0 tw:border-b tw:border-border-subtle tw:px-3 tw:pt-3">

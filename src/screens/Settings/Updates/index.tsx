@@ -1,3 +1,5 @@
+// Presents updater phases, transfer progress, and the controller's available update actions.
+
 import { openUrl } from "@tauri-apps/plugin-opener";
 
 import { Icon, type IconName } from "../../../components/Icon";

@@ -1,3 +1,5 @@
+// Defines reserved connection option keys and their engine-specific validation bounds.
+
 import type {
   ConnectionEngine,
   ConnectionProfile,

@@ -1,3 +1,5 @@
+// Owns credential-dialog phase transitions and the current one-use verification receipt.
+
 import type {
   ProviderCredentialReceipt,
   ProviderCredentialDialogStatus,

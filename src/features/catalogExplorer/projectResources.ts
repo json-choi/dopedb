@@ -1,3 +1,5 @@
+// Projects and orders Project resources while preserving their exact Environment bindings.
+
 import type {
   EnvironmentConnection,
   KnowledgeEnvironment,

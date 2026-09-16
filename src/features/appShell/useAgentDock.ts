@@ -1,3 +1,5 @@
+// Persists Agent dock visibility and width while applying the shared geometry bounds.
+
 import { useCallback, useRef, useState } from "react";
 
 import {

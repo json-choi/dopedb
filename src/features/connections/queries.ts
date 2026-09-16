@@ -1,3 +1,5 @@
+// Builds scoped connection and BigQuery discovery query keys and read options.
+
 import { queryOptions } from "@tanstack/react-query";
 
 import { isTransientDbError } from "../../lib/queries";

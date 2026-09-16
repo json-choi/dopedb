@@ -1,3 +1,5 @@
+// Defines Explorer catalog error recovery, object labels, and drag-target contracts.
+
 import {
   errDetails,
   type Catalog,

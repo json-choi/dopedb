@@ -1,3 +1,5 @@
+// Routes guided-demo actions through existing catalog, Project, Agent, and Safety commands.
+
 import { useQueryClient } from "@tanstack/react-query";
 
 import { useToast } from "../../components/Toast";
