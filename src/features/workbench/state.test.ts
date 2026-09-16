@@ -70,6 +70,10 @@ import {
   connectionTestFailureTarget,
   connectionTestFailureTitle,
 } from "../connections/connectionTestFailure";
+import {
+  connectionEditorEnterCommand,
+  connectionTestResultIsCurrent,
+} from "../connections/connectionEditorInteraction";
 import { switchConnectionSource } from "../connections/connectionEditorModel";
 import {
   BIGQUERY_AUTH_MODE_PARAMETER,
@@ -858,6 +862,66 @@ describe("workbench state ownership", () => {
           "mongodb+srv://reader@cluster.example.net/app",
         )!,
       ),
+    ).toBe(false);
+
+    const ownedEnter = {
+      key: "Enter",
+      defaultPrevented: false,
+      isComposing: false,
+      busy: false,
+      editorOwnsTarget: true,
+      nestedFormOwnsTarget: false,
+      inputType: "text",
+      inputId: "connection-name",
+    };
+    expect(connectionEditorEnterCommand(ownedEnter)).toBe("save");
+    expect(
+      connectionEditorEnterCommand({
+        ...ownedEnter,
+        inputId: "connection-url",
+      }),
+    ).toBe("normalizeUrl");
+    expect(
+      connectionEditorEnterCommand({
+        ...ownedEnter,
+        editorOwnsTarget: false,
+      }),
+    ).toBeNull();
+    expect(
+      connectionEditorEnterCommand({
+        ...ownedEnter,
+        nestedFormOwnsTarget: true,
+      }),
+    ).toBeNull();
+    expect(
+      connectionEditorEnterCommand({ ...ownedEnter, isComposing: true }),
+    ).toBeNull();
+    expect(
+      connectionEditorEnterCommand({
+        ...ownedEnter,
+        inputType: "search",
+      }),
+    ).toBeNull();
+    expect(
+      connectionEditorEnterCommand({
+        ...ownedEnter,
+        inputType: "checkbox",
+      }),
+    ).toBeNull();
+    expect(
+      connectionEditorEnterCommand({
+        ...ownedEnter,
+        defaultPrevented: true,
+      }),
+    ).toBeNull();
+    expect(
+      connectionTestResultIsCurrent(2, 2, 4, 4),
+    ).toBe(true);
+    expect(
+      connectionTestResultIsCurrent(2, 3, 4, 4),
+    ).toBe(false);
+    expect(
+      connectionTestResultIsCurrent(2, 2, 4, 5),
     ).toBe(false);
 
     const bigQueryDriver: DriverDescriptor = {

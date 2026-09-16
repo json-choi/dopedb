@@ -1,6 +1,6 @@
 // Owns the editable profile draft, URL projection, connection options, and
 // local command status shared by the Connection editor controllers.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type SetStateAction } from "react";
 
 import { useToast } from "../../components/Toast";
 import { isDocumentEngine } from "../../lib/capabilities";
@@ -69,6 +69,7 @@ export function useConnectionProfileState({
   const [message, setMessage] = useState<string | null>(null);
   const [messageIsError, setMessageIsError] = useState(false);
   const [testFailure, setTestFailure] = useState<ConnectionTestIssue | null>(null);
+  const verificationRevision = useRef(0);
   const flags = connectionProfileFlags(form);
   const advancedParameters = Object.entries(form.extraParams).filter(
     ([key]) =>
@@ -80,25 +81,43 @@ export function useConnectionProfileState({
     setPortDraftState(String(form.port));
   }, [form.port]);
 
+  function invalidateVerification() {
+    verificationRevision.current += 1;
+    setMessage(null);
+    setMessageIsError(false);
+    setTestFailure(null);
+  }
+
+  function setFormValue(value: SetStateAction<ConnectionProfile>) {
+    invalidateVerification();
+    setForm(value);
+  }
+
+  function setCredentialPassword(value: SetStateAction<string>) {
+    invalidateVerification();
+    setPassword(value);
+  }
+
   function set<K extends keyof ConnectionProfile>(
     key: K,
     value: ConnectionProfile[K],
   ) {
     if (key === "name") setNameInteracted(true);
-    setForm((current) => ({ ...current, [key]: value }));
+    setFormValue((current) => ({ ...current, [key]: value }));
   }
 
   function setPortDraft(value: string) {
+    invalidateVerification();
     setPortDraftState(value);
     if (!/^\d+$/u.test(value)) return;
     const port = Number(value);
     if (Number.isSafeInteger(port) && port >= 1 && port <= 65_535) {
-      set("port", port);
+      setForm((current) => ({ ...current, port }));
     }
   }
 
   function setExtraParameter(key: string, value: string) {
-    setForm((current) => {
+    setFormValue((current) => {
       const extraParams = { ...current.extraParams };
       if (value) extraParams[key] = value;
       else delete extraParams[key];
@@ -107,7 +126,7 @@ export function useConnectionProfileState({
   }
 
   function setSrv(checked: boolean) {
-    setForm((current) => {
+    setFormValue((current) => {
       const extraParams = { ...current.extraParams };
       if (checked) extraParams.srv = "true";
       else delete extraParams.srv;
@@ -116,7 +135,7 @@ export function useConnectionProfileState({
   }
 
   function setMongoTls(checked: boolean) {
-    setForm((current) => {
+    setFormValue((current) => {
       const extraParams = { ...current.extraParams };
       if (checked) {
         extraParams.tls = "true";
@@ -136,7 +155,7 @@ export function useConnectionProfileState({
   }
 
   function setTimedConnectionOptionValue(key: string, value: string) {
-    setForm((current) => ({
+    setFormValue((current) => ({
       ...current,
       extraParams: {
         ...current.extraParams,
@@ -160,7 +179,7 @@ export function useConnectionProfileState({
     nextKey: string,
     nextValue: string,
   ) {
-    setForm((current) => {
+    setFormValue((current) => {
       const extraParams = { ...current.extraParams };
       delete extraParams[currentKey];
       if (nextKey.trim()) extraParams[nextKey] = nextValue;
@@ -169,7 +188,7 @@ export function useConnectionProfileState({
   }
 
   function addAdvancedParameter() {
-    setForm((current) => {
+    setFormValue((current) => {
       let suffix = 1;
       let key = "parameter";
       while (key in current.extraParams) {
@@ -184,7 +203,7 @@ export function useConnectionProfileState({
   }
 
   function removeAdvancedParameter(key: string) {
-    setForm((current) => {
+    setFormValue((current) => {
       const extraParams = { ...current.extraParams };
       delete extraParams[key];
       return { ...current, extraParams };
@@ -196,7 +215,7 @@ export function useConnectionProfileState({
     if (mode === "urlOnly") {
       setConnectionUrlDraft(formatConnectionUrl(form));
     }
-    setForm((current) => {
+    setFormValue((current) => {
       const extraParams = { ...current.extraParams };
       if (mode === "urlOnly") {
         extraParams[CONNECTION_INPUT_MODE_PARAMETER] = "urlOnly";
@@ -206,8 +225,6 @@ export function useConnectionProfileState({
       return { ...current, extraParams };
     });
     setConnectionInputMode(mode);
-    setMessage(null);
-    setMessageIsError(false);
   }
 
   function applyConnectionUrl(
@@ -245,8 +262,8 @@ export function useConnectionProfileState({
       id: form.id,
       secretRef: form.secretRef,
     };
-    setForm(nextForm);
-    if (parsed.password != null) setPassword(parsed.password);
+    setFormValue(nextForm);
+    if (parsed.password != null) setCredentialPassword(parsed.password);
     if (normalizeDraft) {
       setConnectionUrlDraft(formatConnectionUrl(nextForm));
     }
@@ -257,6 +274,7 @@ export function useConnectionProfileState({
   }
 
   function editConnectionUrl(raw: string) {
+    invalidateVerification();
     setConnectionUrlDraft(raw);
     applyConnectionUrl(raw, false);
   }
@@ -294,7 +312,7 @@ export function useConnectionProfileState({
   return {
     form: {
       value: form,
-      setValue: setForm,
+      setValue: setFormValue,
       set,
       nameInteracted,
       revealNameValidation: () => setNameInteracted(true),
@@ -314,7 +332,7 @@ export function useConnectionProfileState({
       pickExtraParameterFile,
     },
     identity: { isNew, setIsNew, persisted, setPersisted },
-    credentials: { password, setPassword },
+    credentials: { password, setPassword: setCredentialPassword },
     tabs: { active: activeTab, setActive: setActiveTab },
     url: {
       mode: connectionInputMode,
@@ -337,6 +355,9 @@ export function useConnectionProfileState({
       setMessageIsError,
       testFailure,
       setTestFailure,
+    },
+    verification: {
+      currentRevision: () => verificationRevision.current,
     },
   };
 }

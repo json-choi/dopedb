@@ -12,6 +12,7 @@ import {
   deleteWorkspaceConnection,
   updateWorkspaceConnection,
 } from "../workspaces/tauriAdapter";
+import { connectionTestResultIsCurrent } from "./connectionEditorInteraction";
 import type { ConnectionTab } from "./connectionEditorModel";
 import {
   connectionOperationErrorTitle,
@@ -60,10 +61,7 @@ export function useConnectionProfileController({
 }: {
   connections: ConnectionProfile[];
   onDeletedConnection: (id: string) => Promise<void>;
-  onSaved: (
-    profile: ConnectionProfile,
-    closeEditor: boolean,
-  ) => Promise<void>;
+  onSaved: (profile: ConnectionProfile, closeEditor: boolean) => Promise<void>;
   onCancel: () => void;
   profileState: ConnectionProfileState;
   catalog: ConnectionCatalogController;
@@ -73,14 +71,14 @@ export function useConnectionProfileController({
   const { t } = useI18n();
   const toast = useToast();
   const catalogScope = useCatalogScope();
-  const { form, identity, credentials, tabs: tabState, url, status } =
+  const { form, identity, credentials, tabs: tabState, url, status, verification } =
     profileState;
   const { isSharedTemplate, isMongo, isBigQuery } = form.flags;
   const [databaseDiscovery, setDatabaseDiscovery] = useState<{
-    pending: boolean;
-    databases: string[];
+    pending: boolean; databases: string[];
   }>({ pending: false, databases: [] });
   const mounted = useRef(true);
+  const testRequestId = useRef(0);
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -88,13 +86,9 @@ export function useConnectionProfileController({
     };
   }, []);
   const driverCatalog = catalog.model.driverCatalog;
-  const managedConnection = useManagedConnectionRecovery(
-    form.value,
-    catalogScope,
-  );
+  const managedConnection = useManagedConnectionRecovery(form.value, catalogScope);
   const diagnosticProfile = isSharedTemplate
-    ? { ...form.value, extraParams: {} }
-    : form.value;
+    ? { ...form.value, extraParams: {} } : form.value;
   const diagnostics = diagnoseConnection(
     diagnosticProfile,
     connections,
@@ -363,7 +357,12 @@ export function useConnectionProfileController({
       dialogs.problems.setOpen(true);
       return;
     }
-    const recordVerification = connectionVerificationRecorder(catalogScope, form.value);
+    const startedRevision = verification.currentRevision();
+    const requestId = ++testRequestId.current;
+    const recordVerification = connectionVerificationRecorder(
+      catalogScope,
+      form.value,
+    );
     status.setBusy(true);
     status.setRunning("test");
     status.setMessage(null);
@@ -377,6 +376,7 @@ export function useConnectionProfileController({
           credentials.password || undefined,
         );
       if (!mounted.current) return;
+      if (!connectionTestResultIsCurrent(startedRevision, verification.currentRevision(), requestId, testRequestId.current)) return;
       if (!receipt.ok) {
         status.setTestFailure(connectionTestIssue(receipt.failure));
         status.setMessageIsError(true);
@@ -389,6 +389,7 @@ export function useConnectionProfileController({
       recordVerification("success");
     } catch {
       if (!mounted.current) return;
+      if (!connectionTestResultIsCurrent(startedRevision, verification.currentRevision(), requestId, testRequestId.current)) return;
       status.setTestFailure({
         code: "unknown",
         field: null,
@@ -397,7 +398,7 @@ export function useConnectionProfileController({
       dialogs.problems.setOpen(true);
       recordVerification("failed");
     } finally {
-      if (mounted.current) {
+      if (mounted.current && requestId === testRequestId.current) {
         status.setBusy(false);
         status.setRunning(null);
       }
