@@ -42,6 +42,10 @@ import {
   gridCellInspection,
 } from "./decodeFailures";
 import { dataGridSelectionResetIdentity } from "./useDataGridSelectionReset";
+import {
+  accumulateDataGridNumericColumns,
+  observeDataGridNumericColumns,
+} from "./dataGridNumericColumns";
 
 const offsets = Array.from(
   { length: 51 },
@@ -161,6 +165,57 @@ describe("DataGridVirtual window", () => {
         streamIdentity,
       ).columnKey,
     );
+    expect(observeDataGridNumericColumns(2, [[null, undefined]])).toEqual([
+      "unknown",
+      "unknown",
+    ]);
+    const numericObservation = observeDataGridNumericColumns(2, [
+      [12, "1234567890.123456789"],
+    ]);
+    expect(numericObservation).toEqual(["numeric", "numeric"]);
+    expect(
+      observeDataGridNumericColumns(2, [
+        [12, "123.45"],
+        [13, "ordinary text"],
+      ]),
+    ).toEqual(["numeric", "text"]);
+    expect(
+      observeDataGridNumericColumns(3, [[Number.POSITIVE_INFINITY, {}, true]]),
+    ).toEqual(["text", "text", "text"]);
+    let numericAccumulator = {
+      identity: dataGridSelectionResetIdentity(wideResult, streamIdentity),
+      states: numericObservation,
+    };
+    numericAccumulator = accumulateDataGridNumericColumns(
+      numericAccumulator,
+      dataGridSelectionResetIdentity(wideResult, {
+        ...streamIdentity,
+        rowCount: 200,
+      }),
+      ["unknown", "unknown"],
+    );
+    expect(numericAccumulator.states).toEqual(["numeric", "numeric"]);
+    numericAccumulator = accumulateDataGridNumericColumns(
+      numericAccumulator,
+      numericAccumulator.identity,
+      ["unknown", "text"],
+    );
+    expect(numericAccumulator.states).toEqual(["numeric", "text"]);
+    numericAccumulator = accumulateDataGridNumericColumns(
+      numericAccumulator,
+      numericAccumulator.identity,
+      numericObservation,
+    );
+    expect(numericAccumulator.states).toEqual(["numeric", "text"]);
+    numericAccumulator = accumulateDataGridNumericColumns(
+      numericAccumulator,
+      dataGridSelectionResetIdentity(wideResult, {
+        ...streamIdentity,
+        operationId: "00000000-0000-0000-0000-000000000002",
+      }),
+      ["unknown", "unknown"],
+    );
+    expect(numericAccumulator.states).toEqual(["unknown", "unknown"]);
     const table = {
       database: null,
       schema: "public",

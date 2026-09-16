@@ -9,7 +9,6 @@
 // dragged column moves. Double-click resets the compact default widths.
 import {
   useEffect,
-  useMemo,
   useRef,
   useState,
   type KeyboardEvent,
@@ -49,6 +48,7 @@ import {
   firstDecodeFailureInSelection,
   gridCellInspection,
 } from "./decodeFailures";
+import { useDataGridNumericColumns } from "./dataGridNumericColumns";
 import { useDataGridSelectionReset } from "./useDataGridSelectionReset";
 
 function cell(v: unknown): string {
@@ -184,24 +184,7 @@ function DataGridTable({
   ];
   const totalW = columnWidths.reduce((total, width) => total + width, 0);
 
-  // Right-align numeric columns. NUMERIC/MONEY arrive as plain decimal strings (the
-  // Rust side serializes them lossless), so detect by value shape — and per column,
-  // not per cell, so a text column with the odd digit-only value can't render ragged.
-  const numericCols = useMemo(() => {
-    const numRe = /^-?\d+(\.\d+)?$/;
-    return result.columns.map(
-      (_, j) =>
-        result.rows.some((r) => r[j] != null) &&
-        result.rows.every((r) => {
-          const v = r[j];
-          return (
-            v == null ||
-            typeof v === "number" ||
-            (typeof v === "string" && numRe.test(v))
-          );
-        }),
-    );
-  }, [result]);
+  const numericCols = useDataGridNumericColumns({ result, rowSource });
 
   function startResize(
     e: { preventDefault(): void; stopPropagation(): void; clientX: number },
@@ -516,7 +499,7 @@ function DataGridTable({
                     key={j}
                     data-null={v === null && !decodeFailure}
                     data-decode-failure={decodeFailure ? "true" : undefined}
-                    data-numeric={numericCols[j]}
+                    data-numeric={!decodeFailure && numericCols[j]}
                     data-interactive={interactive}
                     data-selected={isSel}
                     data-focused={isFocus}

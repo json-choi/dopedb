@@ -55,6 +55,7 @@ import {
   firstDecodeFailureInSelection,
   gridCellInspection,
 } from "./decodeFailures";
+import { useDataGridNumericColumns } from "./dataGridNumericColumns";
 import { useDataGridSelectionReset } from "./useDataGridSelectionReset";
 
 const OVERSCAN = 4;
@@ -213,6 +214,19 @@ export default function DataGridVirtual(props: Props) {
     setSelection,
     setCopyError,
     setFocus,
+  });
+  const numericRows: Array<readonly unknown[]> = [];
+  if (props.rowSource) {
+    for (let row = startRow; row < endRow; row += 1) {
+      const loaded = rowAt(row);
+      if (loaded) numericRows.push(loaded);
+    }
+  }
+  const numericCols = useDataGridNumericColumns({
+    result: props.result,
+    rowSource: props.rowSource,
+    observedRows: numericRows,
+    observedColumns: visibleColumns,
   });
 
   const activate = (row: number, col: number, extend = false) => {
@@ -614,10 +628,13 @@ export default function DataGridVirtual(props: Props) {
                   data-null={value === null && !decodeFailure}
                   data-decode-failure={decodeFailure ? "true" : undefined}
                   data-loading={loading}
+                  data-numeric={
+                    !loading && !decodeFailure && numericCols[columnIndex]
+                  }
                   data-interactive={interactive}
                   data-selected={selected}
                   data-focused={focused}
-                  className="tw:group-data-[selected=true]:!bg-selection tw:data-[null=true]:text-muted-foreground tw:data-[null=true]:italic tw:data-[decode-failure=true]:text-danger tw:data-[loading=true]:text-muted-foreground tw:data-[interactive=true]:cursor-pointer tw:data-[selected=true]:!bg-selection tw:data-[focused=true]:shadow-[inset_0_0_0_var(--ds-border-width-strong)_var(--ds-ring)]"
+                  className="tw:group-data-[selected=true]:!bg-selection tw:data-[null=true]:text-muted-foreground tw:data-[null=true]:italic tw:data-[decode-failure=true]:text-danger tw:data-[loading=true]:text-muted-foreground tw:data-[numeric=true]:text-right tw:data-[numeric=true]:tabular-nums tw:data-[interactive=true]:cursor-pointer tw:data-[selected=true]:!bg-selection tw:data-[focused=true]:shadow-[inset_0_0_0_var(--ds-border-width-strong)_var(--ds-ring)]"
                   role="gridcell"
                   aria-colindex={columnIndex + 2}
                   aria-selected={selected}
