@@ -110,6 +110,11 @@ cluster가 더 악화되는 것을 막는다. `pnpm audit:code-structure`의 전
 아니며 내부 import 왕복만 늘리는 작은 sibling은 다시 합칠 수 있다. 분리·재결합
 판단표는 [`docs/CODE_STRUCTURE.md`](docs/CODE_STRUCTURE.md)를 따른다.
 
+`pnpm check:role-comments`는 45줄이 넘는 `src/` TS/TSX 파일이 import 앞에 역할
+주석을 두는지 형식만 검사한다. 주석이 파일의 실제 책임을 맞게 설명하는지는
+검사기가 판정할 수 없으므로 리뷰에서 확인한다. 예외 목록과 Rust `//!` 규칙과의
+차이는 [`docs/CODE_STRUCTURE.md`](docs/CODE_STRUCTURE.md)가 소유한다.
+
 ## UI 변경
 
 TSX, CSS, Tailwind, layout을 수정하기 전에

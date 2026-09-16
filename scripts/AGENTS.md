@@ -21,6 +21,7 @@ root `AGENTS.md` GitHub identity and release sections).
 | `check-architecture.mjs` | Runs the split architecture guard collectors (see `architecture/AGENTS.md`) as one CI contract over a deterministic repository view. | `check:architecture` |
 | `check-code-structure.mjs` | Runs the full repository code-structure audit and the CI ratchet against `docs/architecture/code-structure-baseline.json`. | `check:code-structure`, `audit:code-structure` |
 | `check-critical-test-budget.mjs` | Enforces the repository's fixed 208-test critical-suite budget. | `check:test-budget` |
+| `check-role-comments.mjs` | Format gate for the CLAUDE.md rule that a `src/` TS/TSX file over 45 lines opens with a role comment; exempts short, test, `.d.ts`, and generated files, and cannot judge whether a header is accurate. | `check:role-comments` |
 | `check-site-deployment.mjs` | Verifies the requested site Worker version has 100% traffic and matches the live production domain. | `site:cloud:verify-deployment` |
 | `check-ui-palette.mjs` | Scans `src/` for raw colors outside the design-system semantic token contract. | `check:ui-palette` |
 | `check-ui-primitives.mjs` | Scans Desktop, Workspace Web, and site frontend roots for unnamed icon-only controls and inconsistent fixed-density form geometry. | `check:ui-primitives` |

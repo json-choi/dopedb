@@ -204,6 +204,11 @@ control에는 실제 command와 state owner가 있어야 한다.
   보고 baseline 변경 전에 직접 검토한다. 300줄은 강제 분리 한도가 아니라
   응집도 검토 기준이며, 내부 왕복만 늘리는 작은 sibling은 다시 합칠 수 있다.
   상세 판단은 `docs/CODE_STRUCTURE.md`를 따른다.
+- `pnpm check:role-comments`: 45줄이 넘는 `src/` TS/TSX 파일이 import 앞에 역할
+  주석을 두는지 **형식만** 검사한다. 주석 내용이 실제 책임과 맞는지는 판정할 수
+  없으므로 정확성은 코드 리뷰가 소유한다. 짧은 파일, test, `*.d.ts`, 생성 파일은
+  예외이며 목록은 `docs/CODE_STRUCTURE.md`가 소유한다. Rust `//!` 규칙은 줄 수
+  조건이 없는 별도 규칙이라 이 검사기가 다루지 않는다.
 
 명령을 실행하려면 전제 조건 세 가지가 필요하다. pnpm은 `packageManager`가
 고정한 11.25.0을 `corepack enable`로 PATH에 두거나 `corepack pnpm ...`으로

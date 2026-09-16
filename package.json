@@ -21,6 +21,7 @@
     "check:architecture": "node scripts/check-architecture.mjs",
     "check:code-structure": "node scripts/check-code-structure.mjs",
     "audit:code-structure": "node scripts/check-code-structure.mjs --audit",
+    "check:role-comments": "node scripts/check-role-comments.mjs",
     "check:ui-primitives": "node scripts/check-ui-primitives.mjs",
     "check:ui-palette": "node scripts/check-ui-palette.mjs",
     "check:test-budget": "node scripts/check-critical-test-budget.mjs",

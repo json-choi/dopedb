@@ -252,6 +252,11 @@ Run checks proportional to the change:
   the full ranked review before changing its baseline. The 300-line mark starts
   a cohesion review rather than forcing a split; merge tiny siblings when they
   only add internal hops. Follow [`docs/CODE_STRUCTURE.md`](docs/CODE_STRUCTURE.md).
+- `pnpm check:role-comments` checks only the *format* of the rule that a `src/`
+  TS/TSX file over 45 lines opens with a role comment. It cannot tell whether a
+  header describes the file truthfully, so accuracy stays a code-review judgement.
+  Short, test, `*.d.ts`, and generated files are exempt; `docs/CODE_STRUCTURE.md`
+  owns that list. The Rust `//!` rule has no line threshold and is not checked here.
 
 The repository has a hard budget of 208 critical tests. Add a test only for a
 security/safety invariant, public wire contract, or core end-to-end journey.

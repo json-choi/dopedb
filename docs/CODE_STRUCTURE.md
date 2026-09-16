@@ -141,6 +141,32 @@ baseline은 다음 경우에만 갱신한다.
 `--print-baseline`은 검토용 후보를 stdout에 출력한다. 결과를 자동으로 덮어쓰지
 않는 이유는 구조 회귀를 수치 갱신으로 숨기지 않기 위해서다.
 
+## 역할 주석 검사
+
+```bash
+pnpm check:role-comments
+pnpm check:role-comments -- --audit
+```
+
+`src/`의 TS/TSX 파일이 45줄을 넘으면 import 앞에 역할 주석이 있어야 한다는
+`CLAUDE.md` 규칙의 **형식**만 검사한다. 첫 줄이 주석인지만 확인하므로 주석이
+파일의 실제 책임을 맞게 설명하는지는 판정할 수 없고, 그 정확성은 코드 리뷰가
+소유한다. 라이선스 헤더처럼 설명이 아닌 주석도 형식 검사는 통과한다.
+
+다음은 의도된 예외이며 검사 대상이 아니다.
+
+- 45줄 이하 파일. 파일 전체가 곧 설명이다.
+- `*.test.*`, `*.spec.*`, `*.harness.*`, `__tests__/`. 의도가 case 이름에 있다.
+- `*.d.ts` ambient 선언. 동작을 소유하지 않는다.
+- `gen/`·`generated/` 경로와 `@generated` 계열 marker가 있는 파일. 손으로 쓴
+  헤더가 재생성 때 지워진다.
+
+`"use client"` 같은 directive prologue는 첫 statement 자리를 지켜야 하므로 주석이
+그 뒤에 와도 통과한다.
+
+Rust 규칙은 다르다. `src-tauri`의 모든 모듈은 줄 수와 무관하게 `//!` 헤더를
+두므로 임계값도 예외 목록도 없고, 이 검사기가 다루지 않는다.
+
 ## 변경 검증
 
 구조 변경은 동작 변경과 같은 수준으로 검증한다.
@@ -148,7 +174,8 @@ baseline은 다음 경우에만 갱신한다.
 - TypeScript/TSX: `pnpm lint:hooks`, `pnpm build`, 관련 smoke test
 - Rust: `cargo fmt --all -- --check`, 관련 package test 또는 `pnpm test:rust`
 - UI projection: 기존 화면의 command, 접근성 이름, focus, responsive 상태 수동 확인
-- 모든 코드 변경: `pnpm check:code-structure`, `graphify update .`
+- 모든 코드 변경: `pnpm check:code-structure`, `pnpm check:role-comments`,
+  `graphify update .`
 
 파일 수 감소나 평균 줄 수 감소는 완료 증거가 아니다. 공개 API, dependency 방향,
 single-writer 상태, 테스트 결과가 유지되고 탐색 경로가 짧아졌을 때 완료다.
