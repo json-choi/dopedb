@@ -1014,7 +1014,6 @@ glyph를 표시한다. disabled 버튼에는 hover 색상을 적용하지 않으
 
 - `.card` / `.ds-card`: 반복 항목과 작은 정보 그룹
 - `.ds-panel`: 넓은 작업 surface
-- `.grid-panel`: job 결과 surface
 - `[data-data-grid-scroll]`: Tailwind로 구성하는 표·쿼리 결과 surface
 
 Surface는 기본적으로 `card + border + rounded-lg + no shadow`다. floating surface만
@@ -1073,7 +1072,6 @@ variant를 추가하고 이 문서에 기록한다.
 
 Toolbar:
 
-- `.ds-toolbar-spacer`
 - `.ds-control-row`
 - `ToolbarMenu`, `.ds-menu-popover`, `.ds-menu-item`
 

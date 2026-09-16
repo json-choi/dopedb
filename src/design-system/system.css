@@ -135,13 +135,6 @@ h3 {
   padding: var(--ds-space-4);
 }
 
-.grid-panel {
-  background: var(--ds-surface-0);
-  border: var(--ds-border-width) solid var(--ds-border-subtle);
-  border-radius: var(--ds-radius-lg);
-  box-shadow: var(--ds-shadow-panel);
-}
-
 .badge {
   max-width: 100%;
   min-width: 0;
@@ -259,11 +252,6 @@ h3 {
     --ds-control-local-size,
     var(--ds-row-control-size, var(--ds-control-field))
   );
-}
-
-.ds-toolbar-spacer {
-  flex: 1;
-  min-width: var(--ds-space-3);
 }
 
 .ds-tone-trust {
