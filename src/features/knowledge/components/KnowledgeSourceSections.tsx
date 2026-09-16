@@ -90,7 +90,7 @@ export function KnowledgeConnectSourceSection({
     <section data-primary-flow className="tw:grid tw:gap-4 tw:border-b tw:border-border-subtle tw:pb-5">
       <div className="tw:flex tw:min-w-0 tw:flex-wrap tw:items-start tw:justify-between tw:gap-3">
         <div className="tw:grid tw:gap-1">
-          <h2 className="tw:m-0 tw:text-base tw:font-semibold">
+          <h2>
             {t("knowledge.connectSource")}
           </h2>
           <p className="tw:m-0 tw:text-sm tw:text-muted-foreground">
@@ -305,7 +305,7 @@ export function KnowledgeSourceInventory({
   return (
     <section className="tw:grid tw:gap-3">
       <div className="tw:flex tw:items-center tw:justify-between tw:gap-3">
-        <h2 className="tw:m-0 tw:text-base tw:font-semibold">
+        <h2>
           {t("knowledge.sources")}
         </h2>
         <Button

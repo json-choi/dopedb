@@ -22,6 +22,7 @@ import {
 } from "../sqlDocuments/domain";
 import { tauriSqlDocumentGateway } from "../sqlDocuments/tauriAdapter";
 import type { WorkbenchDocument } from "../workbench/domain";
+import { SectionTitle } from "../../design-system/components/Typography";
 
 type SqlWorkbenchDocument = Extract<WorkbenchDocument, { kind: "sql" }>;
 
@@ -288,9 +289,11 @@ export default function LocalHistoryToolWindow({
           )}
         </section>
         <section className="tw:flex tw:flex-col">
-          <h2 className="tw:m-0 tw:px-2 tw:py-1 tw:text-xs tw:font-semibold tw:text-muted-foreground">
-            {t("localHistory.files")}
-          </h2>
+          <div className="tw:px-2 tw:py-1">
+            <SectionTitle level={2} role="group">
+              {t("localHistory.files")}
+            </SectionTitle>
+          </div>
           <div className="tw:min-h-0 tw:flex-1 tw:overflow-auto tw:p-1">
             {filteredDocuments.map((document) => (
               <button

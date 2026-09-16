@@ -117,7 +117,7 @@ export function ProjectSetupDialog({
             </p>
 
             <section className="tw:grid tw:gap-2">
-              <h2 className="tw:m-0 tw:text-sm tw:font-semibold tw:text-foreground">
+              <h2>
                 {t("connections.projects")}
               </h2>
               <Field label={t("connections.projectName")}>
@@ -133,7 +133,7 @@ export function ProjectSetupDialog({
             </section>
 
             <section className="tw:grid tw:gap-3 tw:border-t tw:border-border-subtle tw:pt-4">
-              <h2 className="tw:m-0 tw:text-sm tw:font-semibold tw:text-foreground">
+              <h2>
                 {t("connections.firstEnvironment")}
               </h2>
               <div className="tw:grid tw:grid-cols-2 tw:gap-3 tw:@max-[520px]:grid-cols-1">

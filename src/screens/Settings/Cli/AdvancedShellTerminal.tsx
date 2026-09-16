@@ -34,6 +34,7 @@ import {
 import { errMessage } from "../../../ipc/types";
 import { useI18n } from "../../../lib/i18n";
 import { useCatalogScope } from "../../../lib/queries";
+import { SectionTitle } from "../../../design-system/components/Typography";
 
 const BUFFER_LIMIT_BYTES = 512 * 1024;
 
@@ -68,9 +69,9 @@ export function AdvancedShellTerminalLauncher({
       <div className="tw:flex tw:items-start tw:gap-3">
         <Icon name="terminal" className="tw:mt-0.5 tw:shrink-0 tw:text-muted-foreground" />
         <div className="tw:min-w-0 tw:flex-1">
-          <h3 className="tw:m-0 tw:text-sm tw:font-semibold">
+          <SectionTitle level={3} role="section">
             {t("terminal.title")}
-          </h3>
+          </SectionTitle>
           <p className="tw:mt-1 tw:mb-0 tw:max-w-[620px] tw:text-sm tw:leading-body tw:text-muted-foreground">
             {t("terminal.description")}
           </p>

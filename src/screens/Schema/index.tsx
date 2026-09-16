@@ -36,6 +36,7 @@ import {
   filterCatalogOverview,
   filterCatalogSnapshot,
 } from "../../features/catalogExplorer/scopeFilter";
+import { SectionTitle } from "../../design-system/components/Typography";
 
 const ErdCanvas = lazy(() => import("../../features/erd/ErdCanvas"));
 
@@ -306,9 +307,9 @@ export default function SchemaExplorer({
                 <>
                   <div className="tw:flex tw:items-start tw:justify-between tw:gap-3">
                     <div className="tw:grid tw:min-w-0 tw:gap-1">
-                      <h3 className="tw:mt-0 tw:text-foreground tw:normal-case tw:tracking-normal">
+                      <SectionTitle level={3} role="section">
                         {relationDisplayName(selected.object)}
-                      </h3>
+                      </SectionTitle>
                       <span
                         className="badge"
                         title={t("schema.columnCount", {

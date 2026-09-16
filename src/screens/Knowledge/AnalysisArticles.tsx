@@ -246,7 +246,7 @@ function ArticleDocument({
     <AnalysisArticleReader article={article} projectName={projectName} source={source} connectionName={connectionLabel} runAction={runAction}>
       <section data-article-saved-query tabIndex={-1} className="tw:grid tw:scroll-mt-8 tw:gap-3 tw:border-t tw:border-border-subtle tw:pt-6 tw:outline-none">
         <div className="tw:flex tw:flex-wrap tw:items-center tw:justify-between tw:gap-2">
-          <h2 className="tw:m-0 tw:text-sm tw:font-semibold">{t("analysis.savedQuery")}</h2>
+          <h2>{t("analysis.savedQuery")}</h2>
           <span className="tw:text-xs tw:text-muted-foreground">{connectionLabel}</span>
         </div>
         <pre className="tw:m-0 tw:max-h-72 tw:overflow-auto tw:rounded-md tw:border tw:border-border-subtle tw:bg-card tw:p-4 tw:text-xs tw:leading-relaxed"><code>{query.sql}</code></pre>
@@ -254,7 +254,7 @@ function ArticleDocument({
 
       <section className="tw:grid tw:gap-3 tw:border-t tw:border-border-subtle tw:pt-5">
         <div className="tw:flex tw:flex-wrap tw:items-center tw:justify-between tw:gap-2">
-          <h2 className="tw:m-0 tw:text-sm tw:font-semibold">{t("analysis.latestLocalResult")}</h2>
+          <h2>{t("analysis.latestLocalResult")}</h2>
           {ranAt ? <time className="tw:text-xs tw:text-muted-foreground" dateTime={ranAt}>{new Date(ranAt).toLocaleString()}</time> : null}
         </div>
         {resultLoading ? <LoadingLabel>{t("analysis.runningQuery")}</LoadingLabel> : null}
@@ -306,7 +306,7 @@ function HistoryView({
     <div className="scrollbar-sleek tw:mx-auto tw:grid tw:h-full tw:w-full tw:max-w-[1000px] tw:content-start tw:gap-8 tw:overflow-auto tw:p-8">
       <h1 className="tw:m-0 tw:font-serif tw:text-4xl tw:font-normal">{t("analysis.tabHistory")}</h1>
       <section className="tw:grid tw:gap-2">
-        <h2 className="tw:m-0 tw:text-sm tw:font-semibold">{t("analysis.revisions")}</h2>
+        <h2>{t("analysis.revisions")}</h2>
         {revisions.map((revision) => (
           <div className="tw:flex tw:items-center tw:gap-3 tw:rounded-md tw:border tw:border-border-subtle tw:p-3" key={revision.revision}>
             <strong className="tw:font-mono tw:text-xs">r{revision.revision}</strong>
@@ -315,7 +315,7 @@ function HistoryView({
         ))}
       </section>
       <section className="tw:grid tw:gap-2">
-        <h2 className="tw:m-0 tw:text-sm tw:font-semibold">{t("analysis.runs")}</h2>
+        <h2>{t("analysis.runs")}</h2>
         {runs.map((run) => (
           <div className="tw:flex tw:items-center tw:gap-3 tw:rounded-md tw:border tw:border-border-subtle tw:p-3" key={run.id}>
             <StatusBadge density="compact" tone={run.state === "succeeded" ? "success" : run.state === "failed" ? "danger" : "neutral"}>{runStateLabel(t, run.state)}</StatusBadge>

@@ -47,6 +47,7 @@ import {
   prepareProviderProvisioningRepair,
   reconcileProviderProvisioning,
 } from "./tauriAdapter";
+import { SectionTitle } from "../../design-system/components/Typography";
 
 const actionKey: Record<ProvisioningAction, I18nKey> = {
   bindProviderRole: "managedAccess.action.bindProviderRole",
@@ -411,7 +412,7 @@ export function ManagedAccessDialog({
           <main className="tw:min-h-0 tw:min-w-0 tw:overflow-y-auto tw:bg-background tw:[container-type:inline-size]">
             <div className="tw:mx-auto tw:grid tw:w-full tw:max-w-[760px] tw:gap-5 tw:p-5 tw:@max-[560px]:p-4">
               <div>
-                <h2 className="tw:m-0 tw:text-base tw:font-semibold">{t("managedAccess.title")}</h2>
+                <h2>{t("managedAccess.title")}</h2>
                 <p id="managed-access-description" className="tw:mt-1 tw:mb-0 tw:text-sm tw:leading-body tw:text-muted-foreground">
                   {t("managedAccess.description")}
                 </p>
@@ -432,9 +433,9 @@ export function ManagedAccessDialog({
               {selectedStatus && !plan ? (
                 <section className="tw:grid tw:gap-3" aria-labelledby="managed-access-login">
                   <div className="tw:flex tw:min-w-0 tw:items-center tw:gap-2 tw:border-b tw:border-border-subtle tw:pb-2">
-                    <h3 id="managed-access-login" className="tw:m-0 tw:min-w-0 tw:flex-1 tw:text-sm tw:font-semibold">
+                    <SectionTitle level={3} role="section" grow id="managed-access-login">
                       {providerLabel(selectedStatus.provider)} · {selectedStatus.prerequisiteName}
-                    </h3>
+                    </SectionTitle>
                     <StatusBadge tone={readinessTone(selectedStatus)}>
                       {t(readinessKey[selectedStatus.readiness])}
                     </StatusBadge>
@@ -457,9 +458,9 @@ export function ManagedAccessDialog({
 
               {selectedStatus?.readiness === "ready" && !plan ? (
                 <section className="tw:grid tw:gap-3" aria-labelledby="managed-access-target">
-                  <h3 id="managed-access-target" className="tw:m-0 tw:text-sm tw:font-semibold">
+                  <SectionTitle level={3} role="section" id="managed-access-target">
                     {t("managedAccess.target")}
-                  </h3>
+                  </SectionTitle>
                   {targets === null ? (
                     <div>
                       <Button size="compact" onClick={() => void discover()} disabled={pending !== null}>
@@ -506,9 +507,9 @@ export function ManagedAccessDialog({
                   <div className="tw:flex tw:min-w-0 tw:items-start tw:gap-3 tw:border-b tw:border-border-subtle tw:pb-3">
                     <Icon name="shield" className="tw:mt-0.5 tw:text-info" />
                     <div className="tw:grid tw:min-w-0 tw:flex-1 tw:gap-0.5">
-                      <h3 id="managed-access-plan" className="tw:m-0 tw:truncate tw:text-sm tw:font-semibold">
+                      <SectionTitle level={3} role="section" truncate id="managed-access-plan">
                         {plan.targetDisplayName}
-                      </h3>
+                      </SectionTitle>
                       <span className="tw:truncate tw:text-xs tw:text-muted-foreground">{plan.targetDetail}</span>
                     </div>
                     <StatusBadge tone={planTone(plan)}>{t(stateKey[plan.state])}</StatusBadge>

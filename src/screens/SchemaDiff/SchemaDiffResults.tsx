@@ -5,6 +5,7 @@ import { Icon } from "../../components/Icon";
 import { WorkbenchScrollBody } from "../../design-system/components/Workbench";
 import { useI18n, type I18nKey } from "../../lib/i18n";
 import type { SchemaDiffStatus, SchemaObjectDiff, SchemaObjectType } from "../../lib/schemaDiff";
+import { SectionTitle } from "../../design-system/components/Typography";
 
 const OBJECT_LABELS: Record<SchemaObjectType, I18nKey> = {
   table: "schemaDiff.objectTable",
@@ -40,16 +41,18 @@ export function SchemaDiffResults({ objects }: { objects: SchemaObjectDiff[] }) 
           : null;
         return (
           <section key={table} aria-label={table} className="tw:shrink-0">
-            <h3 className="tw:m-0 tw:flex tw:items-start tw:gap-2 tw:border-b tw:border-border-subtle tw:bg-muted tw:px-3 tw:py-2 tw:text-sm tw:font-medium tw:normal-case tw:tracking-normal">
+            <div className="tw:flex tw:items-start tw:gap-2 tw:border-b tw:border-border-subtle tw:bg-muted tw:px-3 tw:py-2">
               <Icon name="table" className="tw:mt-0.5 tw:shrink-0 tw:text-muted-foreground" />
-              <code className="tw:min-w-0 tw:flex-1 tw:select-text tw:font-mono tw:font-normal tw:[overflow-wrap:anywhere]">{table}</code>
+              <SectionTitle level={3} role="section" grow>
+                <code className="tw:select-text tw:font-mono tw:font-normal tw:[overflow-wrap:anywhere]">{table}</code>
+              </SectionTitle>
               {relation ? (
                 <>
                   <span className="tw:shrink-0 tw:text-xs tw:text-muted-foreground">{t(OBJECT_LABELS[relation.objectType])}</span>
                   <DiffStatus status={relation.status} />
                 </>
               ) : null}
-            </h3>
+            </div>
             {relation ? null : members.map((object) => (
               <div key={object.id} className="tw:border-b tw:border-border-subtle tw:px-3 tw:py-2">
                 <div className="tw:flex tw:items-start tw:gap-2">

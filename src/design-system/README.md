@@ -225,6 +225,28 @@ color를 거부한다.
 - 큰 제목은 `-0.02em`, 패널 제목은 `-0.01em` tracking을 사용한다.
 - 데이터 숫자는 `font-variant-numeric: tabular-nums`를 사용한다.
 
+### 제목 역할
+
+제목의 문서 rank와 시각 역할은 별개의 결정이다. 역할은 아래 네 가지뿐이며
+화면에서 크기·weight·대소문자 조합을 새로 만들지 않는다.
+
+| 역할 | 값 | 기본 rank |
+| --- | --- | --- |
+| screen | 23px / 700 / `-0.02em` | `h1` |
+| panel | 17px / 600 / `-0.01em` / tight | `h2` |
+| section | 13px / 600 / normal case / ui | 없음 |
+| group | 12px / 700 / uppercase / `0.05em` / muted | `h3` |
+
+`system.css`의 `h1`·`h2`·`h3` 선언이 기본 rank의 역할을 소유하므로, 기본 역할을
+그대로 쓰는 제목은 className 없이 해당 태그만 쓴다. rank와 역할이 달라야 하는
+제목만
+[`SectionTitle`](components/Typography.tsx)로 `level`과 `role`을 따로 지정한다.
+`grow`와 `truncate`만 배치 prop으로 받고, 그 밖의 배치는 부모가 소유한다.
+
+Article reader의 serif 문서 scale(제목 36–64px, 본문 h2/h3 28px·23px)은 이 chrome
+scale과 분리된 별도 역할이며 `AnalysisArticleBody`와 `AnalysisArticleReader`가
+소유한다.
+
 ## Radius와 elevation
 
 compact control과 dialog의 radius를 역할별 scale로 표현한다. 작업 pane은 평평한 경계를 사용한다.

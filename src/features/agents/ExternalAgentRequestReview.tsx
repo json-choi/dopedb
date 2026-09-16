@@ -37,7 +37,7 @@ export function ExternalAgentStartReview({
   return (
     <div className="tw:grid tw:min-w-0 tw:grid-cols-[minmax(0,1fr)] tw:gap-4 tw:[overflow-wrap:anywhere]">
       <div>
-        <h2 className="tw:m-0 tw:text-base tw:font-semibold">
+        <h2>
           {review.project?.name ?? request.config.projectId}
         </h2>
         <p className="tw:mt-1 tw:mb-0 tw:text-sm tw:text-muted-foreground">

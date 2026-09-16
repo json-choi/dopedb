@@ -3,6 +3,7 @@ import { Icon } from "../../../components/Icon";
 import { Button } from "../../../design-system/components/Button";
 import { EnvironmentBadge } from "../../../design-system/components/EnvironmentBadge";
 import { InlineNotice } from "../../../design-system/components/Status";
+import { SectionTitle } from "../../../design-system/components/Typography";
 import { useI18n } from "../../../lib/i18n";
 import type {
   KnowledgeEnvironment,
@@ -44,9 +45,9 @@ export function KnowledgeWorkspaceHeader({
           name={view === "databases" ? "database" : "branch"}
           className="tw:shrink-0 tw:text-muted-foreground"
         />
-        <h1 className="tw:m-0 tw:min-w-0 tw:truncate tw:text-base tw:font-semibold tw:tracking-tight">
+        <SectionTitle level={1} truncate>
           {title}
-        </h1>
+        </SectionTitle>
         {project && environment ? (
           <span className="tw:min-w-0 tw:truncate tw:text-xs tw:text-muted-foreground">
             {project.name} / {environment.name}

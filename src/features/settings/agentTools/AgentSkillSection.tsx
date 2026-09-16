@@ -20,6 +20,7 @@ import {
 } from "../../skills/presentation";
 import { skillConflictLabel, skillReasonLabel } from "./model";
 import type { AgentToolsController } from "./useAgentToolsController";
+import { SectionTitle } from "../../../design-system/components/Typography";
 
 interface AgentSkillSectionProps {
   controller: AgentToolsController;
@@ -88,9 +89,9 @@ export function AgentSkillSection({ controller }: AgentSkillSectionProps) {
                     <AgentProviderMark
                       provider={target.target === "codex" ? "codex" : "claude"}
                     />
-                    <h3 className="tw:m-0 tw:text-title tw:leading-ui tw:font-bold tw:tracking-normal tw:text-foreground tw:normal-case">
+                    <SectionTitle level={3}>
                       {target.displayName}
-                    </h3>
+                    </SectionTitle>
                   </div>
                 }
                 details={
