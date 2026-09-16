@@ -12,6 +12,7 @@ import { workspaceMessages } from "../../lib/workspace-messages";
 import { useWorkspaceLocale } from "../components/WorkspaceLocale";
 import { localizedProviderMessage } from "../../lib/workspace-provider-copy";
 
+type LoadState = "pending" | "ready" | "failed";
 type WorkspaceMember = {
   id: string;
   userId: string;
@@ -31,6 +32,7 @@ export function WorkspaceAccessPanel({ workspaceId }: { workspaceId: string }) {
   const locale = useWorkspaceLocale();
   const copy = workspaceMessages[locale].members;
   const roleLabel: Record<string, string> = copy.roles;
+  const [membersState, setMembersState] = useState<LoadState>("pending");
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [invitations, setInvitations] = useState<PendingInvitation[]>([]);
   const [email, setEmail] = useState("");
@@ -53,20 +55,26 @@ export function WorkspaceAccessPanel({ workspaceId }: { workspaceId: string }) {
           ? localizedProviderMessage(body.error, locale, copy.loadError)
           : copy.loadError,
       );
+      setMembersState("failed");
       return;
     }
     const body = await response.json().catch(() => null);
+    // A reply that arrives after the workspace changed must not be applied.
+    if (signal?.aborted) return;
     if (!body || !Array.isArray(body.members) || !Array.isArray(body.invitations)) {
       setError(copy.shapeError);
+      setMembersState("failed");
       return;
     }
     setError("");
     setMembers(body.members);
     setInvitations(body.invitations);
+    setMembersState("ready");
   }, [copy, locale, workspaceId]);
 
   useEffect(() => {
     const controller = new AbortController();
+    setMembersState("pending");
     void load(controller.signal);
     return () => controller.abort();
   }, [load]);
@@ -198,6 +206,16 @@ export function WorkspaceAccessPanel({ workspaceId }: { workspaceId: string }) {
         </small>
       </header>
       <div className="tw:grid tw:border-t tw:border-border">
+        {membersState !== "ready" ? (
+          <p className="tw:m-0 tw:border-b tw:border-border tw:py-5 tw:text-2xs tw:text-muted-foreground">
+            {membersState === "pending" ? copy.loading : copy.unavailable}
+          </p>
+        ) : null}
+        {membersState === "ready" && members.length === 0 ? (
+          <p className="tw:m-0 tw:border-b tw:border-border tw:py-5 tw:text-2xs tw:text-muted-foreground">
+            {copy.empty}
+          </p>
+        ) : null}
         {members.map((item) => (
           <div
             className="tw:flex tw:flex-wrap tw:items-center tw:justify-between tw:gap-3 tw:border-b tw:border-border tw:py-2.5"
