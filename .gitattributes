@@ -3,3 +3,8 @@
 /skills/dopedb-cli/** text eol=lf
 /src-tauri/resources/skills/*.json text eol=lf
 /scripts/generate-skill-bundle.mjs text eol=lf
+
+# The loopback document embeds the browser script verbatim and is compared byte
+# for byte before packaging. Preserve both inputs and output on Windows too.
+/src/features/workspaces/desktopLoginPage.js text eol=lf
+/src-tauri/src/features/workspaces/adapters/desktop_login/page.html text eol=lf

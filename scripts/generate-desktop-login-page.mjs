@@ -24,7 +24,9 @@ try {
   const css = compiler.build(candidates);
   const script = await readFile(new URL("../src/features/workspaces/desktopLoginPage.js", import.meta.url), "utf8");
   html = "<!doctype html>" + html.replace("</head>", `<style>${css}</style></head>`)
-    .replace("</body>", `<script>${script}</script></body>`);
+    .replace("</body>", `<script>${script}</script></body>`)
+    // CSS custom-property values and the script retain checkout line endings.
+    .replace(/\r\n/g, "\n");
   const output = new URL("../src-tauri/src/features/workspaces/adapters/desktop_login/page.html", import.meta.url);
   if (process.argv.includes("--check")) {
     if (await readFile(output, "utf8") !== html) throw new Error("Desktop login page is stale; run node scripts/generate-desktop-login-page.mjs");
