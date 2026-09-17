@@ -1606,7 +1606,7 @@ dependencies = [
 
 [[package]]
 name = "dopedb"
-version = "0.4.40"
+version = "0.4.41"
 dependencies = [
  "agent-client-protocol",
  "base64 0.23.1",
@@ -1670,7 +1670,7 @@ dependencies = [
 
 [[package]]
 name = "dopedb-cli"
-version = "0.4.40"
+version = "0.4.41"
 dependencies = [
  "chrono",
  "clap",

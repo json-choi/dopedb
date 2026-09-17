@@ -20,7 +20,9 @@ jobs:
   analyze:
     name: codeql-${{ matrix.language }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # Rust also bundles its full analysis database after uploading SARIF results.
+    # Keep that evidence step enabled without cutting it off at the scan budget.
+    timeout-minutes: ${{ matrix.language == 'rust' && 45 || 20 }}
     strategy:
       fail-fast: false
       matrix:
