@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 
 use dopedb_protocol::{Constraint, ConstraintKind, IndexKey, SortDirection};
 use sqlparser::{
-    ast::{ColumnOption, Expr, Statement, TableConstraint},
+    ast::{ColumnOption, Expr, OrderBySort, Statement, TableConstraint},
     dialect::SQLiteDialect,
     parser::Parser,
 };
@@ -417,13 +417,11 @@ fn parse_index_ddl(sql: &str) -> IndexDdlMetadata {
                 IndexKey {
                     column: name,
                     expression,
-                    direction: column.column.options.asc.map(|asc| {
-                        if asc {
-                            SortDirection::Asc
-                        } else {
-                            SortDirection::Desc
-                        }
-                    }),
+                    direction: match column.column.options.sort {
+                        Some(OrderBySort::Asc) => Some(SortDirection::Asc),
+                        Some(OrderBySort::Desc) => Some(SortDirection::Desc),
+                        Some(OrderBySort::Using(_)) | None => None,
+                    },
                 }
             })
             .collect(),

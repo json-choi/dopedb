@@ -14,7 +14,7 @@ files require the repository owner's review (see `CODEOWNERS`), matching root
 |------|-------------|
 | `CODEOWNERS` | Requires the repository owner's review for `/.github/`, `AGENTS.md`, `CLAUDE.md`, `CONTRIBUTING.md`, `package.json`, `Cargo.lock`, and `src-tauri`'s `Cargo.toml`/`tauri*.json`. |
 | `SECURITY.md` | Owns the vulnerability-reporting policy: private GitHub advisories only, security fixes applied to latest stable and `main`. |
-| `dependabot.yml` | Weekly grouped update schedules for GitHub Actions and every npm/Cargo project in the repo (root, `workspace-cloud`, `site`, `product-analytics-cloudflare`, `workspace-scheduler-cloudflare`, `agent-runtime/plugins`, and Cargo). |
+| `dependabot.yml` | Security-only grouped updates (`open-pull-requests-limit: 0`) for GitHub Actions and every npm/Cargo project in the repo (root, `workspace-cloud`, `site`, `product-analytics-cloudflare`, `workspace-scheduler-cloudflare`, `agent-runtime/plugins`, and Cargo). |
 
 ## Subdirectories
 | Directory | Purpose |

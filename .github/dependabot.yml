@@ -2,6 +2,8 @@ version: 2
 updates:
   - package-ecosystem: github-actions
     directory: /
+    # Disable routine version PRs; security updates remain enabled.
+    open-pull-requests-limit: 0
     schedule:
       interval: weekly
     labels:
@@ -10,11 +12,14 @@ updates:
       prefix: chore(actions)
     groups:
       github-actions:
+        applies-to: security-updates
         patterns:
           - "*"
 
   - package-ecosystem: npm
     directory: /
+    # Disable routine version PRs; security updates remain enabled.
+    open-pull-requests-limit: 0
     schedule:
       interval: weekly
     labels:
@@ -23,11 +28,14 @@ updates:
       prefix: chore(deps)
     groups:
       desktop-dependencies:
+        applies-to: security-updates
         patterns:
           - "*"
 
   - package-ecosystem: npm
     directory: /workspace-cloud
+    # Disable routine version PRs; security updates remain enabled.
+    open-pull-requests-limit: 0
     schedule:
       interval: weekly
     labels:
@@ -36,11 +44,14 @@ updates:
       prefix: chore(deps-cloud)
     groups:
       workspace-cloud-dependencies:
+        applies-to: security-updates
         patterns:
           - "*"
 
   - package-ecosystem: npm
     directory: /site
+    # Disable routine version PRs; security updates remain enabled.
+    open-pull-requests-limit: 0
     schedule:
       interval: weekly
     labels:
@@ -49,11 +60,14 @@ updates:
       prefix: chore(deps-site)
     groups:
       site-dependencies:
+        applies-to: security-updates
         patterns:
           - "*"
 
   - package-ecosystem: npm
     directory: /product-analytics-cloudflare
+    # Disable routine version PRs; security updates remain enabled.
+    open-pull-requests-limit: 0
     schedule:
       interval: weekly
     labels:
@@ -62,11 +76,14 @@ updates:
       prefix: chore(deps-analytics)
     groups:
       analytics-dependencies:
+        applies-to: security-updates
         patterns:
           - "*"
 
   - package-ecosystem: npm
     directory: /workspace-scheduler-cloudflare
+    # Disable routine version PRs; security updates remain enabled.
+    open-pull-requests-limit: 0
     schedule:
       interval: weekly
     labels:
@@ -75,11 +92,14 @@ updates:
       prefix: chore(deps-scheduler)
     groups:
       scheduler-dependencies:
+        applies-to: security-updates
         patterns:
           - "*"
 
   - package-ecosystem: npm
     directory: /agent-runtime/plugins
+    # Disable routine version PRs; security updates remain enabled.
+    open-pull-requests-limit: 0
     schedule:
       interval: weekly
     labels:
@@ -88,11 +108,14 @@ updates:
       prefix: chore(deps-agents)
     groups:
       agent-adapter-dependencies:
+        applies-to: security-updates
         patterns:
           - "*"
 
   - package-ecosystem: cargo
     directory: /
+    # Disable routine version PRs; security updates remain enabled.
+    open-pull-requests-limit: 0
     schedule:
       interval: weekly
     labels:
@@ -101,5 +124,6 @@ updates:
       prefix: chore(deps-rust)
     groups:
       rust-dependencies:
+        applies-to: security-updates
         patterns:
           - "*"
