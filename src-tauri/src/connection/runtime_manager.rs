@@ -74,6 +74,58 @@ impl ConnectionManager {
         }
     }
 
+    /// Resolve the app-owned Wrangler profile boundary for one exact
+    /// Workspace/member/connection selection without reading Cloudflare identity data.
+    pub(crate) async fn cloudflare_d1_auth_scope(
+        &self,
+        profile: &ConnectionProfile,
+    ) -> AppResult<crate::cloudflare_d1::CloudflareD1AuthScope> {
+        if profile.engine != Engine::Sqlite || profile.provider != Provider::CloudflareD1 {
+            return Err(AppError::Config(
+                "Cloudflare authentication requires a Cloudflare D1 profile".into(),
+            ));
+        }
+        let _scope_guard = self.inner.scope_gate.read().await;
+        match self.inner.store.pin_connection_for_view(profile.id).await {
+            Ok(pin) => {
+                if pin.requires_remote_rbac {
+                    if pin.profile.engine != Engine::Sqlite
+                        || pin.profile.provider != Provider::CloudflareD1
+                        || profile.workspace_access != pin.profile.workspace_access
+                        || profile.credential_mode != pin.profile.credential_mode
+                    {
+                        return Err(scope_changed());
+                    }
+                } else if profile.workspace_access != WorkspaceConnectionAccess::Local
+                    || profile.credential_mode != WorkspaceCredentialMode::Local
+                {
+                    return Err(scope_changed());
+                }
+                Ok(
+                    crate::cloudflare_d1::CloudflareD1AuthScope::from_active_scope(
+                        &pin.scope, profile.id,
+                    ),
+                )
+            }
+            Err(AppError::NotFound(_))
+                if profile.workspace_access == WorkspaceConnectionAccess::Local
+                    && profile.credential_mode == WorkspaceCredentialMode::Local =>
+            {
+                self.inner
+                    .store
+                    .ensure_connection_write_scope(profile.id)
+                    .await?;
+                let scope = self.inner.store.active_resource_scope().await?;
+                Ok(
+                    crate::cloudflare_d1::CloudflareD1AuthScope::from_active_scope(
+                        &scope, profile.id,
+                    ),
+                )
+            }
+            Err(error) => Err(error),
+        }
+    }
+
     /// Capture deletion cleanup authority before the connection row disappears.
     pub(crate) async fn existing_bigquery_auth_scope(
         &self,
@@ -88,6 +140,28 @@ impl ConnectionManager {
         Ok((pin.profile.engine == Engine::Bigquery).then(|| {
             crate::bigquery::BigQueryAuthScope::from_active_scope(&pin.scope, connection_id)
         }))
+    }
+
+    pub(crate) async fn existing_cloudflare_d1_auth_scope(
+        &self,
+        connection_id: Uuid,
+    ) -> AppResult<Option<crate::cloudflare_d1::CloudflareD1AuthScope>> {
+        let _scope_guard = self.inner.scope_gate.read().await;
+        let pin = self
+            .inner
+            .store
+            .pin_connection_for_view(connection_id)
+            .await?;
+        Ok(
+            (pin.profile.engine == Engine::Sqlite
+                && pin.profile.provider == Provider::CloudflareD1)
+                .then(|| {
+                    crate::cloudflare_d1::CloudflareD1AuthScope::from_active_scope(
+                        &pin.scope,
+                        connection_id,
+                    )
+                }),
+        )
     }
 
     pub(super) async fn pin_is_current(&self, pin: &PinnedConnection) -> AppResult<bool> {

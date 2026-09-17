@@ -73,6 +73,31 @@ export const connectionsCatalog = defineCatalog(
     "connections.connectionUrl": "URL",
     "connections.connectionUrlOverrides":
       "Overrides the connection settings above.",
+    "connections.cloudflareAccount": "Cloudflare account",
+    "connections.cloudflareD1Database": "D1 database",
+    "connections.cloudflareD1ConnectAccount": "Connect Cloudflare",
+    "connections.cloudflareD1ChangeAccount": "Change account",
+    "connections.cloudflareD1Connected": "Connected",
+    "connections.cloudflareD1NotConnected": "Not connected",
+    "connections.cloudflareD1Authenticating": "Waiting for browser login…",
+    "connections.cloudflareD1CheckingConnection": "Checking connection…",
+    "connections.cloudflareD1SelectAccount": "Select an account",
+    "connections.cloudflareD1SelectDatabase": "Select a D1 database",
+    "connections.cloudflareD1ConnectFirst": "Connect Cloudflare first",
+    "connections.cloudflareD1AccountHint":
+      "Wrangler opens Cloudflare in your browser. DopeDB never asks for or stores an API token.",
+    "connections.cloudflareD1WranglerRequired":
+      "Install Wrangler 4 or later to connect a Cloudflare account.",
+    "connections.cloudflareD1AccountsLoading": "Loading accounts…",
+    "connections.cloudflareD1DatabasesLoading": "Loading D1 databases…",
+    "connections.cloudflareD1NoAccounts": "No accessible accounts found.",
+    "connections.cloudflareD1NoDatabases": "No D1 databases found in this account.",
+    "connections.cloudflareD1AuthenticationFailed": "Could not connect the Cloudflare account.",
+    "connections.cloudflareD1AccountsLoadFailed": "Could not load Cloudflare accounts.",
+    "connections.cloudflareD1DatabasesLoadFailed": "Could not load D1 databases.",
+    "connections.cloudflareD1PermissionError": "This Cloudflare account does not have access to the requested resource.",
+    "connections.cloudflareD1ErrorTimeout": "Cloudflare did not finish in time. Try again.",
+    "connections.cloudflareD1ErrorNetwork": "Could not reach Cloudflare. Check the network and try again.",
     "connections.connection": "Connection",
     "connections.createDataSource": "Create data source",
     "connections.copyName": "{name} copy",
@@ -252,7 +277,17 @@ export const connectionsCatalog = defineCatalog(
       "Enter a host name without a URL scheme or whitespace.",
     "connections.problemHostRequired": "Enter the database host.",
     "connections.problemConnectionUrlInvalid":
-      "Enter a supported PostgreSQL, MySQL, SQLite, or MongoDB URL.",
+      "Enter a supported PostgreSQL, MySQL, SQLite, MongoDB, BigQuery, or Cloudflare D1 URL.",
+    "connections.problemCloudflareAccountRequired":
+      "Enter the Cloudflare account ID.",
+    "connections.problemCloudflareAccountInvalid":
+      "The Cloudflare account ID must be 32 hexadecimal characters.",
+    "connections.problemCloudflareD1DatabaseRequired":
+      "Enter the D1 database ID.",
+    "connections.problemCloudflareD1DatabaseInvalid":
+      "Enter a valid D1 database UUID.",
+    "connections.problemCloudflareD1ReadTokenRequired":
+      "Enter a D1 Read API token for this device.",
     "connections.problemTimeZoneInvalid":
       "Enter a valid time zone such as UTC, Asia/Seoul, or +09:00.",
     "connections.problemKeepAliveInvalid":
@@ -428,6 +463,7 @@ export const connectionsCatalog = defineCatalog(
     "connections.procedures": "Procedures ({count})",
     "connections.providerAuto": "Automatic detection",
     "connections.providerGcpCloudSql": "GCP Cloud SQL",
+    "connections.providerCloudflareD1": "Cloudflare D1",
     "connections.providerGeneric": "Generic / self-hosted",
     "connections.providerBigQueryCli": "Official Google BigQuery CLI",
     "connections.providerNeon": "Neon",
@@ -580,6 +616,31 @@ export const connectionsCatalog = defineCatalog(
     "connections.connectionUrl": "URL",
     "connections.connectionUrlOverrides":
       "위 연결 설정을 이 URL로 재정의합니다.",
+    "connections.cloudflareAccount": "Cloudflare 계정",
+    "connections.cloudflareD1Database": "D1 데이터베이스",
+    "connections.cloudflareD1ConnectAccount": "Cloudflare 연결",
+    "connections.cloudflareD1ChangeAccount": "계정 변경",
+    "connections.cloudflareD1Connected": "연결됨",
+    "connections.cloudflareD1NotConnected": "연결 안 됨",
+    "connections.cloudflareD1Authenticating": "브라우저 로그인을 기다리는 중…",
+    "connections.cloudflareD1CheckingConnection": "연결 확인 중…",
+    "connections.cloudflareD1SelectAccount": "계정 선택",
+    "connections.cloudflareD1SelectDatabase": "D1 데이터베이스 선택",
+    "connections.cloudflareD1ConnectFirst": "Cloudflare를 먼저 연결하세요",
+    "connections.cloudflareD1AccountHint":
+      "Wrangler가 브라우저에서 Cloudflare 로그인을 엽니다. DopeDB는 API 토큰을 요청하거나 저장하지 않습니다.",
+    "connections.cloudflareD1WranglerRequired":
+      "Cloudflare 계정 연결에는 Wrangler 4 이상이 필요합니다.",
+    "connections.cloudflareD1AccountsLoading": "계정 불러오는 중…",
+    "connections.cloudflareD1DatabasesLoading": "D1 데이터베이스 불러오는 중…",
+    "connections.cloudflareD1NoAccounts": "접근 가능한 계정이 없습니다.",
+    "connections.cloudflareD1NoDatabases": "이 계정에 D1 데이터베이스가 없습니다.",
+    "connections.cloudflareD1AuthenticationFailed": "Cloudflare 계정을 연결하지 못했습니다.",
+    "connections.cloudflareD1AccountsLoadFailed": "Cloudflare 계정을 불러오지 못했습니다.",
+    "connections.cloudflareD1DatabasesLoadFailed": "D1 데이터베이스를 불러오지 못했습니다.",
+    "connections.cloudflareD1PermissionError": "이 Cloudflare 계정은 요청한 리소스에 접근할 수 없습니다.",
+    "connections.cloudflareD1ErrorTimeout": "Cloudflare 응답 시간이 초과되었습니다. 다시 시도하세요.",
+    "connections.cloudflareD1ErrorNetwork": "Cloudflare에 연결할 수 없습니다. 네트워크를 확인하고 다시 시도하세요.",
     "connections.connection": "연결",
     "connections.createDataSource": "데이터 소스 생성",
     "connections.copyName": "{name} 복사본",
@@ -758,7 +819,17 @@ export const connectionsCatalog = defineCatalog(
       "URL scheme과 공백 없이 호스트 이름을 입력하세요.",
     "connections.problemHostRequired": "데이터베이스 호스트를 입력하세요.",
     "connections.problemConnectionUrlInvalid":
-      "지원되는 PostgreSQL, MySQL, SQLite 또는 MongoDB URL을 입력하세요.",
+      "지원되는 PostgreSQL, MySQL, SQLite, MongoDB, BigQuery 또는 Cloudflare D1 URL을 입력하세요.",
+    "connections.problemCloudflareAccountRequired":
+      "Cloudflare 계정 ID를 입력하세요.",
+    "connections.problemCloudflareAccountInvalid":
+      "Cloudflare 계정 ID는 32자리 16진수여야 합니다.",
+    "connections.problemCloudflareD1DatabaseRequired":
+      "D1 데이터베이스 ID를 입력하세요.",
+    "connections.problemCloudflareD1DatabaseInvalid":
+      "올바른 D1 데이터베이스 UUID를 입력하세요.",
+    "connections.problemCloudflareD1ReadTokenRequired":
+      "이 기기에서 사용할 D1 Read API 토큰을 입력하세요.",
     "connections.problemTimeZoneInvalid":
       "UTC, Asia/Seoul 또는 +09:00 같은 올바른 시간대를 입력하세요.",
     "connections.problemKeepAliveInvalid":
@@ -933,6 +1004,7 @@ export const connectionsCatalog = defineCatalog(
     "connections.procedures": "프로시저 ({count})",
     "connections.providerAuto": "자동 감지",
     "connections.providerGcpCloudSql": "GCP Cloud SQL",
+    "connections.providerCloudflareD1": "Cloudflare D1",
     "connections.providerGeneric": "일반 / 자체 호스팅",
     "connections.providerBigQueryCli": "Google BigQuery 공식 CLI",
     "connections.providerNeon": "Neon",

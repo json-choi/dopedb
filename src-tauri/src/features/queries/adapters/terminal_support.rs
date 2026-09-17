@@ -43,6 +43,7 @@ pub(super) fn pool_ref(db: &DbPool) -> PoolRef<'_> {
         DbPool::Mysql(pool) => PoolRef::Mysql(pool),
         DbPool::Sqlite(pool) => PoolRef::Sqlite(pool),
         DbPool::Bigquery(connection) => PoolRef::Bigquery(connection),
+        DbPool::CloudflareD1(connection) => PoolRef::CloudflareD1(connection),
     }
 }
 

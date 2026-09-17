@@ -7,6 +7,7 @@ mod bigquery;
 mod broker;
 mod cli_environment;
 mod cli_install;
+mod cloudflare_d1;
 mod commands;
 mod connection;
 mod ddl;
@@ -223,6 +224,11 @@ pub fn run() {
             features::connections::transport::clear_bigquery_service_account_auth,
             features::connections::transport::discover_bigquery_projects,
             features::connections::transport::discover_bigquery_datasets,
+            features::connections::transport::get_cloudflare_d1_auth_state,
+            features::connections::transport::authenticate_cloudflare_d1_account,
+            features::connections::transport::clear_cloudflare_d1_auth,
+            features::connections::transport::discover_cloudflare_d1_accounts,
+            features::connections::transport::discover_cloudflare_d1_databases,
             features::product_analytics::transport::product_analytics_status,
             features::product_analytics::transport::set_product_analytics_consent,
             features::product_analytics::transport::submit_product_analytics_batch,

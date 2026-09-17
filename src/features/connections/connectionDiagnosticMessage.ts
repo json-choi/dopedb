@@ -14,6 +14,14 @@ export function connectionDiagnosticMessage(
     hostInvalid: "connections.problemHostInvalid",
     portInvalid: "connections.problemPortInvalid",
     sqliteFileRequired: "connections.problemSqliteFileRequired",
+    cloudflareAccountRequired:
+      "connections.problemCloudflareAccountRequired",
+    cloudflareAccountInvalid:
+      "connections.problemCloudflareAccountInvalid",
+    cloudflareD1DatabaseRequired:
+      "connections.problemCloudflareD1DatabaseRequired",
+    cloudflareD1DatabaseInvalid:
+      "connections.problemCloudflareD1DatabaseInvalid",
     mongoDatabaseRequired: "connections.problemMongoDatabaseRequired",
     targetDatabaseRequired: "connections.problemTargetDatabaseRequired",
     targetDatabaseInvalid: "connections.problemTargetDatabaseInvalid",

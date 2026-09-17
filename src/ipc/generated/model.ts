@@ -10,7 +10,7 @@ export type JsonValue =
   | JsonValue[];
 
 export type Engine = "postgres" | "mysql" | "sqlite" | "mongodb" | "bigquery";
-export type Provider = "auto" | "generic" | "neon" | "planetScale" | "gcpCloudSql";
+export type Provider = "auto" | "generic" | "neon" | "planetScale" | "gcpCloudSql" | "cloudflareD1";
 export type WorkspaceConnectionAccess = "view" | "read" | "write" | "manage" | "local";
 export type WorkspaceCredentialMode = "local" | "memberLocal" | "managed";
 export type NeonBranchState = "init" | "resetting" | "ready" | "archived" | "unknown";

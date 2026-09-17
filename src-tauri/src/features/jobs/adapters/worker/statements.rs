@@ -204,6 +204,12 @@ pub(super) async fn execute_transaction(
                 reason: "BigQuery import jobs are unavailable through the read-only adapter".into(),
             })
         }
+        DbPool::CloudflareD1(_) => {
+            return Err(AppError::Blocked {
+                reason: "Cloudflare D1 import jobs require a dedicated remote batch workflow"
+                    .into(),
+            })
+        }
     }
     Ok(())
 }

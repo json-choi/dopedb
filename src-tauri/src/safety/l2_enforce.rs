@@ -12,6 +12,9 @@
 //!   → a write raises `1792`.
 //! - **SQLite:** relies on the connection module opening a `read_only(true)` pool;
 //!   L2 also sets `PRAGMA query_only=ON` → a write raises `SQLITE_READONLY`.
+//! - **Cloudflare D1:** Wrangler OAuth has no separate D1 read-only scope. Desktop
+//!   manual reads are syntax-constrained again at the adapter boundary, while Agent
+//!   and Analysis Article execution is rejected before reaching this function.
 
 use std::time::{Duration, Instant};
 
@@ -48,6 +51,14 @@ pub(crate) async fn run_read_only_cancellable(
     if let PoolRef::Bigquery(connection) = pool {
         return connection.query(sql, max_rows, cancellation).await;
     }
+    if let PoolRef::CloudflareD1(connection) = pool {
+        return cancel::guard_registered(
+            cancellation,
+            cancel::QUERY_TIMEOUT,
+            connection.query(sql, max_rows),
+        )
+        .await;
+    }
     cancel::guard_registered(
         cancellation,
         cancel::QUERY_TIMEOUT,
@@ -71,6 +82,36 @@ pub(crate) async fn run_read_only_byte_capped_cancellable(
         return connection
             .query_byte_capped(sql, max_rows, max_bytes, cancellation)
             .await;
+    }
+    if let PoolRef::CloudflareD1(connection) = pool {
+        let mut result = cancel::guard_registered(
+            cancellation,
+            cancel::QUERY_TIMEOUT,
+            connection.query(sql, max_rows),
+        )
+        .await?;
+        let mut retained_bytes = 0_usize;
+        let mut rows = Vec::with_capacity(result.rows.len());
+        for row in result.rows {
+            let row_bytes = serde_json::to_vec(&row)?.len();
+            if row_bytes > max_bytes {
+                return Err(AppError::Blocked {
+                    reason: format!(
+                        "one export row exceeds the {} MiB batch safety limit",
+                        max_bytes / 1024 / 1024
+                    ),
+                });
+            }
+            if retained_bytes.saturating_add(row_bytes) > max_bytes {
+                result.truncated = true;
+                break;
+            }
+            retained_bytes += row_bytes;
+            rows.push(row);
+        }
+        result.row_count = rows.len();
+        result.rows = rows;
+        return Ok(result);
     }
     cancel::guard_registered(
         cancellation,
@@ -196,7 +237,9 @@ async fn run_read_only_byte_capped_inner(
             };
             (columns, rows, decode_failures, truncated)
         }
-        PoolRef::Bigquery(_) => unreachable!("BigQuery is handled before the SQLx boundary"),
+        PoolRef::Bigquery(_) | PoolRef::CloudflareD1(_) => {
+            unreachable!("remote CLI engines are handled before the SQLx boundary")
+        }
     };
     Ok(QueryResult {
         row_count: rows.len(),
@@ -322,7 +365,9 @@ async fn run_read_only_inner(
             };
             (c, r, f, t)
         }
-        PoolRef::Bigquery(_) => unreachable!("BigQuery is handled before the SQLx boundary"),
+        PoolRef::Bigquery(_) | PoolRef::CloudflareD1(_) => {
+            unreachable!("remote CLI engines are handled before the SQLx boundary")
+        }
     };
 
     Ok(QueryResult {

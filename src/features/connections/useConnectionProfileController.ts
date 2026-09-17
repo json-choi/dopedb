@@ -43,6 +43,7 @@ import {
   upsertConnection,
 } from "./tauriAdapter";
 import type { BigQueryOnboardingController } from "./useBigQueryOnboardingController";
+import type { CloudflareD1OnboardingController } from "./useCloudflareD1OnboardingController";
 import type { ConnectionCatalogController } from "./useConnectionCatalogController";
 import type { ConnectionEditorDialogs } from "./useConnectionEditorDialogs";
 import type { ConnectionProfileState } from "./useConnectionProfileState";
@@ -58,6 +59,7 @@ export function useConnectionProfileController({
   catalog,
   dialogs,
   bigQuery,
+  cloudflareD1,
 }: {
   connections: ConnectionProfile[];
   onDeletedConnection: (id: string) => Promise<void>;
@@ -67,6 +69,7 @@ export function useConnectionProfileController({
   catalog: ConnectionCatalogController;
   dialogs: ConnectionEditorDialogs;
   bigQuery: BigQueryOnboardingController;
+  cloudflareD1: CloudflareD1OnboardingController;
 }) {
   const { t } = useI18n();
   const toast = useToast();
@@ -168,6 +171,7 @@ export function useConnectionProfileController({
         } satisfies FieldValidation
       : undefined,
   };
+
   const tabs: readonly PanelTab<ConnectionTab>[] = isSharedTemplate
     ? [{ id: "general", label: t("connections.general") }]
     : isBigQuery
@@ -247,15 +251,13 @@ export function useConnectionProfileController({
             readonlyDefault: true,
             allowWrites: false,
           })
-        : await upsertConnection(
-            form.value,
-            credentials.password || undefined,
-          );
+        : await upsertConnection(form.value, credentials.password || undefined);
       form.setValue(saved);
       if (url.mode === "urlOnly") {
         url.setDraft(formatConnectionUrl(saved));
       }
       await bigQuery.finalizeSavedProfile(saved);
+      await cloudflareD1.finalizeSavedProfile(saved);
       identity.setIsNew(false);
       identity.setPersisted(true);
       credentials.setPassword("");
@@ -340,6 +342,7 @@ export function useConnectionProfileController({
     status.setMessage(null);
     try {
       await bigQuery.discardUnpersistedAuth();
+      await cloudflareD1.discardUnpersistedAuth();
       status.setBusy(false);
       onCancel();
     } catch (error) {
@@ -369,10 +372,7 @@ export function useConnectionProfileController({
     try {
       const receipt = isSharedTemplate
         ? await testConnection(form.value.id)
-        : await testConnectionProfile(
-          form.value,
-          credentials.password || undefined,
-        );
+        : await testConnectionProfile(form.value, credentials.password || undefined);
       if (!mounted.current) return;
       if (!connectionTestResultIsCurrent(startedRevision, verification.currentRevision(), requestId, testRequestId.current)) return;
       if (!receipt.ok) {
@@ -445,6 +445,7 @@ export function useConnectionProfileController({
       },
       databaseDiscovery,
       bigQuery,
+      cloudflareD1,
       validation,
     },
     problems: {

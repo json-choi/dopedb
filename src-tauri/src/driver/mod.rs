@@ -19,6 +19,7 @@ enum RuntimeAdapter {
     Sqlite,
     Mongodb,
     Bigquery,
+    CloudflareD1,
 }
 
 struct DriverDefinition {
@@ -89,6 +90,22 @@ const DEFINITIONS: &[DriverDefinition] = &[
         adapter: Some(RuntimeAdapter::Sqlite),
     },
     DriverDefinition {
+        id: "cloudflare-d1-wrangler",
+        name: "Cloudflare Wrangler",
+        engine: Engine::Sqlite,
+        version: "v4",
+        install_mode: DriverInstallMode::System,
+        install_state: DriverInstallState::Available,
+        supported_providers: &[Provider::CloudflareD1],
+        capabilities: &[
+            DriverCapability::Sql,
+            DriverCapability::Introspection,
+            DriverCapability::SchemaDiff,
+        ],
+        recommended: true,
+        adapter: Some(RuntimeAdapter::CloudflareD1),
+    },
+    DriverDefinition {
         id: "mongodb-rust",
         name: "MongoDB Rust Driver",
         engine: Engine::Mongodb,
@@ -128,6 +145,12 @@ impl DriverDefinition {
     fn descriptor(&self) -> DriverDescriptor {
         let install_state = if self.engine == Engine::Bigquery {
             if crate::bigquery::is_cli_available() {
+                DriverInstallState::Installed
+            } else {
+                DriverInstallState::Available
+            }
+        } else if self.supported_providers == [Provider::CloudflareD1] {
+            if crate::cloudflare_d1::is_cli_available() {
                 DriverInstallState::Installed
             } else {
                 DriverInstallState::Available
@@ -254,6 +277,7 @@ pub async fn connect(
     secret: &str,
     access: ConnectionAccess,
     bigquery_auth_scope: Option<&crate::bigquery::BigQueryAuthScope>,
+    cloudflare_auth_scope: Option<&crate::cloudflare_d1::CloudflareD1AuthScope>,
 ) -> AppResult<Live> {
     if profile.engine == Engine::Bigquery {
         crate::bigquery::validate_profile(profile)?;
@@ -289,6 +313,16 @@ pub async fn connect(
             })?;
             Live::Sql(crate::connection::LiveConnection::bigquery(
                 crate::bigquery::connect(profile, auth_scope).await?,
+            ))
+        }
+        RuntimeAdapter::CloudflareD1 => {
+            let auth_scope = cloudflare_auth_scope.ok_or_else(|| AppError::Blocked {
+                reason: "Cloudflare authentication is not pinned to the active Workspace member"
+                    .into(),
+            })?;
+            Live::Sql(crate::connection::LiveConnection::cloudflare_d1(
+                crate::cloudflare_d1::connect(profile, auth_scope).await?,
+                access.is_mutation(),
             ))
         }
     })

@@ -98,6 +98,7 @@ export function useConnectionProfileState({
     setPassword(value);
   }
 
+
   function set<K extends keyof ConnectionProfile>(
     key: K,
     value: ConnectionProfile[K],
@@ -332,7 +333,10 @@ export function useConnectionProfileState({
       pickExtraParameterFile,
     },
     identity: { isNew, setIsNew, persisted, setPersisted },
-    credentials: { password, setPassword: setCredentialPassword },
+    credentials: {
+      password,
+      setPassword: setCredentialPassword,
+    },
     tabs: { active: activeTab, setActive: setActiveTab },
     url: {
       mode: connectionInputMode,

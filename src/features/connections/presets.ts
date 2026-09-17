@@ -43,17 +43,18 @@ export function blankConnection(
   const provider = preset?.provider ?? "auto";
 
   const bigquery = engine === "bigquery";
+  const cloudflareD1 = engine === "sqlite" && provider === "cloudflareD1";
   return {
     id: connectionId(crypto.randomUUID()),
     name: "",
     engine,
     provider: bigquery ? "generic" : provider,
-    driverId: null,
-    host: bigquery ? "" : "localhost",
-    port: CONNECTION_DEFAULT_PORTS[engine],
+    driverId: cloudflareD1 ? "cloudflare-d1-wrangler" : null,
+    host: bigquery || cloudflareD1 ? "" : "localhost",
+    port: cloudflareD1 ? 443 : CONNECTION_DEFAULT_PORTS[engine],
     database: "",
     username: "",
-    sslmode: connectionDefaultSslMode(engine),
+    sslmode: cloudflareD1 ? "require" : connectionDefaultSslMode(engine),
     extraParams: bigquery
       ? { maximumBytesBilled: "1073741824" }
       : {},

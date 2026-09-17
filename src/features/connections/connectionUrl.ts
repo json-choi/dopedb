@@ -218,6 +218,49 @@ function parseMongoConnectionUrl(text: string): ParsedConnectionUrl | null {
   };
 }
 
+function parseCloudflareD1Url(url: URL): ParsedConnectionUrl | null {
+  let accountId = "";
+  let databaseId = "";
+  if (url.protocol === "d1:") {
+    accountId = decodeUrlPart(url.hostname);
+    databaseId = decodeUrlPart(url.pathname.replace(/^\/+/, ""));
+  } else if (
+    url.protocol === "https:" &&
+    url.hostname.toLowerCase() === "api.cloudflare.com"
+  ) {
+    const match =
+      /^\/client\/v4\/accounts\/([^/]+)\/d1\/database\/([^/]+)(?:\/(?:query|raw))?\/?$/u.exec(
+        url.pathname,
+      );
+    if (!match) return null;
+    accountId = decodeUrlPart(match[1]);
+    databaseId = decodeUrlPart(match[2]);
+  } else {
+    return null;
+  }
+  if (!accountId || !databaseId) return null;
+  const meta = parseUrlMetaParams(url.searchParams, databaseId);
+  const update: Partial<ConnectionProfile> = {
+    name: meta.name,
+    engine: "sqlite",
+    provider: "cloudflareD1",
+    driverId: "cloudflare-d1-wrangler",
+    host: accountId,
+    port: 443,
+    database: databaseId,
+    username: "",
+    sslmode: "require",
+    extraParams: {},
+  };
+  if (meta.env) update.env = meta.env;
+  if (meta.readonlyDefault != null) update.readonlyDefault = meta.readonlyDefault;
+  if (meta.allowWrites != null) update.allowWrites = meta.allowWrites;
+  return {
+    update,
+    password: null,
+  };
+}
+
 export function parseConnectionUrl(raw: string): ParsedConnectionUrl | null {
   const text = unwrapConnectionUrlInput(raw);
   if (!text) return null;
@@ -232,6 +275,9 @@ export function parseConnectionUrl(raw: string): ParsedConnectionUrl | null {
   } catch {
     return null;
   }
+
+  const d1 = parseCloudflareD1Url(url);
+  if (d1) return d1;
 
   const protocol = url.protocol.replace(/:$/, "").toLowerCase();
   const engine: Engine | null =
@@ -393,6 +439,11 @@ export function formatConnectionUrl(
   profile: ConnectionProfile,
 ): string {
   const params = safeConnectionParameters(profile);
+  if (profile.engine === "sqlite" && profile.provider === "cloudflareD1") {
+    const accountId = encodeURIComponent(profile.host.trim());
+    const databaseId = encodeURIComponent(profile.database.trim());
+    return `d1://${accountId}/${databaseId}`;
+  }
   if (profile.engine === "sqlite") {
     const normalizedPath = profile.database.replace(/\\/g, "/");
     const path = encodedPath(normalizedPath);

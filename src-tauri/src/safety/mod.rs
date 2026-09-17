@@ -37,6 +37,7 @@ pub enum PoolRef<'a> {
     Mysql(&'a sqlx::MySqlPool),
     Sqlite(&'a sqlx::SqlitePool),
     Bigquery(&'a crate::bigquery::BigQueryConnection),
+    CloudflareD1(&'a crate::cloudflare_d1::D1Connection),
 }
 
 impl PoolRef<'_> {
@@ -46,6 +47,7 @@ impl PoolRef<'_> {
             PoolRef::Mysql(_) => Engine::Mysql,
             PoolRef::Sqlite(_) => Engine::Sqlite,
             PoolRef::Bigquery(_) => Engine::Bigquery,
+            PoolRef::CloudflareD1(_) => Engine::Sqlite,
         }
     }
 }

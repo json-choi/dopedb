@@ -117,6 +117,12 @@ where
             });
         }
         profile.schema_group = normalize_schema_group(profile.schema_group);
+        let uses_cli_authentication = profile.engine == Engine::Bigquery
+            || (profile.engine == Engine::Sqlite
+                && profile.provider == crate::model::Provider::CloudflareD1);
+        if uses_cli_authentication {
+            profile.secret_ref = None;
+        }
         self.drivers.validate(&profile)?;
 
         let id = ConnectionId::from(profile.id);
@@ -141,10 +147,9 @@ where
                 AppError::Config("stored connection secret reference is invalid".into())
             })?;
         let password = password.filter(|password| !password.is_empty());
-        let uses_cli_authentication = profile.engine == Engine::Bigquery;
         if uses_cli_authentication && password.is_some() {
             return Err(AppError::Config(
-                "BigQuery credentials are owned by Google Cloud CLI and cannot be stored as a database password"
+                "CLI-authenticated connection credentials cannot be stored as a database password"
                     .into(),
             ));
         }
@@ -309,13 +314,22 @@ where
         &self,
         request: ConnectionProfileTestRequest,
     ) -> AppResult<()> {
-        let ConnectionProfileTestRequest { profile, password } = request;
+        let ConnectionProfileTestRequest {
+            mut profile,
+            password,
+        } = request;
         if profile.workspace_access != WorkspaceConnectionAccess::Local
             || profile.credential_mode != WorkspaceCredentialMode::Local
         {
             return Err(AppError::Blocked {
                 reason: "shared connections must be tested through workspace authorization".into(),
             });
+        }
+        let uses_cli_authentication = profile.engine == Engine::Bigquery
+            || (profile.engine == Engine::Sqlite
+                && profile.provider == crate::model::Provider::CloudflareD1);
+        if uses_cli_authentication {
+            profile.secret_ref = None;
         }
         let supplied = password.filter(|password| !password.is_empty());
         if supplied
@@ -334,6 +348,7 @@ where
         // keeps socket/trust authentication working.
         let password = match supplied {
             Some(value) => value,
+            None if uses_cli_authentication => Zeroizing::new(String::new()),
             None => self.credentials.fetch_profile(&profile)?,
         };
         self.tester.test(&profile, password).await

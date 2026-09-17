@@ -93,36 +93,12 @@ export const CONTROLLED_CONNECTION_PARAMETERS = new Set<string>([
 ]);
 
 export const STANDARD_CONNECTION_SOURCES: StandardConnectionSource[] = [
-  {
-    engine: "postgres",
-    provider: "auto",
-    label: "PostgreSQL",
-    category: "database",
-  },
-  {
-    engine: "mysql",
-    provider: "auto",
-    label: "MySQL / MariaDB",
-    category: "database",
-  },
-  {
-    engine: "mongodb",
-    provider: "generic",
-    label: "MongoDB",
-    category: "database",
-  },
-  {
-    engine: "bigquery",
-    provider: "generic",
-    label: "Google BigQuery",
-    category: "database",
-  },
-  {
-    engine: "sqlite",
-    provider: "generic",
-    label: "SQLite",
-    category: "file",
-  },
+  { engine: "postgres", provider: "auto", label: "PostgreSQL", category: "database" },
+  { engine: "mysql", provider: "auto", label: "MySQL / MariaDB", category: "database" },
+  { engine: "mongodb", provider: "generic", label: "MongoDB", category: "database" },
+  { engine: "bigquery", provider: "generic", label: "Google BigQuery", category: "database" },
+  { engine: "sqlite", provider: "cloudflareD1", label: "Cloudflare D1", category: "database" },
+  { engine: "sqlite", provider: "generic", label: "SQLite", category: "file" },
 ];
 
 export function compatibleDrivers(
@@ -179,6 +155,8 @@ export function sslModeForEngine(engine: Engine, current: string): string {
 
 export function connectionProfileFlags(form: ConnectionProfile) {
   const isSqlite = form.engine === "sqlite";
+  const isCloudflareD1 =
+    form.engine === "sqlite" && form.provider === "cloudflareD1";
   const isMongo = form.engine === "mongodb";
   const isBigQuery = form.engine === "bigquery";
   const isSharedTemplate = form.workspaceAccess !== "local";
@@ -193,6 +171,7 @@ export function connectionProfileFlags(form: ConnectionProfile) {
       form.engine === "mongodb");
   return {
     isSqlite,
+    isCloudflareD1,
     isMongo,
     isBigQuery,
     isSharedTemplate,
@@ -263,28 +242,34 @@ export function switchConnectionSource(
 ): ConnectionProfile {
   const switchingFromBigQuery = current.engine === "bigquery";
   const switchingToBigQuery = engine === "bigquery";
+  const switchingFromCloudflareD1 = current.provider === "cloudflareD1";
+  const switchingToCloudflareD1 = provider === "cloudflareD1";
   return {
     ...current,
     engine,
     provider,
     extraParams: clearIncompatibleSourceParameters(current, engine),
-    sslmode: sslModeForEngine(engine, current.sslmode),
+    sslmode: switchingToCloudflareD1
+      ? "require"
+      : sslModeForEngine(engine, current.sslmode),
     driverId: null,
-    port:
-      switchingToBigQuery || switchingFromBigQuery
+    port: switchingToCloudflareD1
+      ? 443
+      : switchingToBigQuery || switchingFromBigQuery || switchingFromCloudflareD1
         ? CONNECTION_DEFAULT_PORTS[engine]
         : current.port === CONNECTION_DEFAULT_PORTS[current.engine]
         ? CONNECTION_DEFAULT_PORTS[engine]
         : current.port,
-    host: switchingToBigQuery
+    host: switchingToBigQuery || switchingToCloudflareD1
       ? ""
-      : switchingFromBigQuery
+      : switchingFromBigQuery || switchingFromCloudflareD1
         ? "localhost"
         : current.host,
-    database: switchingToBigQuery || switchingFromBigQuery
+    database:
+      switchingToBigQuery || switchingFromBigQuery || switchingToCloudflareD1 || switchingFromCloudflareD1
       ? ""
       : current.database,
-    username: switchingToBigQuery ? "" : current.username,
+    username: switchingToBigQuery || switchingToCloudflareD1 ? "" : current.username,
     readonlyDefault: switchingToBigQuery ? true : current.readonlyDefault,
     allowWrites: switchingToBigQuery ? false : current.allowWrites,
     schemaGroup:

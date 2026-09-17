@@ -29,6 +29,10 @@ export type ConnectionDiagnosticCode =
   | "hostInvalid"
   | "portInvalid"
   | "sqliteFileRequired"
+  | "cloudflareAccountRequired"
+  | "cloudflareAccountInvalid"
+  | "cloudflareD1DatabaseRequired"
+  | "cloudflareD1DatabaseInvalid"
   | "mongoDatabaseRequired"
   | "targetDatabaseRequired"
   | "targetDatabaseInvalid"
@@ -107,7 +111,32 @@ export function diagnoseConnection(
     );
   }
 
-  if (profile.engine === "sqlite") {
+  if (profile.engine === "sqlite" && profile.provider === "cloudflareD1") {
+    const accountId = profile.host.trim();
+    if (!accountId) {
+      diagnostics.push(
+        issue("cloudflareAccountRequired", "danger", "connection-host"),
+      );
+    } else if (!/^[a-f0-9]{32}$/iu.test(accountId)) {
+      diagnostics.push(
+        issue("cloudflareAccountInvalid", "danger", "connection-host"),
+      );
+    }
+    const databaseId = profile.database.trim();
+    if (!databaseId) {
+      diagnostics.push(
+        issue("cloudflareD1DatabaseRequired", "danger", "connection-database"),
+      );
+    } else if (
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(
+        databaseId,
+      )
+    ) {
+      diagnostics.push(
+        issue("cloudflareD1DatabaseInvalid", "danger", "connection-database"),
+      );
+    }
+  } else if (profile.engine === "sqlite") {
     if (!profile.database.trim()) {
       diagnostics.push(
         issue(

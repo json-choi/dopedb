@@ -40,6 +40,7 @@ pub enum Provider {
     Neon,
     PlanetScale,
     GcpCloudSql,
+    CloudflareD1,
 }
 
 /// Cached server authority for a shared connection. Personal connections are Local;

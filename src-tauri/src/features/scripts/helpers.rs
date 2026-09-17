@@ -163,6 +163,11 @@ pub(super) async fn execute_script_transaction(
                         .into(),
             })
         }
+        DbPool::CloudflareD1(_) => {
+            return Err(AppError::Blocked {
+                reason: "Cloudflare D1 scripts require the dedicated remote batch workflow".into(),
+            })
+        }
     })
 }
 

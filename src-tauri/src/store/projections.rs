@@ -175,6 +175,7 @@ pub(crate) fn provider_str(provider: Provider) -> &'static str {
         Provider::Neon => "neon",
         Provider::PlanetScale => "planetScale",
         Provider::GcpCloudSql => "gcpCloudSql",
+        Provider::CloudflareD1 => "cloudflareD1",
     }
 }
 
@@ -185,6 +186,7 @@ pub(crate) fn parse_provider(s: String) -> AppResult<Provider> {
         "neon" => Ok(Provider::Neon),
         "planetScale" => Ok(Provider::PlanetScale),
         "gcpCloudSql" => Ok(Provider::GcpCloudSql),
+        "cloudflareD1" => Ok(Provider::CloudflareD1),
         other => Err(AppError::Config(format!("unknown provider '{other}'"))),
     }
 }

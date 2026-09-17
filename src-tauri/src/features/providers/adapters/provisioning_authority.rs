@@ -503,7 +503,7 @@ fn resource_matches_profile(
         Provider::Neon => Some(LocalProvider::Neon),
         Provider::GcpCloudSql => Some(LocalProvider::GcpCloudSql),
         Provider::PlanetScale => Some(LocalProvider::PlanetScale),
-        Provider::Auto | Provider::Generic => None,
+        Provider::Auto | Provider::Generic | Provider::CloudflareD1 => None,
     };
     let (engine, database) = match resource {
         AuthorizedProvisioningResource::Neon { database, .. } => {

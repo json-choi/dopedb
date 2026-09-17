@@ -26,6 +26,7 @@ pub async fn introspect(conn: &Live) -> AppResult<Catalog> {
             DbPool::Mysql(pool) => mysql::introspect(pool, live.skip_fk_metadata).await,
             DbPool::Sqlite(pool) => sqlite::introspect(pool).await,
             DbPool::Bigquery(connection) => connection.introspect().await,
+            DbPool::CloudflareD1(connection) => connection.introspect().await,
         },
         Live::Mongo(conn) => crate::mongo::introspect::introspect(conn).await,
     }
@@ -42,6 +43,7 @@ pub(crate) async fn overview(conn: &Live, database: &str) -> AppResult<CatalogOv
             DbPool::Mysql(pool) => mysql::overview(pool, database).await,
             DbPool::Sqlite(pool) => sqlite::overview(pool, database).await,
             DbPool::Bigquery(connection) => connection.overview().await,
+            DbPool::CloudflareD1(connection) => connection.overview(database).await,
         },
         Live::Mongo(conn) => crate::mongo::introspect::overview(conn, database).await,
     }
@@ -59,6 +61,7 @@ pub(crate) async fn databases(conn: &Live, configured: &str) -> AppResult<Vec<Da
             DbPool::Mysql(pool) => mysql::databases(pool).await?,
             DbPool::Sqlite(_) => vec![configured.to_owned()],
             DbPool::Bigquery(connection) => connection.databases().await?,
+            DbPool::CloudflareD1(_) => vec![configured.to_owned()],
         },
         Live::Mongo(conn) => crate::mongo::introspect::databases(conn).await?,
     };
@@ -99,6 +102,7 @@ pub(crate) async fn table_ddl(live: &Live, schema: Option<&str>, table: &str) ->
             DbPool::Bigquery(_) => Err(AppError::Blocked {
                 reason: "BigQuery DDL is unavailable through the read-only adapter".into(),
             }),
+            DbPool::CloudflareD1(connection) => connection.table_ddl(table).await,
         },
         Live::Mongo(_) => Err(AppError::Config(
             "MongoDB collections have no SQL DDL".into(),

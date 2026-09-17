@@ -93,6 +93,7 @@ pub(crate) async fn run_write(
                     reason: "BigQuery connections are read-only in DopeDB".into(),
                 })
             }
+            Pool::CloudflareD1(connection) => connection.execute(sql).await?,
         };
         Ok::<u64, AppError>(affected)
     };

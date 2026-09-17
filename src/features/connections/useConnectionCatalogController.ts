@@ -181,6 +181,9 @@ export function useConnectionCatalogController({
     if (engine === "bigquery") {
       credentials.setPassword("");
     }
+    if (provider === "cloudflareD1") {
+      credentials.setPassword("");
+    }
     if (
       engine === "bigquery" ||
       (tabs.active === "schemas" && isDocumentEngine(engine))
@@ -255,6 +258,9 @@ export function useConnectionCatalogController({
     if (provider === "neon") return t("connections.providerNeon");
     if (provider === "planetScale") {
       return t("connections.providerPlanetScale");
+    }
+    if (provider === "cloudflareD1") {
+      return t("connections.providerCloudflareD1");
     }
     return t("connections.providerGcpCloudSql");
   }

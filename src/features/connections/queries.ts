@@ -8,6 +8,9 @@ import { bigQueryAuthMode } from "./bigQueryOnboardingModel";
 import {
   discoverBigQueryDatasets,
   discoverBigQueryProjects,
+  discoverCloudflareD1Accounts,
+  discoverCloudflareD1Databases,
+  getCloudflareD1AuthState,
   getBigQueryAuthState,
   listConnections,
 } from "./tauriAdapter";
@@ -42,6 +45,22 @@ export const connectionQueryKeys = {
       bigQueryAuthMode(profile),
       "datasets",
       projectId,
+    ] as const,
+  cloudflareD1Auth: (profile: ConnectionProfile, scopeKey: string) =>
+    ["cloudflareD1Onboarding", profile.id, scopeKey, "auth"] as const,
+  cloudflareD1Accounts: (profile: ConnectionProfile, scopeKey: string) =>
+    ["cloudflareD1Onboarding", profile.id, scopeKey, "accounts"] as const,
+  cloudflareD1Databases: (
+    profile: ConnectionProfile,
+    accountId: string,
+    scopeKey: string,
+  ) =>
+    [
+      "cloudflareD1Onboarding",
+      profile.id,
+      scopeKey,
+      "databases",
+      accountId,
     ] as const,
 };
 
@@ -91,6 +110,47 @@ export function bigQueryDatasetsQuery(
       scopeKey,
     ),
     queryFn: () => discoverBigQueryDatasets(profile, projectId),
+    staleTime: 30_000,
+    retry: false,
+  });
+}
+
+export function cloudflareD1AuthStateQuery(
+  profile: ConnectionProfile,
+  scopeKey: string,
+) {
+  return queryOptions({
+    queryKey: connectionQueryKeys.cloudflareD1Auth(profile, scopeKey),
+    queryFn: () => getCloudflareD1AuthState(profile),
+    staleTime: 10_000,
+    retry: false,
+  });
+}
+
+export function cloudflareD1AccountsQuery(
+  profile: ConnectionProfile,
+  scopeKey: string,
+) {
+  return queryOptions({
+    queryKey: connectionQueryKeys.cloudflareD1Accounts(profile, scopeKey),
+    queryFn: () => discoverCloudflareD1Accounts(profile),
+    staleTime: 30_000,
+    retry: false,
+  });
+}
+
+export function cloudflareD1DatabasesQuery(
+  profile: ConnectionProfile,
+  accountId: string,
+  scopeKey: string,
+) {
+  return queryOptions({
+    queryKey: connectionQueryKeys.cloudflareD1Databases(
+      profile,
+      accountId,
+      scopeKey,
+    ),
+    queryFn: () => discoverCloudflareD1Databases(profile, accountId),
     staleTime: 30_000,
     retry: false,
   });

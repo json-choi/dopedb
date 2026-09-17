@@ -100,6 +100,11 @@ impl AnalysisReadExecutionPort for DesktopAnalysisReadExecution {
                 reason: "Analysis Articles currently require a relational read source; document sources must use a typed document node".into(),
             });
         }
+        if pin.profile.provider == crate::model::Provider::CloudflareD1 {
+            return Err(AppError::Blocked {
+                reason: "Cloudflare D1 cannot run Analysis Articles because Wrangler OAuth does not provide a database-enforced read-only session".into(),
+            });
+        }
         let sql = request.query.sql.as_str();
         let classification = safety::classify(sql, pin.profile.engine)?;
         if classification.kind != QueryKind::Read || classification.statement_count != 1 {
@@ -311,6 +316,7 @@ fn pool_ref(pool: &DbPool) -> PoolRef<'_> {
         DbPool::Mysql(pool) => PoolRef::Mysql(pool),
         DbPool::Sqlite(pool) => PoolRef::Sqlite(pool),
         DbPool::Bigquery(connection) => PoolRef::Bigquery(connection),
+        DbPool::CloudflareD1(connection) => PoolRef::CloudflareD1(connection),
     }
 }
 

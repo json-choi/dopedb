@@ -4,6 +4,7 @@ import type { ConnectionProfile } from "./domain";
 import type { ConnectionLaunchPreset } from "./presets";
 import { useBigQueryOnboardingController } from "./useBigQueryOnboardingController";
 import { useConnectionCatalogController } from "./useConnectionCatalogController";
+import { useCloudflareD1OnboardingController } from "./useCloudflareD1OnboardingController";
 import { useConnectionEditorDialogs } from "./useConnectionEditorDialogs";
 import { useConnectionProfileController } from "./useConnectionProfileController";
 import { useConnectionProfileState } from "./useConnectionProfileState";
@@ -44,6 +45,10 @@ export function useConnectionEditorController(props: ConnectionEditorProps) {
     profileState,
     catalog.view.drivers.active?.installState === "installed",
   );
+  const cloudflareD1 = useCloudflareD1OnboardingController(
+    profileState,
+    catalog.view.drivers.active?.installState === "installed",
+  );
   const schema = useConnectionSchemaController(profileState);
   const profileController = useConnectionProfileController({
     connections: props.connections,
@@ -54,6 +59,7 @@ export function useConnectionEditorController(props: ConnectionEditorProps) {
     catalog,
     dialogs: dialogState,
     bigQuery,
+    cloudflareD1,
   });
 
   return {

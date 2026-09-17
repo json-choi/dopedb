@@ -233,6 +233,21 @@ impl SystemAdHocConnection {
             .await
             .map(Some)
     }
+
+    async fn cloudflare_auth_scope(
+        &self,
+        profile: &ConnectionProfile,
+    ) -> AppResult<Option<crate::cloudflare_d1::CloudflareD1AuthScope>> {
+        if profile.engine != crate::model::Engine::Sqlite
+            || profile.provider != crate::model::Provider::CloudflareD1
+        {
+            return Ok(None);
+        }
+        self.connections
+            .cloudflare_d1_auth_scope(profile)
+            .await
+            .map(Some)
+    }
 }
 
 /// An unsaved connection-form probe is only a reachability read, never a target
@@ -248,12 +263,14 @@ impl AdHocConnectionPort for SystemAdHocConnection {
         // A reachability probe only pings the target; it never needs a write
         // credential or a write-capable pool (including for MongoDB profiles).
         let bigquery_auth_scope = self.bigquery_auth_scope(profile).await?;
+        let cloudflare_auth_scope = self.cloudflare_auth_scope(profile).await?;
         let transport = connection::ssh::open(profile, profile).await?;
         let live = match driver::connect(
             &transport.profile,
             password.as_str(),
             AD_HOC_CONNECTION_TEST_ACCESS,
             bigquery_auth_scope.as_ref(),
+            cloudflare_auth_scope.as_ref(),
         )
         .await
         {
@@ -288,12 +305,14 @@ impl AdHocConnectionPort for SystemAdHocConnection {
             };
         }
         let bigquery_auth_scope = self.bigquery_auth_scope(&target).await?;
+        let cloudflare_auth_scope = self.cloudflare_auth_scope(&target).await?;
         let transport = connection::ssh::open(&target, &target).await?;
         let live = match driver::connect(
             &transport.profile,
             password.as_str(),
             AD_HOC_CONNECTION_TEST_ACCESS,
             bigquery_auth_scope.as_ref(),
+            cloudflare_auth_scope.as_ref(),
         )
         .await
         {

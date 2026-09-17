@@ -496,6 +496,10 @@ pub async fn delete_workspace_connection(
         .connections
         .existing_bigquery_auth_scope(id.into())
         .await?;
+    let cloudflare_auth_scope = state
+        .connections
+        .existing_cloudflare_d1_auth_scope(id.into())
+        .await?;
     let profile = state.services.workspace.delete_connection(id).await?;
     state.terminals.stop_connection(id, &app);
     state.agents_acp.stop_connection(id);
@@ -505,6 +509,15 @@ pub async fn delete_workspace_connection(
                 connection_id = %id,
                 %error,
                 "could not remove the deleted BigQuery connection CLI profile"
+            );
+        }
+    }
+    if let Some(auth_scope) = cloudflare_auth_scope {
+        if let Err(error) = crate::cloudflare_d1::cleanup_connection_auth(&auth_scope).await {
+            tracing::warn!(
+                connection_id = %id,
+                %error,
+                "could not remove the deleted Cloudflare Wrangler profile"
             );
         }
     }

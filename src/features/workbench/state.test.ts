@@ -56,6 +56,7 @@ import {
 } from "../connections/diagnostics";
 import {
   connectionUrlNeedsDatabaseSelection,
+  formatConnectionUrl,
   parseConnectionUrl,
 } from "../connections/connectionUrl";
 import {
@@ -895,6 +896,29 @@ describe("workbench state ownership", () => {
         )!,
       ),
     ).toBe(false);
+    const importedD1 = parseConnectionUrl(
+      "https://api.cloudflare.com/client/v4/accounts/0123456789abcdef0123456789abcdef/d1/database/123e4567-e89b-42d3-a456-426614174000/query?token=read-secret",
+    );
+    expect(importedD1).not.toBeNull();
+    expect(importedD1?.update).toMatchObject({
+      engine: "sqlite",
+      provider: "cloudflareD1",
+      driverId: "cloudflare-d1-wrangler",
+      host: "0123456789abcdef0123456789abcdef",
+      port: 443,
+      database: "123e4567-e89b-42d3-a456-426614174000",
+      sslmode: "require",
+      extraParams: {},
+    });
+    expect(importedD1?.password).toBeNull();
+    expect(
+      formatConnectionUrl({
+        ...nameless,
+        ...importedD1!.update,
+      }),
+    ).toBe(
+      "d1://0123456789abcdef0123456789abcdef/123e4567-e89b-42d3-a456-426614174000",
+    );
 
     const ownedEnter = {
       key: "Enter",

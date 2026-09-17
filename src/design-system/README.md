@@ -98,6 +98,10 @@ packaged runtime 증거가 아니다.
   `ConnectionProfile`로 즉시 정규화하며 password, token과 DopeDB 내부
   parameter는 redacted URL projection에 표시하지 않는다.
   선택 mode는 driver URL과 분리된 내부 profile metadata로 저장·복원한다.
+  Cloudflare D1은 수동 token field나 URL mode를 노출하지 않는다. canonical
+  compact action으로 Wrangler browser OAuth를 시작한 뒤 account와 database를
+  같은 `SelectInput` 밀도의 selector로 고른다. token은 화면·profile·keychain에
+  들어오지 않으며 `d1://account-id/database-id`는 redacted 내부 projection만이다.
   runtime이 지원하지 않는 SQLite In-memory는 선택지처럼 보이게 만들지 않는다.
   760px 이하 dialog에서는 같은 세 책임을 `SegmentedControl`로 유지하고,
   현재 data source/provider/driver를 실제 selector로 전환한다. desktop

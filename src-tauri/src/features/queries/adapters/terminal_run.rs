@@ -73,6 +73,20 @@ impl PreparedAgentQueryRun {
         } = self;
         let operation_id = claimed.record().id;
         let engine = operation_pin.profile.engine;
+        if operation_pin.profile.provider == crate::model::Provider::CloudflareD1 {
+            let error = AppError::Blocked {
+                reason: "Cloudflare D1 is unavailable to Agents because Wrangler OAuth does not provide a database-enforced read-only session".into(),
+            };
+            let _ = operation
+                .fail(
+                    operation_id,
+                    &serde_json::json!({
+                        "error": error.to_string(), "reason": "read_only_boundary_unavailable",
+                    }),
+                )
+                .await;
+            return Err(AgentQueryRunError::Connection(error));
+        }
         let lease = match context
             .connect_to_database(Some(event_context.database.clone()))
             .await

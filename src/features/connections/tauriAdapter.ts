@@ -7,6 +7,9 @@ import type {
   BigQueryAuthState,
   BigQueryDatasetSummary,
   BigQueryProjectSummary,
+  CloudflareD1AccountSummary,
+  CloudflareD1AuthState,
+  CloudflareD1DatabaseSummary,
   ConnectionId,
   ConnectionProfile,
   ConnectionTestReceipt,
@@ -107,6 +110,37 @@ export function discoverBigQueryDatasets(
   projectId: string,
 ): Promise<BigQueryDatasetSummary[]> {
   return invoke("discover_bigquery_datasets", { profile, projectId });
+}
+
+export function getCloudflareD1AuthState(
+  profile: ConnectionProfile,
+): Promise<CloudflareD1AuthState> {
+  return invoke("get_cloudflare_d1_auth_state", { profile });
+}
+
+export function authenticateCloudflareD1Account(
+  profile: ConnectionProfile,
+): Promise<CloudflareD1AuthState> {
+  return invoke("authenticate_cloudflare_d1_account", { profile });
+}
+
+export function clearCloudflareD1Auth(
+  profile: ConnectionProfile,
+): Promise<void> {
+  return invoke("clear_cloudflare_d1_auth", { profile });
+}
+
+export function discoverCloudflareD1Accounts(
+  profile: ConnectionProfile,
+): Promise<CloudflareD1AccountSummary[]> {
+  return invoke("discover_cloudflare_d1_accounts", { profile });
+}
+
+export function discoverCloudflareD1Databases(
+  profile: ConnectionProfile,
+  accountId: string,
+): Promise<CloudflareD1DatabaseSummary[]> {
+  return invoke("discover_cloudflare_d1_databases", { profile, accountId });
 }
 
 /** Native picker for SQLite and certificate paths; null means user cancellation. */

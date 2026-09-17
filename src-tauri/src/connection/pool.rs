@@ -40,6 +40,7 @@ pub enum DbPool {
     Mysql(MySqlPool),
     Sqlite(SqlitePool),
     Bigquery(crate::bigquery::BigQueryConnection),
+    CloudflareD1(crate::cloudflare_d1::D1Connection),
 }
 
 impl DbPool {
@@ -56,6 +57,7 @@ impl DbPool {
                 sqlx::query("SELECT 1").execute(p).await?;
             }
             DbPool::Bigquery(connection) => connection.ping().await?,
+            DbPool::CloudflareD1(connection) => connection.ping().await?,
         }
         Ok(())
     }
@@ -67,6 +69,7 @@ impl DbPool {
             DbPool::Mysql(pool) => pool.close().await,
             DbPool::Sqlite(pool) => pool.close().await,
             DbPool::Bigquery(_) => {}
+            DbPool::CloudflareD1(_) => {}
         }
     }
 
@@ -76,6 +79,7 @@ impl DbPool {
             DbPool::Mysql(pool) => pool.is_closed(),
             DbPool::Sqlite(pool) => pool.is_closed(),
             DbPool::Bigquery(_) => false,
+            DbPool::CloudflareD1(_) => false,
         }
     }
 }
@@ -99,6 +103,18 @@ impl LiveConnection {
         Self {
             read_pool,
             mutation_pool: None,
+            skip_fk_metadata: false,
+        }
+    }
+
+    pub(crate) fn cloudflare_d1(
+        connection: crate::cloudflare_d1::D1Connection,
+        writable: bool,
+    ) -> Self {
+        let read_pool = DbPool::CloudflareD1(connection.clone());
+        Self {
+            read_pool,
+            mutation_pool: writable.then_some(DbPool::CloudflareD1(connection)),
             skip_fk_metadata: false,
         }
     }

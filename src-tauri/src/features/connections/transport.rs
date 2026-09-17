@@ -99,6 +99,10 @@ pub async fn delete_connection(
         .connections
         .existing_bigquery_auth_scope(id.into())
         .await?;
+    let cloudflare_auth_scope = state
+        .connections
+        .existing_cloudflare_d1_auth_scope(id.into())
+        .await?;
     let deleted = state.services.connections.delete(id).await?;
     state.terminals.stop_connection(id, &app);
     state.agents_acp.stop_connection(id);
@@ -108,6 +112,15 @@ pub async fn delete_connection(
                 connection_id = %id,
                 %error,
                 "could not remove the deleted BigQuery connection CLI profile"
+            );
+        }
+    }
+    if let Some(auth_scope) = cloudflare_auth_scope {
+        if let Err(error) = crate::cloudflare_d1::cleanup_connection_auth(&auth_scope).await {
+            tracing::warn!(
+                connection_id = %id,
+                %error,
+                "could not remove the deleted Cloudflare Wrangler profile"
             );
         }
     }
@@ -229,4 +242,50 @@ pub async fn discover_bigquery_datasets(
 ) -> AppResult<Vec<crate::bigquery::BigQueryDatasetSummary>> {
     let auth_scope = state.connections.bigquery_auth_scope(&profile).await?;
     crate::bigquery::discover_datasets(profile, project_id, &auth_scope).await
+}
+
+#[tauri::command]
+pub async fn get_cloudflare_d1_auth_state(
+    state: State<'_, AppState>,
+    profile: ConnectionProfile,
+) -> AppResult<crate::cloudflare_d1::CloudflareD1AuthState> {
+    let auth_scope = state.connections.cloudflare_d1_auth_scope(&profile).await?;
+    crate::cloudflare_d1::auth_state(profile, &auth_scope).await
+}
+
+#[tauri::command]
+pub async fn authenticate_cloudflare_d1_account(
+    state: State<'_, AppState>,
+    profile: ConnectionProfile,
+) -> AppResult<crate::cloudflare_d1::CloudflareD1AuthState> {
+    let auth_scope = state.connections.cloudflare_d1_auth_scope(&profile).await?;
+    crate::cloudflare_d1::authenticate_account(profile, &auth_scope).await
+}
+
+#[tauri::command]
+pub async fn clear_cloudflare_d1_auth(
+    state: State<'_, AppState>,
+    profile: ConnectionProfile,
+) -> AppResult<()> {
+    let auth_scope = state.connections.cloudflare_d1_auth_scope(&profile).await?;
+    crate::cloudflare_d1::cleanup_connection_auth(&auth_scope).await
+}
+
+#[tauri::command]
+pub async fn discover_cloudflare_d1_accounts(
+    state: State<'_, AppState>,
+    profile: ConnectionProfile,
+) -> AppResult<Vec<crate::cloudflare_d1::CloudflareD1AccountSummary>> {
+    let auth_scope = state.connections.cloudflare_d1_auth_scope(&profile).await?;
+    crate::cloudflare_d1::discover_accounts(profile, &auth_scope).await
+}
+
+#[tauri::command]
+pub async fn discover_cloudflare_d1_databases(
+    state: State<'_, AppState>,
+    profile: ConnectionProfile,
+    account_id: String,
+) -> AppResult<Vec<crate::cloudflare_d1::CloudflareD1DatabaseSummary>> {
+    let auth_scope = state.connections.cloudflare_d1_auth_scope(&profile).await?;
+    crate::cloudflare_d1::discover_databases(profile, account_id, &auth_scope).await
 }

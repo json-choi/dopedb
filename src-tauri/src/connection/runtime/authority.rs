@@ -66,6 +66,14 @@ async fn open_live(
     let bigquery_auth_scope = (alias_profile.engine == Engine::Bigquery).then(|| {
         crate::bigquery::BigQueryAuthScope::from_active_scope(&pin.scope, pin.connection_id)
     });
+    let cloudflare_auth_scope = (alias_profile.engine == Engine::Sqlite
+        && alias_profile.provider == Provider::CloudflareD1)
+        .then(|| {
+            crate::cloudflare_d1::CloudflareD1AuthScope::from_active_scope(
+                &pin.scope,
+                pin.connection_id,
+            )
+        });
     if let Some(config) = cloud_sql_config {
         if alias_profile
             .extra_params
@@ -81,6 +89,7 @@ async fn open_live(
             secret,
             access,
             bigquery_auth_scope.as_ref(),
+            cloudflare_auth_scope.as_ref(),
         )
         .await
         {
@@ -105,6 +114,7 @@ async fn open_live(
         secret,
         access,
         bigquery_auth_scope.as_ref(),
+        cloudflare_auth_scope.as_ref(),
     )
     .await
     {

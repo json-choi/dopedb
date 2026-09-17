@@ -177,6 +177,26 @@ async fn explain(
                 let plan = bytes.map(|value| format!("BigQuery dry-run: {value} bytes processed"));
                 (estimated_rows, plan)
             }),
+        PoolRef::CloudflareD1(connection) => timeout(
+            PREVIEW_TIMEOUT,
+            connection.query(&format!("EXPLAIN QUERY PLAN {sql}"), 1_000),
+        )
+        .await
+        .ok()
+        .and_then(Result::ok)
+        .map(|result| {
+            let plan = result
+                .rows
+                .into_iter()
+                .filter_map(|row| row.get(3).cloned())
+                .map(|value| match value {
+                    serde_json::Value::String(value) => value,
+                    other => other.to_string(),
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            (None, Some(plan))
+        }),
     };
     out.unwrap_or((None, None))
 }

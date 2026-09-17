@@ -17,6 +17,7 @@ import { useI18n } from "../../lib/i18n";
 import { ConnectionBigQueryFields } from "./ConnectionBigQueryFields";
 import { ManagedWorkspaceConnectionField } from "./ManagedWorkspaceConnectionField";
 import { ConnectionDatabaseField } from "./ConnectionDatabaseField";
+import { ConnectionCloudflareD1Fields } from "./ConnectionCloudflareD1Fields";
 
 type Controller = ConnectionEditorController;
 
@@ -48,6 +49,7 @@ export function ConnectionGeneralTab({
   const {
     isSharedTemplate,
     isSqlite,
+    isCloudflareD1,
     isMongo,
     isBigQuery,
     canEditConnection,
@@ -63,18 +65,22 @@ export function ConnectionGeneralTab({
             <label className="tw:inline-flex tw:min-w-0 tw:items-center tw:gap-1.5">
               <span>{t("connections.engine")}:</span>
               <InlineSelect
-                value={form.engine}
+                value={`${form.engine}:${form.provider}`}
                 aria-label={t("connections.engine")}
                 disabled={busy}
                 onChange={(event) => {
                   const source = sources.available.find(
-                    (candidate) => candidate.engine === event.target.value,
+                    (candidate) =>
+                      `${candidate.engine}:${candidate.provider}` === event.target.value,
                   );
                   if (source) sources.selectAddSource(source);
                 }}
               >
                 {sources.available.map((source) => (
-                  <option key={source.engine} value={source.engine}>
+                  <option
+                    key={`${source.engine}:${source.provider}`}
+                    value={`${source.engine}:${source.provider}`}
+                  >
                     {source.label}
                   </option>
                 ))}
@@ -82,7 +88,7 @@ export function ConnectionGeneralTab({
             </label>
           ) : null}
 
-          {!isSharedTemplate && !isBigQuery ? (
+          {!isSharedTemplate && !isBigQuery && !isCloudflareD1 ? (
             <label className="tw:inline-flex tw:min-w-0 tw:items-center tw:gap-1.5">
               <span>{t("connections.connectionType")}:</span>
               <InlineSelect
@@ -148,7 +154,7 @@ export function ConnectionGeneralTab({
         ) : null}
       </section>
 
-      {!isSharedTemplate && !isBigQuery && url.mode === "urlOnly" ? (
+      {!isSharedTemplate && !isBigQuery && !isCloudflareD1 && url.mode === "urlOnly" ? (
         <section className="tw:grid tw:gap-2">
           <PropertyRow
             label={t("connections.connectionUrl")}
@@ -172,6 +178,8 @@ export function ConnectionGeneralTab({
             {t("connections.connectionUrlOverrides")}
           </p>
         </section>
+      ) : isCloudflareD1 ? (
+        <ConnectionCloudflareD1Fields profile={profile} />
       ) : isSqlite ? (
         <section className="tw:grid tw:gap-3">
           <PropertyRow

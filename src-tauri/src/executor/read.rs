@@ -102,8 +102,12 @@ where
     // preference: no caller can request an oversized page.
     let batch_rows = batch_rows.clamp(1, 256);
     let max = max_rows as usize;
-    if let Pool::Bigquery(connection) = &live.read_pool {
-        let result = connection.query(sql, max_rows, cancellation).await?;
+    let materialized = match &live.read_pool {
+        Pool::Bigquery(connection) => Some(connection.query(sql, max_rows, cancellation).await?),
+        Pool::CloudflareD1(connection) => Some(connection.query(sql, max_rows).await?),
+        _ => None,
+    };
+    if let Some(result) = materialized {
         let columns = result.columns.clone();
         let row_count = result.rows.len();
         let first_row_ms = (!result.rows.is_empty()).then(|| started.elapsed().as_millis() as u64);
@@ -263,7 +267,9 @@ where
                     first_row_ms,
                 )
             }
-            Pool::Bigquery(_) => unreachable!("BigQuery is handled before the SQLx stream"),
+            Pool::Bigquery(_) | Pool::CloudflareD1(_) => {
+                unreachable!("remote CLI engines are handled before the SQLx stream")
+            }
         };
         // Keep zero-row metadata inside the same cancellation/timeout envelope as
         // cursor iteration. It must also become a page so renderers can build an
@@ -325,10 +331,39 @@ pub(crate) async fn run_read_byte_capped(
 ) -> AppResult<QueryResult> {
     let started = Instant::now();
     let cancellation = query_id.map(cancel::register);
-    if let Pool::Bigquery(connection) = &live.read_pool {
-        return connection
-            .query_byte_capped(sql, max_rows, max_bytes, cancellation.as_ref())
-            .await;
+    match &live.read_pool {
+        Pool::Bigquery(connection) => {
+            return connection
+                .query_byte_capped(sql, max_rows, max_bytes, cancellation.as_ref())
+                .await;
+        }
+        Pool::CloudflareD1(connection) => {
+            let mut result = connection.query(sql, max_rows).await?;
+            let mut retained_bytes = 0_usize;
+            let mut rows = Vec::with_capacity(result.rows.len());
+            for row in result.rows {
+                let row_bytes = serde_json::to_vec(&row)?.len();
+                if row_bytes > max_bytes {
+                    return Err(AppError::Blocked {
+                        reason: format!(
+                            "one export row exceeds the {} MiB batch safety limit",
+                            max_bytes / 1024 / 1024
+                        ),
+                    });
+                }
+                if retained_bytes.saturating_add(row_bytes) > max_bytes {
+                    result.truncated = true;
+                    break;
+                }
+                retained_bytes += row_bytes;
+                rows.push(row);
+            }
+            result.row_count = rows.len();
+            result.rows = rows;
+            result.duration_ms = started.elapsed().as_millis() as u64;
+            return Ok(result);
+        }
+        _ => {}
     }
     let max = max_rows as usize;
     let inner = async {
@@ -378,7 +413,9 @@ pub(crate) async fn run_read_byte_capped(
                     truncated,
                 )
             }
-            Pool::Bigquery(_) => unreachable!("BigQuery is handled before the SQLx stream"),
+            Pool::Bigquery(_) | Pool::CloudflareD1(_) => {
+                unreachable!("remote CLI engines are handled before the SQLx stream")
+            }
         };
         Ok(QueryResult {
             row_count: rows.len(),
@@ -408,8 +445,10 @@ pub(crate) async fn run_read_registered(
     let started = Instant::now();
     let max = max_rows as usize;
 
-    if let Pool::Bigquery(connection) = &live.read_pool {
-        return connection.query(sql, max_rows, cancellation).await;
+    match &live.read_pool {
+        Pool::Bigquery(connection) => return connection.query(sql, max_rows, cancellation).await,
+        Pool::CloudflareD1(connection) => return connection.query(sql, max_rows).await,
+        _ => {}
     }
 
     // ponytail: read_pool is the L2-enforced pool; reads never touch mutation authority.
@@ -466,7 +505,9 @@ pub(crate) async fn run_read_registered(
                 .await?;
                 (with_headers(c, pool, sql).await, r, f, t)
             }
-            Pool::Bigquery(_) => unreachable!("BigQuery is handled before the SQLx stream"),
+            Pool::Bigquery(_) | Pool::CloudflareD1(_) => {
+                unreachable!("remote CLI engines are handled before the SQLx stream")
+            }
         };
         Ok::<_, AppError>(QueryResult {
             row_count: rows.len(),

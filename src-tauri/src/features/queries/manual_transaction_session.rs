@@ -31,6 +31,10 @@ impl ManualConnection {
             DbPool::Bigquery(_) => Err(AppError::Blocked {
                 reason: "BigQuery does not expose manual transactions in DopeDB".into(),
             }),
+            DbPool::CloudflareD1(_) => Err(AppError::Blocked {
+                reason: "Cloudflare D1 Wrangler connections do not expose manual transactions"
+                    .into(),
+            }),
         }
     }
 

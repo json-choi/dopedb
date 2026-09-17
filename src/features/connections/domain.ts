@@ -21,7 +21,8 @@ export type ConnectionProvider =
   | "generic"
   | "neon"
   | "planetScale"
-  | "gcpCloudSql";
+  | "gcpCloudSql"
+  | "cloudflareD1";
 export type WorkspaceConnectionAccess =
   | "view"
   | "read"
@@ -84,6 +85,21 @@ export interface BigQueryProjectSummary {
 
 export interface BigQueryDatasetSummary {
   id: string;
+}
+
+export interface CloudflareD1AuthState {
+  authenticated: boolean;
+  email: string | null;
+}
+
+export interface CloudflareD1AccountSummary {
+  id: string;
+  name: string;
+}
+
+export interface CloudflareD1DatabaseSummary {
+  id: string;
+  name: string;
 }
 
 /**
