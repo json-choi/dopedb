@@ -23,8 +23,26 @@ async fn send(host: &str, request: &str) -> String {
     response
 }
 
-fn handoff(value: &WorkspaceDesktopAuthorization) -> (String, String) {
-    let url = url::Url::parse(&value.authorization_url).unwrap();
+async fn handoff(value: &WorkspaceDesktopAuthorization) -> (String, String, String) {
+    let start = url::Url::parse(&value.authorization_url).unwrap();
+    assert_eq!(start.host_str(), Some("127.0.0.1"));
+    assert!(start.query().is_none());
+    let host = format!("127.0.0.1:{}", start.port().unwrap());
+    let response = send(&host, &request(start.path(), &host)).await;
+    assert!(response.starts_with("HTTP/1.1 200"));
+    assert!(response.contains("data-page=\"start\""));
+    assert!(response.contains("Content-Security-Policy:"));
+    let response = send(
+        &host,
+        &request(&format!("/authorize/{}?", value.attempt_id), &host),
+    )
+    .await;
+    assert!(response.starts_with("HTTP/1.1 303"));
+    let location = response
+        .lines()
+        .find_map(|line| line.strip_prefix("Location: "))
+        .unwrap();
+    let url = url::Url::parse(location).unwrap();
     let pairs: std::collections::HashMap<_, _> = url.query_pairs().into_owned().collect();
     let redirect = url::Url::parse(&pairs["redirect_uri"]).unwrap();
     assert_eq!(redirect.host_str(), Some("127.0.0.1"));
@@ -37,6 +55,7 @@ fn handoff(value: &WorkspaceDesktopAuthorization) -> (String, String) {
     (
         format!("127.0.0.1:{}", redirect.port().unwrap()),
         pairs["state"].clone(),
+        pairs["code_challenge"].clone(),
     )
 }
 
@@ -78,10 +97,21 @@ pub(crate) async fn assert_desktop_login_contract() {
 
     let runtime = DesktopLoginRuntime::default();
     let first = runtime
-        .begin_at("https://app.dopedb.dev", LIFETIME)
+        .begin_at("https://app.dopedb.dev", LIFETIME, "dev.dopedb.desktop")
         .await
         .unwrap();
-    let (host, state) = handoff(&first);
+    let (host, state, challenge) = handoff(&first).await;
+    for target in ["/start/wrong", "/authorize/wrong"] {
+        assert!(send(&host, &request(target, &host))
+            .await
+            .starts_with("HTTP/1.1 400"));
+    }
+    assert!(send(
+        &host,
+        &request(&format!("/start/{}", first.attempt_id), "other.example")
+    )
+    .await
+    .starts_with("HTTP/1.1 400"));
     let invalid = send(
         &host,
         &request(&format!("/callback?state=wrong&code={CODE}"), &host),
@@ -97,17 +127,14 @@ pub(crate) async fn assert_desktop_login_contract() {
     assert!(response.contains("Cache-Control: no-store"));
     assert!(response.contains("Referrer-Policy: no-referrer"));
     assert!(!response.contains(CODE));
+    assert!(response.contains("data-page=\"received\""));
+    assert!(response.contains("history.replaceState"));
+    assert!(!response.contains(&state));
+    assert!(!response.contains("unsafe-inline"));
     assert!(TcpStream::connect(&host).await.is_err());
     let DesktopCallback::Code(code) = runtime.wait(&first.attempt_id).await.unwrap() else {
         panic!("code expected")
     };
-    let url = url::Url::parse(&first.authorization_url).unwrap();
-    let challenge = url
-        .query_pairs()
-        .find(|(key, _)| key == "code_challenge")
-        .unwrap()
-        .1
-        .into_owned();
     assert_eq!(
         URL_SAFE_NO_PAD.encode(Sha256::digest(code.verifier.as_bytes())),
         challenge
@@ -125,10 +152,10 @@ pub(crate) async fn assert_desktop_login_contract() {
 
     // A valid but not-yet-committed callback cannot sign in after replacement.
     let superseded = runtime
-        .begin_at("https://app.dopedb.dev", LIFETIME)
+        .begin_at("https://app.dopedb.dev", LIFETIME, "dev.dopedb.desktop")
         .await
         .unwrap();
-    let (host, state) = handoff(&superseded);
+    let (host, state, _) = handoff(&superseded).await;
     send(
         &host,
         &request(&format!("/callback?state={state}&code={CODE}"), &host),
@@ -139,7 +166,7 @@ pub(crate) async fn assert_desktop_login_contract() {
         DesktopCallback::Code(_)
     ));
     let replacement = runtime
-        .begin_at("https://app.dopedb.dev", LIFETIME)
+        .begin_at("https://app.dopedb.dev", LIFETIME, "dev.dopedb.desktop")
         .await
         .unwrap();
     let mut committed = false;
@@ -154,7 +181,7 @@ pub(crate) async fn assert_desktop_login_contract() {
     runtime.cancel(&replacement.attempt_id).await;
 
     let old = runtime
-        .begin_at("https://app.dopedb.dev", LIFETIME)
+        .begin_at("https://app.dopedb.dev", LIFETIME, "dev.dopedb.desktop")
         .await
         .unwrap();
     let pending = runtime.clone();
@@ -162,7 +189,7 @@ pub(crate) async fn assert_desktop_login_contract() {
     let waiter = tokio::spawn(async move { pending.wait(&old_id).await });
     tokio::task::yield_now().await;
     let new = runtime
-        .begin_at("https://app.dopedb.dev", LIFETIME)
+        .begin_at("https://app.dopedb.dev", LIFETIME, "dev.dopedb.desktop")
         .await
         .unwrap();
     assert!(waiter.await.unwrap().is_err());
@@ -171,17 +198,45 @@ pub(crate) async fn assert_desktop_login_contract() {
         .commit(&old.attempt_id, async { Ok(()) })
         .await
         .is_err());
-    let (cancelled_host, _) = handoff(&new);
+    let (cancelled_host, _, _) = handoff(&new).await;
     runtime.cancel(&new.attempt_id).await;
     assert!(TcpStream::connect(&cancelled_host).await.is_err());
     runtime.cancel(&new.attempt_id).await;
     assert!(runtime.wait(&new.attempt_id).await.is_err());
 
-    let expired = runtime
-        .begin_at("https://app.dopedb.dev", Duration::from_millis(100))
+    let denied = runtime
+        .begin_at("https://app.dopedb.dev", LIFETIME, "dev.dopedb.desktop.dev")
         .await
         .unwrap();
-    let (host, _) = handoff(&expired);
+    let (host, state, _) = handoff(&denied).await;
+    let response = send(
+        &host,
+        &request(
+            &format!("/callback?state={state}&error=access_denied"),
+            &host,
+        ),
+    )
+    .await;
+    assert!(response.contains("data-page=\"denied\""));
+    assert!(response.contains("dopedb-dev://workspace/access-complete"));
+    assert!(matches!(
+        runtime.wait(&denied.attempt_id).await.unwrap(),
+        DesktopCallback::Denied
+    ));
+    assert!(runtime
+        .begin_at("https://app.dopedb.dev", LIFETIME, "unknown")
+        .await
+        .is_err());
+
+    let expired = runtime
+        .begin_at(
+            "https://app.dopedb.dev",
+            Duration::from_millis(100),
+            "dev.dopedb.desktop",
+        )
+        .await
+        .unwrap();
+    let (host, _, _) = handoff(&expired).await;
     let mut stalled = TcpStream::connect(&host).await.unwrap();
     stalled
         .write_all(b"GET /callback?state=unfinished")
@@ -193,10 +248,10 @@ pub(crate) async fn assert_desktop_login_contract() {
     ));
     assert!(TcpStream::connect(&host).await.is_err());
     let stopped = runtime
-        .begin_at("https://app.dopedb.dev", LIFETIME)
+        .begin_at("https://app.dopedb.dev", LIFETIME, "dev.dopedb.desktop")
         .await
         .unwrap();
-    let (host, _) = handoff(&stopped);
+    let (host, _, _) = handoff(&stopped).await;
     runtime.shutdown().await;
     assert!(TcpStream::connect(&host).await.is_err());
     assert!(runtime.wait(&stopped.attempt_id).await.is_err());

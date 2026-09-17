@@ -255,6 +255,15 @@ Elevation은 세 단계만 허용한다.
 
 ### React primitive
 
+- `features/workspaces/DesktopLoginPage`는 native loopback 로그인 시작·인증 전달·
+  거절·오류의 브라우저 문서를 소유한다. 공용 `Button`, `DopeDBMarkGraphic`,
+  semantic token과 정적 Tailwind를 빌드 시 단일 HTML로 생성해 앱에 포함한다.
+  `pnpm generate:desktop-login`으로 갱신하며 build 전에 생성물 일치를 검사한다.
+  listener는 별도 CSS·font·script 요청을 받지 않으므로 OS 글꼴 fallback을 쓰고
+  생성된 CSS와 고정 스크립트는 CSP SHA-256으로 허용한다. 화면별 CSS는 없다.
+  브라우저 언어의 한·영과 OS 테마를 반영하며 인증 전달을 로그인 성공으로 표시하지
+  않는다. native에서 session 확정 후 앱 창을 복원한다.
+
 - DopeDB 브랜드는 좁은 D를 −24° 행성 고리가 감싸는 마크로 통일한다.
   [`assets/brand/dopedb-icon.svg`](../../assets/brand/dopedb-icon.svg)가 도형과
   타일 배경 `#151a16`·마크 `#ccf36b`의 단일 정본이다. `pnpm icons`는 이 SVG를

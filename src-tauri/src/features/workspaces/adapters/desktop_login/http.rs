@@ -1,6 +1,8 @@
 //! Bounded HTTP callback parsing; only a matching single-use state completes login.
 
 use crate::error::{AppError, AppResult};
+use base64::{engine::general_purpose::STANDARD, Engine};
+use sha2::{Digest, Sha256};
 use std::time::Duration;
 use subtle::ConstantTimeEq;
 use tokio::{
@@ -15,6 +17,9 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
 pub(super) async fn receive(
     listener: TcpListener,
     state: &str,
+    id: &str,
+    authorization_url: &str,
+    app_url: &str,
 ) -> AppResult<Option<Zeroizing<String>>> {
     let host = listener.local_addr()?.to_string();
     loop {
@@ -22,24 +27,49 @@ pub(super) async fn receive(
         if !peer.ip().is_loopback() {
             continue;
         }
-        let parsed =
-            tokio::time::timeout(REQUEST_TIMEOUT, read_request(&mut stream, &host, state)).await;
-        let accepted = matches!(&parsed, Ok(Ok(_)));
+        let request = tokio::time::timeout(REQUEST_TIMEOUT, read_request(&mut stream)).await;
+        let parsed = match request {
+            Ok(Ok(request)) => {
+                let target = request_target(&request, &host);
+                if target
+                    .as_ref()
+                    .is_ok_and(|target| *target == format!("/start/{id}"))
+                {
+                    respond(&mut stream, "start", id, app_url).await;
+                    continue;
+                }
+                if target.as_ref().is_ok_and(|target| {
+                    *target == format!("/authorize/{id}") || *target == format!("/authorize/{id}?")
+                }) {
+                    let response = format!("HTTP/1.1 303 See Other\r\nLocation: {authorization_url}\r\nContent-Length: 0\r\nCache-Control: no-store\r\nReferrer-Policy: no-referrer\r\nConnection: close\r\n\r\n");
+                    let _ = tokio::time::timeout(
+                        REQUEST_TIMEOUT,
+                        stream.write_all(response.as_bytes()),
+                    )
+                    .await;
+                    continue;
+                }
+                parse(&request, &host, state)
+            }
+            _ => Err(invalid()),
+        };
+        let accepted = parsed.is_ok();
         // Release the listening socket before acknowledging a valid callback.
         if accepted {
             drop(listener);
-            respond(&mut stream, true).await;
-            return parsed.expect("accepted callback has a result");
+            let page = if matches!(&parsed, Ok(Some(_))) {
+                "received"
+            } else {
+                "denied"
+            };
+            respond(&mut stream, page, id, app_url).await;
+            return parsed;
         }
-        respond(&mut stream, false).await;
+        respond(&mut stream, "invalid", id, app_url).await;
     }
 }
 
-async fn read_request(
-    stream: &mut TcpStream,
-    host: &str,
-    state: &str,
-) -> AppResult<Option<Zeroizing<String>>> {
+async fn read_request(stream: &mut TcpStream) -> AppResult<Zeroizing<String>> {
     let mut bytes = Zeroizing::new(Vec::with_capacity(1024));
     loop {
         let mut chunk = Zeroizing::new([0u8; 512]);
@@ -52,11 +82,11 @@ async fn read_request(
             if end + 4 != bytes.len() {
                 return Err(invalid());
             }
-            return parse(
-                std::str::from_utf8(&bytes).map_err(|_| invalid())?,
-                host,
-                state,
-            );
+            return Ok(Zeroizing::new(
+                std::str::from_utf8(&bytes)
+                    .map_err(|_| invalid())?
+                    .to_owned(),
+            ));
         }
     }
 }
@@ -65,17 +95,10 @@ fn invalid() -> AppError {
     AppError::Config("invalid workspace login callback".into())
 }
 
-pub(super) fn parse(
-    request: &str,
-    host: &str,
-    state: &str,
-) -> AppResult<Option<Zeroizing<String>>> {
+fn request_target<'a>(request: &'a str, host: &str) -> AppResult<&'a str> {
     let mut lines = request.split("\r\n");
     let parts: Vec<_> = lines.next().ok_or_else(invalid)?.split(' ').collect();
-    if parts.len() != 3
-        || parts[0] != "GET"
-        || parts[2] != "HTTP/1.1"
-        || !parts[1].starts_with("/callback?")
+    if parts.len() != 3 || parts[0] != "GET" || parts[2] != "HTTP/1.1" || !parts[1].starts_with('/')
     {
         return Err(invalid());
     }
@@ -97,7 +120,19 @@ pub(super) fn parse(
     if hosts != 1 {
         return Err(invalid());
     }
-    let url = url::Url::parse(&format!("http://{host}{}", parts[1])).map_err(|_| invalid())?;
+    Ok(parts[1])
+}
+
+pub(super) fn parse(
+    request: &str,
+    host: &str,
+    state: &str,
+) -> AppResult<Option<Zeroizing<String>>> {
+    let target = request_target(request, host)?;
+    if !target.starts_with("/callback?") {
+        return Err(invalid());
+    }
+    let url = url::Url::parse(&format!("http://{host}{target}")).map_err(|_| invalid())?;
     if url.path() != "/callback" || url.fragment().is_some() {
         return Err(invalid());
     }
@@ -132,12 +167,28 @@ pub(super) fn parse(
     }
 }
 
-async fn respond(stream: &mut TcpStream, accepted: bool) {
-    let (status, body) = if accepted {
-        ("200 OK", "<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><title>DopeDB</title><p>You can return to DopeDB.</p></html>")
+async fn respond(stream: &mut TcpStream, page: &str, id: &str, app_url: &str) {
+    let status = if page == "invalid" {
+        "400 Bad Request"
     } else {
-        ("400 Bad Request", "Invalid login callback.")
+        "200 OK"
     };
-    let response = format!("HTTP/1.1 {status}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nCache-Control: no-store\r\nReferrer-Policy: no-referrer\r\nContent-Security-Policy: default-src 'none'; frame-ancestors 'none'\r\nX-Content-Type-Options: nosniff\r\nConnection: close\r\n\r\n{body}", body.len());
+    let body = include_str!("page.html")
+        .replace("__PAGE__", page)
+        .replace("__AUTHORIZE_PATH__", &format!("/authorize/{id}"))
+        .replace("__APP_URL__", app_url);
+    let hash = |tag: &str| {
+        let content = body
+            .split_once(&format!("<{tag}>"))
+            .unwrap()
+            .1
+            .split_once(&format!("</{tag}>"))
+            .unwrap()
+            .0;
+        STANDARD.encode(Sha256::digest(content.as_bytes()))
+    };
+    let style_hash = hash("style");
+    let script_hash = hash("script");
+    let response = format!("HTTP/1.1 {status}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nCache-Control: no-store\r\nReferrer-Policy: no-referrer\r\nContent-Security-Policy: default-src 'none'; style-src 'sha256-{style_hash}'; script-src 'sha256-{script_hash}'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'\r\nX-Content-Type-Options: nosniff\r\nConnection: close\r\n\r\n{body}", body.len());
     let _ = tokio::time::timeout(REQUEST_TIMEOUT, stream.write_all(response.as_bytes())).await;
 }

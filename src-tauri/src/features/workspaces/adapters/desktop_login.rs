@@ -64,8 +64,8 @@ fn random_secret() -> AppResult<Zeroizing<String>> {
 }
 
 impl DesktopLoginRuntime {
-    pub(crate) async fn begin(&self) -> AppResult<WorkspaceDesktopAuthorization> {
-        self.begin_at(&crate::hosted_control_plane::origin()?, LIFETIME)
+    pub(crate) async fn begin(&self, scheme: &str) -> AppResult<WorkspaceDesktopAuthorization> {
+        self.begin_at(&crate::hosted_control_plane::origin()?, LIFETIME, scheme)
             .await
     }
 
@@ -73,6 +73,7 @@ impl DesktopLoginRuntime {
         &self,
         origin: &str,
         lifetime: Duration,
+        scheme: &str,
     ) -> AppResult<WorkspaceDesktopAuthorization> {
         // Serializes replacement with the complete account commit, never with browser wait.
         let mut active = self.active.lock().await;
@@ -98,6 +99,18 @@ impl DesktopLoginRuntime {
             ("code_challenge_method", "S256"),
         ]);
         let id = Uuid::new_v4().to_string();
+        let authorization_url = format!("http://{address}/start/{id}");
+        let browser_id = id.clone();
+        let app_url = match scheme {
+            "dev.dopedb.desktop.dev" => "dopedb-dev://workspace/access-complete",
+            "dev.dopedb.desktop.benchmark" => "dopedb-benchmark://workspace/access-complete",
+            "dev.dopedb.desktop" => "dopedb://workspace/access-complete",
+            _ => {
+                return Err(AppError::Config(
+                    "unrecognized desktop login application".into(),
+                ))
+            }
+        };
         let cancellation = CancellationToken::new();
         let cancelled = cancellation.clone();
         let (sender, receiver) = oneshot::channel();
@@ -105,7 +118,7 @@ impl DesktopLoginRuntime {
             let callback = tokio::select! {
                 biased;
                 _ = cancelled.cancelled() => return,
-                result = tokio::time::timeout_at(Instant::now() + lifetime, http::receive(listener, &state)) => {
+                result = tokio::time::timeout_at(Instant::now() + lifetime, http::receive(listener, &state, &browser_id, url.as_str(), app_url)) => {
                     match result {
                         Err(_) => Ok(DesktopCallback::Expired),
                         Ok(Err(error)) => Err(error),
@@ -124,7 +137,7 @@ impl DesktopLoginRuntime {
         });
         Ok(WorkspaceDesktopAuthorization {
             attempt_id: id,
-            authorization_url: url.into(),
+            authorization_url,
             expires_in: lifetime.as_secs(),
         })
     }

@@ -2,7 +2,6 @@
 // Session tokens stay behind Rust IPC; this component caches public identity only.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { openUrl } from "@tauri-apps/plugin-opener";
 import { ProviderCredentialDialog } from "../../providers/ProviderCredentialDialog";
 import { ProviderCredentialsMenuItem } from "../../providers/ProviderCredentialsMenuItem";
 import {
@@ -419,8 +418,6 @@ export default function WorkspaceAccount({
         analyticsAttemptId,
         attemptId,
       };
-      await openUrl(authorization.authorizationUrl);
-      if (loginAttempt.current !== attempt) return;
       setLoginPhase("waiting");
       const result = await completeDesktopWorkspaceLogin(attemptId);
       if (loginAttempt.current !== attempt) return;

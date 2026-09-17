@@ -249,8 +249,21 @@ pub async fn workspace_sign_out_all(
 #[tauri::command]
 pub async fn begin_desktop_workspace_login(
     state: State<'_, AppState>,
+    app: tauri::AppHandle,
 ) -> AppResult<super::domain::WorkspaceDesktopAuthorization> {
-    state.desktop_login.begin().await
+    use tauri_plugin_opener::OpenerExt;
+    let authorization = state.desktop_login.begin(&app.config().identifier).await?;
+    if app
+        .opener()
+        .open_url(&authorization.authorization_url, None::<String>)
+        .is_err()
+    {
+        state.desktop_login.cancel(&authorization.attempt_id).await;
+        return Err(crate::error::AppError::Config(
+            "could not open the sign-in browser".into(),
+        ));
+    }
+    Ok(authorization)
 }
 
 #[tauri::command]
@@ -270,7 +283,7 @@ pub async fn complete_desktop_workspace_login(
 ) -> AppResult<WorkspaceLoginResult> {
     use super::adapters::desktop_login::DesktopCallback;
     let callback = state.desktop_login.wait(&attempt_id).await?;
-    state
+    let result = state
         .desktop_login
         .commit(&attempt_id, async {
             match callback {
@@ -296,7 +309,19 @@ pub async fn complete_desktop_workspace_login(
                 }),
             }
         })
-        .await
+        .await;
+    if result
+        .as_ref()
+        .is_ok_and(|value| value.status == WorkspaceLoginStatus::SignedIn)
+    {
+        use tauri::Manager;
+        if let Some(window) = app.get_webview_window("main") {
+            let _ = window.unminimize();
+            let _ = window.show();
+            let _ = window.set_focus();
+        }
+    }
+    result
 }
 
 async fn commit_workspace_login(

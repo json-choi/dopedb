@@ -11,9 +11,6 @@
       "identifier": "opener:allow-open-url",
       "allow": [
         {
-          "url": "https://app.dopedb.dev/auth/desktop?*"
-        },
-        {
           "url": "https://app.dopedb.dev/settings*"
         },
         {

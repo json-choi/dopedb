@@ -216,13 +216,13 @@ describe("workspace auth lifecycle", () => {
     expect(allowedUrls).toContain(DOPEDB_RELEASES_URL);
     expect(allowedUrls).toContain("https://app.dopedb.dev/analyses/*");
     expect(allowedUrls).not.toContain("https://github.com/*");
-    expect(allowedUrls).toContain("https://app.dopedb.dev/auth/desktop?*");
+    expect(allowedUrls).not.toContain("https://app.dopedb.dev/auth/desktop?*");
     expect(allowedUrls).not.toContain("https://app.dopedb.dev/auth/device?user_code=*");
     expect(allowedUrls.some((url) => url.startsWith("http:"))).toBe(false);
 
     const desktopAuthorization = {
       attemptId: "desktop-attempt",
-      authorizationUrl: "https://app.dopedb.dev/auth/desktop?request=public-request",
+      authorizationUrl: "http://127.0.0.1:32123/start/desktop-attempt",
       expiresIn: 300,
     };
     const desktopLoginInvoke = vi.spyOn(ipc, "invoke")

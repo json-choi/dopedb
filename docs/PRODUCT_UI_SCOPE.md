@@ -238,12 +238,17 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
 - 작업용 chrome은 낮고 조용하게 유지하며 정보는 실행 문맥 가까이에 둔다.
 - command row와 tree row는 compact density를 사용하고, 선택·focus·위험·실패처럼
   의미가 있는 상태에만 색과 elevation을 사용한다.
-- Desktop workspace 로그인은 배포된 HTTPS 웹에서 계정 선택과 명시적인 승인을
+- Desktop workspace 로그인 시작 화면은 native가 연 임시 localhost 주소에서
+  앱에 포함된 공용 디자인 시스템 문서로 표시한다. 계정 인증을 계속하면
+  배포된 HTTPS 웹에서 계정 선택과 명시적인 승인을
   받고, native가 연 `127.0.0.1` 임시 포트의 일회성 callback으로 돌아온다.
   native는 짧은 만료의 state와 PKCE S256으로 authorization code를 교환하고
   계정별 OS 자격 증명 저장과 권한 전환을 마친 뒤에만 로그인 완료를 알린다.
   verifier, code와 session token은 WebView에 전달하지 않는다. 취소·만료·완료·앱
   종료 시 listener를 닫고, 이전 시도의 callback은 새 로그인에 영향을 주지 않는다.
+  callback은 한국어·영어의 인증 전달·거절·오류 안내와 앱 복귀 동작을 제공하고,
+  URL query를 지운다. 인증 전달 화면은 session 확인 성공을 미리 주장하지 않는다.
+  실제 로그인 성공 뒤 native가 앱의 최소화를 해제하고 앞으로 가져온다.
   비밀값 없는 `DopeDB 앱 열기` URL은 앱 활성화만 소유하며 인증 완료 근거가 아니다.
   기존 RFC 8628 device endpoint는 호환 경계로 유지한다. 현재 `dopedb` CLI에는
   독립 Workspace 로그인 명령이 없으며 `agent start`는 실행 중인 Desktop의 승인과
