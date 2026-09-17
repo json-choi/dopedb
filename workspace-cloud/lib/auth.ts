@@ -5,7 +5,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "@better-auth/drizzle-adapter";
-import { bearer, deviceAuthorization, multiSession, organization } from "better-auth/plugins";
+import { bearer, multiSession, organization } from "better-auth/plugins";
 import { d1Db as db } from "./d1/database";
 import { env } from "./env";
 import { sendWorkspaceInvitation } from "./invitation-email";
@@ -81,15 +81,9 @@ function createAuth() {
       // Keep several browser identities available without merging their organization
       // boundaries. The active session remains explicit and can be switched atomically.
       multiSession({ maximumSessions: 10 }),
-      // Desktop PKCE and the compatible device exchange return independent Better Auth
+      // Desktop PKCE returns independent Better Auth
       // sessions, stored locally and presented only over HTTPS as Bearer tokens.
       bearer(),
-      deviceAuthorization({
-        verificationUri: "/auth/device",
-        expiresIn: "10m",
-        interval: "5s",
-        validateClient: async (clientId) => clientId === "dopedb-desktop",
-      }),
       organization({
         ac,
         roles: workspaceRoles,

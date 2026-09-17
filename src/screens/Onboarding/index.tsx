@@ -93,7 +93,7 @@ export default function Onboarding({
 
   return (
     <div role="group" tabIndex={0} aria-label={t("onboarding.cosmicScene")}
-      className="tw:relative tw:flex tw:h-full tw:min-h-0 tw:cursor-grab tw:flex-col tw:overflow-hidden tw:bg-[var(--ds-cosmic-night)] tw:focus-visible:outline-none tw:focus-visible:ring-1 tw:focus-visible:ring-inset tw:focus-visible:ring-ring tw:data-[dragging=true]:cursor-grabbing tw:[--ds-background:var(--ds-cosmic-night)] tw:[--ds-editor-surface:var(--ds-cosmic-night)] tw:[--ds-foreground:var(--ds-cosmic-cream)] tw:[--ds-muted:var(--ds-cosmic-night-soft)] tw:[--ds-muted-foreground:var(--ds-cosmic-muted)] tw:[--ds-ring:var(--ds-cosmic-electric)] tw:[--ds-selection:var(--ds-cosmic-night-soft)]">
+      className="tw:relative tw:flex tw:h-full tw:min-h-0 tw:cursor-grab tw:flex-col tw:overflow-hidden tw:bg-[var(--ds-cosmic-night)] tw:focus-visible:outline-none tw:focus-visible:ring-1 tw:focus-visible:ring-inset tw:focus-visible:ring-ring tw:data-[dragging=true]:cursor-grabbing tw:[--ds-background:var(--ds-cosmic-night)] tw:[--ds-editor-surface:var(--ds-cosmic-night)] tw:[--ds-foreground:var(--ds-primary-foreground)] tw:[--ds-muted:var(--ds-cosmic-night-soft)] tw:[--ds-muted-foreground:var(--ds-cosmic-muted)] tw:[--ds-ring:var(--ds-cosmic-electric)] tw:[--ds-selection:var(--ds-cosmic-night-soft)]">
       <CosmicBackdrop />
       <div className="tw:pointer-events-none tw:relative tw:z-10 tw:flex tw:min-h-0 tw:flex-1 tw:items-end tw:justify-center tw:overflow-auto tw:p-5 tw:pb-16">
         <main className="tw:pointer-events-auto tw:w-full tw:max-w-[320px] tw:cursor-default">

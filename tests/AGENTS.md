@@ -32,7 +32,7 @@ Each `*.harness.*` file in the repository — with no exceptions — must appear
 | `entry-point` | vitest executes this file directly; it declares `describe`/`it` cases. | `tests` (exact case count, ≥1) and `runner` (the vitest config whose `include` list names it) |
 | `helper` | An assertion module with **zero** cases, imported by another harness file. | `tests: 0` and `importedBy` (the harness file that imports it) |
 
-Current scope: 5 entry points carrying 14 cases, plus 16 helper modules.
+Current scope: 4 entry points carrying 14 cases, plus 16 helper modules.
 
 Folding these cases into `frontendCap`/`totalCap` is a real alternative that
 the repository owner has **not** decided (issue #198, option 2). Recording the
@@ -53,7 +53,7 @@ caps, which needs an explicit owner request.
 
 ### Testing Requirements
 - `pnpm check:test-budget` runs `node scripts/check-critical-test-budget.mjs`, which walks the whole repository (skipping `.git`, `node_modules`, `target`, `dist`, `.next`, `.open-next`, `.wrangler`, and similar build/tooling directories), counts every frontend/Rust/harness file and test case, and fails on any mismatch against `critical-test-budget.json`. Run this whenever a test or harness file is added, removed, or renamed anywhere in the repository.
-- It prints two lines. The first is the 208 budget (`frontend … , Rust … , total …/208`); the second reports the harness suites separately (`harness 14/14 (budget 외 계약 검증, 208에 포함되지 않음): 5 entry points, 16 helper modules`). The harness line never changes the first line's totals.
+- It prints two lines. The first is the 208 budget (`frontend … , Rust … , total …/208`); the second reports the harness suites separately (`harness 14/14 (budget 외 계약 검증, 208에 포함되지 않음): 4 entry points, 16 helper modules`). The harness line never changes the first line's totals.
 - One shared counter serves both the frontend and harness sections, and it ignores member calls such as `/^[0-9a-f]{64}$/.test(value)` or `pattern.test(x)`. An assertion that happens to call `.test()` is never miscounted as a declared case, so a file is never pushed to a wrong number that the manifest then gets "corrected" to match. The Rust side is unaffected: it counts whole-line `#[test]`-shaped attributes, a form no method call can imitate.
 
 ### Common Patterns
@@ -64,7 +64,7 @@ caps, which needs an explicit owner request.
 
 ### Internal
 - Read by `../scripts/check-critical-test-budget.mjs`. `fixtures/product-analytics-v1.json` is read by `../product-analytics-cloudflare/src/index.harness.ts` (see `../product-analytics-cloudflare/AGENTS.md`).
-- The `harness` section names four vitest configs it must stay consistent with: `../workspace-cloud/vitest.contracts.config.ts` (`pnpm --dir workspace-cloud test:contracts`, also reached by root `pnpm check:knowledge`), `../workspace-cloud/vitest.provider-harness.config.ts` (opt-in, launched only by `run-provider-import-postgres-harness.mjs` behind its isolation guard), `../product-analytics-cloudflare/vitest.config.ts` (`pnpm analytics:cloudflare:test`), and `../workspace-scheduler-cloudflare/vitest.config.ts` (`pnpm scheduler:cloudflare:test`).
+- The `harness` section names three vitest configs it must stay consistent with: `../workspace-cloud/vitest.contracts.config.ts` (`pnpm --dir workspace-cloud test:contracts`, also reached by root `pnpm check:knowledge`), `../product-analytics-cloudflare/vitest.config.ts` (`pnpm analytics:cloudflare:test`), and `../workspace-scheduler-cloudflare/vitest.config.ts` (`pnpm scheduler:cloudflare:test`).
 
 ### External
 - None.

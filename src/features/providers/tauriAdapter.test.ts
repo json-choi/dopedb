@@ -90,7 +90,10 @@ import providerOperationReconciliationSource from "../../../workspace-cloud/lib/
 import providerOperationRecordsSource from "../../../workspace-cloud/lib/provider-operation-records.ts?raw";
 import providerOperationSwitchSource from "../../../workspace-cloud/lib/provider-operation-switch.ts?raw";
 import providerOperationMarkerSource from "../../../workspace-cloud/lib/provider-operation-marker.ts?raw";
-import workspaceBaselineSource from "../../../workspace-cloud/drizzle/0000_mvp_baseline.sql?raw";
+import workspaceGuardSource from "../../../workspace-cloud/d1-migrations/0001_workspace_guards.sql?raw";
+import workspaceMemberDetachmentSource from "../../../workspace-cloud/d1-migrations/0004_member_evidence_detachment.sql?raw";
+import workspaceRetentionSource from "../../../workspace-cloud/d1-migrations/0006_retention_purge.sql?raw";
+import workspaceBaselineSource from "../../../workspace-cloud/d1-migrations/0000_workspace_baseline.sql?raw";
 import workspaceBackupCoreSource from "../../../workspace-cloud/lib/workspace-backup-core.ts?raw";
 import workspaceBackupSource from "../../../workspace-cloud/lib/workspace-backup.ts?raw";
 import workspaceDataKeySource from "../../../workspace-cloud/lib/workspace-data-key.ts?raw";
@@ -1530,12 +1533,12 @@ describe("provider credential Tauri adapter", () => {
     expect(switchCompletion).toContain("provider_resource_id = (SELECT json_extract(payload, '$.targetId') FROM (${scope}))");
     expect(switchCompletion).toContain("connection.provider_target.switch");
     expect(workspaceBaselineSource).toContain(
-      '"approval_policy" text NOT NULL',
+      '`approval_policy` text NOT NULL',
     );
     expect(workspaceBaselineSource).toContain("'remote_started'");
     expect(workspaceBaselineSource).toContain("'separate_admin'");
     expect(workspaceBaselineSource).toContain(
-      'FOREIGN KEY ("organization_id","integration_id","provider")',
+      'FOREIGN KEY (`organization_id`,`integration_id`,`provider`)',
     );
     expect(workspaceBaselineSource).toContain(
       "'neon.branch.create', 'neon.branch.delete'",
@@ -2122,45 +2125,15 @@ describe("provider credential Tauri adapter", () => {
     expect(workspaceBackupSource).toContain("openWorkspaceMetadataBackupWithKms");
     expect(workspaceDataKeyRotationSource).toContain('role: "owner" }, ["owner"]');
     expect(workspaceDataKeyRotationSource).toContain("SET wrapped_key = NULL");
-    expect(workspaceBaselineSource).toContain(
-      'CREATE EXTENSION IF NOT EXISTS "pgcrypto"',
-    );
-    expect(workspaceBaselineSource).toContain(
-      'ON DELETE SET NULL ("member_id") ON UPDATE NO ACTION',
-    );
-    expect(workspaceBaselineSource).toContain(
-      'ON DELETE SET NULL ("requested_by_member_id") ON UPDATE NO ACTION',
-    );
-    expect(workspaceBaselineSource).toContain(
-      'ON DELETE SET NULL ("cancel_requested_by_member_id") ON UPDATE NO ACTION',
-    );
-    expect(workspaceBaselineSource).toContain(
-      'ON DELETE SET NULL ("approved_by_member_id") ON UPDATE NO ACTION',
-    );
-    expect(workspaceBaselineSource).toContain(
-      'CREATE TABLE "workspace_control"."workspace_data_key"',
-    );
-    expect(workspaceBaselineSource).toContain(
-      'WHERE "retired_at" IS NULL',
-    );
-    expect(workspaceBaselineSource).toContain(
-      "immutable outside an active key rotation",
-    );
-    expect(workspaceBaselineSource).toContain(
-      'CREATE TABLE "workspace_control"."workspace_deletion_receipt"',
-    );
-    expect(workspaceBaselineSource).toContain(
-      'CREATE OR REPLACE FUNCTION "workspace_control"."purge_due_workspace"',
-    );
-    expect(workspaceBaselineSource).toContain(
-      'REVOKE ALL ON FUNCTION "workspace_control"."purge_due_workspace"',
-    );
-    expect(workspaceBaselineSource).toContain(
-      "operation.state NOT IN ('succeeded', 'failed', 'cancelled')",
-    );
-    expect(workspaceBaselineSource).toContain(
-      "member.revocation_claim_id IS NOT NULL",
-    );
+    expect(workspaceBaselineSource).toContain('CREATE TABLE `workspace_data_key`');
+    expect(workspaceBaselineSource).toContain('CREATE TABLE `workspace_deletion_receipt`');
+    expect(workspaceBaselineSource).toContain('"retired_at" IS NULL');
+    expect(workspaceGuardSource).toContain("immutable outside an active key rotation");
+    expect(workspaceMemberDetachmentSource).toContain("member_id = NULL");
+    expect(workspaceMemberDetachmentSource).toContain("requested_by_member_id = NULL");
+    expect(workspaceMemberDetachmentSource).toContain("cancel_requested_by_member_id = NULL");
+    expect(workspaceMemberDetachmentSource).toContain("approved_by_member_id = NULL");
+    expect(workspaceRetentionSource).toContain("Workspace evidence requires an exact retention purge");
     expect(workspaceLifecycleSource).toContain(
       'role: "owner" }, ["owner"]',
     );

@@ -32,7 +32,6 @@ database records, or credentials, and graph construction itself is intentionally
 - `source-revisions.ts` only advances the pinned commit; do not fold graph-building logic into this module.
 
 ### Testing Requirements
-- Exercised indirectly through `../provider-import-postgres-harness/personal-knowledge-scenarios.ts` and `../provider-import-postgres-harness/source-revision-scenarios.ts` (run via `pnpm test:postgres-import`).
 - `../d1-route-scenarios.harness.ts` exercises the knowledge environment-connection bind route directly (part of `pnpm test:contracts`).
 
 ### Common Patterns

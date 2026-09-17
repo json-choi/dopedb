@@ -315,7 +315,8 @@ Elevation은 세 단계만 허용한다.
   하단 조작은 공용 32px Button이며 DB command의 pointer·keyboard 입력과 분리한다.
   Welcome은 중앙 작업면을 padding 없이 채우며, canvas 준비나 WebGL2 실패가
   본문을 차단하지 않는다. 정적 fallback과 cream·warm·electric·night 색은
-  `--ds-cosmic-*` token이 소유한다. 읽기 영역의 veil도 canonical paint role이다.
+  `--ds-cosmic-*` token이 소유한다. Welcome command의 글자·아이콘은
+  `--ds-primary-foreground`의 중립 흰색을 사용한다. 읽기 영역의 veil도 canonical paint role이다.
 - `site/app/PlatformDownloads`: 공개 사이트의 header·hero·download CTA가 공유하는
   OS/CPU 추천 경계. Windows와 브라우저가 확실히 밝힌 Mac architecture만 안정된
   latest-download 별칭으로 직접 연결하고, Mac CPU가 숨겨지거나 지원하지 않는

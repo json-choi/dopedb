@@ -36,7 +36,6 @@ root `AGENTS.md` GitHub identity and release sections).
 | `tauri.sh` | Wraps `pnpm tauri ...` to give each dev build a distinct app identity and use the stable-signing runner on macOS. | `tauri`, `dev:app` |
 | `test-gcp-schema-policy.mjs` | Exercises the production Cloud SQL IAM/schema policy against an isolated PostgreSQL cluster; touches no cloud credentials or real database. | (invoked manually / by CI for GCP policy changes) |
 | `test-provider-import-d1.sh` | Runs the production D1 migration entry point against an isolated database. | `bash scripts/test-provider-import-d1.sh` (also called directly per root `AGENTS.md`) |
-| `test-provider-import-postgres.sh` | Legacy required-check entry point that now forwards to `test-provider-import-d1.sh` while storage moves to D1. | (kept as a required-check compatibility shim) |
 | `with-gh-owner.sh` | Runs one owner-only GitHub CLI/`git push` operation as the repository owner, then restores the default account even on failure or signal. | `gh:owner`, `gh:restore` |
 | `with-repository-owner-identity.sh` | Runs one explicit owner-authored `git commit`/tag without persisting identity to Git config. | `repo:owner-identity` |
 

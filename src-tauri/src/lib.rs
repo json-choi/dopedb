@@ -77,7 +77,7 @@ pub fn run() {
             let state = tauri::async_runtime::block_on(state::AppState::new(startup_trace))?;
             app.manage(state);
             #[cfg(any(target_os = "macos", windows, target_os = "linux"))]
-            features::workspaces::adapters::register_workspace_login_callback(app);
+            features::workspaces::adapters::register_workspace_callbacks(app);
             let state = app.state::<state::AppState>();
             let mut events = state.services.job.subscribe();
             let handle = app.handle().clone();
@@ -166,11 +166,9 @@ pub fn run() {
             features::workspaces::transport::refresh_workspace_auth_state,
             features::workspaces::transport::workspace_sign_out,
             features::workspaces::transport::workspace_sign_out_all,
-            features::workspaces::transport::begin_workspace_login,
             features::workspaces::transport::begin_desktop_workspace_login,
             features::workspaces::transport::complete_desktop_workspace_login,
             features::workspaces::transport::cancel_desktop_workspace_login,
-            features::workspaces::transport::poll_workspace_login,
             features::workspaces::transport::workspace_console_url,
             features::workspaces::transport::list_workspaces,
             features::workspaces::transport::get_active_workspace,

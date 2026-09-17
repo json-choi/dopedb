@@ -9,7 +9,7 @@ import { createDesktopApprovalNonce, desktopAuthorizationQuery, parseDesktopAuth
 import { getWorkspaceLocale } from "../../../lib/workspace-locale-server";
 import { localizedWorkspacePath } from "../../../lib/workspace-locale";
 import { workspaceMessages } from "../../../lib/workspace-messages";
-import { DeviceAccountActions } from "../device/DeviceAccountActions";
+import { DesktopAccountActions } from "./DesktopAccountActions";
 import { SignInButton } from "../sign-in/SignInButton";
 import { DesktopApproval } from "./DesktopApproval";
 
@@ -20,7 +20,7 @@ export default async function DesktopAuthorizationPage({ searchParams }: {
 }) {
   const request = parseDesktopAuthorization(await searchParams);
   const locale = await getWorkspaceLocale();
-  const copy = workspaceMessages[locale].device;
+  const copy = workspaceMessages[locale].desktopLogin;
   const requestHeaders = await headers();
   // A browser approval never inherits a native Bearer identity.
   const current = request && !requestHeaders.has("authorization")
@@ -36,7 +36,7 @@ export default async function DesktopAuthorizationPage({ searchParams }: {
         <IdentityBody>{copy.desktopDescription}</IdentityBody>
         {!request ? <IdentityError>{copy.invalidRequest}</IdentityError> : current ? <>
           <IdentityBody><strong>{current.user.name}</strong><br />{current.user.email}</IdentityBody>
-          <DeviceAccountActions currentUserId={current.user.id} returnPath={returnPath} />
+          <DesktopAccountActions currentUserId={current.user.id} returnPath={returnPath} />
           <DesktopApproval request={request} nonce={createDesktopApprovalNonce(request, current.session.id, env.authSecret())} />
         </> : <SignInButton returnTo={localizedWorkspacePath(returnPath, locale)} />}
         <small className="tw:mt-4 tw:block tw:text-xs tw:text-muted-foreground">{copy.desktopExpires}</small>

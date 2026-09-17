@@ -125,23 +125,6 @@ export const invitation = sqliteTable(
   ],
 );
 
-export const deviceCode = sqliteTable(
-  "device_code",
-  {
-    id: text("id").default(uuidDefault).primaryKey().notNull(),
-    deviceCode: text("device_code").notNull().unique(),
-    userCode: text("user_code").notNull().unique(),
-    userId: text("user_id").references(() => user.id, { onDelete: "cascade" }),
-    expiresAt: utcDate("expires_at").notNull(),
-    status: text("status").notNull(),
-    lastPolledAt: utcDate("last_polled_at"),
-    pollingInterval: integer("polling_interval"),
-    clientId: text("client_id"),
-    scope: text("scope"),
-  },
-  (table) => [index("device_code_user_idx").on(table.userId)],
-);
-
 export const rateLimit = sqliteTable(
   "rate_limit",
   {
@@ -157,4 +140,4 @@ export const rateLimit = sqliteTable(
 // workspace name, member list, provider identity, or payload; only the opaque id,
 // actor attribution, retention deadline, and terminal outcome remain after purge.
 
-export const authSchema = { user, organization, session, account, verification, member, invitation, deviceCode, rateLimit };
+export const authSchema = { user, organization, session, account, verification, member, invitation, rateLimit };

@@ -25,7 +25,7 @@ authoritative replacement and scope transition passes through it.
 | `navigation.ts` | Builds narrow Workspace Web destination URLs from the trusted console origin returned by the native adapter. |
 | `queries.ts` | TanStack Query key/option definitions for workspace context and auth state. |
 | `selectionRequest.ts` | Window-event bus (`requestWorkspaceSelection`/`onWorkspaceSelectionRequested`) routing contextual recovery actions through the shell-owned workspace menu. |
-| `tauriAdapter.ts` | Sole frontend owner of workspace command names (Desktop login begin/complete/cancel, legacy device login/poll, sign-out, list/get/set active workspace, copy/bind/update/delete workspace connection, write-policy). |
+| `tauriAdapter.ts` | Sole frontend owner of workspace command names (Desktop login begin/complete/cancel, sign-out, list/get/set active workspace, copy/bind/update/delete workspace connection, write-policy). |
 
 ## Subdirectories
 | Directory | Purpose |
@@ -46,8 +46,7 @@ authoritative replacement and scope transition passes through it.
 - **Security invariant (verified in code):** `tauriAdapter.ts` and
   `WorkspaceAccount.tsx` never accept or return a bearer/session token; only
   Desktop uses public identity, a public authorization URL and an opaque attempt
-  handle. PKCE verifier, callback code and session tokens stay native. Legacy
-  device-auth adapters remain separate from the Desktop UI.
+  handle. PKCE verifier, callback code and session tokens stay native.
 - **Security invariant (verified in code):** `cache.ts` is the only sanctioned
   place to replace or invalidate shared workspace Query state — do not call
   `queryClient.setQueryData`/`invalidateQueries` on workspace keys from a

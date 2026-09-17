@@ -117,12 +117,6 @@
       "tests": 1,
       "protects": "Workspace D1 safety over a Miniflare-backed database: relational guards, atomic rollback, and the shared concurrent request budget"
     },
-    "workspace-cloud/lib/provider-import-postgres.harness.ts": {
-      "role": "entry-point",
-      "runner": "workspace-cloud/vitest.provider-harness.config.ts",
-      "tests": 1,
-      "protects": "PostgreSQL provider import end to end against an independently confirmed-isolated database: exactly-once import, exact replay, stale-authority rejection, and no credential leakage. Opt-in; the run-provider-import-postgres-harness runner refuses to start without an isolated database"
-    },
     "workspace-scheduler-cloudflare/src/index.harness.ts": {
       "role": "entry-point",
       "runner": "workspace-scheduler-cloudflare/vitest.config.ts",

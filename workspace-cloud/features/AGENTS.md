@@ -77,7 +77,7 @@ calls and database writes.
 - `articleSharing/store.ts` and `acceptance.ts` are `"server-only"` and run one durable SQL statement per mutation (advisory-lock + CTE) rather than multiple round trips — read the full statement before changing invitation semantics; it never recreates removed membership or grants on a re-accept.
 
 ### Testing Requirements
-- No colocated `*.test.ts`/`*.spec.ts`/`*.harness.ts` files exist under `features/` (verified by search). `pnpm workspace:cloud:build` is the only check that type-checks this directory (Next.js build). This app's dedicated Vitest suites (`pnpm --dir workspace-cloud test:contracts`, `test:postgres-harness-guard`, `test:postgres-import`, `test:d1-import`) only include harness files under `lib/`, not anything in `features/`.
+- No colocated `*.test.ts`/`*.spec.ts`/`*.harness.ts` files exist under `features/` (verified by search). `pnpm workspace:cloud:build` is the only check that type-checks this directory (Next.js build). This app's dedicated Vitest suites (`pnpm --dir workspace-cloud test:contracts`, `test:d1-import`) only include harness files under `lib/`, not anything in `features/`.
 - Manually exercise changed screens per the root `CLAUDE.md`/`AGENTS.md` UI-change rule; there is no automated coverage substitute here.
 
 ### Common Patterns

@@ -12,14 +12,11 @@ import type {
   DesktopWorkspaceAuthorization,
   Workspace,
   WorkspaceAuthState,
-  WorkspaceDeviceAuthorization,
   WorkspaceFeatureState,
   WorkspaceId,
-  WorkspaceLoginPoll,
+  WorkspaceLoginResult,
 } from "./domain";
 import { workspaceManagedConnectionSettingsUrl } from "./navigation";
-
-const WORKSPACE_LOGIN_CALLBACK_EVENT = "workspace-login:callback";
 
 export function workspaceFeatureState(): Promise<WorkspaceFeatureState> {
   return invoke("workspace_feature_state");
@@ -41,30 +38,16 @@ export function signOutAllWorkspaces(): Promise<WorkspaceAuthState> {
   return invoke("workspace_sign_out_all");
 }
 
-export function beginWorkspaceLogin(): Promise<WorkspaceDeviceAuthorization> {
-  return invoke("begin_workspace_login");
-}
-
-export function pollWorkspaceLogin(deviceCode: string): Promise<WorkspaceLoginPoll> {
-  return invoke("poll_workspace_login", { deviceCode });
-}
-
 export function beginDesktopWorkspaceLogin(): Promise<DesktopWorkspaceAuthorization> {
   return invoke("begin_desktop_workspace_login");
 }
 
-export function completeDesktopWorkspaceLogin(attemptId: string): Promise<WorkspaceLoginPoll> {
+export function completeDesktopWorkspaceLogin(attemptId: string): Promise<WorkspaceLoginResult> {
   return invoke("complete_desktop_workspace_login", { attemptId });
 }
 
 export function cancelDesktopWorkspaceLogin(attemptId: string): Promise<void> {
   return invoke("cancel_desktop_workspace_login", { attemptId });
-}
-
-export function onWorkspaceLoginCallback(
-  handler: () => void,
-): Promise<UnlistenFn> {
-  return listen(WORKSPACE_LOGIN_CALLBACK_EVENT, handler);
 }
 
 export function onWorkspaceAccessCallback(handler: () => void): Promise<UnlistenFn> {

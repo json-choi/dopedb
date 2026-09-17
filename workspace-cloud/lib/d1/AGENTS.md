@@ -6,10 +6,7 @@
 ## Purpose
 Cloudflare D1 (SQLite) access layer for the Workspace control plane: the Drizzle client, the
 atomic-batch primitive every conditional mutation relies on, chunked encrypted-backup storage, an
-in-D1 request-budget counter, and the full Drizzle table schema (`schema/`). Historical PostgreSQL
-migration tooling (`../../drizzle/schema.postgres.ts`) is intentionally separate and out of scope
-here.
-
+in-D1 request-budget counter, and the full Drizzle table schema (`schema/`).
 ## Key Files
 | File | Description |
 |------|-------------|
@@ -29,7 +26,7 @@ here.
 | File | Description |
 |------|-------------|
 | `index.ts` | Re-exports every schema module below; this is what `../schema.ts` and `database.ts` import as `* as schema`. |
-| `auth.ts` | Better Auth tables — `user`, `organization`, `session`, `account`, `verification`, `member`, `invitation`, `deviceCode`, `rateLimit` — bundled as `authSchema` for the Better Auth D1 adapter. |
+| `auth.ts` | Better Auth tables — `user`, `organization`, `session`, `account`, `verification`, `member`, `invitation`, `rateLimit` — bundled as `authSchema` for the Better Auth D1 adapter. |
 | `desktop-auth.ts` | `desktopAuthorizationCode`: 120-second hashed code bound to S256 challenge, literal loopback redirect, client and approving browser session; consumed rows retain the approval proof until its ten-minute lifetime ends. |
 | `workspace.ts` | `workspaceDeletionReceipt`, `workspaceProfile`, `workspaceAuditEvent`, `workspaceSyncHead`, `workspaceSyncEvent` — workspace identity, the append-only audit log, and the sync cursor/event tables Desktop polls. |
 | `integrations.ts` | `workspaceProviderIntegration` — one provider (Neon/PlanetScale/GCP Cloud SQL/Vault) connection's durable identity, status, and generation counter. |

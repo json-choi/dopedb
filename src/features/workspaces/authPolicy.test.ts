@@ -6,7 +6,7 @@ import capability from "../../../src-tauri/capabilities/default.json";
 import tauriBenchmarkConfig from "../../../src-tauri/tauri.benchmark.conf.json";
 import tauriConfig from "../../../src-tauri/tauri.conf.json";
 import tauriDevConfig from "../../../src-tauri/tauri.dev.conf.json";
-import { completeDesktopAccessReturn, desktopWorkspaceAccessCallbackUrl, desktopWorkspaceLoginCallbackUrl, readDesktopAccessReturn, saveDesktopAccessReturn, type DesktopAccessReturnIntent } from "../../../workspace-cloud/lib/desktop-deep-link";
+import { completeDesktopAccessReturn, desktopWorkspaceAccessCallbackUrl, readDesktopAccessReturn, saveDesktopAccessReturn, type DesktopAccessReturnIntent } from "../../../workspace-cloud/lib/desktop-deep-link";
 import {
   AGENT_SETUP_URLS,
   DOPEDB_RELEASES_URL,
@@ -243,7 +243,6 @@ describe("workspace auth lifecycle", () => {
       desktopLoginInvoke.mockRestore();
     }
 
-    const loginCallback = new URL(desktopWorkspaceLoginCallbackUrl);
     expect(desktopWorkspaceAccessCallbackUrl).toBe("dopedb://workspace/access-complete");
     const values = new Map<string, string>();
     const storage = { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => { values.set(key, value); }, removeItem: (key: string) => { values.delete(key); } };
@@ -261,13 +260,6 @@ describe("workspace auth lifecycle", () => {
       expect(readDesktopAccessReturn(storage, user, workspace, now)).toBeNull();
       expect(values.size).toBe(0);
     }
-    expect(loginCallback.protocol).toBe("dopedb:");
-    expect(loginCallback.host).toBe("auth");
-    expect(loginCallback.pathname).toBe("/device-complete");
-    expect(loginCallback.username).toBe("");
-    expect(loginCallback.password).toBe("");
-    expect(loginCallback.search).toBe("");
-    expect(loginCallback.hash).toBe("");
     expect(tauriConfig.plugins["deep-link"].desktop.schemes).toEqual(["dopedb"]);
     expect(tauriDevConfig.plugins["deep-link"].desktop.schemes).toEqual(["dopedb-dev"]);
     expect(tauriBenchmarkConfig.plugins["deep-link"].desktop.schemes).toEqual([

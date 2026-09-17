@@ -1,7 +1,3 @@
-// Stable, token-free browser return target for Desktop device authorization.
-export const desktopWorkspaceLoginCallbackUrl =
-  "dopedb://auth/device-complete";
-
 // Navigation only. Desktop rechecks current authority independently of this signal.
 export const desktopWorkspaceAccessCallbackUrl = "dopedb://workspace/access-complete";
 

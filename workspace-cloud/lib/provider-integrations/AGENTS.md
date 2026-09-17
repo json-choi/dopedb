@@ -34,7 +34,6 @@ a saved or reusable credential.
 
 ### Testing Requirements
 - `../d1-managed-lease-scenarios.harness.ts` and `../d1-integration-scenarios.harness.ts` exercise `lease-cleanup.ts`, `lease-issuance.ts`, and the disconnect/mutation stores against D1 (part of `pnpm test:contracts`).
-- `../provider-import-postgres-harness/authority-provider-scenarios.ts` and `provider-operation-scenarios.ts` exercise `authority.ts` against the isolated PostgreSQL fixture (`pnpm test:postgres-import`).
 
 ### Common Patterns
 - Every write pairs its `atomicD1` scope with `authority.ts`'s `providerMutationAuthoritySql`, so authorization and the durable consequence commit in the same D1 batch.

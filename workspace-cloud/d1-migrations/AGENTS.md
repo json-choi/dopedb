@@ -9,14 +9,13 @@ control plane. `../wrangler.jsonc` binds `WORKSPACE_DB` (database
 `dopedb-workspace`) with `"migrations_dir": "d1-migrations"`, and `../lib/schema.ts`
 states plainly that "Cloudflare D1 owns Workspace control-plane state" — this
 is the schema and migration history the running app actually reads and
-writes, unlike the historical Postgres path in `../drizzle/` (see
-`../drizzle/AGENTS.md`). `drizzle.d1.config.ts` (one directory up) generates
+writes. `drizzle.d1.config.ts` (one directory up) generates
 new migrations here from `../lib/d1/schema/index.ts`.
 
 ## Key Files
 | File | Description |
 |------|-------------|
-| `0000_workspace_baseline.sql` | Creates the full baseline table set mirroring the historical Postgres schema without a schema namespace (SQLite has none) — accounts, organizations, members, invitations, knowledge/code-index tables, workspace resources, etc. |
+| `0000_workspace_baseline.sql` | Creates the full baseline table set without a schema namespace (SQLite has none) — accounts, organizations, members, invitations, knowledge/code-index tables, workspace resources, etc. |
 | `0001_workspace_guards.sql` | Database-owned evidence/sequencing invariants applied after the baseline schema: `BEFORE UPDATE`/`BEFORE DELETE` triggers that reject mutation of append-only tables (`workspace_resource_version`, `workspace_resource_conflict`, `workspace_resource_conflict_resolution`, `knowledge_graph_revision`, `workspace_analysis_article_revision`, `workspace_analysis_article_query_receipt`), an immutable-payload trigger for `workspace_metadata_backup`, an append-only sync-event trigger, and a revoke-only update trigger for `workspace_analysis_publication`. |
 | `0002_storage_types.sql` | Re-establishes PostgreSQL-level type strictness that SQLite/D1 does not enforce natively: per-table `BEFORE INSERT`/`BEFORE UPDATE` triggers that reject inexact numeric values, since D1 transports integers through JavaScript numbers. |
 | `0003_atomic_scope.sql` | Adds `workspace_atomic_scope`: a command's validated snapshot exists only inside one atomic D1 batch, which must delete its own scope row before committing (errors roll back the insert). |
@@ -25,10 +24,12 @@ new migrations here from `../lib/d1/schema/index.ts`.
 | `0006_retention_purge.sql` | Narrows the append-only delete guards from `0001`/prior so evidence deletion is possible only inside the exact due-workspace retention-purge batch, adding a matching delete guard on `organization` itself. |
 | `0007_unusual_lionheart.sql` | Generated Desktop authorization-code table, hashed code/approval uniqueness, browser-session/user foreign keys, and constrained client/challenge fields. |
 
+| `0008_remove_device_authorization.sql` | Removes the unused device-code authorization table; Desktop PKCE uses its own authorization-code table. |
+
 ## Subdirectories
 | Directory | Purpose |
 |-----------|---------|
-| `meta/` | drizzle-kit generated snapshots (`0000_snapshot.json`, `0006_snapshot.json`) and the applied-migration ledger (`_journal.json`, SQLite dialect, tags `0000_workspace_baseline` through `0006_retention_purge`). Not hand-edited. |
+| `meta/` | drizzle-kit generated snapshots and the applied-migration ledger (`_journal.json`, SQLite dialect, tags `0000_workspace_baseline` through `0008_remove_device_authorization`). Not hand-edited. |
 
 ## For AI Agents
 
@@ -104,7 +105,6 @@ new migrations here from `../lib/d1/schema/index.ts`.
 - `../lib/schema.ts`, `../lib/d1/schema/` (the live schema these migrations implement).
 - `../wrangler.jsonc` (`WORKSPACE_DB` D1 binding, `migrations_dir: "d1-migrations"`).
 - `../scripts/migrate-d1.mjs`, `../scripts/migrate-production.sh`, `../scripts/test-d1-migrations.mjs` (see `../scripts/AGENTS.md`).
-- `../drizzle/` (the superseded historical Postgres schema this mirrors structurally).
 
 ### External
 - `drizzle-kit` (SQLite/D1 dialect, migration generation).

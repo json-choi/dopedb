@@ -407,15 +407,6 @@ check_sidecars() {
 # scripts/test-gcp-schema-policy.mjs grants pg_read_all_data and
 # pg_write_all_data, which are PostgreSQL 14+ predefined roles, so 14 is the
 # floor for this phase and the script itself refuses anything older.
-#
-# A second, higher floor exists but is not enforced here: the provider-import
-# harness needs PostgreSQL 15 or later, because 14.18 rejects the
-# "ON DELETE SET NULL (column)" clauses in
-# workspace-cloud/drizzle/0000_mvp_baseline.sql with a syntax error. ci.yml
-# dropped that harness step while its suite is rewritten against D1, so nothing
-# in this script provisions a cluster today. If the step returns, its cluster
-# needs 15+, and a syntax error from that migration is a server-version floor
-# rather than a migration regression.
 postgres_version_floor="14"
 
 check_postgres() {
@@ -662,8 +653,6 @@ phase_provider_postgres() {
     bash scripts/test-provider-import-d1.sh || return 1
   run_step "Verify Cloud SQL setup preserves application access" \
     node scripts/test-gcp-schema-policy.mjs || return 1
-  run_step "Verify the PostgreSQL harness safety guard" \
-    "${package_manager_command[@]}" --dir workspace-cloud test:postgres-harness-guard || return 1
   return 0
 }
 

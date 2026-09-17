@@ -106,7 +106,6 @@ pre-existing database user, role, or ACL — verified in `gcp-cloud-connection-p
 ### Testing Requirements
 - `gcp-cloud-bootstrap.harness.ts` and `workload-identity.harness.ts` are pulled in by `../control-plane-contracts.harness.ts`, one of the two `pnpm test:contracts` entry points.
 - `../d1-switch-scenarios.harness.ts` and `../d1-operation-scenarios.harness.ts` exercise the Neon branch-operation lifecycle against D1 (`pnpm test:contracts`).
-- `../provider-import-postgres-harness/provider-operation-scenarios.ts` exercises provider-operation authority against the isolated PostgreSQL fixture (`pnpm test:postgres-import`).
 
 ### Common Patterns
 - Each provider splits into a `*-core.ts` (pure validation/identity, no `server-only`) and a stateful adapter (`server-only`, does the actual HTTP/DB work) — see `neon-core.ts`/`neon-api.ts` and `gcp-cloud-sql-core.ts`/`gcp-cloud-sql.ts`.

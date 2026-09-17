@@ -1,15 +1,11 @@
-//! Desktop deep-link adapter for returning from browser device authorization.
-//! The URL carries no login material; the existing server poll remains authoritative.
+//! Desktop access and article navigation deep links.
+//! Navigation signals never establish a session or grant authority.
 
 use tauri::{App, Emitter, Manager, Runtime};
 use tauri_plugin_deep_link::DeepLinkExt;
 use url::Url;
 
-const LOGIN_CALLBACK_EVENT: &str = "workspace-login:callback";
-const LOGIN_CALLBACK_HOST: &str = "auth";
-const LOGIN_CALLBACK_PATH: &str = "/device-complete";
-
-pub(crate) fn register_workspace_login_callback<R: Runtime>(app: &App<R>) {
+pub(crate) fn register_workspace_callbacks<R: Runtime>(app: &App<R>) {
     let identifier = app.config().identifier.clone();
     let handle = app.handle().clone();
     // Retain cold-start links until the renderer has mounted its listener.
@@ -24,9 +20,7 @@ pub(crate) fn register_workspace_login_callback<R: Runtime>(app: &App<R>) {
     app.deep_link().on_open_url(move |event| {
         let mut recognized = false;
         for url in event.urls() {
-            let event_name = if is_workspace_login_callback(&url, &identifier) {
-                Some(LOGIN_CALLBACK_EVENT)
-            } else if is_workspace_access_callback(&url, &identifier) {
+            let event_name = if is_workspace_access_callback(&url, &identifier) {
                 Some("workspace-access:callback")
             } else if crate::features::analysis_articles::desktop_links::receive_article_link(
                 &url,
@@ -60,10 +54,6 @@ fn callback_scheme(identifier: &str) -> Option<&'static str> {
     }
 }
 
-fn is_workspace_login_callback(url: &Url, identifier: &str) -> bool {
-    is_callback(url, identifier, LOGIN_CALLBACK_HOST, LOGIN_CALLBACK_PATH)
-}
-
 fn is_workspace_access_callback(url: &Url, identifier: &str) -> bool {
     is_callback(url, identifier, "workspace", "/access-complete")
 }
@@ -80,20 +70,15 @@ fn is_callback(url: &Url, identifier: &str, host: &str, path: &str) -> bool {
 }
 
 #[cfg(test)]
-pub(crate) fn assert_workspace_login_callback_contract() {
+pub(crate) fn assert_workspace_callback_contract() {
     crate::features::analysis_articles::desktop_links::assert_article_link_contract();
     for (identifier, scheme) in [
         ("dev.dopedb.desktop", "dopedb"),
         ("dev.dopedb.desktop.dev", "dopedb-dev"),
         ("dev.dopedb.desktop.benchmark", "dopedb-benchmark"),
     ] {
-        let valid = Url::parse(&format!("{scheme}://auth/device-complete")).unwrap();
-        assert!(is_workspace_login_callback(&valid, identifier));
-        assert!(valid.query().is_none());
-        assert!(valid.fragment().is_none());
         let access = Url::parse(&format!("{scheme}://workspace/access-complete")).unwrap();
         assert!(is_workspace_access_callback(&access, identifier));
-        assert!(!is_workspace_login_callback(&access, identifier));
         for suffix in ["?token=value", "#fragment", "/", "?connection=other"] {
             assert!(!is_workspace_access_callback(
                 &Url::parse(&format!("{access}{suffix}")).unwrap(),
@@ -102,26 +87,6 @@ pub(crate) fn assert_workspace_login_callback_contract() {
         }
     }
 
-    for invalid in [
-        "dopedb://auth/device-complete?device_code=secret",
-        "dopedb://auth/device-complete#token",
-        "dopedb://user@auth/device-complete",
-        "dopedb://auth:443/device-complete",
-        "dopedb://auth/device-complete/",
-        "dopedb://auth/other",
-        "https://auth/device-complete",
-    ] {
-        assert!(!is_workspace_login_callback(
-            &Url::parse(invalid).unwrap(),
-            "dev.dopedb.desktop",
-        ));
-    }
-
-    let production = Url::parse("dopedb://auth/device-complete").unwrap();
-    assert!(!is_workspace_login_callback(
-        &production,
-        "dev.dopedb.desktop.dev",
-    ));
     assert!(callback_scheme("unrecognized.bundle").is_none());
     for invalid in [
         "dopedb://user@workspace/access-complete",

@@ -9,7 +9,7 @@ Next.js 16 App Router tree for the DopeDB Workspace Web control-plane app: every
 screen-local client components each page composes. This directory owns workspace
 identity, connection templates, member/connection grants, provider integrations
 (PlanetScale/Neon/GCP Cloud SQL/Vault), Analysis Article sharing, and Better Auth
-session/device-flow screens. It must never: return raw database query result rows
+session/Desktop-approval screens. It must never: return raw database query result rows
 (Analysis Article runs return only receipts/metadata; rows stay on the Desktop
 runner), execute or expose a saved query from a public `/analyses/[slug]` page
 (publications are immutable pre-rendered HTML snapshots), issue a managed
@@ -28,11 +28,6 @@ change.
 | `/accept-invitation/[invitationId]` | `app/accept-invitation/[invitationId]/page.tsx` | page (RSC) | Validates the UUID, requires a session (redirects to `/auth/sign-in?returnTo=...` otherwise), renders `AcceptInvitation` inside the shared Identity shell |
 | `/accept-invitation/[invitationId]/AcceptInvitation.tsx` | same dir | page (client) | Calls `authClient.organization.acceptInvitation`; also lets the user switch to another already-signed-in local account via `multiSession.setActive` before accepting |
 | `/article-invitations/[invitationId]` | `app/article-invitations/[invitationId]/page.tsx` | page (RSC) | `force-dynamic`, `noindex`; validates UUID, renders `HandoffPage` (from `features/articleSharing`) for accepting an Analysis Article sharing invitation |
-| `/auth/device` | `app/auth/device/page.tsx` | page (RSC) | RFC 8628 device-flow screen; calls `auth.api.deviceVerify({ query: { user_code } })` server-side, then shows `DeviceAccountActions` + `DeviceApproval` if signed in, else `SignInButton` |
-| `/auth/device/DeviceApproval.tsx` | same dir | page (client) | Approve/deny buttons calling `authClient.device.approve` / `.deny`, then redirects to `/auth/device/complete` (or `?denied=1`) |
-| `/auth/device/DeviceAccountActions.tsx` | same dir | page (client) | Lets the signed-in user switch to a different already-authenticated local account (via `useDeviceAccounts` + `multiSession.setActive`) before approving, so "add account" cannot silently reuse the wrong browser identity |
-| `/auth/device/complete` | `app/auth/device/complete/page.tsx` | page (RSC) | Static approved/denied confirmation screen; renders `DeviceCompletionAction` |
-| `/auth/device/complete/DeviceCompletionAction.tsx` | same dir | page (client) | On mount, auto-navigates (`window.location.assign`) to `desktopWorkspaceLoginCallbackUrl` — hands control back to the DopeDB Desktop app / `dopedb agent start` CLI that started the device flow |
 | `/auth/github/complete` | `app/auth/github/complete/page.tsx` | page (RSC) | Static success/failure confirmation screen for the GitHub App installation OAuth flow, driven by `?status=connected|failed` |
 | `/auth/sign-in` | `app/auth/sign-in/page.tsx` | page (RSC) | Marketing-style sign-in screen; resolves a safe `returnTo`, shows OAuth-error copy, renders `SignInButton` |
 | `/auth/sign-in/SignInButton.tsx` | same dir | page (client) | Calls `authClient.signIn.social({ provider: "google", callbackURL: returnTo })` |
@@ -178,13 +173,14 @@ All of the panels below are composed by `app/settings/page.tsx`, the server comp
 
 ## Auth flows (app/auth/*)
 - **Desktop loopback flow** (`auth/desktop`): hosted login, explicit account choice and approval followed by a `127.0.0.1` callback carrying only a 120-second authorization code and state. `api/auth/desktop/authorize` requires exact Origin, cookie-only live session and a request/session-bound nonce; `api/auth/desktop/token` accepts native JSON S256 exchange only, atomically consumes the code and creates a separate Better Auth Bearer session.
-- **Device-code compatibility flow** (`auth/device`, `auth/device/complete`): retains the existing RFC 8628 boundary. `/auth/device` server-verifies `user_code` via `auth.api.deviceVerify`, then shows sign-in, account selection and explicit approve/deny controls. Completion may open the token-free Desktop deep link. This does not create a CLI login: `dopedb agent start` still uses the visible Desktop-approved grant.
 - **Google sign-in** (`auth/sign-in`): marketing-style screen; `SignInButton` calls `authClient.signIn.social({ provider: "google" })` with a validated `returnTo`.
 - **GitHub App installation completion** (`auth/github/complete`): static success/failure screen reflecting `?status=connected|failed` from the `api/v1/knowledge/github/callback` redirect.
 
 ## Static assets
 - `app/favicon.ico`, `app/apple-icon.png`, `app/icon.svg` — tab/PWA icons for the Workspace Web app.
 - `app/globals.css` — global stylesheet, imported once by `app/layout.tsx` alongside the Pretendard variable font.
+
+The Desktop approval page owns `DesktopAccountActions.tsx`, which selects an explicit browser account before approval.
 
 ## For AI Agents
 
@@ -216,7 +212,7 @@ All of the panels below are composed by `app/settings/page.tsx`, the server comp
 - `../drizzle.d1.config.ts` / D1 migrations — schema source for everything imported from `lib/schema.ts`.
 
 ### External
-- `better-auth` + `@better-auth/drizzle-adapter` — session, organization/member, invitation, multi-session, and device-authorization (RFC 8628) primitives used throughout `api/auth`, `api/v1/workspaces/**`, and the `auth/*` pages.
+- `better-auth` + `@better-auth/drizzle-adapter` — session, organization/member, invitation, multi-session primitives used throughout `api/auth`, `api/v1/workspaces/**`, and the `auth/*` pages.
 - `drizzle-orm` — every SQL query and schema reference in `route.ts` files.
 - `sanitize-html` — via `src/design-system/components/AnalysisArticleBody`, used to render public Analysis Article HTML in `analyses/[slug]/PublicAnalysisArticle.tsx`.
 - `@opennextjs/cloudflare` (`getCloudflareContext`) — `api/internal/deployment/route.ts`.

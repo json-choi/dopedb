@@ -1,4 +1,4 @@
-//! Hosted Better Auth RFC 8628 device authorization adapter. Network exchange
+//! Hosted Desktop PKCE and session adapter. Network exchange
 //! and credential persistence stay in Rust so Bearer sessions never cross into the
 //! webview, logs, local SQLite, or frontend query caches.
 
@@ -31,9 +31,8 @@ use crate::connection::{
 };
 use crate::error::{AppError, AppResult};
 use crate::features::workspaces::{
-    domain::{parse_workspace_role, valid_device_code},
-    RemoteWorkspace, WorkspaceAuthUser, WorkspaceDeviceAuthorization, WorkspaceLoginPoll,
-    WorkspaceLoginPollStatus, WorkspacePullPage,
+    domain::parse_workspace_role, RemoteWorkspace, WorkspaceAuthUser, WorkspaceLoginResult,
+    WorkspaceLoginStatus, WorkspacePullPage,
 };
 use crate::kernel::identity::{AccountId, ConnectionId, ProviderIntegrationId, WorkspaceId};
 use crate::model::{
@@ -42,7 +41,7 @@ use crate::model::{
 };
 
 use super::super::ports::WorkspaceControlPlanePort;
-use authentication::{auth_user, begin_login, poll_login, remote_workspaces, sign_out};
+use authentication::{auth_user, remote_workspaces, sign_out};
 use connections::{
     authorize_connection, delete_connection, issue_managed_connection_lease,
     release_managed_connection_lease, remote_connections, share_connection, update_connection,
@@ -51,7 +50,6 @@ use provider_local_target::provider_local_target;
 use sync::workspace_pull_page;
 
 const DESKTOP_CLIENT_ID: &str = "dopedb-desktop";
-const DEVICE_GRANT: &str = "urn:ietf:params:oauth:grant-type:device_code";
 const MAX_AUTH_RESPONSE_BYTES: usize = 64 * 1024;
 const MAX_WORKSPACE_LIST_RESPONSE_BYTES: usize = 1024 * 1024;
 const MAX_CONNECTION_RESPONSE_BYTES: usize = 128 * 1024;
@@ -60,21 +58,6 @@ const MAX_MANAGED_LEASE_RESPONSE_BYTES: usize = 256 * 1024;
 const MAX_WORKSPACE_SYNC_RESPONSE_BYTES: usize = 16 * 1024;
 const MAX_WORKSPACES_PER_ACCOUNT: usize = 512;
 const MAX_CONNECTIONS_PER_WORKSPACE: usize = 10_000;
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "snake_case")]
-struct DeviceCodeResponse {
-    device_code: String,
-    user_code: String,
-    verification_uri_complete: String,
-    expires_in: u64,
-    interval: u64,
-}
-
-#[derive(Deserialize)]
-struct TokenResponse {
-    access_token: Zeroizing<String>,
-}
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -340,16 +323,8 @@ impl WorkspaceControlPlanePort for HostedWorkspaceControlPlane {
         code: &str,
         verifier: &str,
         redirect_uri: &str,
-    ) -> AppResult<WorkspaceLoginPoll> {
+    ) -> AppResult<WorkspaceLoginResult> {
         authentication::exchange_desktop_code(code, verifier, redirect_uri).await
-    }
-
-    async fn begin_login(&self) -> AppResult<WorkspaceDeviceAuthorization> {
-        begin_login().await
-    }
-
-    async fn poll_login(&self, device_code: &str) -> AppResult<WorkspaceLoginPoll> {
-        poll_login(device_code).await
     }
 
     async fn auth_user(&self, account_id: &AccountId) -> AppResult<Option<WorkspaceAuthUser>> {

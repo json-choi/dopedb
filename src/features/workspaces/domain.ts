@@ -60,14 +60,6 @@ export interface WorkspaceAuthState {
   authorityGeneration: number;
 }
 
-export interface WorkspaceDeviceAuthorization {
-  deviceCode: string;
-  userCode: string;
-  verificationUriComplete: string;
-  expiresIn: number;
-  interval: number;
-}
-
 /** Public attempt handle only; native owns the listener and PKCE secrets. */
 export interface DesktopWorkspaceAuthorization {
   attemptId: string;
@@ -75,14 +67,12 @@ export interface DesktopWorkspaceAuthorization {
   expiresIn: number;
 }
 
-export type WorkspaceLoginPollStatus =
-  | "pending"
-  | "slowDown"
+export type WorkspaceLoginStatus =
   | "signedIn"
   | "denied"
   | "expired";
 
-export interface WorkspaceLoginPoll {
-  status: WorkspaceLoginPollStatus;
+export interface WorkspaceLoginResult {
+  status: WorkspaceLoginStatus;
   user: WorkspaceAuthUser | null;
 }

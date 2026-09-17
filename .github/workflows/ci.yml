@@ -153,9 +153,6 @@ jobs:
       - name: Verify Cloud SQL setup preserves application access
         run: PG_BIN="$(pg_config --bindir)" node scripts/test-gcp-schema-policy.mjs
 
-      - name: Verify the PostgreSQL harness safety guard
-        run: pnpm --dir workspace-cloud test:postgres-harness-guard
-
   site_build:
     name: site-build
     runs-on: ubuntu-latest

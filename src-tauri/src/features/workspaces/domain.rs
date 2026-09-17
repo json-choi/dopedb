@@ -62,21 +62,9 @@ pub(crate) struct WorkspaceAuthState {
     pub(crate) authority_generation: i64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct WorkspaceDeviceAuthorization {
-    pub(crate) device_code: String,
-    pub(crate) user_code: String,
-    pub(crate) verification_uri_complete: String,
-    pub(crate) expires_in: u64,
-    pub(crate) interval: u64,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) enum WorkspaceLoginPollStatus {
-    Pending,
-    SlowDown,
+pub(crate) enum WorkspaceLoginStatus {
     SignedIn,
     Denied,
     Expired,
@@ -93,8 +81,8 @@ pub(crate) struct WorkspaceDesktopAuthorization {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct WorkspaceLoginPoll {
-    pub(crate) status: WorkspaceLoginPollStatus,
+pub(crate) struct WorkspaceLoginResult {
+    pub(crate) status: WorkspaceLoginStatus,
     pub(crate) user: Option<WorkspaceAuthUser>,
 }
 
@@ -181,11 +169,4 @@ pub(crate) fn validate_member_username(username: &str) -> AppResult<&str> {
         return Err(AppError::Config("username is invalid".into()));
     }
     Ok(username)
-}
-
-pub(crate) fn valid_device_code(device_code: &str) -> bool {
-    device_code.len() == 40
-        && device_code
-            .chars()
-            .all(|character| character.is_ascii_alphanumeric())
 }

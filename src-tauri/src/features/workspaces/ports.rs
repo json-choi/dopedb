@@ -10,8 +10,7 @@ use crate::model::ConnectionProfile;
 
 use super::domain::{
     RemoteWorkspace, Workspace, WorkspaceAuthAccount, WorkspaceAuthUser,
-    WorkspaceAuthorityFingerprint, WorkspaceDeviceAuthorization, WorkspaceLoginPoll,
-    WorkspacePullPage, WorkspaceRole,
+    WorkspaceAuthorityFingerprint, WorkspaceLoginResult, WorkspacePullPage, WorkspaceRole,
 };
 
 pub(crate) trait WorkspaceRepositoryPort: Clone + Send + Sync + 'static {
@@ -127,14 +126,7 @@ pub(crate) trait WorkspaceControlPlanePort: Clone + Send + Sync + 'static {
         code: &str,
         verifier: &str,
         redirect_uri: &str,
-    ) -> impl Future<Output = AppResult<WorkspaceLoginPoll>> + Send;
-
-    fn begin_login(&self) -> impl Future<Output = AppResult<WorkspaceDeviceAuthorization>> + Send;
-
-    fn poll_login(
-        &self,
-        device_code: &str,
-    ) -> impl Future<Output = AppResult<WorkspaceLoginPoll>> + Send;
+    ) -> impl Future<Output = AppResult<WorkspaceLoginResult>> + Send;
 
     fn auth_user(
         &self,

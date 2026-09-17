@@ -1,13 +1,6 @@
-//! Better Auth device grant, session, and membership HTTP exchanges.
+//! Desktop PKCE, session, and membership HTTP exchanges.
 
 use super::*;
-
-#[derive(Debug, Deserialize)]
-struct OAuthErrorResponse {
-    error: Option<String>,
-    error_description: Option<String>,
-    message: Option<String>,
-}
 
 #[derive(Serialize)]
 struct DesktopTokenRequest<'a> {
@@ -16,45 +9,6 @@ struct DesktopTokenRequest<'a> {
     client_id: &'a str,
     redirect_uri: &'a str,
     code_verifier: &'a str,
-}
-
-/// Start a single-use ten-minute device authorization request.
-pub(super) async fn begin_login() -> AppResult<WorkspaceDeviceAuthorization> {
-    let origin = origin()?;
-    let response = client()?
-        .post(format!("{origin}/api/auth/device/code"))
-        .json(&json!({ "client_id": DESKTOP_CLIENT_ID }))
-        .send()
-        .await
-        .map_err(|error| request_error("starting workspace login", error))?;
-    if !response.status().is_success() {
-        return Err(oauth_error(response).await);
-    }
-    let value: DeviceCodeResponse = crate::hosted_control_plane::bounded_json_response(
-        response,
-        "reading workspace login response",
-        MAX_AUTH_RESPONSE_BYTES,
-    )
-    .await?;
-    let expected_verification_prefix = format!("{origin}/auth/device?user_code=");
-    if !valid_device_code(&value.device_code)
-        || !value
-            .verification_uri_complete
-            .starts_with(&expected_verification_prefix)
-        || !(1..=60).contains(&value.interval)
-        || !(1..=3600).contains(&value.expires_in)
-    {
-        return Err(AppError::Network(
-            "workspace login returned an invalid device authorization response".into(),
-        ));
-    }
-    Ok(WorkspaceDeviceAuthorization {
-        device_code: value.device_code,
-        user_code: value.user_code,
-        verification_uri_complete: value.verification_uri_complete,
-        expires_in: value.expires_in,
-        interval: value.interval,
-    })
 }
 
 async fn session_for_token(token: &str) -> AppResult<Option<WorkspaceAuthUser>> {
@@ -95,7 +49,7 @@ pub(super) async fn exchange_desktop_code(
     code: &str,
     verifier: &str,
     redirect_uri: &str,
-) -> AppResult<WorkspaceLoginPoll> {
+) -> AppResult<WorkspaceLoginResult> {
     let origin = origin()?;
     let response = client()?
         .post(format!("{origin}/api/auth/desktop/token"))
@@ -129,7 +83,7 @@ pub(super) async fn exchange_desktop_code(
     accept_token(payload.access_token).await
 }
 
-async fn accept_token(token: Zeroizing<String>) -> AppResult<WorkspaceLoginPoll> {
+async fn accept_token(token: Zeroizing<String>) -> AppResult<WorkspaceLoginResult> {
     if token.len() < 20 || token.len() > 4096 || token.chars().any(char::is_whitespace) {
         return Err(AppError::Network(
             "workspace login returned an invalid session token".into(),
@@ -139,8 +93,8 @@ async fn accept_token(token: Zeroizing<String>) -> AppResult<WorkspaceLoginPoll>
         .await?
         .ok_or_else(|| AppError::Network("workspace login returned an inactive session".into()))?;
     store_workspace_session(&user.id, token.as_str()).await?;
-    Ok(WorkspaceLoginPoll {
-        status: WorkspaceLoginPollStatus::SignedIn,
+    Ok(WorkspaceLoginResult {
+        status: WorkspaceLoginStatus::SignedIn,
         user: Some(user),
     })
 }
@@ -241,60 +195,4 @@ pub(super) async fn remote_workspaces(user_id: &str) -> AppResult<Vec<RemoteWork
         workspaces.push(RemoteWorkspace { id, name, role });
     }
     Ok(workspaces)
-}
-
-/// Poll once at the server-provided interval. A successful token is validated and
-/// committed directly to the OS credential store before signed-in state is returned.
-pub(super) async fn poll_login(device_code: &str) -> AppResult<WorkspaceLoginPoll> {
-    if !valid_device_code(device_code) {
-        return Err(AppError::Config("invalid workspace device code".into()));
-    }
-    let origin = origin()?;
-    let response = client()?
-        .post(format!("{origin}/api/auth/device/token"))
-        .json(&json!({
-            "grant_type": DEVICE_GRANT,
-            "device_code": device_code,
-            "client_id": DESKTOP_CLIENT_ID,
-        }))
-        .send()
-        .await
-        .map_err(|error| request_error("polling workspace login", error))?;
-
-    if response.status().is_success() {
-        let payload: TokenResponse = crate::hosted_control_plane::bounded_json_response(
-            response,
-            "reading workspace session token",
-            MAX_AUTH_RESPONSE_BYTES,
-        )
-        .await?;
-        return accept_token(payload.access_token).await;
-    }
-
-    let status = response.status();
-    let body: OAuthErrorResponse = crate::hosted_control_plane::bounded_json_response(
-        response,
-        "reading workspace login status",
-        MAX_AUTH_RESPONSE_BYTES,
-    )
-    .await?;
-    let poll_status = match body.error.as_deref() {
-        Some("authorization_pending") => WorkspaceLoginPollStatus::Pending,
-        Some("slow_down") => WorkspaceLoginPollStatus::SlowDown,
-        Some("access_denied") => WorkspaceLoginPollStatus::Denied,
-        Some("expired_token") | Some("invalid_grant") => WorkspaceLoginPollStatus::Expired,
-        _ => {
-            let detail = body
-                .error_description
-                .or(body.message)
-                .unwrap_or_else(|| "the control plane rejected the request".into());
-            return Err(AppError::Network(format!(
-                "workspace login returned {status}: {detail}"
-            )));
-        }
-    };
-    Ok(WorkspaceLoginPoll {
-        status: poll_status,
-        user: None,
-    })
 }

@@ -57,6 +57,13 @@
       "when": 1789569081357,
       "tag": "0007_unusual_lionheart",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1789639321176,
+      "tag": "0008_remove_device_authorization",
+      "breakpoints": true
     }
   ]
 }

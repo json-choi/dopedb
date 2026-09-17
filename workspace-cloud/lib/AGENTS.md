@@ -18,8 +18,8 @@ default privilege, or ACL (see root `CLAUDE.md`/`AGENTS.md`).
 | File | Description |
 |------|-------------|
 | `access.ts` | Better Auth access-control statement and workspace roles (adds a `view`-only `viewer` role on top of `memberAc`). |
-| `auth-client.ts` | Client-side Better Auth instance (`multiSession`, `deviceAuthorization`, `organization` plugins). |
-| `auth.ts` | Server Better Auth instance: D1 adapter, bearer/device/multi-session/organization plugins; strips provider tokens before persistence. |
+| `auth-client.ts` | Client-side Better Auth instance (`multiSession`, `organization` plugins). |
+| `auth.ts` | Server Better Auth instance: D1 adapter, bearer/multi-session/organization plugins; strips provider tokens before persistence. |
 | `desktop-authorization.ts` / `desktop-authorization-store.ts` | Desktop-only S256 PKCE handoff: strict literal loopback requests, session-bound approval proofs, hash-only codes, atomic single-use D1 consumption. Better Auth creates each independent native session. |
 | `desktop-authorization-scenarios.ts` | Security scenarios composed inside the existing D1 test case: request/proof binding, PKCE, expiration, session revocation, concurrent replay. |
 | `authoritative-session.ts` | Session read that keeps browser-cookie and native-Bearer authentication mutually exclusive and observes durable revocation. |
@@ -132,7 +132,7 @@ default privilege, or ACL (see root `CLAUDE.md`/`AGENTS.md`).
 |------|-------------|
 | `control-plane-contracts.ts` | Versioned public HTTPS envelope types shared with Desktop, decoded identically by an independently deployed Rust client. |
 | `db.ts` | Proxy over the Drizzle D1 client exposing a raw-SQL `execute`; multi-statement mutations use `atomicD1`, never callback transactions. |
-| `schema.ts` | Re-exports `./d1/schema`; historical PostgreSQL migration tooling uses `drizzle/schema.postgres.ts` explicitly instead. |
+| `schema.ts` | Re-exports the current `./d1/schema`. |
 
 ### Tests & Contract Harnesses
 | File | Description |
@@ -152,7 +152,6 @@ default privilege, or ACL (see root `CLAUDE.md`/`AGENTS.md`).
 | `d1-switch-scenarios.harness.ts` | Verifies the Neon branch-switch provider-operation plan/execute/complete path against D1. |
 | `d1-versioning-scenarios.harness.ts` | Verifies connection version create/mutate/conflict/resolve and snapshot restore against D1, using revocation gates. |
 | `d1-workspace-scenarios.harness.ts` | Top-level D1 scenario composer that runs the permission, operation, retention, and backup scenario suites together. |
-| `provider-import-postgres.harness.ts` | Vitest entry composing the isolated-PostgreSQL scenario suite in `provider-import-postgres-harness/`. |
 | `site-analytics.harness.ts` | Asserts the public website analytics wire contract admits no customer identifiers or arbitrary properties. |
 
 ## Subdirectories
@@ -160,7 +159,6 @@ default privilege, or ACL (see root `CLAUDE.md`/`AGENTS.md`).
 |-----------|---------|
 | `d1/` | D1 (Cloudflare SQLite) client, `atomicD1` batch helper, and the full Drizzle schema (see `d1/AGENTS.md`). |
 | `knowledge/` | Project Knowledge: GitHub App source browsing, source/graph inventory, personal-workspace scope (see `knowledge/AGENTS.md`). |
-| `provider-import-postgres-harness/` | Isolated-PostgreSQL scenario suite for the historical migration path, run via `test:postgres-import` (see `provider-import-postgres-harness/AGENTS.md`). |
 | `provider-integrations/` | Provider integration authority, discovery receipts, and managed-credential lease issuance/cleanup (see `provider-integrations/AGENTS.md`). |
 | `providers/` | Per-provider adapters: GCP Cloud SQL, Neon, PlanetScale, Vault (see `providers/AGENTS.md`). |
 
@@ -176,7 +174,6 @@ default privilege, or ACL (see root `CLAUDE.md`/`AGENTS.md`).
 
 ### Testing Requirements
 - `pnpm test:contracts` (vitest, `vitest.contracts.config.ts`) runs `control-plane-contracts.harness.ts` and `d1-storage.harness.ts`; the former transitively pulls in every `d1-*-scenarios.harness.ts`, the GCP/workload-identity harnesses, and `site-analytics.harness.ts`.
-- `pnpm test:postgres-import` (`scripts/run-provider-import-postgres-harness.mjs`) runs the isolated PostgreSQL scenario suite in `provider-import-postgres-harness/`, gated by the source/environment safety checks in `pnpm test:postgres-harness-guard`.
 - `pnpm test:d1-import` (`scripts/test-d1-migrations.mjs`) exercises the D1 migration entry point.
 - New tests here count against the repository's 208-test budget only when they add new `it`/`test` cases; see root `tests/critical-test-budget.json`.
 
@@ -189,11 +186,10 @@ default privilege, or ACL (see root `CLAUDE.md`/`AGENTS.md`).
 
 ### Internal
 - `../app/api/**` route handlers are the primary callers of this directory's server-only modules.
-- `../drizzle/schema.postgres.ts` and `../drizzle/provider-credential-key-rotation.ts` back the historical PostgreSQL harness only.
 - `../../site/lib/analytics` shares the `web-analytics.ts` contract, verified by `site-analytics.harness.ts`.
 
 ### External
-- `better-auth` and `@better-auth/drizzle-adapter` for identity, session, organization, and device authorization.
+- `better-auth` and `@better-auth/drizzle-adapter` for identity, session, and organization.
 - `drizzle-orm` (`drizzle-orm/d1`, `drizzle-orm/sqlite-core`) for the D1 schema and queries.
 - `@neondatabase/serverless`, `sanitize-html`, `@microsoft/clarity`, `@cloudflare/workers-types`.
 - `vitest` and `miniflare` for the contract/scenario harnesses.

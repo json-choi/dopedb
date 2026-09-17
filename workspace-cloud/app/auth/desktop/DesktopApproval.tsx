@@ -9,7 +9,7 @@ import type { DesktopAuthorization } from "../../../lib/desktop-authorization";
 
 export function DesktopApproval({ request, nonce }: { request: DesktopAuthorization; nonce: string }) {
   const locale = useWorkspaceLocale();
-  const copy = workspaceMessages[locale].device;
+  const copy = workspaceMessages[locale].desktopLogin;
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
 

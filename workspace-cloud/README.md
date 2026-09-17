@@ -28,9 +28,7 @@ The existing Bearer/session revocation boundary remains authoritative. Neither
 the browser's session token nor Google tokens cross the callback.
 
 Apply the generated D1 migration before deploying these endpoints. This table
-belongs only to the live D1 authentication path; historical PostgreSQL import
-harness schemas remain unchanged. The existing `/auth/device` RFC 8628 flow is
-retained as a compatibility boundary; the CLI does not gain an independent login.
+belongs to the D1 authentication path. Desktop uses only this PKCE authorization flow.
 Authentication pages never initialize web
 analytics and are served with `private, no-store`.
 
@@ -154,12 +152,10 @@ Keep production values outside the application directory so Next.js never loads 
 `pnpm db:preflight` checks the configured D1 database without changing its schema.
 Migration files are compared with both the ordered Wrangler history and exact SHA-256 receipts.
 A changed migration, unknown nonempty database, or incomplete ledger stops deployment.
-Applied files are immutable; add a new migration for schema changes. Historical PostgreSQL
-migration material under `drizzle/` is recovery evidence, not the deployment source.
+Applied files are immutable; add a new migration for schema changes. D1 is the only Workspace control-plane schema and deployment source.
 `bash scripts/test-provider-import-d1.sh` exercises the production migration entry point on a
 disposable workerd database, rejects tampered receipts and unknown databases, and runs native D1
-atomic mutation and public contract scenarios. The older PostgreSQL-named shell entry point
-forwards to this same harness for existing check callers.
+atomic mutation and public contract scenarios.
 
 Encrypted metadata backups larger than one D1 row use bounded encrypted chunks. Their manifest,
 chunks, metadata and audit commit in one batch; key rotation and retention keep the same boundary.
@@ -420,8 +416,7 @@ data must be reset instead of upgraded.
 
 ## Trust boundary
 
-- Better Auth owns Google login, sessions, organizations, invitations, rate limits, and
-  RFC 8628 device authorization; the app does not maintain a parallel auth system.
+- Better Auth owns Google login, sessions, organizations, invitations, and rate limits; the app does not maintain a parallel auth system.
 - Database hooks clear Google access, refresh, and ID tokens before account persistence.
 - Better Auth Multi Session keeps at most ten browser identities available without
   merging their users or organization memberships. The active identity is explicit.

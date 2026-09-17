@@ -30,6 +30,8 @@ try {
   run("bash", migrate); // Exact receipt replay does not rebuild or reset anything.
   const check = run("node", ["scripts/migrate-d1.mjs", "--check", "--local", "--persist-to", directory]);
   assert.match(check, /0 pending/);
+  const retiredTables = JSON.parse(query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'device_code'"));
+  assert.deepEqual(retiredTables[0].results, []);
   query("UPDATE workspace_schema_migration SET sha256 = 'tampered' WHERE file = '0000_workspace_baseline.sql'");
   assert.match(run("bash", migrate, 1), /D1 migration bytes or ordering differ/);
   const unknown = resolve(directory, "unknown");

@@ -5,9 +5,8 @@ use crate::features::connections::ConnectionCredentialVault;
 use crate::kernel::identity::AccountId;
 
 use super::super::domain::{
-    WorkspaceAuthState, WorkspaceAuthUser, WorkspaceAuthorityFingerprint,
-    WorkspaceDeviceAuthorization, WorkspaceFeatureState, WorkspaceLoginPoll,
-    WorkspaceLoginPollStatus,
+    WorkspaceAuthState, WorkspaceAuthUser, WorkspaceAuthorityFingerprint, WorkspaceFeatureState,
+    WorkspaceLoginResult, WorkspaceLoginStatus,
 };
 use super::super::ports::{
     WorkspaceConfigurationPort, WorkspaceControlPlanePort, WorkspaceRepositoryPort,
@@ -107,21 +106,12 @@ where
         self.auth_state_from_repository().await
     }
 
-    pub(crate) async fn begin_login(&self) -> AppResult<WorkspaceDeviceAuthorization> {
-        self.control_plane.begin_login().await
-    }
-
-    pub(crate) async fn poll_login(&self, device_code: &str) -> AppResult<WorkspaceLoginPoll> {
-        let result = self.control_plane.poll_login(device_code).await?;
-        self.accept_login(result).await
-    }
-
     pub(crate) async fn complete_desktop_login(
         &self,
         code: &str,
         verifier: &str,
         redirect_uri: &str,
-    ) -> AppResult<WorkspaceLoginPoll> {
+    ) -> AppResult<WorkspaceLoginResult> {
         let result = self
             .control_plane
             .exchange_desktop_code(code, verifier, redirect_uri)
@@ -129,8 +119,8 @@ where
         self.accept_login(result).await
     }
 
-    async fn accept_login(&self, result: WorkspaceLoginPoll) -> AppResult<WorkspaceLoginPoll> {
-        if result.status == WorkspaceLoginPollStatus::SignedIn {
+    async fn accept_login(&self, result: WorkspaceLoginResult) -> AppResult<WorkspaceLoginResult> {
+        if result.status == WorkspaceLoginStatus::SignedIn {
             let user = result.user.as_ref().ok_or_else(|| {
                 AppError::Network("workspace login did not return an account".into())
             })?;

@@ -130,7 +130,7 @@ async fn query_and_skill_security_contracts_stay_fail_closed() {
     crate::features::workspaces::adapters::desktop_login::assert_desktop_login_contract().await;
     crate::features::workspaces::adapters::control_plane::assert_hosted_workspace_response_bounds_contract();
     #[cfg(any(target_os = "macos", windows, target_os = "linux"))]
-    crate::features::workspaces::adapters::desktop_login_callback::assert_workspace_login_callback_contract();
+    crate::features::workspaces::adapters::desktop_callbacks::assert_workspace_callback_contract();
     crate::connection::keychain::assert_workspace_session_keychain_async_contract().await;
     crate::connection::assert_warm_cache_authorization_contract();
     crate::bigquery::assert_bigquery_contract();

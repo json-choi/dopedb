@@ -26,7 +26,7 @@ import {
 import type {
   AccountId,
   WorkspaceAuthState,
-  WorkspaceLoginPoll,
+  WorkspaceLoginResult,
 } from "../domain";
 import {
   readWorkspaceContext,
@@ -338,7 +338,7 @@ export default function WorkspaceAccount({
     toast(t("workspace.loginCanceled"));
   }
 
-  async function handleLoginResult(result: WorkspaceLoginPoll, attempt: number) {
+  async function handleLoginResult(result: WorkspaceLoginResult, attempt: number) {
     if (pendingLogin.current?.attempt !== attempt) return true;
     if (result.status === "signedIn" && result.user) {
       const analyticsAttemptId = pendingLogin.current.analyticsAttemptId;
