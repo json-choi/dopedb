@@ -1,3 +1,6 @@
+// Presents the open workbench documents as a tab strip. It owns only the transient rename
+// draft and keeping the active tab in view; document identity, ordering, activation, and
+// closing stay with the caller.
 import { useEffect, useRef, useState } from "react";
 
 import type { ConnectionProfile } from "../features/connections/domain";

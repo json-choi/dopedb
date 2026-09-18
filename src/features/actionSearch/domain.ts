@@ -1,3 +1,6 @@
+// Pure match model for the action palette. Items are normalized once into an index, then
+// ranked into fixed strength buckets so memory and the final merge stay bounded by the
+// caller's limit. It holds no state and never runs an item.
 export type ActionSearchKind =
   | "action"
   | "connection"

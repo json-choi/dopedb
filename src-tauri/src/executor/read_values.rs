@@ -492,8 +492,16 @@ fn mysql_fallback(row: &MySqlRow, i: usize, ty: &str) -> DecodedCell {
 }
 
 pub(crate) fn sqlite_value(row: &SqliteRow, i: usize) -> DecodedCell {
-    // ponytail: SQLite is dynamically typed (declared type != stored class), so probe
-    // storage classes in order. The five classes are covered, so all-fail == real NULL.
+    // A real NULL has to be recognised before any storage-class probe: SQLite's
+    // integer and real decoders read NULL as 0 rather than failing, so probing
+    // first would make the grid, the clipboard and an export all agree on a 0 the
+    // column never held.
+    if row.try_get_raw(i).map(|v| v.is_null()).unwrap_or(false) {
+        return decoded(Value::Null);
+    }
+    // SQLite is dynamically typed (declared type != stored class), so probe storage
+    // classes in order. The five classes are covered, so a non-NULL value matching
+    // none of them is genuinely undecodable rather than empty.
     if let Ok(v) = row.try_get::<i64, _>(i) {
         return decoded(int_json(v));
     }

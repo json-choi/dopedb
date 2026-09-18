@@ -1,3 +1,6 @@
+// Wire contract for Analysis Articles: the saved query definition, per-column sensitivity and
+// masking, run receipts, revisions, and publication records. Type-only, so the ACP, Desktop
+// runner, and publication paths cannot drift onto separate shapes.
 export type AnalysisArticleSource =
   | "human"
   | "dopedb.acp.claude"

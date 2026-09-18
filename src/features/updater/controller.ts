@@ -1,3 +1,6 @@
+// Headless state machine for the app updater. Version lookup, check, download, and relaunch
+// all arrive as injected dependencies, so the phase and progress snapshot the UI subscribes
+// to is owned here and observable without the Tauri plugin.
 export type AppUpdaterPhase =
   | "idle"
   | "checking"

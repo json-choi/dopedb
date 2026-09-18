@@ -1,3 +1,5 @@
+// Rate limiter for running-query snapshots. It is scope-aware: a snapshot queued before the
+// active connection scope changed is dropped rather than published into the new scope.
 type TimerHandle = unknown;
 type ScheduleTimer = (callback: () => void, delayMs: number) => TimerHandle;
 type CancelTimer = (handle: TimerHandle) => void;

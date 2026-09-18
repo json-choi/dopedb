@@ -1,3 +1,6 @@
+// Property fields for the Cloudflare D1 connection editor. It only projects the shared editor
+// controller: account and database discovery, CLI availability, and the login lifecycle stay
+// there, and every edit here goes back through that controller's setters.
 import { Button } from "../../design-system/components/Button";
 import {
   PropertyRow,

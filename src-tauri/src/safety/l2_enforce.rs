@@ -602,5 +602,12 @@ mod tests {
             r.rows[0][0],
             serde_json::Value::String("9223372036854775807".into())
         );
+
+        // A real NULL must stay NULL: SQLite's integer decoder reads NULL as 0, so
+        // probing storage classes first would show a 0 the column never held.
+        let nulls = run_read_only(PoolRef::Sqlite(&pool), "SELECT NULL AS n", 10)
+            .await
+            .unwrap();
+        assert_eq!(nulls.rows[0][0], serde_json::Value::Null);
     }
 }

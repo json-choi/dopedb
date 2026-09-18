@@ -109,6 +109,11 @@ cluster가 더 악화되는 것을 막는다. `pnpm audit:code-structure`의 전
 아니며 내부 import 왕복만 늘리는 작은 sibling은 다시 합칠 수 있다. 분리·재결합
 판단표는 [`docs/CODE_STRUCTURE.md`](docs/CODE_STRUCTURE.md)를 따른다.
 
+`pnpm check:role-comments`는 45줄이 넘는 TS/TSX 파일이 주석으로 시작하는지만
+확인한다. 주석이 실제 책임을 맞게 설명하는지는 리뷰에서 본다. 예외 표와 예외를
+넓히지 못하게 막는 self-check도 같은 문서에 있다. `pnpm build`가 self-test와
+저장소 검사를 실행하므로 CI build에서도 같은 규칙을 강제한다.
+
 ## UI 변경
 
 TSX, CSS, Tailwind, layout을 수정하기 전에

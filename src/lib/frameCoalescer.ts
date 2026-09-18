@@ -1,3 +1,6 @@
+// Latest-wins frame batching for high-frequency UI values such as drag geometry. The frame
+// scheduler is injectable, so callers drive it deterministically instead of depending on a
+// real animation frame.
 type RequestFrame = (callback: FrameRequestCallback) => number;
 type CancelFrame = (handle: number) => void;
 

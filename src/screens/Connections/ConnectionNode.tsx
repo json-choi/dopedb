@@ -1,3 +1,6 @@
+// One Explorer row for a connection and its catalog subtree, including the row menu, drop
+// targets, and schema scope controls. It owns only the row-local menu focus; selection,
+// expansion, catalog loading, ordering, and every mutation are passed in by the tree owner.
 import type {
   PointerEvent,
   RefObject,

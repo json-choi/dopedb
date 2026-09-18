@@ -1,3 +1,6 @@
+// Single owner of the packaged renderer's benchmark counters. Collection is gated by a
+// build-time flag so an ordinary build observes nothing; when enabled it accumulates React
+// commit, IPC, long-task, and frame-gap samples and scopes them into named action windows.
 import type { ProfilerOnRenderCallback } from "react";
 
 const enabled = import.meta.env.VITE_DOPEDB_PACKAGED_BENCHMARK === "1";

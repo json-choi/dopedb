@@ -1,3 +1,6 @@
+// Pure status model shared by the SQL editor and the run path. A run source keeps the exact
+// document offsets after whitespace is trimmed off, and the execution marker resolves to null
+// once the text under those offsets no longer matches, so a stale marker cannot be drawn.
 export const SQL_EDITOR_INDENT_SIZE = 4;
 
 export interface SqlCursorPosition {

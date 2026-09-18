@@ -249,6 +249,13 @@ Run checks proportional to the change:
   the full ranked review before changing its baseline. The 300-line mark starts
   a cohesion review rather than forcing a split; merge tiny siblings when they
   only add internal hops. Follow [`docs/CODE_STRUCTURE.md`](docs/CODE_STRUCTURE.md).
+- `pnpm check:role-comments` requires a leading comment on every TS/TSX file
+  over 45 lines. It detects a missing comment only; whether the comment states
+  the real state ownership and responsibility boundary is a review judgement,
+  not a scanner's. Rust's `//!` module docs are a separate rule with no line
+  threshold and are not scanned. The exemption table and its anti-widening
+  self-checks live in [`docs/CODE_STRUCTURE.md`](docs/CODE_STRUCTURE.md).
+  `pnpm build` runs both the self-test and scan, including in CI.
 
 The repository has a hard budget of 208 critical tests. Add a test only for a
 security/safety invariant, public wire contract, or core end-to-end journey.

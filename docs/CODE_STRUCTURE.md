@@ -141,6 +141,41 @@ baseline은 다음 경우에만 갱신한다.
 `--print-baseline`은 검토용 후보를 stdout에 출력한다. 결과를 자동으로 덮어쓰지
 않는 이유는 구조 회귀를 수치 갱신으로 숨기지 않기 위해서다.
 
+## 역할 주석
+
+파일을 열었을 때 첫 줄이 책임을 알려주면 탐색 왕복이 줄어든다. 45줄이 넘는
+TS/TSX 파일은 import 앞에 그 파일이 소유한 상태, 입출력, 책임 경계를 1~3줄로
+적는다. 파일명을 반복하거나 "이 파일은 X 컴포넌트를 담는다" 수준의 문장은
+탐색에 아무것도 보태지 않으므로 쓰지 않는다.
+
+`pnpm check:role-comments`는 **형식 누락만** 탐지한다. 첫 줄이 어떤 주석이든
+있으면 통과하며, 그 주석이 실제 책임을 정확히 설명하는지는 자동화하지 않고
+코드 리뷰가 소유한다. 문구를 점수화하는 scanner는 이 규칙이 막으려는 boilerplate를
+오히려 통과시키기 때문이다.
+
+Rust는 다른 규칙이다. 모든 모듈이 줄 수와 무관하게 파일 상단에 `//!` 모듈
+설명을 둔다. 이 검사기는 Rust를 읽지 않는다.
+
+검사에서 빠지는 경우는 아래가 전부다.
+
+| id | 처리 | 범위 |
+| --- | --- | --- |
+| `size` | 제외 | 45줄 이하 |
+| `declaration` | 제외 | `*.d.ts` |
+| `test` | 제외 | `*.test.*`, `*.spec.*`, `*.harness.*`, `__tests__/` |
+| `generated` | 제외 | `gen/`·`generated/` 경로 또는 `@generated` marker |
+| `directive` | 선행 허용 | `"use client"` 같은 directive prologue 뒤의 주석도 통과 |
+
+예외를 넓혀 누락을 숨기지 못하도록 검사기가 스스로를 검사한다. 예외 id 목록은
+고정되어 있어 항목을 추가하면 이 표와 함께 고치기 전까지 실패하고, 규칙이
+`src`의 수작업 파일 중 60% 미만에만 닿으면 실패하며, `generated` 예외에 기대는
+파일이 늘어도 실패한다. `node scripts/check-role-comments.mjs --self-test`는
+누락 탐지·정상 통과·각 예외를 메모리 fixture로 확인한다.
+`pnpm build`가 self-test와 저장소 검사를 모두 실행하므로 CI build에서도 강제된다.
+
+`src`는 누락 0을 유지한다. `workspace-cloud`와 `site`는 아직 남은 수를 상한으로
+고정해 늘어나지 못하게만 하며, 파일을 채우면 상한을 같은 변경에서 내린다.
+
 ## 변경 검증
 
 구조 변경은 동작 변경과 같은 수준으로 검증한다.
@@ -148,7 +183,8 @@ baseline은 다음 경우에만 갱신한다.
 - TypeScript/TSX: `pnpm lint:hooks`, `pnpm build`, 관련 smoke test
 - Rust: `cargo fmt --all -- --check`, 관련 package test 또는 `pnpm test:rust`
 - UI projection: 기존 화면의 command, 접근성 이름, focus, responsive 상태 수동 확인
-- 모든 코드 변경: `pnpm check:code-structure`, `graphify update .`
+- 모든 코드 변경: `pnpm check:code-structure`, `pnpm check:role-comments`,
+  `graphify update .`
 
 파일 수 감소나 평균 줄 수 감소는 완료 증거가 아니다. 공개 API, dependency 방향,
 single-writer 상태, 테스트 결과가 유지되고 탐색 경로가 짧아졌을 때 완료다.
