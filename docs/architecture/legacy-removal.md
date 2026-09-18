@@ -24,6 +24,13 @@ fallback, fixture, and compatibility test. Desktop opens only the current local 
 Workspace Cloud is provisioned from one current baseline. An older development database
 must be reset instead of being upgraded inside the product.
 
+A deserialization-only alias is allowed for a renamed field in still-owned local runtime
+bookkeeping when it is required to keep a released Desktop opening its current application
+state for startup or status. This narrow exception must serialize only the canonical current
+name, use `deny_unknown_fields` or equivalent strict schema parsing, require a regression
+test for alias acceptance and unrelated-field rejection, and introduce no schema or database
+migration. It is not a general compatibility path and does not retain old database layouts.
+
 Current public protocol versions and security capability negotiation are not migration
 fallbacks. They remain only while they are part of the documented current contract.
 
@@ -31,8 +38,9 @@ fallbacks. They remain only while they are part of the documented current contra
 
 - Desktop opens one current local schema and does not upgrade pre-MVP databases.
 - Workspace Cloud and each D1 service start from one current baseline migration.
-- Private persisted payloads accept only their current shape; old aliases and decoders
-  are not retained.
+- Private persisted payloads accept only their current shape. The only exception is the
+  narrow deserialization-only local runtime bookkeeping alias defined above; old aliases and
+  broad decoders are not retained.
 - Provider import always creates a new managed connection. It cannot convert an
   existing member-local connection in place or preserve that connection's identity.
 - Retired MCP cleanup, chat archives, Analysis automation/results, and their storage
