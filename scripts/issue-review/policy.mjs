@@ -7,7 +7,6 @@ export const REVIEW_REPOSITORY = Object.freeze({
 });
 
 export const REVIEW_MARKER = "<!-- dopedb-local-codex-review:v1 -->";
-export const OWNER_AUTHOR_IDS = new Set([77_596_321, 231_148_561]);
 
 const VERDICTS = new Set([
   "supported_bug",
@@ -70,10 +69,6 @@ function truncated(value, maxLength) {
   return value.length <= maxLength
     ? value
     : `${value.slice(0, maxLength)}\n[truncated by local reviewer]`;
-}
-
-export function isOwnerAuthored(authorId) {
-  return Number.isSafeInteger(authorId) && OWNER_AUTHOR_IDS.has(authorId);
 }
 
 export function normalizeIssue(issue, comments = []) {
@@ -169,7 +164,6 @@ function sourceLink(commitSha, evidence) {
 
 export function renderReviewComment({ issueInput, review, evidence, commitSha, queryTokens }) {
   if (!/^[0-9a-f]{40}$/.test(commitSha)) throw new Error("Invalid review commit SHA");
-  const ownerAuthored = isOwnerAuthored(issueInput.author.id);
   const evidenceById = new Map(evidence.map((item) => [item.id, item]));
   const cited = new Set(review.findings.flatMap((finding) => finding.evidenceIds));
   const shortSha = commitSha.slice(0, 12);
@@ -181,9 +175,7 @@ export function renderReviewComment({ issueInput, review, evidence, commitSha, q
     `- 이슈 작성자: \`${plainMarkdown(issueInput.author.login, 100)}\` (GitHub ID \`${issueInput.author.id}\`)`,
     `- Graphify 질의: ${queryTokens.map((token) => `\`${plainMarkdown(token, 40)}\``).join(", ")}`,
     "",
-    ownerAuthored
-      ? "이 이슈는 소유자 작성 이슈이므로 후속 Agent 작업 후보가 될 수 있습니다. 이 리뷰 프로세스 자체는 코드를 수정하거나 이슈를 닫지 않습니다."
-      : "이 이슈는 외부 제안입니다. 검토와 피드백만 수행하며 Agent 구현·종료 대기열에는 들어가지 않습니다. 채택하려면 소유자가 원본을 참조하는 새 이슈를 작성해야 합니다.",
+    "작성자와 관계없이 사용자 요청 범위·제품 방향·완료 근거에 따라 후속 작업과 종료를 판단합니다. 소유자 작성 대체 이슈는 필요하지 않습니다. 이 자동 리뷰 프로세스 자체는 코드를 수정하거나 이슈를 닫지 않습니다.",
     "",
     "### 판단",
     "",
@@ -242,9 +234,6 @@ export function runPolicySelfTest() {
     updated_at: "2026-08-10T00:01:00Z",
     user: { id: 43, login: "reviewer" },
   }]);
-  if (isOwnerAuthored(issueInput.author.id) || !isOwnerAuthored(77_596_321)) {
-    throw new Error("Owner author gate self-test failed");
-  }
   const plan = validateQueryPlan({ query_tokens: ["issue", "issue"], search_intent: "review" }, new Set(["issue"]));
   if (plan.queryTokens.length !== 1) throw new Error("Query plan self-test failed");
   const review = validateReview({
@@ -261,8 +250,20 @@ export function runPolicySelfTest() {
     commitSha: "a".repeat(40),
     queryTokens: plan.queryTokens,
   });
-  if (!comment.includes("외부 제안") || comment.includes("@owner")) {
+  if (!comment.includes("작성자와 관계없이") || comment.includes("@owner")) {
     throw new Error("Comment boundary self-test failed");
+  }
+  const otherAuthorComment = renderReviewComment({
+    issueInput: { ...issueInput, author: { id: 84, login: "another-contributor" } },
+    review,
+    evidence: [{ id: "E1", path: "AGENTS.md", line: 1, label: "정본" }],
+    commitSha: "a".repeat(40),
+    queryTokens: plan.queryTokens,
+  });
+  const withoutAttribution = (value) => value.split("\n")
+    .filter((line) => !line.startsWith("- 이슈 작성자:")).join("\n");
+  if (withoutAttribution(comment) !== withoutAttribution(otherAuthorComment)) {
+    throw new Error("Issue review must not vary policy by author");
   }
   if (issueInputDigest(issueInput).length !== 64) throw new Error("Digest self-test failed");
 }
