@@ -255,9 +255,11 @@ Elevation은 세 단계만 허용한다.
 
 ### React primitive
 
-- `features/workspaces/DesktopLoginPage`는 native loopback 로그인 시작·인증 전달·
+- `features/workspaces/DesktopLoginPage`는 native loopback 인증 전달·
   거절·오류의 브라우저 문서를 소유한다. 공용 `Button`, `DopeDBMarkGraphic`,
   semantic token과 정적 Tailwind를 빌드 시 단일 HTML로 생성해 앱에 포함한다.
+  로그인 시작은 HTML 없이 HTTPS 인증 경로로 redirect하며 웹 세션이 없으면 Google
+  로그인을 자동 시작한다.
   `pnpm generate:desktop-login`으로 갱신하며 build 전에 생성물 일치를 검사한다.
   listener는 별도 CSS·font·script 요청을 받지 않으므로 OS 글꼴 fallback을 쓰고
   생성된 CSS와 고정 스크립트는 CSP SHA-256으로 허용한다. 화면별 CSS는 없다.

@@ -29,15 +29,9 @@ async fn handoff(value: &WorkspaceDesktopAuthorization) -> (String, String, Stri
     assert!(start.query().is_none());
     let host = format!("127.0.0.1:{}", start.port().unwrap());
     let response = send(&host, &request(start.path(), &host)).await;
-    assert!(response.starts_with("HTTP/1.1 200"));
-    assert!(response.contains("data-page=\"start\""));
-    assert!(response.contains("Content-Security-Policy:"));
-    let response = send(
-        &host,
-        &request(&format!("/authorize/{}?", value.attempt_id), &host),
-    )
-    .await;
     assert!(response.starts_with("HTTP/1.1 303"));
+    assert!(response.contains("Cache-Control: no-store"));
+    assert!(!response.contains("<html"));
     let location = response
         .lines()
         .find_map(|line| line.strip_prefix("Location: "))

@@ -35,12 +35,6 @@ pub(super) async fn receive(
                     .as_ref()
                     .is_ok_and(|target| *target == format!("/start/{id}"))
                 {
-                    respond(&mut stream, "start", id, app_url).await;
-                    continue;
-                }
-                if target.as_ref().is_ok_and(|target| {
-                    *target == format!("/authorize/{id}") || *target == format!("/authorize/{id}?")
-                }) {
                     let response = format!("HTTP/1.1 303 See Other\r\nLocation: {authorization_url}\r\nContent-Length: 0\r\nCache-Control: no-store\r\nReferrer-Policy: no-referrer\r\nConnection: close\r\n\r\n");
                     let _ = tokio::time::timeout(
                         REQUEST_TIMEOUT,
@@ -62,10 +56,10 @@ pub(super) async fn receive(
             } else {
                 "denied"
             };
-            respond(&mut stream, page, id, app_url).await;
+            respond(&mut stream, page, app_url).await;
             return parsed;
         }
-        respond(&mut stream, "invalid", id, app_url).await;
+        respond(&mut stream, "invalid", app_url).await;
     }
 }
 
@@ -167,7 +161,7 @@ pub(super) fn parse(
     }
 }
 
-async fn respond(stream: &mut TcpStream, page: &str, id: &str, app_url: &str) {
+async fn respond(stream: &mut TcpStream, page: &str, app_url: &str) {
     let status = if page == "invalid" {
         "400 Bad Request"
     } else {
@@ -175,7 +169,6 @@ async fn respond(stream: &mut TcpStream, page: &str, id: &str, app_url: &str) {
     };
     let body = include_str!("page.html")
         .replace("__PAGE__", page)
-        .replace("__AUTHORIZE_PATH__", &format!("/authorize/{id}"))
         .replace("__APP_URL__", app_url);
     let hash = |tag: &str| {
         let content = body

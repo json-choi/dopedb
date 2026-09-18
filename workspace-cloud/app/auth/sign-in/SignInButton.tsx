@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+// Shared Google sign-in command; Desktop starts once automatically and retains manual retry.
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   IdentityError,
   IdentityPrimaryButton,
@@ -11,30 +12,48 @@ import { workspaceMessages } from "../../../lib/workspace-messages";
 import { localizedProviderMessage } from "../../../lib/workspace-provider-copy";
 import { useWorkspaceLocale } from "../../components/WorkspaceLocale";
 
-export function SignInButton({ returnTo }: { returnTo: string }) {
+export function SignInButton({ returnTo, autoStart = false }: { returnTo: string; autoStart?: boolean }) {
   const locale = useWorkspaceLocale();
   const copy = workspaceMessages[locale].signIn;
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
 
-  async function signIn() {
+  const started = useRef(false);
+  const inFlight = useRef(false);
+
+  const signIn = useCallback(async () => {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setPending(true);
     setError("");
-    const result = await authClient.signIn.social({
-      provider: "google",
-      callbackURL: returnTo,
-      errorCallbackURL: localizedWorkspacePath(
-        `/auth/sign-in?error=oauth_failed&returnTo=${encodeURIComponent(returnTo)}`,
-        locale,
-      ),
-    });
-    if (result.error) {
+    try {
+      const result = await authClient.signIn.social({
+        provider: "google",
+        callbackURL: returnTo,
+        errorCallbackURL: localizedWorkspacePath(
+          `/auth/sign-in?error=oauth_failed&returnTo=${encodeURIComponent(returnTo)}`,
+          locale,
+        ),
+      });
+      if (result.error) {
+        inFlight.current = false;
+        setPending(false);
+        setError(result.error.message
+          ? localizedProviderMessage(result.error.message, locale, copy.errors.start)
+          : copy.errors.start);
+      }
+    } catch {
+      inFlight.current = false;
       setPending(false);
-      setError(result.error.message
-        ? localizedProviderMessage(result.error.message, locale, copy.errors.start)
-        : copy.errors.start);
+      setError(copy.errors.start);
     }
-  }
+  }, [returnTo, locale, copy.errors.start]);
+
+  useEffect(() => {
+    if (!autoStart || started.current) return;
+    started.current = true;
+    void signIn();
+  }, [autoStart, signIn]);
 
   return (
     <>

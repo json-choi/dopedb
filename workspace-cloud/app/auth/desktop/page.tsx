@@ -38,7 +38,7 @@ export default async function DesktopAuthorizationPage({ searchParams }: {
           <IdentityBody><strong>{current.user.name}</strong><br />{current.user.email}</IdentityBody>
           <DesktopAccountActions currentUserId={current.user.id} returnPath={returnPath} />
           <DesktopApproval request={request} nonce={createDesktopApprovalNonce(request, current.session.id, env.authSecret())} />
-        </> : <SignInButton returnTo={localizedWorkspacePath(returnPath, locale)} />}
+        </> : <SignInButton autoStart returnTo={localizedWorkspacePath(returnPath, locale)} />}
         <small className="tw:mt-4 tw:block tw:text-xs tw:text-muted-foreground">{copy.desktopExpires}</small>
       </IdentityCard>
     </div>

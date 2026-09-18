@@ -238,9 +238,9 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
 - 작업용 chrome은 낮고 조용하게 유지하며 정보는 실행 문맥 가까이에 둔다.
 - command row와 tree row는 compact density를 사용하고, 선택·focus·위험·실패처럼
   의미가 있는 상태에만 색과 elevation을 사용한다.
-- Desktop workspace 로그인 시작 화면은 native가 연 임시 localhost 주소에서
-  앱에 포함된 공용 디자인 시스템 문서로 표시한다. 계정 인증을 계속하면
-  배포된 HTTPS 웹에서 계정 선택과 명시적인 승인을
+- Desktop workspace 로그인은 native가 연 임시 localhost 주소에서 안내 화면 없이
+  배포된 HTTPS 인증 경로로 즉시 이동한다. 웹 세션이 없으면 Google 로그인을
+  자동 시작하고, 웹 세션이 있으면 계정 확인과 명시적인 승인을
   받고, native가 연 `127.0.0.1` 임시 포트의 일회성 callback으로 돌아온다.
   native는 짧은 만료의 state와 PKCE S256으로 authorization code를 교환하고
   계정별 OS 자격 증명 저장과 권한 전환을 마친 뒤에만 로그인 완료를 알린다.

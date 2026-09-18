@@ -26,9 +26,9 @@ export function renderDesktopLoginPage() {
             <p id="login-description" className="tw:mt-4 tw:mb-6 tw:leading-body tw:text-muted-foreground">
               Return to DopeDB to check your sign-in request.
             </p>
-            <form id="login-action" hidden action="__AUTHORIZE_PATH__" method="get" data-primary-flow="desktop-login">
+            <form id="login-action" hidden action="__APP_URL__" method="get" data-primary-flow="desktop-login">
               <Button type="submit" variant="primary" labelBehavior="wrap">
-                <span id="login-action-label">Continue to sign in</span>
+                <span id="login-action-label">Return to DopeDB</span>
               </Button>
             </form>
             <p id="login-hint" className="tw:mt-6 tw:mb-0 tw:text-sm tw:leading-body tw:text-muted-foreground">

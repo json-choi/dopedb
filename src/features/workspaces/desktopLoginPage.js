@@ -5,9 +5,6 @@
   document.documentElement.lang = ko ? "ko" : "en";
   document.documentElement.dataset.theme = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   const copy = {
-    start: ko
-      ? ["DopeDB에 로그인", "브라우저에서 이 앱에 사용할 계정을 선택해 주세요.", "로그인 계속하기", "취소하려면 앱으로 돌아가세요. 로그인 요청은 10분 뒤 만료됩니다."]
-      : ["Sign in to DopeDB", "Continue in your browser to choose the account for this app.", "Continue to sign in", "Return to the app to cancel. This sign-in request expires after 10 minutes."],
     received: ko
       ? ["인증을 앱에 전달했어요", "DopeDB로 돌아가 로그인 결과를 확인해 주세요.", "DopeDB로 돌아가기", "이 탭은 닫아도 됩니다. 앱에서 연결에 실패하면 로그인을 다시 시작해 주세요."]
       : ["Authorization sent to the app", "Return to DopeDB to check your sign-in result.", "Return to DopeDB", "You can close this tab. If the app cannot connect, start sign-in again."],
@@ -28,9 +25,7 @@
   action.addEventListener("submit", (event) => {
     event.preventDefault();
     // Navigation permits the fixed HTTPS handoff without widening form-action.
-    location.href = page === "start" ? action.action : "__APP_URL__";
+    location.href = "__APP_URL__";
   });
-  if (page !== "start") {
-    history.replaceState(null, "", "/complete");
-  }
+  history.replaceState(null, "", "/complete");
 })();
