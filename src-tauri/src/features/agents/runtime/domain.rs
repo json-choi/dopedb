@@ -82,6 +82,7 @@ pub(super) struct PersistedPluginRecord {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct InstalledPluginVersion {
+    #[serde(alias = "version")]
     pub(super) adapter_bundle_version: String,
     pub(super) manifest_sha256: String,
     pub(super) entrypoint_sha256: String,
@@ -131,6 +132,7 @@ impl Default for PersistedRuntimeState {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct QuarantinedPluginVersion {
+    #[serde(alias = "version")]
     pub(super) adapter_bundle_version: String,
     pub(super) manifest_sha256: String,
     pub(super) reason: String,
@@ -158,4 +160,63 @@ pub(super) struct InstalledPluginMarker {
     pub(super) schema_version: u16,
     pub(super) envelope: SignedAcpPluginManifestV2,
     pub(super) entrypoint_sha256: String,
+}
+
+#[cfg(test)]
+pub(super) fn assert_persisted_state_compatibility_contract() {
+    let legacy = serde_json::json!({
+        "schemaVersion": RUNTIME_STATE_SCHEMA_VERSION,
+        "plugins": {
+            "dopedb.acp.codex": {
+                "enabled": true,
+                "current": {
+                     "version": "1.0.0",
+                    "manifestSha256": "a".repeat(64),
+                    "entrypointSha256": "b".repeat(64)
+                }
+            }
+        }
+    });
+
+    let state: PersistedRuntimeState =
+        serde_json::from_value(legacy.clone()).expect("legacy plugin state remains readable");
+    assert_eq!(
+        state
+            .plugins
+            .get(&AcpPluginId::Codex)
+            .and_then(|record| record.current.as_ref())
+            .map(|version| version.adapter_bundle_version.as_str()),
+        Some("1.0.0")
+    );
+
+    let mut incompatible = legacy;
+    incompatible["plugins"]["dopedb.acp.codex"]["current"]["futureField"] = serde_json::json!(true);
+    assert!(serde_json::from_value::<PersistedRuntimeState>(incompatible).is_err());
+
+    let legacy_quarantine = serde_json::json!({
+        "schemaVersion": RUNTIME_STATE_SCHEMA_VERSION,
+        "plugins": {
+            "dopedb.acp.codex": [{
+                "version": "1.0.0",
+                "manifestSha256": "c".repeat(64),
+                "reason": "verification failed"
+            }]
+        }
+    });
+
+    let quarantine: PersistedQuarantineState = serde_json::from_value(legacy_quarantine.clone())
+        .expect("legacy quarantine state remains readable");
+    assert_eq!(
+        quarantine
+            .plugins
+            .get(&AcpPluginId::Codex)
+            .and_then(|versions| versions.first())
+            .map(|version| version.adapter_bundle_version.as_str()),
+        Some("1.0.0")
+    );
+
+    let mut incompatible_quarantine = legacy_quarantine;
+    incompatible_quarantine["plugins"]["dopedb.acp.codex"][0]["futureField"] =
+        serde_json::json!(true);
+    assert!(serde_json::from_value::<PersistedQuarantineState>(incompatible_quarantine).is_err());
 }
