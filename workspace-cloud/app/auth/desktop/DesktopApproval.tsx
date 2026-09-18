@@ -2,7 +2,7 @@
 "use client";
 
 import { useState } from "react";
-import { IdentityError, IdentityPrimaryButton, IdentitySecondaryButton } from "../../components/Identity";
+import { IdentityError, IdentityPrimaryButton, IdentitySecondaryButton } from "../../../../src/design-system/components/WorkspaceIdentity";
 import { useWorkspaceLocale } from "../../components/WorkspaceLocale";
 import { workspaceMessages } from "../../../lib/workspace-messages";
 import type { DesktopAuthorization } from "../../../lib/desktop-authorization";

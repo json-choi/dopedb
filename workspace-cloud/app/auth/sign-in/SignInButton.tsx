@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   IdentityError,
   IdentityPrimaryButton,
-} from "../../components/Identity";
+} from "../../../../src/design-system/components/WorkspaceIdentity";
 import { authClient } from "../../../lib/auth-client";
 import { localizedWorkspacePath } from "../../../lib/workspace-locale";
 import { workspaceMessages } from "../../../lib/workspace-messages";

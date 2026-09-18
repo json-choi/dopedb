@@ -6,7 +6,7 @@ import {
   IdentityEyebrow,
   IdentitySingleShell,
   IdentityTitle,
-} from "../../../components/Identity";
+} from "../../../../../src/design-system/components/WorkspaceIdentity";
 import { getWorkspaceLocale } from "../../../../lib/workspace-locale-server";
 import { workspaceMessages } from "../../../../lib/workspace-messages";
 

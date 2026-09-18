@@ -14,6 +14,30 @@ use zeroize::Zeroizing;
 const MAX_HEADERS: usize = 8192;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
 
+// Static categories only: never include a URL, header, state, or authorization code.
+#[derive(Debug, PartialEq)]
+pub(super) enum CallbackError {
+    Request,
+    Timeout,
+    Path,
+    Parameters,
+    State,
+    Code,
+}
+
+impl CallbackError {
+    fn diagnostic(&self) -> &'static str {
+        match self {
+            Self::Request => "LOGIN_REQUEST",
+            Self::Timeout => "LOGIN_TIMEOUT",
+            Self::Path => "LOGIN_PATH",
+            Self::Parameters => "LOGIN_PARAMETERS",
+            Self::State => "LOGIN_STATE",
+            Self::Code => "LOGIN_CODE",
+        }
+    }
+}
+
 pub(super) async fn receive(
     listener: TcpListener,
     state: &str,
@@ -43,9 +67,23 @@ pub(super) async fn receive(
                     .await;
                     continue;
                 }
+                if target.as_ref().is_ok_and(|target| *target == "/complete") {
+                    respond(&mut stream, "incomplete", "", app_url).await;
+                    continue;
+                }
+                if target
+                    .as_ref()
+                    .is_ok_and(|target| *target == "/favicon.ico")
+                {
+                    let _ = stream
+                        .write_all(b"HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n")
+                        .await;
+                    continue;
+                }
                 parse(&request, &host, state)
             }
-            _ => Err(invalid()),
+            Ok(Err(_)) => Err(CallbackError::Request),
+            Err(_) => Err(CallbackError::Timeout),
         };
         let accepted = parsed.is_ok();
         // Release the listening socket before acknowledging a valid callback.
@@ -56,10 +94,16 @@ pub(super) async fn receive(
             } else {
                 "denied"
             };
-            respond(&mut stream, page, app_url).await;
-            return parsed;
+            respond(&mut stream, page, "", app_url).await;
+            return Ok(parsed.expect("accepted callback"));
         }
-        respond(&mut stream, "invalid", app_url).await;
+        respond(
+            &mut stream,
+            "invalid",
+            parsed.unwrap_err().diagnostic(),
+            app_url,
+        )
+        .await;
     }
 }
 
@@ -121,14 +165,15 @@ pub(super) fn parse(
     request: &str,
     host: &str,
     state: &str,
-) -> AppResult<Option<Zeroizing<String>>> {
-    let target = request_target(request, host)?;
+) -> Result<Option<Zeroizing<String>>, CallbackError> {
+    let target = request_target(request, host).map_err(|_| CallbackError::Request)?;
     if !target.starts_with("/callback?") {
-        return Err(invalid());
+        return Err(CallbackError::Path);
     }
-    let url = url::Url::parse(&format!("http://{host}{target}")).map_err(|_| invalid())?;
+    let url =
+        url::Url::parse(&format!("http://{host}{target}")).map_err(|_| CallbackError::Path)?;
     if url.path() != "/callback" || url.fragment().is_some() {
-        return Err(invalid());
+        return Err(CallbackError::Path);
     }
     let mut returned_state = None;
     let mut code = None;
@@ -140,12 +185,12 @@ pub(super) fn parse(
             }
             "code" if code.is_none() => code = Some(Zeroizing::new(value.into_owned())),
             "error" if error.is_none() => error = Some(value.into_owned()),
-            _ => return Err(invalid()),
+            _ => return Err(CallbackError::Parameters),
         }
     }
-    let returned_state = returned_state.ok_or_else(invalid)?;
+    let returned_state = returned_state.ok_or(CallbackError::State)?;
     if !bool::from(returned_state.as_bytes().ct_eq(state.as_bytes())) {
-        return Err(invalid());
+        return Err(CallbackError::State);
     }
     match (code, error.as_deref()) {
         (Some(code), None)
@@ -157,11 +202,11 @@ pub(super) fn parse(
             Ok(Some(code))
         }
         (None, Some("access_denied")) => Ok(None),
-        _ => Err(invalid()),
+        _ => Err(CallbackError::Code),
     }
 }
 
-async fn respond(stream: &mut TcpStream, page: &str, app_url: &str) {
+async fn respond(stream: &mut TcpStream, page: &str, diagnostic: &str, app_url: &str) {
     let status = if page == "invalid" {
         "400 Bad Request"
     } else {
@@ -169,6 +214,7 @@ async fn respond(stream: &mut TcpStream, page: &str, app_url: &str) {
     };
     let body = include_str!("page.html")
         .replace("__PAGE__", page)
+        .replace("__DIAGNOSTIC__", diagnostic)
         .replace("__APP_URL__", app_url);
     let hash = |tag: &str| {
         let content = body

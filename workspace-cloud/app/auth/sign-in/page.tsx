@@ -4,7 +4,7 @@ import {
   IdentityCard,
   IdentityError,
   IdentityEyebrow,
-} from "../../components/Identity";
+} from "../../../../src/design-system/components/WorkspaceIdentity";
 import { safeReturnTo } from "../../../lib/http";
 import { localizedWorkspacePath } from "../../../lib/workspace-locale";
 import { getWorkspaceLocale } from "../../../lib/workspace-locale-server";

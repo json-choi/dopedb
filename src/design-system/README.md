@@ -251,19 +251,28 @@ Elevation은 세 단계만 허용한다.
 
 일반 card/panel에는 shadow를 추가하지 않는다.
 
+## Workspace 인증 surface
+
+`workspace.css`는 Workspace Web과 Desktop의 독립 loopback 문서가 공유하는
+인증 palette, Tailwind 역할, 전역 reset의 정본이다. 기존 Workspace Web의
+`globals.css`에 있던 정의를 이동한 것으로 desktop 앱 shell에는 import하지 않는다.
+`components/WorkspaceIdentity.tsx`는 두 surface의 카드·제목·본문·버튼을 소유한다.
+loopback 문서는 이 정본을 빌드 시 포함하며 네트워크 font나 script를 요청하지 않는다.
+
 ## 컴포넌트
 
 ### React primitive
 
 - `features/workspaces/DesktopLoginPage`는 native loopback 인증 전달·
-  거절·오류의 브라우저 문서를 소유한다. 공용 `Button`, `DopeDBMarkGraphic`,
+  거절·오류의 브라우저 문서를 소유한다. 공용 `WorkspaceIdentity`, `DopeDBMarkGraphic`,
   semantic token과 정적 Tailwind를 빌드 시 단일 HTML로 생성해 앱에 포함한다.
   로그인 시작은 HTML 없이 HTTPS 인증 경로로 redirect하며 웹 세션이 없으면 Google
   로그인을 자동 시작한다.
   `pnpm generate:desktop-login`으로 갱신하며 build 전에 생성물 일치를 검사한다.
   listener는 별도 CSS·font·script 요청을 받지 않으므로 OS 글꼴 fallback을 쓰고
   생성된 CSS와 고정 스크립트는 CSP SHA-256으로 허용한다. 화면별 CSS는 없다.
-  브라우저 언어의 한·영과 OS 테마를 반영하며 인증 전달을 로그인 성공으로 표시하지
+  Workspace 웹과 같은 밝은 인증 surface와 브라우저 언어의 한·영을 사용하며
+  인증 전달을 로그인 성공으로 표시하지
   않는다. native에서 session 확정 후 앱 창을 복원한다.
 
 - DopeDB 브랜드는 좁은 D를 −24° 행성 고리가 감싸는 마크로 통일한다.

@@ -112,6 +112,16 @@ pub(crate) async fn assert_desktop_login_contract() {
     )
     .await;
     assert!(invalid.starts_with("HTTP/1.1 400"));
+    assert!(invalid.contains("data-diagnostic=\"LOGIN_STATE\""));
+    assert!(!invalid.contains(CODE));
+    assert!(!invalid.contains(&state));
+    // Reloading the scrubbed URL is informational, never another callback or a success.
+    let reload = send(&host, &request("/complete", &host)).await;
+    assert!(reload.starts_with("HTTP/1.1 200"));
+    assert!(reload.contains("data-page=\"incomplete\""));
+    let icon = send(&host, &request("/favicon.ico", &host)).await;
+    assert!(icon.starts_with("HTTP/1.1 204"));
+    assert!(!icon.contains("<html"));
     let response = send(
         &host,
         &request(&format!("/callback?state={state}&code={CODE}"), &host),

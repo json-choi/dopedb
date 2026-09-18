@@ -2,7 +2,7 @@
 import { headers } from "next/headers";
 import { Brand } from "../../components/Brand";
 import { LocaleSwitcher } from "../../components/LocaleSwitcher";
-import { IdentityBody, IdentityCard, IdentityError, IdentitySingleShell, IdentityTitle } from "../../components/Identity";
+import { IdentityBody, IdentityCard, IdentityError, IdentitySingleShell, IdentityTitle } from "../../../../src/design-system/components/WorkspaceIdentity";
 import { auth } from "../../../lib/auth";
 import { env } from "../../../lib/env";
 import { createDesktopApprovalNonce, desktopAuthorizationQuery, parseDesktopAuthorization } from "../../../lib/desktop-authorization";

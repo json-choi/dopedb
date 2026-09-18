@@ -6,7 +6,7 @@ import { localizedWorkspacePath } from "../../lib/workspace-locale";
 import { getWorkspaceLocale } from "../../lib/workspace-locale-server";
 import { Brand } from "../../app/components/Brand";
 import { LocaleSwitcher } from "../../app/components/LocaleSwitcher";
-import { IdentityBody, IdentityCard, IdentityEyebrow, IdentitySecondaryLink, IdentitySingleShell, IdentityTitle } from "../../app/components/Identity";
+import { IdentityBody, IdentityCard, IdentityEyebrow, IdentitySecondaryLink, IdentitySingleShell, IdentityTitle } from "../../../src/design-system/components/WorkspaceIdentity";
 import { articleSharingCopy } from "./copy";
 import { inspectArticleInvitation } from "./acceptance";
 import { articlePath, loadArticleSharing, type SharingScope } from "./store";

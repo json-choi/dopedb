@@ -25,9 +25,8 @@ loopback handoff로 전환한다.
 1. Rust가 `127.0.0.1`의 OS 할당 임시 port에 한 번만 수신하는 listener를 열고,
    PKCE verifier, state, redirect URI를 해당 시도의 메모리에만 보관한다.
 2. native가 시스템 브라우저에 해당 시도에 묶인 `127.0.0.1:<port>/start/<id>`를
-   연다. 시작 화면은 앱에 포함된 디자인 시스템 문서다. 로그인 계속하기는 같은
-   listener의 고정 authorize 경로를 통해 Workspace Web의 `/auth/desktop`으로
-   이동한다. Google 인증, 다중 계정 선택, 승인과 거절은 HTTPS 웹에서 수행한다.
+   연다. listener는 안내 화면 없이 Workspace Web의 `/auth/desktop`으로
+   redirect하며, 웹 세션이 없으면 Google 로그인을 자동 시작한다. Google 인증, 다중 계정 선택, 승인과 거절은 HTTPS 웹에서 수행한다.
 3. Workspace Web은 선택한 browser session, public client ID, 정확한 loopback URI,
    PKCE challenge에 묶인 짧은 수명의 authorization code를 발급한다. 저장소에는
    code 원문이 아니라 digest만 남긴다.
@@ -61,7 +60,8 @@ loopback handoff로 전환한다.
 - loopback 응답은 code와 token을 반영하지 않는 고정 HTML과 `no-store`, 제한된 CSP를
   사용한다. 공용 UI에서 생성한 self-contained 문서의 CSS·고정 script만 SHA-256
   CSP로 허용한다. callback의 query는 browser history에서 제거하고 인증 전달·거절·
-  잘못된 요청을 구분한다. 인증 전달은 session 교환 성공을 의미하지 않는다.
+  잘못된 요청을 구분한다. 오류는 비밀값 없는 고정 진단 코드만 표시하고
+  `/complete` 재방문은 인증 완료를 주장하지 않는 안내로 처리한다. 인증 전달은 session 교환 성공을 의미하지 않는다.
   listener는 유효 callback 하나 뒤 즉시 닫고 실제 session 확정 뒤 native가 앱을
   앞으로 가져온다. token 없는 기존 access-complete URL은 수동 복귀만 소유한다.
 - 로그인 완료 뒤에도 기존 Broker authority fencing, workspace membership 재검증,

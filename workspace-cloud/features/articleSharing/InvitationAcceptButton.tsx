@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { IdentityError, IdentityPrimaryButton } from "../../app/components/Identity";
+import { IdentityError, IdentityPrimaryButton } from "../../../src/design-system/components/WorkspaceIdentity";
 import { useWorkspaceLocale } from "../../app/components/WorkspaceLocale";
 import { localizedWorkspacePath } from "../../lib/workspace-locale";
 import { articleSharingCopy } from "./copy";

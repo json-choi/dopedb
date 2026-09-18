@@ -9,7 +9,7 @@ import {
   IdentityPrimaryButton,
   IdentitySingleShell,
   IdentityTitle,
-} from "./components/Identity";
+} from "../../src/design-system/components/WorkspaceIdentity";
 import { articleSharingCopy } from "../features/articleSharing/copy";
 import { useWorkspaceLocale } from "./components/WorkspaceLocale";
 

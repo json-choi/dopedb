@@ -8,7 +8,7 @@ import {
   IdentityError,
   IdentityPrimaryButton,
   IdentitySecondaryLink,
-} from "../../components/Identity";
+} from "../../../../src/design-system/components/WorkspaceIdentity";
 import { authClient } from "../../../lib/auth-client";
 import { useDeviceAccounts } from "../../../lib/useDeviceAccounts";
 import { localizedWorkspacePath } from "../../../lib/workspace-locale";

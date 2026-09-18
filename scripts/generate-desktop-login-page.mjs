@@ -13,12 +13,10 @@ try {
   const { renderDesktopLoginPage } = await server.ssrLoadModule("/src/features/workspaces/DesktopLoginPage.tsx");
   let html = renderDesktopLoginPage();
   // Fonts use the OS fallback: the ephemeral listener serves no external assets.
-  const bridge = await readFile(new URL("../src/design-system/index.css", import.meta.url), "utf8");
   const compiler = await compile([
     '@import "tailwindcss/theme.css" layer(theme) prefix(tw);',
     '@import "tailwindcss/utilities.css" layer(utilities) prefix(tw) source(none) important;',
-    '@import "./src/design-system/tokens.css";',
-    bridge.slice(bridge.indexOf("@theme inline")),
+    '@import "./src/design-system/workspace.css";',
   ].join("\n"), { base: root, onDependency() {} });
   const candidates = [...html.matchAll(/class="([^"]+)"/g)].flatMap((match) => match[1].split(/\s+/));
   const css = compiler.build(candidates);

@@ -3,7 +3,7 @@
 "use client";
 
 import { useState } from "react";
-import { IdentityAccountChoice } from "../../components/Identity";
+import { IdentityAccountChoice } from "../../../../src/design-system/components/WorkspaceIdentity";
 import { authClient } from "../../../lib/auth-client";
 import { useDeviceAccounts } from "../../../lib/useDeviceAccounts";
 import { localizedWorkspacePath } from "../../../lib/workspace-locale";

@@ -1,3 +1,5 @@
+// Shared Workspace identity surfaces for hosted authentication and the static Desktop callback.
+// Callers own authentication commands; these primitives own only presentation.
 import type {
   AnchorHTMLAttributes,
   ButtonHTMLAttributes,

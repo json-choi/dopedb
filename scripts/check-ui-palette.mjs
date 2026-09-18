@@ -80,6 +80,7 @@ const rawColorPattern = /#[0-9a-f]{3,8}\b|\brgba?\s*\(/i;
 const rawColorOwners = new Set([
   "src/design-system/scoped-palettes.css",
   "src/design-system/tokens.css",
+  "src/design-system/workspace.css",
   "src/design-system/artifactPalettes.ts",
 ]);
 for (const [file, source] of documents) {

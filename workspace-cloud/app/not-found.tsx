@@ -7,7 +7,7 @@ import {
   IdentitySecondaryLink,
   IdentitySingleShell,
   IdentityTitle,
-} from "./components/Identity";
+} from "../../src/design-system/components/WorkspaceIdentity";
 import { articleSharingCopy } from "../features/articleSharing/copy";
 import { localizedWorkspacePath } from "../lib/workspace-locale";
 import { getWorkspaceLocale } from "../lib/workspace-locale-server";
