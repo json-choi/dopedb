@@ -49,11 +49,43 @@ pub(crate) fn executable_search_path(first: Option<&Path>) -> OsString {
     if let Some(path) = std::env::var_os("PATH") {
         directories.extend(std::env::split_paths(&path));
     }
-    directories.extend(node_runtime_directories(home.as_deref()));
+    directories.extend(post_inherited_path_directories(
+        home.as_deref(),
+        cfg!(target_os = "macos"),
+        node_runtime_directories(home.as_deref()),
+    ));
 
     let mut seen = BTreeSet::new();
     directories.retain(|directory| directory.is_absolute() && seen.insert(path_key(directory)));
     std::env::join_paths(&directories).unwrap_or_default()
+}
+
+fn post_inherited_path_directories(
+    home: Option<&Path>,
+    include_macos_app_fallbacks: bool,
+    node_directories: Vec<PathBuf>,
+) -> Vec<PathBuf> {
+    if !include_macos_app_fallbacks {
+        return node_directories;
+    }
+
+    let mut directories = Vec::with_capacity(node_directories.len() + 4);
+    for bundle in ["ChatGPT.app", "Codex.app"] {
+        directories.push(
+            Path::new("/Applications")
+                .join(bundle)
+                .join("Contents/Resources"),
+        );
+        if let Some(home) = home {
+            directories.push(
+                home.join("Applications")
+                    .join(bundle)
+                    .join("Contents/Resources"),
+            );
+        }
+    }
+    directories.extend(node_directories);
+    directories
 }
 
 /// npm and pnpm install `claude` and `codex` as shims that re-exec `node`, so a
@@ -359,6 +391,31 @@ fn version_key(directory: &Path) -> Vec<u64> {
 #[cfg(test)]
 pub(crate) fn assert_cli_environment_contract() {
     let root = Path::new("/fixture/home");
+    let inherited = PathBuf::from("/fixture/inherited");
+    let node = PathBuf::from("/fixture/node");
+    let mut search_tail = vec![inherited.clone()];
+    search_tail.extend(post_inherited_path_directories(
+        Some(root),
+        true,
+        vec![node.clone()],
+    ));
+    assert_eq!(
+        search_tail,
+        vec![
+            inherited,
+            PathBuf::from("/Applications/ChatGPT.app/Contents/Resources"),
+            root.join("Applications/ChatGPT.app/Contents/Resources"),
+            PathBuf::from("/Applications/Codex.app/Contents/Resources"),
+            root.join("Applications/Codex.app/Contents/Resources"),
+            node,
+        ]
+    );
+    let non_macos_nodes = vec![PathBuf::from("/fixture/non-macos-node")];
+    assert_eq!(
+        post_inherited_path_directories(Some(root), false, non_macos_nodes.clone()),
+        non_macos_nodes
+    );
+
     let directories = windows_cli_runtime_directories(Some(root), |key| match key {
         "NVM_SYMLINK" => Some(OsString::from("/fixture/nvm-link")),
         "VOLTA_HOME" => Some(OsString::from("/fixture/volta")),
