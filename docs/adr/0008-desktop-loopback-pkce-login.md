@@ -62,6 +62,9 @@ loopback handoff로 전환한다.
   CSP로 허용한다. callback의 query는 browser history에서 제거하고 인증 전달·거절·
   잘못된 요청을 구분한다. 오류는 비밀값 없는 고정 진단 코드만 표시하고
   `/complete` 재방문은 인증 완료를 주장하지 않는 안내로 처리한다. 인증 전달은 session 교환 성공을 의미하지 않는다.
+  브라우저의 사전 연결과 불완전한 요청은 2초 뒤 응답 문서 없이 닫는다.
+  최대 8개 연결의 요청을 함께 기다려 빈 연결이 실제 callback을 가로막지 않게 한다.
+  callback 수락·취소·교체·만료 시 대기 중인 연결도 모두 닫는다.
   listener는 유효 callback 하나 뒤 즉시 닫고 실제 session 확정 뒤 native가 앱을
   앞으로 가져온다. token 없는 기존 access-complete URL은 수동 복귀만 소유한다.
 - 로그인 완료 뒤에도 기존 Broker authority fencing, workspace membership 재검증,

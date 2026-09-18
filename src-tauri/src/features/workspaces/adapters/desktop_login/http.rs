@@ -2,6 +2,7 @@
 
 use crate::error::{AppError, AppResult};
 use base64::{engine::general_purpose::STANDARD, Engine};
+use futures::{stream::FuturesUnordered, StreamExt};
 use sha2::{Digest, Sha256};
 use std::time::Duration;
 use subtle::ConstantTimeEq;
@@ -13,12 +14,12 @@ use zeroize::Zeroizing;
 
 const MAX_HEADERS: usize = 8192;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
+const MAX_CONNECTIONS: usize = 8;
 
 // Static categories only: never include a URL, header, state, or authorization code.
 #[derive(Debug, PartialEq)]
 pub(super) enum CallbackError {
     Request,
-    Timeout,
     Path,
     Parameters,
     State,
@@ -29,7 +30,6 @@ impl CallbackError {
     fn diagnostic(&self) -> &'static str {
         match self {
             Self::Request => "LOGIN_REQUEST",
-            Self::Timeout => "LOGIN_TIMEOUT",
             Self::Path => "LOGIN_PATH",
             Self::Parameters => "LOGIN_PARAMETERS",
             Self::State => "LOGIN_STATE",
@@ -46,12 +46,25 @@ pub(super) async fn receive(
     app_url: &str,
 ) -> AppResult<Option<Zeroizing<String>>> {
     let host = listener.local_addr()?.to_string();
+    // Poll bounded reads together: a browser preconnect must not hold the
+    // actual callback behind an empty socket. Dropping this set closes every
+    // pending socket on success, cancellation, replacement, or expiry.
+    let mut requests = FuturesUnordered::new();
     loop {
-        let (mut stream, peer) = listener.accept().await?;
-        if !peer.ip().is_loopback() {
-            continue;
-        }
-        let request = tokio::time::timeout(REQUEST_TIMEOUT, read_request(&mut stream)).await;
+        let (mut stream, request) = tokio::select! {
+            biased;
+            Some(completed) = requests.next(), if !requests.is_empty() => completed,
+            accepted = listener.accept(), if requests.len() < MAX_CONNECTIONS => {
+                let (mut stream, peer) = accepted?;
+                if peer.ip().is_loopback() {
+                    requests.push(async move {
+                        let request = tokio::time::timeout(REQUEST_TIMEOUT, read_request(&mut stream)).await;
+                        (stream, request)
+                    });
+                }
+                continue;
+            }
+        };
         let parsed = match request {
             Ok(Ok(request)) => {
                 let target = request_target(&request, &host);
@@ -82,13 +95,15 @@ pub(super) async fn receive(
                 }
                 parse(&request, &host, state)
             }
-            Ok(Err(_)) => Err(CallbackError::Request),
-            Err(_) => Err(CallbackError::Timeout),
+            // No complete HTTP request exists yet. An unsolicited 400 would
+            // turn speculative connection setup into an OAuth failure page.
+            Ok(Err(_)) | Err(_) => continue,
         };
         let accepted = parsed.is_ok();
         // Release the listening socket before acknowledging a valid callback.
         if accepted {
             drop(listener);
+            drop(requests);
             let page = if matches!(&parsed, Ok(Some(_))) {
                 "received"
             } else {

@@ -95,6 +95,21 @@ pub(crate) async fn assert_desktop_login_contract() {
         .await
         .unwrap();
     let (host, state, challenge) = handoff(&first).await;
+    // A speculative browser connection has no HTTP request to reject. Returning
+    // an error document here can make it the response to a later navigation.
+    let mut idle = TcpStream::connect(&host).await.unwrap();
+    let mut unsolicited = String::new();
+    tokio::time::timeout(
+        Duration::from_secs(3),
+        idle.read_to_string(&mut unsolicited),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert!(
+        unsolicited.is_empty(),
+        "idle sockets must close without a login error page"
+    );
     for target in ["/start/wrong", "/authorize/wrong"] {
         assert!(send(&host, &request(target, &host))
             .await
@@ -122,11 +137,20 @@ pub(crate) async fn assert_desktop_login_contract() {
     let icon = send(&host, &request("/favicon.ico", &host)).await;
     assert!(icon.starts_with("HTTP/1.1 204"));
     assert!(!icon.contains("<html"));
-    let response = send(
-        &host,
-        &request(&format!("/callback?state={state}&code={CODE}"), &host),
+    // Idle and partial connections cannot block a complete callback or outlive
+    // it. The bound is below their read deadline, not a throughput benchmark.
+    let mut idle = TcpStream::connect(&host).await.unwrap();
+    let mut partial = TcpStream::connect(&host).await.unwrap();
+    partial.write_all(b"GET /callback").await.unwrap();
+    let response = tokio::time::timeout(
+        Duration::from_secs(1),
+        send(
+            &host,
+            &request(&format!("/callback?state={state}&code={CODE}"), &host),
+        ),
     )
-    .await;
+    .await
+    .expect("speculative sockets must not block the callback");
     assert!(response.starts_with("HTTP/1.1 200"));
     assert!(response.contains("Cache-Control: no-store"));
     assert!(response.contains("Referrer-Policy: no-referrer"));
@@ -136,6 +160,13 @@ pub(crate) async fn assert_desktop_login_contract() {
     assert!(!response.contains(&state));
     assert!(!response.contains("unsafe-inline"));
     assert!(TcpStream::connect(&host).await.is_err());
+    for stream in [&mut idle, &mut partial] {
+        let mut byte = [0];
+        let closed = tokio::time::timeout(Duration::from_secs(1), stream.read(&mut byte))
+            .await
+            .unwrap();
+        assert!(matches!(closed, Ok(0) | Err(_)));
+    }
     let DesktopCallback::Code(code) = runtime.wait(&first.attempt_id).await.unwrap() else {
         panic!("code expected")
     };

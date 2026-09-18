@@ -25,7 +25,6 @@
   const diagnostic = document.documentElement.dataset.diagnostic;
   const reasons = {
     LOGIN_REQUEST: ko ? "앱이 브라우저 요청 형식을 읽지 못했습니다." : "The app could not read the browser request.",
-    LOGIN_TIMEOUT: ko ? "브라우저 요청을 받는 시간이 초과됐습니다." : "The browser request timed out.",
     LOGIN_PATH: ko ? "앱으로 돌아온 주소가 로그인 반환 주소와 다릅니다." : "The return address does not match the sign-in callback.",
     LOGIN_PARAMETERS: ko ? "로그인 응답에 예상하지 못한 항목이 있습니다." : "The sign-in response contains unexpected parameters.",
     LOGIN_STATE: ko ? "앱에서 시작한 로그인 요청과 돌아온 요청이 일치하지 않습니다." : "The return request does not match the sign-in attempt in the app.",
