@@ -1,3 +1,6 @@
+// Packaged-QA scenario for the Analysis Article publication contract: it renders one fixed
+// HTML snapshot and asserts in the DOM that sanitization left no executable control behind,
+// publishing the verdict through a data attribute the packaged runner reads.
 import { useEffect, useState } from "react";
 
 const publishedHtml = [

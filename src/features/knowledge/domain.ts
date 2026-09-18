@@ -1,3 +1,6 @@
+// Wire contract for Knowledge projects, environments, sources, and environment-connection
+// bindings. A source revision carries the exact commit or snapshot fingerprint a grant is
+// pinned to, and record revisions let a stale editor be rejected instead of overwriting.
 export type KnowledgeEnvironment = {
   id: string;
   name: string;

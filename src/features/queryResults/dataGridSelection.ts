@@ -1,3 +1,6 @@
+// Pure rectangular cell-selection model shared by both grid renderers: anchor/focus
+// coordinates, their normalized bounds, and the clipboard projection. A single-cell copy takes
+// its own formatter so one value is not reshaped by the tab-separated range format.
 export type GridCellCoordinate = {
   row: number;
   col: number;

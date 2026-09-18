@@ -1,3 +1,6 @@
+// Stateless chrome for the result workbench: the toolbar row, the row-count footer, and the
+// cell-to-text projection they share. Filter text, paging, and the show-more decision stay
+// with the result owner.
 import type { SqlStreamRowSource } from "../queries/domain";
 import type { CellDecodeFailure } from "../../ipc/types";
 import {

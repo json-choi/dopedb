@@ -1,3 +1,6 @@
+// Composition root for the shell workbench. Connection list, selected connection, route,
+// safety policy, and open documents each invalidate the others, so this hook is their single
+// writer and the per-concern sub-hooks it composes never write across that boundary.
 import {
   useEffect,
   useMemo,

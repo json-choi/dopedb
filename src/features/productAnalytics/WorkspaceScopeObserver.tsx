@@ -1,3 +1,5 @@
+// Effect-only observer with no rendered output. main.tsx mounts it once, outside packaged
+// benchmark runs, so the session-scoped capture below has exactly one caller.
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 

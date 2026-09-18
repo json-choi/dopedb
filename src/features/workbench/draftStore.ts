@@ -1,3 +1,6 @@
+// Module-scoped store for unsaved SQL text, keyed by document id and held outside React so
+// typing never re-renders the shell. Retention is bounded and only entries without a mounted
+// subscriber are evicted, oldest first.
 import { useCallback, useSyncExternalStore } from "react";
 
 const MAX_RETAINED_DRAFTS = 64;

@@ -1,3 +1,6 @@
+// Renders a connection diagnostic code as localized text. The exhaustive record turns a new
+// code into a compile error instead of a missing string and keeps every i18n key static, so
+// no key is assembled at runtime.
 import type { I18nKey } from "../../lib/i18n";
 import type { ConnectionDiagnosticCode } from "./diagnostics";
 

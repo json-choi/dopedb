@@ -1,3 +1,6 @@
+// Pure validation policy for a connection draft. It returns engine-aware codes and whether
+// each one blocks a connection test, never localized text, so the editor, the test path, and
+// the message table stay on one contract.
 import type {
   ConnectionProfile,
   DriverDescriptor,
