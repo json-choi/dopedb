@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-13 | Updated: 2026-09-13 -->
+<!-- Generated: 2026-09-13 | Updated: 2026-09-19 -->
 
 # src/features/workbench
 
@@ -14,6 +14,7 @@ its own — persistence is delegated to `../sqlDocuments`.
 |------|-------------|
 | `domain.ts` | `WorkbenchDocument` union and id helpers (`stableDocument`, `queryDocument`, `persistedQueryDocument`, `sqlRecoveryKey`-based ids). |
 | `draftStore.ts` | `useSyncExternalStore`-based unsent-draft cache, capped at `MAX_RETAINED_DRAFTS` (64), evicting entries with no active listeners first. |
+| `openTabs.ts` | Member-local open-tab record (list, order, active tab) per workspace/account/connection, plus `restorableOpenTabs`, which decides what may reopen after a document list response. |
 | `state.test.ts` | Renders workbench state against a real schema-diff fixture and SQL parameter/catalog helpers to validate the document strip state machine. |
 | `state.ts` | Pure state machine for the workbench document strip; React effects/handlers dispatch commands here instead of mutating the document array in multiple places. |
 | `useWorkbenchDocuments.ts` | Single writer for workbench document state; coordinates connection changes, persisted SQL restoration, tab commands, and optimistic save projections. |
@@ -31,6 +32,13 @@ None.
   document state — do not add a second hook that also owns document lifecycle.
 - `draftStore.ts` only evicts a draft with zero active listeners; do not change
   eviction to drop a draft a component still has mounted.
+- Closing a tab is not deleting a document: `restoreSql` reopens only the ids in
+  the member-local record (`openTabs.ts`), never the whole `list()` result. A
+  missing record means a first run and restores everything; a stored empty list
+  means the member closed everything and must stay empty.
+- `useWorkbenchDocuments.ts` writes that record only after a connection's restore
+  has settled, so an initial placeholder document can never overwrite what the
+  member left open.
 
 ### Testing Requirements
 - `state.test.ts` is part of the `pnpm test` smoke suite

@@ -308,6 +308,7 @@ function Shell() {
       },
       selectConnection: commands.connections.select,
       activateDocument: commands.documents.activate,
+      openSavedDocument: commands.documents.openSaved,
       openTable: commands.documents.openTable,
     },
   });
@@ -371,6 +372,7 @@ function Shell() {
         model={{
           workspace: {
             connections: connections.items,
+            connectionsLoaded: connections.loaded,
             selected: connections.selected,
             selectedId: connections.selectedId,
             supportsSql: connections.supportsSql,

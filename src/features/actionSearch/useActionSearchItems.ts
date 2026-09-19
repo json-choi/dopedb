@@ -9,8 +9,10 @@ import { databaseCatalogQuery, type CatalogScope } from "../../lib/queries";
 import { filterCatalogOverview } from "../catalogExplorer/scopeFilter";
 import { databaseDisplayLabel, type ConnectionProfile } from "../connections/domain";
 import { settingsSearchKeywords, type SettingsSection } from "../settings/domain";
+import type { SqlDocument } from "../sqlDocuments/domain";
 import type { WorkbenchDocument } from "../workbench/domain";
 import { useCachedCatalogOverviews } from "./catalogCache";
+import { useDocumentActionSearchItems } from "./documentItems";
 import type { ActionSearchItem } from "./domain";
 
 type ActionSearchItemsInput = {
@@ -31,6 +33,7 @@ type ActionSearchItemsInput = {
     openSettings: (section?: SettingsSection) => void;
     selectConnection: (id: string) => void;
     activateDocument: (document: WorkbenchDocument) => void;
+    openSavedDocument: (document: SqlDocument) => void;
     openTable: (connection: ConnectionProfile, table: CatalogTable) => void;
   };
 };
@@ -54,6 +57,15 @@ export function useActionSearchItems({
     scope.key,
     open && scope.ready,
   );
+  const documentItems = useDocumentActionSearchItems({
+    open,
+    scope,
+    selected,
+    documents,
+    supportsSql,
+    activate: commands.activateDocument,
+    openSaved: commands.openSavedDocument,
+  });
   const visibleDatabase = (connection: ConnectionProfile, database: string) =>
     databaseDisplayLabel(connection.engine, database);
 
@@ -146,37 +158,6 @@ export function useActionSearchItems({
       run: () => commands.selectConnection(connection.id),
     }),
   );
-
-  const documentItems: ActionSearchItem[] = documents.map((document) => {
-    const label =
-      document.kind === "sql"
-        ? document.title
-        : document.kind === "data"
-          ? [document.table.schema, document.table.name]
-              .filter(Boolean)
-              .join(".")
-          : document.kind === "schema"
-            ? t("tabs.schema")
-            : document.kind === "welcome"
-              ? t("onboarding.title")
-              : document.kind === "results"
-                ? t("sql.executionResults")
-              : document.kind === "activity"
-                ? t("tabs.activity")
-                : t("tabs.documents");
-    return {
-      id: `document:${document.id}`,
-      kind: "document",
-      label,
-      detail:
-        selected?.name ||
-        (selected
-          ? visibleDatabase(selected, selected.database)
-          : t("app.unnamed")),
-      keywords: [document.kind],
-      run: () => commands.activateDocument(document),
-    };
-  });
 
   const connectionById = new Map(
     connections.map((connection) => [connection.id, connection]),

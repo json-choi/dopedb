@@ -34,12 +34,14 @@ import type { SqlDocument } from "../sqlDocuments/domain";
 import { tauriSqlDocumentGateway } from "../sqlDocuments/tauriAdapter";
 import type { SqlResolveMode } from "../queries/resolveMode";
 import {
+  persistedQueryDocument,
   queryDocument,
   stableDocument,
   tableDocument,
   type WorkbenchDocument,
 } from "../workbench/domain";
 import { publishWorkbenchDraft } from "../workbench/draftStore";
+import { openTabScopeKey } from "../workbench/openTabs";
 import { useWorkbenchDocuments } from "../workbench/useWorkbenchDocuments";
 import { recordStartupMark } from "../runtime/tauriAdapter";
 import {
@@ -159,9 +161,11 @@ export function useAppShellWorkbenchController({
     selectedConnectionDatabase: selected?.database ?? null,
     supportsSql,
     sqlDocuments: tauriSqlDocumentGateway,
+    openTabScope: openTabScopeKey(scope),
     onRestoreError: (error) => {
       console.error("could not restore SQL documents:", error);
     },
+    onError: (message) => toast(message, "error"),
   });
   const { selectedDocuments, activeDocument, activeDocumentId } = workbench;
   const selectedTable =
@@ -327,7 +331,12 @@ export function useAppShellWorkbenchController({
 
   function closeDocument(id: string) {
     if (!selected) return;
-    workbench.close(id, selected.id, supportsSql);
+    void workbench.close(id, selected.id, supportsSql);
+  }
+
+  function openSavedDocument(document: SqlDocument) {
+    if (!selected || String(document.connectionId) !== selected.id) return;
+    activateDocument(persistedQueryDocument(document));
   }
 
   function setActiveQueryTitle(value: string) {
@@ -500,6 +509,7 @@ export function useAppShellWorkbenchController({
         activateId: workbench.activateId,
         rename: workbench.updateTitle,
         close: closeDocument,
+        openSaved: openSavedDocument,
         newQuery: () => void openQueryDocument(),
         openQuery: openQueryDocument,
         openTable,

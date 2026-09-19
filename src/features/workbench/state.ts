@@ -27,7 +27,11 @@ export type WorkbenchAction =
       type: "restoreSql";
       connectionId: string;
       documents: SqlDocument[];
-      activateFirst: boolean;
+      // Exactly the persisted ids this member left open, already ordered and
+      // validated against `documents`; closing a tab is not deleting it, so the
+      // full stored list is never reopened wholesale.
+      open: readonly string[];
+      activePersistedId: string | null;
     }
   | { type: "activate"; document: WorkbenchDocument }
   | { type: "activateId"; id: string }
@@ -56,7 +60,26 @@ export function workbenchReducer(
         activeDocumentId: action.document.id,
       };
     case "restoreSql": {
-      const restored = action.documents.map(persistedQueryDocument);
+      const storedById = new Map(
+        action.documents.map((document) => [String(document.id), document]),
+      );
+      // A document created after the list request was issued is open in memory but
+      // absent from that response; keep the live instance instead of dropping it.
+      const openById = new Map(
+        state.documents.flatMap((document) =>
+          document.connectionId === action.connectionId &&
+          document.kind === "sql" &&
+          document.persistedId
+            ? [[document.persistedId, document] as const]
+            : [],
+        ),
+      );
+      const restored = action.open.flatMap((id) => {
+        const stored = storedById.get(id);
+        if (stored) return [persistedQueryDocument(stored)];
+        const alreadyOpen = openById.get(id);
+        return alreadyOpen ? [alreadyOpen] : [];
+      });
       const documents = [
         ...state.documents.filter(
           (document) =>
@@ -64,14 +87,20 @@ export function workbenchReducer(
         ),
         ...restored,
       ];
+      const reactivated = action.activePersistedId
+        ? (restored.find(
+            (document) =>
+              document.kind === "sql" &&
+              document.persistedId === action.activePersistedId,
+          )?.id ?? null)
+        : null;
       return {
         documents,
         activeDocumentId:
-          action.activateFirst && restored[0]
-            ? restored[0].id
-            : documents.some((document) => document.id === state.activeDocumentId)
-              ? state.activeDocumentId
-              : (documents[0]?.id ?? null),
+          reactivated ??
+          (documents.some((document) => document.id === state.activeDocumentId)
+            ? state.activeDocumentId
+            : (documents[0]?.id ?? null)),
       };
     }
     case "activate":

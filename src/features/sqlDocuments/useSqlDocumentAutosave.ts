@@ -1,5 +1,6 @@
 // Autosave state machine for one persisted SQL document. It owns debounce, local
-// recovery, optimistic revision conflicts, and stale async response suppression.
+// recovery, optimistic revision conflicts, stale async response suppression, and the
+// flush that closing this document's tab awaits before the editor unmounts.
 
 import {
   useCallback,
@@ -19,6 +20,10 @@ import {
   sqlDocumentConflict,
   sqlRecoveryKey,
 } from "./domain";
+import {
+  registerSqlDocumentFlush,
+  type SqlDocumentFlushOutcome,
+} from "./pendingSaves";
 import type { SqlDocumentGateway } from "./ports";
 import type { SqlResolveMode } from "../queries/resolveMode";
 
@@ -89,6 +94,8 @@ export function useSqlDocumentAutosave({
   const [conflict, setConflict] = useState<SqlDocumentConflict | null>(null);
   const saveSequence = useRef(0);
   const mounted = useRef(true);
+  const latestConflict = useRef(conflict);
+  latestConflict.current = conflict;
   const recoveryTimer = useRef<number | null>(null);
   const pendingRecovery = useRef<PendingRecoveryWrite | null>(null);
   const latest = useRef({
@@ -139,21 +146,25 @@ export function useSqlDocumentAutosave({
     content: recovered ? null : content,
   });
 
-  const flushRecovery = useCallback(() => {
+  /** Returns the storage error, or null, so an unmount-time failure is not lost. */
+  const flushRecovery = useCallback((): unknown => {
     if (recoveryTimer.current !== null) {
       window.clearTimeout(recoveryTimer.current);
       recoveryTimer.current = null;
     }
     const pending = pendingRecovery.current;
-    if (!pending) return;
+    if (!pending) return null;
     pendingRecovery.current = null;
     try {
       localStorage.setItem(pending.key, JSON.stringify(pending.payload));
+      return null;
     } catch (error) {
       pendingRecovery.current = pending;
-      if (!mounted.current) return;
-      setSaveError(errMessage(error));
-      setSaveState("error");
+      if (mounted.current) {
+        setSaveError(errMessage(error));
+        setSaveState("error");
+      }
+      return error;
     }
   }, []);
 
@@ -191,8 +202,8 @@ export function useSqlDocumentAutosave({
       nextSelectedSchema: string | null,
       nextResolveMode: SqlResolveMode,
       nextContent: string,
-    ) => {
-      if (!documentId) return;
+    ): Promise<SqlDocumentFlushOutcome> => {
+      if (!documentId) return { kind: "saved" };
       const sequence = ++saveSequence.current;
       setSaveState("saving");
       setSaveError(null);
@@ -207,7 +218,8 @@ export function useSqlDocumentAutosave({
           content: nextContent,
           expectedRevision,
         });
-        if (sequence !== saveSequence.current) return;
+        // A newer save has taken over this document; it owns the outcome.
+        if (sequence !== saveSequence.current) return { kind: "saved" };
         if (!outcome.saved) {
           setConflict(sqlDocumentConflict(outcome.document, {
             title: nextTitle,
@@ -217,7 +229,7 @@ export function useSqlDocumentAutosave({
             content: nextContent,
           }));
           setSaveState("conflict");
-          return;
+          return { kind: "conflict" };
         }
         persistedBaseline.current = {
           revision: outcome.document.localRevision,
@@ -239,10 +251,12 @@ export function useSqlDocumentAutosave({
         setConflict(null);
         setSaveState(savedLatestSnapshot ? "saved" : "dirty");
         callbacks.current.onPersisted(outcome.document);
+        return { kind: "saved" };
       } catch (error) {
-        if (sequence !== saveSequence.current) return;
+        if (sequence !== saveSequence.current) return { kind: "saved" };
         setSaveError(errMessage(error));
         setSaveState("error");
+        return { kind: "error", message: errMessage(error) };
       }
     },
     [clearRecovery, connectionId, documentId, gateway],
@@ -302,6 +316,44 @@ export function useSqlDocumentAutosave({
     selectedSchema,
     title,
   ]);
+
+  /**
+   * Finishes the debounced write this editor still owes before its tab closes.
+   * The caller keeps the tab open on anything but a clean save, so a rejected
+   * recovery write or a failed save is never reported as a completed close.
+   */
+  const flushPendingSave = useCallback(async (): Promise<SqlDocumentFlushOutcome> => {
+    const recoveryError = flushRecovery();
+    if (recoveryError) {
+      return { kind: "error", message: errMessage(recoveryError) };
+    }
+    if (latestConflict.current) return { kind: "conflict" };
+    if (!documentId) return { kind: "saved" };
+    const current = latest.current;
+    const baseline = persistedBaseline.current;
+    const dirty =
+      baseline.revision !== current.revision ||
+      baseline.title !== current.title ||
+      baseline.selectedDatabase !== current.selectedDatabase ||
+      baseline.selectedSchema !== current.selectedSchema ||
+      baseline.resolveMode !== current.resolveMode ||
+      baseline.content !== current.content;
+    // An untitled document is never persisted, matching the autosave effect.
+    if (!dirty || !current.title.trim()) return { kind: "saved" };
+    return await persist(
+      current.revision,
+      current.title,
+      current.selectedDatabase,
+      current.selectedSchema,
+      current.resolveMode,
+      current.content,
+    );
+  }, [documentId, flushRecovery, persist]);
+
+  useEffect(() => {
+    if (!documentId) return;
+    return registerSqlDocumentFlush(documentId, flushPendingSave);
+  }, [documentId, flushPendingSave]);
 
   useEffect(() => {
     const flushWhenHidden = () => {

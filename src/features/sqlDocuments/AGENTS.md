@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-13 | Updated: 2026-09-13 -->
+<!-- Generated: 2026-09-13 | Updated: 2026-09-19 -->
 
 # src/features/sqlDocuments
 
@@ -18,7 +18,9 @@ plus revision reads).
 | `domain.ts` | Branded `ConnectionId`/`SqlDocumentId` and the SQL document/revision domain types. |
 | `ports.ts` | `SqlDocumentGateway` port contract; application state depends on this rather than importing `tauriAdapter.ts`/`invoke` directly. |
 | `tauriAdapter.ts` | Sole owner of the SQL document command names (`list_sql_documents`, `list_sql_document_revision_page`, `get_sql_document_revision`, `create_sql_document`, `save_sql_document`, `delete_sql_document`); implements `tauriSqlDocumentGateway: SqlDocumentGateway`. |
-| `useSqlDocumentAutosave.ts` | Autosave state machine for one persisted SQL document: debounce, local recovery, optimistic revision-conflict handling, and stale-async-response suppression. |
+| `pendingSaves.ts` | Registry of the mounted editor's pending save, keyed by document id, so closing a tab can await the debounced write instead of dropping it with the unmounted editor. |
+| `queries.ts` | TanStack Query options for a connection's saved SQL documents, used by the Action Search reopen command. |
+| `useSqlDocumentAutosave.ts` | Autosave state machine for one persisted SQL document: debounce, local recovery, optimistic revision-conflict handling, stale-async-response suppression, and the `flushPendingSave` that a tab close awaits. |
 
 ## Subdirectories
 None.
@@ -35,6 +37,9 @@ None.
 - `useSqlDocumentAutosave.ts` must keep suppressing stale async responses so a
   slow save response cannot overwrite a newer local edit; preserve its
   optimistic-revision-conflict handling when touching it.
+- Closing a document tab never calls `delete`. `pendingSaves.ts` exists so the
+  close path finishes the editor's debounced write and reports a failure instead
+  of discarding it; do not make that flush silent or optional.
 
 ### Testing Requirements
 - No test file exists in this directory; not part of the `pnpm test` smoke suite.
