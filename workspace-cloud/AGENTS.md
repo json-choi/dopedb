@@ -52,7 +52,7 @@ it is not part of the Next.js build.
 | `features/` | Client-side feature modules (`articleSharing/`, `connectionAccess/`, `providerAccess/`) composed by `app/settings/*` and article-handoff pages (see `features/AGENTS.md`). |
 | `d1-migrations/` | The live, production Cloudflare D1 migration set the deployed Worker actually reads and writes (see `d1-migrations/AGENTS.md`). |
 | `infrastructure/` | Source for the separate `dopedb-workspace-identity` Cloudflare Worker (GCP Workload Identity Federation token issuance) (see `infrastructure/AGENTS.md`). |
-| `scripts/` | D1 migration/deploy tooling and the isolated PostgreSQL provider-import test harness runner/guard (see `scripts/AGENTS.md`). |
+| `scripts/` | D1 migration/deploy tooling and the isolated D1 migration/contract harness runner (see `scripts/AGENTS.md`). |
 
 ## For AI Agents
 

@@ -209,7 +209,7 @@ grid의 query field·header action·필터 popover 밀도도 같은 앱에서 �
 | grouped AppShell presentation contract | `complete` | `pnpm check:architecture` |
 | generic UI의 feature/adapter 비의존 | `complete` | transitive architecture guard |
 | critical test 예산 | `complete` | `pnpm check:test-budget` |
-| UI module 책임 설명 | `partial` | 45줄 초과 TS/TSX 중 누락된 87개 파일에 domain별 역할 주석만 추가했고 기존 본문 byte 보존·ESLint·code-structure 검사를 통과했다. 병행 수정 중인 동작 파일과 test/benchmark는 이 주석 전용 검수에서 제외했다. |
+| UI module 책임 설명 | `complete` | `pnpm check:role-comments` — `src`의 45줄 초과 TS/TSX는 누락 0이고, 검사기가 예외 표(size·declaration·test·generated·directive)와 예외 확장을 self-test 16건으로 검증하며 `pnpm build`와 CI build가 이를 강제한다. `workspace-cloud`·`site`의 남은 94개는 상한을 고정한 backlog로 늘어나지 못하게만 막는다. 주석이 실제 책임을 설명하는지는 코드 리뷰가 소유한다. |
 
 일반 section/dialog 제목은 `text-title`, 독립 작업 문서 제목은
 `text-heading` 역할을 사용한다. 적용한 화면에서 기본 Tailwind 글자 크기,
