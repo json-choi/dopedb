@@ -32,9 +32,15 @@ pnpm icons --check
 | 소개 사이트 탭·홈 화면 | `site/public/`의 SVG, ICO, 48/180/192/512px PNG |
 | 약관·개인정보 문서·OAuth 업로드 | `site/public/oauth-logo-120.png` |
 | Open Graph·Twitter 공유 카드 | `site/public/og-card.png` (1200×630, 원본 마크·palette와 Pillow 내장 font) |
+| 공개 Analysis Article 공유 카드 | `workspace-cloud/app/analyses/[slug]/opengraph-image.png` (같은 1200×630 카드) |
 | Workspace 탭·홈 화면 | `workspace-cloud/app/icon.svg`, `favicon.ico`, `apple-icon.png` |
 
-총 18개 생성물(공용 TSX 1개, SVG 2개, PNG 11개, ICO 3개, ICNS 1개)을 검증한다.
+공개 Article 카드는 Next의 `opengraph-image` 파일 규약이고 사이트 카드와 같은
+바이트다. 그 경로의 `generateMetadata`가 `openGraph`를 직접 선언하므로 같은
+세그먼트에 둬야 Next가 이미지를 합쳐 넣는다. ADR 0007의 공개 경로 계약에 따라
+쿼리문, 결과 행, workspace 이름 없이 승인된 마크와 고정 문구만 담는다.
+
+총 19개 생성물(공용 TSX 1개, SVG 2개, PNG 12개, ICO 3개, ICNS 1개)을 검증한다.
 CI의 `brand-assets`는 macOS에서 같은 Pillow 버전과 frozen site 의존성을 사용해
 전체 생성물을 검사한다. 이 결과는 필수 `build` 집계에도 포함된다.
 inline 마크는 각 화면의 semantic `currentColor`를 사용해 라이트·다크 테마에

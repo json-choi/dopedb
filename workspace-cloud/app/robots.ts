@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 
-const workspaceSiteUrl = "https://app.dopedb.dev";
+import { workspaceSiteUrl } from "../lib/workspace-site";
 
 export default function robots(): MetadataRoute.Robots {
   return {
