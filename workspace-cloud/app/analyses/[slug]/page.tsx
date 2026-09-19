@@ -10,6 +10,7 @@ import {
 } from "../../../lib/public-analysis-publication";
 import { forwardedClientKey } from "../../../lib/rate-limit";
 import { getWorkspaceLocale } from "../../../lib/workspace-locale-server";
+import { workspaceSiteUrl } from "../../../lib/workspace-site";
 import { articleSharingCopy } from "../../../features/articleSharing/copy";
 import { formatPublicationInstant, PublicAnalysisArticle } from "./PublicAnalysisArticle";
 
@@ -40,7 +41,12 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   if (loaded.kind !== "found") return { title: copy.unavailableTitle, robots: { index: false } };
   const { result } = loaded;
   const index = result.visibility === "public" && result.article.searchIndexable;
+  // The sibling `opengraph-image.png` is the generated brand card; Next merges it
+  // into this `openGraph` object because it declares no `images` of its own, and
+  // metadataBase is what turns that relative route into the absolute URL a
+  // crawler can fetch. The card carries no query, result, or workspace text.
   return {
+    metadataBase: new URL(workspaceSiteUrl),
     title: `${result.article.title} · DopeDB`,
     description: copy.publicationDescription,
     robots: { index, follow: index },

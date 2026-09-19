@@ -43,10 +43,17 @@ ICO_OUTPUTS = {
     "workspace-cloud/app/favicon.ico": (16, 32, 48, 64),
 }
 ICNS_OUTPUT = Path("src-tauri/icons/icon.icns")
-OG_OUTPUT = Path("site/public/og-card.png")
+# One approved card serves every public share surface. The workspace copy sits on
+# Next's `opengraph-image` file convention inside the public Analysis Article
+# segment, because that route's own generateMetadata declares `openGraph` and
+# Next only merges a file-convention image at the segment that declares it.
+OG_OUTPUTS = (
+    Path("site/public/og-card.png"),
+    Path("workspace-cloud/app/analyses/[slug]/opengraph-image.png"),
+)
 
 
-def generate_og(source: Image.Image, svg: bytes, path: Path) -> None:
+def generate_og(source: Image.Image, svg: bytes, paths: tuple[Path, ...]) -> None:
     # Reuse the approved tile palette and mark; Pillow's bundled font avoids
     # host-font substitution in this deterministic, static social projection.
     document = ElementTree.fromstring(svg)
@@ -60,8 +67,10 @@ def generate_og(source: Image.Image, svg: bytes, path: Path) -> None:
     draw.text((380, 258), "Shared database access", font=ImageFont.load_default(size=36), fill=foreground)
     draw.text((76, 452), "Share access. Keep credentials personal.", font=ImageFont.load_default(size=40), fill=foreground)
     draw.text((76, 534), "Teams and AI agents  /  Open-source alpha", font=ImageFont.load_default(size=25), fill=foreground)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    card.convert("RGB").save(path)
+    flattened = card.convert("RGB")
+    for path in paths:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        flattened.save(path)
 
 
 def render_graphic(svg: bytes) -> str:
@@ -191,9 +200,9 @@ def generate_assets(staging: Path) -> list[Path]:
         path.parent.mkdir(parents=True, exist_ok=True)
         source.save(path, sizes=[(size, size) for size in sizes])
     generate_icns(source, staging / ICNS_OUTPUT)
-    generate_og(source, svg, staging / OG_OUTPUT)
+    generate_og(source, svg, tuple(staging / relative for relative in OG_OUTPUTS))
     return [GRAPHIC, *SVG_OUTPUTS, *(Path(path) for path in PNG_OUTPUTS),
-            *(Path(path) for path in ICO_OUTPUTS), ICNS_OUTPUT, OG_OUTPUT]
+            *(Path(path) for path in ICO_OUTPUTS), ICNS_OUTPUT, *OG_OUTPUTS]
 
 
 def main() -> None:

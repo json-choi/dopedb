@@ -88,7 +88,7 @@ runtime과 성능 수치로 수행한다.
 - 단일 원본은 `assets/brand/dopedb-icon.svg`다. 기존 배경 `#151a16`과
   마크 `#ccf36b`, 승인된 좁은 D·−24° 고리·위성 점을 유지한다.
   `scripts/generate-icons.py`는 공용 `DopeDBMarkGraphic`과 PNG/SVG/ICO/ICNS
-  18개 생성물을 같은 원본에서 만들며 `pnpm icons --check`로 불일치를 차단한다.
+  19개 생성물을 같은 원본에서 만들며 `pnpm icons --check`로 불일치를 차단한다.
 - Desktop title toolbar 24px, Workspace selector 20px(문자 D placeholder 제거),
   소개 사이트와 Workspace `Brand`, 한·영 README, 약관·개인정보 문서,
   favicon·홈 화면·OAuth·Tauri bundle/Windows installer 자산이 이 원본을 사용한다.
@@ -106,9 +106,10 @@ runtime과 성능 수치로 수행한다.
   `git diff --check` 통과. 원본 SVG의 1024px 렌더 결과는 승인된 오른쪽 시안과
   픽셀 단위로 동일하다. Graphify AST도 갱신했다. 기존 Next.js의 middleware/root
   설정 경고와 Graphify의 `Cargo.toml` zero-node 경고는 남아 있다.
-- 정적 Open Graph 카드는 같은 생성 경계에 포함한다. CI의 `brand-assets` job이
-  18개 생성물의 drift를 검사하도록 연결했으며, 원격 CI와 운영 metadata 반영은
-  해당 실행·배포 영수증으로 별도 확인한다.
+- 정적 Open Graph 카드는 같은 생성 경계에 포함한다. 소개 사이트와 공개 Analysis
+  Article이 같은 카드를 쓰며, CI의 `brand-assets` job이 19개 생성물의 drift를
+  검사하도록 연결했다. 원격 CI와 운영 metadata 반영은 해당 실행·배포 영수증으로
+  별도 확인한다.
 - 사용처·생성 환경·외부 반영 경계는
   [`브랜드 자산 안내`](../assets/brand/README.md)를 따른다.
 
