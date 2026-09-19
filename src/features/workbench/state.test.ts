@@ -40,6 +40,7 @@ import {
   readWorkbenchDraft,
   seedWorkbenchDraft,
 } from "./draftStore";
+import { restorableOpenTabs } from "./openTabs";
 import { emptyWorkbenchState, workbenchReducer } from "./state";
 import {
   appShellNavigationReducer,
@@ -441,7 +442,8 @@ describe("workbench state ownership", () => {
       type: "restoreSql",
       connectionId: "db-1",
       documents: [storedDocument()],
-      activateFirst: true,
+      open: ["doc-1"],
+      activePersistedId: "doc-1",
     });
 
     expect(restored.documents.map((document) => document.kind)).toEqual([
@@ -651,6 +653,92 @@ describe("workbench state ownership", () => {
     expect(mongoClosed.documents).toHaveLength(1);
     expect(mongoClosed.documents[0]?.kind).toBe("documents");
     expect(mongoClosed.activeDocumentId).toBe(mongoClosed.documents[0]?.id);
+  });
+
+  it("keeps a closed SQL tab closed across a member-local restore", () => {
+    const documents = [storedDocument("doc-1"), storedDocument("doc-2")];
+
+    // No stored record at all is a first run: every saved document reopens.
+    const firstRun = restorableOpenTabs(null, documents, new Set());
+    expect(firstRun).toEqual({ open: ["doc-1", "doc-2"], active: null });
+
+    // A stored empty list is a deliberate "closed everything" and stays empty.
+    expect(
+      restorableOpenTabs({ open: [], active: null }, documents, new Set()),
+    ).toEqual({ open: [], active: null });
+
+    // Ids the backend no longer returns cannot come back as ghost tabs, and a
+    // stored active id that did not survive that filter is dropped with it.
+    expect(
+      restorableOpenTabs(
+        { open: ["doc-2", "deleted-elsewhere", "doc-2"], active: "deleted-elsewhere" },
+        documents,
+        new Set(),
+      ),
+    ).toEqual({ open: ["doc-2"], active: null });
+
+    // A tab closed while the list request was still in flight stays closed when
+    // the late response lands, while one opened in that window is kept even though
+    // the response predates it.
+    const afterLateResponse = restorableOpenTabs(
+      { open: ["doc-1", "doc-2"], active: "doc-1" },
+      documents,
+      new Set(["doc-1"]),
+    );
+    expect(afterLateResponse).toEqual({ open: ["doc-2"], active: null });
+    expect(
+      restorableOpenTabs(
+        { open: [], active: null },
+        documents,
+        new Set(),
+        new Set(["doc-3"]),
+      ),
+    ).toEqual({ open: ["doc-3"], active: null });
+
+    const welcome = stableDocument("db-1", "welcome");
+    const restored = workbenchReducer(
+      workbenchReducer(emptyWorkbenchState, {
+        type: "initialize",
+        document: welcome,
+      }),
+      {
+        type: "restoreSql",
+        connectionId: "db-1",
+        documents,
+        open: afterLateResponse.open,
+        activePersistedId: afterLateResponse.active,
+      },
+    );
+    const restoredSql = restored.documents.filter(
+      (document) => document.kind === "sql",
+    );
+    expect(restoredSql).toHaveLength(1);
+    expect(restoredSql[0]?.kind === "sql" && restoredSql[0].persistedId).toBe(
+      "doc-2",
+    );
+
+    // A delayed inventory must not replace the user's newer open document.
+    const edited = workbenchReducer(restored, {
+      type: "updateTitle", id: restoredSql[0]!.id, title: "Locally edited title",
+    });
+    const reloaded = workbenchReducer(edited, {
+      type: "restoreSql", connectionId: "db-1", documents,
+      open: ["doc-2"], activePersistedId: "doc-2",
+    });
+    expect(reloaded.documents.find((document) => document.id === restoredSql[0]!.id))
+      .toMatchObject({ title: "Locally edited title" });
+
+    // Closing the last SQL tab leaves the connection surface, not a deletion.
+    const closed = workbenchReducer(restored, {
+      type: "close",
+      id: restoredSql[0]?.id ?? "",
+      connectionId: "db-1",
+      fallbackKind: "welcome",
+    });
+    expect(
+      closed.documents.some((document) => document.kind === "sql"),
+    ).toBe(false);
+    expect(closed.documents).toEqual([welcome]);
   });
 
   it("applies a successful save through the one state reducer", async () => {

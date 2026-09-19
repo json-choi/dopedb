@@ -148,6 +148,14 @@ Welcome은 중앙 작업면의 padding을 제거한 우주 배경을 사용한�
 기존 Rust 저장소 회귀도 실제 Project binding 삭제 뒤 전체 연결 profile·credential
 reference·safety 값 보존을 검증한다.
 
+2026-09-19에는 SQL 탭 닫기와 저장본 삭제를 분리하고 workspace·account·connection별
+열린 SQL 탭을 member-local로 기억하도록 했다. 연결 목록이 로딩 중일 때 빈 상태를
+노출하지 않는다. 격리된 React 훅 검증에서 진행 중 저장을 기다리는 닫기, 중복 저장
+방지, 닫는 중 추가 편집 보존, 계정 전환 후 지연된 닫기 무효화를 확인했다. 지연된
+목록의 현재 문서 덮어쓰기 방지는 기존 workbench 회귀 테스트를 확장해 검증했다.
+실제 앱 재시작·연결 전환·Action Search 재열기 화면 검수는 컴퓨터 제어 연결 부재로
+남아 있으며, 운영 웹 공유 카드 반영도 배포 영수증 없이 완료로 판정하지 않는다.
+
 이번 Agent UI 정리에서는 AI Chat 입력을 직각 1~3줄 자동 높이로 제한하고 dock의
 최대 폭을 전체 창의 50%로 맞췄다. 앱 시작 시에는 CLI 탐지·adapter 검증·기존
 session 목록·Project inventory를 읽기 전용으로 예열한다. persisted connection으로

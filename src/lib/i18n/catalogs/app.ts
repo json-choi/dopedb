@@ -151,6 +151,8 @@ export const appCatalog = defineCatalog(
     "tabs.data": "Data",
     "tabs.documents": "MongoDB query",
     "tabs.openDocuments": "Open tabs",
+    "tabs.openTabsNotRemembered":
+      "Could not remember which tabs are open on this device: {reason}",
     "tabs.schema": "Schema",
     "tabs.sql": "SQL",
   },
@@ -303,6 +305,8 @@ export const appCatalog = defineCatalog(
     "tabs.data": "데이터",
     "tabs.documents": "MongoDB 조회",
     "tabs.openDocuments": "열린 탭",
+    "tabs.openTabsNotRemembered":
+      "이 기기에 열린 탭 상태를 기억하지 못했습니다: {reason}",
     "tabs.schema": "스키마",
     "tabs.sql": "SQL",
   },

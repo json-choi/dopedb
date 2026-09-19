@@ -46,6 +46,7 @@ const IS_MACOS =
 type ShellLayoutModel = {
   workspace: {
     connections: ConnectionProfile[];
+    connectionsLoaded: boolean;
     selected: ConnectionProfile | null;
     selectedId: string | null;
     supportsSql: boolean;
@@ -345,6 +346,7 @@ function ShellLayoutContent({ model, commands }: Props) {
               onNavigate={commands.explorer.openProjectEnvironment}
             />}
             connections={workspace.connections}
+            connectionsLoaded={workspace.connectionsLoaded}
             selectedId={
               environmentDetailOpen ? null : workspace.selectedId
             }

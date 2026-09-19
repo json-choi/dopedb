@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-13 | Updated: 2026-09-13 -->
+<!-- Generated: 2026-09-13 | Updated: 2026-09-19 -->
 
 # src/features/actionSearch
 
@@ -19,7 +19,8 @@ features.
 | `domain.ts` | Pure `ActionSearchItem`/`ActionSearchKind` types and `indexActionSearchItems`/`searchActionItems` fuzzy-match functions; no React or IPC imports. |
 | `catalogCache.ts` | `useCachedCatalogOverviews` — reads already-fetched `CatalogOverview` query cache entries (by connection/database) so search does not trigger new catalog fetches. |
 | `useActionSearchDialog.ts` | Open/close state and the editable-target guard (`actionSearchShortcutTargetIsEditable`) so the shortcut does not fire while typing in an input, textarea, or CodeMirror surface. |
-| `useActionSearchItems.ts` | Builds the actual `ActionSearchItem[]` from connections, workbench documents, settings sections, and cached catalog tables for the current scope. |
+| `documentItems.ts` | `useDocumentActionSearchItems` — projects the connection's open tabs plus the saved SQL documents a member closed and may reopen into one searchable document list. |
+| `useActionSearchItems.ts` | Builds the actual `ActionSearchItem[]` from connections, documents, settings sections, and cached catalog tables for the current scope. |
 
 ## For AI Agents
 
@@ -31,6 +32,8 @@ features.
   `tauriAdapter.ts`.
 - Keep `domain.ts` free of React/Tauri imports; indexing and matching logic
   belongs there so it stays independently testable.
+- The saved-document read goes through `sqlDocuments/queries.ts` and stays gated
+  on the palette being open; do not fetch it eagerly on every shell render.
 
 ### Testing Requirements
 
