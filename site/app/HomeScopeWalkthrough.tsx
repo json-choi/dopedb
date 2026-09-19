@@ -86,12 +86,12 @@ function ResourceOrbit({
       label: "CODEX",
       sub: ko ? "정확한 리소스 범위" : "Exact resource scope",
       selected: state.phase > 0
-    }].map(node => <g key={node.label} transform={`translate(${node.x} ${node.y})`} data-selected={node.selected} className="tw:text-cream-muted/45 tw:transition-colors tw:duration-500 tw:data-[selected=true]:text-signal">
+    }].map(node => <g key={node.label} transform={`translate(${node.x} ${node.y})`} data-selected={node.selected} className="tw:text-cream-muted tw:transition-colors tw:duration-500 tw:data-[selected=true]:text-signal">
       <circle r="12" fill="currentColor" opacity=".08" /><circle r="4" fill="currentColor" /><circle r="9" fill="none" stroke="currentColor" opacity=".5" />
       <text y="30" textAnchor="middle" fill="currentColor" className="tw:font-mono tw:text-[11px]">{node.label}</text>
-      <text y="48" textAnchor="middle" fill="currentColor" opacity=".7" className="tw:text-[11px]">{node.sub}</text>
+      <text y="48" textAnchor="middle" fill="currentColor" className="tw:text-[10px]">{node.sub}</text>
     </g>)}
-    <g transform="translate(66 48)" className="tw:text-cream-muted/40"><path d="m-3-3 6 6m0-6-6 6" stroke="currentColor" fill="none" /><text x="14" y="4" fill="currentColor" className="tw:font-mono tw:text-[10px]">Other databases</text><text x="14" y="21" fill="currentColor" className="tw:text-[10px]">{ko ? "범위 밖 · 접근 없음" : "Outside scope · no access"}</text></g>
+    <g transform="translate(66 48)" className="tw:text-cream-muted"><path d="m-3-3 6 6m0-6-6 6" stroke="currentColor" fill="none" /><text x="14" y="4" fill="currentColor" className="tw:font-mono tw:text-[10px]">Other databases</text><text x="14" y="21" fill="currentColor" className="tw:text-[10px]">{ko ? "범위 밖 · 접근 없음" : "Outside scope · no access"}</text></g>
   </svg>;
 }
 export function HomeScopeWalkthrough({
