@@ -177,13 +177,15 @@ export default function Knowledge({
       ),
     [environmentConnections.data, environmentId],
   );
+  // Bindings are keyed per Environment in the store, so only this Environment's
+  // bindings make a connection unassignable here.
   const boundConnectionIds = useMemo(
     () => new Set(
-      (environmentConnections.data ?? []).flatMap((binding) =>
+      selectedEnvironmentConnections.flatMap((binding) =>
         binding.connectionId ? [binding.connectionId] : []
       ),
     ),
-    [environmentConnections.data],
+    [selectedEnvironmentConnections],
   );
   const assignableConnections = useMemo(
     () => (connections.data ?? []).filter(
@@ -549,6 +551,7 @@ export default function Knowledge({
           connectionsPhase={connectionsPhase}
           connectionsLoaded={connections.data !== undefined}
           assignableConnections={assignableConnections}
+          savedConnectionCount={connections.data?.length ?? 0}
           connectionId={connectionId}
           connectionRole={connectionRole}
           connectionAlias={connectionAlias}
