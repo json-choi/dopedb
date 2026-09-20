@@ -14,6 +14,7 @@ its own — persistence is delegated to `../sqlDocuments`.
 |------|-------------|
 | `domain.ts` | `WorkbenchDocument` union and id helpers (`stableDocument`, `queryDocument`, `persistedQueryDocument`, `sqlRecoveryKey`-based ids). |
 | `draftStore.ts` | `useSyncExternalStore`-based unsent-draft cache, capped at `MAX_RETAINED_DRAFTS` (64), evicting entries with no active listeners first. |
+| `openTabStore.ts` | Member-local browser-storage record of which persisted SQL documents stay on the strip, keyed by workspace/account/connection. A missing entry restores everything once; a stored empty list means "closed everything". Writes throw so the caller can surface a storage failure. |
 | `state.test.ts` | Renders workbench state against a real schema-diff fixture and SQL parameter/catalog helpers to validate the document strip state machine. |
 | `state.ts` | Pure state machine for the workbench document strip; React effects/handlers dispatch commands here instead of mutating the document array in multiple places. |
 | `useWorkbenchDocuments.ts` | Single writer for workbench document state; coordinates connection changes, persisted SQL restoration, tab commands, and optimistic save projections. |
@@ -31,6 +32,9 @@ None.
   document state — do not add a second hook that also owns document lifecycle.
 - `draftStore.ts` only evicts a draft with zero active listeners; do not change
   eviction to drop a draft a component still has mounted.
+- Closing a tab is not deleting a document: never call the SQL document delete
+  gateway from a close path, and keep the open-tab record in `openTabStore.ts`
+  rather than in the native store, whose schema change would reset the baseline.
 
 ### Testing Requirements
 - `state.test.ts` is part of the `pnpm test` smoke suite

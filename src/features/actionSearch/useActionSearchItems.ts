@@ -9,8 +9,12 @@ import { databaseCatalogQuery, type CatalogScope } from "../../lib/queries";
 import { filterCatalogOverview } from "../catalogExplorer/scopeFilter";
 import { databaseDisplayLabel, type ConnectionProfile } from "../connections/domain";
 import { settingsSearchKeywords, type SettingsSection } from "../settings/domain";
-import type { WorkbenchDocument } from "../workbench/domain";
+import type {
+  SqlWorkbenchDocument,
+  WorkbenchDocument,
+} from "../workbench/domain";
 import { useCachedCatalogOverviews } from "./catalogCache";
+import { documentSearchItems } from "./documentItems";
 import type { ActionSearchItem } from "./domain";
 
 type ActionSearchItemsInput = {
@@ -19,6 +23,8 @@ type ActionSearchItemsInput = {
   connections: readonly ConnectionProfile[];
   selected: ConnectionProfile | null;
   documents: readonly WorkbenchDocument[];
+  /** Persisted SQL documents of the selected connection that are off the strip. */
+  closedDocuments: readonly SqlWorkbenchDocument[];
   supportsSql: boolean;
   commands: {
     showWelcome: () => void;
@@ -42,6 +48,7 @@ export function useActionSearchItems({
   connections,
   selected,
   documents,
+  closedDocuments,
   supportsSql,
   commands,
 }: ActionSearchItemsInput): readonly ActionSearchItem[] {
@@ -147,35 +154,12 @@ export function useActionSearchItems({
     }),
   );
 
-  const documentItems: ActionSearchItem[] = documents.map((document) => {
-    const label =
-      document.kind === "sql"
-        ? document.title
-        : document.kind === "data"
-          ? [document.table.schema, document.table.name]
-              .filter(Boolean)
-              .join(".")
-          : document.kind === "schema"
-            ? t("tabs.schema")
-            : document.kind === "welcome"
-              ? t("onboarding.title")
-              : document.kind === "results"
-                ? t("sql.executionResults")
-              : document.kind === "activity"
-                ? t("tabs.activity")
-                : t("tabs.documents");
-    return {
-      id: `document:${document.id}`,
-      kind: "document",
-      label,
-      detail:
-        selected?.name ||
-        (selected
-          ? visibleDatabase(selected, selected.database)
-          : t("app.unnamed")),
-      keywords: [document.kind],
-      run: () => commands.activateDocument(document),
-    };
+  const documentItems = documentSearchItems({
+    t,
+    selected,
+    documents,
+    closedDocuments,
+    activateDocument: commands.activateDocument,
   });
 
   const connectionById = new Map(
@@ -252,5 +236,11 @@ export function useActionSearchItems({
     run: () => commands.openSettings(section),
   }));
 
-  return [...actions, ...connectionItems, ...documentItems, ...databaseObjects, ...settings];
+  return [
+    ...actions,
+    ...connectionItems,
+    ...documentItems,
+    ...databaseObjects,
+    ...settings,
+  ];
 }

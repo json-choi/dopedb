@@ -62,6 +62,7 @@ import { useProjectExplorerActions } from "../../features/catalogExplorer/usePro
 // expanded to reveal its tables. Clicking a table opens its data in the main area.
 export function DatabaseExplorer({
   connections,
+  connectionsLoaded,
   selectedId,
   selectedTableKey,
   activeSchemaGroupKey,
@@ -87,6 +88,7 @@ export function DatabaseExplorer({
   onOpenProjectEnvironment,
 }: {
   connections: ConnectionProfile[];
+  connectionsLoaded: boolean;
   selectedId: string | null;
   selectedTableKey: string | null;
   activeSchemaGroupKey: string | null;
@@ -580,7 +582,12 @@ export function DatabaseExplorer({
             </p>
           </div>
         ) : null}
-        {connections.length === 0 && activeProjectEnvironmentView !== "analyses" ? (
+        {!connectionsLoaded ? (
+          <div className="tw:min-h-control-md tw:px-2 tw:py-1 tw:text-xs">
+            <LoadingLabel>{t("connections.loadingConnections")}</LoadingLabel>
+          </div>
+        ) : connections.length === 0 &&
+          activeProjectEnvironmentView !== "analyses" ? (
           <DatabaseExplorerEmptyState
             creatingDemo={creatingDemo}
             onNewConnection={onNewConnection}

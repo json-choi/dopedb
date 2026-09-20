@@ -40,6 +40,7 @@ import {
   type WorkbenchDocument,
 } from "../workbench/domain";
 import { publishWorkbenchDraft } from "../workbench/draftStore";
+import { workbenchTabScopeKey } from "../workbench/openTabStore";
 import { useWorkbenchDocuments } from "../workbench/useWorkbenchDocuments";
 import { recordStartupMark } from "../runtime/tauriAdapter";
 import {
@@ -159,11 +160,18 @@ export function useAppShellWorkbenchController({
     selectedConnectionDatabase: selected?.database ?? null,
     supportsSql,
     sqlDocuments: tauriSqlDocumentGateway,
+    tabScopeKey: workbenchTabScopeKey(scope),
     onRestoreError: (error) => {
       console.error("could not restore SQL documents:", error);
     },
+    onPersistError: (error) => toast(errMessage(error), "error"),
   });
-  const { selectedDocuments, activeDocument, activeDocumentId } = workbench;
+  const {
+    selectedDocuments,
+    closedDocuments,
+    activeDocument,
+    activeDocumentId,
+  } = workbench;
   const selectedTable =
     activeDocument?.kind === "data" ? activeDocument.table : null;
 
@@ -460,6 +468,7 @@ export function useAppShellWorkbenchController({
     },
     documents: {
       items: selectedDocuments,
+      closed: closedDocuments,
       active: activeDocument,
       activeId: activeDocumentId,
       selectedTable,

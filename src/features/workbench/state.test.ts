@@ -34,13 +34,28 @@ import {
   canFallbackFromCombinedRead,
   initialSqlRunPath,
 } from "../queries/runPath";
-import { queryDocument, stableDocument } from "./domain";
+import {
+  persistedQueryDocument,
+  queryDocument,
+  stableDocument,
+} from "./domain";
 import {
   publishWorkbenchDraft,
   readWorkbenchDraft,
   seedWorkbenchDraft,
 } from "./draftStore";
-import { emptyWorkbenchState, workbenchReducer } from "./state";
+import {
+  openTabStorageKey,
+  parseOpenTabs,
+  readOpenTabs,
+  workbenchTabScopeKey,
+  writeOpenTabs,
+} from "./openTabStore";
+import {
+  emptyWorkbenchState,
+  openTabSnapshot,
+  workbenchReducer,
+} from "./state";
 import {
   appShellNavigationReducer,
   initialAppShellMode,
@@ -441,6 +456,8 @@ describe("workbench state ownership", () => {
       type: "restoreSql",
       connectionId: "db-1",
       documents: [storedDocument()],
+      open: null,
+      activePersistedId: null,
       activateFirst: true,
     });
 
@@ -475,7 +492,221 @@ describe("workbench state ownership", () => {
     expect(editorClosed.activeDocumentId).toBe(results.id);
     const reopenedResults = workbenchReducer(editorClosed, { type: "activate", document: results });
     expect(reopenedResults.documents).toHaveLength(1);
+    // An unsaved editor has nothing to reopen, so closing it records nothing.
+    expect(editorClosed.closedDocuments).toEqual([]);
     expect(workbenchReducer(reopenedResults, { type: "reset" })).toEqual(emptyWorkbenchState);
+
+    // Closing a persisted tab keeps its document and revision history; only the
+    // member-local open set changes, so the tab stays reopenable.
+    const welcomeOnly = () =>
+      workbenchReducer(emptyWorkbenchState, {
+        type: "initialize",
+        document: stableDocument("db-1", "welcome"),
+      });
+    const [docOne, docTwo, docThree, docFour] = [
+      storedDocument("doc-1"),
+      storedDocument("doc-2"),
+      storedDocument("doc-3"),
+      storedDocument("doc-4"),
+    ];
+    const firstRun = workbenchReducer(welcomeOnly(), {
+      type: "restoreSql",
+      connectionId: "db-1",
+      documents: [docOne!, docTwo!],
+      open: null,
+      activePersistedId: null,
+      activateFirst: false,
+    });
+    // No recorded set restores today's behaviour once and settles the connection.
+    expect(firstRun.documents.map((document) => document.id)).toEqual([
+      "db-1:welcome",
+      "db-1:sql:doc-1",
+      "db-1:sql:doc-2",
+    ]);
+    expect(firstRun.closedDocuments).toEqual([]);
+    expect(firstRun.restoredConnectionId).toBe("db-1");
+    expect(openTabSnapshot(firstRun, "db-1")).toEqual({
+      open: ["doc-1", "doc-2"],
+      active: null,
+    });
+    const activeSecond = workbenchReducer(firstRun, {
+      type: "activateId",
+      id: "db-1:sql:doc-2",
+    });
+    expect(openTabSnapshot(activeSecond, "db-1")).toEqual({
+      open: ["doc-1", "doc-2"],
+      active: "doc-2",
+    });
+    const afterClose = workbenchReducer(activeSecond, {
+      type: "close",
+      id: "db-1:sql:doc-1",
+      connectionId: "db-1",
+      fallbackKind: "welcome",
+    });
+    expect(afterClose.documents.map((document) => document.id)).toEqual([
+      "db-1:welcome",
+      "db-1:sql:doc-2",
+    ]);
+    expect(
+      afterClose.closedDocuments.map((document) => document.persistedId),
+    ).toEqual(["doc-1"]);
+    expect(openTabSnapshot(afterClose, "db-1")).toEqual({
+      open: ["doc-2"],
+      active: "doc-2",
+    });
+    // Reopening from Action Search takes the closed document back onto the strip.
+    const reopened = workbenchReducer(afterClose, {
+      type: "activate",
+      document: afterClose.closedDocuments[0]!,
+    });
+    expect(reopened.closedDocuments).toEqual([]);
+    expect(openTabSnapshot(reopened, "db-1")).toEqual({
+      open: ["doc-2", "doc-1"],
+      active: "doc-1",
+    });
+
+    // A recorded set decides order and active tab; the rest stay reopenable.
+    const reloaded = workbenchReducer(welcomeOnly(), {
+      type: "restoreSql",
+      connectionId: "db-1",
+      documents: [docOne!, docTwo!],
+      open: ["doc-2"],
+      activePersistedId: "doc-2",
+      activateFirst: false,
+    });
+    expect(reloaded.documents.map((document) => document.id)).toEqual([
+      "db-1:welcome",
+      "db-1:sql:doc-2",
+    ]);
+    expect(reloaded.activeDocumentId).toBe("db-1:sql:doc-2");
+    expect(
+      reloaded.closedDocuments.map((document) => document.persistedId),
+    ).toEqual(["doc-1"]);
+    expect(
+      workbenchReducer(welcomeOnly(), {
+        type: "restoreSql",
+        connectionId: "db-1",
+        documents: [docOne!, docTwo!],
+        open: ["doc-2", "doc-1"],
+        activePersistedId: null,
+        activateFirst: false,
+      }).documents.map((document) => document.id),
+    ).toEqual(["db-1:welcome", "db-1:sql:doc-2", "db-1:sql:doc-1"]);
+    // An explicitly empty set means the member closed everything, not first run.
+    const closedEverything = workbenchReducer(welcomeOnly(), {
+      type: "restoreSql",
+      connectionId: "db-1",
+      documents: [docOne!, docTwo!],
+      open: [],
+      activePersistedId: null,
+      activateFirst: false,
+    });
+    expect(closedEverything.documents.map((document) => document.id)).toEqual([
+      "db-1:welcome",
+    ]);
+    expect(closedEverything.activeDocumentId).toBe("db-1:welcome");
+    expect(
+      closedEverything.closedDocuments.map((document) => document.persistedId),
+    ).toEqual(["doc-1", "doc-2"]);
+
+    // A late response applies against the newest open set: it neither resurrects
+    // a tab closed while it was in flight nor drops one opened since.
+    const openedWhilePending = workbenchReducer(
+      workbenchReducer(
+        workbenchReducer(welcomeOnly(), {
+          type: "activate",
+          document: persistedQueryDocument(docThree!),
+        }),
+        {
+          type: "close",
+          id: "db-1:sql:doc-3",
+          connectionId: "db-1",
+          fallbackKind: "welcome",
+        },
+      ),
+      { type: "activate", document: persistedQueryDocument(docFour!) },
+    );
+    const lateResponse = workbenchReducer(openedWhilePending, {
+      type: "restoreSql",
+      connectionId: "db-1",
+      documents: [docOne!, docTwo!, docThree!],
+      open: ["doc-1"],
+      activePersistedId: "doc-1",
+      activateFirst: false,
+    });
+    expect(lateResponse.documents.map((document) => document.id)).toEqual([
+      "db-1:welcome",
+      "db-1:sql:doc-1",
+      "db-1:sql:doc-4",
+    ]);
+    expect(lateResponse.activeDocumentId).toBe("db-1:sql:doc-1");
+    expect(
+      lateResponse.closedDocuments.map((document) => document.persistedId),
+    ).toEqual(["doc-2", "doc-3"]);
+
+    // The record is member-local and never shared across workspace or account.
+    expect(
+      workbenchTabScopeKey({
+        workspaceKind: null,
+        workspaceId: null,
+        accountScope: null,
+      }),
+    ).toBeNull();
+    expect(openTabStorageKey(null, "db-1")).toBeNull();
+    const tabScopeKey = workbenchTabScopeKey({
+      workspaceKind: "team",
+      workspaceId: "workspace-1",
+      accountScope: "account-1",
+    });
+    const tabKey = openTabStorageKey(tabScopeKey, "db-1");
+    expect(tabKey).not.toBe(
+      openTabStorageKey(
+        workbenchTabScopeKey({
+          workspaceKind: "team",
+          workspaceId: "workspace-1",
+          accountScope: "account-2",
+        }),
+        "db-1",
+      ),
+    );
+    expect(tabKey).not.toBe(openTabStorageKey(tabScopeKey, "db-2"));
+    expect(parseOpenTabs({ open: ["doc-1", "doc-1"], active: "doc-9" })).toEqual({
+      open: ["doc-1"],
+      active: null,
+    });
+    expect(parseOpenTabs({ active: "doc-1" })).toBeNull();
+    const entries = new Map<string, string>();
+    let rejectWrites = false;
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: (key: string) => entries.get(key) ?? null,
+        setItem: (key: string, value: string) => {
+          if (rejectWrites) throw new Error("storage is full");
+          entries.set(key, value);
+        },
+        removeItem: (key: string) => entries.delete(key),
+      },
+    });
+    try {
+      // No entry is not an empty entry: the caller must restore everything once.
+      expect(readOpenTabs(tabKey)).toBeNull();
+      writeOpenTabs(tabKey, { open: ["doc-2", "doc-1"], active: "doc-1" });
+      expect(readOpenTabs(tabKey)).toEqual({
+        open: ["doc-2", "doc-1"],
+        active: "doc-1",
+      });
+      writeOpenTabs(tabKey, { open: [], active: "doc-1" });
+      expect(readOpenTabs(tabKey)).toEqual({ open: [], active: null });
+      entries.set(tabKey!, "{ not json");
+      expect(readOpenTabs(tabKey)).toBeNull();
+      // A rejected write is surfaced by the caller rather than swallowed here.
+      rejectWrites = true;
+      expect(() => writeOpenTabs(tabKey, { open: ["doc-1"], active: null }))
+        .toThrow("storage is full");
+    } finally {
+      Reflect.deleteProperty(globalThis, "localStorage");
+    }
 
     seedWorkbenchDraft(query.id, query.draft ?? "");
     publishWorkbenchDraft(query.id, "SELECT 42;");

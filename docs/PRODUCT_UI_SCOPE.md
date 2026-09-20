@@ -378,6 +378,7 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
 | PD-40 | Analysis Article 삭제·공개 발행 | `구현` | optimistic revision 기반 삭제와 ADR 0007의 immutable public HTML 발행·해지를 제공한다. 별도 archive 상태 전환은 만들지 않는다. |
 | PD-41 | External official Agent CLI | `구현` | `dopedb agent init/start`가 secret-free Project resource config, 매 실행 Desktop 검토, process-bound runtime-only typed bridge로 공식 로컬 Codex/Claude를 실행한다. 저장된 범용 MCP와 provider token 접근은 허용하지 않는다. |
 | PD-42 | 조직 내부 Article 링크와 읽기 초대 | `구현` | 기존 구성원용 링크는 현재 계정의 Workspace membership와 해당 DB grant를 매번 확인한다. Workspace 관리자이면서 해당 DB의 manage 권한을 가진 사람만 이메일 하나에 고정된 48시간 초대 링크를 만든다. 검증된 수신 계정의 명시적 수락은 멤버 참여와 지정 DB의 read grant를 원자적으로 처리하며 기존의 더 높은 역할·grant는 보존한다. 링크 소지만으로 접근할 수 없고 회사 도메인을 조직 권한으로 추정하지 않는다. 앱 설치·로그인 안내 후 인증된 Desktop의 원래 Article로 연결하며 OS 설치 동의, member-local credential 입력과 Google CLI 인증을 대신하지 않는다. 브라우저는 초대와 앱 진입만 소유하고 Article query나 결과를 실행·제공하지 않는다. |
+| PD-43 | 닫은 SQL document 다시 열기 | `구현` | tab을 닫는 것은 삭제가 아니다. 열린 tab 집합과 순서·활성 tab만 workspace·account·connection 범위의 member-local 기록으로 남기고 document 본문·revision은 보존한다. 연결 전환과 재시작은 그 기록과 저장된 document의 교집합만 복원하며, 기록이 없으면 한 번은 저장된 document를 모두 열고 즉시 기록한다. 닫힌 document는 선택한 connection 범위에서 Action Search의 문서 범주로 다시 연다. 별도 복구 화면, panel, 목록은 만들지 않는다. |
 
 ## 변경 규칙
 

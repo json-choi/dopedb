@@ -1,5 +1,7 @@
 // Single writer for workbench document state. It coordinates connection changes,
-// persisted SQL restoration, tab commands, and optimistic save projections.
+// persisted SQL restoration, tab commands, and optimistic save projections, and
+// mirrors the open-tab set into member-local storage so a closed tab stays closed
+// across connection switches and restarts without deleting its document.
 
 import {
   useCallback,
@@ -21,7 +23,13 @@ import {
   type WorkbenchDocument,
 } from "./domain";
 import {
+  openTabStorageKey,
+  readOpenTabs,
+  writeOpenTabs,
+} from "./openTabStore";
+import {
   emptyWorkbenchState,
+  openTabSnapshot,
   workbenchReducer,
 } from "./state";
 import { useI18n } from "../../lib/i18n";
@@ -31,7 +39,10 @@ interface UseWorkbenchDocumentsOptions {
   selectedConnectionDatabase: string | null;
   supportsSql: boolean;
   sqlDocuments: SqlDocumentGateway;
+  /** Workspace/account boundary of the stored tab set; `null` disables persistence. */
+  tabScopeKey: string | null;
   onRestoreError?: (error: unknown) => void;
+  onPersistError?: (error: unknown) => void;
 }
 
 interface OpenQueryOptions {
@@ -47,7 +58,9 @@ export function useWorkbenchDocuments({
   selectedConnectionDatabase,
   supportsSql,
   sqlDocuments,
+  tabScopeKey,
   onRestoreError,
+  onPersistError,
 }: UseWorkbenchDocumentsOptions) {
   const { t } = useI18n();
   const [state, dispatch] = useReducer(workbenchReducer, emptyWorkbenchState);
@@ -55,6 +68,9 @@ export function useWorkbenchDocuments({
   const pendingInitial = useRef<WorkbenchDocument | null>(null);
   const restoreError = useRef(onRestoreError);
   restoreError.current = onRestoreError;
+  const persistError = useRef(onPersistError);
+  persistError.current = onPersistError;
+  const lastPersisted = useRef<{ key: string; value: string } | null>(null);
 
   useEffect(() => {
     const token = ++loadToken.current;
@@ -75,15 +91,21 @@ export function useWorkbenchDocuments({
     dispatch({ type: "initialize", document: initial });
 
     if (!supportsSql) return;
+    // Read the recorded set before the request goes out; the reducer then applies
+    // it against whatever the strip holds once the response lands.
+    const recorded = readOpenTabs(
+      openTabStorageKey(tabScopeKey, selectedConnectionId),
+    );
     void sqlDocuments
       .list(connectionId(selectedConnectionId))
-      .then(async (stored) => {
-        if (token !== loadToken.current) return;
+      .then((stored) => {
         if (token !== loadToken.current) return;
         dispatch({
           type: "restoreSql",
           connectionId: selectedConnectionId,
           documents: stored,
+          open: recorded?.open ?? null,
+          activePersistedId: recorded?.active ?? null,
           activateFirst: false,
         });
       })
@@ -95,7 +117,35 @@ export function useWorkbenchDocuments({
     selectedConnectionId,
     sqlDocuments,
     supportsSql,
+    tabScopeKey,
   ]);
+
+  // Only a settled connection may write: a failed or pending restore must not
+  // record an incomplete set over the member's stored tabs.
+  useEffect(() => {
+    if (
+      !selectedConnectionId ||
+      state.restoredConnectionId !== selectedConnectionId
+    ) {
+      return;
+    }
+    const key = openTabStorageKey(tabScopeKey, selectedConnectionId);
+    if (!key) return;
+    const snapshot = openTabSnapshot(state, selectedConnectionId);
+    const value = JSON.stringify(snapshot);
+    if (
+      lastPersisted.current?.key === key &&
+      lastPersisted.current.value === value
+    ) {
+      return;
+    }
+    lastPersisted.current = { key, value };
+    try {
+      writeOpenTabs(key, snapshot);
+    } catch (error) {
+      persistError.current?.(error);
+    }
+  }, [selectedConnectionId, state, tabScopeKey]);
 
   const selectedDocuments = useMemo(
     () =>
@@ -108,6 +158,13 @@ export function useWorkbenchDocuments({
     selectedDocuments.find(
       (document) => document.id === state.activeDocumentId,
     ) ?? null;
+  const closedDocuments = useMemo(
+    () =>
+      state.closedDocuments.filter(
+        (document) => document.connectionId === selectedConnectionId,
+      ),
+    [selectedConnectionId, state.closedDocuments],
+  );
 
   const reset = useCallback(() => {
     loadToken.current += 1;
@@ -194,6 +251,7 @@ export function useWorkbenchDocuments({
 
   return {
     selectedDocuments,
+    closedDocuments,
     activeDocument,
     activeDocumentId: state.activeDocumentId,
     reset,

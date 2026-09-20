@@ -47,6 +47,8 @@ export type QueryDocument = Extract<
   { kind: "sql" | "documents" }
 >;
 
+export type SqlWorkbenchDocument = Extract<WorkbenchDocument, { kind: "sql" }>;
+
 let sequence = 0;
 
 export function stableDocument(
@@ -148,7 +150,9 @@ function readRecovery(document: SqlDocument): SqlRecoverySnapshot | null {
   }
 }
 
-export function persistedQueryDocument(document: SqlDocument): QueryDocument {
+export function persistedQueryDocument(
+  document: SqlDocument,
+): SqlWorkbenchDocument {
   const recovery = readRecovery(document);
   return {
     id: `${document.connectionId}:sql:${document.id}`,
