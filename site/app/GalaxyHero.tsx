@@ -29,7 +29,9 @@ export function GalaxyHero({
     preference();
     media.addEventListener("change", preference);
     let disposed = false;
-    void import("../lib/galaxyRenderer").then(({ createGalaxyRenderer }) => {
+    // Data Saver keeps the CSS fallback background and never downloads the Three.js chunk.
+    const saveData = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData === true;
+    if (!saveData) void import("../lib/galaxyRenderer").then(({ createGalaxyRenderer }) => {
       if (!disposed && scene.current) galaxy.current = createGalaxyRenderer(scene.current, ready => {
         if (!disposed) { setAvailable(ready); if (!ready) setExploring(false); }
       });

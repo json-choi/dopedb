@@ -40,6 +40,14 @@ pnpm icons --check
 세그먼트에 둬야 Next가 이미지를 합쳐 넣는다. ADR 0007의 공개 경로 계약에 따라
 쿼리문, 결과 행, workspace 이름 없이 승인된 마크와 고정 문구만 담는다.
 
+macOS ICNS만 모든 프레임(@2x 포함)에서 마크를 캔버스의 824/1024(약 80.5%)로
+축소해 중앙에 배치하고 나머지를 투명 여백으로 남긴다. macOS 시스템 앱이 icon
+grid에서 차지하는 비율과 같아 Dock·Finder·App Switcher에서 DopeDB만 커 보이지
+않게 한다. 여백은 `scripts/generate-icons.py`의 `save_icns_frame`에서만 적용하며
+PNG·ICO·SVG·OG 카드는 계속 캔버스를 꽉 채운다. 승인된 마크 도형과 색은 바꾸지
+않는다. 16px 1배 프레임은 마크가 그만큼 작아지므로, 이 크기의 가독성은 소형
+전용 형태 결정으로 따로 다룬다.
+
 총 19개 생성물(공용 TSX 1개, SVG 2개, PNG 12개, ICO 3개, ICNS 1개)을 검증한다.
 CI의 `brand-assets`는 macOS에서 같은 Pillow 버전과 frozen site 의존성을 사용해
 전체 생성물을 검사한다. 이 결과는 필수 `build` 집계에도 포함된다.
