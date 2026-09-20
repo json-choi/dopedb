@@ -20,6 +20,15 @@ pnpm icons --check
 저장소를 변경하지 않고 누락·불일치 시 실패한다. 도형 수정은 원본 SVG에서만 하고
 생성된 파일이나 공용 graphic을 따로 수정하지 않는다.
 
+macOS ICNS(`src-tauri/icons/icon.icns`)만 모든 프레임(@2x 포함)에서 캔버스의
+824/1024(~80.5%)로 축소해 중앙에 배치하고 나머지를 투명 여백으로 남긴다. 이
+비율은 Calculator·Notes 같은 macOS 시스템 앱이 icon grid에서 차지하는 비율과
+같아 Dock·Finder·App Switcher에서 DopeDB 아이콘이 과도하게 커 보이지 않게
+한다. PNG 세트, ICO 3종, SVG, OG 카드를 포함한 다른 모든 생성물은 계속 캔버스를
+꽉 채우는 원본 full-bleed 비율을 유지하며 이 여백 규칙의 영향을 받지 않는다.
+여백은 `scripts/generate-icons.py`의 `save_icns_frame`에서만 적용되고, 승인된
+마크 도형(좁은 D, −24° 고리, 위성 점)이나 색은 바꾸지 않는다.
+
 ## 사용처
 
 | 사용처 | 생성물 / 소비자 |

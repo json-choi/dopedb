@@ -44,6 +44,10 @@ ICO_OUTPUTS = {
 }
 ICNS_OUTPUT = Path("src-tauri/icons/icon.icns")
 OG_OUTPUT = Path("site/public/og-card.png")
+# macOS icon-grid proportion: system apps (Calculator, Notes) occupy about
+# 824/1024 of their canvas width, centred, with a transparent margin. Shared
+# PNG/ICO outputs stay full-bleed; only the ICNS frames get this padding.
+ICNS_MARK_SCALE = 824 / 1024
 
 
 def generate_og(source: Image.Image, svg: bytes, path: Path) -> None:
@@ -163,13 +167,26 @@ def save_png(source: Image.Image, path: Path, size: int) -> None:
     source.resize((size, size), Image.Resampling.LANCZOS).save(path)
 
 
+def save_icns_frame(source: Image.Image, path: Path, size: int) -> None:
+    # Scale the full rendered tile+mark down to the macOS icon-grid proportion
+    # and centre it on a transparent canvas, instead of the full-bleed resize
+    # every other projection uses.
+    path.parent.mkdir(parents=True, exist_ok=True)
+    inset = round(size * ICNS_MARK_SCALE)
+    mark = source.resize((inset, inset), Image.Resampling.LANCZOS)
+    canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    offset = (size - inset) // 2
+    canvas.alpha_composite(mark, (offset, offset))
+    canvas.save(path)
+
+
 def generate_icns(source: Image.Image, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="dopedb-", suffix=".iconset") as directory:
         iconset = Path(directory)
         for size in (16, 32, 128, 256, 512):
-            save_png(source, iconset / f"icon_{size}x{size}.png", size)
-            save_png(source, iconset / f"icon_{size}x{size}@2x.png", size * 2)
+            save_icns_frame(source, iconset / f"icon_{size}x{size}.png", size)
+            save_icns_frame(source, iconset / f"icon_{size}x{size}@2x.png", size * 2)
         subprocess.run(["iconutil", "-c", "icns", str(iconset), "-o", str(path)], check=True)
 
 
