@@ -43,6 +43,10 @@ ICO_OUTPUTS = {
     "workspace-cloud/app/favicon.ico": (16, 32, 48, 64),
 }
 ICNS_OUTPUT = Path("src-tauri/icons/icon.icns")
+# macOS icon grid: system apps fill about 824/1024 of the canvas, centred, with a
+# transparent margin. Only the ICNS frames take this inset so the Dock, Finder and
+# app switcher size DopeDB like its neighbours; every other output stays full-bleed.
+ICNS_MARK_SCALE = 824 / 1024
 # One approved card serves every public share surface. The workspace copy sits on
 # Next's `opengraph-image` file convention inside the public Analysis Article
 # segment, because that route's own generateMetadata declares `openGraph` and
@@ -172,13 +176,24 @@ def save_png(source: Image.Image, path: Path, size: int) -> None:
     source.resize((size, size), Image.Resampling.LANCZOS).save(path)
 
 
+def save_icns_frame(source: Image.Image, path: Path, size: int) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    inset = round(size * ICNS_MARK_SCALE)
+    canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    canvas.alpha_composite(
+        source.resize((inset, inset), Image.Resampling.LANCZOS),
+        ((size - inset) // 2, (size - inset) // 2),
+    )
+    canvas.save(path)
+
+
 def generate_icns(source: Image.Image, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="dopedb-", suffix=".iconset") as directory:
         iconset = Path(directory)
         for size in (16, 32, 128, 256, 512):
-            save_png(source, iconset / f"icon_{size}x{size}.png", size)
-            save_png(source, iconset / f"icon_{size}x{size}@2x.png", size * 2)
+            save_icns_frame(source, iconset / f"icon_{size}x{size}.png", size)
+            save_icns_frame(source, iconset / f"icon_{size}x{size}@2x.png", size * 2)
         subprocess.run(["iconutil", "-c", "icns", str(iconset), "-o", str(path)], check=True)
 
 
