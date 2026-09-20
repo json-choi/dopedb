@@ -511,9 +511,19 @@ loopback 문서는 이 정본을 빌드 시 포함하며 네트워크 font나 sc
   input class를 만들지 않는다. `TextInput`과 `SelectInput`의 기본 밀도는 36px,
   `compact`는 32px, `xs`는 tool-window 내부의 28px다. 각 밀도는 높이와 최소
   높이, `--ds-control-local-size`를 함께 소유해 control row의 암묵적인 높이가
-  덮어쓰지 않는다. 모든 field는 portal dialog에서도 자체 `min-width: 0`과
-  최대 폭을 갖고, checkbox는 긴 label 때문에 축소되지 않는다. `InlineSelect`는 General 상단의 Connection
+  덮어쓰지 않는다. `SelectInput`은 platform별로 다르게 그려지는 native select
+  chrome 대신 `appearance: none`과 `chevronDown` indicator를 primitive 안에서
+  소유한다. indicator는 `text-muted-foreground` 역할 token을 쓰고
+  `pointer-events`를 받지 않으며, 밀도별 오른쪽 padding이 긴 값의 truncation과
+  겹치지 않게 자리를 예약한다. 화면이 select 옆에 별도 chevron을 덧붙이지
+  않는다. 모든 field는 portal dialog에서도 자체 `min-width: 0`과
+  최대 폭을 갖고, checkbox는 긴 label 때문에 축소되지 않는다. border가 있는
+  field의 focus는 `border-ring`과 `ring-[3px] ring-ring/20`의 부드러운 halo가
+  함께 표현한다. 경계선이 선명도를 소유하므로 halo를 더 진하게 만들지 않는다.
+  `InlineSelect`는 General 상단의 Connection
   type·Driver처럼 label과 값이 한 줄에 놓이는 실제 선택 속성을 소유한다.
+  경계선이 없으므로 값 오른쪽의 작은 `chevronDown` indicator가 선택 가능함을
+  표시하고 disabled일 때 값과 같은 muted 색으로 따라간다.
   SQL/session 설정처럼 여러 줄인 값은 화면별 textarea class를 만들지 않고
   monospace `TextAreaInput`을 사용한다. 계층 checklist의 parent는
   `CheckboxField`의 native `indeterminate` 상태로 부분 선택을 표현한다.

@@ -9,6 +9,8 @@ import type {
 } from "react";
 import { forwardRef, useId } from "react";
 
+import { Icon } from "../../components/Icon";
+
 export type FieldValidation = {
   tone: "warning" | "danger";
   message: ReactNode;
@@ -227,7 +229,7 @@ export const TextInput = forwardRef<
       data-density={density}
       data-monospace={monospace}
       data-search={props.type === "search" || undefined}
-      className="tw:[--ds-control-local-size:var(--ds-control-lg)] tw:data-[density=compact]:[--ds-control-local-size:var(--ds-control-md)] tw:data-[density=xs]:[--ds-control-local-size:var(--ds-control-sm)] tw:h-control-lg tw:min-h-control-lg tw:w-full tw:min-w-0 tw:max-w-full tw:rounded-sm tw:border tw:border-input tw:bg-background tw:px-3 tw:font-sans tw:text-ui tw:text-foreground tw:shadow-control tw:outline-none tw:data-[density=compact]:h-control-md tw:data-[density=compact]:min-h-control-md tw:data-[density=xs]:h-control-sm tw:data-[density=xs]:min-h-control-sm tw:data-[density=xs]:px-2 tw:data-[density=compact]:px-2 tw:data-[monospace=true]:font-mono tw:data-[search=true]:rounded-none tw:placeholder:text-muted-foreground tw:focus:border-ring tw:focus:ring-2 tw:focus:ring-ring/30 tw:disabled:cursor-default tw:disabled:opacity-50"
+      className="tw:[--ds-control-local-size:var(--ds-control-lg)] tw:data-[density=compact]:[--ds-control-local-size:var(--ds-control-md)] tw:data-[density=xs]:[--ds-control-local-size:var(--ds-control-sm)] tw:h-control-lg tw:min-h-control-lg tw:w-full tw:min-w-0 tw:max-w-full tw:rounded-sm tw:border tw:border-input tw:bg-background tw:px-3 tw:font-sans tw:text-ui tw:text-foreground tw:shadow-control tw:outline-none tw:data-[density=compact]:h-control-md tw:data-[density=compact]:min-h-control-md tw:data-[density=xs]:h-control-sm tw:data-[density=xs]:min-h-control-sm tw:data-[density=xs]:px-2 tw:data-[density=compact]:px-2 tw:data-[monospace=true]:font-mono tw:data-[search=true]:rounded-none tw:placeholder:text-muted-foreground tw:focus:border-ring tw:focus:ring-[3px] tw:focus:ring-ring/20 tw:disabled:cursor-default tw:disabled:opacity-50"
       {...props}
     />
   );
@@ -243,14 +245,23 @@ export const SelectInput = forwardRef<
   ref,
 ) {
   return (
-    <select
-      ref={ref}
+    <span
       data-density={density}
-      className="tw:[--ds-control-local-size:var(--ds-control-lg)] tw:data-[density=compact]:[--ds-control-local-size:var(--ds-control-md)] tw:data-[density=xs]:[--ds-control-local-size:var(--ds-control-sm)] tw:h-control-lg tw:min-h-control-lg tw:w-full tw:min-w-0 tw:max-w-full tw:rounded-sm tw:border tw:border-input tw:bg-background tw:px-3 tw:font-sans tw:text-ui tw:text-foreground tw:shadow-control tw:outline-none tw:data-[density=compact]:h-control-md tw:data-[density=compact]:min-h-control-md tw:data-[density=xs]:h-control-sm tw:data-[density=xs]:min-h-control-sm tw:data-[density=xs]:px-2 tw:data-[density=compact]:px-2 tw:focus:border-ring tw:focus:ring-2 tw:focus:ring-ring/30 tw:disabled:cursor-default tw:disabled:opacity-50"
-      {...props}
+      className="tw:relative tw:grid tw:w-full tw:min-w-0 tw:max-w-full tw:items-center"
     >
-      {children}
-    </select>
+      <select
+        ref={ref}
+        data-density={density}
+        className="tw:peer tw:[--ds-control-local-size:var(--ds-control-lg)] tw:data-[density=compact]:[--ds-control-local-size:var(--ds-control-md)] tw:data-[density=xs]:[--ds-control-local-size:var(--ds-control-sm)] tw:h-control-lg tw:min-h-control-lg tw:w-full tw:min-w-0 tw:max-w-full tw:cursor-pointer tw:appearance-none tw:truncate tw:rounded-sm tw:border tw:border-input tw:bg-background tw:py-0 tw:pl-3 tw:pr-8 tw:font-sans tw:text-ui tw:text-foreground tw:shadow-control tw:outline-none tw:data-[density=compact]:h-control-md tw:data-[density=compact]:min-h-control-md tw:data-[density=xs]:h-control-sm tw:data-[density=xs]:min-h-control-sm tw:data-[density=xs]:pl-2 tw:data-[density=xs]:pr-7 tw:data-[density=compact]:pl-2 tw:hover:border-ring/50 tw:focus:border-ring tw:focus:ring-[3px] tw:focus:ring-ring/20 tw:disabled:cursor-default tw:disabled:opacity-50"
+        {...props}
+      >
+        {children}
+      </select>
+      <Icon
+        name="chevronDown"
+        className="tw:pointer-events-none tw:absolute tw:right-2.5 tw:top-1/2 tw:-translate-y-1/2 tw:text-sm tw:text-muted-foreground tw:peer-disabled:opacity-50 tw:peer-data-[density=xs]:right-2"
+      />
+    </span>
   );
 });
 
@@ -259,13 +270,19 @@ export const InlineSelect = forwardRef<
   Omit<SelectHTMLAttributes<HTMLSelectElement>, "className">
 >(function InlineSelect({ children, ...props }, ref) {
   return (
-    <select
-      ref={ref}
-      className="tw:[--ds-control-local-size:var(--ds-control-sm)] tw:block tw:h-control-sm tw:min-h-control-sm tw:min-w-0 tw:max-w-full tw:cursor-pointer tw:appearance-none tw:truncate tw:border-0 tw:bg-transparent tw:p-0 tw:font-sans tw:text-sm tw:font-medium tw:text-info tw:outline-none tw:focus-visible:rounded-xs tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:disabled:cursor-default tw:disabled:text-muted-foreground"
-      {...props}
-    >
-      {children}
-    </select>
+    <span className="tw:relative tw:inline-flex tw:min-w-0 tw:max-w-full tw:items-center">
+      <select
+        ref={ref}
+        className="tw:peer tw:[--ds-control-local-size:var(--ds-control-sm)] tw:block tw:h-control-sm tw:min-h-control-sm tw:min-w-0 tw:max-w-full tw:cursor-pointer tw:appearance-none tw:truncate tw:border-0 tw:bg-transparent tw:py-0 tw:pl-0 tw:pr-4 tw:font-sans tw:text-sm tw:font-medium tw:text-info tw:outline-none tw:focus-visible:rounded-xs tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:disabled:cursor-default tw:disabled:text-muted-foreground"
+        {...props}
+      >
+        {children}
+      </select>
+      <Icon
+        name="chevronDown"
+        className="tw:pointer-events-none tw:absolute tw:right-0 tw:top-1/2 tw:-translate-y-1/2 tw:text-xs tw:text-info tw:peer-disabled:text-muted-foreground"
+      />
+    </span>
   );
 });
 
@@ -276,7 +293,7 @@ export const TextAreaInput = forwardRef<
   return (
     <textarea
       ref={ref}
-      className="tw:min-h-24 tw:w-full tw:min-w-0 tw:max-w-full tw:resize-y tw:rounded-sm tw:border tw:border-input tw:bg-background tw:px-3 tw:py-2 tw:font-mono tw:text-ui tw:text-foreground tw:shadow-control tw:outline-none tw:placeholder:text-muted-foreground tw:focus:border-ring tw:focus:ring-2 tw:focus:ring-ring/30 tw:disabled:cursor-default tw:disabled:opacity-50"
+      className="tw:min-h-24 tw:w-full tw:min-w-0 tw:max-w-full tw:resize-y tw:rounded-sm tw:border tw:border-input tw:bg-background tw:px-3 tw:py-2 tw:font-mono tw:text-ui tw:text-foreground tw:shadow-control tw:outline-none tw:placeholder:text-muted-foreground tw:focus:border-ring tw:focus:ring-[3px] tw:focus:ring-ring/20 tw:disabled:cursor-default tw:disabled:opacity-50"
       {...props}
     />
   );
