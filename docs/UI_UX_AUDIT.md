@@ -117,3 +117,45 @@ desktop 23,200개 별과 한 번만 만드는 buffer 계약은 그대로 유지�
 reduced-motion은 `running=false`, 강제 WebGL context loss는 fallback과 서버
 본문을 유지했다. JavaScript를 끈 영어 페이지도 제목·FAQ 7개를 렌더링했다.
 두 viewport 모두 가로 overflow가 없었다. 배포는 수행하지 않았다.
+
+## 공개 사이트 검수 — 2026-09-20 (#204)
+
+`HomeScopeWalkthrough`의 관계도(`ResourceOrbit`)에서 미선택 노드 라벨·보조
+캡션과 "Other databases · 범위 밖 · 접근 없음" 그룹이 10–11px 텍스트로 WCAG AA
+4.5:1을 만족하지 못했다. 아래 표는 sRGB 상대 휘도 공식으로 라벨 alpha를
+배경 위에 직접 합성한 **계산상의 대비 수치**이며, #240 항목처럼 실제 렌더링
+픽셀을 캡처해 비교한 기기 검수가 아니다. 은하 canvas가 실제로 그리는 별·먼지
+픽셀은 이 계산의 배경(night)보다 밝을 수 있어 실기기 대비는 이보다 낮을 수
+있다.
+
+계산과 별개로 실제 렌더 화면에서도 측정했다. `next start`로 띄운 build 결과를
+1280×720 viewport에서 촬영해 라벨 주변의 배경 픽셀(은하 canvas가 실제로 그린
+값)을 표본으로 뽑고, 그 위에 전경 alpha를 합성해 비교했다. `Other databases`
+주변 배경 `rgb(14,20,18)`에서 5.82:1, 관계도 중앙 하단 `rgb(16,20,17)`에서
+5.82:1, `CODEX` 라벨 주변 `rgb(7,10,13)`에서 6.06:1이 나왔다. 같은 배경에서
+변경 전 alpha(0.45)는 각각 2.87:1, 2.87:1, 2.82:1이었다. 렌더된 glyph 픽셀을
+직접 읽는 방식은 antialiasing 때문에 실제보다 낮게 나오므로 지정 색 합성값을
+기준으로 삼았다.
+
+배경 산출: section의 `tw:bg-night/60`을 그 자체 위에 겹친 값
+(`night(#070906) 60% over night` = `night`)을 대비 계산의 바닥으로 삼았다.
+전경은 `--landing-cream-muted`(`#b5bcae`)이며, 선택 상태는 변경하지 않은
+`--landing-signal`(`#ccf36b`, 100% 기준 15.80:1)을 그대로 사용해 선택/미선택
+구분을 유지한다.
+
+| 라벨 역할 | alpha 전 → 후 | 합성 RGB 전 → 후 | 대비 전 → 후 |
+| --- | --- | --- | --- |
+| 메인 라벨 (미선택 노드, `text-cream-muted/45`) | 0.45 → 0.75 | (85,90,82) → (138,143,132) | 2.82:1 → 6.04:1 |
+| 보조 캡션 (미선택 노드, group alpha × SVG `opacity=".7"`) | 0.315 → 0.75 | (62,65,59) → (138,143,132) | 1.93:1 → 6.04:1 |
+| "Other databases" 그룹 (`text-cream-muted/40`) | 0.40 → 0.75 | (77,81,73) → (138,143,132) | 2.45:1 → 6.04:1 |
+
+세 역할 모두 그룹 클래스를 기존 파일에 이미 쓰인 `tw:text-cream-muted/75`
+(`c.demoNotice` 문구와 동일 alpha)로 맞추고, 보조 캡션의 중복 SVG
+`opacity=".7"`을 제거해 두 alpha가 곱해져 31.5%까지 떨어지던 문제를 없앴다.
+새 토큰은 추가하지 않았다. 6.04:1은 요구한 4.5:1보다 여유가 있어 계산
+배경보다 다소 밝은 실제 은하 픽셀 위에서도 대체로 버틸 수 있을 것으로
+본다. 저데이터 모드는 `GalaxyHero`가 `navigator.connection?.saveData === true`일
+때 Three.js chunk를 동적 import하지 않고 `available=false` 초기 상태의 CSS
+`--galaxy-fallback` 배경만 유지하는 방식으로 처리한다. WebGL 작업뿐 아니라
+chunk 다운로드 자체를 건너뛰며, `navigator.connection`이 없는 브라우저는
+기존 경로를 그대로 따른다. 셰이더 품질·DPR·compact tier는 변경하지 않았다.
