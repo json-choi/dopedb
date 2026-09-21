@@ -173,6 +173,11 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
   준비된 Welcome은 sample table 탐색, exact Environment에 고정된 Agent 읽기,
   `Settings → Safety`를 거치는 Agent 쓰기 승인의 실제 command 세 개만 flat
   목록으로 보여준다.
+- 연결이 하나도 없는 시작 화면은 `이 컴퓨터에서 데이터베이스 찾기` command 하나를
+  제공한다. 사용자가 실행했을 때만 PD-44의 닫힌 loopback allowlist를 자격 증명 없이
+  한 번 확인하고, 응답한 서버를 engine·host·port가 채워진 새 연결 초안으로 여는
+  command로 같은 평평한 목록에 덧붙인다. 감지된 서버가 없거나 확인에 실패하면 그
+  사실만 문장으로 표시하고 `새 연결`과 `가이드 데모` command는 그대로 둔다.
 - 시작 화면은 연결 유무와 관계없이 상단 Home command와 Action Search로 다시
   열 수 있다. 돌아갈 때 기존 쿼리 문서를 삭제하거나 연결을 해제하지 않는다.
   마지막 연결을 삭제한 뒤에는 이전 Project 화면 대신 시작 화면을 연다.
@@ -379,6 +384,8 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
 | PD-41 | External official Agent CLI | `구현` | `dopedb agent init/start`가 secret-free Project resource config, 매 실행 Desktop 검토, process-bound runtime-only typed bridge로 공식 로컬 Codex/Claude를 실행한다. 저장된 범용 MCP와 provider token 접근은 허용하지 않는다. |
 | PD-42 | 조직 내부 Article 링크와 읽기 초대 | `구현` | 기존 구성원용 링크는 현재 계정의 Workspace membership와 해당 DB grant를 매번 확인한다. Workspace 관리자이면서 해당 DB의 manage 권한을 가진 사람만 이메일 하나에 고정된 48시간 초대 링크를 만든다. 검증된 수신 계정의 명시적 수락은 멤버 참여와 지정 DB의 read grant를 원자적으로 처리하며 기존의 더 높은 역할·grant는 보존한다. 링크 소지만으로 접근할 수 없고 회사 도메인을 조직 권한으로 추정하지 않는다. 앱 설치·로그인 안내 후 인증된 Desktop의 원래 Article로 연결하며 OS 설치 동의, member-local credential 입력과 Google CLI 인증을 대신하지 않는다. 브라우저는 초대와 앱 진입만 소유하고 Article query나 결과를 실행·제공하지 않는다. |
 | PD-43 | 문서 탭 닫기와 재열기 | `구현` | 탭 닫기는 SQL document 삭제가 아니며 본문과 revision을 보존한다. 열린 SQL 탭 목록, 순서, 활성 SQL 탭은 workspace·account·connection 범위의 member-local 상태로만 영속하고 공유 레코드에 두지 않는다. 저장된 상태가 없으면 기존처럼 복원하고 저장된 빈 목록은 사용자가 모두 닫은 상태로 존중한다. 닫은 문서는 Action Search의 최소 재열기 command로 다시 연다. 별도 문서 관리 화면과 Local History 비교 UI는 만들지 않는다. |
+| PD-44 | 로컬 데이터베이스 리스너 감지 | `구현` | 첫 연결의 입력을 줄이기 위해 사용자가 명시적으로 실행한 1회 감지만 수행한다. 대상은 loopback 주소와 engine별 기본 포트의 닫힌 allowlist(PostgreSQL 5432, MySQL/MariaDB 3306, MongoDB 27017)로 한정하고 임의 host, 포트 범위, 로컬 네트워크 대역, container runtime, 파일 시스템을 탐색하지 않는다. 각 후보는 자격 증명 없이 protocol handshake만 수행해 engine을, 프로토콜이 인증 전에 알려 주는 경우에만 서버 버전을 확인한 뒤 즉시 닫으며 인증 시도, startup 패킷, query를 보내지 않는다. `~/.pgpass`, `~/.my.cnf`, `pg_service.conf`, 환경 변수, 프로젝트 `.env` 같은 클라이언트 설정과 자격 증명 저장소는 읽지 않는다. 감지 결과는 engine, host, port, driver만 편집 가능한 초안에 채우는 제안이며 username, 비밀번호, database는 사람이 입력하거나 기존 database discovery가 채운다. 감지는 연결을 저장하거나 자동으로 접속하지 않고 백그라운드 polling과 주기적 재감지를 하지 않는다. 미설치와 감지 실패는 정확한 빈 상태로 표시하고 기존 수동 입력 경로를 막지 않는다. |
+
 
 ## 변경 규칙
 

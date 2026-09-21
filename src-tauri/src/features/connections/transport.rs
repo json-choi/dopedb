@@ -9,7 +9,10 @@ use crate::kernel::identity::ConnectionId;
 use crate::model::ConnectionProfile;
 use crate::state::AppState;
 
-use super::{ConnectionProfileTestRequest, ConnectionUpsertRequest, DriverDescriptor};
+use super::{
+    ConnectionProfileTestRequest, ConnectionUpsertRequest, DriverDescriptor,
+    LocalDatabaseListener,
+};
 
 #[tauri::command]
 pub fn list_drivers(state: State<'_, AppState>) -> Vec<DriverDescriptor> {
@@ -186,6 +189,16 @@ pub async fn discover_connection_profile_databases(
         .connections
         .discover_profile_databases(profile, password.map(Zeroizing::new))
         .await
+}
+
+/// Suggest database servers already listening on loopback so a first
+/// connection needs fewer remembered values. Returns suggestions only: no
+/// credential is sent, nothing is saved, and nothing is connected.
+#[tauri::command]
+pub async fn discover_local_database_listeners(
+    state: State<'_, AppState>,
+) -> AppResult<Vec<LocalDatabaseListener>> {
+    Ok(state.services.connections.discover_local_listeners().await)
 }
 
 #[tauri::command]

@@ -12,6 +12,7 @@ import { useI18n } from "../../lib/i18n";
 import type { SchemaConnectionGroup } from "../../lib/schemaDiff";
 import Onboarding from "../../screens/Onboarding";
 import type { ConnectionProfile } from "../connections/domain";
+import { useLocalListenerDiscovery } from "../connections/useLocalListenerDiscovery";
 import {
   isDemoSqliteConnection,
   type ConnectionLaunchPreset,
@@ -168,6 +169,7 @@ function WorkbenchLoading() {
 
 function WorkbenchContentResolved({ model, commands }: Props) {
   const { t } = useI18n();
+  const localDiscovery = useLocalListenerDiscovery();
   const { route, connection, workbench, update } = model;
   const selected = connection.selected;
   const activeDocument = workbench.active;
@@ -287,6 +289,16 @@ function WorkbenchContentResolved({ model, commands }: Props) {
         creatingDemo={connection.creatingDemo}
         guidedDemoAvailable={connection.guidedDemoAvailable}
         onCreateDemoDatabase={commands.connections.createDemo}
+        localDiscovery={
+          connection.items.length === 0 ? localDiscovery : undefined
+        }
+        onUseLocalListener={(listener) =>
+          commands.connections.new({
+            engine: listener.engine,
+            host: listener.host,
+            port: listener.port,
+          })
+        }
         onNewConnection={() => commands.connections.new()}
       />,
     );

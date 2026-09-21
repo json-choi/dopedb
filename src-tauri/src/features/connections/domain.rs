@@ -534,3 +534,118 @@ pub(crate) fn resolve_cli_name(
         _ => Err(CliConnectionResolutionError::Ambiguous { candidates }),
     }
 }
+
+/// Loopback host used by local listener discovery. Discovery never widens to
+/// another address: a remote server is reached only through a profile the user
+/// typed by hand.
+pub(crate) const LOCAL_LISTENER_HOST: &str = "127.0.0.1";
+
+/// One loopback candidate that local listener discovery may probe.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct LocalListenerTarget {
+    pub(crate) engine: Engine,
+    pub(crate) port: u16,
+}
+
+/// The closed allowlist local listener discovery probes. Adding an entry is a
+/// product decision (`PD-43`), not a configuration value: discovery must never
+/// sweep a port range, a local network, or a container runtime.
+pub(crate) const LOCAL_LISTENER_TARGETS: [LocalListenerTarget; 3] = [
+    LocalListenerTarget {
+        engine: Engine::Postgres,
+        port: 5432,
+    },
+    LocalListenerTarget {
+        engine: Engine::Mysql,
+        port: 3306,
+    },
+    LocalListenerTarget {
+        engine: Engine::Mongodb,
+        port: 27017,
+    },
+];
+
+/// One database server that answered a credential-free handshake on loopback.
+/// This is a suggestion for the connection editor: it carries no credential,
+/// names no database, and grants no authority.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct LocalDatabaseListener {
+    pub(crate) engine: Engine,
+    pub(crate) host: String,
+    pub(crate) port: u16,
+    /// Server version, only when the protocol reports it before authentication.
+    pub(crate) server_version: Option<String>,
+}
+
+/// Longest server version a suggestion may carry, so an unexpected answer on
+/// an allowlisted port cannot push arbitrary text into the connection editor.
+const MAX_SERVER_VERSION_CHARS: usize = 64;
+
+impl LocalDatabaseListener {
+    /// Builds a suggestion for one allowlisted candidate. The reported version
+    /// is accepted only when it is short, printable text; anything else is
+    /// dropped rather than shown.
+    pub(crate) fn new(target: LocalListenerTarget, reported_version: Option<&str>) -> Self {
+        Self {
+            engine: target.engine,
+            host: LOCAL_LISTENER_HOST.into(),
+            port: target.port,
+            server_version: reported_version.and_then(readable_server_version),
+        }
+    }
+}
+
+fn readable_server_version(reported: &str) -> Option<String> {
+    let version = reported.trim();
+    if version.is_empty()
+        || version.chars().count() > MAX_SERVER_VERSION_CHARS
+        || version.chars().any(char::is_control)
+    {
+        return None;
+    }
+    Some(version.to_owned())
+}
+
+/// Local listener discovery may only ever look at loopback, at the closed
+/// engine/port allowlist `PD-44` names, and may only surface short printable
+/// version text. Widening any of these is a product decision, so the contract
+/// is asserted rather than left to review.
+#[cfg(test)]
+pub(crate) fn assert_local_listener_discovery_contract() {
+    assert_eq!(LOCAL_LISTENER_HOST, "127.0.0.1");
+    assert_eq!(
+        LOCAL_LISTENER_TARGETS
+            .iter()
+            .map(|target| (target.engine, target.port))
+            .collect::<Vec<_>>(),
+        vec![
+            (Engine::Postgres, 5432),
+            (Engine::Mysql, 3306),
+            (Engine::Mongodb, 27017),
+        ],
+    );
+
+    let target = LOCAL_LISTENER_TARGETS[1];
+    let suggestion = LocalDatabaseListener::new(target, Some("8.0.36-0ubuntu0.22.04.1  "));
+    assert_eq!(suggestion.host, "127.0.0.1");
+    assert_eq!(suggestion.port, 3306);
+    assert_eq!(
+        suggestion.server_version.as_deref(),
+        Some("8.0.36-0ubuntu0.22.04.1"),
+    );
+
+    for rejected in ["", "   ", "8.4\n2", "\u{1b}[31m8.4"] {
+        assert_eq!(
+            LocalDatabaseListener::new(target, Some(rejected)).server_version,
+            None,
+            "a version that is empty or carries control characters must not reach the editor",
+        );
+    }
+    assert_eq!(
+        LocalDatabaseListener::new(target, Some(&"9".repeat(MAX_SERVER_VERSION_CHARS + 1)))
+            .server_version,
+        None,
+    );
+    assert_eq!(LocalDatabaseListener::new(target, None).server_version, None);
+}

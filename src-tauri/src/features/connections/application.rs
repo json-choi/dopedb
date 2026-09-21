@@ -16,12 +16,13 @@ use crate::model::{ConnectionProfile, Engine, WorkspaceConnectionAccess, Workspa
 
 use super::domain::{
     normalize_schema_group, resolve_cli_name, validate_schema_group_engine, AgentConnectionSummary,
-    CliConnectionResolutionError, DriverDescriptor, MAX_CONNECTION_CREDENTIAL_BYTES,
+    CliConnectionResolutionError, DriverDescriptor, LocalDatabaseListener,
+    MAX_CONNECTION_CREDENTIAL_BYTES, LOCAL_LISTENER_TARGETS,
 };
 use super::ports::{
     AdHocConnectionPort, AuthorizedConnectionPort, ConnectionCredentialVault,
     ConnectionMutationPort, ConnectionPermission, ConnectionRepositoryPort, ConnectionRuntimePort,
-    DriverRegistryPort, ProfileMutationPort, ScopeMutationPort,
+    DriverRegistryPort, LocalListenerProbePort, ProfileMutationPort, ScopeMutationPort,
 };
 
 pub(crate) struct ConnectionUpsertRequest {
@@ -34,7 +35,7 @@ pub(crate) struct ConnectionProfileTestRequest {
     pub(crate) password: Option<Zeroizing<String>>,
 }
 
-pub(crate) struct ConnectionUseCases<R, A, D, T, V>
+pub(crate) struct ConnectionUseCases<R, A, D, T, V, P>
 where
     V: ConnectionCredentialVault + ?Sized,
 {
@@ -43,14 +44,16 @@ where
     drivers: D,
     tester: T,
     credentials: Arc<V>,
+    local_listeners: P,
 }
 
-impl<R, A, D, T, V> Clone for ConnectionUseCases<R, A, D, T, V>
+impl<R, A, D, T, V, P> Clone for ConnectionUseCases<R, A, D, T, V, P>
 where
     R: Clone,
     A: Clone,
     D: Clone,
     T: Clone,
+    P: Clone,
     V: ConnectionCredentialVault + ?Sized,
 {
     fn clone(&self) -> Self {
@@ -60,17 +63,19 @@ where
             drivers: self.drivers.clone(),
             tester: self.tester.clone(),
             credentials: Arc::clone(&self.credentials),
+            local_listeners: self.local_listeners.clone(),
         }
     }
 }
 
-impl<R, A, D, T, V> ConnectionUseCases<R, A, D, T, V>
+impl<R, A, D, T, V, P> ConnectionUseCases<R, A, D, T, V, P>
 where
     R: ConnectionRepositoryPort,
     A: ConnectionRuntimePort,
     D: DriverRegistryPort,
     T: AdHocConnectionPort,
     V: ConnectionCredentialVault + ?Sized,
+    P: LocalListenerProbePort,
 {
     pub(crate) fn new(
         repository: R,
@@ -78,6 +83,7 @@ where
         drivers: D,
         tester: T,
         credentials: Arc<V>,
+        local_listeners: P,
     ) -> Self {
         Self {
             repository,
@@ -85,7 +91,28 @@ where
             drivers,
             tester,
             credentials,
+            local_listeners,
         }
+    }
+
+    /// Suggest database servers already listening on this machine so the first
+    /// connection needs fewer remembered values.
+    ///
+    /// Probes only the closed `LOCAL_LISTENER_TARGETS` allowlist on loopback,
+    /// sends no credential, and reads no client configuration. The result is a
+    /// suggestion: nothing is saved, nothing is connected, and the caller still
+    /// supplies the account and database.
+    pub(crate) async fn discover_local_listeners(&self) -> Vec<LocalDatabaseListener> {
+        futures::future::join_all(
+            LOCAL_LISTENER_TARGETS
+                .iter()
+                .copied()
+                .map(|target| self.local_listeners.probe(target)),
+        )
+        .await
+        .into_iter()
+        .flatten()
+        .collect()
     }
 
     pub(crate) fn list_drivers(&self) -> Vec<DriverDescriptor> {

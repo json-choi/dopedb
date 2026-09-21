@@ -21,6 +21,7 @@ validates DopeDB-owned principals without rewriting pre-existing ones.
 | `application.rs` | Connection use cases; validation and mutation ordering, with concrete SQLite/keychain/driver/pool/Tauri details behind ports. |
 | `ports.rs` | Platform ports required by connection use cases. |
 | `adapters.rs` | Concrete connection adapters for SQLite, live pool authority, drivers, and keychain. |
+| `local_probe.rs` | Credential-free loopback handshakes behind `LocalListenerProbePort`. Each probe opens one allowlisted candidate, identifies the protocol, and closes without authenticating, querying, or reading any client configuration or credential file. |
 | `transport.rs` | Tauri transport adapter for connection use cases. |
 | `demo.rs` | Creates the bundled, local SQLite learning database used by the first-run Data Source launcher; seeded idempotently under the app-local data directory so opening the demo never overwrites user edits. |
 

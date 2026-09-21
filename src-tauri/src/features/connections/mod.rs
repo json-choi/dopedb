@@ -4,6 +4,7 @@ mod adapters;
 mod application;
 mod demo;
 mod domain;
+mod local_probe;
 mod ports;
 pub(crate) mod transport;
 
@@ -17,14 +18,18 @@ use adapters::{
     RuntimeConnectionAuthority, SqliteConnectionRepository, SystemAdHocConnection,
     SystemDriverRegistry,
 };
+use local_probe::SystemLocalListenerProbe;
 pub(crate) use application::{
     ConnectionProfileTestRequest, ConnectionUpsertRequest, ConnectionUseCases,
 };
 #[cfg(test)]
-pub(crate) use domain::assert_connection_test_failure_contract;
+pub(crate) use domain::{
+    assert_connection_test_failure_contract, assert_local_listener_discovery_contract,
+};
 pub(crate) use domain::{
     AgentConnectionSummary, CliConnectionResolutionError, ConnectionTestReceipt, DriverCapability,
-    DriverDescriptor, DriverInstallMode, DriverInstallState, MAX_CONNECTION_CREDENTIAL_BYTES,
+    DriverDescriptor, DriverInstallMode, DriverInstallState, LocalDatabaseListener,
+    MAX_CONNECTION_CREDENTIAL_BYTES,
 };
 pub(crate) use ports::ConnectionCredentialVault;
 
@@ -34,6 +39,7 @@ pub(crate) type ConnectionsFeature = ConnectionUseCases<
     SystemDriverRegistry,
     SystemAdHocConnection,
     dyn ConnectionCredentialVault,
+    SystemLocalListenerProbe,
 >;
 
 pub(crate) fn compose(
@@ -48,5 +54,6 @@ pub(crate) fn compose(
         SystemDriverRegistry,
         ad_hoc,
         credentials,
+        SystemLocalListenerProbe,
     )
 }

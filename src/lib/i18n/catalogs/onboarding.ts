@@ -23,6 +23,12 @@ export const onboardingCatalog = defineCatalog(
     "onboarding.demoStart": "Explore the guided demo",
     "onboarding.demoStarting": "Preparing guided demo…",
     "onboarding.firstRunLead": "Connect a data source to browse and query it.",
+    "onboarding.localDiscoveryFailed":
+      "This computer could not be checked for database servers.",
+    "onboarding.localDiscoveryNone":
+      "No database server is listening on this computer's default ports.",
+    "onboarding.localDiscoveryRunning": "Looking on this computer…",
+    "onboarding.localDiscoveryStart": "Find a database on this computer",
     "onboarding.title": "Welcome to DopeDB",
   },
   {
@@ -46,6 +52,12 @@ export const onboardingCatalog = defineCatalog(
     "onboarding.demoStart": "가이드 데모로 둘러보기",
     "onboarding.demoStarting": "가이드 데모 준비 중…",
     "onboarding.firstRunLead": "데이터 소스를 연결해 탐색과 쿼리를 시작하세요.",
+    "onboarding.localDiscoveryFailed":
+      "이 컴퓨터의 데이터베이스 서버를 확인하지 못했습니다.",
+    "onboarding.localDiscoveryNone":
+      "이 컴퓨터의 기본 포트에서 실행 중인 데이터베이스 서버가 없습니다.",
+    "onboarding.localDiscoveryRunning": "이 컴퓨터에서 찾는 중…",
+    "onboarding.localDiscoveryStart": "이 컴퓨터에서 데이터베이스 찾기",
     "onboarding.title": "DopeDB에 오신 것을 환영합니다",
   },
 );

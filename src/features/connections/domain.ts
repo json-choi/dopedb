@@ -229,3 +229,36 @@ export interface DriverDescriptor {
   capabilities: DriverCapability[];
   recommended: boolean;
 }
+
+/**
+ * One database server that answered a credential-free handshake on this
+ * machine's loopback address. It is a suggestion for the connection editor: it
+ * carries no credential, names no database, and grants no authority.
+ */
+export type LocalDatabaseListener = {
+  engine: ConnectionEngine;
+  host: string;
+  port: number;
+  /** Only set when the protocol reports it before authentication. */
+  serverVersion: string | null;
+};
+
+/**
+ * Canonical display name for one engine, shared by every surface that names a
+ * database without also naming its provider. Provider-specific wording (a
+ * Cloudflare D1 file, for example) stays in `STANDARD_CONNECTION_SOURCES`.
+ */
+export function databaseEngineLabel(engine: ConnectionEngine): string {
+  switch (engine) {
+    case "postgres":
+      return "PostgreSQL";
+    case "mysql":
+      return "MySQL";
+    case "sqlite":
+      return "SQLite";
+    case "mongodb":
+      return "MongoDB";
+    case "bigquery":
+      return "BigQuery";
+  }
+}

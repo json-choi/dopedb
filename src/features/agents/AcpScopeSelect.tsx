@@ -7,7 +7,10 @@ import { Icon, type IconName } from "../../components/Icon";
 import ToolbarMenu from "../../components/ToolbarMenu";
 import { EnvironmentBadge } from "../../design-system/components/EnvironmentBadge";
 import { useI18n } from "../../lib/i18n";
-import type { ConnectionEngine, ConnectionId } from "../connections/domain";
+import {
+  databaseEngineLabel,
+  type ConnectionId,
+} from "../connections/domain";
 import {
   githubSourceRevisionLabel,
   knowledgeEnvironmentBadge,
@@ -180,21 +183,6 @@ export function AcpScopeSelect({
       </ToolbarMenu>
     </span>
   );
-}
-
-function databaseEngineLabel(engine: ConnectionEngine) {
-  switch (engine) {
-    case "postgres":
-      return "PostgreSQL";
-    case "mysql":
-      return "MySQL";
-    case "sqlite":
-      return "SQLite";
-    case "mongodb":
-      return "MongoDB";
-    case "bigquery":
-      return "BigQuery";
-  }
 }
 
 function ResourceGroupLabel({ children }: { children: ReactNode }) {

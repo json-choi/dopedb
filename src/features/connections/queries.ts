@@ -11,12 +11,14 @@ import {
   discoverCloudflareD1Accounts,
   discoverCloudflareD1Databases,
   getCloudflareD1AuthState,
+  discoverLocalDatabaseListeners,
   getBigQueryAuthState,
   listConnections,
 } from "./tauriAdapter";
 
 export const connectionQueryKeys = {
   all: (scopeKey: string) => ["connections", scopeKey] as const,
+  localListeners: () => ["localDatabaseListeners"] as const,
   bigQueryAuth: (profile: ConnectionProfile, scopeKey: string) =>
     [
       "bigQueryOnboarding",
@@ -71,6 +73,20 @@ export function connectionsQuery(scopeKey: string) {
     retry: (failureCount, error) =>
       failureCount < 3 && isTransientDbError(error),
     retryDelay: (attempt) => Math.min(1_000 * 2 ** attempt, 8_000),
+  });
+}
+
+/**
+ * Loopback listener suggestions for the first connection. The probe is cheap
+ * but touches the machine, so it runs only when a caller enables it and the
+ * answer stays fresh for the rest of the first-run session.
+ */
+export function localDatabaseListenersQuery() {
+  return queryOptions({
+    queryKey: connectionQueryKeys.localListeners(),
+    queryFn: discoverLocalDatabaseListeners,
+    staleTime: 60_000,
+    retry: false,
   });
 }
 

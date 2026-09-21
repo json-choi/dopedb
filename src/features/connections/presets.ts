@@ -13,6 +13,9 @@ export type ConnectionLaunchPreset = {
   engine?: ConnectionEngine;
   provider?: ConnectionProvider;
   source?: "standard";
+  /** Endpoint a local listener suggestion already proved reachable. */
+  host?: string;
+  port?: number;
   /** Bind a newly saved connection into this exact Project boundary. */
   projectEnvironmentId?: string;
 };
@@ -50,8 +53,8 @@ export function blankConnection(
     engine,
     provider: bigquery ? "generic" : provider,
     driverId: cloudflareD1 ? "cloudflare-d1-wrangler" : null,
-    host: bigquery || cloudflareD1 ? "" : "localhost",
-    port: cloudflareD1 ? 443 : CONNECTION_DEFAULT_PORTS[engine],
+    host: preset?.host ?? (bigquery || cloudflareD1 ? "" : "localhost"),
+    port: preset?.port ?? (cloudflareD1 ? 443 : CONNECTION_DEFAULT_PORTS[engine]),
     database: "",
     username: "",
     sslmode: cloudflareD1 ? "require" : connectionDefaultSslMode(engine),
