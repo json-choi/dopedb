@@ -18,7 +18,6 @@ use adapters::{
     RuntimeConnectionAuthority, SqliteConnectionRepository, SystemAdHocConnection,
     SystemDriverRegistry,
 };
-use local_probe::SystemLocalListenerProbe;
 pub(crate) use application::{
     ConnectionProfileTestRequest, ConnectionUpsertRequest, ConnectionUseCases,
 };
@@ -31,6 +30,7 @@ pub(crate) use domain::{
     DriverDescriptor, DriverInstallMode, DriverInstallState, LocalDatabaseListener,
     MAX_CONNECTION_CREDENTIAL_BYTES,
 };
+use local_probe::SystemLocalListenerProbe;
 pub(crate) use ports::ConnectionCredentialVault;
 
 pub(crate) type ConnectionsFeature = ConnectionUseCases<

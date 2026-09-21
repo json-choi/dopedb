@@ -647,5 +647,8 @@ pub(crate) fn assert_local_listener_discovery_contract() {
             .server_version,
         None,
     );
-    assert_eq!(LocalDatabaseListener::new(target, None).server_version, None);
+    assert_eq!(
+        LocalDatabaseListener::new(target, None).server_version,
+        None
+    );
 }

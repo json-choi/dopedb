@@ -10,8 +10,7 @@ use crate::model::ConnectionProfile;
 use crate::state::AppState;
 
 use super::{
-    ConnectionProfileTestRequest, ConnectionUpsertRequest, DriverDescriptor,
-    LocalDatabaseListener,
+    ConnectionProfileTestRequest, ConnectionUpsertRequest, DriverDescriptor, LocalDatabaseListener,
 };
 
 #[tauri::command]

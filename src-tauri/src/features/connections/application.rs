@@ -16,8 +16,8 @@ use crate::model::{ConnectionProfile, Engine, WorkspaceConnectionAccess, Workspa
 
 use super::domain::{
     normalize_schema_group, resolve_cli_name, validate_schema_group_engine, AgentConnectionSummary,
-    CliConnectionResolutionError, DriverDescriptor, LocalDatabaseListener,
-    MAX_CONNECTION_CREDENTIAL_BYTES, LOCAL_LISTENER_TARGETS,
+    CliConnectionResolutionError, DriverDescriptor, LocalDatabaseListener, LOCAL_LISTENER_TARGETS,
+    MAX_CONNECTION_CREDENTIAL_BYTES,
 };
 use super::ports::{
     AdHocConnectionPort, AuthorizedConnectionPort, ConnectionCredentialVault,
