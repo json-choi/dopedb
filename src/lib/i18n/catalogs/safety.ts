@@ -12,6 +12,11 @@ export const safetyCatalog = defineCatalog(
     "safety.accessWrite": "Data changes",
     "safety.accessWriteHint":
       "Allow INSERT, UPDATE, and DELETE proposals. Every data change still requires exact approval.",
+    "safety.localSchemaRequired": "Admin connection required",
+    "safety.setupAdminConnection": "Set up admin connection",
+    "safety.adminConnectionName": "{name} · Admin",
+    "safety.adminConnectionTitle": "Admin connection",
+    "safety.adminConnectionScope": "This device only",
     "safety.accessSchema": "Schema changes",
     "safety.accessSchemaHint":
       "Allow CREATE, ALTER, DROP, and other DDL proposals. Data changes must be enabled first, and every schema change still requires exact approval.",
@@ -105,6 +110,11 @@ export const safetyCatalog = defineCatalog(
     "safety.accessWrite": "데이터 변경",
     "safety.accessWriteHint":
       "INSERT, UPDATE, DELETE 제안을 허용합니다. 모든 데이터 변경은 여전히 정확한 승인을 거칩니다.",
+    "safety.localSchemaRequired": "관리자 연결 필요",
+    "safety.setupAdminConnection": "관리자 연결 설정",
+    "safety.adminConnectionName": "{name} · 관리자",
+    "safety.adminConnectionTitle": "관리자 연결",
+    "safety.adminConnectionScope": "이 기기에만 저장",
     "safety.accessSchema": "스키마 변경",
     "safety.accessSchemaHint":
       "CREATE, ALTER, DROP 등 DDL 제안을 허용합니다. 먼저 데이터 변경을 켜야 하며 모든 스키마 변경은 여전히 정확한 승인을 거칩니다.",

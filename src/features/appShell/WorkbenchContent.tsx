@@ -22,6 +22,7 @@ import QueryResultsPane from "../queryServices/QueryResultsPane";
 import type { QueryServiceStore } from "../queryServices/store";
 import type { QueryServiceSession } from "../queryServices/domain";
 import type { SqlResolveMode } from "../queries/resolveMode";
+import { localSchemaConnectionPreset } from "../connections/presets";
 import { effectiveSafetySettings } from "../safetySettings/policy";
 import type { SettingsSection } from "../settings/domain";
 import type { SqlDocument } from "../sqlDocuments/domain";
@@ -196,6 +197,9 @@ function WorkbenchContentResolved({ model, commands }: Props) {
       refreshSafety={commands.safety.refresh}
       onSafetySaved={commands.safety.accept}
       onConnectionUpdated={commands.connections.update}
+      onOpenAdminConnection={(source) => commands.connections.new(localSchemaConnectionPreset(
+        source, t("safety.adminConnectionName", { name: source.name }),
+      ))}
       updater={update.snapshot}
       onUpdateRefresh={commands.update.refresh}
       onUpdateInstall={commands.update.install}

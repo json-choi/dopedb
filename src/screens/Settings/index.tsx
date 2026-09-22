@@ -37,6 +37,7 @@ export default function Settings({
   onClose,
   onConnectionUpdated,
   onSafetySaved,
+  onOpenAdminConnection,
   refreshSafety,
   initialSection,
   updater,
@@ -47,6 +48,7 @@ export default function Settings({
   onClose: () => void;
   onConnectionUpdated: (connection: ConnectionProfile) => void;
   onSafetySaved: (connectionId: string, settings: SafetySettings) => void;
+  onOpenAdminConnection: (connection: ConnectionProfile) => void;
   // Re-loads the App's per-connection safety so Safety edits apply without reselecting.
   refreshSafety: () => void;
   initialSection?: SettingsSection;
@@ -360,6 +362,7 @@ export default function Settings({
                       connection={connection}
                       onConnectionUpdated={onConnectionUpdated}
                       onSaved={onSafetySaved}
+                      onOpenAdminConnection={() => onOpenAdminConnection(connection)}
                     />
                   ) : (
                     <div className="tw:text-muted-foreground">

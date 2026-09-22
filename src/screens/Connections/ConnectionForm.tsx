@@ -65,7 +65,9 @@ export function ConnectionForm(props: ConnectionEditorProps) {
           }}
         >
           <ModalHeader
-            title={t("connections.dataSourcesAndDrivers")}
+            title={props.preset?.source === "schemaAdmin"
+              ? `${t("safety.adminConnectionTitle")} · ${t("safety.adminConnectionScope")}`
+              : t("connections.dataSourcesAndDrivers")}
             titleId="connection-editor-title"
           />
 

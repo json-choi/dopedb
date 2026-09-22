@@ -351,3 +351,11 @@ HTML snapshot만 읽고 재조회 command는 인증된 Desktop에만 존재한�
 - `partial`: Workspace Web Access는 관리자에게 현재·향후 멤버의 팀 읽기 공유를 켜고 끄는 command를 제공한다. 기존 개별 제한·회수와 별도 쓰기 권한을 설명하며 정책으로 생성된 grant를 구분한다.
 - 실제 컴포넌트의 격리 로컬 fixture에서 저장 중 잠금, 서버 응답 후 상태 변경, 실패 시 기존 상태 보존, 일반 멤버의 관리 control 숨김을 확인했다.
 - 격리 D1 harness는 신규·재가입 멤버, 명시적 grant 보존, 회수 exclusion과 active lease가 남은 공유 해제 차단을 검증한다. 기존 운영 연결의 공유 활성화와 두 실제 멤버의 Desktop 연결 검수는 배포 후 남아 있다.
+
+### GCP 스키마 관리자 연결 전환
+
+- `partial`: 관리형 DDL이 없는 GCP PostgreSQL 관리자의 Safety 스키마 행에서
+  상태 배지와 관리자 연결 설정을 제공한다. 기존 개인 연결 편집기를 열고
+  대상만 미리 채우며 자격 증명/쓰기 동의/팀 grant는 복사하지 않는다.
+- 실제 Safety→연결 편집기 컴포넌트 fixture에서 한국어/영어, 390px 화면, 대상 사전 입력과 빈 자격 증명을 수동 확인했다. 빌드와 frontend smoke 43개가 통과했다.
+- 실제 관리자 자격 증명 입력과 packaged Desktop의 연결 성공은 별도 확인 대상이다.

@@ -1,5 +1,5 @@
 // Per-connection SafetySettings editor. Loads via get_safety, saves via set_safety.
-import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { SafetySettings } from "../../../ipc/types";
 import { errDetails, errMessage } from "../../../ipc/types";
@@ -14,6 +14,7 @@ import { SettingsGroup } from "../../../design-system/components/Settings";
 import { InlineNotice } from "../../../design-system/components/Status";
 import {
   canManageWorkspaceWritePolicy,
+  needsLocalSchemaConnection,
   effectiveSafetySettings,
   requestedSafetySettings,
   safetySchemaControlAvailable,
@@ -28,6 +29,7 @@ import type { ConnectionProfile } from "../../../features/connections/domain";
 import ManagedConnectionRecoveryNotice from "../../../features/connections/ManagedConnectionRecoveryNotice";
 import { setWorkspaceConnectionWritePolicy } from "../../../features/workspaces/tauriAdapter";
 import MonitoringAccess from "./MonitoringAccess";
+import AccessPermissions from "./AccessPermissions";
 import { setSafetySettings } from "../../../features/safetySettings/tauriAdapter";
 import {
   safetyQueryKeys,
@@ -71,10 +73,12 @@ export default function Safety({
   connection,
   onConnectionUpdated,
   onSaved,
+  onOpenAdminConnection,
 }: {
   connection: ConnectionProfile;
   onConnectionUpdated: (connection: ConnectionProfile) => void;
   onSaved: (connectionId: string, settings: SafetySettings) => void;
+  onOpenAdminConnection: () => void;
 }) {
   const { t } = useI18n();
   const connectionId = connection.id;
@@ -101,7 +105,7 @@ export default function Safety({
     () => safetySaveInFlight(connectionId),
     () => false,
   );
-  const accessPermissionsLabelId = useId();
+  const localSchemaRequired = needsLocalSchemaConnection(connection);
   const toast = useToast();
   const queryClient = useQueryClient();
   const safetyQuery = useQuery(safetySettingsQuery(connectionId));
@@ -319,52 +323,16 @@ export default function Safety({
       ) : null}
       <div className="tw:grid tw:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] tw:gap-4 tw:@max-[760px]:grid-cols-1">
         <SettingsGroup title={t("safety.guardrails")}>
-          <div className="tw:grid tw:gap-2 tw:pb-3">
-            <div className="tw:flex tw:items-center tw:gap-2">
-              <strong id={accessPermissionsLabelId} className="tw:text-sm">
-                {t("safety.accessLevel")}
-              </strong>
-              <InfoTip label={t("safety.accessLevelHint")} />
-            </div>
-            <div
-              role="group"
-              aria-labelledby={accessPermissionsLabelId}
-              className="tw:grid"
-            >
-              {accessPermissions.map((permission) => (
-                <div
-                  key={permission.key}
-                  className="tw:grid tw:min-h-control-lg tw:grid-cols-[minmax(0,1fr)_20px] tw:items-center tw:gap-2 tw:border-t tw:border-border-subtle tw:py-2 tw:first-of-type:border-t-0"
-                >
-                  <CheckboxField
-                    checked={permission.checked}
-                    disabled={permission.disabled}
-                    onChange={permission.onChange
-                      ? (event) => permission.onChange?.(event.target.checked)
-                      : undefined}
-                    label={<strong>{t(permission.label)}</strong>}
-                  />
-                  <InfoTip label={t(permission.hint)} />
-                </div>
-              ))}
-            </div>
-            <p className="tw:m-0 tw:text-sm tw:leading-body tw:text-muted-foreground">
-              {t(
-                memberLocalReadOnly
-                  ? "safety.memberLocalReadOnlyHint"
-                  : workspacePolicyEditable
-                    ? "safety.sharedWritesManagerHint"
-                    : workspaceManaged
-                      ? "safety.sharedWritesHint"
-                      : "safety.accessLevelHint",
-              )}
-            </p>
-            {schemaUnavailableHint ? (
-              <InlineNotice tone="warning" icon="info" role="status">
-                {t(schemaUnavailableHint)}
-              </InlineNotice>
-            ) : null}
-          </div>
+          <AccessPermissions
+            permissions={accessPermissions}
+            hint={memberLocalReadOnly ? "safety.memberLocalReadOnlyHint"
+              : workspacePolicyEditable ? "safety.sharedWritesManagerHint"
+              : workspaceManaged ? "safety.sharedWritesHint" : "safety.accessLevelHint"}
+            unavailableHint={schemaUnavailableHint}
+            localSchemaRequired={localSchemaRequired}
+            onOpenAdminConnection={onOpenAdminConnection}
+            busy={busy}
+          />
           {TOGGLES.map((item) => (
             <div
               key={item.key}
@@ -437,7 +405,7 @@ export default function Safety({
               ? null
             : hasUnsavedChanges
             ? t("safety.unsavedChanges")
-            : schemaUnavailableHint
+            : schemaUnavailableHint && !localSchemaRequired
               ? t(
                   effectiveAllowWrites
                     ? "safety.appliedWithSchemaUnavailable"

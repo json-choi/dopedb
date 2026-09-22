@@ -12,10 +12,13 @@ import {
 export type ConnectionLaunchPreset = {
   engine?: ConnectionEngine;
   provider?: ConnectionProvider;
-  source?: "standard";
-  /** Endpoint a local listener suggestion already proved reachable. */
+  source?: "standard" | "schemaAdmin";
+  /** Non-secret endpoint defaults; the editor still verifies the connection. */
   host?: string;
   port?: number;
+  database?: string;
+  name?: string;
+  sslmode?: string;
   /** Bind a newly saved connection into this exact Project boundary. */
   projectEnvironmentId?: string;
 };
@@ -49,15 +52,15 @@ export function blankConnection(
   const cloudflareD1 = engine === "sqlite" && provider === "cloudflareD1";
   return {
     id: connectionId(crypto.randomUUID()),
-    name: "",
+    name: preset?.name ?? "",
     engine,
     provider: bigquery ? "generic" : provider,
     driverId: cloudflareD1 ? "cloudflare-d1-wrangler" : null,
     host: preset?.host ?? (bigquery || cloudflareD1 ? "" : "localhost"),
     port: preset?.port ?? (cloudflareD1 ? 443 : CONNECTION_DEFAULT_PORTS[engine]),
-    database: "",
+    database: preset?.database ?? "",
     username: "",
-    sslmode: cloudflareD1 ? "require" : connectionDefaultSslMode(engine),
+    sslmode: preset?.sslmode ?? (cloudflareD1 ? "require" : connectionDefaultSslMode(engine)),
     extraParams: bigquery
       ? { maximumBytesBilled: "1073741824" }
       : {},
@@ -104,4 +107,21 @@ export function findDemoSqliteConnection(
     (connection) =>
       connection.engine === "sqlite" && connection.database === path,
   );
+}
+
+/** Start a separate personal connection; never clone managed credentials or grants. */
+export function localSchemaConnectionPreset(
+  connection: ConnectionProfile,
+  name: string,
+): ConnectionLaunchPreset {
+  return {
+    source: "schemaAdmin",
+    engine: connection.engine,
+    provider: "generic",
+    host: connection.host,
+    port: connection.port,
+    database: connection.database,
+    sslmode: connection.sslmode,
+    name,
+  };
 }

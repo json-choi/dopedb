@@ -233,3 +233,12 @@ export function effectiveSafetySettings(
       safetySchemaControlAvailable(connection),
   };
 }
+
+/** Managers can prepare personal DDL access without widening the shared grant. */
+export function needsLocalSchemaConnection(connection: ConnectionWriteAuthority): boolean {
+  return connection.credentialMode === "managed"
+    && connection.workspaceAccess === "manage"
+    && connection.provider === "gcpCloudSql"
+    && connection.engine === "postgres"
+    && connection.schemaAccessAvailable !== true;
+}

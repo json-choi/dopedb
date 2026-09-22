@@ -4,6 +4,7 @@ import {
   connectionId,
   type ConnectionProfile,
 } from "../connections/domain";
+import { blankConnection, localSchemaConnectionPreset } from "../connections/presets";
 import { persistConnectionSafety } from "../safetySettings/persistence";
 import {
   claimSafetySave,
@@ -14,6 +15,7 @@ import {
 } from "../safetySettings/saveCoordinator";
 import {
   canManageWorkspaceWritePolicy,
+  needsLocalSchemaConnection,
   effectiveSafetySettings,
   requestedSafetySettings,
   safetySchemaControlAvailable,
@@ -143,6 +145,29 @@ describe("SQL run guidance", () => {
       { ...managedWorkspaceManager, provider: "gcpCloudSql", schemaAccessAvailable: false },
       { kind: "blocked", message: "Managed schema access is not configured for this connection" },
     )).toBe("schemaUnavailable");
+    const managedSource: ConnectionProfile = {
+      ...blankConnection(), ...managedWorkspaceManager,
+      provider: "gcpCloudSql", schemaAccessAvailable: false,
+      host: "db.example.test", database: "app", name: "Team DB",
+      username: "managed-iam-user", secretRef: "managed-secret",
+      extraParams: { "dopedb.schemaOwner": "migration_owner", token: "must-not-copy" },
+      allowWrites: true,
+    };
+    expect(needsLocalSchemaConnection(managedSource)).toBe(true);
+    expect(needsLocalSchemaConnection({ ...managedSource, workspaceAccess: "read" })).toBe(false);
+    expect(needsLocalSchemaConnection({ ...managedSource, schemaAccessAvailable: true })).toBe(false);
+    expect(needsLocalSchemaConnection({ ...managedSource, credentialMode: "memberLocal" })).toBe(false);
+    const localDraft = blankConnection(localSchemaConnectionPreset(managedSource, "Team DB · Admin"));
+    expect(localDraft).toMatchObject({
+      name: "Team DB · Admin", host: "db.example.test", database: "app",
+      provider: "generic", credentialMode: "local", workspaceAccess: "local",
+      username: "", secretRef: null, providerTarget: null, extraParams: {},
+      allowWrites: false, readonlyDefault: true,
+    });
+    expect(localDraft.id).not.toBe(managedSource.id);
+    expect(localDraft.schemaAccessAvailable).toBeUndefined();
+    expect(managedSource.secretRef).toBe("managed-secret");
+    expect(requestedSafetySettings(managedSource, { ...safety, allowWrites: true, allowSchemaChanges: true }).allowSchemaChanges).toBe(false);
     expect(canManageWorkspaceWritePolicy(managedWorkspaceManager)).toBe(true);
     expect(safetyWriteControlAvailable(managedWorkspaceManager)).toBe(true);
     expect(safetySchemaControlAvailable(managedWorkspaceManager)).toBe(true);
