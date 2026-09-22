@@ -56,6 +56,9 @@ if [[ -n "$(git status --porcelain=v1 --untracked-files=all)" ]]; then
 fi
 
 node scripts/release/verify-release-version.mjs "$version"
+# Version bumps also change the packaged skill manifest and release mapping.
+# Reject stale generated resources before publishing an immutable release tag.
+node scripts/generate-skill-bundle.mjs --check
 pnpm check:agent-runtime:published
 git fetch origin main --tags
 

@@ -1,7 +1,7 @@
 {
   "name": "dopedb",
   "private": true,
-  "version": "0.4.48",
+  "version": "0.4.49",
   "type": "module",
   "packageManager": "pnpm@11.25.0",
   "scripts": {
