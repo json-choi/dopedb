@@ -24,7 +24,8 @@ export function useLocalListenerDiscovery(): LocalListenerDiscovery {
   const [started, setStarted] = useState(false);
   const query = useQuery({
     ...localDatabaseListenersQuery(),
-    enabled: started,
+    // Only run() may probe loopback; cache invalidation and reconnects may not.
+    enabled: false,
   });
 
   let status: LocalListenerDiscoveryStatus = "idle";
@@ -36,7 +37,11 @@ export function useLocalListenerDiscovery(): LocalListenerDiscovery {
 
   return {
     status,
-    listeners: query.data ?? [],
-    run: () => setStarted(true),
+    listeners: started ? query.data ?? [] : [],
+    run: () => {
+      if (started) return;
+      setStarted(true);
+      void query.refetch({ cancelRefetch: false });
+    },
   };
 }

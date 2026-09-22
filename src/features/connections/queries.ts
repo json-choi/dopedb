@@ -78,13 +78,14 @@ export function connectionsQuery(scopeKey: string) {
 
 /**
  * Loopback listener suggestions for the first connection. The probe is cheap
- * but touches the machine, so it runs only when a caller enables it and the
- * answer stays fresh for the rest of the first-run session.
+ * but touches the machine, so the disabled observer runs only through an
+ * explicit refetch. Loopback discovery also works while the network is offline.
  */
 export function localDatabaseListenersQuery() {
   return queryOptions({
     queryKey: connectionQueryKeys.localListeners(),
     queryFn: discoverLocalDatabaseListeners,
+    networkMode: "always",
     staleTime: 60_000,
     retry: false,
   });
