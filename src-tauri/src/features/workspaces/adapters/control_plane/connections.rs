@@ -489,6 +489,7 @@ pub(super) async fn issue_managed_connection_lease(
         password: secret,
         sslmode,
         tls_server_ca_pem,
+        schema_owner,
         connector,
         ..
     } = lease;
@@ -500,6 +501,12 @@ pub(super) async fn issue_managed_connection_lease(
     leased_profile.username = username;
     leased_profile.sslmode = sslmode;
     leased_profile.extra_params.clear();
+    if requested_access == ManagedAccessMode::Schema && provider == Provider::GcpCloudSql {
+        leased_profile.extra_params.insert(
+            "dopedb.schemaOwner".into(),
+            schema_owner.unwrap_or_default(),
+        );
+    }
     if let Some(ca) = tls_server_ca_pem {
         leased_profile
             .extra_params

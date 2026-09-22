@@ -14,7 +14,7 @@ use zeroize::Zeroizing;
 pub const CONTROL_PLANE_CONTRACTS_SCHEMA_VERSION: u32 = 1;
 /// Desktop and Workspace Cloud must agree on this header before a managed
 /// credential can cross the HTTPS boundary.
-pub const MANAGED_LEASE_CONTRACT_VERSION: &str = "access-v5";
+pub const MANAGED_LEASE_CONTRACT_VERSION: &str = "access-v6";
 const JAVASCRIPT_MAX_SAFE_INTEGER: i64 = 9_007_199_254_740_991;
 
 /// Workspace sync cursors cross a JavaScript number boundary in Cloud and must
@@ -83,6 +83,8 @@ pub struct ManagedLeasePayload {
     pub tls_server_ca_pem: Option<String>,
     #[serde(default, deserialize_with = "deserialize_optional_non_null")]
     pub connector: Option<ManagedConnectorPayload>,
+    #[serde(default, deserialize_with = "deserialize_optional_non_null")]
+    pub schema_owner: Option<String>,
     pub access_mode: ManagedAccessMode,
     pub expires_at: String,
 }
@@ -146,8 +148,30 @@ impl ManagedLeasePayload {
             && (self.access_mode != ManagedAccessMode::Schema
                 || (matches!(self.provider.as_str(), "neon" | "gcpCloudSql")
                     && self.engine == "postgres"))
+            && self.schema_owner.as_ref().is_none_or(|owner| {
+                is_gcp
+                    && self.engine == "postgres"
+                    && self.access_mode == ManagedAccessMode::Schema
+                    && valid_schema_owner(owner)
+            })
             && valid_rfc3339_instant(&self.expires_at)
     }
+}
+
+fn valid_schema_owner(owner: &str) -> bool {
+    let lower = owner.to_ascii_lowercase();
+    !owner.is_empty()
+        && owner.len() <= 63
+        && owner
+            .bytes()
+            .next()
+            .is_some_and(|c| c.is_ascii_alphabetic() || c == b'_')
+        && owner
+            .bytes()
+            .all(|c| c.is_ascii_alphanumeric() || b"_.@-".contains(&c))
+        && !lower.starts_with("pg_")
+        && !lower.starts_with("cloudsql")
+        && lower != "postgres"
 }
 
 fn deserialize_optional_non_null<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>

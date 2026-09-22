@@ -107,6 +107,7 @@ export const GCP_SETUP_ROLE_REQUIREMENTS = [
 ] as const;
 
 export type GcpCloudBootstrapInput = {
+  schemaAuthority?: { database: string; owner: string };
   workspaceId: string;
   projectId: string;
   projectNumber: string;

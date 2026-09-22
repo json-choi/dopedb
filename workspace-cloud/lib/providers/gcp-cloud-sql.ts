@@ -570,6 +570,10 @@ export async function issueGcpCloudSqlLease(input: {
       input.accessMode === "schema" ? 403 : 409,
     );
   }
+  if (input.accessMode === "schema" && input.credential.schemaAuthority
+    && input.resource.database !== input.credential.schemaAuthority.database) {
+    throw new ProviderRequestError("gcpCloudSql", "Schema authority belongs to another database", 403);
+  }
   const leaseSeconds = input.accessMode === "schema"
     ? GCP_SCHEMA_LEASE_SECONDS
     : GCP_LEASE_SECONDS;
@@ -664,6 +668,8 @@ export async function issueGcpCloudSqlLease(input: {
     database: input.resource.database,
     username: gcpDatabaseUsername(serviceAccountEmail, input.resource.engine),
     password: loginToken.accessToken,
+    ...(input.accessMode === "schema" && input.credential.schemaAuthority
+      ? { schemaOwner: input.credential.schemaAuthority.owner } : {}),
     sslmode: target.sslmode,
     connector: {
       kind: "gcpCloudSqlAuthProxy",

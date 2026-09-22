@@ -32,9 +32,12 @@ import {
 import { ProviderRequestError } from "../../../../../../../../lib/providers/provider-types";
 import {
   gcpCloudSqlTargetFingerprint,
+  parseGcpSchemaAuthority,
+  parseGcpCloudSqlCredential,
 } from "../../../../../../../../lib/providers/gcp-cloud-sql-core";
 import {
   openProviderSetupCredential,
+  openProviderCredential,
   sealProviderBootstrapTicket,
 } from "../../../../../../../../lib/secret-envelope";
 import {
@@ -263,6 +266,12 @@ export async function POST(request: Request, context: RouteContext) {
   ) {
     return jsonError("Invalid Google Cloud setup request", 400);
   }
+  let schemaAuthority;
+  try { schemaAuthority = parseGcpSchemaAuthority(body.schemaAuthority); }
+  catch { return jsonError("Specify the exact database and existing migration owner for schema access", 400); }
+  if (schemaAuthority && body.approveSchemaDelegation !== true) {
+    return jsonError("Schema delegation requires explicit administrator approval", 400);
+  }
   const repairIntegrationId = body.repairIntegrationId === undefined
     ? null
     : typeof body.repairIntegrationId === "string"
@@ -319,6 +328,16 @@ export async function POST(request: Request, context: RouteContext) {
         instanceId: body.instanceId,
       });
     if (targetIntegrationId) {
+      if (!schemaAuthority) {
+        const [existing] = await db.select({ encryptedCredential: workspaceProviderIntegration.encryptedCredential })
+          .from(workspaceProviderIntegration).where(and(
+            eq(workspaceProviderIntegration.id, targetIntegrationId),
+            eq(workspaceProviderIntegration.organizationId, workspaceId),
+          ));
+        if (existing) schemaAuthority = parseGcpCloudSqlCredential(
+          openProviderCredential(targetIntegrationId, existing.encryptedCredential),
+        ).schemaAuthority;
+      }
       const activeLeaseWindow = await activeIntegrationLeaseRevocationWindow({
         organizationId: workspaceId,
         integrationId: targetIntegrationId,
@@ -367,6 +386,7 @@ export async function POST(request: Request, context: RouteContext) {
         // workspace role/grant/connection policy still defaults every import to
         // read-only and decides whether the write principal can ever be leased.
         writeAccess: true,
+        ...(schemaAuthority ? { schemaAuthority } : {}),
         approveProduction: body.approveProduction,
         approveIamAuthenticationChange: body.approveIamAuthenticationChange,
       },

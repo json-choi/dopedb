@@ -41,6 +41,9 @@ export function useProviderAccountAccess(
     gcpIamAuthenticationChangeApproved,
     gcpPermissionCheck,
     gcpIamRoleGrantApproved,
+    gcpSchemaDatabase,
+    gcpSchemaOwner,
+    gcpSchemaApproved,
     gcpSetupError,
     gcpSetupReconnectRequired,
     loading,
@@ -57,6 +60,9 @@ export function useProviderAccountAccess(
     "gcpIamAuthenticationChangeApproved",
   );
   const setGcpIamRoleGrantApproved = setField("gcpIamRoleGrantApproved");
+  const setGcpSchemaDatabase = setField("gcpSchemaDatabase");
+  const setGcpSchemaOwner = setField("gcpSchemaOwner");
+  const setGcpSchemaApproved = setField("gcpSchemaApproved");
   const setLoading = setField("loading");
   const setMutation = setField("mutation");
   const setError = setField("error");
@@ -189,6 +195,9 @@ export function useProviderAccountAccess(
     gcpIamAuthenticationChangeApproved,
     gcpPermissionCheck,
     gcpIamRoleGrantApproved,
+    gcpSchemaDatabase,
+    gcpSchemaOwner,
+    gcpSchemaApproved,
     gcpSetupError,
     gcpSetupReconnectRequired,
     loading,
@@ -204,6 +213,9 @@ export function useProviderAccountAccess(
     selectGcpProject,
     setGcpEnvironmentClassification,
     setGcpIamRoleGrantApproved,
+    setGcpSchemaDatabase,
+    setGcpSchemaOwner,
+    setGcpSchemaApproved,
     setGcpProductionApproved,
     setGcpIamAuthenticationChangeApproved,
     setNeonConfiguration,

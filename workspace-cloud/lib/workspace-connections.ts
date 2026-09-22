@@ -61,18 +61,20 @@ export function providerResourceSupportsSchema(input: {
   engine: string;
   capabilityManifest: unknown;
   grantedScope?: string | null;
+  database?: string;
 }): boolean {
   return (input.provider === "neon" || input.provider === "gcpCloudSql")
     && input.engine === "postgres"
     && providerResourceSupportsWrite(input.capabilityManifest)
-    && !providerSchemaSetupRequired(input.provider, input.grantedScope ?? null);
+    && !providerSchemaSetupRequired(input.provider, input.grantedScope ?? null, input.database);
 }
 
 /** Cloud SQL schema access needs its own verified service account. The stored
  * scopes are emitted only after provider setup validates those identities. */
-export function providerSchemaSetupRequired(provider: string, grantedScope: string | null): boolean {
+export function providerSchemaSetupRequired(provider: string, grantedScope: string | null, database?: string): boolean {
   return provider === "gcpCloudSql"
-    && !grantedScope?.split(/\s+/).includes("cloudsql.schema");
+    && !grantedScope?.split(/\s+/).some((scope) => scope === "cloudsql.schema"
+      || (database !== undefined && scope === `cloudsql.schema:${encodeURIComponent(database)}`));
 }
 
 const neonBranchStates = ["init", "resetting", "ready", "archived", "unknown"] as const;

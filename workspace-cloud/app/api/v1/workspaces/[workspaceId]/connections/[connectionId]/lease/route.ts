@@ -92,7 +92,7 @@ export async function POST(request: Request, context: RouteContext) {
   const managedLeaseContract = request.headers.get(
     "x-dopedb-managed-lease-contract",
   );
-  if (managedLeaseContract !== MANAGED_LEASE_CONTRACT_VERSION) {
+  if (managedLeaseContract !== MANAGED_LEASE_CONTRACT_VERSION && managedLeaseContract !== "access-v5") {
     return jsonError(
       "Update DopeDB to use managed database access safely",
       426,
@@ -228,8 +228,12 @@ export async function POST(request: Request, context: RouteContext) {
   )) {
     return jsonError("Managed schema access requires connection manage permission", 403);
   }
+  if (requestedAccessMode === "schema" && managedLeaseContract !== MANAGED_LEASE_CONTRACT_VERSION
+    && integration.grantedScope?.split(/\s+/).some((scope) => scope.startsWith("cloudsql.schema:"))) {
+    return jsonError("Update DopeDB to use delegated schema access safely", 426);
+  }
   if (requestedAccessMode === "schema" && providerSchemaSetupRequired(
-    integration.provider, integration.grantedScope ?? null,
+    integration.provider, integration.grantedScope ?? null, resource.database,
   )) {
     return jsonError(
       "Managed schema access requires a separately verified schema credential. Reconnecting only restores data access",
@@ -242,6 +246,7 @@ export async function POST(request: Request, context: RouteContext) {
       engine: resource.engine,
       capabilityManifest: canonicalResource.capabilityManifest,
       grantedScope: integration.grantedScope,
+      database: resource.database,
     })
   )) {
     return jsonError(
@@ -367,6 +372,7 @@ export async function POST(request: Request, context: RouteContext) {
           ? { tlsServerCaPem: lease.tlsServerCaPem }
           : {}),
         ...(lease.connector ? { connector: lease.connector } : {}),
+        ...(lease.schemaOwner ? { schemaOwner: lease.schemaOwner } : {}),
         accessMode,
         expiresAt: lease.expiresAt,
       },

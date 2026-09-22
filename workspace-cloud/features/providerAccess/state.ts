@@ -46,6 +46,9 @@ export type ProviderAccessState = {
   gcpIamAuthenticationChangeApproved: boolean;
   gcpPermissionCheck: GcpSetupPermissionCheck | null;
   gcpIamRoleGrantApproved: boolean;
+  gcpSchemaDatabase: string;
+  gcpSchemaOwner: string;
+  gcpSchemaApproved: boolean;
   gcpSetupError: string;
   gcpSetupReconnectRequired: boolean;
   loading: boolean;
@@ -91,6 +94,9 @@ export const initialProviderAccessState: ProviderAccessState = {
   gcpIamAuthenticationChangeApproved: false,
   gcpPermissionCheck: null,
   gcpIamRoleGrantApproved: false,
+  gcpSchemaDatabase: "",
+  gcpSchemaOwner: "",
+  gcpSchemaApproved: false,
   gcpSetupError: "",
   gcpSetupReconnectRequired: false,
   loading: true,

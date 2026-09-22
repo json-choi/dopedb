@@ -1,10 +1,12 @@
 // Explicit Google setup provisions the approved target, verifies runtime access,
-// creates data-only accounts without rewriting existing users or database ACLs.
+// creates dedicated accounts without rewriting existing users or database ACLs.
 import "server-only";
+import { createHash } from "node:crypto";
 
 import {
   gcpCloudSqlEngine,
   parseGcpCloudSqlCredential,
+  parseGcpSchemaAuthority,
   type GcpCloudSqlCredential,
 } from "./gcp-cloud-sql-core";
 import { listGcpOAuthInstances, type GcpSetupCredential } from "./gcp-cloud-oauth";
@@ -135,6 +137,11 @@ export async function bootstrapGcpCloudSql(input: {
   const expectedVersion = String(initialDetails.databaseVersion);
   const readRoles = gcpConnectionDatabaseRoles(expectedVersion, false);
   const writeRoles = gcpConnectionDatabaseRoles(expectedVersion, true);
+  const schemaAuthority = parseGcpSchemaAuthority(configuration.schemaAuthority);
+  const configuredDatabases = await databaseNames(credential, configuration.projectId, configuration.instanceId);
+  if (schemaAuthority && (selected.engine !== "postgres" || !configuredDatabases.includes(schemaAuthority.database))) {
+    throw new ProviderRequestError("gcpCloudSql", "Schema access requires an existing PostgreSQL database", 400);
+  }
   let selectedProduction = selected.production;
   if (selectedProduction === "unknown" && !configuration.environmentClassification) {
     throw new ProviderRequestError(
@@ -192,9 +199,15 @@ export async function bootstrapGcpCloudSql(input: {
         `DopeDB write · ${configuration.instanceId}`.slice(0, 100),
       )
     : null;
-  // Connecting grants data access only. Schema ownership must never be acquired
-  // by changing an existing application or shared ACL during setup/repair.
-  const schemaEmail = null;
+  // Only explicit schema setup delegates an existing owner to a new principal.
+  // Existing application memberships, owners and shared ACLs remain untouched.
+  const schemaFingerprint = schemaAuthority ? createHash("sha256")
+    .update(JSON.stringify(["schema-delegation:v1", fingerprint, schemaAuthority])).digest("hex").slice(0, 14) : null;
+  const schemaEmail = schemaFingerprint ? await ensureServiceAccount(
+    credential, configuration.projectId, serviceAccountId("schema", schemaFingerprint),
+    `dopedb-managed:schema:v1:${schemaFingerprint}:${configuration.instanceId}`,
+    `DopeDB schema · ${configuration.instanceId}`.slice(0, 100),
+  ) : null;
   const principal = `principal://iam.googleapis.com/projects/${
     configuration.projectNumber
   }/locations/global/workloadIdentityPools/${POOL_ID}/subject/${
@@ -216,6 +229,9 @@ export async function bootstrapGcpCloudSql(input: {
       ),
     ] : []),
   ]);
+  if (schemaEmail) await grantWorkloadIdentity(
+    credential, configuration.projectId, schemaEmail, principal, readEmail,
+  );
   await grantCloudSqlRoles(
     credential,
     configuration,
@@ -256,10 +272,9 @@ export async function bootstrapGcpCloudSql(input: {
       writeEmail, engine, writeRoles,
     );
   }
-  const configuredDatabases = await databaseNames(
-    credential,
-    configuration.projectId,
-    configuration.instanceId,
+  if (schemaEmail && schemaAuthority) await ensureDatabaseUser(
+    credential, configuration.projectId, configuration.instanceId,
+    schemaEmail, engine, [schemaAuthority.owner],
   );
   const durableConfiguration = parseGcpCloudSqlCredential({
     projectId: configuration.projectId,
@@ -270,6 +285,7 @@ export async function bootstrapGcpCloudSql(input: {
     readServiceAccountEmail: readEmail,
     writeServiceAccountEmail: writeEmail,
     schemaServiceAccountEmail: schemaEmail,
+    ...(schemaAuthority ? { schemaAuthority } : {}),
     workloadIdentitySubject: identity.subject,
     databaseNames: configuredDatabases,
     dedicatedServiceAccountsConfirmed: true,

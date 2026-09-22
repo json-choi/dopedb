@@ -4,6 +4,7 @@
 //! credentials are short-lived process-memory leases. The CLI sees connection ids only.
 
 mod cloud_sql_proxy;
+mod gcp_schema_policy;
 pub mod keychain;
 pub mod pool;
 mod provider_local;

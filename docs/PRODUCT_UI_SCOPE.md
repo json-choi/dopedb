@@ -307,8 +307,11 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
   않는다. PostgreSQL 14 이상은 새 전용 데이터 계정 생성 시 predefined data role만
   부여하고 기존 계정은 변경 없이 검증한다. 과거 신뢰 정책의 principal은 보존하고
   정책 세대가 분리된 새 계정을 사용한다. 일반 연결·복구는 schema principal을
-  자동 구성하지 않으며, 기존에 별도 검증된 schema credential의 엄격한 런타임
-  검증은 유지한다. 안전한 자동 구성이 없는 이전 PostgreSQL/MySQL은 변경 전에
+  자동 구성하지 않는다. 관리자가 별도로 DB와 기존 마이그레이션 owner 역할을
+  지정한 스키마 설정은 새 전용 IAM 로그인에 그 역할만 위임한다. Desktop은
+  승인된 owner로 실행하여 기존 객체 소유권과 새 객체의 기본 권한을 보존하며,
+  모든 물리 접속에서 owner·멤버십·public 범위·권한 정책을 검증한다. 정책이 맞지
+  않으면 기존 권한을 고치지 않고 구체적 진단으로 중단한다. 안전한 자동 구성이 없는 이전 PostgreSQL/MySQL은 변경 전에
   중단하고 member-local 연결을 안내한다. 상세 경계는
   [`GCP_SCHEMA_ACCESS_SAFETY.md`](GCP_SCHEMA_ACCESS_SAFETY.md)를 따른다.
 - Neon 역시 연결 과정에서 PUBLIC·기본 권한·기존 객체 소유권을 바꾸지 않는다.

@@ -116,6 +116,7 @@ import desktopSharedConnectionSource from "../../../src-tauri/src/features/works
 import desktopControlPlaneSource from "../../../src-tauri/src/features/workspaces/adapters/control_plane.rs?raw";
 import hostedControlPlaneSource from "../../../src-tauri/src/hosted_control_plane.rs?raw";
 import desktopRuntimePolicySource from "../../../src-tauri/src/connection/runtime_policy.rs?raw";
+import desktopSchemaPolicySource from "../../../src-tauri/src/connection/gcp_schema_policy.rs?raw";
 import {
   neonBranchQueryable,
   parseNeonBranchInventory,
@@ -460,7 +461,7 @@ describe("provider credential Tauri adapter", () => {
   it("preserves existing Cloud SQL users and retains the active lease preflight", () => {
     expect(gcpBootstrapDatabaseSource).not.toMatch(/method: "(PUT|DELETE)"|revokeExistingRoles|cloudsqlsuperuser/);
     expect(gcpBootstrapApplicationSource).not.toContain("configureDatabasePrivileges");
-    expect(gcpBootstrapApplicationSource).toContain("const schemaEmail = null");
+
     expect(gcpConnectionDatabaseRoles("POSTGRES_17", false)).toEqual(["pg_read_all_data"]);
     expect(gcpConnectionDatabaseRoles("POSTGRES_17", true)).toEqual(["pg_read_all_data", "pg_write_all_data"]);
     const original = { type: "CLOUD_IAM_SERVICE_ACCOUNT", databaseRoles: ["application_role"] };
@@ -1116,7 +1117,7 @@ describe("provider credential Tauri adapter", () => {
     expect(gcpBootstrapSource).toContain("roles/iam.workloadIdentityUser");
     expect(gcpBootstrapSource).not.toContain("configureDatabasePrivileges");
     expect(gcpBootstrapSource).toContain("pg_write_all_data");
-    expect(gcpBootstrapApplicationSource).toContain("const schemaEmail = null");
+
     expect(gcpBootstrapIamSource).not.toContain("grantSchemaPolicyInspection");
     expect(gcpBootstrapIamSource).toContain("createdAccounts.get(credential)?.delete");
     expect(gcpBootstrapIamSource).toContain("expected.members.filter");
@@ -1133,8 +1134,8 @@ describe("provider credential Tauri adapter", () => {
     expect(workspaceConnectionsSource).toContain(
       'input.provider === "neon" || input.provider === "gcpCloudSql"',
     );
-    expect(desktopRuntimePolicySource).toContain(
-      "GCP Cloud SQL schema credential exceeded its approved PostgreSQL policy",
+    expect(desktopSchemaPolicySource).toContain(
+      "GCP schema authority check failed",
     );
     expect(workspaceBaselineSource).toContain("'read', 'write', 'schema'");
     expect(gcpConnectionPolicySource).not.toContain("cloudsqlsuperuser TO");
@@ -1156,6 +1157,16 @@ describe("provider credential Tauri adapter", () => {
       dedicatedServiceAccountsConfirmed: true,
       instanceScopedIamConfirmed: true,
     });
+    const delegated = { ...schemaCredential, schemaAuthority: { database: "app", owner: "migration_owner" } };
+    expect(parseGcpCloudSqlCredential(delegated).schemaAuthority).toEqual(delegated.schemaAuthority);
+    for (const authority of [null, { database: "other", owner: "migration_owner" },
+      { database: "app", owner: "postgres" }, { database: "app", owner: "pg_read_all_data" },
+      { database: "app", owner: "owner;RESET ROLE" }, { database: "app", owner: "migration_owner", extra: true }]) {
+      expect(() => parseGcpCloudSqlCredential({ ...schemaCredential, schemaAuthority: authority })).toThrow();
+    }
+    expect(() => parseGcpCloudSqlCredential({ ...delegated, schemaServiceAccountEmail: null })).toThrow();
+    expect((await gcpCloudSqlIntegrationIdentity(delegated)).externalAccountId)
+      .not.toEqual((await gcpCloudSqlIntegrationIdentity(schemaCredential)).externalAccountId);
     expect(gcpCloudSqlPrincipalClaims(
       await gcpCloudSqlIntegrationIdentity(schemaCredential),
     ).map((claim) => claim.accessKind)).toEqual(["read", "write", "schema"]);
@@ -1168,14 +1179,14 @@ describe("provider credential Tauri adapter", () => {
       workloadIdentitySubject: null,
     });
     expect(gcpCloudSqlSource).not.toContain("gcpSchemaDatabaseExecutor");
-    expect(desktopRuntimePolicySource).toContain("exact_schema_owner");
+    expect(desktopSchemaPolicySource).toContain("exact_schema_owner");
     expect(desktopRuntimePolicySource).toContain("sql.rw()?");
     expect(desktopRuntimePolicySource).not.toContain("safe_policy_admin");
     expect(desktopRuntimePolicySource).not.toContain("dopedb_a_");
-    expect(desktopRuntimePolicySource).toContain("cloudsqliamserviceaccount");
-    expect(desktopRuntimePolicySource).toContain("membership.roleid = lease.oid");
-    expect(desktopRuntimePolicySource).toContain("safe_system_role");
-    expect(desktopRuntimePolicySource).toContain("no_public_managed_routine");
+    expect(desktopSchemaPolicySource).toContain("cloudsqliamserviceaccount");
+    expect(desktopSchemaPolicySource).toContain("m.roleid = lease.oid");
+    expect(desktopSchemaPolicySource).toContain("safe_system_role");
+    expect(desktopSchemaPolicySource).toContain("no_public_managed_routine");
     expect(gcpBootstrapSource).toContain("roles/serviceusage.serviceUsageConsumer");
     expect(gcpBootstrapSource).toContain("reconnect will not change existing users or permissions");
     expect(gcpCloudSqlHttpSource).toContain("logGcpManagedAccessUpstreamRejection");

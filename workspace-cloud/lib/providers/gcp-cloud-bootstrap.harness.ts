@@ -334,6 +334,27 @@ async function assertConnectionPreservesExistingPrincipals() {
     await bootstrapGcpCloudSql({ credential: setup, oidcToken, configuration: config });
     expect(JSON.stringify(users)).toBe(before);
     expect(writes).toEqual([]);
+    const schemaAuthority = { database: "workspace", owner: "migration_owner" };
+    const schemaResult = await bootstrapGcpCloudSql({ credential: setup, oidcToken,
+      configuration: { ...config, schemaAuthority } });
+    expect(schemaResult.configuration.schemaAuthority).toEqual(schemaAuthority);
+    expect(schemaResult.configuration.schemaServiceAccountEmail).toMatch(/^dopedb-s-/);
+    expect(users.slice(0, 4)).toEqual(JSON.parse(before));
+    expect(users[4].databaseRoles).toEqual(["migration_owner"]);
+    const schemaBaseline = JSON.stringify(users);
+    writes.length = 0;
+    await bootstrapGcpCloudSql({ credential: setup, oidcToken, configuration: { ...config, schemaAuthority } });
+    expect(writes).toEqual([]);
+    expect(JSON.stringify(users)).toBe(schemaBaseline);
+    await expect(bootstrapGcpCloudSql({ credential: setup, oidcToken,
+      configuration: { ...config, schemaAuthority: { ...schemaAuthority, database: "missing" } },
+    })).rejects.toThrow("existing PostgreSQL database");
+    expect(writes).toEqual([]);
+    users[4].databaseRoles = ["different_owner"];
+    await expect(bootstrapGcpCloudSql({ credential: setup, oidcToken, configuration: { ...config, schemaAuthority } }))
+      .rejects.toThrow("Existing roles were preserved");
+    expect(writes).toEqual([]);
+    expect(users.slice(0, 4)).toEqual(JSON.parse(before));
   } finally { oidc.mockRestore(); }
 }
 

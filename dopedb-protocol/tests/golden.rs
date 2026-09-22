@@ -545,6 +545,35 @@ fn public_protocol_goldens_match_pinned_agent_and_control_plane_contracts() {
     let gcp_schema: ManagedLeaseResponse =
         serde_json::from_value(gcp_schema).expect("GCP schema access mode must decode");
     assert!(gcp_schema.validate());
+    let mut delegated = contracts.managed_lease.response.clone();
+    delegated["lease"]["accessMode"] = json!("schema");
+    delegated["lease"]["schemaOwner"] = json!("migration_owner");
+    assert!(
+        serde_json::from_value::<ManagedLeaseResponse>(delegated.clone())
+            .unwrap()
+            .validate()
+    );
+    for owner in [
+        "postgres",
+        "pg_read_all_data",
+        "cloudsqlsuperuser",
+        "owner;RESET ROLE",
+        &"x".repeat(64),
+    ] {
+        delegated["lease"]["schemaOwner"] = json!(owner);
+        assert!(
+            !serde_json::from_value::<ManagedLeaseResponse>(delegated.clone())
+                .unwrap()
+                .validate()
+        );
+    }
+    delegated["lease"]["schemaOwner"] = Value::Null;
+    assert!(serde_json::from_value::<ManagedLeaseResponse>(delegated.clone()).is_err());
+    delegated["lease"]["schemaOwner"] = json!("migration_owner");
+    delegated["lease"]["accessMode"] = json!("read");
+    assert!(!serde_json::from_value::<ManagedLeaseResponse>(delegated)
+        .unwrap()
+        .validate());
     let mut invalid_schema_provider = contracts.managed_lease.response.clone();
     invalid_schema_provider["lease"]["provider"] = json!("planetScale");
     invalid_schema_provider["lease"]["accessMode"] = json!("schema");

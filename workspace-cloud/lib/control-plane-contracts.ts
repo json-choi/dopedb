@@ -3,7 +3,7 @@
 // by Rust so independently deployed clients cannot drift silently.
 
 export const CONTROL_PLANE_CONTRACTS_SCHEMA_VERSION = 1 as const;
-export const MANAGED_LEASE_CONTRACT_VERSION = "access-v5" as const;
+export const MANAGED_LEASE_CONTRACT_VERSION = "access-v6" as const;
 
 export type ManagedAccessMode = "read" | "write" | "schema";
 
@@ -44,6 +44,7 @@ export type ManagedLease = Readonly<{
   password: string;
   sslmode: "verify-ca" | "verify-full";
   tlsServerCaPem?: string;
+  schemaOwner?: string;
   connector?: ManagedLeaseConnector;
   accessMode: ManagedAccessMode;
   expiresAt: string;
@@ -231,7 +232,7 @@ export function managedLeaseResponse(value: unknown): ManagedLeaseResponse {
     "sslmode",
     "accessMode",
     "expiresAt",
-  ], ["tlsServerCaPem", "connector"]);
+  ], ["tlsServerCaPem", "connector", "schemaOwner"]);
   if (!envelope || !lease) throw new Error("Invalid managed lease response contract");
   const connector = managedLeaseConnector(lease.connector);
   if (
@@ -264,6 +265,11 @@ export function managedLeaseResponse(value: unknown): ManagedLeaseResponse {
       (lease.provider !== "neon" && lease.provider !== "gcpCloudSql")
       || lease.engine !== "postgres"
     ))
+    || (lease.schemaOwner !== undefined && (lease.provider !== "gcpCloudSql"
+      || lease.accessMode !== "schema" || lease.engine !== "postgres"
+      || typeof lease.schemaOwner !== "string"
+      || !/^[A-Za-z_][A-Za-z0-9_.@-]{0,62}$/.test(lease.schemaOwner)
+      || /^(pg_|cloudsql|postgres$)/i.test(lease.schemaOwner)))
     || !validRfc3339Instant(lease.expiresAt)
     || (lease.provider === "gcpCloudSql") !== Boolean(connector)
     || (lease.provider === "gcpCloudSql" && lease.tlsServerCaPem !== undefined)
@@ -289,6 +295,7 @@ export function managedLeaseResponse(value: unknown): ManagedLeaseResponse {
         ? { tlsServerCaPem: lease.tlsServerCaPem }
         : {}),
       ...(connector ? { connector } : {}),
+      ...(typeof lease.schemaOwner === "string" ? { schemaOwner: lease.schemaOwner } : {}),
       accessMode: lease.accessMode,
       expiresAt: lease.expiresAt,
     },

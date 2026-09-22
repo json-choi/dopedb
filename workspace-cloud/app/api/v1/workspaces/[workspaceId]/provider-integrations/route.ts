@@ -361,7 +361,8 @@ export async function POST(request: Request, context: RouteContext) {
       grantedScope = [
         "cloudsql.read",
         ...(credential.writeServiceAccountEmail ? ["cloudsql.write"] : []),
-        ...(credential.schemaServiceAccountEmail ? ["cloudsql.schema"] : []),
+        ...(credential.schemaServiceAccountEmail ? [credential.schemaAuthority
+          ? `cloudsql.schema:${encodeURIComponent(credential.schemaAuthority.database)}` : "cloudsql.schema"] : []),
       ].join(" ");
     } else {
       credential = parseVaultCredential(body.configuration);

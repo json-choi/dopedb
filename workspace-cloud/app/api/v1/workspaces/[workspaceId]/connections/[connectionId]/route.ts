@@ -135,6 +135,7 @@ export async function POST(request: Request, context: RouteContext) {
   if (body.action === "schema" && providerSchemaSetupRequired(
     connection.integrationProvider ?? "",
     connection.integrationGrantedScope,
+    connection.databaseName,
   )) {
     return jsonError(
       "Managed schema access requires a separately verified schema credential. Reconnecting only restores data access",
@@ -147,6 +148,7 @@ export async function POST(request: Request, context: RouteContext) {
       engine: connection.engine,
       capabilityManifest: connection.providerCapabilityManifest,
       grantedScope: connection.integrationGrantedScope,
+      database: connection.databaseName,
     })
   )) {
     return jsonError(
@@ -259,6 +261,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       engine: existing.engine,
       capabilityManifest: providerResource?.capabilityManifest,
       grantedScope: integration.grantedScope,
+      database: existing.databaseName,
     });
   if (input.allowWrites && !writeAvailable) {
     return jsonError("This managed provider connection has no write credential", 409);

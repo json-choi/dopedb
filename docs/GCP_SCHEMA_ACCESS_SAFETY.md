@@ -19,8 +19,25 @@ PostgreSQL 14 이상에서 현재 정책 세대에 고정된 DopeDB 전용 read/
 사용자가 로그인한 기존 IAM DB 사용자를 임시 관리자로 승격하거나 그 역할을
 회수하지 않는다. Data API 활성화와 권한 설정 SQL 경로도 사용하지 않는다.
 
-일반 연결·복구는 schema principal을 구성하지 않는다. 이미 별도 구성된 schema
-credential의 엄격한 IAM·Desktop owner 검증은 유지한다. 스키마 관리 권한을
+일반 연결·복구는 schema principal을 새로 구성하지 않는다. 별도 스키마 설정에서
+관리자가 DB와 기존 마이그레이션 owner 역할을 지정하고 위임을 승인하면, 그 대상에
+고정된 새 IAM 로그인만 만든다. Cloud SQL users.insert의 databaseRoles로 owner
+역할을 새 로그인에 부여하며 기존 role membership·소유권·ACL은 재작성하지 않는다.
+반복 복구는 저장된 위임을 유지하며 다른 owner를 선택하면 다른 principal을 만든다.
+
+Desktop은 모든 물리 접속에서 SET ROLE로 승인된 owner를 선택하고 권한을 검증한다.
+객체는 계속 기존 owner가 소유하며 새 객체에도 그 owner의 기존 기본 권한이 적용된다.
+앱이 owner를 상속하는 기존 membership은 허용하되, 새 로그인에 대한 inbound
+membership, ADMIN OPTION, 관리자/다른 역할 상속은 거부한다. 기존 정책과 같이
+public 밖 접근, DB CREATE/TEMP, grant option, 다른 객체 owner, PUBLIC 함수 실행과
+함수 기본 EXECUTE 권한은 차단한다. 이 검사를 만족하지 못하는 DB는 기존 ACL을
+자동 수정하지 않고 실패한 검사 이름을 표시한다. 이 경로는 모든 임의 DB의 자동
+권한 마이그레이션을 의미하지 않는다. 이전 schema credential도 같은 엄격한 정책을
+사용하며 위임 정보가 없으면 로그인 자신이 owner여야 한다.
+
+새 lease 계약 access-v6는 schemaOwner를 GCP PostgreSQL schema lease에만 허용한다.
+access-v5의 읽기/데이터 변경 및 기존 schema lease는 유지하지만 새 위임 schema
+요청은 자격 증명 발급 전에 426으로 차단하여 Desktop 업데이트를 요구한다. 스키마 관리 권한을
 확보하기 위해 기존 객체를 인수하거나 PUBLIC 권한을 회수하지 않는다. 기존
 PostgreSQL/MySQL 중 안전한 자동 구성이 없는 엔진은 외부 변경 전에 중단하고
 member-local 자격 증명 연결을 안내한다.
@@ -74,7 +91,8 @@ bindir을 가리켜야 한다. conda/anaconda의 `postgresql` 패키지처럼 `p
 ## 데이터 접근과 스키마 접근의 표시
 
 연결 목록은 비밀값이 아닌 `schemaAccessAvailable`을 반환한다. GCP에서는 활성
-integration의 정확한 `cloudsql.schema` scope, PostgreSQL 엔진, 쓰기 가능한 managed
+integration의 DB에 고정된 `cloudsql.schema:<encoded database>` scope (이전 전용
+계정은 `cloudsql.schema`), PostgreSQL 엔진, 쓰기 가능한 managed
 resource가 함께 있어야 true다. Desktop은 누락된 값과 이전 로컬 캐시를 false로
 처리하며, 값이 회수되면 기존 기기의 DDL opt-in도 해제한다. 이 값은 설정 여부의
 표시이며 매 발급 시 수행하는 IAM·DB owner 검증을 대신하지 않는다.
@@ -83,5 +101,5 @@ resource가 함께 있어야 true다. Desktop은 누락된 값과 이전 로컬 
 구체적인 제한을 반환한다. 이 상황을 연결 장애로 분류하거나 재연결로 스키마 권한을
 만들 수 있다고 안내하지 않는다. 읽기와 허용된 데이터 변경은 그대로 사용할 수 있다.
 과거 schema 계정이 객체를 소유한다는 사실만으로 그 계정을 다시 사용하지 않는다.
-기존 서버의 해당 계정 상속이나 새 객체의 다른 owner 등 현재 정책과의 차이는 별도
-접근 마이그레이션에서 검토해야 한다.
+기존 서버가 상속하는 owner는 관리자가 새 로그인에 명시적으로 위임할 수 있지만,
+다른 객체 owner나 안전하지 않은 기본 권한은 별도 DB 관리자 검토가 필요하다.

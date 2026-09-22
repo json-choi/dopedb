@@ -147,6 +147,68 @@ try {
   assert.equal(memberships(), originalMemberships);
   console.log("PASS: existing application users, owners, RLS, PUBLIC, defaults, repair refusal, future schemas and data-only managed roles");
 
+  // A pre-existing migration owner may already be inherited by the application.
+  // Schema setup adds membership only to a NEW login; SQL runs as the old owner.
+  const owner = "migration_owner";
+  const schemaLogin = "dopedb-s-1234567890abcd@dopedb-fixture.iam";
+  query(`CREATE ROLE cloudsqliamserviceaccount NOLOGIN;
+    CREATE ROLE ${owner} NOLOGIN;
+    CREATE ROLE schema_app LOGIN;
+    GRANT ${owner} TO schema_app;
+    CREATE DATABASE schema_app;`, "postgres");
+  query(`REVOKE TEMPORARY ON DATABASE schema_app FROM PUBLIC;
+    REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+    GRANT USAGE, CREATE ON SCHEMA public TO ${owner};
+    ALTER DEFAULT PRIVILEGES FOR ROLE ${owner} REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
+    SET ROLE ${owner};
+    CREATE TABLE contents(id int, visibility text DEFAULT 'public');
+    INSERT INTO contents VALUES (1, 'public'), (2, 'private');`, "schema_app");
+  const savedAccess = () => query(`SELECT json_build_object(
+    'members', (SELECT json_agg(row(member,roleid,admin_option) ORDER BY member,roleid) FROM pg_auth_members WHERE member IN
+      (SELECT oid FROM pg_roles WHERE rolname IN ('schema_app','${owner}'))),
+    'defaults', (SELECT json_agg(row(defaclrole,defaclnamespace,defaclobjtype,defaclacl) ORDER BY oid) FROM pg_default_acl),
+    'schema', (SELECT nspacl FROM pg_namespace WHERE nspname='public'),
+    'database', (SELECT datacl FROM pg_database WHERE datname=current_database()),
+    'owner', (SELECT relowner FROM pg_class WHERE oid='public.contents'::regclass));`, "schema_app");
+  const saved = savedAccess();
+  query(`CREATE ROLE "${schemaLogin}" LOGIN;
+    GRANT cloudsqliamserviceaccount, ${owner} TO "${schemaLogin}";`, "schema_app");
+  assert.equal(savedAccess(), saved);
+  const policySource = readFileSync(path.join(root, "src-tauri/src/connection/gcp_schema_policy.rs"), "utf8");
+  const policySql = /POLICY: &str = r#"([\s\S]*?)"#;/.exec(policySource)[1];
+  const setupSql = `SET ROLE ${owner}; SET statement_timeout='5min';
+    SET idle_in_transaction_session_timeout='1min'; SET idle_session_timeout='5min';
+    SET search_path=public; SET default_transaction_read_only=off;`;
+  const checkPolicy = () => JSON.parse(query(`${setupSql}
+    SELECT row_to_json(policy) FROM (${policySql.replaceAll("$1", `'${owner}'`)}) policy;`,
+    "schema_app", schemaLogin).split("\n").at(-1));
+  const assertSafe = () => {
+    for (const [name, safe] of Object.entries(checkPolicy())) assert.equal(safe, true, name);
+  };
+  assertSafe();
+  query(`${setupSql}
+    CREATE TYPE public.content_visibility AS ENUM ('private','public','unlisted');
+    ALTER TABLE contents ALTER COLUMN visibility DROP DEFAULT;
+    ALTER TABLE contents ALTER COLUMN visibility TYPE public.content_visibility
+      USING visibility::text::public.content_visibility;
+    ALTER TABLE contents ALTER COLUMN visibility SET DEFAULT 'public'::public.content_visibility;
+    CREATE TABLE public.new_content(id int);
+    INSERT INTO public.new_content VALUES (3);`, "schema_app", schemaLogin);
+  assert.equal(query("SELECT count(*) FROM contents; SELECT count(*) FROM new_content;", "schema_app", "schema_app"), "2\n1");
+  assert.equal(savedAccess(), saved, "Schema execution rewrote existing access or ownership");
+  assertSafe(); // another physical connection preserves and revalidates the owner
+  query(`ALTER ROLE ${owner} CREATEDB;`, "schema_app");
+  assert.equal(checkPolicy().safe_login_role, false);
+  query(`ALTER ROLE ${owner} NOCREATEDB; GRANT pg_read_all_data TO ${owner};`, "schema_app");
+  assert.equal(checkPolicy().exact_membership, false);
+  query(`REVOKE pg_read_all_data FROM ${owner};
+    GRANT ${owner} TO "${schemaLogin}" WITH ADMIN OPTION;`, "schema_app");
+  assert.equal(checkPolicy().exact_membership, false);
+  query(`REVOKE ADMIN OPTION FOR ${owner} FROM "${schemaLogin}";`, "schema_app");
+  assertSafe();
+  assert.equal(savedAccess(), saved);
+  console.log("PASS: delegated schema owner, enum migration, future application reads, repeated connection checks and authority drift rejection");
+
 } finally {
   if (started) run("pg_ctl", ["-D", data, "-m", "fast", "-w", "stop"]);
   rmSync(scratch, { recursive: true, force: true });

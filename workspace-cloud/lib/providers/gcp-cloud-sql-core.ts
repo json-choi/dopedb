@@ -20,6 +20,7 @@ export type GcpCloudSqlCredential = {
   readServiceAccountEmail: string;
   writeServiceAccountEmail: string | null;
   schemaServiceAccountEmail: string | null;
+  schemaAuthority?: { database: string; owner: string };
   workloadIdentitySubject: string | null;
   databaseNames: string[];
   dedicatedServiceAccountsConfirmed: true;
@@ -58,6 +59,18 @@ function gcpServiceAccountEmail(value: unknown): value is string {
       .test(value);
 }
 
+/** Exact pre-existing owner chosen by an administrator; never inferred from a prefix. */
+export function parseGcpSchemaAuthority(value: unknown): { database: string; owner: string } | undefined {
+  if (value === undefined) return undefined;
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Invalid schema authority");
+  const row = value as Record<string, unknown>;
+  if (Object.keys(row).sort().join(",") !== "database,owner"
+    || !gcpResourceName(row.database) || typeof row.owner !== "string"
+    || !/^[A-Za-z_][A-Za-z0-9_.@-]{0,62}$/.test(row.owner)
+    || /^(pg_|cloudsql|postgres$)/i.test(row.owner)) throw new Error("Invalid schema authority");
+  return { database: row.database, owner: row.owner };
+}
+
 export function parseGcpCloudSqlCredential(
   value: unknown,
 ): GcpCloudSqlCredential {
@@ -77,6 +90,7 @@ export function parseGcpCloudSqlCredential(
     || body.workloadIdentitySubject == null
     ? null
     : body.workloadIdentitySubject;
+  const schemaAuthority = parseGcpSchemaAuthority(body.schemaAuthority);
   const databaseNames = body.databaseNames === undefined
     ? []
     : body.databaseNames;
@@ -99,6 +113,8 @@ export function parseGcpCloudSqlCredential(
     || (workloadIdentitySubject !== null
       && workloadIdentitySubject !== "dopedb:workspace:production")
     || (schemaServiceAccountEmail !== null && workloadIdentitySubject === null)
+    || (schemaAuthority !== undefined && (schemaServiceAccountEmail === null
+      || !Array.isArray(databaseNames) || !databaseNames.includes(schemaAuthority.database)))
     || !Array.isArray(databaseNames)
     || databaseNames.length > 200
     || !databaseNames.every((name) => gcpResourceName(name))
@@ -117,6 +133,7 @@ export function parseGcpCloudSqlCredential(
     readServiceAccountEmail: body.readServiceAccountEmail,
     writeServiceAccountEmail,
     schemaServiceAccountEmail,
+    ...(schemaAuthority ? { schemaAuthority } : {}),
     workloadIdentitySubject,
     databaseNames,
     dedicatedServiceAccountsConfirmed: true,
@@ -253,6 +270,7 @@ export async function gcpCloudSqlIntegrationIdentity(
         readServiceAccountEmail: credential.readServiceAccountEmail,
         writeServiceAccountEmail: credential.writeServiceAccountEmail,
         schemaServiceAccountEmail: credential.schemaServiceAccountEmail,
+        ...(credential.schemaAuthority ? { schemaAuthority: credential.schemaAuthority } : {}),
         workloadIdentitySubject: credential.workloadIdentitySubject,
       }),
     ]);

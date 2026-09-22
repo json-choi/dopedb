@@ -121,6 +121,7 @@ export async function GET(request: Request, context: RouteContext) {
           engine: connection.engine,
           capabilityManifest,
           grantedScope,
+          database: connection.databaseName,
         }),
       );
     }),

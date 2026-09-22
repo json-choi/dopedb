@@ -830,6 +830,16 @@ describe("Desktop control-plane contracts", () => {
       },
     });
     expect(gcpSchemaLease.lease.accessMode).toBe("schema");
+    expect(managedLeaseResponse({ lease: { ...gcpSchemaLease.lease, schemaOwner: "migration_owner" } })
+      .lease.schemaOwner).toBe("migration_owner");
+    for (const schemaOwner of [null, "postgres", "pg_read_all_data", "cloudsqlsuperuser", "owner;RESET ROLE", "x".repeat(64)]) {
+      expect(() => managedLeaseResponse({ lease: { ...gcpSchemaLease.lease, schemaOwner } })).toThrow();
+    }
+    expect(() => managedLeaseResponse({ lease: { ...lease.lease, schemaOwner: "migration_owner" } })).toThrow();
+    const scoped = { ...configuredSchema, grantedScope: "cloudsql.read cloudsql.schema:app", database: "app" };
+    expect(providerResourceSupportsSchema(scoped)).toBe(true);
+    expect(providerResourceSupportsSchema({ ...scoped, database: "other" })).toBe(false);
+    expect(providerResourceSupportsSchema({ ...scoped, database: undefined })).toBe(false);
     expect(() => managedLeaseResponse({
       lease: {
         ...(fixture.managedLease.response as { lease: object }).lease,

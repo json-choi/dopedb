@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import {
   ControlButton,
   ControlField,
+  ControlInput,
   ControlLink,
   ControlSelect,
 } from "../../app/components/Controls";
@@ -40,6 +41,8 @@ export function GcpCloudSetup({
     gcpIamAuthenticationChangeApproved,
     gcpPermissionCheck,
     gcpIamRoleGrantApproved,
+    gcpSchemaDatabase, gcpSchemaOwner, gcpSchemaApproved,
+    setGcpSchemaDatabase, setGcpSchemaOwner, setGcpSchemaApproved,
     gcpSetupError,
     gcpSetupReconnectRequired,
     gcpRecoveryIntent,
@@ -105,6 +108,8 @@ export function GcpCloudSetup({
     && selectedInstance
     && selectedInstance.ready
     && environmentClassified
+    && (!(gcpSchemaDatabase.trim() || gcpSchemaOwner.trim() || gcpSchemaApproved)
+      || (gcpSchemaApproved && selectedInstance.engine === "postgres" && gcpSchemaDatabase.trim() && gcpSchemaOwner.trim()))
     && (!effectiveProduction || gcpProductionApproved)
     && (
       selectedInstance.iamAuthenticationEnabled
@@ -297,6 +302,26 @@ export function GcpCloudSetup({
           </div>
 
           <div className="tw:grid tw:gap-3">
+            {selectedInstance.engine === "postgres" ? (
+              <details className="tw:grid tw:gap-2">
+                <summary className="tw:text-sm tw:font-semibold">{copy.schemaTitle}</summary>
+                <p className="tw:text-xs tw:text-muted-foreground">{copy.schemaDescription}</p>
+                <ControlField label={copy.schemaDatabase}>
+                  <ControlInput value={gcpSchemaDatabase} disabled={busy}
+                    onChange={(event) => { setGcpSchemaDatabase(event.target.value); setGcpSchemaApproved(false); }} />
+                </ControlField>
+                <ControlField label={copy.schemaOwner}>
+                  <ControlInput value={gcpSchemaOwner} disabled={busy} maxLength={63}
+                    onChange={(event) => { setGcpSchemaOwner(event.target.value); setGcpSchemaApproved(false); }} />
+                </ControlField>
+                <label className="tw:flex tw:items-start tw:gap-2 tw:text-xs">
+                  <input type="checkbox" checked={gcpSchemaApproved}
+                    disabled={busy || !gcpSchemaDatabase.trim() || !gcpSchemaOwner.trim()}
+                    onChange={(event) => setGcpSchemaApproved(event.target.checked)} />
+                  <span>{copy.schemaApproval}</span>
+                </label>
+              </details>
+            ) : null}
             {selectedInstance.production === "unknown" ? (
               <label className="tw:grid tw:gap-2 tw:border tw:border-warning/40 tw:bg-warning/10 tw:p-3">
                 <span className="tw:text-xs tw:font-semibold tw:text-warning">

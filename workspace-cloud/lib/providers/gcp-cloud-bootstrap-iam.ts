@@ -494,6 +494,7 @@ export async function grantWorkloadIdentity(
   projectId: string,
   serviceAccountEmail: string,
   principal: string,
+  viewerEmail?: string,
 ) {
   const resource = `${IAM_ORIGIN}/v1/projects/${encodeURIComponent(projectId)
   }/serviceAccounts/${encodeURIComponent(serviceAccountEmail)}`;
@@ -502,10 +503,13 @@ export async function grantWorkloadIdentity(
     body: JSON.stringify({ options: { requestedPolicyVersion: 3 } }),
   }))!;
   const bindings = policyBindings(policy);
-  if (bindings.length === 1
-    && bindings[0].role === "roles/iam.workloadIdentityUser"
-    && !bindings[0].condition && bindings[0].members.length === 1
-    && bindings[0].members[0] === principal) return;
+  const expected = [
+    { role: "roles/iam.workloadIdentityUser", members: [principal] },
+    ...(viewerEmail ? [{ role: "roles/iam.serviceAccountViewer", members: [`serviceAccount:${viewerEmail}`] }] : []),
+  ];
+  if (bindings.length === expected.length && expected.every((entry) => bindings.some((binding) =>
+    binding.role === entry.role && !binding.condition && binding.members.length === 1
+    && binding.members[0] === entry.members[0]))) return;
   if (!createdAccounts.get(credential)?.has(serviceAccountEmail)
     || bindings.length !== 0) {
     throw new ProviderRequestError("gcpCloudSql",
@@ -523,7 +527,7 @@ export async function grantWorkloadIdentity(
     body: JSON.stringify({ policy: {
       ...policy,
       version: 3,
-      bindings: [{ role: "roles/iam.workloadIdentityUser", members: [principal] }],
+      bindings: expected,
     } }),
   });
   createdAccounts.get(credential)?.delete(serviceAccountEmail);

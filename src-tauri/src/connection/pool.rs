@@ -11,7 +11,7 @@ use std::time::Duration;
 use sqlx::mysql::{MySqlConnectOptions, MySqlPool, MySqlPoolOptions, MySqlSslMode};
 use sqlx::postgres::{PgConnectOptions, PgPool, PgPoolOptions, PgSslMode};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions};
-use sqlx::{AssertSqlSafe, Executor};
+use sqlx::{AssertSqlSafe, Connection, Executor};
 
 use crate::error::{AppError, AppResult};
 use crate::model::{ConnectionProfile, Engine, WorkspaceCredentialMode};
@@ -221,6 +221,20 @@ pub(crate) async fn connect_sqlx(
                 .ssl_mode(pg_ssl_mode(&profile.sslmode)?);
             let base = providers::apply_pg_tuning(profile, base);
 
+            let schema_owner = profile.extra_params.get("dopedb.schemaOwner").cloned();
+            if let Some(owner) = &schema_owner {
+                // Pool after_connect retries hide policy errors behind PoolTimedOut.
+                // Surface the first exact diagnostic before starting either pool;
+                // every pooled physical connection still repeats the same check.
+                let mut probe =
+                    tokio::time::timeout(acquire, sqlx::PgConnection::connect_with(&base))
+                        .await
+                        .map_err(|_| sqlx::Error::PoolTimedOut)??;
+                let verified = super::gcp_schema_policy::prepare(&mut probe, owner).await;
+                let _ = probe.close().await;
+                verified?;
+            }
+            let read_owner = schema_owner.clone();
             let read_startup = runtime.startup_script.clone();
             let ro = PgPoolOptions::new()
                 .max_connections(max_connections)
@@ -228,7 +242,11 @@ pub(crate) async fn connect_sqlx(
                 .idle_timeout(runtime.auto_disconnect_timeout)
                 .after_connect(move |conn, _meta| {
                     let startup = read_startup.clone();
+                    let owner = read_owner.clone();
                     Box::pin(async move {
+                        if let Some(owner) = owner {
+                            super::gcp_schema_policy::prepare(conn, &owner).await?;
+                        }
                         conn.execute("SET default_transaction_read_only = on")
                             .await?;
                         if let Some(script) = startup {
@@ -252,7 +270,11 @@ pub(crate) async fn connect_sqlx(
                         .idle_timeout(runtime.auto_disconnect_timeout)
                         .after_connect(move |conn, _meta| {
                             let startup = write_startup.clone();
+                            let owner = schema_owner.clone();
                             Box::pin(async move {
+                                if let Some(owner) = owner {
+                                    super::gcp_schema_policy::prepare(conn, &owner).await?;
+                                }
                                 if let Some(script) = startup {
                                     sqlx::raw_sql(AssertSqlSafe(script))
                                         .execute(&mut *conn)

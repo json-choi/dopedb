@@ -256,6 +256,9 @@ export function useGcpProviderSetup({
   async function selectGcpProject(projectId: string) {
     if (!gcpSetupId || mutation) return;
     setSelectedGcpProjectId(projectId);
+    setField("gcpSchemaApproved")(false);
+    setField("gcpSchemaDatabase")("");
+    setField("gcpSchemaOwner")("");
     setSelectedGcpInstanceId("");
     setGcpSetupInstances([]);
     setGcpEnvironmentClassification("");
@@ -275,6 +278,9 @@ export function useGcpProviderSetup({
 
   function selectGcpInstance(instanceId: string) {
     setSelectedGcpInstanceId(instanceId);
+    setField("gcpSchemaApproved")(false);
+    setField("gcpSchemaDatabase")("");
+    setField("gcpSchemaOwner")("");
     setGcpEnvironmentClassification("");
     setGcpProductionApproved(false);
     setGcpIamAuthenticationChangeApproved(false);
@@ -333,6 +339,10 @@ export function useGcpProviderSetup({
           approveIamAuthenticationChange:
             gcpIamAuthenticationChangeApproved,
           approveIamRoleGrant: gcpIamRoleGrantApproved,
+          ...(state.gcpSchemaApproved ? {
+            schemaAuthority: { database: state.gcpSchemaDatabase.trim(), owner: state.gcpSchemaOwner.trim() },
+            approveSchemaDelegation: true,
+          } : {}),
           ...(gcpRecoveryTarget ? {
             repairIntegrationId: gcpRecoveryTarget.intent.integrationId,
           } : {}),
