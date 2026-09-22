@@ -26,7 +26,7 @@ export const ROLE_COMMENT_LINE_THRESHOLD = 45;
 // Lowering a cap after clearing files is the expected way to edit this table.
 const ROOTS = [
   { path: "src", missingCap: 0 },
-  { path: "workspace-cloud", missingCap: 91 },
+  { path: "workspace-cloud", missingCap: 90 },
   { path: "site", missingCap: 3 },
 ];
 

@@ -658,6 +658,38 @@ async fn assert_current_store_baseline_and_invariants() {
         .await
         .unwrap();
 
+    // Existing supported stores gain only a fail-closed capability cache.
+    let connection_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM connections")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    sqlx::query("ALTER TABLE connections DROP COLUMN schema_access_available")
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        super::super::bootstrap::bootstrap_local_store(&pool)
+            .await
+            .unwrap(),
+        super::super::bootstrap::LocalStoreBootstrap::Ready { created: false }
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM connections")
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        connection_count
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM connections WHERE schema_access_available <> 0"
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        0
+    );
+
     let legacy_root = tempfile::tempdir().unwrap();
     let legacy_path = legacy_root.path().join("app.db");
     let legacy_pool = super::super::open_local_store_pool(&legacy_path)
@@ -1432,6 +1464,7 @@ async fn managed_remote_template_never_reads_or_accepts_a_local_binding() {
         protected: Some(false),
     };
     template.provider_target = Some(provider_target.clone());
+    template.schema_access_available = true;
     let removed_credential_ids = store
         .sync_remote_connections(workspace_id, &user.id, &[(template.clone(), 2)])
         .await
@@ -1451,6 +1484,17 @@ async fn managed_remote_template_never_reads_or_accepts_a_local_binding() {
     assert!(loaded.secret_ref.is_none());
     assert!(loaded.allow_writes);
     assert_eq!(loaded.provider_target, Some(provider_target));
+    assert!(loaded.schema_access_available);
+    let mut legacy_profile = serde_json::to_value(&loaded).unwrap();
+    legacy_profile
+        .as_object_mut()
+        .unwrap()
+        .remove("schemaAccessAvailable");
+    assert!(
+        !serde_json::from_value::<ConnectionProfile>(legacy_profile)
+            .unwrap()
+            .schema_access_available
+    );
     assert!(
         sqlx::query("UPDATE connections SET extra_params = '{' WHERE id = ?1")
             .bind(id.to_string())
@@ -1501,6 +1545,17 @@ async fn managed_remote_template_never_reads_or_accepts_a_local_binding() {
         .await
         .unwrap());
     assert!(store.get_safety(id).await.unwrap().allow_schema_changes);
+    template.schema_access_available = false;
+    store
+        .sync_remote_connections(workspace_id, &user.id, &[(template.clone(), 5)])
+        .await
+        .unwrap();
+    assert!(store.get_safety(id).await.unwrap().allow_writes);
+    assert!(!store.get_safety(id).await.unwrap().allow_schema_changes);
+    assert!(store
+        .set_safety(id, 5, false, &device_safety)
+        .await
+        .is_err());
     template.allow_writes = false;
     store
         .sync_remote_connections(workspace_id, &user.id, &[(template, 5)])

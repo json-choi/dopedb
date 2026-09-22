@@ -22,7 +22,9 @@ import {
   member,
   user,
   workspaceConnectionGrant,
+  workspaceConnection,
 } from "../../../../../../../../lib/schema";
+import { changeTeamRead } from "../../../../../../../../lib/workspace-team-read-http";
 import { authorizeWorkspaceConnection } from "../../../../../../../../lib/workspace-authorization";
 
 type RouteContext = { params: Promise<{ workspaceId: string; connectionId: string }> };
@@ -50,6 +52,7 @@ export async function GET(request: Request, context: RouteContext) {
     email: user.email,
     role: member.role,
     capability: workspaceConnectionGrant.capability,
+    origin: workspaceConnectionGrant.origin,
   }).from(member)
     .innerJoin(user, eq(user.id, member.userId))
     .leftJoin(
@@ -66,7 +69,12 @@ export async function GET(request: Request, context: RouteContext) {
       isNull(member.revocationClaimId),
     ))
     .orderBy(asc(user.name), asc(user.email));
+  const connection = await db.query.workspaceConnection.findFirst({
+    where: and(eq(workspaceConnection.organizationId, workspaceId), eq(workspaceConnection.id, connectionId)),
+    columns: { teamReadEnabled: true },
+  });
   return privateJson({
+    teamReadEnabled: connection?.teamReadEnabled ?? false,
     workspaceId,
     connectionId,
     actorMemberId: authorization.membership.id,
@@ -84,6 +92,9 @@ export async function POST(request: Request, context: RouteContext) {
       parsed.reason === "too_large" ? "Connection grant is too large" : "Invalid connection grant",
       parsed.reason === "too_large" ? 413 : 400,
     );
+  }
+  if (parsed.value && typeof parsed.value === "object" && "teamReadEnabled" in parsed.value) {
+    return changeTeamRead(request, workspaceId, connectionId, parsed.value);
   }
   const body = parsed.value as { memberId?: unknown; capability?: unknown } | null;
   if (!validMemberId(body?.memberId)

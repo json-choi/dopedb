@@ -70,6 +70,7 @@ pub(super) fn row_to_connection(r: &sqlx::sqlite::SqliteRow) -> AppResult<Connec
         workspace_access: parse_workspace_access(r.try_get("workspace_access")?)?,
         credential_mode: parse_credential_mode(r.try_get("credential_mode")?)?,
         provider_target,
+        schema_access_available: r.try_get("schema_access_available")?,
     })
 }
 

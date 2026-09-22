@@ -95,7 +95,12 @@ and migration archives are unsupported and have no parser, table, route, or UI p
 
 ## Authorization model
 
-Workspace role and connection grant are separate narrowing layers.
+Workspace role and connection grant are separate narrowing layers. Managed imports
+create a team-read policy for current and future members (view-only for Viewers);
+existing connections remain explicit until their manager enables sharing in Access.
+Individual grants override this default. Removed access is recorded by user identity
+and survives membership re-creation and policy toggles. Team sharing never grants
+write or manage, and disabling it drains leases before removing policy-created grants.
 
 | Capability | Viewer | Analyst | Editor | Admin | Owner |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -112,7 +117,7 @@ Every database operation is narrowed by all applicable layers:
 1. active account and workspace session;
 2. current membership and workspace role;
 3. exact Project Environment/resource revision;
-4. explicit connection grant;
+4. a materialized connection grant, either explicit or created by the manager-owned team-read policy;
 5. provider and database credential capability;
 6. Desktop safety policy;
 7. exact proposal approval when the caller did not author the mutation;

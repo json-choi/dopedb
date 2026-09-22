@@ -2,7 +2,16 @@
 
 use super::super::*;
 
-type SafetyConnectionRow = (i64, String, String, bool, Option<String>, String, String);
+type SafetyConnectionRow = (
+    i64,
+    String,
+    String,
+    bool,
+    Option<String>,
+    String,
+    String,
+    bool,
+);
 
 pub(in crate::store) async fn ensure_safety_row(
     tx: &mut Transaction<'_, Sqlite>,
@@ -82,7 +91,7 @@ impl Store {
             .await?;
         let connection: Option<SafetyConnectionRow> = sqlx::query_as(
             "SELECT revision, workspace_access, credential_mode, allow_writes, remote_id,
-                    provider, engine
+                    provider, engine, schema_access_available
              FROM connections
              WHERE id = ?1 AND deleted_at IS NULL",
         )
@@ -97,6 +106,7 @@ impl Store {
             remote_id,
             provider,
             engine,
+            schema_access_available,
         )) = connection
         else {
             return Err(AppError::NotFound(format!("connection {connection_id}")));
@@ -121,6 +131,7 @@ impl Store {
                 credential_mode == "managed"
                     && workspace_access == "manage"
                     && previous_ceiling
+                    && schema_access_available
                     && matches!(provider.as_str(), "neon" | "gcpCloudSql")
                     && engine == "postgres"
             };

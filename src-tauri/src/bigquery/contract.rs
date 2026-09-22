@@ -383,6 +383,7 @@ pub(crate) fn assert_bigquery_contract() {
         workspace_access: crate::model::WorkspaceConnectionAccess::Local,
         credential_mode: crate::model::WorkspaceCredentialMode::Local,
         provider_target: None,
+        schema_access_available: false,
     };
     assert!(validate_profile(&profile).is_ok());
     assert_eq!(

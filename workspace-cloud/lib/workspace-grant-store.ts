@@ -1,3 +1,4 @@
+// Explicit grants override team defaults; removals preserve a user-bound exclusion.
 import "server-only";
 import { sql } from "drizzle-orm";
 import { atomicD1 } from "./d1/atomic";
@@ -27,8 +28,12 @@ export async function increaseConnectionGrant(input: GrantMutation & { capabilit
     statements: (scope) => [
       sql`INSERT INTO workspace_connection_grant (organization_id, connection_id, member_id, capability)
         SELECT ${input.organizationId}, ${input.connectionId}, ${input.memberId}, ${input.capability} FROM (${scope}) WHERE TRUE
-        ON CONFLICT (organization_id, connection_id, member_id) DO UPDATE SET capability = excluded.capability, updated_at = ${utcNow}
+        ON CONFLICT (organization_id, connection_id, member_id) DO UPDATE SET capability = excluded.capability, origin = 'explicit', updated_at = ${utcNow}
         RETURNING capability`,
+      sql`DELETE FROM workspace_connection_access_exclusion WHERE organization_id = ${input.organizationId}
+        AND connection_id = ${input.connectionId}
+        AND user_id = (SELECT user_id FROM member WHERE id = ${input.memberId} AND organization_id = ${input.organizationId})
+        AND EXISTS (${scope})`,
       sql`INSERT INTO workspace_audit_event (organization_id, actor_user_id, action, resource_type, resource_id, redacted_summary, request_id)
         SELECT ${input.organizationId}, ${input.authority.userId}, 'connection.grant.update', 'connection', ${input.connectionId},
           json_object('memberId', ${input.memberId}, 'capability', ${input.capability}), ${uuidDefault} FROM (${scope})`,
@@ -47,6 +52,8 @@ export async function removeConnectionGrant(input: GrantMutation & { claimId: st
         AND NOT EXISTS (SELECT 1 FROM workspace_credential_lease WHERE organization_id = ${input.organizationId}
           AND connection_id = ${input.connectionId} AND user_id = ${input.userId} AND revoked_at IS NULL)`,
     statements: (scope) => [
+      sql`INSERT OR IGNORE INTO workspace_connection_access_exclusion (organization_id, connection_id, user_id)
+        SELECT ${input.organizationId}, ${input.connectionId}, ${input.userId} FROM (${scope})`,
       sql`DELETE FROM workspace_connection_grant WHERE organization_id = ${input.organizationId} AND connection_id = ${input.connectionId}
         AND member_id = ${input.memberId} AND EXISTS (${scope}) RETURNING member_id AS memberId`,
       sql`INSERT INTO workspace_audit_event (organization_id, actor_user_id, action, resource_type, resource_id, redacted_summary, request_id)
@@ -54,5 +61,5 @@ export async function removeConnectionGrant(input: GrantMutation & { claimId: st
           json_object('memberId', ${input.memberId}), ${uuidDefault} FROM (${scope})`,
     ],
   });
-  return result.rows[0] as { memberId: string }[];
+  return result.rows[1] as { memberId: string }[];
 }

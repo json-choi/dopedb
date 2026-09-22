@@ -6,7 +6,7 @@ import type { SafetySettings } from "../../ipc/types";
 export type ConnectionWriteAuthority = Pick<
   ConnectionProfile,
   "allowWrites" | "credentialMode" | "workspaceAccess"
-> & Partial<Pick<ConnectionProfile, "engine" | "provider">>;
+> & Partial<Pick<ConnectionProfile, "engine" | "provider" | "schemaAccessAvailable">>;
 
 export type WriteBlockRecoveryKind =
   | "deviceSafety"
@@ -68,6 +68,7 @@ function isSchemaAccessError(error: WriteBlockError): boolean {
     message.includes("managed schema access is not supported") ||
     message.includes("schema access requires a separately verified") ||
     message.includes("schema policy owner is unavailable") ||
+    message.includes("managed schema access is not configured") ||
     (isDdlStatement(error.sql) &&
       (message.includes("permission denied for schema") ||
         message.includes("must be owner of")))
@@ -193,7 +194,8 @@ export function safetySchemaControlAvailable(
     connection.credentialMode === "managed" &&
     connection.workspaceAccess === "manage" &&
     (connection.provider === "neon" || connection.provider === "gcpCloudSql") &&
-    connection.engine === "postgres"
+    connection.engine === "postgres" &&
+    connection.schemaAccessAvailable === true
   );
 }
 

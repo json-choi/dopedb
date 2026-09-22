@@ -42,9 +42,11 @@ import {
 } from "./workspace-background-scheduler";
 import {
   parseSharedConnection,
+  providerResourceSupportsSchema,
   providerSchemaSetupRequired,
   publicConnection,
 } from "./workspace-connections";
+import { issueGcpCloudSqlLease } from "./providers/gcp-cloud-sql";
 import {
   issueVaultLease,
   parseVaultCredential,
@@ -779,6 +781,41 @@ describe("Desktop control-plane contracts", () => {
       .toEqual({ accessMode: "schema" });
     for (const scope of [null, "", "cloudsql.read cloudsql.write", "cloudsql.schema.extra"]) {
       expect(providerSchemaSetupRequired("gcpCloudSql", scope)).toBe(true);
+      expect(providerResourceSupportsSchema({
+        provider: "gcpCloudSql", engine: "postgres", grantedScope: scope,
+        capabilityManifest: { importReadOnly: true, managedLease: true, write: true },
+      })).toBe(false);
+    }
+    const configuredSchema = {
+      provider: "gcpCloudSql", engine: "postgres",
+      grantedScope: "cloudsql.read cloudsql.write cloudsql.schema",
+      capabilityManifest: { importReadOnly: true, managedLease: true, write: true },
+    };
+    expect(providerResourceSupportsSchema(configuredSchema)).toBe(true);
+    expect(providerResourceSupportsSchema({ ...configuredSchema, engine: "mysql" })).toBe(false);
+    expect(providerResourceSupportsSchema({ ...configuredSchema, capabilityManifest: { write: true } })).toBe(false);
+    const schemaFetch = vi.spyOn(globalThis, "fetch");
+    try {
+      await expect(issueGcpCloudSqlLease({
+        credential: {
+          projectId: "dopedb-fixture", projectNumber: "123456789012",
+          workloadIdentityPoolId: "dopedb-pool", workloadIdentityProviderId: "dopedb-provider",
+          instanceId: "fixture-db", databaseNames: ["app"],
+          readServiceAccountEmail: "read@dopedb-fixture.iam.gserviceaccount.com",
+          writeServiceAccountEmail: "write@dopedb-fixture.iam.gserviceaccount.com",
+          schemaServiceAccountEmail: null, workloadIdentitySubject: "dopedb:workspace:production",
+          dedicatedServiceAccountsConfirmed: true, instanceScopedIamConfirmed: true,
+        },
+        oidcToken: "fixture", externalCredentialId: "fixture-schema-lease",
+        resource: { project: "dopedb-fixture", instance: "fixture-db", database: "app", engine: "postgres", networkMode: "PUBLIC", production: false },
+        accessMode: "schema",
+      })).rejects.toMatchObject({
+        status: 403,
+        message: "Managed schema access requires a separately verified schema credential. Reconnecting only restores data access",
+      });
+      expect(schemaFetch).not.toHaveBeenCalled();
+    } finally {
+      schemaFetch.mockRestore();
     }
     expect(providerSchemaSetupRequired("gcpCloudSql", "cloudsql.read cloudsql.write cloudsql.schema"))
       .toBe(false);
@@ -957,7 +994,7 @@ describe("Desktop control-plane contracts", () => {
     expect(() => parseSharedConnection(bigQueryTemplate, {
       credentialMode: "managed",
     })).toThrow("member-local Google Cloud CLI");
-    expect(publicConnection({
+    const publicTemplate = {
       id: "connection-bigquery",
       ...bigQueryTemplate,
       databaseName: bigQueryTemplate.database,
@@ -965,7 +1002,13 @@ describe("Desktop control-plane contracts", () => {
       contentRevision: 1,
       updatedAt: new Date("2026-08-26T00:00:00Z"),
       credentialMode: "member_local",
-    }, "analyst", "read").credentialsRequired).toBe(false);
+    };
+    expect(publicConnection(publicTemplate, "analyst", "read").credentialsRequired).toBe(false);
+    expect(publicConnection(publicTemplate, "owner", "manage", true, true).schemaAccessAvailable).toBe(false);
+    const managedTemplate = { ...publicTemplate, engine: "postgres", provider: "gcpCloudSql", credentialMode: "managed" };
+    expect(publicConnection(managedTemplate, "owner", "manage", true).schemaAccessAvailable).toBe(false);
+    expect(publicConnection(managedTemplate, "owner", "manage", false, true).schemaAccessAvailable).toBe(false);
+    expect(publicConnection(managedTemplate, "owner", "manage", true, true).schemaAccessAvailable).toBe(true);
 
     expect(upstreamMessage(
       403,

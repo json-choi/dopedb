@@ -13,6 +13,7 @@ import {
 import {
   workspaceConnection,
   workspaceConnectionGrant,
+  workspaceProviderIntegration,
   workspaceProviderResource,
 } from "../../../../../../lib/schema";
 import {
@@ -24,6 +25,7 @@ import {
 } from "../../../../../../lib/workspace-permissions";
 import {
   parseSharedConnection,
+  providerResourceSupportsSchema,
   providerResourceSupportsWrite,
   publicConnection,
 } from "../../../../../../lib/workspace-connections";
@@ -53,6 +55,8 @@ export async function GET(request: Request, context: RouteContext) {
       capability: workspaceConnectionGrant.capability,
       capabilityManifest: workspaceProviderResource.capabilityManifest,
       providerMetadata: workspaceProviderResource.redactedMetadata,
+      grantedScope: workspaceProviderIntegration.grantedScope,
+      activeIntegrationId: workspaceProviderIntegration.id,
     })
     .from(workspaceConnectionGrant)
     .innerJoin(
@@ -60,6 +64,19 @@ export async function GET(request: Request, context: RouteContext) {
       and(
         eq(workspaceConnection.organizationId, workspaceConnectionGrant.organizationId),
         eq(workspaceConnection.id, workspaceConnectionGrant.connectionId),
+      ),
+    )
+    .leftJoin(
+      workspaceProviderIntegration,
+      and(
+        eq(workspaceProviderIntegration.id, workspaceConnection.providerIntegrationId),
+        eq(workspaceProviderIntegration.organizationId, workspaceConnection.organizationId),
+        eq(workspaceProviderIntegration.provider, workspaceConnection.provider),
+        eq(workspaceProviderIntegration.status, "active"),
+        eq(workspaceProviderIntegration.refreshPhase, "idle"),
+        isNull(workspaceProviderIntegration.revokedAt),
+        isNull(workspaceProviderIntegration.revocationPendingAt),
+        isNull(workspaceProviderIntegration.revocationClaimId),
       ),
     )
     .leftJoin(
@@ -89,7 +106,7 @@ export async function GET(request: Request, context: RouteContext) {
     workspaceId,
     role: authorization.role,
     accessMode: authorization.accessMode,
-    connections: rows.map(({ connection, capability, capabilityManifest, providerMetadata }) => {
+    connections: rows.map(({ connection, capability, capabilityManifest, providerMetadata, grantedScope, activeIntegrationId }) => {
       const accessMode = accessModeForConnectionGrant(
         authorization.role,
         capability as WorkspaceConnectionCapability,
@@ -99,6 +116,12 @@ export async function GET(request: Request, context: RouteContext) {
         authorization.role,
         accessMode,
         providerResourceSupportsWrite(capabilityManifest),
+        Boolean(activeIntegrationId) && providerResourceSupportsSchema({
+          provider: connection.provider,
+          engine: connection.engine,
+          capabilityManifest,
+          grantedScope,
+        }),
       );
     }),
   });

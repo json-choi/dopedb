@@ -60,10 +60,12 @@ export function providerResourceSupportsSchema(input: {
   provider: string;
   engine: string;
   capabilityManifest: unknown;
+  grantedScope?: string | null;
 }): boolean {
   return (input.provider === "neon" || input.provider === "gcpCloudSql")
     && input.engine === "postgres"
-    && providerResourceSupportsWrite(input.capabilityManifest);
+    && providerResourceSupportsWrite(input.capabilityManifest)
+    && !providerSchemaSetupRequired(input.provider, input.grantedScope ?? null);
 }
 
 /** Cloud SQL schema access needs its own verified service account. The stored
@@ -206,6 +208,7 @@ export function publicConnection(
   role: WorkspaceRoleName,
   accessMode: "view" | "read" | "write" | "manage",
   writeAvailable = false,
+  schemaAccessAvailable = false,
 ) {
   const managed = row.credentialMode === "managed";
   const effectiveWrite = managed
@@ -225,6 +228,7 @@ export function publicConnection(
     readonlyDefault: true,
     allowWrites: effectiveWrite,
     writeAvailable: managed && writeAvailable,
+    schemaAccessAvailable: managed && writeAvailable && schemaAccessAvailable,
     env: row.environment,
     schemaGroup: row.schemaGroup,
     revision: row.contentRevision,

@@ -21,6 +21,7 @@ export type ActiveProviderIntegration = {
   externalAccountId: string;
   encryptedCredential: string;
   credentialExpiresAt: Date | null;
+  grantedScope?: string | null;
   generation: bigint;
   updatedAt: Date;
 };

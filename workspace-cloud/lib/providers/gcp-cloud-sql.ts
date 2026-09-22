@@ -565,9 +565,9 @@ export async function issueGcpCloudSqlLease(input: {
     throw new ProviderRequestError(
       "gcpCloudSql",
       input.accessMode === "schema"
-        ? "Reconnect this Cloud SQL integration to configure managed schema access"
+        ? "Managed schema access requires a separately verified schema credential. Reconnecting only restores data access"
         : "Cloud SQL write service account is not configured",
-      409,
+      input.accessMode === "schema" ? 403 : 409,
     );
   }
   const leaseSeconds = input.accessMode === "schema"

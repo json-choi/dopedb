@@ -1,8 +1,9 @@
 "use client";
 
-// Connection grants are intentionally separate from workspace roles: membership
-// makes a template visible only when a manager grants view, read, use, or manage.
+// Connection access combines durable team read sharing with explicit member grants;
+// workspace roles remain the execution ceiling for every granted capability.
 import { useCallback, useEffect, useRef, useState } from "react";
+import { TeamReadAccess } from "../../features/connectionAccess/TeamReadAccess";
 import { changeConnectionGrant } from "../../features/connectionAccess/grants";
 import { useDesktopAccessReturn } from "../../features/connectionAccess/DesktopAccessReturn";
 import { ControlButton, ControlField, ControlSelect } from "../components/Controls";
@@ -28,6 +29,7 @@ type MemberGrant = {
   email: string;
   role: string;
   capability: ConnectionCapability | null;
+  origin: "explicit" | "team" | null;
 };
 type ConflictPayload = {
   name: string;
@@ -154,6 +156,9 @@ export function ConnectionAccessPanel({ workspaceId }: { workspaceId: string }) 
   const [selectedId, setSelectedId] = useState("");
   const [grants, setGrants] = useState<MemberGrant[]>([]);
   const [actorMemberId, setActorMemberId] = useState("");
+  const [teamReadState, setTeamReadState] = useState<{
+    workspaceId: string; connectionId: string; enabled: boolean;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [connectionsErrorState, setConnectionsErrorState] = useState<{
     workspaceId: string;
@@ -181,6 +186,7 @@ export function ConnectionAccessPanel({ workspaceId }: { workspaceId: string }) 
     setConflicts([]);
     setGrants([]);
     setActorMemberId("");
+    setTeamReadState(null);
   }, [workspaceId, desktopReturn.connectionId]);
 
   const loadConflicts = useCallback(async (signal?: AbortSignal) => {
@@ -255,6 +261,7 @@ export function ConnectionAccessPanel({ workspaceId }: { workspaceId: string }) 
     if (!connectionId) {
       setGrants([]);
       setActorMemberId("");
+      setTeamReadState(null);
       return;
     }
     const response = await fetch(
@@ -279,12 +286,14 @@ export function ConnectionAccessPanel({ workspaceId }: { workspaceId: string }) 
       workspaceRef.current !== requestedWorkspaceId
       || selectedIdRef.current !== connectionId
     ) return;
-    if (!Array.isArray(body?.grants) || typeof body?.actorMemberId !== "string") {
+    if (!Array.isArray(body?.grants) || typeof body?.actorMemberId !== "string"
+      || typeof body?.teamReadEnabled !== "boolean") {
       setError(copy.grantsShapeError);
       return;
     }
     setGrants(body.grants);
     setActorMemberId(body.actorMemberId);
+    setTeamReadState({ workspaceId, connectionId, enabled: body.teamReadEnabled });
     setError("");
   }, [copy, locale, setError, workspaceId]);
 
@@ -304,6 +313,7 @@ export function ConnectionAccessPanel({ workspaceId }: { workspaceId: string }) 
     const controller = new AbortController();
     setGrants([]);
     setActorMemberId("");
+    setTeamReadState(null);
     setError("");
     void loadGrants(selectedId, controller.signal);
     return () => controller.abort();
@@ -540,7 +550,7 @@ export function ConnectionAccessPanel({ workspaceId }: { workspaceId: string }) 
       <ControlField label={copy.sharedConnection}>
         <ControlSelect
           value={selectedId}
-          disabled={connectionsLoading || visibleConnections.length === 0}
+          disabled={connectionsLoading || visibleConnections.length === 0 || mutatingId !== ""}
           onChange={(event) => setSelectedId(event.target.value)}
         >
           {visibleConnections.length === 0 ? (
@@ -571,6 +581,21 @@ export function ConnectionAccessPanel({ workspaceId }: { workspaceId: string }) 
             ? copy.managedDescription
             : copy.localDescription}
         </p>
+      ) : null}
+
+      {selected?.credentialMode === "managed" && teamReadState?.workspaceId === workspaceId
+        && teamReadState.connectionId === selectedId ? (
+        <TeamReadAccess
+          key={`${workspaceId}:${selectedId}`}
+          workspaceId={workspaceId}
+          connectionId={selectedId}
+          enabled={teamReadState.enabled}
+          disabled={mutatingId !== ""}
+          canManage={grants.some((grant) => grant.memberId === actorMemberId
+            && grant.capability === "manage" && ["owner", "admin"].includes(grant.role))}
+          onBusyChange={(busy) => setMutatingId(busy ? "team-read" : "")}
+          onSaved={() => loadGrants(selectedId)}
+        />
       ) : null}
 
       {selected?.credentialMode === "managed" ? (
@@ -609,6 +634,7 @@ export function ConnectionAccessPanel({ workspaceId }: { workspaceId: string }) 
                 </strong>
                 <small className="tw:overflow-hidden tw:text-xs tw:text-ellipsis tw:whitespace-nowrap tw:text-muted-foreground">
                   {grant.email} · {grant.role}
+                  {grant.origin === "team" ? ` · ${copy.teamReadOrigin}` : ""}
                 </small>
               </div>
               <ControlSelect

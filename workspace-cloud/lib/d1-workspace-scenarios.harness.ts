@@ -72,6 +72,13 @@ export async function verifyD1WorkspaceMutations(db: D1Database, identity: {
   };
   const input = { organizationId, integrationId: integration.id, authority, receiptId: await makeReceipt(),
     idempotencyKey: randomUUID(), name: "Imported database", productionApproved: false };
+  const teammateUserId = randomUUID(); const teammateMemberId = randomUUID();
+  await db.batch([
+    db.prepare("INSERT INTO user (id, name, email) VALUES (?, 'Existing teammate', ?)")
+      .bind(teammateUserId, `${teammateUserId}@invalid.test`),
+    db.prepare("INSERT INTO member (id, organization_id, user_id, role) VALUES (?, ?, ?, 'admin')")
+      .bind(teammateMemberId, organizationId, teammateUserId),
+  ]);
   const imported = await Promise.all(Array.from({ length: 8 }, () => importProviderReceipt(input)));
   expect(imported.every((result) => result.kind === "imported")).toBe(true);
   const connectionIds = imported.map((result) => result.kind === "imported" ? result.connection.id : null);
@@ -80,7 +87,12 @@ export async function verifyD1WorkspaceMutations(db: D1Database, identity: {
   expect(await db.prepare("SELECT count(*) AS count FROM workspace_resource_version WHERE resource_id = ?")
     .bind(connectionId).first("count")).toBe(1);
   expect(await db.prepare("SELECT count(*) AS count FROM workspace_connection_grant WHERE connection_id = ?")
-    .bind(connectionId).first("count")).toBe(1);
+    .bind(connectionId).first("count")).toBe(2);
+  expect(await db.prepare("SELECT capability, origin FROM workspace_connection_grant WHERE connection_id = ? AND member_id = ?")
+    .bind(connectionId, teammateMemberId).first()).toEqual({ capability: "read", origin: "team" });
+  expect(await db.prepare("SELECT team_read_enabled FROM workspace_connection WHERE id = ?")
+    .bind(connectionId).first("team_read_enabled")).toBe(1);
+  await db.prepare("DELETE FROM member WHERE id = ?").bind(teammateMemberId).run();
   const version = await db.prepare("SELECT payload, payload_hash FROM workspace_resource_version WHERE resource_id = ?")
     .bind(connectionId).first<{ payload: string; payload_hash: string }>();
   expect(canonicalHash(JSON.parse(version!.payload))).toBe(version!.payload_hash);

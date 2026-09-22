@@ -140,6 +140,8 @@ export async function importProviderReceipt(input: ImportInput): Promise<Provide
             ${input.integrationId}, ${snapshot.resourceId}, ${snapshot.resource}, 1, ${input.authority.userId} FROM (${fresh})`,
         sql`INSERT INTO workspace_connection_grant (organization_id, connection_id, member_id, capability)
           SELECT ${input.organizationId}, ${connectionId}, ${input.authority.membershipId}, 'manage' FROM (${fresh})`,
+        sql`UPDATE workspace_connection SET team_read_enabled = 1
+          WHERE id = ${connectionId} AND organization_id = ${input.organizationId} AND EXISTS (${fresh})`,
         sql`INSERT INTO workspace_resource_version (organization_id, resource_type, resource_id, revision,
             base_revision, parent_version_id, branch, operation, payload, payload_hash, created_by_user_id)
           SELECT ${input.organizationId}, 'connection', ${connectionId}, 1, 0, NULL, 'main', 'create',
@@ -166,7 +168,7 @@ export async function importProviderReceipt(input: ImportInput): Promise<Provide
       ];
     },
   });
-  const row = outcome.rows[6]?.[0];
+  const row = outcome.rows[7]?.[0];
   if (row?.kind === "imported") {
     const connection = returnedConnection({ ...row, readonlyDefault: row.readonlyDefault === 1, allowWrites: row.allowWrites === 1 });
     if (!connection) throw new Error("Provider import returned an invalid projection");

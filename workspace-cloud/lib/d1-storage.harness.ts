@@ -53,7 +53,7 @@ beforeAll(async () => {
   });
 
   await withStage("migrations", async () => {
-    for (const name of ["0000_workspace_baseline.sql", "0001_workspace_guards.sql", "0002_storage_types.sql", "0003_atomic_scope.sql", "0004_member_evidence_detachment.sql", "0005_backup_chunks.sql", "0006_retention_purge.sql", "0007_unusual_lionheart.sql", "0008_remove_device_authorization.sql"]) {
+    for (const name of ["0000_workspace_baseline.sql", "0001_workspace_guards.sql", "0002_storage_types.sql", "0003_atomic_scope.sql", "0004_member_evidence_detachment.sql", "0005_backup_chunks.sql", "0006_retention_purge.sql", "0007_unusual_lionheart.sql", "0008_remove_device_authorization.sql", "0009_bored_lady_ursula.sql"]) {
       const source = await readFile(new URL(`../d1-migrations/${name}`, import.meta.url), "utf8");
       const statements = source.includes("--> statement-breakpoint")
         ? source.split("--> statement-breakpoint")

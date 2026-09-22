@@ -11,7 +11,7 @@ import {
   privateJson,
   privateResponse,
 } from "../../../../../../../lib/http";
-import { revokeActiveLeases } from "../../../../../../../lib/provider-integrations";
+import { activeProviderIntegration, revokeActiveLeases } from "../../../../../../../lib/provider-integrations";
 import {
   claimRevocationGate,
   clearRevocationGate,
@@ -129,25 +129,29 @@ export async function POST(request: Request, context: RouteContext) {
   if (body.action === "schema" && (
     !hasWorkspaceCapability(authorization.role, "manage")
     || authorization.accessMode !== "manage"
-    || !providerResourceSupportsSchema({
-      provider: connection.integrationProvider ?? "",
-      engine: connection.engine,
-      capabilityManifest: connection.providerCapabilityManifest,
-    })
   )) {
-    return jsonError(
-      "Managed schema access requires connection manage permission and a supported provider",
-      403,
-    );
+    return jsonError("Managed schema access requires connection manage permission", 403);
   }
   if (body.action === "schema" && providerSchemaSetupRequired(
     connection.integrationProvider ?? "",
     connection.integrationGrantedScope,
   )) {
     return jsonError(
-      "Reconnect this Cloud SQL integration to configure managed schema access",
-      409,
-      MANAGED_CONNECTION_RECOVERY_REQUIRED,
+      "Managed schema access requires a separately verified schema credential. Reconnecting only restores data access",
+      403,
+    );
+  }
+  if (body.action === "schema" && (
+    !providerResourceSupportsSchema({
+      provider: connection.integrationProvider ?? "",
+      engine: connection.engine,
+      capabilityManifest: connection.providerCapabilityManifest,
+      grantedScope: connection.integrationGrantedScope,
+    })
+  )) {
+    return jsonError(
+      "Managed schema access requires connection manage permission and a supported provider",
+      403,
     );
   }
   return privateJson({
@@ -199,6 +203,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       environment: true,
       schemaGroup: true,
       providerResourceId: true,
+      providerIntegrationId: true,
       revision: true,
       contentRevision: true,
     },
@@ -245,6 +250,16 @@ export async function PATCH(request: Request, context: RouteContext) {
   const writeAvailable = providerResourceSupportsWrite(
     providerResource?.capabilityManifest,
   );
+  const integration = existing.providerIntegrationId
+    ? await activeProviderIntegration(workspaceId, existing.providerIntegrationId)
+    : null;
+  const schemaAccessAvailable = integration?.provider === existing.provider
+    && providerResourceSupportsSchema({
+      provider: existing.provider,
+      engine: existing.engine,
+      capabilityManifest: providerResource?.capabilityManifest,
+      grantedScope: integration.grantedScope,
+    });
   if (input.allowWrites && !writeAvailable) {
     return jsonError("This managed provider connection has no write credential", 409);
   }
@@ -332,6 +347,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       authorization.role,
       authorization.accessMode,
       writeAvailable,
+      schemaAccessAvailable,
     ),
   });
 }

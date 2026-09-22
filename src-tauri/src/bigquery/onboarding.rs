@@ -371,6 +371,7 @@ pub(super) fn assert_onboarding_contract() {
         workspace_access: WorkspaceConnectionAccess::Local,
         credential_mode: crate::model::WorkspaceCredentialMode::Local,
         provider_target: None,
+        schema_access_available: false,
     };
     assert_eq!(
         auth_mode(&profile).unwrap(),

@@ -2,7 +2,8 @@
 //!
 //! DopeDB is still pre-MVP, so local stores from earlier schema experiments are
 //! deliberately unsupported. Keeping one current baseline avoids carrying data
-//! conversion code into the product; a mismatched app-owned store is reset by
+//! conversion code into the product. Metadata-only, fail-closed cache additions
+//! preserve the supported baseline; a mismatched app-owned store is reset by
 //! [`Store::open`](super::Store::open) instead of being decoded or upgraded.
 
 use super::*;
@@ -25,6 +26,18 @@ pub(super) async fn bootstrap_local_store(pool: &SqlitePool) -> AppResult<LocalS
         .fetch_one(pool)
         .await?;
     if version == LOCAL_SCHEMA_BASELINE && application_id == LOCAL_SCHEMA_APPLICATION_ID {
+        // Add only a fail-closed hosted capability cache to the supported baseline.
+        // This does not convert authority or reset existing local data.
+        let columns = sqlx::query("PRAGMA table_info(connections)")
+            .fetch_all(pool)
+            .await?;
+        if !columns
+            .iter()
+            .any(|row| row.get::<String, _>("name") == "schema_access_available")
+        {
+            sqlx::query("ALTER TABLE connections ADD COLUMN schema_access_available INTEGER NOT NULL DEFAULT 0 CHECK(schema_access_available IN (0, 1))")
+                .execute(pool).await?;
+        }
         return Ok(LocalStoreBootstrap::Ready { created: false });
     }
     if version != 0 || application_id != 0 {

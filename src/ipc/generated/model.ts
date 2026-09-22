@@ -33,6 +33,10 @@ readonlyDefault: boolean,
  */
 allowWrites: boolean,
 /**
+ * Verified hosted schema capability; absent server metadata fails closed.
+ */
+schemaAccessAvailable: boolean,
+/**
  * Credential-store item id for the secret, if one has been stored.
  */
 secretRef: string | null,

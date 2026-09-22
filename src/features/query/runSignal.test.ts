@@ -133,9 +133,16 @@ describe("SQL run guidance", () => {
       allowWrites: false,
       credentialMode: "managed" as const,
       workspaceAccess: "manage" as const,
+      schemaAccessAvailable: true,
       provider: "neon" as const,
       engine: "postgres" as const,
     };
+    expect(safetySchemaControlAvailable({ ...managedWorkspaceManager, schemaAccessAvailable: undefined })).toBe(false);
+    expect(safetySchemaControlAvailable({ ...managedWorkspaceManager, provider: "gcpCloudSql", schemaAccessAvailable: false })).toBe(false);
+    expect(writeBlockRecoveryKind(
+      { ...managedWorkspaceManager, provider: "gcpCloudSql", schemaAccessAvailable: false },
+      { kind: "blocked", message: "Managed schema access is not configured for this connection" },
+    )).toBe("schemaUnavailable");
     expect(canManageWorkspaceWritePolicy(managedWorkspaceManager)).toBe(true);
     expect(safetyWriteControlAvailable(managedWorkspaceManager)).toBe(true);
     expect(safetySchemaControlAvailable(managedWorkspaceManager)).toBe(true);

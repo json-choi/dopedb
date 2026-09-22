@@ -675,6 +675,7 @@ mod tests {
                 workspace_access: WorkspaceConnectionAccess::Local,
                 credential_mode: WorkspaceCredentialMode::Local,
                 provider_target: None,
+                schema_access_available: false,
             },
             requires_remote_rbac: false,
             catalog_cache_policy: CatalogCachePolicy::Persistent,

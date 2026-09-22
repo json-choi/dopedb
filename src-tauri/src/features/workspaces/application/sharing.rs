@@ -236,6 +236,7 @@ where
                 // the workspace write ceiling that Safety owns.
                 profile.allow_writes = current.credential_mode == WorkspaceCredentialMode::Managed
                     && current.allow_writes;
+                profile.schema_access_available = current.schema_access_available;
                 (profile, None)
             }
             SharedConnectionMutation::WritePolicy(allow_writes) => {

@@ -34,6 +34,7 @@ import { authorizeWorkspaceConnection } from "../../../../../../../../lib/worksp
 import {
   providerResourceSupportsSchema,
   providerResourceSupportsWrite,
+  providerSchemaSetupRequired,
 } from "../../../../../../../../lib/workspace-connections";
 import { hasWorkspaceCapability } from "../../../../../../../../lib/workspace-permissions";
 import { kickWorkspaceBackgroundTask } from "../../../../../../../../lib/workspace-background-scheduler";
@@ -42,9 +43,6 @@ import { logManagedDatabaseAccessFailure } from "../../../../../../../../lib/wor
 type RouteContext = {
   params: Promise<{ workspaceId: string; connectionId: string }>;
 };
-
-const MANAGED_CONNECTION_RECOVERY_REQUIRED =
-  "managed_connection_recovery_required";
 
 // Leaves room for the 45-second provider-authority gate to fail closed and for
 // the pending reservation to be retired before the platform stops the request.
@@ -227,10 +225,23 @@ export async function POST(request: Request, context: RouteContext) {
   if (requestedAccessMode === "schema" && (
     authorization.connectionCapability !== "manage"
     || !hasWorkspaceCapability(authorization.role, "manage")
-    || !providerResourceSupportsSchema({
+  )) {
+    return jsonError("Managed schema access requires connection manage permission", 403);
+  }
+  if (requestedAccessMode === "schema" && providerSchemaSetupRequired(
+    integration.provider, integration.grantedScope ?? null,
+  )) {
+    return jsonError(
+      "Managed schema access requires a separately verified schema credential. Reconnecting only restores data access",
+      403,
+    );
+  }
+  if (requestedAccessMode === "schema" && (
+    !providerResourceSupportsSchema({
       provider: integration.provider,
       engine: resource.engine,
       capabilityManifest: canonicalResource.capabilityManifest,
+      grantedScope: integration.grantedScope,
     })
   )) {
     return jsonError(
@@ -377,11 +388,6 @@ export async function POST(request: Request, context: RouteContext) {
       return jsonError(
         error.message,
         error.status,
-        integration.provider === "gcpCloudSql"
-          && accessMode === "schema"
-          && error.message === "Reconnect this Cloud SQL integration to configure managed schema access"
-          ? MANAGED_CONNECTION_RECOVERY_REQUIRED
-          : undefined,
       );
     }
     return jsonError("Managed database access could not be issued", 502);

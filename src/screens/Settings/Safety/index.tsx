@@ -250,7 +250,9 @@ export default function Safety({
       : connection.credentialMode === "managed" && connection.workspaceAccess !== "manage"
         ? "safety.schemaRequiresManage"
         : connection.credentialMode === "managed"
-          ? "safety.schemaProviderUnavailable"
+          ? connection.provider === "gcpCloudSql" && connection.engine === "postgres"
+            ? "safety.schemaPreparationRequired"
+            : "safety.schemaProviderUnavailable"
           : "safety.mutationsEngineUnavailable";
 
   const accessPermissions = [

@@ -63,6 +63,7 @@ export interface ConnectionProfile {
   extraParams: Record<string, string>;
   readonlyDefault: boolean;
   allowWrites: boolean;
+  schemaAccessAvailable?: boolean;
   secretRef: string | null;
   env: string | null;
   schemaGroup: string | null;

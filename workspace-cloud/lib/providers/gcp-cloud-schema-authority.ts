@@ -23,8 +23,8 @@ export async function verifyGcpSchemaServiceAccountPolicy(input: {
   if (!schemaEmail || !credential.workloadIdentitySubject) {
     throw new ProviderRequestError(
       "gcpCloudSql",
-      "Reconnect this Cloud SQL integration to configure managed schema access",
-      409,
+      "Managed schema access requires a separately verified schema credential. Reconnecting only restores data access",
+      403,
     );
   }
   const policy = await input.request(

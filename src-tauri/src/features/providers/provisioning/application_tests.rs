@@ -211,6 +211,7 @@ pub(crate) async fn assert_restart_resume_lifecycle() {
             workspace_access: crate::model::WorkspaceConnectionAccess::Local,
             credential_mode: crate::model::WorkspaceCredentialMode::Local,
             provider_target: None,
+            schema_access_available: false,
         };
         for expected_revision in 1..=plan.target().connection_revision() {
             store
@@ -347,6 +348,7 @@ pub(crate) async fn assert_restart_resume_lifecycle() {
             workspace_access: crate::model::WorkspaceConnectionAccess::Local,
             credential_mode: crate::model::WorkspaceCredentialMode::Local,
             provider_target: None,
+            schema_access_available: false,
         };
         for expected_revision in 1..=plan.target().connection_revision() {
             store

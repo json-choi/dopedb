@@ -46,6 +46,7 @@ async fn query_and_skill_security_contracts_stay_fail_closed() {
         workspace_access: WorkspaceConnectionAccess::Local,
         credential_mode: WorkspaceCredentialMode::Local,
         provider_target: None,
+        schema_access_available: false,
     };
     let health = HealthSnapshot {
         level: "normal".into(),

@@ -117,6 +117,8 @@ fn remote_connection(value: RemoteConnectionResponse) -> AppResult<(ConnectionPr
             workspace_access: access,
             credential_mode,
             provider_target: value.provider_target,
+            schema_access_available: credential_mode == WorkspaceCredentialMode::Managed
+                && value.schema_access_available,
         },
         revision,
     ))

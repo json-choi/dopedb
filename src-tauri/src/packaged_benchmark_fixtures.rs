@@ -97,6 +97,7 @@ async fn prepare_connections(store: &crate::store::Store, count: usize) -> AppRe
             workspace_access: WorkspaceConnectionAccess::Local,
             credential_mode: WorkspaceCredentialMode::Local,
             provider_target: None,
+            schema_access_available: false,
         };
         store.upsert_connection(&profile).await?;
     }

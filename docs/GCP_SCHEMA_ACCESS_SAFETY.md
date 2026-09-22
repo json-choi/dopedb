@@ -70,3 +70,18 @@ bindir을 가리켜야 한다. conda/anaconda의 `postgresql` 패키지처럼 `p
 
 근거: [Cloud SQL IAM 사용자 역할 지정](https://docs.cloud.google.com/sql/docs/postgres/add-manage-iam-users),
 [PostgreSQL predefined roles](https://www.postgresql.org/docs/current/predefined-roles.html).
+
+## 데이터 접근과 스키마 접근의 표시
+
+연결 목록은 비밀값이 아닌 `schemaAccessAvailable`을 반환한다. GCP에서는 활성
+integration의 정확한 `cloudsql.schema` scope, PostgreSQL 엔진, 쓰기 가능한 managed
+resource가 함께 있어야 true다. Desktop은 누락된 값과 이전 로컬 캐시를 false로
+처리하며, 값이 회수되면 기존 기기의 DDL opt-in도 해제한다. 이 값은 설정 여부의
+표시이며 매 발급 시 수행하는 IAM·DB owner 검증을 대신하지 않는다.
+
+데이터 전용 연결에서 DDL을 요청하면 별도 검증된 schema credential이 필요하다는
+구체적인 제한을 반환한다. 이 상황을 연결 장애로 분류하거나 재연결로 스키마 권한을
+만들 수 있다고 안내하지 않는다. 읽기와 허용된 데이터 변경은 그대로 사용할 수 있다.
+과거 schema 계정이 객체를 소유한다는 사실만으로 그 계정을 다시 사용하지 않는다.
+기존 서버의 해당 계정 상속이나 새 객체의 다른 owner 등 현재 정책과의 차이는 별도
+접근 마이그레이션에서 검토해야 한다.

@@ -64,6 +64,13 @@
       "when": 1789639321176,
       "tag": "0008_remove_device_authorization",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1790059953077,
+      "tag": "0009_bored_lady_ursula",
+      "breakpoints": true
     }
   ]
 }

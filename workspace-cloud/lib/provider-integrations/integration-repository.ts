@@ -32,6 +32,7 @@ async function providerIntegration(
     predicates.push(
       isNull(workspaceProviderIntegration.revocationPendingAt),
     );
+    predicates.push(isNull(workspaceProviderIntegration.revocationClaimId));
   }
   const row = await db.query.workspaceProviderIntegration.findFirst({
     where: and(...predicates),
@@ -42,6 +43,7 @@ async function providerIntegration(
       externalAccountId: true,
       encryptedCredential: true,
       credentialExpiresAt: true,
+      grantedScope: true,
       generation: true,
       updatedAt: true,
       localVerificationTarget: true,

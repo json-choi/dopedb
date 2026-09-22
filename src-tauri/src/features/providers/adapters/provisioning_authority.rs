@@ -622,6 +622,7 @@ pub(crate) fn assert_target_projection_contract() {
             workspace_access: crate::model::WorkspaceConnectionAccess::Manage,
             credential_mode: WorkspaceCredentialMode::Managed,
             provider_target: None,
+            schema_access_available: false,
         },
         requires_remote_rbac: true,
         catalog_cache_policy: crate::kernel::access::CatalogCachePolicy::EphemeralOnly,

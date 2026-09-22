@@ -455,7 +455,8 @@ pub(super) fn validate_resolved_provider_local_profile(
         && resolved.username == original.username
         && resolved.env == original.env
         && resolved.schema_group == original.schema_group
-        && resolved.provider_target == original.provider_target;
+        && resolved.provider_target == original.provider_target
+        && resolved.schema_access_available == original.schema_access_available;
     if !unchanged_identity
         || resolved.database != target.target_database()
         || resolved.database != original.database

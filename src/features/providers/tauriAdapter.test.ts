@@ -1247,8 +1247,10 @@ describe("provider credential Tauri adapter", () => {
       'let requestedAccessMode: "read" | "write" | "schema"',
     );
     expect(managedLeaseRouteSource).toContain(
-      'integration.provider === "gcpCloudSql"',
+      "providerSchemaSetupRequired",
     );
+    expect(managedLeaseRouteSource).toContain("Reconnecting only restores data access");
+    expect(managedLeaseRouteSource).not.toContain("managed_connection_recovery_required");
     expect(managedLeaseRouteSource).not.toMatch(/access-v3|access-v4|LEGACY_MANAGED/);
     expect(managedLeaseRouteSource).toContain("providerResourceSupportsSchema");
     expect(managedLeaseRouteSource).toContain("providerResourceSupportsWrite");

@@ -23,6 +23,7 @@ export const workspaceConnection = sqliteTable(
     sslmode: text("sslmode").notNull(),
     readonlyDefault: integer("readonly_default", { mode: "boolean" }).notNull().default(true),
     allowWrites: integer("allow_writes", { mode: "boolean" }).notNull().default(false),
+    teamReadEnabled: integer("team_read_enabled", { mode: "boolean" }).notNull().default(false),
     credentialMode: text("credential_mode").notNull().default("member_local"),
     providerIntegrationId: text("provider_integration_id").references(
       () => workspaceProviderIntegration.id,
@@ -77,6 +78,7 @@ export const workspaceConnection = sqliteTable(
           AND ${table.revocationClaimId} IS NOT NULL
           AND ${table.revocationPendingAt} IS NOT NULL)`,
     ),
+    check("workspace_connection_team_read_enabled", sql`typeof(${table.teamReadEnabled}) = 'integer' AND ${table.teamReadEnabled} IN (0, 1)`),
     check("workspace_connection_content_revision", sql`${table.contentRevision} >= 1 AND ${table.contentRevision} <= 9007199254740991`),
     check("workspace_connection_revision", sql`${table.revision} >= 1 AND ${table.revision} <= 9007199254740991`),
     // Member-local templates are secretless and read-only. Managed integrations
@@ -101,6 +103,7 @@ export const workspaceConnectionGrant = sqliteTable(
     connectionId: text("connection_id").notNull(),
     memberId: text("member_id").notNull(),
     capability: text("capability").notNull().default("view"),
+    origin: text("origin").notNull().default("explicit"),
     createdAt: utcDate("created_at").notNull().default(utcNow),
     updatedAt: utcDate("updated_at").notNull().default(utcNow),
   },
@@ -121,6 +124,8 @@ export const workspaceConnectionGrant = sqliteTable(
       foreignColumns: [member.organizationId, member.id],
       name: "workspace_connection_grant_org_member_fk",
     }).onDelete("cascade"),
+    check("workspace_connection_grant_origin", sql`${table.origin} IN ('explicit', 'team')`),
+    check("workspace_connection_team_grant_read_only", sql`${table.origin} <> 'team' OR ${table.capability} IN ('view', 'read')`),
     check(
       "workspace_connection_grant_capability",
       sql`${table.capability} IN ('view', 'read', 'use', 'manage')`,
@@ -165,3 +170,18 @@ export const workspaceProviderImportRequest = sqliteTable(
 // Resource versions are immutable tenant-scoped facts. The mutable connection row
 // remains the current projection; offline candidates are stored on a conflict branch
 // instead of replacing that projection.
+
+// User-bound exclusions outlive membership deletion; only an explicit manager grant
+// clears them. They prevent team policy from silently restoring removed access.
+export const workspaceConnectionAccessExclusion = sqliteTable("workspace_connection_access_exclusion", {
+  organizationId: text("organization_id").notNull(),
+  connectionId: text("connection_id").notNull(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  createdAt: utcDate("created_at").notNull().default(utcNow),
+}, (table) => [
+  primaryKey({ columns: [table.organizationId, table.connectionId, table.userId] }),
+  foreignKey({ columns: [table.organizationId, table.connectionId],
+    foreignColumns: [workspaceConnection.organizationId, workspaceConnection.id],
+    name: "workspace_connection_exclusion_connection_fk",
+  }).onDelete("cascade"),
+]);

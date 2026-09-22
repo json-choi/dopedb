@@ -137,6 +137,9 @@ pub struct ConnectionProfile {
     pub readonly_default: bool,
     /// Master per-connection gate for the write path (default false).
     pub allow_writes: bool,
+    /// Verified hosted schema capability; absent server metadata fails closed.
+    #[serde(default)]
+    pub schema_access_available: bool,
     /// Credential-store item id for the secret, if one has been stored.
     pub secret_ref: Option<String>,
     /// Environment label ("dev" | "staging" | "prod") — drives the sidebar/header chip.

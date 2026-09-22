@@ -98,6 +98,8 @@ struct RemoteConnectionResponse {
     sslmode: String,
     readonly_default: bool,
     allow_writes: bool,
+    #[serde(default)]
+    schema_access_available: bool,
     env: Option<String>,
     schema_group: Option<String>,
     revision: i64,
