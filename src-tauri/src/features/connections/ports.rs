@@ -11,7 +11,7 @@ use crate::kernel::identity::ConnectionId;
 use crate::kernel::TerminalAuthority;
 use crate::model::ConnectionProfile;
 
-use super::domain::DriverDescriptor;
+use super::domain::{DriverDescriptor, LocalDatabaseListener, LocalListenerTarget};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ConnectionPermission {
@@ -116,4 +116,15 @@ pub(crate) trait AdHocConnectionPort: Clone + Send + Sync + 'static {
         profile: &ConnectionProfile,
         password: Zeroizing<String>,
     ) -> impl Future<Output = AppResult<Vec<DatabaseSummary>>> + Send;
+}
+
+/// Credential-free loopback reachability probe used by local listener
+/// discovery. Implementations may only open the exact candidate they are
+/// handed, identify the protocol, and close; they never authenticate, run a
+/// query, or read a client configuration or credential file.
+pub(crate) trait LocalListenerProbePort: Clone + Send + Sync + 'static {
+    fn probe(
+        &self,
+        target: LocalListenerTarget,
+    ) -> impl Future<Output = Option<LocalDatabaseListener>> + Send;
 }

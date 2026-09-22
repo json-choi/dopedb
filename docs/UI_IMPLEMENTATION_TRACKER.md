@@ -236,8 +236,10 @@ contract 검증을 통과했으며 버전 숫자 차이만으로 dependency를 �
 ### 1. 처음 연결
 
 1. 실제 데이터 소스는 Welcome에서 새 연결을 열고 engine과 검증된 최소 필드만
-   입력한다. 제품을 먼저 체험하려면 Personal Workspace에서 가이드 데모를 한 번
-   실행한다.
+   입력한다. 연결이 하나도 없으면 Welcome의 `이 컴퓨터에서 데이터베이스 찾기`를
+   실행해 PD-44의 loopback allowlist에서 응답한 서버를 engine·host·port가 채워진
+   초안으로 열 수 있다. 제품을 먼저 체험하려면 Personal Workspace에서 가이드 데모를
+   한 번 실행한다.
 2. 가이드 데모는 파일 기반 Demo SQLite를 검증하고 `DopeDB Demo → Sandbox`의
    로컬 Environment와 exact binding을 준비한다. 다시 실행해도 기존 자원을
    재사용한다.
@@ -254,7 +256,9 @@ DopeDB가 OS·architecture별 pinned 공식 runtime을 app-owned 경로에 최�
 사용한다.
 
 Acceptance: 임의 고급 옵션, 계획 중 provider, 저장되지 않는 가짜 control이 없어야
-하며 장기 secret은 shared record에 들어가지 않는다. BigQuery 연결 과정에서도 앱은
+하며 장기 secret은 shared record에 들어가지 않는다. 로컬 리스너 감지는 사용자가
+실행할 때만 동작하고 자격 증명과 클라이언트 설정 파일을 읽지 않으며 연결을 저장하거나
+자동으로 접속하지 않는다. BigQuery 연결 과정에서도 앱은
 Google token, refresh token, service-account key 내용이나 경로를 읽거나 저장하지 않는다. 데모도 team membership,
 credential, 공유 권한을 꾸며내지 않고 실제 local command만 사용한다.
 

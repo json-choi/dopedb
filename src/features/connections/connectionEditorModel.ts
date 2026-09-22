@@ -100,7 +100,6 @@ export const STANDARD_CONNECTION_SOURCES: StandardConnectionSource[] = [
   { engine: "sqlite", provider: "cloudflareD1", label: "Cloudflare D1", category: "database" },
   { engine: "sqlite", provider: "generic", label: "SQLite", category: "file" },
 ];
-
 export function compatibleDrivers(
   drivers: DriverDescriptor[],
   engine: Engine,

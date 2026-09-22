@@ -14,6 +14,7 @@ import type {
   ConnectionProfile,
   ConnectionTestReceipt,
   DriverDescriptor,
+  LocalDatabaseListener,
 } from "./domain";
 
 export function listConnections(): Promise<ConnectionProfile[]> {
@@ -69,6 +70,12 @@ export function discoverConnectionProfileDatabases(
     profile,
     password,
   });
+}
+
+export function discoverLocalDatabaseListeners(): Promise<
+  LocalDatabaseListener[]
+> {
+  return invoke("discover_local_database_listeners");
 }
 
 export function getBigQueryAuthState(

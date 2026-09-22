@@ -254,6 +254,7 @@ pub fn run() {
             features::catalog::transport::get_catalog_overview,
             features::catalog::transport::list_connection_databases,
             features::connections::transport::discover_connection_profile_databases,
+            features::connections::transport::discover_local_database_listeners,
             features::catalog::transport::get_database_catalog_overview,
             features::catalog::transport::get_database_catalog_snapshot,
             features::catalog::transport::get_table_ddl,
