@@ -86,6 +86,9 @@ export function KnowledgeConnectSourceSection({
   onConnectLocal,
 }: KnowledgeConnectSourceSectionProps) {
   const { t } = useI18n();
+  // Archived repositories cannot be connected, so they never reach the picker.
+  const selectableRepositories =
+    repositories?.filter((repository) => !repository.archived) ?? [];
   return (
     <section data-primary-flow className="tw:grid tw:gap-4 tw:border-b tw:border-border-subtle tw:pb-5">
       <div className="tw:flex tw:min-w-0 tw:flex-wrap tw:items-start tw:justify-between tw:gap-3">
@@ -198,37 +201,48 @@ export function KnowledgeConnectSourceSection({
                 })}
               </InlineNotice>
             ) : null}
-            <div className="tw:grid tw:grid-cols-2 tw:gap-3 tw:@max-[620px]:grid-cols-1">
-              <Field label={t("knowledge.repository")}>
-                <SelectInput
-                  value={repositoryId}
-                  onChange={(event) => {
-                    const repository = repositories?.find(
-                      (candidate) => candidate.id === event.target.value,
-                    );
-                    if (repository) onRepositoryChange(repository);
-                  }}
-                >
-                  {repositories?.filter((repository) => !repository.archived).map((repository) => (
-                    <option
-                      key={`${repository.installationId}:${repository.id}`}
-                      value={repository.id}
-                    >
-                      {knowledgeRepositoryLabel(
-                        repository,
-                        t("knowledge.privateRepository"),
-                      )}
-                    </option>
-                  ))}
-                </SelectInput>
-              </Field>
-              <Field label={t("knowledge.branchRef")}>
-                <TextInput
-                  value={refName}
-                  onChange={(event) => onRefNameChange(event.target.value)}
-                />
-              </Field>
-            </div>
+            {selectableRepositories.length === 0 ? (
+              <div className="tw:grid tw:min-w-0 tw:gap-1 tw:rounded-md tw:border tw:border-border-subtle tw:px-3 tw:py-3">
+                <strong className="tw:text-sm">
+                  {t("knowledge.noSelectableRepositories")}
+                </strong>
+                <span className="tw:text-xs tw:text-muted-foreground">
+                  {t("knowledge.noSelectableRepositoriesBody")}
+                </span>
+              </div>
+            ) : (
+              <div className="tw:grid tw:grid-cols-2 tw:gap-3 tw:@max-[620px]:grid-cols-1">
+                <Field label={t("knowledge.repository")}>
+                  <SelectInput
+                    value={repositoryId}
+                    onChange={(event) => {
+                      const repository = selectableRepositories.find(
+                        (candidate) => candidate.id === event.target.value,
+                      );
+                      if (repository) onRepositoryChange(repository);
+                    }}
+                  >
+                    {selectableRepositories.map((repository) => (
+                      <option
+                        key={`${repository.installationId}:${repository.id}`}
+                        value={repository.id}
+                      >
+                        {knowledgeRepositoryLabel(
+                          repository,
+                          t("knowledge.privateRepository"),
+                        )}
+                      </option>
+                    ))}
+                  </SelectInput>
+                </Field>
+                <Field label={t("knowledge.branchRef")}>
+                  <TextInput
+                    value={refName}
+                    onChange={(event) => onRefNameChange(event.target.value)}
+                  />
+                </Field>
+              </div>
+            )}
             <Field label={t("knowledge.displayName")}>
               <TextInput
                 value={displayName}

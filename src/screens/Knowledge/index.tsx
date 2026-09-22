@@ -177,6 +177,8 @@ export default function Knowledge({
       ),
     [environmentConnections.data, environmentId],
   );
+  // A connection can have only one active binding in this workspace, matching
+  // both the local store and hosted authority.
   const boundConnectionIds = useMemo(
     () => new Set(
       (environmentConnections.data ?? []).flatMap((binding) =>
@@ -549,6 +551,7 @@ export default function Knowledge({
           connectionsPhase={connectionsPhase}
           connectionsLoaded={connections.data !== undefined}
           assignableConnections={assignableConnections}
+          savedConnectionCount={connections.data?.length ?? 0}
           connectionId={connectionId}
           connectionRole={connectionRole}
           connectionAlias={connectionAlias}

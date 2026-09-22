@@ -23,6 +23,7 @@ interface KnowledgeDatabaseSectionProps {
   connectionsPhase: QueryResultPhase;
   connectionsLoaded: boolean;
   assignableConnections: ConnectionProfile[];
+  savedConnectionCount: number;
   connectionId: string;
   connectionRole: string;
   connectionAlias: string;
@@ -47,6 +48,7 @@ export function KnowledgeDatabaseSection({
   connectionsPhase,
   connectionsLoaded,
   assignableConnections,
+  savedConnectionCount,
   connectionId,
   connectionRole,
   connectionAlias,
@@ -86,6 +88,19 @@ export function KnowledgeDatabaseSection({
       </div>
       {connectionsPhase === "coldLoading" ? (
         <LoadingLabel>{t("knowledge.loadingConnections")}</LoadingLabel>
+      ) : connectionsLoaded && assignableConnections.length === 0 ? (
+        <div className="tw:grid tw:min-w-0 tw:gap-1 tw:rounded-md tw:border tw:border-border-subtle tw:px-3 tw:py-3">
+          <strong className="tw:text-sm">
+            {savedConnectionCount === 0
+              ? t("knowledge.noSavedConnections")
+              : t("knowledge.noAssignableConnections")}
+          </strong>
+          <span className="tw:text-xs tw:text-muted-foreground">
+            {savedConnectionCount === 0
+              ? t("knowledge.noSavedConnectionsBody")
+              : t("knowledge.noAssignableConnectionsBody")}
+          </span>
+        </div>
       ) : connectionsLoaded ? (
         <>
           <div className="tw:grid tw:grid-cols-[minmax(0,1.2fr)_minmax(0,.7fr)_minmax(0,1fr)_auto] tw:items-end tw:gap-2 tw:@max-[760px]:grid-cols-2 tw:@max-[520px]:grid-cols-1">
@@ -135,42 +150,40 @@ export function KnowledgeDatabaseSection({
                 : t("knowledge.bindDatabase")}
             </Button>
           </div>
-          {assignableConnections.length > 0 ? (
-            <div className="tw:grid tw:overflow-hidden tw:rounded-md tw:border tw:border-border-subtle">
-              <div className="tw:grid tw:gap-1 tw:border-b tw:border-border-subtle tw:bg-surface-subtle tw:px-3 tw:py-2">
-                <strong className="tw:text-sm">
-                  {t("knowledge.unassignedConnections")}
-                </strong>
-                <span className="tw:text-xs tw:text-muted-foreground">
-                  {t("knowledge.unassignedConnectionsBody")}
-                </span>
-              </div>
-              {assignableConnections.map((connection) => (
-                <div
-                  key={connection.id}
-                  className="tw:grid tw:grid-cols-[minmax(0,1fr)_auto] tw:items-center tw:gap-3 tw:border-b tw:border-border-subtle tw:px-3 tw:py-2 tw:last:border-b-0 tw:@max-[560px]:grid-cols-1"
-                >
-                  <span className="tw:grid tw:min-w-0 tw:gap-1">
-                    <strong className="tw:truncate tw:text-sm">
-                      {connection.name}
-                    </strong>
-                    <span className="tw:truncate tw:text-xs tw:text-muted-foreground">
-                      {connection.engine} · {connection.database}
-                    </span>
-                  </span>
-                  <Button
-                    size="compact"
-                    variant={connection.id === connectionId ? "selected" : "ghost"}
-                    onClick={() => onConnectionChange(connection)}
-                  >
-                    {connection.id === connectionId
-                      ? t("knowledge.selected")
-                      : t("knowledge.reviewBinding")}
-                  </Button>
-                </div>
-              ))}
+          <div className="tw:grid tw:overflow-hidden tw:rounded-md tw:border tw:border-border-subtle">
+            <div className="tw:grid tw:gap-1 tw:border-b tw:border-border-subtle tw:bg-surface-subtle tw:px-3 tw:py-2">
+              <strong className="tw:text-sm">
+                {t("knowledge.unassignedConnections")}
+              </strong>
+              <span className="tw:text-xs tw:text-muted-foreground">
+                {t("knowledge.unassignedConnectionsBody")}
+              </span>
             </div>
-          ) : null}
+            {assignableConnections.map((connection) => (
+              <div
+                key={connection.id}
+                className="tw:grid tw:grid-cols-[minmax(0,1fr)_auto] tw:items-center tw:gap-3 tw:border-b tw:border-border-subtle tw:px-3 tw:py-2 tw:last:border-b-0 tw:@max-[560px]:grid-cols-1"
+              >
+                <span className="tw:grid tw:min-w-0 tw:gap-1">
+                  <strong className="tw:truncate tw:text-sm">
+                    {connection.name}
+                  </strong>
+                  <span className="tw:truncate tw:text-xs tw:text-muted-foreground">
+                    {connection.engine} · {connection.database}
+                  </span>
+                </span>
+                <Button
+                  size="compact"
+                  variant={connection.id === connectionId ? "selected" : "ghost"}
+                  onClick={() => onConnectionChange(connection)}
+                >
+                  {connection.id === connectionId
+                    ? t("knowledge.selected")
+                    : t("knowledge.reviewBinding")}
+                </Button>
+              </div>
+            ))}
+          </div>
         </>
       ) : null}
 
