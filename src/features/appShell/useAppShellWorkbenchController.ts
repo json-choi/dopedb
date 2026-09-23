@@ -4,8 +4,8 @@
 import {
   useEffect,
   useMemo,
-  useReducer,
   useRef,
+  useState,
   type Dispatch,
   type SetStateAction,
 } from "react";
@@ -45,11 +45,8 @@ import { openTabScopeKey } from "../workbench/openTabs";
 import { useWorkbenchDocuments } from "../workbench/useWorkbenchDocuments";
 import { recordStartupMark } from "../runtime/tauriAdapter";
 import {
-  appShellNavigationReducer,
-  initialAppShellMode,
-} from "./navigationState";
-import {
   preloadSqlEditor,
+  useAppRouteTransition,
   useActivitySeen,
   usePersistentSelectedConnection,
   useSqlEditorPreload,
@@ -82,6 +79,7 @@ export function useAppShellWorkbenchController({
   activity,
 }: WorkbenchControllerInput) {
   const toast = useToast();
+  const [creatingQuery, setCreatingQuery] = useState(false);
   const queryClient = useQueryClient();
   const {
     connections,
@@ -91,10 +89,7 @@ export function useAppShellWorkbenchController({
     refresh,
   } = useConnectionProfiles(scope.key);
   const [selectedId, setSelectedId] = usePersistentSelectedConnection();
-  const [navigation, navigate] = useReducer(
-    appShellNavigationReducer,
-    initialAppShellMode,
-  );
+  const { navigation, navigate, pending: routePending, startTransition: startRouteTransition } = useAppRouteTransition();
   const selectionRestoreMarked = useRef(false);
   const completedLaunchPresetBindings = useRef(new Set<string>());
   const {
@@ -181,7 +176,7 @@ export function useAppShellWorkbenchController({
         groupKey: schemaDiffGroupKey,
       });
     }
-  }, [activeSchemaGroup, schemaDiffGroupKey]);
+  }, [activeSchemaGroup, navigate, schemaDiffGroupKey]);
 
   async function reloadWorkspaceScope() {
     setSelectedId(null);
@@ -256,19 +251,20 @@ export function useAppShellWorkbenchController({
       connection && isDocumentEngine(connection.engine)
         ? queryDocument(id, "documents")
         : stableDocument(id, "welcome");
-    workbench.prime(initial);
+    workbench.prime(initial, true);
     setSelectedId(id);
     showWorkbench();
     mobileExplorer.setOpen(false);
     mobileExplorer.focusMainAfterSelection();
   }
 
-  function activateDocument(
-    document: WorkbenchDocument,
-    closeMobileExplorer = true,
-  ) {
-    workbench.activate(document);
-    showWorkbench();
+  function activateDocument(document: WorkbenchDocument, closeMobileExplorer = true) {
+    const reveal = () => {
+      workbench.activate(document);
+      showWorkbench();
+    };
+    if (selectedId === document.connectionId) startRouteTransition(reveal);
+    else reveal();
     if (closeMobileExplorer) {
       mobileExplorer.setOpen(false);
       if (mobileExplorer.open) mobileExplorer.focusMainAfterSelection();
@@ -296,7 +292,8 @@ export function useAppShellWorkbenchController({
   }
 
   async function openQueryDocument() {
-    if (!selected) return;
+    if (!selected || creatingQuery) return;
+    setCreatingQuery(true);
     preloadSqlEditor();
     try {
       const document = await workbench.openQuery({
@@ -307,31 +304,37 @@ export function useAppShellWorkbenchController({
       activateDocument(document);
     } catch (error) {
       toast(errMessage(error), "error");
+    } finally {
+      setCreatingQuery(false);
     }
   }
 
   async function loadSql(sql: string) {
-    if (!selected) return;
-    let document: WorkbenchDocument;
+    if (!selected || creatingQuery) return;
+    setCreatingQuery(true);
     try {
-      document = await workbench.openQuery({
+      const document = await workbench.openQuery({
         connectionId: selected.id,
         database: selected.database,
         supportsSql,
         title: "History query",
         content: sql,
       });
+      activateDocument(document);
     } catch (error) {
       toast(errMessage(error), "error");
-      return;
+    } finally {
+      setCreatingQuery(false);
     }
-    workbench.activate(document);
-    showWorkbench();
   }
 
-  function closeDocument(id: string) {
+  async function closeDocument(id: string) {
     if (!selected) return;
-    void workbench.close(id, selected.id, supportsSql);
+    try {
+      await workbench.close(id, selected.id, supportsSql);
+    } catch (error) {
+      toast(errMessage(error), "error");
+    }
   }
 
   function openSavedDocument(document: SqlDocument) {
@@ -440,6 +443,7 @@ export function useAppShellWorkbenchController({
 
   return {
     route: {
+      pending: routePending,
       welcomeOpen: mainRoute.kind === "welcome",
       settingsOpen,
       settingsSection,
@@ -472,6 +476,8 @@ export function useAppShellWorkbenchController({
       active: activeDocument,
       activeId: activeDocumentId,
       selectedTable,
+      restoring: workbench.restoring,
+      creatingQuery,
     },
     commands: {
       route: {
@@ -506,7 +512,7 @@ export function useAppShellWorkbenchController({
       },
       documents: {
         activate,
-        activateId: workbench.activateId,
+        activateId: (id: string) => startRouteTransition(() => workbench.activateId(id)),
         rename: workbench.updateTitle,
         close: closeDocument,
         openSaved: openSavedDocument,

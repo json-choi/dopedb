@@ -66,6 +66,7 @@ type ShellLayoutModel = {
     documents: WorkbenchDocument[];
     activeDocumentId: string | null;
     selectedTable: CatalogTable | null;
+    routePending: boolean;
     content: ReactNode;
   };
   agent: {
@@ -416,6 +417,13 @@ function ShellLayoutContent({ model, commands }: Props) {
         inert={viewport.mobileExplorerOpen ? true : undefined}
       >
         {workbench.content}
+        {workbench.routePending ? (
+          <div
+            className="tw:pointer-events-none tw:absolute tw:inset-x-0 tw:top-0 tw:z-10 tw:h-0.5 tw:bg-primary"
+            role="status"
+            aria-label={t("app.loading")}
+          />
+        ) : null}
         {showUpdateBadge && (
           <div className="tw:absolute tw:right-3 tw:bottom-3 tw:z-10 tw:max-w-[min(280px,calc(100%_-_24px))]" role="status" aria-live="polite">
             <Button

@@ -1,7 +1,6 @@
-// Composes the bounded Agent plugin, local CLI, and Skill settings.
+// Presents one setup path per Agent; optional external use stays in row details.
 import { Button } from "../../../design-system/components/Button";
 import { AgentPluginSection } from "../../../features/settings/agentTools/AgentPluginSection";
-import { AgentSkillSection } from "../../../features/settings/agentTools/AgentSkillSection";
 import { useAgentToolsController } from "../../../features/settings/agentTools/useAgentToolsController";
 import { useI18n } from "../../../lib/i18n";
 
@@ -13,9 +12,7 @@ export default function AgentTools() {
     statusQuery,
     pluginQuery,
     cliQuery,
-    combinedSetupPlan,
     anyCurrent,
-    runInstall,
     runSelfTest,
     refresh,
   } = controller;
@@ -26,34 +23,7 @@ export default function AgentTools() {
       data-primary-flow
     >
       <AgentPluginSection controller={controller} />
-      <AgentSkillSection controller={controller} />
       <div className="ds-control-row tw:mt-4 tw:flex tw:flex-wrap tw:items-center tw:gap-[var(--ds-control-gap)]">
-        {combinedSetupPlan?.selection ? (
-          <Button
-            size="compact"
-            variant="primary"
-            data-agent-skill-batch-action={combinedSetupPlan.action}
-            disabled={busy !== null}
-            onClick={() => void runInstall(combinedSetupPlan.selection!)}
-          >
-            {t(
-              combinedSetupPlan.action === "update"
-                ? "agentTools.updateAll"
-                : combinedSetupPlan.action === "install-and-update"
-                  ? "agentTools.installAndUpdate"
-                  : "agentTools.installAll",
-            )}
-          </Button>
-        ) : null}
-        {anyCurrent ? (
-          <Button
-            size="compact"
-            disabled={busy !== null}
-            onClick={() => void runSelfTest()}
-          >
-            {t("agentTools.selfTest")}
-          </Button>
-        ) : null}
         <Button
           size="compact"
           disabled={
@@ -71,6 +41,14 @@ export default function AgentTools() {
           )}
         </Button>
       </div>
+      {anyCurrent ? (
+        <details className="tw:mt-4 tw:text-xs tw:text-muted-foreground">
+          <summary className="tw:cursor-pointer tw:hover:text-foreground">{t("agentTools.advancedDiagnostics")}</summary>
+          <Button size="compact" disabled={busy !== null} onClick={() => void runSelfTest()}>
+            {t("agentTools.selfTest")}
+          </Button>
+        </details>
+      ) : null}
     </div>
   );
 }

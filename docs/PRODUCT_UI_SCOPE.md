@@ -99,6 +99,11 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
 - 상단은 브랜드와 검색·계정·설정, 실제 전역 command를 제공한다. Workspace 선택은
   Explorer 상단에 두고 Explorer를 숨기거나 Local History를 열면 title toolbar에
   표시한다. 각 작업 면은 해당 문맥과 document tab을 소유한다.
+- 화면 이동은 클릭 즉시 선택 또는 진행 상태를 보여 주고, 새 화면의 지연 로딩이
+  중앙 pane 전체를 빈 화면으로 바꾸지 않게 한다. 같은 연결의 문서 전환은 새
+  화면이 준비될 때까지 기존 문서를 유지하고, 다른 연결로 바뀌면 이전 DB의
+  내용을 보여 주지 않은 채 tab strip 높이를 유지한 국소 loading 상태를 쓴다.
+  저장·조회가 끝나야 완료되는 command는 눌린 control에서 진행 상태를 표시한다.
 - 왼쪽 Databases와 Articles는 서로 배타적인 탐색 범위를 소유한다. Databases에는
   `Project → Databases / Data sources`와 미배정 연결만, Articles에는 Project별
   Article collection만 표시한다. Databases 안에는 분석 folder나 Article을 표시하지 않는다.
@@ -203,10 +208,21 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
   답변 조각은 수신 후 다음 화면 frame에 반영하고, 생성 중 커서를 표시한다.
   최종 완료·권한 요청은 대기 중인 조각까지 즉시 반영하며 사용자가 위로 스크롤해
   읽는 중에는 강제로 아래로 이동하지 않는다.
-  입력창 아래는 provider·model과 resource·승인 모드를 두 행의 동일한 28px control로
-  표시한다. 승인 모드는 공식 ACP adapter가 광고한 선택지만 제공하고 세션이 준비된
-  상태에서 명시적으로 변경한다. 자동 승인은 adapter의 도구 권한 요청에 적용되며
-  exact resource grant, 단일 write target과 DB 변경의 별도 승인을 대체하지 않는다.
+  입력창 아래에는 exact resource 범위와 현재 승인 모드만 표시한다. provider와
+  model은 제목 없는 32px 헤더의 하나의 선택 메뉴에 모으며, 좁은 패널에서도 입력과 범위가
+  우선 보이게 한다. 승인 모드는 공식 ACP adapter가 광고한 선택지만 제공한다.
+  사용자가 세션에서 명시적으로 선택한 모드는 이 기기의 현재 workspace/account와
+  provider에 한정해 기억하고, 새 세션에서 같은 선택지가 광고될 때만 적용한다.
+  선택지가 없거나 적용에 실패하면 adapter의 현재 모드를 유지하고 실패를 표시한다.
+  자동 승인은 adapter의 도구 권한 요청에 적용되며 exact resource grant,
+  단일 write target과 DB 변경의 별도 승인을 대체하지 않는다.
+- Agent 도구 설정은 Claude와 Codex를 각각 한 행으로 보여 준다. 선택한 Agent의
+  내장 채팅 연결 구성 요소는 앱이 검증해 설치·활성화하고, 공식 로컬 CLI의 설치·
+  로그인 상태는 같은 행에서 확인한다. CLI가 없거나 로그인되지 않았으면 해당
+  제공자의 공식 설정 안내로 이어간다. 앱은 CLI나 로그인 자격 증명을 대신
+  설치·소유하지 않는다. ACP·버전·릴리스 ID와 선택형 DopeDB 스킬은 행의
+  설치 상세에 두며, 스킬은 내장 채팅 준비에 포함하지 않는다. 사용자 파일과
+  충돌한 스킬을 자동으로 덮어쓰지 않는다.
 - 외부 공식 Codex/Claude CLI는 `dopedb agent init`으로 Project root의
   `.dopedb/agent.json`을 만든다. 이 파일은 provider와 Project/resource UUID, 선택적인
   단일 쓰기 대상만 가지며 credential, URL, capability를 저장하지 않는다. 초기

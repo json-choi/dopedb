@@ -4,8 +4,10 @@ import { lazy, Suspense, type ReactNode } from "react";
 import { Icon } from "../../components/Icon";
 import WorkbenchDocumentStrip from "../../components/WorkbenchDocumentStrip";
 import { Button } from "../../design-system/components/Button";
+import { ModalBackdrop, ModalSurface } from "../../design-system/components/Modal";
 import RenderRecoveryBoundary from "../../design-system/components/RenderRecoveryBoundary";
 import { LoadingLabel } from "../../design-system/components/Status";
+import Skeleton from "../../components/Skeleton";
 import { WorkbenchEmptyState } from "../../design-system/components/Workbench";
 import type { CatalogTable, SafetySettings } from "../../ipc/types";
 import { useI18n } from "../../lib/i18n";
@@ -83,6 +85,8 @@ type WorkbenchContentModel = {
     items: WorkbenchDocument[];
     active: WorkbenchDocument | null;
     activeId: string | null;
+    restoring: boolean;
+    creatingQuery: boolean;
   };
   update: { snapshot: AppUpdaterSnapshot };
 };
@@ -113,7 +117,7 @@ type WorkbenchContentCommands = {
   documents: {
     activateId: (id: string) => void;
     rename: (id: string, title: string) => void;
-    close: (id: string) => void;
+    close: (id: string) => Promise<void>;
     newQuery: () => void;
     openAgentTask: (
       connectionId: string,
@@ -168,6 +172,14 @@ function WorkbenchLoading() {
   );
 }
 
+function WorkbenchPaneLoading() {
+  return (
+    <div className="tw:h-full tw:min-h-0 tw:bg-background tw:p-3">
+      <Skeleton lines={6} />
+    </div>
+  );
+}
+
 function WorkbenchContentResolved({ model, commands }: Props) {
   const { t } = useI18n();
   const localDiscovery = useLocalListenerDiscovery();
@@ -191,7 +203,20 @@ function WorkbenchContentResolved({ model, commands }: Props) {
         }
       : undefined;
   const settingsDialog = route.settingsOpen ? (
-    <Settings
+    <Suspense fallback={
+      <ModalBackdrop>
+        <ModalSurface
+          size="settings"
+          aria-label={t("app.loading")}
+          onRequestClose={commands.route.closeSettings}
+        >
+          <div className="tw:flex tw:min-h-48 tw:items-center tw:justify-center">
+            <LoadingLabel>{t("app.loading")}</LoadingLabel>
+          </div>
+        </ModalSurface>
+      </ModalBackdrop>
+    }>
+      <Settings
       connection={selected}
       initialSection={route.settingsSection}
       refreshSafety={commands.safety.refresh}
@@ -204,7 +229,8 @@ function WorkbenchContentResolved({ model, commands }: Props) {
       onUpdateRefresh={commands.update.refresh}
       onUpdateInstall={commands.update.install}
       onClose={commands.route.closeSettings}
-    />
+      />
+    </Suspense>
   ) : null;
   const withSettings = (content: ReactNode) => (
     <>
@@ -215,34 +241,38 @@ function WorkbenchContentResolved({ model, commands }: Props) {
 
   if (route.activeSchemaGroup) {
     return withSettings(
-      <SchemaDiff
-        key={route.activeSchemaGroup.key}
-        group={route.activeSchemaGroup}
-        onClose={commands.route.closeSurface}
-      />,
+      <Suspense fallback={<WorkbenchPaneLoading />}>
+        <SchemaDiff
+          key={route.activeSchemaGroup.key}
+          group={route.activeSchemaGroup}
+          onClose={commands.route.closeSurface}
+        />
+      </Suspense>,
     );
   }
 
   if (route.editing !== null) {
     return withSettings(
       <div className="tw:h-full tw:min-h-0">
-        <ConnectionForm
-          key={
-            route.editing === "new"
-              ? `connection-new-${route.connectionPreset?.engine ?? "default"}-${route.connectionPreset?.provider ?? "auto"}-${route.connectionPreset?.source ?? "standard"}`
-              : `connection-${route.editing.id}`
-          }
-          initial={route.editing === "new" ? null : route.editing}
-          preset={route.editing === "new" ? route.connectionPreset : null}
-          connections={connection.items}
-          creatingDemo={connection.creatingDemo}
-          onCreateDemoDatabase={commands.connections.createDemo}
-          onNewConnection={commands.connections.new}
-          onEditConnection={commands.connections.edit}
-          onDeletedConnection={commands.connections.delete}
-          onSaved={commands.connections.save}
-          onCancel={commands.route.closeSurface}
-        />
+        <Suspense fallback={<WorkbenchPaneLoading />}>
+          <ConnectionForm
+            key={
+              route.editing === "new"
+                ? `connection-new-${route.connectionPreset?.engine ?? "default"}-${route.connectionPreset?.provider ?? "auto"}-${route.connectionPreset?.source ?? "standard"}`
+                : `connection-${route.editing.id}`
+            }
+            initial={route.editing === "new" ? null : route.editing}
+            preset={route.editing === "new" ? route.connectionPreset : null}
+            connections={connection.items}
+            creatingDemo={connection.creatingDemo}
+            onCreateDemoDatabase={commands.connections.createDemo}
+            onNewConnection={commands.connections.new}
+            onEditConnection={commands.connections.edit}
+            onDeletedConnection={commands.connections.delete}
+            onSaved={commands.connections.save}
+            onCancel={commands.route.closeSurface}
+          />
+        </Suspense>
       </div>,
     );
   }
@@ -257,11 +287,13 @@ function WorkbenchContentResolved({ model, commands }: Props) {
           )}
           resetKeys={[focus.requestId]}
         >
-          <Knowledge
-            environmentFocus={focus}
-            onOpenAgent={commands.documents.openAgentTask}
-            onNewConnection={() => commands.connections.new()}
-          />
+          <Suspense fallback={<WorkbenchPaneLoading />}>
+            <Knowledge
+              environmentFocus={focus}
+              onOpenAgent={commands.documents.openAgentTask}
+              onNewConnection={() => commands.connections.new()}
+            />
+          </Suspense>
         </RenderRecoveryBoundary>
       </section>,
     );
@@ -322,15 +354,19 @@ function WorkbenchContentResolved({ model, commands }: Props) {
   return (
     <>
       {selected && (
-        <WorkbenchDocumentStrip
-          documents={workbench.items}
-          activeId={workbench.activeId}
-          engine={selected.engine}
-          connectionName={selected.name || t("app.unnamed")}
-          onActivate={commands.documents.activateId}
-          onRename={commands.documents.rename}
-          onClose={commands.documents.close}
-        />
+        workbench.restoring ? (
+          <div className="tw:h-document-tab tw:min-h-document-tab tw:border-b tw:border-border-subtle tw:bg-background" aria-hidden="true" />
+        ) : (
+          <WorkbenchDocumentStrip
+            documents={workbench.items}
+            activeId={workbench.activeId}
+            engine={selected.engine}
+            connectionName={selected.name || t("app.unnamed")}
+            onActivate={commands.documents.activateId}
+            onRename={commands.documents.rename}
+            onClose={commands.documents.close}
+          />
+        )
       )}
 
       <section
@@ -338,96 +374,102 @@ function WorkbenchContentResolved({ model, commands }: Props) {
         data-edge-to-edge={activeDocument !== null}
         className="scrollbar-sleek tw:min-h-0 tw:flex-1 tw:overflow-auto tw:bg-background tw:p-[var(--ds-pane-pad)] tw:shadow-[inset_0_var(--ds-border-width)_0_var(--ds-border-subtle)] tw:data-[edge-to-edge=true]:overflow-hidden tw:data-[edge-to-edge=true]:p-0 tw:max-[760px]:p-3 tw:max-[760px]:data-[edge-to-edge=true]:p-0"
       >
-        {!selected ? (
-          <ConnectionPicker
-            connections={connection.items}
-            projectNamesByConnectionId={connection.projectNamesByConnectionId}
-            onSelect={commands.connections.select}
-            onNew={commands.connections.new}
-          />
-        ) : !activeDocument ? (
-          connection.supportsSql ? (
-            <WorkbenchEmptyState icon="play">
-              <span>{t("tabs.sql")}</span>
-              <Button variant="primary" onClick={commands.documents.newQuery}>
-                <Icon name="plus" />
-                {t("tabs.sql")}
-              </Button>
-            </WorkbenchEmptyState>
-          ) : (
-            <Documents key={`${selected.id}:mongo-query`} connection={selected} />
-          )
-        ) : activeDocument.kind === "welcome" ? (
-          <Onboarding
-            connectionName={selected.name || selected.database}
-            guidedDemo={guidedDemo}
-            onNewConnection={() => commands.connections.new()}
-            onNewQuery={commands.documents.newQuery}
-          />
-        ) : activeDocument.kind === "data" ? (
-          effectiveSafety ? (
-            <TableData
+        <Suspense fallback={<WorkbenchPaneLoading />}>
+          {workbench.restoring ? (
+            <div className="tw:p-3">
+              <Skeleton lines={6} />
+            </div>
+          ) : !selected ? (
+            <ConnectionPicker
+              connections={connection.items}
+              projectNamesByConnectionId={connection.projectNamesByConnectionId}
+              onSelect={commands.connections.select}
+              onNew={commands.connections.new}
+            />
+          ) : !activeDocument ? (
+            connection.supportsSql ? (
+              <WorkbenchEmptyState icon="play">
+                <span>{t("tabs.sql")}</span>
+                <Button variant="primary" disabled={workbench.creatingQuery} onClick={commands.documents.newQuery}>
+                  <Icon name="plus" />
+                  {t("tabs.sql")}
+                </Button>
+              </WorkbenchEmptyState>
+            ) : (
+              <Documents key={`${selected.id}:mongo-query`} connection={selected} />
+            )
+          ) : activeDocument.kind === "welcome" ? (
+            <Onboarding
+              connectionName={selected.name || selected.database}
+              guidedDemo={guidedDemo}
+              onNewConnection={() => commands.connections.new()}
+              onNewQuery={commands.documents.newQuery}
+            />
+          ) : activeDocument.kind === "data" ? (
+            effectiveSafety ? (
+              <TableData
+                connection={selected}
+                table={activeDocument.table}
+                safety={effectiveSafety}
+              />
+            ) : (
+              safetyFallback
+            )
+          ) : activeDocument.kind === "schema" ? (
+            <SchemaExplorer
+              key={activeDocument.id}
               connection={selected}
-              table={activeDocument.table}
-              safety={effectiveSafety}
+              selectedTable={null}
+              onOpenTable={(table) => commands.documents.openTable(selected, table)}
+            />
+          ) : activeDocument.kind === "sql" ? (
+            <Sql
+              key={activeDocument.id}
+              connection={selected}
+              documentId={activeDocument.id}
+              safety={effectiveSafety ?? BLOCKED_SAFETY_SETTINGS}
+              safetyReady={connection.safety !== null}
+              safetyLoadError={connection.safetyError}
+              draft={activeDocument.draft}
+              title={activeDocument.title}
+              setTitle={commands.documents.setTitle}
+              selectedDatabase={activeDocument.selectedDatabase}
+              setSelectedDatabase={commands.documents.setDatabase}
+              selectedSchema={activeDocument.selectedSchema}
+              setSelectedSchema={commands.documents.setSchema}
+              resolveMode={activeDocument.resolveMode}
+              setResolveMode={commands.documents.setResolveMode}
+              persistedId={activeDocument.persistedId}
+              revision={activeDocument.revision}
+              recovered={activeDocument.recovered}
+              onPersisted={commands.documents.persisted}
+              onQueryServiceSessionChange={commands.queryServices.updateSession}
+              resultStore={commands.queryServices.store}
+              onOpenResults={() => commands.documents.openStable("results")}
+              onOpenSafety={commands.route.openSafety}
+              onOpenHistory={() => commands.documents.openStable("activity")}
+              onRetrySafety={commands.safety.refresh}
+            />
+          ) : activeDocument.kind === "results" ? (
+            <QueryResultsPane
+              store={commands.queryServices.store}
+              connection={selected}
+              onOpenSafety={commands.route.openSafety}
+            />
+          ) : activeDocument.kind === "documents" ? (
+            <Documents
+              key={activeDocument.id}
+              connection={selected}
+              draft={activeDocument.draft}
             />
           ) : (
-            safetyFallback
-          )
-        ) : activeDocument.kind === "schema" ? (
-          <SchemaExplorer
-            key={activeDocument.id}
-            connection={selected}
-            selectedTable={null}
-            onOpenTable={(table) => commands.documents.openTable(selected, table)}
-          />
-        ) : activeDocument.kind === "sql" ? (
-          <Sql
-            key={activeDocument.id}
-            connection={selected}
-            documentId={activeDocument.id}
-            safety={effectiveSafety ?? BLOCKED_SAFETY_SETTINGS}
-            safetyReady={connection.safety !== null}
-            safetyLoadError={connection.safetyError}
-            draft={activeDocument.draft}
-            title={activeDocument.title}
-            setTitle={commands.documents.setTitle}
-            selectedDatabase={activeDocument.selectedDatabase}
-            setSelectedDatabase={commands.documents.setDatabase}
-            selectedSchema={activeDocument.selectedSchema}
-            setSelectedSchema={commands.documents.setSchema}
-            resolveMode={activeDocument.resolveMode}
-            setResolveMode={commands.documents.setResolveMode}
-            persistedId={activeDocument.persistedId}
-            revision={activeDocument.revision}
-            recovered={activeDocument.recovered}
-            onPersisted={commands.documents.persisted}
-            onQueryServiceSessionChange={commands.queryServices.updateSession}
-            resultStore={commands.queryServices.store}
-            onOpenResults={() => commands.documents.openStable("results")}
-            onOpenSafety={commands.route.openSafety}
-            onOpenHistory={() => commands.documents.openStable("activity")}
-            onRetrySafety={commands.safety.refresh}
-          />
-        ) : activeDocument.kind === "results" ? (
-          <QueryResultsPane
-            store={commands.queryServices.store}
-            connection={selected}
-            onOpenSafety={commands.route.openSafety}
-          />
-        ) : activeDocument.kind === "documents" ? (
-          <Documents
-            key={activeDocument.id}
-            connection={selected}
-            draft={activeDocument.draft}
-          />
-        ) : (
-          <Activity
-            key={activeDocument.id}
-            connection={selected}
-            onLoadSql={commands.documents.loadSql}
-          />
-        )}
+            <Activity
+              key={activeDocument.id}
+              connection={selected}
+              onLoadSql={commands.documents.loadSql}
+            />
+          )}
+        </Suspense>
       </section>
       {settingsDialog}
     </>

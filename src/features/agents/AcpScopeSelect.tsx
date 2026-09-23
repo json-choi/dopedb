@@ -59,7 +59,7 @@ export function AcpScopeSelect({
     : t("agent.acpSelectResources");
 
   return (
-    <span className="tw:col-start-1 tw:row-start-2 tw:min-w-0">
+    <span className="tw:min-w-0 tw:flex-1">
       <ToolbarMenu
         label={accessibleSelection}
         align="start"
@@ -75,10 +75,15 @@ export function AcpScopeSelect({
             className="tw:flex tw:w-full tw:min-w-0 tw:items-center tw:gap-1.5"
             title={accessibleSelection}
           >
-            <span className="tw:min-w-0 tw:flex-1 tw:truncate">{visibleSelection}</span>
+            <span className="tw:min-w-0 tw:flex-1 tw:truncate">{projectName ?? visibleSelection}</span>
+            {projectName ? (
+              <span className="tw:shrink-0 tw:text-2xs tw:text-muted-foreground">
+                {t("agent.acpResourceCountsCompact", { databases: databaseCount, sources: sourceCount })}
+              </span>
+            ) : null}
             {selectedCount > 0 ? (
-              <span className="tw:shrink-0 tw:rounded-xs tw:border tw:border-border-subtle tw:bg-transparent tw:px-1.5 tw:font-mono tw:text-2xs tw:font-medium tw:text-muted-foreground">
-                {selectedCount}
+              <span className="tw:shrink-0 tw:text-2xs tw:font-medium tw:text-foreground" title={accessMode}>
+                {writeDatabase ? t("agent.acpWriteCompact") : t("agent.acpReadCompact")}
               </span>
             ) : null}
             <Icon

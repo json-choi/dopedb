@@ -1,9 +1,9 @@
-// Render the official adapter's advertised choices without inventing config IDs
-// or locally persisting a permission mode across sessions.
+// Render the official adapter's advertised mode choices without inventing IDs.
 import { Icon } from "../../components/Icon";
 import ToolbarMenu, { ToolbarMenuItem } from "../../components/ToolbarMenu";
 import { useI18n } from "../../lib/i18n";
 import type { AcpSessionConfigOption, AgentProvider } from "./domain";
+import { configSelectChoices } from "./approvalModePreference";
 
 export function AcpConfigSelect({
   provider,
@@ -17,9 +17,7 @@ export function AcpConfigSelect({
   onChange: (value: string) => void;
 }) {
   const { t } = useI18n();
-  const choices = option.options?.flatMap((entry) =>
-    "options" in entry ? entry.options : [entry],
-  ) ?? [];
+  const choices = configSelectChoices(option);
   if (typeof option.currentValue !== "string" || choices.length === 0) return null;
   const isMode = option.category === "mode";
   const name = isMode ? t("agent.acpApprovalMode") : option.name;
@@ -38,12 +36,44 @@ export function AcpConfigSelect({
           return t("agent.acpApprovalBypass");
       }
     }
+    if (isMode && provider === "codex") {
+      switch (fallback.toLowerCase()) {
+        case "ask for approval":
+          return t("agent.acpApprovalDefault");
+        case "approve for me":
+          return t("agent.acpApprovalAgentDecides");
+        case "full access":
+          return t("agent.acpApprovalFullAccess");
+      }
+    }
+    return fallback;
+  }
+  function compactModeLabel(value: string, fallback: string) {
+    if (provider === "claude") {
+      switch (value) {
+        case "default": return t("agent.acpApprovalDefaultShort");
+        case "acceptEdits": return t("agent.acpApprovalEditsShort");
+        case "plan": return t("agent.acpApprovalPlanShort");
+        case "auto": return t("agent.acpApprovalAutoShort");
+        case "bypassPermissions": return t("agent.acpApprovalFullShort");
+      }
+    }
+    if (provider === "codex") {
+      switch (fallback.toLowerCase()) {
+        case "ask for approval": return t("agent.acpApprovalDefaultShort");
+        case "approve for me": return t("agent.acpApprovalAutoShort");
+        case "full access": return t("agent.acpApprovalFullShort");
+      }
+    }
     return fallback;
   }
   const current = choices.find((choice) => choice.value === option.currentValue);
   const label = current
     ? choiceLabel(current.value, current.name)
     : option.currentValue;
+  const triggerLabel = isMode && current
+    ? compactModeLabel(current.value, current.name)
+    : label;
   return (
     <ToolbarMenu
       label={`${name}: ${label}`}
@@ -52,9 +82,8 @@ export function AcpConfigSelect({
       disabled={disabled}
       trigger={
         <>
-          {isMode ? <Icon name="shield" /> : null}
           <span className="tw:min-w-0 tw:flex-1 tw:truncate" title={label}>
-            {label}
+            {triggerLabel}
           </span>
           <Icon name="chevronDown" />
         </>

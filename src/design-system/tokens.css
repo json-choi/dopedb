@@ -1,8 +1,8 @@
 /*
  * DopeDB product-owned design tokens.
  *
- * The visual contract is monochrome and quiet: neutral surfaces carry the app
- * chrome, while color is reserved for focus and meaningful database state.
+ * The visual contract uses a restrained midnight-blue surface scale. Blue
+ * identifies primary actions and focus; warm orange stays in artwork.
  * DopeDB keeps its --ds-* API so every existing screen inherits the system.
  */
 
@@ -197,42 +197,47 @@
   --ds-surface-elevated: var(--ds-popover);
 }
 
-/* Soft charcoal dark palette; theme.ts resolves the system or explicit preference. */
+/* Midnight-blue dark palette; theme.ts resolves the system or explicit preference. */
 :root[data-theme="dark"] {
   color-scheme: dark;
   --ds-shadow-control: 0 1px 2px rgb(0 0 0 / 0.18);
   --ds-shadow-popover: 0 16px 36px rgb(0 0 0 / 0.34);
-  --ds-background: #17191d;
-  --ds-foreground: #e4e6e2;
-  --ds-card: #1c1f24;
-  --ds-card-foreground: #e4e6e2;
-  --ds-popover: #24272d;
-  --ds-popover-foreground: #e4e6e2;
-  --ds-primary: #3574f0;
-  --ds-primary-hover: #467ff2;
-  --ds-secondary: #282c33;
-  --ds-secondary-foreground: #e4e6e2;
-  --ds-muted: #23262c;
-  --ds-muted-foreground: #a7acb3;
-  --ds-selection: #293957;
-  --ds-destructive: #db5c5c;
-  --ds-input: #343942;
-  --ds-ring: #548af7;
-  --ds-editor-surface: #17191d;
-  --ds-worktree-sidebar: #14161a;
-  --ds-worktree-sidebar-accent: #22252b;
-  --ds-border-subtle: rgb(255 255 255 / 0.1);
-  --ds-border-strong: #454a53;
-  --ds-text-subtle: #858b94;
+  --ds-background: #101422;
+  --ds-foreground: #e8eefa;
+  --ds-card: #202a3e;
+  --ds-card-foreground: #e8eefa;
+  --ds-popover: #29344a;
+  --ds-popover-foreground: #e8eefa;
+  --ds-primary: #3556e5;
+  --ds-primary-hover: #4565f0;
+  --ds-secondary: #1b2537;
+  --ds-secondary-foreground: #e8eefa;
+  --ds-muted: #242e42;
+  --ds-muted-foreground: #acbbd2;
+  --ds-selection: #253a70;
+  --ds-destructive: #f08a8d;
+  --ds-destructive-foreground: #101422;
+  --ds-input: #354157;
+  --ds-ring: #8ba3ff;
+  --ds-editor-surface: #111722;
+  --ds-worktree-sidebar: #151c2c;
+  --ds-worktree-sidebar-accent: #22304b;
+  --ds-border-subtle: #39455b;
+  --ds-border-strong: #657795;
+  --ds-text-subtle: #97a7c1;
   --ds-overlay: rgb(0 0 0 / 0.6);
-  --ds-accent-text: #6f9df8;
-  --ds-accent-soft: #263652;
-  --ds-info: #60a5fa;
-  --ds-positive: #86efac;
-  --ds-caution: #fbbf24;
-  --ds-critical-emphasis: #df2225;
+  --ds-accent-text: #a5b6ff;
+  --ds-accent-soft: #24336b;
+  --ds-info: #8db4ff;
+  --ds-positive: #88d7a9;
+  --ds-caution: #f4c26f;
+  --ds-critical-emphasis: #ff777d;
+  --ds-cosmic-night-raised: #0d1a63;
+  --ds-cosmic-night-soft: #1a2ca3;
+  --ds-cosmic-electric: #2845d6;
+  --ds-cosmic-warm: #f68048;
 }
 
 :root[data-theme="dark"] .sidebar {
-  --ds-surface-1: #1a1d22;
+  --ds-surface-1: #1b2537;
 }

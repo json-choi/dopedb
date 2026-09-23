@@ -26,6 +26,10 @@ import {
 import type { WorkbenchDocument } from "../workbench/domain";
 import { EMPTY_ACP_PROMPT_CONTEXT } from "./acpPromptContext";
 import {
+  applyRememberedAcpMode,
+  rememberAcpMode,
+} from "./approvalModePreference";
+import {
   loginCommand,
   selectRichTranscriptKeys,
 } from "./acpTranscriptPresentation";
@@ -397,6 +401,16 @@ export function useAcpChatController({
     },
     [selectActiveSession],
   );
+  const prepareRememberedMode = useCallback(async (focus: AcpSessionFocus) => {
+    try {
+      await applyRememberedAcpMode(focus, catalogScope.preferenceKey ?? catalogScope.key);
+    } catch (reason) {
+      setError(t("agent.acpConfigFailed", {
+        name: t("agent.acpApprovalMode"),
+        error: errMessage(reason),
+      }));
+    }
+  }, [catalogScope.key, catalogScope.preferenceKey, t]);
   const startSession = useAcpSessionStartup({
     activeSessionId,
     beginFocusRequest,
@@ -408,6 +422,7 @@ export function useAcpChatController({
     focusRequestIsCurrent,
     onError: setError,
     onStarted: commitStartedSession,
+    onPrepared: prepareRememberedMode,
     onStartingChange: setStarting,
     prerequisitesReady,
     selectedResourceScopes: agentScope.resourceScopes,
@@ -601,6 +616,9 @@ export function useAcpChatController({
     setError(null);
     try {
       await setAgentAcpConfigOption(active.id, option.id, value);
+      if (option.category === "mode") {
+        rememberAcpMode(catalogScope.preferenceKey ?? catalogScope.key, active.provider, value);
+      }
     } catch (reason) {
       setError(
         t("agent.acpConfigFailed", {

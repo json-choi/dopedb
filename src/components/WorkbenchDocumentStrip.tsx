@@ -30,10 +30,11 @@ export default function WorkbenchDocumentStrip({
   connectionName: string;
   onActivate: (id: string) => void;
   onRename: (id: string, title: string) => void;
-  onClose: (id: string) => void;
+  onClose: (id: string) => Promise<void>;
 }) {
   const { t } = useI18n();
   const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [closingId, setClosingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const activeTabRef = useRef<HTMLDivElement>(null);
   const visibleDocuments = documents;
@@ -85,6 +86,16 @@ export default function WorkbenchDocumentStrip({
     const title = renameValue.trim();
     if (title) onRename(id, title);
     setRenamingId(null);
+  }
+
+  async function closeTab(id: string) {
+    if (closingId !== null) return;
+    setClosingId(id);
+    try {
+      await onClose(id);
+    } finally {
+      setClosingId(null);
+    }
   }
 
   return (
@@ -159,11 +170,12 @@ export default function WorkbenchDocumentStrip({
                   iconOnly
                   size="xs"
                   variant="ghost"
-                  onClick={() => onClose(document.id)}
-                  title={t("common.close")}
-                  aria-label={`${t("common.close")}: ${title}`}
+                  disabled={closingId === document.id}
+                  onClick={() => void closeTab(document.id)}
+                  title={closingId === document.id ? t("common.saving") : t("common.close")}
+                  aria-label={`${closingId === document.id ? t("common.saving") : t("common.close")}: ${title}`}
                 >
-                  <Icon name="close" />
+                  <Icon name={closingId === document.id ? "refresh" : "close"} className={closingId === document.id ? "tw:animate-spin tw:motion-reduce:animate-none" : undefined} />
                 </Button>
               }
               key={document.id}

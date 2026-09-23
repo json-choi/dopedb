@@ -18,7 +18,6 @@ export type AgentToolsMutation = "repair" | "remove";
 export type AgentToolsBusyAction =
   | SkillTargetSelection
   | AcpPluginId
-  | "plugin-batch"
   | "plugin-check"
   | "self-test";
 

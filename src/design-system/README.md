@@ -135,7 +135,8 @@ packaged runtime 증거가 아니다.
   검색 input은 검색 action으로 열었을 때만 하나만 표시하며 connection subtree에
   검색 input을 중복하지 않는다. backend disconnect lifecycle이 없는 동안
   소유자 없는 Deactivate를 모양만 있는 action으로 추가하지 않는다.
-- 색상보다 `muted`, `selection`, `border`를 먼저 사용한다.
+- 화면의 구조는 surface·border·text 위계로 만들고, 강한 파랑은 현재 선택과
+  한 흐름의 주 동작에만 사용한다.
 - 일반 surface는 평평하게 유지한다. 그림자는 popover, dialog, toast처럼 떠 있는
   surface에만 사용한다.
 - 카드 안에 카드를 중첩하지 않는다.
@@ -166,10 +167,16 @@ Desktop 테마는 `theme.ts`가 기기별 `dopedb.theme` preference를 소유한
 시스템 설정과 독립적으로 유지하며 다시 시작해도 복원한다. `index.html`의 작은
 bootstrap은 같은 키의 저장값만 첫 paint 전에 적용하고, live state는 복제하지 않는다.
 `data-theme`에는 해석된 light/dark만 두고 `tokens.css`와 `scoped-palettes.css`의
-동일 role을 바꾼다. 다크의 큰 면은 near-black 대신 soft charcoal surface를
-사용하고 파랑은 선택·focus·실행 역할에만 남긴다. 앱 배경·에디터·사이드바의 낮은
-명도 차와 WCAG AA 이상의 텍스트 대비로 장시간 작업의 대비 피로를 줄인다. 라이트는
-밝은 중립 surface·ink primary를 사용하며 화면 배치는 공유한다.
+동일 role을 바꾼다. 다크는 채도를 낮춘 남색을 배경·사이드바·작업 surface의
+단계로 사용한다. 선명한 파랑은 primary action과 focus에, 옅은 파랑은 선택과
+정보에 사용한다. 밝은 주황은 Welcome 장식에만 사용하며 경고·실패·데이터
+상태를 뜻하지 않는다. 일반 작업 pane에 그라디언트나 주황 면을 깔지 않는다.
+라이트는 밝은 중립 surface·ink primary를 사용하며 화면 배치는 공유한다.
+
+다크 역할 값과 모든 화면·컴포넌트의 색 배정은
+[`docs/DARK_COLOR_COMPONENT_MAP.md`](../../docs/DARK_COLOR_COMPONENT_MAP.md)에 기록한다.
+작업 surface의 단계와 글자/상태 대비를 실제 Desktop 화면에서 확인한 뒤
+역할 토큰만 조정한다. 화면별 raw color를 추가하지 않는다.
 
 `useTheme`은 CodeMirror를 재구성하고 xterm의 theme option만 갱신해 문서·선택·
 terminal session을 보존한다. Agent code fence는 CSS 역할을 사용하고 Mermaid는
@@ -370,7 +377,8 @@ loopback 문서는 이 정본을 빌드 시 포함하며 네트워크 font나 sc
 - `IdeTabStrip`, `IdeTab`: 평평한 document strip과 strip 안쪽의 둥근 active
   tab. active tab만 Tab 순서에 두고 ArrowLeft/Right/Home/End로 enabled tab을
   이동·선택한다. 화면별 rectangular selection이나 bottom accent를 다시 만들지
-  않는다.
+  않는다. 연결 변경 중에는 같은 40px strip 공간을 보존해 본문이 수직으로
+  뛰지 않게 하고, 다른 연결의 기존 tab과 데이터는 표시하지 않는다.
 - query toolbar는 정상 autosave 완료 아이콘을 상시 반복하지 않는다. 저장 중,
   미저장, conflict, 실패처럼 사용자가 알아야 하는 예외 상태만 schema selector
   뒤의 status slot에 표시하고, 실행 결과는 editor inline marker가 소유한다.
@@ -432,7 +440,9 @@ loopback 문서는 이 정본을 빌드 시 포함하며 네트워크 font나 sc
   tree badge, grid header 밀도를 소유한다. feature가 trigger별 class map을
   만들거나 전역 `.btn`을 섞지 않는다.
 - `ToolWindowHeader`: Database Explorer, Agent, provider 패널의 고정 헤더와
-  우측 action 슬롯. `divider={false}`는 Agent surface처럼 header와 본문이
+  우측 action 슬롯. Agent 채팅처럼 상위 surface에 접근 가능한 이름이 있으면
+  시각적 제목을 생략하고 `leading` 선택기를 왼쪽, action을 오른쪽에 둘 수 있다.
+  Agent 채팅은 `compact` 32px 높이로 본문 공간을 돌려준다. `divider={false}`는 Agent surface처럼 header와 본문이
   하나의 평면을 이루는 tool window에서만 하단 divider를 제거한다.
 - `ToolWindowSideSurface`: Explorer와 Local History의 데스크톱
   left-anchor frame과 compact full-sheet/open state. feature CSS나 부모
@@ -446,7 +456,7 @@ loopback 문서는 이 정본을 빌드 시 포함하며 네트워크 font나 sc
   wrapper 크기를 다시 지정하지 않는다.
 - `ToolWindowComposer`, `ToolWindowComposerDock`, `ToolWindowComposerInput`,
   `ToolWindowComposerContext`: AI Chat의 multiline 입력면, 내부 context row와
-  외부 2열·2행 context grid. 첫 행은 Agent·model, 둘째 행은 resource·승인 모드다.
+  외부 resource·승인 모드 한 행. Agent·model은 header의 단일 선택 메뉴가 소유한다.
   입력면은 한 줄에서 시작해 내용에 따라 최대 세 줄까지만 자동 확장하며 수동 확대
   action을 제공하지 않는다. 첨부와 전송 action은 textarea 안쪽 양 끝에 overlay해
   context chip이 늘어나도 action의 위치와 클릭 영역을 밀지 않는다. textarea는
@@ -476,11 +486,12 @@ loopback 문서는 이 정본을 빌드 시 포함하며 네트워크 font나 sc
   [`src/assets/agent-icons/README.md`](../assets/agent-icons/README.md)에 기록한다.
   provider 선택은 아이콘·현재 이름·chevron을 하나의 `ToolbarMenu` trigger로
   정렬한다. `ToolbarMenuItem`은 일반 `IconName` 또는 공용 브랜드 마크를 받는다.
-  좁은 context row에서는 model과 resource 이름이 가용 폭 안에서 줄어들고,
-  resource 선택의 count·chevron은 유지한다. `ToolbarMenu triggerVariant="composer"`는
-  이 네 선택기의 28px 높이·14px medium 글자·14px chevron과 가용 폭 내 줄임을
-  소유한다. 승인 모드는 어댑터가 실제 제공한 선택지만 보이고, 현재 세션이 ready일
-  때 변경한다. UI가 자동 승인을 기본값으로 저장하거나 DB 쓰기 승인을 생략하지 않는다.
+  좁은 context row에서는 resource 이름이 가용 폭 안에서 줄어들고 count·chevron은
+  유지한다. `ToolbarMenu triggerVariant="composer"`는 선택기의 28px 높이·14px
+  medium 글자·14px chevron과 가용 폭 내 줄임을 소유한다. 승인 모드는 어댑터가
+  실제 제공한 선택지만 보이고 현재 세션이 ready일 때 변경한다. 사용자가 명시적으로
+  고른 모드만 현재 workspace/account·provider의 기기 선호로 저장하며 새 세션에도
+  같은 선택지가 있을 때 적용한다. DB 쓰기 승인은 생략하지 않는다.
   feature별 임시 SVG나 상태색 대용 브랜드색을 만들지 않는다.
 - `AgentCliStatusIndicators`, `AgentCliDetectionNotice`: 시작 모달과 Agent Tools가
   공유하고 AI Chat도 같은 상태 어휘를 따르는 feature composition. 로컬 CLI의
@@ -937,6 +948,9 @@ DopeDB의 실제 작업 흐름과 접근성, supported viewport를 위한 제품
   접근 가능한 이름에 두고, 실패·충돌·복구처럼 행동이 필요한 문장만 행 아래에
   남긴다. 선택 불가능한 행도 checkbox 한 칸을 예약해 같은 종류의 이름 기준선을
   유지한다.
+  Agent 도구는 공급자별 한 행에 내장 채팅 준비 상태를 우선 표시한다. 공식 CLI와
+  선택형 외부 사용 스킬의 상태·수리·제거는 그 행의 펼침 영역에 둔다. 기술
+  구성 요소를 별도 최상위 목록으로 반복하지 않는다.
 - `DiagnosticSummary`, `DiagnosticCount`: 설정·속성 편집기의 Problems 목록과
   오류/경고 개수를 같은 compact hierarchy로 표시.
 - `SettingsGroup`: 설정·정책 화면의 제목, 상단 divider, dense spacing을 공유하는

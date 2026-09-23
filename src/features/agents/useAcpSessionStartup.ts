@@ -32,6 +32,7 @@ type AcpSessionStartupInput = {
   focusRequestIsCurrent: (request: AcpFocusRequest) => boolean;
   onError: (message: string | null) => void;
   onStarted: (focus: AcpSessionFocus, provider: AgentProvider) => void;
+  onPrepared: (focus: AcpSessionFocus) => Promise<void>;
   onStartingChange: (starting: boolean) => void;
   prerequisitesReady: boolean;
   selectedResourceScopes: AgentResourceScopeSelection[];
@@ -51,6 +52,7 @@ export function useAcpSessionStartup({
   focusRequestIsCurrent,
   onError,
   onStarted,
+  onPrepared,
   onStartingChange,
   prerequisitesReady,
   selectedResourceScopes,
@@ -140,6 +142,7 @@ export function useAcpSessionStartup({
             return null;
           }
           onStarted(focus, provider);
+          await onPrepared(focus);
           return focus;
         } catch (reason) {
           completeAnalytics("failed");
@@ -171,6 +174,7 @@ export function useAcpSessionStartup({
       focusRequestIsCurrent,
       onError,
       onStarted,
+      onPrepared,
       onStartingChange,
       ready,
       selectionKey,

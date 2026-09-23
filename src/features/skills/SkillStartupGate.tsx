@@ -121,11 +121,11 @@ export default function SkillStartupGate() {
       }
     }
     setBusy(null);
-    saveAgentTargets(selected);
     if (failures.length > 0) {
       setError(failures.join("\n"));
       return;
     }
+    saveAgentTargets(selected);
     setOpen(false);
   }
 

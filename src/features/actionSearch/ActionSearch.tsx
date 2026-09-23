@@ -14,6 +14,8 @@ import { Button } from "../../design-system/components/Button";
 import { CommandMenuItem } from "../../design-system/components/CommandMenu";
 import { useModalBehavior } from "../../design-system/components/Modal";
 import { useI18n } from "../../lib/i18n";
+import { errMessage } from "../../ipc/types";
+import { useToast } from "../../components/Toast";
 import {
   indexActionSearchItems,
   searchActionItems,
@@ -88,14 +90,16 @@ export default function ActionSearch({
   onClose: (reason: ActionSearchCloseReason) => void;
 }) {
   const { t } = useI18n();
+  const toast = useToast();
   const [query, setQuery] = useState("");
+  const [pendingItem, setPendingItem] = useState<string | null>(null);
   const [scope, setScope] = useState<ActionSearchScope>("all");
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const surfaceRef = useRef<HTMLElement>(null);
   useModalBehavior({
     surfaceRef,
-    onRequestClose: () => onClose("dismiss"),
+    onRequestClose: () => { if (pendingItem === null) onClose("dismiss"); },
     restoreFocus: false,
   });
   const index = useMemo(
@@ -146,12 +150,19 @@ export default function ActionSearch({
   }, [visibleItems.length]);
 
   async function choose(item: ActionSearchItem) {
-    if (item.disabled) return;
-    onClose("selection");
-    await item.run();
+    if (item.disabled || pendingItem !== null) return;
+    setPendingItem(item.id);
+    try {
+      await item.run();
+      onClose("selection");
+    } catch (error) {
+      toast(errMessage(error), "error");
+      setPendingItem(null);
+    }
   }
 
   function closeAndRestoreFocus() {
+    if (pendingItem !== null) return;
     onClose("dismiss");
   }
 
@@ -203,6 +214,7 @@ export default function ActionSearch({
         role="dialog"
         aria-modal="true"
         aria-label={t("ide.action.actionSearch")}
+        aria-busy={pendingItem !== null}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div
@@ -213,6 +225,7 @@ export default function ActionSearch({
           {searchScopeTabs.map((tab, tabIndex) => (
             <Button
               key={tab.id}
+              disabled={pendingItem !== null}
               size="xs"
               variant={scope === tab.id ? "selected" : "ghost"}
               role="tab"
@@ -239,6 +252,7 @@ export default function ActionSearch({
             />
             <input
               ref={inputRef}
+              disabled={pendingItem !== null}
               data-modal-initial-focus
               type="search"
               value={query}
@@ -309,7 +323,7 @@ export default function ActionSearch({
                   .filter(Boolean)
                   .join(" · ")}
                 aria-selected={itemIndex === activeIndex}
-                disabled={item.disabled}
+                disabled={item.disabled || pendingItem !== null}
                 leading={
                   <Icon
                     name={kindIcon[item.kind]}
@@ -317,7 +331,12 @@ export default function ActionSearch({
                   />
                 }
                 trailing={
-                  item.shortcut ? (
+                  pendingItem === item.id ? (
+                    <span className="tw:flex tw:items-center tw:gap-1 tw:text-2xs tw:text-muted-foreground">
+                      <Icon name="refresh" className="tw:animate-spin tw:motion-reduce:animate-none" />
+                      {t("common.loading")}
+                    </span>
+                  ) : item.shortcut ? (
                     <kbd className="tw:rounded-xs tw:border tw:border-border-subtle tw:bg-background tw:px-1.5 tw:py-1 tw:font-mono tw:text-2xs tw:text-muted-foreground">
                       {item.shortcut}
                     </kbd>

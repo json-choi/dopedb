@@ -392,6 +392,7 @@ function Shell() {
             documents: documents.items,
             activeDocumentId: documents.activeId,
             selectedTable: documents.selectedTable,
+            routePending: route.pending || documents.creatingQuery,
             content: mainContent,
           },
           agent: {

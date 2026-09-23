@@ -64,6 +64,7 @@ const LOG_STALE_MS = 10_000;
 const LOG_GC_MS = 60_000;
 export type CatalogScope = {
   key: string;
+  preferenceKey?: string;
   ready: boolean;
   workspaceId: string | null;
   accountScope: string | null;
@@ -103,6 +104,9 @@ export function useCatalogScope(): CatalogScope {
   const key = workspace
     ? `workspace:${workspace.kind}:${workspace.id}:account:${accountId}:authority:${authorityGeneration}`
     : "workspace:unresolved";
+  const preferenceKey = workspace
+    ? `workspace:${workspace.kind}:${workspace.id}:account:${accountId}`
+    : "workspace:unresolved";
   // Hold one committed render across a scope replacement before enabling new reads.
   const [settledKey, setSettledKey] = useState(key);
   useEffect(() => {
@@ -117,6 +121,7 @@ export function useCatalogScope(): CatalogScope {
   const prerequisiteReady = !!workspace && auth.data !== undefined;
   return {
     key,
+    preferenceKey,
     ready: settledKey === key && (prerequisiteReady || error !== undefined),
     workspaceId: workspace?.id ?? null,
     // The cache key still follows login changes, but local resources have no

@@ -8,6 +8,7 @@ import {
   useMemo,
   useReducer,
   useRef,
+  useState,
 } from "react";
 import {
   connectionId,
@@ -65,8 +66,9 @@ export function useWorkbenchDocuments({
 }: UseWorkbenchDocumentsOptions) {
   const { t } = useI18n();
   const [state, dispatch] = useReducer(workbenchReducer, emptyWorkbenchState);
+  const [restoringConnectionId, setRestoringConnectionId] = useState<string | null>(null);
   const loadToken = useRef(0);
-  const pendingInitial = useRef<WorkbenchDocument | null>(null);
+  const pendingInitial = useRef<{ document: WorkbenchDocument; showRestore: boolean } | null>(null);
   const restoreError = useRef(onRestoreError);
   restoreError.current = onRestoreError;
   const reportError = useRef(onError);
@@ -92,6 +94,7 @@ export function useWorkbenchDocuments({
     openedWhileLoading.current = new Set();
     if (!selectedConnectionId) {
       pendingInitial.current = null;
+      setRestoringConnectionId(null);
       dispatch({ type: "reset" });
       return;
     }
@@ -99,12 +102,13 @@ export function useWorkbenchDocuments({
     const queued = pendingInitial.current;
     pendingInitial.current = null;
     const initial =
-      queued?.connectionId === selectedConnectionId
-        ? queued
+      queued?.document.connectionId === selectedConnectionId
+        ? queued.document
         : supportsSql
           ? stableDocument(selectedConnectionId, "welcome")
           : queryDocument(selectedConnectionId, "documents");
-    dispatch({ type: "initialize", document: initial });
+    setRestoringConnectionId(supportsSql && (queued?.showRestore ?? true) ? selectedConnectionId : null);
+    if (queued?.document !== initial) dispatch({ type: "initialize", document: initial });
     if (initial.kind === "sql" && initial.persistedId) {
       openedWhileLoading.current.add(initial.persistedId);
     }
@@ -133,9 +137,12 @@ export function useWorkbenchDocuments({
           open: restorable.open,
           activePersistedId: restorable.active,
         });
+        setRestoringConnectionId(null);
       })
       .catch((error) => {
-        if (token === loadToken.current) restoreError.current?.(error);
+        if (token !== loadToken.current) return;
+        setRestoringConnectionId(null);
+        restoreError.current?.(error);
       });
   }, [
     openTabScope,
@@ -183,6 +190,10 @@ export function useWorkbenchDocuments({
     selectedDocuments.find(
       (document) => document.id === state.activeDocumentId,
     ) ?? null;
+  const restoring = supportsSql && selectedConnectionId !== null && (
+    restoringConnectionId === selectedConnectionId ||
+    (selectedDocuments.length === 0 && state.documents.length === 0)
+  );
 
   const reset = useCallback(() => {
     loadToken.current += 1;
@@ -190,19 +201,22 @@ export function useWorkbenchDocuments({
     closedWhileLoading.current = new Set();
     openedWhileLoading.current = new Set();
     pendingInitial.current = null;
+    setRestoringConnectionId(null);
     dispatch({ type: "reset" });
   }, []);
 
-  const prime = useCallback((document: WorkbenchDocument) => {
+  const prime = useCallback((document: WorkbenchDocument, showRestore = false) => {
     loadToken.current += 1;
     persistTarget.current = null;
     closedWhileLoading.current = new Set();
     openedWhileLoading.current = new Set();
-    pendingInitial.current = document;
+    pendingInitial.current = { document, showRestore };
+    setRestoringConnectionId(showRestore ? document.connectionId : null);
     dispatch({ type: "initialize", document });
   }, []);
 
   const activate = useCallback((document: WorkbenchDocument) => {
+    setRestoringConnectionId(null);
     if (
       !persistTarget.current &&
       document.kind === "sql" &&
@@ -310,6 +324,7 @@ export function useWorkbenchDocuments({
     selectedDocuments,
     activeDocument,
     activeDocumentId: state.activeDocumentId,
+    restoring,
     reset,
     prime,
     activate,

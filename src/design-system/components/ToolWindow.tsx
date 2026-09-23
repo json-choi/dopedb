@@ -41,23 +41,31 @@ export function ToolWindowSideSurface({
 
 export function ToolWindowHeader({
   title,
+  leading,
   actions,
   divider = true,
+  compact = false,
 }: {
-  title: ReactNode;
+  title?: ReactNode;
+  leading?: ReactNode;
   actions?: ReactNode;
   divider?: boolean;
+  compact?: boolean;
 }) {
   return (
     <header
       data-divider={divider || undefined}
-      className="tw:flex tw:h-[calc(var(--ds-tool-window-header-height)_-_1px)] tw:min-h-[calc(var(--ds-tool-window-header-height)_-_1px)] tw:shrink-0 tw:items-center tw:justify-between tw:gap-2 tw:border-b tw:border-transparent tw:bg-background tw:px-3 tw:text-ui tw:data-[divider=true]:border-border-subtle"
+      data-compact={compact || undefined}
+      className="tw:flex tw:h-[calc(var(--ds-tool-window-header-height)_-_1px)] tw:min-h-[calc(var(--ds-tool-window-header-height)_-_1px)] tw:shrink-0 tw:items-center tw:justify-between tw:gap-2 tw:border-b tw:border-transparent tw:bg-background tw:px-3 tw:text-ui tw:data-[divider=true]:border-border-subtle tw:data-[compact=true]:h-8 tw:data-[compact=true]:min-h-8"
     >
-      <strong className="tw:min-w-0 tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap">
-        {title}
-      </strong>
+      {title ? (
+        <strong className="tw:min-w-0 tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap">
+          {title}
+        </strong>
+      ) : null}
+      {leading ? <div className="tw:min-w-0">{leading}</div> : null}
       {actions ? (
-        <div className="ds-control-row tw:flex tw:shrink-0 tw:items-center tw:gap-[2px] tw:[--ds-row-control-size:var(--ds-control-sm)]">{actions}</div>
+        <div className="ds-control-row tw:ml-auto tw:flex tw:shrink-0 tw:items-center tw:gap-[2px] tw:[--ds-row-control-size:var(--ds-control-sm)]">{actions}</div>
       ) : null}
     </header>
   );
@@ -249,7 +257,7 @@ export function ToolWindowComposerContext({
   children: ReactNode;
 }) {
   return (
-    <div className="ds-control-row tw:grid tw:min-w-0 tw:shrink-0 tw:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] tw:items-center tw:gap-1 tw:py-1 tw:[--ds-row-control-size:var(--ds-control-sm)]">
+    <div className="ds-control-row tw:flex tw:min-w-0 tw:shrink-0 tw:items-center tw:gap-1 tw:py-1 tw:[--ds-row-control-size:var(--ds-control-sm)]">
       {children}
     </div>
   );

@@ -2,8 +2,6 @@
 // to controller-owned command groups. It owns no session/query/transport state.
 
 import { Icon } from "../../components/Icon";
-import ToolbarMenu, { ToolbarMenuItem } from "../../components/ToolbarMenu";
-import { AgentProviderMark } from "../../design-system/components/Agent";
 import { Button } from "../../design-system/components/Button";
 import {
   ToolWindowComposer,
@@ -14,7 +12,6 @@ import {
 import { useI18n } from "../../lib/i18n";
 import { AcpConfigSelect } from "./AcpConfigSelect";
 import { AcpScopeSelect } from "./AcpScopeSelect";
-import { providerLabel } from "./acpTranscriptPresentation";
 import type { AcpChatController } from "./useAcpChatController";
 
 type AcpChatComposerProps = Pick<
@@ -192,46 +189,6 @@ export default function AcpChatComposer({
         ) : null}
       </ToolWindowComposer>
       <ToolWindowComposerContext>
-        <ToolbarMenu
-          align="start"
-          triggerVariant="composer"
-          label={`${t("agent.acpProvider")}: ${providerLabel(setup.selectedProvider)}`}
-          disabled={session.starting}
-          trigger={
-            <>
-              <AgentProviderMark provider={setup.selectedProvider} />
-              <span className="tw:min-w-0 tw:flex-1 tw:truncate">
-                {providerLabel(setup.selectedProvider)}
-              </span>
-              <Icon name="chevronDown" />
-            </>
-          }
-        >
-          {setup.enabledProviders.map((provider) => (
-            <ToolbarMenuItem
-              key={provider}
-              icon={<AgentProviderMark provider={provider} />}
-              role="menuitemradio"
-              aria-checked={provider === setup.selectedProvider}
-              onClick={() => void commands.setup.changeProvider(provider)}
-            >
-              {providerLabel(provider)}
-            </ToolbarMenuItem>
-          ))}
-        </ToolbarMenu>
-        {composer.modelOption ? (
-          <AcpConfigSelect
-            provider={setup.selectedProvider}
-            option={composer.modelOption}
-            disabled={configDisabled}
-            onChange={(value) =>
-              void commands.composer.changeConfigOption(
-                composer.modelOption!,
-                value,
-              )
-            }
-          />
-        ) : <span />}
         <AcpScopeSelect
           knowledge={setup.knowledge}
           starting={session.starting}
@@ -243,14 +200,16 @@ export default function AcpChatComposer({
           }
         />
         {composer.modeOption ? (
-          <AcpConfigSelect
-            provider={setup.selectedProvider}
-            option={composer.modeOption}
-            disabled={configDisabled}
-            onChange={(value) =>
-              void commands.composer.changeConfigOption(composer.modeOption!, value)
-            }
-          />
+          <span className="tw:w-24 tw:min-w-0 tw:shrink-0">
+            <AcpConfigSelect
+              provider={setup.selectedProvider}
+              option={composer.modeOption}
+              disabled={configDisabled}
+              onChange={(value) =>
+                void commands.composer.changeConfigOption(composer.modeOption!, value)
+              }
+            />
+          </span>
         ) : null}
       </ToolWindowComposerContext>
     </ToolWindowComposerDock>

@@ -80,9 +80,9 @@
   --ds-terminal-ansi-bright-white: #dfe1e5;
 
   /* Completed Agent code fences. */
-  --ds-syntax-background: #17191d;
-  --ds-syntax-foreground: #e4e6e2;
-  --ds-syntax-comment: #858b94;
+  --ds-syntax-background: #111722;
+  --ds-syntax-foreground: #e8eefa;
+  --ds-syntax-comment: #97a7c1;
   --ds-syntax-changed: #fbbf24;
   --ds-syntax-constant: #fde68a;
   --ds-syntax-deleted: #ff8789;

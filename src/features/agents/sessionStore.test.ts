@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("./tauriAdapter", () => ({
   listAgentAcpSessions: vi.fn(),
   onAgentAcpChanged: vi.fn(),
+  setAgentAcpConfigOption: vi.fn(),
 }));
 
 import type {
@@ -12,7 +13,8 @@ import type {
   AgentKnowledgeScope,
 } from "./domain";
 import { buildAcpArticleContext } from "./useAcpComposerContext";
-import { listAgentAcpSessions, onAgentAcpChanged } from "./tauriAdapter";
+import { applyRememberedAcpMode, rememberAcpMode } from "./approvalModePreference";
+import { listAgentAcpSessions, onAgentAcpChanged, setAgentAcpConfigOption } from "./tauriAdapter";
 import {
   AcpSessionStore,
   mergeAcpSessionSummaries,
@@ -66,6 +68,7 @@ function messageEvent(
 describe("ACP session store", () => {
   const list = vi.mocked(listAgentAcpSessions);
   const listen = vi.mocked(onAgentAcpChanged);
+  const setConfig = vi.mocked(setAgentAcpConfigOption);
   let change: ((event: AcpSessionChanged) => void) | null;
   let unlisten: () => void;
   let unlistenCalls: number;
@@ -73,6 +76,8 @@ describe("ACP session store", () => {
   beforeEach(() => {
     list.mockReset();
     listen.mockReset();
+    setConfig.mockReset();
+    setConfig.mockResolvedValue(undefined);
     change = null;
     unlistenCalls = 0;
     unlisten = () => {
@@ -332,6 +337,42 @@ describe("ACP session store", () => {
     })).toBe(false);
     expect(store.getSnapshot().projections.size).toBe(0);
     expect(unlistenCalls).toBe(1);
+
+    const preferences = new Map<string, string>();
+    vi.stubGlobal("localStorage", {
+      getItem: (key: string) => preferences.get(key) ?? null,
+      setItem: (key: string, value: string) => { preferences.set(key, value); },
+    });
+    try {
+      const focus = {
+        session: session("private"),
+        replayTruncated: false,
+        events: [{
+          sessionId: session("private").id,
+          sequence: 1,
+          createdAt: "2026-08-13T00:00:00.000Z",
+          type: "sessionConfiguration" as const,
+          configOptions: [{
+            id: "mode", name: "Approval mode", category: "mode", type: "select",
+            currentValue: "ask", options: [
+              { value: "ask", name: "Ask for approval" },
+              { value: "full", name: "Full access" },
+            ],
+          }],
+        }],
+      };
+      rememberAcpMode("workspace:a", "codex", "full");
+      await applyRememberedAcpMode(focus, "workspace:b");
+      expect(setConfig).not.toHaveBeenCalled();
+      await applyRememberedAcpMode(focus, "workspace:a");
+      expect(setConfig).toHaveBeenCalledWith(focus.session.id, "mode", "full");
+      expect(setConfig).toHaveBeenCalledTimes(1);
+      focus.events[0].configOptions[0].options = [{ value: "ask", name: "Ask for approval" }];
+      await applyRememberedAcpMode(focus, "workspace:a");
+      expect(setConfig).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("keeps a newer event that races ahead of the initial list response", async () => {

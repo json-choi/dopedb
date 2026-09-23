@@ -25,8 +25,8 @@ settings screen, never from a general work surface.
 
 | File | Description |
 |------|-------------|
-| `AgentPluginSection.tsx` | Renders ACP plugin lifecycle state and the matching official local CLI inventory. |
-| `AgentSkillSection.tsx` | Renders Skill inventory, conflicts, and explicit install/repair/remove actions. |
+| `AgentPluginSection.tsx` | Renders one Agent setup row per provider with aggregate chat readiness and expandable technical details. |
+| `AgentSkillSection.tsx` | Renders optional external-use Skill inventory and guarded actions inside its provider row. |
 | `model.ts` | Shared presentation vocabulary for the bounded Agent tool setup workflow; the settings screen consumes these values without owning provider or Skill state itself. |
 | `useAgentToolsController.ts` | Coordinates the four bounded setup workflows rendered by Agent Tools settings, keeping effects and native commands out of the screen so it stays a composition root. |
 

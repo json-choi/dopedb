@@ -20,7 +20,11 @@ import {
   repairSkill,
   skillSelfTest,
 } from "../../skills/tauriAdapter";
-import { buildSkillSetupPlan } from "../../skills/setupPolicy";
+import {
+  loadAgentTargets,
+  saveAgentTargets,
+  SUPPORTED_AGENT_TARGETS,
+} from "../../skills/agentPreferences";
 import {
   errMessage,
   type SkillMutationReceipt,
@@ -44,43 +48,38 @@ export function useAgentToolsController() {
     refetchOnWindowFocus: false,
   });
   const [busy, setBusy] = useState<AgentToolsBusyAction | null>(null);
-  const [selectedPlugins, setSelectedPlugins] = useState<AcpPluginId[]>([]);
   const [error, setError] = useState<string | null>(null);
   const status = statusQuery.data ?? null;
 
   useEffect(() => {
-    if (busy !== "plugin-batch" && !busy?.startsWith("dopedb.acp.")) return;
+    if (!busy?.startsWith("dopedb.acp.")) return;
     const timer = window.setInterval(() => void refetchPlugins(), 500);
     return () => window.clearInterval(timer);
   }, [busy, refetchPlugins]);
 
-  useEffect(() => {
-    if (!pluginQuery.data || selectedPlugins.length > 0) return;
-    setSelectedPlugins(
-      pluginQuery.data
-        .filter((plugin) => plugin.state === "not_installed")
-        .map((plugin) => plugin.pluginId),
-    );
-  }, [pluginQuery.data, selectedPlugins.length]);
-
-  async function installPlugins(pluginIds: AcpPluginId[]) {
-    if (pluginIds.length === 0) return;
-    setBusy(pluginIds.length === 1 ? pluginIds[0] : "plugin-batch");
+  async function prepareAgent(pluginId: AcpPluginId) {
+    setBusy(pluginId);
     setError(null);
-    const failures: string[] = [];
     try {
-      for (const pluginId of pluginIds) {
-        try {
-          await installAgentAcpPlugin(pluginId);
-        } catch (reason) {
-          failures.push(errMessage(reason));
-        } finally {
-          await pluginQuery.refetch();
-        }
+      const current = pluginQuery.data?.find((plugin) => plugin.pluginId === pluginId);
+      if (current?.state === "ready" || current?.state === "staged") {
+        if (!current.enabled) await setAgentAcpPluginEnabled(pluginId, true);
+      } else {
+        await installAgentAcpPlugin(pluginId);
       }
-      if (failures.length > 0) throw new Error(failures.join("\n"));
-      setSelectedPlugins([]);
-      toast(t("agentTools.pluginsInstalled", { count: pluginIds.length }));
+      const refreshed = await pluginQuery.refetch();
+      if (refreshed.error) throw refreshed.error;
+      const prepared = refreshed.data?.find((plugin) => plugin.pluginId === pluginId);
+      if (!prepared?.enabled || !(
+        prepared.installedVersion || prepared.candidateVersion || prepared.lastKnownGoodVersion
+      )) {
+        throw new Error(t("agentTools.agentSetupFailed"));
+      }
+      const target = SUPPORTED_AGENT_TARGETS.find((agent) =>
+        pluginId.endsWith(agent.provider),
+      );
+      if (target) saveAgentTargets([...loadAgentTargets(), target.target]);
+      toast(t("agentTools.agentPrepared"));
     } catch (reason) {
       reportError(reason);
     } finally {
@@ -238,16 +237,13 @@ export function useAgentToolsController() {
     statusQuery,
     pluginQuery,
     cliQuery,
-    selectedPlugins,
-    setSelectedPlugins,
-    installPlugins,
+    prepareAgent,
     removePlugin,
     togglePlugin,
     runMutation,
     runInstall,
     runSelfTest,
     refresh,
-    combinedSetupPlan: status ? buildSkillSetupPlan(status.targets) : null,
     anyCurrent: status?.targets.some(
       (target) => target.state === "managed_current",
     ),

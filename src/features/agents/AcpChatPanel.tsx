@@ -5,9 +5,6 @@
 import { useLayoutEffect, useRef, type ReactNode, type RefObject } from "react";
 
 import { Icon } from "../../components/Icon";
-import ToolbarMenu, {
-  ToolbarMenuItem,
-} from "../../components/ToolbarMenu";
 import { Button } from "../../design-system/components/Button";
 import { useModalBehavior } from "../../design-system/components/Modal";
 import RenderRecoveryBoundary from "../../design-system/components/RenderRecoveryBoundary";
@@ -21,7 +18,9 @@ import {
 } from "../../design-system/components/ToolWindow";
 import { useI18n } from "../../lib/i18n";
 import { reportRenderFailure } from "../monitoring/client";
+import { AcpAgentModelMenu } from "./AcpAgentModelMenu";
 import AcpChatComposer from "./AcpChatComposer";
+import { AcpChatHeaderActions } from "./AcpChatHeaderActions";
 import AcpChatTranscript from "./AcpChatTranscript";
 import {
   lifecycleLabel,
@@ -120,58 +119,10 @@ function AcpChatPanelContent({
         onDoubleClick={viewport.resize.onDoubleClick}
       />
       <ToolWindowHeader
-        title={t("agent.acpTitle")}
+        leading={<AcpAgentModelMenu session={session} setup={setup} composer={composer} commands={commands} />}
+        compact
         divider={false}
-        actions={
-          <>
-            <Button
-              size="xs"
-              variant="ghost"
-              data-agent-focus-target="session-control"
-              disabled={session.starting}
-              onClick={commands.session.beginNewChat}
-              title={t("agent.acpNew")}
-            >
-              <Icon name="plus" />
-              {t("agent.acpNew")}
-            </Button>
-            <Button
-              iconOnly
-              size="xs"
-              variant="ghost"
-              aria-pressed={session.historyOpen}
-              onClick={commands.session.toggleHistory}
-              title={t("agent.acpSessions")}
-              aria-label={t("agent.acpSessions")}
-            >
-              <Icon name="history" />
-            </Button>
-            <ToolbarMenu
-              align="end"
-              triggerVariant="compact"
-              icon="moreVertical"
-              label={t("agent.acpMore")}
-            >
-              <ToolbarMenuItem
-                icon="gear"
-                onClick={commands.setup.openAgentSetup}
-              >
-                {t("agent.acpAgentSetup")}
-              </ToolbarMenuItem>
-              {active &&
-              active.lifecycle !== "closed" &&
-              active.lifecycle !== "failed" ? (
-                <ToolbarMenuItem
-                  icon="trash"
-                  onClick={() => void commands.session.close()}
-                >
-                  {t("agent.acpCloseSession")}
-                </ToolbarMenuItem>
-              ) : null}
-            </ToolbarMenu>
-            <ToolWindowHideButton label={t("common.close")} onClick={onClose} />
-          </>
-        }
+        actions={<AcpChatHeaderActions session={session} commands={commands} onClose={onClose} />}
       />
 
       {feedback.error || session.loadError ? (
@@ -279,8 +230,8 @@ function AcpChatPanelRecovery({
       returnFocusRef={returnFocusRef}
     >
       <ToolWindowHeader
+        compact
         divider={false}
-        title={t("agent.acpTitle")}
         actions={
           <ToolWindowHideButton
             label={t("common.close")}

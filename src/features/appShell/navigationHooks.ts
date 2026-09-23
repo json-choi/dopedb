@@ -1,6 +1,27 @@
-import { useEffect, useState } from "react";
+// Local shell navigation hooks own route transitions, editor warmup, and
+// member-local selection state without changing database resource identity.
+import { useCallback, useEffect, useReducer, useState, useTransition } from "react";
 
 import type { WorkbenchDocument } from "../workbench/domain";
+import {
+  appShellNavigationReducer,
+  initialAppShellMode,
+  type AppShellNavigationCommand,
+} from "./navigationState";
+
+export function useAppRouteTransition() {
+  const [navigation, dispatchNavigation] = useReducer(appShellNavigationReducer, initialAppShellMode);
+  const [pending, startTransition] = useTransition();
+  const navigate = useCallback((command: AppShellNavigationCommand) => {
+    // A resource switch commits its identity and route together.
+    if (command.type === "workspaceScopeChanged" || command.type === "showWorkbench") {
+      dispatchNavigation(command);
+      return;
+    }
+    startTransition(() => dispatchNavigation(command));
+  }, [startTransition]);
+  return { navigation, navigate, pending, startTransition };
+}
 
 export function preloadSqlEditor() {
   void import("../../components/SqlViewer").catch(() => undefined);
