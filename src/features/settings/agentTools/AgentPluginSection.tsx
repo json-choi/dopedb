@@ -21,6 +21,7 @@ import {
   AgentCliDetectionNotice,
   AgentCliStatusIndicators,
 } from "../../agents/AgentCliStatus";
+import { agentReadyForChat } from "../../agents/availability";
 import type { AcpPluginStatus, AgentCliInfo } from "../../agents/domain";
 import { SUPPORTED_AGENT_TARGETS, useEnabledAgentProviders } from "../../skills/agentPreferences";
 import { AgentSkillSection } from "./AgentSkillSection";
@@ -85,6 +86,8 @@ export function AgentPluginSection({ controller }: { controller: AgentToolsContr
             const state = agentStatus(plugin, cli, cliQuery.isPending || cliQuery.isFetching, cliQuery.isError);
             const selected = enabledProviders.includes(agent.provider);
             const installed = Boolean(plugin.installedVersion || plugin.candidateVersion || plugin.lastKnownGoodVersion);
+            const muted = !selected || !installed || !plugin.enabled ||
+              (cliQuery.isSuccess && !agentReadyForChat(plugin, cli));
             const needsPlugin = !selected || !installed || !plugin.enabled || Boolean(plugin.failure) || plugin.state === "rollback_required";
             const needsCli = selected && installed && plugin.enabled && !cliQuery.isPending && !cliQuery.isFetching && !cliQuery.isError && cli && (!cli.installed || !cli.authenticated);
             const busyAgent = busy === agent.id || activePluginStates.has(plugin.state);
@@ -92,13 +95,13 @@ export function AgentPluginSection({ controller }: { controller: AgentToolsContr
               <SettingsRow
                 key={agent.id}
                 identity={
-                  <span className="tw:flex tw:items-center tw:gap-2">
+                  <span className={muted ? "tw:flex tw:items-center tw:gap-2 tw:opacity-50" : "tw:flex tw:items-center tw:gap-2"}>
                     <AgentProviderMark provider={agent.provider} />
                     <strong>{agent.label}</strong>
                   </span>
                 }
                 details={
-                  <span className="tw:flex tw:min-w-0 tw:items-center tw:gap-2">
+                  <span className={muted ? "tw:flex tw:min-w-0 tw:items-center tw:gap-2 tw:opacity-60" : "tw:flex tw:min-w-0 tw:items-center tw:gap-2"}>
                     <StatusIndicator
                       tone={!selected && state.key === "agentTools.agentReady" ? "neutral" : state.tone}
                       icon={!selected && state.key === "agentTools.agentReady" ? "circleSlash" : state.icon}

@@ -107,11 +107,11 @@ export default function AcpChatTranscript({
         <AgentEmpty>
           <LoadingLabel>{t("agent.acpStarting")}</LoadingLabel>
         </AgentEmpty>
-      ) : !setup.selectedPluginReady ? (
+      ) : setup.enabledProviders.length === 0 || !setup.selectedPluginReady ? (
         <AgentEmpty>
           <Icon name="gear" />
-          <strong>{t("agent.acpPluginRequired")}</strong>
-          <p>{t("agent.acpPluginRequiredBody")}</p>
+          <strong>{t("agent.acpNoReadyAgents")}</strong>
+          <p>{t("agent.acpNoReadyAgentsBody")}</p>
           <Button
             size="xs"
             variant="primary"

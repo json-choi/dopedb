@@ -32,12 +32,12 @@ export function hasSavedAgentTargets() {
 }
 
 export function loadAgentTargets(): SkillTarget[] {
-  if (typeof localStorage === "undefined") return defaultTargets();
+  if (typeof localStorage === "undefined") return [];
   const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) return SUPPORTED_AGENT_TARGETS.map((entry) => entry.target);
+  if (!raw) return [];
   try {
     const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return defaultTargets();
+    if (!Array.isArray(parsed)) return [];
     const allowed = new Set<SkillTarget>(
       SUPPORTED_AGENT_TARGETS.map((entry) => entry.target),
     );
@@ -45,9 +45,9 @@ export function loadAgentTargets(): SkillTarget[] {
       (value): value is SkillTarget =>
         typeof value === "string" && allowed.has(value as SkillTarget),
     );
-    return targets.length > 0 ? [...new Set(targets)] : defaultTargets();
+    return [...new Set(targets)];
   } catch {
-    return defaultTargets();
+    return [];
   }
 }
 
@@ -80,8 +80,4 @@ function providersFromTargets() {
   return SUPPORTED_AGENT_TARGETS.filter((entry) => targets.has(entry.target)).map(
     (entry) => entry.provider,
   );
-}
-
-function defaultTargets(): SkillTarget[] {
-  return SUPPORTED_AGENT_TARGETS.map((entry) => entry.target);
 }

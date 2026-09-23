@@ -29,6 +29,7 @@ import {
   applyRememberedAcpMode,
   rememberAcpMode,
 } from "./approvalModePreference";
+import { agentReadyForChat } from "./availability";
 import {
   loginCommand,
   selectRichTranscriptKeys,
@@ -162,15 +163,10 @@ export function useAcpChatController({
         const plugin = pluginStatusQuery.data?.find(
           (status) => status.pluginId === pluginId,
         );
-        return (
-          plugin?.enabled === true &&
-          plugin.state !== "failed" &&
-          (plugin.installedVersion !== null ||
-            plugin.candidateVersion !== null ||
-            plugin.lastKnownGoodVersion !== null)
-        );
+        const cli = cliStatusQuery.data?.find((status) => status.id === provider);
+        return agentReadyForChat(plugin, cli);
       }),
-    [configuredProviders, pluginStatusQuery.data],
+    [configuredProviders, pluginStatusQuery.data, cliStatusQuery.data],
   );
 
   const workspaceSessions = useMemo(
@@ -339,7 +335,7 @@ export function useAcpChatController({
   }, [catalogScope.key, selectActiveSession]);
 
   useEffect(() => {
-    if (sessionSnapshot.loading || !pluginStatusQuery.isSuccess || restoredScopeRef.current === catalogScope.key) return;
+    if (sessionSnapshot.loading || !pluginStatusQuery.isSuccess || !cliStatusQuery.isSuccess || restoredScopeRef.current === catalogScope.key) return;
     restoredScopeRef.current = catalogScope.key;
     const next = workspaceSessions.find((session) =>
       isLiveSession(session.lifecycle),
@@ -347,7 +343,7 @@ export function useAcpChatController({
     if (activeIdRef.current === null) {
       selectActiveSession(next?.id ?? null);
     }
-  }, [catalogScope.key, pluginStatusQuery.isSuccess, selectActiveSession, sessionSnapshot.loading, workspaceSessions]);
+  }, [catalogScope.key, pluginStatusQuery.isSuccess, cliStatusQuery.isSuccess, selectActiveSession, sessionSnapshot.loading, workspaceSessions]);
 
   useEffect(() => {
     const next =

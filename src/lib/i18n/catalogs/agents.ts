@@ -103,9 +103,9 @@ export const agentsCatalog = defineCatalog(
     "agent.acpNoToken": "Local login · no app token",
     "agent.acpOpenLink": "Open link in the system browser",
     "agent.acpOpenSetup": "Set up Agent",
-    "agent.acpPluginRequired": "Install an Agent adapter",
-    "agent.acpPluginRequiredBody":
-      "Choose Claude or Codex in Agent Tools. DopeDB installs only the selected signed adapter plugin.",
+    "agent.acpNoReadyAgents": "No Agent ready for chat",
+    "agent.acpNoReadyAgentsBody":
+      "Prepare an Agent in Settings and sign in to its local CLI to use it here.",
     "agent.acpPlainTextFallback":
       "This response is shown as plain text to keep the chat stable.",
     "agent.acpPermission": "Permission required",
@@ -552,9 +552,9 @@ export const agentsCatalog = defineCatalog(
     "agent.acpNoToken": "로컬 로그인 · 앱 토큰 없음",
     "agent.acpOpenLink": "시스템 브라우저에서 링크 열기",
     "agent.acpOpenSetup": "에이전트 설정",
-    "agent.acpPluginRequired": "에이전트 어댑터를 설치하세요",
-    "agent.acpPluginRequiredBody":
-      "에이전트 도구에서 Claude 또는 Codex를 선택하세요. DopeDB는 선택한 서명된 어댑터 플러그인만 설치합니다.",
+    "agent.acpNoReadyAgents": "채팅할 수 있는 Agent가 없습니다",
+    "agent.acpNoReadyAgentsBody":
+      "설정에서 사용할 Agent를 준비하고 로컬 CLI에 로그인하세요.",
     "agent.acpPlainTextFallback":
       "채팅을 안정적으로 유지하기 위해 이 답변을 일반 텍스트로 표시합니다.",
     "agent.acpPermission": "권한 승인 필요",

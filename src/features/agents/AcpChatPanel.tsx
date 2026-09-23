@@ -119,7 +119,9 @@ function AcpChatPanelContent({
         onDoubleClick={viewport.resize.onDoubleClick}
       />
       <ToolWindowHeader
-        leading={<AcpAgentModelMenu session={session} setup={setup} composer={composer} commands={commands} />}
+        leading={setup.enabledProviders.includes(setup.selectedProvider) ? (
+          <AcpAgentModelMenu session={session} setup={setup} composer={composer} commands={commands} />
+        ) : null}
         compact
         divider={false}
         actions={<AcpChatHeaderActions session={session} commands={commands} onClose={onClose} />}
