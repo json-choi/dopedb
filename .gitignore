@@ -38,3 +38,5 @@ src-tauri/gen/
 **/.omc/*
 !/.omc/skills/
 /.claude/settings.local.json
+/.gstack/
+/.omx/
