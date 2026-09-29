@@ -1,15 +1,13 @@
-// Editorial Article reading surface: document, derived outline and exact query tools.
-// Commands and results remain owned by the existing Article controller.
+// Keeps the Article's findings first and review metadata collapsed by default.
+// The controller owns query execution/results; opening review never starts a query.
 import { memo, type ReactNode } from "react";
 import { Icon } from "../../components/Icon";
 import { AnalysisArticleBody } from "../../design-system/components/AnalysisArticleBody";
-import { Button } from "../../design-system/components/Button";
 import { useI18n } from "../../lib/i18n";
 import type { AnalysisArticleRecord } from "./domain";
 import { useArticleOutline } from "./useArticleOutline";
 
-// Desktop owns DOM retention for its outline; the shared markup stays import-free
-// so Workspace can compile it using only its own installed React runtime and types.
+// Desktop retains the body DOM for outline focus; Workspace uses the same primitive.
 const StableArticleBody = memo(AnalysisArticleBody);
 
 export function AnalysisArticleReader({ article, projectName, source, connectionName, runAction, children }: {
@@ -22,65 +20,48 @@ export function AnalysisArticleReader({ article, projectName, source, connection
 }) {
   const { t, lang } = useI18n();
   const outline = useArticleOutline(article.definition.html);
-  const outlineItems = outline.headings.map((heading, index) => (
-    <button
-      key={index}
-      type="button"
-      aria-current={outline.active === index ? "location" : undefined}
-      data-nested={heading.nested || undefined}
-      className="tw:w-full tw:cursor-pointer tw:border-0 tw:border-l tw:border-border-subtle tw:bg-transparent tw:px-4 tw:py-2.5 tw:text-left tw:font-sans tw:text-sm tw:leading-body tw:text-muted-foreground tw:data-[nested=true]:pl-7 tw:aria-[current=location]:border-foreground tw:aria-[current=location]:text-foreground tw:hover:text-foreground tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring"
-      onClick={() => outline.navigate(index)}
-    >{heading.title}</button>
-  ));
-  const scrollToQuery = () => {
-    const query = outline.scrollRef.current?.querySelector<HTMLElement>("[data-article-saved-query]");
-    query?.focus({ preventScroll: true });
-    query?.scrollIntoView({ block: "start" });
-  };
   return (
     <div ref={outline.scrollRef} className="scrollbar-sleek tw:h-full tw:min-h-0 tw:overflow-y-auto tw:overscroll-contain tw:motion-safe:scroll-smooth">
-      <div className="tw:mx-auto tw:grid tw:w-full tw:max-w-[1440px] tw:grid-cols-[minmax(0,1fr)_216px] tw:items-start tw:gap-y-8 tw:gap-x-[clamp(32px,6cqw,88px)] tw:px-[clamp(24px,4.5cqw,60px)] tw:pt-9 tw:pb-20 tw:@max-[920px]:grid-cols-1 tw:@max-[920px]:gap-y-8 tw:@max-[560px]:px-5 tw:@max-[560px]:pt-5">
-          <header className="tw:col-start-1 tw:row-start-1 tw:grid tw:gap-5">
-            <span className="ds-context-badge tw:w-fit">{projectName}</span>
-            <h1 className="tw:m-0 tw:max-w-[850px] tw:font-serif tw:text-[clamp(36px,4.7cqw,64px)] tw:leading-[1.08] tw:font-normal tw:tracking-[-0.035em] tw:text-balance tw:[overflow-wrap:anywhere]">{article.definition.title}</h1>
-            {article.definition.query.title !== article.definition.title ? <p className="tw:m-0 tw:max-w-[680px] tw:text-[clamp(16px,1.6cqw,20px)] tw:leading-body tw:text-muted-foreground">{article.definition.query.title}</p> : null}
-            <div className="tw:mt-1 tw:flex tw:items-center tw:gap-3">
-              <span className="tw:grid tw:size-9 tw:shrink-0 tw:place-items-center tw:rounded-full tw:bg-muted tw:text-muted-foreground"><Icon name={article.definition.source === "human" ? "user" : "terminal"} /></span>
-              <div className="tw:grid tw:gap-1">
-                <span className="tw:text-sm tw:font-medium">{source}</span>
-                <span className="tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-1 tw:text-xs tw:text-muted-foreground">
-                  <time dateTime={article.updatedAt}>{t("analysis.updatedOn", { date: new Date(article.updatedAt).toLocaleDateString(lang, { year: "numeric", month: "short", day: "numeric" }) })}</time>
-                  <span aria-hidden="true">·</span><span>{t("analysis.revisionNumber", { revision: article.revision })}</span>
-                </span>
-              </div>
+      <article className="tw:mx-auto tw:grid tw:w-full tw:max-w-[1000px] tw:min-w-0 tw:gap-8 tw:px-[clamp(20px,4.5cqw,56px)] tw:pt-5 tw:pb-14">
+        <header className="tw:grid tw:min-w-0 tw:gap-4">
+          <h1 className="tw:m-0 tw:font-sans tw:text-[clamp(26px,3.4cqw,36px)] tw:leading-tight tw:font-semibold tw:tracking-tight tw:text-balance tw:[overflow-wrap:anywhere]">{article.definition.title}</h1>
+          <div className="tw:flex tw:flex-wrap tw:items-center tw:justify-between tw:gap-3 tw:border-b tw:border-border-subtle tw:pb-5">
+            <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-1 tw:text-xs tw:text-muted-foreground">
+              <span>{source}</span><span aria-hidden="true">·</span>
+              <time dateTime={article.updatedAt}>{t("analysis.updatedOn", { date: new Date(article.updatedAt).toLocaleDateString(lang, { year: "numeric", month: "short", day: "numeric" }) })}</time>
             </div>
-          </header>
-          <div className="tw:col-start-1 tw:row-start-2 tw:min-w-0 tw:@max-[920px]:row-start-3">
-            <StableArticleBody bodyRef={outline.bodyRef} html={article.definition.html} />
-            <div className="tw:mt-12 tw:grid tw:min-w-0 tw:gap-9">{children}</div>
+            {runAction}
           </div>
-        <aside className="tw:sticky tw:top-8 tw:col-start-2 tw:row-start-1 tw:row-span-2 tw:grid tw:min-w-0 tw:gap-8 tw:@max-[920px]:static tw:@max-[920px]:col-start-1 tw:@max-[920px]:row-start-2 tw:@max-[920px]:row-span-1 tw:@max-[920px]:gap-5 tw:@max-[920px]:border-y tw:@max-[920px]:border-border-subtle tw:@max-[920px]:py-4">
-          {outline.headings.length ? <>
-            <nav aria-label={t("analysis.onThisPage")} className="tw:grid tw:gap-4 tw:@max-[920px]:hidden">
-              <h2 className="tw:m-0 tw:text-2xs tw:font-medium tw:tracking-[0.08em] tw:text-muted-foreground tw:uppercase">{t("analysis.onThisPage")}</h2>
-              <div className="scrollbar-sleek tw:grid tw:max-h-[42dvh] tw:overflow-auto">{outlineItems}</div>
-            </nav>
-            <details className="tw:hidden tw:@max-[920px]:block">
-              <summary className="tw:cursor-pointer tw:text-sm tw:text-muted-foreground">{t("analysis.onThisPage")}</summary>
-              <nav aria-label={t("analysis.onThisPage")} className="tw:mt-3 tw:grid">{outlineItems}</nav>
-            </details>
-          </> : null}
-          <section className="tw:grid tw:gap-4 tw:border-t tw:border-border-subtle tw:pt-7 tw:@max-[920px]:border-0 tw:@max-[920px]:pt-0">
-            <h2 className="tw:m-0 tw:text-2xs tw:font-medium tw:tracking-[0.08em] tw:text-muted-foreground tw:uppercase">{t("analysis.sourceDatabase")}</h2>
-            <div className="tw:grid tw:gap-4 tw:text-sm tw:text-muted-foreground tw:@max-[920px]:flex tw:@max-[920px]:flex-wrap tw:@max-[920px]:items-center">
-              <span className="tw:flex tw:min-w-0 tw:items-center tw:gap-2.5"><Icon name="database" className="tw:shrink-0" /><span className="tw:[overflow-wrap:anywhere]">{connectionName}</span></span>
-              <span className="tw:flex tw:items-center tw:gap-2.5"><Icon name="lock" />{t("analysis.queryReadOnly")}</span>
-              <Button variant="ghost" size="compact" onClick={scrollToQuery}><Icon name="file" />{t("analysis.savedQuery")}</Button>
-              {runAction}
+        </header>
+        <StableArticleBody bodyRef={outline.bodyRef} html={article.definition.html} />
+        <details key={article.id} className="tw:group tw:min-w-0 tw:border-t tw:border-border-subtle">
+          <summary className="tw:flex tw:cursor-pointer tw:list-none tw:items-center tw:gap-2 tw:py-4 tw:text-sm tw:font-medium tw:text-muted-foreground tw:hover:text-foreground tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:[&::-webkit-details-marker]:hidden">
+            <span className="tw:shrink-0 tw:group-open:rotate-90"><Icon name="chevronRight" /></span>
+            {t("analysis.reviewDetails")}
+          </summary>
+          <div className="tw:grid tw:min-w-0 tw:gap-6 tw:pb-4">
+            <p className="tw:m-0 tw:text-sm tw:text-muted-foreground">{t("analysis.reviewHelp")}</p>
+            <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-x-4 tw:gap-y-2 tw:text-xs tw:text-muted-foreground">
+              <span>{projectName}</span>
+              <span>{t("analysis.revisionNumber", { revision: article.revision })}</span>
+              <span className="tw:flex tw:min-w-0 tw:items-center tw:gap-2"><Icon name="database" /><span className="tw:[overflow-wrap:anywhere]">{connectionName}</span></span>
+              <span className="tw:flex tw:items-center tw:gap-2"><Icon name="lock" />{t("analysis.queryReadOnly")}</span>
             </div>
-          </section>
-        </aside>
-      </div>
+            {outline.headings.length ? <nav aria-label={t("analysis.onThisPage")} className="tw:grid tw:gap-2">
+              <h2 className="tw:m-0 tw:text-sm tw:font-medium">{t("analysis.onThisPage")}</h2>
+              {outline.headings.map((heading, index) => <button
+                key={index}
+                type="button"
+                aria-current={outline.active === index ? "location" : undefined}
+                data-nested={heading.nested || undefined}
+                className="tw:w-full tw:cursor-pointer tw:border-0 tw:border-l tw:border-border-subtle tw:bg-transparent tw:px-3 tw:py-1 tw:text-left tw:font-sans tw:text-sm tw:text-muted-foreground tw:data-[nested=true]:pl-6 tw:hover:text-foreground tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring"
+                onClick={() => outline.navigate(index)}
+              >{heading.title}</button>)}
+            </nav> : null}
+            {children}
+          </div>
+        </details>
+      </article>
     </div>
   );
 }

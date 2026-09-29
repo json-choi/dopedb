@@ -1,69 +1,47 @@
 ---
 name: dopedb-analysis-article
-description: Create or edit visual Analysis Articles through a DopeDB session, with measured charts, readable HTML, and the existing Article's saved query.
+description: Adapt and save visual analysis as a DopeDB Analysis Article, using available authoring skills and the Article's saved-query contract.
 ---
 
 # Analysis Article authoring
 
-Deliver a readable visual analysis in the workspace's Article tools. Use the
-existing Article ID for an edit. Its title and HTML can change while its query
-and successful observation stay unchanged; presentation edits need no new read.
-Other authoring skills can help produce content, but a local file or chat render
-does not save an Article.
+Use an available HTML, visualization, or document-design skill when it fits the
+analysis. Follow its authoring workflow, then adapt the result to DopeDB's HTML
+contract below. Do not assume a particular skill is installed; if none fits,
+compose the Article directly.
 
-## Choose the visual that answers the question
+Keep the Article short and focused on the key metrics and findings. Let the
+question determine the layout and number of visuals rather than following a
+fixed template. Preserve verified measurements, observation periods, denominators,
+and limitations needed to interpret the findings. Do not repeat the Article title,
+SQL, query IDs, or execution metadata in the body; the app provides review tools.
 
-- A funnel shows the same cohort progressing through ordered stages. Scale bars
-  to counts, label counts and denominators, and distinguish stage conversion
-  from conversion against the starting cohort.
-- A time series uses a line with a stated time zone and interval. Comparisons
-  usually use bars; a scatter plot can show the relationship between measures.
-- Use a diagram for a process or relationship, not as evidence of measured values.
-- Choose only the visuals the findings need. Include a caption and readable
-  values or a compact table. For a zero denominator, show an unavailable rate.
+## Save through DopeDB
 
-Lead with the finding, then its visual evidence and interpretation. Keep methods,
-observation dates, and material limits available without burying the finding in
-query IDs, hashes, raw SQL, or file paths. The app already shows the saved query.
-Do not repeat the Article title as the first body heading.
+Use the session's Article tools to save the result; a local HTML file or chat
+render alone does not create or update an Article. For an edit, use the existing
+Article ID. Presentation-only edits can change its title and HTML while preserving
+its one exact read-only saved query and successful observation; no new read is
+needed. Manual query reruns do not rewrite the HTML or charts.
 
-## HTML and visual vocabulary
+## Supported output
 
-Return an HTML fragment, without Markdown fences or a second HTML document.
-Headings h2–h4, paragraphs, lists, tables, section, aside, div, span, figure,
-figcaption, caption, and definition lists are supported. The app supplies the
-typography, spacing, colors, and responsive behavior; inline styles are removed.
+Return an HTML fragment, not Markdown fences or a full HTML document. The app
+supplies document typography, spacing, and responsive behavior; inline styles are
+removed. Supported content includes h2–h4, paragraphs, lists, tables, section,
+aside, div, span, figure, figcaption, caption, and definition lists.
 
-Optional layout classes:
+Optional app layout hooks are section.article-metrics with div.article-metric
+items, span.article-kicker labels, span.article-value values, and aside.article-note.
+They are available when useful, not a required layout.
 
-- section.article-metrics contains div.article-metric items; use span.article-kicker
-  for the label and span.article-value for the measured value.
-- aside.article-note highlights an interpretation or limitation.
-- SVG elements can use article-accent or article-muted for theme-aware emphasis.
+Use static inline SVG for charts, with a viewBox and an accessible title, desc,
+or aria-label. Supported drawing elements are svg, g, path, rect, circle, ellipse,
+line, polyline, polygon, text, and tspan. Coordinate and presentation attributes
+include x/y, sizes, points, path d, opacity, fill, stroke, stroke-width, font-size,
+font-weight, and text-anchor.
 
-Charts and diagrams use inline static SVG with a viewBox, role="img", title,
-desc, and/or aria-label. Allowed drawing elements are svg, g, path, rect, circle,
-ellipse, line, polyline, polygon, text, and tspan. Draw in absolute coordinates;
-use plain text labels, x/y, sizes, points, path d, numeric opacity, fill, stroke,
-stroke-width, font-size, font-weight, and text-anchor. Prefer currentColor and
-the emphasis classes. Include enough room for labels at narrow widths.
-
-For example, a measured comparison can use:
-
-```html
-<figure>
-  <svg viewBox="0 0 600 150" role="img" aria-label="Example: 80 starters and 40 completions">
-    <title>Example conversion</title>
-    <text x="0" y="28" fill="currentColor" font-size="18">Started · 80</text>
-    <rect x="170" y="8" width="400" height="32" rx="4" fill="currentColor" class="article-accent" />
-    <text x="0" y="88" fill="currentColor" font-size="18">Completed · 40</text>
-    <rect x="170" y="68" width="200" height="32" rx="4" fill="currentColor" class="article-accent" />
-  </svg>
-  <figcaption>40 of 80 starters completed the process (50%).</figcaption>
-</figure>
-```
-
-Replace example values with verified measurements. Scripts, event handlers,
-forms, animation, foreignObject, images, use references, external fonts,
-stylesheets, and URL-based SVG paint are not supported. Charts are snapshots:
-they do not query a database, refresh automatically, or publish themselves.
+Adapt unsupported output before saving: scripts, event handlers, forms,
+animation, foreignObject, images, use references, external fonts, stylesheets,
+and URL-based SVG paint are not supported. Charts are static observations, not
+live queries or automatically refreshed results.

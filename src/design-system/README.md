@@ -223,15 +223,14 @@ color를 거부한다.
   package `pretendard`의 dynamic-subset Variable WOFF2를 고정 버전으로 포함하며
   CDN이나 설치된 시스템 폰트에 의존하지 않는다. 같은 UI 글꼴을 Desktop,
   Workspace, 소개 사이트에서 사용한다.
-- Serif: `--ds-font-serif`. Article 제목과 본문 heading, 앱 브랜드에 사용한다.
+- Serif: `--ds-font-serif`. 브랜드와 별도로 정한 editorial surface에 사용한다. Article은 sans 제목·heading으로 지표와 같은 읽기 흐름을 유지한다.
 - Mono: `--ds-font-mono`. 경로, SQL, 값, 식별자, 숫자 비교에 사용한다.
 - Body: 15px.
 - Dense UI: 14px.
 - 보조 텍스트: 13px.
 - 일반 section·dialog 제목은 `text-title` 17px, 독립 작업 문서 제목은
   `text-heading` 23px를 사용한다. `text-base`·`text-lg` 같은 Tailwind 기본
-  크기로 화면마다 제목을 보정하지 않는다. Article 본문의 큰 serif heading은
-  아래 문서 전용 계약을 유지하고, 그 아래 h4는 17px 제목 역할을 사용한다.
+  크기로 화면마다 제목을 보정하지 않는다. Article 본문의 h2는 22px, h3/h4는 17px 제목 역할을 사용한다.
 - 기본 본문과 일반 leaf row는 400, tree section·일반 control·DB row는 500,
   section emphasis는 600, heading과 강한 category label은 700 weight를 사용한다.
   `font-normal/medium/semibold/bold`는 이 네 semantic token에 대응하며 화면별
@@ -1239,14 +1238,20 @@ Tauri 최소 창 크기에서는 explorer와 main을 세로로 고정 분할하�
 
 ### Article 문서 중심 화면
 
-- `AnalysisArticleReader`는 중앙 문서와 216px 오른쪽 도구 열을 소유한다.
-  제목은 36–64px serif, 본문은 15px/1.75, h2/h3는 28px/23px serif다.
-  실제 Project, 작성 source, 수정일과 revision만 표시한다.
-- `useArticleOutline`은 이미 정제되어 렌더링된 h2/h3에서 최대 64개 목차를 만들고
-  본문 scroll container를 관찰한다. HTML을 재작성하지 않는다. 목차 선택은 실제
-  heading으로 스크롤하고 keyboard focus도 옮긴다.
-- 읽는 면 폭이 920px 이하면 목차를 접을 수 있는 `details`로, DB·저장 쿼리·수동
-  재조회 도구를 제목 아래로 옮긴다. 폭은 viewport가 아닌 main container를 따른다.
+- `AnalysisArticleReader`는 최대 1000px 단일 문서 열을 소유한다. 제목은
+  26–36px sans semibold, 작성 source·수정일은 한 줄로 정리하며 query 제목을
+  부제목으로 반복하지 않는다. 본문은 15px/1.65, h2는 22px, h3/h4는 17px다.
+- `AnalysisArticleBody`의 metric은 상단 구분선과 큰 숫자만 가진 평평한 그룹이며
+  chart figure는 박스 없이 표시한다. 표는 가로 구분선을 사용하고 보조 note는
+  작은 글자와 왼쪽 선으로 구분한다. 작성 안내는 사용 가능한 Agent 작성 스킬에
+  표현을 맡기며 핵심 지표와 발견 내용을 짧게 전달하도록 한다. 레이아웃·색상·지표·
+  차트 개수를 고정하지 않고 기존 HTML을 자동 요약하거나 값·내용을 삭제하지 않는다.
+- `useArticleOutline`은 정제된 h2/h3에서 최대 64개 목차를 만들고 본문 scroll
+  container를 관찰한다. HTML을 재작성하지 않으며 선택한 heading으로 focus를 옮긴다.
+- 본문 아래 native `details`는 출처·revision·목차·저장 쿼리·최근 로컬 결과를
+  기본으로 접는다. 펼치기는 실행을 유발하지 않는다. 수동 재조회·실행 중 취소는
+  제목 아래에 남아 있으며 재조회가 HTML과 차트를 갱신하지 않는다는 설명은 검수
+  영역에 둔다. 오류는 기존 controller의 바깥 inline notice에 계속 표시한다.
 - 문서 위에는 breadcrumb, More, Edit, primary Share만 둔다. More의 HTML 공개는
   기존 publication 기능을 bounded modal에서 열며, History와 삭제도 실제 command다.
   빈 목록·로딩·실패를 구분하고 실패 상태에서 새로고침할 수 있다.

@@ -6,6 +6,8 @@ export const analysisCatalog = defineCatalog(
   {
     "analysis.navigation": "Articles",
     "analysis.onThisPage": "On this page",
+    "analysis.reviewDetails": "Sources, query & verification",
+    "analysis.reviewHelp": "Review the saved query and local results here. Rerunning the query does not update the Article’s text or charts.",
     "analysis.sourceDatabase": "Source",
     "analysis.queryReadOnly": "Read-only query",
     "analysis.updatedOn": "Updated {date}",
@@ -127,6 +129,8 @@ export const analysisCatalog = defineCatalog(
   {
     "analysis.navigation": "아티클",
     "analysis.onThisPage": "목차",
+    "analysis.reviewDetails": "출처·쿼리·검수 정보",
+    "analysis.reviewHelp": "저장 쿼리와 로컬 결과를 검수할 때 펼쳐보세요. 다시 조회해도 아티클 본문과 차트는 자동으로 바뀌지 않습니다.",
     "analysis.sourceDatabase": "원본 데이터베이스",
     "analysis.queryReadOnly": "읽기 전용 쿼리",
     "analysis.updatedOn": "{date} 수정",
