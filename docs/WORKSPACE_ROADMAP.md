@@ -1,6 +1,6 @@
 # Workspace Collaboration Roadmap
 
-Status: maintained alpha roadmap, updated 2026-09-03.
+Status: maintained alpha roadmap, updated 2026-09-29.
 
 This document tracks the remaining work needed to harden DopeDB's team workspace.
 It does not define product scope. Scope is owned by
@@ -24,6 +24,74 @@ Work is prioritized in this order:
 
 Driver count, a general database-client feature list, dashboards, text-to-SQL, and an
 always-on general MCP server are not workspace exit criteria.
+
+## Adopted roadmap: use-case proof and team self-hosting
+
+Owner direction accepted 2026-09-29:
+
+1. Show the three strongest useful DopeDB workflows on the introduction site with
+   graphics grounded in actual product use. Start with candidate selection, then
+   validate the flows, capture them, and implement the site presentation.
+2. Add an option for a team to self-host the workspace control plane and retain
+   control of provider access-issuance authority. This is accepted roadmap work,
+   not an available installation option; packaging and supported deployment
+   dependencies still need design.
+3. Skip business-model development. Pricing, paid tiers, conversion funnels, and
+   license changes are not deliverables of this roadmap.
+
+These presentation priorities do not waive the alpha reliability and security
+gates below. Candidate selection is not proof that a workflow is ready to publish.
+
+### Introduction-site candidates, in recommended display order
+
+| Candidate | Concrete task and benefit | Actual-use graphic sequence | Evidence required before publication |
+| --- | --- | --- | --- |
+| 1. Give a teammate database access without another provider login | An administrator connects a supported managed provider; an authorized teammate signs in to DopeDB and reads the shared database without handling the administrator's provider key or a shared DB password. | Administrator's managed connection and team access → teammate's shared connection → successful local read. | A packaged two-member run on one named supported managed provider, with distinct member access and redacted issuance evidence. DopeDB sign-in and grants remain required; do not imply member-local or BigQuery authentication is eliminated. |
+| 2. Investigate a data problem using code and the real database together | Ask why a sample order is missing from a report. The Agent reads the explicitly selected source revision and database schema/data, then explains the cause with file and query evidence. | Project resource selection → actual investigation request → source/query evidence and explanation. | A packaged official Agent session with a selected GitHub source revision and DB, reproducible synthetic data, evidence supporting the answer, and verification that unselected resources are inaccessible. Do not imply automatic cross-database joins or an implemented knowledge graph. |
+| 3. Share a clear funnel analysis with workspace teammates | Turn an investigation of an order-conversion funnel into a readable Analysis Article with its explanation and one exact read-only query. Share it inside the workspace so authorized teammates can understand the analysis and manually rerun the query in Desktop with their own access. | Actual funnel investigation → readable Article with stage definitions and findings → internal share link → authorized teammate opens the same Article and manually reruns its query. | A packaged two-member run proving internal access checks, the same shared Article definition, one exact read-only query, and independent authorized Desktop reruns with local-only result rows. Show synthetic analysis content; no public publication is needed for this story. A funnel is the subject of the Article, not a new funnel-builder, dashboard, multi-query pipeline, or automatic refresh feature. |
+
+The three candidates cover team onboarding, useful investigation, and clear
+internal analysis sharing. Use one coherent
+synthetic order-data scenario where practical, with product-owned neutral names.
+Capture actual application screens or recordings; crop, annotate, and sequence
+them for readability without fabricating controls, Agent answers, or receipts.
+Keep secrets and private data out of captures. Explain any illustrative overlays
+and keep each workflow's prerequisites and alpha status visible.
+
+Analysis Article sharing replaces Agent-proposed data correction as the third lead
+story by owner direction. Its packaged two-member and manual-rerun validation gates
+remain open; selection does not imply completion. Write approval remains a
+supporting capability. Generic SQL generation, driver count, and personal offline
+use are also supporting capabilities rather than these lead stories.
+
+Completion means three verified workflows, their redacted capture evidence, and
+readable site graphics with accurate captions. Site visitors do not execute real
+database operations through those graphics. No graphics or site changes are
+completed by this roadmap entry.
+
+### Team self-hosting: accepted direction, design pending
+
+The intended option lets a team operate workspace identity, membership, connection
+definitions, policy, collaboration metadata, and managed provider issuance inside
+its own infrastructure. Provider authorization or keyless trust must be controlled
+by that team, rather than requiring DopeDB's hosted service to issue access.
+Desktop continues to execute DB traffic locally and receive member-specific
+short-lived credentials; self-hosting does not create a DB proxy or shared static
+password distribution path.
+
+Before implementation, settle the supported installation target and external
+dependencies, team authentication and bootstrap, Desktop server selection and
+server-bound identity isolation, secret/key ownership and rotation, scheduling and
+expiry/revoke behavior, backup/restore, upgrades, and operator responsibility.
+Record these choices in an ADR and update the Product UI Scope decision table and
+implementation tracker before introducing server-selection controls. The option
+must not silently reuse hosted-service sessions or provider authority.
+
+Acceptance requires a clean installation on team-controlled infrastructure,
+two-member managed access with no DopeDB-hosted control-plane dependency, verified
+denial and expiry behavior, and documented upgrade and restore drills. This does
+not promise offline provider APIs or offline AI execution. Existing application
+principals, grants, and ownership must remain unchanged by setup and repair.
 
 ## Architecture boundary
 
@@ -223,7 +291,8 @@ removing its validation label.
   reads and operating cost, and a paid or experimental entitlement is explicitly approved.
 - Additional providers and engines require verified demand and a complete connection,
   revoke, drift, and platform test plan.
-- Enterprise SSO/SCIM, configurable retention, data residency beyond the current
-  deployment, and self-hosted control-plane packaging remain separate decisions.
+- Enterprise SSO/SCIM, configurable retention, and data residency beyond the current
+  deployment remain separate decisions. Team self-hosting is accepted above;
+  its packaging and implementation design remain pending.
 - Cross-device Personal Workspace database, credential, and Local Folder sync is not
   implied by account sign-in.

@@ -1,6 +1,6 @@
 # DopeDB Product Positioning
 
-Status: accepted product decision, updated 2026-09-10.
+Status: accepted product decision, updated 2026-09-29.
 
 This document owns DopeDB's market category, competitive boundary, and public
 message. Architecture documents prove how the promise is enforced; the landing
@@ -35,6 +35,16 @@ The product promise has five parts:
    execution on the public page.
 
 ## Audience and job
+
+Team-operated self-hosting is an accepted roadmap direction: teams should be able
+to operate the workspace control plane and managed provider issuance authority in
+their own infrastructure. It is not a shipped installation option. Supported
+packaging, dependencies, authentication, and operational boundaries must be settled
+before implementation; see the [adopted roadmap](WORKSPACE_ROADMAP.md#adopted-roadmap-use-case-proof-and-team-self-hosting).
+Managed access on the hosted service can retain encrypted provider authorization
+or keyless trust settings to issue member credentials. Public messaging must not
+equate keeping member-local DB passwords off the service with the service holding
+no access-issuance authority.
 
 The first audience is a small engineering or data team that already uses Codex or
 Claude Code and needs those agents to inspect staging or production-shaped
@@ -188,6 +198,19 @@ General local-client convenience, driver breadth, visual object authoring, built
 model APIs, and universal MCP compatibility do not outrank those items.
 
 ## Landing contract
+
+The next site presentation will demonstrate three useful workflows using actual
+product screens: teammate onboarding through managed access, investigation using
+selected source code and real database context, and clear internal sharing of a
+funnel analysis through an Analysis Article. The third story shows authorized
+workspace members reading the same Article and manually rerunning its single
+read-only query in Desktop; it does not introduce a funnel-builder or dashboard.
+These are selected candidates pending execution and capture
+validation, not additional completed public claims. The
+[roadmap](WORKSPACE_ROADMAP.md#adopted-roadmap-use-case-proof-and-team-self-hosting)
+owns their scenarios, evidence gates, and self-hosting follow-up. Business-model
+development is excluded from this initiative by owner decision; it does not add
+pricing, paid tiers, or a license change.
 
 The public landing page serves one audience and one primary action:
 
