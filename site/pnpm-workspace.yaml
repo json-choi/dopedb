@@ -1,4 +1,6 @@
 overrides:
+  # GHSA-3wwx-pv8p-q78v: fix WebSocket decompression error handling.
+  'undici@>=7.28.0 <7.29.1': 7.29.1
   'nanoid@<3.3.18': 3.3.18
   postcss: 8.5.26
   sharp: ^0.35.3
