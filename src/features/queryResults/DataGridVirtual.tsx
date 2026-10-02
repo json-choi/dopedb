@@ -514,12 +514,13 @@ export default function DataGridVirtual(props: Props) {
               >
                 <span className="tw:flex tw:min-w-0 tw:items-center tw:gap-1 tw:pr-1">
                   <span
-                    className="tw:inline-flex tw:min-w-0 tw:flex-1 tw:items-center tw:gap-1 tw:overflow-hidden tw:align-middle tw:[&_.icon]:shrink-0 tw:[&_.icon]:text-xs tw:[&_.icon]:text-muted-foreground tw:[&>span]:overflow-hidden tw:[&>span]:text-ellipsis"
+                    className="tw:inline-flex tw:min-w-0 tw:flex-1 tw:items-center tw:gap-1 tw:overflow-hidden tw:align-middle tw:[&_.icon]:shrink-0 tw:[&>span]:overflow-hidden tw:[&>span]:text-ellipsis"
                     title={props.columnMeta?.[name]?.dataType}
                   >
                     {props.columnMeta?.[name] ? (
                       <Icon
                         name={props.columnMeta[name].pk ? "key" : "columns"}
+                        className="tw:text-xs tw:text-muted-foreground"
                       />
                     ) : null}
                     <span>{name}</span>
@@ -528,7 +529,7 @@ export default function DataGridVirtual(props: Props) {
                         name={
                           props.sort.dir === "asc" ? "caretUp" : "caretDown"
                         }
-                        className="tw:text-2xs tw:text-primary"
+                        className="tw:text-body tw:text-muted-foreground"
                       />
                     ) : null}
                   </span>
