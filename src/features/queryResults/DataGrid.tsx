@@ -409,7 +409,7 @@ function DataGridTable({
                       {sort?.col === c ? (
                         <Icon
                           name={sort.dir === "asc" ? "caretUp" : "caretDown"}
-                          className="tw:shrink-0 tw:text-2xs tw:text-primary"
+                          className="tw:shrink-0 tw:text-body tw:text-muted-foreground"
                         />
                       ) : null}
                     </button>

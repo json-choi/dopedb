@@ -76,8 +76,8 @@ const glyphs = {
   ),
   chevronRight: <path d="m9 18 6-6-6-6" />,
   chevronDown: <path d="m6 9 6 6 6-6" />,
-  caretUp: <path d="M12 8l5 8H7z" fill="currentColor" stroke="none" />,
-  caretDown: <path d="M12 16l-5-8h10z" fill="currentColor" stroke="none" />,
+  caretUp: <path d="M12 4l6 10H6z" fill="currentColor" stroke="none" />,
+  caretDown: <path d="M12 20l-6-10h12z" fill="currentColor" stroke="none" />,
   database: (
     <>
       <ellipse cx="12" cy="5" rx="9" ry="3" />
