@@ -220,7 +220,7 @@ grid의 query field·header action·필터 popover 밀도도 같은 앱에서 �
 | static Tailwind v4 utility | `complete` | build와 source guard |
 | modal focus containment/trigger 복구·명시적 footer 종료 | `complete` | browser interaction smoke, 공용 `ModalHeader`/`ModalFooter` primitive |
 | popup/menu viewport collision | `complete` | 공용 popup/menu primitive |
-| grid composite keyboard/resize separator | `complete` | 공용 roving helper, `ResizeSeparator`, packaged interaction smoke |
+| grid composite keyboard/resize separator | `partial` | 공용 roving helper, `ResizeSeparator`, packaged interaction smoke. 열 경계 더블클릭·Enter 자동 맞춤은 일반·가상 grid 공용 계산으로 구현했다. 로드된 표시 값·헤더 control을 기준으로 해당 열만 최대 480px까지 조절한다. macOS 개발 앱의 Demo SQLite에서 email 열 144→245px 맞춤과 다른 열 폭 유지를 확인했다. 실제 컴포넌트의 브라우저 fixture에서 일반·가상·빈 결과·부분 stream 맞춤, 480px 상한, 정렬 오작동 방지와 keyboard resize를 확인했다. 경계 hover/focus는 두 줄 조작 힌트를 제공하며 브라우저 focus 상태의 줄바꿈을 확인했다. [검수 캡처](qa/grid-column-auto-fit.md). 새 동작과 hover 힌트의 macOS·Windows packaged runtime 검수는 남아 있다. |
 | grouped AppShell presentation contract | `complete` | `pnpm check:architecture` |
 | generic UI의 feature/adapter 비의존 | `complete` | transitive architecture guard |
 | critical test 예산 | `complete` | `pnpm check:test-budget` |

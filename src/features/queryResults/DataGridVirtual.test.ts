@@ -29,6 +29,7 @@ import { tabularResult } from "../agents/AcpStructuredResult";
 import {
   clearSqlResultPageCache,
   collectCachedSqlResultRows,
+  iterateCachedSqlResultRows,
   ensureSqlResultRange,
   SQL_RESULT_CACHE_MAX_PAGES,
   retainSqlStreamBatch,
@@ -425,6 +426,14 @@ describe("DataGridVirtual window", () => {
     expect(sqlResultRowAt(source, 0)).toBeUndefined();
     expect(sqlResultRowAt(source, SQL_RESULT_CACHE_MAX_PAGES * 256)).toEqual([
       SQL_RESULT_CACHE_MAX_PAGES * 256,
+    ]);
+    // Auto-fit reads only retained pages, even before stream completion. It
+    // must not flatten the logical result or include evicted/unloaded rows.
+    const retainedRows = [...iterateCachedSqlResultRows({ ...source, complete: false })];
+    expect(retainedRows).toHaveLength(SQL_RESULT_CACHE_MAX_PAGES * 256);
+    expect(retainedRows[0]).toEqual([256, [256]]);
+    expect(retainedRows[retainedRows.length - 1]).toEqual([
+      source.rowCount - 1, [source.rowCount - 1],
     ]);
 
     clearSqlResultPageCache();

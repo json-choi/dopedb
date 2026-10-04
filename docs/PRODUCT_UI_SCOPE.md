@@ -287,6 +287,11 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
   `X`를 만들지 않고 footer의 명시적인 취소·닫기·완료 action으로 종료한다.
 - data grid의 header/row/row number는 28px, 기본 column은 144px을 기준으로 한다.
   virtualization 여부와 무관하게 selection, resize, sort, filter 계약은 같다.
+  열 경계 더블클릭 또는 경계에 focus한 뒤 Enter는 해당 열만 현재 로드된 표시 값과
+  헤더에 맞추며 자동 맞춤 상한은 480px이다. 추가 조회나 새 행 도착에 따른 자동 재조절은 하지 않고,
+  수동 드래그는 기존 1200px 상한을 유지한다.
+  열 경계 hover/focus 힌트는 `드래그: 너비 조절`과 `더블클릭: 자동 맞춤`을
+  두 줄로 표시한다.
 - 사용자가 편집기에서 작성한 SQL은 Run 동작 자체를 exact payload 승인으로 사용해
   중복 검토 화면이나 확인 문구 입력 없이 실행한다. Agent와 background 작업이
   제안한 mutation은 사람이 작성한 것으로 간주하지 않고 별도 한 번의 명시적

@@ -404,11 +404,14 @@ loopback 문서는 이 정본을 빌드 시 포함하며 네트워크 font나 sc
   자동으로 사라지지 않고 닫은 뒤 trigger focus를 복구한다.
 - `ResizeSeparator`: shell sidebar와 data-grid column이 공유하는
   keyboard/pointer resize 경계. 실제 dimension과 min/max/now ARIA를 연결하고,
-  방향키의 bounded step, Home/End 경계 이동, double-click reset을 소유한다.
+  방향키의 bounded step, Home/End 경계 이동, double-click/Enter action을 소유한다.
+  기본은 reset이며 data-grid는 같은 callback으로 해당 열 자동 맞춤을 실행한다.
+  opt-in `tooltip`은 공용 `Tooltip`을 사용하며 native title을 중복 표시하지 않는다.
   저장과 pointer drag lifecycle은 각 feature의 기존 state owner가 유지한다.
 - `Tooltip`: icon-only command와 compact help affordance의 portal tooltip.
   짧은 hover/focus delay, viewport collision, 위·아래 flip, `Esc` dismiss를
-  소유한다. `Button iconOnly`는 `title` 또는 `aria-label`을 이 primitive에
+  소유한다. label의 명시적 줄바꿈은 `whitespace-pre-line`으로 보존한다.
+  `Button iconOnly`는 `title` 또는 `aria-label`을 이 primitive에
   전달해 native tooltip과 화면별 hover popup을 만들지 않는다.
   portal 위치는 공용 `floatingSurfaceMiddleware`를 통해 Floating UI의
   `autoUpdate`, `flip`, `shift`, `size`, `hide`를 사용한다. CSS token이 spacing과
@@ -863,7 +866,12 @@ DopeDB의 실제 작업 흐름과 접근성, supported viewport를 위한 제품
   한다.
   `dataGridGeometry.ts`가 제품 기준의 28px header/row, 28px row-number
   column, 144px default data column을 소유하며 일반·가상 renderer는 이 값을
-  중복 선언하지 않는다. identifier/value/row number는 `font-mono`를 사용하고
+  중복 선언하지 않는다. identifier/value/row number는 `font-mono`를 사용한다.
+  열 경계 더블클릭은 공용 `dataGridAutoFitWidth`로 해당 열만 최대 480px까지
+  맞춘다. 실제 표시 font·헤더 control 공간과 현재 로드된 값을 측정하고,
+  stream은 retained cache page만 순회해 추가 조회·전체 결과 평탄화를 하지 않는다.
+  수동 드래그의 1200px 상한과 다른 열의 폭은 유지한다. 새 행 도착은 자동 맞춤을
+  다시 실행하지 않는다. `ResizeSeparator`의 double-click callback은 이 동작을 호출한다.
   강한 zebra 배경을 추가하지 않는다.
   header와 row-number/frozen boundary만 구조적 세로선을 유지하며 body data
   cell은 기본 vertical border를 그리지 않는다.

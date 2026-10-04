@@ -6,7 +6,7 @@
 //   - onSelectRow/onCellClick → row highlight + click-to-open a cell in the side viewer
 //   - startIndex → row numbers continue across pages (rows 101-200, not 1-100 again)
 // Columns are drag-resizable: first drag snapshots every rendered width so only the
-// dragged column moves. Double-click resets the compact default widths.
+// dragged column moves. Double-click fits only that column to loaded display text.
 import {
   useEffect,
   useRef,
@@ -50,6 +50,7 @@ import {
 } from "./decodeFailures";
 import { useDataGridNumericColumns } from "./dataGridNumericColumns";
 import { useDataGridSelectionReset } from "./useDataGridSelectionReset";
+import { dataGridAutoFitWidth } from "./dataGridAutoFit";
 
 function cell(v: unknown): string {
   if (v === null || v === undefined) return "NULL";
@@ -403,7 +404,10 @@ function DataGridTable({
                           className="tw:shrink-0 tw:text-xs tw:text-muted-foreground"
                         />
                       ) : null}
-                      <span className="tw:overflow-hidden tw:text-ellipsis">
+                      <span
+                        data-grid-column-label
+                        className="tw:overflow-hidden tw:text-ellipsis"
+                      >
                         {c}
                       </span>
                       {sort?.col === c ? (
@@ -424,7 +428,10 @@ function DataGridTable({
                           className="tw:shrink-0 tw:text-xs tw:text-muted-foreground"
                         />
                       ) : null}
-                      <span className="tw:overflow-hidden tw:text-ellipsis">
+                      <span
+                        data-grid-column-label
+                        className="tw:overflow-hidden tw:text-ellipsis"
+                      >
                         {c}
                       </span>
                     </span>
@@ -442,6 +449,7 @@ function DataGridTable({
                   data-grid-resize-handle
                   className="tw:absolute tw:top-0 tw:right-0 tw:z-[var(--ds-z-sticky)] tw:h-full tw:w-2 tw:cursor-col-resize tw:hover:bg-primary/55 tw:active:bg-primary/55"
                   label={`${c}: ${t("grid.resizeHint")}`}
+                  tooltip={t("grid.resizeTooltip")}
                   orientation="vertical"
                   value={columnWidths[j + 1]}
                   minimum={50}
@@ -449,7 +457,22 @@ function DataGridTable({
                   onChange={(width) =>
                     setWidths((current) => ({ ...current, [j + 1]: width }))
                   }
-                  onReset={() => setWidths({})}
+                  onReset={() => {
+                    const header = tableRef.current?.querySelector<HTMLElement>(
+                      `[role=columnheader][aria-colindex="${j + 2}"]`,
+                    );
+                    if (!header) return;
+                    const texts = result.rows.map((row, index) => {
+                      const failure = cellDecodeFailureAt(
+                        result.decodeFailures, index, j,
+                      );
+                      return failure
+                        ? t("grid.decodeFailure", { type: failure.databaseType })
+                        : cell(row[j]);
+                    });
+                    const width = dataGridAutoFitWidth(header, texts, 50);
+                    setWidths((current) => ({ ...current, [j + 1]: width }));
+                  }}
                   onMouseDown={(e) => startResize(e, j + 1)}
                 />
               </th>

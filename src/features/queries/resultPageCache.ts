@@ -280,6 +280,17 @@ export function collectCachedSqlResultRows(
   return rows.length === source.rowCount ? rows : null;
 }
 
+/** Iterates only retained pages, including partial streams, without flattening or fetching. */
+export function* iterateCachedSqlResultRows(source: SqlStreamRowSource) {
+  const cache = cacheFor(source);
+  if (!cache) return;
+  for (const page of cache.pages.values()) {
+    for (let offset = 0; offset < page.rows.length; offset += 1) {
+      yield [page.rowStart + offset, page.rows[offset]] as const;
+    }
+  }
+}
+
 export async function ensureSqlResultRange(
   source: SqlStreamRowSource,
   start: number,
