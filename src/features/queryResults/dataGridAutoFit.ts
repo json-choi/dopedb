@@ -54,3 +54,20 @@ export function dataGridAutoFitWidth(
   }
   return Math.min(AUTO_FIT_MAXIMUM, Math.ceil(width));
 }
+
+// One pending restore per column; manual resize clears that column's entry.
+export function toggleDataGridAutoFit(
+  previousWidths: Map<number, number>,
+  column: number,
+  currentWidth: number,
+  fit: () => number,
+) {
+  const previous = previousWidths.get(column);
+  if (previous !== undefined) {
+    previousWidths.delete(column);
+    return previous;
+  }
+  const fitted = fit();
+  previousWidths.set(column, currentWidth);
+  return fitted;
+}

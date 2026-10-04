@@ -871,7 +871,10 @@ DopeDB의 실제 작업 흐름과 접근성, supported viewport를 위한 제품
   맞춘다. 실제 표시 font·헤더 control 공간과 현재 로드된 값을 측정하고,
   stream은 retained cache page만 순회해 추가 조회·전체 결과 평탄화를 하지 않는다.
   수동 드래그의 1200px 상한과 다른 열의 폭은 유지한다. 새 행 도착은 자동 맞춤을
-  다시 실행하지 않는다. `ResizeSeparator`의 double-click callback은 이 동작을 호출한다.
+  다시 실행하지 않는다. 같은 열을 다시 실행하면 직전 너비를 복원한다.
+  열별 복원 상태는 renderer가 보관하고 수동 drag·keyboard resize 시 해당 열만 해제한다.
+  맞춤 상태에서는 두 줄 힌트의 둘째 줄을 이전 너비 복원으로 바꾼다.
+  `ResizeSeparator`의 double-click/Enter callback은 이 동작을 호출한다.
   강한 zebra 배경을 추가하지 않는다.
   header와 row-number/frozen boundary만 구조적 세로선을 유지하며 body data
   cell은 기본 vertical border를 그리지 않는다.

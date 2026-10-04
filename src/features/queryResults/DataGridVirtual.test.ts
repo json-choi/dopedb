@@ -22,6 +22,7 @@ import {
 import type { SqlStreamRowSource } from "../queries/domain";
 import { createFrameCoalescer } from "../../lib/frameCoalescer";
 import { resizeSeparatorNextValue } from "../../design-system/components/ResizeSeparator";
+import { toggleDataGridAutoFit } from "./dataGridAutoFit";
 import { dataGridKeyboardTarget } from "./dataGridKeyboard";
 import type { ButtonProps } from "../../design-system/components/Button";
 import type { ConfirmButtonProps } from "../../components/ConfirmButton";
@@ -87,6 +88,17 @@ describe("DataGridVirtual window", () => {
     expect(window.endRow).toBeLessThan(1_000_000);
     expect(window.visibleColumns.length).toBeLessThan(15);
     expect(cellCount).toBeLessThan(400);
+
+    const previousWidths = new Map<number, number>();
+    expect(toggleDataGridAutoFit(previousWidths, 0, 144, () => 245)).toBe(245);
+    expect(toggleDataGridAutoFit(previousWidths, 1, 200, () => 480)).toBe(480);
+    expect(toggleDataGridAutoFit(previousWidths, 0, 245, () => {
+      throw new Error("restore must not measure data again");
+    })).toBe(144);
+    expect(previousWidths.get(1)).toBe(200);
+    previousWidths.delete(1); // manual resize starts a new fit/restore pair
+    expect(toggleDataGridAutoFit(previousWidths, 1, 320, () => 480)).toBe(480);
+    expect(toggleDataGridAutoFit(previousWidths, 1, 480, () => 480)).toBe(320);
 
     const scheduled: { frame: FrameRequestCallback | null } = { frame: null };
     let frameRequests = 0;
