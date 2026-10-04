@@ -49,6 +49,8 @@ import {
   hasNonScalarPk,
   pkColumns,
 } from "../../lib/sqlBuild";
+import EditableTableCell from "../../features/tableData/EditableTableCell";
+import { cellEditKey, sameCellEditRow, stageCellEdit } from "../../features/tableData/cellEdits";
 import TableSidePanel from "./TableSidePanel";
 import TableExpressionBar from "./TableExpressionBar";
 import TableStructure from "./TableStructure";
@@ -96,6 +98,7 @@ export default function SqlTableData({
       appliedOrderByExpression,
       selectedRow: selected,
       selectedCell: cellSel,
+      cellDraftActive,
       editor,
       staged,
       reviewing,
@@ -156,6 +159,7 @@ export default function SqlTableData({
     commands.patch({
       selectedRow: null,
       selectedCell: null,
+      cellDraftActive: false,
       writeError: null,
     });
   });
@@ -439,11 +443,13 @@ export default function SqlTableData({
         <TableToolbar
           table={table}
           result={result}
-          canEdit={canEdit}
+          canEdit={canEdit && !stagedRunning && !stagedProposal}
           noEditTitle={noEditTitle}
           selectedRowBlockedReason={selectedRowBlockedReason}
           selected={selected}
           stagedCount={staged.length}
+          mutationLocked={stagedRunning || !!stagedProposal}
+          cellDraftActive={cellDraftActive}
           activeFilters={activeFilters}
           page={page}
           pageSize={pageSize}
@@ -607,6 +613,35 @@ export default function SqlTableData({
                       ),
                     });
                   }}
+                  renderCell={(value, rowIndex, column) => {
+                    const original = rowMap(result.rows[rowIndex]);
+                    const rowKey = cellEditKey(table, original);
+                    const pending = staged.find((write) => sameCellEditRow(write, rowKey));
+                    const metadata = table.columns.find((candidate) => candidate.name === column);
+                    const changed = !!pending?.cellEdit && column in pending.cellEdit.values;
+                    return <EditableTableCell
+                      key={`${key}:${JSON.stringify(rowKey)}:${column}:${rowsQuery.dataUpdatedAt}`}
+                      value={changed ? pending!.cellEdit!.values[column] : cellToInput(value)}
+                      column={column}
+                      nullable={metadata?.nullable ?? false}
+                      changed={changed}
+                      editable={canEdit && pageReady && !busy && !stagedRunning && !stagedProposal && !editor && !pendingDelete && !!metadata && !metadata.pk &&
+                        Object.values(rowKey).every((pk) => pk != null) &&
+                        !firstDecodeFailureInRow(result.decodeFailures, rowIndex)}
+                      onDraftActive={(active) => commands.patch({ cellDraftActive: active })}
+                      onCommit={(nextValue) => {
+                        try {
+                          commands.patch({
+                            staged: stageCellEdit(staged, engine, table, original, column, nextValue),
+                            selectedCell: null,
+                            writeError: null,
+                          });
+                        } catch (error) {
+                          commands.patch({ writeError: errMessage(error) });
+                        }
+                      }}
+                    />;
+                  }}
                   columnMeta={Object.fromEntries(
                     table.columns.map((column) => [
                       column.name,
@@ -660,17 +695,17 @@ export default function SqlTableData({
                 proposal={stagedProposal}
                 running={stagedRunning}
                 catalogPending={snapshotQuery.isPending}
+                writesEnabled={safety.allowWrites}
                 selectedCell={cellSel}
                 onSubmit={stageWrite}
                 onCloseEditor={() => commands.patch({ editor: null })}
                 onCloseDelete={() => commands.patch({ pendingDelete: null })}
                 onArmDelete={armDelete}
-                onCloseReview={() =>
-                  commands.patch({
-                    reviewing: false,
-                    proposal: null,
-                  })
-                }
+                onCloseReview={() => {
+                  if (stagedRunning) return;
+                  if (stagedProposal) void rejectStagedChanges();
+                  else commands.patch({ reviewing: false });
+                }}
                 onRemoveStaged={commands.removeStaged}
                 onPrepare={() => void prepareStagedChanges()}
                 onApprove={() => void approveStagedChanges()}

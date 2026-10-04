@@ -31,6 +31,7 @@ export function initialTableDataState(viewKey: string): TableDataState {
     appliedOrderByExpression: "",
     selectedRow: null,
     selectedCell: null,
+    cellDraftActive: false,
     editor: null,
     staged: [],
     reviewing: false,
