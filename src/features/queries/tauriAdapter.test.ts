@@ -14,6 +14,11 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 
 import { invoke } from "@tauri-apps/api/core";
+import type { FrontendDiagnostic } from "../diagnostics/domain";
+import { invoke as invokeDiagnosticCommand } from "../../ipc/core";
+import {
+  configureDiagnosticCapture, installDiagnosticCapture, recordDiagnosticIpc,
+} from "../diagnostics/client";
 
 import type { QueryServiceSession } from "../queryServices/domain";
 import { RunningQueryUpdateScheduler } from "../queryServices/runningUpdateScheduler";
@@ -68,6 +73,50 @@ describe("query Tauri adapter", () => {
   });
 
   it("uses backend-owned inspection and one consolidated transaction snapshot", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("window", new EventTarget());
+    const diagnosticSink = vi.fn(async (_generation: number, _entries: FrontendDiagnostic[]) => undefined);
+    const stopDiagnostics = installDiagnosticCapture(diagnosticSink);
+    try {
+      recordDiagnosticIpc("disabled_command", 1, false);
+      await vi.advanceTimersByTimeAsync(250);
+      expect(diagnosticSink).not.toHaveBeenCalled();
+      configureDiagnosticCapture(true, 1);
+      invokeMock.mockResolvedValueOnce(undefined);
+      await invokeDiagnosticCommand("safe_command", {
+        password: "diagnostic-secret", sql: "SELECT private_value", rows: ["private-row"],
+      });
+      await vi.advanceTimersByTimeAsync(250);
+      expect(diagnosticSink).toHaveBeenCalledWith(1, [{
+        level: "DEBUG", source: "ipc", text: expect.stringMatching(/^safe_command outcome=succeeded duration_ms=\d+$/),
+      }]);
+      expect(JSON.stringify(diagnosticSink.mock.calls)).not.toContain("diagnostic-secret");
+      expect(JSON.stringify(diagnosticSink.mock.calls)).not.toContain("private_value");
+      invokeMock.mockRejectedValueOnce(new Error("diagnostic-secret"));
+      await expect(invokeDiagnosticCommand("failed_command")).rejects.toThrow("diagnostic-secret");
+      await vi.advanceTimersByTimeAsync(250);
+      expect(diagnosticSink).toHaveBeenLastCalledWith(1, [{
+        level: "ERROR", source: "ipc", text: expect.stringMatching(/^failed_command outcome=failed/),
+      }]);
+      recordDiagnosticIpc("diagnostics_snapshot", 1, false);
+      recordDiagnosticIpc("cleared_command", 1, false);
+      configureDiagnosticCapture(true, 2);
+      await vi.advanceTimersByTimeAsync(250);
+      expect(diagnosticSink).toHaveBeenCalledTimes(2);
+      for (let index = 0; index < 75; index++) recordDiagnosticIpc(`command_${index}`, 1, false);
+      await vi.advanceTimersByTimeAsync(250);
+      expect(diagnosticSink).toHaveBeenLastCalledWith(2, expect.any(Array));
+      expect(diagnosticSink.mock.calls[diagnosticSink.mock.calls.length - 1]?.[1]).toHaveLength(50);
+      configureDiagnosticCapture(false, 3);
+      recordDiagnosticIpc("disabled_again", 1, false);
+      await vi.advanceTimersByTimeAsync(250);
+      expect(diagnosticSink).toHaveBeenCalledTimes(3);
+    } finally {
+      stopDiagnostics();
+      vi.unstubAllGlobals();
+      vi.useRealTimers();
+      invokeMock.mockReset();
+    }
     invokeMock.mockResolvedValueOnce({
       classification: readProposal.classification,
       report: readProposal.preview,

@@ -19,7 +19,7 @@ section (`safety`) that is disabled with no connection selected.
 ## Subdirectories
 | Directory | Purpose |
 |-----------|---------|
-| `Advanced/` | `index.tsx` — default-exported `AdvancedSettings`: debugging toggle (`useAgentDebugDetails`/`saveAgentDebugDetails` from `features/agents/displayPreferences`) inside a `SettingsGroup`. |
+| `Advanced/` | `index.tsx` — default-exported `AdvancedSettings`: debugging toggle (`useAgentDebugDetails`/`saveAgentDebugDetails` from `features/agents/displayPreferences`) inside a `SettingsGroup`; `Diagnostics.tsx` presents opt-in bounded local logs and explicit privacy warnings before copying or opening the GitHub issue form. |
 | `AgentTools/` | `index.tsx` — default-exported `AgentTools`: composes provider-first Agent setup rows and install/self-test status via `useAgentToolsController` (all from `features/settings/agentTools/`). |
 | `Cli/` | `index.tsx` — default-exported `CliSettings`: version-matched CLI sidecar install status/action via `cliInstallationStatusQuery` and `features/skills/tauriAdapter`'s `installCli`; `AdvancedShellTerminal.tsx` — `AdvancedShellTerminalLauncher`, the explicit developer-only Shell PTY pinned to the selected connection (separate surface from ACP Agent sessions; only reachable from here, never a general work screen). |
 | `Privacy/` | `index.tsx` — default-exported `PrivacySettings`: product-analytics consent grant/deny via `features/productAnalytics/client` and a link to the privacy policy (`openProductAnalyticsPrivacyPolicy`). |

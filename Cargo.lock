@@ -1630,6 +1630,7 @@ dependencies = [
  "objc2",
  "objc2-app-kit",
  "portable-pty",
+ "regex",
  "reqwest",
  "rust_xlsxwriter",
  "schemars 1.2.2",

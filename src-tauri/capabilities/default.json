@@ -29,6 +29,9 @@
           "url": "https://github.com/json-choi/dopedb/releases/latest"
         },
         {
+          "url": "https://github.com/json-choi/dopedb/issues/new"
+        },
+        {
           "url": "https://app.dopedb.dev/analyses/*"
         }
       ]

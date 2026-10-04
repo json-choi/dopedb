@@ -37,6 +37,7 @@ pub use error::{AppError, AppResult};
 use std::time::Duration;
 
 use tauri::{Emitter, Manager};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Layer};
 
 pub fn run() {
     #[cfg(feature = "packaged-benchmark")]
@@ -46,10 +47,17 @@ pub fn run() {
         return;
     }
     let startup_trace = startup::StartupTrace::new();
-    tracing_subscriber::fmt()
-        .with_env_filter(
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer().with_filter(
             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
-        )
+        ))
+        .with(features::diagnostics::DiagnosticsLayer.with_filter(
+            tracing_subscriber::filter::filter_fn(|metadata| {
+                (metadata.target().starts_with(env!("CARGO_CRATE_NAME"))
+                    || metadata.target().starts_with("dopedb::"))
+                    && *metadata.level() <= tracing::Level::DEBUG
+            }),
+        ))
         .init();
 
     let builder = tauri::Builder::default();
@@ -124,6 +132,10 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            features::diagnostics::transport::diagnostics_snapshot,
+            features::diagnostics::transport::diagnostics_set_enabled,
+            features::diagnostics::transport::diagnostics_clear,
+            features::diagnostics::transport::diagnostics_append,
             features::cosmic_scene::transport::cosmic_scene_recipe,
             features::agents::transport::start_agent_acp_session,
             features::agents::transport::list_agent_knowledge_environments,

@@ -14,7 +14,7 @@ export type SettingsSection =
 // Both Settings and Action Search index the same supported concepts in either locale.
 export const settingsSearchKeywords: Record<SettingsSection, string> = {
   "agent-tools": "agent codex claude tools 에이전트 도구 설치 플러그인 스킬",
-  advanced: "advanced debug debugging diagnostics developer 디버깅 진단 고급",
+  advanced: "advanced debug debugging diagnostics logs bug report developer 디버깅 진단 로그 버그 제보 고급",
   cli: "command line terminal path cli 명령줄 터미널 경로",
   privacy: "privacy analytics telemetry consent 개인정보 분석 통계 동의",
   safety: "read only write approval policy audit schema 읽기 전용 쓰기 권한 승인 정책 감사 스키마 안전",

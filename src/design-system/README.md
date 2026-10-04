@@ -427,6 +427,10 @@ loopback 문서는 이 정본을 빌드 시 포함하며 네트워크 font나 sc
 - `ProgressBar`: 업데이트 다운로드, 쿼리 작업, 결과 내보내기가 공유하는
   determinate/indeterminate 진행률 primitive. `default`와 `compact` 밀도만
   허용하고 화면별 track/fill utility나 임의 최소 진행률을 다시 만들지 않는다.
+- `Settings → 고급`의 로컬 진단 로그는 `SettingsGroup`, `CheckboxField`, `Button`,
+  `InlineNotice`와 공용 `ModalSurface` 확인 dialog를 합성한다. 로그 viewport는
+  정적 Tailwind의 bounded mono `<pre>`이며 개인정보 경고는 화면과 복사·제보
+  확인 dialog에 유지한다. 별도 screen CSS나 원격 전송 UI는 없다.
 - `RenderRecoveryBoundary`: Markdown, diagram, provider payload처럼 선택적인
   rich surface의 render 실패를 해당 feature 안에 격리한다. 오류 원문은 UI에
   노출하지 않고 호출자가 제공한 안전한 fallback과 명시적 retry만 표시하며,

@@ -18,6 +18,10 @@ import { initializeProductAnalytics } from "./features/productAnalytics/client";
 import { ProductAnalyticsWorkspaceScopeObserver } from "./features/productAnalytics/WorkspaceScopeObserver";
 import { ProductAnalyticsConsentPrompt } from "./features/productAnalytics/ConsentPrompt";
 import { AppProviders } from "./lib/appProviders";
+import { initializeLocalDiagnostics } from "./features/diagnostics/tauriAdapter";
+
+const stopLocalDiagnostics = initializeLocalDiagnostics();
+import.meta.hot?.dispose(stopLocalDiagnostics);
 
 void initializeProductAnalytics();
 

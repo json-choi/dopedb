@@ -5,6 +5,7 @@ import {
   useAgentDebugDetails,
 } from "../../../features/agents/displayPreferences";
 import { useI18n } from "../../../lib/i18n";
+import Diagnostics from "./Diagnostics";
 
 export default function AdvancedSettings() {
   const { t } = useI18n();
@@ -23,6 +24,7 @@ export default function AdvancedSettings() {
           </p>
         </div>
       </SettingsGroup>
+      <Diagnostics />
     </div>
   );
 }
