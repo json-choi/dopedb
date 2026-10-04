@@ -366,3 +366,21 @@ HTML snapshot만 읽고 재조회 command는 인증된 Desktop에만 존재한�
   대상만 미리 채우며 자격 증명/쓰기 동의/팀 grant는 복사하지 않는다.
 - 실제 Safety→연결 편집기 컴포넌트 fixture에서 한국어/영어, 390px 화면, 대상 사전 입력과 빈 자격 증명을 수동 확인했다. 빌드와 frontend smoke 43개가 통과했다.
 - 실제 관리자 자격 증명 입력과 packaged Desktop의 연결 성공은 별도 확인 대상이다.
+
+### 조회 결과 트랙패드 확대·축소
+
+일반·가상 결과 표는 공용 `useDataGridZoom`으로 조회 viewport 전체의 WebKit
+gesture와 ctrl-wheel pinch를 받아 표 내용만 50~200%로 확대·축소한다.
+일반 스크롤, 셀 선택, 앱 chrome은 기존 계약을 유지하며 가상 window와 keyboard
+이동·열 너비 drag는 비율에 맞춰 계산한다. 실제 컴포넌트의 브라우저 fixture에서
+WebKit gesture 이벤트 150% 확대, ctrl-wheel 축소, 일반 wheel 비차단, 가상 표의
+스크롤 위치와 확대·축소 왕복 후 위치 복원을 확인했다. 실제 macOS 트랙패드
+확대·축소는 사용자가 로컬 QA 앱에서 정상 동작을 확인했다. 기본 크기가 아닐 때
+viewport 우측 상단의 비율·복귀 버튼을 표시하며 클릭 또는 영역 내부 ⌘0/Ctrl+0으로
+100%로 돌아간다.
+
+복귀 UX는 로컬 macOS QA 앱에서 버튼 클릭, ⌘0, 복귀 뒤 방향키 셀 이동을
+확인했다. 브라우저 가상 표 fixture에서는 150% 확대 후 양방향 scroll에도 버튼이
+viewport 우측 상단에 유지됨을 측정하고 클릭·Ctrl+0의 정확한 100% 복귀와
+focus 유지를 확인했다. 확대 검수 입력은 합성 gesture이며 실제 트랙패드 입력
+증거는 사용자의 QA 결과다. 데모 screenshot은 `audits/result-grid-zoom/`에 둔다.

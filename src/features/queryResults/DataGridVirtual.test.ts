@@ -7,6 +7,7 @@ import {
 } from "../../lib/sqlBuild";
 import type { CatalogTable } from "../../ipc/types";
 import { shouldVirtualizeDataGrid } from "./DataGrid";
+import { clampDataGridZoom } from "../../design-system/useDataGridZoom";
 import { virtualGridWindow } from "./DataGridVirtual";
 import {
   extendGridSelection,
@@ -88,6 +89,16 @@ describe("DataGridVirtual window", () => {
     expect(window.endRow).toBeLessThan(1_000_000);
     expect(window.visibleColumns.length).toBeLessThan(15);
     expect(cellCount).toBeLessThan(400);
+    for (const zoom of [0.5, 1.5, 2]) {
+      const scaled = virtualGridWindow(1_000_000, 50, offsets, {
+        top: 500_000 * DATA_GRID_ROW_HEIGHT * zoom,
+        left: 2_000 * zoom, width: 360 * zoom, height: 240 * zoom,
+      }, zoom);
+      expect(scaled).toEqual(window);
+    }
+    expect(clampDataGridZoom(0.1)).toBe(0.5);
+    expect(clampDataGridZoom(3)).toBe(2);
+    expect(clampDataGridZoom(Number.NaN)).toBe(1);
 
     const previousWidths = new Map<number, number>();
     expect(toggleDataGridAutoFit(previousWidths, 0, 144, () => 245)).toBe(245);
