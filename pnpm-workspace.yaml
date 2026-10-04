@@ -3,9 +3,10 @@ allowBuilds:
   core-js: false
   esbuild: true
 overrides:
+  'brace-expansion@>=5.0.0 <5.0.12': 5.0.12
   '@codemirror/state': 6.7.2
   '@codemirror/view': 6.43.10
-  'dompurify@<3.4.13': 3.4.13
+  'dompurify@<3.4.16': 3.4.16
   'lodash-es@<4.18.0': 4.18.1
 minimumReleaseAge: 1440
 minimumReleaseAgeStrict: true
