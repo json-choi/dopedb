@@ -8,6 +8,7 @@ import { readWithCatalogIssue } from "../catalogExplorer/catalogDomain";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { I18nProvider } from "../../lib/i18n";
+import { resolveInitialLang, resolveLangPreference, synchronizeLangPreference } from "../../lib/i18n/runtime";
 import { ConnectionGeneralTab } from "../../screens/Connections/ConnectionGeneralTab";
 import { ConnectionBigQueryFields } from "../../screens/Connections/ConnectionBigQueryFields";
 import { ConnectionSecurityTab } from "../../screens/Connections/ConnectionSecurityTab";
@@ -185,6 +186,26 @@ function storedDocument(id = "doc-1"): SqlDocument {
 
 describe("workbench state ownership", () => {
   it("restores persisted SQL without removing the connection welcome document", async () => {
+    // First-run language follows the system without turning detection into a fixed choice.
+    for (const stored of [null, "system", "invalid"]) {
+      expect(resolveLangPreference(stored)).toBe("system");
+      expect(resolveInitialLang(stored, "ko-KR")).toBe("ko");
+      expect(resolveInitialLang(stored, "fr-FR")).toBe("en");
+      expect(resolveInitialLang(stored, "kok-IN")).toBe("en");
+    }
+    expect(resolveInitialLang("system", "KO-kr")).toBe("ko");
+    for (const preference of ["en", "ko"] as const) {
+      expect(resolveLangPreference(preference)).toBe(preference);
+      expect(resolveInitialLang(preference, preference === "en" ? "ko-KR" : "en-US")).toBe(preference);
+    }
+    const languageStorage = { setItem: vi.fn() };
+    const documentLanguage = { lang: "" };
+    synchronizeLangPreference("system", "ko", documentLanguage, languageStorage);
+    expect(documentLanguage.lang).toBe("ko");
+    expect(languageStorage.setItem).toHaveBeenLastCalledWith("dopedb.lang", "system");
+    synchronizeLangPreference("en", "en", documentLanguage, languageStorage);
+    expect(documentLanguage.lang).toBe("en");
+    expect(languageStorage.setItem).toHaveBeenLastCalledWith("dopedb.lang", "en");
     const key = (value: I18nKey) => value;
     const managedManager = {
       credentialMode: "managed" as const,

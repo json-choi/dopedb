@@ -16,7 +16,7 @@ together.
 |------|-------------|
 | `types.ts` | Shared `Lang`/`MessageCatalog` contracts and `defineCatalog`, which makes a missing, extra, or mismatched Korean key a compile-time TypeScript error rather than a runtime fallback. |
 | `catalog.ts` | Composes every bounded catalog from `catalogs/` into one `messages` object via `composeCatalogs`, which throws at module load if a key length/name mismatch or an inter-catalog key collision is detected. |
-| `runtime.tsx` | React context/provider and `useI18n()` hook: resolves the initial language from `localStorage` (`dopedb.lang`) or the browser's Korean locale hint (`resolveInitialLang`), and exposes `lang`, `setLang`, and `t(key, vars?)`. |
+| `runtime.tsx` | React context/provider and `useI18n()` hook: persists `system`/`en`/`ko` in `dopedb.lang`, keeps `langPreference` separate from resolved `lang`, refreshes system locale on languagechange/focus, and exposes `setLang` and `t(key, vars?)`. |
 | `index.ts` | Barrel re-exporting `I18nProvider`/`useI18n` from `runtime.tsx` and the `I18nKey`/`Lang` types. |
 
 ## Subdirectories

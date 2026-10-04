@@ -3,6 +3,9 @@
 /** Languages currently shipped by the desktop application. */
 export type Lang = "en" | "ko";
 
+/** Device preference stays independent of the currently resolved catalogue language. */
+export type LangPreference = Lang | "system";
+
 /** A catalogue carries the same string-keyed messages for every supported language. */
 export type MessageCatalog = Readonly<{
   en: Readonly<Record<string, string>>;
