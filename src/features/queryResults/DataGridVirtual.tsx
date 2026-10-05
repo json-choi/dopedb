@@ -12,6 +12,7 @@ import type { QueryResult } from "../../ipc/types";
 import { type SqlStreamRowSource } from "../queries/domain";
 import {
   collectCachedSqlResultDecodeFailures,
+  iterateCachedSqlResultRows,
   ensureSqlResultRange,
   sqlResultDecodeFailureAt,
   sqlResultRangeIsCached,
@@ -57,6 +58,7 @@ import {
 } from "./decodeFailures";
 import { useDataGridNumericColumns } from "./dataGridNumericColumns";
 import { useDataGridSelectionReset } from "./useDataGridSelectionReset";
+import { dataGridAutoFitWidth, toggleDataGridAutoFit } from "./dataGridAutoFit";
 
 const OVERSCAN = 4;
 
@@ -143,6 +145,9 @@ export default function DataGridVirtual(props: Props) {
   const [focus, setFocus] = useState<DataGridFocus>({ row: 0, column: 0 });
   const focusRequestedRef = useRef(false);
   const [widths, setWidths] = useState<Record<number, number>>({});
+  const previousWidths = useRef(new Map<number, number>());
+  const columnSignature = props.result.columns.join(" ");
+  useEffect(() => { previousWidths.current.clear(); }, [columnSignature]);
   const interactive = !!props.onCellClick || !!props.onSelectRow;
   const rowCount = props.rowSource?.rowCount ?? props.result.rows.length;
   const rowAt = (index: number) =>
@@ -412,9 +417,11 @@ export default function DataGridVirtual(props: Props) {
       })),
     );
     const onMove = (moveEvent: MouseEvent) => {
+      if (widthAt(moveEvent.clientX) !== initial) previousWidths.current.delete(index);
       coalescer.push(widthAt(moveEvent.clientX));
     };
     const onUp = (upEvent: MouseEvent) => {
+      if (widthAt(upEvent.clientX) !== initial) previousWidths.current.delete(index);
       coalescer.push(widthAt(upEvent.clientX));
       coalescer.flush();
       document.removeEventListener("mousemove", onMove);
@@ -523,7 +530,7 @@ export default function DataGridVirtual(props: Props) {
                         className="tw:text-xs tw:text-muted-foreground"
                       />
                     ) : null}
-                    <span>{name}</span>
+                    <span data-grid-column-label>{name}</span>
                     {props.sort?.col === name ? (
                       <Icon
                         name={
@@ -546,20 +553,38 @@ export default function DataGridVirtual(props: Props) {
                   data-grid-resize-handle
                   className="tw:absolute tw:top-0 tw:right-0 tw:z-[var(--ds-z-sticky)] tw:h-full tw:w-2 tw:cursor-col-resize tw:hover:bg-primary/55 tw:active:bg-primary/55"
                   label={`${name}: ${t("grid.resizeHint")}`}
+                  tooltip={t(previousWidths.current.has(index)
+                    ? "grid.restoreWidthTooltip" : "grid.resizeTooltip")}
                   orientation="vertical"
                   value={columnWidths[index]}
                   minimum={72}
                   maximum={1200}
-                  onChange={(width) =>
-                    setWidths((current) => ({ ...current, [index]: width }))
-                  }
-                  onReset={() =>
-                    setWidths((current) => {
-                      const next = { ...current };
-                      delete next[index];
-                      return next;
-                    })
-                  }
+                  onChange={(width) => {
+                    previousWidths.current.delete(index);
+                    setWidths((current) => ({ ...current, [index]: width }));
+                  }}
+                  onReset={() => {
+                    const header = scrollRef.current?.querySelector<HTMLElement>(
+                      `[role=columnheader][aria-colindex="${index + 2}"]`,
+                    );
+                    if (!header) return;
+                    const rows = props.rowSource
+                      ? iterateCachedSqlResultRows(props.rowSource)
+                      : props.result.rows.entries();
+                    function* texts() {
+                      for (const [rowIndex, row] of rows) {
+                        const failure = failureAt(rowIndex, index);
+                        yield failure
+                          ? t("grid.decodeFailure", { type: failure.databaseType })
+                          : display(row[index]);
+                      }
+                    }
+                    const width = toggleDataGridAutoFit(
+                      previousWidths.current, index, columnWidths[index],
+                      () => dataGridAutoFitWidth(header, texts(), 72),
+                    );
+                    setWidths((current) => ({ ...current, [index]: width }));
+                  }}
                   onMouseDown={(event) => resize(event, index)}
                 />
               </div>

@@ -1,11 +1,12 @@
 // Canonical keyboard and pointer resize boundary. Feature owners keep the
 // persisted dimension and pointer drag lifecycle; this primitive owns ARIA,
-// bounded keyboard steps, and default reset behavior.
+// bounded keyboard steps, and the caller's double-click/Enter action.
 import type {
   HTMLAttributes,
   KeyboardEvent,
   MouseEventHandler,
 } from "react";
+import { Tooltip } from "./Tooltip";
 
 export type ResizeSeparatorOrientation = "horizontal" | "vertical";
 
@@ -39,6 +40,7 @@ type ResizeSeparatorProps = Omit<
   "aria-label" | "onChange" | "onDoubleClick" | "onKeyDown" | "role"
 > & {
   label: string;
+  tooltip?: string;
   orientation: ResizeSeparatorOrientation;
   value: number;
   minimum: number;
@@ -51,6 +53,7 @@ type ResizeSeparatorProps = Omit<
 
 export function ResizeSeparator({
   label,
+  tooltip,
   orientation,
   value,
   minimum,
@@ -63,6 +66,12 @@ export function ResizeSeparator({
   ...props
 }: ResizeSeparatorProps) {
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      event.stopPropagation();
+      onReset();
+      return;
+    }
     const next = resizeSeparatorNextValue({
       key: event.key,
       value,
@@ -76,7 +85,7 @@ export function ResizeSeparator({
     onChange(next);
   };
 
-  return (
+  const separator = (
     <div
       {...props}
       role="separator"
@@ -86,7 +95,7 @@ export function ResizeSeparator({
       aria-valuemax={maximum}
       aria-valuenow={value}
       tabIndex={0}
-      title={label}
+      title={tooltip ? undefined : label}
       className={`tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring/45 ${className ?? ""}`}
       onKeyDown={onKeyDown}
       onMouseDown={onMouseDown}
@@ -98,4 +107,5 @@ export function ResizeSeparator({
       }}
     />
   );
+  return tooltip ? <Tooltip label={tooltip}>{separator}</Tooltip> : separator;
 }

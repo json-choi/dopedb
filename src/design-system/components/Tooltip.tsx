@@ -164,7 +164,7 @@ export function Tooltip({
               data-ready={isPositioned ? "true" : undefined}
               data-floating-owner-id={floatingPortalOwnerId(wrapperRef.current)}
               data-modal-owned={floatingPortalIsModalOwned(wrapperRef.current)}
-              className="tw:pointer-events-none tw:fixed tw:z-[var(--ds-z-popover)] tw:max-w-[min(320px,calc(100vw_-_var(--ds-space-4)))] tw:rounded-xs tw:border tw:border-border-strong tw:bg-popover tw:px-2 tw:py-1 tw:text-xs tw:leading-ui tw:text-popover-foreground tw:opacity-0 tw:shadow-popover tw:transition-opacity tw:duration-100 tw:data-[modal-owned=true]:z-[var(--ds-z-modal-popover)] tw:data-[ready=true]:opacity-100 tw:motion-reduce:transition-none"
+              className="tw:pointer-events-none tw:fixed tw:z-[var(--ds-z-popover)] tw:max-w-[min(320px,calc(100vw_-_var(--ds-space-4)))] tw:whitespace-pre-line tw:rounded-xs tw:border tw:border-border-strong tw:bg-popover tw:px-2 tw:py-1 tw:text-xs tw:leading-ui tw:text-popover-foreground tw:opacity-0 tw:shadow-popover tw:transition-opacity tw:duration-100 tw:data-[modal-owned=true]:z-[var(--ds-z-modal-popover)] tw:data-[ready=true]:opacity-100 tw:motion-reduce:transition-none"
               style={floatingStyles}
             >
               {label}

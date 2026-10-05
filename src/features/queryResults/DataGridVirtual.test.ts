@@ -22,6 +22,7 @@ import {
 import type { SqlStreamRowSource } from "../queries/domain";
 import { createFrameCoalescer } from "../../lib/frameCoalescer";
 import { resizeSeparatorNextValue } from "../../design-system/components/ResizeSeparator";
+import { toggleDataGridAutoFit } from "./dataGridAutoFit";
 import { dataGridKeyboardTarget } from "./dataGridKeyboard";
 import type { ButtonProps } from "../../design-system/components/Button";
 import type { ConfirmButtonProps } from "../../components/ConfirmButton";
@@ -29,6 +30,7 @@ import { tabularResult } from "../agents/AcpStructuredResult";
 import {
   clearSqlResultPageCache,
   collectCachedSqlResultRows,
+  iterateCachedSqlResultRows,
   ensureSqlResultRange,
   SQL_RESULT_CACHE_MAX_PAGES,
   retainSqlStreamBatch,
@@ -86,6 +88,17 @@ describe("DataGridVirtual window", () => {
     expect(window.endRow).toBeLessThan(1_000_000);
     expect(window.visibleColumns.length).toBeLessThan(15);
     expect(cellCount).toBeLessThan(400);
+
+    const previousWidths = new Map<number, number>();
+    expect(toggleDataGridAutoFit(previousWidths, 0, 144, () => 245)).toBe(245);
+    expect(toggleDataGridAutoFit(previousWidths, 1, 200, () => 480)).toBe(480);
+    expect(toggleDataGridAutoFit(previousWidths, 0, 245, () => {
+      throw new Error("restore must not measure data again");
+    })).toBe(144);
+    expect(previousWidths.get(1)).toBe(200);
+    previousWidths.delete(1); // manual resize starts a new fit/restore pair
+    expect(toggleDataGridAutoFit(previousWidths, 1, 320, () => 480)).toBe(480);
+    expect(toggleDataGridAutoFit(previousWidths, 1, 480, () => 480)).toBe(320);
 
     const scheduled: { frame: FrameRequestCallback | null } = { frame: null };
     let frameRequests = 0;
@@ -425,6 +438,14 @@ describe("DataGridVirtual window", () => {
     expect(sqlResultRowAt(source, 0)).toBeUndefined();
     expect(sqlResultRowAt(source, SQL_RESULT_CACHE_MAX_PAGES * 256)).toEqual([
       SQL_RESULT_CACHE_MAX_PAGES * 256,
+    ]);
+    // Auto-fit reads only retained pages, even before stream completion. It
+    // must not flatten the logical result or include evicted/unloaded rows.
+    const retainedRows = [...iterateCachedSqlResultRows({ ...source, complete: false })];
+    expect(retainedRows).toHaveLength(SQL_RESULT_CACHE_MAX_PAGES * 256);
+    expect(retainedRows[0]).toEqual([256, [256]]);
+    expect(retainedRows[retainedRows.length - 1]).toEqual([
+      source.rowCount - 1, [source.rowCount - 1],
     ]);
 
     clearSqlResultPageCache();

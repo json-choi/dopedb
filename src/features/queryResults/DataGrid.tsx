@@ -6,7 +6,7 @@
 //   - onSelectRow/onCellClick → row highlight + click-to-open a cell in the side viewer
 //   - startIndex → row numbers continue across pages (rows 101-200, not 1-100 again)
 // Columns are drag-resizable: first drag snapshots every rendered width so only the
-// dragged column moves. Double-click resets the compact default widths.
+// dragged column moves. Double-click fits only that column to loaded display text.
 import {
   useEffect,
   useRef,
@@ -50,6 +50,7 @@ import {
 } from "./decodeFailures";
 import { useDataGridNumericColumns } from "./dataGridNumericColumns";
 import { useDataGridSelectionReset } from "./useDataGridSelectionReset";
+import { dataGridAutoFitWidth, toggleDataGridAutoFit } from "./dataGridAutoFit";
 
 function cell(v: unknown): string {
   if (v === null || v === undefined) return "NULL";
@@ -148,6 +149,7 @@ function DataGridTable({
   const interactive = !!onSelectRow || !!onCellClick;
   // Column widths keyed by header-cell index (0 = rownum).
   const [widths, setWidths] = useState<Record<number, number>>({});
+  const previousWidths = useRef(new Map<number, number>());
   // Selected cell (click to select, ⌘C to copy, Esc to clear). Independent of onCellClick.
   const [sel, setSel] = useState<GridCellSelection | null>(null);
   const [copyError, setCopyError] = useState<string | null>(null);
@@ -158,6 +160,7 @@ function DataGridTable({
   const sig = result.columns.join(" ");
   useEffect(() => {
     setWidths({}); // new column set → stale widths dropped
+    previousWidths.current.clear();
   }, [sig]);
   useDataGridSelectionReset({
     result,
@@ -213,6 +216,7 @@ function DataGridTable({
     };
     const move = (ev: MouseEvent) => {
       pendingW = Math.min(1200, Math.max(50, startW + ev.clientX - startX));
+      if (pendingW !== startW) previousWidths.current.delete(colIdx);
       if (!raf) raf = requestAnimationFrame(flush);
     };
     const up = () => {
@@ -403,7 +407,10 @@ function DataGridTable({
                           className="tw:shrink-0 tw:text-xs tw:text-muted-foreground"
                         />
                       ) : null}
-                      <span className="tw:overflow-hidden tw:text-ellipsis">
+                      <span
+                        data-grid-column-label
+                        className="tw:overflow-hidden tw:text-ellipsis"
+                      >
                         {c}
                       </span>
                       {sort?.col === c ? (
@@ -424,7 +431,10 @@ function DataGridTable({
                           className="tw:shrink-0 tw:text-xs tw:text-muted-foreground"
                         />
                       ) : null}
-                      <span className="tw:overflow-hidden tw:text-ellipsis">
+                      <span
+                        data-grid-column-label
+                        className="tw:overflow-hidden tw:text-ellipsis"
+                      >
                         {c}
                       </span>
                     </span>
@@ -442,14 +452,35 @@ function DataGridTable({
                   data-grid-resize-handle
                   className="tw:absolute tw:top-0 tw:right-0 tw:z-[var(--ds-z-sticky)] tw:h-full tw:w-2 tw:cursor-col-resize tw:hover:bg-primary/55 tw:active:bg-primary/55"
                   label={`${c}: ${t("grid.resizeHint")}`}
+                  tooltip={t(previousWidths.current.has(j + 1)
+                    ? "grid.restoreWidthTooltip" : "grid.resizeTooltip")}
                   orientation="vertical"
                   value={columnWidths[j + 1]}
                   minimum={50}
                   maximum={1200}
-                  onChange={(width) =>
-                    setWidths((current) => ({ ...current, [j + 1]: width }))
-                  }
-                  onReset={() => setWidths({})}
+                  onChange={(width) => {
+                    previousWidths.current.delete(j + 1);
+                    setWidths((current) => ({ ...current, [j + 1]: width }));
+                  }}
+                  onReset={() => {
+                    const header = tableRef.current?.querySelector<HTMLElement>(
+                      `[role=columnheader][aria-colindex="${j + 2}"]`,
+                    );
+                    if (!header) return;
+                    const texts = result.rows.map((row, index) => {
+                      const failure = cellDecodeFailureAt(
+                        result.decodeFailures, index, j,
+                      );
+                      return failure
+                        ? t("grid.decodeFailure", { type: failure.databaseType })
+                        : cell(row[j]);
+                    });
+                    const width = toggleDataGridAutoFit(
+                      previousWidths.current, j + 1, columnWidths[j + 1],
+                      () => dataGridAutoFitWidth(header, texts, 50),
+                    );
+                    setWidths((current) => ({ ...current, [j + 1]: width }));
+                  }}
                   onMouseDown={(e) => startResize(e, j + 1)}
                 />
               </th>
