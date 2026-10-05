@@ -1,10 +1,11 @@
-// Wraps native IPC with aggregate timing only in the isolated packaged-benchmark build.
+// Wraps native IPC with opt-in local outcome timing and isolated benchmark timing.
 
 import {
   Channel,
   invoke as nativeInvoke,
 } from "@tauri-apps/api/core";
 import { recordBenchmarkIpc } from "../benchmarks/packagedMetrics";
+import { recordDiagnosticIpc } from "../features/diagnostics/client";
 
 type NativeInvokeParameters = Parameters<typeof nativeInvoke>;
 
@@ -16,24 +17,26 @@ export { Channel };
 /**
  * The application-owned Tauri command boundary.
  *
- * Production calls pass through unchanged. The isolated packaged benchmark
- * records only aggregate duration/count metadata here, without replacing or
- * mutating Tauri's private window internals.
+ * Local diagnostics record command identity, outcome, and duration only.
+ * Arguments, errors, and return payloads stay outside the diagnostic boundary.
+ * The isolated packaged benchmark keeps its aggregate timing contract.
  */
 export async function invoke<T>(
   command: NativeInvokeParameters[0],
   args?: NativeInvokeParameters[1],
   options?: NativeInvokeParameters[2],
 ): Promise<T> {
-  if (!packagedBenchmark) {
-    return invokeNative<T>(command, args, options);
-  }
-
   const startedAt = performance.now();
+  let failed = false;
   try {
     return await invokeNative<T>(command, args, options);
+  } catch (error) {
+    failed = true;
+    throw error;
   } finally {
-    recordBenchmarkIpc(performance.now() - startedAt);
+    const elapsed = performance.now() - startedAt;
+    if (packagedBenchmark) recordBenchmarkIpc(elapsed);
+    else recordDiagnosticIpc(command, elapsed, failed);
   }
 }
 

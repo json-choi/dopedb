@@ -5,7 +5,7 @@
 
 ## Purpose
 The typed Tauri IPC boundary between the frontend and the Rust core. `core.ts`
-wraps every `invoke` call site; `types.ts` is the public shared-contract
+wraps every `invoke` call site and adds opt-in local diagnostic outcome/timing metadata without arguments, errors, or results; `types.ts` is the public shared-contract
 facade re-exported to the rest of the app; `generated/` holds the DTOs that
 `ts-rs` generates directly from the Rust `serde` structs/enums that produce
 them, so the wire shape is checked in and reviewable as a diff. Frontend
@@ -16,7 +16,7 @@ must keep serialization shape and field order in sync with the matching Rust
 ## Key Files
 | File | Description |
 |------|-------------|
-| `core.ts` | The application-owned `invoke`/`Channel` boundary. Production calls pass straight through to `@tauri-apps/api/core`'s `invoke`; only under the isolated packaged benchmark build does it also record aggregate duration/count via `recordBenchmarkIpc`, without mutating any private Tauri window internals. |
+| `core.ts` | The application-owned `invoke`/`Channel` boundary. Calls preserve the native result/error contract. Opt-in local diagnostics record only command identity, outcome, and duration; the isolated benchmark separately records aggregate duration/count via `recordBenchmarkIpc`, without mutating private Tauri window internals. |
 | `types.ts` | Public shared-contract facade. Re-exports the ts-rs-generated model/protocol/introspection DTOs from `generated/`, plus feature-owned manual transport types that sit outside the generation boundary (explicitly commented as "not a schema-parity claim" where applicable, e.g. `DocumentQuery`). |
 
 ## Subdirectories

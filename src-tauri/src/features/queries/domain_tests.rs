@@ -12,6 +12,7 @@ use crate::monitoring::HealthSnapshot;
 
 #[tokio::test]
 async fn query_and_skill_security_contracts_stay_fail_closed() {
+    crate::features::diagnostics::assert_local_diagnostics_contract();
     crate::features::connections::assert_connection_test_failure_contract();
     crate::features::connections::assert_local_listener_discovery_contract();
     let job_event = crate::features::jobs::JobChangedEvent {
