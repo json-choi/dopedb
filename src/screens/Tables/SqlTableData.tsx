@@ -1,4 +1,5 @@
 // SQL table query, paging, filtering, and staged row-edit controller.
+import { DataGridStatusScope } from "../../design-system/components/DataGridStatusScope";
 import { useEffect, useEffectEvent, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type {
@@ -433,291 +434,293 @@ export default function SqlTableData({
   const panelOpen = reviewing || !!editor || !!cellSel || !!pendingDelete;
 
   return (
-    <WorkbenchPane>
-      <TableToolbar
-        table={table}
-        result={result}
-        canEdit={canEdit}
-        noEditTitle={noEditTitle}
-        selectedRowBlockedReason={selectedRowBlockedReason}
-        selected={selected}
-        stagedCount={staged.length}
-        activeFilters={activeFilters}
-        page={page}
-        pageSize={pageSize}
-        total={total}
-        hasMore={hasMore}
-        rows={rows}
-        busy={busy}
-        jobsOpen={jobsOpen}
-        catalogAvailable={!!catalogRelation}
-        structureOpen={structure}
-        manualTransaction={manualTransaction}
-        writesEnabled={safety.allowWrites}
-        supportsMutationTools={supportsMutationTools}
-        supportsBulkJobs={supportsBulkJobs}
-        onOpenEdit={openEdit}
-        onDelete={doDelete}
-        onReviewStaged={() =>
-          commands.patch({
-            reviewing: true,
-            editor: null,
-            pendingDelete: null,
-            selectedCell: null,
-          })
-        }
-        onDiscardStaged={() =>
-          commands.patch({
-            staged: [],
-            reviewing: false,
-            proposal: null,
-          })
-        }
-        onClearFilters={() =>
-          commands.patch({
-            filters: {},
-            appliedFilters: {},
-            whereExpression: "",
-            appliedWhereExpression: "",
-          })
-        }
-        onPage={(nextPage) => commands.patch({ page: nextPage })}
-        onRefresh={() => void refreshRowsAndCount()}
-        onShowDdl={() => setDdlOpen(true)}
-        onToggleJobs={() =>
-          commands.patch({
-            jobsOpen: !jobsOpen,
-            reviewing: false,
-            editor: null,
-            pendingDelete: null,
-            selectedCell: null,
-          })
-        }
-        onToggleStructure={() => commands.patch({ structureOpen: !structure })}
-        onCopyRow={copyRow}
-      />
+    <DataGridStatusScope>
+      <WorkbenchPane>
+        <TableToolbar
+          table={table}
+          result={result}
+          canEdit={canEdit}
+          noEditTitle={noEditTitle}
+          selectedRowBlockedReason={selectedRowBlockedReason}
+          selected={selected}
+          stagedCount={staged.length}
+          activeFilters={activeFilters}
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          hasMore={hasMore}
+          rows={rows}
+          busy={busy}
+          jobsOpen={jobsOpen}
+          catalogAvailable={!!catalogRelation}
+          structureOpen={structure}
+          manualTransaction={manualTransaction}
+          writesEnabled={safety.allowWrites}
+          supportsMutationTools={supportsMutationTools}
+          supportsBulkJobs={supportsBulkJobs}
+          onOpenEdit={openEdit}
+          onDelete={doDelete}
+          onReviewStaged={() =>
+            commands.patch({
+              reviewing: true,
+              editor: null,
+              pendingDelete: null,
+              selectedCell: null,
+            })
+          }
+          onDiscardStaged={() =>
+            commands.patch({
+              staged: [],
+              reviewing: false,
+              proposal: null,
+            })
+          }
+          onClearFilters={() =>
+            commands.patch({
+              filters: {},
+              appliedFilters: {},
+              whereExpression: "",
+              appliedWhereExpression: "",
+            })
+          }
+          onPage={(nextPage) => commands.patch({ page: nextPage })}
+          onRefresh={() => void refreshRowsAndCount()}
+          onShowDdl={() => setDdlOpen(true)}
+          onToggleJobs={() =>
+            commands.patch({
+              jobsOpen: !jobsOpen,
+              reviewing: false,
+              editor: null,
+              pendingDelete: null,
+              selectedCell: null,
+            })
+          }
+          onToggleStructure={() => commands.patch({ structureOpen: !structure })}
+          onCopyRow={copyRow}
+        />
 
-      <TableExpressionBar
-        whereExpression={whereExpression}
-        appliedWhereExpression={appliedWhereExpression}
-        orderByExpression={orderByExpression}
-        appliedOrderByExpression={appliedOrderByExpression}
-        busy={busy}
-        onWhereChange={(value) => commands.patch({ whereExpression: value })}
-        onOrderByChange={(value) =>
-          commands.patch({ orderByExpression: value })
-        }
-        onApplyWhere={applyWhereExpression}
-        onApplyOrderBy={applyOrderByExpression}
-      />
+        <TableExpressionBar
+          whereExpression={whereExpression}
+          appliedWhereExpression={appliedWhereExpression}
+          orderByExpression={orderByExpression}
+          appliedOrderByExpression={appliedOrderByExpression}
+          busy={busy}
+          onWhereChange={(value) => commands.patch({ whereExpression: value })}
+          onOrderByChange={(value) =>
+            commands.patch({ orderByExpression: value })
+          }
+          onApplyWhere={applyWhereExpression}
+          onApplyOrderBy={applyOrderByExpression}
+        />
 
-      <WorkbenchContainedBody>
-        {structure && <TableStructure table={table} />}
+        <WorkbenchContainedBody>
+          {structure && <TableStructure table={table} />}
 
-        {err && (
-          <div className="tw:border-b tw:border-border-subtle tw:px-3 tw:py-2 tw:text-ui tw:text-danger">
-            {err}
-          </div>
-        )}
-
-        {catalogEnabled && (catalogPhase === "coldError" || catalogPhase === "staleError") && catalogQuery.error ? (
-          <InlineNotice
-            tone={catalogPhase === "coldError" ? "danger" : "warning"}
-            icon="alert"
-            role={catalogPhase === "coldError" ? "alert" : "status"}
-            action={(
-              <Button size="compact" onClick={() => void catalogQuery.refetch()}>
-                {t("app.retry")}
-              </Button>
-            )}
-          >
-            {t("tables.catalogLoadFailed", {
-              error: catalogLoadIssueMessage(
-                t,
-                catalogLoadIssue(catalogQuery.error),
-              ),
-            })}
-          </InlineNotice>
-        ) : null}
-
-        {/* Dim (not blank) the stale grid while paging/sorting/filtering re-queries. */}
-        <div
-          data-busy={busy && Boolean(result)}
-          className="tw:flex tw:min-h-0 tw:flex-1 tw:data-[busy=true]:[&_[data-data-grid-scroll]]:pointer-events-none tw:data-[busy=true]:[&_[data-data-grid-scroll]]:opacity-50 tw:@max-[920px]:flex-col"
-        >
-          {result ? (
-            result.rows.length ? (
-              <DataGrid
-                result={result}
-                surface="workbench"
-                footerInset
-                startIndex={page * pageSize}
-                sort={sort}
-                onSort={cycleSort}
-                filters={filters}
-                onFilter={commands.filter}
-                selectedRow={selected}
-                onSelectRow={(selectedRow) => {
-                  commands.patch({ selectedRow, selectedCell: null });
-                  if (
-                    firstDecodeFailureInRow(
-                      result.decodeFailures,
-                      selectedRow,
-                    )
-                  ) {
-                    agentSelection.clear();
-                  }
-                }}
-                onCellClick={(value, i, column) => {
-                  const failure = firstDecodeFailureInRow(
-                    result.decodeFailures,
-                    i,
-                  );
-                  if (failure) {
-                    commands.patch({ selectedCell: null });
-                    agentSelection.clear();
-                    toast(
-                      t("tables.decodeFailureRowBlocked", {
-                        column: failure.columnIndex + 1,
-                        type: failure.databaseType,
-                      }),
-                      "error",
-                    );
-                    return;
-                  }
-                  commands.patch({
-                    selectedRow: i,
-                    selectedCell: { value, column },
-                    jobsOpen: false,
-                  });
-                  agentSelection.select({
-                    connectionId: connection.id,
-                    database: table.database ?? connection.database,
-                    schema: table.schema ?? null,
-                    table: table.name,
-                    column,
-                    rowIndex: page * pageSize + i,
-                    row: Object.fromEntries(
-                      result.columns.map((name, index) => [
-                        name,
-                        result.rows[i]?.[index] ?? null,
-                      ]),
-                    ),
-                  });
-                }}
-                columnMeta={Object.fromEntries(
-                  table.columns.map((column) => [
-                    column.name,
-                    { dataType: column.dataType, pk: column.pk },
-                  ]),
-                )}
-              />
-            ) : busy ? (
-              // Reloading (filter cleared / table switched) — the stale zero-row result would
-              // otherwise flash a wrong "Table is empty." against the now-live filter state.
-              <WorkbenchEmptyState>
-                {t("tables.loadingRows")}
-              </WorkbenchEmptyState>
-            ) : (
-              // Loaded but zero rows: distinguish an empty table from a filter that matched nothing.
-              <WorkbenchEmptyState icon="table">
-                {activeFilters > 0
-                  ? t("tables.noRowsFilter")
-                  : t("tables.tableEmpty")}
-              </WorkbenchEmptyState>
-            )
-          ) : (
-            // No cached page for this table yet — the only place a cold load is visible.
-            !err &&
-            (busy ? (
-              <div className="tw:flex-1 tw:p-3">
-                <Skeleton lines={8} />
-              </div>
-            ) : (
-              <WorkbenchEmptyState icon="table">
-                {t("tables.noRows")}
-              </WorkbenchEmptyState>
-            ))
+          {err && (
+            <div className="tw:border-b tw:border-border-subtle tw:px-3 tw:py-2 tw:text-ui tw:text-danger">
+              {err}
+            </div>
           )}
 
-          {supportsBulkJobs && jobsOpen && catalogRelation ? (
-            <JobPanel
-              connectionId={connection.id}
-              relation={catalogRelation}
-              onClose={() => commands.patch({ jobsOpen: false })}
-            />
-          ) : panelOpen ? (
-            <TableSidePanel
-              engine={engine}
-              table={table}
-              selected={selected}
-              editor={editor}
-              pendingDelete={pendingDelete}
-              reviewing={reviewing}
-              staged={staged}
-              proposal={stagedProposal}
-              running={stagedRunning}
-              catalogPending={snapshotQuery.isPending}
-              selectedCell={cellSel}
-              onSubmit={stageWrite}
-              onCloseEditor={() => commands.patch({ editor: null })}
-              onCloseDelete={() => commands.patch({ pendingDelete: null })}
-              onArmDelete={armDelete}
-              onCloseReview={() =>
-                commands.patch({
-                  reviewing: false,
-                  proposal: null,
-                })
-              }
-              onRemoveStaged={commands.removeStaged}
-              onPrepare={() => void prepareStagedChanges()}
-              onApprove={() => void approveStagedChanges()}
-              onReject={() => void rejectStagedChanges()}
-              onCloseCell={() => commands.patch({ selectedCell: null })}
-            />
+          {catalogEnabled && (catalogPhase === "coldError" || catalogPhase === "staleError") && catalogQuery.error ? (
+            <InlineNotice
+              tone={catalogPhase === "coldError" ? "danger" : "warning"}
+              icon="alert"
+              role={catalogPhase === "coldError" ? "alert" : "status"}
+              action={(
+                <Button size="compact" onClick={() => void catalogQuery.refetch()}>
+                  {t("app.retry")}
+                </Button>
+              )}
+            >
+              {t("tables.catalogLoadFailed", {
+                error: catalogLoadIssueMessage(
+                  t,
+                  catalogLoadIssue(catalogQuery.error),
+                ),
+              })}
+            </InlineNotice>
           ) : null}
-        </div>
-      </WorkbenchContainedBody>
 
-      {result ? (
-        <DataGridStatusPill
-          title={[
-            total != null
+          {/* Dim (not blank) the stale grid while paging/sorting/filtering re-queries. */}
+          <div
+            data-busy={busy && Boolean(result)}
+            className="tw:flex tw:min-h-0 tw:flex-1 tw:data-[busy=true]:[&_[data-data-grid-scroll]]:pointer-events-none tw:data-[busy=true]:[&_[data-data-grid-scroll]]:opacity-50 tw:@max-[920px]:flex-col"
+          >
+            {result ? (
+              result.rows.length ? (
+                <DataGrid
+                  result={result}
+                  surface="workbench"
+                  footerInset
+                  startIndex={page * pageSize}
+                  sort={sort}
+                  onSort={cycleSort}
+                  filters={filters}
+                  onFilter={commands.filter}
+                  selectedRow={selected}
+                  onSelectRow={(selectedRow) => {
+                    commands.patch({ selectedRow, selectedCell: null });
+                    if (
+                      firstDecodeFailureInRow(
+                        result.decodeFailures,
+                        selectedRow,
+                      )
+                    ) {
+                      agentSelection.clear();
+                    }
+                  }}
+                  onCellClick={(value, i, column) => {
+                    const failure = firstDecodeFailureInRow(
+                      result.decodeFailures,
+                      i,
+                    );
+                    if (failure) {
+                      commands.patch({ selectedCell: null });
+                      agentSelection.clear();
+                      toast(
+                        t("tables.decodeFailureRowBlocked", {
+                          column: failure.columnIndex + 1,
+                          type: failure.databaseType,
+                        }),
+                        "error",
+                      );
+                      return;
+                    }
+                    commands.patch({
+                      selectedRow: i,
+                      selectedCell: { value, column },
+                      jobsOpen: false,
+                    });
+                    agentSelection.select({
+                      connectionId: connection.id,
+                      database: table.database ?? connection.database,
+                      schema: table.schema ?? null,
+                      table: table.name,
+                      column,
+                      rowIndex: page * pageSize + i,
+                      row: Object.fromEntries(
+                        result.columns.map((name, index) => [
+                          name,
+                          result.rows[i]?.[index] ?? null,
+                        ]),
+                      ),
+                    });
+                  }}
+                  columnMeta={Object.fromEntries(
+                    table.columns.map((column) => [
+                      column.name,
+                      { dataType: column.dataType, pk: column.pk },
+                    ]),
+                  )}
+                />
+              ) : busy ? (
+                // Reloading (filter cleared / table switched) — the stale zero-row result would
+                // otherwise flash a wrong "Table is empty." against the now-live filter state.
+                <WorkbenchEmptyState>
+                  {t("tables.loadingRows")}
+                </WorkbenchEmptyState>
+              ) : (
+                // Loaded but zero rows: distinguish an empty table from a filter that matched nothing.
+                <WorkbenchEmptyState icon="table">
+                  {activeFilters > 0
+                    ? t("tables.noRowsFilter")
+                    : t("tables.tableEmpty")}
+                </WorkbenchEmptyState>
+              )
+            ) : (
+              // No cached page for this table yet — the only place a cold load is visible.
+              !err &&
+              (busy ? (
+                <div className="tw:flex-1 tw:p-3">
+                  <Skeleton lines={8} />
+                </div>
+              ) : (
+                <WorkbenchEmptyState icon="table">
+                  {t("tables.noRows")}
+                </WorkbenchEmptyState>
+              ))
+            )}
+
+            {supportsBulkJobs && jobsOpen && catalogRelation ? (
+              <JobPanel
+                connectionId={connection.id}
+                relation={catalogRelation}
+                onClose={() => commands.patch({ jobsOpen: false })}
+              />
+            ) : panelOpen ? (
+              <TableSidePanel
+                engine={engine}
+                table={table}
+                selected={selected}
+                editor={editor}
+                pendingDelete={pendingDelete}
+                reviewing={reviewing}
+                staged={staged}
+                proposal={stagedProposal}
+                running={stagedRunning}
+                catalogPending={snapshotQuery.isPending}
+                selectedCell={cellSel}
+                onSubmit={stageWrite}
+                onCloseEditor={() => commands.patch({ editor: null })}
+                onCloseDelete={() => commands.patch({ pendingDelete: null })}
+                onArmDelete={armDelete}
+                onCloseReview={() =>
+                  commands.patch({
+                    reviewing: false,
+                    proposal: null,
+                  })
+                }
+                onRemoveStaged={commands.removeStaged}
+                onPrepare={() => void prepareStagedChanges()}
+                onApprove={() => void approveStagedChanges()}
+                onReject={() => void rejectStagedChanges()}
+                onCloseCell={() => commands.patch({ selectedCell: null })}
+              />
+            ) : null}
+          </div>
+        </WorkbenchContainedBody>
+
+        {result ? (
+          <DataGridStatusPill
+            title={[
+              total != null
+                ? t("tables.rowRangeTotal", {
+                    from,
+                    to,
+                    total: total.toLocaleString(),
+                  })
+                : t("tables.rowRange", { from, to }),
+              result.truncated ? t("tables.truncated") : null,
+              `${result.durationMs} ms`,
+              selected != null
+                ? t("tables.selectedRow", {
+                    row: page * pageSize + selected + 1,
+                  })
+                : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          >
+            {total != null
               ? t("tables.rowRangeTotal", {
                   from,
                   to,
                   total: total.toLocaleString(),
                 })
-              : t("tables.rowRange", { from, to }),
-            result.truncated ? t("tables.truncated") : null,
-            `${result.durationMs} ms`,
-            selected != null
-              ? t("tables.selectedRow", {
-                  row: page * pageSize + selected + 1,
-                })
-              : null,
-          ]
-            .filter(Boolean)
-            .join(" · ")}
-        >
-          {total != null
-            ? t("tables.rowRangeTotal", {
-                from,
-                to,
-                total: total.toLocaleString(),
-              })
-            : t("tables.rowRange", { from, to })}
-          {result.truncated ? ` · ${t("tables.truncated")}` : ""}
-          {` · ${t("tables.durationMs", { duration: result.durationMs })}`}
-        </DataGridStatusPill>
-      ) : null}
-      {ddlOpen ? (
-        <DdlModal
-          connection={connection}
-          table={table}
-          onClose={() => setDdlOpen(false)}
-        />
-      ) : null}
-    </WorkbenchPane>
+              : t("tables.rowRange", { from, to })}
+            {result.truncated ? ` · ${t("tables.truncated")}` : ""}
+            {` · ${t("tables.durationMs", { duration: result.durationMs })}`}
+          </DataGridStatusPill>
+        ) : null}
+        {ddlOpen ? (
+          <DdlModal
+            connection={connection}
+            table={table}
+            onClose={() => setDdlOpen(false)}
+          />
+        ) : null}
+      </WorkbenchPane>
+    </DataGridStatusScope>
   );
 }

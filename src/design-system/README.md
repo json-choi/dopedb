@@ -863,7 +863,10 @@ DopeDB의 실제 작업 흐름과 접근성, supported viewport를 위한 제품
   열 너비 drag는 해당 비율로 좌표를 환산한다.
   화면별 handler나 셀 경계 control을 추가하지 않는다.
 
-- `DataGridViewport`는 확대 비율이 100%가 아닐 때 우측 상단의 고정된 비율·복귀
+- `DataGridStatusScope`는 결과 하나의 상태 표시 action host만 연결한다. 비율 상태는
+  viewport가 소유하고 복귀 버튼은 `DataGridStatusPill` action 영역으로 portal한다.
+  상태 표시가 없는 standalone/embedded 표는 하단 중앙에 복귀 버튼을 표시한다.
+- `DataGridViewport`는 확대 비율이 100%가 아닐 때 하단 결과 상태 표시 옆의 비율·복귀
   버튼을 소유한다. `useDataGridZoom`의 `resetZoom`과 viewport 내부 ⌘0/Ctrl+0은
   pending frame과 gesture 기준을 정리하고 정확히 100%로 복귀한다. 버튼 클릭 뒤
   roving grid cell로 focus를 돌려준다. en/ko 접근성 이름과 tooltip은 caller가 제공한다.

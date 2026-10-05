@@ -1,4 +1,5 @@
 // Displays query outcomes and the recovery command owned by their exact connection.
+import { DataGridStatusScope } from "../../design-system/components/DataGridStatusScope";
 import { useMemo, useState } from "react";
 
 import { Button } from "../../design-system/components/Button";
@@ -134,69 +135,71 @@ function MaterializedResult({
   );
 
   return (
-    <WorkbenchContainedBody>
-      {result ? (
-        <>
-          <ResultWorkbenchToolbar
-            columns={result.columns}
-            rows={filteredRows}
-            decodeFailures={filteredDecodeFailures}
-            filenameBase={`query-${stamp()}`}
-            filterOpen={filterOpen}
-            filter={filter}
-            onToggleFilter={() => {
-              setFilterOpen((open) => !open);
-              if (filterOpen) setFilter("");
-            }}
-            onFilterChange={(value) => {
-              setFilter(value);
-              setLimit(PAGE_STEP);
-            }}
-          />
-          <InspectableResultGrid
-            result={{
-              ...result,
-              rows: visibleRows,
-              decodeFailures: visibleDecodeFailures,
-              rowCount: filteredRows.length,
-            }}
-            inspectionKey={result}
-            surface="workbench"
-            footerInset
-          />
-          <ResultWorkbenchFooter
-            visible={visibleRows.length}
-            total={result.rows.length}
-            duration={result.durationMs}
-            truncated={result.truncated}
-            maxRows={maxRows}
-            showMoreCount={Math.min(
-              PAGE_STEP,
-              filteredRows.length - visibleRows.length,
-            )}
-            onShowMore={
-              filteredRows.length > limit
-                ? () => setLimit((current) => current + PAGE_STEP)
-                : undefined
-            }
-          />
-        </>
-      ) : (
-        <ResultMeta>
-          <SqlSnippet>{sql}</SqlSnippet>
-          {" · "}
-          {outcome.manualTransaction
-            ? t("sql.writeStaged")
-            : outcome.committed
-              ? t("sql.writeCommitted")
-              : t("sql.noRowsReturned")}
-          {outcome.affected !== null && (
-            <> · {t("sql.affected", { count: outcome.affected })}</>
-          )}{" "}
-          · {at}
-        </ResultMeta>
-      )}
-    </WorkbenchContainedBody>
+    <DataGridStatusScope>
+      <WorkbenchContainedBody>
+        {result ? (
+          <>
+            <ResultWorkbenchToolbar
+              columns={result.columns}
+              rows={filteredRows}
+              decodeFailures={filteredDecodeFailures}
+              filenameBase={`query-${stamp()}`}
+              filterOpen={filterOpen}
+              filter={filter}
+              onToggleFilter={() => {
+                setFilterOpen((open) => !open);
+                if (filterOpen) setFilter("");
+              }}
+              onFilterChange={(value) => {
+                setFilter(value);
+                setLimit(PAGE_STEP);
+              }}
+            />
+            <InspectableResultGrid
+              result={{
+                ...result,
+                rows: visibleRows,
+                decodeFailures: visibleDecodeFailures,
+                rowCount: filteredRows.length,
+              }}
+              inspectionKey={result}
+              surface="workbench"
+              footerInset
+            />
+            <ResultWorkbenchFooter
+              visible={visibleRows.length}
+              total={result.rows.length}
+              duration={result.durationMs}
+              truncated={result.truncated}
+              maxRows={maxRows}
+              showMoreCount={Math.min(
+                PAGE_STEP,
+                filteredRows.length - visibleRows.length,
+              )}
+              onShowMore={
+                filteredRows.length > limit
+                  ? () => setLimit((current) => current + PAGE_STEP)
+                  : undefined
+              }
+            />
+          </>
+        ) : (
+          <ResultMeta>
+            <SqlSnippet>{sql}</SqlSnippet>
+            {" · "}
+            {outcome.manualTransaction
+              ? t("sql.writeStaged")
+              : outcome.committed
+                ? t("sql.writeCommitted")
+                : t("sql.noRowsReturned")}
+            {outcome.affected !== null && (
+              <> · {t("sql.affected", { count: outcome.affected })}</>
+            )}{" "}
+            · {at}
+          </ResultMeta>
+        )}
+      </WorkbenchContainedBody>
+    </DataGridStatusScope>
   );
 }
 
