@@ -54,6 +54,7 @@ export function useConnectionProfileController({
   connections,
   onDeletedConnection,
   onSaved,
+  projectEnvironmentId,
   onCancel,
   profileState,
   catalog,
@@ -64,6 +65,7 @@ export function useConnectionProfileController({
   connections: ConnectionProfile[];
   onDeletedConnection: (id: string) => Promise<void>;
   onSaved: (profile: ConnectionProfile, closeEditor: boolean) => Promise<void>;
+  projectEnvironmentId?: string;
   onCancel: () => void;
   profileState: ConnectionProfileState;
   catalog: ConnectionCatalogController;
@@ -262,8 +264,11 @@ export function useConnectionProfileController({
       identity.setPersisted(true);
       credentials.setPassword("");
       await onSaved(saved, closeEditor);
-      toast(t("connections.connectionSaved"));
-      status.setMessage(t("connections.saved"));
+      const savedMessage = projectEnvironmentId
+        ? t("connections.connectionSavedToProject")
+        : t("connections.connectionSaved");
+      toast(savedMessage);
+      status.setMessage(savedMessage);
       status.setMessageIsError(false);
     } catch (error) {
       status.setMessage(connectionOperationErrorTitle(t, error));

@@ -83,7 +83,7 @@ OS / architecture / WebView:
 
 - title toolbar, document tab, tool window 전환
 - Explorer expand, search, refresh, 폭 resize
-- connection 입력 검증, Test, Apply/OK
+- connection 입력 검증, Test, Save/Save and close
 - SQL Run, streaming first batch, Cancel, 완료
 - result tab, Output, grid scroll/select/sort/filter/copy/context menu
 - Agent approval pending, approve, deny, completed

@@ -54,6 +54,7 @@ export function useConnectionEditorController(props: ConnectionEditorProps) {
     connections: props.connections,
     onDeletedConnection: props.onDeletedConnection,
     onSaved: props.onSaved,
+    projectEnvironmentId: props.preset?.projectEnvironmentId,
     onCancel: props.onCancel,
     profileState,
     catalog,
