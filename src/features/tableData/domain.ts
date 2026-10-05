@@ -1,3 +1,4 @@
+// Table view state and staged mutation contracts, including original values for cell edits.
 import type { ScriptOperationProposal } from "../../ipc/types";
 import type { GridSort } from "../../lib/sqlBuild";
 
@@ -12,6 +13,11 @@ export type StagedWrite = {
   id: string;
   sql: string;
   rationale?: string;
+  cellEdit?: {
+    key: Record<string, string | null>;
+    original: Record<string, string | null>;
+    values: Record<string, string | null>;
+  };
 };
 
 export type PendingDelete = {
@@ -32,6 +38,7 @@ export type TableDataState = {
   appliedOrderByExpression: string;
   selectedRow: number | null;
   selectedCell: SelectedCell | null;
+  cellDraftActive: boolean;
   editor: RowEditorState | null;
   staged: StagedWrite[];
   reviewing: boolean;
