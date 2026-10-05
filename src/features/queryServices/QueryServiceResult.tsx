@@ -169,6 +169,7 @@ function MaterializedResult({
             <ResultWorkbenchFooter
               visible={visibleRows.length}
               total={result.rows.length}
+              onClearFilter={normalizedFilter ? () => setFilter("") : undefined}
               duration={result.durationMs}
               truncated={result.truncated}
               maxRows={maxRows}

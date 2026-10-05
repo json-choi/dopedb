@@ -27,7 +27,7 @@ function ExpressionField({
   onApply,
 }: ExpressionFieldProps) {
   const { t } = useI18n();
-  const label = kind === "where" ? "WHERE" : "ORDER BY";
+  const label = kind === "where" ? t("tables.databaseWhere") : "ORDER BY";
   const issue = gridExpressionIssue(kind, value);
   const dirty = value !== appliedValue;
   const hasExpression = Boolean(value || appliedValue);

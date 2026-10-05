@@ -1,11 +1,13 @@
 // Stateless chrome for the result workbench: the toolbar row, the row-count footer, and the
 // cell-to-text projection they share. Filter text, paging, and the show-more decision stay
 // with the result owner.
+import { useId } from "react";
 import type { SqlStreamRowSource } from "../queries/domain";
 import type { CellDecodeFailure } from "../../ipc/types";
 import {
   DataGridStatusPill,
   WorkbenchButton,
+  ResultMeta,
   WorkbenchDivider,
   WorkbenchToolbar,
 } from "../../design-system/components/Workbench";
@@ -40,49 +42,56 @@ export function ResultWorkbenchToolbar({
   onFilterChange: (value: string) => void;
 }) {
   const { t } = useI18n();
+  const filterScopeId = useId();
   return (
-    <WorkbenchToolbar label={t("services.resultToolbar")} compact>
-      <span
-        className="tw:inline-flex tw:size-control-sm tw:shrink-0 tw:items-center tw:justify-center tw:text-foreground"
-        title={t("services.gridView")}
-      >
-        <Icon name="table" />
-      </span>
-      <WorkbenchDivider />
-      <WorkbenchButton
-        iconOnly
-        size="xs"
-        aria-pressed={filterOpen}
-        aria-label={t("services.resultSearch")}
-        title={t("services.resultSearch")}
-        disabled={filterDisabled}
-        onClick={onToggleFilter}
-      >
-        <Icon name="search" />
-      </WorkbenchButton>
-      {filterOpen ? (
-        <span className="tw:w-[min(260px,34vw)] tw:min-w-24 tw:shrink">
-          <TextInput
-            autoFocus
-            density="xs"
-            type="search"
-            value={filter}
-            onChange={(event) => onFilterChange(event.target.value)}
-            placeholder={t("services.resultSearchPlaceholder")}
-            aria-label={t("services.resultSearch")}
-          />
+    <>
+      <WorkbenchToolbar label={t("services.resultToolbar")} compact>
+        <span
+          className="tw:inline-flex tw:size-control-sm tw:shrink-0 tw:items-center tw:justify-center tw:text-foreground"
+          title={t("services.gridView")}
+        >
+          <Icon name="table" />
         </span>
+        <WorkbenchDivider />
+        <WorkbenchButton
+          iconOnly
+          size="xs"
+          aria-pressed={filterOpen}
+          aria-label={t("services.resultSearch")}
+          title={t("services.resultSearch")}
+          disabled={filterDisabled}
+          onClick={onToggleFilter}
+        >
+          <Icon name="search" />
+        </WorkbenchButton>
+        {filterOpen ? (
+          <span className="tw:w-[min(260px,34vw)] tw:min-w-24 tw:shrink">
+            <TextInput
+              autoFocus
+              density="xs"
+              type="search"
+              value={filter}
+              onChange={(event) => onFilterChange(event.target.value)}
+              placeholder={t("services.resultSearchPlaceholder")}
+              aria-label={t("services.resultSearch")}
+              aria-describedby={filterScopeId}
+            />
+          </span>
+        ) : null}
+        <ResultToolbar
+          columns={columns}
+          rows={rows}
+          decodeFailures={decodeFailures}
+          rowSource={rowSource}
+          filenameBase={filenameBase}
+          partial={partial}
+          presentation="workbench"
+        />
+      </WorkbenchToolbar>
+      {filterOpen ? (
+        <ResultMeta><span id={filterScopeId}>{t("results.filterScope")}</span></ResultMeta>
       ) : null}
-      <ResultToolbar
-        columns={columns}
-        rows={rows}
-        decodeFailures={decodeFailures}
-        rowSource={rowSource}
-        filenameBase={filenameBase}
-        partial={partial}
-        presentation="workbench"
-      />
-    </WorkbenchToolbar>
+    </>
   );
 }
 
@@ -95,6 +104,7 @@ export function ResultWorkbenchFooter({
   maxRows,
   showMoreCount = 0,
   onShowMore,
+  onClearFilter,
 }: {
   visible: number;
   total: number;
@@ -104,6 +114,7 @@ export function ResultWorkbenchFooter({
   maxRows: number;
   showMoreCount?: number;
   onShowMore?: () => void;
+  onClearFilter?: () => void;
 }) {
   const { t } = useI18n();
   return (
@@ -118,16 +129,29 @@ export function ResultWorkbenchFooter({
           : t("services.rowSummary", { visible, total, duration })
       }
       actions={
-        onShowMore && showMoreCount > 0 ? (
-          <WorkbenchButton
-            onClick={onShowMore}
-          >
-            {t("sql.showMore", { count: showMoreCount, total })}
-          </WorkbenchButton>
-        ) : undefined
+        <>
+          {onClearFilter ? (
+            <WorkbenchButton
+              iconOnly
+              size="xs"
+              title={t("results.clearFilter")}
+              aria-label={t("results.clearFilter")}
+              onClick={onClearFilter}
+            >
+              <Icon name="close" />
+            </WorkbenchButton>
+          ) : null}
+          {onShowMore && showMoreCount > 0 ? (
+            <WorkbenchButton onClick={onShowMore}>
+              {t("sql.showMore", { count: showMoreCount, total })}
+            </WorkbenchButton>
+          ) : null}
+        </>
       }
     >
-      {t("ide.queryRows", { count: visible })}
+      {onClearFilter
+        ? t("results.filteredRows", { visible, total })
+        : t("ide.queryRows", { count: visible })}
       {truncated ? ` · ${t("sql.capped", { count: maxRows })}` : ""}
     </DataGridStatusPill>
   );

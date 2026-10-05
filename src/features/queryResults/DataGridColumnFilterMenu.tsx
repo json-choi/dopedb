@@ -1,4 +1,4 @@
-// Presents searchable page-value filters while retaining the opened column's value inventory.
+// Chooses DB query conditions from loaded page values; the table owner re-queries the database.
 
 import { useMemo, useRef, useState } from "react";
 import { Button } from "../../design-system/components/Button";
@@ -57,7 +57,7 @@ export default function DataGridColumnFilterMenu({
       }),
     );
   }, [values]);
-  // Applying a value filter replaces the page result with the selected subset. Keep
+  // Applying a value filter re-queries the database and replaces the page. Keep
   // the popup's original value inventory while that filter is active so users can
   // add another value or see the original counts without clearing first.
   const choiceCache = useRef<FilterChoice[]>(currentChoices);
@@ -93,7 +93,7 @@ export default function DataGridColumnFilterMenu({
       onKeyDown={(event) => event.stopPropagation()}
     >
       <ToolbarMenu
-        label={t("grid.localFilterLabel", { col: column })}
+        label={t("grid.databaseFilterLabel", { col: column })}
         icon="filter"
         align="start"
         pressed={Boolean(filter)}
@@ -101,14 +101,17 @@ export default function DataGridColumnFilterMenu({
       >
         <div className="tw:grid tw:w-56 tw:gap-1 tw:p-1">
           <div className="tw:px-1 tw:pt-1 tw:text-right tw:text-xs tw:font-semibold tw:text-muted-foreground">
-            {t("grid.localFilterTitle", { col: column })}
+            {t("grid.databaseFilterTitle", { col: column })}
           </div>
+          <p className="tw:m-0 tw:px-1 tw:py-1 tw:text-xs tw:text-muted-foreground">
+            {t("grid.databaseFilterScope")}
+          </p>
           <TextInput
             density="compact"
             autoFocus
             value={search}
-            aria-label={t("grid.localFilterSearch", { col: column })}
-            placeholder={t("grid.localFilterSearchPlaceholder")}
+            aria-label={t("grid.databaseFilterSearch", { col: column })}
+            placeholder={t("grid.databaseFilterSearchPlaceholder")}
             onChange={(event) => setSearch(event.target.value)}
           />
           <div className="tw:grid tw:min-w-0 tw:grid-cols-[minmax(0,1fr)_auto] tw:items-center tw:border-b tw:border-border-subtle tw:px-1 tw:py-1 tw:text-xs tw:text-muted-foreground">
@@ -124,9 +127,9 @@ export default function DataGridColumnFilterMenu({
                   )
                 }
               />
-              {t("grid.localFilterValue")}
+              {t("grid.databaseFilterValue")}
             </label>
-            <span>{t("grid.localFilterCount")}</span>
+            <span>{t("grid.databaseFilterCount")}</span>
           </div>
           <div className="scrollbar-sleek tw:grid tw:max-h-64 tw:overflow-y-auto">
             {visibleChoices.map((choice) => (
@@ -159,7 +162,7 @@ export default function DataGridColumnFilterMenu({
             ))}
             {visibleChoices.length === 0 ? (
               <span className="tw:px-2 tw:py-4 tw:text-center tw:text-sm tw:text-muted-foreground">
-                {t("grid.localFilterEmpty")}
+                {t("grid.databaseFilterEmpty")}
               </span>
             ) : null}
           </div>
@@ -168,7 +171,7 @@ export default function DataGridColumnFilterMenu({
               size="compact"
               onClick={() => onFilter("")}
             >
-              {t("grid.localFilterClear")}
+              {t("grid.databaseFilterClear")}
             </Button>
           ) : null}
         </div>
