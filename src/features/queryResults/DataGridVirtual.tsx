@@ -80,6 +80,7 @@ type Props = {
   onFilter?: (col: string, value: string) => void;
   selectedRow?: number | null;
   onSelectRow?: (i: number) => void;
+  renderCell?: (value: unknown, row: number, column: string) => import("react").ReactNode;
   onCellClick?: (value: unknown, rowIndex: number, col: string) => void;
   columnMeta?: Record<string, { dataType: string; pk: boolean }>;
   surface?: DataGridSurface;
@@ -340,6 +341,7 @@ export default function DataGridVirtual(props: Props) {
     setFocus({ row: Math.min(Math.max(0, startRow), Math.max(0, rowCount - 1)), column: 0 });
   }, [endRow, focus, rowCount, startRow, visibleColumns]);
   const move = (event: KeyboardEvent<HTMLDivElement>) => {
+    if ((event.target as HTMLElement).closest("input, textarea, button")) return;
     if (event.key === "Escape") return setSelection(null);
     if (
       (event.metaKey || event.ctrlKey) &&
@@ -687,7 +689,9 @@ export default function DataGridVirtual(props: Props) {
                     setFocus({ row: rowIndex, column: columnIndex + 1 })
                   }
                 >
-                  {text}
+                  {!loading && !decodeFailure && props.renderCell
+                    ? props.renderCell(value, rowIndex, props.result.columns[columnIndex])
+                    : text}
                 </div>
               );
             })}

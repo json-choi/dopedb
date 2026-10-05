@@ -25,6 +25,8 @@ type Props = {
   selectedRowBlockedReason: string | null;
   selected: number | null;
   stagedCount: number;
+  mutationLocked?: boolean;
+  cellDraftActive?: boolean;
   activeFilters: number;
   page: number;
   pageSize: number;
@@ -165,18 +167,20 @@ export default function TableToolbar(props: Props) {
               </WorkbenchButton>
             </>
           ) : null}
-          {stagedCount > 0 ? (
+          {stagedCount > 0 || props.cellDraftActive ? (
             <>
               <WorkbenchButton
                 variant="selected"
+                disabled={props.mutationLocked}
                 onClick={props.onReviewStaged}
                 title={t("tables.reviewStaged")}
               >
                 <Icon name="check" />
-                {t("tables.stagedCount", { count: stagedCount })}
+                {t("tables.saveChanges", { count: stagedCount })}
               </WorkbenchButton>
               <WorkbenchButton
                 iconOnly
+                disabled={props.mutationLocked}
                 onClick={props.onDiscardStaged}
                 title={t("tables.discardStaged")}
                 aria-label={t("tables.discardStaged")}

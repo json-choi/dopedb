@@ -12,6 +12,7 @@ import {
   useRef,
   useState,
   type KeyboardEvent,
+  type ReactNode,
   type MouseEvent as ReactMouseEvent,
 } from "react";
 import type { QueryResult } from "../../ipc/types";
@@ -86,6 +87,7 @@ type DataGridProps = {
   selectedRow?: number | null;
   onSelectRow?: (i: number) => void;
   onCellClick?: (value: unknown, rowIndex: number, col: string) => void;
+  renderCell?: (value: unknown, row: number, column: string) => ReactNode;
   columnMeta?: Record<string, { dataType: string; pk: boolean }>;
   /** A chunked streaming source; rows are never flattened for the grid. */
   rowSource?: SqlStreamRowSource;
@@ -121,6 +123,7 @@ export default function DataGrid(props: DataGridProps) {
         selectedRow={props.selectedRow}
         onSelectRow={props.onSelectRow}
         onCellClick={props.onCellClick}
+        renderCell={props.renderCell}
         columnMeta={props.columnMeta}
         rowSource={props.rowSource}
         surface={props.surface}
@@ -142,6 +145,7 @@ function DataGridTable({
   onSelectRow,
   onCellClick,
   columnMeta,
+  renderCell,
   rowSource,
   surface,
   footerInset,
@@ -265,6 +269,7 @@ function DataGridTable({
   // roving-select a cell (mirrors App.tsx's tab-bar pattern: move sel, then focus the td —
   // valid even at tabIndex=-1, only Tab-order membership depends on that). Enter opens it.
   function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    if ((e.target as HTMLElement).closest("input, textarea, button")) return;
     if (e.key === "Escape" && sel) {
       setSel(null);
       return;
@@ -558,7 +563,7 @@ function DataGridTable({
                       selectCell(i, j, event.shiftKey)
                     }
                   >
-                    {text}
+                    {!decodeFailure && renderCell ? renderCell(v, i, result.columns[j]) : text}
                   </td>
                 );
               })}

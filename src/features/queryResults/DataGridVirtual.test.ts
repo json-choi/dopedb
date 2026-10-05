@@ -1,3 +1,4 @@
+import { stageCellEdit } from "../tableData/cellEdits";
 import { describe, expect, it } from "vitest";
 import {
   buildPageQuery,
@@ -242,6 +243,28 @@ describe("DataGridVirtual window", () => {
       ["unknown", "unknown"],
     );
     expect(numericAccumulator.states).toEqual(["unknown", "unknown"]);
+    const editableTable = {
+      database: null, schema: "public", name: "records",
+      columns: [
+        { name: "id", dataType: "bigint", pk: true, nullable: false },
+        { name: "label", dataType: "text", pk: false, nullable: true },
+        { name: "amount", dataType: "numeric", pk: false, nullable: false },
+      ],
+    } as CatalogTable;
+    const original = { id: "9007199254740993", label: "before", amount: "1.000000000000000001" };
+    let edits = stageCellEdit([], "postgres", editableTable, original, "label", "it's changed");
+    edits = stageCellEdit(edits, "postgres", editableTable, original, "amount", "2.000000000000000001");
+    expect(edits).toHaveLength(1);
+    expect(edits[0].sql).toBe('UPDATE "public"."records" SET "label" = \'it\'\'s changed\', "amount" = 2.000000000000000001 WHERE "id" = 9007199254740993 AND "label" = \'before\' AND "amount" = 1.000000000000000001');
+    edits = stageCellEdit(edits, "postgres", editableTable, { ...original, label: "refreshed" }, "label", null);
+    expect(edits[0].sql).toContain('"label" = NULL');
+    expect(edits[0].sql).toContain('"label" = \'before\'');
+    edits = stageCellEdit(edits, "postgres", editableTable, original, "label", "before");
+    edits = stageCellEdit(edits, "postgres", editableTable, original, "amount", original.amount);
+    expect(edits).toHaveLength(0);
+    expect(() => stageCellEdit([], "postgres", editableTable, original, "id", "2")).toThrow();
+    expect(() => stageCellEdit([], "postgres", editableTable, original, "amount", null)).toThrow();
+    expect(() => stageCellEdit([], "postgres", editableTable, { ...original, id: null }, "label", "after")).toThrow();
     const table = {
       database: null,
       schema: "public",

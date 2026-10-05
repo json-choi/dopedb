@@ -7,6 +7,8 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from "react";
 import CellViewer from "../../components/CellViewer";
+import LazySqlViewer from "../../components/LazySqlViewer";
+import { useToast } from "../../components/Toast";
 import { Icon } from "../../components/Icon";
 import { Button } from "../../design-system/components/Button";
 import RowEditor, {
@@ -68,6 +70,7 @@ type Props = {
   proposal: ScriptOperationProposal | null;
   running: boolean;
   catalogPending: boolean;
+  writesEnabled: boolean;
   selectedCell: SelectedCell | null;
   onSubmit: (write: RowEditorSubmission) => void;
   onCloseEditor: () => void;
@@ -83,6 +86,7 @@ type Props = {
 
 export default function TableSidePanel(props: Props) {
   const { t } = useI18n();
+  const toast = useToast();
   const [width, setWidth] = useState(readWidth);
   const {
     engine,
@@ -224,13 +228,14 @@ export default function TableSidePanel(props: Props) {
                 size="xs"
                 variant="ghost"
                 aria-label={t("common.close")}
+                disabled={running}
                 onClick={props.onCloseReview}
               >
                 <Icon name="close" />
               </Button>
             }
           />
-          <ol className="tw:m-0 tw:grid tw:list-none tw:gap-0 tw:p-0 tw:[&_li]:flex tw:[&_li]:items-start tw:[&_li]:justify-between tw:[&_li]:gap-2 tw:[&_li]:border-t tw:[&_li]:border-border-subtle tw:[&_li]:py-2 tw:[&_li>div]:min-w-0 tw:[&_strong]:block tw:[&_code]:mt-1 tw:[&_code]:block tw:[&_code]:[overflow-wrap:anywhere] tw:[&_code]:text-xs tw:[&_code]:text-muted-foreground">
+          <ol className="tw:m-0 tw:grid tw:list-none tw:gap-0 tw:p-0 tw:[&_li]:flex tw:[&_li]:items-start tw:[&_li]:justify-between tw:[&_li]:gap-2 tw:[&_li]:border-t tw:[&_li]:border-border-subtle tw:[&_li]:py-2 tw:[&_li>div:first-child]:min-w-0 tw:[&_li>div:first-child]:flex-1 tw:[&_strong]:block">
             {staged.map((change, index) => (
               <li key={change.id}>
                 <div>
@@ -238,36 +243,56 @@ export default function TableSidePanel(props: Props) {
                     {change.rationale ||
                       t("tables.stagedChange", { index: index + 1 })}
                   </strong>
-                  <code>{change.sql}</code>
+                  <div className="tw:mt-1">
+                    <LazySqlViewer value={change.sql} engine={engine} minHeight="40px" />
+                  </div>
                 </div>
-                {!proposal && (
+                <div className="ds-control-row tw:flex tw:shrink-0 tw:items-center tw:gap-1">
                   <Button
-                    iconOnly
                     size="xs"
-                    variant="ghost"
-                    onClick={() => props.onRemoveStaged(change.id)}
-                    aria-label={t("common.delete")}
+                    aria-label={`${t("common.copy")} SQL (${index + 1})`}
+                    onClick={() => {
+                      void navigator.clipboard.writeText(change.sql)
+                        .then(() => toast(t("common.copied")))
+                        .catch(() => toast(t("results.copyFailed"), "error"));
+                    }}
                   >
-                    <Icon name="close" />
+                    <Icon name="copy" /> {t("common.copy")}
                   </Button>
-                )}
+                  {!proposal && (
+                    <Button
+                      iconOnly
+                      size="xs"
+                      variant="ghost"
+                      onClick={() => props.onRemoveStaged(change.id)}
+                      aria-label={t("common.delete")}
+                    >
+                      <Icon name="close" />
+                    </Button>
+                  )}
+                </div>
               </li>
             ))}
           </ol>
+          {!props.writesEnabled && (
+            <p role="status" className="tw:text-ui tw:text-muted-foreground">
+              {t("tables.cellSaveWritesRequired")}
+            </p>
+          )}
           <InspectorFooter>
             {!proposal ? (
               <Button
                 variant="primary"
-                disabled={staged.length === 0 || running || catalogPending}
+                disabled={staged.length === 0 || running || catalogPending || !props.writesEnabled}
                 onClick={props.onPrepare}
               >
-                {running ? t("common.loading") : t("tables.reviewAndApply")}
+                {running ? t("common.loading") : t("common.save")}
               </Button>
             ) : (
               <>
                 <Button
                   variant="primary"
-                  disabled={running}
+                  disabled={running || !props.writesEnabled}
                   onClick={props.onApprove}
                 >
                   {running
