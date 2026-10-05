@@ -1,4 +1,5 @@
 // Displays one fetched Mongo page; inspection and export stay bound to that page.
+import { DataGridStatusScope } from "../../design-system/components/DataGridStatusScope";
 import { useMemo } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 
@@ -79,132 +80,134 @@ export default function MongoTableData({
   const to = page * pageSize + rows;
 
   return (
-    <WorkbenchPane>
-      <WorkbenchToolbar label={t("tables.pagination")}>
-        <WorkbenchButton
-          iconOnly
-          disabled={busy}
-          title={t("common.refresh")}
-          aria-label={t("common.refresh")}
-          onClick={() => {
-            void rowsQuery.refetch();
-            void countQuery.refetch();
-          }}
-        >
-          {busy ? "…" : <Icon name="refresh" />}
-        </WorkbenchButton>
-        <span className="tw:flex-1" />
-        {documentPage && !busy && !error && !rowsQuery.isPlaceholderData ? (
-          <ResultToolbar
-            columns={result.columns}
-            rows={result.rows}
-            scopeLabel={t("results.currentPage")}
-            filenameBase={`documents-${table.name}-page${page + 1}-${stamp()}`}
-            presentation="workbench"
+    <DataGridStatusScope>
+      <WorkbenchPane>
+        <WorkbenchToolbar label={t("tables.pagination")}>
+          <WorkbenchButton
+            iconOnly
+            disabled={busy}
+            title={t("common.refresh")}
+            aria-label={t("common.refresh")}
+            onClick={() => {
+              void rowsQuery.refetch();
+              void countQuery.refetch();
+            }}
+          >
+            {busy ? "…" : <Icon name="refresh" />}
+          </WorkbenchButton>
+          <span className="tw:flex-1" />
+          {documentPage && !busy && !error && !rowsQuery.isPlaceholderData ? (
+            <ResultToolbar
+              columns={result.columns}
+              rows={result.rows}
+              scopeLabel={t("results.currentPage")}
+              filenameBase={`documents-${table.name}-page${page + 1}-${stamp()}`}
+              presentation="workbench"
+            />
+          ) : null}
+          <Pager
+            page={page}
+            pageSize={pageSize}
+            total={total}
+            rows={rows}
+            busy={busy}
+            showRefresh={false}
+            onPage={setPage}
+            onRefresh={() => {
+              void rowsQuery.refetch();
+              void countQuery.refetch();
+            }}
           />
-        ) : null}
-        <Pager
-          page={page}
-          pageSize={pageSize}
-          total={total}
-          rows={rows}
-          busy={busy}
-          showRefresh={false}
-          onPage={setPage}
-          onRefresh={() => {
-            void rowsQuery.refetch();
-            void countQuery.refetch();
-          }}
-        />
-      </WorkbenchToolbar>
+        </WorkbenchToolbar>
 
-      <WorkbenchContainedBody>
-        {error && (
-          <div className="tw:border-b tw:border-border-subtle tw:px-3 tw:py-2 tw:text-ui tw:text-danger">
-            {error}
-          </div>
-        )}
-        <div
-          data-busy={busy && Boolean(documentPage)}
-          className="tw:relative tw:flex tw:min-h-0 tw:flex-1 tw:data-[busy=true]:pointer-events-none tw:data-[busy=true]:opacity-50"
-        >
-          {documentPage ? (
-            <>
-              <InspectableResultGrid
-                result={result}
-                inspectionKey={documentPage}
-                inspectionDisabled={busy || Boolean(error) || rowsQuery.isPlaceholderData}
-                surface="workbench"
-                footerInset
-                startIndex={page * pageSize}
-                onCellClick={(_value, rowIndex, column) => {
-                  agentSelection.select({
-                    connectionId: connection.id,
-                    database: table.database ?? connection.database,
-                    schema: table.schema ?? null,
-                    table: table.name,
-                    column,
-                    rowIndex: page * pageSize + rowIndex,
-                    row: Object.fromEntries(
-                      result.columns.map((name, index) => [
-                        name,
-                        result.rows[rowIndex]?.[index] ?? null,
-                      ]),
-                    ),
-                  });
-                }}
-                columnMeta={Object.fromEntries(
-                  table.columns.map((column) => [
-                    column.name,
-                    { dataType: column.dataType, pk: column.pk },
-                  ]),
-                )}
-              />
-              {rows === 0 && !busy && (
-                <div className="tw:pointer-events-none tw:absolute tw:inset-x-0 tw:top-control-md tw:bottom-0 tw:flex tw:items-center tw:justify-center tw:bg-background/90 tw:text-ui tw:text-muted-foreground">
-                  {t("tables.tableEmpty")}
-                </div>
-              )}
-            </>
-          ) : (
-            !error &&
-            (busy ? (
-              <div className="tw:flex-1 tw:p-3">
-                <Skeleton lines={8} />
-              </div>
-            ) : (
-              <WorkbenchEmptyState icon="table">
-                {t("tables.noRows")}
-              </WorkbenchEmptyState>
-            ))
+        <WorkbenchContainedBody>
+          {error && (
+            <div className="tw:border-b tw:border-border-subtle tw:px-3 tw:py-2 tw:text-ui tw:text-danger">
+              {error}
+            </div>
           )}
-        </div>
-      </WorkbenchContainedBody>
-      {documentPage ? (
-        <DataGridStatusPill
-          title={[
-            total != null
-              ? t("tables.rowRangeTotal", {
-                  from,
-                  to,
-                  total: total.toLocaleString(),
-                })
-              : t("tables.rowRange", { from, to }),
-            documentPage.truncated ? t("tables.truncated") : null,
-            countError,
-            `${documentPage.durationMs} ms`,
-          ]
-            .filter(Boolean)
-            .join(" · ")}
-        >
-          {total != null
-            ? t("tables.rowRangeTotal", { from, to, total: total.toLocaleString() })
-            : t("tables.rowRange", { from, to })}
-          {documentPage.truncated ? ` · ${t("tables.truncated")}` : ""}
-          {countError ? ` · ${t("tables.countUnavailableShort")}` : ""}
-          {` · ${t("tables.durationMs", { duration: documentPage.durationMs })}`}
-        </DataGridStatusPill>
-      ) : null}
-    </WorkbenchPane>
+          <div
+            data-busy={busy && Boolean(documentPage)}
+            className="tw:relative tw:flex tw:min-h-0 tw:flex-1 tw:data-[busy=true]:pointer-events-none tw:data-[busy=true]:opacity-50"
+          >
+            {documentPage ? (
+              <>
+                <InspectableResultGrid
+                  result={result}
+                  inspectionKey={documentPage}
+                  inspectionDisabled={busy || Boolean(error) || rowsQuery.isPlaceholderData}
+                  surface="workbench"
+                  footerInset
+                  startIndex={page * pageSize}
+                  onCellClick={(_value, rowIndex, column) => {
+                    agentSelection.select({
+                      connectionId: connection.id,
+                      database: table.database ?? connection.database,
+                      schema: table.schema ?? null,
+                      table: table.name,
+                      column,
+                      rowIndex: page * pageSize + rowIndex,
+                      row: Object.fromEntries(
+                        result.columns.map((name, index) => [
+                          name,
+                          result.rows[rowIndex]?.[index] ?? null,
+                        ]),
+                      ),
+                    });
+                  }}
+                  columnMeta={Object.fromEntries(
+                    table.columns.map((column) => [
+                      column.name,
+                      { dataType: column.dataType, pk: column.pk },
+                    ]),
+                  )}
+                />
+                {rows === 0 && !busy && (
+                  <div className="tw:pointer-events-none tw:absolute tw:inset-x-0 tw:top-control-md tw:bottom-0 tw:flex tw:items-center tw:justify-center tw:bg-background/90 tw:text-ui tw:text-muted-foreground">
+                    {t("tables.tableEmpty")}
+                  </div>
+                )}
+              </>
+            ) : (
+              !error &&
+              (busy ? (
+                <div className="tw:flex-1 tw:p-3">
+                  <Skeleton lines={8} />
+                </div>
+              ) : (
+                <WorkbenchEmptyState icon="table">
+                  {t("tables.noRows")}
+                </WorkbenchEmptyState>
+              ))
+            )}
+          </div>
+        </WorkbenchContainedBody>
+        {documentPage ? (
+          <DataGridStatusPill
+            title={[
+              total != null
+                ? t("tables.rowRangeTotal", {
+                    from,
+                    to,
+                    total: total.toLocaleString(),
+                  })
+                : t("tables.rowRange", { from, to }),
+              documentPage.truncated ? t("tables.truncated") : null,
+              countError,
+              `${documentPage.durationMs} ms`,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          >
+            {total != null
+              ? t("tables.rowRangeTotal", { from, to, total: total.toLocaleString() })
+              : t("tables.rowRange", { from, to })}
+            {documentPage.truncated ? ` · ${t("tables.truncated")}` : ""}
+            {countError ? ` · ${t("tables.countUnavailableShort")}` : ""}
+            {` · ${t("tables.durationMs", { duration: documentPage.durationMs })}`}
+          </DataGridStatusPill>
+        ) : null}
+      </WorkbenchPane>
+    </DataGridStatusScope>
   );
 }

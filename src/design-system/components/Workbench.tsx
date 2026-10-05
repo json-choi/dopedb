@@ -1,6 +1,7 @@
 // Canonical workbench primitives for editor, data, and result panes. These own
 // the dense IDE spacing shared by table data, SQL, and document surfaces.
-import type { ComponentPropsWithoutRef, ReactNode } from "react";
+import { useContext, type ComponentPropsWithoutRef, type ReactNode } from "react";
+import { DataGridStatusContext } from "./DataGridStatusScope";
 
 import { Icon, type IconName } from "../../components/Icon";
 import { Button, type ButtonProps } from "./Button";
@@ -169,6 +170,7 @@ export function DataGridStatusPill({
   actions?: ReactNode;
   title?: string;
 }) {
+  const status = useContext(DataGridStatusContext);
   return (
     <footer
       className="tw:absolute tw:bottom-3 tw:left-1/2 tw:z-[var(--ds-z-raised)] tw:flex tw:h-control-lg tw:min-w-[108px] tw:max-w-[calc(100%_-_var(--ds-space-4))] tw:-translate-x-1/2 tw:items-center tw:justify-center tw:gap-1 tw:rounded-md tw:border tw:border-border-strong tw:bg-card tw:px-3 tw:text-sm tw:whitespace-nowrap tw:text-foreground tw:shadow-control"
@@ -177,11 +179,9 @@ export function DataGridStatusPill({
       <span className="tw:min-w-0 tw:overflow-hidden tw:text-ellipsis">
         {children}
       </span>
-      {actions ? (
-        <div className="tw:ml-1 tw:flex tw:items-center tw:border-l tw:border-border-subtle tw:pl-2">
-          {actions}
-        </div>
-      ) : null}
+      <div ref={status?.setHost} className="tw:ml-1 tw:flex tw:shrink-0 tw:items-center tw:gap-1 tw:border-l tw:border-border-subtle tw:pl-2 tw:empty:hidden">
+        {actions}
+      </div>
     </footer>
   );
 }

@@ -1,5 +1,6 @@
 // Bounded desktop stream projection. The grid and exports consume the immutable
 // chunk source directly; this component never flattens a partial result.
+import { DataGridStatusScope } from "../../design-system/components/DataGridStatusScope";
 import { useMemo, useState } from "react";
 
 import { type SqlStreamViewState } from "../queries/domain";
@@ -89,55 +90,57 @@ export default function StreamOutcome({
           : t("sql.running");
 
   return (
-    <WorkbenchContainedBody aria-live="polite">
-      {stream.columns.length === 0 ? (
-        <ResultMeta>
-          <SqlSnippet>{sql}</SqlSnippet>
-          {" · "}
-          {running ? t("sql.running") : phaseLabel}
-        </ResultMeta>
-      ) : (
-        <>
-          <ResultWorkbenchToolbar
-            columns={stream.columns}
-            rows={filteredRows ?? undefined}
-            decodeFailures={filteredDecodeFailures}
-            rowSource={filteredRows === null ? stream.rowSource : undefined}
-            filenameBase={`query-${stamp()}`}
-            partial={partial}
-            filterOpen={filterOpen}
-            filter={filter}
-            filterDisabled={partial || filterableRows === null}
-            onToggleFilter={() => {
-              setFilterOpen((open) => !open);
-              if (filterOpen) setFilter("");
-            }}
-            onFilterChange={setFilter}
-          />
-          <InspectableResultGrid
-            result={{
-              columns: stream.columns,
-              rows: filteredRows ?? [],
-              decodeFailures: filteredDecodeFailures,
-              rowCount: filteredRows?.length ?? stream.rowCount,
-              truncated: stream.truncated,
-              durationMs: stream.durationMs ?? 0,
-            }}
-            inspectionKey={stream}
-            rowSource={filteredRows === null ? stream.rowSource : undefined}
-            surface="workbench"
-            footerInset
-          />
-          <ResultWorkbenchFooter
-            visible={filteredRows?.length ?? stream.rowCount}
-            total={stream.rowCount}
-            duration={stream.durationMs}
-            state={phaseLabel}
-            truncated={stream.truncated}
-            maxRows={maxRows}
-          />
-        </>
-      )}
-    </WorkbenchContainedBody>
+    <DataGridStatusScope>
+      <WorkbenchContainedBody aria-live="polite">
+        {stream.columns.length === 0 ? (
+          <ResultMeta>
+            <SqlSnippet>{sql}</SqlSnippet>
+            {" · "}
+            {running ? t("sql.running") : phaseLabel}
+          </ResultMeta>
+        ) : (
+          <>
+            <ResultWorkbenchToolbar
+              columns={stream.columns}
+              rows={filteredRows ?? undefined}
+              decodeFailures={filteredDecodeFailures}
+              rowSource={filteredRows === null ? stream.rowSource : undefined}
+              filenameBase={`query-${stamp()}`}
+              partial={partial}
+              filterOpen={filterOpen}
+              filter={filter}
+              filterDisabled={partial || filterableRows === null}
+              onToggleFilter={() => {
+                setFilterOpen((open) => !open);
+                if (filterOpen) setFilter("");
+              }}
+              onFilterChange={setFilter}
+            />
+            <InspectableResultGrid
+              result={{
+                columns: stream.columns,
+                rows: filteredRows ?? [],
+                decodeFailures: filteredDecodeFailures,
+                rowCount: filteredRows?.length ?? stream.rowCount,
+                truncated: stream.truncated,
+                durationMs: stream.durationMs ?? 0,
+              }}
+              inspectionKey={stream}
+              rowSource={filteredRows === null ? stream.rowSource : undefined}
+              surface="workbench"
+              footerInset
+            />
+            <ResultWorkbenchFooter
+              visible={filteredRows?.length ?? stream.rowCount}
+              total={stream.rowCount}
+              duration={stream.durationMs}
+              state={phaseLabel}
+              truncated={stream.truncated}
+              maxRows={maxRows}
+            />
+          </>
+        )}
+      </WorkbenchContainedBody>
+    </DataGridStatusScope>
   );
 }

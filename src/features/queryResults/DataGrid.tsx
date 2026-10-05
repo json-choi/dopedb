@@ -27,6 +27,7 @@ import {
   DataGridViewport,
   type DataGridSurface,
 } from "../../design-system/components/DataGridViewport";
+import useDataGridZoom from "../../design-system/useDataGridZoom";
 import { ResizeSeparator } from "../../design-system/components/ResizeSeparator";
 import { Icon } from "../../components/Icon";
 import DataGridColumnFilterMenu from "./DataGridColumnFilterMenu";
@@ -157,6 +158,7 @@ function DataGridTable({
   const focusRequestedRef = useRef(false);
   const viewportRef = useRef<HTMLDivElement>(null);
   const tableRef = useRef<HTMLTableElement>(null);
+  const { zoom, resetZoom } = useDataGridZoom(viewportRef);
   const sig = result.columns.join(" ");
   useEffect(() => {
     setWidths({}); // new column set → stale widths dropped
@@ -215,7 +217,7 @@ function DataGridTable({
       setWidths({ ...snap, [colIdx]: pendingW });
     };
     const move = (ev: MouseEvent) => {
-      pendingW = Math.min(1200, Math.max(50, startW + ev.clientX - startX));
+      pendingW = Math.min(1200, Math.max(50, startW + (ev.clientX - startX) / zoom));
       if (pendingW !== startW) previousWidths.current.delete(colIdx);
       if (!raf) raf = requestAnimationFrame(flush);
     };
@@ -319,7 +321,7 @@ function DataGridTable({
       pageRows: Math.max(
         1,
         Math.floor(
-          ((viewportRef.current?.clientHeight ?? 280) -
+          ((viewportRef.current?.clientHeight ?? 280) / zoom -
             DATA_GRID_HEADER_HEIGHT) /
             DATA_GRID_ROW_HEIGHT,
         ),
@@ -342,6 +344,9 @@ function DataGridTable({
   return (
     <DataGridViewport
       ref={viewportRef}
+      zoom={zoom}
+      onResetZoom={resetZoom}
+      resetZoomLabel={t("grid.resetZoom")}
       surface={surface}
       footerInset={footerInset}
       tabIndex={result.rows.length === 0 ? 0 : undefined}
@@ -361,7 +366,7 @@ function DataGridTable({
         aria-rowcount={Math.max(result.rowCount, startIndex + result.rows.length) + 1}
         aria-colcount={result.columns.length + 1}
         className="tw:table-fixed tw:border-separate tw:border-spacing-0 tw:bg-background tw:font-mono tw:text-ui tw:[&_td]:box-border tw:[&_td]:max-w-none tw:[&_td]:overflow-hidden tw:[&_td]:border-b tw:[&_td]:border-border-subtle tw:[&_td]:px-2 tw:[&_td]:py-1 tw:[&_td]:leading-ui tw:[&_td]:text-left tw:[&_td]:text-ellipsis tw:[&_td]:whitespace-nowrap tw:[&_th]:box-border tw:[&_th]:max-w-none tw:[&_th]:overflow-hidden tw:[&_th]:border-r tw:[&_th]:border-b tw:[&_th]:border-border-subtle tw:[&_th]:px-2 tw:[&_th]:py-px tw:[&_th]:leading-ui tw:[&_th]:text-left tw:[&_th]:text-ellipsis tw:[&_th]:whitespace-nowrap tw:[&_thead_th]:sticky tw:[&_thead_th]:top-0 tw:[&_thead_th]:z-[var(--ds-z-raised)] tw:[&_thead_th]:h-control-sm tw:[&_thead_th]:bg-card"
-        style={{ tableLayout: "fixed", width: totalW }}
+        style={{ tableLayout: "fixed", width: totalW, zoom }}
       >
         <colgroup>
           <col style={{ width: columnWidths[0] }} />

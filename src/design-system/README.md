@@ -856,6 +856,21 @@ DopeDB의 실제 작업 흐름과 접근성, supported viewport를 위한 제품
   command row에 SQL snippet을 반복하지 않는다. `ResultWorkbenchFooter`는
   `DataGridStatusPill`을 합성하고, 부분
   stream은 평탄화하지 않고 완료된 결과에만 검색을 적용한다.
+- `useDataGridZoom`: 조회 viewport 전체에 non-passive WebKit gesture와 ctrl-wheel
+  pinch listener를 등록한다. 표별 로컬 비율 50~200%를 frame batching으로 갱신하며
+  일반 wheel은 그대로 통과시킨다. table/virtual content의 CSS `zoom`만 바꾸고
+  viewport 중앙의 데이터 위치를 유지하고 가상 window, keyboard scroll과
+  열 너비 drag는 해당 비율로 좌표를 환산한다.
+  화면별 handler나 셀 경계 control을 추가하지 않는다.
+
+- `DataGridStatusScope`는 결과 하나의 상태 표시 action host만 연결한다. 비율 상태는
+  viewport가 소유하고 복귀 버튼은 `DataGridStatusPill` action 영역으로 portal한다.
+  상태 표시가 없는 standalone/embedded 표는 하단 중앙에 복귀 버튼을 표시한다.
+- `DataGridViewport`는 확대 비율이 100%가 아닐 때 하단 결과 상태 표시 옆의 비율·복귀
+  버튼을 소유한다. `useDataGridZoom`의 `resetZoom`과 viewport 내부 ⌘0/Ctrl+0은
+  pending frame과 gesture 기준을 정리하고 정확히 100%로 복귀한다. 버튼 클릭 뒤
+  roving grid cell로 focus를 돌려준다. en/ko 접근성 이름과 tooltip은 caller가 제공한다.
+
 - 일반·가상 `DataGrid`는 공용 `DataGridViewport`와
   `data-data-grid-scroll` surface 계약을 공유한다.
   sticky header, filter, hover/selection, resize handle, scrollbar는

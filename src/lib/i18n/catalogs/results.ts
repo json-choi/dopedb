@@ -3,6 +3,7 @@ import { defineCatalog } from "../types";
 
 export const resultsCatalog = defineCatalog(
   {
+    "grid.resetZoom": "Reset to default size · ⌘0 / Ctrl+0",
     "grid.filterLabel": "Filter {col}",
     "grid.filterPlaceholder": "filter",
     "grid.localFilterClear": "Clear local filter",
@@ -39,6 +40,7 @@ export const resultsCatalog = defineCatalog(
     "results.partialExportUnavailable": "Partial result — export unavailable",
   },
   {
+    "grid.resetZoom": "기본 크기로 · ⌘0 / Ctrl+0",
     "grid.filterLabel": "{col} 필터",
     "grid.filterPlaceholder": "필터",
     "grid.localFilterClear": "로컬 필터 초기화",

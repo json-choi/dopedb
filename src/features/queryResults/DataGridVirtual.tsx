@@ -42,6 +42,7 @@ import {
   DataGridViewport,
   type DataGridSurface,
 } from "../../design-system/components/DataGridViewport";
+import useDataGridZoom from "../../design-system/useDataGridZoom";
 import { ResizeSeparator } from "../../design-system/components/ResizeSeparator";
 import {
   createFrameCoalescer,
@@ -90,17 +91,18 @@ export function virtualGridWindow(
   columnCount: number,
   offsets: number[],
   scroll: { top: number; left: number; width: number; height: number },
+  zoom = 1,
 ) {
   const startRow = Math.max(
     0,
-    Math.floor(scroll.top / DATA_GRID_ROW_HEIGHT) - OVERSCAN,
+    Math.floor(scroll.top / zoom / DATA_GRID_ROW_HEIGHT) - OVERSCAN,
   );
   const endRow = Math.min(
     rowCount,
-    Math.ceil((scroll.top + scroll.height) / DATA_GRID_ROW_HEIGHT) + OVERSCAN,
+    Math.ceil((scroll.top + scroll.height) / zoom / DATA_GRID_ROW_HEIGHT) + OVERSCAN,
   );
   let firstColumn = 0;
-  while (firstColumn < columnCount && offsets[firstColumn + 1] <= scroll.left)
+  while (firstColumn < columnCount && offsets[firstColumn + 1] <= scroll.left / zoom)
     firstColumn += 1;
   const visibleColumns: number[] = [];
   for (
@@ -110,7 +112,7 @@ export function virtualGridWindow(
   ) {
     if (
       offsets[index] >
-      scroll.left + scroll.width + DATA_GRID_DEFAULT_COLUMN_WIDTH * OVERSCAN
+      (scroll.left + scroll.width) / zoom + DATA_GRID_DEFAULT_COLUMN_WIDTH * OVERSCAN
     )
       break;
     visibleColumns.push(index);
@@ -133,6 +135,7 @@ function copy(value: unknown) {
 export default function DataGridVirtual(props: Props) {
   const { t } = useI18n();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const { zoom, resetZoom } = useDataGridZoom(scrollRef);
   const scrollCoalescerRef = useRef<FrameCoalescer<VirtualScroll> | null>(null);
   const [scroll, setScroll] = useState<VirtualScroll>({
     top: 0,
@@ -180,6 +183,7 @@ export default function DataGridVirtual(props: Props) {
     props.result.columns.length,
     offsets,
     scroll,
+    zoom,
   );
   const pageError = useSqlResultPages(
     props.rowSource,
@@ -371,7 +375,7 @@ export default function DataGridVirtual(props: Props) {
       pageRows: Math.max(
         1,
         Math.floor(
-          (scroll.height - DATA_GRID_HEADER_HEIGHT) / DATA_GRID_ROW_HEIGHT,
+          (scroll.height / zoom - DATA_GRID_HEADER_HEIGHT) / DATA_GRID_ROW_HEIGHT,
         ),
       ),
     });
@@ -390,16 +394,16 @@ export default function DataGridVirtual(props: Props) {
     scrollRef.current?.scrollTo({
       top: Math.max(
         0,
-        DATA_GRID_HEADER_HEIGHT +
+        (DATA_GRID_HEADER_HEIGHT +
           target.row * DATA_GRID_ROW_HEIGHT -
-          DATA_GRID_ROW_HEIGHT,
+          DATA_GRID_ROW_HEIGHT) * zoom,
       ),
       left:
         target.column === 0
           ? 0
           : Math.max(
               0,
-              offsets[target.column - 1] - DATA_GRID_ROW_NUMBER_WIDTH,
+              (offsets[target.column - 1] - DATA_GRID_ROW_NUMBER_WIDTH) * zoom,
             ),
     });
   };
@@ -409,7 +413,7 @@ export default function DataGridVirtual(props: Props) {
     const startX = event.clientX;
     const initial = columnWidths[index];
     const widthAt = (clientX: number) =>
-      Math.max(72, Math.min(1200, initial + clientX - startX));
+      Math.max(72, Math.min(1200, initial + (clientX - startX) / zoom));
     const coalescer = createFrameCoalescer<number>((width) =>
       setWidths((current) => ({
         ...current,
@@ -434,6 +438,9 @@ export default function DataGridVirtual(props: Props) {
   return (
     <DataGridViewport
       ref={scrollRef}
+      zoom={zoom}
+      onResetZoom={resetZoom}
+      resetZoomLabel={t("grid.resetZoom")}
       surface={props.surface}
       virtual
       footerInset={props.footerInset}
@@ -471,6 +478,7 @@ export default function DataGridVirtual(props: Props) {
         className="tw:relative tw:min-w-full tw:font-mono tw:[&_[data-grid-box]]:absolute tw:[&_[data-grid-box]]:box-border tw:[&_[data-grid-box]]:h-control-sm tw:[&_[data-grid-box]]:overflow-hidden tw:[&_[data-grid-box]]:border-b tw:[&_[data-grid-box]]:border-border-subtle tw:[&_[data-grid-box]]:bg-background tw:[&_[data-grid-box]]:px-2 tw:[&_[data-grid-box]]:py-1 tw:[&_[data-grid-box]]:leading-ui tw:[&_[data-grid-box]]:text-ellipsis tw:[&_[data-grid-box]]:whitespace-nowrap"
         style={{
           width: totalWidth,
+          zoom,
           height: DATA_GRID_HEADER_HEIGHT + rowCount * DATA_GRID_ROW_HEIGHT,
         }}
       >
