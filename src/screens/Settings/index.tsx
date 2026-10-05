@@ -56,7 +56,7 @@ export default function Settings({
   onUpdateRefresh: () => Promise<void>;
   onUpdateInstall: () => Promise<void>;
 }) {
-  const { lang, setLang, t } = useI18n();
+  const { langPreference, setLang, t } = useI18n();
   const [section, setSection] = useState<SettingsSection>(
     initialSection ?? "agent-tools",
   );
@@ -345,11 +345,12 @@ export default function Settings({
                   <div className="tw:grid tw:max-w-[560px] tw:gap-4 tw:p-4">
                     <Field label={t("language.label")}>
                       <SelectInput
-                        value={lang}
+                        value={langPreference}
                         onChange={(e) =>
-                          setLang(e.target.value as typeof lang)
+                          setLang(e.target.value as typeof langPreference)
                         }
                       >
+                        <option value="system">{t("language.system")}</option>
                         <option value="ko">{t("language.korean")}</option>
                         <option value="en">{t("language.english")}</option>
                       </SelectInput>

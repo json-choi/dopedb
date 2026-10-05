@@ -2,6 +2,7 @@
 // feature catalogues remain pure, statically bundled data and callers retain one stable context.
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -10,36 +11,39 @@ import {
 } from "react";
 
 import { messages, type I18nKey } from "./catalog";
-import type { Lang, MessageCatalog } from "./types";
+import type { Lang, LangPreference, MessageCatalog } from "./types";
 
 const STORAGE_KEY = "dopedb.lang";
 
 interface I18nValue {
   lang: Lang;
-  setLang: (lang: Lang) => void;
+  langPreference: LangPreference;
+  setLang: (preference: LangPreference) => void;
   t: (key: I18nKey, vars?: Record<string, string | number>) => string;
 }
 
 const I18nContext = createContext<I18nValue | null>(null);
 
-/** Chooses a persisted language first, then uses the browser's Korean locale hint. */
+/** Missing or invalid preferences follow the system; existing explicit choices are preserved. */
+export function resolveLangPreference(stored: string | null): LangPreference {
+  return stored === "en" || stored === "ko" ? stored : "system";
+}
+
+/** Resolves the system locale to one of the two shipped catalogue languages. */
 export function resolveInitialLang(stored: string | null, browserLanguage: string): Lang {
   if (stored === "en" || stored === "ko") return stored;
-  return browserLanguage.toLowerCase().startsWith("ko") ? "ko" : "en";
+  return browserLanguage.toLowerCase().split("-")[0] === "ko" ? "ko" : "en";
 }
 
 /** Keeps the document language and the persisted user preference in one place. */
 export function synchronizeLangPreference(
+  preference: LangPreference,
   lang: Lang,
   documentElement: Pick<HTMLElement, "lang">,
   storage: Pick<Storage, "setItem">,
 ) {
   documentElement.lang = lang;
-  storage.setItem(STORAGE_KEY, lang);
-}
-
-function detectLang(): Lang {
-  return resolveInitialLang(localStorage.getItem(STORAGE_KEY), navigator.language);
+  storage.setItem(STORAGE_KEY, preference);
 }
 
 /** Resolves a translated template with Korean-to-English fallback retained for partial data. */
@@ -63,19 +67,38 @@ export function formatMessage(
 }
 
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const [lang, setLangState] = useState<Lang>(() => detectLang());
+  const [langPreference, setLangState] = useState<LangPreference>(() =>
+    resolveLangPreference(localStorage.getItem(STORAGE_KEY)),
+  );
+  const [systemLanguage, setSystemLanguage] = useState(() => navigator.language);
+  const lang = resolveInitialLang(langPreference, systemLanguage);
+  const setLang = useCallback((preference: LangPreference) => {
+    setSystemLanguage(navigator.language);
+    setLangState(preference);
+  }, []);
 
   useEffect(() => {
-    synchronizeLangPreference(lang, document.documentElement, localStorage);
-  }, [lang]);
+    const refreshSystemLanguage = () => setSystemLanguage(navigator.language);
+    window.addEventListener("languagechange", refreshSystemLanguage);
+    window.addEventListener("focus", refreshSystemLanguage);
+    return () => {
+      window.removeEventListener("languagechange", refreshSystemLanguage);
+      window.removeEventListener("focus", refreshSystemLanguage);
+    };
+  }, []);
+
+  useEffect(() => {
+    synchronizeLangPreference(langPreference, lang, document.documentElement, localStorage);
+  }, [langPreference, lang]);
 
   const value = useMemo<I18nValue>(
     () => ({
       lang,
-      setLang: setLangState,
+      langPreference,
+      setLang,
       t: (key, vars) => formatMessage(resolveMessage(messages, lang, key)!, vars),
     }),
-    [lang],
+    [langPreference, lang, setLang],
   );
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
