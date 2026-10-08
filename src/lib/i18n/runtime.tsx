@@ -35,6 +35,32 @@ export function resolveInitialLang(stored: string | null, browserLanguage: strin
   return browserLanguage.toLowerCase().split("-")[0] === "ko" ? "ko" : "en";
 }
 
+/** Only system mode observes locale changes; switching back reads the current locale. */
+export function subscribeSystemLanguage(
+  preference: LangPreference,
+  onChange: (language: string) => void,
+): (() => void) | undefined {
+  switch (preference) {
+    case "en":
+    case "ko":
+      return;
+    case "system": {
+      const refresh = () => onChange(navigator.language);
+      refresh();
+      window.addEventListener("languagechange", refresh);
+      window.addEventListener("focus", refresh);
+      return () => {
+        window.removeEventListener("languagechange", refresh);
+        window.removeEventListener("focus", refresh);
+      };
+    }
+    default: {
+      const exhaustive: never = preference;
+      return exhaustive;
+    }
+  }
+}
+
 /** Keeps the document language and the persisted user preference in one place. */
 export function synchronizeLangPreference(
   preference: LangPreference,
@@ -78,14 +104,8 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    const refreshSystemLanguage = () => setSystemLanguage(navigator.language);
-    window.addEventListener("languagechange", refreshSystemLanguage);
-    window.addEventListener("focus", refreshSystemLanguage);
-    return () => {
-      window.removeEventListener("languagechange", refreshSystemLanguage);
-      window.removeEventListener("focus", refreshSystemLanguage);
-    };
-  }, []);
+    return subscribeSystemLanguage(langPreference, setSystemLanguage);
+  }, [langPreference]);
 
   useEffect(() => {
     synchronizeLangPreference(langPreference, lang, document.documentElement, localStorage);

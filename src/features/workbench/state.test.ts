@@ -8,7 +8,7 @@ import { readWithCatalogIssue } from "../catalogExplorer/catalogDomain";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { I18nProvider } from "../../lib/i18n";
-import { resolveInitialLang, resolveLangPreference, synchronizeLangPreference } from "../../lib/i18n/runtime";
+import { resolveInitialLang, resolveLangPreference, subscribeSystemLanguage, synchronizeLangPreference } from "../../lib/i18n/runtime";
 import { ConnectionGeneralTab } from "../../screens/Connections/ConnectionGeneralTab";
 import { ConnectionBigQueryFields } from "../../screens/Connections/ConnectionBigQueryFields";
 import { ConnectionSecurityTab } from "../../screens/Connections/ConnectionSecurityTab";
@@ -206,6 +206,39 @@ describe("workbench state ownership", () => {
     synchronizeLangPreference("en", "en", documentLanguage, languageStorage);
     expect(documentLanguage.lang).toBe("en");
     expect(languageStorage.setItem).toHaveBeenLastCalledWith("dopedb.lang", "en");
+    // Given a live locale source, system refreshes on both events without pinning detection.
+    const localeWindow = new EventTarget();
+    const localeNavigator = { language: "ko-KR" };
+    vi.stubGlobal("window", localeWindow);
+    vi.stubGlobal("navigator", localeNavigator);
+    try {
+      const refresh = vi.fn();
+      const unsubscribe = subscribeSystemLanguage("system", refresh);
+      expect(refresh).toHaveBeenLastCalledWith("ko-KR");
+      // When the WebView announces a changed locale, read its current value.
+      localeNavigator.language = "en-US";
+      localeWindow.dispatchEvent(new Event("languagechange"));
+      expect(refresh).toHaveBeenLastCalledWith("en-US");
+      localeNavigator.language = "ko-KR";
+      localeWindow.dispatchEvent(new Event("focus"));
+      expect(refresh).toHaveBeenLastCalledWith("ko-KR");
+      // Then cleanup and explicit overrides stop observing either event.
+      unsubscribe?.();
+      refresh.mockClear();
+      for (const preference of ["en", "ko"] as const) {
+        expect(subscribeSystemLanguage(preference, refresh)).toBeUndefined();
+        localeWindow.dispatchEvent(new Event("languagechange"));
+        localeWindow.dispatchEvent(new Event("focus"));
+        expect(refresh).not.toHaveBeenCalled();
+      }
+      // Returning to system catches changes made while an override was active.
+      localeNavigator.language = "fr-FR";
+      const stop = subscribeSystemLanguage("system", refresh);
+      expect(refresh).toHaveBeenLastCalledWith("fr-FR");
+      stop?.();
+    } finally {
+      vi.unstubAllGlobals();
+    }
     const key = (value: I18nKey) => value;
     const managedManager = {
       credentialMode: "managed" as const,
