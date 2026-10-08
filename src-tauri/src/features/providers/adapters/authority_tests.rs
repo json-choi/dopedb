@@ -189,6 +189,32 @@ fn accepts_only_the_exact_gcp_target_receipt() {
         }),
     };
     assert!(parse_integration(base()).is_ok());
+
+    // The exact wire the local-authority route emits: camelCase fields inside the
+    // tagged verification target, not the Rust field names.
+    let wire = br#"{"integrations":[{"id":"8b0c0b7e-5d9e-4c1a-9f3e-2a6d1c4b7e90","provider":"gcpCloudSql","status":"active","generation":"4","displayName":"GCP read access","grantedScope":"adcWif","reconnectRequired":false,"verificationTarget":{"kind":"gcpCloudSql","projectId":"sample-project-123","instanceId":"instance-one"}}]}"#;
+    let inventory = parse_inventory_body(wire).expect("route wire is accepted");
+    let parsed: Vec<_> = inventory
+        .integrations
+        .into_iter()
+        .map(parse_integration)
+        .collect::<Result<_, _>>()
+        .expect("route wire projects to a GCP integration");
+    assert!(matches!(
+        parsed[0].verification_target,
+        Some(crate::features::providers::domain::ProviderVerificationTarget::GcpCloudSql(_))
+    ));
+    for target in [
+        r#"{"kind":"gcpCloudSql","project_id":"sample-project-123","instance_id":"instance-one"}"#,
+        r#"{"kind":"gcpCloudSql","projectId":"sample-project-123","instanceId":"instance-one","region":"x"}"#,
+    ] {
+        let body = String::from_utf8_lossy(wire).replace(
+            r#"{"kind":"gcpCloudSql","projectId":"sample-project-123","instanceId":"instance-one"}"#,
+            target,
+        );
+        assert!(parse_inventory_body(body.as_bytes()).is_err());
+    }
+
     let mut missing = base();
     missing.verification_target = None;
     assert!(parse_integration(missing).is_err());
