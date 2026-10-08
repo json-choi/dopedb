@@ -31,10 +31,10 @@ export const connectionsCatalog = defineCatalog(
     "connections.collapseMetadata": "Collapse metadata for {table}",
     "connections.connectionDeleted": "Connection deleted",
     "connections.connectionDuplicated":
-      "Duplicate draft is ready. Apply or OK to save it.",
+      "Duplicate draft is ready. Choose Save or Save and close to save it.",
     "connections.connectionMenu": "Connection actions",
     "connections.projectMenu": "Project actions",
-    "connections.connectionOk": "Connection OK",
+    "connections.connectionOk": "Connection test passed. Testing does not save changes.",
     "connections.managedWorkspace.label": "Endpoint and credentials",
     "connections.managedWorkspace.status": "Managed in Workspace Web",
     "connections.managedWorkspace.managerDescription":
@@ -57,6 +57,8 @@ export const connectionsCatalog = defineCatalog(
     "connections.managedWorkspace.openFailed":
       "Could not open this database in Workspace Web: {error}",
     "connections.connectionSaved": "Connection saved",
+    "connections.saveAndClose": "Save and close",
+    "connections.connectionSavedToProject": "Connection saved and added to the Project",
     "connections.clouds": "Clouds",
     "connections.dataSourceFromCloudProvider":
       "Data Source from Cloud Provider",
@@ -483,7 +485,6 @@ export const connectionsCatalog = defineCatalog(
     "connections.keepAliveSeconds":
       "Keep-alive interval in seconds",
     "connections.refreshSchema": "Refresh schema",
-    "connections.saved": "Saved.",
     "connections.safety": "Safety",
     "connections.seconds": "seconds",
     "connections.schemaDiffInSync": "Schema matches the baseline",
@@ -575,10 +576,10 @@ export const connectionsCatalog = defineCatalog(
     "connections.collapseMetadata": "{table} 메타데이터 접기",
     "connections.connectionDeleted": "연결이 삭제되었습니다",
     "connections.connectionDuplicated":
-      "복제 초안을 만들었습니다. 적용 또는 확인으로 저장하세요.",
+      "복제 초안을 만들었습니다. 저장 또는 저장하고 닫기로 저장하세요.",
     "connections.connectionMenu": "연결 메뉴",
     "connections.projectMenu": "프로젝트 메뉴",
-    "connections.connectionOk": "연결 정상",
+    "connections.connectionOk": "연결 검사 성공. 검사는 변경 내용을 저장하지 않습니다.",
     "connections.managedWorkspace.label": "엔드포인트 및 자격 증명",
     "connections.managedWorkspace.status": "워크스페이스 웹에서 관리됨",
     "connections.managedWorkspace.managerDescription":
@@ -601,6 +602,8 @@ export const connectionsCatalog = defineCatalog(
     "connections.managedWorkspace.openFailed":
       "워크스페이스 웹에서 이 DB를 열지 못했습니다: {error}",
     "connections.connectionSaved": "연결이 저장되었습니다",
+    "connections.saveAndClose": "저장하고 닫기",
+    "connections.connectionSavedToProject": "연결을 저장하고 Project에 배정했습니다",
     "connections.clouds": "클라우드",
     "connections.dataSourceFromCloudProvider":
       "클라우드 공급자의 데이터 소스",
@@ -1024,7 +1027,6 @@ export const connectionsCatalog = defineCatalog(
     "connections.keepAlive": "다음 간격마다 keep-alive 쿼리 실행",
     "connections.keepAliveSeconds": "keep-alive 간격(초)",
     "connections.refreshSchema": "스키마 새로고침",
-    "connections.saved": "저장되었습니다.",
     "connections.safety": "안전",
     "connections.seconds": "초",
     "connections.schemaDiffInSync": "기준 DB와 스키마가 같습니다",

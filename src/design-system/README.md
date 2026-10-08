@@ -640,7 +640,7 @@ loopback 문서는 이 정본을 빌드 시 포함하며 네트워크 font나 sc
   `size="dataSources"`는
   제품 계약의 980×731 frame을 compact full-height fallback과 함께
   소유한다. Data Sources의 `Problems`는 catalog 하단, `Test Connection`은
-  detail action bar, `Cancel/Apply/OK`는 `ModalFooter`에 두며 한 footer에
+  detail action bar, `Cancel/Save/Save and close`는 `ModalFooter`에 두며 한 footer에
   섞지 않는다.
 - `WorkbenchPane`, `WorkbenchContainedBody`, `WorkbenchScrollBody`,
   `WorkbenchToolbar`, `WorkbenchSelect`,

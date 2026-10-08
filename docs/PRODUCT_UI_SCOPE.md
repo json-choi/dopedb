@@ -75,7 +75,9 @@ flowchart LR
 조건이 충족되지 않은 위험 command는 비활성 form으로 미리 노출하지 않고, 해결할
 항목과 실제 목적지부터 보여 준다. 같은 위험 동작에 exact-name 입력과 별도 browser
 confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적인 고급 설정 disclosure로
-접는다.
+접는다. 연결 편집기의 저장 동작은 `저장`(편집 유지)과 `저장하고 닫기`로 표시한다.
+연결 검사는 변경 내용을 저장하지 않는다고 안내하고, Project에서 시작한 연결의 저장
+완료는 exact Environment binding까지 성공한 뒤 Project 배정 완료로 안내한다.
 
 ### 화면 구조
 

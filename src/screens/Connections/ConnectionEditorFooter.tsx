@@ -37,7 +37,7 @@ export function ConnectionEditorFooter({
             >
               {commands.running === "apply"
                 ? t("common.saving")
-                : t("common.apply")}
+                : t("common.save")}
             </Button>
             <Button
               variant="primary"
@@ -47,7 +47,7 @@ export function ConnectionEditorFooter({
             >
               {commands.running === "save"
                 ? t("common.saving")
-                : t("common.ok")}
+                : t("connections.saveAndClose")}
             </Button>
           </>
         ) : (
