@@ -156,7 +156,11 @@ export function useAcpSessionStartup({
           return null;
         }
       })();
-      pendingStartRef.current = { key: startKey, foreground, promise: pending };
+      pendingStartRef.current = {
+        key: startKey,
+        foreground: foreground || pendingStartRef.current?.foreground === true,
+        promise: pending,
+      };
       void pending.finally(() => {
         if (pendingStartRef.current?.promise !== pending) return;
         const wasForeground = pendingStartRef.current.foreground;
