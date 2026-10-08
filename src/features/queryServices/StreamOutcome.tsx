@@ -133,6 +133,7 @@ export default function StreamOutcome({
             <ResultWorkbenchFooter
               visible={filteredRows?.length ?? stream.rowCount}
               total={stream.rowCount}
+              onClearFilter={filteredRows !== null ? () => setFilter("") : undefined}
               duration={stream.durationMs}
               state={phaseLabel}
               truncated={stream.truncated}

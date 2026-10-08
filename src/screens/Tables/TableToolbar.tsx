@@ -211,7 +211,6 @@ export default function TableToolbar(props: Props) {
           ) : null}
           <WorkbenchButton
             active={activeFilters > 0}
-            iconOnly
             tone={activeFilters > 0 ? "primary" : "neutral"}
             disabled={activeFilters === 0}
             onClick={props.onClearFilters}
@@ -219,6 +218,7 @@ export default function TableToolbar(props: Props) {
             aria-label={t("tables.clear")}
           >
             <Icon name="filter" />
+            {activeFilters > 0 ? t("tables.databaseFilters", { count: activeFilters }) : null}
           </WorkbenchButton>
         </div>
       </div>
