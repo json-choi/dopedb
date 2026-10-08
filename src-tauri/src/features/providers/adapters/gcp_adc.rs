@@ -125,6 +125,7 @@ fn validate_authorized_user(object: &Map<String, Value>) -> AppResult<()> {
         object,
         &[
             "type",
+            "account",
             "client_id",
             "client_secret",
             "refresh_token",
@@ -140,7 +141,63 @@ fn validate_authorized_user(object: &Map<String, Value>) -> AppResult<()> {
             bounded_string(value, 1024)?;
         }
     }
+    // Current gcloud records the signed-in account here, often as "". It is
+    // descriptive metadata only, so accept it as bounded text, even empty.
+    if let Some(value) = object.get("account") {
+        value
+            .as_str()
+            .filter(|account| account.len() <= 320 && !account.chars().any(char::is_control))
+            .ok_or_else(|| blocked("GCP ADC credential is invalid"))?;
+    }
     Ok(())
+}
+
+/// The ADC subset contract: current gcloud authorized-user files are accepted,
+/// while service-account keys, unknown keys and executable WIF sources stay refused.
+#[cfg(test)]
+pub(super) fn assert_adc_document_contract() {
+    let authorized = |extra: Value| {
+        let mut document = serde_json::json!({
+            "type": "authorized_user",
+            "client_id": "fixture-client.apps.example.test",
+            "client_secret": "fixture-client-secret",
+            "refresh_token": "fixture-refresh-token",
+            "quota_project_id": "sample-project-123",
+            "universe_domain": "googleapis.com",
+        });
+        for (key, value) in extra.as_object().expect("fixture fields") {
+            document[key] = value.clone();
+        }
+        document
+    };
+    assert!(validate_adc(&authorized(serde_json::json!({}))).is_ok());
+    assert!(validate_adc(&authorized(serde_json::json!({ "account": "" }))).is_ok());
+    assert!(validate_adc(&authorized(
+        serde_json::json!({ "account": "member@example.test" })
+    ))
+    .is_ok());
+    for refused in [
+        serde_json::json!({ "account": 7 }),
+        serde_json::json!({ "account": "line\nbreak" }),
+        serde_json::json!({ "token_uri": "https://oauth2.example.test/token" }),
+        serde_json::json!({ "refresh_token": "" }),
+    ] {
+        assert!(validate_adc(&authorized(refused)).is_err());
+    }
+    assert!(validate_adc(&serde_json::json!({
+        "type": "service_account",
+        "private_key": "fixture",
+        "client_email": "fixture@example.test",
+    }))
+    .is_err());
+    assert!(validate_adc(&serde_json::json!({
+        "type": "external_account",
+        "audience": "//iam.googleapis.com/projects/1/locations/global/workloadIdentityPools/p/providers/p",
+        "subject_token_type": "urn:ietf:params:oauth:token-type:jwt",
+        "token_url": "https://sts.googleapis.com/v1/token",
+        "credential_source": { "executable": { "command": "/bin/echo token" } },
+    }))
+    .is_err());
 }
 
 fn validate_external_account(object: &Map<String, Value>) -> AppResult<()> {

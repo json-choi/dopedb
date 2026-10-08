@@ -174,6 +174,7 @@ fn rejects_untyped_or_non_decimal_remote_inventory() {
 #[test]
 fn accepts_only_the_exact_gcp_target_receipt() {
     crate::features::providers::provisioning::assert_mock_provider_lifecycle();
+    super::super::gcp_adc::assert_adc_document_contract();
 
     let base = || RemoteIntegration {
         id: uuid::Uuid::new_v4().to_string(),
