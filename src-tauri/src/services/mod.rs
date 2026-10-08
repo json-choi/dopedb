@@ -21,6 +21,7 @@ use crate::features::queries::QueriesFeature;
 use crate::features::safety_settings::{self, SafetySettingsFeature};
 use crate::features::scripts::{self, ScriptFeature};
 use crate::features::sql_documents::{self, SqlDocumentsFeature};
+use crate::features::workspace_admin::{self, WorkspaceAdminFeature};
 use crate::features::workspaces::{self, WorkspacesFeature};
 use crate::operations::OperationRuntime;
 use crate::store::Store;
@@ -47,6 +48,7 @@ pub(crate) struct ApplicationServices {
     pub(crate) script: ScriptFeature,
     pub(crate) sql_documents: SqlDocumentsFeature,
     pub(crate) workspace: WorkspacesFeature,
+    pub(crate) workspace_admin: WorkspaceAdminFeature,
 }
 
 impl ApplicationServices {
@@ -108,6 +110,7 @@ impl ApplicationServices {
             script,
             sql_documents,
             workspace: workspaces::compose(store, connections, connection_credentials),
+            workspace_admin: workspace_admin::compose(),
         }
     }
 }

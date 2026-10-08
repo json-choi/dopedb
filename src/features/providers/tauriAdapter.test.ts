@@ -36,26 +36,14 @@ import providerDiscoveryProofSource from "../../../workspace-cloud/lib/provider-
 import providerLeaseCleanupSource from "../../../workspace-cloud/lib/provider-integrations/lease-cleanup.ts?raw";
 import providerLeaseIssuanceSource from "../../../workspace-cloud/lib/provider-integrations/lease-issuance.ts?raw";
 import providerLeaseRevocationWindowSource from "../../../workspace-cloud/lib/provider-integrations/lease-revocation-window.ts?raw";
-import gcpSetupSource from "../../../workspace-cloud/features/providerAccess/GcpCloudSetup.tsx?raw";
-import gcpProviderSetupControllerSource from "../../../workspace-cloud/features/providerAccess/useGcpProviderSetup.ts?raw";
-import managedConnectionRecoverySource from "../../../workspace-cloud/features/providerAccess/managedConnectionRecovery.ts?raw";
-import managedConnectionRecoveryControllerSource from "../../../workspace-cloud/features/providerAccess/useManagedConnectionRecovery.ts?raw";
-import providerIntegrationListSource from "../../../workspace-cloud/features/providerAccess/ProviderIntegrationList.tsx?raw";
-import providerResourcePickerSource from "../../../workspace-cloud/features/providerAccess/ProviderResourcePicker.tsx?raw";
-import neonBranchManagerSource from "../../../workspace-cloud/features/providerAccess/NeonBranchManager.tsx?raw";
-import sharedDatabaseControllerSource from "../../../workspace-cloud/features/providerAccess/useSharedDatabaseAccess.ts?raw";
-import neonProviderBootstrapControllerSource from "../../../workspace-cloud/features/providerAccess/useNeonProviderBootstrap.ts?raw";
-import providerAccessDomainSource from "../../../workspace-cloud/features/providerAccess/domain.ts?raw";
-import sharedDatabasePanelSource from "../../../workspace-cloud/app/settings/SharedDatabasePanel.tsx?raw";
-import connectionAccessPanelSource from "../../../workspace-cloud/app/settings/ConnectionAccessPanel.tsx?raw";
-import workspaceAccessPanelSource from "../../../workspace-cloud/app/settings/WorkspaceAccessPanel.tsx?raw";
+import workspaceAdminRoutesSource from "../../../src-tauri/src/features/workspace_admin/domain/routes.rs?raw";
+import workspaceAdminAdapterSource from "../../../src-tauri/src/features/workspace_admin/adapters.rs?raw";
 import publicAnalysisPageSource from "../../../workspace-cloud/app/analyses/[slug]/page.tsx?raw";
 import publicAnalysisArticleSource from "../../../workspace-cloud/app/analyses/[slug]/PublicAnalysisArticle.tsx?raw";
 import workspaceNotFoundSource from "../../../workspace-cloud/app/not-found.tsx?raw";
 import workspaceErrorBoundarySource from "../../../workspace-cloud/app/error.tsx?raw";
 import articleSharingCopySource from "../../../workspace-cloud/features/articleSharing/copy.ts?raw";
 import providerCatalogSource from "../../../workspace-cloud/lib/provider-catalog.ts?raw";
-import workspaceMessagesSource from "../../../workspace-cloud/lib/workspace-messages.ts?raw";
 import workspaceServerLogSource from "../../../workspace-cloud/lib/workspace-server-log.ts?raw";
 import providerAdapterContractSource from "../../../workspace-cloud/lib/providers/adapter-contract.ts?raw";
 import {
@@ -102,14 +90,12 @@ import workspaceKmsSource from "../../../workspace-cloud/lib/workspace-kms.ts?ra
 import workspaceLifecycleSource from "../../../workspace-cloud/lib/workspace-lifecycle.ts?raw";
 import workspaceAuthorizationSource from "../../../workspace-cloud/lib/workspace-authorization.ts?raw";
 import workspaceLifecycleRouteSource from "../../../workspace-cloud/app/api/v1/workspaces/[workspaceId]/lifecycle/route.ts?raw";
-import workspaceLifecyclePanelSource from "../../../workspace-cloud/app/settings/WorkspaceLifecyclePanel.tsx?raw";
 import workspaceConnectionsSource from "../../../workspace-cloud/lib/workspace-connections.ts?raw";
 import workspacePermissionsSource from "../../../workspace-cloud/lib/workspace-permissions.ts?raw";
 import workspaceRevocationGatesSource from "../../../workspace-cloud/lib/revocation-gates.ts?raw";
 import workspaceSchemaSource from "../../../workspace-cloud/lib/d1/schema/leases.ts?raw";
 import workspaceVersioningStoreSource from "../../../workspace-cloud/lib/workspace-versioning-store.ts?raw";
 import workspaceSnapshotRestoreSource from "../../../workspace-cloud/lib/workspace-snapshot-restore.ts?raw";
-import workspaceSettingsNavigationSource from "../../../workspace-cloud/app/settings/SettingsNavigation.tsx?raw";
 import desktopSettingsSource from "../../../src/screens/Settings/index.tsx?raw";
 import safetySettingsScreenSource from "../../../src/screens/Settings/Safety/index.tsx?raw";
 import desktopSharedConnectionSource from "../../../src-tauri/src/features/workspaces/adapters/control_plane/connections.rs?raw";
@@ -144,15 +130,49 @@ import {
 import {
   neonInheritedRoleRetirementStatement,
 } from "../../../workspace-cloud/lib/providers/neon-role-policy";
+import { messages } from "../../lib/i18n/catalog";
 import {
-  deriveNeonSafeRun,
-  parseNeonBranchInventory as parseNeonBranchInventoryResponse,
-  parseNeonBranchOperations,
-} from "../../../workspace-cloud/features/providerAccess/neonBranches";
+  accountId as workspaceAccountId,
+  workspaceId as workspaceIdentity,
+} from "../workspaces/domain";
+import { sharedDatabasesQuery } from "../workspaceAdmin/access/queries";
+import { parseMemberDirectory } from "../workspaceAdmin/members/domain";
+import {
+  connectableProvider,
+  hasBroadNeonKey,
+  managedDatabaseCount,
+  providerAccountGroups,
+} from "../workspaceAdmin/providers/accounts/accountModel";
+import {
+  canRemoveSharedConnection,
+  canRepairManagedAccess,
+} from "../workspaceAdmin/providers/databases/model";
 import {
   gcpActiveLeaseRetryMessage,
   parseGcpActiveLeaseConflict,
-} from "../../../workspace-cloud/features/providerAccess/domain";
+  parseNeonBootstrapApply,
+  parseNeonBootstrapPreflight,
+  type Integration,
+  type Provider,
+} from "../workspaceAdmin/providers/domain";
+import {
+  GcpBootstrapCancelled,
+  GcpSetupExpired,
+  prepareGcpSetupWithPropagationRetry,
+} from "../workspaceAdmin/providers/gcp/gcpBootstrapTransport";
+import {
+  forgetGcpRepair,
+  gcpApprovalsComplete,
+  gcpPrepareOperation,
+  gcpRepairTarget,
+  pendingGcpRepair,
+  rememberGcpRepair,
+  type GcpApprovalInput,
+} from "../workspaceAdmin/providers/gcp/gcpModel";
+import { parseNeonBranchInventory as parseNeonBranchInventoryResponse } from "../workspaceAdmin/providers/neonBranches/branchInventory";
+import { parseNeonBranchOperations } from "../workspaceAdmin/providers/neonBranches/branchOperations";
+import { deriveNeonSafeRun } from "../workspaceAdmin/providers/neonBranches/safeRun";
+import { WorkspaceAdminRequestError } from "../workspaceAdmin/requests";
 import {
   gcpCloudSqlIntegrationIdentity,
   gcpCloudSqlPrincipalClaims,
@@ -174,6 +194,9 @@ const neonBranchOperationsApplicationSource = [
 ].join("\n");
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
+// The real server setup error is loaded at run time below; its server-only marker
+// has no behaviour of its own outside the Next.js build.
+vi.mock("server-only", () => ({}));
 
 import { invoke } from "@tauri-apps/api/core";
 
@@ -192,6 +215,33 @@ import {
   revokeProviderCredentialBinding,
   verifyProviderCredentialBinding,
 } from "./tauriAdapter";
+
+// Desktop workspace administration owns the former Web console boundaries. Reading
+// every module keeps a renamed or newly added file inside the same checks.
+const workspaceAdminSources = import.meta.glob<string>(
+  "../workspaceAdmin/**/*.{ts,tsx}",
+  { query: "?raw", import: "default", eager: true },
+);
+
+function workspaceAdminSource(modulePath: string): string {
+  const source = workspaceAdminSources[`../workspaceAdmin/${modulePath}`];
+  if (source === undefined) {
+    throw new Error(`Missing workspace administration module ${modulePath}`);
+  }
+  return source;
+}
+
+function workspaceAdminModulesUnder(directory: string): Array<[string, string]> {
+  const modules = Object.entries(workspaceAdminSources)
+    .filter(([modulePath]) => modulePath.startsWith(`../workspaceAdmin/${directory}`));
+  if (modules.length === 0) {
+    throw new Error(`Missing workspace administration directory ${directory}`);
+  }
+  return modules;
+}
+
+const adminAccountId = workspaceAccountId("account-admin");
+const adminWorkspaceId = workspaceIdentity("12121212-1212-4212-8212-121212121212");
 
 const gcpBootstrapSource = [
   gcpBootstrapFacadeSource,
@@ -241,6 +291,47 @@ const binding = {
   state: "ready",
   updatedAt: "2026-07-27T00:00:00.000Z",
 };
+
+// One reviewed Cloud SQL setup target in Desktop Settings → Providers; each check
+// overrides only the approval or instance state it is about.
+const gcpSetupId = "13131313-1313-4313-8313-131313131313";
+const gcpInstance: NonNullable<GcpApprovalInput["instance"]> = {
+  id: "example-instance",
+  name: "example-instance",
+  engine: "postgres",
+  region: "asia-northeast3",
+  ready: true,
+  production: false,
+  iamAuthenticationEnabled: false,
+};
+const gcpApproval: GcpApprovalInput = {
+  instance: gcpInstance,
+  environment: "",
+  productionApproved: false,
+  iamChangeApproved: false,
+  iamRoleGrantApproved: false,
+  schema: { database: "", owner: "", approved: false },
+  permissions: {
+    account: "admin@example.test",
+    projectId: "example-project",
+    canAutoGrant: false,
+    missing: [],
+  },
+};
+
+function gcpPrepare(
+  input: Partial<GcpApprovalInput>,
+  repairIntegrationId: string | null = null,
+) {
+  return gcpPrepareOperation({
+    ...gcpApproval,
+    ...input,
+    workspaceId: adminWorkspaceId,
+    setupId: gcpSetupId,
+    project: { id: "example-project", number: "123456789012", name: "Example" },
+    repairIntegrationId,
+  });
+}
 
 describe("provider credential Tauri adapter", () => {
   const invokeMock = vi.mocked(invoke);
@@ -424,28 +515,47 @@ describe("provider credential Tauri adapter", () => {
     expect(gcpSetupRouteSource).toContain(
       'typeof body.approveIamAuthenticationChange !== "boolean"',
     );
-    expect(gcpProviderSetupControllerSource).toContain(
-      "approveIamAuthenticationChange:",
+    // Desktop asks for the IAM flag change only with its explicit approval and only
+    // when the instance lacks the flag; no prepare field can request a restart.
+    expect(gcpApprovalsComplete(gcpApproval)).toBe(false);
+    expect(gcpPrepare({})).toBeNull();
+    const iamChange = gcpPrepare({ iamChangeApproved: true });
+    expect(iamChange).toMatchObject({
+      kind: "prepareGcpSetup",
+      approveIamAuthenticationChange: true,
+      approveProduction: false,
+      approveIamRoleGrant: false,
+      repairIntegrationId: null,
+    });
+    expect(Object.keys(iamChange ?? {}).filter((key) => /restart/i.test(key))).toEqual([]);
+    expect(gcpPrepare({
+      instance: { ...gcpInstance, iamAuthenticationEnabled: true },
+      iamChangeApproved: true,
+    })).toMatchObject({ approveIamAuthenticationChange: false });
+    expect(workspaceAdminSource("providers/gcp/GcpSetupApprovals.tsx")).toContain(
+      "checked={wizard.iamChangeApproved}",
     );
-    expect(gcpProviderSetupControllerSource).toContain(
-      "gcpIamAuthenticationChangeApproved",
+    expect(workspaceAdminRoutesSource).toContain(
+      "Value::Bool(*approve_iam_authentication_change)",
     );
-    expect(gcpSetupSource).toContain("gcpIamAuthenticationChangeApproved");
+    expect(workspaceAdminRoutesSource).not.toMatch(/restart/i);
     expect(gcpBootstrapSource).toContain(
       "approveIamAuthenticationChange",
     );
     expect(gcpBootstrapSource).not.toContain(
       "approveInstanceRestart",
     );
-    expect(workspaceMessagesSource).toContain(
+    expect(messages.en["workspaceProviders.gcpIamApprovalDescription"]).toContain(
       "not requiring an instance restart.",
     );
-    expect(workspaceMessagesSource).toContain(
+    expect(messages.ko["workspaceProviders.gcpIamApprovalDescription"]).toContain(
       "인스턴스 재시작이 필요하지 않습니다.",
     );
-    expect(workspaceMessagesSource).not.toMatch(
-      /instance may restart while|인스턴스가 재시작될 수/,
-    );
+    for (const catalog of [messages.en, messages.ko]) {
+      expect(Object.values(catalog).join("\n")).not.toMatch(
+        /instance may restart while|인스턴스가 재시작될 수/,
+      );
+    }
     const enableIamAuthenticationSource = gcpBootstrapDatabaseSource.slice(
       gcpBootstrapDatabaseSource.indexOf(
         "export async function enableIamAuthentication",
@@ -458,7 +568,7 @@ describe("provider credential Tauri adapter", () => {
     expect(enableIamAuthenticationSource).not.toContain("/restart");
   });
 
-  it("preserves existing Cloud SQL users and retains the active lease preflight", () => {
+  it("preserves existing Cloud SQL users and retains the active lease preflight", async () => {
     expect(gcpBootstrapDatabaseSource).not.toMatch(/method: "(PUT|DELETE)"|revokeExistingRoles|cloudsqlsuperuser/);
     expect(gcpBootstrapApplicationSource).not.toContain("configureDatabasePrivileges");
 
@@ -535,10 +645,142 @@ describe("provider credential Tauri adapter", () => {
       retryAt: "2026-09-01T10:12:00.000Z",
       setupExpiresAt: "2026-09-01T10:20:00.000Z",
     }, now)).toBeNull();
-    expect(gcpProviderSetupControllerSource).toContain(
-      "parseGcpActiveLeaseConflict",
+    // Desktop setup turns that refusal into the localized wait or reconnect sentence;
+    // both shipped templates are filled completely in each language.
+    expect(workspaceAdminSource("providers/gcp/useGcpSetupWizard.ts")).toContain(
+      "parseGcpActiveLeaseConflict(cause.body)",
     );
-    expect(workspaceMessagesSource).toContain("gcpActiveLeaseReconnect");
+    for (const lang of ["en", "ko"] as const) {
+      const copy = {
+        wait: messages[lang]["workspaceProviders.gcpActiveLeaseWait"],
+        reconnect: messages[lang]["workspaceProviders.gcpActiveLeaseReconnect"],
+      };
+      const wait = gcpActiveLeaseRetryMessage(conflict!, copy, lang, now);
+      const reconnect = gcpActiveLeaseRetryMessage(
+        { ...conflict!, setupExpiresAt: "2026-09-01T10:14:00.000Z" },
+        copy,
+        lang,
+        now,
+      );
+      expect(wait).not.toBe(reconnect);
+      for (const sentence of [wait, reconnect]) {
+        expect(sentence).toContain("12");
+        expect(sentence).not.toMatch(/\{(?:count|minutes|time)\}/);
+      }
+    }
+
+    // The Desktop prepare request continues only the server's exact IAM-propagation
+    // refusal, resending the same reviewed operation inside a bounded window.
+    expect(gcpSetupRouteSource).toMatch(
+      /error: error\.message,\s*code: error\.code,\s*retryAfterMs: error\.retryAfterMs,/,
+    );
+    // The server class itself, loaded at run time so the Desktop type-check never
+    // compiles server-only modules.
+    const { GcpIamPropagationPendingError } = await vi.importActual<{
+      GcpIamPropagationPendingError: new () => Error & {
+        status: number;
+        code: string;
+        retryAfterMs: number;
+      };
+    }>("../../../workspace-cloud/lib/providers/gcp-cloud-bootstrap-application");
+    const pendingError = new GcpIamPropagationPendingError();
+    expect(pendingError).toMatchObject({ status: 503, code: "gcp_iam_propagation_pending" });
+    const pendingRefusal = {
+      status: pendingError.status,
+      body: {
+        error: pendingError.message,
+        code: pendingError.code,
+        retryAfterMs: pendingError.retryAfterMs,
+      },
+    };
+    const prepareOperation = gcpPrepare({ iamChangeApproved: true });
+    expect(prepareOperation).not.toBeNull();
+    const prepare = (
+      input: Partial<Parameters<typeof prepareGcpSetupWithPropagationRetry>[0]> = {},
+    ) => prepareGcpSetupWithPropagationRetry({
+      accountId: adminAccountId,
+      operation: prepareOperation!,
+      setupExpiresAt: new Date(Date.now() + 20 * 60_000).toISOString(),
+      signal: new AbortController().signal,
+      onIamPending: vi.fn(),
+      ...input,
+    });
+    vi.useFakeTimers();
+    vi.stubGlobal("window", globalThis);
+    try {
+      // Seven minutes of propagation refusals do not exhaust the attempt; only the
+      // eventual verified body reaches the caller, and every request is identical.
+      const continuedStart = Date.now();
+      invokeMock.mockReset().mockImplementation(async () => (
+        Date.now() - continuedStart < 7 * 60_000
+          ? pendingRefusal
+          : { status: 200, body: { bootstrapTicket: "fixture-verified-ticket" } }
+      ));
+      const onIamPending = vi.fn();
+      const continued = prepare({ onIamPending });
+      await vi.runAllTimersAsync();
+      await expect(continued).resolves.toEqual({ bootstrapTicket: "fixture-verified-ticket" });
+      expect(onIamPending).toHaveBeenCalled();
+      expect(invokeMock.mock.calls.length).toBeGreaterThan(1);
+      for (const call of invokeMock.mock.calls) {
+        expect(call).toEqual([
+          "workspace_admin_request",
+          { request: { accountId: adminAccountId, operation: prepareOperation } },
+        ]);
+      }
+
+      // Workspace authorization, active leases, expired setups, upstream denials,
+      // unrelated or out-of-bounds 503s and transport failures are never resent.
+      for (const refusal of [
+        ...[401, 403, 409, 410, 424, 503].map((status) => ({
+          status,
+          body: { error: "fixture denial" },
+        })),
+        { ...pendingRefusal, body: { ...pendingRefusal.body, retryAfterMs: 60_000 } },
+      ]) {
+        invokeMock.mockReset().mockResolvedValue(refusal);
+        await expect(prepare()).rejects.toMatchObject({
+          name: "WorkspaceAdminRequestError",
+          status: refusal.status,
+        });
+        expect(invokeMock).toHaveBeenCalledTimes(1);
+      }
+      invokeMock.mockReset().mockRejectedValue(new Error("fixture network failure"));
+      await expect(prepare()).rejects.toThrow("fixture network failure");
+      expect(invokeMock).toHaveBeenCalledTimes(1);
+
+      // A context change cancels the wait without starting another request.
+      invokeMock.mockReset().mockResolvedValue(pendingRefusal);
+      const controller = new AbortController();
+      const cancelled = prepare({
+        signal: controller.signal,
+        onIamPending: () => controller.abort(),
+      }).catch((error: unknown) => error);
+      await vi.runAllTimersAsync();
+      expect(await cancelled).toBeInstanceOf(GcpBootstrapCancelled);
+      expect(invokeMock).toHaveBeenCalledTimes(1);
+
+      // Persistent propagation has a finite budget and keeps the actionable refusal.
+      invokeMock.mockClear();
+      const boundedStart = Date.now();
+      const bounded = prepare().catch((error: unknown) => error);
+      await vi.runAllTimersAsync();
+      const exhausted = await bounded;
+      expect(exhausted).toBeInstanceOf(WorkspaceAdminRequestError);
+      expect(exhausted).toMatchObject({ status: 503, code: "gcp_iam_propagation_pending" });
+      expect(Date.now() - boundedStart).toBeLessThanOrEqual(10 * 60_000);
+      expect(invokeMock.mock.calls.length).toBeLessThanOrEqual(120);
+
+      // A setup authorization a minute from expiry is never sent.
+      invokeMock.mockClear();
+      await expect(prepare({
+        setupExpiresAt: new Date(Date.now() + 60_000).toISOString(),
+      })).rejects.toBeInstanceOf(GcpSetupExpired);
+      expect(invokeMock).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+      vi.useRealTimers();
+    }
   });
 
   it("rejects removed provider identity and manual GCP trust input", async () => {
@@ -1086,25 +1328,92 @@ describe("provider credential Tauri adapter", () => {
     expect(providerIntegrationRouteSource).not.toContain(
       "parseGcpCloudSqlCredential(body.configuration)",
     );
-    expect(gcpSetupSource).toContain("copy.configure");
-    expect(workspaceMessagesSource).toContain('configure: "Configure and connect"');
-    expect(workspaceMessagesSource).toContain('configure: "자동 설정하고 연결"');
-    expect(gcpSetupSource).not.toMatch(
-      /workloadIdentityPoolId|workloadIdentityProviderId|readServiceAccountEmail/,
+    expect(workspaceAdminSource("providers/gcp/GcpSetupWizard.tsx")).toContain(
+      't("workspaceProviders.gcpConfigure")',
     );
-    expect(providerIntegrationListSource).not.toMatch(/availability|"준비 중"/);
-    expect(providerIntegrationListSource).toContain("copy.neonDescriptionBeforeLink");
-    expect(providerIntegrationListSource).toContain("copy.neonGuide.firstPath");
-    expect(providerIntegrationListSource).toContain("neonConfiguration.projectId");
-    expect(workspaceMessagesSource).toContain("This is not one-click setup");
-    expect(workspaceMessagesSource).toContain("원클릭 연결이 아니며");
-    expect(providerIntegrationListSource).toContain(":personal:broad:");
+    expect(messages.en["workspaceProviders.gcpConfigure"]).toBe("Configure and connect");
+    expect(messages.ko["workspaceProviders.gcpConfigure"]).toBe("자동 설정하고 연결");
+    // Google Cloud trust is created by the reviewed setup itself: no Desktop module
+    // or administration route accepts a hand-entered pool, provider or account.
+    for (const [modulePath, source] of Object.entries(workspaceAdminSources)) {
+      expect(source, modulePath).not.toMatch(
+        /workloadIdentityPoolId|workloadIdentityProviderId|readServiceAccountEmail/,
+      );
+    }
+    expect(workspaceAdminRoutesSource).not.toMatch(
+      /workload_identity_pool|workload_identity_provider|service_account_email/,
+    );
+    // Only providers Desktop can connect, or that still own accounts, get a row;
+    // nothing renders an availability placeholder for the rest.
+    const catalogProvider = (
+      id: string,
+      setupKind: Provider["setupKind"],
+      configured = true,
+    ): Provider => ({
+      id,
+      name: id,
+      configured,
+      note: "",
+      leaseSeconds: 900,
+      setupKind,
+      supportedEngines: ["postgres"],
+      resourceLevels: [
+        { key: "project", kind: "projects", label: "Project" },
+        { key: "branch", kind: "branches", label: "Branch" },
+        { key: "database", kind: "databases", label: "Database" },
+      ],
+    });
+    const neonAccount: Integration = {
+      id: "18181818-1818-4818-8818-181818181818",
+      provider: "neon",
+      status: "active",
+      generation: "3",
+      displayName: "Neon · app",
+      grantedScope: "api-key-v1:personal:broad:projects:3:0123456789abcdef",
+      updatedAt: "2026-09-01T10:00:00.000Z",
+      credentialMode: "managed",
+    };
+    expect(connectableProvider(catalogProvider("neon", "apiKey"))).toBe("neon");
+    expect(connectableProvider(catalogProvider("neon", "apiKey", false))).toBeNull();
+    expect(connectableProvider(catalogProvider("neon", "oauth"))).toBeNull();
+    expect(providerAccountGroups([
+      catalogProvider("planetScale", "oauth"),
+      catalogProvider("gcpCloudSql", "oauth", false),
+      catalogProvider("neon", "apiKey", false),
+    ], [neonAccount]).map((group) => [group.id, group.connectable])).toEqual([
+      ["planetScale", "planetScale"],
+      ["neon", null],
+    ]);
+    for (const [modulePath, source] of workspaceAdminModulesUnder("providers/accounts/")) {
+      expect(source, modulePath).not.toMatch(/availability|"준비 중"/);
+    }
+    // An unknown managed-database inventory is never shown as zero databases.
+    expect(managedDatabaseCount(null, neonAccount.id)).toBeNull();
+    expect(managedDatabaseCount([], neonAccount.id)).toBe(0);
+    // Personal broad-scope Neon keys keep their warning on the account row.
+    expect(hasBroadNeonKey(neonAccount)).toBe(true);
+    expect(hasBroadNeonKey({
+      ...neonAccount,
+      grantedScope: "api-key-v1:organization:scoped:projects:1:0123456789abcdef",
+    })).toBe(false);
+    expect(hasBroadNeonKey({ ...neonAccount, provider: "planetScale" })).toBe(false);
+    expect(workspaceAdminSource("providers/accounts/ProviderAccountRow.tsx")).toContain(
+      "hasBroadNeonKey(integration)",
+    );
+    const neonConnectDialogSource = workspaceAdminSource("providers/accounts/NeonConnectDialog.tsx");
+    expect(neonConnectDialogSource).toContain('t("workspaceProviders.neonIntro")');
+    expect(neonConnectDialogSource).toContain('"workspaceProviders.neonGuideOrganizationPath"');
+    expect(neonConnectDialogSource).toContain("projectId: form.projectId.trim() || null");
+    expect(messages.en["workspaceProviders.neonIntro"]).toContain("connects with an API key");
+    expect(messages.ko["workspaceProviders.neonIntro"]).toContain("API 키로 연결합니다");
     expect(providerCatalogSource).not.toMatch(
       /supportsReadWrite|availability|awsRds|oracleOci|mongodbAtlas/,
     );
     expect(providerCatalogSource.match(/id: "(planetScale|gcpCloudSql|neon|vault)"/g))
       .toHaveLength(4);
-    expect(providerIntegrationListSource).toContain("copy.vaultGuide.caution");
+    expect(workspaceAdminSource("providers/accounts/VaultConnectDialog.tsx")).toContain(
+      't("workspaceProviders.vaultCaution")',
+    );
     expect(vaultProviderSource).toContain("env.vaultBrokerOrigins().includes(url.origin)");
     expect(vaultProviderSource).toContain('redirect: "error"');
     expect(vaultProviderSource).toContain("VAULT_MAX_DATABASE_LEASE_SECONDS");
@@ -1229,31 +1538,89 @@ describe("provider credential Tauri adapter", () => {
     expect(gcpSetupRouteSource).toContain("writeAccess: true");
     expect(gcpSetupRouteSource).toContain("matchesManagedGcpRepairTarget");
     expect(gcpSetupRouteSource).toContain('eq(workspaceConnection.credentialMode, "managed")');
-    expect(sharedDatabasePanelSource).toContain("repairManagedConnection");
-    expect(managedConnectionRecoveryControllerSource).toContain(
-      "saveManagedConnectionRecoveryIntent",
+    // Desktop repairs a managed Cloud SQL connection only for members who manage it,
+    // pinning the server-projected target in memory for one browser authorization.
+    const repairConnection = {
+      id: connectionId,
+      name: "Shared production",
+      engine: "postgres",
+      credentialMode: "managed",
+      allowWrites: false,
+      revision: 4,
+      accessMode: "manage",
+    } as const;
+    const repairManaged = {
+      connectionId,
+      integrationId,
+      provider: "gcpCloudSql",
+      resource: {
+        project: "example-project",
+        instance: "example-instance",
+        database: "app",
+        password: "must-not-pass",
+      },
+    };
+    expect(canRepairManagedAccess(repairConnection, repairManaged)).toBe(true);
+    expect(canRepairManagedAccess({ ...repairConnection, accessMode: "write" }, repairManaged))
+      .toBe(false);
+    expect(canRepairManagedAccess(repairConnection, { ...repairManaged, provider: "neon" }))
+      .toBe(false);
+    expect(workspaceAdminSource("providers/databases/SharedDatabaseRow.tsx")).toContain(
+      "onRepair(managed)",
     );
-    expect(gcpProviderSetupControllerSource).toContain("repairIntegrationId");
-    expect(gcpSetupSource).toContain("copy.repairPinnedTarget");
+    // Only identifiers and the pinned project, instance and database travel.
+    const repairTarget = gcpRepairTarget(repairManaged);
+    expect(repairTarget).toEqual({
+      connectionId,
+      integrationId,
+      resource: { project: "example-project", instance: "example-instance", database: "app" },
+    });
+    expect(JSON.stringify(repairTarget)).not.toMatch(
+      /password|accessToken|refreshToken|credential|must-not-pass/i,
+    );
+    expect(gcpRepairTarget({ ...repairManaged, provider: "neon" })).toBeNull();
+    expect(gcpRepairTarget({ ...repairManaged, integrationId: "not-an-integration" })).toBeNull();
+    // The intent belongs to one account and workspace, lasts fifteen minutes, is
+    // discarded by any other read, and is never written to browser storage.
+    const repairScope = { accountId: adminAccountId, workspaceId: adminWorkspaceId };
+    const repairStartedAt = Date.parse("2026-09-01T10:00:00.000Z");
+    rememberGcpRepair(repairScope, repairTarget!, repairStartedAt);
+    expect(pendingGcpRepair({
+      ...repairScope,
+      workspaceId: workspaceIdentity("19191919-1919-4919-8919-191919191919"),
+    }, repairStartedAt)).toBeNull();
+    expect(pendingGcpRepair(repairScope, repairStartedAt)).toBeNull();
+    rememberGcpRepair(repairScope, repairTarget!, repairStartedAt);
+    expect(pendingGcpRepair(repairScope, repairStartedAt + 15 * 60_000)).toEqual(repairTarget);
+    expect(pendingGcpRepair(repairScope, repairStartedAt + 15 * 60_000 + 1)).toBeNull();
+    expect(pendingGcpRepair(repairScope, repairStartedAt)).toBeNull();
+    rememberGcpRepair(repairScope, repairTarget!, repairStartedAt);
+    forgetGcpRepair();
+    expect(pendingGcpRepair(repairScope, repairStartedAt)).toBeNull();
+    expect(workspaceAdminSource("providers/accounts/useProviderAuthorization.ts")).toContain(
+      "rememberGcpRepair(scope, request.repair)",
+    );
+    // The repair keeps its project and instance and names only its own integration.
+    expect(gcpPrepare({ iamChangeApproved: true }, integrationId)).toMatchObject({
+      repairIntegrationId: integrationId,
+    });
+    const gcpSetupController = workspaceAdminSource("providers/gcp/useGcpSetupWizard.ts");
+    expect(gcpSetupController).toContain(
+      "const projectId = repair ? repair.resource.project : projectChoice;",
+    );
+    expect(gcpSetupController).toContain(
+      "const instanceId = repair ? repair.resource.instance : instanceChoice;",
+    );
+    expect(gcpSetupController).toContain("repair && integrationId !== repair.integrationId");
+    expect(workspaceAdminSource("providers/gcp/GcpSetupWizard.tsx")).toContain(
+      't("workspaceProviders.gcpPinnedTitle")',
+    );
     expect(providerIntegrationRouteSource).toContain(
       "requestedRepairIntegrationId",
     );
     expect(providerIntegrationRouteSource).toContain(
       "The managed Cloud SQL repair target changed",
     );
-    expect(managedConnectionRecoverySource).not.toMatch(
-      /password|accessToken|refreshToken|credential/i,
-    );
-    expect(managedConnectionRecoverySource).toContain(
-      "RECOVERY_TTL_MS = 15 * 60 * 1_000",
-    );
-    expect(managedConnectionRecoverySource).toContain(
-      "item.connectionId === intent.connectionId",
-    );
-    expect(managedConnectionRecoverySource).toContain(
-      "item.integrationId === intent.integrationId",
-    );
-    expect(managedConnectionRecoverySource).toContain("storage.removeItem");
     expect(managedLeaseRouteSource).toContain(
       'let requestedAccessMode: "read" | "write" | "schema"',
     );
@@ -1600,46 +1967,220 @@ describe("provider credential Tauri adapter", () => {
     expect(providerImportProjectionSource).toContain(
       '(provider !== "neon" && item.production === false)',
     );
-    expect(providerAccessDomainSource).toContain("parseNeonBootstrapPreflight");
-    expect(providerAccessDomainSource).toContain("parseNeonBootstrapApply");
-    expect(neonProviderBootstrapControllerSource).toContain('action: "preflight"');
-    expect(neonProviderBootstrapControllerSource).toContain('action: "apply"');
-    expect(neonProviderBootstrapControllerSource).toContain("pendingApplyRef");
-    expect(providerResourcePickerSource).toContain("copy.neonTitle");
-    expect(providerResourcePickerSource).toContain("copy.publicApproval");
-    expect(workspaceMessagesSource).toContain("Prepare Neon least-privilege access");
-    expect(workspaceMessagesSource).toContain("Neon 최소권한 준비");
-    expect(workspaceMessagesSource).toContain("기존 PUBLIC 권한은 별도 관리자 검토가 필요합니다");
-    expect(providerResourcePickerSource).not.toMatch(/setup terminal|SQL 입력/);
-    expect(neonBranchManagerSource).toContain("copy.createNoChangePlan");
-    expect(neonBranchManagerSource).toContain("copy.productionCopyNotice");
-    expect(neonBranchManagerSource).toContain("copy.createDeletePlan");
-    expect(neonBranchManagerSource).toContain("copy.createSwitchPlan");
-    expect(neonBranchManagerSource).toContain("copy.switchDescription");
-    expect(neonBranchManagerSource).toContain("copy.safeRun.currentTitle");
-    expect(neonBranchManagerSource).toContain("copy.safeRun.returnPlan");
-    expect(workspaceMessagesSource).toContain("Create no-change plan");
-    expect(workspaceMessagesSource).toContain("변경 없는 계획 만들기");
-    expect(sharedDatabaseControllerSource).toContain('method: "DELETE"');
-    expect(sharedDatabaseControllerSource).toContain('"x-dopedb-expected-revision"');
-    expect(sharedDatabasePanelSource).toContain("copy.remove");
-    expect(sharedDatabasePanelSource).toContain("copy.focusedManagedAccess");
-    expect(sharedDatabasePanelSource).toContain('id={`database-${connection.id}`}');
-    expect(sharedDatabasePanelSource).toContain("copy.manageProvider");
-    expect(connectionAccessPanelSource).toContain("copy.writePolicyStatus");
-    expect(connectionAccessPanelSource).toContain("copy.writePolicyDesktop");
-    expect(connectionAccessPanelSource).toContain(
-      "workspaceRef.current !== requestedWorkspaceId",
+    // Neon least-privilege preparation accepts only a self-consistent sealed report:
+    // a blocker blocks, a PUBLIC change asks for its approval, production asks for
+    // production approval, and no extra or expired field is carried forward.
+    const neonFinding = {
+      code: "NEON_REVOKE_PUBLIC_DATABASE_CONNECT",
+      level: "change",
+      description: "Revoke PUBLIC CONNECT on the managed database",
+      target: "database app",
+      before: "PUBLIC CONNECT",
+      after: "no PUBLIC CONNECT",
+      requiresApproval: "publicAcl",
+      rollbackAvailable: true,
+    };
+    const neonReport = {
+      version: 1,
+      status: "approvalRequired",
+      planHash: "c".repeat(64),
+      providerAuditId: "br-main:123456789",
+      production: false,
+      target: {
+        project: "project-one",
+        branch: "br-main",
+        databaseId: "123456789",
+        database: "app",
+        schemas: ["public"],
+      },
+      findings: [neonFinding],
+      requiresPublicAclApproval: true,
+      requiresProductionApproval: false,
+      canRollback: true,
+    };
+    const neonPlanExpiresAt = new Date(Date.now() + 5 * 60_000).toISOString();
+    const neonPreflight = {
+      report: neonReport,
+      plan: "p".repeat(80),
+      planExpiresAt: neonPlanExpiresAt,
+    };
+    expect(parseNeonBootstrapPreflight(neonPreflight)?.report.status).toBe("approvalRequired");
+    for (const forged of [
+      { ...neonPreflight, receipt: "must-not-pass" },
+      { ...neonPreflight, planExpiresAt: new Date(Date.now() - 1_000).toISOString() },
+      { ...neonPreflight, report: { ...neonReport, status: "readyToApply" } },
+      { ...neonPreflight, report: { ...neonReport, requiresPublicAclApproval: false } },
+      { ...neonPreflight, report: { ...neonReport, findings: [{ ...neonFinding, level: "blocker" }] } },
+      { ...neonPreflight, report: { ...neonReport, production: true } },
+    ]) {
+      expect(parseNeonBootstrapPreflight(forged)).toBeNull();
+    }
+    const neonApply = {
+      report: {
+        ...neonReport,
+        status: "readyToApply",
+        findings: [{ ...neonFinding, level: "verified", requiresApproval: null }],
+        requiresPublicAclApproval: false,
+      },
+      receipt: "16161616-1616-4616-8616-161616161616",
+      receiptExpiresAt: neonPlanExpiresAt,
+    };
+    expect(parseNeonBootstrapApply(neonApply)?.receipt).toBe(neonApply.receipt);
+    expect(parseNeonBootstrapApply({ ...neonApply, receipt: "not-a-receipt" })).toBeNull();
+    expect(parseNeonBootstrapApply({ ...neonApply, plan: "must-not-pass" })).toBeNull();
+    const neonBootstrapController = workspaceAdminSource("providers/databases/useNeonBootstrap.ts");
+    expect(neonBootstrapController).toContain('kind: "preflightNeonBootstrap"');
+    expect(neonBootstrapController).toContain('kind: "applyNeonBootstrap"');
+    // A retried apply of the same sealed plan and approvals reuses its key.
+    expect(neonBootstrapController).toContain("idempotencyKey: pending.idempotencyKey");
+    expect(workspaceAdminRoutesSource).toContain('"action": "preflight"');
+    expect(workspaceAdminRoutesSource).toContain('"action": "apply"');
+    const neonBootstrapPanel = workspaceAdminSource("providers/databases/NeonBootstrapPanel.tsx");
+    expect(neonBootstrapPanel).toContain('t("workspaceProviderDatabases.neonTitle")');
+    expect(neonBootstrapPanel).toContain('t("workspaceProviderDatabases.publicApproval")');
+    expect(messages.en["workspaceProviderDatabases.neonTitle"])
+      .toBe("Prepare Neon least-privilege access");
+    expect(messages.ko["workspaceProviderDatabases.neonTitle"]).toBe("Neon 최소 권한 준비");
+    expect(messages.ko["workspaceProviderDatabases.publicApproval"])
+      .toBe("기존 PUBLIC 권한은 별도 관리자 검토가 필요합니다");
+    // Adding a database never offers a setup terminal or SQL input, and an import
+    // always creates its own connection instead of replacing an existing one.
+    for (const [modulePath, source] of workspaceAdminModulesUnder("providers/databases/")) {
+      expect(source, modulePath).not.toMatch(
+        /setup terminal|SQL 입력|ImportIntent|replaceTitle|replaceDescription|replaceButton/i,
+      );
+    }
+    for (const lang of ["en", "ko"] as const) {
+      for (const [key, value] of Object.entries(messages[lang])) {
+        if (key.startsWith("workspaceProviderDatabases.")) {
+          expect(value, key).not.toMatch(/setup terminal|SQL 입력/i);
+        }
+      }
+    }
+    const importOperation = workspaceAdminSource("domain.ts")
+      .match(/kind: "importProviderResource";[^}]*\}/)?.[0] ?? "";
+    expect(importOperation).toContain("receipt: string;");
+    expect(importOperation).not.toContain("connectionId");
+    const importRoute = workspaceAdminRoutesSource.slice(
+      workspaceAdminRoutesSource.indexOf("Op::ImportProviderResource {"),
+      workspaceAdminRoutesSource.indexOf("Op::PreflightNeonBootstrap {"),
     );
-    expect(connectionAccessPanelSource).toContain("copy.loadingConnections");
-    expect(connectionAccessPanelSource).toContain("copy.retryConnections");
-    expect(connectionAccessPanelSource).not.toContain("changeWritePolicy");
-    expect(connectionAccessPanelSource).not.toContain('type="checkbox"');
-    expect(workspaceAccessPanelSource).toContain(
-      "loadedWorkspaceId === workspaceId",
+    expect(importRoute).toContain('&["imports"]');
+    expect(importRoute).not.toMatch(/connection_id|connectionId/);
+    // Neon branch views ask the manager for plans in the shipped language only.
+    const neonBranchViewSource = workspaceAdminModulesUnder("providers/neonBranches/")
+      .filter(([modulePath]) => modulePath.endsWith(".tsx"))
+      .map(([, source]) => source)
+      .join("\n");
+    for (const key of [
+      "workspaceNeonBranches.createNoChangePlan",
+      "workspaceNeonBranches.productionCopyNotice",
+      "workspaceNeonBranches.createDeletePlan",
+      "workspaceNeonBranches.createSwitchPlan",
+      "workspaceNeonBranches.switchDescription",
+      "workspaceNeonBranches.safeRun.title",
+      "workspaceNeonBranches.safeRun.returnPlan",
+    ]) {
+      expect(neonBranchViewSource).toContain(`"${key}"`);
+    }
+    expect(messages.en["workspaceNeonBranches.createNoChangePlan"]).toBe("Create no-change plan");
+    expect(messages.ko["workspaceNeonBranches.createNoChangePlan"]).toBe("변경 없는 계획 만들기");
+
+    // Desktop administration reaches the control plane only through the typed
+    // workspace_admin IPC: no module fetches, builds an API path or header, keeps
+    // browser storage, or asks through a native browser dialog.
+    for (const [modulePath, source] of Object.entries(workspaceAdminSources)) {
+      expect(source, modulePath).not.toMatch(
+        /\bfetch\s*\(|XMLHttpRequest|\/api\/v1\/|x-dopedb-|sessionStorage|localStorage|document\.cookie|window\.(?:confirm|alert|prompt)\b/,
+      );
+      expect(source.includes("invoke("), modulePath)
+        .toBe(modulePath === "../workspaceAdmin/tauriAdapter.ts");
+    }
+    // Removing a shared database is manager-only and revision-pinned: Desktop sends
+    // the listed revision and only Rust turns it into DELETE plus the dedicated header.
+    expect(canRemoveSharedConnection(repairConnection)).toBe(true);
+    for (const connection of [
+      { ...repairConnection, accessMode: "write" },
+      { ...repairConnection, revision: 0 },
+      { ...repairConnection, revision: 1.5 },
+    ] as const) {
+      expect(canRemoveSharedConnection(connection)).toBe(false);
+    }
+    const sharedDatabasesView = workspaceAdminSource("providers/databases/SharedDatabasesView.tsx");
+    expect(sharedDatabasesView).toContain('kind: "deleteSharedConnection"');
+    expect(sharedDatabasesView).toContain("expectedRevision: connection.revision");
+    const deleteRoute = workspaceAdminRoutesSource.slice(
+      workspaceAdminRoutesSource.indexOf("Op::DeleteSharedConnection {"),
+      workspaceAdminRoutesSource.indexOf("Op::GetLifecycle {"),
     );
-    expect(workspaceAccessPanelSource).toContain('role="status"');
-    expect(workspaceAccessPanelSource).toContain("copy.emptyMembers");
+    expect(deleteRoute).toContain("AdminRoute::delete(connection_path(");
+    expect(deleteRoute).toContain(".with_expected_revision(*expected_revision)?");
+    expect(workspaceAdminAdapterSource).toContain(
+      "builder.header(EXPECTED_REVISION_HEADER, revision.to_string())",
+    );
+    expect(hostedControlPlaneSource).toContain(
+      'EXPECTED_REVISION_HEADER: &str = "x-dopedb-expected-revision"',
+    );
+    // The destructive command waits for an in-app confirmation naming the database;
+    // a recovery request reveals its database once and leads with the repair.
+    const sharedDatabaseRow = workspaceAdminSource("providers/databases/SharedDatabaseRow.tsx");
+    expect(sharedDatabaseRow).toContain("<ConfirmButton");
+    expect(sharedDatabaseRow).toContain(
+      't("workspaceProviderDatabases.removeConfirm", { name: connection.name })',
+    );
+    expect(sharedDatabaseRow).toContain("onConfirm={() => onRemove(connection)}");
+    expect(sharedDatabaseRow).toContain('"workspaceProviderDatabases.focusRepair"');
+    expect(sharedDatabaseRow).toContain('t("workspaceProviderDatabases.openAccounts")');
+    expect(workspaceAdminSource("providers/ProvidersPanel.tsx")).toContain(
+      "useState(() => takePendingConnectionFocus())",
+    );
+    // Database access shows the workspace write ceiling as status only: it changes
+    // in Settings → Safety, and no administration operation can toggle it.
+    const databaseAccess = workspaceAdminSource("access/DatabaseAccess.tsx");
+    expect(databaseAccess).toContain('t("workspaceAccess.writeCeiling")');
+    expect(databaseAccess).toContain('t("workspaceAccess.writeCeilingHint")');
+    expect(databaseAccess).not.toMatch(/CheckboxField|type="checkbox"|<Switch\b/);
+    expect(messages.en["workspaceAccess.writeCeilingHint"]).toContain("Settings → Safety");
+    expect(messages.ko["workspaceAccess.writeCeilingHint"]).toContain("설정 → 안전");
+    expect(workspaceAdminSource("domain.ts")).not.toMatch(/allowWrites|writePolicy|WritePolicy/);
+    const connectionAccessPanel = workspaceAdminSource("access/ConnectionAccessPanel.tsx");
+    expect(connectionAccessPanel).toContain('t("workspaceAccess.loadingDatabases")');
+    expect(connectionAccessPanel).toContain('t("workspaceAdmin.retry")');
+    // A response for another account or workspace can never fill this one's view.
+    const adminScope = {
+      accountId: adminAccountId,
+      workspaceId: adminWorkspaceId,
+      workspaceName: "Example",
+      role: "owner",
+      canManage: true,
+      isOwner: true,
+    } as const;
+    const otherWorkspaceId = workspaceIdentity("1a1a1a1a-1a1a-41a1-81a1-1a1a1a1a1a1a");
+    expect(sharedDatabasesQuery(adminScope).queryKey).toEqual([
+      "workspaceAdmin",
+      adminAccountId,
+      adminWorkspaceId,
+      "access",
+      "databases",
+    ]);
+    expect(sharedDatabasesQuery({ ...adminScope, workspaceId: otherWorkspaceId }).queryKey)
+      .not.toEqual(sharedDatabasesQuery(adminScope).queryKey);
+    expect(desktopSettingsSource).toContain(
+      "<Fragment key={`${adminScope.accountId}:${adminScope.workspaceId}`}>",
+    );
+    expect(parseMemberDirectory({
+      workspaceId: adminWorkspaceId,
+      members: [],
+      invitations: [],
+    }, adminWorkspaceId)).toEqual({ members: [], invitations: [] });
+    expect(() => parseMemberDirectory({
+      workspaceId: otherWorkspaceId,
+      members: [],
+      invitations: [],
+    }, adminWorkspaceId)).toThrow();
+    const membersPanel = workspaceAdminSource("members/MembersPanel.tsx");
+    expect(membersPanel).toContain("<Skeleton");
+    expect(membersPanel).toContain('t("workspaceMembers.empty")');
     expect(publicAnalysisPageSource).toContain("copy.publicationDescription");
     expect(publicAnalysisPageSource).toContain(
       'dateTime={result.publishedAt.toISOString()}',
@@ -1673,9 +2214,9 @@ describe("provider credential Tauri adapter", () => {
     expect(safetySettingsScreenSource).toContain(
       "saveError?.connectionId === connectionId",
     );
-    expect(workspaceMessagesSource).toContain("Remove shared database");
-    expect(workspaceMessagesSource).toContain("공유 DB 제거");
-    expect(neonBranchManagerSource).not.toMatch(/>Switch<|>Restore<|>Delete</);
+    expect(messages.en["workspaceProviderDatabases.remove"]).toBe("Remove shared database");
+    expect(messages.ko["workspaceProviderDatabases.remove"]).toBe("공유 DB 제거");
+    expect(neonBranchViewSource).not.toMatch(/>Switch<|>Restore<|>Delete</);
     const branchPlan = {
       version: 1,
       kind: "neon.branch.create",
@@ -2120,9 +2661,6 @@ describe("provider credential Tauri adapter", () => {
     expect(providerImportRouteSource).toContain(
       "Object.keys(body).length !== fields.length",
     );
-    expect(providerResourcePickerSource).not.toMatch(
-      /ImportIntent|replaceTitle|replaceDescription|replaceButton/,
-    );
 
     expect(workspaceBackupCoreSource).toContain("...parseSharedConnection(template)");
     expect(workspaceBackupCoreSource).not.toContain("parseBackupConnection");
@@ -2165,11 +2703,28 @@ describe("provider credential Tauri adapter", () => {
     expect(workspaceLifecycleRouteSource).toContain(
       'Object.keys(body).some((key) => !allowedKeys.includes(key))',
     );
-    expect(workspaceLifecyclePanelSource).toContain(
-      'confirmation !== lifecycle.workspaceName',
+    // Desktop schedules deletion only for the exact workspace name, compared and sent
+    // untrimmed, and only owners are shown or rendered Backups & deletion.
+    expect(workspaceAdminSource("lifecycle/useLifecycleController.ts")).toContain(
+      "confirmation !== current.workspaceName",
     );
-    expect(workspaceSettingsNavigationSource).toContain(
-      'item.id === "workspace-settings" && !canDeleteWorkspace',
+    expect(workspaceAdminSource("lifecycle/WorkspaceDeletionSection.tsx")).toContain(
+      "confirmation === status.workspaceName",
+    );
+    expect(workspaceAdminRoutesSource).toContain(
+      '"confirmation": exact_text(confirmation, 120, "deletion confirmation")?',
+    );
+    const exactText = workspaceAdminRoutesSource.slice(
+      workspaceAdminRoutesSource.indexOf("fn exact_text("),
+      workspaceAdminRoutesSource.indexOf("fn opaque_token("),
+    );
+    expect(exactText).toContain("Ok(value.to_string())");
+    expect(exactText).not.toContain("trim");
+    expect(desktopSettingsSource).toMatch(
+      /\.\.\.\(adminScope\?\.isOwner\s*\?\s*\[\s*\{\s*id: "workspace-lifecycle"/,
+    );
+    expect(desktopSettingsSource).toContain(
+      'section === "workspace-lifecycle" && adminScope.isOwner &&',
     );
     expect(desktopSettingsSource).toContain(
       'section === entry.id ? "page" : undefined',

@@ -19,14 +19,8 @@ export default function ManagedConnectionRecoveryNotice({
       icon="alert"
       role="alert"
       action={recovery.canOpenSettings ? (
-        <Button
-          size="compact"
-          disabled={recovery.openingSettings}
-          onClick={() => void recovery.openSettings()}
-        >
-          {t(recovery.openingSettings
-            ? "connections.managedWorkspace.opening"
-            : "connections.managedWorkspace.recover")}
+        <Button size="compact" onClick={() => recovery.openSettings()}>
+          {t("connections.managedWorkspace.recover")}
         </Button>
       ) : undefined}
     >

@@ -1,16 +1,14 @@
 // Active workspace/project menu for the title toolbar. Workspace changes clear cached
-// resource reads before the shell reloads the newly selected account scope.
+// resource reads before the shell reloads the newly selected account scope; creating a
+// workspace and opening workspace administration start from the same menu.
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { openUrl } from "@tauri-apps/plugin-opener";
-import {
-  setActiveWorkspace,
-  workspaceConsoleUrl,
-} from "../tauriAdapter";
+import { setActiveWorkspace } from "../tauriAdapter";
 import {
   runWorkspaceAuthorityTransition,
   synchronizeWorkspaceScope,
 } from "../cache";
+import type { AccountId, WorkspaceId } from "../domain";
 import { workspaceAuthStateQuery, workspaceContextQuery } from "../queries";
 import { onWorkspaceSelectionRequested } from "../selectionRequest";
 import {
@@ -18,6 +16,9 @@ import {
   parseWorkspaceChoice,
   workspaceChoiceValue,
 } from "../choices";
+import CreateWorkspaceDialog from "../../workspaceAdmin/workspaces/CreateWorkspaceDialog";
+import { requestWorkspaceAdmin } from "../../workspaceAdmin/navigationRequest";
+import { useWorkspaceAdminScope } from "../../workspaceAdmin/scope";
 import { errMessage } from "../../../ipc/types";
 import { useI18n } from "../../../lib/i18n";
 import { Icon } from "../../../components/Icon";
@@ -39,8 +40,10 @@ export default function WorkspaceSwitcher({
   const queryClient = useQueryClient();
   const context = useQuery(workspaceContextQuery());
   const auth = useQuery(workspaceAuthStateQuery());
+  const adminScope = useWorkspaceAdminScope();
   const [switching, setSwitching] = useState(false);
-  const [dashboardOpening, setDashboardOpening] = useState(false);
+  // The account that opened "New workspace"; the dialog closes if it stops being active.
+  const [creatingFor, setCreatingFor] = useState<AccountId | null>(null);
   const [openRequest, setOpenRequest] = useState(0);
   useEffect(
     () => onWorkspaceSelectionRequested(() => setOpenRequest((value) => value + 1)),
@@ -67,21 +70,32 @@ export default function WorkspaceSwitcher({
         context.data.active.kind === "team" ? (auth.data?.user?.id ?? null) : null,
       )
     : "";
+  const signedInUser = auth.data?.user ?? null;
+  const signedInUserId = signedInUser?.id ?? null;
+  useEffect(() => {
+    if (creatingFor !== null && signedInUserId !== creatingFor) setCreatingFor(null);
+  }, [creatingFor, signedInUserId]);
+
+  async function switchWorkspace(id: WorkspaceId, accountUserId: AccountId | undefined) {
+    await runWorkspaceAuthorityTransition(
+      queryClient,
+      () => setActiveWorkspace(id, accountUserId),
+      async () => {
+        await synchronizeWorkspaceScope(queryClient);
+        await onChanged();
+      },
+    );
+  }
 
   async function changeWorkspace(value: string) {
     if (!context.data?.feature.enabled) return;
     const choice = parseWorkspaceChoice(value);
     if (!choice || value === activeChoice || switching) return;
-    const accountUserId = choice.accountUserId ?? auth.data?.user?.id;
     setSwitching(true);
     try {
-      await runWorkspaceAuthorityTransition(
-        queryClient,
-        () => setActiveWorkspace(choice.workspaceId, accountUserId),
-        async () => {
-          await synchronizeWorkspaceScope(queryClient);
-          await onChanged();
-        },
+      await switchWorkspace(
+        choice.workspaceId,
+        choice.accountUserId ?? auth.data?.user?.id,
       );
     } catch (error) {
       toast(t("workspace.switchFailed", { error: errMessage(error) }), "error");
@@ -90,98 +104,99 @@ export default function WorkspaceSwitcher({
     }
   }
 
-  async function openDashboard() {
-    if (!context.data?.feature.enabled || dashboardOpening) return;
-    setDashboardOpening(true);
-    try {
-      const { active } = context.data;
-      const url = await workspaceConsoleUrl(active.kind === "team" ? active.id : undefined);
-      await openUrl(url);
-    } catch (error) {
-      toast(t("workspace.dashboardOpenFailed", { error: errMessage(error) }), "error");
-    } finally {
-      setDashboardOpening(false);
-    }
-  }
-
-  const dashboardLabel =
-    context.data?.active.kind === "team"
-      ? t("workspace.openDashboardFor", { name: context.data.active.name })
-      : t("workspace.openDashboard");
   const activeLabel =
     context.data?.active.kind === "team"
       ? context.data.active.name
       : t("workspace.personalName");
 
   return (
-    <ToolbarMenu
-      align="start"
-      label={t("workspace.select")}
-      disabled={context.isLoading || switching}
-      openRequest={openRequest}
-      trigger={
-        <>
-          <span className="tw:grid tw:size-5 tw:shrink-0 tw:place-items-center tw:rounded-xs tw:bg-secondary tw:text-foreground">
-            <DopeDBMark size="compact" />
-          </span>
-          <span className="tw:max-w-[170px] tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap">
-            {activeLabel}
-          </span>
-          <Icon
-            name="chevronDown"
-            className="tw:shrink-0 tw:text-xs tw:text-muted-foreground"
-          />
-        </>
-      }
-    >
-      {choiceGroups.map((group) => (
-        <div key={group.key} role="presentation">
-          <p className="tw:m-0 tw:px-2 tw:pt-2 tw:pb-1 tw:text-2xs tw:font-semibold tw:tracking-[0.04em] tw:text-muted-foreground tw:uppercase">
-            {group.label}
-          </p>
-          {group.choices.map((choice) => {
-            const active = choice.value === activeChoice;
-            const label =
-              choice.workspace.kind === "personal"
-                ? t("workspace.personalName")
-                : choice.workspace.name;
-            return (
-              <ToolbarMenuItem
-                key={choice.value}
-                icon={active ? "check" : "folder"}
-                role="menuitemradio"
-                aria-checked={active}
-                disabled={switching || auth.data === undefined}
-                onClick={() => void changeWorkspace(choice.value)}
-              >
-                <span className="tw:flex tw:min-w-0 tw:flex-1 tw:items-center tw:justify-between tw:gap-4">
-                  <span className="tw:truncate">{label}</span>
-                  {choice.role ? (
-                    <span className="tw:text-2xs tw:text-muted-foreground">
-                      {roleLabels[choice.role]}
-                    </span>
-                  ) : null}
-                </span>
-              </ToolbarMenuItem>
-            );
-          })}
-        </div>
-      ))}
-      <div
-        className="tw:my-1 tw:h-px tw:bg-border-subtle"
-        role="separator"
-      />
-      <ToolbarMenuItem icon="plus" onClick={() => onNew()}>
-        {t("connections.new")}
-      </ToolbarMenuItem>
-      <ToolbarMenuItem
-        icon="externalLink"
-        onClick={() => void openDashboard()}
-        disabled={!context.data?.feature.enabled || dashboardOpening}
-        aria-busy={dashboardOpening}
+    <>
+      <ToolbarMenu
+        align="start"
+        label={t("workspace.select")}
+        disabled={context.isLoading || switching}
+        openRequest={openRequest}
+        trigger={
+          <>
+            <span className="tw:grid tw:size-5 tw:shrink-0 tw:place-items-center tw:rounded-xs tw:bg-secondary tw:text-foreground">
+              <DopeDBMark size="compact" />
+            </span>
+            <span className="tw:max-w-[170px] tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap">
+              {activeLabel}
+            </span>
+            <Icon
+              name="chevronDown"
+              className="tw:shrink-0 tw:text-xs tw:text-muted-foreground"
+            />
+          </>
+        }
       >
-        {dashboardLabel}
-      </ToolbarMenuItem>
-    </ToolbarMenu>
+        {choiceGroups.map((group) => (
+          <div key={group.key} role="presentation">
+            <p className="tw:m-0 tw:px-2 tw:pt-2 tw:pb-1 tw:text-2xs tw:font-semibold tw:tracking-[0.04em] tw:text-muted-foreground tw:uppercase">
+              {group.label}
+            </p>
+            {group.choices.map((choice) => {
+              const active = choice.value === activeChoice;
+              const label =
+                choice.workspace.kind === "personal"
+                  ? t("workspace.personalName")
+                  : choice.workspace.name;
+              return (
+                <ToolbarMenuItem
+                  key={choice.value}
+                  icon={active ? "check" : "folder"}
+                  role="menuitemradio"
+                  aria-checked={active}
+                  disabled={switching || auth.data === undefined}
+                  onClick={() => void changeWorkspace(choice.value)}
+                >
+                  <span className="tw:flex tw:min-w-0 tw:flex-1 tw:items-center tw:justify-between tw:gap-4">
+                    <span className="tw:truncate">{label}</span>
+                    {choice.role ? (
+                      <span className="tw:text-2xs tw:text-muted-foreground">
+                        {roleLabels[choice.role]}
+                      </span>
+                    ) : null}
+                  </span>
+                </ToolbarMenuItem>
+              );
+            })}
+          </div>
+        ))}
+        <div
+          className="tw:my-1 tw:h-px tw:bg-border-subtle"
+          role="separator"
+        />
+        <ToolbarMenuItem icon="plus" onClick={() => onNew()}>
+          {t("connections.new")}
+        </ToolbarMenuItem>
+        {/* Both commands open surfaces outside this menu, so selection closes the menu
+            first and the opened dialog returns focus to the menu trigger. */}
+        {context.data?.feature.enabled && signedInUser ? (
+          <ToolbarMenuItem
+            icon="folderPlus"
+            onClick={() => setCreatingFor(signedInUser.id)}
+          >
+            {t("workspaceAdmin.newWorkspace")}
+          </ToolbarMenuItem>
+        ) : null}
+        {adminScope?.canManage ? (
+          <ToolbarMenuItem
+            icon="gear"
+            onClick={() => requestWorkspaceAdmin("workspace-members")}
+          >
+            {t("workspaceAdmin.manage")}
+          </ToolbarMenuItem>
+        ) : null}
+      </ToolbarMenu>
+      {creatingFor !== null && signedInUserId === creatingFor ? (
+        <CreateWorkspaceDialog
+          accountId={creatingFor}
+          onSwitch={(id) => switchWorkspace(id, creatingFor)}
+          onClose={() => setCreatingFor(null)}
+        />
+      ) : null}
+    </>
   );
 }

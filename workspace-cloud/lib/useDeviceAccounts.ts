@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { authClient } from "./auth-client";
 import { useWorkspaceLocale } from "../app/components/WorkspaceLocale";
 import { workspaceMessages } from "./workspace-messages";
-import { localizedProviderMessage } from "./workspace-provider-copy";
+import { localizedServerMessage } from "./workspace-server-message";
 
 interface DeviceSession {
   session: {
@@ -30,7 +30,7 @@ export function useDeviceAccounts() {
     const result = await authClient.multiSession.listDeviceSessions();
     if (result.error) {
       setError(result.error.message
-        ? localizedProviderMessage(result.error.message, locale, copy.loadError)
+        ? localizedServerMessage(result.error.message, locale, copy.loadError)
         : copy.loadError);
       return;
     }

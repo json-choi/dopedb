@@ -32,7 +32,6 @@ interface CatalogTreeStatusProps {
   onRecoverAuthentication?: () => void;
   onRecoverManagedConnection?: () => void;
   onEdit?: () => void;
-  managedConnectionRecoveryPending?: boolean;
   onRetryOverview: () => void;
   onRequestDetails: () => void;
 }
@@ -53,7 +52,6 @@ export function CatalogTreeStatus({
   onRecoverAuthentication,
   onRecoverManagedConnection,
   onEdit,
-  managedConnectionRecoveryPending = false,
   onRetryOverview,
   onRequestDetails,
 }: CatalogTreeStatusProps) {
@@ -119,8 +117,6 @@ export function CatalogTreeStatus({
     : detailActionKind === "retry"
       ? onRequestDetails
       : undefined;
-  const primaryActionPending = managedConnectionRecoveryPending
-    || authenticationRecoveryPending;
   return (
     <>
       {accessIssue ? (
@@ -166,7 +162,7 @@ export function CatalogTreeStatus({
             <Button
               size="xs"
               variant="ghost"
-              disabled={primaryActionPending}
+              disabled={authenticationRecoveryPending}
               onClick={primaryAction}
               role="treeitem"
               aria-level={treeLevel + 1}
@@ -177,9 +173,7 @@ export function CatalogTreeStatus({
               tabIndex={-1}
             >
               {primaryActionKind === "recoverManaged"
-                ? managedConnectionRecoveryPending
-                  ? t("connections.managedWorkspace.opening")
-                  : t("connections.managedWorkspace.recover")
+                ? t("connections.managedWorkspace.recover")
                 : primaryActionKind === "recoverAuthentication"
                   ? authenticationRecoveryPending
                     ? t("connections.bigQueryReconnecting")

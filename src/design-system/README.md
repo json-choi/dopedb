@@ -352,21 +352,12 @@ loopback 문서는 이 정본을 빌드 시 포함하며 네트워크 font나 sc
   latest-download 별칭으로 직접 연결하고, Mac CPU가 숨겨지거나 지원하지 않는
   기기에서는 Apple Silicon/Intel/Windows 선택 surface로 이동한다. 추천과 수동
   선택 analytics를 구분하며 user-agent 추측으로 잘못된 DMG를 자동 선택하지 않는다.
-- `workspace-cloud/app/components/Controls`: workspace 관리 화면의
-  `ControlButton`, `ControlLink`, field/input/select 밀도를 함께 소유한다.
-  외부 관리 콘솔로 이동하는 action도 화면에서 button utility를 복사하지 않고
-  `ControlLink`를 사용한다. Workspace 관리 panel의 header와 최상위 본문은
-  desktop 24px, 640px 이하 16px의 같은 content gutter를 사용한다. Database
-  요약과 우측 action은 확장 상태에서도 첫 2열을 유지하고, 복구 안내처럼 길어지는
-  보조 내용은 그 아래 전체 폭 grid row가 소유한다.
-  `ControlSelect`의 기본 밀도는 44px field, `density="compact"`는 34px
-  inline filter다. 인증·초대 화면의 계정 선택 행은 `IdentityAccountChoice`가
-  최소 44px 높이, 이름·이메일의 수직 계층과 긴 문자열 줄바꿈을 소유하며
-  각 화면은 인증 command만 제공한다.
-  `ControlButton`의 `aria-pressed`는 작업·공급자 선택의 semantic selection
-  surface를 소유한다. Providers는 선택 목록과 선택한 공급자의 연결 안내를
-  2열로 배치하고 640px 이하에서는 한 열로 접는다. 계정 관리는 native details로
-  열며 별도 번호 장식·중복 계정 제목·빈 계정 목록을 쌓지 않는다.
+- `workspace-cloud/app/components/Controls`: Workspace Web에 남은 브라우저
+  surface의 compact `ControlButton` 하나를 소유한다. Workspace 관리는 Desktop
+  Settings로 이동했으므로 Web에 관리용 field·select·link primitive를 다시 만들지
+  않는다. `aria-pressed`는 semantic selection surface로 표시한다. 인증·초대
+  화면의 계정 선택 행은 `IdentityAccountChoice`가 최소 44px 높이, 이름·이메일의
+  수직 계층과 긴 문자열 줄바꿈을 소유하며 각 화면은 인증 command만 제공한다.
 - `IdeTitleToolbar`, `IdeStatusBarSurface`: title/status chrome의
   고정 높이와 좌·중앙·우 slot. `contextAction` slot은 브랜드 바로 오른쪽에
   항상 보이는 왼쪽 패널 토글을 둔다. 32px 검색과 헤더의 위아래 경계를 맞추고,
@@ -980,6 +971,14 @@ DopeDB의 실제 작업 흐름과 접근성, supported viewport를 위한 제품
   Agent 도구는 공급자별 한 행에 내장 채팅 준비 상태를 우선 표시한다. 공식 CLI와
   선택형 외부 사용 스킬의 상태·수리·제거는 그 행의 펼침 영역에 둔다. 기술
   구성 요소를 별도 최상위 목록으로 반복하지 않는다.
+- Workspace 관리 section(`계정`, 구성원, DB 접근 권한, 공급자, 백업 및 삭제)은
+  새 table·card stack 없이 `SettingsSectionHeader`·`SettingsList`·`SettingsRow`
+  inventory, `Status`의 `InlineNotice`, `ConfirmButton`, `Modal`을 조합한다.
+  구성원 제거, 초대 취소, 공유 DB 삭제, 백업 삭제·복원 같은 파괴적 동작은
+  `ConfirmButton`의 차단 확인 dialog로, workspace 삭제는 정확한 이름 입력으로만
+  실행하고 `window.confirm`을 쓰지 않는다. 실행할 수 없는 역할에는 section
+  자체를 숨기며 disabled placeholder를 두지 않는다. 서버 문장은 현재 UI 언어와
+  같을 때만 보이고 나머지는 catalog 문구로 대체한다.
 - `DiagnosticSummary`, `DiagnosticCount`: 설정·속성 편집기의 Problems 목록과
   오류/경고 개수를 같은 compact hierarchy로 표시.
 - `SettingsGroup`: 설정·정책 화면의 제목, 상단 divider, dense spacing을 공유하는

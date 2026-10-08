@@ -1,5 +1,5 @@
 // Search projection of real shell commands, documents and cached database objects.
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { CatalogTable } from "../../ipc/types";
 import { errMessage } from "../../ipc/types";
@@ -9,6 +9,8 @@ import { databaseCatalogQuery, type CatalogScope } from "../../lib/queries";
 import { filterCatalogOverview } from "../catalogExplorer/scopeFilter";
 import { databaseDisplayLabel, type ConnectionProfile } from "../connections/domain";
 import { settingsSearchKeywords, type SettingsSection } from "../settings/domain";
+import { useWorkspaceAdminScope } from "../workspaceAdmin/scope";
+import { workspaceAuthStateQuery } from "../workspaces/queries";
 import type { SqlDocument } from "../sqlDocuments/domain";
 import type { WorkbenchDocument } from "../workbench/domain";
 import { useCachedCatalogOverviews } from "./catalogCache";
@@ -51,6 +53,8 @@ export function useActionSearchItems({
   const { t } = useI18n();
   const toast = useToast();
   const queryClient = useQueryClient();
+  const adminScope = useWorkspaceAdminScope();
+  const signedIn = Boolean(useQuery(workspaceAuthStateQuery()).data?.user);
   const catalogTargets = useCachedCatalogOverviews(
     queryClient,
     connections,
@@ -222,6 +226,20 @@ export function useActionSearchItems({
       ["language", t("settings.languageTitle"), false],
       ["appearance", t("settings.appearance"), false],
       ["updates", t("settings.updates"), false],
+      // Administration commands appear only for the role that may run them.
+      ...(signedIn
+        ? ([["account", t("workspaceAdmin.account"), false]] as const)
+        : []),
+      ...(adminScope?.canManage
+        ? ([
+            ["workspace-members", t("workspaceAdmin.members"), false],
+            ["workspace-access", t("workspaceAdmin.access"), false],
+            ["workspace-providers", t("workspaceAdmin.providers"), false],
+          ] as const)
+        : []),
+      ...(adminScope?.isOwner
+        ? ([["workspace-lifecycle", t("workspaceAdmin.lifecycle"), false]] as const)
+        : []),
     ] satisfies ReadonlyArray<readonly [SettingsSection, string, boolean]>
   ).map(([section, label, disabled]) => ({
     id: `setting:${section}`,

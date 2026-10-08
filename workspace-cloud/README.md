@@ -32,6 +32,31 @@ belongs to the D1 authentication path. Desktop uses only this PKCE authorization
 Authentication pages never initialize web
 analytics and are served with `private, no-store`.
 
+## Workspace administration
+
+DopeDB Desktop owns workspace administration: **Settings → Account** (other sessions,
+workspaces scheduled for deletion) and **Settings → Workspace** (Members, Database
+access, Providers, Backups & deletion) call this app's `/api/v1` routes with the
+account's Desktop Bearer session (see
+[ADR 0009](../docs/adr/0009-desktop-workspace-administration.md)). Those routes are a
+public contract for independently released Desktop versions, so their requests and
+responses stay backward compatible. The browser keeps only sign-in, Desktop approval,
+invitation acceptance, the provider authorization start/complete pages, and public
+Articles; the former `/settings` console address shows only a settings-moved notice
+with **Open DopeDB** and install links.
+
+PlanetScale and Google Cloud authorizations start in Desktop.
+`POST /api/v1/workspaces/:workspaceId/provider-integrations` stores a hashed,
+single-use, 10-minute state and returns a same-origin `/auth/provider/start?state=…`
+URL, the only page Desktop opens. That page does not consume the state: it sends a
+signed-out browser to sign-in, explains an account mismatch, and redirects to the
+provider only when the browser account is the account that started the authorization,
+so a provider code is never issued to a browser that cannot redeem it. The callbacks
+still verify the cookie session against the state's user, then end on the token-free
+`/auth/provider/complete` page. When the user returns to the app, Desktop re-reads
+integrations and finds an authorized Google Cloud setup through
+`GET .../provider-integrations/gcp-setup`.
+
 ## Local setup
 
 ### Optional workspace web analytics
@@ -106,8 +131,8 @@ managed-access flow: `read_organizations`, `read_databases`, `read_branches`,
 grant missing any of them instead of leaving a partially working integration.
 
 To deliver invitation email, also set `RESEND_API_KEY` and a verified
-`WORKSPACE_INVITATION_FROM` sender; without them, the workspace console keeps the
-email-bound copy-link fallback.
+`WORKSPACE_INVITATION_FROM` sender; without them, Desktop
+**Settings → Workspace → Members** keeps the email-bound copy-link fallback.
 The anonymous first-party product-outcome endpoint is disabled unless
 `PRODUCT_ANALYTICS_RELAY_ENABLED=1`. Production uses the `PRODUCT_ANALYTICS`
 Cloudflare service binding; there is no public sink URL or shared bearer token.
@@ -230,14 +255,15 @@ Cloudflare control plane accept GitHub sources only.
    to an organization. Neon does not currently publish a third-party OAuth client
    registration contract for this use case. A personal key also works, but the UI
    identifies its wider account blast radius and never calls this fallback one-click.
-2. In Workspace settings, choose Neon, enter the key and optional organization ID,
-   and select project → branch → database. Protected branches are always production;
-   default or otherwise unclassified branches require an Admin/Owner classification.
+2. In Desktop **Settings → Workspace → Providers**, choose Neon, enter the key and
+   optional organization ID, and select project → branch → database. Protected
+   branches are always production; default or otherwise unclassified branches
+   require an Admin/Owner classification.
 3. Run the read-only preflight. It returns redacted finding codes and exact before/after
    descriptions for the selected database, other database `PUBLIC CONNECT`, allowed
    schema creation, ownership, current/future object grants, public
    `SECURITY DEFINER` functions, and DopeDB marker/lease-role drift. Raw ACL SQL and
-   owner credentials never reach the browser.
+   owner credentials never leave the server.
 4. Review and explicitly approve any `PUBLIC` ACL changes and, independently, any
    production target. DopeDB applies only the sealed plan hash. Approved statements
    run transactionally, their exact inverse is retained for rollback, and a changed
@@ -293,10 +319,12 @@ not treat password `VALID UNTIL` alone as a hard session-expiry boundary.
 
 GCP uses keyless federation. Do not create or upload a JSON service-account key, and
 do not copy a project number, WIF coordinate, or service-account identity into a
-browser form.
+setup form.
 
-1. A workspace Admin or Owner chooses **Google Cloud 연결** and approves the Google
-   OAuth request. The short-lived setup grant is held only for this bootstrap session.
+1. A workspace Admin or Owner starts the Google Cloud SQL setup in Desktop
+   **Settings → Workspace → Providers** and approves the Google OAuth request in the
+   browser opened through `/auth/provider/start`. The short-lived setup grant is held
+   only for this bootstrap session, which Desktop continues after the user returns.
 2. DopeDB lists the approved account's projects and runnable Cloud SQL instances. The
    admin selects one project and instance, classifies an unlabeled environment, and
    explicitly approves production access or a required database restart.
@@ -314,7 +342,7 @@ browser form.
 5. The completed integration stores only keyless trust coordinates and encrypted
    Provider authorization needed for rotation. Google login tokens, service-account
    keys, and database passwords are never copied into a shared connection or returned
-   to the browser.
+   to the browser or Desktop.
 
 The OAuth account must be able to enumerate projects and Cloud SQL and, when one-click
 setup is requested, enable services, manage the dedicated service account and IAM
@@ -376,14 +404,17 @@ credentials, then atomically replaces hash-only global principal claims so a ser
 account cannot be reused by another integration. Selecting a different dedicated
 instance creates a separate integration; move its connections before disconnecting the
 old one.
-When Desktop cannot obtain a managed Cloud SQL lease, a manager can open that exact
-database row in Workspace Web and start **Repair managed access**. The OAuth round trip
-retains only a 15-minute, non-secret browser intent containing opaque workspace,
-connection, and integration IDs. After OAuth, the server-projected managed connection
-pins the existing project and instance; the setup rechecks required permissions, IAM
-database authentication, and dedicated database users. The final mutation must resolve
-to the same integration before it updates credentials, and then returns to the same
-database row without replacing its connection ID or grants.
+When Desktop cannot obtain a managed Cloud SQL lease, a manager follows the
+connection's **Repair managed connection** action to that exact database row in Desktop
+**Settings → Workspace → Providers** and starts **Repair managed access**. While the
+browser authorization runs, Desktop keeps only a 15-minute, in-memory repair intent for
+that account and workspace with the opaque connection and integration IDs and the
+connection's project, instance, and database; nothing is stored in the browser. After
+OAuth, the server-projected managed connection pins the existing project and instance;
+the setup rechecks required permissions, IAM database authentication, and dedicated
+database users. The final mutation must resolve to the same integration before it
+updates credentials, and the repaired database keeps its connection ID and grants.
+
 ## Analysis Articles
 
 An Analysis Article is a versioned sanitized HTML document with exactly one bounded,
@@ -529,8 +560,9 @@ data must be reset instead of upgraded.
   opaque conflict id. Connection version history is append-only at the database boundary.
 - Admin/Owner can create, resend, and cancel Better Auth invitations; remove members;
   and assign Viewer (metadata only), Analyst (read-only), Editor (read/write through
-  local safety gates), or Admin roles. Resend delivers email when configured, while the
-  settings page always exposes a copyable, email-bound invitation link.
+  local safety gates), or Admin roles. Resend delivers email when configured, while
+  Desktop **Settings → Workspace → Members** always exposes a copyable, email-bound
+  invitation link.
 - A signed-in user with a verified Google email automatically accepts every live
   invitation for that exact email on the next workspace read. Better Auth still
   performs the recipient, expiry, role, membership-limit, and state-transition checks.

@@ -22,6 +22,14 @@ import { tablesCatalog } from "./catalogs/tables";
 import { terminalCatalog } from "./catalogs/terminal";
 import { updatesCatalog } from "./catalogs/updates";
 import { workspaceCatalog } from "./catalogs/workspace";
+import { workspaceAdminCatalog } from "./catalogs/workspaceAdmin";
+import { workspaceMembersCatalog } from "./catalogs/workspaceMembers";
+import { workspaceAccessCatalog } from "./catalogs/workspaceAccess";
+import { workspaceLifecycleCatalog } from "./catalogs/workspaceLifecycle";
+import { workspaceAccountCatalog } from "./catalogs/workspaceAccount";
+import { workspaceProvidersCatalog } from "./catalogs/workspaceProviders";
+import { workspaceProviderDatabasesCatalog } from "./catalogs/workspaceProviderDatabases";
+import { workspaceNeonBranchesCatalog } from "./catalogs/workspaceNeonBranches";
 import { providerProvisioningCatalog } from "./catalogs/providerProvisioning";
 import { productAnalyticsCatalog } from "./catalogs/productAnalytics";
 import type { Lang, MessageCatalog } from "./types";
@@ -49,6 +57,14 @@ export const catalogParts = [
   terminalCatalog,
   updatesCatalog,
   workspaceCatalog,
+  workspaceAdminCatalog,
+  workspaceMembersCatalog,
+  workspaceAccessCatalog,
+  workspaceLifecycleCatalog,
+  workspaceAccountCatalog,
+  workspaceProvidersCatalog,
+  workspaceProviderDatabasesCatalog,
+  workspaceNeonBranchesCatalog,
   providerProvisioningCatalog,
   productAnalyticsCatalog,
 ] as const;

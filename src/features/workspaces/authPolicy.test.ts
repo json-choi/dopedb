@@ -6,7 +6,12 @@ import capability from "../../../src-tauri/capabilities/default.json";
 import tauriBenchmarkConfig from "../../../src-tauri/tauri.benchmark.conf.json";
 import tauriConfig from "../../../src-tauri/tauri.conf.json";
 import tauriDevConfig from "../../../src-tauri/tauri.dev.conf.json";
-import { completeDesktopAccessReturn, desktopWorkspaceAccessCallbackUrl, readDesktopAccessReturn, saveDesktopAccessReturn, type DesktopAccessReturnIntent } from "../../../workspace-cloud/lib/desktop-deep-link";
+import { desktopWorkspaceAccessCallbackUrl } from "../../../workspace-cloud/lib/desktop-deep-link";
+import {
+  onWorkspaceAdminRequested,
+  requestWorkspaceAdmin,
+  takePendingConnectionFocus,
+} from "../workspaceAdmin/navigationRequest";
 import {
   AGENT_SETUP_URLS,
   DOPEDB_RELEASES_URL,
@@ -244,21 +249,33 @@ describe("workspace auth lifecycle", () => {
     }
 
     expect(desktopWorkspaceAccessCallbackUrl).toBe("dopedb://workspace/access-complete");
-    const values = new Map<string, string>();
-    const storage = { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => { values.set(key, value); }, removeItem: (key: string) => { values.delete(key); } };
-    const intent: DesktopAccessReturnIntent = { userId: "member-a", workspaceId: "workspace-a", connectionId: "10000000-0000-4000-8000-000000000001", phase: "pending", createdAt: Date.now() };
-    saveDesktopAccessReturn(storage, intent);
-    expect(readDesktopAccessReturn(storage, intent.userId, intent.workspaceId)).toEqual(intent);
-    expect(completeDesktopAccessReturn(intent, "other")).toBeNull();
-    const completed = completeDesktopAccessReturn(intent, intent.connectionId)!;
-    expect(completed.phase).toBe("complete");
-    expect(completeDesktopAccessReturn(completed, intent.connectionId)).toBeNull();
-    saveDesktopAccessReturn(storage, { ...completed, phase: "opened" });
-    expect(readDesktopAccessReturn(storage, intent.userId, intent.workspaceId)?.phase).toBe("opened");
-    for (const [user, workspace, now] of [["other", intent.workspaceId, intent.createdAt], [intent.userId, "other", intent.createdAt], [intent.userId, intent.workspaceId, intent.createdAt + 31 * 60_000], [intent.userId, intent.workspaceId, intent.createdAt - 1]] as const) {
-      saveDesktopAccessReturn(storage, intent);
-      expect(readDesktopAccessReturn(storage, user, workspace, now)).toBeNull();
-      expect(values.size).toBe(0);
+    // Managed-connection recovery opens exactly Settings → Providers and hands the
+    // database focus over once; a stale or superseded focus never reaches the panel.
+    const previousWindow = (globalThis as { window?: unknown }).window;
+    (globalThis as { window?: unknown }).window = new EventTarget();
+    try {
+      const recoveryTarget = "10000000-0000-4000-8000-000000000001";
+      const requested: string[] = [];
+      const stopListening = onWorkspaceAdminRequested((section) => requested.push(section));
+      requestWorkspaceAdmin("workspace-providers", { connectionId: recoveryTarget });
+      expect(requested).toEqual(["workspace-providers"]);
+      expect(takePendingConnectionFocus()).toBe(recoveryTarget);
+      expect(takePendingConnectionFocus()).toBeNull();
+      requestWorkspaceAdmin("workspace-providers", { connectionId: recoveryTarget });
+      requestWorkspaceAdmin("workspace-members");
+      expect(takePendingConnectionFocus()).toBeNull();
+      requestWorkspaceAdmin("workspace-providers", { connectionId: recoveryTarget });
+      expect(takePendingConnectionFocus(Date.now() + 61_000)).toBeNull();
+      stopListening();
+      requestWorkspaceAdmin("workspace-access");
+      expect(requested).toEqual([
+        "workspace-providers",
+        "workspace-providers",
+        "workspace-members",
+        "workspace-providers",
+      ]);
+    } finally {
+      (globalThis as { window?: unknown }).window = previousWindow;
     }
     expect(tauriConfig.plugins["deep-link"].desktop.schemes).toEqual(["dopedb"]);
     expect(tauriDevConfig.plugins["deep-link"].desktop.schemes).toEqual(["dopedb-dev"]);

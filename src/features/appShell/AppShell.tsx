@@ -34,6 +34,7 @@ import { useAgentDock } from "./useAgentDock";
 import { useToolWindowLayout } from "./useToolWindowLayout";
 import { useAppShellWorkbenchController } from "./useAppShellWorkbenchController";
 import { useConnectionProjectNames } from "./useConnectionProjectNames";
+import { useWorkspaceAdminRequests } from "../workspaceAdmin/useWorkspaceAdminRequests";
 
 export default function App() {
   return (
@@ -97,6 +98,10 @@ function Shell() {
     catalogScope,
     connections.selected === null,
   );
+  useWorkspaceAdminRequests((section) => {
+    commands.route.openSettings(section);
+    setMobileExplorerOpen(false);
+  });
   const backgroundTasks = useBackgroundTasks({
     connections: connections.items,
     queryServiceStore: queryServices.store,

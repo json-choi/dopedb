@@ -40,7 +40,7 @@ rather than calling `invoke` for connection commands directly.
 | `useLocalListenerDiscovery.ts` | One-shot loopback listener discovery for the first-run Welcome; starts only when the caller runs it and returns suggestions that only the connection editor can turn into a saved profile. |
 | `useConnectionProfileState.ts` | Owns the editable profile draft, URL projection, connection options, and local command status shared by the editor's other controllers. |
 | `useConnectionSchemaController.ts` | Schema discovery and the persisted introspection scope (`SCHEMA_SCOPE_PARAMETER`) projected by the editor's Schemas tab. |
-| `useManagedConnectionRecovery.ts` | Owns the Desktop-to-Workspace-Web recovery command for one managed shared connection; per its header comment, the trusted console origin still comes from the native adapter, not this hook. |
+| `useManagedConnectionRecovery.ts` | Owns the repair command for one managed shared connection: opens Settings → Workspace → Providers focused on that database through `requestWorkspaceAdmin`, and runs the caller's refresh once when Settings reports that database repaired. |
 
 ## For AI Agents
 
@@ -82,7 +82,8 @@ rather than calling `invoke` for connection commands directly.
 ### Internal
 
 - `src/features/catalogExplorer/scopeFilter.ts` (`SCHEMA_SCOPE_PARAMETER`, `OBJECT_PATTERN_PARAMETER`, `isIntrospectionParameter`).
-- `src/features/workspaces/tauriAdapter.ts` (`deleteWorkspaceConnection`, `updateWorkspaceConnection`, `onWorkspaceAccessCallback`, `workspaceManagedConnectionConsoleUrl`), `src/features/workspaces/domain.ts`.
+- `src/features/workspaces/tauriAdapter.ts` (`deleteWorkspaceConnection`, `updateWorkspaceConnection`), `src/features/workspaces/domain.ts`.
+- `src/features/workspaceAdmin/navigationRequest.ts` (`requestWorkspaceAdmin`) and `src/features/workspaceAdmin/providers/gcp/repairSignal.ts` (`onManagedConnectionsRepaired`) for managed-connection recovery.
 - `src/features/providers/domain.ts` (`ProviderKind`).
 - `src/features/productAnalytics/{client,outcomes}.ts`.
 - `src/lib/{capabilities,queries}.ts`.

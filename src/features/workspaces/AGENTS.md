@@ -16,13 +16,13 @@ authoritative replacement and scope transition passes through it.
 ## Key Files
 | File | Description |
 |------|-------------|
-| `authPolicy.test.ts` | Cross-checks workspace auth/login-callback URLs and deep-link handling against `src-tauri/tauri*.conf.json`, `src-tauri/capabilities/default.json`, and `workspace-cloud`'s deep-link module, plus a product-analytics fixture. |
+| `authPolicy.test.ts` | Cross-checks workspace auth/login-callback URLs and deep-link handling against `src-tauri/tauri*.conf.json`, `src-tauri/capabilities/default.json`, and `workspace-cloud`'s deep-link constant, the one-time database focus of `workspaceAdmin/navigationRequest.ts`, plus a product-analytics fixture. |
 | `authPolicy.ts` | Workspace identity stays visually stable while the server silently revalidates the OS-keychain session; defines recheck/retry backoff timing (`WORKSPACE_AUTH_RECHECK_MS`, `WORKSPACE_AUTH_RETRY_MS`, exponential `workspaceAuthRetryDelay`). Resource APIs still authorize every sensitive action regardless of this cached visual state. |
 | `cache.ts` | Sole owner of authoritative workspace Query-cache replacement/invalidation and scope-transition cancellation. |
 | `choices.ts` | Pure account/workspace option projection for the switcher and secure-copy dialog; composite values keep duplicate cross-account memberships distinct. |
 | `domain.ts` | Branded `WorkspaceId`/`AccountId` and workspace wire/domain contracts. |
 | `loginRequest.ts` | Window-event bus (`requestWorkspaceLogin`/`onWorkspaceLoginRequested`) routing contextual sign-in actions through the one shell-owned login lifecycle. |
-| `navigation.ts` | Builds narrow Workspace Web destination URLs from the trusted console origin returned by the native adapter. |
+| `membershipRefreshRequest.ts` | Window-event bus (`requestWorkspaceMembershipRefresh`/`onWorkspaceMembershipRefreshRequested`) that lets workspace administration ask `WorkspaceAccount` to re-read memberships after a change to the member's own authority; resolves once that refresh settles. |
 | `queries.ts` | TanStack Query key/option definitions for workspace context and auth state. |
 | `selectionRequest.ts` | Window-event bus (`requestWorkspaceSelection`/`onWorkspaceSelectionRequested`) routing contextual recovery actions through the shell-owned workspace menu. |
 | `tauriAdapter.ts` | Sole frontend owner of workspace command names (Desktop login begin/complete/cancel, sign-out, list/get/set active workspace, copy/bind/update/delete workspace connection, write-policy). |
@@ -38,7 +38,7 @@ authoritative replacement and scope transition passes through it.
 |------|-------------|
 | `WorkspaceAccount.tsx` | Account-specific native loopback/PKCE login lifecycle and the unified local account menu; caches only public identity, session tokens stay behind Rust IPC. |
 | `WorkspaceConnectionDialog.tsx` | Secure workspace connection flow: publishes only a redacted local template, or binds a member-local credential to an already-synchronized template. |
-| `WorkspaceSwitcher.tsx` | Active workspace/project menu for the title toolbar; clears cached resource reads before the shell reloads the newly selected account scope. |
+| `WorkspaceSwitcher.tsx` | Active workspace/project menu for the title toolbar; clears cached resource reads before the shell reloads the newly selected account scope, and opens `New workspace` and, for owners and admins, `Manage workspace` in Settings. |
 
 ## For AI Agents
 
@@ -63,8 +63,8 @@ authoritative replacement and scope transition passes through it.
 - `authPolicy.test.ts` is part of the `pnpm test` smoke suite
   (`vitest run src/features/workspaces/authPolicy.test.ts`) and counts against the
   208-test budget; extend it rather than adding a new top-level test file. It
-  cross-reads Tauri config/capabilities files and `workspace-cloud` deep-link code,
-  so a change to either side's callback URL shape must keep this test passing.
+  cross-reads Tauri config/capabilities files and the `workspace-cloud` deep-link
+  constant, so a change to either side's callback URL shape must keep this test passing.
 
 ### Common Patterns
 - `WorkspaceSwitcher.tsx` and `WorkspaceConnectionDialog.tsx` both route mutations

@@ -9,7 +9,7 @@ import {
 import { authClient } from "../../../lib/auth-client";
 import { localizedWorkspacePath } from "../../../lib/workspace-locale";
 import { workspaceMessages } from "../../../lib/workspace-messages";
-import { localizedProviderMessage } from "../../../lib/workspace-provider-copy";
+import { localizedServerMessage } from "../../../lib/workspace-server-message";
 import { useWorkspaceLocale } from "../../components/WorkspaceLocale";
 
 export function SignInButton({ returnTo, autoStart = false }: { returnTo: string; autoStart?: boolean }) {
@@ -39,7 +39,7 @@ export function SignInButton({ returnTo, autoStart = false }: { returnTo: string
         inFlight.current = false;
         setPending(false);
         setError(result.error.message
-          ? localizedProviderMessage(result.error.message, locale, copy.errors.start)
+          ? localizedServerMessage(result.error.message, locale, copy.errors.start)
           : copy.errors.start);
       }
     } catch {

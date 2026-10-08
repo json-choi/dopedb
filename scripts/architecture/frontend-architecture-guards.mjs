@@ -613,10 +613,6 @@ export function checkFrontendArchitecture(harness) {
   }
 
   for (const [filePath, limit] of [
-    ["workspace-cloud/features/providerAccess/NeonBranchManager.tsx", 750],
-    ["workspace-cloud/features/providerAccess/useProviderAccountAccess.ts", 240],
-    ["workspace-cloud/features/providerAccess/useSharedDatabaseAccess.ts", 600],
-    ["workspace-cloud/features/providerAccess/transport.ts", 80],
     ["site/app/page.tsx", 200],
   ]) {
     const lines = lineCount(read(filePath));
@@ -624,100 +620,95 @@ export function checkFrontendArchitecture(harness) {
       failures.push(`${filePath}: presentation boundary has ${lines} lines; keep it below ${limit}`);
     }
   }
-  for (const filePath of [
-    "workspace-cloud/app/settings/CloudAccountPanel.tsx",
-    "workspace-cloud/app/settings/SharedDatabasePanel.tsx",
-    "workspace-cloud/features/providerAccess/NeonBranchManager.tsx",
-  ]) {
-    if (/\bfetch\s*\(/.test(read(filePath))) {
-      failures.push(`${filePath}: presentation must call its feature controller rather than fetch directly`);
-    }
-  }
 
-  // Account integration setup and shared database import are separate browser
-  // workflows. A connection-inventory outage must not take Cloud Accounts down,
-  // and GCP/account mutations must not flow back into the database controller.
-  const providerAccountControllerPath =
-    "workspace-cloud/features/providerAccess/useProviderAccountAccess.ts";
-  const sharedDatabaseControllerPath =
-    "workspace-cloud/features/providerAccess/useSharedDatabaseAccess.ts";
-  const cloudAccountPanelPath = "workspace-cloud/app/settings/CloudAccountPanel.tsx";
-  const sharedDatabasePanelPath = "workspace-cloud/app/settings/SharedDatabasePanel.tsx";
-  if (exists("workspace-cloud/features/providerAccess/useProviderAccess.ts")) {
-    failures.push(
-      "workspace-cloud/features/providerAccess/useProviderAccess.ts: account and database"
-        + " workflows must not share an umbrella controller",
-    );
-  }
-  for (const [filePath, requiredToken, forbiddenTokens] of [
-    [
-      cloudAccountPanelPath,
-      "useProviderAccountAccess(workspaceId, gcpSetupId)",
-      ["useSharedDatabaseAccess", "useProviderAccess("],
-    ],
-    [
-      sharedDatabasePanelPath,
-      "useSharedDatabaseAccess(workspaceId, initialIntegrationId, adding)",
-      ["useProviderAccountAccess", "useProviderAccess("],
-    ],
-  ]) {
-    const source = read(filePath);
-    if (!source.includes(requiredToken)) {
-      failures.push(`${filePath}: panel must retain its dedicated access controller (${requiredToken})`);
+  // Workspace provider administration lives in Desktop Settings → Providers. The
+  // Neon branch manager and the shared-database flow stay split into views,
+  // controllers and parsers instead of regrowing one module per workflow.
+  const providerAdminRoot = "src/features/workspaceAdmin/providers";
+  const providerAdminModules = (area) => walk(`${providerAdminRoot}/${area}`)
+    .map(relative)
+    .filter((filePath) => /\.(?:ts|tsx)$/.test(filePath));
+  for (const [area, limit] of [["neonBranches", 750], ["databases", 600]]) {
+    const modules = providerAdminModules(area);
+    if (modules.length === 0) {
+      failures.push(`${providerAdminRoot}/${area}: provider administration modules are missing`);
     }
-    for (const token of forbiddenTokens) {
-      if (source.includes(token)) {
-        failures.push(`${filePath}: panel crossed provider-access controller boundaries (${token})`);
+    for (const filePath of modules) {
+      const lines = lineCount(read(filePath));
+      if (lines > limit) {
+        failures.push(`${filePath}: provider administration module has ${lines} lines; keep it below ${limit}`);
       }
     }
   }
-  for (const [filePath, forbiddenTokens] of [
-    [providerAccountControllerPath, [
-      "/connections",
-      "fetchSharedConnectionsSnapshot",
-      "useNeonProviderBootstrap",
-      "deleteSharedConnection",
-      "importDiscoveredResource",
+  // Neon branch views render their controller's state; only the controller and its
+  // query module issue administration commands.
+  for (const filePath of providerAdminModules("neonBranches").filter((path) => path.endsWith(".tsx"))) {
+    if (/\b(?:runWorkspaceAdmin|workspaceAdminRequest)\s*\(/.test(read(filePath))) {
+      failures.push(`${filePath}: presentation must call its feature controller rather than run administration commands directly`);
+    }
+  }
+
+  // Provider accounts and shared databases are separate Desktop workflows. A
+  // managed-inventory or import failure must not take the accounts view down, and
+  // account authorization, connect or disconnect never flows into the database flow.
+  for (const [area, forbiddenTokens] of [
+    ["accounts", [
+      "../databases/",
+      "sharedConnectionsQuery",
+      '"deleteSharedConnection"',
+      '"claimProviderResource"',
+      '"importProviderResource"',
+      '"preflightNeonBootstrap"',
+      '"applyNeonBootstrap"',
     ]],
-    [sharedDatabaseControllerPath, [
-      "useGcpProviderSetup",
-      "gcpSetupId",
-      "beginConnect",
-      "function connect(",
-      "function disconnect(",
+    ["databases", [
+      "../gcp/",
+      "useProviderAuthorization",
+      "startWorkspaceProviderAuthorization",
+      '"connectNeon"',
+      '"connectVault"',
+      '"saveGcpIntegration"',
+      '"disconnectProviderIntegration"',
     ]],
   ]) {
-    const source = read(filePath);
-    if (!source.includes("useProviderAccessState()")) {
-      failures.push(`${filePath}: controller must own an independent provider-access reducer instance`);
-    }
-    for (const token of forbiddenTokens) {
-      if (source.includes(token)) {
-        failures.push(`${filePath}: controller regained another workflow responsibility (${token})`);
+    for (const filePath of providerAdminModules(area)) {
+      const source = read(filePath);
+      for (const token of forbiddenTokens) {
+        if (source.includes(token)) {
+          failures.push(`${filePath}: provider workflow crossed the account/database boundary (${token})`);
+        }
       }
     }
   }
 
-  const providerAccessTransportPath =
-    "workspace-cloud/features/providerAccess/transport.ts";
-  const providerAccessStatePath =
-    "workspace-cloud/features/providerAccess/state.ts";
-  const providerIntegrationListPath =
-    "workspace-cloud/features/providerAccess/ProviderIntegrationList.tsx";
-  const providerIntegrationRoutePath =
-    "workspace-cloud/app/api/v1/workspaces/[workspaceId]/provider-integrations/route.ts";
-  const providerAccessTransport = read(providerAccessTransportPath);
+  // The core provider read and the managed-connection inventory stay two requests,
+  // from the Desktop query options through the Rust route to the server GET.
+  const providerQueriesPath = `${providerAdminRoot}/queries.ts`;
+  const providerQueries = read(providerQueriesPath);
   for (const token of [
-    'includeManagedConnections ? "?includeManagedConnections=1" : ""',
-    "fetchProviderAccessSnapshot(workspaceId, false, signal)",
-    "fetchProviderAccessSnapshot(workspaceId, true, signal)",
+    "export function providerAccountsQuery(",
+    "includeManagedConnections: false,",
+    "export function providerInventoryQuery(",
+    "includeManagedConnections: true,",
   ]) {
-    if (!providerAccessTransport.includes(token)) {
+    if (!providerQueries.includes(token)) {
       failures.push(
-        `${providerAccessTransportPath}: provider core and managed-inventory requests lost their explicit split (${token})`,
+        `${providerQueriesPath}: provider core and managed-inventory requests lost their explicit split (${token})`,
       );
     }
   }
+  const workspaceAdminRoutesPath = "src-tauri/src/features/workspace_admin/domain/routes.rs";
+  if (
+    !read(workspaceAdminRoutesPath).includes(
+      'route.with_query("includeManagedConnections", "1".to_string())',
+    )
+  ) {
+    failures.push(
+      `${workspaceAdminRoutesPath}: managed connection inventory must stay an explicit opt-in query`,
+    );
+  }
+  const providerIntegrationRoutePath =
+    "workspace-cloud/app/api/v1/workspaces/[workspaceId]/provider-integrations/route.ts";
   const providerIntegrationRoute = read(providerIntegrationRoutePath);
   const providerIntegrationGet = providerIntegrationRoute.match(
     /export async function GET[\s\S]*?\n}\n\nexport async function POST/,
@@ -738,56 +729,36 @@ export function checkFrontendArchitecture(harness) {
       `${providerIntegrationRoutePath}: core provider GET must finish independently of managed connection inventory`,
     );
   }
-  const providerAccountController = read(providerAccountControllerPath);
-  const accountCoreLoaded = providerAccountController.indexOf(
-    "setIntegrations(data.integrations);",
-  );
-  const accountLoadingFinished = providerAccountController.indexOf(
-    "setLoading(false);",
-    accountCoreLoaded,
-  );
-  const accountInventoryEnrichment = providerAccountController.indexOf(
-    "await fetchProviderAccessWithManagedConnections(",
-    accountCoreLoaded,
-  );
-  if (
-    accountCoreLoaded < 0
-    || accountLoadingFinished < accountCoreLoaded
-    || accountInventoryEnrichment < accountLoadingFinished
-  ) {
-    failures.push(
-      `${providerAccountControllerPath}: account core must render before optional managed-inventory enrichment`,
-    );
-  }
-  const accountInventoryBlock = providerAccountController.slice(
-    accountInventoryEnrichment,
-    providerAccountController.indexOf("\n  }, [", accountInventoryEnrichment),
-  );
-  if (
-    !accountInventoryBlock.includes("inventory.response?.ok")
-    || accountInventoryBlock.includes("setError(")
-  ) {
-    failures.push(
-      `${providerAccountControllerPath}: managed-inventory enrichment must be optional and preserve account success`,
-    );
-  }
-  if (
-    !read(sharedDatabaseControllerPath).includes(
-      "fetchProviderAccessWithManagedConnections(workspaceId, signal)",
-    )
-  ) {
-    failures.push(
-      `${sharedDatabaseControllerPath}: shared databases require the managed connection inventory request`,
-    );
-  }
-  const providerAccessState = read(providerAccessStatePath);
-  const providerIntegrationList = read(providerIntegrationListPath);
-  for (const [source, filePath, token] of [
-    [providerAccessState, providerAccessStatePath, "managedConnectionsLoaded: false"],
-    [providerAccountController, providerAccountControllerPath, "managedConnectionsLoaded,"],
-    [providerIntegrationList, providerIntegrationListPath, "copy.databasesUnavailable"],
+  // The accounts view renders the core provider read first; the managed inventory
+  // only enriches it, and its failure never becomes an accounts failure.
+  const providerAccountsViewPath = `${providerAdminRoot}/accounts/ProviderAccountsView.tsx`;
+  const providerAccountsView = read(providerAccountsViewPath);
+  for (const token of [
+    "useQuery(providerAccountsQuery(scope))",
+    "enabled: accounts.isSuccess",
+    "const accountsError = accounts.isError ?",
+    "inventoryFailed={inventory.isError}",
   ]) {
-    if (!source.includes(token)) {
+    if (!providerAccountsView.includes(token)) {
+      failures.push(
+        `${providerAccountsViewPath}: account core must render before optional managed-inventory enrichment (${token})`,
+      );
+    }
+  }
+  const sharedDatabasesViewPath = `${providerAdminRoot}/databases/SharedDatabasesView.tsx`;
+  if (!read(sharedDatabasesViewPath).includes("useQuery(providerInventoryQuery(scope))")) {
+    failures.push(
+      `${sharedDatabasesViewPath}: shared databases require the managed connection inventory request`,
+    );
+  }
+  const providerAccountModelPath = `${providerAdminRoot}/accounts/accountModel.ts`;
+  const providerAccountRowPath = `${providerAdminRoot}/accounts/ProviderAccountRow.tsx`;
+  for (const [filePath, token] of [
+    [providerAccountModelPath, "if (!managed) return null;"],
+    [providerAccountRowPath, "managedDatabaseCount(managedConnections, integration.id)"],
+    [providerAccountRowPath, '"workspaceProviders.accountDatabasesUnavailable"'],
+  ]) {
+    if (!read(filePath).includes(token)) {
       failures.push(
         `${filePath}: unavailable managed-inventory state must not render as a zero count (${token})`,
       );

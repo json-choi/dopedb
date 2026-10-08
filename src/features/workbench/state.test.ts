@@ -152,7 +152,14 @@ import { queryResultPhase } from "../../lib/queryResultPhase";
 import { compareCatalogs, diffCounts } from "../../lib/schemaDiff";
 import { tableRef } from "../../lib/tableRef";
 import type { I18nKey } from "../../lib/i18n";
-import { workspaceManagedConnectionSettingsUrl } from "../workspaces/navigation";
+import { workspaceAdminScope } from "../workspaceAdmin/scope";
+import type { WorkspaceContextState } from "../workspaces/queries";
+import {
+  accountId as workspaceAccountId,
+  workspaceId as workspaceIdentity,
+  type WorkspaceAuthState,
+  type WorkspaceRole,
+} from "../workspaces/domain";
 
 function deferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
@@ -385,20 +392,61 @@ describe("workbench state ownership", () => {
       })).toBe(false);
     }
 
-    const managedConnectionId = connectionProfileId(
-      "55555555-5555-4555-8555-555555555555",
-    );
-    const recoveryUrl = new URL(workspaceManagedConnectionSettingsUrl(
-      "https://workspace.example.test/settings?workspace=11111111-1111-4111-8111-111111111111#workspace-11111111-1111-4111-8111-111111111111",
-      managedConnectionId,
-    ));
-    expect(recoveryUrl.searchParams.get("workspace")).toBe(
-      "11111111-1111-4111-8111-111111111111",
-    );
-    expect(recoveryUrl.searchParams.get("section")).toBe("providers");
-    expect(recoveryUrl.searchParams.get("connection")).toBe(managedConnectionId);
-    expect(recoveryUrl.searchParams.get("desktop")).toBe("1");
-    expect(recoveryUrl.hash).toBe(`#database-${managedConnectionId}`);
+    // Workspace administration exists only for the signed-in member of the active team
+    // workspace: members, access and providers for admins and owners, backups and
+    // deletion for owners, and nothing for a personal or disabled workspace.
+    const teamWorkspaceId = workspaceIdentity("11111111-1111-4111-8111-111111111111");
+    const adminAccount = workspaceAccountId("account-admin");
+    const adminAuth = (role: WorkspaceRole): WorkspaceAuthState => ({
+      authenticated: true,
+      user: { id: adminAccount, email: "member@example.test", displayName: "Member" },
+      accounts: [{
+        user: { id: adminAccount, email: "member@example.test", displayName: "Member" },
+        memberships: [{ workspaceId: teamWorkspaceId, role }],
+      }],
+      authorityGeneration: 4,
+    });
+    const teamContext: WorkspaceContextState = {
+      feature: { enabled: true },
+      workspaces: [],
+      active: {
+        id: teamWorkspaceId,
+        name: "Team",
+        kind: "team",
+        lifecycleState: "active",
+        createdAt: "2026-01-01T00:00:00Z",
+        updatedAt: "2026-01-01T00:00:00Z",
+      },
+    };
+    expect(workspaceAdminScope(adminAuth("owner"), teamContext)).toMatchObject({
+      accountId: adminAccount,
+      workspaceId: teamWorkspaceId,
+      canManage: true,
+      isOwner: true,
+    });
+    expect(workspaceAdminScope(adminAuth("admin"), teamContext)).toMatchObject({
+      canManage: true,
+      isOwner: false,
+    });
+    for (const role of ["editor", "analyst", "viewer"] as const) {
+      expect(workspaceAdminScope(adminAuth(role), teamContext)).toMatchObject({
+        canManage: false,
+        isOwner: false,
+      });
+    }
+    expect(workspaceAdminScope(adminAuth("owner"), {
+      ...teamContext,
+      active: { ...teamContext.active, kind: "personal" },
+    })).toBeNull();
+    expect(workspaceAdminScope(adminAuth("owner"), {
+      ...teamContext,
+      feature: { enabled: false },
+    })).toBeNull();
+    expect(workspaceAdminScope({
+      ...adminAuth("owner"),
+      accounts: [{ ...adminAuth("owner").accounts[0], memberships: [] }],
+    }, teamContext)).toBeNull();
+    expect(workspaceAdminScope({ ...adminAuth("owner"), user: null }, teamContext)).toBeNull();
     expect(isKnowledgeEnvironmentRevisionConflict({
       kind: "network",
       message: "workspace service returned 409 Conflict: Environment or connection changed",

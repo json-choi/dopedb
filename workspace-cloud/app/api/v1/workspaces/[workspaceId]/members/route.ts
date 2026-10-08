@@ -2,6 +2,7 @@
 // invitation acceptance and role changes; this route adds strict role choices and audit.
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { auth } from "../../../../../../lib/auth";
+import { betterAuthErrorResponse } from "../../../../../../lib/better-auth-errors";
 import { changeWorkspaceMemberRole } from "../../../../../../lib/workspace-member-store";
 import { db } from "../../../../../../lib/db";
 import { env } from "../../../../../../lib/env";
@@ -109,10 +110,17 @@ export async function POST(request: Request, context: RouteContext) {
   if (!/^\S+@\S+\.\S+$/.test(email) || email.length > 320) return jsonError("Invalid email", 400);
   if (!isAssignableRole(body?.role)) return jsonError("Invalid assignable workspace role", 400);
 
-  const created = await auth.api.createInvitation({
-    headers: request.headers,
-    body: { email, role: body.role, organizationId: workspaceId, resend: true },
-  });
+  let created: Awaited<ReturnType<typeof auth.api.createInvitation>>;
+  try {
+    created = await auth.api.createInvitation({
+      headers: request.headers,
+      body: { email, role: body.role, organizationId: workspaceId, resend: true },
+    });
+  } catch (error) {
+    // Membership limits, existing members and delivery failures are Better Auth
+    // decisions; report them as JSON instead of an opaque server error.
+    return betterAuthErrorResponse(error, "Invitation could not be created");
+  }
   await db.insert(workspaceAuditEvent).values({
     organizationId: workspaceId,
     actorUserId: authorization.session.user.id,
@@ -276,10 +284,14 @@ export async function DELETE(request: Request, context: RouteContext) {
       ),
     });
     if (!existing) return jsonError("Invitation not found", 404);
-    await auth.api.cancelInvitation({
-      headers: request.headers,
-      body: { invitationId: existing.id },
-    });
+    try {
+      await auth.api.cancelInvitation({
+        headers: request.headers,
+        body: { invitationId: existing.id },
+      });
+    } catch (error) {
+      return betterAuthErrorResponse(error, "Invitation could not be cancelled");
+    }
     await db.insert(workspaceAuditEvent).values({
       organizationId: workspaceId,
       actorUserId: authorization.session.user.id,
