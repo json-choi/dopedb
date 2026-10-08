@@ -28,7 +28,6 @@ import {
 } from "../../../../../../lib/revocation-gates";
 import {
   isPlanetScaleConfigured,
-  planetScaleAuthorizationUrl,
   PlanetScaleRequestError,
 } from "../../../../../../lib/providers/planetscale";
 import {
@@ -44,9 +43,7 @@ import {
 import {
   validateGcpCloudSqlCredential,
 } from "../../../../../../lib/providers/gcp-cloud-sql";
-import {
-  gcpCloudAuthorizationUrl,
-} from "../../../../../../lib/providers/gcp-cloud-oauth";
+import { providerAuthorizationStartUrl } from "../../../../../../lib/provider-authorization-handoff";
 import { ProviderRequestError } from "../../../../../../lib/providers/provider-types";
 import { consumeRateLimit } from "../../../../../../lib/rate-limit";
 import {
@@ -242,11 +239,9 @@ export async function POST(request: Request, context: RouteContext) {
         stateHash,
         expiresAt: new Date(Date.now() + 10 * 60 * 1_000),
       });
-      return privateJson({
-        authorizationUrl: body.provider === "planetScale"
-          ? planetScaleAuthorizationUrl(state)
-          : gcpCloudAuthorizationUrl(state),
-      });
+      // Desktop opens only this origin's start page, which confirms the browser
+      // account before redirecting to the provider and never consumes the state.
+      return privateJson({ startUrl: providerAuthorizationStartUrl(state) });
     }
 
     let credential:

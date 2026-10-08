@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-13 | Updated: 2026-09-13 -->
+<!-- Generated: 2026-09-13 | Updated: 2026-10-08 -->
 
 # workspace-cloud
 
@@ -15,7 +15,13 @@ encrypted provider-integration material. Per the product's shared-access axis
 (root `AGENTS.md`/`CLAUDE.md`), this app must never store a member-local
 database password, an ordinary query result row, or any other long-lived
 secret in a shared record; managed access is issued as short-lived,
-member-specific credentials at request time. A companion Cloudflare Worker in
+member-specific credentials at request time. Workspace administration (members,
+DB access, providers, backups and deletion, account sessions) is a DopeDB Desktop
+Settings surface (`../src/features/workspaceAdmin/`, ADR
+`../docs/adr/0009-desktop-workspace-administration.md`) that calls this app's
+`/api/v1` routes with the account's Bearer session; the browser keeps only sign-in,
+Desktop approval, invitation acceptance, provider authorization start/complete
+pages, public Articles, and a settings-moved notice. A companion Cloudflare Worker in
 `infrastructure/` (a separate deploy target) mints the short-lived Workload
 Identity Federation tokens this app and the analytics Worker use to reach GCP;
 it is not part of the Next.js build.
@@ -49,7 +55,7 @@ it is not part of the Next.js build.
 |-----------|---------|
 | `app/` | Next.js App Router tree: every `route.ts`/`page.tsx`, plus their screen-local components (see `app/AGENTS.md`). |
 | `lib/` | Server-only core: auth/session, workspace/connection/grant/lease domain logic, provider-integration adapters, Analysis Article storage, D1 schema, and the versioned HTTP contracts (see `lib/AGENTS.md`). |
-| `features/` | Client-side feature modules (`articleSharing/`, `connectionAccess/`, `providerAccess/`) composed by `app/settings/*` and article-handoff pages (see `features/AGENTS.md`). |
+| `features/` | Analysis Article sharing handoff (`articleSharing/`): server-rendered invitation/open pages, one client accept button, and the server-only invitation SQL, composed by the article-handoff pages and sharing routes (see `features/AGENTS.md`). |
 | `d1-migrations/` | The live, production Cloudflare D1 migration set the deployed Worker actually reads and writes (see `d1-migrations/AGENTS.md`). |
 | `infrastructure/` | Source for the separate `dopedb-workspace-identity` Cloudflare Worker (GCP Workload Identity Federation token issuance) (see `infrastructure/AGENTS.md`). |
 | `scripts/` | D1 migration/deploy tooling and the isolated D1 migration/contract harness runner (see `scripts/AGENTS.md`). |
@@ -61,7 +67,8 @@ it is not part of the Next.js build.
 - D1 (`lib/d1/schema/`, migrated via `d1-migrations/`) owns the current production schema.
 - `app/analyses/[slug]/PublicAnalysisArticle.tsx` imports `AnalysisArticleBody` directly from the sibling Tauri desktop app's `../../src/design-system/components/AnalysisArticleBody.tsx` (also referenced by a Tailwind `@source` scan in `app/globals.css`) — this is a real, intentional cross-project dependency for the shared Analysis Article rendering primitive, not an accident; keep it in sync with the desktop `src/design-system/` component if either changes.
 - Public Analysis Article publications are immutable HTML snapshots that never execute the saved query at read time (see `docs/adr/0007-analysis-article-bi-domain.md` at the repo root); `middleware.ts` additionally forces `cache-control: private, no-store` on `/analyses/*`, `/article-invitations/*`, and `/open-article/*` so a revoked publication or a private handoff link cannot be served from a shared cache.
-- Long-lived secrets are never written into a shared/workspace record; managed provider credentials are issued as short-lived, member-specific leases at request time (see `lib/AGENTS.md`, `features/AGENTS.md` `providerAccess/`, and the connection-lease routes in `app/AGENTS.md`).
+- Long-lived secrets are never written into a shared/workspace record; managed provider credentials are issued as short-lived, member-specific leases at request time (see `lib/AGENTS.md`, `lib/provider-integrations/AGENTS.md`, and the connection-lease routes in `app/AGENTS.md`).
+- Provider OAuth started from Desktop opens only this origin's `/auth/provider/start` page, which never consumes the state and continues to the provider only for the browser account that started it. The PlanetScale and GCP callbacks must keep checking the cookie session's user against the state's user; never relax them to trust the state alone (ADR 0009).
 - Follow the repo-root `AGENTS.md`/`CLAUDE.md` rule that connecting, reconnecting, importing, repairing, or issuing/revoking credentials must never rewrite a pre-existing application user, role membership, grant, default privilege, or ACL; this app's D1 schema only ever records DopeDB's own workspace-management state (see `d1-migrations/AGENTS.md`).
 - No provider API is ever called directly from application code outside the officially adapted flows this app owns (OAuth/API-key provider integrations for GCP Cloud SQL, Neon, PlanetScale, Vault); the AI-provider "official CLI only" rule in root `CLAUDE.md` is a separate boundary and does not apply to this sub-project's own database-provider integrations.
 
@@ -74,14 +81,15 @@ it is not part of the Next.js build.
 - Any UI change under `app/` or `features/` also needs a manual check per root `AGENTS.md`/`CLAUDE.md`; there is no route-level HTTP integration test suite for `app/api/**` in this repository.
 
 ### Common Patterns
-- Server-only data/session logic lives in `lib/`; `app/**/route.ts` and `page.tsx` files are thin HTTP/RSC boundaries over it, and client-only feature logic lives in `features/`. See `app/AGENTS.md` for the six-step mutating-route pattern (origin check → capability authorization → optimistic-revision check → scoped DB lookup → body validation → versioned/gated commit) that most `route.ts` files follow.
-- Wire contracts are hand-validated at both the sender and receiver (strict parsers rejecting unexpected shape) rather than trusted from a shared type import alone — see `features/AGENTS.md`'s note on `providerAccess/` parsers and `lib/AGENTS.md`'s contract files.
+- Server-only data/session logic lives in `lib/`; `app/**/route.ts` and `page.tsx` files are thin HTTP/RSC boundaries over it, and page-spanning feature modules (currently only `articleSharing/`) live in `features/`. See `app/AGENTS.md` for the six-step mutating-route pattern (origin check → capability authorization → optimistic-revision check → scoped DB lookup → body validation → versioned/gated commit) that most `route.ts` files follow.
+- Wire contracts are hand-validated at both the sender and receiver (strict parsers rejecting unexpected shape) rather than trusted from a shared type import alone — see the Desktop administration parsers under `../src/features/workspaceAdmin/` (e.g. `providers/neonBranches/branchInventory.ts`) and `lib/AGENTS.md`'s contract files.
 
 ## Dependencies
 
 ### Internal
-- `../src/design-system/components/AnalysisArticleBody.tsx` — the one verified cross-project import from the Tauri desktop app's frontend (see note above).
+- `../src/design-system/components/AnalysisArticleBody.tsx` (see note above), `WorkspaceIdentity.tsx` (identity shell primitives for the auth, invitation, handoff, settings-moved, and error pages), `DopeDBMarkGraphic.tsx` (`app/components/Brand.tsx`), and `../src/design-system/workspace.css` (imported by `app/globals.css`) — the cross-project imports from the Tauri desktop app's frontend.
 - `../docs/adr/0007-analysis-article-bi-domain.md` — the ADR this app's Analysis Article sharing/publication model implements.
+- `../docs/adr/0009-desktop-workspace-administration.md` and `../src/features/workspaceAdmin/` — the decision that moved workspace administration out of this app, and the Desktop Settings client of its administration routes.
 - `../scripts/deploy-workspace-cloudflare.mjs`, `../scripts/check-workspace-deployment.mjs`, `../scripts/test-provider-import-d1.sh` — repo-root automation that builds, deploys, and verifies this sub-project.
 - `product-analytics-cloudflare/` — the separate sub-project `wrangler.jsonc` declares a service binding to (`PRODUCT_ANALYTICS`), and whose own Worker consumes the identity Worker's `AnalyticsIdentity` entrypoint alongside this app's `WorkspaceIdentity` one.
 

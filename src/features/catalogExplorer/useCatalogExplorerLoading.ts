@@ -122,13 +122,11 @@ export function useCatalogExplorerLoading(
         : undefined,
       onRecoverManagedConnection:
         managedConnectionRecovery.canOpenSettings(connection)
-          ? () => void managedConnectionRecovery.openSettings(
+          ? () => managedConnectionRecovery.openSettings(
               connection,
               onManagedReturn,
             )
           : undefined,
-      managedConnectionRecoveryPending:
-        managedConnectionRecovery.openingConnectionId === connection.id,
     };
   }
 

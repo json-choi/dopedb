@@ -70,7 +70,7 @@ SQL 데이터 값, provider 로고, 그래프 범주에는 앱 chrome 팔레트�
 - Welcome: `cosmic-*`만 장식에 쓰고 실제 연결·권한·오류 control에는 core 역할을 쓴다.
 - Agent 코드 fence와 터미널 ANSI: `scoped-palettes.css`의 독립 palette를 유지한다.
   코드 fence의 배경과 기본 글자만 새 editor scale에 맞췄다.
-- Workspace Web: `workspace.css`의 밝은 인증·관리 색 계약을 유지한다. 별도
+- Workspace Web: `workspace.css`의 밝은 인증·안내 색 계약을 유지한다. 별도
   다크 모드를 만들 때 `background/surface/foreground/primary/status` 의미를
   재사용하며 Desktop의 hex를 그대로 복제하지 않는다.
 - 공개 사이트: `site/app/globals.css`의 별도 브랜드 palette를 유지한다. 앱의
@@ -135,7 +135,7 @@ SQL 데이터 값, provider 로고, 그래프 범주에는 앱 chrome 팔레트�
 | [`src/components/ToolbarMenu.tsx`](../src/components/ToolbarMenu.tsx) | popover·foreground·selection·ring |
 | [`src/components/WorkbenchDocumentStrip.tsx`](../src/components/WorkbenchDocumentStrip.tsx) | card·foreground·selection·ring |
 
-### Desktop 기능·화면 (125개)
+### Desktop 기능·화면 (169개)
 
 | 컴포넌트 파일 | 배정할 색 역할 |
 | --- | --- |
@@ -201,6 +201,45 @@ SQL 데이터 값, provider 로고, 그래프 범주에는 앱 chrome 팔레트�
 | [`src/features/settings/agentTools/AgentSkillSection.tsx`](../src/features/settings/agentTools/AgentSkillSection.tsx) | card·foreground·muted-foreground·info/warning/danger: Agent 상태 |
 | [`src/features/skills/SkillStartupGate.tsx`](../src/features/skills/SkillStartupGate.tsx) | popover·foreground·primary·ring |
 | [`src/features/terminals/PtySurface.tsx`](../src/features/terminals/PtySurface.tsx) | editor·foreground; ANSI는 terminal 전용 palette |
+| [`src/features/workspaceAdmin/access/ConflictReview.tsx`](../src/features/workspaceAdmin/access/ConflictReview.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
+| [`src/features/workspaceAdmin/access/ConnectionAccessPanel.tsx`](../src/features/workspaceAdmin/access/ConnectionAccessPanel.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
+| [`src/features/workspaceAdmin/access/DatabaseAccess.tsx`](../src/features/workspaceAdmin/access/DatabaseAccess.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
+| [`src/features/workspaceAdmin/access/MemberGrants.tsx`](../src/features/workspaceAdmin/access/MemberGrants.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
+| [`src/features/workspaceAdmin/access/TeamReadAccess.tsx`](../src/features/workspaceAdmin/access/TeamReadAccess.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
+| [`src/features/workspaceAdmin/account/AccountPanel.tsx`](../src/features/workspaceAdmin/account/AccountPanel.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
+| [`src/features/workspaceAdmin/account/AccountSessions.tsx`](../src/features/workspaceAdmin/account/AccountSessions.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
+| [`src/features/workspaceAdmin/account/DeletionPendingWorkspaces.tsx`](../src/features/workspaceAdmin/account/DeletionPendingWorkspaces.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
+| [`src/features/workspaceAdmin/lifecycle/BackupsSection.tsx`](../src/features/workspaceAdmin/lifecycle/BackupsSection.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
+| [`src/features/workspaceAdmin/lifecycle/DeletionScheduledView.tsx`](../src/features/workspaceAdmin/lifecycle/DeletionScheduledView.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
+| [`src/features/workspaceAdmin/lifecycle/EncryptionKeySection.tsx`](../src/features/workspaceAdmin/lifecycle/EncryptionKeySection.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
+| [`src/features/workspaceAdmin/lifecycle/LifecyclePanel.tsx`](../src/features/workspaceAdmin/lifecycle/LifecyclePanel.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
+| [`src/features/workspaceAdmin/lifecycle/LifecycleParts.tsx`](../src/features/workspaceAdmin/lifecycle/LifecycleParts.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
+| [`src/features/workspaceAdmin/lifecycle/WorkspaceDeletionSection.tsx`](../src/features/workspaceAdmin/lifecycle/WorkspaceDeletionSection.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
+| [`src/features/workspaceAdmin/members/InviteForm.tsx`](../src/features/workspaceAdmin/members/InviteForm.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
+| [`src/features/workspaceAdmin/members/MemberDirectoryRows.tsx`](../src/features/workspaceAdmin/members/MemberDirectoryRows.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
+| [`src/features/workspaceAdmin/members/MembersPanel.tsx`](../src/features/workspaceAdmin/members/MembersPanel.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
+| [`src/features/workspaceAdmin/providers/ProvidersPanel.tsx`](../src/features/workspaceAdmin/providers/ProvidersPanel.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
+| [`src/features/workspaceAdmin/providers/accounts/ExternalGuideButton.tsx`](../src/features/workspaceAdmin/providers/accounts/ExternalGuideButton.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
+| [`src/features/workspaceAdmin/providers/accounts/NeonConnectDialog.tsx`](../src/features/workspaceAdmin/providers/accounts/NeonConnectDialog.tsx) | popover·foreground·input·ring; 위험 동작만 danger, 검증 오류만 semantic 색 |
+| [`src/features/workspaceAdmin/providers/accounts/ProviderAccountRow.tsx`](../src/features/workspaceAdmin/providers/accounts/ProviderAccountRow.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
+| [`src/features/workspaceAdmin/providers/accounts/ProviderAccountsView.tsx`](../src/features/workspaceAdmin/providers/accounts/ProviderAccountsView.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
+| [`src/features/workspaceAdmin/providers/accounts/ProviderConnectDialogFrame.tsx`](../src/features/workspaceAdmin/providers/accounts/ProviderConnectDialogFrame.tsx) | popover·foreground·input·ring; 위험 동작만 danger, 검증 오류만 semantic 색 |
+| [`src/features/workspaceAdmin/providers/accounts/ProviderStatusNotice.tsx`](../src/features/workspaceAdmin/providers/accounts/ProviderStatusNotice.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
+| [`src/features/workspaceAdmin/providers/accounts/VaultConnectDialog.tsx`](../src/features/workspaceAdmin/providers/accounts/VaultConnectDialog.tsx) | popover·foreground·input·ring; 위험 동작만 danger, 검증 오류만 semantic 색 |
+| [`src/features/workspaceAdmin/providers/databases/AddManagedDatabase.tsx`](../src/features/workspaceAdmin/providers/databases/AddManagedDatabase.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
+| [`src/features/workspaceAdmin/providers/databases/ImportReviewStep.tsx`](../src/features/workspaceAdmin/providers/databases/ImportReviewStep.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
+| [`src/features/workspaceAdmin/providers/databases/NeonBootstrapPanel.tsx`](../src/features/workspaceAdmin/providers/databases/NeonBootstrapPanel.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
+| [`src/features/workspaceAdmin/providers/databases/ResourceTargetStep.tsx`](../src/features/workspaceAdmin/providers/databases/ResourceTargetStep.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
+| [`src/features/workspaceAdmin/providers/databases/SharedDatabaseRow.tsx`](../src/features/workspaceAdmin/providers/databases/SharedDatabaseRow.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
+| [`src/features/workspaceAdmin/providers/databases/SharedDatabasesView.tsx`](../src/features/workspaceAdmin/providers/databases/SharedDatabasesView.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
+| [`src/features/workspaceAdmin/providers/gcp/GcpSetupApprovals.tsx`](../src/features/workspaceAdmin/providers/gcp/GcpSetupApprovals.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
+| [`src/features/workspaceAdmin/providers/gcp/GcpSetupWizard.tsx`](../src/features/workspaceAdmin/providers/gcp/GcpSetupWizard.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
+| [`src/features/workspaceAdmin/providers/neonBranches/NeonBranchBrowser.tsx`](../src/features/workspaceAdmin/providers/neonBranches/NeonBranchBrowser.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
+| [`src/features/workspaceAdmin/providers/neonBranches/NeonBranchCreateForm.tsx`](../src/features/workspaceAdmin/providers/neonBranches/NeonBranchCreateForm.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
+| [`src/features/workspaceAdmin/providers/neonBranches/NeonBranchManager.tsx`](../src/features/workspaceAdmin/providers/neonBranches/NeonBranchManager.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
+| [`src/features/workspaceAdmin/providers/neonBranches/NeonOperationHistory.tsx`](../src/features/workspaceAdmin/providers/neonBranches/NeonOperationHistory.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
+| [`src/features/workspaceAdmin/providers/neonBranches/NeonSafeRunTracker.tsx`](../src/features/workspaceAdmin/providers/neonBranches/NeonSafeRunTracker.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
+| [`src/features/workspaceAdmin/workspaces/CreateWorkspaceDialog.tsx`](../src/features/workspaceAdmin/workspaces/CreateWorkspaceDialog.tsx) | popover·foreground·input·ring; 위험 동작만 danger, 검증 오류만 semantic 색 |
 | [`src/features/workspaces/DesktopLoginPage.tsx`](../src/features/workspaces/DesktopLoginPage.tsx) | background·card·foreground·muted-foreground·input·ring; 접근 상태만 semantic 색 |
 | [`src/features/workspaces/components/WorkspaceAccount.tsx`](../src/features/workspaces/components/WorkspaceAccount.tsx) | background·card·foreground·muted-foreground·input·ring; 접근 상태만 semantic 색 |
 | [`src/features/workspaces/components/WorkspaceConnectionDialog.tsx`](../src/features/workspaces/components/WorkspaceConnectionDialog.tsx) | background·card·foreground·muted-foreground·input·ring; 접근 상태만 semantic 색 |
@@ -243,6 +282,7 @@ SQL 데이터 값, provider 로고, 그래프 범주에는 앱 chrome 팔레트�
 | [`src/screens/Schema/index.tsx`](../src/screens/Schema/index.tsx) | background·card·foreground·muted-foreground·border-subtle |
 | [`src/screens/SchemaDiff/SchemaDiffResults.tsx`](../src/screens/SchemaDiff/SchemaDiffResults.tsx) | background·card·foreground·muted-foreground; 차이 표시는 기호+상태색 |
 | [`src/screens/SchemaDiff/index.tsx`](../src/screens/SchemaDiff/index.tsx) | background·card·foreground·muted-foreground; 차이 표시는 기호+상태색 |
+| [`src/screens/Settings/Account/index.tsx`](../src/screens/Settings/Account/index.tsx) | 직접 색 없음 또는 상위 Settings surface 상속 |
 | [`src/screens/Settings/Advanced/index.tsx`](../src/screens/Settings/Advanced/index.tsx) | background·card·foreground·muted-foreground·input·ring; 접근 상태만 semantic 색 |
 | [`src/screens/Settings/AgentTools/index.tsx`](../src/screens/Settings/AgentTools/index.tsx) | card·foreground·muted-foreground·info/warning/danger: Agent 상태 |
 | [`src/screens/Settings/Appearance.tsx`](../src/screens/Settings/Appearance.tsx) | background·card·foreground·muted-foreground·input·ring; 접근 상태만 semantic 색 |
@@ -253,6 +293,10 @@ SQL 데이터 값, provider 로고, 그래프 범주에는 앱 chrome 팔레트�
 | [`src/screens/Settings/Safety/MonitoringAccess.tsx`](../src/screens/Settings/Safety/MonitoringAccess.tsx) | background·card·foreground·muted-foreground·input·ring; 접근 상태만 semantic 색 |
 | [`src/screens/Settings/Safety/index.tsx`](../src/screens/Settings/Safety/index.tsx) | background·card·foreground·muted-foreground·input·ring; 접근 상태만 semantic 색 |
 | [`src/screens/Settings/Updates/index.tsx`](../src/screens/Settings/Updates/index.tsx) | background·card·foreground·muted-foreground·input·ring; 접근 상태만 semantic 색 |
+| [`src/screens/Settings/WorkspaceAccess/index.tsx`](../src/screens/Settings/WorkspaceAccess/index.tsx) | 직접 색 없음 또는 상위 Settings surface 상속 |
+| [`src/screens/Settings/WorkspaceLifecycle/index.tsx`](../src/screens/Settings/WorkspaceLifecycle/index.tsx) | 직접 색 없음 또는 상위 Settings surface 상속 |
+| [`src/screens/Settings/WorkspaceMembers/index.tsx`](../src/screens/Settings/WorkspaceMembers/index.tsx) | 직접 색 없음 또는 상위 Settings surface 상속 |
+| [`src/screens/Settings/WorkspaceProviders/index.tsx`](../src/screens/Settings/WorkspaceProviders/index.tsx) | 직접 색 없음 또는 상위 Settings surface 상속 |
 | [`src/screens/Settings/index.tsx`](../src/screens/Settings/index.tsx) | background·card·foreground·muted-foreground·input·ring; 접근 상태만 semantic 색 |
 | [`src/screens/Sql/SqlParameterDialog.tsx`](../src/screens/Sql/SqlParameterDialog.tsx) | editor·foreground·muted-foreground·ring; 쓰기/오류는 warning/danger |
 | [`src/screens/Sql/index.tsx`](../src/screens/Sql/index.tsx) | editor·foreground·muted-foreground·ring; 쓰기/오류는 warning/danger |
@@ -265,7 +309,7 @@ SQL 데이터 값, provider 로고, 그래프 범주에는 앱 chrome 팔레트�
 | [`src/screens/Tables/TableToolbar.tsx`](../src/screens/Tables/TableToolbar.tsx) | editor·foreground·muted-foreground·border-subtle·selection·ring; 오류만 danger |
 | [`src/screens/Tables/index.tsx`](../src/screens/Tables/index.tsx) | editor·foreground·muted-foreground·border-subtle·selection·ring; 오류만 danger |
 
-### Workspace Web (42개)
+### Workspace Web (26개)
 
 | 컴포넌트 파일 | 배정할 색 역할 |
 | --- | --- |
@@ -278,10 +322,11 @@ SQL 데이터 값, provider 로고, 그래프 범주에는 앱 chrome 팔레트�
 | [`workspace-cloud/app/auth/desktop/DesktopApproval.tsx`](../workspace-cloud/app/auth/desktop/DesktopApproval.tsx) | Workspace 인증 `background`·`surface`·`text`·`accent` |
 | [`workspace-cloud/app/auth/desktop/page.tsx`](../workspace-cloud/app/auth/desktop/page.tsx) | 직접 색 없음 또는 상위 Workspace surface 상속 |
 | [`workspace-cloud/app/auth/github/complete/page.tsx`](../workspace-cloud/app/auth/github/complete/page.tsx) | 직접 색 없음 또는 상위 Workspace surface 상속 |
+| [`workspace-cloud/app/auth/provider/complete/page.tsx`](../workspace-cloud/app/auth/provider/complete/page.tsx) | Workspace 인증 `background`·`surface`·`text`·`accent`; 실패만 danger |
+| [`workspace-cloud/app/auth/provider/start/page.tsx`](../workspace-cloud/app/auth/provider/start/page.tsx) | Workspace 인증 `background`·`surface`·`text`·`accent`; 실패만 danger |
 | [`workspace-cloud/app/auth/sign-in/SignInButton.tsx`](../workspace-cloud/app/auth/sign-in/SignInButton.tsx) | Workspace `surface`·`text`·`accent`·`ring`: 버튼/입력 |
 | [`workspace-cloud/app/auth/sign-in/page.tsx`](../workspace-cloud/app/auth/sign-in/page.tsx) | 직접 색 없음 또는 상위 Workspace surface 상속 |
 | [`workspace-cloud/app/components/Brand.tsx`](../workspace-cloud/app/components/Brand.tsx) | Workspace 브랜드 자산 + `text`; Desktop palette 직접 사용 없음 |
-| [`workspace-cloud/app/components/Console.tsx`](../workspace-cloud/app/components/Console.tsx) | Workspace `surface`·`text`·`danger`/`accent`: 안내/복구 |
 | [`workspace-cloud/app/components/Controls.tsx`](../workspace-cloud/app/components/Controls.tsx) | Workspace `surface`·`text`·`accent`·`ring`: 버튼/입력 |
 | [`workspace-cloud/app/components/LocaleSwitcher.tsx`](../workspace-cloud/app/components/LocaleSwitcher.tsx) | Workspace `background`·`surface`·`text`·`accent`; 위험 동작만 danger |
 | [`workspace-cloud/app/components/WebAnalyticsProvider.tsx`](../workspace-cloud/app/components/WebAnalyticsProvider.tsx) | 직접 색 없음 또는 상위 Workspace surface 상속 |
@@ -291,26 +336,9 @@ SQL 데이터 값, provider 로고, 그래프 범주에는 앱 chrome 팔레트�
 | [`workspace-cloud/app/not-found.tsx`](../workspace-cloud/app/not-found.tsx) | Workspace `surface`·`text`·`danger`/`accent`: 안내/복구 |
 | [`workspace-cloud/app/open-article/[workspaceId]/[articleId]/page.tsx`](../workspace-cloud/app/open-article/[workspaceId]/[articleId]/page.tsx) | 직접 색 없음 또는 상위 Workspace surface 상속 |
 | [`workspace-cloud/app/page.tsx`](../workspace-cloud/app/page.tsx) | 직접 색 없음 또는 상위 Workspace surface 상속 |
-| [`workspace-cloud/app/settings/AccountManagementPanel.tsx`](../workspace-cloud/app/settings/AccountManagementPanel.tsx) | Workspace `background`·`surface`·`text`·`accent`; 위험 동작만 danger |
-| [`workspace-cloud/app/settings/AccountSwitcher.tsx`](../workspace-cloud/app/settings/AccountSwitcher.tsx) | Workspace `background`·`surface`·`text`·`accent`; 위험 동작만 danger |
-| [`workspace-cloud/app/settings/ActiveSessions.tsx`](../workspace-cloud/app/settings/ActiveSessions.tsx) | Workspace `background`·`surface`·`text`·`accent`; 위험 동작만 danger |
-| [`workspace-cloud/app/settings/CloudAccountPanel.tsx`](../workspace-cloud/app/settings/CloudAccountPanel.tsx) | Workspace `surface`·`text`·`accent`; 공급자 상태만 semantic |
-| [`workspace-cloud/app/settings/ConnectionAccessPanel.tsx`](../workspace-cloud/app/settings/ConnectionAccessPanel.tsx) | Workspace `surface`·`text`·`muted-foreground`·`accent`; 권한 경고만 semantic |
-| [`workspace-cloud/app/settings/CreateWorkspaceForm.tsx`](../workspace-cloud/app/settings/CreateWorkspaceForm.tsx) | Workspace `background`·`surface`·`text`·`accent`; 위험 동작만 danger |
-| [`workspace-cloud/app/settings/SettingsNavigation.tsx`](../workspace-cloud/app/settings/SettingsNavigation.tsx) | Workspace `background`·`surface`·`text`·`accent`; 위험 동작만 danger |
-| [`workspace-cloud/app/settings/SharedDatabasePanel.tsx`](../workspace-cloud/app/settings/SharedDatabasePanel.tsx) | Workspace `surface`·`text`·`accent`; 공급자 상태만 semantic |
-| [`workspace-cloud/app/settings/WorkspaceAccessPanel.tsx`](../workspace-cloud/app/settings/WorkspaceAccessPanel.tsx) | Workspace `surface`·`text`·`muted-foreground`·`accent`; 권한 경고만 semantic |
-| [`workspace-cloud/app/settings/WorkspaceLifecyclePanel.tsx`](../workspace-cloud/app/settings/WorkspaceLifecyclePanel.tsx) | Workspace `background`·`surface`·`text`·`accent`; 위험 동작만 danger |
-| [`workspace-cloud/app/settings/WorkspaceManagementPanel.tsx`](../workspace-cloud/app/settings/WorkspaceManagementPanel.tsx) | Workspace `background`·`surface`·`text`·`accent`; 위험 동작만 danger |
-| [`workspace-cloud/app/settings/page.tsx`](../workspace-cloud/app/settings/page.tsx) | 직접 색 없음 또는 상위 Workspace surface 상속 |
+| [`workspace-cloud/app/settings/page.tsx`](../workspace-cloud/app/settings/page.tsx) | Workspace 인증 `background`·`surface`·`text`·`accent`: 관리 이전 안내 |
 | [`workspace-cloud/features/articleSharing/HandoffPage.tsx`](../workspace-cloud/features/articleSharing/HandoffPage.tsx) | Workspace `background`·`surface`·`text`·`accent`; 공개 본문은 문서 역할 |
 | [`workspace-cloud/features/articleSharing/InvitationAcceptButton.tsx`](../workspace-cloud/features/articleSharing/InvitationAcceptButton.tsx) | Workspace `surface`·`text`·`accent`·`ring`: 버튼/입력 |
-| [`workspace-cloud/features/connectionAccess/DesktopAccessReturn.tsx`](../workspace-cloud/features/connectionAccess/DesktopAccessReturn.tsx) | Workspace `surface`·`text`·`muted-foreground`·`accent`; 권한 경고만 semantic |
-| [`workspace-cloud/features/connectionAccess/TeamReadAccess.tsx`](../workspace-cloud/features/connectionAccess/TeamReadAccess.tsx) | Workspace `surface`·`text`·`muted-foreground`·`accent`; 권한 경고만 semantic |
-| [`workspace-cloud/features/providerAccess/GcpCloudSetup.tsx`](../workspace-cloud/features/providerAccess/GcpCloudSetup.tsx) | Workspace `surface`·`text`·`accent`; 공급자 상태만 semantic |
-| [`workspace-cloud/features/providerAccess/NeonBranchManager.tsx`](../workspace-cloud/features/providerAccess/NeonBranchManager.tsx) | Workspace `surface`·`text`·`accent`; 공급자 상태만 semantic |
-| [`workspace-cloud/features/providerAccess/ProviderIntegrationList.tsx`](../workspace-cloud/features/providerAccess/ProviderIntegrationList.tsx) | Workspace `surface`·`text`·`accent`; 공급자 상태만 semantic |
-| [`workspace-cloud/features/providerAccess/ProviderResourcePicker.tsx`](../workspace-cloud/features/providerAccess/ProviderResourcePicker.tsx) | Workspace `surface`·`text`·`accent`; 공급자 상태만 semantic |
 
 ### 공개 사이트 (15개)
 

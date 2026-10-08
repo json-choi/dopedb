@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-13 | Updated: 2026-09-13 -->
+<!-- Generated: 2026-09-13 | Updated: 2026-10-08 -->
 
 # workspace-cloud/app
 
@@ -9,9 +9,15 @@ Next.js 16 App Router tree for the DopeDB Workspace Web control-plane app: every
 screen-local client components each page composes. This directory owns workspace
 identity, connection templates, member/connection grants, provider integrations
 (PlanetScale/Neon/GCP Cloud SQL/Vault), Analysis Article sharing, and Better Auth
-session/Desktop-approval screens. It must never: return raw database query result rows
-(Analysis Article runs return only receipts/metadata; rows stay on the Desktop
-runner), execute or expose a saved query from a public `/analyses/[slug]` page
+session/Desktop-approval screens. Workspace administration has no browser screen:
+Desktop Settings (`../../src/features/workspaceAdmin/`, ADR
+`../../docs/adr/0009-desktop-workspace-administration.md`) calls these `/api/v1`
+routes with the account's Bearer session, and the browser keeps only sign-in,
+Desktop approval, invitation acceptance, the provider authorization start/complete
+pages, public Articles, and the settings-moved notice. It must never: return raw
+database query result rows (Analysis Article runs return only receipts/metadata;
+rows stay on the Desktop runner), execute or expose a saved query from a public
+`/analyses/[slug]` page
 (publications are immutable pre-rendered HTML snapshots), issue a managed
 credential to anything but a Desktop bearer request, or let a shared/public
 record carry a long-lived secret. Nearly every mutating route also enforces one
@@ -24,11 +30,13 @@ change.
 ### Auth
 | Route | File | Methods | Purpose |
 |-------|------|---------|---------|
-| `/api/auth/[...all]` | `app/api/auth/[...all]/route.ts` | GET, POST | Better Auth catch-all handler (`toNextJsHandler`); GET first checks whether the `callback/google` path is actually a GCP Cloud Setup OAuth callback and special-cases it before delegating to Better Auth |
+| `/api/auth/[...all]` | `app/api/auth/[...all]/route.ts` | GET, POST | Better Auth catch-all handler (`toNextJsHandler`); GET first checks whether the `callback/google` path is actually a GCP Cloud Setup OAuth callback and special-cases it (`lib/providers/gcp-cloud-oauth-callback.ts`, which ends on `/auth/provider/complete` without putting the setup id in the URL) before delegating to Better Auth |
 | `/accept-invitation/[invitationId]` | `app/accept-invitation/[invitationId]/page.tsx` | page (RSC) | Validates the UUID, requires a session (redirects to `/auth/sign-in?returnTo=...` otherwise), renders `AcceptInvitation` inside the shared Identity shell |
 | `/accept-invitation/[invitationId]/AcceptInvitation.tsx` | same dir | page (client) | Calls `authClient.organization.acceptInvitation`; also lets the user switch to another already-signed-in local account via `multiSession.setActive` before accepting |
 | `/article-invitations/[invitationId]` | `app/article-invitations/[invitationId]/page.tsx` | page (RSC) | `force-dynamic`, `noindex`; validates UUID, renders `HandoffPage` (from `features/articleSharing`) for accepting an Analysis Article sharing invitation |
 | `/auth/github/complete` | `app/auth/github/complete/page.tsx` | page (RSC) | Static success/failure confirmation screen for the GitHub App installation OAuth flow, driven by `?status=connected|failed` |
+| `/auth/provider/start` | `app/auth/provider/start/page.tsx` | page (RSC) | `force-dynamic`; the only page Desktop opens for a PlanetScale/GCP Cloud SQL authorization. Reads the unexpired `?state=` without consuming it, then redirects a signed-out browser to `/auth/sign-in?returnTo=...`, shows an account-mismatch card (with a sign-in link) when the cookie session is not the state's user, shows an expired-link card for an unknown state, or redirects to the provider |
+| `/auth/provider/complete` | `app/auth/provider/complete/page.tsx` | page (RSC) | Token-free result card for `?provider=planetScale|gcpCloudSql&status=connected|authorised|failed` with one Open DopeDB (`dopedb://workspace/access-complete`) link; Desktop re-reads integrations and continues any setup itself |
 | `/auth/sign-in` | `app/auth/sign-in/page.tsx` | page (RSC) | Marketing-style sign-in screen; resolves a safe `returnTo`, shows OAuth-error copy, renders `SignInButton` |
 | `/auth/sign-in/SignInButton.tsx` | same dir | page (client) | Calls `authClient.signIn.social({ provider: "google", callbackURL: returnTo })` |
 
@@ -42,16 +50,18 @@ change.
 ### v1 top-level
 | Route | File | Methods | Purpose |
 |-------|------|---------|---------|
+| `/api/v1/account/sessions` | `app/api/v1/account/sessions/route.ts` | GET | Token-free list (newest first, at most 100) of the signed-in account's unexpired sessions: id, `current` flag, `browser`/`desktop` client kind, timestamps, and IP address |
+| `/api/v1/account/sessions/[sessionId]` | `app/api/v1/account/sessions/[sessionId]/route.ts` | DELETE | Ends one other session of the same account through Better Auth `revokeSession` (the token stays server-side); refuses the caller's own session with 409 `current_session` (sign out instead) and returns 404 for a session the account does not own |
 | `/api/v1/article-invitations/[invitationId]` | `app/api/v1/article-invitations/[invitationId]/route.ts` | POST | Accepts one Analysis Article sharing invitation for the authenticated user (`acceptArticleInvitation`) |
 | `/api/v1/knowledge/github/callback` | `app/api/v1/knowledge/github/callback/route.ts` | GET | GitHub App installation/user-authorization OAuth callback: validates opaque setup state, rechecks workspace `manage` authority, inspects/validates the installation, then upserts `knowledge_github_installation`; redirects to `/auth/github/complete` |
 | `/api/v1/knowledge/github/webhook` | `app/api/v1/knowledge/github/webhook/route.ts` | POST | Verifies the GitHub HMAC signature on a size-bounded body, then updates `knowledge_source` sync state for `push`, `installation`, `installation_repositories`, and `repository` events |
 | `/api/v1/personal/knowledge/scope` | `app/api/v1/personal/knowledge/scope/route.ts` | POST | Provisions/updates the signed-in user's private Personal Knowledge scope (Projects/Environments) from a bounded, strictly-shaped payload |
 | `/api/v1/product-analytics/events` | `app/api/v1/product-analytics/events/route.ts` | POST | Anonymous first-party analytics ingestion: content-type/size checks, ingress + per-installation rate limits, then relays the envelope; distinguishes retryable (429/503) from terminal (400/415/422) outcomes |
-| `/api/v1/providers/planet-scale/callback` | `app/api/v1/providers/planet-scale/callback/route.ts` | GET | PlanetScale OAuth callback: consumes single-use state, re-authorizes the workspace, exchanges the code, verifies managed scopes, and persists/reconnects the provider integration (revoking prior leases on reconnect) |
+| `/api/v1/providers/planet-scale/callback` | `app/api/v1/providers/planet-scale/callback/route.ts` | GET | PlanetScale OAuth callback: requires the cookie session, consumes single-use state, re-authorizes the workspace, exchanges the code, verifies managed scopes, and persists/reconnects the provider integration (revoking prior leases on reconnect); every outcome, including a missing session, redirects to the token-free `/auth/provider/complete` page |
 | `/api/v1/public/analyses/[slug]` | `app/api/v1/public/analyses/[slug]/route.ts` | GET | Rate-limited, secret-free JSON read of one live (non-revoked) public Analysis Article publication; strict CSP/robots headers |
 | `/api/v1/session` | `app/api/v1/session/route.ts` | GET | Returns the current authenticated user/session identity, or 401 |
-| `/api/v1/workspaces` | `app/api/v1/workspaces/route.ts` | GET, POST | GET lists the caller's active-lifecycle workspaces (excluding personal-knowledge orgs), auto-accepting pending invitations first; POST creates a new organization/workspace with a generated slug |
-| `/` | `app/page.tsx` | page (RSC) | Redirects to the localized `/settings` |
+| `/api/v1/workspaces` | `app/api/v1/workspaces/route.ts` | GET, POST | GET lists the caller's active-lifecycle workspaces (excluding personal-knowledge orgs), auto-accepting pending invitations first, plus `deletionPending`: workspaces in scheduled deletion that the matching Owner may still inspect or cancel (id, name, request and purge times); POST validates a 1–120 character single-line name, creates a new organization/workspace with a generated slug, and returns Better Auth refusals as JSON errors |
+| `/` | `app/page.tsx` | page (RSC) | Redirects to the localized `/settings` (the settings-moved notice) |
 | `/robots.ts` | `app/robots.ts` | (metadata route) | Allows `/`, disallows `/api/`, sets `host` to `app.dopedb.dev` |
 
 ### v1 / workspaces / {workspaceId} / analyses
@@ -113,13 +123,14 @@ change.
 ### v1 / workspaces / {workspaceId} / provider-integrations
 | Route | File | Methods | Purpose |
 |-------|------|---------|---------|
-| `.../provider-integrations` | `.../provider-integrations/route.ts` | GET, POST | GET lists active/reconnect-required integrations plus the static provider catalog (optionally including managed connections); POST starts OAuth (PlanetScale/GCP Cloud SQL) or validates+persists a directly-supplied credential (Neon/Vault, or GCP via a sealed bootstrap ticket) |
+| `.../provider-integrations` | `.../provider-integrations/route.ts` | GET, POST | GET lists active/reconnect-required integrations plus the static provider catalog (optionally including managed connections); POST starts OAuth (PlanetScale/GCP Cloud SQL, optionally pinned to a GCP `repairIntegrationId`) by storing a hashed 10-minute state and returning `{ startUrl }` for this origin's `/auth/provider/start?state=…` page, or validates+persists a directly-supplied credential (Neon/Vault, or GCP via a sealed bootstrap ticket) |
 | `.../provider-integrations/[integrationId]` | `.../[integrationId]/route.ts` | DELETE | Multi-phase, resumable disconnect: revoke active leases → revoke the provider OAuth grant → scrub the stored credential → finalize; each phase is durably recorded so a crash mid-disconnect can resume |
 | `.../provider-integrations/[integrationId]/imports` | `.../[integrationId]/imports/route.ts` | POST | Imports a new managed connection from a single-use, session/member-bound discovery receipt (idempotency-keyed) |
 | `.../provider-integrations/[integrationId]/neon-bootstrap` | `.../[integrationId]/neon-bootstrap/route.ts` | POST | `action: "preflight"` inspects a Neon database and returns a signed, TTL-bound bootstrap plan; `action: "apply"` re-validates and executes that exact plan, then issues a discovery receipt |
 | `.../provider-integrations/[integrationId]/neon-branches/operations` | `.../neon-branches/operations/route.ts` | GET, POST | GET lists durable Neon branch operations for the integration; POST runs a branch operation command (thin HTTP boundary over `neon-branch-operation-application`) |
 | `.../provider-integrations/[integrationId]/neon-branches` | `.../[integrationId]/neon-branches/route.ts` | GET | Read-only Neon branch tree for one project: live provider branch inventory joined with workspace connection references, active lease counts, and deletion-blocker codes |
 | `.../provider-integrations/[integrationId]/resources` | `.../[integrationId]/resources/route.ts` | GET, POST | GET discovers provider resources for a selection (org/project/database/branch/instance/broker/target) and seals a per-item selection proof; POST re-runs that exact discovery and exchanges a still-valid selection proof for a single-use import receipt |
+| `.../provider-integrations/gcp-setup` | `.../provider-integrations/gcp-setup/route.ts` | GET | `manage` only; lists up to 10 of the caller's own unconsumed, unexpired GCP Cloud SQL setup sessions (id, Google account label, `expiresAt`, `createdAt`; never the sealed credential) so Desktop can continue a setup authorized in the browser |
 | `.../provider-integrations/gcp-setup/[setupId]` | `.../gcp-setup/[setupId]/route.ts` | GET, POST | GET queries session-bound GCP OAuth discovery (`projects`/`instances`/`permissions`); POST bootstraps a Cloud SQL instance — provisions least-privilege principals, optionally grants/revokes temporary IAM, and returns a sealed bootstrap ticket |
 | `.../provider-integrations/local-authority` | `.../local-authority/route.ts` | GET | Read-only, redacted authority projection for member-local (non-managed) provider credentials |
 
@@ -127,7 +138,7 @@ change.
 | Route | File | Methods | Purpose |
 |-------|------|---------|---------|
 | `.../lifecycle` | `.../[workspaceId]/lifecycle/route.ts` | GET, POST | GET returns deletion/lifecycle status and blockers; POST performs `schedule_deletion` (exact-name confirmed, idempotency-keyed, schedules the purge cron) or `cancel_deletion` |
-| `.../members` | `.../[workspaceId]/members/route.ts` | GET, POST, PATCH, DELETE | GET lists members + pending invitations; POST creates an invitation (`auth.api.createInvitation`); PATCH changes a member's role (revocation-gated, revokes active leases, blocks if the member owns undelegated Analysis Articles); DELETE removes a member or cancels a pending invitation |
+| `.../members` | `.../[workspaceId]/members/route.ts` | GET, POST, PATCH, DELETE | GET lists members + pending invitations; POST creates an invitation (`auth.api.createInvitation`); PATCH changes a member's role (revocation-gated, revokes active leases, blocks if the member owns undelegated Analysis Articles); DELETE removes a member or cancels a pending invitation. Better Auth invitation create/cancel refusals (membership limit, existing member, delivery) return JSON errors via `betterAuthErrorResponse` |
 | `.../sync` | `.../[workspaceId]/sync/route.ts` | GET | Ordered, payload-free change cursor: given a client cursor it returns the new head plus which secret-free collections (`connections`, `analyses`) need reconciliation and whether either was tombstoned; a stale/too-far-behind cursor triggers a full `reset` |
 
 ### Public / misc pages
@@ -137,7 +148,7 @@ change.
 | `/analyses/[slug]/PublicAnalysisArticle.tsx` | same dir | page (RSC) | Renders the sanitized HTML body plus localized title and explicit UTC publication timestamp for a public publication |
 | `not-found.tsx` / `error.tsx` | app root | RSC / client boundary | Uses one localized, non-identifying recovery surface for unavailable or failed shared links; never reveals whether an Article, invitation, workspace, or saved query exists |
 | `/open-article/[workspaceId]/[articleId]` | `app/open-article/[workspaceId]/[articleId]/page.tsx` | page (RSC) | `force-dynamic`, `noindex`; validates both UUIDs, renders `HandoffPage` scoped to the workspace+article for opening it in Desktop |
-| `/settings` | `app/settings/page.tsx` | page (RSC) | `force-dynamic`; the full Settings screen — see Settings section below |
+| `/settings` | `app/settings/page.tsx` | page (RSC) | Settings-moved notice with an Open DopeDB deep link and an install link; reads no session or workspace state — see Settings section below |
 
 ## Layout, misc top-level files
 - `app/layout.tsx` — root server layout: resolves locale, sets metadata (noindex), loads Pretendard + IBM Plex Mono fonts, wraps children in `WorkspaceLocaleProvider` and `WorkspaceWebAnalytics`.
@@ -146,35 +157,25 @@ change.
 | File | Description |
 |------|-------------|
 | `Brand.tsx` | Client. Logo + "DopeDB Workspace" wordmark link; points to the marketing site or `/settings` depending on `destination` |
-| `Console.tsx` | Server. `ConsoleNotice` — inline success/danger status banner used by settings notices |
-| `Controls.tsx` | Server. Shared button/link/input/select/field primitives (`ControlButton`, `ControlLink`, `ControlField`, `ControlInput`, `ControlSelect`) used across `app/` screens |
-| `Identity.tsx` | Server. Shared auth-shell/card/typography/button primitives (`IdentitySingleShell`, `IdentityCard`, `IdentityTitle`, `IdentityPrimaryButton`, etc.) used by accept-invitation and `/auth/*` pages |
+| `Controls.tsx` | No directive (server- and client-safe). Only `ControlButton`, the compact command button (`tone` `neutral`/`primary`/`danger`, `size` `small`/`field`); used by the analytics consent controls in `WebAnalyticsProvider.tsx` |
 | `LocaleSwitcher.tsx` | Client. EN/KO toggle link that preserves the current path and query string |
 | `WebAnalyticsProvider.tsx` | Client. Consent-gated analytics provider: checks eligibility (HTTPS, not localhost, no DNT/GPC), reads/writes a `localStorage` consent flag, lazy-loads the Clarity plugin only after consent, and stops tracking before client-side navigation |
 | `WorkspaceLocale.tsx` | Client. React context provider (`WorkspaceLocaleProvider`) and hook (`useWorkspaceLocale`) for the resolved locale |
 
+The identity shell/card/typography/button primitives (`IdentitySingleShell`, `IdentityCard`, `IdentityTitle`, `IdentityPrimaryButton`, etc.) are not in this directory: the sign-in, Desktop approval, provider authorization, GitHub completion, invitation, Article handoff, settings-moved, error, and not-found pages import them from the Desktop design system's `../../src/design-system/components/WorkspaceIdentity.tsx`.
+
 ## Settings (app/settings/)
-All of the panels below are composed by `app/settings/page.tsx`, the server component that resolves the session, the caller's visible/active workspace and role, and the requested section (`workspaces` / `access` / `providers` / `workspace-settings` / `account`) before rendering the matching panel(s).
+Workspace administration moved to DopeDB Desktop Settings (ADR `../../docs/adr/0009-desktop-workspace-administration.md`). This directory keeps only the former console address, so old links and bookmarks, the `/` redirect, the `Brand` workspace link, and the redirect after accepting a workspace invitation still land on a useful page. Do not rebuild administration panels here.
 
 | File | Description |
 |------|-------------|
-| `page.tsx` | Server, `force-dynamic`. Resolves session (redirects to sign-in), accepts pending invitations, lists+filters visible workspaces, resolves the active workspace/role/lifecycle state, computes the effective section, and renders header + `SettingsNavigation` + the section's panel(s) |
-| `SettingsNavigation.tsx` | Server. Tab navigation between `workspaces` / `access` / `providers` / `workspace-settings` / `account`, hiding tabs the caller cannot use |
-| `AccountSwitcher.tsx` | Client. Multi-session Better Auth account switcher dropdown in the header (`multiSession.setActive` / `.revoke`, sign-out-all) |
-| `AccountManagementPanel.tsx` | Client. Account identity header; renders `ActiveSessions` (user-level, not workspace-scoped) |
-| `ActiveSessions.tsx` | Client. Lists and revokes the user's active Better Auth sessions via `authClient.listSessions`/`revokeSession`; handles `SESSION_NOT_FRESH` by prompting reauthentication |
-| `CreateWorkspaceForm.tsx` | Client. `POST /api/v1/workspaces` to create a new workspace, then `router.refresh()` |
-| `WorkspaceAccessPanel.tsx` | Client. Member/invitation administration; calls `GET/POST/PATCH/DELETE .../workspaces/{id}/members` |
-| `ConnectionAccessPanel.tsx` | Client. Per-connection member grant management and conflict resolution UI; calls `.../connections`, `.../connections/conflicts`, `.../connections/{id}/grants`, `.../connections/conflicts/{id}`, and `.../connections/{id}` (conflict apply) |
-| `CloudAccountPanel.tsx` | Client. Renders the provider integration list or the GCP Cloud Setup wizard (via `useProviderAccountAccess`); wraps `GcpCloudSetup` / `ProviderIntegrationList` from `features/providerAccess` |
-| `SharedDatabasePanel.tsx` | Client. Managed-provider database import and Neon branch management UI (`NeonBranchManager`, `ProviderResourcePicker`) driven by the `useSharedDatabaseAccess` hook |
-| `WorkspaceLifecyclePanel.tsx` | Client. Workspace deletion scheduling/cancellation, backup list, and key-rotation controls; calls `.../lifecycle`, `.../backups`, `.../backups/key-rotation` |
-| `WorkspaceManagementPanel.tsx` | Server. Composes the `access` / `providers` / `workspace-settings` panels above for the selected management area |
+| `page.tsx` | Server. Settings-moved notice: reads no session, account, or workspace state; renders the localized `settingsMoved` copy in the identity shell with an Open DopeDB link (`desktopWorkspaceAccessCallbackUrl`) and a `dopedb.dev#download` install link. `/settings` and `/ko/settings` remain the only paths eligible for opt-in web analytics recording (`lib/web-analytics.ts`) |
 
 ## Auth flows (app/auth/*)
 - **Desktop loopback flow** (`auth/desktop`): hosted login, explicit account choice and approval followed by a `127.0.0.1` callback carrying only a 120-second authorization code and state. `api/auth/desktop/authorize` requires exact Origin, cookie-only live session and a request/session-bound nonce; `api/auth/desktop/token` accepts native JSON S256 exchange only, atomically consumes the code and creates a separate Better Auth Bearer session.
 - **Google sign-in** (`auth/sign-in`): marketing-style screen; `SignInButton` calls `authClient.signIn.social({ provider: "google" })` with a validated `returnTo`.
 - **GitHub App installation completion** (`auth/github/complete`): static success/failure screen reflecting `?status=connected|failed` from the `api/v1/knowledge/github/callback` redirect.
+- **Provider authorization handoff** (`auth/provider/start`, `auth/provider/complete`): Desktop asks `POST .../provider-integrations` to start a PlanetScale or GCP Cloud SQL authorization and opens only the returned same-origin `startUrl`. The start page leaves the one-use state unconsumed and continues to the provider only when the browser's cookie session is the account that created the state; otherwise it sends the browser to sign-in with a `returnTo` or explains the account mismatch, so a code is never issued to a browser that cannot redeem it. The PlanetScale callback and the GCP setup callback (via `api/auth/[...all]`) still consume the state against the cookie session's user, then end on the token-free complete page, whose only action is the Open DopeDB deep link.
 
 ## Static assets
 - `app/favicon.ico`, `app/apple-icon.png`, `app/icon.svg` — tab/PWA icons for the Workspace Web app.
@@ -186,13 +187,14 @@ The Desktop approval page owns `DesktopAccountActions.tsx`, which selects an exp
 
 ### Working In This Directory
 - Every mutating `route.ts` calls `mutationAllowed(request, env.appOrigin())` as its very first check, before touching auth or the database (origin/CSRF gate).
-- Session/authority resolution is layered: `authoritativeSession(request)` for user-level `/api/v1` routes with no workspace scope (`session`, `workspaces` list/create, `article-invitations/*`, `personal/knowledge/scope`); `authorizeWorkspace(request, workspaceId, capability)` for workspace-scoped routes; `authorizeWorkspaceConnection` / `authorizeWorkspaceConnectionAction` for connection-scoped capability checks; `authorizeWorkspaceLifecycle` for `.../lifecycle`.
+- Session/authority resolution is layered: `authoritativeSession(request)` for user-level `/api/v1` routes with no workspace scope (`session`, `workspaces` list/create, `account/sessions*`, `article-invitations/*`, `personal/knowledge/scope`); `authorizeWorkspace(request, workspaceId, capability)` for workspace-scoped routes; `authorizeWorkspaceConnection` / `authorizeWorkspaceConnectionAction` for connection-scoped capability checks; `authorizeWorkspaceLifecycle` for `.../lifecycle`.
 - Every dynamic path param is validated with `isUuid()` (or an explicit regex for non-UUID ids) before any query, and every query's `WHERE` always re-intersects `organizationId`/`workspaceId` — this is how a guessed UUID from another tenant is prevented from resolving.
 - Mutations that change persisted content use optimistic concurrency (`parseExpectedRevision`, `contentRevision`/`revision` columns): missing revision → 428, stale revision → 409 (sometimes returning a `conflictId` for connections).
 - Routes that change live database/member/integration access wrap a revocation-gate claim (`claimRevocationGate` → `revokeActiveLeases` → commit → `clearRevocationGate`/`releaseRevocationGateClaim`) so a concurrent grant change can never race an issued credential lease.
 - Desktop-only endpoints (lease issue/release, run create/complete, provisioning target prepare/destroy) require an `Authorization: Bearer` header and/or an exact `x-dopedb-*-contract` version header, returning `426` to force a client upgrade on mismatch.
+- The administration routes (`workspaces`, `members`, the connection list/grants/conflicts and conflict-candidate `PATCH`, `provider-integrations/**`, `backups/**`, `lifecycle`, `account/sessions*`) are called by Desktop Settings with the account's Bearer session and are a public contract for independently released Desktop versions (ADR 0009): keep their requests and responses backward compatible, and turn Better Auth `APIError`s into JSON with `lib/better-auth-errors.ts` instead of letting them surface as 500s.
 - Query/result rows never cross any Analysis Article or run API — only receipts, hashes, and row/byte counts. Do not add a field that would leak result data through these routes.
-- Dynamic segment names are consistent nouns: `[workspaceId]`, `[connectionId]`, `[articleId]`, `[runId]`, `[runnerId]`, `[integrationId]`, `[setupId]`, `[backupId]`, `[invitationId]`, `[environmentId]`, `[projectId]`, `[sourceId]`, `[publicationId]`, `[conflictId]`, `[slug]`.
+- Dynamic segment names are consistent nouns: `[workspaceId]`, `[connectionId]`, `[articleId]`, `[runId]`, `[runnerId]`, `[integrationId]`, `[setupId]`, `[backupId]`, `[invitationId]`, `[environmentId]`, `[projectId]`, `[sourceId]`, `[publicationId]`, `[conflictId]`, `[sessionId]`, `[slug]`.
 
 ### Testing Requirements
 - `pnpm test:contracts` (vitest, `vitest.contracts.config.ts`) runs only `lib/control-plane-contracts.harness.ts` and `lib/d1-storage.harness.ts`. This exercises wire-format/serialization helpers that routes call (e.g. `managedLeaseResponse` used by `connections/[connectionId]/lease/route.ts`, `workspaceSyncPage` used by `sync/route.ts`) — it does **not** invoke any `route.ts` handler directly.
@@ -207,12 +209,13 @@ The Desktop approval page owns `DesktopAccountActions.tsx`, which selects an exp
 ## Dependencies
 
 ### Internal
-- `../lib/` — see `../lib/AGENTS.md`. Referenced constantly: `workspace-authorization.ts` (all authorization helpers), `workspace-versioning*.ts` (optimistic concurrency + conflict store), `revocation-gates.ts`, `provider-integrations/*`, `provider-integration-mutation-store.ts`, `workspace-analysis-*-store.ts`, `workspace-backup*.ts`, `knowledge/*`, `secret-envelope.ts`, `schema.ts` (Drizzle tables), `http.ts` (`jsonError`/`privateJson`/`boundedJsonBody`/`isUuid`/`mutationAllowed`).
-- `../features/` — client components delegate feature logic here rather than embedding it: `features/providerAccess/*` (Cloud setup, Neon branch manager, resource picker) used by `settings/CloudAccountPanel.tsx` and `settings/SharedDatabasePanel.tsx`; `features/connectionAccess/*` (grant mutation, Desktop-return handoff) used by `settings/ConnectionAccessPanel.tsx` and `settings/page.tsx`; `features/articleSharing/*` (`HandoffPage`, invitation store/acceptance) used by `article-invitations/[invitationId]/page.tsx`, `open-article/.../page.tsx`, and `api/v1/article-invitations/[invitationId]/route.ts` and `.../analyses/[articleId]/sharing/route.ts`.
+- `../lib/` — see `../lib/AGENTS.md`. Referenced constantly: `workspace-authorization.ts` (all authorization helpers), `workspace-versioning*.ts` (optimistic concurrency + conflict store), `revocation-gates.ts`, `provider-integrations/*`, `provider-integration-mutation-store.ts`, `workspace-analysis-*-store.ts`, `workspace-backup*.ts`, `knowledge/*`, `secret-envelope.ts`, `schema.ts` (Drizzle tables), `http.ts` (`jsonError`/`privateJson`/`boundedJsonBody`/`isUuid`/`mutationAllowed`), `provider-authorization-handoff.ts` (provider OAuth start/complete URLs and the start-page decision), `better-auth-errors.ts`.
+- `../features/articleSharing/*` (see `../features/AGENTS.md`) — `HandoffPage` and invitation store/acceptance used by `article-invitations/[invitationId]/page.tsx`, `open-article/.../page.tsx`, `api/v1/article-invitations/[invitationId]/route.ts`, and `.../analyses/[articleId]/sharing/route.ts`; its `copy.ts` is also read by `analyses/[slug]/*`, `not-found.tsx`, and `error.tsx`.
+- `../../src/design-system/components/` — `WorkspaceIdentity.tsx` (identity shell primitives for the auth, invitation, handoff, settings-moved, and error pages), `AnalysisArticleBody.tsx` (public Article body), and `DopeDBMarkGraphic.tsx` (`Brand`), imported across the project boundary from the Desktop design system.
 - `../drizzle.d1.config.ts` / D1 migrations — schema source for everything imported from `lib/schema.ts`.
 
 ### External
-- `better-auth` + `@better-auth/drizzle-adapter` — session, organization/member, invitation, multi-session primitives used throughout `api/auth`, `api/v1/workspaces/**`, and the `auth/*` pages.
+- `better-auth` + `@better-auth/drizzle-adapter` — session, organization/member, invitation, multi-session primitives used throughout `api/auth`, `api/v1/workspaces/**`, `api/v1/account/sessions/**`, and the `auth/*` pages.
 - `drizzle-orm` — every SQL query and schema reference in `route.ts` files.
 - `sanitize-html` — via `src/design-system/components/AnalysisArticleBody`, used to render public Analysis Article HTML in `analyses/[slug]/PublicAnalysisArticle.tsx`.
 - `@opennextjs/cloudflare` (`getCloudflareContext`) — `api/internal/deployment/route.ts`.

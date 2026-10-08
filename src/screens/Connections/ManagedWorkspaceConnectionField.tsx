@@ -1,4 +1,4 @@
-// Presents the server-owned endpoint boundary and its exact Web recovery command.
+// Presents the server-owned endpoint boundary and its exact Settings recovery command.
 import { Button } from "../../design-system/components/Button";
 import { PropertyRow } from "../../design-system/components/FormControls";
 import { StatusBadge } from "../../design-system/components/Status";
@@ -23,12 +23,10 @@ export function ManagedWorkspaceConnectionField({
           {recovery.canOpenSettings ? (
             <Button
               size="compact"
-              disabled={busy || recovery.openingSettings}
-              onClick={() => void recovery.openSettings()}
+              disabled={busy}
+              onClick={() => recovery.openSettings()}
             >
-              {recovery.openingSettings
-                ? t("connections.managedWorkspace.opening")
-                : t("connections.managedWorkspace.open")}
+              {t("connections.managedWorkspace.open")}
             </Button>
           ) : null}
         </div>

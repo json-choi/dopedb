@@ -374,14 +374,6 @@ async fn commit_workspace_login(
 }
 
 #[tauri::command]
-pub fn workspace_console_url(
-    state: State<'_, AppState>,
-    workspace_id: Option<WorkspaceId>,
-) -> AppResult<String> {
-    state.services.workspace.console_url(workspace_id)
-}
-
-#[tauri::command]
 pub async fn list_workspaces(state: State<'_, AppState>) -> AppResult<Vec<Workspace>> {
     state.services.workspace.list().await
 }

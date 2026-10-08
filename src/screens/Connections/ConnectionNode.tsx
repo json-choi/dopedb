@@ -127,7 +127,6 @@ type Props = {
   onRetryOverview: (database: string) => void;
   onRecoverAuthentication?: () => void;
   onRecoverManagedConnection?: () => void;
-  managedConnectionRecoveryPending?: boolean;
   authenticationRecoveryPending?: boolean;
   authenticationRecoveryError?: CatalogLoadIssue;
   onToggleRelationSection: (key: string) => void;
@@ -654,9 +653,6 @@ export default function ConnectionNode(props: Props) {
                 onEdit={props.onEdit}
                 onRecoverAuthentication={props.onRecoverAuthentication}
                 onRecoverManagedConnection={props.onRecoverManagedConnection}
-                managedConnectionRecoveryPending={
-                  props.managedConnectionRecoveryPending
-                }
                 authenticationRecoveryPending={
                   props.authenticationRecoveryPending
                 }
@@ -712,9 +708,6 @@ export default function ConnectionNode(props: Props) {
             onEdit={props.onEdit}
             onRecoverAuthentication={props.onRecoverAuthentication}
             onRecoverManagedConnection={props.onRecoverManagedConnection}
-            managedConnectionRecoveryPending={
-              props.managedConnectionRecoveryPending
-            }
             authenticationRecoveryPending={
               props.authenticationRecoveryPending
             }

@@ -1,6 +1,8 @@
-// Settings shell for agent tools, command-line, safety, language, and updates.
-// Kept outside the data tabs so navigation remains focused on the selected database.
-import { useEffect, useMemo, useState } from "react";
+// Settings shell for application preferences, the signed-in account, workspace
+// administration, and per-connection safety. Kept outside the data tabs so
+// navigation remains focused on the selected database.
+import { Fragment, useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import type { ConnectionProfile } from "../../features/connections/domain";
 import type { SafetySettings } from "../../ipc/types";
 import { Icon } from "../../components/Icon";
@@ -18,10 +20,16 @@ import {
 import { TreeSearch } from "../../design-system/components/TreeControls";
 import { useI18n } from "../../lib/i18n";
 import { settingsSearchKeywords, type SettingsSection } from "../../features/settings/domain";
+import { useWorkspaceAdminScope } from "../../features/workspaceAdmin/scope";
+import {
+  workspaceAuthStateQuery,
+  workspaceContextQuery,
+} from "../../features/workspaces/queries";
 import {
   appUpdaterProgress,
   type AppUpdaterSnapshot,
 } from "../../features/updater/controller";
+import AccountSettings from "./Account";
 import AdvancedSettings from "./Advanced";
 import Appearance from "./Appearance";
 import AgentTools from "./AgentTools";
@@ -29,8 +37,13 @@ import CliSettings from "./Cli";
 import PrivacySettings from "./Privacy";
 import Safety from "./Safety";
 import Updates from "./Updates";
+import WorkspaceAccessSettings from "./WorkspaceAccess";
+import WorkspaceLifecycleSettings from "./WorkspaceLifecycle";
+import WorkspaceMembersSettings from "./WorkspaceMembers";
+import WorkspaceProvidersSettings from "./WorkspaceProviders";
 
-type SettingsScope = "application" | "dataSource";
+type SettingsScope = "application" | "workspace" | "dataSource";
+const SETTINGS_SCOPES = ["application", "workspace", "dataSource"] as const;
 
 export default function Settings({
   connection,
@@ -61,6 +74,13 @@ export default function Settings({
     initialSection ?? "agent-tools",
   );
   const [filter, setFilter] = useState("");
+  const auth = useQuery(workspaceAuthStateQuery());
+  const workspaceContext = useQuery(workspaceContextQuery());
+  const signedIn = Boolean(auth.data?.user);
+  const adminScope = useWorkspaceAdminScope();
+  // Account and workspace sections depend on these reads; until both settle, a
+  // requested section is not yet known to be unavailable.
+  const scopeResolved = auth.data !== undefined && workspaceContext.data !== undefined;
   const settingsEntries = useMemo(
     () =>
       [
@@ -113,6 +133,55 @@ export default function Settings({
           disabled: false,
           keywords: settingsSearchKeywords.updates,
         },
+        ...(signedIn
+          ? [
+              {
+                id: "account",
+                label: t("workspaceAdmin.account"),
+                scope: "application",
+                disabled: false,
+                keywords: settingsSearchKeywords.account,
+              } as const,
+            ]
+          : []),
+        // Administration sections exist only for the exact role that may use them;
+        // other members see no placeholder for commands they cannot run.
+        ...(adminScope?.canManage
+          ? [
+              {
+                id: "workspace-members",
+                label: t("workspaceAdmin.members"),
+                scope: "workspace",
+                disabled: false,
+                keywords: settingsSearchKeywords["workspace-members"],
+              } as const,
+              {
+                id: "workspace-access",
+                label: t("workspaceAdmin.access"),
+                scope: "workspace",
+                disabled: false,
+                keywords: settingsSearchKeywords["workspace-access"],
+              } as const,
+              {
+                id: "workspace-providers",
+                label: t("workspaceAdmin.providers"),
+                scope: "workspace",
+                disabled: false,
+                keywords: settingsSearchKeywords["workspace-providers"],
+              } as const,
+            ]
+          : []),
+        ...(adminScope?.isOwner
+          ? [
+              {
+                id: "workspace-lifecycle",
+                label: t("workspaceAdmin.lifecycle"),
+                scope: "workspace",
+                disabled: false,
+                keywords: settingsSearchKeywords["workspace-lifecycle"],
+              } as const,
+            ]
+          : []),
         {
           id: "safety",
           label: `${t("settings.safety")}${
@@ -131,7 +200,7 @@ export default function Settings({
         disabled: boolean;
         keywords: string;
       }>,
-    [connection, t],
+    [adminScope?.canManage, adminScope?.isOwner, connection, signedIn, t],
   );
   const filteredEntries = useMemo(() => {
     const query = filter.trim().toLocaleLowerCase().normalize("NFKC");
@@ -155,6 +224,11 @@ export default function Settings({
     if (next) setSection(next.id);
   }, [filter, filteredEntries, filteredIds, section]);
 
+  useEffect(() => {
+    if (!scopeResolved || settingsEntries.some((entry) => entry.id === section)) return;
+    setSection(settingsEntries[0]?.id ?? "agent-tools");
+  }, [scopeResolved, section, settingsEntries]);
+
   // Safety may have changed while this menu was open — refresh App's copy on the way out.
   function close() {
     refreshSafety();
@@ -164,6 +238,18 @@ export default function Settings({
   const activeEntry =
     settingsEntries.find((entry) => entry.id === section) ??
     settingsEntries[0];
+  function scopeLabel(scope: SettingsScope) {
+    if (scope === "workspace") {
+      return adminScope
+        ? `${t("workspaceAdmin.scope")} · ${adminScope.workspaceName}`
+        : t("workspaceAdmin.scope");
+    }
+    return t(
+      scope === "application"
+        ? "settings.scopeApplication"
+        : "settings.scopeDataSource",
+    );
+  }
   const updateProgress = appUpdaterProgress(updater);
   const updateNavigationStatus =
     updater.phase === "downloading" && updateProgress !== null
@@ -220,7 +306,7 @@ export default function Settings({
                 />
               </div>
               <nav className="tw:min-h-0 tw:flex-1 tw:overflow-y-auto">
-                {(["application", "dataSource"] as const).map((scope) => {
+                {SETTINGS_SCOPES.map((scope) => {
                   const entries = filteredEntries.filter(
                     (entry) => entry.scope === scope,
                   );
@@ -235,12 +321,8 @@ export default function Settings({
                           name="chevronDown"
                           className="tw:text-muted-foreground"
                         />
-                        <span>
-                          {t(
-                            scope === "application"
-                              ? "settings.scopeApplication"
-                              : "settings.scopeDataSource",
-                          )}
+                        <span className="tw:min-w-0 tw:truncate" title={scopeLabel(scope)}>
+                          {scopeLabel(scope)}
                         </span>
                       </div>
                       {entries.map((entry) => (
@@ -287,15 +369,10 @@ export default function Settings({
                     setSection(event.target.value as SettingsSection);
                   }}
                 >
-                  {(["application", "dataSource"] as const).map((scope) => (
-                    <optgroup
-                      key={scope}
-                      label={t(
-                        scope === "application"
-                          ? "settings.scopeApplication"
-                          : "settings.scopeDataSource",
-                      )}
-                    >
+                  {SETTINGS_SCOPES.filter((scope) =>
+                    settingsEntries.some((entry) => entry.scope === scope),
+                  ).map((scope) => (
+                    <optgroup key={scope} label={scopeLabel(scope)}>
                       {settingsEntries
                         .filter((entry) => entry.scope === scope)
                         .map((entry) => (
@@ -316,11 +393,7 @@ export default function Settings({
               </div>
               <div className="tw:flex tw:h-[42px] tw:min-h-[42px] tw:shrink-0 tw:items-center tw:gap-2 tw:bg-background tw:px-4 tw:text-ui tw:font-semibold tw:@max-[700px]:hidden">
                 <span className="tw:text-muted-foreground">
-                  {t(
-                    activeEntry?.scope === "dataSource"
-                      ? "settings.scopeDataSource"
-                      : "settings.scopeApplication",
-                  )}
+                  {scopeLabel(activeEntry?.scope ?? "application")}
                 </span>
                 <Icon
                   name="chevronRight"
@@ -341,6 +414,23 @@ export default function Settings({
                   />
                 )}
                 {section === "appearance" && <Appearance />}
+                {section === "account" && signedIn && <AccountSettings />}
+                {adminScope?.canManage ? (
+                  <Fragment key={`${adminScope.accountId}:${adminScope.workspaceId}`}>
+                    {section === "workspace-members" && (
+                      <WorkspaceMembersSettings scope={adminScope} onNavigate={setSection} />
+                    )}
+                    {section === "workspace-access" && (
+                      <WorkspaceAccessSettings scope={adminScope} onNavigate={setSection} />
+                    )}
+                    {section === "workspace-providers" && (
+                      <WorkspaceProvidersSettings scope={adminScope} onNavigate={setSection} />
+                    )}
+                    {section === "workspace-lifecycle" && adminScope.isOwner && (
+                      <WorkspaceLifecycleSettings scope={adminScope} onNavigate={setSection} />
+                    )}
+                  </Fragment>
+                ) : null}
                 {section === "language" && (
                   <div className="tw:grid tw:max-w-[560px] tw:gap-4 tw:p-4">
                     <Field label={t("language.label")}>

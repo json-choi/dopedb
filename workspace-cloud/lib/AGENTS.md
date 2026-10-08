@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-13 | Updated: 2026-09-13 -->
+<!-- Generated: 2026-09-13 | Updated: 2026-10-08 -->
 
 # workspace-cloud/lib
 
@@ -24,8 +24,7 @@ default privilege, or ACL (see root `CLAUDE.md`/`AGENTS.md`).
 | `desktop-authorization-scenarios.ts` | Security scenarios composed inside the existing D1 test case: request/proof binding, PKCE, expiration, session revocation, concurrent replay. |
 | `authoritative-session.ts` | Session read that keeps browser-cookie and native-Bearer authentication mutually exclusive and observes durable revocation. |
 | `cron-auth.ts` | Constant-time bearer authentication shared by every internal cron route. |
-| `desktop-deep-link.ts` | Stable, token-free `dopedb://` deep-link targets and a short-lived Desktop access-return intent. |
-| `device-session-policy.ts` | Filters device sessions to exclude the current one before a mass revoke. |
+| `desktop-deep-link.ts` | The one token-free Desktop deep link, `desktopWorkspaceAccessCallbackUrl` (`dopedb://workspace/access-complete`), linked by the settings-moved and provider-authorization-complete pages; navigation only, Desktop rechecks authority itself. |
 | `useDeviceAccounts.ts` | Client hook projecting the Better Auth multi-session list for device-account UI. |
 | `workload-identity.ts` | Obtains a workload OIDC token from the Cloudflare Worker binding (never a client-supplied header). |
 
@@ -41,16 +40,17 @@ default privilege, or ACL (see root `CLAUDE.md`/`AGENTS.md`).
 | `workspace-locale-server.ts` | Server helper resolving the active `WorkspaceLocale` from request headers. |
 | `workspace-locale.ts` | `en`/`ko` locale contract: header/cookie names and pathname helpers. |
 | `workspace-member-store.ts` | Atomic member role-change mutation, including ownership-transfer rules. |
-| `workspace-messages.ts` | i18n message catalog for the Workspace Web UI. |
+| `workspace-messages.ts` | `en`/`ko` message catalog for the remaining browser surfaces: `brand`, `signIn`, `desktopLogin`, `githubInstallation`, `settingsMoved`, `providerAuthorization`, `invitation`, `deviceAccounts`. |
 | `workspace-permissions.ts` | Role name and capability enum definitions (`viewer`..`owner`; `view`/`read`/`write`/`manage`/`delete`). |
-| `workspace-provider-copy.ts` | Localized (`ko`) copy for provider error messages, keyed by the English source string. |
 | `workspace-retention-purge.ts` | Final atomic workspace purge query and the deletion-unblocked precondition guard. |
 | `workspace-server-log.ts` | The only application server log sink; every event has a closed categorical shape (no bodies, identifiers, SQL, credentials, or `Error` objects). |
+| `workspace-server-message.ts` | `localizedServerMessage`: shows a server or Better Auth message only when it is written in the current locale (Hangul check), otherwise the caller's localized fallback; used by the sign-in, Desktop account, invitation, and device-account clients. |
 
 ### Connections, Grants & Leases
 | File | Description |
 |------|-------------|
 | `connection-conflict-decision.ts` | Pure function deciding whether a version conflict keeps the current revision or applies a candidate. |
+| `provider-authorization-handoff.ts` | Browser handoff for Desktop-started PlanetScale/GCP Cloud SQL OAuth: builds the same-origin `/auth/provider/start?state=…` URL returned to Desktop, reads the unexpired hashed state without consuming it, decides `invalid`/`sign_in`/`account_mismatch`/`redirect` for the start page, and builds the provider authorization and token-free `/auth/provider/complete` URLs. |
 | `provider-catalog.ts` | Public catalog of provider adapters cleared for discovery/import/managed issuance (`gcpCloudSql`, `neon`, `planetScale`, `vault`). |
 | `provider-credential-envelope.ts` | Seals/opens provider credentials with a key-id fingerprint so key rotation can fence old ciphertexts. |
 | `provider-discovery-proof.ts` | Issues/verifies an opaque, short-lived proof binding a browser-returned resource selection to server-sealed selectors. |
@@ -122,6 +122,7 @@ default privilege, or ACL (see root `CLAUDE.md`/`AGENTS.md`).
 ### HTTP, Errors & Validation
 | File | Description |
 |------|-------------|
+| `better-auth-errors.ts` | `betterAuthErrorResponse` turns a Better Auth `APIError` raised inside a workspace route into the bounded `{ error, code? }` JSON response (its 4xx/5xx status else 400, a ≤512-character message else the caller's fallback, an `[A-Z0-9_]` code); anything else is rethrown. |
 | `bounded-json-response.ts` | Provider-neutral bounded JSON response reader; never trusts `Content-Length` or echoes an upstream body in errors. |
 | `env.ts` | Lazy server-only environment variable access; fails closed in request handlers, lets static pages build without secrets. |
 | `http.ts` | `privateJson`/`privateResponse` helpers that force `cache-control: private, no-store`. |
@@ -166,7 +167,7 @@ default privilege, or ACL (see root `CLAUDE.md`/`AGENTS.md`).
 
 ### Working In This Directory
 - Connect/reconnect/import/repair/disconnect code must never change a pre-existing application user, role, grant, default privilege, or ACL. This is verified in code: `providers/gcp-cloud-connection-policy.ts` and `providers/gcp-cloud-bootstrap-database.ts` grant predefined roles without touching existing owners or ACLs, and `providers/neon-core.ts` notes the control-plane API role inherits `neon_superuser`, so managed leases create a separate constrained SQL role instead of reusing it.
-- Modules imported by a Client Component (`auth-client.ts`, `useDeviceAccounts.ts`) must stay free of `"server-only"` imports and of secret-bearing logic.
+- Modules imported by a Client Component (`auth-client.ts`, `useDeviceAccounts.ts`, `workspace-server-message.ts`) must stay free of `"server-only"` imports and of secret-bearing logic.
 - A mutation that must be atomic with its authorization check uses `atomicD1` (`d1/atomic.ts`) with a `scope` SQL selecting at most one `payload` row, not a callback transaction.
 - Long-lived secrets are sealed with `secret-envelope.ts` / `provider-credential-envelope.ts` before persistence and are never returned from a route; `workspace-server-log.ts` enforces the same exclusion for log lines.
 - Provider adapters narrow arbitrary upstream JSON into an allowlisted shape (`providers/adapter-contract.ts`, `providers/provider-types.ts`) before it reaches storage or a client response.

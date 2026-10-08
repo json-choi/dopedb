@@ -95,12 +95,9 @@ export function ConnectionProfilePanel({
                 <Button
                   size="compact"
                   tone="primary"
-                  disabled={commands.managedConnection.openingSettings}
-                  onClick={() => void commands.managedConnection.openSettings()}
+                  onClick={() => commands.managedConnection.openSettings()}
                 >
-                  {commands.managedConnection.openingSettings
-                    ? t("connections.managedWorkspace.opening")
-                    : t("connections.managedWorkspace.open")}
+                  {t("connections.managedWorkspace.open")}
                 </Button>
               </div>
             ) : null}

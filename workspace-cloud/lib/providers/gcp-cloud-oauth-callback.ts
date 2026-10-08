@@ -8,7 +8,6 @@ import { createHash } from "node:crypto";
 import { and, eq, gt, isNull } from "drizzle-orm";
 import { authoritativeSession } from "../authoritative-session";
 import { db } from "../db";
-import { env } from "../env";
 import {
   openProviderSetupCredential,
   sealProviderSetupCredential,
@@ -28,21 +27,16 @@ import {
 } from "./gcp-cloud-bootstrap-database";
 import { parseDatabaseBootstrapState } from "./gcp-cloud-bootstrap-journal";
 import { ProviderRequestError } from "./provider-types";
-import {
-  localizedWorkspacePath,
-  workspaceLocaleFromCookieHeader,
-} from "../workspace-locale";
+import { providerAuthorizationCompleteUrl } from "../provider-authorization-handoff";
+import { workspaceLocaleFromCookieHeader } from "../workspace-locale";
 import { logGcpCloudSetupCallbackFailure } from "../workspace-server-log";
 
-function settingsUrl(request: Request, workspaceId: string | null, setupId?: string) {
-  const locale = workspaceLocaleFromCookieHeader(request.headers.get("cookie"));
-  const target = new URL(localizedWorkspacePath("/settings", locale), env.appOrigin());
-  target.searchParams.set("provider", "gcpCloudSql");
-  target.searchParams.set("status", setupId ? "authorised" : "failed");
-  target.searchParams.set("section", "providers");
-  if (workspaceId) target.searchParams.set("workspace", workspaceId);
-  if (setupId) target.searchParams.set("gcpSetup", setupId);
-  return target;
+function completionUrl(request: Request, authorised: boolean) {
+  return providerAuthorizationCompleteUrl(
+    "gcpCloudSql",
+    authorised ? "authorised" : "failed",
+    workspaceLocaleFromCookieHeader(request.headers.get("cookie")),
+  );
 }
 
 function stateHash(request: Request) {
@@ -117,18 +111,12 @@ export async function gcpCloudSetupCallbackResponse(request: Request) {
   const hash = stateHash(request);
   const code = url.searchParams.get("code") ?? "";
   if (!hash || code.length < 8 || code.length > 2_048) {
-    return Response.redirect(settingsUrl(request, null));
+    return Response.redirect(completionUrl(request, false));
   }
   const session = await authoritativeSession(request);
-  if (!session) {
-    return Response.redirect(new URL(
-      localizedWorkspacePath(
-        `/auth/sign-in?returnTo=${encodeURIComponent(localizedWorkspacePath("/settings", workspaceLocaleFromCookieHeader(request.headers.get("cookie"))))}`,
-        workspaceLocaleFromCookieHeader(request.headers.get("cookie")),
-      ),
-      env.appOrigin(),
-    ));
-  }
+  // Desktop's start page establishes the browser session before Google returns;
+  // without one the code cannot be redeemed, so the user restarts from the app.
+  if (!session) return Response.redirect(completionUrl(request, false));
   const consumed = await db.delete(providerOauthState).where(and(
     eq(providerOauthState.stateHash, hash),
     eq(providerOauthState.userId, session.user.id),
@@ -136,14 +124,14 @@ export async function gcpCloudSetupCallbackResponse(request: Request) {
     gt(providerOauthState.expiresAt, new Date()),
   )).returning({ organizationId: providerOauthState.organizationId });
   const oauthState = consumed[0];
-  if (!oauthState) return Response.redirect(settingsUrl(request, null));
+  if (!oauthState) return Response.redirect(completionUrl(request, false));
   const authorization = await authorizeWorkspace(
     request,
     oauthState.organizationId,
     "manage",
   );
   if (!authorization.ok || authorization.session.user.id !== session.user.id) {
-    return Response.redirect(settingsUrl(request, oauthState.organizationId));
+    return Response.redirect(completionUrl(request, false));
   }
   let stage:
     | "token_exchange"
@@ -178,13 +166,13 @@ export async function gcpCloudSetupCallbackResponse(request: Request) {
       accountLabel: credential.email,
       expiresAt,
     });
-    return Response.redirect(settingsUrl(request, oauthState.organizationId, setupId));
+    return Response.redirect(completionUrl(request, true));
   } catch (error) {
     logGcpCloudSetupCallbackFailure({
       stage,
       providerRequest: error instanceof ProviderRequestError,
       status: error instanceof ProviderRequestError ? error.status : 0,
     });
-    return Response.redirect(settingsUrl(request, oauthState.organizationId));
+    return Response.redirect(completionUrl(request, false));
   }
 }

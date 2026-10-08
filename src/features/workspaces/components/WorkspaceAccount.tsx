@@ -38,6 +38,7 @@ import {
   workspaceAuthRetryDelay,
 } from "../authPolicy";
 import { onWorkspaceLoginRequested } from "../loginRequest";
+import { onWorkspaceMembershipRefreshRequested } from "../membershipRefreshRequest";
 import { errMessage } from "../../../ipc/types";
 import { useI18n } from "../../../lib/i18n";
 import { Icon } from "../../../components/Icon";
@@ -92,6 +93,7 @@ export default function WorkspaceAccount({
   const workspaceAccountMounted = useRef(false);
   const providerCredentialAuthorityVersion = useRef<number | null>(null);
   const membershipRefreshHandler = useRef<(force?: boolean) => void>(() => undefined);
+  const requestedMembershipRefresh = useRef<() => Promise<void>>(() => Promise.resolve());
   const loginRequestHandler = useRef<() => void>(() => undefined);
   const scopeChangeHandler = useRef<() => void | Promise<void>>(
     () => undefined,
@@ -265,6 +267,11 @@ export default function WorkspaceAccount({
 
   useEffect(() => onWorkspaceLoginRequested(() => loginRequestHandler.current()), []);
 
+  useEffect(
+    () => onWorkspaceMembershipRefreshRequested(() => requestedMembershipRefresh.current()),
+    [],
+  );
+
   useEffect(() => {
     if (!auth.data?.authenticated) return;
     void invalidateWorkspaceContext(queryClient);
@@ -399,6 +406,29 @@ export default function WorkspaceAccount({
         }
       });
     membershipRefreshInFlight.current = request;
+  };
+
+  // An administration change (a created workspace, a cancelled deletion) lands after
+  // any refresh already in flight began, so wait for it and prove a fresh snapshot.
+  requestedMembershipRefresh.current = async () => {
+    while (membershipRefreshInFlight.current) {
+      await membershipRefreshInFlight.current;
+    }
+    clearMembershipRefreshRetry();
+    const refresh = refreshWorkspaceAuthority(refreshWorkspaceAuthState);
+    const request = refresh
+      .then(membershipRefreshSucceeded, async () => {
+        await auth.refetch().catch(() => undefined);
+        await invalidateWorkspaceContext(queryClient);
+        membershipRefreshFailed();
+      })
+      .finally(() => {
+        if (membershipRefreshInFlight.current === request) {
+          membershipRefreshInFlight.current = null;
+        }
+      });
+    membershipRefreshInFlight.current = request;
+    await refresh;
   };
 
   async function login() {

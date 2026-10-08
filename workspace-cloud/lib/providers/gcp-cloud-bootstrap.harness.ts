@@ -8,7 +8,6 @@ import * as workloadIdentity from "./workload-oidc";
 import { bootstrapGcpCloudSql } from "./gcp-cloud-bootstrap-application";
 import { parseDatabaseBootstrapRecovery } from "./gcp-cloud-bootstrap-recovery";
 import { googleRequest } from "./gcp-cloud-bootstrap-core";
-import { requestGcpBootstrap } from "../../features/providerAccess/gcpBootstrapTransport";
 import { gcpJsonRequest, GcpManagedAccessRequestError } from "./gcp-cloud-managed-http";
 import { GcpIamPropagationPendingError, waitForFederation } from "./gcp-cloud-bootstrap-application";
 import { gcpWifPrincipal, parseGcpCloudSqlCredential } from "./gcp-cloud-sql-core";
@@ -126,7 +125,6 @@ export async function assertGcpBootstrapReadinessContract() {
       message: "Cloud SQL schema service-account trust policy has drifted" });
     expect(schemaAttempts).toBe(1);
 
-    await assertBootstrapContinuation(pendingError);
     await assertExistingAccessIsNeverRewritten();
     await assertConnectionPreservesExistingPrincipals();
 
@@ -356,69 +354,4 @@ async function assertConnectionPreservesExistingPrincipals() {
     expect(writes).toEqual([]);
     expect(users.slice(0, 4)).toEqual(JSON.parse(before));
   } finally { oidc.mockRestore(); }
-}
-
-async function assertBootstrapContinuation(pendingError: GcpIamPropagationPendingError) {
-  const pendingResponse = () => Response.json({ code: pendingError.code,
-    error: pendingError.message, retryAfterMs: pendingError.retryAfterMs }, { status: pendingError.status });
-  const fixtureBody = JSON.stringify({ projectId: "dopedb-fixture", instanceId: "workspace-db",
-    approveProduction: false, approveIamRoleGrant: false, repairIntegrationId: "fixture-integration" });
-  const options = () => ({
-    url: "/api/v1/workspaces/fixture-workspace/provider-integrations/gcp-setup/fixture-setup",
-    body: fixtureBody,
-    expiresAt: new Date(Date.now() + 20 * 60_000).toISOString(),
-    signal: new AbortController().signal,
-    onIamPending: vi.fn(),
-  });
-  // Real setup validation continues across request boundaries; only the eventual
-  // verified response reaches the caller. Seven minutes does not exhaust it.
-  const start = Date.now();
-  const transport = vi.fn(async () => Date.now() - start < 7 * 60_000
-    ? pendingResponse() : Response.json({ bootstrapTicket: "fixture-verified-ticket" }));
-  vi.stubGlobal("fetch", transport);
-  const input = options();
-  const result = requestGcpBootstrap(input);
-  await vi.runAllTimersAsync();
-  expect(await (await result)?.json()).toEqual({ bootstrapTicket: "fixture-verified-ticket" });
-  expect(input.onIamPending).toHaveBeenCalled();
-  for (const call of transport.mock.calls as unknown as [string, RequestInit][]) {
-    expect(call[0]).toBe(input.url);
-    expect(call[1]).toMatchObject({ method: "POST", body: fixtureBody });
-  }
-
-  // Workspace authorization, active leases, expired sessions and unrelated 503s
-  // never acquire the setup-only retry semantics.
-  for (const status of [401, 403, 409, 410, 424, 503]) {
-    transport.mockReset().mockImplementation(async () => Response.json({ error: "fixture denial" }, { status }));
-    expect((await requestGcpBootstrap(options()))?.status).toBe(status);
-    expect(transport).toHaveBeenCalledTimes(1);
-  }
-  transport.mockReset().mockRejectedValue(new Error("fixture network failure"));
-  expect(await requestGcpBootstrap(options())).toBeNull();
-  expect(transport).toHaveBeenCalledTimes(1);
-
-  // A context change cancels waiting without starting another mutation.
-  transport.mockReset().mockImplementation(async () => pendingResponse());
-  const controller = new AbortController();
-  const aborted = requestGcpBootstrap({ ...options(), signal: controller.signal,
-    onIamPending: () => controller.abort(),
-  }).catch(error => error);
-  await vi.runAllTimersAsync();
-  expect(await aborted).toMatchObject({ name: "AbortError" });
-  expect(transport).toHaveBeenCalledTimes(1);
-
-  // Persistent denial has a finite budget and retains an actionable failure.
-  transport.mockClear();
-  const boundedStart = Date.now();
-  const bounded = requestGcpBootstrap(options());
-  await vi.runAllTimersAsync();
-  expect((await bounded)?.status).toBe(503);
-  expect(Date.now() - boundedStart).toBeLessThanOrEqual(10 * 60_000);
-  expect(transport.mock.calls.length).toBeLessThanOrEqual(120);
-
-  transport.mockClear();
-  const expired = options();
-  expired.expiresAt = new Date(Date.now() + 60_000).toISOString();
-  expect((await requestGcpBootstrap(expired))?.status).toBe(410);
-  expect(transport).not.toHaveBeenCalled();
 }

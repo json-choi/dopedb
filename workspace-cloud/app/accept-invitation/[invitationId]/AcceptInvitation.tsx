@@ -13,7 +13,7 @@ import { authClient } from "../../../lib/auth-client";
 import { useDeviceAccounts } from "../../../lib/useDeviceAccounts";
 import { localizedWorkspacePath } from "../../../lib/workspace-locale";
 import { workspaceMessages } from "../../../lib/workspace-messages";
-import { localizedProviderMessage } from "../../../lib/workspace-provider-copy";
+import { localizedServerMessage } from "../../../lib/workspace-server-message";
 import { useWorkspaceLocale } from "../../components/WorkspaceLocale";
 
 export function AcceptInvitation({
@@ -36,7 +36,7 @@ export function AcceptInvitation({
     if (result.error) {
       setPending(false);
       setError(result.error.message
-        ? localizedProviderMessage(result.error.message, locale, copy.acceptError)
+        ? localizedServerMessage(result.error.message, locale, copy.acceptError)
         : copy.acceptError);
       return;
     }
@@ -49,7 +49,7 @@ export function AcceptInvitation({
     if (result.error) {
       setPending(false);
       setError(result.error.message
-        ? localizedProviderMessage(result.error.message, locale, copy.switchError)
+        ? localizedServerMessage(result.error.message, locale, copy.switchError)
         : copy.switchError);
       return;
     }
