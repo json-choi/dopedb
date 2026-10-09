@@ -3,7 +3,7 @@
 // malformed answer becomes an explicit failure instead of an empty list or a wrong
 // deletion state. Documented refusals are classified by their exact server sentence.
 import { errDetails } from "../../../ipc/types";
-import type { WorkspaceAdminSettingsSection } from "../navigationRequest";
+import type { WorkspaceAdminSection } from "../sections";
 import { WorkspaceAdminRequestError } from "../requests";
 
 export const DELETION_BLOCKER_KINDS = [
@@ -315,7 +315,7 @@ export function keyVersionLabel(version: number): string {
 }
 
 export type BlockerDestination = Extract<
-  WorkspaceAdminSettingsSection,
+  WorkspaceAdminSection,
   "workspace-providers" | "workspace-members"
 >;
 

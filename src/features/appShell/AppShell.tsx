@@ -34,6 +34,7 @@ import { useAgentDock } from "./useAgentDock";
 import { useToolWindowLayout } from "./useToolWindowLayout";
 import { useAppShellWorkbenchController } from "./useAppShellWorkbenchController";
 import { useConnectionProjectNames } from "./useConnectionProjectNames";
+import type { WorkspaceAdminDestination } from "../workspaceAdmin/sections";
 import { useWorkspaceAdminRequests } from "../workspaceAdmin/useWorkspaceAdminRequests";
 
 export default function App() {
@@ -98,10 +99,11 @@ function Shell() {
     catalogScope,
     connections.selected === null,
   );
-  useWorkspaceAdminRequests((section) => {
-    commands.route.openSettings(section);
+  const openWorkspaceAdmin = (destination: WorkspaceAdminDestination) => {
+    commands.route.openWorkspaceAdmin(destination);
     setMobileExplorerOpen(false);
-  });
+  };
+  useWorkspaceAdminRequests(openWorkspaceAdmin);
   const backgroundTasks = useBackgroundTasks({
     connections: connections.items,
     queryServiceStore: queryServices.store,
@@ -311,6 +313,7 @@ function Shell() {
         commands.route.openSettings(section);
         setMobileExplorerOpen(false);
       },
+      openWorkspaceAdmin,
       selectConnection: commands.connections.select,
       activateDocument: commands.documents.activate,
       openSavedDocument: commands.documents.openSaved,
@@ -341,6 +344,8 @@ function Shell() {
         route: {
           openSafety: (connectionId: string) => openShellSettings("safety", connectionId),
           closeSettings: commands.route.closeSettings,
+          openWorkspaceAdmin: commands.route.openWorkspaceAdmin,
+          closeWorkspaceAdmin: commands.route.closeWorkspaceAdmin,
           closeSurface: commands.route.showWorkbench,
         },
         connections: commands.connections,

@@ -38,7 +38,7 @@ export const connectionsCatalog = defineCatalog(
     "connections.managedWorkspace.label": "Endpoint and credentials",
     "connections.managedWorkspace.status": "Managed by the workspace",
     "connections.managedWorkspace.managerDescription":
-      "The real endpoint and a short-lived credential are issued when this database is used. Repair its provider setup in Settings → Workspace → Providers; member access is managed in Database access.",
+      "The real endpoint and a short-lived credential are issued when this database is used. Repair its provider setup in Workspace management → Providers; member access is managed in Database access.",
     "connections.managedWorkspace.memberDescription":
       "The real endpoint and a short-lived credential are issued by the Workspace. Ask a Workspace admin to check the provider account and database registration if access fails.",
     "connections.managedWorkspace.securityNote":
@@ -46,7 +46,7 @@ export const connectionsCatalog = defineCatalog(
     "connections.managedWorkspace.open": "Open managed-access repair",
     "connections.managedWorkspace.recover": "Repair managed connection",
     "connections.managedWorkspace.recoveryRequiredManager":
-      "This managed database connection needs repair. Repair it in Settings → Workspace → Providers; short-lived credentials resume automatically afterwards.",
+      "This managed database connection needs repair. Repair it in Workspace management → Providers; short-lived credentials resume automatically afterwards.",
     "connections.managedWorkspace.recoveryRequiredMember":
       "This managed database connection needs repair. Ask a Workspace manager to repair its provider connection.",
     "connections.managedWorkspace.recoveryRequiredManagerCompact":
@@ -365,7 +365,7 @@ export const connectionsCatalog = defineCatalog(
     "connections.testFailure.managedTitle":
       "Workspace-managed access could not be issued",
     "connections.testFailure.managedManagerRecovery":
-      "Do not edit the read-only connection values below. Open this database in Settings → Workspace → Providers, check its provider account and database registration, then test again.",
+      "Do not edit the read-only connection values below. Open this database in Workspace management → Providers, check its provider account and database registration, then test again.",
     "connections.testFailure.managedMemberRecovery":
       "This connection is managed by the workspace, not on this device. Ask a workspace admin to check its provider account, database registration, and your access, then test again.",
     "connections.testFailure.technicalDetails": "Technical details",
@@ -580,7 +580,7 @@ export const connectionsCatalog = defineCatalog(
     "connections.managedWorkspace.label": "엔드포인트 및 자격 증명",
     "connections.managedWorkspace.status": "워크스페이스에서 관리됨",
     "connections.managedWorkspace.managerDescription":
-      "이 DB를 사용할 때 실제 엔드포인트와 단기 자격 증명이 발급됩니다. 공급자 설정은 설정 → 워크스페이스 → 공급자에서 복구하고, 구성원 접근은 DB 접근 권한에서 관리합니다.",
+      "이 DB를 사용할 때 실제 엔드포인트와 단기 자격 증명이 발급됩니다. 공급자 설정은 워크스페이스 관리 → 공급자에서 복구하고, 구성원 접근은 DB 접근 권한에서 관리합니다.",
     "connections.managedWorkspace.memberDescription":
       "실제 엔드포인트와 단기 자격 증명은 워크스페이스가 발급합니다. 접근에 실패하면 워크스페이스 관리자에게 공급자 계정과 DB 등록 상태 확인을 요청하세요.",
     "connections.managedWorkspace.securityNote":
@@ -588,7 +588,7 @@ export const connectionsCatalog = defineCatalog(
     "connections.managedWorkspace.open": "관리형 접근 복구 열기",
     "connections.managedWorkspace.recover": "관리형 연결 복구",
     "connections.managedWorkspace.recoveryRequiredManager":
-      "이 관리형 DB 연결을 복구해야 합니다. 설정 → 워크스페이스 → 공급자에서 복구하면 단기 자격 증명이 다시 자동 갱신됩니다.",
+      "이 관리형 DB 연결을 복구해야 합니다. 워크스페이스 관리 → 공급자에서 복구하면 단기 자격 증명이 다시 자동 갱신됩니다.",
     "connections.managedWorkspace.recoveryRequiredMember":
       "이 관리형 DB 연결을 복구해야 합니다. 워크스페이스 관리자에게 공급자 연결 복구를 요청하세요.",
     "connections.managedWorkspace.recoveryRequiredManagerCompact":
@@ -906,7 +906,7 @@ export const connectionsCatalog = defineCatalog(
     "connections.testFailure.managedTitle":
       "워크스페이스 관리형 접근을 발급하지 못했습니다",
     "connections.testFailure.managedManagerRecovery":
-      "아래 읽기 전용 연결값은 수정하지 마세요. 설정 → 워크스페이스 → 공급자에서 이 DB를 열어 공급자 계정과 DB 등록 상태를 확인한 뒤 다시 테스트하세요.",
+      "아래 읽기 전용 연결값은 수정하지 마세요. 워크스페이스 관리 → 공급자에서 이 DB를 열어 공급자 계정과 DB 등록 상태를 확인한 뒤 다시 테스트하세요.",
     "connections.testFailure.managedMemberRecovery":
       "이 연결은 이 기기가 아니라 워크스페이스에서 관리됩니다. 워크스페이스 관리자에게 공급자 계정, DB 등록과 내 접근 권한 확인을 요청한 뒤 다시 테스트하세요.",
     "connections.testFailure.technicalDetails": "기술 상세",

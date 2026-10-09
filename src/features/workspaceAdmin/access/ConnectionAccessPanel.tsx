@@ -1,4 +1,4 @@
-// Settings → Workspace → Database access. A workspace admin picks one shared
+// Workspace management → Database access. A workspace admin picks one shared
 // database they manage, reviews how members get credentials, the write ceiling and
 // team read access, and sets each member's access level; offline edits that
 // conflict with a database's current version are reviewed above the picker.

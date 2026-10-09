@@ -37,6 +37,7 @@ import {
   shouldRevalidateWorkspaceAuth,
   workspaceAuthRetryDelay,
 } from "../authPolicy";
+import { requestWorkspaceAdmin } from "../../workspaceAdmin/navigationRequest";
 import { onWorkspaceLoginRequested } from "../loginRequest";
 import { onWorkspaceMembershipRefreshRequested } from "../membershipRefreshRequest";
 import { errMessage } from "../../../ipc/types";
@@ -684,6 +685,17 @@ export default function WorkspaceAccount({
                   </div>
                 );
               })}
+              {/* Sessions and workspaces scheduled for deletion are user-level, so they
+                  open in Settings → Account rather than in Workspace management. */}
+              <PopupMenuItem
+                onClick={() => {
+                  setMenuOpen(false);
+                  requestWorkspaceAdmin("account");
+                }}
+              >
+                <Icon name="user" />
+                {t("workspaceAdmin.manageAccount")}
+              </PopupMenuItem>
               <ProviderCredentialsMenuItem
                 onOpen={() => {
                   setMenuOpen(false);

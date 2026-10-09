@@ -36,9 +36,9 @@ authoritative replacement and scope transition passes through it.
 
 | File | Description |
 |------|-------------|
-| `WorkspaceAccount.tsx` | Account-specific native loopback/PKCE login lifecycle and the unified local account menu; caches only public identity, session tokens stay behind Rust IPC. |
+| `WorkspaceAccount.tsx` | Account-specific native loopback/PKCE login lifecycle and the unified local account menu (including `Manage account`, which opens Settings → Account); caches only public identity, session tokens stay behind Rust IPC. |
 | `WorkspaceConnectionDialog.tsx` | Secure workspace connection flow: publishes only a redacted local template, or binds a member-local credential to an already-synchronized template. |
-| `WorkspaceSwitcher.tsx` | Active workspace/project menu for the title toolbar; clears cached resource reads before the shell reloads the newly selected account scope, and opens `New workspace` and, for owners and admins, `Manage workspace` in Settings. |
+| `WorkspaceSwitcher.tsx` | Active workspace/project menu for the title toolbar; clears cached resource reads before the shell reloads the newly selected account scope, and opens `New workspace` and, for owners and admins, `Manage workspace`, which opens the Workspace management dialog. |
 
 ## For AI Agents
 

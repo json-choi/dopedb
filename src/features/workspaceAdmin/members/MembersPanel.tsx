@@ -1,4 +1,4 @@
-// Settings → Workspace → Members for one team workspace. Composes the invite form, the
+// Workspace management → Members for one team workspace. Composes the invite form, the
 // member list and the pending invitations from a single directory read. Every write goes
 // through the members command controller, one at a time; the control plane authorizes
 // each command, so this panel only hides actions the server would always refuse.

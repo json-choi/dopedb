@@ -50,7 +50,10 @@ export function useManagedConnectionRecoveryLauncher(
     if (!canOpenSettings(profile)) return;
     if (onReturn) returnActions.current.set(profile.id, onReturn);
     else returnActions.current.delete(profile.id);
-    requestWorkspaceAdmin("workspace-providers", { connectionId: profile.id });
+    requestWorkspaceAdmin("workspace-providers", {
+      kind: "connection",
+      connectionId: profile.id,
+    });
   }
 
   return {

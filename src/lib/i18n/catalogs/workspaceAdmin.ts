@@ -10,6 +10,13 @@ export const workspaceAdminCatalog = defineCatalog(
     "workspaceAdmin.lifecycle": "Backups & deletion",
     "workspaceAdmin.account": "Account",
     "workspaceAdmin.manage": "Manage workspace",
+    "workspaceAdmin.dialogTitle": "Workspace management",
+    "workspaceAdmin.manageAccount": "Manage account",
+    "workspaceAdmin.addSharedDatabase": "Add shared database",
+    "workspaceAdmin.addSharedDatabaseDescription":
+      "Register a provider database for the whole team",
+    "workspaceAdmin.addSharedDatabaseHint":
+      "Register a database from a connected provider account once for the whole team, or connect another account or instance, in Workspace management → Providers.",
     "workspaceAdmin.newWorkspace": "New workspace",
     "workspaceAdmin.roleViewer": "View only",
     "workspaceAdmin.roleAnalyst": "Read only",
@@ -34,6 +41,13 @@ export const workspaceAdminCatalog = defineCatalog(
     "workspaceAdmin.lifecycle": "백업 및 삭제",
     "workspaceAdmin.account": "계정",
     "workspaceAdmin.manage": "워크스페이스 관리",
+    "workspaceAdmin.dialogTitle": "워크스페이스 관리",
+    "workspaceAdmin.manageAccount": "계정 관리",
+    "workspaceAdmin.addSharedDatabase": "공유 DB 추가",
+    "workspaceAdmin.addSharedDatabaseDescription":
+      "팀 전체가 쓰는 공급자 DB를 등록",
+    "workspaceAdmin.addSharedDatabaseHint":
+      "연결된 공급자 계정의 DB를 팀 전체에 한 번 등록하거나, 다른 계정·인스턴스를 연결하는 일은 워크스페이스 관리 → 공급자에서 합니다.",
     "workspaceAdmin.newWorkspace": "새 워크스페이스",
     "workspaceAdmin.roleViewer": "보기 전용",
     "workspaceAdmin.roleAnalyst": "읽기 전용",

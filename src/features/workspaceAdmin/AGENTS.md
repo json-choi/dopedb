@@ -1,13 +1,14 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-10-08 | Updated: 2026-10-08 -->
+<!-- Generated: 2026-10-08 | Updated: 2026-10-09 -->
 
 # src/features/workspaceAdmin
 
 ## Purpose
 
-Desktop Settings surfaces for workspace administration: the account area
-(other sessions, workspaces scheduled for deletion), workspace creation, and for
-the active team workspace the members, database access, providers and owner-only
+Desktop surfaces for workspace administration: the account area in Settings →
+Account (other sessions, workspaces scheduled for deletion), workspace creation,
+and, in the separate Workspace management dialog (`src/screens/WorkspaceAdmin`),
+the active team workspace's members, database access, providers and owner-only
 backups/deletion sections. Every read and write goes through one Tauri command
 with a closed operation; the Bearer session and provider OAuth state stay in Rust
 (`src-tauri/src/features/workspace_admin`).
@@ -21,8 +22,9 @@ with a closed operation; the Bearer session and provider OAuth state stay in Rus
 | `requests.ts` | `runWorkspaceAdmin`, `WorkspaceAdminRequestError` (status, code, body), session-rejection detection and localized error text. |
 | `scope.ts` | `workspaceAdminScope` / `useWorkspaceAdminScope`: the exact signed-in account, team workspace and role; `null` for personal, disabled or signed-out states. |
 | `queryKeys.ts` | `workspaceAdmin` and `workspaceAccountAdmin` query roots, keyed by account and workspace and cleared on any scope change. |
-| `navigationRequest.ts` | `requestWorkspaceAdmin(section, focus?)` / `onWorkspaceAdminRequested`, and a one-time, 60-second database focus for managed-connection recovery. |
-| `useWorkspaceAdminRequests.ts` | Lets the shell, which owns the Settings route, answer those requests. |
+| `sections.ts` | `WorkspaceAdminSection` / `WorkspaceAdminDestination` (sections plus `account`) and the search keywords shared by the dialog and Action Search. |
+| `navigationRequest.ts` | `requestWorkspaceAdmin(destination, focus?)` / `onWorkspaceAdminRequested`, and a one-time, 60-second focus the Providers section takes: a database to reveal for managed-connection recovery, or the add-database flow for the shared database shortcut. |
+| `useWorkspaceAdminRequests.ts` | Lets the shell, which owns the Workspace management and Settings routes, answer those requests; `account` opens Settings → Account. |
 
 ## Subdirectories
 

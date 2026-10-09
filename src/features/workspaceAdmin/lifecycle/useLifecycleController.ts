@@ -1,4 +1,4 @@
-// State and command owner for Settings → Workspace → Backups & deletion. Reads load
+// State and command owner for Workspace management → Backups & deletion. Reads load
 // once per opening: the lifecycle status first, then backups and key rotation in
 // parallel for an active workspace. One command runs at a time. Key rotation and
 // deletion scheduling keep one request id per attempt, so a retry after a lost or

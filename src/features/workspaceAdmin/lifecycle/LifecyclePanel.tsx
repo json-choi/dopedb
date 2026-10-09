@@ -1,4 +1,4 @@
-// Settings → Workspace → Backups & deletion, shown to the owner only. Composes the
+// Workspace management → Backups & deletion, shown to the owner only. Composes the
 // backups, encryption key, retention and deletion blocks for an active workspace, or the
 // scheduled-deletion state once deletion is pending. useLifecycleController owns every
 // read and command; this root only chooses what the current status allows. Once a

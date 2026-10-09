@@ -58,7 +58,7 @@ const en = {
   settingsMoved: {
     eyebrow: "WORKSPACE ADMINISTRATION",
     title: "Workspace management moved to the DopeDB app.",
-    body: "Members, database access, providers, backups and account sessions are managed in DopeDB → Settings → Workspace. Open the app, or install it first.",
+    body: "Members, database access, providers and backups are managed in DopeDB's workspace menu → Workspace management, and account sessions in Settings → Account. Open the app, or install it first.",
     openApp: "Open DopeDB",
     download: "Install DopeDB",
   },
@@ -163,7 +163,7 @@ const ko: DeepStringShape<typeof en> = {
   settingsMoved: {
     eyebrow: "WORKSPACE ADMINISTRATION",
     title: "워크스페이스 관리는 DopeDB 앱으로 옮겨졌습니다.",
-    body: "구성원, DB 접근 권한, 공급자, 백업과 계정 세션은 DopeDB → 설정 → 워크스페이스에서 관리합니다. 앱을 열거나 먼저 설치하세요.",
+    body: "구성원, DB 접근 권한, 공급자, 백업은 DopeDB의 워크스페이스 메뉴 → 워크스페이스 관리에서, 계정 세션은 설정 → 계정에서 관리합니다. 앱을 열거나 먼저 설치하세요.",
     openApp: "DopeDB 열기",
     download: "DopeDB 설치",
   },

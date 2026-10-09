@@ -2,6 +2,8 @@
 
 - 상태: Accepted
 - 결정일: 2026-10-08
+- 갱신: 2026-10-09 — 관리 진입을 앱 `Settings`에서 분리된 `워크스페이스 관리`
+  dialog로 옮기고 데이터 소스 카탈로그에 `공유 DB 추가` 바로가기를 둠
 - 관련: [`PRODUCT_UI_SCOPE.md`](../PRODUCT_UI_SCOPE.md) PD-46,
   [ADR 0008](0008-desktop-loopback-pkce-login.md), Issue #282
 
@@ -22,10 +24,14 @@ Desktop은 ADR 0008에 따라 계정별 Better Auth session을 Rust가 OS creden
 
 ## 결정
 
-1. Workspace 관리 command는 Desktop `Settings`가 소유한다. 팀 workspace의 관리자와
-   소유자에게만 `Workspace` 범위(`구성원`, `DB 접근 권한`, `공급자`, 소유자 전용
-   `백업 및 삭제`)를 표시하고, 계정 session 종료와 삭제 예약 취소는 `계정`,
-   workspace 생성과 관리 진입은 workspace menu가 소유한다.
+1. Workspace 관리 command는 Desktop이 소유한다. 팀 workspace의 관리자와 소유자는
+   앱 환경설정인 `Settings`와 분리된 `워크스페이스 관리` dialog(`구성원`, `DB 접근
+   권한`, `공급자`, 소유자 전용 `백업 및 삭제`)를 쓰고, 사용자 단위인 계정 session
+   종료와 삭제 예약 취소는 `Settings → 계정`, workspace 생성과 관리 진입은
+   workspace menu가 소유한다. 데이터 소스 카탈로그의 `공유 DB 추가`는 관리자와
+   소유자에게만 `공급자`의 DB 추가를 여는 바로가기다. 처음에는 `Settings` 안의
+   `Workspace` 범위였으나 기기별 환경설정과 팀 workspace 관리가 한 dialog에 섞이고
+   공유 DB 추가 경로를 찾기 어려워 2026-10-09에 분리했다.
 2. Rust `workspace_admin` feature가 control plane 관리 API의 닫힌 작업 목록을
    소유한다. WebView는 작업 하나와 행동 계정만 보낸다. Rust는 계정이 이 기기에
    로그인했는지 확인하고, 경로를 고정 문자열과 UUID만으로 만들며, 텍스트·opaque

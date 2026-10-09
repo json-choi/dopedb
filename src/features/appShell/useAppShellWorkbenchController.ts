@@ -30,6 +30,7 @@ import { knowledgeQueryKeys } from "../knowledge/queryKeys";
 import { useGuidedDemoSetup } from "../onboarding/useGuidedDemoSetup";
 import { connectionCanEnterWritePath } from "../safetySettings/policy";
 import type { SettingsSection } from "../settings/domain";
+import type { WorkspaceAdminDestination } from "../workspaceAdmin/sections";
 import type { SqlDocument } from "../sqlDocuments/domain";
 import { tauriSqlDocumentGateway } from "../sqlDocuments/tauriAdapter";
 import type { SqlResolveMode } from "../queries/resolveMode";
@@ -105,6 +106,7 @@ export function useAppShellWorkbenchController({
   const settingsOpen = navigation.kind === "settings";
   const settingsSection =
     navigation.kind === "settings" ? navigation.section : undefined;
+  const workspaceAdminSection = navigation.kind === "workspaceAdmin" ? navigation.section : null;
   const schemaDiffGroupKey =
     mainRoute.kind === "schemaDiff" ? mainRoute.groupKey : null;
   const knowledgeEnvironmentFocus =
@@ -447,6 +449,7 @@ export function useAppShellWorkbenchController({
       welcomeOpen: mainRoute.kind === "welcome",
       settingsOpen,
       settingsSection,
+      workspaceAdminSection,
       schemaDiffGroupKey,
       activeSchemaGroup,
       knowledgeEnvironmentFocus,
@@ -489,6 +492,9 @@ export function useAppShellWorkbenchController({
         },
         closeSettings: () => navigate({ type: "closeSettings" }),
         openSettings,
+        closeWorkspaceAdmin: () => navigate({ type: "closeWorkspaceAdmin" }),
+        openWorkspaceAdmin: (destination: WorkspaceAdminDestination) =>
+          navigate({ type: "openWorkspaceAdmin", destination }),
         focusToolWindow: () => navigate({ type: "focusToolWindow" }),
         openKnowledge,
         openSchemaDiff: (groupKey: string) =>

@@ -97,6 +97,8 @@ import workspaceSchemaSource from "../../../workspace-cloud/lib/d1/schema/leases
 import workspaceVersioningStoreSource from "../../../workspace-cloud/lib/workspace-versioning-store.ts?raw";
 import workspaceSnapshotRestoreSource from "../../../workspace-cloud/lib/workspace-snapshot-restore.ts?raw";
 import desktopSettingsSource from "../../../src/screens/Settings/index.tsx?raw";
+import workspaceAdminDialogSource from "../../../src/screens/WorkspaceAdmin/index.tsx?raw";
+import sectionDialogSource from "../../../src/design-system/components/SectionDialog.tsx?raw";
 import safetySettingsScreenSource from "../../../src/screens/Settings/Safety/index.tsx?raw";
 import desktopSharedConnectionSource from "../../../src-tauri/src/features/workspaces/adapters/control_plane/connections.rs?raw";
 import desktopControlPlaneSource from "../../../src-tauri/src/features/workspaces/adapters/control_plane.rs?raw";
@@ -137,6 +139,7 @@ import {
 } from "../workspaces/domain";
 import { sharedDatabasesQuery } from "../workspaceAdmin/access/queries";
 import { parseMemberDirectory } from "../workspaceAdmin/members/domain";
+import { workspaceAdminSectionsFor } from "../workspaceAdmin/sections";
 import {
   connectableProvider,
   hasBroadNeonKey,
@@ -292,7 +295,7 @@ const binding = {
   updatedAt: "2026-07-27T00:00:00.000Z",
 };
 
-// One reviewed Cloud SQL setup target in Desktop Settings → Providers; each check
+// One reviewed Cloud SQL setup target in Desktop Workspace management → Providers; each check
 // overrides only the approval or instance state it is about.
 const gcpSetupId = "13131313-1313-4313-8313-131313131313";
 const gcpInstance: NonNullable<GcpApprovalInput["instance"]> = {
@@ -2132,7 +2135,7 @@ describe("provider credential Tauri adapter", () => {
     expect(sharedDatabaseRow).toContain('"workspaceProviderDatabases.focusRepair"');
     expect(sharedDatabaseRow).toContain('t("workspaceProviderDatabases.openAccounts")');
     expect(workspaceAdminSource("providers/ProvidersPanel.tsx")).toContain(
-      "useState(() => takePendingConnectionFocus())",
+      "useState(() => takePendingWorkspaceAdminFocus())",
     );
     // Database access shows the workspace write ceiling as status only: it changes
     // in Settings → Safety, and no administration operation can toggle it.
@@ -2165,8 +2168,8 @@ describe("provider credential Tauri adapter", () => {
     ]);
     expect(sharedDatabasesQuery({ ...adminScope, workspaceId: otherWorkspaceId }).queryKey)
       .not.toEqual(sharedDatabasesQuery(adminScope).queryKey);
-    expect(desktopSettingsSource).toContain(
-      "<Fragment key={`${adminScope.accountId}:${adminScope.workspaceId}`}>",
+    expect(workspaceAdminDialogSource).toContain(
+      "<Fragment key={`${scope.accountId}:${scope.workspaceId}`}>",
     );
     expect(parseMemberDirectory({
       workspaceId: adminWorkspaceId,
@@ -2720,18 +2723,24 @@ describe("provider credential Tauri adapter", () => {
     );
     expect(exactText).toContain("Ok(value.to_string())");
     expect(exactText).not.toContain("trim");
-    expect(desktopSettingsSource).toMatch(
-      /\.\.\.\(adminScope\?\.isOwner\s*\?\s*\[\s*\{\s*id: "workspace-lifecycle"/,
+    const sectionIds = (scope: Parameters<typeof workspaceAdminSectionsFor>[0]) =>
+      workspaceAdminSectionsFor(scope).map((section) => section.id);
+    expect(sectionIds({ canManage: true, isOwner: true })).toEqual([
+      "workspace-members",
+      "workspace-access",
+      "workspace-providers",
+      "workspace-lifecycle",
+    ]);
+    expect(sectionIds({ canManage: true, isOwner: false })).not.toContain("workspace-lifecycle");
+    expect(sectionIds({ canManage: false, isOwner: false })).toEqual([]);
+    expect(sectionIds(null)).toEqual([]);
+    expect(workspaceAdminDialogSource).toContain(
+      'active === "workspace-lifecycle" && scope.isOwner &&',
     );
-    expect(desktopSettingsSource).toContain(
-      'section === "workspace-lifecycle" && adminScope.isOwner &&',
+    expect(sectionDialogSource).toContain(
+      'aria-current={active === entry.id ? "page" : undefined}',
     );
-    expect(desktopSettingsSource).toContain(
-      'section === entry.id ? "page" : undefined',
-    );
-    expect(desktopSettingsSource).toMatch(
-      /id: "safety",[\s\S]*?scope: "dataSource",\s*disabled: false/,
-    );
+    expect(desktopSettingsSource).toMatch(/entry\(\s*"safety",[\s\S]*?"dataSource",\s*\)/);
     expect(desktopSettingsSource).toContain('t("settings.selectConnection")');
     expect(workspaceSnapshotRestoreSource).toContain("readonlyDefault: true");
     expect(workspaceSnapshotRestoreSource).toContain("allowWrites: false");

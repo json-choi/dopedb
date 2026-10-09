@@ -10,11 +10,7 @@ export type SettingsSection =
   | "updates"
   | "language"
   | "appearance"
-  | "account"
-  | "workspace-members"
-  | "workspace-access"
-  | "workspace-providers"
-  | "workspace-lifecycle";
+  | "account";
 
 // Both Settings and Action Search index the same supported concepts in either locale.
 export const settingsSearchKeywords: Record<SettingsSection, string> = {
@@ -27,8 +23,4 @@ export const settingsSearchKeywords: Record<SettingsSection, string> = {
   language: "locale korean english language 언어 한국어 영어",
   appearance: "theme appearance light dark system 테마 화면 라이트 다크 시스템",
   account: "account sessions devices sign out deletion 계정 세션 기기 로그아웃 삭제 예약",
-  "workspace-members": "members invite invitation role team 구성원 초대 역할 팀",
-  "workspace-access": "database access grant team read conflict 데이터베이스 접근 권한 팀 읽기 충돌",
-  "workspace-providers": "provider planetscale neon google cloud sql vault branch import 공급자 브랜치 가져오기 관리형",
-  "workspace-lifecycle": "backup restore key rotation retention delete workspace 백업 복원 키 회전 보존 삭제 워크스페이스",
 };

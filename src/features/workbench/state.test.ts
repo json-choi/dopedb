@@ -587,6 +587,29 @@ describe("workbench state ownership", () => {
       appShellNavigationReducer(welcome, { type: "openSettings" }),
       { type: "closeSettings" },
     )).toEqual(welcome);
+    // Workspace management is its own modal over the same background route: an account
+    // request replaces it with Settings → Account, and only its own close returns to
+    // the background content.
+    const workspaceAdmin = appShellNavigationReducer(editing, {
+      type: "openWorkspaceAdmin",
+      destination: "workspace-providers",
+    });
+    expect(workspaceAdmin).toEqual({
+      kind: "workspaceAdmin",
+      route: { kind: "workbench" },
+      section: "workspace-providers",
+    });
+    expect(appShellNavigationReducer(workspaceAdmin, { type: "closeSettings" })).toBe(workspaceAdmin);
+    expect(
+      appShellNavigationReducer(workspaceAdmin, { type: "openWorkspaceAdmin", destination: "account" }),
+    ).toEqual({ kind: "settings", route: { kind: "workbench" }, section: "account" });
+    expect(appShellNavigationReducer(
+      appShellNavigationReducer(knowledge, {
+        type: "openWorkspaceAdmin",
+        destination: "workspace-members",
+      }),
+      { type: "closeWorkspaceAdmin" },
+    )).toEqual(knowledge);
     expect(appShellNavigationReducer(knowledge, {
       type: "connectionDeleted", connectionId: "db-1", remainingConnections: 0,
     })).toEqual(welcome);

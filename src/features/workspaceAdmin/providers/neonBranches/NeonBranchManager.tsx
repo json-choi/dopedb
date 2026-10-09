@@ -1,4 +1,4 @@
-// Neon safe-branch administration inside Settings → Providers → Shared databases. It
+// Neon safe-branch administration inside Workspace management → Providers → Shared databases. It
 // discovers Neon project targets from managed connections and each integration's
 // operation history, then mounts one keyed panel per project so selection, drafts and
 // the reconcile timer never leak across projects, integration generations or scopes.

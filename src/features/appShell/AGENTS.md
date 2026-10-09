@@ -23,7 +23,7 @@ than owning their domain logic itself.
 | `WorkbenchContent.tsx` | Default-exported central document router; per its header comment, content surfaces keep their own state/commands and this file only routes between them (lazy-loaded via `Suspense`). |
 | `WorkspaceNavigation.tsx` | Main destination nav; per its header comment, reuses the Explorer's exact environment commands rather than a separate navigation model. |
 | `navigationHooks.ts` | `preloadSqlEditor`, `useSqlEditorPreload`, `usePersistentSelectedConnection`, `useActivitySeen`. |
-| `navigationState.ts` | `AppShellRoute`/`AppShellMode`/`appShellNavigationReducer`; per its header comment, the shell's central surface has exactly one route owner (Settings is a modal mode with an explicit background route, not a parallel flag). |
+| `navigationState.ts` | `AppShellRoute`/`AppShellMode`/`appShellNavigationReducer`; per its header comment, the shell's central surface has exactly one route owner (Settings and Workspace management are modal modes with an explicit background route that replace each other, not parallel flags). |
 | `useAgentDock.ts` | Persisted Agent dock open/width state (`localStorage` keys `agentDockOpen`, `agentDockWidth`), built on `agents/layout.ts`'s clamping helpers. |
 | `useAppShellWorkbenchController.ts` | The shell's main workbench controller: connection selection, document routing state, and catalog/driver queries feeding `WorkbenchContent`. |
 | `useConnectionProfiles.ts` | Connection list query plus `changedConnectionRuntimeIds`, which fingerprints a profile's runtime-relevant fields (engine/provider/driver/host/port/database) to detect changes needing a reconnect. |

@@ -10,6 +10,7 @@ import { filterCatalogOverview } from "../catalogExplorer/scopeFilter";
 import { databaseDisplayLabel, type ConnectionProfile } from "../connections/domain";
 import { settingsSearchKeywords, type SettingsSection } from "../settings/domain";
 import { useWorkspaceAdminScope } from "../workspaceAdmin/scope";
+import { workspaceAdminSectionsFor, type WorkspaceAdminSection } from "../workspaceAdmin/sections";
 import { workspaceAuthStateQuery } from "../workspaces/queries";
 import type { SqlDocument } from "../sqlDocuments/domain";
 import type { WorkbenchDocument } from "../workbench/domain";
@@ -33,6 +34,7 @@ type ActionSearchItemsInput = {
     showLocalHistory: () => void;
     openAgent: () => void;
     openSettings: (section?: SettingsSection) => void;
+    openWorkspaceAdmin: (section: WorkspaceAdminSection) => void;
     selectConnection: (id: string) => void;
     activateDocument: (document: WorkbenchDocument) => void;
     openSavedDocument: (document: SqlDocument) => void;
@@ -226,19 +228,8 @@ export function useActionSearchItems({
       ["language", t("settings.languageTitle"), false],
       ["appearance", t("settings.appearance"), false],
       ["updates", t("settings.updates"), false],
-      // Administration commands appear only for the role that may run them.
       ...(signedIn
         ? ([["account", t("workspaceAdmin.account"), false]] as const)
-        : []),
-      ...(adminScope?.canManage
-        ? ([
-            ["workspace-members", t("workspaceAdmin.members"), false],
-            ["workspace-access", t("workspaceAdmin.access"), false],
-            ["workspace-providers", t("workspaceAdmin.providers"), false],
-          ] as const)
-        : []),
-      ...(adminScope?.isOwner
-        ? ([["workspace-lifecycle", t("workspaceAdmin.lifecycle"), false]] as const)
         : []),
     ] satisfies ReadonlyArray<readonly [SettingsSection, string, boolean]>
   ).map(([section, label, disabled]) => ({
@@ -251,5 +242,17 @@ export function useActionSearchItems({
     run: () => commands.openSettings(section),
   }));
 
-  return [...actions, ...connectionItems, ...documentItems, ...databaseObjects, ...settings];
+  // Workspace management commands appear only for the role that may run them.
+  const workspaceAdmin = workspaceAdminSectionsFor(adminScope).map(
+    ({ id, label, keywords }): ActionSearchItem => ({
+      id: `workspace-admin:${id}`,
+      kind: "setting",
+      label: t(label),
+      detail: t("workspaceAdmin.dialogTitle"),
+      keywords: [id, keywords],
+      run: () => commands.openWorkspaceAdmin(id),
+    }),
+  );
+
+  return [...actions, ...connectionItems, ...documentItems, ...databaseObjects, ...settings, ...workspaceAdmin];
 }

@@ -1,4 +1,4 @@
-// Settings → Workspace → Providers. Owns the section's view switch, the one browser
+// Workspace management → Providers. Owns the section's view switch, the one browser
 // authorization in flight, the credential form that is open, and the Google Cloud
 // SQL setup that replaces both views while it runs. Provider changes run one at a
 // time: switching views locks while any provider request is running, and every
@@ -11,7 +11,7 @@ import { useI18n } from "../../../lib/i18n";
 import { useCatalogScope } from "../../../lib/queries";
 import { useEventCallback } from "../../../lib/useEventCallback";
 import {
-  takePendingConnectionFocus,
+  takePendingWorkspaceAdminFocus,
   type WorkspaceAdminPanelProps,
 } from "../navigationRequest";
 import {
@@ -58,10 +58,19 @@ export default function ProvidersPanel({ scope }: WorkspaceAdminPanelProps) {
   const { lang, t } = useI18n();
   const queryClient = useQueryClient();
   const catalogScope = useCatalogScope();
-  // A recovery request from outside Settings reveals its database exactly once.
-  const [initialFocus] = useState(() => takePendingConnectionFocus());
+  // A request from outside the dialog reveals its database, or opens the add flow,
+  // exactly once; switching views afterwards never reopens it.
+  const [initialFocus] = useState(() => takePendingWorkspaceAdminFocus());
   const [view, setView] = useState<ProvidersView>(initialFocus ? "databases" : "accounts");
-  const [focusConnectionId, setFocusConnectionId] = useState<string | null>(initialFocus);
+  const [focusConnectionId, setFocusConnectionId] = useState<string | null>(
+    initialFocus?.kind === "connection" ? initialFocus.connectionId : null,
+  );
+  const [addRequested, setAddRequested] = useState(initialFocus?.kind === "addDatabase");
+
+  function showView(next: ProvidersView) {
+    setAddRequested(false);
+    setView(next);
+  }
   const [accountsBusy, setAccountsBusy] = useState(false);
   const [databasesBusy, setDatabasesBusy] = useState(false);
   const [wizardBusy, setWizardBusy] = useState(false);
@@ -119,7 +128,7 @@ export default function ProvidersPanel({ scope }: WorkspaceAdminPanelProps) {
       return;
     }
     if (connectable === "neon" || connectable === "vault") {
-      setView("accounts");
+      showView("accounts");
       setDialog({ provider: connectable, providerName, mode: "reconnect" });
       return;
     }
@@ -178,7 +187,7 @@ export default function ProvidersPanel({ scope }: WorkspaceAdminPanelProps) {
     if (saved.repair) {
       setNotice({ kind: "repaired" });
       setFocusConnectionId(saved.repair.connectionId);
-      setView("databases");
+      showView("databases");
       return;
     }
     setNotice({ kind: "connected", providerName: setup.providerName });
@@ -220,7 +229,7 @@ export default function ProvidersPanel({ scope }: WorkspaceAdminPanelProps) {
             { value: "databases", label: t("workspaceProviders.viewDatabases") },
           ]}
           onChange={(next) => {
-            if (!busy) setView(next);
+            if (!busy) showView(next);
           }}
         />
       </div>
@@ -235,7 +244,7 @@ export default function ProvidersPanel({ scope }: WorkspaceAdminPanelProps) {
         onOpenDatabases={() => {
           if (busy) return;
           setNotice(null);
-          setView("databases");
+          showView("databases");
         }}
       />
       {view === "accounts" ? (
@@ -253,11 +262,12 @@ export default function ProvidersPanel({ scope }: WorkspaceAdminPanelProps) {
         <SharedDatabasesView
           scope={scope}
           onConnectAccount={() => {
-            if (!busy) setView("accounts");
+            if (!busy) showView("accounts");
           }}
           onRepair={(managed) => void repair(managed)}
           repairingConnectionId={authorization.repairingConnectionId}
           focusConnectionId={focusConnectionId}
+          initiallyAdding={addRequested}
           onBusyChange={setDatabasesBusy}
         />
       )}
