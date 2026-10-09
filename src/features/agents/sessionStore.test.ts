@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { exerciseStartupOwnership } from "../../../tests/acpSessionStartupScenario";
 
 vi.mock("./tauriAdapter", () => ({
   listAgentAcpSessions: vi.fn(),
   onAgentAcpChanged: vi.fn(),
   setAgentAcpConfigOption: vi.fn(),
+  startAgentAcpSession: vi.fn(),
+  closeAgentAcpSession: vi.fn(),
 }));
 
 import type {
@@ -90,7 +93,7 @@ describe("ACP session store", () => {
     list.mockResolvedValue([]);
   });
 
-  it("preserves observed sessions and accepts only owned focus results", () => {
+  it("preserves observed sessions and accepts only owned focus results", async () => {
     const prior: readonly AcpSessionSummary[] = [];
     const merged = mergeAcpSessionSummaries(prior, [session("one")]);
     expect(merged).toHaveLength(1);
@@ -168,6 +171,7 @@ describe("ACP session store", () => {
     expect(ownsAcpComposerRequest({ ...ready, knowledgeScopes: [{ ...grant, connections: [] }] }, handoff)).toBe(false);
     expect(ownsAcpComposerRequest(ready, { ...handoff, projectEnvironmentId: "environment-other" })).toBe(false);
     expect(ownsAcpComposerRequest(ready, { ...handoff, connectionId: "database-other" as typeof handoff.connectionId })).toBe(false);
+    await exerciseStartupOwnership(session);
   });
 
   it("rejects an older event for the same exact session", () => {
