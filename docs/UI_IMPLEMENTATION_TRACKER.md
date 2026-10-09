@@ -33,6 +33,29 @@ runtime과 성능 수치로 수행한다.
 
 ## 공개 소개 사이트
 
+- 2026-10-08 홈페이지의 세 팀 시나리오: `partial`. `HomeWorkflows.tsx`가
+  공용 `SectionLabel`과 기존 night/cream/hairline 역할, 정적 Tailwind로
+  문제 → 세 단계 → 결과 → 시작 조건을 서버 렌더링한다. `homeWorkflowContent.ts`가
+  한·영 설명을 소유한다. Desktop에서는 두 열, 390px에서는 문서 순서대로 한 열이며
+  document가 유일한 세로 스크롤 소유자다. 시나리오 설명과 실행 기록을 구분한다.
+  기존 실제 앱 이미지는 역사적 0.4.21 caption·alt·파일을 그대로 유지한다.
+  이 변경은 로컬 검수용이며 운영 반영 영수증은 없다.
+- 로컬 검증: Node 24.11.0 / pnpm 11.25.0의 `pnpm --dir site build` 성공.
+  Next middleware 폐기 예정 및 Next 내부 Edge `process.cwd` 경고가 남는다.
+  격리된 실제 Chrome과 omowright로 `/`, `/ko`를 1440px 및 iPhone 14
+  390px에서 열어 세 시나리오·언어·0.4.21 alt를 확인했다. 네 조합 모두
+  document scrollWidth와 viewport 폭이 일치했다. 각 조합의 상단, 소개,
+  세 시나리오, 하단 총 24개 PNG와 viewport JSON을 로컬 QA artifact로 생성했다.
+  이는 소개 사이트 렌더 증거이며 Desktop 실사용 증거가 아니다.
+- Draft 완료 게이트: #245의 현재 개발 Desktop Demo 한·영 2400×1600 캡처와
+  개인정보 검수는 미확보다. 이 worktree에는 개발 Desktop bundle이 없고
+  실행 세션에는 OS 화면 조작 도구가 없다. #272의 지원 provider 두 구성원
+  managed 접근·발급·조회, 공식 Agent의 선택 소스/DB 조사와 미선택 리소스 거부,
+  동일 내부 Article 열람·각자 수동 재조회·로컬 결과 영수증도 미확보다.
+  계정/provider 변경 없이 얻을 수 없는 영수증을 합성하지 않는다.
+  실제 시나리오 그래픽, 전체 light/dark·상태·motion QA, Lighthouse,
+  실제 Safari·모바일 기기 검수는 남아 있다. #245/#272 완료 근거로 사용하지 않는다.
+
 - 상태: `partial` — Three.js 은하 배경은 로컬 검수 후 사용자 요청에 따라
   Cloudflare 운영 사이트에 반영했다. 실제 Safari·모바일 기기 성능,
   실사용 Core Web Vitals와 검색 수집 확인도 남아 있다.

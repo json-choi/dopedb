@@ -2,6 +2,7 @@
 import { GalaxyHero } from "./GalaxyHero";
 import { HomeDemoShowcase } from "./HomeDemoShowcase";
 import { HomeScopeWalkthrough } from "./HomeScopeWalkthrough";
+import { HomeWorkflows } from "./HomeWorkflows";
 import { Arrow, MarketingButton, SectionLabel } from "./MarketingButton";
 import { DopeDBMark } from "./DopeDBMark";
 import { RecommendedMarketingDownload, PlatformDownloadOptions } from "./PlatformDownloads";
@@ -10,6 +11,7 @@ import { repoUrl, workspaceUrls, type HomeCopy, type Lang } from "./homeContent"
 export function HomeSections({ c, lang }: { c: HomeCopy; lang: Lang }) {
   return <>
     <HomeAccessSections c={c} lang={lang} />
+    <HomeWorkflows lang={lang} />
     <HomeScopeWalkthrough lang={lang} c={{
       flowLabel: c.landing.flowLabel,
       flowTitle: c.landing.flowTitle,
