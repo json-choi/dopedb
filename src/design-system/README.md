@@ -353,9 +353,9 @@ loopback 문서는 이 정본을 빌드 시 포함하며 네트워크 font나 sc
   기기에서는 Apple Silicon/Intel/Windows 선택 surface로 이동한다. 추천과 수동
   선택 analytics를 구분하며 user-agent 추측으로 잘못된 DMG를 자동 선택하지 않는다.
 - `workspace-cloud/app/components/Controls`: Workspace Web에 남은 브라우저
-  surface의 compact `ControlButton` 하나를 소유한다. Workspace 관리는 Desktop
-  Settings로 이동했으므로 Web에 관리용 field·select·link primitive를 다시 만들지
-  않는다. `aria-pressed`는 semantic selection surface로 표시한다. 인증·초대
+  surface의 compact `ControlButton` 하나를 소유한다. Workspace 관리는 Desktop의
+  워크스페이스 관리 dialog로 이동했으므로 Web에 관리용 field·select·link
+  primitive를 다시 만들지 않는다. `aria-pressed`는 semantic selection surface로 표시한다. 인증·초대
   화면의 계정 선택 행은 `IdentityAccountChoice`가 최소 44px 높이, 이름·이메일의
   수직 계층과 긴 문자열 줄바꿈을 소유하며 각 화면은 인증 command만 제공한다.
 - `IdeTitleToolbar`, `IdeStatusBarSurface`: title/status chrome의
@@ -971,8 +971,8 @@ DopeDB의 실제 작업 흐름과 접근성, supported viewport를 위한 제품
   Agent 도구는 공급자별 한 행에 내장 채팅 준비 상태를 우선 표시한다. 공식 CLI와
   선택형 외부 사용 스킬의 상태·수리·제거는 그 행의 펼침 영역에 둔다. 기술
   구성 요소를 별도 최상위 목록으로 반복하지 않는다.
-- Workspace 관리 section(`계정`, 구성원, DB 접근 권한, 공급자, 백업 및 삭제)은
-  새 table·card stack 없이 `SettingsSectionHeader`·`SettingsList`·`SettingsRow`
+- 워크스페이스 관리 dialog의 section(구성원, DB 접근 권한, 공급자, 백업 및
+  삭제)과 Settings의 `계정` section은 새 table·card stack 없이 `SettingsSectionHeader`·`SettingsList`·`SettingsRow`
   inventory, `Status`의 `InlineNotice`, `ConfirmButton`, `Modal`을 조합한다.
   구성원 제거, 초대 취소, 공유 DB 삭제, 백업 삭제·복원 같은 파괴적 동작은
   `ConfirmButton`의 차단 확인 dialog로, workspace 삭제는 정확한 이름 입력으로만
@@ -986,6 +986,14 @@ DopeDB의 실제 작업 흐름과 접근성, supported viewport를 위한 제품
   202px settings rail은 검색 input에 8px gutter를 두고 24px hierarchy의
   hover/selection row는 rail 전체 폭을 차지하는 평평한 surface를 사용한다.
   선택 항목을 inset rounded pill로 만들지 않는다.
+- `SectionDialog`: Settings와 워크스페이스 관리처럼 왼쪽 section rail과 오른쪽
+  본문을 가진 설정형 dialog의 정본. `ModalSurface size="settings"`, 선택적
+  `TreeSearch` 검색(keyword 필터, 지우기, 결과 없음 문구), group별 rail
+  button(`aria-current`), 좁은 폭에서 optgroup `SelectInput`으로 바뀌는 section
+  선택, breadcrumb, `container-type: inline-size` 본문과 완료 footer를 소유한다.
+  각 화면은 entry 목록·활성 section·본문만 제공하고 rail·검색·footer를 다시
+  조립하지 않는다. 검색이 활성 항목을 숨기면 첫 번째 선택 가능한 일치 항목을
+  고른다. 두 dialog는 shell의 modal mode로 서로를 대체하며 동시에 열리지 않는다.
 
 툴윈도우 primitive는
 [`src/design-system/components/ToolWindow.tsx`](components/ToolWindow.tsx)에

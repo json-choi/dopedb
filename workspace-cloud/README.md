@@ -35,8 +35,9 @@ analytics and are served with `private, no-store`.
 ## Workspace administration
 
 DopeDB Desktop owns workspace administration: **Settings → Account** (other sessions,
-workspaces scheduled for deletion) and **Settings → Workspace** (Members, Database
-access, Providers, Backups & deletion) call this app's `/api/v1` routes with the
+workspaces scheduled for deletion) and **Workspace management**, opened from the
+workspace menu (Members, Database access, Providers, Backups & deletion), call this
+app's `/api/v1` routes with the
 account's Desktop Bearer session (see
 [ADR 0009](../docs/adr/0009-desktop-workspace-administration.md)). Those routes are a
 public contract for independently released Desktop versions, so their requests and
@@ -132,7 +133,7 @@ grant missing any of them instead of leaving a partially working integration.
 
 To deliver invitation email, also set `RESEND_API_KEY` and a verified
 `WORKSPACE_INVITATION_FROM` sender; without them, Desktop
-**Settings → Workspace → Members** keeps the email-bound copy-link fallback.
+**Workspace management → Members** keeps the email-bound copy-link fallback.
 The anonymous first-party product-outcome endpoint is disabled unless
 `PRODUCT_ANALYTICS_RELAY_ENABLED=1`. Production uses the `PRODUCT_ANALYTICS`
 Cloudflare service binding; there is no public sink URL or shared bearer token.
@@ -255,7 +256,7 @@ Cloudflare control plane accept GitHub sources only.
    to an organization. Neon does not currently publish a third-party OAuth client
    registration contract for this use case. A personal key also works, but the UI
    identifies its wider account blast radius and never calls this fallback one-click.
-2. In Desktop **Settings → Workspace → Providers**, choose Neon, enter the key and
+2. In Desktop **Workspace management → Providers**, choose Neon, enter the key and
    optional organization ID, and select project → branch → database. Protected
    branches are always production; default or otherwise unclassified branches
    require an Admin/Owner classification.
@@ -322,7 +323,7 @@ do not copy a project number, WIF coordinate, or service-account identity into a
 setup form.
 
 1. A workspace Admin or Owner starts the Google Cloud SQL setup in Desktop
-   **Settings → Workspace → Providers** and approves the Google OAuth request in the
+   **Workspace management → Providers** and approves the Google OAuth request in the
    browser opened through `/auth/provider/start`. The short-lived setup grant is held
    only for this bootstrap session, which Desktop continues after the user returns.
 2. DopeDB lists the approved account's projects and runnable Cloud SQL instances. The
@@ -406,7 +407,7 @@ instance creates a separate integration; move its connections before disconnecti
 old one.
 When Desktop cannot obtain a managed Cloud SQL lease, a manager follows the
 connection's **Repair managed connection** action to that exact database row in Desktop
-**Settings → Workspace → Providers** and starts **Repair managed access**. While the
+**Workspace management → Providers** and starts **Repair managed access**. While the
 browser authorization runs, Desktop keeps only a 15-minute, in-memory repair intent for
 that account and workspace with the opaque connection and integration IDs and the
 connection's project, instance, and database; nothing is stored in the browser. After
@@ -561,7 +562,7 @@ data must be reset instead of upgraded.
 - Admin/Owner can create, resend, and cancel Better Auth invitations; remove members;
   and assign Viewer (metadata only), Analyst (read-only), Editor (read/write through
   local safety gates), or Admin roles. Resend delivers email when configured, while
-  Desktop **Settings → Workspace → Members** always exposes a copyable, email-bound
+  Desktop **Workspace management → Members** always exposes a copyable, email-bound
   invitation link.
 - A signed-in user with a verified Google email automatically accepts every live
   invitation for that exact email on the next workspace read. Better Auth still

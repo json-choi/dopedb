@@ -83,7 +83,7 @@ SQL 데이터 값, provider 로고, 그래프 범주에는 앱 chrome 팔레트�
 값은 파일에 hex를 쓰라는 지시가 아니라 그 컴포넌트가 소비하거나 상속할 의미
 역할이다. 상태색은 실제 상태가 있을 때만 사용한다.
 
-### Desktop 공통 primitive (30개)
+### Desktop 공통 primitive (31개)
 
 | 컴포넌트 파일 | 배정할 색 역할 |
 | --- | --- |
@@ -107,6 +107,7 @@ SQL 데이터 값, provider 로고, 그래프 범주에는 앱 chrome 팔레트�
 | [`src/design-system/components/Progress.tsx`](../src/design-system/components/Progress.tsx) | muted·primary·info: 진행 막대 |
 | [`src/design-system/components/RenderRecoveryBoundary.tsx`](../src/design-system/components/RenderRecoveryBoundary.tsx) | card·foreground·danger·primary: 재시도 |
 | [`src/design-system/components/ResizeSeparator.tsx`](../src/design-system/components/ResizeSeparator.tsx) | border-subtle·ring: 크기 조절 focus |
+| [`src/design-system/components/SectionDialog.tsx`](../src/design-system/components/SectionDialog.tsx) | background·card·foreground·muted-foreground·border-subtle·selection·ring: section rail과 본문 |
 | [`src/design-system/components/SegmentedControl.tsx`](../src/design-system/components/SegmentedControl.tsx) | secondary·selection·foreground·ring: 단일 선택 |
 | [`src/design-system/components/Settings.tsx`](../src/design-system/components/Settings.tsx) | background·foreground·border-subtle: 그룹 구분 |
 | [`src/design-system/components/SettingsList.tsx`](../src/design-system/components/SettingsList.tsx) | background·foreground·muted-foreground·border-subtle |
@@ -135,7 +136,7 @@ SQL 데이터 값, provider 로고, 그래프 범주에는 앱 chrome 팔레트�
 | [`src/components/ToolbarMenu.tsx`](../src/components/ToolbarMenu.tsx) | popover·foreground·selection·ring |
 | [`src/components/WorkbenchDocumentStrip.tsx`](../src/components/WorkbenchDocumentStrip.tsx) | card·foreground·selection·ring |
 
-### Desktop 기능·화면 (169개)
+### Desktop 기능·화면 (166개)
 
 | 컴포넌트 파일 | 배정할 색 역할 |
 | --- | --- |
@@ -293,11 +294,7 @@ SQL 데이터 값, provider 로고, 그래프 범주에는 앱 chrome 팔레트�
 | [`src/screens/Settings/Safety/MonitoringAccess.tsx`](../src/screens/Settings/Safety/MonitoringAccess.tsx) | background·card·foreground·muted-foreground·input·ring; 접근 상태만 semantic 색 |
 | [`src/screens/Settings/Safety/index.tsx`](../src/screens/Settings/Safety/index.tsx) | background·card·foreground·muted-foreground·input·ring; 접근 상태만 semantic 색 |
 | [`src/screens/Settings/Updates/index.tsx`](../src/screens/Settings/Updates/index.tsx) | background·card·foreground·muted-foreground·input·ring; 접근 상태만 semantic 색 |
-| [`src/screens/Settings/WorkspaceAccess/index.tsx`](../src/screens/Settings/WorkspaceAccess/index.tsx) | 직접 색 없음 또는 상위 Settings surface 상속 |
-| [`src/screens/Settings/WorkspaceLifecycle/index.tsx`](../src/screens/Settings/WorkspaceLifecycle/index.tsx) | 직접 색 없음 또는 상위 Settings surface 상속 |
-| [`src/screens/Settings/WorkspaceMembers/index.tsx`](../src/screens/Settings/WorkspaceMembers/index.tsx) | 직접 색 없음 또는 상위 Settings surface 상속 |
-| [`src/screens/Settings/WorkspaceProviders/index.tsx`](../src/screens/Settings/WorkspaceProviders/index.tsx) | 직접 색 없음 또는 상위 Settings surface 상속 |
-| [`src/screens/Settings/index.tsx`](../src/screens/Settings/index.tsx) | background·card·foreground·muted-foreground·input·ring; 접근 상태만 semantic 색 |
+| [`src/screens/Settings/index.tsx`](../src/screens/Settings/index.tsx) | 직접 색 없음 또는 `SectionDialog` surface 상속 |
 | [`src/screens/Sql/SqlParameterDialog.tsx`](../src/screens/Sql/SqlParameterDialog.tsx) | editor·foreground·muted-foreground·ring; 쓰기/오류는 warning/danger |
 | [`src/screens/Sql/index.tsx`](../src/screens/Sql/index.tsx) | editor·foreground·muted-foreground·ring; 쓰기/오류는 warning/danger |
 | [`src/screens/Tables/MongoTableData.tsx`](../src/screens/Tables/MongoTableData.tsx) | editor·foreground·muted-foreground·border-subtle·selection·ring; 오류만 danger |
@@ -308,6 +305,7 @@ SQL 데이터 값, provider 로고, 그래프 범주에는 앱 chrome 팔레트�
 | [`src/screens/Tables/TableStructure.tsx`](../src/screens/Tables/TableStructure.tsx) | editor·foreground·muted-foreground·border-subtle·selection·ring; 오류만 danger |
 | [`src/screens/Tables/TableToolbar.tsx`](../src/screens/Tables/TableToolbar.tsx) | editor·foreground·muted-foreground·border-subtle·selection·ring; 오류만 danger |
 | [`src/screens/Tables/index.tsx`](../src/screens/Tables/index.tsx) | editor·foreground·muted-foreground·border-subtle·selection·ring; 오류만 danger |
+| [`src/screens/WorkspaceAdmin/index.tsx`](../src/screens/WorkspaceAdmin/index.tsx) | 직접 색 없음 또는 `SectionDialog` surface 상속 |
 
 ### Workspace Web (26개)
 

@@ -621,7 +621,7 @@ export function checkFrontendArchitecture(harness) {
     }
   }
 
-  // Workspace provider administration lives in Desktop Settings → Providers. The
+  // Workspace provider administration lives in Desktop Workspace management → Providers. The
   // Neon branch manager and the shared-database flow stay split into views,
   // controllers and parsers instead of regrowing one module per workflow.
   const providerAdminRoot = "src/features/workspaceAdmin/providers";

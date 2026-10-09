@@ -27,6 +27,10 @@ import type { SqlResolveMode } from "../queries/resolveMode";
 import { localSchemaConnectionPreset } from "../connections/presets";
 import { effectiveSafetySettings } from "../safetySettings/policy";
 import type { SettingsSection } from "../settings/domain";
+import type {
+  WorkspaceAdminDestination,
+  WorkspaceAdminSection,
+} from "../workspaceAdmin/sections";
 import type { SqlDocument } from "../sqlDocuments/domain";
 import type { AppUpdaterSnapshot } from "../updater/controller";
 import type { WorkbenchDocument } from "../workbench/domain";
@@ -44,6 +48,7 @@ const Knowledge = lazy(() => import("../../screens/Knowledge"));
 const SchemaExplorer = lazy(() => import("../../screens/Schema"));
 const SchemaDiff = lazy(() => import("../../screens/SchemaDiff"));
 const Settings = lazy(() => import("../../screens/Settings"));
+const WorkspaceAdmin = lazy(() => import("../../screens/WorkspaceAdmin"));
 const Sql = lazy(() => import("../../screens/Sql"));
 const TableData = lazy(() => import("../../screens/Tables"));
 
@@ -64,6 +69,8 @@ type WorkbenchContentModel = {
     welcomeOpen: boolean;
     settingsOpen: boolean;
     settingsSection?: SettingsSection;
+    /** Active Workspace management section, or null while the dialog is closed. */
+    workspaceAdminSection: WorkspaceAdminSection | null;
     activeSchemaGroup: SchemaConnectionGroup | null;
     editing: EditingConnection;
     connectionPreset: ConnectionLaunchPreset | null;
@@ -94,6 +101,8 @@ type WorkbenchContentModel = {
 type WorkbenchContentCommands = {
   route: {
     closeSettings: () => void;
+    openWorkspaceAdmin: (destination: WorkspaceAdminDestination) => void;
+    closeWorkspaceAdmin: () => void;
     closeSurface: () => void;
     openSafety: (connectionId: string) => void;
   };
@@ -202,20 +211,21 @@ function WorkbenchContentResolved({ model, commands }: Props) {
           onOpenSafety: commands.guidedDemo.openSafety,
         }
       : undefined;
+  const dialogFallback = (onClose: () => void) => (
+    <ModalBackdrop>
+      <ModalSurface
+        size="settings"
+        aria-label={t("app.loading")}
+        onRequestClose={onClose}
+      >
+        <div className="tw:flex tw:min-h-48 tw:items-center tw:justify-center">
+          <LoadingLabel>{t("app.loading")}</LoadingLabel>
+        </div>
+      </ModalSurface>
+    </ModalBackdrop>
+  );
   const settingsDialog = route.settingsOpen ? (
-    <Suspense fallback={
-      <ModalBackdrop>
-        <ModalSurface
-          size="settings"
-          aria-label={t("app.loading")}
-          onRequestClose={commands.route.closeSettings}
-        >
-          <div className="tw:flex tw:min-h-48 tw:items-center tw:justify-center">
-            <LoadingLabel>{t("app.loading")}</LoadingLabel>
-          </div>
-        </ModalSurface>
-      </ModalBackdrop>
-    }>
+    <Suspense fallback={dialogFallback(commands.route.closeSettings)}>
       <Settings
       connection={selected}
       initialSection={route.settingsSection}
@@ -232,15 +242,25 @@ function WorkbenchContentResolved({ model, commands }: Props) {
       />
     </Suspense>
   ) : null;
-  const withSettings = (content: ReactNode) => (
+  const workspaceAdminDialog = route.workspaceAdminSection ? (
+    <Suspense fallback={dialogFallback(commands.route.closeWorkspaceAdmin)}>
+      <WorkspaceAdmin
+        section={route.workspaceAdminSection}
+        onNavigate={commands.route.openWorkspaceAdmin}
+        onClose={commands.route.closeWorkspaceAdmin}
+      />
+    </Suspense>
+  ) : null;
+  const withDialogs = (content: ReactNode) => (
     <>
       {content}
       {settingsDialog}
+      {workspaceAdminDialog}
     </>
   );
 
   if (route.activeSchemaGroup) {
-    return withSettings(
+    return withDialogs(
       <Suspense fallback={<WorkbenchPaneLoading />}>
         <SchemaDiff
           key={route.activeSchemaGroup.key}
@@ -252,7 +272,7 @@ function WorkbenchContentResolved({ model, commands }: Props) {
   }
 
   if (route.editing !== null) {
-    return withSettings(
+    return withDialogs(
       <div className="tw:h-full tw:min-h-0">
         <Suspense fallback={<WorkbenchPaneLoading />}>
           <ConnectionForm
@@ -279,7 +299,7 @@ function WorkbenchContentResolved({ model, commands }: Props) {
 
   if (route.knowledgeEnvironmentFocus) {
     const focus = route.knowledgeEnvironmentFocus;
-    return withSettings(
+    return withDialogs(
       <section className="scrollbar-sleek tw:min-h-0 tw:flex-1 tw:overflow-auto tw:bg-background">
         <RenderRecoveryBoundary
           fallback={({ retry }) => (
@@ -300,7 +320,7 @@ function WorkbenchContentResolved({ model, commands }: Props) {
   }
 
   if (connection.loadError) {
-    return withSettings(
+    return withDialogs(
       <div className="tw:flex tw:h-full tw:min-w-0 tw:flex-col tw:items-center tw:justify-center tw:gap-2 tw:bg-muted tw:p-[var(--ds-pane-pad)] tw:text-center tw:leading-relaxed tw:[&>*]:max-w-[min(520px,100%)]">
         <div className="tw:break-words tw:text-ui tw:text-danger" role="alert">
           {t("app.couldNotLoadConnections", {
@@ -313,11 +333,11 @@ function WorkbenchContentResolved({ model, commands }: Props) {
   }
 
   if (!connection.loaded) {
-    return withSettings(<WorkbenchLoading />);
+    return withDialogs(<WorkbenchLoading />);
   }
 
   if (route.welcomeOpen || connection.items.length === 0) {
-    return withSettings(
+    return withDialogs(
       <Onboarding
         connectionName={selected ? selected.name || selected.database : undefined}
         guidedDemo={guidedDemo}
@@ -472,6 +492,7 @@ function WorkbenchContentResolved({ model, commands }: Props) {
         </Suspense>
       </section>
       {settingsDialog}
+      {workspaceAdminDialog}
     </>
   );
 }

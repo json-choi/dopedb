@@ -25,7 +25,7 @@ connection persistence itself.
 | `ConnectionSecurityTab.tsx` | `ConnectionSecurityTab` — TLS and SSH alias properties; no file picking or validation state owned here. |
 | `ConnectionBigQueryFields.tsx` | `ConnectionBigQueryFields` — BigQuery's official-CLI profile fields, kept separate from socket/password fields. |
 | `ConnectionCatalogCompactSelector.tsx` | `ConnectionCatalogCompactSelector` — compact catalog (engine/provider) selector used below the editor's wide-layout breakpoint. |
-| `ConnectionCatalogDetail.tsx` | `ConnectionCatalogDetail` — selected cloud provider or driver details from the catalog view model; does not load or mutate catalog state. |
+| `ConnectionCatalogDetail.tsx` | `ConnectionCatalogDetail` — selected cloud provider or driver details from the catalog view model, including the controller's shared database shortcut; does not load or mutate catalog state. |
 | `ConnectionCatalogNavigation.tsx` | `ConnectionCatalogNavigation` — catalog navigation and source commands in the editor; query/mutation ownership stays in feature controllers. |
 | `ConnectionSourcePicker.tsx` | `ConnectionSourcePicker` — one source picker shared by both wide and compact connection editor layouts. |
 | `ConnectionEditorDialogs.tsx` | `ConnectionEditorDialogs` — provider-credential and workspace-binding dialogs driven by dialog controller state. |

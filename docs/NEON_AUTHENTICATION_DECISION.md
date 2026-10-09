@@ -62,7 +62,7 @@ The hosted control plane verifies both the `/auth` principal and the complete,
 bounded project set. Their fingerprints form the durable external account
 identity. Discovery and new lease issuance repeat that comparison, so a key
 replacement or project-scope drift fails closed and asks the administrator to
-reconnect in Desktop Settings → Workspace → Providers. Member Desktops receive
+reconnect in Desktop Workspace management → Providers. Member Desktops receive
 only the redacted resource selector and the resulting short-lived database lease;
 the API key entered there is forwarded once and never stored on the device.
 

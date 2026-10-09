@@ -19,7 +19,7 @@ See `../AGENTS.md` for how these relate to the other canonical docs.
 | `0006-native-query-cancellation.md` | Defers per-engine native query cancellation; Stop instead cancels via an Operation-Runtime-issued UUID and a process-local cancellation slot checked before connection release. |
 | `0007-analysis-article-bi-domain.md` | Analysis Article is a published sanitized-HTML document with exactly one saved read-only query and a Desktop-only manual rerun; this supersedes the earlier block/graph BI composition model and excludes dashboards, transforms, schedules, and signals. |
 | `0008-desktop-loopback-pkce-login.md` | Desktop Workspace login uses hosted account approval plus an ephemeral IPv4 loopback callback and PKCE S256; native secrets stay outside the WebView while RFC 8628 remains a compatibility boundary. |
-| `0009-desktop-workspace-administration.md` | Workspace administration moves from the Workspace Web console into Desktop Settings; Rust calls a closed, validated catalog of control-plane admin operations with the account's Bearer session, provider OAuth goes through a same-origin start page, and the web keeps only sign-in, invitations, OAuth handoff and public Articles. |
+| `0009-desktop-workspace-administration.md` | Workspace administration moves from the Workspace Web console into Desktop (a Workspace management dialog, with account sessions in Settings → Account); Rust calls a closed, validated catalog of control-plane admin operations with the account's Bearer session, provider OAuth goes through a same-origin start page, and the web keeps only sign-in, invitations, OAuth handoff and public Articles. |
 
 ## For AI Agents
 

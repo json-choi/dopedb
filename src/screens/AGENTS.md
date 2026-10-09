@@ -24,9 +24,10 @@ None directly in this directory; every screen lives in its own subdirectory.
 | `Onboarding/` | Welcome document shown with no connection or an empty document strip (see `Onboarding/AGENTS.md`). |
 | `Schema/` | Catalog V2 ERD/relationship explorer (see `Schema/AGENTS.md`). |
 | `SchemaDiff/` | Multi-connection schema comparison workspace (see `SchemaDiff/AGENTS.md`). |
-| `Settings/` | Settings dialog: Advanced, AgentTools, Appearance, Cli, Privacy, Safety, Updates (see `Settings/AGENTS.md`). |
+| `Settings/` | Settings dialog: Account, Advanced, AgentTools, Appearance, Cli, Privacy, Safety, Updates (see `Settings/AGENTS.md`). |
 | `Sql/` | Manual SQL console (CodeMirror editor + results) (see `Sql/AGENTS.md`). |
 | `Tables/` | Table/collection data grid, paging, and row editing (see `Tables/AGENTS.md`). |
+| `WorkspaceAdmin/` | Workspace management dialog for the active team workspace: members, database access, providers, owner-only backups & deletion (see `WorkspaceAdmin/AGENTS.md`). |
 
 ## For AI Agents
 

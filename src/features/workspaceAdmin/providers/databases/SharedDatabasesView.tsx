@@ -1,4 +1,4 @@
-// Shared databases of the active workspace in Settings → Providers: the inventory
+// Shared databases of the active workspace in Workspace management → Providers: the inventory
 // joined with each managed connection's provider target, removal, the managed-access
 // repair entry, the inline add-database flow and Neon branch administration. Reads
 // come from the shared provider queries; this view owns the removal mutation and its
@@ -43,6 +43,8 @@ export interface SharedDatabasesViewProps {
   repairingConnectionId: string | null;
   /** Database to reveal once, e.g. from a managed-connection recovery request. */
   focusConnectionId: string | null;
+  /** Opens the add-database flow on mount, e.g. from the data source catalog. */
+  initiallyAdding?: boolean;
   /** Reports whether a mutation is running so the panel can lock view changes. */
   onBusyChange: (busy: boolean) => void;
 }
@@ -103,6 +105,7 @@ export default function SharedDatabasesView({
   onRepair,
   repairingConnectionId,
   focusConnectionId,
+  initiallyAdding = false,
   onBusyChange,
 }: SharedDatabasesViewProps) {
   const i18n = useI18n();
@@ -113,7 +116,8 @@ export default function SharedDatabasesView({
   const connections = useQuery(sharedConnectionsQuery(scope));
   const inventory = useQuery(providerInventoryQuery(scope));
   const catalogScope = useCatalogScope();
-  const [adding, setAdding] = useState(false);
+  // The wizard renders only once the provider inventory arrives.
+  const [adding, setAdding] = useState(initiallyAdding);
   const [wizardBusy, setWizardBusy] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [notice, setNotice] = useState<ViewNotice | null>(null);

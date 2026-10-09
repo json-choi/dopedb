@@ -34,7 +34,7 @@ flowchart LR
   end
 
   subgraph Desktop[Desktop · 관리와 실제 데이터 작업]
-    A0[Settings → Workspace<br/>구성원 · DB 접근 권한 · 공급자 · 백업 및 삭제]
+    A0[워크스페이스 관리<br/>구성원 · DB 접근 권한 · 공급자 · 백업 및 삭제]
     A1[Settings → 계정<br/>세션 종료 · 삭제 예약 취소]
     D0[Workspace · Project 선택]
     D1{연결 준비 여부}
@@ -50,6 +50,7 @@ flowchart LR
     D3 --> D4 --> D7
     D3 --> D5 --> D6 --> D7
     D0 --> A0
+    D2 -- 공유 DB 추가 --> A0
   end
 
   B0 --> D0
@@ -60,11 +61,11 @@ flowchart LR
 | 사용자 목적 | 유일한 command 소유자 | 다른 surface의 역할 |
 | --- | --- | --- |
 | workspace 생성 | Desktop workspace menu `새 워크스페이스` | 브라우저는 workspace를 만들지 않음 |
-| 구성원 초대·역할·제거 | Desktop `Settings → Workspace → 구성원` | 브라우저는 이메일 초대 링크의 수락만 소유 |
-| DB grant·팀 읽기 공유·연결 편집 충돌 | Desktop `Settings → Workspace → DB 접근 권한` | 연결 편집기와 Explorer는 적용된 권한만 표시 |
-| provider 계정 승인·managed DB 등록/복구·Neon branch | Desktop `Settings → Workspace → 공급자` | 브라우저는 OAuth 시작 확인과 완료 안내만 소유하고 설정을 진행하지 않음. 연결 편집기·Explorer는 연결 상태와 이 화면의 exact DB 복구 command만 제공 |
-| server backup·key rotation·retention·workspace 삭제 예약 | Desktop `Settings → Workspace → 백업 및 삭제`(Owner) | 삭제가 예약되면 취소는 `Settings → 계정`이 소유 |
-| 삭제 예약 취소·다른 기기와 브라우저 session 종료 | Desktop `Settings → 계정` | 계정 전환·추가·로그아웃은 title toolbar 계정 메뉴가 소유 |
+| 구성원 초대·역할·제거 | Desktop `워크스페이스 관리 → 구성원` | 브라우저는 이메일 초대 링크의 수락만 소유 |
+| DB grant·팀 읽기 공유·연결 편집 충돌 | Desktop `워크스페이스 관리 → DB 접근 권한` | 연결 편집기와 Explorer는 적용된 권한만 표시 |
+| provider 계정 승인·managed DB 등록/복구·Neon branch | Desktop `워크스페이스 관리 → 공급자` | 브라우저는 OAuth 시작 확인과 완료 안내만 소유하고 설정을 진행하지 않음. 연결 편집기·Explorer는 연결 상태와 이 화면의 exact DB 복구 command만 제공하고, 데이터 소스 카탈로그의 `공유 DB 추가`는 관리자·소유자에게만 이 화면의 DB 추가를 여는 바로가기 |
+| server backup·key rotation·retention·workspace 삭제 예약 | Desktop `워크스페이스 관리 → 백업 및 삭제`(Owner) | 삭제가 예약되면 취소는 `Settings → 계정`이 소유 |
+| 삭제 예약 취소·다른 기기와 브라우저 session 종료 | Desktop `Settings → 계정` | 계정 전환·추가·로그아웃은 title toolbar 계정 메뉴가 소유하고, 같은 메뉴의 `계정 관리`가 이 section을 연다 |
 | member-local credential·연결 profile·연결 검사 | Desktop connection editor | Web은 credential 입력·편집을 소유하지 않음 |
 | Project binding·schema/object 탐색 | Desktop Explorer | Agent와 결과 문서는 별도 resource tree를 만들지 않음 |
 | SQL·조회·Article 작업 | Desktop 중앙 document | 실행 결과·출력도 같은 중앙 작업 영역에서 확인 |
@@ -250,11 +251,16 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
   결과·출력·다중 statement를 열고, 하단 상태 표시가 background 진행·취소를 소유한다.
 - status surface는 현재 database/source/schema/object, transaction과 background
   상태를 보여주되 이미 document가 소유한 설명을 반복하지 않는다.
-- Workspace 관리는 Desktop `Settings`가 소유한다. 팀 workspace의 관리자·소유자에게만
-  `Workspace` 범위가 보이며 `구성원`, `DB 접근 권한`, `공급자`와 소유자 전용
-  `백업 및 삭제` 네 section을 둔다. 권한이 없는 구성원에게는 비활성 항목 없이 이
-  범위를 표시하지 않는다. 로그인한 계정의 다른 기기·브라우저 session 종료와 소유한
-  workspace의 삭제 예약 취소는 `Application → 계정`이 소유한다. 삭제가 예약되면
+- Workspace 관리는 Desktop의 `워크스페이스 관리` dialog가 소유한다. 앱
+  환경설정인 `Settings`와 분리된 shell modal이며 두 dialog는 서로를 대체할 뿐 겹쳐
+  열리지 않는다. 팀 workspace의 관리자·소유자만 열 수 있고 `구성원`, `DB 접근
+  권한`, `공급자`와 소유자 전용 `백업 및 삭제` 네 section을 둔다. 권한이 없는
+  구성원에게는 진입점과 section을 비활성 항목 없이 숨긴다. 진입점은 workspace
+  menu의 `워크스페이스 관리`, Action Search, 관리형 연결 복구, 데이터 소스 `+`
+  메뉴와 클라우드 안내의 `공유 DB 추가`이며, `공유 DB 추가`는 `공급자 → 공유
+  데이터베이스`의 DB 추가를 바로 연다. 로그인한 계정의 다른 기기·브라우저 session
+  종료와 소유한 workspace의 삭제 예약 취소는 workspace가 아니라 사용자 단위이므로
+  `Settings → 계정`이 소유하고, 계정 메뉴의 `계정 관리`가 그곳을 연다. 삭제가 예약되면
   Desktop은 membership을 다시 읽어 그 workspace에서 벗어나고 `계정`에서 영구 삭제
   시각과 취소를 보여 준다. 기록은 됐지만 정리 예약만 실패한 경우에는 같은 화면에서
   같은 요청을 다시 보낸다. workspace 생성은 workspace menu의 `새 워크스페이스`,
@@ -358,7 +364,7 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
   credential을 편집 가능한 로컬 값처럼 표시하지 않는다. 연결 검사가 실패하면
   로컬 host·password 수정을 안내하지 않고 관리 주체, 관리자가 확인할 provider
   account·DB 등록·멤버 접근을 설명한다. exact `manage` 권한이 있으면
-  `Settings → Workspace → 공급자`의 해당 DB 행을 여는 실제 command를 제공한다.
+  `워크스페이스 관리 → 공급자`의 해당 DB 행을 여는 실제 command를 제공한다.
   해당 DB 행은 설명에서 끝나지 않고 provider 재승인을 시작하는 복구 command를
   소유한다. GCP Cloud SQL 복구는 기존 integration·project·instance를 고정한 채
   브라우저에서 OAuth를 다시 받고, Desktop에 돌아와 IAM DB 인증 flag와 전용 DB 사용자를
@@ -456,7 +462,7 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
 | PD-43 | 문서 탭 닫기와 재열기 | `구현` | 탭 닫기는 SQL document 삭제가 아니며 본문과 revision을 보존한다. 열린 SQL 탭 목록, 순서, 활성 SQL 탭은 workspace·account·connection 범위의 member-local 상태로만 영속하고 공유 레코드에 두지 않는다. 저장된 상태가 없으면 기존처럼 복원하고 저장된 빈 목록은 사용자가 모두 닫은 상태로 존중한다. 닫은 문서는 Action Search의 최소 재열기 command로 다시 연다. 별도 문서 관리 화면과 Local History 비교 UI는 만들지 않는다. |
 | PD-44 | 로컬 데이터베이스 리스너 감지 | `구현` | 첫 연결의 입력을 줄이기 위해 사용자가 명시적으로 실행한 1회 감지만 수행한다. 대상은 loopback 주소와 engine별 기본 포트의 닫힌 allowlist(PostgreSQL 5432, MySQL/MariaDB 3306, MongoDB 27017)로 한정하고 임의 host, 포트 범위, 로컬 네트워크 대역, container runtime, 파일 시스템을 탐색하지 않는다. 각 후보는 자격 증명 없이 protocol handshake만 수행해 engine을, 프로토콜이 인증 전에 알려 주는 경우에만 서버 버전을 확인한 뒤 즉시 닫으며 인증 시도, startup 패킷, query를 보내지 않는다. `~/.pgpass`, `~/.my.cnf`, `pg_service.conf`, 환경 변수, 프로젝트 `.env` 같은 클라이언트 설정과 자격 증명 저장소는 읽지 않는다. 감지 결과는 engine, host, port, driver만 편집 가능한 초안에 채우는 제안이며 username, 비밀번호, database는 사람이 입력하거나 기존 database discovery가 채운다. 감지는 연결을 저장하거나 자동으로 접속하지 않고 백그라운드 polling과 주기적 재감지를 하지 않는다. 미설치와 감지 실패는 정확한 빈 상태로 표시하고 기존 수동 입력 경로를 막지 않는다. |
 | PD-45 | 로컬 진단 로그와 버그 제보 | `구현` | Settings → 고급에서 명시적으로 켠 뒤 Desktop의 Rust 진단 이벤트, frontend 오류와 IPC 결과·시간을 bounded process-memory에만 수집한다. 기본은 꺼짐이며 끄기·종료 시 비우고 파일·서버에 전송하지 않는다. 인증 비밀값과 명시적 SQL·결과·Agent payload는 제외하되 호스트·DB 이름·사용자명·경로 같은 내부 정보는 포함될 수 있다. 조회·비우기와 개인정보 경고 확인 뒤 수동 복사·GitHub 이슈 작성 페이지 열기만 제공하며 자동 첨부·제출과 완전한 개인정보 자동 마스킹은 제공하지 않는다. |
-| PD-46 | Desktop workspace 관리 | `구현` | workspace 생성, 구성원 초대·역할·제거, DB grant·팀 읽기 공유·연결 편집 충돌, 공급자 계정 승인·managed DB 등록/복구·Neon branch, 소유자의 backup·key rotation·retention·삭제 예약, 계정 session 종료와 삭제 예약 취소를 Desktop `Settings`가 소유한다. Rust가 계정별 Bearer session으로 control plane의 닫힌 작업 목록만 호출하고 경로 식별자를 검증하며 token·provider state·입력한 provider secret을 WebView 캐시나 로컬 저장소에 남기지 않는다. 브라우저 OAuth가 필요한 공급자는 control plane origin의 시작 확인 페이지만 열고 완료 뒤 Desktop에서 이어 간다. Workspace Web의 관리 화면은 제거하고 로그인·초대 수락·OAuth 시작 확인과 완료 안내·공개 Article만 남긴다. 권한이 없는 구성원에게는 관리 section을 비활성 항목 없이 숨긴다. |
+| PD-46 | Desktop workspace 관리 | `구현` | workspace 생성, 구성원 초대·역할·제거, DB grant·팀 읽기 공유·연결 편집 충돌, 공급자 계정 승인·managed DB 등록/복구·Neon branch, 소유자의 backup·key rotation·retention·삭제 예약, 계정 session 종료와 삭제 예약 취소를 Desktop이 소유한다. workspace 범위 관리는 앱 `Settings`와 분리된 `워크스페이스 관리` dialog가, 계정 session 종료와 삭제 예약 취소는 `Settings → 계정`이 맡는다. 데이터 소스 카탈로그의 `공유 DB 추가`는 관리자·소유자에게만 그 dialog의 DB 추가를 여는 바로가기다. Rust가 계정별 Bearer session으로 control plane의 닫힌 작업 목록만 호출하고 경로 식별자를 검증하며 token·provider state·입력한 provider secret을 WebView 캐시나 로컬 저장소에 남기지 않는다. 브라우저 OAuth가 필요한 공급자는 control plane origin의 시작 확인 페이지만 열고 완료 뒤 Desktop에서 이어 간다. Workspace Web의 관리 화면은 제거하고 로그인·초대 수락·OAuth 시작 확인과 완료 안내·공개 Article만 남긴다. 권한이 없는 구성원에게는 관리 진입점과 section을 비활성 항목 없이 숨긴다. |
 
 
 ## 변경 규칙

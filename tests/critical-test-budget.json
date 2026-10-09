@@ -41,7 +41,7 @@
     },
     "src/features/workspaces/authPolicy.test.ts": {
       "tests": 3,
-      "protects": "Workspace authentication cooldown, request deduplication, exact external authentication URL scope, token-free Desktop callback schemes, managed-connection recovery that opens exactly Settings → Providers and hands its database focus over once while dropping a superseded or 60-second-stale focus, personal/team shared-authority separation, active-observer cache clearing, connection-scoped Agent Knowledge reset, localized persisted-session recovery, role-only authority refetch, responsive Agent modeless/modal and Escape contracts, and consent-gated product analytics identity, queue, scope, bucketing, and raw-field exclusion"
+      "protects": "Workspace authentication cooldown, request deduplication, exact external authentication URL scope, token-free Desktop callback schemes, managed-connection recovery and the shared-database shortcut that open exactly Workspace management → Providers and hand their focus over once while dropping a superseded or 60-second-stale focus, personal/team shared-authority separation, active-observer cache clearing, connection-scoped Agent Knowledge reset, localized persisted-session recovery, role-only authority refetch, responsive Agent modeless/modal and Escape contracts, and consent-gated product analytics identity, queue, scope, bucketing, and raw-field exclusion"
     }
   },
   "rust": {

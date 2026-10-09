@@ -10,7 +10,7 @@ import { desktopWorkspaceAccessCallbackUrl } from "../../../workspace-cloud/lib/
 import {
   onWorkspaceAdminRequested,
   requestWorkspaceAdmin,
-  takePendingConnectionFocus,
+  takePendingWorkspaceAdminFocus,
 } from "../workspaceAdmin/navigationRequest";
 import {
   AGENT_SETUP_URLS,
@@ -249,29 +249,39 @@ describe("workspace auth lifecycle", () => {
     }
 
     expect(desktopWorkspaceAccessCallbackUrl).toBe("dopedb://workspace/access-complete");
-    // Managed-connection recovery opens exactly Settings → Providers and hands the
-    // database focus over once; a stale or superseded focus never reaches the panel.
+    // Managed-connection recovery and the shared-database shortcut open exactly
+    // Workspace management → Providers and hand their focus over once; a stale or
+    // superseded focus never reaches the panel.
     const previousWindow = (globalThis as { window?: unknown }).window;
     (globalThis as { window?: unknown }).window = new EventTarget();
     try {
       const recoveryTarget = "10000000-0000-4000-8000-000000000001";
+      const recoveryFocus = { kind: "connection", connectionId: recoveryTarget } as const;
       const requested: string[] = [];
       const stopListening = onWorkspaceAdminRequested((section) => requested.push(section));
-      requestWorkspaceAdmin("workspace-providers", { connectionId: recoveryTarget });
+      requestWorkspaceAdmin("workspace-providers", recoveryFocus);
       expect(requested).toEqual(["workspace-providers"]);
-      expect(takePendingConnectionFocus()).toBe(recoveryTarget);
-      expect(takePendingConnectionFocus()).toBeNull();
-      requestWorkspaceAdmin("workspace-providers", { connectionId: recoveryTarget });
+      expect(takePendingWorkspaceAdminFocus()).toEqual(recoveryFocus);
+      expect(takePendingWorkspaceAdminFocus()).toBeNull();
+      requestWorkspaceAdmin("workspace-providers", { kind: "addDatabase" });
+      expect(takePendingWorkspaceAdminFocus()).toEqual({ kind: "addDatabase" });
+      requestWorkspaceAdmin("workspace-providers", recoveryFocus);
       requestWorkspaceAdmin("workspace-members");
-      expect(takePendingConnectionFocus()).toBeNull();
-      requestWorkspaceAdmin("workspace-providers", { connectionId: recoveryTarget });
-      expect(takePendingConnectionFocus(Date.now() + 61_000)).toBeNull();
+      expect(takePendingWorkspaceAdminFocus()).toBeNull();
+      requestWorkspaceAdmin("workspace-providers", { kind: "addDatabase" });
+      requestWorkspaceAdmin("account");
+      expect(takePendingWorkspaceAdminFocus()).toBeNull();
+      requestWorkspaceAdmin("workspace-providers", recoveryFocus);
+      expect(takePendingWorkspaceAdminFocus(Date.now() + 61_000)).toBeNull();
       stopListening();
       requestWorkspaceAdmin("workspace-access");
       expect(requested).toEqual([
         "workspace-providers",
         "workspace-providers",
+        "workspace-providers",
         "workspace-members",
+        "workspace-providers",
+        "account",
         "workspace-providers",
       ]);
     } finally {

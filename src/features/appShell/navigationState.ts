@@ -1,9 +1,15 @@
-// The shell's central surface has one route owner. Settings is a modal mode that
-// retains an explicit background route instead of coexisting with independent
-// editor, Knowledge, and schema-diff flags.
+// The shell's central surface has one route owner. Settings and Workspace management
+// are modal modes that retain an explicit background route instead of coexisting
+// with independent editor, Knowledge, and schema-diff flags; opening one replaces
+// the other. A Workspace management request for the account opens Settings → Account,
+// because the account belongs to the person rather than to one workspace.
 import type { ConnectionLaunchPreset } from "../connections/presets";
 import type { KnowledgeEnvironmentFocus } from "../knowledge/domain";
 import type { SettingsSection } from "../settings/domain";
+import type {
+  WorkspaceAdminDestination,
+  WorkspaceAdminSection,
+} from "../workspaceAdmin/sections";
 
 export type AppShellRoute =
   | { kind: "workbench" }
@@ -23,6 +29,11 @@ export type AppShellMode =
       kind: "settings";
       route: AppShellRoute;
       section: SettingsSection | undefined;
+    }
+  | {
+      kind: "workspaceAdmin";
+      route: AppShellRoute;
+      section: WorkspaceAdminSection;
     };
 
 export type AppShellNavigationCommand =
@@ -39,6 +50,8 @@ export type AppShellNavigationCommand =
   | { type: "openSchemaDiff"; groupKey: string }
   | { type: "openSettings"; section?: SettingsSection }
   | { type: "closeSettings" }
+  | { type: "openWorkspaceAdmin"; destination: WorkspaceAdminDestination }
+  | { type: "closeWorkspaceAdmin" }
   | { type: "focusToolWindow" }
   | { type: "schemaGroupUnavailable"; groupKey: string }
   | { type: "connectionDeleted"; connectionId: string; remainingConnections?: number };
@@ -50,7 +63,7 @@ export const initialAppShellMode: AppShellMode = {
   route: WORKBENCH_ROUTE,
 };
 
-function backgroundForSettings(route: AppShellRoute): AppShellRoute {
+function backgroundForDialog(route: AppShellRoute): AppShellRoute {
   return route.kind === "connectionEditor" || route.kind === "schemaDiff"
     ? WORKBENCH_ROUTE
     : route;
@@ -64,9 +77,9 @@ function withRoute(
   mode: AppShellMode,
   route: AppShellRoute,
 ): AppShellMode {
-  return mode.kind === "settings"
-    ? { ...mode, route }
-    : { kind: "content", route };
+  return mode.kind === "content"
+    ? { kind: "content", route }
+    : { ...mode, route };
 }
 
 export function appShellNavigationReducer(
@@ -97,17 +110,27 @@ export function appShellNavigationReducer(
     case "openSettings":
       return {
         kind: "settings",
-        route: backgroundForSettings(routeOf(mode)),
+        route: backgroundForDialog(routeOf(mode)),
         section: command.section,
       };
     case "closeSettings":
       return mode.kind === "settings"
         ? { kind: "content", route: mode.route }
         : mode;
+    case "openWorkspaceAdmin": {
+      const route = backgroundForDialog(routeOf(mode));
+      return command.destination === "account"
+        ? { kind: "settings", route, section: "account" }
+        : { kind: "workspaceAdmin", route, section: command.destination };
+    }
+    case "closeWorkspaceAdmin":
+      return mode.kind === "workspaceAdmin"
+        ? { kind: "content", route: mode.route }
+        : mode;
     case "focusToolWindow":
       return {
         kind: "content",
-        route: backgroundForSettings(routeOf(mode)),
+        route: backgroundForDialog(routeOf(mode)),
       };
     case "schemaGroupUnavailable": {
       const route = routeOf(mode);

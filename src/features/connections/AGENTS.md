@@ -32,7 +32,7 @@ rather than calling `invoke` for connection commands directly.
 | `queries.ts` | `connectionQueryKeys` and `connectionsQuery`/`localDatabaseListenersQuery`/`bigQueryAuthStateQuery`/`bigQueryProjectsQuery`/`bigQueryDatasetsQuery` (`queryOptions()`-based). |
 | `tauriAdapter.ts` | `listConnections`, `listDrivers`, `installDriver`, `createDemoSqlite`, `upsertConnection`, `setConnectionsSchemaGroup`, `deleteConnection`, `testConnection`/`testConnectionProfile`, `discoverConnectionProfileDatabases`, `discoverLocalDatabaseListeners`, BigQuery auth/discovery (`getBigQueryAuthState`, `authenticateBigQueryGoogleAccount`/`ServiceAccount`, `clearBigQueryServiceAccountAuth`, `discoverBigQueryProjects`/`Datasets`). |
 | `useBigQueryOnboardingController.ts` | Owns BigQuery's local Google Cloud CLI authentication and bounded resource discovery; per its header comment, the editor receives only authentication availability and bounded resource identifiers, not raw credentials. |
-| `useConnectionCatalogController.ts` | Driver/source catalog queries, search/selection state, driver installation, and the add-data-source command menu. |
+| `useConnectionCatalogController.ts` | Driver/source catalog queries, search/selection state, driver installation, the add-data-source command menu, and the owner/admin-only shortcut that opens Workspace management → Providers at the shared database add flow through `requestWorkspaceAdmin`. |
 | `useConnectionEditorController.ts` | Composes `useBigQueryOnboardingController`, `useConnectionCatalogController`, `useConnectionEditorDialogs`, `useConnectionProfileController`, `useConnectionProfileState`, and `useConnectionSchemaController` into one `ConnectionEditorController`. |
 | `useConnectionEditorDialogs.ts` | Dialog visibility and return-focus anchors (provider credentials, workspace copy/credentials, problems panel) kept separate from profile/catalog state. |
 | `useConnectionProfileController.ts` | Profile validation and save/test/delete lifecycle commands; editable draft mechanics stay in `useConnectionProfileState.ts`. |
@@ -40,7 +40,7 @@ rather than calling `invoke` for connection commands directly.
 | `useLocalListenerDiscovery.ts` | One-shot loopback listener discovery for the first-run Welcome; starts only when the caller runs it and returns suggestions that only the connection editor can turn into a saved profile. |
 | `useConnectionProfileState.ts` | Owns the editable profile draft, URL projection, connection options, and local command status shared by the editor's other controllers. |
 | `useConnectionSchemaController.ts` | Schema discovery and the persisted introspection scope (`SCHEMA_SCOPE_PARAMETER`) projected by the editor's Schemas tab. |
-| `useManagedConnectionRecovery.ts` | Owns the repair command for one managed shared connection: opens Settings → Workspace → Providers focused on that database through `requestWorkspaceAdmin`, and runs the caller's refresh once when Settings reports that database repaired. |
+| `useManagedConnectionRecovery.ts` | Owns the repair command for one managed shared connection: opens Workspace management → Providers focused on that database through `requestWorkspaceAdmin`, and runs the caller's refresh once when Settings reports that database repaired. |
 
 ## For AI Agents
 
