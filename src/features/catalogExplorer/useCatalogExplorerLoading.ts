@@ -1,6 +1,7 @@
 // Owns explicit Explorer loading and authentication recovery. Provider login runs
 // through the existing connection adapter; this hook only coordinates catalog cache
-// refresh after the member-local credential becomes usable again.
+// refresh after the member-local credential becomes usable again. A shared connection
+// whose workspace session expired is recovered by signing in to the workspace.
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import {
@@ -14,6 +15,7 @@ import {
   type ConnectionProfile,
 } from "../connections/domain";
 import { useManagedConnectionRecoveryLauncher } from "../connections/useManagedConnectionRecovery";
+import { requestWorkspaceAdmin } from "../workspaceAdmin/navigationRequest";
 import { qk, type CatalogScope } from "../../lib/queries";
 import { catalogLoadIssue, readWithCatalogIssue } from "./catalogDomain";
 import type { useCatalogExplorerState } from "./state";
@@ -62,7 +64,7 @@ export function useCatalogExplorerLoading(
           type: "all",
         }),
         queryClient.refetchQueries({
-          queryKey: ["databaseCatalog", connection.id],
+          queryKey: ["databaseCatalogSnapshot", connection.id],
           type: "all",
         }),
       ]);
@@ -93,6 +95,21 @@ export function useCatalogExplorerLoading(
       ),
       exact: true,
     });
+    // A failed refresh may have failed the full snapshot too; retry it in the same
+    // action instead of revealing a second error after the overview recovers.
+    const snapshotKey = qk.databaseCatalogSnapshot(
+      connectionId,
+      database,
+      catalogScope.key,
+    );
+    if (queryClient.getQueryState(snapshotKey)?.status === "error") {
+      void queryClient.refetchQueries({ queryKey: snapshotKey, exact: true });
+    }
+    // A failed database-list re-read is reported on the default database; retry it too.
+    const databasesKey = qk.connectionDatabases(connectionId, catalogScope.key);
+    if (queryClient.getQueryState(databasesKey)?.status === "error") {
+      void queryClient.refetchQueries({ queryKey: databasesKey, exact: true });
+    }
   }
 
   const recoveryConnectionId = authenticationRecovery.variables?.connection.id
@@ -126,6 +143,13 @@ export function useCatalogExplorerLoading(
               connection,
               onManagedReturn,
             )
+          : undefined,
+      // A shared connection is leased and authorized with this device's workspace
+      // session, so its `authenticationRequired` means that session expired. A
+      // provider sign-in (BigQuery) is renewed by its own recovery above instead.
+      onSignInWorkspace:
+        connection.workspaceAccess !== "local" && connection.engine !== "bigquery"
+          ? () => requestWorkspaceAdmin("account")
           : undefined,
     };
   }

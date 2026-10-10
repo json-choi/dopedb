@@ -1,6 +1,7 @@
 // Query feature application state. A run owns its controller and every pending
 // React commit acknowledgement, so replacement and lifecycle cleanup cannot
-// resolve a callback from another run.
+// resolve a callback from another run. A user cancel keeps the rows already
+// received as a partial result marked cancelled; a replacement discards them.
 import {
   useCallback,
   useEffect,
@@ -124,24 +125,30 @@ export function useSqlResultStream(scopeKey: string) {
     });
   }, [owns]);
 
-  const invalidate = useCallback(async (run: StreamRun | null) => {
+  // `keepRows` is a user cancel: the rows already received stay as a partial
+  // result marked cancelled. A replacement run or unmount discards them.
+  const invalidate = useCallback(async (run: StreamRun | null, keepRows = false) => {
     if (!run || !run.active) return;
     run.active = false;
     run.resolveInvalidated();
     if (activeRunRef.current === run) activeRunRef.current = null;
     settlePending(run, staleRun());
     const current = stateRef.current;
+    let partial = false;
     if (
       current.runId === run.id &&
       (current.phase === "connecting" || current.phase === "streaming")
     ) {
-      clearSqlResultPageCache(current.rowSource);
-      const cancelled = {
-        ...current,
-        phase: "cancelled" as const,
-        rowSource: emptySqlStreamView(run.id).rowSource,
-        rowCount: 0,
-      };
+      partial = keepRows && current.rowCount > 0;
+      if (!partial) clearSqlResultPageCache(current.rowSource);
+      const cancelled = partial
+        ? { ...current, phase: "cancelled" as const }
+        : {
+            ...current,
+            phase: "cancelled" as const,
+            rowSource: emptySqlStreamView(run.id).rowSource,
+            rowCount: 0,
+          };
       stateRef.current = cancelled;
       setStream(cancelled);
     }
@@ -150,15 +157,27 @@ export function useSqlResultStream(scopeKey: string) {
     // Cancellation is best effort. Its transport failure must never leave a
     // commit callback unresolved or stop the next run from being created.
     await controller?.cancel().catch(() => undefined);
+    if (!partial || !controller) return;
+    // The backend publishes the pages it wrote before the run settles; only
+    // then can rows that left the bounded page cache be read back.
+    await controller.completion.catch(() => undefined);
+    const latest = stateRef.current;
+    if (!mountedRef.current || latest.runId !== run.id || latest.phase !== "cancelled") return;
+    const readable = {
+      ...latest,
+      rowSource: { ...latest.rowSource, complete: true },
+    };
+    stateRef.current = readable;
+    setStream(readable);
   }, [settlePending]);
 
   const cancel = useCallback(
-    async () => invalidate(activeRunRef.current),
+    async () => invalidate(activeRunRef.current, true),
     [invalidate],
   );
 
   const start = useCallback(async (factory: ControllerFactory) => {
-    await cancel();
+    await invalidate(activeRunRef.current);
     const run = newRun(++nextRunIdRef.current);
     activeRunRef.current = run;
 
@@ -212,10 +231,10 @@ export function useSqlResultStream(scopeKey: string) {
         activeRunRef.current = null;
       }
     }
-  }, [cancel, commit, owns, settlePending]);
+  }, [commit, invalidate, owns, settlePending]);
 
   const reset = useCallback(async () => {
-    await cancel();
+    await invalidate(activeRunRef.current);
     if (!mountedRef.current) return;
     const run = newRun(++nextRunIdRef.current);
     activeRunRef.current = run;
@@ -224,7 +243,7 @@ export function useSqlResultStream(scopeKey: string) {
       run.active = false;
       activeRunRef.current = null;
     }
-  }, [cancel, commit]);
+  }, [commit, invalidate]);
 
   useEffect(() => {
     mountedRef.current = true;

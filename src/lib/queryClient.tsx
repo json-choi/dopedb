@@ -5,12 +5,16 @@ import { useEffect, useState, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
 import type { JobChangedEvent } from "../features/jobs/domain";
-import type {
-  ManualTransactionChangedEvent,
-  ManualTransactionStatus,
-} from "../features/queries/domain";
+import type { ManualTransactionStatus } from "../features/queries/domain";
+import {
+  manualTransactionEndedKey,
+  type ManualTransactionChange,
+  type ManualTransactionEnded,
+} from "../features/queries/useManualTransaction";
 import { knowledgeQueryScope } from "../features/knowledge/queryKeys";
+import { isPersistedCatalogValue } from "../features/catalog/tauriAdapter";
 import { qk } from "./queries";
+import { refreshConnectionCatalog } from "./catalogQueries";
 
 // Scope changes are a security boundary, so new feature queries are private by
 // default. Only machine-global inventories and the two queries that establish the
@@ -33,7 +37,6 @@ const CONNECTION_RESOURCE_QUERY_ROOTS = new Set([
   "catalogOverview",
   "catalogSnapshot",
   "connectionDatabases",
-  "databaseCatalog",
   "databaseCatalogOverview",
   "databaseCatalogSnapshot",
   "history",
@@ -50,6 +53,18 @@ const CONNECTION_RESOURCE_QUERY_ROOTS = new Set([
   "tableDdl",
 ]);
 
+// Catalog reads are authorized once when they start and keyed by that scope, so an
+// authority that did change resets them through `resetWorkspaceResourceQueries`.
+const CATALOG_READ_ROOTS = new Set([
+  "catalog",
+  "catalogOverview",
+  "catalogSnapshot",
+  "connectionDatabases",
+  "databaseCatalogOverview",
+  "databaseCatalogSnapshot",
+  "tableDdl",
+]);
+
 /** Clear only data tied to the previous workspace; identity and global catalogs stay warm. */
 export async function resetWorkspaceResourceQueries(queryClient: QueryClient) {
   await queryClient.cancelQueries({ predicate: isWorkspaceResource });
@@ -63,18 +78,34 @@ export async function resetWorkspaceResourceQueries(queryClient: QueryClient) {
   queryClient.removeQueries({ predicate: isWorkspaceResource, type: "inactive" });
 }
 
-/** Freeze private reads before a native authority refresh can change its active scope. */
-export async function cancelWorkspaceResourceQueries(queryClient: QueryClient) {
-  await queryClient.cancelQueries({ predicate: isWorkspaceResource });
+/**
+ * Freeze private reads before a native authority refresh can change its active scope.
+ * A revalidation may keep catalog reads running: cancelling them would only re-send the
+ * same scans, and an authority that did change resets them afterwards.
+ */
+export async function cancelWorkspaceResourceQueries(
+  queryClient: QueryClient,
+  { keepCatalogReads = false }: { keepCatalogReads?: boolean } = {},
+) {
+  await queryClient.cancelQueries({
+    predicate: (query) =>
+      isWorkspaceResource(query)
+      && !(keepCatalogReads && CATALOG_READ_ROOTS.has(String(query.queryKey[0]))),
+  });
 }
 
-/** Resume only data-less private observers stranded by a completed scope replacement. */
+/**
+ * Resume private observers stranded by a completed scope replacement: data-less entries,
+ * and catalog entries a cancelled read reverted to the persisted seed it was showing.
+ */
 export async function resumePendingWorkspaceResourceQueries(queryClient: QueryClient) {
   await queryClient.refetchQueries({
     predicate: (query) =>
       isWorkspaceResource(query)
-      && query.state.status === "pending"
-      && query.state.fetchStatus === "idle",
+      && query.state.fetchStatus === "idle"
+      && (query.state.status === "pending"
+        || (query.state.status === "success"
+          && isPersistedCatalogValue(query.state.data))),
     type: "active",
   });
 }
@@ -179,18 +210,51 @@ function retainCacheInvalidation(queryClient: QueryClient) {
         const connectionId = event.payload.connectionId;
         if (!connectionId) return;
         void queryClient.invalidateQueries({ queryKey: qk.history(connectionId) });
-        void queryClient.invalidateQueries({ queryKey: qk.audit(connectionId) });
+        // Only the newest audit page can change: older cursor pages and exact
+        // entries are append-only. The chain verdict rescans every row, so it is
+        // only marked stale and recomputes when Activity opens or on request.
+        void queryClient.invalidateQueries({
+          queryKey: qk.auditPage(connectionId, null),
+          exact: true,
+        });
+        void queryClient.invalidateQueries({
+          queryKey: qk.auditVerdict(connectionId),
+          exact: true,
+          refetchType: "none",
+        });
       }),
       listen<JobChangedEvent>("job:changed", (event) => {
         if (!active()) return;
         void invalidateJobQueries(queryClient, event.payload);
       }),
-      listen<ManualTransactionChangedEvent>(
+      // A committed DDL statement or connection edit retired the native catalog
+      // cache. Reload that connection's catalog views once through the shared
+      // refresh path; `null` follows a dropped event burst with a full resync.
+      listen<{ connectionId: string | null }>("catalog:changed", (event) => {
+        if (!active()) return;
+        void refreshConnectionCatalog(
+          queryClient,
+          event.payload.connectionId,
+        ).catch(() => {
+          // Each failed read keeps its own error state for the visible surface.
+        });
+      }),
+      listen<ManualTransactionChange>(
         "manual-transaction:changed",
         (event) => {
           if (!active()) return;
-          const { connectionId, status } = event.payload;
+          const { connectionId, status, ended } = event.payload;
           queryClient.setQueryData(qk.manualTransaction(connectionId), status);
+          // Why the transaction ended stays visible until dismissed or a new
+          // begin; the shell announces ends the user did not initiate.
+          if (ended) {
+            queryClient.setQueryData<ManualTransactionEnded>(
+              manualTransactionEndedKey(connectionId),
+              { ...ended, connectionId },
+            );
+          } else if (status) {
+            queryClient.setQueryData(manualTransactionEndedKey(connectionId), null);
+          }
           queryClient.setQueryData<ManualTransactionStatus[]>(
             qk.manualTransactions(),
             (current) => {

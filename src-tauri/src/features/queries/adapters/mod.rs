@@ -24,11 +24,11 @@ pub(crate) use desktop_contracts::{
 };
 #[cfg(test)]
 pub(crate) use desktop_result_store::assert_decode_failure_export_contract;
-pub(crate) use desktop_result_store::DesktopSqlResultAuthority;
 #[cfg(feature = "packaged-benchmark")]
 pub(crate) use desktop_result_store::{
     run_packaged_result_store_benchmark, PackagedResultStoreMetric,
 };
+pub(crate) use desktop_result_store::{save_renderer_export, DesktopSqlResultAuthority};
 pub(crate) use desktop_stream_lifecycle::{DesktopStreamCleanupOwner, DesktopStreamCleanupRuntime};
 #[cfg(test)]
 pub(crate) use desktop_stream_registry::assert_ephemeral_page_contract;

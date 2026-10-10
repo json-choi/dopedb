@@ -4,6 +4,7 @@ mod adapters;
 mod application;
 mod domain;
 mod manual_transaction;
+pub(crate) mod manual_transaction_exit;
 mod ports;
 pub(crate) mod transport;
 
@@ -52,6 +53,10 @@ pub(crate) use manual_transaction::{
     ManualExecutionTarget, ManualScriptRequest, ManualTransactionRuntime, ManualTransactionStatus,
 };
 
+/// Stable review refusals the Desktop maps to localized copy.
+const AGENT_PROPOSAL_MISMATCH: &str = "agent_proposal_mismatch";
+const AGENT_PROPOSAL_NOT_REVIEWABLE: &str = "agent_proposal_not_reviewable";
+
 #[cfg(test)]
 mod domain_tests;
 
@@ -92,7 +97,8 @@ impl QueriesFeature {
         expected_payload_hash: String,
     ) -> AppResult<DesktopSqlApprovalReview> {
         let planned = self.operation.get(operation_id.into()).await?;
-        self.store
+        let target = self
+            .store
             .get_connection(uuid::Uuid::from(connection_id))
             .await?;
         let active_workspace_id = self.store.active_workspace_id().await?;
@@ -105,7 +111,7 @@ impl QueriesFeature {
             || planned.account_scope != active_account_scope
         {
             return Err(AppError::Blocked {
-                reason: "the Agent proposal does not match this Desktop session".into(),
+                reason: AGENT_PROPOSAL_MISMATCH.into(),
             });
         }
         if planned.payload_schema_version != DESKTOP_SQL_PAYLOAD_SCHEMA_VERSION
@@ -115,14 +121,18 @@ impl QueriesFeature {
             )
         {
             return Err(AppError::Blocked {
-                reason: "the operation is not a reviewable Agent SQL proposal".into(),
+                reason: AGENT_PROPOSAL_NOT_REVIEWABLE.into(),
             });
         }
         let payload: StoredDesktopSqlPayload = serde_json::from_value(planned.payload.clone())?;
-        let state = if planned.state == OperationState::PendingApproval
-            && planned
-                .expires_at
-                .is_some_and(|expires_at| expires_at <= chrono::Utc::now())
+        // An unclaimed approval expires at the same instant as a pending one:
+        // execution would transition it to Expired, so the review says so first.
+        let state = if matches!(
+            planned.state,
+            OperationState::PendingApproval | OperationState::Approved
+        ) && planned
+            .expires_at
+            .is_some_and(|expires_at| expires_at <= chrono::Utc::now())
         {
             OperationState::Expired
         } else {
@@ -132,7 +142,7 @@ impl QueriesFeature {
         // could still approve or execute stays bound to the creating runtime.
         if !state.is_terminal() && planned.runtime_id != self.operation.runtime_id() {
             return Err(AppError::Blocked {
-                reason: "the Agent proposal does not match this Desktop session".into(),
+                reason: AGENT_PROPOSAL_MISMATCH.into(),
             });
         }
         let affected = if state == OperationState::Succeeded {
@@ -142,17 +152,36 @@ impl QueriesFeature {
         } else {
             None
         };
+        // The approval phrase, environment, and impact preview are derived from
+        // the immutable stored plan so the card cannot be steered by tool output.
+        let confirmation_phrase = (state == OperationState::PendingApproval)
+            .then(|| crate::operations::required_confirmation(&planned))
+            .flatten()
+            .map(str::to_owned);
+        let environment = planned
+            .policy_snapshot
+            .get("environment")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_owned);
+        let preview =
+            serde_json::from_value::<crate::model::PreviewReport>(planned.preview.clone()).ok();
         Ok(DesktopSqlApprovalReview {
             operation_id,
             connection_id,
+            connection_name: target.name,
+            engine: target.engine,
+            environment,
             payload_hash: planned.payload_hash,
             state,
             risk_level: planned.risk_level,
+            confirmation_phrase,
             sql: payload.sql,
             database: payload.database,
             namespace: payload.namespace,
+            preview,
             affected,
             expires_at: planned.expires_at,
+            proposer_session_id: planned.terminal_session_id,
         })
     }
 
@@ -302,7 +331,7 @@ impl QueriesFeature {
         let benchmark_started = std::time::Instant::now();
         let proposal = self
             .application
-            .propose_desktop_sql(request)
+            .propose_desktop_auto_read(request)
             .await
             .map_err(DesktopSqlInspectionError::into_error)?;
         if proposal.approval_required || !proposal.auto_run {
@@ -453,13 +482,31 @@ impl QueriesFeature {
         cancelled
     }
 
+    /// Cancels by the stream capability alone: a still-pending stream never
+    /// binds, and an already-bound auto-run read (whose renderer has not yet
+    /// learned the operation from a first batch) stops its executor now instead
+    /// of running the statement to completion.
     pub(crate) fn cancel_pending_desktop_sql_stream(
         &self,
         capability: &str,
         owner_webview: &str,
     ) -> bool {
-        self.desktop_streams
+        if self
+            .desktop_streams
             .cancel_pending(capability, owner_webview)
+        {
+            return true;
+        }
+        match self
+            .desktop_streams
+            .cancel_bound_by_capability(capability, owner_webview)
+        {
+            Some(operation_id) => {
+                crate::executor::cancel::cancel(operation_id.into());
+                true
+            }
+            None => false,
+        }
     }
 
     pub(crate) fn forget_pending_desktop_sql_stream(&self, capability: &str, owner_webview: &str) {
@@ -566,6 +613,21 @@ impl QueriesFeature {
         joined.map_err(|_| {
             crate::error::AppError::Config("SQL result export worker stopped".into())
         })?
+    }
+
+    /// Saves export text the renderer already built to the file the person chose,
+    /// under the stored-result export's destination contract (no symlinked
+    /// destination; a `.partial` renamed into place only once fully written).
+    pub(crate) async fn save_renderer_export(
+        &self,
+        destination: std::path::PathBuf,
+        contents: String,
+    ) -> crate::error::AppResult<()> {
+        tokio::task::spawn_blocking(move || {
+            adapters::save_renderer_export(&destination, contents.as_bytes())
+        })
+        .await
+        .map_err(|_| crate::error::AppError::Config("SQL result export worker stopped".into()))?
     }
 
     pub(crate) fn cancel_desktop_sql_result_export(

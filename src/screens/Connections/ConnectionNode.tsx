@@ -114,6 +114,10 @@ type Props = {
   onToggleOpen: () => void;
   onSelect: () => void;
   onEdit: () => void;
+  /** Opens this device's connection editor focused on re-entering a lost credential. */
+  onEditCredentials: () => void;
+  /** Resynchronizes the workspace through the shell, then re-reads this catalog. */
+  onRefreshWorkspace: () => void;
   onWorkspaceDialog: (mode: "copy" | "credentials") => void;
   onRefresh: () => void;
   onDelete: () => void;
@@ -127,6 +131,8 @@ type Props = {
   onRetryOverview: (database: string) => void;
   onRecoverAuthentication?: () => void;
   onRecoverManagedConnection?: () => void;
+  /** Opens workspace sign-in; set only where an expired workspace session blocks reads. */
+  onSignInWorkspace?: () => void;
   authenticationRecoveryPending?: boolean;
   authenticationRecoveryError?: CatalogLoadIssue;
   onToggleRelationSection: (key: string) => void;
@@ -209,6 +215,21 @@ export default function ConnectionNode(props: Props) {
   const canMoveProjectDatabaseDown = Boolean(
     props.projectDatabaseOrder?.nextBlockBindingId,
   );
+  // Where a missing credential is re-entered: a shared member-local identity binds
+  // this device's credential through the workspace dialog, while a local connection
+  // reopens its own editor at the credential field.
+  const resolveCredentials =
+    accessIssue === "credentials"
+    || (
+      connection.credentialMode === "memberLocal"
+      && connection.workspaceAccess !== "view"
+      && connection.engine !== "bigquery"
+    )
+      ? () => props.onWorkspaceDialog("credentials")
+      : connection.workspaceAccess === "local"
+          && connection.credentialMode === "local"
+        ? props.onEditCredentials
+        : undefined;
 
   return (
     <div className="tw:relative">
@@ -618,7 +639,8 @@ export default function ConnectionNode(props: Props) {
                 selectedTableKey={props.selectedTableKey}
                 overview={props.databaseOverviews[key]}
                 fullCatalog={props.databaseCatalogs[key]}
-                error={props.overviewErrorsByDatabase[key]}
+                error={props.overviewErrorsByDatabase[key]
+                  ?? (database.isDefault ? props.error : undefined)}
                 detailError={props.detailErrorsByDatabase[key]}
                 applySchemaScope={database.isDefault}
                 initiallyOpen={database.isDefault}
@@ -651,17 +673,16 @@ export default function ConnectionNode(props: Props) {
                   props.onRetryOverview(database.name)
                 }
                 onEdit={props.onEdit}
+                onRefreshWorkspace={props.onRefreshWorkspace}
                 onRecoverAuthentication={props.onRecoverAuthentication}
                 onRecoverManagedConnection={props.onRecoverManagedConnection}
+                onSignInWorkspace={props.onSignInWorkspace}
+                refreshing={props.refreshingId === connection.id}
                 authenticationRecoveryPending={
                   props.authenticationRecoveryPending
                 }
                 authenticationRecoveryError={props.authenticationRecoveryError}
-                onResolveAccess={
-                  accessIssue === "credentials"
-                    ? () => props.onWorkspaceDialog("credentials")
-                    : undefined
-                }
+                onResolveAccess={resolveCredentials}
                 onToggleRelationSection={props.onToggleRelationSection}
                 onToggleObjectSection={props.onToggleObjectSection}
                 revealRequest={props.revealRequest}
@@ -706,17 +727,16 @@ export default function ConnectionNode(props: Props) {
               props.onRetryOverview(connection.database)
             }
             onEdit={props.onEdit}
+            onRefreshWorkspace={props.onRefreshWorkspace}
             onRecoverAuthentication={props.onRecoverAuthentication}
             onRecoverManagedConnection={props.onRecoverManagedConnection}
+            onSignInWorkspace={props.onSignInWorkspace}
+            refreshing={props.refreshingId === connection.id}
             authenticationRecoveryPending={
               props.authenticationRecoveryPending
             }
             authenticationRecoveryError={props.authenticationRecoveryError}
-            onResolveAccess={
-              accessIssue === "credentials"
-                ? () => props.onWorkspaceDialog("credentials")
-                : undefined
-            }
+            onResolveAccess={resolveCredentials}
             onToggleRelationSection={props.onToggleRelationSection}
             onToggleObjectSection={props.onToggleObjectSection}
             revealRequest={props.revealRequest}

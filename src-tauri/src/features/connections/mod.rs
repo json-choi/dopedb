@@ -2,10 +2,12 @@
 
 mod adapters;
 mod application;
+mod credential_endpoint;
 mod demo;
 mod domain;
 mod local_probe;
 mod ports;
+mod probe;
 pub(crate) mod transport;
 
 use std::sync::Arc;
@@ -21,17 +23,18 @@ use adapters::{
 pub(crate) use application::{
     ConnectionProfileTestRequest, ConnectionUpsertRequest, ConnectionUseCases,
 };
+pub(crate) use credential_endpoint::same_credential_endpoint;
 #[cfg(test)]
+pub(crate) use domain::assert_local_listener_discovery_contract;
 pub(crate) use domain::{
-    assert_connection_test_failure_contract, assert_local_listener_discovery_contract,
-};
-pub(crate) use domain::{
-    AgentConnectionSummary, CliConnectionResolutionError, ConnectionTestReceipt, DriverCapability,
-    DriverDescriptor, DriverInstallMode, DriverInstallState, LocalDatabaseListener,
-    MAX_CONNECTION_CREDENTIAL_BYTES,
+    AgentConnectionSummary, CliConnectionResolutionError, DriverCapability, DriverDescriptor,
+    DriverInstallMode, DriverInstallState, LocalDatabaseListener, MAX_CONNECTION_CREDENTIAL_BYTES,
 };
 use local_probe::SystemLocalListenerProbe;
 pub(crate) use ports::ConnectionCredentialVault;
+#[cfg(test)]
+pub(crate) use probe::assert_connection_test_failure_contract;
+pub(crate) use probe::{ConnectionTestReceipt, DatabaseDiscoveryReceipt};
 
 pub(crate) type ConnectionsFeature = ConnectionUseCases<
     SqliteConnectionRepository,

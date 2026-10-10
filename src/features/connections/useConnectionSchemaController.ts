@@ -2,10 +2,8 @@
 // Connection editor's Schemas tab.
 import { useQuery } from "@tanstack/react-query";
 
-import {
-  catalogOverviewQuery,
-  useCatalogScope,
-} from "../../lib/queries";
+import { useCatalogScope } from "../../lib/queries";
+import { catalogOverviewQuery } from "../../lib/catalogQueries";
 import {
   nextSchemaScopeSelection,
   relationNamespace,

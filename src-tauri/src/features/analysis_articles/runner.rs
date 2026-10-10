@@ -168,7 +168,7 @@ fn sha256(bytes: &[u8]) -> String {
 #[cfg(test)]
 pub(crate) fn assert_runner_safety_contract() {
     super::adapters::assert_exact_query_contract();
-    super::adapters::assert_hosted_mutation_error_contract();
+    super::adapters::assert_hosted_article_contract();
     let fixture: Value = serde_json::from_str(include_str!(
         "../../../../dopedb-protocol/tests/fixtures/control-plane-contracts-v1.json"
     ))
@@ -177,9 +177,36 @@ pub(crate) fn assert_runner_safety_contract() {
         serde_json::from_value(fixture["analysisArticleCreate"].clone())
             .expect("current compact fixture must decode");
     assert!(super::validation::validate_shared_create(&valid_article).is_ok());
+    // A person's Desktop save over an Agent-authored revision records the person.
+    let mut agent_authored = valid_article.clone();
+    agent_authored.definition.source = dopedb_protocol::AnalysisArticleSource::DopedbAcpClaude;
+    assert_eq!(
+        super::transport::human_edit(agent_authored)
+            .definition
+            .source,
+        dopedb_protocol::AnalysisArticleSource::Human
+    );
     let serialized = serde_json::to_value(&valid_article).expect("current article must encode");
     assert!(serialized["definition"].get("query").is_some());
     assert!(serialized["definition"].get("queries").is_none());
+    // A content pin that no longer matches is still recorded as an outdated run, as it
+    // was while the Environment check reported it as `Blocked`.
+    for outdated in [
+        AppError::SharedConnectionChanged,
+        AppError::Blocked {
+            reason: "pin".into(),
+        },
+        AppError::NotFound("article".into()),
+    ] {
+        assert_eq!(
+            super::transport::failed_run_state(&outdated),
+            dopedb_protocol::AnalysisRunState::Stale
+        );
+    }
+    assert_eq!(
+        super::transport::failed_run_state(&AppError::CredentialBindingRequired),
+        dopedb_protocol::AnalysisRunState::Failed
+    );
 
     assert!(ensure_result_size(MAX_ARTICLE_RESULT_BYTES).is_ok());
     assert!(ensure_result_size(MAX_ARTICLE_RESULT_BYTES + 1).is_err());

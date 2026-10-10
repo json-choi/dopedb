@@ -54,6 +54,7 @@ export function IdeTopBar({
   onToggleLocalHistory,
   onToggleAgent,
   agentButtonRef,
+  agentPendingApprovals,
   actionSearchButtonRef,
   onActionSearch,
   onSettings,
@@ -63,6 +64,8 @@ export function IdeTopBar({
   leftPanelOpen: boolean;
   localHistoryOpen: boolean;
   agentDockOpen: boolean;
+  /** Agent changes waiting for a person's decision on their AI Chat cards. */
+  agentPendingApprovals: number;
   actionSearchOpen: boolean;
   settingsOpen: boolean;
   workspace?: ReactNode;
@@ -79,9 +82,17 @@ export function IdeTopBar({
 }) {
   const { t } = useI18n();
   const queryDisabled = !selected || !supportsSql;
-  const agentLauncherLabel = selected
-    ? t("agent.acpTitle")
-    : t("agent.acpSelectDatabaseToOpen");
+  const agentLauncherLabel = !selected
+    ? t("agent.acpSelectDatabaseToOpen")
+    : agentPendingApprovals > 0
+      ? t("agent.acpTitlePendingApprovals", { count: agentPendingApprovals })
+      : t("agent.acpTitle");
+  // AI Chat is inert while closed, so its cards cannot announce a new request;
+  // this region says how many changes wait until the panel is opened.
+  const pendingApprovalAnnouncement =
+    selected && !agentDockOpen && agentPendingApprovals > 0
+      ? t("agent.acpPendingApprovalsAnnouncement", { count: agentPendingApprovals })
+      : "";
   const panelLabel = t(leftPanelOpen ? "ide.action.hideLeftPanel" : "ide.action.showLeftPanel");
 
   return (
@@ -139,7 +150,10 @@ export function IdeTopBar({
       }
       actions={
         <>
-        <IdeToolbarLauncher buttonRef={agentButtonRef} active={agentDockOpen} disabled={!selected} onClick={onToggleAgent} title={agentLauncherLabel} aria-label={agentLauncherLabel}><Icon name="chat" /></IdeToolbarLauncher>
+        <IdeToolbarLauncher buttonRef={agentButtonRef} active={agentDockOpen} disabled={!selected} count={selected ? agentPendingApprovals : 0} onClick={onToggleAgent} title={agentLauncherLabel} aria-label={agentLauncherLabel}><Icon name="chat" /></IdeToolbarLauncher>
+        <span className="tw:sr-only" role="status" aria-live="polite">
+          {pendingApprovalAnnouncement}
+        </span>
         {account}
         <IdeToolbarLauncher
           active={settingsOpen}
@@ -170,6 +184,7 @@ export function IdeStatusBar({
   unseenOperationCount,
   onOpenQueryTask,
   onOpenAgentTask,
+  onOpenAgentProposal,
   onOpenManualTransaction,
   onCommitManualTransaction,
   onRollbackManualTransaction,
@@ -192,6 +207,11 @@ export function IdeStatusBar({
   unseenOperationCount: number;
   onOpenQueryTask: (sessionId: string) => void;
   onOpenAgentTask: (connectionId: string) => void;
+  onOpenAgentProposal: (
+    connectionId: string,
+    sessionId: string,
+    operationId: string,
+  ) => void;
   onOpenManualTransaction: (
     transaction: WorkspaceManualTransaction,
   ) => void;
@@ -336,6 +356,7 @@ export function IdeStatusBar({
           cancellingKeys={cancellingBackgroundTaskKeys}
           onCancel={onCancelBackgroundTask}
           onOpenAgent={onOpenAgentTask}
+          onOpenAgentProposal={onOpenAgentProposal}
           onOpenQuery={onOpenQueryTask}
         />
       ) : null}

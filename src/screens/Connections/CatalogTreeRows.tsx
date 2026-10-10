@@ -1,21 +1,26 @@
 // Presentational rows for the catalog tree. Virtualization keys and expansion
-// policy stay in CatalogTree; these components only render one bounded row.
+// policy stay in CatalogTree; these components only render one bounded row, and a
+// relation's metadata groups and items are separate rows so each is a tree item.
 import type {
+  CatalogColumn,
   CatalogConstraint,
-  CatalogForeignKey,
   CatalogIndex,
   CatalogObject,
   CatalogTable,
 } from "../../ipc/types";
 import type { ConnectionProfile } from "../../features/connections/domain";
-import { Icon } from "../../components/Icon";
+import type { ReactNode } from "react";
+import { Icon, type IconName } from "../../components/Icon";
 import { TreeSectionButton } from "../../design-system/components/TreeControls";
 import { LoadingLabel } from "../../design-system/components/Status";
 import { isDocumentEngine } from "../../lib/capabilities";
-import { useI18n } from "../../lib/i18n";
+import { useI18n, type I18nKey } from "../../lib/i18n";
 import { tableDiffTone, type TableSchemaDiff } from "../../lib/schemaDiff";
 import { tableKey, tableLabel } from "../../lib/tableRef";
-import { catalogObjectLabel } from "../../features/catalogExplorer/catalogDomain";
+import {
+  catalogObjectLabel,
+  compareCatalogNames,
+} from "../../features/catalogExplorer/catalogDomain";
 import { isCatalogSearchResultActive } from "../../features/catalogExplorer/state";
 import { schemaTableDiffTitle } from "./schemaDiffPresentation";
 
@@ -25,166 +30,324 @@ interface CatalogRelationRowProps {
   tableDiff?: TableSchemaDiff;
   fullCatalogLoaded: boolean;
   detailsOpen: boolean;
-  collapsedMetadataSections: ReadonlySet<string>;
   searchResultKey?: string;
   activeSearchResultKey?: string;
   selected: boolean;
   showRowCounts: boolean;
   onToggleDetails: () => void;
-  onToggleMetadataSection: (section: string) => void;
   onOpen: () => void;
 }
 
-function keyLabel(
-  constraint: CatalogConstraint | CatalogForeignKey,
-  index: number,
-) {
-  if ("kind" in constraint) {
-    return constraint.name ||
-      `${constraint.kind} (${constraint.columns.join(", ")})`;
+export type CatalogMetadataSection = "columns" | "keys" | "indexes";
+
+const KEY_KIND_ORDER: Record<CatalogConstraint["kind"], number> = {
+  primary: 0,
+  unique: 1,
+  foreign: 2,
+  check: 3,
+};
+
+const KEY_KIND_LABELS: Record<CatalogConstraint["kind"], I18nKey> = {
+  primary: "schema.keyPrimary",
+  unique: "schema.keyUnique",
+  foreign: "schema.keyForeign",
+  check: "schema.keyCheck",
+};
+
+/** Every key in one order: primary, unique, foreign (with target), then check. */
+export function catalogTableKeys(table: CatalogTable): CatalogConstraint[] {
+  return [...table.constraints].sort(
+    (left, right) =>
+      KEY_KIND_ORDER[left.kind] - KEY_KIND_ORDER[right.kind]
+      || compareCatalogNames(left.name, right.name),
+  );
+}
+
+/** The metadata sections a loaded relation shows, in tree order, with item counts. */
+export function catalogMetadataSections(table: CatalogTable) {
+  return [
+    { section: "columns", count: table.columns.length },
+    { section: "keys", count: table.constraints.length },
+    { section: "indexes", count: table.indexes.length },
+  ] as const satisfies ReadonlyArray<{
+    section: CatalogMetadataSection;
+    count: number;
+  }>;
+}
+
+function keyDefinition(constraint: CatalogConstraint) {
+  const columns = `(${constraint.columns.join(", ")})`;
+  if (constraint.kind === "check") return constraint.checkExpression ?? columns;
+  if (constraint.kind !== "foreign" || !constraint.referencedRelation) {
+    return columns;
   }
   const target = [
-    constraint.referencesSchema,
-    constraint.referencesTable,
-    constraint.referencesColumn,
+    constraint.referencedRelation.namespace,
+    constraint.referencedRelation.name,
   ]
     .filter(Boolean)
     .join(".");
-  return constraint.name ||
-    `${constraint.column} → ${target || `#${index + 1}`}`;
+  return `${columns} → ${target}(${constraint.referencedColumns.join(", ")})`;
 }
 
-function indexLabel(index: CatalogIndex) {
-  const columns = index.keys.length > 0
+function indexDefinition(index: CatalogIndex) {
+  const keys = index.keys.length > 0
     ? index.keys.map((key) => key.column ?? key.expression).filter(Boolean)
     : index.columns;
-  return `${index.name} (${columns.join(", ")})`;
+  return `(${keys.join(", ")})`;
 }
 
-function CatalogTableDetails({
-  table,
-  fullCatalogLoaded,
-  collapsedSections,
-  onToggleSection,
+// SQL clauses the compact definition leaves out. Tooltips and screen readers carry
+// them, since a row only paints the name and key list.
+function definitionClauses(clauses: ReadonlyArray<string | null | undefined | false>) {
+  return clauses.filter((clause): clause is string => Boolean(clause)).join(" ");
+}
+
+function indexClauses(index: CatalogIndex) {
+  return definitionClauses([
+    index.method && `USING ${index.method}`,
+    index.includedColumns.length > 0
+      && `INCLUDE (${index.includedColumns.join(", ")})`,
+    index.predicate && `WHERE ${index.predicate}`,
+  ]);
+}
+
+function foreignKeyClauses(constraint: CatalogConstraint) {
+  return constraint.kind === "foreign"
+    ? definitionClauses([
+        constraint.deleteAction && `ON DELETE ${constraint.deleteAction}`,
+        constraint.updateAction && `ON UPDATE ${constraint.updateAction}`,
+      ])
+    : "";
+}
+
+const METADATA_SECTION_PRESENTATION = {
+  columns: { icon: "columns", label: "connections.columns" },
+  keys: { icon: "key", label: "connections.keys" },
+  indexes: { icon: "list", label: "connections.indexes" },
+} as const satisfies Record<
+  CatalogMetadataSection,
+  { icon: IconName; label: I18nKey }
+>;
+
+/** A relation's Columns/Keys/Indexes group, rendered inside its own tree item. */
+export function CatalogMetadataSectionRow({
+  section,
+  count,
+  expanded,
+  onToggle,
 }: {
-  table: CatalogTable;
-  fullCatalogLoaded: boolean;
-  collapsedSections: ReadonlySet<string>;
-  onToggleSection: (section: string) => void;
+  section: CatalogMetadataSection;
+  count: number;
+  expanded: boolean;
+  onToggle: () => void;
 }) {
   const { t } = useI18n();
-  if (!fullCatalogLoaded) {
-    return (
-      <div className="tw:pl-5 tw:text-xs tw:text-muted-foreground">
-        <LoadingLabel>{t("connections.loadingMetadata")}</LoadingLabel>
-      </div>
-    );
-  }
-
-  const metadata = {
-    columns: table.columns.map((column) => (
-      <div
-        className="ds-object-row tw:cursor-default tw:pl-4 tw:text-ui"
-        key={`${tableKey(table)}:column:${column.ordinal}:${column.name}`}
-        title={[
-          column.dataType,
-          column.nullable ? t("connections.nullable") : t("connections.notNull"),
-          column.defaultExpression
-            ? `${t("connections.defaultValue")}: ${column.defaultExpression}`
-            : null,
-        ].filter(Boolean).join(" · ")}
-      >
-        <Icon
-          className="tw:shrink-0 tw:text-[length:var(--ds-icon-sm)] tw:text-muted-foreground"
-          name={column.pk ? "key" : "columns"}
-        />
-        <span className="tw:min-w-0 tw:flex-1 tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap">
-          {column.name}
-        </span>
-        <span className="tw:max-w-[48%] tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap tw:font-mono tw:text-2xs tw:text-muted-foreground">
-          {column.dataType}
-        </span>
-      </div>
-    )),
-    keys: (table.constraints.length > 0
-      ? table.constraints
-      : table.foreignKeys).map((constraint, index) => (
-      <div
-        className="ds-object-row tw:cursor-default tw:pl-4 tw:text-ui"
-        key={`${tableKey(table)}:key:${keyLabel(constraint, index)}:${index}`}
-        title={keyLabel(constraint, index)}
-      >
-        <Icon
-          className="tw:shrink-0 tw:text-[length:var(--ds-icon-sm)] tw:text-muted-foreground"
-          name="key"
-        />
-        <span className="tw:min-w-0 tw:flex-1 tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap">
-          {keyLabel(constraint, index)}
-        </span>
-        {"kind" in constraint ? (
-          <span className="tw:font-mono tw:text-2xs tw:text-muted-foreground">
-            {constraint.kind}
-          </span>
-        ) : null}
-      </div>
-    )),
-    indexes: table.indexes.map((index) => (
-      <div
-        className="ds-object-row tw:cursor-default tw:pl-4 tw:text-ui"
-        key={`${tableKey(table)}:index:${index.name}`}
-        title={indexLabel(index)}
-      >
-        <Icon
-          className="tw:shrink-0 tw:text-[length:var(--ds-icon-sm)] tw:text-muted-foreground"
-          name="list"
-        />
-        <span className="tw:min-w-0 tw:flex-1 tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap">
-          {indexLabel(index)}
-        </span>
-        {index.unique ? (
-          <span className="tw:font-mono tw:text-2xs tw:text-muted-foreground">
-            {t("connections.unique")}
-          </span>
-        ) : null}
-      </div>
-    )),
-  };
-  const sections = [
-    ["columns", table.columns.length, "columns", "connections.columns"],
-    [
-      "keys",
-      table.constraints.length || table.foreignKeys.length,
-      "key",
-      "connections.keys",
-    ],
-    ["indexes", table.indexes.length, "list", "connections.indexes"],
-  ] as const;
-  const itemCount = sections.reduce((total, section) => total + section[1], 0);
-
+  const presentation = METADATA_SECTION_PRESENTATION[section];
   return (
-    <div className="tw:flex tw:flex-col tw:gap-px tw:pl-3">
-      {sections.map(([section, count, icon, label]) => {
-        if (count === 0) return null;
-        const key = `${tableKey(table)}:${section}`;
-        const expanded = !collapsedSections.has(key);
-        return (
-          <div className="tw:flex tw:flex-col tw:gap-px" key={key}>
-            <TreeSectionButton
-              expanded={expanded}
-              icon={icon}
-              treeItemContent
-              onToggle={() => onToggleSection(section)}
-            >
-              {t(label, { count })}
-            </TreeSectionButton>
-            {expanded ? metadata[section] : null}
-          </div>
-        );
-      })}
-      {itemCount === 0 ? (
-        <div className="tw:pl-5 tw:text-xs tw:text-muted-foreground">
-          {t("connections.noMetadata")}
-        </div>
+    <div className="tw:pl-3">
+      <TreeSectionButton
+        expanded={expanded}
+        icon={presentation.icon}
+        treeItemContent
+        onToggle={onToggle}
+      >
+        {t(presentation.label, { count })}
+      </TreeSectionButton>
+    </div>
+  );
+}
+
+type MetadataRow = {
+  key: string;
+  treeItem: { key: string; parentKey: string; level: number; expanded?: boolean };
+  render: () => ReactNode;
+};
+
+/**
+ * A relation's expanded metadata as separate tree items: one group row per non-empty
+ * section and one row per column, key or index, so keyboard users reach each item.
+ */
+export function catalogMetadataRows({
+  table,
+  relationRowKey,
+  relationTreeKey,
+  level,
+  loaded,
+  isCollapsed,
+  onToggle,
+}: {
+  table: CatalogTable;
+  relationRowKey: string;
+  relationTreeKey: string;
+  level: number;
+  loaded: boolean;
+  isCollapsed: (section: CatalogMetadataSection) => boolean;
+  onToggle: (section: CatalogMetadataSection) => void;
+}): MetadataRow[] {
+  const sections = loaded
+    ? catalogMetadataSections(table).filter((entry) => entry.count > 0)
+    : [];
+  if (sections.length === 0) {
+    return [{
+      key: `${relationRowKey}:metadata:status`,
+      treeItem: {
+        key: `${relationTreeKey}:metadata:status`,
+        parentKey: relationTreeKey,
+        level: level + 1,
+      },
+      render: () => <CatalogMetadataStatusRow loading={!loaded} />,
+    }];
+  }
+  const rows: MetadataRow[] = [];
+  for (const { section, count } of sections) {
+    const sectionTreeKey = `${relationTreeKey}:metadata:${section}`;
+    const expanded = !isCollapsed(section);
+    rows.push({
+      key: `${relationRowKey}:metadata:${section}`,
+      treeItem: {
+        key: sectionTreeKey,
+        parentKey: relationTreeKey,
+        level: level + 1,
+        expanded,
+      },
+      render: () => (
+        <CatalogMetadataSectionRow
+          section={section}
+          count={count}
+          expanded={expanded}
+          onToggle={() => onToggle(section)}
+        />
+      ),
+    });
+    if (!expanded) continue;
+    const item = (itemKey: string, render: () => ReactNode) => rows.push({
+      key: `${relationRowKey}:metadata:${section}:${itemKey}`,
+      treeItem: {
+        key: `${sectionTreeKey}:${itemKey}`,
+        parentKey: sectionTreeKey,
+        level: level + 2,
+      },
+      render,
+    });
+    if (section === "columns") {
+      for (const column of table.columns) {
+        item(`${column.ordinal}:${column.name}`, () => (
+          <CatalogColumnRow column={column} />
+        ));
+      }
+    } else if (section === "keys") {
+      catalogTableKeys(table).forEach((constraint, index) => {
+        item(`${index}:${constraint.name}`, () => (
+          <CatalogKeyRow constraint={constraint} />
+        ));
+      });
+    } else {
+      for (const index of table.indexes) {
+        item(index.name, () => <CatalogIndexRow index={index} />);
+      }
+    }
+  }
+  return rows;
+}
+
+/** Loading or empty metadata state, announced inside the relation's subtree. */
+export function CatalogMetadataStatusRow({ loading }: { loading: boolean }) {
+  const { t } = useI18n();
+  return (
+    <div className="tw:pl-5 tw:text-xs tw:text-muted-foreground">
+      {loading ? (
+        <LoadingLabel>{t("connections.loadingMetadata")}</LoadingLabel>
+      ) : (
+        t("connections.noMetadata")
+      )}
+    </div>
+  );
+}
+
+export function CatalogColumnRow({ column }: { column: CatalogColumn }) {
+  const { t } = useI18n();
+  const description = [
+    column.dataType,
+    column.nullable ? t("connections.nullable") : t("connections.notNull"),
+    column.generatedExpression
+      ? `${t("schema.generatedValue")}: ${column.generatedExpression}`
+      : column.defaultExpression
+        ? `${t("connections.defaultValue")}: ${column.defaultExpression}`
+        : null,
+  ].filter(Boolean).join(" · ");
+  return (
+    <div
+      className="ds-object-row tw:cursor-default tw:pl-7 tw:text-ui"
+      title={description}
+    >
+      <Icon
+        className="tw:shrink-0 tw:text-[length:var(--ds-icon-sm)] tw:text-muted-foreground"
+        name={column.pk ? "key" : "columns"}
+      />
+      <span className="tw:min-w-0 tw:flex-1 tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap">
+        {column.name}
+      </span>
+      <span className="tw:max-w-[48%] tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap tw:font-mono tw:text-2xs tw:text-muted-foreground">
+        {column.dataType}
+      </span>
+      <span className="tw:sr-only">{description}</span>
+    </div>
+  );
+}
+
+export function CatalogKeyRow({ constraint }: { constraint: CatalogConstraint }) {
+  const { t } = useI18n();
+  const kind = t(KEY_KIND_LABELS[constraint.kind]);
+  const definition = keyDefinition(constraint);
+  const clauses = foreignKeyClauses(constraint);
+  return (
+    <div
+      className="ds-object-row tw:cursor-default tw:pl-7 tw:text-ui"
+      title={definitionClauses([`${kind} ${constraint.name} ${definition}`, clauses])}
+    >
+      <Icon
+        className="tw:shrink-0 tw:text-[length:var(--ds-icon-sm)] tw:text-muted-foreground"
+        name="key"
+      />
+      <span className="tw:min-w-0 tw:flex-1 tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap">
+        {constraint.name}{" "}
+        <span className="tw:font-mono tw:text-2xs tw:text-muted-foreground">
+          {definition}
+        </span>
+        {clauses ? <span className="tw:sr-only"> {clauses}</span> : null}
+      </span>
+      <span className="tw:shrink-0 tw:text-2xs tw:text-muted-foreground">
+        {kind}
+      </span>
+    </div>
+  );
+}
+
+export function CatalogIndexRow({ index }: { index: CatalogIndex }) {
+  const { t } = useI18n();
+  const definition = indexDefinition(index);
+  const clauses = indexClauses(index);
+  return (
+    <div
+      className="ds-object-row tw:cursor-default tw:pl-7 tw:text-ui"
+      title={definitionClauses([`${index.name} ${definition}`, clauses])}
+    >
+      <Icon
+        className="tw:shrink-0 tw:text-[length:var(--ds-icon-sm)] tw:text-muted-foreground"
+        name="list"
+      />
+      <span className="tw:min-w-0 tw:flex-1 tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap">
+        {index.name}{" "}
+        <span className="tw:font-mono tw:text-2xs tw:text-muted-foreground">
+          {definition}
+        </span>
+        {clauses ? <span className="tw:sr-only"> {clauses}</span> : null}
+      </span>
+      {index.unique ? (
+        <span className="tw:shrink-0 tw:text-2xs tw:text-muted-foreground">
+          {t("connections.unique")}
+        </span>
       ) : null}
     </div>
   );
@@ -196,18 +359,17 @@ export function CatalogRelationRow({
   tableDiff,
   fullCatalogLoaded,
   detailsOpen,
-  collapsedMetadataSections,
   searchResultKey,
   activeSearchResultKey,
   selected,
   showRowCounts,
   onToggleDetails,
-  onToggleMetadataSection,
   onOpen,
 }: CatalogRelationRowProps) {
   const { t } = useI18n();
   const key = tableKey(table);
   const tone = tableDiffTone(tableDiff);
+  const diffDescription = tableDiff ? schemaTableDiffTitle(t, tableDiff) : null;
   return (
     <div className="tw:flex tw:flex-col tw:gap-px">
       <div
@@ -221,11 +383,10 @@ export function CatalogRelationRow({
         data-diff={tone ?? "none"}
         aria-selected={selected}
         title={
-          tableDiff
-            ? schemaTableDiffTitle(t, tableDiff)
-            : fullCatalogLoaded
+          diffDescription
+            ?? (fullCatalogLoaded
               ? t("connections.columns", { count: table.columns.length })
-              : undefined
+              : undefined)
         }
       >
         {!isDocumentEngine(connection.engine) ? (
@@ -249,18 +410,12 @@ export function CatalogRelationRow({
         <span
           data-diff={tone ?? "none"}
           className="tw:size-[7px] tw:shrink-0 tw:rounded-full tw:bg-transparent tw:data-[diff=added]:bg-success tw:data-[diff=missing]:bg-danger tw:data-[diff=changed]:bg-warning tw:data-[diff=mixed]:border tw:data-[diff=mixed]:border-danger tw:data-[diff=mixed]:bg-warning"
-          title={tableDiff ? schemaTableDiffTitle(t, tableDiff) : undefined}
+          title={diffDescription ?? undefined}
           aria-hidden="true"
         />
         <Icon
           className="tw:shrink-0 tw:text-[length:var(--ds-icon-sm)] tw:text-muted-foreground tw:group-hover:text-current"
-          name={
-            isDocumentEngine(connection.engine)
-              ? "collection"
-              : table.kind === "view"
-                ? "view"
-                : "table"
-          }
+          name={relationIcon(connection, table)}
         />
         <button
           type="button"
@@ -276,17 +431,23 @@ export function CatalogRelationRow({
             ~{table.rowEstimate.toLocaleString()}
           </span>
         ) : null}
+        {/* The colored diff dot is decorative; keep the state in the item's name. */}
+        {diffDescription ? (
+          <span className="tw:sr-only">{diffDescription}</span>
+        ) : null}
       </div>
-      {detailsOpen ? (
-        <CatalogTableDetails
-          table={table}
-          fullCatalogLoaded={fullCatalogLoaded}
-          collapsedSections={collapsedMetadataSections}
-          onToggleSection={onToggleMetadataSection}
-        />
-      ) : null}
     </div>
   );
+}
+
+function relationIcon(
+  connection: ConnectionProfile,
+  table: CatalogTable,
+): IconName {
+  if (isDocumentEngine(connection.engine)) return "collection";
+  if (table.kind === "view") return "view";
+  if (table.kind === "materialized_view") return "materializedView";
+  return "table";
 }
 
 export function CatalogMissingRelationRow({
@@ -305,15 +466,23 @@ export function CatalogMissingRelationRow({
       <span className="tw:size-[7px] tw:shrink-0 tw:rounded-full tw:bg-danger" aria-hidden="true" />
       <Icon
         className="tw:shrink-0 tw:text-[length:var(--ds-icon-sm)] tw:text-muted-foreground"
-        name={table.kind === "view" ? "view" : "table"}
+        name={relationIcon(connection, table)}
       />
       <span className="tbl-name tw:min-w-[10ch] tw:flex-1 tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap">
         {tableLabel(connection.engine, table)}
       </span>
-      <span className="tw:shrink-0 tw:text-2xs tw:font-bold tw:tracking-[0.04em] tw:text-muted-foreground tw:uppercase">
-        {t(table.kind === "view" ? "schemaDiff.objectView" : "schemaDiff.objectTable")}
+      <span className="tw:shrink-0 tw:text-2xs tw:font-bold tw:text-muted-foreground">
+        {t(
+          table.kind === "view"
+            ? "schemaDiff.objectView"
+            : table.kind === "materialized_view"
+              ? "schemaDiff.objectMaterializedView"
+              : "schemaDiff.objectTable",
+        )}
       </span>
-      <span className="tw:shrink-0 tw:text-2xs tw:font-bold tw:text-danger">base</span>
+      <span className="tw:shrink-0 tw:text-2xs tw:font-bold tw:text-danger">
+        {t("schemaDiff.onlyInBaseline")}
+      </span>
     </div>
   );
 }
@@ -351,7 +520,9 @@ export function CatalogObjectRow({
       title={[
         catalogObjectLabel(object),
         object.parent ? `${t("connections.objectOn")} ${object.parent}` : null,
-        object.detail && object.kind === "trigger" ? object.detail : null,
+        object.detail && (object.kind === "trigger" || object.kind === "type")
+          ? object.detail
+          : null,
       ].filter(Boolean).join(" · ")}
     >
       <Icon

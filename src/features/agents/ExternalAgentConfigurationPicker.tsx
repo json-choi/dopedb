@@ -33,6 +33,7 @@ export function ExternalAgentConfigurationPicker({
   ensureAvailable: (
     environmentId: string,
     authorityConnectionId: ConnectionId,
+    connectionIds: readonly ConnectionId[],
   ) => Promise<boolean>;
   onApprove: (config: ExternalAgentConfig) => void;
 }) {
@@ -118,6 +119,7 @@ export function ExternalAgentConfigurationPicker({
           && !(await ensureAvailable(
             boundary.environmentId,
             boundary.authorityConnectionId,
+            boundary.connectionIds,
           ))
         ) {
           return;
@@ -236,7 +238,6 @@ export function ExternalAgentConfigurationPicker({
       <Button
         variant="primary"
         disabled={disabled || preparing || !config}
-        data-modal-initial-focus
         onClick={() => void approve()}
       >
         {t("agent.externalSaveConfig")}

@@ -225,25 +225,20 @@ export function lifecycleLabel(
   lifecycle: AcpSessionLifecycle,
   t: Translate,
 ) {
-  return t(`agent.acpLifecycle.${lifecycle}` as Parameters<typeof t>[0]);
-}
-
-export function agentSessionErrorLabel(message: string, t: Translate) {
-  if (message === "workspace_authority_changed") {
-    return t("agent.acpInterruptedWorkspaceAuthority");
+  switch (lifecycle) {
+    case "starting":
+      return t("agent.acpLifecycle.starting");
+    case "ready":
+      return t("agent.acpLifecycle.ready");
+    case "running":
+      return t("agent.acpLifecycle.running");
+    case "waitingPermission":
+      return t("agent.acpLifecycle.waitingPermission");
+    case "failed":
+      return t("agent.acpLifecycle.failed");
+    case "closed":
+      return t("agent.acpLifecycle.closed");
   }
-  if (message === "connection_authority_changed") {
-    return t("agent.acpInterruptedConnectionAuthority");
-  }
-  if (message === "agent_process_closed") {
-    return t("agent.acpInterruptedProcessClosed");
-  }
-  if (message === "agent_process_unavailable") {
-    return t("agent.acpInterruptedProcessUnavailable");
-  }
-  if (message === "agent_session_metadata_unavailable")
-    return t("agent.acpInterruptedSessionMetadataUnavailable");
-  return message;
 }
 
 export function stopReasonLabel(reason: string, t: Translate) {

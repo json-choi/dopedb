@@ -3,7 +3,7 @@ use serde_json::json;
 use tokio_util::sync::CancellationToken;
 
 use crate::error::{AppError, AppResult};
-use crate::features::jobs::{Job, JobKind, JobState};
+use crate::features::jobs::{Job, JobKind, JobSqlAudit, JobState};
 use crate::kernel::identity::ConnectionJobId;
 
 use super::super::ports::{
@@ -40,21 +40,29 @@ where
             .ledger
             .get_scoped(read_guard.authority(), job_id)
             .await?;
-        let permission = if current.job.kind == JobKind::Import {
-            JobPermission::Write
-        } else {
-            JobPermission::Read
+        let operation = self.operation.get(current.job.operation_id).await?;
+        let contains_ddl = JobSqlAudit::from_operation_value(&operation.payload)
+            .is_some_and(|audit| audit.ddl_count > 0);
+        let permission = match current.job.kind {
+            JobKind::Import if contains_ddl => JobPermission::Schema,
+            JobKind::Import => JobPermission::Write,
+            JobKind::Export => JobPermission::Read,
         };
         let guard = self.authority.authorize(connection_id, permission).await?;
         if current.job.kind == JobKind::Import {
+            // Re-check the current policy: an approved plan never outlives a
+            // narrowed Safety gate or workspace grant.
             let safety = self.authority.safety(&guard).await?;
-            if !safety.allow_writes || !guard.authority().workspace_access.can_write() {
+            let access = guard.authority().workspace_access;
+            if !safety.allow_writes
+                || !access.can_write()
+                || (contains_ddl && (!safety.allow_schema_changes || !access.can_manage()))
+            {
                 return Err(AppError::Blocked {
                     reason: "current policy no longer allows this import".into(),
                 });
             }
         }
-        let operation = self.operation.get(current.job.operation_id).await?;
         if operation.state == OperationState::PendingApproval {
             return Err(AppError::Blocked {
                 reason: "approve the exact import plan before starting it".into(),

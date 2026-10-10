@@ -92,12 +92,14 @@ export function bindWorkspaceConnectionCredentials(
   username: string,
   password: string,
   sshAlias: string,
+  tlsFiles?: Record<string, string>,
 ): Promise<ConnectionProfile> {
   return invoke("bind_workspace_connection_credentials", {
     id,
     username,
     password,
     sshAlias,
+    tlsFiles,
   });
 }
 

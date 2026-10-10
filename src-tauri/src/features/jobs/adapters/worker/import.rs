@@ -40,15 +40,37 @@ impl JobWorker {
         else {
             unreachable!()
         };
+        // DDL in a SQL import executes only with the schema credential, the
+        // `manage` grant, and the device's schema-change opt-in at run time.
+        let allow_ddl =
+            crate::features::jobs::JobSqlAudit::from_operation_value(&claimed.record().payload)
+                .is_some_and(|audit| audit.ddl_count > 0);
         let guard = self
             .authority
-            .authorize(record.job.connection_id, JobPermission::Write)
+            .authorize(
+                record.job.connection_id,
+                if allow_ddl {
+                    JobPermission::Schema
+                } else {
+                    JobPermission::Write
+                },
+            )
             .await?;
         ensure_record_scope(&record, guard.authority())?;
         let engine = guard.authority().engine;
         if !guard.authority().workspace_access.can_write() {
             return Err(AppError::Blocked {
                 reason: "your workspace role grants read-only database access".into(),
+            });
+        }
+        let safety = self.authority.safety(&guard).await?;
+        if !safety.allow_writes
+            || (allow_ddl
+                && (!safety.allow_schema_changes
+                    || !guard.authority().workspace_access.can_manage()))
+        {
+            return Err(AppError::Blocked {
+                reason: "current policy no longer allows this import".into(),
             });
         }
         let capability = self
@@ -64,7 +86,15 @@ impl JobWorker {
             .source_sha256
             .as_deref()
             .ok_or_else(|| AppError::Config("input capability has no source hash".into()))?;
-        let snapshot = self.catalog.refresh(record.job.connection_id).await?;
+        // A run that may change the schema reads it live without persisting it: a
+        // cached pre-import snapshot would be stale once its own DDL commits.
+        let snapshot = if allow_ddl {
+            self.catalog
+                .read_before_schema_change(record.job.connection_id)
+                .await?
+        } else {
+            self.catalog.refresh(record.job.connection_id).await?
+        };
         let target_fingerprint = snapshot.fingerprint().to_owned();
         let target_metadata = match target_relation {
             Some(reference) => Some(find_relation(&snapshot, reference)?),
@@ -125,6 +155,8 @@ impl JobWorker {
         let mut rows_processed = record.job.rows_processed;
         let mut error_artifact_needed =
             std::fs::metadata(&error_path).is_ok_and(|metadata| metadata.len() > 0);
+        // Set once a DDL statement committed, or may have (an unknown commit outcome).
+        let mut schema_changed = false;
         let result = if cancellation.is_cancelled() {
             self.checkpoint_import_stop(
                 &record,
@@ -167,6 +199,7 @@ impl JobWorker {
                     }
                     let statements = build_import_statements(
                         engine,
+                        allow_ddl,
                         target_relation.as_ref(),
                         target_metadata,
                         mapping,
@@ -196,21 +229,26 @@ impl JobWorker {
                     if !executable.is_empty() {
                         let sql = executable
                             .iter()
-                            .map(|(_, statement)| statement.clone())
+                            .map(|(_, statement)| statement.sql.clone())
                             .collect::<Vec<_>>();
-                        if let Err(batch_error) = execute_transaction(
+                        let batch_changes_schema = executable
+                            .iter()
+                            .any(|(_, statement)| statement.schema_change);
+                        let batch = execute_transaction(
                             live.rw()?,
                             &sql,
                             claimed.grant(),
                             &cancellation,
                             record.job.format.base() == JobFormat::Sql,
                         )
-                        .await
-                        {
+                        .await;
+                        schema_changed |= batch_changes_schema && batch.is_ok();
+                        if let Err(batch_error) = batch {
                             // An unacknowledged commit may already have reached the target.
                             // Retrying it row-by-row could duplicate data, so this state is
                             // terminal regardless of the configured validation policy.
                             if matches!(batch_error, AppError::OutcomeUnknown(_)) {
+                                schema_changed |= batch_changes_schema;
                                 error_artifact_needed = true;
                                 for (item, _) in &executable {
                                     write_item_error(
@@ -253,17 +291,21 @@ impl JobWorker {
                             for (item, statement) in executable {
                                 match execute_transaction(
                                     live.rw()?,
-                                    &[statement],
+                                    &[statement.sql],
                                     claimed.grant(),
                                     &cancellation,
                                     false,
                                 )
                                 .await
                                 {
-                                    Ok(()) => fallback_committed = true,
+                                    Ok(()) => {
+                                        fallback_committed = true;
+                                        schema_changed |= statement.schema_change;
+                                    }
                                     Err(row_error)
                                         if matches!(row_error, AppError::OutcomeUnknown(_)) =>
                                     {
+                                        schema_changed |= statement.schema_change;
                                         error_artifact_needed = true;
                                         write_item_error(
                                             &mut error_writer,
@@ -339,6 +381,12 @@ impl JobWorker {
             };
             execute_batches().await
         };
+        // DDL that reached the database retires every cached catalog of the connection
+        // and announces it, like any other committed schema change, whatever the run's
+        // outcome. A failed retirement must not mask the run's own result.
+        if schema_changed {
+            let _ = self.catalog.schema_changed(record.job.connection_id).await;
+        }
         finalize_error_writer(error_writer)?;
         if !matches!(&result, Ok(WorkerOutcome::Paused)) {
             if error_artifact_needed {

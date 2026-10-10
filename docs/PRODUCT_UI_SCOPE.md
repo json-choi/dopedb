@@ -216,7 +216,13 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
   선택은 즉시 반영하고 입력창·포커스·레이아웃을 유지하며 선행 준비 상태로
   전체 surface를 로딩으로 바꾸지 않는다. 준비 중 선택이 바뀌면 이전 세션을
   정리하고 마지막 선택만 준비한다. 첫 prompt는 같은 준비 작업을 기다려 한 번만
-  전송하며, 대화가 시작된 뒤에는 resource grant를 변경하지 않는다.
+  전송하며, 대화가 시작된 뒤에는 resource grant를 변경하지 않는다. 대화가 시작된
+  뒤 범위 메뉴는 고정된 선택과 새 채팅이 필요한 이유를 읽기 전용으로 보여준다.
+  백그라운드 준비는 Project binding을 다시 쓰지 않는다. 선택한 DB가 Project에
+  추가된 뒤 revision이 바뀌었으면 입력 영역에 변경 내용과 `재확인`을 표시하고,
+  사람이 재확인해야 새 revision으로 준비한다. Project에 속하지 않은 연결은 Agent가
+  사용할 수 없다고 알리고 `프로젝트에 추가`로 잇는다. session이 닫히거나 회수·
+  만료되면 그 session의 미결 DB 변경 제안은 `철회됨`이 되어 승인할 수 없다.
   답변 조각은 수신 후 다음 화면 frame에 반영하고, 생성 중 커서를 표시한다.
   최종 완료·권한 요청은 대기 중인 조각까지 즉시 반영하며 사용자가 위로 스크롤해
   읽는 중에는 강제로 아래로 이동하지 않는다.
@@ -228,6 +234,10 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
   선택지가 없거나 적용에 실패하면 adapter의 현재 모드를 유지하고 실패를 표시한다.
   자동 승인은 adapter의 도구 권한 요청에 적용되며 exact resource grant,
   단일 write target과 DB 변경의 별도 승인을 대체하지 않는다.
+  DB 변경 제안 카드는 포커스나 스크롤을 옮기지 않고 polite 알림으로 한 번 알린다.
+  승인 버튼에는 자동 포커스를 두지 않는다. 패널이 닫혀 있으면 AI Chat 토글과 상태
+  표시에 `승인 대기 N`을 표시하고, 상태 표시는 카드로 이동만 할 뿐 결정 control을
+  복제하지 않는다. 승인된 실행은 카드와 상태 표시에서 실제 backend cancel로 중지한다.
 - Agent 도구 설정은 Claude와 Codex를 각각 한 행으로 보여 준다. 선택한 Agent의
   내장 채팅 연결 구성 요소는 앱이 검증해 설치·활성화하고, 공식 로컬 CLI의 설치·
   로그인 상태는 같은 행에서 확인한다. CLI가 없거나 로그인되지 않았으면 해당
@@ -246,6 +256,10 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
   승인받는다. config에서 사라졌거나 권한이 바뀐 resource는 승인 control을
   비활성화한다. 이 modal은 범위를 넓히지 않으며 실행 중인 공식 CLI가 끝나면 해당
   process-bound session도 폐기한다.
+  승인된 외부 Agent process의 DB 변경 제안은 같은 Desktop 승인 dialog에서 제안마다
+  한 번 승인하거나 거절한다. 초기 포커스는 중립적인 닫기 동작에 두어 요청한
+  terminal에서 입력하던 키가 승인 control에 닿지 않게 하고, 결정이 끝나기 전에는
+  닫을 수 없다(제안 검토를 불러오지 못한 경우는 닫을 수 있다). process가 끝나 session이 폐기되면 미결 제안은 자동으로 취소된다.
 - 하단 Services 패널과 보조 보기는 제공하지 않는다. SQL 문서는 SQL/결과를 전환하며
   실행 중에도 editor와 controller를 유지한다. 중앙 실행 결과 문서는 같은 연결의 보존된
   결과·출력·다중 statement를 열고, 하단 상태 표시가 background 진행·취소를 소유한다.
@@ -309,7 +323,7 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
 - popup, menu, modal은 viewport collision, keyboard 이동, focus containment와
   trigger 복구를 책임진다. 앱 내부 modal은 native 창처럼 보이는 drag header나
   `X`를 만들지 않고 footer의 명시적인 취소·닫기·완료 action으로 종료한다.
-- data grid의 header/row/row number는 28px, 기본 column은 144px을 기준으로 한다.
+- data grid의 header/row는 28px, row number column은 최소 28px에서 가장 큰 행 번호의 자릿수에 맞춰 넓어지며, 기본 column은 144px을 기준으로 한다.
   virtualization 여부와 무관하게 selection, resize, sort, filter 계약은 같다.
   열 경계 더블클릭 또는 경계에 focus한 뒤 Enter는 해당 열만 현재 로드된 표시 값과
   헤더에 맞추며 자동 맞춤 상한은 480px이다. 추가 조회나 새 행 도착에 따른 자동 재조절은 하지 않고,
@@ -441,7 +455,7 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
 | PD-22 | data source comment/color | `구현 안 함` | 공유 연결 구분은 environment badge가 소유한다. |
 | PD-23 | authentication/save policy 선택 | `구현 안 함` | engine마다 검증된 최소 입력 경로 하나를 유지한다. |
 | PD-24 | status breadcrumb 탐색 | `구현` | 현재 문맥을 표시하고 Explorer의 정확한 문맥을 reveal한다. |
-| PD-25 | 전역 manual transaction 상태 | `구현` | 장기 transaction을 발견하고 해당 연결에서 commit/rollback하도록 한다. |
+| PD-25 | 전역 manual transaction 상태 | `구현` | 장기 transaction을 발견하고 해당 연결에서 commit/rollback하도록 한다. 만료 5분 전에 경고하고, 열린 transaction이 있으면 창 닫기와 앱 종료 전에 롤백 확인을 받으며 어떤 종료 경로도 암묵적으로 commit하지 않는다. |
 | PD-26 | data grid quick-filter/history | `구현 안 함` | 기존 column filter와 WHERE/ORDER BY, Agent 재조회 경로를 사용한다. |
 | PD-27 | 범용 workspace settings bag | `구현 안 함` | 공유 상태는 connection과 Analysis Article 같은 실제 revision owner에 둔다. |
 | PD-28 | safe branch checkpoint/restore | `구현` | 승인된 격리 생성, connection revision 전환, 복귀·폐기와 audit를 하나의 durable operation으로 묶는다. |

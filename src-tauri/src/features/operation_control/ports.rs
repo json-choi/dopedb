@@ -17,6 +17,11 @@ pub(crate) trait OperationControlPort: Clone + Send + Sync + 'static {
         &self,
     ) -> impl Future<Output = AppResult<RestartRecoveryReport>> + Send;
 
+    fn cancel_revoked_agent_proposals(
+        &self,
+        operation_ids: Vec<Uuid>,
+    ) -> impl Future<Output = ()> + Send + '_;
+
     fn approve_local<'a>(
         &'a self,
         authority: &'a LocalApprovalAuthority,

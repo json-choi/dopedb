@@ -1,8 +1,12 @@
 // Central result presentation. Local snapshots survive editor and document closure;
-// every result stays scoped to its original connection and workspace store.
-import { useState } from "react";
+// every result stays scoped to its original connection and workspace store. A
+// running query shows its elapsed time and, while its run has registered one, the
+// same exact cancel the status bar uses, next to the result it will produce.
+import { useEffect, useState } from "react";
 
+import { queryTaskKey, useBackgroundTaskCancels } from "../backgroundTasks/cancelRegistry";
 import { Icon } from "../../components/Icon";
+import { Button } from "../../design-system/components/Button";
 import { IdeToolTab, IdeToolTabStrip } from "../../design-system/components/IdeTabs";
 import {
   WorkbenchContainedBody,
@@ -13,19 +17,39 @@ import {
 } from "../../design-system/components/Workbench";
 import { useI18n } from "../../lib/i18n";
 import type { ConnectionProfile } from "../connections/domain";
-import QueryServiceResult from "./QueryServiceResult";
+import QueryServiceResult, { type SqlErrorNavigation } from "./QueryServiceResult";
+import type { QueryServiceSession } from "./domain";
 import { type QueryServiceStore, useQueryServiceSnapshot } from "./store";
+
+/** Whole seconds since `startedAt`, ticking while `running`. */
+function useElapsedSeconds(startedAt: string | undefined, running: boolean) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!running) return;
+    setNow(Date.now());
+    const timer = setInterval(() => setNow(Date.now()), 1_000);
+    return () => clearInterval(timer);
+  }, [running, startedAt]);
+  const started = startedAt ? Date.parse(startedAt) : Number.NaN;
+  return Number.isFinite(started) ? Math.max(0, Math.floor((now - started) / 1_000)) : 0;
+}
 
 export default function QueryResultsPane({
   store,
   connection,
   documentId,
   onOpenSafety,
+  onRerun,
+  onOpenActivity,
+  errorNavigation,
 }: {
   store: QueryServiceStore;
   connection: ConnectionProfile;
   documentId?: string;
   onOpenSafety: (connectionId: string) => void;
+  onRerun?: (session: QueryServiceSession) => void;
+  onOpenActivity?: () => void;
+  errorNavigation?: SqlErrorNavigation | null;
 }) {
   const { t } = useI18n();
   const snapshot = useQueryServiceSnapshot(store);
@@ -41,6 +65,10 @@ export default function QueryResultsPane({
     tab: number | "output";
   } | null>(null);
   const tab = selection?.sessionId === active?.id ? selection?.tab ?? 0 : 0;
+  const running = active?.status === "running" || active?.status === "waiting";
+  const elapsed = useElapsedSeconds(active?.startedAt, running);
+  // Present only while the run that owns this session can still be stopped.
+  const cancelRun = useBackgroundTaskCancels().get(queryTaskKey(active?.id ?? ""));
 
   if (!active) {
     return <WorkbenchEmptyState icon="table">{t("sql.resultsEmpty")}</WorkbenchEmptyState>;
@@ -100,6 +128,20 @@ export default function QueryResultsPane({
           <Icon name="terminal" />{t("services.outputTab")}
         </IdeToolTab>
       </IdeToolTabStrip>
+      {running ? (
+        <div className="tw:flex tw:min-h-control-md tw:items-center tw:gap-2 tw:border-b tw:border-border-subtle tw:px-3 tw:text-ui">
+          <Icon name="refresh" className="tw:text-info" />
+          {/* A timer is not announced on every tick, unlike a status region. */}
+          <span role="timer" className="tw:min-w-0 tw:flex-1 tw:tabular-nums">
+            {t("sql.runningFor", { seconds: elapsed })}
+          </span>
+          {cancelRun ? (
+            <Button size="compact" onClick={() => void cancelRun()}>
+              {t("sql.cancelRun")}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
       <WorkbenchContainedBody>
         {tab === "output" ? (
           <WorkbenchScrollBody>
@@ -116,6 +158,11 @@ export default function QueryResultsPane({
             connection={connection}
             onOpenSafety={onOpenSafety}
             scriptStatementIndex={active.result.kind === "script" ? tab : undefined}
+            onRerun={onRerun ? () => onRerun(active) : undefined}
+            onOpenActivity={onOpenActivity}
+            errorNavigation={
+              errorNavigation?.sessionId === active.id ? errorNavigation : null
+            }
           />
         )}
       </WorkbenchContainedBody>

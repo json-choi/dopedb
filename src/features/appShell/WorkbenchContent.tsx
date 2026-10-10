@@ -33,7 +33,11 @@ import type {
 } from "../workspaceAdmin/sections";
 import type { SqlDocument } from "../sqlDocuments/domain";
 import type { AppUpdaterSnapshot } from "../updater/controller";
-import type { WorkbenchDocument } from "../workbench/domain";
+import {
+  historyQueryTarget,
+  type HistoryQueryTarget,
+  type WorkbenchDocument,
+} from "../workbench/domain";
 import ConnectionPicker from "./ConnectionPicker";
 import type { EditingConnection } from "./useAppShellWorkbenchController";
 
@@ -73,6 +77,8 @@ type WorkbenchContentModel = {
     workspaceAdminSection: WorkspaceAdminSection | null;
     activeSchemaGroup: SchemaConnectionGroup | null;
     editing: EditingConnection;
+    /** The editor opened to re-enter a credential this device no longer holds. */
+    editorInitialFocus?: "credentials";
     connectionPreset: ConnectionLaunchPreset | null;
     knowledgeEnvironmentFocus: KnowledgeEnvironmentFocus | null;
   };
@@ -109,7 +115,7 @@ type WorkbenchContentCommands = {
   connections: {
     retry: () => void;
     new: (preset?: ConnectionLaunchPreset) => void;
-    edit: (connection: ConnectionProfile) => void;
+    edit: (connection: ConnectionProfile, initialFocus?: "credentials") => void;
     delete: (id: string) => Promise<void>;
     select: (id: string) => void;
     save: (
@@ -141,7 +147,7 @@ type WorkbenchContentCommands = {
     persisted: (document: SqlDocument) => void;
     openTable: (connection: ConnectionProfile, table: CatalogTable) => void;
     openStable: (kind: "schema" | "activity" | "results") => void;
-    loadSql: (sql: string) => Promise<void>;
+    loadSql: (sql: string, target: HistoryQueryTarget) => Promise<void>;
   };
   queryServices: {
     updateSession: (session: QueryServiceSession) => void;
@@ -283,6 +289,7 @@ function WorkbenchContentResolved({ model, commands }: Props) {
             }
             initial={route.editing === "new" ? null : route.editing}
             preset={route.editing === "new" ? route.connectionPreset : null}
+            initialFocus={route.editing === "new" ? undefined : route.editorInitialFocus}
             connections={connection.items}
             creatingDemo={connection.creatingDemo}
             onCreateDemoDatabase={commands.connections.createDemo}
@@ -475,6 +482,7 @@ function WorkbenchContentResolved({ model, commands }: Props) {
               store={commands.queryServices.store}
               connection={selected}
               onOpenSafety={commands.route.openSafety}
+              onOpenActivity={() => commands.documents.openStable("activity")}
             />
           ) : activeDocument.kind === "documents" ? (
             <Documents
@@ -486,7 +494,10 @@ function WorkbenchContentResolved({ model, commands }: Props) {
             <Activity
               key={activeDocument.id}
               connection={selected}
-              onLoadSql={commands.documents.loadSql}
+              onLoadSql={(entry) => commands.documents.loadSql(
+                entry.sql,
+                historyQueryTarget(entry, t("sql.historyQueryTitle")),
+              )}
             />
           )}
         </Suspense>

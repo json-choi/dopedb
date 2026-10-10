@@ -1,14 +1,12 @@
 //! Verified official-CLI process launch port for one connection-pinned ACP actor.
 
 use std::future::Future;
-use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
 
 use agent_client_protocol::schema::v1::{EnvVariable, McpServer, McpServerStdio};
 use agent_client_protocol::AcpAgentConfig;
 use dopedb_protocol::{AcpPluginId, AgentSessionRegisterArguments};
-use sha2::{Digest, Sha256};
 use tauri::AppHandle;
 use zeroize::Zeroizing;
 
@@ -16,8 +14,7 @@ use crate::error::{AppError, AppResult};
 use crate::features::agents::runtime::AcpPluginManager;
 use crate::kernel::identity::{ConnectionId, TerminalSessionId};
 
-use super::super::domain::AgentProvider;
-use super::provider_name;
+use super::super::domain::{agent_error, AgentProvider};
 
 const DOPEDB_MCP_SERVER_NAME: &str = "dopedb-desktop-session";
 const MAX_PROVIDER_CLI_BYTES: u64 = 512 * 1024 * 1024;
@@ -45,17 +42,27 @@ impl AcpProcessLaunchPort for TauriAcpProcessLaunchPort {
     fn prepare(&self, provider: AgentProvider) -> ProcessLaunchFuture<'_> {
         Box::pin(async move {
             let plugin_id = plugin_id(provider);
-            let plugin_plan = self.plugins.launch_plan(&self.app, plugin_id)?;
+            // Launch planning re-verifies the adapter tree and bundled runtime;
+            // keep that file I/O off the async workers.
+            let plugins = self.plugins.clone();
+            let app = self.app.clone();
+            let plugin_plan =
+                tokio::task::spawn_blocking(move || plugins.launch_plan(&app, plugin_id))
+                    .await
+                    .map_err(|_| {
+                        AppError::Config("the ACP plugin verifier stopped unexpectedly".into())
+                    })??;
             let cli_name = match provider {
                 AgentProvider::Claude => "claude",
                 AgentProvider::Codex => "codex",
             };
-            let provider_cli = crate::cli_environment::find_executable(cli_name).ok_or_else(|| {
-                AppError::Agent(format!(
-                    "{} is not installed. Install its official local CLI, then start a new Agent session.",
-                    provider_name(provider)
-                ))
-            })?;
+            let provider_cli =
+                crate::cli_environment::find_executable(cli_name).ok_or_else(|| {
+                    AppError::Agent(agent_error::for_provider(
+                        agent_error::CLI_MISSING,
+                        provider,
+                    ))
+                })?;
             let (provider_cli, provider_cli_resolved, provider_cli_sha256) =
                 tokio::task::spawn_blocking(move || verified_provider_cli(provider_cli))
                     .await
@@ -288,6 +295,13 @@ impl AcpPluginCandidateReceipt {
             .map(|_| ())
     }
 
+    /// Clears a stale candidate failure once the ready fallback version works.
+    pub(super) fn record_ready_success(&self) -> AppResult<()> {
+        self.plugins
+            .record_ready_installation_success(self.plugin_id, &self.plugin_installation_id)
+            .map(|_| ())
+    }
+
     pub(super) fn record_initialize_failure(&self, reason: &str) -> AppResult<()> {
         self.plugins
             .record_initialize_failure(
@@ -339,17 +353,8 @@ fn verified_provider_cli(path: PathBuf) -> AppResult<(PathBuf, PathBuf, String)>
             });
         }
     }
-    let mut file = std::fs::File::open(&resolved)?;
-    let mut hasher = Sha256::new();
-    let mut buffer = [0u8; 16 * 1024];
-    loop {
-        let read = file.read(&mut buffer)?;
-        if read == 0 {
-            break;
-        }
-        hasher.update(&buffer[..read]);
-    }
-    Ok((path, resolved, hex::encode(hasher.finalize())))
+    let digest = crate::features::agents::runtime::verified_file_sha256(&resolved)?;
+    Ok((path, resolved, digest))
 }
 
 fn utf8_path(path: &Path, label: &str) -> AppResult<String> {

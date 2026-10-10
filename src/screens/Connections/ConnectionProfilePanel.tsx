@@ -1,13 +1,11 @@
-// Composes the profile editor header, tabs, diagnostics, and action status from
+// Composes the profile editor header, tabs, diagnostics, and check status from
 // narrow grouped presentation models.
 import type { RefObject } from "react";
 import { DiagnosticSummary } from "../../design-system/components/Diagnostics";
-import { Button } from "../../design-system/components/Button";
 import {
   FieldValidationMessage,
   TextInput,
 } from "../../design-system/components/FormControls";
-import { ModalDetailActionBar } from "../../design-system/components/Modal";
 import { PanelTabs } from "../../design-system/components/PanelTabs";
 import type { ConnectionEditorController } from "../../features/connections/useConnectionEditorController";
 import { useI18n } from "../../lib/i18n";
@@ -16,6 +14,10 @@ import { ConnectionGeneralTab } from "./ConnectionGeneralTab";
 import { ConnectionOptionsTab } from "./ConnectionOptionsTab";
 import { ConnectionSchemaTab } from "./ConnectionSchemaTab";
 import { ConnectionSecurityTab } from "./ConnectionSecurityTab";
+import {
+  ConnectionTestActionBar,
+  ConnectionTestFailureNotice,
+} from "./ConnectionTestStatus";
 
 export function ConnectionProfilePanel({
   nameInputRef,
@@ -59,12 +61,19 @@ export function ConnectionProfilePanel({
             aria-invalid={
               profile.validation.name?.tone === "danger" || undefined
             }
+            aria-describedby={
+              profile.validation.name ? "connection-name-validation" : undefined
+            }
             onChange={(event) => profile.set("name", event.target.value)}
+            onBlur={() => profile.touch("connection-name")}
             placeholder="prod-readonly"
             autoFocus={autoFocus}
           />
           {profile.validation.name ? (
-            <FieldValidationMessage validation={profile.validation.name} />
+            <FieldValidationMessage
+              id="connection-name-validation"
+              validation={profile.validation.name}
+            />
           ) : null}
         </span>
       </div>
@@ -79,29 +88,8 @@ export function ConnectionProfilePanel({
       ) : null}
 
       <div className="tw:min-h-0 tw:min-w-0 tw:flex-1 tw:overflow-y-auto tw:p-5 tw:[container-type:inline-size]">
-        {!problems.open && commands.testFailure ? (
-          <section
-            className="tw:mx-auto tw:mb-4 tw:grid tw:w-full tw:max-w-[840px] tw:gap-1.5 tw:rounded-sm tw:border tw:border-danger/40 tw:bg-danger-muted tw:p-3"
-            role="alert"
-          >
-            <strong className="tw:text-sm tw:font-semibold tw:text-danger">
-              {commands.testFailureTitle(commands.testFailure.code)}
-            </strong>
-            <p className="tw:m-0 tw:text-sm tw:leading-body tw:text-foreground">
-              {commands.testFailureRecovery(commands.testFailure.code)}
-            </p>
-            {commands.managedConnection.canOpenSettings ? (
-              <div className="tw:mt-1">
-                <Button
-                  size="compact"
-                  tone="primary"
-                  onClick={() => commands.managedConnection.openSettings()}
-                >
-                  {t("connections.managedWorkspace.open")}
-                </Button>
-              </div>
-            ) : null}
-          </section>
+        {!problems.open ? (
+          <ConnectionTestFailureNotice commands={commands} />
         ) : null}
         {problems.open ? (
           <DiagnosticSummary
@@ -138,32 +126,11 @@ export function ConnectionProfilePanel({
         ) : null}
       </div>
 
-      <ModalDetailActionBar>
-        <button
-          type="button"
-          className="tw:cursor-pointer tw:border-0 tw:bg-transparent tw:p-0 tw:font-sans tw:text-sm tw:font-medium tw:text-info tw:disabled:cursor-default tw:disabled:text-muted-foreground"
-          disabled={commands.busy || problems.hasTestBlocking}
-          onClick={() => void commands.test()}
-        >
-          {commands.running === "test"
-            ? t("connections.testing")
-            : t("connections.test")}
-        </button>
-        {commands.message ? (
-          <span
-            data-error={commands.messageIsError || undefined}
-            className="tw:min-w-0 tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap tw:text-sm tw:text-muted-foreground tw:data-[error=true]:text-danger"
-            role={commands.messageIsError ? "alert" : "status"}
-            title={commands.message}
-          >
-            {commands.message}
-          </span>
-        ) : drivers.active ? (
-          <span className="tw:min-w-0 tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap tw:text-sm tw:text-muted-foreground">
-            {drivers.active.name} {drivers.active.version}
-          </span>
-        ) : null}
-      </ModalDetailActionBar>
+      <ConnectionTestActionBar
+        commands={commands}
+        activeDriver={drivers.active}
+        problemsOpen={problems.open}
+      />
     </>
   );
 }

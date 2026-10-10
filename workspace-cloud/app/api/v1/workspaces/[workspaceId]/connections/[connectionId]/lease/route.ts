@@ -17,6 +17,7 @@ import {
 import {
   activeProviderIntegration,
   issueManagedLease,
+  ManagedLeaseReservationBusyError,
   parseManagedProviderResource,
   revokeActiveLeases,
 } from "../../../../../../../../lib/provider-integrations";
@@ -47,6 +48,12 @@ type RouteContext = {
 // Leaves room for the 45-second provider-authority gate to fail closed and for
 // the pending reservation to be retired before the platform stops the request.
 export const maxDuration = 60;
+
+// Machine codes Desktop classifies without reading the English message. A
+// provider or target mismatch needs a Workspace manager's repair, so Desktop
+// offers recovery instead of a retry; an authority race is safe to retry.
+const MANAGED_CONNECTION_RECOVERY_REQUIRED = "managed_connection_recovery_required";
+const MANAGED_LEASE_AUTHORITY_CHANGED = "managed_lease_authority_changed";
 
 function consumeLeaseBudget(
   organizationId: string,
@@ -113,6 +120,11 @@ export async function POST(request: Request, context: RouteContext) {
   } catch {
     return jsonError("Managed access mode must be read, write, or schema", 400);
   }
+  // Repairing an integration restores data access only, so schema leases never
+  // carry the recovery code; data leases do for a provider or target mismatch.
+  const recoveryRequired = (message: string) => requestedAccessMode === "schema"
+    ? jsonError(message, 409)
+    : jsonError(message, 409, MANAGED_CONNECTION_RECOVERY_REQUIRED);
   const authorization = await authorizeWorkspaceConnection(
     request, workspaceId, connectionId,
     requestedAccessMode === "schema" ? "manage" : requestedAccessMode === "write" ? "use" : "read",
@@ -145,18 +157,18 @@ export async function POST(request: Request, context: RouteContext) {
     || !connection.providerIntegrationId
     || !connection.providerResourceId
   ) {
-    return jsonError("Managed database access is not available", 409);
+    return recoveryRequired("Managed database access is not available");
   }
   const integration = await activeProviderIntegration(
     workspaceId,
     connection.providerIntegrationId,
   );
-  if (!integration) return jsonError("Provider integration not found", 404);
+  if (!integration) return recoveryRequired("Provider integration not found");
   const expectedConnectionProvider = integration.provider === "vault"
     ? "generic"
     : integration.provider;
   if (connection.provider !== expectedConnectionProvider) {
-    return jsonError("Managed database provider does not match the connection", 409);
+    return recoveryRequired("Managed database provider does not match the connection");
   }
   const canonicalResource = await db.query.workspaceProviderResource.findFirst({
     where: and(
@@ -167,7 +179,7 @@ export async function POST(request: Request, context: RouteContext) {
     columns: { resource: true, redactedMetadata: true, capabilityManifest: true },
   });
   if (!canonicalResource) {
-    return jsonError("Managed database access requires a canonical provider resource", 409);
+    return recoveryRequired("Managed database access requires a canonical provider resource");
   }
   let resource;
   try {
@@ -176,10 +188,10 @@ export async function POST(request: Request, context: RouteContext) {
       canonicalResource.resource,
     );
   } catch {
-    return jsonError("Managed database resource is invalid", 409);
+    return recoveryRequired("Managed database resource is invalid");
   }
   if (resource.engine !== connection.engine) {
-    return jsonError("Managed database engine does not match the connection", 409);
+    return recoveryRequired("Managed database engine does not match the connection");
   }
   if (integration.provider === "vault") {
     const target = resource as VaultManagedResource;
@@ -189,7 +201,7 @@ export async function POST(request: Request, context: RouteContext) {
       || target.database !== connection.databaseName
       || target.sslmode !== connection.sslmode
     ) {
-      return jsonError("Brokered database target does not match the connection", 409);
+      return recoveryRequired("Brokered database target does not match the connection");
     }
   }
   const metadata = canonicalResource.redactedMetadata
@@ -213,7 +225,7 @@ export async function POST(request: Request, context: RouteContext) {
       && safeMigrations !== true
     )
   ) {
-    return jsonError("Managed database policy is invalid", 409);
+    return recoveryRequired("Managed database policy is invalid");
   }
   if (requestedAccessMode !== "read" && (
     !connection.allowWrites
@@ -347,7 +359,11 @@ export async function POST(request: Request, context: RouteContext) {
         userId: authorization.session.user.id,
         connectionId,
       });
-      return jsonError("Workspace database authority changed. Retry with current access.", 409);
+      return jsonError(
+        "Workspace database authority changed. Retry with current access.",
+        409,
+        MANAGED_LEASE_AUTHORITY_CHANGED,
+      );
     }
     // Provider-enforced expiry is the authority boundary. The durable row lets
     // the event-driven coordinator remove expired provider objects early, while
@@ -390,7 +406,22 @@ export async function POST(request: Request, context: RouteContext) {
       status: error instanceof ProviderRequestError ? error.status : 0,
       databaseCode: nestedDatabaseCode(error),
     });
+    if (error instanceof ManagedLeaseReservationBusyError) {
+      return jsonError(error.message, 409, MANAGED_LEASE_AUTHORITY_CHANGED);
+    }
     if (error instanceof ProviderRequestError) {
+      // Only a provider that rejects the integration's credential (401/403), no
+      // longer has its resource (404), or fails a dependency (424) needs a
+      // Workspace manager's repair; target and engine mismatches already returned
+      // above. Conflicts, locks, and rate limits (409/423/429) and unavailable
+      // upstreams keep their retryable status, and schema-mode capability limits
+      // stay a Safety concern rather than a repair.
+      if (
+        accessMode !== "schema"
+        && [401, 403, 404, 424].includes(error.status)
+      ) {
+        return recoveryRequired(error.message);
+      }
       return jsonError(
         error.message,
         error.status,

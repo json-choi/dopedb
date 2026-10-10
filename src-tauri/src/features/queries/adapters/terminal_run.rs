@@ -42,6 +42,10 @@ pub(crate) struct PreparedAgentQueryRun {
     origin: super::super::domain::AgentQueryInvocationOrigin,
     cancellation: executor::cancel::CancelHandle,
     manual_transactions: crate::features::queries::ManualTransactionRuntime,
+    /// Whether this read may join the user's open manual transaction. Only the
+    /// session's single write target shares that physical session (PD-04);
+    /// every other Agent read uses the database-enforced read-only pool.
+    shares_manual_transaction: bool,
 }
 
 /// Successful result whose lease survives Broker response projection.
@@ -57,6 +61,14 @@ impl AgentQueryRunReceipt {
 }
 
 impl PreparedAgentQueryRun {
+    /// Let this read observe the open manual transaction on its connection. The
+    /// caller grants this only when the connection is the session's single write
+    /// target, so uncommitted rows never reach an Agent that cannot write them.
+    pub(crate) fn within_write_target(mut self) -> Self {
+        self.shares_manual_transaction = true;
+        self
+    }
+
     pub(crate) async fn execute(self) -> Result<AgentQueryRunReceipt, AgentQueryRunError> {
         let Self {
             store,
@@ -70,6 +82,7 @@ impl PreparedAgentQueryRun {
             origin,
             cancellation,
             manual_transactions,
+            shares_manual_transaction,
         } = self;
         let operation_id = claimed.record().id;
         let engine = operation_pin.profile.engine;
@@ -138,18 +151,23 @@ impl PreparedAgentQueryRun {
                 ));
             }
         };
-        let manual_result = manual_transactions
-            .run_read(
-                ManualExecutionTarget {
-                    connection_id: operation_pin.connection_id,
-                    database: lease.target_database(),
-                    namespace: None,
-                },
-                &event_context.sql,
-                max_rows,
-                Some(&cancellation),
-            )
-            .await;
+        // A shared read still runs inside the manual session's read-only scope.
+        let manual_result = if shares_manual_transaction {
+            manual_transactions
+                .run_read(
+                    ManualExecutionTarget {
+                        connection_id: operation_pin.connection_id,
+                        database: lease.target_database(),
+                        namespace: None,
+                    },
+                    &event_context.sql,
+                    max_rows,
+                    Some(&cancellation),
+                )
+                .await
+        } else {
+            None
+        };
         let manual_transaction = manual_result.is_some();
         let result = if let Some(result) = manual_result {
             result
@@ -401,6 +419,7 @@ impl QueryPlatformAdapter {
             origin: payload.origin,
             cancellation,
             manual_transactions: self.manual_transactions.clone(),
+            shares_manual_transaction: false,
         })
     }
 }

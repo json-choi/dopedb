@@ -19,7 +19,7 @@ use uuid::Uuid;
 
 fn fixture() -> Value {
     serde_json::from_str(include_str!(
-        "../../../dopedb-protocol/tests/fixtures/schema-diff-v1.json"
+        "../../../dopedb-protocol/tests/fixtures/schema-diff-v2.json"
     ))
     .unwrap()
 }
@@ -242,7 +242,7 @@ pub(super) fn run() {
     });
 }
 
-/// The `--json` comparison reproduces the fixture objects and counts exactly.
+/// The `--json` comparison reproduces the fixture scope, objects and counts exactly.
 fn cli_json_journey() -> Value {
     let output = invoke("ok", None, false);
     assert!(
@@ -252,19 +252,36 @@ fn cli_json_journey() -> Value {
     );
     assert!(output.stderr.is_empty());
     let diff: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(diff["scope"], fixture()["scope"]);
     assert_eq!(diff["objects"], fixture()["objects"]);
     assert_eq!(diff["counts"], fixture()["counts"]);
 
     diff
 }
 
-/// The human-readable rendering keeps the same counts and per-object detail.
+/// The human-readable rendering keeps the same counts and per-object detail, and
+/// always states exactly what it compared and what it did not.
 fn cli_human_journey() {
     let human = invoke("ok", None, true);
     assert!(human.status.success());
     let human = String::from_utf8(human.stdout).unwrap();
-    assert!(human.contains("2 added · 2 missing · 5 changed"));
+    assert!(human.contains(
+        "3 added · 2 missing · 7 changed\nCompared: relation presence, relation kind, \
+         column presence, column types, column nullability, primary-key membership (not \
+         order), index presence, index keys in order, index uniqueness, each foreign-key \
+         column's referenced column.\nNot compared: column order, column defaults,"
+    ));
+    assert!(human.contains(
+        "check constraints, UNIQUE constraints without an index, index methods, index \
+         predicates, INCLUDE columns, index sort order, index validity, foreign-key \
+         actions, foreign-key deferrability, foreign-key validation, view definitions,"
+    ));
+    assert!(human.contains("comments, triggers, routines, types, sequences.\n"));
+    // Quoted ENUM members keep their case; only the type keyword is case-insensitive.
+    assert!(human.contains("~ column priority (changed)\n    − ENUM('High','low') · NULL\n"));
+    assert!(!human.contains("Compared properties match."));
     assert!(human.contains(fixture()["objects"][2]["name"].as_str().unwrap()));
+    assert!(human.contains("public.orders_daily\n  + materialized view added\n"));
     assert!(human.contains("− (status)"));
     assert!(human.contains("+ UNIQUE (status)"));
 }
@@ -303,7 +320,8 @@ fn agent_first_page_journey() -> Value {
     let page: Value = serde_json::from_slice::<Value>(&output.stdout).unwrap()["result"]
         ["structuredContent"]
         .clone();
-    assert_eq!(page["diff"]["total"], 9);
+    assert_eq!(page["diff"]["total"], 12);
+    assert_eq!(page["diff"]["scope"], fixture()["scope"]);
     assert_eq!(page["nextOffset"], 2);
     assert_eq!(page["diff"]["objects"].as_array().unwrap().len(), 2);
 

@@ -1,8 +1,11 @@
 //! Signature, host contract, and bundled runtime verification for ACP plugins.
 
+use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
+use std::time::SystemTime;
 
 use dopedb_protocol::{
     AcpPluginManifestV2, SignedAcpPluginManifestV2, ACP_PLUGIN_PROTOCOL_VERSION,
@@ -16,6 +19,7 @@ use tauri::path::BaseDirectory;
 use tauri::{AppHandle, Manager};
 
 use crate::error::{AppError, AppResult};
+use crate::kernel::sync::lock_unpoisoned;
 
 const ACP_PLUGIN_PUBLIC_KEY: &str =
     include_str!("../../../../resources/agent-runtime/acp-plugin.pub");
@@ -24,6 +28,53 @@ const NODE_RUNTIME_CATALOG: &str =
 pub(super) const ACP_PLUGIN_KEY_ID: &str = "71F10E6488C84C71";
 const MAX_RUNTIME_MANIFEST_BYTES: u64 = 64 * 1024;
 const MAX_BUNDLED_NODE_BYTES: u64 = 130 * 1024 * 1024;
+const MAX_CACHED_DIGESTS: usize = 32 * 1024;
+
+/// Identity and metadata that must all be unchanged for a cached digest to be
+/// reused. Any write, replacement, or metadata change (ctime on Unix) forces a
+/// fresh read, so launches stop re-reading unchanged 100 MB runtimes without
+/// trusting a file that changed since it was verified.
+#[derive(Clone, PartialEq, Eq)]
+struct FileStamp {
+    len: u64,
+    modified: Option<SystemTime>,
+    #[cfg(unix)]
+    identity: (u64, u64, i64, i64),
+    #[cfg(not(unix))]
+    created: Option<SystemTime>,
+}
+
+impl FileStamp {
+    fn of(metadata: &fs::Metadata) -> Self {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            Self {
+                len: metadata.len(),
+                modified: metadata.modified().ok(),
+                identity: (
+                    metadata.dev(),
+                    metadata.ino(),
+                    metadata.ctime(),
+                    metadata.ctime_nsec(),
+                ),
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            Self {
+                len: metadata.len(),
+                modified: metadata.modified().ok(),
+                created: metadata.created().ok(),
+            }
+        }
+    }
+}
+
+fn digest_cache() -> &'static Mutex<HashMap<PathBuf, (FileStamp, String)>> {
+    static CACHE: OnceLock<Mutex<HashMap<PathBuf, (FileStamp, String)>>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
 
 #[derive(Debug, Clone)]
 pub(super) struct VerifiedNodeRuntime {
@@ -263,12 +314,21 @@ pub(super) fn verify_bundled_node(app: &AppHandle) -> AppResult<VerifiedNodeRunt
     })
 }
 
-pub(super) fn sha256_file(path: &Path) -> AppResult<String> {
+/// SHA-256 of one regular file, reusing this process's earlier digest only while
+/// the file's identity, size, and timestamps are unchanged. Callers run it on a
+/// blocking thread: a cold read of the bundled runtime is ~100 MB.
+pub(crate) fn sha256_file(path: &Path) -> AppResult<String> {
     let metadata = fs::symlink_metadata(path)?;
     if !metadata.file_type().is_file() {
         return Err(AppError::Blocked {
             reason: "a runtime file is not a regular file".into(),
         });
+    }
+    let stamp = FileStamp::of(&metadata);
+    if let Some((cached_stamp, digest)) = lock_unpoisoned(digest_cache()).get(path) {
+        if *cached_stamp == stamp {
+            return Ok(digest.clone());
+        }
     }
     let mut file = File::open(path)?;
     let mut hasher = Sha256::new();
@@ -280,7 +340,16 @@ pub(super) fn sha256_file(path: &Path) -> AppResult<String> {
         }
         hasher.update(&buffer[..read]);
     }
-    Ok(hex::encode(hasher.finalize()))
+    let digest = hex::encode(hasher.finalize());
+    // Cache only when the file did not change while it was being read.
+    if fs::symlink_metadata(path).is_ok_and(|after| FileStamp::of(&after) == stamp) {
+        let mut cache = lock_unpoisoned(digest_cache());
+        if cache.len() >= MAX_CACHED_DIGESTS {
+            cache.clear();
+        }
+        cache.insert(path.to_path_buf(), (stamp, digest.clone()));
+    }
+    Ok(digest)
 }
 
 fn verify_minisign(bytes: &[u8], encoded: &str) -> AppResult<()> {

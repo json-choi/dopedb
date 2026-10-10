@@ -16,9 +16,11 @@ connection persistence itself.
 |------|-------------|
 | `index.tsx` | Barrel re-exporting the two screen entry points: `DatabaseExplorer` and `ConnectionForm`. |
 | `ConnectionForm.tsx` | Compact connection/driver editor `ConnectionForm(props: ConnectionEditorProps)`; hosts `useConnectionEditorController` and composes the tab/panel files below. |
-| `ConnectionProfilePanel.tsx` | `ConnectionProfilePanel` — editor header, tab strip, diagnostics summary, and action status from grouped view models. |
-| `ConnectionGeneralTab.tsx` | `ConnectionGeneralTab` — General properties (name, engine, host/port/database) from profile/driver/workspace-dialog view models. |
-| `ConnectionDatabaseField.tsx` | Native target-database field and accessible loading/empty/error discovery feedback; late suggestions never move focus from another control. |
+| `ConnectionProfilePanel.tsx` | `ConnectionProfilePanel` — editor header, tab strip, diagnostics summary, and check status from grouped view models. |
+| `ConnectionTestStatus.tsx` | `ConnectionTestFailureNotice` (the last check outcome with its one recovery action) and `ConnectionTestActionBar` (Test/Stop, why a check is unavailable, and persistent live regions for each result). |
+| `ConnectionGeneralTab.tsx` | `ConnectionGeneralTab` — General properties (name, engine, host/port/database) from profile/driver/workspace-dialog view models. The local password row renders in field and URL-only modes, so every credential recovery finds `connection-password`. |
+| `ConnectionSharedTemplateFields.tsx` | Shared-template rows of the General tab: template- or provider-owned transport security shown read-only where a binding or integration owns it, environment and schema group labels, and the member credential state with its binding command. |
+| `ConnectionDatabaseField.tsx` | Native target-database field and accessible loading/empty/error discovery feedback; late suggestions never move focus from another control. A discovery refused because the endpoint moved offers an explicit "Enter password" command. |
 | `ConnectionOptionsTab.tsx` | `ConnectionOptionsTab` — runtime-backed connection/session options; mutation/validation stays in the feature controller. |
 | `ConnectionAdvancedTab.tsx` | `ConnectionAdvancedTab` — free-form driver parameters and capabilities from grouped profile/catalog view models. |
 | `ConnectionSchemaTab.tsx` | `ConnectionSchemaTab` — discovered namespaces and saved introspection scope; does not query catalog adapters directly. |
@@ -34,19 +36,19 @@ connection persistence itself.
 | `DatabaseExplorer.tsx` | `DatabaseExplorer` — sidebar connection tree, DDL modal host, schema-group drag-and-drop; the piece `ConnectionForm.tsx` was split out of. |
 | `DatabaseExplorerToolbar.tsx` | `DatabaseExplorerToolbar` — toolbar and scoped search controls for the Database Explorer tool window. |
 | `DatabaseExplorerEmptyState.tsx` | `DatabaseExplorerEmptyState` — first-run launch actions shown when the workspace has no local connections. |
-| `DatabaseExplorerOverlays.tsx` | `DatabaseExplorerOverlays` — footer, setup dialogs, drag preview, and modal overlays for Database Explorer. |
+| `DatabaseExplorerOverlays.tsx` | `DatabaseExplorerOverlays` — footer, setup dialogs, drag preview, the schema-group change confirmation dialog, and modal overlays for Database Explorer. |
 | `CatalogTree.tsx` | Default-exported `CatalogTree` — the virtualized connection/catalog tree; also exports the `CatalogTreeSearchResult` type. |
-| `CatalogTreeRows.tsx` | Presentational tree rows (`CatalogRelationRow`, `CatalogMissingRelationRow`, `CatalogObjectRow`); virtualization keys/expansion policy stay in `CatalogTree.tsx`. |
+| `CatalogTreeRows.tsx` | Presentational tree rows (`CatalogRelationRow`, `CatalogMissingRelationRow`, `CatalogObjectRow`) and a relation's metadata rows (`CatalogMetadataSectionRow`, `CatalogColumnRow`, `CatalogKeyRow` for primary/unique/foreign-with-target/check keys, `CatalogIndexRow`), each its own tree item; virtualization keys/expansion policy stay in `CatalogTree.tsx`. |
 | `CatalogTreeStatus.tsx` | `CatalogTreeStatus` — renders the tree's mutually exclusive access/load/empty states. |
 | `ConnectionNode.tsx` | Default-exported `ConnectionNode` — one connection's row in the tree, with its actions menu and drag source. |
-| `SchemaConnectionGroupRow.tsx` | `SchemaConnectionGroupRow` — one schema-comparison group's row, showing diff-compatibility and change counts. |
+| `SchemaConnectionGroupRow.tsx` | `SchemaConnectionGroupRow` — one schema-comparison group's row, showing diff-compatibility and change counts against the member-chosen baseline. |
 | `KnowledgeProjectTree.tsx` | `KnowledgeProjectTree` — one Knowledge Project's database/source/analysis resources; injects a connection-catalog row renderer rather than loading catalogs itself. |
 | `DdlModal.tsx` | Default-exported `DdlModal` — read-only DDL viewer dialog backed by `features/catalog/useTableDdl`. |
 | `useCatalogTree.ts` | `useCatalogTree` plus helpers `shouldLoadCatalogDetails` and `databaseCatalogKey`; drives per-database catalog loading and the `CatalogLoadIssue` state consumed by `CatalogTreeStatus.tsx`. |
 | `useCatalogTreeProjection.ts` | `useCatalogTreeProjection` — builds the filtered catalog and schema groups consumed by the virtual tree; rendering/expansion stays in `CatalogTree.tsx`. |
 | `useDatabaseExplorerKnowledge.ts` | `useDatabaseExplorerKnowledge` — owns Knowledge Project inventory, resource expansion, and analysis query lifecycles consumed by Database Explorer. |
 | `useDatabaseExplorerSearch.ts` | `useDatabaseExplorerSearch` — cross-catalog search result aggregation and keyboard result selection/navigation. |
-| `catalogOverview.ts` | `catalogOverviewTable` and `catalogFromOverview` — build navigation-only `CatalogTable`/`Catalog` shapes from a lightweight `CatalogOverview` before full metadata arrives. |
+| `catalogOverview.ts` | `catalogFromOverview` — builds the navigation `Catalog` from a lightweight `CatalogOverview` (via `features/catalog`'s `navigationTableFromOverview`) and hydrates rows from the shared full snapshot. |
 | `schemaDiffPresentation.tsx` | `schemaDiffForConnection`, `schemaTableDiffTitle`, and the `SchemaDiffTrigger` button used to open a schema comparison from the tree. |
 
 ## For AI Agents

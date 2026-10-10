@@ -12,13 +12,28 @@ use crate::store::{CacheWriteOutcome, Store};
 
 use super::{Catalog, ForeignKey, Table};
 
+/// What a stored snapshot means, as produced by this build's introspection. Bump it
+/// whenever introspection changes what a snapshot contains (generated or identity
+/// columns, INCLUDE keys, temporary relations, materialized views and the like): the
+/// store retires every row an older producer wrote at the next start, so no reader,
+/// including an Agent's cache-first read, is ever served one. Revision 2 lists
+/// standalone composite and range types.
+pub(crate) const CATALOG_PRODUCER_REVISION: u32 = 2;
+
+/// A cache-first read serves a stored snapshot only this many minutes old, so a
+/// schema changed outside DopeDB reaches an Agent within that bound.
+const CACHE_FIRST_MAX_AGE_MINUTES: i64 = 15;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CatalogReadMode {
-    /// Authorize online, return a current canonical snapshot when present, otherwise
-    /// introspect live and write it through.
+    /// Authorize online, return a current canonical snapshot no older than the
+    /// cache-first bound when present, otherwise introspect live and write it through.
     CacheFirst,
     /// Delete the current scoped cache first, introspect live, then write through.
     Refresh,
+    /// Delete the current scoped cache and introspect live without writing it back:
+    /// the caller is about to change the schema, so its snapshot must not outlive it.
+    Uncached,
 }
 
 /// Load a canonical snapshot while retaining a caller-owned, already authorized scope.
@@ -32,14 +47,24 @@ pub(crate) async fn load_catalog_snapshot_in_context(
 ) -> AppResult<v2::CatalogSnapshot> {
     if mode == CatalogReadMode::CacheFirst {
         if let Some(snapshot) = store.get_catalog_if_current(context.pin()).await? {
-            return Ok(snapshot);
+            // A capture time in the future cannot prove its age, so it is stale too.
+            let age = Utc::now() - snapshot.captured_at();
+            if age >= chrono::Duration::zero()
+                && age <= chrono::Duration::minutes(CACHE_FIRST_MAX_AGE_MINUTES)
+            {
+                return Ok(snapshot);
+            }
         }
-    } else if mode == CatalogReadMode::Refresh {
+    } else {
+        // A reader's own refresh stays silent: only committed schema changes
+        // broadcast `catalog:changed`, otherwise the UI would refresh in a loop.
         store
-            .clear_schema_cache(context.pin().connection_id)
+            .discard_catalog_cache(context.pin().connection_id)
             .await?;
     }
 
+    // Taken before the scan: a schema change committed during it retires this write.
+    let epoch = store.catalog_epoch(context.pin().connection_id).await;
     let lease = context.connect().await?;
     if lease.pin().profile.database.trim().is_empty() {
         return Err(AppError::Config(
@@ -48,8 +73,16 @@ pub(crate) async fn load_catalog_snapshot_in_context(
     }
     let catalog = super::introspect(lease.live()).await?;
     let snapshot = snapshot_from_catalog(&lease.pin().profile, &catalog)?;
-    match store.put_catalog_if_current(lease.pin(), &snapshot).await? {
-        CacheWriteOutcome::Stored | CacheWriteOutcome::NotPersisted => {}
+    if mode == CatalogReadMode::Uncached {
+        return Ok(snapshot);
+    }
+    match store
+        .put_catalog_if_current(lease.pin(), &snapshot, epoch)
+        .await?
+    {
+        CacheWriteOutcome::Stored
+        | CacheWriteOutcome::NotPersisted
+        | CacheWriteOutcome::Superseded => {}
         CacheWriteOutcome::Stale => {
             return Err(AppError::Blocked {
                 reason: "workspace or connection access changed; retry schema loading".into(),

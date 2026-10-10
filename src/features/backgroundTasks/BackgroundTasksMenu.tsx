@@ -1,4 +1,6 @@
 // Presents running background tasks and forwards cancellation to their owning features.
+// Stop appears only for a task whose owner exposed a real cancel path. A pending
+// Agent change only opens its approval card here; it is never decided here.
 
 import { Icon, type IconName } from "../../components/Icon";
 import ToolbarMenu from "../../components/ToolbarMenu";
@@ -20,7 +22,10 @@ const STATUS_KEYS: Record<BackgroundTaskStatus, I18nKey> = {
 
 function taskIcon(task: BackgroundTask): IconName {
   if (task.kind === "agent") return "user";
+  if (task.kind === "agentProposal") return "alert";
+  if (task.kind === "agentApproval") return "lock";
   if (task.kind === "query") return "terminal";
+  if (task.kind === "resultExport") return "download";
   return task.operation === "import" ? "download" : "upload";
 }
 
@@ -41,12 +46,19 @@ export default function BackgroundTasksMenu({
   cancellingKeys,
   onCancel,
   onOpenAgent,
+  onOpenAgentProposal,
   onOpenQuery,
 }: {
   tasks: BackgroundTask[];
   cancellingKeys: ReadonlySet<string>;
   onCancel: (task: BackgroundTask) => Promise<void>;
   onOpenAgent: (connectionId: string) => void;
+  /** Opens AI Chat on the conversation and brings its approval card into view. */
+  onOpenAgentProposal: (
+    connectionId: string,
+    sessionId: string,
+    operationId: string,
+  ) => void;
   onOpenQuery: (sessionId: string) => void;
 }) {
   const { t } = useI18n();
@@ -91,14 +103,24 @@ export default function BackgroundTasksMenu({
       <div role="presentation" className="tw:grid">
         {tasks.map((task) => {
           const cancelling = cancellingKeys.has(task.key);
-          const canOpen = task.kind === "agent" || task.kind === "query";
-          const context = `${task.connectionName} · ${t(STATUS_KEYS[task.status])}${
+          const canOpen =
+            task.kind === "agent" ||
+            task.kind === "agentProposal" ||
+            task.kind === "query";
+          const statusLabel = task.kind === "agentApproval"
+            ? t("ide.backgroundTask.status.agentApproval")
+            : t(STATUS_KEYS[task.status]);
+          const context = [
+            task.connectionName,
+            statusLabel,
             task.rowsProcessed !== null
-              ? ` · ${t("ide.backgroundTask.rows", {
+              ? t("ide.backgroundTask.rows", {
                   count: task.rowsProcessed.toLocaleString(),
-                })}`
-              : ""
-          }`;
+                })
+              : "",
+          ]
+            .filter(Boolean)
+            .join(" · ");
           return (
             <div
               key={task.key}
@@ -151,6 +173,22 @@ export default function BackgroundTasksMenu({
                       size="xs"
                       variant="ghost"
                       onClick={() => onOpenAgent(task.connectionId)}
+                    >
+                      <Icon name="externalLink" />
+                      {t("ide.backgroundTask.open")}
+                    </Button>
+                  ) : task.kind === "agentProposal" ? (
+                    <Button
+                      role="menuitem"
+                      size="xs"
+                      variant="ghost"
+                      onClick={() =>
+                        onOpenAgentProposal(
+                          task.sessionConnectionId,
+                          task.sessionId,
+                          task.operationId,
+                        )
+                      }
                     >
                       <Icon name="externalLink" />
                       {t("ide.backgroundTask.open")}

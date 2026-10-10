@@ -755,6 +755,26 @@ fn every_phase_six_cli_command_has_request_success_error_and_redaction_goldens()
             );
         }
     }
+
+    // A rejected proposal may carry the reviewer's short reason for the Agent.
+    // The field is optional: omitted when absent and decoded fail-closed.
+    let mut rejected = operation_summary_fixture();
+    rejected["state"] = json!("rejected");
+    rejected["decisionReason"] = json!("Use a narrower WHERE clause");
+    let typed: dopedb_protocol::OperationSummary =
+        serde_json::from_value(rejected.clone()).expect("rejected operation summary");
+    assert_eq!(
+        typed.decision_reason.as_deref(),
+        Some("Use a narrower WHERE clause")
+    );
+    assert_eq!(serde_json::to_value(&typed).unwrap(), rejected);
+    assert_eq!(dopedb_protocol::MAX_DECISION_REASON_CHARS, 280);
+    let pending: dopedb_protocol::OperationSummary =
+        serde_json::from_value(operation_summary_fixture()).expect("pending operation summary");
+    assert!(serde_json::to_value(&pending)
+        .unwrap()
+        .get("decisionReason")
+        .is_none());
 }
 
 #[test]
@@ -927,14 +947,15 @@ fn unknown_envelope_and_active_command_fields_fail_closed() {
 }
 
 #[test]
-fn command_names_match_the_v17_catalog() {
+fn command_names_match_the_v18_catalog() {
     let actual = dopedb_protocol::CommandName::ALL
         .into_iter()
         .map(|command| command.as_str())
         .collect::<Vec<_>>();
     let expected: Vec<String> =
-        serde_json::from_str(include_str!("fixtures/command-catalog-v17.json")).unwrap();
+        serde_json::from_str(include_str!("fixtures/command-catalog-v18.json")).unwrap();
     assert_eq!(actual, expected);
+    assert_eq!(COMMAND_SCHEMA_VERSION, 18);
 
     let external_config = ExternalAgentConfig {
         schema_version: 1,
@@ -1037,7 +1058,7 @@ fn command_names_match_the_v17_catalog() {
 #[test]
 fn catalog_snapshot_matches_the_v2_golden_contract() {
     let fixture: Value =
-        serde_json::from_str(include_str!("fixtures/schema-diff-v1.json")).unwrap();
+        serde_json::from_str(include_str!("fixtures/schema-diff-v2.json")).unwrap();
     let capture = |side: &str, engine| {
         let value = &fixture[side];
         CatalogSnapshot::capture(
@@ -1063,7 +1084,14 @@ fn catalog_snapshot_matches_the_v2_golden_contract() {
         serde_json::to_value(&diff.counts).unwrap(),
         fixture["counts"]
     );
-    assert_eq!(diff.total, 9);
+    // Every result names what it compared, so zero differences never reads as identical.
+    assert_eq!(serde_json::to_value(&diff.scope).unwrap(), fixture["scope"]);
+    // Includes the expression-key index case: `(lower(status), account_id)` vs `(account_id)`,
+    // an added materialized view, and an ENUM whose members differ only in case
+    // (`ENUM('High','low')` vs `enum('high','LOW')`), while ` BIGINT ` vs `bigint` matches.
+    assert_eq!(diff.total, 12);
+    assert_eq!(diff.schema_version, dopedb_protocol::SCHEMA_DIFF_VERSION);
+    assert_eq!(dopedb_protocol::SCHEMA_DIFF_VERSION, 2);
     assert_eq!(
         serde_json::from_value::<dopedb_protocol::SchemaDiff>(serde_json::to_value(&diff).unwrap())
             .unwrap(),

@@ -31,9 +31,17 @@ export async function verifyD1AnalysisArticles(db: D1Database, organizationId: s
   expect(await commitAnalysisArticleMutation({ organizationId, article, authority, expectedRevision: 2,
     ownerMemberId: authority.membershipId, operation: "update" })).toBeNull();
   // Source revocation blocks execution changes but cannot prevent orphan cleanup.
+  const activePublications = db.prepare("SELECT count(*) AS count FROM workspace_analysis_publication WHERE article_id = ? AND revoked_at IS NULL")
+    .bind(article.id);
+  // Editing cleared the successful-run pin, but the earlier public page is still live and revocable.
+  expect(await activePublications.first("count")).toBe(1);
   const deleted = await commitAnalysisArticleDelete({ organizationId, article, authority, expectedRevision: 2,
     ownerMemberId: authority.membershipId });
   expect(deleted?.revision).toBe(3);
+  expect(deleted?.revokedPublicationSlugs).toHaveLength(1);
+  expect(await activePublications.first("count")).toBe(0);
+  expect(await db.prepare("SELECT count(*) AS count FROM workspace_audit_event WHERE action = 'analysis_publication.revoke' AND json_extract(redacted_summary, '$.reason') = 'article_deleted' AND json_extract(redacted_summary, '$.articleId') = ?")
+    .bind(article.id).first("count")).toBe(1);
   expect(await commitAnalysisArticleDelete({ organizationId, article, authority, expectedRevision: 2,
     ownerMemberId: authority.membershipId })).toBeNull();
   expect(await db.prepare("SELECT count(*) AS count FROM workspace_analysis_article_revision WHERE article_id = ?")

@@ -10,6 +10,7 @@ import type {
   AgentComposerRequest,
   AgentResourceScopeSelection,
 } from "./domain";
+import { externalAgentResourceBoundaries } from "./externalAgentRequestModel";
 import type {
   AgentDatabaseResourceChoice,
   AgentProjectResourceChoice,
@@ -220,6 +221,20 @@ export function useAgentScopeSelection({
     () => selectedResources(inventoryProjects, selection),
     [inventoryProjects, selection],
   );
+
+  useEffect(() => {
+    // Safety or workspace policy can change after the target was chosen. A
+    // draft never keeps a write target that no longer passes the write path;
+    // a started conversation's pinned target is re-checked by the Broker.
+    if (selectionLocked || selection.writeConnectionId === null) return;
+    const stillWritable = resources.databases.some(
+      (database) =>
+        database.connectionId === selection.writeConnectionId && database.writable,
+    );
+    if (!stillWritable) {
+      setSelection((current) => ({ ...current, writeConnectionId: null }));
+    }
+  }, [resources.databases, selection.writeConnectionId, selectionLocked]);
   const scopes = useMemo(
     () => agentResourceScopes(resources.databases, resources.sources),
     [resources.databases, resources.sources],
@@ -310,23 +325,23 @@ export function useAgentScopeSelection({
     ],
   );
 
-  const ensureSelected = useCallback(async () => {
-    const selected = [...resources.databases, ...resources.sources];
-    const boundaries = new Map(
-      selected.map((resource) => [
-        resource.environmentId,
-        {
-          authorityConnectionId: resource.authorityConnectionId,
-          stale: resource.needsReconfirmation,
-        },
-      ]),
-    );
-    for (const [environmentId, boundary] of boundaries) {
+  // Rebinding a stale Environment binding is a write (hosted in a Team
+  // workspace), so it happens only through this explicit command; background
+  // preparation never starts while the selection needs reconfirmation.
+  const needsReconfirmation = [...resources.databases, ...resources.sources].some(
+    (resource) => resource.needsReconfirmation,
+  );
+  const reconfirmSelected = useCallback(async () => {
+    for (const boundary of externalAgentResourceBoundaries(
+      resources.databases,
+      resources.sources,
+    )) {
       if (!boundary.stale) continue;
       if (
         !(await inventory.ensureAvailable(
-          environmentId,
+          boundary.environmentId,
           boundary.authorityConnectionId,
+          boundary.connectionIds,
         ))
       ) {
         return false;
@@ -344,11 +359,13 @@ export function useAgentScopeSelection({
     inventory.success &&
     inventory.updatingEnvironmentId === null &&
     scopes.length > 0 &&
-    anchorConnectionId !== null;
+    anchorConnectionId !== null &&
+    !needsReconfirmation;
 
   return {
     anchorConnectionId,
-    ensureSelected,
+    needsReconfirmation,
+    reconfirmSelected,
     newScopeReady,
     project: resources.project,
     resourceScopes: scopes,

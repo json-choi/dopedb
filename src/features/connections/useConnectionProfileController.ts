@@ -1,52 +1,40 @@
-// Owns Connection profile validation and save/test/delete lifecycle commands;
-// editable draft mechanics stay in the profile state model.
-import { useEffect, useRef } from "react";
+// Owns the Connection profile's save/delete/duplicate/cancel lifecycle and the
+// grouped editor projection. It composes the draft's problems and the cancellable
+// check; editable draft mechanics and unsaved-change state stay in the profile
+// state, and a local save that would move the saved password to another endpoint
+// returns the person to the password field.
+import { useQueryClient } from "@tanstack/react-query";
 
-import type { DiagnosticItem } from "../../design-system/components/Diagnostics";
-import type { FieldValidation } from "../../design-system/components/FormControls";
 import type { PanelTab } from "../../design-system/components/PanelTabs";
 import { useI18n } from "../../lib/i18n";
 import { useCatalogScope } from "../../lib/queries";
 import { useToast } from "../../components/Toast";
+import { refreshDesktopConnections } from "../workspaceAdmin/desktopConnections";
+import { requestWorkspaceAdmin } from "../workspaceAdmin/navigationRequest";
 import {
   deleteWorkspaceConnection,
   updateWorkspaceConnection,
 } from "../workspaces/tauriAdapter";
-import { connectionTestResultIsCurrent } from "./connectionEditorInteraction";
+import { markConnectionEditorReturn } from "./connectionEditorShellBridge";
 import type { ConnectionTab } from "./connectionEditorModel";
 import {
-  connectionOperationErrorTitle,
-  connectionTestIssue,
-  connectionTestFailureRecovery,
-  connectionTestFailureTarget,
-  connectionTestFailureTitle,
+  connectionDeleteFailureMessage,
+  connectionSaveFailureMessage,
+  connectionSaveNeedsPassword,
 } from "./connectionTestFailure";
-import { formatConnectionUrl, parseConnectionUrl } from "./connectionUrl";
-import {
-  connectionDiagnosticBlocksTest,
-  diagnoseConnection,
-} from "./diagnostics";
-import { connectionDiagnosticMessage } from "./connectionDiagnosticMessage";
-import {
-  connectionId,
-  type ConnectionProfile,
-  type ConnectionTestFailureCode,
-} from "./domain";
+import { formatConnectionUrl } from "./connectionUrl";
+import { connectionId, type ConnectionProfile } from "./domain";
 import {
   CONNECTION_INPUT_MODE_PARAMETER,
 } from "./options";
-import { connectionVerificationRecorder } from "./connectionVerificationAnalytics";
-import {
-  deleteConnection,
-  testConnection,
-  testConnectionProfile,
-  upsertConnection,
-} from "./tauriAdapter";
+import { deleteConnection, upsertConnection } from "./tauriAdapter";
 import type { BigQueryOnboardingController } from "./useBigQueryOnboardingController";
 import type { CloudflareD1OnboardingController } from "./useCloudflareD1OnboardingController";
 import type { ConnectionCatalogController } from "./useConnectionCatalogController";
 import type { ConnectionEditorDialogs } from "./useConnectionEditorDialogs";
+import { useConnectionProblems } from "./useConnectionProblems";
 import type { ConnectionProfileState } from "./useConnectionProfileState";
+import { useConnectionTestCommand } from "./useConnectionTestCommand";
 import { useManagedConnectionRecovery } from "./useManagedConnectionRecovery";
 import { useConnectionDatabaseDiscovery } from "./useConnectionDatabaseDiscovery";
 
@@ -76,103 +64,32 @@ export function useConnectionProfileController({
   const { t } = useI18n();
   const toast = useToast();
   const catalogScope = useCatalogScope();
-  const { form, identity, credentials, tabs: tabState, url, status, verification } =
-    profileState;
+  const queryClient = useQueryClient();
+  const {
+    form,
+    identity,
+    credentials,
+    changes,
+    reveal,
+    tabs: tabState,
+    url,
+    status,
+  } = profileState;
   const { isSharedTemplate, isMongo, isBigQuery } = form.flags;
   const databaseDiscovery = useConnectionDatabaseDiscovery(profileState);
-  const mounted = useRef(true);
-  const testRequestId = useRef(0);
-  useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-    };
-  }, []);
-  const driverCatalog = catalog.model.driverCatalog;
   const managedConnection = useManagedConnectionRecovery(form.value, catalogScope);
-  const diagnosticProfile = isSharedTemplate
-    ? { ...form.value, extraParams: {} } : form.value;
-  const diagnostics = diagnoseConnection(
-    diagnosticProfile,
+  const problems = useConnectionProblems({
+    profileState,
     connections,
-    driverCatalog.data ?? [],
-    driverCatalog.isError,
-    driverCatalog.isPending,
-    form.portDraft,
-  );
-  const parsedConnectionUrl =
-    !isSharedTemplate && url.mode === "urlOnly"
-      ? parseConnectionUrl(url.draft)
-      : null;
-  const connectionUrlInvalid =
-    !isSharedTemplate && url.mode === "urlOnly" && parsedConnectionUrl === null;
-  const hasBlockingProblems =
-    connectionUrlInvalid ||
-    diagnostics.some((diagnostic) => diagnostic.tone === "danger");
-  const hasTestBlockingProblems =
-    connectionUrlInvalid || diagnostics.some(connectionDiagnosticBlocksTest);
-  const problemItems: DiagnosticItem[] = diagnostics
-    .filter(
-      ({ fieldId }) => fieldId !== "connection-name" || form.nameInteracted,
-    )
-    .map((diagnostic) => ({
-      id: diagnostic.id,
-      tone: diagnostic.tone,
-      title: connectionDiagnosticMessage(t, diagnostic.code),
-    }));
-  if (connectionUrlInvalid) {
-    problemItems.push({
-      id: "connection-url-invalid",
-      tone: "danger",
-      title: t("connections.problemConnectionUrlInvalid"),
-    });
-  }
-  if (status.messageIsError && status.message) {
-    problemItems.push({
-      id: "connection-runtime",
-      tone: "danger",
-      title: t("connections.problemRuntime"),
-      description: status.message,
-    });
-  }
-  if (status.testFailure) {
-    problemItems.push({
-      id: "connection-test-failure",
-      tone: "danger",
-      title: connectionTestFailureTitle(
-        t,
-        status.testFailure.code,
-        form.value,
-      ),
-      description: connectionTestFailureRecovery(
-        t,
-        status.testFailure.code,
-        form.value,
-      ),
-    });
-  }
-  const validation = {
-    name: form.nameInteracted ? fieldValidation("connection-name") : undefined,
-    driver: fieldValidation("connection-driver"),
-    host: fieldValidation("connection-host"),
-    port: fieldValidation("connection-port"),
-    database: fieldValidation("connection-database"),
-    bigQueryLocation: fieldValidation("connection-bigquery-location"),
-    bigQueryMaximumBytesBilled: fieldValidation(
-      "connection-bigquery-maximum-bytes-billed",
-    ),
-    timeZone: fieldValidation("connection-time-zone"),
-    keepAlive: fieldValidation("connection-keep-alive"),
-    autoDisconnect: fieldValidation("connection-auto-disconnect"),
-    startupScript: fieldValidation("connection-startup-script"),
-    sshAlias: fieldValidation("connection-ssh-alias"),
-    connectionUrl: connectionUrlInvalid
-      ? {
-          tone: "danger",
-          message: t("connections.problemConnectionUrlInvalid"),
-        } satisfies FieldValidation
-      : undefined,
-  };
+    driverCatalog: catalog.model.driverCatalog,
+    dialogs,
+  });
+  const check = useConnectionTestCommand({
+    profileState,
+    dialogs,
+    catalogScope,
+    hasTestBlockingProblems: problems.hasTestBlocking,
+  });
 
   const tabs: readonly PanelTab<ConnectionTab>[] = isSharedTemplate
     ? [{ id: "general", label: t("connections.general") }]
@@ -190,100 +107,97 @@ export function useConnectionProfileController({
         { id: "advanced", label: t("connections.advanced") },
       ];
 
-  function fieldValidation(fieldId: string): FieldValidation | undefined {
-    const diagnostic = diagnostics.find(
-      (candidate) => candidate.fieldId === fieldId,
-    );
-    return diagnostic
-      ? {
-          tone: diagnostic.tone,
-          message: connectionDiagnosticMessage(t, diagnostic.code),
-        }
-      : undefined;
-  }
-
-  function openDiagnostic(diagnosticId: string) {
-    if (diagnosticId === "connection-test-failure") {
-      dialogs.problems.setOpen(false);
-      if (status.testFailure) {
-        const target = connectionTestFailureTarget(
-          status.testFailure,
-          form.value,
-        );
-        if (!target) return;
-        tabState.setActive(target.tab);
-        requestAnimationFrame(() => document.getElementById(target.fieldId)?.focus());
-      }
-      return;
-    }
-    if (diagnosticId === "connection-url-invalid") {
-      dialogs.problems.setOpen(false);
-      tabState.setActive("general");
-      requestAnimationFrame(() =>
-        document.getElementById("connection-url")?.focus(),
-      );
-      return;
-    }
-    const diagnostic = diagnostics.find(
-      (candidate) => candidate.id === diagnosticId,
-    );
-    if (!diagnostic) return;
-    dialogs.problems.setOpen(false);
-    tabState.setActive(diagnostic.tab);
-    if (diagnostic.fieldId) {
-      const fieldId = diagnostic.fieldId;
-      requestAnimationFrame(() => document.getElementById(fieldId)?.focus());
-    }
-  }
-
   async function save(closeEditor: boolean) {
-    if (hasBlockingProblems) {
-      form.revealNameValidation();
+    if (problems.hasBlocking) {
+      reveal.revealAll();
       dialogs.problems.setOpen(true);
       return;
     }
+    check.cancel();
     status.setBusy(true);
     status.setRunning(closeEditor ? "save" : "apply");
     status.setMessage(null);
     status.setTestFailure(null);
+    let saved: ConnectionProfile;
     try {
-      const saved = isSharedTemplate
+      saved = isSharedTemplate
         ? await updateWorkspaceConnection({
             ...form.value,
             readonlyDefault: true,
             allowWrites: false,
           })
-        : await upsertConnection(form.value, credentials.password || undefined);
-      form.setValue(saved);
-      if (url.mode === "urlOnly") {
-        url.setDraft(formatConnectionUrl(saved));
-      }
-      await bigQuery.finalizeSavedProfile(saved);
-      await cloudflareD1.finalizeSavedProfile(saved);
-      identity.setIsNew(false);
-      identity.setPersisted(true);
-      credentials.setPassword("");
-      await onSaved(saved, closeEditor);
-      const savedMessage = projectEnvironmentId
-        ? t("connections.connectionSavedToProject")
-        : t("connections.connectionSaved");
-      toast(savedMessage);
-      status.setMessage(savedMessage);
-      status.setMessageIsError(false);
+        : await upsertConnection(
+            form.value,
+            credentials.password || undefined,
+            credentials.clearStoredPassword && !credentials.password,
+          );
     } catch (error) {
-      status.setMessage(connectionOperationErrorTitle(t, error));
-      status.setMessageIsError(true);
-    } finally {
+      status.showError("save", connectionSaveFailureMessage(t, error, "profile"));
       status.setBusy(false);
       status.setRunning(null);
+      // The saved password stays bound to its endpoint; a moved local profile
+      // needs the password for the new endpoint before it can be saved.
+      if (!isSharedTemplate && connectionSaveNeedsPassword(error)) {
+        dialogs.problems.setOpen(false);
+        tabState.focusField("general", "connection-password");
+      }
+      return;
     }
+    form.setValue(saved);
+    const savedUrlDraft = url.mode === "urlOnly"
+      ? formatConnectionUrl(saved)
+      : null;
+    if (savedUrlDraft !== null) url.setDraft(savedUrlDraft);
+    identity.setIsNew(false);
+    identity.setPersisted(true);
+    identity.markPersisted(saved, savedUrlDraft);
+    credentials.setPassword("");
+    try {
+      // Removing a CLI sign-in the saved profile no longer uses is cleanup; the
+      // profile itself is already saved, so a failure here is only reported.
+      await bigQuery.finalizeSavedProfile(saved);
+      await cloudflareD1.finalizeSavedProfile(saved);
+    } catch {
+      toast(t("connections.authCleanupDeferred"), "error");
+    }
+    try {
+      await onSaved(saved, closeEditor);
+    } catch (error) {
+      // The profile is saved; only the exact Project binding failed and can be
+      // retried by saving again from this editor.
+      status.showError(
+        "save",
+        connectionSaveFailureMessage(t, error, "projectBinding"),
+      );
+      status.setBusy(false);
+      status.setRunning(null);
+      return;
+    }
+    const savedMessage = projectEnvironmentId
+      ? t("connections.connectionSavedToProject")
+      : t("connections.connectionSaved");
+    toast(savedMessage);
+    status.setMessage(savedMessage);
+    status.setMessageIsError(false);
+    status.setBusy(false);
+    status.setRunning(null);
   }
 
   function bindWorkspaceConnection(bound: ConnectionProfile) {
-    form.setValue(bound);
+    // The binding owns only this member's username, parameters, and credential
+    // reference; unsaved template edits in this editor stay unsaved and visible.
+    form.setValue((current) => ({
+      ...current,
+      username: bound.username,
+      extraParams: bound.extraParams,
+      secretRef: bound.secretRef,
+    }));
+    identity.markPersisted(bound, null);
     void onSaved(bound, false).catch((error) => {
-      status.setMessage(connectionOperationErrorTitle(t, error));
-      status.setMessageIsError(true);
+      status.showError(
+        "save",
+        connectionSaveFailureMessage(t, error, "projectBinding"),
+      );
     });
   }
 
@@ -308,6 +222,7 @@ export function useConnectionProfileController({
     identity.setIsNew(true);
     identity.setPersisted(false);
     credentials.setPassword("");
+    credentials.setClearStoredPassword(false);
     url.setMode("default");
     url.setDraft("");
     tabState.setActive("general");
@@ -323,6 +238,7 @@ export function useConnectionProfileController({
     ) {
       return;
     }
+    check.cancel();
     status.setBusy(true);
     status.setMessage(null);
     try {
@@ -335,77 +251,53 @@ export function useConnectionProfileController({
       await onDeletedConnection(form.value.id);
       onCancel();
     } catch (error) {
-      status.setMessage(connectionOperationErrorTitle(t, error));
-      status.setMessageIsError(true);
+      status.showError("delete", connectionDeleteFailureMessage(t, error));
+      status.setBusy(false);
+    }
+  }
+
+  /**
+   * A shared connection that changed in the workspace is checked again only after
+   * this device pulls its current revision; the stale one is never opened.
+   */
+  async function refreshWorkspace() {
+    if (status.busy) return;
+    status.setBusy(true);
+    status.setTestFailure(null);
+    status.setMessage(null);
+    try {
+      await refreshDesktopConnections(queryClient, catalogScope.key, [form.value.id]);
+      status.setMessage(t("connections.workspaceRefreshed"));
+      status.setMessageIsError(false);
+    } catch {
+      status.showError("refresh", t("connections.workspaceRefreshFailed"));
+    } finally {
       status.setBusy(false);
     }
   }
 
   async function cancelEditor() {
     if (status.busy) return;
+    check.cancel();
     status.setBusy(true);
     status.setMessage(null);
+    let cleanupFailed = false;
     try {
       await bigQuery.discardUnpersistedAuth();
       await cloudflareD1.discardUnpersistedAuth();
-      status.setBusy(false);
-      onCancel();
-    } catch (error) {
-      status.setMessage(connectionOperationErrorTitle(t, error));
-      status.setMessageIsError(true);
-      status.setBusy(false);
+    } catch {
+      // Leaving must not depend on removing a temporary CLI sign-in.
+      cleanupFailed = true;
     }
+    status.setBusy(false);
+    if (cleanupFailed) toast(t("connections.authCleanupDeferred"), "error");
+    onCancel();
   }
 
-  async function test() {
-    if (hasTestBlockingProblems) {
-      form.revealNameValidation();
-      dialogs.problems.setOpen(true);
-      return;
-    }
-    const startedRevision = verification.currentRevision();
-    const requestId = ++testRequestId.current;
-    const recordVerification = connectionVerificationRecorder(
-      catalogScope,
-      form.value,
-    );
-    status.setBusy(true);
-    status.setRunning("test");
-    status.setMessage(null);
-    status.setTestFailure(null);
-    dialogs.problems.setOpen(false);
-    try {
-      const receipt = isSharedTemplate
-        ? await testConnection(form.value.id)
-        : await testConnectionProfile(form.value, credentials.password || undefined);
-      if (!mounted.current) return;
-      if (!connectionTestResultIsCurrent(startedRevision, verification.currentRevision(), requestId, testRequestId.current)) return;
-      if (!receipt.ok) {
-        status.setTestFailure(connectionTestIssue(receipt.failure));
-        status.setMessageIsError(true);
-        dialogs.problems.setOpen(true);
-        recordVerification("failed");
-        return;
-      }
-      status.setMessage(`✓ ${t("connections.connectionOk")}`);
-      status.setMessageIsError(false);
-      recordVerification("success");
-    } catch {
-      if (!mounted.current) return;
-      if (!connectionTestResultIsCurrent(startedRevision, verification.currentRevision(), requestId, testRequestId.current)) return;
-      status.setTestFailure({
-        code: "unknown",
-        field: null,
-      });
-      status.setMessageIsError(true);
-      dialogs.problems.setOpen(true);
-      recordVerification("failed");
-    } finally {
-      if (mounted.current && requestId === testRequestId.current) {
-        status.setBusy(false);
-        status.setRunning(null);
-      }
-    }
+  /** Esc, Cancel, and leaving for another draft confirm before losing edits. */
+  function requestCancel() {
+    if (status.busy) return;
+    changes.guardDiscard(() => void cancelEditor());
   }
 
   return {
@@ -422,6 +314,8 @@ export function useConnectionProfileController({
         persisted: identity.persisted,
       },
       credentials,
+      touch: reveal.touch,
+      verified: status.verified,
       tabs: {
         items: tabs,
         active: tabState.active,
@@ -436,10 +330,11 @@ export function useConnectionProfileController({
         importFromClipboard: url.importFromClipboard,
       },
       options: {
-        advancedParameters: form.advancedParameters,
-        addAdvancedParameter: form.addAdvancedParameter,
-        removeAdvancedParameter: form.removeAdvancedParameter,
-        updateAdvancedParameter: form.updateAdvancedParameter,
+        advancedRows: form.advanced.rows,
+        advancedParameterIssue: form.advanced.issue,
+        addAdvancedParameter: form.advanced.add,
+        removeAdvancedParameter: form.advanced.remove,
+        updateAdvancedParameter: form.advanced.update,
         setExtraParameter: form.setExtraParameter,
         setMongoTls: form.setMongoTls,
         setSrv: form.setSrv,
@@ -451,13 +346,13 @@ export function useConnectionProfileController({
       databaseDiscovery,
       bigQuery,
       cloudflareD1,
-      validation,
+      validation: problems.validation,
     },
     problems: {
-      items: problemItems,
-      hasBlocking: hasBlockingProblems,
-      hasTestBlocking: hasTestBlockingProblems,
-      openDiagnostic,
+      items: problems.items,
+      hasBlocking: problems.hasBlocking,
+      hasTestBlocking: problems.hasTestBlocking,
+      openDiagnostic: problems.openDiagnostic,
     },
     commands: {
       busy: status.busy,
@@ -465,17 +360,41 @@ export function useConnectionProfileController({
       message: status.message,
       messageIsError: status.messageIsError,
       testFailure: status.testFailure,
-      testFailureTitle: (code: ConnectionTestFailureCode) =>
-        connectionTestFailureTitle(t, code, form.value),
-      testFailureRecovery: (code: ConnectionTestFailureCode) =>
-        connectionTestFailureRecovery(t, code, form.value),
-      managedConnection,
+      testFailureTitle: problems.failure.title,
+      testFailureRecovery: problems.failure.recovery,
+      testUnavailableReason: check.unavailableReason,
+      managedRetrySeconds: check.managedRetrySeconds,
+      failureOpensBinding: problems.failure.opensBinding,
+      openFailureBinding: problems.failure.openBinding,
+      managedConnection: {
+        ...managedConnection,
+        // Workspace management opens over this editor and returns to it, so the
+        // draft, including any unsaved edit, survives the repair round trip.
+        openSettings: () => {
+          markConnectionEditorReturn();
+          managedConnection.openSettings();
+        },
+      },
       save,
-      test,
+      test: check.test,
       duplicate: duplicateCurrentConnection,
       remove: removeCurrentConnection,
-      cancel: cancelEditor,
+      refreshWorkspace,
+      /** Settings → Account opens over this editor and returns to it after sign-in. */
+      signIn: () => {
+        markConnectionEditorReturn();
+        requestWorkspaceAdmin("account");
+      },
+      cancel: requestCancel,
       bindWorkspaceConnection,
+      /** Leave this draft for another one only after confirming unsaved edits. */
+      leave: changes.guardDiscard,
+      discard: {
+        pending: changes.pendingDiscard,
+        confirm: changes.confirmDiscard,
+        keepEditing: changes.keepEditing,
+      },
+      dirty: changes.dirty,
     },
   };
 }

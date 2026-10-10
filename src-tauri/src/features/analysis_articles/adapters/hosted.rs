@@ -26,6 +26,7 @@ use crate::hosted_control_plane::{
     EXPECTED_REVISION_HEADER,
 };
 
+use super::super::domain::{AnalysisArticleMutation, AnalysisArticleSummary};
 use super::super::ports::AnalysisHostedAuthorityPort;
 
 #[path = "hosted_articles.rs"]
@@ -61,11 +62,22 @@ pub(crate) fn analysis_runner_capability_is_missing(error: &AppError) -> bool {
     matches!(error, AppError::Blocked { reason } if reason == ANALYSIS_RUNNER_CAPABILITY_MISSING)
 }
 
+/// `view=summary` listing. A service that predates the summary view ignores the
+/// parameter and returns full records, which are projected down locally.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct ArticleCollectionResponse {
+struct ArticleSummaryCollectionResponse {
     workspace_id: Uuid,
-    articles: Vec<AnalysisArticleRecord>,
+    #[serde(default)]
+    view: Option<String>,
+    articles: Vec<ArticleListEntry>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum ArticleListEntry {
+    Summary(Box<AnalysisArticleSummary>),
+    Full(Box<AnalysisArticleRecord>),
 }
 
 #[derive(Debug, Deserialize)]
@@ -216,8 +228,16 @@ fn classify_article_mutation_error(status: StatusCode, hosted_error: AppError) -
     }
 }
 
+/// A stale optimistic revision is a definite rejection, not an unknown outcome.
+fn is_revision_conflict(status: StatusCode) -> bool {
+    matches!(
+        status,
+        StatusCode::CONFLICT | StatusCode::PRECONDITION_FAILED
+    )
+}
+
 #[cfg(test)]
-pub(crate) fn assert_hosted_mutation_error_contract() {
+pub(crate) fn assert_hosted_article_contract() {
     let upstream = || AppError::Network("untrusted upstream detail".into());
     assert!(matches!(
         classify_article_mutation_error(StatusCode::BAD_REQUEST, upstream()),
@@ -235,6 +255,106 @@ pub(crate) fn assert_hosted_mutation_error_contract() {
         classify_article_mutation_error(StatusCode::BAD_GATEWAY, upstream()),
         AppError::Network(_)
     ));
+    assert!(is_revision_conflict(StatusCode::CONFLICT));
+    assert!(is_revision_conflict(StatusCode::PRECONDITION_FAILED));
+    assert!(!is_revision_conflict(StatusCode::FORBIDDEN));
+
+    // The summary view and the pre-summary full listing project to one bounded shape.
+    let fixture: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../../dopedb-protocol/tests/fixtures/control-plane-contracts-v1.json"
+    ))
+    .expect("control-plane fixture must decode");
+    let workspace_id = Uuid::new_v4();
+    let mut full = fixture["analysisArticleCreate"].clone();
+    for (field, value) in [
+        ("ownerMemberId", json!("member-owner")),
+        ("updatedByMemberId", json!("member-editor")),
+        ("revision", json!(2)),
+        ("latestSuccessfulRunId", json!(null)),
+        ("createdAt", json!("2026-01-01T00:00:00Z")),
+        ("updatedAt", json!("2026-01-02T00:00:00Z")),
+    ] {
+        full[field] = value;
+    }
+    let mut summary = full.clone();
+    summary["definition"] = json!({
+        "version": 3,
+        "source": full["definition"]["source"],
+        "title": full["definition"]["title"],
+    });
+    let project = |body: serde_json::Value, workspace: Uuid| {
+        summaries_from_collection(
+            serde_json::from_value(body).expect("Article collection must decode"),
+            workspace,
+        )
+    };
+    let legacy = project(
+        json!({ "workspaceId": workspace_id, "articles": [full] }),
+        workspace_id,
+    )
+    .expect("a pre-summary listing must still project");
+    let current = project(
+        json!({ "workspaceId": workspace_id, "view": "summary", "articles": [summary] }),
+        workspace_id,
+    )
+    .expect("the summary listing must decode");
+    assert_eq!(legacy, current);
+    let encoded = serde_json::to_value(&current[0]).expect("summary must encode");
+    assert!(encoded["definition"].get("html").is_none());
+    assert!(encoded["definition"].get("query").is_none());
+    assert!(project(
+        json!({ "workspaceId": workspace_id, "view": "full", "articles": [] }),
+        workspace_id
+    )
+    .is_err());
+    assert!(project(
+        json!({ "workspaceId": workspace_id, "articles": [] }),
+        Uuid::new_v4()
+    )
+    .is_err());
+}
+
+fn validate_summary(article: &AnalysisArticleSummary) -> AppResult<()> {
+    if article.environment_revision < 1
+        || article.revision < 1
+        || article.connection_revision < 1
+        || article.definition.version != 3
+        || article.definition.title.trim().is_empty()
+        || article.definition.title.chars().count() > 160
+    {
+        return Err(AppError::Network(
+            "Analysis Article summary returned invalid identity or authority".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn summaries_from_collection(
+    body: ArticleSummaryCollectionResponse,
+    workspace_id: Uuid,
+) -> AppResult<Vec<AnalysisArticleSummary>> {
+    if body.workspace_id != workspace_id
+        || body.articles.len() > 1_000
+        || body.view.as_deref().is_some_and(|view| view != "summary")
+    {
+        return Err(AppError::Network(
+            "Analysis Article collection changed workspace identity".into(),
+        ));
+    }
+    body.articles
+        .into_iter()
+        .map(|entry| {
+            let summary = match entry {
+                ArticleListEntry::Summary(summary) => *summary,
+                ArticleListEntry::Full(article) => {
+                    validate_article(&article, None)?;
+                    AnalysisArticleSummary::from(*article)
+                }
+            };
+            validate_summary(&summary)?;
+            Ok(summary)
+        })
+        .collect()
 }
 
 fn validate_article(article: &AnalysisArticleRecord, expected_id: Option<Uuid>) -> AppResult<()> {
@@ -311,13 +431,13 @@ fn validate_publication(
 pub(crate) struct HostedAnalysisAuthority;
 
 impl AnalysisHostedAuthorityPort for HostedAnalysisAuthority {
-    async fn list_articles(
+    async fn list_article_summaries(
         &self,
         account_id: &str,
         workspace_id: Uuid,
         environment_id: Option<Uuid>,
-    ) -> AppResult<Vec<AnalysisArticleRecord>> {
-        list_analysis_articles(account_id, workspace_id, environment_id).await
+    ) -> AppResult<Vec<AnalysisArticleSummary>> {
+        list_analysis_article_summaries(account_id, workspace_id, environment_id).await
     }
 
     async fn get_article(
@@ -345,7 +465,7 @@ impl AnalysisHostedAuthorityPort for HostedAnalysisAuthority {
         article_id: Uuid,
         expected_revision: i64,
         article: &SharedAnalysisArticleCreate,
-    ) -> AppResult<AnalysisArticleRecord> {
+    ) -> AppResult<AnalysisArticleMutation> {
         mutate_analysis_article(
             account_id,
             workspace_id,

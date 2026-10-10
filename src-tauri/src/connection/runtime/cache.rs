@@ -162,7 +162,6 @@ impl Drop for CacheEntry {
 
 struct ManagedOpenFailure {
     retry_at: Instant,
-    message: String,
 }
 
 #[derive(Default)]
@@ -176,22 +175,28 @@ pub(super) struct ConnectionSlot {
 
 impl ConnectionSlot {
     pub(super) fn remember_managed_open_failure(&mut self, error: &AppError) {
-        let AppError::Network(message) = error else {
+        if !matches!(error, AppError::Network(_)) {
             return;
-        };
+        }
         self.managed_open_failure = Some(ManagedOpenFailure {
             retry_at: Instant::now() + MANAGED_OPEN_RETRY_COOLDOWN,
-            message: message.clone(),
         });
     }
 
+    /// While the cooldown runs, report how long to wait instead of repeating the open
+    /// failure, so clients can disable retry until the target may be opened again.
     pub(super) fn managed_open_retry_error(&mut self) -> Option<AppError> {
         let failure = self.managed_open_failure.as_ref()?;
-        if failure.retry_at <= Instant::now() {
+        let now = Instant::now();
+        if failure.retry_at <= now {
             self.managed_open_failure = None;
             return None;
         }
-        Some(AppError::Network(failure.message.clone()))
+        let remaining = failure.retry_at.duration_since(now);
+        Some(AppError::RetryLater {
+            // Round up so a client never retries before the cooldown has ended.
+            retry_after_seconds: remaining.as_secs() + u64::from(remaining.subsec_nanos() > 0),
+        })
     }
 
     pub(super) fn clear_managed_open_failure(&mut self) {

@@ -1,8 +1,15 @@
 // Query's public DTOs are generated from the Rust model/receipt contracts.  Keeping this
 // module as the only frontend owner preserves existing imports without a hand-written mirror.
-import { retainSqlStreamBatch } from "./resultPageCache";
+import {
+  decodeFailureCellIsConsistent,
+  retainSqlStreamBatch,
+} from "./resultPageCache";
 import type { OperationState } from "../../ipc/generated/protocol-contracts";
-import type { CellDecodeFailure } from "../../ipc/generated/model";
+import type {
+  CellDecodeFailure,
+  Engine,
+  PreviewReport,
+} from "../../ipc/generated/model";
 
 export type {
   Classification,
@@ -19,14 +26,21 @@ export type {
 export type SqlApprovalReview = {
   operationId: string;
   connectionId: string;
+  connectionName: string;
+  engine: Engine;
+  environment: string | null;
   payloadHash: string;
   state: OperationState;
   riskLevel: "low" | "medium" | "high" | "critical";
+  confirmationPhrase: string | null;
   sql: string;
   database: string;
   namespace: string | null;
+  preview: PreviewReport | null;
   affected: number | null;
   expiresAt: string | null;
+  /** The Broker session that proposed the change. */
+  proposerSessionId: string | null;
 };
 
 // Desktop-only channel payload. Broker, CLI, and bounded Analysis Article receipts
@@ -210,10 +224,13 @@ export function acceptSqlStreamBatch(
           (batch.rowStart ?? state.rowCount) + batch.rows.length ||
         failure.columnIndex < 0 ||
         failure.columnIndex >= batch.columns.length ||
-        batch.rows[
-          failure.rowIndex - (batch.rowStart ?? state.rowCount)
-        ]?.[failure.columnIndex] !== null ||
-        !failure.databaseType,
+        !failure.databaseType ||
+        !decodeFailureCellIsConsistent(
+          failure,
+          batch.rows[failure.rowIndex - (batch.rowStart ?? state.rowCount)]?.[
+            failure.columnIndex
+          ],
+        ),
     )
   )
     return null;

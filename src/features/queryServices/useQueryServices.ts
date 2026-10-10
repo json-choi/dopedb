@@ -8,6 +8,7 @@ import {
 
 import {
   isTerminalQueryServiceSession,
+  persistableQueryServiceSession,
   type QueryServiceSession,
 } from "./domain";
 import {
@@ -148,11 +149,12 @@ export function useQueryServices(
       // app session; only the durable snapshot is account-scoped.
       if (projection === "memory" || !expectedScope) return;
       if (store.session(session.id)?.updatedAt !== session.updatedAt) return;
-      const serialized = JSON.stringify(session);
+      const persisted = persistableQueryServiceSession(session);
+      const serialized = JSON.stringify(persisted);
       if (persistedSnapshots.current.get(session.id) === serialized) return;
       persistedSnapshots.current.set(session.id, serialized);
       const saveScopeKey = scope.key;
-      void saveQueryServiceSession(expectedScope, session).catch(
+      void saveQueryServiceSession(expectedScope, persisted).catch(
         (error) => {
           if (
             scopeKeyRef.current !== saveScopeKey ||

@@ -124,6 +124,8 @@ export const workspaceProvidersCatalog = defineCatalog(
 
     "workspaceProviders.vaultTitle": "Connect a Vault broker",
     "workspaceProviders.vaultReconnectTitle": "Reconnect a Vault broker",
+    "workspaceProviders.vaultReconnectTargetLocked":
+      "The database target identifies this account and stays the same. Enter the broker address and a current AppRole Role ID and Secret ID.",
     "workspaceProviders.vaultIntro":
       "Connect an approved Vault Database Secrets broker. DopeDB requests one short-lived database credential per member and never copies the broker secret to this device.",
     "workspaceProviders.vaultSecretStorage":
@@ -219,6 +221,8 @@ export const workspaceProvidersCatalog = defineCatalog(
     "workspaceProviders.gcpSchemaTitle": "Schema access (optional)",
     "workspaceProviders.gcpSchemaDescription":
       "Create a separate login that acts as this owner in public. Existing users, object owners, and default privileges stay unchanged. Desktop verifies the role before running SQL; broader roles or unsafe defaults need a separate administrator review.",
+    "workspaceProviders.gcpSchemaRepairKeepsDelegate":
+      "Repair keeps the schema delegation this database already has. Enter and approve a database and owner here only to change who the schema is delegated to.",
     "workspaceProviders.gcpSchemaDatabase": "Database for schema changes",
     "workspaceProviders.gcpSchemaOwner": "Existing migration owner role",
     "workspaceProviders.gcpSchemaApproval":
@@ -533,6 +537,8 @@ export const workspaceProvidersCatalog = defineCatalog(
 
     "workspaceProviders.vaultTitle": "Vault 브로커 연결",
     "workspaceProviders.vaultReconnectTitle": "Vault 브로커 다시 연결",
+    "workspaceProviders.vaultReconnectTargetLocked":
+      "DB 대상은 이 계정을 식별하므로 그대로 유지됩니다. 브로커 주소와 현재 AppRole Role ID, Secret ID를 입력하세요.",
     "workspaceProviders.vaultIntro":
       "승인된 Vault Database Secrets 브로커를 연결합니다. DopeDB는 구성원마다 단기 DB 자격 증명을 요청하며 브로커 비밀값을 이 기기로 복사하지 않습니다.",
     "workspaceProviders.vaultSecretStorage":
@@ -628,6 +634,8 @@ export const workspaceProvidersCatalog = defineCatalog(
     "workspaceProviders.gcpSchemaTitle": "스키마 변경 접근 (선택)",
     "workspaceProviders.gcpSchemaDescription":
       "public에서 이 소유자 역할로 실행하는 별도 로그인을 만듭니다. 기존 사용자·객체 소유권·기본 권한은 유지합니다. Desktop이 SQL 실행 전에 역할을 검증하며, 권한이 너무 넓거나 기본 권한이 안전하지 않으면 DB 관리자의 별도 검토가 필요합니다.",
+    "workspaceProviders.gcpSchemaRepairKeepsDelegate":
+      "복구는 이 데이터베이스에 이미 있는 스키마 위임을 그대로 유지합니다. 위임 대상을 바꿀 때만 여기에 데이터베이스와 소유자를 입력하고 승인하세요.",
     "workspaceProviders.gcpSchemaDatabase": "스키마를 변경할 DB",
     "workspaceProviders.gcpSchemaOwner": "기존 마이그레이션 소유자 역할",
     "workspaceProviders.gcpSchemaApproval": "새 전용 로그인에 이 DB 소유자 역할 사용을 허용합니다",

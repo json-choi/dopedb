@@ -30,7 +30,18 @@ impl QueryPlatformAdapter {
         &self,
         request: DesktopSqlProposalRequest,
     ) -> Result<DesktopSqlProposalReceipt, DesktopSqlInspectionError> {
-        self.propose_sql(request, None).await
+        self.propose_sql(request, None, DesktopPreviewIntent::ImpactPreview)
+            .await
+    }
+
+    /// Plan the atomic auto-run read. Identical durable proposal and policy gates,
+    /// but no EXPLAIN round trip: the caller streams the read immediately.
+    pub(crate) async fn propose_desktop_auto_read(
+        &self,
+        request: DesktopSqlProposalRequest,
+    ) -> Result<DesktopSqlProposalReceipt, DesktopSqlInspectionError> {
+        self.propose_sql(request, None, DesktopPreviewIntent::AutoRunRead)
+            .await
     }
 
     pub(crate) async fn propose_terminal_sql(
@@ -46,6 +57,7 @@ impl QueryPlatformAdapter {
                 origin: Some("cli".into()),
             },
             Some(request.authority),
+            DesktopPreviewIntent::ImpactPreview,
         )
         .await
     }
@@ -54,6 +66,7 @@ impl QueryPlatformAdapter {
         &self,
         request: DesktopSqlProposalRequest,
         terminal: Option<TerminalAuthority>,
+        intent: DesktopPreviewIntent,
     ) -> Result<DesktopSqlProposalReceipt, DesktopSqlInspectionError> {
         let inspection = self
             .inspect_sql(
@@ -62,7 +75,7 @@ impl QueryPlatformAdapter {
                     sql: request.sql.clone(),
                     database: request.database,
                     namespace: request.namespace,
-                    intent: DesktopPreviewIntent::ImpactPreview,
+                    intent,
                 },
                 terminal.as_ref(),
             )
@@ -97,7 +110,11 @@ impl QueryPlatformAdapter {
         };
         if let safety::GateDecision::Block { reason } = safety::decide(&settings, &classification) {
             if classification.kind == QueryKind::Privilege {
-                return Err(inspection.into_error(AppError::SqlPolicyBlocked { position: Some(1) }));
+                // Re-classify only on this refused path: unparsable SQL becomes a
+                // positioned parse error, USE/SET a session-statement refusal, and a
+                // real privilege statement points at its first significant token.
+                return Err(inspection
+                    .into_error(safety::rejection_error(&request.sql, pin.profile.engine)));
             }
             return Err(inspection.into_error(AppError::Blocked { reason }));
         }

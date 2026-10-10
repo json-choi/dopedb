@@ -1541,8 +1541,9 @@ describe("provider credential Tauri adapter", () => {
     expect(gcpSetupRouteSource).toContain("writeAccess: true");
     expect(gcpSetupRouteSource).toContain("matchesManagedGcpRepairTarget");
     expect(gcpSetupRouteSource).toContain('eq(workspaceConnection.credentialMode, "managed")');
-    // Desktop repairs a managed Cloud SQL connection only for members who manage it,
-    // pinning the server-projected target in memory for one browser authorization.
+    // Desktop repairs managed access only for members who manage the database:
+    // Cloud SQL pins the server-projected target in memory for one browser
+    // authorization, and other providers reconnect the account that serves it.
     const repairConnection = {
       id: connectionId,
       name: "Shared production",
@@ -1567,7 +1568,8 @@ describe("provider credential Tauri adapter", () => {
     expect(canRepairManagedAccess({ ...repairConnection, accessMode: "write" }, repairManaged))
       .toBe(false);
     expect(canRepairManagedAccess(repairConnection, { ...repairManaged, provider: "neon" }))
-      .toBe(false);
+      .toBe(true);
+    expect(canRepairManagedAccess(repairConnection, null)).toBe(false);
     expect(workspaceAdminSource("providers/databases/SharedDatabaseRow.tsx")).toContain(
       "onRepair(managed)",
     );
@@ -1631,7 +1633,17 @@ describe("provider credential Tauri adapter", () => {
       "providerSchemaSetupRequired",
     );
     expect(managedLeaseRouteSource).toContain("Reconnecting only restores data access");
-    expect(managedLeaseRouteSource).not.toContain("managed_connection_recovery_required");
+    // Data leases mark provider and target mismatches for repair; a schema lease
+    // never promises that reconnecting restores schema access.
+    expect(managedLeaseRouteSource).toContain(
+      'const recoveryRequired = (message: string) => requestedAccessMode === "schema"',
+    );
+    expect(managedLeaseRouteSource).toContain(
+      "jsonError(message, 409, MANAGED_CONNECTION_RECOVERY_REQUIRED)",
+    );
+    expect(managedLeaseRouteSource).toContain(
+      "jsonError(error.message, 409, MANAGED_LEASE_AUTHORITY_CHANGED)",
+    );
     expect(managedLeaseRouteSource).not.toMatch(/access-v3|access-v4|LEGACY_MANAGED/);
     expect(managedLeaseRouteSource).toContain("providerResourceSupportsSchema");
     expect(managedLeaseRouteSource).toContain("providerResourceSupportsWrite");

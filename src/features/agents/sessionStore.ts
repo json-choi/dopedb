@@ -20,6 +20,8 @@ export type AcpSessionSnapshot = {
   scopeKey: string | null;
   sessions: readonly AcpSessionSummary[];
   projections: ReadonlyMap<AcpSessionId, AcpConversationProjection>;
+  /** Broker session each live conversation last reported through focus. */
+  brokerSessionIds: ReadonlyMap<AcpSessionId, string>;
   loading: boolean;
   error: unknown;
 };
@@ -32,6 +34,7 @@ const EMPTY_SNAPSHOT: AcpSessionSnapshot = {
   scopeKey: null,
   sessions: [],
   projections: new Map(),
+  brokerSessionIds: new Map(),
   loading: false,
   error: null,
 };
@@ -41,6 +44,7 @@ function pendingSnapshot(scopeKey: string): AcpSessionSnapshot {
     scopeKey,
     sessions: [],
     projections: new Map(),
+    brokerSessionIds: new Map(),
     loading: true,
     error: null,
   };
@@ -71,7 +75,8 @@ export class AcpSessionStore {
   private pendingChanges = new Map<
     AcpSessionId,
     {
-      session: AcpSessionSummary;
+      sessionId: AcpSessionId;
+      session: AcpSessionSummary | null;
       events: NonNullable<AcpSessionChanged["event"]>[];
     }
   >();
@@ -106,13 +111,7 @@ export class AcpSessionStore {
     this.pendingChanges.clear();
     this.cancelFlush?.();
     this.cancelFlush = null;
-    this.publish({
-      scopeKey,
-      sessions: [],
-      projections: new Map(),
-      loading: true,
-      error: null,
-    });
+    this.publish(pendingSnapshot(scopeKey));
 
     void onAgentAcpChanged((change) => {
       if (generation !== this.generation) return;
@@ -156,13 +155,20 @@ export class AcpSessionStore {
         focus.replayTruncated,
       ),
     );
-    this.publish({ ...this.snapshot, sessions, projections });
+    const brokerSessionIds = new Map(this.snapshot.brokerSessionIds);
+    if (focus.brokerSessionId) {
+      brokerSessionIds.set(focus.session.id, focus.brokerSessionId);
+    } else {
+      brokerSessionIds.delete(focus.session.id);
+    }
+    this.publish({ ...this.snapshot, sessions, projections, brokerSessionIds });
     return true;
   }
 
   private applyChanges(
     changes: readonly {
-      session: AcpSessionSummary;
+      sessionId: AcpSessionId;
+      session: AcpSessionSummary | null;
       events: readonly NonNullable<AcpSessionChanged["event"]>[];
     }[],
   ) {
@@ -171,15 +177,15 @@ export class AcpSessionStore {
     let nextProjections: Map<AcpSessionId, AcpConversationProjection> | null =
       null;
     for (const change of changes) {
-      sessions = mergeAcpSessionSummaries(sessions, [change.session]);
+      if (change.session) sessions = mergeAcpSessionSummaries(sessions, [change.session]);
       if (change.events.length === 0) continue;
       const activeProjections = nextProjections ?? projections;
       const result = appendAcpConversationEvents(
-        activeProjections.get(change.session.id),
+        activeProjections.get(change.sessionId),
         [...change.events],
       );
       nextProjections ??= new Map(projections);
-      touchProjection(nextProjections, change.session.id, result.projection);
+      touchProjection(nextProjections, change.sessionId, result.projection);
     }
     const publishedProjections = nextProjections ?? projections;
     if (
@@ -206,16 +212,17 @@ export class AcpSessionStore {
         // authoritative session projection.
       }
     }
-    const pending = this.pendingChanges.get(change.session.id);
+    const sessionId = change.session?.id ?? change.event?.sessionId;
+    if (!sessionId) return;
+    const pending = this.pendingChanges.get(sessionId);
     const session =
-      pending && pending.session.updatedAt > change.session.updatedAt
-        ? pending.session
+      !change.session ||
+      (pending?.session && pending.session.updatedAt > change.session.updatedAt)
+        ? pending?.session ?? null
         : change.session;
-    this.pendingChanges.set(change.session.id, {
-      session,
-      events: pending?.events ?? [],
-    });
-    if (change.event) this.pendingChanges.get(change.session.id)!.events.push(change.event);
+    const events = pending?.events ?? [];
+    if (change.event) events.push(change.event);
+    this.pendingChanges.set(sessionId, { sessionId, session, events });
     if (isProjectionBoundary(change.event)) {
       this.flushChanges();
       return;

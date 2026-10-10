@@ -170,9 +170,10 @@ impl KnowledgeRepositoryPort for SqliteKnowledgeRepository {
         &self,
         connection: &PinnedConnection,
         environment_id: Option<Uuid>,
+        selected_connection_ids: &[Uuid],
     ) -> AppResult<Option<KnowledgeSessionScope>> {
         self.store
-            .knowledge_session_scope(connection, environment_id)
+            .knowledge_session_scope(connection, environment_id, selected_connection_ids)
             .await
     }
 

@@ -71,6 +71,7 @@ pub fn run() {
     #[cfg(any(target_os = "macos", windows, target_os = "linux"))]
     let builder = builder.plugin(tauri_plugin_deep_link::init());
     builder
+        .plugin(features::agents::transport::app_navigation_guard())
         .plugin(tauri_plugin_dialog::init())
         .plugin(
             tauri_plugin_opener::Builder::new()
@@ -79,6 +80,7 @@ pub fn run() {
         )
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .on_window_event(features::queries::manual_transaction_exit::on_window_event)
         .setup(move |app| {
             // Plugins reject secondary launches before setup. Opening AppState
             // earlier would let a duplicate process expire the live app's work
@@ -118,6 +120,7 @@ pub fn run() {
                     }
                 }
             });
+            features::queries::manual_transaction_exit::guard_quit_menu_item(app);
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 // A broken renderer must not leave Agent/Job commands waiting forever.
@@ -246,6 +249,7 @@ pub fn run() {
             features::product_analytics::transport::set_product_analytics_consent,
             features::product_analytics::transport::submit_product_analytics_batch,
             features::analysis_articles::transport::list_analysis_articles_command,
+            features::analysis_articles::transport::get_analysis_article_command,
             features::analysis_articles::transport::update_analysis_article_command,
             features::analysis_articles::transport::delete_analysis_article_command,
             features::analysis_articles::transport::get_local_analysis_article_result_command,
@@ -263,7 +267,6 @@ pub fn run() {
             features::analysis_articles::transport::run_analysis_article_command,
             features::analysis_articles::transport::cancel_analysis_article_run,
             features::catalog::transport::get_catalog_snapshot,
-            features::catalog::transport::refresh_catalog_snapshot,
             features::catalog::transport::get_catalog_overview,
             features::catalog::transport::list_connection_databases,
             features::connections::transport::discover_connection_profile_databases,
@@ -280,6 +283,7 @@ pub fn run() {
             features::queries::transport::begin_manual_transaction,
             features::queries::transport::commit_manual_transaction,
             features::queries::transport::rollback_manual_transaction,
+            features::queries::manual_transaction_exit::respond_manual_transaction_exit,
             features::queries::transport::list_query_service_sessions,
             features::queries::transport::save_query_service_session,
             features::queries::transport::format_sql_fragment,
@@ -292,6 +296,7 @@ pub fn run() {
             features::queries::transport::pull_sql_stream_batch,
             features::queries::transport::read_sql_result_page,
             features::queries::transport::export_sql_result,
+            features::queries::transport::save_result_text,
             features::queries::transport::cancel_sql_result_export,
             features::queries::transport::ack_sql_stream,
             features::queries::transport::cancel_sql_stream,
@@ -357,6 +362,11 @@ pub fn run() {
                     let _ = window.show();
                     let _ = window.set_focus();
                 }
+            }
+            if let tauri::RunEvent::ExitRequested { code, api, .. } = &event {
+                features::queries::manual_transaction_exit::on_exit_requested(
+                    app_handle, *code, api,
+                );
             }
             // Terminal PTYs and the local broker own process/socket resources outside
             // ordinary command futures. Close them within a bounded window before the

@@ -1,8 +1,11 @@
 // Compact connection and driver editor. Feature controllers own the
-// workflow; this screen only composes grouped presentation models.
+// workflow, including the unsaved-change decision this screen presents;
+// this screen only composes grouped presentation models.
 import { useRef } from "react";
+import { Button } from "../../design-system/components/Button";
 import {
   ModalBackdrop,
+  ModalFooter,
   ModalHeader,
   ModalSurface,
 } from "../../design-system/components/Modal";
@@ -25,7 +28,7 @@ import { ConnectionProfilePanel } from "./ConnectionProfilePanel";
 export function ConnectionForm(props: ConnectionEditorProps) {
   const { t } = useI18n();
   const nameInputRef = useRef<HTMLInputElement>(null);
-  const { profile, catalog, schema, dialogs, commands } =
+  const { profile, catalog, navigation, schema, dialogs, commands } =
     useConnectionEditorController(props);
   const { creatingDemo, onCreateDemoDatabase } = props;
 
@@ -77,15 +80,17 @@ export function ConnectionForm(props: ConnectionEditorProps) {
               profile={profile}
               dialogs={dialogs}
               commands={commands}
-              onEditConnection={props.onEditConnection}
+              onEditConnection={navigation.editConnection}
             />
 
             <section className="tw:flex tw:min-w-0 tw:flex-1 tw:flex-col tw:overflow-hidden">
               <ConnectionCatalogCompactSelector
                 catalog={catalog}
                 profile={profile}
-                onEditConnection={props.onEditConnection}
-                onNewConnection={props.onNewConnection}
+                dialogs={dialogs}
+                commands={commands}
+                onEditConnection={navigation.editConnection}
+                onNewConnection={navigation.newConnection}
               />
               {catalog.navigation.view === "dataSources" ? (
                 <ConnectionProfilePanel
@@ -127,6 +132,45 @@ export function ConnectionForm(props: ConnectionEditorProps) {
             dialogs={dialogs}
             bindWorkspaceConnection={commands.bindWorkspaceConnection}
           />
+          {commands.discard.pending ? (
+            <ModalBackdrop
+              onMouseDown={(event) => {
+                if (event.target === event.currentTarget) {
+                  commands.discard.keepEditing();
+                }
+              }}
+            >
+              <ModalSurface
+                size="alert"
+                role="alertdialog"
+                aria-labelledby="connection-discard-title"
+                aria-describedby="connection-discard-body"
+                onRequestClose={commands.discard.keepEditing}
+              >
+                <ModalHeader
+                  title={t("connections.discardChangesTitle")}
+                  titleId="connection-discard-title"
+                />
+                <p
+                  id="connection-discard-body"
+                  className="tw:m-0 tw:px-5 tw:py-6 tw:text-sm tw:leading-ui tw:text-foreground tw:[overflow-wrap:anywhere] tw:max-[640px]:px-4"
+                >
+                  {t("connections.discardChangesBody")}
+                </p>
+                <ModalFooter>
+                  <Button
+                    data-modal-initial-focus
+                    onClick={commands.discard.keepEditing}
+                  >
+                    {t("connections.keepEditing")}
+                  </Button>
+                  <Button variant="danger" onClick={commands.discard.confirm}>
+                    {t("connections.discardChanges")}
+                  </Button>
+                </ModalFooter>
+              </ModalSurface>
+            </ModalBackdrop>
+          ) : null}
         </div>
       </ModalSurface>
     </ModalBackdrop>

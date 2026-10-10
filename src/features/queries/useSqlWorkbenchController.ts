@@ -1,8 +1,17 @@
 // Owns SQL editor persistence, target resolution, execution approval, streaming,
-// cancellation, and Services projection for the manual query workbench.
+// cancellation, and Services projection for the manual query workbench. Run and
+// Explain approve exactly the editor selection when there is one; a run cancelled
+// while it is still being planned never starts; failed and unknown stream outcomes
+// are terminal; and an error position is mapped back onto the live editor text.
+// Each run registers its exact cancel for the status bar until the run settles.
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { SqlLanguage } from "sql-formatter";
+import type { EditorView } from "@codemirror/view";
 
+import {
+  queryTaskKey,
+  registerBackgroundTaskCancel,
+} from "../backgroundTasks/cancelRegistry";
 import type { ConnectionProfile } from "../connections/domain";
 import { approveOperation } from "../operations/tauriAdapter";
 import {
@@ -17,7 +26,6 @@ import {
 } from "../query/sqlParameters";
 import {
   nextQueryServiceSessionId,
-  type QueryServiceResult,
   type QueryServiceSession,
 } from "../queryServices/domain";
 import {
@@ -32,7 +40,7 @@ import {
   useWorkbenchDraft,
 } from "../workbench/draftStore";
 import type { SafetySettings, ScriptOutcome } from "../../ipc/types";
-import { errDetails, errMessage } from "../../ipc/types";
+import { errDetails, isQueryCancellationError } from "../../ipc/types";
 import { useI18n } from "../../lib/i18n";
 import { useEventCallback } from "../../lib/useEventCallback";
 import { splitStatements } from "../../lib/sqlStatements";
@@ -72,8 +80,12 @@ import { useSqlResultStream } from "./useSqlResultStream";
 import {
   buildSqlHelpPrompt,
   wholeDocumentRunSource,
+  sqlEditorExecutionStatus,
+  sqlErrorEditorLocation,
+  sqlWorkbenchSessionOutcome,
   type SqlParameterDialogState,
   type SqlWorkbenchErrorInfo,
+  type SqlWorkbenchPlanError,
   type SqlWorkbenchLastAttempt,
   type SqlWorkbenchResultKind,
   type SqlWorkbenchRun,
@@ -168,7 +180,14 @@ export function useSqlWorkbenchController({
     outcome: ScriptOutcome;
     at: string;
   } | null>(null);
-  const { running, cancelled, execute, cancel, track } = useQueryRun();
+  const { running, cancelled, execute, cancel, track, checkpoint } = useQueryRun();
+  // Before an operation exists this stops the run at its next planning
+  // checkpoint; afterwards it cancels the exact backend operation/stream. The
+  // identity is stable so the status bar registration and shortcut can hold it.
+  const cancelRun = useEventCallback(() => {
+    cancel();
+    void cancelDesktopStream();
+  });
   const [runErr, setRunErr] = useState<SqlWorkbenchErrorInfo | null>(null);
   const [lastAttempt, setLastAttempt] =
     useState<SqlWorkbenchLastAttempt | null>(null);
@@ -181,12 +200,21 @@ export function useSqlWorkbenchController({
   const serviceSessionRef = useRef<
     Omit<QueryServiceSession, "status" | "result" | "updatedAt"> | undefined
   >(undefined);
+  const [latestSessionId, setLatestSessionId] = useState<string | null>(null);
 
   // EXPLAIN plan (read-only preview) shown above the results, independent of execution.
   const [plan, setPlan] = useState<PreviewReport | null>(null);
-  const [planErr, setPlanErr] = useState<string | null>(null);
+  const [planErr, setPlanErr] = useState<SqlWorkbenchPlanError | null>(null);
   const [explaining, setExplaining] = useState(false);
   const [formatting, setFormatting] = useState(false);
+  const [formatError, setFormatError] = useState<"failed" | "edited" | null>(null);
+  // The editor's current non-empty selection. Run and Explain approve exactly
+  // this text; only the "has a selection" bit re-renders the toolbar.
+  const selectionRef = useRef<SqlRunSource | undefined>(undefined);
+  const [hasSelection, setHasSelection] = useState(false);
+  const editorViewRef = useRef<EditorView | null>(null);
+  const draftVersionRef = useRef(draftVersion);
+  draftVersionRef.current = draftVersion;
   const {
     catalogScope,
     catalog,
@@ -232,7 +260,6 @@ export function useSqlWorkbenchController({
     conflict: documentConflict,
     useSavedVersion: loadSavedConflictVersion,
     keepLocalVersion: keepLocalConflictVersion,
-    reportError: reportDocumentSaveError,
     flushRecovery,
   } = useSqlDocumentAutosave({
     gateway: tauriSqlDocumentGateway,
@@ -259,12 +286,27 @@ export function useSqlWorkbenchController({
   const handleCursorChange = useEventCallback((position: SqlCursorPosition) => {
     publishSqlEditorCursor(documentId, position);
   });
+  const handleSelectionChange = useEventCallback((source?: SqlRunSource) => {
+    selectionRef.current = source?.sql ? source : undefined;
+    setHasSelection(selectionRef.current !== undefined);
+  });
+  const handleEditorReady = useEventCallback((view: EditorView) => {
+    editorViewRef.current = view;
+  });
+  /** The live selection, if it still covers the text it was made on. */
+  const currentSelection = () => {
+    const selection = selectionRef.current;
+    return selection && draft.slice(selection.from, selection.to).trim() === selection.sql
+      ? selection : undefined;
+  };
 
   useEffect(() => () => clearSqlEditorCursor(documentId), [documentId]);
 
   async function formatDraft() {
     if (!draft.trim() || formatting) return;
+    const versionAtStart = draftVersion;
     setFormatting(true);
+    setFormatError(null);
     try {
       const language: SqlLanguage =
         connection.engine === "postgres"
@@ -274,9 +316,15 @@ export function useSqlWorkbenchController({
             : connection.engine === "bigquery"
               ? "bigquery"
               : "sqlite";
-      setDraft(await formatSqlDocument(draft, language));
-    } catch (error) {
-      reportDocumentSaveError(error);
+      const formatted = await formatSqlDocument(draft, language);
+      // Typing during an asynchronous format wins: never overwrite newer text.
+      if (draftVersionRef.current !== versionAtStart) {
+        setFormatError("edited");
+        return;
+      }
+      setDraft(formatted);
+    } catch {
+      setFormatError("failed");
     } finally {
       setFormatting(false);
     }
@@ -312,12 +360,19 @@ export function useSqlWorkbenchController({
       status: "running",
       result: { kind: "none" },
     });
+    setLatestSessionId(sessionId);
     onShowResult(sessionId);
     setRunErr(null);
     setRun(null);
     setScriptOut(null);
     setResultKind(script ? "script" : "single");
     setLastAttempt({ sql, at, documentVersion: draftVersion, source });
+    // The status bar's Stop uses this exact run's cancel until the run settles,
+    // even if the editor closes while an operation is still executing.
+    const unregisterCancel = registerBackgroundTaskCancel(
+      queryTaskKey(sessionId),
+      cancelRun,
+    );
 
     try {
       await execute(async () => {
@@ -331,10 +386,12 @@ export function useSqlWorkbenchController({
             effectiveNamespace,
             effectiveDatabase,
           );
+          checkpoint();
           if (proposal.approvalRequired) {
             queryAnalytics.requireApproval(analyticsAttempt);
           }
           await approveManualOperationIfRequired(proposal, approveOperation);
+          checkpoint();
           track(proposal.operationId);
           const outcome = await runScript(proposal.operationId);
           setScriptOut({ outcome, at });
@@ -347,6 +404,8 @@ export function useSqlWorkbenchController({
               effectiveNamespace,
               effectiveDatabase,
             );
+            // Cancel pressed while planning: nothing has started, so stop here.
+            checkpoint();
             const approvalRequired =
               proposalSqlRunPath(proposal) === "approval";
             if (approvalRequired) {
@@ -355,6 +414,7 @@ export function useSqlWorkbenchController({
                 proposal,
                 approveOperation,
               );
+              checkpoint();
             }
             setRun(null);
             if (approvalRequired || manualTransaction.status) {
@@ -397,6 +457,7 @@ export function useSqlWorkbenchController({
               }
               await resetDesktopStream();
               queryAnalytics.arm(analyticsAttempt);
+              checkpoint();
               await runPlannedSql();
             }
             queryAnalytics.arm(analyticsAttempt);
@@ -409,7 +470,9 @@ export function useSqlWorkbenchController({
       });
     } catch (e) {
       queryAnalytics.arm(analyticsAttempt);
-      if (!script && stream.phase === "cancelled") return;
+      // Decide from this run's own error, never a render-time snapshot of the
+      // stream (a previous run's `cancelled` phase must not hide this failure).
+      if (isQueryCancellationError(e)) return;
       const details = errDetails(e);
       setRunErr({ ...details, sql, at: new Date().toLocaleTimeString() });
       // Clear the attempted kind so a failed run can't leave the previous
@@ -418,11 +481,14 @@ export function useSqlWorkbenchController({
       else {
         setRun(null);
       }
+    } finally {
+      unregisterCancel();
     }
   }
 
   function executeSql(selectedSource?: SqlRunSource) {
-    const source = selectedSource ?? wholeDocumentRunSource(draft);
+    const source =
+      selectedSource ?? currentSelection() ?? wholeDocumentRunSource(draft);
     if (!source?.sql || running || !safetyReady) return;
     const parameters = findSqlParameters(source.sql, connection.engine);
     if (parameters.length > 0) {
@@ -482,7 +548,8 @@ export function useSqlWorkbenchController({
       );
       setPlan(inspection.report);
     } catch (e) {
-      setPlanErr(errMessage(e));
+      const details = errDetails(e);
+      setPlanErr({ kind: details.kind, message: details.message });
       setPlan(null);
     } finally {
       setExplaining(false);
@@ -491,28 +558,26 @@ export function useSqlWorkbenchController({
 
   function explain() {
     if (!draft.trim() || explaining) return;
-    if (splitStatements(draft).length > 1) return;
-    const parameters = findSqlParameters(draft, connection.engine);
+    const source = currentSelection() ?? wholeDocumentRunSource(draft);
+    if (!source?.sql || splitStatements(source.sql).length > 1) return;
+    const parameters = findSqlParameters(source.sql, connection.engine);
     if (parameters.length > 0) {
       setParameterDialog({
-        sql: draft,
-        source: wholeDocumentRunSource(draft) ?? {
-          sql: draft,
-          from: 0,
-          to: draft.length,
-        },
+        sql: source.sql,
+        source,
         parameters,
         action: "explain",
       });
       return;
     }
-    void explainSql(draft);
+    void explainSql(source.sql);
   }
 
   // A plan describes the draft it was generated from — invalidate it on edit.
   useEffect(() => {
     setPlan(null);
     setPlanErr(null);
+    setFormatError(null);
   }, [draftVersion]);
 
   useEffect(() => {
@@ -543,120 +608,71 @@ export function useSqlWorkbenchController({
       runErr,
     ],
   );
-  const editorExecutionStatus = useMemo<SqlExecutionStatus | null>(() => {
-    const attempt = lastAttempt;
-    const sql = attempt?.sql.trim();
-    if (!attempt || !sql || attempt.documentVersion !== draftVersion)
-      return null;
-    if (runErr) {
-      return {
-        source: attempt.source,
-        state: "failed",
-        label: t("services.status.failed"),
-      };
-    }
-    if (
-      running ||
-      stream.phase === "connecting" ||
-      stream.phase === "streaming"
-    ) {
-      return {
-        source: attempt.source,
-        state: "running",
-        label: t("sql.runningFor", { seconds: elapsed }),
-      };
-    }
-    if (cancelled || stream.phase === "cancelled") {
-      return {
-        source: attempt.source,
-        state: "cancelled",
-        label: t("services.status.cancelled"),
-      };
-    }
-    const durationMs =
-      stream.durationMs ?? run?.outcome.result?.durationMs ?? null;
-    if (scriptOut || run || stream.phase === "complete") {
-      return {
-        source: attempt.source,
-        state: "completed",
-        label:
-          durationMs === null
-            ? t("services.status.completed")
-            : `${Math.round(durationMs)} ms`,
-      };
-    }
-    return null;
-  }, [
-    cancelled,
-    draftVersion,
-    elapsed,
-    lastAttempt,
-    run,
-    runErr,
-    running,
-    scriptOut,
-    stream.durationMs,
-    stream.phase,
-    t,
-  ]);
+  // A stream that ended in error or with an unconfirmable receipt is terminal,
+  // even when no exception reached the run (e.g. a receipt/batch mismatch).
+  const streamFailed =
+    resultKind === "single" &&
+    (stream.phase === "error" || stream.phase === "outcome_unknown");
+  const editorExecutionStatus = useMemo<SqlExecutionStatus | null>(
+    () =>
+      sqlEditorExecutionStatus(lastAttempt, draftVersion, {
+        failed: runErr !== null || streamFailed,
+        running:
+          running ||
+          stream.phase === "connecting" ||
+          stream.phase === "streaming",
+        cancelled: cancelled || stream.phase === "cancelled",
+        completed: scriptOut !== null || run !== null || stream.phase === "complete",
+        durationMs: stream.durationMs ?? run?.outcome.result?.durationMs ?? null,
+        labels: {
+          failed: t("services.status.failed"),
+          running: t("sql.runningFor", { seconds: elapsed }),
+          cancelled: t("services.status.cancelled"),
+          completed: t("services.status.completed"),
+        },
+      }),
+    [
+      cancelled,
+      draftVersion,
+      elapsed,
+      lastAttempt,
+      run,
+      runErr,
+      running,
+      scriptOut,
+      stream.durationMs,
+      stream.phase,
+      streamFailed,
+      t,
+    ],
+  );
 
   useEffect(() => {
     const session = serviceSessionRef.current;
     if (!session) return;
-
-    let result: QueryServiceResult = { kind: "none" };
-    if (runErr) {
-      result = { kind: "error", error: runErr, prompt: aiPrompt };
-    } else if (resultKind === "script" && scriptOut) {
-      result = {
-        kind: "script",
-        outcome: scriptOut.outcome,
-        at: scriptOut.at,
-      };
-    } else if (resultKind === "single" && run) {
-      result = {
-        kind: "materialized",
-        sql: run.sql,
-        outcome: run.outcome,
-        at: run.at,
-        maxRows: safety.maxRows,
-      };
-    } else if (
-      resultKind === "single" &&
-      (stream.phase === "connecting" ||
-        stream.phase === "streaming" ||
-        stream.phase === "complete")
-    ) {
-      result = {
-        kind: "stream",
-        sql: lastAttempt?.sql ?? session.sql,
-        stream,
-        maxRows: safety.maxRows,
-      };
-    }
-
-    const status = runErr
-      ? "failed"
-      : cancelled || stream.phase === "cancelled"
-        ? "cancelled"
-        : running ||
-            stream.phase === "connecting" ||
-            stream.phase === "streaming"
-          ? "running"
-          : result.kind === "none"
-            ? "running"
-            : "completed";
-
     onQueryServiceSessionChange({
       ...session,
       updatedAt: Date.now(),
-      status,
-      result,
+      ...sqlWorkbenchSessionOutcome({
+        sessionSql: session.sql,
+        sessionStartedLabel: session.startedLabel,
+        runErr,
+        prompt: aiPrompt,
+        stream,
+        streamFailed,
+        resultKind,
+        scriptOut,
+        materialized: run,
+        lastAttempt,
+        maxRows: safety.maxRows,
+        running,
+        cancelled,
+      }),
     });
   }, [
     aiPrompt,
     cancelled,
-    lastAttempt?.sql,
+    lastAttempt,
     onQueryServiceSessionChange,
     resultKind,
     run,
@@ -665,11 +681,33 @@ export function useSqlWorkbenchController({
     safety.maxRows,
     scriptOut,
     stream,
+    streamFailed,
   ]);
 
-  const cancelRun = () => {
-    cancel();
-    void cancelDesktopStream();
+  const errorLocation = useMemo(
+    () => sqlErrorEditorLocation(draft, lastAttempt, runErr?.position ?? null),
+    [draft, lastAttempt, runErr],
+  );
+
+  const jumpToError = useEventCallback(() => {
+    const view = editorViewRef.current;
+    if (!view || !errorLocation) return;
+    const length = view.state.doc.length;
+    view.dispatch({
+      selection: {
+        anchor: Math.min(errorLocation.from, length),
+        head: Math.min(errorLocation.to, length),
+      },
+      scrollIntoView: true,
+    });
+    view.focus();
+  });
+
+  /** Re-runs a stored session's SQL; it remains the exact payload Run approves. */
+  const rerunSql = (sql: string) => {
+    const source = wholeDocumentRunSource(sql);
+    if (!source || running || !safetyReady) return;
+    void runSql(source.sql, { ...source, from: -1, to: -1 });
   };
   const closeParameterDialog = () => setParameterDialog(null);
   const closePlan = () => setPlan(null);
@@ -700,6 +738,9 @@ export function useSqlWorkbenchController({
     formatDraft,
     formatting,
     handleCursorChange,
+    handleEditorReady,
+    handleSelectionChange,
+    hasSelection,
     keepLocalConflictVersion,
     loadSavedConflictVersion,
     manualTransaction,
@@ -709,6 +750,11 @@ export function useSqlWorkbenchController({
     parameterValues,
     plan,
     planErr,
+    formatError,
+    errorLocation,
+    jumpToError,
+    rerunSql,
+    latestSessionId,
     resolveModeHint,
     running,
     setDraft,

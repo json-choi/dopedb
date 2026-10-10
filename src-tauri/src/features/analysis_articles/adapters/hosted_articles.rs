@@ -5,20 +5,26 @@ use super::*;
 // Every request below uses the shared origin validator, which rejects cleartext
 // outside a debug-only loopback origin; the release client is HTTPS-only too.
 
-pub(crate) async fn list_analysis_articles(
+/// Lists titles and authority pins only (`view=summary`). Each body stays behind
+/// `get_analysis_article`, so large HTML or SQL in a few Articles cannot exceed the
+/// collection cap and hide every other Article in the Environment.
+pub(crate) async fn list_analysis_article_summaries(
     user_id: &str,
     workspace_id: Uuid,
     environment_id: Option<Uuid>,
-) -> AppResult<Vec<AnalysisArticleRecord>> {
+) -> AppResult<Vec<AnalysisArticleSummary>> {
     let token = token(user_id).await?;
     let mut url = Url::parse(&format!(
         "{}/api/v1/workspaces/{workspace_id}/analyses",
         origin()?
     ))
     .map_err(|_| AppError::Config("Analysis Article endpoint is invalid".into()))?;
-    if let Some(environment_id) = environment_id {
-        url.query_pairs_mut()
-            .append_pair("environmentId", &environment_id.to_string());
+    {
+        let mut query = url.query_pairs_mut();
+        if let Some(environment_id) = environment_id {
+            query.append_pair("environmentId", &environment_id.to_string());
+        }
+        query.append_pair("view", "summary");
     }
     let raw = client()?
         .get(url)
@@ -26,22 +32,14 @@ pub(crate) async fn list_analysis_articles(
         .send()
         .await
         .map_err(|error| request_error("loading Analysis Articles", error))?;
-    let body: ArticleCollectionResponse = response(
+    let body: ArticleSummaryCollectionResponse = response(
         raw,
         user_id,
         "Analysis Article collection",
         MAX_DEFINITION_RESPONSE_BYTES,
     )
     .await?;
-    if body.workspace_id != workspace_id || body.articles.len() > 1_000 {
-        return Err(AppError::Network(
-            "Analysis Article collection changed workspace identity".into(),
-        ));
-    }
-    for article in &body.articles {
-        validate_article(article, None)?;
-    }
-    Ok(body.articles)
+    summaries_from_collection(body, workspace_id)
 }
 
 pub(crate) async fn get_analysis_article(
@@ -109,7 +107,7 @@ pub(crate) async fn mutate_analysis_article(
     article_id: Uuid,
     expected_revision: i64,
     article: &SharedAnalysisArticleCreate,
-) -> AppResult<AnalysisArticleRecord> {
+) -> AppResult<AnalysisArticleMutation> {
     if expected_revision < 1 {
         return Err(AppError::Config(
             "Analysis Article expected revision must be positive".into(),
@@ -133,6 +131,11 @@ pub(crate) async fn mutate_analysis_article(
         .send()
         .await
         .map_err(|error| request_error("updating an Analysis Article", error))?;
+    if is_revision_conflict(raw.status()) {
+        // Drain the bounded error body for connection reuse; its text is untrusted.
+        let _ = oauth_error(raw).await;
+        return Ok(AnalysisArticleMutation::RevisionConflict);
+    }
     let body: ArticleResponse = article_mutation_response(
         raw,
         user_id,
@@ -141,7 +144,7 @@ pub(crate) async fn mutate_analysis_article(
     )
     .await?;
     validate_article(&body.article, Some(article_id))?;
-    Ok(body.article)
+    Ok(AnalysisArticleMutation::Applied(Box::new(body.article)))
 }
 
 pub(crate) async fn delete_analysis_article(

@@ -3,6 +3,21 @@
 use super::*;
 
 impl OperationRepository {
+    /// The reason a person recorded with the latest rejection of this operation.
+    /// Approval rows are excluded: their reason field carries confirmation phrases.
+    pub(crate) async fn rejection_reason(&self, operation_id: Uuid) -> AppResult<Option<String>> {
+        let reason: Option<Option<String>> = sqlx::query_scalar(
+            "SELECT reason FROM operation_approvals
+             WHERE operation_id = ?1 AND decision = 'rejected'
+             ORDER BY created_at DESC
+             LIMIT 1",
+        )
+        .bind(operation_id.to_string())
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(reason.flatten().filter(|reason| !reason.trim().is_empty()))
+    }
+
     /// Append one exact local/workspace decision and its projection transition in
     /// the same SQLite transaction. Agent, Plugin, and System actors are rejected
     /// before any approval row is written.

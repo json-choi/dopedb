@@ -31,7 +31,7 @@ pub(crate) use model::{
     RestartRecoveryReport,
 };
 pub(crate) use runtime::{
-    ClaimedOperation, ExactApprovalRequest, LocalApprovalAuthority, OperationPlanDisposition,
-    OperationRuntime,
+    AgentSessionLiveness, ClaimedOperation, ExactApprovalRequest, LocalApprovalAuthority,
+    OperationPlanDisposition, OperationRuntime, AGENT_SESSION_REVOKED,
 };
 pub use state_machine::{ensure_transition, restart_recovery, RestartRecovery, TransitionError};

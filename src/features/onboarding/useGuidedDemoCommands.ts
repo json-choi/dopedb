@@ -6,7 +6,8 @@ import { useToast } from "../../components/Toast";
 import type { CatalogTable } from "../../ipc/types";
 import { errMessage } from "../../ipc/types";
 import { useI18n } from "../../lib/i18n";
-import { catalogQuery, type CatalogScope } from "../../lib/queries";
+import { type CatalogScope } from "../../lib/queries";
+import { catalogQuery } from "../../lib/catalogQueries";
 import type { ConnectionProfile } from "../connections/domain";
 import {
   catalogLoadIssueMessage,

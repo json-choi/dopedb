@@ -131,12 +131,23 @@ impl BrokerDispatcher {
     ) -> Result<ConnectionListResult, ErrorCode> {
         let services = self.services()?;
         let authority = terminal_authority(session, client_protocol_version);
+        // An Agent pinned to a Project resource set sees only its selected
+        // databases; a source-only session must not learn the anchor DB.
+        let resource_set_enforced =
+            session.agent_plugin_id.is_some() && !session.knowledge_scopes.is_empty();
+        let selected = session
+            .knowledge_scopes
+            .iter()
+            .flat_map(|scope| scope.connections.iter())
+            .map(|connection| connection.connection_id)
+            .collect::<std::collections::BTreeSet<_>>();
         let connections = services
             .connections
             .list_terminal_summaries(&authority)
             .await
             .map_err(|_| ErrorCode::ScopeDenied)?
             .iter()
+            .filter(|summary| !resource_set_enforced || selected.contains(&Uuid::from(summary.id)))
             .map(connection_summary)
             .collect();
         Ok(ConnectionListResult { connections })

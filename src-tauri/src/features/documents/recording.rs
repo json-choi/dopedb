@@ -167,6 +167,8 @@ pub(super) async fn persist_history(
                 error,
                 executed_at: Utc::now(),
                 origin: origin.to_string(),
+                database: None,
+                namespace: None,
             },
         )
         .await

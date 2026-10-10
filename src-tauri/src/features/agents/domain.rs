@@ -25,6 +25,50 @@ pub(crate) enum AgentProvider {
     Codex,
 }
 
+/// Stable Agent failure codes. The Desktop maps each code to localized copy and
+/// never parses English sentences: a code may name the official CLI involved
+/// (`code:claude`), and a diagnostic the person can copy follows on the next
+/// line. Errors carry them as `AppError::Agent`/`Blocked` text or session events.
+pub(crate) mod agent_error {
+    use super::AgentProvider;
+
+    pub(crate) const CLI_MISSING: &str = "agent_cli_missing";
+    pub(crate) const CLI_NOT_AUTHENTICATED: &str = "agent_cli_not_authenticated";
+    pub(crate) const CLI_NODE_MISSING: &str = "agent_cli_node_missing";
+    pub(crate) const CLI_UNEXPECTED_VERSION: &str = "agent_cli_unexpected_version";
+    pub(crate) const CLI_PROBE_FAILED: &str = "agent_cli_probe_failed";
+    pub(crate) const START_TIMED_OUT: &str = "agent_start_timed_out";
+    pub(crate) const HISTORY_UNAVAILABLE: &str = "agent_history_unavailable";
+    pub(crate) const NOT_RESUMABLE: &str = "agent_not_resumable";
+    pub(crate) const ALREADY_RUNNING: &str = "agent_already_running";
+    pub(crate) const BUSY: &str = "agent_busy";
+    pub(crate) const SESSION_UNAVAILABLE: &str = "agent_session_unavailable";
+    pub(crate) const RESOURCES_REQUIRED: &str = "agent_resources_required";
+    pub(crate) const SCOPE_UNAVAILABLE: &str = "agent_scope_unavailable";
+    pub(crate) const EDITOR_CONTEXT_OUTSIDE_SCOPE: &str = "agent_editor_context_outside_scope";
+    pub(crate) const CONTEXT_TOO_LARGE: &str = "agent_context_too_large";
+    pub(crate) const PLUGIN_DISABLED: &str = "agent_plugin_disabled";
+    pub(crate) const CONFIG_UNAVAILABLE: &str = "agent_config_unavailable";
+    pub(crate) const PERMISSION_UNAVAILABLE: &str = "agent_permission_unavailable";
+    pub(crate) const EVENT_DROPPED: &str = "agent_event_dropped";
+    pub(crate) const AUTHORITY_REVALIDATING: &str = "agent_authority_revalidating";
+    pub(crate) const PROVIDER_ERROR: &str = "agent_provider_error";
+
+    /// `code:provider`, for copy that names the official CLI involved.
+    pub(crate) fn for_provider(code: &str, provider: AgentProvider) -> String {
+        let provider = match provider {
+            AgentProvider::Claude => "claude",
+            AgentProvider::Codex => "codex",
+        };
+        format!("{code}:{provider}")
+    }
+
+    /// A code followed by a diagnostic the Desktop offers only for copying.
+    pub(crate) fn with_detail(code: &str, detail: impl std::fmt::Display) -> String {
+        format!("{code}\n{detail}")
+    }
+}
+
 /// Non-secret local CLI availability and authentication status.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -135,13 +179,20 @@ pub(crate) struct AcpSessionFocus {
     pub(crate) session: AcpSessionSummary,
     pub(crate) events: Vec<AcpSessionEvent>,
     pub(crate) replay_truncated: bool,
+    /// The Broker session a live conversation currently runs under; its SQL
+    /// proposal cards accept decisions only for operations it proposed. Absent
+    /// for a stored or detached conversation, whose cards are read-only.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) broker_session_id: Option<uuid::Uuid>,
 }
 
-/// Event emitted whenever an ACP session summary or stream changes.
+/// Event emitted whenever an ACP session summary or stream changes. Streamed
+/// message/thought chunks carry only the event: the summary (with its pinned
+/// resource scopes) is resent at the next boundary instead of once per token.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct AcpSessionChanged {
-    pub(crate) session: AcpSessionSummary,
+    pub(crate) session: Option<AcpSessionSummary>,
     pub(crate) event: Option<AcpSessionEvent>,
 }
 

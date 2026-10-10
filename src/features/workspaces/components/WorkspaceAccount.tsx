@@ -149,7 +149,9 @@ export default function WorkspaceAccount({
       );
     // Native membership/auth refreshes may change the backend's active account or
     // workspace. Stop old-generation reads before invoking that authority boundary.
-    await cancelWorkspaceResourceQueries(queryClient);
+    // Catalog reads keep running: a changed authority resets them below, and an
+    // unchanged one must not cancel and re-send the same scans.
+    await cancelWorkspaceResourceQueries(queryClient, { keepCatalogReads: true });
     let nextAuth: WorkspaceAuthState;
     let nextContext: WorkspaceContextState;
     try {

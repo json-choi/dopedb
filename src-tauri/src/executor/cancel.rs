@@ -4,10 +4,13 @@
 //! query. Without a guard a slow statement pins that connection and hangs the tab
 //! forever. [`guard`] wraps the query future in a `tokio::select!` between the
 //! query, a wall-clock timeout, and an on-demand cancel signal keyed by the
-//! frontend's `query_id`. On cancel/timeout the query future (and the pooled
-//! connection it borrows) is dropped mid-flight; sqlx does not return a
-//! connection dropped mid-statement to the pool, it closes it — so no corrupted
-//! connection leaks back.
+//! frontend's `query_id`. On cancel/timeout the query future is dropped
+//! mid-flight. A plain pooled connection dropped there would be returned to the
+//! pool only after sqlx drained the abandoned statement — the server kept running
+//! it and the next query waited behind it — so executors hold their connection in
+//! [`AbandonClosingConnection`], which closes it instead. PostgreSQL 14+ sessions
+//! set `client_connection_check_interval`, so the server aborts the statement once
+//! the socket closes; other engines stop when they next write to the closed socket.
 
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
@@ -22,6 +25,54 @@ use crate::kernel::sync::lock_unpoisoned;
 
 /// Default wall-clock ceiling for a desktop read/write.
 pub const QUERY_TIMEOUT: Duration = Duration::from_secs(300);
+
+/// A pooled connection that is closed, never reused, if the future owning it is
+/// dropped before [`release`](Self::release). Callers await their whole statement
+/// sequence, then release on both success and ordinary SQL errors; only an
+/// abandoned (cancelled or timed-out) future reaches `Drop` while still holding it.
+pub(crate) struct AbandonClosingConnection<DB: sqlx::Database> {
+    connection: Option<sqlx::pool::PoolConnection<DB>>,
+}
+
+impl<DB: sqlx::Database> AbandonClosingConnection<DB> {
+    pub(crate) async fn acquire(pool: &sqlx::Pool<DB>) -> Result<Self, sqlx::Error> {
+        Ok(Self {
+            connection: Some(pool.acquire().await?),
+        })
+    }
+
+    /// The statement sequence finished (successfully or with a database error);
+    /// return the connection to the pool for reuse.
+    pub(crate) fn release(mut self) {
+        drop(self.connection.take());
+    }
+}
+
+impl<DB: sqlx::Database> std::ops::Deref for AbandonClosingConnection<DB> {
+    type Target = DB::Connection;
+
+    fn deref(&self) -> &Self::Target {
+        self.connection
+            .as_deref()
+            .expect("the connection is held until release")
+    }
+}
+
+impl<DB: sqlx::Database> std::ops::DerefMut for AbandonClosingConnection<DB> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.connection
+            .as_deref_mut()
+            .expect("the connection is held until release")
+    }
+}
+
+impl<DB: sqlx::Database> Drop for AbandonClosingConnection<DB> {
+    fn drop(&mut self) {
+        if let Some(connection) = self.connection.as_mut() {
+            connection.close_on_drop();
+        }
+    }
+}
 
 // ponytail: one global lock over a small map keyed by unique v4 UUIDs. Contention
 // is a non-issue at desktop scale; shard only if that ever changes.
@@ -124,6 +175,43 @@ pub async fn guard_registered<T, F>(
 where
     F: std::future::Future<Output = AppResult<T>>,
 {
+    match run_or_abandon(handle, wall, fut).await {
+        Ok(result) => result,
+        Err(abandoned) => Err(abandoned.into_error(wall)),
+    }
+}
+
+/// Why a guarded future was dropped before it completed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Abandoned {
+    Cancelled,
+    TimedOut,
+}
+
+impl Abandoned {
+    /// The error [`guard_registered`] reports for this outcome.
+    pub(crate) fn into_error(self, wall: Duration) -> AppError {
+        match self {
+            Self::Cancelled => AppError::Safety("query cancelled".into()),
+            Self::TimedOut => AppError::Safety(format!(
+                "query timed out after {}s and was aborted",
+                wall.as_secs()
+            )),
+        }
+    }
+}
+
+/// Race `fut` against the cancellation slot and a wall-clock limit, reporting
+/// whether it completed or was abandoned. Owners of a stateful connection use
+/// this to close that connection when a statement is abandoned mid-flight.
+pub(crate) async fn run_or_abandon<T, F>(
+    handle: Option<&CancelHandle>,
+    wall: Duration,
+    fut: F,
+) -> Result<T, Abandoned>
+where
+    F: std::future::Future<Output = T>,
+{
     tokio::select! {
         biased;
         _ = async {
@@ -131,14 +219,8 @@ where
                 Some(h) => h.cancelled().await,
                 None => std::future::pending::<()>().await,
             }
-        } => Err(AppError::Safety("query cancelled".into())),
-        r = tokio::time::timeout(wall, fut) => match r {
-            Ok(inner) => inner,
-            Err(_) => Err(AppError::Safety(format!(
-                "query timed out after {}s and was aborted",
-                wall.as_secs()
-            ))),
-        }
+        } => Err(Abandoned::Cancelled),
+        r = tokio::time::timeout(wall, fut) => r.map_err(|_| Abandoned::TimedOut),
     }
 }
 

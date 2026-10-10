@@ -13,7 +13,7 @@ import { ConnectionGeneralTab } from "../../screens/Connections/ConnectionGenera
 import { ConnectionBigQueryFields } from "../../screens/Connections/ConnectionBigQueryFields";
 import { ConnectionSecurityTab } from "../../screens/Connections/ConnectionSecurityTab";
 import type { ConnectionEditorController } from "../connections/useConnectionEditorController";
-import schemaDiffFixture from "../../../dopedb-protocol/tests/fixtures/schema-diff-v1.json";
+import schemaDiffFixture from "../../../dopedb-protocol/tests/fixtures/schema-diff-v2.json";
 import { catalogFromSnapshot } from "../catalog/tauriAdapter";
 import {
   connectionId,
@@ -149,7 +149,8 @@ import {
   PropertyRow,
 } from "../../design-system/components/FormControls";
 import { queryResultPhase } from "../../lib/queryResultPhase";
-import { compareCatalogs, diffCounts } from "../../lib/schemaDiff";
+import { compareCatalogs, diffCounts, SCHEMA_DIFF_SCOPE } from "../../lib/schemaDiff";
+import { SCHEMA_DIFF_ASPECT_LABELS } from "../../screens/SchemaDiff/SchemaDiffResults";
 import { tableRef } from "../../lib/tableRef";
 import type { I18nKey } from "../../lib/i18n";
 import { workspaceAdminScope } from "../workspaceAdmin/scope";
@@ -214,6 +215,9 @@ describe("workbench state ownership", () => {
     expect(documentLanguage.lang).toBe("en");
     expect(languageStorage.setItem).toHaveBeenLastCalledWith("dopedb.lang", "en");
     const key = (value: I18nKey) => value;
+    // Catalog issues wrap a heading-style title in a sentence template; read the title.
+    const catalogKey = (value: I18nKey, vars?: Record<string, string | number>) =>
+      typeof vars?.message === "string" ? vars.message : value;
     const managedManager = {
       credentialMode: "managed" as const,
       workspaceAccess: "manage" as const,
@@ -290,7 +294,7 @@ describe("workbench state ownership", () => {
     });
     expect(hostileCatalogIssue).toEqual({ code: "sshHostKey" });
     expect(JSON.stringify(hostileCatalogIssue)).not.toContain("HOSTILE_PASSWORD");
-    expect(catalogLoadIssueMessage(key, hostileCatalogIssue)).toBe(
+    expect(catalogLoadIssueMessage(catalogKey, hostileCatalogIssue)).toBe(
       "connections.testFailure.sshHostKeyTitle",
     );
     expect(catalogLoadIssueAction(hostileCatalogIssue)).toBe("edit");
@@ -307,7 +311,7 @@ describe("workbench state ownership", () => {
       await expect(safeClient.fetchQuery(inventoryOptions)).rejects.toEqual({ code: "sshHostKey" });
       const retained = safeClient.getQueryState(inventoryOptions.queryKey)?.error;
       expect(retained).toEqual({ code: "sshHostKey" });
-      expect(catalogLoadIssueMessage(key, catalogLoadIssue(retained))).toBe("connections.testFailure.sshHostKeyTitle");
+      expect(catalogLoadIssueMessage(catalogKey, catalogLoadIssue(retained))).toBe("connections.testFailure.sshHostKeyTitle");
       for (const read of [listKnowledgeEnvironmentConnections, listAnalysisArticles]) {
         await expect(read()).rejects.toEqual({ code: "sshHostKey" });
       }
@@ -344,6 +348,9 @@ describe("workbench state ownership", () => {
       "timeout",
       "notFound",
       "unknown",
+      "sharedConnectionChanged",
+      "credentialStoreDenied",
+      "lockTimeout",
     ]);
     for (const code of [
       "sshClientMissing",
@@ -359,7 +366,7 @@ describe("workbench state ownership", () => {
       "connectionUnknown",
     ] as const) {
       expect(catalogLoadIssueAction({ code })).toBe("edit");
-      expect(catalogLoadIssueMessage(key, { code })).toMatch(
+      expect(catalogLoadIssueMessage(catalogKey, { code })).toMatch(
         /^connections\.testFailure\./u,
       );
     }
@@ -1784,8 +1791,12 @@ describe("workbench state ownership", () => {
         ...agentEnvironments,
       ])?.id,
     ).toBe("environment-demo");
+    // Only the exact in-app MCP call opens an approval card: Claude records the
+    // qualified tool name in `_meta.claudeCode.toolName`; Codex marks MCP calls
+    // and names the server and tool in its raw input. A title never decides it.
     const sqlProposalTool = {
       title: "mcp__dopedb-desktop-session__sql_propose",
+      _meta: { claudeCode: { toolName: "mcp__dopedb-desktop-session__sql_propose" } },
       rawOutput: JSON.stringify({
         operationId: "e4ec6fa8-edf8-4c66-a8cc-da3bfbeb58a2",
         connectionId: "eeeda2b1-47d9-404e-a143-3dd3b2f96d65",
@@ -1794,6 +1805,21 @@ describe("workbench state ownership", () => {
       }),
     };
     expect(isSqlProposalTool(sqlProposalTool)).toBe(true);
+    expect(isSqlProposalTool({
+      title: "mcp.dopedb-desktop-session.sql_propose",
+      _meta: { is_mcp_tool_call: true },
+      rawInput: { server: "dopedb-desktop-session", tool: "sql_propose", arguments: {} },
+    })).toBe(true);
+    expect(isSqlProposalTool({
+      title: sqlProposalTool.title,
+      rawOutput: sqlProposalTool.rawOutput,
+    })).toBe(false);
+    expect(isSqlProposalTool({
+      title: "echo sql_propose",
+      _meta: { claudeCode: { toolName: "Bash" } },
+      rawInput: { command: "echo sql_propose" },
+      rawOutput: sqlProposalTool.rawOutput,
+    })).toBe(false);
     expect(findAgentSqlProposal(sqlProposalTool.rawOutput)).toMatchObject({
       operationId: "e4ec6fa8-edf8-4c66-a8cc-da3bfbeb58a2",
       connectionId: "eeeda2b1-47d9-404e-a143-3dd3b2f96d65",
@@ -1844,12 +1870,24 @@ describe("workbench state ownership", () => {
       fingerprint: "fixture", namespaces: [], routines: [], otherObjects: [],
     } as Parameters<typeof catalogFromSnapshot>[0]);
     const sharedDiff = compareCatalogs(comparisonCatalog(schemaDiffFixture.target), comparisonCatalog(schemaDiffFixture.baseline));
-    const normalizeDiff = (objects: unknown[]) => objects.map((object) => JSON.stringify(object)).sort();
+    // Order is part of the contract: Desktop lists objects exactly as the CLI prints them.
+    const normalizeDiff = (objects: unknown[]) => objects.map((object) => JSON.stringify(object));
+    // Desktop states the same comparison scope as the Rust result, with one label for
+    // exactly each compared and uncompared property.
+    expect(SCHEMA_DIFF_SCOPE).toEqual(schemaDiffFixture.scope);
+    expect(Object.keys(SCHEMA_DIFF_ASPECT_LABELS).sort()).toEqual(
+      [...schemaDiffFixture.scope.compared, ...schemaDiffFixture.scope.notCompared].sort(),
+    );
+    // `relation` is the CLI's `table` path; the fixture includes an added matview and an
+    // ENUM whose quoted members differ only in case.
     expect(normalizeDiff(sharedDiff.objects.map((object) => ({
       table: object.tableKey.replace(/^commerce_(dev|prod)\./, ""),
+      relation: object.relation,
       objectType: object.objectType, name: object.label, status: object.status,
       baselineValue: object.baselineValue, targetValue: object.targetValue,
-    })))).toEqual(normalizeDiff(schemaDiffFixture.objects));
+    })))).toEqual(normalizeDiff(schemaDiffFixture.objects.map(({ table, ...object }) => ({
+      table, relation: table, ...object,
+    }))));
     const environmentDiff = compareCatalogs(
       {
         tables: [
@@ -1891,8 +1929,8 @@ describe("workbench state ownership", () => {
     expect(environmentDiff.addedTables).toHaveLength(0);
     expect(environmentDiff.changedTables).toHaveLength(1);
     expect(environmentDiff.objects.map(({ path }) => path)).toEqual([
-      "commerce_dev.public.orders.fulfillment_channel",
-      "commerce_dev.public.orders.orders_status_idx",
+      "public.orders.fulfillment_channel",
+      "public.orders.orders_status_idx",
     ]);
 
     expect(

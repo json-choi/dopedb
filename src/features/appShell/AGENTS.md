@@ -16,7 +16,8 @@ than owning their domain logic itself.
 
 | File | Description |
 |------|-------------|
-| `AppShell.tsx` | Default-exported `App()` root: wires `ToastProvider`, Action Search, Background Tasks, Agent readiness warmup, the Article link gate, guided-demo commands, Query Services, and the Skill startup gate together. |
+| `AppShell.tsx` | Default-exported `App()` root: wires `ToastProvider`, Action Search, Background Tasks, Agent readiness warmup, the Article link gate, guided-demo commands, Query Services, and the app-wide gates (`ShellGates`) together. |
+| `ShellGates.tsx` | The blocking gates the shell mounts once: the Skill startup gate and the close/quit confirmation for open manual transactions. |
 | `ConnectionPicker.tsx` | Default-exported connection-switcher dropdown, grouped via `buildConnectionSections`. |
 | `IdeChrome.tsx` | `IdeTopBar`/`IdeStatusBar` — the single quiet title toolbar; its header comment notes macOS owns the native File/Edit/View menus, so the WebView must not draw a second application menu. |
 | `ShellLayout.tsx` | Default-exported layout positioning the left Explorer, central documents, Agent dock, and persistent status bar, with a resizable separator. |
@@ -26,6 +27,8 @@ than owning their domain logic itself.
 | `navigationState.ts` | `AppShellRoute`/`AppShellMode`/`appShellNavigationReducer`; per its header comment, the shell's central surface has exactly one route owner (Settings and Workspace management are modal modes with an explicit background route that replace each other, not parallel flags). |
 | `useAgentDock.ts` | Persisted Agent dock open/width state (`localStorage` keys `agentDockOpen`, `agentDockWidth`), built on `agents/layout.ts`'s clamping helpers. |
 | `useAppShellWorkbenchController.ts` | The shell's main workbench controller: connection selection, document routing state, and catalog/driver queries feeding `WorkbenchContent`. |
+| `connectionEditorRoute.ts` | The connection editor's side of shell navigation: the profile, launch preset, and entry focus the editor route names, and Settings/Workspace management commands that confirm an open editor's unsaved edits first, except for the editor's own Workspace management requests, which open over it and return to it. `useConnectionCredentialRequests` opens a connection's editor at its credential when another surface, such as a SQL result, asks. |
+| `useLaunchPresetBinding.ts` | Binds a connection created from a Project environment's launch preset to that environment once, after its first save, and refreshes the Project reads in the background. |
 | `useConnectionProfiles.ts` | Connection list query plus `changedConnectionRuntimeIds`, which fingerprints a profile's runtime-relevant fields (engine/provider/driver/host/port/database) to detect changes needing a reconnect. |
 | `useConnectionProjectNames.ts` | Picker-only Project binding name lookup, kept out of the `AppShell` composition root per its header comment. |
 | `useInertShellBackground.ts` | Sets `element.inert` on non-Agent-surface shell children while a modal/overlay is open, for focus containment. |

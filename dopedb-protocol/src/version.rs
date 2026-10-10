@@ -4,7 +4,10 @@ use thiserror::Error;
 
 pub const PROTOCOL_MIN: u16 = 1;
 pub const PROTOCOL_MAX: u16 = 1;
-pub const COMMAND_SCHEMA_VERSION: u16 = 17;
+/// 18: `OperationSummary.decisionReason` and the version-2 schema diff
+/// (`materializedView`, expression index keys, `scope`) are not decodable by a
+/// version-17 peer, whose closed DTOs deny unknown fields and values.
+pub const COMMAND_SCHEMA_VERSION: u16 = 18;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
 #[error(

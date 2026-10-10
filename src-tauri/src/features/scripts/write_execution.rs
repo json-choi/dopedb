@@ -49,6 +49,8 @@ impl ScriptPlatformAdapter {
                     row_count: None,
                     error: Some(reason.clone()),
                     origin: &history_origin,
+                    database: &payload.database,
+                    namespace: payload.namespace.as_deref(),
                 },
             )
             .await;
@@ -80,6 +82,8 @@ impl ScriptPlatformAdapter {
                     row_count: None,
                     error: Some(reason.into()),
                     origin: &history_origin,
+                    database: &payload.database,
+                    namespace: payload.namespace.as_deref(),
                 },
             )
             .await;
@@ -106,7 +110,8 @@ impl ScriptPlatformAdapter {
                 sql: payload.sql.clone(),
                 kind: script_kind,
                 action: "script:execute:attempt".into(),
-                approved_by: Some(operation.record().actor.id.clone()),
+                // The approving Desktop account, not the proposing actor.
+                approved_by: Some(crate::operations::approver_for_pin(&operation_pin).id),
                 affected_estimate: None,
                 error: None,
             },
@@ -153,6 +158,8 @@ impl ScriptPlatformAdapter {
                         row_count: None,
                         error: Some(error.to_string()),
                         origin: &history_origin,
+                        database: &payload.database,
+                        namespace: payload.namespace.as_deref(),
                     },
                 )
                 .await;
@@ -180,6 +187,8 @@ impl ScriptPlatformAdapter {
                         row_count: None,
                         error: Some(error.to_string()),
                         origin: &history_origin,
+                        database: &payload.database,
+                        namespace: payload.namespace.as_deref(),
                     },
                 )
                 .await;
@@ -255,12 +264,13 @@ impl ScriptPlatformAdapter {
         let (outcomes, committed) = match transaction_result {
             Ok(result) => result,
             Err(error) => {
-                let interrupted = matches!(
-                    &error,
-                    AppError::Safety(reason)
-                        if reason == "query cancelled"
-                            || reason.starts_with("query timed out after ")
-                );
+                let cancelled =
+                    matches!(&error, AppError::Safety(reason) if reason == "query cancelled");
+                let interrupted = cancelled
+                    || matches!(
+                        &error,
+                        AppError::Safety(reason) if reason.starts_with("query timed out after ")
+                    );
                 let error = if interrupted && !manual_transaction {
                     AppError::OutcomeUnknown(format!(
                         "script execution was interrupted before rollback or commit could be confirmed: {error}"
@@ -268,17 +278,28 @@ impl ScriptPlatformAdapter {
                 } else {
                     error
                 };
+                // A cancelled manual-transaction script is a confirmed rollback;
+                // an interrupted autocommit script has an unknown outcome.
+                let (action, status) = if matches!(&error, AppError::OutcomeUnknown(_)) {
+                    ("script:execute:outcome_unknown", "outcome_unknown")
+                } else if cancelled {
+                    ("script:execute:cancelled", "cancelled")
+                } else {
+                    ("script:execute", "error")
+                };
                 record_script_run(
                     &self.store,
                     &operation_pin,
                     ScriptRunRecord {
                         sql: &payload.sql,
                         kind: script_kind,
-                        action: "script:execute",
-                        status: "error",
+                        action,
+                        status,
                         row_count: None,
                         error: Some(error.to_string()),
                         origin: &history_origin,
+                        database: &payload.database,
+                        namespace: payload.namespace.as_deref(),
                     },
                 )
                 .await;
@@ -287,6 +308,13 @@ impl ScriptPlatformAdapter {
                         .mark_outcome_unknown(
                             operation_id,
                             &serde_json::json!({"reason": "target_outcome_unconfirmed"}),
+                        )
+                        .await
+                } else if cancelled {
+                    self.operation
+                        .confirm_cancelled(
+                            operation_id,
+                            &serde_json::json!({"reason": "user_cancelled"}),
                         )
                         .await
                 } else {
@@ -325,6 +353,8 @@ impl ScriptPlatformAdapter {
                     row_count: None,
                     error: Some(error.to_string()),
                     origin: &history_origin,
+                    database: &payload.database,
+                    namespace: payload.namespace.as_deref(),
                 },
             )
             .await;
@@ -355,7 +385,7 @@ impl ScriptPlatformAdapter {
             .sum();
         let first_error = outcomes
             .iter()
-            .find_map(|statement| statement.error.clone());
+            .find_map(|statement| Some(statement.error.as_ref()?.message.clone()));
         record_script_run(
             &self.store,
             &operation_pin,
@@ -373,6 +403,8 @@ impl ScriptPlatformAdapter {
                 row_count: Some(total),
                 error: first_error,
                 origin: &history_origin,
+                database: &payload.database,
+                namespace: payload.namespace.as_deref(),
             },
         )
         .await;

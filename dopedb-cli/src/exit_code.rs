@@ -29,16 +29,24 @@ pub(crate) fn for_client_error(error: &ClientError) -> u8 {
         ClientError::AuthenticationUnavailable => AUTHENTICATION_DENIED,
         ClientError::ProtocolMismatch => PROTOCOL_MISMATCH,
         ClientError::InvalidResponse | ClientError::Internal => INTERNAL,
-        ClientError::Remote(remote) => match remote.code() {
-            ErrorCode::InvalidRequest => USAGE,
-            ErrorCode::RuntimeUnavailable => RUNTIME_UNAVAILABLE,
-            ErrorCode::AuthenticationDenied | ErrorCode::ScopeDenied => AUTHENTICATION_DENIED,
-            ErrorCode::PolicyBlocked => POLICY_BLOCKED,
-            ErrorCode::OperationExpired | ErrorCode::OperationConflict => OPERATION_CONFLICT,
-            ErrorCode::Cancelled | ErrorCode::Timeout => CANCELLED,
-            ErrorCode::TargetExecutionFailed => TARGET_EXECUTION_FAILED,
-            ErrorCode::ProtocolMismatch => PROTOCOL_MISMATCH,
-            ErrorCode::ResponseTooLarge | ErrorCode::Internal => INTERNAL,
-        },
+        ClientError::Remote(remote) | ClientError::Refused { error: remote, .. } => {
+            for_remote_code(remote.code())
+        }
+    }
+}
+
+/// Stable codes for Desktop refusals. `InvalidRequest` (including SQL that does
+/// not parse) is the caller's input to fix, so it shares the usage code.
+fn for_remote_code(code: ErrorCode) -> u8 {
+    match code {
+        ErrorCode::InvalidRequest => USAGE,
+        ErrorCode::RuntimeUnavailable => RUNTIME_UNAVAILABLE,
+        ErrorCode::AuthenticationDenied | ErrorCode::ScopeDenied => AUTHENTICATION_DENIED,
+        ErrorCode::PolicyBlocked => POLICY_BLOCKED,
+        ErrorCode::OperationExpired | ErrorCode::OperationConflict => OPERATION_CONFLICT,
+        ErrorCode::Cancelled | ErrorCode::Timeout => CANCELLED,
+        ErrorCode::TargetExecutionFailed => TARGET_EXECUTION_FAILED,
+        ErrorCode::ProtocolMismatch => PROTOCOL_MISMATCH,
+        ErrorCode::ResponseTooLarge | ErrorCode::Internal => INTERNAL,
     }
 }

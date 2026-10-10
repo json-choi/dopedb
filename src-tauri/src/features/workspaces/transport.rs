@@ -453,6 +453,7 @@ pub async fn bind_workspace_connection_credentials(
     username: String,
     password: String,
     ssh_alias: Option<String>,
+    tls_files: Option<std::collections::HashMap<String, String>>,
 ) -> AppResult<ConnectionProfile> {
     let profile = state
         .services
@@ -462,6 +463,7 @@ pub async fn bind_workspace_connection_credentials(
             username,
             password: Zeroizing::new(password),
             ssh_alias,
+            tls_files,
         })
         .await?;
     state.terminals.stop_connection(id, &app);

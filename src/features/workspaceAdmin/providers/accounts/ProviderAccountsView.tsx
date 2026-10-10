@@ -104,7 +104,12 @@ export default function ProviderAccountsView({
     if (rowLocked || !provider || !connectable) return;
     setFailure(null);
     if (connectable === "neon" || connectable === "vault") {
-      onOpenDialog({ provider: connectable, providerName: provider.name, mode: "reconnect" });
+      onOpenDialog({
+        provider: connectable,
+        providerName: provider.name,
+        mode: "reconnect",
+        integrationId: integration.id,
+      });
       return;
     }
     if (connectable === "gcpCloudSql") {

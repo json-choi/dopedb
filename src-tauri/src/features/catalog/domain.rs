@@ -4,11 +4,30 @@
 //! introspection implementation. Current IPC values use one exact shape.
 
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CatalogReadPolicy {
     CacheFirst,
     Refresh,
+    /// A live read that leaves no cached snapshot behind, for a caller about to
+    /// change the schema (an import that runs DDL).
+    Uncached,
+}
+
+/// A connection whose catalog changed outside a reader's own refresh, such as a
+/// committed DDL statement or a connection edit. `None` asks listeners to
+/// resynchronize every catalog after a lagged receiver dropped events.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct CatalogChanged {
+    pub(crate) connection_id: Option<Uuid>,
+}
+
+impl CatalogChanged {
+    pub(crate) const RESYNC: Self = Self {
+        connection_id: None,
+    };
 }
 
 /// One database the current credential can reach through a server connection.

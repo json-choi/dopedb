@@ -2,8 +2,12 @@
 
 use std::future::Future;
 
-use super::domain::AgentCliInfo;
+use super::domain::{AgentCliInfo, AgentProvider};
 
 pub(crate) trait AgentCliProbePort: Clone + Send + Sync + 'static {
-    fn detect(&self) -> impl Future<Output = Vec<AgentCliInfo>> + Send;
+    /// Probe only the named providers' CLIs, in the given order.
+    fn detect(
+        &self,
+        providers: Vec<AgentProvider>,
+    ) -> impl Future<Output = Vec<AgentCliInfo>> + Send;
 }

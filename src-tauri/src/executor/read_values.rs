@@ -1,9 +1,45 @@
 //! Lossless JSON decoding for PostgreSQL, MySQL, and SQLite rows.
+//!
+//! PostgreSQL scalars whose SQLx decoders would lose information or panic are read
+//! from the binary wire format here with checked arithmetic: timestamp/date
+//! infinities and out-of-range instants, `24:00:00`, NUMERIC beyond Decimal's 28
+//! digits, REAL widening, non-finite floats, MONEY scale, JSON numbers a JS
+//! `Number` cannot hold, and empty ranges. A value that still cannot be represented
+//! becomes per-cell failure metadata; it never aborts the read.
 
 use super::*;
 
+#[path = "read_pg_wire.rs"]
+mod pg_wire;
+
+#[cfg(test)]
+pub(crate) use pg_wire::assert_decoder_contract;
+use pg_wire::{pg_effective_type, pg_shape, pg_wire_value};
+
 /// JS `Number` loses precision past 2^53; anything larger is emitted as a string.
 const JS_MAX_SAFE_INT: u64 = 1 << 53;
+
+/// Session-scoped presentation facts that SQLx does not expose on a row. They are
+/// probed once per pool (all of a pool's sessions share one configuration).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct SessionFacts {
+    /// PostgreSQL MONEY minor-unit digits from the session's `lc_monetary`.
+    pub(crate) money_digits: u32,
+    /// Fixed UTC offset (seconds) of the session time zone. `None` means the zone
+    /// changes offset during the year or was not probed: PostgreSQL instants then
+    /// keep their exact UTC form (`+00:00`) and MySQL `TIMESTAMP` stays the
+    /// session's wall-clock text without an offset.
+    pub(crate) instant_offset_seconds: Option<i32>,
+}
+
+impl Default for SessionFacts {
+    fn default() -> Self {
+        Self {
+            money_digits: 2,
+            instant_offset_seconds: None,
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct DecodedCell {
@@ -31,6 +67,53 @@ where
         Ok(value) => decoded(value.into()),
         Err(_) => null_or_failure(row, i, ty),
     }
+}
+
+/// A MySQL date or date-time; a zero or partial date that has no calendar value
+/// is shown as the literal text MySQL itself prints.
+fn mysql_date_cell(
+    row: &MySqlRow,
+    i: usize,
+    ty: &str,
+    with_time: bool,
+    result: Result<String, sqlx::Error>,
+) -> DecodedCell {
+    match result {
+        Ok(text) => decoded(Value::String(text)),
+        Err(_) => match row
+            .try_get_unchecked::<&[u8], _>(i)
+            .ok()
+            .and_then(|bytes| mysql_literal_date_text(bytes, with_time))
+        {
+            Some(text) => decoded(Value::String(text)),
+            None => null_or_failure(row, i, ty),
+        },
+    }
+}
+
+/// `0000-00-00` / `2024-00-15 00:00:00` from a MySQL temporal value: the binary
+/// row form is a length byte (0, 4, 7 or 11) then little-endian fields, while the
+/// text protocol already carries MySQL's own text.
+pub(super) fn mysql_literal_date_text(bytes: &[u8], with_time: bool) -> Option<String> {
+    let binary = bytes.first().is_some_and(|&length| {
+        matches!(length, 0 | 4 | 7 | 11) && usize::from(length) + 1 == bytes.len()
+    });
+    if !binary {
+        return std::str::from_utf8(bytes).ok().map(str::to_owned);
+    }
+    let field = |at: usize| bytes.get(at + 1).copied().unwrap_or(0);
+    let year = u16::from_le_bytes([field(0), field(1)]);
+    let date = format!("{year:04}-{:02}-{:02}", field(2), field(3));
+    if !with_time {
+        return Some(date);
+    }
+    let time = format!("{:02}:{:02}:{:02}", field(4), field(5), field(6));
+    let micros = u32::from_le_bytes([field(7), field(8), field(9), field(10)]);
+    Some(if micros == 0 {
+        format!("{date} {time}")
+    } else {
+        format!("{date} {time}.{micros:06}")
+    })
 }
 
 /// Ints outside JS's safe range become JSON strings to avoid silent corruption.
@@ -70,7 +153,7 @@ where
     }
 }
 
-fn hex_str(b: Vec<u8>) -> String {
+fn hex_str(b: impl AsRef<[u8]>) -> String {
     format!("\\x{}", hex::encode(b))
 }
 
@@ -96,79 +179,23 @@ where
     }
 }
 
-/// MONEY has no scale on the wire; the fractional-digit count comes from the DB's
-/// `lc_monetary`. 2 is the near-universal default (en_US etc). ponytail: single knob —
-/// set per-connection from `SHOW lc_monetary` (0 for KRW/JPY) if a DB ever needs it.
-const PG_MONEY_FRAC_DIGITS: u32 = 2;
-
-pub(crate) fn pg_value(row: &PgRow, i: usize) -> DecodedCell {
-    let ty = row.column(i).type_info().name().to_ascii_uppercase();
+pub(crate) fn pg_value_in(row: &PgRow, i: usize, facts: &SessionFacts) -> DecodedCell {
+    let info = pg_effective_type(row.column(i).type_info());
+    let ty = info.name().to_ascii_uppercase();
+    let raw = match row.try_get_raw(i) {
+        Ok(raw) => raw,
+        Err(_) => return failed(&ty),
+    };
+    if raw.is_null() {
+        return decoded(Value::Null);
+    }
+    if let Some(shape) = pg_shape(&info, &ty) {
+        return match pg_wire_value(&raw, shape, facts) {
+            Some(value) => decoded(value),
+            None => failed(&ty),
+        };
+    }
     match ty.as_str() {
-        "BOOL" => decode_result(row, i, &ty, row.try_get::<bool, _>(i)),
-        "INT2" => decode_result(row, i, &ty, row.try_get::<i16, _>(i).map(|v| v as i64)),
-        "INT4" => decode_result(row, i, &ty, row.try_get::<i32, _>(i).map(|v| v as i64)),
-        "INT8" => int_result(row, i, &ty, row.try_get::<i64, _>(i)),
-        "OID" => decode_result(row, i, &ty, row.try_get::<Oid, _>(i).map(|o| o.0)),
-        "FLOAT4" => decode_result(row, i, &ty, row.try_get::<f32, _>(i).map(|v| v as f64)),
-        "FLOAT8" => decode_result(row, i, &ty, row.try_get::<f64, _>(i)),
-        // NUMERIC: exact string; out-of-range for Decimal becomes explicit failure metadata.
-        "NUMERIC" => match row.try_get::<Decimal, _>(i) {
-            Ok(d) => decoded(Value::String(d.to_string())),
-            Err(_) => null_or_failure(row, i, &ty),
-        },
-        // MONEY is an i64 of minor units, NOT a Decimal on the wire (rust_decimal only
-        // decodes NUMERIC), so it needs PgMoney; the old NUMERIC|MONEY arm lost the distinction.
-        "MONEY" => match row.try_get::<PgMoney, _>(i) {
-            Ok(m) => decoded(Value::String(
-                m.to_decimal(PG_MONEY_FRAC_DIGITS).to_string(),
-            )),
-            Err(_) => null_or_failure(row, i, &ty),
-        },
-        "TEXT" | "VARCHAR" | "BPCHAR" | "CHAR" | "NAME" | "CITEXT" => {
-            decode_result(row, i, &ty, row.try_get::<String, _>(i))
-        }
-        "UUID" => decode_result(
-            row,
-            i,
-            &ty,
-            row.try_get::<uuid::Uuid, _>(i).map(|u| u.to_string()),
-        ),
-        "JSON" | "JSONB" => decode_result(row, i, &ty, row.try_get::<Value, _>(i)),
-        "TIMESTAMPTZ" => decode_result(
-            row,
-            i,
-            &ty,
-            row.try_get::<DateTime<Utc>, _>(i).map(|t| t.to_rfc3339()),
-        ),
-        "TIMESTAMP" => decode_result(row, i, &ty, row.try_get::<NaiveDateTime, _>(i).map(iso_dt)),
-        "DATE" => decode_result(
-            row,
-            i,
-            &ty,
-            row.try_get::<NaiveDate, _>(i).map(|t| t.to_string()),
-        ),
-        "TIME" => decode_result(
-            row,
-            i,
-            &ty,
-            row.try_get::<NaiveTime, _>(i).map(|t| t.to_string()),
-        ),
-        "TIMETZ" => match row.try_get::<PgTimeTz<NaiveTime, FixedOffset>, _>(i) {
-            Ok(t) => decoded(Value::from(fmt_timetz(&t))),
-            Err(_) => null_or_failure(row, i, &ty),
-        },
-        "INTERVAL" => match row.try_get::<PgInterval, _>(i) {
-            Ok(iv) => decoded(Value::from(fmt_interval(&iv))),
-            Err(_) => null_or_failure(row, i, &ty),
-        },
-        // Ranges render via PgRange's Display ("[1,5)" canonical form).
-        "INT4RANGE" => pg_range::<i32>(row, i, &ty),
-        "INT8RANGE" => pg_range::<i64>(row, i, &ty),
-        "NUMRANGE" => pg_range::<Decimal>(row, i, &ty),
-        "DATERANGE" => pg_range::<NaiveDate>(row, i, &ty),
-        "TSRANGE" => pg_range::<NaiveDateTime>(row, i, &ty),
-        "TSTZRANGE" => pg_range::<DateTime<Utc>>(row, i, &ty),
-        "BYTEA" => decode_result(row, i, &ty, row.try_get::<Vec<u8>, _>(i).map(hex_str)),
         // inet/cidr, macaddr, bit/varbit via the sqlx feature decoders enabled in Cargo.toml.
         "INET" | "CIDR" => match row.try_get::<IpNetwork, _>(i) {
             Ok(n) => decoded(Value::from(n.to_string())),
@@ -182,89 +209,132 @@ pub(crate) fn pg_value(row: &PgRow, i: usize) -> DecodedCell {
             Ok(b) => decoded(Value::from(fmt_bits(&b))),
             Err(_) => null_or_failure(row, i, &ty),
         },
-        // arrays (NAME[]/INT4[]/…) and custom enums land here.
-        _ if ty.ends_with("[]") => pg_array(row, i, &ty),
+        // custom enums and the remaining scalar types land here.
         _ => pg_fallback(row, i, &ty),
     }
 }
 
-/// Render a range column as text via `PgRange<T>`'s `Display`. Generic over the element
-/// so the six range types share one body; each `T` here has an owned `Decode` impl.
-fn pg_range<T>(row: &PgRow, i: usize, ty: &str) -> DecodedCell
-where
-    T: std::fmt::Display,
-    PgRange<T>: sqlx::Type<sqlx::Postgres>,
-    for<'a> PgRange<T>: sqlx::Decode<'a, sqlx::Postgres>,
-{
-    match row.try_get::<PgRange<T>, _>(i) {
-        Ok(r) => decoded(Value::from(r.to_string())),
-        Err(_) => null_or_failure(row, i, ty),
+fn failed(ty: &str) -> DecodedCell {
+    DecodedCell {
+        value: Value::Null,
+        failure_type: Some(ty.to_ascii_lowercase()),
     }
 }
 
-/// Map a decoded `Vec<Option<T>>` to a JSON array, NULL elements → `Value::Null`.
-/// Decoding `Option<T>` per element is what lets an array containing a NULL decode at
-/// all: sqlx runs `T::decode` on every element, so a bare `Vec<T>` errors on the first
-/// NULL and fails the whole cell (a very common shape for real array columns).
-fn arr<T>(
-    r: Result<Vec<Option<T>>, sqlx::Error>,
-    f: impl Fn(T) -> Value,
-) -> Result<Vec<Value>, sqlx::Error> {
-    r.map(|v| {
-        v.into_iter()
-            .map(|x| x.map(&f).unwrap_or(Value::Null))
-            .collect()
-    })
+/// REAL is presented by its own shortest round-trip digits, not the widened f64's.
+pub(crate) fn float4_json(value: f32) -> Value {
+    if !value.is_finite() {
+        return non_finite_text(f64::from(value));
+    }
+    value
+        .to_string()
+        .parse::<f64>()
+        .ok()
+        .and_then(serde_json::Number::from_f64)
+        .map_or_else(|| non_finite_text(f64::from(value)), Value::Number)
 }
 
-/// Decode a PG array into a JSON array of the element rendering. sqlx names array types
-/// `<BASE>[]` (display_name), so the element type is the name minus the `[]` suffix.
-fn pg_array(row: &PgRow, i: usize, ty: &str) -> DecodedCell {
-    let elem = ty.strip_suffix("[]").unwrap_or(ty);
-    let decoded_values: Result<Vec<Value>, sqlx::Error> = match elem {
-        "INT2" => arr(row.try_get(i), |x: i16| Value::from(x as i64)),
-        "INT4" => arr(row.try_get(i), |x: i32| Value::from(x as i64)),
-        "INT8" => arr(row.try_get(i), int_json),
-        "FLOAT4" => arr(row.try_get(i), |x: f32| Value::from(x as f64)),
-        "FLOAT8" => arr(row.try_get(i), |x: f64| Value::from(x)),
-        "BOOL" => arr(row.try_get(i), |x: bool| Value::from(x)),
-        "NUMERIC" => arr(row.try_get(i), |d: Decimal| Value::from(d.to_string())),
-        "TEXT" | "VARCHAR" | "BPCHAR" | "CHAR" | "NAME" | "CITEXT" => {
-            arr(row.try_get(i), |s: String| Value::from(s))
+pub(crate) fn float8_json(value: f64) -> Value {
+    serde_json::Number::from_f64(value).map_or_else(|| non_finite_text(value), Value::Number)
+}
+
+/// JSON has no NaN/Infinity, so the database's own text keeps them visible.
+fn non_finite_text(value: f64) -> Value {
+    Value::String(
+        if value.is_nan() {
+            "NaN"
+        } else if value.is_sign_negative() {
+            "-Infinity"
+        } else {
+            "Infinity"
         }
-        "UUID" => arr(row.try_get(i), |u: Uuid| Value::from(u.to_string())),
-        "TIMESTAMPTZ" => arr(row.try_get(i), |t: DateTime<Utc>| {
-            Value::from(t.to_rfc3339())
-        }),
-        "TIMESTAMP" => arr(row.try_get(i), |t: NaiveDateTime| Value::from(iso_dt(t))),
-        "DATE" => arr(row.try_get(i), |t: NaiveDate| Value::from(t.to_string())),
-        "TIME" => arr(row.try_get(i), |t: NaiveTime| Value::from(t.to_string())),
-        "JSON" | "JSONB" => arr(row.try_get(i), |v: Value| v),
-        // enum[] has an arbitrary element type name; detect structurally and read labels.
-        _ => return pg_enum_array(row, i, ty),
-    };
-    match decoded_values {
-        Ok(v) => decoded(Value::Array(v)),
-        Err(_) => null_or_failure(row, i, ty),
-    }
+        .into(),
+    )
 }
 
-/// An array whose element type name matched nothing above: if it is structurally an
-/// array-of-enum, decode the labels (via `try_get_unchecked`, which skips the element
-/// compat check that would otherwise reject the enum). Anything else is a decode failure.
-fn pg_enum_array(row: &PgRow, i: usize, ty: &str) -> DecodedCell {
-    if let PgTypeKind::Array(inner) = row.column(i).type_info().kind() {
-        if matches!(inner.kind(), PgTypeKind::Enum(_)) {
-            if let Ok(v) = row.try_get_unchecked::<Vec<Option<String>>, _>(i) {
-                return decoded(Value::Array(
-                    v.into_iter()
-                        .map(|x| x.map(Value::from).unwrap_or(Value::Null))
-                        .collect(),
-                ));
+/// A JSON cell stays structured when JavaScript can hold every number in it
+/// exactly; otherwise the database's exact JSON text is kept so no digit is lost
+/// in the grid, the clipboard, or an export.
+pub(crate) fn json_cell(text: &str) -> Value {
+    if json_numbers_survive_js(text) {
+        if let Ok(value) = serde_json::from_str(text) {
+            return value;
+        }
+    }
+    Value::String(text.to_owned())
+}
+
+fn json_numbers_survive_js(text: &str) -> bool {
+    let bytes = text.as_bytes();
+    let mut index = 0;
+    while index < bytes.len() {
+        match bytes[index] {
+            b'"' => {
+                index += 1;
+                while index < bytes.len() {
+                    match bytes[index] {
+                        b'\\' => index += 2,
+                        b'"' => {
+                            index += 1;
+                            break;
+                        }
+                        _ => index += 1,
+                    }
+                }
             }
+            b'-' | b'0'..=b'9' => {
+                let start = index;
+                while index < bytes.len()
+                    && matches!(bytes[index], b'0'..=b'9' | b'-' | b'+' | b'.' | b'e' | b'E')
+                {
+                    index += 1;
+                }
+                if !number_survives_js(&text[start..index]) {
+                    return false;
+                }
+            }
+            _ => index += 1,
         }
     }
-    null_or_failure(row, i, ty)
+    true
+}
+
+/// True when `JSON.parse` followed by JavaScript's shortest number formatting keeps
+/// the token's exact decimal value (integers additionally keep their digits).
+fn number_survives_js(token: &str) -> bool {
+    if !token.contains(['.', 'e', 'E']) {
+        return token
+            .trim_start_matches('-')
+            .parse::<u64>()
+            .is_ok_and(|value| value <= JS_MAX_SAFE_INT);
+    }
+    let Ok(value) = token.parse::<f64>() else {
+        return false;
+    };
+    value.is_finite() && normalized_decimal(token) == normalized_decimal(&format!("{value:e}"))
+}
+
+/// (negative, significant digits, exponent) with zero normalized to one form.
+fn normalized_decimal(text: &str) -> Option<(bool, String, i64)> {
+    let (negative, unsigned) = match text.strip_prefix('-') {
+        Some(rest) => (true, rest),
+        None => (false, text.strip_prefix('+').unwrap_or(text)),
+    };
+    let (mantissa, exponent) = match unsigned.split_once(['e', 'E']) {
+        Some((mantissa, exponent)) => (mantissa, exponent.parse::<i64>().ok()?),
+        None => (unsigned, 0),
+    };
+    let (whole, fraction) = mantissa.split_once('.').unwrap_or((mantissa, ""));
+    let mut digits = format!("{whole}{fraction}");
+    let mut exponent = exponent.checked_sub(i64::try_from(fraction.len()).ok()?)?;
+    let trimmed = digits.trim_end_matches('0').len();
+    exponent = exponent.checked_add(i64::try_from(digits.len() - trimmed).ok()?)?;
+    digits.truncate(trimmed);
+    let digits = digits.trim_start_matches('0').to_owned();
+    if digits.is_empty() {
+        return Some((false, String::new(), 0));
+    }
+    Some((negative, digits, exponent))
 }
 
 fn pg_fallback(row: &PgRow, i: usize, ty: &str) -> DecodedCell {
@@ -275,7 +345,7 @@ fn pg_fallback(row: &PgRow, i: usize, ty: &str) -> DecodedCell {
         return decoded(int_json(v));
     }
     if let Ok(v) = row.try_get::<f64, _>(i) {
-        return decoded(Value::from(v));
+        return decoded(float8_json(v));
     }
     if let Ok(v) = row.try_get::<bool, _>(i) {
         return decoded(Value::from(v));
@@ -307,25 +377,32 @@ fn bytes_as_label(bytes: &[u8]) -> Option<String> {
 /// psql-style interval, e.g. "1 year 2 mons 5 days 02:03:04.5". ponytail: PgInterval only
 /// carries months/days/µs, so per-component sign nuance (rare) collapses into the time part.
 fn fmt_interval(iv: &PgInterval) -> String {
+    // PostgreSQL 17+ stores ±infinity as every field at its extreme.
+    if iv.months == i32::MAX && iv.days == i32::MAX && iv.microseconds == i64::MAX {
+        return "infinity".into();
+    }
+    if iv.months == i32::MIN && iv.days == i32::MIN && iv.microseconds == i64::MIN {
+        return "-infinity".into();
+    }
     let mut out: Vec<String> = Vec::new();
     let (years, mons) = (iv.months / 12, iv.months % 12);
     if years != 0 {
         out.push(format!(
             "{years} year{}",
-            if years.abs() == 1 { "" } else { "s" }
+            if years.unsigned_abs() == 1 { "" } else { "s" }
         ));
     }
     if mons != 0 {
         out.push(format!(
             "{mons} mon{}",
-            if mons.abs() == 1 { "" } else { "s" }
+            if mons.unsigned_abs() == 1 { "" } else { "s" }
         ));
     }
     if iv.days != 0 {
         out.push(format!(
             "{} day{}",
             iv.days,
-            if iv.days.abs() == 1 { "" } else { "s" }
+            if iv.days.unsigned_abs() == 1 { "" } else { "s" }
         ));
     }
     if iv.microseconds != 0 || out.is_empty() {
@@ -344,11 +421,6 @@ fn fmt_interval(iv: &PgInterval) -> String {
         }
     }
     out.join(" ")
-}
-
-/// TIMETZ as "13:14:15+02:00" (NaiveTime + FixedOffset both Display to those forms).
-fn fmt_timetz(t: &PgTimeTz<NaiveTime, FixedOffset>) -> String {
-    format!("{}{}", t.time, t.offset)
 }
 
 /// BIT/VARBIT as a string of 0/1, e.g. "1011".
@@ -390,6 +462,7 @@ enum MySqlDecodeRoute {
     Text,
     Set,
     DateTime,
+    Timestamp,
     Date,
     Time,
     Json,
@@ -412,7 +485,8 @@ fn mysql_decode_route(ty: &str) -> MySqlDecodeRoute {
             MySqlDecodeRoute::Text
         }
         "SET" => MySqlDecodeRoute::Set,
-        "DATETIME" | "TIMESTAMP" => MySqlDecodeRoute::DateTime,
+        "DATETIME" => MySqlDecodeRoute::DateTime,
+        "TIMESTAMP" => MySqlDecodeRoute::Timestamp,
         "DATE" => MySqlDecodeRoute::Date,
         "TIME" => MySqlDecodeRoute::Time,
         "JSON" => MySqlDecodeRoute::Json,
@@ -420,7 +494,17 @@ fn mysql_decode_route(ty: &str) -> MySqlDecodeRoute {
     }
 }
 
-pub(crate) fn mysql_value(row: &MySqlRow, i: usize) -> DecodedCell {
+/// MySQL sends DECIMAL as its exact text in both protocols; keep every digit
+/// rather than rounding through Decimal's 28-digit mantissa.
+fn mysql_decimal_text(text: &str) -> bool {
+    let unsigned = text.strip_prefix('-').unwrap_or(text);
+    let (whole, fraction) = unsigned.split_once('.').unwrap_or((unsigned, ""));
+    !whole.is_empty()
+        && whole.bytes().all(|byte| byte.is_ascii_digit())
+        && fraction.bytes().all(|byte| byte.is_ascii_digit())
+}
+
+pub(crate) fn mysql_value_in(row: &MySqlRow, i: usize, facts: &SessionFacts) -> DecodedCell {
     let ty = row.column(i).type_info().name().to_ascii_uppercase();
     match mysql_decode_route(&ty) {
         // SQLx models YEAR as an unsigned integer even though its type name does
@@ -430,13 +514,20 @@ pub(crate) fn mysql_value(row: &MySqlRow, i: usize) -> DecodedCell {
             decode_result(row, i, &ty, row.try_get::<Vec<u8>, _>(i).map(hex_str))
         }
         MySqlDecodeRoute::SignedInteger => int_result(row, i, &ty, row.try_get::<i64, _>(i)),
-        MySqlDecodeRoute::Float32 => {
-            decode_result(row, i, &ty, row.try_get::<f32, _>(i).map(|v| v as f64))
-        }
-        MySqlDecodeRoute::Float64 => decode_result(row, i, &ty, row.try_get::<f64, _>(i)),
-        MySqlDecodeRoute::Decimal => match row.try_get::<Decimal, _>(i) {
-            Ok(d) => decoded(Value::String(d.to_string())),
+        MySqlDecodeRoute::Float32 => match row.try_get::<f32, _>(i) {
+            Ok(value) => decoded(float4_json(value)),
             Err(_) => null_or_failure(row, i, &ty),
+        },
+        MySqlDecodeRoute::Float64 => match row.try_get::<f64, _>(i) {
+            Ok(value) => decoded(float8_json(value)),
+            Err(_) => null_or_failure(row, i, &ty),
+        },
+        MySqlDecodeRoute::Decimal => match row.try_get_unchecked::<String, _>(i) {
+            Ok(text) if mysql_decimal_text(&text) => decoded(Value::String(text)),
+            _ => match row.try_get::<Decimal, _>(i) {
+                Ok(d) => decoded(Value::String(d.to_string())),
+                Err(_) => null_or_failure(row, i, &ty),
+            },
         },
         MySqlDecodeRoute::Text => decode_result(row, i, &ty, row.try_get::<String, _>(i)),
         // SET is textual on the wire, but SQLx 0.8 omits ColumnType::Set from
@@ -446,16 +537,32 @@ pub(crate) fn mysql_value(row: &MySqlRow, i: usize) -> DecodedCell {
             Ok(value) => decoded(Value::from(value)),
             Err(_) => null_or_failure(row, i, &ty),
         },
-        MySqlDecodeRoute::DateTime => decode_result(
+        MySqlDecodeRoute::DateTime => mysql_date_cell(
             row,
             i,
             &ty,
+            true,
             row.try_get::<chrono::NaiveDateTime, _>(i).map(iso_dt),
         ),
-        MySqlDecodeRoute::Date => decode_result(
+        // TIMESTAMP is an instant MySQL renders in the session time zone; name
+        // that zone's fixed offset so the wall-clock text cannot read as UTC.
+        MySqlDecodeRoute::Timestamp => mysql_date_cell(
             row,
             i,
             &ty,
+            true,
+            row.try_get::<chrono::NaiveDateTime, _>(i).map(|wall| {
+                match facts.instant_offset_seconds.and_then(FixedOffset::east_opt) {
+                    Some(offset) => format!("{}{offset}", iso_dt(wall)),
+                    None => iso_dt(wall),
+                }
+            }),
+        ),
+        MySqlDecodeRoute::Date => mysql_date_cell(
+            row,
+            i,
+            &ty,
+            false,
             row.try_get::<chrono::NaiveDate, _>(i)
                 .map(|t| t.to_string()),
         ),
@@ -463,7 +570,11 @@ pub(crate) fn mysql_value(row: &MySqlRow, i: usize) -> DecodedCell {
             Ok(t) => decoded(Value::from(fmt_mysql_time(&t))),
             Err(_) => mysql_fallback(row, i, &ty),
         },
-        MySqlDecodeRoute::Json => decode_result(row, i, &ty, row.try_get::<Value, _>(i)),
+        // JSON arrives as text; keep numbers JavaScript cannot hold exactly.
+        MySqlDecodeRoute::Json => match row.try_get_unchecked::<String, _>(i) {
+            Ok(text) => decoded(json_cell(&text)),
+            Err(_) => decode_result(row, i, &ty, row.try_get::<Value, _>(i)),
+        },
         // BIT and anything unlisted fall through.
         MySqlDecodeRoute::Fallback => mysql_fallback(row, i, &ty),
     }
@@ -480,7 +591,7 @@ fn mysql_fallback(row: &MySqlRow, i: usize, ty: &str) -> DecodedCell {
         return decoded(uint_json(v));
     }
     if let Ok(v) = row.try_get::<f64, _>(i) {
-        return decoded(Value::from(v));
+        return decoded(float8_json(v));
     }
     if let Ok(d) = row.try_get::<Decimal, _>(i) {
         return decoded(Value::String(d.to_string()));
@@ -506,7 +617,8 @@ pub(crate) fn sqlite_value(row: &SqliteRow, i: usize) -> DecodedCell {
         return decoded(int_json(v));
     }
     if let Ok(v) = row.try_get::<f64, _>(i) {
-        return decoded(Value::from(v));
+        // SQLite stores ±Infinity (e.g. 9e999); JSON numbers cannot, so keep text.
+        return decoded(float8_json(v));
     }
     if let Ok(s) = row.try_get::<String, _>(i) {
         return decoded(Value::from(s));

@@ -8,17 +8,22 @@ import { useI18n } from "../../lib/i18n";
 export function ManagedWorkspaceConnectionField({
   recovery,
   busy,
+  verified,
 }: {
   recovery: ConnectionEditorController["commands"]["managedConnection"];
   busy: boolean;
+  /** A check passed for the current draft; otherwise the state is unverified. */
+  verified: boolean;
 }) {
   const { t } = useI18n();
   return (
     <PropertyRow label={t("connections.managedWorkspace.label")}>
       <div className="tw:grid tw:min-h-control-md tw:gap-2">
         <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
-          <StatusBadge tone="success">
-            {t("connections.managedWorkspace.status")}
+          <StatusBadge tone={verified ? "success" : "neutral"}>
+            {verified
+              ? t("connections.credentialVerified")
+              : t("connections.managedWorkspace.status")}
           </StatusBadge>
           {recovery.canOpenSettings ? (
             <Button

@@ -1,33 +1,73 @@
 // Owns the intentionally small Analysis Article workflow: select, edit one HTML
 // document, manually rerun one saved query, recover its local result, and inspect
-// immutable history.
+// immutable history. Lists carry titles only; the selected body loads per revision,
+// runs live in the app-lifetime run store, and role decides which commands exist.
+// Before a rerun it checks this device's connection pin and credential from cached
+// state and offers the matching recovery step instead of starting a doomed run;
+// after a re-check it offers the real fix (reconfirm the binding, edit the Article)
+// or says whom to ask.
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { errMessage } from "../../ipc/types";
 import { useI18n } from "../../lib/i18n";
 import { useCatalogScope } from "../../lib/queries";
-import type { EnvironmentConnection, KnowledgeEnvironment } from "../knowledge/domain";
+import { connectionAccessIssue, type ConnectionProfile } from "../connections/domain";
+import { connectionQueryKeys, connectionsQuery } from "../connections/queries";
+import { bindKnowledgeEnvironmentConnectionWithRefresh } from "../knowledge/bindEnvironmentConnection";
+import type {
+  BindEnvironmentConnectionInput,
+  EnvironmentConnection,
+  KnowledgeEnvironment,
+} from "../knowledge/domain";
+import { knowledgeQueryKeys } from "../knowledge/queryKeys";
+import { useWorkspaceAdminScope } from "../workspaceAdmin/scope";
+import { canManageWorkspaceConnections } from "../workspaces/choices";
 import {
-  type AnalysisArticleRecord,
-  type AnalysisDefinitionRunReceipt,
-  type SharedAnalysisArticleCreate,
+  analysisFailure,
+  analysisPinFailure,
+  analysisRunPinIssue,
+  type AnalysisFailure,
+  type AnalysisRecovery,
+} from "./analysisFeedback";
+import {
+  analysisQuerySignature,
+  cancelAnalysisRun,
+  dismissAnalysisRunNotice,
+  startAnalysisRun,
+  useAnalysisRunSession,
+} from "./analysisRunStore";
+import type {
+  AnalysisArticleDocument,
+  AnalysisArticleRecord,
+  SharedAnalysisArticleCreate,
 } from "./domain";
-import { beginManualAnalysisRunOutcome } from "./productAnalytics";
 import { analysisQueryKeys } from "./queryKeys";
 import {
-  cancelAnalysisArticleRun,
   deleteAnalysisArticle,
+  getAnalysisArticle,
   getLocalAnalysisArticleResult,
   listAnalysisArticleRevisions,
   listAnalysisArticleRuns,
   listAnalysisArticles,
   onAnalysisArticleChanged,
-  runAnalysisArticle,
   updateAnalysisArticle,
 } from "./tauriAdapter";
 
 export type AnalysisArticleDetailTab = "article" | "history";
+
+/** One editing session; `base` is the revision the unsaved draft applies to. */
+export type AnalysisEditorState = Readonly<{
+  base: AnalysisArticleDocument;
+  failure: AnalysisFailure | null;
+  /** Set after a revision conflict. The draft is kept and now applies to `base`. */
+  conflict: Readonly<{ latestUnavailable: boolean }> | null;
+  /** Why the editor was opened to fix the database pin, if it was. */
+  notice?: string;
+}>;
+
+// The workspace service authorizes every command; this only avoids offering
+// commands a viewer or analyst can never complete. Ownership stays server-checked.
+const WRITE_ROLES = new Set(["editor", "admin", "owner"]);
 
 type Params = {
   environment: KnowledgeEnvironment;
@@ -49,10 +89,10 @@ export function useAnalysisArticlesController({
   const { t } = useI18n();
   const queryClient = useQueryClient();
   const catalogScope = useCatalogScope();
-  const detailTabs = useMemo(() => [
-    { id: "article", label: t("analysis.tabArticle") },
-    { id: "history", label: t("analysis.tabHistory") },
-  ] as const, [t]);
+  const workspaceRole = useWorkspaceAdminScope()?.role ?? null;
+  const canWrite = workspaceRole === null || WRITE_ROLES.has(workspaceRole);
+  // Environment bindings are workspace-managed (admin or owner), like the Databases view.
+  const canManageBindings = workspaceRole === null || canManageWorkspaceConnections(workspaceRole);
   const articleKey = useMemo(
     () => analysisQueryKeys.articles(scopeKey, environment.id),
     [environment.id, scopeKey],
@@ -65,10 +105,8 @@ export function useAnalysisArticlesController({
   });
   const [selectedId, setSelectedId] = useState<string | null>(focusId ?? null);
   const [tab, setTab] = useState<AnalysisArticleDetailTab>("article");
-  const [editorArticle, setEditorArticle] = useState<AnalysisArticleRecord | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [localResults, setLocalResults] = useState(new Map<string, AnalysisDefinitionRunReceipt>());
-  const [running, setRunning] = useState<{ articleId: string; runId: string } | null>(null);
+  const [editor, setEditor] = useState<AnalysisEditorState | null>(null);
+  const [actionFailure, setActionFailure] = useState<AnalysisFailure | null>(null);
 
   useEffect(() => {
     if (focusId && articles.data?.some((article) => article.id === focusId)) {
@@ -80,6 +118,25 @@ export function useAnalysisArticlesController({
   }, [articles.data, focusId, selectedId]);
 
   const selected = articles.data?.find((article) => article.id === selectedId) ?? null;
+  // A revision's HTML and SQL never change, so each body is fetched once per revision.
+  const documentQuery = useQuery({
+    queryKey: analysisQueryKeys.document(scopeKey, selected?.id, selected?.revision),
+    queryFn: async () => {
+      const current = await getAnalysisArticle(selected!.id);
+      if (current.revision !== selected!.revision) {
+        queryClient.setQueryData(
+          analysisQueryKeys.document(scopeKey, current.id, current.revision),
+          current,
+        );
+        void queryClient.invalidateQueries({ queryKey: analysisQueryKeys.articles(scopeKey) });
+      }
+      return current;
+    },
+    enabled: Boolean(selected),
+    staleTime: Infinity,
+    retry: false,
+  });
+  const articleDocument = documentQuery.data?.id === selected?.id ? documentQuery.data ?? null : null;
   const revisions = useQuery({
     queryKey: analysisQueryKeys.revisions(scopeKey, selected?.id),
     queryFn: () => listAnalysisArticleRevisions(selected!.id),
@@ -98,10 +155,21 @@ export function useAnalysisArticlesController({
     enabled: Boolean(selected),
     retry: false,
   });
-  const memoryResult = selected ? localResults.get(selected.id) ?? null : null;
-  const localResult = memoryResult
-    ?? (recoveredResult.data?.articleRevision === selected?.revision ? recoveredResult.data : null);
-  const resultData = localResult?.result ?? null;
+  const runSession = useAnalysisRunSession(scopeKey, selected?.id ?? null);
+  // Results are shown only for the exact query that produced them. After the SQL or
+  // connection pin changes, an older result is hidden and marked as outdated.
+  const memoryResult = runSession.result;
+  const currentMemoryResult = memoryResult && articleDocument
+    && memoryResult.querySignature === analysisQuerySignature(articleDocument)
+    ? memoryResult.receipt
+    : null;
+  const recovered = recoveredResult.data ?? null;
+  const currentRecovered = recovered && articleDocument
+    && recovered.articleRevision === articleDocument.revision
+    ? recovered
+    : null;
+  const localResult = currentMemoryResult ?? currentRecovered;
+  const resultOutdated = !localResult && Boolean(articleDocument) && Boolean(memoryResult || recovered);
 
   useEffect(() => {
     let disposed = false;
@@ -129,58 +197,64 @@ export function useAnalysisArticlesController({
     ]);
   };
   const saveArticle = useMutation({
-    mutationFn: (input: SharedAnalysisArticleCreate) => updateAnalysisArticle(input.id, editorArticle!.revision, input),
-    onSuccess: async (article) => {
-      setActionError(null);
-      setEditorArticle(null);
-      setSelectedId(article.id);
-      await refreshArticle(article.id);
+    mutationFn: ({ input, expectedRevision }: {
+      input: SharedAnalysisArticleCreate;
+      expectedRevision: number;
+    }) => updateAnalysisArticle(input.id, expectedRevision, input),
+    onSuccess: async (result) => {
+      if (result.outcome === "saved") {
+        queryClient.setQueryData(
+          analysisQueryKeys.document(scopeKey, result.article.id, result.article.revision),
+          result.article,
+        );
+        setEditor(null);
+        setSelectedId(result.article.id);
+        await refreshArticle(result.article.id);
+        return;
+      }
+      // Nothing was written. Keep the draft open on top of the latest revision.
+      if (result.latest) {
+        queryClient.setQueryData(
+          analysisQueryKeys.document(scopeKey, result.latest.id, result.latest.revision),
+          result.latest,
+        );
+      }
+      setEditor((current) => current && {
+        base: result.latest ?? current.base,
+        failure: null,
+        conflict: { latestUnavailable: result.latest === null },
+      });
+      void queryClient.invalidateQueries({ queryKey: articleKey });
     },
-    onError: (error) => setActionError(errMessage(error)),
+    onError: (error) => setEditor((current) => current && {
+      ...current,
+      failure: analysisFailure(t, error),
+    }),
+  });
+  const reloadEditorBase = useMutation({
+    mutationFn: (articleId: string) => getAnalysisArticle(articleId),
+    onSuccess: (latest) => setEditor((current) => current && {
+      base: latest,
+      failure: null,
+      conflict: { latestUnavailable: false },
+    }),
+    onError: (error) => setEditor((current) => current && {
+      ...current,
+      failure: analysisFailure(t, error),
+    }),
   });
   const remove = useMutation({
     mutationFn: (article: AnalysisArticleRecord) => deleteAnalysisArticle(article.id, article.revision),
     onSuccess: async (_, article) => {
-      setActionError(null);
+      setActionFailure(null);
       setSelectedId(null);
       await refreshArticle(article.id);
     },
-    onError: (error) => setActionError(errMessage(error)),
-  });
-  const execute = useMutation({
-    mutationFn: ({ article, runId }: { article: AnalysisArticleRecord; runId: string }) =>
-      runAnalysisArticle(article.id, article.revision, runId),
-    onMutate: ({ article, runId }) => {
-      setActionError(null);
-      setRunning({ articleId: article.id, runId });
-      return { completeAnalytics: beginManualAnalysisRunOutcome(catalogScope) };
+    onError: async (error, article) => {
+      setActionFailure(analysisFailure(t, error));
+      // A concurrent edit is the usual cause; reload so a retry uses the new revision.
+      await refreshArticle(article.id);
     },
-    onSuccess: async (value, _variables, analyticsAttempt) => {
-      analyticsAttempt?.completeAnalytics(value.run);
-      setLocalResults((current) => new Map(current).set(value.result.articleId, value.result));
-      setRunning(null);
-      await refreshArticle(value.result.articleId);
-    },
-    onError: async (error, variables, analyticsAttempt) => {
-      setRunning(null);
-      setActionError(errMessage(error));
-      try {
-        const page = await listAnalysisArticleRuns(variables.article.id);
-        analyticsAttempt?.completeAnalytics(page.runs.find((run) => run.id === variables.runId));
-      } catch {
-        // Do not infer a terminal analytics state without a durable run receipt.
-      }
-    },
-  });
-  const cancel = useMutation({
-    mutationFn: ({ articleId, runId }: { articleId: string; runId: string }) =>
-      cancelAnalysisArticleRun(articleId, runId),
-    onSuccess: async (run) => {
-      setActionError(null);
-      setRunning(null);
-      await refreshArticle(run.articleId);
-    },
-    onError: (error) => setActionError(errMessage(error)),
   });
 
   const agentBinding = bindings.find((binding) =>
@@ -197,27 +271,172 @@ export function useAnalysisArticlesController({
       selected ? undefined : t("analysis.simpleAgentPrompt"), selected?.id);
   };
 
+  // Pre-run check from cached state, mirroring the Desktop runner's preconditions:
+  // the Article's pinned connection must still be bound, current, mirrored on this
+  // device, and carry this member's credential. The runner repeats every check and
+  // reports the same typed failures, which map to the same recovery steps.
+  const connections = useQuery({ ...connectionsQuery(catalogScope.key), enabled: sharedWorkspace });
+  const runBinding = selected
+    ? bindings.find((binding) => binding.remoteConnectionId === selected.connectionId) ?? null
+    : null;
+  const runConnection = runBinding?.connectionId
+    ? connections.data?.find((connection) => connection.id === runBinding.connectionId) ?? null
+    : null;
+  const runAccessIssue = runConnection ? connectionAccessIssue(runConnection) : undefined;
+  const [credentialTarget, setCredentialTarget] = useState<ConnectionProfile | null>(null);
+  const clearRunFailure = (articleId: string | undefined) => {
+    setActionFailure(null);
+    if (articleId) dismissAnalysisRunNotice(scopeKey, articleId);
+  };
+  const recheckConnection = useMutation({
+    mutationFn: async (articleId: string | undefined) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: connectionQueryKeys.all(catalogScope.key) }),
+        queryClient.invalidateQueries({ queryKey: knowledgeQueryKeys.environmentConnections() }),
+        queryClient.invalidateQueries({ queryKey: articleKey }),
+      ]);
+      return articleId;
+    },
+    onSuccess: clearRunFailure,
+  });
+  // The same rebind the Databases view's Reconfirm runs, for a binding that went stale
+  // after its shared connection changed. The workspace service still authorizes it.
+  const reconfirmBinding = useMutation({
+    mutationFn: async ({ input, articleId }: {
+      input: BindEnvironmentConnectionInput;
+      articleId: string | undefined;
+    }) => {
+      await bindKnowledgeEnvironmentConnectionWithRefresh(input);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: knowledgeQueryKeys.environmentConnections() }),
+        queryClient.invalidateQueries({ queryKey: knowledgeQueryKeys.agentEnvironments() }),
+      ]);
+      return articleId;
+    },
+    onSuccess: clearRunFailure,
+    onError: (error) => setActionFailure(analysisFailure(t, error)),
+  });
+  const resetRecheck = recheckConnection.reset;
+  const resetReconfirm = reconfirmBinding.reset;
+  useEffect(() => {
+    resetRecheck();
+    resetReconfirm();
+  }, [resetRecheck, resetReconfirm, selected?.id]);
+  // An empty binding list may still be loading, so the runner decides until the person
+  // re-checks; after a re-check an empty list means the database was unbound.
+  const pinIssue = selected && (bindings.length > 0 || recheckConnection.isSuccess)
+    ? analysisRunPinIssue(selected, runBinding, !connections.isSuccess || runConnection !== null)
+    : null;
+  const runBlocker: AnalysisFailure | null = !selected
+    ? null
+    : pinIssue
+      ? analysisPinFailure(t, pinIssue, selected, {
+          rechecked: recheckConnection.isSuccess,
+          canWrite,
+          canManage: canManageBindings,
+        })
+      : runAccessIssue === "credentials"
+        ? { message: t("analysis.errorCredentialBinding"), detail: null, recovery: "connectCredentials" }
+        : runAccessIssue === "grant"
+          ? { message: t("analysis.errorPermission"), detail: null }
+          : null;
+
   return {
-    actionError,
+    actionFailure,
     agentBinding,
     articles,
     askAgent,
-    resultData,
-    cancel,
-    detailTabs,
-    editorArticle,
-    execute,
+    canWrite,
+    articleDocument,
+    credentialTarget,
+    documentQuery,
+    editor,
     localResult,
     recoveredResult,
+    reloadEditorBase,
     remove,
+    resultOutdated,
     revisions,
-    running,
+    runBlocker,
+    runSession,
     runs,
     saveArticle,
     selected,
-    setEditorArticle,
     setTab,
-    startRun: (article: AnalysisArticleRecord) => execute.mutate({ article, runId: crypto.randomUUID() }),
     tab,
+    /** The recovery step still in flight, so only its button shows progress. */
+    recovering: recheckConnection.isPending
+      ? "recheckConnection"
+      : reconfirmBinding.isPending
+        ? "reconfirmBinding"
+        : null satisfies AnalysisRecovery | null as AnalysisRecovery | null,
+    /** A re-check or reconfirm finished and the pin and credential now allow a rerun. */
+    connectionRechecked: (recheckConnection.isSuccess || reconfirmBinding.isSuccess)
+      && runBlocker === null,
+    recover: (recovery: AnalysisRecovery) => {
+      if (recovery === "connectCredentials" && runConnection && canBindCredentials(runConnection)) {
+        setCredentialTarget(runConnection);
+        return;
+      }
+      if (recovery === "reconfirmBinding" && canManageBindings && runBinding?.connectionId) {
+        reconfirmBinding.mutate({
+          input: {
+            projectEnvironmentId: runBinding.projectEnvironmentId,
+            connectionId: runBinding.connectionId,
+            role: runBinding.role,
+            alias: runBinding.alias,
+          },
+          articleId: selected?.id,
+        });
+        return;
+      }
+      if (recovery === "editArticle" && canWrite && articleDocument) {
+        // Saving re-pins the Article to the chosen binding's current content.
+        setEditor({
+          base: articleDocument,
+          failure: null,
+          conflict: null,
+          notice: runBlocker
+            ? `${runBlocker.message} ${t("analysis.editorRepinHint")}`
+            : t("analysis.editorRepinHint"),
+        });
+        return;
+      }
+      recheckConnection.mutate(selected?.id);
+    },
+    closeCredentials: () => setCredentialTarget(null),
+    credentialsBound: () => {
+      void queryClient.invalidateQueries({ queryKey: connectionQueryKeys.all(catalogScope.key) });
+      clearRunFailure(selected?.id);
+    },
+    cancelRun: () => {
+      if (selected) cancelAnalysisRun(scopeKey, selected.id);
+    },
+    closeEditor: () => setEditor(null),
+    dismissRunNotice: () => {
+      if (selected) dismissAnalysisRunNotice(scopeKey, selected.id);
+    },
+    openEditor: () => {
+      if (articleDocument && canWrite) setEditor({ base: articleDocument, failure: null, conflict: null });
+    },
+    saveDraft: (input: SharedAnalysisArticleCreate) => {
+      if (editor) saveArticle.mutate({ input, expectedRevision: editor.base.revision });
+    },
+    startRun: () => {
+      // A blocked rerun is never started; the run area offers its recovery instead.
+      if (!articleDocument || runBlocker) return;
+      setActionFailure(null);
+      resetRecheck();
+      resetReconfirm();
+      startAnalysisRun({ queryClient, scopeKey, catalogScope, article: articleDocument });
+    },
   };
+}
+
+/** The same member-local credential binding the Connections screen offers. */
+function canBindCredentials(connection: ConnectionProfile) {
+  return connection.credentialMode === "memberLocal"
+    && connection.workspaceAccess !== "view"
+    && connection.workspaceAccess !== "local"
+    && connection.engine !== "bigquery";
 }

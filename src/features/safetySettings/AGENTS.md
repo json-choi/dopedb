@@ -17,6 +17,7 @@ self-contained IPC feature.
 | `policy.ts` | `ConnectionWriteAuthority` projection and `WriteBlockRecoveryKind` union describing why/how a blocked write can be recovered (device safety, local safety, managed credential, schema safety/unavailable, workspace grant). |
 | `queries.ts` | TanStack Query option loading safety settings with a 5s timeout (`loadSafetyBounded`). |
 | `saveCoordinator.ts` | Process-wide connection-keyed single-flight owner for Safety saves; keeps a claim across Settings screen unmount/remount and exposes a React external-store subscription. |
+| `draftStore.ts` | Keeps an unapplied Safety edit per connection for the app window's lifetime so leaving the screen never discards it; the screen restores it with a "kept from before" notice and clears it on Apply or Discard. |
 | `tauriAdapter.ts` | `getSafetySettings`/`setSafetySettings` — the only two commands this feature owns (`get_safety`, `set_safety`). |
 
 ## Subdirectories
@@ -28,6 +29,9 @@ None.
 - **Security invariant (verified in code):** `persistence.ts` is explicitly
   fail-closed — do not reorder its workspace-ceiling-then-device-gate checks such
   that a failure to read one gate is treated as permissive.
+- A manager's Apply changes the workspace write ceiling only when the Data
+  changes checkbox was toggled in that edit (`writesChanged`); the editor shows
+  the narrower device gate, so a limits-only edit must never rewrite the ceiling.
 - `persistence.ts` takes commands as an injected `SafetyPersistenceCommands` object
   rather than calling `tauriAdapter.ts` directly; keep that inversion so the policy
   logic stays testable without Tauri.

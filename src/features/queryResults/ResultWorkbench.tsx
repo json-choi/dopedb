@@ -1,6 +1,7 @@
-// Stateless chrome for the result workbench: the toolbar row, the row-count footer, and the
-// cell-to-text projection they share. Filter text, paging, and the show-more decision stay
-// with the result owner.
+// Stateless chrome for the result workbench: the toolbar row and the row-count footer,
+// which can carry a short tooltip note about how the result's values are shown.
+// Filter text, paging, and the show-more decision stay with the result owner; cell text
+// comes from the grid's shared `gridCellText` projection.
 import { useId } from "react";
 import type { SqlStreamRowSource } from "../queries/domain";
 import type { CellDecodeFailure } from "../../ipc/types";
@@ -14,6 +15,7 @@ import {
 import { useI18n } from "../../lib/i18n";
 import { Icon } from "../../components/Icon";
 import { TextInput } from "../../design-system/components/FormControls";
+import { StatusBadge } from "../../design-system/components/Status";
 import ResultToolbar from "./ResultToolbar";
 
 export function ResultWorkbenchToolbar({
@@ -26,6 +28,7 @@ export function ResultWorkbenchToolbar({
   filterOpen,
   filter,
   filterDisabled = false,
+  filterDisabledReason,
   onToggleFilter,
   onFilterChange,
 }: {
@@ -38,6 +41,8 @@ export function ResultWorkbenchToolbar({
   filterOpen: boolean;
   filter: string;
   filterDisabled?: boolean;
+  /** Why the received-rows filter is unavailable; shown on the focusable control. */
+  filterDisabledReason?: string;
   onToggleFilter: () => void;
   onFilterChange: (value: string) => void;
 }) {
@@ -58,8 +63,13 @@ export function ResultWorkbenchToolbar({
           size="xs"
           aria-pressed={filterOpen}
           aria-label={t("services.resultSearch")}
-          title={t("services.resultSearch")}
+          title={
+            filterDisabled && filterDisabledReason
+              ? filterDisabledReason
+              : t("services.resultSearch")
+          }
           disabled={filterDisabled}
+          disabledBehavior="focusable"
           onClick={onToggleFilter}
         >
           <Icon name="search" />
@@ -105,6 +115,7 @@ export function ResultWorkbenchFooter({
   showMoreCount = 0,
   onShowMore,
   onClearFilter,
+  hint,
 }: {
   visible: number;
   total: number;
@@ -115,6 +126,8 @@ export function ResultWorkbenchFooter({
   showMoreCount?: number;
   onShowMore?: () => void;
   onClearFilter?: () => void;
+  /** A short note about how this result's values are shown, as a tooltip. */
+  hint?: string;
 }) {
   const { t } = useI18n();
   return (
@@ -130,6 +143,11 @@ export function ResultWorkbenchFooter({
       }
       actions={
         <>
+          {hint ? (
+            <StatusBadge iconOnly title={hint} aria-label={hint} role="img">
+              <Icon name="info" />
+            </StatusBadge>
+          ) : null}
           {onClearFilter ? (
             <WorkbenchButton
               iconOnly
@@ -152,13 +170,8 @@ export function ResultWorkbenchFooter({
       {onClearFilter
         ? t("results.filteredRows", { visible, total })
         : t("ide.queryRows", { count: visible })}
+      {duration === null ? "" : ` · ${t("results.durationMs", { duration })}`}
       {truncated ? ` · ${t("sql.capped", { count: maxRows })}` : ""}
     </DataGridStatusPill>
   );
-}
-
-export function resultCellText(value: unknown) {
-  if (value === null || value === undefined) return "NULL";
-  if (typeof value === "object") return JSON.stringify(value);
-  return String(value);
 }

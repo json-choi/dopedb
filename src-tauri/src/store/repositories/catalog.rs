@@ -1,7 +1,29 @@
 //! Canonical catalog cache persistence.
 
+use std::collections::HashMap;
+use std::sync::LazyLock;
+
+use tokio::sync::{broadcast, Mutex as AsyncMutex};
+
 use super::super::*;
+use crate::features::catalog::CatalogChanged;
 use crate::kernel::access::{CatalogCachePolicy, PinnedConnection};
+
+/// The paths that commit DDL (Desktop SQL runs, scripts, SQL import Jobs) and
+/// connection edits retire the cache through [`Store::clear_schema_cache`], so the
+/// announcement lives with the cache rather than in each execution adapter. A new
+/// DDL-committing path must call it too; manual transactions refuse DDL.
+static CATALOG_CHANGES: LazyLock<broadcast::Sender<CatalogChanged>> =
+    LazyLock::new(|| broadcast::channel(64).0);
+
+/// Per-connection schema epochs, bumped by every [`Store::clear_schema_cache`]. A live
+/// read captures one before introspecting, and its write-through is dropped when a
+/// schema change committed meanwhile: a scan that began before a DDL commit must not
+/// re-persist the schema that commit replaced. The cache and every writer of it live
+/// in this process, so process memory suffices; the lock also orders a write against
+/// a concurrent retirement.
+static CATALOG_EPOCHS: LazyLock<AsyncMutex<HashMap<Uuid, u64>>> =
+    LazyLock::new(|| AsyncMutex::new(HashMap::new()));
 
 impl Store {
     /// Return a valid Catalog V2 snapshot only when both its stored provenance and the
@@ -97,6 +119,11 @@ impl Store {
         else {
             return Ok(None);
         };
+        // A capture time in the future (a clock moved back, or an edited row) cannot
+        // prove how old the snapshot is, so it is never current.
+        if captured_at > Utc::now() {
+            return Ok(None);
+        }
         let Ok(catalog_json) = row.try_get::<String, _>("catalog_json") else {
             return Ok(None);
         };
@@ -115,12 +142,27 @@ impl Store {
         Ok(Some(snapshot))
     }
 
+    /// The connection's current schema epoch. A live read captures it before it
+    /// introspects and passes it to [`Store::put_catalog_if_current`].
+    pub(crate) async fn catalog_epoch(&self, connection_id: Uuid) -> CatalogEpoch {
+        CatalogEpoch(
+            CATALOG_EPOCHS
+                .lock()
+                .await
+                .get(&connection_id)
+                .copied()
+                .unwrap_or(0),
+        )
+    }
+
     /// Store a Catalog V2 snapshot only if the pin is still current at the exact
-    /// statement that performs the write. `Stale` is an expected race outcome.
+    /// statement that performs the write and no schema change committed since `epoch`
+    /// was captured. `Stale` and `Superseded` are expected race outcomes.
     pub(crate) async fn put_catalog_if_current(
         &self,
         pin: &PinnedConnection,
         snapshot: &CatalogSnapshot,
+        epoch: CatalogEpoch,
     ) -> AppResult<CacheWriteOutcome> {
         if pin.catalog_cache_policy == CatalogCachePolicy::EphemeralOnly {
             return Ok(CacheWriteOutcome::NotPersisted);
@@ -134,6 +176,12 @@ impl Store {
             ));
         }
         let catalog_json = serde_json::to_string(snapshot)?;
+        // Held through the write: a retirement either lands first, so this write is
+        // dropped, or runs after it and deletes the row it wrote.
+        let epochs = CATALOG_EPOCHS.lock().await;
+        if epochs.get(&pin.connection_id).copied().unwrap_or(0) != epoch.0 {
+            return Ok(CacheWriteOutcome::Superseded);
+        }
         let mut tx = self.pool.begin().await?;
         let result = sqlx::query(
             "INSERT INTO catalog_cache
@@ -213,12 +261,42 @@ impl Store {
             return Ok(CacheWriteOutcome::Stale);
         }
         tx.commit().await?;
+        drop(epochs);
         Ok(CacheWriteOutcome::Stored)
     }
 
-    /// Drop the cached catalog so the next introspection reads live — after a
-    /// connection edit, or an explicit schema refresh.
+    /// Retire the cached catalog after a committed schema change or connection edit
+    /// and announce it, so every in-memory catalog view of this connection reloads.
+    /// The database changed for every account that caches it, so every workspace
+    /// account scope's row goes, not only the active scope's; no pin is needed to
+    /// delete a cache entry.
     pub async fn clear_schema_cache(&self, connection_id: Uuid) -> AppResult<()> {
+        {
+            // Bump before deleting, under the write lock: every live read that began
+            // before this change now fails its epoch check instead of re-persisting.
+            let mut epochs = CATALOG_EPOCHS.lock().await;
+            let epoch = epochs.entry(connection_id).or_insert(0);
+            *epoch = epoch.wrapping_add(1);
+            sqlx::query("DELETE FROM catalog_cache WHERE connection_id = ?1")
+                .bind(connection_id.to_string())
+                .execute(&self.pool)
+                .await?;
+        }
+        // No receiver simply means no desktop shell is listening (CLI tests).
+        let _ = CATALOG_CHANGES.send(CatalogChanged {
+            connection_id: Some(connection_id),
+        });
+        Ok(())
+    }
+
+    /// Subscribe to catalog retirements announced by [`Store::clear_schema_cache`].
+    pub(crate) fn subscribe_catalog_changes(&self) -> broadcast::Receiver<CatalogChanged> {
+        CATALOG_CHANGES.subscribe()
+    }
+
+    /// Drop the cached catalog before a caller-owned live refresh. Unlike
+    /// [`Store::clear_schema_cache`] this is silent: the caller is already reloading.
+    pub(crate) async fn discard_catalog_cache(&self, connection_id: Uuid) -> AppResult<()> {
         let pin = self.pin_connection_for_read(connection_id).await?;
         let account_scope = pin.scope.account_scope.storage_key();
         let mut tx = self.pool.begin().await?;

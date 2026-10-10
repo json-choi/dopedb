@@ -9,7 +9,9 @@ use uuid::Uuid;
 
 use crate::error::AppResult;
 
-use super::domain::{AnalysisDataSet, AnalysisDefinitionRunReceipt};
+use super::domain::{
+    AnalysisArticleMutation, AnalysisArticleSummary, AnalysisDataSet, AnalysisDefinitionRunReceipt,
+};
 
 pub(crate) trait AnalysisLocalRepositoryPort: Clone + Send + Sync + 'static {
     fn load_result(
@@ -63,12 +65,13 @@ pub(crate) trait AnalysisReadExecutionPort: Clone + Send + Sync + 'static {
 }
 
 pub(crate) trait AnalysisHostedAuthorityPort: Clone + Send + Sync + 'static {
-    fn list_articles(
+    /// Title-and-identity listing whose size does not grow with HTML or SQL bodies.
+    fn list_article_summaries(
         &self,
         account_id: &str,
         workspace_id: Uuid,
         environment_id: Option<Uuid>,
-    ) -> impl Future<Output = AppResult<Vec<AnalysisArticleRecord>>> + Send;
+    ) -> impl Future<Output = AppResult<Vec<AnalysisArticleSummary>>> + Send;
 
     fn get_article(
         &self,
@@ -91,5 +94,5 @@ pub(crate) trait AnalysisHostedAuthorityPort: Clone + Send + Sync + 'static {
         article_id: Uuid,
         expected_revision: i64,
         article: &SharedAnalysisArticleCreate,
-    ) -> impl Future<Output = AppResult<AnalysisArticleRecord>> + Send;
+    ) -> impl Future<Output = AppResult<AnalysisArticleMutation>> + Send;
 }

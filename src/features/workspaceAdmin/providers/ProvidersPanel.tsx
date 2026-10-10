@@ -17,6 +17,7 @@ import {
 import {
   connectableProvider,
   managedConnectionIds,
+  vaultReconnectTarget,
   type ConnectDialogRequest,
 } from "./accounts/accountModel";
 import NeonConnectDialog from "./accounts/NeonConnectDialog";
@@ -129,7 +130,12 @@ export default function ProvidersPanel({ scope }: WorkspaceAdminPanelProps) {
     }
     if (connectable === "neon" || connectable === "vault") {
       showView("accounts");
-      setDialog({ provider: connectable, providerName, mode: "reconnect" });
+      setDialog({
+        provider: connectable,
+        providerName,
+        mode: "reconnect",
+        integrationId: managed.integrationId,
+      });
       return;
     }
     if (connectable === "planetScale") {
@@ -154,6 +160,21 @@ export default function ProvidersPanel({ scope }: WorkspaceAdminPanelProps) {
     setDialog(null);
     setNotice({ kind: "connected", providerName: request.providerName });
     void invalidateProviderReads(queryClient, scope);
+    if (request.mode !== "reconnect") return;
+    // A reconnected account restores the databases it serves. Refresh Desktop's
+    // copies and clear their recovery state exactly as a Cloud SQL repair does.
+    const managed = queryClient.getQueryData(providerInventoryQuery(scope).queryKey)
+      ?.managedConnections;
+    const affected = request.integrationId
+      ? managedConnectionIds(managed, request.integrationId)
+      : (managed ?? [])
+          .filter((item) => item.provider === request.provider)
+          .map((item) => item.connectionId);
+    if (affected.length > 0 || managed === undefined) {
+      void refreshDesktopConnections(queryClient, catalogScope.key, affected)
+        .catch(() => undefined)
+        .finally(() => announceManagedConnectionsRepaired(affected));
+    }
   }
 
   function handleGcpSaved(saved: GcpSetupSaved) {
@@ -283,6 +304,13 @@ export default function ProvidersPanel({ scope }: WorkspaceAdminPanelProps) {
         <VaultConnectDialog
           scope={scope}
           mode={dialog.mode}
+          reconnectTarget={dialog.mode === "reconnect"
+            ? vaultReconnectTarget(
+                queryClient.getQueryData(providerInventoryQuery(scope).queryKey)
+                  ?.managedConnections,
+                dialog.integrationId,
+              )
+            : null}
           onCancel={() => setDialog(null)}
           onConnected={() => handleConnected(dialog)}
         />

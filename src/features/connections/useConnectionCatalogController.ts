@@ -5,7 +5,7 @@ import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import type { Engine, Provider } from "../../ipc/types";
-import { errMessage } from "../../ipc/types";
+import { errDetails } from "../../ipc/types";
 import { isDocumentEngine } from "../../lib/capabilities";
 import { useI18n } from "../../lib/i18n";
 import { driversQuery } from "../../lib/queries";
@@ -19,6 +19,7 @@ import {
   type ConnectionEditorView,
   type StandardConnectionSource,
 } from "./connectionEditorModel";
+import { markConnectionEditorReturn } from "./connectionEditorShellBridge";
 import type { ConnectionProfile, DriverDescriptor } from "./domain";
 import type { ConnectionLaunchPreset } from "./presets";
 import { installDriver } from "./tauriAdapter";
@@ -192,6 +193,8 @@ export function useConnectionCatalogController({
   function addSharedDatabase() {
     setAddMenuOpen(false);
     setAddSearch("");
+    // Workspace management opens over this editor and returns to it.
+    markConnectionEditorReturn();
     requestWorkspaceAdmin("workspace-providers", { kind: "addDatabase" });
   }
 
@@ -251,8 +254,14 @@ export function useConnectionCatalogController({
       );
       status.setMessageIsError(false);
     } catch (error) {
-      status.setMessage(errMessage(error));
-      status.setMessageIsError(true);
+      // Installer output can name local paths or mirrors; show a stable category.
+      const kind = errDetails(error).kind;
+      status.showError(
+        "driver",
+        kind === "network" || kind === "timeout"
+          ? t("connections.driverDownloadNetworkFailed", { name: driver.name })
+          : t("connections.driverDownloadFailed", { name: driver.name }),
+      );
     } finally {
       setInstallingDriverId(null);
     }

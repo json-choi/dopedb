@@ -3,9 +3,12 @@
 
 use std::time::Duration;
 
-use crate::error::AppResult;
+use crate::error::{AppError, AppResult};
 
-use super::domain::{AnalysisDefinitionRunReceipt, AnalysisDefinitionRunRequest};
+use super::domain::{
+    AnalysisArticleMutation, AnalysisArticleSaveResult, AnalysisArticleSummary,
+    AnalysisDefinitionRunReceipt, AnalysisDefinitionRunRequest,
+};
 use super::ports::{
     AnalysisHostedAuthorityPort, AnalysisLocalRepositoryPort, AnalysisReadExecutionPort,
 };
@@ -68,14 +71,15 @@ where
             .await
     }
 
-    pub(crate) async fn list_remote(
+    /// Lists render titles only; bodies load per Article through `get_remote`.
+    pub(crate) async fn list_remote_summaries(
         &self,
         account_id: &str,
         workspace_id: uuid::Uuid,
         environment_id: Option<uuid::Uuid>,
-    ) -> AppResult<Vec<dopedb_protocol::AnalysisArticleRecord>> {
+    ) -> AppResult<Vec<AnalysisArticleSummary>> {
         self.hosted
-            .list_articles(account_id, workspace_id, environment_id)
+            .list_article_summaries(account_id, workspace_id, environment_id)
             .await
     }
 
@@ -111,7 +115,8 @@ where
         article: &dopedb_protocol::SharedAnalysisArticleCreate,
     ) -> AppResult<dopedb_protocol::AnalysisArticleRecord> {
         validate_shared_create(article)?;
-        self.hosted
+        match self
+            .hosted
             .mutate_article(
                 account_id,
                 workspace_id,
@@ -119,7 +124,50 @@ where
                 expected_revision,
                 article,
             )
-            .await
+            .await?
+        {
+            AnalysisArticleMutation::Applied(article) => Ok(*article),
+            // The Agent bridge keeps its established conflict classification.
+            AnalysisArticleMutation::RevisionConflict => Err(AppError::OutcomeUnknown(
+                "Analysis Article revision changed before the mutation could be applied".into(),
+            )),
+        }
+    }
+
+    /// Desktop editor save. A revision conflict is returned as data with the latest
+    /// Article so the screen can keep the person's draft and offer to re-apply it.
+    pub(crate) async fn save_remote(
+        &self,
+        account_id: &str,
+        workspace_id: uuid::Uuid,
+        article_id: uuid::Uuid,
+        expected_revision: i64,
+        article: &dopedb_protocol::SharedAnalysisArticleCreate,
+    ) -> AppResult<AnalysisArticleSaveResult> {
+        validate_shared_create(article)?;
+        let mutation = self
+            .hosted
+            .mutate_article(
+                account_id,
+                workspace_id,
+                article_id,
+                expected_revision,
+                article,
+            )
+            .await?;
+        Ok(match mutation {
+            AnalysisArticleMutation::Applied(article) => {
+                AnalysisArticleSaveResult::Saved { article }
+            }
+            AnalysisArticleMutation::RevisionConflict => AnalysisArticleSaveResult::Conflict {
+                latest: self
+                    .hosted
+                    .get_article(account_id, workspace_id, article_id)
+                    .await
+                    .ok()
+                    .map(Box::new),
+            },
+        })
     }
 
     pub(crate) async fn run_definition(

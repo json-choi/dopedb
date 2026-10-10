@@ -24,7 +24,7 @@ the hosted control plane.
 | `validation.rs` | Runtime validation for the current one-query Analysis Article contract. |
 | `desktop_links.rs` | Bounded, token-free navigation inbox; a link never changes account or executes work. |
 | `sharing_transport.rs` | Sharing commands; keeps browser links free of credentials and fences account changes. |
-| `transport.rs` | Tauri commands for current Analysis Articles; definitions and immutable HTML publications are shared, query results stay in Desktop's local recovery cache. |
+| `transport.rs` | Tauri commands for current Analysis Articles; definitions and immutable HTML publications are shared, query results stay in Desktop's local recovery cache. The list command returns title-only `AnalysisArticleSummary` rows (`view=summary`, projected locally from a pre-summary service), `get_analysis_article_command` reads one body on open, saves return `saved`/`conflict` data instead of an unknown outcome, and deletion revokes visible active publications before deleting. |
 
 ## Subdirectories
 
@@ -56,6 +56,10 @@ the hosted control plane.
   receipts only.
 - `desktop_links.rs` links must stay token-free and must not execute work or
   switch account on their own — they only navigate.
+- A 409/412 on an Article update is a definite rejection
+  (`AnalysisArticleMutation::RevisionConflict`). The Desktop save surfaces it as
+  a conflict with the latest revision; `mutate_remote` keeps mapping it to
+  `OutcomeUnknown` for the Agent bridge's existing `OperationConflict` code.
 
 ### Testing Requirements
 

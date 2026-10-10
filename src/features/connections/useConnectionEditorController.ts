@@ -1,5 +1,11 @@
 // Composes the Connection editor's profile, catalog, schema, dialog, and
-// command controllers into a grouped presentation model.
+// command controllers into a grouped presentation model, and keeps the shell's
+// entry and leave contract: credential recovery opens at the fix, and every
+// route that replaces the editor first confirms unsaved edits.
+import {
+  useConnectionEditorLeaveGuard,
+  useCredentialRecoveryEntry,
+} from "./connectionEditorShellBridge";
 import type { ConnectionProfile } from "./domain";
 import type { ConnectionLaunchPreset } from "./presets";
 import { useBigQueryOnboardingController } from "./useBigQueryOnboardingController";
@@ -15,6 +21,11 @@ export type { ConnectionInputMode } from "./connectionEditorModel";
 export type ConnectionEditorProps = {
   initial: ConnectionProfile | null;
   preset: ConnectionLaunchPreset | null;
+  /**
+   * Opened to recover a credential this device no longer holds: a local profile
+   * focuses its password field, a shared member-local one opens its binding.
+   */
+  initialFocus?: "credentials";
   connections: ConnectionProfile[];
   creatingDemo: boolean;
   onCreateDemoDatabase: () => void;
@@ -34,9 +45,23 @@ export function useConnectionEditorController(props: ConnectionEditorProps) {
     preset: props.preset,
   });
   const dialogState = useConnectionEditorDialogs();
+  // Opening another draft replaces this editor, so unsaved edits are confirmed
+  // before every route that leaves it. The shell asks the same guard before
+  // Settings or Workspace management replace the editor.
+  const leave = profileState.changes.guardDiscard;
+  useConnectionEditorLeaveGuard(leave);
+  useCredentialRecoveryEntry(
+    props.initialFocus === "credentials" && props.initial !== null,
+    profileState,
+    dialogState.workspace,
+  );
+  const editConnection = (connection: ConnectionProfile) =>
+    leave(() => props.onEditConnection(connection));
+  const newConnection = (preset?: ConnectionLaunchPreset) =>
+    leave(() => props.onNewConnection(preset));
   const catalog = useConnectionCatalogController({
     connections: props.connections,
-    onNewConnection: props.onNewConnection,
+    onNewConnection: newConnection,
     openProviderCredentials: dialogState.providerCredentials.show,
     profileState,
     selectSourceOnOpen: props.initial === null && !props.preset?.engine,
@@ -66,6 +91,7 @@ export function useConnectionEditorController(props: ConnectionEditorProps) {
   return {
     profile: profileController.view,
     catalog: catalog.view,
+    navigation: { editConnection, newConnection },
     schema,
     dialogs: {
       providerCredentials: dialogState.providerCredentials,

@@ -55,7 +55,6 @@ export default function Pager({
         <Icon name="chevronsLeft" />
       </WorkbenchButton>
       <WorkbenchButton
-        collapse={collapseNavigation ? "narrow" : "never"}
         iconOnly
         disabled={busy || !hasPrev}
         onClick={() => onPage(page - 1)}
@@ -72,7 +71,6 @@ export default function Pager({
         {lastPage != null && ` / ${lastPage + 1}`}
       </span>
       <WorkbenchButton
-        collapse={collapseNavigation ? "narrow" : "never"}
         iconOnly
         disabled={busy || !hasNext}
         onClick={() => onPage(page + 1)}

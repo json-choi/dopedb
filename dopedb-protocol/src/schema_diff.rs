@@ -1,6 +1,13 @@
 //! Read-only structural comparison of canonical catalogs, matching Desktop's
-//! relation-kind, column type/nullability/PK, index, and foreign-key projection.
-//! Database names, native IDs, row estimates, and capture times are not identity.
+//! relation-kind, column type/nullability/PK, index key (column or expression) order
+//! and uniqueness, and foreign-key target projection. Database names, native IDs,
+//! row estimates, and capture times are not identity. Every result names the exact
+//! compared and not-compared properties, so zero differences never reads as identical.
+//!
+//! A primary key compares column membership, not key order. Foreign keys compare each
+//! column's referenced relation and column, not constraint names or composite
+//! grouping. Objects are ordered by relation `(schema, name)`, then relation, column,
+//! index and foreign-key entries, each by name in code-point order (Desktop matches).
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -8,6 +15,12 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{CatalogSnapshot, ConstraintKind, DatabaseEngine, ObjectKind, Relation};
+
+/// Version of the public `SchemaDiff` result. Version 2 added the
+/// `materializedView` object type (previously reported as `table`), compares
+/// expression index keys, and reports its `scope`, so the same catalogs can yield
+/// different objects. It also keeps quoted text in a column type case-sensitive.
+pub const SCHEMA_DIFF_VERSION: u16 = 2;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -42,6 +55,7 @@ pub enum SchemaDiffStatus {
 pub enum SchemaDiffObjectType {
     Table,
     View,
+    MaterializedView,
     Column,
     Index,
     ForeignKey,
@@ -66,6 +80,102 @@ pub struct SchemaDiffCounts {
     pub changed: usize,
 }
 
+/// One catalog property a schema diff either compares or deliberately leaves out.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SchemaDiffProperty {
+    RelationPresence,
+    RelationKind,
+    ColumnPresence,
+    ColumnType,
+    ColumnNullability,
+    PrimaryKey,
+    IndexPresence,
+    IndexKeys,
+    IndexUniqueness,
+    ForeignKeyTargets,
+    ColumnOrder,
+    ColumnDefault,
+    GeneratedColumn,
+    Identity,
+    Collation,
+    CheckConstraint,
+    UniqueConstraint,
+    IndexMethod,
+    IndexPredicate,
+    IndexInclude,
+    IndexSortOrder,
+    IndexValidity,
+    ForeignKeyAction,
+    ForeignKeyDeferrable,
+    ForeignKeyValidation,
+    ViewDefinition,
+    Partitioning,
+    Comment,
+    Trigger,
+    Routine,
+    Type,
+    Sequence,
+}
+
+/// The exact comparison scope. `total == 0` means only the `compared` properties
+/// match; every `notCompared` property may still differ between the two catalogs.
+/// `primaryKey` is column membership (not order); `foreignKeyTargets` is each
+/// column's referenced relation and column. A UNIQUE constraint counts only through
+/// its index, and an INVALID index or a NOT VALID foreign key compares like a valid one.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SchemaDiffScope {
+    pub compared: Vec<SchemaDiffProperty>,
+    pub not_compared: Vec<SchemaDiffProperty>,
+}
+
+impl SchemaDiffScope {
+    /// The properties `compare_schema_catalogs` reads (`columns`, `indexes`,
+    /// `foreign_keys` and relation kind) and the catalog facts it ignores.
+    pub fn current() -> Self {
+        use SchemaDiffProperty as Property;
+        Self {
+            compared: vec![
+                Property::RelationPresence,
+                Property::RelationKind,
+                Property::ColumnPresence,
+                Property::ColumnType,
+                Property::ColumnNullability,
+                Property::PrimaryKey,
+                Property::IndexPresence,
+                Property::IndexKeys,
+                Property::IndexUniqueness,
+                Property::ForeignKeyTargets,
+            ],
+            not_compared: vec![
+                Property::ColumnOrder,
+                Property::ColumnDefault,
+                Property::GeneratedColumn,
+                Property::Identity,
+                Property::Collation,
+                Property::CheckConstraint,
+                Property::UniqueConstraint,
+                Property::IndexMethod,
+                Property::IndexPredicate,
+                Property::IndexInclude,
+                Property::IndexSortOrder,
+                Property::IndexValidity,
+                Property::ForeignKeyAction,
+                Property::ForeignKeyDeferrable,
+                Property::ForeignKeyValidation,
+                Property::ViewDefinition,
+                Property::Partitioning,
+                Property::Comment,
+                Property::Trigger,
+                Property::Routine,
+                Property::Type,
+                Property::Sequence,
+            ],
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SchemaDiff {
@@ -73,6 +183,7 @@ pub struct SchemaDiff {
     pub engine: DatabaseEngine,
     pub baseline: SchemaDiffSource,
     pub target: SchemaDiffSource,
+    pub scope: SchemaDiffScope,
     pub counts: SchemaDiffCounts,
     pub total: usize,
     pub objects: Vec<SchemaDiffObject>,
@@ -168,10 +279,11 @@ pub fn compare_schema_catalogs(
         }
     }
     Ok(SchemaDiff {
-        schema_version: 1,
+        schema_version: SCHEMA_DIFF_VERSION,
         engine: baseline.engine(),
         baseline: baseline.into(),
         target: target.into(),
+        scope: SchemaDiffScope::current(),
         counts,
         total: objects.len(),
         objects,
@@ -179,10 +291,10 @@ pub fn compare_schema_catalogs(
 }
 
 fn relation_type(relation: &Relation) -> SchemaDiffObjectType {
-    if relation.object.kind == ObjectKind::View {
-        SchemaDiffObjectType::View
-    } else {
-        SchemaDiffObjectType::Table
+    match relation.object.kind {
+        ObjectKind::View => SchemaDiffObjectType::View,
+        ObjectKind::MaterializedView => SchemaDiffObjectType::MaterializedView,
+        _ => SchemaDiffObjectType::Table,
     }
 }
 
@@ -200,8 +312,33 @@ fn kind_label(relation: &Relation) -> &'static str {
 }
 
 // The first string is the comparison signature; the second preserves the full
-// display value. Type spelling alone is case/whitespace insensitive in Desktop.
+// display value.
 type Definitions = BTreeMap<String, (String, String)>;
+
+/// Type spelling ignores outer whitespace and letter case, except inside quoted
+/// text: MySQL `ENUM`/`SET` members and quoted identifiers are case-sensitive, so
+/// `enum('A','b')` and `enum('a','B')` differ. A doubled quote stays quoted. Each
+/// character is lowered on its own, exactly like Desktop's comparison.
+fn type_signature(native_type: &str) -> String {
+    let mut signature = String::with_capacity(native_type.len());
+    let mut quote = None;
+    for character in native_type.trim().chars() {
+        match quote {
+            Some(open) => {
+                if character == open {
+                    quote = None;
+                }
+                signature.push(character);
+            }
+            None if character == '\'' || character == '"' => {
+                quote = Some(character);
+                signature.push(character);
+            }
+            None => signature.extend(character.to_lowercase()),
+        }
+    }
+    signature
+}
 
 fn columns(relation: &Relation) -> Definitions {
     let primary = relation
@@ -217,7 +354,7 @@ fn columns(relation: &Relation) -> Definitions {
             let pk = primary.contains(&column.name);
             let signature = format!(
                 "{}|{}|{pk}",
-                column.native_type.trim().to_lowercase(),
+                type_signature(&column.native_type),
                 column.nullable
             );
             let value = format!(
@@ -236,10 +373,12 @@ fn indexes(relation: &Relation) -> Definitions {
         .indexes
         .iter()
         .map(|index| {
+            // An expression key is part of the index definition: `(lower(email), qty)`
+            // must never compare equal to `(qty)`.
             let columns = index
                 .keys
                 .iter()
-                .filter_map(|key| key.column.as_deref())
+                .filter_map(|key| key.column.as_deref().or(key.expression.as_deref()))
                 .collect::<Vec<_>>();
             let value = format!(
                 "{}({})",

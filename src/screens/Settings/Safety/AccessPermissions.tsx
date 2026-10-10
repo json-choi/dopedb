@@ -1,5 +1,6 @@
 // Presents the existing safety gates and the separate personal schema connection
 // action. The parent owns all permission state; this surface never grants access.
+// Each gate's hint is both a hover tip and the checkbox's accessible description.
 import { useId } from "react";
 import InfoTip from "../../../components/InfoTip";
 import { Button } from "../../../design-system/components/Button";
@@ -49,8 +50,12 @@ export default function AccessPermissions({
           <div key={permission.key} className="tw:grid tw:min-h-control-lg tw:grid-cols-[minmax(0,1fr)_20px] tw:items-center tw:gap-2 tw:border-t tw:border-border-subtle tw:py-2 tw:first-of-type:border-t-0">
             <CheckboxField checked={permission.checked} disabled={permission.disabled}
               onChange={permission.onChange ? (event) => permission.onChange?.(event.target.checked) : undefined}
+              aria-describedby={`${labelId}-${permission.key}`}
               label={<strong>{t(permission.label)}</strong>} />
             <InfoTip label={t(permission.hint)} />
+            <span id={`${labelId}-${permission.key}`} className="tw:sr-only">
+              {t(permission.hint)}
+            </span>
           </div>
         ))}
       </div>

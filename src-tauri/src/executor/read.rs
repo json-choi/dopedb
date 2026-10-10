@@ -10,12 +10,12 @@
 use std::future::Future;
 use std::time::Instant;
 
-use chrono::{DateTime, FixedOffset, NaiveDate, NaiveDateTime, NaiveTime, Utc};
+use chrono::FixedOffset;
 use futures::TryStreamExt;
 use serde_json::Value;
 use sqlx::mysql::types::{MySqlTime, MySqlTimeSign};
 use sqlx::mysql::MySqlRow;
-use sqlx::postgres::types::{Oid, PgInterval, PgMoney, PgRange, PgTimeTz};
+use sqlx::postgres::types::PgInterval;
 use sqlx::postgres::{PgRow, PgTypeKind};
 use sqlx::sqlite::SqliteRow;
 use sqlx::types::Decimal;
@@ -32,19 +32,133 @@ use crate::error::{AppError, AppResult};
 use crate::executor::cancel;
 use crate::model::{CellDecodeFailure, Engine, QueryResult};
 
+#[path = "read_page_budget.rs"]
+mod page_budget;
+#[path = "read_session.rs"]
+mod session;
 #[path = "read_values.rs"]
 mod values;
 
-pub(crate) use values::{int_json, mysql_value, pg_value, sqlite_value, uint_json};
+pub(crate) use page_budget::TRUNCATED_CELL_TYPE_PREFIX;
+use page_budget::{fit_row_to_page, json_size, page_row_budget};
+pub(crate) use session::{mysql_session_facts, pg_session_facts};
+
+pub(crate) use values::{
+    int_json, mysql_value_in, pg_value_in, sqlite_value, uint_json, SessionFacts,
+};
+
+/// Read-path invariants: the PostgreSQL wire decoders (see `read_pg_wire`), and
+/// which reads open their own read-only transaction.
+#[cfg(test)]
+pub(crate) fn assert_decoder_contract() {
+    values::assert_decoder_contract();
+    // A plain read keeps the no-extra-round-trip path; a namespace or a transaction
+    // pooler reads inside `BEGIN READ ONLY … ROLLBACK`, never under a session `SET`.
+    assert_eq!(pg_read_scope(None, false), None);
+    assert_eq!(
+        pg_read_scope(None, true).as_deref(),
+        Some("BEGIN READ ONLY")
+    );
+    for pooler in [false, true] {
+        assert_eq!(
+            pg_read_scope(Some("app"), pooler).as_deref(),
+            Some("BEGIN READ ONLY; SET LOCAL search_path TO \"app\"")
+        );
+    }
+}
+
+/// Columns from the first row are empty when zero rows come back; fall back to the
+/// prepared-statement metadata (`describe`) on the same connection so an empty result
+/// still has headers. The executor stays a concrete `&mut` connection: a generic
+/// `Executor<'e>` helper here defeats the `Send` proof of the desktop command futures.
+macro_rules! with_headers {
+    ($cols:expr, $connection:expr, $sql:expr) => {{
+        let cols: Vec<String> = $cols;
+        if cols.is_empty() {
+            ($connection)
+                .describe(AssertSqlSafe($sql).into_sql_str())
+                .await
+                .ok()
+                .map(describe_cols)
+                .unwrap_or_default()
+        } else {
+            cols
+        }
+    }};
+}
+
+/// The one simple-protocol message that opens a PostgreSQL read's own read-only
+/// transaction, when it needs one: a namespace is scoped with `SET LOCAL`, and a
+/// transaction-mode pooler carries no session default (a session `SET` would leak
+/// to its other clients), so its reads always run inside `BEGIN READ ONLY`. Any
+/// other read runs on the L2 session directly, with no extra round trip.
+fn pg_read_scope(namespace: Option<&str>, transaction_pooler: bool) -> Option<String> {
+    match namespace {
+        Some(namespace) => Some(format!(
+            "BEGIN READ ONLY; {}",
+            crate::executor::namespace::postgres_search_path_statement(namespace)
+        )),
+        None => transaction_pooler.then(|| "BEGIN READ ONLY".to_string()),
+    }
+}
+
+/// Ends a scoped read's transaction with `ROLLBACK` when its session can be reused:
+/// after a complete result, or after a server error, which already ended the
+/// statement (the session then waits only for this `ROLLBACK`). A capped read or
+/// any other failure may have stopped mid-result, so its transaction is left for
+/// [`finish_read`] to close with the connection. Returns whether it is still open.
+async fn end_pg_read_scope<T>(
+    connection: &mut sqlx::PgConnection,
+    outcome: &mut AppResult<T>,
+    truncated: impl FnOnce(&T) -> bool,
+) -> bool {
+    let reusable = match &*outcome {
+        Ok(read) => !truncated(read),
+        Err(AppError::Db(sqlx::Error::Database(_))) => true,
+        Err(_) => false,
+    };
+    if !reusable {
+        return true;
+    }
+    match sqlx::raw_sql("ROLLBACK").execute(connection).await {
+        Ok(_) => false,
+        Err(error) => {
+            // A server error keeps its own diagnostic; a finished read reports
+            // that its transaction could not be closed.
+            if outcome.is_ok() {
+                *outcome = Err(error.into());
+            }
+            true
+        }
+    }
+}
+
+/// Returns a finished read's connection to the pool only when its session is idle.
+/// A capped read stops with unread rows (and, when scoped, an open read-only
+/// transaction): draining them would transfer the rest of the result, so the
+/// connection is closed instead (dropping it closes it). Any failure that may have
+/// stopped mid-result, or one that left a transaction open, closes it too; a
+/// server error with no transaction left open leaves the session ready for reuse.
+fn finish_read<DB: sqlx::Database, T>(
+    connection: cancel::AbandonClosingConnection<DB>,
+    outcome: &AppResult<T>,
+    truncated: impl FnOnce(&T) -> bool,
+    in_transaction: bool,
+) {
+    let idle = match outcome {
+        Ok(read) => !truncated(read),
+        Err(AppError::Db(sqlx::Error::Database(_))) => !in_transaction,
+        Err(_) => false,
+    };
+    if idle {
+        connection.release();
+    }
+}
 
 /// A row-bearing desktop page must remain small enough for a direct IPC callback.
 /// This is intentionally below Tauri's 8KiB fetch-queue threshold only for the
 /// notification path; row pages are pulled separately by the feature adapter.
 pub(crate) const DESKTOP_STREAM_BATCH_MAX_BYTES: usize = 512 * 1024;
-// Reserve envelope/column/identity JSON space before the adapter validates the
-// exact serialized `DesktopSqlStreamBatch`; pathological metadata still fails
-// closed at that boundary instead of retaining an oversized page.
-const DESKTOP_STREAM_ROW_BUDGET_BYTES: usize = DESKTOP_STREAM_BATCH_MAX_BYTES - 4 * 1024;
 
 /// A bounded decoded page emitted by the desktop-only streaming query path.
 /// The producer never retains prior pages; a receiver that rejects a page aborts
@@ -108,164 +222,86 @@ where
         _ => None,
     };
     if let Some(result) = materialized {
-        let columns = result.columns.clone();
-        let row_count = result.rows.len();
-        let first_row_ms = (!result.rows.is_empty()).then(|| started.elapsed().as_millis() as u64);
-        let mut batch = Vec::with_capacity(batch_rows);
-        let mut batch_bytes = 0usize;
-        let failures = result.decode_failures;
-        let mut row_start = 0_usize;
-        for row in result.rows {
-            let row_bytes = serde_json::to_vec(&row)?.len();
-            if row_bytes > DESKTOP_STREAM_ROW_BUDGET_BYTES {
-                return Err(AppError::Blocked {
-                    reason: "one streamed result row exceeds the 512 KiB batch safety limit".into(),
-                });
-            }
-            if !batch.is_empty()
-                && batch_bytes.saturating_add(row_bytes) > DESKTOP_STREAM_ROW_BUDGET_BYTES
-            {
-                let batch_len = batch.len();
-                let batch_decode_failures = failures
-                    .iter()
-                    .filter(|failure| {
-                        failure.row_index >= row_start && failure.row_index < row_start + batch_len
-                    })
-                    .cloned()
-                    .collect();
-                on_batch(ReadBatch {
-                    columns: columns.clone(),
-                    rows: std::mem::take(&mut batch),
-                    decode_failures: batch_decode_failures,
-                })
-                .await?;
-                row_start = row_start.saturating_add(batch_len);
-                batch = Vec::with_capacity(batch_rows);
-                batch_bytes = 0;
-            }
-            batch_bytes += row_bytes;
-            batch.push(row);
-            if batch.len() == batch_rows {
-                let batch_len = batch.len();
-                let batch_decode_failures = failures
-                    .iter()
-                    .filter(|failure| {
-                        failure.row_index >= row_start && failure.row_index < row_start + batch_len
-                    })
-                    .cloned()
-                    .collect();
-                on_batch(ReadBatch {
-                    columns: columns.clone(),
-                    rows: std::mem::take(&mut batch),
-                    decode_failures: batch_decode_failures,
-                })
-                .await?;
-                row_start = row_start.saturating_add(batch_len);
-                batch = Vec::with_capacity(batch_rows);
-                batch_bytes = 0;
-            }
-        }
-        if !batch.is_empty() || row_count == 0 {
-            on_batch(ReadBatch {
-                columns: columns.clone(),
-                rows: batch,
-                decode_failures: failures
-                    .into_iter()
-                    .filter(|failure| failure.row_index >= row_start)
-                    .collect(),
-            })
-            .await?;
-        }
-        return Ok(StreamedRead {
-            columns,
-            row_count,
-            truncated: result.truncated,
-            duration_ms: started.elapsed().as_millis() as u64,
-            first_row_ms,
-        });
+        return page_budget::stream_materialized(result, batch_rows, started, &mut on_batch).await;
     }
     let inner = async {
         let (columns, row_count, truncated, first_row_ms) = match &live.read_pool {
             Pool::Postgres(pool) => {
-                if let Some(namespace) = namespace.as_deref() {
-                    let mut transaction = pool.begin().await?;
-                    let context =
-                        crate::executor::namespace::postgres_search_path_statement(namespace);
-                    sqlx::query(AssertSqlSafe(context))
-                        .execute(&mut *transaction)
-                        .await?;
+                let mut connection = cancel::AbandonClosingConnection::acquire(pool).await?;
+                let scope = pg_read_scope(namespace.as_deref(), live.transaction_pooler);
+                let mut outcome = async {
+                    let facts = pg_session_facts(pool, &mut connection).await;
+                    let decode =
+                        |row: &PgRow, index: usize| values::pg_value_in(row, index, &facts);
+                    if let Some(scope) = scope.as_deref() {
+                        sqlx::raw_sql(AssertSqlSafe(scope))
+                            .execute(&mut *connection)
+                            .await?;
+                    }
                     let (columns, row_count, truncated, first_row_ms) = stream_batched(
-                        sqlx::query(AssertSqlSafe(sql)).fetch(&mut *transaction),
+                        sqlx::query(AssertSqlSafe(sql)).fetch(&mut *connection),
                         max,
                         batch_rows,
-                        pg_value,
+                        decode,
                         started,
                         &mut on_batch,
                     )
                     .await?;
-                    let columns = if columns.is_empty() {
-                        (&mut *transaction)
-                            .describe(AssertSqlSafe(sql).into_sql_str())
-                            .await
-                            .ok()
-                            .map(describe_cols)
-                            .unwrap_or_default()
-                    } else {
-                        columns
-                    };
-                    transaction.rollback().await?;
-                    (columns, row_count, truncated, first_row_ms)
-                } else {
+                    let columns = with_headers!(columns, &mut *connection, sql);
+                    Ok::<_, AppError>((columns, row_count, truncated, first_row_ms))
+                }
+                .await;
+                let open = scope.is_some()
+                    && end_pg_read_scope(&mut connection, &mut outcome, |read| read.2).await;
+                finish_read(connection, &outcome, |read| read.2, open);
+                outcome?
+            }
+            Pool::Mysql(pool) => {
+                let mut connection = cancel::AbandonClosingConnection::acquire(pool).await?;
+                let outcome = async {
+                    let facts = mysql_session_facts(pool, &mut connection).await;
                     let (columns, row_count, truncated, first_row_ms) = stream_batched(
-                        sqlx::query(AssertSqlSafe(sql)).fetch(pool),
+                        sqlx::query(AssertSqlSafe(sql)).fetch(&mut *connection),
                         max,
                         batch_rows,
-                        pg_value,
+                        |row: &MySqlRow, index: usize| values::mysql_value_in(row, index, &facts),
                         started,
                         &mut on_batch,
                     )
                     .await?;
-                    (
-                        with_headers(columns, pool, sql).await,
+                    Ok::<_, AppError>((
+                        with_headers!(columns, &mut *connection, sql),
                         row_count,
                         truncated,
                         first_row_ms,
-                    )
+                    ))
                 }
-            }
-            Pool::Mysql(pool) => {
-                let (columns, row_count, truncated, first_row_ms) = stream_batched(
-                    sqlx::query(AssertSqlSafe(sql)).fetch(pool),
-                    max,
-                    batch_rows,
-                    mysql_value,
-                    started,
-                    &mut on_batch,
-                )
-                .await?;
-                (
-                    with_headers(columns, pool, sql).await,
-                    row_count,
-                    truncated,
-                    first_row_ms,
-                )
+                .await;
+                finish_read(connection, &outcome, |read| read.2, false);
+                outcome?
             }
             Pool::Sqlite(pool) => {
-                let (columns, row_count, truncated, first_row_ms) = stream_batched(
-                    sqlx::query(AssertSqlSafe(sql)).fetch(pool),
-                    max,
-                    batch_rows,
-                    sqlite_value,
-                    started,
-                    &mut on_batch,
-                )
-                .await?;
-                (
-                    with_headers(columns, pool, sql).await,
-                    row_count,
-                    truncated,
-                    first_row_ms,
-                )
+                let mut connection = cancel::AbandonClosingConnection::acquire(pool).await?;
+                let outcome = async {
+                    let (columns, row_count, truncated, first_row_ms) = stream_batched(
+                        sqlx::query(AssertSqlSafe(sql)).fetch(&mut *connection),
+                        max,
+                        batch_rows,
+                        sqlite_value,
+                        started,
+                        &mut on_batch,
+                    )
+                    .await?;
+                    Ok::<_, AppError>((
+                        with_headers!(columns, &mut *connection, sql),
+                        row_count,
+                        truncated,
+                        first_row_ms,
+                    ))
+                }
+                .await;
+                connection.release();
+                outcome?
             }
             Pool::Bigquery(_) | Pool::CloudflareD1(_) => {
                 unreachable!("remote CLI engines are handled before the SQLx stream")
@@ -369,49 +405,79 @@ pub(crate) async fn run_read_byte_capped(
     let inner = async {
         let (columns, rows, decode_failures, truncated) = match &live.read_pool {
             Pool::Postgres(pool) => {
-                let (columns, rows, decode_failures, truncated) = stream_byte_capped(
-                    sqlx::query(AssertSqlSafe(sql)).fetch(pool),
-                    max,
-                    max_bytes,
-                    pg_value,
-                )
-                .await?;
-                (
-                    with_headers(columns, pool, sql).await,
-                    rows,
-                    decode_failures,
-                    truncated,
-                )
+                let mut connection = cancel::AbandonClosingConnection::acquire(pool).await?;
+                // A job read has no namespace; a transaction pooler still needs its
+                // own read-only transaction.
+                let scope = pg_read_scope(None, live.transaction_pooler);
+                let mut outcome = async {
+                    let facts = pg_session_facts(pool, &mut connection).await;
+                    if let Some(scope) = scope.as_deref() {
+                        sqlx::raw_sql(AssertSqlSafe(scope))
+                            .execute(&mut *connection)
+                            .await?;
+                    }
+                    let (columns, rows, decode_failures, truncated) = stream_byte_capped(
+                        sqlx::query(AssertSqlSafe(sql)).fetch(&mut *connection),
+                        max,
+                        max_bytes,
+                        |row: &PgRow, index: usize| values::pg_value_in(row, index, &facts),
+                    )
+                    .await?;
+                    Ok::<_, AppError>((
+                        with_headers!(columns, &mut *connection, sql),
+                        rows,
+                        decode_failures,
+                        truncated,
+                    ))
+                }
+                .await;
+                let open = scope.is_some()
+                    && end_pg_read_scope(&mut connection, &mut outcome, |read| read.3).await;
+                finish_read(connection, &outcome, |read| read.3, open);
+                outcome?
             }
             Pool::Mysql(pool) => {
-                let (columns, rows, decode_failures, truncated) = stream_byte_capped(
-                    sqlx::query(AssertSqlSafe(sql)).fetch(pool),
-                    max,
-                    max_bytes,
-                    mysql_value,
-                )
-                .await?;
-                (
-                    with_headers(columns, pool, sql).await,
-                    rows,
-                    decode_failures,
-                    truncated,
-                )
+                let mut connection = cancel::AbandonClosingConnection::acquire(pool).await?;
+                let outcome = async {
+                    let facts = mysql_session_facts(pool, &mut connection).await;
+                    let (columns, rows, decode_failures, truncated) = stream_byte_capped(
+                        sqlx::query(AssertSqlSafe(sql)).fetch(&mut *connection),
+                        max,
+                        max_bytes,
+                        |row: &MySqlRow, index: usize| values::mysql_value_in(row, index, &facts),
+                    )
+                    .await?;
+                    Ok::<_, AppError>((
+                        with_headers!(columns, &mut *connection, sql),
+                        rows,
+                        decode_failures,
+                        truncated,
+                    ))
+                }
+                .await;
+                finish_read(connection, &outcome, |read| read.3, false);
+                outcome?
             }
             Pool::Sqlite(pool) => {
-                let (columns, rows, decode_failures, truncated) = stream_byte_capped(
-                    sqlx::query(AssertSqlSafe(sql)).fetch(pool),
-                    max,
-                    max_bytes,
-                    sqlite_value,
-                )
-                .await?;
-                (
-                    with_headers(columns, pool, sql).await,
-                    rows,
-                    decode_failures,
-                    truncated,
-                )
+                let mut connection = cancel::AbandonClosingConnection::acquire(pool).await?;
+                let outcome = async {
+                    let (columns, rows, decode_failures, truncated) = stream_byte_capped(
+                        sqlx::query(AssertSqlSafe(sql)).fetch(&mut *connection),
+                        max,
+                        max_bytes,
+                        sqlite_value,
+                    )
+                    .await?;
+                    Ok::<_, AppError>((
+                        with_headers!(columns, &mut *connection, sql),
+                        rows,
+                        decode_failures,
+                        truncated,
+                    ))
+                }
+                .await;
+                connection.release();
+                outcome?
             }
             Pool::Bigquery(_) | Pool::CloudflareD1(_) => {
                 unreachable!("remote CLI engines are handled before the SQLx stream")
@@ -455,55 +521,61 @@ pub(crate) async fn run_read_registered(
     let inner = async {
         let (columns, rows, decode_failures, truncated) = match &live.read_pool {
             Pool::Postgres(pool) => {
-                if let Some(namespace) = namespace.as_deref() {
-                    let mut transaction = pool.begin().await?;
-                    let context =
-                        crate::executor::namespace::postgres_search_path_statement(namespace);
-                    sqlx::query(AssertSqlSafe(context))
-                        .execute(&mut *transaction)
-                        .await?;
-                    let (columns, rows, decode_failures, truncated) = stream_capped(
-                        sqlx::query(AssertSqlSafe(sql)).fetch(&mut *transaction),
+                let mut connection = cancel::AbandonClosingConnection::acquire(pool).await?;
+                let scope = pg_read_scope(namespace.as_deref(), live.transaction_pooler);
+                let mut outcome = async {
+                    let facts = pg_session_facts(pool, &mut connection).await;
+                    let decode =
+                        |row: &PgRow, index: usize| values::pg_value_in(row, index, &facts);
+                    if let Some(scope) = scope.as_deref() {
+                        sqlx::raw_sql(AssertSqlSafe(scope))
+                            .execute(&mut *connection)
+                            .await?;
+                    }
+                    let (c, r, f, t) = stream_capped(
+                        sqlx::query(AssertSqlSafe(sql)).fetch(&mut *connection),
                         max,
-                        pg_value,
+                        decode,
                     )
                     .await?;
-                    let columns = if columns.is_empty() {
-                        (&mut *transaction)
-                            .describe(AssertSqlSafe(sql).into_sql_str())
-                            .await
-                            .ok()
-                            .map(describe_cols)
-                            .unwrap_or_default()
-                    } else {
-                        columns
-                    };
-                    transaction.rollback().await?;
-                    (columns, rows, decode_failures, truncated)
-                } else {
-                    let (c, r, f, t) =
-                        stream_capped(sqlx::query(AssertSqlSafe(sql)).fetch(pool), max, pg_value)
-                            .await?;
-                    (with_headers(c, pool, sql).await, r, f, t)
+                    Ok::<_, AppError>((with_headers!(c, &mut *connection, sql), r, f, t))
                 }
+                .await;
+                let open = scope.is_some()
+                    && end_pg_read_scope(&mut connection, &mut outcome, |read| read.3).await;
+                finish_read(connection, &outcome, |read| read.3, open);
+                outcome?
             }
             Pool::Mysql(pool) => {
-                let (c, r, f, t) = stream_capped(
-                    sqlx::query(AssertSqlSafe(sql)).fetch(pool),
-                    max,
-                    mysql_value,
-                )
-                .await?;
-                (with_headers(c, pool, sql).await, r, f, t)
+                let mut connection = cancel::AbandonClosingConnection::acquire(pool).await?;
+                let outcome = async {
+                    let facts = mysql_session_facts(pool, &mut connection).await;
+                    let (c, r, f, t) = stream_capped(
+                        sqlx::query(AssertSqlSafe(sql)).fetch(&mut *connection),
+                        max,
+                        |row: &MySqlRow, index: usize| values::mysql_value_in(row, index, &facts),
+                    )
+                    .await?;
+                    Ok::<_, AppError>((with_headers!(c, &mut *connection, sql), r, f, t))
+                }
+                .await;
+                finish_read(connection, &outcome, |read| read.3, false);
+                outcome?
             }
             Pool::Sqlite(pool) => {
-                let (c, r, f, t) = stream_capped(
-                    sqlx::query(AssertSqlSafe(sql)).fetch(pool),
-                    max,
-                    sqlite_value,
-                )
-                .await?;
-                (with_headers(c, pool, sql).await, r, f, t)
+                let mut connection = cancel::AbandonClosingConnection::acquire(pool).await?;
+                let outcome = async {
+                    let (c, r, f, t) = stream_capped(
+                        sqlx::query(AssertSqlSafe(sql)).fetch(&mut *connection),
+                        max,
+                        sqlite_value,
+                    )
+                    .await?;
+                    Ok::<_, AppError>((with_headers!(c, &mut *connection, sql), r, f, t))
+                }
+                .await;
+                connection.release();
+                outcome?
             }
             Pool::Bigquery(_) | Pool::CloudflareD1(_) => {
                 unreachable!("remote CLI engines are handled before the SQLx stream")
@@ -522,23 +594,6 @@ pub(crate) async fn run_read_registered(
     let mut result = cancel::guard_registered(cancellation, cancel::QUERY_TIMEOUT, inner).await?;
     result.duration_ms = started.elapsed().as_millis() as u64;
     Ok(result)
-}
-
-/// Columns from the first row are empty when zero rows come back; fall back to the
-/// prepared-statement metadata (`describe`) so an empty result still has headers.
-async fn with_headers<'e, E>(cols: Vec<String>, ex: E, sql: &str) -> Vec<String>
-where
-    E: Executor<'e>,
-{
-    if cols.is_empty() {
-        ex.describe(AssertSqlSafe(sql).into_sql_str())
-            .await
-            .ok()
-            .map(describe_cols)
-            .unwrap_or_default()
-    } else {
-        cols
-    }
 }
 
 /// Column names from statement metadata (used for zero-row headers).
@@ -602,6 +657,8 @@ where
     let mut row_count = 0_usize;
     let mut truncated = false;
     let mut first_row_ms = None;
+    // Room for rows once the page envelope and column names are counted.
+    let mut page_budget = 0_usize;
     while let Some(row) = stream.try_next().await? {
         first_row_ms.get_or_insert_with(|| started.elapsed().as_millis() as u64);
         if columns.is_empty() {
@@ -610,21 +667,15 @@ where
                 .iter()
                 .map(|column| column.name().to_owned())
                 .collect();
+            page_budget = page_row_budget(&columns)?;
         }
         if row_count >= max_rows {
             truncated = true;
             break;
         }
-        let (decoded, failures) = decode_row(&row, row_count, row.columns().len(), &decode);
-        let row_bytes = serde_json::to_vec(&decoded)?.len();
-        if row_bytes > DESKTOP_STREAM_ROW_BUDGET_BYTES {
-            return Err(AppError::Blocked {
-                reason: "one streamed result row exceeds the 512 KiB batch safety limit".into(),
-            });
-        }
-        if !batch.is_empty()
-            && batch_bytes.saturating_add(row_bytes) > DESKTOP_STREAM_ROW_BUDGET_BYTES
-        {
+        let (mut decoded, mut failures) = decode_row(&row, row_count, row.columns().len(), &decode);
+        let row_bytes = fit_row_to_page(&mut decoded, &mut failures, row_count, page_budget)?;
+        if !batch.is_empty() && batch_bytes.saturating_add(row_bytes) > page_budget {
             on_batch(ReadBatch {
                 columns: columns.clone(),
                 rows: std::mem::take(&mut batch),
@@ -688,7 +739,7 @@ where
             break;
         }
         let (decoded, failures) = decode_row(&row, rows.len(), row.columns().len(), &decode);
-        let row_bytes = serde_json::to_vec(&decoded)?.len();
+        let row_bytes = json_size(&decoded)?;
         if row_bytes > max_bytes {
             return Err(AppError::Blocked {
                 reason: format!(
@@ -717,7 +768,17 @@ fn decode_row<R: Row>(
     let mut values = Vec::with_capacity(column_count);
     let mut failures = Vec::new();
     for column_index in 0..column_count {
-        let decoded = decode(row, column_index);
+        // A driver decoder panic is contained to the one cell it was decoding:
+        // the cell becomes failure metadata and the command still answers.
+        let decoded =
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| decode(row, column_index)))
+                .unwrap_or_else(|_| values::DecodedCell {
+                    value: Value::Null,
+                    failure_type: Some(row.columns().get(column_index).map_or_else(
+                        || "unknown".into(),
+                        |column| column.type_info().name().to_ascii_lowercase(),
+                    )),
+                });
         if let Some(database_type) = decoded.failure_type {
             failures.push(CellDecodeFailure {
                 row_index,

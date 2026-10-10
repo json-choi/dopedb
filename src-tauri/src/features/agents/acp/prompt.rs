@@ -4,8 +4,7 @@ use agent_client_protocol::schema::v1::{ContentBlock, TextContent};
 
 use crate::error::{AppError, AppResult};
 
-use super::super::domain::AcpPromptContext;
-use super::super::domain::AcpSessionSummary;
+use super::super::domain::{agent_error, AcpPromptContext, AcpSessionSummary};
 use super::process;
 
 const MAX_PROMPT_BYTES: usize = 32 * 1024;
@@ -19,11 +18,18 @@ pub(super) fn normalize(prompt: String) -> AppResult<String> {
         return Err(AppError::Config("the Agent prompt cannot be empty".into()));
     }
     if prompt.len() > MAX_PROMPT_BYTES {
-        return Err(AppError::Blocked {
-            reason: format!("the Agent prompt exceeds the {MAX_PROMPT_BYTES}-byte limit"),
-        });
+        return Err(too_large(format_args!(
+            "prompt over {MAX_PROMPT_BYTES} bytes"
+        )));
     }
     Ok(prompt)
+}
+
+/// A prompt or attached context over its byte bound; the bound is a copyable detail.
+fn too_large(detail: std::fmt::Arguments<'_>) -> AppError {
+    AppError::Blocked {
+        reason: agent_error::with_detail(agent_error::CONTEXT_TOO_LARGE, detail),
+    }
 }
 
 pub(super) fn validate_context(context: &AcpPromptContext) -> AppResult<()> {
@@ -53,11 +59,9 @@ pub(super) fn validate_context(context: &AcpPromptContext) -> AppResult<()> {
         ),
     ] {
         if value.is_some_and(|value| value.len() > MAX_CONTEXT_LABEL_BYTES) {
-            return Err(AppError::Blocked {
-                reason: format!(
-                    "the Agent {label} exceeds the {MAX_CONTEXT_LABEL_BYTES}-byte context limit"
-                ),
-            });
+            return Err(too_large(format_args!(
+                "{label} over {MAX_CONTEXT_LABEL_BYTES} bytes"
+            )));
         }
     }
     if context
@@ -65,11 +69,9 @@ pub(super) fn validate_context(context: &AcpPromptContext) -> AppResult<()> {
         .as_ref()
         .is_some_and(|text| text.len() > MAX_DOCUMENT_BYTES)
     {
-        return Err(AppError::Blocked {
-            reason: format!(
-                "the attached document exceeds the {MAX_DOCUMENT_BYTES}-byte Agent context limit"
-            ),
-        });
+        return Err(too_large(format_args!(
+            "document over {MAX_DOCUMENT_BYTES} bytes"
+        )));
     }
     if let Some(table) = &context.table {
         if table.table.trim().is_empty() || table.table.len() > 512 {
@@ -83,11 +85,7 @@ pub(super) fn validate_context(context: &AcpPromptContext) -> AppResult<()> {
             .and_then(|row| serde_json::to_vec(row).ok())
             .is_some_and(|row| row.len() > MAX_ROW_BYTES)
         {
-            return Err(AppError::Blocked {
-                reason: format!(
-                    "the selected row exceeds the {MAX_ROW_BYTES}-byte Agent context limit"
-                ),
-            });
+            return Err(too_large(format_args!("row over {MAX_ROW_BYTES} bytes")));
         }
     }
     Ok(())
@@ -101,11 +99,13 @@ pub(super) fn validate_scope(
         || context.document_name.is_some()
         || context.document_text.is_some()
         || context.table.is_some();
+    // Editor context needs an exact database inside the session's selected set.
+    let outside = || AppError::Blocked {
+        reason: agent_error::EDITOR_CONTEXT_OUTSIDE_SCOPE.into(),
+    };
     let Some(connection_id) = context.connection_id else {
         return if has_editor_context {
-            Err(AppError::Blocked {
-                reason: "editor context requires an exact selected database".into(),
-            })
+            Err(outside())
         } else {
             Ok(())
         };
@@ -116,9 +116,7 @@ pub(super) fn validate_scope(
             .iter()
             .any(|connection| connection.connection_id == connection_id)
     });
-    selected.then_some(()).ok_or_else(|| AppError::Blocked {
-        reason: "editor context is outside the Agent's exact selected database set".into(),
-    })
+    selected.then_some(()).ok_or_else(outside)
 }
 
 pub(super) fn content(
@@ -179,12 +177,15 @@ pub(super) fn content(
     blocks
 }
 
+/// Language-neutral labels for the visible user turn: the document name (or
+/// `SQL` when unnamed) and the table path with column and `#row` index. The
+/// Desktop shows them as written, so no English words are stored here.
 pub(super) fn attachments(context: &AcpPromptContext) -> Vec<String> {
     let mut attachments = Vec::new();
     if let Some(name) = context.document_name.as_deref() {
-        attachments.push(format!("Document · {}", truncate_chars(name, 80)));
+        attachments.push(truncate_chars(name, 80));
     } else if context.document_text.is_some() {
-        attachments.push("SQL document".into());
+        attachments.push("SQL".into());
     }
     if let Some(table) = &context.table {
         let mut label = [
@@ -200,7 +201,10 @@ pub(super) fn attachments(context: &AcpPromptContext) -> Vec<String> {
             label.push_str(&format!(" · {column}"));
         }
         if table.row.is_some() {
-            label.push_str(" · row");
+            match table.row_index {
+                Some(index) => label.push_str(&format!(" · #{}", index.saturating_add(1))),
+                None => label.push_str(" · #"),
+            }
         }
         attachments.push(label);
     }

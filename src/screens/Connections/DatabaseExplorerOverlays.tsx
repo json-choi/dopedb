@@ -2,19 +2,23 @@
 import type { ReactNode, RefObject } from "react";
 
 import EngineMark from "../../components/EngineMark";
+import { Button } from "../../design-system/components/Button";
+import {
+  ModalBackdrop,
+  ModalFooter,
+  ModalHeader,
+  ModalSurface,
+} from "../../design-system/components/Modal";
+import type { PendingSchemaGroupChange } from "../../features/catalogExplorer/useSchemaGroupDrag";
 import { ProviderCredentialDialog } from "../../features/providers/ProviderCredentialDialog";
 import type { ProviderKind } from "../../features/providers/domain";
 import { EnvironmentSetupDialog } from "../../features/knowledge/components/EnvironmentSetupDialog";
 import { ProjectSetupDialog } from "../../features/knowledge/components/ProjectSetupDialog";
 import type { KnowledgeProject } from "../../features/knowledge/domain";
-import type {
-  DdlDialogState,
-  WorkspaceDialogState,
-} from "../../features/catalogExplorer/domain";
+import type { WorkspaceDialogState } from "../../features/catalogExplorer/domain";
 import type { ConnectionProfile } from "../../features/connections/domain";
 import WorkspaceConnectionDialog from "../../features/workspaces/components/WorkspaceConnectionDialog";
 import { useI18n } from "../../lib/i18n";
-import DdlModal from "./DdlModal";
 
 interface DatabaseExplorerOverlaysProps {
   workspaceAccount?: ReactNode;
@@ -30,7 +34,7 @@ interface DatabaseExplorerOverlaysProps {
   } | null;
   orderAnnouncement: { id: number; message: string } | null;
   connections: ConnectionProfile[];
-  ddlDialog: DdlDialogState | null;
+  pendingGroupChange: PendingSchemaGroupChange | null;
   workspaceDialog: WorkspaceDialogState | null;
   providerCredentialsOpen: ProviderKind | null;
   providerReturnFocusRef: RefObject<HTMLElement | null>;
@@ -39,7 +43,8 @@ interface DatabaseExplorerOverlaysProps {
   onCloseProjectSetup: () => void;
   onCloseEnvironmentSetup: () => void;
   onConnectionUpdated: (connection: ConnectionProfile) => void;
-  onCloseDdl: () => void;
+  onConfirmGroupChange: () => void;
+  onCancelGroupChange: () => void;
   onCloseWorkspaceDialog: () => void;
   onCloseProviderCredentials: () => void;
 }
@@ -53,7 +58,7 @@ export function DatabaseExplorerOverlays({
   dragPreview,
   orderAnnouncement,
   connections,
-  ddlDialog,
+  pendingGroupChange,
   workspaceDialog,
   providerCredentialsOpen,
   providerReturnFocusRef,
@@ -62,7 +67,8 @@ export function DatabaseExplorerOverlays({
   onCloseProjectSetup,
   onCloseEnvironmentSetup,
   onConnectionUpdated,
-  onCloseDdl,
+  onConfirmGroupChange,
+  onCancelGroupChange,
   onCloseWorkspaceDialog,
   onCloseProviderCredentials,
 }: DatabaseExplorerOverlaysProps) {
@@ -144,16 +150,45 @@ export function DatabaseExplorerOverlays({
         </span>
       ) : null}
 
-      {ddlDialog ? (
-        <DdlModal
-          connection={ddlDialog.connection}
-          table={ddlDialog.table}
-          onClose={onCloseDdl}
-        />
+      {pendingGroupChange ? (
+        <ModalBackdrop onMouseDown={onCancelGroupChange}>
+          <ModalSurface
+            size="alert"
+            role="alertdialog"
+            aria-labelledby="schema-group-change-title"
+            aria-describedby="schema-group-change-body"
+            onRequestClose={onCancelGroupChange}
+          >
+            <ModalHeader
+              title={t("connections.schemaGroup")}
+              titleId="schema-group-change-title"
+            />
+            <p
+              id="schema-group-change-body"
+              className="tw:m-0 tw:px-5 tw:py-4 tw:text-ui tw:leading-body"
+            >
+              {pendingGroupChange.message}
+            </p>
+            <ModalFooter>
+              <Button data-modal-initial-focus onClick={onCancelGroupChange}>
+                {t("common.cancel")}
+              </Button>
+              <Button variant="primary" onClick={onConfirmGroupChange}>
+                {t("common.apply")}
+              </Button>
+            </ModalFooter>
+          </ModalSurface>
+        </ModalBackdrop>
       ) : null}
       {workspaceDialog ? (
         <WorkspaceConnectionDialog
-          connection={workspaceDialog.connection}
+          // The latest binding, not the one captured when the dialog opened, decides
+          // whether a saved password can be kept.
+          connection={
+            connections.find(
+              (connection) => connection.id === workspaceDialog.connection.id,
+            ) ?? workspaceDialog.connection
+          }
           mode={workspaceDialog.mode}
           onBound={onConnectionUpdated}
           onClose={onCloseWorkspaceDialog}

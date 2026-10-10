@@ -7,6 +7,7 @@ mod projection;
 mod public_skill;
 mod query_document;
 
+pub(super) use external_agent::release_external_session;
 use projection::*;
 
 use super::session::{AuthenticatedSession, BrokerCapability, BrokerSessionRegistry};

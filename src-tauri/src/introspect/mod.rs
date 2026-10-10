@@ -9,6 +9,7 @@ mod sqlite;
 
 pub(crate) use catalog_v2::{
     load_catalog_snapshot_in_context, snapshot_from_catalog, CatalogReadMode,
+    CATALOG_PRODUCER_REVISION,
 };
 
 use crate::connection::{DbPool, Live};
@@ -92,7 +93,9 @@ fn valid_database_name(name: &str) -> bool {
 ///
 /// - MySQL: `SHOW CREATE TABLE` (server-authoritative).
 /// - SQLite: the stored `sqlite_master.sql` for the table plus its indexes.
-/// - Postgres: synthesized from the catalog (NOT pg_dump-exact — see `pg::table_ddl`).
+/// - Postgres: one relation read by oid and rendered from server functions (tables,
+///   partitions, foreign tables, views, materialized views); NOT pg_dump-exact — see
+///   `pg::table_ddl`.
 pub(crate) async fn table_ddl(live: &Live, schema: Option<&str>, table: &str) -> AppResult<String> {
     match live {
         Live::Sql(live) => match live.ro() {

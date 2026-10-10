@@ -29,13 +29,16 @@ import {
   type VirtualTreeRow,
 } from "../../design-system/components/VirtualTreeRows";
 import { isDocumentEngine } from "../../lib/capabilities";
+import { persistedCatalogCapturedAt } from "../../features/catalog/tauriAdapter";
 import { useI18n } from "../../lib/i18n";
 import type { SchemaConnectionGroup } from "../../lib/schemaDiff";
 import { tableKey } from "../../lib/tableRef";
 import {
+  catalogMetadataRows,
   CatalogMissingRelationRow,
   CatalogObjectRow,
   CatalogRelationRow,
+  type CatalogMetadataSection,
 } from "./CatalogTreeRows";
 import { useCatalogTreeProjection } from "./useCatalogTreeProjection";
 import { CatalogTreeStatus } from "./CatalogTreeStatus";
@@ -69,9 +72,13 @@ type Props = {
   onRequestDetails: () => void;
   onRetryOverview: () => void;
   onEdit: () => void;
+  onRefreshWorkspace?: () => void;
   onResolveAccess?: () => void;
   onRecoverAuthentication?: () => void;
   onRecoverManagedConnection?: () => void;
+  onSignInWorkspace?: () => void;
+  /** An explicit refresh of this connection's catalog is running. */
+  refreshing?: boolean;
   authenticationRecoveryPending?: boolean;
   authenticationRecoveryError?: CatalogLoadIssue;
   onToggleRelationSection: (key: string) => void;
@@ -92,6 +99,13 @@ export type CatalogTreeSearchResult = {
   database: string;
   table?: CatalogTable;
 };
+
+function relationSectionKind(table: CatalogTable) {
+  if (table.kind === "view") return "view";
+  // Distinct from the auxiliary `materialized_view` object section's state and keys.
+  if (table.kind === "materialized_view") return "materialized_relation";
+  return "table";
+}
 
 export default function CatalogTree(props: Props) {
   const { t } = useI18n();
@@ -195,7 +209,7 @@ export default function CatalogTree(props: Props) {
     if (table && schemaKey) {
       const relationSection = isDocumentEngine(connection.engine)
         ? "collections"
-        : `${schemaKey}:${table.kind === "view" ? "view" : "table"}`;
+        : `${schemaKey}:${relationSectionKind(table)}`;
       const relationSectionKey = databaseSectionKey(relationSection);
       if (
         collapsedSections.has(
@@ -264,7 +278,10 @@ export default function CatalogTree(props: Props) {
     });
   }
 
-  function toggleMetadataSection(table: CatalogTable, section: string) {
+  function toggleMetadataSection(
+    table: CatalogTable,
+    section: CatalogMetadataSection,
+  ) {
     const key = `${tableKey(table)}:${section}`;
     setCollapsedMetadataSections((current) => {
       const next = new Set(current);
@@ -284,7 +301,6 @@ export default function CatalogTree(props: Props) {
         tableDiff={diff?.tableDiffs[key]}
         fullCatalogLoaded={Boolean(fullCatalog)}
         detailsOpen={detailsOpen}
-        collapsedMetadataSections={collapsedMetadataSections}
         searchResultKey={
           normalizedFilter ? tableSearchResultKey(table) : undefined
         }
@@ -292,9 +308,6 @@ export default function CatalogTree(props: Props) {
         selected={selected && selectedTableKey === key}
         showRowCounts={showRowCounts}
         onToggleDetails={() => toggleTableDetails(table)}
-        onToggleMetadataSection={(section) =>
-          toggleMetadataSection(table, section)
-        }
         onOpen={() => props.onOpenTable(table)}
       />
     );
@@ -371,6 +384,44 @@ export default function CatalogTree(props: Props) {
       ),
     [treeKey],
   );
+
+  /** A relation row plus, when expanded, its metadata groups and items as tree items. */
+  function pushRelationRows(
+    rows: VirtualTreeRow[],
+    table: CatalogTable,
+    parentKey: string,
+    level: number,
+  ) {
+    const key = tableKey(table);
+    const relationTreeKey = tableTreeKey(table);
+    const relationRowKey = tableRowKey(table);
+    const expandable = !isDocumentEngine(connection.engine);
+    const detailsOpen = expandable && expandedTables.has(key);
+    rows.push(row(
+      relationRowKey,
+      1,
+      {
+        key: relationTreeKey,
+        parentKey,
+        level,
+        expanded: expandable ? detailsOpen : undefined,
+        selected: selected && selectedTableKey === key,
+      },
+      () => renderTable(table),
+    ));
+    if (!detailsOpen) return;
+    for (const entry of catalogMetadataRows({
+      table,
+      relationRowKey,
+      relationTreeKey,
+      level,
+      loaded: Boolean(fullCatalog),
+      isCollapsed: (section) => collapsedMetadataSections.has(`${key}:${section}`),
+      onToggle: (section) => toggleMetadataSection(table, section),
+    })) {
+      rows.push(row(entry.key, 1, entry.treeItem, entry.render));
+    }
+  }
 
   const searchResults = useMemo<CatalogTreeSearchResult[]>(() => {
     if (!normalizedFilter) return [];
@@ -472,17 +523,12 @@ export default function CatalogTree(props: Props) {
         ));
         if (collectionsOpen) {
           for (const table of tables) {
-            rows.push(row(
-              tableRowKey(table),
-              1,
-              {
-                key: tableTreeKey(table),
-                parentKey: collectionsTreeKey,
-                level: props.treeLevel + 2,
-                selected: selected && selectedTableKey === tableKey(table),
-              },
-              () => renderTable(table),
-            ));
+            pushRelationRows(
+              rows,
+              table,
+              collectionsTreeKey,
+              props.treeLevel + 2,
+            );
           }
         }
       }
@@ -516,101 +562,50 @@ export default function CatalogTree(props: Props) {
         ));
         if (!schemaOpen) continue;
 
-        const tableSectionKey = databaseSectionKey(`${schemaKey}:table`);
-        const tablesOpen =
-          Boolean(normalizedFilter) ||
-          !collapsedSections.has(`${connection.id}:${tableSectionKey}`);
-        if (contents.tables.length > 0) {
-          const tablesTreeKey = treeKey(
-            `schema:${schemaKey}:section:table`,
-          );
+        const relationSections = [
+          { kind: "table", icon: "table", relations: contents.tables },
+          { kind: "view", icon: "view", relations: contents.views },
+          {
+            kind: "materialized_relation",
+            icon: "materializedView",
+            relations: contents.materializedViews,
+          },
+        ] as const;
+        for (const { kind, icon, relations } of relationSections) {
+          if (relations.length === 0) continue;
+          const sectionKey = databaseSectionKey(`${schemaKey}:${kind}`);
+          const open =
+            Boolean(normalizedFilter) ||
+            !collapsedSections.has(`${connection.id}:${sectionKey}`);
+          const sectionTreeKey = treeKey(`schema:${schemaKey}:section:${kind}`);
+          const count = relations.length;
           rows.push(row(
-            `${connection.database}:schema:${schemaKey}:section:table`,
+            `${connection.database}:schema:${schemaKey}:section:${kind}`,
             1,
             {
-              key: tablesTreeKey,
+              key: sectionTreeKey,
               parentKey: schemaTreeKey,
               level: props.treeLevel + 2,
-              expanded: tablesOpen,
+              expanded: open,
             },
             () => (
               <TreeSectionButton
-                expanded={tablesOpen}
-                icon="table"
+                expanded={open}
+                icon={icon}
                 treeItemContent
-                onToggle={() =>
-                  props.onToggleRelationSection(tableSectionKey)
-                }
+                onToggle={() => props.onToggleRelationSection(sectionKey)}
               >
-                {t("connections.tables", { count: contents.tables.length })}
+                {kind === "table"
+                  ? t("connections.tables", { count })
+                  : kind === "view"
+                    ? t("connections.views", { count })
+                    : t("connections.materializedViews", { count })}
               </TreeSectionButton>
             ),
           ));
-          if (tablesOpen) {
-            for (const table of contents.tables) {
-              rows.push(row(
-                tableRowKey(table),
-                1,
-                {
-                  key: tableTreeKey(table),
-                  parentKey: tablesTreeKey,
-                  level: props.treeLevel + 3,
-                  expanded: isDocumentEngine(connection.engine)
-                    ? undefined
-                    : expandedTables.has(tableKey(table)),
-                  selected: selected && selectedTableKey === tableKey(table),
-                },
-                () => renderTable(table),
-              ));
-            }
-          }
-        }
-
-        const viewSectionKey = databaseSectionKey(`${schemaKey}:view`);
-        const viewsOpen =
-          Boolean(normalizedFilter) ||
-          !collapsedSections.has(`${connection.id}:${viewSectionKey}`);
-        if (contents.views.length > 0) {
-          const viewsTreeKey = treeKey(
-            `schema:${schemaKey}:section:view`,
-          );
-          rows.push(row(
-            `${connection.database}:schema:${schemaKey}:section:view`,
-            1,
-            {
-              key: viewsTreeKey,
-              parentKey: schemaTreeKey,
-              level: props.treeLevel + 2,
-              expanded: viewsOpen,
-            },
-            () => (
-              <TreeSectionButton
-                expanded={viewsOpen}
-                icon="view"
-                treeItemContent
-                onToggle={() =>
-                  props.onToggleRelationSection(viewSectionKey)
-                }
-              >
-                {t("connections.views", { count: contents.views.length })}
-              </TreeSectionButton>
-            ),
-          ));
-          if (viewsOpen) {
-            for (const view of contents.views) {
-              rows.push(row(
-                tableRowKey(view),
-                1,
-                {
-                  key: tableTreeKey(view),
-                  parentKey: viewsTreeKey,
-                  level: props.treeLevel + 3,
-                  expanded: expandedTables.has(tableKey(view)),
-                  selected: selected && selectedTableKey === tableKey(view),
-                },
-                () => renderTable(view),
-              ));
-            }
+          if (!open) continue;
+          for (const relation of relations) {
+            pushRelationRows(rows, relation, sectionTreeKey, props.treeLevel + 3);
           }
         }
 
@@ -721,6 +716,7 @@ export default function CatalogTree(props: Props) {
       <div
         className="tw:flex tw:flex-col tw:gap-px"
         data-database-root
+        aria-busy={props.refreshing || undefined}
       >
         <TreeSectionButton
           expanded={databaseVisible}
@@ -737,6 +733,9 @@ export default function CatalogTree(props: Props) {
         {databaseVisible ? (
           <div className="tw:flex tw:flex-col tw:gap-px tw:pl-3">
             <CatalogTreeStatus
+              persistedAt={
+                fullCatalog ? persistedCatalogCapturedAt(fullCatalog) : null
+              }
               accessIssue={accessIssue}
               error={error}
               detailError={detailError}
@@ -747,6 +746,7 @@ export default function CatalogTree(props: Props) {
                 missingTables.length === 0
               }
               normalizedFilter={normalizedFilter}
+              refreshing={props.refreshing}
               databaseTreeKey={databaseTreeKey}
               treeLevel={props.treeLevel}
               authenticationMode={
@@ -761,9 +761,11 @@ export default function CatalogTree(props: Props) {
               onResolveAccess={props.onResolveAccess}
               onRecoverAuthentication={props.onRecoverAuthentication}
               onRecoverManagedConnection={props.onRecoverManagedConnection}
+              onSignInWorkspace={props.onSignInWorkspace}
               onRetryOverview={props.onRetryOverview}
               onRequestDetails={props.onRequestDetails}
               onEdit={props.onEdit}
+              onRefreshWorkspace={props.onRefreshWorkspace}
             />
             {databaseRows.length > 0 ? (
               <VirtualTreeRows

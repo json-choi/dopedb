@@ -1,6 +1,8 @@
 //! Script result projection, transaction execution, and audit/history recording.
 
 use super::*;
+use crate::error::db_error_text;
+use crate::model::ScriptStatementError;
 
 pub(super) fn statement_ok(sql: &str, affected: u64) -> ScriptStatement {
     ScriptStatement {
@@ -11,17 +13,57 @@ pub(super) fn statement_ok(sql: &str, affected: u64) -> ScriptStatement {
     }
 }
 
-pub(super) fn statement_error(sql: &str, message: String) -> ScriptStatement {
+/// A statement without a result. `kind` is a closed script state or an
+/// `AppError` kind, so the UI translates it instead of showing `message`.
+pub(super) fn statement_error(
+    sql: &str,
+    kind: &str,
+    message: String,
+    position: Option<u32>,
+) -> ScriptStatement {
     ScriptStatement {
         sql: sql.to_string(),
         result: None,
         affected: None,
-        error: Some(message),
+        error: Some(ScriptStatementError {
+            kind: kind.to_string(),
+            message,
+            position,
+            sqlstate: None,
+            detail: None,
+            hint: None,
+        }),
     }
 }
 
+/// A statement the database or executor rejected, in the same `{ kind, message,
+/// position, sqlstate, detail, hint }` vocabulary a single run's `AppError` carries.
+pub(super) fn statement_failed(sql: &str, error: &AppError) -> ScriptStatement {
+    // The serialized error is where a driver position (original Postgres offsets
+    // only) and a server error's diagnostics are resolved, so read them there
+    // instead of re-deriving them.
+    let wire = serde_json::to_value(error).unwrap_or_default();
+    let text = |field: &str| wire.get(field)?.as_str().map(str::to_string);
+    let position = wire
+        .get("position")
+        .and_then(serde_json::Value::as_u64)
+        .and_then(|position| u32::try_from(position).ok());
+    let mut statement = statement_error(sql, error.kind(), error.to_string(), position);
+    if let Some(failure) = statement.error.as_mut() {
+        failure.sqlstate = text("sqlstate");
+        failure.detail = text("detail");
+        failure.hint = text("hint");
+    }
+    statement
+}
+
 pub(super) fn statement_skipped(sql: &str) -> ScriptStatement {
-    statement_error(sql, "skipped — transaction rolled back".into())
+    statement_error(
+        sql,
+        "skipped",
+        "skipped — transaction rolled back".into(),
+        None,
+    )
 }
 
 pub(super) fn script_has_write(kinds: &[QueryKind]) -> bool {
@@ -53,6 +95,8 @@ pub(super) fn script_operation_risk(
 
 /// Execute every statement in one write-pool transaction. MySQL may implicitly
 /// commit DDL, so mixed MySQL DDL scripts retain the existing best-effort caveat.
+/// The connection is closed instead of returned to the pool when a cancel or
+/// timeout abandons the script, so the server stops it and rolls back.
 pub(super) async fn execute_script_transaction(
     pool: &DbPool,
     statements: &[String],
@@ -69,8 +113,30 @@ pub(super) async fn execute_script_transaction(
     let _exact_payload = (grant.payload_sha256(), grant.connection_id());
     macro_rules! run_transaction {
         ($pool:expr, $context:expr) => {{
+            let begin_failed = |error: &dyn std::fmt::Display| {
+                (
+                    statements
+                        .iter()
+                        .map(|statement| {
+                            statement_error(
+                                statement,
+                                "transactionBeginFailed",
+                                format!("could not begin transaction: {error}"),
+                                None,
+                            )
+                        })
+                        .collect::<Vec<_>>(),
+                    false,
+                )
+            };
+            let mut connection =
+                match crate::executor::cancel::AbandonClosingConnection::acquire($pool).await {
+                    Ok(connection) => connection,
+                    Err(error) => return Ok(begin_failed(&error)),
+                };
+            let outcome = async {
             let mut outcomes = Vec::with_capacity(statements.len());
-            match $pool.begin().await {
+            match sqlx::Connection::begin(&mut *connection).await {
                 Ok(mut transaction) => {
                     if let Some(context) = $context {
                         if let Err(error) = sqlx::query(AssertSqlSafe(context))
@@ -79,7 +145,8 @@ pub(super) async fn execute_script_transaction(
                         {
                             transaction.rollback().await.map_err(|rollback| {
                                 AppError::OutcomeUnknown(format!(
-                                    "script namespace rollback acknowledgement failed: {rollback}"
+                                    "script namespace rollback acknowledgement failed: {}",
+                                    db_error_text(&rollback)
                                 ))
                             })?;
                             return Err(AppError::from(error));
@@ -99,9 +166,11 @@ pub(super) async fn execute_script_transaction(
                                     if affected != *expected {
                                         outcomes.push(statement_error(
                                             statement,
+                                            "optimisticConflict",
                                             format!(
                                                 "optimistic concurrency conflict: expected {expected} affected row, got {affected}"
                                             ),
+                                            None,
                                         ));
                                         succeeded = false;
                                         break;
@@ -110,7 +179,10 @@ pub(super) async fn execute_script_transaction(
                                 outcomes.push(statement_ok(statement, affected))
                             }
                             Err(error) => {
-                                outcomes.push(statement_error(statement, error.to_string()));
+                                outcomes.push(statement_failed(
+                                    statement,
+                                    &AppError::from(error),
+                                ));
                                 succeeded = false;
                                 break;
                             }
@@ -119,34 +191,30 @@ pub(super) async fn execute_script_transaction(
                     if !succeeded {
                         if let Err(error) = transaction.rollback().await {
                             return Err(AppError::OutcomeUnknown(format!(
-                                "script rollback acknowledgement failed: {error}"
+                                "script rollback acknowledgement failed: {}",
+                                db_error_text(&error)
                             )));
                         }
                         while outcomes.len() < statements.len() {
                             outcomes.push(statement_skipped(&statements[outcomes.len()]));
                         }
-                        (outcomes, false)
+                        Ok((outcomes, false))
                     } else if let Err(error) = transaction.commit().await {
-                        return Err(AppError::OutcomeUnknown(format!(
-                            "script commit acknowledgement failed: {error}"
-                        )));
+                        Err(AppError::OutcomeUnknown(format!(
+                            "script commit acknowledgement failed: {}",
+                            db_error_text(&error)
+                        )))
                     } else {
-                        (outcomes, true)
+                        Ok((outcomes, true))
                     }
                 }
-                Err(error) => (
-                    statements
-                        .iter()
-                        .map(|statement| {
-                            statement_error(
-                                statement,
-                                format!("could not begin transaction: {error}"),
-                            )
-                        })
-                        .collect(),
-                    false,
-                ),
+                Err(error) => Ok(begin_failed(&db_error_text(&error))),
             }
+            }
+            .await;
+            // Completed (successfully or with SQL errors): reuse the connection.
+            connection.release();
+            outcome?
         }};
     }
     let postgres_context = namespace
@@ -179,6 +247,10 @@ pub(super) struct ScriptRunRecord<'a> {
     pub(super) row_count: Option<i64>,
     pub(super) error: Option<String>,
     pub(super) origin: &'a str,
+    /// The database and schema the console selected for the script, recorded so
+    /// History reopens it there; empty means the connection's default.
+    pub(super) database: &'a str,
+    pub(super) namespace: Option<&'a str>,
 }
 
 pub(super) async fn record_script_run(
@@ -223,6 +295,13 @@ pub(super) async fn record_script_run(
                 error: record.error,
                 executed_at: Utc::now(),
                 origin: record.origin.to_string(),
+                database: Some(record.database)
+                    .filter(|database| !database.is_empty())
+                    .map(str::to_string),
+                namespace: record
+                    .namespace
+                    .filter(|namespace| !namespace.is_empty())
+                    .map(str::to_string),
             },
         )
         .await

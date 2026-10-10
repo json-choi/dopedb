@@ -48,7 +48,7 @@ const DEFINITIONS: &[DriverDefinition] = &[
         id: "sqlx-postgres",
         name: "SQLx PostgreSQL",
         engine: Engine::Postgres,
-        version: "0.8",
+        version: "0.9",
         install_mode: DriverInstallMode::Bundled,
         install_state: DriverInstallState::Installed,
         supported_providers: &[
@@ -65,7 +65,7 @@ const DEFINITIONS: &[DriverDefinition] = &[
         id: "sqlx-mysql",
         name: "SQLx MySQL / MariaDB",
         engine: Engine::Mysql,
-        version: "0.8",
+        version: "0.9",
         install_mode: DriverInstallMode::Bundled,
         install_state: DriverInstallState::Installed,
         supported_providers: &[
@@ -81,7 +81,7 @@ const DEFINITIONS: &[DriverDefinition] = &[
         id: "sqlx-sqlite",
         name: "SQLx SQLite",
         engine: Engine::Sqlite,
-        version: "0.8",
+        version: "0.9",
         install_mode: DriverInstallMode::Bundled,
         install_state: DriverInstallState::Installed,
         supported_providers: &[Provider::Generic],
@@ -109,7 +109,7 @@ const DEFINITIONS: &[DriverDefinition] = &[
         id: "mongodb-rust",
         name: "MongoDB Rust Driver",
         engine: Engine::Mongodb,
-        version: "3.2",
+        version: "3.9",
         // Statically linked like the sqlx drivers — same Bundled pattern.
         install_mode: DriverInstallMode::Bundled,
         install_state: DriverInstallState::Installed,

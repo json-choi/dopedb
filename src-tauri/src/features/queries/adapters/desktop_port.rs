@@ -34,6 +34,13 @@ impl DesktopQueryPort for QueryPlatformAdapter {
         QueryPlatformAdapter::propose_desktop_sql(self, request).await
     }
 
+    async fn propose_desktop_auto_read(
+        &self,
+        request: DesktopSqlProposalRequest,
+    ) -> Result<Self::ProposalReceipt, Self::InspectionError> {
+        QueryPlatformAdapter::propose_desktop_auto_read(self, request).await
+    }
+
     async fn propose_terminal_sql(
         &self,
         request: TerminalSqlProposalRequest,

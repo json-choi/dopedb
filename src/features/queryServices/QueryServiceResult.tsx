@@ -1,7 +1,16 @@
 // Displays query outcomes and the recovery command owned by their exact connection.
+// Errors are presented by their typed kind in translated copy (syntax, session
+// statements, policy blocks, manual-transaction refusals, unknown outcomes) with a
+// caret under the failing position and, for the latest run, a jump into the editor.
+// A PostgreSQL error's DETAIL, HINT, and SQLSTATE get their own rows. Each failed
+// script statement uses the same typed copy, server diagnostics, and caret for its
+// own SQL. A kind without a verbatim diagnostic offers "Copy details" instead of
+// inline backend text, and a moved shared connection offers its refresh.
 import { DataGridStatusScope } from "../../design-system/components/DataGridStatusScope";
-import { useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Fragment, useMemo, useState } from "react";
 
+import { useToast } from "../../components/Toast";
 import { Button } from "../../design-system/components/Button";
 import { InlineNotice } from "../../design-system/components/Status";
 import InspectableResultGrid from "../queryResults/InspectableResultGrid";
@@ -9,8 +18,8 @@ import ResultToolbar from "../queryResults/ResultToolbar";
 import {
   ResultWorkbenchFooter,
   ResultWorkbenchToolbar,
-  resultCellText,
 } from "../queryResults/ResultWorkbench";
+import { gridCellText } from "../queryResults/dataGridSelection";
 import { remapDecodeFailures } from "../queryResults/decodeFailures";
 import {
   ResultMeta,
@@ -20,8 +29,15 @@ import {
   WorkbenchScrollBody,
 } from "../../design-system/components/Workbench";
 import { Icon } from "../../components/Icon";
+import type { ScriptStatementError } from "../../ipc/types";
 import { stamp } from "../../lib/export";
 import { useI18n } from "../../lib/i18n";
+import { useCatalogScope } from "../../lib/queries";
+import { readsOidAliases } from "../queries/sqlWorkbenchModel";
+import { refreshDesktopConnections } from "../workspaceAdmin/desktopConnections";
+import ConnectionCredentialRecoveryNotice, {
+  isCredentialRecoveryErrorKind,
+} from "../connections/ConnectionCredentialRecoveryNotice";
 import type { ConnectionProfile } from "../connections/domain";
 import ManagedConnectionRecoveryNotice from "../connections/ManagedConnectionRecoveryNotice";
 import {
@@ -30,6 +46,7 @@ import {
   type WriteBlockRecoveryKind,
 } from "../safetySettings/policy";
 import StreamOutcome from "./StreamOutcome";
+import { scriptStatementErrorCopy, sqlErrorCopy } from "./errorCopy";
 import type {
   QueryServiceError,
   QueryServiceResult as QueryServiceResultModel,
@@ -42,11 +59,18 @@ export default function QueryServiceResult({
   connection,
   onOpenSafety,
   scriptStatementIndex,
+  onRerun,
+  onOpenActivity,
+  errorNavigation,
 }: {
   result: QueryServiceResultModel;
   connection: ConnectionProfile | null;
   onOpenSafety: (connectionId: ConnectionProfile["id"]) => void;
   scriptStatementIndex?: number;
+  /** Re-runs this session's SQL when its stored rows can no longer be read. */
+  onRerun?: () => void;
+  onOpenActivity?: () => void;
+  errorNavigation?: SqlErrorNavigation | null;
 }) {
   if (result.kind === "none") {
     return (
@@ -71,6 +95,7 @@ export default function QueryServiceResult({
         stream={result.stream}
         sql={result.sql}
         maxRows={result.maxRows}
+        onRerun={onRerun}
       />
     );
   }
@@ -91,6 +116,8 @@ export default function QueryServiceResult({
       prompt={result.prompt}
       connection={connection}
       onOpenSafety={onOpenSafety}
+      onOpenActivity={onOpenActivity}
+      navigation={errorNavigation}
     />
   );
 }
@@ -117,7 +144,7 @@ function MaterializedResult({
     const sourceRows = result.rows.flatMap((row, index) =>
       !normalizedFilter ||
       row.some((value) =>
-        resultCellText(value).toLocaleLowerCase().includes(normalizedFilter),
+        gridCellText(value).toLocaleLowerCase().includes(normalizedFilter),
       )
         ? [index]
         : [],
@@ -182,6 +209,7 @@ function MaterializedResult({
                   ? () => setLimit((current) => current + PAGE_STEP)
                   : undefined
               }
+              hint={readsOidAliases(sql) ? t("results.oidAliasHint") : undefined}
             />
           </>
         ) : (
@@ -240,8 +268,8 @@ function ScriptResults({
     : statements.flatMap(({ statement }) => {
         if (!statement.error) return [];
         const kind = writeBlockRecoveryKind(connection, {
-          kind: null,
-          message: statement.error,
+          kind: statement.error.kind,
+          message: statement.error.message,
           sql: statement.sql,
         });
         return kind ? [kind] : [];
@@ -290,9 +318,11 @@ function ScriptResults({
               <SqlSnippet>{statement.sql}</SqlSnippet>
             </ResultMeta>
             {statement.error ? (
-              <div className="tw:px-3 tw:py-2 tw:text-ui tw:text-danger">
-                {statement.error}
-              </div>
+              <ScriptStatementFailure
+                sql={statement.sql}
+                error={statement.error}
+                connection={connection}
+              />
             ) : statement.result ? (
               <>
                 <div className="tw:mx-3 tw:my-1 tw:text-sm tw:text-muted-foreground">
@@ -333,37 +363,170 @@ function ScriptResults({
   );
 }
 
+/**
+ * Line, column, and a caret under the offending character of the submitted SQL.
+ * Tabs before the caret stay tabs so it lines up exactly under the text.
+ */
 function errorPosition(sql: string, position: number) {
   const codePoints = Array.from(sql);
   const index = Math.min(Math.max(position - 1, 0), codePoints.length);
   const lineStart =
     index === 0 ? 0 : codePoints.lastIndexOf("\n", index - 1) + 1;
   const lineEnd = codePoints.indexOf("\n", index);
-  const column = index - lineStart;
+  const caretPrefix = codePoints
+    .slice(lineStart, index)
+    .map((value) => (value === "\t" ? "\t" : " "))
+    .join("");
   return {
     line:
       codePoints.slice(0, index).filter((value) => value === "\n").length + 1,
-    column: column + 1,
+    column: index - lineStart + 1,
     snippet:
       codePoints
         .slice(lineStart, lineEnd === -1 ? codePoints.length : lineEnd)
         .join("") +
       "\n" +
-      " ".repeat(column) +
+      caretPrefix +
       "^",
   };
 }
+
+/** A PostgreSQL server error's DETAIL, HINT, and SQLSTATE rows, when it sent them. */
+function dbDiagnosticRows(error: {
+  detail?: string | null;
+  hint?: string | null;
+  sqlstate?: string | null;
+}) {
+  return (
+    [
+      ["sql.errorDbDetail", error.detail],
+      ["sql.errorHint", error.hint],
+      ["sql.errorSqlstate", error.sqlstate],
+    ] as const
+  ).flatMap(([label, value]) => (value ? [{ label, value }] : []));
+}
+
+/** Copies a reported reason that is not shown inline (it may be backend text). */
+function CopyDetailsButton({ text }: { text: string }) {
+  const { t } = useI18n();
+  const toast = useToast();
+  return (
+    <Button
+      size="compact"
+      onClick={() =>
+        void navigator.clipboard
+          .writeText(text)
+          .then(() => toast(t("common.copied")))
+          .catch(() => toast(t("results.copyFailed"), "error"))
+      }
+    >
+      <Icon name="copy" />
+      {t("sql.copyErrorDetails")}
+    </Button>
+  );
+}
+
+/**
+ * Pulls the workspace so a shared connection whose revision moved is current
+ * again, with the same resync the Explorer and workspace administration use.
+ */
+function SharedConnectionRefreshButton({ connectionId }: { connectionId: string }) {
+  const { t } = useI18n();
+  const toast = useToast();
+  const queryClient = useQueryClient();
+  const catalogScope = useCatalogScope();
+  const [refreshing, setRefreshing] = useState(false);
+  return (
+    <Button
+      size="compact"
+      disabled={refreshing}
+      onClick={() => {
+        setRefreshing(true);
+        void refreshDesktopConnections(queryClient, catalogScope.key, [connectionId])
+          .then(() => toast(t("sql.connectionRefreshed")))
+          .catch(() => toast(t("sql.connectionRefreshFailed"), "error"))
+          .finally(() => setRefreshing(false));
+      }}
+    >
+      <Icon name="refresh" />
+      {refreshing ? t("common.refreshing") : t("sql.refreshConnection")}
+    </Button>
+  );
+}
+
+function ScriptStatementFailure({
+  sql,
+  error,
+  connection,
+}: {
+  sql: string;
+  error: ScriptStatementError;
+  connection: ConnectionProfile | null;
+}) {
+  const { t } = useI18n();
+  const copy = scriptStatementErrorCopy({ sql, error }, connection, t);
+  const position = error.position !== null ? errorPosition(sql, error.position) : null;
+  return (
+    <div
+      data-skipped={error.kind === "skipped"}
+      className="tw:px-3 tw:py-2 tw:text-ui tw:text-danger tw:data-[skipped=true]:text-muted-foreground"
+    >
+      <p className="tw:m-0 tw:font-semibold">{copy.title}</p>
+      {copy.message ? (
+        <p className="tw:m-0 tw:mt-1 tw:leading-relaxed tw:text-foreground">{copy.message}</p>
+      ) : null}
+      {copy.detail ? (
+        <pre className="tw:m-0 tw:mt-1 tw:overflow-auto tw:font-mono tw:text-sm tw:whitespace-pre-wrap tw:text-foreground tw:[overflow-wrap:anywhere]">
+          {copy.detail}
+        </pre>
+      ) : null}
+      {dbDiagnosticRows(error).map(({ label, value }) => (
+        <p
+          key={label}
+          className="tw:m-0 tw:mt-1 tw:text-sm tw:text-foreground tw:[overflow-wrap:anywhere]"
+        >
+          <span className="tw:text-muted-foreground">{t(label)}: </span>
+          <span className="tw:font-mono">{value}</span>
+        </p>
+      ))}
+      {copy.copyable ? (
+        <div className="tw:mt-2">
+          <CopyDetailsButton text={copy.copyable} />
+        </div>
+      ) : null}
+      {position ? (
+        <pre className="tw:m-0 tw:mt-2 tw:overflow-auto tw:font-mono tw:text-sm tw:whitespace-pre tw:text-foreground tw:[tab-size:4]">
+          {t("sql.errorPositionAt", { line: position.line, column: position.column })}
+          {"\n"}
+          {position.snippet}
+        </pre>
+      ) : null}
+    </div>
+  );
+}
+
+/** The latest failed run's location mapped onto the live editor document. */
+export type SqlErrorNavigation = {
+  sessionId: string;
+  line: number;
+  column: number;
+  jump: () => void;
+};
 
 function SqlErrorCard({
   error,
   prompt,
   connection,
   onOpenSafety,
+  onOpenActivity,
+  navigation,
 }: {
   error: QueryServiceError;
   prompt: string;
   connection: ConnectionProfile | null;
   onOpenSafety: (connectionId: ConnectionProfile["id"]) => void;
+  onOpenActivity?: () => void;
+  navigation?: SqlErrorNavigation | null;
 }) {
   const { t } = useI18n();
   const position =
@@ -371,39 +534,81 @@ function SqlErrorCard({
   const writeRecovery = connection
     ? writeBlockRecoveryKind(connection, error)
     : null;
+  const copy = sqlErrorCopy(error, t, writeRecovery !== null);
   return (
     <div
       data-workbench-scroll-owner="document"
       className="scrollbar-sleek tw:flex tw:min-h-0 tw:flex-1 tw:flex-col tw:overflow-auto tw:overscroll-contain tw:text-foreground"
-      role="alert"
     >
-      <ResultMeta>
-        <Icon name="alert" className="tw:text-danger" />
-        <strong className="tw:text-danger">{t(error.kind === "sqlPolicyBlocked" ? "sql.policyBlock.title" : "sql.errorTitle")}</strong>
-        <span className="tw:text-muted-foreground"> · {error.at}</span>
-      </ResultMeta>
+      {/* Only the title and translated message are announced, not every row. */}
+      <div role="alert">
+        <ResultMeta>
+          <Icon name="alert" className="tw:text-danger" />
+          <strong className="tw:text-danger">{copy.title}</strong>
+          <span className="tw:text-muted-foreground"> · {error.at}</span>
+          {copy.message ? <span className="tw:sr-only">{copy.message}</span> : null}
+        </ResultMeta>
+      </div>
       {error.kind === "managedConnectionRecoveryRequired" && connection ? (
         <ManagedConnectionRecoveryNotice connection={connection} />
       ) : null}
+      {isCredentialRecoveryErrorKind(error.kind) && connection ? (
+        <ConnectionCredentialRecoveryNotice
+          connection={connection}
+          errorKind={error.kind}
+        />
+      ) : null}
+      {error.kind === "outcomeUnknown" && onOpenActivity ? (
+        <InlineNotice
+          tone="warning"
+          icon="info"
+          role="status"
+          action={
+            <Button size="compact" onClick={onOpenActivity}>
+              {t("sql.outcomeUnknown.openActivity")}
+            </Button>
+          }
+        >
+          {t("sql.outcomeUnknown.guidance")}
+        </InlineNotice>
+      ) : null}
       <dl className="tw:m-0 tw:grid tw:grid-cols-[max-content_minmax(0,1fr)] tw:items-stretch tw:[&>*]:m-0 tw:[&>*]:border-b tw:[&>*]:border-border-subtle tw:[&>*]:px-3 tw:[&>*]:py-2 tw:[&>dd]:min-w-0 tw:[&>dt]:text-muted-foreground tw:max-[760px]:grid-cols-1 tw:max-[760px]:[&>dt]:border-b-0 tw:max-[760px]:[&>dt]:pb-0">
-        <dt>{t("sql.errorKind")}</dt>
-        <dd>
-          <code className="tw:font-mono tw:text-sm">
-            {error.kind ?? t("common.unknown")}
-          </code>
-        </dd>
-        <dt>{t("sql.errorMessage")}</dt>
-        <dd>
-          {error.kind === "sqlPolicyBlocked" ? (
-            <p className="tw:m-0 tw:text-ui tw:leading-relaxed tw:whitespace-pre-wrap">
-              {t("sql.policyBlock.message")}
-            </p>
-          ) : (
-          <pre className="tw:m-0 tw:overflow-auto tw:font-mono tw:text-sm tw:whitespace-pre-wrap tw:[overflow-wrap:anywhere]">
-            {error.message}
-          </pre>
-          )}
-        </dd>
+        {copy.message || copy.detail ? (
+          <>
+            <dt>{t("sql.errorMessage")}</dt>
+            <dd>
+              {copy.message ? (
+                <p className="tw:m-0 tw:text-ui tw:leading-relaxed tw:whitespace-pre-wrap">
+                  {copy.message}
+                </p>
+              ) : null}
+              {copy.detail ? (
+                <pre
+                  data-framed={copy.message ? "true" : undefined}
+                  className="tw:m-0 tw:overflow-auto tw:font-mono tw:text-sm tw:whitespace-pre-wrap tw:[overflow-wrap:anywhere] tw:data-[framed=true]:mt-2"
+                >
+                  {copy.detail}
+                </pre>
+              ) : null}
+              {copy.copyable || (error.kind === "sharedConnectionChanged" && connection) ? (
+                <div className="ds-control-row tw:mt-2 tw:flex tw:flex-wrap tw:items-center tw:gap-2">
+                  {error.kind === "sharedConnectionChanged" && connection ? (
+                    <SharedConnectionRefreshButton connectionId={connection.id} />
+                  ) : null}
+                  {copy.copyable ? <CopyDetailsButton text={copy.copyable} /> : null}
+                </div>
+              ) : null}
+            </dd>
+          </>
+        ) : null}
+        {dbDiagnosticRows(error).map(({ label, value }) => (
+          <Fragment key={label}>
+            <dt>{t(label)}</dt>
+            <dd className="tw:font-mono tw:text-sm tw:whitespace-pre-wrap tw:[overflow-wrap:anywhere]">
+              {value}
+            </dd>
+          </Fragment>
+        ))}
         {writeRecovery && connection ? (
           <WriteBlockRecoveryRow
             kind={writeRecovery}
@@ -415,14 +620,26 @@ function SqlErrorCard({
           <>
             <dt>{t("sql.errorPosition")}</dt>
             <dd>
-              <pre className="tw:m-0 tw:overflow-auto tw:font-mono tw:text-sm tw:whitespace-pre-wrap tw:[overflow-wrap:anywhere]">
-                {t("sql.errorPositionAt", {
-                  line: position.line,
-                  column: position.column,
-                })}
-                {"\n"}
-                {position.snippet}
-              </pre>
+              <div className="tw:flex tw:min-w-0 tw:items-start tw:justify-between tw:gap-3 tw:max-[760px]:flex-col">
+                <pre className="tw:m-0 tw:min-w-0 tw:overflow-auto tw:font-mono tw:text-sm tw:whitespace-pre tw:[tab-size:4]">
+                  {navigation
+                    ? t("sql.errorPositionInEditor", {
+                        line: navigation.line,
+                        column: navigation.column,
+                      })
+                    : t("sql.errorPositionAt", {
+                        line: position.line,
+                        column: position.column,
+                      })}
+                  {"\n"}
+                  {position.snippet}
+                </pre>
+                {navigation ? (
+                  <Button size="compact" onClick={navigation.jump}>
+                    {t("sql.jumpToError")}
+                  </Button>
+                ) : null}
+              </div>
             </dd>
           </>
         ) : null}

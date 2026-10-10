@@ -22,7 +22,8 @@ session.
 |------|-------------|
 | `mod.rs` | Declares `acp`, `adapters`, `application`, `domain`, `external_transport`, `ports`, `runtime`, `transport`; `compose()` builds `AgentsFeature = AgentsUseCases<ProcessAgentCliProbe>`. |
 | `acp.rs` | Official ACP client runtime module root for the in-app Agent surface; documents the no-token-access invariant for the whole `acp/` submodule. |
-| `acp_runtime.rs` | ACP session admission, lifecycle commands, and runtime coordination. |
+| `acp_runtime.rs` | ACP session lifecycle commands and runtime coordination. |
+| `acp_admission.rs` | Live-session cap admission and reclamation of prepared sessions nobody prompted (oldest untouched yields first; idle TTL sweeper keeps the newest per provider). |
 | `acp_session.rs` | ACP session projections, permissions, and replay-buffer state. |
 | `acp_session_driver.rs` | ACP adapter process execution, turn handling, and protocol validation. |
 | `application.rs` | Read-only Agent CLI discovery composed from an explicit platform port. |

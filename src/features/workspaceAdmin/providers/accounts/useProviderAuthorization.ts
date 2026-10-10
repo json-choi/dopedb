@@ -116,12 +116,14 @@ export function useProviderAuthorization(
         }
       } else {
         const setups = await queryClient.fetchQuery({ ...gcpSetupsQuery(scope), staleTime: 0 });
-        const newest = setups[0];
-        if (newest) {
+        // Only a setup this authorization created completes it; an older setup
+        // from an earlier attempt or another administrator never does.
+        const created = setups.find((setup) => !flow.baseline.has(setup.id));
+        if (created) {
           outcome = {
             provider: "gcpCloudSql",
             providerName: flow.providerName,
-            setup: newest,
+            setup: created,
             repair: flow.repair,
           };
         }
@@ -164,15 +166,18 @@ export function useProviderAuthorization(
     }
     const startedAt = Date.now();
     try {
-      // A fresh snapshot, so another administrator's earlier change is not
-      // mistaken for this authorization completing.
+      // A fresh snapshot, so another administrator's earlier change or an older
+      // Cloud SQL setup is not mistaken for this authorization completing.
       const baseline = request.provider === "planetScale"
         ? integrationBaseline(
             (await queryClient.fetchQuery({ ...providerAccountsQuery(scope), staleTime: 0 }))
               .integrations,
             "planetScale",
           )
-        : new Map<string, string>();
+        : new Map<string, string>(
+            (await queryClient.fetchQuery({ ...gcpSetupsQuery(scope), staleTime: 0 }))
+              .map((setup) => [setup.id, setup.createdAt] as const),
+          );
       if (activeRef.current !== active) return;
       const response = await startWorkspaceProviderAuthorization(
         scope.accountId,

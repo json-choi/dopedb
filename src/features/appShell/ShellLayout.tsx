@@ -17,6 +17,7 @@ import {
   clampAgentDockWidth,
   shouldOverlayAgentDock,
 } from "../agents/layout";
+import { requestAgentApprovalFocus } from "../agents/pendingApprovals";
 import { AgentSelectionProvider } from "../agents/selectionContext";
 import type { BackgroundTask } from "../backgroundTasks/domain";
 import type { ConnectionProfile } from "../connections/domain";
@@ -214,6 +215,9 @@ function ShellLayoutContent({ model, commands }: Props) {
             : workspace.updater.phase === "ready"
               ? t("updates.relaunching")
               : t("updates.error");
+  const agentPendingApprovals = status.backgroundTasks.filter(
+    (task) => task.kind === "agentProposal",
+  ).length;
   const databaseExplorerVisible = explorer.databaseOpen;
   const environmentDetailOpen = explorer.knowledgeFocus !== null;
   const localHistoryVisible =
@@ -308,6 +312,7 @@ function ShellLayoutContent({ model, commands }: Props) {
         onToggleLocalHistory={commands.explorer.toggleLocalHistory}
         onToggleAgent={commands.agent.toggle}
         agentButtonRef={agent.buttonRef}
+        agentPendingApprovals={agentPendingApprovals}
         actionSearchButtonRef={search.buttonRef}
         onActionSearch={commands.search.open}
         onSettings={commands.workspace.settings}
@@ -456,6 +461,12 @@ function ShellLayoutContent({ model, commands }: Props) {
         unseenOperationCount={status.unseenOperationCount}
         onOpenQueryTask={commands.status.openQueryResult}
         onOpenAgentTask={commands.agent.openTask}
+        onOpenAgentProposal={(connectionId, sessionId, operationId) => {
+          // AI Chat selects that conversation and its card takes focus once
+          // visible; a decision control never does.
+          requestAgentApprovalFocus(sessionId, operationId);
+          commands.agent.openTask(connectionId);
+        }}
         onOpenManualTransaction={commands.status.openManualTransaction}
         onCommitManualTransaction={commands.status.commitManualTransaction}
         onRollbackManualTransaction={commands.status.rollbackManualTransaction}
@@ -487,6 +498,11 @@ function ShellLayoutContent({ model, commands }: Props) {
               articleId,
             )
           }
+          onOpenProjectDatabases={(environmentId) =>
+            commands.explorer.openProjectEnvironment(environmentId, "databases")
+          }
+          onSafetySettings={commands.workspace.safetySettings}
+          onOpenActivity={commands.status.openNotifications}
           onClose={commands.agent.close}
           returnFocusRef={agent.returnFocusRef}
         />

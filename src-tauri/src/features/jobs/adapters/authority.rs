@@ -52,6 +52,7 @@ impl JobAuthorityPort for RuntimeJobAuthority {
         let access = match permission {
             JobPermission::Read => ConnectionAccess::Read,
             JobPermission::Write => ConnectionAccess::Write,
+            JobPermission::Schema => ConnectionAccess::Schema,
         };
         let context = self.connections.pin(connection_id.into(), access).await?;
         let pin = context.pin();

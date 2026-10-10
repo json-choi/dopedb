@@ -9,22 +9,41 @@
 //! - **PostgreSQL:** `BEGIN; SET TRANSACTION READ ONLY; SET LOCAL statement_timeout`
 //!   → a write raises SQLSTATE `25006`.
 //! - **MySQL:** `SET SESSION max_execution_time; START TRANSACTION READ ONLY`
-//!   → a write raises `1792`.
+//!   → a write raises `1792`. The read pool's release resets
+//!   `max_execution_time` to the server default (`connection::mysql_session`).
 //! - **SQLite:** relies on the connection module opening a `read_only(true)` pool;
 //!   L2 also sets `PRAGMA query_only=ON` → a write raises `SQLITE_READONLY`.
 //! - **Cloudflare D1:** Wrangler OAuth has no separate D1 read-only scope. Desktop
 //!   manual reads are syntax-constrained again at the adapter boundary, while Agent
 //!   and Analysis Article execution is rejected before reaching this function.
+//!
+//! PostgreSQL and MySQL reads hold their connection in an
+//! `AbandonClosingConnection`: it returns to the shared read pool only after a
+//! complete result's `ROLLBACK` was acknowledged. `ROLLBACK` is never sent after
+//! a truncated read (it would first drain the unread rows) or an error (the
+//! transaction is aborted or stopped mid-result); those connections, like a
+//! cancelled or timed-out read's, are dropped, which closes them, and the server
+//! rolls back. So no open (idle-in-transaction) read can reach the pool and hold
+//! locks or a stale snapshot for the next reader.
+//!
+//! PostgreSQL and MySQL cells decode with the pool's session facts (MONEY scale,
+//! a fixed session offset) exactly like the Desktop grid. They come from the
+//! executor's per-pool cache, probed on the session connection before the
+//! read-only transaction begins; a rejected probe falls back to the defaults and
+//! never aborts the read.
 
 use std::time::{Duration, Instant};
 
+use sqlx::mysql::MySqlRow;
+use sqlx::postgres::PgRow;
 use sqlx::{AssertSqlSafe, Executor, SqlSafeStr};
 use tokio::time::timeout;
 
 use crate::error::{AppError, AppResult};
-use crate::executor::cancel::{self, CancelHandle};
+use crate::executor::cancel::{self, AbandonClosingConnection, CancelHandle};
 use crate::executor::read::{
-    describe_cols, mysql_value, pg_value, sqlite_value, stream_byte_capped, stream_capped,
+    describe_cols, mysql_session_facts, mysql_value_in, pg_session_facts, pg_value_in,
+    sqlite_value, stream_byte_capped, stream_capped,
 };
 use crate::model::{Engine, QueryResult};
 
@@ -132,7 +151,8 @@ async fn run_read_only_byte_capped_inner(
     let engine = pool.engine();
     let (columns, rows, decode_failures, truncated) = match pool {
         PoolRef::Postgres(pool) => {
-            let mut connection = pool.acquire().await?;
+            let mut connection = AbandonClosingConnection::acquire(pool).await?;
+            let facts = pg_session_facts(pool, &mut connection).await;
             let result = async {
                 sqlx::query("BEGIN").execute(&mut *connection).await?;
                 sqlx::query("SET TRANSACTION READ ONLY")
@@ -148,15 +168,21 @@ async fn run_read_only_byte_capped_inner(
                     query.fetch(&mut *connection),
                     max,
                     max_bytes,
-                    pg_value,
+                    |row: &PgRow, index: usize| pg_value_in(row, index, &facts),
                 ))
                 .await
             }
             .await;
-            let _ = sqlx::query("ROLLBACK").execute(&mut *connection).await;
+            let idle = match &result {
+                Ok(read) if !read.3 => sqlx::raw_sql("ROLLBACK")
+                    .execute(&mut *connection)
+                    .await
+                    .is_ok(),
+                _ => false,
+            };
             let (columns, rows, decode_failures, truncated) =
                 result.map_err(|error| map_readonly_app(engine, error))?;
-            let columns = if columns.is_empty() {
+            let columns = if columns.is_empty() && idle {
                 (&mut *connection)
                     .describe(AssertSqlSafe(sql).into_sql_str())
                     .await
@@ -166,10 +192,14 @@ async fn run_read_only_byte_capped_inner(
             } else {
                 columns
             };
+            if idle {
+                connection.release();
+            }
             (columns, rows, decode_failures, truncated)
         }
         PoolRef::Mysql(pool) => {
-            let mut connection = pool.acquire().await?;
+            let mut connection = AbandonClosingConnection::acquire(pool).await?;
+            let facts = mysql_session_facts(pool, &mut connection).await;
             let result = async {
                 let _ = sqlx::query(AssertSqlSafe(format!(
                     "SET SESSION max_execution_time = {STATEMENT_TIMEOUT_MS}"
@@ -184,15 +214,21 @@ async fn run_read_only_byte_capped_inner(
                     query.fetch(&mut *connection),
                     max,
                     max_bytes,
-                    mysql_value,
+                    |row: &MySqlRow, index: usize| mysql_value_in(row, index, &facts),
                 ))
                 .await
             }
             .await;
-            let _ = sqlx::query("ROLLBACK").execute(&mut *connection).await;
+            let idle = match &result {
+                Ok(read) if !read.3 => sqlx::raw_sql("ROLLBACK")
+                    .execute(&mut *connection)
+                    .await
+                    .is_ok(),
+                _ => false,
+            };
             let (columns, rows, decode_failures, truncated) =
                 result.map_err(|error| map_readonly_app(engine, error))?;
-            let columns = if columns.is_empty() {
+            let columns = if columns.is_empty() && idle {
                 (&mut *connection)
                     .describe(AssertSqlSafe(sql).into_sql_str())
                     .await
@@ -202,6 +238,9 @@ async fn run_read_only_byte_capped_inner(
             } else {
                 columns
             };
+            if idle {
+                connection.release();
+            }
             (columns, rows, decode_failures, truncated)
         }
         PoolRef::Sqlite(pool) => {
@@ -262,10 +301,15 @@ async fn run_read_only_inner(
 
     let (columns, rows, decode_failures, truncated) = match pool {
         PoolRef::Postgres(p) => {
-            let mut conn = p.acquire().await?;
+            let mut conn = AbandonClosingConnection::acquire(p).await?;
+            // Presentation only, outside the transaction: a rejected probe
+            // yields the defaults and cannot abort the read.
+            let facts = pg_session_facts(p, &mut conn).await;
             // Establishing READ ONLY is safety-critical: if any setup statement
             // fails, the `?` inside the block short-circuits and we never run the
-            // user SQL. ROLLBACK always fires afterwards (no leaked txn).
+            // user SQL. Only a complete result is rolled back and its connection
+            // reused; every other exit (cancel, timeout, truncation, any error)
+            // closes the connection, so no transaction outlives the read.
             let res = async {
                 sqlx::query("BEGIN").execute(&mut *conn).await?;
                 sqlx::query("SET TRANSACTION READ ONLY")
@@ -279,14 +323,17 @@ async fn run_read_only_inner(
                 guarded(stream_capped(
                     sqlx::query(AssertSqlSafe(sql)).fetch(&mut *conn),
                     max,
-                    pg_value,
+                    |row: &PgRow, index: usize| pg_value_in(row, index, &facts),
                 ))
                 .await
             }
             .await;
-            let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
+            let idle = match &res {
+                Ok(read) if !read.3 => sqlx::raw_sql("ROLLBACK").execute(&mut *conn).await.is_ok(),
+                _ => false,
+            };
             let (c, r, f, t) = res.map_err(|e| map_readonly(engine, e))?;
-            let c = if c.is_empty() {
+            let c = if c.is_empty() && idle {
                 (&mut *conn)
                     .describe(AssertSqlSafe(sql).into_sql_str())
                     .await
@@ -296,10 +343,14 @@ async fn run_read_only_inner(
             } else {
                 c
             };
+            if idle {
+                conn.release();
+            }
             (c, r, f, t)
         }
         PoolRef::Mysql(p) => {
-            let mut conn = p.acquire().await?;
+            let mut conn = AbandonClosingConnection::acquire(p).await?;
+            let facts = mysql_session_facts(p, &mut conn).await;
             let res = async {
                 let _ = sqlx::query(AssertSqlSafe(format!(
                     "SET SESSION max_execution_time = {STATEMENT_TIMEOUT_MS}"
@@ -312,14 +363,17 @@ async fn run_read_only_inner(
                 guarded(stream_capped(
                     sqlx::query(AssertSqlSafe(sql)).fetch(&mut *conn),
                     max,
-                    mysql_value,
+                    |row: &MySqlRow, index: usize| mysql_value_in(row, index, &facts),
                 ))
                 .await
             }
             .await;
-            let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
+            let idle = match &res {
+                Ok(read) if !read.3 => sqlx::raw_sql("ROLLBACK").execute(&mut *conn).await.is_ok(),
+                _ => false,
+            };
             let (c, r, f, t) = res.map_err(|e| map_readonly(engine, e))?;
-            let c = if c.is_empty() {
+            let c = if c.is_empty() && idle {
                 (&mut *conn)
                     .describe(AssertSqlSafe(sql).into_sql_str())
                     .await
@@ -329,6 +383,9 @@ async fn run_read_only_inner(
             } else {
                 c
             };
+            if idle {
+                conn.release();
+            }
             (c, r, f, t)
         }
         PoolRef::Sqlite(p) => {
@@ -586,6 +643,19 @@ mod tests {
         .unwrap();
         assert_eq!(r.row_count, 0);
         assert_eq!(r.columns, vec!["id".to_string(), "name".to_string()]);
+
+        // Read-only introspection PRAGMAs that L1 now classifies as reads run
+        // under the same query_only session and return the catalog rows.
+        let sql = "PRAGMA table_info(t)";
+        assert_eq!(
+            crate::safety::classify(sql, Engine::Sqlite).unwrap().kind,
+            crate::model::QueryKind::Read
+        );
+        let pragma = run_read_only(PoolRef::Sqlite(&pool), sql, 100)
+            .await
+            .unwrap();
+        assert_eq!(pragma.row_count, 2);
+        assert!(pragma.columns.contains(&"name".to_string()));
     }
 
     #[tokio::test]

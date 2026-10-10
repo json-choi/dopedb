@@ -168,11 +168,20 @@ export interface Job {
   updatedAt: string;
 }
 
+/** Exact statement counts of a hash-pinned SQL import. */
+export interface JobSqlAudit {
+  statementCount: number;
+  readCount: number;
+  writeCount: number;
+  ddlCount: number;
+}
+
 export interface JobProposal {
   job: Job;
   payloadHash: string;
   approvalRequired: boolean;
   confirmationPhrase: string | null;
+  sqlAudit?: JobSqlAudit | null;
 }
 
 export interface JobArtifact {
@@ -192,6 +201,7 @@ export interface JobDetail {
   payloadHash: string;
   approvalRequired: boolean;
   confirmationPhrase: string | null;
+  sqlAudit?: JobSqlAudit | null;
 }
 
 export interface JobChangedEvent {

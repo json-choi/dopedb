@@ -59,6 +59,10 @@ impl SqliteWorkspaceRepository {
 }
 
 impl WorkspaceRepositoryPort for SqliteWorkspaceRepository {
+    async fn defer_credential_delete(&self, credential_id: Uuid) -> AppResult<()> {
+        self.store.defer_credential_delete(credential_id).await
+    }
+
     async fn list_workspaces(&self) -> AppResult<Vec<Workspace>> {
         self.store.list_workspaces().await
     }

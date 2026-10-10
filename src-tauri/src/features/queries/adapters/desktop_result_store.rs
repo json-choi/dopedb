@@ -33,6 +33,7 @@ mod benchmark;
 #[path = "desktop_result_files.rs"]
 mod files;
 
+pub(crate) use files::save_renderer_export;
 use files::*;
 
 #[cfg(feature = "packaged-benchmark")]
@@ -186,8 +187,10 @@ impl DesktopSqlResultWriter {
                 failure.row_index < self.row_count
                     || failure.row_index >= self.row_count.saturating_add(batch.rows.len())
                     || failure.column_index >= batch.columns.len()
-                    || batch.rows[failure.row_index - self.row_count][failure.column_index]
-                        != serde_json::Value::Null
+                    || !failure_cell_is_consistent(
+                        failure,
+                        &batch.rows[failure.row_index - self.row_count][failure.column_index],
+                    )
             })
         {
             return Err(DesktopSqlStreamSinkError::BatchTooLarge);
@@ -198,7 +201,7 @@ impl DesktopSqlResultWriter {
             return Err(DesktopSqlStreamSinkError::InvalidAcknowledgement);
         }
         let path = page_path(&self.partial_directory, batch.sequence);
-        write_new_file_atomically(&path, encoded)
+        write_new_file_atomically(&path, encoded, false)
             .map_err(|_| DesktopSqlStreamSinkError::ResultStoreUnavailable)?;
         self.pages.push(ResultPageMeta {
             sequence: batch.sequence,
@@ -209,23 +212,6 @@ impl DesktopSqlResultWriter {
         });
         self.row_count = self.row_count.saturating_add(batch.rows.len());
         Ok(())
-    }
-
-    pub(super) fn read_page(
-        &self,
-        sequence: u64,
-    ) -> Result<DesktopSqlStreamBatch, DesktopSqlStreamSinkError> {
-        let meta = self
-            .pages
-            .get(sequence as usize)
-            .filter(|meta| meta.sequence == sequence)
-            .ok_or(DesktopSqlStreamSinkError::InvalidAcknowledgement)?;
-        read_verified_page(
-            &self.partial_directory,
-            meta,
-            &self.columns,
-            self.operation_id,
-        )
     }
 
     pub(super) fn complete(
@@ -265,12 +251,25 @@ impl DesktopSqlResultWriter {
         if encoded.len() as u64 > MAX_MANIFEST_BYTES {
             return Err(DesktopSqlStreamSinkError::ResultStoreUnavailable);
         }
-        write_new_file_atomically(&self.partial_directory.join("manifest.json"), &encoded)
-            .map_err(|_| DesktopSqlStreamSinkError::ResultStoreUnavailable)?;
+        write_new_file_atomically(
+            &self.partial_directory.join("manifest.json"),
+            &encoded,
+            true,
+        )
+        .map_err(|_| DesktopSqlStreamSinkError::ResultStoreUnavailable)?;
         fs::rename(&self.partial_directory, &self.final_directory)
             .map_err(|_| DesktopSqlStreamSinkError::ResultStoreUnavailable)?;
         self.published = true;
         Ok(())
+    }
+
+    /// Publishes the pages already written when the owner cancels the stream, so
+    /// the rows it received stay readable as a partial (truncated) result.
+    pub(super) fn complete_cancelled(&mut self) -> Result<(), DesktopSqlStreamSinkError> {
+        if self.published || self.pages.is_empty() {
+            return Ok(());
+        }
+        self.complete(self.row_count, true, 0)
     }
 }
 
@@ -391,23 +390,7 @@ impl DesktopSqlResultStore {
         mut progress: impl FnMut(DesktopSqlResultExportProgress) -> AppResult<()>,
     ) -> AppResult<DesktopSqlResultExportReceipt> {
         let manifest = load_authorized_manifest(operation_id, capability, owner_webview)?;
-        let parent = destination.parent().ok_or_else(|| AppError::Blocked {
-            reason: "SQL result export destination has no parent directory".into(),
-        })?;
-        ensure_real_directory(parent)?;
-        if let Ok(metadata) = fs::symlink_metadata(&destination) {
-            if metadata.file_type().is_symlink() || !metadata.is_file() {
-                return Err(AppError::Blocked {
-                    reason: "SQL result export destination is not a regular file".into(),
-                });
-            }
-        }
-        let partial = parent.join(format!(".dopedb-result-{export_id}.partial"));
-        if partial.exists() {
-            return Err(AppError::Blocked {
-                reason: "SQL result export partial file already exists".into(),
-            });
-        }
+        let partial = export_partial_path(&destination, export_id)?;
         let result = export_manifest(
             export_id,
             &manifest,
@@ -434,16 +417,6 @@ impl DesktopSqlResultStore {
     }
 }
 
-fn remove_partial_export(path: &Path) -> AppResult<()> {
-    match fs::remove_file(path) {
-        Ok(()) => Ok(()),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(AppError::OutcomeUnknown(format!(
-            "SQL result export failed and partial output cleanup could not be confirmed: {error}"
-        ))),
-    }
-}
-
 fn export_manifest(
     export_id: Uuid,
     manifest: &ResultManifest,
@@ -460,10 +433,14 @@ fn export_manifest(
     let mut rows_written = 0_usize;
     match format {
         DesktopSqlResultExportFormat::Csv => {
-            let mut writer = csv::WriterBuilder::new()
-                .has_headers(false)
-                .from_writer(BufWriter::new(file));
-            writer.write_record(&manifest.columns).map_err(csv_error)?;
+            let mut writer = BufWriter::new(file);
+            // Same bytes as the renderer's CSV download: a UTF-8 BOM so
+            // spreadsheet apps read non-ASCII text, then CRLF-separated records.
+            writer.write_all("\u{feff}".as_bytes())?;
+            write_csv_record(
+                &mut writer,
+                manifest.columns.iter().map(|column| csv_text(column, true)),
+            )?;
             for page in &manifest.pages {
                 ensure_export_open(cancelled)?;
                 let batch = read_verified_page(
@@ -475,9 +452,8 @@ fn export_manifest(
                 .map_err(|error| AppError::Safety(error.to_string()))?;
                 ensure_page_exportable(&batch)?;
                 for row in batch.rows {
-                    writer
-                        .write_record(row.iter().map(csv_cell))
-                        .map_err(csv_error)?;
+                    writer.write_all(b"\r\n")?;
+                    write_csv_record(&mut writer, row.iter().map(csv_cell))?;
                     rows_written = rows_written.saturating_add(1);
                 }
                 progress(DesktopSqlResultExportProgress {
@@ -488,13 +464,15 @@ fn export_manifest(
                 })?;
             }
             writer.flush()?;
-            let writer = writer
-                .into_inner()
-                .map_err(|error| AppError::Io(error.into_error()))?;
             writer.get_ref().sync_all()?;
         }
         DesktopSqlResultExportFormat::Json => {
             let mut writer = BufWriter::new(file);
+            // Duplicate result column names stay distinct keys (`name`, `name_2`).
+            let keys = unique_column_keys(&manifest.columns)
+                .iter()
+                .map(serde_json::to_string)
+                .collect::<Result<Vec<_>, _>>()?;
             writer.write_all(b"[")?;
             for page in &manifest.pages {
                 ensure_export_open(cancelled)?;
@@ -510,13 +488,16 @@ fn export_manifest(
                     if rows_written > 0 {
                         writer.write_all(b",")?;
                     }
-                    let object = manifest
-                        .columns
-                        .iter()
-                        .cloned()
-                        .zip(row)
-                        .collect::<serde_json::Map<_, _>>();
-                    serde_json::to_writer(&mut writer, &object)?;
+                    writer.write_all(b"{")?;
+                    for (index, (key, value)) in keys.iter().zip(&row).enumerate() {
+                        if index > 0 {
+                            writer.write_all(b",")?;
+                        }
+                        writer.write_all(key.as_bytes())?;
+                        writer.write_all(b":")?;
+                        serde_json::to_writer(&mut writer, value)?;
+                    }
+                    writer.write_all(b"}")?;
                     rows_written = rows_written.saturating_add(1);
                 }
                 progress(DesktopSqlResultExportProgress {
@@ -540,33 +521,27 @@ fn export_manifest(
     Ok(rows_written)
 }
 
+/// The renderer maps these exact shapes to a translated message that names the
+/// row and column; keep them stable.
 fn ensure_page_exportable(batch: &DesktopSqlStreamBatch) -> AppResult<()> {
     if let Some(failure) = batch.decode_failures.first() {
-        return Err(AppError::Blocked {
-            reason: format!(
-                "SQL result export blocked: cell at row {}, column {} could not be decoded as {}",
-                failure.row_index + 1,
-                failure.column_index + 1,
+        let row = failure.row_index + 1;
+        let column = failure.column_index + 1;
+        let reason = match failure
+            .database_type
+            .strip_prefix(crate::executor::read::TRUNCATED_CELL_TYPE_PREFIX)
+        {
+            Some(bytes) => format!(
+                "SQL result export blocked: cell at row {row}, column {column} was shortened from {bytes} bytes to fit a result page"
+            ),
+            None => format!(
+                "SQL result export blocked: cell at row {row}, column {column} could not be decoded as {}",
                 failure.database_type
             ),
-        });
+        };
+        return Err(AppError::Blocked { reason });
     }
     Ok(())
-}
-
-fn csv_cell(value: &serde_json::Value) -> String {
-    match value {
-        serde_json::Value::Null => String::new(),
-        serde_json::Value::String(value) => value.clone(),
-        other => other.to_string(),
-    }
-}
-
-fn csv_error(error: csv::Error) -> AppError {
-    match error.into_kind() {
-        csv::ErrorKind::Io(error) => AppError::Io(error),
-        other => AppError::Config(format!("SQL result CSV export failed: {other:?}")),
-    }
 }
 
 fn ensure_export_open(cancelled: &AtomicBool) -> AppResult<()> {
@@ -689,4 +664,108 @@ pub(crate) fn assert_decode_failure_export_contract() {
         .expect_err("unconfirmed partial cleanup fails closed");
     assert!(matches!(cleanup_error, AppError::OutcomeUnknown(_)));
     fs::remove_dir(cleanup_directory).expect("remove cleanup target");
+
+    // A complete export follows the renderer's CSV/JSON contract byte for byte:
+    // BOM, CRLF, NULL as an empty field, quoting, formula neutralization that
+    // spares plain numbers, JavaScript number text, and distinct duplicate keys.
+    let exported_id = Uuid::new_v4().into();
+    let mut exported = DesktopSqlResultWriter::begin_with_authority(
+        exported_id,
+        Uuid::new_v4(),
+        "test-account",
+        Uuid::new_v4(),
+        1,
+        owner_webview,
+        &capability,
+    )
+    .expect("begin exported result");
+    let _exported_cleanup = TestResultCleanup {
+        partial: exported.partial_directory.clone(),
+        completed: exported.final_directory.clone(),
+    };
+    let page = DesktopSqlStreamBatch {
+        operation_id: exported_id,
+        sequence: 0,
+        row_start: 0,
+        columns: vec!["name".into(), "name".into(), "=total".into()],
+        rows: vec![
+            vec![
+                serde_json::json!("=1+2"),
+                serde_json::json!("-12.50"),
+                serde_json::json!(2.0),
+            ],
+            vec![
+                serde_json::Value::Null,
+                serde_json::json!("a,\"b\"\r\n"),
+                serde_json::json!({"x": 1.5, "y": [1.0, 1e21]}),
+            ],
+        ],
+        decode_failures: Vec::new(),
+    };
+    let encoded = serde_json::to_vec(&page).expect("encode exported page");
+    exported
+        .write_page(&page, &encoded)
+        .expect("persist exported page");
+    exported
+        .complete(2, false, 1)
+        .expect("publish exported manifest");
+    for (format, extension, expected) in [
+        (
+            DesktopSqlResultExportFormat::Csv,
+            "csv",
+            "\u{feff}name,name,'=total\r\n'=1+2,-12.50,2\r\n,\"a,\"\"b\"\"\r\n\",\"{\"\"x\"\":1.5,\"\"y\"\":[1,1e+21]}\"",
+        ),
+        (
+            DesktopSqlResultExportFormat::Json,
+            "json",
+            r#"[{"name":"=1+2","name_2":"-12.50","=total":2.0},{"name":null,"name_2":"a,\"b\"\r\n","=total":{"x":1.5,"y":[1.0,1e+21]}}]"#,
+        ),
+    ] {
+        let export_id = Uuid::new_v4();
+        let destination = output_directory.path().join(format!("complete.{extension}"));
+        let cancelled = store
+            .start_export(export_id, exported_id, &capability, owner_webview)
+            .expect("authorize complete export");
+        store
+            .export_to_path(
+                export_id,
+                exported_id,
+                &capability,
+                owner_webview,
+                format,
+                destination.clone(),
+                cancelled,
+                |_| Ok(()),
+            )
+            .expect("complete export succeeds");
+        store.finish_export(export_id);
+        assert_eq!(
+            fs::read_to_string(&destination).expect("read complete export"),
+            expected
+        );
+    }
+    assert_eq!(
+        unique_column_keys(&["name".into(), "name".into(), "name_2".into(), "name".into()]),
+        ["name", "name_2", "name_2_2", "name_3"]
+    );
+    assert_eq!(js_float_text(0.000_001), "0.000001");
+    assert_eq!(js_float_text(1.5e-7), "1.5e-7");
+    assert_eq!(js_float_text(123.456), "123.456");
+    assert!(!inert_value("1e") && !inert_value(".") && inert_value(".5e-3"));
+    // Formula neutralization spares only inert renderings of non-text values.
+    for inert in ["-12.50", "-Infinity", "-infinity", "-1 day", "-04:05:06.5"] {
+        assert_eq!(csv_text(inert, true), inert);
+    }
+    assert_eq!(
+        csv_text("-1 years -2 mons -3 days +04:05:06", true),
+        "-1 years -2 mons -3 days +04:05:06"
+    );
+    assert_eq!(
+        csv_text("-2+3+cmd|' /C calc'!A0", true),
+        "'-2+3+cmd|' /C calc'!A0"
+    );
+    assert_eq!(csv_text("@SUM(1)", true), "'@SUM(1)");
+    assert_eq!(csv_text("-1 day; =1", true), "'-1 day; =1");
+
+    crate::executor::read::assert_decoder_contract();
 }

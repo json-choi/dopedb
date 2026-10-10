@@ -8,18 +8,18 @@ import { Icon } from "../../components/Icon";
 import { Button } from "../../design-system/components/Button";
 import { useModalBehavior } from "../../design-system/components/Modal";
 import RenderRecoveryBoundary from "../../design-system/components/RenderRecoveryBoundary";
-import {
-  InlineNotice,
-  StatusDot,
-} from "../../design-system/components/Status";
+import { ResizeSeparator } from "../../design-system/components/ResizeSeparator";
+import { StatusDot } from "../../design-system/components/Status";
 import {
   ToolWindowHeader,
   ToolWindowHideButton,
 } from "../../design-system/components/ToolWindow";
 import { useI18n } from "../../lib/i18n";
+import type { ConnectionId } from "../connections/domain";
 import { reportRenderFailure } from "../monitoring/client";
 import { AcpAgentModelMenu } from "./AcpAgentModelMenu";
 import AcpChatComposer from "./AcpChatComposer";
+import AcpChatFeedback from "./AcpChatFeedback";
 import { AcpChatHeaderActions } from "./AcpChatHeaderActions";
 import AcpChatTranscript from "./AcpChatTranscript";
 import {
@@ -31,7 +31,7 @@ import {
   shouldDismissAgentOverlayFromEscape,
   type AgentDockLayout,
 } from "./layout";
-import { sessionMetaLabel } from "./sessionPresentation";
+import { sessionMetaLabel, sessionTitle } from "./sessionPresentation";
 import {
   useAcpChatController,
   type AcpChatControllerInput,
@@ -40,6 +40,11 @@ import {
 type AcpChatPanelProps = AcpChatControllerInput & {
   open: boolean;
   onOpenKnowledgeAnalysis: (environmentId: string, articleId?: string) => void;
+  /** Opens the existing Project Environment binding view for the Explorer DB. */
+  onOpenProjectDatabases: (environmentId: string | null) => void;
+  onSafetySettings: (connectionId: ConnectionId) => void;
+  /** Opens Activity, where an approved Agent change's outcome is recorded. */
+  onOpenActivity: () => void;
   onClose: () => void;
   returnFocusRef: RefObject<HTMLElement | null>;
 };
@@ -81,6 +86,9 @@ function AcpChatPanelContent({
   width,
   onWidthChange,
   onOpenKnowledgeAnalysis,
+  onOpenProjectDatabases,
+  onSafetySettings,
+  onOpenActivity,
   onClose,
   returnFocusRef,
 }: AcpChatPanelProps) {
@@ -109,17 +117,22 @@ function AcpChatPanelContent({
       onClose={onClose}
       returnFocusRef={returnFocusRef}
     >
-      <div
+      <ResizeSeparator
         className="tw:absolute tw:inset-y-0 tw:-left-[3px] tw:z-[var(--ds-z-raised)] tw:w-[7px] tw:cursor-col-resize tw:hover:bg-ring/30 tw:active:bg-ring/30 tw:data-[layout=overlay]:hidden tw:data-[layout=compact]:hidden"
         data-layout={viewport.layout}
-        role="separator"
-        aria-orientation="vertical"
-        aria-label={t("app.dragResize")}
+        hidden={viewport.layout !== "docked"}
+        label={t("app.dragResize")}
+        orientation="vertical"
+        value={viewport.resize.value}
+        minimum={viewport.resize.minimum}
+        maximum={viewport.resize.maximum}
+        step={12}
+        onChange={viewport.resize.onChange}
+        onReset={viewport.resize.onReset}
         onMouseDown={viewport.resize.onMouseDown}
-        onDoubleClick={viewport.resize.onDoubleClick}
       />
       <ToolWindowHeader
-        leading={setup.enabledProviders.includes(setup.selectedProvider) ? (
+        leading={session.activeLive || setup.pickerProviders.includes(setup.selectedProvider) ? (
           <AcpAgentModelMenu session={session} setup={setup} composer={composer} commands={commands} />
         ) : null}
         compact
@@ -127,33 +140,7 @@ function AcpChatPanelContent({
         actions={<AcpChatHeaderActions session={session} commands={commands} onClose={onClose} />}
       />
 
-      {feedback.error || session.loadError ? (
-        <InlineNotice
-          tone="danger"
-          icon="alert"
-          role="alert"
-          action={
-            <Button
-              iconOnly
-              size="xs"
-              variant="ghost"
-              onClick={
-                session.loadError
-                  ? commands.session.retryLoad
-                  : commands.feedback.dismiss
-              }
-              title={t(session.loadError ? "common.refresh" : "common.close")}
-              aria-label={t(
-                session.loadError ? "common.refresh" : "common.close",
-              )}
-            >
-              <Icon name={session.loadError ? "refresh" : "close"} />
-            </Button>
-          }
-        >
-          {feedback.error ?? session.loadError}
-        </InlineNotice>
-      ) : null}
+      <AcpChatFeedback feedback={feedback} session={session} commands={commands} />
 
       {session.historyOpen ? (
         <section className="tw:grid tw:max-h-[min(360px,45vh)] tw:shrink-0 tw:overflow-auto tw:border-b tw:border-border-subtle tw:bg-background tw:p-1">
@@ -170,7 +157,7 @@ function AcpChatPanelContent({
                   name={candidate.knowledgeScopes.length > 0 ? "folder" : "database"}
                 />
                 <span className="tw:min-w-0 tw:flex-1 tw:truncate">
-                  {candidate.title}
+                  {sessionTitle(candidate, t)}
                 </span>
                 <span className="tw:max-w-[40%] tw:min-w-0 tw:truncate tw:text-xs tw:text-muted-foreground" title={sessionMetaLabel(candidate, setup.knowledge.projects)}>
                   {sessionMetaLabel(candidate, setup.knowledge.projects)}
@@ -194,14 +181,16 @@ function AcpChatPanelContent({
         setup={setup}
         viewport={viewport}
         commands={commands}
-        connectionEngine={connection.engine}
         onOpenKnowledgeAnalysis={onOpenKnowledgeAnalysis}
+        onOpenActivity={onOpenActivity}
       />
       <AcpChatComposer
         session={session}
         setup={setup}
         composer={composer}
         commands={commands}
+        onOpenProjectDatabases={onOpenProjectDatabases}
+        onOpenSafety={onSafetySettings}
       />
     </AcpChatSurface>
   );

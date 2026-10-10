@@ -32,7 +32,7 @@ export const analysisCatalog = defineCatalog(
     "analysis.inviteExpired": "Expired",
     "analysis.cancelInvite": "Cancel invitation",
     "analysis.inviteAdminOnly": "A workspace administrator with management access to this database can invite new colleagues.",
-    "analysis.inviteRevokeHelp": "Cancel unused invitations here. Manage accepted members and database access in Workspace Access.",
+    "analysis.inviteRevokeHelp": "Cancel unused invitations here. Manage accepted members and database access in Workspace management → Database access.",
     "analysis.shareLoadFailed": "Could not load sharing. Check your connection and access.",
     "analysis.openSharedTitle": "Open shared Article",
     "analysis.openSharedBody": "Open this Article in {workspace} with the current account. No query will run automatically.",
@@ -92,7 +92,8 @@ export const analysisCatalog = defineCatalog(
     "analysis.cancel": "Cancel",
     "analysis.saving": "Saving…",
     "analysis.save": "Save",
-    "analysis.publishRunFirst": "Run this saved query successfully before publishing.",
+    "analysis.publishRunFirst":
+      "Run this saved query successfully before publishing a new version. Existing publications can still be opened or revoked below.",
     "analysis.publishHtmlTitle": "Publish HTML",
     "analysis.publishHtmlBody":
       "Publish an immutable copy of this HTML. The saved query and database access never enter the public page.",
@@ -108,7 +109,7 @@ export const analysisCatalog = defineCatalog(
     "analysis.publicationSearchIndex": "Allow search engines to index this page",
     "analysis.revoked": "Revoked",
     "analysis.openPublication": "Open",
-    "analysis.openPublicationFailed": "Could not open the publication: {error}",
+    "analysis.openPublicationFailed": "Could not open the published page.",
     "analysis.revokeConfirm": "Revoke this public URL?",
     "analysis.revoke": "Revoke",
     "analysis.noPublications": "No HTML page has been published.",
@@ -125,6 +126,76 @@ export const analysisCatalog = defineCatalog(
     "analysis.runState.failed": "Failed",
     "analysis.runState.cancelled": "Cancelled",
     "analysis.runState.stale": "Outdated",
+    "analysis.cancellingRun": "Cancelling…",
+    "analysis.cancelFailed": "Could not request cancellation. The query may still be running.",
+    "analysis.runCancelled": "Cancelled. The previous result is unchanged.",
+    "analysis.readOnlyRole": "View-only access",
+    "analysis.readOnlyRoleDetail":
+      "Your workspace role can open and rerun Articles. Editing, publishing, and deleting need a role that can write.",
+    "analysis.deleteConfirm":
+      "Delete this Article? Any published HTML link stops working. Its revision history is kept.",
+    "analysis.documentLoadFailed": "Could not open this Article",
+    "analysis.loadingDocument": "Opening Article…",
+    "analysis.loadingLocalResult": "Loading local result…",
+    "analysis.retry": "Try again",
+    "analysis.resultOutdated":
+      "This Article changed after the last local result, so that result is hidden. Run again to see the current saved query's result.",
+    "analysis.resultRowsShown": "Showing the first {shown} of {total} rows.",
+    "analysis.saveFailed": "Not saved. {reason}",
+    "analysis.saveOnLatest": "Save on latest",
+    "analysis.conflictKeptDraft":
+      "This Article changed elsewhere (now revision {revision}). Nothing was saved and your draft is kept. Save to apply it on top of the latest revision, or start over from the latest content.",
+    "analysis.conflictLatestUnavailable":
+      "This Article changed elsewhere, and the latest revision could not be loaded. Your draft is kept; load the latest revision before saving.",
+    "analysis.restartFromLatest": "Start over from latest",
+    "analysis.reloadLatest": "Load latest",
+    "analysis.reloadingLatest": "Loading…",
+    "analysis.discardTitle": "Discard unsaved changes?",
+    "analysis.discardBody": "Your edits to the title, HTML, database, or saved query will be lost.",
+    "analysis.keepEditing": "Keep editing",
+    "analysis.discardChanges": "Discard changes",
+    "analysis.publishFailed": "Could not publish. {reason}",
+    "analysis.revokeFailed": "Could not revoke. {reason}",
+    "analysis.publishedAt": "Published {time}",
+    "analysis.errorDetails": "Details",
+    "analysis.errorService":
+      "The workspace service could not complete the request. Check your connection and access, then try again.",
+    "analysis.errorPermission":
+      "Your access changed or does not allow this action. Refresh and try again.",
+    "analysis.errorNotFound": "This Article was deleted or is no longer shared with you.",
+    "analysis.errorInvalid": "The title, HTML, or saved query does not meet the Article rules.",
+    "analysis.errorTimeout": "The request did not finish in time.",
+    "analysis.errorCredential":
+      "This device needs your database credential or provider sign-in for this connection.",
+    "analysis.errorCredentialBinding":
+      "This device has no credential connected for this Article's database yet.",
+    "analysis.errorConnectionChanged":
+      "The database connection this Article pins no longer matches this Environment. Check the connection again to see what changed.",
+    "analysis.connectCredentials": "Connect credentials",
+    "analysis.recheckConnection": "Check connection again",
+    "analysis.recheckingConnection": "Checking connection…",
+    "analysis.connectionRechecked": "Connection checked. You can run the query again.",
+    "analysis.reconfirmBinding": "Reconfirm binding",
+    "analysis.reconfirmingBinding": "Reconfirming binding…",
+    "analysis.editArticleConnection": "Edit Article connection",
+    "analysis.editorRepinHint":
+      "Choose the database and save; the Article then pins its current connection content.",
+    "analysis.pinUnbound": "This Article's database is no longer bound to this Environment.",
+    "analysis.pinBindingStale":
+      "The shared connection {name} changed after it was bound to this Environment (revision {from} → {to}).",
+    "analysis.pinContentChanged":
+      "This Article is pinned to revision {pinned} of {name}'s connection content, but the Environment now uses revision {current}.",
+    "analysis.pinUnavailable": "The {name} database is not available on this device.",
+    "analysis.askEditor": "Ask a member who can edit Articles to update its database.",
+    "analysis.askAdminReconfirm": "Ask a workspace admin or owner to reconfirm this binding.",
+    "analysis.askAdminAccess": "Ask a workspace admin for access to this database.",
+    "analysis.errorStopped":
+      "The run stopped because its authority or the read-only policy could not be confirmed.",
+    "analysis.errorOutcomeUnknown": "The result could not be confirmed. Refresh before trying again.",
+    "analysis.errorDatabase": "The database rejected the saved query.",
+    "analysis.errorConnection":
+      "Could not connect to the database. Check the connection settings and credentials.",
+    "analysis.errorGeneric": "The action did not complete. Try again.",
   },
   {
     "analysis.navigation": "아티클",
@@ -155,7 +226,7 @@ export const analysisCatalog = defineCatalog(
     "analysis.inviteExpired": "만료됨",
     "analysis.cancelInvite": "초대 취소",
     "analysis.inviteAdminOnly": "이 DB 관리 권한을 가진 워크스페이스 관리자만 새 동료를 초대할 수 있습니다.",
-    "analysis.inviteRevokeHelp": "수락 전 초대는 여기서 취소하세요. 수락한 멤버와 DB 권한은 워크스페이스 Access에서 관리합니다.",
+    "analysis.inviteRevokeHelp": "수락 전 초대는 여기서 취소하세요. 수락한 멤버와 DB 권한은 워크스페이스 관리 → DB 접근 권한에서 관리합니다.",
     "analysis.shareLoadFailed": "공유 정보를 불러오지 못했습니다. 연결과 접근 권한을 확인하세요.",
     "analysis.openSharedTitle": "공유 아티클 열기",
     "analysis.openSharedBody": "현재 계정으로 {workspace}의 아티클을 엽니다. 쿼리는 자동 실행되지 않습니다.",
@@ -215,7 +286,8 @@ export const analysisCatalog = defineCatalog(
     "analysis.cancel": "취소",
     "analysis.saving": "저장 중…",
     "analysis.save": "저장",
-    "analysis.publishRunFirst": "발행하기 전에 이 저장 쿼리를 성공적으로 실행하세요.",
+    "analysis.publishRunFirst":
+      "새 버전을 발행하려면 먼저 이 저장 쿼리를 성공적으로 실행하세요. 기존 발행은 아래에서 열거나 해지할 수 있습니다.",
     "analysis.publishHtmlTitle": "HTML 발행",
     "analysis.publishHtmlBody":
       "현재 HTML의 변경 불가능한 사본을 발행합니다. 저장 쿼리와 데이터베이스 접근 정보는 공개 페이지에 포함되지 않습니다.",
@@ -231,7 +303,7 @@ export const analysisCatalog = defineCatalog(
     "analysis.publicationSearchIndex": "검색 엔진의 페이지 색인 허용",
     "analysis.revoked": "해지됨",
     "analysis.openPublication": "열기",
-    "analysis.openPublicationFailed": "게시물을 열지 못했습니다: {error}",
+    "analysis.openPublicationFailed": "발행한 페이지를 열지 못했습니다.",
     "analysis.revokeConfirm": "이 공개 URL을 해지할까요?",
     "analysis.revoke": "해지",
     "analysis.noPublications": "아직 발행된 HTML 페이지가 없습니다.",
@@ -248,5 +320,75 @@ export const analysisCatalog = defineCatalog(
     "analysis.runState.failed": "실패",
     "analysis.runState.cancelled": "취소됨",
     "analysis.runState.stale": "최신 상태 아님",
+    "analysis.cancellingRun": "취소 중…",
+    "analysis.cancelFailed": "취소를 요청하지 못했습니다. 쿼리가 계속 실행 중일 수 있습니다.",
+    "analysis.runCancelled": "취소했습니다. 이전 결과는 그대로입니다.",
+    "analysis.readOnlyRole": "보기 권한",
+    "analysis.readOnlyRoleDetail":
+      "현재 워크스페이스 역할로는 아티클을 열고 다시 조회할 수 있습니다. 편집·발행·삭제는 쓰기 가능한 역할이 필요합니다.",
+    "analysis.deleteConfirm":
+      "이 아티클을 삭제할까요? 발행한 HTML 링크가 있으면 함께 중지되어 더 이상 열리지 않습니다. 변경 기록은 보존됩니다.",
+    "analysis.documentLoadFailed": "아티클을 열지 못했습니다",
+    "analysis.loadingDocument": "아티클 여는 중…",
+    "analysis.loadingLocalResult": "로컬 결과 불러오는 중…",
+    "analysis.retry": "다시 시도",
+    "analysis.resultOutdated":
+      "마지막 로컬 결과 이후 아티클이 바뀌어 그 결과를 숨겼습니다. 다시 조회하면 현재 저장 쿼리의 결과를 볼 수 있습니다.",
+    "analysis.resultRowsShown": "결과 {total}행 중 처음 {shown}행만 표시합니다.",
+    "analysis.saveFailed": "저장하지 못했습니다. {reason}",
+    "analysis.saveOnLatest": "최신 수정본에 저장",
+    "analysis.conflictKeptDraft":
+      "이 아티클이 다른 곳에서 수정되었습니다(현재 버전 {revision}). 저장되지 않았고 작성 중인 내용은 그대로 있습니다. 저장하면 최신 수정본 위에 적용되며, 최신 내용으로 다시 시작할 수도 있습니다.",
+    "analysis.conflictLatestUnavailable":
+      "이 아티클이 다른 곳에서 수정되었고 최신 수정본을 불러오지 못했습니다. 작성 중인 내용은 그대로 있으니 최신 수정본을 불러온 뒤 저장하세요.",
+    "analysis.restartFromLatest": "최신 내용으로 다시 시작",
+    "analysis.reloadLatest": "최신 내용 불러오기",
+    "analysis.reloadingLatest": "불러오는 중…",
+    "analysis.discardTitle": "저장하지 않은 변경을 버릴까요?",
+    "analysis.discardBody": "제목·HTML·데이터베이스·저장 쿼리에 한 변경이 사라집니다.",
+    "analysis.keepEditing": "계속 편집",
+    "analysis.discardChanges": "변경 버리기",
+    "analysis.publishFailed": "발행하지 못했습니다. {reason}",
+    "analysis.revokeFailed": "해지하지 못했습니다. {reason}",
+    "analysis.publishedAt": "{time} 발행",
+    "analysis.errorDetails": "자세히",
+    "analysis.errorService":
+      "워크스페이스 서비스가 요청을 처리하지 못했습니다. 연결과 권한을 확인한 뒤 다시 시도하세요.",
+    "analysis.errorPermission":
+      "권한이 바뀌었거나 이 작업을 할 수 없는 권한입니다. 새로고침한 뒤 다시 시도하세요.",
+    "analysis.errorNotFound": "아티클이 삭제되었거나 더 이상 공유되지 않습니다.",
+    "analysis.errorInvalid": "제목·HTML·저장 쿼리가 아티클 규칙에 맞지 않습니다.",
+    "analysis.errorTimeout": "요청이 제한 시간 안에 끝나지 않았습니다.",
+    "analysis.errorCredential":
+      "이 기기에서 이 연결의 DB 자격 증명이나 공급자 로그인이 필요합니다.",
+    "analysis.errorCredentialBinding":
+      "이 기기에 이 아티클 데이터베이스의 자격 증명이 아직 연결되지 않았습니다.",
+    "analysis.errorConnectionChanged":
+      "아티클이 고정한 데이터베이스 연결이 이 환경과 더 이상 맞지 않습니다. 연결을 다시 확인하면 무엇이 바뀌었는지 보여 줍니다.",
+    "analysis.connectCredentials": "자격 증명 연결",
+    "analysis.recheckConnection": "연결 다시 확인",
+    "analysis.recheckingConnection": "연결 확인 중…",
+    "analysis.connectionRechecked": "연결을 다시 확인했습니다. 이제 다시 조회할 수 있습니다.",
+    "analysis.reconfirmBinding": "바인딩 재확인",
+    "analysis.reconfirmingBinding": "바인딩 재확인 중…",
+    "analysis.editArticleConnection": "아티클 연결 수정",
+    "analysis.editorRepinHint":
+      "데이터베이스를 고르고 저장하면 아티클이 현재 연결 내용으로 다시 고정됩니다.",
+    "analysis.pinUnbound": "이 아티클의 데이터베이스가 더 이상 이 환경에 연결되어 있지 않습니다.",
+    "analysis.pinBindingStale":
+      "{name} 공유 연결이 환경에 바인딩된 뒤 바뀌었습니다(리비전 {from} → {to}).",
+    "analysis.pinContentChanged":
+      "아티클은 {name} 연결 내용의 리비전 {pinned}에 고정되어 있지만, 현재 환경의 연결 내용은 리비전 {current}입니다.",
+    "analysis.pinUnavailable": "{name} 데이터베이스를 이 기기에서 사용할 수 없습니다.",
+    "analysis.askEditor": "아티클 편집 권한이 있는 구성원에게 데이터베이스 연결 수정을 요청하세요.",
+    "analysis.askAdminReconfirm": "워크스페이스 관리자(admin·owner)에게 이 바인딩의 재확인을 요청하세요.",
+    "analysis.askAdminAccess": "워크스페이스 관리자에게 이 데이터베이스 접근 권한을 요청하세요.",
+    "analysis.errorStopped":
+      "실행 권한이나 읽기 전용 정책을 확인할 수 없어 실행을 중단했습니다.",
+    "analysis.errorOutcomeUnknown": "결과를 확인하지 못했습니다. 새로고침해 확인한 뒤 다시 시도하세요.",
+    "analysis.errorDatabase": "데이터베이스가 저장 쿼리를 거부했습니다.",
+    "analysis.errorConnection":
+      "데이터베이스에 연결하지 못했습니다. 연결 설정과 자격 증명을 확인하세요.",
+    "analysis.errorGeneric": "작업을 완료하지 못했습니다. 다시 시도하세요.",
   },
 );

@@ -172,12 +172,15 @@ async fn fail_start(
         }
         sleep(Duration::from_millis(5)).await;
     }
+    // Proxy stderr can name instances, accounts, or network paths. It stays in the
+    // local diagnostic log; the returned error carries only the fixed reason.
     let detail = clean_error(&stderr.lock().await);
-    AppError::Network(if detail.is_empty() {
-        format!("Cloud SQL secure connector could not start: {reason}")
-    } else {
-        format!("Cloud SQL secure connector could not start: {detail}")
-    })
+    if !detail.is_empty() {
+        tracing::warn!(%detail, reason, "Cloud SQL secure connector could not start");
+    }
+    AppError::Network(format!(
+        "Cloud SQL secure connector could not start: {reason}"
+    ))
 }
 
 pub(crate) async fn open(

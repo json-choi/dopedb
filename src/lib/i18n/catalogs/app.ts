@@ -47,6 +47,74 @@ export const appCatalog = defineCatalog(
     "ide.workspaceNavigation": "Workspace navigation",
     "ide.manualTransactions": "{count} manual transactions",
     "ide.manualTransaction.title": "Manual transactions",
+    "ide.manualTransaction.minutesLeft": "{count} min left",
+    "ide.manualTransaction.secondsLeft": "{count} s left",
+    "ide.manualTransaction.expiresAt":
+      "Rolls back automatically at {time} unless you commit it.",
+    "ide.manualTransaction.expiringSoon":
+      "The manual transaction on {connection} rolls back automatically in {count} min. Commit or roll it back now.",
+    "ide.manualTransaction.rolledBackStatements":
+      "{count} failed statements were rolled back on their own; the transaction is still open.",
+    "ide.manualTransaction.busy": "Waiting for the previous transaction command.",
+    "ide.manualTransaction.loading": "Checking the transaction state…",
+    "ide.manualTransaction.unavailable":
+      "Unavailable while this view is running a statement or showing another database.",
+    "ide.manualTransaction.ended.expired":
+      "The manual transaction on {connection} reached its 30-minute limit and was rolled back. The rollback is recorded in Activity.",
+    "ide.manualTransaction.ended.statementCancelled":
+      "A cancelled statement rolled back the manual transaction on {connection}. Its earlier changes were discarded; the rollback is recorded in Activity.",
+    "ide.manualTransaction.ended.statementTimedOut":
+      "A statement timed out, so the manual transaction on {connection} was rolled back. The rollback is recorded in Activity.",
+    "ide.manualTransaction.ended.authorityChanged":
+      "Your access to {connection} changed, so its manual transaction was rolled back. The rollback is recorded in Activity.",
+    "ide.manualTransaction.ended.connectionChanged":
+      "The settings of {connection} changed, so its manual transaction was rolled back. The rollback is recorded in Activity.",
+    "ide.manualTransaction.ended.workspaceChanged":
+      "The workspace or account changed, so the manual transaction on {connection} was rolled back. The rollback is recorded in Activity.",
+    "ide.manualTransaction.ended.applicationExit":
+      "The manual transaction on {connection} was rolled back while the app was closing.",
+    "ide.manualTransaction.ended.commitOutcomeUnknown":
+      "The database did not confirm the commit on {connection}. Check the data before trying again; the attempt is recorded in Activity.",
+    "ide.manualTransaction.endedShort.cancelled": "Rolled back by cancel",
+    "ide.manualTransaction.endedShort.expired": "Rolled back at time limit",
+    "ide.manualTransaction.endedShort.access": "Rolled back: access changed",
+    "ide.manualTransaction.endedShort.unknown": "Commit unconfirmed",
+    "ide.manualTransaction.dismissEnded": "Dismiss this notice",
+    "ide.manualTransaction.openActivity": "Open Activity",
+    "ide.manualTransaction.exit.title": "Open manual transactions",
+    "ide.manualTransaction.exit.message":
+      "{count} manual transactions are still open. Closing rolls back their uncommitted changes; nothing is committed.",
+    "ide.manualTransaction.exit.confirm": "Roll back {count} open transactions and close",
+    "ide.manualTransaction.exit.closing": "Rolling back…",
+    "ide.manualTransaction.exit.failed":
+      "The app could not close. Your transactions may already be rolled back; check the status bar, then try again.",
+    "ide.manualTransaction.actionFailed":
+      "The manual transaction command could not be completed. Try again.",
+    "ide.manualTransaction.commitOutcomeUnknown":
+      "The database did not confirm the commit. Check the data before trying again; the attempt is recorded in Activity.",
+    "ide.manualTransaction.refusal.unsupported":
+      "Manual transactions are unavailable for this connection.",
+    "ide.manualTransaction.refusal.readOnlyRole":
+      "Your workspace role grants read-only access, so a manual transaction cannot start.",
+    "ide.manualTransaction.refusal.writesDisabled":
+      "Data changes are off for this connection. Turn them on in Settings → Safety to start or commit a manual transaction.",
+    "ide.manualTransaction.refusal.otherDatabase":
+      "The open manual transaction belongs to another database. Commit or roll it back before switching.",
+    "ide.manualTransaction.refusal.statementRunning":
+      "A statement is still running in this transaction. Wait for it or cancel it, then commit.",
+    "ide.manualTransaction.refusal.failed":
+      "This transaction failed and can only be rolled back.",
+    "ide.manualTransaction.refusal.ended": "This manual transaction has already ended.",
+    "ide.manualTransaction.refusal.expired":
+      "The manual transaction reached its 30-minute limit and was rolled back.",
+    "ide.manualTransaction.refusal.stale":
+      "This is no longer the open transaction. Refresh and try again.",
+    "ide.manualTransaction.refusal.unsupportedStatement":
+      "Schema and privilege statements cannot run inside a manual transaction.",
+    "ide.manualTransaction.refusal.authorityChanged":
+      "Your access to this connection changed, so the manual transaction was rolled back.",
+    "ide.backgroundTask.status.agentApproval": "Running approved Agent change",
+    "ide.backgroundTask.stopFailed": "The task could not be stopped. Try again.",
     "ide.indentSpaces": "{count} spaces",
     "ide.noDataSource": "Welcome",
     "ide.notifications": "Notifications",
@@ -221,6 +289,74 @@ export const appCatalog = defineCatalog(
     "ide.workspaceNavigation": "워크스페이스 탐색",
     "ide.manualTransactions": "수동 트랜잭션 {count}개",
     "ide.manualTransaction.title": "수동 트랜잭션",
+    "ide.manualTransaction.minutesLeft": "{count}분 남음",
+    "ide.manualTransaction.secondsLeft": "{count}초 남음",
+    "ide.manualTransaction.expiresAt":
+      "{time}까지 커밋하지 않으면 자동으로 롤백됩니다.",
+    "ide.manualTransaction.expiringSoon":
+      "{connection}의 수동 트랜잭션이 {count}분 뒤 자동으로 롤백됩니다. 지금 커밋하거나 롤백하세요.",
+    "ide.manualTransaction.rolledBackStatements":
+      "실패한 문장 {count}개는 해당 문장만 롤백됐고 트랜잭션은 계속 열려 있습니다.",
+    "ide.manualTransaction.busy": "이전 트랜잭션 명령을 처리하는 중입니다.",
+    "ide.manualTransaction.loading": "트랜잭션 상태를 확인하는 중…",
+    "ide.manualTransaction.unavailable":
+      "이 화면에서 문장을 실행 중이거나 다른 데이터베이스를 보고 있어 사용할 수 없습니다.",
+    "ide.manualTransaction.ended.expired":
+      "{connection}의 수동 트랜잭션이 30분 제한에 도달해 롤백됐습니다. 롤백 기록은 활동에서 확인할 수 있습니다.",
+    "ide.manualTransaction.ended.statementCancelled":
+      "실행 중인 문장을 취소해 {connection}의 수동 트랜잭션이 롤백됐습니다. 앞서 실행한 변경도 취소됐으며 기록은 활동에서 확인할 수 있습니다.",
+    "ide.manualTransaction.ended.statementTimedOut":
+      "문장 실행 시간이 초과돼 {connection}의 수동 트랜잭션이 롤백됐습니다. 롤백 기록은 활동에서 확인할 수 있습니다.",
+    "ide.manualTransaction.ended.authorityChanged":
+      "{connection}에 대한 접근 권한이 바뀌어 수동 트랜잭션이 롤백됐습니다. 롤백 기록은 활동에서 확인할 수 있습니다.",
+    "ide.manualTransaction.ended.connectionChanged":
+      "{connection}의 연결 설정이 바뀌어 수동 트랜잭션이 롤백됐습니다. 롤백 기록은 활동에서 확인할 수 있습니다.",
+    "ide.manualTransaction.ended.workspaceChanged":
+      "워크스페이스나 계정이 바뀌어 {connection}의 수동 트랜잭션이 롤백됐습니다. 롤백 기록은 활동에서 확인할 수 있습니다.",
+    "ide.manualTransaction.ended.applicationExit":
+      "앱을 닫는 동안 {connection}의 수동 트랜잭션이 롤백됐습니다.",
+    "ide.manualTransaction.ended.commitOutcomeUnknown":
+      "데이터베이스가 {connection}의 커밋을 확인하지 못했습니다. 다시 시도하기 전에 데이터를 확인하세요. 시도 기록은 활동에서 확인할 수 있습니다.",
+    "ide.manualTransaction.endedShort.cancelled": "취소로 롤백됨",
+    "ide.manualTransaction.endedShort.expired": "시간 제한으로 롤백됨",
+    "ide.manualTransaction.endedShort.access": "권한 변경으로 롤백됨",
+    "ide.manualTransaction.endedShort.unknown": "커밋 확인 안 됨",
+    "ide.manualTransaction.dismissEnded": "이 알림 닫기",
+    "ide.manualTransaction.openActivity": "활동 열기",
+    "ide.manualTransaction.exit.title": "열린 수동 트랜잭션",
+    "ide.manualTransaction.exit.message":
+      "수동 트랜잭션 {count}개가 아직 열려 있습니다. 닫으면 커밋하지 않은 변경이 모두 롤백되며 아무것도 커밋되지 않습니다.",
+    "ide.manualTransaction.exit.confirm": "열린 트랜잭션 {count}개를 롤백하고 닫기",
+    "ide.manualTransaction.exit.closing": "롤백하는 중…",
+    "ide.manualTransaction.exit.failed":
+      "앱을 닫지 못했습니다. 트랜잭션은 이미 롤백됐을 수 있습니다. 상태 표시줄을 확인한 뒤 다시 시도하세요.",
+    "ide.manualTransaction.actionFailed":
+      "수동 트랜잭션 명령을 완료하지 못했습니다. 다시 시도하세요.",
+    "ide.manualTransaction.commitOutcomeUnknown":
+      "데이터베이스가 커밋을 확인하지 못했습니다. 다시 시도하기 전에 데이터를 확인하세요. 시도 기록은 활동에서 확인할 수 있습니다.",
+    "ide.manualTransaction.refusal.unsupported":
+      "이 연결에서는 수동 트랜잭션을 사용할 수 없습니다.",
+    "ide.manualTransaction.refusal.readOnlyRole":
+      "워크스페이스 역할이 읽기 전용이라 수동 트랜잭션을 시작할 수 없습니다.",
+    "ide.manualTransaction.refusal.writesDisabled":
+      "이 연결의 데이터 변경이 꺼져 있습니다. 설정 → 안전에서 켜야 수동 트랜잭션을 시작하거나 커밋할 수 있습니다.",
+    "ide.manualTransaction.refusal.otherDatabase":
+      "열린 수동 트랜잭션이 다른 데이터베이스에 있습니다. 전환하기 전에 커밋하거나 롤백하세요.",
+    "ide.manualTransaction.refusal.statementRunning":
+      "이 트랜잭션에서 아직 실행 중인 문장이 있습니다. 끝날 때까지 기다리거나 취소한 뒤 커밋하세요.",
+    "ide.manualTransaction.refusal.failed":
+      "이 트랜잭션은 실패해 롤백만 할 수 있습니다.",
+    "ide.manualTransaction.refusal.ended": "이 수동 트랜잭션은 이미 끝났습니다.",
+    "ide.manualTransaction.refusal.expired":
+      "수동 트랜잭션이 30분 제한에 도달해 롤백됐습니다.",
+    "ide.manualTransaction.refusal.stale":
+      "더 이상 열려 있는 트랜잭션이 아닙니다. 새로고침한 뒤 다시 시도하세요.",
+    "ide.manualTransaction.refusal.unsupportedStatement":
+      "스키마 변경과 권한 변경 문장은 수동 트랜잭션 안에서 실행할 수 없습니다.",
+    "ide.manualTransaction.refusal.authorityChanged":
+      "이 연결에 대한 접근 권한이 바뀌어 수동 트랜잭션이 롤백됐습니다.",
+    "ide.backgroundTask.status.agentApproval": "Agent 변경 실행 중",
+    "ide.backgroundTask.stopFailed": "작업을 중지하지 못했습니다. 다시 시도하세요.",
     "ide.indentSpaces": "공백 {count}칸",
     "ide.noDataSource": "시작",
     "ide.notifications": "알림",

@@ -72,6 +72,15 @@
             "nullable": true,
             "identity": false,
             "autoIncrement": false
+          },
+          {
+            "name": "priority",
+            "ordinal": 6,
+            "nativeType": "ENUM('High','low')",
+            "typeFamily": "text",
+            "nullable": true,
+            "identity": false,
+            "autoIncrement": false
           }
         ],
         "constraints": [
@@ -104,6 +113,20 @@
           }
         ],
         "indexes": [
+          {
+            "name": "orders_account_lookup_idx",
+            "keys": [
+              {
+                "expression": "lower(status)"
+              },
+              {
+                "column": "account_id"
+              }
+            ],
+            "includedColumns": [],
+            "unique": false,
+            "valid": true
+          },
           {
             "name": "orders_status_idx",
             "keys": [
@@ -206,6 +229,15 @@
             "nullable": true,
             "identity": false,
             "autoIncrement": false
+          },
+          {
+            "name": "priority",
+            "ordinal": 6,
+            "nativeType": "enum('high','LOW')",
+            "typeFamily": "text",
+            "nullable": true,
+            "identity": false,
+            "autoIncrement": false
           }
         ],
         "constraints": [
@@ -239,6 +271,17 @@
         ],
         "indexes": [
           {
+            "name": "orders_account_lookup_idx",
+            "keys": [
+              {
+                "column": "account_id"
+              }
+            ],
+            "includedColumns": [],
+            "unique": false,
+            "valid": true
+          },
+          {
             "name": "orders_status_idx",
             "keys": [
               {
@@ -251,6 +294,20 @@
           }
         ],
         "rowEstimate": 999
+      },
+      {
+        "object": {
+          "namespace": "public",
+          "name": "orders_daily",
+          "kind": "materialized_view",
+          "catalog": "commerce_dev",
+          "nativeId": "commerce_dev3"
+        },
+        "partitionChildren": [],
+        "columns": [],
+        "constraints": [],
+        "indexes": [],
+        "rowEstimate": 30
       },
       {
         "object": {
@@ -268,10 +325,48 @@
       }
     ]
   },
+  "scope": {
+    "compared": [
+      "relationPresence",
+      "relationKind",
+      "columnPresence",
+      "columnType",
+      "columnNullability",
+      "primaryKey",
+      "indexPresence",
+      "indexKeys",
+      "indexUniqueness",
+      "foreignKeyTargets"
+    ],
+    "notCompared": [
+      "columnOrder",
+      "columnDefault",
+      "generatedColumn",
+      "identity",
+      "collation",
+      "checkConstraint",
+      "uniqueConstraint",
+      "indexMethod",
+      "indexPredicate",
+      "indexInclude",
+      "indexSortOrder",
+      "indexValidity",
+      "foreignKeyAction",
+      "foreignKeyDeferrable",
+      "foreignKeyValidation",
+      "viewDefinition",
+      "partitioning",
+      "comment",
+      "trigger",
+      "routine",
+      "type",
+      "sequence"
+    ]
+  },
   "counts": {
-    "added": 2,
+    "added": 3,
     "missing": 2,
-    "changed": 5
+    "changed": 7
   },
   "objects": [
     {
@@ -317,10 +412,26 @@
     {
       "table": "public.orders",
       "objectType": "column",
+      "name": "priority",
+      "status": "changed",
+      "baselineValue": "ENUM('High','low') · NULL",
+      "targetValue": "enum('high','LOW') · NULL"
+    },
+    {
+      "table": "public.orders",
+      "objectType": "column",
       "name": "status",
       "status": "changed",
       "baselineValue": "text · NULL",
       "targetValue": "varchar(64) · NOT NULL"
+    },
+    {
+      "table": "public.orders",
+      "objectType": "index",
+      "name": "orders_account_lookup_idx",
+      "status": "changed",
+      "baselineValue": "(lower(status), account_id)",
+      "targetValue": "(account_id)"
     },
     {
       "table": "public.orders",
@@ -337,6 +448,14 @@
       "status": "changed",
       "baselineValue": "account_id → public.accounts.id",
       "targetValue": "account_id → public.workspace_accounts.id"
+    },
+    {
+      "table": "public.orders_daily",
+      "objectType": "materializedView",
+      "name": "orders_daily",
+      "status": "added",
+      "baselineValue": "—",
+      "targetValue": "materialized_view"
     },
     {
       "table": "public.orders_summary",

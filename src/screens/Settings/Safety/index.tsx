@@ -1,8 +1,12 @@
 // Per-connection SafetySettings editor. Loads via get_safety, saves via set_safety.
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+// One Apply persists the cumulative read → DML → DDL gates and limits. A manager's
+// Apply changes the team write ceiling only when Data changes was toggled in that
+// edit. Unapplied edits survive navigation and failed saves, limits validate on
+// blur and Apply, and every hint is an accessible description of its control.
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { SafetySettings } from "../../../ipc/types";
-import { errDetails, errMessage } from "../../../ipc/types";
+import { errDetails } from "../../../ipc/types";
 import InfoTip from "../../../components/InfoTip";
 import { useToast } from "../../../components/Toast";
 import { Button } from "../../../design-system/components/Button";
@@ -43,16 +47,54 @@ import {
   subscribeSafetySaves,
 } from "../../../features/safetySettings/saveCoordinator";
 import { queryResultPhase } from "../../../lib/queryResultPhase";
+import {
+  rememberSafetyDraft,
+  restoreSafetyDraft,
+} from "../../../features/safetySettings/draftStore";
 
-const TOGGLES: { key: keyof SafetySettings; label: I18nKey; hint: I18nKey }[] = [
+const TOGGLES: { key: "autoRunReads" | "explainPreview"; label: I18nKey; hint: I18nKey }[] = [
   { key: "autoRunReads", label: "safety.autoRunReads", hint: "safety.autoRunReadsHint" },
   { key: "explainPreview", label: "safety.explainPreview", hint: "safety.explainPreviewHint" },
 ];
 
-const NUMBERS: { key: keyof SafetySettings; label: I18nKey; hint: I18nKey }[] = [
-  { key: "maxRows", label: "safety.maxRows", hint: "safety.maxRowsHint" },
-  { key: "execPreviewRowLimit", label: "safety.execPreviewRowLimit", hint: "safety.execPreviewRowLimitHint" },
+type LimitKey = "maxRows" | "execPreviewRowLimit";
+
+const NUMBERS: {
+  key: LimitKey;
+  label: I18nKey;
+  hint: I18nKey;
+  invalid: I18nKey;
+  min: number;
+  max: number;
+}[] = [
+  { key: "maxRows", label: "safety.maxRows", hint: "safety.maxRowsHint", invalid: "safety.maxRowsInvalid", min: 1, max: 100_000 },
+  { key: "execPreviewRowLimit", label: "safety.execPreviewRowLimit", hint: "safety.execPreviewRowLimitHint", invalid: "safety.execPreviewRowLimitInvalid", min: 0, max: 1_000_000 },
 ];
+
+/** A whole number inside the backend-enforced bounds, or `null`. */
+function parseLimit(raw: string, min: number, max: number): number | null {
+  const trimmed = raw.trim();
+  if (!/^\d+$/.test(trimmed)) return null;
+  const value = Number(trimmed);
+  return Number.isSafeInteger(value) && value >= min && value <= max ? value : null;
+}
+
+function limitText(settings: SafetySettings): Record<LimitKey, string> {
+  return {
+    maxRows: String(settings.maxRows),
+    execPreviewRowLimit: String(settings.execPreviewRowLimit),
+  };
+}
+
+/** Translate a Safety save failure; backend text is never shown. */
+function saveErrorKey(kind: string | null, message: string): I18nKey {
+  if (kind === "network" || kind === "timeout") return "safety.saveFailedNetwork";
+  if (kind === "blocked" && /changed before|authority changed/i.test(message)) {
+    return "safety.saveFailedChanged";
+  }
+  if (kind === "blocked" || kind === "safety") return "safety.saveFailedDenied";
+  return "safety.saveFailed";
+}
 
 function sameSafetySettings(left: SafetySettings, right: SafetySettings) {
   return left.allowWrites === right.allowWrites
@@ -67,7 +109,22 @@ function sameSafetySettings(left: SafetySettings, right: SafetySettings) {
 type SafetyDraft = Readonly<{
   connectionId: string;
   settings: SafetySettings;
+  numbers: Readonly<Record<LimitKey, string>>;
+  /** Limits the user left with an invalid value (shown after blur or Apply). */
+  invalid: ReadonlySet<LimitKey>;
+  /** The edit was kept from an earlier visit to this screen. */
+  restored: boolean;
 }>;
+
+function freshDraft(connectionId: string, settings: SafetySettings): SafetyDraft {
+  return {
+    connectionId,
+    settings,
+    numbers: limitText(settings),
+    invalid: new Set(),
+    restored: false,
+  };
+}
 
 export default function Safety({
   connection,
@@ -91,6 +148,8 @@ export default function Safety({
   const [saveError, setSaveError] = useState<{
     connectionId: string; kind: string | null; message: string;
   } | null>(null);
+  const descriptionId = useId();
+  const limitInputs = useRef<Partial<Record<LimitKey, HTMLInputElement | null>>>({});
   const mountedRef = useRef(false);
   const viewRef = useRef({ connectionId, generation: 0 });
   if (viewRef.current.connectionId !== connectionId) {
@@ -118,12 +177,46 @@ export default function Safety({
     };
   }, []);
 
+  // Reconcile the draft with the persisted value without discarding edits: an
+  // unapplied edit of this connection survives refetches, and one left behind on
+  // an earlier visit is restored and labeled instead of silently dropped.
   useEffect(() => {
-    setDraft(safetyQuery.data ? {
-      connectionId,
-      settings: effectiveSafetySettings(connection, safetyQuery.data),
-    } : null);
+    if (!safetyQuery.data) {
+      setDraft(null);
+      return;
+    }
+    const persisted = effectiveSafetySettings(connection, safetyQuery.data);
+    setDraft((current) => {
+      if (current?.connectionId === connectionId) {
+        const edited = !sameSafetySettings(current.settings, persisted)
+          || NUMBERS.some(({ key }) => current.numbers[key].trim() !== String(persisted[key]));
+        return edited ? current : freshDraft(connectionId, persisted);
+      }
+      const remembered = restoreSafetyDraft(connectionId);
+      if (remembered && !sameSafetySettings(remembered.settings, persisted)) {
+        return {
+          connectionId,
+          settings: remembered.settings,
+          numbers: remembered.numbers,
+          invalid: new Set(),
+          restored: true,
+        };
+      }
+      return freshDraft(connectionId, persisted);
+    });
   }, [connection, connectionId, safetyQuery.data]);
+
+  // Keep only an unapplied edit so leaving this screen never loses it.
+  useEffect(() => {
+    if (!draft || !safetyQuery.data || draft.connectionId !== connectionId) return;
+    const persisted = effectiveSafetySettings(connection, safetyQuery.data);
+    const edited = !sameSafetySettings(draft.settings, persisted)
+      || NUMBERS.some(({ key }) => draft.numbers[key].trim() !== String(persisted[key]));
+    rememberSafetyDraft(
+      connectionId,
+      edited ? { settings: draft.settings, numbers: draft.numbers } : null,
+    );
+  }, [connection, connectionId, draft, safetyQuery.data]);
 
   if (!settings) {
     if (safetyPhase === "coldError" && safetyQuery.error) {
@@ -138,7 +231,7 @@ export default function Safety({
             </Button>
           )}
         >
-          {t("safety.loadFailed", { error: errMessage(safetyQuery.error) })}
+          {t("safety.loadFailed")}
         </InlineNotice>
       );
     }
@@ -152,13 +245,24 @@ export default function Safety({
   const persistedSettings = safetyQuery.data
     ? effectiveSafetySettings(connection, safetyQuery.data)
     : null;
+  const numbers = draft?.numbers ?? limitText(settings);
+  const invalidLimits = draft?.invalid ?? new Set<LimitKey>();
   const hasUnsavedChanges = persistedSettings !== null
-    && !sameSafetySettings(settings, persistedSettings);
+    && (!sameSafetySettings(settings, persistedSettings)
+      || NUMBERS.some(({ key }) => numbers[key].trim() !== String(persistedSettings[key])));
+  // Only these gates end Agent and Shell sessions when applied (`set_safety`).
+  const permissionsChanged = persistedSettings !== null
+    && (settings.allowWrites !== persistedSettings.allowWrites
+      || settings.allowSchemaChanges !== persistedSettings.allowSchemaChanges);
 
-  function set<K extends keyof SafetySettings>(key: K, value: SafetySettings[K]) {
+  function clearSaveError() {
     setSaveError((current) => (
       current?.connectionId === connectionId ? null : current
     ));
+  }
+
+  function set<K extends keyof SafetySettings>(key: K, value: SafetySettings[K]) {
+    clearSaveError();
     setDraft((current) => (
       current?.connectionId === connectionId
         ? { ...current, settings: { ...current.settings, [key]: value } }
@@ -166,10 +270,62 @@ export default function Safety({
     ));
   }
 
+  /** Keep the raw text while typing; a valid value updates the draft at once. */
+  function editLimit(key: LimitKey, raw: string) {
+    clearSaveError();
+    const spec = NUMBERS.find((item) => item.key === key)!;
+    const value = parseLimit(raw, spec.min, spec.max);
+    setDraft((current) => {
+      if (current?.connectionId !== connectionId) return current;
+      const invalid = new Set(current.invalid);
+      if (value !== null) invalid.delete(key);
+      return {
+        ...current,
+        numbers: { ...current.numbers, [key]: raw },
+        invalid,
+        settings: value === null ? current.settings : { ...current.settings, [key]: value },
+      };
+    });
+  }
+
+  /** Validate on blur: normalize a valid value, flag an invalid one. */
+  function validateLimit(key: LimitKey) {
+    const spec = NUMBERS.find((item) => item.key === key)!;
+    setDraft((current) => {
+      if (current?.connectionId !== connectionId) return current;
+      const value = parseLimit(current.numbers[key], spec.min, spec.max);
+      const invalid = new Set(current.invalid);
+      if (value === null) invalid.add(key);
+      else invalid.delete(key);
+      return {
+        ...current,
+        invalid,
+        numbers: value === null ? current.numbers : { ...current.numbers, [key]: String(value) },
+      };
+    });
+  }
+
+  function discard() {
+    if (!persistedSettings) return;
+    clearSaveError();
+    rememberSafetyDraft(connectionId, null);
+    setDraft(freshDraft(connectionId, persistedSettings));
+  }
+
   async function save() {
     if (!settings || !hasUnsavedChanges) return;
+    const invalid = NUMBERS.filter(({ key, min, max }) => parseLimit(numbers[key], min, max) === null);
+    if (invalid.length > 0) {
+      setDraft((current) => current?.connectionId === connectionId
+        ? { ...current, invalid: new Set(invalid.map(({ key }) => key)) }
+        : current);
+      limitInputs.current[invalid[0].key]?.focus();
+      return;
+    }
     const requestToken = claimSafetySave(connectionId);
     if (!requestToken) return;
+    const writesChanged = persistedSettings !== null
+      && settings.allowWrites !== persistedSettings.allowWrites;
     const requestGeneration = viewRef.current.generation;
     const requestIsCurrent = () => (
       mountedRef.current
@@ -191,6 +347,7 @@ export default function Safety({
           setDeviceSafety: setSafetySettings,
           setWorkspaceWritePolicy: setWorkspaceConnectionWritePolicy,
         },
+        { writesChanged },
       );
       if (localPolicyChange) {
         persistedConnection = {
@@ -207,34 +364,31 @@ export default function Safety({
       });
       queryClient.setQueryData(safetyQueryKeys.detail(connectionId), persisted);
       onSaved(connectionId, persisted);
+      rememberSafetyDraft(connectionId, null);
       if (requestIsCurrent()) {
-        setDraft({ connectionId, settings: persisted });
+        setDraft(freshDraft(connectionId, persisted));
         toast(t("safety.saved"));
       }
     } catch (e) {
-      let message = errMessage(e);
+      const details = errDetails(e);
+      let message = t(saveErrorKey(details.kind, details.message));
       if (e instanceof WorkspaceWritePolicyRollbackError) {
         onConnectionUpdated(e.connection);
-        message = t("safety.workspacePolicyRollbackFailed", {
-          error: errMessage(e.rollbackError),
-        });
+        message = t("safety.workspacePolicyRollbackFailed");
       }
-      let recovered: SafetySettings;
+      // Refresh what was actually persisted (a partial save may have narrowed
+      // the device gate) but keep the user's edit so Apply can be retried.
       try {
-        recovered = await queryClient.fetchQuery({
+        const recovered = await queryClient.fetchQuery({
           ...safetySettingsQuery(connectionId),
           staleTime: 0,
         });
+        queryClient.setQueryData(safetyQueryKeys.detail(connectionId), recovered);
       } catch {
-        recovered = {
-          ...requested,
-          allowWrites: false,
-          allowSchemaChanges: false,
-        };
+        // The stale-error notice offers its own retry.
       }
       if (requestIsCurrent()) {
-        setDraft({ connectionId, settings: recovered });
-        setSaveError({ connectionId, kind: errDetails(e).kind, message });
+        setSaveError({ connectionId, kind: details.kind, message });
         toast(message, "error");
       }
     } finally {
@@ -275,9 +429,7 @@ export default function Safety({
       checked: effectiveAllowWrites,
       disabled: busy || !writeControlAvailable,
       onChange: (checked: boolean) => {
-        setSaveError((current) => (
-          current?.connectionId === connectionId ? null : current
-        ));
+        clearSaveError();
         setDraft((current) => current?.connectionId === connectionId ? {
           ...current,
           settings: {
@@ -311,7 +463,7 @@ export default function Safety({
             </Button>
           )}
         >
-          {t("safety.refreshFailed", { error: errMessage(safetyQuery.error) })}
+          {t("safety.refreshFailed")}
         </InlineNotice>
       ) : null}
       {saveError?.connectionId === connectionId && saveError.kind === "managedConnectionRecoveryRequired" ? (
@@ -319,6 +471,20 @@ export default function Safety({
       ) : saveError?.connectionId === connectionId ? (
         <InlineNotice tone="danger" icon="alert" role="alert">
           {saveError.message}
+        </InlineNotice>
+      ) : null}
+      {draft?.restored && hasUnsavedChanges ? (
+        <InlineNotice
+          tone="warning"
+          icon="info"
+          role="status"
+          action={(
+            <Button size="compact" disabled={busy} onClick={discard}>
+              {t("safety.discardChanges")}
+            </Button>
+          )}
+        >
+          {t("safety.draftRestored")}
         </InlineNotice>
       ) : null}
       <div className="tw:grid tw:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] tw:gap-4 tw:@max-[760px]:grid-cols-1">
@@ -339,45 +505,66 @@ export default function Safety({
               className="tw:grid tw:min-h-control-lg tw:grid-cols-[minmax(0,1fr)_20px] tw:items-center tw:gap-2 tw:border-t tw:border-border-subtle tw:py-2 tw:first-of-type:border-t-0"
             >
               <CheckboxField
-                checked={settings[item.key] as boolean}
+                checked={settings[item.key]}
                 disabled={busy}
-                onChange={(e) => set(item.key, e.target.checked as never)}
+                onChange={(e) => set(item.key, e.target.checked)}
                 label={<strong>{t(item.label)}</strong>}
+                aria-describedby={`${descriptionId}-${item.key}`}
               />
               <InfoTip label={t(item.hint)} />
+              <span id={`${descriptionId}-${item.key}`} className="tw:sr-only">
+                {t(item.hint)}
+              </span>
             </div>
           ))}
         </SettingsGroup>
 
         <SettingsGroup title={t("safety.limits")}>
-          {NUMBERS.map((n) => (
-            <label
-              key={n.key}
-              className="tw:grid tw:min-h-control-lg tw:min-w-0 tw:grid-cols-[minmax(0,1fr)_120px_20px] tw:items-center tw:gap-2 tw:border-t tw:border-border-subtle tw:py-2 tw:first-of-type:border-t-0 tw:@max-[400px]:grid-cols-[minmax(0,1fr)_20px] tw:@max-[400px]:[&>span]:col-span-2"
-            >
-              <span className="tw:text-sm tw:text-muted-foreground">
-                {t(n.label)}
-              </span>
-              <TextInput
-                density="compact"
-                disabled={busy}
-                type="number"
-                min={n.key === "maxRows" ? 1 : 0}
-                step={1}
-                value={settings[n.key] as number}
-                onChange={(e) => {
-                  // Clamp to backend-enforced bounds; guard NaN from an empty field.
-                  const raw = Math.floor(Number(e.target.value));
-                  const v =
-                    n.key === "maxRows"
-                      ? Math.min(100000, Math.max(1, raw || 1))
-                      : Math.min(1000000, Math.max(0, raw || 0));
-                  set(n.key, v as never);
-                }}
-              />
-              <InfoTip label={t(n.hint)} />
-            </label>
-          ))}
+          {NUMBERS.map((n) => {
+            const invalid = invalidLimits.has(n.key);
+            return (
+              <div
+                key={n.key}
+                className="tw:grid tw:min-h-control-lg tw:min-w-0 tw:grid-cols-[minmax(0,1fr)_120px_20px] tw:items-center tw:gap-x-2 tw:gap-y-1 tw:border-t tw:border-border-subtle tw:py-2 tw:first-of-type:border-t-0 tw:@max-[400px]:grid-cols-[minmax(0,1fr)_20px] tw:@max-[400px]:[&>label]:col-span-2"
+              >
+                <label
+                  htmlFor={`${descriptionId}-${n.key}-input`}
+                  className="tw:text-sm tw:text-muted-foreground"
+                >
+                  {t(n.label)}
+                </label>
+                <TextInput
+                  id={`${descriptionId}-${n.key}-input`}
+                  ref={(node) => {
+                    limitInputs.current[n.key] = node;
+                  }}
+                  density="compact"
+                  disabled={busy}
+                  inputMode="numeric"
+                  value={numbers[n.key]}
+                  aria-invalid={invalid || undefined}
+                  aria-describedby={invalid
+                    ? `${descriptionId}-${n.key}-error ${descriptionId}-${n.key}-hint`
+                    : `${descriptionId}-${n.key}-hint`}
+                  onChange={(e) => editLimit(n.key, e.target.value)}
+                  onBlur={() => validateLimit(n.key)}
+                />
+                <InfoTip label={t(n.hint)} />
+                <span id={`${descriptionId}-${n.key}-hint`} className="tw:sr-only">
+                  {t(n.hint)}
+                </span>
+                {invalid ? (
+                  <span
+                    id={`${descriptionId}-${n.key}-error`}
+                    role="alert"
+                    className="tw:col-span-full tw:text-xs tw:text-danger"
+                  >
+                    {t(n.invalid)}
+                  </span>
+                ) : null}
+              </div>
+            );
+          })}
         </SettingsGroup>
       </div>
 
@@ -389,9 +576,15 @@ export default function Safety({
           disabled={busy || !hasUnsavedChanges}
           disabledBehavior="focusable"
           onClick={save}
+          aria-describedby={permissionsChanged ? `${descriptionId}-sessions` : undefined}
         >
           {busy ? t("safety.applying") : t("safety.apply")}
         </Button>
+        {hasUnsavedChanges && !draft?.restored ? (
+          <Button size="compact" disabled={busy} onClick={discard}>
+            {t("safety.discardChanges")}
+          </Button>
+        ) : null}
         <span
           role="status"
           aria-live="polite"
@@ -413,10 +606,21 @@ export default function Safety({
                 )
               : t("safety.noUnsavedChanges")}
         </span>
+        {permissionsChanged ? (
+          <span
+            id={`${descriptionId}-sessions`}
+            className="tw:basis-full tw:text-xs tw:leading-body tw:text-muted-foreground"
+          >
+            {t("safety.applyEndsSessions")}
+          </span>
+        ) : null}
       </div>
 
       {connection.engine !== "bigquery" ? (
-        <MonitoringAccess connectionId={connectionId} />
+        <MonitoringAccess
+          connectionId={connectionId}
+          writesEnabled={persistedSettings?.allowWrites === true}
+        />
       ) : null}
     </div>
   );

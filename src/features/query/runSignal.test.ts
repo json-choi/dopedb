@@ -430,6 +430,24 @@ describe("SQL run guidance", () => {
     )).resolves.toMatchObject({ allowWrites: false });
     expect(persistenceOrder).toEqual(["device:false", "workspace:false"]);
 
+    // An edit that did not toggle Data changes saves only the device gate: the
+    // team's write ceiling is never rewritten from the narrower device value.
+    persistenceOrder.length = 0;
+    setWorkspaceWritePolicy.mockClear();
+    await expect(persistConnectionSafety(
+      { ...managedProfile, allowWrites: true },
+      safety,
+      {
+        setDeviceSafety: async () => {
+          persistenceOrder.push("device:false");
+        },
+        setWorkspaceWritePolicy,
+      },
+      { writesChanged: false },
+    )).resolves.toMatchObject({ allowWrites: true });
+    expect(persistenceOrder).toEqual(["device:false"]);
+    expect(setWorkspaceWritePolicy).not.toHaveBeenCalled();
+
     const approve = vi.fn().mockResolvedValue(undefined);
     await expect(
       approveManualOperationIfRequired(
@@ -538,5 +556,16 @@ describe("SQL run guidance", () => {
       icon: "info",
       text: 'sql.signalReadCap:{"count":500}',
     });
+    // SHOW/DESCRIBE and read-only PRAGMA are reads, never write warnings;
+    // USE/SET point at the selectors instead of claiming they will run.
+    for (const read of ["SHOW search_path", "DESCRIBE users", "PRAGMA table_info(users)"]) {
+      expect(analyzeRunSignal(read, [], safety)?.text.key).toBe("sql.signalReadCap");
+    }
+    expect(analyzeRunSignal("PRAGMA foreign_keys = ON", [], safety)?.tone).not.toBe("muted");
+    for (const session of ["USE analytics", "SET search_path TO sales"]) {
+      expect(analyzeRunSignal(session, [], safety)?.text.key).toBe(
+        "sql.signalSessionStatement",
+      );
+    }
   });
 });
