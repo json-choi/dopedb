@@ -24,6 +24,15 @@ write access to `app.db` (that needs an external notary or append-only sink).
 
 - Never add an update/delete path for an audit row. A correction is a new
   row, not a mutation of an old one.
+- `verify_chain` pins the genesis link and compares the chain with the
+  per-connection tail anchor in `audit_chain_anchors` (row count, tail hash),
+  which `record` advances in the same `BEGIN IMMEDIATE` transaction as the
+  append. Edited, reordered, or removed rows report `first_bad_row_id`; removed
+  or replaced newest rows report `anchor_status` (`shorter`, `tailMismatch`,
+  `longer`, `missing`). Never write the anchor from anywhere but `record`, and
+  never rebuild it from the chain after bootstrap seeded it once: a rebuild
+  would bless a truncated chain. Rewriting rows and anchor together in `app.db`
+  stays outside tamper-evidence, and UI copy must say so.
 - Any new audited field must be included in the canonical row serialization
   `chain.rs` hashes, or it silently falls outside tamper-evidence.
 

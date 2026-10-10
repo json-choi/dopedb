@@ -74,6 +74,7 @@ impl Store {
                     b.username AS binding_username,
                     b.extra_params AS binding_extra_params,
                     b.secret_ref AS binding_secret_ref,
+                    b.bound_endpoint AS binding_bound_endpoint,
                     b.workspace_access AS binding_workspace_access,
                     b.allow_writes AS binding_allow_writes
              FROM connections c
@@ -106,6 +107,7 @@ impl Store {
                     b.username AS binding_username,
                     b.extra_params AS binding_extra_params,
                     b.secret_ref AS binding_secret_ref,
+                    b.bound_endpoint AS binding_bound_endpoint,
                     b.workspace_access AS binding_workspace_access,
                     b.allow_writes AS binding_allow_writes
              FROM connections c
@@ -150,6 +152,7 @@ impl Store {
                     b.username AS binding_username,
                     b.extra_params AS binding_extra_params,
                     b.secret_ref AS binding_secret_ref,
+                    b.bound_endpoint AS binding_bound_endpoint,
                     b.workspace_access AS binding_workspace_access,
                     b.allow_writes AS binding_allow_writes,
                     active.workspace_id AS pinned_workspace_id,

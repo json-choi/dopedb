@@ -304,6 +304,12 @@ Acceptance: cancel 후 connection을 검증 없이 재사용하지 않고 write 
    secret-free config를 만들고 `dopedb agent start -- <provider args>`를 실행한다.
    Desktop은 시작 때마다 저장된 exact resource set을 현재 상태로 다시 보여주며,
    승인 뒤 공식 CLI process tree에만 runtime-only 권한을 부여하고 종료 시 폐기한다.
+   그 process의 DB 변경 제안은 같은 전역 gate의 변경 검토 dialog에서 결정하고,
+   process가 끝나면 미결 제안은 자동으로 취소된다.
+6. 대화가 시작된 뒤 범위 메뉴는 고정된 선택과 이유를 읽기 전용으로 보여준다.
+   미배정 연결은 `프로젝트에 추가`, binding 뒤 revision이 바뀐 DB는 `재확인`으로
+   잇고, 백그라운드 준비는 binding을 다시 쓰지 않는다. 종료·회수된 session의 미결
+   제안은 `철회됨`이 된다.
 
 Acceptance: general MCP server, arbitrary provider API, 승인 우회 mode와 stale session
 focus가 없어야 한다.
@@ -391,3 +397,23 @@ focus 유지를 확인했다. 확대 검수 입력은 합성 gesture이며 실�
 fixture에서 일반·가상 표를 동시에 150%로 확대한 뒤 한쪽 복귀가 다른 표에
 영향을 주지 않음, 가상 표 양방향 scroll 후 footer 내 버튼 유지, footer 버튼에
 focus를 둔 Ctrl+0, standalone 표 하단 버튼과 복귀를 확인했다.
+
+### 핵심 기능 15종 감사 후속 (2026-10-10)
+
+결과와 점수는 [`UI_UX_AUDIT.md`](./UI_UX_AUDIT.md)의 같은 날짜 절이 소유한다.
+
+- `partial`: Agent 승인 카드는 자동 포커스 없이 polite 알림과 AI Chat 토글·상태
+  표시의 `승인 대기 N`으로 알리고, 실행 중 중지와 결과 열기를 제공한다. 외부 Agent
+  process의 제안 dialog, 범위 메뉴 잠금, 미배정 연결·revision 재확인 안내, session
+  종료 시 제안 철회도 구현했다. 공식 Claude/Codex 로그인 세션과 `dopedb agent
+  start`에서 제안→승인·거절·중지 왕복은 실기 검수가 남았다.
+- `partial`: 열린 수동 트랜잭션이 있으면 창 닫기·Cmd+Q·메뉴 종료 전에 롤백 확인을
+  받는다. Dock 종료·로그아웃·updater 재실행은 확인 없이 종료하되 커밋하지 않는다.
+  packaged 앱에서 확인 창 동작을 검수해야 한다.
+- `partial`: 모든 결과 내보내기는 네이티브 저장 대화상자와 완료·실패 알림을 거친다.
+  packaged 앱 저장 대화상자 검수가 남았다.
+- `partial`: 공유·관리형 연결의 복구 동선(재동기화, 워크스페이스 로그인, 관리형 복구,
+  재시도 카운트다운)은 개발 앱에서 재현할 수 없어 실계정 검수가 남았다.
+- `complete`(개발 앱 실기 확인): 테이블 열기·페이지·정렬·필터, SQL 실행·구문 오류
+  위치·취소(⌘.), Activity 감사 체인 검증·취소 기록, Settings → Safety, Explorer의
+  저장 스냅샷 표시 해제, WebView 최상위 이동 차단.

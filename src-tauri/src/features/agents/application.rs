@@ -1,6 +1,6 @@
 //! Read-only Agent CLI discovery composed from an explicit platform port.
 
-use super::domain::AgentCliInfo;
+use super::domain::{AgentCliInfo, AgentProvider};
 use super::ports::AgentCliProbePort;
 
 #[derive(Clone)]
@@ -17,7 +17,15 @@ where
     }
 
     /// Detect only the installed CLI's own status; provider credentials never cross this port.
-    pub(crate) async fn detect_clis(&self) -> Vec<AgentCliInfo> {
-        self.cli_probe.detect().await
+    /// `None` probes every provider; a list re-probes just those (for example the
+    /// ones that were not ready), so a ready CLI is never spawned again.
+    pub(crate) async fn detect_clis(
+        &self,
+        providers: Option<Vec<AgentProvider>>,
+    ) -> Vec<AgentCliInfo> {
+        let mut providers =
+            providers.unwrap_or_else(|| vec![AgentProvider::Claude, AgentProvider::Codex]);
+        providers.dedup();
+        self.cli_probe.detect(providers).await
     }
 }

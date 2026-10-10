@@ -41,7 +41,8 @@ import {
   TextAreaInput,
   TextInput,
 } from "../../design-system/components/FormControls";
-import { catalogQuery, useCatalogScope } from "../../lib/queries";
+import { useCatalogScope } from "../../lib/queries";
+import { catalogQuery } from "../../lib/catalogQueries";
 import { documentsToGrid } from "../../lib/documentGrid";
 import { stamp } from "../../lib/export";
 import { useI18n } from "../../lib/i18n";

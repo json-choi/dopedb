@@ -112,6 +112,7 @@ impl Store {
                 .filter(|event| after_sequence.is_none_or(|after| event.sequence > after))
                 .collect(),
             replay_truncated,
+            broker_session_id: None,
         })
     }
 
@@ -127,40 +128,37 @@ impl Store {
         Ok(())
     }
 
-    pub(crate) async fn discard_agent_acp_events_through(
-        &self,
-        scope: &ActiveResourceScope,
-        id: AcpSessionId,
-        sequence: u64,
-    ) -> AppResult<()> {
-        let sequence = i64::try_from(sequence)
-            .map_err(|_| AppError::Config("the ACP event sequence exceeded SQLite range".into()))?;
-        sqlx::query(
-            "DELETE FROM agent_acp_events
-             WHERE session_id = ?1 AND sequence <= ?2
-               AND EXISTS (
-                   SELECT 1 FROM agent_acp_sessions
-                   WHERE id = ?1 AND workspace_id = ?3 AND account_scope = ?4
-               )",
-        )
-        .bind(id.to_string())
-        .bind(sequence)
-        .bind(scope.workspace_id.to_string())
-        .bind(scope.account_scope.storage_key())
-        .execute(&self.pool)
-        .await?;
-        Ok(())
-    }
-
+    #[cfg(any(test, feature = "packaged-benchmark"))]
     pub(crate) async fn persist_agent_acp_events(
         &self,
         scope: &ActiveResourceScope,
         summary: &AcpSessionSummary,
         events: &[AcpSessionEvent],
     ) -> AppResult<()> {
+        self.persist_agent_acp_event_batch(scope, summary, events, &[])
+            .await
+    }
+
+    /// Persist one ordered batch. `replaced_sequences` names rows of a streamed
+    /// message run that a newer folded row (same text plus more) supersedes.
+    pub(crate) async fn persist_agent_acp_event_batch(
+        &self,
+        scope: &ActiveResourceScope,
+        summary: &AcpSessionSummary,
+        events: &[AcpSessionEvent],
+        replaced_sequences: &[u64],
+    ) -> AppResult<()> {
         if events.is_empty() {
             return Ok(());
         }
+        let replaced = replaced_sequences
+            .iter()
+            .map(|sequence| {
+                i64::try_from(*sequence).map_err(|_| {
+                    AppError::Config("the ACP event sequence exceeded SQLite range".into())
+                })
+            })
+            .collect::<AppResult<Vec<_>>>()?;
         let mut rows = Vec::with_capacity(events.len());
         for event in events {
             if event.session_id != summary.id {
@@ -184,11 +182,21 @@ impl Store {
         }
         let mut transaction = self.pool.begin().await?;
         upsert_session(&mut *transaction, scope, summary).await?;
+        for sequence in replaced {
+            sqlx::query("DELETE FROM agent_acp_events WHERE session_id = ?1 AND sequence = ?2")
+                .bind(summary.id.to_string())
+                .bind(sequence)
+                .execute(&mut *transaction)
+                .await?;
+        }
         for (sequence, created_at, payload) in rows {
             sqlx::query(
-                "INSERT OR IGNORE INTO agent_acp_events(
+                "INSERT INTO agent_acp_events(
                      session_id, sequence, created_at, payload
-                 ) VALUES (?1, ?2, ?3, ?4)",
+                 ) VALUES (?1, ?2, ?3, ?4)
+                 ON CONFLICT(session_id, sequence) DO UPDATE SET
+                     created_at = excluded.created_at,
+                     payload = excluded.payload",
             )
             .bind(summary.id.to_string())
             .bind(sequence)

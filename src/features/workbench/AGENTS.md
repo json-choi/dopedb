@@ -12,7 +12,7 @@ its own — persistence is delegated to `../sqlDocuments`.
 ## Key Files
 | File | Description |
 |------|-------------|
-| `domain.ts` | `WorkbenchDocument` union and id helpers (`stableDocument`, `queryDocument`, `persistedQueryDocument`, `sqlRecoveryKey`-based ids). |
+| `domain.ts` | `WorkbenchDocument` union and id helpers (`stableDocument`, `queryDocument`, `persistedQueryDocument`, `sqlRecoveryKey`-based ids), plus `historyQueryTarget`, which reopens a History entry in the database and schema its run recorded (the connection's default when it recorded none). |
 | `draftStore.ts` | `useSyncExternalStore`-based unsent-draft cache, capped at `MAX_RETAINED_DRAFTS` (64), evicting entries with no active listeners first. |
 | `openTabs.ts` | Member-local open-tab record (list, order, active tab) per workspace/account/connection, plus `restorableOpenTabs`, which decides what may reopen after a document list response. |
 | `state.test.ts` | Renders workbench state against a real schema-diff fixture and SQL parameter/catalog helpers to validate the document strip state machine. |
@@ -44,7 +44,7 @@ None.
 - `state.test.ts` is part of the `pnpm test` smoke suite
   (`vitest run src/features/workbench/state.test.ts`) and counts against the
   208-test budget; extend it rather than adding a new top-level test file. It
-  reads `dopedb-protocol/tests/fixtures/schema-diff-v1.json` as a fixture.
+  reads `dopedb-protocol/tests/fixtures/schema-diff-v2.json` as a fixture.
 
 ### Common Patterns
 - Document ids distinguish "stable" (singleton) vs. "unique, connection-scoped"

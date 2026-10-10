@@ -28,6 +28,8 @@ impl Store {
     }
 
     /// Insert or update a connection profile; ensures a default safety row exists.
+    /// An update never changes `allow_writes`: Settings → Safety is its only writer,
+    /// so a connection edit (or a pasted URL) cannot widen or reset the write cap.
     pub async fn upsert_connection(&self, p: &ConnectionProfile) -> AppResult<ConnectionProfile> {
         if p.workspace_access != WorkspaceConnectionAccess::Local {
             return Err(AppError::Config(
@@ -96,7 +98,7 @@ impl Store {
                ON CONFLICT(id) DO UPDATE SET
                  name=?2, engine=?3, provider=?4, driver_id=?5, host=?6, port=?7,
                  db_name=?8, username=?9, sslmode=?10, extra_params=?11, secret_ref=?12,
-                 readonly_default=?13, allow_writes=?14, updated_at=?15,
+                 readonly_default=?13, allow_writes=connections.allow_writes, updated_at=?15,
                  env=?16, schema_group=?17, revision=connections.revision + 1,
                  sync_status='local', workspace_access=?20, credential_mode=?21,
                  deleted_at=NULL
@@ -285,6 +287,51 @@ impl Store {
                 .bind(now)
                 .execute(&mut *tx)
                 .await?;
+            } else if profile.credential_mode == WorkspaceCredentialMode::MemberLocal {
+                // A member's saved credential stays bound to the template endpoint it
+                // was entered for. When this template moves the endpoint, weakens its
+                // transport, or changes a verified trust anchor, the credential is
+                // released and the member binds again before anything is sent.
+                let bindings: Vec<(String, String, String, String, Option<String>)> =
+                    sqlx::query_as(
+                        "SELECT account_user_id, username, extra_params, secret_ref, bound_endpoint
+                         FROM workspace_connection_bindings
+                         WHERE connection_id = ?1 AND secret_ref IS NOT NULL",
+                    )
+                    .bind(profile.id.to_string())
+                    .fetch_all(&mut *tx)
+                    .await?;
+                for (binding_account, username, extra_params, secret_ref, bound_endpoint) in
+                    bindings
+                {
+                    let mut current = profile.clone();
+                    current.username = username;
+                    current.extra_params = serde_json::from_str(&extra_params).unwrap_or_default();
+                    if binding_endpoint_admits(bound_endpoint.as_deref(), &current) {
+                        continue;
+                    }
+                    match Uuid::parse_str(&secret_ref) {
+                        Ok(credential_id) => {
+                            removed_credential_ids.insert(credential_id);
+                        }
+                        Err(error) => tracing::warn!(
+                            connection_id = %profile.id,
+                            %error,
+                            "ignored an invalid shared credential reference during endpoint synchronization"
+                        ),
+                    }
+                    sqlx::query(
+                        "UPDATE workspace_connection_bindings
+                         SET secret_ref = NULL, bound_endpoint = NULL,
+                             revision = revision + 1, updated_at = ?3
+                         WHERE connection_id = ?1 AND account_user_id = ?2",
+                    )
+                    .bind(profile.id.to_string())
+                    .bind(binding_account)
+                    .bind(now)
+                    .execute(&mut *tx)
+                    .await?;
+                }
             }
             sqlx::query(
                 r#"INSERT INTO connections
@@ -385,6 +432,42 @@ impl Store {
         Ok(())
     }
 
+    // ── deferred credential deletes ────────────────────────────────────────
+
+    /// Remember an OS credential item no profile references whose deletion failed.
+    /// Only the opaque item id is stored; the credential itself never is.
+    pub async fn defer_credential_delete(&self, credential_id: Uuid) -> AppResult<()> {
+        sqlx::query(
+            "INSERT INTO deferred_credential_deletes (credential_id, deferred_at)
+             VALUES (?1, ?2)
+             ON CONFLICT(credential_id) DO NOTHING",
+        )
+        .bind(credential_id.to_string())
+        .bind(Utc::now())
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    /// Every credential item still waiting for deletion, oldest first.
+    pub async fn deferred_credential_deletes(&self) -> AppResult<Vec<Uuid>> {
+        let ids: Vec<String> = sqlx::query_scalar(
+            "SELECT credential_id FROM deferred_credential_deletes ORDER BY deferred_at",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        ids.into_iter().map(parse_uuid).collect()
+    }
+
+    /// Forget an item once the OS credential store confirmed its removal.
+    pub async fn clear_deferred_credential_delete(&self, credential_id: Uuid) -> AppResult<()> {
+        sqlx::query("DELETE FROM deferred_credential_deletes WHERE credential_id = ?1")
+            .bind(credential_id.to_string())
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
     /// Save one account's local overlay for a shared template. The secret value remains
     /// in the OS credential store; only its opaque item id enters SQLite.
     pub async fn bind_connection_credentials(
@@ -400,6 +483,7 @@ impl Store {
                     b.username AS binding_username,
                     b.extra_params AS binding_extra_params,
                     b.secret_ref AS binding_secret_ref,
+                    b.bound_endpoint AS binding_bound_endpoint,
                     b.workspace_access AS binding_workspace_access,
                     b.allow_writes AS binding_allow_writes
              FROM connections c
@@ -427,28 +511,35 @@ impl Store {
             });
         }
         let extra_params_json = serde_json::to_string(extra_params)?;
-        sqlx::query(
+        // The credential is bound to the template endpoint exactly as it is now. The
+        // statement is assembled only from compile-time constants.
+        let bind_sql = format!(
             "INSERT INTO workspace_connection_bindings
-                (connection_id, account_user_id, username, extra_params, secret_ref, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+                (connection_id, account_user_id, username, extra_params, secret_ref, updated_at,
+                 bound_endpoint)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6,
+                     (SELECT {TEMPLATE_ENDPOINT_JSON} FROM connections WHERE id = ?1))
              ON CONFLICT(connection_id, account_user_id) DO UPDATE SET
                 username = excluded.username,
                 extra_params = excluded.extra_params,
                 secret_ref = excluded.secret_ref,
+                bound_endpoint = excluded.bound_endpoint,
                 revision = workspace_connection_bindings.revision + 1,
                 updated_at = excluded.updated_at
              WHERE workspace_connection_bindings.username IS NOT excluded.username
                 OR workspace_connection_bindings.extra_params IS NOT excluded.extra_params
-                OR workspace_connection_bindings.secret_ref IS NOT excluded.secret_ref",
-        )
-        .bind(id.to_string())
-        .bind(account_user_id)
-        .bind(username.trim())
-        .bind(extra_params_json)
-        .bind(secret_ref)
-        .bind(Utc::now())
-        .execute(&self.pool)
-        .await?;
+                OR workspace_connection_bindings.secret_ref IS NOT excluded.secret_ref
+                OR workspace_connection_bindings.bound_endpoint IS NOT excluded.bound_endpoint"
+        );
+        sqlx::query(sqlx::AssertSqlSafe(bind_sql))
+            .bind(id.to_string())
+            .bind(account_user_id)
+            .bind(username.trim())
+            .bind(extra_params_json)
+            .bind(secret_ref)
+            .bind(Utc::now())
+            .execute(&self.pool)
+            .await?;
         profile.username = username.trim().to_string();
         profile.extra_params = extra_params.clone();
         profile.secret_ref = secret_ref.map(str::to_string);

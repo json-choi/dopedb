@@ -1,4 +1,6 @@
 // Retains bounded SQL stream pages and serves row, decode-failure, and subscription lookups.
+// A page that fails to load is retried a bounded number of times with backoff and then
+// reported as a classified error the result surface can explain and recover from.
 
 import type {
   SqlStreamBatch,
@@ -8,9 +10,52 @@ import type {
 } from "./domain";
 import type { CellDecodeFailure } from "../../ipc/generated/model";
 
+/**
+ * Failure-metadata type of a cell the backend shortened so its row fits one
+ * result page (`dopedb.truncated:<original bytes>`). Unlike a decode failure,
+ * the cell keeps a text preview; copy and export still refuse it.
+ */
+const TRUNCATED_CELL_TYPE_PREFIX = "dopedb.truncated:";
+
+export function truncatedCellBytes(
+  failure: Pick<CellDecodeFailure, "databaseType">,
+): number | null {
+  if (!failure.databaseType.startsWith(TRUNCATED_CELL_TYPE_PREFIX)) return null;
+  const bytes = Number(failure.databaseType.slice(TRUNCATED_CELL_TYPE_PREFIX.length));
+  return Number.isSafeInteger(bytes) && bytes >= 0 ? bytes : null;
+}
+
+/** A failed cell is null; a shortened cell keeps its string preview. */
+export function decodeFailureCellIsConsistent(
+  failure: CellDecodeFailure,
+  value: unknown,
+) {
+  return truncatedCellBytes(failure) === null
+    ? value === null
+    : typeof value === "string";
+}
+
 /** Six 512 KiB wire pages plus one in-flight IPC page bounds renderer retention. */
 export const SQL_RESULT_CACHE_MAX_PAGES = 6;
 const SQL_RESULT_CACHE_MAX_RESULTS = 4;
+/** Automatic attempts per page before the surface asks for an explicit retry. */
+const SQL_RESULT_PAGE_MAX_ATTEMPTS = 3;
+const SQL_RESULT_PAGE_RETRY_BASE_MS = 1_000;
+
+/**
+ * Why stored rows could not be read back. `authorityChanged`: the connection was
+ * edited or access changed since the run; `expired`: the local result artifact
+ * left retention; `unavailable`: anything else (corrupt or unreadable page).
+ */
+export type SqlResultPageErrorKind = "authorityChanged" | "expired" | "unavailable";
+
+export type SqlResultPageError = {
+  kind: SqlResultPageErrorKind;
+  /** True while a bounded automatic retry is still scheduled. */
+  retrying: boolean;
+};
+
+type PageFailure = { attempts: number; retryAt: number; kind: SqlResultPageErrorKind };
 
 type ResultPageCache = {
   pages: Map<
@@ -19,8 +64,27 @@ type ResultPageCache = {
   >;
   failures: Map<number, readonly CellDecodeFailure[]>;
   loading: Map<number, Promise<void>>;
-  error: string | null;
+  pageFailures: Map<number, PageFailure>;
+  retryTimer: ReturnType<typeof setTimeout> | null;
+  error: SqlResultPageError | null;
 };
+
+export function classifySqlResultPageError(error: unknown): SqlResultPageErrorKind {
+  const shaped = error && typeof error === "object"
+    ? (error as { kind?: unknown; message?: unknown })
+    : {};
+  const message = typeof shaped.message === "string" ? shaped.message : "";
+  if (shaped.kind === "blocked" && message.includes("authority changed")) {
+    return "authorityChanged";
+  }
+  if (
+    shaped.kind === "notFound" ||
+    (shaped.kind === "io" && /no such file|not found|cannot find/i.test(message))
+  ) {
+    return "expired";
+  }
+  return "unavailable";
+}
 
 const caches = new Map<string, ResultPageCache>();
 // Subscriptions outlive page-cache eviction. Keeping them separate prevents an
@@ -43,6 +107,8 @@ function cacheFor(source: SqlStreamRowSource) {
       pages: new Map(),
       failures: new Map(),
       loading: new Map(),
+      pageFailures: new Map(),
+      retryTimer: null,
       error: null,
     };
     caches.set(key, cache);
@@ -68,7 +134,7 @@ function trimResultPages(protectedKey: string) {
     caches.delete(oldest[0]);
     oldest[1].pages.clear();
     oldest[1].failures.clear();
-    oldest[1].error = null;
+    clearPageFailures(oldest[1]);
     notify(oldest[0]);
   }
 
@@ -85,6 +151,50 @@ function trimResultPages(protectedKey: string) {
       caches.delete(key);
     }
   }
+}
+
+function clearPageFailures(cache: ResultPageCache) {
+  if (cache.retryTimer !== null) clearTimeout(cache.retryTimer);
+  cache.retryTimer = null;
+  cache.pageFailures.clear();
+  cache.error = null;
+}
+
+/** Explicit recovery: forget failed attempts so the next render reads again. */
+export function retrySqlResultPages(source: SqlStreamRowSource) {
+  const key = sourceKey(source);
+  const cache = key ? caches.get(key) : undefined;
+  if (!cache || !key) return;
+  clearPageFailures(cache);
+  notify(key);
+}
+
+function recordPageFailure(
+  key: string,
+  cache: ResultPageCache,
+  sequence: number,
+  error: unknown,
+) {
+  const previous = cache.pageFailures.get(sequence);
+  const attempts = (previous?.attempts ?? 0) + 1;
+  const kind = classifySqlResultPageError(error);
+  // A changed authority or an expired artifact cannot heal by itself.
+  const retrying =
+    kind === "unavailable" && attempts < SQL_RESULT_PAGE_MAX_ATTEMPTS;
+  const delay = SQL_RESULT_PAGE_RETRY_BASE_MS * 4 ** (attempts - 1);
+  cache.pageFailures.set(sequence, {
+    attempts: retrying ? attempts : SQL_RESULT_PAGE_MAX_ATTEMPTS,
+    retryAt: Date.now() + delay,
+    kind,
+  });
+  cache.error = { kind, retrying };
+  if (retrying && cache.retryTimer === null) {
+    cache.retryTimer = setTimeout(() => {
+      cache.retryTimer = null;
+      notify(key);
+    }, delay);
+  }
+  notify(key);
 }
 
 function retain(
@@ -109,13 +219,14 @@ function retain(
   cache.pages.delete(sequence);
   cache.pages.set(sequence, { rowStart, rows });
   cache.failures.set(sequence, failures);
+  cache.pageFailures.delete(sequence);
   while (cache.pages.size > SQL_RESULT_CACHE_MAX_PAGES) {
     const oldest = cache.pages.keys().next().value;
     if (oldest === undefined) break;
     cache.pages.delete(oldest);
     cache.failures.delete(oldest);
   }
-  cache.error = null;
+  if (cache.pageFailures.size === 0) cache.error = null;
   trimResultPages(key);
   notify(key);
 }
@@ -251,7 +362,9 @@ export function subscribeSqlResultPages(
   };
 }
 
-export function sqlResultPageError(source: SqlStreamRowSource) {
+export function sqlResultPageError(
+  source: SqlStreamRowSource,
+): SqlResultPageError | null {
   return cacheFor(source)?.error ?? null;
 }
 
@@ -320,9 +433,19 @@ export async function ensureSqlResultRange(
     ranges.push(range);
   }
   const requests: Promise<void>[] = [];
+  const now = Date.now();
   for (const range of ranges) {
     const sequence = range.sequence;
     if (cache.pages.has(sequence)) continue;
+    const failure = cache.pageFailures.get(sequence);
+    // Re-rendering after a failure must not re-request the page: only the
+    // bounded backoff timer or an explicit retry starts another attempt.
+    if (
+      failure &&
+      (failure.attempts >= SQL_RESULT_PAGE_MAX_ATTEMPTS || now < failure.retryAt)
+    ) {
+      continue;
+    }
     let request = cache.loading.get(sequence);
     if (!request) {
       request = readPage(source, sequence)
@@ -345,10 +468,13 @@ export async function ensureSqlResultRange(
                   range.rowStart + batch.rows.length ||
                 failure.columnIndex < 0 ||
                 failure.columnIndex >= batch.columns.length ||
-                batch.rows[failure.rowIndex - range.rowStart]?.[
-                  failure.columnIndex
-                ] !== null ||
-                !failure.databaseType,
+                !failure.databaseType ||
+                !decodeFailureCellIsConsistent(
+                  failure,
+                  batch.rows[failure.rowIndex - range.rowStart]?.[
+                    failure.columnIndex
+                  ],
+                ),
             )
           ) {
             throw new Error("SQL result page did not match its artifact");
@@ -364,11 +490,7 @@ export async function ensureSqlResultRange(
         .catch((error) => {
           const current = cacheFor(source);
           if (!current) return;
-          current.error =
-            error instanceof Error
-              ? error.message
-              : "SQL result page is unavailable";
-          notify(key);
+          recordPageFailure(key, current, sequence, error);
         })
         .finally(() => cache.loading.delete(sequence));
       cache.loading.set(sequence, request);
@@ -381,8 +503,10 @@ export async function ensureSqlResultRange(
 export function clearSqlResultPageCache(source?: SqlStreamRowSource) {
   const key = source ? sourceKey(source) : null;
   if (key) {
-    caches.get(key)?.pages.clear();
-    caches.get(key)?.failures.clear();
+    const cache = caches.get(key);
+    cache?.pages.clear();
+    cache?.failures.clear();
+    if (cache) clearPageFailures(cache);
     caches.delete(key);
     notify(key);
   } else if (!source) {
@@ -390,6 +514,7 @@ export function clearSqlResultPageCache(source?: SqlStreamRowSource) {
     for (const cache of caches.values()) {
       cache.pages.clear();
       cache.failures.clear();
+      clearPageFailures(cache);
     }
     caches.clear();
     for (const cacheKey of keys) notify(cacheKey);

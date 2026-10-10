@@ -2,6 +2,8 @@
 // queryId per run and tells a user-initiated cancelQuery apart from a real backend
 // error so callers only render one or the other. The branching lives in `runTracked`,
 // a plain-object helper kept outside React state so it's unit-testable on its own.
+// A run cancelled before any backend operation exists (while it is still being
+// planned) stops at the caller's next checkpoint via `RunCancelledError`.
 import { useRef, useState } from "react";
 import { cancelQuery } from "../features/queries/tauriAdapter";
 import { isQueryCancellationError } from "../ipc/types";
@@ -12,6 +14,14 @@ interface RunTracker {
 }
 
 type RunOutcome<T> = { cancelled: true } | { cancelled: false; value: T };
+
+/** Thrown at a planning checkpoint once the user has cancelled the run. */
+export class RunCancelledError extends Error {
+  constructor() {
+    super("run cancelled before execution");
+    this.name = "RunCancelledError";
+  }
+}
 
 // Runs `fn` with a fresh queryId. A local click is not enough to claim cancellation:
 // only the backend's confirmed read-cancellation error is swallowed. An uncertain
@@ -26,6 +36,7 @@ export async function runTracked<T>(
   try {
     return { cancelled: false, value: await fn(id) };
   } catch (e) {
+    if (e instanceof RunCancelledError) return { cancelled: true };
     if (tracker.cancelled && isQueryCancellationError(e)) return { cancelled: true };
     throw e;
   } finally {
@@ -38,6 +49,11 @@ export function cancelTracked(tracker: RunTracker): void {
     tracker.cancelled = true;
     void cancelQuery(tracker.queryId);
   }
+}
+
+/** Throws `RunCancelledError` when the active run was cancelled while planning. */
+export function throwIfRunCancelled(tracker: RunTracker): void {
+  if (tracker.cancelled) throw new RunCancelledError();
 }
 
 export function useQueryRun() {
@@ -69,5 +85,10 @@ export function useQueryRun() {
     if (tracker.cancelled) void cancelQuery(queryId);
   }
 
-  return { running, cancelled, execute, cancel, track };
+  /** Planning checkpoint: stop before an operation starts if Cancel was pressed. */
+  function checkpoint() {
+    throwIfRunCancelled(tracker);
+  }
+
+  return { running, cancelled, execute, cancel, track, checkpoint };
 }

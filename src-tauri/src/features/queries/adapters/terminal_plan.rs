@@ -61,8 +61,9 @@ impl QueryPlatformAdapter {
         if profile.engine.is_document() {
             return Err(AgentQueryPlanError::DocumentConnection);
         }
-        let classification = safety::classify(&request.sql, profile.engine)
+        let analysis = safety::classify_with_integrity(&request.sql, profile.engine)
             .map_err(AgentQueryPlanError::Application)?;
+        let classification = analysis.classification.clone();
         if !matches!(classification.kind, crate::model::QueryKind::Read)
             || classification.statement_count != 1
         {
@@ -76,6 +77,16 @@ impl QueryPlatformAdapter {
                 Some("query plan accepts exactly one read-only SELECT statement".into()),
             )
             .await;
+            // A typo or USE/SET gets its precise typed reason (with the parser
+            // position) so the Agent can correct the SQL; other shapes remain a
+            // policy refusal.
+            if matches!(
+                analysis.integrity,
+                safety::ClassificationIntegrity::ParseFailed
+                    | safety::ClassificationIntegrity::SessionStatement
+            ) {
+                return Err(AgentQueryPlanError::Application(analysis.rejection(1)));
+            }
             return Err(AgentQueryPlanError::NotSingleRead);
         }
         let settings = self

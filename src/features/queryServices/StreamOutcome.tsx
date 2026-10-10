@@ -1,5 +1,6 @@
 // Bounded desktop stream projection. The grid and exports consume the immutable
-// chunk source directly; this component never flattens a partial result.
+// chunk source directly; this component never flattens a partial result. A small
+// polite live region announces the outcome instead of the whole grid being live.
 import { DataGridStatusScope } from "../../design-system/components/DataGridStatusScope";
 import { useMemo, useState } from "react";
 
@@ -9,13 +10,14 @@ import {
   collectCachedSqlResultRows,
   SQL_RESULT_CACHE_MAX_PAGES,
 } from "../queries/resultPageCache";
+import { readsOidAliases } from "../queries/sqlWorkbenchModel";
 import { useSqlResultPages } from "../queries/useSqlResultPages";
 import InspectableResultGrid from "../queryResults/InspectableResultGrid";
 import {
   ResultWorkbenchFooter,
   ResultWorkbenchToolbar,
-  resultCellText,
 } from "../queryResults/ResultWorkbench";
+import { gridCellText } from "../queryResults/dataGridSelection";
 import {
   ResultMeta,
   SqlSnippet,
@@ -30,10 +32,13 @@ export default function StreamOutcome({
   stream,
   sql,
   maxRows,
+  onRerun,
 }: {
   stream: SqlStreamViewState;
   sql: string;
   maxRows: number;
+  /** Re-runs the query when its stored rows can no longer be read back. */
+  onRerun?: () => void;
 }) {
   const { t } = useI18n();
   const running = stream.phase === "connecting" || stream.phase === "streaming";
@@ -64,7 +69,7 @@ export default function StreamOutcome({
     for (const [index, row] of filterableRows.entries()) {
       if (
         row.some((value) =>
-          resultCellText(value).toLocaleLowerCase().includes(normalizedFilter),
+          gridCellText(value).toLocaleLowerCase().includes(normalizedFilter),
         )
       ) {
         rows.push([...row] as JsonValue[]);
@@ -84,14 +89,33 @@ export default function StreamOutcome({
     stream.phase === "cancelled"
       ? t("sql.cancelled")
       : stream.phase === "outcome_unknown"
-        ? t("common.unknown")
+        ? t("sql.outcomeUnknownShort")
         : stream.phase === "error"
-          ? (stream.error ?? t("sql.errorTitle"))
+          ? t("sql.errorTitle")
           : t("sql.running");
+  const filterDisabledReason = partial
+    ? t("results.filterUnavailablePartial")
+    : stream.rowCount > filterRowLimit
+      ? t("results.filterUnavailableLarge", { count: filterRowLimit })
+      : undefined;
+  const announcement =
+    stream.phase === "complete"
+      ? t("results.liveComplete", {
+          count: stream.rowCount,
+          duration: stream.durationMs ?? 0,
+        })
+      : stream.phase === "cancelled"
+        ? t("sql.cancelled")
+        : stream.phase === "error" || stream.phase === "outcome_unknown"
+          ? t("results.liveFailed")
+          : "";
 
   return (
     <DataGridStatusScope>
-      <WorkbenchContainedBody aria-live="polite">
+      <span className="tw:sr-only" role="status" aria-live="polite">
+        {announcement}
+      </span>
+      <WorkbenchContainedBody>
         {stream.columns.length === 0 ? (
           <ResultMeta>
             <SqlSnippet>{sql}</SqlSnippet>
@@ -110,6 +134,7 @@ export default function StreamOutcome({
               filterOpen={filterOpen}
               filter={filter}
               filterDisabled={partial || filterableRows === null}
+              filterDisabledReason={filterDisabledReason}
               onToggleFilter={() => {
                 setFilterOpen((open) => !open);
                 if (filterOpen) setFilter("");
@@ -129,6 +154,7 @@ export default function StreamOutcome({
               rowSource={filteredRows === null ? stream.rowSource : undefined}
               surface="workbench"
               footerInset
+              onRerun={onRerun}
             />
             <ResultWorkbenchFooter
               visible={filteredRows?.length ?? stream.rowCount}
@@ -138,6 +164,7 @@ export default function StreamOutcome({
               state={phaseLabel}
               truncated={stream.truncated}
               maxRows={maxRows}
+              hint={readsOidAliases(sql) ? t("results.oidAliasHint") : undefined}
             />
           </>
         )}

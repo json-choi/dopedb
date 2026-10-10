@@ -4,7 +4,8 @@
 use std::time::Duration;
 
 use dopedb_protocol::{
-    AnalysisArticleRecord, AnalysisRunError, AnalysisRunState, SharedAnalysisArticleCreate,
+    AnalysisArticleRecord, AnalysisArticleSource, AnalysisRunError, AnalysisRunState,
+    SharedAnalysisArticleCreate,
 };
 use serde::Serialize;
 use tauri::State;
@@ -25,6 +26,7 @@ use crate::kernel::access::{ActiveResourceScope, WorkspaceKind};
 use crate::kernel::identity::AccountId;
 use crate::state::AppState;
 
+use super::domain::{AnalysisArticleSaveResult, AnalysisArticleSummary};
 use super::{AnalysisDefinitionRunReceipt, AnalysisDefinitionRunRequest};
 
 // This is execution authority/cancellation supervision, not Analysis log polling.
@@ -75,31 +77,72 @@ fn cancelled_error(error: &AppError) -> bool {
     matches!(error, AppError::Safety(message) if message.to_ascii_lowercase().contains("cancel"))
 }
 
+/// Terminal state recorded for a run that did not succeed. A run whose Article or
+/// connection pin went out of date, including a shared connection that changed
+/// under it, is recorded as stale rather than failed.
+pub(super) fn failed_run_state(error: &AppError) -> AnalysisRunState {
+    if cancelled_error(error) {
+        AnalysisRunState::Cancelled
+    } else if matches!(
+        error,
+        AppError::Blocked { .. } | AppError::NotFound(_) | AppError::SharedConnectionChanged
+    ) {
+        AnalysisRunState::Stale
+    } else {
+        AnalysisRunState::Failed
+    }
+}
+
+/// Titles and authority pins only; the reader loads one body on open.
 #[tauri::command]
 pub(crate) async fn list_analysis_articles_command(
     state: State<'_, AppState>,
     project_environment_id: Option<Uuid>,
-) -> AppResult<Vec<AnalysisArticleRecord>> {
+) -> AppResult<Vec<AnalysisArticleSummary>> {
     let (scope, account) = remote_scope(&state).await?;
     state
         .services
         .analysis_article
-        .list_remote(account.as_str(), scope.workspace_id, project_environment_id)
+        .list_remote_summaries(account.as_str(), scope.workspace_id, project_environment_id)
         .await
 }
 
+/// The current HTML and saved query of one Article the member can still read.
+#[tauri::command]
+pub(crate) async fn get_analysis_article_command(
+    state: State<'_, AppState>,
+    article_id: Uuid,
+) -> AppResult<AnalysisArticleRecord> {
+    let (scope, account) = remote_scope(&state).await?;
+    state
+        .services
+        .analysis_article
+        .get_remote(account.as_str(), scope.workspace_id, article_id)
+        .await
+}
+
+/// A person's edit is attributed to the person, whatever the edited revision's source.
+pub(super) fn human_edit(mut article: SharedAnalysisArticleCreate) -> SharedAnalysisArticleCreate {
+    article.definition.source = AnalysisArticleSource::Human;
+    article
+}
+
+/// Saves the person's own edit. Agent writes go through the session-bound broker,
+/// which stamps the Agent source itself, so a save through this command always
+/// records a human source, even when the revision being edited was Agent-authored.
 #[tauri::command]
 pub(crate) async fn update_analysis_article_command(
     state: State<'_, AppState>,
     article_id: Uuid,
     expected_revision: i64,
     article: SharedAnalysisArticleCreate,
-) -> AppResult<AnalysisArticleRecord> {
+) -> AppResult<AnalysisArticleSaveResult> {
+    let article = human_edit(article);
     let (scope, account) = remote_scope(&state).await?;
     state
         .services
         .analysis_article
-        .mutate_remote(
+        .save_remote(
             account.as_str(),
             scope.workspace_id,
             article_id,
@@ -109,6 +152,11 @@ pub(crate) async fn update_analysis_article_command(
         .await
 }
 
+/// Deleting an Article also stops its public HTML. Visible active publications are
+/// revoked first through the publication API, so the links stop even on a workspace
+/// service that does not yet revoke them as part of the deletion; a failed
+/// revocation leaves the Article in place for a retry. A member whose connection
+/// grant was revoked cannot list them, and deletion must still remain possible.
 #[tauri::command]
 pub(crate) async fn delete_analysis_article_command(
     state: State<'_, AppState>,
@@ -116,6 +164,27 @@ pub(crate) async fn delete_analysis_article_command(
     expected_revision: i64,
 ) -> AppResult<i64> {
     let (scope, account) = remote_scope(&state).await?;
+    match list_analysis_publications(account.as_str(), scope.workspace_id, article_id).await {
+        Ok(publications) => {
+            for publication in publications
+                .iter()
+                .filter(|publication| publication.revoked_at.is_none())
+            {
+                revoke_analysis_publication(
+                    account.as_str(),
+                    scope.workspace_id,
+                    article_id,
+                    publication.id,
+                )
+                .await?;
+            }
+        }
+        Err(error) => tracing::warn!(
+            error_kind = error.kind(),
+            %article_id,
+            "Analysis publications were not visible before deletion"
+        ),
+    }
     let revision = delete_analysis_article(
         account.as_str(),
         scope.workspace_id,
@@ -354,13 +423,7 @@ pub(crate) async fn run_analysis_article_command(
             Ok(AnalysisRunCommandResult { run, result })
         }
         Err(error) => {
-            let terminal_state = if cancelled_error(&error) {
-                AnalysisRunState::Cancelled
-            } else if matches!(&error, AppError::Blocked { .. } | AppError::NotFound(_)) {
-                AnalysisRunState::Stale
-            } else {
-                AnalysisRunState::Failed
-            };
+            let terminal_state = failed_run_state(&error);
             let completion_error = Some(bounded_error(&error));
             match complete_analysis_run(
                 account.as_str(),

@@ -9,12 +9,13 @@ use dopedb_protocol::{
     ExternalAgentConfigCreateResult, ExternalAgentProvider, ExternalAgentSessionRevokeCommand,
     ExternalAgentSessionStartCommand, ExternalAgentSessionStartResult,
 };
-use tauri::Emitter;
+use tauri::{Emitter, Manager, UserAttentionType};
 
 use super::*;
 use crate::broker::{
-    AgentKnowledgeAuthorization, ExternalAgentProcessAuthorization, ExternalAgentRequestDecision,
-    ExternalAgentRequestKind, ExternalAgentRequestSummary,
+    AgentKnowledgeAuthorization, ExternalAgentProcessAuthorization, ExternalAgentProposalReference,
+    ExternalAgentRequestDecision, ExternalAgentRequestKind, ExternalAgentRequestRegistry,
+    ExternalAgentRequestSummary,
 };
 use crate::error::AppResult;
 use crate::features::agents::acp::narrow_resource_scope;
@@ -52,6 +53,7 @@ async fn configure(dispatcher: &BrokerDispatcher, request: &RequestEnvelope) -> 
         provider: arguments.provider,
         working_directory: arguments.working_directory,
         config: None,
+        proposal: None,
     };
     let decision = match await_decision(dispatcher, summary).await {
         Ok(decision) => decision,
@@ -87,16 +89,93 @@ async fn start(dispatcher: &BrokerDispatcher, request: &RequestEnvelope) -> Resp
         provider: arguments.config.provider,
         working_directory: arguments.working_directory.clone(),
         config: Some(arguments.config.clone()),
+        proposal: None,
     };
     match await_decision(dispatcher, summary).await {
         Ok(ExternalAgentRequestDecision::Approved(None)) => {}
         Ok(_) => return failure(request.request_id, ErrorCode::PolicyBlocked, false),
         Err(code) => return failure(request.request_id, code, false),
     }
+    let provider = arguments.config.provider;
     let result = issue_session(dispatcher, arguments.config, peer)
         .await
         .map_err(map_application_error);
+    if let Ok(started) = &result {
+        dispatcher
+            .external_agent_requests
+            .register_external_session(
+                TerminalSessionId::from(started.terminal_session_id),
+                provider,
+                arguments.working_directory,
+            );
+    }
     respond(request.request_id, result)
+}
+
+/// Show a pending SQL proposal from a Desktop-approved external Agent process in
+/// the same approval gate. In-app ACP sessions are not registered here because
+/// their transcript already owns the one approval card.
+pub(super) fn surface_proposal(
+    dispatcher: &BrokerDispatcher,
+    terminal_session_id: TerminalSessionId,
+    summary: &OperationSummary,
+) {
+    if summary.state != dopedb_protocol::OperationState::PendingApproval {
+        return;
+    }
+    let Some(entry) = dispatcher.external_agent_requests.enqueue_proposal(
+        terminal_session_id,
+        ExternalAgentProposalReference {
+            operation_id: summary.operation_id,
+            connection_id: summary.connection_id,
+            payload_hash: summary.payload_hash.clone(),
+            state: summary.state,
+        },
+    ) else {
+        return;
+    };
+    let Some(app) = dispatcher.app_handle.as_ref() else {
+        return;
+    };
+    request_attention(dispatcher, UserAttentionType::Informational);
+    if let Err(error) = app.emit(REQUEST_EVENT, entry) {
+        tracing::warn!(%error, "failed to announce an external Agent proposal");
+    }
+}
+
+/// Ask for the person's attention without activating the window: keystrokes
+/// typed in another app, often the requesting terminal, must never land on an
+/// approval control. Returns `false` when there is no window to show it in.
+fn request_attention(dispatcher: &BrokerDispatcher, attention: UserAttentionType) -> bool {
+    let Some(window) = dispatcher
+        .app_handle
+        .as_ref()
+        .and_then(|app| app.get_webview_window("main"))
+    else {
+        return false;
+    };
+    if let Err(error) = window.request_user_attention(Some(attention)) {
+        tracing::debug!(%error, "could not request attention for an external Agent request");
+    }
+    true
+}
+
+/// Release what a removed external Agent session queued for approval and clear
+/// those entries from the Desktop approval UI.
+pub(crate) fn release_external_session(
+    requests: &ExternalAgentRequestRegistry,
+    app: Option<&tauri::AppHandle>,
+    terminal_session_id: TerminalSessionId,
+) {
+    let released = requests.forget_external_session(terminal_session_id);
+    let Some(app) = app else {
+        return;
+    };
+    for id in released {
+        if let Err(error) = app.emit(REQUEST_FINISHED_EVENT, id) {
+            tracing::warn!(%error, %id, "failed to clear a released external Agent proposal");
+        }
+    }
 }
 
 fn revoke(dispatcher: &BrokerDispatcher, request: &RequestEnvelope) -> ResponseEnvelope {
@@ -114,6 +193,11 @@ fn revoke(dispatcher: &BrokerDispatcher, request: &RequestEnvelope) -> ResponseE
         _ => return failure(request.request_id, ErrorCode::AuthenticationDenied, false),
     };
     dispatcher.sessions.revoke(session.terminal_session_id);
+    release_external_session(
+        &dispatcher.external_agent_requests,
+        dispatcher.app_handle.as_ref(),
+        session.terminal_session_id,
+    );
     respond(
         request.request_id,
         Ok::<_, ErrorCode>(dopedb_protocol::EmptyArguments {}),
@@ -133,9 +217,13 @@ async fn await_decision(
         finish_request(dispatcher, id);
         return Err(ErrorCode::Internal);
     };
-    // Focus first so a failed focus cannot leave an already-emitted request in
-    // the approval UI after its pending receiver has been removed.
-    if dispatcher.focus_app().is_err() || app.emit(REQUEST_EVENT, summary).is_err() {
+    // Ask for attention first so a missing window cannot leave an already-emitted
+    // request in the approval UI after its pending receiver has been removed. The
+    // window is never activated: the request is blocking a terminal the person
+    // may still be typing in.
+    if !request_attention(dispatcher, UserAttentionType::Critical)
+        || app.emit(REQUEST_EVENT, summary).is_err()
+    {
         finish_request(dispatcher, id);
         return Err(ErrorCode::Internal);
     }
@@ -195,7 +283,11 @@ async fn issue_session(
         }
         let mut scope = services
             .knowledge
-            .knowledge_session_scope(&authority, Some(selection.project_environment_id))
+            .knowledge_session_scope(
+                &authority,
+                Some(selection.project_environment_id),
+                &selection.connection_ids,
+            )
             .await?
             .ok_or_else(|| AppError::Blocked {
                 reason: "the configured Project resource scope is unavailable".into(),

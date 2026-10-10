@@ -88,14 +88,13 @@ impl ScriptPlatformAdapter {
             .iter()
             .position(|kind| matches!(kind, QueryKind::Privilege))
         {
+            // The same typed reason as a single statement (parse failure with its
+            // position, USE/SET session statement, or policy block), located in
+            // the submitted script.
+            let offset = crate::sql_script::statement_position(&request.sql, &statements, index)
+                .unwrap_or(1);
             return Err(DesktopScriptRunError::Scoped(DesktopScriptScopedFailure {
-                error: AppError::SqlPolicyBlocked {
-                    position: crate::sql_script::statement_position(
-                        &request.sql,
-                        &statements,
-                        index,
-                    ),
-                },
+                error: safety::rejection_error_at(&statements[index], pin.profile.engine, offset),
                 _scope: Box::new(operation_scope),
             }));
         }

@@ -83,7 +83,7 @@ export function observeAgentTurnOutcome(
     });
   };
   stopNativeObservation = observeLiveAcpSessionChanges((change) => {
-    if (stopped || change.session.id !== sessionId || !change.event) return;
+    if (stopped || !change.event || change.event.sessionId !== sessionId) return;
     const event = change.event;
     if (!turnStarted) {
       if (event.type === "userMessage") turnStarted = true;

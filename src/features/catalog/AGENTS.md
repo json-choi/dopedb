@@ -14,7 +14,7 @@ state (`catalogExplorer/` does) — this feature is the IPC + projection layer.
 
 | File | Description |
 |------|-------------|
-| `tauriAdapter.ts` | `getCatalog`, `refreshCatalog`, `getCatalogSnapshot`, `getCatalogOverview`, `listConnectionDatabases`, `getDatabaseCatalog(Overview\|Snapshot)`, `getTableDdl`, plus `catalogFromSnapshot` which flattens a `CatalogSnapshot` (relations + constraints) into the legacy `Catalog`/`CatalogTable` shape used by callers. |
+| `tauriAdapter.ts` | `getCatalogOverview`, `listConnectionDatabases`, `getDatabaseCatalogOverview`, the single live read `getDatabaseCatalogSnapshot` (`null` = configured database), `getTableDdl`, plus the projections `catalogFromSnapshot` (memoized per snapshot object; keeps every key constraint and expression index keys), `overviewFromSnapshot` and `navigationTableFromOverview`. |
 | `useTableDdl.ts` | `tableDdlQuery`/`useTableDdl` — a `queryOptions()`-based hook for one table's DDL, keyed by connection/database/schema/table. |
 
 ## For AI Agents
@@ -37,8 +37,12 @@ state (`catalogExplorer/` does) — this feature is the IPC + projection layer.
 
 - IPC-adapter functions here return `Promise<T>` directly rather than a
   `queryOptions()` object; query-key wiring for these lives in `src/lib/queries.ts`
-  (e.g. `catalogQuery`, `databaseCatalogQuery`) except for `useTableDdl.ts`,
-  which defines its own `tableDdlQuery`/`tableDdlQueryKey` locally.
+  except for `useTableDdl.ts`, which defines its own
+  `tableDdlQuery`/`tableDdlQueryKey` locally. One live snapshot entry per exact
+  `(connection, database)` (`databaseCatalogSnapshotQuery`) is the cached source;
+  `databaseCatalogQuery` selects the `Catalog` projection from that same entry, and
+  `refreshConnectionCatalog` is the only refresh path (Explorer refresh, committed
+  DDL via `catalog:changed`).
 
 ## Dependencies
 

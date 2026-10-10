@@ -110,6 +110,8 @@ function connectionScope(input: ArticleInput) {
 async function commitArticleChange(input: ArticleInput, options: {
   scope: SQL; mutation: (scope: SQL) => SQL; ownerMemberId: string; revision: number;
   operation: "create" | "update" | "propose" | "delete";
+  /** Extra statements in the same batch, gated by the same authority scope. */
+  trailing?: (scope: SQL) => SQL[];
 }) {
   const payload = analysisArticleVersionPayload({ ...input.article, ownerMemberId: options.ownerMemberId,
     ...(options.operation === "delete" ? { deleted: true } : {}) });
@@ -132,13 +134,14 @@ async function commitArticleChange(input: ArticleInput, options: {
           ${input.article.id}, ${JSON.stringify(summary)}, ${crypto.randomUUID()} FROM (${scope})`,
       sql`SELECT ${articleColumns()} FROM workspace_analysis_article article CROSS JOIN (${scope})
         WHERE article.id = ${input.article.id}`,
+      ...(options.trailing?.(scope) ?? []),
     ],
   });
-  return returnedAnalysisArticle(result.rows[3][0]);
+  return { article: returnedAnalysisArticle(result.rows[3][0]), trailingRows: result.rows.slice(4) };
 }
 
 export async function commitAnalysisArticleCreate(input: ArticleInput): Promise<StoredAnalysisArticle | null> {
-  return commitArticleChange(input, {
+  return (await commitArticleChange(input, {
     ownerMemberId: input.authority.membershipId, revision: 1, operation: "create",
     scope: sql`SELECT '{}' AS payload WHERE EXISTS (${workspaceMemberAuthority(input.organizationId, input.authority, editorRoles)})
       AND (SELECT count(*) FROM (${connectionScope(input)})) = 1`,
@@ -147,7 +150,7 @@ export async function commitAnalysisArticleCreate(input: ArticleInput): Promise<
       SELECT ${input.article.id}, ${input.organizationId}, ${input.article.projectEnvironmentId}, ${input.article.environmentRevision},
         ${input.article.connectionId}, ${input.article.connectionRevision}, ${JSON.stringify(input.article.definition)},
         ${input.authority.membershipId}, ${input.authority.membershipId}, 1 FROM (${scope})`,
-  });
+  })).article;
 }
 
 export type AnalysisArticleMutationOperation = "propose" | "update";
@@ -155,7 +158,7 @@ export type AnalysisArticleMutationOperation = "propose" | "update";
 export async function commitAnalysisArticleMutation(input: ArticleInput & {
   expectedRevision: number; ownerMemberId: string; operation: AnalysisArticleMutationOperation;
 }): Promise<StoredAnalysisArticle | null> {
-  return commitArticleChange(input, {
+  return (await commitArticleChange(input, {
     ownerMemberId: input.ownerMemberId, revision: input.expectedRevision + 1, operation: input.operation,
     scope: sql`SELECT '{}' AS payload FROM workspace_analysis_article article
       JOIN (${workspaceMemberAuthority(input.organizationId, input.authority, editorRoles)}) actor
@@ -172,14 +175,35 @@ export async function commitAnalysisArticleMutation(input: ArticleInput & {
         owner_member_id = ${input.ownerMemberId}, updated_by_member_id = ${input.authority.membershipId},
         revision = revision + 1, updated_at = ${utcNow}, latest_successful_run_id = NULL, deleted_at = NULL
       WHERE id = ${input.article.id} AND EXISTS (${scope})`,
-  });
+  })).article;
 }
 
-/** Cleanup remains possible after the original Environment or connection was revoked. */
+export type DeletedAnalysisArticle = StoredAnalysisArticle & Readonly<{
+  /** Slugs whose public HTML stopped with this deletion, for cache revalidation. */
+  revokedPublicationSlugs: readonly string[];
+}>;
+
+/**
+ * Cleanup remains possible after the original Environment or connection was revoked.
+ * Every still-public HTML snapshot of the Article is revoked in the same batch, with
+ * its own audit event, so a deleted Article never keeps serving a public page.
+ */
 export async function commitAnalysisArticleDelete(input: ArticleInput & {
   expectedRevision: number; ownerMemberId: string;
-}): Promise<StoredAnalysisArticle | null> {
-  return commitArticleChange(input, {
+}): Promise<DeletedAnalysisArticle | null> {
+  const activePublications = (scope: SQL) => sql`FROM workspace_analysis_publication publication
+    WHERE publication.organization_id = ${input.organizationId} AND publication.article_id = ${input.article.id}
+      AND publication.revoked_at IS NULL AND EXISTS (${scope})`;
+  const { article, trailingRows } = await commitArticleChange(input, {
+    trailing: (scope) => [
+      sql`INSERT INTO workspace_audit_event (organization_id, actor_user_id, action, resource_type,
+          resource_id, redacted_summary, request_id)
+        SELECT ${input.organizationId}, ${input.authority.userId}, 'analysis_publication.revoke', 'analysis_publication',
+          publication.id, json_object('articleId', ${input.article.id}, 'reason', 'article_deleted'),
+          ${crypto.randomUUID()} ${activePublications(scope)}`,
+      sql`UPDATE workspace_analysis_publication SET revoked_at = ${utcNow}
+        WHERE id IN (SELECT publication.id ${activePublications(scope)}) RETURNING slug`,
+    ],
     ownerMemberId: input.ownerMemberId, revision: input.expectedRevision + 1, operation: "delete",
     scope: sql`SELECT '{}' AS payload FROM workspace_analysis_article article
       JOIN (${workspaceMemberAuthority(input.organizationId, input.authority, editorRoles)}) actor
@@ -192,4 +216,9 @@ export async function commitAnalysisArticleDelete(input: ArticleInput & {
         revision = revision + 1, latest_successful_run_id = NULL, deleted_at = ${utcNow}, updated_at = ${utcNow}
       WHERE id = ${input.article.id} AND EXISTS (${scope})`,
   });
+  if (!article) return null;
+  const revokedPublicationSlugs = (trailingRows[1] ?? [])
+    .map((row) => row.slug)
+    .filter((slug): slug is string => typeof slug === "string");
+  return { ...article, revokedPublicationSlugs };
 }

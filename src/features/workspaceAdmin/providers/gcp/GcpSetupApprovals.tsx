@@ -146,6 +146,11 @@ export default function GcpSetupApprovals({ wizard }: { wizard: GcpSetupWizardCo
               </summary>
               <div className="tw:mt-2 tw:grid tw:gap-3">
                 <BlockText>{t("workspaceProviders.gcpSchemaDescription")}</BlockText>
+                {wizard.repair ? (
+                  // Repair keeps the integration's current delegate unless a new
+                  // database and owner are approved here.
+                  <BlockText>{t("workspaceProviders.gcpSchemaRepairKeepsDelegate")}</BlockText>
+                ) : null}
                 <Field label={t("workspaceProviders.gcpSchemaDatabase")}>
                   {(binding) => (
                     <TextInput

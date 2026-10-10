@@ -25,27 +25,72 @@ database. They do not expand a Project resource grant.
 
 ## Output and scope
 
-Human output shows the two database identities once, counts, relation groups,
-and full `−` baseline / `+` target definitions. Identifiers and values are never
-ellipsized; terminal control characters are escaped. A valid comparison exits
-with status 0, including when differences are found. `--json` emits the complete
-`SchemaDiff` version-1 result with no headings, containing:
+Human output shows the two database identities once, the counts, `Compared
+properties match.` when there are no differences, one `Compared: …` and one
+`Not compared: …` line in the result's scope order, then relation groups with
+full `−` baseline / `+` target definitions.
+Identifiers and values are never ellipsized; terminal control characters are
+escaped. A valid comparison exits with status 0, including when differences are
+found. `--json` emits the complete `SchemaDiff` version-2 result with no
+headings, containing:
 
 - `baseline` and `target`: connection ID, database, catalog fingerprint and capture time.
-- `engine`, `counts`, `total` and all `objects`.
-- Each object: relation path, object type, name, status and both complete values.
+- `engine`, `scope`, `counts`, `total` and all `objects`.
+- `scope.compared` and `scope.notCompared`: closed camelCase property lists,
+  identical for every result of this version.
+- Each object: relation path (`schema.table`, never the database name), object
+  type (`table`, `view`, `materializedView`, `column`, `index`, `foreignKey`),
+  name, status and both complete values.
 
-The comparison follows Desktop Diff: relation kind; column type, nullability and
-primary-key membership; index column order and uniqueness; and foreign-key column
-targets. Database names and native IDs are excluded from cross-environment object
-identity. Whole added/missing relations count once. A renamed object appears as
-an addition and a missing object. Type spelling is case/outer-whitespace insensitive.
+The comparison follows Desktop Diff. It compares exactly (`scope.compared`):
+relation presence and kind (`relationPresence`, `relationKind`); column presence,
+type, nullability and primary-key membership (`columnPresence`, `columnType`,
+`columnNullability`, `primaryKey`); index presence, key order — a column or an
+expression key such as `lower(email)` — and uniqueness (`indexPresence`,
+`indexKeys`, `indexUniqueness`); and foreign-key column targets
+(`foreignKeyTargets`). Relations are identified by the `(schema, name)` pair,
+so names containing dots cannot collide; database names and native IDs are
+excluded from cross-environment object identity. Whole added/missing relations
+count once. A renamed object appears as an addition and a missing object.
 
-This structural projection does not compare default/generated expressions,
-check constraints, index expressions/predicates, foreign-key actions, routine or
-view SQL, comments, or row data. Zero differences means the compared fields match.
-Different engines and MongoDB are rejected. CLI and Desktop consume the same
-neutral comparison fixture in their existing critical contract tests.
+- `primaryKey` is set membership: whether each column belongs to the primary
+  key, not the key's column order.
+- `foreignKeyTargets` is per column: each referencing column's referenced
+  relation and column, not constraint names or composite grouping. Two
+  single-column keys and one composite key with the same column pairs compare
+  equal.
+- Type spelling ignores outer whitespace and letter case except inside quoted
+  text: MySQL `ENUM`/`SET` members and quoted identifiers keep their case, so
+  `enum('A','b')` and `enum('a','B')` differ while ` BIGINT ` equals `bigint`.
+- A UNIQUE constraint counts only through its index, and an INVALID index or a
+  NOT VALID foreign key compares like a valid one.
+
+It does not compare (`scope.notCompared`): column order, column defaults,
+generated columns, identity/auto-increment, collations, check constraints,
+UNIQUE constraints without an index, index methods, index predicates, INCLUDE
+columns, index sort order, index validity, foreign-key actions, foreign-key
+deferrability, foreign-key validation, view definitions, partitioning, comments,
+triggers, routines, types or sequences (`columnOrder`, `columnDefault`,
+`generatedColumn`, `identity`, `collation`, `checkConstraint`,
+`uniqueConstraint`, `indexMethod`, `indexPredicate`, `indexInclude`,
+`indexSortOrder`, `indexValidity`, `foreignKeyAction`, `foreignKeyDeferrable`,
+`foreignKeyValidation`, `viewDefinition`, `partitioning`, `comment`, `trigger`,
+`routine`, `type`, `sequence`), nor row data. `total` 0 means only the compared
+properties match, not that the schemas are identical; Desktop states the same
+scope. Different engines and MongoDB are rejected. CLI and Desktop consume the
+same neutral comparison fixture in their existing critical contract tests, which
+also pin the object order.
+
+Objects are ordered by relation `(schema, name)`, then the relation-level entry,
+columns, indexes and foreign keys, each by name in Unicode code-point order (not
+natural or locale order). Several entries for one foreign-key column list
+additions before missing values. Desktop uses the same order.
+
+Desktop reads both sides through the same live loader as `catalog.show` with an
+exact database. Opening the comparison and each explicit reread introspect the
+baseline and the selected comparison database once; other group members are not
+read. Each side shows when it was read, and a failed reread keeps the previous
+comparison visible with that read time and a retry.
 
 ## Broker and Agent boundary
 
@@ -69,7 +114,9 @@ Individual definitions are never clipped. To continue, pass `nextOffset` as
 `baselineFingerprint` / `targetFingerprint`. Catalog drift rejects continuation
 and requires a fresh first page. An individually oversized object fails clearly.
 
-The private Broker command schema stays at version 17 because the request and
-response meanings of its existing commands are unchanged. This feature requires
-a Desktop/CLI build containing the new CLI parser and Agent tool; publishing
-updated installers remains a separate explicit release action.
+The private Broker command schema is version 18. Version 18 added the
+`materializedView` object type, expression-key comparison and the `scope` field
+to the version-2 schema diff and an optional rejected-decision reason to
+operation summaries, so a
+version-17 CLI is refused and told to update from Desktop Settings → Command
+line. Publishing updated installers remains a separate explicit release action.

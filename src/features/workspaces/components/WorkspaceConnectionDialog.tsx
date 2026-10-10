@@ -1,5 +1,6 @@
 // Secure workspace connection flow: publishes only a redacted local template or
-// binds a member-local credential to a synchronized template.
+// binds a member-local credential to a synchronized template, then checks the
+// new binding once so the member sees whether it works.
 import {
   useMemo,
   useState,
@@ -17,13 +18,26 @@ import {
   canManageWorkspaceConnections,
   parseWorkspaceChoice,
 } from "../choices";
-import type { ConnectionProfile } from "../../connections/domain";
+import {
+  connectionTestIssue,
+  connectionTestIssueRecovery,
+  connectionTestIssueTitle,
+} from "../../connections/connectionTestFailure";
+import type {
+  ConnectionProfile,
+  ConnectionTestIssue,
+} from "../../connections/domain";
 import { CONNECTION_SSH_ALIAS_PARAMETER } from "../../connections/options";
+import {
+  pickConnectionFile,
+  testConnection,
+} from "../../connections/tauriAdapter";
 import { errDetails } from "../../../ipc/types";
-import { useI18n } from "../../../lib/i18n";
+import { useI18n, type I18nKey } from "../../../lib/i18n";
 import { useToast } from "../../../components/Toast";
 import { Button } from "../../../design-system/components/Button";
 import {
+  CheckboxField,
   Field,
   SelectInput,
   TextInput,
@@ -34,6 +48,68 @@ import {
   ModalHeader,
   ModalSurface,
 } from "../../../design-system/components/Modal";
+import { LoadingLabel } from "../../../design-system/components/Status";
+
+type DialogMode = "copy" | "credentials";
+
+/**
+ * TLS files a member keeps in their own binding. The shared template owns the
+ * TLS mode; certificate and key paths name files on this device, so they stay
+ * in the local binding and never reach the workspace.
+ */
+const SQL_TLS_FILES = [
+  { key: "sslrootcert", label: "connections.caCertificate" },
+  { key: "sslcert", label: "connections.clientCertificate" },
+  { key: "sslkey", label: "connections.clientKey" },
+] as const satisfies readonly { key: string; label: I18nKey }[];
+
+const MONGO_TLS_FILES = [
+  { key: "tlsCAFile", label: "connections.caCertificate" },
+  { key: "tlsCertificateKeyFile", label: "connections.clientCertificateKey" },
+] as const satisfies readonly { key: string; label: I18nKey }[];
+
+/** Which member-local TLS settings apply; SQL files only when the template uses TLS. */
+function memberTlsFiles(connection: ConnectionProfile) {
+  if (connection.engine === "mongodb") return MONGO_TLS_FILES;
+  if (
+    (connection.engine === "postgres" || connection.engine === "mysql") &&
+    !["disable", "disabled"].includes(connection.sslmode)
+  ) {
+    return SQL_TLS_FILES;
+  }
+  return [];
+}
+
+/** Stable copy for a failed copy or binding; backend text never reaches the UI. */
+function workspaceConnectionErrorKey(
+  error: unknown,
+  mode: DialogMode,
+): I18nKey {
+  switch (errDetails(error).kind) {
+    case "network":
+    case "timeout":
+      return "workspace.connectionServiceUnavailable";
+    case "credentialBindingRequired":
+      return mode === "copy"
+        ? "workspace.copyCredentialMissing"
+        : "workspace.bindPasswordRequired";
+    case "keychain":
+      return "workspace.bindCredentialStoreFailed";
+    case "config":
+      return mode === "copy"
+        ? "workspace.copyRejected"
+        : "workspace.bindValuesRejected";
+    case "blocked":
+    case "safety":
+      return "workspace.connectionActionBlocked";
+    case "notFound":
+      return mode === "copy"
+        ? "workspace.copyTargetUnavailable"
+        : "workspace.bindConnectionUnavailable";
+    default:
+      return "workspace.connectionActionFailed";
+  }
+}
 
 export default function WorkspaceConnectionDialog({
   connection,
@@ -43,7 +119,7 @@ export default function WorkspaceConnectionDialog({
   returnFocusRef,
 }: {
   connection: ConnectionProfile;
-  mode: "copy" | "credentials";
+  mode: DialogMode;
   onBound: (connection: ConnectionProfile) => void;
   onClose: () => void;
   returnFocusRef?: RefObject<HTMLElement | null>;
@@ -80,62 +156,123 @@ export default function WorkspaceConnectionDialog({
   const [sshAlias, setSshAlias] = useState(
     connection.extraParams[CONNECTION_SSH_ALIAS_PARAMETER] ?? "",
   );
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState("");
+  const tlsFileFields = memberTlsFiles(connection);
+  const [tlsFiles, setTlsFiles] = useState<Record<string, string>>(() =>
+    Object.fromEntries(
+      [...SQL_TLS_FILES, ...MONGO_TLS_FILES].map(({ key }) => [
+        key,
+        connection.extraParams[key] ?? "",
+      ]),
+    ),
+  );
+  const [mongoTls, setMongoTls] = useState(
+    connection.extraParams.tls?.toLowerCase() === "true",
+  );
+  const tlsFilesDisabled =
+    connection.engine === "mongodb" && !mongoTls;
+  const [pending, setPending] = useState<"saving" | "checking" | null>(null);
+  const [error, setError] = useState<I18nKey | null>(null);
+  const [checkFailure, setCheckFailure] = useState<{
+    issue: ConnectionTestIssue;
+    /** Whole seconds a `retryLater` refusal asked to wait. */
+    retryAfterSeconds?: number;
+  } | null>(null);
+  // An existing binding keeps its saved password when the field stays empty.
+  const keepsSavedPassword = connection.secretRef !== null;
   const selectedTargetValue = targetValue || targets[0]?.value || "";
+
+  async function copy() {
+    const target = parseWorkspaceChoice(selectedTargetValue);
+    if (!target?.accountUserId) {
+      setError("workspace.copyTargetRequired");
+      return;
+    }
+    await copyConnectionToWorkspace(
+      connection.id,
+      target.workspaceId,
+      target.accountUserId,
+    );
+    await invalidateWorkspaceContext(queryClient);
+    toast(t("workspace.connectionCopied"));
+    onClose();
+  }
+
+  /** Every applicable setting is sent, so clearing a path removes it from the binding. */
+  function tlsFilesRequest(): Record<string, string> | undefined {
+    if (tlsFileFields.length === 0) return undefined;
+    const request: Record<string, string> = Object.fromEntries(
+      tlsFileFields.map(({ key }) => [
+        key,
+        tlsFilesDisabled ? "" : (tlsFiles[key] ?? ""),
+      ]),
+    );
+    if (connection.engine === "mongodb") request.tls = mongoTls ? "true" : "";
+    return request;
+  }
+
+  async function browse(key: string) {
+    const file = await pickConnectionFile();
+    if (file) setTlsFiles((current) => ({ ...current, [key]: file }));
+  }
+
+  /** Save the binding, then check it once so a wrong value is fixed right here. */
+  async function bind() {
+    const bound = await bindWorkspaceConnectionCredentials(
+      connection.id,
+      username,
+      password,
+      sshAlias,
+      tlsFilesRequest(),
+    );
+    onBound(bound);
+    setPassword("");
+    setPending("checking");
+    let receipt;
+    try {
+      receipt = await testConnection(bound.id);
+    } catch {
+      setCheckFailure({ issue: { code: "unknown", field: null } });
+      return;
+    }
+    if (!receipt.ok) {
+      // A refusal made before connecting keeps its own guidance and wait.
+      setCheckFailure({
+        issue: connectionTestIssue(receipt.failure),
+        retryAfterSeconds: receipt.failure.retryAfterSeconds,
+      });
+      return;
+    }
+    toast(t("workspace.credentialsVerified"));
+    onClose();
+  }
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
-    setPending(true);
-    setError("");
+    setPending("saving");
+    setError(null);
+    setCheckFailure(null);
     try {
-      if (mode === "copy") {
-        const target = parseWorkspaceChoice(selectedTargetValue);
-        if (!target?.accountUserId) throw new Error("A workspace account is required.");
-        await copyConnectionToWorkspace(
-          connection.id,
-          target.workspaceId,
-          target.accountUserId,
-        );
-        await invalidateWorkspaceContext(queryClient);
-        toast(t("workspace.connectionCopied"));
-      } else {
-        const bound = await bindWorkspaceConnectionCredentials(
-          connection.id,
-          username,
-          password,
-          sshAlias,
-        );
-        onBound(bound);
-        toast(t("workspace.credentialsBound"));
-      }
-      onClose();
+      if (mode === "copy") await copy();
+      else await bind();
     } catch (caught) {
-      const details = errDetails(caught);
-      const serviceUnavailable =
-        details.kind === "network" && details.message.includes("404 Not Found");
-      setError(
-        serviceUnavailable
-          ? t("workspace.connectionServiceUnavailable")
-          : details.message,
-      );
+      setError(workspaceConnectionErrorKey(caught, mode));
     } finally {
-      setPending(false);
+      setPending(null);
     }
   }
 
   return (
     <ModalBackdrop
       onMouseDown={() => {
-        if (!pending) onClose();
+        if (pending === null) onClose();
       }}
     >
       <ModalSurface
         aria-labelledby="workspace-connection-title"
         aria-describedby="workspace-connection-description"
-        aria-busy={pending}
+        aria-busy={pending !== null}
         onRequestClose={onClose}
-        dismissible={!pending}
+        dismissible={pending === null}
         returnFocusRef={returnFocusRef}
       >
         <form
@@ -168,7 +305,7 @@ export default function WorkspaceConnectionDialog({
                   onChange={(event) =>
                     setTargetValue(event.target.value)
                   }
-                  disabled={pending || targets.length === 0}
+                  disabled={pending !== null || targets.length === 0}
                 >
                   {targetGroups.map((group) => (
                     <optgroup key={group.key} label={group.label}>
@@ -219,7 +356,12 @@ export default function WorkspaceConnectionDialog({
                     setPassword(event.target.value)
                   }
                   autoComplete="current-password"
-                  required
+                  required={!keepsSavedPassword}
+                  placeholder={
+                    keepsSavedPassword
+                      ? t("workspace.bindKeepsSavedPassword")
+                      : undefined
+                  }
                 />
               </Field>
               {connection.engine !== "sqlite" ? (
@@ -240,31 +382,101 @@ export default function WorkspaceConnectionDialog({
                   />
                 </Field>
               ) : null}
+              {tlsFileFields.length > 0 ? (
+                <section
+                  className="tw:grid tw:min-w-0 tw:gap-3 tw:border-t tw:border-border-subtle tw:pt-3"
+                  aria-labelledby="workspace-connection-tls"
+                >
+                  <h2
+                    id="workspace-connection-tls"
+                    className="tw:m-0 tw:text-ui tw:font-semibold tw:text-foreground"
+                  >
+                    {t("workspace.bindTlsFiles")}
+                  </h2>
+                  {connection.engine === "mongodb" ? (
+                    <CheckboxField
+                      label={t("connections.enableTls")}
+                      checked={mongoTls}
+                      disabled={pending !== null}
+                      onChange={(event) => setMongoTls(event.target.checked)}
+                    />
+                  ) : null}
+                  {tlsFileFields.map(({ key, label }) => (
+                    <Field key={key} label={t(label)}>
+                      {({ controlProps }) => (
+                        <div className="tw:grid tw:min-w-0 tw:grid-cols-[minmax(0,1fr)_auto] tw:items-center tw:gap-2">
+                          <TextInput
+                            {...controlProps()}
+                            value={tlsFiles[key] ?? ""}
+                            disabled={pending !== null || tlsFilesDisabled}
+                            autoCapitalize="none"
+                            autoCorrect="off"
+                            spellCheck={false}
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              setTlsFiles((current) => ({ ...current, [key]: value }));
+                            }}
+                          />
+                          <Button
+                            aria-label={`${t("connections.browse")}: ${t(label)}`}
+                            disabled={pending !== null || tlsFilesDisabled}
+                            onClick={() => void browse(key)}
+                          >
+                            {t("connections.browse")}
+                          </Button>
+                        </div>
+                      )}
+                    </Field>
+                  ))}
+                </section>
+              ) : null}
             </>
           )}
+          {pending === "checking" ? (
+            <span className="tw:text-ui">
+              <LoadingLabel>{t("workspace.bindChecking")}</LoadingLabel>
+            </span>
+          ) : null}
           {error ? (
             <div
               className="tw:border-l-2 tw:border-danger tw:bg-danger-muted tw:p-2 tw:text-ui tw:leading-body tw:text-danger tw:[overflow-wrap:anywhere]"
               role="alert"
             >
-              {error}
+              {t(error)}
+            </div>
+          ) : checkFailure ? (
+            <div
+              className="tw:grid tw:gap-1 tw:border-l-2 tw:border-danger tw:bg-danger-muted tw:p-2 tw:text-ui tw:leading-body tw:[overflow-wrap:anywhere]"
+              role="alert"
+            >
+              <strong className="tw:font-semibold tw:text-danger">
+                {connectionTestIssueTitle(t, checkFailure.issue, connection)}
+              </strong>
+              <span className="tw:text-foreground">
+                {checkFailure.issue.refusal
+                  ? connectionTestIssueRecovery(t, checkFailure.issue, connection, {
+                      retrySeconds: checkFailure.retryAfterSeconds,
+                    })
+                  : t("workspace.bindCheckFailed")}
+              </span>
             </div>
           ) : null}
           </div>
           <ModalFooter>
             <Button
               onClick={onClose}
-              disabled={pending}
+              disabled={pending !== null}
             >
-              {t("common.cancel")}
+              {checkFailure ? t("common.close") : t("common.cancel")}
             </Button>
             <Button
               type="submit"
               variant="primary"
               disabled={
-                pending ||
+                pending !== null ||
                 (mode === "copy" && !selectedTargetValue)
               }
+              disabledBehavior="focusable"
             >
               {pending
                 ? t("common.working")

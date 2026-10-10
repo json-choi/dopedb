@@ -21,8 +21,10 @@ general-purpose or always-on database server. Covers `dispatch/` inline.
 | `discovery.rs` | Runtime discovery path, atomic publication, and owner-only permissions for the endpoint file the CLI looks up to find a running Broker. |
 | `peer.rs` | OS peer identity and owner-only endpoint permissions (500 lines). `PeerProcessIdentity` (pid + start time) identifies a connecting peer process cross-platform (Unix and Windows paths), bounded by `MAX_PROCESS_ANCESTORS` when walking process ancestry to confirm a request originates from an authorized descendant process. |
 | `server.rs` | The owner-local UDS/named-pipe server with bounded length-prefixed frames. |
-| `session.rs` | In-memory Terminal session capabilities (924 lines, the largest file in this module). Tokens never enter SQLite, discovery, logs, argv, or serialized broker results — a session's authority lives only in process memory for its lifetime. |
-| `external_agent_requests.rs` | In-memory handoff between owner-local Broker requests and the Desktop approval UI (for `dopedb agent start`-style external Agent bootstrap requests). |
+| `session.rs` | In-memory Terminal session capabilities: the registry, authentication, and revocation. Tokens never enter SQLite, discovery, logs, argv, or serialized broker results — a session's authority lives only in process memory for its lifetime. Its 4 budget-protected tests stay in this file. |
+| `session/issue.rs` | Capability issuance: mints exact-scope bearer, Agent bootstrap, and process-bound sessions with a positive TTL, and rejects an Agent write target outside the selected Project resources. |
+| `session/proposals.rs` | Proposal ledger and liveness: remembers the operations each session proposed and reports every removed session (revoked, closed, or expired, including by the periodic expiry sweep) with them as a `SessionRevocation`; implements `AgentSessionLiveness` for approval- and claim-time rechecks. |
+| `external_agent_requests.rs` | In-memory handoff between owner-local Broker requests and the Desktop approval UI (for `dopedb agent start`-style external Agent bootstrap requests). Queued proposals keep their session, are released when it is removed by any path, and are never dropped for space: a full queue refuses the next proposal before it is created. A live external session's identity is never evicted either (an evicted one would look in-app and its proposals would reach no approval surface); every session removal releases it. |
 
 ## Subdirectories
 

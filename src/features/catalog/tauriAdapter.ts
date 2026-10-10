@@ -1,10 +1,14 @@
 // Loads native catalog metadata and projects snapshots into the catalog shapes used by the UI.
+// Desktop reads every catalog live through one command; the projection is memoized per
+// snapshot object so every cached view of the same snapshot shares one Catalog.
 
 import { invoke } from "../../ipc/core";
 import type {
   Catalog,
   CatalogObject,
+  CatalogObjectRef,
   CatalogOverview,
+  CatalogOverviewRelation,
   CatalogSnapshot,
   CatalogTable,
   DatabaseSummary,
@@ -68,15 +72,15 @@ function tableFromSnapshot(
           validated: constraint.validated,
         })),
       ),
-    constraints: relation.constraints.filter(
-      (constraint) =>
-        constraint.kind !== "primary" && constraint.kind !== "foreign",
-    ),
+    // Every key constraint in catalog order; the primary key keeps its key order.
+    constraints: relation.constraints,
     indexes: relation.indexes.map((index) => ({
       name: index.name,
-      columns: index.keys.flatMap((key) =>
-        key.column === undefined || key.column === null ? [] : [key.column],
-      ),
+      // Expression keys stay in key order so `(lower(email), qty)` never reads as `(qty)`.
+      columns: index.keys.flatMap((key) => {
+        const part = key.column ?? key.expression;
+        return part === undefined || part === null ? [] : [part];
+      }),
       unique: index.unique,
       method: index.method ?? null,
       keys: index.keys,
@@ -124,8 +128,47 @@ function objectFromSnapshot(
   };
 }
 
+const catalogsBySnapshot = new WeakMap<CatalogSnapshot, Catalog>();
+// Snapshots read from the persisted cache are shown only while a live read runs.
+// Marking them lets surfaces label their capture time or refuse them (row editing).
+const persistedSnapshots = new WeakSet<object>();
+
+/**
+ * A `Catalog` projected from a persisted snapshot carries its capture time as data.
+ * Structural sharing (query data, `select`, `useQueries` combine) keeps the previous
+ * object whenever the next value is deep-equal, so an identity marker would outlive
+ * the live read of an unchanged schema; a data field leaves with the persisted value.
+ */
+type PersistedCatalog = Catalog & { readonly persistedCapturedAt: string };
+
+export function markPersistedSnapshot(snapshot: CatalogSnapshot) {
+  persistedSnapshots.add(snapshot);
+}
+
+/** Whether `value` is itself a persisted snapshot; any other value is not. */
+export function isPersistedSnapshot(value: unknown): boolean {
+  return typeof value === "object"
+    && value !== null
+    && persistedSnapshots.has(value);
+}
+
+/** Capture time of a `Catalog` projected from a persisted snapshot, else `null`. */
+export function persistedCatalogCapturedAt(catalog: Catalog): string | null {
+  return (catalog as Partial<PersistedCatalog>).persistedCapturedAt ?? null;
+}
+
+/** Whether a cached value is a persisted seed: the snapshot or its `Catalog` projection. */
+export function isPersistedCatalogValue(value: unknown): boolean {
+  return isPersistedSnapshot(value)
+    || (typeof value === "object"
+      && value !== null
+      && typeof (value as Partial<PersistedCatalog>).persistedCapturedAt === "string");
+}
+
 export function catalogFromSnapshot(snapshot: CatalogSnapshot): Catalog {
-  return {
+  const cached = catalogsBySnapshot.get(snapshot);
+  if (cached) return cached;
+  let catalog: Catalog = {
     tables: snapshot.relations.map((relation) =>
       tableFromSnapshot(relation, snapshot.database),
     ),
@@ -134,21 +177,85 @@ export function catalogFromSnapshot(snapshot: CatalogSnapshot): Catalog {
       ...snapshot.otherObjects.map(objectFromSnapshot),
     ],
   };
+  if (persistedSnapshots.has(snapshot)) {
+    const persisted: PersistedCatalog = {
+      ...catalog,
+      persistedCapturedAt: snapshot.capturedAt,
+    };
+    catalog = persisted;
+  }
+  catalogsBySnapshot.set(snapshot, catalog);
+  return catalog;
 }
 
-export async function getCatalog(id: string): Promise<Catalog> {
-  return catalogFromSnapshot(await getCatalogSnapshot(id));
+/**
+ * A navigation-only relation from the bounded tree. Opening it never waits for full
+ * metadata; the table surface upgrades it from the shared snapshot when that loads.
+ */
+export function navigationTableFromOverview(
+  relation: CatalogOverviewRelation,
+  database: string | null,
+): CatalogTable {
+  const parent = relation.parent;
+  return {
+    database,
+    schema: relation.schema,
+    name: relation.name,
+    kind: relation.kind,
+    nativeId: relation.nativeId ?? null,
+    comment: relation.comment ?? null,
+    partitionParent: parent
+      ? {
+          namespace: parent.schema,
+          name: parent.name,
+          kind: parent.kind as CatalogObjectRef["kind"],
+          nativeId: parent.nativeId ?? null,
+        }
+      : null,
+    partitionChildren: [],
+    columns: [],
+    foreignKeys: [],
+    constraints: [],
+    indexes: [],
+    rowEstimate: relation.rowEstimate,
+  };
 }
 
-export async function refreshCatalog(id: string): Promise<Catalog> {
-  const snapshot = await invoke<CatalogSnapshot>("refresh_catalog_snapshot", {
-    id,
-  });
-  return catalogFromSnapshot(snapshot);
-}
-
-export function getCatalogSnapshot(id: string): Promise<CatalogSnapshot> {
-  return invoke("get_catalog_snapshot", { id });
+/**
+ * The bounded relation tree implied by a newer full snapshot. Namespaces the
+ * previous tree discovered (including empty schemas) are kept until the next
+ * overview read, because a snapshot only names namespaces that own objects.
+ */
+export function overviewFromSnapshot(
+  snapshot: CatalogSnapshot,
+  knownNamespaces: readonly string[],
+): CatalogOverview {
+  return {
+    database: snapshot.database,
+    namespaces: [
+      ...new Set([
+        ...knownNamespaces,
+        ...snapshot.namespaces.map((namespace) => namespace.name),
+      ]),
+    ].sort(),
+    relations: snapshot.relations.map((relation) => ({
+      schema: relation.object.namespace ?? null,
+      name: relation.object.name,
+      kind: objectKind(relation.object.kind),
+      nativeId: relation.object.nativeId ?? null,
+      comment: relation.comment ?? null,
+      rowEstimate: relation.rowEstimate ?? null,
+      parent: relation.partitionParent
+        ? {
+            schema: relation.partitionParent.namespace ?? null,
+            name: relation.partitionParent.name,
+            kind: objectKind(relation.partitionParent.kind),
+            nativeId: relation.partitionParent.nativeId ?? null,
+          }
+        : null,
+    })),
+    detailState: "deferred",
+  };
 }
 
 export function getCatalogOverview(id: string): Promise<CatalogOverview> {
@@ -159,13 +266,6 @@ export function listConnectionDatabases(id: string): Promise<DatabaseSummary[]> 
   return invoke("list_connection_databases", { id });
 }
 
-export async function getDatabaseCatalog(
-  id: string,
-  database: string,
-): Promise<Catalog> {
-  return catalogFromSnapshot(await getDatabaseCatalogSnapshot(id, database));
-}
-
 export function getDatabaseCatalogOverview(
   id: string,
   database: string,
@@ -173,9 +273,20 @@ export function getDatabaseCatalogOverview(
   return invoke("get_database_catalog_overview", { id, database });
 }
 
+/**
+ * The persisted configured-database snapshot when still current for the authorized
+ * scope. It never connects; callers show it only until a live read replaces it.
+ */
+export function getPersistedCatalogSnapshot(
+  id: string,
+): Promise<CatalogSnapshot | null> {
+  return invoke("get_catalog_snapshot", { id });
+}
+
+/** Live introspection of one exact database; `null` selects the configured one. */
 export function getDatabaseCatalogSnapshot(
   id: string,
-  database: string,
+  database: string | null,
 ): Promise<CatalogSnapshot> {
   return invoke("get_database_catalog_snapshot", { id, database });
 }

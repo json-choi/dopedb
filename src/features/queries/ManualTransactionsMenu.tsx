@@ -1,6 +1,7 @@
 // Status-bar recovery surface for manual transactions across the active
 // workspace. It stays hidden when there is nothing to recover and exposes only
-// commands backed by the connection-scoped transaction owner.
+// commands backed by the connection-scoped transaction owner, with the time left
+// before each transaction's automatic rollback.
 import { Icon } from "../../components/Icon";
 import ToolbarMenu from "../../components/ToolbarMenu";
 import { Button } from "../../design-system/components/Button";
@@ -9,6 +10,10 @@ import {
   type StatusTone,
 } from "../../design-system/components/Status";
 import { useI18n } from "../../lib/i18n";
+import {
+  manualTransactionRemaining,
+  useManualTransactionClock,
+} from "./useManualTransaction";
 import type { WorkspaceManualTransaction } from "./useWorkspaceManualTransactions";
 
 export default function ManualTransactionsMenu({
@@ -28,6 +33,14 @@ export default function ManualTransactionsMenu({
   const label = t("ide.manualTransactions", {
     count: transactions.length,
   });
+  const earliestExpiry = transactions.reduce<string | null>(
+    (earliest, transaction) =>
+      earliest === null || transaction.expiresAt < earliest
+        ? transaction.expiresAt
+        : earliest,
+    null,
+  );
+  const now = useManualTransactionClock(earliestExpiry);
 
   return (
     <ToolbarMenu
@@ -55,7 +68,9 @@ export default function ManualTransactionsMenu({
         {transactions.map((transaction) => {
           const settling = settlingIds.has(transaction.transactionId);
           const failed = transaction.phase === "failed";
-          const tone: StatusTone = failed ? "danger" : "warning";
+          const remaining = manualTransactionRemaining(transaction.expiresAt, now);
+          const rolledBack = transaction.rolledBackStatementCount ?? 0;
+          const tone: StatusTone = failed || remaining?.soon ? "danger" : "warning";
           return (
             <div
               key={transaction.transactionId}
@@ -82,6 +97,24 @@ export default function ManualTransactionsMenu({
                       })}
                     </span>
                   </span>
+                  {remaining && !failed ? (
+                    <span
+                      data-tone={remaining.soon ? "danger" : "muted"}
+                      className="tw:text-xs tw:tabular-nums tw:text-muted-foreground tw:data-[tone=danger]:text-danger"
+                    >
+                      {t(remaining.key, { count: remaining.count })} ·{" "}
+                      {t("ide.manualTransaction.expiresAt", {
+                        time: new Date(transaction.expiresAt).toLocaleTimeString(),
+                      })}
+                    </span>
+                  ) : null}
+                  {rolledBack > 0 ? (
+                    <span className="tw:text-xs tw:text-muted-foreground">
+                      {t("ide.manualTransaction.rolledBackStatements", {
+                        count: rolledBack,
+                      })}
+                    </span>
+                  ) : null}
                 </span>
               </div>
               <div

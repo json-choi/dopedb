@@ -14,7 +14,7 @@ import { ArticleLinkGate } from "../analysisArticles/ArticleLinkGate";
 import { ExternalAgentRequestGate } from "../agents/ExternalAgentRequestGate";
 import { useGuidedDemoCommands } from "../onboarding/useGuidedDemoCommands";
 import { useQueryServices } from "../queryServices/useQueryServices";
-import SkillStartupGate from "../skills/SkillStartupGate";
+import ShellGates from "./ShellGates";
 import { useSkillStartupObserver } from "../skills/useSkillStartupObserver";
 import {
   useWorkspaceManualTransactions,
@@ -109,7 +109,7 @@ function Shell() {
     queryServiceStore: queryServices.store,
     workspaceScopeKey: catalogScope.key,
   });
-  const manualTransactions = useWorkspaceManualTransactions(connections.items);
+  const manualTransactions = useWorkspaceManualTransactions(connections.items, () => commands.documents.openStable("activity"));
   const {
     width: sidebarWidth,
     minimum: sidebarMinimum,
@@ -496,7 +496,7 @@ function Shell() {
           search: { open: search.show },
         }}
       />
-      <SkillStartupGate />
+      <ShellGates />
       {search.open ? (
         <ActionSearch items={searchItems} onClose={search.close} />
       ) : null}

@@ -1,7 +1,8 @@
 // Compact PostgreSQL monitoring-role control. The backend owns the fixed GRANT/REVOKE
 // and Agent planning safety decision; this panel only exposes status, exact approval, and
-// a DBA-copy fallback without turning on arbitrary database writes.
-import { useEffect, useState } from "react";
+// a DBA-copy fallback without turning on arbitrary database writes. The grant changes
+// the database user, so it is offered only while applied Data changes are on.
+import { useEffect, useId, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   proposePostgresMonitoring,
@@ -12,7 +13,6 @@ import {
   rejectOperation,
 } from "../../../features/operations/tauriAdapter";
 import type { MonitoringOperationProposal } from "../../../ipc/types";
-import { errMessage } from "../../../ipc/types";
 import ConfirmButton from "../../../components/ConfirmButton";
 import { Icon } from "../../../components/Icon";
 import Skeleton from "../../../components/Skeleton";
@@ -24,18 +24,26 @@ import { useI18n } from "../../../lib/i18n";
 
 const GRANT_SQL = "GRANT pg_monitor TO CURRENT_USER;";
 
-export default function MonitoringAccess({ connectionId }: { connectionId: string }) {
+export default function MonitoringAccess({
+  connectionId,
+  writesEnabled,
+}: {
+  connectionId: string;
+  writesEnabled: boolean;
+}) {
   const { t } = useI18n();
   const toast = useToast();
   const queryClient = useQueryClient();
+  const reasonId = useId();
   const statusQuery = useQuery(monitoringStatusQuery(connectionId));
   const [proposal, setProposal] = useState<MonitoringOperationProposal | null>(null);
+  const failed = () => toast(t("safety.monitoringActionFailed"), "error");
   const propose = useMutation({
     mutationFn: (enabled: boolean) => proposePostgresMonitoring(connectionId, enabled),
     onSuccess: (operation) => {
       setProposal(operation);
     },
-    onError: (error) => toast(errMessage(error), "error"),
+    onError: failed,
   });
   const apply = useMutation({
     mutationFn: async (operation: MonitoringOperationProposal) => {
@@ -51,7 +59,7 @@ export default function MonitoringAccess({ connectionId }: { connectionId: strin
       queryClient.setQueryData(qk.monitoring(connectionId), status);
       toast(status.roleGranted ? t("safety.monitoringEnabled") : t("safety.monitoringRevoked"));
     },
-    onError: (error) => toast(errMessage(error), "error"),
+    onError: failed,
   });
   const reject = useMutation({
     mutationFn: (operation: MonitoringOperationProposal) =>
@@ -59,7 +67,7 @@ export default function MonitoringAccess({ connectionId }: { connectionId: strin
     onSuccess: () => {
       setProposal(null);
     },
-    onError: (error) => toast(errMessage(error), "error"),
+    onError: failed,
   });
 
   useEffect(() => {
@@ -98,11 +106,7 @@ export default function MonitoringAccess({ connectionId }: { connectionId: strin
           </div>
         </div>
         <p className="tw:text-ui tw:text-danger">
-          {t("safety.monitoringError", {
-            error: statusQuery.error
-              ? errMessage(statusQuery.error)
-              : t("common.unknown"),
-          })}
+          {t("safety.monitoringError")}
         </p>
       </section>
     );
@@ -161,7 +165,23 @@ export default function MonitoringAccess({ connectionId }: { connectionId: strin
 
       {postgres && status.roleAvailable && !proposal && (
         <div className="ds-action-row ds-control-row tw:items-center">
-          {status.roleGranted ? (
+          {!writesEnabled ? (
+            <>
+              <Button
+                size="compact"
+                disabled
+                disabledBehavior="focusable"
+                aria-describedby={reasonId}
+              >
+                {status.roleGranted
+                  ? t("safety.monitoringRevoke")
+                  : t("safety.monitoringEnable")}
+              </Button>
+              <span id={reasonId} className="tw:text-xs tw:text-muted-foreground">
+                {t("safety.monitoringRequiresWrites")}
+              </span>
+            </>
+          ) : status.roleGranted ? (
             <ConfirmButton
               disabled={busy}
               size="compact"

@@ -65,13 +65,22 @@ export const CATALOG_LOAD_ISSUE_CODES = [
   "timeout",
   "notFound",
   "unknown",
+  "sharedConnectionChanged",
+  "credentialStoreDenied",
+  "lockTimeout",
 ] as const;
 
 export type CatalogLoadIssueCode =
   (typeof CATALOG_LOAD_ISSUE_CODES)[number];
 
-/** Safe identity only: backend message text must not enter Explorer state or UI. */
-export type CatalogLoadIssue = Readonly<{ code: CatalogLoadIssueCode }>;
+/**
+ * Safe identity only: backend message text must not enter Explorer state or UI.
+ * `retryAt` (epoch ms) is when the runtime accepts a new open, fixed when it refused.
+ */
+export type CatalogLoadIssue = Readonly<{
+  code: CatalogLoadIssueCode;
+  retryAt?: number;
+}>;
 
 const CATALOG_LOAD_ISSUE_CODE_SET = new Set<string>(
   CATALOG_LOAD_ISSUE_CODES,
@@ -83,6 +92,9 @@ function normalizedCatalogIssueCode(kind: string | null): CatalogLoadIssueCode {
   }
   if (kind === "config") return "connectionConfiguration";
   if (kind === "safety") return "blocked";
+  // A missing credential arrives as `credentialBindingRequired`; `keychain` means the
+  // OS credential store refused access, which is recovered by allowing it and retrying.
+  if (kind === "keychain") return "credentialStoreDenied";
   return "unknown";
 }
 
@@ -93,8 +105,23 @@ export function isCatalogLoadIssue(error: unknown): error is CatalogLoadIssue {
 }
 
 export function catalogLoadIssue(error: unknown): CatalogLoadIssue {
-  if (isCatalogLoadIssue(error)) return { code: error.code };
-  return { code: normalizedCatalogIssueCode(errDetails(error).kind) };
+  if (isCatalogLoadIssue(error)) {
+    return typeof error.retryAt === "number"
+      ? { code: error.code, retryAt: error.retryAt }
+      : { code: error.code };
+  }
+  const details = errDetails(error);
+  // The runtime refuses a managed open (`retryLater`) only while it cools down after
+  // that open failed on the network. Keep that cause, plus when Retry may run again.
+  if (details.kind === "retryLater") {
+    return details.retryAfterSeconds === undefined
+      ? { code: "connectionNetwork" }
+      : {
+          code: "connectionNetwork",
+          retryAt: Date.now() + details.retryAfterSeconds * 1_000,
+        };
+  }
+  return { code: normalizedCatalogIssueCode(details.kind) };
 }
 
 /** Drops raw transport/driver text before TanStack Query retains a failure. */
@@ -108,12 +135,14 @@ export async function readWithCatalogIssue<T>(
   }
 }
 
+/** A refusal that names when the runtime accepts a new open is not retried before it. */
 export function isTransientCatalogIssue(error: unknown): boolean {
-  const { code } = catalogLoadIssue(error);
-  return code === "network"
-    || code === "timeout"
-    || code === "connectionNetwork"
-    || code === "sshTimeout";
+  const { code, retryAt } = catalogLoadIssue(error);
+  return retryAt === undefined
+    && (code === "network"
+      || code === "timeout"
+      || code === "connectionNetwork"
+      || code === "sshTimeout");
 }
 
 export function retryTransientCatalogIssue(
@@ -123,30 +152,53 @@ export function retryTransientCatalogIssue(
   return failureCount < 3 && isTransientCatalogIssue(error);
 }
 
+/**
+ * Catalog introspection retries only a dropped connection. A timeout means the scan
+ * itself exceeded its bounded budget, which repeats identically: retrying would turn
+ * one bounded failure into minutes of loading, so the UI offers a manual retry instead.
+ * A managed open the runtime refuses until `retryAt` is shown with that time instead.
+ */
+export function retryCatalogScanIssue(
+  failureCount: number,
+  error: unknown,
+): boolean {
+  const { code, retryAt } = catalogLoadIssue(error);
+  return failureCount < 2
+    && retryAt === undefined
+    && (code === "network" || code === "connectionNetwork");
+}
+
 export type CatalogIssueAction =
   | "retry"
   | "edit"
   | "resolveCredentials"
   | "recoverAuthentication"
-  | "recoverManaged";
+  | "recoverManaged"
+  | "refreshWorkspace";
 
+/**
+ * A catalog issue always reads as a complete sentence, also inside a longer message.
+ * Connection-test titles are headings without a period, so they gain one here.
+ */
 export function catalogLoadIssueMessage(
   t: Translate,
   issue: CatalogLoadIssue,
 ): string {
+  const sentence = (title: I18nKey) =>
+    t("schema.issueSentence", { message: t(title) });
   switch (issue.code) {
-    case "sshClientMissing": return t("connections.testFailure.sshClientMissingTitle");
-    case "sshConfiguration": return t("connections.testFailure.sshConfigurationTitle");
-    case "sshHostKey": return t("connections.testFailure.sshHostKeyTitle");
-    case "sshAuthentication": return t("connections.testFailure.sshAuthenticationTitle");
-    case "sshForwarding": return t("connections.testFailure.sshForwardingTitle");
-    case "sshTimeout": return t("connections.testFailure.sshTimeoutTitle");
-    case "sshUnknown": return t("connections.testFailure.sshUnknownTitle");
-    case "connectionNetwork": return t("connections.testFailure.timeoutNetworkTitle");
-    case "connectionTls": return t("connections.testFailure.tlsTitle");
-    case "connectionAuthentication": return t("connections.testFailure.authenticationTitle");
-    case "connectionConfiguration": return t("connections.testFailure.databaseConfigTitle");
-    case "connectionUnknown": return t("connections.testFailure.unknownTitle");
+    case "sshClientMissing": return sentence("connections.testFailure.sshClientMissingTitle");
+    case "sshConfiguration": return sentence("connections.testFailure.sshConfigurationTitle");
+    case "sshHostKey": return sentence("connections.testFailure.sshHostKeyTitle");
+    case "sshAuthentication": return sentence("connections.testFailure.sshAuthenticationTitle");
+    case "sshForwarding": return sentence("connections.testFailure.sshForwardingTitle");
+    case "sshTimeout": return sentence("connections.testFailure.sshTimeoutTitle");
+    case "sshUnknown": return sentence("connections.testFailure.sshUnknownTitle");
+    case "connectionNetwork": return sentence("connections.testFailure.timeoutNetworkTitle");
+    case "connectionTls": return sentence("connections.testFailure.tlsTitle");
+    case "connectionAuthentication": return sentence("connections.testFailure.authenticationTitle");
+    case "connectionConfiguration": return sentence("connections.testFailure.databaseConfigTitle");
+    case "connectionUnknown": return sentence("connections.testFailure.unknownTitle");
     case "cancelled": return t("connections.catalogIssue.cancelled");
     case "credentialBindingRequired": return t("workspace.credentialsRequiredBody");
     case "authenticationRequired": return t("connections.bigQueryAuthenticationExpired");
@@ -156,6 +208,9 @@ export function catalogLoadIssueMessage(
     case "timeout": return t("connections.catalogIssue.timeout");
     case "notFound": return t("connections.catalogIssue.notFound");
     case "unknown": return t("connections.catalogIssue.unknown");
+    case "sharedConnectionChanged": return t("schema.sharedConnectionChanged");
+    case "credentialStoreDenied": return t("schema.credentialStoreDenied");
+    case "lockTimeout": return t("schema.lockTimeout");
   }
 }
 
@@ -168,7 +223,10 @@ export function catalogLoadIssueAction(
     case "managedConnectionRecoveryRequired": return "recoverManaged";
     case "network":
     case "timeout":
-    case "connectionNetwork": return "retry";
+    case "connectionNetwork":
+    case "credentialStoreDenied":
+    case "lockTimeout": return "retry";
+    case "sharedConnectionChanged": return "refreshWorkspace";
     case "sshClientMissing":
     case "sshConfiguration":
     case "sshHostKey":
@@ -217,7 +275,8 @@ export const SQL_OBJECT_SECTIONS: Array<{
     | "connections.functions"
     | "connections.procedures"
     | "connections.sequences"
-    | "connections.triggers";
+    | "connections.triggers"
+    | "schema.types";
 }> = [
   {
     kind: "materialized_view",
@@ -228,6 +287,8 @@ export const SQL_OBJECT_SECTIONS: Array<{
   { kind: "procedure", icon: "procedure", label: "connections.procedures" },
   { kind: "sequence", icon: "sequence", label: "connections.sequences" },
   { kind: "trigger", icon: "trigger", label: "connections.triggers" },
+  // User-defined enum and domain types; `detail` carries their definition.
+  { kind: "type", icon: "list", label: "schema.types" },
 ];
 
 export function supportedObjectKinds(engine: ConnectionProfile["engine"]) {
@@ -238,6 +299,7 @@ export function supportedObjectKinds(engine: ConnectionProfile["engine"]) {
       "procedure",
       "sequence",
       "trigger",
+      "type",
     ]);
   }
   if (engine === "mysql") {
@@ -302,6 +364,13 @@ export function fallbackSchemaGroupName(
   let suffix = 2;
   while (used.has(`${base}-${suffix}`.toLocaleLowerCase())) suffix += 1;
   return `${base}-${suffix}`;
+}
+
+const catalogNameCollator = new Intl.Collator(undefined, { numeric: true });
+
+/** Numeric-aware locale order for identifiers: `t_2` sorts before `t_10`. */
+export function compareCatalogNames(left: string, right: string): number {
+  return catalogNameCollator.compare(left, right);
 }
 
 export function tableMatchesFilter(table: CatalogTable, filter: string) {

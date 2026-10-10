@@ -4,11 +4,11 @@
 import { useCallback, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { errMessage } from "../../ipc/types";
 import { catalogLoadIssue, catalogLoadIssueMessage } from "../catalogExplorer/catalogDomain";
 import { useI18n } from "../../lib/i18n";
 import {
   connectionId as asConnectionId,
+  databaseDisplayLabel,
   type ConnectionEngine,
   type ConnectionId,
   type ConnectionProfile,
@@ -22,6 +22,7 @@ import { knowledgeInventoryQuery } from "../knowledge/inventory";
 import { knowledgeQueryKeys } from "../knowledge/queryKeys";
 import { listKnowledgeEnvironmentConnections } from "../knowledge/tauriAdapter";
 import { connectionCanEnterWritePath } from "../safetySettings/policy";
+import { agentFailure, type AgentFailure } from "./agentErrorLabels";
 import type { AgentKnowledgeEnvironment } from "./domain";
 import { listAgentKnowledgeEnvironments } from "./tauriAdapter";
 
@@ -29,6 +30,16 @@ export type AgentEnvironmentChoice = AgentKnowledgeEnvironment & {
   projectId: string;
   bindings: EnvironmentConnection[];
   needsReconfirmation: boolean;
+};
+
+/** What changed in one stale binding, shown before the person reconfirms it. */
+export type AgentResourceReconfirmation = {
+  connectionId: ConnectionId;
+  name: string;
+  fromRevision: number;
+  toRevision: number;
+  /** Where the connection points now (`connectionTargetLabel`). */
+  target: string;
 };
 
 export type AgentDatabaseResourceChoice = {
@@ -41,11 +52,15 @@ export type AgentDatabaseResourceChoice = {
   riskClass: AgentKnowledgeEnvironment["riskClass"];
   connectionId: ConnectionId;
   authorityConnectionId: ConnectionId;
+  /** The connection name the Explorer shows; the binding alias is secondary. */
   databaseName: string;
+  bindingAlias: string | null;
   engine: ConnectionEngine;
   connectionRevision: number;
   writable: boolean;
+  /** This resource's own binding changed; other bindings never count. */
   needsReconfirmation: boolean;
+  reconfirmation: AgentResourceReconfirmation | null;
 };
 
 export type AgentSourceResourceChoice = {
@@ -61,7 +76,9 @@ export type AgentSourceResourceChoice = {
   displayName: string;
   repository: string;
   commitSha: string;
+  /** The source's authority binding changed. */
   needsReconfirmation: boolean;
+  reconfirmation: AgentResourceReconfirmation | null;
 };
 
 export type AgentProjectResourceChoice = {
@@ -82,6 +99,34 @@ export function agentSourceResourceKey(sourceId: string) {
   return `source:${sourceId}`;
 }
 
+/**
+ * Where a connection points, as one short label. SQLite shows its file name
+ * and Cloudflare D1 its database, because D1's host field holds an account id
+ * rather than a location; BigQuery reads "project / dataset" and every other
+ * engine "host / database".
+ */
+function connectionTargetLabel(profile: ConnectionProfile) {
+  const database = databaseDisplayLabel(profile.engine, profile.database);
+  if (profile.engine === "sqlite" || profile.provider === "cloudflareD1") return database;
+  return [profile.host, database].filter(Boolean).join(" / ");
+}
+
+// The binding pins only a revision number, so the target it was bound to is
+// not known; the notice shows the revisions and where the connection points now.
+function reconfirmationFor(
+  binding: EnvironmentConnection,
+  profile: ConnectionProfile,
+): AgentResourceReconfirmation | null {
+  if (!binding.stale) return null;
+  return {
+    connectionId: profile.id,
+    name: profile.name || binding.alias,
+    fromRevision: binding.connectionRevision,
+    toRevision: binding.currentConnectionRevision,
+    target: connectionTargetLabel(profile),
+  };
+}
+
 export function useAgentEnvironmentInventory({
   catalogScopeKey,
   connection,
@@ -91,7 +136,7 @@ export function useAgentEnvironmentInventory({
   catalogScopeKey: string;
   connection: ConnectionProfile;
   connections: ConnectionProfile[];
-  onError: (message: string | null) => void;
+  onError: (error: AgentFailure | string | null) => void;
 }) {
   const { t } = useI18n();
   const queryClient = useQueryClient();
@@ -173,6 +218,7 @@ export function useAgentEnvironmentInventory({
             const connectionId = asConnectionId(binding.connectionId);
             const profile = connectionById.get(connectionId);
             if (!profile) return [];
+            const reconfirmation = reconfirmationFor(binding, profile);
             return [
               {
                 key: agentDatabaseResourceKey(environment.id, connectionId),
@@ -184,11 +230,16 @@ export function useAgentEnvironmentInventory({
                 riskClass: environment.riskClass,
                 connectionId,
                 authorityConnectionId: connectionId,
-                databaseName: binding.alias || profile.name,
+                databaseName: profile.name || binding.alias,
+                bindingAlias:
+                  binding.alias && binding.alias !== profile.name
+                    ? binding.alias
+                    : null,
                 engine: profile.engine,
                 connectionRevision: binding.currentConnectionRevision,
                 writable: connectionCanEnterWritePath(profile),
-                needsReconfirmation: environment.needsReconfirmation,
+                needsReconfirmation: reconfirmation !== null,
+                reconfirmation,
               },
             ];
           }),
@@ -210,6 +261,10 @@ export function useAgentEnvironmentInventory({
                 (binding) => binding.connectionId === connection.id,
               ) ?? environment.bindings[0];
             if (authority?.connectionId === null || authority === undefined) return [];
+            const authorityProfile = connectionById.get(asConnectionId(authority.connectionId));
+            const reconfirmation = authorityProfile
+              ? reconfirmationFor(authority, authorityProfile)
+              : null;
             return [
               {
                 key: agentSourceResourceKey(source.sourceId),
@@ -230,7 +285,8 @@ export function useAgentEnvironmentInventory({
                   source.revision.kind === "github"
                     ? source.revision.commitSha
                     : "",
-                needsReconfirmation: environment.needsReconfirmation,
+                needsReconfirmation: reconfirmation !== null,
+                reconfirmation,
               },
             ];
           },
@@ -266,15 +322,27 @@ export function useAgentEnvironmentInventory({
       ? catalogLoadIssueMessage(t, catalogLoadIssue(knowledgeInventory.error))
       : null;
 
+  // Rebinding is a write (shared in a Team workspace), so only the bindings of
+  // the resources the person selected and reviewed are reconfirmed.
   const ensureAvailable = useCallback(
-    async (environmentId: string, authorityConnectionId: ConnectionId) => {
+    async (
+      environmentId: string,
+      authorityConnectionId: ConnectionId,
+      connectionIds: readonly ConnectionId[],
+    ) => {
       const choice = choices.find((environment) => environment.id === environmentId);
       if (!choice || updatingEnvironmentId !== null) return false;
       setUpdatingEnvironmentId(environmentId);
       onError(null);
       try {
         for (const binding of choice.bindings) {
-          if (!binding.stale || binding.connectionId === null) continue;
+          if (
+            !binding.stale ||
+            binding.connectionId === null ||
+            !connectionIds.includes(asConnectionId(binding.connectionId))
+          ) {
+            continue;
+          }
           await bindKnowledgeEnvironmentConnectionWithRefresh({
             projectEnvironmentId: environmentId,
             connectionId: binding.connectionId,
@@ -304,9 +372,8 @@ export function useAgentEnvironmentInventory({
       } catch (reason) {
         onError(isKnowledgeEnvironmentRevisionConflict(reason)
           ? t("agent.acpEnvironmentReconfirmFailed")
-          : t("agent.acpEnvironmentReconfirmFailedWithError", {
-              error: errMessage(reason),
-            }));
+          : agentFailure(reason, t, (error) =>
+              t("agent.acpEnvironmentReconfirmFailedWithError", { error })));
         return false;
       } finally {
         setUpdatingEnvironmentId(null);

@@ -5,7 +5,7 @@ import { Icon } from "../../components/Icon";
 import { Button } from "../../design-system/components/Button";
 import { InlineNotice } from "../../design-system/components/Status";
 import { useI18n } from "../../lib/i18n";
-import type { ConnectionId } from "../connections/domain";
+import { databaseEngineLabel, type ConnectionId } from "../connections/domain";
 import { githubSourceRevisionLabel } from "../knowledge/presentation";
 import type { ExternalAgentRequestSummary } from "./externalAgentDomain";
 import {
@@ -71,6 +71,7 @@ export function StartApprovalButton({
   ensureAvailable: (
     environmentId: string,
     authorityConnectionId: ConnectionId,
+    connectionIds: readonly ConnectionId[],
   ) => Promise<boolean>;
   onApprove: () => void;
 }) {
@@ -92,6 +93,7 @@ export function StartApprovalButton({
           && !(await ensureAvailable(
             boundary.environmentId,
             boundary.authorityConnectionId,
+            boundary.connectionIds,
           ))
         ) {
           return;
@@ -110,7 +112,6 @@ export function StartApprovalButton({
     <Button
       variant="primary"
       disabled={disabled || preparing || !review.complete}
-      data-modal-initial-focus
       onClick={() => void approve()}
     >
       {review.needsRefresh
@@ -144,7 +145,7 @@ function ResourceReviewList({
             </span>
             <span className="tw:truncate tw:text-xs tw:text-muted-foreground">
               {t("agent.externalDatabaseRevision", {
-                engine: database.engine,
+                engine: databaseEngineLabel(database.engine),
                 revision: database.connectionRevision,
               })}
             </span>

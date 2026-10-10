@@ -45,7 +45,7 @@ export function AcpAgentModelMenu({
         <span className="tw:px-2 tw:pt-1 tw:text-2xs tw:font-semibold tw:text-muted-foreground">
           {t("agent.acpProvider")}
         </span>
-        {setup.enabledProviders.map((provider) => (
+        {setup.pickerProviders.map((provider) => (
           <ToolbarMenuItem
             key={provider}
             icon={<AgentProviderMark provider={provider} />}

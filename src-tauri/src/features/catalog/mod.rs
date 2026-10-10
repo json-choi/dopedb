@@ -12,7 +12,7 @@ use crate::store::Store;
 use adapters::ScopedCatalogGateway;
 pub(crate) use application::CatalogUseCases;
 pub(crate) use domain::{
-    Catalog, CatalogOverview, CatalogOverviewDetailState, CatalogOverviewRelation,
+    Catalog, CatalogChanged, CatalogOverview, CatalogOverviewDetailState, CatalogOverviewRelation,
     CatalogOverviewRelationRef, CatalogReadPolicy, Column, DatabaseObject, DatabaseSummary,
     ForeignKey, Index, Table,
 };

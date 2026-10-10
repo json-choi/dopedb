@@ -16,6 +16,7 @@ export function connectionDiagnosticMessage(
     hostRequired: "connections.problemHostRequired",
     hostInvalid: "connections.problemHostInvalid",
     portInvalid: "connections.problemPortInvalid",
+    postgresUsernameInvalid: "connections.problemPostgresUsernameInvalid",
     sqliteFileRequired: "connections.problemSqliteFileRequired",
     cloudflareAccountRequired:
       "connections.problemCloudflareAccountRequired",
@@ -39,6 +40,8 @@ export function connectionDiagnosticMessage(
     keepAliveInvalid: "connections.problemKeepAliveInvalid",
     autoDisconnectInvalid: "connections.problemAutoDisconnectInvalid",
     startupScriptTooLong: "connections.problemStartupScriptTooLong",
+    startupScriptSkippedByPooler:
+      "connections.problemStartupScriptSkippedByPooler",
     sshAliasInvalid: "connections.problemSshAliasInvalid",
     sshTunnelSingleHostRequired:
       "connections.problemSshTunnelSingleHostRequired",

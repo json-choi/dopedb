@@ -20,8 +20,8 @@ use tokio::sync::Notify;
 use tokio_util::sync::CancellationToken;
 
 pub(crate) use external_agent_requests::{
-    ExternalAgentRequestDecision, ExternalAgentRequestKind, ExternalAgentRequestRegistry,
-    ExternalAgentRequestSummary,
+    ExternalAgentProposalReference, ExternalAgentRequestDecision, ExternalAgentRequestKind,
+    ExternalAgentRequestRegistry, ExternalAgentRequestSummary,
 };
 #[cfg(windows)]
 pub(crate) use peer::restrict_path_to_current_user;

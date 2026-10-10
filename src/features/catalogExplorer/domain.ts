@@ -1,15 +1,9 @@
 import type { ConnectionProfile } from "../connections/domain";
-import type { CatalogTable } from "../../ipc/types";
 import type { CatalogLoadIssue } from "./catalogDomain";
 
 export type WorkspaceDialogState = {
   connection: ConnectionProfile;
   mode: "copy" | "credentials";
-};
-
-export type DdlDialogState = {
-  connection: ConnectionProfile;
-  table: CatalogTable;
 };
 
 export type CatalogExplorerState = {
@@ -24,5 +18,4 @@ export type CatalogExplorerState = {
   showRowCounts: boolean;
   openMenuId: string | null;
   workspaceDialog: WorkspaceDialogState | null;
-  ddlDialog: DdlDialogState | null;
 };

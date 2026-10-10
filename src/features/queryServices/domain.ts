@@ -4,6 +4,8 @@ import type {
   AppErrorDetails,
   ExecOutcome,
   ScriptOutcome,
+  ScriptStatement,
+  ScriptStatementError,
 } from "../../ipc/types";
 import type { SqlStreamViewState } from "../queries/domain";
 
@@ -80,6 +82,19 @@ export function isTerminalQueryServiceSession(
   );
 }
 
+/**
+ * The snapshot saved for a terminal session. Rows a cancelled run had already
+ * received stay visible for this app session only; the saved snapshot records
+ * the cancellation alone, the shape every restore path accepts.
+ */
+export function persistableQueryServiceSession(
+  session: QueryServiceSession,
+): QueryServiceSession {
+  return session.status === "cancelled" && session.result.kind !== "none"
+    ? { ...session, result: { kind: "none" } }
+    : session;
+}
+
 export function parseQueryServiceSession(value: unknown): QueryServiceSession {
   if (
     !isRecord(value) ||
@@ -117,7 +132,7 @@ export function parseQueryServiceSession(value: unknown): QueryServiceSession {
   if (!statusMatchesResult) {
     throw new Error("Invalid Services session terminal state");
   }
-  return value as QueryServiceSession;
+  return withTypedScriptErrors(value as QueryServiceSession);
 }
 
 function isQueryServiceResult(
@@ -170,12 +185,52 @@ function isScriptOutcome(value: unknown) {
         typeof statement.sql === "string" &&
         (statement.result === null || isQueryResult(statement.result)) &&
         isNullableNumber(statement.affected) &&
-        (statement.error === null || typeof statement.error === "string"),
+        isScriptStatementError(statement.error),
     ) &&
     typeof value.committed === "boolean" &&
     typeof value.allReads === "boolean" &&
     typeof value.manualTransaction === "boolean"
   );
+}
+
+function isScriptStatementError(value: unknown) {
+  return (
+    value === null ||
+    // Snapshots saved before statement errors were typed carry plain text.
+    typeof value === "string" ||
+    (isRecord(value) &&
+      typeof value.kind === "string" &&
+      typeof value.message === "string" &&
+      isNullableNumber(value.position) &&
+      // Server diagnostics; snapshots saved before they existed omit them.
+      (["sqlstate", "detail", "hint"] as const).every(
+        (key) => value[key] === undefined || typeof value[key] === "string",
+      ))
+  );
+}
+
+type StoredScriptStatement = Omit<ScriptStatement, "error"> & {
+  error: ScriptStatementError | string | null;
+};
+
+/** Gives a legacy plain-text statement error the typed shape with no known kind. */
+function withTypedScriptErrors(session: QueryServiceSession): QueryServiceSession {
+  const result = session.result;
+  if (result.kind !== "script") return session;
+  const stored = result.outcome.statements as StoredScriptStatement[];
+  if (!stored.some((statement) => typeof statement.error === "string")) return session;
+  const statements = stored.map((statement) =>
+    typeof statement.error === "string"
+      ? {
+          ...statement,
+          error: { kind: "unknown", message: statement.error, position: null },
+        }
+      : { ...statement, error: statement.error },
+  );
+  return {
+    ...session,
+    result: { ...result, outcome: { ...result.outcome, statements } },
+  };
 }
 
 function isQueryResult(value: unknown) {
@@ -283,7 +338,11 @@ function isQueryServiceError(value: unknown) {
     isNullableNumber(value.position) &&
     typeof value.raw === "string" &&
     typeof value.sql === "string" &&
-    typeof value.at === "string"
+    typeof value.at === "string" &&
+    // Optional diagnostics; snapshots saved before they existed omit them.
+    (["code", "sqlstate", "detail", "hint"] as const).every(
+      (key) => value[key] === undefined || typeof value[key] === "string",
+    )
   );
 }
 

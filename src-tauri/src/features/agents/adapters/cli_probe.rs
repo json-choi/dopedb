@@ -7,10 +7,13 @@ use std::time::Duration;
 
 use crate::cli_environment::{executable_search_path, find_executable};
 
-use super::super::domain::{AgentCliInfo, AgentProvider};
+use super::super::domain::{agent_error, AgentCliInfo, AgentProvider};
 use super::super::ports::AgentCliProbePort;
 
 const PROBE_TIMEOUT: Duration = Duration::from_secs(4);
+/// Stable code for a sign-in probe that did not answer in time. The status is
+/// unknown, not "signed out", so the Desktop offers a re-check, not a login.
+const AUTH_PROBE_TIMEOUT: &str = "auth_probe_timeout";
 const SAFE_PROBE_ENVIRONMENT: &[&str] = &[
     "HOME",
     "USER",
@@ -47,9 +50,26 @@ const NODE_MISSING_MARKERS: &[&str] = &[
 pub(crate) struct ProcessAgentCliProbe;
 
 impl AgentCliProbePort for ProcessAgentCliProbe {
-    async fn detect(&self) -> Vec<AgentCliInfo> {
-        let (claude, codex) = tokio::join!(detect_claude(), detect_codex());
-        vec![claude, codex]
+    async fn detect(&self, providers: Vec<AgentProvider>) -> Vec<AgentCliInfo> {
+        let claude = providers.contains(&AgentProvider::Claude);
+        let codex = providers.contains(&AgentProvider::Codex);
+        let (claude, codex) = tokio::join!(
+            async move {
+                if claude {
+                    Some(detect_claude().await)
+                } else {
+                    None
+                }
+            },
+            async move {
+                if codex {
+                    Some(detect_codex().await)
+                } else {
+                    None
+                }
+            },
+        );
+        [claude, codex].into_iter().flatten().collect()
     }
 }
 
@@ -67,7 +87,7 @@ async fn detect_claude() -> AgentCliInfo {
             return probe_failed(
                 AgentProvider::Claude,
                 "Claude Code",
-                "Version probe returned an unexpected response.",
+                agent_error::CLI_UNEXPECTED_VERSION,
             );
         }
         Err(error) => {
@@ -78,37 +98,40 @@ async fn detect_claude() -> AgentCliInfo {
             );
         }
     };
-    let (authenticated, auth_method) = if installed {
-        run_probe(&binary, &["auth", "status"])
-            .await
-            .ok()
-            .and_then(|output| serde_json::from_str::<serde_json::Value>(&output).ok())
-            .filter(|value| {
-                value
-                    .get("loggedIn")
-                    .and_then(serde_json::Value::as_bool)
-                    .unwrap_or(false)
-            })
-            .map(|value| {
-                (
-                    true,
-                    value
-                        .get("authMethod")
-                        .and_then(serde_json::Value::as_str)
-                        .map(str::to_owned),
-                )
-            })
-            .unwrap_or((false, None))
+    let auth = if installed {
+        Some(run_probe(&binary, &["auth", "status"]).await)
     } else {
-        (false, None)
+        None
     };
+    let auth_unknown = auth
+        .as_ref()
+        .is_some_and(|result| result.as_ref().is_err_and(|error| is_probe_timeout(error)));
+    let (authenticated, auth_method) = auth
+        .and_then(Result::ok)
+        .and_then(|output| serde_json::from_str::<serde_json::Value>(&output).ok())
+        .filter(|value| {
+            value
+                .get("loggedIn")
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(false)
+        })
+        .map(|value| {
+            (
+                true,
+                value
+                    .get("authMethod")
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::to_owned),
+            )
+        })
+        .unwrap_or((false, None));
     AgentCliInfo {
         id: AgentProvider::Claude,
         name: "Claude Code".into(),
         installed,
         authenticated,
         auth_method,
-        detection_error: None,
+        detection_error: auth_unknown.then(|| AUTH_PROBE_TIMEOUT.into()),
         note: "Uses your Claude subscription login in a connection-pinned Terminal.".into(),
     }
 }
@@ -127,7 +150,7 @@ async fn detect_codex() -> AgentCliInfo {
             return probe_failed(
                 AgentProvider::Codex,
                 "Codex CLI",
-                "Version probe returned an unexpected response.",
+                agent_error::CLI_UNEXPECTED_VERSION,
             );
         }
         Err(error) => {
@@ -138,14 +161,22 @@ async fn detect_codex() -> AgentCliInfo {
             );
         }
     };
-    let authenticated = installed && run_probe(&binary, &["login", "status"]).await.is_ok();
+    let auth = if installed {
+        Some(run_probe(&binary, &["login", "status"]).await)
+    } else {
+        None
+    };
+    let auth_unknown = auth
+        .as_ref()
+        .is_some_and(|result| result.as_ref().is_err_and(|error| is_probe_timeout(error)));
+    let authenticated = auth.is_some_and(|result| result.is_ok());
     AgentCliInfo {
         id: AgentProvider::Codex,
         name: "Codex CLI".into(),
         installed,
         authenticated,
         auth_method: None,
-        detection_error: None,
+        detection_error: auth_unknown.then(|| AUTH_PROBE_TIMEOUT.into()),
         note: "Uses your ChatGPT subscription login in a connection-pinned Terminal.".into(),
     }
 }
@@ -176,21 +207,22 @@ fn probe_failed(id: AgentProvider, name: &str, error: impl Into<String>) -> Agen
 }
 
 /// npm-style shims start with `#!/usr/bin/env node`, so a missing runtime
-/// fails inside `env` before the CLI runs. Name that cause instead of leaving
-/// the screen with a bare exit status 127. The screen prefixes the provider
-/// name itself.
+/// fails inside `env` before the CLI runs. Name that cause by code instead of
+/// leaving the screen with a bare exit status 127; the process output stays a
+/// copyable detail.
 fn version_probe_error(error: &str) -> String {
     if NODE_MISSING_MARKERS
         .iter()
         .any(|marker| error.contains(marker))
     {
-        format!(
-            "installed as a Node.js script, but no `node` runtime is on DopeDB's search \
-             path. Install Node.js or link its bin directory, then check again. ({error})"
-        )
+        agent_error::with_detail(agent_error::CLI_NODE_MISSING, error)
     } else {
-        format!("Version probe failed: {error}")
+        agent_error::with_detail(agent_error::CLI_PROBE_FAILED, error)
     }
+}
+
+fn is_probe_timeout(error: &str) -> bool {
+    error.starts_with("command timed out after")
 }
 
 async fn run_probe(binary: &Path, args: &[&str]) -> Result<String, String> {
@@ -323,15 +355,14 @@ pub(super) fn assert_agent_cli_probe_contract() {
     let missing_node = version_probe_error(
         "command failed with status exit status: 127: env: node: No such file or directory",
     );
-    assert!(missing_node.starts_with("installed as a Node.js script"));
-    assert!(missing_node.contains("no `node` runtime is on DopeDB's search path"));
-    assert!(missing_node.ends_with("env: node: No such file or directory)"));
+    assert!(missing_node.starts_with("agent_cli_node_missing\n"));
+    assert!(missing_node.ends_with("env: node: No such file or directory"));
     assert!(
         version_probe_error("env: 'node': No such file or directory")
-            .starts_with("installed as a Node.js script")
+            .starts_with("agent_cli_node_missing\n")
     );
     assert_eq!(
         version_probe_error("command timed out after 4000 ms"),
-        "Version probe failed: command timed out after 4000 ms"
+        "agent_cli_probe_failed\ncommand timed out after 4000 ms"
     );
 }

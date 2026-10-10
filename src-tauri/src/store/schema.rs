@@ -4,6 +4,35 @@
 /// Stable id for the offline-first Personal Workspace created at bootstrap.
 pub const PERSONAL_WORKSPACE_ID: &str = "00000000-0000-0000-0000-000000000001";
 
+/// The audit tail-anchor table exactly as `SCHEMA` declares it. Existing baseline
+/// stores receive it once from `bootstrap`; the audit test asserts both stay equal.
+pub const AUDIT_CHAIN_ANCHOR_SCHEMA: &str = "CREATE TABLE audit_chain_anchors (
+    connection_id TEXT PRIMARY KEY,
+    entry_count   INTEGER NOT NULL CHECK(entry_count > 0),
+    tail_hash     TEXT NOT NULL,
+    updated_at    TEXT NOT NULL
+);";
+
+/// The binding column that records the template endpoint a member-local credential
+/// was entered for, exactly as `SCHEMA` declares it. Existing baseline stores gain
+/// it once from `bootstrap`; the store test asserts both stay equal.
+pub const BINDING_BOUND_ENDPOINT_COLUMN: &str = "bound_endpoint TEXT
+                   CHECK(bound_endpoint IS NULL OR (json_valid(bound_endpoint)
+                         AND json_type(bound_endpoint) = 'object'))";
+
+/// The deferred credential-delete table exactly as `SCHEMA` declares it. Existing
+/// baseline stores receive it once from `bootstrap`; the store test asserts both
+/// stay equal.
+pub const DEFERRED_CREDENTIAL_DELETE_SCHEMA: &str = "CREATE TABLE deferred_credential_deletes (
+    credential_id TEXT PRIMARY KEY,
+    deferred_at   TEXT NOT NULL
+);";
+
+/// The `query_history` columns that record the database and schema a desktop SQL
+/// run targeted, exactly as `SCHEMA` declares them. Existing baseline stores gain
+/// them once from `bootstrap`; the store test asserts both stay equal.
+pub const HISTORY_TARGET_COLUMNS: [&str; 2] = ["target_database TEXT", "target_namespace TEXT"];
+
 /// Project Knowledge stays in a separate baseline block so focused tests can
 /// create that domain independently while receiving the same constraints.
 /// Absolute Local Folder paths, repository credentials, and source bodies are
@@ -263,7 +292,8 @@ CREATE TABLE connections (
 
 -- Per-account local overlay for a redacted shared connection template. The secret
 -- value itself stays in the OS credential store; this table stores only its opaque
--- credential-item id, member-local fields, and the last server-verified RBAC view.
+-- credential-item id, member-local fields, the last server-verified RBAC view, and
+-- the template endpoint the credential was entered for.
 CREATE TABLE workspace_connection_bindings (
     connection_id  TEXT NOT NULL REFERENCES connections(id) ON DELETE CASCADE,
     account_user_id TEXT NOT NULL,
@@ -275,10 +305,21 @@ CREATE TABLE workspace_connection_bindings (
     allow_writes   INTEGER NOT NULL DEFAULT 0,
     revision       INTEGER NOT NULL DEFAULT 1,
     updated_at     TEXT NOT NULL,
+    bound_endpoint TEXT
+                   CHECK(bound_endpoint IS NULL OR (json_valid(bound_endpoint)
+                         AND json_type(bound_endpoint) = 'object')),
     PRIMARY KEY (connection_id, account_user_id)
 );
 CREATE INDEX idx_workspace_connection_bindings_account
     ON workspace_connection_bindings(account_user_id, connection_id);
+
+-- OS credential items no saved profile references any more but whose deletion
+-- failed. Only opaque item ids are kept; a later connection mutation retries each
+-- one, even after a restart, until the OS credential store confirms removal.
+CREATE TABLE deferred_credential_deletes (
+    credential_id TEXT PRIMARY KEY,
+    deferred_at   TEXT NOT NULL
+);
 
 CREATE TABLE connection_safety (
     connection_id         TEXT PRIMARY KEY REFERENCES connections(id) ON DELETE CASCADE,
@@ -302,7 +343,10 @@ CREATE TABLE query_history (
     duration_ms   INTEGER,
     error         TEXT,
     executed_at   TEXT NOT NULL,
-    origin        TEXT NOT NULL            -- agent|manual|analysis_article|surface id
+    origin        TEXT NOT NULL,           -- agent|manual|analysis_article|surface id
+    -- The database and schema a desktop SQL run targeted (NULL: connection default).
+    target_database TEXT,
+    target_namespace TEXT
 );
 CREATE INDEX idx_history_scope_recent
     ON query_history(connection_id, account_scope, executed_at DESC);
@@ -342,6 +386,16 @@ CREATE TABLE audit_log (
 );
 CREATE INDEX idx_audit_conn ON audit_log(connection_id, ts);
 CREATE INDEX idx_audit_connection_row ON audit_log(connection_id);
+
+-- Per-connection tail anchor advanced in the same transaction as every audit
+-- append, so removing the newest rows leaves a detectable gap. Like audit rows it
+-- survives connection deletion and is never rewritten from the chain itself.
+CREATE TABLE audit_chain_anchors (
+    connection_id TEXT PRIMARY KEY,
+    entry_count   INTEGER NOT NULL CHECK(entry_count > 0),
+    tail_hash     TEXT NOT NULL,
+    updated_at    TEXT NOT NULL
+);
 
 -- Durable Operation Runtime projection. Target connection/workspace rows are
 -- intentionally not foreign keys: deleting or archiving a resource must not erase

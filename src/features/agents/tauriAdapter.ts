@@ -130,12 +130,16 @@ export function setAgentAcpConfigOption(
   });
 }
 
-/** Opens an Agent-supplied external link only after native validation and consent. */
+/**
+ * Opens an untrusted external link only after native validation and consent. The
+ * source selects only the consent wording (Agent answer or Analysis Article body).
+ */
 export function openAgentExternalLink(
   href: string,
   language: "en" | "ko",
+  source: "agent" | "analysisArticle" = "agent",
 ): Promise<boolean> {
-  return invoke("open_agent_external_link", { href, language });
+  return invoke("open_agent_external_link", { href, language, source });
 }
 
 export function onAgentAcpChanged(
@@ -146,7 +150,10 @@ export function onAgentAcpChanged(
   );
 }
 
-/** Detects local Agent CLI readiness without reading or transferring credentials. */
-export function detectAgentClis(): Promise<AgentCliInfo[]> {
-  return invoke("detect_agent_clis");
+/**
+ * Detects local Agent CLI readiness without reading or transferring credentials.
+ * With `providers`, only those CLIs are probed (and returned).
+ */
+export function detectAgentClis(providers?: readonly AgentProvider[]): Promise<AgentCliInfo[]> {
+  return invoke("detect_agent_clis", providers ? { providers } : {});
 }

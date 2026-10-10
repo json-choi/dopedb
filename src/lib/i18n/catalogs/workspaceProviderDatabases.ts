@@ -40,6 +40,8 @@ export const workspaceProviderDatabasesCatalog = defineCatalog(
       "The requested database is not among this workspace's shared databases. It may have been removed.",
     "workspaceProviderDatabases.repairDescription":
       "Google authorization is requested again while this exact project and instance stay pinned. DopeDB then rechecks IAM database authentication, the dedicated database users and the PostgreSQL schema owner.",
+    "workspaceProviderDatabases.repairAccountDescription":
+      "The provider account that serves this database is connected again. The database registration and every member's access stay the same.",
     "workspaceProviderDatabases.repair": "Repair managed access",
     "workspaceProviderDatabases.repairing": "Opening repair…",
     "workspaceProviderDatabases.remove": "Remove shared database",
@@ -325,6 +327,8 @@ export const workspaceProviderDatabasesCatalog = defineCatalog(
       "요청한 DB가 이 워크스페이스의 공유 DB 목록에 없습니다. 이미 제거되었을 수 있습니다.",
     "workspaceProviderDatabases.repairDescription":
       "Google 승인을 다시 받은 뒤 이 프로젝트와 인스턴스를 그대로 고정해 IAM DB 인증, 전용 DB 사용자와 PostgreSQL 스키마 소유자를 다시 점검합니다.",
+    "workspaceProviderDatabases.repairAccountDescription":
+      "이 DB를 제공하는 공급자 계정을 다시 연결합니다. DB 등록과 구성원의 접근 권한은 그대로 유지됩니다.",
     "workspaceProviderDatabases.repair": "관리형 접근 복구",
     "workspaceProviderDatabases.repairing": "복구 화면 여는 중…",
     "workspaceProviderDatabases.remove": "공유 DB 제거",

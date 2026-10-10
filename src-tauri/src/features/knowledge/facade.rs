@@ -193,14 +193,20 @@ where
             .await
     }
 
+    /// Resolves the Environment scope anchored on `connection` for a session that
+    /// uses `selected_connection_ids` (plus the anchor, which also anchors selected
+    /// sources). The repository returns only those bindings, so both its local check
+    /// and the hosted stale check below cover exactly the session's resources: an
+    /// unselected stale binding never blocks, a selected one still does.
     pub(crate) async fn knowledge_session_scope(
         &self,
         connection: &PinnedConnection,
         environment_id: Option<Uuid>,
+        selected_connection_ids: &[Uuid],
     ) -> AppResult<Option<KnowledgeSessionScope>> {
         let mut scope = self
             .repository
-            .knowledge_session_scope(connection, environment_id)
+            .knowledge_session_scope(connection, environment_id, selected_connection_ids)
             .await?;
         let Some(scope) = scope.as_mut() else {
             return Ok(None);
@@ -266,6 +272,11 @@ where
     /// Resolve the current internal authority epoch for one durable Analysis
     /// Article content pin. The caller still compares this value with its
     /// device-local pin before opening a credential.
+    ///
+    /// A pin that no longer matches (the database is no longer bound to the
+    /// Environment, or its binding or shared content changed) is
+    /// [`AppError::SharedConnectionChanged`]: the reader re-checks the shared
+    /// connection, and a run that hits it is recorded as stale.
     pub(crate) async fn analysis_connection_authority_revision(
         &self,
         account_id: &str,
@@ -281,19 +292,12 @@ where
         let binding = bindings
             .iter()
             .find(|binding| binding.connection_id == remote_connection_id)
-            .ok_or_else(|| AppError::Blocked {
-                reason: "The Analysis Article database is no longer bound to this Environment"
-                    .into(),
-            })?;
+            .ok_or(AppError::SharedConnectionChanged)?;
         if binding.stale
             || binding.connection_content_revision != content_revision
             || binding.connection_revision != binding.current_connection_revision
         {
-            return Err(AppError::Blocked {
-                reason:
-                    "The Analysis Article database authority or shared connection content changed"
-                        .into(),
-            });
+            return Err(AppError::SharedConnectionChanged);
         }
         Ok(binding.connection_revision)
     }

@@ -29,6 +29,9 @@ use super::{
 pub(crate) enum JobPermission {
     Read,
     Write,
+    /// A SQL import that contains DDL needs the schema credential and the
+    /// connection's `manage` grant, exactly like a schema-change proposal.
+    Schema,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -310,6 +313,20 @@ pub(crate) trait JobCatalogPort: Clone + Send + Sync + 'static {
         &self,
         connection_id: ConnectionId,
     ) -> impl Future<Output = AppResult<CatalogSnapshot>> + Send;
+
+    /// A live read for a run that may change the schema: it leaves no cached snapshot
+    /// for the run's own DDL to turn stale.
+    fn read_before_schema_change(
+        &self,
+        connection_id: ConnectionId,
+    ) -> impl Future<Output = AppResult<CatalogSnapshot>> + Send;
+
+    /// Retire every cached catalog of the connection and announce it after a run's
+    /// DDL reached the database, like any other committed schema change.
+    fn schema_changed(
+        &self,
+        connection_id: ConnectionId,
+    ) -> impl Future<Output = AppResult<()>> + Send;
 }
 
 pub(crate) trait JobOperationPort: Clone + Send + Sync + 'static {

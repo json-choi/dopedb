@@ -7,6 +7,8 @@
 //   - startIndex → row numbers continue across pages (rows 101-200, not 1-100 again)
 // Columns are drag-resizable: first drag snapshots every rendered width so only the
 // dragged column moves. Double-click fits only that column to loaded display text.
+// The row-number column widens to its largest number; copies use the shared TSV and
+// single-cell clipboard convention (NULL empty, JSON digits kept).
 import {
   useEffect,
   useRef,
@@ -22,7 +24,7 @@ import {
   DATA_GRID_DEFAULT_COLUMN_WIDTH,
   DATA_GRID_HEADER_HEIGHT,
   DATA_GRID_ROW_HEIGHT,
-  DATA_GRID_ROW_NUMBER_WIDTH,
+  dataGridRowNumberWidth,
 } from "../../design-system/dataGridGeometry";
 import {
   DataGridViewport,
@@ -36,11 +38,14 @@ import DataGridVirtual from "./DataGridVirtual";
 import { useI18n } from "../../lib/i18n";
 import {
   extendGridSelection,
+  gridCellText,
   gridSelectionClipboardText,
   gridSelectionIncludes,
   singleGridCell,
   type GridCellSelection,
 } from "./dataGridSelection";
+import { cellClipboardText, tsvField } from "../../lib/export";
+import { truncatedCellBytes } from "../queries/resultPageCache";
 import {
   dataGridKeyboardTarget,
   type DataGridFocus,
@@ -49,33 +54,11 @@ import {
   cellDecodeFailureAt,
   firstDecodeFailureInSelection,
   gridCellInspection,
+  type GridCellDetail,
 } from "./decodeFailures";
 import { useDataGridNumericColumns } from "./dataGridNumericColumns";
 import { useDataGridSelectionReset } from "./useDataGridSelectionReset";
 import { dataGridAutoFitWidth, toggleDataGridAutoFit } from "./dataGridAutoFit";
-
-function cell(v: unknown): string {
-  if (v === null || v === undefined) return "NULL";
-  if (typeof v === "object") return JSON.stringify(v);
-  return String(v);
-}
-
-// Clipboard text for a selected cell — same rules as CellViewer's Copy:
-// null/undefined → "NULL", objects → pretty JSON, JSON-string → pretty JSON, else String.
-function copyText(v: unknown): string {
-  if (v === null || v === undefined) return "NULL";
-  if (typeof v === "object") return JSON.stringify(v, null, 2);
-  const s = String(v);
-  if (typeof v === "string") {
-    try {
-      const p = JSON.parse(s);
-      if (p && typeof p === "object") return JSON.stringify(p, null, 2);
-    } catch {
-      /* not JSON — plain text */
-    }
-  }
-  return s;
-}
 
 type DataGridProps = {
   result: QueryResult;
@@ -86,7 +69,12 @@ type DataGridProps = {
   onFilter?: (col: string, value: string) => void;
   selectedRow?: number | null;
   onSelectRow?: (i: number) => void;
-  onCellClick?: (value: unknown, rowIndex: number, col: string) => void;
+  onCellClick?: (
+    value: unknown,
+    rowIndex: number,
+    col: string,
+    detail?: GridCellDetail,
+  ) => void;
   renderCell?: (value: unknown, row: number, column: string) => ReactNode;
   columnMeta?: Record<string, { dataType: string; pk: boolean }>;
   /** A chunked streaming source; rows are never flattened for the grid. */
@@ -95,6 +83,8 @@ type DataGridProps = {
   surface?: DataGridSurface;
   /** Reserve scrollable room beneath a floating workbench status footer. */
   footerInset?: boolean;
+  /** Re-runs the query when a stored result page can no longer be read back. */
+  onRerun?: () => void;
 };
 
 export function shouldVirtualizeDataGrid(
@@ -128,6 +118,7 @@ export default function DataGrid(props: DataGridProps) {
         rowSource={props.rowSource}
         surface={props.surface}
         footerInset={props.footerInset}
+        onRerun={props.onRerun}
       />
     );
   }
@@ -186,7 +177,7 @@ function DataGridTable({
   }, [focus]);
   const resized = Object.keys(widths).length > 0;
   const columnWidths = [
-    widths[0] ?? DATA_GRID_ROW_NUMBER_WIDTH,
+    widths[0] ?? dataGridRowNumberWidth(startIndex + result.rows.length),
     ...result.columns.map(
       (_, index) => widths[index + 1] ?? DATA_GRID_DEFAULT_COLUMN_WIDTH,
     ),
@@ -247,6 +238,7 @@ function DataGridTable({
     const inspection = gridCellInspection(
       result.decodeFailures,
       i,
+      j,
       result.rows[i]?.[j],
     );
     if (inspection.blocked) {
@@ -261,7 +253,9 @@ function DataGridTable({
     }
     setCopyError(null);
     onSelectRow?.(i);
-    onCellClick?.(inspection.value, i, result.columns[j]);
+    onCellClick?.(inspection.value, i, result.columns[j], {
+      truncatedBytes: inspection.truncatedBytes,
+    });
   }
 
   // ⌘C/Ctrl+C copies the selected cell — but yield to a real text selection so users
@@ -283,11 +277,16 @@ function DataGridTable({
       );
       if (failure) {
         setCopyError(
-          t("grid.decodeFailureCopyBlocked", {
-            row: failure.rowIndex + 1,
-            column: failure.columnIndex + 1,
-            type: failure.databaseType,
-          }),
+          truncatedCellBytes(failure) === null
+            ? t("grid.decodeFailureCopyBlocked", {
+                row: failure.rowIndex + 1,
+                column: failure.columnIndex + 1,
+                type: failure.databaseType,
+              })
+            : t("grid.truncatedCopyBlocked", {
+                row: failure.rowIndex + 1,
+                column: failure.columnIndex + 1,
+              }),
         );
         return;
       }
@@ -296,8 +295,8 @@ function DataGridTable({
         gridSelectionClipboardText(
           sel,
           (row) => result.rows[row],
-          cell,
-          copyText,
+          tsvField,
+          cellClipboardText,
         ),
       );
       return;
@@ -368,6 +367,7 @@ function DataGridTable({
       <table
         ref={tableRef}
         role="grid"
+        aria-label={t("grid.label")}
         aria-rowcount={Math.max(result.rowCount, startIndex + result.rows.length) + 1}
         aria-colcount={result.columns.length + 1}
         className="tw:table-fixed tw:border-separate tw:border-spacing-0 tw:bg-background tw:font-mono tw:text-ui tw:[&_td]:box-border tw:[&_td]:max-w-none tw:[&_td]:overflow-hidden tw:[&_td]:border-b tw:[&_td]:border-border-subtle tw:[&_td]:px-2 tw:[&_td]:py-1 tw:[&_td]:leading-ui tw:[&_td]:text-left tw:[&_td]:text-ellipsis tw:[&_td]:whitespace-nowrap tw:[&_th]:box-border tw:[&_th]:max-w-none tw:[&_th]:overflow-hidden tw:[&_th]:border-r tw:[&_th]:border-b tw:[&_th]:border-border-subtle tw:[&_th]:px-2 tw:[&_th]:py-px tw:[&_th]:leading-ui tw:[&_th]:text-left tw:[&_th]:text-ellipsis tw:[&_th]:whitespace-nowrap tw:[&_thead_th]:sticky tw:[&_thead_th]:top-0 tw:[&_thead_th]:z-[var(--ds-z-raised)] tw:[&_thead_th]:h-control-sm tw:[&_thead_th]:bg-card"
@@ -390,7 +390,7 @@ function DataGridTable({
             </th>
             {result.columns.map((c, j) => (
               <th
-                key={c}
+                key={j}
                 role="columnheader"
                 aria-colindex={j + 2}
                 aria-sort={
@@ -481,9 +481,9 @@ function DataGridTable({
                       const failure = cellDecodeFailureAt(
                         result.decodeFailures, index, j,
                       );
-                      return failure
+                      return failure && truncatedCellBytes(failure) === null
                         ? t("grid.decodeFailure", { type: failure.databaseType })
-                        : cell(row[j]);
+                        : gridCellText(row[j]);
                     });
                     const width = toggleDataGridAutoFit(
                       previousWidths.current, j + 1, columnWidths[j + 1],
@@ -525,14 +525,18 @@ function DataGridTable({
                 {startIndex + i + 1}
               </td>
               {row.map((v, j) => {
-                const decodeFailure = cellDecodeFailureAt(
+                const failure = cellDecodeFailureAt(
                   result.decodeFailures,
                   i,
                   j,
                 );
+                const truncated = failure ? truncatedCellBytes(failure) !== null : false;
+                const decodeFailure = truncated ? undefined : failure;
                 const text = decodeFailure
                   ? t("grid.decodeFailure", { type: decodeFailure.databaseType })
-                  : cell(v);
+                  : truncated
+                    ? `${gridCellText(v)}…`
+                    : gridCellText(v);
                 const isSel = gridSelectionIncludes(sel, i, j);
                 const isFocus = focus.row === i && focus.column === j + 1;
                 return (
@@ -540,30 +544,34 @@ function DataGridTable({
                     key={j}
                     data-null={v === null && !decodeFailure}
                     data-decode-failure={decodeFailure ? "true" : undefined}
-                    data-numeric={!decodeFailure && numericCols[j]}
+                    data-truncated={truncated ? "true" : undefined}
+                    data-numeric={!decodeFailure && !truncated && numericCols[j]}
                     data-interactive={interactive}
                     data-selected={isSel}
                     data-focused={isFocus}
                     data-grid-focus={`${i}:${j + 1}`}
-                    className="tw:max-w-[480px] tw:overflow-hidden tw:bg-background tw:text-ellipsis tw:data-[null=true]:text-muted-foreground tw:data-[null=true]:italic tw:data-[decode-failure=true]:text-danger tw:data-[numeric=true]:text-right tw:data-[numeric=true]:tabular-nums tw:data-[interactive=true]:cursor-pointer tw:data-[selected=true]:!bg-selection tw:data-[focused=true]:shadow-[inset_0_0_0_var(--ds-border-width-strong)_var(--ds-ring)]"
+                    className="tw:max-w-[480px] tw:overflow-hidden tw:bg-background tw:text-ellipsis tw:data-[null=true]:text-muted-foreground tw:data-[null=true]:italic tw:data-[decode-failure=true]:text-danger tw:data-[truncated=true]:text-warning tw:data-[numeric=true]:text-right tw:data-[numeric=true]:tabular-nums tw:data-[interactive=true]:cursor-pointer tw:data-[selected=true]:!bg-selection tw:data-[focused=true]:shadow-[inset_0_0_0_var(--ds-border-width-strong)_var(--ds-ring)]"
                     // Compact fixed columns can truncate any value.
                     title={
-                      resized || text.length > 40 || text.includes("\n")
-                        ? text
-                        : undefined
+                      truncated
+                        ? t("grid.truncatedCellTitle")
+                        : resized || text.length > 40 || text.includes("\n")
+                          ? text
+                          : undefined
                     }
                     // Roving tabindex: only the selected cell is a tab stop; arrows move it (onKeyDown above).
                     tabIndex={isFocus ? 0 : -1}
                     role="gridcell"
                     aria-colindex={j + 2}
                     aria-selected={isSel}
+                    aria-description={truncated ? t("grid.truncatedCellTitle") : undefined}
                     data-grid-value
                     onFocus={() => setFocus({ row: i, column: j + 1 })}
                     onClick={(event: ReactMouseEvent) =>
                       selectCell(i, j, event.shiftKey)
                     }
                   >
-                    {!decodeFailure && renderCell ? renderCell(v, i, result.columns[j]) : text}
+                    {!decodeFailure && !truncated && renderCell ? renderCell(v, i, result.columns[j]) : text}
                   </td>
                 );
               })}

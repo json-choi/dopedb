@@ -93,6 +93,62 @@ export const agentsCatalog = defineCatalog(
     "agent.acpLifecycle.waitingPermission": "Approval",
     "agent.acpImageOmitted": "Remote image omitted",
     "agent.acpLoadFailed": "Could not load Agent sessions: {error}",
+    "agent.acpStartCancelled": "Agent start was cancelled.",
+    "agent.acpUntitledSession": "New conversation",
+    "agent.acpAuthProbeTimeout":
+      "The local CLI did not report its sign-in status in time. Check again.",
+    "agent.acpCliNodeMissing":
+      "This CLI runs on Node.js, but no node runtime is on DopeDB's search path. Install Node.js or link its bin directory, then check again.",
+    "agent.acpCliUnexpectedVersion":
+      "The CLI answered its version check unexpectedly. Update it from the official guide, then check again.",
+    "agent.acpCliProbeFailed":
+      "The CLI could not complete its version check. Check its installation, then check again.",
+    "agent.acpScopeChanged":
+      "The Project resources this conversation pinned changed after it started. Start a new session to use the current resources.",
+    "agent.acpScopeUnverified":
+      "DopeDB could not check this conversation's Project resources right now. Check your connection, then resume again.",
+    "agent.acpNewSessionSameResources": "New session with the same resources",
+    "agent.acpCancelStart": "Cancel start",
+    "agent.acpReadyAnnouncement": "The Agent is ready for your next message.",
+    "agent.acpResumeNeedsSetup":
+      "Finish the {provider} setup shown in Agent setup to resume or restart this conversation.",
+    "agent.acpSessionLimit":
+      "Up to 8 Agent sessions can run at once. Close a conversation you no longer need, then try again.",
+    "agent.acpNotAuthenticated":
+      "{provider} is not signed in. Run `{command}` in a local terminal, then try again.",
+    "agent.acpNotInstalled":
+      "{provider} is not installed. Install its official local CLI, then try again.",
+    "agent.acpStartTimedOut":
+      "The official {provider} adapter did not finish starting in time. Try again; if it keeps happening, check the local CLI.",
+    "agent.acpHistoryUnavailable":
+      "This {provider} conversation is no longer in the provider's local history. The local transcript is kept; start a new session to continue.",
+    "agent.acpNotResumable": "This session cannot be resumed. Start a new session to continue.",
+    "agent.acpAlreadyRunning": "This session is already running.",
+    "agent.acpBusy":
+      "The Agent is still working. Wait for it to finish or cancel the current turn.",
+    "agent.acpSessionUnavailable":
+      "The Agent session is no longer available. Resume it or start a new session.",
+    "agent.acpSelectResourcesFirst":
+      "Choose at least one Project resource before starting the Agent.",
+    "agent.acpScopeUnavailable":
+      "The selected Project resources are no longer available as one exact set. Review the context and try again.",
+    "agent.acpEditorContextOutsideScope":
+      "The attached editor context is outside this session's selected databases.",
+    "agent.acpContextTooLarge":
+      "The message or attached context is too large. Shorten it and try again.",
+    "agent.acpPluginDisabled": "This Agent's chat connection is turned off in Settings.",
+    "agent.acpConfigUnavailable":
+      "That setting cannot change right now. Wait until the Agent is ready and try again.",
+    "agent.acpPermissionUnavailable": "This permission request is no longer pending.",
+    "agent.acpEventDropped":
+      "Part of the Agent's update was too large to keep in the local history.",
+    "agent.acpAuthorityRevalidating":
+      "Workspace access is being re-verified. Try again in a moment.",
+    "agent.acpProviderError": "{provider} reported: {error}",
+    "agent.acpUnexpectedError":
+      "The Agent could not complete this action. Try again; if it keeps failing, review Settings → Advanced diagnostics.",
+    "agent.acpStartedNewSession":
+      "The previous conversation was closed, so this message started a new session. The earlier history stays in the session list.",
     "agent.acpLocalAuth":
       "Authentication stays in your local Claude or Codex login. DopeDB never reads or stores its token.",
     "agent.acpNew": "New Chat",
@@ -147,6 +203,12 @@ export const agentsCatalog = defineCatalog(
     "agent.acpReadOnlyContext": "Read only",
     "agent.acpNoWritableDatabase":
       "No selected database currently passes the write policy.",
+    "agent.acpOpenSafety": "Open Safety settings",
+    "agent.acpScopeLocked":
+      "This conversation's context is fixed. Start a new chat to choose different resources.",
+    "agent.acpUnassignedConnection":
+      "{connection} is not in a Project, so the Agent cannot use it.",
+    "agent.acpAddToProject": "Add to Project",
     "agent.externalRequestTitle": "External Agent request",
     "agent.externalConfigureTitle": "Create external Agent configuration",
     "agent.externalStartTitle": "Approve external Agent session",
@@ -176,6 +238,8 @@ export const agentsCatalog = defineCatalog(
     "agent.externalWriteTarget": "Write proposals",
     "agent.externalProvider": "Agent",
     "agent.externalDirectory": "Working directory",
+    "agent.externalProposalTitle": "Review external Agent change",
+    "agent.externalProposalDecideFirst": "Approve or reject the change first.",
     "agent.acpEnvironmentLoadFailed": "Could not load Agent scopes",
     "agent.acpEnvironmentLoadFailedBody":
       "The Agent scope could not be verified: {error}",
@@ -183,6 +247,9 @@ export const agentsCatalog = defineCatalog(
     "agent.acpEnvironmentRequiredBody":
       "In Explorer, connect this database and source code to a Project before starting the Agent.",
     "agent.acpEnvironmentReconfirm": "Reconfirm",
+    "agent.acpReconfirmBody":
+      "A selected database changed after it was added to the Project. Reconfirm the selection before the Agent starts.",
+    "agent.acpReconfirmChange": "{name}: revision {from} → {to} · now {target}",
     "agent.acpEnvironmentReconfirmFailed":
       "The current connection revision could not be confirmed for the selected Project scope.",
     "agent.acpEnvironmentReconfirmFailedWithError":
@@ -246,6 +313,9 @@ export const agentsCatalog = defineCatalog(
     "agent.acpActivityToolSearch": "Finding the right Agent tools",
     "agent.acpThought": "Agent progress",
     "agent.acpTitle": "AI Chat",
+    "agent.acpTitlePendingApprovals": "AI Chat · {count} awaiting approval",
+    "agent.acpPendingApprovalsAnnouncement":
+      "{count} Agent change(s) in AI Chat awaiting your approval",
     "agent.acpSelectDatabaseToOpen":
       "Select a database to open AI Chat",
     "agent.acpToolDetails": "Tool input and result",
@@ -258,7 +328,7 @@ export const agentsCatalog = defineCatalog(
     "agent.acpSqlApprovalVerifying": "Verifying exact proposal…",
     "agent.acpSqlApprovalWaiting": "Waiting for your approval",
     "agent.acpSqlApprovalApproving": "Approving…",
-    "agent.acpSqlApprovalApproved": "Approved",
+    "agent.acpSqlApprovalApproved": "Approved · not run yet",
     "agent.acpSqlApprovalRunning": "Running…",
     "agent.acpSqlApprovalRejecting": "Rejecting…",
     "agent.acpSqlApprovalExecuted": "Executed · {count} rows",
@@ -269,7 +339,53 @@ export const agentsCatalog = defineCatalog(
     "agent.acpSqlApprovalRun": "Run approved change",
     "agent.acpSqlApprovalReject": "Reject",
     "agent.acpSqlApprovalScopeMismatch":
-      "This proposal does not belong to the current pinned connection.",
+      "This proposal targets a database that is not this session's write target, so it cannot be approved here.",
+    "agent.acpSqlApprovalEstimatedRows": "Estimated impact · about {count} rows (EXPLAIN)",
+    "agent.acpSqlApprovalNoEstimate": "No row estimate · review the statement directly",
+    "agent.acpSqlApprovalExpiresAt": "Expires at {time}",
+    "agent.acpSqlApprovalPlan": "Execution plan",
+    "agent.acpSqlApprovalCriticalNotice":
+      "Critical change: it can affect every row, for example without a WHERE clause. Approving also records your explicit critical-change confirmation.",
+    "agent.acpSqlApprovalProductionNotice":
+      "Production database: approving runs this change on production and records your production confirmation.",
+    "agent.acpSqlApprovalApproveCritical": "Approve critical change and run",
+    "agent.acpSqlApprovalApproveProduction": "Approve production change and run",
+    "agent.acpSqlApprovalRejectReason": "Reason for rejecting (optional)",
+    "agent.acpSqlApprovalRefresh": "Check again",
+    "agent.acpSqlApprovalUnavailableStatus": "Unavailable",
+    "agent.acpSqlApprovalFailed": "Execution failed",
+    "agent.acpSqlApprovalOutcomeUnknown": "Outcome unknown · check the database",
+    "agent.acpSqlApprovalRevoked": "Withdrawn · the Agent session ended",
+    "agent.acpSqlApprovalCancelled": "Cancelled",
+    "agent.acpSqlApprovalRiskCritical": "Critical risk",
+    "agent.acpSqlApprovalRiskHigh": "High risk",
+    "agent.acpSqlApprovalRiskMedium": "Medium risk",
+    "agent.acpSqlApprovalRiskLow": "Low risk",
+    "agent.acpSqlApprovalRevokedError":
+      "The Agent session that proposed this change has ended, so it can no longer be approved. Ask again in a new session.",
+    "agent.acpSqlApprovalOutcomeUnknownError":
+      "DopeDB could not confirm whether the change was committed. Check the database before asking the Agent to retry.",
+    "agent.acpSqlApprovalDatabaseError": "The database rejected the change: {error}",
+    "agent.acpSqlApprovalUnavailable":
+      "This proposal belongs to another workspace, account, or app session and cannot be decided here.",
+    "agent.acpSqlApprovalAnnouncement":
+      "The Agent asks for approval of a change to {connection}.",
+    "agent.acpSqlApprovalSessionNotLive":
+      "This conversation is not running, so its proposal cannot be decided here.",
+    "agent.acpSqlApprovalOtherSession":
+      "This proposal belongs to another Agent session and cannot be decided here.",
+    "agent.acpSqlApprovalStop": "Stop",
+    "agent.acpSqlApprovalStopping": "Stopping…",
+    "agent.acpSqlApprovalStopped":
+      "Stop requested. The status above shows whether anything was committed.",
+    "agent.acpSqlApprovalStopFailed":
+      "The change could not be stopped. Check its outcome in Activity.",
+    "agent.acpSqlApprovalOpenResult": "Open result",
+    "agent.acpCopyErrorDetail": "Copy details",
+    "agent.acpSqlApprovalBlockedError":
+      "The current connection, Safety, or workspace policy no longer allows this change.",
+    "agent.acpSqlApprovalActionFailed":
+      "The decision could not be completed. The card shows the proposal's current state.",
     "agent.acpToolStatusCompleted": "Completed",
     "agent.acpToolStatusFailed": "Failed",
     "agent.acpToolStatusPending": "Pending",
@@ -542,6 +658,62 @@ export const agentsCatalog = defineCatalog(
     "agent.acpLifecycle.waitingPermission": "승인 대기",
     "agent.acpImageOmitted": "원격 이미지 생략됨",
     "agent.acpLoadFailed": "Agent 세션을 불러오지 못했습니다: {error}",
+    "agent.acpStartCancelled": "Agent 시작을 취소했습니다.",
+    "agent.acpUntitledSession": "새 대화",
+    "agent.acpAuthProbeTimeout":
+      "로컬 CLI가 제시간에 로그인 상태를 알려 주지 않았습니다. 다시 확인하세요.",
+    "agent.acpCliNodeMissing":
+      "이 CLI는 Node.js로 실행되지만 DopeDB 검색 경로에 node 런타임이 없습니다. Node.js를 설치하거나 bin 폴더를 연결한 뒤 다시 확인하세요.",
+    "agent.acpCliUnexpectedVersion":
+      "CLI가 버전 확인에 예상과 다르게 응답했습니다. 공식 안내에 따라 업데이트한 뒤 다시 확인하세요.",
+    "agent.acpCliProbeFailed":
+      "CLI가 버전 확인을 완료하지 못했습니다. 설치 상태를 확인한 뒤 다시 확인하세요.",
+    "agent.acpScopeChanged":
+      "이 대화가 고정한 프로젝트 리소스가 시작 후 변경되었습니다. 현재 리소스를 사용하려면 새 세션을 시작하세요.",
+    "agent.acpScopeUnverified":
+      "이 대화의 프로젝트 리소스를 지금 확인하지 못했습니다. 연결을 확인한 뒤 다시 이어서 시작하세요.",
+    "agent.acpNewSessionSameResources": "같은 리소스로 새 세션",
+    "agent.acpCancelStart": "시작 취소",
+    "agent.acpReadyAnnouncement": "Agent가 다음 메시지를 받을 준비가 되었습니다.",
+    "agent.acpResumeNeedsSetup":
+      "이 대화를 재개하거나 다시 시작하려면 Agent 설정에서 {provider} 준비를 마치세요.",
+    "agent.acpSessionLimit":
+      "Agent 세션은 동시에 최대 8개까지 실행할 수 있습니다. 필요 없는 대화를 닫은 뒤 다시 시도하세요.",
+    "agent.acpNotAuthenticated":
+      "{provider}에 로그인되어 있지 않습니다. 로컬 터미널에서 `{command}`를 실행한 뒤 다시 시도하세요.",
+    "agent.acpNotInstalled":
+      "{provider}가 설치되어 있지 않습니다. 공식 로컬 CLI를 설치한 뒤 다시 시도하세요.",
+    "agent.acpStartTimedOut":
+      "공식 {provider} 어댑터가 제시간에 시작되지 않았습니다. 다시 시도하고, 반복되면 로컬 CLI 상태를 확인하세요.",
+    "agent.acpHistoryUnavailable":
+      "이 {provider} 대화가 제공자의 로컬 기록에 더 이상 없습니다. 로컬 대화 기록은 보존되며, 이어서 작업하려면 새 세션을 시작하세요.",
+    "agent.acpNotResumable": "이 세션은 재개할 수 없습니다. 새 세션을 시작해 이어가세요.",
+    "agent.acpAlreadyRunning": "이 세션은 이미 실행 중입니다.",
+    "agent.acpBusy":
+      "Agent가 아직 작업 중입니다. 완료를 기다리거나 현재 작업을 취소하세요.",
+    "agent.acpSessionUnavailable":
+      "Agent 세션을 더 이상 사용할 수 없습니다. 세션을 재개하거나 새로 시작하세요.",
+    "agent.acpSelectResourcesFirst":
+      "Agent를 시작하기 전에 프로젝트 리소스를 하나 이상 선택하세요.",
+    "agent.acpScopeUnavailable":
+      "선택한 프로젝트 리소스를 하나의 정확한 범위로 더 이상 사용할 수 없습니다. 컨텍스트를 확인한 뒤 다시 시도하세요.",
+    "agent.acpEditorContextOutsideScope":
+      "첨부한 편집기 컨텍스트가 이 세션에서 선택한 데이터베이스 밖에 있습니다.",
+    "agent.acpContextTooLarge":
+      "메시지나 첨부한 컨텍스트가 너무 큽니다. 줄인 뒤 다시 시도하세요.",
+    "agent.acpPluginDisabled": "이 Agent의 채팅 연결이 설정에서 꺼져 있습니다.",
+    "agent.acpConfigUnavailable":
+      "지금은 이 설정을 바꿀 수 없습니다. Agent가 준비된 뒤 다시 시도하세요.",
+    "agent.acpPermissionUnavailable": "이 권한 요청은 더 이상 대기 중이 아닙니다.",
+    "agent.acpEventDropped":
+      "Agent 업데이트 일부가 너무 커서 로컬 기록에 보존하지 못했습니다.",
+    "agent.acpAuthorityRevalidating":
+      "워크스페이스 권한을 다시 확인하는 중입니다. 잠시 후 다시 시도하세요.",
+    "agent.acpProviderError": "{provider} 응답: {error}",
+    "agent.acpUnexpectedError":
+      "Agent가 이 작업을 완료하지 못했습니다. 다시 시도하고, 계속 실패하면 설정 → 고급의 진단 정보를 확인하세요.",
+    "agent.acpStartedNewSession":
+      "이전 대화가 닫혀 있어 이 메시지로 새 세션을 시작했습니다. 이전 기록은 세션 목록에 남아 있습니다.",
     "agent.acpLocalAuth":
       "인증은 사용자의 로컬 Claude 또는 Codex 로그인이 소유합니다. DopeDB는 토큰을 읽거나 저장하지 않습니다.",
     "agent.acpNew": "새 채팅",
@@ -595,6 +767,12 @@ export const agentsCatalog = defineCatalog(
     "agent.acpReadOnlyContext": "읽기 전용",
     "agent.acpNoWritableDatabase":
       "현재 쓰기 정책을 통과한 선택 DB가 없습니다.",
+    "agent.acpOpenSafety": "Safety 설정 열기",
+    "agent.acpScopeLocked":
+      "이 대화의 컨텍스트는 고정되어 있습니다. 다른 리소스를 고르려면 새 채팅을 시작하세요.",
+    "agent.acpUnassignedConnection":
+      "{connection}은(는) 프로젝트에 속하지 않아 Agent가 사용할 수 없습니다.",
+    "agent.acpAddToProject": "프로젝트에 추가",
     "agent.externalRequestTitle": "외부 Agent 요청",
     "agent.externalConfigureTitle": "외부 Agent 설정 만들기",
     "agent.externalStartTitle": "외부 Agent 세션 승인",
@@ -624,6 +802,8 @@ export const agentsCatalog = defineCatalog(
     "agent.externalWriteTarget": "쓰기 제안",
     "agent.externalProvider": "Agent",
     "agent.externalDirectory": "작업 폴더",
+    "agent.externalProposalTitle": "외부 Agent 변경 검토",
+    "agent.externalProposalDecideFirst": "먼저 변경을 승인하거나 거절하세요.",
     "agent.acpEnvironmentLoadFailed": "Agent 범위를 불러오지 못했습니다",
     "agent.acpEnvironmentLoadFailedBody":
       "Agent 범위를 검증하지 못했습니다: {error}",
@@ -631,6 +811,9 @@ export const agentsCatalog = defineCatalog(
     "agent.acpEnvironmentRequiredBody":
       "Agent를 시작하기 전에 탐색기에서 이 DB와 소스 코드를 프로젝트에 연결하세요.",
     "agent.acpEnvironmentReconfirm": "재확인",
+    "agent.acpReconfirmBody":
+      "선택한 데이터베이스가 프로젝트에 추가된 뒤 변경되었습니다. Agent를 시작하기 전에 선택을 재확인하세요.",
+    "agent.acpReconfirmChange": "{name}: 리비전 {from} → {to} · 현재 {target}",
     "agent.acpEnvironmentReconfirmFailed":
       "선택한 프로젝트 범위에서 현재 연결 리비전을 확인하지 못했습니다.",
     "agent.acpEnvironmentReconfirmFailedWithError":
@@ -694,6 +877,9 @@ export const agentsCatalog = defineCatalog(
     "agent.acpActivityToolSearch": "필요한 Agent 도구 찾기",
     "agent.acpThought": "Agent 진행 상황",
     "agent.acpTitle": "AI Chat",
+    "agent.acpTitlePendingApprovals": "AI Chat · 승인 대기 {count}",
+    "agent.acpPendingApprovalsAnnouncement":
+      "AI Chat에서 Agent 변경 {count}건이 승인을 기다립니다",
     "agent.acpSelectDatabaseToOpen":
       "데이터베이스를 선택하면 AI Chat을 열 수 있습니다",
     "agent.acpToolDetails": "도구 입력 및 결과",
@@ -706,7 +892,7 @@ export const agentsCatalog = defineCatalog(
     "agent.acpSqlApprovalVerifying": "정확한 제안 확인 중…",
     "agent.acpSqlApprovalWaiting": "승인 대기 중",
     "agent.acpSqlApprovalApproving": "승인 중…",
-    "agent.acpSqlApprovalApproved": "승인됨",
+    "agent.acpSqlApprovalApproved": "승인됨 · 아직 실행 안 함",
     "agent.acpSqlApprovalRunning": "실행 중…",
     "agent.acpSqlApprovalRejecting": "거절 중…",
     "agent.acpSqlApprovalExecuted": "실행됨 · {count}행",
@@ -717,7 +903,53 @@ export const agentsCatalog = defineCatalog(
     "agent.acpSqlApprovalRun": "승인된 변경 실행",
     "agent.acpSqlApprovalReject": "거절",
     "agent.acpSqlApprovalScopeMismatch":
-      "이 제안은 현재 고정된 연결에 속하지 않습니다.",
+      "이 제안은 이 세션의 쓰기 대상이 아닌 데이터베이스를 대상으로 하므로 여기서 승인할 수 없습니다.",
+    "agent.acpSqlApprovalEstimatedRows": "예상 영향 · 약 {count}행 (EXPLAIN)",
+    "agent.acpSqlApprovalNoEstimate": "예상 행 수 없음 · 문장을 직접 검토하세요",
+    "agent.acpSqlApprovalExpiresAt": "{time}에 만료",
+    "agent.acpSqlApprovalPlan": "실행 계획",
+    "agent.acpSqlApprovalCriticalNotice":
+      "치명적 변경: WHERE 절이 없는 경우처럼 모든 행에 영향을 줄 수 있습니다. 승인하면 치명적 변경에 대한 명시적 확인도 함께 기록됩니다.",
+    "agent.acpSqlApprovalProductionNotice":
+      "운영(prod) 데이터베이스입니다. 승인하면 운영 환경에서 이 변경을 실행하고 운영 변경 확인을 함께 기록합니다.",
+    "agent.acpSqlApprovalApproveCritical": "치명적 변경 승인 후 실행",
+    "agent.acpSqlApprovalApproveProduction": "운영 변경 승인 후 실행",
+    "agent.acpSqlApprovalRejectReason": "거절 이유 (선택)",
+    "agent.acpSqlApprovalRefresh": "다시 확인",
+    "agent.acpSqlApprovalUnavailableStatus": "확인 불가",
+    "agent.acpSqlApprovalFailed": "실행 실패",
+    "agent.acpSqlApprovalOutcomeUnknown": "결과 불명 · 데이터베이스 확인 필요",
+    "agent.acpSqlApprovalRevoked": "철회됨 · Agent 세션 종료",
+    "agent.acpSqlApprovalCancelled": "취소됨",
+    "agent.acpSqlApprovalRiskCritical": "위험 치명적",
+    "agent.acpSqlApprovalRiskHigh": "위험 높음",
+    "agent.acpSqlApprovalRiskMedium": "위험 보통",
+    "agent.acpSqlApprovalRiskLow": "위험 낮음",
+    "agent.acpSqlApprovalRevokedError":
+      "이 변경을 제안한 Agent 세션이 종료되어 더 이상 승인할 수 없습니다. 새 세션에서 다시 요청하세요.",
+    "agent.acpSqlApprovalOutcomeUnknownError":
+      "변경이 커밋되었는지 확인하지 못했습니다. Agent에게 재시도를 요청하기 전에 데이터베이스를 확인하세요.",
+    "agent.acpSqlApprovalDatabaseError": "데이터베이스가 변경을 거부했습니다: {error}",
+    "agent.acpSqlApprovalUnavailable":
+      "이 제안은 다른 워크스페이스·계정·앱 세션에 속해 여기서 결정할 수 없습니다.",
+    "agent.acpSqlApprovalAnnouncement":
+      "Agent가 {connection} 변경에 대한 승인을 요청했습니다.",
+    "agent.acpSqlApprovalSessionNotLive":
+      "이 대화가 실행 중이 아니어서 여기서 제안을 결정할 수 없습니다.",
+    "agent.acpSqlApprovalOtherSession":
+      "다른 Agent 세션의 제안이라 여기서 결정할 수 없습니다.",
+    "agent.acpSqlApprovalStop": "중지",
+    "agent.acpSqlApprovalStopping": "중지하는 중…",
+    "agent.acpSqlApprovalStopped":
+      "중지를 요청했습니다. 실제로 반영되었는지는 위 상태에서 확인하세요.",
+    "agent.acpSqlApprovalStopFailed":
+      "변경을 중지하지 못했습니다. Activity에서 결과를 확인하세요.",
+    "agent.acpSqlApprovalOpenResult": "결과 열기",
+    "agent.acpCopyErrorDetail": "세부 정보 복사",
+    "agent.acpSqlApprovalBlockedError":
+      "현재 연결·Safety·워크스페이스 정책이 이 변경을 더 이상 허용하지 않습니다.",
+    "agent.acpSqlApprovalActionFailed":
+      "결정을 완료하지 못했습니다. 카드에 제안의 현재 상태가 표시됩니다.",
     "agent.acpToolStatusCompleted": "완료",
     "agent.acpToolStatusFailed": "실패",
     "agent.acpToolStatusPending": "대기 중",

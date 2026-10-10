@@ -15,6 +15,9 @@ export const CONNECTION_AUTO_DISCONNECT_SECONDS_PARAMETER =
 export const CONNECTION_STARTUP_SCRIPT_PARAMETER =
   "dopedb.startupScript";
 export const CONNECTION_SSH_ALIAS_PARAMETER = "dopedb.sshAlias";
+/** Set by hand for a transaction-mode pooler DopeDB cannot recognize by host. */
+export const CONNECTION_TRANSACTION_POOLER_PARAMETER =
+  "dopedb.transactionPooler";
 
 export const CONNECTION_KEEP_ALIVE_MIN_SECONDS = 10;
 export const CONNECTION_KEEP_ALIVE_MAX_SECONDS = 86_400;
@@ -52,6 +55,30 @@ export function isConnectionOptionSupported(
     return engine !== "sqlite" && engine !== "bigquery";
   }
   return isConnectionOptionParameter(key);
+}
+
+/**
+ * Whether PostgreSQL traffic goes through a transaction-mode pooler, where server
+ * sessions are shared and DopeDB runs no session statement such as the startup
+ * script. Mirrors `pg_transaction_pooler` in `src-tauri/src/connection/providers.rs`.
+ */
+export function isPostgresTransactionPooler(
+  profile: ConnectionProfile,
+): boolean {
+  const host = profile.host.trim().toLowerCase();
+  // Matched at label boundaries so a domain that merely contains a pooler name
+  // is never treated as one.
+  const supavisor =
+    host === "pooler.supabase.com" || host.endsWith(".pooler.supabase.com");
+  const neonPooled =
+    host.endsWith(".neon.tech") && host.split(".", 1)[0].endsWith("-pooler");
+  return (
+    (supavisor && profile.port === 6543) ||
+    neonPooled ||
+    profile.extraParams[CONNECTION_TRANSACTION_POOLER_PARAMETER]
+      ?.trim()
+      .toLowerCase() === "true"
+  );
 }
 
 export function isSshHostAlias(value: string): boolean {

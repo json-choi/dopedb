@@ -1,12 +1,13 @@
 //! Typed catalog use cases.
 
 use dopedb_protocol::catalog::CatalogSnapshot;
+use tokio::sync::broadcast;
 
 use crate::error::{AppError, AppResult};
 use crate::kernel::identity::ConnectionId;
 use crate::kernel::TerminalAuthority;
 
-use super::domain::{CatalogOverview, CatalogReadPolicy, DatabaseSummary};
+use super::domain::{CatalogChanged, CatalogOverview, CatalogReadPolicy, DatabaseSummary};
 use super::ports::CatalogGatewayPort;
 
 #[derive(Clone)]
@@ -58,10 +59,35 @@ where
         connection_id: ConnectionId,
         database: String,
     ) -> AppResult<CatalogSnapshot> {
+        self.load_live_snapshot(connection_id, Some(database)).await
+    }
+
+    /// Desktop's one catalog read: always live, `None` meaning the configured database.
+    pub(crate) async fn load_live_snapshot(
+        &self,
+        connection_id: ConnectionId,
+        database: Option<String>,
+    ) -> AppResult<CatalogSnapshot> {
         self.gateway
-            .load_database_snapshot(connection_id, database)
+            .load_live_snapshot(connection_id, database)
             .await
             .map_err(AppError::public_connection_failure)
+    }
+
+    /// The last persisted configured-database snapshot, shown only while a live read runs.
+    pub(crate) async fn load_persisted_snapshot(
+        &self,
+        connection_id: ConnectionId,
+    ) -> AppResult<Option<CatalogSnapshot>> {
+        self.gateway
+            .load_persisted_snapshot(connection_id)
+            .await
+            .map_err(AppError::public_connection_failure)
+    }
+
+    /// Committed schema changes and connection edits that retired a cached catalog.
+    pub(crate) fn subscribe_changes(&self) -> broadcast::Receiver<CatalogChanged> {
+        self.gateway.subscribe_changes()
     }
 
     pub(crate) async fn load_database_overview(

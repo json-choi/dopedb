@@ -51,16 +51,17 @@ impl AnalysisReadExecutionPort for DesktopAnalysisReadExecution {
             return Err(AppError::Safety("Analysis Article run cancelled".into()));
         }
         let operation_scope = self.connections.begin_operation_scope().await;
+        // Pre-run preconditions fail with typed errors before any credential opens or
+        // any audit/history row exists, so the reader gets the matching recovery step:
+        // `SharedConnectionChanged` (re-check the shared connection) here and from the
+        // Environment content pin, and `CredentialBindingRequired` from `connect` when
+        // this device has no credential.
         let local_connection_id = if let Some(workspace_id) = request.workspace_id {
             self.knowledge
                 .local_connection_id_for_remote(workspace_id, request.connection_id)
                 .await?
-                .ok_or_else(|| AppError::Blocked {
-                    reason: format!(
-                        "Analysis Article connection '{}' needs a local credential binding on this device",
-                        request.connection_id
-                    ),
-                })?
+                // The shared connection is not mirrored on this device yet.
+                .ok_or(AppError::SharedConnectionChanged)?
         } else {
             request.connection_id
         };
@@ -88,12 +89,7 @@ impl AnalysisReadExecutionPort for DesktopAnalysisReadExecution {
                 _ => request.connection_revision,
             };
         if pin.connection_revision != expected_authority_revision {
-            return Err(AppError::Blocked {
-                reason: format!(
-                    "Analysis Article connection '{}' changed from revision {} to {}",
-                    request.connection_id, expected_authority_revision, pin.connection_revision
-                ),
-            });
+            return Err(AppError::SharedConnectionChanged);
         }
         if pin.profile.engine == Engine::Mongodb {
             return Err(AppError::Blocked {
@@ -302,6 +298,8 @@ async fn record_query(
                 error,
                 executed_at: Utc::now(),
                 origin: "analysis_article".into(),
+                database: None,
+                namespace: None,
             },
         )
         .await
@@ -327,6 +325,16 @@ pub(crate) fn assert_exact_query_contract() {
             .expect("exact saved query should remain classifiable")
             .kind,
         QueryKind::Read
+    );
+    // The rerun recovery actions ("re-check connection", "connect credentials") key
+    // on exactly these wire kinds for the pre-run precondition failures.
+    assert_eq!(
+        AppError::SharedConnectionChanged.kind(),
+        "sharedConnectionChanged"
+    );
+    assert_eq!(
+        AppError::CredentialBindingRequired.kind(),
+        "credentialBindingRequired"
     );
     assert_ne!(
         safety::classify("DELETE FROM records", Engine::Sqlite)

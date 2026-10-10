@@ -7,10 +7,8 @@ import {
   FieldValidationMessage,
   InlineSelect,
   PropertyRow,
-  SelectInput,
   TextInput,
 } from "../../design-system/components/FormControls";
-import { StatusBadge } from "../../design-system/components/Status";
 import type { ConnectionInputMode } from "../../features/connections/connectionEditorModel";
 import type { ConnectionEditorController } from "../../features/connections/useConnectionEditorController";
 import { useI18n } from "../../lib/i18n";
@@ -18,6 +16,7 @@ import { ConnectionBigQueryFields } from "./ConnectionBigQueryFields";
 import { ManagedWorkspaceConnectionField } from "./ManagedWorkspaceConnectionField";
 import { ConnectionDatabaseField } from "./ConnectionDatabaseField";
 import { ConnectionCloudflareD1Fields } from "./ConnectionCloudflareD1Fields";
+import { ConnectionSharedTemplateFields } from "./ConnectionSharedTemplateFields";
 
 type Controller = ConnectionEditorController;
 
@@ -41,7 +40,6 @@ export function ConnectionGeneralTab({
     form,
     set,
     flags,
-    credentials,
     url,
     options,
     validation,
@@ -54,7 +52,6 @@ export function ConnectionGeneralTab({
     isBigQuery,
     canEditConnection,
     srv,
-    sqlSslModes,
   } = flags;
 
   return (
@@ -177,6 +174,7 @@ export function ConnectionGeneralTab({
           <p className="tw:m-0 tw:pl-[112px] tw:text-xs tw:text-muted-foreground tw:@max-[560px]:pl-0">
             {t("connections.connectionUrlOverrides")}
           </p>
+          <ConnectionPasswordRow profile={profile} />
         </section>
       ) : isCloudflareD1 ? (
         <ConnectionCloudflareD1Fields profile={profile} />
@@ -213,6 +211,7 @@ export function ConnectionGeneralTab({
             <ManagedWorkspaceConnectionField
               recovery={managedConnection}
               busy={busy}
+              verified={profile.verified}
             />
           ) : (
             <PropertyRow
@@ -231,6 +230,7 @@ export function ConnectionGeneralTab({
                     }
                     aria-describedby={validation.host ? "connection-host-validation" : undefined}
                     onChange={(event) => set("host", event.target.value)}
+                    onBlur={() => profile.touch("connection-host")}
                   />
                   {validation.host ? (
                     <FieldValidationMessage id="connection-host-validation" validation={validation.host} />
@@ -276,110 +276,29 @@ export function ConnectionGeneralTab({
           ) : null}
 
           {isSharedTemplate ? (
-            <>
-              <PropertyRow label={t("connections.sslMode")}>
-                <SelectInput
-                  density="compact"
-                  value={form.sslmode}
-                  disabled={!canEditConnection}
-                  onChange={(event) => set("sslmode", event.target.value)}
-                >
-                  {(isMongo ? ["disable", "require"] : sqlSslModes).map(
-                    (mode) => (
-                      <option key={mode} value={mode}>
-                        {mode}
-                      </option>
-                    ),
-                  )}
-                </SelectInput>
-              </PropertyRow>
-              <PropertyRow label={t("connections.environment")}>
-                <SelectInput
-                  density="compact"
-                  value={form.env ?? ""}
-                  disabled={!canEditConnection}
-                  onChange={(event) =>
-                    set("env", event.target.value || null)
-                  }
-                >
-                  <option value="">{t("common.none")}</option>
-                  <option value="dev">dev</option>
-                  <option value="staging">staging</option>
-                  <option value="prod">prod</option>
-                </SelectInput>
-              </PropertyRow>
-              {!isMongo ? (
-                <PropertyRow label={t("connections.schemaGroup")}>
-                  <TextInput
-                    density="compact"
-                    value={form.schemaGroup ?? ""}
-                    disabled={!canEditConnection}
-                    onChange={(event) =>
-                      set("schemaGroup", event.target.value.trim() || null)
-                    }
-                    placeholder={t("connections.schemaGroupPlaceholder")}
-                  />
-                </PropertyRow>
-              ) : null}
-              <PropertyRow label={t("workspace.bindCredentialsShort")}>
-                <div className="tw:flex tw:min-h-control-md tw:flex-wrap tw:items-center tw:gap-2">
-                  <StatusBadge
-                    tone={
-                      form.credentialMode === "managed" || form.secretRef
-                        ? "success"
-                        : "warning"
-                    }
-                  >
-                    {form.credentialMode === "managed" || form.secretRef
-                      ? t("providerCredentials.ready")
-                      : t("providerCredentials.credentialsRequired")}
-                  </StatusBadge>
-                  {form.credentialMode === "memberLocal" &&
-                  form.workspaceAccess !== "view" ? (
-                    <Button
-                      size="compact"
-                      onClick={() => workspaceDialog.setMode("credentials")}
-                    >
-                      {t("workspace.bindCredentialsShort")}
-                    </Button>
-                  ) : null}
-                </div>
-              </PropertyRow>
-              <p className="tw:m-0 tw:border-t tw:border-border-subtle tw:pt-3 tw:text-sm tw:leading-body tw:text-muted-foreground">
-                {managedConnection.active
-                  ? t("connections.managedWorkspace.securityNote")
-                  : t("workspace.copySecurityNote")}
-              </p>
-            </>
+            <ConnectionSharedTemplateFields
+              profile={profile}
+              workspaceDialog={workspaceDialog}
+              managedActive={managedConnection.active}
+            />
           ) : (
             <>
-              <PropertyRow label={t("connections.user")}>
-                <TextInput
-                  id="connection-username"
-                  density="compact"
-                  aria-label={t("connections.user")}
-                  value={form.username}
-                  onChange={(event) => set("username", event.target.value)}
-                />
+              <PropertyRow
+                label={t("connections.user")}
+                htmlFor="connection-username"
+                validation={validation.username}
+              >
+                {({ controlProps }) => (
+                  <TextInput
+                    {...controlProps()}
+                    density="compact"
+                    value={form.username}
+                    onChange={(event) => set("username", event.target.value)}
+                  />
+                )}
               </PropertyRow>
 
-              <PropertyRow label={t("connections.password")}>
-                <TextInput
-                  id="connection-password"
-                  density="compact"
-                  type="password"
-                  aria-label={t("connections.password")}
-                  value={credentials.password}
-                  onChange={(event) =>
-                    credentials.setPassword(event.target.value)
-                  }
-                  placeholder={
-                    form.secretRef
-                      ? `•••••• (${t("connections.passwordStoredExisting")})`
-                      : t("connections.passwordStored")
-                  }
-                />
-              </PropertyRow>
+              <ConnectionPasswordRow profile={profile} />
             </>
           )}
 
@@ -387,5 +306,62 @@ export function ConnectionGeneralTab({
         </section>
       )}
     </div>
+  );
+}
+
+/**
+ * The local password row. URL-only mode renders it too, so every credential
+ * recovery that focuses `connection-password` finds a field in either mode.
+ */
+function ConnectionPasswordRow({ profile }: { profile: Controller["profile"] }) {
+  const { t } = useI18n();
+  const { form, credentials } = profile;
+  const removalPending = credentials.clearStoredPassword && !credentials.password;
+
+  return (
+    <PropertyRow label={t("connections.password")}>
+      <div className="tw:grid tw:gap-1.5">
+        <div className="tw:grid tw:grid-cols-[minmax(0,1fr)_auto] tw:items-center tw:gap-2">
+          <TextInput
+            id="connection-password"
+            density="compact"
+            type="password"
+            aria-label={t("connections.password")}
+            aria-describedby={
+              removalPending ? "connection-password-removal" : undefined
+            }
+            value={credentials.password}
+            onChange={(event) => credentials.setPassword(event.target.value)}
+            placeholder={
+              form.secretRef && !credentials.clearStoredPassword
+                ? `•••••• (${t("connections.passwordStoredExisting")})`
+                : t("connections.passwordStored")
+            }
+          />
+          {form.secretRef && !credentials.password ? (
+            <Button
+              size="compact"
+              variant="ghost"
+              aria-pressed={credentials.clearStoredPassword}
+              onClick={() =>
+                credentials.setClearStoredPassword(
+                  !credentials.clearStoredPassword,
+                )
+              }
+            >
+              {t("connections.removeSavedPassword")}
+            </Button>
+          ) : null}
+        </div>
+        {removalPending ? (
+          <p
+            id="connection-password-removal"
+            className="tw:m-0 tw:text-xs tw:leading-body tw:text-warning"
+          >
+            {t("connections.savedPasswordRemovalPending")}
+          </p>
+        ) : null}
+      </div>
+    </PropertyRow>
   );
 }

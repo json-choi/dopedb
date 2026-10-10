@@ -1,8 +1,145 @@
 //! Connection manager lifecycle and provider revocation integration.
+//!
+//! Long-lived sessions (manual transactions) keep only their exact pool entry,
+//! not the workspace scope gate, so a background workspace refresh never has to
+//! end them merely to acquire that gate. Every scope or connection change that
+//! can alter a session's authority ends the affected sessions through the
+//! registered revocation ports, and a refresh ends only the sessions whose exact
+//! connection authority (scope, connection revision, binding revision) changed.
+
+use std::collections::{HashMap, HashSet};
 
 use super::*;
 
+/// A long-lived session's authority after admission: its exact pin, an opaque
+/// retention of the authorized pool, and the admission fence.
+pub(crate) struct UnscopedSessionStart {
+    pub(crate) pin: PinnedConnection,
+    /// Keeps the pool (and any managed credential lease) alive for the session's
+    /// physical connection without holding the workspace scope gate.
+    pub(crate) retention: Box<dyn std::any::Any + Send + Sync>,
+    /// Drop only after the session is published in its revocation registry, so
+    /// a concurrent revocation cannot miss it.
+    pub(crate) admission: OwnedRwLockReadGuard<()>,
+}
+
+impl ConnectionSessionLeaseStart {
+    /// Convert a newly admitted long-lived session into its exact authority pin
+    /// and pool retention, releasing the workspace scope gate. The owner must be
+    /// registered as a [`ConnectionSessionRevocationPort`] so scope changes end it.
+    pub(crate) fn into_unscoped_session(self) -> UnscopedSessionStart {
+        let Self {
+            lease,
+            _admission_guard: admission,
+        } = self;
+        let ConnectionLease { pin, entry, .. } = lease;
+        UnscopedSessionStart {
+            pin,
+            retention: Box::new(entry),
+            admission,
+        }
+    }
+}
+
+/// Exact authority projection compared across a background refresh so only
+/// long-lived sessions whose connection authority changed are ended.
+struct SessionAuthoritySnapshot {
+    scope: Option<crate::kernel::access::ActiveResourceScope>,
+    connections: Option<HashMap<Uuid, (i64, i64)>>,
+}
+
 impl ConnectionManager {
+    async fn session_authority_snapshot(&self) -> SessionAuthoritySnapshot {
+        SessionAuthoritySnapshot {
+            scope: self.inner.store.active_resource_scope().await.ok(),
+            connections: self
+                .inner
+                .store
+                .active_connection_authority_fingerprint()
+                .await
+                .ok()
+                .map(|rows| {
+                    rows.into_iter()
+                        .map(|(id, revision, binding_revision)| (id, (revision, binding_revision)))
+                        .collect()
+                }),
+        }
+    }
+
+    /// Connections whose exact authority differs between two snapshots, including
+    /// ones that appeared or disappeared. `None` means a snapshot was unreadable or
+    /// the active scope moved, so nothing pinned before may be kept.
+    fn connections_changed_between(
+        before: &SessionAuthoritySnapshot,
+        after: &SessionAuthoritySnapshot,
+    ) -> Option<HashSet<Uuid>> {
+        let (Some(before_scope), Some(before_connections), Some(after_connections)) = (
+            before.scope.as_ref(),
+            before.connections.as_ref(),
+            after.connections.as_ref(),
+        ) else {
+            return None;
+        };
+        if after.scope.as_ref() != Some(before_scope) {
+            return None;
+        }
+        Some(
+            before_connections
+                .iter()
+                .filter(|(id, authority)| after_connections.get(*id) != Some(*authority))
+                .map(|(id, _)| *id)
+                .chain(
+                    after_connections
+                        .keys()
+                        .filter(|id| !before_connections.contains_key(*id))
+                        .copied(),
+                )
+                .collect(),
+        )
+    }
+
+    /// Detach the pools a refresh made stale. Unchanged connections keep their warm
+    /// pool, which is keyed by the exact revisions it was opened with; `None`
+    /// detaches every pool.
+    async fn detach_changed(&self, changed: Option<HashSet<Uuid>>) -> Vec<Arc<CacheEntry>> {
+        let Some(changed) = changed else {
+            return self.detach_all().await;
+        };
+        let keys = self
+            .inner
+            .slots
+            .iter()
+            .filter(|entry| changed.contains(&entry.key().connection_id))
+            .map(|entry| entry.key().clone())
+            .collect::<Vec<_>>();
+        self.detach_keys(keys).await
+    }
+
+    /// End only sessions whose exact authority changed between two snapshots.
+    /// An unreadable snapshot or a different active scope ends every session.
+    async fn revoke_sessions_changed_between(
+        &self,
+        before: SessionAuthoritySnapshot,
+        after: SessionAuthoritySnapshot,
+        reason: &'static str,
+    ) {
+        let (Some(before_scope), Some(before_connections), Some(after_connections)) =
+            (before.scope.as_ref(), before.connections, after.connections)
+        else {
+            self.revoke_sessions(None, reason).await;
+            return;
+        };
+        if after.scope.as_ref() != Some(before_scope) {
+            self.revoke_sessions(None, reason).await;
+            return;
+        }
+        for (connection_id, authority) in before_connections {
+            if after_connections.get(&connection_id) != Some(&authority) {
+                self.revoke_sessions(Some(connection_id), reason).await;
+            }
+        }
+    }
+
     pub(crate) fn with_authorities(
         store: Store,
         remote_authority: Arc<dyn RemoteConnectionAuthorityPort>,
@@ -312,9 +449,11 @@ impl ConnectionManager {
         }
     }
 
+    /// Exclusive gate for local catalog metadata changes (schema groups). Such a
+    /// change neither alters credentials nor access, and long-lived sessions do
+    /// not hold the scope gate, so open manual transactions stay open.
     pub(crate) async fn begin_scope_mutation(&self) -> ConnectionMutation {
         let session_mutation_guard = Arc::clone(&self.inner.session_gate).write_owned().await;
-        self.revoke_sessions(None, "connection scope changed").await;
         ConnectionMutation {
             manager: self.clone(),
             pin: None,
@@ -394,28 +533,37 @@ impl ConnectionManager {
         Ok(())
     }
 
+    /// Refresh memberships. Runs on window focus and reconnects, so it ends only
+    /// the long-lived sessions whose exact authority the refresh changed.
     pub(crate) async fn sync_account_workspaces(
         &self,
         user: &WorkspaceAuthUser,
         workspaces: &[(Uuid, String, WorkspaceRole)],
     ) -> AppResult<()> {
         let _session_gate = self.inner.session_gate.write().await;
-        self.revoke_sessions(None, "workspace memberships changed")
-            .await;
-        let _gate = self.inner.scope_gate.write().await;
-        self.inner
+        let gate = self.inner.scope_gate.write().await;
+        let before = self.session_authority_snapshot().await;
+        let synced = self
+            .inner
             .store
             .sync_account_workspaces(user, workspaces)
-            .await?;
-        let retired = self.detach_all().await;
-        drop(_gate);
+            .await;
+        let after = self.session_authority_snapshot().await;
+        let changed = Self::connections_changed_between(&before, &after);
+        // Sessions are ended before the gate opens so no statement can run in a
+        // session whose authority the refresh just removed.
+        self.revoke_sessions_changed_between(before, after, "workspace memberships changed")
+            .await;
+        synced?;
+        let retired = self.detach_changed(changed).await;
+        drop(gate);
         retire_entries(retired).await;
         Ok(())
     }
 
     /// Reconcile control-plane connection templates while excluding concurrent
     /// scope-pinned operations. Any material or binding revision change gets a fresh
-    /// pool on the next acquisition.
+    /// pool on the next acquisition and ends only that connection's sessions.
     pub(crate) async fn sync_remote_connections(
         &self,
         workspace_id: Uuid,
@@ -423,15 +571,19 @@ impl ConnectionManager {
         connections: &[(ConnectionProfile, i64)],
     ) -> AppResult<Vec<Uuid>> {
         let _session_gate = self.inner.session_gate.write().await;
-        self.revoke_sessions(None, "workspace connections changed")
-            .await;
         let gate = self.inner.scope_gate.write().await;
-        let removed_credential_ids = self
+        let before = self.session_authority_snapshot().await;
+        let synced = self
             .inner
             .store
             .sync_remote_connections(workspace_id, account_user_id, connections)
-            .await?;
-        let retired = self.detach_all().await;
+            .await;
+        let after = self.session_authority_snapshot().await;
+        let changed = Self::connections_changed_between(&before, &after);
+        self.revoke_sessions_changed_between(before, after, "workspace connections changed")
+            .await;
+        let removed_credential_ids = synced?;
+        let retired = self.detach_changed(changed).await;
         drop(gate);
         retire_entries(retired).await;
         Ok(removed_credential_ids)

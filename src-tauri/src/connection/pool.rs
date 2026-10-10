@@ -5,17 +5,33 @@
 //!   - Postgres: `after_connect` sets `default_transaction_read_only = on`.
 //!   - MySQL:    `after_connect` sets `SESSION transaction_read_only = 1`.
 //!   - SQLite:   a second handle opened `read_only(true)` (file-level, unforgeable).
+//!
+//! A user-defined function called by a statement classified as a read can change
+//! that session default (PostgreSQL `set_config` inside the function, a MySQL
+//! stored function running `SET SESSION transaction_read_only = 0`), and the
+//! change would follow the pooled connection to its next read. L1 rejects direct
+//! `set_config` calls and `SET`; as defense in depth, `after_release` refuses a
+//! connection a read left inside a transaction and re-asserts the read-only
+//! default on every PostgreSQL and MySQL read connection returned to the pool,
+//! closing a connection that cannot take it instead of reusing it. The session
+//! and release plans live in `pg_session` (including transaction-mode poolers,
+//! [`LiveConnection::transaction_pooler`]) and `mysql_session`. Connecting adds no
+//! round trip; each release costs one, in SQLx's release task (off the caller's
+//! path).
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use sqlx::mysql::{MySqlConnectOptions, MySqlPool, MySqlPoolOptions, MySqlSslMode};
 use sqlx::postgres::{PgConnectOptions, PgPool, PgPoolOptions, PgSslMode};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions};
-use sqlx::{AssertSqlSafe, Connection, Executor};
+use sqlx::{AssertSqlSafe, Connection};
 
 use crate::error::{AppError, AppResult};
 use crate::model::{ConnectionProfile, Engine, WorkspaceCredentialMode};
 
+use super::mysql_session::MySqlReadSession;
+use super::pg_session::PgSessionPlan;
 use super::providers;
 
 const MAX_CONNS: u32 = 5;
@@ -23,6 +39,26 @@ const MAX_CONNS: u32 = 5;
 // keep their combined maximum aligned with Neon's lease-role CONNECTION LIMIT 4; a
 // managed read profile opens only its read pool.
 const MANAGED_MAX_CONNS_PER_POOL: u32 = 2;
+// sqlx pings every connection when it returns to the pool (that ping also flushes a
+// pending rollback). Pinging again on every acquire added one more network round trip
+// to each remote query, so only a connection idle long enough for a server, proxy, or
+// NAT to have dropped it is probed before reuse.
+const ACQUIRE_PROBE_IDLE: Duration = Duration::from_secs(15);
+
+fn probe_idle_on_acquire<DB: sqlx::Database>(
+    options: sqlx::pool::PoolOptions<DB>,
+) -> sqlx::pool::PoolOptions<DB> {
+    options
+        .test_before_acquire(false)
+        .before_acquire(|conn, meta| {
+            Box::pin(async move {
+                if meta.idle_for >= ACQUIRE_PROBE_IDLE {
+                    conn.ping().await?;
+                }
+                Ok(true)
+            })
+        })
+}
 
 fn pool_connection_limit(mode: WorkspaceCredentialMode) -> u32 {
     if mode == WorkspaceCredentialMode::Managed {
@@ -95,6 +131,11 @@ pub struct LiveConnection {
     mutation_pool: Option<DbPool>,
     /// True for PlanetScale/Vitess — introspection must skip FK metadata.
     pub skip_fk_metadata: bool,
+    /// True when a PostgreSQL profile goes through a transaction-mode pooler
+    /// ([`providers::pg_transaction_pooler`]). Its sessions carry no DopeDB
+    /// session settings — not even the read-only default — so every read must
+    /// open its own `BEGIN READ ONLY … ROLLBACK`.
+    pub transaction_pooler: bool,
 }
 
 impl LiveConnection {
@@ -104,6 +145,7 @@ impl LiveConnection {
             read_pool,
             mutation_pool: None,
             skip_fk_metadata: false,
+            transaction_pooler: false,
         }
     }
 
@@ -116,6 +158,7 @@ impl LiveConnection {
             read_pool,
             mutation_pool: writable.then_some(DbPool::CloudflareD1(connection)),
             skip_fk_metadata: false,
+            transaction_pooler: false,
         }
     }
 
@@ -206,6 +249,8 @@ pub(crate) async fn connect_sqlx(
         )));
     }
     let skip_fk_metadata = providers::skip_fk_metadata(profile);
+    let transaction_pooler =
+        adapter_engine == Engine::Postgres && providers::pg_transaction_pooler(profile);
     let acquire = providers::connect_timeout(profile);
     let max_connections = pool_connection_limit(profile.credential_mode);
     let runtime = providers::connection_runtime_options(profile)?;
@@ -234,54 +279,44 @@ pub(crate) async fn connect_sqlx(
                 let _ = probe.close().await;
                 verified?;
             }
-            let read_owner = schema_owner.clone();
-            let read_startup = runtime.startup_script.clone();
-            let ro = PgPoolOptions::new()
+            // Built after the owner passed `prepare`'s validation above. See
+            // `pg_session` for what connect and release run on each pool.
+            let read_session = Arc::new(PgSessionPlan::new(
+                schema_owner.clone(),
+                runtime.startup_script.clone(),
+                transaction_pooler,
+            ));
+            let connect_session = Arc::clone(&read_session);
+            let ro = probe_idle_on_acquire(PgPoolOptions::new())
                 .max_connections(max_connections)
                 .acquire_timeout(acquire)
                 .idle_timeout(runtime.auto_disconnect_timeout)
                 .after_connect(move |conn, _meta| {
-                    let startup = read_startup.clone();
-                    let owner = read_owner.clone();
-                    Box::pin(async move {
-                        if let Some(owner) = owner {
-                            super::gcp_schema_policy::prepare(conn, &owner).await?;
-                        }
-                        conn.execute("SET default_transaction_read_only = on")
-                            .await?;
-                        if let Some(script) = startup {
-                            sqlx::raw_sql(AssertSqlSafe(script))
-                                .execute(&mut *conn)
-                                .await?;
-                        }
-                        Ok(())
-                    })
+                    let session = Arc::clone(&connect_session);
+                    Box::pin(async move { session.prepare_read(conn).await })
+                })
+                .after_release(move |conn, _meta| {
+                    let session = Arc::clone(&read_session);
+                    Box::pin(async move { Ok(session.release(conn).await) })
                 })
                 .connect_with(base)
                 .await?;
             let ro = DbPool::Postgres(ro);
             if writable {
-                let write_startup = runtime.startup_script.clone();
+                let write_session = Arc::new(PgSessionPlan::new(
+                    schema_owner,
+                    runtime.startup_script.clone(),
+                    transaction_pooler,
+                ));
                 let rw = writable_pool_or_close_read(
                     &ro,
-                    PgPoolOptions::new()
+                    probe_idle_on_acquire(PgPoolOptions::new())
                         .max_connections(max_connections)
                         .acquire_timeout(acquire)
                         .idle_timeout(runtime.auto_disconnect_timeout)
                         .after_connect(move |conn, _meta| {
-                            let startup = write_startup.clone();
-                            let owner = schema_owner.clone();
-                            Box::pin(async move {
-                                if let Some(owner) = owner {
-                                    super::gcp_schema_policy::prepare(conn, &owner).await?;
-                                }
-                                if let Some(script) = startup {
-                                    sqlx::raw_sql(AssertSqlSafe(script))
-                                        .execute(&mut *conn)
-                                        .await?;
-                                }
-                                Ok(())
-                            })
+                            let session = Arc::clone(&write_session);
+                            Box::pin(async move { session.prepare_write(conn).await })
                         })
                         .connect_with(providers::apply_pg_tuning(
                             profile,
@@ -311,36 +346,20 @@ pub(crate) async fn connect_sqlx(
                 .ssl_mode(mysql_ssl_mode(&profile.sslmode)?);
             let base = providers::apply_mysql_tuning(profile, base);
 
-            let read_startup = runtime.startup_script.clone();
-            let ro = MySqlPoolOptions::new()
+            // See `mysql_session` for what connect and release run.
+            let read_session = Arc::new(MySqlReadSession::new(runtime.startup_script.clone()));
+            let connect_session = Arc::clone(&read_session);
+            let ro = probe_idle_on_acquire(MySqlPoolOptions::new())
                 .max_connections(max_connections)
                 .acquire_timeout(acquire)
                 .idle_timeout(runtime.auto_disconnect_timeout)
                 .after_connect(move |conn, _meta| {
-                    let startup = read_startup.clone();
-                    Box::pin(async move {
-                        // Fail CLOSED: the read pool must be genuinely read-only. Try the
-                        // MySQL's current variable, then MariaDB's server-specific name; if neither exists,
-                        // reject the connection rather than hand back a writable read pool.
-                        if conn
-                            .execute("SET SESSION transaction_read_only = 1")
-                            .await
-                            .is_err()
-                            && conn.execute("SET SESSION tx_read_only = 1").await.is_err()
-                        {
-                            return Err(sqlx::Error::Configuration(
-                                "read-only pool: server accepts neither `transaction_read_only` \
-                                 nor `tx_read_only` — refusing a silently writable read pool"
-                                    .into(),
-                            ));
-                        }
-                        if let Some(script) = startup {
-                            sqlx::raw_sql(AssertSqlSafe(script))
-                                .execute(&mut *conn)
-                                .await?;
-                        }
-                        Ok(())
-                    })
+                    let session = Arc::clone(&connect_session);
+                    Box::pin(async move { session.prepare(conn).await })
+                })
+                .after_release(move |conn, _meta| {
+                    let session = Arc::clone(&read_session);
+                    Box::pin(async move { Ok(session.release(conn).await) })
                 })
                 .connect_with(base)
                 .await?;
@@ -349,7 +368,7 @@ pub(crate) async fn connect_sqlx(
                 let write_startup = runtime.startup_script.clone();
                 let rw = writable_pool_or_close_read(
                     &ro,
-                    MySqlPoolOptions::new()
+                    probe_idle_on_acquire(MySqlPoolOptions::new())
                         .max_connections(max_connections)
                         .acquire_timeout(acquire)
                         .idle_timeout(runtime.auto_disconnect_timeout)
@@ -427,6 +446,7 @@ pub(crate) async fn connect_sqlx(
         read_pool,
         mutation_pool,
         skip_fk_metadata,
+        transaction_pooler,
     };
     live.start_keep_alive(runtime.keep_alive_interval);
     Ok(live)

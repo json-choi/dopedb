@@ -50,6 +50,12 @@ pub(crate) trait DesktopQueryPort: Clone + Send + Sync + 'static {
         request: DesktopSqlProposalRequest,
     ) -> impl Future<Output = Result<Self::ProposalReceipt, Self::InspectionError>> + Send;
 
+    /// Plan an auto-run read for the atomic stream helper without a target preview.
+    fn propose_desktop_auto_read(
+        &self,
+        request: DesktopSqlProposalRequest,
+    ) -> impl Future<Output = Result<Self::ProposalReceipt, Self::InspectionError>> + Send;
+
     fn propose_terminal_sql(
         &self,
         request: TerminalSqlProposalRequest,

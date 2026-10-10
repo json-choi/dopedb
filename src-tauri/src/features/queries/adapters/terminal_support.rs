@@ -100,6 +100,8 @@ pub(super) async fn persist_history(
                 error,
                 executed_at: Utc::now(),
                 origin: "agent".into(),
+                database: None,
+                namespace: None,
             },
         )
         .await?;

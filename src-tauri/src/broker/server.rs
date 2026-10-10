@@ -21,6 +21,8 @@ use super::{discovery, peer, BrokerRuntime};
 
 const CONTROL_IO_TIMEOUT: Duration = Duration::from_secs(10);
 const MAX_CONCURRENT_CONNECTIONS: usize = 64;
+/// How often sessions nothing authenticates with are checked for expiry.
+const EXPIRED_SESSION_SWEEP_INTERVAL: Duration = Duration::from_secs(30);
 
 pub(crate) async fn serve(
     runtime: BrokerRuntime,
@@ -53,10 +55,61 @@ async fn serve_at(
     skills: Option<SkillManager>,
     app_handle: Option<tauri::AppHandle>,
 ) -> AppResult<()> {
+    let revocations = services
+        .as_ref()
+        .map(|services| bind_proposal_revocation(&runtime, services, app_handle.clone()));
     let result = platform_serve(&runtime, &runtime_file, services, skills, app_handle).await;
+    if let Some(revocations) = revocations {
+        revocations.abort();
+    }
     discovery::remove_if_owned(&runtime_file, runtime.runtime_id());
     runtime.finish(result.as_ref().err());
     result
+}
+
+/// A closed, interrupted, expired, or revoked Agent/Terminal grant must not leave
+/// an approvable proposal or a queued approval behind. The registry reports every
+/// removed session with its proposals; this consumer releases the session's
+/// external approval queue and cancels the proposals nobody started executing.
+/// Expired sessions are swept periodically so the same release happens even
+/// when nothing authenticates with them again.
+fn bind_proposal_revocation(
+    runtime: &BrokerRuntime,
+    services: &ApplicationServices,
+    app_handle: Option<tauri::AppHandle>,
+) -> tokio::task::JoinHandle<()> {
+    services
+        .operation
+        .bind_agent_session_liveness(Arc::new(runtime.sessions().clone()));
+    let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+    runtime.sessions().install_revocation_sink(sender);
+    let operation = services.operation.clone();
+    let sessions = runtime.sessions().clone();
+    let requests = runtime.external_agent_requests().clone();
+    tokio::spawn(async move {
+        let mut sweep = tokio::time::interval(EXPIRED_SESSION_SWEEP_INTERVAL);
+        sweep.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        loop {
+            tokio::select! {
+                revocation = receiver.recv() => {
+                    let Some(revocation) = revocation else { break };
+                    super::dispatch::release_external_session(
+                        &requests,
+                        app_handle.as_ref(),
+                        revocation.terminal_session_id,
+                    );
+                    if !revocation.operations.is_empty() {
+                        operation
+                            .cancel_revoked_agent_proposals(revocation.operations)
+                            .await;
+                    }
+                }
+                _ = sweep.tick() => {
+                    sessions.sweep_expired();
+                }
+            }
+        }
+    })
 }
 
 #[cfg(unix)]

@@ -2,7 +2,10 @@
 // profile/catalog view models.
 import { Icon } from "../../components/Icon";
 import { Button } from "../../design-system/components/Button";
-import { TextInput } from "../../design-system/components/FormControls";
+import {
+  FieldValidationMessage,
+  TextInput,
+} from "../../design-system/components/FormControls";
 import type { ConnectionEditorController } from "../../features/connections/useConnectionEditorController";
 import { useI18n } from "../../lib/i18n";
 
@@ -29,53 +32,68 @@ export function ConnectionAdvancedTab({
             {t("connections.addParameter")}
           </Button>
         </div>
-        {options.advancedParameters.length === 0 ? (
+        {options.advancedRows.length === 0 ? (
           <p className="tw:m-0 tw:border-y tw:border-border-subtle tw:py-4 tw:text-sm tw:text-muted-foreground">
             {t("connections.noParameters")}
           </p>
         ) : (
           <div className="tw:grid tw:gap-2">
-            {options.advancedParameters.map(([key, value], index) => (
-              <div
-                key={`${index}-${key}`}
-                className="ds-control-row tw:grid tw:min-w-0 tw:grid-cols-[minmax(0,0.42fr)_minmax(0,1fr)_auto] tw:items-center tw:gap-2 tw:[--ds-row-control-size:var(--ds-control-md)]"
-              >
-                <TextInput
-                  density="compact"
-                  value={key}
-                  aria-label={t("connections.parameterKey")}
-                  onChange={(event) =>
-                    options.updateAdvancedParameter(
-                      key,
-                      event.target.value,
-                      value,
-                    )
-                  }
-                />
-                <TextInput
-                  density="compact"
-                  value={value}
-                  aria-label={t("connections.parameterValue")}
-                  onChange={(event) =>
-                    options.updateAdvancedParameter(
-                      key,
-                      key,
-                      event.target.value,
-                    )
-                  }
-                />
-                <Button
-                  iconOnly
-                  size="compact"
-                  variant="ghost"
-                  onClick={() => options.removeAdvancedParameter(key)}
-                  title={t("common.remove")}
-                  aria-label={t("common.remove")}
-                >
-                  <Icon name="close" />
-                </Button>
-              </div>
-            ))}
+            {options.advancedRows.map((row) => {
+              const issue = options.advancedParameterIssue(row);
+              const issueId = `connection-parameter-${row.id}-issue`;
+              return (
+                <div key={row.id} className="tw:grid tw:gap-1">
+                  <div className="ds-control-row tw:grid tw:min-w-0 tw:grid-cols-[minmax(0,0.42fr)_minmax(0,1fr)_auto] tw:items-center tw:gap-2 tw:[--ds-row-control-size:var(--ds-control-md)]">
+                    <TextInput
+                      density="compact"
+                      value={row.key}
+                      aria-label={t("connections.parameterKey")}
+                      aria-describedby={issue ? issueId : undefined}
+                      onChange={(event) =>
+                        options.updateAdvancedParameter(
+                          row.id,
+                          event.target.value,
+                          row.value,
+                        )
+                      }
+                    />
+                    <TextInput
+                      density="compact"
+                      value={row.value}
+                      aria-label={t("connections.parameterValue")}
+                      onChange={(event) =>
+                        options.updateAdvancedParameter(
+                          row.id,
+                          row.key,
+                          event.target.value,
+                        )
+                      }
+                    />
+                    <Button
+                      iconOnly
+                      size="compact"
+                      variant="ghost"
+                      onClick={() => options.removeAdvancedParameter(row.id)}
+                      title={t("common.remove")}
+                      aria-label={t("common.remove")}
+                    >
+                      <Icon name="close" />
+                    </Button>
+                  </div>
+                  {issue ? (
+                    <FieldValidationMessage
+                      id={issueId}
+                      validation={{
+                        tone: "warning",
+                        message: issue === "reserved"
+                          ? t("connections.parameterReserved")
+                          : t("connections.parameterDuplicate"),
+                      }}
+                    />
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
         )}
       </section>

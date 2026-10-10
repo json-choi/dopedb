@@ -5,11 +5,13 @@ import {
   gridExpressionIssue,
   toCsv,
   toJson,
+  uniqueColumnKeys,
 } from "../../lib/sqlBuild";
+import { cellClipboardText, prettyJsonText, toTsv, tsvField } from "../../lib/export";
 import type { CatalogTable } from "../../ipc/types";
 import { shouldVirtualizeDataGrid } from "./DataGrid";
 import { clampDataGridZoom } from "../../design-system/useDataGridZoom";
-import { virtualGridWindow } from "./DataGridVirtual";
+import { nearestScrollOffset, virtualGridWindow } from "./DataGridVirtual";
 import {
   extendGridSelection,
   gridSelectionClipboardText,
@@ -20,6 +22,7 @@ import {
   DATA_GRID_DEFAULT_COLUMN_WIDTH,
   DATA_GRID_ROW_HEIGHT,
   DATA_GRID_ROW_NUMBER_WIDTH,
+  dataGridRowNumberWidth,
 } from "../../design-system/dataGridGeometry";
 import type { SqlStreamRowSource } from "../queries/domain";
 import { createFrameCoalescer } from "../../lib/frameCoalescer";
@@ -34,9 +37,11 @@ import {
   collectCachedSqlResultRows,
   iterateCachedSqlResultRows,
   ensureSqlResultRange,
+  retrySqlResultPages,
   SQL_RESULT_CACHE_MAX_PAGES,
   retainSqlStreamBatch,
   sqlResultDecodeFailureAt,
+  sqlResultPageError,
   sqlResultRangeIsCached,
   sqlResultRowAt,
   subscribeSqlResultPages,
@@ -97,6 +102,13 @@ describe("DataGridVirtual window", () => {
       }, zoom);
       expect(scaled).toEqual(window);
     }
+    // Row numbers fit their largest value; keyboard scrolling moves minimally.
+    expect(dataGridRowNumberWidth(9)).toBe(DATA_GRID_ROW_NUMBER_WIDTH);
+    expect(dataGridRowNumberWidth(100)).toBe(44);
+    expect(dataGridRowNumberWidth(1_000_000)).toBeGreaterThan(dataGridRowNumberWidth(100));
+    expect(nearestScrollOffset(280, 400, 28, 400, 28)).toBe(280);
+    expect(nearestScrollOffset(280, 400, 28, 700, 28)).toBe(328);
+    expect(nearestScrollOffset(280, 400, 28, 112, 28)).toBe(84);
     expect(clampDataGridZoom(0.1)).toBe(0.5);
     expect(clampDataGridZoom(3)).toBe(2);
     expect(clampDataGridZoom(Number.NaN)).toBe(1);
@@ -386,23 +398,61 @@ describe("DataGridVirtual window", () => {
     expect(firstDecodeFailureInRow(decodeFailures, 0)).toEqual(
       decodeFailures[0],
     );
-    expect(gridCellInspection(decodeFailures, 0, null)).toEqual({
+    // Only the failed cell blocks inspection; the rest of its row stays open,
+    // and a cell shortened to fit its page is inspectable as a marked preview.
+    expect(gridCellInspection(decodeFailures, 0, 4, null)).toEqual({
       blocked: true,
       failure: decodeFailures[0],
     });
-    expect(gridCellInspection([], 0, null)).toEqual({
+    expect(gridCellInspection(decodeFailures, 0, 1, "")).toEqual({
       blocked: false,
-      value: null,
+      value: "",
+      truncatedBytes: null,
     });
+    expect(
+      gridCellInspection(
+        [{ rowIndex: 0, columnIndex: 2, databaseType: "dopedb.truncated:614400" }],
+        0,
+        2,
+        "preview",
+      ),
+    ).toEqual({ blocked: false, value: "preview", truncatedBytes: 614_400 });
     // Selected-cell exports preserve the exact value/type, and a page export
     // contains only the supplied local rows, including nested Mongo values.
     const preciseValue = "9007199254740993.0001";
     expect(JSON.parse(toJson(["amount"], [[preciseValue]]))).toEqual([
       { amount: preciseValue },
     ]);
+    // One export contract for renderer and Rust: CRLF records, quoting,
+    // formula neutralization that spares plain numbers, distinct duplicate keys.
     expect(toCsv(["note"], [["line one\n\"line two\""]])).toBe(
-      'note\n"line one\n""line two"""',
+      'note\r\n"line one\n""line two"""',
     );
+    expect(toCsv(["a", "b", "c"], [["=1+2", "-12.50", null]])).toBe(
+      "a,b,c\r\n'=1+2,-12.50,",
+    );
+    // Inert renderings of numbers, infinities, and intervals keep their text in
+    // both CSV and clipboard TSV; anything else a spreadsheet would run does not.
+    expect(
+      toCsv(["i", "f", "t"], [["-1 days +02:00:00", "-Infinity", "-2+3+cmd|' /C calc'!A0"]]),
+    ).toBe("i,f,t\r\n-1 days +02:00:00,-Infinity,'-2+3+cmd|' /C calc'!A0");
+    expect(tsvField("@SUM(A1)")).toBe("'@SUM(A1)");
+    expect(tsvField("-04:05:06.5")).toBe("-04:05:06.5");
+    expect(tsvField(-5)).toBe("-5");
+    expect(uniqueColumnKeys(["name", "name", "name_2", "name"])).toEqual([
+      "name", "name_2", "name_2_2", "name_3",
+    ]);
+    // Copies share CSV's NULL convention and keep tabs/newlines inside one cell;
+    // JSON text is re-indented without rounding integers past 2^53.
+    expect(toTsv(["a", "b"], [[null, "x\ty"], [1, 'say "hi"']])).toBe(
+      'a\tb\n\t"x\ty"\n1\t"say ""hi"""',
+    );
+    expect(tsvField(null)).toBe("");
+    expect(cellClipboardText(null)).toBe("");
+    expect(prettyJsonText('{"id":12345678901234567890,"tags":[],"s":"a,b"}')).toBe(
+      '{\n  "id": 12345678901234567890,\n  "tags": [],\n  "s": "a,b"\n}',
+    );
+    expect(prettyJsonText("not json")).toBeNull();
     expect(JSON.parse(toJson(["document"], [[{ nested: [1, null, "x"] }]]))).toEqual([
       { document: { nested: [1, null, "x"] } },
     ]);
@@ -592,6 +642,30 @@ describe("DataGridVirtual window", () => {
     ]);
     expect(sqlResultRowAt(reloadedSource, 0)).toEqual([0]);
     expect(sqlResultRowAt(reloadedSource, 4)).toEqual([4]);
+
+    // A page that cannot be read back is not re-requested on every render:
+    // bounded automatic retries, then an explicit retry restarts the attempts.
+    clearSqlResultPageCache();
+    let failedReads = 0;
+    const failingRead = async () => {
+      failedReads += 1;
+      throw {
+        kind: "blocked",
+        message: "blocked: SQL result authority changed; run the query again",
+      };
+    };
+    for (let render = 0; render < 5; render += 1) {
+      await ensureSqlResultRange(reloadedSource, 0, 2, ["id"], failingRead);
+    }
+    expect(failedReads).toBe(1);
+    expect(sqlResultPageError(reloadedSource)).toEqual({
+      kind: "authorityChanged",
+      retrying: false,
+    });
+    retrySqlResultPages(reloadedSource);
+    expect(sqlResultPageError(reloadedSource)).toBeNull();
+    await ensureSqlResultRange(reloadedSource, 0, 2, ["id"], failingRead);
+    expect(failedReads).toBe(2);
 
     unsubscribe();
     clearSqlResultPageCache();

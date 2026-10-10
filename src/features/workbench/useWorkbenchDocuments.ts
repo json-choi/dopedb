@@ -53,6 +53,8 @@ interface OpenQueryOptions {
   supportsSql: boolean;
   title?: string;
   content?: string;
+  /** Execution schema to start in (the Explorer selection or a reopened run's). */
+  selectedSchema?: string | null;
 }
 
 export function useWorkbenchDocuments({
@@ -305,6 +307,7 @@ export function useWorkbenchDocuments({
       supportsSql: canUseSql,
       title = t("sql.untitledQuery"),
       content,
+      selectedSchema = null,
     }: OpenQueryOptions): Promise<WorkbenchDocument> => {
       if (!canUseSql) {
         return queryDocument(rawConnectionId, "documents", content ?? null);
@@ -313,6 +316,7 @@ export function useWorkbenchDocuments({
         connectionId: connectionId(rawConnectionId),
         title,
         selectedDatabase: database,
+        selectedSchema,
         content: content ?? "SELECT 1;",
       });
       return persistedQueryDocument(document);

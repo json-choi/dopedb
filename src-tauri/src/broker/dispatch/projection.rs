@@ -268,12 +268,18 @@ pub(super) fn map_target_error(error: AppError) -> ErrorCode {
         AppError::ConnectionFailure(code) => map_connection_failure(code),
         AppError::Blocked { .. } => ErrorCode::ScopeDenied,
         AppError::CredentialBindingRequired
+        | AppError::Keychain(_)
         | AppError::AuthenticationRequired(_)
         | AppError::ManagedConnectionRecoveryRequired
         | AppError::Config(_)
         | AppError::Parse(_) => ErrorCode::InvalidRequest,
         AppError::Db(_) | AppError::Timeout(_) => map_query_execution_error(&error),
-        AppError::Mongo(_) | AppError::Network(_) => ErrorCode::TargetExecutionFailed,
+        // A cooling-down target may open after the reported delay; the runtime is fine.
+        AppError::Mongo(_) | AppError::Network(_) | AppError::RetryLater { .. } => {
+            ErrorCode::TargetExecutionFailed
+        }
+        // The shared connection's revision moved while this request was in flight.
+        AppError::SharedConnectionChanged => ErrorCode::OperationConflict,
         _ => ErrorCode::Internal,
     }
 }
@@ -290,21 +296,38 @@ pub(super) fn map_operation_error(error: AppError) -> ErrorCode {
 pub(super) fn map_application_error(error: AppError) -> ErrorCode {
     match error {
         AppError::ConnectionFailure(code) => map_connection_failure(code),
-        AppError::Blocked { .. } | AppError::SqlPolicyBlocked { .. } => ErrorCode::PolicyBlocked,
+        AppError::Blocked { .. }
+        | AppError::SqlPolicyBlocked { .. }
+        | AppError::SessionStatementBlocked { .. } => ErrorCode::PolicyBlocked,
+        // Unparsable SQL is the caller's request to fix, not a policy decision; the
+        // statement is still refused before any target access.
+        AppError::SqlParseFailed { .. } => ErrorCode::InvalidRequest,
+        // A statement still running in the shared manual session is a transient
+        // conflict; every other manual-transaction refusal is a policy outcome.
+        AppError::ManualTransaction(crate::error::ManualTransactionRefusal::StatementRunning) => {
+            ErrorCode::OperationConflict
+        }
+        AppError::ManualTransaction(_) => ErrorCode::PolicyBlocked,
         AppError::ProposalRequired => ErrorCode::PolicyBlocked,
         AppError::Safety(_) => ErrorCode::PolicyBlocked,
+        // A refused OS credential store needs the person to allow access in
+        // Desktop, like a missing binding; it is not an internal fault.
         AppError::CredentialBindingRequired
+        | AppError::Keychain(_)
         | AppError::AuthenticationRequired(_)
         | AppError::ManagedConnectionRecoveryRequired
         | AppError::NotFound(_)
         | AppError::Config(_)
-        | AppError::Parse(_) => ErrorCode::InvalidRequest,
+        | AppError::Parse(_)
+        | AppError::ResultRowTooLarge
+        | AppError::UnsupportedColumnType => ErrorCode::InvalidRequest,
         AppError::Db(_) | AppError::Timeout(_) => map_query_execution_error(&error),
-        AppError::Mongo(_) => ErrorCode::TargetExecutionFailed,
-        AppError::OutcomeUnknown(_) => ErrorCode::OperationConflict,
+        AppError::Mongo(_) | AppError::RetryLater { .. } => ErrorCode::TargetExecutionFailed,
+        AppError::OutcomeUnknown(_) | AppError::SharedConnectionChanged => {
+            ErrorCode::OperationConflict
+        }
         AppError::Agent(_)
         | AppError::Network(_)
-        | AppError::Keychain(_)
         | AppError::Io(_)
         | AppError::Serialization(_) => ErrorCode::Internal,
     }
@@ -313,7 +336,8 @@ pub(super) fn map_application_error(error: AppError) -> ErrorCode {
 fn map_connection_failure(code: crate::error::ConnectionFailureCode) -> ErrorCode {
     use crate::error::ConnectionFailureCode as Code;
     match code {
-        Code::SshTimeout => ErrorCode::Timeout,
+        // Lock contention ends when the other session does; the agent retries later.
+        Code::SshTimeout | Code::LockTimeout => ErrorCode::Timeout,
         Code::Cancelled => ErrorCode::Cancelled,
         Code::SshClientMissing
         | Code::SshConfiguration
@@ -441,6 +465,79 @@ pub(super) fn assert_execution_error_contract() {
         assert_eq!(actual, ErrorCode::Timeout);
         assert!(!ProtocolError::new(actual, false).is_retryable());
     }
+    // A refused credential store keeps its recovery identity, never the platform text.
+    let keychain = AppError::Keychain(keyring::Error::PlatformFailure("private-diagnostic".into()))
+        .public_connection_failure();
+    assert_eq!(keychain.kind(), "keychain");
+    assert!(!serde_json::to_string(&keychain)
+        .unwrap()
+        .contains("private-diagnostic"));
+    assert_eq!(map_application_error(keychain), ErrorCode::InvalidRequest);
+    assert_eq!(
+        map_target_error(
+            AppError::Keychain(keyring::Error::NoStorageAccess(
+                keyring::Error::PlatformFailure("private-diagnostic".into()).into()
+            ))
+            .public_connection_failure()
+        ),
+        ErrorCode::InvalidRequest
+    );
+    // A catalog read that waited out the lock timeout is a closed, retryable identity.
+    let locked = AppError::Db(sqlx::Error::Database(Box::new(DriverFailure {
+        code: Some("55P03"),
+        message: "canceling statement due to lock timeout: private-diagnostic",
+    })))
+    .public_connection_failure();
+    assert_eq!(locked.kind(), "lockTimeout");
+    assert!(!serde_json::to_string(&locked)
+        .unwrap()
+        .contains("private-diagnostic"));
+    assert_eq!(map_application_error(locked), ErrorCode::Timeout);
+    // Only a scan that raced a concurrent DROP is rescanned; every other failure,
+    // including a timeout, a cancel or a refused login, surfaces from the first scan.
+    for (code, message, raced) in [
+        (
+            Some("XX000"),
+            "could not open relation with OID 20786",
+            true,
+        ),
+        (
+            Some("XX000"),
+            "cache lookup failed for relation 20786",
+            true,
+        ),
+        (
+            Some("42P01"),
+            "relation \"public.gone\" does not exist",
+            true,
+        ),
+        (Some("42704"), "type \"gone\" does not exist", true),
+        (Some("XX000"), "invalid memory alloc request size", false),
+        (
+            Some("57014"),
+            "canceling statement due to statement timeout",
+            false,
+        ),
+        (
+            Some("57014"),
+            "canceling statement due to user request",
+            false,
+        ),
+        (Some("28P01"), "password authentication failed", false),
+        (None, "could not open relation with OID 20786", false),
+    ] {
+        let failure = AppError::Db(sqlx::Error::Database(Box::new(DriverFailure {
+            code,
+            message,
+        })));
+        assert_eq!(
+            failure.is_concurrent_catalog_drop(),
+            raced,
+            "{code:?} {message}"
+        );
+    }
+    assert!(!AppError::Network("connection reset".into()).is_concurrent_catalog_drop());
+    assert!(!AppError::Timeout("deadline".into()).is_concurrent_catalog_drop());
 }
 
 #[derive(Clone, Copy)]

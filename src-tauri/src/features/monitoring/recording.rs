@@ -65,6 +65,8 @@ pub(super) async fn record_monitoring_change(
                 error: record.error,
                 executed_at: Utc::now(),
                 origin: "manual".into(),
+                database: None,
+                namespace: None,
             },
         )
         .await

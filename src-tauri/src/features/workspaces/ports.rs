@@ -53,6 +53,13 @@ pub(crate) trait WorkspaceRepositoryPort: Clone + Send + Sync + 'static {
         connection_id: ConnectionId,
     ) -> impl Future<Output = AppResult<()>> + Send;
 
+    /// Remember an OS credential item whose deletion failed, so the connections
+    /// feature retries it after a restart. Only the opaque item id is stored.
+    fn defer_credential_delete(
+        &self,
+        credential_id: Uuid,
+    ) -> impl Future<Output = AppResult<()>> + Send;
+
     fn workspace_pull_cursor(
         &self,
         workspace_id: WorkspaceId,

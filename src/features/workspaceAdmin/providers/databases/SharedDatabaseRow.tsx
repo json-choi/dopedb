@@ -165,7 +165,9 @@ export default function SharedDatabaseRow({
             {repairable ? (
               <>
                 <p className="tw:m-0 tw:text-xs tw:leading-body tw:text-muted-foreground">
-                  {t("workspaceProviderDatabases.repairDescription")}
+                  {t(managed.provider === "gcpCloudSql"
+                    ? "workspaceProviderDatabases.repairDescription"
+                    : "workspaceProviderDatabases.repairAccountDescription")}
                 </p>
                 <Button
                   size="compact"

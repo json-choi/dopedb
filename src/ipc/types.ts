@@ -28,6 +28,7 @@ export type {
   SafetySettings,
   ScriptOutcome,
   ScriptStatement,
+  ScriptStatementError,
   WorkspaceConnectionAccess,
   WorkspaceCredentialMode,
 } from "./generated/model";
@@ -193,8 +194,6 @@ export interface AuditEntrySummary {
   connectionId: string;
   ts: string;
   engine: Engine;
-  agentPromptPreview: string | null;
-  agentPromptTruncated: boolean;
   sqlPreview: string;
   sqlTruncated: boolean;
   kind: QueryKind;
@@ -221,6 +220,14 @@ interface AppErrorShape {
   message: string;
   /** 1-based character offset into the executed SQL (Postgres only). */
   position?: number;
+  /** Seconds to wait before retrying; present only for `retryLater`. */
+  retryAfterSeconds?: number;
+  /** Closed refusal code; present only for `manualTransaction`. */
+  code?: string;
+  /** PostgreSQL server error diagnostics kept apart from the message. */
+  sqlstate?: string;
+  detail?: string;
+  hint?: string;
 }
 
 export function errMessage(e: unknown): string {
@@ -244,6 +251,14 @@ export interface AppErrorDetails {
   message: string;
   position: number | null;
   raw: string;
+  /** Cooldown before a retry may succeed; only `retryLater` carries it. */
+  retryAfterSeconds?: number;
+  /** Closed refusal code; only a kind with a code set (`manualTransaction`) has it. */
+  code?: string;
+  /** A PostgreSQL server error's SQLSTATE, DETAIL, and HINT, when it sent them. */
+  sqlstate?: string;
+  detail?: string;
+  hint?: string;
 }
 
 export function errDetails(e: unknown): AppErrorDetails {
@@ -260,6 +275,13 @@ export function errDetails(e: unknown): AppErrorDetails {
       message: String(shaped.message),
       position: typeof shaped.position === "number" ? shaped.position : null,
       raw,
+      ...(typeof shaped.retryAfterSeconds === "number"
+        ? { retryAfterSeconds: shaped.retryAfterSeconds }
+        : {}),
+      ...(typeof shaped.code === "string" ? { code: shaped.code } : {}),
+      ...(typeof shaped.sqlstate === "string" ? { sqlstate: shaped.sqlstate } : {}),
+      ...(typeof shaped.detail === "string" ? { detail: shaped.detail } : {}),
+      ...(typeof shaped.hint === "string" ? { hint: shaped.hint } : {}),
     };
   }
   return { kind: null, message: String(e), position: null, raw: String(e) };

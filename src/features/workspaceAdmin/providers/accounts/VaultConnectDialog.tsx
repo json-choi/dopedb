@@ -2,7 +2,8 @@
 // and Secret ID live only in this dialog's state, are sent once to the workspace
 // service (which verifies them and stores them sealed server-side), and are
 // cleared on success or cancel. Desktop later receives only short-lived database
-// credentials for the exact TLS-verified target entered here.
+// credentials for the exact TLS-verified target entered here. A reconnect starts
+// from the account's existing secret-free target and keeps its identity read-only.
 import { useId, useState } from "react";
 
 import {
@@ -25,6 +26,7 @@ import {
   vaultEngineChange,
   vaultFormIssues,
   type VaultFieldIssue,
+  type VaultReconnectTarget,
 } from "./accountModel";
 import ExternalGuideButton from "./ExternalGuideButton";
 import ProviderConnectDialogFrame from "./ProviderConnectDialogFrame";
@@ -85,20 +87,33 @@ const TARGET_FIELDS: readonly VaultTextFieldSpec[] = [
   { name: "database", label: "workspaceProviders.vaultDatabase", monospace: true },
 ];
 
+/** Target fields that identify a Vault account; a reconnect keeps them read-only. */
+const LOCKED_RECONNECT_FIELDS = new Set<VaultTextFieldName>([
+  "host",
+  "port",
+  "database",
+]);
+
 export default function VaultConnectDialog({
   scope,
   mode,
+  reconnectTarget = null,
   onCancel,
   onConnected,
 }: {
   scope: WorkspaceAdminScope;
   mode: "connect" | "reconnect";
+  /** The existing secret-free target; AppRole IDs are always entered again. */
+  reconnectTarget?: VaultReconnectTarget | null;
   onCancel: () => void;
   onConnected: () => void;
 }) {
   const { lang, t } = useI18n();
   const titleId = useId();
-  const [form, setForm] = useState<VaultConfiguration>(emptyVault);
+  const [form, setForm] = useState<VaultConfiguration>(() =>
+    reconnectTarget ? { ...emptyVault, ...reconnectTarget } : emptyVault,
+  );
+  const targetLocked = reconnectTarget !== null;
   const [attempted, setAttempted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -146,6 +161,7 @@ export default function VaultConnectDialog({
   }
 
   function textField(spec: VaultTextFieldSpec) {
+    const locked = targetLocked && LOCKED_RECONNECT_FIELDS.has(spec.name);
     return (
       <Field
         key={spec.name}
@@ -154,12 +170,15 @@ export default function VaultConnectDialog({
       >
         {(binding) => (
           <TextInput
-            {...binding.controlProps()}
+            {...binding.controlProps(
+              locked ? { "aria-describedby": `${titleId}-target-locked` } : undefined,
+            )}
             type={spec.secret ? "password" : "text"}
             inputMode={spec.name === "port" ? "numeric" : undefined}
             autoComplete="off"
             spellCheck={false}
             monospace={spec.monospace}
+            readOnly={locked}
             disabled={submitting}
             placeholder={spec.placeholder ? t(spec.placeholder) : undefined}
             value={form[spec.name]}
@@ -231,13 +250,25 @@ export default function VaultConnectDialog({
           <p className="tw:m-0 tw:text-xs tw:leading-body tw:text-muted-foreground">
             {t("workspaceProviders.vaultTargetDescription")}
           </p>
+          {targetLocked ? (
+            <p
+              id={`${titleId}-target-locked`}
+              className="tw:m-0 tw:text-xs tw:leading-body tw:text-muted-foreground"
+            >
+              {t("workspaceProviders.vaultReconnectTargetLocked")}
+            </p>
+          ) : null}
         </div>
         <div className="tw:grid tw:grid-cols-2 tw:gap-3 tw:@max-[520px]:grid-cols-1">
           <Field label={t("workspaceProviders.vaultEngine")}>
             {(binding) => (
               <SelectInput
-                {...binding.controlProps()}
-                disabled={submitting}
+                {...binding.controlProps(
+                  targetLocked
+                    ? { "aria-describedby": `${titleId}-target-locked` }
+                    : undefined,
+                )}
+                disabled={submitting || targetLocked}
                 value={form.engine}
                 onChange={(event) => setForm((current) => vaultEngineChange(
                   current,

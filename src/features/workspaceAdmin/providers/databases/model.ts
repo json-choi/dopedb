@@ -134,14 +134,16 @@ export function managedTargetPath(managed: ManagedConnection, provider: Provider
     .join(" / ");
 }
 
-/** Only Cloud SQL access can be repaired, and only by members who manage the database. */
+/**
+ * Members who manage the database can repair its managed access: Cloud SQL by
+ * re-authorizing its pinned project and instance, every other provider by
+ * reconnecting the account that serves it.
+ */
 export function canRepairManagedAccess(
   connection: SharedConnection,
   managed: ManagedConnection | null,
 ): managed is ManagedConnection {
-  return managed !== null
-    && managed.provider === "gcpCloudSql"
-    && connection.accessMode === "manage";
+  return managed !== null && connection.accessMode === "manage";
 }
 
 export function canRemoveSharedConnection(connection: SharedConnection): boolean {

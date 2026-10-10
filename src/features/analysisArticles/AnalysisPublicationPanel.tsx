@@ -1,4 +1,6 @@
 // Publishes and revokes immutable Article HTML snapshots within their exact scope.
+// Existing publications stay listed and revocable even when the current revision has
+// no successful run yet; only publishing a new snapshot needs that run.
 import { useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -8,8 +10,9 @@ import { Icon } from "../../components/Icon";
 import { Button } from "../../design-system/components/Button";
 import { CheckboxField, Field, SelectInput, TextInput } from "../../design-system/components/FormControls";
 import { InlineNotice, LoadingLabel, StatusBadge } from "../../design-system/components/Status";
-import { errMessage } from "../../ipc/types";
 import { useI18n } from "../../lib/i18n";
+import { fullTime } from "../../lib/relTime";
+import { analysisFailure } from "./analysisFeedback";
 import type { AnalysisArticleRecord, AnalysisPublicationRequest } from "./domain";
 import { analysisQueryKeys } from "./queryKeys";
 import {
@@ -47,7 +50,7 @@ export function AnalysisPublicationPanel({
   article: AnalysisArticleRecord;
   scopeKey: string;
 }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const queryClient = useQueryClient();
   const publicationKey = analysisQueryKeys.publication(scopeKey, article.id);
   const publications = useQuery({
@@ -57,15 +60,20 @@ export function AnalysisPublicationPanel({
   });
   const [request, setRequest] = useState(() => requestFor(article));
   const [error, setError] = useState<string | null>(null);
+  const canPublish = article.latestSuccessfulRunId !== null;
 
   const publish = useMutation({
-    mutationFn: () => publishAnalysisSnapshot(article.id, request),
+    // The run proving the current revision may have finished after this panel opened.
+    mutationFn: () => publishAnalysisSnapshot(article.id, {
+      ...request,
+      runId: article.latestSuccessfulRunId ?? request.runId,
+    }),
     onSuccess: async () => {
       setError(null);
       setRequest(requestFor(article));
       await queryClient.invalidateQueries({ queryKey: publicationKey });
     },
-    onError: (nextError) => setError(errMessage(nextError)),
+    onError: (nextError) => setError(t("analysis.publishFailed", { reason: analysisFailure(t, nextError).message })),
   });
   const revoke = useMutation({
     mutationFn: (publicationId: string) => revokeAnalysisPublication(article.id, publicationId),
@@ -73,7 +81,11 @@ export function AnalysisPublicationPanel({
       setError(null);
       await queryClient.invalidateQueries({ queryKey: publicationKey });
     },
-    onError: (nextError) => setError(errMessage(nextError)),
+    onError: async (nextError) => {
+      setError(t("analysis.revokeFailed", { reason: analysisFailure(t, nextError).message }));
+      // A concurrent revoke or replacement is the usual cause; show the current state.
+      await queryClient.invalidateQueries({ queryKey: publicationKey });
+    },
   });
 
   const preparePublication = (publication: NonNullable<typeof publications.data>[number]) => {
@@ -90,14 +102,10 @@ export function AnalysisPublicationPanel({
     setError(null);
     try {
       await openUrl(await analysisPublicationUrl(slug));
-    } catch (reason) {
-      setError(t("analysis.openPublicationFailed", { error: errMessage(reason) }));
+    } catch {
+      setError(t("analysis.openPublicationFailed"));
     }
   };
-
-  if (!article.latestSuccessfulRunId) {
-    return <InlineNotice tone="warning" icon="alert">{t("analysis.publishRunFirst")}</InlineNotice>;
-  }
 
   return (
     <div className="tw:grid tw:gap-5">
@@ -108,63 +116,85 @@ export function AnalysisPublicationPanel({
           {t("analysis.publishHtmlBody")}
         </p>
       </div>
-      <Field label={t("analysis.publicationSlug")}>
-        <TextInput
-          id="analysis-publication-slug"
-          value={request.slug}
-          maxLength={128}
-          onChange={(event) => setRequest((current) => ({
-            ...current,
-            slug: event.target.value.toLocaleLowerCase().replace(/[^a-z0-9-]/g, ""),
-          }))}
-        />
-      </Field>
-      <Field label={t("analysis.publicationVisibility")}>
-        <SelectInput
-          id="analysis-publication-visibility"
-          value={request.visibility}
-          onChange={(event) => {
-            const visibility = event.target.value === "public" ? "public" : "unlisted";
-            setRequest((current) => ({ ...current, visibility, searchIndexable: false }));
-          }}
-        >
-          <option value="unlisted">{t("analysis.visibilityUnlisted")}</option>
-          <option value="public">{t("analysis.visibilityPublic")}</option>
-        </SelectInput>
-      </Field>
-      {request.visibility === "public" ? (
-        <CheckboxField
-          checked={request.searchIndexable}
-          onChange={(event) => setRequest((current) => ({ ...current, searchIndexable: event.target.checked }))}
-          label={t("analysis.publicationSearchIndex")}
-        />
-      ) : null}
-      <div className="tw:flex tw:justify-end">
-        <Button variant="primary" disabled={publish.isPending || request.slug.length < 8} onClick={() => publish.mutate()}>
-          <Icon name="upload" />
-          {publish.isPending ? t("analysis.publishing") : request.replacePublicationId ? t("analysis.publishNewVersion") : t("analysis.publishHtml")}
-        </Button>
-      </div>
+      {!canPublish ? (
+        <InlineNotice tone="warning" icon="alert">{t("analysis.publishRunFirst")}</InlineNotice>
+      ) : (
+        <>
+          <Field label={t("analysis.publicationSlug")}>
+            <TextInput
+              id="analysis-publication-slug"
+              value={request.slug}
+              maxLength={128}
+              onChange={(event) => setRequest((current) => ({
+                ...current,
+                slug: event.target.value.toLocaleLowerCase().replace(/[^a-z0-9-]/g, ""),
+              }))}
+            />
+          </Field>
+          <Field label={t("analysis.publicationVisibility")}>
+            <SelectInput
+              id="analysis-publication-visibility"
+              value={request.visibility}
+              onChange={(event) => {
+                const visibility = event.target.value === "public" ? "public" : "unlisted";
+                setRequest((current) => ({ ...current, visibility, searchIndexable: false }));
+              }}
+            >
+              <option value="unlisted">{t("analysis.visibilityUnlisted")}</option>
+              <option value="public">{t("analysis.visibilityPublic")}</option>
+            </SelectInput>
+          </Field>
+          {request.visibility === "public" ? (
+            <CheckboxField
+              checked={request.searchIndexable}
+              onChange={(event) => setRequest((current) => ({ ...current, searchIndexable: event.target.checked }))}
+              label={t("analysis.publicationSearchIndex")}
+            />
+          ) : null}
+          <div className="tw:flex tw:justify-end">
+            <Button variant="primary" disabled={publish.isPending || request.slug.length < 8} onClick={() => publish.mutate()}>
+              <Icon name="upload" />
+              {publish.isPending ? t("analysis.publishing") : request.replacePublicationId ? t("analysis.publishNewVersion") : t("analysis.publishHtml")}
+            </Button>
+          </div>
+        </>
+      )}
 
       <section className="tw:grid tw:gap-2 tw:border-t tw:border-border-subtle tw:pt-4">
         <h3 className="tw:m-0">{t("analysis.publicationsTitle")}</h3>
         {publications.isPending ? <LoadingLabel>{t("analysis.loading")}</LoadingLabel> : null}
+        {publications.isError ? (
+          <InlineNotice
+            tone="danger"
+            icon="alert"
+            role="alert"
+            action={<Button size="xs" onClick={() => void publications.refetch()}>{t("analysis.retry")}</Button>}
+          >
+            {analysisFailure(t, publications.error).message}
+          </InlineNotice>
+        ) : null}
         {publications.data?.length ? (
           <ul className="tw:m-0 tw:grid tw:list-none tw:gap-2 tw:p-0">
             {publications.data.map((publication) => (
               <li className="tw:flex tw:flex-wrap tw:items-center tw:gap-2 tw:rounded-md tw:border tw:border-border-subtle tw:p-3" key={publication.id}>
                 <code className="tw:min-w-0 tw:flex-1 tw:truncate tw:text-xs">/{publication.slug}</code>
                 <StatusBadge density="compact">v{publication.version}</StatusBadge>
+                <span className="tw:text-xs tw:text-muted-foreground">
+                  {t("analysis.publishedAt", { time: fullTime(publication.publishedAt, lang) })}
+                </span>
                 {publication.revokedAt ? <StatusBadge density="compact" tone="danger">{t("analysis.revoked")}</StatusBadge> : null}
                 {!publication.revokedAt ? (
                   <>
                     <Button size="xs" onClick={() => void openPublication(publication.slug)}>
                       {t("analysis.openPublication")}
                     </Button>
-                    <Button size="xs" onClick={() => preparePublication(publication)}>{t("analysis.prepareNewVersion")}</Button>
+                    {canPublish ? (
+                      <Button size="xs" onClick={() => preparePublication(publication)}>{t("analysis.prepareNewVersion")}</Button>
+                    ) : null}
                     <ConfirmButton
                       size="xs"
                       variant="danger"
+                      disabled={revoke.isPending}
                       confirmLabel={t("analysis.revokeConfirm")}
                       onConfirm={() => revoke.mutate(publication.id)}
                     >
@@ -175,7 +205,7 @@ export function AnalysisPublicationPanel({
               </li>
             ))}
           </ul>
-        ) : publications.isPending ? null : (
+        ) : publications.isPending || publications.isError ? null : (
           <p className="tw:m-0 tw:text-sm tw:text-muted-foreground">{t("analysis.noPublications")}</p>
         )}
       </section>

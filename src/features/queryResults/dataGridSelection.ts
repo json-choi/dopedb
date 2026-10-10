@@ -1,6 +1,21 @@
 // Pure rectangular cell-selection model shared by both grid renderers: anchor/focus
 // coordinates, their normalized bounds, and the clipboard projection. A single-cell copy takes
 // its own formatter so one value is not reshaped by the tab-separated range format.
+// Objects are stringified once per value identity, not on every scroll frame.
+const objectTextCache = new WeakMap<object, string>();
+
+/** Grid display text: NULL label for null, compact JSON for objects. */
+export function gridCellText(value: unknown): string {
+  if (value === null || value === undefined) return "NULL";
+  if (typeof value !== "object") return String(value);
+  let text = objectTextCache.get(value);
+  if (text === undefined) {
+    text = JSON.stringify(value);
+    objectTextCache.set(value, text);
+  }
+  return text;
+}
+
 export type GridCellCoordinate = {
   row: number;
   col: number;

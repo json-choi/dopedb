@@ -43,7 +43,16 @@ pub struct OperationSummary {
     pub finished_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    /// The short reason a person gave when rejecting this exact proposal, so the
+    /// proposing Agent can adjust; at most [`MAX_DECISION_REASON_CHARS`]
+    /// characters. Present only for rejected operations whose reviewer wrote
+    /// one; approvals never expose their confirmation text.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub decision_reason: Option<String>,
 }
+
+/// Upper bound, in characters, of [`OperationSummary::decision_reason`].
+pub const MAX_DECISION_REASON_CHARS: usize = 280;
 
 pub struct OperationShowCommand;
 

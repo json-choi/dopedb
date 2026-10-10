@@ -1,5 +1,7 @@
 // Workspace Analysis Article library. Definitions and exact authority pins are
-// shared here; query result rows always remain on Desktop.
+// shared here; query result rows always remain on Desktop. `view=summary` lists
+// titles and pins only; without it the full-definition listing stays unchanged
+// for Desktop versions that predate the summary view.
 import { isUniqueDatabaseConflict } from "../../../../../../lib/workspace-server-log";
 import { env } from "../../../../../../lib/env";
 import {
@@ -14,7 +16,10 @@ import {
   commitAnalysisArticleCreate,
   type AnalysisArticleMutationAuthority,
 } from "../../../../../../lib/workspace-analysis-article-store";
-import { listAccessibleAnalysisArticles } from "../../../../../../lib/workspace-analysis-article-http";
+import {
+  listAccessibleAnalysisArticleSummaries,
+  listAccessibleAnalysisArticles,
+} from "../../../../../../lib/workspace-analysis-article-http";
 import {
   parseSharedAnalysisArticleCreate,
   publicAnalysisArticle,
@@ -40,17 +45,25 @@ function authority(authorization: {
 export async function GET(request: Request, context: RouteContext) {
   const { workspaceId } = await context.params;
   if (!isUuid(workspaceId)) return jsonError("Invalid workspace id", 400);
-  const environmentId = new URL(request.url).searchParams.get("environmentId");
+  const searchParams = new URL(request.url).searchParams;
+  const environmentId = searchParams.get("environmentId");
   if (environmentId !== null && !isUuid(environmentId)) {
     return jsonError("Invalid Environment id", 400);
   }
+  const view = searchParams.get("view");
+  if (view !== null && view !== "summary") return jsonError("Invalid Analysis Article view", 400);
   const authorization = await authorizeWorkspace(request, workspaceId, "view");
   if (!authorization.ok) return jsonError(authorization.error, authorization.status);
-  const articles = await listAccessibleAnalysisArticles({
+  const scope = {
     organizationId: workspaceId,
     memberId: authorization.membership.id,
     projectEnvironmentId: environmentId ?? undefined,
-  });
+  };
+  if (view === "summary") {
+    const articles = await listAccessibleAnalysisArticleSummaries(scope);
+    return privateJson({ workspaceId, view, articles });
+  }
+  const articles = await listAccessibleAnalysisArticles(scope);
   return privateJson({ workspaceId, articles });
 }
 

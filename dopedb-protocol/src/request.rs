@@ -7,7 +7,7 @@ use serde_json::Value;
 use uuid::Uuid;
 use zeroize::Zeroizing;
 
-/// Version-17 command catalog. Any addition, removal, or meaning change requires a
+/// Version-18 command catalog. Any addition, removal, or meaning change requires a
 /// command-schema version bump and an explicitly negotiated compatibility range.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum CommandName {

@@ -53,6 +53,12 @@ export async function verifyD1AnalysisRuns(db: D1Database, organizationId: strin
     .bind(replacementId).run()).rejects.toThrow();
   expect((await revokeAnalysisPublication({ organizationId, articleId: article.id, publicationId: replacementId, authority }))?.id)
     .toBe(replacementId);
+  // Left public on purpose: Article edits keep it live and Article deletion must revoke it.
+  const lingeringRequest = parseAnalysisPublicationRequest({ id: randomUUID(), runId: runInput.run.id,
+    slug: `fixture-${randomUUID()}`, replacePublicationId: null, visibility: "unlisted", searchIndexable: false });
+  expect((await commitAnalysisPublication({ ...publicationInput, request: lingeringRequest,
+    snapshot: buildAnalysisPublicSnapshot({ request: lingeringRequest, definition: article.definition, publishedAt: new Date() }) }))
+    ?.version).toBe(1);
   const cancelId = randomUUID();
   expect((await commitAnalysisRunCreate({ ...runInput, run: { ...runInput.run, id: cancelId } }))?.run.state).toBe("running");
   expect((await requestAnalysisRunCancellation({ organizationId, articleId: article.id, runId: cancelId, authority }))?.cancelRequestedAt)

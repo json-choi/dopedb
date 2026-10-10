@@ -25,9 +25,7 @@ import {
   shouldOverlayAgentDock,
   shouldDismissAgentOverlayFromEscape,
 } from "../agents/layout";
-import {
-  agentSessionErrorLabel,
-} from "../agents/acpTranscriptPresentation";
+import { agentSessionErrorLabel } from "../agents/agentErrorLabels";
 import { closedBeforeTurnCompleted } from "../agents/transcript";
 import { retainInertShellChildren } from "../appShell/useInertShellBackground";
 import {

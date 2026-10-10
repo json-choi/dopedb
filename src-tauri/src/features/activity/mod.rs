@@ -20,8 +20,13 @@ pub(crate) struct AuditVerdict {
     pub(crate) ok: bool,
     pub(crate) first_bad_index: Option<i64>,
     pub(crate) first_bad_id: Option<Uuid>,
+    /// Page cursor anchor for the first broken record (`rowId < firstBadRowId + 1`).
+    pub(crate) first_bad_row_id: Option<i64>,
     pub(crate) entry_count: i64,
     pub(crate) tail_hash: Option<String>,
+    /// Comparison with the tail anchor every append advances; `ok` requires `matched`.
+    pub(crate) anchor_status: audit::AuditAnchorStatus,
+    pub(crate) anchored_count: Option<i64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -103,8 +108,11 @@ impl ActivityPlatformAdapter {
             ok: verification.ok,
             first_bad_index: verification.first_bad_index,
             first_bad_id: verification.first_bad_id,
+            first_bad_row_id: verification.first_bad_row_id,
             entry_count: verification.entry_count,
             tail_hash: verification.tail_hash,
+            anchor_status: verification.anchor_status,
+            anchored_count: verification.anchored_count,
         })
     }
 

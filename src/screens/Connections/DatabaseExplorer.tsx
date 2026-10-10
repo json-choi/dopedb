@@ -1,6 +1,6 @@
-// Database Explorer sidebar: connection tree, DDL modal, schema-group
-// drag-and-drop. Split out of the old Connections/index.tsx (see ConnectionForm.tsx
-// for the connection create/edit form that used to live alongside it).
+// Database Explorer sidebar: connection tree and schema-group drag-and-drop. Schema
+// groups carry the member's chosen comparison baseline so every change chip compares
+// against the same database as the Schema Diff screen.
 import {
   useEffect,
   useEffectEvent,
@@ -32,6 +32,7 @@ import {
 } from "../../features/catalogExplorer/catalogDomain";
 import { useCatalogExplorerState } from "../../features/catalogExplorer/state";
 import { useSchemaGroupDrag } from "../../features/catalogExplorer/useSchemaGroupDrag";
+import { useSchemaDiffBaselineGroups } from "../../features/catalogExplorer/schemaDiffBaseline";
 import { useProjectDatabaseOrder } from "../../features/catalogExplorer/useProjectDatabaseOrder";
 import { useCatalogScope } from "../../lib/queries";
 import {
@@ -95,7 +96,8 @@ export function DatabaseExplorer({
   onSelectConn: (id: string) => void;
   onOpenTable: (conn: ConnectionProfile, table: CatalogTable) => void;
   onOpenSchemaDiff: (group: SchemaConnectionGroup) => void;
-  onEdit: (conn: ConnectionProfile) => void;
+  /** `initialFocus` opens the editor at the credential this device lost. */
+  onEdit: (conn: ConnectionProfile, initialFocus?: "credentials") => void;
   onDeleted: (id: string) => void;
   onConnectionUpdated: (conn: ConnectionProfile) => void;
   workspaceAccount?: ReactNode;
@@ -183,7 +185,6 @@ export function DatabaseExplorer({
       showRowCounts,
       openMenuId,
       workspaceDialog,
-      ddlDialog,
     },
     commands,
   } = useCatalogExplorerState(catalogScope.key);
@@ -249,6 +250,7 @@ export function DatabaseExplorer({
     overviews,
     overviewErrs,
     catalogs,
+    comparisonCatalogs,
     detailErrs,
     requestOverview,
     requestDetails,
@@ -270,6 +272,7 @@ export function DatabaseExplorer({
     removeConnection,
     removeEnvironmentConnection,
     removeProject,
+    resyncSharedConnection,
     setSchemaScope,
   } = useDatabaseExplorerMutations({
     catalogScope,
@@ -298,7 +301,10 @@ export function DatabaseExplorer({
     onOpenProjectEnvironment,
   });
   const {
-    groupByConnectionId,
+    groupByConnectionId: draggableGroupByConnectionId,
+    pendingGroupChange,
+    confirmGroupChange,
+    cancelGroupChange,
     draggingIds,
     dropTarget,
     dragPreview,
@@ -314,6 +320,16 @@ export function DatabaseExplorer({
     onDropOnEnvironment: bindDroppedConnection,
     onReorderProjectDatabase: projectDatabaseOrder.reorder,
   });
+  const withSchemaDiffBaseline = useSchemaDiffBaselineGroups(
+    catalogScope.preferenceKey ?? catalogScope.key,
+  );
+  const groupByConnectionId = useMemo(() => {
+    const groups = new Map<string, SchemaConnectionGroup>();
+    for (const [connectionId, group] of draggableGroupByConnectionId) {
+      groups.set(connectionId, withSchemaDiffBaseline(group));
+    }
+    return groups;
+  }, [draggableGroupByConnectionId, withSchemaDiffBaseline]);
   const errs: Record<string, CatalogLoadIssue> = { ...overviewErrs };
   for (const [connectionId, issue] of Object.entries(refreshErrs)) {
     errs[connectionId] = issue;
@@ -433,7 +449,7 @@ export function DatabaseExplorer({
         activeSearchResultKey={activeSearchResultKey}
         onSearchResultsChange={onSearchResultsChange}
         groupByConnectionId={groupByConnectionId}
-        catalogs={catalogs}
+        catalogs={comparisonCatalogs}
         collapsedSections={collapsedSections}
         objectSectionsOpen={objectSectionsOpen}
         onPointerDown={pointerDownConnection}
@@ -448,6 +464,8 @@ export function DatabaseExplorer({
         onToggleOpen={() => toggleOpen(connection.id)}
         onSelect={() => onSelectConn(connection.id)}
         onEdit={() => onEdit(connection)}
+        onEditCredentials={() => onEdit(connection, "credentials")}
+        onRefreshWorkspace={() => void resyncSharedConnection(connection.id)}
         onWorkspaceDialog={(mode) =>
           commands.openWorkspaceDialog({ connection, mode })
         }
@@ -491,14 +509,15 @@ export function DatabaseExplorer({
     );
   }
 
-  function renderGroup(group: SchemaConnectionGroup) {
+  function renderGroup(sectionGroup: SchemaConnectionGroup) {
+    const group = withSchemaDiffBaseline(sectionGroup);
     return (
       <SchemaConnectionGroupRow
         key={`group-${group.key}`}
         group={group}
         activeGroupKey={activeSchemaGroupKey}
         dropTarget={dropTarget?.kind === "group" && dropTarget.key === group.key}
-        catalogs={catalogs}
+        catalogs={comparisonCatalogs}
         onEnsureLoaded={ensureLoaded}
         onOpenSchemaDiff={onOpenSchemaDiff}
         renderConnection={(connection, treeParentKey) =>
@@ -714,7 +733,7 @@ export function DatabaseExplorer({
         dragPreview={dragPreview}
         orderAnnouncement={projectDatabaseOrder.announcement}
         connections={connections}
-        ddlDialog={ddlDialog}
+        pendingGroupChange={pendingGroupChange}
         workspaceDialog={workspaceDialog}
         providerCredentialsOpen={providerCredentialsOpen}
         providerReturnFocusRef={providerReturnFocusRef}
@@ -723,7 +742,8 @@ export function DatabaseExplorer({
         onCloseProjectSetup={() => setProjectSetupOpen(false)}
         onCloseEnvironmentSetup={() => setEnvironmentSetupProjectId(null)}
         onConnectionUpdated={onConnectionUpdated}
-        onCloseDdl={() => commands.patch({ ddlDialog: null })}
+        onConfirmGroupChange={() => void confirmGroupChange()}
+        onCancelGroupChange={cancelGroupChange}
         onCloseWorkspaceDialog={() =>
           commands.patch({ workspaceDialog: null })
         }

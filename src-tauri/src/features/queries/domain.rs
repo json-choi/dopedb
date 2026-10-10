@@ -228,11 +228,14 @@ pub(crate) struct TerminalQueryPlanRequest {
 /// must reject any uncertain or target-mutating shape before credentials or a
 /// target pool are requested. `ImpactPreview` may return a static skipped report
 /// for a dangerous shape so the proposal workflow can still apply its durable
-/// approval gate without opening the target.
+/// approval gate without opening the target. `AutoRunRead` belongs to the atomic
+/// plan-and-stream read: nothing displays its plan, so it never opens the target
+/// for an EXPLAIN and a non-read is terminalized by that helper before execution.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum DesktopPreviewIntent {
     ReadOnlyExplain,
     ImpactPreview,
+    AutoRunRead,
 }
 
 /// Atomic desktop SQL inspection input after transport decoding.

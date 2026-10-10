@@ -2,10 +2,9 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { CatalogTable } from "../../ipc/types";
-import { errMessage } from "../../ipc/types";
-import { useToast } from "../../components/Toast";
 import { useI18n } from "../../lib/i18n";
-import { databaseCatalogQuery, type CatalogScope } from "../../lib/queries";
+import type { CatalogScope } from "../../lib/queries";
+import { navigationTableFromOverview } from "../catalog/tauriAdapter";
 import { filterCatalogOverview } from "../catalogExplorer/scopeFilter";
 import { databaseDisplayLabel, type ConnectionProfile } from "../connections/domain";
 import { settingsSearchKeywords, type SettingsSection } from "../settings/domain";
@@ -53,7 +52,6 @@ export function useActionSearchItems({
   commands,
 }: ActionSearchItemsInput): readonly ActionSearchItem[] {
   const { t } = useI18n();
-  const toast = useToast();
   const queryClient = useQueryClient();
   const adminScope = useWorkspaceAdminScope();
   const signedIn = Boolean(useQuery(workspaceAuthStateQuery()).data?.user);
@@ -188,7 +186,9 @@ export function useActionSearchItems({
           t(
             relation.kind === "view"
               ? "schemaDiff.objectView"
-              : "schemaDiff.objectTable",
+              : relation.kind === "materialized_view"
+                ? "schemaDiff.objectMaterializedView"
+                : "schemaDiff.objectTable",
           ),
         ]
           .filter(Boolean)
@@ -198,23 +198,13 @@ export function useActionSearchItems({
           target.database,
           relation.comment ?? "",
         ],
-        run: async () => {
-          try {
-            const catalog = await queryClient.fetchQuery(
-              databaseCatalogQuery(connection.id, target.database, scope),
-            );
-            const table = catalog.tables.find(
-              (candidate) =>
-                candidate.name === relation.name &&
-                candidate.schema === relation.schema &&
-                candidate.kind === relation.kind,
-            );
-            if (table) commands.openTable(connection, table);
-            else commands.selectConnection(connection.id);
-          } catch (error) {
-            toast(errMessage(error), "error");
-          }
-        },
+        // Open at once from the loaded tree; the table surface upgrades its
+        // metadata from the shared catalog entry instead of blocking on a scan.
+        run: () =>
+          commands.openTable(
+            connection,
+            navigationTableFromOverview(relation, target.database),
+          ),
       }));
     },
   );

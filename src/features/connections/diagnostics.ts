@@ -13,6 +13,7 @@ import {
   CONNECTION_AUTO_DISCONNECT_MAX_SECONDS,
   CONNECTION_AUTO_DISCONNECT_MIN_SECONDS,
   CONNECTION_AUTO_DISCONNECT_SECONDS_PARAMETER,
+  CONNECTION_INPUT_MODE_PARAMETER,
   CONNECTION_KEEP_ALIVE_MAX_SECONDS,
   CONNECTION_KEEP_ALIVE_MIN_SECONDS,
   CONNECTION_KEEP_ALIVE_SECONDS_PARAMETER,
@@ -22,6 +23,7 @@ import {
   CONNECTION_TIME_ZONE_PARAMETER,
   isBoundedConnectionOptionSeconds,
   isConnectionTimeZone,
+  isPostgresTransactionPooler,
   isSshHostAlias,
 } from "./options";
 
@@ -31,6 +33,7 @@ export type ConnectionDiagnosticCode =
   | "hostRequired"
   | "hostInvalid"
   | "portInvalid"
+  | "postgresUsernameInvalid"
   | "sqliteFileRequired"
   | "cloudflareAccountRequired"
   | "cloudflareAccountInvalid"
@@ -49,6 +52,7 @@ export type ConnectionDiagnosticCode =
   | "keepAliveInvalid"
   | "autoDisconnectInvalid"
   | "startupScriptTooLong"
+  | "startupScriptSkippedByPooler"
   | "sshAliasInvalid"
   | "sshTunnelSingleHostRequired"
   | "sshTunnelSrvUnsupported"
@@ -70,6 +74,21 @@ export function connectionDiagnosticBlocksTest(
   return diagnostic.tone === "danger" &&
     diagnostic.code !== "nameRequired" &&
     diagnostic.code !== "targetDatabaseRequired";
+}
+
+/**
+ * A connection user is sent verbatim, so provider formats such as
+ * `postgres.<project-ref>` or `user@server` are valid role names. Only
+ * surrounding whitespace or control characters usually reveal a paste or typo.
+ */
+function suspiciousPostgresUsername(username: string): boolean {
+  return (
+    username.trim() !== username ||
+    [...username].some((character) => {
+      const code = character.codePointAt(0) ?? 0;
+      return code < 0x20 || code === 0x7f;
+    })
+  );
 }
 
 function issue(
@@ -212,6 +231,24 @@ export function diagnoseConnection(
       );
     }
 
+    // A warning, not a block: the person confirms the exact role name.
+    if (
+      profile.engine === "postgres" &&
+      profile.workspaceAccess === "local" &&
+      profile.username &&
+      suspiciousPostgresUsername(profile.username)
+    ) {
+      diagnostics.push(
+        issue(
+          "postgresUsernameInvalid",
+          "warning",
+          profile.extraParams[CONNECTION_INPUT_MODE_PARAMETER] === "urlOnly"
+            ? "connection-url"
+            : "connection-username",
+        ),
+      );
+    }
+
     const mongoSrv =
       profile.engine === "mongodb" &&
       profile.extraParams.srv === "true";
@@ -313,6 +350,21 @@ export function diagnoseConnection(
       issue(
         "startupScriptTooLong",
         "danger",
+        "connection-startup-script",
+        "options",
+      ),
+    );
+  } else if (
+    profile.engine === "postgres" &&
+    startupScript.trim() &&
+    isPostgresTransactionPooler(profile)
+  ) {
+    // A warning, not a block: the connection works, but shared server sessions
+    // mean the script never runs.
+    diagnostics.push(
+      issue(
+        "startupScriptSkippedByPooler",
+        "warning",
         "connection-startup-script",
         "options",
       ),

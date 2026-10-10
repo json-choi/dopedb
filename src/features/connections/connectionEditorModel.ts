@@ -174,6 +174,9 @@ export function connectionProfileFlags(form: ConnectionProfile) {
     isMongo,
     isBigQuery,
     isSharedTemplate,
+    /** The provider integration owns this endpoint; the editor never moves it. */
+    isWorkspaceManaged:
+      isSharedTemplate && form.credentialMode === "managed",
     canEditConnection:
       !isSharedTemplate || form.workspaceAccess === "manage",
     supportsSqlSessionOptions,

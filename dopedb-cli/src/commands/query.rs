@@ -1,5 +1,5 @@
 use dopedb_protocol::{
-    OperationSummary, QueryCancelArguments, QueryCancelCommand, QueryPlanArguments,
+    ErrorCode, OperationSummary, QueryCancelArguments, QueryCancelCommand, QueryPlanArguments,
     QueryPlanCommand, QueryPlanResult, QueryRunArguments, QueryRunCommand, QueryRunResult,
     SqlProposeArguments, SqlProposeCommand, MAX_STRING_BYTES,
 };
@@ -11,6 +11,38 @@ use crate::commands::input::read_stdin_utf8;
 use crate::output::{self, OutputMode};
 
 const MAX_SQL_INPUT_BYTES: u64 = MAX_STRING_BYTES as u64;
+
+/// Desktop parses the SQL before any target access; an invalid request here is
+/// almost always the SQL itself, otherwise the database or connection named.
+const SQL_INVALID: &str = "Desktop could not accept this SQL: send exactly one statement that parses in this connection's SQL dialect. If it is valid, check the database it names and the connection's credentials and settings in Desktop";
+const SQL_READ_BLOCKED: &str = "Desktop's safety policy blocked this SQL: `dopedb query` runs one read-only statement, so propose a change with `dopedb sql propose` for approval in Desktop. USE, SET, and transaction control are never run; use --database and schema-qualified names instead";
+const SQL_PROPOSE_BLOCKED: &str = "Desktop's safety policy blocked this proposal on this connection: USE, SET, and transaction control are never run, so use --database and send one statement. A read-only role or turned-off data changes also block proposals";
+
+#[derive(Clone, Copy)]
+enum SqlRequest {
+    Read,
+    Propose,
+}
+
+/// Explain a refusal of SQL text in terms of that SQL rather than the command
+/// line; exit codes still follow the stable remote code.
+fn sql_refusal(request: SqlRequest) -> impl Fn(ClientError) -> ClientError {
+    move |error| match error {
+        ClientError::Remote(remote) => {
+            let message = match (remote.code(), request) {
+                (ErrorCode::InvalidRequest, _) => SQL_INVALID,
+                (ErrorCode::PolicyBlocked, SqlRequest::Read) => SQL_READ_BLOCKED,
+                (ErrorCode::PolicyBlocked, SqlRequest::Propose) => SQL_PROPOSE_BLOCKED,
+                _ => return ClientError::Remote(remote),
+            };
+            ClientError::Refused {
+                message,
+                error: remote,
+            }
+        }
+        other => other,
+    }
+}
 
 pub(crate) async fn plan(
     connection: &str,
@@ -29,7 +61,8 @@ pub(crate) async fn plan(
             sql,
             max_rows,
         })
-        .await?;
+        .await
+        .map_err(sql_refusal(SqlRequest::Read))?;
     match mode {
         OutputMode::Json => output::write_json(&result),
         OutputMode::Human => output::write_human(&[
@@ -106,7 +139,8 @@ pub(crate) async fn propose(
             database,
             sql,
         })
-        .await?;
+        .await
+        .map_err(sql_refusal(SqlRequest::Propose))?;
     write_operation(&result, mode)
 }
 
@@ -116,11 +150,17 @@ pub(crate) fn write_operation(
 ) -> Result<(), ClientError> {
     match mode {
         OutputMode::Json => output::write_json(result),
-        OutputMode::Human => output::write_human(&[
-            format!("Operation: {}", result.operation_id),
-            format!("State: {:?}", result.state),
-            format!("Payload: {}", result.payload_hash),
-        ]),
+        OutputMode::Human => {
+            let mut lines = vec![
+                format!("Operation: {}", result.operation_id),
+                format!("State: {:?}", result.state),
+                format!("Payload: {}", result.payload_hash),
+            ];
+            if let Some(reason) = &result.decision_reason {
+                lines.push(format!("Rejection reason: {reason}"));
+            }
+            output::write_human(&lines)
+        }
     }
 }
 

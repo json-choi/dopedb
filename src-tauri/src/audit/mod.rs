@@ -2,7 +2,8 @@
 //! ask/classify/preview/run action is recordable here via [`record`].
 //!
 //! Rows are inserted, never updated or deleted. [`verify_chain`] recomputes the
-//! chain to surface post-hoc edits — see `chain` for the tamper-EVIDENT (not
+//! chain to surface post-hoc edits and compares it with the per-connection tail
+//! anchor that every append advances — see `chain` for the tamper-EVIDENT (not
 //! tamper-proof) caveat.
 
 pub mod chain;
@@ -19,7 +20,6 @@ use crate::store::{self, Store};
 use chain::AuditFields;
 
 const AUDIT_PAGE_SIZE: usize = 50;
-const AUDIT_PROMPT_PREVIEW_CHARS: i64 = 512;
 const AUDIT_SQL_PREVIEW_CHARS: i64 = 2_048;
 const AUDIT_ERROR_PREVIEW_CHARS: i64 = 512;
 
@@ -27,8 +27,45 @@ pub(crate) struct AuditVerification {
     pub(crate) ok: bool,
     pub(crate) first_bad_index: Option<i64>,
     pub(crate) first_bad_id: Option<Uuid>,
+    /// Insertion-order cursor of the first broken row, so a reader can open the
+    /// exact metadata page that contains it instead of scanning pages by hand.
+    pub(crate) first_bad_row_id: Option<i64>,
     pub(crate) entry_count: i64,
     pub(crate) tail_hash: Option<String>,
+    pub(crate) anchor_status: AuditAnchorStatus,
+    /// Row count the tail anchor recorded at the last append, when one exists.
+    pub(crate) anchored_count: Option<i64>,
+}
+
+/// How the recomputed chain compares with the tail anchor its appends maintain.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum AuditAnchorStatus {
+    /// Same row count and tail hash as the last append, or an empty chain.
+    Matched,
+    /// Rows exist but their anchor is gone.
+    Missing,
+    /// Fewer rows than the anchor recorded: the newest rows were removed.
+    Shorter,
+    /// More rows than the anchor recorded: rows were inserted outside `record`.
+    Longer,
+    /// Same row count with a different tail: the newest rows were replaced.
+    TailMismatch,
+}
+
+fn anchor_status(
+    anchor: Option<&(i64, String)>,
+    entry_count: i64,
+    tail_hash: Option<&str>,
+) -> AuditAnchorStatus {
+    match anchor {
+        None if entry_count == 0 => AuditAnchorStatus::Matched,
+        None => AuditAnchorStatus::Missing,
+        Some((count, _)) if entry_count < *count => AuditAnchorStatus::Shorter,
+        Some((count, _)) if entry_count > *count => AuditAnchorStatus::Longer,
+        Some((_, hash)) if tail_hash != Some(hash.as_str()) => AuditAnchorStatus::TailMismatch,
+        Some(_) => AuditAnchorStatus::Matched,
+    }
 }
 
 /// Owned inputs for one audit record. The caller supplies the semantic fields;
@@ -46,7 +83,8 @@ pub struct RecordArgs {
     pub error: Option<String>,
 }
 
-/// Append one entry: fetch the connection's latest hash, chain onto it, insert.
+/// Append one entry: fetch the connection's latest hash, chain onto it, insert, and
+/// advance the connection's tail anchor in the same transaction.
 pub async fn record(store: &Store, args: RecordArgs) -> AppResult<AuditEntry> {
     let id = Uuid::new_v4();
     let ts = Utc::now();
@@ -55,6 +93,9 @@ pub async fn record(store: &Store, args: RecordArgs) -> AppResult<AuditEntry> {
     // on the pooled store read the same tail hash and both insert with the same
     // prev_hash, forking the chain (verify_chain then reports false tampering).
     let _chain = store.audit_lock().lock().await;
+    // IMMEDIATE takes the write lock before the tail read, so another writer cannot
+    // invalidate this WAL snapshot between the read and the insert.
+    let mut transaction = store.pool().begin_with("BEGIN IMMEDIATE").await?;
 
     // Latest hash for THIS connection is the chain tail we link onto. Ordered by
     // rowid (insertion order) so concurrent same-ts rows still chain stably.
@@ -62,7 +103,7 @@ pub async fn record(store: &Store, args: RecordArgs) -> AppResult<AuditEntry> {
         "SELECT hash FROM audit_log WHERE connection_id = ?1 ORDER BY rowid DESC LIMIT 1",
     )
     .bind(args.connection_id.to_string())
-    .fetch_optional(store.pool())
+    .fetch_optional(&mut *transaction)
     .await?
     .map(|r| r.try_get("hash"))
     .transpose()?;
@@ -100,8 +141,22 @@ pub async fn record(store: &Store, args: RecordArgs) -> AppResult<AuditEntry> {
     .bind(&args.error)
     .bind(&prev_hash)
     .bind(&hash)
-    .execute(store.pool())
+    .execute(&mut *transaction)
     .await?;
+    sqlx::query(
+        "INSERT INTO audit_chain_anchors (connection_id, entry_count, tail_hash, updated_at)
+         VALUES (?1, 1, ?2, ?3)
+         ON CONFLICT(connection_id) DO UPDATE SET
+             entry_count = audit_chain_anchors.entry_count + 1,
+             tail_hash = excluded.tail_hash,
+             updated_at = excluded.updated_at",
+    )
+    .bind(args.connection_id.to_string())
+    .bind(&hash)
+    .bind(ts)
+    .execute(&mut *transaction)
+    .await?;
+    transaction.commit().await?;
 
     Ok(AuditEntry {
         id,
@@ -120,8 +175,8 @@ pub async fn record(store: &Store, args: RecordArgs) -> AppResult<AuditEntry> {
     })
 }
 
-/// Read one bounded newest-first metadata page. Large prompt, SQL, and error bodies
-/// remain behind [`entry`] so the list has a deterministic IPC byte ceiling.
+/// Read one bounded newest-first metadata page. Large SQL and error bodies remain
+/// behind [`entry`] so the list has a deterministic IPC byte ceiling.
 pub(crate) async fn page_after(
     store: &Store,
     connection_id: Uuid,
@@ -129,24 +184,20 @@ pub(crate) async fn page_after(
 ) -> AppResult<AuditPage> {
     let rows = sqlx::query(
         "SELECT rowid AS audit_row_id, id, connection_id, ts, engine,
-                CASE WHEN agent_prompt IS NULL THEN NULL
-                     ELSE substr(agent_prompt, 1, ?3) END AS agent_prompt_preview,
-                COALESCE(length(agent_prompt) > ?3, 0) AS agent_prompt_truncated,
-                substr(sql, 1, ?4) AS sql_preview,
-                length(sql) > ?4 AS sql_truncated,
+                substr(sql, 1, ?3) AS sql_preview,
+                length(sql) > ?3 AS sql_truncated,
                 kind, action, approved_by, affected_estimate,
-                CASE WHEN error IS NULL THEN NULL ELSE substr(error, 1, ?5) END
+                CASE WHEN error IS NULL THEN NULL ELSE substr(error, 1, ?4) END
                   AS error_preview,
-                COALESCE(length(error) > ?5, 0) AS error_truncated,
+                COALESCE(length(error) > ?4, 0) AS error_truncated,
                 prev_hash, hash
          FROM audit_log
          WHERE connection_id = ?1 AND (?2 IS NULL OR rowid < ?2)
          ORDER BY rowid DESC
-         LIMIT ?6",
+         LIMIT ?5",
     )
     .bind(connection_id.to_string())
     .bind(cursor.map(|value| value.row_id))
-    .bind(AUDIT_PROMPT_PREVIEW_CHARS)
     .bind(AUDIT_SQL_PREVIEW_CHARS)
     .bind(AUDIT_ERROR_PREVIEW_CHARS)
     .bind(i64::try_from(AUDIT_PAGE_SIZE + 1).expect("audit page size fits i64"))
@@ -191,14 +242,30 @@ pub(crate) async fn entry(
 /// Returns `(false, Some(index))` at the first row that was edited, reordered, or had
 /// its `prev_hash` broken (index = 0-based insertion-order position); `(true, None)`
 /// if the whole chain verifies.
+///
+/// The genesis link pins the start and the tail anchor (advanced by every append)
+/// pins the end, so removing or replacing the newest rows is reported through
+/// `anchor_status` even when the remaining links are intact. Rewriting the rows and
+/// the anchor together in the same local file is still outside tamper-evidence.
 pub async fn verify_chain(store: &Store, connection_id: Uuid) -> AppResult<AuditVerification> {
-    let mut rows =
-        sqlx::query("SELECT * FROM audit_log WHERE connection_id = ?1 ORDER BY rowid ASC")
-            .bind(connection_id.to_string())
-            .fetch(store.pool());
+    // One read transaction gives the anchor and the rows a single WAL snapshot, so an
+    // append that commits during the scan cannot look like a gap.
+    let mut transaction = store.pool().begin().await?;
+    let anchor: Option<(i64, String)> = sqlx::query_as(
+        "SELECT entry_count, tail_hash FROM audit_chain_anchors WHERE connection_id = ?1",
+    )
+    .bind(connection_id.to_string())
+    .fetch_optional(&mut *transaction)
+    .await?;
+    let mut rows = sqlx::query(
+        "SELECT rowid AS audit_row_id, * FROM audit_log WHERE connection_id = ?1 ORDER BY rowid ASC",
+    )
+    .bind(connection_id.to_string())
+    .fetch(&mut *transaction);
     let mut expected_prev: Option<String> = None;
     let mut first_bad_index = None;
     let mut first_bad_id = None;
+    let mut first_bad_row_id = None;
     let mut entry_count = 0_i64;
     let mut tail_hash = None;
     while let Some(row) = rows.try_next().await? {
@@ -222,17 +289,24 @@ pub async fn verify_chain(store: &Store, connection_id: Uuid) -> AppResult<Audit
         if first_bad_index.is_none() && (!link_matches || !hash_matches) {
             first_bad_index = Some(entry_count);
             first_bad_id = Some(entry.id);
+            first_bad_row_id = Some(row.try_get::<i64, _>("audit_row_id")?);
         }
         entry_count = entry_count.saturating_add(1);
         expected_prev = Some(entry.hash.clone());
         tail_hash = Some(entry.hash);
     }
+    drop(rows);
+    transaction.rollback().await?;
+    let anchor_status = anchor_status(anchor.as_ref(), entry_count, tail_hash.as_deref());
     Ok(AuditVerification {
-        ok: first_bad_index.is_none(),
+        ok: first_bad_index.is_none() && anchor_status == AuditAnchorStatus::Matched,
         first_bad_index,
         first_bad_id,
+        first_bad_row_id,
         entry_count,
         tail_hash,
+        anchor_status,
+        anchored_count: anchor.map(|(count, _)| count),
     })
 }
 
@@ -243,8 +317,6 @@ fn row_to_audit_summary(row: &sqlx::sqlite::SqliteRow) -> AppResult<(AuditEntryS
             connection_id: store::parse_uuid(row.try_get("connection_id")?)?,
             ts: row.try_get("ts")?,
             engine: store::parse_engine(row.try_get("engine")?)?,
-            agent_prompt_preview: row.try_get("agent_prompt_preview")?,
-            agent_prompt_truncated: row.try_get::<i64, _>("agent_prompt_truncated")? != 0,
             sql_preview: row.try_get("sql_preview")?,
             sql_truncated: row.try_get::<i64, _>("sql_truncated")? != 0,
             kind: store::parse_kind(row.try_get("kind")?)?,

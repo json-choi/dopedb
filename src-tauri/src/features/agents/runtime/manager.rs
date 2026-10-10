@@ -195,7 +195,7 @@ impl AcpPluginManager {
         })?;
         if !record.enabled {
             return Err(AppError::Blocked {
-                reason: "this ACP adapter plugin is disabled".into(),
+                reason: crate::features::agents::domain::agent_error::PLUGIN_DISABLED.into(),
             });
         }
         let (installed, candidate) = record
@@ -276,6 +276,31 @@ impl AcpPluginManager {
         let status = self.project_status(plugin_id, &state)?;
         emit_telemetry(app, plugin_id, "candidate_initialize", "promoted");
         Ok(status)
+    }
+
+    /// A ready, non-candidate version that initialized a session proves the
+    /// provider usable again: clear the failure left by a quarantined candidate
+    /// so readiness, the chat picker, and Settings stop reporting it as broken.
+    pub(crate) fn record_ready_installation_success(
+        &self,
+        plugin_id: AcpPluginId,
+        installation_id: &str,
+    ) -> AppResult<bool> {
+        let mut state = self.load_state()?;
+        let Some(record) = state.plugins.get_mut(&plugin_id) else {
+            return Ok(false);
+        };
+        let active = record
+            .current
+            .as_ref()
+            .or(record.last_known_good.as_ref())
+            .is_some_and(|version| version.manifest_sha256 == installation_id);
+        if record.failure.is_none() || record.candidate.is_some() || !active {
+            return Ok(false);
+        }
+        record.failure = None;
+        self.write_state(&state)?;
+        Ok(true)
     }
 
     pub(crate) fn record_initialize_failure(

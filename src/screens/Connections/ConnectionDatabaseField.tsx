@@ -15,7 +15,8 @@ export function ConnectionDatabaseField({ profile, busy }: {
   const { t } = useI18n();
   const inputRef = useRef<HTMLInputElement>(null);
   const { form, set, flags, databaseDiscovery, validation } = profile;
-  const { canEditConnection, canDiscoverDatabases, isMongo } = flags;
+  const { canEditConnection, canDiscoverDatabases, isMongo, isWorkspaceManaged } =
+    flags;
   useEffect(() => {
     if (databaseDiscovery.databases.length === 0) return;
     const input = inputRef.current;
@@ -37,16 +38,24 @@ export function ConnectionDatabaseField({ profile, busy }: {
       {({ controlProps }) => (
         <div className="tw:grid tw:gap-1.5">
           <TextInput
-            {...controlProps({ "aria-describedby": canDiscoverDatabases ? "connection-database-discovery-status" : undefined })}
+            {...controlProps({
+              "aria-describedby": canDiscoverDatabases
+                ? "connection-database-discovery-status"
+                : isWorkspaceManaged
+                  ? "connection-managed-endpoint-note"
+                  : undefined,
+            })}
             ref={inputRef}
             id="connection-database"
             density="compact"
             value={form.database}
             list={canDiscoverDatabases && databaseDiscovery.databases.length > 0 ? "connection-database-options" : undefined}
             disabled={!canEditConnection || busy}
-            required
+            readOnly={isWorkspaceManaged}
+            required={!isWorkspaceManaged}
             onChange={(event) => set("database", event.target.value)}
             onFocus={() => void databaseDiscovery.discover()}
+            onBlur={() => profile.touch("connection-database")}
           />
           {canDiscoverDatabases && databaseDiscovery.databases.length > 0 ? (
             <datalist id="connection-database-options">
@@ -58,11 +67,21 @@ export function ConnectionDatabaseField({ profile, busy }: {
               <div id="connection-database-discovery-status" role="status" aria-live="polite" className="tw:text-xs tw:leading-body tw:text-muted-foreground">
                 {databaseDiscovery.phase === "loading" ? t("connections.databaseDiscoveryLoading")
                   : databaseDiscovery.phase === "empty" ? t("connections.databaseDiscoveryEmpty")
-                    : databaseDiscovery.phase === "error" ? t("connections.databaseDiscoveryFailed") : null}
+                    : databaseDiscovery.phase === "error" ? t("connections.databaseDiscoveryFailed")
+                      : databaseDiscovery.phase === "credentialRequired"
+                        ? t("connections.testFailure.savedCredentialEndpointChangedTitle")
+                        : databaseDiscovery.phase === "credentialStoreDenied"
+                          ? t("sql.credentialStoreDenied.title") : null}
               </div>
-              {databaseDiscovery.phase === "error" || databaseDiscovery.phase === "empty" ? (
-                <Button size="compact" onClick={() => void databaseDiscovery.discover()} disabled={busy}>
+              {databaseDiscovery.phase === "error" || databaseDiscovery.phase === "empty"
+                || databaseDiscovery.phase === "credentialStoreDenied" ? (
+                <Button size="compact" onClick={() => void databaseDiscovery.discover({ force: true })} disabled={busy}>
                   <Icon name="refresh" />{t("connections.databaseDiscoveryRetry")}
+                </Button>
+              ) : databaseDiscovery.phase === "credentialRequired" ? (
+                // Discovery starts on focus, so moving focus stays an explicit command.
+                <Button size="compact" onClick={databaseDiscovery.enterPassword} disabled={busy}>
+                  {t("connections.enterPassword")}
                 </Button>
               ) : null}
             </>

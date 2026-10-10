@@ -8,6 +8,6 @@ mod sqlite;
 pub(crate) use desktop_read::assert_exact_query_contract;
 pub(crate) use desktop_read::DesktopAnalysisReadExecution;
 #[cfg(test)]
-pub(crate) use hosted::assert_hosted_mutation_error_contract;
+pub(crate) use hosted::assert_hosted_article_contract;
 pub(crate) use hosted::HostedAnalysisAuthority;
 pub(crate) use sqlite::SqliteAnalysisLocalRepository;

@@ -1,10 +1,8 @@
 // Resource changes update the draft immediately and retire its old prepared
 // session in the background. A conversation's exact grant remains immutable.
 
-import type { Dispatch, SetStateAction } from "react";
-
-import { errMessage } from "../../ipc/types";
 import { useI18n } from "../../lib/i18n";
+import { agentFailure, type AgentFailure } from "./agentErrorLabels";
 import type { ConnectionId } from "../connections/domain";
 import type { AcpSessionId, AcpSessionSummary } from "./domain";
 import { closeAgentAcpSession } from "./tauriAdapter";
@@ -22,7 +20,7 @@ export function useAcpScopeCommands({
   scopeChangeAllowed: boolean;
   starting: boolean;
   onSelectSession: (id: AcpSessionId | null) => void;
-  setError: Dispatch<SetStateAction<string | null>>;
+  setError: (error: AgentFailure | string | null) => void;
   toggleResource: (resourceKey: string) => void;
   selectWriteTarget: (connectionId: ConnectionId | null) => void;
 }) {
@@ -37,7 +35,7 @@ export function useAcpScopeCommands({
       try {
         await closeAgentAcpSession(active.id);
       } catch (reason) {
-        setError(t("agent.acpCloseFailed", { error: errMessage(reason) }));
+        setError(agentFailure(reason, t, (error) => t("agent.acpCloseFailed", { error })));
       }
     }
   }

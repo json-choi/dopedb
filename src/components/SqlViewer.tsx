@@ -1,6 +1,8 @@
 // CodeMirror 6 SQL viewer/editor, shared by read-only SQL surfaces and the SQL
 // screen. Read-only by default; when a `catalog` is passed it feeds schema-aware
 // autocomplete (table + column names), and `onRun` binds Mod-Enter to execute.
+// The editor reports its selection (so toolbar Run can run exactly it), carries an
+// accessible name, and underlines the range a failed run points at.
 import { useCallback, useMemo } from "react";
 import { useTheme } from "../design-system/theme";
 import CodeMirror from "@uiw/react-codemirror";
@@ -85,6 +87,12 @@ export interface SqlViewerProps {
   executionStatus?: SqlExecutionStatus | null;
   /** Receives the production CodeMirror view for deterministic packaged profiling. */
   onEditorReady?: (view: EditorView) => void;
+  /** The current non-empty selection, or undefined when the selection is empty. */
+  onSelectionChange?: (source: SqlRunSource | undefined) => void;
+  /** Accessible name of the editing surface. */
+  ariaLabel?: string;
+  /** Document range a failed run points at; underlined until the text changes. */
+  errorRange?: { from: number; to: number } | null;
 }
 
 function cursorPosition(state: EditorState): SqlCursorPosition {
@@ -97,12 +105,11 @@ function cursorPosition(state: EditorState): SqlCursorPosition {
 }
 
 function selectedRunSource(state: EditorState): SqlRunSource | undefined {
-  const selection = state.selection.main;
-  return sqlRunSourceFromSelection(
-    state.doc.toString(),
-    selection.from,
-    selection.to,
-  );
+  const { from, to, empty } = state.selection.main;
+  // A caret move must not copy the whole document; slice only a real selection.
+  if (empty) return undefined;
+  const source = sqlRunSourceFromSelection(state.sliceDoc(from, to), 0, to - from);
+  return source && { ...source, from: source.from + from, to: source.to + from };
 }
 
 class SqlExecutionWidget extends WidgetType {
@@ -149,6 +156,25 @@ class SqlExecutionWidget extends WidgetType {
   }
 }
 
+function errorRangeExtension(
+  length: number,
+  range: { from: number; to: number } | null | undefined,
+): Extension {
+  if (!range) return [];
+  const from = Math.max(0, Math.min(range.from, length));
+  const to = Math.max(from, Math.min(range.to, length));
+  if (to === from) return [];
+  return EditorView.decorations.of(
+    Decoration.set([
+      Decoration.mark({
+        class:
+          "tw:underline tw:decoration-wavy tw:decoration-danger tw:underline-offset-4",
+        attributes: { "data-sql-error": "true" },
+      }).range(from, to),
+    ]),
+  );
+}
+
 function executionStatusExtension(
   value: string,
   status: SqlExecutionStatus | null | undefined,
@@ -181,6 +207,9 @@ export default function SqlViewer({
   onBlur,
   executionStatus,
   onEditorReady,
+  onSelectionChange,
+  ariaLabel,
+  errorRange,
 }: SqlViewerProps) {
   const { resolved: colorScheme } = useTheme();
   const richLanguageEditing = value.length <= SQL_RICH_EDITING_MAX_BYTES;
@@ -245,8 +274,12 @@ export default function SqlViewer({
         }),
       );
     }
+    if (ariaLabel) {
+      ext.push(EditorView.contentAttributes.of({ "aria-label": ariaLabel }));
+    }
     return ext;
   }, [
+    ariaLabel,
     catalog,
     defaultSchema,
     engine,
@@ -265,25 +298,31 @@ export default function SqlViewer({
   const handleCreateEditor = useCallback(
     (view: EditorView) => {
       reportCursor(view.state);
+      onSelectionChange?.(selectedRunSource(view.state));
       onEditorReady?.(view);
     },
-    [onEditorReady, reportCursor],
+    [onEditorReady, onSelectionChange, reportCursor],
   );
   const handleUpdate = useCallback(
     (update: ViewUpdate) => {
-      if (!onCursorChange || !update.selectionSet) return;
-      reportCursor(update.state);
+      if (!update.selectionSet && !update.docChanged) return;
+      if (onCursorChange && update.selectionSet) reportCursor(update.state);
+      onSelectionChange?.(selectedRunSource(update.state));
     },
-    [onCursorChange, reportCursor],
+    [onCursorChange, onSelectionChange, reportCursor],
   );
   const executionValue = executionStatus ? value : "";
   const executionExtension = useMemo(
     () => executionStatusExtension(executionValue, executionStatus),
     [executionStatus, executionValue],
   );
+  const errorExtension = useMemo(
+    () => errorRangeExtension(value.length, errorRange),
+    [errorRange, value.length],
+  );
   const allExtensions = useMemo(
-    () => [...extensions, executionExtension],
-    [executionExtension, extensions],
+    () => [...extensions, executionExtension, errorExtension],
+    [errorExtension, executionExtension, extensions],
   );
 
   return (

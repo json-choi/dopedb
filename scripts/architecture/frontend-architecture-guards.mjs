@@ -323,6 +323,7 @@ export function checkFrontendArchitecture(harness) {
   for (const [filePath, limit] of [
     [appShellPath, 520],
     [workbenchControllerPath, 550],
+    ["src/features/appShell/useLaunchPresetBinding.ts", 80],
     [searchItemsPath, 260],
   ]) {
     const lines = lineCount(read(filePath));
@@ -455,12 +456,21 @@ export function checkFrontendArchitecture(harness) {
     ["src/screens/Connections/ConnectionProfilePanel.tsx", 180],
     ["src/screens/Connections/ConnectionSchemaTab.tsx", 220],
     ["src/screens/Connections/ConnectionSecurityTab.tsx", 260],
+    ["src/screens/Connections/ConnectionSharedTemplateFields.tsx", 190],
+    ["src/screens/Connections/ConnectionTestStatus.tsx", 160],
+    ["src/features/appShell/connectionEditorRoute.ts", 100],
     ["src/features/connections/connectionEditorModel.ts", 300],
+    ["src/features/connections/connectionEditorShellBridge.ts", 110],
+    ["src/features/connections/useAdvancedParameterRows.ts", 160],
     ["src/features/connections/useConnectionCatalogController.ts", 450],
+    ["src/features/connections/useConnectionDraftChanges.ts", 120],
     ["src/features/connections/useConnectionEditorDialogs.ts", 100],
+    ["src/features/connections/useConnectionProblems.ts", 240],
     ["src/features/connections/useConnectionProfileController.ts", 500],
     ["src/features/connections/useConnectionProfileState.ts", 400],
     ["src/features/connections/useConnectionSchemaController.ts", 150],
+    ["src/features/connections/useConnectionTestCommand.ts", 200],
+    ["src/features/connections/useConnectionUrlDraft.ts", 180],
   ];
   for (const [filePath, limit] of connectionEditorBoundaries) {
     const lines = lineCount(read(filePath));
@@ -534,6 +544,7 @@ export function checkFrontendArchitecture(harness) {
   for (const filePath of [
     "src/features/agents/AcpChatPanel.tsx",
     "src/features/agents/AcpChatTranscript.tsx",
+    "src/features/agents/AcpToolCallCard.tsx",
     "src/features/agents/AcpChatComposer.tsx",
     "src/features/agents/acpTranscriptPresentation.ts",
     "src/features/agents/acpActivityLabels.ts",
@@ -567,9 +578,7 @@ export function checkFrontendArchitecture(harness) {
     "src/features/agents/useAcpChatController.ts",
   );
   for (const token of [
-    "selectionGenerationRef",
-    "focusRequestIdRef",
-    "isCurrentAcpFocusRequest",
+    "useAcpActiveSession",
     "useAcpSessionSnapshot",
     "visibleAcpTranscriptItems",
     "viewport,",
@@ -581,6 +590,20 @@ export function checkFrontendArchitecture(harness) {
     if (!acpChatController.includes(token)) {
       failures.push(
         `src/features/agents/useAcpChatController.ts: ACP controller lost owned boundary marker (${token})`,
+      );
+    }
+  }
+  // The controller's active-session sub-hook keeps stale focus generations
+  // beside the replay and lifecycle commands that can race them.
+  const acpActiveSession = read("src/features/agents/useAcpActiveSession.ts");
+  for (const token of [
+    "selectionGenerationRef",
+    "focusRequestIdRef",
+    "isCurrentAcpFocusRequest",
+  ]) {
+    if (!acpActiveSession.includes(token)) {
+      failures.push(
+        `src/features/agents/useAcpActiveSession.ts: ACP active session lost owned boundary marker (${token})`,
       );
     }
   }

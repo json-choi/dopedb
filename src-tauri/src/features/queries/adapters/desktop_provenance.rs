@@ -20,6 +20,10 @@ pub(super) struct DesktopRunRecord<'a> {
     pub(super) duration_ms: Option<i64>,
     pub(super) error: Option<String>,
     pub(super) origin: &'a str,
+    /// The database and schema the console selected for the run, recorded so
+    /// History reopens the SQL there; empty means the connection's default.
+    pub(super) database: &'a str,
+    pub(super) namespace: Option<&'a str>,
 }
 
 /// Append the established desktop audit and history pair. Logging remains
@@ -73,6 +77,13 @@ pub(super) async fn record_desktop_run(
                 error: record.error,
                 executed_at: Utc::now(),
                 origin: record.origin.to_string(),
+                database: Some(record.database)
+                    .filter(|database| !database.is_empty())
+                    .map(str::to_string),
+                namespace: record
+                    .namespace
+                    .filter(|namespace| !namespace.is_empty())
+                    .map(str::to_string),
             },
         )
         .await

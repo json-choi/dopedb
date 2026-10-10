@@ -2,8 +2,10 @@
 //! only production path that can turn an immutable stored plan into an opaque
 //! execution grant.
 
+use std::sync::{Arc, OnceLock};
+
 use chrono::Utc;
-use serde_json::Value;
+use serde_json::{json, Value};
 use uuid::Uuid;
 
 use super::execute::{self, ExecutionGrant};
@@ -12,9 +14,20 @@ use super::model::{
     OperationRecord, RestartRecoveryReport,
 };
 use super::repository::OperationRepository;
-use super::OperationState;
+use super::{OperationActorKind, OperationState};
 use crate::error::{AppError, AppResult};
 use crate::store::Store;
+
+/// Stable reason for an Agent proposal whose proposing session no longer holds
+/// its exact grant. The Desktop maps it to localized copy.
+pub(crate) const AGENT_SESSION_REVOKED: &str = "agent_session_revoked";
+
+/// Answers whether the Agent session that created a proposal still holds its
+/// exact grant. The runtime consults it when a proposal is approved and again
+/// when its execution is claimed; the Broker session registry provides it.
+pub(crate) trait AgentSessionLiveness: Send + Sync {
+    fn is_live(&self, terminal_session_id: Uuid) -> bool;
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum OperationPlanDisposition {
@@ -55,6 +68,8 @@ pub(crate) struct LocalApprovalAuthority {
 pub(crate) struct OperationRuntime {
     runtime_id: Uuid,
     repository: OperationRepository,
+    /// Shared by every clone: bound once by the Broker when it starts.
+    agent_sessions: Arc<OnceLock<Arc<dyn AgentSessionLiveness>>>,
 }
 
 impl OperationRuntime {
@@ -64,6 +79,7 @@ impl OperationRuntime {
             Self {
                 runtime_id,
                 repository: OperationRepository::new(store),
+                agent_sessions: Arc::new(OnceLock::new()),
             },
             LocalApprovalAuthority { runtime_id },
         )
@@ -71,6 +87,27 @@ impl OperationRuntime {
 
     pub(crate) const fn runtime_id(&self) -> Uuid {
         self.runtime_id
+    }
+
+    /// Bind the Broker's live session registry. Until bound (tests, or before the
+    /// Broker starts) no Agent session exists that could need it.
+    pub(crate) fn bind_agent_session_liveness(&self, liveness: Arc<dyn AgentSessionLiveness>) {
+        let _ = self.agent_sessions.set(liveness);
+    }
+
+    /// True when an Agent proposal's session no longer holds its exact grant.
+    pub(crate) fn proposing_session_revoked(&self, record: &OperationRecord) -> bool {
+        let (Some(terminal_session_id), Some(liveness)) =
+            (record.terminal_session_id, self.agent_sessions.get())
+        else {
+            return false;
+        };
+        record.actor.kind == OperationActorKind::Agent && !liveness.is_live(terminal_session_id)
+    }
+
+    /// The human reason recorded with a rejection, if one was given.
+    pub(crate) async fn rejection_reason(&self, operation_id: Uuid) -> AppResult<Option<String>> {
+        self.repository.rejection_reason(operation_id).await
     }
 
     pub(crate) async fn recover_previous_runtimes(&self) -> AppResult<RestartRecoveryReport> {
@@ -172,10 +209,42 @@ impl OperationRuntime {
     /// Claim by id only. The repository reloads the immutable payload and uses its
     /// own hash in the CAS; callers never resend SQL, connection, or approval.
     pub(crate) async fn claim(&self, operation_id: Uuid) -> AppResult<ClaimedOperation> {
+        // An approved Agent proposal executes only while the session that
+        // proposed it still holds its exact grant: checked before the claim and
+        // again after it, so a revocation in between never reaches the target.
+        if self.agent_sessions.get().is_some() {
+            let current = self.repository.get(operation_id).await?;
+            if self.proposing_session_revoked(&current) {
+                if !current.state.is_terminal() && current.state != OperationState::Executing {
+                    let _ = self
+                        .finish(
+                            operation_id,
+                            OperationState::Cancelled,
+                            &json!({ "origin": AGENT_SESSION_REVOKED }),
+                        )
+                        .await;
+                }
+                return Err(AppError::Blocked {
+                    reason: AGENT_SESSION_REVOKED.into(),
+                });
+            }
+        }
         let record = self
             .repository
             .claim_execution(operation_id, self.runtime_id, Utc::now())
             .await?;
+        if self.proposing_session_revoked(&record) {
+            let _ = self
+                .finish(
+                    operation_id,
+                    OperationState::Cancelled,
+                    &json!({ "origin": AGENT_SESSION_REVOKED, "phase": "claimed" }),
+                )
+                .await;
+            return Err(AppError::Blocked {
+                reason: AGENT_SESSION_REVOKED.into(),
+            });
+        }
         let grant = execute::issue(&record)?;
         Ok(ClaimedOperation { record, grant })
     }

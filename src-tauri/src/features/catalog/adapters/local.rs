@@ -6,17 +6,19 @@ use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use dopedb_protocol::catalog::CatalogSnapshot;
-use tokio::sync::{Mutex, OwnedMutexGuard, OwnedSemaphorePermit, Semaphore};
+use tokio::sync::{broadcast, Mutex, OwnedMutexGuard, OwnedSemaphorePermit, Semaphore};
 
-use crate::connection::{ensure_terminal_pin, ConnectionAccess, ConnectionManager};
+use crate::connection::{
+    ensure_terminal_pin, ConnectionAccess, ConnectionContext, ConnectionManager,
+};
 use crate::error::{AppError, AppResult};
 use crate::introspect::{self, CatalogReadMode};
 use crate::kernel::identity::ConnectionId;
 use crate::kernel::TerminalAuthority;
 use crate::model::{Engine, Provider, WorkspaceCredentialMode};
-use crate::store::Store;
+use crate::store::{CacheWriteOutcome, Store};
 
-use super::super::domain::{CatalogOverview, CatalogReadPolicy, DatabaseSummary};
+use super::super::domain::{CatalogChanged, CatalogOverview, CatalogReadPolicy, DatabaseSummary};
 use super::super::ports::CatalogGatewayPort;
 
 const CATALOG_OVERVIEW_TIMEOUT: Duration = Duration::from_secs(20);
@@ -53,6 +55,7 @@ impl From<CatalogReadPolicy> for CatalogReadMode {
         match policy {
             CatalogReadPolicy::CacheFirst => Self::CacheFirst,
             CatalogReadPolicy::Refresh => Self::Refresh,
+            CatalogReadPolicy::Uncached => Self::Uncached,
         }
     }
 }
@@ -138,6 +141,58 @@ impl ScopedCatalogGateway {
             reads: CatalogReadCoordinator::default(),
         }
     }
+
+    /// Introspect one exact database live inside an already pinned scope. Reading the
+    /// configured database also replaces the persisted snapshot, so CLI cache-first
+    /// readers never keep serving a catalog older than the one Desktop shows.
+    async fn live_snapshot(
+        &self,
+        context: ConnectionContext,
+        connection_id: ConnectionId,
+        database: Option<String>,
+    ) -> AppResult<CatalogSnapshot> {
+        let configured = context.pin().profile.database.clone();
+        let database = database.unwrap_or_else(|| configured.clone());
+        if database.trim().is_empty() {
+            return Err(AppError::Config(
+                "Catalog V2 requires an explicit database name".into(),
+            ));
+        }
+        let configured_database = database == configured;
+        let _load = if configured_database {
+            // The configured database shares the persisted snapshot with cache-first
+            // and refresh readers; serialize with them instead of scanning twice.
+            Some(self.loads.acquire(connection_id).await)
+        } else {
+            None
+        };
+        let _read = self.reads.acquire(connection_id).await?;
+        // Taken before the scan: a schema change committed during it retires the write.
+        let epoch = self.store.catalog_epoch(connection_id.into()).await;
+        let lease = context.connect_to_database(Some(database.clone())).await?;
+        let catalog = introspect::introspect(lease.live()).await?;
+        let mut profile = lease.pin().profile.clone();
+        profile.database = database;
+        let snapshot = introspect::snapshot_from_catalog(&profile, &catalog)?;
+        if configured_database {
+            match self
+                .store
+                .put_catalog_if_current(lease.pin(), &snapshot, epoch)
+                .await?
+            {
+                CacheWriteOutcome::Stored
+                | CacheWriteOutcome::NotPersisted
+                | CacheWriteOutcome::Superseded => {}
+                CacheWriteOutcome::Stale => {
+                    return Err(AppError::Blocked {
+                        reason: "workspace or connection access changed; retry schema loading"
+                            .into(),
+                    });
+                }
+            }
+        }
+        Ok(snapshot)
+    }
 }
 
 impl CatalogGatewayPort for ScopedCatalogGateway {
@@ -198,10 +253,10 @@ impl CatalogGatewayPort for ScopedCatalogGateway {
         .await
     }
 
-    async fn load_database_snapshot(
+    async fn load_live_snapshot(
         &self,
         connection_id: ConnectionId,
-        database: String,
+        database: Option<String>,
     ) -> AppResult<CatalogSnapshot> {
         self.prepare_runtime(connection_id).await?;
         bounded_catalog_read(
@@ -212,15 +267,34 @@ impl CatalogGatewayPort for ScopedCatalogGateway {
                     .connections
                     .pin(connection_id.into(), ConnectionAccess::Read)
                     .await?;
-                let _read = self.reads.acquire(connection_id).await?;
-                let lease = context.connect_to_database(Some(database.clone())).await?;
-                let catalog = introspect::introspect(lease.live()).await?;
-                let mut profile = lease.pin().profile.clone();
-                profile.database = database;
-                introspect::snapshot_from_catalog(&profile, &catalog)
+                self.live_snapshot(context, connection_id, database).await
             },
         )
         .await
+    }
+
+    async fn load_persisted_snapshot(
+        &self,
+        connection_id: ConnectionId,
+    ) -> AppResult<Option<CatalogSnapshot>> {
+        // Authorize exactly like a cache-first read, but never open a database session:
+        // the renderer shows this only until the concurrent live read replaces it.
+        bounded_catalog_read(
+            "persisted catalog snapshot",
+            CATALOG_OVERVIEW_TIMEOUT,
+            async {
+                let context = self
+                    .connections
+                    .pin(connection_id.into(), ConnectionAccess::Read)
+                    .await?;
+                self.store.get_catalog_if_current(context.pin()).await
+            },
+        )
+        .await
+    }
+
+    fn subscribe_changes(&self) -> broadcast::Receiver<CatalogChanged> {
+        self.store.subscribe_catalog_changes()
     }
 
     async fn load_database_overview(
@@ -313,12 +387,8 @@ impl CatalogGatewayPort for ScopedCatalogGateway {
                     .pin(authority.connection_id.into(), ConnectionAccess::Read)
                     .await?;
                 ensure_terminal_pin(authority, context.pin())?;
-                let _read = self.reads.acquire(authority.connection_id).await?;
-                let lease = context.connect_to_database(Some(database.clone())).await?;
-                let catalog = introspect::introspect(lease.live()).await?;
-                let mut profile = lease.pin().profile.clone();
-                profile.database = database;
-                introspect::snapshot_from_catalog(&profile, &catalog)
+                self.live_snapshot(context, authority.connection_id, Some(database))
+                    .await
             },
         )
         .await
@@ -336,7 +406,8 @@ impl CatalogGatewayPort for ScopedCatalogGateway {
                 .connections
                 .pin(connection_id.into(), ConnectionAccess::Read)
                 .await?;
-            let _load = self.loads.acquire(connection_id).await;
+            // DDL reads one relation and never touches the shared snapshot cache, so it
+            // must not wait behind a full catalog scan holding the load lock.
             let _read = self.reads.acquire(connection_id).await?;
             let lease = context.connect().await?;
             introspect::table_ddl(lease.live(), schema, table).await

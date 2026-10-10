@@ -15,13 +15,43 @@ const STATES = new Set<OperationState>([
   "planned", "pending_approval", "ready", "approved", "rejected", "expired",
   "cancelled", "executing", "succeeded", "failed", "outcome_unknown",
 ]);
+const FINAL_STATES = new Set<OperationState>([
+  "rejected", "expired", "cancelled", "succeeded", "failed", "outcome_unknown",
+]);
 
+/** No further decision or execution can change a proposal in these states. */
+export function isFinalOperationState(state: OperationState) {
+  return FINAL_STATES.has(state);
+}
+
+/** The MCP server each in-app ACP session's bridge registers, and its proposal tool. */
+const DESKTOP_MCP_SERVER = "dopedb-desktop-session";
+const SQL_PROPOSE_TOOL = "sql_propose";
+
+function record(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+/**
+ * True only for this session's own `sql_propose` call, identified by the exact
+ * server and tool names each official adapter reports: Claude keeps the
+ * qualified tool name in `_meta.claudeCode.toolName`; Codex marks MCP calls in
+ * `_meta` and names the server and tool in its raw input. Display titles never
+ * decide this.
+ */
 export function isSqlProposalTool(data: Record<string, unknown>) {
-  const title = typeof data.title === "string" ? data.title : "";
-  const meta = data._meta && typeof data._meta === "object"
-    ? JSON.stringify(data._meta)
-    : "";
-  return `${title} ${meta}`.includes("sql_propose");
+  const meta = record(data._meta);
+  if (record(meta?.claudeCode)?.toolName === `mcp__${DESKTOP_MCP_SERVER}__${SQL_PROPOSE_TOOL}`) {
+    return true;
+  }
+  const input = record(data.rawInput);
+  return (
+    meta?.is_mcp_tool_call === true &&
+    input?.server === DESKTOP_MCP_SERVER &&
+    input?.tool === SQL_PROPOSE_TOOL
+  );
 }
 
 /** Finds only the redacted broker receipt; trusted SQL is loaded separately. */

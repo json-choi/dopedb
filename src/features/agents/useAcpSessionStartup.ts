@@ -8,6 +8,8 @@ import type { CatalogScope } from "../../lib/queries";
 import { useI18n } from "../../lib/i18n";
 import type { ConnectionId } from "../connections/domain";
 import { providerLabel } from "./acpTranscriptPresentation";
+import { agentFailure, stableAgentErrorCode, type AgentFailure } from "./agentErrorLabels";
+import { beginForegroundAgentStart } from "./approvalActivity";
 import type {
   AcpSessionFocus,
   AgentProvider,
@@ -21,6 +23,8 @@ import { beginAgentInitializationOutcome } from "./productAnalytics";
 import { recordAcpSessionFocus } from "./sessionStore";
 import { closeAgentAcpSession, startAgentAcpSession } from "./tauriAdapter";
 
+const AGENT_START_CANCELLED = "agent_start_cancelled";
+
 type AcpSessionStartupInput = {
   activeSessionId: string | null;
   beginFocusRequest: () => AcpFocusRequest;
@@ -28,9 +32,8 @@ type AcpSessionStartupInput = {
   connectionId: ConnectionId;
   currentFocusRequest: () => AcpFocusRequest;
   resourceScopeReady: boolean;
-  ensureSelectedResources: () => Promise<boolean>;
   focusRequestIsCurrent: (request: AcpFocusRequest) => boolean;
-  onError: (message: string | null) => void;
+  onError: (error: AgentFailure | null) => void;
   onStarted: (focus: AcpSessionFocus, provider: AgentProvider) => void;
   onPrepared: (focus: AcpSessionFocus) => Promise<void>;
   onStartingChange: (starting: boolean) => void;
@@ -48,7 +51,6 @@ export function useAcpSessionStartup({
   connectionId,
   currentFocusRequest,
   resourceScopeReady,
-  ensureSelectedResources,
   focusRequestIsCurrent,
   onError,
   onStarted,
@@ -65,6 +67,8 @@ export function useAcpSessionStartup({
     key: string;
     foreground: boolean;
     promise: Promise<AcpSessionFocus | null>;
+    /** Ends the status bar's record of a start a person is waiting on. */
+    finishForeground: (() => void) | null;
   } | null>(null);
   const prewarmAttemptRef = useRef<string | null>(null);
   const selectionKey = [
@@ -91,7 +95,13 @@ export function useAcpSessionStartup({
       const startKey = selectionKey;
       if (pendingStartRef.current?.key === startKey) {
         if (foreground) {
+          // A message sent during background preparation makes it the
+          // person's own start, shown and cancellable in the status bar.
           pendingStartRef.current.foreground = true;
+          pendingStartRef.current.finishForeground ??= beginForegroundAgentStart(
+            connectionId,
+            provider,
+          );
           onStartingChange(true);
         }
         return pendingStartRef.current.promise;
@@ -109,13 +119,6 @@ export function useAcpSessionStartup({
           // Only one adapter initializes at a time. Rapid selection changes
           // collapse to the latest grant without accumulating idle processes.
           await previousStart;
-          if (currentSelectionRef.current !== startKey || !focusRequestIsCurrent(request)) {
-            return null;
-          }
-          if (!(await ensureSelectedResources())) {
-            completeAnalytics("failed");
-            return null;
-          }
           if (currentSelectionRef.current !== startKey || !focusRequestIsCurrent(request)) {
             return null;
           }
@@ -145,19 +148,28 @@ export function useAcpSessionStartup({
           await onPrepared(focus);
           return focus;
         } catch (reason) {
+          // A person cancelled the slow start (status bar or chat): neither an
+          // adapter failure nor an error worth reporting.
+          // The code arrives behind the error variant's prefix, so it is
+          // parsed rather than compared with the whole message.
+          if (stableAgentErrorCode(errMessage(reason))?.code === AGENT_START_CANCELLED) return null;
           completeAnalytics("failed");
           if (currentSelectionRef.current !== startKey || !focusRequestIsCurrent(request)) return null;
-          onError(
-            t("agent.acpStartFailed", {
-              provider: providerLabel(provider),
-              error: errMessage(reason),
-            }),
-          );
+          onError(agentFailure(reason, t, (error) =>
+            t("agent.acpStartFailed", { provider: providerLabel(provider), error })));
           return null;
         }
       })();
-      pendingStartRef.current = { key: startKey, foreground, promise: pending };
+      const entry = {
+        key: startKey,
+        foreground,
+        promise: pending,
+        finishForeground: foreground ? beginForegroundAgentStart(connectionId, provider) : null,
+      };
+      pendingStartRef.current = entry;
       void pending.finally(() => {
+        // Even a start replaced by a newer selection stops being shown.
+        entry.finishForeground?.();
         if (pendingStartRef.current?.promise !== pending) return;
         const wasForeground = pendingStartRef.current.foreground;
         pendingStartRef.current = null;
@@ -170,7 +182,6 @@ export function useAcpSessionStartup({
       catalogScope,
       connectionId,
       currentFocusRequest,
-      ensureSelectedResources,
       focusRequestIsCurrent,
       onError,
       onStarted,

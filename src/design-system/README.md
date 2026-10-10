@@ -364,6 +364,9 @@ loopback 문서는 이 정본을 빌드 시 포함하며 네트워크 font나 sc
   하단 구분선은 inset shadow로 그려 control 높이를 침범하지 않는다. feature shell은 command와 state만 제공한다.
 - `IdeToolbarLauncher`: title toolbar의 32px launcher와 중립적인 open/pressed
   상태. tool window가 열렸다는 이유만으로 primary 파랑을 사용하지 않는다.
+  `count`는 그 tool window에서 사람의 결정을 기다리는 항목 수(예: Agent 변경
+  승인 대기)만 오른쪽 위 pill로 표시한다. pill은 시각 표시일 뿐이므로 호출자가
+  같은 수를 `aria-label`과 tooltip에 함께 적는다.
 - `IdeTabStrip`, `IdeTab`: 평평한 document strip과 strip 안쪽의 둥근 active
   tab. active tab만 Tab 순서에 두고 ArrowLeft/Right/Home/End로 enabled tab을
   이동·선택한다. 화면별 rectangular selection이나 bottom accent를 다시 만들지
@@ -380,7 +383,8 @@ loopback 문서는 이 정본을 빌드 시 포함하며 네트워크 font나 sc
 - `Button`: 전역 `.btn`을 대체하는 Tailwind button primitive. variant, density,
   icon geometry, tone, active/expanded state를 semantic prop으로 소유한다.
   기본 `disabled`는 native 동작을 유지한다. 진행 중 focus를 보존해야 하는
-  command만 `disabledBehavior="focusable"`을 사용하며, 이 opt-in은
+  command와, 잠시 비활성화되어도 tree 화살표 이동과 roving tab stop이 지나가야
+  하는 tree item만 `disabledBehavior="focusable"`을 사용하며, 이 opt-in은
   `aria-disabled`를 노출하고 click·Enter·Space activation을 primitive 안에서
   차단한다. 화면은 `aria-disabled`만 붙인 채 실행 guard를 생략하지 않는다.
   popup 내부 full-width action은 화면별 class를 만들지 않고
@@ -393,6 +397,12 @@ loopback 문서는 이 정본을 빌드 시 포함하며 네트워크 font나 sc
   blocking `alertdialog`에 영향 설명과 취소/파괴적 action을 여는 2단계
   확인 composition. 취소를 첫 focus로 두고 배경 클릭·Escape로 닫으며,
   자동으로 사라지지 않고 닫은 뒤 trigger focus를 복구한다.
+- `ConfirmDialog` (`src/components/ConfirmDialog.tsx`): `ConfirmButton`이 여는
+  바로 그 확인 dialog다. `ModalBackdrop`·`ModalSurface`(alert 크기)·
+  `ModalHeader`·`ModalFooter`를 조합하며, trigger 없이 시작되는 확인(예: 열린
+  수동 트랜잭션이 있을 때 창 닫기·앱 종료)이 같은 dialog를 직접 렌더링한다.
+  확정한 작업이 진행 중이면 `pending`으로 두 action을 focus 가능한 비활성
+  상태로 두고 `aria-busy`를 노출한다. 확인 dialog의 class 목록을 복사하지 않는다.
 - `ResizeSeparator`: shell sidebar와 data-grid column이 공유하는
   keyboard/pointer resize 경계. 실제 dimension과 min/max/now ARIA를 연결하고,
   방향키의 bounded step, Home/End 경계 이동, double-click/Enter action을 소유한다.
@@ -808,6 +818,9 @@ DopeDB의 실제 작업 흐름과 접근성, supported viewport를 위한 제품
   쓰기 대상 유무를 축약해 보여준다. 선택하지 않은 resource는 새 ACP session의
   immutable grant에 포함하지 않으며 여러 DB 결과는 UI에서 join된 것처럼 표현하지
   않는다.
+  대화가 시작된 뒤에는 trigger를 비활성화하지 않고 메뉴를 열어 고정된 선택과 새
+  채팅이 필요한 이유를 읽기 전용으로 보여준다. 미배정 연결의 `프로젝트에 추가`와
+  revision 변경의 `재확인`은 입력면 위의 `ComposerNoticeBar`가 소유한다.
 - 외부 `dopedb agent init/start` 요청은 기존 `Modal` primitive의 wide/fill surface를
   쓰는 전역 approval gate로 표시한다. configure 요청만 같은 Project resource
   checkbox와 단일 write-target radio를 편집할 수 있고, start 요청은 저장된 exact
@@ -815,6 +828,11 @@ DopeDB의 실제 작업 흐름과 접근성, supported viewport를 위한 제품
   전용으로 보여준다. resource가 사라졌거나 inventory를 불러오지 못하면 승인을
   비활성화하고 거절만 허용한다. modal은 secret, connection URL, capability를 표시하지
   않는다.
+  승인된 외부 process의 DB 변경 제안은 같은 gate의 `ExternalAgentProposalDialog`
+  (`src/features/agents/ExternalAgentRequestDialogs.tsx`)가 내장 채팅과 같은
+  `AcpSqlApproval` 카드로 표시한다. 초기 포커스는 닫기 버튼에 두고, operation이 최종
+  상태가 되기 전에는 닫기를 focusable-disabled로 유지하고, 검토를 불러오지 못하면
+  닫기를 허용한다.
 - 빈 AI Chat transcript는 제목·설명 card를 만들지 않고 실제 SQL 작업,
   스키마·선택 데이터 탐색, 명시적 변경 승인 세 줄만 표시한다. 화면에 없는
   IDE capability를 본뜨거나 steady-state onboarding 문단을 반복하지 않는다.
@@ -874,9 +892,9 @@ DopeDB의 실제 작업 흐름과 접근성, supported viewport를 위한 제품
   scrollbar 계약을 사용하며 floating status footer가 있는 grid는 scroll
   bottom inset을 명시해 마지막 행과 keyboard focus가 footer 아래에 가리지 않게
   한다.
-  `dataGridGeometry.ts`가 제품 기준의 28px header/row, 28px row-number
-  column, 144px default data column을 소유하며 일반·가상 renderer는 이 값을
-  중복 선언하지 않는다. identifier/value/row number는 `font-mono`를 사용한다.
+  `dataGridGeometry.ts`가 제품 기준의 28px header/row, 최소 28px에서 가장 큰
+  행 번호의 자릿수에 맞춰 넓어지는 row-number column, 144px default data
+  column을 소유하며 일반·가상 renderer는 이 값을 중복 선언하지 않는다. identifier/value/row number는 `font-mono`를 사용한다.
   열 경계 더블클릭은 공용 `dataGridAutoFitWidth`로 해당 열만 최대 480px까지
   맞춘다. 실제 표시 font·헤더 control 공간과 현재 로드된 값을 측정하고,
   stream은 retained cache page만 순회해 추가 조회·전체 결과 평탄화를 하지 않는다.

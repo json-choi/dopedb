@@ -18,6 +18,7 @@ import {
 } from "../choices";
 import CreateWorkspaceDialog from "../../workspaceAdmin/workspaces/CreateWorkspaceDialog";
 import { requestWorkspaceAdmin } from "../../workspaceAdmin/navigationRequest";
+import { leaveConnectionEditor } from "../../connections/connectionEditorShellBridge";
 import { useWorkspaceAdminScope } from "../../workspaceAdmin/scope";
 import { errMessage } from "../../../ipc/types";
 import { useI18n } from "../../../lib/i18n";
@@ -87,10 +88,17 @@ export default function WorkspaceSwitcher({
     );
   }
 
-  async function changeWorkspace(value: string) {
+  function changeWorkspace(value: string) {
     if (!context.data?.feature.enabled) return;
     const choice = parseWorkspaceChoice(value);
     if (!choice || value === activeChoice || switching) return;
+    // An open connection editor confirms discarding unsaved edits first.
+    leaveConnectionEditor(() => void applyWorkspaceChoice(choice));
+  }
+
+  async function applyWorkspaceChoice(
+    choice: NonNullable<ReturnType<typeof parseWorkspaceChoice>>,
+  ) {
     setSwitching(true);
     try {
       await switchWorkspace(

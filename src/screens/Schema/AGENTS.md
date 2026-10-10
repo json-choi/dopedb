@@ -23,9 +23,12 @@ disagree about which schema revision they show.
   `onOpenTable`.
 - The ERD canvas (`features/erd/ErdCanvas`) is `lazy()`-loaded from this
   screen — keep it behind `Suspense` rather than importing it eagerly.
-- Reads go through `catalogOverviewQuery`, `catalogQuery`,
-  `catalogSnapshotQuery`, `useCatalogScope` (`src/lib/queries.ts`); do not add
-  a raw `invoke` fetch here.
+- Reads go through `catalogOverviewQuery` and the shared per-database
+  `databaseCatalogSnapshotQuery` (projected with `catalogFromSnapshot`) from
+  `src/lib/catalogQueries.ts`, scoped by `useCatalogScope` (`src/lib/queries.ts`);
+  do not add a raw `invoke` fetch here. Details another surface already read are
+  shown without a new request. Rereading uses the shared `refreshConnectionCatalog`;
+  a failed reread keeps the last read schema with an inline failure and Retry.
 - Respect `detailLifecycle.ts`'s `schemaDetailsEnabled` gate — do not trigger a
   full-catalog fetch merely because a connection became selected.
 - Manual UI check: run `pnpm dev:app`, open a connection's Schema tab, and

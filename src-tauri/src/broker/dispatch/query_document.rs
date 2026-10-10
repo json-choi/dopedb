@@ -154,6 +154,14 @@ impl BrokerDispatcher {
         {
             return Err(ErrorCode::ScopeDenied);
         }
+        // An external Agent's proposals are decided only in the bounded approval
+        // queue; never create one it could not show. The Agent waits instead.
+        if !self
+            .external_agent_requests
+            .accepts_proposal(session.terminal_session_id)
+        {
+            return Err(ErrorCode::OperationConflict);
+        }
         let receipt = self
             .services()?
             .queries
@@ -165,11 +173,18 @@ impl BrokerDispatcher {
             })
             .await
             .map_err(|error| map_application_error(error.into_error()))?;
-        self.services()?
+        // The proposal is approvable only while this exact session holds its
+        // grant; the registry hands it to cancellation when the session ends.
+        self.sessions
+            .track_proposal(session.terminal_session_id, receipt.operation_id.into());
+        let summary = self
+            .services()?
             .operation
             .show_terminal(&authority, receipt.operation_id.into())
             .await
-            .map_err(map_operation_error)
+            .map_err(map_operation_error)?;
+        super::external_agent::surface_proposal(self, session.terminal_session_id, &summary);
+        Ok(summary)
     }
 
     async fn show_operation(
@@ -349,6 +364,17 @@ impl BrokerDispatcher {
             .prepare_terminal_run(arguments.plan_id.into(), &authority)
             .await
             .map_err(map_prepare_error)?;
+        // An open manual transaction (and its uncommitted rows) is visible only to a
+        // read on the ACP session's single write target, or to a non-ACP terminal
+        // session pinned to that one connection; every other read stays on the
+        // database-enforced read-only pool.
+        let prepared = if session.agent_plugin_id.is_none()
+            || session.write_connection_id == Some(authority.connection_id)
+        {
+            prepared.within_write_target()
+        } else {
+            prepared
+        };
         let receipt = prepared.execute().await.map_err(map_query_run_error)?;
         let run = receipt.run();
         Ok(QueryRunResult {

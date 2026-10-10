@@ -1,11 +1,11 @@
-// ACP Chat owns session selection, lifecycle, permissions, composer state, and
-// viewport effects while returning state grouped by view responsibility.
+// ACP Chat composes provider readiness, the selected Project resources, the
+// active session (useAcpActiveSession), composer state, and viewport effects,
+// returning state and commands grouped by view responsibility.
 
 import {
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type FormEvent,
 } from "react";
@@ -26,59 +26,54 @@ import {
 import type { WorkbenchDocument } from "../workbench/domain";
 import { EMPTY_ACP_PROMPT_CONTEXT } from "./acpPromptContext";
 import {
+  applyPanelModelChoice,
   applyRememberedAcpMode,
   rememberAcpMode,
 } from "./approvalModePreference";
-import { agentReadyForChat } from "./availability";
-import {
-  loginCommand,
-  selectRichTranscriptKeys,
-} from "./acpTranscriptPresentation";
+import { agentCliReady, agentPluginReady } from "./availability";
+import { loginCommand, selectRichTranscriptKeys } from "./acpTranscriptPresentation";
+import { agentErrorLabel, agentFailure, type AgentFailure } from "./agentErrorLabels";
 import { useAgentDebugDetails } from "./displayPreferences";
+import { useAgentApprovalFocusSelection } from "./pendingApprovals";
 import type {
   AcpPromptContext,
   AcpSessionConfigOption,
   AcpSessionFocus,
   AcpSessionId,
+  AcpSessionSummary,
   AgentComposerRequest,
   AgentProvider,
 } from "./domain";
 import {
-  agentCliDetectionQuery,
   agentPluginStatusQuery,
+  useAgentCliStatusQuery,
 } from "./queryOptions";
 import {
-  isCurrentAcpFocusRequest,
   isLiveSession,
   ownsAcpComposerRequest,
   selectWorkspaceSessions,
-  type AcpFocusRequest,
 } from "./sessionFocus";
 import {
-  recordAcpSessionFocus,
   retryAcpSessionSnapshot,
   useAcpSessionSnapshot,
 } from "./sessionStore";
+import { observeAgentTurnOutcome } from "./productAnalytics";
 import {
-  beginAgentInitializationOutcome,
-  observeAgentTurnOutcome,
-} from "./productAnalytics";
-import {
-  cancelAgentAcpSession,
   closeAgentAcpSession,
-  focusAgentAcpSession,
   openAgentExternalLink,
   promptAgentAcpSession,
-  respondAgentAcpPermission,
-  resumeAgentAcpSession,
   setAgentAcpConfigOption,
 } from "./tauriAdapter";
 import { visibleAcpTranscriptItems } from "./transcript";
-import { useAgentEnvironmentInventory } from "./useAgentEnvironmentInventory";
+import {
+  useAgentEnvironmentInventory,
+  type AgentResourceReconfirmation,
+} from "./useAgentEnvironmentInventory";
 import {
   useAgentScopeConnection,
   useAgentScopeSelection,
 } from "./useAgentScopeSelection";
+import { useAcpActiveSession } from "./useAcpActiveSession";
 import { useAcpSessionStartup } from "./useAcpSessionStartup";
 import { useAcpScopeCommands } from "./useAcpScopeCommands";
 import { useAcpChatViewport } from "./useAcpChatViewport";
@@ -117,34 +112,35 @@ export function useAcpChatController({
   const sessionSnapshot = useAcpSessionSnapshot(catalogScope.key);
   const debugDetails = useAgentDebugDetails();
   const configuredProviders = useEnabledAgentProviders();
-  const [activeId, setActiveId] = useState<AcpSessionId | null>(null);
   const [starting, setStarting] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [selectedProvider, setSelectedProvider] =
     useState<AgentProvider>("claude");
   const [configChanging, setConfigChanging] = useState<string | null>(null);
+  const [panelModelChoices, setPanelModelChoices] = useState<
+    Partial<Record<AgentProvider, string>>
+  >({});
   const [prompt, setPrompt] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [permissionSubmitting, setPermissionSubmitting] = useState<
-    string | null
-  >(null);
+  const [errorState, setErrorState] = useState<AgentFailure | null>(null);
+  // A failure from `agentFailure` carries its stable code and copyable raw
+  // text; plain product copy has neither.
+  const setError = useCallback((error: AgentFailure | string | null) => {
+    setErrorState(
+      typeof error === "string" ? { message: error, detail: null, code: null } : error,
+    );
+  }, []);
+  const error = errorState?.message ?? null;
+  const [notice, setNotice] = useState<string | null>(null);
   const [copiedSetupCommand, setCopiedSetupCommand] =
     useState<AgentProvider | null>(null);
   const {
     connection: scopedConnection,
     select: selectScopedConnection,
   } = useAgentScopeConnection(connection, connections);
-  const activeIdRef = useRef<AcpSessionId | null>(null);
-  const restoredScopeRef = useRef<string | null>(null);
-  const selectionGenerationRef = useRef(0);
-  const focusRequestIdRef = useRef(0);
-  const catalogScopeKeyRef = useRef(catalogScope.key);
-  catalogScopeKeyRef.current = catalogScope.key;
   const [consumedComposerRequestId, setConsumedComposerRequestId] = useState<string | null>(null);
-  const cliStatusQuery = useQuery({
-    ...agentCliDetectionQuery(),
-    refetchOnWindowFocus: false,
-  });
+  // Returning from a terminal install or sign-in re-probes only the chosen
+  // CLIs that are not ready; a ready CLI is never spawned again on focus.
+  const cliStatusQuery = useAgentCliStatusQuery(configuredProviders);
   const pluginStatusQuery = useQuery({
     ...agentPluginStatusQuery(),
     refetchOnWindowFocus: false,
@@ -156,30 +152,56 @@ export function useAcpChatController({
     onError: setError,
   });
   const availableKnowledgeEnvironments = environmentInventory.available;
+  // The chat connection decides whether AI Chat can host a provider at all; the
+  // local CLI sign-in only gates the picker and new sessions, so its setup
+  // guidance stays reachable and a readiness flap never hides a conversation.
+  const pluginReadyProviders = useMemo(
+    () =>
+      configuredProviders.filter((provider) =>
+        agentPluginReady(
+          pluginStatusQuery.data?.find(
+            (status) => status.pluginId === `dopedb.acp.${provider}`,
+          ),
+        ),
+      ),
+    [configuredProviders, pluginStatusQuery.data],
+  );
   const enabledProviders = useMemo(
     () =>
-      configuredProviders.filter((provider) => {
-        const pluginId = `dopedb.acp.${provider}`;
-        const plugin = pluginStatusQuery.data?.find(
-          (status) => status.pluginId === pluginId,
-        );
-        const cli = cliStatusQuery.data?.find((status) => status.id === provider);
-        return agentReadyForChat(plugin, cli);
-      }),
-    [configuredProviders, pluginStatusQuery.data, cliStatusQuery.data],
+      pluginReadyProviders.filter((provider) =>
+        agentCliReady(cliStatusQuery.data?.find((status) => status.id === provider)),
+      ),
+    [pluginReadyProviders, cliStatusQuery.data],
   );
 
   const workspaceSessions = useMemo(
-    () => selectWorkspaceSessions(sessionSnapshot.sessions, enabledProviders),
-    [enabledProviders, sessionSnapshot.sessions],
+    () => selectWorkspaceSessions(sessionSnapshot.sessions, configuredProviders),
+    [configuredProviders, sessionSnapshot.sessions],
   );
-  const active =
-    workspaceSessions.find((session) => session.id === activeId) ?? null;
+  const activeSession = useAcpActiveSession({
+    catalogScope,
+    sessions: workspaceSessions,
+    projections: sessionSnapshot.projections,
+    restoreReady:
+      !sessionSnapshot.loading &&
+      pluginStatusQuery.isSuccess &&
+      cliStatusQuery.isSuccess,
+    selectedProvider,
+    starting,
+    setStarting,
+    setError,
+  });
+  const {
+    active,
+    activeId,
+    activeEventsLoaded,
+    selectActiveSession,
+    beginFocusRequest,
+    currentFocusRequest,
+    focusRequestIsCurrent,
+  } = activeSession;
   const activeSessionId = active?.id ?? null;
   const activeProvider = active?.provider ?? null;
-  const activeEventsLoaded =
-    activeSessionId !== null &&
-    sessionSnapshot.projections.has(activeSessionId);
   const activeProjection = activeSessionId
     ? sessionSnapshot.projections.get(activeSessionId)
     : undefined;
@@ -198,7 +220,17 @@ export function useAcpChatController({
     selectionLocked: !scopeChangeAllowed,
   });
   const richTranscriptKeys = selectRichTranscriptKeys(transcript);
-  const configOptions = activeProjection?.configOptions ?? [];
+  // While a replacement session prepares, keep showing the provider's last
+  // advertised options (disabled) so the composer does not jump or lose them.
+  const liveConfigOptions = activeProjection?.configOptions ?? [];
+  const configOptions =
+    liveConfigOptions.length > 0
+      ? liveConfigOptions
+      : lastAdvertisedConfigOptions(
+          workspaceSessions,
+          sessionSnapshot.projections,
+          activeProvider ?? selectedProvider,
+        );
   const modelOption = configOptions.find(
     (option) =>
       option.category === "model" &&
@@ -229,10 +261,20 @@ export function useAcpChatController({
     selectedCliStatus?.installed === true &&
     selectedCliStatus.authenticated === true;
   const cliDetectionError = cliStatusQuery.isError
-    ? errMessage(cliStatusQuery.error)
-    : selectedCliStatus?.detectionError ?? null;
-  const selectedPluginReady = enabledProviders.includes(selectedProvider);
-  const prerequisitesReady = selectedCliReady && selectedPluginReady;
+    ? agentErrorLabel(errMessage(cliStatusQuery.error), t)
+    : selectedCliStatus?.detectionError
+      ? agentErrorLabel(selectedCliStatus.detectionError, t)
+      : null;
+  const selectedPluginReady = pluginReadyProviders.includes(selectedProvider);
+  const activeLive = active !== null && isLiveSession(active.lifecycle);
+  // A new session needs the chat connection and the signed-in local CLI; an
+  // already running conversation keeps working through its own adapter.
+  const startPrerequisitesReady = selectedCliReady && selectedPluginReady;
+  const prerequisitesReady = activeLive || startPrerequisitesReady;
+  const pickerProviders =
+    selectedPluginReady && !enabledProviders.includes(selectedProvider)
+      ? [...enabledProviders, selectedProvider]
+      : enabledProviders;
   const newEnvironmentScopeReady = agentScope.newScopeReady;
   const activeEnvironmentScopeReady =
     active !== null &&
@@ -243,10 +285,22 @@ export function useAcpChatController({
   const loading = sessionSnapshot.loading;
   const sessionLoadError = sessionSnapshot.error
     ? t("agent.acpLoadFailed", {
-        error: errMessage(sessionSnapshot.error),
+        error: agentErrorLabel(errMessage(sessionSnapshot.error), t),
       })
     : null;
   const environmentLoadError = environmentInventory.loadError;
+  // The database open in Explorer may belong to no Project; the Agent cannot
+  // use it, so the panel says so and offers the existing binding destination.
+  const explorerConnectionUnassigned =
+    environmentInventory.success &&
+    !environmentInventory.available.some((environment) =>
+      environment.bindings.some((binding) => binding.connectionId === connection.id),
+    );
+  const assignEnvironmentId =
+    agentScope.project?.databases[0]?.environmentId ??
+    agentScope.project?.sources[0]?.environmentId ??
+    environmentInventory.available[0]?.id ??
+    null;
   const viewport = useAcpChatViewport({
     activeSessionId,
     projectionRevision: activeProjection?.revision,
@@ -260,35 +314,6 @@ export function useAcpChatController({
     selectScopedConnection(active?.connectionId ?? agentScope.anchorConnectionId ?? connection.id);
   }, [active?.connectionId, agentScope.anchorConnectionId, connection.id, selectScopedConnection]);
 
-  const selectActiveSession = useCallback((next: AcpSessionId | null) => {
-    if (activeIdRef.current === next) return;
-    activeIdRef.current = next;
-    selectionGenerationRef.current += 1;
-    setActiveId(next);
-  }, []);
-  const beginFocusRequest = useCallback(
-    (): AcpFocusRequest => ({
-      requestId: ++focusRequestIdRef.current,
-      scopeKey: catalogScopeKeyRef.current,
-      selectionGeneration: selectionGenerationRef.current,
-      selectedSessionId: activeIdRef.current,
-    }),
-    [],
-  );
-  const currentFocusRequest = useCallback(
-    (): AcpFocusRequest => ({
-      requestId: focusRequestIdRef.current,
-      scopeKey: catalogScopeKeyRef.current,
-      selectionGeneration: selectionGenerationRef.current,
-      selectedSessionId: activeIdRef.current,
-    }),
-    [],
-  );
-  const focusRequestIsCurrent = useCallback(
-    (request: AcpFocusRequest) =>
-      isCurrentAcpFocusRequest(request, currentFocusRequest()),
-    [currentFocusRequest],
-  );
   const scopeCommands = useAcpScopeCommands({
     active,
     scopeChangeAllowed,
@@ -298,96 +323,77 @@ export function useAcpChatController({
     toggleResource: agentScope.toggle,
     selectWriteTarget: agentScope.selectWriteTarget,
   });
-  const recordFocus = useCallback(
-    (focus: AcpSessionFocus) =>
-      recordAcpSessionFocus(catalogScope.key, focus),
-    [catalogScope.key],
-  );
-  const loadFocusReplay = useCallback(
-    async (sessionId: AcpSessionId) => {
-      const focus = await focusAgentAcpSession(sessionId);
-      // A late replay still belongs in the external store, but selection is
-      // owned by the user's latest intent and is never changed by this read.
-      recordFocus(focus);
-      return focus;
-    },
-    [recordFocus],
-  );
+  // A prepared session nobody has prompted holds an adapter process and one of
+  // the runtime's session slots. Leaving it for another provider, conversation,
+  // or resource must close it instead of only deselecting it.
+  const activeUntouched =
+    active !== null && active.lifecycle === "ready" && transcript.length === 0;
+  const releaseUntouchedActive = useCallback(() => {
+    if (!active || !activeUntouched) return;
+    void closeAgentAcpSession(active.id).catch(() => undefined);
+  }, [active, activeUntouched]);
   const changeProvider = useCallback(
     (provider: AgentProvider) => {
       if (provider === selectedProvider && activeProvider === provider) return;
       setSelectedProvider(provider);
       setCopiedSetupCommand(null);
       if (activeProvider !== null && activeProvider !== provider) {
+        releaseUntouchedActive();
         selectActiveSession(null);
         setPrompt("");
         setError(null);
+        setNotice(null);
         setHistoryOpen(false);
         setIncludeEditorContext(false);
       }
     },
-    [activeProvider, selectActiveSession, selectedProvider, setIncludeEditorContext],
+    [
+      activeProvider,
+      releaseUntouchedActive,
+      selectActiveSession,
+      selectedProvider,
+      setError,
+      setIncludeEditorContext,
+    ],
   );
-
-  useEffect(() => {
-    selectActiveSession(null);
-    setStarting(false);
-  }, [catalogScope.key, selectActiveSession]);
-
-  useEffect(() => {
-    if (sessionSnapshot.loading || !pluginStatusQuery.isSuccess || !cliStatusQuery.isSuccess || restoredScopeRef.current === catalogScope.key) return;
-    restoredScopeRef.current = catalogScope.key;
-    const next = workspaceSessions.find((session) =>
-      isLiveSession(session.lifecycle),
-    );
-    if (activeIdRef.current === null) {
-      selectActiveSession(next?.id ?? null);
-    }
-  }, [catalogScope.key, pluginStatusQuery.isSuccess, cliStatusQuery.isSuccess, selectActiveSession, sessionSnapshot.loading, workspaceSessions]);
-
-  useEffect(() => {
-    const next =
-      workspaceSessions.find((session) =>
-        isLiveSession(session.lifecycle)
-      )?.id ?? null;
-    if (
-      activeId &&
-      !workspaceSessions.some((session) => session.id === activeId)
-    ) {
-      selectActiveSession(next);
-    }
-  }, [activeId, selectActiveSession, workspaceSessions]);
 
   useEffect(() => {
     if (activeProvider) setSelectedProvider(activeProvider);
   }, [activeProvider]);
 
   useEffect(() => {
-    if (enabledProviders.includes(selectedProvider)) return;
-    const next = enabledProviders[0];
+    // Never switch away from an open conversation because a readiness probe
+    // flapped; only an idle panel follows the first fully ready provider.
+    if (activeProvider !== null || enabledProviders.includes(selectedProvider)) return;
+    const next =
+      enabledProviders[0] ??
+      (pluginReadyProviders.includes(selectedProvider)
+        ? undefined
+        : pluginReadyProviders[0]);
     if (next) void changeProvider(next);
-  }, [changeProvider, enabledProviders, selectedProvider]);
+  }, [
+    activeProvider,
+    changeProvider,
+    enabledProviders,
+    pluginReadyProviders,
+    selectedProvider,
+  ]);
 
   useEffect(() => {
-    if (activeSessionId === null || activeEventsLoaded) return;
-    const request = beginFocusRequest();
-    void loadFocusReplay(activeSessionId).catch((reason) => {
-      if (!focusRequestIsCurrent(request)) return;
-      setError(t("agent.acpLoadFailed", { error: errMessage(reason) }));
-    });
-    return () => {
-      if (focusRequestIdRef.current === request.requestId) {
-        focusRequestIdRef.current += 1;
-      }
-    };
-  }, [
-    activeEventsLoaded,
-    activeSessionId,
-    beginFocusRequest,
-    focusRequestIsCurrent,
-    loadFocusReplay,
-    t,
-  ]);
+    // An untouched prepared session that closed (idle limit, provider removal)
+    // has nothing to resume; let the panel prepare a fresh one when needed.
+    if (
+      !active ||
+      starting ||
+      !activeEventsLoaded ||
+      active.lifecycle !== "closed" ||
+      active.error !== null ||
+      transcript.length > 0
+    ) {
+      return;
+    }
+    selectActiveSession(null);
+  }, [active, activeEventsLoaded, selectActiveSession, starting, transcript.length]);
 
   const commitStartedSession = useCallback(
     (focus: AcpSessionFocus, provider: AgentProvider) => {
@@ -400,13 +406,12 @@ export function useAcpChatController({
   const prepareRememberedMode = useCallback(async (focus: AcpSessionFocus) => {
     try {
       await applyRememberedAcpMode(focus, catalogScope.preferenceKey ?? catalogScope.key);
+      await applyPanelModelChoice(focus, panelModelChoices[focus.session.provider]);
     } catch (reason) {
-      setError(t("agent.acpConfigFailed", {
-        name: t("agent.acpApprovalMode"),
-        error: errMessage(reason),
-      }));
+      setError(agentFailure(reason, t, (error) =>
+        t("agent.acpConfigFailed", { name: t("agent.acpApprovalMode"), error })));
     }
-  }, [catalogScope.key, catalogScope.preferenceKey, t]);
+  }, [catalogScope.key, catalogScope.preferenceKey, panelModelChoices, setError, t]);
   const startSession = useAcpSessionStartup({
     activeSessionId,
     beginFocusRequest,
@@ -414,13 +419,12 @@ export function useAcpChatController({
     connectionId: agentScope.anchorConnectionId ?? scopedConnection.id,
     currentFocusRequest,
     resourceScopeReady: newEnvironmentScopeReady,
-    ensureSelectedResources: agentScope.ensureSelected,
     focusRequestIsCurrent,
     onError: setError,
     onStarted: commitStartedSession,
     onPrepared: prepareRememberedMode,
     onStartingChange: setStarting,
-    prerequisitesReady,
+    prerequisitesReady: startPrerequisitesReady,
     selectedResourceScopes: agentScope.resourceScopes,
     writeConnectionId: agentScope.writeConnectionId,
     selectedProvider,
@@ -437,8 +441,12 @@ export function useAcpChatController({
         session.lifecycle === "closed" ||
         session.lifecycle === "failed"
       ) {
+        const replacingConversation = session !== null && transcript.length > 0;
         const focus = await startSession(selectedProvider);
         session = focus?.session ?? null;
+        // Say so when a message opens a new conversation instead of continuing
+        // the closed one; its history stays in the session list.
+        if (session && replacingConversation) setNotice(t("agent.acpStartedNewSession"));
       }
       if (!session || session.lifecycle !== "ready") return false;
       const stopObservingTurn = observeAgentTurnOutcome(
@@ -463,6 +471,8 @@ export function useAcpChatController({
       selectedProvider,
       startSession,
       starting,
+      t,
+      transcript.length,
     ],
   );
 
@@ -481,6 +491,7 @@ export function useAcpChatController({
       return;
     }
     if (active && !ownsAcpComposerRequest(active, composerRequest)) {
+      releaseUntouchedActive();
       selectActiveSession(null);
       return;
     }
@@ -505,7 +516,7 @@ export function useAcpChatController({
         if (sent) setPrompt("");
       })
       .catch((reason) => {
-        setError(t("agent.acpSendFailed", { error: errMessage(reason) }));
+        setError(agentFailure(reason, t, (error) => t("agent.acpSendFailed", { error })));
       });
   }, [
     active,
@@ -514,8 +525,10 @@ export function useAcpChatController({
     consumedComposerRequestId,
     environmentInventory.success,
     prerequisitesReady,
+    releaseUntouchedActive,
     selectActiveSession,
     agentScope.resourceScopes,
+    setError,
     setIncludeEditorContext,
     starting,
     submitPromptText,
@@ -530,57 +543,46 @@ export function useAcpChatController({
     setHistoryOpen(false);
     setPrompt("");
     setError(null);
+    setNotice(null);
     setIncludeEditorContext(false);
+  }
+
+  // A conversation whose pinned resources changed cannot resume. The new
+  // draft keeps its selection, because the draft mirrors the last selected
+  // conversation's resources; a stale binding still needs reconfirmation.
+  function newWithSameResources() {
+    beginNewChat();
+    window.requestAnimationFrame(() => {
+      document
+        .querySelector<HTMLElement>('[data-agent-focus-target="composer"]:not(:disabled)')
+        ?.focus({ preventScroll: true });
+    });
   }
 
   function selectSession(id: AcpSessionId) {
     const session = workspaceSessions.find((candidate) => candidate.id === id);
+    if (activeId !== id) releaseUntouchedActive();
     selectActiveSession(id);
     setError(null);
+    setNotice(null);
     if (session) setSelectedProvider(session.provider);
     setHistoryOpen(false);
   }
-
-  async function resumeSession() {
-    if (!active || starting || active.acpSessionId === null) return;
-    const request = beginFocusRequest();
-    const completeAnalytics = beginAgentInitializationOutcome(
-      catalogScope,
-      active.provider,
-    );
-    setStarting(true);
-    setError(null);
-    try {
-      const focus = await resumeAgentAcpSession(active.id);
-      completeAnalytics("success");
-      recordFocus(focus);
-    } catch (reason) {
-      completeAnalytics("failed");
-      if (!focusRequestIsCurrent(request)) return;
-      setError(t("agent.acpResumeFailed", { error: errMessage(reason) }));
-      try {
-        const recoveryRequest = beginFocusRequest();
-        await loadFocusReplay(active.id);
-        if (!focusRequestIsCurrent(recoveryRequest)) return;
-      } catch {
-        // Keep the actionable resume error when the persisted focus also vanished.
-      }
-    } finally {
-      setStarting(false);
-    }
-  }
+  // A pending Agent change opened from the status bar shows its conversation.
+  useAgentApprovalFocusSelection(workspaceSessions, activeId, selectSession);
 
   async function sendPrompt(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const submitted = prompt;
     setError(null);
+    setNotice(null);
     try {
       const submittedContext = composerContext.included
         ? composerContext.context
         : EMPTY_ACP_PROMPT_CONTEXT;
       if (await submitPromptText(submitted, submittedContext)) setPrompt("");
     } catch (reason) {
-      setError(t("agent.acpSendFailed", { error: errMessage(reason) }));
+      setError(agentFailure(reason, t, (error) => t("agent.acpSendFailed", { error })));
     }
   }
 
@@ -589,7 +591,7 @@ export function useAcpChatController({
     try {
       await openUrl(AGENT_SETUP_URLS[provider]);
     } catch (reason) {
-      setError(t("agent.acpSetupActionFailed", { error: errMessage(reason) }));
+      setError(agentFailure(reason, t, (error) => t("agent.acpSetupActionFailed", { error })));
     }
   }
 
@@ -599,7 +601,7 @@ export function useAcpChatController({
       await navigator.clipboard.writeText(loginCommand(provider));
       setCopiedSetupCommand(provider);
     } catch (reason) {
-      setError(t("agent.acpSetupActionFailed", { error: errMessage(reason) }));
+      setError(agentFailure(reason, t, (error) => t("agent.acpSetupActionFailed", { error })));
     }
   }
 
@@ -615,62 +617,23 @@ export function useAcpChatController({
       if (option.category === "mode") {
         rememberAcpMode(catalogScope.preferenceKey ?? catalogScope.key, active.provider, value);
       }
+      if (option.category === "model") {
+        setPanelModelChoices((current) => ({ ...current, [active.provider]: value }));
+      }
     } catch (reason) {
-      setError(
-        t("agent.acpConfigFailed", {
-          name: option.name,
-          error: errMessage(reason),
-        }),
-      );
+      setError(agentFailure(reason, t, (error) =>
+        t("agent.acpConfigFailed", { name: option.name, error })));
     } finally {
       setConfigChanging(null);
-    }
-  }
-
-  const respondPermission = useCallback(
-    async (requestId: string, optionId: string | null) => {
-      if (!activeId || permissionSubmitting) return;
-      setPermissionSubmitting(requestId);
-      setError(null);
-      try {
-        await respondAgentAcpPermission(activeId, requestId, optionId);
-      } catch (reason) {
-        setError(t("agent.acpPermissionFailed", { error: errMessage(reason) }));
-      } finally {
-        setPermissionSubmitting(null);
-      }
-    },
-    [activeId, permissionSubmitting, t],
-  );
-
-  async function cancelTurn() {
-    if (!active) return;
-    setError(null);
-    try {
-      await cancelAgentAcpSession(active.id);
-      // The live ACP event stream owns the turn-end and ready transition.
-      // Replaying focus here races that stream and can merge an incomplete frame.
-    } catch (reason) {
-      setError(t("agent.acpCancelFailed", { error: errMessage(reason) }));
-    }
-  }
-
-  async function closeSession() {
-    if (!active || active.lifecycle === "closed") return;
-    setError(null);
-    try {
-      await closeAgentAcpSession(active.id);
-    } catch (reason) {
-      setError(t("agent.acpCloseFailed", { error: errMessage(reason) }));
     }
   }
 
   const openMessageLink = useCallback((href: string) => {
     setError(null);
     void openAgentExternalLink(href, lang).catch((reason) => {
-      setError(t("agent.acpOpenLinkFailed", { error: errMessage(reason) }));
+      setError(agentFailure(reason, t, (error) => t("agent.acpOpenLinkFailed", { error })));
     });
-  }, [lang, t]);
+  }, [lang, setError, t]);
 
   return {
     viewport,
@@ -682,10 +645,17 @@ export function useAcpChatController({
       activeEventsLoaded,
       replayTruncated: activeProjection?.replayTruncated ?? false,
       pendingPermissionId,
-      permissionSubmitting,
+      permissionSubmitting: activeSession.permissionSubmitting,
       historyOpen,
       starting,
       busy: agentBusy,
+      activeLive,
+      // Proposal cards accept decisions only for this live conversation's own
+      // Broker session; a stored or ended one has none.
+      brokerSessionId:
+        activeLive && activeSessionId !== null
+          ? sessionSnapshot.brokerSessionIds.get(activeSessionId) ?? null
+          : null,
       loading,
       loadError: sessionLoadError,
       debugDetails,
@@ -693,6 +663,8 @@ export function useAcpChatController({
     setup: {
       selectedProvider,
       enabledProviders,
+      pluginReadyProviders,
+      pickerProviders,
       selectedCliStatus,
       selectedCliReady,
       selectedPluginReady,
@@ -714,6 +686,16 @@ export function useAcpChatController({
         success: environmentInventory.success,
         loadError: environmentLoadError,
         newScopeReady: newEnvironmentScopeReady,
+        needsReconfirmation: agentScope.needsReconfirmation,
+        // What changed in each selected resource, shown before reconfirming.
+        reconfirmChanges: uniqueReconfirmations([
+          ...agentScope.selectedDatabases,
+          ...agentScope.selectedSources,
+        ]),
+        unassignedConnectionName: explorerConnectionUnassigned
+          ? connection.name
+          : null,
+        assignEnvironmentId,
         reconfirmingEnvironmentId: environmentInventory.updatingEnvironmentId,
       },
     },
@@ -729,15 +711,23 @@ export function useAcpChatController({
     },
     feedback: {
       error,
+      errorDetail: errorState?.detail ?? null,
+      // Resuming found the pinned resources changed: offer the same selection
+      // in a new conversation instead of a dead end.
+      offerSameResources:
+        errorState?.code === "agent_scope_changed" && active !== null && !activeLive,
+      notice,
     },
     commands: {
       session: {
         beginNewChat,
+        newWithSameResources,
         select: selectSession,
-        resume: resumeSession,
+        resume: activeSession.commands.resume,
         start: startSession,
-        cancelTurn,
-        close: closeSession,
+        cancelStart: activeSession.commands.cancelStart,
+        cancelTurn: activeSession.commands.cancelTurn,
+        close: activeSession.commands.close,
         toggleHistory: () => setHistoryOpen((current) => !current),
         retryLoad: () => retryAcpSessionSnapshot(catalogScope.key),
       },
@@ -747,6 +737,7 @@ export function useAcpChatController({
         toggleEditorContext: composerContext.toggle,
         selectEnvironment: scopeCommands.toggle,
         selectWriteTarget: scopeCommands.write,
+        reconfirmResources: () => void agentScope.reconfirmSelected(),
         changeConfigOption,
       },
       setup: {
@@ -759,10 +750,11 @@ export function useAcpChatController({
           environmentInventory.refresh(),
       },
       permission: {
-        respond: respondPermission,
+        respond: activeSession.commands.respondPermission,
       },
       feedback: {
         dismiss: () => setError(null),
+        dismissNotice: () => setNotice(null),
       },
       links: {
         openMessage: openMessageLink,
@@ -772,3 +764,27 @@ export function useAcpChatController({
 }
 
 export type AcpChatController = ReturnType<typeof useAcpChatController>;
+
+/** One entry per changed connection, even when a database and a source share it. */
+function uniqueReconfirmations(
+  resources: readonly { reconfirmation: AgentResourceReconfirmation | null }[],
+): AgentResourceReconfirmation[] {
+  const changes = new Map<string, AgentResourceReconfirmation>();
+  for (const { reconfirmation } of resources) {
+    if (reconfirmation) changes.set(reconfirmation.connectionId, reconfirmation);
+  }
+  return [...changes.values()];
+}
+
+function lastAdvertisedConfigOptions(
+  sessions: readonly AcpSessionSummary[],
+  projections: ReadonlyMap<AcpSessionId, { configOptions: AcpSessionConfigOption[] }>,
+  provider: AgentProvider,
+): AcpSessionConfigOption[] {
+  for (const candidate of sessions) {
+    if (candidate.provider !== provider) continue;
+    const options = projections.get(candidate.id)?.configOptions;
+    if (options && options.length > 0) return options;
+  }
+  return [];
+}

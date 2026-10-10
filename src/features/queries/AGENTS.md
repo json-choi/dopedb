@@ -16,6 +16,7 @@ holds pure client-side SQL text analysis with no IPC.
 | File | Description |
 |------|-------------|
 | `ManualTransactionControls.tsx` | UI controls (commit/rollback etc.) driven by a `ManualTransactionController`. |
+| `ManualTransactionExitGuard.tsx` | Close/quit confirmation while manual transactions are open: answers the backend's `manual-transaction:exit-requested` hold with the shared `ConfirmDialog` ("Roll back N open transactions and close" / Cancel). Confirming rolls everything back, never commits; each request is acknowledged only after the dialog rendered, so a missing or broken renderer cannot trap the window (the next request after 5s proceeds). |
 | `ManualTransactionsMenu.tsx` | Status-bar recovery surface for manual transactions across the active workspace; hidden when there is nothing to recover. |
 | `domain.ts` | Query's public DTOs, generated from the Rust model/receipt contracts; re-exports `Classification`/`PreviewReport`/`RiskLevel`. |
 | `editorStatus.ts` | SQL editor cursor/status types and the editor indent size constant. |
@@ -24,17 +25,17 @@ holds pure client-side SQL text analysis with no IPC.
 | `namespace.ts` | Resolves the default SQL namespace per connection engine (sqlite `main`, postgres `public`, else the database name). |
 | `productAnalytics.ts` | Reduces query runtime state to one content-free product event per manual attempt; SQL text and statement errors never enter retained analytics state. |
 | `resolveMode.ts` | `playground`/`script` resolve-mode type and a non-code masking helper used by mode resolution. |
-| `resultPageCache.ts` | Bounds SQL stream result retention to `SQL_RESULT_CACHE_MAX_PAGES` (6) plus one in-flight page. |
+| `resultPageCache.ts` | Bounds SQL stream result retention to `SQL_RESULT_CACHE_MAX_PAGES` (6) plus one in-flight page; a page that cannot be read back is retried a bounded number of times with backoff and then reported as a closed reason (`authorityChanged`/`expired`/`unavailable`) instead of being re-requested on every render. |
 | `runPath.ts` | Pure branching logic: backend classification stays authoritative; this only decides combined vs. planned streaming for a manual run. |
 | `sqlWorkbenchModel.ts` | Pure state/text projections shared by the manual SQL workbench controller. |
 | `tauriAdapter.test.ts` | Verifies transaction snapshot consolidation, the `propose_sql` wire shape, bounded table-page streaming, and cancel/ACK semantics for read proposals. |
-| `tauriAdapter.ts` | Sole owner of SQL execution/manual-transaction/streaming command names (`inspect_sql`, `propose_sql`, `run_sql`, `run_script`, `cancel_query`, `read_sql_result_page`, manual transaction begin/commit/rollback, etc.). |
+| `tauriAdapter.ts` | Sole owner of SQL execution/manual-transaction/streaming command names (`inspect_sql`, `propose_sql`, `run_sql`, `run_script`, `cancel_query`, `read_sql_result_page`, manual transaction begin/commit/rollback, the close/quit hold response, etc.). |
 | `useManualTransaction.ts` | Hook wrapping begin/commit/rollback/get manual-transaction commands. |
 | `useSqlResultPages.ts` | Hook paging through cached SQL stream rows via `readSqlResultPage`. |
-| `useSqlResultStream.ts` | Query feature's core execution state machine: a run owns its controller and every pending React commit acknowledgement so a replaced run cannot resolve a stale callback. |
+| `useSqlResultStream.ts` | Query feature's core execution state machine: a run owns its controller and every pending React commit acknowledgement so a replaced run cannot resolve a stale callback. A user cancel keeps the rows already received as a partial result marked cancelled (readable once the backend publishes them); a replacement run discards them. |
 | `useSqlWorkbenchController.ts` | Owns SQL editor persistence, target resolution, execution approval, streaming, cancellation, and Services projection for the manual query workbench. |
 | `useSqlWorkbenchTarget.ts` | Resolves the manual SQL workbench's exact database and namespace authority. |
-| `useWorkspaceManualTransactions.ts` | Workspace-level observer giving the status bar one recovery surface for manual transactions left open outside the active editor. |
+| `useWorkspaceManualTransactions.ts` | Workspace-level observer giving the status bar one recovery surface for manual transactions left open outside the active editor; announces backend-ended transactions with a toast whose action opens Activity. |
 
 ## Subdirectories
 | Directory | Purpose |

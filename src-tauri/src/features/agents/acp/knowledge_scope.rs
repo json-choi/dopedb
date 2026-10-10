@@ -10,15 +10,18 @@ use crate::error::{AppError, AppResult};
 use crate::features::knowledge::{domain::KnowledgeSessionScope, KnowledgeFeature};
 use crate::kernel::access::PinnedConnection;
 
-use super::super::domain::AcpSessionSummary;
+use super::super::domain::{agent_error, AcpSessionSummary};
 
 type KnowledgeScopeFuture<'a, T> = Pin<Box<dyn Future<Output = AppResult<T>> + Send + 'a>>;
 
 pub(super) trait AcpKnowledgeScopePort: Send + Sync {
+    /// Resolves the scope for the databases the session selects; bindings it does
+    /// not select are neither checked nor returned.
     fn resolve<'a>(
         &'a self,
         connection: &'a PinnedConnection,
         environment_id: Option<Uuid>,
+        selected_connection_ids: &'a [Uuid],
     ) -> KnowledgeScopeFuture<'a, Option<KnowledgeSessionScope>>;
 
     fn verify<'a>(
@@ -44,10 +47,11 @@ impl AcpKnowledgeScopePort for FeatureKnowledgeScopePort {
         &'a self,
         connection: &'a PinnedConnection,
         environment_id: Option<Uuid>,
+        selected_connection_ids: &'a [Uuid],
     ) -> KnowledgeScopeFuture<'a, Option<KnowledgeSessionScope>> {
         Box::pin(async move {
             self.knowledge
-                .knowledge_session_scope(connection, environment_id)
+                .knowledge_session_scope(connection, environment_id, selected_connection_ids)
                 .await
         })
     }
@@ -175,8 +179,9 @@ pub(crate) fn narrow_resource_scope(
                 .any(|source| source.source_id == *source_id)
         })
     {
+        // The selected subset is not part of this Project resource scope.
         return Err(AppError::Blocked {
-            reason: "the selected Agent Project resource subset is invalid".into(),
+            reason: agent_error::SCOPE_UNAVAILABLE.into(),
         });
     }
     scope
@@ -191,6 +196,35 @@ pub(crate) fn narrow_resource_scope(
     scope.graph_revision_ids.clear();
     scope.knowledge_grant_id = None;
     validate_scope(scope)
+}
+
+/// A resumed conversation keeps its immutable grant only while every pinned
+/// revision is still current. Otherwise the pin no longer describes the
+/// Project resources and a new session must pin the current set instead.
+pub(super) fn pinned_revisions_current(
+    pinned: &KnowledgeSessionScope,
+    current: &KnowledgeSessionScope,
+) -> bool {
+    pinned.project_id == current.project_id
+        && pinned.project_environment_id == current.project_environment_id
+        && pinned.environment_revision == current.environment_revision
+        && pinned.authority_connection_id == current.authority_connection_id
+        && pinned.authority_connection_revision == current.authority_connection_revision
+        && pinned.connections.len() == current.connections.len()
+        && pinned.connections.iter().all(|connection| {
+            current.connections.iter().any(|candidate| {
+                candidate.connection_id == connection.connection_id
+                    && candidate.connection_revision == connection.connection_revision
+                    && candidate.connection_content_revision
+                        == connection.connection_content_revision
+            })
+        })
+        && pinned.sources.len() == current.sources.len()
+        && pinned.sources.iter().all(|source| {
+            current.sources.iter().any(|candidate| {
+                candidate.source_id == source.source_id && candidate.commit_sha == source.commit_sha
+            })
+        })
 }
 
 pub(super) fn resource_context(

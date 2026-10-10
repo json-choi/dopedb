@@ -1,4 +1,9 @@
 //! Single-writer, capability-bound pull/ACK backpressure for desktop SQL streams.
+//!
+//! The producer serializes each page once. A durable page is written to its
+//! result artifact under that stream's own writer lock — never the registry-wide
+//! lock — and the single in-flight page stays in memory so the renderer's pull
+//! needs no file read, hash, or parse.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -51,8 +56,12 @@ struct StreamCredit {
     capability: String,
     retention: DesktopSqlStreamRetention,
     started: bool,
-    result_writer: Option<DesktopSqlResultWriter>,
+    result_writer: Option<Arc<Mutex<DesktopSqlResultWriter>>>,
+    /// The ephemeral (never persisted) page awaiting its pull.
     ephemeral_batch: Option<DesktopSqlStreamBatch>,
+    /// The durable page awaiting its pull. It is already written to the result
+    /// artifact; keeping it in memory spares the pull a file read and hash.
+    durable_page: Option<DesktopSqlStreamBatch>,
     /// Versioned state change signal. A waiter subscribes before inspecting the
     /// credit, so an ACK between unlock and await is observed rather than lost.
     changed: watch::Sender<u64>,
@@ -180,6 +189,7 @@ impl DesktopSqlStreamRegistry {
                 started: false,
                 result_writer: None,
                 ephemeral_batch: None,
+                durable_page: None,
                 changed,
             },
         );
@@ -210,15 +220,20 @@ impl DesktopSqlStreamRegistry {
         if stream.started {
             return Err(DesktopSqlStreamSinkError::StreamAlreadyActive);
         }
+        // A capability-only cancellation can land after binding but before the
+        // executor registers its cancellation slot; never start such a stream.
+        if stream.cancelled {
+            return Err(DesktopSqlStreamSinkError::Cancelled);
+        }
         stream.started = true;
         if stream.retention == DesktopSqlStreamRetention::Durable {
             let pin = pin.ok_or(DesktopSqlStreamSinkError::ResultStoreUnavailable)?;
-            stream.result_writer = Some(DesktopSqlResultWriter::begin(
+            stream.result_writer = Some(Arc::new(Mutex::new(DesktopSqlResultWriter::begin(
                 operation_id,
                 pin,
                 owner_webview,
                 capability,
-            )?);
+            )?)));
         }
         drop(streams);
         Ok(DesktopSqlStreamSession {
@@ -260,12 +275,13 @@ impl DesktopSqlStreamRegistry {
             Self::reject_owned(stream);
             return None;
         }
+        // A durable page was persisted before its ready notification; serve the
+        // in-memory copy once instead of re-reading and re-hashing the file.
         let batch = match stream.retention {
-            DesktopSqlStreamRetention::Durable => {
-                stream.result_writer.as_ref()?.read_page(sequence).ok()?
-            }
-            DesktopSqlStreamRetention::Ephemeral => stream.ephemeral_batch.clone()?,
-        };
+            DesktopSqlStreamRetention::Durable => stream.durable_page.take(),
+            DesktopSqlStreamRetention::Ephemeral => stream.ephemeral_batch.take(),
+        }
+        .filter(|batch| batch.sequence == sequence)?;
         stream.pulled = true;
         Some(batch)
     }
@@ -291,6 +307,7 @@ impl DesktopSqlStreamRegistry {
         stream.in_flight = None;
         stream.pulled = false;
         stream.ephemeral_batch = None;
+        stream.durable_page = None;
         stream.next_sequence = stream.next_sequence.saturating_add(1);
         stream
             .changed
@@ -327,6 +344,23 @@ impl DesktopSqlStreamRegistry {
         true
     }
 
+    /// Cancels the bound stream this exact capability owns. An auto-run read
+    /// learns its operation only from its first batch, so a cancellation sent
+    /// before that batch names just the capability while the operation already
+    /// runs. Returns that operation so its executor is cancelled as well.
+    pub(crate) fn cancel_bound_by_capability(
+        &self,
+        capability: &str,
+        owner_webview: &str,
+    ) -> Option<OperationId> {
+        let mut streams = lock_unpoisoned(&self.streams);
+        let (operation_id, stream) = streams.iter_mut().find(|(_, stream)| {
+            stream.capability == capability && stream.owner_webview == owner_webview
+        })?;
+        Self::reject_owned(stream);
+        Some(*operation_id)
+    }
+
     pub(crate) fn forget_pending(&self, capability: &str, owner_webview: &str) {
         let mut pending = lock_unpoisoned(&self.pending);
         if pending
@@ -339,14 +373,20 @@ impl DesktopSqlStreamRegistry {
 
     pub(crate) fn close(&self, operation_id: OperationId) -> bool {
         let removed = lock_unpoisoned(&self.streams).remove(&operation_id);
-        if let Some(stream) = removed {
-            stream
-                .changed
-                .send_modify(|version| *version = version.saturating_add(1));
-            true
-        } else {
-            false
+        let Some(stream) = removed else {
+            return false;
+        };
+        stream
+            .changed
+            .send_modify(|version| *version = version.saturating_add(1));
+        // The owner cancelled: the pages it already received stay readable as a
+        // partial result instead of being discarded with the stream.
+        if stream.cancelled {
+            if let Some(writer) = stream.result_writer.as_ref() {
+                let _ = lock_unpoisoned(writer).complete_cancelled();
+            }
         }
+        true
     }
 
     fn complete(
@@ -356,7 +396,7 @@ impl DesktopSqlStreamRegistry {
         truncated: bool,
         duration_ms: u64,
     ) -> Result<(), DesktopSqlStreamSinkError> {
-        let mut stream = lock_unpoisoned(&self.streams)
+        let stream = lock_unpoisoned(&self.streams)
             .remove(&operation_id)
             .ok_or(DesktopSqlStreamSinkError::StreamNotActive)?;
         stream
@@ -369,19 +409,18 @@ impl DesktopSqlStreamRegistry {
                 DesktopSqlStreamSinkError::InvalidAcknowledgement
             });
         }
+        if stream.ephemeral_batch.is_some() || stream.durable_page.is_some() {
+            return Err(DesktopSqlStreamSinkError::InvalidAcknowledgement);
+        }
         match stream.retention {
-            DesktopSqlStreamRetention::Durable => stream
-                .result_writer
-                .as_mut()
-                .ok_or(DesktopSqlStreamSinkError::ResultStoreUnavailable)?
-                .complete(row_count, truncated, duration_ms),
-            DesktopSqlStreamRetention::Ephemeral => {
-                if stream.ephemeral_batch.is_some() {
-                    Err(DesktopSqlStreamSinkError::InvalidAcknowledgement)
-                } else {
-                    Ok(())
-                }
-            }
+            DesktopSqlStreamRetention::Durable => lock_unpoisoned(
+                stream
+                    .result_writer
+                    .as_ref()
+                    .ok_or(DesktopSqlStreamSinkError::ResultStoreUnavailable)?,
+            )
+            .complete(row_count, truncated, duration_ms),
+            DesktopSqlStreamRetention::Ephemeral => Ok(()),
         }
     }
 
@@ -510,12 +549,7 @@ impl StreamBorrow {
         batch: DesktopSqlStreamBatch,
         emit: impl FnOnce(DesktopSqlStreamReady) -> Result<(), E>,
     ) -> Result<(), DesktopSqlStreamSinkError> {
-        let encoded =
-            serde_json::to_vec(&batch).map_err(|_| DesktopSqlStreamSinkError::BatchTooLarge)?;
-        if batch.rows.len() > 256 || encoded.len() > DESKTOP_STREAM_BATCH_MAX_BYTES {
-            return Err(DesktopSqlStreamSinkError::BatchTooLarge);
-        }
-        let ready = {
+        let writer = {
             let mut streams = lock_unpoisoned(&self.registry.streams);
             let stream = streams
                 .get_mut(&self.operation_id)
@@ -531,11 +565,42 @@ impl StreamBorrow {
             stream.in_flight = Some(sequence);
             stream.pulled = false;
             match stream.retention {
-                DesktopSqlStreamRetention::Durable => stream
-                    .result_writer
-                    .as_mut()
-                    .ok_or(DesktopSqlStreamSinkError::ResultStoreUnavailable)?
-                    .write_page(&batch, &encoded)?,
+                DesktopSqlStreamRetention::Durable => Some(Arc::clone(
+                    stream
+                        .result_writer
+                        .as_ref()
+                        .ok_or(DesktopSqlStreamSinkError::ResultStoreUnavailable)?,
+                )),
+                DesktopSqlStreamRetention::Ephemeral => None,
+            }
+        };
+        // Serialize once: the same bytes bound the page and become its file.
+        // Only an ephemeral (never persisted) page skips the encoding.
+        if let Some(writer) = writer {
+            let encoded =
+                serde_json::to_vec(&batch).map_err(|_| DesktopSqlStreamSinkError::BatchTooLarge)?;
+            if batch.rows.len() > 256 || encoded.len() > DESKTOP_STREAM_BATCH_MAX_BYTES {
+                return Err(DesktopSqlStreamSinkError::BatchTooLarge);
+            }
+            lock_unpoisoned(&writer).write_page(&batch, &encoded)?;
+        } else if batch.rows.len() > 256 || encoded_len(&batch)? > DESKTOP_STREAM_BATCH_MAX_BYTES {
+            return Err(DesktopSqlStreamSinkError::BatchTooLarge);
+        }
+        let ready = {
+            let mut streams = lock_unpoisoned(&self.registry.streams);
+            let stream = streams
+                .get_mut(&self.operation_id)
+                .ok_or(DesktopSqlStreamSinkError::StreamNotActive)?;
+            if stream.cancelled {
+                return Err(DesktopSqlStreamSinkError::Cancelled);
+            }
+            if stream.in_flight != Some(sequence) {
+                return Err(DesktopSqlStreamSinkError::InvalidAcknowledgement);
+            }
+            match stream.retention {
+                DesktopSqlStreamRetention::Durable => {
+                    stream.durable_page = Some(batch);
+                }
                 DesktopSqlStreamRetention::Ephemeral => {
                     stream.ephemeral_batch = Some(batch);
                 }
@@ -593,6 +658,24 @@ impl StreamBorrow {
     }
 }
 
+/// Serialized size of a page that is never persisted, counted without allocating.
+fn encoded_len(batch: &DesktopSqlStreamBatch) -> Result<usize, DesktopSqlStreamSinkError> {
+    struct Counter(usize);
+    impl std::io::Write for Counter {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            self.0 += bytes.len();
+            Ok(bytes.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    let mut counter = Counter(0);
+    serde_json::to_writer(&mut counter, batch)
+        .map_err(|_| DesktopSqlStreamSinkError::BatchTooLarge)?;
+    Ok(counter.0)
+}
+
 #[cfg(test)]
 pub(crate) fn assert_ephemeral_page_contract() {
     let registry = DesktopSqlStreamRegistry::default();
@@ -647,4 +730,28 @@ pub(crate) fn assert_ephemeral_page_contract() {
     assert_eq!(pulled.decode_failures, batch.decode_failures);
     assert!(registry.acknowledge(operation_id, 0, &capability, "main"));
     session.complete(1, false, 1).expect("complete page");
+
+    // A cancellation that names only the capability (the renderer has not yet
+    // learned the operation from a first batch) must stop an already-bound
+    // stream, never one owned by another webview, and the stream never starts.
+    let bound_operation: OperationId = Uuid::new_v4().into();
+    let bound_capability = "b".repeat(64);
+    registry
+        .reserve_pending_ephemeral("main".into(), bound_capability.clone())
+        .expect("reserve capability-cancel stream");
+    registry
+        .bind_pending(bound_operation, "main".into(), bound_capability.clone())
+        .expect("bind capability-cancel stream");
+    assert!(!registry.cancel_pending(&bound_capability, "main"));
+    assert!(registry
+        .cancel_bound_by_capability(&bound_capability, "other")
+        .is_none());
+    assert!(
+        registry.cancel_bound_by_capability(&bound_capability, "main") == Some(bound_operation)
+    );
+    assert!(registry.is_cancelled(bound_operation));
+    assert!(matches!(
+        registry.begin_reserved(bound_operation, "main", &bound_capability, None),
+        Err(DesktopSqlStreamSinkError::Cancelled)
+    ));
 }

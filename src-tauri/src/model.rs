@@ -360,7 +360,28 @@ pub struct ScriptStatement {
     pub sql: String,
     pub result: Option<QueryResult>,
     pub affected: Option<i64>,
-    pub error: Option<String>,
+    pub error: Option<ScriptStatementError>,
+}
+
+/// Why one script statement has no result, typed like the IPC `AppError` so the
+/// UI translates it and points at the failing character instead of echoing text.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScriptStatementError {
+    /// An `AppError` kind (`db`, `timeout`, ...) or a script-only state:
+    /// `skipped`, `optimisticConflict`, or `transactionBeginFailed`.
+    pub kind: String,
+    pub message: String,
+    /// 1-based character offset into this statement's `sql` (Postgres only).
+    pub position: Option<u32>,
+    /// A PostgreSQL server error's SQLSTATE, DETAIL, and HINT, as a single run's
+    /// `AppError` carries them; absent for every other failure.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sqlstate: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hint: Option<String>,
 }
 
 /// Outcome of a `run_script` call. `committed` is true only for a write script whose
@@ -413,6 +434,13 @@ pub struct HistoryEntry {
     pub executed_at: DateTime<Utc>,
     /// "agent" | "manual" | "analysis_article" | surface id.
     pub origin: String,
+    /// The database and schema a desktop SQL run targeted, so History reopens the
+    /// SQL there. `None` when the run used the connection's default target or came
+    /// from a surface that does not record one.
+    #[serde(default)]
+    pub database: Option<String>,
+    #[serde(default)]
+    pub namespace: Option<String>,
 }
 
 /// Stable newest-first cursor for one scoped query-history page. The SQLite row id
@@ -459,8 +487,9 @@ pub struct AuditCursor {
     pub row_id: i64,
 }
 
-/// One bounded audit-list row. Full prompt, SQL, and error bodies remain behind an
-/// exact connection/id detail read so a single page has a deterministic byte ceiling.
+/// One bounded audit-list row. Full SQL and error bodies remain behind an exact
+/// connection/id detail read so a single page has a deterministic byte ceiling.
+/// Production writers never record an Agent prompt, so the list carries none.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct AuditEntrySummary {
@@ -468,8 +497,6 @@ pub struct AuditEntrySummary {
     pub connection_id: Uuid,
     pub ts: DateTime<Utc>,
     pub engine: Engine,
-    pub agent_prompt_preview: Option<String>,
-    pub agent_prompt_truncated: bool,
     pub sql_preview: String,
     pub sql_truncated: bool,
     pub kind: QueryKind,

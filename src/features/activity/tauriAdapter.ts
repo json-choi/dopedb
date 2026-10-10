@@ -1,3 +1,5 @@
+// IPC boundary for Activity: audit verification and bounded audit/history pages,
+// plus one exact record body on demand. Rust owns every value; this only types it.
 import { invoke } from "../../ipc/core";
 import type {
   AuditEntryDetail,
@@ -8,7 +10,20 @@ import type {
   HistoryPageRequest,
 } from "../../ipc/types";
 
-export function auditVerify(id: string): Promise<AuditVerdict> {
+/** How the chain compares with the tail anchor that every audit append advances. */
+export type AuditAnchorStatus = "matched" | "missing" | "shorter" | "longer" | "tailMismatch";
+
+/**
+ * `firstBadRowId` anchors the metadata page that starts at the first broken record.
+ * `ok` already requires `anchorStatus === "matched"`; the status says which end failed.
+ */
+export type AuditVerdictReceipt = AuditVerdict & {
+  firstBadRowId: number | null;
+  anchorStatus: AuditAnchorStatus;
+  anchoredCount: number | null;
+};
+
+export function auditVerify(id: string): Promise<AuditVerdictReceipt> {
   return invoke("audit_verify", { connectionId: id });
 }
 

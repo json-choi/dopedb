@@ -1,13 +1,16 @@
-// Resolves the manual SQL workbench's exact database and namespace authority.
+// Resolves the manual SQL workbench's exact database and namespace authority. The
+// schema choice is persisted only once the server's namespace list has settled, so a
+// new console is not pinned to whichever schema the table catalog listed first.
 import { useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import type { ConnectionProfile } from "../connections/domain";
+import { useCatalogScope } from "../../lib/queries";
 import {
   connectionDatabasesQuery,
+  databaseCatalogOverviewQuery,
   databaseCatalogQuery,
-  useCatalogScope,
-} from "../../lib/queries";
+} from "../../lib/catalogQueries";
 import {
   effectiveSqlNamespace,
   sqlNamespaceOptions,
@@ -53,10 +56,20 @@ export function useSqlWorkbenchTarget({
     databaseCatalogQuery(connection.id, effectiveDatabase, catalogScope),
   );
   const catalog = catalogQuery.data;
+  const overviewQuery = useQuery({
+    ...databaseCatalogOverviewQuery(connection.id, effectiveDatabase, catalogScope),
+    enabled:
+      connection.engine === "postgres" && (catalogScope?.ready ?? true),
+  });
+  const serverNamespaces = overviewQuery.data?.namespaces;
   const namespaceOptions = useMemo(
-    () => sqlNamespaceOptions(targetConnection, catalog),
-    [catalog, targetConnection],
+    () => sqlNamespaceOptions(targetConnection, catalog, serverNamespaces),
+    [catalog, serverNamespaces, targetConnection],
   );
+  const namespacesSettled =
+    connection.engine !== "postgres" ||
+    overviewQuery.isSuccess ||
+    overviewQuery.isError;
   const effectiveNamespace = useMemo(
     () =>
       effectiveSqlNamespace(targetConnection, selectedSchema, namespaceOptions),
@@ -79,12 +92,13 @@ export function useSqlWorkbenchTarget({
   ]);
 
   useEffect(() => {
-    if (!catalogQuery.data) return;
+    if (!catalogQuery.data || !namespacesSettled) return;
     if (!effectiveNamespace || selectedSchema === effectiveNamespace) return;
     setSelectedSchema(effectiveNamespace);
   }, [
     catalogQuery.data,
     effectiveNamespace,
+    namespacesSettled,
     selectedSchema,
     setSelectedSchema,
   ]);

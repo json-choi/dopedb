@@ -26,7 +26,59 @@ export type ConnectDialogRequest = {
   provider: FormProvider;
   providerName: string;
   mode: "connect" | "reconnect";
+  /** The account being reconnected, so its existing target can be kept exactly. */
+  integrationId?: string;
 };
+
+/** Vault target fields a reconnect keeps unchanged; they identify the account. */
+export type VaultReconnectTarget = Pick<
+  VaultConfiguration,
+  | "host"
+  | "port"
+  | "database"
+  | "engine"
+  | "databaseMount"
+  | "databaseConnection"
+  | "readRole"
+  | "writeRole"
+>;
+
+/**
+ * The secret-free Vault target a reconnect must reuse. The workspace service
+ * identifies a Vault account by its exact database target, so reconnecting with
+ * a different target would create a new account and leave the databases served
+ * by the old one unrepaired. AppRole IDs are never available and stay empty.
+ */
+export function vaultReconnectTarget(
+  managed: readonly ManagedConnection[] | null | undefined,
+  integrationId: string | undefined,
+): VaultReconnectTarget | null {
+  if (!integrationId) return null;
+  const resource = managed?.find(
+    (item) => item.provider === "vault" && item.integrationId === integrationId,
+  )?.resource;
+  if (!resource) return null;
+  const engine = resource.engine;
+  const port = String(resource.port ?? "");
+  if (
+    (engine !== "postgres" && engine !== "mysql") ||
+    !resource.host ||
+    !/^\d{1,5}$/.test(port) ||
+    !resource.database
+  ) {
+    return null;
+  }
+  return {
+    host: resource.host,
+    port,
+    database: resource.database,
+    engine,
+    databaseMount: resource.databaseMount ?? "",
+    databaseConnection: resource.databaseConnection ?? "",
+    readRole: resource.readRole ?? "",
+    writeRole: resource.writeRole ?? "",
+  };
+}
 
 const NEON_IDENTIFIER = /^[a-z0-9][a-z0-9-]{0,59}$/;
 const CONTROL = /[\u0000-\u001f\u007f]/;

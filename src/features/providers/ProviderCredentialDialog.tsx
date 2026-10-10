@@ -10,6 +10,7 @@ import {
 } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
+import ConfirmButton from "../../components/ConfirmButton";
 import { Icon } from "../../components/Icon";
 import Skeleton from "../../components/Skeleton";
 import { Button } from "../../design-system/components/Button";
@@ -85,6 +86,17 @@ function ProviderStatusBadge({
 function supportsMemberLocal(integration: ProviderIntegrationSummary) {
   return integration.provider === "gcpCloudSql" && integration.credentialMethod === "adcWif";
 }
+
+const providerNameKey: Record<
+  ProviderKind,
+  | "connections.providerGcpCloudSql"
+  | "connections.providerNeon"
+  | "connections.providerPlanetScale"
+> = {
+  gcpCloudSql: "connections.providerGcpCloudSql",
+  neon: "connections.providerNeon",
+  planetScale: "connections.providerPlanetScale",
+};
 
 export function ProviderCredentialDialog({
   initialProvider,
@@ -295,28 +307,32 @@ export function ProviderCredentialDialog({
                 {memberLocalIntegrations.map((integration) => {
                   const selected = integration.id === state.selectedIntegrationId;
                   return (
-                    <button
-                      type="button"
+                    <div
                       key={integration.id}
-                      className="tw:flex tw:min-h-control-xl tw:w-full tw:cursor-pointer tw:items-center tw:justify-between tw:gap-3 tw:border-0 tw:border-t tw:border-border-subtle tw:bg-transparent tw:p-2 tw:font-sans tw:text-left tw:text-foreground tw:aria-pressed:bg-selection tw:hover:bg-muted tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring"
-                      onClick={() => {
-                        setActionFailed(false);
-                        dispatch({ type: "select", integrationId: integration.id });
-                      }}
-                      aria-pressed={selected}
+                      className="tw:border-t tw:border-border-subtle"
                     >
-                      <span className="tw:grid tw:min-w-0 tw:gap-[var(--ds-segment-gap)]">
-                        <strong className="tw:min-w-0 tw:[overflow-wrap:anywhere] tw:text-sm">
-                          {integration.displayName}
-                        </strong>
-                        <small className="tw:text-2xs tw:text-muted-foreground">
-                          {integration.provider}
-                        </small>
-                      </span>
-                      <ProviderStatusBadge status={integration.state}>
-                        {t(statusKey[integration.state])}
-                      </ProviderStatusBadge>
-                    </button>
+                      <Button
+                        presentation="listItem"
+                        labelBehavior="wrap"
+                        aria-pressed={selected}
+                        onClick={() => {
+                          setActionFailed(false);
+                          dispatch({ type: "select", integrationId: integration.id });
+                        }}
+                      >
+                        <span className="tw:grid tw:min-w-0 tw:flex-1 tw:gap-[var(--ds-segment-gap)]">
+                          <strong className="tw:min-w-0 tw:[overflow-wrap:anywhere] tw:text-sm">
+                            {integration.displayName}
+                          </strong>
+                          <small className="tw:text-2xs tw:text-muted-foreground">
+                            {t(providerNameKey[integration.provider])}
+                          </small>
+                        </span>
+                        <ProviderStatusBadge status={integration.state}>
+                          {t(statusKey[integration.state])}
+                        </ProviderStatusBadge>
+                      </Button>
+                    </div>
                   );
                 })}
               </div>
@@ -330,7 +346,7 @@ export function ProviderCredentialDialog({
                         {t("providerCredentials.memberLocal")}
                       </strong>
                       <small className="tw:text-2xs tw:text-muted-foreground">
-                        {t("providerCredentials.managed")}
+                        {t("providerCredentials.memberLocalDetail")}
                       </small>
                     </span>
                   </div>
@@ -366,19 +382,23 @@ export function ProviderCredentialDialog({
                     key={binding.id}
                   >
                     <span className="tw:grid tw:min-w-0 tw:gap-[var(--ds-segment-gap)]">
-                      <strong className="tw:text-sm">{binding.provider}</strong>
+                      <strong className="tw:text-sm">
+                        {t(providerNameKey[binding.provider])}
+                      </strong>
                       <small className="tw:text-2xs tw:text-muted-foreground">
                         {t(statusKey[binding.state])}
                       </small>
                     </span>
-                    <Button
+                    <ConfirmButton
                       size="compact"
                       variant="ghost"
                       disabled={revoking !== null}
-                      onClick={() => void revoke(binding.id)}
+                      label={t("providerCredentials.revoke")}
+                      confirmLabel={t("providerCredentials.revokeConfirm")}
+                      onConfirm={() => void revoke(binding.id)}
                     >
                       {revoking === binding.id ? t("providerCredentials.revokePending") : t("providerCredentials.revoke")}
-                    </Button>
+                    </ConfirmButton>
                   </div>
                 )) : (
                   <p className="tw:m-0 tw:py-2 tw:text-sm tw:text-muted-foreground">

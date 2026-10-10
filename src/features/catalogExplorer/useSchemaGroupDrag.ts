@@ -1,4 +1,5 @@
-// Coordinates pointer drag targets and persistence for connection schema groups.
+// Coordinates pointer drag targets and persistence for connection schema groups. A group
+// change waits in `pendingGroupChange` until the Explorer's confirmation dialog applies it.
 
 import { useMemo, useRef, useState, type PointerEvent } from "react";
 
@@ -39,6 +40,11 @@ type EnvironmentDropTarget = {
   connectionIds: ReadonlySet<string>;
 };
 
+export type PendingSchemaGroupChange = {
+  message: string;
+  apply: () => Promise<void>;
+};
+
 type ConnectionDragOptions = {
   environmentTargets?: readonly EnvironmentDropTarget[];
   projectDatabasesTargets?: readonly ProjectDatabasesDropTarget[];
@@ -72,6 +78,8 @@ export function useSchemaGroupDrag(
     x: number;
     y: number;
   } | null>(null);
+  const [pendingGroupChange, setPendingGroupChange] =
+    useState<PendingSchemaGroupChange | null>(null);
   const dragStartRef = useRef<DragStart | null>(null);
   const activeDragIdRef = useRef<string | null>(null);
   const suppressClickRef = useRef(false);
@@ -213,25 +221,16 @@ export function useSchemaGroupDrag(
         ...(draggedGroup === group ? [] : [dragged.id]),
         ...(destinationGroup === group ? [] : [destination.id]),
       ];
-      if (
-        ids.length === 0 ||
-        !window.confirm(
-          t("connections.schemaGroupConfirmPair", {
-            source: dragged.name || dragged.database || t("app.unnamed"),
-            target:
-              destination.name || destination.database || t("app.unnamed"),
-            group,
-          }),
-        )
-      ) {
-        return;
-      }
-      try {
-        await saveGroup(ids, group);
-        toast(t("connections.schemaGroupUpdated"));
-      } catch (error) {
-        toast(errMessage(error), "error");
-      }
+      if (ids.length === 0) return;
+      setPendingGroupChange({
+        message: t("connections.schemaGroupConfirmPair", {
+          source: dragged.name || dragged.database || t("app.unnamed"),
+          target:
+            destination.name || destination.database || t("app.unnamed"),
+          group,
+        }),
+        apply: () => persistGroupChange(ids, group),
+      });
       return;
     }
 
@@ -239,22 +238,32 @@ export function useSchemaGroupDrag(
     if (
       !group ||
       !canDropOnGroup(dragged.id, group) ||
-      dragged.schemaGroup?.trim() === group.label ||
-      !window.confirm(
-        t("connections.schemaGroupConfirmGroup", {
-          connection: dragged.name || dragged.database || t("app.unnamed"),
-          group: group.label,
-        }),
-      )
+      dragged.schemaGroup?.trim() === group.label
     ) {
       return;
     }
+    setPendingGroupChange({
+      message: t("connections.schemaGroupConfirmGroup", {
+        connection: dragged.name || dragged.database || t("app.unnamed"),
+        group: group.label,
+      }),
+      apply: () => persistGroupChange([dragged.id], group.label),
+    });
+  }
+
+  async function persistGroupChange(ids: ConnectionId[], group: string) {
     try {
-      await saveGroup([dragged.id], group.label);
+      await saveGroup(ids, group);
       toast(t("connections.schemaGroupUpdated"));
     } catch (error) {
       toast(errMessage(error), "error");
     }
+  }
+
+  async function confirmGroupChange() {
+    const pending = pendingGroupChange;
+    setPendingGroupChange(null);
+    await pending?.apply();
   }
 
   function dropTargetFromPoint(
@@ -447,6 +456,9 @@ export function useSchemaGroupDrag(
   return {
     sections,
     groupByConnectionId,
+    pendingGroupChange,
+    confirmGroupChange,
+    cancelGroupChange: () => setPendingGroupChange(null),
     draggingIds,
     dropTarget,
     dragPreview,

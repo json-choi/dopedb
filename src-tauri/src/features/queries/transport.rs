@@ -385,7 +385,8 @@ pub(crate) fn ack_sql_stream(
 }
 
 /// Pulls the one retained result page after the small Channel notification.
-#[tauri::command]
+/// Runs off the main thread: serializing a page must not stall the window.
+#[tauri::command(async)]
 pub(crate) fn pull_sql_stream_batch(
     state: State<'_, AppState>,
     webview: tauri::WebviewWindow,
@@ -418,6 +419,16 @@ pub(crate) async fn read_sql_result_page(
         .await
 }
 
+/// An export receipt plus the chosen file's name — never its directory — so the
+/// renderer can confirm where the rows went.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct SqlResultExportOutcome {
+    #[serde(flatten)]
+    receipt: DesktopSqlResultExportReceipt,
+    file_name: String,
+}
+
 /// Picks a native destination and writes an immutable result without exposing
 /// either row payloads or filesystem paths to the renderer.
 #[tauri::command]
@@ -435,7 +446,7 @@ pub(crate) async fn export_sql_result(
     format: DesktopSqlResultExportFormat,
     suggested_name: String,
     on_progress: Channel<DesktopSqlResultExportProgress>,
-) -> AppResult<Option<DesktopSqlResultExportReceipt>> {
+) -> AppResult<Option<SqlResultExportOutcome>> {
     use tauri_plugin_dialog::DialogExt;
 
     let extension = match format {
@@ -453,6 +464,10 @@ pub(crate) async fn export_sql_result(
     let Some(destination) = destination else {
         return Ok(None);
     };
+    let file_name = destination
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default();
     state
         .services
         .queries
@@ -472,7 +487,59 @@ pub(crate) async fn export_sql_result(
             },
         )
         .await
-        .map(Some)
+        .map(|receipt| Some(SqlResultExportOutcome { receipt, file_name }))
+}
+
+/// Largest export text the renderer may hand over for one native save. The
+/// renderer checks the same limit (`RENDERER_EXPORT_MAX_BYTES`) before sending.
+const MAX_RENDERER_EXPORT_BYTES: usize = 64 * 1024 * 1024;
+
+/// Writes export text the renderer already built (rows it holds: a filtered view,
+/// a materialized or script-statement result, one cell) to a file the person picks
+/// in the native save dialog, under the stored-result export's destination
+/// contract: no symlinked destination, a `.partial` first, and a rename only once
+/// the whole text is written. Returns only the chosen file's name, or `None` when
+/// the dialog is dismissed; the directory never reaches the renderer.
+#[tauri::command]
+pub(crate) async fn save_result_text(
+    state: State<'_, AppState>,
+    app: tauri::AppHandle,
+    suggested_name: String,
+    format: DesktopSqlResultExportFormat,
+    contents: String,
+) -> AppResult<Option<String>> {
+    use tauri_plugin_dialog::DialogExt;
+
+    if contents.len() > MAX_RENDERER_EXPORT_BYTES {
+        return Err(crate::error::AppError::Blocked {
+            reason: "the export is larger than one in-memory save allows".into(),
+        });
+    }
+    let extension = match format {
+        DesktopSqlResultExportFormat::Csv => "csv",
+        DesktopSqlResultExportFormat::Json => "json",
+    };
+    let suggested_name = safe_result_export_name(&suggested_name, extension)?;
+    let destination = app
+        .dialog()
+        .file()
+        .set_file_name(suggested_name)
+        .add_filter(extension.to_ascii_uppercase(), &[extension])
+        .blocking_save_file()
+        .and_then(|path| path.into_path().ok());
+    let Some(destination) = destination else {
+        return Ok(None);
+    };
+    let file_name = destination
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    state
+        .services
+        .queries
+        .save_renderer_export(destination, contents)
+        .await?;
+    Ok(Some(file_name))
 }
 
 fn safe_result_export_name(value: &str, extension: &str) -> AppResult<String> {

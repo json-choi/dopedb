@@ -1,4 +1,5 @@
-// Presents the Connection editor's catalog navigation and source commands.
+// Presents the Connection editor's catalog navigation and the open source's
+// commands, which the compact selector reuses below the editor breakpoint.
 // Query and mutation ownership stays in the feature controllers.
 import ConfirmButton from "../../components/ConfirmButton";
 import EngineMark from "../../components/EngineMark";
@@ -36,8 +37,8 @@ export function ConnectionCatalogNavigation({
 }) {
   const { t } = useI18n();
   const { navigation, sources, addMenu, drivers, clouds } = catalog;
-  const { form, identity, flags, url } = profile;
-  const { workspace, problems } = dialogs;
+  const { form, identity } = profile;
+  const { problems } = dialogs;
 
   return (
     <>
@@ -119,92 +120,11 @@ export function ConnectionCatalogNavigation({
                   </Button>
 
                 </div>
-                {!identity.isNew && form.workspaceAccess === "local" ? (
-                  <>
-                    <Button
-                      ref={workspace.buttonRef}
-                      iconOnly
-                      size="xs"
-                      variant="ghost"
-                      disabled={commands.busy}
-                      onClick={() => workspace.setMode("copy")}
-                      title={t("workspace.copyToWorkspace")}
-                      aria-label={t("workspace.copyToWorkspace")}
-                    >
-                      <Icon name="upload" />
-                    </Button>
-                    <Button
-                      iconOnly
-                      size="xs"
-                      variant="ghost"
-                      disabled={commands.busy}
-                      onClick={commands.duplicate}
-                      title={t("connections.duplicate")}
-                      aria-label={t("connections.duplicate")}
-                    >
-                      <Icon name="copy" />
-                    </Button>
-                    <ConfirmButton
-                      disabled={commands.busy}
-                      iconOnly
-                      label={t("common.delete")}
-                      size="xs"
-                      variant="ghost"
-                      confirmLabel={t(
-                        isDemoSqliteConnection(form)
-                          ? "connections.reallyDeleteDemo"
-                          : "common.reallyDelete",
-                      )}
-                      onConfirm={() => void commands.remove()}
-                    >
-                      <Icon name="trash" />
-                    </ConfirmButton>
-                  </>
-                ) : null}
-                {!identity.isNew &&
-                flags.isSharedTemplate &&
-                form.engine !== "bigquery" &&
-                form.credentialMode === "memberLocal" &&
-                form.workspaceAccess !== "view" ? (
-                  <Button
-                    ref={workspace.buttonRef}
-                    iconOnly
-                    size="xs"
-                    variant="ghost"
-                    disabled={commands.busy}
-                    onClick={() => workspace.setMode("credentials")}
-                    title={t("workspace.bindCredentialsShort")}
-                    aria-label={t("workspace.bindCredentialsShort")}
-                  >
-                    <Icon name="key" />
-                  </Button>
-                ) : null}
-                {!identity.isNew && form.workspaceAccess === "manage" ? (
-                  <ConfirmButton
-                    disabled={commands.busy}
-                    iconOnly
-                    label={t("common.delete")}
-                    size="xs"
-                    variant="ghost"
-                    confirmLabel={t("common.reallyDelete")}
-                    onConfirm={() => void commands.remove()}
-                  >
-                    <Icon name="trash" />
-                  </ConfirmButton>
-                ) : null}
-                {identity.isNew ? (
-                  <Button
-                    iconOnly
-                    size="xs"
-                    variant="ghost"
-                    disabled={commands.busy}
-                    onClick={() => void url.importFromClipboard(true)}
-                    title={t("connections.importClipboard")}
-                    aria-label={t("connections.importClipboard")}
-                  >
-                    <Icon name="copy" />
-                  </Button>
-                ) : null}
+                <ConnectionSourceCommands
+                  profile={profile}
+                  dialogs={dialogs}
+                  commands={commands}
+                />
                 <Button
                   active={navigation.searchOpen}
                   iconOnly
@@ -404,6 +324,120 @@ export function ConnectionCatalogNavigation({
           ) : null}
         </div>
       </aside>
+    </>
+  );
+}
+
+/**
+ * Commands for the open data source, shared by the desktop catalog strip and
+ * the compact selector so a narrow window keeps every entry point. Dialog
+ * triggers record themselves as the return-focus anchor when activated.
+ */
+export function ConnectionSourceCommands({
+  profile,
+  dialogs,
+  commands,
+}: {
+  profile: Controller["profile"];
+  dialogs: Controller["dialogs"];
+  commands: Controller["commands"];
+}) {
+  const { t } = useI18n();
+  const { form, identity, flags, url } = profile;
+  const { workspace } = dialogs;
+
+  return (
+    <>
+      {!identity.isNew && form.workspaceAccess === "local" ? (
+        <>
+          <Button
+            iconOnly
+            size="xs"
+            variant="ghost"
+            disabled={commands.busy}
+            onClick={(event) => {
+              workspace.buttonRef.current = event.currentTarget;
+              workspace.setMode("copy");
+            }}
+            title={t("workspace.copyToWorkspace")}
+            aria-label={t("workspace.copyToWorkspace")}
+          >
+            <Icon name="upload" />
+          </Button>
+          <Button
+            iconOnly
+            size="xs"
+            variant="ghost"
+            disabled={commands.busy}
+            onClick={commands.duplicate}
+            title={t("connections.duplicate")}
+            aria-label={t("connections.duplicate")}
+          >
+            <Icon name="copy" />
+          </Button>
+          <ConfirmButton
+            disabled={commands.busy}
+            iconOnly
+            label={t("common.delete")}
+            size="xs"
+            variant="ghost"
+            confirmLabel={t(
+              isDemoSqliteConnection(form)
+                ? "connections.reallyDeleteDemo"
+                : "common.reallyDelete",
+            )}
+            onConfirm={() => void commands.remove()}
+          >
+            <Icon name="trash" />
+          </ConfirmButton>
+        </>
+      ) : null}
+      {!identity.isNew &&
+      flags.isSharedTemplate &&
+      form.engine !== "bigquery" &&
+      form.credentialMode === "memberLocal" &&
+      form.workspaceAccess !== "view" ? (
+        <Button
+          iconOnly
+          size="xs"
+          variant="ghost"
+          disabled={commands.busy}
+          onClick={(event) => {
+            workspace.buttonRef.current = event.currentTarget;
+            workspace.setMode("credentials");
+          }}
+          title={t("workspace.bindCredentialsShort")}
+          aria-label={t("workspace.bindCredentialsShort")}
+        >
+          <Icon name="key" />
+        </Button>
+      ) : null}
+      {!identity.isNew && form.workspaceAccess === "manage" ? (
+        <ConfirmButton
+          disabled={commands.busy}
+          iconOnly
+          label={t("common.delete")}
+          size="xs"
+          variant="ghost"
+          confirmLabel={t("common.reallyDelete")}
+          onConfirm={() => void commands.remove()}
+        >
+          <Icon name="trash" />
+        </ConfirmButton>
+      ) : null}
+      {identity.isNew ? (
+        <Button
+          iconOnly
+          size="xs"
+          variant="ghost"
+          disabled={commands.busy}
+          onClick={() => void url.importFromClipboard(true)}
+          title={t("connections.importClipboard")}
+          aria-label={t("connections.importClipboard")}
+        >
+          <Icon name="copy" />
+        </Button>
+      ) : null}
     </>
   );
 }

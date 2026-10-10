@@ -73,7 +73,15 @@ pub(crate) enum CacheWriteOutcome {
     Stored,
     Stale,
     NotPersisted,
+    /// A committed schema change retired the cache after the read began, so the
+    /// read may describe the old schema and is returned without being stored.
+    Superseded,
 }
+
+/// The schema epoch a live catalog read started under. Capture it with
+/// [`Store::catalog_epoch`] before introspecting and hand it to the cache write.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct CatalogEpoch(u64);
 
 impl Store {
     /// Open (creating if needed) the current app.db schema.

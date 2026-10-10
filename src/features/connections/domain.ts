@@ -146,20 +146,44 @@ export const CONNECTION_TEST_FAILURE_FIELDS = [
 export type ConnectionTestFailureField =
   (typeof CONNECTION_TEST_FAILURE_FIELDS)[number];
 
+/**
+ * A probe refused before contacting any server: a saved password is reused only
+ * for the engine, host, port, user, and SSH alias it was saved with, over TLS at
+ * least as strict; a managed open cools down after a failure; and a changed
+ * shared connection is never opened from its stale revision.
+ */
+export type ConnectionProbeRefusal =
+  | "savedCredentialEndpointChanged"
+  | "retryLater"
+  | "sharedConnectionChanged"
+  | "workspaceSignInRequired"
+  | "credentialStoreDenied"
+  | "lockTimeout";
+
 export interface ConnectionTestFailure {
   code: ConnectionTestFailureCode;
   field: ConnectionTestFailureField | null;
   detail: string;
+  /** Present only when the check was refused before contacting the server. */
+  refusal?: ConnectionProbeRefusal;
+  /** Whole seconds left in a `retryLater` cooldown. */
+  retryAfterSeconds?: number;
 }
 
 /** Safe UI identity projected from the wire receipt without backend detail text. */
 export type ConnectionTestIssue = Readonly<
-  Pick<ConnectionTestFailure, "code" | "field">
+  Pick<ConnectionTestFailure, "code" | "field" | "refusal">
 >;
 
 export type ConnectionTestReceipt =
   | { ok: true; failure: null }
   | { ok: false; failure: ConnectionTestFailure };
+
+/** Databases a draft reaches, or why discovery refused before connecting. */
+export type DatabaseDiscoveryReceipt = {
+  databases: { name: string }[];
+  refusal?: ConnectionProbeRefusal;
+};
 
 export type ConnectionAccessIssue = "grant" | "credentials";
 

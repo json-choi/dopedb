@@ -29,6 +29,13 @@ where
         self.port.recover_previous_runtimes().await
     }
 
+    /// A revoked or closed Agent grant leaves nothing approvable behind.
+    pub(crate) async fn cancel_revoked_agent_proposals(&self, operation_ids: Vec<Uuid>) {
+        self.port
+            .cancel_revoked_agent_proposals(operation_ids)
+            .await;
+    }
+
     pub(crate) async fn approve_local(
         &self,
         authority: &LocalApprovalAuthority,

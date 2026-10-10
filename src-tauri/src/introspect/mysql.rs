@@ -25,8 +25,14 @@ WHERE table_schema = DATABASE()
 ORDER BY table_name, ordinal_position
 "#;
 
+// Relations in the current database carry no schema, so a same-database target also
+// has none; only a cross-database reference names its database. Database names then
+// stay out of FK identity when comparing environments (app_dev vs app_prod).
 const FK_SQL: &str = r#"
 SELECT k.table_name, k.constraint_name, k.ordinal_position, k.column_name,
+       CASE WHEN k.referenced_table_schema = k.table_schema THEN NULL
+            ELSE k.referenced_table_schema
+       END AS referenced_table_schema,
        k.referenced_table_name, k.referenced_column_name,
        r.update_rule, r.delete_rule
 FROM information_schema.key_column_usage k
@@ -262,7 +268,9 @@ pub async fn introspect(pool: &MySqlPool, skip_fk: bool) -> AppResult<Catalog> {
                     column: r.try_get("column_name")?,
                     references_table: r.try_get("referenced_table_name")?,
                     references_column: r.try_get("referenced_column_name")?,
-                    references_schema: None,
+                    references_schema: r
+                        .try_get::<Option<String>, _>("referenced_table_schema")
+                        .unwrap_or(None),
                     update_action: r.try_get("update_rule").ok(),
                     delete_action: r.try_get("delete_rule").ok(),
                     ..ForeignKey::default()
