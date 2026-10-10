@@ -66,9 +66,15 @@ export function isPostgresTransactionPooler(
   profile: ConnectionProfile,
 ): boolean {
   const host = profile.host.trim().toLowerCase();
+  // Matched at label boundaries so a domain that merely contains a pooler name
+  // is never treated as one.
+  const supavisor =
+    host === "pooler.supabase.com" || host.endsWith(".pooler.supabase.com");
+  const neonPooled =
+    host.endsWith(".neon.tech") && host.split(".", 1)[0].endsWith("-pooler");
   return (
-    (host.includes("pooler.supabase.com") && profile.port === 6543) ||
-    (host.includes("-pooler.") && host.endsWith(".neon.tech")) ||
+    (supavisor && profile.port === 6543) ||
+    neonPooled ||
     profile.extraParams[CONNECTION_TRANSACTION_POOLER_PARAMETER]
       ?.trim()
       .toLowerCase() === "true"

@@ -258,19 +258,31 @@ pub fn connect_timeout(p: &ConnectionProfile) -> Duration {
     }
 }
 
+/// A Supavisor host: `pooler.supabase.com` itself or a regional
+/// `<region>.pooler.supabase.com`, matched at a label boundary so another domain
+/// that merely contains the name is never treated as one.
+fn supavisor_host(host: &str) -> bool {
+    host == "pooler.supabase.com" || host.ends_with(".pooler.supabase.com")
+}
+
 /// Whether a PostgreSQL profile reaches the database through a transaction-mode
 /// pooler, where consecutive transactions may run on different server sessions
 /// that other clients share, so a session-level `SET` neither sticks nor stays
-/// private: Supavisor's transaction port (`pooler.supabase.com` on 6543; 5432
-/// there is session mode), Neon's pooled endpoints (`-pooler.` hosts under
-/// `neon.tech`, PgBouncer in transaction mode), or a profile that sets
-/// `dopedb.transactionPooler` to `true`. The connection editor mirrors this rule
-/// in `isPostgresTransactionPooler` (`src/features/connections/options.ts`) to warn
-/// that the startup script will not run; change both together.
+/// private: Supavisor's transaction port (a `supavisor_host` on 6543; 5432
+/// there is session mode), Neon's pooled endpoints (a first label ending in
+/// `-pooler` under `.neon.tech`, PgBouncer in transaction mode), or a profile that
+/// sets `dopedb.transactionPooler` to `true`. The connection editor mirrors this
+/// rule in `isPostgresTransactionPooler` (`src/features/connections/options.ts`)
+/// to warn that the startup script will not run; change both together.
 pub(crate) fn pg_transaction_pooler(p: &ConnectionProfile) -> bool {
     let host = p.host.trim().to_ascii_lowercase();
-    (host.contains("pooler.supabase.com") && p.port == 6543)
-        || (host.contains("-pooler.") && host.ends_with(".neon.tech"))
+    let neon_pooled = host.ends_with(".neon.tech")
+        && host
+            .split('.')
+            .next()
+            .is_some_and(|label| label.ends_with("-pooler"));
+    (supavisor_host(&host) && p.port == 6543)
+        || neon_pooled
         || p.extra_params
             .get(TRANSACTION_POOLER_PARAMETER)
             .is_some_and(|value| value.trim().eq_ignore_ascii_case("true"))
@@ -278,7 +290,7 @@ pub(crate) fn pg_transaction_pooler(p: &ConnectionProfile) -> bool {
 
 /// Apply Postgres per-provider tuning to freshly-built connect options.
 pub fn apply_pg_tuning(p: &ConnectionProfile, mut opts: PgConnectOptions) -> PgConnectOptions {
-    if p.host.to_ascii_lowercase().contains("pooler.supabase.com") || pg_transaction_pooler(p) {
+    if supavisor_host(&p.host.trim().to_ascii_lowercase()) || pg_transaction_pooler(p) {
         // A transaction pooler (Supavisor, PgBouncer before 1.21, …) can hand the
         // next transaction to a server session without this client's named
         // prepared statements; client-side statement caching breaks connections →
