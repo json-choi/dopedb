@@ -104,17 +104,32 @@ function distributionConfig(path) {
 }
 
 function command(commandName, args) {
-  const result = spawnSync(commandName, args, {
-    encoding: "utf8",
-    maxBuffer: 4 * 1024 * 1024,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  if (result.error) fail(`${commandName} failed to start: ${result.error.message}`);
-  const output = `${result.stdout ?? ""}${result.stderr ?? ""}`;
-  if (result.status !== 0) {
-    fail(`${commandName} ${args[0] ?? ""} failed: ${output.trim() || `exit ${result.status}`}`);
+  const maximumAttempts = 5;
+  for (let attempt = 1; attempt <= maximumAttempts; attempt += 1) {
+    const result = spawnSync(commandName, args, {
+      encoding: "utf8",
+      maxBuffer: 4 * 1024 * 1024,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    if (result.error) fail(`${commandName} failed to start: ${result.error.message}`);
+    const output = `${result.stdout ?? ""}${result.stderr ?? ""}`;
+    if (result.status === 0) return output;
+
+    // Ticket validation reads Apple's CloudKit service even after notarization.
+    // Retry only its explicit connection-lost error; every trust check still
+    // needs a successful native command before a receipt can be written.
+    const connectionLost = commandName === "xcrun"
+      && args[0] === "stapler"
+      && args[1] === "validate"
+      && /NSURLErrorDomain\s+Code=-1005\b/.test(output);
+    if (!connectionLost || attempt === maximumAttempts) {
+      fail(`${commandName} ${args[0] ?? ""} failed: ${output.trim() || `exit ${result.status}`}`);
+    }
+    const delayMs = attempt * 5_000;
+    console.warn(`Apple ticket validation connection lost; retry ${attempt + 1}/${maximumAttempts} in ${delayMs / 1_000}s`);
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, delayMs);
   }
-  return output;
+  fail(`${commandName} exhausted its validation attempts`);
 }
 
 function oneFile(directory, suffix) {
