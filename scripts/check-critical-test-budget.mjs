@@ -61,6 +61,8 @@ function walk(directory, files = []) {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     if (entry.isDirectory() && ignoredDirectories.has(entry.name)) continue;
     const entryPath = path.join(directory, entry.name);
+    // Nested repositories and linked worktrees have their own test manifests.
+    if (entry.isDirectory() && existsSync(path.join(entryPath, ".git"))) continue;
     if (entry.isDirectory()) walk(entryPath, files);
     else files.push(entryPath);
   }

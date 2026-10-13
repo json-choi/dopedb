@@ -139,13 +139,20 @@ export function manualTransactionErrorKey(cause: unknown): I18nKey {
 
 /** Wall clock for time-limit displays: ticks every second in the last minute. */
 export function useManualTransactionClock(expiresAt: string | null): number {
-  const [now, setNow] = useState(() => Date.now());
+  const [clock, setClock] = useState(() => ({ expiresAt, now: Date.now() }));
+  let now = clock.now;
+  // An idle editor has no ticking clock. Rebind its first reading before a new
+  // deadline paints so an earlier transaction or idle period cannot extend it.
+  if (clock.expiresAt !== expiresAt) {
+    now = Date.now();
+    setClock({ expiresAt, now });
+  }
   useEffect(() => {
     if (!expiresAt) return;
     const deadline = Date.parse(expiresAt);
     const remaining = deadline - Date.now();
     const timer = window.setTimeout(
-      () => setNow(Date.now()),
+      () => setClock({ expiresAt, now: Date.now() }),
       remaining <= 60_000 ? 1_000 : Math.min(15_000, remaining - 60_000),
     );
     return () => window.clearTimeout(timer);
