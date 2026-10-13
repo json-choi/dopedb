@@ -7,6 +7,7 @@ import { useQueryClient } from "@tanstack/react-query";
 
 import type { PanelTab } from "../../design-system/components/PanelTabs";
 import { useI18n } from "../../lib/i18n";
+import { useConnectionEnvironmentContext } from "./useConnectionEnvironmentContext";
 import { useCatalogScope } from "../../lib/queries";
 import { useToast } from "../../components/Toast";
 import { refreshDesktopConnections } from "../workspaceAdmin/desktopConnections";
@@ -75,6 +76,7 @@ export function useConnectionProfileController({
     url,
     status,
   } = profileState;
+  const environmentContext = useConnectionEnvironmentContext(form.value.id, projectEnvironmentId);
   const { isSharedTemplate, isMongo, isBigQuery } = form.flags;
   const databaseDiscovery = useConnectionDatabaseDiscovery(profileState);
   const managedConnection = useManagedConnectionRecovery(form.value, catalogScope);
@@ -302,6 +304,7 @@ export function useConnectionProfileController({
 
   return {
     view: {
+      environmentContext,
       form: form.value,
       set: form.set,
       port: {

@@ -9,7 +9,7 @@ use crate::connection::{ConnectionAccess, ConnectionManager, DbPool};
 use crate::error::{AppError, AppResult};
 use crate::executor::cancel;
 use crate::features::knowledge::KnowledgeFeature;
-use crate::kernel::access::PinnedConnection;
+use crate::kernel::access::{PinnedConnection, WorkspaceKind};
 use crate::model::{Engine, HistoryEntry, QueryKind, QueryResult};
 use crate::operations::canonical_hash;
 use crate::safety::{self, PoolRef};
@@ -56,7 +56,14 @@ impl AnalysisReadExecutionPort for DesktopAnalysisReadExecution {
         // `SharedConnectionChanged` (re-check the shared connection) here and from the
         // Environment content pin, and `CredentialBindingRequired` from `connect` when
         // this device has no credential.
-        let local_connection_id = if let Some(workspace_id) = request.workspace_id {
+        let active_scope = self.store.active_resource_scope().await?;
+        let personal = active_scope.workspace_kind == WorkspaceKind::Personal;
+        if personal && request.workspace_id != Some(active_scope.workspace_id) {
+            return Err(AppError::SharedConnectionChanged);
+        }
+        let local_connection_id = if personal {
+            request.connection_id
+        } else if let Some(workspace_id) = request.workspace_id {
             self.knowledge
                 .local_connection_id_for_remote(workspace_id, request.connection_id)
                 .await?
@@ -68,6 +75,20 @@ impl AnalysisReadExecutionPort for DesktopAnalysisReadExecution {
         let pin = operation_scope.pin_connection(local_connection_id).await?;
         let expected_authority_revision =
             match (request.workspace_id, request.project_environment_id) {
+                (Some(_), Some(environment_id)) if personal => {
+                    let revision = request
+                        .environment_revision
+                        .ok_or(AppError::SharedConnectionChanged)?;
+                    self.store
+                        .check_personal_article_pin(
+                            environment_id,
+                            revision,
+                            request.connection_id,
+                            request.connection_revision,
+                        )
+                        .await?;
+                    request.connection_revision
+                }
                 (Some(workspace_id), Some(environment_id)) => {
                     let account_id = pin.scope.selected_account_id.as_deref().ok_or_else(|| {
                         AppError::Blocked {
@@ -193,6 +214,20 @@ impl AnalysisReadExecutionPort for DesktopAnalysisReadExecution {
             )
             .await;
             return Err(error);
+        }
+        if personal {
+            self.store
+                .check_personal_article_pin(
+                    request
+                        .project_environment_id
+                        .ok_or(AppError::SharedConnectionChanged)?,
+                    request
+                        .environment_revision
+                        .ok_or(AppError::SharedConnectionChanged)?,
+                    request.connection_id,
+                    request.connection_revision,
+                )
+                .await?;
         }
         record_query(
             &self.store,

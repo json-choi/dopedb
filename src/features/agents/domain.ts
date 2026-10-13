@@ -46,6 +46,8 @@ export interface AgentCliInfo {
   installed: boolean;
   authenticated: boolean;
   authMethod: string | null;
+  accountEmail: string | null;
+  accountPlan: string | null;
   detectionError: string | null;
   note: string;
 }

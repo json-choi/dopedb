@@ -152,6 +152,7 @@ export function useAgentEnvironmentInventory({
       catalogScopeKey,
     ),
     queryFn: () => listKnowledgeEnvironmentConnections(),
+    staleTime: 60_000,
     refetchOnWindowFocus: false,
   });
   const connectionById = useMemo(

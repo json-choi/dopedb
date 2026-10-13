@@ -111,6 +111,7 @@ type WorkbenchContentCommands = {
     closeWorkspaceAdmin: () => void;
     closeSurface: () => void;
     openSafety: (connectionId: string) => void;
+    openProjectEnvironment: (environmentId: string) => void;
   };
   connections: {
     retry: () => void;
@@ -238,6 +239,8 @@ function WorkbenchContentResolved({ model, commands }: Props) {
       refreshSafety={commands.safety.refresh}
       onSafetySaved={commands.safety.accept}
       onConnectionUpdated={commands.connections.update}
+      onEditConnection={commands.connections.edit}
+      onOpenProjectEnvironment={commands.route.openProjectEnvironment}
       onOpenAdminConnection={(source) => commands.connections.new(localSchemaConnectionPreset(
         source, t("safety.adminConnectionName", { name: source.name }),
       ))}

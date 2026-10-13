@@ -59,6 +59,7 @@ const MAX_OPERATION_WAIT: Duration = Duration::from_secs(30);
 pub(crate) fn assert_dispatch_contract() {
     connection_catalog::assert_catalog_search_contract();
     projection::assert_execution_error_contract();
+    analysis_article_operation::assert_article_scope_contract();
 }
 
 #[derive(Clone, Serialize)]

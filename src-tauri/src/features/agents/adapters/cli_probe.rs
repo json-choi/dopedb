@@ -16,6 +16,8 @@ const PROBE_TIMEOUT: Duration = Duration::from_secs(4);
 const AUTH_PROBE_TIMEOUT: &str = "auth_probe_timeout";
 const SAFE_PROBE_ENVIRONMENT: &[&str] = &[
     "HOME",
+    "CODEX_HOME",
+    "CLAUDE_CONFIG_DIR",
     "USER",
     "LOGNAME",
     "SHELL",
@@ -106,7 +108,7 @@ async fn detect_claude() -> AgentCliInfo {
     let auth_unknown = auth
         .as_ref()
         .is_some_and(|result| result.as_ref().is_err_and(|error| is_probe_timeout(error)));
-    let (authenticated, auth_method) = auth
+    let (authenticated, auth_method, account_email, account_plan) = auth
         .and_then(Result::ok)
         .and_then(|output| serde_json::from_str::<serde_json::Value>(&output).ok())
         .filter(|value| {
@@ -122,15 +124,19 @@ async fn detect_claude() -> AgentCliInfo {
                     .get("authMethod")
                     .and_then(serde_json::Value::as_str)
                     .map(str::to_owned),
+                super::cli_account::public_text(value.get("email")),
+                super::cli_account::public_text(value.get("subscriptionType")),
             )
         })
-        .unwrap_or((false, None));
+        .unwrap_or((false, None, None, None));
     AgentCliInfo {
         id: AgentProvider::Claude,
         name: "Claude Code".into(),
         installed,
         authenticated,
         auth_method,
+        account_email,
+        account_plan,
         detection_error: auth_unknown.then(|| AUTH_PROBE_TIMEOUT.into()),
         note: "Uses your Claude subscription login in a connection-pinned Terminal.".into(),
     }
@@ -170,12 +176,22 @@ async fn detect_codex() -> AgentCliInfo {
         .as_ref()
         .is_some_and(|result| result.as_ref().is_err_and(|error| is_probe_timeout(error)));
     let authenticated = auth.is_some_and(|result| result.is_ok());
+    let account = if authenticated {
+        super::cli_account::codex_account(&binary).await
+    } else {
+        None
+    };
+    let (auth_method, account_email, account_plan) = account
+        .map(|(method, email, plan)| (Some(method), email, plan))
+        .unwrap_or((None, None, None));
     AgentCliInfo {
         id: AgentProvider::Codex,
         name: "Codex CLI".into(),
         installed,
         authenticated,
-        auth_method: None,
+        auth_method,
+        account_email,
+        account_plan,
         detection_error: auth_unknown.then(|| AUTH_PROBE_TIMEOUT.into()),
         note: "Uses your ChatGPT subscription login in a connection-pinned Terminal.".into(),
     }
@@ -188,6 +204,8 @@ fn unavailable(id: AgentProvider, name: &str, note: &str) -> AgentCliInfo {
         installed: false,
         authenticated: false,
         auth_method: None,
+        account_email: None,
+        account_plan: None,
         detection_error: None,
         note: note.into(),
     }
@@ -200,6 +218,8 @@ fn probe_failed(id: AgentProvider, name: &str, error: impl Into<String>) -> Agen
         installed: false,
         authenticated: false,
         auth_method: None,
+        account_email: None,
+        account_plan: None,
         detection_error: Some(error.into()),
         note: "DopeDB found this CLI but could not complete its credential-free status probe."
             .into(),
@@ -246,7 +266,7 @@ async fn run_probe_with_timeout(
     decode_output(output)
 }
 
-fn apply_probe_environment(command: &mut std::process::Command) {
+pub(super) fn apply_probe_environment(command: &mut std::process::Command) {
     command.env_clear();
     for (key, value) in std::env::vars_os() {
         if probe_environment_key_allowed(&key, cfg!(windows)) {
@@ -296,7 +316,7 @@ fn decode_output(output: Output) -> Result<String, String> {
     })
 }
 
-fn quiet_command(program: impl AsRef<OsStr>) -> std::process::Command {
+pub(super) fn quiet_command(program: impl AsRef<OsStr>) -> std::process::Command {
     let program = program.as_ref();
     #[cfg(windows)]
     {

@@ -88,7 +88,7 @@ export function AnalysisArticleEditor({
   const [error, setError] = useState<string | null>(null);
   const [confirmingDiscard, setConfirmingDiscard] = useState(false);
   const usableBindings = useMemo(
-    () => bindings.filter((binding) => binding.remoteConnectionId && !binding.stale),
+    () => bindings.filter((binding) => (binding.remoteConnectionId ?? binding.connectionId) && !binding.stale),
     [bindings],
   );
   const dirty = title !== origin.title || html !== origin.html
@@ -112,9 +112,10 @@ export function AnalysisArticleEditor({
   const submit = () => {
     const normalizedTitle = title.trim();
     const normalizedSql = sql.trim();
-    const binding = usableBindings.find((candidate) => candidate.remoteConnectionId === connectionId);
+    const binding = usableBindings.find((candidate) => (candidate.remoteConnectionId ?? candidate.connectionId) === connectionId);
     if (!normalizedTitle) return setError(t("analysis.editorTitleRequired"));
-    if (!binding?.remoteConnectionId) return setError(t("analysis.editorConnectionRequired"));
+    const authorityConnectionId = binding?.remoteConnectionId ?? binding?.connectionId;
+    if (!binding || !authorityConnectionId) return setError(t("analysis.editorConnectionRequired"));
     if (!normalizedSql) return setError(t("analysis.editorQueryRequired"));
     const query: AnalysisQueryNode = {
       ...base.definition.query,
@@ -125,7 +126,7 @@ export function AnalysisArticleEditor({
       id: base.id,
       projectEnvironmentId: base.projectEnvironmentId,
       environmentRevision: base.environmentRevision,
-      connectionId: binding.remoteConnectionId,
+      connectionId: authorityConnectionId,
       connectionRevision: binding.connectionContentRevision,
       definition: simpleDefinition(normalizedTitle, html, query),
     });
@@ -200,7 +201,7 @@ export function AnalysisArticleEditor({
             >
               <option value="">{t("analysis.selectDatabase")}</option>
               {usableBindings.map((binding) => (
-                <option key={binding.id} value={binding.remoteConnectionId!}>
+                <option key={binding.id} value={(binding.remoteConnectionId ?? binding.connectionId)!}>
                   {binding.alias || binding.connectionName}
                 </option>
               ))}

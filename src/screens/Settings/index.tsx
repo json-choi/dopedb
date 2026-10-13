@@ -21,6 +21,13 @@ import {
   type AppUpdaterSnapshot,
 } from "../../features/updater/controller";
 import AccountSettings from "./Account";
+import ConnectionSettings from "./Connection";
+import { Button } from "../../design-system/components/Button";
+import { SettingsGroup } from "../../design-system/components/Settings";
+import { SettingsList, SettingsRow } from "../../design-system/components/SettingsList";
+import { useWorkspaceAdminScope } from "../../features/workspaceAdmin/scope";
+import { workspaceAdminSectionsFor } from "../../features/workspaceAdmin/sections";
+import { requestWorkspaceAdmin } from "../../features/workspaceAdmin/navigationRequest";
 import AdvancedSettings from "./Advanced";
 import Appearance from "./Appearance";
 import AgentTools from "./AgentTools";
@@ -29,7 +36,7 @@ import PrivacySettings from "./Privacy";
 import Safety from "./Safety";
 import Updates from "./Updates";
 
-type SettingsScope = "application" | "dataSource";
+type SettingsScope = "application" | "agents" | "account" | "dataSource";
 
 export default function Settings({
   connection,
@@ -37,6 +44,8 @@ export default function Settings({
   onConnectionUpdated,
   onSafetySaved,
   onOpenAdminConnection,
+  onEditConnection,
+  onOpenProjectEnvironment,
   refreshSafety,
   initialSection,
   updater,
@@ -48,6 +57,8 @@ export default function Settings({
   onConnectionUpdated: (connection: ConnectionProfile) => void;
   onSafetySaved: (connectionId: string, settings: SafetySettings) => void;
   onOpenAdminConnection: (connection: ConnectionProfile) => void;
+  onEditConnection: (connection: ConnectionProfile) => void;
+  onOpenProjectEnvironment: (environmentId: string) => void;
   // Re-loads the App's per-connection safety so Safety edits apply without reselecting.
   refreshSafety: () => void;
   initialSection?: SettingsSection;
@@ -60,6 +71,7 @@ export default function Settings({
     initialSection ?? "agent-tools",
   );
   const auth = useQuery(workspaceAuthStateQuery());
+  const adminScope = useWorkspaceAdminScope();
   const signedIn = Boolean(auth.data?.user);
   // The account section depends on this read; until it settles, a requested
   // section is not yet known to be unavailable.
@@ -94,14 +106,15 @@ export default function Settings({
       status,
     });
     return [
-      entry("agent-tools", t("settings.agentTools"), "application"),
+      entry("agent-tools", t("settings.agentTools"), "agents"),
       entry("advanced", t("settings.advanced"), "application"),
-      entry("cli", t("settings.cli"), "application"),
+      entry("cli", t("settings.cli"), "agents"),
       entry("appearance", t("settings.appearance"), "application"),
       entry("language", t("settings.languageTitle"), "application"),
       entry("privacy", t("settings.privacy"), "application"),
       entry("updates", t("settings.updates"), "application", updateNavigationStatus),
-      ...(signedIn ? [entry("account", t("workspaceAdmin.account"), "application")] : []),
+      ...(signedIn ? [entry("account", t("workspaceAdmin.account"), "account")] : []),
+      entry("connection", t("settings.connectionEnvironment"), "dataSource"),
       entry(
         "safety",
         `${t("settings.safety")}${connection ? ` · ${connection.name || t("app.unnamed")}` : ""}`,
@@ -127,6 +140,8 @@ export default function Settings({
       titleId="settings-dialog-title"
       groups={[
         { id: "application", label: t("settings.scopeApplication") },
+        { id: "agents", label: t("settings.scopeAgents") },
+        { id: "account", label: t("settings.scopeAccount") },
         { id: "dataSource", label: t("settings.scopeDataSource") },
       ]}
       entries={entries}
@@ -153,7 +168,13 @@ export default function Settings({
         />
       )}
       {section === "appearance" && <Appearance />}
-      {section === "account" && signedIn && <AccountSettings />}
+      {section === "account" && signedIn && <>
+        {adminScope?.canManage ? <SettingsGroup title={t("workspaceAdmin.manage")}><SettingsList>
+          {workspaceAdminSectionsFor(adminScope).map((entry) => <SettingsRow key={entry.id} identity={t(entry.label)} details={adminScope.workspaceName} actions={<Button size="compact" onClick={() => requestWorkspaceAdmin(entry.id)}>{t("settings.openManagement")}</Button>} />)}
+        </SettingsList></SettingsGroup> : null}
+        <AccountSettings />
+      </>}
+      {section === "connection" && (connection ? <ConnectionSettings connection={connection} onEdit={onEditConnection} onOpenProject={onOpenProjectEnvironment} /> : <p>{t("settings.selectConnection")}</p>)}
       {section === "language" && (
         <div className="tw:grid tw:max-w-[560px] tw:gap-4 tw:p-4">
           <Field label={t("language.label")}>

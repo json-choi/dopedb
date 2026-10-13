@@ -89,6 +89,7 @@ export function useAnalysisArticlesController({
   const { t } = useI18n();
   const queryClient = useQueryClient();
   const catalogScope = useCatalogScope();
+  const available = catalogScope.ready && (sharedWorkspace || catalogScope.workspaceKind === "personal");
   const workspaceRole = useWorkspaceAdminScope()?.role ?? null;
   const canWrite = workspaceRole === null || WRITE_ROLES.has(workspaceRole);
   // Environment bindings are workspace-managed (admin or owner), like the Databases view.
@@ -100,7 +101,7 @@ export function useAnalysisArticlesController({
   const articles = useQuery({
     queryKey: articleKey,
     queryFn: () => listAnalysisArticles(environment.id),
-    enabled: sharedWorkspace,
+    enabled: available,
     retry: false,
   });
   const [selectedId, setSelectedId] = useState<string | null>(focusId ?? null);
@@ -260,7 +261,7 @@ export function useAnalysisArticlesController({
   const agentBinding = bindings.find((binding) =>
     binding.connectionId && !binding.stale && (
       !selected || (
-        binding.remoteConnectionId === selected.connectionId
+        (binding.remoteConnectionId ?? binding.connectionId) === selected.connectionId
         && binding.connectionContentRevision === selected.connectionRevision
       )
     ),
@@ -275,9 +276,9 @@ export function useAnalysisArticlesController({
   // the Article's pinned connection must still be bound, current, mirrored on this
   // device, and carry this member's credential. The runner repeats every check and
   // reports the same typed failures, which map to the same recovery steps.
-  const connections = useQuery({ ...connectionsQuery(catalogScope.key), enabled: sharedWorkspace });
+  const connections = useQuery({ ...connectionsQuery(catalogScope.key), enabled: available });
   const runBinding = selected
-    ? bindings.find((binding) => binding.remoteConnectionId === selected.connectionId) ?? null
+    ? bindings.find((binding) => (binding.remoteConnectionId ?? binding.connectionId) === selected.connectionId) ?? null
     : null;
   const runConnection = runBinding?.connectionId
     ? connections.data?.find((connection) => connection.id === runBinding.connectionId) ?? null
@@ -342,6 +343,7 @@ export function useAnalysisArticlesController({
           : null;
 
   return {
+    available,
     actionFailure,
     agentBinding,
     articles,

@@ -291,10 +291,6 @@ function ShellLayoutContent({ model, commands }: Props) {
           leftToolWindowVisible &&
           (!viewport.compact || viewport.mobileExplorerOpen)
         }
-        localHistoryOpen={
-          localHistoryVisible &&
-          (!viewport.compact || viewport.mobileExplorerOpen)
-        }
         agentDockOpen={agent.open}
         actionSearchOpen={search.open}
         settingsOpen={workspace.settingsOpen}
@@ -309,7 +305,8 @@ function ShellLayoutContent({ model, commands }: Props) {
         onNewQuery={commands.workbench.newQuery}
         onWelcome={commands.workbench.showWelcome}
         onToggleLeftPanel={commands.explorer.togglePanel}
-        onToggleLocalHistory={commands.explorer.toggleLocalHistory}
+        onOpenQueryHistory={commands.status.openNotifications}
+        queryHistoryOpen={activeWorkbenchDocument?.kind === "activity"}
         onToggleAgent={commands.agent.toggle}
         agentButtonRef={agent.buttonRef}
         agentPendingApprovals={agentPendingApprovals}

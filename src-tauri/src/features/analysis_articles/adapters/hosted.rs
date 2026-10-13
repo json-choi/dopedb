@@ -1,13 +1,12 @@
 //! Authenticated Analysis Article control-plane adapter. Bearer sessions and
 //! manual-run capabilities stay in Rust; result rows never leave Desktop.
 
-use std::collections::BTreeMap;
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use dopedb_protocol::{
-    AnalysisArticleRecord, AnalysisArticleVersionPayload, AnalysisQueryReceipt, AnalysisRunError,
-    AnalysisRunState, SharedAnalysisArticleCreate,
+    AnalysisArticleRecord, AnalysisQueryReceipt, AnalysisRunError, AnalysisRunState,
+    SharedAnalysisArticleCreate,
 };
 use reqwest::{Response, StatusCode, Url};
 use serde::de::DeserializeOwned;
@@ -86,17 +85,7 @@ struct ArticleResponse {
     article: AnalysisArticleRecord,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub(crate) struct RemoteAnalysisArticleRevision {
-    pub(crate) revision: i64,
-    pub(crate) base_revision: Option<i64>,
-    pub(crate) operation: String,
-    pub(crate) payload: AnalysisArticleVersionPayload,
-    pub(crate) payload_hash: String,
-    pub(crate) created_by_member_id: String,
-    pub(crate) created_at: DateTime<Utc>,
-}
+pub(crate) use super::super::domain::AnalysisArticleRevision as RemoteAnalysisArticleRevision;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

@@ -15,6 +15,23 @@ runtime과 성능 수치로 수행한다.
 - `missing`: 범위에는 속하지만 아직 구현하지 않음
 - `out-of-scope`: 제품 범위 결정상 화면이나 placeholder를 만들지 않음
 
+## 2026-10-13 기능 복구 검수
+
+워크스페이스 생성의 로그인 진입, 검색 옆 쿼리 이력, BigQuery의 별도 연결 진입,
+설정의 scope 그룹과 연결·Project 환경 바로가기, 지정 DB만 표시하는 Explorer,
+닫힌 채팅의 exact read-only ACP 준비와 재열기, 공식 CLI 계정 표시, SVG 위 drop과
+다른 Project drop 차단, 개인 Analysis Article 경로를 수정했다. 개인 문서는 additive
+SQLite 테이블에 암호화해 저장하며 팀 정의·초대·공개 발행 경로와 섞지 않는다.
+backend 검수는 격리된 실제 SQLite의 저장·revision 충돌·안전 HTML·수동 조회·
+stale pin 실행 차단·삭제와 개인/팀 Article identity 분리 조건을 검증한다.
+CLI stdout 종료가 프로세스의 정상 exit보다 앞선 경우도 원래 timeout·취소·
+전체 자식 종료 증명을 유지하면서 허용된 exit code를 정확히 검사한다.
+브라우저 검수는 실제 React 컴포넌트와 native IPC fixture를 사용한 headless 방식이다.
+화면 흐름 30개를 검증했다. 연결 선택과 속성도 Project 환경을 우선 표시하며,
+동일 연결이 여러 환경에 속하면 임의로 하나를 고르지 않고 환경을 함께 표시한다.
+native packaged 화면의 직접 조작, 실제 공급자 대화와 BigQuery Google 로그인은
+사용자의 백그라운드 검수 범위 밖이므로 `partial` 검수 gap으로 유지한다.
+
 ## Desktop 제품 분석 동의
 
 - 상태: `partial` — 전역 우측 하단 동의 카드와 BigQuery 전송 경로를 구현했다.

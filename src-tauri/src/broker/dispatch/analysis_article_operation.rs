@@ -19,6 +19,17 @@ use super::*;
 /// Granted Article bodies read at once while listing; each is one bounded read.
 const ARTICLE_BODY_READ_CONCURRENCY: usize = 4;
 
+fn article_connection_id(
+    connection: &crate::features::knowledge::domain::KnowledgeSessionConnection,
+    personal: bool,
+) -> Option<Uuid> {
+    if personal {
+        Some(connection.connection_id)
+    } else {
+        connection.remote_connection_id
+    }
+}
+
 pub(super) async fn handle(
     dispatcher: &BrokerDispatcher,
     request: &RequestEnvelope,
@@ -43,9 +54,6 @@ pub(super) async fn handle(
         Some(dopedb_protocol::AcpPluginId::Codex) => AnalysisArticleSource::DopedbAcpCodex,
         None => return failure(request_id, ErrorCode::ScopeDenied, false),
     };
-    if session.account_scope.as_str() == "personal" {
-        return failure(request_id, ErrorCode::ScopeDenied, false);
-    }
     let services = match dispatcher.services() {
         Ok(services) => services,
         Err(code) => return failure(request_id, code, false),
@@ -56,7 +64,7 @@ pub(super) async fn handle(
             .exact_knowledge_session_graphs(
                 scope,
                 Uuid::from(session.workspace_id),
-                session.account_scope.as_str(),
+                session.knowledge_account_scope.as_str(),
             )
             .await
         {
@@ -107,6 +115,7 @@ pub(super) async fn handle(
 /// database grant permits: only the exact Environment revision and connection pins pass.
 fn article_in_grant(
     scope: &KnowledgeSessionScope,
+    personal: bool,
     project_environment_id: Uuid,
     environment_revision: i64,
     connection_id: Uuid,
@@ -115,7 +124,7 @@ fn article_in_grant(
     project_environment_id == scope.project_environment_id
         && u64::try_from(environment_revision).ok() == Some(scope.environment_revision)
         && scope.connections.iter().any(|connection| {
-            connection.remote_connection_id == Some(connection_id)
+            article_connection_id(connection, personal) == Some(connection_id)
                 && connection.connection_content_revision == connection_revision
         })
 }
@@ -139,6 +148,7 @@ async fn list_granted_articles(
             .filter(|summary| {
                 article_in_grant(
                     scope,
+                    account == "personal",
                     summary.project_environment_id,
                     summary.environment_revision,
                     summary.connection_id,
@@ -163,6 +173,7 @@ async fn list_granted_articles(
         articles.extend(bodies.into_iter().flatten().filter(|article| {
             article_in_grant(
                 scope,
+                account == "personal",
                 article.project_environment_id,
                 article.environment_revision,
                 article.connection_id,
@@ -175,6 +186,7 @@ async fn list_granted_articles(
 
 fn article_create(
     scope: &KnowledgeSessionScope,
+    personal: bool,
     connection_id: Uuid,
     source: AnalysisArticleSource,
     definition: dopedb_protocol::AnalysisArticleInputDefinition,
@@ -188,9 +200,8 @@ fn article_create(
         .iter()
         .find(|connection| connection.connection_id == connection_id)
         .ok_or(ErrorCode::ScopeDenied)?;
-    let remote_connection_id = scoped_connection
-        .remote_connection_id
-        .ok_or(ErrorCode::ScopeDenied)?;
+    let remote_connection_id =
+        article_connection_id(scoped_connection, personal).ok_or(ErrorCode::ScopeDenied)?;
     let article = SharedAnalysisArticleCreate {
         id: article_id,
         project_environment_id: scope.project_environment_id,
@@ -230,6 +241,7 @@ async fn propose(
     let scope = scope_for_connection(session, arguments.connection_id)?;
     let article = article_create(
         scope,
+        session.account_scope.as_str() == "personal",
         arguments.connection_id,
         source,
         arguments.definition,
@@ -278,6 +290,7 @@ async fn update_article(
     }
     let article = article_create(
         scope,
+        session.account_scope.as_str() == "personal",
         arguments.connection_id,
         source,
         arguments.definition,
@@ -316,6 +329,7 @@ async fn verify_article(
     let scope = scope_for_connection(session, arguments.connection_id)?;
     let article = article_create(
         scope,
+        session.account_scope.as_str() == "personal",
         arguments.connection_id,
         source,
         arguments.definition,
@@ -327,6 +341,7 @@ async fn verify_article(
         .run_definition(AnalysisDefinitionRunRequest {
             workspace_id: Some(Uuid::from(session.workspace_id)),
             project_environment_id: Some(article.project_environment_id),
+            environment_revision: Some(article.environment_revision),
             article_id,
             article_revision: 1,
             definition: article.definition,
@@ -371,4 +386,96 @@ fn emit_changed(
     ) {
         tracing::warn!(%error, "failed to emit Analysis Article mutation");
     }
+}
+
+#[cfg(test)]
+pub(super) fn assert_article_scope_contract() {
+    let connection_id = Uuid::new_v4();
+    let remote_id = Uuid::new_v4();
+    let mut connection = crate::features::knowledge::domain::KnowledgeSessionConnection {
+        connection_id,
+        remote_connection_id: None,
+        connection_revision: 1,
+        connection_content_revision: 1,
+        role: "read".into(),
+        alias: "main".into(),
+    };
+    assert_eq!(
+        article_connection_id(&connection, true),
+        Some(connection_id)
+    );
+    assert_eq!(article_connection_id(&connection, false), None);
+    connection.remote_connection_id = Some(remote_id);
+    assert_eq!(article_connection_id(&connection, false), Some(remote_id));
+    assert_eq!(
+        article_connection_id(&connection, true),
+        Some(connection_id)
+    );
+    let scope = KnowledgeSessionScope {
+        project_id: Uuid::new_v4(),
+        knowledge_grant_id: None,
+        project_environment_id: Uuid::new_v4(),
+        environment_revision: 1,
+        authority_connection_id: connection_id,
+        authority_connection_revision: 1,
+        sources: vec![],
+        graph_revision_ids: vec![],
+        connections: vec![connection],
+    };
+    assert!(article_in_grant(
+        &scope,
+        true,
+        scope.project_environment_id,
+        1,
+        connection_id,
+        1
+    ));
+    assert!(!article_in_grant(
+        &scope,
+        true,
+        scope.project_environment_id,
+        1,
+        remote_id,
+        1
+    ));
+    assert!(!article_in_grant(
+        &scope,
+        true,
+        scope.project_environment_id,
+        2,
+        connection_id,
+        1
+    ));
+    assert!(!article_in_grant(
+        &scope,
+        true,
+        Uuid::new_v4(),
+        1,
+        connection_id,
+        1
+    ));
+    assert!(!article_in_grant(
+        &scope,
+        true,
+        scope.project_environment_id,
+        1,
+        connection_id,
+        2
+    ));
+    assert!(article_in_grant(
+        &scope,
+        false,
+        scope.project_environment_id,
+        1,
+        remote_id,
+        1
+    ));
+    assert!(!article_in_grant(
+        &scope,
+        false,
+        scope.project_environment_id,
+        1,
+        connection_id,
+        1
+    ));
 }

@@ -4,6 +4,35 @@
 /// Stable id for the offline-first Personal Workspace created at bootstrap.
 pub const PERSONAL_WORKSPACE_ID: &str = "00000000-0000-0000-0000-000000000001";
 
+/// Additive, encrypted personal Article definitions and immutable revisions.
+pub(crate) const PERSONAL_ARTICLES_SCHEMA: &str = r#"
+CREATE TABLE IF NOT EXISTS personal_analysis_articles (
+    id TEXT PRIMARY KEY,
+    environment_id TEXT NOT NULL,
+    revision INTEGER NOT NULL CHECK(revision > 0),
+    deleted INTEGER NOT NULL DEFAULT 0 CHECK(deleted IN (0, 1)),
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS personal_analysis_article_revisions (
+    article_id TEXT NOT NULL REFERENCES personal_analysis_articles(id) ON DELETE CASCADE,
+    revision INTEGER NOT NULL CHECK(revision > 0),
+    nonce BLOB NOT NULL CHECK(length(nonce) = 24),
+    ciphertext BLOB NOT NULL CHECK(length(ciphertext) BETWEEN 17 AND 1048576),
+    PRIMARY KEY(article_id, revision)
+);
+CREATE TABLE IF NOT EXISTS personal_analysis_article_runs (
+    id TEXT PRIMARY KEY,
+    article_id TEXT NOT NULL REFERENCES personal_analysis_articles(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL,
+    nonce BLOB NOT NULL CHECK(length(nonce) = 24),
+    ciphertext BLOB NOT NULL CHECK(length(ciphertext) BETWEEN 17 AND 65536)
+);
+CREATE INDEX IF NOT EXISTS idx_personal_analysis_articles_environment
+    ON personal_analysis_articles(environment_id, deleted, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_personal_analysis_article_runs
+    ON personal_analysis_article_runs(article_id, created_at DESC);
+"#;
+
 /// The audit tail-anchor table exactly as `SCHEMA` declares it. Existing baseline
 /// stores receive it once from `bootstrap`; the audit test asserts both stay equal.
 pub const AUDIT_CHAIN_ANCHOR_SCHEMA: &str = "CREATE TABLE audit_chain_anchors (

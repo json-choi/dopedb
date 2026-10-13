@@ -308,6 +308,7 @@ pub(crate) async fn assert_process_boundary() {
             )
             .await
             .expect("accept an explicitly hashed action-required exit code");
+        Box::pin(assert_natural_exit_after_eof()).await;
         assert!(ProvisioningCliCommand::new(
             LocalProvider::GcpCloudSql,
             executable.clone(),
@@ -380,4 +381,43 @@ pub(crate) async fn assert_process_boundary() {
             .await
             .expect("remove executable drift fixture directory");
     }
+}
+
+#[cfg(unix)]
+async fn assert_natural_exit_after_eof() {
+    use uuid::Uuid;
+
+    let delayed_exit = ProvisioningCliCommand::new(
+        LocalProvider::GcpCloudSql,
+        ProvisioningExecutableIdentity::audit(
+            LocalProvider::GcpCloudSql,
+            Path::new("/bin/sh"),
+            &[PathBuf::from("/bin")],
+            &["sh"],
+        )
+        .await
+        .expect("audit the fixed EOF-before-exit fixture"),
+        vec![
+            "-c".into(),
+            "exec 1>&- 2>&-; /bin/sleep 0.05; exit 1".into(),
+        ],
+        vec![ProvisioningCliEnvironment::SafePath],
+        ProvisioningCliOutputSchema::Empty,
+        Duration::from_secs(2),
+    )
+    .expect("construct EOF-before-exit fixture")
+    .with_accepted_exit_codes([1])
+    .expect("pin the fixture's natural exit code");
+    delayed_exit
+        .run(
+            &ProvisioningExecutionPermit::issue(
+                Uuid::from_u128(55),
+                LocalProvider::GcpCloudSql,
+                "ef".repeat(32),
+                delayed_exit.execution_sha256().unwrap(),
+            ),
+            &CancellationToken::new(),
+        )
+        .await
+        .expect("EOF must not kill a CLI before its accepted exit");
 }

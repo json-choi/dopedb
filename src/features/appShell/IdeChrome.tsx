@@ -42,7 +42,6 @@ export function IdeTopBar({
   selected,
   supportsSql,
   leftPanelOpen,
-  localHistoryOpen,
   agentDockOpen,
   actionSearchOpen,
   settingsOpen,
@@ -51,7 +50,8 @@ export function IdeTopBar({
   onNewQuery,
   onWelcome,
   onToggleLeftPanel,
-  onToggleLocalHistory,
+  onOpenQueryHistory,
+  queryHistoryOpen,
   onToggleAgent,
   agentButtonRef,
   agentPendingApprovals,
@@ -62,7 +62,6 @@ export function IdeTopBar({
   selected: ConnectionProfile | null;
   supportsSql: boolean;
   leftPanelOpen: boolean;
-  localHistoryOpen: boolean;
   agentDockOpen: boolean;
   /** Agent changes waiting for a person's decision on their AI Chat cards. */
   agentPendingApprovals: number;
@@ -73,7 +72,8 @@ export function IdeTopBar({
   onNewQuery: () => void;
   onWelcome: () => void;
   onToggleLeftPanel: () => void;
-  onToggleLocalHistory: () => void;
+  onOpenQueryHistory: () => void;
+  queryHistoryOpen: boolean;
   onToggleAgent: () => void;
   agentButtonRef: RefObject<HTMLButtonElement | null>;
   actionSearchButtonRef: RefObject<HTMLButtonElement | null>;
@@ -125,19 +125,14 @@ export function IdeTopBar({
           className="tw:flex tw:h-control-md tw:w-[min(320px,30vw)] tw:cursor-pointer tw:items-center tw:gap-2 tw:rounded-none tw:border tw:border-border-subtle tw:bg-card tw:px-3 tw:py-0 tw:font-sans tw:text-sm tw:text-muted-foreground tw:hover:border-border-strong tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:max-[760px]:w-control-md tw:max-[760px]:justify-center tw:max-[760px]:px-0"
           onClick={(event) => onActionSearch(event.currentTarget)}
         ><Icon name="search" /><span className="tw:truncate tw:max-[760px]:hidden">{t("ide.action.actionSearch")}</span><kbd className="tw:ml-auto tw:font-sans tw:text-xs tw:max-[760px]:hidden">⇧ ⇧</kbd></button>
+        <IdeToolbarLauncher active={queryHistoryOpen} disabled={!selected} onClick={onOpenQueryHistory} title={t("activity.queryHistory")} aria-label={t("activity.queryHistory")}>
+          <Icon name="history" />
+        </IdeToolbarLauncher>
         <ToolbarMenu
           align="start"
           icon="moreHorizontal"
           label={t("ide.action.more")}
         >
-          <ToolbarMenuItem
-            icon={localHistoryOpen ? "check" : "history"}
-            disabled={!localHistoryOpen && (!selected || !supportsSql)}
-            onClick={onToggleLocalHistory}
-            aria-pressed={localHistoryOpen}
-          >
-            {t("localHistory.title")}
-          </ToolbarMenuItem>
           <ToolbarMenuItem
             icon="play"
             disabled={queryDisabled}

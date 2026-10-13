@@ -343,6 +343,7 @@ function Shell() {
       commands={{
         route: {
           openSafety: (connectionId: string) => openShellSettings("safety", connectionId),
+          openProjectEnvironment: (environmentId: string) => commands.route.openKnowledge(environmentId, "databases"),
           closeSettings: commands.route.closeSettings,
           openWorkspaceAdmin: commands.route.openWorkspaceAdmin,
           closeWorkspaceAdmin: commands.route.closeWorkspaceAdmin,

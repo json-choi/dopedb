@@ -215,6 +215,7 @@ export function useActionSearchItems({
       ["cli", t("settings.cli"), false],
       ["privacy", t("settings.privacy"), false],
       ["safety", t("settings.safety"), !selected],
+      ["connection", t("settings.connectionEnvironment"), !selected],
       ["language", t("settings.languageTitle"), false],
       ["appearance", t("settings.appearance"), false],
       ["updates", t("settings.updates"), false],

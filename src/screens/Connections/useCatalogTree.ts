@@ -14,9 +14,9 @@ import {
   type CatalogLoadIssue,
 } from "../../features/catalogExplorer/catalogDomain";
 import { persistedCatalogCapturedAt } from "../../features/catalog/tauriAdapter";
+import type { ConnectionProfile } from "../../features/connections/domain";
 import { qk, type CatalogScope } from "../../lib/queries";
 import {
-  connectionDatabasesQuery,
   databaseCatalogOverviewQuery,
   databaseCatalogQuery,
 } from "../../lib/catalogQueries";
@@ -39,7 +39,7 @@ export function databaseCatalogKey(
 function isDatabaseTargetName(database: string) {
   return (
     database.length > 0 &&
-    new TextEncoder().encode(database).length <= 255 &&
+    new TextEncoder().encode(database).length <= 1024 &&
     ![...database].some((character) => /\p{Cc}/u.test(character))
   );
 }
@@ -51,12 +51,12 @@ type DatabaseTarget = {
 };
 
 /**
- * Discovers the databases visible through each server connection, then paints one
- * bounded relation tree per database. Full metadata remains opt-in per exact
+ * Shows only the configured database of each connection. Server discovery remains
+ * available in the connection editor. Full metadata remains opt-in per exact
  * `(connection, database)` target.
  */
 export function useCatalogTree(
-  connectionIds: string[],
+  connections: readonly ConnectionProfile[],
   scope: CatalogScope,
 ) {
   const queryClient = useQueryClient();
@@ -75,28 +75,13 @@ export function useCatalogTree(
 
   // Stable combine callbacks keep the projected records referentially stable until a
   // result changes; inline callbacks would rebuild every record on every render.
-  const combineDatabases = useCallback(
-    (results: Array<{ data?: DatabaseSummary[]; error: unknown }>) => {
-      const databasesByConnection: Record<string, DatabaseSummary[]> = {};
-      const databaseErrs: Record<string, CatalogLoadIssue> = {};
-      results.forEach((result, index) => {
-        const id = connectionIds[index];
-        if (result.data) databasesByConnection[id] = result.data;
-        // A failed re-read keeps the last list on screen and still reports the failure.
-        if (result.error) databaseErrs[id] = catalogLoadIssue(result.error);
-      });
-      return { databasesByConnection, databaseErrs };
-    },
-    [connectionIds],
-  );
-  const { databasesByConnection, databaseErrs } = useQueries({
-    queries: connectionIds.map((id) => connectionDatabasesQuery(id, scope)),
-    combine: combineDatabases,
-  });
+  const databasesByConnection = useMemo<Record<string, DatabaseSummary[]>>(() =>
+    Object.fromEntries(connections.map((connection) => [connection.id, [{ name: connection.database, isDefault: true }]])),
+  [connections]);
 
   const targets = useMemo(
     () =>
-      connectionIds.flatMap((connectionId) =>
+      connections.flatMap(({ id: connectionId }) =>
         (databasesByConnection[connectionId] ?? []).flatMap((database) =>
           isDatabaseTargetName(database.name)
             ? [{
@@ -107,7 +92,7 @@ export function useCatalogTree(
             : [],
         ),
       ),
-    [connectionIds, databasesByConnection],
+    [connections, databasesByConnection],
   );
 
   const requestDetails = useCallback(
@@ -304,7 +289,7 @@ export function useCatalogTree(
     detailErrs,
   } = useMemo(() => {
     const overviews: Record<string, CatalogOverview> = {};
-    const overviewErrs: Record<string, CatalogLoadIssue> = { ...databaseErrs };
+    const overviewErrs: Record<string, CatalogLoadIssue> = {};
     const catalogs: Record<string, Catalog> = {};
     // Schema comparison chips never judge a persisted snapshot shown while revalidating.
     const comparisonCatalogs: Record<string, Catalog> = {};
@@ -331,7 +316,6 @@ export function useCatalogTree(
     return { overviews, overviewErrs, catalogs, comparisonCatalogs, detailErrs };
   }, [
     databaseCatalogs,
-    databaseErrs,
     databaseOverviews,
     detailErrsByDatabase,
     overviewErrsByDatabase,

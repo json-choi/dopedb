@@ -259,6 +259,17 @@ Elevation은 세 단계만 허용한다.
 
 ## Workspace 인증 surface
 
+로그인 전에도 Workspace 선택기를 열고 `새 워크스페이스`를 선택할 수 있다.
+선택은 로그인 필요 안내와 기존 shell-owned Desktop 로그인 lifecycle을 사용한다.
+검색 옆의 history launcher는 SQL revision 도구가 아니라 실제 쿼리 실행 이력을 연다.
+CLI 계정 이름과 플랜은 `AgentAccountIdentity`가 설정 inventory와 채팅 메뉴에 같은
+문법으로 표시하며, 자격 증명이나 로그인 session을 소유하지 않는다.
+Settings의 연결·환경 진입은 같은 연결 편집기와 Project binding command로 이동한다.
+bound DB의 환경 control은 실제 Project marker를 읽기 전용으로 표시해 독립 profile
+라벨과 혼동하지 않게 하고, 독립 연결은 General에서 환경을 편집한다.
+BigQuery는 기존 `CommandMenuGroup`의 별도 cloud warehouse 그룹을 사용한다.
+Explorer는 설정된 DB만 직접 읽으며 서버의 다른 DB는 연결 편집기에서 선택한다.
+
 `workspace.css`는 Workspace Web과 Desktop의 독립 loopback 문서가 공유하는
 인증 palette, Tailwind 역할, 전역 reset의 정본이다. 기존 Workspace Web의
 `globals.css`에 있던 정의를 이동한 것으로 desktop 앱 shell에는 import하지 않는다.

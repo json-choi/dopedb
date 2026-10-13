@@ -272,7 +272,7 @@ export function useSchemaGroupDrag(
     y: number,
   ): DropTarget | null {
     const element = document.elementFromPoint(x, y);
-    if (!(element instanceof HTMLElement)) return null;
+    if (!(element instanceof Element)) return null;
     const targetProjectId = element.closest<HTMLElement>(
       "[data-knowledge-project-databases-drop-id]",
     )?.dataset.knowledgeProjectDatabasesDropId;
@@ -308,6 +308,9 @@ export function useSchemaGroupDrag(
       orderElement?.dataset.projectDatabaseBlockFirstBindingId;
     const targetBlockLastBindingId =
       orderElement?.dataset.projectDatabaseBlockLastBindingId;
+    // An assigned row only reorders its own Project. It must never fall through
+    // to a schema-group mutation when dropped outside that Project.
+    if (orderSource && orderTargetProjectId !== orderSource.projectId) return null;
     if (
       orderSource &&
       orderElement &&
@@ -372,7 +375,7 @@ export function useSchemaGroupDrag(
   ) {
     if (
       event.button !== 0 ||
-      (event.target instanceof HTMLElement &&
+      (event.target instanceof Element &&
         !!event.target.closest(
           "button,input,select,textarea,a,summary,details,.db-menu",
         ))
@@ -422,6 +425,7 @@ export function useSchemaGroupDrag(
   }
 
   function pointerUp(event: PointerEvent<HTMLDivElement>) {
+    if (dragStartRef.current?.pointerId !== event.pointerId) return;
     const activeId = activeDragIdRef.current;
     const target = activeId
       ? dropTargetFromPoint(activeId, event.clientX, event.clientY)
@@ -443,6 +447,7 @@ export function useSchemaGroupDrag(
   }
 
   function pointerCancel(event: PointerEvent<HTMLDivElement>) {
+    if (dragStartRef.current?.pointerId !== event.pointerId) return;
     if (dragStartRef.current?.pointerId === event.pointerId) {
       try {
         event.currentTarget.releasePointerCapture?.(event.pointerId);
@@ -451,6 +456,7 @@ export function useSchemaGroupDrag(
       }
     }
     clearDrag();
+    suppressClickRef.current = false;
   }
 
   return {

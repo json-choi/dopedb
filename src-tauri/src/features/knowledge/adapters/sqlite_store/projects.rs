@@ -334,6 +334,19 @@ impl Store {
                 reason: "the Project revision changed before deletion".into(),
             });
         }
+        if workspace_id.to_string() == "00000000-0000-0000-0000-000000000001" {
+            let has_articles: bool = sqlx::query_scalar(
+                "SELECT EXISTS(SELECT 1 FROM personal_analysis_articles article
+                 JOIN knowledge_project_environments environment ON environment.id = article.environment_id
+                 WHERE environment.project_id = ?1 AND article.deleted = 0)"
+            ).bind(project_id.to_string()).fetch_one(&mut *tx).await?;
+            if has_articles {
+                return Err(AppError::Blocked {
+                    reason: "Project has active Analysis Articles; delete its Articles first"
+                        .into(),
+                });
+            }
+        }
         delete_project_cache(&mut tx, workspace_id, project_id, Some(expected_revision)).await?;
         tx.commit().await?;
         Ok(())

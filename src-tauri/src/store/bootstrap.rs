@@ -51,6 +51,9 @@ pub(super) async fn bootstrap_local_store(pool: &SqlitePool) -> AppResult<LocalS
         add_deferred_credential_deletes(pool).await?;
         add_history_targets(pool).await?;
         retire_older_catalog_producer(pool).await?;
+        sqlx::raw_sql(schema::PERSONAL_ARTICLES_SCHEMA)
+            .execute(pool)
+            .await?;
         return Ok(LocalStoreBootstrap::Ready { created: false });
     }
     if version != 0 || application_id != 0 {
@@ -65,6 +68,9 @@ pub(super) async fn bootstrap_local_store(pool: &SqlitePool) -> AppResult<LocalS
         .execute(&mut *transaction)
         .await?;
     sqlx::raw_sql(schema::KNOWLEDGE_SCHEMA)
+        .execute(&mut *transaction)
+        .await?;
+    sqlx::raw_sql(schema::PERSONAL_ARTICLES_SCHEMA)
         .execute(&mut *transaction)
         .await?;
     sqlx::query("PRAGMA application_id = 1146048581")

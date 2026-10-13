@@ -35,7 +35,9 @@ const PENDING_REVIEW_REFRESH_MS = 5_000;
 export function agentPluginStatusQuery() {
   return queryOptions({
     queryKey: agentQueryKeys.pluginStatus(),
-    staleTime: 15_000,
+    staleTime: 60_000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
     queryFn: listAgentAcpPlugins,
   });
 }
@@ -44,7 +46,9 @@ export function agentPluginStatusQuery() {
 export function agentCliDetectionQuery() {
   return queryOptions({
     queryKey: agentQueryKeys.cliStatus(),
-    staleTime: 15_000,
+    staleTime: 5 * 60_000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
     queryFn: () => detectAgentClis(),
   });
 }

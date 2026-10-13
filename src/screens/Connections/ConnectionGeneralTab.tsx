@@ -7,6 +7,7 @@ import {
   FieldValidationMessage,
   InlineSelect,
   PropertyRow,
+  SelectInput,
   TextInput,
 } from "../../design-system/components/FormControls";
 import type { ConnectionInputMode } from "../../features/connections/connectionEditorModel";
@@ -305,6 +306,29 @@ export function ConnectionGeneralTab({
           <ConnectionDatabaseField profile={profile} busy={busy} />
         </section>
       )}
+      <PropertyRow
+        label={t("connections.environment")}
+        htmlFor="connection-environment"
+        description={t(profile.environmentContext.bound ? "connections.projectEnvironmentHint" : "connections.environmentHint")}
+      >
+        <SelectInput
+          id="connection-environment"
+          density="compact"
+          value={profile.environmentContext.marker ?? (profile.environmentContext.bound ? "" : form.env ?? "")}
+          disabled={!canEditConnection || busy || profile.environmentContext.pending || profile.environmentContext.bound}
+          onChange={(event) => set("env", event.target.value || null)}
+        >
+          {profile.environmentContext.bound && !profile.environmentContext.environment && profile.environmentContext.marker ? (
+            <option value={profile.environmentContext.marker}>{profile.environmentContext.marker.toUpperCase()}</option>
+          ) : null}
+          <option value="">{t("common.none")}</option>
+          <option value="dev">DEV</option>
+          <option value="staging">STAGING</option>
+          <option value="prod">PROD</option>
+          <option value="test">TEST</option>
+          <option value="custom">CUSTOM</option>
+        </SelectInput>
+      </PropertyRow>
     </div>
   );
 }

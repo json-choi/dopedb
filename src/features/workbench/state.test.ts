@@ -2205,6 +2205,7 @@ describe("workbench state ownership", () => {
       const form = { ...blankConnection(), name: "DopeDB development", database: "app" };
       const danger = (message: string) => ({ tone: "danger" as const, message });
       const profile = {
+        environmentContext: { bound: false, marker: null, pending: false, project: undefined, environment: undefined, error: null },
         form, set: vi.fn(), flags: connectionProfileFlags(form),
         identity: { isNew: false, persisted: true },
         credentials: { password: "", setPassword: vi.fn() },

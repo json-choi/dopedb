@@ -149,7 +149,7 @@ function connectionLabel(
   bindings: readonly EnvironmentConnection[],
 ) {
   const binding = bindings.find(
-    (candidate) => candidate.remoteConnectionId === article.connectionId,
+    (candidate) => (candidate.remoteConnectionId ?? candidate.connectionId) === article.connectionId,
   );
   return binding ? binding.alias || binding.connectionName : article.connectionId;
 }
@@ -188,7 +188,7 @@ export default function AnalysisArticles({
     onOpenAgent,
   });
 
-  if (!sharedWorkspace) {
+  if (!controller.available) {
     return (
       <WorkbenchEmptyState icon="chart">
         <strong>{t("analysis.teamOnlyTitle")}</strong>
@@ -309,7 +309,7 @@ export default function AnalysisArticles({
                 <ToolbarMenu label={t("ide.action.more")} icon="moreHorizontal">
                   {controller.canWrite && controller.agentBinding?.connectionId && onOpenAgent ? <ToolbarMenuItem icon="terminal" onClick={controller.askAgent}>{t("analysis.editWithAgent")}</ToolbarMenuItem> : null}
                   <ToolbarMenuItem icon="history" onClick={() => controller.setTab(controller.tab === "history" ? "article" : "history")}>{t(controller.tab === "history" ? "analysis.tabArticle" : "analysis.tabHistory")}</ToolbarMenuItem>
-                  {controller.canWrite ? <ToolbarMenuItem icon="upload" onClick={() => { controller.setTab("article"); setShowPublication(true); }}>{t("analysis.publishHtml")}</ToolbarMenuItem> : null}
+                  {sharedWorkspace && controller.canWrite ? <ToolbarMenuItem icon="upload" onClick={() => { controller.setTab("article"); setShowPublication(true); }}>{t("analysis.publishHtml")}</ToolbarMenuItem> : null}
                   <ToolbarMenuItem icon="refresh" onClick={() => void controller.articles.refetch()}>{t("analysis.refresh")}</ToolbarMenuItem>
                   {controller.canWrite ? (
                     <div role="none" data-menu-keep-open>
@@ -329,7 +329,7 @@ export default function AnalysisArticles({
                 {controller.canWrite ? (
                   <Button size="compact" disabled={!articleDocument} onClick={controller.openEditor}><Icon name="pencil" />{t("analysis.edit")}</Button>
                 ) : null}
-                <AnalysisShareButton key={`${scopeKey}:${selected.id}`} articleId={selected.id} />
+                {sharedWorkspace ? <AnalysisShareButton key={`${scopeKey}:${selected.id}`} articleId={selected.id} /> : null}
               </div>
             </header>
             <div className="tw:min-h-0 tw:flex-1 tw:overflow-hidden">
@@ -375,7 +375,7 @@ export default function AnalysisArticles({
         )}
       </main>
 
-      {selected && showPublication && controller.canWrite ? <ModalBackdrop onMouseDown={() => setShowPublication(false)}>
+      {sharedWorkspace && selected && showPublication && controller.canWrite ? <ModalBackdrop onMouseDown={() => setShowPublication(false)}>
         <ModalSurface aria-labelledby="article-publication-title" onRequestClose={() => setShowPublication(false)}>
           <ModalHeader title={t("analysis.publishHtml")} titleId="article-publication-title" />
           <div className="scrollbar-sleek tw:min-h-0 tw:overflow-auto tw:p-5"><AnalysisPublicationPanel key={`${scopeKey}:${selected.id}`} article={selected} scopeKey={scopeKey} /></div>

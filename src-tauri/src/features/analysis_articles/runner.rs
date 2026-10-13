@@ -54,6 +54,7 @@ where
             .execute_read(AnalysisReadExecutionRequest {
                 workspace_id: request.workspace_id,
                 project_environment_id: request.project_environment_id,
+                environment_revision: request.environment_revision,
                 connection_id: request.connection_id,
                 connection_revision: request.connection_revision,
                 query,

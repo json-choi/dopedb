@@ -36,15 +36,15 @@ const ANALYSIS_CONTROL_POLL_INTERVAL: Duration = Duration::from_secs(2);
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct AnalysisRunCommandResult {
-    run: RemoteAnalysisRun,
-    result: AnalysisDefinitionRunReceipt,
+    pub(super) run: RemoteAnalysisRun,
+    pub(super) result: AnalysisDefinitionRunReceipt,
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct AnalysisRunPage {
-    runs: Vec<RemoteAnalysisRun>,
-    next_cursor: Option<String>,
+    pub(super) runs: Vec<RemoteAnalysisRun>,
+    pub(super) next_cursor: Option<String>,
 }
 
 fn team_account(scope: &ActiveResourceScope) -> AppResult<AccountId> {
@@ -63,6 +63,17 @@ fn team_account(scope: &ActiveResourceScope) -> AppResult<AccountId> {
 async fn remote_scope(state: &AppState) -> AppResult<(ActiveResourceScope, AccountId)> {
     let scope = state.services.knowledge.active_resource_scope().await?;
     let account = team_account(&scope)?;
+    Ok((scope, account))
+}
+
+async fn article_scope(state: &AppState) -> AppResult<(ActiveResourceScope, AccountId)> {
+    let scope = state.services.knowledge.active_resource_scope().await?;
+    let account = if scope.workspace_kind == WorkspaceKind::Personal {
+        AccountId::new("personal")
+            .ok_or_else(|| AppError::Config("Personal Article identity is invalid".into()))?
+    } else {
+        team_account(&scope)?
+    };
     Ok((scope, account))
 }
 
@@ -99,7 +110,7 @@ pub(crate) async fn list_analysis_articles_command(
     state: State<'_, AppState>,
     project_environment_id: Option<Uuid>,
 ) -> AppResult<Vec<AnalysisArticleSummary>> {
-    let (scope, account) = remote_scope(&state).await?;
+    let (scope, account) = article_scope(&state).await?;
     state
         .services
         .analysis_article
@@ -113,7 +124,7 @@ pub(crate) async fn get_analysis_article_command(
     state: State<'_, AppState>,
     article_id: Uuid,
 ) -> AppResult<AnalysisArticleRecord> {
-    let (scope, account) = remote_scope(&state).await?;
+    let (scope, account) = article_scope(&state).await?;
     state
         .services
         .analysis_article
@@ -138,7 +149,7 @@ pub(crate) async fn update_analysis_article_command(
     article: SharedAnalysisArticleCreate,
 ) -> AppResult<AnalysisArticleSaveResult> {
     let article = human_edit(article);
-    let (scope, account) = remote_scope(&state).await?;
+    let (scope, account) = article_scope(&state).await?;
     state
         .services
         .analysis_article
@@ -163,7 +174,14 @@ pub(crate) async fn delete_analysis_article_command(
     article_id: Uuid,
     expected_revision: i64,
 ) -> AppResult<i64> {
-    let (scope, account) = remote_scope(&state).await?;
+    let (scope, account) = article_scope(&state).await?;
+    if scope.workspace_kind == WorkspaceKind::Personal {
+        return state
+            .services
+            .analysis_article
+            .delete_personal_article(article_id, expected_revision)
+            .await;
+    }
     match list_analysis_publications(account.as_str(), scope.workspace_id, article_id).await {
         Ok(publications) => {
             for publication in publications
@@ -225,7 +243,14 @@ pub(crate) async fn list_analysis_article_revisions_command(
     state: State<'_, AppState>,
     article_id: Uuid,
 ) -> AppResult<Vec<RemoteAnalysisArticleRevision>> {
-    let (scope, account) = remote_scope(&state).await?;
+    let (scope, account) = article_scope(&state).await?;
+    if scope.workspace_kind == WorkspaceKind::Personal {
+        return state
+            .services
+            .analysis_article
+            .personal_revisions(article_id)
+            .await;
+    }
     list_analysis_article_revisions(account.as_str(), scope.workspace_id, article_id).await
 }
 
@@ -275,7 +300,10 @@ pub(crate) async fn list_analysis_article_runs_command(
     article_id: Uuid,
     before: Option<chrono::DateTime<chrono::Utc>>,
 ) -> AppResult<AnalysisRunPage> {
-    let (scope, account) = remote_scope(&state).await?;
+    let (scope, account) = article_scope(&state).await?;
+    if scope.workspace_kind == WorkspaceKind::Personal {
+        return super::personal_transport::list(&state, article_id, before).await;
+    }
     let (runs, next_cursor) =
         list_analysis_runs(account.as_str(), scope.workspace_id, article_id, before).await?;
     Ok(AnalysisRunPage { runs, next_cursor })
@@ -288,7 +316,10 @@ pub(crate) async fn run_analysis_article_command(
     article_revision: i64,
     run_id: Option<Uuid>,
 ) -> AppResult<AnalysisRunCommandResult> {
-    let (scope, account) = remote_scope(&state).await?;
+    let (scope, account) = article_scope(&state).await?;
+    if scope.workspace_kind == WorkspaceKind::Personal {
+        return super::personal_transport::run(&state, article_id, article_revision, run_id).await;
+    }
     let registration_guard = analysis_runner_registration_guard().await;
     let mut device_id = state
         .services
@@ -326,6 +357,7 @@ pub(crate) async fn run_analysis_article_command(
     let request = AnalysisDefinitionRunRequest {
         workspace_id: Some(scope.workspace_id),
         project_environment_id: Some(article.project_environment_id),
+        environment_revision: Some(article.environment_revision),
         article_id,
         article_revision,
         definition: article.definition.clone(),
@@ -457,7 +489,10 @@ pub(crate) async fn cancel_analysis_article_run(
     article_id: Uuid,
     run_id: Uuid,
 ) -> AppResult<RemoteAnalysisRun> {
-    let (scope, account) = remote_scope(&state).await?;
+    let (scope, account) = article_scope(&state).await?;
+    if scope.workspace_kind == WorkspaceKind::Personal {
+        return super::personal_transport::cancel(&state, article_id, run_id).await;
+    }
     let remote =
         cancel_remote_analysis_run(account.as_str(), scope.workspace_id, article_id, run_id)
             .await?;

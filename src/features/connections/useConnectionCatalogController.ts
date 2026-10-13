@@ -158,6 +158,11 @@ export function useConnectionCatalogController({
         sourceDriverDescription(source),
       ),
   );
+  const filteredWarehouseSources = STANDARD_CONNECTION_SOURCES.filter(
+    (source) => source.category === "warehouse" && matchesAddSearch(
+      source.label, source.engine, t("connections.cloudWarehouse"), "google gcp 빅쿼리",
+    ),
+  );
   const filteredCloudProviders = cloudProviders.filter(
     (provider) =>
       provider.provider === "gcpCloudSql" &&
@@ -185,6 +190,7 @@ export function useConnectionCatalogController({
     );
   const hasAddResults =
     filteredDatabaseSources.length > 0 ||
+    filteredWarehouseSources.length > 0 ||
     filteredFileSources.length > 0 ||
     filteredCloudProviders.length > 0 ||
     demoMatches ||
@@ -321,6 +327,7 @@ export function useConnectionCatalogController({
         search: sourceSearch,
         setSearch: setSourceSearch,
         filteredDatabaseSources,
+        filteredWarehouseSources,
         filteredFileSources,
         selectAddSource,
         sourceDriverDescription,

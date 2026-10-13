@@ -1,5 +1,5 @@
 // Presents the shared-template rows of the General tab: transport security the
-// template or the provider owns, environment and schema group labels, and this
+// template or the provider owns, schema group labels, and this
 // member's credential state with its binding command. Values a member binding or
 // a provider integration owns are shown read-only rather than edited here.
 import { Button } from "../../design-system/components/Button";
@@ -91,25 +91,6 @@ export function ConnectionSharedTemplateFields({
           </SelectInput>
         </PropertyRow>
       )}
-      <PropertyRow
-        label={t("connections.environment")}
-        htmlFor="connection-template-env"
-      >
-        <SelectInput
-          id="connection-template-env"
-          density="compact"
-          value={form.env ?? ""}
-          disabled={!canEditConnection}
-          onChange={(event) =>
-            set("env", event.target.value || null)
-          }
-        >
-          <option value="">{t("common.none")}</option>
-          <option value="dev">dev</option>
-          <option value="staging">staging</option>
-          <option value="prod">prod</option>
-        </SelectInput>
-      </PropertyRow>
       {!isMongo ? (
         <PropertyRow
           label={t("connections.schemaGroup")}

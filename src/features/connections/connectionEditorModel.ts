@@ -37,7 +37,7 @@ export type StandardConnectionSource = {
   engine: Engine;
   provider: Provider;
   label: string;
-  category: "database" | "file";
+  category: "database" | "warehouse" | "file";
 };
 
 export const POSTGRES_SSL_MODES = [
@@ -96,7 +96,7 @@ export const STANDARD_CONNECTION_SOURCES: StandardConnectionSource[] = [
   { engine: "postgres", provider: "auto", label: "PostgreSQL", category: "database" },
   { engine: "mysql", provider: "auto", label: "MySQL / MariaDB", category: "database" },
   { engine: "mongodb", provider: "generic", label: "MongoDB", category: "database" },
-  { engine: "bigquery", provider: "generic", label: "Google BigQuery", category: "database" },
+  { engine: "bigquery", provider: "generic", label: "Google BigQuery", category: "warehouse" },
   { engine: "sqlite", provider: "cloudflareD1", label: "Cloudflare D1", category: "database" },
   { engine: "sqlite", provider: "generic", label: "SQLite", category: "file" },
 ];

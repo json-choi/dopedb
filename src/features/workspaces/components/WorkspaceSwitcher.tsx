@@ -11,6 +11,7 @@ import {
 import type { AccountId, WorkspaceId } from "../domain";
 import { workspaceAuthStateQuery, workspaceContextQuery } from "../queries";
 import { onWorkspaceSelectionRequested } from "../selectionRequest";
+import { requestWorkspaceLogin } from "../loginRequest";
 import {
   buildWorkspaceChoiceGroups,
   parseWorkspaceChoice,
@@ -181,10 +182,17 @@ export default function WorkspaceSwitcher({
         </ToolbarMenuItem>
         {/* Both commands open surfaces outside this menu, so selection closes the menu
             first and the opened dialog returns focus to the menu trigger. */}
-        {context.data?.feature.enabled && signedInUser ? (
+        {context.data?.feature.enabled ? (
           <ToolbarMenuItem
             icon="folderPlus"
-            onClick={() => setCreatingFor(signedInUser.id)}
+            disabled={auth.data === undefined}
+            onClick={() => {
+              if (signedInUser) setCreatingFor(signedInUser.id);
+              else {
+                toast(t("workspace.createRequiresLogin"));
+                requestWorkspaceLogin();
+              }
+            }}
           >
             {t("workspaceAdmin.newWorkspace")}
           </ToolbarMenuItem>

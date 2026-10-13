@@ -28,6 +28,7 @@ use workspace_codec::{
 
 use bootstrap::*;
 use projections::*;
+pub(crate) use repositories::personal_article_key;
 use repositories::*;
 
 pub(crate) use projections::{

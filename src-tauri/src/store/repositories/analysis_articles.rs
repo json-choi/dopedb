@@ -206,7 +206,7 @@ fn cache_aad(
     .into_bytes()
 }
 
-fn encrypt(
+pub(super) fn encrypt(
     key: &Zeroizing<[u8; 32]>,
     aad: &[u8],
     plaintext: &[u8],
@@ -230,7 +230,7 @@ fn encrypt(
     Ok((nonce, ciphertext))
 }
 
-fn decrypt(
+pub(super) fn decrypt(
     key: &Zeroizing<[u8; 32]>,
     aad: &[u8],
     nonce: &[u8],
@@ -271,8 +271,8 @@ mod tests {
         Zeroizing::new(random_bytes())
     }
 
-    #[test]
-    fn encrypted_cache_round_trips_only_with_exact_authority() {
+    #[tokio::test]
+    async fn encrypted_cache_round_trips_only_with_exact_authority() {
         let aad = b"workspace\0account\0article\0revision\0run\0hash";
         let plaintext = br#"{"result":"privacy-minimized"}"#;
         let key = key();
@@ -280,6 +280,7 @@ mod tests {
         assert_ne!(ciphertext, plaintext);
         assert_eq!(decrypt(&key, aad, &nonce, &ciphertext).unwrap(), plaintext);
         assert!(decrypt(&key, b"different-account", &nonce, &ciphertext).is_err());
+        super::super::personal_analysis_articles::assert_personal_article_contract().await;
     }
 
     #[test]

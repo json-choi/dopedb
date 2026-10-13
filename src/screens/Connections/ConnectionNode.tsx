@@ -269,6 +269,7 @@ export default function ConnectionNode(props: Props) {
         onPointerMove={props.onPointerMove}
         onPointerUp={props.onPointerUp}
         onPointerCancel={props.onPointerCancel}
+        onLostPointerCapture={props.onPointerCancel}
         onKeyDown={(event) => {
           if (
             !props.projectDatabaseOrder ||
@@ -336,7 +337,7 @@ export default function ConnectionNode(props: Props) {
             name={props.expanded ? "chevronDown" : "chevronRight"}
           />
         </span>
-        {!props.nested && (
+        {(!props.nested || props.projectDatabaseOrder) && (
           <EngineMark engine={connection.engine} size="tree" />
         )}
         <span className="tw:flex tw:min-w-0 tw:flex-1 tw:items-center tw:gap-1.5 tw:overflow-hidden">

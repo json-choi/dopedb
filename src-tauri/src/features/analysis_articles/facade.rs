@@ -39,6 +39,49 @@ where
         }
     }
 
+    pub(crate) async fn personal_revisions(
+        &self,
+        article_id: uuid::Uuid,
+    ) -> AppResult<Vec<super::domain::AnalysisArticleRevision>> {
+        self.local.personal_revisions(article_id).await
+    }
+    pub(crate) async fn delete_personal_article(
+        &self,
+        article_id: uuid::Uuid,
+        expected_revision: i64,
+    ) -> AppResult<i64> {
+        self.local
+            .delete_personal_article(article_id, expected_revision)
+            .await
+    }
+    pub(crate) async fn assert_personal_pin(
+        &self,
+        article: &dopedb_protocol::AnalysisArticleRecord,
+    ) -> AppResult<()> {
+        self.local.assert_personal_pin(article).await
+    }
+    pub(crate) async fn save_personal_run(
+        &self,
+        run: &super::domain::AnalysisRunRecord,
+        creating: bool,
+    ) -> AppResult<()> {
+        self.local.save_personal_run(run, creating).await
+    }
+    pub(crate) async fn personal_run(
+        &self,
+        article_id: uuid::Uuid,
+        run_id: uuid::Uuid,
+    ) -> AppResult<super::domain::AnalysisRunRecord> {
+        self.local.personal_run(article_id, run_id).await
+    }
+    pub(crate) async fn personal_runs(
+        &self,
+        article_id: uuid::Uuid,
+        before: Option<chrono::DateTime<chrono::Utc>>,
+    ) -> AppResult<(Vec<super::domain::AnalysisRunRecord>, Option<String>)> {
+        self.local.personal_runs(article_id, before).await
+    }
+
     pub(crate) async fn load_local_result(
         &self,
         article_id: uuid::Uuid,

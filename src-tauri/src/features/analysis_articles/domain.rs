@@ -69,6 +69,50 @@ pub(crate) enum AnalysisArticleMutation {
     RevisionConflict,
 }
 
+/// Immutable edit history shared by local and hosted definition repositories.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct AnalysisArticleRevision {
+    pub(crate) revision: i64,
+    pub(crate) base_revision: Option<i64>,
+    pub(crate) operation: String,
+    pub(crate) payload: dopedb_protocol::AnalysisArticleVersionPayload,
+    pub(crate) payload_hash: String,
+    pub(crate) created_by_member_id: String,
+    pub(crate) created_at: chrono::DateTime<chrono::Utc>,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum AnalysisRunTrigger {
+    Manual,
+}
+
+/// Metadata only; result rows remain in the encrypted local result cache.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct AnalysisRunRecord {
+    pub(crate) id: Uuid,
+    pub(crate) article_id: Uuid,
+    pub(crate) article_revision: i64,
+    pub(crate) runner_id: Uuid,
+    pub(crate) runner_capability_generation: u64,
+    pub(crate) trigger: AnalysisRunTrigger,
+    pub(crate) state: dopedb_protocol::AnalysisRunState,
+    pub(crate) definition_hash: String,
+    pub(crate) schema_fingerprints: std::collections::BTreeMap<String, String>,
+    pub(crate) row_count: u64,
+    pub(crate) byte_count: u64,
+    pub(crate) result_hash: Option<String>,
+    pub(crate) error_kind: Option<String>,
+    pub(crate) error_message: Option<String>,
+    pub(crate) cancel_requested_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub(crate) cancel_requested_by_member_id: Option<String>,
+    pub(crate) started_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub(crate) finished_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub(crate) created_at: chrono::DateTime<chrono::Utc>,
+}
+
 /// Desktop editor save receipt. A conflict carries the latest revision when it could
 /// be read, so the person can re-apply the unsaved draft on top of it.
 #[derive(Debug, Clone, Serialize)]
@@ -86,6 +130,7 @@ pub(crate) enum AnalysisArticleSaveResult {
 pub(crate) struct AnalysisDefinitionRunRequest {
     pub(crate) workspace_id: Option<Uuid>,
     pub(crate) project_environment_id: Option<Uuid>,
+    pub(crate) environment_revision: Option<i64>,
     pub(crate) article_id: Uuid,
     pub(crate) article_revision: i64,
     pub(crate) definition: AnalysisArticleDefinition,

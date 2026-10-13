@@ -241,6 +241,7 @@ export function DatabaseExplorer({
         && connectionAccessIssue(connection) === undefined;
     });
   }, [connections, wantedIds]);
+  const readableWantedConnections = useMemo(() => connections.filter((connection) => readableWantedIds.includes(connection.id)), [connections, readableWantedIds]);
   const {
     databasesByConnection,
     databaseOverviews,
@@ -256,7 +257,7 @@ export function DatabaseExplorer({
     requestDetails,
     forgetOverview,
     forgetConnection,
-  } = useCatalogTree(readableWantedIds, catalogScope);
+  } = useCatalogTree(readableWantedConnections, catalogScope);
   const {
     ensureLoaded,
     retryOverview,

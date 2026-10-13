@@ -192,18 +192,17 @@ export function useAgentScopeSelection({
         candidate.databases.some(
           (database) => database.connectionId === connectionId,
         ),
-      ) ?? inventoryProjects[0];
+      );
     const database =
       project?.databases.find(
         (candidate) => candidate.connectionId === connectionId,
-      ) ?? project?.databases[0];
-    const source = database ? undefined : project?.sources[0];
-    const anchor = database?.connectionId ?? source?.authorityConnectionId;
+      );
+    const anchor = database?.connectionId;
     if (anchor) onSelectConnection(anchor);
     const next = {
       projectId: project?.id ?? null,
       databaseIds: database ? [database.connectionId] : [],
-      sourceIds: source ? [source.sourceId] : [],
+      sourceIds: [],
       writeConnectionId: null,
     };
     setSelection((current) => sameSelection(current, next) ? current : next);
