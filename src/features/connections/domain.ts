@@ -128,6 +128,7 @@ export const CONNECTION_TEST_FAILURE_CODES = [
   "sshUnknown",
   "timeoutNetwork",
   "authentication",
+  "authenticationIdentity",
   "tls",
   "databaseConfig",
   "unknown",

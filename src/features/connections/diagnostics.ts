@@ -26,6 +26,7 @@ import {
   isPostgresTransactionPooler,
   isSshHostAlias,
 } from "./options";
+import { defaultConnectionName } from "./presets";
 
 export type ConnectionDiagnosticCode =
   | "nameRequired"
@@ -33,6 +34,7 @@ export type ConnectionDiagnosticCode =
   | "hostRequired"
   | "hostInvalid"
   | "portInvalid"
+  | "usernameRequired"
   | "postgresUsernameInvalid"
   | "sqliteFileRequired"
   | "cloudflareAccountRequired"
@@ -115,11 +117,15 @@ export function diagnoseConnection(
   portDraft = String(profile.port),
 ): ConnectionDiagnostic[] {
   const diagnostics: ConnectionDiagnostic[] = [];
+  // An unnamed draft is saved under its endpoint name, so only a draft without
+  // an endpoint yet needs a typed name. Only a typed name is checked for
+  // duplicates; a derived one is visible as the placeholder.
   const name = profile.name.trim();
 
-  if (!name) {
+  if (!name && !defaultConnectionName(profile)) {
     diagnostics.push(issue("nameRequired", "danger", "connection-name"));
   } else if (
+    name &&
     savedConnections.some(
       (candidate) =>
         candidate.id !== profile.id &&
@@ -231,21 +237,30 @@ export function diagnoseConnection(
       );
     }
 
-    // A warning, not a block: the person confirms the exact role name.
+    // PostgreSQL and MySQL reject an empty user at the handshake, so a
+    // personal draft names the exact role before any check contacts the server.
+    // Shared and provider-managed profiles take the user from their binding.
+    const usernameSource =
+      profile.extraParams[CONNECTION_INPUT_MODE_PARAMETER] === "urlOnly"
+        ? "connection-url"
+        : "connection-username";
     if (
+      (profile.engine === "postgres" || profile.engine === "mysql") &&
+      profile.workspaceAccess === "local" &&
+      profile.credentialMode === "local" &&
+      profile.providerTarget === null &&
+      !profile.username.trim()
+    ) {
+      diagnostics.push(issue("usernameRequired", "danger", usernameSource));
+    } else if (
+      // A warning, not a block: the person confirms the exact role name.
       profile.engine === "postgres" &&
       profile.workspaceAccess === "local" &&
       profile.username &&
       suspiciousPostgresUsername(profile.username)
     ) {
       diagnostics.push(
-        issue(
-          "postgresUsernameInvalid",
-          "warning",
-          profile.extraParams[CONNECTION_INPUT_MODE_PARAMETER] === "urlOnly"
-            ? "connection-url"
-            : "connection-username",
-        ),
+        issue("postgresUsernameInvalid", "warning", usernameSource),
       );
     }
 

@@ -16,6 +16,7 @@ export function connectionDiagnosticMessage(
     hostRequired: "connections.problemHostRequired",
     hostInvalid: "connections.problemHostInvalid",
     portInvalid: "connections.problemPortInvalid",
+    usernameRequired: "connections.problemUsernameRequired",
     postgresUsernameInvalid: "connections.problemPostgresUsernameInvalid",
     sqliteFileRequired: "connections.problemSqliteFileRequired",
     cloudflareAccountRequired:

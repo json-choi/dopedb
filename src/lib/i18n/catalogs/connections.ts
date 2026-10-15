@@ -303,6 +303,8 @@ export const connectionsCatalog = defineCatalog(
       "This connection goes through a transaction-mode pooler that shares server sessions, so the startup script does not run. Use a session-mode or direct connection to apply it.",
     "connections.problemSshAliasInvalid":
       "Use an OpenSSH Host alias with letters, numbers, dots, underscores, or hyphens.",
+    "connections.problemUsernameRequired":
+      "Enter the database user. PostgreSQL from Homebrew or Postgres.app uses your computer login name, the official installer and Docker image use postgres, and a local MySQL usually uses root.",
     "connections.problemPostgresUsernameInvalid":
       "This PostgreSQL user starts or ends with whitespace or contains control characters. Check that it matches the role exactly.",
     "connections.problemSshTunnelSingleHostRequired":
@@ -368,6 +370,9 @@ export const connectionsCatalog = defineCatalog(
     "connections.testFailure.authenticationTitle": "Authentication failed",
     "connections.testFailure.authenticationRecovery":
       "Check the user and password stored on this device, then test again.",
+    "connections.testFailure.authenticationIdentityTitle": "The server does not accept this user",
+    "connections.testFailure.authenticationIdentityRecovery":
+      "Check that this role exists on the server. PostgreSQL from Homebrew creates only a role named after your computer login, not postgres. If the role exists, the server's pg_hba.conf may not allow this user or address.",
     "connections.testFailure.tlsTitle": "TLS verification failed",
     "connections.testFailure.tlsRecovery":
       "Check the TLS mode and certificate paths in SSH/SSL, then test again.",
@@ -926,6 +931,8 @@ export const connectionsCatalog = defineCatalog(
       "이 연결은 서버 세션을 공유하는 트랜잭션 모드 풀러를 거치므로 시작 스크립트가 실행되지 않습니다. 적용하려면 세션 모드 또는 직접 연결을 사용하세요.",
     "connections.problemSshAliasInvalid":
       "영문자, 숫자, 점, 밑줄 또는 하이픈으로 된 OpenSSH Host 별칭을 입력하세요.",
+    "connections.problemUsernameRequired":
+      "데이터베이스 사용자를 입력하세요. Homebrew나 Postgres.app으로 설치한 PostgreSQL은 이 컴퓨터의 로그인 계정 이름을, 공식 설치 프로그램과 Docker 이미지는 postgres를, 로컬 MySQL은 보통 root를 사용합니다.",
     "connections.problemPostgresUsernameInvalid":
       "이 PostgreSQL 사용자 이름의 앞이나 뒤에 공백이 있거나 제어 문자가 들어 있습니다. 실제 역할 이름과 정확히 같은지 확인하세요.",
     "connections.problemSshTunnelSingleHostRequired":
@@ -991,6 +998,9 @@ export const connectionsCatalog = defineCatalog(
     "connections.testFailure.authenticationTitle": "인증에 실패했습니다",
     "connections.testFailure.authenticationRecovery":
       "이 기기에 저장된 사용자와 비밀번호를 확인한 뒤 다시 테스트하세요.",
+    "connections.testFailure.authenticationIdentityTitle": "서버가 이 사용자를 받아들이지 않습니다",
+    "connections.testFailure.authenticationIdentityRecovery":
+      "서버에 이 역할이 있는지 확인하세요. Homebrew로 설치한 PostgreSQL에는 postgres 역할이 없고 이 컴퓨터의 로그인 계정 이름으로 된 역할만 있습니다. 역할이 있다면 서버의 pg_hba.conf가 이 사용자나 접속 주소를 허용하지 않는 것일 수 있습니다.",
     "connections.testFailure.tlsTitle": "TLS 검증에 실패했습니다",
     "connections.testFailure.tlsRecovery":
       "SSH/SSL에서 TLS 모드와 인증서 경로를 확인한 뒤 다시 테스트하세요.",
