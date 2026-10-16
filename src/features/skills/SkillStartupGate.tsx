@@ -27,6 +27,7 @@ import {
   agentCliDetectionQuery,
   agentPluginStatusQuery,
 } from "../agents/queryOptions";
+import { agentPluginReady } from "../agents/availability";
 import { installAgentAcpPlugin } from "../agents/tauriAdapter";
 import { errMessage, type SkillTarget } from "../../ipc/types";
 import { useI18n, type I18nKey } from "../../lib/i18n";
@@ -103,14 +104,9 @@ export default function SkillStartupGate() {
     for (const target of selected) {
       const id = pluginId(target);
       const current = pluginsQ.data?.find((plugin) => plugin.pluginId === id);
-      if (
-        current?.enabled &&
-        (current.installedVersion !== null ||
-          current.candidateVersion !== null ||
-          current.lastKnownGoodVersion !== null)
-      ) {
-        continue;
-      }
+      // A recorded version is not enough: an install from an earlier contract
+      // stays recorded but unverifiable, and only a reinstall repairs it.
+      if (agentPluginReady(current)) continue;
       setBusy(id);
       try {
         await installAgentAcpPlugin(id);
@@ -220,6 +216,11 @@ export default function SkillStartupGate() {
                       />
                     </div>
                   </div>
+                  {status?.failure && busy !== id ? (
+                    <p className="tw:m-0 tw:break-words tw:text-xs tw:leading-body tw:text-muted-foreground">
+                      {t("agentTools.pluginFailureDetail", { reason: status.failure })}
+                    </p>
+                  ) : null}
                   {busy === id ? (
                     <ProgressBar
                       value={null}

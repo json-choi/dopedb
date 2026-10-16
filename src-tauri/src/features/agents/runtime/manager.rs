@@ -395,8 +395,14 @@ impl AcpPluginManager {
             .map_err(|_| AppError::Config("the ACP plugin phase registry is unavailable".into()))?
             .get(&plugin_id)
             .copied();
+        // An install from an earlier contract or layout cannot be verified;
+        // a signed update repairs it, and the kept failure keeps it unready.
         let state = if installation_failure.is_some() {
-            AcpPluginInstallationState::Failed
+            phase.unwrap_or(if available.is_some() {
+                AcpPluginInstallationState::UpdateAvailable
+            } else {
+                AcpPluginInstallationState::Failed
+            })
         } else {
             phase.unwrap_or_else(|| {
                 if record.candidate.is_some() {
@@ -775,4 +781,18 @@ pub(super) fn assert_installation_identity_contract() {
         status.failure.is_some(),
         "unverified installations are never ready"
     );
+
+    let update = AvailablePluginVersion {
+        adapter_version: "2.0.0".into(),
+        adapter_bundle_version: "2.0.0".into(),
+        release_id: "acp-bundle-v2026.09.17.1".into(),
+        manifest_sha256: "e".repeat(64),
+    };
+    let mut updates = PersistedAvailableUpdates::default();
+    updates.plugins.insert(AcpPluginId::Claude, update);
+    manager.write_available_updates(&updates).unwrap();
+    let status = manager.project_status(AcpPluginId::Claude, &state).unwrap();
+    // A signed update is the repair path, yet the install stays unready.
+    assert_eq!(status.state, AcpPluginInstallationState::UpdateAvailable);
+    assert!(status.failure.is_some());
 }
