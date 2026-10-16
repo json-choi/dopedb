@@ -108,18 +108,6 @@
       "forbiddenWriterTokens": []
     },
     {
-      "name": "cloudProviderAccessFlow",
-      "owner": "workspace-cloud/features/providerAccess/state.ts",
-      "dispatcher": "workspace-cloud/features/providerAccess/state.ts",
-      "writerTokens": [
-        "export function providerAccessReducer("
-      ],
-      "forbiddenWriterTokens": [
-        "useState<ProviderAccessState",
-        "setResourceOptions] = useState"
-      ]
-    },
-    {
       "name": "cloudProviderCredentialMutations",
       "owner": "workspace-cloud/lib/provider-integration-mutation-store.ts",
       "dispatcher": "workspace-cloud/lib/provider-integration-mutation-store.ts",

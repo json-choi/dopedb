@@ -41,6 +41,8 @@ impl ScriptPlatformAdapter {
                         row_count: None,
                         error: Some(error.to_string()),
                         origin: &history_origin,
+                        database: &payload.database,
+                        namespace: payload.namespace.as_deref(),
                     },
                 )
                 .await;
@@ -74,6 +76,8 @@ impl ScriptPlatformAdapter {
         };
         let mut outcomes = Vec::with_capacity(statements.len());
         let mut failure = None;
+        let mut cancelled = false;
+        let is_cancellation = |error: &AppError| matches!(error, AppError::Safety(reason) if reason == "query cancelled");
         let cancellation = executor::cancel::register(operation_id);
         let manual_execution = self
             .manual_transactions
@@ -97,8 +101,16 @@ impl ScriptPlatformAdapter {
             match result {
                 Ok(result) => outcomes = result.statements,
                 Err(error) => {
+                    cancelled = is_cancellation(&error);
                     let message = error.to_string();
-                    outcomes.push(statement_error(&statements[0], message.clone()));
+                    // The failure belongs to the whole staged run, so no position
+                    // is pinned onto the first statement's text.
+                    outcomes.push(statement_error(
+                        &statements[0],
+                        error.kind(),
+                        message.clone(),
+                        None,
+                    ));
                     outcomes.extend(
                         statements
                             .iter()
@@ -131,9 +143,9 @@ impl ScriptPlatformAdapter {
                         error: None,
                     }),
                     Err(error) => {
-                        let message = error.to_string();
-                        outcomes.push(statement_error(statement, message.clone()));
-                        failure = Some(message);
+                        cancelled = is_cancellation(&error);
+                        outcomes.push(statement_failed(statement, &error));
+                        failure = Some(error.to_string());
                     }
                 }
             }
@@ -144,9 +156,10 @@ impl ScriptPlatformAdapter {
             .map(|result| result.row_count as i64)
             .sum();
         let failed = failure.is_some();
-        let (status, error) = match failure {
-            Some(error) => ("error", Some(error)),
-            None => ("ok", None),
+        let (action, status, error) = match failure {
+            Some(error) if cancelled => ("script:execute:cancelled", "cancelled", Some(error)),
+            Some(error) => ("script:execute", "error", Some(error)),
+            None => ("script:execute", "ok", None),
         };
         record_script_run(
             &self.store,
@@ -154,15 +167,24 @@ impl ScriptPlatformAdapter {
             ScriptRunRecord {
                 sql: &payload.sql,
                 kind: QueryKind::Read,
-                action: "script:execute",
+                action,
                 status,
                 row_count: Some(total),
                 error,
                 origin: &history_origin,
+                database: &payload.database,
+                namespace: payload.namespace.as_deref(),
             },
         )
         .await;
-        let operation_result = if failed {
+        let operation_result = if cancelled {
+            self.operation
+                .confirm_cancelled(
+                    operation_id,
+                    &serde_json::json!({"reason": "user_cancelled"}),
+                )
+                .await
+        } else if failed {
             self.operation
                 .fail(
                     operation_id,

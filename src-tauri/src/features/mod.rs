@@ -24,4 +24,5 @@ pub(crate) mod safety_settings;
 pub(crate) mod scripts;
 pub(crate) mod sql_documents;
 pub(crate) mod terminals;
+pub(crate) mod workspace_admin;
 pub(crate) mod workspaces;

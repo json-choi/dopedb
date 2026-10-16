@@ -19,6 +19,7 @@ props. This directory has no IPC of its own.
 | `DataGridVirtual.test.ts` | Tests virtualization windowing and cell-selection helpers together with `../../lib/sqlBuild` grid query building. |
 | `DataGridVirtual.tsx` | Windowed row-and-column renderer for large query results; only cells intersecting the viewport (+ small overscan) enter the DOM. |
 | `ResultToolbar.tsx` | Compact export/copy controls for any result grid; every action operates on the full result rows, not just the visible window. |
+| `resultExports.ts` | Window-owned stored-result export registry: an export outlives the toolbar that started it, toolbars observe its progress (none while the save dialog is open), the status bar lists every export that is writing, and completion is announced with the chosen file name. `saveRendererExport` saves rows the renderer holds (filtered, materialized, script statement, one cell) through the same native save dialog and toasts. |
 | `ResultWorkbench.tsx` | Toolbar/footer chrome (`ResultWorkbenchToolbar`, status pill) wrapping a result grid in the workbench layout. |
 | `dataGridKeyboard.ts` | Shared composite-grid keyboard/focus model; the first composite column is the row header, data columns follow at indices 1..N. |
 | `dataGridSelection.ts` | Grid cell/range selection types and helpers (anchor/focus coordinates). |

@@ -22,6 +22,8 @@ import {
   AgentCliStatusIndicators,
 } from "../../agents/AgentCliStatus";
 import { agentReadyForChat } from "../../agents/availability";
+import { AgentAccountIdentity } from "../../agents/AgentAccountIdentity";
+import { loginCommand } from "../../agents/acpTranscriptPresentation";
 import type { AcpPluginStatus, AgentCliInfo } from "../../agents/domain";
 import { SUPPORTED_AGENT_TARGETS, useEnabledAgentProviders } from "../../skills/agentPreferences";
 import { AgentSkillSection } from "./AgentSkillSection";
@@ -97,7 +99,7 @@ export function AgentPluginSection({ controller }: { controller: AgentToolsContr
                 identity={
                   <span className={muted ? "tw:flex tw:items-center tw:gap-2 tw:opacity-50" : "tw:flex tw:items-center tw:gap-2"}>
                     <AgentProviderMark provider={agent.provider} />
-                    <strong>{agent.label}</strong>
+                    <span className="tw:grid tw:min-w-0 tw:gap-1"><strong>{agent.label}</strong><AgentAccountIdentity cli={cli} /></span>
                   </span>
                 }
                 details={
@@ -142,6 +144,14 @@ export function AgentPluginSection({ controller }: { controller: AgentToolsContr
                     {t("agentTools.agentDetails")}
                   </summary>
                   <div className="tw:mt-3 tw:grid tw:gap-3">
+                    <div className="tw:grid tw:gap-2">
+                      <p className="tw:m-0 tw:text-xs tw:text-muted-foreground">{t("agentTools.accountChangeInstructions")}</p>
+                      <div className="ds-control-row tw:flex tw:flex-wrap tw:items-center tw:gap-2">
+                        <code className="tw:text-xs">{loginCommand(agent.provider)}</code>
+                        <Button size="compact" onClick={() => void navigator.clipboard.writeText(loginCommand(agent.provider)).then(() => toast(t("agentTools.accountCommandCopied"))).catch(() => toast(t("agentTools.accountCommandCopyFailed"), "error"))}>{t("agentTools.copyAccountCommand")}</Button>
+                        <Button size="compact" disabled={cliQuery.isFetching} onClick={() => void cliQuery.refetch()}>{t("agentTools.checkAgain")}</Button>
+                      </div>
+                    </div>
                     <div className="tw:flex tw:flex-wrap tw:items-center tw:justify-between tw:gap-2">
                       <div className="tw:flex tw:min-w-0 tw:flex-wrap tw:items-center tw:gap-2">
                         <strong className="tw:text-ui">{t("agentTools.localRuntime")}</strong>

@@ -1,5 +1,7 @@
-// One Analysis Article's current optimistic edit and delete boundary.
+// One Analysis Article's current optimistic edit and delete boundary. Deleting an
+// Article also revokes its public HTML in the same batch and refreshes those pages.
 import { and, eq } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
 
 import { db } from "../../../../../../../lib/db";
 import { env } from "../../../../../../../lib/env";
@@ -184,6 +186,10 @@ export async function DELETE(request: Request, context: RouteContext) {
     authority: authority(authorization),
   });
   if (!deleted) return jsonError("Analysis Article authority changed. Retry deletion.", 409);
+  for (const slug of deleted.revokedPublicationSlugs) {
+    revalidatePath(`/analyses/${slug}`);
+    revalidatePath(`/api/v1/public/analyses/${slug}`);
+  }
   return privateJson({
     deleted: true,
     revision: deleted.revision,

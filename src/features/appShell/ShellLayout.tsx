@@ -17,6 +17,7 @@ import {
   clampAgentDockWidth,
   shouldOverlayAgentDock,
 } from "../agents/layout";
+import { requestAgentApprovalFocus } from "../agents/pendingApprovals";
 import { AgentSelectionProvider } from "../agents/selectionContext";
 import type { BackgroundTask } from "../backgroundTasks/domain";
 import type { ConnectionProfile } from "../connections/domain";
@@ -129,7 +130,7 @@ type ShellLayoutCommands = {
     showWelcome: () => void;
     activateDocument: (id: string) => void;
     restoreDocument: (id: string, content: string) => void;
-    newQuery: () => void;
+    newQuery: (connection?: ConnectionProfile) => void;
   };
   agent: {
     toggle: () => void;
@@ -214,6 +215,9 @@ function ShellLayoutContent({ model, commands }: Props) {
             : workspace.updater.phase === "ready"
               ? t("updates.relaunching")
               : t("updates.error");
+  const agentPendingApprovals = status.backgroundTasks.filter(
+    (task) => task.kind === "agentProposal",
+  ).length;
   const databaseExplorerVisible = explorer.databaseOpen;
   const environmentDetailOpen = explorer.knowledgeFocus !== null;
   const localHistoryVisible =
@@ -287,10 +291,6 @@ function ShellLayoutContent({ model, commands }: Props) {
           leftToolWindowVisible &&
           (!viewport.compact || viewport.mobileExplorerOpen)
         }
-        localHistoryOpen={
-          localHistoryVisible &&
-          (!viewport.compact || viewport.mobileExplorerOpen)
-        }
         agentDockOpen={agent.open}
         actionSearchOpen={search.open}
         settingsOpen={workspace.settingsOpen}
@@ -305,9 +305,11 @@ function ShellLayoutContent({ model, commands }: Props) {
         onNewQuery={commands.workbench.newQuery}
         onWelcome={commands.workbench.showWelcome}
         onToggleLeftPanel={commands.explorer.togglePanel}
-        onToggleLocalHistory={commands.explorer.toggleLocalHistory}
+        onOpenQueryHistory={commands.status.openNotifications}
+        queryHistoryOpen={activeWorkbenchDocument?.kind === "activity"}
         onToggleAgent={commands.agent.toggle}
         agentButtonRef={agent.buttonRef}
+        agentPendingApprovals={agentPendingApprovals}
         actionSearchButtonRef={search.buttonRef}
         onActionSearch={commands.search.open}
         onSettings={commands.workspace.settings}
@@ -360,6 +362,7 @@ function ShellLayoutContent({ model, commands }: Props) {
               environmentDetailOpen ? null : explorer.activeSchemaGroupKey
             }
             onSelectConn={commands.explorer.selectConnection}
+            onNewQuery={commands.workbench.newQuery}
             onOpenTable={commands.explorer.openTable}
             onOpenSchemaDiff={commands.explorer.openSchemaDiff}
             onEdit={commands.workspace.editConnection}
@@ -456,6 +459,12 @@ function ShellLayoutContent({ model, commands }: Props) {
         unseenOperationCount={status.unseenOperationCount}
         onOpenQueryTask={commands.status.openQueryResult}
         onOpenAgentTask={commands.agent.openTask}
+        onOpenAgentProposal={(connectionId, sessionId, operationId) => {
+          // AI Chat selects that conversation and its card takes focus once
+          // visible; a decision control never does.
+          requestAgentApprovalFocus(sessionId, operationId);
+          commands.agent.openTask(connectionId);
+        }}
         onOpenManualTransaction={commands.status.openManualTransaction}
         onCommitManualTransaction={commands.status.commitManualTransaction}
         onRollbackManualTransaction={commands.status.rollbackManualTransaction}
@@ -487,6 +496,11 @@ function ShellLayoutContent({ model, commands }: Props) {
               articleId,
             )
           }
+          onOpenProjectDatabases={(environmentId) =>
+            commands.explorer.openProjectEnvironment(environmentId, "databases")
+          }
+          onSafetySettings={commands.workspace.safetySettings}
+          onOpenActivity={commands.status.openNotifications}
           onClose={commands.agent.close}
           returnFocusRef={agent.returnFocusRef}
         />

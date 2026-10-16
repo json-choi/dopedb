@@ -170,24 +170,6 @@ fn origin() -> AppResult<String> {
     validated_control_plane_origin()
 }
 
-/// Build the hosted workspace console URL from the same validated origin used by
-/// the auth API. Keeping this in Rust prevents the webview from opening an
-/// arbitrary origin while still honoring the localhost override in debug builds.
-pub(crate) fn console_url(workspace_id: Option<Uuid>) -> AppResult<String> {
-    let mut url = Url::parse(&validated_control_plane_origin()?)
-        .map_err(|_| AppError::Config("workspace control-plane origin is invalid".into()))?;
-    url.set_path("/settings");
-    if let Some(workspace_id) = workspace_id {
-        let workspace_id = workspace_id.to_string();
-        url.query_pairs_mut()
-            .append_pair("workspace", &workspace_id);
-        url.set_fragment(Some(&format!("workspace-{workspace_id}")));
-    } else {
-        url.set_fragment(Some("workspaces"));
-    }
-    Ok(url.into())
-}
-
 fn client() -> AppResult<&'static Client> {
     crate::hosted_control_plane::client()
 }
@@ -397,9 +379,5 @@ impl WorkspaceControlPlanePort for HostedWorkspaceControlPlane {
             expected_revision,
         )
         .await
-    }
-
-    fn console_url(&self, workspace_id: Option<WorkspaceId>) -> AppResult<String> {
-        console_url(workspace_id.map(Into::into))
     }
 }

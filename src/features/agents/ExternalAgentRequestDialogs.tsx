@@ -1,5 +1,6 @@
 // Composes external Agent request modals from inventory, review, and response boundaries.
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 import { Button } from "../../design-system/components/Button";
 import {
@@ -11,6 +12,7 @@ import {
 import { InlineNotice, LoadingLabel } from "../../design-system/components/Status";
 import { useI18n } from "../../lib/i18n";
 import type { ConnectionProfile } from "../connections/domain";
+import AcpSqlApproval from "./AcpSqlApproval";
 import type { ExternalAgentConfig, ExternalAgentRequestSummary } from "./externalAgentDomain";
 import { ExternalAgentConfigurationPicker } from "./ExternalAgentConfigurationPicker";
 import {
@@ -18,7 +20,75 @@ import {
   ExternalAgentStartReview,
   StartApprovalButton,
 } from "./ExternalAgentRequestReview";
+import { agentSqlProposalReviewQuery } from "./queryOptions";
+import {
+  isFinalOperationState,
+  type AgentSqlProposalReference,
+} from "./sqlProposal";
 import { useAgentEnvironmentInventory } from "./useAgentEnvironmentInventory";
+
+/**
+ * An approved external Agent process has no Desktop transcript, so its SQL
+ * proposal is decided here with the same one-click approval card. Closing the
+ * entry is possible only once the operation can no longer change.
+ */
+export function ExternalAgentProposalDialog({
+  request,
+  proposal,
+  error,
+  submitting,
+  onClose,
+}: {
+  request: ExternalAgentRequestSummary;
+  proposal: AgentSqlProposalReference;
+  error: string | null;
+  submitting: boolean;
+  onClose: () => void;
+}) {
+  const { t } = useI18n();
+  const review = useQuery(agentSqlProposalReviewQuery(proposal));
+  const closable =
+    review.isError || (review.data ? isFinalOperationState(review.data.state) : false);
+  return (
+    <ModalBackdrop>
+      <ModalSurface
+        aria-labelledby="external-agent-proposal-title"
+        dismissible={closable && !submitting}
+        onRequestClose={onClose}
+      >
+        <ModalHeader
+          title={t("agent.externalProposalTitle")}
+          titleId="external-agent-proposal-title"
+        />
+        <div className="tw:grid tw:gap-4 tw:p-5">
+          <AcpSqlApproval
+            proposal={proposal}
+            expectedConnectionId={proposal.connectionId}
+          />
+          <ExternalAgentRequestIdentity request={request} />
+          {error ? (
+            <InlineNotice tone="danger" icon="alert" role="alert">
+              {error}
+            </InlineNotice>
+          ) : null}
+        </div>
+        <ModalFooter>
+          {/* Initial focus stays on this neutral action: keystrokes typed in the
+              requesting terminal must never land on an approval control. */}
+          <Button
+            disabled={!closable || submitting}
+            disabledBehavior="focusable"
+            data-modal-initial-focus
+            title={closable ? undefined : t("agent.externalProposalDecideFirst")}
+            onClick={onClose}
+          >
+            {t("common.close")}
+          </Button>
+        </ModalFooter>
+      </ModalSurface>
+    </ModalBackdrop>
+  );
+}
 
 export function ExternalAgentUnavailableDialog({
   request,
@@ -84,7 +154,9 @@ export function ExternalAgentRequestDialog({
     catalogScopeKey,
     connection: anchor,
     connections,
-    onError: setInventoryError,
+    // The configuration picker shows the sentence only; it has no copy action.
+    onError: (error) =>
+      setInventoryError(error === null || typeof error === "string" ? error : error.message),
   });
 
   return (
@@ -138,7 +210,8 @@ export function ExternalAgentRequestDialog({
           </div>
         ) : null}
         <ModalFooter>
-          <Button disabled={submitting} onClick={onReject}>
+          {/* Initial focus stays on Reject, never on an approval control. */}
+          <Button disabled={submitting} data-modal-initial-focus onClick={onReject}>
             {t("agent.externalReject")}
           </Button>
           {request.kind === "start" ? (

@@ -441,10 +441,10 @@ check_postgres() {
     if [[ -z "$candidate" ]]; then
       continue
     fi
-    if [[ ! -x "$candidate/initdb" || ! -x "$candidate/pg_ctl" || ! -x "$candidate/psql" ]]; then
+    if [[ ! -x "$candidate/initdb" || ! -x "$candidate/pg_ctl" || ! -x "$candidate/psql" || ! -x "$candidate/postgres" ]]; then
       continue
     fi
-    raw="$("$candidate/initdb" --version 2>/dev/null || true)"
+    raw="$("$candidate/postgres" --version 2>/dev/null || true)"
     version="$(printf '%s\n' "$raw" | awk '{ print $3 }')"
     if [[ -n "$version" ]] && version_satisfies "$version" "$postgres_version_floor"; then
       resolved_pg_bin="$candidate"
@@ -475,7 +475,7 @@ EOF
     return 0
   fi
   if [[ -n "$explicit" ]]; then
-    check_fail "PG_BIN='$explicit' does not contain initdb, pg_ctl and psql. Point it at a PostgreSQL $postgres_version_floor+ server install rather than a libpq-only client."
+    check_fail "PG_BIN='$explicit' does not contain initdb, pg_ctl, psql and postgres. Point it at a PostgreSQL $postgres_version_floor+ server install rather than a libpq-only client."
     return 0
   fi
   if [[ -n "$config_bindir" ]]; then

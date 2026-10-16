@@ -18,7 +18,9 @@ reruns stay on the exact-grant Desktop.
 
 | File | Description |
 |------|-------------|
-| `AnalysisArticleEditor.tsx` | Modal editor for one Article's title/HTML/target environment fields. |
+| `AnalysisArticleEditor.tsx` | Modal editor for one Article's title/HTML/target environment fields. Save failures and revision conflicts stay inside the dialog; a conflict keeps the draft and re-bases it on the latest revision, and unsaved edits need an explicit discard. |
+| `analysisRunStore.ts` | App-lifetime owner of manual runs (`useSyncExternalStore`): in-flight run, idempotent cancel, latest in-memory result with its exact query signature, and the terminal notice (own cancellation is neutral). Survives screen unmounts. |
+| `analysisFeedback.ts` | Maps command failures to catalog copy by closed error kind; only a database diagnostic is kept as optional detail. |
 | `AnalysisArticleReader.tsx` | Read surface composing the shared `AnalysisArticleBody` (from `design-system`) with a derived outline and the exact query tool; commands/results stay owned by the article controller per its header comment. |
 | `AnalysisPublicationPanel.tsx` | Lists/publishes/revokes public snapshot publications (`listAnalysisPublications`, `publishAnalysisSnapshot`, `revokeAnalysisPublication`) and opens the published URL. |
 | `AnalysisShareButton.tsx` | Per-Article member sharing: create/revoke an `ArticleInvitation` scoped to `{ accountId, workspaceId, articleId }`. |
@@ -26,7 +28,7 @@ reruns stay on the exact-grant Desktop.
 | `domain.ts` | `AnalysisArticleSource` (`human` \| `dopedb.acp.claude` \| `dopedb.acp.codex`), column/value/query types, `AnalysisArticleRecord`, `AnalysisRun`, `AnalysisPublication`, and related wire contracts. |
 | `productAnalytics.ts` | `beginManualAnalysisRunOutcome` — per its header comment, deliberately has no path for article text, SQL, parameters, result rows, or error bodies to reach the analytics contract; only closed state and run receipts. |
 | `queryKeys.ts` | `analysisQueryKeys` — every key is rooted in the authenticated workspace scope key, because (per its header comment) hosted accounts may legitimately share the same client-generated Article id across scopes. |
-| `tauriAdapter.ts` | `listAnalysisArticles`, `updateAnalysisArticle`, `deleteAnalysisArticle`, `listAnalysisArticleRevisions`/`Runs`, `getLocalAnalysisArticleResult`, `runAnalysisArticle`, `cancelAnalysisArticleRun`, `onAnalysisArticleChanged`, publication (`listAnalysisPublications`, `publishAnalysisSnapshot`, `revokeAnalysisPublication`, `analysisPublicationUrl`), and sharing/link types (`ArticleSharingScope`, `ArticleInvitation`, `DesktopArticleLink`). |
+| `tauriAdapter.ts` | `listAnalysisArticles` (title-and-identity `AnalysisArticleRecord` summaries), `getAnalysisArticle` (one `AnalysisArticleDocument` with HTML and SQL, read on open), `updateAnalysisArticle` (saved or conflict result), `deleteAnalysisArticle` (also stops public HTML), `listAnalysisArticleRevisions`/`Runs`, `getLocalAnalysisArticleResult`, `runAnalysisArticle`, `cancelAnalysisArticleRun`, `onAnalysisArticleChanged`, publication (`listAnalysisPublications`, `publishAnalysisSnapshot`, `revokeAnalysisPublication`, `analysisPublicationUrl`), and sharing/link types (`ArticleSharingScope`, `ArticleInvitation`, `DesktopArticleLink`). |
 | `useAnalysisArticlesController.ts` | Owns the "intentionally small" (per header comment) Article workflow: select, edit one HTML document, manually rerun its one saved query, recover the local result, and inspect immutable history. |
 | `useArticleOutline.ts` | Derives a heading outline by observing the already-rendered, server-sanitized document DOM; per its header comment it only navigates headings in this exact reader and never executes content. |
 

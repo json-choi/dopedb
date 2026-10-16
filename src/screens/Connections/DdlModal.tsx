@@ -26,7 +26,7 @@ export default function DdlModal({
   onClose: () => void;
 }) {
   const { t } = useI18n();
-  const { text, error, copied, copy, retry } = useTableDdl(
+  const { text, error, copied, copyFailed, copy, retry } = useTableDdl(
     connection.id,
     table.name,
     table.schema,
@@ -61,6 +61,11 @@ export default function DdlModal({
           )}
           {text != null && <LazySqlViewer value={text} minHeight="96px" />}
         </div>
+        {copyFailed ? (
+          <p className="tw:m-0 tw:border-t tw:border-border-subtle tw:px-3 tw:py-2 tw:text-ui tw:text-danger" role="alert">
+            {t("schema.ddlCopyFailed")}
+          </p>
+        ) : null}
         <ModalFooter>
           <Button
             onClick={() => void copy()}

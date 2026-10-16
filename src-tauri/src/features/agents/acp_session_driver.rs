@@ -9,7 +9,6 @@ pub(super) struct ResumeSeed {
 
 pub(super) struct ResumeContext {
     pub(super) acp_session_id: String,
-    pub(super) previous_last_sequence: u64,
 }
 
 pub(super) struct SessionRuntimeContext {
@@ -53,13 +52,33 @@ pub(super) async fn run_session(
         .name("DopeDB ACP client")
         .on_receive_notification(
             async move |notification: SessionNotification, _connection| {
+                // `session/load` streams the provider's own history before it
+                // answers. DopeDB already shows its bounded local transcript, so
+                // replaying it again would duplicate the conversation and turn the
+                // pinned context blocks into visible user messages.
+                if notification_session
+                    .replaying_history
+                    .load(Ordering::SeqCst)
+                {
+                    return Ok(());
+                }
+                // An adapter may change its own options mid-session (for example a
+                // mode switch after plan approval). Re-project the full advertised
+                // set so the allowed values and the visible selection stay exact.
+                if let SessionUpdate::ConfigOptionUpdate(update) = &notification.update {
+                    push_session_configuration(
+                        &notification_session,
+                        Some(update.config_options.clone()),
+                    );
+                    return Ok(());
+                }
                 match bounded_json_value(&notification.update, "ACP session update") {
                     Ok(update) => {
                         notification_session.push(AcpSessionEventPayload::SessionUpdate { update });
                     }
                     Err(error) => {
                         notification_session.push(AcpSessionEventPayload::Error {
-                            message: format!("could not project an ACP session update: {error}"),
+                            message: agent_error::with_detail(agent_error::EVENT_DROPPED, error),
                         });
                     }
                 }
@@ -131,16 +150,19 @@ pub(super) async fn run_session(
             let initialized = connection.send_request(initialize).block_task().await?;
             let (acp_session_id, config_options) = if let Some(resume) = resume {
                 if !initialized.agent_capabilities.load_session {
-                    let message = format!(
-                        "the official {} ACP adapter does not support session history loading",
-                        provider_name(connection_session.summary().provider)
+                    let message = agent_error::for_provider(
+                        agent_error::NOT_RESUMABLE,
+                        connection_session.summary().provider,
                     );
                     complete_ready(&ready_for_connection, Err(AppError::Agent(message.clone())));
                     connection_session.set_lifecycle(AcpSessionLifecycle::Failed, Some(message));
                     return Ok(());
                 }
                 let acp_session_id = SessionId::from(resume.acp_session_id);
-                let loaded = match connection
+                connection_session
+                    .replaying_history
+                    .store(true, Ordering::SeqCst);
+                let loaded = connection
                     .send_request(
                         LoadSessionRequest::new(acp_session_id.clone(), launch.working_directory())
                             .mcp_servers(vec![launch.mcp_server(
@@ -149,8 +171,11 @@ pub(super) async fn run_session(
                             )]),
                     )
                     .block_task()
-                    .await
-                {
+                    .await;
+                connection_session
+                    .replaying_history
+                    .store(false, Ordering::SeqCst);
+                let loaded = match loaded {
                     Ok(loaded) => loaded,
                     Err(error) => {
                         if resume_history_unavailable(&error.to_string()) {
@@ -159,9 +184,6 @@ pub(super) async fn run_session(
                         return Err(error);
                     }
                 };
-                connection_session
-                    .discard_replaced_history(resume.previous_last_sequence)
-                    .await;
                 (acp_session_id, loaded.config_options)
             } else {
                 let created = connection
@@ -189,6 +211,13 @@ pub(super) async fn run_session(
                         "ACP plugin initialized but its candidate promotion was deferred"
                     ),
                 }
+            } else if let Err(error) = receipt_for_connection.record_ready_success() {
+                tracing::warn!(
+                    %error,
+                    plugin_id = plugin_id.as_str(),
+                    plugin_version = %version_for_connection,
+                    "ACP plugin fallback initialized but its stale failure was not cleared"
+                );
             }
             connection_session.set_lifecycle(AcpSessionLifecycle::Ready, None);
             complete_ready(&ready_for_connection, Ok(()));
@@ -258,7 +287,11 @@ pub(super) async fn run_session(
             actionable_acp_error(session.summary().provider, &error.to_string())
         }),
         () = startup_cancel.cancelled() => {
-            Err(startup_timeout_message(session.summary().provider))
+            if session.startup_cancelled_by_user.load(Ordering::SeqCst) {
+                Err(AGENT_START_CANCELLED.to_owned())
+            } else {
+                Err(startup_timeout_message(session.summary().provider))
+            }
         }
     };
 
@@ -280,6 +313,12 @@ pub(super) async fn run_session(
                 // silently discarding an unfinished answer.
                 session.set_interrupted(AGENT_PROCESS_CLOSED);
             }
+        }
+        Err(message) if session.startup_cancelled_by_user.load(Ordering::SeqCst) => {
+            // A person stopped a slow start: not an adapter failure, so the
+            // candidate is not quarantined and no error is recorded.
+            complete_ready(&ready, Err(AppError::Agent(message)));
+            session.set_lifecycle(AcpSessionLifecycle::Closed, None);
         }
         Err(message) => {
             if plugin_candidate && !plugin_activated.load(Ordering::SeqCst) {
@@ -357,8 +396,9 @@ async fn run_turn(
                         // stale duplicate rather than interleaving ACP prompt turns.
                     }
                     Some(SessionCommand::SetConfigOption { response, .. }) => {
+                        // The configuration cannot change during a turn.
                         let _ = response.send(Err(AppError::Blocked {
-                            reason: "the Agent configuration cannot change during a turn".into(),
+                            reason: agent_error::CONFIG_UNAVAILABLE.into(),
                         }));
                     }
                 }
@@ -375,8 +415,9 @@ fn push_session_configuration(
     if config_options.len() > MAX_CONFIG_OPTIONS {
         lock_unpoisoned(&session.config_options).clear();
         session.push(AcpSessionEventPayload::Error {
-            message: format!(
-                "the ACP adapter advertised more than {MAX_CONFIG_OPTIONS} configuration options"
+            message: agent_error::with_detail(
+                agent_error::CONFIG_UNAVAILABLE,
+                format_args!("more than {MAX_CONFIG_OPTIONS} configuration options"),
             ),
         });
         return;
@@ -390,7 +431,7 @@ fn push_session_configuration(
         Ok(_) => {
             lock_unpoisoned(&session.config_options).clear();
             session.push(AcpSessionEventPayload::Error {
-                message: "the ACP adapter returned an invalid session configuration".into(),
+                message: agent_error::CONFIG_UNAVAILABLE.into(),
             });
         }
         Err(message) => {
@@ -404,21 +445,26 @@ fn bounded_json_value<T: serde::Serialize>(
     value: &T,
     label: &str,
 ) -> Result<serde_json::Value, String> {
-    let bytes =
-        serde_json::to_vec(value).map_err(|error| format!("could not project {label}: {error}"))?;
+    let dropped = |detail: String| agent_error::with_detail(agent_error::EVENT_DROPPED, detail);
+    let bytes = serde_json::to_vec(value).map_err(|error| dropped(format!("{label}: {error}")))?;
     if bytes.len() > MAX_EVENT_BYTES {
-        return Err(format!(
-            "{label} exceeded the {MAX_EVENT_BYTES}-byte replay limit and was not retained"
-        ));
+        return Err(dropped(format!(
+            "{label} exceeded the {MAX_EVENT_BYTES}-byte replay limit"
+        )));
     }
-    serde_json::from_slice(&bytes).map_err(|error| format!("could not project {label}: {error}"))
+    serde_json::from_slice(&bytes).map_err(|error| dropped(format!("{label}: {error}")))
 }
 
+/// An invalid permission request is cancelled; the code names why for copy.
 fn validate_permission_options(options: &[AcpPermissionOption]) -> Result<(), String> {
+    let invalid = |detail: &str| {
+        Err(agent_error::with_detail(
+            agent_error::PERMISSION_UNAVAILABLE,
+            detail,
+        ))
+    };
     if options.is_empty() || options.len() > MAX_PERMISSION_OPTIONS {
-        return Err(
-            "the ACP permission request supplied an invalid option count; it was cancelled".into(),
-        );
+        return invalid("invalid option count");
     }
     if options.iter().any(|option| {
         option.id.is_empty()
@@ -426,31 +472,25 @@ fn validate_permission_options(options: &[AcpPermissionOption]) -> Result<(), St
             || option.id.len() > MAX_PERMISSION_OPTION_BYTES
             || option.name.len() > MAX_PERMISSION_OPTION_BYTES
     }) {
-        return Err(
-            "the ACP permission request supplied an invalid option; it was cancelled".into(),
-        );
+        return invalid("invalid option");
     }
     let unique_ids = options
         .iter()
         .map(|option| option.id.as_str())
         .collect::<HashSet<_>>();
     if unique_ids.len() != options.len() {
-        return Err(
-            "the ACP permission request supplied duplicate options; it was cancelled".into(),
-        );
+        return invalid("duplicate options");
     }
     Ok(())
 }
 
 pub(super) fn validate_config_option_value(config_id: &str, value: &str) -> AppResult<()> {
     if config_id.trim().is_empty() || value.trim().is_empty() {
-        return Err(AppError::Config(
-            "the ACP configuration option and value are required".into(),
-        ));
+        return Err(AppError::Config(agent_error::CONFIG_UNAVAILABLE.into()));
     }
     if config_id.len() > MAX_CONFIG_OPTION_ID_BYTES || value.len() > MAX_CONFIG_OPTION_VALUE_BYTES {
         return Err(AppError::Blocked {
-            reason: "the ACP configuration option exceeded its size limit".into(),
+            reason: agent_error::CONFIG_UNAVAILABLE.into(),
         });
     }
     Ok(())
@@ -466,21 +506,20 @@ fn permission_kind(kind: PermissionOptionKind) -> &'static str {
     }
 }
 
+/// Classifies an adapter failure by code; anything else stays the provider's own
+/// explanation, carried as a detail under the provider-error code.
 fn actionable_acp_error(provider: AgentProvider, message: &str) -> String {
     let lower = message.to_ascii_lowercase();
     if resume_history_unavailable(&lower) {
-        return format!(
-            "This {} conversation is no longer available in the provider's local history. DopeDB kept the bounded transcript, but it cannot recreate the provider session. Start a new Agent session.",
-            provider_name(provider)
-        );
+        return agent_error::for_provider(agent_error::HISTORY_UNAVAILABLE, provider);
     }
     if lower.contains("auth") || lower.contains("login") || lower.contains("unauthorized") {
-        return match provider {
-            AgentProvider::Claude => "Claude is not authenticated. Run `claude auth login` in a terminal, then start a new Agent session.".into(),
-            AgentProvider::Codex => "Codex is not authenticated. Run `codex login` in a terminal, then start a new Agent session.".into(),
-        };
+        return agent_error::for_provider(agent_error::CLI_NOT_AUTHENTICATED, provider);
     }
-    format!("{} ACP error: {message}", provider_name(provider))
+    agent_error::with_detail(
+        &agent_error::for_provider(agent_error::PROVIDER_ERROR, provider),
+        message,
+    )
 }
 
 fn resume_history_unavailable(message: &str) -> bool {
@@ -494,6 +533,19 @@ fn resume_history_unavailable(message: &str) -> bool {
     identifies_history && reports_missing
 }
 
+/// The ACP session of this provider is no longer available to take a command.
+pub(super) fn session_unavailable(provider: AgentProvider) -> AppError {
+    AppError::Agent(agent_error::for_provider(
+        agent_error::SESSION_UNAVAILABLE,
+        provider,
+    ))
+}
+
+/// True when a person cancelled the adapter start; no fallback launch follows.
+pub(super) fn is_start_cancelled(error: &AppError) -> bool {
+    matches!(error, AppError::Agent(message) if message == AGENT_START_CANCELLED)
+}
+
 pub(super) fn provider_name(provider: AgentProvider) -> &'static str {
     match provider {
         AgentProvider::Claude => "Claude",
@@ -502,10 +554,9 @@ pub(super) fn provider_name(provider: AgentProvider) -> &'static str {
 }
 
 pub(super) fn startup_timeout_message(provider: AgentProvider) -> String {
-    format!(
-        "the official {} ACP adapter did not initialize within {} seconds",
-        provider_name(provider),
-        ACP_START_TIMEOUT.as_secs()
+    agent_error::with_detail(
+        &agent_error::for_provider(agent_error::START_TIMED_OUT, provider),
+        format_args!("{} seconds", ACP_START_TIMEOUT.as_secs()),
     )
 }
 
@@ -532,6 +583,19 @@ pub(super) fn same_storage_scope(left: &ActiveResourceScope, right: &ActiveResou
     left.workspace_id == right.workspace_id
         && left.account_scope.storage_key() == right.account_scope.storage_key()
         && left.selected_account_id == right.selected_account_id
+}
+
+/// A resource check that could not run now, as opposed to an answer that the
+/// pinned resource no longer exists or changed.
+pub(super) fn scope_check_is_transient(error: &AppError) -> bool {
+    matches!(
+        error,
+        AppError::Network(_)
+            | AppError::Timeout(_)
+            | AppError::RetryLater { .. }
+            | AppError::Io(_)
+            | AppError::AuthenticationRequired(_)
+    )
 }
 
 pub(super) fn truncate_chars(value: &str, max: usize) -> String {

@@ -1,16 +1,36 @@
-// Tiny toast system: context + hook + a fixed corner stack. 3s auto-dismiss,
-// success/error variants. useToast() returns a `toast(msg, variant?)` fn.
-import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from "react";
+// Tiny toast system: context + hook + a fixed corner stack with success/error
+// variants. useToast() returns `toast(msg, variant?, action?)`. A plain toast
+// auto-dismisses after 3s; one with an action stays 10s so keyboard and pointer
+// users can reach it. Every toast pauses while hovered or focused, and Escape
+// or a click dismisses it.
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { Button } from "../design-system/components/Button";
 import { useI18n } from "../lib/i18n";
 
 type Variant = "success" | "error";
+export interface ToastAction {
+  label: string;
+  onClick: () => void;
+}
 interface ToastItem {
   id: number;
   msg: string;
   variant: Variant;
+  action?: ToastAction;
 }
 
-type ToastFn = (msg: string, variant?: Variant) => void;
+type ToastFn = (msg: string, variant?: Variant, action?: ToastAction) => void;
+
+const PLAIN_TOAST_MS = 3000;
+const ACTION_TOAST_MS = 10_000;
 
 const Ctx = createContext<ToastFn>(() => {});
 
@@ -22,15 +42,40 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const { t } = useI18n();
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const idRef = useRef(0);
+  const timersRef = useRef(new Map<number, number>());
 
-  const dismiss = useCallback((id: number) => setToasts((t) => t.filter((x) => x.id !== id)), []);
+  const pause = useCallback((id: number) => {
+    window.clearTimeout(timersRef.current.get(id));
+    timersRef.current.delete(id);
+  }, []);
 
-  const toast = useCallback<ToastFn>((msg, variant = "success") => {
+  const dismiss = useCallback((id: number) => {
+    pause(id);
+    setToasts((current) => current.filter((item) => item.id !== id));
+  }, [pause]);
+
+  const schedule = useCallback((item: Pick<ToastItem, "id" | "action">) => {
+    pause(item.id);
+    timersRef.current.set(
+      item.id,
+      window.setTimeout(
+        () => dismiss(item.id),
+        item.action ? ACTION_TOAST_MS : PLAIN_TOAST_MS,
+      ),
+    );
+  }, [dismiss, pause]);
+
+  const toast = useCallback<ToastFn>((msg, variant = "success", action) => {
     const id = idRef.current++;
     // cap the stack so a burst can't overflow off-screen
-    setToasts((t) => [...t, { id, msg, variant }].slice(-4));
-    window.setTimeout(() => dismiss(id), 3000);
-  }, [dismiss]);
+    setToasts((current) => [...current, { id, msg, variant, action }].slice(-4));
+    schedule({ id, action });
+  }, [schedule]);
+
+  useEffect(() => {
+    const timers = timersRef.current;
+    return () => timers.forEach((timer) => window.clearTimeout(timer));
+  }, []);
 
   return (
     <Ctx.Provider value={toast}>
@@ -41,15 +86,36 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         role="region"
         aria-label={t("ide.notifications")}
       >
-        {toasts.map((t) => (
+        {toasts.map((item) => (
           <div
-            key={t.id}
-            data-variant={t.variant}
-            className="tw:pointer-events-auto tw:min-w-[180px] tw:max-w-[360px] tw:cursor-pointer tw:rounded-md tw:border tw:border-border-subtle tw:border-l-[3px] tw:border-l-success tw:bg-card tw:px-4 tw:py-3 tw:text-ui tw:text-foreground tw:shadow-popover tw:animate-[toast-in_150ms_ease-out] tw:data-[variant=error]:border-l-danger tw:max-[640px]:w-full tw:max-[640px]:min-w-0 tw:max-[640px]:max-w-none"
-            role={t.variant === "error" ? "alert" : "status"}
-            onClick={() => dismiss(t.id)}
+            key={item.id}
+            data-variant={item.variant}
+            className="tw:pointer-events-auto tw:flex tw:min-w-[180px] tw:max-w-[360px] tw:cursor-pointer tw:items-center tw:gap-3 tw:rounded-md tw:border tw:border-border-subtle tw:border-l-[3px] tw:border-l-success tw:bg-card tw:px-4 tw:py-3 tw:text-ui tw:text-foreground tw:shadow-popover tw:animate-[toast-in_150ms_ease-out] tw:data-[variant=error]:border-l-danger tw:max-[640px]:w-full tw:max-[640px]:min-w-0 tw:max-[640px]:max-w-none"
+            role={item.variant === "error" ? "alert" : "status"}
+            onClick={() => dismiss(item.id)}
+            onKeyDown={(event) => {
+              if (event.key !== "Escape") return;
+              event.stopPropagation();
+              dismiss(item.id);
+            }}
+            onMouseEnter={() => pause(item.id)}
+            onMouseLeave={(event) => {
+              if (!event.currentTarget.contains(document.activeElement)) schedule(item);
+            }}
+            onFocus={() => pause(item.id)}
+            onBlur={(event) => {
+              const next = event.relatedTarget;
+              if (next instanceof Node && event.currentTarget.contains(next)) return;
+              if (!event.currentTarget.matches(":hover")) schedule(item);
+            }}
           >
-            {t.msg}
+            <span className="tw:min-w-0 tw:flex-1 tw:[overflow-wrap:anywhere]">{item.msg}</span>
+            {item.action ? (
+              // The click also bubbles to the toast, which dismisses it.
+              <Button size="compact" onClick={item.action.onClick}>
+                {item.action.label}
+              </Button>
+            ) : null}
           </div>
         ))}
       </div>

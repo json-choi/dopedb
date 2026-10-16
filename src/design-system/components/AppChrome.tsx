@@ -64,6 +64,7 @@ export function IdeToolbarLauncher({
   active,
   buttonRef,
   children,
+  count = 0,
   title,
   "aria-label": ariaLabel,
   ...buttonProps
@@ -71,6 +72,11 @@ export function IdeToolbarLauncher({
   active?: boolean;
   buttonRef?: Ref<HTMLButtonElement>;
   children: ReactNode;
+  /**
+   * Items in this tool window waiting for a person. The caller's label must
+   * say the same count; the badge is visual only.
+   */
+  count?: number;
 } & Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children">) {
   const tooltipLabel =
     typeof title === "string" && title.trim().length > 0
@@ -85,10 +91,18 @@ export function IdeToolbarLauncher({
       data-active={active || undefined}
       aria-pressed={active === undefined ? undefined : active}
       aria-label={ariaLabel ?? tooltipLabel ?? undefined}
-      className="tw:grid tw:size-control-md tw:shrink-0 tw:cursor-pointer tw:place-items-center tw:rounded-sm tw:border-0 tw:bg-transparent tw:text-[length:var(--ds-icon-md)] tw:text-muted-foreground tw:hover:bg-muted tw:hover:text-foreground tw:data-[active=true]:bg-muted tw:data-[active=true]:text-foreground tw:disabled:cursor-not-allowed tw:disabled:opacity-40 tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-inset tw:focus-visible:ring-ring"
+      className="tw:relative tw:grid tw:size-control-md tw:shrink-0 tw:cursor-pointer tw:place-items-center tw:rounded-sm tw:border-0 tw:bg-transparent tw:text-[length:var(--ds-icon-md)] tw:text-muted-foreground tw:hover:bg-muted tw:hover:text-foreground tw:data-[active=true]:bg-muted tw:data-[active=true]:text-foreground tw:disabled:cursor-not-allowed tw:disabled:opacity-40 tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-inset tw:focus-visible:ring-ring"
       {...buttonProps}
     >
       {children}
+      {count > 0 ? (
+        <span
+          aria-hidden="true"
+          className="tw:pointer-events-none tw:absolute tw:top-0.5 tw:right-0.5 tw:grid tw:h-3.5 tw:min-w-3.5 tw:place-items-center tw:rounded-full tw:bg-primary tw:px-1 tw:font-sans tw:text-2xs tw:leading-none tw:font-bold tw:tabular-nums tw:text-primary-foreground"
+        >
+          {count > 9 ? "9+" : count}
+        </span>
+      ) : null}
     </button>
   );
   return tooltipLabel ? (

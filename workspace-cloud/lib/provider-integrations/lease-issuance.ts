@@ -56,6 +56,18 @@ import {
 } from "./integration";
 import { cleanupExpiredManagedLeases } from "./lease-cleanup";
 
+/**
+ * The lease reservation raced a concurrent authority change or another schema
+ * session. Unlike provider and target mismatches, retrying can succeed without
+ * any repair, so the lease route reports it with a retryable code.
+ */
+export class ManagedLeaseReservationBusyError extends ProviderRequestError {
+  constructor(provider: string, message: string) {
+    super(provider, message, 409);
+    this.name = "ManagedLeaseReservationBusyError";
+  }
+}
+
 async function bestEffortRevokeLease(input: {
   integration: ActiveProviderIntegration;
   resource: ManagedProviderResource;
@@ -187,15 +199,19 @@ export async function issueManagedLease(input: {
     );
   }
   const reservation = await reserveManagedLeaseIfUnblocked(authority);
-  if (reservation !== "reserved") {
+  if (reservation === "limit") {
     throw new ProviderRequestError(
+      input.integration.provider,
+      "Too many active database sessions. Retry after leases expire.",
+      429,
+    );
+  }
+  if (reservation !== "reserved") {
+    throw new ManagedLeaseReservationBusyError(
       input.integration.provider,
       reservation === "schema_busy"
         ? "Another managed schema change session is active for this connection"
-        : reservation === "limit"
-          ? "Too many active database sessions. Retry after leases expire."
-          : "Workspace database authority is changing. Retry shortly.",
-      reservation === "limit" ? 429 : 409,
+        : "Workspace database authority is changing. Retry shortly.",
     );
   }
 

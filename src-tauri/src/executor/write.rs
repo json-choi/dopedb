@@ -2,7 +2,7 @@
 //! `allow_writes` gate on. Runs the statement inside BEGIN..COMMIT on the read-write
 //! pool and reports exactly how many rows committed.
 
-use sqlx::AssertSqlSafe;
+use sqlx::{AssertSqlSafe, Connection};
 
 use crate::connection::{LiveConnection, Pool};
 use crate::error::{AppError, AppResult};
@@ -38,55 +38,76 @@ pub(crate) async fn run_write(
         });
     }
 
-    // Cancel/timeout guard: aborting drops the in-flight txn future (uncommitted →
-    // rolled back) and closes the pooled connection, so a hung write frees the tab.
+    // Cancel/timeout guard: aborting drops the in-flight txn future and the
+    // abandon-closing connection closes its socket instead of returning it to the
+    // pool, so the server rolls back the uncommitted transaction and a hung write
+    // frees both the tab and the pool.
     let inner = async {
         let affected: u64 = match live.rw()? {
             Pool::Postgres(pool) => {
-                let mut tx = pool.begin().await?;
-                if let Some(namespace) = namespace.as_deref() {
-                    let context =
-                        crate::executor::namespace::postgres_search_path_statement(namespace);
-                    sqlx::query(AssertSqlSafe(context))
+                let mut connection = cancel::AbandonClosingConnection::acquire(pool).await?;
+                let outcome = async {
+                    let mut tx = Connection::begin(&mut *connection).await?;
+                    if let Some(namespace) = namespace.as_deref() {
+                        let context =
+                            crate::executor::namespace::postgres_search_path_statement(namespace);
+                        sqlx::raw_sql(AssertSqlSafe(context))
+                            .execute(&mut *tx)
+                            .await?;
+                    }
+                    let n = sqlx::query(AssertSqlSafe(sql))
                         .execute(&mut *tx)
-                        .await?;
+                        .await?
+                        .rows_affected();
+                    tx.commit().await.map_err(|error| {
+                        AppError::OutcomeUnknown(format!(
+                            "PostgreSQL commit acknowledgement failed: {}",
+                            crate::error::db_error_text(&error)
+                        ))
+                    })?;
+                    Ok::<u64, AppError>(n)
                 }
-                let n = sqlx::query(AssertSqlSafe(sql))
-                    .execute(&mut *tx)
-                    .await?
-                    .rows_affected();
-                tx.commit().await.map_err(|error| {
-                    AppError::OutcomeUnknown(format!(
-                        "PostgreSQL commit acknowledgement failed: {error}"
-                    ))
-                })?;
-                n
+                .await;
+                connection.release();
+                outcome?
             }
             Pool::Mysql(pool) => {
-                let mut tx = pool.begin().await?;
-                let n = sqlx::query(AssertSqlSafe(sql))
-                    .execute(&mut *tx)
-                    .await?
-                    .rows_affected();
-                tx.commit().await.map_err(|error| {
-                    AppError::OutcomeUnknown(format!(
-                        "MySQL commit acknowledgement failed: {error}"
-                    ))
-                })?;
-                n
+                let mut connection = cancel::AbandonClosingConnection::acquire(pool).await?;
+                let outcome = async {
+                    let mut tx = Connection::begin(&mut *connection).await?;
+                    let n = sqlx::query(AssertSqlSafe(sql))
+                        .execute(&mut *tx)
+                        .await?
+                        .rows_affected();
+                    tx.commit().await.map_err(|error| {
+                        AppError::OutcomeUnknown(format!(
+                            "MySQL commit acknowledgement failed: {error}"
+                        ))
+                    })?;
+                    Ok::<u64, AppError>(n)
+                }
+                .await;
+                connection.release();
+                outcome?
             }
             Pool::Sqlite(pool) => {
-                let mut tx = pool.begin().await?;
-                let n = sqlx::query(AssertSqlSafe(sql))
-                    .execute(&mut *tx)
-                    .await?
-                    .rows_affected();
-                tx.commit().await.map_err(|error| {
-                    AppError::OutcomeUnknown(format!(
-                        "SQLite commit acknowledgement failed: {error}"
-                    ))
-                })?;
-                n
+                let mut connection = cancel::AbandonClosingConnection::acquire(pool).await?;
+                let outcome = async {
+                    let mut tx = Connection::begin(&mut *connection).await?;
+                    let n = sqlx::query(AssertSqlSafe(sql))
+                        .execute(&mut *tx)
+                        .await?
+                        .rows_affected();
+                    tx.commit().await.map_err(|error| {
+                        AppError::OutcomeUnknown(format!(
+                            "SQLite commit acknowledgement failed: {error}"
+                        ))
+                    })?;
+                    Ok::<u64, AppError>(n)
+                }
+                .await;
+                connection.release();
+                outcome?
             }
             Pool::Bigquery(_) => {
                 return Err(AppError::Blocked {

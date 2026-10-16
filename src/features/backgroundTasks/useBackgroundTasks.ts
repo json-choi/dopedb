@@ -1,9 +1,18 @@
-// Combines Job, Agent, and query activity into one cancellable background-task projection.
+// Combines Job, Agent, pending and approved Agent change, SQL activity, and
+// stored-result exports into one background-task projection. Stop uses each
+// owner's real cancel path: Job and Agent commands here, for SQL the cancel the
+// workbench registered for that run, and for an export the result export
+// registry's own cancel (PD-10). A pending Agent change is listed first and is
+// only opened from here: its decision belongs to its approval card.
 
 import { useCallback, useMemo, useState } from "react";
 import { useQueries, useQueryClient } from "@tanstack/react-query";
 
 import type { ConnectionProfile } from "../connections/domain";
+import {
+  cancelResultExport,
+  useResultExportTasks,
+} from "../queryResults/resultExports";
 import {
   type QueryServiceStore,
   useQueryServiceActivities,
@@ -12,11 +21,21 @@ import type { AcpSessionSummary } from "../agents/domain";
 import {
   cancelAgentAcpSession,
 } from "../agents/tauriAdapter";
+import {
+  agentStartKey,
+  stopAgentApprovalRun,
+  useAgentApprovalRuns,
+  useForegroundAgentStarts,
+} from "../agents/approvalActivity";
+import { usePendingAgentApprovals } from "../agents/pendingApprovals";
+import { sessionTitle } from "../agents/sessionPresentation";
 import { useAcpSessionSnapshot } from "../agents/sessionStore";
 import type { Job } from "../jobs/domain";
 import { cancelJob } from "../jobs/tauriAdapter";
+import { useI18n } from "../../lib/i18n";
 import { jobsQuery, qk } from "../../lib/queries";
 import { usePostPaintReady } from "../../lib/usePostPaintReady";
+import { queryTaskKey, useBackgroundTaskCancels } from "./cancelRegistry";
 import type { BackgroundTask, BackgroundTaskStatus } from "./domain";
 
 const ACTIVE_JOB_STATES = new Set<Job["state"]>([
@@ -66,9 +85,15 @@ export function useBackgroundTasks({
   queryServiceStore: QueryServiceStore;
   workspaceScopeKey: string;
 }) {
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const postPaintReady = usePostPaintReady();
   const querySessions = useQueryServiceActivities(queryServiceStore);
+  const queryCancels = useBackgroundTaskCancels();
+  const resultExports = useResultExportTasks();
+  const approvalRuns = useAgentApprovalRuns();
+  const foregroundStarts = useForegroundAgentStarts();
+  const pendingApprovals = usePendingAgentApprovals(workspaceScopeKey);
   const agentSessions = useAcpSessionSnapshot(
     workspaceScopeKey,
     postPaintReady,
@@ -107,11 +132,22 @@ export function useBackgroundTasks({
         progress: null,
         rowsProcessed: null,
         updatedAt: session.updatedAt,
-        cancellable: false,
+        cancellable: queryCancels.has(queryTaskKey(session.id)),
       }];
     });
     const agentTasks: BackgroundTask[] = agentSessions.flatMap((session) => {
       if (!ACTIVE_AGENT_STATES.has(session.lifecycle)) return [];
+      // A silent pre-warm (starting, no prompt yet, so still untitled) is not
+      // work the user started and stays out of the status bar; an untitled
+      // start the person is waiting on is shown so it can be cancelled.
+      const title = sessionTitle(session, t);
+      if (
+        session.lifecycle === "starting"
+        && title === sessionTitle({ title: "" }, t)
+        && !foregroundStarts.has(agentStartKey(session.connectionId, session.provider))
+      ) {
+        return [];
+      }
       return [{
         kind: "agent",
         key: `agent:${session.id}`,
@@ -119,7 +155,7 @@ export function useBackgroundTasks({
         connectionId: session.connectionId,
         connectionName:
           connectionNames.get(session.connectionId) || session.connectionId,
-        title: session.title,
+        title,
         status: agentStatus(session.lifecycle),
         progress: null,
         rowsProcessed: null,
@@ -127,6 +163,34 @@ export function useBackgroundTasks({
         cancellable: true,
       }];
     });
+    const proposalTasks: BackgroundTask[] = pendingApprovals.map((approval) => ({
+      kind: "agentProposal",
+      key: `agent-proposal:${approval.operationId}`,
+      operationId: approval.operationId,
+      sessionId: approval.sessionId,
+      sessionConnectionId: approval.sessionConnectionId,
+      connectionName: approval.connectionName,
+      title: t("agent.acpSqlApprovalTitle"),
+      status: "waitingApproval",
+      progress: null,
+      rowsProcessed: null,
+      updatedAt: 0,
+      cancellable: false,
+    }));
+    const approvalTasks: BackgroundTask[] = approvalRuns.map((run) => ({
+      kind: "agentApproval",
+      key: `agent-approval:${run.operationId}`,
+      operationId: run.operationId,
+      connectionId: run.connectionId,
+      connectionName:
+        connectionNames.get(run.connectionId) || run.connectionName,
+      title: run.connectionName,
+      status: run.stopping ? "cancelling" : "running",
+      progress: null,
+      rowsProcessed: null,
+      updatedAt: run.startedAt,
+      cancellable: !run.stopping,
+    }));
     const jobTasks: BackgroundTask[] = jobQueries.flatMap((query) =>
       (query.data ?? []).flatMap((job) => {
         if (!ACTIVE_JOB_STATES.has(job.state)) return [];
@@ -150,14 +214,42 @@ export function useBackgroundTasks({
         }];
       })
     );
-    return [...queryTasks, ...agentTasks, ...jobTasks].sort(
-      (left, right) => right.updatedAt - left.updatedAt,
-    );
+    // Listed only while rows are being written, never while its dialog is open.
+    const exportTasks: BackgroundTask[] = resultExports.map((entry) => ({
+      kind: "resultExport",
+      key: `result-export:${entry.operationId}`,
+      operationId: entry.operationId,
+      connectionName: "",
+      title: entry.title,
+      status: entry.cancelled ? "cancelling" : "running",
+      progress: entry.totalRows > 0
+        ? Math.min(100, (entry.rowsWritten / entry.totalRows) * 100)
+        : null,
+      rowsProcessed: entry.rowsWritten,
+      updatedAt: entry.startedAt,
+      cancellable: !entry.cancelled,
+    }));
+    return [
+      ...proposalTasks,
+      ...[
+        ...queryTasks,
+        ...approvalTasks,
+        ...agentTasks,
+        ...jobTasks,
+        ...exportTasks,
+      ].sort((left, right) => right.updatedAt - left.updatedAt),
+    ];
   }, [
     agentSessions,
+    approvalRuns,
     connections,
+    foregroundStarts,
     jobQueries,
+    pendingApprovals,
+    queryCancels,
     querySessions,
+    resultExports,
+    t,
   ]);
 
   const cancelTask = useCallback(
@@ -172,7 +264,17 @@ export function useBackgroundTasks({
           await queryClient.invalidateQueries({
             queryKey: qk.jobs(task.connectionId),
           });
+        } else if (task.kind === "query") {
+          await queryCancels.get(task.key)?.();
+        } else if (task.kind === "agentApproval") {
+          // The same executor cancel path the approval card's Stop uses.
+          await stopAgentApprovalRun(task.operationId);
+        } else if (task.kind === "resultExport") {
+          cancelResultExport(task.operationId);
         }
+      } catch {
+        // The shell shows this message; never surface backend text.
+        throw new Error(t("ide.backgroundTask.stopFailed"));
       } finally {
         setCancellingKeys((current) => {
           const next = new Set(current);
@@ -181,7 +283,7 @@ export function useBackgroundTasks({
         });
       }
     },
-    [cancellingKeys, queryClient],
+    [cancellingKeys, queryCancels, queryClient, t],
   );
 
   return {

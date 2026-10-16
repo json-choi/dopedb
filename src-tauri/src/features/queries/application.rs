@@ -56,6 +56,13 @@ where
         self.port.propose_desktop_sql(request).await
     }
 
+    pub(crate) async fn propose_desktop_auto_read(
+        &self,
+        request: DesktopSqlProposalRequest,
+    ) -> Result<P::ProposalReceipt, P::InspectionError> {
+        self.port.propose_desktop_auto_read(request).await
+    }
+
     pub(crate) async fn propose_terminal_sql(
         &self,
         request: TerminalSqlProposalRequest,

@@ -31,7 +31,8 @@ export type BackgroundTask =
       sessionId: string;
       connectionId: string;
       connectionName: string;
-      cancellable: false;
+      /** True while the SQL workbench has registered its own cancel path. */
+      cancellable: boolean;
     })
   | (BackgroundTaskBase & {
       kind: "agent";
@@ -41,10 +42,37 @@ export type BackgroundTask =
       cancellable: true;
     })
   | (BackgroundTaskBase & {
+      /** An Agent proposal waiting for a person; it is decided only on its card. */
+      kind: "agentProposal";
+      operationId: string;
+      sessionId: AcpSessionId;
+      /** The conversation's anchor connection; AI Chat opens on it. */
+      sessionConnectionId: string;
+      connectionName: string;
+      cancellable: false;
+    })
+  | (BackgroundTaskBase & {
+      /** An Agent proposal a person approved that is executing now. */
+      kind: "agentApproval";
+      operationId: string;
+      connectionId: string;
+      connectionName: string;
+      /** Stopped through the executor's cancel path until a stop is requested. */
+      cancellable: boolean;
+    })
+  | (BackgroundTaskBase & {
       kind: "job";
       jobId: JobId;
       connectionId: JobConnectionId;
       connectionName: string;
       operation: "import" | "export";
+      cancellable: boolean;
+    })
+  | (BackgroundTaskBase & {
+      /** A stored SQL result being written to the file the person chose. */
+      kind: "resultExport";
+      operationId: string;
+      /** A result is not tied to a listed connection here; shown without one. */
+      connectionName: "";
       cancellable: boolean;
     });

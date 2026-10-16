@@ -16,6 +16,7 @@ exception to the repo's default-export convention).
 | File | Description |
 |------|-------------|
 | `appProviders.tsx` | The single provider composition shared by the real app entry point and UI review harnesses; the only place providers/global CSS are wired, so the harness can never drift into a second copy. |
+| `catalogQueries.ts` | Catalog read options shared by every surface: one live snapshot per exact (connection, database), the `Catalog` selected from it, a persisted snapshot shown only while the first live read runs (its marker is data, so structural sharing drops it), and the one catalog refresh path. Collapsing the Explorer never cancels these shared reads. |
 | `capabilities.ts` | Resolves which `DriverCapability` set applies to a saved connection, gating SQL-only UI (tabs, DDL, row editing, schema diff) with the same driver-fallback order `ConnectionForm` uses. |
 | `documentGrid.ts` | Shapes MongoDB documents into `DataGrid` columns/rows (union of top-level keys, `_id` first, cells JSON-stringified); shared by the Documents screen and the Tables MongoDB branch. |
 | `erdExport.ts` | Deterministic ERD export (SVG is the source artifact; PNG/PDF are derived locally) independent of the React Flow DOM, using `ERD_EXPORT_PALETTE`. |
@@ -55,8 +56,9 @@ exception to the repo's default-export convention).
   `erdGraph.ts`, `tableRef.ts`, `relTime.ts`, etc.) free of React imports so
   they stay unit-testable in isolation; only add a `.tsx` extension when a
   file genuinely needs JSX (providers, hooks returning elements).
-- New backend reads are added as a query option in `queries.ts`, not as a
-  bespoke `useEffect` + `invoke` in a screen (see root `AGENTS.md`).
+- New backend reads are added as a query option in `queries.ts` (catalog reads
+  in `catalogQueries.ts`), not as a bespoke `useEffect` + `invoke` in a screen
+  (see root `AGENTS.md`).
 
 ### Testing Requirements
 - No test files live directly under `src/lib/` today (existing coverage for
@@ -83,7 +85,7 @@ exception to the repo's default-export convention).
 - Consumed by 151+ files across `src/features/` and `src/screens/`.
 
 ### External
-- `@tanstack/react-query` (`queries.ts`, `queryClient.tsx`).
+- `@tanstack/react-query` (`queries.ts`, `catalogQueries.ts`, `queryClient.tsx`).
 - `elkjs` (`erdLayout.ts`).
 
 <!-- MANUAL: Any manually added notes below this line are preserved on regeneration -->

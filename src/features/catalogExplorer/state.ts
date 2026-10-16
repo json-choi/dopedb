@@ -4,7 +4,6 @@ import { useReducer } from "react";
 
 import type {
   CatalogExplorerState,
-  DdlDialogState,
   WorkspaceDialogState,
 } from "./domain";
 import type { CatalogLoadIssue } from "./catalogDomain";
@@ -43,7 +42,6 @@ export function initialCatalogExplorerState(
     showRowCounts: true,
     openMenuId: null,
     workspaceDialog: null,
-    ddlDialog: null,
   };
 }
 
@@ -149,8 +147,6 @@ export function useCatalogExplorerState(scopeKey: string) {
         dispatch({ type: "toggleCollapsedSection", key }),
       openWorkspaceDialog: (workspaceDialog: WorkspaceDialogState) =>
         dispatch({ type: "patch", patch: { workspaceDialog } }),
-      openDdlDialog: (ddlDialog: DdlDialogState) =>
-        dispatch({ type: "patch", patch: { ddlDialog } }),
     },
   };
 }

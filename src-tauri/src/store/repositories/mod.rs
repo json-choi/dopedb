@@ -13,3 +13,6 @@ pub(super) use workspaces::{
     repair_active_scope_on_open,
 };
 mod analysis_articles;
+mod personal_analysis_articles;
+mod personal_analysis_runs;
+pub(crate) use personal_analysis_articles::personal_article_key;

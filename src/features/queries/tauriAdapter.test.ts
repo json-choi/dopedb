@@ -234,6 +234,40 @@ describe("query Tauri adapter", () => {
     await expect(listQueryServiceSessions(serviceScope)).rejects.toThrow(
       "Unsupported Services session snapshot",
     );
+    // Script statement errors are typed; a snapshot saved while they were plain
+    // text still restores, with no kind or position invented for it.
+    const typedError = { kind: "db", message: "syntax error", position: 8 };
+    const scriptSession = (errors: unknown[]) => ({
+      ...serviceSession,
+      result: {
+        kind: "script",
+        at: "00:00:00",
+        outcome: {
+          statements: errors.map((error) => ({
+            sql: "SELECT bad",
+            result: null,
+            affected: null,
+            error,
+          })),
+          committed: false,
+          allReads: true,
+          manualTransaction: false,
+        },
+      },
+    });
+    invokeMock.mockResolvedValueOnce([scriptSession([typedError, "legacy text"])]);
+    await expect(listQueryServiceSessions(serviceScope)).resolves.toEqual([
+      scriptSession([
+        typedError,
+        { kind: "unknown", message: "legacy text", position: null },
+      ]),
+    ]);
+    invokeMock.mockResolvedValueOnce([
+      scriptSession([{ kind: "db", message: "x", position: "8" }]),
+    ]);
+    await expect(listQueryServiceSessions(serviceScope)).rejects.toThrow(
+      "Invalid Services session snapshot",
+    );
 
     const serviceStore = new QueryServiceStore("workspace:account-1");
     let fullNotifications = 0;

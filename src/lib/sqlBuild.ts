@@ -385,23 +385,53 @@ export function buildDelete(
 }
 
 // --- CSV / JSON export (pure) --------------------------------------------------------
-// NULL → empty field (CSV) / null (JSON). Fields containing , " or a newline are quoted
-// and internal quotes doubled.
+// Shared export contract (the Rust result exporter follows the same rules):
+//   - NULL → empty field (CSV) / null (JSON); records end with CRLF (RFC 4180).
+//   - Fields containing , " CR or LF are quoted and internal quotes doubled.
+//   - A text cell that a spreadsheet would evaluate (leading = + - @ tab or CR) gets a
+//     leading apostrophe, unless the whole value is the database's inert rendering of
+//     a number ("-12.50"), ±Infinity, or an interval/duration ("-1 day -02:00:00").
+//     Clipboard TSV copies apply the same rule.
+//   - Duplicate column names stay distinct in JSON as name, name_2, name_3, ….
+const SPREADSHEET_FORMULA_START = /^[=+\-@\t\r]/;
+const INERT_VALUE =
+  /^(?:[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?|[+-]?[Ii]nfinity|-?[0-9]+ (?:years?|mons?|days?)(?: [+-]?[0-9]+ (?:years?|mons?|days?))*(?: [+-]?[0-9]+:[0-9]{2}:[0-9]{2}(?:\.[0-9]+)?)?|-?[0-9]+:[0-9]{2}:[0-9]{2}(?:\.[0-9]+)?)$/;
+
+/** Text a spreadsheet would run as a formula, prefixed with an apostrophe. */
+export function spreadsheetSafeText(text: string): string {
+  return SPREADSHEET_FORMULA_START.test(text) && !INERT_VALUE.test(text)
+    ? `'${text}`
+    : text;
+}
+
 function escapeCsvField(v: unknown): string {
   if (v === null || v === undefined) return "";
-  const s = typeof v === "object" ? JSON.stringify(v) : String(v);
+  let s = typeof v === "object" ? JSON.stringify(v) : String(v);
+  if (typeof v === "string") s = spreadsheetSafeText(s);
   return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
 export function toCsv(columns: string[], rows: unknown[][]): string {
   const head = columns.map(escapeCsvField).join(",");
-  const body = rows.map((r) => r.map(escapeCsvField).join(",")).join("\n");
-  return body ? `${head}\n${body}` : head;
+  const body = rows.map((r) => r.map(escapeCsvField).join(",")).join("\r\n");
+  return body ? `${head}\r\n${body}` : head;
+}
+
+/** Deterministic JSON keys for result columns that share a name. */
+export function uniqueColumnKeys(columns: string[]): string[] {
+  const used = new Set<string>();
+  return columns.map((column) => {
+    let key = column;
+    for (let suffix = 2; used.has(key); suffix += 1) key = `${column}_${suffix}`;
+    used.add(key);
+    return key;
+  });
 }
 
 export function toJson(columns: string[], rows: unknown[][]): string {
+  const keys = uniqueColumnKeys(columns);
   return JSON.stringify(
-    rows.map((r) => Object.fromEntries(columns.map((c, i) => [c, r[i] ?? null]))),
+    rows.map((r) => Object.fromEntries(keys.map((key, i) => [key, r[i] ?? null]))),
     null,
     2,
   );

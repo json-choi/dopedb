@@ -322,14 +322,35 @@ impl ProvisioningCliCommand {
             .ok_or(ProvisioningProcessFailure::OutputRejected)?;
         let read = async move { tokio::try_join!(read_bounded(stdout), read_bounded(stderr)) };
         let timeout = Duration::from_millis(self.timeout_ms);
-        let result = tokio::select! {
+        let deadline = tokio::time::Instant::now() + timeout;
+        let mut result = tokio::select! {
             biased;
             _ = cancellation.cancelled() => Err(ProvisioningProcessFailure::Cancelled),
-            value = tokio::time::timeout(timeout, read) => match value {
+            value = tokio::time::timeout_at(deadline, read) => match value {
                 Ok(value) => value,
                 Err(_) => Err(ProvisioningProcessFailure::TimedOut),
             },
         };
+        // EOF can precede the root's exit. Let a completed output stream settle
+        // within the original deadline instead of signalling a valid CLI before
+        // its exit code exists. Cancellation still tears down the whole tree.
+        if result.is_ok() {
+            let exit = Box::pin(async {
+                tokio::select! {
+                    biased;
+                    _ = cancellation.cancelled() => Err(ProvisioningProcessFailure::Cancelled),
+                    value = tokio::time::timeout_at(deadline, child.wait()) => match value {
+                        Ok(Ok(_)) => Ok(()),
+                        Ok(Err(_)) => Err(ProvisioningProcessFailure::CleanupFailed),
+                        Err(_) => Err(ProvisioningProcessFailure::TimedOut),
+                    },
+                }
+            })
+            .await;
+            if let Err(error) = exit {
+                result = Err(error);
+            }
+        }
         let status = tree
             .terminate_and_reap(&mut child)
             .await
@@ -441,7 +462,7 @@ async fn hash_regular_file(path: &Path) -> Result<(String, u64), ProvisioningPro
         return Err(ProvisioningProcessFailure::ExecutableRejected);
     }
     let mut digest = Sha256::new();
-    let mut buffer = [0_u8; 64 * 1024];
+    let mut buffer = vec![0_u8; 64 * 1024];
     let mut observed = 0_u64;
     loop {
         let read = file
@@ -474,7 +495,7 @@ where
     R: AsyncRead + Unpin,
 {
     let mut output = Zeroizing::new(Vec::with_capacity(4096));
-    let mut buffer = [0_u8; 8192];
+    let mut buffer = Zeroizing::new(vec![0_u8; 8192]);
     loop {
         let read = stream
             .read(&mut buffer)

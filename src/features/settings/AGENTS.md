@@ -14,7 +14,7 @@ settings screen, never from a general work surface.
 ## Key Files
 | File | Description |
 |------|-------------|
-| `domain.ts` | `SettingsSection` union (`agent-tools`, `advanced`, `cli`, `privacy`, `safety`, `updates`, `language`, `appearance`) — settings navigation is shared application state, not screen-local state. |
+| `domain.ts` | `SettingsSection` union (`agent-tools`, `advanced`, `cli`, `privacy`, `safety`, `updates`, `language`, `appearance`, `account`) — settings navigation is shared application state, not screen-local state. |
 
 ## Subdirectories
 | Directory | Purpose |

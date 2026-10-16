@@ -156,6 +156,7 @@ impl Store {
         &self,
         connection: &PinnedConnection,
         requested_environment_id: Option<Uuid>,
+        selected_connection_ids: &[Uuid],
     ) -> AppResult<Option<KnowledgeSessionScope>> {
         let environment_rows: Vec<(String, String, i64)> = sqlx::query_as(
             "SELECT DISTINCT environment.id, environment.project_id, environment.revision
@@ -264,6 +265,14 @@ impl Store {
         }
         let mut connections = Vec::new();
         for binding in bindings {
+            // Only the anchor (which also anchors selected sources) and the selected
+            // databases are checked and returned; the caller narrows to exactly the
+            // selection, so an unselected stale binding must not block the session.
+            if binding.connection_id != connection.connection_id
+                && !selected_connection_ids.contains(&binding.connection_id)
+            {
+                continue;
+            }
             if binding.connection_revision != binding.current_connection_revision {
                 return Err(AppError::Blocked {
                     reason: format!(

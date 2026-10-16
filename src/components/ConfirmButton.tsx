@@ -1,18 +1,12 @@
 // Canonical destructive-action confirmation. The trigger keeps its original
-// geometry while the decision moves into a centered, blocking alert dialog.
+// geometry while the decision moves into the shared blocking ConfirmDialog.
 import { useId, useRef, useState, type ReactNode } from "react";
 import {
   Button,
   type ButtonProps,
 } from "../design-system/components/Button";
-import {
-  ModalBackdrop,
-  ModalFooter,
-  ModalHeader,
-  ModalSurface,
-} from "../design-system/components/Modal";
 import { useI18n } from "../lib/i18n";
-import { floatingPortalOwnerId } from "../design-system/floating";
+import ConfirmDialog from "./ConfirmDialog";
 
 type ConfirmButtonBaseProps = {
   children: ReactNode;
@@ -48,8 +42,6 @@ export default function ConfirmButton({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const generatedId = useId().replace(/:/g, "");
   const dialogId = `confirm-dialog-${generatedId}`;
-  const titleId = `${dialogId}-title`;
-  const descriptionId = `${dialogId}-description`;
   const actionLabel = label ?? children;
   const close = () => setOpen(false);
 
@@ -88,46 +80,19 @@ export default function ConfirmButton({
     <>
       {trigger}
       {open ? (
-        <ModalBackdrop
-          data-floating-owner-id={floatingPortalOwnerId(triggerRef.current)}
-          onMouseDown={close}
-        >
-          <ModalSurface
-            id={dialogId}
-            size="alert"
-            role="alertdialog"
-            aria-labelledby={titleId}
-            aria-describedby={descriptionId}
-            onRequestClose={close}
-            returnFocusRef={triggerRef}
-          >
-            <ModalHeader title={actionLabel} titleId={titleId} />
-            <div className="tw:grid tw:min-w-0 tw:flex-1 tw:content-center tw:gap-2 tw:overflow-auto tw:px-5 tw:py-6 tw:max-[640px]:px-4 tw:max-[640px]:py-5">
-              <p
-                id={descriptionId}
-                className="tw:m-0 tw:min-w-0 tw:text-sm tw:leading-ui tw:text-foreground tw:[overflow-wrap:anywhere]"
-              >
-                {confirmLabel ?? t("common.reallyDelete")}
-              </p>
-            </div>
-            <ModalFooter>
-              <Button data-modal-initial-focus onClick={close}>
-                {t("common.cancel")}
-              </Button>
-              <Button
-                variant="danger"
-                disabled={disabled}
-                labelBehavior="wrap"
-                onClick={() => {
-                  close();
-                  onConfirm();
-                }}
-              >
-                {actionLabel}
-              </Button>
-            </ModalFooter>
-          </ModalSurface>
-        </ModalBackdrop>
+        <ConfirmDialog
+          id={dialogId}
+          title={actionLabel}
+          description={confirmLabel ?? t("common.reallyDelete")}
+          confirmLabel={actionLabel}
+          confirmDisabled={disabled}
+          onCancel={close}
+          onConfirm={() => {
+            close();
+            onConfirm();
+          }}
+          returnFocusRef={triggerRef}
+        />
       ) : null}
     </>
   );

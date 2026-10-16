@@ -16,7 +16,6 @@ import type {
   WorkspaceId,
   WorkspaceLoginResult,
 } from "./domain";
-import { workspaceManagedConnectionSettingsUrl } from "./navigation";
 
 export function workspaceFeatureState(): Promise<WorkspaceFeatureState> {
   return invoke("workspace_feature_state");
@@ -52,18 +51,6 @@ export function cancelDesktopWorkspaceLogin(attemptId: string): Promise<void> {
 
 export function onWorkspaceAccessCallback(handler: () => void): Promise<UnlistenFn> {
   return listen("workspace-access:callback", handler);
-}
-
-export function workspaceConsoleUrl(workspaceId?: WorkspaceId): Promise<string> {
-  return invoke("workspace_console_url", { workspaceId: workspaceId ?? null });
-}
-
-export async function workspaceManagedConnectionConsoleUrl(
-  workspaceId: WorkspaceId,
-  connectionId: ConnectionId,
-): Promise<string> {
-  const consoleUrl = await workspaceConsoleUrl(workspaceId);
-  return workspaceManagedConnectionSettingsUrl(consoleUrl, connectionId);
 }
 
 export function listWorkspaces(): Promise<Workspace[]> {
@@ -105,12 +92,14 @@ export function bindWorkspaceConnectionCredentials(
   username: string,
   password: string,
   sshAlias: string,
+  tlsFiles?: Record<string, string>,
 ): Promise<ConnectionProfile> {
   return invoke("bind_workspace_connection_credentials", {
     id,
     username,
     password,
     sshAlias,
+    tlsFiles,
   });
 }
 

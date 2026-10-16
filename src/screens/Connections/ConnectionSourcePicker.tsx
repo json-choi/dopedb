@@ -39,6 +39,28 @@ export function ConnectionSourcePicker({ catalog, nameInputRef, creatingDemo, on
         if (reason === "escape" && !addMenu.buttonRef.current) focusName();
       }}
     >
+      {/* Owners and admins register a team database first; others never see this group. */}
+      {addMenu.sharedDatabaseMatches ? (
+        <CommandMenuGroup title={t("workspaceAdmin.scope")}>
+          <CommandMenuItem
+            leading={<Icon name="database" />}
+            trailing={<Icon name="chevronRight" />}
+            description={t("workspaceAdmin.addSharedDatabaseDescription")}
+            onClick={catalog.sharedDatabase.add}
+          >
+            {t("workspaceAdmin.addSharedDatabase")}
+          </CommandMenuItem>
+        </CommandMenuGroup>
+      ) : null}
+      {sources.filteredWarehouseSources.length > 0 ? (
+        <CommandMenuGroup title={t("connections.cloudWarehouse")}>
+          {sources.filteredWarehouseSources.map((source) => (
+            <CommandMenuItem key={source.engine} leading={<EngineMark engine={source.engine} />} trailing={<Icon name="chevronRight" />} description={t("connections.bigQueryConnectionDescription")} onClick={() => selectSource(source)}>
+              {source.label}
+            </CommandMenuItem>
+          ))}
+        </CommandMenuGroup>
+      ) : null}
       {sources.filteredDatabaseSources.length > 0 ? (
         <CommandMenuGroup
           title={t("connections.database")}

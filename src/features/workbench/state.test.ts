@@ -13,7 +13,7 @@ import { ConnectionGeneralTab } from "../../screens/Connections/ConnectionGenera
 import { ConnectionBigQueryFields } from "../../screens/Connections/ConnectionBigQueryFields";
 import { ConnectionSecurityTab } from "../../screens/Connections/ConnectionSecurityTab";
 import type { ConnectionEditorController } from "../connections/useConnectionEditorController";
-import schemaDiffFixture from "../../../dopedb-protocol/tests/fixtures/schema-diff-v1.json";
+import schemaDiffFixture from "../../../dopedb-protocol/tests/fixtures/schema-diff-v2.json";
 import { catalogFromSnapshot } from "../catalog/tauriAdapter";
 import {
   connectionId,
@@ -30,7 +30,9 @@ import { resolveSqlNamespaceAtCaret } from "../queries/resolveMode";
 import {
   sqlExecutionMarkerPosition,
   sqlRunSourceFromSelection,
+  sqlRunChoices,
 } from "../queries/editorStatus";
+import { splitStatementRanges, splitStatements } from "../../lib/sqlStatements";
 import {
   canFallbackFromCombinedRead,
   initialSqlRunPath,
@@ -97,6 +99,7 @@ import {
 } from "../connections/options";
 import {
   blankConnection,
+  defaultConnectionName,
   demoSqliteConnection,
   findDemoSqliteConnection,
 } from "../connections/presets";
@@ -149,10 +152,18 @@ import {
   PropertyRow,
 } from "../../design-system/components/FormControls";
 import { queryResultPhase } from "../../lib/queryResultPhase";
-import { compareCatalogs, diffCounts } from "../../lib/schemaDiff";
+import { compareCatalogs, diffCounts, SCHEMA_DIFF_SCOPE } from "../../lib/schemaDiff";
+import { SCHEMA_DIFF_ASPECT_LABELS } from "../../screens/SchemaDiff/SchemaDiffResults";
 import { tableRef } from "../../lib/tableRef";
 import type { I18nKey } from "../../lib/i18n";
-import { workspaceManagedConnectionSettingsUrl } from "../workspaces/navigation";
+import { workspaceAdminScope } from "../workspaceAdmin/scope";
+import type { WorkspaceContextState } from "../workspaces/queries";
+import {
+  accountId as workspaceAccountId,
+  workspaceId as workspaceIdentity,
+  type WorkspaceAuthState,
+  type WorkspaceRole,
+} from "../workspaces/domain";
 
 function deferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
@@ -240,6 +251,9 @@ describe("workbench state ownership", () => {
       vi.unstubAllGlobals();
     }
     const key = (value: I18nKey) => value;
+    // Catalog issues wrap a heading-style title in a sentence template; read the title.
+    const catalogKey = (value: I18nKey, vars?: Record<string, string | number>) =>
+      typeof vars?.message === "string" ? vars.message : value;
     const managedManager = {
       credentialMode: "managed" as const,
       workspaceAccess: "manage" as const,
@@ -261,6 +275,10 @@ describe("workbench state ownership", () => {
       code: "authentication",
       field: "credentials",
     }, managedManager)).toBeNull();
+    expect(connectionTestFailureTarget({
+      code: "authenticationIdentity",
+      field: "credentials",
+    })).toEqual({ tab: "general", fieldId: "connection-username" });
     expect(CONNECTION_TEST_FAILURE_CODES).toEqual([
       "sshClientMissing",
       "sshConfiguration",
@@ -271,6 +289,7 @@ describe("workbench state ownership", () => {
       "sshUnknown",
       "timeoutNetwork",
       "authentication",
+      "authenticationIdentity",
       "tls",
       "databaseConfig",
       "unknown",
@@ -316,7 +335,7 @@ describe("workbench state ownership", () => {
     });
     expect(hostileCatalogIssue).toEqual({ code: "sshHostKey" });
     expect(JSON.stringify(hostileCatalogIssue)).not.toContain("HOSTILE_PASSWORD");
-    expect(catalogLoadIssueMessage(key, hostileCatalogIssue)).toBe(
+    expect(catalogLoadIssueMessage(catalogKey, hostileCatalogIssue)).toBe(
       "connections.testFailure.sshHostKeyTitle",
     );
     expect(catalogLoadIssueAction(hostileCatalogIssue)).toBe("edit");
@@ -333,7 +352,7 @@ describe("workbench state ownership", () => {
       await expect(safeClient.fetchQuery(inventoryOptions)).rejects.toEqual({ code: "sshHostKey" });
       const retained = safeClient.getQueryState(inventoryOptions.queryKey)?.error;
       expect(retained).toEqual({ code: "sshHostKey" });
-      expect(catalogLoadIssueMessage(key, catalogLoadIssue(retained))).toBe("connections.testFailure.sshHostKeyTitle");
+      expect(catalogLoadIssueMessage(catalogKey, catalogLoadIssue(retained))).toBe("connections.testFailure.sshHostKeyTitle");
       for (const read of [listKnowledgeEnvironmentConnections, listAnalysisArticles]) {
         await expect(read()).rejects.toEqual({ code: "sshHostKey" });
       }
@@ -370,6 +389,9 @@ describe("workbench state ownership", () => {
       "timeout",
       "notFound",
       "unknown",
+      "sharedConnectionChanged",
+      "credentialStoreDenied",
+      "lockTimeout",
     ]);
     for (const code of [
       "sshClientMissing",
@@ -385,7 +407,7 @@ describe("workbench state ownership", () => {
       "connectionUnknown",
     ] as const) {
       expect(catalogLoadIssueAction({ code })).toBe("edit");
-      expect(catalogLoadIssueMessage(key, { code })).toMatch(
+      expect(catalogLoadIssueMessage(catalogKey, { code })).toMatch(
         /^connections\.testFailure\./u,
       );
     }
@@ -418,20 +440,61 @@ describe("workbench state ownership", () => {
       })).toBe(false);
     }
 
-    const managedConnectionId = connectionProfileId(
-      "55555555-5555-4555-8555-555555555555",
-    );
-    const recoveryUrl = new URL(workspaceManagedConnectionSettingsUrl(
-      "https://workspace.example.test/settings?workspace=11111111-1111-4111-8111-111111111111#workspace-11111111-1111-4111-8111-111111111111",
-      managedConnectionId,
-    ));
-    expect(recoveryUrl.searchParams.get("workspace")).toBe(
-      "11111111-1111-4111-8111-111111111111",
-    );
-    expect(recoveryUrl.searchParams.get("section")).toBe("providers");
-    expect(recoveryUrl.searchParams.get("connection")).toBe(managedConnectionId);
-    expect(recoveryUrl.searchParams.get("desktop")).toBe("1");
-    expect(recoveryUrl.hash).toBe(`#database-${managedConnectionId}`);
+    // Workspace administration exists only for the signed-in member of the active team
+    // workspace: members, access and providers for admins and owners, backups and
+    // deletion for owners, and nothing for a personal or disabled workspace.
+    const teamWorkspaceId = workspaceIdentity("11111111-1111-4111-8111-111111111111");
+    const adminAccount = workspaceAccountId("account-admin");
+    const adminAuth = (role: WorkspaceRole): WorkspaceAuthState => ({
+      authenticated: true,
+      user: { id: adminAccount, email: "member@example.test", displayName: "Member" },
+      accounts: [{
+        user: { id: adminAccount, email: "member@example.test", displayName: "Member" },
+        memberships: [{ workspaceId: teamWorkspaceId, role }],
+      }],
+      authorityGeneration: 4,
+    });
+    const teamContext: WorkspaceContextState = {
+      feature: { enabled: true },
+      workspaces: [],
+      active: {
+        id: teamWorkspaceId,
+        name: "Team",
+        kind: "team",
+        lifecycleState: "active",
+        createdAt: "2026-01-01T00:00:00Z",
+        updatedAt: "2026-01-01T00:00:00Z",
+      },
+    };
+    expect(workspaceAdminScope(adminAuth("owner"), teamContext)).toMatchObject({
+      accountId: adminAccount,
+      workspaceId: teamWorkspaceId,
+      canManage: true,
+      isOwner: true,
+    });
+    expect(workspaceAdminScope(adminAuth("admin"), teamContext)).toMatchObject({
+      canManage: true,
+      isOwner: false,
+    });
+    for (const role of ["editor", "analyst", "viewer"] as const) {
+      expect(workspaceAdminScope(adminAuth(role), teamContext)).toMatchObject({
+        canManage: false,
+        isOwner: false,
+      });
+    }
+    expect(workspaceAdminScope(adminAuth("owner"), {
+      ...teamContext,
+      active: { ...teamContext.active, kind: "personal" },
+    })).toBeNull();
+    expect(workspaceAdminScope(adminAuth("owner"), {
+      ...teamContext,
+      feature: { enabled: false },
+    })).toBeNull();
+    expect(workspaceAdminScope({
+      ...adminAuth("owner"),
+      accounts: [{ ...adminAuth("owner").accounts[0], memberships: [] }],
+    }, teamContext)).toBeNull();
+    expect(workspaceAdminScope({ ...adminAuth("owner"), user: null }, teamContext)).toBeNull();
     expect(isKnowledgeEnvironmentRevisionConflict({
       kind: "network",
       message: "workspace service returned 409 Conflict: Environment or connection changed",
@@ -452,6 +515,31 @@ describe("workbench state ownership", () => {
       to: selectedEnd - 2,
     });
     expect(sqlRunSourceFromSelection(selectedDraft, 0, 0)).toBeUndefined();
+
+    // A scope choice must authorize exactly the previewed occurrence, never a
+    // repeated statement elsewhere or a semicolon inside a literal/comment.
+    const script = "  SELECT 1;\n\nSELECT 2;  ";
+    const choices = sqlRunChoices(script, script.indexOf("SELECT 2") + 4);
+    expect(choices).toEqual([
+      { kind: "statement", source: { sql: "SELECT 2", from: 13, to: 21 } },
+      { kind: "script", source: { sql: script.trim(), from: 2, to: 22 } },
+    ]);
+    const repeated = "SELECT 1; SELECT 1;";
+    expect(sqlRunChoices(repeated, 14)[0].source.from).toBe(10);
+    expect(sqlRunChoices(script, 10)[0].source.sql).toBe("SELECT 1");
+    expect(sqlRunChoices(script, script.length)[0].source.sql).toBe("SELECT 2");
+    for (const text of ["SELECT 1;", "-- only comments;", "/* only ; */"]) {
+      expect(sqlRunChoices(text, 0)).toEqual([]);
+    }
+    const quoted = "-- title;\nSELECT '한글😀;'; SELECT $$x;y$$; /* ; */ SELECT 3; -- tail";
+    const ranges = splitStatementRanges(quoted);
+    expect(ranges.map((range) => range.sql)).toEqual(splitStatements(quoted));
+    expect(ranges).toHaveLength(3);
+    for (const range of ranges) {
+      expect(quoted.slice(range.from, range.to)).toBe(range.sql);
+    }
+    expect(sqlRunChoices(quoted, quoted.indexOf("x;y"))[0].source.sql)
+      .toBe("SELECT $$x;y$$");
 
     expect(queryResultPhase(undefined, new Error("offline"))).toBe("coldError");
     expect(queryResultPhase(undefined, null)).toBe("coldLoading");
@@ -572,6 +660,29 @@ describe("workbench state ownership", () => {
       appShellNavigationReducer(welcome, { type: "openSettings" }),
       { type: "closeSettings" },
     )).toEqual(welcome);
+    // Workspace management is its own modal over the same background route: an account
+    // request replaces it with Settings → Account, and only its own close returns to
+    // the background content.
+    const workspaceAdmin = appShellNavigationReducer(editing, {
+      type: "openWorkspaceAdmin",
+      destination: "workspace-providers",
+    });
+    expect(workspaceAdmin).toEqual({
+      kind: "workspaceAdmin",
+      route: { kind: "workbench" },
+      section: "workspace-providers",
+    });
+    expect(appShellNavigationReducer(workspaceAdmin, { type: "closeSettings" })).toBe(workspaceAdmin);
+    expect(
+      appShellNavigationReducer(workspaceAdmin, { type: "openWorkspaceAdmin", destination: "account" }),
+    ).toEqual({ kind: "settings", route: { kind: "workbench" }, section: "account" });
+    expect(appShellNavigationReducer(
+      appShellNavigationReducer(knowledge, {
+        type: "openWorkspaceAdmin",
+        destination: "workspace-members",
+      }),
+      { type: "closeWorkspaceAdmin" },
+    )).toEqual(knowledge);
     expect(appShellNavigationReducer(knowledge, {
       type: "connectionDeleted", connectionId: "db-1", remainingConnections: 0,
     })).toEqual(welcome);
@@ -928,9 +1039,15 @@ describe("workbench state ownership", () => {
       capabilities: ["sql"],
       recommended: true,
     };
-    const nameless = { ...blankConnection(), database: "app" };
+    // An unnamed draft is saved under its endpoint name; only a draft without
+    // an endpoint still asks for one, and that never blocks a server check.
+    const nameless = { ...blankConnection(), database: "app", username: "app" };
+    expect(defaultConnectionName(nameless)).toBe("PostgreSQL localhost:5432");
+    expect(
+      diagnoseConnection(nameless, [], [postgresDriver], false, false),
+    ).toEqual([]);
     const namelessDiagnostics = diagnoseConnection(
-      nameless,
+      { ...nameless, host: "" },
       [],
       [postgresDriver],
       false,
@@ -938,13 +1055,20 @@ describe("workbench state ownership", () => {
     );
     expect(namelessDiagnostics.map(({ code }) => code)).toEqual([
       "nameRequired",
+      "hostRequired",
     ]);
-    expect(namelessDiagnostics.some(connectionDiagnosticBlocksTest)).toBe(
-      false,
-    );
-    expect(
-      namelessDiagnostics.some(({ tone }) => tone === "danger"),
-    ).toBe(true);
+    expect(connectionDiagnosticBlocksTest(namelessDiagnostics[0]!)).toBe(false);
+    // PostgreSQL and MySQL refuse an empty user at the handshake, so a personal
+    // draft must name the role before a check; managed profiles are exempt.
+    for (const engine of ["postgres", "mysql"] as const) {
+      const userless = { ...nameless, engine, username: " " };
+      const userDiagnostics = diagnoseConnection(userless, [], [], false, true);
+      expect(userDiagnostics.map(({ code }) => code)).toEqual(["usernameRequired"]);
+      expect(userDiagnostics.some(connectionDiagnosticBlocksTest)).toBe(true);
+      expect(
+        diagnoseConnection({ ...userless, username: "", credentialMode: "managed" }, [], [], false, true),
+      ).toEqual([]);
+    }
 
     // Server discovery/testing can use a default database, but the saved grant
     // must name a target accepted by the native runtime's 255-byte contract.
@@ -970,6 +1094,7 @@ describe("workbench state ownership", () => {
     const mongo = switchConnectionSource(
       {
         ...nameless,
+        username: "",
         driverId: postgresDriver.id,
         extraParams: {
           "dopedb.timeZone": "UTC",
@@ -1746,8 +1871,12 @@ describe("workbench state ownership", () => {
         ...agentEnvironments,
       ])?.id,
     ).toBe("environment-demo");
+    // Only the exact in-app MCP call opens an approval card: Claude records the
+    // qualified tool name in `_meta.claudeCode.toolName`; Codex marks MCP calls
+    // and names the server and tool in its raw input. A title never decides it.
     const sqlProposalTool = {
       title: "mcp__dopedb-desktop-session__sql_propose",
+      _meta: { claudeCode: { toolName: "mcp__dopedb-desktop-session__sql_propose" } },
       rawOutput: JSON.stringify({
         operationId: "e4ec6fa8-edf8-4c66-a8cc-da3bfbeb58a2",
         connectionId: "eeeda2b1-47d9-404e-a143-3dd3b2f96d65",
@@ -1756,6 +1885,21 @@ describe("workbench state ownership", () => {
       }),
     };
     expect(isSqlProposalTool(sqlProposalTool)).toBe(true);
+    expect(isSqlProposalTool({
+      title: "mcp.dopedb-desktop-session.sql_propose",
+      _meta: { is_mcp_tool_call: true },
+      rawInput: { server: "dopedb-desktop-session", tool: "sql_propose", arguments: {} },
+    })).toBe(true);
+    expect(isSqlProposalTool({
+      title: sqlProposalTool.title,
+      rawOutput: sqlProposalTool.rawOutput,
+    })).toBe(false);
+    expect(isSqlProposalTool({
+      title: "echo sql_propose",
+      _meta: { claudeCode: { toolName: "Bash" } },
+      rawInput: { command: "echo sql_propose" },
+      rawOutput: sqlProposalTool.rawOutput,
+    })).toBe(false);
     expect(findAgentSqlProposal(sqlProposalTool.rawOutput)).toMatchObject({
       operationId: "e4ec6fa8-edf8-4c66-a8cc-da3bfbeb58a2",
       connectionId: "eeeda2b1-47d9-404e-a143-3dd3b2f96d65",
@@ -1806,12 +1950,24 @@ describe("workbench state ownership", () => {
       fingerprint: "fixture", namespaces: [], routines: [], otherObjects: [],
     } as Parameters<typeof catalogFromSnapshot>[0]);
     const sharedDiff = compareCatalogs(comparisonCatalog(schemaDiffFixture.target), comparisonCatalog(schemaDiffFixture.baseline));
-    const normalizeDiff = (objects: unknown[]) => objects.map((object) => JSON.stringify(object)).sort();
+    // Order is part of the contract: Desktop lists objects exactly as the CLI prints them.
+    const normalizeDiff = (objects: unknown[]) => objects.map((object) => JSON.stringify(object));
+    // Desktop states the same comparison scope as the Rust result, with one label for
+    // exactly each compared and uncompared property.
+    expect(SCHEMA_DIFF_SCOPE).toEqual(schemaDiffFixture.scope);
+    expect(Object.keys(SCHEMA_DIFF_ASPECT_LABELS).sort()).toEqual(
+      [...schemaDiffFixture.scope.compared, ...schemaDiffFixture.scope.notCompared].sort(),
+    );
+    // `relation` is the CLI's `table` path; the fixture includes an added matview and an
+    // ENUM whose quoted members differ only in case.
     expect(normalizeDiff(sharedDiff.objects.map((object) => ({
       table: object.tableKey.replace(/^commerce_(dev|prod)\./, ""),
+      relation: object.relation,
       objectType: object.objectType, name: object.label, status: object.status,
       baselineValue: object.baselineValue, targetValue: object.targetValue,
-    })))).toEqual(normalizeDiff(schemaDiffFixture.objects));
+    })))).toEqual(normalizeDiff(schemaDiffFixture.objects.map(({ table, ...object }) => ({
+      table, relation: table, ...object,
+    }))));
     const environmentDiff = compareCatalogs(
       {
         tables: [
@@ -1853,8 +2009,8 @@ describe("workbench state ownership", () => {
     expect(environmentDiff.addedTables).toHaveLength(0);
     expect(environmentDiff.changedTables).toHaveLength(1);
     expect(environmentDiff.objects.map(({ path }) => path)).toEqual([
-      "commerce_dev.public.orders.fulfillment_channel",
-      "commerce_dev.public.orders.orders_status_idx",
+      "public.orders.fulfillment_channel",
+      "public.orders.orders_status_idx",
     ]);
 
     expect(
@@ -2129,6 +2285,7 @@ describe("workbench state ownership", () => {
       const form = { ...blankConnection(), name: "DopeDB development", database: "app" };
       const danger = (message: string) => ({ tone: "danger" as const, message });
       const profile = {
+        environmentContext: { bound: false, marker: null, pending: false, project: undefined, environment: undefined, error: null },
         form, set: vi.fn(), flags: connectionProfileFlags(form),
         identity: { isNew: false, persisted: true },
         credentials: { password: "", setPassword: vi.fn() },

@@ -106,6 +106,10 @@ export function requestedExternalAgentResources(
   };
 }
 
+/**
+ * One reconfirmation boundary per Environment of the selected resources, with
+ * exactly the selected resources' stale connection bindings to rebind.
+ */
 export function externalAgentResourceBoundaries(
   databases: AgentDatabaseResourceChoice[],
   sources: AgentSourceResourceChoice[],
@@ -116,15 +120,20 @@ export function externalAgentResourceBoundaries(
       environmentId: string;
       authorityConnectionId: ConnectionId;
       stale: boolean;
+      connectionIds: ConnectionId[];
     }
   >();
   for (const resource of [...databases, ...sources]) {
     const current = boundaries.get(resource.environmentId);
+    const connectionIds = current?.connectionIds ?? [];
+    const changed = resource.reconfirmation?.connectionId;
+    if (changed && !connectionIds.includes(changed)) connectionIds.push(changed);
     boundaries.set(resource.environmentId, {
       environmentId: resource.environmentId,
       authorityConnectionId:
         current?.authorityConnectionId ?? resource.authorityConnectionId,
       stale: Boolean(current?.stale || resource.needsReconfirmation),
+      connectionIds,
     });
   }
   return [...boundaries.values()];

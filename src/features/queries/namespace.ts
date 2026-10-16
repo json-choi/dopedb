@@ -1,5 +1,7 @@
 // SQL console namespace projection. The catalog supplies selectable values while
-// the persisted document owns the current choice.
+// the persisted document owns the current choice. Empty schemas the server lists
+// (PostgreSQL's default `public` often holds no tables) stay selectable, and a new
+// console starts in the server default rather than the alphabetically first schema.
 
 import type { Catalog } from "../../ipc/types";
 import type { ConnectionProfile } from "../connections/domain";
@@ -15,6 +17,7 @@ export function defaultSqlNamespace(connection: ConnectionProfile): string {
 export function sqlNamespaceOptions(
   connection: ConnectionProfile,
   catalog: Catalog | undefined,
+  serverNamespaces: readonly string[] = [],
 ): string[] {
   if (connection.engine === "sqlite") return ["main"];
   if (connection.engine === "mysql") return [connection.database].filter(Boolean);
@@ -22,7 +25,9 @@ export function sqlNamespaceOptions(
     return [connection.database].filter(Boolean);
   }
 
-  const discovered = new Set<string>();
+  const discovered = new Set<string>(
+    serverNamespaces.map((namespace) => namespace.trim()).filter(Boolean),
+  );
   for (const table of catalog?.tables ?? []) {
     if (table.schema?.trim()) discovered.add(table.schema.trim());
   }
@@ -43,8 +48,14 @@ export function effectiveSqlNamespace(
   options: readonly string[],
 ): string {
   if (requested && options.includes(requested)) return requested;
-  if (options.includes(connection.database)) return connection.database;
   const fallback = defaultSqlNamespace(connection);
+  // PostgreSQL schemas are not databases: never prefer one named like the database.
+  if (
+    connection.engine !== "postgres" &&
+    options.includes(connection.database)
+  ) {
+    return connection.database;
+  }
   if (options.includes(fallback)) return fallback;
   return options[0] ?? fallback;
 }

@@ -1,14 +1,17 @@
 // Owns driver/source catalog queries, search and selection state, driver
-// installation, and the add-data-source command menu.
+// installation, the add-data-source command menu, and the manager-only shortcut
+// that opens Workspace management at the shared database add flow.
 import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import type { Engine, Provider } from "../../ipc/types";
-import { errMessage } from "../../ipc/types";
+import { errDetails } from "../../ipc/types";
 import { isDocumentEngine } from "../../lib/capabilities";
 import { useI18n } from "../../lib/i18n";
 import { driversQuery } from "../../lib/queries";
 import type { ProviderKind } from "../providers/domain";
+import { requestWorkspaceAdmin } from "../workspaceAdmin/navigationRequest";
+import { useWorkspaceAdminScope } from "../workspaceAdmin/scope";
 import {
   compatibleDrivers,
   STANDARD_CONNECTION_SOURCES,
@@ -16,6 +19,7 @@ import {
   type ConnectionEditorView,
   type StandardConnectionSource,
 } from "./connectionEditorModel";
+import { markConnectionEditorReturn } from "./connectionEditorShellBridge";
 import type { ConnectionProfile, DriverDescriptor } from "./domain";
 import type { ConnectionLaunchPreset } from "./presets";
 import { installDriver } from "./tauriAdapter";
@@ -41,6 +45,9 @@ export function useConnectionCatalogController({
 }) {
   const { t } = useI18n();
   const driverCatalog = useQuery(driversQuery());
+  // Owners and admins register a provider database once for the whole team;
+  // other members get no shortcut or placeholder for it.
+  const canAddSharedDatabase = useWorkspaceAdminScope()?.canManage ?? false;
   const { form, identity, credentials, tabs, status } = profileState;
   const [installingDriverId, setInstallingDriverId] = useState<
     string | null
@@ -151,6 +158,11 @@ export function useConnectionCatalogController({
         sourceDriverDescription(source),
       ),
   );
+  const filteredWarehouseSources = STANDARD_CONNECTION_SOURCES.filter(
+    (source) => source.category === "warehouse" && matchesAddSearch(
+      source.label, source.engine, t("connections.cloudWarehouse"), "google gcp 빅쿼리",
+    ),
+  );
   const filteredCloudProviders = cloudProviders.filter(
     (provider) =>
       provider.provider === "gcpCloudSql" &&
@@ -168,11 +180,29 @@ export function useConnectionCatalogController({
     "demo sqlite",
     "sample",
   );
+  const sharedDatabaseMatches =
+    canAddSharedDatabase &&
+    matchesAddSearch(
+      t("workspaceAdmin.addSharedDatabase"),
+      t("workspaceAdmin.addSharedDatabaseDescription"),
+      t("workspaceAdmin.scope"),
+      "shared workspace",
+    );
   const hasAddResults =
     filteredDatabaseSources.length > 0 ||
+    filteredWarehouseSources.length > 0 ||
     filteredFileSources.length > 0 ||
     filteredCloudProviders.length > 0 ||
-    demoMatches;
+    demoMatches ||
+    sharedDatabaseMatches;
+
+  function addSharedDatabase() {
+    setAddMenuOpen(false);
+    setAddSearch("");
+    // Workspace management opens over this editor and returns to it.
+    markConnectionEditorReturn();
+    requestWorkspaceAdmin("workspace-providers", { kind: "addDatabase" });
+  }
 
   function selectSource(engine: Engine, provider: Provider = "auto") {
     form.setValue((current) =>
@@ -230,8 +260,14 @@ export function useConnectionCatalogController({
       );
       status.setMessageIsError(false);
     } catch (error) {
-      status.setMessage(errMessage(error));
-      status.setMessageIsError(true);
+      // Installer output can name local paths or mirrors; show a stable category.
+      const kind = errDetails(error).kind;
+      status.showError(
+        "driver",
+        kind === "network" || kind === "timeout"
+          ? t("connections.driverDownloadNetworkFailed", { name: driver.name })
+          : t("connections.driverDownloadFailed", { name: driver.name }),
+      );
     } finally {
       setInstallingDriverId(null);
     }
@@ -291,6 +327,7 @@ export function useConnectionCatalogController({
         search: sourceSearch,
         setSearch: setSourceSearch,
         filteredDatabaseSources,
+        filteredWarehouseSources,
         filteredFileSources,
         selectAddSource,
         sourceDriverDescription,
@@ -304,8 +341,13 @@ export function useConnectionCatalogController({
         buttonRef: addButtonRef,
         filteredCloudProviders,
         demoMatches,
+        sharedDatabaseMatches,
         hasResults: hasAddResults,
         openProviderCredentials,
+      },
+      sharedDatabase: {
+        available: canAddSharedDatabase,
+        add: addSharedDatabase,
       },
       drivers: {
         pending: driverCatalog.isPending,

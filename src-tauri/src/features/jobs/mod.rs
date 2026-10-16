@@ -29,7 +29,7 @@ use application::{JobDependencies, JobUseCases};
 pub(crate) use domain::{
     CreateJobRequest, Job, JobArtifact, JobChangedEvent, JobDetail, JobErrorPolicy,
     JobFieldMapping, JobFileCapability, JobFileDirection, JobFormat, JobInputInspection, JobKind,
-    JobPlan, JobProposal, JobState, JobValidation,
+    JobPlan, JobProposal, JobSqlAudit, JobState, JobValidation,
 };
 pub(crate) use state_machine::JobTransition;
 pub(crate) use validation::{
@@ -130,8 +130,8 @@ pub(crate) fn compose(
     operation: OperationRuntime,
 ) -> JobsFeature {
     let ledger = JobRepository::new(store.clone());
+    let catalog = JobCatalogAdapter::new(catalog, store.clone());
     let authority = RuntimeJobAuthority::new(store, connections);
-    let catalog = JobCatalogAdapter::new(catalog);
     let (events, _) = broadcast::channel(256);
     let execution = JobWorker::new(
         ledger.clone(),

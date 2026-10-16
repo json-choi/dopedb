@@ -17,7 +17,8 @@ state on top of it.
 | File | Description |
 |------|-------------|
 | `catalogDomain.ts` | `DropTarget`/`ProjectDatabaseOrderDrag` drag types, `catalogLoadIssue`/`isAuthenticationRequired`/`isManagedConnectionRecoveryRequired` error classification, `SQL_OBJECT_SECTIONS`, and object-label/filename helpers (`catalogObjectLabel`, `fallbackSchemaGroupName`, `tableMatchesFilter`). |
-| `domain.ts` | `WorkspaceDialogState`, `DdlDialogState`, and the `CatalogExplorerState` shape (`scopeKey`, `wanted`, `refreshErrors`, `openConnections`, …). |
+| `domain.ts` | `WorkspaceDialogState` and the `CatalogExplorerState` shape (`scopeKey`, `wanted`, `refreshErrors`, `openConnections`, …). Relation DDL opens from the table toolbar, not Explorer state. |
+| `schemaDiffBaseline.ts` | Workspace-member-scoped schema group baseline selection (`selectSchemaDiffBaseline`, `useSchemaDiffBaselineGroups`) shared by the Schema Diff screen and Explorer change chips; storage failures fall back to the session. |
 | `projectResources.ts` | Pure functions over Project/Environment/connection resources: `projectResourceKey`, `flattenProjectEnvironmentResources`, `orderProjectDatabaseResources`, `moveProjectDatabaseResource`, `projectConnectionAssignment`. |
 | `scopeFilter.ts` | Owns the two reserved introspection parameters (`SCHEMA_SCOPE_PARAMETER` = `dopedb.schemaScope`, `OBJECT_PATTERN_PARAMETER` = `dopedb.objectPattern`) and `filterCatalog`/`filterCatalogOverview`/`filterCatalogSnapshot`, which apply a connection's persisted schema scope and object pattern to catalog data. |
 | `state.ts` | `catalogExplorerReducer` and `useCatalogExplorerState(scopeKey)` — the one reducer owning Explorer expansion/selection/error UI state. |

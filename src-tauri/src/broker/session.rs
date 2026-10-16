@@ -1,22 +1,27 @@
 //! In-memory Terminal session capabilities. Tokens never enter SQLite, discovery,
-//! logs, argv, or serialized broker results.
+//! logs, argv, or serialized broker results. This module owns the registry,
+//! authentication, and revocation; `issue` mints exact-scope capabilities and
+//! `proposals` keeps each session's proposal ledger and liveness.
+
+mod issue;
+mod proposals;
+
+pub(crate) use proposals::SessionRevocation;
 
 use std::collections::BTreeSet;
 use std::fmt;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use dopedb_protocol::{AcpPluginId, AgentSessionRegisterArguments, SessionAuthentication};
 use subtle::ConstantTimeEq;
-#[cfg(test)]
+use tokio::sync::mpsc::UnboundedSender;
 use uuid::Uuid;
 use zeroize::Zeroizing;
 
 use crate::error::{AppError, AppResult};
 use crate::features::knowledge::domain::KnowledgeSessionScope;
-use crate::kernel::access::PinnedConnection;
 use crate::kernel::identity::{
     AccountScopeId, ConnectionId, RuntimeId, TerminalSessionId, WorkspaceId,
 };
@@ -167,6 +172,11 @@ pub(crate) struct BrokerSessionRegistry {
     sessions: std::sync::Arc<DashMap<TerminalSessionId, SessionRecord>>,
     authority_verified: std::sync::Arc<AtomicBool>,
     authority_refreshes: std::sync::Arc<AtomicUsize>,
+    /// Operations proposed through each live session. A revoked, closed, or
+    /// expired grant must not leave an approvable proposal behind, so removal
+    /// hands these ids to the Desktop's cancellation sink.
+    proposals: std::sync::Arc<DashMap<TerminalSessionId, Vec<Uuid>>>,
+    revocation_sink: std::sync::Arc<std::sync::Mutex<Option<UnboundedSender<SessionRevocation>>>>,
 }
 
 /// One in-flight hosted-authority verification. While any guard is alive, new
@@ -184,6 +194,8 @@ impl BrokerSessionRegistry {
             sessions: std::sync::Arc::new(DashMap::new()),
             authority_verified: std::sync::Arc::new(AtomicBool::new(true)),
             authority_refreshes: std::sync::Arc::new(AtomicUsize::new(0)),
+            proposals: std::sync::Arc::new(DashMap::new()),
+            revocation_sink: std::sync::Arc::new(std::sync::Mutex::new(None)),
         }
     }
 
@@ -217,209 +229,6 @@ impl BrokerSessionRegistry {
         }
     }
 
-    pub(crate) fn issue(
-        &self,
-        terminal_session_id: TerminalSessionId,
-        pin: &PinnedConnection,
-        capabilities: impl IntoIterator<Item = BrokerCapability>,
-        ttl: Duration,
-    ) -> AppResult<IssuedSessionCapability> {
-        self.issue_with_authorization(
-            terminal_session_id,
-            pin,
-            capabilities,
-            ttl,
-            None,
-            AgentKnowledgeAuthorization::default(),
-        )
-    }
-
-    #[cfg(test)]
-    pub(crate) fn issue_agent(
-        &self,
-        terminal_session_id: TerminalSessionId,
-        pin: &PinnedConnection,
-        capabilities: impl IntoIterator<Item = BrokerCapability>,
-        ttl: Duration,
-        registration: AgentSessionRegisterArguments,
-    ) -> AppResult<IssuedSessionCapability> {
-        if !valid_agent_registration_paths(&registration) {
-            return Err(AppError::Config(
-                "the ACP launcher registration descriptor is invalid".into(),
-            ));
-        }
-        self.issue_with_authorization(
-            terminal_session_id,
-            pin,
-            capabilities,
-            ttl,
-            Some(registration),
-            AgentKnowledgeAuthorization::default(),
-        )
-    }
-
-    pub(crate) fn issue_agent_with_knowledge(
-        &self,
-        terminal_session_id: TerminalSessionId,
-        pin: &PinnedConnection,
-        capabilities: impl IntoIterator<Item = BrokerCapability>,
-        ttl: Duration,
-        registration: AgentSessionRegisterArguments,
-        knowledge: AgentKnowledgeAuthorization,
-    ) -> AppResult<IssuedSessionCapability> {
-        if !valid_agent_registration_paths(&registration) {
-            return Err(AppError::Config(
-                "the ACP launcher registration descriptor is invalid".into(),
-            ));
-        }
-        self.issue_with_authorization(
-            terminal_session_id,
-            pin,
-            capabilities,
-            ttl,
-            Some(registration),
-            knowledge,
-        )
-    }
-
-    /// Issue an exact Project resource capability directly to an owner-local
-    /// CLI process after the Desktop approval UI accepted that request. No
-    /// bearer is created or returned: the caller and its descendants are the
-    /// complete authentication boundary for this runtime-only session.
-    pub(crate) fn issue_external_agent_process(
-        &self,
-        terminal_session_id: TerminalSessionId,
-        pin: &PinnedConnection,
-        capabilities: impl IntoIterator<Item = BrokerCapability>,
-        ttl: Duration,
-        authorization: ExternalAgentProcessAuthorization,
-    ) -> AppResult<DateTime<Utc>> {
-        let ExternalAgentProcessAuthorization {
-            plugin_id,
-            knowledge,
-            peer,
-        } = authorization;
-        let AgentKnowledgeAuthorization {
-            scopes: knowledge_scopes,
-            write_connection_id,
-        } = knowledge;
-        self.ensure_authority_available()?;
-        if ttl.is_zero() {
-            return Err(AppError::Config(
-                "external Agent session capability TTL must be positive".into(),
-            ));
-        }
-        validate_write_target(&knowledge_scopes, write_connection_id)?;
-        let expires_at = Utc::now()
-            + chrono::Duration::from_std(ttl)
-                .map_err(|_| AppError::Config("Agent session TTL is too large".into()))?;
-        let account_scope = AccountScopeId::new(pin.scope.account_scope.storage_key())
-            .expect("active resource scope has a non-empty account partition");
-        let knowledge_account_scope = AccountScopeId::new(
-            pin.scope
-                .selected_account_id
-                .as_deref()
-                .unwrap_or_else(|| pin.scope.account_scope.storage_key()),
-        )
-        .expect("active resource scope has a non-empty Knowledge account partition");
-        self.sessions.insert(
-            terminal_session_id,
-            SessionRecord {
-                metadata: AuthenticatedSession {
-                    terminal_session_id,
-                    agent_plugin_id: Some(plugin_id),
-                    runtime_id: self.runtime_id,
-                    workspace_id: pin.scope.workspace_id.into(),
-                    account_scope,
-                    knowledge_account_scope,
-                    scope_generation: pin.scope.generation,
-                    connection_id: pin.connection_id.into(),
-                    connection_revision: pin.connection_revision,
-                    capabilities: capabilities.into_iter().collect(),
-                    knowledge_scopes,
-                    write_connection_id,
-                    expires_at,
-                },
-                authorization: SessionAuthorization::AgentProcess(peer),
-            },
-        );
-        Ok(expires_at)
-    }
-
-    fn issue_with_authorization(
-        &self,
-        terminal_session_id: TerminalSessionId,
-        pin: &PinnedConnection,
-        capabilities: impl IntoIterator<Item = BrokerCapability>,
-        ttl: Duration,
-        agent_registration: Option<AgentSessionRegisterArguments>,
-        knowledge: AgentKnowledgeAuthorization,
-    ) -> AppResult<IssuedSessionCapability> {
-        let AgentKnowledgeAuthorization {
-            scopes: knowledge_scopes,
-            write_connection_id,
-        } = knowledge;
-        self.ensure_authority_available()?;
-        if ttl.is_zero() {
-            return Err(AppError::Config(
-                "terminal session capability TTL must be positive".into(),
-            ));
-        }
-        validate_write_target(&knowledge_scopes, write_connection_id)?;
-        let mut token = Zeroizing::new([0u8; SESSION_TOKEN_BYTES]);
-        getrandom::fill(token.as_mut()).map_err(|_| {
-            AppError::Config("operating system random source is unavailable".into())
-        })?;
-        let expires_at = Utc::now()
-            + chrono::Duration::from_std(ttl)
-                .map_err(|_| AppError::Config("terminal session TTL is too large".into()))?;
-        let agent_plugin_id = agent_registration
-            .as_ref()
-            .map(|registration| registration.plugin_id);
-        let account_scope = AccountScopeId::new(pin.scope.account_scope.storage_key())
-            .expect("active resource scope has a non-empty account partition");
-        let knowledge_account_scope = AccountScopeId::new(
-            pin.scope
-                .selected_account_id
-                .as_deref()
-                .unwrap_or_else(|| pin.scope.account_scope.storage_key()),
-        )
-        .expect("active resource scope has a non-empty Knowledge account partition");
-        let metadata = AuthenticatedSession {
-            terminal_session_id,
-            agent_plugin_id,
-            runtime_id: self.runtime_id,
-            workspace_id: pin.scope.workspace_id.into(),
-            account_scope,
-            knowledge_account_scope,
-            scope_generation: pin.scope.generation,
-            connection_id: pin.connection_id.into(),
-            connection_revision: pin.connection_revision,
-            capabilities: capabilities.into_iter().collect(),
-            knowledge_scopes,
-            write_connection_id,
-            expires_at,
-        };
-        self.sessions.insert(
-            terminal_session_id,
-            SessionRecord {
-                metadata,
-                authorization: match agent_registration {
-                    Some(registration) => SessionAuthorization::AgentBootstrap {
-                        token: token.clone(),
-                        registration: Box::new(registration),
-                    },
-                    None => SessionAuthorization::Bearer(token.clone()),
-                },
-            },
-        );
-        Ok(IssuedSessionCapability {
-            terminal_session_id,
-            token: Zeroizing::new(hex::encode(token.as_ref())),
-            expires_at,
-        })
-    }
-
     pub(crate) fn authenticate(
         &self,
         authentication: &SessionAuthentication,
@@ -436,7 +245,7 @@ impl BrokerSessionRegistry {
         if record.metadata.runtime_id != self.runtime_id || record.metadata.expires_at <= Utc::now()
         {
             drop(record);
-            self.sessions.remove(&terminal_session_id);
+            self.remove_expired(terminal_session_id);
             return Err(authentication_denied());
         }
         let SessionAuthorization::AgentProcess(root) = &record.authorization else {
@@ -471,7 +280,7 @@ impl BrokerSessionRegistry {
         }
         if record.metadata.expires_at <= Utc::now() {
             drop(record);
-            self.sessions.remove(&terminal_session_id);
+            self.remove_expired(terminal_session_id);
             return Err(authentication_denied());
         }
         let supplied_token = authentication.token().ok_or_else(authentication_denied)?;
@@ -509,7 +318,7 @@ impl BrokerSessionRegistry {
         if record.metadata.runtime_id != self.runtime_id || record.metadata.expires_at <= Utc::now()
         {
             drop(record);
-            self.sessions.remove(&terminal_session_id);
+            self.remove_expired(terminal_session_id);
             return Err(authentication_denied());
         }
         let SessionAuthorization::Bearer(expected) = &record.authorization else {
@@ -526,7 +335,32 @@ impl BrokerSessionRegistry {
     }
 
     pub(crate) fn revoke(&self, terminal_session_id: TerminalSessionId) -> bool {
-        self.sessions.remove(&terminal_session_id).is_some()
+        let removed = self.sessions.remove(&terminal_session_id).is_some();
+        self.drain_proposals(terminal_session_id);
+        removed
+    }
+
+    fn remove_expired(&self, terminal_session_id: TerminalSessionId) {
+        self.sessions.remove(&terminal_session_id);
+        self.drain_proposals(terminal_session_id);
+    }
+
+    /// Remove every expired session, so what it proposed or queued is released
+    /// even when nothing authenticates with it again.
+    pub(crate) fn sweep_expired(&self) -> usize {
+        let now = Utc::now();
+        let expired = self
+            .sessions
+            .iter()
+            .filter(|entry| {
+                entry.metadata.expires_at <= now || entry.metadata.runtime_id != self.runtime_id
+            })
+            .map(|entry| *entry.key())
+            .collect::<Vec<_>>();
+        for id in &expired {
+            self.remove_expired(*id);
+        }
+        expired.len()
     }
 
     pub(crate) fn revoke_connection(&self, connection_id: ConnectionId) -> usize {
@@ -549,36 +383,30 @@ impl BrokerSessionRegistry {
         let count = ids.len();
         for id in ids {
             self.sessions.remove(&id);
+            self.drain_proposals(id);
         }
         count
     }
 
     pub(crate) fn revoke_all(&self) {
+        let mut ids = self
+            .sessions
+            .iter()
+            .map(|entry| *entry.key())
+            .chain(self.proposals.iter().map(|entry| *entry.key()))
+            .collect::<Vec<_>>();
+        ids.sort_unstable_by_key(|id| uuid::Uuid::from(*id));
+        ids.dedup();
         self.sessions.clear();
+        for id in ids {
+            self.drain_proposals(id);
+        }
     }
 
     #[cfg(test)]
     fn len(&self) -> usize {
         self.sessions.len()
     }
-}
-
-fn validate_write_target(
-    knowledge_scopes: &[KnowledgeSessionScope],
-    write_connection_id: Option<ConnectionId>,
-) -> AppResult<()> {
-    if write_connection_id.is_some_and(|write_connection_id| {
-        !knowledge_scopes.iter().any(|scope| {
-            scope.connections.iter().any(|connection| {
-                ConnectionId::from(connection.connection_id) == write_connection_id
-            })
-        })
-    }) {
-        return Err(AppError::Config(
-            "the Agent write target is outside its selected Project resource set".into(),
-        ));
-    }
-    Ok(())
 }
 
 impl Drop for BrokerAuthorityRefreshGuard {
@@ -610,10 +438,12 @@ fn authentication_denied() -> AppError {
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
+    use std::time::Duration;
 
     use std::collections::HashMap;
 
     use crate::features::knowledge::domain::KnowledgeSessionConnection;
+    use crate::kernel::access::PinnedConnection;
     use crate::kernel::access::WorkspaceKind;
     use crate::kernel::access::{AccountScope, ActiveResourceScope, CatalogCachePolicy};
     use crate::model::{
@@ -815,7 +645,21 @@ mod tests {
         assert!(registry
             .authenticate(&process_bound, Some(&unrelated))
             .is_err());
+        // Revoking a grant hands every proposal it created to cancellation, so
+        // nothing it proposed stays approvable; a late report is cancelled at once.
+        let (revoked_sender, mut revoked) = tokio::sync::mpsc::unbounded_channel();
+        registry.install_revocation_sink(revoked_sender);
+        let proposal = Uuid::new_v4();
+        registry.track_proposal(agent_session_id, proposal);
+        assert!(registry.is_live(agent_session_id));
         assert!(registry.revoke(agent_session_id));
+        assert!(!registry.is_live(agent_session_id));
+        let revocation = revoked.try_recv().unwrap();
+        assert_eq!(revocation.terminal_session_id, agent_session_id);
+        assert_eq!(revocation.operations, vec![proposal]);
+        let late = Uuid::new_v4();
+        registry.track_proposal(agent_session_id, late);
+        assert_eq!(revoked.try_recv().unwrap().operations, vec![late]);
         assert!(registry.authenticate(&process_bound, Some(&root)).is_err());
         assert!(registry.revoke(terminal_session_id));
         assert!(registry.authenticate(&authentication, None).is_err());
@@ -921,5 +765,23 @@ mod tests {
         std::thread::sleep(Duration::from_millis(5));
         assert!(registry.authenticate(&authentication, None).is_err());
         assert_eq!(registry.len(), 0);
+
+        // A session nothing authenticates with again is still released by the
+        // periodic sweep, which reports it so its queued state is dropped too.
+        let (revoked_sender, mut revoked) = tokio::sync::mpsc::unbounded_channel();
+        registry.install_revocation_sink(revoked_sender);
+        let idle = TerminalSessionId::from(Uuid::new_v4());
+        registry
+            .issue(
+                idle,
+                &pin(Uuid::new_v4()),
+                [BrokerCapability::ConnectionRead],
+                Duration::from_millis(1),
+            )
+            .unwrap();
+        std::thread::sleep(Duration::from_millis(5));
+        assert_eq!(registry.sweep_expired(), 1);
+        assert_eq!(registry.len(), 0);
+        assert_eq!(revoked.try_recv().unwrap().terminal_session_id, idle);
     }
 }

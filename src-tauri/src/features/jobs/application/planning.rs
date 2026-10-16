@@ -5,6 +5,7 @@ use crate::error::{AppError, AppResult};
 use crate::features::jobs::{
     summaries, validate_mapping_sources, validate_plan, validate_required_target_columns,
     CreateJobRequest, Job, JobDetail, JobFileDirection, JobFormat, JobKind, JobPlan, JobProposal,
+    JobSqlAudit,
 };
 use crate::kernel::identity::{ConnectionId, ConnectionJobId};
 use crate::model::Engine;
@@ -95,6 +96,21 @@ where
         } else {
             (None, None)
         };
+        // A SQL import that creates, alters, or drops objects is a schema change:
+        // it needs the same `manage` grant and device DDL opt-in as a DDL proposal.
+        if sql_audit.as_ref().is_some_and(|audit| audit.ddl_count > 0) {
+            if !authority.workspace_access.can_manage() {
+                return Err(AppError::Blocked {
+                    reason: "your workspace role does not permit schema changes".into(),
+                });
+            }
+            if !operation_context.safety.allow_schema_changes {
+                return Err(AppError::Blocked {
+                    reason: "schema changes are disabled for this connection; this SQL import contains DDL. Enable schema changes in Safety settings to import it."
+                        .into(),
+                });
+            }
+        }
         let snapshot = self.catalog.refresh(request.connection_id).await?;
         validate_plan(&request, &snapshot)?;
         if let (
@@ -233,6 +249,7 @@ where
             payload_hash: operation.payload_hash.clone(),
             approval_required: kind == JobKind::Import,
             confirmation_phrase: required_confirmation(&operation).map(str::to_owned),
+            sql_audit: JobSqlAudit::from_operation_value(&operation.payload),
         })
     }
 
@@ -260,6 +277,7 @@ where
             artifacts,
             approval_required: operation.state == OperationState::PendingApproval,
             confirmation_phrase: required_confirmation(&operation).map(str::to_owned),
+            sql_audit: JobSqlAudit::from_operation_value(&operation.payload),
             payload_hash: operation.payload_hash,
             operation_state: operation.state,
         })

@@ -9,7 +9,6 @@ import {
   AgentActivityLine,
   AgentPermissionCard,
   AgentProviderMark,
-  AgentToolCallCard,
 } from "../../design-system/components/Agent";
 import {
   AgentPlainText,
@@ -23,13 +22,10 @@ import {
   StatusDot,
 } from "../../design-system/components/Status";
 import { useI18n } from "../../lib/i18n";
-import type { ConnectionEngine } from "../connections/domain";
 import { reportRenderFailure } from "../monitoring/client";
-import AcpSqlApproval from "./AcpSqlApproval";
-import AcpStructuredResult from "./AcpStructuredResult";
+import AcpToolCallCard from "./AcpToolCallCard";
+import { agentSessionErrorLabel } from "./agentErrorLabels";
 import {
-  agentSessionErrorLabel,
-  findAnalysisArticle,
   loginCommand,
   planEntryLabel,
   providerLabel,
@@ -37,13 +33,12 @@ import {
   safeJson,
   showProviderHeading,
   stopReasonLabel,
-  toolContentText,
-  toolStatusLabel,
-  toolStatusTone,
 } from "./acpTranscriptPresentation";
-import { toolActivityLabel } from "./acpActivityLabels";
-import type { AcpPermissionOption, AgentProvider } from "./domain";
-import { findAgentSqlProposal, isSqlProposalTool } from "./sqlProposal";
+import type {
+  AcpPermissionOption,
+  AcpSessionLifecycle,
+  AgentProvider,
+} from "./domain";
 import {
   closedBeforeTurnCompleted,
   type AcpTranscriptItem,
@@ -57,10 +52,10 @@ type AcpChatTranscriptProps = Pick<AcpChatController, "session" | "setup"> & {
   >;
   commands: Pick<
     AcpChatController["commands"],
-    "setup" | "permission" | "links"
+    "setup" | "permission" | "links" | "session"
   >;
-  connectionEngine: ConnectionEngine;
   onOpenKnowledgeAnalysis: (environmentId: string, articleId?: string) => void;
+  onOpenActivity: () => void;
 };
 
 export default function AcpChatTranscript({
@@ -68,8 +63,8 @@ export default function AcpChatTranscript({
   setup,
   viewport,
   commands,
-  connectionEngine,
   onOpenKnowledgeAnalysis,
+  onOpenActivity,
 }: AcpChatTranscriptProps) {
   const { t } = useI18n();
   const active = session.active;
@@ -88,13 +83,20 @@ export default function AcpChatTranscript({
       session.transcript,
     ),
   );
+  // Setup guidance replaces the transcript only when no conversation is open:
+  // a probe flap must never hide a live or saved conversation.
+  const showSetup =
+    !active || (!session.activeLive && session.transcript.length === 0);
   return (
     <div
       ref={viewport.transcriptRef}
       className="tw:min-h-0 tw:min-w-0 tw:flex-1 tw:overflow-x-hidden tw:overflow-y-auto tw:overscroll-contain tw:bg-background tw:px-4 tw:pt-4 tw:pb-4"
-      aria-live="polite"
       onScroll={viewport.onTranscriptScroll}
     >
+      {/* Announce lifecycle changes only; streamed tokens are not read one by one. */}
+      <span className="tw:sr-only" role="status">
+        {active ? lifecycleAnnouncement(active.lifecycle, t) : ""}
+      </span>
       {session.loading ||
       setup.cliPending ||
       setup.pluginPending ||
@@ -106,8 +108,16 @@ export default function AcpChatTranscript({
       ) : session.starting && !active ? (
         <AgentEmpty>
           <LoadingLabel>{t("agent.acpStarting")}</LoadingLabel>
+          <Button
+            size="xs"
+            variant="ghost"
+            onClick={() => void commands.session.cancelStart()}
+          >
+            {t("agent.acpCancelStart")}
+          </Button>
         </AgentEmpty>
-      ) : setup.enabledProviders.length === 0 || !setup.selectedPluginReady ? (
+      ) : showSetup &&
+        (setup.pluginReadyProviders.length === 0 || !setup.selectedPluginReady) ? (
         <AgentEmpty>
           <Icon name="gear" />
           <strong>{t("agent.acpNoReadyAgents")}</strong>
@@ -120,7 +130,7 @@ export default function AcpChatTranscript({
             {t("agent.acpOpenSetup")}
           </Button>
         </AgentEmpty>
-      ) : setup.cliDetectionError ? (
+      ) : showSetup && setup.cliDetectionError ? (
         <AgentEmpty>
           <Icon name="alert" />
           <strong>{t("agentTools.detectionFailed")}</strong>
@@ -143,7 +153,7 @@ export default function AcpChatTranscript({
             {t("agentTools.checkAgain")}
           </Button>
         </AgentEmpty>
-      ) : setup.selectedCliStatus && !setup.selectedCliReady ? (
+      ) : showSetup && setup.selectedCliStatus && !setup.selectedCliReady ? (
         <AgentSetupGuidance
           cli={setup.selectedCliStatus}
           copied={setup.copiedSetupCommand === setup.selectedProvider}
@@ -237,8 +247,12 @@ export default function AcpChatTranscript({
                 onPermission={commands.permission.respond}
                 onOpenLink={commands.links.openMessage}
                 onOpenKnowledgeAnalysis={onOpenKnowledgeAnalysis}
-                expectedConnectionId={active.writeConnectionId ?? ""}
-                expectedConnectionEngine={connectionEngine}
+                onOpenActivity={onOpenActivity}
+                expectedConnectionId={active.writeConnectionId}
+                expectedProposerSessionId={session.brokerSessionId}
+                sessionEnded={
+                  active.lifecycle === "closed" || active.lifecycle === "failed"
+                }
               />
             </Fragment>
           ))}
@@ -262,6 +276,26 @@ export default function AcpChatTranscript({
       )}
     </div>
   );
+}
+
+function lifecycleAnnouncement(
+  lifecycle: AcpSessionLifecycle,
+  t: ReturnType<typeof useI18n>["t"],
+) {
+  switch (lifecycle) {
+    case "starting":
+      return t("agent.acpStarting");
+    case "running":
+      return t("agent.acpWorking");
+    case "waitingPermission":
+      return t("agent.acpPermissionWaiting");
+    case "ready":
+      return t("agent.acpReadyAnnouncement");
+    case "failed":
+      return t("agent.acpFailed");
+    case "closed":
+      return t("agent.acpLifecycle.closed");
+  }
 }
 
 function AgentEmpty({ children }: { children: ReactNode }) {
@@ -355,8 +389,10 @@ const TranscriptItemView = memo(function TranscriptItemView({
   onPermission,
   onOpenLink,
   onOpenKnowledgeAnalysis,
+  onOpenActivity,
   expectedConnectionId,
-  expectedConnectionEngine,
+  expectedProposerSessionId,
+  sessionEnded,
 }: {
   item: AcpTranscriptItem;
   revision: number;
@@ -368,8 +404,10 @@ const TranscriptItemView = memo(function TranscriptItemView({
   onPermission: (requestId: string, optionId: string | null) => void;
   onOpenLink: (href: string) => void;
   onOpenKnowledgeAnalysis: (environmentId: string, articleId?: string) => void;
-  expectedConnectionId: string;
-  expectedConnectionEngine: ConnectionEngine;
+  onOpenActivity: () => void;
+  expectedConnectionId: string | null;
+  expectedProposerSessionId: string | null;
+  sessionEnded: boolean;
 }) {
   const { t } = useI18n();
   if (item.kind === "user") {
@@ -436,12 +474,14 @@ const TranscriptItemView = memo(function TranscriptItemView({
   }
   if (item.kind === "tool") {
     return (
-      <ToolCallCard
+      <AcpToolCallCard
         data={item.data}
         debugDetails={debugDetails}
         onOpenKnowledgeAnalysis={onOpenKnowledgeAnalysis}
+        onOpenActivity={onOpenActivity}
         expectedConnectionId={expectedConnectionId}
-        expectedConnectionEngine={expectedConnectionEngine}
+        expectedProposerSessionId={expectedProposerSessionId}
+        sessionEnded={sessionEnded}
       />
     );
   }
@@ -553,122 +593,6 @@ const TranscriptItemView = memo(function TranscriptItemView({
   }
   return null;
 });
-
-function ToolCallCard({
-  data,
-  debugDetails,
-  onOpenKnowledgeAnalysis,
-  expectedConnectionId,
-  expectedConnectionEngine,
-}: {
-  data: Record<string, unknown>;
-  debugDetails: boolean;
-  onOpenKnowledgeAnalysis: (environmentId: string, articleId?: string) => void;
-  expectedConnectionId: string;
-  expectedConnectionEngine: ConnectionEngine;
-}) {
-  const { t } = useI18n();
-  const status = recordString(data, "status") ?? "pending";
-  const title =
-    recordString(data, "title") ??
-    recordString(data, "kind") ??
-    t("agent.acpToolRequest");
-  const content = toolContentText(data.content);
-  const rawOutput = data.rawOutput;
-  const rawInput = data.rawInput;
-  const article = findAnalysisArticle(rawOutput ?? data.content);
-  const sqlProposal = isSqlProposalTool(data)
-    ? findAgentSqlProposal(rawOutput ?? data.content)
-    : null;
-  if (!debugDetails) {
-    return (
-      <div className="tw:grid tw:gap-2">
-        <AgentActivityLine
-          label={toolActivityLabel(data, t)}
-          status={toolStatusLabel(status, t)}
-          tone={toolStatusTone(status)}
-        />
-        {article ? (
-          <Button
-            size="xs"
-            variant="primary"
-            onClick={() =>
-              onOpenKnowledgeAnalysis(
-                article.projectEnvironmentId,
-                article.id,
-              )
-            }
-          >
-            <Icon name="chart" />
-            {t("agent.acpOpenAnalysisArticle")}
-          </Button>
-        ) : null}
-        {sqlProposal ? (
-          <AcpSqlApproval
-            proposal={sqlProposal}
-            expectedConnectionId={expectedConnectionId}
-            expectedConnectionEngine={expectedConnectionEngine}
-          />
-        ) : null}
-      </div>
-    );
-  }
-  return (
-    <AgentToolCallCard
-      title={title}
-      status={toolStatusLabel(status, t)}
-      tone={toolStatusTone(status)}
-      details={
-        rawInput !== undefined || rawOutput !== undefined ? (
-          <details className="tw:max-w-full tw:min-w-0 tw:overflow-hidden tw:text-xs">
-            <summary className="tw:cursor-pointer tw:text-muted-foreground">
-              {t("agent.acpToolDetails")}
-            </summary>
-            <pre className="tw:mt-2 tw:mb-0 tw:max-h-48 tw:max-w-full tw:overflow-auto tw:break-all tw:rounded-sm tw:bg-muted tw:p-2 tw:font-mono tw:text-2xs tw:leading-body tw:whitespace-pre-wrap">
-              {safeJson({ input: rawInput, output: rawOutput })}
-            </pre>
-          </details>
-        ) : null
-      }
-    >
-      <div className="tw:grid tw:max-w-full tw:min-w-0 tw:gap-2 tw:overflow-hidden">
-        {content ? (
-          <details className="tw:max-w-full tw:min-w-0 tw:overflow-hidden tw:text-xs">
-            <summary className="tw:cursor-pointer tw:text-muted-foreground">
-              {t("agent.acpToolOutput")}
-            </summary>
-            <pre className="tw:mt-2 tw:mb-0 tw:max-h-48 tw:max-w-full tw:overflow-auto tw:break-all tw:rounded-sm tw:bg-muted tw:p-2 tw:font-mono tw:text-2xs tw:leading-body tw:whitespace-pre-wrap">
-              {content}
-            </pre>
-          </details>
-        ) : null}
-        <AcpStructuredResult value={rawOutput ?? data.content} />
-        {article ? (
-          <Button
-            size="xs"
-            variant="primary"
-            onClick={() =>
-              onOpenKnowledgeAnalysis(
-                article.projectEnvironmentId,
-                article.id,
-              )
-            }
-          >
-            <Icon name="chart" />
-            {t("agent.acpOpenAnalysisArticle")}
-          </Button>
-        ) : null}
-        {sqlProposal ? (
-          <AcpSqlApproval
-            proposal={sqlProposal}
-            expectedConnectionId={expectedConnectionId}
-            expectedConnectionEngine={expectedConnectionEngine}
-          />
-        ) : null}
-      </div>
-    </AgentToolCallCard>
-  );
-}
 
 function PermissionButton({
   option,

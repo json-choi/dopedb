@@ -42,22 +42,16 @@ impl Store {
         .await?;
         let mut snapshots = Vec::with_capacity(rows.len());
         for row in rows {
-            let snapshot_json: String = row.try_get("snapshot_json")?;
-            let snapshot = serde_json::from_str(&snapshot_json)?;
-            let validated = validate_query_service_session_snapshot(snapshot)?;
-            let stored_connection_id: String = row.try_get("connection_id")?;
-            let stored_updated_at: i64 = row.try_get("updated_at")?;
-            let stored_status: String = row.try_get("status")?;
-            if validated.id != row.try_get::<String, _>("id")?
-                || validated.connection_id.to_string() != stored_connection_id
-                || validated.updated_at != stored_updated_at
-                || validated.status.as_str() != stored_status
-            {
-                return Err(AppError::Config(
-                    "persisted Services metadata does not match its snapshot".into(),
-                ));
+            // One unreadable or inconsistent snapshot must not hide the other
+            // retained results. Only the closed error kind is logged because a
+            // snapshot body carries SQL text and result metadata.
+            match decode_persisted_session(&row) {
+                Ok(snapshot) => snapshots.push(snapshot),
+                Err(error) => tracing::warn!(
+                    error_kind = error.kind(),
+                    "persisted Services result skipped"
+                ),
             }
-            snapshots.push(validated.snapshot);
         }
         Ok(snapshots)
     }
@@ -143,4 +137,24 @@ impl Store {
         transaction.commit().await?;
         Ok(())
     }
+}
+
+/// Decodes one stored snapshot and requires its indexed metadata to match the body.
+fn decode_persisted_session(row: &sqlx::sqlite::SqliteRow) -> AppResult<serde_json::Value> {
+    let snapshot_json: String = row.try_get("snapshot_json")?;
+    let snapshot = serde_json::from_str(&snapshot_json)?;
+    let validated = validate_query_service_session_snapshot(snapshot)?;
+    let stored_connection_id: String = row.try_get("connection_id")?;
+    let stored_updated_at: i64 = row.try_get("updated_at")?;
+    let stored_status: String = row.try_get("status")?;
+    if validated.id != row.try_get::<String, _>("id")?
+        || validated.connection_id.to_string() != stored_connection_id
+        || validated.updated_at != stored_updated_at
+        || validated.status.as_str() != stored_status
+    {
+        return Err(AppError::Config(
+            "persisted Services metadata does not match its snapshot".into(),
+        ));
+    }
+    Ok(validated.snapshot)
 }

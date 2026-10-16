@@ -190,6 +190,47 @@ mod tests {
             serde_json::to_value(crate::error::AppError::SqlPolicyBlocked { position }).unwrap();
         assert_eq!(error["kind"], "sqlPolicyBlocked");
         assert_eq!(error["position"], position.unwrap());
+        let typed = serde_json::to_value(crate::safety::rejection_error_at(
+            &statements[index],
+            crate::model::Engine::Postgres,
+            position.unwrap(),
+        ))
+        .unwrap();
+        assert_eq!(typed["kind"], "sqlPolicyBlocked");
+        assert_eq!(typed["position"], position.unwrap());
+        // Script rejections keep their own typed reason at the script position:
+        // a session statement and a parse failure are not privilege blocks.
+        for (script, kind, expected) in [
+            ("SELECT 1;\nUSE reporting;", "sessionStatementBlocked", 11),
+            (
+                "SELECT 1;\nSELECT 2 FROM t WHERE a = = 1;",
+                "sqlParseFailed",
+                37,
+            ),
+        ] {
+            let engine = if kind == "sessionStatementBlocked" {
+                crate::model::Engine::Mysql
+            } else {
+                crate::model::Engine::Postgres
+            };
+            let statements = crate::sql_script::split_statements(script, engine);
+            let blocked = statements
+                .iter()
+                .position(|statement| {
+                    crate::safety::classify(statement, engine).unwrap().kind == QueryKind::Privilege
+                })
+                .unwrap();
+            let offset =
+                crate::sql_script::statement_position(script, &statements, blocked).unwrap();
+            let error = serde_json::to_value(crate::safety::rejection_error_at(
+                &statements[blocked],
+                engine,
+                offset,
+            ))
+            .unwrap();
+            assert_eq!(error["kind"], kind, "{script}");
+            assert_eq!(error["position"], expected, "{script}");
+        }
         assert!(matches!(
             decide(
                 &SafetySettings {

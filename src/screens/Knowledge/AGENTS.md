@@ -14,7 +14,7 @@ read-only saved query; result rows and rerun stay on the exact-grant Desktop
 | File | Description |
 |------|-------------|
 | `index.tsx` | Default-exported `Knowledge` screen: environment focus routing (sources vs. analyses), workspace auth/login/selection requests, product-analytics event emission. |
-| `AnalysisArticles.tsx` | Composes Article commands, editorial reading (`AnalysisArticleEditor`/`AnalysisArticleReader`), and immutable execution history via `useAnalysisArticlesController`. |
+| `AnalysisArticles.tsx` | Composes Article commands, editorial reading (`AnalysisArticleEditor`/`AnalysisArticleReader`), and immutable execution history via `useAnalysisArticlesController`. Edit, publish, and delete appear only for roles that can write; run, cancel, and failure states come from the controller's run store. |
 
 ## For AI Agents
 

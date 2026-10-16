@@ -1,4 +1,4 @@
-//! ACP session admission, lifecycle commands, and runtime coordination.
+//! ACP session lifecycle commands and runtime coordination.
 
 use super::*;
 
@@ -10,6 +10,7 @@ impl AcpRuntime {
             broker,
             sessions: Arc::new(DashMap::new()),
             persistence: Arc::new(PersistenceTracker::default()),
+            idle_sweeper_started: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -68,7 +69,11 @@ impl AcpRuntime {
         let first = self
             .launch(connection_id, provider, resources.clone(), &ports, None)
             .await;
-        if first.is_err() && ports.process.has_ready_fallback(provider)? {
+        if first
+            .as_ref()
+            .is_err_and(|error| !is_start_cancelled(error))
+            && ports.process.has_ready_fallback(provider)?
+        {
             return self
                 .launch(connection_id, provider, resources, &ports, None)
                 .await;
@@ -87,14 +92,14 @@ impl AcpRuntime {
                 AcpSessionLifecycle::Closed | AcpSessionLifecycle::Failed
             ) {
                 return Err(AppError::Blocked {
-                    reason: "the Agent session is already running".into(),
+                    reason: agent_error::ALREADY_RUNNING.into(),
                 });
             }
         }
         let focus = self.sessions_persistence.focus_session(id, None).await?;
         if focus.session.acp_session_id.is_none() {
             return Err(AppError::Blocked {
-                reason: "this Agent session has no resumable ACP identity".into(),
+                reason: agent_error::NOT_RESUMABLE.into(),
             });
         }
         let connection_id = focus.session.connection_id;
@@ -111,7 +116,11 @@ impl AcpRuntime {
                 }),
             )
             .await;
-        if first.is_err() && ports.process.has_ready_fallback(provider)? {
+        if first
+            .as_ref()
+            .is_err_and(|error| !is_start_cancelled(error))
+            && ports.process.has_ready_fallback(provider)?
+        {
             let focus = self.sessions_persistence.focus_session(id, None).await?;
             return self
                 .launch(
@@ -141,22 +150,8 @@ impl AcpRuntime {
             resource_scopes: requested_resource_scopes,
             write_connection_id: requested_write_connection_id,
         } = resources;
-        if self
-            .sessions
-            .iter()
-            .filter(|entry| {
-                !matches!(
-                    entry.value().summary().lifecycle,
-                    AcpSessionLifecycle::Closed | AcpSessionLifecycle::Failed
-                )
-            })
-            .count()
-            >= MAX_ACTIVE_SESSIONS
-        {
-            return Err(AppError::Blocked {
-                reason: format!("at most {MAX_ACTIVE_SESSIONS} Agent sessions may run at once"),
-            });
-        }
+        self.ensure_idle_sweeper();
+        self.admit_session()?;
 
         let prepared_process = ports.process.prepare(provider).await?;
         let registration = prepared_process.registration()?;
@@ -165,45 +160,47 @@ impl AcpRuntime {
             .pin_connection(connection_id)
             .await?;
         let (knowledge_scopes, write_connection_id) = match resume_seed.as_ref() {
-            Some(seed) => (
-                knowledge_scope::summary_scopes(&seed.summary)?,
-                seed.summary.write_connection_id,
-            ),
+            Some(seed) => {
+                let pinned = knowledge_scope::summary_scopes(&seed.summary)?;
+                for scope in &pinned {
+                    self.ensure_pinned_scope_current(&connection, scope).await?;
+                }
+                (pinned, seed.summary.write_connection_id)
+            }
             None => {
                 let selections = &requested_resource_scopes;
                 if selections.is_empty() || selections.len() > 16 {
                     return Err(AppError::Blocked {
-                        reason: "select at least one Project resource before starting the Agent"
-                            .into(),
+                        reason: agent_error::RESOURCES_REQUIRED.into(),
                     });
                 }
+                let scope_unavailable = || AppError::Blocked {
+                    reason: agent_error::SCOPE_UNAVAILABLE.into(),
+                };
                 let mut environment_ids = HashSet::new();
                 let mut scopes = Vec::with_capacity(selections.len());
                 for selection in selections {
+                    // One Environment appears at most once in a resource set.
                     if !environment_ids.insert(selection.project_environment_id) {
-                        return Err(AppError::Blocked {
-                            reason:
-                                "the selected Agent resource scopes contain a duplicate Environment"
-                                    .into(),
-                        });
+                        return Err(scope_unavailable());
                     }
                     let authority = self
                         .sessions_persistence
                         .pin_connection(ConnectionId::from(selection.authority_connection_id))
                         .await?;
+                    // Every resource belongs to the session's workspace and account.
                     if !same_storage_scope(&connection.scope, &authority.scope) {
-                        return Err(AppError::Blocked {
-                            reason: "the selected Agent resources belong to another workspace or account"
-                                .into(),
-                        });
+                        return Err(scope_unavailable());
                     }
                     let mut scope = self
                         .knowledge_scope
-                        .resolve(&authority, Some(selection.project_environment_id))
+                        .resolve(
+                            &authority,
+                            Some(selection.project_environment_id),
+                            &selection.connection_ids,
+                        )
                         .await?
-                        .ok_or_else(|| AppError::Blocked {
-                            reason: "the selected Project resource scope is unavailable".into(),
-                        })?;
+                        .ok_or_else(scope_unavailable)?;
                     narrow_resource_scope(
                         &mut scope,
                         &selection.connection_ids,
@@ -246,18 +243,13 @@ impl AcpRuntime {
                     || selected_sources.len() > 100
                     || !anchor_is_selected_or_authority
                 {
-                    return Err(AppError::Blocked {
-                        reason:
-                            "the selected Agent resources must be one exact Project resource set"
-                                .into(),
-                    });
+                    // The selection must be one exact Project resource set.
+                    return Err(scope_unavailable());
                 }
                 if let Some(write_connection_id) = requested_write_connection_id {
+                    // The single write target must be one of the selected databases.
                     if !selected_connections.contains(&write_connection_id) {
-                        return Err(AppError::Blocked {
-                            reason: "the Agent write target is outside the selected database set"
-                                .into(),
-                        });
+                        return Err(scope_unavailable());
                     }
                 }
                 (scopes, requested_write_connection_id)
@@ -291,8 +283,6 @@ impl AcpRuntime {
                         reason: "the Agent session belongs to another provider".into(),
                     });
                 }
-                let previous_last_sequence =
-                    seed.events.last().map(|event| event.sequence).unwrap_or(0);
                 let acp_session_id = seed
                     .summary
                     .acp_session_id
@@ -306,10 +296,7 @@ impl AcpRuntime {
                     summary.id,
                     summary,
                     VecDeque::from(seed.events),
-                    Some(ResumeContext {
-                        acp_session_id,
-                        previous_last_sequence,
-                    }),
+                    Some(ResumeContext { acp_session_id }),
                 )
             }
             None => {
@@ -320,7 +307,9 @@ impl AcpRuntime {
                         id,
                         connection_id,
                         provider,
-                        title: "New Agent session".into(),
+                        // A stable untitled sentinel until the first prompt;
+                        // Desktop surfaces render localized copy for it.
+                        title: UNTITLED_SESSION_TITLE.into(),
                         lifecycle: AcpSessionLifecycle::Starting,
                         acp_session_id: None,
                         knowledge_scopes: knowledge_scopes.clone(),
@@ -343,17 +332,30 @@ impl AcpRuntime {
         let selected_resource_context =
             knowledge_scope::resource_context(&knowledge_scopes, write_connection_id);
         let broker_session_id = TerminalSessionId::from(Uuid::new_v4());
-        let issued = self.broker.sessions().issue_agent_with_knowledge(
-            broker_session_id,
-            &connection,
-            BrokerCapability::ALL,
-            ACP_CAPABILITY_TTL,
-            registration,
-            AgentKnowledgeAuthorization {
-                scopes: knowledge_scopes,
-                write_connection_id: write_connection_id.map(ConnectionId::from),
-            },
-        )?;
+        let issued = self
+            .broker
+            .sessions()
+            .issue_agent_with_knowledge(
+                broker_session_id,
+                &connection,
+                BrokerCapability::ALL,
+                ACP_CAPABILITY_TTL,
+                registration,
+                AgentKnowledgeAuthorization {
+                    scopes: knowledge_scopes,
+                    write_connection_id: write_connection_id.map(ConnectionId::from),
+                },
+            )
+            .map_err(|error| {
+                // A paused workspace-authority check is retryable, not a refusal.
+                if self.broker.sessions().authority_available() {
+                    error
+                } else {
+                    AppError::Blocked {
+                        reason: agent_error::AUTHORITY_REVALIDATING.into(),
+                    }
+                }
+            })?;
         let token = Zeroizing::new(issued.token().to_owned());
         drop(issued);
         let launch = prepared_process.bind(token, self.broker.runtime_file());
@@ -372,15 +374,20 @@ impl AcpRuntime {
             connection_id,
             broker_session_id,
             storage_scope: connection.scope.clone(),
-            sessions_persistence: self.sessions_persistence.clone(),
             persistence: self.persistence.clone(),
             summary: Mutex::new(summary),
             events: Mutex::new(replay),
             persistence_queue,
             push_order: Mutex::new(()),
             accepting_events: AtomicBool::new(true),
+            replaying_history: AtomicBool::new(false),
             next_sequence: AtomicU64::new(next_sequence),
             busy: AtomicBool::new(false),
+            // A resumed conversation was chosen explicitly and has history; it is
+            // never treated as an idle prepared session.
+            prompted: AtomicBool::new(resume.is_some()),
+            startup_cancel: CancellationToken::new(),
+            startup_cancelled_by_user: AtomicBool::new(false),
             command: Mutex::new(None),
             permissions: Mutex::new(HashMap::new()),
             config_options: Mutex::new(HashMap::new()),
@@ -389,12 +396,15 @@ impl AcpRuntime {
             event_sink: ports.events.clone(),
         });
         self.sessions.insert(id, session.clone());
+        // Announce the starting session at once so the status bar can show and
+        // cancel a slow adapter start instead of only queueing a turn cancel.
+        session.emit(None);
 
         let sessions_persistence = self.sessions_persistence.clone();
         let persistence_scope = connection.scope.clone();
         let persistence_tracker = self.persistence.clone();
         tokio::spawn(persistence::run_worker(
-            id,
+            session.summary(),
             sessions_persistence,
             persistence_scope,
             persistence_tracker,
@@ -405,10 +415,9 @@ impl AcpRuntime {
         *lock_unpoisoned(&session.command) = Some(command_tx);
         let (ready_tx, ready_rx) = oneshot::channel();
         let ready = Arc::new(Mutex::new(Some(ready_tx)));
-        let startup_cancel = CancellationToken::new();
         let broker = self.broker.clone();
         let worker_session = session.clone();
-        let worker_startup_cancel = startup_cancel.clone();
+        let worker_startup_cancel = session.startup_cancel.clone();
         tokio::spawn(async move {
             run_session(
                 worker_session,
@@ -428,13 +437,11 @@ impl AcpRuntime {
         match tokio::time::timeout(ACP_START_TIMEOUT, ready_rx).await {
             Ok(Ok(Ok(()))) => session.focus(None),
             Ok(Ok(Err(error))) => Err(error),
-            Ok(Err(_)) => Err(AppError::Agent(format!(
-                "the {} ACP startup task stopped before initialization",
-                provider_name(provider)
-            ))),
+            // The startup task stopped before initialization.
+            Ok(Err(_)) => Err(session_unavailable(provider)),
             Err(_) => {
                 let message = startup_timeout_message(provider);
-                startup_cancel.cancel();
+                session.startup_cancel.cancel();
                 if tokio::time::timeout(
                     ACP_START_CLEANUP_TIMEOUT,
                     wait_for_session_termination(&session),
@@ -463,9 +470,10 @@ impl AcpRuntime {
         let text = prompt::normalize(text)?;
         prompt::validate_context(&context)?;
         prompt::validate_scope(&context, &session.summary())?;
+        // Not ready for a new prompt, or already working on one.
         if session.summary().lifecycle != AcpSessionLifecycle::Ready {
             return Err(AppError::Blocked {
-                reason: "the Agent session is not ready for a new prompt".into(),
+                reason: agent_error::BUSY.into(),
             });
         }
         if session
@@ -474,7 +482,7 @@ impl AcpRuntime {
             .is_err()
         {
             return Err(AppError::Blocked {
-                reason: "the Agent is already working on a prompt".into(),
+                reason: agent_error::BUSY.into(),
             });
         }
         if session
@@ -486,11 +494,9 @@ impl AcpRuntime {
             .is_err()
         {
             session.busy.store(false, Ordering::SeqCst);
-            return Err(AppError::Agent(format!(
-                "the {} ACP session is no longer available",
-                provider_name(session.summary().provider)
-            )));
+            return Err(session_unavailable(session.summary().provider));
         }
+        session.prompted.store(true, Ordering::SeqCst);
         Ok(())
     }
 
@@ -503,13 +509,20 @@ impl AcpRuntime {
             self.sessions_persistence.focus_session(id, None).await?;
             return Ok(());
         };
+        if session.summary().lifecycle == AcpSessionLifecycle::Starting {
+            // The command loop does not exist until initialization finishes, so a
+            // queued turn cancel would be ignored. Stop the startup itself.
+            session
+                .startup_cancelled_by_user
+                .store(true, Ordering::SeqCst);
+            session.startup_cancel.cancel();
+            return Ok(());
+        }
         session.cancel_pending_permissions();
-        session.sender()?.send(SessionCommand::Cancel).map_err(|_| {
-            AppError::Agent(format!(
-                "the {} ACP session is no longer available",
-                provider_name(session.summary().provider)
-            ))
-        })
+        session
+            .sender()?
+            .send(SessionCommand::Cancel)
+            .map_err(|_| session_unavailable(session.summary().provider))
     }
 
     pub(crate) fn respond_permission(
@@ -524,8 +537,15 @@ impl AcpRuntime {
 
     pub(crate) fn close(&self, id: AcpSessionId) -> AppResult<()> {
         let session = self.session(id)?;
-        if session.summary().lifecycle == AcpSessionLifecycle::Closed {
+        let lifecycle = session.summary().lifecycle;
+        if lifecycle == AcpSessionLifecycle::Closed {
             return Ok(());
+        }
+        if lifecycle == AcpSessionLifecycle::Starting {
+            session
+                .startup_cancelled_by_user
+                .store(true, Ordering::SeqCst);
+            session.startup_cancel.cancel();
         }
         session.cancel_pending_permissions();
         if let Ok(sender) = session.sender() {
@@ -545,14 +565,12 @@ impl AcpRuntime {
     ) -> AppResult<()> {
         let session = self.session(id)?;
         validate_config_option_value(&config_id, &value)?;
-        if !session.allows_config_option(&config_id, &value) {
+        // Only an advertised option, and only while the session is ready.
+        if !session.allows_config_option(&config_id, &value)
+            || session.summary().lifecycle != AcpSessionLifecycle::Ready
+        {
             return Err(AppError::Blocked {
-                reason: "the ACP adapter did not advertise that configuration option".into(),
-            });
-        }
-        if session.summary().lifecycle != AcpSessionLifecycle::Ready {
-            return Err(AppError::Blocked {
-                reason: "the Agent session is not ready to change configuration".into(),
+                reason: agent_error::CONFIG_UNAVAILABLE.into(),
             });
         }
         let (response_tx, response_rx) = oneshot::channel();
@@ -563,18 +581,11 @@ impl AcpRuntime {
                 value,
                 response: response_tx,
             })
-            .map_err(|_| {
-                AppError::Agent(format!(
-                    "the {} ACP session is no longer available",
-                    provider_name(session.summary().provider)
-                ))
-            })?;
-        response_rx.await.map_err(|_| {
-            AppError::Agent(format!(
-                "the {} ACP session stopped before applying its configuration",
-                provider_name(session.summary().provider)
-            ))
-        })?
+            .map_err(|_| session_unavailable(session.summary().provider))?;
+        // The session stopped before applying its configuration.
+        response_rx
+            .await
+            .map_err(|_| session_unavailable(session.summary().provider))?
     }
 
     pub(crate) async fn stop_provider_and_wait(
@@ -622,11 +633,68 @@ impl AcpRuntime {
         let _ = tokio::time::timeout(timeout, self.persistence.wait_for_idle()).await;
     }
 
+    /// Resuming re-verifies the immutable grant: each pinned Environment,
+    /// connection, and source revision must still be the current one. A check
+    /// that could not run (network, timeout, a hosted authority asking to retry)
+    /// is reported as retryable, never as a changed scope.
+    async fn ensure_pinned_scope_current(
+        &self,
+        connection: &crate::kernel::access::PinnedConnection,
+        pinned: &crate::features::knowledge::domain::KnowledgeSessionScope,
+    ) -> AppResult<()> {
+        let changed = || AppError::Blocked {
+            reason: AGENT_SCOPE_CHANGED.into(),
+        };
+        let classify = |error: AppError| {
+            if scope_check_is_transient(&error) {
+                AppError::Blocked {
+                    reason: AGENT_SCOPE_UNVERIFIED.into(),
+                }
+            } else {
+                changed()
+            }
+        };
+        let authority = self
+            .sessions_persistence
+            .pin_connection(ConnectionId::from(pinned.authority_connection_id))
+            .await
+            .map_err(classify)?;
+        if !same_storage_scope(&connection.scope, &authority.scope) {
+            return Err(changed());
+        }
+        let connection_ids = pinned
+            .connections
+            .iter()
+            .map(|connection| connection.connection_id)
+            .collect::<Vec<_>>();
+        let mut current = self
+            .knowledge_scope
+            .resolve(
+                &authority,
+                Some(pinned.project_environment_id),
+                &connection_ids,
+            )
+            .await
+            .map_err(classify)?
+            .ok_or_else(changed)?;
+        let source_ids = pinned
+            .sources
+            .iter()
+            .map(|source| source.source_id)
+            .collect::<Vec<_>>();
+        narrow_resource_scope(&mut current, &connection_ids, &source_ids).map_err(|_| changed())?;
+        if knowledge_scope::pinned_revisions_current(pinned, &current) {
+            Ok(())
+        } else {
+            Err(changed())
+        }
+    }
+
     fn session(&self, id: AcpSessionId) -> AppResult<Arc<AcpSession>> {
         self.sessions
             .get(&id)
             .map(|entry| entry.value().clone())
-            .ok_or_else(|| AppError::NotFound("Agent session not found".into()))
+            .ok_or_else(|| AppError::NotFound(agent_error::SESSION_UNAVAILABLE.into()))
     }
 
     pub(super) fn interrupt(&self, id: AcpSessionId, reason: &'static str) {

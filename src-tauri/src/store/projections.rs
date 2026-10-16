@@ -113,6 +113,18 @@ pub(super) fn row_to_connection_with_binding(
                 None => HashMap::new(),
             };
             profile.secret_ref = r.try_get("binding_secret_ref")?;
+            // A member's saved credential stays bound to the template endpoint it
+            // was entered for. A moved or weakened template never reaches the OS
+            // credential store; the member binds again instead.
+            if profile.secret_ref.is_some()
+                && !binding_endpoint_admits(
+                    r.try_get::<Option<String>, _>("binding_bound_endpoint")?
+                        .as_deref(),
+                    &profile,
+                )
+            {
+                profile.secret_ref = None;
+            }
         } else {
             profile.username.clear();
             profile.extra_params.clear();
@@ -131,6 +143,46 @@ pub(super) fn row_to_connection_with_binding(
     Ok(profile)
 }
 
+/// The template endpoint a member-local binding is made against, as one JSON
+/// object in the store's own column encodings. SQL writes this shape and
+/// [`binding_endpoint_admits`] reads it.
+pub(super) const TEMPLATE_ENDPOINT_JSON: &str =
+    "json_object('engine', engine, 'provider', provider, \
+     'host', host, 'port', port, 'sslmode', sslmode)";
+
+#[derive(serde::Deserialize)]
+struct BoundTemplateEndpoint {
+    engine: String,
+    provider: String,
+    host: String,
+    port: i64,
+    sslmode: String,
+}
+
+/// Whether a member-local credential bound against `bound_endpoint` may still be
+/// used with `current`: the template as synced now plus the member's own binding.
+/// It may when the endpoint is unchanged and its transport security is at least as
+/// strong. A missing or unreadable record never admits a credential.
+pub(super) fn binding_endpoint_admits(
+    bound_endpoint: Option<&str>,
+    current: &ConnectionProfile,
+) -> bool {
+    let bound = bound_endpoint
+        .and_then(|raw| serde_json::from_str::<BoundTemplateEndpoint>(raw).ok())
+        .and_then(|bound| {
+            let mut profile = current.clone();
+            profile.engine = parse_engine(bound.engine).ok()?;
+            profile.provider = parse_provider(bound.provider).ok()?;
+            profile.host = bound.host;
+            profile.port = u16::try_from(bound.port).ok()?;
+            profile.sslmode = bound.sslmode;
+            Some(profile)
+        });
+    bound.is_some_and(|bound| {
+        crate::features::connections::same_credential_endpoint(&bound, current)
+    })
+}
+
 pub(super) fn row_to_history(r: &sqlx::sqlite::SqliteRow) -> AppResult<HistoryEntry> {
     Ok(HistoryEntry {
         id: parse_uuid(r.try_get("id")?)?,
@@ -143,6 +195,8 @@ pub(super) fn row_to_history(r: &sqlx::sqlite::SqliteRow) -> AppResult<HistoryEn
         error: r.try_get("error")?,
         executed_at: r.try_get("executed_at")?,
         origin: r.try_get("origin")?,
+        database: r.try_get("target_database")?,
+        namespace: r.try_get("target_namespace")?,
     })
 }
 

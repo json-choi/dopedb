@@ -1,14 +1,16 @@
 // Search projection of real shell commands, documents and cached database objects.
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { CatalogTable } from "../../ipc/types";
-import { errMessage } from "../../ipc/types";
-import { useToast } from "../../components/Toast";
 import { useI18n } from "../../lib/i18n";
-import { databaseCatalogQuery, type CatalogScope } from "../../lib/queries";
+import type { CatalogScope } from "../../lib/queries";
+import { navigationTableFromOverview } from "../catalog/tauriAdapter";
 import { filterCatalogOverview } from "../catalogExplorer/scopeFilter";
 import { databaseDisplayLabel, type ConnectionProfile } from "../connections/domain";
 import { settingsSearchKeywords, type SettingsSection } from "../settings/domain";
+import { useWorkspaceAdminScope } from "../workspaceAdmin/scope";
+import { workspaceAdminSectionsFor, type WorkspaceAdminSection } from "../workspaceAdmin/sections";
+import { workspaceAuthStateQuery } from "../workspaces/queries";
 import type { SqlDocument } from "../sqlDocuments/domain";
 import type { WorkbenchDocument } from "../workbench/domain";
 import { useCachedCatalogOverviews } from "./catalogCache";
@@ -31,6 +33,7 @@ type ActionSearchItemsInput = {
     showLocalHistory: () => void;
     openAgent: () => void;
     openSettings: (section?: SettingsSection) => void;
+    openWorkspaceAdmin: (section: WorkspaceAdminSection) => void;
     selectConnection: (id: string) => void;
     activateDocument: (document: WorkbenchDocument) => void;
     openSavedDocument: (document: SqlDocument) => void;
@@ -49,8 +52,9 @@ export function useActionSearchItems({
   commands,
 }: ActionSearchItemsInput): readonly ActionSearchItem[] {
   const { t } = useI18n();
-  const toast = useToast();
   const queryClient = useQueryClient();
+  const adminScope = useWorkspaceAdminScope();
+  const signedIn = Boolean(useQuery(workspaceAuthStateQuery()).data?.user);
   const catalogTargets = useCachedCatalogOverviews(
     queryClient,
     connections,
@@ -182,7 +186,9 @@ export function useActionSearchItems({
           t(
             relation.kind === "view"
               ? "schemaDiff.objectView"
-              : "schemaDiff.objectTable",
+              : relation.kind === "materialized_view"
+                ? "schemaDiff.objectMaterializedView"
+                : "schemaDiff.objectTable",
           ),
         ]
           .filter(Boolean)
@@ -192,23 +198,13 @@ export function useActionSearchItems({
           target.database,
           relation.comment ?? "",
         ],
-        run: async () => {
-          try {
-            const catalog = await queryClient.fetchQuery(
-              databaseCatalogQuery(connection.id, target.database, scope),
-            );
-            const table = catalog.tables.find(
-              (candidate) =>
-                candidate.name === relation.name &&
-                candidate.schema === relation.schema &&
-                candidate.kind === relation.kind,
-            );
-            if (table) commands.openTable(connection, table);
-            else commands.selectConnection(connection.id);
-          } catch (error) {
-            toast(errMessage(error), "error");
-          }
-        },
+        // Open at once from the loaded tree; the table surface upgrades its
+        // metadata from the shared catalog entry instead of blocking on a scan.
+        run: () =>
+          commands.openTable(
+            connection,
+            navigationTableFromOverview(relation, target.database),
+          ),
       }));
     },
   );
@@ -219,9 +215,13 @@ export function useActionSearchItems({
       ["cli", t("settings.cli"), false],
       ["privacy", t("settings.privacy"), false],
       ["safety", t("settings.safety"), !selected],
+      ["connection", t("settings.connectionEnvironment"), !selected],
       ["language", t("settings.languageTitle"), false],
       ["appearance", t("settings.appearance"), false],
       ["updates", t("settings.updates"), false],
+      ...(signedIn
+        ? ([["account", t("workspaceAdmin.account"), false]] as const)
+        : []),
     ] satisfies ReadonlyArray<readonly [SettingsSection, string, boolean]>
   ).map(([section, label, disabled]) => ({
     id: `setting:${section}`,
@@ -233,5 +233,17 @@ export function useActionSearchItems({
     run: () => commands.openSettings(section),
   }));
 
-  return [...actions, ...connectionItems, ...documentItems, ...databaseObjects, ...settings];
+  // Workspace management commands appear only for the role that may run them.
+  const workspaceAdmin = workspaceAdminSectionsFor(adminScope).map(
+    ({ id, label, keywords }): ActionSearchItem => ({
+      id: `workspace-admin:${id}`,
+      kind: "setting",
+      label: t(label),
+      detail: t("workspaceAdmin.dialogTitle"),
+      keywords: [id, keywords],
+      run: () => commands.openWorkspaceAdmin(id),
+    }),
+  );
+
+  return [...actions, ...connectionItems, ...documentItems, ...databaseObjects, ...settings, ...workspaceAdmin];
 }

@@ -11,6 +11,7 @@ import {
   type ConnectionProfile,
 } from "../connections/domain";
 import { ProviderTargetLabel } from "../connections/ProviderTargetLabel";
+import { useConnectionEnvironmentInventory } from "../connections/useConnectionEnvironmentContext";
 import { useI18n } from "../../lib/i18n";
 import {
   buildConnectionSections,
@@ -40,12 +41,16 @@ export default function ConnectionPicker({
   onNew: () => void;
 }) {
   const { t } = useI18n();
+  const environments = useConnectionEnvironmentInventory();
   const sections = useMemo(() => buildConnectionSections(connections), [connections]);
   const grouped = sections.filter((section) => section.kind === "group");
   const singles = sections.filter((section) => section.kind === "single");
 
   function renderConnectionCard(connection: ConnectionProfile, grouped = false) {
     const name = connection.name || t("app.unnamed");
+    const environment = environments.pending ? null : environments.markersByConnectionId.has(connection.id)
+      ? environments.markersByConnectionId.get(connection.id)
+      : connection.env;
     const projectName = grouped
       ? undefined
       : projectNamesByConnectionId.get(connection.id);
@@ -78,9 +83,9 @@ export default function ConnectionPicker({
           <span className="tw:min-w-0 tw:overflow-hidden tw:text-body tw:font-bold tw:text-ellipsis tw:whitespace-nowrap">
             {name}
           </span>
-          {connection.env ? (
+          {environment ? (
             <span className="tw:ml-auto">
-              <EnvironmentBadge environment={connection.env} />
+              <EnvironmentBadge environment={environment} />
             </span>
           ) : null}
         </span>

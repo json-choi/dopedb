@@ -35,6 +35,7 @@ positioning.
 | `RenderRecoveryBoundary.tsx` | Error boundary isolating render failures of optional rich surfaces (Markdown, diagrams, provider payloads); shows only a safe caller-provided fallback and retry, never the raw error. |
 | `ResizeSeparator.tsx` | Canonical keyboard/pointer resize boundary with ARIA `now`/`min`/`max`, bounded arrow-key steps, Home/End, and double-click reset; caller keeps persisted size and drag lifecycle. |
 | `SegmentedControl.tsx` | Compact mutually-exclusive radiogroup for property editors; owns disabling whole/individual options and keyboard focus that skips them. |
+| `SectionDialog.tsx` | `SectionDialog`: canonical rail-and-body settings dialog shared by Settings and Workspace management (settings-size `ModalSurface`, optional keyword search, grouped rail, narrow-width section select, breadcrumb, Done footer). |
 | `Settings.tsx` | `SettingsGroup`: flat divider/heading rhythm for dense preference groups, no nested card surfaces. |
 | `SettingsList.tsx` | Dense settings inventory rows (`SettingsSectionHeader` and related row primitives) sharing one identity/state/action grid. |
 | `Status.tsx` | Small semantic status primitives (`neutral`/`success`/`warning`/`danger` tone); color always communicates state, never navigation selection. |

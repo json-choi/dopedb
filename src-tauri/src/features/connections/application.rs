@@ -9,11 +9,11 @@ use uuid::Uuid;
 use zeroize::Zeroizing;
 
 use crate::error::{AppError, AppResult};
-use crate::features::catalog::DatabaseSummary;
 use crate::kernel::identity::ConnectionId;
 use crate::kernel::TerminalAuthority;
 use crate::model::{ConnectionProfile, Engine, WorkspaceConnectionAccess, WorkspaceCredentialMode};
 
+use super::credential_endpoint::same_credential_endpoint;
 use super::domain::{
     normalize_schema_group, resolve_cli_name, validate_schema_group_engine, AgentConnectionSummary,
     CliConnectionResolutionError, DriverDescriptor, LocalDatabaseListener, LOCAL_LISTENER_TARGETS,
@@ -24,15 +24,29 @@ use super::ports::{
     ConnectionMutationPort, ConnectionPermission, ConnectionRepositoryPort, ConnectionRuntimePort,
     DriverRegistryPort, LocalListenerProbePort, ProfileMutationPort, ScopeMutationPort,
 };
+use super::probe::{ConnectionProbeRefusal, ConnectionTestReceipt, DatabaseDiscoveryReceipt};
 
 pub(crate) struct ConnectionUpsertRequest {
     pub(crate) profile: ConnectionProfile,
     pub(crate) password: Option<Zeroizing<String>>,
+    /// Remove the saved credential when no replacement password is supplied.
+    pub(crate) clear_password: bool,
 }
 
 pub(crate) struct ConnectionProfileTestRequest {
     pub(crate) profile: ConnectionProfile,
     pub(crate) password: Option<Zeroizing<String>>,
+}
+
+/// The saved credential an unsaved draft may use for one probe.
+enum SavedCredential {
+    /// The saved secret of the same stored endpoint.
+    Reuse(Zeroizing<String>),
+    /// No saved credential participates: none is stored, the draft opted out, or
+    /// the profile authenticates through the socket or trust.
+    Empty,
+    /// The draft moved to another endpoint; the saved secret is withheld.
+    EndpointChanged,
 }
 
 pub(crate) struct ConnectionUseCases<R, A, D, T, V, P>
@@ -135,7 +149,9 @@ where
         let ConnectionUpsertRequest {
             mut profile,
             password,
+            clear_password,
         } = request;
+        self.retry_deferred_credential_deletes().await;
         if profile.workspace_access != WorkspaceConnectionAccess::Local {
             return Err(AppError::Blocked {
                 reason:
@@ -160,13 +176,16 @@ where
         let mut profile_mutation = Some(self.authority.begin_profile_mutation(id).await);
         self.repository.ensure_write_scope(id).await?;
         let connections = self.repository.list().await?;
-        let existing = connections
+        let stored = connections
             .iter()
-            .any(|connection| connection.id == profile.id);
+            .find(|connection| connection.id == profile.id);
+        let existing = stored.is_some();
+        // `Settings → Safety` is the single owner of the write ceiling. Neither the
+        // editor draft nor a pasted URL may change it, and a stale draft must not
+        // revert a newer Safety decision. A new profile starts without writes.
+        profile.allow_writes = stored.is_some_and(|connection| connection.allow_writes);
         validate_schema_group_engine(&profile, &connections)?;
-        let existing_secret_id = connections
-            .iter()
-            .find(|connection| connection.id == profile.id)
+        let existing_secret_id = stored
             .and_then(|connection| connection.secret_ref.as_deref())
             .map(Uuid::parse_str)
             .transpose()
@@ -189,7 +208,21 @@ where
             ));
         }
 
-        profile.secret_ref = if uses_cli_authentication {
+        let removes_stored_secret =
+            clear_password && password.is_none() && existing_secret_id.is_some();
+        // A saved credential stays bound to the endpoint it was entered for. Keeping
+        // it while the profile moves to another engine, host, port, user, or SSH
+        // alias would let the next check send it there, so a moved profile must
+        // carry a new password or explicitly drop the saved one.
+        if password.is_none()
+            && !removes_stored_secret
+            && !uses_cli_authentication
+            && existing_secret_id.is_some()
+            && stored.is_some_and(|stored| !same_credential_endpoint(stored, &profile))
+        {
+            return Err(AppError::CredentialBindingRequired);
+        }
+        profile.secret_ref = if uses_cli_authentication || removes_stored_secret {
             None
         } else {
             existing_secret_id.map(|value| value.to_string())
@@ -216,21 +249,24 @@ where
                         self.delete_secret_best_effort(
                             previous_id,
                             "replace_connection_credentials",
-                        );
+                        )
+                        .await;
                     }
-                } else if uses_cli_authentication {
+                } else if uses_cli_authentication || removes_stored_secret {
                     if let Some(previous_id) = existing_secret_id {
                         self.delete_secret_best_effort(
                             previous_id,
                             "remove_obsolete_connection_credentials",
-                        );
+                        )
+                        .await;
                     }
                 }
                 Ok(profile)
             }
             Err(error) => {
                 if let Some(credential_id) = replacement_secret_id {
-                    self.delete_secret_best_effort(credential_id, "upsert_connection");
+                    self.delete_secret_best_effort(credential_id, "upsert_connection")
+                        .await;
                 }
                 Err(error)
             }
@@ -293,6 +329,7 @@ where
     }
 
     pub(crate) async fn delete(&self, id: ConnectionId) -> AppResult<ConnectionProfile> {
+        self.retry_deferred_credential_deletes().await;
         let mutation = self
             .authority
             .begin_connection_mutation(id, ConnectionPermission::Read)
@@ -308,7 +345,8 @@ where
         if let Some(secret_ref) = profile.secret_ref.as_deref() {
             match Uuid::parse_str(secret_ref) {
                 Ok(credential_id) => {
-                    self.delete_secret_best_effort(credential_id, "delete_connection");
+                    self.delete_secret_best_effort(credential_id, "delete_connection")
+                        .await;
                 }
                 Err(error) => {
                     tracing::warn!(
@@ -337,10 +375,13 @@ where
             .await
     }
 
+    /// Check an unsaved local draft. A draft that moved away from its saved
+    /// endpoint is refused before any connection, so the saved secret never
+    /// reaches a server it was not entered for.
     pub(crate) async fn test_profile(
         &self,
         request: ConnectionProfileTestRequest,
-    ) -> AppResult<()> {
+    ) -> ConnectionTestReceipt {
         let ConnectionProfileTestRequest {
             mut profile,
             password,
@@ -348,47 +389,55 @@ where
         if profile.workspace_access != WorkspaceConnectionAccess::Local
             || profile.credential_mode != WorkspaceCredentialMode::Local
         {
-            return Err(AppError::Blocked {
+            return ConnectionTestReceipt::from_result(Err(AppError::Blocked {
                 reason: "shared connections must be tested through workspace authorization".into(),
-            });
+            }));
         }
         let uses_cli_authentication = profile.engine == Engine::Bigquery
             || (profile.engine == Engine::Sqlite
                 && profile.provider == crate::model::Provider::CloudflareD1);
-        if uses_cli_authentication {
-            profile.secret_ref = None;
-        }
         let supplied = password.filter(|password| !password.is_empty());
         if supplied
             .as_ref()
             .is_some_and(|value| value.len() > MAX_CONNECTION_CREDENTIAL_BYTES)
         {
-            return Err(AppError::Config(
+            return ConnectionTestReceipt::from_result(Err(AppError::Config(
                 "connection credential exceeds the size limit".into(),
-            ));
+            )));
         }
-        // A saved profile keeps its secret in the OS credential store and the editor
-        // sends an empty password field for it, so an empty input means "use the
-        // stored credential" rather than "authenticate without one" — otherwise
-        // `upsert` and `test_profile` disagree about the same connection. A local
-        // profile with no stored reference still resolves to an empty string, which
-        // keeps socket/trust authentication working.
+        // The editor sends an empty password field for a saved profile, so an empty
+        // input means "use the stored credential" rather than "authenticate without
+        // one"; otherwise `upsert` and `test_profile` disagree about one connection.
         let password = match supplied {
-            Some(value) => value,
-            None if uses_cli_authentication => Zeroizing::new(String::new()),
-            None => self.credentials.fetch_profile(&profile)?,
+            Some(value) => {
+                profile.secret_ref = None;
+                value
+            }
+            None if uses_cli_authentication => {
+                profile.secret_ref = None;
+                Zeroizing::new(String::new())
+            }
+            None => match self.saved_local_credential(&mut profile).await {
+                Ok(SavedCredential::Reuse(secret)) => secret,
+                Ok(SavedCredential::Empty) => Zeroizing::new(String::new()),
+                Ok(SavedCredential::EndpointChanged) => {
+                    return ConnectionTestReceipt::saved_credential_endpoint_changed();
+                }
+                Err(error) => return ConnectionTestReceipt::from_result(Err(error)),
+            },
         };
-        self.tester.test(&profile, password).await
+        ConnectionTestReceipt::from_result(self.tester.test(&profile, password).await)
     }
 
     /// Discover selectable databases from an unsaved, local profile. This is a
     /// bounded read only: the result is never persisted and grants no authority
-    /// beyond the one connection made for this request.
+    /// beyond the one connection made for this request. Like Test, it refuses a
+    /// draft that moved away from its saved endpoint before connecting.
     pub(crate) async fn discover_profile_databases(
         &self,
-        profile: ConnectionProfile,
+        mut profile: ConnectionProfile,
         password: Option<Zeroizing<String>>,
-    ) -> AppResult<Vec<DatabaseSummary>> {
+    ) -> AppResult<DatabaseDiscoveryReceipt> {
         if profile.workspace_access != WorkspaceConnectionAccess::Local
             || profile.credential_mode != WorkspaceCredentialMode::Local
         {
@@ -406,7 +455,27 @@ where
         self.drivers
             .validate(&profile)
             .map_err(AppError::public_connection_failure)?;
-        let password = password.unwrap_or_default();
+        // Discovery and Test must agree about the same draft: an empty password
+        // field means "use this saved profile's credential", exactly as in Test.
+        let password = match password.filter(|password| !password.is_empty()) {
+            Some(value) => {
+                profile.secret_ref = None;
+                value
+            }
+            None => match self
+                .saved_local_credential(&mut profile)
+                .await
+                .map_err(AppError::public_connection_failure)?
+            {
+                SavedCredential::Reuse(secret) => secret,
+                SavedCredential::Empty => Zeroizing::new(String::new()),
+                SavedCredential::EndpointChanged => {
+                    return Ok(DatabaseDiscoveryReceipt::refused(
+                        ConnectionProbeRefusal::SavedCredentialEndpointChanged,
+                    ));
+                }
+            },
+        };
         if password.len() > MAX_CONNECTION_CREDENTIAL_BYTES {
             return Err(AppError::Config(
                 "connection credential exceeds the size limit".into(),
@@ -415,6 +484,7 @@ where
         self.tester
             .discover_databases(&profile, password)
             .await
+            .map(DatabaseDiscoveryReceipt::found)
             .map_err(AppError::public_connection_failure)
     }
 
@@ -468,13 +538,88 @@ where
         Ok(resolved)
     }
 
-    fn delete_secret_best_effort(&self, id: Uuid, action: &'static str) {
+    /// The saved credential an unsaved draft may reuse.
+    ///
+    /// The WebView only opts in by carrying a credential reference; the reference
+    /// value itself is discarded. The secret is resolved strictly from the stored
+    /// local profile with the same id in the active scope, so a crafted draft can
+    /// never send another connection's or a shared binding's credential to the
+    /// host it names. It is reused only while the draft names the same engine,
+    /// host, port, user, and SSH alias; a moved draft is refused before the OS
+    /// credential store is read. Socket/trust profiles without a saved credential
+    /// resolve to an empty password.
+    async fn saved_local_credential(
+        &self,
+        draft: &mut ConnectionProfile,
+    ) -> AppResult<SavedCredential> {
+        if draft.secret_ref.take().is_none() {
+            return Ok(SavedCredential::Empty);
+        }
+        let stored = self
+            .repository
+            .list()
+            .await?
+            .into_iter()
+            .find(|connection| connection.id == draft.id);
+        match stored {
+            Some(stored)
+                if stored.workspace_access == WorkspaceConnectionAccess::Local
+                    && stored.credential_mode == WorkspaceCredentialMode::Local
+                    && stored.secret_ref.is_some() =>
+            {
+                if !same_credential_endpoint(&stored, draft) {
+                    return Ok(SavedCredential::EndpointChanged);
+                }
+                self.credentials
+                    .fetch_profile(&stored)
+                    .map(SavedCredential::Reuse)
+            }
+            _ => Ok(SavedCredential::Empty),
+        }
+    }
+
+    /// Retry every unreferenced credential item whose deletion failed earlier,
+    /// including ones recorded before the app restarted. A failure keeps the
+    /// record for the next mutation; the mutation itself never waits on cleanup.
+    async fn retry_deferred_credential_deletes(&self) {
+        let pending = match self.repository.deferred_credential_deletes().await {
+            Ok(pending) => pending,
+            Err(error) => {
+                tracing::warn!(
+                    error_kind = error.kind(),
+                    "deferred credential cleanup unreadable"
+                );
+                return;
+            }
+        };
+        for id in pending {
+            if self.credentials.delete(&id).is_ok() {
+                if let Err(error) = self.repository.clear_deferred_credential_delete(id).await {
+                    tracing::warn!(
+                        error_kind = error.kind(),
+                        "deferred credential cleanup could not be cleared"
+                    );
+                }
+            }
+        }
+    }
+
+    /// Delete an unreferenced credential item, or record it so a later mutation
+    /// retries the deletion even after a restart.
+    async fn delete_secret_best_effort(&self, id: Uuid, action: &'static str) {
         if let Err(error) = self.credentials.delete(&id) {
             tracing::warn!(
                 error_kind = error.kind(),
                 action,
                 "credential cleanup deferred"
             );
+            if let Err(error) = self.repository.defer_credential_delete(id).await {
+                tracing::warn!(
+                    error_kind = error.kind(),
+                    action,
+                    "credential cleanup could not be deferred"
+                );
+            }
         }
     }
 }

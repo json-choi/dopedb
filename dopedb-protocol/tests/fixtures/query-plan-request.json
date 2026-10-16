@@ -1,6 +1,6 @@
 {
   "protocolVersion": 1,
-  "commandSchemaVersion": 17,
+  "commandSchemaVersion": 18,
   "requestId": "018f1111-2222-7333-8444-555566667777",
   "authentication": {
     "terminalSessionId": "018faaaa-bbbb-7ccc-8ddd-eeeeeeeeeeee",

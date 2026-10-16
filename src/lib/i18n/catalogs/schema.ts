@@ -4,6 +4,14 @@ import { defineCatalog } from "../types";
 export const schemaCatalog = defineCatalog(
   {
     "schema.columnCount": "{count} columns",
+    "schema.connectionRetryAfter":
+      "The connection could not be opened a moment ago. Try again in {seconds} seconds.",
+    "schema.connectionRetryLater":
+      "The connection could not be opened a moment ago. It can be retried after a short wait.",
+    "schema.credentialStoreDenied":
+      "This device's credential store did not release the saved password, so the schema could not be read. Allow DopeDB to use it, unlocking the keychain if asked, then retry.",
+    "schema.ddlCopyFailed":
+      "Could not copy to the clipboard. Select the DDL text and copy it manually.",
     "schema.detailsDeferredDescription":
       "Load columns, relationships, and indexes only when you need the schema diagram.",
     "schema.detailsDeferredTitle": "{count} schema objects are ready",
@@ -44,22 +52,50 @@ export const schemaCatalog = defineCatalog(
     "schema.erdVisibleStats": "{nodes} objects · {edges} relationships",
     "schema.filterPlaceholder": "Filter tables, columns, indexes...",
     "schema.fkCount": "{count} relationships",
+    "schema.generatedValue": "Generated",
     "schema.hideDetails": "Hide schema details",
     "schema.indexes": "Indexes",
+    "schema.issueSentence": "{message}.",
+    "schema.keyCheck": "Check constraint",
+    "schema.keyForeign": "Foreign key",
+    "schema.keyPrimary": "Primary key",
+    "schema.keyUnique": "Unique",
     "schema.loadDetails": "Load schema details",
+    "schema.lockTimeout":
+      "Another session holds a lock this read needs, so it stopped waiting. Try again in a moment.",
     "schema.noForeignKeys": "No foreign keys found.",
     "schema.noMatch": "No schema objects match the filter.",
     "schema.openData": "Open data",
+    "schema.persistedRefreshing":
+      "Showing the schema read at {time}; reading the current schema…",
+    "schema.persistedShown": "Showing the schema read at {time}.",
     "schema.pk": "PK",
-    "schema.relationshipText": "{fromTable}.{fromColumn} -> {toTable}.{toColumn}",
+    "schema.refreshWorkspace": "Refresh workspace",
     "schema.relationships": "Relationships",
+    "schema.reread": "Reread schema",
+    "schema.rereadFailed": "Could not reread the schema. {error}",
+    "schema.rereading": "Rereading the schema…",
+    "schema.retryIn": "Retry in {seconds}s",
     "schema.selectTable": "Select a table to inspect columns, indexes, and foreign keys.",
+    "schema.sharedConnectionChanged":
+      "This shared connection changed in the workspace. Refresh the workspace data, then try again.",
     "schema.showDetails": "Show schema details",
     "schema.tableCount": "{count} objects",
+    "schema.types": "Types ({count})",
     "schema.view": "view",
+    "schema.workspaceSignInRequired":
+      "This device's workspace sign-in expired, so shared access was not authorized. Sign in again to read this schema.",
   },
   {
     "schema.columnCount": "{count}개 컬럼",
+    "schema.connectionRetryAfter":
+      "방금 연결을 열지 못했습니다. {seconds}초 후에 다시 시도하세요.",
+    "schema.connectionRetryLater":
+      "방금 연결을 열지 못했습니다. 잠시 기다린 뒤 다시 시도할 수 있습니다.",
+    "schema.credentialStoreDenied":
+      "이 기기의 자격 증명 저장소가 저장된 비밀번호를 내주지 않아 스키마를 읽지 못했습니다. DopeDB의 사용을 허용하고, 요청하면 키체인 잠금을 해제한 뒤 다시 시도하세요.",
+    "schema.ddlCopyFailed":
+      "클립보드에 복사하지 못했습니다. DDL 텍스트를 선택해 직접 복사하세요.",
     "schema.detailsDeferredDescription":
       "스키마 다이어그램이 필요할 때만 컬럼, 관계, 인덱스를 불러옵니다.",
     "schema.detailsDeferredTitle": "스키마 객체 {count}개를 찾았습니다",
@@ -100,18 +136,38 @@ export const schemaCatalog = defineCatalog(
     "schema.erdVisibleStats": "객체 {nodes}개 · 관계 {edges}개",
     "schema.filterPlaceholder": "테이블, 컬럼, 인덱스 필터...",
     "schema.fkCount": "관계 {count}개",
+    "schema.generatedValue": "생성식",
     "schema.hideDetails": "스키마 상세 정보 숨기기",
     "schema.indexes": "인덱스",
+    "schema.issueSentence": "{message}.",
+    "schema.keyCheck": "검사 제약",
+    "schema.keyForeign": "외래 키",
+    "schema.keyPrimary": "기본 키",
+    "schema.keyUnique": "고유",
     "schema.loadDetails": "상세 스키마 불러오기",
+    "schema.lockTimeout":
+      "이 읽기에 필요한 잠금을 다른 세션이 잡고 있어 기다리기를 멈췄습니다. 잠시 후 다시 시도하세요.",
     "schema.noForeignKeys": "외래 키를 찾지 못했습니다.",
     "schema.noMatch": "필터와 일치하는 스키마 객체가 없습니다.",
     "schema.openData": "데이터 열기",
+    "schema.persistedRefreshing":
+      "{time}에 읽은 스키마를 표시하며 현재 스키마를 읽는 중…",
+    "schema.persistedShown": "{time}에 읽은 스키마를 표시하고 있습니다.",
     "schema.pk": "PK",
-    "schema.relationshipText": "{fromTable}.{fromColumn} -> {toTable}.{toColumn}",
+    "schema.refreshWorkspace": "워크스페이스 새로고침",
     "schema.relationships": "관계",
+    "schema.reread": "스키마 다시 읽기",
+    "schema.rereadFailed": "스키마를 다시 읽지 못했습니다. {error}",
+    "schema.rereading": "스키마를 다시 읽는 중…",
+    "schema.retryIn": "{seconds}초 후 재시도",
     "schema.selectTable": "테이블을 선택하면 컬럼, 인덱스, 외래 키를 볼 수 있습니다.",
+    "schema.sharedConnectionChanged":
+      "워크스페이스에서 이 공유 연결이 변경되었습니다. 워크스페이스 데이터를 새로고침한 뒤 다시 시도하세요.",
     "schema.showDetails": "스키마 상세 정보 보기",
     "schema.tableCount": "{count}개 객체",
+    "schema.types": "타입 ({count})",
     "schema.view": "뷰",
+    "schema.workspaceSignInRequired":
+      "이 기기의 워크스페이스 로그인이 만료되어 공유 접근을 확인하지 못했습니다. 다시 로그인하면 이 스키마를 읽을 수 있습니다.",
   },
 );

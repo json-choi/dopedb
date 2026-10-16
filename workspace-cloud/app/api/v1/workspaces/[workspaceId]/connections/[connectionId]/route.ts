@@ -266,9 +266,20 @@ export async function PATCH(request: Request, context: RouteContext) {
   if (input.allowWrites && !writeAvailable) {
     return jsonError("This managed provider connection has no write credential", 409);
   }
+  const managedEndpoint = existing.credentialMode === "managed";
   const normalized = {
     ...input,
-    provider: (existing.credentialMode === "managed" ? existing.provider : input.provider) as typeof input.provider,
+    provider: (managedEndpoint ? existing.provider : input.provider) as typeof input.provider,
+    // The provider integration owns a managed endpoint. A template edit never
+    // moves it, or every member's issued lease would stop matching the target.
+    ...(managedEndpoint
+      ? {
+          host: existing.host,
+          port: existing.port,
+          database: existing.databaseName,
+          sslmode: existing.sslmode,
+        }
+      : {}),
   };
   const normalizedPayload = connectionVersionPayload(normalized);
   if (expectedRevision !== existing.contentRevision) {

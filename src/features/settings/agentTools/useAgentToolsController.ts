@@ -62,7 +62,9 @@ export function useAgentToolsController() {
     setError(null);
     try {
       const current = pluginQuery.data?.find((plugin) => plugin.pluginId === pluginId);
-      if (current?.state === "ready" || current?.state === "staged") {
+      // A recorded failure means the installed adapter is not chat-ready even
+      // when a version is present, so Prepare must verify or reinstall it.
+      if ((current?.state === "ready" || current?.state === "staged") && !current.failure) {
         if (!current.enabled) await setAgentAcpPluginEnabled(pluginId, true);
       } else {
         await installAgentAcpPlugin(pluginId);
@@ -70,7 +72,7 @@ export function useAgentToolsController() {
       const refreshed = await pluginQuery.refetch();
       if (refreshed.error) throw refreshed.error;
       const prepared = refreshed.data?.find((plugin) => plugin.pluginId === pluginId);
-      if (!prepared?.enabled || !(
+      if (!prepared?.enabled || prepared.failure || !(
         prepared.installedVersion || prepared.candidateVersion || prepared.lastKnownGoodVersion
       )) {
         throw new Error(t("agentTools.agentSetupFailed"));

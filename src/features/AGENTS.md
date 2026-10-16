@@ -72,7 +72,8 @@ Agent surface reads through `useAcpSessionSnapshot`, and
 | `terminals/` | xterm-based PTY surface for the explicit, connection-pinned advanced Shell (Settings → Command line only). |
 | `updater/` | App auto-updater phase state and controller. |
 | `workbench/` | Central workbench document domain (singleton vs. query documents) and the draft store. |
-| `workspaces/` | Workspace/account auth policy, login flow, and Tauri adapter. |
+| `workspaceAdmin/` | Settings surfaces for workspace administration: account sessions and pending deletions, workspace creation, members, database access, providers, and owner-only backups/deletion (see `workspaceAdmin/AGENTS.md`). |
+| `workspaces/` | Workspace/account auth policy, login flow, membership refresh channel, and Tauri adapter. |
 
 ## For AI Agents
 

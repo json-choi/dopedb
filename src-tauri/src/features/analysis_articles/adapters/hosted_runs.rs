@@ -5,35 +5,7 @@ use super::*;
 // Every request below uses the shared origin validator, which rejects cleartext
 // outside a debug-only loopback origin; the release client is HTTPS-only too.
 
-#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub(crate) enum AnalysisRunTrigger {
-    Manual,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct RemoteAnalysisRun {
-    pub(crate) id: Uuid,
-    pub(crate) article_id: Uuid,
-    pub(crate) article_revision: i64,
-    pub(crate) runner_id: Uuid,
-    pub(crate) runner_capability_generation: u64,
-    pub(crate) trigger: AnalysisRunTrigger,
-    pub(crate) state: AnalysisRunState,
-    pub(crate) definition_hash: String,
-    pub(crate) schema_fingerprints: BTreeMap<String, String>,
-    pub(crate) row_count: u64,
-    pub(crate) byte_count: u64,
-    pub(crate) result_hash: Option<String>,
-    pub(crate) error_kind: Option<String>,
-    pub(crate) error_message: Option<String>,
-    pub(crate) cancel_requested_at: Option<DateTime<Utc>>,
-    pub(crate) cancel_requested_by_member_id: Option<String>,
-    pub(crate) started_at: Option<DateTime<Utc>>,
-    pub(crate) finished_at: Option<DateTime<Utc>>,
-    pub(crate) created_at: DateTime<Utc>,
-}
+pub(crate) use super::super::super::domain::AnalysisRunRecord as RemoteAnalysisRun;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

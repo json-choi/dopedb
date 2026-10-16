@@ -2,6 +2,12 @@
 
 use super::*;
 
+/// Opening a shared connection without a usable workspace session is a sign-in
+/// recovery, never a connection setting the member should edit.
+fn workspace_sign_in_required() -> AppError {
+    AppError::AuthenticationRequired(crate::hosted_control_plane::WORKSPACE_AUTHENTICATION.into())
+}
+
 fn safe_neon_segment(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 128
@@ -337,9 +343,7 @@ pub(super) async fn authorize_connection(
     let token = fetch_workspace_session(user_id)
         .await?
         .map(Zeroizing::new)
-        .ok_or_else(|| {
-            AppError::Config("shared connection access requires an authenticated session".into())
-        })?;
+        .ok_or_else(workspace_sign_in_required)?;
     let origin = origin()?;
     let response = client()?
         .post(format!(
@@ -356,6 +360,7 @@ pub(super) async fn authorize_connection(
         .map_err(|error| request_error("authorizing shared connection", error))?;
     if response.status() == StatusCode::UNAUTHORIZED {
         delete_workspace_session(user_id).await?;
+        return Err(workspace_sign_in_required());
     }
     if !response.status().is_success() {
         return Err(oauth_error(response).await);
@@ -407,9 +412,7 @@ pub(super) async fn issue_managed_connection_lease(
     let token = fetch_workspace_session(user_id)
         .await?
         .map(Zeroizing::new)
-        .ok_or_else(|| {
-            AppError::Config("managed database access requires an authenticated session".into())
-        })?;
+        .ok_or_else(workspace_sign_in_required)?;
     let origin = origin()?;
     let requested_access = match access {
         crate::connection::ConnectionAccess::Read => ManagedAccessMode::Read,
@@ -440,9 +443,10 @@ pub(super) async fn issue_managed_connection_lease(
         .map_err(|error| request_error("requesting managed database access", error))?;
     if response.status() == StatusCode::UNAUTHORIZED {
         delete_workspace_session(user_id).await?;
+        return Err(workspace_sign_in_required());
     }
     if !response.status().is_success() {
-        return Err(oauth_error(response).await);
+        return Err(crate::hosted_control_plane::managed_lease_response_error(response).await);
     }
     let payload: ManagedLeaseResponse = crate::hosted_control_plane::bounded_json_response(
         response,

@@ -21,7 +21,7 @@ runtime-arbitrary-SQL client, not a fixed-schema application. Covers
 | `mod.rs` | `Store::open()`: opens (or resets, for a pre-MVP schema mismatch) the WAL SQLite database at the app-owned data root. |
 | `schema.rs` | Current DDL baseline for a fresh local app database (952 lines). Secrets never live here, matching the module-level invariant. |
 | `bootstrap.rs` | Fresh-install bootstrap for the local app database. DopeDB is still pre-MVP, so stores from earlier schema experiments are deliberately unsupported — `Store::open` resets a mismatched app-owned store rather than decoding or migrating it, to avoid carrying data-conversion code for a product that has not reached MVP. |
-| `projections.rs` | SQLite row projections and stable enum/string codecs shared across repositories. |
+| `projections.rs` | SQLite row projections and stable enum/string codecs shared across repositories. A member-local binding projects its saved credential only while `binding_endpoint_admits` holds: the synced template still names the endpoint the credential was bound to (`workspace_connection_bindings.bound_endpoint`), over transport security at least as strong. |
 | `workspace_codec.rs` | SQLite wire codecs for workspace-owned values. |
 | `agent_acp.rs` | Workspace-scoped persistence for current ACP conversation projections. Only opaque session ids and bounded UI events live here — provider tokens, refresh credentials, broker capabilities, and prompt context rows are never persisted by this repository. |
 | `query_services.rs` | Bounded workspace/account-local persistence for the Services result projection. Snapshots are display-only execution artifacts; they never become executable SQL, operation grants, credentials, or authority inputs after being loaded back. |
@@ -39,12 +39,12 @@ runtime-arbitrary-SQL client, not a fixed-schema application. Covers
 |------|-------------|
 | `mod.rs` | Declares the feature-scoped repository submodules. |
 | `catalog.rs` | Canonical catalog cache persistence (backs `../introspect/catalog_v2.rs`). |
-| `history.rs` | Scope-pinned query history persistence and Analysis Article provenance reads. |
+| `history.rs` | Scope-pinned query history persistence and Analysis Article provenance reads. A desktop SQL run or script also records the database and schema it targeted (`query_history.target_database`/`target_namespace`, added to baseline stores by `bootstrap.rs`), so History reopens it there. |
 | `safety.rs` | Per-connection safety policy persistence. |
 | `analysis_articles.rs` | Encrypted local recovery cache for privacy-minimized Analysis Article results. |
 | `analysis_run_identity.rs` | Device-local identity for the possession-bound manual Analysis run capability; not a database credential and never authorizes background work on its own. |
 | `connections/mod.rs` | Connection persistence grouped by mutation, lookup, and batch operations. |
-| `connections/mutations.rs` | Connection creation, remote synchronization, and credential-binding mutations. |
+| `connections/mutations.rs` | Connection creation, remote synchronization, and credential-binding mutations. Binding records the template endpoint it was made against; a synchronization that moves that endpoint or weakens its transport releases the member's credential and returns its item id for credential-store cleanup, like a managed reset. |
 | `connections/lookup.rs` | Scoped connection lookup and retained-authority validation. |
 | `connections/grouping.rs` | Batch schema grouping and connection tombstone mutations. |
 | `workspaces/mod.rs` | Workspace persistence grouped by account sync, selection, and scope invariants. |

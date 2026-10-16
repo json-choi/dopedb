@@ -233,6 +233,20 @@ fn preconnection_report(
             }
             Ok(None)
         }
+        DesktopPreviewIntent::AutoRunRead => {
+            if matches!(context.classification.kind, QueryKind::Read) && !context.can_read {
+                return Err(AppError::Blocked {
+                    reason: "workspace role cannot execute this connection".into(),
+                });
+            }
+            // The read starts immediately and no surface shows its plan, so an
+            // EXPLAIN would only add target round trips (and a second remote grant
+            // check for shared connections) before the first row.
+            Ok(Some(skipped_preview_report(
+                no_target_touch_note
+                    .unwrap_or("auto-run read — executed directly without an EXPLAIN preview"),
+            )))
+        }
         DesktopPreviewIntent::ImpactPreview => {
             if let Some(note) = no_target_touch_note {
                 return Ok(Some(skipped_preview_report(note)));
