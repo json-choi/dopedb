@@ -15,11 +15,91 @@ import {
   WorkbenchScrollBody,
   WorkbenchSelect,
 } from "../../design-system/components/Workbench";
-import { useI18n } from "../../lib/i18n";
+import { useI18n, type I18nKey } from "../../lib/i18n";
+import { sqlResultTitle } from "../query/sqlDraftAnalysis";
 import type { ConnectionProfile } from "../connections/domain";
 import QueryServiceResult, { type SqlErrorNavigation } from "./QueryServiceResult";
 import type { QueryServiceSession } from "./domain";
 import { type QueryServiceStore, useQueryServiceSnapshot } from "./store";
+
+type Translate = (
+  key: I18nKey,
+  vars?: Record<string, string | number>,
+) => string;
+
+/** Leading-comment title of a session's exact run payload, or null without one. */
+function sessionResultTitle(session: QueryServiceSession): string | null {
+  if (session.result.kind === "materialized") return sqlResultTitle(session.result.sql);
+  if (session.result.kind === "stream") return sqlResultTitle(session.result.sql);
+  if (session.result.kind === "error") return sqlResultTitle(session.sql);
+  // A script's statements carry their own titles on the per-statement tabs.
+  return null;
+}
+
+/** Per-statement tab label source; non-script runs use the session title. */
+function statementResultTitle(
+  session: QueryServiceSession,
+  index: number,
+): string | null {
+  if (session.result.kind !== "script") return null;
+  return sqlResultTitle(session.result.outcome.statements[index]?.sql ?? "");
+}
+
+/**
+ * The Output tab's status text: state, row/affected counts, and the timing
+ * observations — the backend receipt's duration and the renderer's total.
+ * Their intervals overlap (backend streaming can wait on renderer ACKs), so
+ * neither their difference nor either total is an isolated fetch duration.
+ */
+function outputSummaryText(session: QueryServiceSession, t: Translate): string {
+  const parts = [t(`services.status.${session.status}`)];
+  const result = session.result;
+  if (result.kind === "none" || result.kind === "error") return parts[0];
+  if (result.kind === "script") {
+    const lines = [parts[0]];
+    result.outcome.statements.forEach((statement, index) => {
+      const statementParts = [`${index + 1}.`];
+      const title = sqlResultTitle(statement.sql);
+      if (title) statementParts.push(title);
+      const rows = statement.result
+        ? statement.result.rowCount
+        : statement.affected;
+      if (rows !== null) {
+        statementParts.push(t("services.outputRows", { count: rows }));
+      }
+      const durationMs = statement.result?.durationMs;
+      if (durationMs != null) {
+        statementParts.push(t("services.outputTotal", { ms: Math.round(durationMs) }));
+      }
+      if (statement.error) statementParts.push(t("services.status.failed"));
+      lines.push(statementParts.join(" · "));
+    });
+    return lines.join("\n");
+  }
+  if (result.kind === "stream") {
+    parts.push(t("services.outputRows", { count: result.stream.rowCount }));
+    const timings = result.stream.timings;
+    const durationMs = result.stream.durationMs;
+    if (timings && durationMs !== null) {
+      parts.push(t("services.outputClientTotal", { ms: Math.round(timings.clientTotalMs) }));
+      parts.push(t("services.outputBackend", { ms: Math.round(durationMs) }));
+    } else if (durationMs !== null) {
+      parts.push(t("services.outputTotal", { ms: Math.round(durationMs) }));
+    }
+    return parts.join(" · ");
+  }
+  if (result.outcome.result) {
+    parts.push(t("services.outputRows", { count: result.outcome.result.rowCount }));
+    if (result.outcome.result.durationMs !== null) {
+      parts.push(
+        t("services.outputTotal", { ms: Math.round(result.outcome.result.durationMs) }),
+      );
+    }
+  } else if (result.outcome.affected !== null && result.outcome.affected > 0) {
+    parts.push(t("services.outputAffected", { count: result.outcome.affected }));
+  }
+  return parts.join(" · ");
+}
 
 /** Whole seconds since `startedAt`, ticking while `running`. */
 function useElapsedSeconds(startedAt: string | undefined, running: boolean) {
@@ -79,12 +159,13 @@ export default function QueryResultsPane({
   const selectTab = (next: number | "output") =>
     setSelection({ sessionId: active.id, tab: next });
   const status = t(`services.status.${active.status}`);
+  const title = sessionResultTitle(active);
   const output = [
     `[${active.startedLabel}] ${t("services.started", { connection: active.connectionName })}`,
     "",
     active.sql,
     "",
-    status,
+    outputSummaryText(active, t),
   ].join("\n");
 
   return (
@@ -95,31 +176,36 @@ export default function QueryResultsPane({
         status={
           <WorkbenchSelect
             label={t("sql.executionResults")}
-            title={`${active.consoleTitle} · ${active.startedLabel} · ${status}`}
+            title={`${title ?? active.consoleTitle} · ${active.startedLabel} · ${status}`}
             value={active.id}
             onChange={(sessionId) => store.activate(sessionId)}
           >
             {sessions.map((session) => (
               <option key={session.id} value={session.id}>
-                {session.consoleTitle} · {session.startedLabel} · {t(`services.status.${session.status}`)}
+                {`${sessionResultTitle(session) ?? session.consoleTitle} · ${session.startedLabel} · ${t(`services.status.${session.status}`)}`}
               </option>
             ))}
           </WorkbenchSelect>
         }
       >
-        {Array.from({ length: Math.max(1, statementCount) }, (_, index) => (
-          <IdeToolTab
-            key={index}
-            active={tab === index}
-            size="compact"
-            onClick={() => selectTab(index)}
-          >
-            <Icon name="table" />
-            {statementCount > 1
-              ? t("services.resultNumber", { number: index + 1 })
-              : t("services.resultTab")}
-          </IdeToolTab>
-        ))}
+        {Array.from({ length: Math.max(1, statementCount) }, (_, index) => {
+          const label =
+            statementCount > 1
+              ? statementResultTitle(active, index) ??
+                t("services.resultNumber", { number: index + 1 })
+              : title ?? t("services.resultTab");
+          return (
+            <IdeToolTab
+              key={index}
+              active={tab === index}
+              size="compact"
+              onClick={() => selectTab(index)}
+            >
+              <Icon name="table" />
+              {label}
+            </IdeToolTab>
+          );
+        })}
         <IdeToolTab
           active={tab === "output"}
           size="compact"

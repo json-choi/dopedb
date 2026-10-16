@@ -180,6 +180,9 @@ export function useSqlResultStream(scopeKey: string) {
     await invalidate(activeRunRef.current);
     const run = newRun(++nextRunIdRef.current);
     activeRunRef.current = run;
+    // Client-side stream pipeline total for the output timing split; the
+    // backend receipt carries only the backend's own duration.
+    const runStartedMs = globalThis.performance?.now?.() ?? Date.now();
 
     try {
       await commit(run, {
@@ -209,7 +212,14 @@ export function useSqlResultStream(scopeKey: string) {
       ]);
       if (receipt === RUN_INVALIDATED) return;
       if (!owns(run)) return;
-      await commit(run, finishSqlStream(stateRef.current, run.id, receipt));
+      const clientTotalMs = Math.max(
+        0,
+        Math.round((globalThis.performance?.now?.() ?? Date.now()) - runStartedMs),
+      );
+      await commit(
+        run,
+        finishSqlStream(stateRef.current, run.id, receipt, { clientTotalMs }),
+      );
     } catch (error) {
       if (!owns(run)) {
         if (!mountedRef.current) throw error;
