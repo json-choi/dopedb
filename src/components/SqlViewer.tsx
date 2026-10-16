@@ -182,14 +182,25 @@ function executionStatusExtension(
   if (!status) return [];
   const markerPosition = sqlExecutionMarkerPosition(value, status);
   if (markerPosition === null) return [];
-  return EditorView.decorations.of(
-    Decoration.set([
-      Decoration.widget({
-        widget: new SqlExecutionWidget(status),
-        side: 1,
-      }).range(markerPosition),
-    ]),
-  );
+  const decorations = [
+    Decoration.widget({
+      widget: new SqlExecutionWidget(status),
+      side: 1,
+    }).range(markerPosition),
+  ];
+  // Highlight the exact range the run approved, for as long as its status
+  // still matches the text; the same validity gate owns the status widget.
+  const from = Math.max(0, Math.min(status.source.from, value.length));
+  const to = Math.max(from, Math.min(status.source.to, value.length));
+  if (to > from) {
+    decorations.push(
+      Decoration.mark({
+        class: "tw:bg-selection",
+        attributes: { "data-sql-run-range": "true" },
+      }).range(from, to),
+    );
+  }
+  return EditorView.decorations.of(Decoration.set(decorations, true));
 }
 
 export default function SqlViewer({

@@ -138,7 +138,16 @@ export type SqlStreamViewState = {
   truncated: boolean;
   durationMs: number | null;
   error: string | null;
+  /** Client-measured stream pipeline total; present only on a completed run. */
+  timings?: SqlStreamTimings;
 };
+
+/**
+ * The receive-side half of the output timing split: what the renderer observed
+ * for the whole stream, alongside the backend's own `durationMs`. Absent on
+ * restored snapshots, which keep the backend total alone.
+ */
+export type SqlStreamTimings = { clientTotalMs: number };
 
 /** Serializable handle over a Rust-owned, immutable local result artifact. */
 export type SqlStreamRowSource = {
@@ -277,6 +286,7 @@ export function finishSqlStream(
   state: SqlStreamViewState,
   runId: number,
   receipt: SqlStreamReceipt,
+  timings?: SqlStreamTimings,
 ): SqlStreamViewState {
   if (
     state.runId !== runId ||
@@ -305,5 +315,6 @@ export function finishSqlStream(
       rowCount: receipt.rowCount,
       complete: true,
     },
+    ...(timings ? { timings } : {}),
   };
 }
