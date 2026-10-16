@@ -84,9 +84,9 @@ pub(crate) enum ConnectionTestFailureCode {
     SshUnknown,
     TimeoutNetwork,
     Authentication,
-    /// The server refused the role itself rather than its password: PostgreSQL
-    /// SQLSTATE 28000 covers a missing role, an empty user name, and a
-    /// `pg_hba.conf` rule that rejects this user or address.
+    /// The server refused the role itself, not its secret. PostgreSQL SQLSTATE
+    /// 28000 covers a missing role, an empty user name, and a `pg_hba.conf`
+    /// rule that rejects this user or address.
     AuthenticationIdentity,
     Tls,
     DatabaseConfig,
