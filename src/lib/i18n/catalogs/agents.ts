@@ -107,6 +107,8 @@ export const agentsCatalog = defineCatalog(
       "The Project resources this conversation pinned changed after it started. Start a new session to use the current resources.",
     "agent.acpScopeUnverified":
       "DopeDB could not check this conversation's Project resources right now. Check your connection, then resume again.",
+    "agent.acpKnowledgeAccessSyncFailed":
+      "DopeDB couldn't sync this account's hosted Project Knowledge access, so resources that depend on it stay blocked. Check your network or sign-in, then try again.",
     "agent.acpNewSessionSameResources": "New session with the same resources",
     "agent.acpCancelStart": "Cancel start",
     "agent.acpReadyAnnouncement": "The Agent is ready for your next message.",
@@ -247,7 +249,11 @@ export const agentsCatalog = defineCatalog(
       "The Agent scope could not be verified: {error}",
     "agent.acpEnvironmentRequired": "Connect a database to a Project",
     "agent.acpEnvironmentRequiredBody":
-      "In Explorer, connect this database and source code to a Project before starting the Agent.",
+      "In Explorer, add this database to a Project before starting the Agent.",
+    "agent.acpComposerWriteUnavailable":
+      "This database can't be the write target yet. Allow writes for it in Safety, then try again.",
+    "agent.acpPendingRequest": "Your request will be sent when the Agent is ready.",
+    "agent.acpPendingRequestCancel": "Cancel request",
     "agent.acpEnvironmentReconfirm": "Reconfirm",
     "agent.acpReconfirmBody":
       "A selected database changed after it was added to the Project. Reconfirm the selection before the Agent starts.",
@@ -410,6 +416,8 @@ export const agentsCatalog = defineCatalog(
       "Choose the Agents you want to use in DopeDB. The app prepares each selected Agent and checks its local authentication configuration.",
     "agentTools.startupHeading": "Choose Agents for DopeDB",
     "agentTools.startupLater": "Later",
+    "agentTools.startupInstallFailed":
+      "{provider} could not be prepared. Check the network and try again, or choose Later and prepare it in Settings. ({error})",
     "agentTools.startupSafety":
       "If an Agent or its authentication configuration is missing, finish setup with its official CLI. DopeDB does not open credential files or store tokens.",
     "agentTools.startupInstallSelected": "Prepare selected Agents",
@@ -686,6 +694,8 @@ export const agentsCatalog = defineCatalog(
       "이 대화가 고정한 프로젝트 리소스가 시작 후 변경되었습니다. 현재 리소스를 사용하려면 새 세션을 시작하세요.",
     "agent.acpScopeUnverified":
       "이 대화의 프로젝트 리소스를 지금 확인하지 못했습니다. 연결을 확인한 뒤 다시 이어서 시작하세요.",
+    "agent.acpKnowledgeAccessSyncFailed":
+      "이 계정의 서버 측 프로젝트 지식 접근 권한을 동기화하지 못해, 이에 의존하는 리소스는 계속 차단됩니다. 네트워크나 로그인 상태를 확인한 뒤 다시 시도하세요.",
     "agent.acpNewSessionSameResources": "같은 리소스로 새 세션",
     "agent.acpCancelStart": "시작 취소",
     "agent.acpReadyAnnouncement": "Agent가 다음 메시지를 받을 준비가 되었습니다.",
@@ -825,7 +835,11 @@ export const agentsCatalog = defineCatalog(
       "Agent 범위를 검증하지 못했습니다: {error}",
     "agent.acpEnvironmentRequired": "프로젝트에 DB를 먼저 연결하세요",
     "agent.acpEnvironmentRequiredBody":
-      "Agent를 시작하기 전에 탐색기에서 이 DB와 소스 코드를 프로젝트에 연결하세요.",
+      "Agent를 시작하기 전에 탐색기에서 이 DB를 프로젝트에 추가하세요.",
+    "agent.acpComposerWriteUnavailable":
+      "이 데이터베이스는 아직 쓰기 대상으로 지정할 수 없습니다. 안전 설정에서 쓰기를 허용한 뒤 다시 시도하세요.",
+    "agent.acpPendingRequest": "Agent가 준비되면 요청을 보냅니다.",
+    "agent.acpPendingRequestCancel": "요청 취소",
     "agent.acpEnvironmentReconfirm": "재확인",
     "agent.acpReconfirmBody":
       "선택한 데이터베이스가 프로젝트에 추가된 뒤 변경되었습니다. Agent를 시작하기 전에 선택을 재확인하세요.",
@@ -988,6 +1002,8 @@ export const agentsCatalog = defineCatalog(
       "DopeDB에서 사용할 Agent를 선택하세요. 선택한 Agent의 채팅 연결을 준비하고 로컬 인증 설정을 확인합니다.",
     "agentTools.startupHeading": "DopeDB에서 사용할 Agent 선택",
     "agentTools.startupLater": "나중에",
+    "agentTools.startupInstallFailed":
+      "{provider}를 준비하지 못했습니다. 네트워크를 확인하고 다시 시도하거나 '나중에'를 눌러 설정에서 준비하세요. ({error})",
     "agentTools.startupSafety":
       "Agent나 인증 설정이 없으면 공식 CLI에서 설정을 마치세요. DopeDB는 자격 증명 파일을 열거나 토큰을 저장하지 않습니다.",
     "agentTools.startupInstallSelected": "선택한 Agent 준비",

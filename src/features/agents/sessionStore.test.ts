@@ -164,6 +164,7 @@ describe("ACP session store", () => {
     const handoff = {
       id: "handoff-one", connectionId: grant.connections[0].connectionId,
       projectEnvironmentId: grant.projectEnvironmentId, prompt: "",
+      writeConnectionId: null,
     };
     const ready = { ...session("one"), lifecycle: "ready" as const, knowledgeScopes: [grant] };
     expect(ownsAcpComposerRequest(ready, handoff)).toBe(true);
@@ -171,6 +172,10 @@ describe("ACP session store", () => {
     expect(ownsAcpComposerRequest({ ...ready, knowledgeScopes: [{ ...grant, connections: [] }] }, handoff)).toBe(false);
     expect(ownsAcpComposerRequest(ready, { ...handoff, projectEnvironmentId: "environment-other" })).toBe(false);
     expect(ownsAcpComposerRequest(ready, { ...handoff, connectionId: "database-other" as typeof handoff.connectionId })).toBe(false);
+    // A read-only session never swallows a handoff that needs a write target.
+    const writeHandoff = { ...handoff, writeConnectionId: handoff.connectionId };
+    expect(ownsAcpComposerRequest(ready, writeHandoff)).toBe(false);
+    expect(ownsAcpComposerRequest({ ...ready, writeConnectionId: handoff.connectionId }, writeHandoff)).toBe(true);
     await exerciseStartupOwnership(session);
   });
 

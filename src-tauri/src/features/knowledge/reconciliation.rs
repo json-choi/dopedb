@@ -1,10 +1,12 @@
 //! Explicit reconciliation of hosted Knowledge authority into device-local state.
 //!
-//! Read entry points never reconcile access or mutate grants/Environment bindings.
-//! Project inventory reads may refresh their bounded local copy of remote Projects.
-//! Callers that require current hosted authority invoke this application workflow
-//! deliberately and receive a bounded receipt; transport layers do not reach into
-//! one another to trigger it.
+//! Generic read entry points never reconcile access or mutate grants/Environment
+//! bindings. Project inventory reads may refresh their bounded local copy of remote
+//! Projects. Agent entry points (session start, the Agent Environment list, and
+//! `dopedb agent start`) reconcile deliberately, and only when they consume hosted
+//! authority: Team access, or a selected hosted source. Personal databases stay
+//! device-owned even with a selected account. A required sync that fails is never
+//! turned into an offline fallback.
 
 use std::collections::BTreeSet;
 
@@ -96,6 +98,16 @@ where
         grant_count: grants.len(),
         environment_binding_count,
     })
+}
+
+/// Whether an Agent entry point consumes hosted authority and so must reconcile
+/// first. Team access is always hosted-governed; Personal access depends on hosted
+/// grants only through a selected hosted (GitHub) source.
+pub(crate) fn agent_entry_requires_hosted_reconciliation(
+    kind: WorkspaceKind,
+    selects_hosted_source: bool,
+) -> bool {
+    kind == WorkspaceKind::Team || selects_hosted_source
 }
 
 fn selected_remote_account(scope: &ActiveResourceScope) -> AppResult<AccountId> {

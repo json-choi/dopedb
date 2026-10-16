@@ -29,8 +29,11 @@ export const SUPPORTED_AGENT_TARGETS = [
 }>;
 
 export function hasSavedAgentTargets() {
-  if (typeof localStorage === "undefined") return false;
-  return localStorage.getItem(STORAGE_KEY) !== null;
+  try {
+    return localStorage.getItem(STORAGE_KEY) !== null;
+  } catch {
+    return false;
+  }
 }
 
 export function agentSetupDeferred() {

@@ -490,7 +490,8 @@ export const connectionsCatalog = defineCatalog(
       "Choose a SQLite database file.",
     "connections.duplicate": "Duplicate connection",
     "connections.demoCreating": "Creating Demo SQLite...",
-    "connections.demoCreated": "Demo SQLite is ready.",
+    "connections.demoCreatedLocalOnly":
+      "Demo SQLite is ready on this device. SQLite files can't join a Team Project, so the Agent can't use this demo.",
     "connections.demoDescription":
       "Create a local database with seeded sample data",
     "connections.demoSqlite": "Create Demo SQLite",
@@ -1117,7 +1118,8 @@ export const connectionsCatalog = defineCatalog(
       "SQLite 데이터베이스 파일을 선택하세요.",
     "connections.duplicate": "연결 복제",
     "connections.demoCreating": "Demo SQLite 생성 중...",
-    "connections.demoCreated": "Demo SQLite가 준비되었습니다.",
+    "connections.demoCreatedLocalOnly":
+      "이 기기에 Demo SQLite가 준비됐습니다. SQLite 파일은 Team Project에 추가할 수 없어 Agent가 이 데모를 사용할 수 없습니다.",
     "connections.demoDescription":
       "샘플 데이터가 포함된 로컬 데이터베이스 생성",
     "connections.demoSqlite": "Demo SQLite 생성",

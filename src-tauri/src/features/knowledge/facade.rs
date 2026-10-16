@@ -17,7 +17,7 @@ use super::domain::{
     validate_binding_draft, EnvironmentConnectionBinding, EnvironmentRiskClass,
     KnowledgeEnvironmentSummary, KnowledgeMappingProposal, KnowledgeSessionScope, Project,
     ProjectDefinition, ProjectEnvironment, SourceBindingDraft, SourceLocator, SourceSnapshot,
-    StoredKnowledgeScope,
+    StoredKnowledgeScope, KNOWLEDGE_ACCESS_SYNC_FAILED,
 };
 use super::ports::{
     AppendKnowledgeEnvironmentRequest, CreateKnowledgeProjectRequest, CreateKnowledgeSourceRequest,
@@ -50,22 +50,31 @@ where
         self.repository.active_resource_scope().await
     }
 
-    /// Reconcile hosted grants and Environment bindings explicitly before an
-    /// Agent or graph workflow consumes them. Read transports never trigger
-    /// this mutation implicitly.
-    pub(crate) async fn reconcile_current_access(
-        &self,
-    ) -> AppResult<KnowledgeAccessReconciliation> {
-        let receipt =
-            super::reconciliation::reconcile_current_access(&self.repository, &self.authority)
-                .await?;
-        tracing::debug!(
-            projects = receipt.projects.len(),
-            grants = receipt.grant_count,
-            environment_bindings = receipt.environment_binding_count,
-            "reconciled exact Project Knowledge access"
-        );
-        Ok(receipt)
+    /// Reconcile hosted access for an Agent entry point that consumes it (see
+    /// [`super::reconciliation::agent_entry_requires_hosted_reconciliation`]).
+    /// Every failure fails closed. A hosted control-plane failure (server error or
+    /// offline) carries the stable `knowledge_access_sync_failed` code before the
+    /// original detail; sign-in, policy, and configuration errors keep their kind.
+    pub(crate) async fn reconcile_access_for_agent(&self) -> AppResult<()> {
+        match self.reconcile_current_access().await {
+            Ok(receipt) => {
+                tracing::debug!(
+                    projects = receipt.projects.len(),
+                    grants = receipt.grant_count,
+                    environment_bindings = receipt.environment_binding_count,
+                    "reconciled exact Project Knowledge access"
+                );
+                Ok(())
+            }
+            Err(AppError::Network(detail)) => Err(AppError::Network(format!(
+                "{KNOWLEDGE_ACCESS_SYNC_FAILED}\n{detail}"
+            ))),
+            Err(error) => Err(error),
+        }
+    }
+
+    async fn reconcile_current_access(&self) -> AppResult<KnowledgeAccessReconciliation> {
+        super::reconciliation::reconcile_current_access(&self.repository, &self.authority).await
     }
 
     pub(crate) async fn knowledge_projects(

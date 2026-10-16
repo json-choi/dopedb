@@ -86,6 +86,8 @@ export const safetyCatalog = defineCatalog(
     "safety.monitoringUser": "Database user",
     "safety.monitoringWorking": "Applying...",
     "safety.saved": "Safety settings saved",
+    "safety.savedWritePolicyChanged":
+      "Safety settings saved. Agent conversations using this database were ended; reconfirm its Project binding before the next Agent session or Analysis Article run.",
     "safety.refreshFailed":
       "The saved safety settings are still shown, but they could not be refreshed. Retry to load the latest values.",
     "safety.sharedWritesHint":
@@ -208,6 +210,8 @@ export const safetyCatalog = defineCatalog(
     "safety.monitoringUser": "DB 사용자",
     "safety.monitoringWorking": "적용 중...",
     "safety.saved": "안전 설정이 저장되었습니다",
+    "safety.savedWritePolicyChanged":
+      "안전 설정이 저장되었습니다. 이 데이터베이스를 쓰던 Agent 대화는 종료되었습니다. 다음 Agent 세션이나 분석 아티클을 실행하기 전에 Project 연결을 재확인하세요.",
     "safety.refreshFailed":
       "저장된 안전 설정을 계속 표시하지만 새로고침하지 못했습니다. 다시 시도해 최신 값을 불러오세요.",
     "safety.sharedWritesHint":

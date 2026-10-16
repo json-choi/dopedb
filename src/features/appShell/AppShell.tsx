@@ -127,7 +127,6 @@ function Shell() {
   const showAgentDock =
     agentDock.open && !!connections.selected && route.editing === null;
 
-
   const notifyOperation = useCallback(
     () => toast(t("app.toastAgentQuery")),
     [t, toast],
@@ -140,11 +139,9 @@ function Shell() {
 
   function openOrFocusAgentDock() {
     if (!connections.selected) return;
-    const returnFocus =
-      document.activeElement instanceof HTMLElement
-        ? document.activeElement
-        : null;
-    setAgentComposerRequest(null);
+    const returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    // Keep a queued handoff for the selected database; drop one for another.
+    setAgentComposerRequest((current) => current?.connectionId === connections.selected?.id ? current : null);
     if (compactShell) {
       setMobileExplorerOpen(false);
     }
@@ -162,11 +159,9 @@ function Shell() {
     environmentId?: string,
     prompt?: string,
     articleId?: string,
+    options?: { write?: boolean },
   ) {
-    const returnFocus =
-      document.activeElement instanceof HTMLElement
-        ? document.activeElement
-        : null;
+    const returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const target = connections.items.find((connection) => connection.id === connectionId);
     if (!target) return;
     setAgentComposerRequest(
@@ -176,6 +171,7 @@ function Shell() {
             connectionId: target.id,
             projectEnvironmentId: environmentId,
             prompt: prompt ?? "",
+            writeConnectionId: options?.write ? target.id : null,
           }
         : null,
     );
@@ -197,6 +193,8 @@ function Shell() {
     openTable: commands.documents.openTable,
     openAgentTask,
     openSafety: () => commands.route.openSettings("safety"),
+    connections: connections.items, selectConnection: commands.connections.select,
+    showWelcome: commands.route.showWelcome,
   });
 
   async function cancelBackgroundTask(task: BackgroundTask) {
@@ -409,6 +407,7 @@ function Shell() {
           agent: {
             open: showAgentDock,
             composerRequest: agentComposerRequest,
+            settleComposerRequest: (id) => setAgentComposerRequest((current) => (current?.id === id ? null : current)),
             width: agentDock.width,
             buttonRef: agentDock.buttonRef,
             returnFocusRef: agentDock.returnFocusRef,
