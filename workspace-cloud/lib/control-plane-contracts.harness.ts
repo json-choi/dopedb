@@ -75,10 +75,9 @@ import {
   type ConnectionVersionPayload,
 } from "./workspace-versioning";
 import {
-  requestedSettingsScope,
-  requestedSettingsScopeState,
-  selectSettingsWorkspace,
-} from "../app/settings/requestedScope";
+  providerAuthorizationStartDecision,
+  providerAuthorizationStartUrl,
+} from "./provider-authorization-handoff";
 
 type Fixture = Readonly<{
   schemaVersion: number;
@@ -202,122 +201,46 @@ describe("Connection conflict decisions", () => {
   });
 });
 
-describe("Settings requested-scope boundary", () => {
-  it("keeps ordinary entry fallback while collapsing unavailable exact scopes", () => {
-    const workspaceId = "11111111-1111-4111-8111-111111111111";
-    const otherWorkspaceId = "22222222-2222-4222-8222-222222222222";
-    const connectionId = "33333333-3333-4333-8333-333333333333";
-    const integrationId = "44444444-4444-4444-8444-444444444444";
-    const setupId = "55555555-5555-4555-8555-555555555555";
-    const visibleWorkspaces = [{ id: workspaceId }, { id: otherWorkspaceId }];
-    const ordinary = requestedSettingsScope({});
-    expect(selectSettingsWorkspace({
-      requested: ordinary,
-      visibleWorkspaces,
-      sessionWorkspaceId: otherWorkspaceId,
-    })).toEqual({ id: otherWorkspaceId });
-    expect(requestedSettingsScopeState({
-      requested: ordinary,
-      activeWorkspaceId: otherWorkspaceId,
-      requestedSectionAvailable: true,
-      connection: null,
-      integrationId: null,
-      setupId: null,
-    })).toBe("available");
+describe("Provider authorization start boundary", () => {
+  it("sends only the account that started the authorization on to the provider", () => {
+    const userId = "user-desktop-owner";
+    for (const state of [
+      null,
+      { userId, provider: "neon" },
+      { userId, provider: "vault" },
+      { userId, provider: "PlanetScale" },
+      { userId, provider: "" },
+    ]) {
+      expect(providerAuthorizationStartDecision({ state, sessionUserId: userId }))
+        .toBe("invalid");
+    }
+    for (const provider of ["planetScale", "gcpCloudSql"] as const) {
+      const state = { userId, provider };
+      for (const sessionUserId of [null, ""]) {
+        expect(providerAuthorizationStartDecision({ state, sessionUserId })).toBe("sign_in");
+      }
+      expect(providerAuthorizationStartDecision({ state, sessionUserId: "user-other" }))
+        .toBe("account_mismatch");
+      expect(providerAuthorizationStartDecision({ state, sessionUserId: userId }))
+        .toBe("redirect");
+    }
 
-    const absentWorkspace = requestedSettingsScope({
-      workspace: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-    });
-    expect(selectSettingsWorkspace({
-      requested: absentWorkspace,
-      visibleWorkspaces,
-      sessionWorkspaceId: otherWorkspaceId,
-    })).toBeNull();
-
-    const unavailableStates = [
-      requestedSettingsScopeState({
-        requested: absentWorkspace,
-        activeWorkspaceId: null,
-        requestedSectionAvailable: false,
-        connection: null,
-        integrationId: null,
-        setupId: null,
-      }),
-      requestedSettingsScopeState({
-        requested: requestedSettingsScope({ workspace: workspaceId, connection: connectionId }),
-        activeWorkspaceId: workspaceId,
-        requestedSectionAvailable: true,
-        connection: null,
-        integrationId: null,
-        setupId: null,
-      }),
-      requestedSettingsScopeState({
-        requested: requestedSettingsScope({ workspace: workspaceId, integration: integrationId }),
-        activeWorkspaceId: workspaceId,
-        requestedSectionAvailable: true,
-        connection: null,
-        integrationId: null,
-        setupId: null,
-      }),
-      requestedSettingsScopeState({
-        requested: requestedSettingsScope({ workspace: workspaceId, gcpSetup: setupId }),
-        activeWorkspaceId: workspaceId,
-        requestedSectionAvailable: true,
-        connection: null,
-        integrationId: null,
-        setupId: null,
-      }),
-      requestedSettingsScopeState({
-        requested: requestedSettingsScope({
-          workspace: workspaceId,
-          connection: connectionId,
-          integration: integrationId,
-        }),
-        activeWorkspaceId: workspaceId,
-        requestedSectionAvailable: true,
-        connection: { id: connectionId, providerIntegrationId: setupId },
-        integrationId,
-        setupId: null,
-      }),
-      requestedSettingsScopeState({
-        requested: requestedSettingsScope({ connection: connectionId }),
-        activeWorkspaceId: workspaceId,
-        requestedSectionAvailable: true,
-        connection: { id: connectionId, providerIntegrationId: integrationId },
-        integrationId: null,
-        setupId: null,
-      }),
-      requestedSettingsScopeState({
-        requested: requestedSettingsScope({ workspace: [workspaceId] }),
-        activeWorkspaceId: workspaceId,
-        requestedSectionAvailable: true,
-        connection: null,
-        integrationId: null,
-        setupId: null,
-      }),
-    ];
-    expect(unavailableStates).toEqual(Array(unavailableStates.length).fill("unavailable"));
-
-    expect(requestedSettingsScopeState({
-      requested: requestedSettingsScope({
-        workspace: workspaceId,
-        connection: connectionId,
-        integration: integrationId,
-      }),
-      activeWorkspaceId: workspaceId,
-      requestedSectionAvailable: true,
-      connection: { id: connectionId, providerIntegrationId: integrationId },
-      integrationId,
-      setupId: null,
-    })).toBe("available");
-    expect(requestedSettingsScopeState({
-      requested: requestedSettingsScope({ workspace: workspaceId, gcpSetup: setupId }),
-      activeWorkspaceId: workspaceId,
-      requestedSectionAvailable: true,
-      connection: null,
-      integrationId: null,
-      setupId,
-    })).toBe("available");
+    // Desktop opens only this origin's start page; the one-use state is its only
+    // query parameter, even when the value carries URL syntax.
+    vi.stubEnv("BETTER_AUTH_URL", "https://app.dopedb.dev");
+    try {
+      for (const state of ["s".repeat(43), `${"s".repeat(32)}&next=https://example.test/#x`]) {
+        const startUrl = new URL(providerAuthorizationStartUrl(state));
+        expect(startUrl.origin).toBe("https://app.dopedb.dev");
+        expect(startUrl.pathname).toBe("/auth/provider/start");
+        expect([...startUrl.searchParams.keys()]).toEqual(["state"]);
+        expect(startUrl.searchParams.get("state")).toBe(state);
+        expect(startUrl.hash).toBe("");
+        expect(`${startUrl.username}${startUrl.password}`).toBe("");
+      }
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });
 

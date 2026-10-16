@@ -45,6 +45,20 @@ pub(crate) trait ConnectionRepositoryPort: Clone + Send + Sync + 'static {
     fn delete(&self, id: ConnectionId) -> impl Future<Output = AppResult<()>> + Send;
 
     fn get(&self, id: ConnectionId) -> impl Future<Output = AppResult<ConnectionProfile>> + Send;
+
+    /// Remember an unreferenced OS credential item whose deletion failed, so a
+    /// later mutation retries it even after the app restarts.
+    fn defer_credential_delete(
+        &self,
+        credential_id: Uuid,
+    ) -> impl Future<Output = AppResult<()>> + Send;
+
+    fn deferred_credential_deletes(&self) -> impl Future<Output = AppResult<Vec<Uuid>>> + Send;
+
+    fn clear_deferred_credential_delete(
+        &self,
+        credential_id: Uuid,
+    ) -> impl Future<Output = AppResult<()>> + Send;
 }
 
 pub(crate) trait ProfileMutationPort: Send {

@@ -13,6 +13,7 @@ import {
   respondExternalAgentRequest,
 } from "./externalAgentTauriAdapter";
 import {
+  ExternalAgentProposalDialog,
   ExternalAgentRequestDialog,
   ExternalAgentUnavailableDialog,
 } from "./ExternalAgentRequestDialogs";
@@ -117,6 +118,18 @@ export function ExternalAgentRequestGate({
   );
 
   if (!active) return null;
+  if (active.kind === "proposal" && active.proposal) {
+    return (
+      <ExternalAgentProposalDialog
+        key={active.id}
+        request={active}
+        proposal={active.proposal}
+        error={error}
+        submitting={submitting}
+        onClose={() => void respond(false, null)}
+      />
+    );
+  }
   if (!anchor) {
     return (
       <ExternalAgentUnavailableDialog

@@ -14,7 +14,7 @@ import { ArticleLinkGate } from "../analysisArticles/ArticleLinkGate";
 import { ExternalAgentRequestGate } from "../agents/ExternalAgentRequestGate";
 import { useGuidedDemoCommands } from "../onboarding/useGuidedDemoCommands";
 import { useQueryServices } from "../queryServices/useQueryServices";
-import SkillStartupGate from "../skills/SkillStartupGate";
+import ShellGates from "./ShellGates";
 import { useSkillStartupObserver } from "../skills/useSkillStartupObserver";
 import {
   useWorkspaceManualTransactions,
@@ -34,6 +34,8 @@ import { useAgentDock } from "./useAgentDock";
 import { useToolWindowLayout } from "./useToolWindowLayout";
 import { useAppShellWorkbenchController } from "./useAppShellWorkbenchController";
 import { useConnectionProjectNames } from "./useConnectionProjectNames";
+import type { WorkspaceAdminDestination } from "../workspaceAdmin/sections";
+import { useWorkspaceAdminRequests } from "../workspaceAdmin/useWorkspaceAdminRequests";
 
 export default function App() {
   return (
@@ -97,12 +99,17 @@ function Shell() {
     catalogScope,
     connections.selected === null,
   );
+  const openWorkspaceAdmin = (destination: WorkspaceAdminDestination) => {
+    commands.route.openWorkspaceAdmin(destination);
+    setMobileExplorerOpen(false);
+  };
+  useWorkspaceAdminRequests(openWorkspaceAdmin);
   const backgroundTasks = useBackgroundTasks({
     connections: connections.items,
     queryServiceStore: queryServices.store,
     workspaceScopeKey: catalogScope.key,
   });
-  const manualTransactions = useWorkspaceManualTransactions(connections.items);
+  const manualTransactions = useWorkspaceManualTransactions(connections.items, () => commands.documents.openStable("activity"));
   const {
     width: sidebarWidth,
     minimum: sidebarMinimum,
@@ -306,6 +313,7 @@ function Shell() {
         commands.route.openSettings(section);
         setMobileExplorerOpen(false);
       },
+      openWorkspaceAdmin,
       selectConnection: commands.connections.select,
       activateDocument: commands.documents.activate,
       openSavedDocument: commands.documents.openSaved,
@@ -335,7 +343,10 @@ function Shell() {
       commands={{
         route: {
           openSafety: (connectionId: string) => openShellSettings("safety", connectionId),
+          openProjectEnvironment: (environmentId: string) => commands.route.openKnowledge(environmentId, "databases"),
           closeSettings: commands.route.closeSettings,
+          openWorkspaceAdmin: commands.route.openWorkspaceAdmin,
+          closeWorkspaceAdmin: commands.route.closeWorkspaceAdmin,
           closeSurface: commands.route.showWorkbench,
         },
         connections: commands.connections,
@@ -456,7 +467,7 @@ function Shell() {
             showWelcome: commands.route.showWelcome,
             activateDocument: commands.documents.activateId,
             restoreDocument: commands.documents.restoreDraft,
-            newQuery: commands.documents.newQuery,
+            newQuery: commands.documents.openQuery,
           },
           agent: {
             toggle: showAgentDock ? agentDock.close : openOrFocusAgentDock,
@@ -486,7 +497,7 @@ function Shell() {
           search: { open: search.show },
         }}
       />
-      <SkillStartupGate />
+      <ShellGates />
       {search.open ? (
         <ActionSearch items={searchItems} onClose={search.close} />
       ) : null}

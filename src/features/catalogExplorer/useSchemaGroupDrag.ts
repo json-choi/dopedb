@@ -1,4 +1,5 @@
-// Coordinates pointer drag targets and persistence for connection schema groups.
+// Coordinates pointer drag targets and persistence for connection schema groups. A group
+// change waits in `pendingGroupChange` until the Explorer's confirmation dialog applies it.
 
 import { useMemo, useRef, useState, type PointerEvent } from "react";
 
@@ -39,6 +40,11 @@ type EnvironmentDropTarget = {
   connectionIds: ReadonlySet<string>;
 };
 
+export type PendingSchemaGroupChange = {
+  message: string;
+  apply: () => Promise<void>;
+};
+
 type ConnectionDragOptions = {
   environmentTargets?: readonly EnvironmentDropTarget[];
   projectDatabasesTargets?: readonly ProjectDatabasesDropTarget[];
@@ -72,6 +78,8 @@ export function useSchemaGroupDrag(
     x: number;
     y: number;
   } | null>(null);
+  const [pendingGroupChange, setPendingGroupChange] =
+    useState<PendingSchemaGroupChange | null>(null);
   const dragStartRef = useRef<DragStart | null>(null);
   const activeDragIdRef = useRef<string | null>(null);
   const suppressClickRef = useRef(false);
@@ -213,25 +221,16 @@ export function useSchemaGroupDrag(
         ...(draggedGroup === group ? [] : [dragged.id]),
         ...(destinationGroup === group ? [] : [destination.id]),
       ];
-      if (
-        ids.length === 0 ||
-        !window.confirm(
-          t("connections.schemaGroupConfirmPair", {
-            source: dragged.name || dragged.database || t("app.unnamed"),
-            target:
-              destination.name || destination.database || t("app.unnamed"),
-            group,
-          }),
-        )
-      ) {
-        return;
-      }
-      try {
-        await saveGroup(ids, group);
-        toast(t("connections.schemaGroupUpdated"));
-      } catch (error) {
-        toast(errMessage(error), "error");
-      }
+      if (ids.length === 0) return;
+      setPendingGroupChange({
+        message: t("connections.schemaGroupConfirmPair", {
+          source: dragged.name || dragged.database || t("app.unnamed"),
+          target:
+            destination.name || destination.database || t("app.unnamed"),
+          group,
+        }),
+        apply: () => persistGroupChange(ids, group),
+      });
       return;
     }
 
@@ -239,22 +238,32 @@ export function useSchemaGroupDrag(
     if (
       !group ||
       !canDropOnGroup(dragged.id, group) ||
-      dragged.schemaGroup?.trim() === group.label ||
-      !window.confirm(
-        t("connections.schemaGroupConfirmGroup", {
-          connection: dragged.name || dragged.database || t("app.unnamed"),
-          group: group.label,
-        }),
-      )
+      dragged.schemaGroup?.trim() === group.label
     ) {
       return;
     }
+    setPendingGroupChange({
+      message: t("connections.schemaGroupConfirmGroup", {
+        connection: dragged.name || dragged.database || t("app.unnamed"),
+        group: group.label,
+      }),
+      apply: () => persistGroupChange([dragged.id], group.label),
+    });
+  }
+
+  async function persistGroupChange(ids: ConnectionId[], group: string) {
     try {
-      await saveGroup([dragged.id], group.label);
+      await saveGroup(ids, group);
       toast(t("connections.schemaGroupUpdated"));
     } catch (error) {
       toast(errMessage(error), "error");
     }
+  }
+
+  async function confirmGroupChange() {
+    const pending = pendingGroupChange;
+    setPendingGroupChange(null);
+    await pending?.apply();
   }
 
   function dropTargetFromPoint(
@@ -263,7 +272,7 @@ export function useSchemaGroupDrag(
     y: number,
   ): DropTarget | null {
     const element = document.elementFromPoint(x, y);
-    if (!(element instanceof HTMLElement)) return null;
+    if (!(element instanceof Element)) return null;
     const targetProjectId = element.closest<HTMLElement>(
       "[data-knowledge-project-databases-drop-id]",
     )?.dataset.knowledgeProjectDatabasesDropId;
@@ -299,6 +308,9 @@ export function useSchemaGroupDrag(
       orderElement?.dataset.projectDatabaseBlockFirstBindingId;
     const targetBlockLastBindingId =
       orderElement?.dataset.projectDatabaseBlockLastBindingId;
+    // An assigned row only reorders its own Project. It must never fall through
+    // to a schema-group mutation when dropped outside that Project.
+    if (orderSource && orderTargetProjectId !== orderSource.projectId) return null;
     if (
       orderSource &&
       orderElement &&
@@ -363,7 +375,7 @@ export function useSchemaGroupDrag(
   ) {
     if (
       event.button !== 0 ||
-      (event.target instanceof HTMLElement &&
+      (event.target instanceof Element &&
         !!event.target.closest(
           "button,input,select,textarea,a,summary,details,.db-menu",
         ))
@@ -413,6 +425,7 @@ export function useSchemaGroupDrag(
   }
 
   function pointerUp(event: PointerEvent<HTMLDivElement>) {
+    if (dragStartRef.current?.pointerId !== event.pointerId) return;
     const activeId = activeDragIdRef.current;
     const target = activeId
       ? dropTargetFromPoint(activeId, event.clientX, event.clientY)
@@ -434,6 +447,7 @@ export function useSchemaGroupDrag(
   }
 
   function pointerCancel(event: PointerEvent<HTMLDivElement>) {
+    if (dragStartRef.current?.pointerId !== event.pointerId) return;
     if (dragStartRef.current?.pointerId === event.pointerId) {
       try {
         event.currentTarget.releasePointerCapture?.(event.pointerId);
@@ -442,11 +456,15 @@ export function useSchemaGroupDrag(
       }
     }
     clearDrag();
+    suppressClickRef.current = false;
   }
 
   return {
     sections,
     groupByConnectionId,
+    pendingGroupChange,
+    confirmGroupChange,
+    cancelGroupChange: () => setPendingGroupChange(null),
     draggingIds,
     dropTarget,
     dragPreview,

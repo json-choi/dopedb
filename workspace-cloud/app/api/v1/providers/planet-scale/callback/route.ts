@@ -4,7 +4,6 @@ import { createHash } from "node:crypto";
 import { and, eq, gt } from "drizzle-orm";
 import { authoritativeSession } from "../../../../../../lib/authoritative-session";
 import { db } from "../../../../../../lib/db";
-import { env } from "../../../../../../lib/env";
 import {
   exchangePlanetScaleCode,
   inspectPlanetScaleToken,
@@ -27,26 +26,15 @@ import {
   workspaceProviderIntegration,
 } from "../../../../../../lib/schema";
 import { authorizeWorkspace } from "../../../../../../lib/workspace-authorization";
-import {
-  localizedWorkspacePath,
-  workspaceLocaleFromCookieHeader,
-} from "../../../../../../lib/workspace-locale";
+import { providerAuthorizationCompleteUrl } from "../../../../../../lib/provider-authorization-handoff";
+import { workspaceLocaleFromCookieHeader } from "../../../../../../lib/workspace-locale";
 
-function settingsUrl(
-  request: Request,
-  workspaceId: string | null,
-  status: "connected" | "failed",
-) {
-  const locale = workspaceLocaleFromCookieHeader(request.headers.get("cookie"));
-  const target = new URL(localizedWorkspacePath("/settings", locale), env.appOrigin());
-  target.searchParams.set("provider", "planetScale");
-  target.searchParams.set("status", status);
-  target.searchParams.set("section", "providers");
-  if (workspaceId) {
-    target.searchParams.set("workspace", workspaceId);
-    target.hash = `workspace-${workspaceId}`;
-  }
-  return target;
+function completionUrl(request: Request, status: "connected" | "failed") {
+  return providerAuthorizationCompleteUrl(
+    "planetScale",
+    status,
+    workspaceLocaleFromCookieHeader(request.headers.get("cookie")),
+  );
 }
 
 export async function GET(request: Request) {
@@ -59,18 +47,12 @@ export async function GET(request: Request) {
     || code.length < 8
     || code.length > 2_048
   ) {
-    return Response.redirect(settingsUrl(request, null, "failed"));
+    return Response.redirect(completionUrl(request, "failed"));
   }
   const session = await authoritativeSession(request);
-  if (!session) {
-    return Response.redirect(new URL(
-      localizedWorkspacePath(
-        `/auth/sign-in?returnTo=${encodeURIComponent(localizedWorkspacePath("/settings", workspaceLocaleFromCookieHeader(request.headers.get("cookie"))))}`,
-        workspaceLocaleFromCookieHeader(request.headers.get("cookie")),
-      ),
-      env.appOrigin(),
-    ));
-  }
+  // The Desktop start page signs the browser in before the provider redirect, so
+  // a missing session here means the code cannot be redeemed; restart from the app.
+  if (!session) return Response.redirect(completionUrl(request, "failed"));
   const stateHash = createHash("sha256").update(state).digest("base64url");
   const consumed = await db.delete(providerOauthState).where(and(
     eq(providerOauthState.stateHash, stateHash),
@@ -81,14 +63,14 @@ export async function GET(request: Request) {
     organizationId: providerOauthState.organizationId,
   });
   const oauthState = consumed[0];
-  if (!oauthState) return Response.redirect(settingsUrl(request, null, "failed"));
+  if (!oauthState) return Response.redirect(completionUrl(request, "failed"));
   const authorization = await authorizeWorkspace(
     request,
     oauthState.organizationId,
     "manage",
   );
   if (!authorization.ok || authorization.session.user.id !== session.user.id) {
-    return Response.redirect(settingsUrl(request, oauthState.organizationId, "failed"));
+    return Response.redirect(completionUrl(request, "failed"));
   }
 
   let tokenToRevoke: { accessToken: string; refreshToken: string } | null = null;
@@ -202,12 +184,12 @@ export async function GET(request: Request) {
     if (reconnectClaim && existing) {
       await revokeProviderAuthorization(existing).catch(() => undefined);
     }
-    return Response.redirect(settingsUrl(request, oauthState.organizationId, "connected"));
+    return Response.redirect(completionUrl(request, "connected"));
   } catch {
     if (tokenToRevoke) {
       await revokePlanetScaleAuthorization(tokenToRevoke.accessToken).catch(() => undefined);
       await revokePlanetScaleAuthorization(tokenToRevoke.refreshToken).catch(() => undefined);
     }
-    return Response.redirect(settingsUrl(request, oauthState.organizationId, "failed"));
+    return Response.redirect(completionUrl(request, "failed"));
   }
 }

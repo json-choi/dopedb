@@ -32,6 +32,7 @@ export function ConnectionEditorFooter({
             </Button>
             <Button
               disabled={commands.busy}
+              disabledBehavior="focusable"
               size="compact"
               onClick={() => void commands.save(false)}
             >
@@ -42,6 +43,7 @@ export function ConnectionEditorFooter({
             <Button
               variant="primary"
               disabled={commands.busy}
+              disabledBehavior="focusable"
               size="compact"
               onClick={() => void commands.save(true)}
             >

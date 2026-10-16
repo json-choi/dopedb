@@ -1,10 +1,24 @@
-// Presents read-only column and key metadata for the current catalog table.
+// Presents read-only column and key metadata for the current catalog table. Primary-key
+// positions follow key order and composite foreign keys stay one constraint.
 
 import type { CatalogTable } from "../../ipc/types";
 import { useI18n } from "../../lib/i18n";
 
 export default function TableStructure({ table }: { table: CatalogTable }) {
   const { t } = useI18n();
+  const primaryKey = table.constraints.find(
+    (constraint) => constraint.kind === "primary",
+  )?.columns ?? table.columns.filter((column) => column.pk).map((column) => column.name);
+  const foreignKeys = table.constraints.filter(
+    (constraint) => constraint.kind === "foreign" && constraint.referencedRelation,
+  );
+  const primaryKeyLabel = (column: string) => {
+    const position = primaryKey.indexOf(column);
+    if (position < 0) return "";
+    return primaryKey.length > 1
+      ? `${t("schema.pk")} ${position + 1}`
+      : t("schema.pk");
+  };
   return (
     <div className="tw:grid tw:min-h-0 tw:flex-[0_1_280px] tw:grid-cols-[minmax(0,1.4fr)_minmax(240px,0.6fr)] tw:gap-4 tw:overflow-auto tw:border-b tw:border-border-subtle tw:p-3 tw:@max-[920px]:grid-cols-1">
       <table className="tw:w-full tw:border-collapse tw:text-sm tw:[&_th]:border-b tw:[&_th]:border-border-subtle tw:[&_th]:px-2 tw:[&_th]:py-1 tw:[&_th]:text-left tw:[&_th]:font-semibold tw:[&_th]:text-muted-foreground tw:[&_td]:border-b tw:[&_td]:border-border-subtle tw:[&_td]:px-2 tw:[&_td]:py-1 tw:[&_td]:text-left">
@@ -13,7 +27,7 @@ export default function TableStructure({ table }: { table: CatalogTable }) {
             <th>{t("tables.column")}</th>
             <th>{t("tables.type")}</th>
             <th>{t("tables.nullable")}</th>
-            <th>PK</th>
+            <th>{t("schema.pk")}</th>
           </tr>
         </thead>
         <tbody>
@@ -22,7 +36,7 @@ export default function TableStructure({ table }: { table: CatalogTable }) {
               <td>{column.name}</td>
               <td className="tw:text-muted-foreground">{column.dataType}</td>
               <td>{column.nullable ? t("common.yes") : t("common.no")}</td>
-              <td>{column.pk ? "PK" : ""}</td>
+              <td>{primaryKeyLabel(column.name)}</td>
             </tr>
           ))}
         </tbody>
@@ -36,7 +50,13 @@ export default function TableStructure({ table }: { table: CatalogTable }) {
                 <li key={index.name}>
                   {index.name}
                   {index.unique ? ` (${t("tables.unique")})` : ""}:{" "}
-                  {index.columns.join(", ")}
+                  <span className="tw:font-mono">({index.columns.join(", ")})</span>
+                  {index.includedColumns.length > 0 ? (
+                    <span className="tw:font-mono"> INCLUDE ({index.includedColumns.join(", ")})</span>
+                  ) : null}
+                  {index.predicate ? (
+                    <span className="tw:font-mono"> WHERE {index.predicate}</span>
+                  ) : null}
                 </li>
               ))}
             </ul>
@@ -46,17 +66,19 @@ export default function TableStructure({ table }: { table: CatalogTable }) {
         </div>
         <div>
           <strong>{t("tables.foreignKeys")}</strong>
-          {table.foreignKeys.length ? (
+          {foreignKeys.length ? (
             <ul>
-              {table.foreignKeys.map((foreignKey) => (
-                <li
-                  key={`${foreignKey.column}-${foreignKey.referencesTable}-${foreignKey.referencesColumn}`}
-                >
-                  {foreignKey.column} →{" "}
-                  {foreignKey.referencesSchema
-                    ? `${foreignKey.referencesSchema}.`
-                    : ""}
-                  {foreignKey.referencesTable}.{foreignKey.referencesColumn}
+              {foreignKeys.map((foreignKey) => (
+                <li key={foreignKey.name}>
+                  {foreignKey.name}:{" "}
+                  <span className="tw:font-mono">
+                    ({foreignKey.columns.join(", ")}) →{" "}
+                    {foreignKey.referencedRelation?.namespace
+                      ? `${foreignKey.referencedRelation.namespace}.`
+                      : ""}
+                    {foreignKey.referencedRelation?.name}(
+                    {foreignKey.referencedColumns.join(", ")})
+                  </span>
                 </li>
               ))}
             </ul>

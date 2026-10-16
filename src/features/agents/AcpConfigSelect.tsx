@@ -36,13 +36,14 @@ export function AcpConfigSelect({
           return t("agent.acpApprovalBypass");
       }
     }
+    // The official Codex adapter's stable mode ids, never its English names.
     if (isMode && provider === "codex") {
-      switch (fallback.toLowerCase()) {
-        case "ask for approval":
+      switch (value) {
+        case "read-only":
           return t("agent.acpApprovalDefault");
-        case "approve for me":
+        case "agent":
           return t("agent.acpApprovalAgentDecides");
-        case "full access":
+        case "agent-full-access":
           return t("agent.acpApprovalFullAccess");
       }
     }
@@ -59,10 +60,10 @@ export function AcpConfigSelect({
       }
     }
     if (provider === "codex") {
-      switch (fallback.toLowerCase()) {
-        case "ask for approval": return t("agent.acpApprovalDefaultShort");
-        case "approve for me": return t("agent.acpApprovalAutoShort");
-        case "full access": return t("agent.acpApprovalFullShort");
+      switch (value) {
+        case "read-only": return t("agent.acpApprovalDefaultShort");
+        case "agent": return t("agent.acpApprovalAutoShort");
+        case "agent-full-access": return t("agent.acpApprovalFullShort");
       }
     }
     return fallback;

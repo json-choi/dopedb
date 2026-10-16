@@ -20,6 +20,78 @@ impl SqliteAnalysisLocalRepository {
 }
 
 impl AnalysisLocalRepositoryPort for SqliteAnalysisLocalRepository {
+    async fn personal_revisions(
+        &self,
+        article_id: Uuid,
+    ) -> AppResult<Vec<crate::features::analysis_articles::AnalysisArticleRevision>> {
+        self.store
+            .personal_article_revisions(article_id, &crate::store::personal_article_key().await?)
+            .await
+    }
+    async fn delete_personal_article(
+        &self,
+        article_id: Uuid,
+        expected_revision: i64,
+    ) -> AppResult<i64> {
+        self.store
+            .delete_personal_article(
+                article_id,
+                expected_revision,
+                &crate::store::personal_article_key().await?,
+            )
+            .await
+    }
+    async fn assert_personal_pin(
+        &self,
+        article: &dopedb_protocol::AnalysisArticleRecord,
+    ) -> AppResult<()> {
+        self.store
+            .check_personal_article_pin(
+                article.project_environment_id,
+                article.environment_revision,
+                article.connection_id,
+                article.connection_revision,
+            )
+            .await
+    }
+    async fn save_personal_run(
+        &self,
+        run: &crate::features::analysis_articles::AnalysisRunRecord,
+        creating: bool,
+    ) -> AppResult<()> {
+        self.store
+            .save_personal_analysis_run(run, creating, &crate::store::personal_article_key().await?)
+            .await
+    }
+    async fn personal_run(
+        &self,
+        article_id: Uuid,
+        run_id: Uuid,
+    ) -> AppResult<crate::features::analysis_articles::AnalysisRunRecord> {
+        self.store
+            .personal_analysis_run(
+                article_id,
+                run_id,
+                &crate::store::personal_article_key().await?,
+            )
+            .await
+    }
+    async fn personal_runs(
+        &self,
+        article_id: Uuid,
+        before: Option<chrono::DateTime<chrono::Utc>>,
+    ) -> AppResult<(
+        Vec<crate::features::analysis_articles::AnalysisRunRecord>,
+        Option<String>,
+    )> {
+        self.store
+            .personal_analysis_runs(
+                article_id,
+                before,
+                &crate::store::personal_article_key().await?,
+            )
+            .await
+    }
     async fn load_result(
         &self,
         article_id: Uuid,

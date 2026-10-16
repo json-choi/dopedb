@@ -6,6 +6,8 @@
 mod cloud_sql_proxy;
 mod gcp_schema_policy;
 pub mod keychain;
+mod mysql_session;
+mod pg_session;
 pub mod pool;
 mod provider_local;
 pub mod providers;
@@ -67,6 +69,11 @@ pub(crate) fn ensure_terminal_pin(
 /// Resolve the credential item referenced by a profile. Shared templates must carry
 /// an account-specific binding; they never fall back to the connection UUID where a
 /// different signed-in account's stale credential could exist.
+///
+/// A referenced item that this device's OS credential store no longer holds is the
+/// same recoverable state as a missing binding: the member must enter the credential
+/// again on this device. It is reported as `CredentialBindingRequired` rather than a
+/// generic not-found so every surface can route to credential entry.
 pub fn fetch_profile_secret(profile: &ConnectionProfile) -> AppResult<String> {
     if profile.credential_mode == WorkspaceCredentialMode::Managed {
         return Err(AppError::Config(
@@ -86,7 +93,10 @@ pub fn fetch_profile_secret(profile: &ConnectionProfile) -> AppResult<String> {
         }
         None => return Err(AppError::CredentialBindingRequired),
     };
-    fetch_secret(&secret_id)
+    fetch_secret(&secret_id).map_err(|error| match error {
+        AppError::NotFound(_) => AppError::CredentialBindingRequired,
+        error => error,
+    })
 }
 
 /// One open connection of either family: the sqlx SQL stack or the MongoDB

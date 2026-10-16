@@ -1,8 +1,12 @@
 // Manual SQL console. Editable CodeMirror. Run is the human approval action;
 // execution results and output occupy the central document.
 // Multi-statement scripts execute through the backend script runner and preserve
-// per-statement results. ⌘↩ runs the current draft or selected SQL.
-import { useState } from "react";
+// per-statement results. ⌘↩ and the toolbar Run both run the selection when there
+// is one ("Run selection"), otherwise choose current statement/all for a script;
+// ⌘. / Ctrl+. cancels a run.
+// The editor stays above its results in a resizable split. Executing updates
+// results without hiding the editor or moving focus away from the query.
+import { useEffect } from "react";
 import { StatusBadge } from "../../design-system/components/Status";
 import QueryResultsPane from "../../features/queryServices/QueryResultsPane";
 import type { QueryServiceStore } from "../../features/queryServices/store";
@@ -17,6 +21,7 @@ import {
   WorkbenchToolbar,
 } from "../../design-system/components/Workbench";
 import ManualTransactionControls from "../../features/queries/ManualTransactionControls";
+import SqlResultSplit from "../../features/queries/SqlResultSplit";
 import type { SqlResolveMode } from "../../features/queries/resolveMode";
 import {
   useSqlWorkbenchController,
@@ -24,7 +29,13 @@ import {
 } from "../../features/queries/useSqlWorkbenchController";
 import { databaseDisplayLabel } from "../../features/connections/domain";
 import { useI18n } from "../../lib/i18n";
+import SqlDocumentDetails from "./SqlDocumentDetails";
 import SqlParameterDialog from "./SqlParameterDialog";
+import SqlRunMenu from "./SqlRunMenu";
+
+const IS_MAC =
+  typeof navigator !== "undefined" &&
+  /Macintosh|Mac OS X/.test(navigator.userAgent);
 
 export default function Sql(props: Omit<SqlWorkbenchProps, "onShowResult"> & {
   resultStore: QueryServiceStore;
@@ -32,7 +43,6 @@ export default function Sql(props: Omit<SqlWorkbenchProps, "onShowResult"> & {
   onOpenSafety: (connectionId: string) => void;
 }) {
   const { t } = useI18n();
-  const [view, setView] = useState<"editor" | "result">("editor");
   const {
     connection,
     safety,
@@ -71,8 +81,16 @@ export default function Sql(props: Omit<SqlWorkbenchProps, "onShowResult"> & {
     explaining,
     flushEditorState,
     formatDraft,
+    formatError,
     formatting,
     handleCursorChange,
+    handleEditorReady,
+    handleSelectionChange,
+    hasSelection,
+    errorLocation,
+    jumpToError,
+    latestSessionId,
+    rerunSql,
     keepLocalConflictVersion,
     loadSavedConflictVersion,
     manualTransaction,
@@ -84,14 +102,39 @@ export default function Sql(props: Omit<SqlWorkbenchProps, "onShowResult"> & {
     planErr,
     resolveModeHint,
     running,
+    runChooser,
     setDraft,
   } = useSqlWorkbenchController({
     ...props,
-    onShowResult: (sessionId) => {
-      props.resultStore.activate(sessionId);
-      setView("result");
-    },
+    onShowResult: (sessionId) => props.resultStore.activate(sessionId),
   });
+
+  // ⌘. (macOS) / Ctrl+. cancels this document's run from anywhere while it runs.
+  useEffect(() => {
+    if (!running) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      const modifier = IS_MAC
+        ? event.metaKey && !event.ctrlKey
+        : event.ctrlKey && !event.metaKey;
+      if (event.key !== "." || !modifier || event.altKey || event.shiftKey) return;
+      if (event.defaultPrevented || event.repeat) return;
+      event.preventDefault();
+      cancelRun();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [cancelRun, running]);
+
+  const runLabel = hasSelection ? t("sql.runSelection") : t("sql.run");
+  const errorNavigation =
+    errorLocation && latestSessionId
+      ? {
+          sessionId: latestSessionId,
+          line: errorLocation.line,
+          column: errorLocation.column,
+          jump: jumpToError,
+        }
+      : null;
 
   return (
     <WorkbenchPane>
@@ -102,8 +145,8 @@ export default function Sql(props: Omit<SqlWorkbenchProps, "onShowResult"> & {
             tone="success"
             disabled={draft.length === 0 || running || !safetyReady}
             onClick={() => void executeSql()}
-            title={t("sql.runHint")}
-            aria-label={running ? t("sql.running") : t("sql.run")}
+            title={`${runLabel} · ${t(IS_MAC ? "sql.runHintMac" : "sql.runHintOther")}`}
+            aria-label={running ? t("sql.running") : runLabel}
           >
             <Icon name={running ? "refresh" : "play"} />
           </WorkbenchButton>
@@ -135,19 +178,20 @@ export default function Sql(props: Omit<SqlWorkbenchProps, "onShowResult"> & {
             disabled={
               draft.length === 0 ||
               !analysisCurrent ||
-              draftIsScript ||
+              (draftIsScript && !hasSelection) ||
               explaining ||
               running ||
               !safetyReady
             }
             title={
-              draftIsScript ? t("sql.explainSingle") : t("sql.explainTitle")
+              draftIsScript && !hasSelection
+                ? t("sql.explainSingle")
+                : hasSelection
+                  ? t("sql.explainSelectionTitle")
+                  : t("sql.explainTitle")
             }
             aria-label={t("sql.explain")}
-            onClick={() => {
-              setView("editor");
-              explain();
-            }}
+            onClick={explain}
           >
             <Icon name={explaining ? "refresh" : "target"} />
           </WorkbenchButton>
@@ -207,19 +251,16 @@ export default function Sql(props: Omit<SqlWorkbenchProps, "onShowResult"> & {
           iconOnly
           disabled={!running}
           onClick={cancelRun}
-          title={
-            running
-              ? `${t("sql.cancel")} · ${t("sql.runningFor", {
-                  seconds: elapsed,
-                })}`
-              : t("sql.cancel")
-          }
+          title={[
+            t("sql.cancel"),
+            t(IS_MAC ? "sql.cancelHintMac" : "sql.cancelHintOther"),
+            ...(running ? [t("sql.runningFor", { seconds: elapsed })] : []),
+          ].join(" · ")}
           aria-label={t("sql.cancel")}
+          aria-keyshortcuts={IS_MAC ? "Meta+." : "Control+."}
         >
           <Icon name="stop" />
         </WorkbenchButton>
-        <WorkbenchButton active={view === "editor"} onClick={() => setView("editor")}>SQL</WorkbenchButton>
-        <WorkbenchButton active={view === "result"} onClick={() => setView("result")}>{t("services.resultTab")}</WorkbenchButton>
         <WorkbenchButton
           iconOnly
           disabled={running}
@@ -298,7 +339,7 @@ export default function Sql(props: Omit<SqlWorkbenchProps, "onShowResult"> & {
           </span>
         ) : null}
       </WorkbenchToolbar>
-      <div data-active={view === "editor"} className="tw:flex tw:min-h-0 tw:flex-1 tw:flex-col tw:overflow-hidden tw:data-[active=false]:hidden" data-sql-editor-view>
+      <SqlResultSplit editor={
         <WorkbenchContainedBody>
           <div
             data-workbench-scroll-owner="sql-editor"
@@ -316,92 +357,42 @@ export default function Sql(props: Omit<SqlWorkbenchProps, "onShowResult"> & {
               namespaceOptions={namespaceOptions}
               minHeight="0px"
               onCursorChange={handleCursorChange}
+              onSelectionChange={handleSelectionChange}
+              onEditorReady={handleEditorReady}
               onBlur={flushEditorState}
               executionStatus={editorExecutionStatus}
+              previewSource={runChooser.previewSource}
+              errorRange={errorLocation}
+              ariaLabel={t("sql.editorLabel", {
+                connection: connection.name || t("app.unnamed"),
+              })}
             />
           </div>
 
-          <div
-            data-workbench-scroll-owner="document-details"
-            className="scrollbar-sleek tw:max-h-[50%] tw:min-h-0 tw:shrink-0 tw:overflow-auto tw:overscroll-contain tw:bg-background"
-          >
-            {documentConflict && (
-              <div
-                className="tw:mx-3 tw:flex tw:min-h-control-lg tw:items-center tw:justify-between tw:gap-3 tw:border-y tw:border-warning tw:py-2 tw:text-sm tw:text-warning tw:max-[760px]:flex-col tw:max-[760px]:items-start"
-                role="alert"
-              >
-                <span>{t("sql.saveConflictBody")}</span>
-                <div className="ds-control-row">
-                  <WorkbenchButton
-                    variant="default"
-                    onClick={loadSavedConflictVersion}
-                  >
-                    {t("sql.loadSaved")}
-                  </WorkbenchButton>
-                  <WorkbenchButton
-                    variant="default"
-                    onClick={keepLocalConflictVersion}
-                  >
-                    {t("sql.keepMine")}
-                  </WorkbenchButton>
-                </div>
-              </div>
-            )}
-            {documentSaveError && documentSaveState === "error" && (
-              <div className="tw:mx-3 tw:mt-2 tw:text-ui tw:text-danger">
-                {t("sql.saveFailed")}: {documentSaveError}
-              </div>
-            )}
-            {planErr && (
-              <div className="tw:mx-3 tw:mt-2 tw:text-ui tw:text-danger">
-                {planErr}
-              </div>
-            )}
-            {plan && (
-              <details
-                open
-                className="tw:my-2 tw:border-y tw:border-border-subtle tw:bg-background"
-              >
-                <summary className="tw:flex tw:min-h-workbench-toolbar tw:cursor-pointer tw:items-center tw:gap-2 tw:px-3 tw:py-1 tw:font-semibold">
-                  {t("sql.queryPlan")}
-                  <span className="tw:ml-auto">
-                    <WorkbenchButton
-                      iconOnly
-                      size="xs"
-                      onClick={(event) => {
-                        event.preventDefault();
-                        closePlan();
-                      }}
-                      title={t("common.close")}
-                      aria-label={t("common.close")}
-                    >
-                      <Icon name="close" />
-                    </WorkbenchButton>
-                  </span>
-                </summary>
-                {plan.plan ? (
-                  <pre className="tw:m-0 tw:overflow-x-auto tw:border-t tw:border-border-subtle tw:bg-background tw:p-3 tw:font-mono tw:text-sm tw:whitespace-pre">
-                    {plan.plan}
-                  </pre>
-                ) : (
-                  <div className="tw:border-t tw:border-border-subtle tw:px-3 tw:py-2 tw:text-muted-foreground">
-                    {t("sql.noPlan", { mode: plan.mode })}
-                  </div>
-                )}
-              </details>
-            )}
-
-          </div>
+          <SqlDocumentDetails
+            conflict={!!documentConflict}
+            onLoadSaved={loadSavedConflictVersion}
+            onKeepMine={keepLocalConflictVersion}
+            saveState={documentSaveState}
+            saveError={documentSaveError}
+            formatError={formatError}
+            plan={plan}
+            planError={planErr}
+            onClosePlan={closePlan}
+          />
         </WorkbenchContainedBody>
-      </div>
-      {view === "result" ? (
+      } result={
         <QueryResultsPane
           store={props.resultStore}
           connection={connection}
           documentId={props.documentId}
           onOpenSafety={props.onOpenSafety}
+          onRerun={(session) => rerunSql(session.sql)}
+          onOpenActivity={onOpenHistory}
+          errorNavigation={errorNavigation}
         />
-      ) : null}
+      } />
+      <SqlRunMenu chooser={runChooser} />
       {parameterDialog ? (
         <SqlParameterDialog
           parameters={parameterDialog.parameters}

@@ -5,7 +5,12 @@ overrides:
   'undici@>=7.28.0 <7.29.1': 7.29.1
   'nanoid@<3.3.18': 3.3.18
   postcss: 8.5.26
-  sharp: ^0.35.3
+  # GHSA-wq5f-xc86-pv6w: use the sharp build with the patched librsvg.
+  sharp: ^0.35.5
+  # GHSA-jqcg-44mw-7w3h: reject IPv4-mapped IPv6 trust-subnet spoofing.
+  'proxy-addr@<2.0.8': 2.0.8
+  # GHSA-68fv-2mgg-jv7q: bound indexed source-map section offsets.
+  'source-map-js@<1.2.2': 1.2.2
 minimumReleaseAge: 1440
 minimumReleaseAgeStrict: true
 allowBuilds:

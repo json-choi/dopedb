@@ -3,7 +3,8 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { errMessage, type CatalogRelationV2 } from "../../ipc/types";
+import type { CatalogRelationV2 } from "../../ipc/types";
+import { useI18n } from "../../lib/i18n";
 import { jobsQuery, qk } from "../../lib/queries";
 import { approveOperation } from "../operations/tauriAdapter";
 import {
@@ -19,8 +20,14 @@ import {
   type JobId,
   type JobInputInspection,
   type JobKind,
+  type JobSqlAudit,
 } from "./domain";
-import { DEFAULT_JOB_BATCH_SIZE, jobFileExtension, jobRelationLabel } from "./jobPanelPresentation";
+import {
+  DEFAULT_JOB_BATCH_SIZE,
+  jobErrorKey,
+  jobFileExtension,
+  jobRelationLabel,
+} from "./jobPanelPresentation";
 import {
   cancelJob,
   createJob,
@@ -37,6 +44,8 @@ export type JobApproval = {
   job: Job;
   payloadHash: string;
   confirmationPhrase: string | null;
+  /** Statement counts of a SQL import, including schema changes (DDL). */
+  sqlAudit: JobSqlAudit | null;
 };
 
 export function useJobPanelController({
@@ -46,6 +55,7 @@ export function useJobPanelController({
   connectionId: string;
   relation: CatalogRelationV2;
 }) {
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const jobs = useQuery(jobsQuery(connectionId));
   const scopedConnectionId = jobConnectionId(connectionId);
@@ -115,7 +125,7 @@ export function useJobPanelController({
     } catch (cause) {
       setCapability(null);
       setInspection(null);
-      setError(errMessage(cause));
+      setError(t(jobErrorKey(cause)));
     } finally {
       setBusy(false);
     }
@@ -175,6 +185,7 @@ export function useJobPanelController({
           job: proposed.job,
           payloadHash: proposed.payloadHash,
           confirmationPhrase: proposed.confirmationPhrase,
+          sqlAudit: proposed.sqlAudit ?? null,
         });
         return;
       }
@@ -182,7 +193,7 @@ export function useJobPanelController({
       setCapability(null);
       await refreshJobs();
     } catch (cause) {
-      setError(errMessage(cause));
+      setError(t(jobErrorKey(cause)));
     } finally {
       setBusy(false);
     }
@@ -204,7 +215,7 @@ export function useJobPanelController({
       setDetail(null);
       await refreshJobs();
     } catch (cause) {
-      setError(errMessage(cause));
+      setError(t(jobErrorKey(cause)));
     } finally {
       setBusy(false);
     }
@@ -220,7 +231,7 @@ export function useJobPanelController({
       setDetail(null);
       await refreshJobs();
     } catch (cause) {
-      setError(errMessage(cause));
+      setError(t(jobErrorKey(cause)));
     } finally {
       setBusy(false);
     }
@@ -235,7 +246,7 @@ export function useJobPanelController({
       if (action === "cancel") await cancelJob(scopedConnectionId, job.id);
       await refreshJobs();
     } catch (cause) {
-      setError(errMessage(cause));
+      setError(t(jobErrorKey(cause)));
     } finally {
       setBusyJobId(null);
     }
@@ -252,10 +263,11 @@ export function useJobPanelController({
           job: next.job,
           payloadHash: next.payloadHash,
           confirmationPhrase: next.confirmationPhrase,
+          sqlAudit: next.sqlAudit ?? null,
         });
       }
     } catch (cause) {
-      setError(errMessage(cause));
+      setError(t(jobErrorKey(cause)));
     } finally {
       setBusyJobId(null);
     }
@@ -265,7 +277,7 @@ export function useJobPanelController({
     try {
       await revealJobArtifact(scopedConnectionId, artifactId);
     } catch (cause) {
-      setError(errMessage(cause));
+      setError(t(jobErrorKey(cause)));
     }
   }
 

@@ -46,6 +46,8 @@ export interface AgentCliInfo {
   installed: boolean;
   authenticated: boolean;
   authMethod: string | null;
+  accountEmail: string | null;
+  accountPlan: string | null;
   detectionError: string | null;
   note: string;
 }
@@ -209,10 +211,16 @@ export interface AcpSessionFocus {
   session: AcpSessionSummary;
   events: AcpSessionEvent[];
   replayTruncated: boolean;
+  /** The Broker session a live conversation runs under; absent once it is stored or detached. */
+  brokerSessionId?: string;
 }
 
+/**
+ * Streamed message/thought chunks omit `session`; the full summary (with its
+ * pinned resource scopes) arrives again with the next boundary event.
+ */
 export interface AcpSessionChanged {
-  session: AcpSessionSummary;
+  session: AcpSessionSummary | null;
   event: AcpSessionEvent | null;
 }
 

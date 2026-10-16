@@ -1,6 +1,5 @@
 // The only frontend owner of saved-connection Tauri command names. Screens depend on
 // these typed functions and never invoke the connection transport directly.
-import type { DatabaseSummary } from "../../ipc/types";
 import { invoke } from "../../ipc/core";
 
 import type {
@@ -13,6 +12,7 @@ import type {
   ConnectionId,
   ConnectionProfile,
   ConnectionTestReceipt,
+  DatabaseDiscoveryReceipt,
   DriverDescriptor,
   LocalDatabaseListener,
 } from "./domain";
@@ -33,11 +33,16 @@ export function createDemoSqlite(): Promise<string> {
   return invoke("create_demo_sqlite");
 }
 
+/**
+ * Saves a local profile. `clearPassword` removes the saved credential when no
+ * replacement password is supplied; the write ceiling always stays with Safety.
+ */
 export function upsertConnection(
   profile: ConnectionProfile,
   password?: string,
+  clearPassword = false,
 ): Promise<ConnectionProfile> {
-  return invoke("upsert_connection", { profile, password });
+  return invoke("upsert_connection", { profile, password, clearPassword });
 }
 
 export function setConnectionsSchemaGroup(
@@ -55,6 +60,10 @@ export function testConnection(id: ConnectionId): Promise<ConnectionTestReceipt>
   return invoke("test_connection", { id });
 }
 
+/**
+ * Checks an unsaved draft. A present `secretRef` only opts into the credential
+ * saved for this profile id; the native side never trusts the reference value.
+ */
 export function testConnectionProfile(
   profile: ConnectionProfile,
   password?: string,
@@ -62,10 +71,11 @@ export function testConnectionProfile(
   return invoke("test_connection_profile", { profile, password });
 }
 
+/** Like a check, discovery refuses a draft that moved away from its saved endpoint. */
 export function discoverConnectionProfileDatabases(
   profile: ConnectionProfile,
   password?: string,
-): Promise<DatabaseSummary[]> {
+): Promise<DatabaseDiscoveryReceipt> {
   return invoke("discover_connection_profile_databases", {
     profile,
     password,

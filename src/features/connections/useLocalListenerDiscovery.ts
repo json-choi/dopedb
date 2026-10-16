@@ -1,5 +1,6 @@
-// Owns the one-shot loopback listener discovery offered on the first-run
-// Welcome. Discovery never starts on its own: the caller runs it, and the
+// Owns the loopback listener discovery offered on the first-run Welcome.
+// Discovery never starts on its own: each probe is one explicit run by the
+// person (a finished run may be repeated on request, never polled), and the
 // result is a suggestion that only the connection editor can turn into a saved
 // profile.
 import { useState } from "react";
@@ -30,16 +31,17 @@ export function useLocalListenerDiscovery(): LocalListenerDiscovery {
 
   let status: LocalListenerDiscoveryStatus = "idle";
   if (started) {
-    if (query.isError) status = "failed";
+    if (query.isFetching) status = "running";
+    else if (query.isError) status = "failed";
     else if (query.data) status = "ready";
     else status = "running";
   }
 
   return {
     status,
-    listeners: started ? query.data ?? [] : [],
+    listeners: started && status !== "running" ? query.data ?? [] : [],
     run: () => {
-      if (started) return;
+      if (query.isFetching) return;
       setStarted(true);
       void query.refetch({ cancelRefetch: false });
     },

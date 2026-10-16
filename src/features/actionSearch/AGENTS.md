@@ -20,7 +20,7 @@ features.
 | `catalogCache.ts` | `useCachedCatalogOverviews` — reads already-fetched `CatalogOverview` query cache entries (by connection/database) so search does not trigger new catalog fetches. |
 | `useActionSearchDialog.ts` | Open/close state and the editable-target guard (`actionSearchShortcutTargetIsEditable`) so the shortcut does not fire while typing in an input, textarea, or CodeMirror surface. |
 | `documentItems.ts` | `useDocumentActionSearchItems` — projects the connection's open tabs plus the saved SQL documents a member closed and may reopen into one searchable document list. |
-| `useActionSearchItems.ts` | Builds the actual `ActionSearchItem[]` from connections, documents, settings sections, and cached catalog tables for the current scope. |
+| `useActionSearchItems.ts` | Builds the actual `ActionSearchItem[]` from connections, documents, settings sections, the Workspace management sections the member's role can run, and cached catalog tables for the current scope. |
 
 ## For AI Agents
 

@@ -1,21 +1,22 @@
-const controllerPath = "src/features/connections/useConnectionProfileController.ts";
+// The cancellable check owns the probe lifecycle the editor's profile controller composes.
+const checkCommandPath = "src/features/connections/useConnectionTestCommand.ts";
 const footerPath = "src/screens/Connections/ConnectionEditorFooter.tsx";
 const generalTabPath = "src/screens/Connections/ConnectionGeneralTab.tsx";
 const transportPath = "src-tauri/src/features/connections/transport.rs";
 
 export function collectConnectionEditorDiagnostics({ exists, read }) {
-  const required = [controllerPath, footerPath, generalTabPath, transportPath];
+  const required = [checkCommandPath, footerPath, generalTabPath, transportPath];
   const diagnostics = required
     .filter((filePath) => !exists(filePath))
     .map((filePath) => `required connection editor boundary is missing: ${filePath}`);
   if (diagnostics.length > 0) return diagnostics;
 
-  const controller = read(controllerPath);
-  if (!controller.includes("if (!mounted.current) return;")) {
-    diagnostics.push(`${controllerPath}: dismissed probes must not update unmounted editor state`);
+  const checkCommand = read(checkCommandPath);
+  if (!checkCommand.includes("if (!mounted.current) return;")) {
+    diagnostics.push(`${checkCommandPath}: dismissed probes must not update unmounted editor state`);
   }
-  if (!controller.includes("receipt.ok")) {
-    diagnostics.push(`${controllerPath}: test failures must consume the typed native receipt`);
+  if (!checkCommand.includes("receipt.ok")) {
+    diagnostics.push(`${checkCommandPath}: test failures must consume the typed native receipt`);
   }
 
   const footer = read(footerPath);

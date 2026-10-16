@@ -18,6 +18,8 @@ validates DopeDB-owned principals without rewriting pre-existing ones.
 |------|-------------|
 | `mod.rs` | Saved connection feature composition. |
 | `domain.rs` | Connection domain values and invariants, deliberately unaware of Tauri, SQLite, the keychain, live pools, or the driver installer; owns rules every transport must use. |
+| `probe.rs` | Connection probe outcomes: the closed check receipt that never serializes driver text and the database discovery receipt. A refusal made before contacting a server is an optional `refusal` on the receipt: `savedCredentialEndpointChanged`, `retryLater` (network family plus `retryAfterSeconds` from the managed cooldown), or `sharedConnectionChanged` (refresh the workspace). |
+| `credential_endpoint.rs` | `same_credential_endpoint`: a saved credential is reused only for the engine, host, port, user, and SSH alias it was saved with, over transport security at least as strong (PostgreSQL/MySQL `sslmode` rank, MongoDB `tls`/`ssl`/`srv` and verification-relaxing options) and, while the stored profile verifies the server, the same CA option. Check, discovery, and save refuse anything else instead of sending or keeping the saved secret. The store applies the same rule to shared member-local bindings against the template endpoint each was bound to, and the workspace binding's keep-password path applies it to a changed user, SSH alias, or TLS file. |
 | `application.rs` | Connection use cases; validation and mutation ordering, with concrete SQLite/keychain/driver/pool/Tauri details behind ports. |
 | `ports.rs` | Platform ports required by connection use cases. |
 | `adapters.rs` | Concrete connection adapters for SQLite, live pool authority, drivers, and keychain. |
@@ -35,6 +37,9 @@ validates DopeDB-owned principals without rewriting pre-existing ones.
   silently widening access when a safe path cannot be established.
 - `demo.rs`'s seeding must stay idempotent — never overwrite an existing
   demo database file's user edits.
+- A saved local credential is resolved only from the stored profile with the
+  same id and only while `same_credential_endpoint` holds; decide that before
+  reading the OS credential store, and never relax it for a draft or a save.
 
 ### Testing Requirements
 

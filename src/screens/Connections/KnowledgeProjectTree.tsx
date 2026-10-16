@@ -46,6 +46,7 @@ interface AnalysisQueryState {
   data: AnalysisArticleRecord[] | undefined;
   error: unknown;
   isPending: boolean;
+  isLoading: boolean;
   refetch: () => Promise<unknown>;
 }
 
@@ -227,7 +228,6 @@ function KnowledgeProjectResources({
   sourcesError,
   sourcesPhase,
   analysisQueries,
-  sharedWorkspace,
   expandedResourceKeys,
   unbindingBindingId,
   dropTargetEnvironmentId,
@@ -311,7 +311,7 @@ function KnowledgeProjectResources({
     query?.error ? [query.error] : [],
   );
   const analysisPending =
-    sharedWorkspace && projectAnalysisQueries.some(({ query }) => query?.isPending);
+    projectAnalysisQueries.some(({ query }) => query?.isLoading);
   const analysisHasData = projectAnalysisQueries.some(
     ({ query }) => query?.data !== undefined,
   );

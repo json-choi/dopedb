@@ -169,6 +169,8 @@ impl QueryPlatformAdapter {
                     duration_ms: None,
                     error: Some(reason.clone()),
                     origin: &payload.history_origin,
+                    database: &payload.database,
+                    namespace: payload.namespace.as_deref(),
                 },
             )
             .await;
@@ -418,6 +420,8 @@ impl QueryPlatformAdapter {
                                 duration_ms: Some(duration_ms as i64),
                                 error: receipt.as_ref().err().map(ToString::to_string),
                                 origin: &payload.history_origin,
+                                database: &payload.database,
+                                namespace: payload.namespace.as_deref(),
                             },
                         )
                         .await;
@@ -498,6 +502,8 @@ impl QueryPlatformAdapter {
                         duration_ms: Some(summary.duration_ms as i64),
                         error: None,
                         origin: &payload.history_origin,
+                        database: &payload.database,
+                        namespace: payload.namespace.as_deref(),
                     },
                 )
                 .await;
@@ -561,18 +567,27 @@ impl QueryPlatformAdapter {
                 )
                 .await
         };
+        // A user cancellation is recorded as cancelled, not as a failed read, so
+        // Activity tells the two apart like the operation-backed run paths do.
+        let (action, status) = if cancelled {
+            ("read:cancelled", "cancelled")
+        } else {
+            ("error", "error")
+        };
         record_desktop_run(
             &self.store,
             pin,
             DesktopRunRecord {
                 sql: &payload.sql,
                 kind: QueryKind::Read,
-                action: "error",
-                status: "error",
+                action,
+                status,
                 row_count: None,
                 duration_ms: None,
                 error: Some(error.to_string()),
                 origin: &payload.history_origin,
+                database: &payload.database,
+                namespace: payload.namespace.as_deref(),
             },
         )
         .await;

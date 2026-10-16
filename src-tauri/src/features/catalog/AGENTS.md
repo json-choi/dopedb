@@ -44,6 +44,30 @@ feature.
   than widening it ad hoc.
 - New introspection logic belongs in `adapters/local.rs` behind `CatalogPort`,
   never inline in `transport.rs`.
+- Desktop reads catalogs only through `load_live_snapshot` (always live; reading
+  the configured database also replaces the persisted snapshot so CLI cache-first
+  readers stay current). Relation DDL never waits for the snapshot load lock.
+- `Store::clear_schema_cache` deletes the connection's cached catalog in every
+  workspace account scope and announces `CatalogChanged`. The DDL-committing
+  paths call it: Desktop SQL runs, scripts, and SQL import Jobs (after any DDL
+  statement committed or reached an unknown commit outcome). Connection edits call
+  it too; manual transactions refuse DDL. A new DDL-committing path must call it.
+  The transport's process-wide forwarder, started by the first renderer catalog
+  read, emits the announcement as `catalog:changed`. A reader's own refresh uses
+  the silent, scope-local `Store::discard_catalog_cache` so it never re-triggers
+  itself. An import that may run DDL reads with `CatalogReadPolicy::Uncached`, so
+  no pre-import snapshot is persisted for its own DDL to make stale.
+- `clear_schema_cache` also bumps the connection's in-process schema epoch. A live
+  read captures `Store::catalog_epoch` before it introspects and passes it to
+  `put_catalog_if_current`; a write whose epoch is older returns `Superseded` and is
+  not stored, so a scan that began before a DDL commit cannot re-persist the old
+  schema. Callers return such a snapshot uncached; `catalog:changed` reloads views.
+- `CATALOG_PRODUCER_REVISION` (`introspect/catalog_v2.rs`) names what a stored
+  snapshot means. Bump it whenever introspection changes snapshot contents: store
+  bootstrap then retires every row an older producer wrote, so no reader, Desktop
+  or an Agent's cache-first read, is served one. Cache-first reads also refuse a
+  snapshot older than 15 minutes and reintrospect. A capture time in the future is
+  never current (`get_catalog_if_current`) and never fresh.
 
 ### Testing Requirements
 

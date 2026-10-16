@@ -38,6 +38,12 @@ renders that HTML, shows the latest local query result, and has one explicit
 `Run again` command. Changing the question means editing the saved SQL or asking
 the Agent; it does not add a block, transform, metric, or dashboard mode.
 
+Personal workspaces use the same bounded document and exact Project resource
+contract in the encrypted device-local store. Creation, edits, revision history,
+deletion and explicit manual reruns do not require a cloud login. They never
+publish or share a local document implicitly. Team Articles continue to use the
+authenticated control plane; public publication and invitations remain team-only.
+
 ## Query and authority contract
 
 An article owns exactly one non-empty read-only query. It pins the shared
@@ -58,8 +64,9 @@ Pre-MVP Article payloads that do not carry the current content revision are
 unsupported. They fail closed rather than inferring authority from an internal
 epoch or another historical field.
 
-The query executes only after an authenticated person explicitly requests a
-manual rerun in Desktop. There is no cron, signal-triggered run, publication run,
+The query executes only after a person explicitly requests a manual rerun in
+Desktop; a team workspace also requires current authentication and grants.
+There is no cron, signal-triggered run, publication run,
 or hosted execution. Results remain as bounded local artifacts; the workspace
 service may retain run metadata and audit receipts but is not a result warehouse.
 Failure never erases the last recoverable successful local result.

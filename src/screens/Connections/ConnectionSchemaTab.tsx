@@ -142,7 +142,10 @@ export function ConnectionSchemaTab({
         <Field label={t("connections.schemaGroup")}>
           <TextInput
             value={form.schemaGroup ?? ""}
-            onChange={(event) =>
+            // Spaces are part of a group name; only surrounding blanks are dropped,
+            // once editing ends, so typing "app core" keeps its space.
+            onChange={(event) => set("schemaGroup", event.target.value || null)}
+            onBlur={(event) =>
               set("schemaGroup", event.target.value.trim() || null)
             }
             placeholder={t("connections.schemaGroupPlaceholder")}

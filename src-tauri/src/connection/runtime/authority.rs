@@ -101,9 +101,12 @@ async fn open_live(
                 if detail.is_empty() {
                     Err(error)
                 } else {
-                    Err(AppError::Network(format!(
-                        "Cloud SQL secure connector rejected the connection: {detail}"
-                    )))
+                    // Connector stderr can name instances, accounts, or network
+                    // paths; keep it in the local log and return a fixed reason.
+                    tracing::warn!(%detail, "Cloud SQL secure connector rejected the connection");
+                    Err(AppError::Network(
+                        "Cloud SQL secure connector rejected the connection".into(),
+                    ))
                 }
             }
         };
@@ -183,9 +186,7 @@ pub(super) async fn authorize_pin(
         )
         .await?;
     if authority.revision != pin.connection_revision {
-        return Err(AppError::Blocked {
-            reason: "the shared connection changed; refresh the workspace and retry".into(),
-        });
+        return Err(AppError::SharedConnectionChanged);
     }
     let (provider_local_target, provider_local_pin) = if requires_provider_local_target(pin, access)
     {

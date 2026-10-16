@@ -33,6 +33,17 @@ pub fn respond_external_agent_request(
         .ok_or_else(|| AppError::Blocked {
             reason: "the external Agent approval request is no longer pending".into(),
         })?;
+    if request.kind == ExternalAgentRequestKind::Proposal {
+        // A queued proposal is decided only through the exact operation approval
+        // card. Closing its entry never approves, rejects, or widens anything.
+        if approved || config.is_some() {
+            return Err(AppError::Config(
+                "an external Agent proposal is decided through its exact approval card".into(),
+            ));
+        }
+        state.broker.external_agent_requests().dismiss_proposal(id);
+        return Ok(());
+    }
     let decision = if !approved {
         if config.is_some() {
             return Err(AppError::Config(
@@ -43,12 +54,12 @@ pub fn respond_external_agent_request(
     } else {
         match request.kind {
             ExternalAgentRequestKind::Configure => {
-                let config = config.filter(ExternalAgentConfig::validate).ok_or_else(|| {
-                    AppError::Config(
-                        "an approved external Agent configuration must contain one valid Project resource set"
-                            .into(),
-                    )
-                })?;
+                // An approved configuration must be one valid Project resource set.
+                let config = config
+                    .filter(ExternalAgentConfig::validate)
+                    .ok_or_else(|| {
+                        AppError::Config(super::domain::agent_error::SCOPE_UNAVAILABLE.into())
+                    })?;
                 if config.provider != request.provider {
                     return Err(AppError::Config(
                         "the approved Agent provider does not match the request".into(),
@@ -63,6 +74,11 @@ pub fn respond_external_agent_request(
                     ));
                 }
                 ExternalAgentRequestDecision::Approved(None)
+            }
+            ExternalAgentRequestKind::Proposal => {
+                return Err(AppError::Config(
+                    "an external Agent proposal is decided through its exact approval card".into(),
+                ));
             }
         }
     };

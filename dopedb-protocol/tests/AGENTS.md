@@ -26,11 +26,11 @@ before it silently breaks `dopedb-cli` or the Desktop/Cloud sync path.
 | `status-request.json`, `status-success.json`, `status-error.json` | `StatusCommand`/`StatusResult` request and success/error response shapes. |
 | `version-request.json`, `version-success.json`, `version-error.json` | `VersionCommand`/`VersionResult` request and success/error response shapes. |
 | `catalog-snapshot-v2.json` | Catalog V2 snapshot DTO fixture (`catalog::CatalogSnapshot`). |
-| `schema-diff-v1.json` | Read-only structural schema-diff output fixture (`schema_diff.rs`). |
+| `schema-diff-v2.json` | Read-only structural schema-diff output fixture (`schema_diff.rs`), at `SCHEMA_DIFF_VERSION` 2 (materialized views, expression index keys and the `scope` lists). Also read by `dopedb-cli/tests/support/schema_diff.rs` and `src/features/workbench/state.test.ts`. |
 | `query-plan-request.json` | `QueryPlanCommand`/`QueryPlanArguments` request fixture. |
 | `policy-blocked.json` | A policy-denied broker response fixture (`ErrorCode` / policy-block path). |
 | `runtime-discovery.json` | Public, secret-free runtime discovery metadata fixture (`discovery.rs`). |
-| `command-catalog-v17.json` | Versioned catalog of every `CommandName`/`CommandSpec` the broker accepts, at command-schema version 17. |
+| `command-catalog-v18.json` | Versioned catalog of every `CommandName`/`CommandSpec` the broker accepts, at command-schema version 18. |
 | `cli-command-contract-v14.json` | Versioned CLI command contract fixture, at contract version 14. |
 | `control-plane-contracts-v1.json` | Workspace control-plane HTTPS payload contracts fixture (`control_plane.rs`), version 1. |
 | `skill-command-contract-v1.json` | Skill bundle/inventory/mutation command contract fixture (`skill_command.rs`), version 1. |
@@ -40,7 +40,7 @@ before it silently breaks `dopedb-cli` or the Desktop/Cloud sync path.
 
 ### Working In This Directory
 - A fixture file is the source of truth for a wire shape, not `golden.rs`'s in-memory construction of it — when a DTO's serialization changes intentionally, regenerate/update the matching fixture in the same change as the `src/` edit, and update any dependent frontend (`tauriAdapter.ts`) or Rust (`transport.rs`) adapter at the same time (see `../AGENTS.md`).
-- A versioned fixture's filename encodes its schema version (e.g. `command-catalog-v17.json`); a breaking change bumps both the constant in `src/` and the fixture filename rather than editing the existing version in place, so old and new shapes stay diffable.
+- A versioned fixture's filename encodes its schema version (e.g. `command-catalog-v18.json`); a breaking change bumps both the constant in `src/` and the fixture filename (rename the file in the same change instead of editing the old version in place), so review sees the version change and the previous shape stays diffable through version control history. Only the current version is kept in the tree: no test reads an older fixture, and an unread copy would drift unnoticed.
 
 ### Testing Requirements
 - `cargo test --package dopedb-protocol --test golden` — part of `pnpm test:rust`. Protects 8 tests in the repository's 208-test critical budget (`tests/critical-test-budget.json`): "Versioned public CLI and Cloud↔Desktop sync, managed lease, and Analysis Article wire contracts with fail-closed decoding; schema diff JSON and shared Desktop comparison fixture." See `../../tests/AGENTS.md` for the budget mechanics.

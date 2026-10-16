@@ -17,10 +17,11 @@ use dopedb_protocol::{
     AnalysisArticleUpdateArguments, AnalysisArticleUpdateCommand, AnalysisArticleVerifyArguments,
     AnalysisArticleVerifyCommand, CatalogArguments,
     CatalogSearchArguments as BrokerCatalogSearchArguments, CatalogSearchCommand, CommandSpec,
-    ConnectionSelector, ConnectionSelectorArguments, ConnectionShowCommand, ConnectionTestCommand,
-    DatabaseListArguments, DatabaseListCommand, DocumentQuery, DocumentRunArguments,
-    DocumentRunCommand, EmptyArguments, EnvironmentContextCommand, ErrorCode, FunnelTraceArguments,
-    FunnelTraceCommand, KnowledgeDiffArguments, KnowledgeDiffCommand, KnowledgeEvidenceArguments,
+    ConnectionSelector, ConnectionSelectorArguments, ConnectionShowCommand, ConnectionSummary,
+    ConnectionTestCommand, DatabaseListArguments, DatabaseListCommand, DocumentQuery,
+    DocumentRunArguments, DocumentRunCommand, EmptyArguments, EnvironmentContextCommand,
+    EnvironmentContextResult, ErrorCode, FunnelTraceArguments, FunnelTraceCommand,
+    KnowledgeDiffArguments, KnowledgeDiffCommand, KnowledgeEvidenceArguments,
     KnowledgeEvidenceCommand, KnowledgeExplainCommand, KnowledgeMappingProposeArguments,
     KnowledgeMappingProposeCommand, KnowledgeNeighborsArguments, KnowledgeNeighborsCommand,
     KnowledgeNodeArguments, KnowledgePathArguments, KnowledgePathCommand, KnowledgeSearchArguments,
@@ -84,6 +85,15 @@ const TOOL_ANALYSIS_ARTICLE_PROPOSE: &str = "analysis_article_propose";
 const TOOL_ANALYSIS_ARTICLE_UPDATE: &str = "analysis_article_update";
 const TOOL_ANALYSIS_ARTICLE_VERIFY: &str = "analysis_article_verify";
 const ANALYSIS_ARTICLE_INVALID_REQUEST: &str = "the Analysis Article is invalid; provide sanitized HTML and exactly one bounded read-only query matching this tool's input schema";
+// Desktop parses SQL before any target access, so these refusals tell the Agent
+// how to change the SQL, or when only the user can resolve the connection.
+const SQL_INVALID_REQUEST: &str = "DopeDB could not accept this SQL. Send exactly one statement that parses in this connection's SQL dialect and call the tool again. If the SQL is already valid, the database it names or the connection's credentials or settings need the user's attention in DopeDB Desktop; tell the user instead of retrying.";
+const SQL_READ_POLICY_BLOCKED: &str = "DopeDB's safety policy blocked this statement. query_read runs one read-only statement; propose a data or schema change with sql_propose so a person can approve it. USE, SET, and transaction control are never run: pass the database argument and use schema-qualified names instead.";
+// A session without a write target can never propose, so it is not told to.
+const SQL_READ_POLICY_BLOCKED_READ_ONLY: &str = "DopeDB's safety policy blocked this statement. query_read runs one read-only statement, and this session has no write target, so a change cannot be proposed here; tell the user what you intended. USE, SET, and transaction control are never run: pass the database argument and use schema-qualified names instead.";
+const SQL_PROPOSE_POLICY_BLOCKED: &str = "DopeDB's safety policy blocked this proposal on this connection. USE, SET, and transaction control are never run: pass the database argument and send one statement. If the connection is read-only for this user or its data changes are turned off, tell the user what you intended instead of retrying.";
+// An external Agent's proposals wait in a bounded approval queue; none is dropped.
+const SQL_PROPOSE_CONFLICT: &str = "DopeDB could not accept another proposal now: earlier proposals still await a person's decision, or the connection changed. Check them with operation_status or operation_wait before proposing again.";
 const TOOL_KNOWLEDGE_SEARCH: &str = "knowledge_search";
 const TOOL_SOURCE_SEARCH: &str = "source_search";
 const TOOL_SOURCE_READ: &str = "source_read";
@@ -207,12 +217,17 @@ struct OperationWaitToolArguments {
     connection_id: Option<Uuid>,
 }
 
+/// `connection` is present when the session has a current selected database;
+/// a source-only Project resource set reports its pinned `resources` instead.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct SessionContextResult<T> {
+struct SessionContextResult {
     connection_scope: &'static str,
     bridge_version: &'static str,
-    connection: T,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    connection: Option<ConnectionSummary>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    resources: Option<EnvironmentContextResult>,
 }
 
 struct QueuedToolCall {

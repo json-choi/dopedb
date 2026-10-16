@@ -1,6 +1,8 @@
 // The ACP composer renders one bounded state group and delegates every mutation
 // to controller-owned command groups. It owns no session/query/transport state.
 
+import type { ReactNode } from "react";
+
 import { Icon } from "../../components/Icon";
 import { Button } from "../../design-system/components/Button";
 import {
@@ -10,6 +12,8 @@ import {
   ToolWindowComposerInput,
 } from "../../design-system/components/ToolWindow";
 import { useI18n } from "../../lib/i18n";
+import type { ConnectionId } from "../connections/domain";
+import { providerLabel } from "./acpTranscriptPresentation";
 import { AcpConfigSelect } from "./AcpConfigSelect";
 import { AcpScopeSelect } from "./AcpScopeSelect";
 import type { AcpChatController } from "./useAcpChatController";
@@ -22,6 +26,8 @@ type AcpChatComposerProps = Pick<
     AcpChatController["commands"],
     "session" | "composer" | "setup"
   >;
+  onOpenProjectDatabases: (environmentId: string | null) => void;
+  onOpenSafety: (connectionId: ConnectionId) => void;
 };
 
 export default function AcpChatComposer({
@@ -29,32 +35,82 @@ export default function AcpChatComposer({
   setup,
   composer,
   commands,
+  onOpenProjectDatabases,
+  onOpenSafety,
 }: AcpChatComposerProps) {
   const { t } = useI18n();
   const active = session.active;
-  if (setup.enabledProviders.length === 0) return null;
+  if (!session.activeLive && setup.pluginReadyProviders.length === 0) return null;
   const configDisabled =
     session.starting ||
     active?.lifecycle !== "ready" ||
     composer.configChanging !== null;
+  // Only missing prerequisites disable the input. A running turn or a start in
+  // progress keeps it enabled so focus and the next draft are never lost;
+  // submission is still blocked until the session is ready.
   const composerDisabled =
+    !setup.prerequisitesReady || !composer.environmentScopeReady;
+  const submitBlocked =
     session.starting ||
-    !setup.prerequisitesReady ||
-    !composer.environmentScopeReady ||
     (active !== null &&
       active.lifecycle !== "ready" &&
       active.lifecycle !== "closed" &&
       active.lifecycle !== "failed");
   return (
     <ToolWindowComposerDock>
+      {setup.knowledge.unassignedConnectionName && session.transcript.length === 0 ? (
+        <ComposerNoticeBar
+          message={t("agent.acpUnassignedConnection", {
+            connection: setup.knowledge.unassignedConnectionName,
+          })}
+          action={
+            <Button
+              size="xs"
+              variant="ghost"
+              onClick={() => onOpenProjectDatabases(setup.knowledge.assignEnvironmentId)}
+            >
+              {t("agent.acpAddToProject")}
+            </Button>
+          }
+        />
+      ) : null}
+      {!session.activeLive && setup.knowledge.needsReconfirmation ? (
+        <ComposerNoticeBar
+          message={t("agent.acpReconfirmBody")}
+          details={setup.knowledge.reconfirmChanges.map((change) =>
+            t("agent.acpReconfirmChange", {
+              name: change.name,
+              from: change.fromRevision,
+              to: change.toRevision,
+              target: change.target,
+            }),
+          )}
+          action={
+            <Button
+              size="xs"
+              variant="primary"
+              disabled={setup.knowledge.reconfirmingEnvironmentId !== null}
+              disabledBehavior="focusable"
+              onClick={commands.composer.reconfirmResources}
+            >
+              {t("agent.acpEnvironmentReconfirm")}
+            </Button>
+          }
+        />
+      ) : null}
       {active &&
       (active.lifecycle === "closed" || active.lifecycle === "failed") ? (
-        <div className="tw:mb-2 tw:flex tw:min-h-control-lg tw:items-center tw:gap-3 tw:rounded-md tw:border tw:border-border-subtle tw:bg-card tw:px-3 tw:py-2">
-          <p className="tw:m-0 tw:min-w-0 tw:flex-1 tw:text-xs tw:leading-body tw:text-muted-foreground">
-            {active.acpSessionId === null
-              ? t("agent.acpRestartBody")
-              : t("agent.acpResumeBody")}
-          </p>
+        <ComposerNoticeBar
+          message={
+            !setup.prerequisitesReady
+              ? t("agent.acpResumeNeedsSetup", {
+                  provider: providerLabel(active.provider),
+                })
+              : active.acpSessionId === null
+                ? t("agent.acpRestartBody")
+                : t("agent.acpResumeBody")
+          }
+          action={
           <Button
             size="xs"
             variant="primary"
@@ -78,7 +134,8 @@ export default function AcpChatComposer({
               ? t("agent.acpNew")
               : t("agent.acpResume")}
           </Button>
-        </div>
+          }
+        />
       ) : null}
       <ToolWindowComposer
         aria-label={t("agent.acpComposer")}
@@ -104,7 +161,7 @@ export default function AcpChatComposer({
                 !event.nativeEvent.isComposing
               ) {
                 event.preventDefault();
-                event.currentTarget.form?.requestSubmit();
+                if (!submitBlocked) event.currentTarget.form?.requestSubmit();
               }
             }}
           />
@@ -136,7 +193,8 @@ export default function AcpChatComposer({
             <span className="tw:flex-1" />
             <span className="tw:pointer-events-auto tw:inline-flex">
               {active?.lifecycle === "running" ||
-              active?.lifecycle === "waitingPermission" ? (
+              active?.lifecycle === "waitingPermission" ||
+              active?.lifecycle === "starting" ? (
                 <Button
                   iconOnly
                   size="xs"
@@ -155,14 +213,7 @@ export default function AcpChatComposer({
                   size="xs"
                   variant="ghost"
                   disabled={
-                    session.starting ||
-                    !setup.prerequisitesReady ||
-                    !composer.environmentScopeReady ||
-                    (active !== null &&
-                      active.lifecycle !== "ready" &&
-                      active.lifecycle !== "closed" &&
-                      active.lifecycle !== "failed") ||
-                    !composer.prompt.trim()
+                    composerDisabled || submitBlocked || !composer.prompt.trim()
                   }
                   title={t("agent.acpSend")}
                   aria-label={t("agent.acpSend")}
@@ -198,6 +249,7 @@ export default function AcpChatComposer({
           onWriteTarget={(connectionId) =>
             void commands.composer.selectWriteTarget(connectionId)
           }
+          onOpenSafety={onOpenSafety}
         />
         {composer.modeOption ? (
           <span className="tw:w-24 tw:min-w-0 tw:shrink-0">
@@ -213,5 +265,40 @@ export default function AcpChatComposer({
         ) : null}
       </ToolWindowComposerContext>
     </ToolWindowComposerDock>
+  );
+}
+
+/** One status line above the composer with the single command that resolves it. */
+function ComposerNoticeBar({
+  message,
+  details,
+  action,
+}: {
+  message: string;
+  /** Specific items the action applies to, listed before the person acts. */
+  details?: readonly string[];
+  action: ReactNode;
+}) {
+  return (
+    <div
+      className="tw:mb-2 tw:flex tw:min-h-control-lg tw:items-center tw:gap-3 tw:rounded-md tw:border tw:border-border-subtle tw:bg-card tw:px-3 tw:py-2"
+      role="status"
+    >
+      <div className="tw:grid tw:min-w-0 tw:flex-1 tw:gap-1">
+        <p className="tw:m-0 tw:min-w-0 tw:text-xs tw:leading-body tw:text-muted-foreground">
+          {message}
+        </p>
+        {details && details.length > 0 ? (
+          <ul className="tw:m-0 tw:grid tw:min-w-0 tw:gap-0.5 tw:pl-4 tw:text-xs tw:leading-body tw:text-muted-foreground">
+            {details.map((detail) => (
+              <li key={detail} className="tw:break-words">
+                {detail}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
+      {action}
+    </div>
   );
 }

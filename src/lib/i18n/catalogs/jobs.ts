@@ -48,6 +48,25 @@ export const jobsCatalog = defineCatalog(
     "jobs.stop": "Stop and roll back the batch",
     "jobs.targetFor": "Target column for {source}",
     "jobs.title": "Import / Export",
+    "jobs.sqlStatements": "SQL statements",
+    "jobs.errorSchemaDisabled":
+      "This SQL import contains schema changes (DDL). Turn on Schema changes for this connection in Settings → Safety, then create the job again.",
+    "jobs.errorSchemaRole":
+      "This SQL import contains schema changes (DDL), which need this connection's manage grant.",
+    "jobs.errorWritesDisabled":
+      "Data changes are off for this connection. Turn them on in Settings → Safety before importing.",
+    "jobs.errorReadOnlyRole":
+      "Your workspace role grants read-only access, so imports are unavailable.",
+    "jobs.errorPolicyChanged":
+      "The connection's permissions changed after approval, so this import did not start. Review Safety settings and create a new job.",
+    "jobs.errorOutcomeUnknown":
+      "The database did not confirm the last statement. Check the target before retrying.",
+    "jobs.errorGeneric": "The job request could not be completed. Review the plan and try again.",
+    "jobs.loadFailed": "Jobs could not be loaded for this database.",
+    "jobs.sqlAuditSummary":
+      "{count} total · {reads} reads · {writes} data changes · {ddl} schema changes",
+    "jobs.sqlAuditDdlWarning":
+      "This import changes the schema ({count} DDL statements). It needs this connection's manage grant and Schema changes turned on in Safety, and it runs only after this approval.",
     "jobs.warningNotResumable":
       "This format cannot resume after interruption. Choose CSV, TSV, JSON, NDJSON, or SQL when restart support matters.",
     "jobs.warningSqlCritical":
@@ -99,6 +118,25 @@ export const jobsCatalog = defineCatalog(
     "jobs.stop": "중단하고 현재 배치 롤백",
     "jobs.targetFor": "{source}의 대상 컬럼",
     "jobs.title": "가져오기 / 내보내기",
+    "jobs.sqlStatements": "SQL 문장",
+    "jobs.errorSchemaDisabled":
+      "이 SQL 가져오기에는 스키마 변경(DDL)이 있습니다. 설정 → 안전에서 이 연결의 스키마 변경을 켠 뒤 작업을 다시 만드세요.",
+    "jobs.errorSchemaRole":
+      "이 SQL 가져오기에는 스키마 변경(DDL)이 있어 이 연결의 관리 권한이 필요합니다.",
+    "jobs.errorWritesDisabled":
+      "이 연결의 데이터 변경이 꺼져 있습니다. 가져오기 전에 설정 → 안전에서 켜세요.",
+    "jobs.errorReadOnlyRole":
+      "워크스페이스 역할이 읽기 전용이라 가져오기를 할 수 없습니다.",
+    "jobs.errorPolicyChanged":
+      "승인 뒤 연결 권한이 바뀌어 이 가져오기를 시작하지 않았습니다. 안전 설정을 확인하고 새 작업을 만드세요.",
+    "jobs.errorOutcomeUnknown":
+      "데이터베이스가 마지막 문장을 확인하지 못했습니다. 다시 시도하기 전에 대상을 확인하세요.",
+    "jobs.errorGeneric": "작업 요청을 완료하지 못했습니다. 계획을 확인하고 다시 시도하세요.",
+    "jobs.loadFailed": "이 데이터베이스의 작업 목록을 불러오지 못했습니다.",
+    "jobs.sqlAuditSummary":
+      "전체 {count}개 · 읽기 {reads} · 데이터 변경 {writes} · 스키마 변경 {ddl}",
+    "jobs.sqlAuditDdlWarning":
+      "이 가져오기는 스키마를 변경합니다(DDL {count}개). 이 연결의 관리 권한과 안전 설정의 스키마 변경 허용이 필요하며, 이 승인 뒤에만 실행됩니다.",
     "jobs.warningNotResumable":
       "이 형식은 중단 후 재개할 수 없습니다. 재시작 지원이 필요하면 CSV, TSV, JSON, NDJSON 또는 SQL을 사용하세요.",
     "jobs.warningSqlCritical":

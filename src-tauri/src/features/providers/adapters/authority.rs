@@ -46,8 +46,9 @@ struct RemoteIntegration {
     verification_target: Option<RemoteVerificationTarget>,
 }
 
+// `rename_all` names variants only; the route sends camelCase variant fields too.
 #[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", rename_all_fields = "camelCase")]
 #[serde(tag = "kind", deny_unknown_fields)]
 enum RemoteVerificationTarget {
     #[serde(rename = "gcpCloudSql")]

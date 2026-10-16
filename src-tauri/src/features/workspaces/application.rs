@@ -33,8 +33,11 @@ pub(crate) struct WorkspaceConnectionCopyRequest {
 pub(crate) struct WorkspaceCredentialBindingRequest {
     pub(crate) connection_id: ConnectionId,
     pub(crate) username: String,
+    /// Empty keeps this member's saved credential for an existing binding.
     pub(crate) password: Zeroizing<String>,
     pub(crate) ssh_alias: Option<String>,
+    /// Member-local TLS file paths; `None` leaves the binding's values unchanged.
+    pub(crate) tls_files: Option<std::collections::HashMap<String, String>>,
 }
 
 pub(crate) struct WorkspaceConnectionUpdateRequest {

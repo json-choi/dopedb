@@ -1,6 +1,8 @@
 // The only frontend module that owns SQL query command literals and their camelCase wire shape.
 // Mutating execution stays behind the explicit proposal/approval/run flow.
 
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+
 import { Channel, invoke } from "../../ipc/core";
 
 import type {
@@ -34,6 +36,8 @@ export type SqlResultExportReceipt = {
   exportId: string;
   operationId: string;
   rowsWritten: number;
+  /** Name of the file the user chose (never its directory). */
+  fileName?: string;
 };
 
 export type SqlResultExportController = {
@@ -86,6 +90,26 @@ export function rollbackManualTransaction(
   transactionId: string,
 ): Promise<ManualTransactionStatus> {
   return invoke("rollback_manual_transaction", { id, transactionId });
+}
+
+/** The backend is holding a window close or app quit while transactions are open. */
+export type ManualTransactionExitRequest = { count: number };
+export type ManualTransactionExitResponse = "shown" | "cancelled" | "confirmed";
+
+export function onManualTransactionExitRequested(
+  handler: (request: ManualTransactionExitRequest) => void,
+): Promise<UnlistenFn> {
+  return listen<ManualTransactionExitRequest>(
+    "manual-transaction:exit-requested",
+    (event) => handler(event.payload),
+  );
+}
+
+/** "confirmed" rolls every open transaction back (never commits), then closes. */
+export function respondManualTransactionExit(
+  response: ManualTransactionExitResponse,
+): Promise<void> {
+  return invoke("respond_manual_transaction_exit", { response });
 }
 
 export function inspectSql(
@@ -437,6 +461,23 @@ export function exportSqlResult(
       });
     },
   };
+}
+
+/**
+ * Writes export text the renderer built to a file the person picks in the native
+ * save dialog. Resolves to the chosen file's name, or null when the dialog was
+ * dismissed.
+ */
+export function saveResultText(
+  suggestedName: string,
+  format: SqlResultExportFormat,
+  contents: string,
+): Promise<string | null> {
+  return invoke<string | null>("save_result_text", {
+    suggestedName,
+    format,
+    contents,
+  });
 }
 
 /** Collect one bounded auto-run read through the same atomic stream used by the SQL console. */

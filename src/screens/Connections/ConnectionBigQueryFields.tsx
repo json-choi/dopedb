@@ -30,7 +30,7 @@ export function ConnectionBigQueryFields({
   drivers: Controller["catalog"]["drivers"];
 }) {
   const { t } = useI18n();
-  const { form, set, flags, options, validation, bigQuery } = profile;
+  const { form, flags, options, validation, bigQuery } = profile;
   const { isSharedTemplate, canEditConnection } = flags;
   const projectIsDiscovered = bigQuery.projects.some(
     (project) => project.id === form.host,
@@ -332,24 +332,7 @@ export function ConnectionBigQueryFields({
           />
           )}
         </PropertyRow>
-      ) : (
-        <PropertyRow label={t("connections.environment")}>
-          {({ controlProps }) => (
-          <SelectInput
-            {...controlProps()}
-            density="compact"
-            value={form.env ?? ""}
-            disabled={!canEditConnection}
-            onChange={(event) => set("env", event.target.value || null)}
-          >
-            <option value="">{t("common.none")}</option>
-            <option value="dev">dev</option>
-            <option value="staging">staging</option>
-            <option value="prod">prod</option>
-          </SelectInput>
-          )}
-        </PropertyRow>
-      )}
+      ) : null}
 
       <PropertyRow label={t("connections.bigQueryCliStatus")}>
         <div className="tw:flex tw:min-h-control-md tw:flex-wrap tw:items-center tw:gap-2">

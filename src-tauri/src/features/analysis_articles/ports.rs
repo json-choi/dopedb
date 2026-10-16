@@ -9,9 +9,40 @@ use uuid::Uuid;
 
 use crate::error::AppResult;
 
-use super::domain::{AnalysisDataSet, AnalysisDefinitionRunReceipt};
+use super::domain::{
+    AnalysisArticleMutation, AnalysisArticleRevision, AnalysisArticleSummary, AnalysisDataSet,
+    AnalysisDefinitionRunReceipt, AnalysisRunRecord,
+};
 
 pub(crate) trait AnalysisLocalRepositoryPort: Clone + Send + Sync + 'static {
+    fn personal_revisions(
+        &self,
+        article_id: Uuid,
+    ) -> impl Future<Output = AppResult<Vec<AnalysisArticleRevision>>> + Send;
+    fn delete_personal_article(
+        &self,
+        article_id: Uuid,
+        expected_revision: i64,
+    ) -> impl Future<Output = AppResult<i64>> + Send;
+    fn assert_personal_pin(
+        &self,
+        article: &AnalysisArticleRecord,
+    ) -> impl Future<Output = AppResult<()>> + Send;
+    fn save_personal_run(
+        &self,
+        run: &AnalysisRunRecord,
+        creating: bool,
+    ) -> impl Future<Output = AppResult<()>> + Send;
+    fn personal_run(
+        &self,
+        article_id: Uuid,
+        run_id: Uuid,
+    ) -> impl Future<Output = AppResult<AnalysisRunRecord>> + Send;
+    fn personal_runs(
+        &self,
+        article_id: Uuid,
+        before: Option<chrono::DateTime<chrono::Utc>>,
+    ) -> impl Future<Output = AppResult<(Vec<AnalysisRunRecord>, Option<String>)>> + Send;
     fn load_result(
         &self,
         article_id: Uuid,
@@ -43,6 +74,7 @@ pub(crate) trait AnalysisLocalRepositoryPort: Clone + Send + Sync + 'static {
 pub(crate) struct AnalysisReadExecutionRequest<'a> {
     pub(crate) workspace_id: Option<Uuid>,
     pub(crate) project_environment_id: Option<Uuid>,
+    pub(crate) environment_revision: Option<i64>,
     pub(crate) connection_id: Uuid,
     pub(crate) connection_revision: i64,
     pub(crate) query: &'a AnalysisQueryNode,
@@ -63,12 +95,13 @@ pub(crate) trait AnalysisReadExecutionPort: Clone + Send + Sync + 'static {
 }
 
 pub(crate) trait AnalysisHostedAuthorityPort: Clone + Send + Sync + 'static {
-    fn list_articles(
+    /// Title-and-identity listing whose size does not grow with HTML or SQL bodies.
+    fn list_article_summaries(
         &self,
         account_id: &str,
         workspace_id: Uuid,
         environment_id: Option<Uuid>,
-    ) -> impl Future<Output = AppResult<Vec<AnalysisArticleRecord>>> + Send;
+    ) -> impl Future<Output = AppResult<Vec<AnalysisArticleSummary>>> + Send;
 
     fn get_article(
         &self,
@@ -91,5 +124,5 @@ pub(crate) trait AnalysisHostedAuthorityPort: Clone + Send + Sync + 'static {
         article_id: Uuid,
         expected_revision: i64,
         article: &SharedAnalysisArticleCreate,
-    ) -> impl Future<Output = AppResult<AnalysisArticleRecord>> + Send;
+    ) -> impl Future<Output = AppResult<AnalysisArticleMutation>> + Send;
 }

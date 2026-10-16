@@ -13,7 +13,7 @@ own — callers own presentation and paging state.
 
 | File | Description |
 |------|-------------|
-| `tauriAdapter.ts` | `auditVerify`, `listAuditPage`, `getAuditEntry`, `listHistoryPage`, `getHistoryEntry` — thin wrappers over `invoke()` for the audit and history commands. |
+| `tauriAdapter.ts` | `auditVerify` (returns `AuditVerdictReceipt`, whose `firstBadRowId` anchors the page that starts at the first broken record), `listAuditPage`, `getAuditEntry`, `listHistoryPage`, `getHistoryEntry` — thin wrappers over `invoke()` for the audit and history commands. |
 
 ## For AI Agents
 

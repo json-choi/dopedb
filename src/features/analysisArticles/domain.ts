@@ -1,6 +1,8 @@
 // Wire contract for Analysis Articles: the saved query definition, per-column sensitivity and
 // masking, run receipts, revisions, and publication records. Type-only, so the ACP, Desktop
-// runner, and publication paths cannot drift onto separate shapes.
+// runner, and publication paths cannot drift onto separate shapes. Lists carry
+// `AnalysisArticleRecord` (identity and title only); one `AnalysisArticleDocument` with HTML and
+// SQL is read when an Article opens, so a few large bodies cannot hide a whole collection.
 export type AnalysisArticleSource =
   | "human"
   | "dopedb.acp.claude"
@@ -56,7 +58,7 @@ export type AnalysisArticleVersionPayload = SharedAnalysisArticleCreate & {
   deleted: boolean;
 };
 
-export type AnalysisArticleRecord = SharedAnalysisArticleCreate & {
+type AnalysisArticleIdentity = Omit<SharedAnalysisArticleCreate, "definition"> & {
   ownerMemberId: string;
   updatedByMemberId: string;
   revision: number;
@@ -64,6 +66,26 @@ export type AnalysisArticleRecord = SharedAnalysisArticleCreate & {
   createdAt: string;
   updatedAt: string;
 };
+
+export type AnalysisArticleSummaryDefinition = Pick<
+  AnalysisArticleDefinition,
+  "version" | "source" | "title"
+>;
+
+/** Bounded list projection: identity, authority pins, and title. */
+export type AnalysisArticleRecord = AnalysisArticleIdentity & {
+  definition: AnalysisArticleSummaryDefinition;
+};
+
+/** One current Article with its HTML and saved query, read on open or returned by a save. */
+export type AnalysisArticleDocument = AnalysisArticleIdentity & {
+  definition: AnalysisArticleDefinition;
+};
+
+/** A conflict means nothing was written; `latest` is the revision to re-apply a draft onto. */
+export type AnalysisArticleSaveResult =
+  | { outcome: "saved"; article: AnalysisArticleDocument }
+  | { outcome: "conflict"; latest: AnalysisArticleDocument | null };
 
 export type AnalysisQueryReceipt = {
   queryNodeId: string;

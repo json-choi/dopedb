@@ -259,6 +259,17 @@ Elevation은 세 단계만 허용한다.
 
 ## Workspace 인증 surface
 
+로그인 전에도 Workspace 선택기를 열고 `새 워크스페이스`를 선택할 수 있다.
+선택은 로그인 필요 안내와 기존 shell-owned Desktop 로그인 lifecycle을 사용한다.
+검색 옆의 history launcher는 SQL revision 도구가 아니라 실제 쿼리 실행 이력을 연다.
+CLI 계정 이름과 플랜은 `AgentAccountIdentity`가 설정 inventory와 채팅 메뉴에 같은
+문법으로 표시하며, 자격 증명이나 로그인 session을 소유하지 않는다.
+Settings의 연결·환경 진입은 같은 연결 편집기와 Project binding command로 이동한다.
+bound DB의 환경 control은 실제 Project marker를 읽기 전용으로 표시해 독립 profile
+라벨과 혼동하지 않게 하고, 독립 연결은 General에서 환경을 편집한다.
+BigQuery는 기존 `CommandMenuGroup`의 별도 cloud warehouse 그룹을 사용한다.
+Explorer는 설정된 DB만 직접 읽으며 서버의 다른 DB는 연결 편집기에서 선택한다.
+
 `workspace.css`는 Workspace Web과 Desktop의 독립 loopback 문서가 공유하는
 인증 palette, Tailwind 역할, 전역 reset의 정본이다. 기존 Workspace Web의
 `globals.css`에 있던 정의를 이동한 것으로 desktop 앱 shell에는 import하지 않는다.
@@ -352,27 +363,21 @@ loopback 문서는 이 정본을 빌드 시 포함하며 네트워크 font나 sc
   latest-download 별칭으로 직접 연결하고, Mac CPU가 숨겨지거나 지원하지 않는
   기기에서는 Apple Silicon/Intel/Windows 선택 surface로 이동한다. 추천과 수동
   선택 analytics를 구분하며 user-agent 추측으로 잘못된 DMG를 자동 선택하지 않는다.
-- `workspace-cloud/app/components/Controls`: workspace 관리 화면의
-  `ControlButton`, `ControlLink`, field/input/select 밀도를 함께 소유한다.
-  외부 관리 콘솔로 이동하는 action도 화면에서 button utility를 복사하지 않고
-  `ControlLink`를 사용한다. Workspace 관리 panel의 header와 최상위 본문은
-  desktop 24px, 640px 이하 16px의 같은 content gutter를 사용한다. Database
-  요약과 우측 action은 확장 상태에서도 첫 2열을 유지하고, 복구 안내처럼 길어지는
-  보조 내용은 그 아래 전체 폭 grid row가 소유한다.
-  `ControlSelect`의 기본 밀도는 44px field, `density="compact"`는 34px
-  inline filter다. 인증·초대 화면의 계정 선택 행은 `IdentityAccountChoice`가
-  최소 44px 높이, 이름·이메일의 수직 계층과 긴 문자열 줄바꿈을 소유하며
-  각 화면은 인증 command만 제공한다.
-  `ControlButton`의 `aria-pressed`는 작업·공급자 선택의 semantic selection
-  surface를 소유한다. Providers는 선택 목록과 선택한 공급자의 연결 안내를
-  2열로 배치하고 640px 이하에서는 한 열로 접는다. 계정 관리는 native details로
-  열며 별도 번호 장식·중복 계정 제목·빈 계정 목록을 쌓지 않는다.
+- `workspace-cloud/app/components/Controls`: Workspace Web에 남은 브라우저
+  surface의 compact `ControlButton` 하나를 소유한다. Workspace 관리는 Desktop의
+  워크스페이스 관리 dialog로 이동했으므로 Web에 관리용 field·select·link
+  primitive를 다시 만들지 않는다. `aria-pressed`는 semantic selection surface로 표시한다. 인증·초대
+  화면의 계정 선택 행은 `IdentityAccountChoice`가 최소 44px 높이, 이름·이메일의
+  수직 계층과 긴 문자열 줄바꿈을 소유하며 각 화면은 인증 command만 제공한다.
 - `IdeTitleToolbar`, `IdeStatusBarSurface`: title/status chrome의
   고정 높이와 좌·중앙·우 slot. `contextAction` slot은 브랜드 바로 오른쪽에
   항상 보이는 왼쪽 패널 토글을 둔다. 32px 검색과 헤더의 위아래 경계를 맞추고,
   하단 구분선은 inset shadow로 그려 control 높이를 침범하지 않는다. feature shell은 command와 state만 제공한다.
 - `IdeToolbarLauncher`: title toolbar의 32px launcher와 중립적인 open/pressed
   상태. tool window가 열렸다는 이유만으로 primary 파랑을 사용하지 않는다.
+  `count`는 그 tool window에서 사람의 결정을 기다리는 항목 수(예: Agent 변경
+  승인 대기)만 오른쪽 위 pill로 표시한다. pill은 시각 표시일 뿐이므로 호출자가
+  같은 수를 `aria-label`과 tooltip에 함께 적는다.
 - `IdeTabStrip`, `IdeTab`: 평평한 document strip과 strip 안쪽의 둥근 active
   tab. active tab만 Tab 순서에 두고 ArrowLeft/Right/Home/End로 enabled tab을
   이동·선택한다. 화면별 rectangular selection이나 bottom accent를 다시 만들지
@@ -389,7 +394,8 @@ loopback 문서는 이 정본을 빌드 시 포함하며 네트워크 font나 sc
 - `Button`: 전역 `.btn`을 대체하는 Tailwind button primitive. variant, density,
   icon geometry, tone, active/expanded state를 semantic prop으로 소유한다.
   기본 `disabled`는 native 동작을 유지한다. 진행 중 focus를 보존해야 하는
-  command만 `disabledBehavior="focusable"`을 사용하며, 이 opt-in은
+  command와, 잠시 비활성화되어도 tree 화살표 이동과 roving tab stop이 지나가야
+  하는 tree item만 `disabledBehavior="focusable"`을 사용하며, 이 opt-in은
   `aria-disabled`를 노출하고 click·Enter·Space activation을 primitive 안에서
   차단한다. 화면은 `aria-disabled`만 붙인 채 실행 guard를 생략하지 않는다.
   popup 내부 full-width action은 화면별 class를 만들지 않고
@@ -402,6 +408,12 @@ loopback 문서는 이 정본을 빌드 시 포함하며 네트워크 font나 sc
   blocking `alertdialog`에 영향 설명과 취소/파괴적 action을 여는 2단계
   확인 composition. 취소를 첫 focus로 두고 배경 클릭·Escape로 닫으며,
   자동으로 사라지지 않고 닫은 뒤 trigger focus를 복구한다.
+- `ConfirmDialog` (`src/components/ConfirmDialog.tsx`): `ConfirmButton`이 여는
+  바로 그 확인 dialog다. `ModalBackdrop`·`ModalSurface`(alert 크기)·
+  `ModalHeader`·`ModalFooter`를 조합하며, trigger 없이 시작되는 확인(예: 열린
+  수동 트랜잭션이 있을 때 창 닫기·앱 종료)이 같은 dialog를 직접 렌더링한다.
+  확정한 작업이 진행 중이면 `pending`으로 두 action을 focus 가능한 비활성
+  상태로 두고 `aria-busy`를 노출한다. 확인 dialog의 class 목록을 복사하지 않는다.
 - `ResizeSeparator`: shell sidebar와 data-grid column이 공유하는
   keyboard/pointer resize 경계. 실제 dimension과 min/max/now ARIA를 연결하고,
   방향키의 bounded step, Home/End 경계 이동, double-click/Enter action을 소유한다.
@@ -601,6 +613,10 @@ loopback 문서는 이 정본을 빌드 시 포함하며 네트워크 font나 sc
   popover surface와 keyboard-focus 가능한 command/check row. 공용 Floating UI
   hook이 rail·topbar·tree row에서 viewport 충돌, flip, shift, size, 숨김 감지를
   처리하며 feature는 위치별 Tailwind 분기를 만들지 않는다.
+  `getAnchorRect`는 CodeMirror caret 같은 vendor geometry에 한해 virtual reference를
+  제공하고 실제 `anchorRef`는 포커스 복원과 portal 소유권을 유지한다. 위치가 필요한
+  화면에서 absolute anchor나 별도 popup CSS를 만들지 않는다. `PopupMenuItem`의
+  `data-selected`는 실행 범위처럼 hover·키보드 focus로 미리보는 현재 후보를 표시한다.
 - `ToolbarMenu triggerVariant="statusBar"`와 `menuSize="tasks"`: status bar
   높이를 유지하는 background-task trigger와 380px 이내의 관찰·중단 popup.
   실제 전역 작업 모델에 있는 task만 표시하고 지원되지 않는 중단 control은
@@ -669,6 +685,11 @@ loopback 문서는 이 정본을 빌드 시 포함하며 네트워크 font나 sc
   같은 lifecycle projection을 사용한다. 동일한 SQL이 여러 번 있어도 단순
   문자열 검색으로 첫 occurrence에 붙이지 않으며, widget은 정적 Tailwind
   utility와 semantic token만 사용한다.
+  여러 구문에서 선택 없이 Run하면 caret 옆 `PopupMenu`로 현재 구문·전체 script를
+  고른다. 후보의 정확한 source range는 selection 역할 배경과 ring으로 미리보되
+  실제 CodeMirror selection·본문은 유지하고, 미리보기 동안 이전 실행 mark는 숨긴다.
+  메뉴의 hover·focus 변경은 같은 범위를 표시하며 revision 변경·Escape는 후보를
+  폐기한다. Enter 확인은 기존 parameter/실행 controller에 정확한 source를 전달한다.
   document tab은 welcome/schema/data/SQL/activity를 숨김 예외 없이 같은 strip에
   투영한다. 스키마 비교처럼 일시적으로 중앙 workbench를 점유하는 도구도 큰
   화면 제목이나 card dashboard를 만들지 않고 같은 `IdeTabStrip`과
@@ -710,7 +731,8 @@ DopeDB의 실제 작업 흐름과 접근성, supported viewport를 위한 제품
   clamp한다. 따라서 compact viewport에서 처음 mount되거나 왕복해도 저장된
   desktop 폭과 다음 desktop projection은 변경되지 않는다.
 - Shell은 title toolbar, 중앙 작업 영역, status bar의 세 행만 사용한다. 하단 Services
-  panel·보조 보기·resize·표시 상태 저장은 제공하지 않는다.
+  panel·보조 보기·표시 상태 저장은 제공하지 않는다. SQL 문서 내부의 편집기/결과
+  분할은 이 전역 panel과 다르며 중앙 문서가 소유한다.
 - Local History header는 선행 뒤로 버튼과 제목 하나를 표시한다. 뒤로 버튼과
   상단 Local History 메뉴 재선택은 같은 왼쪽 anchor의 Explorer로 복귀한다.
   Explorer는 숨겨 둔 채 검색·펼침·스크롤 상태를 보존하고, 복귀 시 tree의
@@ -719,7 +741,14 @@ DopeDB의 실제 작업 흐름과 접근성, supported viewport를 위한 제품
   같은 복귀 경로를 사용한다. 실제 revision 복원 action은 검색/필터 문맥과
   같은 command row에 둔다. project external-change 기능이 생기기 전에는 빈 file
   tree나 가짜 view action을 추가하지 않는다.
-- `QueryResultsPane`은 SQL 문서의 SQL/결과 전환과 중앙 실행 결과 문서가 공유한다.
+- `SqlResultSplit`은 SQL 문서 내부에서 편집기 위·결과 아래의 가로 분할을 소유한다.
+  두 pane은 항상 mount·표시 상태를 유지하고 실행 결과가 editor focus를 가져가지
+  않는다. `ResizeSeparator`의 pointer capture·방향키와 reset을 사용하고, 결과의
+  높이 비율만 기기 로컬 선호로 저장한다. 각 pane의 120px 읽기 공간을 우선하며
+  공간이 더 부족한 짧은 창에서는 1:1로 제한하고 저장된 선호는 viewport 변화로 덮어쓰지
+  않는다. grid 책임은 정적 Tailwind가, `--sql-editor-share`/`--sql-result-share`의
+  동적 `fr` 값만 측정된 resize geometry가 소유한다. 별도 feature CSS는 없다.
+- `QueryResultsPane`은 SQL 문서의 아래쪽 결과 pane과 중앙 실행 결과 문서가 공유한다.
   실행 기록 selector, 다중 statement 결과 tab, Output과 기존 DataGrid를 사용한다.
   SQL 실행 중 editor/controller는 mount 상태를 유지하고 취소 action은 toolbar에 남는다.
   shell은 result row 갱신을 구독하지 않으며 전역 상태 표시는 기존 lifecycle projection만 구독한다.
@@ -817,6 +846,9 @@ DopeDB의 실제 작업 흐름과 접근성, supported viewport를 위한 제품
   쓰기 대상 유무를 축약해 보여준다. 선택하지 않은 resource는 새 ACP session의
   immutable grant에 포함하지 않으며 여러 DB 결과는 UI에서 join된 것처럼 표현하지
   않는다.
+  대화가 시작된 뒤에는 trigger를 비활성화하지 않고 메뉴를 열어 고정된 선택과 새
+  채팅이 필요한 이유를 읽기 전용으로 보여준다. 미배정 연결의 `프로젝트에 추가`와
+  revision 변경의 `재확인`은 입력면 위의 `ComposerNoticeBar`가 소유한다.
 - 외부 `dopedb agent init/start` 요청은 기존 `Modal` primitive의 wide/fill surface를
   쓰는 전역 approval gate로 표시한다. configure 요청만 같은 Project resource
   checkbox와 단일 write-target radio를 편집할 수 있고, start 요청은 저장된 exact
@@ -824,6 +856,11 @@ DopeDB의 실제 작업 흐름과 접근성, supported viewport를 위한 제품
   전용으로 보여준다. resource가 사라졌거나 inventory를 불러오지 못하면 승인을
   비활성화하고 거절만 허용한다. modal은 secret, connection URL, capability를 표시하지
   않는다.
+  승인된 외부 process의 DB 변경 제안은 같은 gate의 `ExternalAgentProposalDialog`
+  (`src/features/agents/ExternalAgentRequestDialogs.tsx`)가 내장 채팅과 같은
+  `AcpSqlApproval` 카드로 표시한다. 초기 포커스는 닫기 버튼에 두고, operation이 최종
+  상태가 되기 전에는 닫기를 focusable-disabled로 유지하고, 검토를 불러오지 못하면
+  닫기를 허용한다.
 - 빈 AI Chat transcript는 제목·설명 card를 만들지 않고 실제 SQL 작업,
   스키마·선택 데이터 탐색, 명시적 변경 승인 세 줄만 표시한다. 화면에 없는
   IDE capability를 본뜨거나 steady-state onboarding 문단을 반복하지 않는다.
@@ -883,9 +920,9 @@ DopeDB의 실제 작업 흐름과 접근성, supported viewport를 위한 제품
   scrollbar 계약을 사용하며 floating status footer가 있는 grid는 scroll
   bottom inset을 명시해 마지막 행과 keyboard focus가 footer 아래에 가리지 않게
   한다.
-  `dataGridGeometry.ts`가 제품 기준의 28px header/row, 28px row-number
-  column, 144px default data column을 소유하며 일반·가상 renderer는 이 값을
-  중복 선언하지 않는다. identifier/value/row number는 `font-mono`를 사용한다.
+  `dataGridGeometry.ts`가 제품 기준의 28px header/row, 최소 28px에서 가장 큰
+  행 번호의 자릿수에 맞춰 넓어지는 row-number column, 144px default data
+  column을 소유하며 일반·가상 renderer는 이 값을 중복 선언하지 않는다. identifier/value/row number는 `font-mono`를 사용한다.
   열 경계 더블클릭은 공용 `dataGridAutoFitWidth`로 해당 열만 최대 480px까지
   맞춘다. 실제 표시 font·헤더 control 공간과 현재 로드된 값을 측정하고,
   stream은 retained cache page만 순회해 추가 조회·전체 결과 평탄화를 하지 않는다.
@@ -980,6 +1017,14 @@ DopeDB의 실제 작업 흐름과 접근성, supported viewport를 위한 제품
   Agent 도구는 공급자별 한 행에 내장 채팅 준비 상태를 우선 표시한다. 공식 CLI와
   선택형 외부 사용 스킬의 상태·수리·제거는 그 행의 펼침 영역에 둔다. 기술
   구성 요소를 별도 최상위 목록으로 반복하지 않는다.
+- 워크스페이스 관리 dialog의 section(구성원, DB 접근 권한, 공급자, 백업 및
+  삭제)과 Settings의 `계정` section은 새 table·card stack 없이 `SettingsSectionHeader`·`SettingsList`·`SettingsRow`
+  inventory, `Status`의 `InlineNotice`, `ConfirmButton`, `Modal`을 조합한다.
+  구성원 제거, 초대 취소, 공유 DB 삭제, 백업 삭제·복원 같은 파괴적 동작은
+  `ConfirmButton`의 차단 확인 dialog로, workspace 삭제는 정확한 이름 입력으로만
+  실행하고 `window.confirm`을 쓰지 않는다. 실행할 수 없는 역할에는 section
+  자체를 숨기며 disabled placeholder를 두지 않는다. 서버 문장은 현재 UI 언어와
+  같을 때만 보이고 나머지는 catalog 문구로 대체한다.
 - `DiagnosticSummary`, `DiagnosticCount`: 설정·속성 편집기의 Problems 목록과
   오류/경고 개수를 같은 compact hierarchy로 표시.
 - `SettingsGroup`: 설정·정책 화면의 제목, 상단 divider, dense spacing을 공유하는
@@ -987,6 +1032,14 @@ DopeDB의 실제 작업 흐름과 접근성, supported viewport를 위한 제품
   202px settings rail은 검색 input에 8px gutter를 두고 24px hierarchy의
   hover/selection row는 rail 전체 폭을 차지하는 평평한 surface를 사용한다.
   선택 항목을 inset rounded pill로 만들지 않는다.
+- `SectionDialog`: Settings와 워크스페이스 관리처럼 왼쪽 section rail과 오른쪽
+  본문을 가진 설정형 dialog의 정본. `ModalSurface size="settings"`, 선택적
+  `TreeSearch` 검색(keyword 필터, 지우기, 결과 없음 문구), group별 rail
+  button(`aria-current`), 좁은 폭에서 optgroup `SelectInput`으로 바뀌는 section
+  선택, breadcrumb, `container-type: inline-size` 본문과 완료 footer를 소유한다.
+  각 화면은 entry 목록·활성 section·본문만 제공하고 rail·검색·footer를 다시
+  조립하지 않는다. 검색이 활성 항목을 숨기면 첫 번째 선택 가능한 일치 항목을
+  고른다. 두 dialog는 shell의 modal mode로 서로를 대체하며 동시에 열리지 않는다.
 
 툴윈도우 primitive는
 [`src/design-system/components/ToolWindow.tsx`](components/ToolWindow.tsx)에

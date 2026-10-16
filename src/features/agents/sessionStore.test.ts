@@ -204,8 +204,10 @@ describe("ACP session store", () => {
     });
     change?.({ session: active, event: messageEvent(active.id, 1, "Explain the schema") });
     const beforeTokens = store.getSnapshot();
-    change?.({ session: active, event: delta(2, "First") });
-    change?.({ session: active, event: delta(3, " words") });
+    // Streamed chunks omit the session summary on the wire; the boundary event
+    // that follows carries it again.
+    change?.({ session: null, event: delta(2, "First") });
+    change?.({ session: null, event: delta(3, " words") });
     expect(schedule).toHaveBeenCalledTimes(1);
     expect(store.getSnapshot()).toBe(beforeTokens);
     (frame as (() => void) | null)?.();
@@ -214,24 +216,43 @@ describe("ACP session store", () => {
     expect(store.getSnapshot().sessions[0].lifecycle).toBe("running");
     expect(partial.items.some((item) => item.kind === "turnEnd")).toBe(false);
 
-    change?.({ session: active, event: delta(4, " arrive live.") });
+    change?.({ session: null, event: delta(4, " arrive live.") });
     (frame as (() => void) | null)?.();
     expect(store.getSnapshot().projections.get(active.id)!.items.slice(-1)[0])
       .toMatchObject({ kind: "agent", chunks: ["First", " words", " arrive live."] });
     // The last queued token and turn boundary publish together without waiting
     // for another frame; the final answer contains no duplicated chunks.
-    change?.({ session: active, event: delta(5, " Done.") });
-    change?.({
-      session: { ...active, lifecycle: "ready" },
-      event: { sessionId: active.id, sequence: 6, createdAt: active.updatedAt, type: "turnEnd", stopReason: "end_turn" },
-    });
+    change?.({ session: null, event: delta(5, " Done.") });
+    const turnEnd: AcpSessionEvent = {
+      sessionId: active.id, sequence: 6, createdAt: active.updatedAt, type: "turnEnd", stopReason: "end_turn",
+    };
+    change?.({ session: { ...active, lifecycle: "ready" }, event: turnEnd });
     expect(store.getSnapshot().projections.get(active.id)!.items.slice(-2)[0])
       .toMatchObject({ kind: "agent", chunks: ["First words arrive live. Done."] });
     expect(store.getSnapshot().sessions[0].lifecycle).toBe("ready");
     expect(cancelFrame).toHaveBeenCalledTimes(3);
 
+    // The runtime replays a folded answer as one event that takes the newest
+    // chunk's sequence. Reopening merges it with live memory without
+    // duplicating the answer and keeps live events newer than the replay.
+    change?.({ session: { ...active, lifecycle: "ready" }, event: messageEvent(active.id, 7, "Next") });
+    expect(store.recordFocus("workspace:a", {
+      session: { ...active, lifecycle: "ready" },
+      events: [
+        messageEvent(active.id, 1, "Explain the schema"),
+        delta(5, "First words arrive live. Done."),
+        turnEnd,
+      ],
+      replayTruncated: false,
+    })).toBe(true);
+    const reopened = store.getSnapshot().projections.get(active.id)!;
+    expect(reopened.items.filter((item) => item.kind === "agent")).toEqual([
+      expect.objectContaining({ chunks: ["First words arrive live. Done."] }),
+    ]);
+    expect(reopened.items.slice(-1)[0]).toMatchObject({ kind: "user", text: "Next" });
+
     // An obsolete scheduled callback cannot publish a prior account's text.
-    change?.({ session: active, event: delta(7, "Old account") });
+    change?.({ session: null, event: delta(8, "Old account") });
     const obsoleteFrame = frame as (() => void) | null;
     store.activate("workspace:b");
     expect(cancelFrame).toHaveBeenCalledTimes(4);

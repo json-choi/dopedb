@@ -100,6 +100,17 @@ export default function Onboarding({
           disabled: localDiscovery.status === "running",
           onClick: localDiscovery.run,
         });
+      } else if (
+        localDiscovery.status === "failed" ||
+        localDiscovery.listeners.length === 0
+      ) {
+        // A server started after the first look is found by an explicit retry.
+        commands.push({
+          id: "discover-local-listeners",
+          icon: "refresh",
+          label: t("connections.localDiscoveryRetry"),
+          onClick: localDiscovery.run,
+        });
       }
       for (const listener of localDiscovery.listeners) {
         commands.push({

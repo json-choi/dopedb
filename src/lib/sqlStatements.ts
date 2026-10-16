@@ -15,15 +15,30 @@ function dollarTag(sql: string, i: number): string | null {
   return m ? m[0] : null;
 }
 
-function push(out: string[], raw: string): void {
+export interface SqlStatementRange {
+  sql: string;
+  from: number;
+  to: number;
+}
+
+function push(out: SqlStatementRange[], sql: string, start: number, end: number): void {
+  const raw = sql.slice(start, end);
   const s = raw.trim();
-  if (s && stripComments(s).trim()) out.push(s); // drop empty + comment-only segments
+  if (s && stripComments(s).trim()) {
+    const from = start + raw.length - raw.trimStart().length;
+    out.push({ sql: s, from, to: from + s.length });
+  }
 }
 
 // Split into top-level statements, respecting single/double quotes, dollar-quoted
 // strings, and line/block comments. Comment-only and empty segments are dropped.
 export function splitStatements(sql: string): string[] {
-  const out: string[] = [];
+  return splitStatementRanges(sql).map((statement) => statement.sql);
+}
+
+/** Exact UTF-16 offsets for editor previews; never grants execution authority. */
+export function splitStatementRanges(sql: string): SqlStatementRange[] {
+  const out: SqlStatementRange[] = [];
   const n = sql.length;
   let start = 0;
   let i = 0;
@@ -58,13 +73,13 @@ export function splitStatements(sql: string): string[] {
         i++;
       }
     } else if (c === ";") {
-      push(out, sql.slice(start, i));
+      push(out, sql, start, i);
       i++;
       start = i;
     } else {
       i++;
     }
   }
-  push(out, sql.slice(start));
+  push(out, sql, start, n);
   return out;
 }

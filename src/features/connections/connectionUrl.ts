@@ -96,6 +96,10 @@ function parseOptionalBoolean(value: string | null): boolean | null {
   return null;
 }
 
+/**
+ * Naming metadata a pasted URL may carry. Write and read-only flags in a URL are
+ * stripped but never applied: `Settings → Safety` alone owns write access.
+ */
 function parseUrlMetaParams(params: URLSearchParams, nameFallback: string) {
   return {
     name:
@@ -105,12 +109,6 @@ function parseUrlMetaParams(params: URLSearchParams, nameFallback: string) {
         "connection_name",
       ]) || nameFallback,
     env: firstSearchParam(params, ["env", "environment"]),
-    readonlyDefault: parseOptionalBoolean(
-      firstSearchParam(params, ["readonly", "readOnly", "read_only"]),
-    ),
-    allowWrites: parseOptionalBoolean(
-      firstSearchParam(params, ["allowWrites", "allow_writes", "writes"]),
-    ),
   };
 }
 
@@ -204,10 +202,6 @@ function parseMongoConnectionUrl(text: string): ParsedConnectionUrl | null {
     extraParams,
   };
   if (meta.env) update.env = meta.env;
-  if (meta.readonlyDefault != null) {
-    update.readonlyDefault = meta.readonlyDefault;
-  }
-  if (meta.allowWrites != null) update.allowWrites = meta.allowWrites;
 
   return {
     update,
@@ -253,8 +247,6 @@ function parseCloudflareD1Url(url: URL): ParsedConnectionUrl | null {
     extraParams: {},
   };
   if (meta.env) update.env = meta.env;
-  if (meta.readonlyDefault != null) update.readonlyDefault = meta.readonlyDefault;
-  if (meta.allowWrites != null) update.allowWrites = meta.allowWrites;
   return {
     update,
     password: null,
@@ -353,10 +345,6 @@ export function parseConnectionUrl(raw: string): ParsedConnectionUrl | null {
     "group",
   ]);
   if (schemaGroup && engine !== "bigquery") update.schemaGroup = schemaGroup;
-  if (meta.readonlyDefault != null) {
-    update.readonlyDefault = meta.readonlyDefault;
-  }
-  if (meta.allowWrites != null) update.allowWrites = meta.allowWrites;
   if (engine === "bigquery") {
     update.username = "";
     update.port = CONNECTION_DEFAULT_PORTS.bigquery;

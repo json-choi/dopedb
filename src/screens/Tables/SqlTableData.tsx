@@ -15,6 +15,7 @@ import {
 } from "../../features/catalogExplorer/catalogDomain";
 import { approveOperation, rejectOperation } from "../../features/operations/tauriAdapter";
 import { runScript } from "../../features/queries/tauriAdapter";
+import { scriptStatementErrorCopy } from "../../features/queryServices/errorCopy";
 import { proposeTableChanges } from "../../features/tableData/tauriAdapter";
 import { useCatalogTableMetadata } from "../../features/tableData/catalogTable";
 import type { RowEditorState } from "../../features/tableData/domain";
@@ -404,15 +405,19 @@ export default function SqlTableData({
   }
 
   function finishStagedChanges(outcome: ScriptOutcome) {
-    const conflict = outcome.statements.find((statement) =>
-      statement.error?.includes("optimistic concurrency conflict"),
+    // The statement that failed (later ones are only skipped by the rollback).
+    const failed = outcome.statements.find(
+      (statement) => statement.error && statement.error.kind !== "skipped",
     );
-    if (!outcome.committed || conflict) {
+    if (!outcome.committed || failed) {
+      // The script result view's copy for that kind, then the database's detail.
+      const copy = failed?.error
+        ? scriptStatementErrorCopy({ sql: failed.sql, error: failed.error }, connection, t)
+        : null;
       commands.patch({
-        writeError:
-          conflict?.error ??
-          outcome.statements.find((statement) => statement.error)?.error ??
-          t("tables.changeSetRolledBack"),
+        writeError: copy
+          ? [copy.message ?? copy.title, copy.detail].filter(Boolean).join("\n")
+          : t("tables.changeSetRolledBack"),
       });
       return;
     }
@@ -523,7 +528,7 @@ export default function SqlTableData({
           {structure && <TableStructure table={table} />}
 
           {err && (
-            <div className="tw:border-b tw:border-border-subtle tw:px-3 tw:py-2 tw:text-ui tw:text-danger">
+            <div className="tw:border-b tw:border-border-subtle tw:px-3 tw:py-2 tw:text-ui tw:text-danger tw:whitespace-pre-wrap tw:[overflow-wrap:anywhere]">
               {err}
             </div>
           )}

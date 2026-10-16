@@ -1,15 +1,30 @@
 // Catalog V2 schema explorer. React Flow/ELK owns the relationship canvas while the
-// inspector and structured editor consume the same fingerprint-pinned metadata.
+// inspector and structured editor consume the same fingerprint-pinned metadata. A
+// failed reread keeps the last read schema on screen beside the failure and Retry.
 import {
   lazy,
   Suspense,
+  useCallback,
   useEffect,
   useMemo,
   useState,
   type ReactNode,
 } from "react";
-import { useQuery } from "@tanstack/react-query";
-import type { CatalogRelationV2, CatalogTable } from "../../ipc/types";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import type {
+  CatalogRelationV2,
+  CatalogSnapshot,
+  CatalogTable,
+} from "../../ipc/types";
+import {
+  catalogFromSnapshot,
+  isPersistedSnapshot,
+} from "../../features/catalog/tauriAdapter";
+import { fullTime } from "../../lib/relTime";
+import {
+  InlineNotice,
+  LoadingLabel,
+} from "../../design-system/components/Status";
 import type { ConnectionProfile } from "../../features/connections/domain";
 import {
   catalogLoadIssue,
@@ -25,12 +40,12 @@ import {
   WorkbenchPane,
   WorkbenchScrollBody,
 } from "../../design-system/components/Workbench";
+import { useCatalogScope } from "../../lib/queries";
 import {
   catalogOverviewQuery,
-  catalogQuery,
-  catalogSnapshotQuery,
-  useCatalogScope,
-} from "../../lib/queries";
+  databaseCatalogSnapshotQuery,
+  refreshConnectionCatalog,
+} from "../../lib/catalogQueries";
 import { erdRelationKey, relationDisplayName } from "../../lib/erdGraph";
 import { useI18n } from "../../lib/i18n";
 import { schemaDetailsEnabled } from "./detailLifecycle";
@@ -54,6 +69,10 @@ function SchemaFrame({ children }: { children: ReactNode }) {
   );
 }
 
+function selectPersistedAt(snapshot: CatalogSnapshot) {
+  return isPersistedSnapshot(snapshot) ? snapshot.capturedAt : null;
+}
+
 function catalogTableFor(tables: CatalogTable[], relation: CatalogRelationV2) {
   return (
     tables.find(
@@ -73,28 +92,57 @@ export default function SchemaExplorer({
   selectedTable: CatalogTable | null;
   onOpenTable: (table: CatalogTable) => void;
 }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
+  const queryClient = useQueryClient();
   const catalogScope = useCatalogScope();
   const [detailsRequested, setDetailsRequested] = useState(false);
   const overviewQuery = useQuery({
     ...catalogOverviewQuery(connection.id, catalogScope),
     select: (overview) => filterCatalogOverview(connection, overview),
   });
+  // The flat catalog and the ERD snapshot observe one shared live read of the
+  // configured database, the same entry the Explorer and table surfaces use.
+  const detailsEnabled = schemaDetailsEnabled(
+    detailsRequested,
+    catalogScope.ready,
+  );
+  const selectCatalog = useCallback(
+    (loaded: CatalogSnapshot) =>
+      filterCatalog(connection, catalogFromSnapshot(loaded)),
+    [connection],
+  );
+  const selectSnapshot = useCallback(
+    (loaded: CatalogSnapshot) => filterCatalogSnapshot(connection, loaded),
+    [connection],
+  );
   const catalogQueryResult = useQuery({
-    ...catalogQuery(connection.id, catalogScope),
-    enabled: schemaDetailsEnabled(detailsRequested, catalogScope.ready),
-    select: (catalog) => filterCatalog(connection, catalog),
-  });
-  // A cold full-catalog projection persists the canonical snapshot before it resolves.
-  // Waiting for it avoids running the same live introspection twice in parallel.
-  const snapshotQuery = useQuery({
-    ...catalogSnapshotQuery(
+    ...databaseCatalogSnapshotQuery(
       connection.id,
-      detailsRequested && catalogQueryResult.data !== undefined,
+      connection.database,
+      detailsEnabled,
       catalogScope,
     ),
-    select: (snapshot) => filterCatalogSnapshot(connection, snapshot),
+    select: selectCatalog,
   });
+  const snapshotQuery = useQuery({
+    ...databaseCatalogSnapshotQuery(
+      connection.id,
+      connection.database,
+      detailsEnabled,
+      catalogScope,
+    ),
+    select: selectSnapshot,
+  });
+  // A persisted snapshot is shown only while the live read runs; label its age.
+  const persistedAt = useQuery({
+    ...databaseCatalogSnapshotQuery(
+      connection.id,
+      connection.database,
+      detailsEnabled,
+      catalogScope,
+    ),
+    select: selectPersistedAt,
+  }).data;
   const snapshot = snapshotQuery.data;
   const [filter, setFilter] = useState("");
   const [inspectorOpen, setInspectorOpen] = useState(false);
@@ -151,14 +199,17 @@ export default function SchemaExplorer({
   }
 
   async function retryCatalogLoad() {
-    if (catalogQueryResult.error) {
-      await catalogQueryResult.refetch();
-      return;
-    }
+    // Both observers share one entry, so one refetch retries the single live read.
     await snapshotQuery.refetch();
   }
 
-  if (!detailsRequested) {
+  // The shared refresh rereads every open catalog view of this connection once.
+  function rereadSchema() {
+    void refreshConnectionCatalog(queryClient, connection.id);
+  }
+
+  // Details the Explorer or a table already read are shown without another request.
+  if (!detailsRequested && !(snapshot && catalogQueryResult.data)) {
     if (overviewQuery.error) {
       return (
         <SchemaFrame>
@@ -217,7 +268,9 @@ export default function SchemaExplorer({
   }
 
   const error = snapshotQuery.error ?? catalogQueryResult.error;
-  if (error) {
+  const rereading = catalogQueryResult.isFetching || snapshotQuery.isFetching;
+  // A failed reread keeps the last read schema; only a first read that failed blocks.
+  if (error && !(snapshot && catalogQueryResult.data)) {
     return (
       <SchemaFrame>
         <div className="tw:text-ui tw:text-danger">
@@ -227,8 +280,9 @@ export default function SchemaExplorer({
         <Button
           size="compact"
           type="button"
-          disabled={catalogQueryResult.isFetching || snapshotQuery.isFetching}
-          aria-busy={catalogQueryResult.isFetching || snapshotQuery.isFetching}
+          disabled={rereading}
+          disabledBehavior="focusable"
+          aria-busy={rereading}
           onClick={() => void retryCatalogLoad()}
         >
           <Icon name="refresh" />
@@ -249,12 +303,37 @@ export default function SchemaExplorer({
   return (
     <SchemaFrame>
       <div className="tw:flex tw:items-center tw:justify-between tw:gap-2 tw:@max-[760px]:flex-col tw:@max-[760px]:items-start">
-        <span className="tw:text-sm tw:text-muted-foreground">
-          {t("schema.tableCount", { count: snapshot.relations.length })}
-          {" · "}
-          {t("schema.fkCount", { count: physicalRelationshipCount })}
+        <span className="tw:flex tw:min-w-0 tw:flex-wrap tw:items-center tw:gap-x-2 tw:text-sm tw:text-muted-foreground">
+          <span>
+            {t("schema.tableCount", { count: snapshot.relations.length })}
+            {" · "}
+            {t("schema.fkCount", { count: physicalRelationshipCount })}
+          </span>
+          {persistedAt && !error ? (
+            <LoadingLabel>
+              {t("schema.persistedRefreshing", { time: fullTime(persistedAt, lang) })}
+            </LoadingLabel>
+          ) : persistedAt || error ? (
+            <span>
+              {t("schema.persistedShown", {
+                time: fullTime(persistedAt ?? snapshot.capturedAt, lang),
+              })}
+            </span>
+          ) : null}
         </span>
         <div className="ds-control-row tw:ml-auto tw:flex tw:min-w-0 tw:items-center tw:gap-2 tw:@max-[760px]:ml-0 tw:@max-[760px]:w-full">
+          <Button
+            iconOnly
+            size="compact"
+            disabled={rereading}
+            disabledBehavior="focusable"
+            aria-busy={rereading}
+            title={t(rereading ? "schema.rereading" : "schema.reread")}
+            aria-label={t(rereading ? "schema.rereading" : "schema.reread")}
+            onClick={rereadSchema}
+          >
+            <Icon name="refresh" />
+          </Button>
           <span className="tw:w-[min(320px,42vw)] tw:min-w-0 tw:@max-[760px]:flex-1">
             <TextInput
               density="compact"
@@ -281,6 +360,30 @@ export default function SchemaExplorer({
           </Button>
         </div>
       </div>
+
+      {error ? (
+        <InlineNotice
+          tone="danger"
+          icon="alert"
+          role="alert"
+          action={(
+            <Button
+              size="xs"
+              variant="ghost"
+              disabled={rereading}
+              disabledBehavior="focusable"
+              aria-busy={rereading}
+              onClick={rereadSchema}
+            >
+              {t("app.retry")}
+            </Button>
+          )}
+        >
+          {t("schema.rereadFailed", {
+            error: catalogLoadIssueMessage(t, catalogLoadIssue(error)),
+          })}
+        </InlineNotice>
+      ) : null}
 
       {snapshot.relations.length === 0 ? (
         <WorkbenchEmptyState icon="database">

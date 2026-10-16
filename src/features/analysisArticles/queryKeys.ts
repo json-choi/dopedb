@@ -16,6 +16,9 @@ export const analysisQueryKeys = {
       : (["analysis-article-runs", scopeKey, articleId] as const),
   localResult: (scopeKey: string, articleId: string | undefined) =>
     ["analysis-article-local-result", scopeKey, articleId] as const,
+  /** One immutable Article revision with its HTML and saved query. */
+  document: (scopeKey: string, articleId: string | undefined, revision: number | undefined) =>
+    ["analysis-article-document", scopeKey, articleId, revision] as const,
   publication: (scopeKey: string, articleId: string) =>
     ["analysis-publication", scopeKey, articleId] as const,
 };

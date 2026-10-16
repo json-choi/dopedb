@@ -1,17 +1,52 @@
 // Keeps the Article's findings first and review metadata collapsed by default.
 // The controller owns query execution/results; opening review never starts a query.
-import { memo, type ReactNode } from "react";
+// Shared HTML never navigates the app window: web links open externally only after
+// native confirmation, other schemes are ignored, and in-page fragments stay inside.
+import { memo, type MouseEvent, type ReactNode } from "react";
 import { Icon } from "../../components/Icon";
 import { AnalysisArticleBody } from "../../design-system/components/AnalysisArticleBody";
 import { useI18n } from "../../lib/i18n";
-import type { AnalysisArticleRecord } from "./domain";
+import { openAgentExternalLink } from "../agents/tauriAdapter";
+import type { AnalysisArticleDocument } from "./domain";
 import { useArticleOutline } from "./useArticleOutline";
 
 // Desktop retains the body DOM for outline focus; Workspace uses the same primitive.
 const StableArticleBody = memo(AnalysisArticleBody);
+const EXTERNAL_PROTOCOLS = new Set(["http:", "https:", "mailto:"]);
+
+function followArticleLink(event: MouseEvent<HTMLDivElement>, lang: "en" | "ko") {
+  if (!(event.target instanceof Element)) return;
+  const anchor = event.target.closest("a[href]");
+  if (!anchor || !event.currentTarget.contains(anchor)) return;
+  event.preventDefault();
+  if (event.type === "auxclick" && event.button !== 1) return;
+  const href = anchor.getAttribute("href") ?? "";
+  if (href.startsWith("#")) {
+    let fragment = href.slice(1);
+    try {
+      fragment = decodeURIComponent(fragment);
+    } catch {
+      // A malformed escape is matched literally.
+    }
+    const target = fragment
+      ? event.currentTarget.querySelector(`[id="${CSS.escape(fragment)}"], [name="${CSS.escape(fragment)}"]`)
+      : null;
+    target?.scrollIntoView({ block: "start" });
+    return;
+  }
+  let url: URL;
+  try {
+    url = new URL(href);
+  } catch {
+    return;
+  }
+  if (EXTERNAL_PROTOCOLS.has(url.protocol)) {
+    void openAgentExternalLink(url.href, lang, "analysisArticle").catch(() => undefined);
+  }
+}
 
 export function AnalysisArticleReader({ article, projectName, source, connectionName, runAction, children }: {
-  article: AnalysisArticleRecord;
+  article: AnalysisArticleDocument;
   projectName: string;
   source: string;
   connectionName: string;
@@ -33,7 +68,14 @@ export function AnalysisArticleReader({ article, projectName, source, connection
             {runAction}
           </div>
         </header>
-        <StableArticleBody bodyRef={outline.bodyRef} html={article.definition.html} />
+        {/* Click delegation over shared HTML; links keep native keyboard activation. */}
+        <div
+          className="tw:min-w-0"
+          onClickCapture={(event) => followArticleLink(event, lang)}
+          onAuxClickCapture={(event) => followArticleLink(event, lang)}
+        >
+          <StableArticleBody bodyRef={outline.bodyRef} html={article.definition.html} />
+        </div>
         <details key={article.id} className="tw:group tw:min-w-0 tw:border-t tw:border-border-subtle">
           <summary className="tw:flex tw:cursor-pointer tw:list-none tw:items-center tw:gap-2 tw:py-4 tw:text-sm tw:font-medium tw:text-muted-foreground tw:hover:text-foreground tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:[&::-webkit-details-marker]:hidden">
             <span className="tw:shrink-0 tw:group-open:rotate-90"><Icon name="chevronRight" /></span>

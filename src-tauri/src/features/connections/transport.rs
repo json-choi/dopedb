@@ -4,13 +4,13 @@ use tauri::State;
 use zeroize::Zeroizing;
 
 use crate::error::AppResult;
-use crate::features::catalog::DatabaseSummary;
 use crate::kernel::identity::ConnectionId;
 use crate::model::ConnectionProfile;
 use crate::state::AppState;
 
 use super::{
-    ConnectionProfileTestRequest, ConnectionUpsertRequest, DriverDescriptor, LocalDatabaseListener,
+    ConnectionProfileTestRequest, ConnectionUpsertRequest, DatabaseDiscoveryReceipt,
+    DriverDescriptor, LocalDatabaseListener,
 };
 
 #[tauri::command]
@@ -42,6 +42,7 @@ pub async fn upsert_connection(
     app: tauri::AppHandle,
     profile: ConnectionProfile,
     password: Option<String>,
+    clear_password: Option<bool>,
 ) -> AppResult<ConnectionProfile> {
     let saved = state
         .services
@@ -49,6 +50,7 @@ pub async fn upsert_connection(
         .upsert(ConnectionUpsertRequest {
             profile,
             password: password.map(Zeroizing::new),
+            clear_password: clear_password.unwrap_or(false),
         })
         .await?;
     if saved.engine == crate::model::Engine::Bigquery
@@ -165,16 +167,14 @@ pub async fn test_connection_profile(
     profile: ConnectionProfile,
     password: Option<String>,
 ) -> AppResult<super::ConnectionTestReceipt> {
-    Ok(super::ConnectionTestReceipt::from_result(
-        state
-            .services
-            .connections
-            .test_profile(ConnectionProfileTestRequest {
-                profile,
-                password: password.map(Zeroizing::new),
-            })
-            .await,
-    ))
+    Ok(state
+        .services
+        .connections
+        .test_profile(ConnectionProfileTestRequest {
+            profile,
+            password: password.map(Zeroizing::new),
+        })
+        .await)
 }
 
 #[tauri::command]
@@ -182,7 +182,7 @@ pub async fn discover_connection_profile_databases(
     state: State<'_, AppState>,
     profile: ConnectionProfile,
     password: Option<String>,
-) -> AppResult<Vec<DatabaseSummary>> {
+) -> AppResult<DatabaseDiscoveryReceipt> {
     state
         .services
         .connections

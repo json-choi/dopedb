@@ -1,27 +1,33 @@
-// Settings shell for agent tools, command-line, safety, language, and updates.
-// Kept outside the data tabs so navigation remains focused on the selected database.
+// Settings shell for application preferences, the signed-in account, and
+// per-connection safety. Workspace administration lives in the separate Workspace
+// management dialog, so this dialog stays about this app and its data sources.
 import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import type { ConnectionProfile } from "../../features/connections/domain";
 import type { SafetySettings } from "../../ipc/types";
-import { Icon } from "../../components/Icon";
-import { Button } from "../../design-system/components/Button";
 import {
   Field,
   SelectInput,
 } from "../../design-system/components/FormControls";
 import {
-  ModalBackdrop,
-  ModalFooter,
-  ModalHeader,
-  ModalSurface,
-} from "../../design-system/components/Modal";
-import { TreeSearch } from "../../design-system/components/TreeControls";
+  SectionDialog,
+  type SectionDialogEntry,
+} from "../../design-system/components/SectionDialog";
 import { useI18n } from "../../lib/i18n";
 import { settingsSearchKeywords, type SettingsSection } from "../../features/settings/domain";
+import { workspaceAuthStateQuery } from "../../features/workspaces/queries";
 import {
   appUpdaterProgress,
   type AppUpdaterSnapshot,
 } from "../../features/updater/controller";
+import AccountSettings from "./Account";
+import ConnectionSettings from "./Connection";
+import { Button } from "../../design-system/components/Button";
+import { SettingsGroup } from "../../design-system/components/Settings";
+import { SettingsList, SettingsRow } from "../../design-system/components/SettingsList";
+import { useWorkspaceAdminScope } from "../../features/workspaceAdmin/scope";
+import { workspaceAdminSectionsFor } from "../../features/workspaceAdmin/sections";
+import { requestWorkspaceAdmin } from "../../features/workspaceAdmin/navigationRequest";
 import AdvancedSettings from "./Advanced";
 import Appearance from "./Appearance";
 import AgentTools from "./AgentTools";
@@ -30,7 +36,7 @@ import PrivacySettings from "./Privacy";
 import Safety from "./Safety";
 import Updates from "./Updates";
 
-type SettingsScope = "application" | "dataSource";
+type SettingsScope = "application" | "agents" | "account" | "dataSource";
 
 export default function Settings({
   connection,
@@ -38,6 +44,8 @@ export default function Settings({
   onConnectionUpdated,
   onSafetySaved,
   onOpenAdminConnection,
+  onEditConnection,
+  onOpenProjectEnvironment,
   refreshSafety,
   initialSection,
   updater,
@@ -49,6 +57,8 @@ export default function Settings({
   onConnectionUpdated: (connection: ConnectionProfile) => void;
   onSafetySaved: (connectionId: string, settings: SafetySettings) => void;
   onOpenAdminConnection: (connection: ConnectionProfile) => void;
+  onEditConnection: (connection: ConnectionProfile) => void;
+  onOpenProjectEnvironment: (environmentId: string) => void;
   // Re-loads the App's per-connection safety so Safety edits apply without reselecting.
   refreshSafety: () => void;
   initialSection?: SettingsSection;
@@ -60,110 +70,12 @@ export default function Settings({
   const [section, setSection] = useState<SettingsSection>(
     initialSection ?? "agent-tools",
   );
-  const [filter, setFilter] = useState("");
-  const settingsEntries = useMemo(
-    () =>
-      [
-        {
-          id: "agent-tools",
-          label: t("settings.agentTools"),
-          scope: "application",
-          disabled: false,
-          keywords: settingsSearchKeywords["agent-tools"],
-        },
-        {
-          id: "advanced",
-          label: t("settings.advanced"),
-          scope: "application",
-          disabled: false,
-          keywords: settingsSearchKeywords.advanced,
-        },
-        {
-          id: "cli",
-          label: t("settings.cli"),
-          scope: "application",
-          disabled: false,
-          keywords: settingsSearchKeywords.cli,
-        },
-        {
-          id: "appearance",
-          label: t("settings.appearance"),
-          scope: "application",
-          disabled: false,
-          keywords: settingsSearchKeywords.appearance,
-        },
-        {
-          id: "language",
-          label: t("settings.languageTitle"),
-          scope: "application",
-          disabled: false,
-          keywords: settingsSearchKeywords.language,
-        },
-        {
-          id: "privacy",
-          label: t("settings.privacy"),
-          scope: "application",
-          disabled: false,
-          keywords: settingsSearchKeywords.privacy,
-        },
-        {
-          id: "updates",
-          label: t("settings.updates"),
-          scope: "application",
-          disabled: false,
-          keywords: settingsSearchKeywords.updates,
-        },
-        {
-          id: "safety",
-          label: `${t("settings.safety")}${
-            connection
-              ? ` · ${connection.name || t("app.unnamed")}`
-              : ""
-          }`,
-          scope: "dataSource",
-          disabled: false,
-          keywords: settingsSearchKeywords.safety,
-        },
-      ] satisfies ReadonlyArray<{
-        id: SettingsSection;
-        label: string;
-        scope: SettingsScope;
-        disabled: boolean;
-        keywords: string;
-      }>,
-    [connection, t],
-  );
-  const filteredEntries = useMemo(() => {
-    const query = filter.trim().toLocaleLowerCase().normalize("NFKC");
-    if (!query) return settingsEntries;
-    return settingsEntries.filter((entry) =>
-      `${entry.label} ${entry.keywords}`
-        .toLocaleLowerCase()
-        .normalize("NFKC")
-        .includes(query),
-    );
-  }, [filter, settingsEntries]);
-  const filteredIds = filteredEntries
-    .map((entry) => entry.id)
-    .join(":");
-
-  useEffect(() => {
-    if (!filter || filteredEntries.some((entry) => entry.id === section)) {
-      return;
-    }
-    const next = filteredEntries.find((entry) => !entry.disabled);
-    if (next) setSection(next.id);
-  }, [filter, filteredEntries, filteredIds, section]);
-
-  // Safety may have changed while this menu was open — refresh App's copy on the way out.
-  function close() {
-    refreshSafety();
-    onClose();
-  }
-
-  const activeEntry =
-    settingsEntries.find((entry) => entry.id === section) ??
-    settingsEntries[0];
+  const auth = useQuery(workspaceAuthStateQuery());
+  const adminScope = useWorkspaceAdminScope();
+  const signedIn = Boolean(auth.data?.user);
+  // The account section depends on this read; until it settles, a requested
+  // section is not yet known to be unavailable.
+  const scopeResolved = auth.data !== undefined;
   const updateProgress = appUpdaterProgress(updater);
   const updateNavigationStatus =
     updater.phase === "downloading" && updateProgress !== null
@@ -180,211 +92,118 @@ export default function Settings({
                 ? t("updates.available")
                 : null;
 
+  const entries = useMemo(() => {
+    const entry = (
+      id: SettingsSection,
+      label: string,
+      group: SettingsScope,
+      status: string | null = null,
+    ): SectionDialogEntry<SettingsSection, SettingsScope> => ({
+      id,
+      label,
+      group,
+      keywords: settingsSearchKeywords[id],
+      status,
+    });
+    return [
+      entry("agent-tools", t("settings.agentTools"), "agents"),
+      entry("advanced", t("settings.advanced"), "application"),
+      entry("cli", t("settings.cli"), "agents"),
+      entry("appearance", t("settings.appearance"), "application"),
+      entry("language", t("settings.languageTitle"), "application"),
+      entry("privacy", t("settings.privacy"), "application"),
+      entry("updates", t("settings.updates"), "application", updateNavigationStatus),
+      ...(signedIn ? [entry("account", t("workspaceAdmin.account"), "account")] : []),
+      entry("connection", t("settings.connectionEnvironment"), "dataSource"),
+      entry(
+        "safety",
+        `${t("settings.safety")}${connection ? ` · ${connection.name || t("app.unnamed")}` : ""}`,
+        "dataSource",
+      ),
+    ];
+  }, [connection, signedIn, t, updateNavigationStatus]);
+
+  useEffect(() => {
+    if (!scopeResolved || entries.some((entry) => entry.id === section)) return;
+    setSection(entries[0]?.id ?? "agent-tools");
+  }, [entries, scopeResolved, section]);
+
+  // Safety may have changed while this menu was open — refresh App's copy on the way out.
+  function close() {
+    refreshSafety();
+    onClose();
+  }
+
   return (
-    <ModalBackdrop>
-      <ModalSurface
-        size="settings"
-        aria-labelledby="settings-dialog-title"
-        onRequestClose={close}
-        onKeyDown={(event) => {
-          if (
-            event.key === "Escape" &&
-            (event.target as HTMLElement).closest("input, textarea, select")
-          ) {
-            event.preventDefault();
-          }
-        }}
-      >
-        <div
-          data-settings
-          className="tw:flex tw:h-full tw:min-h-0 tw:flex-col tw:bg-background"
-        >
-          <ModalHeader
-            title={t("common.settings")}
-            titleId="settings-dialog-title"
-          />
-
-          <div className="tw:grid tw:min-h-0 tw:flex-1 tw:grid-cols-[202px_minmax(0,1fr)] tw:@max-[700px]:grid-cols-1">
-            <aside className="tw:flex tw:min-h-0 tw:flex-col tw:border-r tw:border-border-subtle tw:bg-card tw:@max-[700px]:hidden">
-              <div className="tw:p-2">
-                <TreeSearch
-                  value={filter}
-                  autoFocus
-                  placeholder={t("settings.searchPlaceholder")}
-                  clearLabel={t("common.clearSearch")}
-                  onChange={setFilter}
-                  onEscape={() => {
-                    if (filter) setFilter("");
-                    else close();
-                  }}
-                />
-              </div>
-              <nav className="tw:min-h-0 tw:flex-1 tw:overflow-y-auto">
-                {(["application", "dataSource"] as const).map((scope) => {
-                  const entries = filteredEntries.filter(
-                    (entry) => entry.scope === scope,
-                  );
-                  if (entries.length === 0) return null;
-                  return (
-                    <section
-                      key={scope}
-                      className="tw:grid tw:gap-0.5 tw:pb-2"
-                    >
-                      <div className="tw:flex tw:min-h-[var(--ds-tree-row-height)] tw:items-center tw:gap-1 tw:px-2 tw:text-ui tw:font-semibold">
-                        <Icon
-                          name="chevronDown"
-                          className="tw:text-muted-foreground"
-                        />
-                        <span>
-                          {t(
-                            scope === "application"
-                              ? "settings.scopeApplication"
-                              : "settings.scopeDataSource",
-                          )}
-                        </span>
-                      </div>
-                      {entries.map((entry) => (
-                        <button
-                          key={entry.id}
-                          type="button"
-                          data-active={section === entry.id}
-                          aria-current={
-                            section === entry.id ? "page" : undefined
-                          }
-                          className="tw:flex tw:min-h-[var(--ds-tree-row-height)] tw:cursor-pointer tw:items-center tw:justify-between tw:gap-2 tw:rounded-none tw:border-0 tw:bg-transparent tw:pr-3 tw:pl-12 tw:font-sans tw:text-left tw:text-ui tw:text-foreground tw:data-[active=true]:bg-selection tw:data-[active=true]:text-selection-foreground tw:disabled:cursor-default tw:disabled:opacity-50 tw:not-disabled:hover:bg-muted"
-                          onClick={() => setSection(entry.id)}
-                          disabled={entry.disabled}
-                        >
-                          <span className="tw:min-w-0 tw:truncate">
-                            {entry.label}
-                          </span>
-                          {entry.id === "updates" && updateNavigationStatus ? (
-                            <span className="tw:shrink-0 tw:text-xs tw:text-muted-foreground">
-                              {updateNavigationStatus}
-                            </span>
-                          ) : null}
-                        </button>
-                      ))}
-                    </section>
-                  );
-                })}
-                {filteredEntries.length === 0 ? (
-                  <p className="tw:m-0 tw:px-3 tw:py-4 tw:text-sm tw:text-muted-foreground">
-                    {t("settings.noSearchResults")}
-                  </p>
-                ) : null}
-              </nav>
-            </aside>
-
-            <section className="tw:flex tw:min-h-0 tw:min-w-0 tw:flex-col">
-              <div className="tw:hidden tw:h-title-toolbar tw:shrink-0 tw:items-center tw:border-b tw:border-border-subtle tw:bg-background tw:px-3 tw:@max-[700px]:flex">
-                <SelectInput
-                  density="compact"
-                  aria-label={t("common.settings")}
-                  value={section}
-                  onChange={(event) => {
-                    setFilter("");
-                    setSection(event.target.value as SettingsSection);
-                  }}
-                >
-                  {(["application", "dataSource"] as const).map((scope) => (
-                    <optgroup
-                      key={scope}
-                      label={t(
-                        scope === "application"
-                          ? "settings.scopeApplication"
-                          : "settings.scopeDataSource",
-                      )}
-                    >
-                      {settingsEntries
-                        .filter((entry) => entry.scope === scope)
-                        .map((entry) => (
-                          <option
-                            key={entry.id}
-                            value={entry.id}
-                            disabled={entry.disabled}
-                          >
-                            {entry.label}
-                            {entry.id === "updates" && updateNavigationStatus
-                              ? ` · ${updateNavigationStatus}`
-                              : ""}
-                          </option>
-                        ))}
-                    </optgroup>
-                  ))}
-                </SelectInput>
-              </div>
-              <div className="tw:flex tw:h-[42px] tw:min-h-[42px] tw:shrink-0 tw:items-center tw:gap-2 tw:bg-background tw:px-4 tw:text-ui tw:font-semibold tw:@max-[700px]:hidden">
-                <span className="tw:text-muted-foreground">
-                  {t(
-                    activeEntry?.scope === "dataSource"
-                      ? "settings.scopeDataSource"
-                      : "settings.scopeApplication",
-                  )}
-                </span>
-                <Icon
-                  name="chevronRight"
-                  className="tw:text-muted-foreground"
-                />
-                <span>{activeEntry?.label}</span>
-              </div>
-              <div className="tw:min-h-0 tw:min-w-0 tw:flex-1 tw:overflow-auto tw:p-[var(--ds-pane-pad)] tw:[container-name:settings-body] tw:[container-type:inline-size] tw:@max-[700px]:p-3">
-                {section === "agent-tools" && <AgentTools />}
-                {section === "advanced" && <AdvancedSettings />}
-                {section === "cli" && <CliSettings connection={connection} />}
-                {section === "privacy" && <PrivacySettings />}
-                {section === "updates" && (
-                  <Updates
-                    snapshot={updater}
-                    onRefresh={onUpdateRefresh}
-                    onInstall={onUpdateInstall}
-                  />
-                )}
-                {section === "appearance" && <Appearance />}
-                {section === "language" && (
-                  <div className="tw:grid tw:max-w-[560px] tw:gap-4 tw:p-4">
-                    <Field label={t("language.label")}>
-                      <SelectInput
-                        value={langPreference}
-                        onChange={(e) =>
-                          setLang(e.target.value as typeof langPreference)
-                        }
-                      >
-                        <option value="system">{t("language.system")}</option>
-                        <option value="ko">{t("language.korean")}</option>
-                        <option value="en">{t("language.english")}</option>
-                      </SelectInput>
-                    </Field>
-                  </div>
-                )}
-                {section === "safety" &&
-                  (connection ? (
-                    <Safety
-                      connection={connection}
-                      onConnectionUpdated={onConnectionUpdated}
-                      onSaved={onSafetySaved}
-                      onOpenAdminConnection={() => onOpenAdminConnection(connection)}
-                    />
-                  ) : (
-                    <div className="tw:text-muted-foreground">
-                      {t("settings.selectConnection")}
-                    </div>
-                  ))}
-              </div>
-            </section>
-          </div>
-
-          <ModalFooter>
-            <Button
-              size="compact"
-              variant="primary"
-              onClick={close}
+    <SectionDialog
+      title={t("common.settings")}
+      titleId="settings-dialog-title"
+      groups={[
+        { id: "application", label: t("settings.scopeApplication") },
+        { id: "agents", label: t("settings.scopeAgents") },
+        { id: "account", label: t("settings.scopeAccount") },
+        { id: "dataSource", label: t("settings.scopeDataSource") },
+      ]}
+      entries={entries}
+      active={section}
+      onSelect={setSection}
+      onClose={close}
+      doneLabel={t("common.done")}
+      selectLabel={t("common.settings")}
+      search={{
+        placeholder: t("settings.searchPlaceholder"),
+        clearLabel: t("common.clearSearch"),
+        noResults: t("settings.noSearchResults"),
+      }}
+    >
+      {section === "agent-tools" && <AgentTools />}
+      {section === "advanced" && <AdvancedSettings />}
+      {section === "cli" && <CliSettings connection={connection} />}
+      {section === "privacy" && <PrivacySettings />}
+      {section === "updates" && (
+        <Updates
+          snapshot={updater}
+          onRefresh={onUpdateRefresh}
+          onInstall={onUpdateInstall}
+        />
+      )}
+      {section === "appearance" && <Appearance />}
+      {section === "account" && signedIn && <>
+        {adminScope?.canManage ? <SettingsGroup title={t("workspaceAdmin.manage")}><SettingsList>
+          {workspaceAdminSectionsFor(adminScope).map((entry) => <SettingsRow key={entry.id} identity={t(entry.label)} details={adminScope.workspaceName} actions={<Button size="compact" onClick={() => requestWorkspaceAdmin(entry.id)}>{t("settings.openManagement")}</Button>} />)}
+        </SettingsList></SettingsGroup> : null}
+        <AccountSettings />
+      </>}
+      {section === "connection" && (connection ? <ConnectionSettings connection={connection} onEdit={onEditConnection} onOpenProject={onOpenProjectEnvironment} /> : <p>{t("settings.selectConnection")}</p>)}
+      {section === "language" && (
+        <div className="tw:grid tw:max-w-[560px] tw:gap-4 tw:p-4">
+          <Field label={t("language.label")}>
+            <SelectInput
+              value={langPreference}
+              onChange={(e) =>
+                setLang(e.target.value as typeof langPreference)
+              }
             >
-              {t("common.done")}
-            </Button>
-          </ModalFooter>
+              <option value="system">{t("language.system")}</option>
+              <option value="ko">{t("language.korean")}</option>
+              <option value="en">{t("language.english")}</option>
+            </SelectInput>
+          </Field>
         </div>
-      </ModalSurface>
-    </ModalBackdrop>
+      )}
+      {section === "safety" &&
+        (connection ? (
+          <Safety
+            connection={connection}
+            onConnectionUpdated={onConnectionUpdated}
+            onSaved={onSafetySaved}
+            onOpenAdminConnection={() => onOpenAdminConnection(connection)}
+          />
+        ) : (
+          <div className="tw:text-muted-foreground">
+            {t("settings.selectConnection")}
+          </div>
+        ))}
+    </SectionDialog>
   );
 }

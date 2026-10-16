@@ -374,14 +374,6 @@ async fn commit_workspace_login(
 }
 
 #[tauri::command]
-pub fn workspace_console_url(
-    state: State<'_, AppState>,
-    workspace_id: Option<WorkspaceId>,
-) -> AppResult<String> {
-    state.services.workspace.console_url(workspace_id)
-}
-
-#[tauri::command]
 pub async fn list_workspaces(state: State<'_, AppState>) -> AppResult<Vec<Workspace>> {
     state.services.workspace.list().await
 }
@@ -461,6 +453,7 @@ pub async fn bind_workspace_connection_credentials(
     username: String,
     password: String,
     ssh_alias: Option<String>,
+    tls_files: Option<std::collections::HashMap<String, String>>,
 ) -> AppResult<ConnectionProfile> {
     let profile = state
         .services
@@ -470,6 +463,7 @@ pub async fn bind_workspace_connection_credentials(
             username,
             password: Zeroizing::new(password),
             ssh_alias,
+            tls_files,
         })
         .await?;
     state.terminals.stop_connection(id, &app);

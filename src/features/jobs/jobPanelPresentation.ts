@@ -1,9 +1,26 @@
 // Pure labels and display projections shared by the Job panel controller and
 // presentation leaves. This module never owns React state or Tauri commands.
 import type { I18nKey } from "../../lib/i18n";
-import type { CatalogObjectRef } from "../../ipc/types";
+import { errDetails, type CatalogObjectRef } from "../../ipc/types";
 import type { Job, JobFormat } from "./domain";
 import type { StatusTone } from "../../design-system/components/Status";
+
+/**
+ * Translate a Job command failure. The Job Engine's refusals are a closed set of
+ * reasons, so the panel explains them in the user's language and never shows
+ * backend text; anything else falls back to a generic retry message.
+ */
+export function jobErrorKey(cause: unknown): I18nKey {
+  const { kind, message } = errDetails(cause);
+  const text = message.toLowerCase();
+  if (text.includes("schema changes are disabled")) return "jobs.errorSchemaDisabled";
+  if (text.includes("does not permit schema changes")) return "jobs.errorSchemaRole";
+  if (text.includes("writes are disabled")) return "jobs.errorWritesDisabled";
+  if (text.includes("read-only database access")) return "jobs.errorReadOnlyRole";
+  if (text.includes("no longer allows this import")) return "jobs.errorPolicyChanged";
+  if (kind === "outcomeUnknown") return "jobs.errorOutcomeUnknown";
+  return "jobs.errorGeneric";
+}
 
 export const JOB_FORMATS: JobFormat[] = [
   "csv",

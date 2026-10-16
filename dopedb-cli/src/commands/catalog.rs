@@ -2,9 +2,9 @@
 
 use dopedb_protocol::{
     CatalogArguments, CatalogShowCommand, CatalogSnapshot, DatabaseListArguments,
-    DatabaseListCommand, DatabaseListResult, SchemaDiffObjectType, SchemaDiffStatus,
-    SchemaListCommand, SchemaListResult, TableDescribeArguments, TableDescribeCommand,
-    TableDescribeResult,
+    DatabaseListCommand, DatabaseListResult, SchemaDiffObjectType, SchemaDiffProperty,
+    SchemaDiffStatus, SchemaListCommand, SchemaListResult, TableDescribeArguments,
+    TableDescribeCommand, TableDescribeResult,
 };
 
 use crate::client::{BrokerClient, ClientError};
@@ -50,9 +50,23 @@ pub(crate) async fn diff(
             result.counts.added, result.counts.missing, result.counts.changed
         ),
     ];
+    // Zero differences covers only the compared properties; both scope lines always
+    // follow so a match is never read as identical schemas.
     if result.total == 0 {
-        lines.push("Schemas match (compared structural fields).".into());
+        lines.push("Compared properties match.".into());
     }
+    let scope_line = |label: &str, properties: &[SchemaDiffProperty]| {
+        format!(
+            "{label}: {}.",
+            properties
+                .iter()
+                .map(|property| property_words(*property))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    };
+    lines.push(scope_line("Compared", &result.scope.compared));
+    lines.push(scope_line("Not compared", &result.scope.not_compared));
     let mut previous_table = String::new();
     for object in result.objects {
         if object.table != previous_table {
@@ -68,13 +82,16 @@ pub(crate) async fn diff(
         let kind = match object.object_type {
             SchemaDiffObjectType::Table => "table",
             SchemaDiffObjectType::View => "view",
+            SchemaDiffObjectType::MaterializedView => "materialized view",
             SchemaDiffObjectType::Column => "column",
             SchemaDiffObjectType::Index => "index",
             SchemaDiffObjectType::ForeignKey => "foreign key",
         };
         if matches!(
             object.object_type,
-            SchemaDiffObjectType::Table | SchemaDiffObjectType::View
+            SchemaDiffObjectType::Table
+                | SchemaDiffObjectType::View
+                | SchemaDiffObjectType::MaterializedView
         ) && object.status != SchemaDiffStatus::Changed
         {
             lines.push(format!("  {symbol} {kind} {status}"));
@@ -85,6 +102,45 @@ pub(crate) async fn diff(
         }
     }
     output::write_human(&lines)
+}
+
+/// Plain words for one comparison-scope property, in the result's own order.
+fn property_words(property: SchemaDiffProperty) -> &'static str {
+    use SchemaDiffProperty as Property;
+    match property {
+        Property::RelationPresence => "relation presence",
+        Property::RelationKind => "relation kind",
+        Property::ColumnPresence => "column presence",
+        Property::ColumnType => "column types",
+        Property::ColumnNullability => "column nullability",
+        Property::PrimaryKey => "primary-key membership (not order)",
+        Property::IndexPresence => "index presence",
+        Property::IndexKeys => "index keys in order",
+        Property::IndexUniqueness => "index uniqueness",
+        Property::ForeignKeyTargets => "each foreign-key column's referenced column",
+        Property::ColumnOrder => "column order",
+        Property::ColumnDefault => "column defaults",
+        Property::GeneratedColumn => "generated columns",
+        Property::Identity => "identity and auto-increment",
+        Property::Collation => "collations",
+        Property::CheckConstraint => "check constraints",
+        Property::UniqueConstraint => "UNIQUE constraints without an index",
+        Property::IndexMethod => "index methods",
+        Property::IndexPredicate => "index predicates",
+        Property::IndexInclude => "INCLUDE columns",
+        Property::IndexSortOrder => "index sort order",
+        Property::IndexValidity => "index validity",
+        Property::ForeignKeyAction => "foreign-key actions",
+        Property::ForeignKeyDeferrable => "foreign-key deferrability",
+        Property::ForeignKeyValidation => "foreign-key validation",
+        Property::ViewDefinition => "view definitions",
+        Property::Partitioning => "partitioning",
+        Property::Comment => "comments",
+        Property::Trigger => "triggers",
+        Property::Routine => "routines",
+        Property::Type => "types",
+        Property::Sequence => "sequences",
+    }
 }
 
 pub(crate) async fn databases(connection: &str, mode: OutputMode) -> Result<(), ClientError> {

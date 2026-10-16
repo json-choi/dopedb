@@ -7,7 +7,7 @@ import { Button } from "../../design-system/components/Button";
 import { ProgressBar } from "../../design-system/components/Progress";
 import { StatusDot } from "../../design-system/components/Status";
 import { InspectorHeader } from "../../design-system/components/Workbench";
-import { errMessage, type CatalogRelationV2 } from "../../ipc/types";
+import type { CatalogRelationV2 } from "../../ipc/types";
 import { useI18n } from "../../lib/i18n";
 import { JobPlanForm } from "./JobPlanForm";
 import {
@@ -101,6 +101,19 @@ export default function JobPanel({
                 <dt>{t("jobs.destination")}</dt>
                 <dd>{approval.job.targetSummary}</dd>
               </div>
+              {approval.sqlAudit ? (
+                <div>
+                  <dt>{t("jobs.sqlStatements")}</dt>
+                  <dd>
+                    {t("jobs.sqlAuditSummary", {
+                      count: approval.sqlAudit.statementCount,
+                      reads: approval.sqlAudit.readCount,
+                      writes: approval.sqlAudit.writeCount,
+                      ddl: approval.sqlAudit.ddlCount,
+                    })}
+                  </dd>
+                </div>
+              ) : null}
               <div>
                 <dt>SHA-256</dt>
                 <dd title={approval.payloadHash}>
@@ -108,6 +121,15 @@ export default function JobPanel({
                 </dd>
               </div>
             </JobFacts>
+            {approval.sqlAudit && approval.sqlAudit.ddlCount > 0 ? (
+              <p
+                role="note"
+                className="tw:m-0 tw:flex tw:items-start tw:gap-2 tw:text-xs tw:leading-[1.45] tw:text-warning tw:[&_.icon]:mt-0.5 tw:[&_.icon]:shrink-0"
+              >
+                <Icon name="alert" />
+                {t("jobs.sqlAuditDdlWarning", { count: approval.sqlAudit.ddlCount })}
+              </p>
+            ) : null}
           </section>
         )}
 
@@ -138,7 +160,7 @@ export default function JobPanel({
             </div>
           ) : jobs.error ? (
             <div className="tw:text-ui tw:text-danger">
-              {errMessage(jobs.error)}
+              {t("jobs.loadFailed")}
             </div>
           ) : jobs.data?.length ? (
             <div className="tw:grid">

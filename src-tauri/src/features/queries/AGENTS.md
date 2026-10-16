@@ -21,8 +21,11 @@ code stays independent of persistence and pool adapters.
 | `application.rs` | SQL query use cases (`QueryUseCases<P: QueryPlatformAdapter-shaped port>`), independent of persistence and pool adapters. |
 | `ports.rs` | Ports through which SQL query use cases reach platform adapters. |
 | `transport.rs` | Tauri transport for desktop SQL query use cases. |
-| `manual_transaction.rs` | Connection-scoped manual SQL transactions; a session owns one physical SQLx connection plus the exact connection lease that authorized it, so desktop SQL, table edits, and connection-pinned Agent commands can share one rollback boundary without exposing credentials/handles to the renderer or CLI. |
-| `manual_transaction_execution.rs` | Engine-specific manual transaction query and script execution. |
+| `manual_transaction.rs` | Connection-scoped manual SQL transactions: the session map, BEGIN, and statement routing. A session owns one physical SQLx connection plus a retention of the exact pool that authorized it (not the workspace scope gate), so desktop SQL, table edits, and connection-pinned Agent commands can share one rollback boundary without exposing credentials/handles to the renderer or CLI. |
+| `manual_transaction_authority.rs` | COMMIT and per-statement authority re-verification: re-pins the connection and compares workspace, account, scope generation, member binding, and a shared connection's revision with the authority that opened the session; a stale session is rolled back, and COMMIT also re-checks the device write gate. |
+| `manual_transaction_lifecycle.rs` | Every end other than COMMIT — user ROLLBACK, the 30-minute expiry timer, abandoned statements, revocation, and shutdown — each rolled back, audited, and published with its reason. Also owns the Tauri-free close/quit decision: hold the request while a transaction is open, proceed after confirmation or an unanswered prompt, and roll back (never commit) on confirmation. |
+| `manual_transaction_exit.rs` | Tauri adapter for that decision: main-window close, programmatic exit, the macOS Quit menu item (the predefined item is swapped for an identical guarded one), the `manual-transaction:exit-requested` event, and the `respond_manual_transaction_exit` command. Dock Quit, logout, restart, and exits after every window closed cannot be held and roll back in the exit hook. |
+| `manual_transaction_execution.rs` | Engine-specific manual transaction query and script execution; reads decode with the pool's session facts (MONEY scale, fixed session offset) probed before BEGIN, like normal reads. A plain PostgreSQL query (`SELECT`/`WITH`/`VALUES`/`TABLE`) reads through a `NO SCROLL` cursor declared inside the read scope and fetched unprepared (`max_rows + 1` rows), so a truncated read leaves nothing for `ROLLBACK TO SAVEPOINT` to drain; other reads run directly. |
 | `manual_transaction_session.rs` | Manual transaction connection and session state machines. |
 | `domain_tests.rs` | **Part of the 208-test critical budget** (`tests/critical-test-budget.json`, 1 test): protects production guidance, namespace safety, current Services result shape, ephemeral table-page retention, fail-closed Skill install/conflict handling, credential-free Agent CLI probing, official ACP model/permission-mode allowlists without default escalation, secret-free typed connection-test receipts, and redacted non-retryable timeout/cancellation classification across query, Article, and target operations. |
 
@@ -40,12 +43,12 @@ code stays independent of persistence and pool adapters.
 | `platform.rs` | Shared local platform dependencies for desktop and Terminal SQL adapters. |
 | `desktop_port.rs` | Desktop query port implementation backed by the local platform adapter. |
 | `desktop_contracts.rs` | Desktop SQL adapter contracts, lease-backed receipts, and error projections. |
-| `desktop_planning.rs` | Durable desktop and Terminal SQL proposal planning adapter operations. |
-| `desktop_inspection.rs` | Atomic desktop SQL inspection with one authority and policy snapshot. |
+| `desktop_planning.rs` | Durable desktop and Terminal SQL proposal planning adapter operations. `propose_desktop_auto_read` plans the atomic auto-run read with the same durable gates but without an EXPLAIN preview. |
+| `desktop_inspection.rs` | Atomic desktop SQL inspection with one authority and policy snapshot. The `AutoRunRead` intent never opens the target: nothing displays an auto-run read's plan, so it records a skipped preview instead of spending EXPLAIN round trips (and a second remote grant check) before the first row. |
 | `desktop_execution.rs` | Desktop SQL execution, cancellation, audit, history, and outcome reconciliation. |
 | `desktop_provenance.rs` | Best-effort desktop query audit and history persistence. |
 | `desktop_support.rs` | Shared desktop SQL policy, preview, and read-streaming support. |
-| `desktop_stream_registry.rs` | Single-writer, capability-bound pull/ACK backpressure for desktop SQL streams. |
+| `desktop_stream_registry.rs` | Single-writer, capability-bound pull/ACK backpressure for desktop SQL streams. A capability-only cancellation (an auto-run read cancelled before its first batch told the renderer the operation) also reaches an already-bound stream and its executor, and a cancelled stream never starts. |
 | `desktop_stream_lifecycle.rs` | Owned, bounded cleanup for an aborted desktop SQL stream task. |
 | `desktop_result_store.rs` | Private, capability-bound disk storage for desktop SQL result pages; rows never enter the application SQLite database, audit/history, or a renderer-owned aggregate — each page is an independently bounded JSON file, and the immutable manifest publishes only after the producer receipt matches every page written. |
 | `desktop_result_files.rs` | Capability-bound result manifest, page, and retention file operations. |

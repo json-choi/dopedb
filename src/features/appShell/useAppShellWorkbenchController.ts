@@ -18,18 +18,14 @@ import { hasCapability, isDocumentEngine } from "../../lib/capabilities";
 import { resetConnectionResourceQueries } from "../../lib/queryClient";
 import {
   driversQuery,
-  qk,
   type CatalogScope,
 } from "../../lib/queries";
 import { buildConnectionSections } from "../../lib/schemaDiff";
 import type { ConnectionProfile } from "../connections/domain";
 import type { ConnectionLaunchPreset } from "../connections/presets";
-import { bindKnowledgeEnvironmentConnectionWithRefresh } from "../knowledge/bindEnvironmentConnection";
 import type { KnowledgeEnvironmentView } from "../knowledge/domain";
-import { knowledgeQueryKeys } from "../knowledge/queryKeys";
 import { useGuidedDemoSetup } from "../onboarding/useGuidedDemoSetup";
 import { connectionCanEnterWritePath } from "../safetySettings/policy";
-import type { SettingsSection } from "../settings/domain";
 import type { SqlDocument } from "../sqlDocuments/domain";
 import { tauriSqlDocumentGateway } from "../sqlDocuments/tauriAdapter";
 import type { SqlResolveMode } from "../queries/resolveMode";
@@ -38,6 +34,7 @@ import {
   queryDocument,
   stableDocument,
   tableDocument,
+  type HistoryQueryTarget,
   type WorkbenchDocument,
 } from "../workbench/domain";
 import { publishWorkbenchDraft } from "../workbench/draftStore";
@@ -56,6 +53,12 @@ import {
   useConnectionProfiles,
 } from "./useConnectionProfiles";
 import { useSafetySettings } from "./useSafetySettings";
+import {
+  connectionEditorDialogCommands,
+  connectionEditorRoute,
+  useConnectionCredentialRequests,
+} from "./connectionEditorRoute";
+import { useLaunchPresetBinding } from "./useLaunchPresetBinding";
 
 export type EditingConnection = ConnectionProfile | "new" | null;
 
@@ -91,7 +94,6 @@ export function useAppShellWorkbenchController({
   const [selectedId, setSelectedId] = usePersistentSelectedConnection();
   const { navigation, navigate, pending: routePending, startTransition: startRouteTransition } = useAppRouteTransition();
   const selectionRestoreMarked = useRef(false);
-  const completedLaunchPresetBindings = useRef(new Set<string>());
   const {
     safety,
     error: safetyError,
@@ -105,24 +107,16 @@ export function useAppShellWorkbenchController({
   const settingsOpen = navigation.kind === "settings";
   const settingsSection =
     navigation.kind === "settings" ? navigation.section : undefined;
+  const workspaceAdminSection = navigation.kind === "workspaceAdmin" ? navigation.section : null;
   const schemaDiffGroupKey =
     mainRoute.kind === "schemaDiff" ? mainRoute.groupKey : null;
   const knowledgeEnvironmentFocus =
     mainRoute.kind === "knowledge" ? mainRoute.focus : null;
-  const connectionPreset =
-    mainRoute.kind === "connectionEditor" &&
-    mainRoute.target.kind === "new"
-      ? mainRoute.target.preset
-      : null;
-  let editing: EditingConnection = null;
-  if (mainRoute.kind === "connectionEditor") {
-    const target = mainRoute.target;
-    editing =
-      target.kind === "new"
-        ? "new"
-        : connections.find((connection) => connection.id === target.connectionId) ??
-          null;
-  }
+  const editorRoute = connectionEditorRoute(mainRoute, connections);
+  const connectionPreset = editorRoute.preset;
+  const bindLaunchedConnection = useLaunchPresetBinding(connectionPreset);
+  const editorDialogs = connectionEditorDialogCommands(navigation, navigate);
+  useConnectionCredentialRequests(connections, editConnection);
 
   useEffect(() => {
     if (!connectionsLoaded || selectionRestoreMarked.current) return;
@@ -205,10 +199,6 @@ export function useAppShellWorkbenchController({
     showWorkbench,
   });
 
-  function openSettings(section?: SettingsSection) {
-    navigate({ type: "openSettings", section });
-  }
-
   function openKnowledge(
     environmentId: string | null,
     view: KnowledgeEnvironmentView,
@@ -238,10 +228,14 @@ export function useAppShellWorkbenchController({
     mobileExplorer.focusMainAfterSelection();
   }
 
-  function editConnection(connection: ConnectionProfile) {
+  /** `initialFocus` opens the editor to re-enter a credential this device lost. */
+  function editConnection(
+    connection: ConnectionProfile,
+    initialFocus?: "credentials",
+  ) {
     navigate({
       type: "openConnectionEditor",
-      target: { kind: "existing", connectionId: connection.id },
+      target: { kind: "existing", connectionId: connection.id, initialFocus },
     });
   }
 
@@ -291,16 +285,33 @@ export function useAppShellWorkbenchController({
     );
   }
 
-  async function openQueryDocument() {
-    if (!selected || creatingQuery) return;
+  async function openQueryDocument(connection?: ConnectionProfile) {
+    // Resolve the row's identity from the current inventory, not the previous
+    // selection: selecting a different connection and immediately running a
+    // selection-bound command would otherwise open a console on the wrong DB.
+    const target = connection
+      ? connections.find((candidate) => candidate.id === connection.id)
+      : selected;
+    if (!target || creatingQuery) return;
+    const targetSupportsSql = drivers.data
+      ? hasCapability(drivers.data, target, "sql")
+      : !isDocumentEngine(target.engine);
+    if (connection && !targetSupportsSql) return;
+    const useSelectedContext = !connection && target.id === selected?.id;
     setCreatingQuery(true);
     preloadSqlEditor();
     try {
       const document = await workbench.openQuery({
-        connectionId: selected.id,
-        database: selected.database,
-        supportsSql,
+        connectionId: target.id,
+        // A console opened on an Explorer selection starts in that object's target.
+        database: (useSelectedContext ? selectedTable?.database : null) ?? target.database,
+        selectedSchema: useSelectedContext ? selectedTable?.schema ?? null : null,
+        supportsSql: targetSupportsSql,
       });
+      if (selectedId !== target.id) {
+        workbench.prime(document);
+        setSelectedId(target.id);
+      }
       activateDocument(document);
     } catch (error) {
       toast(errMessage(error), "error");
@@ -309,15 +320,16 @@ export function useAppShellWorkbenchController({
     }
   }
 
-  async function loadSql(sql: string) {
+  async function loadSql(sql: string, target: HistoryQueryTarget) {
     if (!selected || creatingQuery) return;
     setCreatingQuery(true);
     try {
       const document = await workbench.openQuery({
         connectionId: selected.id,
-        database: selected.database,
+        database: target.database ?? selected.database,
+        selectedSchema: target.schema,
         supportsSql,
-        title: "History query",
+        title: target.title,
         content: sql,
       });
       activateDocument(document);
@@ -376,46 +388,32 @@ export function useAppShellWorkbenchController({
     profile: ConnectionProfile,
     closeEditor: boolean,
   ) {
-    await refresh();
-    const launchBindingKey = connectionPreset?.projectEnvironmentId
-      ? `${connectionPreset.projectEnvironmentId}:${profile.id}`
-      : null;
+    const previous = connections.find(
+      (connection) => connection.id === profile.id,
+    );
+    // Publish the saved profile at once. The authoritative list refresh, the
+    // cache reset, and Project read refreshes run in the background, so the
+    // editor reports completion as soon as the save and its binding succeed.
+    setConnections((current) =>
+      current.some((connection) => connection.id === profile.id)
+        ? current.map((connection) =>
+            connection.id === profile.id ? profile : connection,
+          )
+        : [...current, profile],
+    );
     if (
-      connectionPreset?.projectEnvironmentId &&
-      launchBindingKey !== null &&
-      !completedLaunchPresetBindings.current.has(launchBindingKey)
+      previous &&
+      changedConnectionRuntimeIds([previous], [profile]).length > 0
     ) {
-      await bindKnowledgeEnvironmentConnectionWithRefresh({
-        projectEnvironmentId: connectionPreset.projectEnvironmentId,
-        connectionId: profile.id,
-        role: "primary",
-        alias: profile.name.trim() || profile.database.trim() || "database",
-      });
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: knowledgeQueryKeys.environmentConnections(),
-          refetchType: "active",
-        }),
-        queryClient.invalidateQueries({
-          queryKey: knowledgeQueryKeys.agentEnvironments(),
-          refetchType: "active",
-        }),
-        queryClient.invalidateQueries({
-          queryKey: knowledgeQueryKeys.inventory(),
-          refetchType: "active",
-        }),
-      ]);
-      completedLaunchPresetBindings.current.add(launchBindingKey);
+      // Saving retires the connection's live pools. Every Explorer, table, and
+      // safety read made through the previous endpoint, credential, or scope
+      // is stale, including the infinite-staleTime database catalogs.
+      void resetConnectionResourceQueries(queryClient, [profile.id]).catch(
+        () => undefined,
+      );
     }
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: qk.catalog(profile.id) }),
-      queryClient.invalidateQueries({
-        queryKey: qk.catalogOverview(profile.id),
-      }),
-      queryClient.invalidateQueries({
-        queryKey: qk.catalogSnapshot(profile.id),
-      }),
-    ]);
+    void refresh().catch(() => undefined);
+    await bindLaunchedConnection(profile);
     setSelectedId(profile.id);
     if (closeEditor) showWorkbench();
   }
@@ -447,10 +445,12 @@ export function useAppShellWorkbenchController({
       welcomeOpen: mainRoute.kind === "welcome",
       settingsOpen,
       settingsSection,
+      workspaceAdminSection,
       schemaDiffGroupKey,
       activeSchemaGroup,
       knowledgeEnvironmentFocus,
-      editing,
+      editing: editorRoute.editing,
+      editorInitialFocus: editorRoute.initialFocus,
       connectionPreset,
     },
     connections: {
@@ -488,7 +488,9 @@ export function useAppShellWorkbenchController({
           mobileExplorer.focusMainAfterSelection();
         },
         closeSettings: () => navigate({ type: "closeSettings" }),
-        openSettings,
+        openSettings: editorDialogs.openSettings,
+        closeWorkspaceAdmin: () => navigate({ type: "closeWorkspaceAdmin" }),
+        openWorkspaceAdmin: editorDialogs.openWorkspaceAdmin,
         focusToolWindow: () => navigate({ type: "focusToolWindow" }),
         openKnowledge,
         openSchemaDiff: (groupKey: string) =>

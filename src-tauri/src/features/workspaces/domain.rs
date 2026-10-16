@@ -170,3 +170,58 @@ pub(crate) fn validate_member_username(username: &str) -> AppResult<&str> {
     }
     Ok(username)
 }
+
+/// TLS file locations a member may keep in their own shared-connection binding.
+/// The shared template owns the TLS mode; certificate and key files live on each
+/// member's device, so their paths stay in the local binding and never reach the
+/// workspace. MongoDB has no template TLS mode, so its enable flag is member-local.
+const SQL_MEMBER_TLS_FILES: [&str; 3] = ["sslrootcert", "sslcert", "sslkey"];
+const MONGO_MEMBER_TLS_FILES: [&str; 2] = ["tlsCAFile", "tlsCertificateKeyFile"];
+const MONGO_MEMBER_TLS_FLAG: &str = "tls";
+const MAX_MEMBER_TLS_PATH_CHARS: usize = 4_096;
+
+/// Apply requested member-local TLS settings to a binding's parameters. An empty
+/// value removes the setting; keys outside the engine's allowlist are rejected so
+/// this path cannot smuggle other driver options into the binding.
+pub(crate) fn merge_member_tls_files(
+    engine: crate::model::Engine,
+    extra_params: &mut std::collections::HashMap<String, String>,
+    requested: &std::collections::HashMap<String, String>,
+) -> AppResult<()> {
+    use crate::model::Engine;
+    let (files, flag): (&[&str], Option<&str>) = match engine {
+        Engine::Postgres | Engine::Mysql => (&SQL_MEMBER_TLS_FILES, None),
+        Engine::Mongodb => (&MONGO_MEMBER_TLS_FILES, Some(MONGO_MEMBER_TLS_FLAG)),
+        Engine::Sqlite | Engine::Bigquery => (&[], None),
+    };
+    for (key, value) in requested {
+        let value = value.trim();
+        if flag == Some(key.as_str()) {
+            match value {
+                "true" => {
+                    extra_params.insert(key.clone(), "true".into());
+                }
+                "" => {
+                    extra_params.remove(key);
+                }
+                _ => return Err(AppError::Config("TLS setting is invalid".into())),
+            }
+            continue;
+        }
+        if !files.contains(&key.as_str()) {
+            return Err(AppError::Config(
+                "this TLS setting is not available for the connection engine".into(),
+            ));
+        }
+        if value.chars().count() > MAX_MEMBER_TLS_PATH_CHARS || value.chars().any(char::is_control)
+        {
+            return Err(AppError::Config("TLS file path is invalid".into()));
+        }
+        if value.is_empty() {
+            extra_params.remove(key);
+        } else {
+            extra_params.insert(key.clone(), value.to_owned());
+        }
+    }
+    Ok(())
+}

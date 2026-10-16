@@ -317,6 +317,32 @@ pub(crate) struct JobProposal {
     pub(crate) payload_hash: String,
     pub(crate) approval_required: bool,
     pub(crate) confirmation_phrase: Option<String>,
+    /// Statement counts of a SQL import, shown on the approval card.
+    pub(crate) sql_audit: Option<JobSqlAudit>,
+}
+
+/// Exact statement classification counts of a hash-pinned SQL import.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct JobSqlAudit {
+    pub(crate) statement_count: u64,
+    pub(crate) read_count: u64,
+    pub(crate) write_count: u64,
+    pub(crate) ddl_count: u64,
+}
+
+impl JobSqlAudit {
+    /// Read the counts persisted in an import operation payload or preview.
+    pub(crate) fn from_operation_value(value: &serde_json::Value) -> Option<Self> {
+        let audit = value.get("sqlAudit")?;
+        let count = |key: &str| audit.get(key).and_then(serde_json::Value::as_u64);
+        Some(Self {
+            statement_count: count("statementCount")?,
+            read_count: count("readCount")?,
+            write_count: count("writeCount")?,
+            ddl_count: count("ddlCount")?,
+        })
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -340,6 +366,7 @@ pub(crate) struct JobDetail {
     pub(crate) payload_hash: String,
     pub(crate) approval_required: bool,
     pub(crate) confirmation_phrase: Option<String>,
+    pub(crate) sql_audit: Option<JobSqlAudit>,
 }
 
 #[derive(Debug, Clone, Serialize)]

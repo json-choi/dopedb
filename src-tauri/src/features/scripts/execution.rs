@@ -190,14 +190,10 @@ impl ScriptPlatformAdapter {
             .iter()
             .position(|kind| matches!(kind, QueryKind::Privilege))
         {
+            let offset = crate::sql_script::statement_position(&payload.sql, &statements, index)
+                .unwrap_or(1);
             return Err(DesktopScriptRunError::Scoped(DesktopScriptScopedFailure {
-                error: AppError::SqlPolicyBlocked {
-                    position: crate::sql_script::statement_position(
-                        &payload.sql,
-                        &statements,
-                        index,
-                    ),
-                },
+                error: safety::rejection_error_at(&statements[index], engine, offset),
                 _scope: Box::new(operation_scope),
             }));
         }
