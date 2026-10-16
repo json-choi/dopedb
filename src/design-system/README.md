@@ -624,6 +624,10 @@ loopback 문서는 이 정본을 빌드 시 포함하며 네트워크 font나 sc
   popover surface와 keyboard-focus 가능한 command/check row. 공용 Floating UI
   hook이 rail·topbar·tree row에서 viewport 충돌, flip, shift, size, 숨김 감지를
   처리하며 feature는 위치별 Tailwind 분기를 만들지 않는다.
+  `getAnchorRect`는 CodeMirror caret 같은 vendor geometry에 한해 virtual reference를
+  제공하고 실제 `anchorRef`는 포커스 복원과 portal 소유권을 유지한다. 위치가 필요한
+  화면에서 absolute anchor나 별도 popup CSS를 만들지 않는다. `PopupMenuItem`의
+  `data-selected`는 실행 범위처럼 hover·키보드 focus로 미리보는 현재 후보를 표시한다.
 - `ToolbarMenu triggerVariant="statusBar"`와 `menuSize="tasks"`: status bar
   높이를 유지하는 background-task trigger와 380px 이내의 관찰·중단 popup.
   실제 전역 작업 모델에 있는 task만 표시하고 지원되지 않는 중단 control은
@@ -692,6 +696,11 @@ loopback 문서는 이 정본을 빌드 시 포함하며 네트워크 font나 sc
   같은 lifecycle projection을 사용한다. 동일한 SQL이 여러 번 있어도 단순
   문자열 검색으로 첫 occurrence에 붙이지 않으며, widget은 정적 Tailwind
   utility와 semantic token만 사용한다.
+  여러 구문에서 선택 없이 Run하면 caret 옆 `PopupMenu`로 현재 구문·전체 script를
+  고른다. 후보의 정확한 source range는 selection 역할 배경과 ring으로 미리보되
+  실제 CodeMirror selection·본문은 유지하고, 미리보기 동안 이전 실행 mark는 숨긴다.
+  메뉴의 hover·focus 변경은 같은 범위를 표시하며 revision 변경·Escape는 후보를
+  폐기한다. Enter 확인은 기존 parameter/실행 controller에 정확한 source를 전달한다.
   document tab은 welcome/schema/data/SQL/activity를 숨김 예외 없이 같은 strip에
   투영한다. 스키마 비교처럼 일시적으로 중앙 workbench를 점유하는 도구도 큰
   화면 제목이나 card dashboard를 만들지 않고 같은 `IdeTabStrip`과
@@ -733,7 +742,8 @@ DopeDB의 실제 작업 흐름과 접근성, supported viewport를 위한 제품
   clamp한다. 따라서 compact viewport에서 처음 mount되거나 왕복해도 저장된
   desktop 폭과 다음 desktop projection은 변경되지 않는다.
 - Shell은 title toolbar, 중앙 작업 영역, status bar의 세 행만 사용한다. 하단 Services
-  panel·보조 보기·resize·표시 상태 저장은 제공하지 않는다.
+  panel·보조 보기·표시 상태 저장은 제공하지 않는다. SQL 문서 내부의 편집기/결과
+  분할은 이 전역 panel과 다르며 중앙 문서가 소유한다.
 - Local History header는 선행 뒤로 버튼과 제목 하나를 표시한다. 뒤로 버튼과
   상단 Local History 메뉴 재선택은 같은 왼쪽 anchor의 Explorer로 복귀한다.
   Explorer는 숨겨 둔 채 검색·펼침·스크롤 상태를 보존하고, 복귀 시 tree의
@@ -742,7 +752,14 @@ DopeDB의 실제 작업 흐름과 접근성, supported viewport를 위한 제품
   같은 복귀 경로를 사용한다. 실제 revision 복원 action은 검색/필터 문맥과
   같은 command row에 둔다. project external-change 기능이 생기기 전에는 빈 file
   tree나 가짜 view action을 추가하지 않는다.
-- `QueryResultsPane`은 SQL 문서의 SQL/결과 전환과 중앙 실행 결과 문서가 공유한다.
+- `SqlResultSplit`은 SQL 문서 내부에서 편집기 위·결과 아래의 가로 분할을 소유한다.
+  두 pane은 항상 mount·표시 상태를 유지하고 실행 결과가 editor focus를 가져가지
+  않는다. `ResizeSeparator`의 pointer capture·방향키와 reset을 사용하고, 결과의
+  높이 비율만 기기 로컬 선호로 저장한다. 각 pane의 120px 읽기 공간을 우선하며
+  공간이 더 부족한 짧은 창에서는 1:1로 제한하고 저장된 선호는 viewport 변화로 덮어쓰지
+  않는다. grid 책임은 정적 Tailwind가, `--sql-editor-share`/`--sql-result-share`의
+  동적 `fr` 값만 측정된 resize geometry가 소유한다. 별도 feature CSS는 없다.
+- `QueryResultsPane`은 SQL 문서의 아래쪽 결과 pane과 중앙 실행 결과 문서가 공유한다.
   실행 기록 selector, 다중 statement 결과 tab, Output과 기존 DataGrid를 사용한다.
   SQL 실행 중 editor/controller는 mount 상태를 유지하고 취소 action은 toolbar에 남는다.
   shell은 result row 갱신을 구독하지 않으며 전역 상태 표시는 기존 lifecycle projection만 구독한다.

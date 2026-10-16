@@ -89,6 +89,10 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
   검색 오른쪽의 `쿼리 이력`은 실제 실행 이력 문서를 직접 연다.
 - Explorer는 연결에서 선택한 DB만 펼친다. 서버의 다른 DB 선택은 연결 편집기가
   소유하며 다른 DB를 같은 Project resource처럼 암묵적으로 노출하지 않는다.
+- SQL 연결 행의 우클릭과 `⋯`는 같은 메뉴의 `새 쿼리 콘솔`을 연다. 생성은 기존
+  SQL 문서 command를 재사용하며 현재 선택과 무관하게 해당 행의 정확한 연결·DB를
+  대상으로 한다. 다른 연결에서 선택한 테이블·스키마를 가져오지 않고 MongoDB에는
+  SQL 콘솔 항목을 표시하지 않는다.
 - 개인 Workspace의 Analysis Article도 같은 HTML·정확한 쿼리·revision 계약으로
   로컬에 저장·편집·삭제·수동 재조회한다. 개인 문서는 기기 밖으로 전송하지 않으며
   팀 공유·공개 발행은 인증된 공유 Workspace에서만 제공한다.
@@ -280,7 +284,11 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
   한 번 승인하거나 거절한다. 초기 포커스는 중립적인 닫기 동작에 두어 요청한
   terminal에서 입력하던 키가 승인 control에 닿지 않게 하고, 결정이 끝나기 전에는
   닫을 수 없다(제안 검토를 불러오지 못한 경우는 닫을 수 있다). process가 끝나 session이 폐기되면 미결 제안은 자동으로 취소된다.
-- 하단 Services 패널과 보조 보기는 제공하지 않는다. SQL 문서는 SQL/결과를 전환하며
+- 전역 하단 Services 패널과 보조 보기는 제공하지 않는다. SQL 문서는 위쪽 편집기와
+  아래쪽 결과를 같은 문서 안에 동시에 표시한다. 실행해도 편집기와 커서·선택·focus를
+  유지해 바로 수정·재실행할 수 있으며 SQL/결과 교체 토글은 두지 않는다. 가로 경계선은
+  드래그·키보드로 높이를 조절하고 더블클릭·Enter로 기본 1:1 비율에 복귀한다. 비율은
+  기기 로컬 선호로 저장하되 좁은 높이에서 두 pane을 모두 읽을 수 있도록 제한한다.
   실행 중에도 editor와 controller를 유지한다. 중앙 실행 결과 문서는 같은 연결의 보존된
   결과·출력·다중 statement를 열고, 하단 상태 표시가 background 진행·취소를 소유한다.
 - status surface는 현재 database/source/schema/object, transaction과 background
@@ -370,6 +378,12 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
   중복 검토 화면이나 확인 문구 입력 없이 실행한다. Agent와 background 작업이
   제안한 mutation은 사람이 작성한 것으로 간주하지 않고 별도 한 번의 명시적
   승인·거절을 유지한다.
+- SQL 문서에서 직접 선택한 텍스트는 그대로 실행한다. 선택 없이 여러 statement를
+  실행하면 caret 옆 메뉴에서 `현재 구문`과 `전체 스크립트`를 고른다. 메뉴의 hover와
+  키보드 focus가 정확한 실행 범위를 미리 표시하고 Enter로 실행, Escape로 취소한다.
+  미리보기는 실제 선택 영역이나 본문을 바꾸지 않으며, 편집으로 revision이 바뀌면
+  후보를 폐기한다. 단일 statement는 메뉴 없이 실행한다. 범위 선택은 실행 권한을
+  확대하지 않고 기존 parameter·exact payload 승인·Safety 경로를 그대로 사용한다.
 - Desktop의 연결별 쓰기 실행 제어는 `Settings → Safety` 한 곳이 소유한다.
   연결 편집기와 작업 화면은 쓰기 권한을 변경하지 않으며, 상태 표시와 Safety
   진입만 제공한다. 관리형 연결의 `manage` 권한 보유자는 같은 Safety control로
@@ -461,7 +475,7 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
 | PD-08 | 범용 cloud resource browser | `구현 안 함` | 연결 onboarding 중 검증된 target selector만 허용한다. |
 | PD-09 | multi-database introspection | `구현` | Explorer, query, data editor와 Agent가 같은 정확한 database scope를 사용한다. |
 | PD-10 | background task model | `구현` | SQL, 승인, ACP turn, import/export Job을 관찰하고 실제 backend cancel로 중단한다. |
-| PD-11 | 하단 Services 패널 및 보조 보기 | `구현 안 함` | 하단 패널·실행 트리·토글·resize를 제거한다. 결과와 출력은 중앙 SQL 문서 및 결과 문서가, 진행·취소는 기존 상태 표시가 소유한다. |
+| PD-11 | 전역 하단 Services 패널 및 보조 보기 | `구현 안 함` | 전역 하단 패널·실행 트리·토글은 두지 않는다. SQL 문서 내부의 편집기/결과 상하 분할과 높이 조절은 허용하며 결과와 출력은 중앙 SQL 문서 및 결과 문서가, 진행·취소는 기존 상태 표시가 소유한다. |
 | PD-12 | result의 광범위한 IDE command set | `구현 안 함` | bounded inspect/copy/export를 유지하고 재조회는 SQL이나 Agent가 소유한다. |
 | PD-13 | Local History compare/navigation | `구현 안 함` | SQL revision 선택·검색·복원만 제공한다. |
 | PD-14 | inline AI editor assistance | `구현 안 함` | Project-resource-pinned Agent와 명시적 SQL context attachment가 소유한다. |

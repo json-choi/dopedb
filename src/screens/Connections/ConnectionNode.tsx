@@ -32,6 +32,7 @@ import type {
   DatabaseSummary,
 } from "../../ipc/types";
 import { useI18n } from "../../lib/i18n";
+import { isDocumentEngine } from "../../lib/capabilities";
 import type { SchemaConnectionGroup } from "../../lib/schemaDiff";
 import { SchemaDiffTrigger } from "./schemaDiffPresentation";
 import CatalogTree from "./CatalogTree";
@@ -113,6 +114,7 @@ type Props = {
   onMoveProjectDatabase?: (direction: "up" | "down") => void;
   onToggleOpen: () => void;
   onSelect: () => void;
+  onNewQuery?: () => void;
   onEdit: () => void;
   /** Opens this device's connection editor focused on re-entering a lost credential. */
   onEditCredentials: () => void;
@@ -270,6 +272,13 @@ export default function ConnectionNode(props: Props) {
         onPointerUp={props.onPointerUp}
         onPointerCancel={props.onPointerCancel}
         onLostPointerCapture={props.onPointerCancel}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          event.currentTarget.focus({ preventScroll: true });
+          setConnectionMenuInitialFocus("first");
+          props.onOpenMenu(connectionMenuKey);
+        }}
         onKeyDown={(event) => {
           if (
             !props.projectDatabaseOrder ||
@@ -496,6 +505,16 @@ export default function ConnectionNode(props: Props) {
               }}
               onReferenceHidden={() => props.onOpenMenu(null)}
             >
+              {props.onNewQuery && !isDocumentEngine(connection.engine) ? (
+                <PopupMenuItem
+                  onClick={() => {
+                    props.onOpenMenu(null);
+                    props.onNewQuery?.();
+                  }}
+                >
+                  {t("ide.action.newQuery")}
+                </PopupMenuItem>
+              ) : null}
               {props.projectDatabaseOrder &&
               props.onMoveProjectDatabase ? (
                 <>
