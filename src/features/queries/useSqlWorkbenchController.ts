@@ -91,6 +91,7 @@ import {
   type SqlWorkbenchRun,
 } from "./sqlWorkbenchModel";
 import { useSqlWorkbenchTarget } from "./useSqlWorkbenchTarget";
+import { useSqlRunChooser } from "./useSqlRunChooser";
 
 export type SqlWorkbenchProps = {
   connection: ConnectionProfile;
@@ -213,6 +214,12 @@ export function useSqlWorkbenchController({
   const selectionRef = useRef<SqlRunSource | undefined>(undefined);
   const [hasSelection, setHasSelection] = useState(false);
   const editorViewRef = useRef<EditorView | null>(null);
+  const runChooser = useSqlRunChooser({
+    draft,
+    version: draftVersion,
+    editorViewRef,
+    onExecute: (source) => executeSql(source),
+  });
   const draftVersionRef = useRef(draftVersion);
   draftVersionRef.current = draftVersion;
   const {
@@ -487,9 +494,11 @@ export function useSqlWorkbenchController({
   }
 
   function executeSql(selectedSource?: SqlRunSource) {
-    const source =
-      selectedSource ?? currentSelection() ?? wholeDocumentRunSource(draft);
-    if (!source?.sql || running || !safetyReady) return;
+    if (running || !safetyReady) return;
+    const selection = selectedSource ?? currentSelection();
+    if (!selection && runChooser.open()) return;
+    const source = selection ?? wholeDocumentRunSource(draft);
+    if (!source?.sql) return;
     const parameters = findSqlParameters(source.sql, connection.engine);
     if (parameters.length > 0) {
       setParameterDialog({
@@ -757,6 +766,7 @@ export function useSqlWorkbenchController({
     latestSessionId,
     resolveModeHint,
     running,
+    runChooser,
     setDraft,
   };
 }

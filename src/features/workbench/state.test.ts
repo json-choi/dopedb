@@ -30,7 +30,9 @@ import { resolveSqlNamespaceAtCaret } from "../queries/resolveMode";
 import {
   sqlExecutionMarkerPosition,
   sqlRunSourceFromSelection,
+  sqlRunChoices,
 } from "../queries/editorStatus";
+import { splitStatementRanges, splitStatements } from "../../lib/sqlStatements";
 import {
   canFallbackFromCombinedRead,
   initialSqlRunPath,
@@ -480,6 +482,31 @@ describe("workbench state ownership", () => {
       to: selectedEnd - 2,
     });
     expect(sqlRunSourceFromSelection(selectedDraft, 0, 0)).toBeUndefined();
+
+    // A scope choice must authorize exactly the previewed occurrence, never a
+    // repeated statement elsewhere or a semicolon inside a literal/comment.
+    const script = "  SELECT 1;\n\nSELECT 2;  ";
+    const choices = sqlRunChoices(script, script.indexOf("SELECT 2") + 4);
+    expect(choices).toEqual([
+      { kind: "statement", source: { sql: "SELECT 2", from: 13, to: 21 } },
+      { kind: "script", source: { sql: script.trim(), from: 2, to: 22 } },
+    ]);
+    const repeated = "SELECT 1; SELECT 1;";
+    expect(sqlRunChoices(repeated, 14)[0].source.from).toBe(10);
+    expect(sqlRunChoices(script, 10)[0].source.sql).toBe("SELECT 1");
+    expect(sqlRunChoices(script, script.length)[0].source.sql).toBe("SELECT 2");
+    for (const text of ["SELECT 1;", "-- only comments;", "/* only ; */"]) {
+      expect(sqlRunChoices(text, 0)).toEqual([]);
+    }
+    const quoted = "-- title;\nSELECT '한글😀;'; SELECT $$x;y$$; /* ; */ SELECT 3; -- tail";
+    const ranges = splitStatementRanges(quoted);
+    expect(ranges.map((range) => range.sql)).toEqual(splitStatements(quoted));
+    expect(ranges).toHaveLength(3);
+    for (const range of ranges) {
+      expect(quoted.slice(range.from, range.to)).toBe(range.sql);
+    }
+    expect(sqlRunChoices(quoted, quoted.indexOf("x;y"))[0].source.sql)
+      .toBe("SELECT $$x;y$$");
 
     expect(queryResultPhase(undefined, new Error("offline"))).toBe("coldError");
     expect(queryResultPhase(undefined, null)).toBe("coldLoading");

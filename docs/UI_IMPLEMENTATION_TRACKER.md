@@ -15,6 +15,55 @@ runtime과 성능 수치로 수행한다.
 - `missing`: 범위에는 속하지만 아직 구현하지 않음
 - `out-of-scope`: 제품 범위 결정상 화면이나 placeholder를 만들지 않음
 
+## SQL 결과 제목과 시간 표시
+
+- 주석에서 결과 제목을 추출하고 출력에 행 수와 시간을 표시한다. 스트리밍의
+  `클라이언트 총`과 `백엔드 처리`는 서로 겹치는 관측 구간이며 DB 실행/fetch의
+  독립적인 시간 분해가 아니다. 두 값의 차이를 수신 시간으로 표시하지 않는다.
+  측정치가 없는 이전 snapshot은 기존 duration만 표시한다.
+
+## SQL 편집기/결과 상하 분할
+
+- 상태: `partial` — SQL/결과 교체 버튼과 실행 후 결과로 focus를 옮기는 상태를
+  제거했다. `features/queries/SqlResultSplit`이 같은 문서 안에서 편집기 위·결과
+  아래 배치와 기기 로컬 높이 비율을 소유한다. 기존 `QueryResultsPane`과 controller는
+  유지하고 결과 갱신이 SQL 본문·커서·선택·편집기 focus를 바꾸지 않는다.
+- 공용 `ResizeSeparator`로 pointer drag·방향키·더블클릭/Enter reset을 제공한다.
+  높이 측정은 저장된 선호를 덮어쓰지 않고 두 pane의 읽기 공간을 보존한다.
+  격리 브라우저의 실제 CodeMirror·결과 grid와 합성 영수증에서 편집 후 결과 갱신에도
+  editor focus·커서가 유지되고 양쪽 pane이 보이는 것을 확인했다. 640px 영역의
+  기본 317/317px, pointer event 조절 후 217/417px, 방향키·reset·재mount 비율 복원과
+  짧은 높이의 preference 비파괴 clamp를 확인했다. 숨긴 Review 탭의 ResizeObserver는
+  실제 DOM geometry로 명시적으로 전달했고 pointer capture는 합성했다. native 앱의
+  실제 DB 실행·취소·재실행과 물리 pointer drag QA는 남아 있다.
+
+## SQL 실행 범위 선택
+
+- 상태: `partial` — 여러 statement에서 선택 없이 Run/⌘Enter를 누르면 현재 구문과
+  전체 스크립트를 caret 옆 메뉴로 제공한다. `useSqlRunChooser`가 revision에 고정한
+  후보를 소유하고 `SqlRunMenu`는 공용 `PopupMenu`로 투영한다. `SqlViewer`는 정확한
+  UTF-16 범위를 decoration으로 미리보며 실제 선택 영역을 변경하지 않는다. 직접
+  드래그한 선택과 단일 구문은 기존 실행 경로를 유지한다.
+- 기존 핵심 여정 테스트에서 중복 SQL의 두 번째 occurrence, 문자열·dollar quote·
+  주석 안의 세미콜론과 Unicode offset을 확인했다. 실제 CodeMirror·chooser hook·메뉴의
+  격리 브라우저 fixture에서 현재/전체 후보 미리보기와 전달 payload, 실제 선택 보존,
+  Escape 취소·포커스 복원, 직접 선택 실행과 편집 후 오래된 확인 callback 차단을
+  검증했다. fixture는 DB를 실행하지 않았으며 native 방향키·Enter 동작, parameter
+  dialog 연계와 실제 SQL 실행 QA는 남아 있다.
+
+## DB 행의 쿼리 콘솔 진입
+
+- 상태: `partial` — `ConnectionNode`의 우클릭과 `⋯`가 같은 메뉴의 `새 쿼리
+  콘솔`을 제공한다. 기존 shell SQL 문서 생성 command가 클릭한 행의 현재 연결
+  identity와 SQL capability를 확인하고 정확한 DB로 생성·전환한다. 기존 선택의
+  테이블·스키마를 다른 연결에 전달하지 않으며 MongoDB에는 항목을 숨긴다.
+- 소유자: `screens/Connections/ConnectionNode`, `DatabaseExplorer`,
+  `features/appShell/useAppShellWorkbenchController`. 메뉴 focus·Escape는 기존
+  `PopupMenu` 경계를 사용한다. 격리 브라우저의 실제 DB 행 컴포넌트에서 우클릭과
+  `⋯`의 항목 노출, 다른 행이 선택돼 있어도 클릭한 행의 callback 전달, Escape
+  후 trigger focus 복귀와 MongoDB 항목 숨김을 확인했다. 실제 backend 문서 생성과
+  native 앱의 우클릭·`⋯`·키보드 진입 검수는 남아 있다.
+
 ## 2026-10-13 기능 복구 검수
 
 워크스페이스 생성의 로그인 진입, 검색 옆 쿼리 이력, BigQuery의 별도 연결 진입,
@@ -218,7 +267,7 @@ grid의 query field·header action·필터 popover 밀도도 같은 앱에서 �
 | Provider account access | `partial` | `features/workspaceAdmin/providers`, provider application modules | GCP 연결·복구는 기존 integration·project·instance·connection ID와 멤버 grant를 유지한다. PostgreSQL 14 이상에 새 세대의 전용 read/write 서비스 계정과 IAM DB 사용자를 만들며 생성 시 predefined data role을 지정한다. 기존 DB 사용자 PUT/DELETE, 관리자 DB 사용자 임시 승격, Data API 권한 SQL, PUBLIC/기본 ACL/객체 소유권 변경은 제거했다. 기존 전용 계정이 기대한 권한과 다르면 변경 없이 중단한다. 기존 신뢰 항목은 삭제하지 않는다. 별도 스키마 설정에서 DB·기존 owner 역할·명시적 위임 승인을 받아 새 schema principal을 만든다. DB별 capability와 access-v6 lease로 owner를 고정하고 모든 물리 접속에서 검증한다. 기존 사용자/ACL/객체 소유권은 보존하며 일반 복구는 기존 위임을 유지한다. 이전 PostgreSQL/MySQL 자동 구성은 변경 전에 중단하고 member-local 자격 증명을 안내한다. OAuth, IAM 인증 flag 승인과 활성 lease 사전 검사는 유지한다. 계약 harness와 격리 PostgreSQL에서 기존 및 새 스키마의 서버 접근을 검증하며, 이번 수정의 실제 사용자 OAuth→DB 연결 성공 및 Desktop 재검수는 미완료다. 공급자 계정 승인·관리형 DB 등록과 복구 화면은 Desktop `워크스페이스 관리 → 공급자`가 소유하며 실제 공급자 OAuth 왕복의 운영 검수는 남아 있다. |
 | SQL/MongoDB query workflow | `complete` | `features/queries`, `features/documentQueries`, `screens/Sql`, `screens/Documents`, Rust query application | SQLite 경로는 기본 화면에서 basename으로만 표시하고 MongoDB limit는 문자열 draft를 보존한 뒤 blur/실행에서 검증한다. 수동 Run exact 승인, Agent 제안 분리, MongoDB의 지속되는 조회 surface와 collection 없는 정확한 빈 상태, 10 KiB/100 KiB/1 MiB 입력과 cancel/transaction packaged 검수를 유지 |
 | Result/Data grid | `partial` | `features/queryResults`, Rust result artifact | 테이블 열 메뉴는 DB 조회 조건과 페이지 기준 값·개수, 선택 시 DB 재조회를 명시한다. WHERE와 적용 중 해제 버튼도 DB 조회 조건으로 구분한다. SQL materialized/완료된 stream의 문자 필터는 받은 결과만 검색함을 입력 아래에 표시하고 적용 중 받은 행 수 대비 표시 행 수·해제를 footer에 유지한다. 실제 컴포넌트 브라우저 fixture의 한·영, 390px 폭, 일반·가상 열 메뉴, 값 선택의 WHERE 생성, materialized 더 보기·0행·해제, 완료된 stream의 100→50행 필터·해제와 실행 중 필터 비활성 상태를 확인했다. native packaged와 실제 DB 재조회 검수는 남아 있다. SQL 테이블 셀 더블클릭 편집은 수정 대기 값 표시, 행별 UPDATE 병합, 원본 값 기반 충돌 감지와 저장 전 SQL 검토를 기존 proposal·승인 경로에 연결한다. 변경 SQL 미리보기는 공용 읽기 전용 SQL viewer로 engine별 구문 하이라이팅과 변경별 SQL 원문 복사 및 성공·실패 알림을 제공한다. 기기 Safety 쓰기가 꺼져 있어도 로컬 셀 수정안과 SQL 미리보기는 허용하며 실제 저장은 차단하고 Safety 설정을 안내한다. 새 Desktop의 실제 DB 저장 QA는 남아 있다. WHERE/ORDER BY는 입력 경계·focus·dirty 상태를 드러내고, 행 범위·전체 수·잘림·실행 시간은 tooltip 없이 floating footer에 표시하며 마지막 cell을 덮지 않는다. decode 실패는 ordinary value와 분리해 표시하고 복사·내보내기·편집을 차단한다. materialized 결과 identity 또는 streaming operation·capability·column identity가 바뀌면 이전 cell selection·focus·copy error를 지우되 같은 stream의 batch·page 도착에는 유지한다. 일반·가상 격자는 같은 숫자 판정을 사용하고 streaming은 현재 window의 `unknown → numeric → text` 증거만 누적해 정렬이 cache eviction으로 되돌아가지 않는다. 30열·50,000행 selection/filter/export와 메모리 경계를 검수했다. SQL materialized/stream/script와 Mongo 결과는 공용 `InspectableResultGrid`에서 선택 셀을 하단 최대 40% inspector로 표시하고 CSV/JSON 내보내기·닫기/Escape grid focus 복구를 제공한다. 결과·페이지 identity가 바뀌면 이전 inspection을 숨긴다. Mongo toolbar 내보내기는 현재 가져온 페이지로 한정하고 loading·error·이전 페이지 placeholder 중에는 차단하며 범위·전체 수·시간을 표시한다. 0.4.36 Debug bundle의 실제 SQL materialized 결과에서 inspector, 명시적 CSV·JSON action, Escape 닫기와 원래 grid cell focus 복귀를 확인했다. stream·script·Mongo 페이지 전환의 runtime 검수는 남아 있다. |
-| 결과/Jobs | `partial` | `features/queryServices`, `features/jobs` | 하단 Services는 보조 보기 없이 제거했다. SQL 문서는 SQL/결과를 전환하고, 중앙 실행 결과 문서는 같은 연결의 보존된 session·Output·다중 statement를 표시한다. 상태 표시의 실행 중 query는 원래 문서로 이동해 controller를 유지한다. 브라우저 실제 컴포넌트에서 420px·900px 결과 폭, SQL 편집기 인스턴스·내용 보존, 다른 connection 결과 제외, Article/DB 탐색 분리를 확인했다. native packaged 실행·취소·재시작 복원 검수는 남아 있다. 비로그인 Personal 실행은 현재 process의 session/result를 즉시 보여 주되 계정 범위 영속화는 하지 않는다. Import/Export의 header와 주 동작은 고정하고 내용만 scroll한다. background cancel과 복원된 result handle, 쓰기 권한 차단 시 exact DB의 필요한 권한 계층·`Settings → Safety` 복구 진입을 검수한다. 관리형 DDL 실패도 별도 권한 창을 만들지 않고 동일한 Safety 단계와 provider 지원 여부로 복구한다. 직접 권한 변경·분류 불가 SQL은 `sqlPolicyBlocked`와 문자 기준 구문 위치로 안내하며 쓰기·DDL 설정을 복구 수단으로 제시하지 않는다. 실제 결과 컴포넌트에서 한·영 및 다크·라이트 안내를 검수했다. |
+| 결과/Jobs | `partial` | `features/queryServices`, `features/jobs` | 전역 하단 Services는 보조 보기 없이 제거했다. SQL 문서는 편집기 위·결과 아래의 높이 조절 가능한 상하 분할을 유지하며 실행 후 편집기 focus를 가져가지 않는다. 새 분할 검수는 위의 SQL 편집기/결과 상하 분할 항목을 따른다. 중앙 실행 결과 문서는 같은 연결의 보존된 session·Output·다중 statement를 표시한다. 상태 표시의 실행 중 query는 원래 문서로 이동해 controller를 유지한다. 브라우저 실제 컴포넌트에서 420px·900px 결과 폭, SQL 편집기 인스턴스·내용 보존, 다른 connection 결과 제외, Article/DB 탐색 분리를 확인했다. native packaged 실행·취소·재시작 복원 검수는 남아 있다. 비로그인 Personal 실행은 현재 process의 session/result를 즉시 보여 주되 계정 범위 영속화는 하지 않는다. Import/Export의 header와 주 동작은 고정하고 내용만 scroll한다. background cancel과 복원된 result handle, 쓰기 권한 차단 시 exact DB의 필요한 권한 계층·`Settings → Safety` 복구 진입을 검수한다. 관리형 DDL 실패도 별도 권한 창을 만들지 않고 동일한 Safety 단계와 provider 지원 여부로 복구한다. 직접 권한 변경·분류 불가 SQL은 `sqlPolicyBlocked`와 문자 기준 구문 위치로 안내하며 쓰기·DDL 설정을 복구 수단으로 제시하지 않는다. 실제 결과 컴포넌트에서 한·영 및 다크·라이트 안내를 검수했다. |
 | Agent tool window | `partial` | `features/agents`, ACP Rust runtime | Claude 표기를 사용하고, 15px 채팅 본문·14px control·12px 상태 계층과 28px header/context control을 적용했다. 공식 adapter가 제공한 model·mode select만 전달하고, ready 세션에서 명시적으로 승인 모드를 변경한다. 명시적으로 선택한 mode는 현재 기기의 workspace/account·provider에 기억하고 새 세션에서 adapter가 해당 선택지를 광고할 때만 적용한다. DB write approval은 별도다. 360px·396px 실제 컴포넌트 fixture에서 기존 두 행 정렬·light/dark·키보드 모드 변경·permission 대기 중 설정 비활성화를 확인했다. 실제 session store·transcript fixture에 시간차 조각을 보내 완료 전 본문 증가·작성 커서·완료 시 커서 제거·긴 답변의 입력창 유지와 자동 스크롤·위로 스크롤한 위치 보존을 확인했다. token burst는 화면 frame으로 합치며, 권한/완료 경계는 즉시 반영하고 account 전환 시 대기 frame을 취소한다. 실제 provider의 자동 승인 도구 실행 검수는 남아 있다. adapter가 없을 때 설정 CTA는 하나만 보여 준다. provider·model은 header 메뉴로 모으고 입력창 아래에는 resource와 mode를 한 행에 표시한다. 한 Project의 DB·BigQuery·GitHub source를 개별/다중 선택하고 trigger에 Project·선택 개수·읽기/쓰기 상태를 표시한다. 선택하지 않은 resource 차단, connection별 독립 read, 단일 write target, 공식 adapter 설치·실행 계약 호환성·로그아웃·permission·resume, resource 선택의 즉시 반영과 입력창을 유지하는 백그라운드 선행 준비, 동일 권한 focus-refresh 연속성, 저장 분석 요청의 Article verify/propose 영수증과 실제 Article 도구명에만 대응하는 저장 상태 표시를 packaged runtime에서 검수하면 `complete`로 복귀 |
 | External Agent approval | `partial` | `features/agents/ExternalAgentRequestGate`, `dopedb-cli`, Local Broker | `agent init`의 secret-free config 생성, `agent start`의 immutable resource 재검토, token 없는 process-bound MCP 주입·종료 revoke는 자동 회귀 검수한다. macOS/Windows packaged CLI에서 Codex/Claude 각각의 실제 로그인·승인·종료 흐름을 검수하면 `complete`로 전환한다. |
 | Knowledge graph | `partial` | Rust `features/knowledge`, frontend Knowledge source projection | exact-commit GitHub 탐색과 Local source revision은 유지한다. 그래프 구성·매핑 검토 UI·exact graph grant는 benchmark와 entitlement 결정 뒤 새 실행 설계로 구현하고 packaged 검수한다. |

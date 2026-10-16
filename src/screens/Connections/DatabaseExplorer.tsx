@@ -68,6 +68,7 @@ export function DatabaseExplorer({
   selectedTableKey,
   activeSchemaGroupKey,
   onSelectConn,
+  onNewQuery,
   onOpenTable,
   onOpenSchemaDiff,
   onEdit,
@@ -94,6 +95,7 @@ export function DatabaseExplorer({
   selectedTableKey: string | null;
   activeSchemaGroupKey: string | null;
   onSelectConn: (id: string) => void;
+  onNewQuery?: (connection: ConnectionProfile) => void;
   onOpenTable: (conn: ConnectionProfile, table: CatalogTable) => void;
   onOpenSchemaDiff: (group: SchemaConnectionGroup) => void;
   /** `initialFocus` opens the editor at the credential this device lost. */
@@ -464,6 +466,7 @@ export function DatabaseExplorer({
         }
         onToggleOpen={() => toggleOpen(connection.id)}
         onSelect={() => onSelectConn(connection.id)}
+        onNewQuery={onNewQuery ? () => onNewQuery(connection) : undefined}
         onEdit={() => onEdit(connection)}
         onEditCredentials={() => onEdit(connection, "credentials")}
         onRefreshWorkspace={() => void resyncSharedConnection(connection.id)}

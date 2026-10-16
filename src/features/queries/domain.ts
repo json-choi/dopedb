@@ -144,8 +144,9 @@ export type SqlStreamViewState = {
 
 /**
  * The receive-side half of the output timing split: what the renderer observed
- * for the whole stream, alongside the backend's own `durationMs`. Absent on
- * restored snapshots, which keep the backend total alone.
+ * for the whole stream, alongside the backend's own `durationMs`. Snapshots
+ * predating this measurement keep the backend total alone. These intervals
+ * overlap; subtracting them does not measure database fetch time.
  */
 export type SqlStreamTimings = { clientTotalMs: number };
 

@@ -47,9 +47,9 @@ function statementResultTitle(
 
 /**
  * The Output tab's status text: state, row/affected counts, and the timing
- * split — the backend receipt's duration next to what the renderer observed,
- * so the difference is honestly attributable to the client pipeline. Restored
- * snapshots keep the backend total alone.
+ * observations — the backend receipt's duration and the renderer's total.
+ * Their intervals overlap (backend streaming can wait on renderer ACKs), so
+ * neither their difference nor either total is an isolated fetch duration.
  */
 function outputSummaryText(session: QueryServiceSession, t: Translate): string {
   const parts = [t(`services.status.${session.status}`)];
@@ -81,13 +81,8 @@ function outputSummaryText(session: QueryServiceSession, t: Translate): string {
     const timings = result.stream.timings;
     const durationMs = result.stream.durationMs;
     if (timings && durationMs !== null) {
-      parts.push(t("services.outputTotal", { ms: Math.round(timings.clientTotalMs) }));
-      parts.push(t("services.outputExecuted", { ms: Math.round(durationMs) }));
-      parts.push(
-        t("services.outputReceived", {
-          ms: Math.max(0, Math.round(timings.clientTotalMs - durationMs)),
-        }),
-      );
+      parts.push(t("services.outputClientTotal", { ms: Math.round(timings.clientTotalMs) }));
+      parts.push(t("services.outputBackend", { ms: Math.round(durationMs) }));
     } else if (durationMs !== null) {
       parts.push(t("services.outputTotal", { ms: Math.round(durationMs) }));
     }

@@ -2,7 +2,8 @@
 // screen. Read-only by default; when a `catalog` is passed it feeds schema-aware
 // autocomplete (table + column names), and `onRun` binds Mod-Enter to execute.
 // The editor reports its selection (so toolbar Run can run exactly it), carries an
-// accessible name, and underlines the range a failed run points at.
+// accessible name, underlines failures, and previews execution choices without
+// replacing the user's actual selection.
 import { useCallback, useMemo } from "react";
 import { useTheme } from "../design-system/theme";
 import CodeMirror from "@uiw/react-codemirror";
@@ -85,6 +86,8 @@ export interface SqlViewerProps {
   onCursorChange?: (position: SqlCursorPosition) => void;
   onBlur?: () => void;
   executionStatus?: SqlExecutionStatus | null;
+  /** Non-destructive execution choice preview; does not replace the real selection. */
+  previewSource?: SqlRunSource | null;
   /** Receives the production CodeMirror view for deterministic packaged profiling. */
   onEditorReady?: (view: EditorView) => void;
   /** The current non-empty selection, or undefined when the selection is empty. */
@@ -217,6 +220,7 @@ export default function SqlViewer({
   onCursorChange,
   onBlur,
   executionStatus,
+  previewSource,
   onEditorReady,
   onSelectionChange,
   ariaLabel,
@@ -266,7 +270,7 @@ export default function SqlViewer({
             {
               key: "Mod-Enter",
               run: (view) => {
-                // Run just the selection when there is one; otherwise the whole draft.
+                // Run an explicit selection; otherwise let the controller choose scope.
                 onRun(selectedRunSource(view.state));
                 return true;
               },
@@ -323,17 +327,29 @@ export default function SqlViewer({
     [onCursorChange, onSelectionChange, reportCursor],
   );
   const executionValue = executionStatus ? value : "";
+  const previewing = Boolean(previewSource);
+  const previewExtension = useMemo(() => {
+    if (!previewSource || value.slice(previewSource.from, previewSource.to) !== previewSource.sql) {
+      return [];
+    }
+    return EditorView.decorations.of(Decoration.set([
+      Decoration.mark({
+        class: "tw:bg-selection tw:outline tw:outline-1 tw:outline-ring",
+        attributes: { "data-sql-run-preview": "true" },
+      }).range(previewSource.from, previewSource.to),
+    ]));
+  }, [previewSource, value]);
   const executionExtension = useMemo(
-    () => executionStatusExtension(executionValue, executionStatus),
-    [executionStatus, executionValue],
+    () => executionStatusExtension(executionValue, previewing ? null : executionStatus),
+    [executionStatus, executionValue, previewing],
   );
   const errorExtension = useMemo(
     () => errorRangeExtension(value.length, errorRange),
     [errorRange, value.length],
   );
   const allExtensions = useMemo(
-    () => [...extensions, executionExtension, errorExtension],
-    [errorExtension, executionExtension, extensions],
+    () => [...extensions, executionExtension, errorExtension, previewExtension],
+    [errorExtension, executionExtension, extensions, previewExtension],
   );
 
   return (

@@ -130,7 +130,7 @@ type ShellLayoutCommands = {
     showWelcome: () => void;
     activateDocument: (id: string) => void;
     restoreDocument: (id: string, content: string) => void;
-    newQuery: () => void;
+    newQuery: (connection?: ConnectionProfile) => void;
   };
   agent: {
     toggle: () => void;
@@ -362,6 +362,7 @@ function ShellLayoutContent({ model, commands }: Props) {
               environmentDetailOpen ? null : explorer.activeSchemaGroupKey
             }
             onSelectConn={commands.explorer.selectConnection}
+            onNewQuery={commands.workbench.newQuery}
             onOpenTable={commands.explorer.openTable}
             onOpenSchemaDiff={commands.explorer.openSchemaDiff}
             onEdit={commands.workspace.editConnection}
