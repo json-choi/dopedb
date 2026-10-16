@@ -3,5 +3,7 @@ export const AGENT_SETUP_URLS = {
   codex: "https://help.openai.com/en/articles/11096431",
 } as const;
 
+export const CLAUDE_AUTH_SETUP_URL = "https://code.claude.com/docs/en/authentication";
+
 export const DOPEDB_RELEASES_URL =
   "https://github.com/json-choi/dopedb/releases/latest";

@@ -130,7 +130,9 @@ pub fn adapter_command(
     let mut command = Command::new(&registration.runtime_executable);
     // A GUI can inherit stale terminal hooks and unrelated credentials from
     // its launcher or updater. Only OS discovery and this exact session belong
-    // in the official adapter; its CLI still owns login in the user's home.
+    // in the official adapter, together with its provider-scoped CLI config.
+    // The CLI owns authentication; inherited gateway credentials are passed
+    // through without parsing, persistence, or inclusion in the registration.
     command.env_clear();
     for name in [
         "HOME",
@@ -173,6 +175,11 @@ pub fn adapter_command(
         "DOPEDB_CONNECTION_SCOPE",
         "DOPEDB_RUNTIME_FILE",
     ] {
+        if let Some(value) = std::env::var_os(name) {
+            command.env(name, value);
+        }
+    }
+    for name in registration.plugin_id.local_cli_configuration_environment() {
         if let Some(value) = std::env::var_os(name) {
             command.env(name, value);
         }

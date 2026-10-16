@@ -223,7 +223,18 @@ color를 거부한다.
   package `pretendard`의 dynamic-subset Variable WOFF2를 고정 버전으로 포함하며
   CDN이나 설치된 시스템 폰트에 의존하지 않는다. 같은 UI 글꼴을 Desktop,
   Workspace, 소개 사이트에서 사용한다.
-- Serif: `--ds-font-serif`. 브랜드와 별도로 정한 editorial surface에 사용한다. Article은 sans 제목·heading으로 지표와 같은 읽기 흐름을 유지한다.
+- Display: `--ds-font-serif`(`tw:font-serif`). 이름만 serif이고 값은 Pretendard
+  display stack이다. 워드마크와 브랜드 제목에 사용하며 Workspace Web의
+  `--font-workspace-display`와 같은 글꼴을 쓴다. Article은 sans 제목·heading으로
+  지표와 같은 읽기 흐름을 유지한다.
+- Form control: Preflight가 없으므로 `system.css`의 전역 reset이 `button`,
+  `input`, `select`, `textarea`, `optgroup`에 `font-family: inherit`를 준다.
+  raw control도 OS 기본 UI 글꼴 대신 Pretendard를 상속한다.
+- ERD SVG export는 Pretendard 우선 stack을 직접 적는다. 보는 쪽에 Pretendard가
+  없으면 OS sans-serif로 대체된다.
+- 알려진 예외: Agent 응답의 Mermaid 다이어그램은 `font-src`가 없는 격리 iframe에
+  그려지므로 OS에 Pretendard가 없으면 라벨이 OS sans-serif로 표시된다. native
+  `select` popup 목록도 OS가 그린다.
 - Mono: `--ds-font-mono`. 경로, SQL, 값, 식별자, 숫자 비교에 사용한다.
 - Body: 15px.
 - Dense UI: 14px.
@@ -513,7 +524,7 @@ loopback 문서는 이 정본을 빌드 시 포함하며 네트워크 font나 sc
   feature별 임시 SVG나 상태색 대용 브랜드색을 만들지 않는다.
 - `AgentCliStatusIndicators`, `AgentCliDetectionNotice`: 시작 모달과 Agent Tools가
   공유하고 AI Chat도 같은 상태 어휘를 따르는 feature composition. 로컬 CLI의
-  탐지 중, probe 실패, 미설치, 로그인 필요, 준비 상태를 구분하며 실패를
+  탐지 중, probe 실패, 미설치, 로컬 인증 설정 필요, 준비 상태를 구분하며 실패를
   미설치로 축약하지 않는다. probe 상세와 재시도는 같은 inline 상태 surface가
   소유한다.
 - `ToolbarMenu menuSize="scope"`: Explorer schema scope popover의 outer

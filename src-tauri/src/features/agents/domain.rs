@@ -17,7 +17,7 @@ pub(crate) struct AgentResourceScopeSelection {
     pub(crate) source_ids: Vec<uuid::Uuid>,
 }
 
-/// Subscription-backed Terminal providers whose local CLIs can be probed safely.
+/// Official local CLI providers whose public status can be probed safely.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub(crate) enum AgentProvider {
@@ -69,7 +69,7 @@ pub(crate) mod agent_error {
     }
 }
 
-/// Non-secret local CLI availability and authentication status.
+/// Non-secret local CLI availability and credential configuration, not remote validation.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct AgentCliInfo {

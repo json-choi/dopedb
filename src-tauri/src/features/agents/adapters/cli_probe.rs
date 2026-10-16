@@ -1,9 +1,11 @@
-//! Process adapter for bounded, credential-free Agent CLI status probes.
+//! Bounded public CLI status probes using the provider's own authentication configuration.
 
 use std::ffi::OsStr;
 use std::path::Path;
 use std::process::Output;
 use std::time::Duration;
+
+use dopedb_protocol::AcpPluginId;
 
 use crate::cli_environment::{executable_search_path, find_executable};
 
@@ -16,8 +18,6 @@ const PROBE_TIMEOUT: Duration = Duration::from_secs(4);
 const AUTH_PROBE_TIMEOUT: &str = "auth_probe_timeout";
 const SAFE_PROBE_ENVIRONMENT: &[&str] = &[
     "HOME",
-    "CODEX_HOME",
-    "CLAUDE_CONFIG_DIR",
     "USER",
     "LOGNAME",
     "SHELL",
@@ -47,7 +47,7 @@ const NODE_MISSING_MARKERS: &[&str] = &[
     "'node' is not recognized",
 ];
 
-/// Runs only public CLI status subcommands, with no credential reads or environment copies.
+/// Runs public CLI status subcommands, never opening credential files or logging their values.
 #[derive(Clone, Copy, Default)]
 pub(crate) struct ProcessAgentCliProbe;
 
@@ -83,7 +83,7 @@ async fn detect_claude() -> AgentCliInfo {
             "Install Claude Code to use its Terminal profile.",
         );
     };
-    let installed = match run_probe(&binary, &["--version"]).await {
+    let installed = match run_probe(&binary, &["--version"], AcpPluginId::Claude).await {
         Ok(output) if output.contains("Claude Code") => true,
         Ok(_) => {
             return probe_failed(
@@ -101,34 +101,30 @@ async fn detect_claude() -> AgentCliInfo {
         }
     };
     let auth = if installed {
-        Some(run_probe(&binary, &["auth", "status"]).await)
+        Some(run_probe(&binary, &["auth", "status"], AcpPluginId::Claude).await)
     } else {
         None
     };
-    let auth_unknown = auth
+    let auth_timeout = auth
         .as_ref()
         .is_some_and(|result| result.as_ref().is_err_and(|error| is_probe_timeout(error)));
-    let (authenticated, auth_method, account_email, account_plan) = auth
+    let account = auth
         .and_then(Result::ok)
-        .and_then(|output| serde_json::from_str::<serde_json::Value>(&output).ok())
-        .filter(|value| {
-            value
-                .get("loggedIn")
-                .and_then(serde_json::Value::as_bool)
-                .unwrap_or(false)
-        })
-        .map(|value| {
-            (
-                true,
-                value
-                    .get("authMethod")
-                    .and_then(serde_json::Value::as_str)
-                    .map(str::to_owned),
-                super::cli_account::public_text(value.get("email")),
-                super::cli_account::public_text(value.get("subscriptionType")),
-            )
-        })
-        .unwrap_or((false, None, None, None));
+        .and_then(|output| super::cli_account::claude_account(&output));
+    let detection_error = if account.is_some() {
+        None
+    } else {
+        Some(
+            if auth_timeout {
+                AUTH_PROBE_TIMEOUT
+            } else {
+                "auth_probe_failed"
+            }
+            .into(),
+        )
+    };
+    let (authenticated, auth_method, account_email, account_plan) =
+        account.unwrap_or((false, None, None, None));
     AgentCliInfo {
         id: AgentProvider::Claude,
         name: "Claude Code".into(),
@@ -137,8 +133,8 @@ async fn detect_claude() -> AgentCliInfo {
         auth_method,
         account_email,
         account_plan,
-        detection_error: auth_unknown.then(|| AUTH_PROBE_TIMEOUT.into()),
-        note: "Uses your Claude subscription login in a connection-pinned Terminal.".into(),
+        detection_error,
+        note: "Uses your local Claude Code authentication, including CLI-managed gateways. Credential configuration is not a live connection check.".into(),
     }
 }
 
@@ -150,7 +146,7 @@ async fn detect_codex() -> AgentCliInfo {
             "Install Codex CLI to use its Terminal profile.",
         );
     };
-    let installed = match run_probe(&binary, &["--version"]).await {
+    let installed = match run_probe(&binary, &["--version"], AcpPluginId::Codex).await {
         Ok(output) if output.contains("codex-cli") => true,
         Ok(_) => {
             return probe_failed(
@@ -168,7 +164,7 @@ async fn detect_codex() -> AgentCliInfo {
         }
     };
     let auth = if installed {
-        Some(run_probe(&binary, &["login", "status"]).await)
+        Some(run_probe(&binary, &["login", "status"], AcpPluginId::Codex).await)
     } else {
         None
     };
@@ -245,32 +241,41 @@ fn is_probe_timeout(error: &str) -> bool {
     error.starts_with("command timed out after")
 }
 
-async fn run_probe(binary: &Path, args: &[&str]) -> Result<String, String> {
-    run_probe_with_timeout(binary, args, PROBE_TIMEOUT).await
-}
-
-async fn run_probe_with_timeout(
-    binary: &Path,
-    args: &[&str],
-    timeout: Duration,
-) -> Result<String, String> {
+async fn run_probe(binary: &Path, args: &[&str], provider: AcpPluginId) -> Result<String, String> {
     let mut command = quiet_command(binary);
     command.args(args);
-    apply_probe_environment(&mut command);
+    apply_probe_environment(&mut command, provider);
     let mut command = tokio::process::Command::from(command);
     command.kill_on_drop(true);
-    let output = tokio::time::timeout(timeout, command.output())
+    let output = tokio::time::timeout(PROBE_TIMEOUT, command.output())
         .await
-        .map_err(|_| format!("command timed out after {} ms", timeout.as_millis()))?
+        .map_err(|_| format!("command timed out after {} ms", PROBE_TIMEOUT.as_millis()))?
         .map_err(|error| error.to_string())?;
+    // Claude returns JSON with loggedIn:false and exit 1 when unconfigured.
+    // Preserve that public status, but never forward token-bearing auth stderr.
+    if provider == AcpPluginId::Claude && args == ["auth", "status"] {
+        let text = String::from_utf8(output.stdout).map_err(|_| "invalid auth status")?;
+        if output.status.success()
+            || (output.status.code() == Some(1)
+                && super::cli_account::claude_account(&text).is_some_and(|status| !status.0))
+        {
+            return Ok(text);
+        }
+        return Err("auth status failed".into());
+    }
     decode_output(output)
 }
 
-pub(super) fn apply_probe_environment(command: &mut std::process::Command) {
+pub(super) fn apply_probe_environment(command: &mut std::process::Command, provider: AcpPluginId) {
     command.env_clear();
     for (key, value) in std::env::vars_os() {
         if probe_environment_key_allowed(&key, cfg!(windows)) {
             command.env(key, value);
+        }
+    }
+    for name in provider.local_cli_configuration_environment() {
+        if let Some(value) = std::env::var_os(name) {
+            command.env(name, value);
         }
     }
     command.env("PATH", executable_search_path(None));
@@ -360,6 +365,24 @@ fn windows_environment_value(name: &str) -> Option<std::ffi::OsString> {
 
 #[cfg(test)]
 pub(super) fn assert_agent_cli_probe_contract() {
+    super::cli_account::assert_claude_account_contract();
+    let claude = AcpPluginId::Claude.local_cli_configuration_environment();
+    assert!(claude.contains(&"CLAUDE_CONFIG_DIR"));
+    assert!(claude.contains(&"ANTHROPIC_BASE_URL"));
+    assert!(claude.contains(&"ANTHROPIC_AUTH_TOKEN"));
+    assert!(claude.contains(&"ANTHROPIC_API_KEY"));
+    for model in [
+        "ANTHROPIC_MODEL",
+        "ANTHROPIC_DEFAULT_OPUS_MODEL",
+        "ANTHROPIC_DEFAULT_SONNET_MODEL",
+        "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+    ] {
+        assert!(claude.contains(&model));
+    }
+    assert!(!claude.contains(&"NODE_OPTIONS"));
+    assert!(!AcpPluginId::Codex
+        .local_cli_configuration_environment()
+        .contains(&"ANTHROPIC_AUTH_TOKEN"));
     assert!(probe_environment_key_allowed(OsStr::new("HOME"), false));
     assert!(!probe_environment_key_allowed(OsStr::new("home"), false));
     assert!(probe_environment_key_allowed(
