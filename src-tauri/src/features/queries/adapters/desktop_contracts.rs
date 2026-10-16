@@ -4,7 +4,7 @@ use crate::connection::{ConnectionLease, ConnectionOperationScope};
 use crate::error::AppError;
 use crate::kernel::access::PinnedConnection;
 use crate::kernel::identity::{ConnectionId, OperationId};
-use crate::model::{Classification, ExecOutcome, PreviewReport};
+use crate::model::{Classification, Engine, ExecOutcome, PreviewReport};
 use crate::operations::{OperationRiskLevel, OperationState};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
@@ -38,19 +38,32 @@ pub(crate) struct StoredDesktopSqlPayload {
 }
 
 /// Trusted Desktop projection of the immutable SQL bytes behind an Agent proposal.
+/// Target identity, environment, risk, and the stored impact preview all come
+/// from the persisted operation, never from the Agent's tool payload.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct DesktopSqlApprovalReview {
     pub(crate) operation_id: OperationId,
     pub(crate) connection_id: ConnectionId,
+    pub(crate) connection_name: String,
+    pub(crate) engine: Engine,
+    /// Environment label captured in the proposal policy (`dev`/`staging`/`prod`).
+    pub(crate) environment: Option<String>,
     pub(crate) payload_hash: String,
     pub(crate) state: OperationState,
     pub(crate) risk_level: OperationRiskLevel,
+    /// Exact phrase the approval must carry for production or critical changes.
+    /// Present only while the proposal still awaits a decision.
+    pub(crate) confirmation_phrase: Option<String>,
     pub(crate) sql: String,
     pub(crate) database: String,
     pub(crate) namespace: Option<String>,
+    pub(crate) preview: Option<PreviewReport>,
     pub(crate) affected: Option<u64>,
     pub(crate) expires_at: Option<chrono::DateTime<Utc>>,
+    /// The Broker session that proposed the change. A transcript card accepts a
+    /// decision only when this is its own live session.
+    pub(crate) proposer_session_id: Option<uuid::Uuid>,
 }
 
 /// Authority retained by an impact preview. Pre-connection skipped reports keep

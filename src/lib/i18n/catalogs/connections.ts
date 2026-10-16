@@ -36,26 +36,23 @@ export const connectionsCatalog = defineCatalog(
     "connections.projectMenu": "Project actions",
     "connections.connectionOk": "Connection test passed. Testing does not save changes.",
     "connections.managedWorkspace.label": "Endpoint and credentials",
-    "connections.managedWorkspace.status": "Managed in Workspace Web",
+    "connections.managedWorkspace.status": "Managed by the workspace",
     "connections.managedWorkspace.managerDescription":
-      "The real endpoint and a short-lived credential are issued when this database is used. Open the exact database in Workspace Web to repair its provider setup and member access.",
+      "The real endpoint and a short-lived credential are issued when this database is used. Repair its provider setup in Workspace management → Providers; member access is managed in Database access.",
     "connections.managedWorkspace.memberDescription":
       "The real endpoint and a short-lived credential are issued by the Workspace. Ask a Workspace admin to check the provider account and database registration if access fails.",
     "connections.managedWorkspace.securityNote":
-      "This Desktop profile intentionally contains no editable host or password. Workspace Web owns the provider target and issues member-specific, short-lived access only when it is needed.",
+      "This Desktop profile intentionally contains no editable host or password. The workspace owns the provider target and issues member-specific, short-lived access only when it is needed.",
     "connections.managedWorkspace.open": "Open managed-access repair",
     "connections.managedWorkspace.recover": "Repair managed connection",
-    "connections.managedWorkspace.opening": "Opening Workspace Web…",
     "connections.managedWorkspace.recoveryRequiredManager":
-      "This managed database connection needs repair. Open its Workspace settings; short-lived credentials resume automatically after repair.",
+      "This managed database connection needs repair. Repair it in Workspace management → Providers; short-lived credentials resume automatically afterwards.",
     "connections.managedWorkspace.recoveryRequiredMember":
       "This managed database connection needs repair. Ask a Workspace manager to repair its provider connection.",
     "connections.managedWorkspace.recoveryRequiredManagerCompact":
       "Managed connection repair is required.",
     "connections.managedWorkspace.recoveryRequiredMemberCompact":
       "A Workspace manager must repair this connection.",
-    "connections.managedWorkspace.openFailed":
-      "Could not open this database in Workspace Web: {error}",
     "connections.connectionSaved": "Connection saved",
     "connections.saveAndClose": "Save and close",
     "connections.connectionSavedToProject": "Connection saved and added to the Project",
@@ -104,6 +101,9 @@ export const connectionsCatalog = defineCatalog(
     "connections.createDataSource": "Create data source",
     "connections.copyName": "{name} copy",
     "connections.database": "Database",
+    "connections.cloudWarehouse": "Cloud data warehouse",
+    "connections.bigQueryConnectionDescription": "Connect a Google Cloud project and BigQuery dataset with your own Google account.",
+    "connections.projectEnvironmentHint": "This database uses its Project environment. Manage its binding in Settings → Connection and environment → Project environments.",
     "connections.databaseExplorer": "Explorer",
     "connections.databaseExplorerActions": "Explorer actions",
     "connections.projects": "Projects",
@@ -299,8 +299,14 @@ export const connectionsCatalog = defineCatalog(
       "Enter an auto-disconnect interval from 30 through 86400 seconds.",
     "connections.problemStartupScriptTooLong":
       "Keep the startup script within 4096 characters.",
+    "connections.problemStartupScriptSkippedByPooler":
+      "This connection goes through a transaction-mode pooler that shares server sessions, so the startup script does not run. Use a session-mode or direct connection to apply it.",
     "connections.problemSshAliasInvalid":
       "Use an OpenSSH Host alias with letters, numbers, dots, underscores, or hyphens.",
+    "connections.problemUsernameRequired":
+      "Enter the database user. PostgreSQL from Homebrew or Postgres.app uses your computer login name, the official installer and Docker image use postgres, and a local MySQL usually uses root.",
+    "connections.problemPostgresUsernameInvalid":
+      "This PostgreSQL user starts or ends with whitespace or contains control characters. Check that it matches the role exactly.",
     "connections.problemSshTunnelSingleHostRequired":
       "An SSH tunnel requires one database host.",
     "connections.problemSshTunnelSrvUnsupported":
@@ -329,6 +335,14 @@ export const connectionsCatalog = defineCatalog(
     "connections.problemPortInvalid":
       "Enter a port from 1 through 65535.",
     "connections.problemRuntime": "Connection check failed",
+    "connections.problemSaveFailed": "Could not save the connection",
+    "connections.problemDeleteFailed": "Could not delete the connection",
+    "connections.problemDriverFailed": "Could not install the driver",
+    "connections.problemRefreshFailed": "Could not refresh the workspace data",
+    "connections.workspaceRefreshed":
+      "Workspace data was refreshed. Test the connection again.",
+    "connections.workspaceRefreshFailed":
+      "Could not refresh the workspace data. Check the network, then try again.",
     "connections.testFailure.sshClientMissingTitle": "System SSH is unavailable",
     "connections.testFailure.sshClientMissingRecovery":
       "Install or restore the system SSH client, then check the SSH Host alias in SSH/SSL.",
@@ -356,6 +370,9 @@ export const connectionsCatalog = defineCatalog(
     "connections.testFailure.authenticationTitle": "Authentication failed",
     "connections.testFailure.authenticationRecovery":
       "Check the user and password stored on this device, then test again.",
+    "connections.testFailure.authenticationIdentityTitle": "The server does not accept this user",
+    "connections.testFailure.authenticationIdentityRecovery":
+      "Check that this role exists on the server. PostgreSQL from Homebrew creates only a role named after your computer login, not postgres. If the role exists, the server's pg_hba.conf may not allow this user or address.",
     "connections.testFailure.tlsTitle": "TLS verification failed",
     "connections.testFailure.tlsRecovery":
       "Check the TLS mode and certificate paths in SSH/SSL, then test again.",
@@ -364,16 +381,84 @@ export const connectionsCatalog = defineCatalog(
       "Check the database name and connection options, then test again.",
     "connections.testFailure.unknownTitle": "Connection check failed",
     "connections.testFailure.unknownRecovery":
-      "Review the technical details, correct the connection settings, and test again.",
+      "Check the host, port, database, and connection options, then test again.",
     "connections.testFailure.managedTitle":
       "Workspace-managed access could not be issued",
     "connections.testFailure.managedManagerRecovery":
-      "Do not edit the read-only connection values below. Open this database in Workspace Web, check its provider account and database registration, then return here and test again.",
+      "Do not edit the read-only connection values below. Open this database in Workspace management → Providers, check its provider account and database registration, then test again.",
     "connections.testFailure.managedMemberRecovery":
-      "This connection is controlled in Workspace Web, not on this device. Ask a Workspace admin to check its provider account, database registration, and your access, then test again.",
-    "connections.testFailure.technicalDetails": "Technical details",
-    "connections.testFailure.transportDetail":
-      "The Desktop connection-test transport failed before returning a typed receipt.",
+      "This connection is managed by the workspace, not on this device. Ask a workspace admin to check its provider account, database registration, and your access, then test again.",
+    "connections.testFailure.memberBindingRecovery":
+      "Your username, password, SSH Host alias, and TLS files for this shared connection are kept on this device. Open Connect credentials to check them, then test again.",
+    "connections.testFailure.savedCredentialRecovery":
+      "The check used the password saved on this device. If it changed, or this device no longer has it, enter the password again and save.",
+    "connections.testFailure.savedCredentialEndpointChangedTitle":
+      "The endpoint changed, so the saved password must be entered again",
+    "connections.testFailure.savedCredentialEndpointChangedRecovery":
+      "A saved password is used only with the host, port, user, and SSH Host alias it was saved for, over TLS settings at least as strict, so nothing was sent. Enter the password for these settings, or restore the earlier ones.",
+    "connections.testFailure.sharedConnectionChangedTitle":
+      "This shared connection changed in the workspace",
+    "connections.testFailure.sharedConnectionChangedRecovery":
+      "This device still has the earlier version, so nothing was opened. Refresh the workspace data, then test again.",
+    "connections.testFailure.workspaceSignInRequiredTitle":
+      "Sign in to the workspace again",
+    "connections.testFailure.workspaceSignInRequiredRecovery":
+      "This device's workspace sign-in expired, so shared access was not authorized and nothing was opened. Sign in again, then test again.",
+    "connections.testFailure.credentialStoreDeniedRecovery":
+      "This device's credential store did not release the saved password, so nothing was sent. Allow DopeDB to use it, unlocking the keychain if asked, then test again.",
+    "connections.testFailure.lockTimeoutTitle":
+      "Another session is holding a lock the check needs",
+    "connections.testFailure.lockTimeoutRecovery":
+      "The database stopped waiting for a lock held by another session. The connection settings need no change; test again in a moment.",
+    "connections.saveFailure.projectBinding":
+      "The connection was saved, but it could not be added to the Project. Save again to retry.",
+    "connections.saveFailure.credentialStore":
+      "The password could not be stored in this computer's credential store. Allow DopeDB to use it, then save again.",
+    "connections.saveFailure.configuration":
+      "These connection settings were not accepted. Check the fields listed in Problems, then save again.",
+    "connections.saveFailure.blocked":
+      "Your workspace role cannot change this connection here.",
+    "connections.saveFailure.notFound":
+      "This connection no longer exists. Close the editor and open it again from the Explorer.",
+    "connections.saveFailure.workspaceUnavailable":
+      "The workspace service could not be reached. Check your network, then try again.",
+    "connections.saveFailure.unknown":
+      "The connection could not be saved. Try again.",
+    "connections.deleteFailure.blocked":
+      "Your workspace role cannot delete this connection.",
+    "connections.deleteFailure.unknown":
+      "The connection could not be deleted. Try again.",
+    "connections.authCleanupDeferred":
+      "The temporary sign-in created for this connection could not be removed from this device.",
+    "connections.testCancel": "Stop test",
+    "connections.testUnavailableSharedDraft":
+      "Save the shared connection first. Testing checks the saved version.",
+    "connections.testUnavailableManagedCooldown":
+      "Workspace-managed access can be checked again in {seconds}s.",
+    "connections.parameterReserved":
+      "This option has its own control on another tab and is ignored here.",
+    "connections.parameterDuplicate":
+      "This name is used more than once. The last value is used.",
+    "connections.discardChangesTitle": "Discard unsaved changes?",
+    "connections.discardChangesBody":
+      "Your changes to this connection, including any password you typed, have not been saved.",
+    "connections.keepEditing": "Keep editing",
+    "connections.discardChanges": "Discard changes",
+    "connections.driverDownloadFailed": "{name} could not be installed. Try again.",
+    "connections.driverDownloadNetworkFailed":
+      "{name} could not be downloaded. Check your network, then try again.",
+    "connections.tls": "TLS",
+    "connections.tlsEnabledOnDevice": "On for this device",
+    "connections.tlsDisabledOnDevice": "Off for this device",
+    "connections.tlsMemberOwned":
+      "Each member turns on MongoDB TLS and chooses certificate files in Connect credentials.",
+    "connections.credentialVerified": "Verified",
+    "connections.credentialSavedOnDevice": "Saved on this device",
+    "connections.removeSavedPassword": "Remove saved password",
+    "connections.enterPassword": "Enter password",
+    "connections.savedPasswordRemovalPending":
+      "The saved password will be removed from this device when you save.",
+    "connections.localDiscoveryRetry": "Look again on this computer",
     "connections.catalogIssue.managed":
       "This workspace-managed connection needs repair before its catalog can be loaded.",
     "connections.catalogIssue.blocked":
@@ -478,25 +563,24 @@ export const connectionsCatalog = defineCatalog(
     "connections.searchDrivers": "Search drivers",
     "connections.reallyDeleteDemo":
       "Delete this connection and its Demo SQLite file?",
-    "connections.readOnlyDefault": "Open read-only by default",
+    "connections.readOnlyDefault": "Start the command-line shell read-only",
     "connections.readOnlyDefaultBody":
-      "New consoles and table editors start in read-only mode.",
+      "Applies to the advanced shell in Settings → Command line and to this connection's CLI summary. Write access for queries, table editors, and the Agent is managed in Settings → Safety.",
     "connections.keepAlive": "Run keep-alive query each",
     "connections.keepAliveSeconds":
       "Keep-alive interval in seconds",
     "connections.refreshSchema": "Refresh schema",
     "connections.safety": "Safety",
     "connections.seconds": "seconds",
-    "connections.schemaDiffInSync": "Schema matches the baseline",
     "connections.schemaDiffMissingSection": "Missing here ({count})",
     "connections.schemaDiffPendingChip": "diff",
     "connections.schemaDiffPendingTitle": "Open schema comparison to load this database",
     "connections.schemaDiffTableAdded": "Only in this database; missing from the baseline",
     "connections.schemaDiffTableChanged":
-      "Compared with the baseline: +{added} columns, -{missing} columns, ~{changed} changed",
+      "Compared with the baseline: +{added} columns, −{missing} columns, ~{changed} changed",
     "connections.schemaDiffTableMissing": "Missing in this database; exists in the baseline",
     "connections.schemaDiffTitle":
-      "Compared with the baseline: +{added} only here, -{missing} missing here, ~{changed} changed",
+      "Compared with the baseline: +{added} only here, −{missing} missing here, ~{changed} changed",
     "connections.schemaComparison": "Schema comparison group",
     "connections.schemaGroup": "Schema group",
     "connections.schemaGroupConfirmGroup":
@@ -581,26 +665,23 @@ export const connectionsCatalog = defineCatalog(
     "connections.projectMenu": "프로젝트 메뉴",
     "connections.connectionOk": "연결 검사 성공. 검사는 변경 내용을 저장하지 않습니다.",
     "connections.managedWorkspace.label": "엔드포인트 및 자격 증명",
-    "connections.managedWorkspace.status": "워크스페이스 웹에서 관리됨",
+    "connections.managedWorkspace.status": "워크스페이스에서 관리됨",
     "connections.managedWorkspace.managerDescription":
-      "이 DB를 사용할 때 실제 엔드포인트와 단기 자격 증명이 발급됩니다. 워크스페이스 웹에서 이 DB의 공급자 설정과 구성원 접근 권한을 바로 복구할 수 있습니다.",
+      "이 DB를 사용할 때 실제 엔드포인트와 단기 자격 증명이 발급됩니다. 공급자 설정은 워크스페이스 관리 → 공급자에서 복구하고, 구성원 접근은 DB 접근 권한에서 관리합니다.",
     "connections.managedWorkspace.memberDescription":
       "실제 엔드포인트와 단기 자격 증명은 워크스페이스가 발급합니다. 접근에 실패하면 워크스페이스 관리자에게 공급자 계정과 DB 등록 상태 확인을 요청하세요.",
     "connections.managedWorkspace.securityNote":
-      "이 Desktop 프로필에는 편집할 호스트나 비밀번호가 의도적으로 들어 있지 않습니다. 워크스페이스 웹이 공급자 대상을 관리하고 필요할 때만 구성원별 단기 접근을 발급합니다.",
+      "이 Desktop 프로필에는 편집할 호스트나 비밀번호가 의도적으로 들어 있지 않습니다. 워크스페이스가 공급자 대상을 관리하고 필요할 때만 구성원별 단기 접근을 발급합니다.",
     "connections.managedWorkspace.open": "관리형 접근 복구 열기",
     "connections.managedWorkspace.recover": "관리형 연결 복구",
-    "connections.managedWorkspace.opening": "워크스페이스 웹 여는 중…",
     "connections.managedWorkspace.recoveryRequiredManager":
-      "이 관리형 DB 연결을 복구해야 합니다. 워크스페이스 설정에서 복구하면 단기 자격 증명은 다시 자동 갱신됩니다.",
+      "이 관리형 DB 연결을 복구해야 합니다. 워크스페이스 관리 → 공급자에서 복구하면 단기 자격 증명이 다시 자동 갱신됩니다.",
     "connections.managedWorkspace.recoveryRequiredMember":
       "이 관리형 DB 연결을 복구해야 합니다. 워크스페이스 관리자에게 공급자 연결 복구를 요청하세요.",
     "connections.managedWorkspace.recoveryRequiredManagerCompact":
       "관리형 연결 복구가 필요합니다.",
     "connections.managedWorkspace.recoveryRequiredMemberCompact":
       "워크스페이스 관리자가 이 연결을 복구해야 합니다.",
-    "connections.managedWorkspace.openFailed":
-      "워크스페이스 웹에서 이 DB를 열지 못했습니다: {error}",
     "connections.connectionSaved": "연결이 저장되었습니다",
     "connections.saveAndClose": "저장하고 닫기",
     "connections.connectionSavedToProject": "연결을 저장하고 Project에 배정했습니다",
@@ -649,6 +730,9 @@ export const connectionsCatalog = defineCatalog(
     "connections.createDataSource": "데이터 소스 생성",
     "connections.copyName": "{name} 복사본",
     "connections.database": "데이터베이스",
+    "connections.cloudWarehouse": "클라우드 데이터 웨어하우스",
+    "connections.bigQueryConnectionDescription": "Google 계정으로 Cloud 프로젝트와 BigQuery 데이터 세트를 연결합니다.",
+    "connections.projectEnvironmentHint": "이 DB는 Project에 지정된 환경을 사용합니다. 설정 → 연결·환경 → 프로젝트 환경에서 연결 배정을 관리하세요.",
     "connections.databaseExplorer": "탐색기",
     "connections.databaseExplorerActions": "탐색기 작업",
     "connections.projects": "프로젝트",
@@ -843,8 +927,14 @@ export const connectionsCatalog = defineCatalog(
       "30초부터 86400초 사이의 자동 연결 해제 간격을 입력하세요.",
     "connections.problemStartupScriptTooLong":
       "시작 스크립트는 4096자 이내로 입력하세요.",
+    "connections.problemStartupScriptSkippedByPooler":
+      "이 연결은 서버 세션을 공유하는 트랜잭션 모드 풀러를 거치므로 시작 스크립트가 실행되지 않습니다. 적용하려면 세션 모드 또는 직접 연결을 사용하세요.",
     "connections.problemSshAliasInvalid":
       "영문자, 숫자, 점, 밑줄 또는 하이픈으로 된 OpenSSH Host 별칭을 입력하세요.",
+    "connections.problemUsernameRequired":
+      "데이터베이스 사용자를 입력하세요. Homebrew나 Postgres.app으로 설치한 PostgreSQL은 이 컴퓨터의 로그인 계정 이름을, 공식 설치 프로그램과 Docker 이미지는 postgres를, 로컬 MySQL은 보통 root를 사용합니다.",
+    "connections.problemPostgresUsernameInvalid":
+      "이 PostgreSQL 사용자 이름의 앞이나 뒤에 공백이 있거나 제어 문자가 들어 있습니다. 실제 역할 이름과 정확히 같은지 확인하세요.",
     "connections.problemSshTunnelSingleHostRequired":
       "SSH 터널에는 데이터베이스 호스트 하나만 사용할 수 있습니다.",
     "connections.problemSshTunnelSrvUnsupported":
@@ -873,6 +963,14 @@ export const connectionsCatalog = defineCatalog(
     "connections.problemPortInvalid":
       "1부터 65535 사이의 포트를 입력하세요.",
     "connections.problemRuntime": "연결 검사 실패",
+    "connections.problemSaveFailed": "연결을 저장하지 못했습니다",
+    "connections.problemDeleteFailed": "연결을 삭제하지 못했습니다",
+    "connections.problemDriverFailed": "드라이버를 설치하지 못했습니다",
+    "connections.problemRefreshFailed": "워크스페이스 데이터를 새로고침하지 못했습니다",
+    "connections.workspaceRefreshed":
+      "워크스페이스 데이터를 새로고침했습니다. 연결을 다시 테스트하세요.",
+    "connections.workspaceRefreshFailed":
+      "워크스페이스 데이터를 새로고침하지 못했습니다. 네트워크를 확인한 뒤 다시 시도하세요.",
     "connections.testFailure.sshClientMissingTitle": "시스템 SSH를 사용할 수 없습니다",
     "connections.testFailure.sshClientMissingRecovery":
       "시스템 SSH 클라이언트를 설치하거나 복구한 뒤 SSH/SSL에서 SSH Host 별칭을 확인하세요.",
@@ -900,6 +998,9 @@ export const connectionsCatalog = defineCatalog(
     "connections.testFailure.authenticationTitle": "인증에 실패했습니다",
     "connections.testFailure.authenticationRecovery":
       "이 기기에 저장된 사용자와 비밀번호를 확인한 뒤 다시 테스트하세요.",
+    "connections.testFailure.authenticationIdentityTitle": "서버가 이 사용자를 받아들이지 않습니다",
+    "connections.testFailure.authenticationIdentityRecovery":
+      "서버에 이 역할이 있는지 확인하세요. Homebrew로 설치한 PostgreSQL에는 postgres 역할이 없고 이 컴퓨터의 로그인 계정 이름으로 된 역할만 있습니다. 역할이 있다면 서버의 pg_hba.conf가 이 사용자나 접속 주소를 허용하지 않는 것일 수 있습니다.",
     "connections.testFailure.tlsTitle": "TLS 검증에 실패했습니다",
     "connections.testFailure.tlsRecovery":
       "SSH/SSL에서 TLS 모드와 인증서 경로를 확인한 뒤 다시 테스트하세요.",
@@ -908,16 +1009,84 @@ export const connectionsCatalog = defineCatalog(
       "데이터베이스 이름과 연결 옵션을 확인한 뒤 다시 테스트하세요.",
     "connections.testFailure.unknownTitle": "연결 검사에 실패했습니다",
     "connections.testFailure.unknownRecovery":
-      "기술 상세를 확인하고 연결 설정을 수정한 뒤 다시 테스트하세요.",
+      "호스트, 포트, 데이터베이스와 연결 옵션을 확인한 뒤 다시 테스트하세요.",
     "connections.testFailure.managedTitle":
       "워크스페이스 관리형 접근을 발급하지 못했습니다",
     "connections.testFailure.managedManagerRecovery":
-      "아래 읽기 전용 연결값은 수정하지 마세요. 워크스페이스 웹에서 이 DB를 열어 공급자 계정과 DB 등록 상태를 확인한 뒤 돌아와 다시 테스트하세요.",
+      "아래 읽기 전용 연결값은 수정하지 마세요. 워크스페이스 관리 → 공급자에서 이 DB를 열어 공급자 계정과 DB 등록 상태를 확인한 뒤 다시 테스트하세요.",
     "connections.testFailure.managedMemberRecovery":
-      "이 연결은 이 기기가 아니라 워크스페이스 웹에서 관리됩니다. 워크스페이스 관리자에게 공급자 계정, DB 등록과 내 접근 권한 확인을 요청한 뒤 다시 테스트하세요.",
-    "connections.testFailure.technicalDetails": "기술 상세",
-    "connections.testFailure.transportDetail":
-      "Desktop 연결 테스트 전송이 구조화된 결과를 반환하기 전에 실패했습니다.",
+      "이 연결은 이 기기가 아니라 워크스페이스에서 관리됩니다. 워크스페이스 관리자에게 공급자 계정, DB 등록과 내 접근 권한 확인을 요청한 뒤 다시 테스트하세요.",
+    "connections.testFailure.memberBindingRecovery":
+      "이 공유 연결의 사용자명, 비밀번호, SSH Host 별칭, TLS 파일은 이 기기에 저장됩니다. 자격 증명 연결을 열어 확인한 뒤 다시 테스트하세요.",
+    "connections.testFailure.savedCredentialRecovery":
+      "이 기기에 저장된 비밀번호로 검사했습니다. 비밀번호가 바뀌었거나 이 기기에 남아 있지 않다면 다시 입력하고 저장하세요.",
+    "connections.testFailure.savedCredentialEndpointChangedTitle":
+      "엔드포인트가 바뀌어 저장된 비밀번호를 다시 입력해야 합니다",
+    "connections.testFailure.savedCredentialEndpointChangedRecovery":
+      "저장된 비밀번호는 저장할 때의 호스트, 포트, 사용자, SSH Host 별칭과 그때보다 약하지 않은 TLS 설정에서만 사용하므로 아무것도 보내지 않았습니다. 이 설정의 비밀번호를 입력하거나 이전 설정으로 되돌리세요.",
+    "connections.testFailure.sharedConnectionChangedTitle":
+      "워크스페이스에서 이 공유 연결이 변경되었습니다",
+    "connections.testFailure.sharedConnectionChangedRecovery":
+      "이 기기에는 이전 버전이 남아 있어 연결을 열지 않았습니다. 워크스페이스 데이터를 새로고침한 뒤 다시 테스트하세요.",
+    "connections.testFailure.workspaceSignInRequiredTitle":
+      "워크스페이스에 다시 로그인해야 합니다",
+    "connections.testFailure.workspaceSignInRequiredRecovery":
+      "이 기기의 워크스페이스 로그인이 만료되어 공유 접근을 확인하지 못했고 연결을 열지 않았습니다. 다시 로그인한 뒤 테스트하세요.",
+    "connections.testFailure.credentialStoreDeniedRecovery":
+      "이 기기의 자격 증명 저장소가 저장된 비밀번호를 내주지 않아 아무것도 보내지 않았습니다. DopeDB의 사용을 허용하고, 요청하면 키체인 잠금을 해제한 뒤 다시 테스트하세요.",
+    "connections.testFailure.lockTimeoutTitle":
+      "다른 세션이 검사에 필요한 잠금을 잡고 있습니다",
+    "connections.testFailure.lockTimeoutRecovery":
+      "다른 세션이 잡은 잠금을 기다리다 데이터베이스가 대기를 멈췄습니다. 연결 설정은 바꿀 필요가 없으니 잠시 후 다시 테스트하세요.",
+    "connections.saveFailure.projectBinding":
+      "연결은 저장했지만 프로젝트에 추가하지 못했습니다. 다시 저장해 재시도하세요.",
+    "connections.saveFailure.credentialStore":
+      "이 컴퓨터의 보안 저장소에 비밀번호를 저장하지 못했습니다. DopeDB의 접근을 허용한 뒤 다시 저장하세요.",
+    "connections.saveFailure.configuration":
+      "이 연결 설정을 받아들이지 않았습니다. 문제 목록의 항목을 확인한 뒤 다시 저장하세요.",
+    "connections.saveFailure.blocked":
+      "현재 워크스페이스 역할로는 여기서 이 연결을 변경할 수 없습니다.",
+    "connections.saveFailure.notFound":
+      "이 연결이 더 이상 없습니다. 편집기를 닫고 탐색기에서 다시 여세요.",
+    "connections.saveFailure.workspaceUnavailable":
+      "워크스페이스 서비스에 연결하지 못했습니다. 네트워크를 확인한 뒤 다시 시도하세요.",
+    "connections.saveFailure.unknown":
+      "연결을 저장하지 못했습니다. 다시 시도하세요.",
+    "connections.deleteFailure.blocked":
+      "현재 워크스페이스 역할로는 이 연결을 삭제할 수 없습니다.",
+    "connections.deleteFailure.unknown":
+      "연결을 삭제하지 못했습니다. 다시 시도하세요.",
+    "connections.authCleanupDeferred":
+      "이 연결을 위해 만든 임시 로그인을 이 기기에서 제거하지 못했습니다.",
+    "connections.testCancel": "테스트 중지",
+    "connections.testUnavailableSharedDraft":
+      "공유 연결을 먼저 저장하세요. 테스트는 저장된 버전을 확인합니다.",
+    "connections.testUnavailableManagedCooldown":
+      "워크스페이스 관리형 접근은 {seconds}초 뒤에 다시 확인할 수 있습니다.",
+    "connections.parameterReserved":
+      "이 옵션은 다른 탭의 전용 설정이 소유하므로 여기서는 무시됩니다.",
+    "connections.parameterDuplicate":
+      "같은 이름이 두 번 이상 있습니다. 마지막 값이 사용됩니다.",
+    "connections.discardChangesTitle": "저장하지 않은 변경을 버릴까요?",
+    "connections.discardChangesBody":
+      "입력한 비밀번호를 포함해 이 연결의 변경 내용이 아직 저장되지 않았습니다.",
+    "connections.keepEditing": "계속 편집",
+    "connections.discardChanges": "변경 버리기",
+    "connections.driverDownloadFailed": "{name}을(를) 설치하지 못했습니다. 다시 시도하세요.",
+    "connections.driverDownloadNetworkFailed":
+      "{name}을(를) 내려받지 못했습니다. 네트워크를 확인한 뒤 다시 시도하세요.",
+    "connections.tls": "TLS",
+    "connections.tlsEnabledOnDevice": "이 기기에서 사용",
+    "connections.tlsDisabledOnDevice": "이 기기에서 사용 안 함",
+    "connections.tlsMemberOwned":
+      "MongoDB TLS 사용 여부와 인증서 파일은 구성원마다 자격 증명 연결에서 정합니다.",
+    "connections.credentialVerified": "확인됨",
+    "connections.credentialSavedOnDevice": "이 기기에 저장됨",
+    "connections.removeSavedPassword": "저장된 비밀번호 삭제",
+    "connections.enterPassword": "비밀번호 입력",
+    "connections.savedPasswordRemovalPending":
+      "저장하면 이 기기에 저장된 비밀번호가 삭제됩니다.",
+    "connections.localDiscoveryRetry": "이 컴퓨터에서 다시 찾기",
     "connections.catalogIssue.managed":
       "카탈로그를 불러오기 전에 이 워크스페이스 관리형 연결을 복구해야 합니다.",
     "connections.catalogIssue.blocked":
@@ -1021,24 +1190,23 @@ export const connectionsCatalog = defineCatalog(
     "connections.searchDrivers": "드라이버 검색",
     "connections.reallyDeleteDemo":
       "이 연결과 Demo SQLite 파일을 삭제할까요?",
-    "connections.readOnlyDefault": "기본 읽기 전용으로 열기",
+    "connections.readOnlyDefault": "명령줄 셸을 읽기 전용으로 시작",
     "connections.readOnlyDefaultBody":
-      "새 콘솔과 테이블 편집기를 읽기 전용으로 시작합니다.",
+      "설정 → 명령줄의 고급 셸과 이 연결의 CLI 요약에 적용됩니다. 쿼리, 테이블 편집기, Agent의 쓰기 권한은 설정 → 안전에서 관리합니다.",
     "connections.keepAlive": "다음 간격마다 keep-alive 쿼리 실행",
     "connections.keepAliveSeconds": "keep-alive 간격(초)",
     "connections.refreshSchema": "스키마 새로고침",
     "connections.safety": "안전",
     "connections.seconds": "초",
-    "connections.schemaDiffInSync": "기준 DB와 스키마가 같습니다",
     "connections.schemaDiffMissingSection": "이 환경에 없음 ({count})",
     "connections.schemaDiffPendingChip": "비교",
     "connections.schemaDiffPendingTitle": "스키마 비교 화면을 열면 이 DB를 불러옵니다",
     "connections.schemaDiffTableAdded": "이 DB에만 있으며 기준 DB에는 없습니다",
     "connections.schemaDiffTableChanged":
-      "기준 DB와 비교: +{added} 컬럼, -{missing} 컬럼, ~{changed} 변경",
+      "기준 DB와 비교: +{added} 컬럼, −{missing} 컬럼, ~{changed} 변경",
     "connections.schemaDiffTableMissing": "이 DB에는 없고 기준 DB에는 있습니다",
     "connections.schemaDiffTitle":
-      "기준 DB와 비교: +{added} 이 DB에만 있음, -{missing} 이 DB에 없음, ~{changed} 변경",
+      "기준 DB와 비교: +{added} 이 DB에만 있음, −{missing} 이 DB에 없음, ~{changed} 변경",
     "connections.schemaComparison": "스키마 비교 그룹",
     "connections.schemaGroup": "스키마 그룹",
     "connections.schemaGroupConfirmGroup":

@@ -26,19 +26,16 @@ DopeDB의 제품 축, 실제 사용자 작업, 접근성, 운영 안전성, 지�
 
 ```mermaid
 flowchart LR
-  subgraph Web[Workspace Web · 공유 관리]
-    W0[로그인 · Workspace 선택]
-    W1[Access<br/>초대 · 역할 · DB grant]
-    W2[Providers<br/>계정 승인 · managed DB 등록/복구]
-    W3[Workspace settings<br/>Backup → Key → Retention → Delete]
-    W4[My account<br/>브라우저 · Desktop session 종료]
-    W0 --> W1
-    W0 --> W2
-    W0 --> W3
-    W0 --> W4
+  subgraph Browser[Workspace Web · 브라우저 진입]
+    B0[로그인 · Desktop 승인]
+    B1[Workspace·Article 초대 수락]
+    B2[공급자 OAuth 시작 확인 · 완료 안내]
+    B3[공개 Article HTML]
   end
 
-  subgraph Desktop[Desktop · 실제 데이터 작업]
+  subgraph Desktop[Desktop · 관리와 실제 데이터 작업]
+    A0[워크스페이스 관리<br/>구성원 · DB 접근 권한 · 공급자 · 백업 및 삭제]
+    A1[Settings → 계정<br/>세션 종료 · 삭제 예약 취소]
     D0[Workspace · Project 선택]
     D1{연결 준비 여부}
     D2[가이드 데모 또는 새 연결]
@@ -52,22 +49,28 @@ flowchart LR
     D1 -- 준비됨 --> D3
     D3 --> D4 --> D7
     D3 --> D5 --> D6 --> D7
+    D0 --> A0
+    D2 -- 공유 DB 추가 --> A0
   end
 
-  W1 --> D0
-  W2 --> D0
+  B0 --> D0
+  B1 --> D0
+  A0 -- 공급자 OAuth --> B2 --> A0
 ```
 
 | 사용자 목적 | 유일한 command 소유자 | 다른 surface의 역할 |
 | --- | --- | --- |
-| 구성원·역할·DB grant | Workspace Web `Access` | Desktop은 적용된 권한과 복구 link만 표시 |
-| provider 승인·managed DB 등록/복구 | Workspace Web `Providers` | Desktop은 연결 상태와 exact DB 복구 link만 표시 |
-| server backup·key rotation·retention·workspace 삭제 | Workspace Web `Workspace settings` | Desktop에는 별도 lifecycle control을 만들지 않음 |
+| workspace 생성 | Desktop workspace menu `새 워크스페이스` | 브라우저는 workspace를 만들지 않음 |
+| 구성원 초대·역할·제거 | Desktop `워크스페이스 관리 → 구성원` | 브라우저는 이메일 초대 링크의 수락만 소유 |
+| DB grant·팀 읽기 공유·연결 편집 충돌 | Desktop `워크스페이스 관리 → DB 접근 권한` | 연결 편집기와 Explorer는 적용된 권한만 표시 |
+| provider 계정 승인·managed DB 등록/복구·Neon branch | Desktop `워크스페이스 관리 → 공급자` | 브라우저는 OAuth 시작 확인과 완료 안내만 소유하고 설정을 진행하지 않음. 연결 편집기·Explorer는 연결 상태와 이 화면의 exact DB 복구 command만 제공하고, 데이터 소스 카탈로그의 `공유 DB 추가`는 관리자·소유자에게만 이 화면의 DB 추가를 여는 바로가기 |
+| server backup·key rotation·retention·workspace 삭제 예약 | Desktop `워크스페이스 관리 → 백업 및 삭제`(Owner) | 삭제가 예약되면 취소는 `Settings → 계정`이 소유 |
+| 삭제 예약 취소·다른 기기와 브라우저 session 종료 | Desktop `Settings → 계정` | 계정 전환·추가·로그아웃은 title toolbar 계정 메뉴가 소유하고, 같은 메뉴의 `계정 관리`가 이 section을 연다 |
 | member-local credential·연결 profile·연결 검사 | Desktop connection editor | Web은 credential 입력·편집을 소유하지 않음 |
 | Project binding·schema/object 탐색 | Desktop Explorer | Agent와 결과 문서는 별도 resource tree를 만들지 않음 |
 | SQL·조회·Article 작업 | Desktop 중앙 document | 실행 결과·출력도 같은 중앙 작업 영역에서 확인 |
 | Agent resource 선택·제안·승인 | Desktop Agent | 중앙 document는 Agent grant나 승인 control을 복제하지 않음 |
-| Article 공유·이메일 지정 초대 | Desktop Article의 공유 dialog와 Workspace의 Article invitation application | 기존 Access는 참여한 멤버와 DB grant의 변경·회수를 계속 소유 |
+| Article 공유·이메일 지정 초대 | Desktop Article의 공유 dialog와 Workspace의 Article invitation application | 참여한 멤버와 DB grant의 변경·회수는 `구성원`·`DB 접근 권한`이 계속 소유 |
 | 실행 결과·background 진행·취소 | 중앙 결과 문서 및 하단 상태 표시 | Agent는 요약과 결과 이동만 제공 |
 | write 실행 상한 | Desktop `Settings → Safety` | 연결 편집기와 실행 오류는 상태와 이 화면의 link만 제공 |
 
@@ -80,6 +83,30 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
 완료는 exact Environment binding까지 성공한 뒤 Project 배정 완료로 안내한다.
 
 ### 화면 구조
+
+- 로그인 전에도 Workspace 메뉴와 `새 워크스페이스`는 보인다. 생성 선택은 로그인
+  필요 안내와 기존 Desktop 로그인 경로를 열며 인증 전에는 공유 상태를 만들지 않는다.
+  검색 오른쪽의 `쿼리 이력`은 실제 실행 이력 문서를 직접 연다.
+- Explorer는 연결에서 선택한 DB만 펼친다. 서버의 다른 DB 선택은 연결 편집기가
+  소유하며 다른 DB를 같은 Project resource처럼 암묵적으로 노출하지 않는다.
+- SQL 연결 행의 우클릭과 `⋯`는 같은 메뉴의 `새 쿼리 콘솔`을 연다. 생성은 기존
+  SQL 문서 command를 재사용하며 현재 선택과 무관하게 해당 행의 정확한 연결·DB를
+  대상으로 한다. 다른 연결에서 선택한 테이블·스키마를 가져오지 않고 MongoDB에는
+  SQL 콘솔 항목을 표시하지 않는다.
+- 개인 Workspace의 Analysis Article도 같은 HTML·정확한 쿼리·revision 계약으로
+  로컬에 저장·편집·삭제·수동 재조회한다. 개인 문서는 기기 밖으로 전송하지 않으며
+  팀 공유·공개 발행은 인증된 공유 Workspace에서만 제공한다.
+- Settings는 기기 설정, AI 에이전트·계정, 워크스페이스·계정, 데이터 소스로
+  관련 항목을 묶는다. `연결·환경`은 현재 연결의 편집기와 exact Project 환경 관리로
+  이동하며 bound DB의 DEV/PROD 표시는 Project 환경을 따른다. 독립 연결의 환경
+  라벨은 연결 편집기의 General에서 설정하고 Options에 중복하지 않는다.
+  동일 연결이 복수 환경에 속하면 전체 환경 라벨을 함께 보여주고 특정 관리 경로를
+  임의로 선택하지 않는다. BigQuery·공유 연결도 같은 General 환경 control을 쓴다.
+  워크스페이스 관리의 변경 command는 기존 관리 dialog가 계속 소유한다.
+- BigQuery는 연결 선택기의 별도 클라우드 데이터 웨어하우스 항목으로 진입한다.
+  Agent 계정의 이름·플랜은 공식 CLI의 공개 상태 명령만 사용하고 설정과 채팅에
+  표시한다. 계정 변경은 기존 공식 CLI 로그인 명령과 재확인으로 연결하며 토큰을
+  읽거나 다른 앱의 계정 저장소를 가져오지 않는다.
 
 - Desktop 언어는 신규 설치에서 `시스템 설정 (기본값)`을 사용한다. Settings → 언어에서
   시스템·한국어·영어를 즉시 선택하고 기기에 저장한다. 기존 명시적 선택은 유지하며,
@@ -213,7 +240,13 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
   선택은 즉시 반영하고 입력창·포커스·레이아웃을 유지하며 선행 준비 상태로
   전체 surface를 로딩으로 바꾸지 않는다. 준비 중 선택이 바뀌면 이전 세션을
   정리하고 마지막 선택만 준비한다. 첫 prompt는 같은 준비 작업을 기다려 한 번만
-  전송하며, 대화가 시작된 뒤에는 resource grant를 변경하지 않는다.
+  전송하며, 대화가 시작된 뒤에는 resource grant를 변경하지 않는다. 대화가 시작된
+  뒤 범위 메뉴는 고정된 선택과 새 채팅이 필요한 이유를 읽기 전용으로 보여준다.
+  백그라운드 준비는 Project binding을 다시 쓰지 않는다. 선택한 DB가 Project에
+  추가된 뒤 revision이 바뀌었으면 입력 영역에 변경 내용과 `재확인`을 표시하고,
+  사람이 재확인해야 새 revision으로 준비한다. Project에 속하지 않은 연결은 Agent가
+  사용할 수 없다고 알리고 `프로젝트에 추가`로 잇는다. session이 닫히거나 회수·
+  만료되면 그 session의 미결 DB 변경 제안은 `철회됨`이 되어 승인할 수 없다.
   답변 조각은 수신 후 다음 화면 frame에 반영하고, 생성 중 커서를 표시한다.
   최종 완료·권한 요청은 대기 중인 조각까지 즉시 반영하며 사용자가 위로 스크롤해
   읽는 중에는 강제로 아래로 이동하지 않는다.
@@ -225,6 +258,10 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
   선택지가 없거나 적용에 실패하면 adapter의 현재 모드를 유지하고 실패를 표시한다.
   자동 승인은 adapter의 도구 권한 요청에 적용되며 exact resource grant,
   단일 write target과 DB 변경의 별도 승인을 대체하지 않는다.
+  DB 변경 제안 카드는 포커스나 스크롤을 옮기지 않고 polite 알림으로 한 번 알린다.
+  승인 버튼에는 자동 포커스를 두지 않는다. 패널이 닫혀 있으면 AI Chat 토글과 상태
+  표시에 `승인 대기 N`을 표시하고, 상태 표시는 카드로 이동만 할 뿐 결정 control을
+  복제하지 않는다. 승인된 실행은 카드와 상태 표시에서 실제 backend cancel로 중지한다.
 - Agent 도구 설정은 Claude와 Codex를 각각 한 행으로 보여 준다. 선택한 Agent의
   내장 채팅 연결 구성 요소는 앱이 검증해 설치·활성화하고, 공식 로컬 CLI의 설치·
   로그인 상태는 같은 행에서 확인한다. CLI가 없거나 로그인되지 않았으면 해당
@@ -243,28 +280,51 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
   승인받는다. config에서 사라졌거나 권한이 바뀐 resource는 승인 control을
   비활성화한다. 이 modal은 범위를 넓히지 않으며 실행 중인 공식 CLI가 끝나면 해당
   process-bound session도 폐기한다.
-- 하단 Services 패널과 보조 보기는 제공하지 않는다. SQL 문서는 SQL/결과를 전환하며
+  승인된 외부 Agent process의 DB 변경 제안은 같은 Desktop 승인 dialog에서 제안마다
+  한 번 승인하거나 거절한다. 초기 포커스는 중립적인 닫기 동작에 두어 요청한
+  terminal에서 입력하던 키가 승인 control에 닿지 않게 하고, 결정이 끝나기 전에는
+  닫을 수 없다(제안 검토를 불러오지 못한 경우는 닫을 수 있다). process가 끝나 session이 폐기되면 미결 제안은 자동으로 취소된다.
+- 전역 하단 Services 패널과 보조 보기는 제공하지 않는다. SQL 문서는 위쪽 편집기와
+  아래쪽 결과를 같은 문서 안에 동시에 표시한다. 실행해도 편집기와 커서·선택·focus를
+  유지해 바로 수정·재실행할 수 있으며 SQL/결과 교체 토글은 두지 않는다. 가로 경계선은
+  드래그·키보드로 높이를 조절하고 더블클릭·Enter로 기본 1:1 비율에 복귀한다. 비율은
+  기기 로컬 선호로 저장하되 좁은 높이에서 두 pane을 모두 읽을 수 있도록 제한한다.
   실행 중에도 editor와 controller를 유지한다. 중앙 실행 결과 문서는 같은 연결의 보존된
   결과·출력·다중 statement를 열고, 하단 상태 표시가 background 진행·취소를 소유한다.
 - status surface는 현재 database/source/schema/object, transaction과 background
   상태를 보여주되 이미 document가 소유한 설명을 반복하지 않는다.
-- Workspace Web은 Desktop의 보조 관리면이다. 최상위 목적지는
-  `Workspaces / Access / Providers / Workspace settings / My account` 다섯 개만
-  둔다. `Access`는 멤버 초대·역할과 DB별 grant를 한 흐름으로, `Providers`는
-  브라우저 OAuth·broker 승인과 그 계정에서 고른 managed DB 등록·복구를 한
-  흐름으로 묶는다. 서버 소유 백업·키 회전·삭제는 Owner 전용
-  `Workspace settings`에, 브라우저와 Desktop 세션 종료는 `My account`에 둔다.
+- Workspace 관리는 Desktop의 `워크스페이스 관리` dialog가 소유한다. 앱
+  환경설정인 `Settings`와 분리된 shell modal이며 두 dialog는 서로를 대체할 뿐 겹쳐
+  열리지 않는다. 팀 workspace의 관리자·소유자만 열 수 있고 `구성원`, `DB 접근
+  권한`, `공급자`와 소유자 전용 `백업 및 삭제` 네 section을 둔다. 권한이 없는
+  구성원에게는 진입점과 section을 비활성 항목 없이 숨긴다. 진입점은 workspace
+  menu의 `워크스페이스 관리`, Action Search, 관리형 연결 복구, 데이터 소스 `+`
+  메뉴와 클라우드 안내의 `공유 DB 추가`이며, `공유 DB 추가`는 `공급자 → 공유
+  데이터베이스`의 DB 추가를 바로 연다. 로그인한 계정의 다른 기기·브라우저 session
+  종료와 소유한 workspace의 삭제 예약 취소는 workspace가 아니라 사용자 단위이므로
+  `Settings → 계정`이 소유하고, 계정 메뉴의 `계정 관리`가 그곳을 연다. 삭제가 예약되면
+  Desktop은 membership을 다시 읽어 그 workspace에서 벗어나고 `계정`에서 영구 삭제
+  시각과 취소를 보여 준다. 기록은 됐지만 정리 예약만 실패한 경우에는 같은 화면에서
+  같은 요청을 다시 보낸다. workspace 생성은 workspace menu의 `새 워크스페이스`,
+  관리 진입은 같은 menu의 `워크스페이스 관리`가 소유한다. 모든 관리 command는 Rust가 계정별 Bearer session으로 control plane의
+  닫힌 작업 목록만 호출하며 session token, provider state, 입력한 provider secret을
+  WebView 캐시나 로컬 저장소에 남기지 않는다. control plane이 구성원·권한·provider·
+  lifecycle 결정의 정본이다.
+  `공급자`는 `계정 연결`과 `공유 데이터베이스` 두 작업 전환으로 나눈다. 계정 연결은
+  공급자 선택과 선택한 공급자의 안내·입력만 보여 주고, 연결된 계정 관리는 같은 목록에서
+  연다. 등록된 DB 보기로 돌아오면 최신 inventory를 읽으며, DB 추가를 열기 전에는
+  provider resource를 조회하지 않는다. Google Cloud SQL 승인 뒤의 대상 선택·승인
+  흐름은 Desktop에서 이어서 진행하고 진행 표시는 실제 구성 상태를 따른다.
+- Workspace Web은 브라우저가 필요한 진입만 소유한다. 로그인과 Desktop 승인,
+  workspace·Article 이메일 초대 수락, 공급자 OAuth의 시작 확인 페이지와 완료 안내,
+  공개된 immutable Analysis HTML 페이지만 둔다. 공급자 OAuth 시작 페이지는 브라우저에
+  로그인한 계정이 Desktop에서 승인을 시작한 계정과 같을 때만 공급자로 이동하고,
+  다르면 계정 전환만 안내한다. 완료 안내는 token 없는 앱 복귀 link만 제공한다.
+  예전 `/settings` 주소는 관리가 Desktop으로 옮겨졌다는 안내와 앱 열기만 보여 준다.
   연결 생성·편집, query, Agent, Safety, Analysis Article 작성·조회·수동 재실행·
-  공개 발행 관리는 Desktop이 소유하며 Workspace Web에 중복 화면을 만들지
-  않는다. 공개된 immutable Analysis HTML을 읽는 페이지는 이 관리 화면과 별개로
-  유지한다. 인증된 관리 화면은 한 번의 page title과 workspace context 뒤에 실제
-  command를 바로 보여 주며 번호 장식, 중복 제목·설명, card-in-card를 사용하지
-  않는다.
-  Providers의 계정 연결은 공급자 선택과 선택한 공급자의 안내·입력만 보여 준다.
-  연결된 계정 관리는 펼쳐서 열고, 등록된 DB 보기는 별도 작업 전환으로 제공한다.
-  계정 변경 후 DB 보기로 돌아오면 최신 inventory를 읽으며, DB 추가를 열기 전에는
-  provider resource를 조회하지 않는다. GCP OAuth 복귀는 대상 선택·승인 흐름에
-  집중하고 진행 표시는 실제 구성 상태를 따른다.
+  공개 발행 관리와 workspace 관리는 Desktop이 소유하며 Workspace Web에 중복 화면을
+  만들지 않는다. 관리 API는 Desktop 배포와 독립적으로 운영되므로 지원 중인 Desktop
+  버전이 쓰는 요청·응답 계약을 하위 호환으로 유지한다.
 
 ### 밀도와 상호작용
 
@@ -291,7 +351,7 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
 - popup, menu, modal은 viewport collision, keyboard 이동, focus containment와
   trigger 복구를 책임진다. 앱 내부 modal은 native 창처럼 보이는 drag header나
   `X`를 만들지 않고 footer의 명시적인 취소·닫기·완료 action으로 종료한다.
-- data grid의 header/row/row number는 28px, 기본 column은 144px을 기준으로 한다.
+- data grid의 header/row는 28px, row number column은 최소 28px에서 가장 큰 행 번호의 자릿수에 맞춰 넓어지며, 기본 column은 144px을 기준으로 한다.
   virtualization 여부와 무관하게 selection, resize, sort, filter 계약은 같다.
   열 경계 더블클릭 또는 경계에 focus한 뒤 Enter는 해당 열만 현재 로드된 표시 값과
   헤더에 맞추며 자동 맞춤 상한은 480px이다. 추가 조회나 새 행 도착에 따른 자동 재조절은 하지 않고,
@@ -318,6 +378,12 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
   중복 검토 화면이나 확인 문구 입력 없이 실행한다. Agent와 background 작업이
   제안한 mutation은 사람이 작성한 것으로 간주하지 않고 별도 한 번의 명시적
   승인·거절을 유지한다.
+- SQL 문서에서 직접 선택한 텍스트는 그대로 실행한다. 선택 없이 여러 statement를
+  실행하면 caret 옆 메뉴에서 `현재 구문`과 `전체 스크립트`를 고른다. 메뉴의 hover와
+  키보드 focus가 정확한 실행 범위를 미리 표시하고 Enter로 실행, Escape로 취소한다.
+  미리보기는 실제 선택 영역이나 본문을 바꾸지 않으며, 편집으로 revision이 바뀌면
+  후보를 폐기한다. 단일 statement는 메뉴 없이 실행한다. 범위 선택은 실행 권한을
+  확대하지 않고 기존 parameter·exact payload 승인·Safety 경로를 그대로 사용한다.
 - Desktop의 연결별 쓰기 실행 제어는 `Settings → Safety` 한 곳이 소유한다.
   연결 편집기와 작업 화면은 쓰기 권한을 변경하지 않으며, 상태 표시와 Safety
   진입만 제공한다. 관리형 연결의 `manage` 권한 보유자는 같은 Safety control로
@@ -345,12 +411,12 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
 - Workspace 관리형 연결의 Desktop 프로필은 실행 시 발급되는 실제 endpoint와
   credential을 편집 가능한 로컬 값처럼 표시하지 않는다. 연결 검사가 실패하면
   로컬 host·password 수정을 안내하지 않고 관리 주체, 관리자가 확인할 provider
-  account·DB 등록·멤버 접근을 설명한다. exact `manage` 권한이 있으면 native가
-  검증한 Workspace Web origin의 해당 DB 행으로 직접 이동하는 실제 command를
-  제공한다. 해당 DB 행은 설명에서 끝나지 않고 provider 재승인을 시작하는 복구
-  command를 소유한다. GCP Cloud SQL 복구는 기존 integration·project·instance를
-  고정한 채 OAuth를 다시 받고 IAM DB 인증 flag와 전용 DB 사용자를 재검증·복구한
-  뒤 같은 DB 행으로 돌아온다. 기존 connection ID와 멤버 grant는 유지한다.
+  account·DB 등록·멤버 접근을 설명한다. exact `manage` 권한이 있으면
+  `워크스페이스 관리 → 공급자`의 해당 DB 행을 여는 실제 command를 제공한다.
+  해당 DB 행은 설명에서 끝나지 않고 provider 재승인을 시작하는 복구 command를
+  소유한다. GCP Cloud SQL 복구는 기존 integration·project·instance를 고정한 채
+  브라우저에서 OAuth를 다시 받고, Desktop에 돌아와 IAM DB 인증 flag와 전용 DB 사용자를
+  재검증·복구한다. 기존 connection ID와 멤버 grant는 유지한다.
 - GCP Cloud SQL 연결·복구 승인은 기존 애플리케이션 객체의 소유권 이전이나
   `PUBLIC` 접근 회수, 기존 사용자 승격/권한 정규화, 기본 권한 변경을 승인하지
   않는다. PostgreSQL 14 이상은 새 전용 데이터 계정 생성 시 predefined data role만
@@ -372,10 +438,11 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
 - 직접 권한 변경 SQL과 안전하게 분류할 수 없는 SQL은 실행 전에 차단하고,
   구문 위치와 DB 관리자 검토 경로를 안내한다. 이 차단에 쓰기·DDL 설정이나 연결
   복구를 해결책으로 제시하지 않는다.
-- Desktop에서 시작한 웹 권한 변경·관리형 연결 복구는 같은 계정·Workspace·DB의
-  실제 저장 성공 뒤 앱 복귀를 한 번 시도하고 수동 복귀 버튼을 유지한다. OAuth
-  승인만으로 완료를 선언하지 않으며 callback은 token·SQL·권한을 전달하지 않는다.
-  앱은 기존 연결 상태를 새로 확인하고 SQL을 자동 재실행하지 않는다.
+- Desktop에서 시작한 공급자 OAuth는 브라우저 완료 안내에서 token 없는 앱 복귀
+  link만 제공한다. OAuth 승인만으로 완료를 선언하지 않으며 callback은 token·SQL·
+  권한을 Desktop에 전달하지 않는다. Desktop은 창으로 돌아오거나 복귀 link를 받으면
+  integration과 setup을 다시 조회하고 남은 단계를 이어서 진행한다. 연결 상태는 새로
+  확인하되 SQL을 자동 재실행하지 않는다.
 
 ### 구현 시스템
 
@@ -408,7 +475,7 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
 | PD-08 | 범용 cloud resource browser | `구현 안 함` | 연결 onboarding 중 검증된 target selector만 허용한다. |
 | PD-09 | multi-database introspection | `구현` | Explorer, query, data editor와 Agent가 같은 정확한 database scope를 사용한다. |
 | PD-10 | background task model | `구현` | SQL, 승인, ACP turn, import/export Job을 관찰하고 실제 backend cancel로 중단한다. |
-| PD-11 | 하단 Services 패널 및 보조 보기 | `구현 안 함` | 하단 패널·실행 트리·토글·resize를 제거한다. 결과와 출력은 중앙 SQL 문서 및 결과 문서가, 진행·취소는 기존 상태 표시가 소유한다. |
+| PD-11 | 전역 하단 Services 패널 및 보조 보기 | `구현 안 함` | 전역 하단 패널·실행 트리·토글은 두지 않는다. SQL 문서 내부의 편집기/결과 상하 분할과 높이 조절은 허용하며 결과와 출력은 중앙 SQL 문서 및 결과 문서가, 진행·취소는 기존 상태 표시가 소유한다. |
 | PD-12 | result의 광범위한 IDE command set | `구현 안 함` | bounded inspect/copy/export를 유지하고 재조회는 SQL이나 Agent가 소유한다. |
 | PD-13 | Local History compare/navigation | `구현 안 함` | SQL revision 선택·검색·복원만 제공한다. |
 | PD-14 | inline AI editor assistance | `구현 안 함` | Project-resource-pinned Agent와 명시적 SQL context attachment가 소유한다. |
@@ -422,7 +489,7 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
 | PD-22 | data source comment/color | `구현 안 함` | 공유 연결 구분은 environment badge가 소유한다. |
 | PD-23 | authentication/save policy 선택 | `구현 안 함` | engine마다 검증된 최소 입력 경로 하나를 유지한다. |
 | PD-24 | status breadcrumb 탐색 | `구현` | 현재 문맥을 표시하고 Explorer의 정확한 문맥을 reveal한다. |
-| PD-25 | 전역 manual transaction 상태 | `구현` | 장기 transaction을 발견하고 해당 연결에서 commit/rollback하도록 한다. |
+| PD-25 | 전역 manual transaction 상태 | `구현` | 장기 transaction을 발견하고 해당 연결에서 commit/rollback하도록 한다. 만료 5분 전에 경고하고, 열린 transaction이 있으면 창 닫기와 앱 종료 전에 롤백 확인을 받으며 어떤 종료 경로도 암묵적으로 commit하지 않는다. |
 | PD-26 | data grid quick-filter/history | `구현 안 함` | 기존 column filter와 WHERE/ORDER BY, Agent 재조회 경로를 사용한다. |
 | PD-27 | 범용 workspace settings bag | `구현 안 함` | 공유 상태는 connection과 Analysis Article 같은 실제 revision owner에 둔다. |
 | PD-28 | safe branch checkpoint/restore | `구현` | 승인된 격리 생성, connection revision 전환, 복귀·폐기와 audit를 하나의 durable operation으로 묶는다. |
@@ -442,8 +509,8 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
 | PD-42 | 조직 내부 Article 링크와 읽기 초대 | `구현` | 기존 구성원용 링크는 현재 계정의 Workspace membership와 해당 DB grant를 매번 확인한다. Workspace 관리자이면서 해당 DB의 manage 권한을 가진 사람만 이메일 하나에 고정된 48시간 초대 링크를 만든다. 검증된 수신 계정의 명시적 수락은 멤버 참여와 지정 DB의 read grant를 원자적으로 처리하며 기존의 더 높은 역할·grant는 보존한다. 링크 소지만으로 접근할 수 없고 회사 도메인을 조직 권한으로 추정하지 않는다. 앱 설치·로그인 안내 후 인증된 Desktop의 원래 Article로 연결하며 OS 설치 동의, member-local credential 입력과 Google CLI 인증을 대신하지 않는다. 브라우저는 초대와 앱 진입만 소유하고 Article query나 결과를 실행·제공하지 않는다. |
 | PD-43 | 문서 탭 닫기와 재열기 | `구현` | 탭 닫기는 SQL document 삭제가 아니며 본문과 revision을 보존한다. 열린 SQL 탭 목록, 순서, 활성 SQL 탭은 workspace·account·connection 범위의 member-local 상태로만 영속하고 공유 레코드에 두지 않는다. 저장된 상태가 없으면 기존처럼 복원하고 저장된 빈 목록은 사용자가 모두 닫은 상태로 존중한다. 닫은 문서는 Action Search의 최소 재열기 command로 다시 연다. 별도 문서 관리 화면과 Local History 비교 UI는 만들지 않는다. |
 | PD-44 | 로컬 데이터베이스 리스너 감지 | `구현` | 첫 연결의 입력을 줄이기 위해 사용자가 명시적으로 실행한 1회 감지만 수행한다. 대상은 loopback 주소와 engine별 기본 포트의 닫힌 allowlist(PostgreSQL 5432, MySQL/MariaDB 3306, MongoDB 27017)로 한정하고 임의 host, 포트 범위, 로컬 네트워크 대역, container runtime, 파일 시스템을 탐색하지 않는다. 각 후보는 자격 증명 없이 protocol handshake만 수행해 engine을, 프로토콜이 인증 전에 알려 주는 경우에만 서버 버전을 확인한 뒤 즉시 닫으며 인증 시도, startup 패킷, query를 보내지 않는다. `~/.pgpass`, `~/.my.cnf`, `pg_service.conf`, 환경 변수, 프로젝트 `.env` 같은 클라이언트 설정과 자격 증명 저장소는 읽지 않는다. 감지 결과는 engine, host, port, driver만 편집 가능한 초안에 채우는 제안이며 username, 비밀번호, database는 사람이 입력하거나 기존 database discovery가 채운다. 감지는 연결을 저장하거나 자동으로 접속하지 않고 백그라운드 polling과 주기적 재감지를 하지 않는다. 미설치와 감지 실패는 정확한 빈 상태로 표시하고 기존 수동 입력 경로를 막지 않는다. |
-
 | PD-45 | 로컬 진단 로그와 버그 제보 | `구현` | Settings → 고급에서 명시적으로 켠 뒤 Desktop의 Rust 진단 이벤트, frontend 오류와 IPC 결과·시간을 bounded process-memory에만 수집한다. 기본은 꺼짐이며 끄기·종료 시 비우고 파일·서버에 전송하지 않는다. 인증 비밀값과 명시적 SQL·결과·Agent payload는 제외하되 호스트·DB 이름·사용자명·경로 같은 내부 정보는 포함될 수 있다. 조회·비우기와 개인정보 경고 확인 뒤 수동 복사·GitHub 이슈 작성 페이지 열기만 제공하며 자동 첨부·제출과 완전한 개인정보 자동 마스킹은 제공하지 않는다. |
+| PD-46 | Desktop workspace 관리 | `구현` | workspace 생성, 구성원 초대·역할·제거, DB grant·팀 읽기 공유·연결 편집 충돌, 공급자 계정 승인·managed DB 등록/복구·Neon branch, 소유자의 backup·key rotation·retention·삭제 예약, 계정 session 종료와 삭제 예약 취소를 Desktop이 소유한다. workspace 범위 관리는 앱 `Settings`와 분리된 `워크스페이스 관리` dialog가, 계정 session 종료와 삭제 예약 취소는 `Settings → 계정`이 맡는다. 데이터 소스 카탈로그의 `공유 DB 추가`는 관리자·소유자에게만 그 dialog의 DB 추가를 여는 바로가기다. Rust가 계정별 Bearer session으로 control plane의 닫힌 작업 목록만 호출하고 경로 식별자를 검증하며 token·provider state·입력한 provider secret을 WebView 캐시나 로컬 저장소에 남기지 않는다. 브라우저 OAuth가 필요한 공급자는 control plane origin의 시작 확인 페이지만 열고 완료 뒤 Desktop에서 이어 간다. Workspace Web의 관리 화면은 제거하고 로그인·초대 수락·OAuth 시작 확인과 완료 안내·공개 Article만 남긴다. 권한이 없는 구성원에게는 관리 진입점과 section을 비활성 항목 없이 숨긴다. |
 
 
 ## 변경 규칙

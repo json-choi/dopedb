@@ -71,6 +71,20 @@ impl ConnectionRepositoryPort for SqliteConnectionRepository {
     async fn get(&self, id: ConnectionId) -> AppResult<ConnectionProfile> {
         self.store.get_connection(id.into()).await
     }
+
+    async fn defer_credential_delete(&self, credential_id: Uuid) -> AppResult<()> {
+        self.store.defer_credential_delete(credential_id).await
+    }
+
+    async fn deferred_credential_deletes(&self) -> AppResult<Vec<Uuid>> {
+        self.store.deferred_credential_deletes().await
+    }
+
+    async fn clear_deferred_credential_delete(&self, credential_id: Uuid) -> AppResult<()> {
+        self.store
+            .clear_deferred_credential_delete(credential_id)
+            .await
+    }
 }
 
 pub(crate) struct RuntimeScopeMutation {

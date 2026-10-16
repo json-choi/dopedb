@@ -16,6 +16,8 @@ pub enum ConnectionFailureCode {
     Authentication,
     Configuration,
     Cancelled,
+    /// Another session held a lock on the object past the request's lock timeout.
+    LockTimeout,
     Unknown,
 }
 
@@ -34,6 +36,7 @@ impl ConnectionFailureCode {
             Self::Authentication => "connectionAuthentication",
             Self::Configuration => "connectionConfiguration",
             Self::Cancelled => "cancelled",
+            Self::LockTimeout => "lockTimeout",
             Self::Unknown => "connectionUnknown",
         }
     }
@@ -52,6 +55,9 @@ impl ConnectionFailureCode {
             Self::Authentication => "Database authentication failed.",
             Self::Configuration => "Check the database connection configuration.",
             Self::Cancelled => "The database request was cancelled.",
+            Self::LockTimeout => {
+                "Another session holds a lock on this object; the request stopped waiting."
+            }
             Self::Unknown => "The database connection could not complete the request.",
         }
     }
@@ -64,14 +70,37 @@ impl std::fmt::Display for ConnectionFailureCode {
 }
 
 impl AppError {
+    /// A catalog scan raced a concurrent DROP: a lookup helper (`pg_get_viewdef`, a
+    /// regclass cast, a type or relation open) read the live system caches for an
+    /// object the scan's snapshot still lists. A fresh scan no longer sees it.
+    /// Timeouts, cancels, authentication and network failures never qualify.
+    pub(crate) fn is_concurrent_catalog_drop(&self) -> bool {
+        let Self::Db(sqlx::Error::Database(database)) = self else {
+            return false;
+        };
+        match database.code().as_deref() {
+            Some("XX000") => {
+                let message = database.message();
+                message.starts_with("cache lookup failed for")
+                    || message.starts_with("could not open relation with OID")
+            }
+            // undefined_table, undefined_object, invalid_schema_name
+            Some("42P01" | "42704" | "3F000") => true,
+            _ => false,
+        }
+    }
+
     /// Drop all untrusted diagnostics before a catalog result reaches IPC, logs,
     /// or the Agent. Preserve the existing access/authentication recovery identity.
     pub(crate) fn public_connection_failure(self) -> Self {
         use ConnectionFailureCode as Code;
         let code = match self {
+            // Closed, secret-free recovery identities pass through unchanged.
             Self::ConnectionFailure(_)
             | Self::CredentialBindingRequired
-            | Self::ManagedConnectionRecoveryRequired => return self,
+            | Self::ManagedConnectionRecoveryRequired
+            | Self::RetryLater { .. }
+            | Self::SharedConnectionChanged => return self,
             Self::AuthenticationRequired(_) => {
                 return Self::AuthenticationRequired("Provider".into())
             }
@@ -90,6 +119,13 @@ impl AppError {
             Self::NotFound(_) => {
                 return Self::NotFound("The requested connection resource is unavailable.".into())
             }
+            // A refused OS credential store is recovered by allowing access, not by
+            // re-entering the credential; keep that identity without the platform text.
+            Self::Keychain(_) => {
+                return Self::Keychain(keyring::Error::NoStorageAccess(
+                    "The OS credential store refused access.".into(),
+                ))
+            }
             Self::Network(_) | Self::Io(_) | Self::Db(sqlx::Error::Io(_)) => Code::Network,
             Self::Db(sqlx::Error::Tls(_)) => Code::Tls,
             Self::Db(sqlx::Error::Database(ref database)) => {
@@ -104,6 +140,11 @@ impl AppError {
                 let number = database
                     .try_downcast_ref::<sqlx::mysql::MySqlDatabaseError>()
                     .map(sqlx::mysql::MySqlDatabaseError::number);
+                // PostgreSQL `lock_not_available` and MySQL's lock wait timeout: the
+                // object is busy, which a later retry resolves without any edit.
+                if state.as_deref() == Some("55P03") || number == Some(1205) {
+                    return Self::ConnectionFailure(Code::LockTimeout);
+                }
                 if state
                     .as_deref()
                     .is_some_and(|state| state.starts_with("28"))

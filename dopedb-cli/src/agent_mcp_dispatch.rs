@@ -19,18 +19,36 @@ pub(super) async fn call_tool(
     match name {
         TOOL_SESSION_CONTEXT => {
             let _: EmptyArguments = tool_arguments(params)?;
-            let connection = broker_request::<ConnectionShowCommand>(
-                client,
-                &ConnectionSelectorArguments {
-                    connection: ConnectionSelector::Current,
-                },
-            )
-            .await?;
-            tool_success(&SessionContextResult {
-                connection_scope: "current",
-                bridge_version: env!("CARGO_PKG_VERSION"),
-                connection,
-            })
+            let current = ConnectionSelectorArguments {
+                connection: ConnectionSelector::Current,
+            };
+            // A Project resource set that selected only source repositories has
+            // no current database: the Broker denies the anchor connection, so
+            // report the pinned resources instead of failing the tool.
+            let connection = match client.request::<ConnectionShowCommand>(&current).await {
+                Ok(connection) => Some(connection),
+                Err(ClientError::Remote(error)) if error.code() == ErrorCode::ScopeDenied => None,
+                Err(_) => Some(broker_request::<ConnectionShowCommand>(client, &current).await?),
+            };
+            match connection {
+                Some(connection) => tool_success(&SessionContextResult {
+                    connection_scope: "current",
+                    bridge_version: env!("CARGO_PKG_VERSION"),
+                    connection: Some(connection),
+                    resources: None,
+                }),
+                None => {
+                    let resources =
+                        broker_request::<EnvironmentContextCommand>(client, &EmptyArguments {})
+                            .await?;
+                    tool_success(&SessionContextResult {
+                        connection_scope: "project_resources",
+                        bridge_version: env!("CARGO_PKG_VERSION"),
+                        connection: None,
+                        resources: Some(resources),
+                    })
+                }
+            }
         }
         TOOL_ENVIRONMENT_CONTEXT => {
             let _: EmptyArguments = tool_arguments(params)?;
@@ -207,13 +225,14 @@ pub(super) async fn call_tool(
             let arguments: SqlProposeToolArguments = tool_arguments(params)?;
             validate_database(arguments.database.as_deref())?;
             validate_text(&arguments.sql, MAX_STRING_BYTES, "SQL")?;
-            let result = broker_request::<SqlProposeCommand>(
+            let result = broker_request_with_hints::<SqlProposeCommand>(
                 client,
                 &SqlProposeArguments {
                     connection: connection_selector(arguments.connection_id),
                     database: arguments.database,
                     sql: arguments.sql,
                 },
+                SQL_PROPOSE_HINTS,
             )
             .await?;
             tool_success(&result)
@@ -281,7 +300,7 @@ async fn broker_request<C>(
 where
     C: CommandSpec,
 {
-    broker_request_with_invalid_hint::<C>(client, arguments, None).await
+    broker_request_with_hints::<C>(client, arguments, RefusalHints::default()).await
 }
 
 async fn analysis_article_request<C>(
@@ -291,44 +310,101 @@ async fn analysis_article_request<C>(
 where
     C: CommandSpec,
 {
-    broker_request_with_invalid_hint::<C>(client, arguments, Some(ANALYSIS_ARTICLE_INVALID_REQUEST))
-        .await
+    let hints = RefusalHints {
+        invalid_request: Some(ANALYSIS_ARTICLE_INVALID_REQUEST),
+        ..RefusalHints::default()
+    };
+    broker_request_with_hints::<C>(client, arguments, hints).await
 }
 
-async fn broker_request_with_invalid_hint<C>(
+/// SQL is parsed by Desktop before any target access; its refusals are told
+/// in terms the Agent can act on instead of the generic code message.
+const SQL_READ_HINTS: RefusalHints = RefusalHints {
+    invalid_request: Some(SQL_INVALID_REQUEST),
+    policy_blocked: Some(PolicyHint::ReadTool),
+    operation_conflict: None,
+};
+const SQL_PROPOSE_HINTS: RefusalHints = RefusalHints {
+    invalid_request: Some(SQL_INVALID_REQUEST),
+    policy_blocked: Some(PolicyHint::Fixed(SQL_PROPOSE_POLICY_BLOCKED)),
+    operation_conflict: Some(SQL_PROPOSE_CONFLICT),
+};
+
+/// Tool-specific text for stable refusals the generic code message explains poorly.
+#[derive(Clone, Copy, Default)]
+struct RefusalHints {
+    invalid_request: Option<&'static str>,
+    policy_blocked: Option<PolicyHint>,
+    operation_conflict: Option<&'static str>,
+}
+
+#[derive(Clone, Copy)]
+enum PolicyHint {
+    Fixed(&'static str),
+    /// A read tool suggests a proposal only when the session has a write target.
+    ReadTool,
+}
+
+/// The text for a refusal, asking the Broker for the session's write target
+/// only on the rare path where the answer depends on it.
+async fn refusal_hint(
+    client: &BrokerClient,
+    hints: RefusalHints,
+    code: ErrorCode,
+) -> Option<&'static str> {
+    match code {
+        ErrorCode::InvalidRequest => hints.invalid_request,
+        ErrorCode::OperationConflict => hints.operation_conflict,
+        ErrorCode::PolicyBlocked => match hints.policy_blocked? {
+            PolicyHint::Fixed(text) => Some(text),
+            PolicyHint::ReadTool => {
+                let writable = client
+                    .request::<EnvironmentContextCommand>(&EmptyArguments {})
+                    .await
+                    .ok()
+                    .and_then(|context| context.write_connection_id)
+                    .is_some();
+                Some(if writable {
+                    SQL_READ_POLICY_BLOCKED
+                } else {
+                    SQL_READ_POLICY_BLOCKED_READ_ONLY
+                })
+            }
+        },
+        _ => None,
+    }
+}
+
+async fn broker_request_with_hints<C>(
     client: &BrokerClient,
     arguments: &C::Arguments,
-    invalid_request_hint: Option<&'static str>,
+    hints: RefusalHints,
 ) -> Result<C::Result, String>
 where
     C: CommandSpec,
 {
     for attempt in 0..=AUTHORITY_RETRY_ATTEMPTS {
-        match client.request::<C>(arguments).await {
+        let error = match client.request::<C>(arguments).await {
             Ok(result) => return Ok(result),
-            Err(ClientError::Remote(error))
-                if error.code() == ErrorCode::InvalidRequest && invalid_request_hint.is_some() =>
-            {
-                return Err(invalid_request_hint
-                    .expect("guarded Analysis Article hint")
-                    .into());
-            }
-            Err(ClientError::Remote(error))
-                if error.code() == ErrorCode::RuntimeUnavailable && error.is_retryable() =>
-            {
-                if attempt == AUTHORITY_RETRY_ATTEMPTS {
-                    return Err(
-                        "DopeDB is revalidating workspace access. The chat is still connected; retry this tool shortly."
-                            .into(),
-                    );
-                }
-                // The Desktop returns this receipt before authentication or
-                // command dispatch while it verifies hosted workspace authority.
-                // Retrying therefore cannot replay a database operation.
-                tokio::time::sleep(AUTHORITY_RETRY_DELAY).await;
-            }
+            Err(ClientError::Remote(error)) => error,
             Err(error) => return Err(error.to_string()),
+        };
+        if let Some(hint) = refusal_hint(client, hints, error.code()).await {
+            return Err(hint.into());
         }
+        if error.code() != ErrorCode::RuntimeUnavailable || !error.is_retryable() {
+            return Err(ClientError::Remote(error).to_string());
+        }
+        if attempt == AUTHORITY_RETRY_ATTEMPTS {
+            return Err(
+                "DopeDB is revalidating workspace access. The chat is still connected; retry this tool shortly."
+                    .into(),
+            );
+        }
+        // The Desktop returns this receipt before authentication or command
+        // dispatch while it verifies hosted workspace authority. Retrying
+        // therefore cannot replay a database operation.
+        tokio::time::sleep(AUTHORITY_RETRY_DELAY).await;
     }
     Err("the DopeDB runtime is unavailable; retry shortly".into())
 }
@@ -341,7 +417,7 @@ async fn query_read(
     validate_database(arguments.database.as_deref())?;
     validate_text(&arguments.sql, MAX_STRING_BYTES, "SQL")?;
     let connection = connection_selector(arguments.connection_id);
-    let plan = broker_request::<QueryPlanCommand>(
+    let plan = broker_request_with_hints::<QueryPlanCommand>(
         client,
         &QueryPlanArguments {
             connection: connection.clone(),
@@ -349,6 +425,7 @@ async fn query_read(
             sql: arguments.sql,
             max_rows: arguments.max_rows,
         },
+        SQL_READ_HINTS,
     )
     .await?;
     if !matches!(plan.decision.as_str(), "ready" | "caution") {

@@ -1,4 +1,6 @@
 // Projects schema-comparison labels, counts, and triggers for Explorer connection rows.
+// Each group carries the member-chosen baseline, so a row chip always agrees with the
+// Schema Diff screen; `compareCatalogs` memoizes the comparison per snapshot pair.
 
 import type { Catalog } from "../../ipc/types";
 import type { ConnectionProfile } from "../../features/connections/domain";
@@ -64,7 +66,7 @@ export function SchemaDiffTrigger({
   const title = !diff
     ? t("schemaDiff.openTitle")
     : diff.total === 0
-      ? t("connections.schemaDiffInSync")
+      ? t("schemaDiff.inSync")
       : t("connections.schemaDiffTitle", {
           added: counts?.added ?? 0,
           missing: counts?.missing ?? 0,
@@ -75,7 +77,9 @@ export function SchemaDiffTrigger({
       size="tree"
       variant="ghost"
       title={title}
-      aria-label={t("schemaDiff.openTitle")}
+      aria-label={diff
+        ? t("schemaDiff.openSummary", { summary: title })
+        : t("schemaDiff.openTitle")}
       tabIndex={-1}
       onPointerDown={(event) => event.stopPropagation()}
       onPointerUp={(event) => event.stopPropagation()}
@@ -98,7 +102,7 @@ export function SchemaDiffTrigger({
             <span className="tw:text-success">+{counts.added}</span>
           ) : null}
           {counts && counts.missing > 0 ? (
-            <span className="tw:text-danger">-{counts.missing}</span>
+            <span className="tw:text-danger">−{counts.missing}</span>
           ) : null}
           {counts && counts.changed > 0 ? (
             <span className="tw:text-warning">~{counts.changed}</span>

@@ -1,18 +1,41 @@
-// Short relative timestamps for feed/audit rows. No deps — app-side Date is fine.
-const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+// Relative and absolute timestamps for feed/audit rows in the app's resolved UI
+// language, so Settings → Language (not the OS locale) owns the wording.
+import type { Lang } from "./i18n";
 
-export function relTime(t: string | number): string {
-  const d = new Date(t);
-  const s = (Date.now() - d.getTime()) / 1000;
-  if (s < 45) return "just now";
-  if (s < 3600) return `${Math.round(s / 60)}m`;
-  if (s < 86400) return `${Math.round(s / 3600)}h`;
-  if (s < 172800) return "yesterday";
-  if (s < 604800) return `${Math.round(s / 86400)}d`;
-  const abs = `${MON[d.getMonth()]} ${d.getDate()}`;
-  return d.getFullYear() === new Date().getFullYear() ? abs : `${abs} ${d.getFullYear()}`;
+const relativeFormats = new Map<Lang, Intl.RelativeTimeFormat>();
+const fullFormats = new Map<Lang, Intl.DateTimeFormat>();
+
+function relativeFormat(lang: Lang) {
+  let format = relativeFormats.get(lang);
+  if (!format) {
+    format = new Intl.RelativeTimeFormat(lang, { numeric: "auto" });
+    relativeFormats.set(lang, format);
+  }
+  return format;
 }
 
-export function fullTime(t: string | number): string {
-  return new Date(t).toLocaleString();
+export function relTime(value: string | number, lang: Lang, now = Date.now()): string {
+  const date = new Date(value);
+  const elapsed = (now - date.getTime()) / 1000;
+  if (Number.isNaN(elapsed)) return "—";
+  const relative = relativeFormat(lang);
+  if (elapsed < 45) return relative.format(0, "second");
+  if (elapsed < 3_600) return relative.format(-Math.max(1, Math.round(elapsed / 60)), "minute");
+  if (elapsed < 86_400) return relative.format(-Math.round(elapsed / 3_600), "hour");
+  if (elapsed < 604_800) return relative.format(-Math.round(elapsed / 86_400), "day");
+  const sameYear = date.getFullYear() === new Date(now).getFullYear();
+  return date.toLocaleDateString(lang, sameYear
+    ? { month: "short", day: "numeric" }
+    : { year: "numeric", month: "short", day: "numeric" });
+}
+
+export function fullTime(value: string | number, lang: Lang): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  let format = fullFormats.get(lang);
+  if (!format) {
+    format = new Intl.DateTimeFormat(lang, { dateStyle: "medium", timeStyle: "medium" });
+    fullFormats.set(lang, format);
+  }
+  return format.format(date);
 }

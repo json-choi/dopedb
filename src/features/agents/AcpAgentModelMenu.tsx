@@ -6,6 +6,8 @@ import ToolbarMenu, { ToolbarMenuItem } from "../../components/ToolbarMenu";
 import { AgentProviderMark } from "../../design-system/components/Agent";
 import { useI18n } from "../../lib/i18n";
 import { configSelectChoices } from "./approvalModePreference";
+import { AgentAccountIdentity } from "./AgentAccountIdentity";
+import { openAgentSetup } from "../skills/agentPreferences";
 import { providerLabel } from "./acpTranscriptPresentation";
 import type { AcpChatController } from "./useAcpChatController";
 
@@ -42,10 +44,12 @@ export function AcpAgentModelMenu({
           </>
         }
       >
+        <div className="tw:px-2 tw:py-1"><AgentAccountIdentity cli={setup.selectedCliStatus} /></div>
+        <ToolbarMenuItem icon="user" onClick={openAgentSetup}>{t("agentTools.manageAccount")}</ToolbarMenuItem>
         <span className="tw:px-2 tw:pt-1 tw:text-2xs tw:font-semibold tw:text-muted-foreground">
           {t("agent.acpProvider")}
         </span>
-        {setup.enabledProviders.map((provider) => (
+        {setup.pickerProviders.map((provider) => (
           <ToolbarMenuItem
             key={provider}
             icon={<AgentProviderMark provider={provider} />}

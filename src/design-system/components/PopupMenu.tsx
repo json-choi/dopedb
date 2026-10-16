@@ -21,12 +21,13 @@ import {
   useMenuInteractions,
 } from "../menuInteraction";
 
-type PopupMenuPlacement = "bottom-end" | "right-end" | "top-start";
+type PopupMenuPlacement = "bottom-end" | "bottom-start" | "right-end" | "top-start";
 
 export function PopupMenu({
   id,
   children,
   anchorRef,
+  getAnchorRect,
   placement = "bottom-end",
   size = "default",
   ariaLabel,
@@ -39,6 +40,8 @@ export function PopupMenu({
   id?: string;
   children: ReactNode;
   anchorRef: RefObject<HTMLElement | null>;
+  /** Optional vendor-measured caret/cell geometry; the real anchor still owns focus. */
+  getAnchorRect?: () => DOMRect;
   placement?: PopupMenuPlacement;
   size?: "account" | "default";
   ariaLabel?: string;
@@ -75,9 +78,11 @@ export function PopupMenu({
   });
 
   useEffect(() => {
-    refs.setReference(anchorRef.current);
+    refs.setReference(getAnchorRect
+      ? { getBoundingClientRect: getAnchorRect, contextElement: anchorRef.current ?? undefined }
+      : anchorRef.current);
     return () => refs.setReference(null);
-  }, [anchorRef, refs]);
+  }, [anchorRef, getAnchorRect, refs]);
 
   useEffect(() => {
     if (!middlewareData.hide?.referenceHidden) return;
@@ -126,7 +131,7 @@ export function PopupMenuItem({
     <button
       type="button"
       role="menuitem"
-      className="tw:flex tw:min-h-control-md tw:w-full tw:cursor-pointer tw:items-center tw:gap-2 tw:rounded-sm tw:border-0 tw:bg-transparent tw:px-2 tw:font-sans tw:text-left tw:text-sm tw:leading-body tw:text-foreground tw:data-[tone=danger]:text-danger tw:disabled:cursor-default tw:disabled:opacity-40 tw:hover:bg-muted tw:focus-visible:bg-muted tw:focus-visible:outline-none"
+      className="tw:flex tw:min-h-control-md tw:w-full tw:cursor-pointer tw:items-center tw:gap-2 tw:rounded-sm tw:border-0 tw:bg-transparent tw:px-2 tw:font-sans tw:text-left tw:text-sm tw:leading-body tw:text-foreground tw:data-[tone=danger]:text-danger tw:disabled:cursor-default tw:disabled:opacity-40 tw:hover:bg-muted tw:focus-visible:bg-muted tw:data-[selected=true]:bg-selection tw:data-[selected=true]:text-selection-foreground tw:focus-visible:outline-none"
       {...props}
     >
       {children}

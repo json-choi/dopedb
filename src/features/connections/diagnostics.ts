@@ -13,6 +13,7 @@ import {
   CONNECTION_AUTO_DISCONNECT_MAX_SECONDS,
   CONNECTION_AUTO_DISCONNECT_MIN_SECONDS,
   CONNECTION_AUTO_DISCONNECT_SECONDS_PARAMETER,
+  CONNECTION_INPUT_MODE_PARAMETER,
   CONNECTION_KEEP_ALIVE_MAX_SECONDS,
   CONNECTION_KEEP_ALIVE_MIN_SECONDS,
   CONNECTION_KEEP_ALIVE_SECONDS_PARAMETER,
@@ -22,8 +23,10 @@ import {
   CONNECTION_TIME_ZONE_PARAMETER,
   isBoundedConnectionOptionSeconds,
   isConnectionTimeZone,
+  isPostgresTransactionPooler,
   isSshHostAlias,
 } from "./options";
+import { defaultConnectionName } from "./presets";
 
 export type ConnectionDiagnosticCode =
   | "nameRequired"
@@ -31,6 +34,8 @@ export type ConnectionDiagnosticCode =
   | "hostRequired"
   | "hostInvalid"
   | "portInvalid"
+  | "usernameRequired"
+  | "postgresUsernameInvalid"
   | "sqliteFileRequired"
   | "cloudflareAccountRequired"
   | "cloudflareAccountInvalid"
@@ -49,6 +54,7 @@ export type ConnectionDiagnosticCode =
   | "keepAliveInvalid"
   | "autoDisconnectInvalid"
   | "startupScriptTooLong"
+  | "startupScriptSkippedByPooler"
   | "sshAliasInvalid"
   | "sshTunnelSingleHostRequired"
   | "sshTunnelSrvUnsupported"
@@ -70,6 +76,21 @@ export function connectionDiagnosticBlocksTest(
   return diagnostic.tone === "danger" &&
     diagnostic.code !== "nameRequired" &&
     diagnostic.code !== "targetDatabaseRequired";
+}
+
+/**
+ * A connection user is sent verbatim, so provider formats such as
+ * `postgres.<project-ref>` or `user@server` are valid role names. Only
+ * surrounding whitespace or control characters usually reveal a paste or typo.
+ */
+function suspiciousPostgresUsername(username: string): boolean {
+  return (
+    username.trim() !== username ||
+    [...username].some((character) => {
+      const code = character.codePointAt(0) ?? 0;
+      return code < 0x20 || code === 0x7f;
+    })
+  );
 }
 
 function issue(
@@ -96,11 +117,15 @@ export function diagnoseConnection(
   portDraft = String(profile.port),
 ): ConnectionDiagnostic[] {
   const diagnostics: ConnectionDiagnostic[] = [];
+  // An unnamed draft is saved under its endpoint name, so only a draft without
+  // an endpoint yet needs a typed name. Only a typed name is checked for
+  // duplicates; a derived one is visible as the placeholder.
   const name = profile.name.trim();
 
-  if (!name) {
+  if (!name && !defaultConnectionName(profile)) {
     diagnostics.push(issue("nameRequired", "danger", "connection-name"));
   } else if (
+    name &&
     savedConnections.some(
       (candidate) =>
         candidate.id !== profile.id &&
@@ -212,6 +237,33 @@ export function diagnoseConnection(
       );
     }
 
+    // PostgreSQL and MySQL reject an empty user at the handshake, so a
+    // personal draft names the exact role before any check contacts the server.
+    // Shared and provider-managed profiles take the user from their binding.
+    const usernameSource =
+      profile.extraParams[CONNECTION_INPUT_MODE_PARAMETER] === "urlOnly"
+        ? "connection-url"
+        : "connection-username";
+    if (
+      (profile.engine === "postgres" || profile.engine === "mysql") &&
+      profile.workspaceAccess === "local" &&
+      profile.credentialMode === "local" &&
+      profile.providerTarget === null &&
+      !profile.username.trim()
+    ) {
+      diagnostics.push(issue("usernameRequired", "danger", usernameSource));
+    } else if (
+      // A warning, not a block: the person confirms the exact role name.
+      profile.engine === "postgres" &&
+      profile.workspaceAccess === "local" &&
+      profile.username &&
+      suspiciousPostgresUsername(profile.username)
+    ) {
+      diagnostics.push(
+        issue("postgresUsernameInvalid", "warning", usernameSource),
+      );
+    }
+
     const mongoSrv =
       profile.engine === "mongodb" &&
       profile.extraParams.srv === "true";
@@ -313,6 +365,21 @@ export function diagnoseConnection(
       issue(
         "startupScriptTooLong",
         "danger",
+        "connection-startup-script",
+        "options",
+      ),
+    );
+  } else if (
+    profile.engine === "postgres" &&
+    startupScript.trim() &&
+    isPostgresTransactionPooler(profile)
+  ) {
+    // A warning, not a block: the connection works, but shared server sessions
+    // mean the script never runs.
+    diagnostics.push(
+      issue(
+        "startupScriptSkippedByPooler",
+        "warning",
         "connection-startup-script",
         "options",
       ),

@@ -20,16 +20,16 @@ public-contract rule that governs every file here.
 | `response.rs` | Validated broker response envelope. |
 | `command.rs` | Typed command payload trait(s) shared by the Desktop broker and CLI; an active dispatcher must decode through one of these closed command specs before reaching an application service. |
 | `error.rs` | Stable broker `ErrorCode`s and redacted error envelopes (consumed by `dopedb-cli/src/exit_code.rs`). |
-| `version.rs` | Protocol and command-schema version negotiation (`PROTOCOL_MIN`/`PROTOCOL_MAX`, `COMMAND_SCHEMA_VERSION`). |
+| `version.rs` | Protocol and command-schema version negotiation (`PROTOCOL_MIN`/`PROTOCOL_MAX`, `COMMAND_SCHEMA_VERSION` = 18). A peer on another command-schema version receives `ProtocolMismatch`; the CLI then tells the user to update it from Settings → Command line. |
 | `discovery.rs` | Public, secret-free runtime discovery metadata (how the CLI finds a running Desktop runtime). |
 | `catalog.rs` | Catalog V2 DTOs shared by introspection, CLI, ERD, DDL, and table editing. |
 | `catalog_command.rs` | Typed catalog, schema, and relation command payloads. |
 | `connection.rs` | Secret-free connection selectors and command payloads. |
 | `operation.rs` | Stable operation lifecycle vocabulary shared with CLI status responses. |
-| `operation_command.rs` | Redacted operation lifecycle command payloads. |
+| `operation_command.rs` | Redacted operation lifecycle command payloads. `OperationSummary.decisionReason` carries only a rejection's human note (≤ `MAX_DECISION_REASON_CHARS` = 280), never approval confirmation text. |
 | `query_command.rs` | Typed read-plan, read-run, SQL-proposal, and cancellation payloads. |
 | `document_command.rs` | Typed MongoDB read contracts for the Terminal-scoped local broker. |
-| `schema_diff.rs` | Read-only structural comparison of canonical catalogs (relation kind, column type/nullability/PK, index, foreign key); explicitly excludes database name, native ID, row estimate, and capture time from identity. |
+| `schema_diff.rs` | Read-only structural comparison of canonical catalogs (relation kind including materialized views, column type/nullability/PK, index column or expression keys, foreign key); explicitly excludes database name, native ID, row estimate, and capture time from identity. The result carries `SCHEMA_DIFF_VERSION` (2) and a closed `scope` (`compared`/`notCompared` property lists) that must name exactly what the engine reads, so zero differences never reads as identical schemas. |
 | `ddl.rs` | Dialect-neutral schema-change IR shared by the desktop UI and runtime; the UI never assembles executable DDL directly, only this IR, which is validated against an exact Catalog V2 fingerprint before the ordinary Operation approval path. |
 | `knowledge.rs` | Provider-neutral Project Knowledge wire contracts; deliberately cannot carry a local folder path, repository token, source file body, provider credential, or unprovenanced inferred fact. |
 | `knowledge_command.rs` | Session-scoped Project Knowledge commands, authorized against the immutable graph revision set pinned at ACP session launch (arguments never carry a workspace/project/environment/source/grant selector). |

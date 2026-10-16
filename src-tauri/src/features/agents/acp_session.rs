@@ -8,12 +8,9 @@ impl AcpSession {
     }
 
     pub(super) fn sender(&self) -> AppResult<tokio::sync::mpsc::UnboundedSender<SessionCommand>> {
-        lock_unpoisoned(&self.command).clone().ok_or_else(|| {
-            AppError::Agent(format!(
-                "the {} ACP session is no longer available",
-                provider_name(self.summary().provider)
-            ))
-        })
+        lock_unpoisoned(&self.command)
+            .clone()
+            .ok_or_else(|| session_unavailable(self.summary().provider))
     }
 
     pub(super) fn focus(&self, after_sequence: Option<u64>) -> AppResult<AcpSessionFocus> {
@@ -31,6 +28,7 @@ impl AcpSession {
                 .map(|entry| entry.event.clone())
                 .collect(),
             replay_truncated,
+            broker_session_id: Some(uuid::Uuid::from(self.broker_session_id)),
         })
     }
 
@@ -48,7 +46,7 @@ impl AcpSession {
 
     pub(super) fn set_title_from_prompt(&self, prompt: &str) {
         let mut summary = lock_unpoisoned(&self.summary);
-        if summary.title != "New Agent session" {
+        if !summary.title.is_empty() && summary.title != UNTITLED_SESSION_TITLE {
             return;
         }
         let title = prompt.split_whitespace().collect::<Vec<_>>().join(" ");
@@ -121,13 +119,13 @@ impl AcpSession {
             let mut summary = lock_unpoisoned(&self.summary);
             summary.updated_at = event.created_at;
         }
-        let summary = self.summary();
+        let boundary = persistence::is_boundary(&event.payload);
         self.persistence.begin();
         let request = PersistenceRequest {
-            summary,
+            summary: boundary.then(|| self.summary()),
             event: event.clone(),
             bytes: event_bytes,
-            immediate: persistence::is_boundary(&event.payload),
+            immediate: boundary,
         };
         if let Err(error) = self
             .persistence_queue
@@ -147,31 +145,13 @@ impl AcpSession {
     }
 
     pub(super) fn emit(&self, event: Option<AcpSessionEvent>) {
+        let streamed_chunk = event
+            .as_ref()
+            .is_some_and(|event| !persistence::is_boundary(&event.payload));
         self.event_sink.emit_changed(AcpSessionChanged {
-            session: self.summary(),
+            session: (!streamed_chunk).then(|| self.summary()),
             event,
         });
-    }
-
-    pub(super) async fn discard_replaced_history(&self, sequence: u64) {
-        match self
-            .sessions_persistence
-            .discard_events_through(&self.storage_scope, self.id, sequence)
-            .await
-        {
-            Ok(()) => {
-                let mut events = lock_unpoisoned(&self.events);
-                events.discard_through(sequence);
-            }
-            Err(error) => {
-                tracing::warn!(
-                    session_id = %self.id,
-                    through_sequence = sequence,
-                    %error,
-                    "could not replace persisted ACP history after session load"
-                );
-            }
-        }
     }
 
     pub(super) fn register_permission(
@@ -190,9 +170,10 @@ impl AcpSession {
         option_id: Option<String>,
     ) -> AppResult<()> {
         let mut permissions = lock_unpoisoned(&self.permissions);
+        // The request must still be pending, and only an offered option answers it.
         let Some(pending) = permissions.get(request_id) else {
             return Err(AppError::NotFound(
-                "the Agent permission request is no longer pending".into(),
+                agent_error::PERMISSION_UNAVAILABLE.into(),
             ));
         };
         if option_id
@@ -200,7 +181,7 @@ impl AcpSession {
             .is_some_and(|option| !pending.allowed.contains(option))
         {
             return Err(AppError::Blocked {
-                reason: "the selected permission option was not offered by the Agent".into(),
+                reason: agent_error::PERMISSION_UNAVAILABLE.into(),
             });
         }
         let pending = permissions
@@ -212,7 +193,7 @@ impl AcpSession {
         pending
             .response
             .send(option_id)
-            .map_err(|_| AppError::Agent("the Agent no longer accepts this permission".into()))?;
+            .map_err(|_| AppError::Agent(agent_error::PERMISSION_UNAVAILABLE.into()))?;
         self.push_unlocked(AcpSessionEventPayload::PermissionResponse {
             request_id: request_id.to_owned(),
             option_id: persisted_option,
@@ -256,7 +237,18 @@ impl ReplayBuffer {
         replay
     }
 
+    /// Append one event. A streamed text chunk that continues the previous
+    /// chunk of the same message is folded into that entry (which takes the
+    /// newest sequence), so the replay bound counts conversation events rather
+    /// than tokens and a long answer cannot evict the start of the conversation.
     pub(super) fn push(&mut self, event: AcpSessionEvent, bytes: usize) {
+        if let Some(last) = self.events.back_mut() {
+            if let Some(added) = persistence::append_text_chunk(&mut last.event, &event) {
+                last.bytes = last.bytes.saturating_add(added);
+                self.bytes = self.bytes.saturating_add(added);
+                return;
+            }
+        }
         self.bytes = self.bytes.saturating_add(bytes);
         self.events.push_back(ReplayEvent { event, bytes });
         while self.events.len() > MAX_REPLAY_EVENTS || self.bytes > MAX_REPLAY_BYTES {
@@ -265,18 +257,6 @@ impl ReplayBuffer {
                 break;
             };
             self.bytes = self.bytes.saturating_sub(removed.bytes);
-        }
-    }
-
-    pub(super) fn discard_through(&mut self, sequence: u64) {
-        while self
-            .events
-            .front()
-            .is_some_and(|entry| entry.event.sequence <= sequence)
-        {
-            if let Some(removed) = self.events.pop_front() {
-                self.bytes = self.bytes.saturating_sub(removed.bytes);
-            }
         }
     }
 }

@@ -80,7 +80,6 @@ export async function exerciseStartupOwnership(makeSession: (id: string) => AcpS
           }],
           selectedProvider: "codex", writeConnectionId: null,
           resourceScopeReady: true, prerequisitesReady: true, sessionsLoading: false,
-          ensureSelectedResources: async () => true,
           onError: vi.fn(), onStarted, onPrepared: async () => undefined, onStartingChange,
         });
       };

@@ -27,8 +27,9 @@ impl Store {
         let result = sqlx::query(
             r#"INSERT INTO query_history
                 (id, connection_id, account_scope, sql, kind, status, row_count,
-                 duration_ms, error, executed_at, origin)
-               SELECT ?10, ?5, ?9, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18
+                 duration_ms, error, executed_at, origin, target_database,
+                 target_namespace)
+               SELECT ?10, ?5, ?9, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20
                WHERE EXISTS(
                    SELECT 1
                    FROM app_settings workspace
@@ -91,6 +92,8 @@ impl Store {
         .bind(&h.error)
         .bind(h.executed_at)
         .bind(&h.origin)
+        .bind(&h.database)
+        .bind(&h.namespace)
         .execute(&self.pool)
         .await?;
         if result.rows_affected() != 1 {
@@ -163,24 +166,32 @@ impl Store {
             None
         };
 
-        let statuses = sqlx::query_scalar::<_, String>(
-            "SELECT DISTINCT status FROM query_history
-             WHERE connection_id = ?1 AND account_scope = ?2
-             ORDER BY status LIMIT 32",
-        )
-        .bind(connection_id.to_string())
-        .bind(&account_scope)
-        .fetch_all(&self.pool)
-        .await?;
-        let origins = sqlx::query_scalar::<_, String>(
-            "SELECT DISTINCT origin FROM query_history
-             WHERE connection_id = ?1 AND account_scope = ?2
-             ORDER BY origin LIMIT 32",
-        )
-        .bind(connection_id.to_string())
-        .bind(&account_scope)
-        .fetch_all(&self.pool)
-        .await?;
+        // Filter facets describe the whole connection history, not one page, so the
+        // two DISTINCT scans run only for the first page. Later pages return empty
+        // facets and the reader keeps the ones from the first page.
+        let (statuses, origins) = if cursor.is_none() {
+            let statuses = sqlx::query_scalar::<_, String>(
+                "SELECT DISTINCT status FROM query_history
+                 WHERE connection_id = ?1 AND account_scope = ?2
+                 ORDER BY status LIMIT 32",
+            )
+            .bind(connection_id.to_string())
+            .bind(&account_scope)
+            .fetch_all(&self.pool)
+            .await?;
+            let origins = sqlx::query_scalar::<_, String>(
+                "SELECT DISTINCT origin FROM query_history
+                 WHERE connection_id = ?1 AND account_scope = ?2
+                 ORDER BY origin LIMIT 32",
+            )
+            .bind(connection_id.to_string())
+            .bind(&account_scope)
+            .fetch_all(&self.pool)
+            .await?;
+            (statuses, origins)
+        } else {
+            (Vec::new(), Vec::new())
+        };
 
         Ok(HistoryPage {
             items: items.into_iter().map(|(summary, _)| summary).collect(),

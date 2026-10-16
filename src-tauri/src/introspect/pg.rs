@@ -4,14 +4,15 @@ mod queries;
 #[path = "pg_timeout.rs"]
 mod timeout;
 
-use queries::objects_sql_for_version;
+use queries::{columns_sql, foreign_keys_sql, indexes_sql, objects_sql};
 use timeout::*;
 
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 use dopedb_protocol::{Constraint, ConstraintKind, IndexKey, ObjectKind, ObjectRef, SortDirection};
-use sqlx::{postgres::PgRow, AssertSqlSafe, PgPool, Postgres, Row, Transaction};
+use futures::TryStreamExt;
+use sqlx::{postgres::PgRow, AssertSqlSafe, Either, PgPool, Postgres, Row, Transaction};
 
 use crate::error::{AppError, AppResult};
 use crate::features::catalog::{
@@ -21,93 +22,13 @@ use crate::features::catalog::{
 
 use super::{Catalog, Column, DatabaseObject, ForeignKey, Index, Table};
 
-const COLS_SQL: &str = r#"
-SELECT n.nspname AS table_schema,
-       c.relname AS table_name,
-       a.attname AS column_name,
-       format_type(a.atttypid, a.atttypmod) AS formatted_type,
-       NOT a.attnotnull AS is_nullable,
-       a.attnum::integer AS ordinal_position,
-       information_schema._pg_char_max_length(a.atttypid, a.atttypmod)
-         AS character_maximum_length,
-       information_schema._pg_numeric_precision(a.atttypid, a.atttypmod)
-         AS numeric_precision,
-       information_schema._pg_numeric_scale(a.atttypid, a.atttypmod)
-         AS numeric_scale,
-       pg_get_expr(def.adbin, def.adrelid) AS column_default,
-       a.attidentity <> '' AS is_identity,
-       coll.collname AS collation_name,
-       col_description(c.oid, a.attnum) AS column_comment
-FROM pg_attribute a
-JOIN pg_class c ON c.oid = a.attrelid
-JOIN pg_namespace n ON n.oid = c.relnamespace
-LEFT JOIN pg_attrdef def ON def.adrelid = a.attrelid AND def.adnum = a.attnum
-LEFT JOIN pg_collation coll ON coll.oid = a.attcollation
-WHERE c.relkind IN ('r', 'p', 'v', 'm', 'f')
-  AND a.attnum > 0
-  AND NOT a.attisdropped
-  AND n.nspname NOT IN ('pg_catalog', 'information_schema')
-  -- Hide objects owned by an extension (e.g. pg_stat_statements) — they are noise in
-  -- a table browser and some error on SELECT *.
-  AND NOT EXISTS (
-    SELECT 1 FROM pg_depend dep
-    WHERE dep.deptype = 'e'
-      AND dep.classid = 'pg_class'::regclass
-      AND dep.objid = c.oid
-  )
-ORDER BY n.nspname, c.relname, a.attnum
-"#;
-
-// PostgreSQL 10 introduced generated identity columns and `pg_attribute.attidentity`.
-// Identity is necessarily false on PostgreSQL 9.6 because the server cannot define one.
-const COLS_PRE_10_SQL: &str = r#"
-SELECT n.nspname AS table_schema,
-       c.relname AS table_name,
-       a.attname AS column_name,
-       format_type(a.atttypid, a.atttypmod) AS formatted_type,
-       NOT a.attnotnull AS is_nullable,
-       a.attnum::integer AS ordinal_position,
-       information_schema._pg_char_max_length(a.atttypid, a.atttypmod)
-         AS character_maximum_length,
-       information_schema._pg_numeric_precision(a.atttypid, a.atttypmod)
-         AS numeric_precision,
-       information_schema._pg_numeric_scale(a.atttypid, a.atttypmod)
-         AS numeric_scale,
-       pg_get_expr(def.adbin, def.adrelid) AS column_default,
-       false AS is_identity,
-       coll.collname AS collation_name,
-       col_description(c.oid, a.attnum) AS column_comment
-FROM pg_attribute a
-JOIN pg_class c ON c.oid = a.attrelid
-JOIN pg_namespace n ON n.oid = c.relnamespace
-LEFT JOIN pg_attrdef def ON def.adrelid = a.attrelid AND def.adnum = a.attnum
-LEFT JOIN pg_collation coll ON coll.oid = a.attcollation
-WHERE c.relkind IN ('r', 'p', 'v', 'm', 'f')
-  AND a.attnum > 0
-  AND NOT a.attisdropped
-  AND n.nspname NOT IN ('pg_catalog', 'information_schema')
-  AND NOT EXISTS (
-    SELECT 1 FROM pg_depend dep
-    WHERE dep.deptype = 'e'
-      AND dep.classid = 'pg_class'::regclass
-      AND dep.objid = c.oid
-  )
-ORDER BY n.nspname, c.relname, a.attnum
-"#;
-
-fn columns_sql_for_version(server_version_num: u32) -> &'static str {
-    if server_version_num >= 100_000 {
-        COLS_SQL
-    } else {
-        COLS_PRE_10_SQL
-    }
-}
-
 // The browser must be useful even when a very large schema makes detail collection
 // expensive.  This deliberately small pg_catalog scan is the core catalog: it returns
 // the table/view tree before columns, constraints, indexes, estimates, or routines.
-// Keep its extension filter aligned with COLS_SQL so a partial catalog never grows
-// surprising extension-owned entries.
+// Keep its extension and temporary-relation filters aligned with `columns_sql` so a
+// partial catalog never grows surprising entries. Only a declarative partition names
+// a parent (a partitioned table, relkind 'p'); classic inheritance may have several
+// parents, so joining every pg_inherits row would repeat the relation.
 const RELATIONS_SQL: &str = r#"
 SELECT n.nspname AS table_schema,
        c.relname AS table_name,
@@ -120,14 +41,21 @@ SELECT n.nspname AS table_schema,
        obj_description(c.oid, 'pg_class') AS table_comment,
        CASE WHEN c.relkind IN ('r', 'p', 'f') AND c.reltuples >= 0
             THEN c.reltuples::bigint ELSE NULL END AS row_estimate,
-       pn.nspname AS parent_schema,
-       pc.relname AS parent_table
+       parent.parent_schema,
+       parent.parent_table
 FROM pg_class c
 JOIN pg_namespace n ON n.oid = c.relnamespace
-LEFT JOIN pg_inherits inh ON inh.inhrelid = c.oid
-LEFT JOIN pg_class pc ON pc.oid = inh.inhparent
-LEFT JOIN pg_namespace pn ON pn.oid = pc.relnamespace
+LEFT JOIN LATERAL (
+  SELECT pn.nspname AS parent_schema, pc.relname AS parent_table
+  FROM pg_inherits inh
+  JOIN pg_class pc ON pc.oid = inh.inhparent
+  JOIN pg_namespace pn ON pn.oid = pc.relnamespace
+  WHERE inh.inhrelid = c.oid
+    AND pc.relkind = 'p'
+  LIMIT 1
+) parent ON true
 WHERE c.relkind IN ('r', 'p', 'v', 'm', 'f')
+  AND c.relpersistence <> 't'
   AND n.nspname NOT IN ('pg_catalog', 'information_schema')
   AND NOT EXISTS (
     SELECT 1
@@ -168,87 +96,19 @@ pub(crate) async fn databases(pool: &PgPool) -> AppResult<Vec<String>> {
         .map_err(Into::into)
 }
 
-// FK edges resolved on pg_catalog so composite keys stay per-column-correct. Zipping
-// conkey/confkey WITH ORDINALITY pairs each local column to the matching referenced
-// column without cross-joining composite or same-named constraints.
-const FK_SQL: &str = r#"
-SELECT cn.nspname   AS table_schema,
-       cl.relname   AS table_name,
-       con.conname  AS constraint_name,
-       k.ord        AS ordinal_position,
-       att.attname  AS column_name,
-       fn.nspname   AS foreign_schema,
-       fcl.relname  AS foreign_table,
-       fatt.attname AS foreign_column,
-       CASE con.confupdtype
-         WHEN 'a' THEN 'NO ACTION' WHEN 'r' THEN 'RESTRICT'
-         WHEN 'c' THEN 'CASCADE' WHEN 'n' THEN 'SET NULL'
-         WHEN 'd' THEN 'SET DEFAULT'
-       END AS update_action,
-       CASE con.confdeltype
-         WHEN 'a' THEN 'NO ACTION' WHEN 'r' THEN 'RESTRICT'
-         WHEN 'c' THEN 'CASCADE' WHEN 'n' THEN 'SET NULL'
-         WHEN 'd' THEN 'SET DEFAULT'
-       END AS delete_action,
-       con.condeferrable AS is_deferrable,
-       con.convalidated AS is_validated
-FROM pg_constraint con
-JOIN pg_class cl       ON cl.oid = con.conrelid
-JOIN pg_namespace cn   ON cn.oid = cl.relnamespace
-JOIN pg_class fcl      ON fcl.oid = con.confrelid
-JOIN pg_namespace fn   ON fn.oid = fcl.relnamespace
-JOIN LATERAL unnest(con.conkey, con.confkey) WITH ORDINALITY AS k(conkey, confkey, ord) ON true
-JOIN pg_attribute att  ON att.attrelid = con.conrelid  AND att.attnum = k.conkey
-JOIN pg_attribute fatt ON fatt.attrelid = con.confrelid AND fatt.attnum = k.confkey
-WHERE con.contype = 'f'
-  AND cn.nspname NOT IN ('pg_catalog', 'information_schema')
-ORDER BY cn.nspname, cl.relname, con.conname, k.ord
-"#;
-
-// Secondary indexes (PK indexes excluded — the PK is already on the columns). Expression
-// columns (indkey = 0) surface as "(expression)".
-const IDX_SQL: &str = r#"
-SELECT n.nspname AS table_schema,
-       t.relname AS table_name,
-       ic.relname AS index_name,
-       i.indisunique AS is_unique,
-       am.amname AS index_method,
-       a.attname AS column_name,
-       CASE WHEN a.attname IS NULL
-            THEN pg_get_indexdef(i.indexrelid, k.ord::integer, true)
-            ELSE NULL
-       END AS index_expression,
-       CASE WHEN (i.indoption[(k.ord - 1)::integer] & 1) = 1
-            THEN 'desc' ELSE 'asc'
-       END AS sort_direction,
-       pg_get_expr(i.indpred, i.indrelid) AS predicate,
-       i.indisvalid AS is_valid
-FROM pg_index i
-JOIN pg_class t      ON t.oid = i.indrelid
-JOIN pg_class ic     ON ic.oid = i.indexrelid
-JOIN pg_namespace n  ON n.oid = t.relnamespace
-JOIN pg_am am         ON am.oid = ic.relam
-JOIN LATERAL unnest(i.indkey) WITH ORDINALITY AS k(attnum, ord) ON true
-LEFT JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = k.attnum
-WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')
-  AND NOT i.indisprimary
-ORDER BY n.nspname, t.relname, ic.relname, k.ord
-"#;
-
 const CONSTRAINTS_SQL: &str = r#"
 SELECT n.nspname AS table_schema,
        c.relname AS table_name,
        con.conname AS constraint_name,
        con.contype::text AS constraint_type,
        COALESCE(
-         ARRAY(
-           SELECT a.attname
+         (
+           SELECT json_agg(a.attname ORDER BY key.ord)
            FROM unnest(con.conkey) WITH ORDINALITY AS key(attnum, ord)
            JOIN pg_attribute a ON a.attrelid = con.conrelid AND a.attnum = key.attnum
-           ORDER BY key.ord
          ),
-         ARRAY[]::text[]
-       ) AS columns,
+         '[]'::json
+       )::text AS columns_json,
        CASE WHEN con.contype = 'c' THEN pg_get_expr(con.conbin, con.conrelid) END
          AS check_expression,
        con.condeferrable AS is_deferrable,
@@ -257,6 +117,7 @@ FROM pg_constraint con
 JOIN pg_class c ON c.oid = con.conrelid
 JOIN pg_namespace n ON n.oid = c.relnamespace
 WHERE con.contype IN ('p', 'u', 'c')
+  AND c.relpersistence <> 't'
   AND n.nspname NOT IN ('pg_catalog', 'information_schema')
 ORDER BY n.nspname, c.relname, con.conname
 "#;
@@ -297,23 +158,68 @@ fn relation_overview_from_row(row: PgRow) -> AppResult<RelationOverviewRow> {
     })
 }
 
-async fn fetch_relation_overview(
+fn relation_overview_rows(rows: Vec<PgRow>) -> AppResult<Vec<RelationOverviewRow>> {
+    rows.into_iter().map(relation_overview_from_row).collect()
+}
+
+/// Send control statements and catalog queries as ONE simple-protocol message and
+/// return each statement's rows in order; a statement without a result set yields an
+/// empty group. A whole stage therefore costs one network round trip.
+///
+/// Unprepared statements stream text-format values, so every column read from these
+/// rows is a name, text, an integer, a boolean, or JSON text. SQL arrays are avoided
+/// because their text form cannot tell a NULL element from the string "NULL".
+async fn fetch_statements(
     tx: &mut Transaction<'_, Postgres>,
-) -> AppResult<Vec<RelationOverviewRow>> {
+    sql: String,
+) -> Result<Vec<Vec<PgRow>>, sqlx::Error> {
+    let mut statements = Vec::new();
+    let mut rows = Vec::new();
+    let mut results = sqlx::raw_sql(AssertSqlSafe(sql)).fetch_many(&mut **tx);
+    while let Some(result) = results.try_next().await? {
+        match result {
+            Either::Left(_) => statements.push(std::mem::take(&mut rows)),
+            Either::Right(row) => rows.push(row),
+        }
+    }
+    Ok(statements)
+}
+
+/// Open the scan transaction and install the core timeout in one round trip. Every
+/// stage reads one snapshot: concurrent DDL can neither split a relation from its
+/// columns nor make two stages disagree about which objects exist.
+async fn begin_scan(pool: &PgPool) -> AppResult<Transaction<'static, Postgres>> {
+    Ok(pool
+        .begin_with(AssertSqlSafe(format!(
+            "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY; {}",
+            statement_timeout_sql(CORE_RELATION_TIMEOUT)
+        )))
+        .await?)
+}
+
+/// End a read-only scan without waiting another round trip. Dropping the transaction
+/// queues its ROLLBACK, which the pool flushes and confirms before the connection is
+/// reused; a catalog read has nothing to commit.
+fn finish_read_only_scan(tx: Transaction<'_, Postgres>) {
+    drop(tx);
+}
+
+/// Run the core relation-tree statements under the core timeout installed by
+/// [`begin_scan`]. `sql` may hold several statements sharing the round trip.
+async fn fetch_core_statements(
+    tx: &mut Transaction<'_, Postgres>,
+    sql: String,
+) -> AppResult<Vec<Vec<PgRow>>> {
     let started = Instant::now();
-    match sqlx::query(RELATIONS_SQL).fetch_all(&mut **tx).await {
-        Ok(rows) => {
-            let rows = rows
-                .into_iter()
-                .map(relation_overview_from_row)
-                .collect::<AppResult<Vec<_>>>()?;
+    match fetch_statements(tx, sql).await {
+        Ok(statements) => {
             tracing::debug!(
                 stage = "relations",
                 elapsed_ms = started.elapsed().as_millis() as u64,
-                relations = rows.len(),
+                relations = statements.last().map_or(0, Vec::len),
                 "PostgreSQL catalog core relation stage completed"
             );
-            Ok(rows)
+            Ok(statements)
         }
         Err(error) if is_statement_timeout(&error) => {
             let elapsed = started.elapsed();
@@ -333,18 +239,43 @@ async fn fetch_relation_overview(
     }
 }
 
+/// Run a snapshot scan, rescanning once in a fresh transaction when it raced a
+/// concurrent DROP ([`AppError::is_concurrent_catalog_drop`]): the new snapshot no
+/// longer lists the dropped object. The normal path keeps its round trips.
+async fn rescan_once_after_concurrent_drop<T, F, Fut>(scan: F) -> AppResult<T>
+where
+    F: Fn() -> Fut,
+    Fut: std::future::Future<Output = AppResult<T>>,
+{
+    match scan().await {
+        Err(error) if error.is_concurrent_catalog_drop() => {
+            tracing::debug!("PostgreSQL catalog scan raced a concurrent DROP; rescanning once");
+            scan().await
+        }
+        result => result,
+    }
+}
+
 /// Fetch only the complete relation tree under the core timeout. This response has
 /// no full-catalog persistence path, so deferred details cannot poison snapshots.
+/// BEGIN plus the timeout, then namespaces plus relations: two round trips.
 pub(crate) async fn overview(pool: &PgPool, database: &str) -> AppResult<CatalogOverview> {
-    let mut tx = pool.begin().await?;
-    sqlx::query(AssertSqlSafe(statement_timeout_sql(CORE_RELATION_TIMEOUT)))
-        .execute(&mut *tx)
-        .await?;
-    let namespaces = sqlx::query_scalar::<_, String>(SCHEMAS_SQL)
-        .fetch_all(&mut *tx)
-        .await?;
-    let relations = fetch_relation_overview(&mut tx)
-        .await?
+    rescan_once_after_concurrent_drop(|| overview_scan(pool, database)).await
+}
+
+async fn overview_scan(pool: &PgPool, database: &str) -> AppResult<CatalogOverview> {
+    let mut tx = begin_scan(pool).await?;
+    let statements =
+        fetch_core_statements(&mut tx, format!("{SCHEMAS_SQL};{RELATIONS_SQL}")).await?;
+    finish_read_only_scan(tx);
+    let [namespace_rows, relation_rows]: [Vec<PgRow>; 2] = statements.try_into().map_err(|_| {
+        AppError::Config("PostgreSQL returned an unexpected catalog overview shape".into())
+    })?;
+    let namespaces = namespace_rows
+        .iter()
+        .map(|row| row.try_get::<String, _>(0))
+        .collect::<Result<Vec<_>, _>>()?;
+    let relations = relation_overview_rows(relation_rows)?
         .into_iter()
         .map(|relation| CatalogOverviewRelation {
             schema: Some(relation.schema),
@@ -363,7 +294,6 @@ pub(crate) async fn overview(pool: &PgPool, database: &str) -> AppResult<Catalog
                 }),
         })
         .collect();
-    tx.commit().await?;
     Ok(CatalogOverview {
         database: database.to_owned(),
         namespaces,
@@ -376,38 +306,78 @@ async fn rollback_stage_savepoint(
     tx: &mut Transaction<'_, Postgres>,
     savepoint: &str,
 ) -> Result<(), sqlx::Error> {
-    sqlx::query(AssertSqlSafe(format!("ROLLBACK TO SAVEPOINT {savepoint}")))
-        .execute(&mut **tx)
-        .await?;
-    sqlx::query(AssertSqlSafe(format!("RELEASE SAVEPOINT {savepoint}")))
-        .execute(&mut **tx)
-        .await?;
+    sqlx::raw_sql(AssertSqlSafe(format!(
+        "ROLLBACK TO SAVEPOINT {savepoint}; RELEASE SAVEPOINT {savepoint}"
+    )))
+    .execute(&mut **tx)
+    .await?;
     Ok(())
+}
+
+/// Bounded detail scan state. A successful stage leaves its savepoint pending so the
+/// RELEASE rides with the next stage's message; ending the scan discards the last one.
+struct DetailScan {
+    started: Instant,
+    relation_count: usize,
+    pending_release: Option<String>,
+}
+
+impl DetailScan {
+    fn new(relation_count: usize) -> Self {
+        Self {
+            started: Instant::now(),
+            relation_count,
+            pending_release: None,
+        }
+    }
+
+    async fn rows(
+        &mut self,
+        tx: &mut Transaction<'_, Postgres>,
+        stage: MetadataStage,
+        sql: &str,
+    ) -> AppResult<Vec<PgRow>> {
+        let Some(timeout) = remaining_detail_timeout(self.started, self.relation_count) else {
+            let elapsed = self.started.elapsed();
+            tracing::warn!(
+                stage = stage.name(),
+                elapsed_ms = elapsed.as_millis() as u64,
+                budget_ms = DETAIL_SCAN_BUDGET.as_millis() as u64,
+                "PostgreSQL catalog detail budget exhausted"
+            );
+            return Err(catalog_detail_budget_exhausted(stage.name(), elapsed));
+        };
+        fetch_detail_rows(tx, stage, timeout, sql, &mut self.pending_release).await
+    }
 }
 
 /// Run one complete-catalog metadata statement under a savepoint. PostgreSQL marks
 /// a transaction failed after statement_timeout; rolling back the savepoint lets us
 /// emit a precise non-retryable timeout rather than leaking a poisoned pool connection.
+/// The previous RELEASE, this SAVEPOINT, its timeout and the catalog query travel as
+/// one simple-protocol message, so a stage costs one round trip on a remote server.
 async fn fetch_detail_rows(
     tx: &mut Transaction<'_, Postgres>,
     stage: MetadataStage,
     timeout: Duration,
-    sql: &'static str,
+    sql: &str,
+    pending_release: &mut Option<String>,
 ) -> AppResult<Vec<PgRow>> {
     let started = Instant::now();
     let savepoint = format!("dopedb_catalog_{}", stage.name());
-    sqlx::query(AssertSqlSafe(format!("SAVEPOINT {savepoint}")))
-        .execute(&mut **tx)
-        .await?;
-    sqlx::query(AssertSqlSafe(statement_timeout_sql(timeout)))
-        .execute(&mut **tx)
-        .await?;
+    let release = pending_release
+        .take()
+        .map(|previous| format!("RELEASE SAVEPOINT {previous}; "))
+        .unwrap_or_default();
+    let message = format!(
+        "{release}SAVEPOINT {savepoint}; {};{sql}",
+        statement_timeout_sql(timeout)
+    );
 
-    match sqlx::query(sql).fetch_all(&mut **tx).await {
-        Ok(rows) => {
-            sqlx::query(AssertSqlSafe(format!("RELEASE SAVEPOINT {savepoint}")))
-                .execute(&mut **tx)
-                .await?;
+    match fetch_statements(tx, message).await {
+        Ok(mut statements) => {
+            *pending_release = Some(savepoint);
+            let rows = statements.pop().unwrap_or_default();
             tracing::debug!(
                 stage = stage.name(),
                 elapsed_ms = started.elapsed().as_millis() as u64,
@@ -417,7 +387,10 @@ async fn fetch_detail_rows(
             Ok(rows)
         }
         Err(error) if is_statement_timeout(&error) => {
-            rollback_stage_savepoint(tx, &savepoint).await?;
+            // Best effort: every caller drops the transaction after an error and the
+            // pool rolls it back before reuse, so a failed restore must not mask the
+            // timeout.
+            let _ = rollback_stage_savepoint(tx, &savepoint).await;
             tracing::warn!(
                 stage = stage.name(),
                 elapsed_ms = started.elapsed().as_millis() as u64,
@@ -431,47 +404,34 @@ async fn fetch_detail_rows(
             ))
         }
         Err(error) => {
-            // Restore the transaction before returning a non-timeout error.  This is
-            // also cancellation-safe: dropping the surrounding transaction rolls it
-            // back and releases the read-pool connection.
-            rollback_stage_savepoint(tx, &savepoint).await?;
+            // Restore the transaction before returning a non-timeout error. When the
+            // failed statement preceded the savepoint the restore fails too; the
+            // original error stays the one reported.
+            let _ = rollback_stage_savepoint(tx, &savepoint).await;
             Err(error.into())
         }
     }
 }
 
-async fn next_detail_rows(
-    tx: &mut Transaction<'_, Postgres>,
-    started: Instant,
-    relation_count: usize,
-    stage: MetadataStage,
-    sql: &'static str,
-) -> AppResult<Vec<PgRow>> {
-    let Some(timeout) = remaining_detail_timeout(started, relation_count) else {
-        let elapsed = started.elapsed();
-        tracing::warn!(
-            stage = stage.name(),
-            elapsed_ms = elapsed.as_millis() as u64,
-            budget_ms = DETAIL_SCAN_BUDGET.as_millis() as u64,
-            "PostgreSQL catalog detail budget exhausted"
-        );
-        return Err(catalog_detail_budget_exhausted(stage.name(), elapsed));
-    };
-    fetch_detail_rows(tx, stage, timeout, sql).await
+/// Read the complete catalog in one server session: BEGIN plus the core timeout, the
+/// relation tree, then five bounded detail stages — seven network round trips in all.
+pub async fn introspect(pool: &PgPool) -> AppResult<Catalog> {
+    rescan_once_after_concurrent_drop(|| introspect_scan(pool)).await
 }
 
-pub async fn introspect(pool: &PgPool) -> AppResult<Catalog> {
-    // Keep one server session for a consistent scan. The core tree gets its own
-    // bounded query; every detail stage must complete before this becomes cacheable.
-    let mut tx = pool.begin().await?;
-    sqlx::query(AssertSqlSafe(statement_timeout_sql(CORE_RELATION_TIMEOUT)))
-        .execute(&mut *tx)
-        .await?;
+async fn introspect_scan(pool: &PgPool) -> AppResult<Catalog> {
+    // Keep one server session for the scan. The core tree gets its own bounded
+    // statement; every detail stage must complete before this becomes cacheable.
+    let mut tx = begin_scan(pool).await?;
+    let relation_rows = fetch_core_statements(&mut tx, RELATIONS_SQL.to_owned())
+        .await?
+        .pop()
+        .unwrap_or_default();
 
     let mut tables: Vec<Table> = Vec::new();
     let mut idx: HashMap<(String, String), usize> = HashMap::new();
 
-    for relation in fetch_relation_overview(&mut tx).await? {
+    for relation in relation_overview_rows(relation_rows)? {
         let schema = relation.schema;
         let name = relation.name;
         let i = *idx
@@ -504,36 +464,62 @@ pub async fn introspect(pool: &PgPool) -> AppResult<Catalog> {
         }
     }
 
-    let details_started = Instant::now();
-    let relation_count = tables.len();
+    // One hash lookup per partition links it under its parent.
+    let partitions = tables
+        .iter()
+        .filter_map(|table| {
+            let parent = table.partition_parent.as_ref()?;
+            let parent_index = *idx.get(&(parent.namespace.clone()?, parent.name.clone()))?;
+            Some((
+                parent_index,
+                ObjectRef {
+                    catalog: None,
+                    namespace: table.schema.clone(),
+                    name: table.name.clone(),
+                    kind: ObjectKind::Table,
+                    native_id: table.native_id.clone(),
+                },
+            ))
+        })
+        .collect::<Vec<_>>();
+    for (parent_index, child) in partitions {
+        tables[parent_index].partition_children.push(child);
+    }
 
-    // This cheap server capability read must happen before the column scan: direct
-    // references to `attidentity` fail at parse time on PostgreSQL 9.6 and older.
-    let server_version_rows = next_detail_rows(
-        &mut tx,
-        details_started,
-        relation_count,
-        MetadataStage::ServerVersion,
-        "SHOW server_version_num",
-    )
-    .await?;
-    let version_row = server_version_rows
-        .into_iter()
-        .next()
-        .ok_or_else(|| AppError::Config("PostgreSQL returned no server_version_num row".into()))?;
-    let server_version: String = version_row.try_get(0)?;
-    let server_version_num = server_version.trim().parse::<u32>().map_err(|_| {
-        AppError::Config("PostgreSQL returned an invalid server_version_num".into())
-    })?;
+    let mut scan = DetailScan::new(tables.len());
 
-    for r in next_detail_rows(
-        &mut tx,
-        details_started,
-        relation_count,
-        MetadataStage::Columns,
-        columns_sql_for_version(server_version_num),
-    )
-    .await?
+    // The server capability must be known before the column scan: direct references
+    // to `attidentity` fail at parse time on PostgreSQL 9.6 and older. The startup
+    // ParameterStatus already carries it; only an unparsable report costs a query.
+    let server_version_num = match tx.server_version_num() {
+        Some(version) => version,
+        None => {
+            let version_row = scan
+                .rows(
+                    &mut tx,
+                    MetadataStage::ServerVersion,
+                    "SHOW server_version_num",
+                )
+                .await?
+                .into_iter()
+                .next()
+                .ok_or_else(|| {
+                    AppError::Config("PostgreSQL returned no server_version_num row".into())
+                })?;
+            let server_version: String = version_row.try_get(0)?;
+            server_version.trim().parse::<u32>().map_err(|_| {
+                AppError::Config("PostgreSQL returned an invalid server_version_num".into())
+            })?
+        }
+    };
+
+    for r in scan
+        .rows(
+            &mut tx,
+            MetadataStage::Columns,
+            &columns_sql(server_version_num),
+        )
+        .await?
     {
         let key: (String, String) = (r.try_get("table_schema")?, r.try_get("table_name")?);
         let Some(&i) = idx.get(&key) else { continue };
@@ -564,6 +550,7 @@ pub async fn introspect(pool: &PgPool) -> AppResult<Catalog> {
                 .unwrap_or(None)
                 .and_then(|value| u32::try_from(value).ok()),
             default_expression: r.try_get("column_default").unwrap_or(None),
+            generated_expression: r.try_get("generation_expression").unwrap_or(None),
             identity: r.try_get("is_identity").unwrap_or(false),
             collation: r.try_get("collation_name").unwrap_or(None),
             comment: r.try_get("column_comment").unwrap_or(None),
@@ -571,40 +558,9 @@ pub async fn introspect(pool: &PgPool) -> AppResult<Catalog> {
         });
     }
 
-    let table_refs = tables
-        .iter()
-        .map(|table| {
-            (
-                (table.schema.clone(), table.name.clone()),
-                ObjectRef {
-                    catalog: None,
-                    namespace: table.schema.clone(),
-                    name: table.name.clone(),
-                    kind: ObjectKind::Table,
-                    native_id: table.native_id.clone(),
-                },
-                table.partition_parent.clone(),
-            )
-        })
-        .collect::<Vec<_>>();
-    for (_, child, parent) in table_refs {
-        let Some(parent) = parent else { continue };
-        if let Some(parent_table) = tables
-            .iter_mut()
-            .find(|table| table.schema == parent.namespace && table.name == parent.name)
-        {
-            parent_table.partition_children.push(child);
-        }
-    }
-
-    for r in next_detail_rows(
-        &mut tx,
-        details_started,
-        relation_count,
-        MetadataStage::Constraints,
-        CONSTRAINTS_SQL,
-    )
-    .await?
+    for r in scan
+        .rows(&mut tx, MetadataStage::Constraints, CONSTRAINTS_SQL)
+        .await?
     {
         let key: (String, String) = (r.try_get("table_schema")?, r.try_get("table_name")?);
         let Some(&i) = idx.get(&key) else { continue };
@@ -614,7 +570,8 @@ pub async fn introspect(pool: &PgPool) -> AppResult<Catalog> {
             "c" => ConstraintKind::Check,
             _ => continue,
         };
-        let columns: Vec<String> = r.try_get("columns").unwrap_or_default();
+        // Key order, not column order: a composite primary key keeps its declaration.
+        let columns: Vec<String> = serde_json::from_str(&r.try_get::<String, _>("columns_json")?)?;
         if kind == ConstraintKind::Primary {
             for column in &mut tables[i].columns {
                 if columns.contains(&column.name) {
@@ -636,14 +593,13 @@ pub async fn introspect(pool: &PgPool) -> AppResult<Catalog> {
         });
     }
 
-    for r in next_detail_rows(
-        &mut tx,
-        details_started,
-        relation_count,
-        MetadataStage::ForeignKeys,
-        FK_SQL,
-    )
-    .await?
+    for r in scan
+        .rows(
+            &mut tx,
+            MetadataStage::ForeignKeys,
+            &foreign_keys_sql(server_version_num),
+        )
+        .await?
     {
         let key: (String, String) = (r.try_get("table_schema")?, r.try_get("table_name")?);
         if let Some(&i) = idx.get(&key) {
@@ -666,83 +622,93 @@ pub async fn introspect(pool: &PgPool) -> AppResult<Catalog> {
         }
     }
 
-    // Group index rows (already ordered by table/index/position) into per-index columns.
-    for r in next_detail_rows(
-        &mut tx,
-        details_started,
-        relation_count,
-        MetadataStage::Indexes,
-        IDX_SQL,
-    )
-    .await?
+    // Group index rows (already ordered by table/index/position) into per-index keys.
+    // INCLUDE columns are payload stored in the index, never part of its key.
+    for r in scan
+        .rows(
+            &mut tx,
+            MetadataStage::Indexes,
+            &indexes_sql(server_version_num),
+        )
+        .await?
     {
         let key: (String, String) = (r.try_get("table_schema")?, r.try_get("table_name")?);
         let Some(&i) = idx.get(&key) else { continue };
         let iname: String = r.try_get("index_name")?;
         let column: Option<String> = r.try_get("column_name")?;
         let expression: Option<String> = r.try_get("index_expression")?;
-        let display = column
-            .clone()
-            .or_else(|| expression.clone())
-            .unwrap_or_else(|| "(expression)".into());
-        let unique: bool = r.try_get("is_unique")?;
-        let key_part = IndexKey {
+        let included: bool = r.try_get("is_included")?;
+        let idxs = &mut tables[i].indexes;
+        if idxs.last().is_none_or(|last| last.name != iname) {
+            idxs.push(Index {
+                name: iname,
+                unique: r.try_get("is_unique")?,
+                method: r.try_get("index_method").ok(),
+                predicate: r.try_get("predicate").unwrap_or(None),
+                valid: r.try_get("is_valid").unwrap_or(true),
+                ..Index::default()
+            });
+        }
+        let Some(index) = idxs.last_mut() else {
+            continue;
+        };
+        if included {
+            index.included_columns.extend(column);
+            continue;
+        }
+        index.columns.push(
+            column
+                .clone()
+                .or_else(|| expression.clone())
+                .unwrap_or_else(|| "(expression)".into()),
+        );
+        index.keys.push(IndexKey {
             column,
             expression,
             direction: match r.try_get::<String, _>("sort_direction")?.as_str() {
                 "desc" => Some(SortDirection::Desc),
                 _ => Some(SortDirection::Asc),
             },
-        };
-        let idxs = &mut tables[i].indexes;
-        match idxs.last_mut() {
-            Some(last) if last.name == iname => {
-                last.columns.push(display);
-                last.keys.push(key_part);
-            }
-            _ => idxs.push(Index {
-                name: iname,
-                columns: vec![display],
-                unique,
-                method: r.try_get("index_method").ok(),
-                keys: vec![key_part],
-                predicate: r.try_get("predicate").unwrap_or(None),
-                valid: r.try_get("is_valid").unwrap_or(true),
-                ..Index::default()
-            }),
-        }
+        });
     }
 
-    let objects = next_detail_rows(
-        &mut tx,
-        details_started,
-        relation_count,
-        MetadataStage::Objects,
-        objects_sql_for_version(server_version_num),
-    )
-    .await?
-    .into_iter()
-    .map(|row| {
-        let detail: Option<String> = row.try_get("object_detail")?;
-        Ok(DatabaseObject {
-            schema: row.try_get("schema_name")?,
-            name: row.try_get("object_name")?,
-            kind: row.try_get("object_kind")?,
-            native_id: row.try_get("native_id")?,
-            detail: detail.clone(),
-            parent: row.try_get("parent_name")?,
-            arguments: detail
-                .filter(|value| !value.trim().is_empty())
-                .into_iter()
-                .collect(),
-            return_type: row.try_get("return_type")?,
-            language: row.try_get("language")?,
-            comment: row.try_get("object_comment")?,
+    let objects = scan
+        .rows(
+            &mut tx,
+            MetadataStage::Objects,
+            &objects_sql(server_version_num),
+        )
+        .await?
+        .into_iter()
+        .map(|row| {
+            let kind: String = row.try_get("object_kind")?;
+            let detail: Option<String> = row.try_get("object_detail")?;
+            // Only a routine's detail is its identity argument list.
+            let arguments = if matches!(kind.as_str(), "function" | "procedure") {
+                detail
+                    .clone()
+                    .filter(|value| !value.trim().is_empty())
+                    .into_iter()
+                    .collect()
+            } else {
+                Vec::new()
+            };
+            Ok(DatabaseObject {
+                schema: row.try_get("schema_name")?,
+                name: row.try_get("object_name")?,
+                kind,
+                native_id: row.try_get("native_id")?,
+                detail,
+                parent: row.try_get("parent_name")?,
+                arguments,
+                return_type: row.try_get("return_type")?,
+                language: row.try_get("language")?,
+                comment: row.try_get("object_comment")?,
+            })
         })
-    })
-    .collect::<AppResult<Vec<_>>>()?;
+        .collect::<AppResult<Vec<_>>>()?;
 
-    tx.commit().await?;
+    finish_read_only_scan(tx);
     Ok(Catalog { tables, objects })
 }
 

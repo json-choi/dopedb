@@ -47,27 +47,100 @@ fn validated_external_agent_link(href: &str) -> AppResult<String> {
     Ok(parsed.into())
 }
 
-/// Validate an untrusted Agent link, ask for native consent, then open it.
+/// Where an untrusted link was shown. It only selects the consent wording; every
+/// source passes the same validation and native confirmation.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ExternalLinkSource {
+    #[default]
+    Agent,
+    AnalysisArticle,
+}
+
+fn external_link_consent(
+    source: ExternalLinkSource,
+    language: &str,
+    target: &str,
+) -> (&'static str, String) {
+    let korean = language == "ko";
+    let origin = match (source, korean) {
+        (ExternalLinkSource::Agent, true) => "Agent가 제안한 외부 주소입니다.",
+        (ExternalLinkSource::Agent, false) => "The Agent suggested this external destination.",
+        (ExternalLinkSource::AnalysisArticle, true) => "분석 아티클 본문에 연결된 외부 주소입니다.",
+        (ExternalLinkSource::AnalysisArticle, false) => {
+            "An Analysis Article links to this external destination."
+        }
+    };
+    if korean {
+        (
+            "외부 링크를 열까요?",
+            format!("{origin} 기본 앱에서 열까요?\n\n{target}"),
+        )
+    } else {
+        (
+            "Open external link?",
+            format!("{origin} Open it in your default application?\n\n{target}"),
+        )
+    }
+}
+
+/// Whether a webview may load `url`: the dev server while developing, otherwise
+/// Tauri's asset protocol (`tauri://localhost` on macOS/Linux,
+/// `http(s)://tauri.localhost` on Windows). WebKit routes subframe loads through the
+/// same hook, so the sandboxed diagram iframe's `about:blank`/`about:srcdoc`
+/// documents stay allowed; a same-origin `blob:` is an export the app itself created.
+fn is_app_navigation(url: &Url, dev_server: Option<&Url>) -> bool {
+    let app_origin = |candidate: &Url| {
+        matches!(
+            (candidate.scheme(), candidate.host_str(), candidate.port()),
+            ("tauri", Some("localhost"), None) | ("http" | "https", Some("tauri.localhost"), None)
+        ) || dev_server.is_some_and(|dev| candidate.origin() == dev.origin())
+    };
+    match url.scheme() {
+        "about" => matches!(url.path(), "blank" | "srcdoc"),
+        "blob" => Url::parse(url.path()).is_ok_and(|inner| app_origin(&inner)),
+        _ => app_origin(url),
+    }
+}
+
+/// Defense in depth for every app webview: navigation never leaves the app origin.
+/// External destinations open only through [`open_agent_external_link`], which
+/// validates the URL and asks for native consent first.
+pub fn app_navigation_guard<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
+    tauri::plugin::Builder::new("app-navigation-guard")
+        .on_navigation(|webview, url| {
+            let dev_server = tauri::is_dev()
+                .then(|| tauri::Manager::config(webview).build.dev_url.as_ref())
+                .flatten();
+            let allowed = is_app_navigation(url, dev_server);
+            if !allowed {
+                // Only a closed category is logged; the URL may carry tokens.
+                let category = match url.scheme() {
+                    "http" | "https" => "web",
+                    "file" => "file",
+                    "data" | "blob" => "inline",
+                    _ => "other",
+                };
+                tracing::warn!(
+                    category,
+                    "blocked a webview navigation outside the app origin"
+                );
+            }
+            allowed
+        })
+        .build()
+}
+
+/// Validate an untrusted Agent or Article link, ask for native consent, then open it.
 #[tauri::command]
 pub async fn open_agent_external_link(
     app: tauri::AppHandle,
     href: String,
     language: String,
+    source: Option<ExternalLinkSource>,
 ) -> AppResult<bool> {
     let target = validated_external_agent_link(&href)?;
-    let (title, message) = if language == "ko" {
-        (
-            "외부 링크를 열까요?",
-            format!("Agent가 제안한 외부 주소입니다. 기본 앱에서 열까요?\n\n{target}"),
-        )
-    } else {
-        (
-            "Open external link?",
-            format!(
-                "The Agent suggested this external destination. Open it in your default application?\n\n{target}"
-            ),
-        )
-    };
+    let (title, message) = external_link_consent(source.unwrap_or_default(), &language, &target);
     let (sender, receiver) = tokio::sync::oneshot::channel();
     app.dialog()
         .message(message)
@@ -302,10 +375,14 @@ pub async fn set_agent_acp_config_option(
 }
 
 /// Claude Code / Codex CLI status for connection-pinned Terminal profiles.
+/// Without `providers` every CLI is probed; with them, only those are.
 #[tauri::command]
-pub async fn detect_agent_clis(state: State<'_, AppState>) -> AppResult<Vec<AgentCliInfo>> {
+pub async fn detect_agent_clis(
+    state: State<'_, AppState>,
+    providers: Option<Vec<AgentProvider>>,
+) -> AppResult<Vec<AgentCliInfo>> {
     let agents = state.services.agents.clone();
-    Ok(agents.detect_clis().await)
+    Ok(agents.detect_clis(providers).await)
 }
 
 #[cfg(test)]
@@ -326,4 +403,49 @@ pub(crate) fn assert_agent_transport_contract() {
     assert!(validated_external_agent_link("https://user@example.test").is_err());
     assert!(validated_external_agent_link("https://example.test/\nnext").is_err());
     assert!(validated_external_agent_link(&"x".repeat(MAX_EXTERNAL_AGENT_LINK_BYTES + 1)).is_err());
+    let target = "https://example.test/path";
+    assert_eq!(
+        external_link_consent(ExternalLinkSource::default(), "ko", target).1,
+        format!("Agent가 제안한 외부 주소입니다. 기본 앱에서 열까요?\n\n{target}")
+    );
+    for language in ["ko", "en"] {
+        let (_, message) =
+            external_link_consent(ExternalLinkSource::AnalysisArticle, language, target);
+        assert!(!message.contains("Agent") && message.ends_with(target));
+    }
+    // Webviews stay on the packaged app origin of each platform (and the dev server
+    // only while developing); every other destination needs the consent command above.
+    let dev_server = Url::parse("http://localhost:1420").expect("dev server url");
+    let navigates = |href: &str, dev: Option<&Url>| {
+        is_app_navigation(&Url::parse(href).expect("navigation url"), dev)
+    };
+    for href in [
+        "tauri://localhost/index.html",
+        "http://tauri.localhost/",
+        "https://tauri.localhost/#/activity",
+        "about:blank",
+        "about:srcdoc",
+        "blob:tauri://localhost/5f0c",
+        "blob:http://tauri.localhost/5f0c",
+    ] {
+        assert!(navigates(href, None), "{href}");
+    }
+    assert!(navigates(
+        "http://localhost:1420/#/activity",
+        Some(&dev_server)
+    ));
+    for href in [
+        "http://localhost:1420/",
+        "https://example.test/",
+        "http://tauri.localhost.example.test/",
+        "http://tauri.localhost:8080/",
+        "tauri://example.test/",
+        "file:///etc/hosts",
+        "blob:https://example.test/5f0c",
+        "data:text/html,x",
+        "about:config",
+    ] {
+        assert!(!navigates(href, None), "{href}");
+    }
+    assert!(!navigates("http://localhost:1421/", Some(&dev_server)));
 }

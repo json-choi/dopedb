@@ -16,6 +16,7 @@ import {
   ModalHeader,
   ModalSurface,
 } from "../../design-system/components/Modal";
+import { ProgressBar } from "../../design-system/components/Progress";
 import {
   InlineNotice,
   LoadingLabel,
@@ -87,6 +88,48 @@ const readinessKey: Record<ProvisioningReadiness, I18nKey> = {
   ready: "managedAccess.readiness.ready",
   wrongAccount: "managedAccess.readiness.wrongAccount",
 };
+
+/** Next step for each non-ready CLI state; a closed map, never an assembled key. */
+const readinessGuidanceKey: Record<
+  Exclude<ProvisioningReadiness, "ready">,
+  I18nKey
+> = {
+  loggedOut: "managedAccess.login.loggedOut",
+  missing: "managedAccess.login.missing",
+  outdated: "managedAccess.login.outdated",
+  wrongAccount: "managedAccess.login.wrongAccount",
+};
+
+/** A command the dialog runs; each failure names what did and did not happen. */
+type DialogCommand =
+  | "discover"
+  | "plan"
+  | "approve"
+  | "execute"
+  | "cancel"
+  | "destroy"
+  | "repair"
+  | "reconcile";
+
+const commandFailureKey: Record<DialogCommand, I18nKey> = {
+  discover: "managedAccess.failure.discover",
+  plan: "managedAccess.failure.plan",
+  approve: "managedAccess.failure.approve",
+  execute: "managedAccess.failure.execute",
+  cancel: "managedAccess.failure.cancel",
+  destroy: "managedAccess.failure.destroy",
+  repair: "managedAccess.failure.repair",
+  reconcile: "managedAccess.failure.reconcile",
+};
+
+const TARGET_NAVIGATION_KEYS = new Set([
+  "ArrowDown",
+  "ArrowRight",
+  "ArrowUp",
+  "ArrowLeft",
+  "Home",
+  "End",
+]);
 
 function providerLabel(provider: ProviderKind) {
   if (provider === "gcpCloudSql") return "Google Cloud SQL";
@@ -168,18 +211,8 @@ export function ManagedAccessDialog({
   const [targets, setTargets] = useState<ProviderProvisioningTarget[] | null>(null);
   const [targetId, setTargetId] = useState<string | null>(null);
   const [plan, setPlan] = useState<ProviderProvisioningPlan | null>(null);
-  const [pending, setPending] = useState<
-    | "discover"
-    | "plan"
-    | "approve"
-    | "execute"
-    | "cancel"
-    | "destroy"
-    | "repair"
-    | "reconcile"
-    | null
-  >(null);
-  const [failed, setFailed] = useState(false);
+  const [pending, setPending] = useState<DialogCommand | null>(null);
+  const [failed, setFailed] = useState<DialogCommand | null>(null);
 
   const selectedStatus = useMemo(
     () => statuses.data?.find((status) => status.provider === provider) ?? null,
@@ -210,19 +243,19 @@ export function ManagedAccessDialog({
     setTargets(null);
     setTargetId(null);
     setPlan(null);
-    setFailed(false);
+    setFailed(null);
   }
 
   async function discover() {
     if (!provider || pending) return;
     setPending("discover");
-    setFailed(false);
+    setFailed(null);
     try {
       const nextTargets = await discoverProviderProvisioningTargets(provider, connectionId);
       setTargets(nextTargets);
       setTargetId(nextTargets[0]?.discoveryId ?? null);
     } catch {
-      setFailed(true);
+      setFailed("discover");
     } finally {
       setPending(null);
     }
@@ -231,7 +264,7 @@ export function ManagedAccessDialog({
   async function prepare() {
     if (!selectedTarget || pending) return;
     setPending("plan");
-    setFailed(false);
+    setFailed(null);
     try {
       const nextPlan = await prepareProviderProvisioning(
         selectedTarget.discoveryId,
@@ -243,7 +276,7 @@ export function ManagedAccessDialog({
         queryKey: providerCredentialQueryKeys.provisioning(connectionId),
       });
     } catch {
-      setFailed(true);
+      setFailed("plan");
     } finally {
       setPending(null);
     }
@@ -251,10 +284,12 @@ export function ManagedAccessDialog({
 
   async function runPlan() {
     if (!plan || pending) return;
-    setFailed(false);
+    setFailed(null);
     let current = plan;
+    let step: DialogCommand = "execute";
     try {
       if (current.operationState === "pending_approval") {
+        step = "approve";
         setPending("approve");
         await approveOperation(
           current.operationId,
@@ -265,13 +300,14 @@ export function ManagedAccessDialog({
         setPlan(current);
       }
       if (!current.canExecute) return;
+      step = "execute";
       setPending("execute");
       current = await executeProviderProvisioning(current.receiptId);
       setPlan(current);
     } catch {
       const recovered = await getProviderProvisioningStatus(current.receiptId).catch(() => null);
       if (recovered) setPlan(recovered);
-      if (recovered?.repairReason !== "userCancelled") setFailed(true);
+      if (recovered?.repairReason !== "userCancelled") setFailed(step);
     } finally {
       setPending(null);
       await queryClient.invalidateQueries({
@@ -286,7 +322,7 @@ export function ManagedAccessDialog({
     try {
       await cancelProviderProvisioning(plan.receiptId);
     } catch {
-      setFailed(true);
+      setFailed("cancel");
     } finally {
       setPending((current) => current === "cancel" ? "execute" : current);
     }
@@ -295,11 +331,11 @@ export function ManagedAccessDialog({
   async function prepareDestroy() {
     if (!plan?.canDestroy || pending) return;
     setPending("destroy");
-    setFailed(false);
+    setFailed(null);
     try {
       setPlan(await prepareProviderProvisioningDestroy(plan.receiptId));
     } catch {
-      setFailed(true);
+      setFailed("destroy");
     } finally {
       setPending(null);
     }
@@ -308,11 +344,11 @@ export function ManagedAccessDialog({
   async function prepareRepair() {
     if (plan?.state !== "needsRepair" || pending) return;
     setPending("repair");
-    setFailed(false);
+    setFailed(null);
     try {
       setPlan(await prepareProviderProvisioningRepair(plan.receiptId));
     } catch {
-      setFailed(true);
+      setFailed("repair");
     } finally {
       setPending(null);
     }
@@ -321,14 +357,14 @@ export function ManagedAccessDialog({
   async function reconcile() {
     if (plan?.state !== "ready" || pending) return;
     setPending("reconcile");
-    setFailed(false);
+    setFailed(null);
     try {
       setPlan(await reconcileProviderProvisioning(plan.receiptId));
       await queryClient.invalidateQueries({
         queryKey: providerCredentialQueryKeys.provisioning(connectionId),
       });
     } catch {
-      setFailed(true);
+      setFailed("reconcile");
     } finally {
       setPending(null);
     }
@@ -344,11 +380,33 @@ export function ManagedAccessDialog({
             cli: selectedStatus.prerequisiteName,
             account: selectedStatus.activeIdentity ?? "—",
           })
-        : t(`managedAccess.login.${selectedStatus.readiness}` as I18nKey, {
+        : t(readinessGuidanceKey[selectedStatus.readiness], {
             cli: selectedStatus.prerequisiteName,
             version: selectedStatus.minimumVersion ?? "—",
           })
     : null;
+
+  /** Radio-group keyboard contract: arrows and Home/End move the checked target. */
+  function moveTarget(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (!targets?.length || !TARGET_NAVIGATION_KEYS.has(event.key)) return;
+    event.preventDefault();
+    const current = Math.max(
+      0,
+      targets.findIndex((target) => target.discoveryId === targetId),
+    );
+    const next = event.key === "Home"
+      ? 0
+      : event.key === "End"
+        ? targets.length - 1
+        : event.key === "ArrowDown" || event.key === "ArrowRight"
+          ? (current + 1) % targets.length
+          : (current - 1 + targets.length) % targets.length;
+    const nextId = targets[next].discoveryId;
+    setTargetId(nextId);
+    event.currentTarget
+      .querySelector<HTMLButtonElement>(`[data-target-index="${next}"]`)
+      ?.focus();
+  }
   return (
     <ModalBackdrop onMouseDown={pending === null ? close : undefined}>
       <ModalSurface
@@ -421,7 +479,9 @@ export function ManagedAccessDialog({
 
               {failed || statuses.isError || existing.isError ? (
                 <InlineNotice tone="danger" icon="info" role="alert">
-                  {t("managedAccess.actionError")}
+                  {failed
+                    ? t(commandFailureKey[failed])
+                    : t("managedAccess.actionError")}
                 </InlineNotice>
               ) : null}
 
@@ -474,25 +534,40 @@ export function ManagedAccessDialog({
                       {t("managedAccess.emptyTargets")}
                     </p>
                   ) : (
-                    <div className="tw:grid tw:gap-1" role="radiogroup" aria-label={t("managedAccess.target")}>
-                      {targets.map((target) => (
-                        <button
-                          key={target.discoveryId}
-                          type="button"
-                          role="radio"
-                          aria-checked={targetId === target.discoveryId}
-                          data-selected={targetId === target.discoveryId || undefined}
-                          className="tw:grid tw:min-w-0 tw:cursor-pointer tw:grid-cols-[20px_minmax(0,1fr)_auto] tw:items-center tw:gap-3 tw:rounded-sm tw:border tw:border-border-subtle tw:bg-card tw:px-3 tw:py-2 tw:text-left tw:data-[selected]:border-ring tw:data-[selected]:bg-selection tw:hover:bg-muted tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring/30"
-                          onClick={() => setTargetId(target.discoveryId)}
-                        >
-                          <Icon name="database" />
-                          <span className="tw:grid tw:min-w-0 tw:gap-0.5">
-                            <strong className="tw:truncate tw:text-sm">{target.displayName}</strong>
-                            <span className="tw:truncate tw:text-xs tw:text-muted-foreground">{target.detail}</span>
-                          </span>
-                          {target.production ? <StatusBadge tone="warning">PROD</StatusBadge> : null}
-                        </button>
-                      ))}
+                    <div
+                      className="tw:grid tw:gap-1"
+                      role="radiogroup"
+                      aria-label={t("managedAccess.target")}
+                      onKeyDown={moveTarget}
+                    >
+                      {targets.map((target, index) => {
+                        const checked = targetId === target.discoveryId;
+                        const tabStop = checked || (targetId === null && index === 0);
+                        return (
+                          <Button
+                            key={target.discoveryId}
+                            role="radio"
+                            aria-checked={checked}
+                            presentation="listItem"
+                            labelBehavior="wrap"
+                            active={checked}
+                            tabIndex={tabStop ? 0 : -1}
+                            data-target-index={index}
+                            onClick={() => setTargetId(target.discoveryId)}
+                          >
+                            <Icon name="database" />
+                            <span className="tw:grid tw:min-w-0 tw:flex-1 tw:gap-0.5">
+                              <strong className="tw:truncate tw:text-sm">{target.displayName}</strong>
+                              <span className="tw:truncate tw:text-xs tw:text-muted-foreground">{target.detail}</span>
+                            </span>
+                            {target.production ? (
+                              <StatusBadge tone="warning">
+                                {t("managedAccess.productionBadge")}
+                              </StatusBadge>
+                            ) : null}
+                          </Button>
+                        );
+                      })}
                     </div>
                   )}
                   {selectedTarget ? (
@@ -536,8 +611,8 @@ export function ManagedAccessDialog({
                           total: plan.totalSteps,
                         })}
                       </LoadingLabel>
-                      <progress
-                        className="tw:h-1.5 tw:w-full tw:accent-info"
+                      <ProgressBar
+                        label={t("managedAccess.progressLabel")}
                         value={plan.completedSteps}
                         max={Math.max(plan.totalSteps, 1)}
                       />

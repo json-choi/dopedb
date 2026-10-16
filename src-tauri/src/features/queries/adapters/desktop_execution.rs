@@ -7,7 +7,7 @@ use crate::executor;
 use crate::features::queries::ManualExecutionTarget;
 use crate::kernel::identity::OperationId;
 use crate::model::QueryKind;
-use crate::operations::{capture_policy, ensure_operation_scope, OperationKind};
+use crate::operations::{approver_for_pin, capture_policy, ensure_operation_scope, OperationKind};
 use crate::safety;
 
 use super::desktop_contracts::{
@@ -110,6 +110,8 @@ impl QueryPlatformAdapter {
                     duration_ms: None,
                     error: Some(reason.clone()),
                     origin: &history_origin,
+                    database: &payload.database,
+                    namespace: payload.namespace.as_deref(),
                 },
             )
             .await;
@@ -138,6 +140,12 @@ impl QueryPlatformAdapter {
         }
 
         if is_write {
+            // A mutation runs only after the Desktop account approved its exact
+            // payload; record that approver, not the proposer (an Agent
+            // proposal's actor is the Agent). Approvals are written only with
+            // `approver_for_pin` of a pin in the operation's own account scope,
+            // and `ensure_operation_scope` above pins the same scope, so this
+            // equals the approved row's `approver_id`.
             if let Err(error) = audit::record(
                 &self.store,
                 RecordArgs {
@@ -147,7 +155,7 @@ impl QueryPlatformAdapter {
                     sql: payload.sql.clone(),
                     kind: classification.kind,
                     action: "execute:attempt".into(),
-                    approved_by: Some(planned.actor.id.clone()),
+                    approved_by: Some(approver_for_pin(&operation_pin).id),
                     affected_estimate: None,
                     error: None,
                 },
@@ -194,6 +202,8 @@ impl QueryPlatformAdapter {
                         duration_ms: None,
                         error: Some(error.to_string()),
                         origin: &history_origin,
+                        database: &payload.database,
+                        namespace: payload.namespace.as_deref(),
                     },
                 )
                 .await;
@@ -222,6 +232,8 @@ impl QueryPlatformAdapter {
                         duration_ms: None,
                         error: Some(error.to_string()),
                         origin: &history_origin,
+                        database: &payload.database,
+                        namespace: payload.namespace.as_deref(),
                     },
                 )
                 .await;
@@ -381,6 +393,8 @@ impl QueryPlatformAdapter {
                         duration_ms,
                         error: None,
                         origin: &history_origin,
+                        database: &payload.database,
+                        namespace: payload.namespace.as_deref(),
                     },
                 )
                 .await;
@@ -433,18 +447,36 @@ impl QueryPlatformAdapter {
                         )
                         .await
                 };
+                // Activity distinguishes a confirmed cancellation and an
+                // unconfirmed write outcome from an ordinary failure.
+                let (action, status) = if matches!(&error, AppError::OutcomeUnknown(_)) {
+                    ("execute:outcome_unknown", "outcome_unknown")
+                } else if cancelled {
+                    (
+                        if is_write {
+                            "execute:cancelled"
+                        } else {
+                            "read:cancelled"
+                        },
+                        "cancelled",
+                    )
+                } else {
+                    ("error", "error")
+                };
                 record_desktop_run(
                     &self.store,
                     &operation_pin,
                     DesktopRunRecord {
                         sql: &payload.sql,
                         kind: classification.kind,
-                        action: "error",
-                        status: "error",
+                        action,
+                        status,
                         row_count: None,
                         duration_ms: None,
                         error: Some(error.to_string()),
                         origin: &history_origin,
+                        database: &payload.database,
+                        namespace: payload.namespace.as_deref(),
                     },
                 )
                 .await;

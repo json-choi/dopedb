@@ -1,7 +1,8 @@
 // Workbench document domain. Stable ids describe singleton resources, while query
-// documents use unique ids and retain their connection scope.
+// documents use unique ids and retain their connection scope. A History entry
+// reopens in the database and schema its run recorded.
 
-import type { CatalogTable } from "../../ipc/types";
+import type { CatalogTable, HistoryEntry } from "../../ipc/types";
 import type { SqlDocument } from "../sqlDocuments/domain";
 import { sqlRecoveryKey } from "../sqlDocuments/domain";
 import { tableKey } from "../../lib/tableRef";
@@ -169,5 +170,30 @@ export function persistedQueryDocument(document: SqlDocument): QueryDocument {
         recovery.selectedDatabase !== document.selectedDatabase ||
         recovery.selectedSchema !== document.selectedSchema ||
         recovery.resolveMode !== document.resolveMode),
+  };
+}
+
+/** The console title, database, and schema a History entry reopens into. */
+export type HistoryQueryTarget = {
+  title: string;
+  /** Null keeps the connection's default database. */
+  database: string | null;
+  /** Null lets the console resolve the server's default schema. */
+  schema: string | null;
+};
+
+/**
+ * A History entry reopens under `title` in the database and schema its run
+ * recorded. Entries recorded without a target (runs on the connection's default,
+ * other surfaces, older rows) open in the connection's default target.
+ */
+export function historyQueryTarget(
+  entry: Pick<HistoryEntry, "database" | "namespace">,
+  title: string,
+): HistoryQueryTarget {
+  return {
+    title,
+    database: entry.database || null,
+    schema: entry.namespace || null,
   };
 }

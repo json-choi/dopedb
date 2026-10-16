@@ -1,15 +1,34 @@
 //! Connection-scoped manual SQL transactions.
 //!
-//! A session owns one physical SQLx connection plus the exact connection lease
-//! that authorized it. Desktop SQL, table edits, and connection-pinned Agent
-//! commands can therefore share one rollback boundary without exposing database
+//! A session owns one physical SQLx connection plus a retention of the exact pool
+//! that authorized it. Desktop SQL, table edits, and the Agent's single write
+//! target can therefore share one rollback boundary without exposing database
 //! credentials or transaction handles to the renderer or CLI.
+//!
+//! Lifecycle guarantees:
+//! - Each write runs inside a statement savepoint, so a failed statement is rolled
+//!   back alone and the transaction stays open; reads run inside a read-only scope
+//!   (PostgreSQL `SET LOCAL transaction_read_only`, SQLite `query_only`, a
+//!   rolled-back savepoint on MySQL) so a misclassified read cannot write.
+//! - A cancelled or timed-out statement closes the session connection. The server
+//!   then stops the statement and rolls the whole transaction back; the session
+//!   ends with that reason instead of waiting for the abandoned statement.
+//! - COMMIT re-checks the current authority and device Safety gate, and both
+//!   COMMIT and ROLLBACK are bounded; an unacknowledged COMMIT is audited as an
+//!   unknown outcome.
+//! - Every end publishes a reason (`manual-transaction:changed`), so the UI can
+//!   explain expiry, cancellation, and authority-change rollbacks.
+//!
+//! This module owns the session map, BEGIN, and statement routing. COMMIT and
+//! per-statement authority re-verification live in `manual_transaction_authority`,
+//! every other end (ROLLBACK, expiry, revocation, shutdown) in
+//! `manual_transaction_lifecycle`, the connection and statement savepoints in
+//! `manual_transaction_session`, and engine SQL in `manual_transaction_execution`.
 
 use std::collections::HashMap;
 use std::future::Future;
-use std::pin::Pin;
-use std::sync::Arc;
-use std::time::Instant;
+use std::sync::{Arc, Mutex as StdMutex};
+use std::time::{Duration, Instant};
 
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use serde::Serialize;
@@ -22,30 +41,41 @@ use tokio::sync::{broadcast, Mutex};
 use uuid::Uuid;
 
 use crate::connection::{
-    ConnectionAccess, ConnectionLease, ConnectionManager, ConnectionSessionRevocationPort, DbPool,
+    ConnectionAccess, ConnectionManager, ConnectionSessionRevocationPort, DbPool,
 };
-use crate::error::{AppError, AppResult};
+use crate::error::{AppError, AppResult, ManualTransactionRefusal};
 use crate::executor;
+use crate::kernel::access::PinnedConnection;
+use crate::kernel::sync::lock_unpoisoned;
 use crate::model::{
     Classification, Engine, ExecOutcome, QueryKind, QueryResult, SafetySettings, ScriptStatement,
 };
 use crate::operations::ExecutionGrant;
 use crate::store::Store;
 
+#[path = "manual_transaction_authority.rs"]
+mod authority;
 #[path = "manual_transaction_execution.rs"]
 mod execution;
+#[path = "manual_transaction_lifecycle.rs"]
+mod lifecycle;
 #[path = "manual_transaction_session.rs"]
 mod session;
 
 use execution::*;
+use lifecycle::ExitPrompt;
+pub(crate) use lifecycle::{ExitDecision, ExitIntent};
 use session::*;
 
 const MANUAL_TRANSACTION_TTL: ChronoDuration = ChronoDuration::minutes(30);
+/// Bound on a COMMIT/ROLLBACK acknowledgement. Past it the connection is closed:
+/// the server then rolls the transaction back, and a commit outcome is unknown.
+const FINISH_TIMEOUT: Duration = Duration::from_secs(10);
+/// How long a rollback waits for a cancelled statement to release its connection.
+const STATEMENT_RELEASE_TIMEOUT: Duration = Duration::from_secs(5);
 
-fn database_mismatch() -> AppError {
-    AppError::Blocked {
-        reason: "the active manual transaction belongs to another database; commit or roll it back before switching".into(),
-    }
+fn refused(refusal: ManualTransactionRefusal) -> AppError {
+    AppError::ManualTransaction(refusal)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -63,8 +93,37 @@ pub(crate) struct ManualTransactionStatus {
     pub(crate) database: String,
     pub(crate) phase: ManualTransactionPhase,
     pub(crate) statement_count: u64,
+    /// Statements that failed and were rolled back to their own savepoint
+    /// without ending the transaction.
+    pub(crate) rolled_back_statement_count: u64,
     pub(crate) started_at: DateTime<Utc>,
     pub(crate) expires_at: DateTime<Utc>,
+}
+
+/// Why a manual transaction ended. The UI explains every reason other than an
+/// explicit commit or rollback, because those happen without a user action.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum ManualTransactionEndReason {
+    Committed,
+    RolledBack,
+    CommitOutcomeUnknown,
+    Expired,
+    StatementCancelled,
+    StatementTimedOut,
+    AuthorityChanged,
+    ConnectionChanged,
+    WorkspaceChanged,
+    ApplicationExit,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ManualTransactionEnded {
+    pub(crate) transaction_id: Uuid,
+    pub(crate) database: String,
+    pub(crate) reason: ManualTransactionEndReason,
+    pub(crate) statement_count: u64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -72,6 +131,7 @@ pub(crate) struct ManualTransactionStatus {
 pub(crate) struct ManualTransactionChanged {
     pub(crate) connection_id: Uuid,
     pub(crate) status: Option<ManualTransactionStatus>,
+    pub(crate) ended: Option<ManualTransactionEnded>,
 }
 
 pub(crate) struct ManualScriptExecution {
@@ -101,6 +161,7 @@ pub(crate) struct ManualTransactionRuntime {
     connections: ConnectionManager,
     sessions: Arc<Mutex<HashMap<Uuid, Arc<ManualSession>>>>,
     events: broadcast::Sender<ManualTransactionChanged>,
+    exit: Arc<StdMutex<ExitPrompt>>,
 }
 
 impl ManualTransactionRuntime {
@@ -111,6 +172,7 @@ impl ManualTransactionRuntime {
             connections,
             sessions: Arc::new(Mutex::new(HashMap::new())),
             events,
+            exit: Arc::default(),
         }
     }
 
@@ -118,18 +180,23 @@ impl ManualTransactionRuntime {
         self.events.subscribe()
     }
 
+    /// Status reads never wait for a running statement: session facts live behind
+    /// a short synchronous lock, separate from the connection.
     pub(crate) async fn snapshot(&self) -> Vec<ManualTransactionStatus> {
-        let connection_ids = self
+        let sessions = self
             .sessions
             .lock()
             .await
-            .keys()
-            .copied()
+            .values()
+            .cloned()
             .collect::<Vec<_>>();
-        let mut statuses = Vec::with_capacity(connection_ids.len());
-        for connection_id in connection_ids {
-            if let Some(status) = self.status(connection_id).await {
-                statuses.push(status);
+        let now = Utc::now();
+        let mut statuses = Vec::with_capacity(sessions.len());
+        for session in sessions {
+            if session.expires_at <= now {
+                self.spawn_expired_end(session);
+            } else {
+                statuses.push(session.status());
             }
         }
         statuses.sort_by_key(|status| status.connection_id);
@@ -141,46 +208,33 @@ impl ManualTransactionRuntime {
         connection_id: Uuid,
         database: Option<String>,
     ) -> AppResult<ManualTransactionStatus> {
-        let admission = self.connections.begin_session_admission().await;
-        let mut sessions = self.sessions.lock().await;
-        if let Some(session) = sessions.get(&connection_id) {
-            if database
-                .as_deref()
-                .is_some_and(|database| database != session.database)
-            {
-                return Err(AppError::Blocked {
-                    reason: "this connection already has a manual transaction in another database"
-                        .into(),
-                });
-            }
-            let status = session.status().await;
-            self.publish(connection_id, Some(status.clone()));
-            return Ok(status);
+        // The global map lock is never held across an await on a statement or a
+        // network round trip; a concurrent begin is reconciled at insertion.
+        if let Some(existing) = self.mapped(connection_id).await {
+            return self.existing_status(&existing, database.as_deref());
         }
+        let admission = self.connections.begin_session_admission().await;
         let pin = admission.pin_connection(connection_id).await?;
-        if pin.profile.engine == Engine::Mongodb {
-            return Err(AppError::Blocked {
-                reason: "manual SQL transactions are unavailable for document connections".into(),
-            });
+        if matches!(pin.profile.engine, Engine::Mongodb | Engine::Bigquery)
+            || pin.profile.provider == crate::model::Provider::CloudflareD1
+        {
+            return Err(refused(ManualTransactionRefusal::Unsupported));
         }
         if !pin.profile.workspace_access.can_write() {
-            return Err(AppError::Blocked {
-                reason: "your workspace role grants read-only database access".into(),
-            });
+            return Err(refused(ManualTransactionRefusal::ReadOnlyRole));
         }
         let settings = self.store.get_safety(pin.connection_id).await?;
         if !settings.allow_writes {
-            return Err(AppError::Blocked {
-                reason: "enable writes for this connection before starting a manual transaction"
-                    .into(),
-            });
+            return Err(refused(ManualTransactionRefusal::WritesDisabled));
         }
         let engine = pin.profile.engine;
+        let requested_database = database.clone();
         let start = admission
             .connect_to_database(pin, ConnectionAccess::Write, database)
             .await?;
         let database = start.target_database().to_owned();
-        let connection = ManualConnection::begin(start.live().sql()?.rw()?).await?;
+        let link = ManualConnection::begin(start.live().sql()?.rw()?).await?;
+        let start = start.into_unscoped_session();
         let started_at = Utc::now();
         let session = Arc::new(ManualSession {
             transaction_id: Uuid::new_v4(),
@@ -189,89 +243,54 @@ impl ManualTransactionRuntime {
             engine,
             started_at,
             expires_at: started_at + MANUAL_TRANSACTION_TTL,
-            state: Mutex::new(ManualSessionState {
-                phase: ManualTransactionPhase::Active,
-                statement_count: 0,
-                connection: Some(connection),
-            }),
-            _lease: start.into_lease(),
+            pin: start.pin,
+            info: StdMutex::new(ManualSessionInfo::default()),
+            link: Mutex::new(Some(link)),
+            _retention: start.retention,
         });
-        let status = session.status().await;
-        sessions.insert(connection_id, Arc::clone(&session));
-        drop(sessions);
-        self.schedule_expiry(session);
-        self.publish(connection_id, Some(status.clone()));
+        {
+            let mut sessions = self.sessions.lock().await;
+            if let Some(existing) = sessions.get(&connection_id).cloned() {
+                drop(sessions);
+                // Dropping the new session closes its connection; the server
+                // discards the empty transaction.
+                drop(session);
+                return self.existing_status(&existing, requested_database.as_deref());
+            }
+            sessions.insert(connection_id, Arc::clone(&session));
+        }
+        // Published in the revocation registry: release the admission fence.
+        drop(start.admission);
+        self.schedule_expiry(&session);
+        let status = session.status();
+        self.publish(connection_id, Some(status.clone()), None);
+        Ok(status)
+    }
+
+    fn existing_status(
+        &self,
+        existing: &Arc<ManualSession>,
+        database: Option<&str>,
+    ) -> AppResult<ManualTransactionStatus> {
+        if database.is_some_and(|database| database != existing.database) {
+            return Err(refused(ManualTransactionRefusal::OtherDatabase));
+        }
+        let status = existing.status();
+        self.publish(existing.connection_id, Some(status.clone()), None);
         Ok(status)
     }
 
     pub(crate) async fn status(&self, connection_id: Uuid) -> Option<ManualTransactionStatus> {
-        let session = self.sessions.lock().await.get(&connection_id).cloned();
-        match session {
-            Some(session) if session.expires_at <= Utc::now() => {
-                self.remove_and_rollback(connection_id, Some(session), "transaction expired")
-                    .await;
-                None
-            }
-            Some(session) => Some(session.status().await),
-            None => None,
+        let session = self.mapped(connection_id).await?;
+        if session.expires_at <= Utc::now() {
+            self.spawn_expired_end(session);
+            return None;
         }
+        Some(session.status())
     }
 
-    pub(crate) async fn commit(
-        &self,
-        connection_id: Uuid,
-        transaction_id: Uuid,
-    ) -> AppResult<ManualTransactionStatus> {
-        let session = self.take_exact(connection_id, transaction_id).await?;
-        let result = match session.finish(true).await {
-            Ok(status) => {
-                self.record_boundary(&session, "manual_transaction:commit", "COMMIT", None)
-                    .await
-                    .map_err(|error| {
-                        AppError::OutcomeUnknown(format!(
-                            "manual transaction committed but its audit receipt failed: {error}"
-                        ))
-                    })?;
-                Ok(status)
-            }
-            Err(error) => {
-                // A failed transaction cannot be returned to the pool merely
-                // because commit raced its rollback-only transition.
-                session.force_rollback("commit rejected").await;
-                Err(error)
-            }
-        };
-        self.publish(connection_id, None);
-        result
-    }
-
-    pub(crate) async fn rollback(
-        &self,
-        connection_id: Uuid,
-        transaction_id: Uuid,
-    ) -> AppResult<ManualTransactionStatus> {
-        let session = self.take_exact(connection_id, transaction_id).await?;
-        let result = match session.finish(false).await {
-            Ok(status) => {
-                if let Err(error) = self
-                    .record_boundary(&session, "manual_transaction:rollback", "ROLLBACK", None)
-                    .await
-                {
-                    tracing::warn!(
-                        %connection_id,
-                        %transaction_id,
-                        %error,
-                        "manual transaction rollback audit receipt failed"
-                    );
-                }
-                Ok(status)
-            }
-            Err(error) => Err(error),
-        };
-        self.publish(connection_id, None);
-        result
-    }
-
+    /// Run a read inside the open transaction's read-only scope, or `None` when
+    /// the connection has no open manual transaction.
     pub(crate) async fn run_read(
         &self,
         target: ManualExecutionTarget<'_>,
@@ -279,21 +298,26 @@ impl ManualTransactionRuntime {
         max_rows: u64,
         cancellation: Option<&executor::cancel::CancelHandle>,
     ) -> Option<AppResult<QueryResult>> {
-        let session = self
-            .sessions
-            .lock()
-            .await
-            .get(&target.connection_id)
-            .cloned()?;
-        if session.database != target.database {
-            return Some(Err(database_mismatch()));
-        }
+        let session = match self
+            .statement_session(target.connection_id, target.database)
+            .await?
+        {
+            Ok(session) => session,
+            Err(error) => return Some(Err(error)),
+        };
+        let started = Instant::now();
+        let engine = session.engine;
+        let namespace = target.namespace;
         let result = session
-            .run_read(sql, target.namespace, max_rows, cancellation)
-            .await;
-        self.publish_current_if_mapped(target.connection_id, &session)
-            .await;
-        Some(result)
+            .execute(cancellation, 1, async |link: &mut ManualLink| {
+                read_statement(link, engine, sql, namespace.as_deref(), max_rows).await
+            })
+            .await
+            .map(|mut result| {
+                result.duration_ms = started.elapsed().as_millis() as u64;
+                result
+            });
+        Some(self.settle(target.connection_id, &session, result).await)
     }
 
     pub(crate) async fn run_write(
@@ -305,28 +329,41 @@ impl ManualTransactionRuntime {
         grant: &ExecutionGrant,
         cancellation: &executor::cancel::CancelHandle,
     ) -> Option<AppResult<ExecOutcome>> {
-        let session = self
-            .sessions
-            .lock()
-            .await
-            .get(&target.connection_id)
-            .cloned()?;
-        if session.database != target.database {
-            return Some(Err(database_mismatch()));
+        let session = match self
+            .statement_session(target.connection_id, target.database)
+            .await?
+        {
+            Ok(session) => session,
+            Err(error) => return Some(Err(error)),
+        };
+        if cancellation.id() != grant.operation_id() {
+            return Some(Err(AppError::Blocked {
+                reason:
+                    "manual transaction cancellation scope does not match its approved operation"
+                        .into(),
+            }));
         }
+        if !settings.allow_writes {
+            return Some(Err(AppError::Blocked {
+                reason: "writes are disabled for this connection (allow_writes = 0)".into(),
+            }));
+        }
+        if matches!(classification.kind, QueryKind::Ddl | QueryKind::Privilege) {
+            return Some(Err(refused(ManualTransactionRefusal::UnsupportedStatement)));
+        }
+        let namespace = target.namespace;
         let result = session
-            .run_write(
-                classification,
-                sql,
-                target.namespace,
-                settings,
-                grant,
-                cancellation,
-            )
-            .await;
-        self.publish_current_if_mapped(target.connection_id, &session)
-            .await;
-        Some(result)
+            .execute(Some(cancellation), 1, async |link: &mut ManualLink| {
+                write_statement(link, sql, namespace.as_deref()).await
+            })
+            .await
+            .map(|affected| ExecOutcome {
+                result: None,
+                affected: Some(affected),
+                committed: false,
+                manual_transaction: true,
+            });
+        Some(self.settle(target.connection_id, &session, result).await)
     }
 
     pub(crate) async fn run_read_streamed<F, Fut>(
@@ -342,43 +379,43 @@ impl ManualTransactionRuntime {
         F: FnMut(executor::read::ReadBatch) -> Fut + Send,
         Fut: Future<Output = AppResult<()>> + Send,
     {
-        let session = self
-            .sessions
-            .lock()
-            .await
-            .get(&target.connection_id)
-            .cloned()?;
-        if session.database != target.database {
-            return Some(Err(database_mismatch()));
-        }
+        let session = match self
+            .statement_session(target.connection_id, target.database)
+            .await?
+        {
+            Ok(session) => session,
+            Err(error) => return Some(Err(error)),
+        };
+        let engine = session.engine;
+        let namespace = target.namespace;
         let result = session
-            .run_read_streamed(
-                sql,
-                target.namespace,
-                max_rows,
-                batch_rows,
-                cancellation,
-                on_batch,
-            )
+            .execute(cancellation, 1, async |link: &mut ManualLink| {
+                read_streamed_statement(
+                    link,
+                    engine,
+                    sql,
+                    namespace.as_deref(),
+                    max_rows,
+                    batch_rows,
+                    on_batch,
+                )
+                .await
+            })
             .await;
-        self.publish_current_if_mapped(target.connection_id, &session)
-            .await;
-        Some(result)
+        Some(self.settle(target.connection_id, &session, result).await)
     }
 
     pub(crate) async fn run_script(
         &self,
         request: ManualScriptRequest<'_>,
     ) -> Option<AppResult<ManualScriptExecution>> {
-        let session = self
-            .sessions
-            .lock()
-            .await
-            .get(&request.target.connection_id)
-            .cloned()?;
-        if session.database != request.target.database {
-            return Some(Err(database_mismatch()));
-        }
+        let session = match self
+            .statement_session(request.target.connection_id, request.target.database)
+            .await?
+        {
+            Ok(session) => session,
+            Err(error) => return Some(Err(error)),
+        };
         if request.cancellation.id() != request.grant.operation_id() {
             return Some(Err(AppError::Blocked {
                 reason: "manual script transaction scope does not match its approved operation"
@@ -390,185 +427,114 @@ impl ManualTransactionRuntime {
             request.grant.connection_id(),
         );
         if request.contains_unsupported_kind {
-            return Some(Err(AppError::Blocked {
-                reason: "DDL and privilege statements are excluded from a manual rollback boundary"
-                    .into(),
-            }));
+            return Some(Err(refused(ManualTransactionRefusal::UnsupportedStatement)));
         }
+        let engine = session.engine;
+        let namespace = request.target.namespace;
+        let script = ManualScript {
+            statements: request.statements,
+            kinds: request.kinds,
+            expected_affected: request.expected_affected,
+            max_rows: request.max_rows,
+        };
         let result = session
-            .run_script(
-                request.statements,
-                request.kinds,
-                request.target.namespace,
-                request.expected_affected,
-                request.max_rows,
-                request.cancellation,
+            .execute(
+                Some(request.cancellation),
+                request.statements.len() as u64,
+                async |link: &mut ManualLink| {
+                    script_statements(link, engine, namespace.as_deref(), script).await
+                },
             )
             .await;
-        self.publish_current_if_mapped(request.target.connection_id, &session)
-            .await;
-        Some(result)
-    }
-
-    pub(crate) async fn shutdown(&self) {
-        self.revoke(None, "application shutdown").await;
-    }
-
-    async fn record_boundary(
-        &self,
-        session: &ManualSession,
-        action: &'static str,
-        sql: &'static str,
-        error: Option<String>,
-    ) -> AppResult<()> {
-        crate::audit::record(
-            &self.store,
-            crate::audit::RecordArgs {
-                connection_id: session.connection_id,
-                engine: session.engine,
-                agent_prompt: None,
-                sql: sql.into(),
-                kind: QueryKind::Write,
-                action: action.into(),
-                approved_by: None,
-                affected_estimate: None,
-                error,
-            },
+        Some(
+            self.settle(request.target.connection_id, &session, result)
+                .await,
         )
-        .await?;
-        Ok(())
     }
 
-    async fn take_exact(
+    async fn mapped(&self, connection_id: Uuid) -> Option<Arc<ManualSession>> {
+        self.sessions.lock().await.get(&connection_id).cloned()
+    }
+
+    /// The open session with this exact identity, still mapped.
+    async fn exact(
         &self,
         connection_id: Uuid,
         transaction_id: Uuid,
     ) -> AppResult<Arc<ManualSession>> {
-        let mut sessions = self.sessions.lock().await;
-        let Some(session) = sessions.get(&connection_id) else {
-            return Err(AppError::NotFound("manual transaction".into()));
-        };
-        if session.transaction_id != transaction_id {
-            return Err(AppError::Blocked {
-                reason: "manual transaction identity is stale".into(),
-            });
+        match self.mapped(connection_id).await {
+            Some(session) if session.transaction_id == transaction_id => Ok(session),
+            Some(_) => Err(refused(ManualTransactionRefusal::Stale)),
+            None => Err(refused(ManualTransactionRefusal::Ended)),
         }
-        Ok(sessions
-            .remove(&connection_id)
-            .expect("checked manual transaction is still mapped"))
     }
 
-    fn publish(&self, connection_id: Uuid, status: Option<ManualTransactionStatus>) {
+    /// Remove the session from the map only if it is still the mapped one.
+    async fn unmap(&self, connection_id: Uuid, expected: &Arc<ManualSession>) -> bool {
+        let mut sessions = self.sessions.lock().await;
+        if sessions
+            .get(&connection_id)
+            .is_some_and(|current| Arc::ptr_eq(current, expected))
+        {
+            sessions.remove(&connection_id);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Publish a statement outcome, ending the session when the statement was
+    /// abandoned (its connection is already closed and the server rolls back).
+    async fn settle<T>(
+        &self,
+        connection_id: Uuid,
+        session: &Arc<ManualSession>,
+        result: Result<T, SessionFailure>,
+    ) -> AppResult<T> {
+        match result {
+            Ok(value) => {
+                self.publish_current_if_mapped(connection_id, session).await;
+                Ok(value)
+            }
+            Err(SessionFailure::Statement(error)) => {
+                self.publish_current_if_mapped(connection_id, session).await;
+                Err(error)
+            }
+            Err(SessionFailure::Abandoned { error, reason }) => {
+                self.end_session(
+                    connection_id,
+                    Some(Arc::clone(session)),
+                    reason,
+                    "statement cancelled or timed out; connection closed",
+                )
+                .await;
+                Err(error)
+            }
+        }
+    }
+
+    fn publish(
+        &self,
+        connection_id: Uuid,
+        status: Option<ManualTransactionStatus>,
+        ended: Option<ManualTransactionEnded>,
+    ) {
         let _ = self.events.send(ManualTransactionChanged {
             connection_id,
             status,
+            ended,
         });
     }
 
     async fn publish_current_if_mapped(&self, connection_id: Uuid, expected: &Arc<ManualSession>) {
-        let status = {
-            let sessions = self.sessions.lock().await;
-            match sessions.get(&connection_id) {
-                Some(current) if Arc::ptr_eq(current, expected) => Some(expected.status().await),
-                _ => None,
-            }
-        };
-        if let Some(status) = status {
-            self.publish(connection_id, Some(status));
+        let mapped = self
+            .sessions
+            .lock()
+            .await
+            .get(&connection_id)
+            .is_some_and(|current| Arc::ptr_eq(current, expected));
+        if mapped {
+            self.publish(connection_id, Some(expected.status()), None);
         }
-    }
-
-    fn schedule_expiry(&self, session: Arc<ManualSession>) {
-        let runtime = self.clone();
-        let expires_at = session.expires_at;
-        let connection_id = session.connection_id;
-        let session = Arc::downgrade(&session);
-        tokio::spawn(async move {
-            let delay = (expires_at - Utc::now()).to_std().unwrap_or_default();
-            tokio::time::sleep(delay).await;
-            if let Some(session) = session.upgrade() {
-                runtime
-                    .remove_and_rollback(connection_id, Some(session), "transaction expired")
-                    .await;
-            }
-        });
-    }
-
-    async fn remove_and_rollback(
-        &self,
-        connection_id: Uuid,
-        expected: Option<Arc<ManualSession>>,
-        reason: &'static str,
-    ) {
-        let session = {
-            let mut sessions = self.sessions.lock().await;
-            let matches = match (sessions.get(&connection_id), expected.as_ref()) {
-                (Some(current), Some(expected)) => Arc::ptr_eq(current, expected),
-                (Some(_), None) => true,
-                _ => false,
-            };
-            matches.then(|| sessions.remove(&connection_id)).flatten()
-        };
-        if let Some(session) = session {
-            self.publish(connection_id, None);
-            session.force_rollback(reason).await;
-            if let Err(error) = self
-                .record_boundary(
-                    &session,
-                    "manual_transaction:forced_rollback",
-                    "ROLLBACK",
-                    Some(reason.into()),
-                )
-                .await
-            {
-                tracing::warn!(
-                    connection_id = %session.connection_id,
-                    transaction_id = %session.transaction_id,
-                    %error,
-                    "manual transaction forced rollback audit receipt failed"
-                );
-            }
-        }
-    }
-}
-
-impl ConnectionSessionRevocationPort for ManualTransactionRuntime {
-    fn revoke<'a>(
-        &'a self,
-        connection_id: Option<Uuid>,
-        reason: &'static str,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {
-            let sessions = {
-                let mut sessions = self.sessions.lock().await;
-                match connection_id {
-                    Some(connection_id) => sessions
-                        .remove(&connection_id)
-                        .into_iter()
-                        .collect::<Vec<_>>(),
-                    None => sessions.drain().map(|(_, session)| session).collect(),
-                }
-            };
-            for session in sessions {
-                self.publish(session.connection_id, None);
-                session.force_rollback(reason).await;
-                if let Err(error) = self
-                    .record_boundary(
-                        &session,
-                        "manual_transaction:forced_rollback",
-                        "ROLLBACK",
-                        Some(reason.into()),
-                    )
-                    .await
-                {
-                    tracing::warn!(
-                        connection_id = %session.connection_id,
-                        transaction_id = %session.transaction_id,
-                        %error,
-                        "manual transaction forced rollback audit receipt failed"
-                    );
-                }
-            }
-        })
     }
 }

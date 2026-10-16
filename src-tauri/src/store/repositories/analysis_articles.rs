@@ -95,6 +95,9 @@ impl Store {
         Ok(())
     }
 
+    /// Returns the newest retained result that still decrypts and matches its exact
+    /// authority. One corrupt or foreign entry is skipped rather than hiding the
+    /// older valid results retained for the same Article.
     pub(crate) async fn load_analysis_article_local_result(
         &self,
         article_id: Uuid,
@@ -102,52 +105,39 @@ impl Store {
     ) -> AppResult<Option<AnalysisDefinitionRunReceipt>> {
         let scope = self.active_resource_scope().await?;
         let account_scope = scope.account_scope.storage_key().to_owned();
-        let row = sqlx::query(
+        let rows = sqlx::query(
             "SELECT article_revision, run_id, result_hash, nonce, ciphertext
              FROM analysis_article_local_results
              WHERE workspace_id = ?1 AND account_scope = ?2 AND article_id = ?3
                AND expires_at > ?4 AND (?5 IS NULL OR run_id = ?5)
-             ORDER BY created_at DESC LIMIT 1",
+             ORDER BY created_at DESC LIMIT ?6",
         )
         .bind(scope.workspace_id.to_string())
         .bind(&account_scope)
         .bind(article_id.to_string())
         .bind(Utc::now().to_rfc3339())
         .bind(run_id.map(|id| id.to_string()))
-        .fetch_optional(&self.pool)
+        .bind(MAX_RESULTS_PER_ARTICLE)
+        .fetch_all(&self.pool)
         .await?;
-        let Some(row) = row else {
+        if rows.is_empty() {
             return Ok(None);
-        };
-        let article_revision: i64 = row.try_get("article_revision")?;
-        let stored_run_id = parse_uuid(row.try_get("run_id")?)?;
-        let result_hash: String = row.try_get("result_hash")?;
-        let nonce: Vec<u8> = row.try_get("nonce")?;
-        let ciphertext: Vec<u8> = row.try_get("ciphertext")?;
-        let aad = cache_aad(
-            scope.workspace_id,
-            &account_scope,
-            article_id,
-            article_revision,
-            stored_run_id,
-            &result_hash,
-        );
+        }
         let key =
             tokio::task::spawn_blocking(crate::connection::keychain::analysis_result_cache_key)
                 .await
                 .map_err(|_| AppError::Config("Analysis result key task stopped".into()))??;
-        let plaintext = decrypt(&key, &aad, &nonce, &ciphertext)?;
-        let receipt = crate::features::analysis_articles::deserialize_local_result(&plaintext)?;
-        if receipt.article_id != article_id
-            || receipt.article_revision != article_revision
-            || receipt.run_id != stored_run_id
-            || receipt.result_hash != result_hash
-        {
-            return Err(AppError::Config(
-                "Analysis Article local result authority is invalid".into(),
-            ));
+        for row in rows {
+            match decode_local_result(&key, scope.workspace_id, &account_scope, article_id, &row) {
+                Ok(receipt) => return Ok(Some(receipt)),
+                Err(error) => tracing::warn!(
+                    error_kind = error.kind(),
+                    %article_id,
+                    "Analysis Article local result entry skipped"
+                ),
+            }
         }
-        Ok(Some(receipt))
+        Ok(None)
     }
 
     pub(crate) async fn delete_analysis_article_local_results(
@@ -168,6 +158,40 @@ impl Store {
     }
 }
 
+fn decode_local_result(
+    key: &Zeroizing<[u8; 32]>,
+    workspace_id: Uuid,
+    account_scope: &str,
+    article_id: Uuid,
+    row: &sqlx::sqlite::SqliteRow,
+) -> AppResult<AnalysisDefinitionRunReceipt> {
+    let article_revision: i64 = row.try_get("article_revision")?;
+    let stored_run_id = parse_uuid(row.try_get("run_id")?)?;
+    let result_hash: String = row.try_get("result_hash")?;
+    let nonce: Vec<u8> = row.try_get("nonce")?;
+    let ciphertext: Vec<u8> = row.try_get("ciphertext")?;
+    let aad = cache_aad(
+        workspace_id,
+        account_scope,
+        article_id,
+        article_revision,
+        stored_run_id,
+        &result_hash,
+    );
+    let plaintext = decrypt(key, &aad, &nonce, &ciphertext)?;
+    let receipt = crate::features::analysis_articles::deserialize_local_result(&plaintext)?;
+    if receipt.article_id != article_id
+        || receipt.article_revision != article_revision
+        || receipt.run_id != stored_run_id
+        || receipt.result_hash != result_hash
+    {
+        return Err(AppError::Config(
+            "Analysis Article local result authority is invalid".into(),
+        ));
+    }
+    Ok(receipt)
+}
+
 fn cache_aad(
     workspace_id: Uuid,
     account_scope: &str,
@@ -182,7 +206,7 @@ fn cache_aad(
     .into_bytes()
 }
 
-fn encrypt(
+pub(super) fn encrypt(
     key: &Zeroizing<[u8; 32]>,
     aad: &[u8],
     plaintext: &[u8],
@@ -206,7 +230,7 @@ fn encrypt(
     Ok((nonce, ciphertext))
 }
 
-fn decrypt(
+pub(super) fn decrypt(
     key: &Zeroizing<[u8; 32]>,
     aad: &[u8],
     nonce: &[u8],
@@ -247,8 +271,8 @@ mod tests {
         Zeroizing::new(random_bytes())
     }
 
-    #[test]
-    fn encrypted_cache_round_trips_only_with_exact_authority() {
+    #[tokio::test]
+    async fn encrypted_cache_round_trips_only_with_exact_authority() {
         let aad = b"workspace\0account\0article\0revision\0run\0hash";
         let plaintext = br#"{"result":"privacy-minimized"}"#;
         let key = key();
@@ -256,6 +280,7 @@ mod tests {
         assert_ne!(ciphertext, plaintext);
         assert_eq!(decrypt(&key, aad, &nonce, &ciphertext).unwrap(), plaintext);
         assert!(decrypt(&key, b"different-account", &nonce, &ciphertext).is_err());
+        super::super::personal_analysis_articles::assert_personal_article_contract().await;
     }
 
     #[test]

@@ -13,10 +13,11 @@ so it shares that backend module rather than owning one of its own.
 ## Key Files
 | File | Description |
 |------|-------------|
-| `QueryResultsPane.tsx` | Central result presentation pane with tabs; local snapshots survive editor/document closure and stay scoped to their originating connection/workspace. |
-| `QueryServiceResult.tsx` | Displays a query outcome plus the recovery command owned by its exact connection. |
+| `QueryResultsPane.tsx` | Central result presentation pane with tabs; local snapshots survive editor/document closure and stay scoped to their originating connection/workspace. A running session shows its elapsed time and, while its run has one registered in `../backgroundTasks/cancelRegistry.ts`, that exact cancel. |
+| `QueryServiceResult.tsx` | Displays a query outcome plus the recovery command owned by its exact connection; run errors and each failed script statement render by typed kind in translated copy with a caret under the failing position. |
 | `StreamOutcome.tsx` | Bounded desktop stream projection; the grid and exports consume the immutable chunk source directly and never flatten a partial result. |
-| `domain.ts` | `QueryServiceStatus`/`QueryServiceSession` types built on `../queries`' `ExecOutcome`/`ScriptOutcome`/`SqlStreamViewState`. |
+| `errorCopy.ts` | `sqlErrorCopy` / `scriptStatementErrorCopy`: translated title and message by typed error kind plus the verbatim database detail; shared by `QueryServiceResult.tsx` and the table editor's staged-change failure (`screens/Tables/SqlTableData.tsx`). |
+| `domain.ts` | `QueryServiceStatus`/`QueryServiceSession` types built on `../queries`' `ExecOutcome`/`ScriptOutcome`/`SqlStreamViewState`; restore validates typed script statement errors and gives a snapshot's legacy plain-text statement error the typed shape with kind `unknown`; `persistableQueryServiceSession` saves a cancelled run's partial rows as the cancellation alone. |
 | `runningUpdateScheduler.ts` | Publishes the latest "running" snapshot at most once per interval per session id; lifecycle transitions (waiting/terminal) bypass the cadence and commit immediately. |
 | `store.ts` | `useSyncExternalStore`-based session store, capped at `MAX_SESSIONS` (20) per scope. |
 | `tauriAdapter.ts` | `listQueryServiceSessions`/`saveQueryServiceSession`, scoped by `{ workspaceId, accountScope }`. |

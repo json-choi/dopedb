@@ -16,22 +16,42 @@ use crate::operations::ExecutionGrant;
 use super::super::format::{typed_sql_literal, write_error_row, ImportDataRow, ImportItem};
 use super::files::{quote_identifier, quoted_relation};
 
+/// One executable import statement. `schema_change` marks DDL, whose arrival at the
+/// database must retire the cached catalog.
+pub(super) struct ImportStatement {
+    pub(super) sql: String,
+    pub(super) schema_change: bool,
+}
+
+/// Build the exact statements of one import batch. SQL items are re-classified
+/// at run time: privilege statements are always refused, and DDL is refused
+/// unless the approved plan declared it and the current policy allows it.
 pub(super) fn build_import_statements(
     engine: Engine,
+    allow_ddl: bool,
     target: Option<&ObjectRef>,
     target_metadata: Option<&dopedb_protocol::Relation>,
     mappings: &[JobFieldMapping],
     validation: &JobValidation,
     items: &[ImportItem],
-) -> Vec<Result<String, String>> {
+) -> Vec<Result<ImportStatement, String>> {
     items
         .iter()
         .map(|item| match item {
             ImportItem::Sql { statement, .. } => match crate::safety::classify(statement, engine) {
-                Ok(classification) if classification.kind != crate::model::QueryKind::Privilege => {
-                    Ok(statement.clone())
-                }
-                Ok(_) => Err("arbitrary privilege statements are blocked in SQL imports".into()),
+                Ok(classification) => match classification.kind {
+                    crate::model::QueryKind::Privilege => {
+                        Err("arbitrary privilege statements are blocked in SQL imports".into())
+                    }
+                    crate::model::QueryKind::Ddl if !allow_ddl => Err(
+                        "schema-change statements are not allowed by this import's approved plan"
+                            .into(),
+                    ),
+                    kind => Ok(ImportStatement {
+                        sql: statement.clone(),
+                        schema_change: matches!(kind, crate::model::QueryKind::Ddl),
+                    }),
+                },
                 Err(error) => Err(format!("SQL statement failed safety inspection: {error}")),
             },
             ImportItem::Data(row) => build_insert(
@@ -41,7 +61,11 @@ pub(super) fn build_import_statements(
                 mappings,
                 validation,
                 row,
-            ),
+            )
+            .map(|sql| ImportStatement {
+                sql,
+                schema_change: false,
+            }),
         })
         .collect()
 }
@@ -183,7 +207,8 @@ pub(super) async fn execute_transaction(
                 ) => match result {
                     Ok(Ok(())) => {}
                     Ok(Err(error)) => return Err(AppError::OutcomeUnknown(format!(
-                        "import commit acknowledgement failed: {error}"
+                        "import commit acknowledgement failed: {}",
+                        crate::error::db_error_text(&error)
                     ))),
                     Err(_) => return Err(AppError::OutcomeUnknown(
                         "import commit acknowledgement timed out".into(),

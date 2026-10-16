@@ -464,7 +464,15 @@ impl ConnectionContext {
             Ok(())
         }
         .await;
+        // The check reports once the probe's own pool and tunnel are closed; the
+        // hosted lease release continues in the background, and the provider's
+        // expiry stays authoritative if that release does not complete.
+        let mut opened = opened;
+        let managed_lease = opened.managed_lease.take();
         retire_opened(opened).await;
+        if let Some(managed_lease) = managed_lease {
+            tokio::spawn(release_managed_bounded(managed_lease));
+        }
         result
     }
 }

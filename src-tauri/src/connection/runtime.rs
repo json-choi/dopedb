@@ -86,9 +86,11 @@ pub(crate) fn assert_warm_cache_authorization_contract() {
     let mut slot = ConnectionSlot::default();
     assert!(slot.managed_open_retry_error().is_none());
     slot.remember_managed_open_failure(&AppError::Network("provider preflight failed".into()));
+    // During the cooldown a reader learns when to retry instead of re-running the open.
     assert!(matches!(
         slot.managed_open_retry_error(),
-        Some(AppError::Network(message)) if message == "provider preflight failed"
+        Some(AppError::RetryLater { retry_after_seconds })
+            if (1..=MANAGED_OPEN_RETRY_COOLDOWN.as_secs()).contains(&retry_after_seconds)
     ));
     slot.clear_managed_open_failure();
     slot.remember_managed_open_failure(&AppError::Blocked {
@@ -300,10 +302,6 @@ impl ConnectionSessionLeaseStart {
 
     pub(crate) fn target_database(&self) -> &str {
         self.lease.target_database()
-    }
-
-    pub(crate) fn into_lease(self) -> ConnectionLease {
-        self.lease
     }
 }
 

@@ -1,9 +1,12 @@
 // Presents a schema group's compatibility and catalog-difference summary with its row actions.
+// Counts compare the member-chosen baseline against the shared live snapshots, exactly
+// as the Schema Diff screen does; comparisons are memoized per snapshot pair.
 
 import type { ReactNode } from "react";
 
 import EngineMark from "../../components/EngineMark";
 import { Icon } from "../../components/Icon";
+import { Button } from "../../design-system/components/Button";
 import type { Catalog } from "../../ipc/types";
 import { useI18n } from "../../lib/i18n";
 import {
@@ -62,6 +65,13 @@ export function SchemaConnectionGroupRow({
   );
   const total = counts.added + counts.missing + counts.changed;
   const treeKey = `schema-group:${group.key}`;
+  const summary = !schemaGroupIsCompatible(group)
+    ? t("schemaDiff.incompatibleTitle")
+    : complete && total === 0
+      ? t("schemaDiff.inSync")
+      : complete
+        ? t("connections.schemaDiffTitle", counts)
+        : t("schemaDiff.openTitle");
 
   return (
     <div
@@ -84,11 +94,12 @@ export function SchemaConnectionGroupRow({
         <span className="tw:min-w-0 tw:flex-1 tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap tw:font-bold tw:text-foreground">
           {group.label}
         </span>
-        <button
-          type="button"
-          className="tw:inline-flex tw:min-h-control-xs tw:min-w-0 tw:cursor-pointer tw:items-center tw:justify-center tw:gap-[2px] tw:rounded-xs tw:border tw:border-border-subtle tw:bg-transparent tw:px-1.5 tw:font-mono tw:text-2xs tw:font-medium tw:whitespace-nowrap tw:text-muted-foreground tw:hover:border-ring tw:hover:text-primary"
-          title={t("schemaDiff.openTitle")}
-          aria-label={t("schemaDiff.openTitle")}
+        <Button
+          size="tree"
+          title={summary}
+          aria-label={summary === t("schemaDiff.openTitle")
+            ? summary
+            : t("schemaDiff.openSummary", { summary })}
           data-tree-primary-action
           tabIndex={-1}
           onClick={() => {
@@ -117,7 +128,7 @@ export function SchemaConnectionGroupRow({
           ) : (
             <span>{t("schemaDiff.open")}</span>
           )}
-        </button>
+        </Button>
       </div>
       {group.connections.map((connection) =>
         renderConnection(connection, treeKey),

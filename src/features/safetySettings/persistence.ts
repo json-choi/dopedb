@@ -34,12 +34,21 @@ export class WorkspaceWritePolicyRollbackError extends Error {
   }
 }
 
+/**
+ * Persist one Safety edit. `writesChanged` says whether the user toggled the
+ * Data changes checkbox in this edit: the editor shows the narrower device gate,
+ * so a manager who only changed a limit must never rewrite the team's write
+ * ceiling from that device value. The Settings screen always passes it; the
+ * default keeps direct callers on the explicit-toggle contract.
+ */
 export async function persistConnectionSafety(
   connection: ConnectionProfile,
   settings: SafetySettings,
   commands: SafetyPersistenceCommands,
+  { writesChanged }: { writesChanged: boolean } = { writesChanged: true },
 ): Promise<ConnectionProfile> {
   const workspacePolicyChange =
+    writesChanged &&
     canManageWorkspaceWritePolicy(connection) &&
     connection.allowWrites !== settings.allowWrites;
 

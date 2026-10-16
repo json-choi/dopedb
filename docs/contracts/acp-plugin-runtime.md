@@ -54,7 +54,7 @@ republication. Unknown contracts and older manifest schemas require installing a
 current signed bundle; they are never treated as compatible by default. The Rust
 wire contract test keeps the checked-in catalog aligned with the compiled host.
 
-The command schema is version 17. Agent registration carries the closed
+The command schema is version 18. Agent registration carries the closed
 `pluginId`, bundle version, the verified bundled Node path and hash, the signed
 adapter entrypoint and hash, and the independently verified local provider CLI
 path and hash. The private bridge re-verifies all three executables before it

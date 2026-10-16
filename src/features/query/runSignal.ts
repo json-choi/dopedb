@@ -1,5 +1,7 @@
 // Fast client-side guidance shown before the authoritative backend classifier runs.
 // These signals never grant execution; they only explain obvious risk shapes early.
+// They follow the backend's statement classes: SHOW/DESCRIBE/EXPLAIN and read-only
+// PRAGMA are reads; USE/SET never run here (the schema selectors own that context).
 
 import type { SafetySettings } from "../../ipc/types";
 import type { I18nKey } from "../../lib/i18n";
@@ -54,7 +56,14 @@ function likelyMutates(sql: string): boolean {
 }
 
 function likelyRead(sql: string): boolean {
-  return /^(select|with|show|describe|desc|explain)\b/i.test(compactSql(sql));
+  const compact = compactSql(sql);
+  return /^(select|with|values|table|show|describe|desc|explain)\b/i.test(compact)
+    || (/^pragma\b/i.test(compact) && !compact.includes("="));
+}
+
+/** Session-context statements the console refuses in favor of its selectors. */
+function changesSessionContext(sql: string): boolean {
+  return /^(use|set)\b/i.test(compactSql(sql));
 }
 
 function lacksWhereOnBulkMutation(sql: string): boolean {
@@ -85,6 +94,14 @@ export function analyzeRunSignal(
       icon: "alert",
       text: { key: "sql.signalPrivilegeBlocked" },
       title: { key: "sql.policyBlock.message" },
+    };
+  }
+  if (effectiveStatements.some(changesSessionContext)) {
+    return {
+      tone: "danger",
+      icon: "alert",
+      text: { key: "sql.signalSessionStatement" },
+      title: { key: "sql.signalSessionStatementTitle" },
     };
   }
   const writes = effectiveStatements.some(likelyMutates);

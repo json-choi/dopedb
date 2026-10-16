@@ -5,9 +5,11 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { invoke } from "../../ipc/core";
 import { readWithCatalogIssue } from "../catalogExplorer/catalogDomain";
 import type {
+  AnalysisArticleDocument,
   AnalysisArticleRecord,
   AnalysisArticleChanged,
   AnalysisArticleRevision,
+  AnalysisArticleSaveResult,
   AnalysisPublication,
   AnalysisPublicationRequest,
   AnalysisRun,
@@ -16,6 +18,7 @@ import type {
   SharedAnalysisArticleCreate,
 } from "./domain";
 
+/** Title-and-identity listing; open one Article with `getAnalysisArticle`. */
 export function listAnalysisArticles(
   projectEnvironmentId?: string | null,
 ): Promise<AnalysisArticleRecord[]> {
@@ -24,11 +27,15 @@ export function listAnalysisArticles(
   }));
 }
 
+export function getAnalysisArticle(articleId: string): Promise<AnalysisArticleDocument> {
+  return invoke("get_analysis_article_command", { articleId });
+}
+
 export function updateAnalysisArticle(
   articleId: string,
   expectedRevision: number,
   article: SharedAnalysisArticleCreate,
-): Promise<AnalysisArticleRecord> {
+): Promise<AnalysisArticleSaveResult> {
   return invoke("update_analysis_article_command", {
     articleId,
     expectedRevision,

@@ -1,4 +1,8 @@
 //! Workspace-scoped ACP session persistence port and ordered batch worker.
+//!
+//! Streamed message and thought chunks are folded into one stored event per
+//! message run, so the bounded history keeps whole conversations instead of
+//! letting one long answer evict everything before it.
 
 use std::future::Future;
 use std::pin::Pin;
@@ -6,6 +10,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
+use serde_json::Value;
 use tokio::sync::Notify;
 
 use crate::error::AppResult;
@@ -18,7 +23,12 @@ use super::super::domain::{
 };
 
 const MAX_EVENT_BYTES: usize = 512 * 1024;
-const PERSIST_BATCH_DELAY: Duration = Duration::from_millis(40);
+/// Text folded into one stored chunk event; JSON escaping stays below the
+/// per-event storage limit even for worst-case text.
+const MAX_COALESCED_TEXT_BYTES: usize = 192 * 1024;
+/// Boundaries (tool calls, turn ends, permissions) flush at once; a streaming
+/// answer is rewritten at most this often instead of once per token batch.
+const PERSIST_BATCH_DELAY: Duration = Duration::from_millis(750);
 const MAX_PERSIST_BATCH_EVENTS: usize = 64;
 const MAX_PERSIST_BATCH_BYTES: usize = 256 * 1024;
 
@@ -43,12 +53,7 @@ pub(super) trait AcpSessionPersistencePort: Send + Sync {
         scope: &'a ActiveResourceScope,
         summary: &'a AcpSessionSummary,
         events: &'a [AcpSessionEvent],
-    ) -> PersistenceFuture<'a, ()>;
-    fn discard_events_through<'a>(
-        &'a self,
-        scope: &'a ActiveResourceScope,
-        id: AcpSessionId,
-        sequence: u64,
+        replaced_sequences: &'a [u64],
     ) -> PersistenceFuture<'a, ()>;
 }
 
@@ -96,28 +101,79 @@ impl AcpSessionPersistencePort for StoreAcpSessionPersistence {
         scope: &'a ActiveResourceScope,
         summary: &'a AcpSessionSummary,
         events: &'a [AcpSessionEvent],
+        replaced_sequences: &'a [u64],
     ) -> PersistenceFuture<'a, ()> {
-        Box::pin(self.store.persist_agent_acp_events(scope, summary, events))
-    }
-
-    fn discard_events_through<'a>(
-        &'a self,
-        scope: &'a ActiveResourceScope,
-        id: AcpSessionId,
-        sequence: u64,
-    ) -> PersistenceFuture<'a, ()> {
-        Box::pin(
-            self.store
-                .discard_agent_acp_events_through(scope, id, sequence),
-        )
+        Box::pin(self.store.persist_agent_acp_event_batch(
+            scope,
+            summary,
+            events,
+            replaced_sequences,
+        ))
     }
 }
 
 pub(super) struct PersistenceRequest {
-    pub(super) summary: AcpSessionSummary,
+    /// Boundary events carry the current summary; streamed chunks reuse the
+    /// worker's last summary with a newer timestamp instead of cloning it.
+    pub(super) summary: Option<AcpSessionSummary>,
     pub(super) event: AcpSessionEvent,
     pub(super) bytes: usize,
     pub(super) immediate: bool,
+}
+
+/// The stored row of the message run being streamed, kept across batches so a
+/// continuing answer replaces its previous row instead of adding new ones.
+struct OpenRun {
+    event: AcpSessionEvent,
+    persisted_sequence: Option<u64>,
+    dirty: bool,
+}
+
+#[derive(Default)]
+struct PersistBatch {
+    writes: Vec<AcpSessionEvent>,
+    replaced: Vec<u64>,
+}
+
+impl PersistBatch {
+    fn flush_run(&mut self, run: &mut OpenRun) {
+        if !run.dirty {
+            return;
+        }
+        if let Some(previous) = run
+            .persisted_sequence
+            .filter(|previous| *previous != run.event.sequence)
+        {
+            self.replaced.push(previous);
+        }
+        self.writes.push(run.event.clone());
+        run.persisted_sequence = Some(run.event.sequence);
+        run.dirty = false;
+    }
+
+    fn add(&mut self, run: &mut Option<OpenRun>, event: AcpSessionEvent) {
+        if is_text_chunk(&event.payload) {
+            if let Some(open) = run.as_mut() {
+                if append_text_chunk(&mut open.event, &event).is_some() {
+                    open.dirty = true;
+                    return;
+                }
+            }
+            if let Some(mut finished) = run.take() {
+                self.flush_run(&mut finished);
+            }
+            *run = Some(OpenRun {
+                event,
+                persisted_sequence: None,
+                dirty: true,
+            });
+            return;
+        }
+        if let Some(mut finished) = run.take() {
+            self.flush_run(&mut finished);
+        }
+        self.writes.push(event);
+    }
 }
 
 pub(super) enum PersistenceCommand {
@@ -159,35 +215,46 @@ impl PersistenceTracker {
 }
 
 pub(super) async fn run_worker(
-    session_id: AcpSessionId,
+    initial_summary: AcpSessionSummary,
     persistence: Arc<dyn AcpSessionPersistencePort>,
     scope: ActiveResourceScope,
     tracker: Arc<PersistenceTracker>,
     mut requests: tokio::sync::mpsc::UnboundedReceiver<PersistenceCommand>,
 ) {
+    let session_id = initial_summary.id;
     let mut closed = false;
+    let mut summary = initial_summary;
+    let mut run: Option<OpenRun> = None;
     while !closed {
         let first = match requests.recv().await {
             Some(PersistenceCommand::Event(request)) => request,
             Some(PersistenceCommand::Shutdown) | None => break,
         };
-        let mut events = Vec::with_capacity(MAX_PERSIST_BATCH_EVENTS);
+        let mut batch = PersistBatch::default();
+        let mut request_count = 1;
         let mut bytes = first.bytes;
-        let mut summary = first.summary;
         let mut immediate = first.immediate;
-        events.push(first.event);
+        let mut latest_at = first.event.created_at;
+        if let Some(current) = first.summary {
+            summary = current;
+        }
+        batch.add(&mut run, first.event);
         let deadline = tokio::time::Instant::now() + PERSIST_BATCH_DELAY;
 
         while !immediate
-            && events.len() < MAX_PERSIST_BATCH_EVENTS
+            && request_count < MAX_PERSIST_BATCH_EVENTS
             && bytes < MAX_PERSIST_BATCH_BYTES
         {
             match tokio::time::timeout_at(deadline, requests.recv()).await {
                 Ok(Some(PersistenceCommand::Event(request))) => {
+                    request_count += 1;
                     bytes = bytes.saturating_add(request.bytes);
-                    summary = request.summary;
                     immediate = request.immediate;
-                    events.push(request.event);
+                    latest_at = request.event.created_at;
+                    if let Some(current) = request.summary {
+                        summary = current;
+                    }
+                    batch.add(&mut run, request.event);
                 }
                 Ok(Some(PersistenceCommand::Shutdown)) | Ok(None) => {
                     closed = true;
@@ -196,7 +263,13 @@ pub(super) async fn run_worker(
                 Err(_) => break,
             }
         }
-
+        if let Some(open) = run.as_mut() {
+            batch.flush_run(open);
+        }
+        if summary.updated_at < latest_at {
+            summary.updated_at = latest_at;
+        }
+        let events = batch.writes;
         let first_sequence = events
             .first()
             .map(|event| event.sequence)
@@ -206,7 +279,10 @@ pub(super) async fn run_worker(
             .map(|event| event.sequence)
             .unwrap_or_default();
         let event_count = events.len();
-        if let Err(error) = persistence.persist_events(&scope, &summary, &events).await {
+        if let Err(error) = persistence
+            .persist_events(&scope, &summary, &events, &batch.replaced)
+            .await
+        {
             tracing::warn!(
                 %session_id,
                 first_sequence,
@@ -225,8 +301,54 @@ pub(super) async fn run_worker(
                 "persisted ACP session event batch"
             );
         }
-        tracker.finish_many(event_count);
+        tracker.finish_many(request_count);
     }
+}
+
+fn is_text_chunk(payload: &AcpSessionEventPayload) -> bool {
+    !is_boundary(payload)
+}
+
+/// Fold `next` into `target` when both are streamed text chunks of the same
+/// kind and message. The folded event takes the newest sequence, so a replay
+/// that covers it also covers every chunk it absorbed. Returns the added bytes.
+pub(super) fn append_text_chunk(
+    target: &mut AcpSessionEvent,
+    next: &AcpSessionEvent,
+) -> Option<usize> {
+    let (
+        AcpSessionEventPayload::SessionUpdate { update: current },
+        AcpSessionEventPayload::SessionUpdate { update: incoming },
+    ) = (&mut target.payload, &next.payload)
+    else {
+        return None;
+    };
+    let kind = incoming.get("sessionUpdate").and_then(Value::as_str)?;
+    if !matches!(kind, "agent_message_chunk" | "agent_thought_chunk")
+        || current.get("sessionUpdate").and_then(Value::as_str) != Some(kind)
+        || current.get("messageId") != incoming.get("messageId")
+    {
+        return None;
+    }
+    let content = incoming.get("content")?;
+    if content.get("type").and_then(Value::as_str) != Some("text") {
+        return None;
+    }
+    let addition = content.get("text").and_then(Value::as_str)?;
+    let existing = current.get_mut("content")?;
+    if existing.get("type").and_then(Value::as_str) != Some("text") {
+        return None;
+    }
+    let Some(Value::String(text)) = existing.get_mut("text") else {
+        return None;
+    };
+    if text.len().saturating_add(addition.len()) > MAX_COALESCED_TEXT_BYTES {
+        return None;
+    }
+    text.push_str(addition);
+    target.sequence = next.sequence;
+    target.created_at = next.created_at;
+    Some(addition.len())
 }
 
 pub(super) fn is_boundary(payload: &AcpSessionEventPayload) -> bool {

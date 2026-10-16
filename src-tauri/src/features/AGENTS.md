@@ -43,6 +43,7 @@ reference Tauri, SQLx, `Store`, the keychain, the network, or the global
 | `scripts/` | Transport-neutral multi-statement SQL script execution (see `scripts/AGENTS.md`). |
 | `sql_documents/` | Persistent SQL document (saved query file) feature (see `sql_documents/AGENTS.md`). |
 | `terminals/` | Connection-pinned, PTY-backed advanced Shell (see `terminals/AGENTS.md`). |
+| `workspace_admin/` | Closed-catalog workspace administration requests sent with the account's Bearer session, and the same-origin provider authorization start (see `workspace_admin/AGENTS.md`). |
 | `workspaces/` | Account-aware workspace authentication, membership, and sync (see `workspaces/AGENTS.md`). |
 
 ## For AI Agents
@@ -106,7 +107,8 @@ reference Tauri, SQLx, `Store`, the keychain, the network, or the global
   `knowledge`; `connections` and `jobs` → `catalog`; `knowledge` and
   `providers` → `workspaces`; `scripts` → `catalog`, `queries`; `queries` →
   `agents`, `connections`, `jobs`, `knowledge`, `product_analytics`,
-  `workspaces`; `workspaces` → `analysis_articles`, `connections`. Every
+  `workspaces`; `workspace_admin` → `workspaces` (transport only, for the
+  signed-in accounts); `workspaces` → `analysis_articles`, `connections`. Every
   feature's own `AGENTS.md` documents its exact imports.
 
 ### External

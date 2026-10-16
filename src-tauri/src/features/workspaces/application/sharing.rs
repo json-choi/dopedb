@@ -3,13 +3,15 @@
 use uuid::Uuid;
 
 use crate::error::{AppError, AppResult};
-use crate::features::connections::{ConnectionCredentialVault, MAX_CONNECTION_CREDENTIAL_BYTES};
+use crate::features::connections::{
+    same_credential_endpoint, ConnectionCredentialVault, MAX_CONNECTION_CREDENTIAL_BYTES,
+};
 use crate::kernel::identity::ConnectionId;
 use crate::model::{ConnectionProfile, WorkspaceConnectionAccess, WorkspaceCredentialMode};
 
 use crate::kernel::access::WorkspaceKind;
 
-use super::super::domain::validate_member_username;
+use super::super::domain::{merge_member_tls_files, validate_member_username};
 use super::super::ports::{
     WorkspaceConfigurationPort, WorkspaceConnectionMutationPort, WorkspaceControlPlanePort,
     WorkspaceRepositoryPort, WorkspaceRuntimePort,
@@ -237,6 +239,15 @@ where
                 profile.allow_writes = current.credential_mode == WorkspaceCredentialMode::Managed
                     && current.allow_writes;
                 profile.schema_access_available = current.schema_access_available;
+                if current.credential_mode == WorkspaceCredentialMode::Managed {
+                    // The provider integration owns a managed endpoint. Moving it
+                    // from the template would make every member's issued lease stop
+                    // matching the connection, so these fields are never edited here.
+                    profile.host = current.host.clone();
+                    profile.port = current.port;
+                    profile.database = current.database.clone();
+                    profile.sslmode = current.sslmode.clone();
+                }
                 (profile, None)
             }
             SharedConnectionMutation::WritePolicy(allow_writes) => {
@@ -363,11 +374,12 @@ where
             username,
             password,
             ssh_alias,
+            tls_files,
         } = request;
         let username = validate_member_username(&username)?;
-        if password.is_empty() || password.len() > MAX_CONNECTION_CREDENTIAL_BYTES {
+        if password.len() > MAX_CONNECTION_CREDENTIAL_BYTES {
             return Err(AppError::Config(
-                "connection credential is empty or exceeds the size limit".into(),
+                "connection credential exceeds the size limit".into(),
             ));
         }
         let mutation = self
@@ -396,9 +408,12 @@ where
                 reason: "your workspace role cannot execute this connection".into(),
             });
         }
-        let binding_extra_params = self
+        let mut binding_extra_params = self
             .ssh_profiles
             .bind_alias(&profile, ssh_alias.as_deref())?;
+        if let Some(tls_files) = tls_files.as_ref() {
+            merge_member_tls_files(profile.engine, &mut binding_extra_params, tls_files)?;
+        }
         let account_user_id = mutation.selected_account_id()?;
         let previous_credential_id = profile
             .secret_ref
@@ -406,11 +421,34 @@ where
             .map(Uuid::parse_str)
             .transpose()
             .map_err(|_| AppError::Config("connection secret reference is invalid".into()))?;
-        // Copy-on-write prevents a password-only rotation from mutating credential
-        // material behind an unchanged binding revision.
-        let credential_id = Uuid::new_v4();
-        self.credentials.store(&credential_id, password.as_str())?;
-        let credential_ref = credential_id.to_string();
+        // An empty password keeps this member's saved credential only while the new
+        // binding names the same user and SSH alias over transport security at least
+        // as strong, with the same trust anchor while the server is verified. Any
+        // other change needs the password before the credential store is read. The
+        // saved item must also still exist on this device; otherwise the read reports
+        // `CredentialBindingRequired` and the member enters a password.
+        let replacement_credential_id = if password.is_empty() {
+            let mut rebound = profile.clone();
+            rebound.username = username.to_owned();
+            rebound.extra_params = binding_extra_params.clone();
+            if !same_credential_endpoint(&profile, &rebound) {
+                return Err(AppError::CredentialBindingRequired);
+            }
+            self.credentials.fetch_profile(&profile)?;
+            None
+        } else {
+            // Copy-on-write prevents a password-only rotation from mutating
+            // credential material behind an unchanged binding revision.
+            let credential_id = Uuid::new_v4();
+            self.credentials.store(&credential_id, password.as_str())?;
+            Some(credential_id)
+        };
+        let Some(credential_ref) = replacement_credential_id
+            .or(previous_credential_id)
+            .map(|id| id.to_string())
+        else {
+            return Err(AppError::CredentialBindingRequired);
+        };
         match self
             .repository
             .bind_connection_credentials(
@@ -424,7 +462,9 @@ where
         {
             Ok(profile) => {
                 mutation.retire(connection_id).await;
-                if let Some(previous_credential_id) = previous_credential_id {
+                if let (Some(_), Some(previous_credential_id)) =
+                    (replacement_credential_id, previous_credential_id)
+                {
                     self.delete_secret_best_effort(
                         previous_credential_id,
                         "replace_workspace_connection_credentials",
@@ -433,7 +473,9 @@ where
                 Ok(profile)
             }
             Err(error) => {
-                self.delete_secret_best_effort(credential_id, "bind_connection_credentials");
+                if let Some(credential_id) = replacement_credential_id {
+                    self.delete_secret_best_effort(credential_id, "bind_connection_credentials");
+                }
                 Err(error)
             }
         }
@@ -442,6 +484,17 @@ where
     pub(super) fn delete_secret_best_effort(&self, id: Uuid, action: &'static str) {
         if self.credentials.delete(&id).is_err() {
             tracing::warn!(action, "credential cleanup deferred");
+            // Persist the opaque item id so the connections feature retries the
+            // deletion after a restart, exactly like a local profile's cleanup.
+            let repository = self.repository.clone();
+            tokio::spawn(async move {
+                if let Err(error) = repository.defer_credential_delete(id).await {
+                    tracing::warn!(
+                        error_kind = error.kind(),
+                        "credential cleanup deferral not persisted"
+                    );
+                }
+            });
         }
     }
 }

@@ -5,9 +5,10 @@
 mod application;
 mod ports;
 
+use std::sync::Arc;
 use std::time::Duration;
 
-use dopedb_protocol::{OperationState, OperationSummary};
+use dopedb_protocol::{OperationState, OperationSummary, MAX_DECISION_REASON_CHARS};
 use serde::Serialize;
 use serde_json::json;
 use uuid::Uuid;
@@ -17,8 +18,8 @@ use crate::error::{AppError, AppResult};
 use crate::kernel::TerminalAuthority;
 use crate::operations::{
     approver_for_pin, capture_policy, ensure_operation_scope, required_confirmation,
-    ExactApprovalRequest, LocalApprovalAuthority, OperationRecord, OperationRuntime,
-    RestartRecoveryReport,
+    AgentSessionLiveness, ExactApprovalRequest, LocalApprovalAuthority, OperationActorKind,
+    OperationRecord, OperationRuntime, RestartRecoveryReport, AGENT_SESSION_REVOKED,
 };
 use crate::store::Store;
 
@@ -53,11 +54,25 @@ type ComposedOperationApplication = OperationUseCases<OperationPlatformAdapter>;
 #[derive(Clone)]
 pub(crate) struct OperationControlFeature {
     application: ComposedOperationApplication,
+    runtime: OperationRuntime,
 }
 
 impl OperationControlFeature {
     pub(crate) async fn recover_previous_runtimes(&self) -> AppResult<RestartRecoveryReport> {
         self.application.recover_previous_runtimes().await
+    }
+
+    /// Bind the Broker's live session registry into the shared Operation
+    /// Runtime: approving an Agent proposal and claiming its execution both
+    /// re-check that its proposing session still holds the exact grant.
+    pub(crate) fn bind_agent_session_liveness(&self, liveness: Arc<dyn AgentSessionLiveness>) {
+        self.runtime.bind_agent_session_liveness(liveness);
+    }
+
+    pub(crate) async fn cancel_revoked_agent_proposals(&self, operation_ids: Vec<Uuid>) {
+        self.application
+            .cancel_revoked_agent_proposals(operation_ids)
+            .await;
     }
 
     pub(crate) async fn approve_local(
@@ -110,25 +125,64 @@ pub(crate) fn compose(
     runtime: OperationRuntime,
 ) -> OperationControlFeature {
     OperationControlFeature {
-        application: OperationUseCases::new(OperationPlatformAdapter::new(
+        application: OperationUseCases::new(OperationPlatformAdapter {
             store,
             connections,
-            runtime,
-        )),
+            runtime: runtime.clone(),
+        }),
+        runtime,
     }
 }
 
 impl OperationPlatformAdapter {
-    fn new(store: Store, connections: ConnectionManager, runtime: OperationRuntime) -> Self {
-        Self {
-            store,
-            connections,
-            runtime,
+    pub(crate) async fn recover_previous_runtimes(&self) -> AppResult<RestartRecoveryReport> {
+        self.runtime.recover_previous_runtimes().await
+    }
+
+    /// Cancel every still-undecided or unclaimed proposal of a removed session.
+    /// Executing work is left to its own cancellation path: a human already
+    /// approved it and the executor owns the outcome.
+    pub(crate) async fn cancel_revoked_agent_proposals(&self, operation_ids: Vec<Uuid>) {
+        for operation_id in operation_ids {
+            let Ok(record) = self.runtime.get(operation_id).await else {
+                continue;
+            };
+            if record.terminal_session_id.is_none()
+                || record.actor.kind != OperationActorKind::Agent
+                || !matches!(
+                    record.state,
+                    OperationState::Planned
+                        | OperationState::PendingApproval
+                        | OperationState::Approved
+                        | OperationState::Ready
+                )
+            {
+                continue;
+            }
+            if let Err(error) = self
+                .runtime
+                .cancel_before_execution(operation_id, &json!({ "origin": AGENT_SESSION_REVOKED }))
+                .await
+            {
+                tracing::debug!(
+                    %operation_id,
+                    error_kind = error.kind(),
+                    "a revoked Agent proposal changed state before cancellation"
+                );
+            }
         }
     }
 
-    pub(crate) async fn recover_previous_runtimes(&self) -> AppResult<RestartRecoveryReport> {
-        self.runtime.recover_previous_runtimes().await
+    /// An Agent/Terminal proposal stays approvable only while the exact session
+    /// that created it still holds its grant.
+    async fn ensure_proposing_session_live(&self, record: &OperationRecord) -> AppResult<()> {
+        if !self.runtime.proposing_session_revoked(record) {
+            return Ok(());
+        }
+        self.cancel_revoked_agent_proposals(vec![record.id]).await;
+        Err(AppError::Blocked {
+            reason: AGENT_SESSION_REVOKED.into(),
+        })
     }
 
     pub(crate) async fn approve_local(
@@ -162,7 +216,17 @@ impl OperationPlatformAdapter {
     ) -> AppResult<OperationSummary> {
         let record = self.runtime.get(operation_id).await?;
         ensure_terminal_scope(&record, scope)?;
-        Ok(operation_summary(&record))
+        let mut summary = operation_summary(&record);
+        // Only a rejection's human note reaches the proposing Agent, bounded so a
+        // long note never inflates every `operation show/wait` summary.
+        if record.state == OperationState::Rejected {
+            summary.decision_reason = self
+                .runtime
+                .rejection_reason(operation_id)
+                .await?
+                .map(|reason| reason.chars().take(MAX_DECISION_REASON_CHARS).collect());
+        }
+        Ok(summary)
     }
 
     pub(crate) async fn wait_terminal(
@@ -224,6 +288,7 @@ impl OperationPlatformAdapter {
     ) -> AppResult<ExactApprovalRequest> {
         let record = self.runtime.get(request.operation_id).await?;
         if validate_confirmation {
+            self.ensure_proposing_session_live(&record).await?;
             if let Some(expected) = required_confirmation(&record) {
                 if request.reason.as_deref() != Some(expected) {
                     return Err(AppError::Blocked {
@@ -256,6 +321,13 @@ impl OperationControlPort for OperationPlatformAdapter {
         &self,
     ) -> impl std::future::Future<Output = AppResult<RestartRecoveryReport>> + Send {
         OperationPlatformAdapter::recover_previous_runtimes(self)
+    }
+
+    fn cancel_revoked_agent_proposals(
+        &self,
+        operation_ids: Vec<Uuid>,
+    ) -> impl std::future::Future<Output = ()> + Send + '_ {
+        OperationPlatformAdapter::cancel_revoked_agent_proposals(self, operation_ids)
     }
 
     fn approve_local<'a>(
@@ -328,6 +400,7 @@ fn operation_summary(record: &OperationRecord) -> OperationSummary {
         finished_at: record.finished_at,
         created_at: record.created_at,
         updated_at: record.updated_at,
+        decision_reason: None,
     }
 }
 

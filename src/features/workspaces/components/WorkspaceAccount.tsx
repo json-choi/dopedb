@@ -37,7 +37,9 @@ import {
   shouldRevalidateWorkspaceAuth,
   workspaceAuthRetryDelay,
 } from "../authPolicy";
+import { requestWorkspaceAdmin } from "../../workspaceAdmin/navigationRequest";
 import { onWorkspaceLoginRequested } from "../loginRequest";
+import { onWorkspaceMembershipRefreshRequested } from "../membershipRefreshRequest";
 import { errMessage } from "../../../ipc/types";
 import { useI18n } from "../../../lib/i18n";
 import { Icon } from "../../../components/Icon";
@@ -92,6 +94,7 @@ export default function WorkspaceAccount({
   const workspaceAccountMounted = useRef(false);
   const providerCredentialAuthorityVersion = useRef<number | null>(null);
   const membershipRefreshHandler = useRef<(force?: boolean) => void>(() => undefined);
+  const requestedMembershipRefresh = useRef<() => Promise<void>>(() => Promise.resolve());
   const loginRequestHandler = useRef<() => void>(() => undefined);
   const scopeChangeHandler = useRef<() => void | Promise<void>>(
     () => undefined,
@@ -146,7 +149,9 @@ export default function WorkspaceAccount({
       );
     // Native membership/auth refreshes may change the backend's active account or
     // workspace. Stop old-generation reads before invoking that authority boundary.
-    await cancelWorkspaceResourceQueries(queryClient);
+    // Catalog reads keep running: a changed authority resets them below, and an
+    // unchanged one must not cancel and re-send the same scans.
+    await cancelWorkspaceResourceQueries(queryClient, { keepCatalogReads: true });
     let nextAuth: WorkspaceAuthState;
     let nextContext: WorkspaceContextState;
     try {
@@ -264,6 +269,11 @@ export default function WorkspaceAccount({
   }, [clearMembershipRefreshRetry]);
 
   useEffect(() => onWorkspaceLoginRequested(() => loginRequestHandler.current()), []);
+
+  useEffect(
+    () => onWorkspaceMembershipRefreshRequested(() => requestedMembershipRefresh.current()),
+    [],
+  );
 
   useEffect(() => {
     if (!auth.data?.authenticated) return;
@@ -399,6 +409,29 @@ export default function WorkspaceAccount({
         }
       });
     membershipRefreshInFlight.current = request;
+  };
+
+  // An administration change (a created workspace, a cancelled deletion) lands after
+  // any refresh already in flight began, so wait for it and prove a fresh snapshot.
+  requestedMembershipRefresh.current = async () => {
+    while (membershipRefreshInFlight.current) {
+      await membershipRefreshInFlight.current;
+    }
+    clearMembershipRefreshRetry();
+    const refresh = refreshWorkspaceAuthority(refreshWorkspaceAuthState);
+    const request = refresh
+      .then(membershipRefreshSucceeded, async () => {
+        await auth.refetch().catch(() => undefined);
+        await invalidateWorkspaceContext(queryClient);
+        membershipRefreshFailed();
+      })
+      .finally(() => {
+        if (membershipRefreshInFlight.current === request) {
+          membershipRefreshInFlight.current = null;
+        }
+      });
+    membershipRefreshInFlight.current = request;
+    await refresh;
   };
 
   async function login() {
@@ -654,6 +687,17 @@ export default function WorkspaceAccount({
                   </div>
                 );
               })}
+              {/* Sessions and workspaces scheduled for deletion are user-level, so they
+                  open in Settings → Account rather than in Workspace management. */}
+              <PopupMenuItem
+                onClick={() => {
+                  setMenuOpen(false);
+                  requestWorkspaceAdmin("account");
+                }}
+              >
+                <Icon name="user" />
+                {t("workspaceAdmin.manageAccount")}
+              </PopupMenuItem>
               <ProviderCredentialsMenuItem
                 onOpen={() => {
                   setMenuOpen(false);

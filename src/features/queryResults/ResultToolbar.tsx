@@ -1,26 +1,28 @@
 // Compact export/copy controls for any result grid. Workbench surfaces use the
 // product command grammar of Copy + one CSV format menu; inline metadata keeps
 // the explicit text actions. Every action operates on the full result rows.
-import { useEffect, useRef, useState } from "react";
-
+// Stored-result exports are owned by `resultExports`, so they survive this
+// toolbar unmounting; rows held here are saved through the same native dialog.
+// Completion and failures are announced with the file name or a translated
+// reason that names the blocking row and column.
 import type { SqlStreamRowSource } from "../queries/domain";
 import {
   collectCachedSqlResultDecodeFailures,
   collectCachedSqlResultRows,
+  truncatedCellBytes,
 } from "../queries/resultPageCache";
 import type { CellDecodeFailure } from "../../ipc/types";
-import { errMessage } from "../../ipc/types";
-import {
-  exportSqlResult,
-  type SqlResultExportController,
-  type SqlResultExportProgress,
-} from "../queries/tauriAdapter";
-import {
-  downloadCsv,
-  downloadJson,
-  toTsv,
-} from "../../lib/export";
+import { toTsv } from "../../lib/export";
 import { useI18n } from "../../lib/i18n";
+import {
+  cancelResultExport,
+  resultExportErrorMessage,
+  saveRendererExport,
+  startResultExport,
+  useResultExportActive,
+  useResultExportProgress,
+  type ResultExportOutcome,
+} from "./resultExports";
 import { WorkbenchButton } from "../../design-system/components/Workbench";
 import { ProgressBar } from "../../design-system/components/Progress";
 import { Icon } from "../../components/Icon";
@@ -60,74 +62,54 @@ export default function ResultToolbar({
     : (decodeFailures ?? []);
   const firstDecodeFailure = knownDecodeFailures[0];
   const copyDisabled = disabled || (!!rowSource && cachedRows === null);
-  const exportRef = useRef<SqlResultExportController | null>(null);
-  const cancelledExportIdRef = useRef<string | null>(null);
-  const [exportProgress, setExportProgress] =
-    useState<SqlResultExportProgress | null>(null);
-  useEffect(
-    () => () => {
-      const controller = exportRef.current;
-      if (!controller) return;
-      cancelledExportIdRef.current = controller.exportId;
-      void controller.cancel();
-    },
-    [],
-  );
-  const cancelExport = () => {
-    const controller = exportRef.current;
-    if (!controller) return;
-    cancelledExportIdRef.current = controller.exportId;
-    void controller.cancel();
+  const exportProgress = useResultExportProgress(rowSource?.operationId);
+  const exportActive = useResultExportActive(rowSource?.operationId);
+  const cancelExport = () => cancelResultExport(rowSource?.operationId ?? null);
+  const failureReason = (action: "copy" | "export") => {
+    if (!firstDecodeFailure) return null;
+    const location = {
+      row: firstDecodeFailure.rowIndex + 1,
+      column: firstDecodeFailure.columnIndex + 1,
+    };
+    if (truncatedCellBytes(firstDecodeFailure) !== null) {
+      return action === "copy"
+        ? t("grid.truncatedCopyBlocked", location)
+        : t("results.exportBlockedTruncated", location);
+    }
+    return t(
+      action === "copy"
+        ? "grid.decodeFailureCopyBlocked"
+        : "results.exportBlockedDecode",
+      { ...location, type: firstDecodeFailure.databaseType },
+    );
   };
-  const failureReason = (action: "copy" | "export") =>
-    firstDecodeFailure
-      ? t(
-          action === "copy"
-            ? "grid.decodeFailureCopyBlocked"
-            : "results.decodeFailureExportBlocked",
-          {
-            row: firstDecodeFailure.rowIndex + 1,
-            column: firstDecodeFailure.columnIndex + 1,
-            type: firstDecodeFailure.databaseType,
-          },
-        )
-      : null;
+  const announceExport = (outcome: ResultExportOutcome) => {
+    if (outcome.kind === "completed") {
+      toast(
+        outcome.fileName
+          ? t("results.exportSucceeded", {
+              count: outcome.rowsWritten,
+              file: outcome.fileName,
+            })
+          : t("results.exportSucceededNoName", { count: outcome.rowsWritten }),
+      );
+    } else if (outcome.kind === "failed") {
+      toast(resultExportErrorMessage(outcome.error, t), "error");
+    }
+  };
   const exportStored = (format: "csv" | "json") => {
-    if (!rowSource || exportRef.current) return;
+    if (!rowSource || exportActive) return;
     const blocked = failureReason("export");
     if (blocked) {
       toast(blocked, "error");
       return;
     }
-    const controller = exportSqlResult(
+    startResultExport(
       rowSource,
       format,
       `${filenameBase}.${format}`,
-      setExportProgress,
+      announceExport,
     );
-    cancelledExportIdRef.current = null;
-    exportRef.current = controller;
-    setExportProgress({
-      exportId: controller.exportId,
-      operationId: rowSource.operationId ?? "",
-      rowsWritten: 0,
-      totalRows: rowSource.rowCount,
-    });
-    void controller.completion
-      .catch((error) => {
-        if (cancelledExportIdRef.current !== controller.exportId) {
-          toast(errMessage(error) || t("results.exportFailed"), "error");
-        }
-      })
-      .finally(() => {
-        if (exportRef.current === controller) {
-          exportRef.current = null;
-          setExportProgress(null);
-        }
-        if (cancelledExportIdRef.current === controller.exportId) {
-          cancelledExportIdRef.current = null;
-        }
-      });
   };
   const exportCsv = () => {
     const blocked = failureReason("export");
@@ -139,7 +121,7 @@ export default function ResultToolbar({
       exportStored("csv");
       return;
     }
-    downloadCsv(filenameBase, columns, rows ?? []);
+    void saveRendererExport("csv", filenameBase, columns, rows ?? [], t, toast);
   };
   const exportJson = () => {
     const blocked = failureReason("export");
@@ -151,7 +133,7 @@ export default function ResultToolbar({
       exportStored("json");
       return;
     }
-    downloadJson(filenameBase, columns, rows ?? []);
+    void saveRendererExport("json", filenameBase, columns, rows ?? [], t, toast);
   };
   const copyTitle =
     copyDisabled && rowSource && !disabled
@@ -212,7 +194,7 @@ export default function ResultToolbar({
       {presentation === "workbench" ? (
         <ToolbarMenu
           label={csvTitle}
-          disabled={disabled || exportProgress !== null}
+          disabled={disabled || exportActive}
           trigger={
             <>
               CSV
@@ -231,7 +213,7 @@ export default function ResultToolbar({
         <>
           <WorkbenchButton
             title={t("results.downloadCsvTitle")}
-            disabled={disabled || exportProgress !== null}
+            disabled={disabled || exportActive}
             onClick={exportCsv}
           >
             {scopeLabel
@@ -240,7 +222,7 @@ export default function ResultToolbar({
           </WorkbenchButton>
           <WorkbenchButton
             title={t("results.downloadJsonTitle")}
-            disabled={disabled || exportProgress !== null}
+            disabled={disabled || exportActive}
             onClick={exportJson}
           >
             {scopeLabel

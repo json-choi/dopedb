@@ -658,15 +658,33 @@ async fn assert_current_store_baseline_and_invariants() {
         .await
         .unwrap();
 
-    // Existing supported stores gain only a fail-closed capability cache.
+    // Existing supported stores gain only a fail-closed capability cache, and each
+    // binding that holds a credential is pinned to the template it is used with.
     let connection_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM connections")
         .fetch_one(&pool)
         .await
         .unwrap();
-    sqlx::query("ALTER TABLE connections DROP COLUMN schema_access_available")
-        .execute(&pool)
-        .await
-        .unwrap();
+    assert!(schema::SCHEMA.contains(schema::BINDING_BOUND_ENDPOINT_COLUMN));
+    sqlx::query(
+        "INSERT INTO workspace_connection_bindings
+             (connection_id, account_user_id, username, extra_params, secret_ref, updated_at)
+         SELECT id, 'migrated-member', 'reader', '{}', 'migrated-ref', CURRENT_TIMESTAMP
+         FROM connections LIMIT 1",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(schema::HISTORY_TARGET_COLUMNS
+        .iter()
+        .all(|column| schema::SCHEMA.contains(column)));
+    for column in [
+        "ALTER TABLE connections DROP COLUMN schema_access_available",
+        "ALTER TABLE workspace_connection_bindings DROP COLUMN bound_endpoint",
+        "ALTER TABLE query_history DROP COLUMN target_database",
+        "ALTER TABLE query_history DROP COLUMN target_namespace",
+    ] {
+        sqlx::query(column).execute(&pool).await.unwrap();
+    }
     assert_eq!(
         super::super::bootstrap::bootstrap_local_store(&pool)
             .await
@@ -680,6 +698,17 @@ async fn assert_current_store_baseline_and_invariants() {
             .unwrap(),
         connection_count
     );
+    // History rows from before the run-target columns keep no target.
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM query_history
+             WHERE target_database IS NOT NULL OR target_namespace IS NOT NULL"
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        0
+    );
     assert_eq!(
         sqlx::query_scalar::<_, i64>(
             "SELECT COUNT(*) FROM connections WHERE schema_access_available <> 0"
@@ -688,6 +717,122 @@ async fn assert_current_store_baseline_and_invariants() {
         .await
         .unwrap(),
         0
+    );
+    let migrated_endpoint: Option<String> = sqlx::query_scalar(
+        "SELECT bound_endpoint FROM workspace_connection_bindings
+         WHERE account_user_id = 'migrated-member'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let migrated_template = super::super::projections::row_to_connection(
+        &sqlx::query(
+            "SELECT * FROM connections WHERE id = (
+                 SELECT connection_id FROM workspace_connection_bindings
+                 WHERE account_user_id = 'migrated-member')",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+    )
+    .unwrap();
+    assert!(super::super::projections::binding_endpoint_admits(
+        migrated_endpoint.as_deref(),
+        &migrated_template,
+    ));
+    let mut moved_template = migrated_template.clone();
+    moved_template.host = "moved.example.test".into();
+    assert!(!super::super::projections::binding_endpoint_admits(
+        migrated_endpoint.as_deref(),
+        &moved_template,
+    ));
+    assert!(sqlx::query(
+        "UPDATE workspace_connection_bindings SET bound_endpoint = '[]'
+         WHERE account_user_id = 'migrated-member'",
+    )
+    .execute(&pool)
+    .await
+    .is_err());
+    sqlx::query(
+        "DELETE FROM workspace_connection_bindings WHERE account_user_id = 'migrated-member'",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // A failed credential deletion survives a restart: baseline stores gain the
+    // same list the fresh schema declares, and each item is kept once until cleared.
+    assert!(schema::SCHEMA.contains(schema::DEFERRED_CREDENTIAL_DELETE_SCHEMA));
+    sqlx::query("DROP TABLE deferred_credential_deletes")
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        super::super::bootstrap::bootstrap_local_store(&pool)
+            .await
+            .unwrap(),
+        super::super::bootstrap::LocalStoreBootstrap::Ready { created: false }
+    );
+    let deferred_credential = Uuid::new_v4();
+    for _ in 0..2 {
+        store
+            .defer_credential_delete(deferred_credential)
+            .await
+            .unwrap();
+    }
+    assert_eq!(
+        store.deferred_credential_deletes().await.unwrap(),
+        vec![deferred_credential]
+    );
+    store
+        .clear_deferred_credential_delete(deferred_credential)
+        .await
+        .unwrap();
+    assert!(store
+        .deferred_credential_deletes()
+        .await
+        .unwrap()
+        .is_empty());
+
+    // A catalog an older introspection producer cached is retired at the next start
+    // and the current producer recorded, so no reader is ever served it.
+    sqlx::query(
+        "INSERT INTO catalog_cache
+             (workspace_id, account_scope, connection_id, connection_revision,
+              binding_revision, binding_updated_at, catalog_schema_version,
+              fingerprint, captured_at, catalog_json)
+         SELECT workspace_id, 'personal', id, revision, 0, '', 2, 'older-producer',
+                '2026-01-01T00:00:00Z', '{}'
+         FROM connections LIMIT 1",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query("UPDATE app_settings SET value = '0' WHERE key = 'catalog_producer_revision'")
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        super::super::bootstrap::bootstrap_local_store(&pool)
+            .await
+            .unwrap(),
+        super::super::bootstrap::LocalStoreBootstrap::Ready { created: false }
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM catalog_cache")
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        0
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, String>(
+            "SELECT value FROM app_settings WHERE key = 'catalog_producer_revision'"
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        crate::introspect::CATALOG_PRODUCER_REVISION.to_string()
     );
 
     let legacy_root = tempfile::tempdir().unwrap();
@@ -1352,8 +1497,31 @@ async fn remote_template_sync_preserves_member_local_credential_binding() {
         .unwrap();
     assert_eq!(environments.len(), 1);
     assert_eq!(environments[0].graph_revision_count, 0);
+    // Only the anchor and the selected databases are checked: a stale binding the
+    // session does not select never blocks it, and a selected one still does.
+    let stale_binding_id = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO knowledge_environment_connections
+             (id, workspace_id, project_environment_id, environment_revision,
+              connection_id, connection_revision, role, alias, created_at)
+         SELECT ?1, ?2, ?3, 1, id, revision, 'analytics', 'Analytics', ?4
+         FROM connections WHERE id = ?5",
+    )
+    .bind(stale_binding_id.to_string())
+    .bind(workspace_id.to_string())
+    .bind(environment_id.to_string())
+    .bind(Utc::now())
+    .bind(bigquery_id.to_string())
+    .execute(store.pool())
+    .await
+    .unwrap();
+    sqlx::query("UPDATE connections SET revision = revision + 1 WHERE id = ?1")
+        .bind(bigquery_id.to_string())
+        .execute(store.pool())
+        .await
+        .unwrap();
     let environment_scope = knowledge
-        .knowledge_session_scope(&pinned, Some(environment_id))
+        .knowledge_session_scope(&pinned, Some(environment_id), &[id])
         .await
         .unwrap()
         .unwrap();
@@ -1368,6 +1536,23 @@ async fn remote_template_sync_preserves_member_local_credential_binding() {
         .await
         .unwrap()
         .is_empty());
+    assert!(matches!(
+        knowledge
+            .knowledge_session_scope(&pinned, Some(environment_id), &[id, bigquery_id])
+            .await,
+        Err(AppError::Blocked { reason })
+            if reason == "the Analytics Environment database binding changed; reconfirm it before starting an Agent session"
+    ));
+    sqlx::query("DELETE FROM knowledge_environment_connections WHERE id = ?1")
+        .bind(stale_binding_id.to_string())
+        .execute(store.pool())
+        .await
+        .unwrap();
+    sqlx::query("UPDATE connections SET revision = revision - 1 WHERE id = ?1")
+        .bind(bigquery_id.to_string())
+        .execute(store.pool())
+        .await
+        .unwrap();
 
     // A transient hosted-inventory miss may tombstone the local cache before
     // the same immutable binding is observed again. Reconciliation must revive
@@ -1417,6 +1602,90 @@ async fn remote_template_sync_preserves_member_local_credential_binding() {
     .await
     .unwrap();
     assert_eq!(binding_count, 0);
+
+    // A member's credential stays bound to the template endpoint it was entered
+    // for. A stronger template keeps it; a moved endpoint or weaker transport
+    // releases it, and nothing reads the credential store until the member binds
+    // again.
+    let pinned_id = Uuid::new_v4();
+    let mut template = sqlite_profile(pinned_id, "pinned");
+    template.engine = Engine::Postgres;
+    template.host = "db.example.test".into();
+    template.port = 5432;
+    template.sslmode = "require".into();
+    template.workspace_access = crate::model::WorkspaceConnectionAccess::Read;
+    template.credential_mode = crate::model::WorkspaceCredentialMode::MemberLocal;
+    store
+        .sync_remote_connections(workspace_id, &user.id, &[(template.clone(), 1)])
+        .await
+        .unwrap();
+    let pinned_ref = Uuid::new_v4();
+    let pinned_ref_text = pinned_ref.to_string();
+    let rebind = || {
+        store.bind_connection_credentials(
+            pinned_id,
+            &user.id,
+            "reader",
+            &member_options,
+            Some(pinned_ref_text.as_str()),
+        )
+    };
+    rebind().await.unwrap();
+    template.sslmode = "verify-full".into();
+    assert!(store
+        .sync_remote_connections(workspace_id, &user.id, &[(template.clone(), 2)])
+        .await
+        .unwrap()
+        .is_empty());
+    let kept_ref = pinned_ref.to_string();
+    assert_eq!(
+        store.get_connection(pinned_id).await.unwrap().secret_ref,
+        Some(kept_ref)
+    );
+    template.host = "elsewhere.example.test".into();
+    assert_eq!(
+        store
+            .sync_remote_connections(workspace_id, &user.id, &[(template.clone(), 3)])
+            .await
+            .unwrap(),
+        vec![pinned_ref]
+    );
+    let released = store.pin_connection_for_read(pinned_id).await.unwrap();
+    assert!(released.profile.secret_ref.is_none());
+    assert!(matches!(
+        crate::connection::fetch_profile_secret(&released.profile),
+        Err(AppError::CredentialBindingRequired)
+    ));
+    rebind().await.unwrap();
+    template.sslmode = "prefer".into();
+    assert_eq!(
+        store
+            .sync_remote_connections(workspace_id, &user.id, &[(template.clone(), 4)])
+            .await
+            .unwrap(),
+        vec![pinned_ref]
+    );
+    // The projection also refuses a binding without a readable endpoint record.
+    rebind().await.unwrap();
+    assert!(store
+        .get_connection(pinned_id)
+        .await
+        .unwrap()
+        .secret_ref
+        .is_some());
+    sqlx::query(
+        "UPDATE workspace_connection_bindings SET bound_endpoint = NULL WHERE connection_id = ?1",
+    )
+    .bind(pinned_id.to_string())
+    .execute(store.pool())
+    .await
+    .unwrap();
+    assert!(store
+        .get_connection(pinned_id)
+        .await
+        .unwrap()
+        .secret_ref
+        .is_none());
 }
 
 #[tokio::test]
@@ -1591,7 +1860,10 @@ async fn managed_remote_template_never_reads_or_accepts_a_local_binding() {
     assert_eq!(pin.catalog_cache_policy, CatalogCachePolicy::EphemeralOnly);
     let snapshot = catalog_snapshot(id, ":memory:", 'c');
     assert_eq!(
-        store.put_catalog_if_current(&pin, &snapshot).await.unwrap(),
+        store
+            .put_catalog_if_current(&pin, &snapshot, store.catalog_epoch(id).await)
+            .await
+            .unwrap(),
         CacheWriteOutcome::NotPersisted
     );
     let cache_rows: i64 = sqlx::query_scalar("SELECT count(*) FROM catalog_cache")
@@ -1713,6 +1985,8 @@ async fn shared_connection_bindings_are_isolated_per_signed_in_account() {
                 error: None,
                 executed_at: Utc::now(),
                 origin: "manual".into(),
+                database: Some(":memory:".into()),
+                namespace: Some("main".into()),
             },
         )
         .await
@@ -1800,6 +2074,8 @@ async fn shared_connection_bindings_are_isolated_per_signed_in_account() {
                     error: Some("connection failed".into()),
                     executed_at: Utc::now(),
                     origin: "agent".into(),
+                    database: None,
+                    namespace: None,
                 },
             )
             .await,
@@ -1839,14 +2115,14 @@ async fn shared_connection_bindings_are_isolated_per_signed_in_account() {
     assert_eq!(history_page.items.len(), 1);
     assert!(history_page.items[0].sql_truncated);
     assert_eq!(history_page.items[0].sql_preview.chars().count(), 512);
-    assert_eq!(
-        store
-            .get_history_entry(connection_id, history_id)
-            .await
-            .unwrap()
-            .sql,
-        history_sql
-    );
+    let history_detail = store
+        .get_history_entry(connection_id, history_id)
+        .await
+        .unwrap();
+    assert_eq!(history_detail.sql, history_sql);
+    // A desktop run reopens from History in the database and schema it targeted.
+    assert_eq!(history_detail.database.as_deref(), Some(":memory:"));
+    assert_eq!(history_detail.namespace.as_deref(), Some("main"));
     let audit_page = crate::audit::page_after(&store, connection_id, None)
         .await
         .unwrap();
@@ -1865,6 +2141,46 @@ async fn shared_connection_bindings_are_isolated_per_signed_in_account() {
     assert!(verification.ok);
     assert_eq!(verification.entry_count, 2);
     assert!(verification.tail_hash.is_some());
+    assert_eq!(
+        verification.anchor_status,
+        crate::audit::AuditAnchorStatus::Matched
+    );
+    assert_eq!(verification.anchored_count, Some(2));
+    // Existing baseline stores receive the same anchor table the fresh schema declares,
+    // seeded once from each chain as it stands.
+    assert!(schema::SCHEMA.contains(schema::AUDIT_CHAIN_ANCHOR_SCHEMA));
+    sqlx::query("DROP TABLE audit_chain_anchors")
+        .execute(store.pool())
+        .await
+        .unwrap();
+    super::super::bootstrap::add_audit_chain_anchors(store.pool())
+        .await
+        .unwrap();
+    let verification = crate::audit::verify_chain(&store, connection_id)
+        .await
+        .unwrap();
+    assert!(verification.ok);
+    assert_eq!(verification.anchored_count, Some(2));
+    // Removing the newest row leaves every remaining link intact; the tail anchor
+    // advanced by each append still exposes the gap.
+    sqlx::query(
+        "DELETE FROM audit_log WHERE rowid = (SELECT max(rowid) FROM audit_log WHERE connection_id = ?1)",
+    )
+    .bind(connection_id.to_string())
+    .execute(store.pool())
+    .await
+    .unwrap();
+    let verification = crate::audit::verify_chain(&store, connection_id)
+        .await
+        .unwrap();
+    assert!(!verification.ok);
+    assert_eq!(verification.first_bad_index, None);
+    assert_eq!(verification.entry_count, 1);
+    assert_eq!(
+        verification.anchor_status,
+        crate::audit::AuditAnchorStatus::Shorter
+    );
+    assert_eq!(verification.anchored_count, Some(2));
     sqlx::query("UPDATE audit_log SET sql = 'tampered' WHERE id = ?1")
         .bind(first_audit.id.to_string())
         .execute(store.pool())
@@ -1876,14 +2192,32 @@ async fn shared_connection_bindings_are_isolated_per_signed_in_account() {
     assert!(!verification.ok);
     assert_eq!(verification.first_bad_index, Some(0));
     assert_eq!(verification.first_bad_id, Some(first_audit.id));
-    assert_eq!(
-        store
-            .list_query_service_sessions(workspace_id, user_a.id.as_str())
-            .await
-            .unwrap()
-            .len(),
-        1
-    );
+    // A corrupt body and a row whose indexed metadata disagrees with its body are
+    // skipped; they never hide the valid retained Services result.
+    for (id, snapshot_json) in [
+        ("services-corrupt-body", Some("{not json")),
+        ("services-mismatched-metadata", None),
+    ] {
+        let inserted = sqlx::query(
+            "INSERT INTO query_service_sessions
+                 (workspace_id, account_scope, id, connection_id, updated_at, status, snapshot_json)
+             SELECT workspace_id, account_scope, ?1, connection_id, updated_at + 1, status,
+                    COALESCE(?2, snapshot_json)
+             FROM query_service_sessions WHERE id = 'document-alpha:1'",
+        )
+        .bind(id)
+        .bind(snapshot_json)
+        .execute(store.pool())
+        .await
+        .unwrap();
+        assert_eq!(inserted.rows_affected(), 1);
+    }
+    let services_sessions = store
+        .list_query_service_sessions(workspace_id, user_a.id.as_str())
+        .await
+        .unwrap();
+    assert_eq!(services_sessions.len(), 1);
+    assert_eq!(services_sessions[0]["id"], "document-alpha:1");
     let removed_for_b = store
         .sync_remote_connections(workspace_id, &user_b.id, &[])
         .await
@@ -1979,7 +2313,7 @@ async fn pinned_catalog_cache_rejects_scope_aba_and_keeps_accounts_isolated() {
     let snapshot = catalog_snapshot(connection_id, ":memory:", 'a');
     assert_eq!(
         store
-            .put_catalog_if_current(&pin_a, &snapshot)
+            .put_catalog_if_current(&pin_a, &snapshot, store.catalog_epoch(connection_id).await)
             .await
             .unwrap(),
         CacheWriteOutcome::Stored
@@ -1995,7 +2329,7 @@ async fn pinned_catalog_cache_rejects_scope_aba_and_keeps_accounts_isolated() {
     assert!(!store.is_pin_current(&pin_a).await.unwrap());
     assert_eq!(
         store
-            .put_catalog_if_current(&pin_a, &snapshot)
+            .put_catalog_if_current(&pin_a, &snapshot, store.catalog_epoch(connection_id).await)
             .await
             .unwrap(),
         CacheWriteOutcome::Stale
@@ -2067,7 +2401,11 @@ async fn pinned_catalog_cache_rejects_scope_aba_and_keeps_accounts_isolated() {
     let refreshed = catalog_snapshot(connection_id, ":memory:", 'd');
     assert_eq!(
         store
-            .put_catalog_if_current(&repinned_a, &refreshed)
+            .put_catalog_if_current(
+                &repinned_a,
+                &refreshed,
+                store.catalog_epoch(connection_id).await
+            )
             .await
             .unwrap(),
         CacheWriteOutcome::Stored
@@ -2097,7 +2435,11 @@ async fn pinned_catalog_cache_rejects_scope_aba_and_keeps_accounts_isolated() {
         .unwrap()
         .is_none());
     store
-        .put_catalog_if_current(&repinned_a, &refreshed)
+        .put_catalog_if_current(
+            &repinned_a,
+            &refreshed,
+            store.catalog_epoch(connection_id).await,
+        )
         .await
         .unwrap();
 
@@ -2117,7 +2459,11 @@ async fn pinned_catalog_cache_rejects_scope_aba_and_keeps_accounts_isolated() {
         .unwrap()
         .is_none());
     store
-        .put_catalog_if_current(&repinned_a, &refreshed)
+        .put_catalog_if_current(
+            &repinned_a,
+            &refreshed,
+            store.catalog_epoch(connection_id).await,
+        )
         .await
         .unwrap();
 
@@ -2142,7 +2488,11 @@ async fn pinned_catalog_cache_rejects_scope_aba_and_keeps_accounts_isolated() {
         .unwrap()
         .is_none());
     store
-        .put_catalog_if_current(&repinned_a, &refreshed)
+        .put_catalog_if_current(
+            &repinned_a,
+            &refreshed,
+            store.catalog_epoch(connection_id).await,
+        )
         .await
         .unwrap();
 
@@ -2161,4 +2511,59 @@ async fn pinned_catalog_cache_rejects_scope_aba_and_keeps_accounts_isolated() {
         .await
         .unwrap()
         .is_none());
+
+    // A capture time in the future cannot prove its age: never current.
+    store
+        .put_catalog_if_current(
+            &repinned_a,
+            &refreshed,
+            store.catalog_epoch(connection_id).await,
+        )
+        .await
+        .unwrap();
+    let future = (chrono::Utc::now() + chrono::Duration::hours(1)).to_rfc3339();
+    let mut future_snapshot = serde_json::to_value(&refreshed).unwrap();
+    future_snapshot["capturedAt"] = serde_json::Value::String(future.clone());
+    sqlx::query(
+        "UPDATE catalog_cache SET captured_at = ?1, catalog_json = ?2
+             WHERE workspace_id = ?3 AND account_scope = ?4 AND connection_id = ?5",
+    )
+    .bind(future)
+    .bind(serde_json::to_string(&future_snapshot).unwrap())
+    .bind(workspace_id.to_string())
+    .bind(user_a.id.as_str())
+    .bind(connection_id.to_string())
+    .execute(store.pool())
+    .await
+    .unwrap();
+    assert!(store
+        .get_catalog_if_current(&repinned_a)
+        .await
+        .unwrap()
+        .is_none());
+
+    // A read that began before a committed schema change never re-persists it.
+    let before_change = store.catalog_epoch(connection_id).await;
+    store.clear_schema_cache(connection_id).await.unwrap();
+    assert_eq!(
+        store
+            .put_catalog_if_current(&repinned_a, &refreshed, before_change)
+            .await
+            .unwrap(),
+        CacheWriteOutcome::Superseded
+    );
+    assert!(store
+        .get_catalog_if_current(&repinned_a)
+        .await
+        .unwrap()
+        .is_none());
+    let after_change = store.catalog_epoch(connection_id).await;
+    assert_ne!(after_change, before_change);
+    assert_eq!(
+        store
+            .put_catalog_if_current(&repinned_a, &refreshed, after_change)
+            .await
+            .unwrap(),
+        CacheWriteOutcome::Stored
+    );
 }

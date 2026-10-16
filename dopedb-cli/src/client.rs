@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use dopedb_protocol::{
     decode_frame, encode_frame, negotiate_protocol, parse_frame_length, AuthenticationRequirement,
-    CommandSpec, ProtocolError, RequestEnvelope, ResponseEnvelope, RuntimeDiscovery,
+    CommandSpec, ErrorCode, ProtocolError, RequestEnvelope, ResponseEnvelope, RuntimeDiscovery,
     SessionAuthentication, COMMAND_SCHEMA_VERSION, MAX_REQUEST_BYTES, MAX_RESPONSE_BYTES,
     PROTOCOL_MAX, PROTOCOL_MIN, RUNTIME_DIRECTORY_NAME, RUNTIME_FILE_NAME,
 };
@@ -208,7 +208,30 @@ pub(crate) enum ClientError {
     ProtocolMismatch,
     InvalidResponse,
     Remote(ProtocolError),
+    /// A remote refusal the calling command explains in its own terms, such as
+    /// unparsable SQL; the exit code still follows the stable remote code.
+    Refused {
+        message: &'static str,
+        error: ProtocolError,
+    },
     Internal,
+}
+
+/// The CLI and the running Desktop speak different command schemas. Settings →
+/// Command line installs the CLI that matches the running Desktop.
+pub(crate) const CLI_UPDATE_REQUIRED: &str = "this DopeDB CLI does not match the running Desktop; open Desktop Settings → Command line and choose Update CLI";
+
+/// A remote invalid request is about the request's content, never CLI syntax.
+const REMOTE_INVALID_REQUEST: &str = "Desktop could not accept this request; check the database or object it names and the connection's credentials and settings in Desktop";
+
+/// CLI wording for a stable remote code: a version mismatch names its fix, and
+/// an invalid request names what to check instead of reading as a usage error.
+pub(crate) fn remote_message(error: &ProtocolError) -> &str {
+    match error.code() {
+        ErrorCode::ProtocolMismatch => CLI_UPDATE_REQUIRED,
+        ErrorCode::InvalidRequest => REMOTE_INVALID_REQUEST,
+        _ => error.message(),
+    }
 }
 
 impl fmt::Display for ClientError {
@@ -257,13 +280,12 @@ impl fmt::Display for ClientError {
                 }
                 Ok(())
             }
-            Self::ProtocolMismatch => {
-                formatter.write_str("the CLI and Desktop runtime protocols are incompatible")
-            }
+            Self::ProtocolMismatch => formatter.write_str(CLI_UPDATE_REQUIRED),
             Self::InvalidResponse => {
                 formatter.write_str("the Desktop runtime returned an invalid response")
             }
-            Self::Remote(error) => formatter.write_str(error.message()),
+            Self::Remote(error) => formatter.write_str(remote_message(error)),
+            Self::Refused { message, .. } => formatter.write_str(message),
             Self::Internal => formatter.write_str("the DopeDB CLI encountered an internal error"),
         }
     }
@@ -277,6 +299,7 @@ impl fmt::Debug for ClientError {
                 .field(message)
                 .finish(),
             Self::Remote(error) => formatter.debug_tuple("Remote").field(error).finish(),
+            Self::Refused { error, .. } => formatter.debug_tuple("Refused").field(error).finish(),
             Self::InvalidArguments => formatter.write_str("InvalidArguments"),
             Self::AgentConfigExists => formatter.write_str("AgentConfigExists"),
             Self::AgentConfigNotFound => formatter.write_str("AgentConfigNotFound"),

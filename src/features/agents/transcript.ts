@@ -25,6 +25,8 @@ export type AcpTranscriptItem = VersionedTranscriptItem &
         kind: "user";
         text: string;
         attachments: string[];
+        /** Set only for adapter-sent user chunks, which may arrive in parts. */
+        messageId: string | null;
       }
     | {
         kind: "agent" | "thought";
@@ -117,8 +119,15 @@ export function mergeAcpConversationFocus(
     return createAcpConversationProjection(events, replayTruncated);
   }
   const recent = current.recentEvents.slice(current.recentStart);
+  // The runtime folds streamed chunks into one event that takes the newest
+  // sequence, so the replay is authoritative up to its last sequence. Only
+  // live events that arrived after that snapshot are kept from memory.
+  const covered = events.reduce(
+    (highest, event) => Math.max(highest, event.sequence),
+    -1,
+  );
   return createAcpConversationProjection(
-    [...events, ...recent],
+    [...events, ...recent.filter((event) => event.sequence > covered)],
     replayTruncated || current.replayTruncated,
   );
 }
@@ -234,6 +243,7 @@ function projectEvent(
       revision: 0,
       text: event.text,
       attachments: event.attachments,
+      messageId: null,
     });
     return;
   }
@@ -284,6 +294,16 @@ function projectEvent(
 
   const update = event.update;
   const kind = recordString(update, "sessionUpdate");
+  if (kind === "user_message_chunk") {
+    const text = contentText(update.content);
+    if (text) appendUserChunk(projection, key, recordString(update, "messageId"), text);
+    return;
+  }
+  if (kind === "current_mode_update") {
+    const modeId = recordString(update, "currentModeId");
+    if (modeId) applyCurrentMode(projection, modeId);
+    return;
+  }
   if (kind === "agent_message_chunk" || kind === "agent_thought_chunk") {
     const text = contentText(update.content);
     if (!text) return;
@@ -378,6 +398,65 @@ function appendTextChunk(
     activityText: text.slice(-MAX_ACTIVITY_TEXT_CHARS),
   });
   compactOversizedTailText(projection);
+}
+
+// Adapter-originated user content (for example local command output) arrives as
+// chunks. Consecutive chunks of one identified message form one user turn.
+function appendUserChunk(
+  projection: AcpConversationProjection,
+  key: string,
+  messageId: string | null,
+  text: string,
+) {
+  const index = projection.items.length - 1;
+  const previous = projection.items[index];
+  if (
+    previous?.kind === "user" &&
+    messageId !== null &&
+    previous.messageId === messageId
+  ) {
+    replaceItem(projection, index, {
+      ...previous,
+      revision: previous.revision + 1,
+      text: `${previous.text}${text}`,
+    });
+    return;
+  }
+  collapseTailTextChunks(projection);
+  appendItem(projection, {
+    kind: "user",
+    key,
+    revision: 0,
+    text,
+    attachments: [],
+    messageId,
+  });
+}
+
+// Mode changes made by the adapter itself (for example after plan approval)
+// keep the advertised mode option's current value truthful.
+function applyCurrentMode(projection: AcpConversationProjection, modeId: string) {
+  let changed = false;
+  const next = projection.configOptions.map((option) => {
+    if (
+      option.category !== "mode" ||
+      option.currentValue === modeId ||
+      !offersValue(option, modeId)
+    ) {
+      return option;
+    }
+    changed = true;
+    return { ...option, currentValue: modeId };
+  });
+  if (changed) projection.configOptions = next;
+}
+
+function offersValue(option: AcpSessionConfigOption, value: string) {
+  return (option.options ?? []).some((entry) =>
+    "options" in entry
+      ? entry.options.some((nested) => nested.value === value)
+      : entry.value === value,
+  );
 }
 
 function collapseTailTextChunks(projection: AcpConversationProjection) {

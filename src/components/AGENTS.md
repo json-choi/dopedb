@@ -15,7 +15,8 @@ toolbar menu.
 | File | Description |
 |------|-------------|
 | `CellViewer.tsx` | Side panel showing one grid cell's full value: pretty-printed JSON when the value is/parses to an object or array, wrapped plain text otherwise, with a copy-to-clipboard button. |
-| `ConfirmButton.tsx` | Inline two-step confirm ("Really delete? Yes / No") that auto-reverts after 3s if untouched; never uses `window.confirm`. |
+| `ConfirmButton.tsx` | Two-step destructive confirm: the trigger keeps its geometry and opens `ConfirmDialog`; never uses `window.confirm`. |
+| `ConfirmDialog.tsx` | The shared blocking confirmation `alertdialog` (Cancel first focus, backdrop/Escape cancel, never auto-dismisses, optional `pending` state). Rendered by `ConfirmButton` and directly by flows without a trigger, such as the close/quit confirmation for open manual transactions. |
 | `EngineMark.tsx` | Renders the small engine logo (`postgres`/`mysql`/`sqlite`/`mongodb` from `src/assets/db-icons/`, `bigquery` from Iconify) at `control` or `tree` size. |
 | `Icon.tsx` | The app's inline-SVG icon set (Feather/Lucide-style 24×24 glyphs, `currentColor`, `em`-sized); no icon-library dependency. Icons are `aria-hidden`; the enclosing control owns the accessible name. |
 | `InfoTip.tsx` | Small circular "i" affordance that opens a `design-system` `Tooltip` with a caption. |
@@ -23,7 +24,7 @@ toolbar menu.
 | `RowEditor.tsx` | Row editor panel (one input per column, checkbox for SQL `NULL`, read-only primary keys on edit) that builds an `INSERT`/`UPDATE` via `sqlBuild` and hands it to the caller — it never executes SQL itself, so the caller's approval/audit pipeline still applies. |
 | `Skeleton.tsx` | Placeholder loading bars for a cold cache with no data to paint yet; a 200ms CSS reveal delay means a fast response unmounts it before it's visible. |
 | `SqlViewer.tsx` | Shared CodeMirror 6 SQL viewer/editor. Read-only by default; a `catalog` prop enables schema-aware table/column autocomplete, and `onRun` binds Mod-Enter to execute. |
-| `Toast.tsx` | Toast system (context + `useToast()` hook + fixed corner stack) with success/error variants and 3s auto-dismiss. |
+| `Toast.tsx` | Toast system (context + `useToast()` hook + fixed corner stack) with success/error variants. `toast(msg, variant?, action?)` takes an optional `{ label, onClick }` action button; plain toasts auto-dismiss after 3s, action toasts after 10s, and every toast pauses while hovered or focused and dismisses on click or Escape. |
 | `ToolbarMenu.tsx` | Portal popup menu anchored to a trigger button; owns floating-surface positioning, roving keyboard focus over menu items, and several trigger-density variants. |
 | `WorkbenchDocumentStrip.tsx` | Document tab strip for the central workbench (rename-in-place via double-click, close, overflow menu of all open documents). |
 

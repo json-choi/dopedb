@@ -1,6 +1,8 @@
-// Presents the compact catalog selector used below the editor breakpoint.
+// Presents the compact catalog selector used below the editor breakpoint. It
+// keeps the same source commands and Problems entry as the desktop strip.
 import { Icon } from "../../components/Icon";
 import { Button } from "../../design-system/components/Button";
+import { DiagnosticCount } from "../../design-system/components/Diagnostics";
 import { SelectInput } from "../../design-system/components/FormControls";
 import type {
   ConnectionEditorController,
@@ -8,23 +10,32 @@ import type {
 } from "../../features/connections/useConnectionEditorController";
 import type { ProviderKind } from "../../features/providers/domain";
 import { useI18n } from "../../lib/i18n";
+import { ConnectionSourceCommands } from "./ConnectionCatalogNavigation";
 
 export function ConnectionCatalogCompactSelector({
   catalog,
   profile,
+  dialogs,
+  commands,
   onEditConnection,
   onNewConnection,
 }: {
   catalog: ConnectionEditorController["catalog"];
   profile: ConnectionEditorController["profile"];
+  dialogs: ConnectionEditorController["dialogs"];
+  commands: ConnectionEditorController["commands"];
   onEditConnection: ConnectionEditorProps["onEditConnection"];
   onNewConnection: ConnectionEditorProps["onNewConnection"];
 }) {
   const { t } = useI18n();
   const { navigation, sources, drivers, clouds } = catalog;
+  const { problems } = dialogs;
+  const hasProblemErrors = problems.items.some(
+    (item) => item.tone === "danger",
+  );
 
   return (
-    <div className="tw:hidden tw:shrink-0 tw:items-center tw:gap-2 tw:border-b tw:border-border-subtle tw:bg-card tw:p-2 tw:@max-[760px]:flex">
+    <div className="tw:hidden tw:shrink-0 tw:flex-wrap tw:items-center tw:gap-2 tw:border-b tw:border-border-subtle tw:bg-card tw:p-2 tw:@max-[760px]:flex">
       {navigation.view === "dataSources" ? (
         <>
           <SelectInput
@@ -55,6 +66,24 @@ export function ConnectionCatalogCompactSelector({
             aria-label={t("connections.new")}
           >
             <Icon name="plus" />
+          </Button>
+          <ConnectionSourceCommands
+            profile={profile}
+            dialogs={dialogs}
+            commands={commands}
+          />
+          <Button
+            size="xs"
+            variant="ghost"
+            aria-pressed={problems.open}
+            onClick={() => problems.setOpen((open) => !open)}
+          >
+            <Icon name="alert" />
+            {t("connections.problems")}
+            <DiagnosticCount
+              count={problems.items.length}
+              hasErrors={hasProblemErrors}
+            />
           </Button>
         </>
       ) : navigation.view === "clouds" ? (

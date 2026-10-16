@@ -4,6 +4,7 @@
 // connection use cases.
 import {
   connectionId,
+  databaseEngineLabel,
   type ConnectionEngine,
   type ConnectionProfile,
   type ConnectionProvider,
@@ -73,6 +74,39 @@ export function blankConnection(
     credentialMode: "local",
     providerTarget: null,
   };
+}
+
+/**
+ * The name an unnamed draft is saved under, derived from its own endpoint so a
+ * first connection needs no invented label. Returns "" when the draft has no
+ * endpoint yet; the editor then still asks for a name.
+ */
+export function defaultConnectionName(
+  profile: Pick<
+    ConnectionProfile,
+    | "engine"
+    | "provider"
+    | "host"
+    | "port"
+    | "database"
+    | "extraParams"
+    | "workspaceAccess"
+  >,
+): string {
+  // A shared identity is named by the people who share it; its endpoint may be
+  // an internal managed placeholder.
+  if (profile.workspaceAccess !== "local") return "";
+  if (profile.engine === "sqlite") {
+    if (profile.provider === "cloudflareD1") return "";
+    return profile.database.trim().split(/[\\/]/u).pop() ?? "";
+  }
+  if (profile.engine === "bigquery") return "";
+  const host = profile.host.trim();
+  if (!host) return "";
+  const singleHost = !host.includes(",") && profile.extraParams.srv !== "true";
+  return singleHost
+    ? `${databaseEngineLabel(profile.engine)} ${host}:${profile.port}`
+    : `${databaseEngineLabel(profile.engine)} ${host}`;
 }
 
 export function demoSqliteConnection(path: string): ConnectionProfile {

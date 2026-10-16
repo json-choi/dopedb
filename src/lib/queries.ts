@@ -1,13 +1,9 @@
 // Query-key factory and shared query options for every cached backend read. Screens
 // consume these via useQuery/useQueries so one fetch per (resource, connection) is shared
 // app-wide: re-entering a tab repaints from cache and revalidates in the background.
-// Invalidation lives in queryClient.tsx; nothing here fetches on its own.
+// Catalog reads live in catalogQueries.ts; invalidation lives in queryClient.tsx.
 import { useEffect, useState } from "react";
-import {
-  queryOptions,
-  type QueryClient,
-  useQuery,
-} from "@tanstack/react-query";
+import { queryOptions, useQuery } from "@tanstack/react-query";
 import {
   auditVerify,
   getAuditEntry,
@@ -15,20 +11,6 @@ import {
   listAuditPage,
   listHistoryPage,
 } from "../features/activity/tauriAdapter";
-import {
-  getCatalog,
-  getDatabaseCatalog,
-  getDatabaseCatalogOverview,
-  getDatabaseCatalogSnapshot,
-  getCatalogOverview,
-  getCatalogSnapshot,
-  listConnectionDatabases,
-  refreshCatalog,
-} from "../features/catalog/tauriAdapter";
-import {
-  readWithCatalogIssue,
-  retryTransientCatalogIssue,
-} from "../features/catalogExplorer/catalogDomain";
 import { runDocumentRead } from "../features/documentQueries/tauriAdapter";
 import { getMonitoringStatus } from "../features/monitoring/tauriAdapter";
 import {
@@ -36,10 +18,7 @@ import {
   skillStatus,
 } from "../features/skills/tauriAdapter";
 import type {
-  Catalog,
-  CatalogOverview,
   CatalogTable,
-  DatabaseSummary,
   Engine,
   HistoryPageRequest,
   QueryResult,
@@ -58,10 +37,13 @@ import {
 import { buildCountQuery, buildPageQuery, type GridSort } from "./sqlBuild";
 import { tableKey } from "./tableRef";
 
-const CATALOG_STALE_MS = Infinity;
 // Avoid redundant log and row refetches while users switch tabs quickly.
 const LOG_STALE_MS = 10_000;
 const LOG_GC_MS = 60_000;
+// An exact COUNT(*) scans the whole filtered relation. Paging and sorting keep the
+// same filter, so the total is reused until the filter changes, the user refreshes,
+// or a committed table edit refetches it explicitly.
+const TABLE_COUNT_STALE_MS = 5 * 60_000;
 export type CatalogScope = {
   key: string;
   preferenceKey?: string;
@@ -200,14 +182,6 @@ export const qk = {
     scope === undefined
       ? (["connectionDatabases", connectionId] as const)
       : (["connectionDatabases", connectionId, scope] as const),
-  databaseCatalog: (
-    connectionId: string,
-    database: string,
-    scope?: string,
-  ) =>
-    scope === undefined
-      ? (["databaseCatalog", connectionId, database] as const)
-      : (["databaseCatalog", connectionId, database, scope] as const),
   databaseCatalogOverview: (
     connectionId: string,
     database: string,
@@ -317,126 +291,6 @@ export function skillStatusQuery(enabled = true) {
   });
 }
 
-export function catalogQuery(connectionId: string, scope?: CatalogScope) {
-  return queryOptions({
-    queryKey: qk.catalog(connectionId, scope?.key),
-    enabled: scope?.ready ?? true,
-    staleTime: CATALOG_STALE_MS,
-    retry: retryTransientCatalogIssue,
-    queryFn: () => readWithCatalogIssue(
-      () => readCatalogInScope(scope, () => getCatalog(connectionId)),
-    ),
-  });
-}
-
-export function catalogOverviewQuery(connectionId: string, scope?: CatalogScope) {
-  return queryOptions({
-    queryKey: qk.catalogOverview(connectionId, scope?.key),
-    enabled: scope?.ready ?? true,
-    staleTime: CATALOG_STALE_MS,
-    retry: retryTransientCatalogIssue,
-    queryFn: (): Promise<CatalogOverview> =>
-      readWithCatalogIssue(
-        () => readCatalogInScope(scope, () => getCatalogOverview(connectionId)),
-      ),
-  });
-}
-
-export function connectionDatabasesQuery(
-  connectionId: string,
-  scope?: CatalogScope,
-) {
-  return queryOptions({
-    queryKey: qk.connectionDatabases(connectionId, scope?.key),
-    enabled: scope?.ready ?? true,
-    staleTime: CATALOG_STALE_MS,
-    retry: retryTransientCatalogIssue,
-    queryFn: (): Promise<DatabaseSummary[]> =>
-      readWithCatalogIssue(
-        () => readCatalogInScope(scope, () => listConnectionDatabases(connectionId)),
-      ),
-  });
-}
-
-export function databaseCatalogQuery(
-  connectionId: string,
-  database: string,
-  scope?: CatalogScope,
-) {
-  return queryOptions({
-    queryKey: qk.databaseCatalog(connectionId, database, scope?.key),
-    enabled: scope?.ready ?? true,
-    staleTime: CATALOG_STALE_MS,
-    retry: retryTransientCatalogIssue,
-    queryFn: () => readWithCatalogIssue(
-      () => readCatalogInScope(scope, () =>
-        getDatabaseCatalog(connectionId, database)
-      ),
-    ),
-  });
-}
-
-export function databaseCatalogOverviewQuery(
-  connectionId: string,
-  database: string,
-  scope?: CatalogScope,
-) {
-  return queryOptions({
-    queryKey: qk.databaseCatalogOverview(
-      connectionId,
-      database,
-      scope?.key,
-    ),
-    enabled: scope?.ready ?? true,
-    staleTime: CATALOG_STALE_MS,
-    retry: retryTransientCatalogIssue,
-    queryFn: () => readWithCatalogIssue(
-      () => readCatalogInScope(scope, () =>
-        getDatabaseCatalogOverview(connectionId, database)
-      ),
-    ),
-  });
-}
-
-export function catalogSnapshotQuery(
-  connectionId: string,
-  enabled = true,
-  scope?: CatalogScope,
-) {
-  return queryOptions({
-    queryKey: qk.catalogSnapshot(connectionId, scope?.key),
-    enabled: enabled && (scope?.ready ?? true),
-    staleTime: CATALOG_STALE_MS,
-    retry: retryTransientCatalogIssue,
-    queryFn: () => readWithCatalogIssue(
-      () => readCatalogInScope(scope, () => getCatalogSnapshot(connectionId)),
-    ),
-  });
-}
-
-export function databaseCatalogSnapshotQuery(
-  connectionId: string,
-  database: string,
-  enabled = true,
-  scope?: CatalogScope,
-) {
-  return queryOptions({
-    queryKey: qk.databaseCatalogSnapshot(
-      connectionId,
-      database,
-      scope?.key,
-    ),
-    enabled: enabled && (scope?.ready ?? true),
-    staleTime: CATALOG_STALE_MS,
-    retry: retryTransientCatalogIssue,
-    queryFn: () => readWithCatalogIssue(
-      () => readCatalogInScope(scope, () =>
-        getDatabaseCatalogSnapshot(connectionId, database)
-      ),
-    ),
-  });
-}
-
 export function erdLayoutsQuery(connectionId: string) {
   return queryOptions({
     queryKey: qk.erdLayouts(connectionId),
@@ -451,33 +305,6 @@ export function jobsQuery(connectionId: string) {
     staleTime: Infinity,
     queryFn: () => listJobs(jobConnectionId(connectionId)),
   });
-}
-
-// Force a live re-introspection. The caller writes the result into qk.catalog(id) so every
-// surface reading the catalog updates at once; a CATALOG_STALE_MS of Infinity means this
-// is the only way a stale table list gets corrected.
-export function fetchFreshCatalog(connectionId: string) {
-  return readWithCatalogIssue(() => refreshCatalog(connectionId));
-}
-
-/** Promotes a manual refresh and retires derived overview/snapshot metadata together. */
-export async function replaceFreshCatalog(
-  queryClient: QueryClient,
-  connectionId: string,
-  scopeKey: string,
-  catalog: Catalog,
-) {
-  queryClient.setQueryData(qk.catalog(connectionId, scopeKey), catalog);
-  await Promise.all([
-    queryClient.invalidateQueries({
-      queryKey: qk.catalogOverview(connectionId, scopeKey),
-      refetchType: "active",
-    }),
-    queryClient.invalidateQueries({
-      queryKey: qk.catalogSnapshot(connectionId, scopeKey),
-      refetchType: "active",
-    }),
-  ]);
 }
 
 export function historyQuery(request: HistoryPageRequest) {
@@ -634,7 +461,7 @@ export function tableCountQuery(args: TableCountArgs) {
   const { connectionId, engine, table, filters, whereExpression } = args;
   return queryOptions({
     queryKey: qk.tableCount(args),
-    staleTime: LOG_STALE_MS,
+    staleTime: TABLE_COUNT_STALE_MS,
     queryFn: async (): Promise<number | null> => {
       const result = await runSqlReadPage(
         connectionId,

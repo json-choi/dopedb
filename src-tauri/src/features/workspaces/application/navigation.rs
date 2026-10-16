@@ -22,10 +22,6 @@ where
     E: WorkspaceConfigurationPort,
     S: super::super::ports::WorkspaceSshProfilePort,
 {
-    pub(crate) fn console_url(&self, workspace_id: Option<WorkspaceId>) -> AppResult<String> {
-        self.control_plane.console_url(workspace_id)
-    }
-
     pub(crate) async fn list(&self) -> AppResult<Vec<Workspace>> {
         self.repository.list_workspaces().await
     }

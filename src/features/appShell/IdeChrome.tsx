@@ -42,7 +42,6 @@ export function IdeTopBar({
   selected,
   supportsSql,
   leftPanelOpen,
-  localHistoryOpen,
   agentDockOpen,
   actionSearchOpen,
   settingsOpen,
@@ -51,9 +50,11 @@ export function IdeTopBar({
   onNewQuery,
   onWelcome,
   onToggleLeftPanel,
-  onToggleLocalHistory,
+  onOpenQueryHistory,
+  queryHistoryOpen,
   onToggleAgent,
   agentButtonRef,
+  agentPendingApprovals,
   actionSearchButtonRef,
   onActionSearch,
   onSettings,
@@ -61,8 +62,9 @@ export function IdeTopBar({
   selected: ConnectionProfile | null;
   supportsSql: boolean;
   leftPanelOpen: boolean;
-  localHistoryOpen: boolean;
   agentDockOpen: boolean;
+  /** Agent changes waiting for a person's decision on their AI Chat cards. */
+  agentPendingApprovals: number;
   actionSearchOpen: boolean;
   settingsOpen: boolean;
   workspace?: ReactNode;
@@ -70,7 +72,8 @@ export function IdeTopBar({
   onNewQuery: () => void;
   onWelcome: () => void;
   onToggleLeftPanel: () => void;
-  onToggleLocalHistory: () => void;
+  onOpenQueryHistory: () => void;
+  queryHistoryOpen: boolean;
   onToggleAgent: () => void;
   agentButtonRef: RefObject<HTMLButtonElement | null>;
   actionSearchButtonRef: RefObject<HTMLButtonElement | null>;
@@ -79,9 +82,17 @@ export function IdeTopBar({
 }) {
   const { t } = useI18n();
   const queryDisabled = !selected || !supportsSql;
-  const agentLauncherLabel = selected
-    ? t("agent.acpTitle")
-    : t("agent.acpSelectDatabaseToOpen");
+  const agentLauncherLabel = !selected
+    ? t("agent.acpSelectDatabaseToOpen")
+    : agentPendingApprovals > 0
+      ? t("agent.acpTitlePendingApprovals", { count: agentPendingApprovals })
+      : t("agent.acpTitle");
+  // AI Chat is inert while closed, so its cards cannot announce a new request;
+  // this region says how many changes wait until the panel is opened.
+  const pendingApprovalAnnouncement =
+    selected && !agentDockOpen && agentPendingApprovals > 0
+      ? t("agent.acpPendingApprovalsAnnouncement", { count: agentPendingApprovals })
+      : "";
   const panelLabel = t(leftPanelOpen ? "ide.action.hideLeftPanel" : "ide.action.showLeftPanel");
 
   return (
@@ -114,19 +125,14 @@ export function IdeTopBar({
           className="tw:flex tw:h-control-md tw:w-[min(320px,30vw)] tw:cursor-pointer tw:items-center tw:gap-2 tw:rounded-none tw:border tw:border-border-subtle tw:bg-card tw:px-3 tw:py-0 tw:font-sans tw:text-sm tw:text-muted-foreground tw:hover:border-border-strong tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:max-[760px]:w-control-md tw:max-[760px]:justify-center tw:max-[760px]:px-0"
           onClick={(event) => onActionSearch(event.currentTarget)}
         ><Icon name="search" /><span className="tw:truncate tw:max-[760px]:hidden">{t("ide.action.actionSearch")}</span><kbd className="tw:ml-auto tw:font-sans tw:text-xs tw:max-[760px]:hidden">⇧ ⇧</kbd></button>
+        <IdeToolbarLauncher active={queryHistoryOpen} disabled={!selected} onClick={onOpenQueryHistory} title={t("activity.queryHistory")} aria-label={t("activity.queryHistory")}>
+          <Icon name="history" />
+        </IdeToolbarLauncher>
         <ToolbarMenu
           align="start"
           icon="moreHorizontal"
           label={t("ide.action.more")}
         >
-          <ToolbarMenuItem
-            icon={localHistoryOpen ? "check" : "history"}
-            disabled={!localHistoryOpen && (!selected || !supportsSql)}
-            onClick={onToggleLocalHistory}
-            aria-pressed={localHistoryOpen}
-          >
-            {t("localHistory.title")}
-          </ToolbarMenuItem>
           <ToolbarMenuItem
             icon="play"
             disabled={queryDisabled}
@@ -139,7 +145,10 @@ export function IdeTopBar({
       }
       actions={
         <>
-        <IdeToolbarLauncher buttonRef={agentButtonRef} active={agentDockOpen} disabled={!selected} onClick={onToggleAgent} title={agentLauncherLabel} aria-label={agentLauncherLabel}><Icon name="chat" /></IdeToolbarLauncher>
+        <IdeToolbarLauncher buttonRef={agentButtonRef} active={agentDockOpen} disabled={!selected} count={selected ? agentPendingApprovals : 0} onClick={onToggleAgent} title={agentLauncherLabel} aria-label={agentLauncherLabel}><Icon name="chat" /></IdeToolbarLauncher>
+        <span className="tw:sr-only" role="status" aria-live="polite">
+          {pendingApprovalAnnouncement}
+        </span>
         {account}
         <IdeToolbarLauncher
           active={settingsOpen}
@@ -170,6 +179,7 @@ export function IdeStatusBar({
   unseenOperationCount,
   onOpenQueryTask,
   onOpenAgentTask,
+  onOpenAgentProposal,
   onOpenManualTransaction,
   onCommitManualTransaction,
   onRollbackManualTransaction,
@@ -192,6 +202,11 @@ export function IdeStatusBar({
   unseenOperationCount: number;
   onOpenQueryTask: (sessionId: string) => void;
   onOpenAgentTask: (connectionId: string) => void;
+  onOpenAgentProposal: (
+    connectionId: string,
+    sessionId: string,
+    operationId: string,
+  ) => void;
   onOpenManualTransaction: (
     transaction: WorkspaceManualTransaction,
   ) => void;
@@ -336,6 +351,7 @@ export function IdeStatusBar({
           cancellingKeys={cancellingBackgroundTaskKeys}
           onCancel={onCancelBackgroundTask}
           onOpenAgent={onOpenAgentTask}
+          onOpenAgentProposal={onOpenAgentProposal}
           onOpenQuery={onOpenQueryTask}
         />
       ) : null}

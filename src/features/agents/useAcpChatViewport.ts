@@ -10,6 +10,8 @@ import { createFrameCoalescer } from "../../lib/frameCoalescer";
 import type { AcpSessionId } from "./domain";
 import {
   AGENT_DOCK_DEFAULT_WIDTH,
+  AGENT_DOCK_MAX_WIDTH,
+  AGENT_DOCK_MIN_WIDTH,
   agentDockLayout,
   clampAgentDockWidth,
 } from "./layout";
@@ -95,8 +97,13 @@ export function useAcpChatViewport({
     transcriptRef,
     onTranscriptScroll: updateAutoScroll,
     resize: {
+      value: width,
+      minimum: AGENT_DOCK_MIN_WIDTH,
+      maximum: clampAgentDockWidth(AGENT_DOCK_MAX_WIDTH, window.innerWidth),
+      onChange: (next: number) =>
+        onWidthChange(clampAgentDockWidth(next, window.innerWidth)),
       onMouseDown: beginResize,
-      onDoubleClick: () => onWidthChange(AGENT_DOCK_DEFAULT_WIDTH),
+      onReset: () => onWidthChange(AGENT_DOCK_DEFAULT_WIDTH),
     },
   };
 }

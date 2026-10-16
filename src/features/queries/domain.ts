@@ -1,8 +1,15 @@
 // Query's public DTOs are generated from the Rust model/receipt contracts.  Keeping this
 // module as the only frontend owner preserves existing imports without a hand-written mirror.
-import { retainSqlStreamBatch } from "./resultPageCache";
+import {
+  decodeFailureCellIsConsistent,
+  retainSqlStreamBatch,
+} from "./resultPageCache";
 import type { OperationState } from "../../ipc/generated/protocol-contracts";
-import type { CellDecodeFailure } from "../../ipc/generated/model";
+import type {
+  CellDecodeFailure,
+  Engine,
+  PreviewReport,
+} from "../../ipc/generated/model";
 
 export type {
   Classification,
@@ -19,14 +26,21 @@ export type {
 export type SqlApprovalReview = {
   operationId: string;
   connectionId: string;
+  connectionName: string;
+  engine: Engine;
+  environment: string | null;
   payloadHash: string;
   state: OperationState;
   riskLevel: "low" | "medium" | "high" | "critical";
+  confirmationPhrase: string | null;
   sql: string;
   database: string;
   namespace: string | null;
+  preview: PreviewReport | null;
   affected: number | null;
   expiresAt: string | null;
+  /** The Broker session that proposed the change. */
+  proposerSessionId: string | null;
 };
 
 // Desktop-only channel payload. Broker, CLI, and bounded Analysis Article receipts
@@ -124,7 +138,17 @@ export type SqlStreamViewState = {
   truncated: boolean;
   durationMs: number | null;
   error: string | null;
+  /** Client-measured stream pipeline total; present only on a completed run. */
+  timings?: SqlStreamTimings;
 };
+
+/**
+ * The receive-side half of the output timing split: what the renderer observed
+ * for the whole stream, alongside the backend's own `durationMs`. Snapshots
+ * predating this measurement keep the backend total alone. These intervals
+ * overlap; subtracting them does not measure database fetch time.
+ */
+export type SqlStreamTimings = { clientTotalMs: number };
 
 /** Serializable handle over a Rust-owned, immutable local result artifact. */
 export type SqlStreamRowSource = {
@@ -210,10 +234,13 @@ export function acceptSqlStreamBatch(
           (batch.rowStart ?? state.rowCount) + batch.rows.length ||
         failure.columnIndex < 0 ||
         failure.columnIndex >= batch.columns.length ||
-        batch.rows[
-          failure.rowIndex - (batch.rowStart ?? state.rowCount)
-        ]?.[failure.columnIndex] !== null ||
-        !failure.databaseType,
+        !failure.databaseType ||
+        !decodeFailureCellIsConsistent(
+          failure,
+          batch.rows[failure.rowIndex - (batch.rowStart ?? state.rowCount)]?.[
+            failure.columnIndex
+          ],
+        ),
     )
   )
     return null;
@@ -260,6 +287,7 @@ export function finishSqlStream(
   state: SqlStreamViewState,
   runId: number,
   receipt: SqlStreamReceipt,
+  timings?: SqlStreamTimings,
 ): SqlStreamViewState {
   if (
     state.runId !== runId ||
@@ -288,5 +316,6 @@ export function finishSqlStream(
       rowCount: receipt.rowCount,
       complete: true,
     },
+    ...(timings ? { timings } : {}),
   };
 }

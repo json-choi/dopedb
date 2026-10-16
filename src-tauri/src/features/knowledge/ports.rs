@@ -366,10 +366,14 @@ pub(crate) trait KnowledgeRepositoryPort:
         &self,
         connection: &PinnedConnection,
     ) -> impl Future<Output = AppResult<Vec<KnowledgeEnvironmentSummary>>> + Send;
+    /// Resolves the Environment scope anchored on `connection`. Only the anchor and
+    /// `selected_connection_ids` are checked and returned, so an unselected stale
+    /// binding never blocks a session that does not use it.
     fn knowledge_session_scope(
         &self,
         connection: &PinnedConnection,
         environment_id: Option<Uuid>,
+        selected_connection_ids: &[Uuid],
     ) -> impl Future<Output = AppResult<Option<KnowledgeSessionScope>>> + Send;
     fn exact_knowledge_session_graphs(
         &self,

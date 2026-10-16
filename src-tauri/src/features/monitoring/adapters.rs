@@ -244,7 +244,7 @@ impl MonitoringPlatformAdapter {
                 }));
             }
         };
-        let approved_by = claimed.record().actor.id.as_str();
+        let approved_by: &str = &crate::operations::approver_for_pin(&operation_pin).id;
         if let Err(error) = audit::record(
             &self.store,
             RecordArgs {

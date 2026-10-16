@@ -1,5 +1,6 @@
 //! Concrete desktop adapter for CLI discovery.
 
+mod cli_account;
 mod cli_probe;
 
 pub(crate) use cli_probe::ProcessAgentCliProbe;

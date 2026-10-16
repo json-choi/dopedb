@@ -7,6 +7,7 @@ import {
 } from "../../design-system/components/Status";
 import { errMessage } from "../../ipc/types";
 import { useI18n } from "../../lib/i18n";
+import { agentErrorLabel } from "./agentErrorLabels";
 import type { AgentCliInfo } from "./domain";
 
 export function AgentCliStatusIndicators({
@@ -35,7 +36,11 @@ export function AgentCliStatusIndicators({
       <StatusIndicator
         icon="alert"
         tone="danger"
-        label={cli?.detectionError ?? t("agentTools.detectionFailed")}
+        label={
+          cli?.detectionError
+            ? agentErrorLabel(cli.detectionError, t)
+            : t("agentTools.detectionFailed")
+        }
       />
     );
   }
@@ -103,14 +108,16 @@ export function AgentCliDetectionNotice({
         <span className="tw:grid tw:gap-1">
           {queryError ? (
             <span>
-              {t("agentTools.detectError", { error: errMessage(queryError) })}
+              {t("agentTools.detectError", {
+                error: agentErrorLabel(errMessage(queryError), t),
+              })}
             </span>
           ) : null}
           {failures.map((cli) => (
             <span key={cli.id}>
               {t("agentTools.detectProviderError", {
                 provider: cli.name,
-                error: cli.detectionError,
+                error: agentErrorLabel(cli.detectionError, t),
               })}
             </span>
           ))}

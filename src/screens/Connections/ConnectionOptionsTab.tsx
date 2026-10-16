@@ -5,7 +5,6 @@ import {
   CheckboxField,
   Field,
   FieldValidationMessage,
-  SelectInput,
   TextAreaInput,
   TextInput,
 } from "../../design-system/components/FormControls";
@@ -220,23 +219,6 @@ export function ConnectionOptionsTab({
         ) : null}
       </section>
 
-      <section className="tw:grid tw:gap-4 tw:border-t tw:border-border-subtle tw:pt-5">
-        <h3>{t("connections.safety")}</h3>
-        <Field
-          label={t("connections.environment")}
-          hint={<InfoTip label={t("connections.environmentHint")} />}
-        >
-          <SelectInput
-            value={form.env ?? ""}
-            onChange={(event) => set("env", event.target.value || null)}
-          >
-            <option value="">{t("common.none")}</option>
-            <option value="dev">dev</option>
-            <option value="staging">staging</option>
-            <option value="prod">prod</option>
-          </SelectInput>
-        </Field>
-      </section>
     </div>
   );
 }

@@ -1,5 +1,8 @@
 // Windowed row-and-column renderer for large query results. The scroll spacer owns
 // geometry; only cells intersecting the viewport (+ a small overscan) enter the DOM.
+// Keyboard moves scroll only as far as the focused cell needs, the row-number column
+// fits its largest number, and a page that cannot be read back explains why with a
+// bounded retry or a re-run instead of re-requesting it on every render.
 import {
   useEffect,
   useMemo,
@@ -14,10 +17,14 @@ import {
   collectCachedSqlResultDecodeFailures,
   iterateCachedSqlResultRows,
   ensureSqlResultRange,
+  retrySqlResultPages,
   sqlResultDecodeFailureAt,
   sqlResultRangeIsCached,
   sqlResultRowAt,
+  truncatedCellBytes,
 } from "../queries/resultPageCache";
+import { cellClipboardText, tsvField } from "../../lib/export";
+import { Button } from "../../design-system/components/Button";
 import { readSqlResultPage } from "../queries/tauriAdapter";
 import { useSqlResultPages } from "../queries/useSqlResultPages";
 import type { GridSort } from "../../lib/sqlBuild";
@@ -26,6 +33,7 @@ import DataGridColumnFilterMenu from "./DataGridColumnFilterMenu";
 import { useI18n } from "../../lib/i18n";
 import {
   extendGridSelection,
+  gridCellText,
   gridSelectionBounds,
   gridSelectionClipboardText,
   gridSelectionIncludes,
@@ -36,7 +44,7 @@ import {
   DATA_GRID_DEFAULT_COLUMN_WIDTH,
   DATA_GRID_HEADER_HEIGHT,
   DATA_GRID_ROW_HEIGHT,
-  DATA_GRID_ROW_NUMBER_WIDTH,
+  dataGridRowNumberWidth,
 } from "../../design-system/dataGridGeometry";
 import {
   DataGridViewport,
@@ -56,6 +64,7 @@ import {
   cellDecodeFailureAt,
   firstDecodeFailureInSelection,
   gridCellInspection,
+  type GridCellDetail,
 } from "./decodeFailures";
 import { useDataGridNumericColumns } from "./dataGridNumericColumns";
 import { useDataGridSelectionReset } from "./useDataGridSelectionReset";
@@ -81,10 +90,17 @@ type Props = {
   selectedRow?: number | null;
   onSelectRow?: (i: number) => void;
   renderCell?: (value: unknown, row: number, column: string) => import("react").ReactNode;
-  onCellClick?: (value: unknown, rowIndex: number, col: string) => void;
+  onCellClick?: (
+    value: unknown,
+    rowIndex: number,
+    col: string,
+    detail?: GridCellDetail,
+  ) => void;
   columnMeta?: Record<string, { dataType: string; pk: boolean }>;
   surface?: DataGridSurface;
   footerInset?: boolean;
+  /** Re-runs the query when its stored result can no longer be read back. */
+  onRerun?: () => void;
 };
 
 export function virtualGridWindow(
@@ -121,16 +137,24 @@ export function virtualGridWindow(
   return { startRow, endRow, visibleColumns };
 }
 
-function display(value: unknown) {
-  if (value === null || value === undefined) return "NULL";
-  return typeof value === "object" ? JSON.stringify(value) : String(value);
-}
-
-function copy(value: unknown) {
-  if (value === null || value === undefined) return "NULL";
-  return typeof value === "object"
-    ? JSON.stringify(value, null, 2)
-    : String(value);
+/**
+ * Scroll offset that brings `[start, start + size)` into the part of the viewport
+ * not covered by sticky chrome (`inset`), moving as little as possible.
+ */
+export function nearestScrollOffset(
+  current: number,
+  viewport: number,
+  inset: number,
+  start: number,
+  size: number,
+) {
+  const visibleStart = current + inset;
+  const visibleEnd = current + viewport;
+  if (start < visibleStart) return Math.max(0, start - inset);
+  if (start + size > visibleEnd) {
+    return Math.max(0, Math.min(start - inset, start + size - viewport));
+  }
+  return current;
 }
 
 export default function DataGridVirtual(props: Props) {
@@ -173,12 +197,13 @@ export default function DataGridVirtual(props: Props) {
       ),
     [props.result.columns, widths],
   );
+  const rowNumberWidth = dataGridRowNumberWidth(props.startIndex + rowCount);
   const offsets = useMemo(() => {
-    const next = [DATA_GRID_ROW_NUMBER_WIDTH];
+    const next = [rowNumberWidth];
     for (const width of columnWidths) next.push(next[next.length - 1] + width);
     return next;
-  }, [columnWidths]);
-  const totalWidth = offsets[offsets.length - 1] ?? DATA_GRID_ROW_NUMBER_WIDTH;
+  }, [columnWidths, rowNumberWidth]);
+  const totalWidth = offsets[offsets.length - 1] ?? rowNumberWidth;
   const { startRow, endRow, visibleColumns } = virtualGridWindow(
     rowCount,
     props.result.columns.length,
@@ -258,6 +283,7 @@ export default function DataGridVirtual(props: Props) {
     const inspection = gridCellInspection(
       failures,
       row,
+      col,
       loadedRow?.[col],
     );
     if (inspection.blocked) {
@@ -272,7 +298,9 @@ export default function DataGridVirtual(props: Props) {
     }
     setCopyError(null);
     props.onSelectRow?.(row);
-    props.onCellClick?.(inspection.value, row, props.result.columns[col]);
+    props.onCellClick?.(inspection.value, row, props.result.columns[col], {
+      truncatedBytes: inspection.truncatedBytes,
+    });
   };
   const copySelection = async (selected: GridCellSelection) => {
     if (props.rowSource) {
@@ -303,17 +331,22 @@ export default function DataGridVirtual(props: Props) {
     );
     if (failure) {
       setCopyError(
-        t("grid.decodeFailureCopyBlocked", {
-          row: failure.rowIndex + 1,
-          column: failure.columnIndex + 1,
-          type: failure.databaseType,
-        }),
+        truncatedCellBytes(failure) === null
+          ? t("grid.decodeFailureCopyBlocked", {
+              row: failure.rowIndex + 1,
+              column: failure.columnIndex + 1,
+              type: failure.databaseType,
+            })
+          : t("grid.truncatedCopyBlocked", {
+              row: failure.rowIndex + 1,
+              column: failure.columnIndex + 1,
+            }),
       );
       return;
     }
     setCopyError(null);
     await navigator.clipboard.writeText(
-      gridSelectionClipboardText(selected, rowAt, display, copy),
+      gridSelectionClipboardText(selected, rowAt, tsvField, cellClipboardText),
     );
   };
   useEffect(() => {
@@ -393,21 +426,30 @@ export default function DataGridVirtual(props: Props) {
           : singleGridCell(target.row, dataColumn),
       );
     }
-    scrollRef.current?.scrollTo({
-      top: Math.max(
-        0,
-        (DATA_GRID_HEADER_HEIGHT +
-          target.row * DATA_GRID_ROW_HEIGHT -
-          DATA_GRID_ROW_HEIGHT) * zoom,
-      ),
-      left:
-        target.column === 0
-          ? 0
-          : Math.max(
-              0,
-              (offsets[target.column - 1] - DATA_GRID_ROW_NUMBER_WIDTH) * zoom,
-            ),
-    });
+    // Move only as far as the target needs past the sticky header and row
+    // numbers; a cell already in view keeps the viewport where it is.
+    const element = scrollRef.current;
+    if (!element) return;
+    const top = nearestScrollOffset(
+      element.scrollTop,
+      element.clientHeight,
+      DATA_GRID_HEADER_HEIGHT * zoom,
+      (DATA_GRID_HEADER_HEIGHT + target.row * DATA_GRID_ROW_HEIGHT) * zoom,
+      DATA_GRID_ROW_HEIGHT * zoom,
+    );
+    const left =
+      target.column === 0
+        ? element.scrollLeft
+        : nearestScrollOffset(
+            element.scrollLeft,
+            element.clientWidth,
+            rowNumberWidth * zoom,
+            offsets[target.column - 1] * zoom,
+            columnWidths[target.column - 1] * zoom,
+          );
+    if (top !== element.scrollTop || left !== element.scrollLeft) {
+      element.scrollTo({ top, left });
+    }
   };
   const resize = (event: ReactMouseEvent, index: number) => {
     event.preventDefault();
@@ -447,6 +489,7 @@ export default function DataGridVirtual(props: Props) {
       virtual
       footerInset={props.footerInset}
       role="grid"
+      aria-label={t("grid.label")}
       aria-rowcount={Math.max(props.result.rowCount, props.startIndex + rowCount) + 1}
       aria-colcount={props.result.columns.length + 1}
       tabIndex={rowCount === 0 ? 0 : undefined}
@@ -462,10 +505,32 @@ export default function DataGridVirtual(props: Props) {
     >
       {pageError ? (
         <div
-          className="tw:sticky tw:top-control-sm tw:left-0 tw:z-[var(--ds-z-sticky)] tw:w-fit tw:max-w-[min(520px,90%)] tw:bg-danger-muted tw:px-2 tw:py-1 tw:font-sans tw:text-xs tw:text-danger"
+          className="tw:sticky tw:top-control-sm tw:left-0 tw:z-[var(--ds-z-sticky)] tw:flex tw:w-fit tw:max-w-[min(560px,90%)] tw:items-center tw:gap-2 tw:bg-danger-muted tw:px-2 tw:py-1 tw:font-sans tw:text-xs tw:text-danger"
           role="status"
         >
-          {pageError}
+          <span className="tw:min-w-0">
+            {pageError.kind === "authorityChanged"
+              ? t("grid.resultAuthorityChanged")
+              : pageError.kind === "expired"
+                ? t("grid.resultExpired")
+                : pageError.retrying
+                  ? t("grid.resultPageRetrying")
+                  : t("grid.resultPageUnavailable")}
+          </span>
+          {pageError.kind === "unavailable" && !pageError.retrying && props.rowSource ? (
+            <Button
+              size="xs"
+              onClick={() => {
+                if (props.rowSource) retrySqlResultPages(props.rowSource);
+              }}
+            >
+              {t("grid.resultPageRetry")}
+            </Button>
+          ) : pageError.kind !== "unavailable" && props.onRerun ? (
+            <Button size="xs" onClick={props.onRerun}>
+              {t("grid.resultRerun")}
+            </Button>
+          ) : null}
         </div>
       ) : null}
       {copyError ? (
@@ -491,10 +556,10 @@ export default function DataGridVirtual(props: Props) {
         >
           <div
             data-grid-box
-            className="tw:top-0 tw:left-0 tw:z-[calc(var(--ds-z-raised)+1)] tw:border-r tw:!bg-card tw:text-right tw:text-muted-foreground"
+            className="tw:top-0 tw:left-0 tw:z-[calc(var(--ds-z-raised)+1)] tw:border-r tw:!bg-card tw:text-right tw:text-muted-foreground tw:tabular-nums"
             role="columnheader"
             aria-colindex={1}
-            style={{ width: DATA_GRID_ROW_NUMBER_WIDTH }}
+            style={{ width: rowNumberWidth }}
           >
             #
           </div>
@@ -520,7 +585,7 @@ export default function DataGridVirtual(props: Props) {
               : {};
             return (
               <div
-                key={name}
+                key={index}
                 data-grid-box
                 data-sortable={props.onSort ? "true" : undefined}
                 className="tw:top-0 tw:border-r tw:!bg-card tw:font-semibold tw:data-[sortable=true]:cursor-pointer tw:data-[sortable=true]:hover:text-primary"
@@ -584,9 +649,9 @@ export default function DataGridVirtual(props: Props) {
                     function* texts() {
                       for (const [rowIndex, row] of rows) {
                         const failure = failureAt(rowIndex, index);
-                        yield failure
+                        yield failure && truncatedCellBytes(failure) === null
                           ? t("grid.decodeFailure", { type: failure.databaseType })
-                          : display(row[index]);
+                          : gridCellText(row[index]);
                       }
                     }
                     const width = toggleDataGridAutoFit(
@@ -622,12 +687,12 @@ export default function DataGridVirtual(props: Props) {
               data-interactive={props.onSelectRow ? "true" : undefined}
               data-focused={focus.row === rowIndex && focus.column === 0}
               data-grid-focus={`${rowIndex}:0`}
-              className="tw:left-0 tw:z-[var(--ds-z-base)] tw:border-r tw:!bg-card tw:text-right tw:text-muted-foreground tw:group-data-[selected=true]:!bg-selection tw:data-[interactive=true]:cursor-pointer tw:data-[focused=true]:shadow-[inset_0_0_0_var(--ds-border-width-strong)_var(--ds-ring)]"
+              className="tw:left-0 tw:z-[var(--ds-z-base)] tw:border-r tw:!bg-card tw:text-right tw:text-muted-foreground tw:tabular-nums tw:group-data-[selected=true]:!bg-selection tw:data-[interactive=true]:cursor-pointer tw:data-[focused=true]:shadow-[inset_0_0_0_var(--ds-border-width-strong)_var(--ds-ring)]"
               role="rowheader"
               aria-colindex={1}
               aria-selected={props.selectedRow === rowIndex}
               tabIndex={focus.row === rowIndex && focus.column === 0 ? 0 : -1}
-              style={{ width: DATA_GRID_ROW_NUMBER_WIDTH }}
+              style={{ width: rowNumberWidth }}
               onFocus={() => setFocus({ row: rowIndex, column: 0 })}
               onClick={() => {
                 focusRequestedRef.current = true;
@@ -640,14 +705,18 @@ export default function DataGridVirtual(props: Props) {
             {visibleColumns.map((columnIndex) => {
               const value = rowAt(rowIndex)?.[columnIndex];
               const loading = value === undefined && !!props.rowSource;
-              const decodeFailure = failureAt(rowIndex, columnIndex);
+              const failure = failureAt(rowIndex, columnIndex);
+              const truncated = failure ? truncatedCellBytes(failure) !== null : false;
+              const decodeFailure = truncated ? undefined : failure;
               const text = loading
                 ? "…"
                 : decodeFailure
                   ? t("grid.decodeFailure", {
                       type: decodeFailure.databaseType,
                     })
-                  : display(value);
+                  : truncated
+                    ? `${gridCellText(value)}…`
+                    : gridCellText(value);
               const selected = gridSelectionIncludes(
                 selection,
                 rowIndex,
@@ -663,20 +732,26 @@ export default function DataGridVirtual(props: Props) {
                   data-grid-box
                   data-null={value === null && !decodeFailure}
                   data-decode-failure={decodeFailure ? "true" : undefined}
+                  data-truncated={truncated ? "true" : undefined}
                   data-loading={loading}
                   data-numeric={
-                    !loading && !decodeFailure && numericCols[columnIndex]
+                    !loading && !decodeFailure && !truncated && numericCols[columnIndex]
                   }
                   data-interactive={interactive}
                   data-selected={selected}
                   data-focused={focused}
-                  className="tw:group-data-[selected=true]:!bg-selection tw:data-[null=true]:text-muted-foreground tw:data-[null=true]:italic tw:data-[decode-failure=true]:text-danger tw:data-[loading=true]:text-muted-foreground tw:data-[numeric=true]:text-right tw:data-[numeric=true]:tabular-nums tw:data-[interactive=true]:cursor-pointer tw:data-[selected=true]:!bg-selection tw:data-[focused=true]:shadow-[inset_0_0_0_var(--ds-border-width-strong)_var(--ds-ring)]"
+                  className="tw:group-data-[selected=true]:!bg-selection tw:data-[null=true]:text-muted-foreground tw:data-[null=true]:italic tw:data-[decode-failure=true]:text-danger tw:data-[truncated=true]:text-warning tw:data-[loading=true]:text-muted-foreground tw:data-[numeric=true]:text-right tw:data-[numeric=true]:tabular-nums tw:data-[interactive=true]:cursor-pointer tw:data-[selected=true]:!bg-selection tw:data-[focused=true]:shadow-[inset_0_0_0_var(--ds-border-width-strong)_var(--ds-ring)]"
                   role="gridcell"
                   aria-colindex={columnIndex + 2}
                   aria-selected={selected}
+                  aria-description={truncated ? t("grid.truncatedCellTitle") : undefined}
                   tabIndex={focused ? 0 : -1}
                   title={
-                    text.length > 40 || text.includes("\n") ? text : undefined
+                    truncated
+                      ? t("grid.truncatedCellTitle")
+                      : text.length > 40 || text.includes("\n")
+                        ? text
+                        : undefined
                   }
                   style={{
                     left: offsets[columnIndex],
@@ -689,7 +764,7 @@ export default function DataGridVirtual(props: Props) {
                     setFocus({ row: rowIndex, column: columnIndex + 1 })
                   }
                 >
-                  {!loading && !decodeFailure && props.renderCell
+                  {!loading && !decodeFailure && !truncated && props.renderCell
                     ? props.renderCell(value, rowIndex, props.result.columns[columnIndex])
                     : text}
                 </div>

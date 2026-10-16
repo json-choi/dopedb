@@ -10,6 +10,9 @@ const packageMetadata = JSON.parse(
   readFileSync(new URL("./package.json", import.meta.url), "utf8"),
 ) as { version: string };
 const sentryRelease = `dopedb@${packageMetadata.version}`;
+const criticalTestManifest = JSON.parse(
+  readFileSync(new URL("./tests/critical-test-budget.json", import.meta.url), "utf8"),
+) as { frontend: Record<string, unknown> };
 
 // Tauri v2 dev server config. Fixed port so the Rust side can point WKWebView at it.
 export default defineConfig(({ command }) => {
@@ -19,6 +22,8 @@ export default defineConfig(({ command }) => {
     Boolean(process.env.SENTRY_AUTH_TOKEN);
 
   return {
+    // Exact manifest paths keep linked worktrees out of this checkout's suite.
+    test: { include: Object.keys(criticalTestManifest.frontend) },
     plugins: [
       tailwindcss(),
       react(),

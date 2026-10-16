@@ -1,25 +1,55 @@
-//! L1 — parse & classify. A **UX pre-filter only** (L2 is authoritative).
+//! L1 — parse & classify. A **UX pre-filter only** (L2 is authoritative), except
+//! where a target has no database-enforced read-only session (Cloudflare D1), so
+//! every write shape must classify as a write here.
 //!
 //! Contract with the rest of the engine:
 //! - `> 1` top-level statement → High risk, kind `Write` (stacked-injection guard).
-//! - `Query` bodies are recursed for DML CTEs; any `INSERT`/`UPDATE` inside a CTE
-//!   reclassifies the whole statement to `Write`.
+//! - `Query` bodies and CTEs are recursed; any `INSERT`/`UPDATE`/`DELETE`/`MERGE`
+//!   anywhere in the set-expression tree reclassifies the statement to `Write`.
+//! - `EXPLAIN ANALYZE` (keyword or `(ANALYZE ...)` option) executes its statement
+//!   and inherits that statement's kind; a plain `EXPLAIN` stays a read.
+//! - `SHOW`, `DESCRIBE`, and read-only SQLite `PRAGMA` forms are reads; writable
+//!   `PRAGMA` forms stay blocked. `USE`/`SET` are rejected as session statements.
 //! - `UPDATE`/`DELETE` with `selection.is_none()` → `no_where` + High risk.
 //! - **Any parse error or ambiguity → `Privilege` / High risk (fail safe), never
 //!   an `Err`** — once DML and DDL have separate authority, an unknown statement
 //!   must not inherit the narrower data-change credential. The privilege gate
-//!   hard-stops it.
+//!   hard-stops it, and [`ClassificationAnalysis::rejection`] names the reason
+//!   (parse failure with its position, session statement, or policy block).
+//! - A few valid dialect forms the parser lacks (`TABLE t`, `ROWS FROM`, XML name
+//!   arguments, SQLite `INDEXED BY` and `IS [NOT] expr`) are re-parsed after a
+//!   token rewrite that only touches those read-only shapes; the rewritten text
+//!   is used for classification only, never executed.
+//!
+//! This module owns the analysis contract and parse-failure positions.
+//! Statement-kind tables and the `set_config` scan live in
+//! `l1_statement_kinds.rs`, the dialect rewrite in `l1_rewrite.rs`, SQLite
+//! `PRAGMA` decisions in `l1_pragma.rs`, and approval-card table collection in
+//! `l1_tables.rs`.
 
-use sqlparser::ast::{
-    FromTable, ObjectType, Query, SetExpr, Statement, TableFactor, TableWithJoins,
-};
+use sqlparser::ast::Statement;
 use sqlparser::dialect::{
     BigQueryDialect, Dialect, MySqlDialect, PostgreSqlDialect, SQLiteDialect,
 };
-use sqlparser::parser::Parser;
+use sqlparser::parser::{Parser, ParserError};
+use sqlparser::tokenizer::{Token, Tokenizer};
 
-use crate::error::AppResult;
+use crate::error::{AppError, AppResult};
 use crate::model::{Classification, Engine, QueryKind, RiskLevel};
+
+#[path = "l1_pragma.rs"]
+mod pragma;
+#[path = "l1_rewrite.rs"]
+mod rewrite;
+#[path = "l1_statement_kinds.rs"]
+mod statement_kinds;
+#[path = "l1_tables.rs"]
+mod tables;
+
+use pragma::pragma_analysis;
+use rewrite::parse_compatible_form;
+use statement_kinds::{classify_stmt, session_setting_call};
+use tables::{collect_tables, dedup};
 
 /// Parser confidence that is deliberately kept outside the serialized SQL
 /// classification wire contract. Callers that may acquire a target capability
@@ -36,6 +66,19 @@ pub enum ClassificationIntegrity {
     DocumentFamily,
     /// A statement parsed but its shape is not allowlisted by the classifier.
     Ambiguous,
+    /// A session-state statement (`USE`, `SET`, or a `set_config` call). DopeDB
+    /// owns database and schema selection and the pooled session's read-only
+    /// default, so it is rejected rather than run on a pooled session.
+    SessionStatement,
+}
+
+/// Parser detail kept for a [`ClassificationIntegrity::ParseFailed`] result.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SqlParseFailure {
+    /// Parser message without its trailing line/column suffix.
+    pub message: String,
+    /// 1-based character offset into the classified SQL text.
+    pub position: Option<usize>,
 }
 
 /// Internal classification result that pairs the stable wire payload with its
@@ -44,9 +87,38 @@ pub enum ClassificationIntegrity {
 pub struct ClassificationAnalysis {
     pub classification: Classification,
     pub integrity: ClassificationIntegrity,
+    pub parse_failure: Option<SqlParseFailure>,
+    /// 1-based character offset a blocked statement reports: the session-setting
+    /// call when one was found, otherwise the first significant token.
+    pub statement_start: Option<usize>,
 }
 
 impl ClassificationAnalysis {
+    /// The typed pre-execution rejection for a statement that the gate blocks as
+    /// privileged or unclassifiable. `offset` is the 1-based character position
+    /// of the classified text inside the SQL the user submitted (1 when the text
+    /// was submitted on its own), so script statements report script positions.
+    pub fn rejection(&self, offset: usize) -> AppError {
+        let shift = |position: usize| offset.max(1).saturating_add(position).saturating_sub(1);
+        let start = Some(shift(self.statement_start.unwrap_or(1)));
+        match self.integrity {
+            ClassificationIntegrity::ParseFailed => {
+                let failure = self.parse_failure.clone().unwrap_or(SqlParseFailure {
+                    message: "no executable SQL statement was found".into(),
+                    position: None,
+                });
+                AppError::SqlParseFailed {
+                    message: failure.message,
+                    position: failure.position.map(shift).or(start),
+                }
+            }
+            ClassificationIntegrity::SessionStatement => {
+                AppError::SessionStatementBlocked { position: start }
+            }
+            _ => AppError::SqlPolicyBlocked { position: start },
+        }
+    }
+
     /// Whether a casual Explain may acquire a read target capability.
     pub fn is_exact_single_read(&self) -> bool {
         matches!(self.integrity, ClassificationIntegrity::ExactSingle)
@@ -91,6 +163,23 @@ fn fail_safe(
             direct_dml: false,
         },
         integrity,
+        parse_failure: None,
+        statement_start: None,
+    }
+}
+
+/// Classify `sql` and return its precise pre-execution rejection. Callers that
+/// kept only the wire classification use this on the (rare) blocked path.
+pub fn rejection_error(sql: &str, engine: Engine) -> AppError {
+    rejection_error_at(sql, engine, 1)
+}
+
+/// [`rejection_error`] for one statement of a script that starts at the 1-based
+/// character `offset` of the submitted script.
+pub fn rejection_error_at(statement: &str, engine: Engine, offset: usize) -> AppError {
+    match classify_with_integrity(statement, engine) {
+        Ok(analysis) => analysis.rejection(offset),
+        Err(error) => error,
     }
 }
 
@@ -104,21 +193,46 @@ pub fn classify_with_integrity(sql: &str, engine: Engine) -> AppResult<Classific
             ClassificationIntegrity::DocumentFamily,
         ));
     };
-    let statements = match Parser::parse_sql(&*dialect, sql) {
-        Ok(s) => s,
-        Err(e) => {
-            return Ok(fail_safe(
-                format!("parse error — blocked as privileged (fail-safe): {e}"),
-                ClassificationIntegrity::ParseFailed,
-            ))
+    let mut analysis = classify_parsed(sql, engine, &*dialect);
+    // Only a blocked result reports a position, so ordinary reads and writes
+    // never pay for the extra tokenizer pass.
+    if analysis.classification.kind == QueryKind::Privilege && analysis.statement_start.is_none() {
+        analysis.statement_start = first_significant_position(sql, &*dialect);
+    }
+    Ok(analysis)
+}
+
+fn classify_parsed(sql: &str, engine: Engine, dialect: &dyn Dialect) -> ClassificationAnalysis {
+    if engine == Engine::Sqlite
+        && sql
+            .as_bytes()
+            .windows(6)
+            .any(|window| window.eq_ignore_ascii_case(b"pragma"))
+    {
+        if let Some(analysis) = pragma_analysis(sql, dialect) {
+            return analysis;
         }
+    }
+    let statements = match Parser::parse_sql(dialect, sql) {
+        Ok(s) => s,
+        Err(original) => match parse_compatible_form(sql, engine, dialect) {
+            Some(statements) => statements,
+            None => {
+                let mut analysis = fail_safe(
+                    "SQL could not be parsed — blocked before execution (fail-safe)",
+                    ClassificationIntegrity::ParseFailed,
+                );
+                analysis.parse_failure = Some(parse_failure(sql, &original));
+                return analysis;
+            }
+        },
     };
 
     if statements.is_empty() {
-        return Ok(fail_safe(
+        return fail_safe(
             "no parseable statement — treated as a write (fail-safe)",
             ClassificationIntegrity::ParseFailed,
-        ));
+        );
     }
 
     if statements.len() > 1 {
@@ -127,7 +241,7 @@ pub fn classify_with_integrity(sql: &str, engine: Engine) -> AppResult<Classific
             collect_tables(s, &mut tables);
         }
         dedup(&mut tables);
-        return Ok(ClassificationAnalysis {
+        return ClassificationAnalysis {
             classification: Classification {
                 kind: QueryKind::Write,
                 risk: RiskLevel::High,
@@ -141,7 +255,20 @@ pub fn classify_with_integrity(sql: &str, engine: Engine) -> AppResult<Classific
                 direct_dml: false,
             },
             integrity: ClassificationIntegrity::MultipleStatements,
-        });
+            parse_failure: None,
+            statement_start: None,
+        };
+    }
+
+    // A session-setting call outlives the statement on a pooled connection, so it
+    // is a session statement wherever it appears (select list, FROM, subquery).
+    if let Some(position) = session_setting_call(sql, engine, dialect) {
+        let mut analysis = fail_safe(
+            "set_config changes session settings — blocked like SET",
+            ClassificationIntegrity::SessionStatement,
+        );
+        analysis.statement_start = Some(position);
+        return analysis;
     }
 
     let stmt = &statements[0];
@@ -165,7 +292,7 @@ pub fn classify_with_integrity(sql: &str, engine: Engine) -> AppResult<Classific
     collect_tables(stmt, &mut tables);
     dedup(&mut tables);
 
-    Ok(ClassificationAnalysis {
+    ClassificationAnalysis {
         classification: Classification {
             kind,
             risk,
@@ -181,7 +308,9 @@ pub fn classify_with_integrity(sql: &str, engine: Engine) -> AppResult<Classific
             ),
         },
         integrity,
-    })
+        parse_failure: None,
+        statement_start: None,
+    }
 }
 
 /// Stable public classification wire payload for callers that do not acquire a
@@ -190,237 +319,117 @@ pub fn classify(sql: &str, engine: Engine) -> AppResult<Classification> {
     Ok(classify_with_integrity(sql, engine)?.classification)
 }
 
-/// Recursive statement classification. Recurses for `EXPLAIN ANALYZE`, which
-/// actually EXECUTES its inner statement, so it must inherit that statement's kind.
-fn classify_stmt(
-    stmt: &Statement,
-    notes: &mut Vec<String>,
-    no_where: &mut bool,
-) -> (QueryKind, ClassificationIntegrity) {
-    match stmt {
-        Statement::Query(q) => {
-            if query_has_dml(q) {
-                notes.push("write DML inside a CTE — reclassified as a write".into());
-                (QueryKind::Write, ClassificationIntegrity::ExactSingle)
-            } else if query_selects_into(q) {
-                // SELECT ... INTO <table> creates and populates a table — not a read.
-                notes.push("SELECT ... INTO creates a table — reclassified as DDL".into());
-                (QueryKind::Ddl, ClassificationIntegrity::ExactSingle)
-            } else if !q.locks.is_empty() {
-                // FOR UPDATE / FOR SHARE takes row locks (would fail on a read-only txn).
-                notes.push(
-                    "SELECT ... FOR UPDATE/SHARE takes row locks — reclassified as a write".into(),
-                );
-                (QueryKind::Write, ClassificationIntegrity::ExactSingle)
-            } else {
-                (QueryKind::Read, ClassificationIntegrity::ExactSingle)
-            }
-        }
-        // Plain EXPLAIN just plans (Read); EXPLAIN ANALYZE runs the statement, so
-        // classify by the boxed inner statement (EXPLAIN ANALYZE DELETE = Write/high).
-        Statement::Explain {
-            analyze, statement, ..
-        } => {
-            if *analyze {
-                notes.push(
-                    "EXPLAIN ANALYZE executes the statement — classified by its inner statement"
-                        .into(),
-                );
-                classify_stmt(statement, notes, no_where)
-            } else {
-                (QueryKind::Read, ClassificationIntegrity::ExactSingle)
-            }
-        }
+// ---- Parse failure detail ---------------------------------------------------
 
-        Statement::Insert(_) => (QueryKind::Write, ClassificationIntegrity::ExactSingle),
-        Statement::Update(update) => {
-            *no_where = update.selection.is_none();
-            (QueryKind::Write, ClassificationIntegrity::ExactSingle)
+/// Split sqlparser's ` at Line: L, Column: C` suffix into a 1-based character
+/// offset so the UI can point at the exact token like a PostgreSQL error.
+fn parse_failure(sql: &str, error: &ParserError) -> SqlParseFailure {
+    let raw = match error {
+        ParserError::TokenizerError(message) | ParserError::ParserError(message) => {
+            message.as_str()
         }
-        Statement::Delete(del) => {
-            *no_where = del.selection.is_none();
-            (QueryKind::Write, ClassificationIntegrity::ExactSingle)
+        ParserError::RecursionLimitExceeded => "the statement is nested too deeply",
+    };
+    let (message, location) = match raw.rfind(" at Line: ") {
+        Some(index) => (
+            &raw[..index],
+            parse_location(&raw[index + " at Line: ".len()..]),
+        ),
+        None => (raw, None),
+    };
+    // sqlparser reports an unexpected end of input without a location; point
+    // just past the last significant character, as PostgreSQL does.
+    let position = match location {
+        Some((line, column)) => {
+            char_offset(sql, line, column).map(|offset| named_token_offset(sql, message, offset))
         }
-
-        Statement::Drop {
-            object_type: ObjectType::Role | ObjectType::User,
-            ..
-        } => (QueryKind::Privilege, ClassificationIntegrity::ExactSingle),
-
-        Statement::CreateTable(_)
-        | Statement::CreateIndex(_)
-        | Statement::CreateView { .. }
-        | Statement::CreateVirtualTable { .. }
-        | Statement::CreateSchema { .. }
-        | Statement::CreateDatabase { .. }
-        | Statement::CreateFunction(_)
-        | Statement::CreateTrigger(_)
-        | Statement::CreateProcedure { .. }
-        | Statement::CreateSequence { .. }
-        | Statement::CreateDomain(_)
-        | Statement::CreateType { .. }
-        | Statement::CreateExtension(_)
-        | Statement::CreateCollation(_)
-        | Statement::CreateOperator(_)
-        | Statement::CreateOperatorFamily(_)
-        | Statement::CreateOperatorClass(_)
-        | Statement::AlterTable { .. }
-        | Statement::AlterSchema(_)
-        | Statement::AlterIndex { .. }
-        | Statement::AlterView { .. }
-        | Statement::AlterFunction(_)
-        | Statement::AlterType(_)
-        | Statement::AlterCollation(_)
-        | Statement::AlterOperator(_)
-        | Statement::AlterOperatorFamily(_)
-        | Statement::AlterOperatorClass(_)
-        | Statement::Drop { .. }
-        | Statement::DropFunction(_)
-        | Statement::DropDomain(_)
-        | Statement::DropProcedure { .. }
-        | Statement::DropTrigger(_)
-        | Statement::DropExtension(_)
-        | Statement::DropOperator(_)
-        | Statement::DropOperatorFamily(_)
-        | Statement::DropOperatorClass(_)
-        | Statement::RenameTable(_)
-        | Statement::Comment { .. }
-        | Statement::Truncate { .. } => (QueryKind::Ddl, ClassificationIntegrity::ExactSingle),
-
-        Statement::CreateRole(_)
-        | Statement::AlterRole { .. }
-        | Statement::CreateUser(_)
-        | Statement::AlterUser(_)
-        | Statement::CreatePolicy(_)
-        | Statement::AlterPolicy(_)
-        | Statement::DropPolicy(_)
-        | Statement::Grant { .. }
-        | Statement::Deny(_)
-        | Statement::Revoke { .. } => (QueryKind::Privilege, ClassificationIntegrity::ExactSingle),
-
-        // Unknown / unmodeled statement: the privilege gate hard-stops it. This
-        // prevents new parser variants from silently inheriting DML authority.
-        other => {
-            notes.push(format!(
-                "unrecognized statement shape — blocked as privileged (fail-safe): {}",
-                short_kind(other)
-            ));
-            (QueryKind::Privilege, ClassificationIntegrity::Ambiguous)
-        }
+        None if message.ends_with("found: EOF") => Some(sql.trim_end().chars().count() + 1),
+        None => None,
+    };
+    SqlParseFailure {
+        message: message.trim().chars().take(500).collect(),
+        position,
     }
 }
 
-/// True for `SELECT ... INTO <table>` at the top-level select body.
-fn query_selects_into(q: &Query) -> bool {
-    matches!(&*q.body, SetExpr::Select(s) if s.into.is_some())
-}
-
-fn short_kind(stmt: &Statement) -> &'static str {
-    match stmt {
-        Statement::Query(_) => "Query",
-        Statement::Insert(_) => "Insert",
-        Statement::Update(_) => "Update",
-        Statement::Delete(_) => "Delete",
-        _ => "Other",
+/// sqlparser can report the location of the token after the one its message
+/// names ("found: FROM" located at the following identifier). When the named
+/// token sits immediately before the reported offset, separated only by
+/// whitespace, point at the named token instead.
+fn named_token_offset(sql: &str, message: &str, reported: usize) -> usize {
+    let Some((_, found)) = message.rsplit_once("found: ") else {
+        return reported;
+    };
+    let needle: Vec<char> = found.trim().chars().collect();
+    if needle.is_empty() || found.trim() == "EOF" {
+        return reported;
+    }
+    let chars: Vec<char> = sql.chars().collect();
+    let at = reported.saturating_sub(1).min(chars.len());
+    let matches_at = |start: usize| {
+        chars
+            .get(start..start + needle.len())
+            .is_some_and(|window| {
+                window
+                    .iter()
+                    .zip(&needle)
+                    .all(|(left, right)| left.eq_ignore_ascii_case(right))
+            })
+    };
+    if matches_at(at) {
+        return reported;
+    }
+    let mut end = at;
+    while end > 0 && chars[end - 1].is_whitespace() {
+        end -= 1;
+    }
+    match end.checked_sub(needle.len()) {
+        Some(start) if matches_at(start) => start + 1,
+        _ => reported,
     }
 }
 
-// ---- DML-in-CTE detection -------------------------------------------------
+fn parse_location(text: &str) -> Option<(usize, usize)> {
+    let (line, rest) = text.split_once(", Column: ")?;
+    let column = rest
+        .chars()
+        .take_while(char::is_ascii_digit)
+        .collect::<String>();
+    Some((line.trim().parse().ok()?, column.parse().ok()?))
+}
 
-fn query_has_dml(q: &Query) -> bool {
-    if let Some(with) = &q.with {
-        if with.cte_tables.iter().any(|cte| query_has_dml(&cte.query)) {
-            return true;
+/// Convert sqlparser's 1-based line/column (columns count characters) into a
+/// 1-based character offset. A location just past the end maps to `len + 1`.
+fn char_offset(sql: &str, line: usize, column: usize) -> Option<usize> {
+    if line == 0 || column == 0 {
+        return None;
+    }
+    let (mut current_line, mut current_column) = (1_usize, 1_usize);
+    let mut count = 0_usize;
+    for character in sql.chars() {
+        if current_line == line && current_column == column {
+            return Some(count + 1);
+        }
+        count += 1;
+        if character == '\n' {
+            current_line += 1;
+            current_column = 1;
+        } else {
+            current_column += 1;
         }
     }
-    setexpr_has_dml(&q.body)
+    (current_line == line && current_column <= column).then_some(count + 1)
 }
 
-fn setexpr_has_dml(se: &SetExpr) -> bool {
-    match se {
-        // sqlparser wraps writable-CTE bodies as these variants.
-        SetExpr::Insert(_) | SetExpr::Update(_) => true,
-        SetExpr::Query(q) => query_has_dml(q),
-        SetExpr::SetOperation { left, right, .. } => {
-            setexpr_has_dml(left) || setexpr_has_dml(right)
-        }
-        _ => false,
-    }
-}
-
-// ---- Table collection (best-effort; UX only) ------------------------------
-//
-// ponytail: walks the stable `TableFactor::Table` / `Derived` / CTE nodes only.
-// Skips INSERT target tables and nested-join relations (deep, version-fragile
-// AST shapes) — this list feeds the approval card, not any safety decision, so
-// L2 stays authoritative regardless of what we miss here.
-
-fn collect_tables(stmt: &Statement, out: &mut Vec<String>) {
-    match stmt {
-        Statement::Query(q) => walk_query(q, out),
-        // Only the update target table; the optional `FROM` join sources are a
-        // version-fragile AST shape and are UX-only, so we skip them.
-        Statement::Update(update) => walk_twj(&update.table, out),
-        Statement::Delete(del) => match &del.from {
-            FromTable::WithFromKeyword(v) | FromTable::WithoutKeyword(v) => {
-                for twj in v {
-                    walk_twj(twj, out);
-                }
-            }
-        },
-        Statement::Insert(ins) => {
-            if let Some(src) = &ins.source {
-                walk_query(src, out);
-            }
-        }
-        _ => {}
-    }
-}
-
-fn walk_query(q: &Query, out: &mut Vec<String>) {
-    if let Some(with) = &q.with {
-        for cte in &with.cte_tables {
-            walk_query(&cte.query, out);
-        }
-    }
-    walk_setexpr(&q.body, out);
-}
-
-fn walk_setexpr(se: &SetExpr, out: &mut Vec<String>) {
-    match se {
-        SetExpr::Select(sel) => {
-            for twj in &sel.from {
-                walk_twj(twj, out);
-            }
-        }
-        SetExpr::Query(q) => walk_query(q, out),
-        SetExpr::SetOperation { left, right, .. } => {
-            walk_setexpr(left, out);
-            walk_setexpr(right, out);
-        }
-        SetExpr::Insert(stmt) | SetExpr::Update(stmt) => collect_tables(stmt, out),
-        _ => {}
-    }
-}
-
-fn walk_twj(twj: &TableWithJoins, out: &mut Vec<String>) {
-    walk_tf(&twj.relation, out);
-    for join in &twj.joins {
-        walk_tf(&join.relation, out);
-    }
-}
-
-fn walk_tf(tf: &TableFactor, out: &mut Vec<String>) {
-    match tf {
-        TableFactor::Table { name, .. } => out.push(name.to_string()),
-        TableFactor::Derived { subquery, .. } => walk_query(subquery, out),
-        _ => {}
-    }
-}
-
-fn dedup(v: &mut Vec<String>) {
-    let mut seen = std::collections::HashSet::new();
-    v.retain(|t| seen.insert(t.clone()));
+/// 1-based character offset of the first non-whitespace, non-comment token.
+fn first_significant_position(sql: &str, dialect: &dyn Dialect) -> Option<usize> {
+    let tokens = Tokenizer::new(dialect, sql).tokenize_with_location().ok()?;
+    let start = tokens
+        .iter()
+        .find(|token| !matches!(token.token, Token::Whitespace(_)))?
+        .span
+        .start;
+    char_offset(sql, start.line as usize, start.column as usize)
 }
 
 #[cfg(test)]
@@ -453,6 +462,95 @@ mod tests {
             analysis(r#"{ "find": "users" }"#, Engine::Mongodb).integrity,
             ClassificationIntegrity::DocumentFamily
         );
+        // Session statements are rejected with their own typed reason.
+        for (sql, engine) in [
+            ("SET search_path = audit", Engine::Postgres),
+            ("SET search_path TO audit", Engine::Postgres),
+            ("USE analytics", Engine::Mysql),
+            ("SET NAMES utf8mb4", Engine::Mysql),
+        ] {
+            let parsed = analysis(sql, engine);
+            assert_eq!(
+                parsed.integrity,
+                ClassificationIntegrity::SessionStatement,
+                "{sql}"
+            );
+            assert_eq!(parsed.classification.kind, QueryKind::Privilege, "{sql}");
+            let error = serde_json::to_value(parsed.rejection(1)).unwrap();
+            assert_eq!(error["kind"], "sessionStatementBlocked", "{sql}");
+            assert_eq!(error["position"], 1, "{sql}");
+        }
+        // A set_config call would leave a pooled session writable or switch its
+        // role, so it is a session statement wherever it appears and however the
+        // name is spelled; the position points at the call. A string literal, a
+        // comment, or reading a setting is not a call.
+        for (sql, position) in [
+            (
+                "SELECT set_config('default_transaction_read_only', 'off', false)",
+                8,
+            ),
+            (
+                "SELECT 1 FROM pg_catalog.set_config('role', 'admin', false)",
+                26,
+            ),
+            (
+                r#"SELECT "pg_catalog"."set_config" ('role', 'admin', false)"#,
+                21,
+            ),
+            (r#"SELECT U&"set\005fconfig"('role', 'admin', false)"#, 8),
+            (
+                "SELECT id FROM t WHERE x = (SELECT set_config('search_path', 'x', false))",
+                36,
+            ),
+        ] {
+            let parsed = analysis(sql, Engine::Postgres);
+            assert_eq!(
+                parsed.integrity,
+                ClassificationIntegrity::SessionStatement,
+                "{sql}"
+            );
+            let error = serde_json::to_value(parsed.rejection(1)).unwrap();
+            assert_eq!(error["kind"], "sessionStatementBlocked", "{sql}");
+            assert_eq!(error["position"], position, "{sql}");
+        }
+        for sql in [
+            "SELECT 'set_config(' AS s",
+            "SELECT 1 -- set_config(\n",
+            "SELECT current_setting('default_transaction_read_only')",
+        ] {
+            let parsed = analysis(sql, Engine::Postgres);
+            assert_eq!(
+                parsed.integrity,
+                ClassificationIntegrity::ExactSingle,
+                "{sql}"
+            );
+            assert_eq!(parsed.classification.kind, QueryKind::Read, "{sql}");
+        }
+        // A parse failure keeps the parser position as a 1-based character
+        // offset (multi-byte text counts characters) and is shifted into the
+        // script that contained the statement.
+        let failed = analysis("SELECT '한글'\nFROM t WHERE a = = 1", Engine::Postgres);
+        assert_eq!(failed.integrity, ClassificationIntegrity::ParseFailed);
+        assert_eq!(failed.classification.kind, QueryKind::Privilege);
+        let detail = failed.parse_failure.clone().unwrap();
+        assert_eq!(detail.position, Some(30));
+        assert!(!detail.message.contains("Line:"));
+        let standalone = serde_json::to_value(failed.rejection(1)).unwrap();
+        assert_eq!(standalone["kind"], "sqlParseFailed");
+        assert_eq!(standalone["position"], 30);
+        let in_script = serde_json::to_value(failed.rejection(5)).unwrap();
+        assert_eq!(in_script["position"], 34);
+        let truncated = analysis("UPDATE t SET  ", Engine::Postgres);
+        assert_eq!(truncated.parse_failure.unwrap().position, Some(13));
+        // The caret points at the token the message names, not the one after it.
+        let misplaced = analysis("SELECT id, FROM sales.orders WHERE", Engine::Postgres);
+        assert_eq!(misplaced.parse_failure.unwrap().position, Some(12));
+        let blocked = serde_json::to_value(
+            analysis("\n  GRANT SELECT ON t TO r", Engine::Postgres).rejection(1),
+        )
+        .unwrap();
+        assert_eq!(blocked["kind"], "sqlPolicyBlocked");
+        assert_eq!(blocked["position"], 4);
     }
 
     #[test]
@@ -473,6 +571,35 @@ mod tests {
         assert_eq!(r.kind, QueryKind::Read);
         assert_eq!(r.risk, RiskLevel::Low);
         assert!(r.tables.contains(&"users".to_string()));
+        // Read-only utility statements and dialect forms the parser lacks.
+        for (sql, engine) in [
+            ("SHOW search_path", Engine::Postgres),
+            ("TABLE users", Engine::Postgres),
+            (
+                "SELECT * FROM ROWS FROM (generate_series(1, 2), generate_series(1, 3)) AS x(a, b)",
+                Engine::Postgres,
+            ),
+            ("SELECT xmlelement(name item, 'body')", Engine::Postgres),
+            ("SHOW TABLES", Engine::Mysql),
+            ("SHOW CREATE TABLE users", Engine::Mysql),
+            ("DESCRIBE users", Engine::Mysql),
+            ("TABLE users ORDER BY id LIMIT 5", Engine::Mysql),
+            ("PRAGMA table_info(users)", Engine::Sqlite),
+            ("PRAGMA main.table_info('users');", Engine::Sqlite),
+            ("PRAGMA user_version", Engine::Sqlite),
+            (
+                "SELECT * FROM users INDEXED BY users_name WHERE name IS NOT nickname",
+                Engine::Sqlite,
+            ),
+        ] {
+            let parsed = analysis(sql, engine);
+            assert_eq!(parsed.classification.kind, QueryKind::Read, "{sql}");
+            assert_eq!(
+                parsed.integrity,
+                ClassificationIntegrity::ExactSingle,
+                "{sql}"
+            );
+        }
     }
 
     #[test]
@@ -501,6 +628,20 @@ mod tests {
     fn writable_cte_reclassified_as_write() {
         let r = c("WITH d AS (INSERT INTO log VALUES (1) RETURNING id) SELECT * FROM d");
         assert_eq!(r.kind, QueryKind::Write);
+        // Cloudflare D1 trusts this classifier alone, so every writable shape
+        // (CTE bodies, a DML body after WITH, MERGE, rewritten dialect forms)
+        // must stay a write.
+        for (sql, engine) in [
+            ("WITH d AS (DELETE FROM orders RETURNING *) SELECT * FROM d", Engine::Postgres),
+            ("WITH stale AS (SELECT 1) DELETE FROM orders", Engine::Postgres),
+            ("WITH s AS (SELECT 1 AS id) MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN DELETE", Engine::Postgres),
+            ("MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN DELETE", Engine::Postgres),
+            ("DELETE FROM t WHERE id IN (TABLE ids)", Engine::Postgres),
+            ("DELETE FROM t INDEXED BY t_id WHERE a IS b", Engine::Sqlite),
+            ("WITH old AS (SELECT id FROM t) DELETE FROM t WHERE id IN (SELECT id FROM old)", Engine::Sqlite),
+        ] {
+            assert_eq!(analysis(sql, engine).classification.kind, QueryKind::Write, "{sql}");
+        }
     }
 
     #[test]
@@ -523,6 +664,23 @@ mod tests {
         assert_eq!(r.kind, QueryKind::Write);
         assert!(r.no_where);
         assert_eq!(r.risk, RiskLevel::High);
+        // The option-list spelling executes too; only an explicit false does not.
+        let options = c("EXPLAIN (ANALYZE) DELETE FROM orders");
+        assert_eq!(options.kind, QueryKind::Write);
+        assert!(options.no_where);
+        for sql in [
+            "EXPLAIN (ANALYZE true, BUFFERS) DELETE FROM orders WHERE id = 1",
+            "EXPLAIN (FORMAT JSON, ANALYZE on) UPDATE orders SET paid = true WHERE id = 1",
+        ] {
+            assert_eq!(c(sql).kind, QueryKind::Write, "{sql}");
+        }
+        for sql in [
+            "EXPLAIN (ANALYZE false) DELETE FROM orders",
+            "EXPLAIN (COSTS off) DELETE FROM orders",
+            "EXPLAIN (ANALYZE) SELECT * FROM orders",
+        ] {
+            assert_eq!(c(sql).kind, QueryKind::Read, "{sql}");
+        }
     }
 
     #[test]
@@ -544,6 +702,21 @@ mod tests {
         let r = c("this is not sql");
         assert_eq!(r.kind, QueryKind::Privilege);
         assert_eq!(r.risk, RiskLevel::High);
+        // State-changing PRAGMA forms and unknown utility statements stay blocked.
+        for (sql, engine) in [
+            ("PRAGMA foreign_keys = OFF", Engine::Sqlite),
+            ("PRAGMA user_version = 5", Engine::Sqlite),
+            ("PRAGMA user_version(5)", Engine::Sqlite),
+            ("PRAGMA wal_checkpoint", Engine::Sqlite),
+            ("PRAGMA table_info(t); DELETE FROM t", Engine::Sqlite),
+            ("SHOW PROCESSLIST", Engine::Mysql),
+        ] {
+            assert_eq!(
+                analysis(sql, engine).classification.kind,
+                QueryKind::Privilege,
+                "{sql}"
+            );
+        }
     }
 
     #[test]

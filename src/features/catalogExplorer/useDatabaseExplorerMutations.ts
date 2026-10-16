@@ -27,10 +27,12 @@ import {
   productAnalyticsConnectionEngine,
   productAnalyticsWorkspaceContext,
 } from "../productAnalytics/outcomes";
+import { refreshDesktopConnections } from "../workspaceAdmin/desktopConnections";
 import { deleteWorkspaceConnection } from "../workspaces/tauriAdapter";
 import { errMessage } from "../../ipc/types";
 import { useI18n } from "../../lib/i18n";
 import { qk, type CatalogScope } from "../../lib/queries";
+import { refreshConnectionCatalog } from "../../lib/catalogQueries";
 import { catalogLoadIssue } from "./catalogDomain";
 import {
   projectResourceKey,
@@ -109,8 +111,9 @@ export function useDatabaseExplorerMutations({
       queryKey: ["databaseCatalogOverview", connectionId],
     });
     queryClient.removeQueries({
-      queryKey: ["databaseCatalog", connectionId],
+      queryKey: ["databaseCatalogSnapshot", connectionId],
     });
+    queryClient.removeQueries({ queryKey: ["tableDdl", connectionId] });
   }
 
   function forgetDeletedConnection(connectionId: string) {
@@ -209,20 +212,35 @@ export function useDatabaseExplorerMutations({
     commands.patch({ refreshingId: connectionId });
     commands.clearRefreshError(connectionId);
     try {
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: qk.connectionDatabases(connectionId, scopeKey),
-          refetchType: "active",
-        }),
-        queryClient.invalidateQueries({
-          queryKey: ["databaseCatalogOverview", connectionId],
-          refetchType: "active",
-        }),
-        queryClient.invalidateQueries({
-          queryKey: ["databaseCatalog", connectionId],
-          refetchType: "active",
-        }),
-      ]);
+      // The shared refresh reloads every open catalog view of this connection once
+      // and reports a failed reload even while the previous catalog stays visible.
+      await refreshConnectionCatalog(queryClient, connectionId, {
+        throwOnError: true,
+      });
+      if (currentScopeKeyRef.current !== scopeKey) return;
+      commands.want(connectionId);
+    } catch (error) {
+      if (currentScopeKeyRef.current !== scopeKey) return;
+      commands.setRefreshError(connectionId, catalogLoadIssue(error));
+    } finally {
+      if (currentScopeKeyRef.current === scopeKey) {
+        commands.patch({ refreshingId: null });
+      }
+    }
+  }
+
+  /**
+   * A shared connection changed under this Desktop. Its revision synchronizes only
+   * through the shell-owned workspace refresh, so a catalog retry alone meets the same
+   * refusal: pull the workspace first. Resetting the connection's cached reads then
+   * re-reads each open catalog view of it once.
+   */
+  async function resyncSharedConnection(connectionId: string) {
+    const scopeKey = catalogScope.key;
+    commands.patch({ refreshingId: connectionId });
+    commands.clearRefreshError(connectionId);
+    try {
+      await refreshDesktopConnections(queryClient, scopeKey, [connectionId]);
       if (currentScopeKeyRef.current !== scopeKey) return;
       commands.want(connectionId);
     } catch (error) {
@@ -409,6 +427,7 @@ export function useDatabaseExplorerMutations({
     removeConnection,
     removeEnvironmentConnection,
     removeProject,
+    resyncSharedConnection,
     setSchemaScope,
   };
 }

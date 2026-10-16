@@ -10,11 +10,13 @@ import {
   WorkbenchToolbar,
 } from "../../design-system/components/Workbench";
 import type { CatalogTable, QueryResult } from "../../ipc/types";
-import { downloadCsv, downloadJson, stamp } from "../../lib/export";
+import { stamp } from "../../lib/export";
 import { useI18n } from "../../lib/i18n";
 import { useToast } from "../../components/Toast";
 import Pager from "./Pager";
 import ManualTransactionControls from "../../features/queries/ManualTransactionControls";
+import { truncatedCellBytes } from "../../features/queries/resultPageCache";
+import { saveRendererExport } from "../../features/queryResults/resultExports";
 import type { ManualTransactionController } from "../../features/queries/useManualTransaction";
 
 type Props = {
@@ -78,46 +80,32 @@ export default function TableToolbar(props: Props) {
     supportsMutationTools,
     supportsBulkJobs,
   } = props;
-  const exportCsv = () => {
-    if (!result) return;
-    if (result.decodeFailures?.length) {
-      const failure = result.decodeFailures[0];
-      toast(
-        t("results.decodeFailureExportBlocked", {
-          row: failure.rowIndex + 1,
-          column: failure.columnIndex + 1,
-          type: failure.databaseType,
-        }),
-        "error",
-      );
-      return;
-    }
-    downloadCsv(
+  // The first undecodable or shortened cell stops export with translated guidance.
+  const exportBlocked = () => {
+    const failure = result?.decodeFailures?.[0];
+    if (!failure) return false;
+    const location = { row: failure.rowIndex + 1, column: failure.columnIndex + 1 };
+    toast(
+      truncatedCellBytes(failure) !== null
+        ? t("results.exportBlockedTruncated", location)
+        : t("results.exportBlockedDecode", { ...location, type: failure.databaseType }),
+      "error",
+    );
+    return true;
+  };
+  const exportPage = (format: "csv" | "json") => {
+    if (!result || exportBlocked()) return;
+    void saveRendererExport(
+      format,
       `${table.name}-page${page + 1}-${stamp()}`,
       result.columns,
       result.rows,
+      t,
+      toast,
     );
   };
-  const exportJson = () => {
-    if (!result) return;
-    if (result.decodeFailures?.length) {
-      const failure = result.decodeFailures[0];
-      toast(
-        t("results.decodeFailureExportBlocked", {
-          row: failure.rowIndex + 1,
-          column: failure.columnIndex + 1,
-          type: failure.databaseType,
-        }),
-        "error",
-      );
-      return;
-    }
-    downloadJson(
-      `${table.name}-page${page + 1}-${stamp()}`,
-      result.columns,
-      result.rows,
-    );
-  };
+  const exportCsv = () => exportPage("csv");
+  const exportJson = () => exportPage("json");
   const lastPage =
     total != null ? Math.max(0, Math.ceil(total / pageSize) - 1) : null;
   const hasPrev = page > 0;
@@ -287,26 +275,14 @@ export default function TableToolbar(props: Props) {
           </ToolbarMenu>
         </span>
         <ToolbarMenu label={t("tables.more")} icon="moreVertical">
+          {/* Previous/next stay visible in the pager at every width; only the
+              first/last jumps collapse into this menu on narrow workbenches. */}
           <ToolbarMenuItem
             icon="chevronsLeft"
             disabled={busy || !hasPrev}
             onClick={() => props.onPage(0)}
           >
             {t("common.first")}
-          </ToolbarMenuItem>
-          <ToolbarMenuItem
-            icon="arrowLeft"
-            disabled={busy || !hasPrev}
-            onClick={() => props.onPage(page - 1)}
-          >
-            {t("common.prev")}
-          </ToolbarMenuItem>
-          <ToolbarMenuItem
-            icon="arrowRight"
-            disabled={busy || !hasNext}
-            onClick={() => props.onPage(page + 1)}
-          >
-            {t("common.next")}
           </ToolbarMenuItem>
           <ToolbarMenuItem
             icon="chevronsRight"

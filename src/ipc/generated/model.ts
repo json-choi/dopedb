@@ -136,7 +136,22 @@ export type ExecOutcome = { result: QueryResult | null, affected: number | null,
  * True only when a write actually committed.
  */
 committed: boolean, manualTransaction: boolean, };
-export type ScriptStatement = { sql: string, result: QueryResult | null, affected: number | null, error: string | null, };
+export type ScriptStatement = { sql: string, result: QueryResult | null, affected: number | null, error: ScriptStatementError | null, };
+export type ScriptStatementError = {
+/**
+ * An `AppError` kind (`db`, `timeout`, ...) or a script-only state:
+ * `skipped`, `optimisticConflict`, or `transactionBeginFailed`.
+ */
+kind: string, message: string,
+/**
+ * 1-based character offset into this statement's `sql` (Postgres only).
+ */
+position: number | null,
+/**
+ * A PostgreSQL server error's SQLSTATE, DETAIL, and HINT, as a single run's
+ * `AppError` carries them; absent for every other failure.
+ */
+sqlstate?: string, detail?: string, hint?: string, };
 export type ScriptOutcome = { statements: Array<ScriptStatement>, committed: boolean, allReads: boolean, manualTransaction: boolean, };
 export type AuditEntry = { id: string, connectionId: string, ts: string, engine: Engine, agentPrompt: string | null, sql: string, kind: QueryKind,
 /**
@@ -155,4 +170,10 @@ status: string, rowCount: number | null, durationMs: number | null, error: strin
 /**
  * "agent" | "manual" | "analysis_article" | surface id.
  */
-origin: string, };
+origin: string,
+/**
+ * The database and schema a desktop SQL run targeted, so History reopens the
+ * SQL there. `None` when the run used the connection's default target or came
+ * from a surface that does not record one.
+ */
+database: string | null, namespace: string | null, };

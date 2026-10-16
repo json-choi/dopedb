@@ -1,4 +1,7 @@
 // Finds SQL parameter tokens and materializes caller-provided expressions at their source ranges.
+// Quoting follows the engine: backslash escapes only where the dialect has them (MySQL,
+// PostgreSQL E'' strings), SQLite brackets quote identifiers, and a colon inside a
+// PostgreSQL array subscript or right after a value (`arr[lo:hi]`) is a slice.
 
 import type { ConnectionEngine } from "../connections/domain";
 
@@ -18,10 +21,15 @@ function identifierPart(value: string | undefined) {
   return value !== undefined && /[A-Za-z0-9_.]/.test(value);
 }
 
-function skipQuoted(sql: string, start: number, quote: string) {
+function skipQuoted(
+  sql: string,
+  start: number,
+  quote: string,
+  backslashEscapes: boolean,
+) {
   let index = start + 1;
   while (index < sql.length) {
-    if (sql[index] === "\\") {
+    if (backslashEscapes && sql[index] === "\\") {
       index += 2;
       continue;
     }
@@ -72,14 +80,34 @@ export function findSqlParameters(
   const parameters: SqlParameter[] = [];
   const namedKeys = new Map<string, string>();
   let positionalIndex = 0;
+  let subscriptDepth = 0;
   let index = 0;
 
   while (index < sql.length) {
     const char = sql[index];
     if (char === "'" || char === '"' || char === "`") {
-      index = skipQuoted(sql, index, char);
+      // Standard SQL strings end at the next quote even after a backslash
+      // ('C:\' is complete); MySQL and PostgreSQL E'' strings escape with it.
+      const escapeString =
+        char === "'" &&
+        engine === "postgres" &&
+        /[eE]/.test(sql[index - 1] ?? "") &&
+        !identifierPart(sql[index - 2]);
+      index = skipQuoted(
+        sql,
+        index,
+        char,
+        engine === "mysql" || escapeString,
+      );
       continue;
     }
+    if (char === "[" && engine === "sqlite") {
+      const end = sql.indexOf("]", index + 1);
+      index = end < 0 ? sql.length : end + 1;
+      continue;
+    }
+    if (char === "[") subscriptDepth += 1;
+    if (char === "]" && subscriptDepth > 0) subscriptDepth -= 1;
     if (char === "-" && sql[index + 1] === "-") {
       const lineEnd = sql.indexOf("\n", index + 2);
       index = lineEnd < 0 ? sql.length : lineEnd + 1;
@@ -140,6 +168,8 @@ export function findSqlParameters(
       char === ":" &&
       sql[index - 1] !== ":" &&
       sql[index + 1] !== "=" &&
+      subscriptDepth === 0 &&
+      !/[A-Za-z0-9_)\]]/.test(sql[index - 1] ?? "") &&
       identifierStart(sql[index + 1])
     ) {
       let end = index + 2;
