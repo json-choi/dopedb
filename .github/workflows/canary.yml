@@ -126,6 +126,9 @@ jobs:
           const cargo = readFileSync(cargoPath, "utf8");
           writeFileSync(cargoPath, cargo.replace(/^version = "[^"]+"/m, `version = "${version}"`));
           NODE
+          # The bundled Skill manifest records the app version, so the build's
+          # freshness check needs it regenerated for this throwaway checkout.
+          node scripts/generate-skill-bundle.mjs
 
       - name: Build unsigned canary bundle
         shell: bash
