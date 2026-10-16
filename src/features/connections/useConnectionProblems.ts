@@ -31,6 +31,7 @@ import type {
 const REQUIRED_VALUE_CODES = new Set<ConnectionDiagnosticCode>([
   "nameRequired",
   "hostRequired",
+  "usernameRequired",
   "sqliteFileRequired",
   "cloudflareAccountRequired",
   "cloudflareD1DatabaseRequired",

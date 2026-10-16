@@ -16,6 +16,7 @@ holds pure client-side SQL text analysis with no IPC.
 | File | Description |
 |------|-------------|
 | `ManualTransactionControls.tsx` | UI controls (commit/rollback etc.) driven by a `ManualTransactionController`. |
+| `SqlResultSplit.tsx` | Document-local top/bottom editor/result geometry; both panes remain visible, with pointer/keyboard resize, bounded local preference, and reset through the shared separator. |
 | `ManualTransactionExitGuard.tsx` | Close/quit confirmation while manual transactions are open: answers the backend's `manual-transaction:exit-requested` hold with the shared `ConfirmDialog` ("Roll back N open transactions and close" / Cancel). Confirming rolls everything back, never commits; each request is acknowledged only after the dialog rendered, so a missing or broken renderer cannot trap the window (the next request after 5s proceeds). |
 | `ManualTransactionsMenu.tsx` | Status-bar recovery surface for manual transactions across the active workspace; hidden when there is nothing to recover. |
 | `domain.ts` | Query's public DTOs, generated from the Rust model/receipt contracts; re-exports `Classification`/`PreviewReport`/`RiskLevel`. |

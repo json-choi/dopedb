@@ -7,6 +7,7 @@ import {
   TextInput,
 } from "../../design-system/components/FormControls";
 import { PanelTabs } from "../../design-system/components/PanelTabs";
+import { defaultConnectionName } from "../../features/connections/presets";
 import type { ConnectionEditorController } from "../../features/connections/useConnectionEditorController";
 import { useI18n } from "../../lib/i18n";
 import { ConnectionAdvancedTab } from "./ConnectionAdvancedTab";
@@ -66,7 +67,7 @@ export function ConnectionProfilePanel({
             }
             onChange={(event) => profile.set("name", event.target.value)}
             onBlur={() => profile.touch("connection-name")}
-            placeholder="prod-readonly"
+            placeholder={defaultConnectionName(profile.form) || "prod-readonly"}
             autoFocus={autoFocus}
           />
           {profile.validation.name ? (

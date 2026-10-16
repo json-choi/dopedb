@@ -33,6 +33,8 @@ import { errMessage, type SkillTarget } from "../../ipc/types";
 import { useI18n, type I18nKey } from "../../lib/i18n";
 import { usePostPaintReady } from "../../lib/usePostPaintReady";
 import {
+  agentSetupDeferred,
+  deferAgentSetup,
   hasSavedAgentTargets,
   loadAgentTargets,
   OPEN_AGENT_SETUP_EVENT,
@@ -75,7 +77,7 @@ export default function SkillStartupGate() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!hasSavedAgentTargets()) setOpen(true);
+    if (!hasSavedAgentTargets() && !agentSetupDeferred()) setOpen(true);
   }, []);
 
   useEffect(() => {
@@ -126,6 +128,7 @@ export default function SkillStartupGate() {
   }
 
   function saveForLater() {
+    deferAgentSetup();
     setError(null);
     setOpen(false);
   }

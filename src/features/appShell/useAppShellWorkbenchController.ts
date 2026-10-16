@@ -285,18 +285,33 @@ export function useAppShellWorkbenchController({
     );
   }
 
-  async function openQueryDocument() {
-    if (!selected || creatingQuery) return;
+  async function openQueryDocument(connection?: ConnectionProfile) {
+    // Resolve the row's identity from the current inventory, not the previous
+    // selection: selecting a different connection and immediately running a
+    // selection-bound command would otherwise open a console on the wrong DB.
+    const target = connection
+      ? connections.find((candidate) => candidate.id === connection.id)
+      : selected;
+    if (!target || creatingQuery) return;
+    const targetSupportsSql = drivers.data
+      ? hasCapability(drivers.data, target, "sql")
+      : !isDocumentEngine(target.engine);
+    if (connection && !targetSupportsSql) return;
+    const useSelectedContext = !connection && target.id === selected?.id;
     setCreatingQuery(true);
     preloadSqlEditor();
     try {
       const document = await workbench.openQuery({
-        connectionId: selected.id,
+        connectionId: target.id,
         // A console opened on an Explorer selection starts in that object's target.
-        database: selectedTable?.database ?? selected.database,
-        selectedSchema: selectedTable?.schema ?? null,
-        supportsSql,
+        database: (useSelectedContext ? selectedTable?.database : null) ?? target.database,
+        selectedSchema: useSelectedContext ? selectedTable?.schema ?? null : null,
+        supportsSql: targetSupportsSql,
       });
+      if (selectedId !== target.id) {
+        workbench.prime(document);
+        setSelectedId(target.id);
+      }
       activateDocument(document);
     } catch (error) {
       toast(errMessage(error), "error");

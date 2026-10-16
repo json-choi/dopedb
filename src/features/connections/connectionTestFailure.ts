@@ -10,6 +10,7 @@ import type {
   ConnectionTestIssue,
 } from "./domain";
 import type { ConnectionTab } from "./connectionEditorModel";
+import { CONNECTION_INPUT_MODE_PARAMETER } from "./options";
 
 type Translate = (
   key: I18nKey,
@@ -19,7 +20,7 @@ type Translate = (
 type ConnectionTestFailureContext = Pick<
   ConnectionProfile,
   "credentialMode" | "workspaceAccess"
->;
+> & Partial<Pick<ConnectionProfile, "extraParams">>;
 
 function isWorkspaceManaged(
   context?: ConnectionTestFailureContext,
@@ -37,7 +38,10 @@ function isMemberLocalBinding(
 
 /** Failures a member fixes in their own credential binding, not in the template. */
 function isBindingFailure(code: ConnectionTestFailureCode): boolean {
-  return code.startsWith("ssh") || code === "authentication" || code === "tls";
+  return code.startsWith("ssh") ||
+    code === "authentication" ||
+    code === "authenticationIdentity" ||
+    code === "tls";
 }
 
 /** Discards backend detail before a connection-test failure enters React state. */
@@ -154,6 +158,7 @@ export function connectionTestFailureTitle(
     case "sshUnknown": return t("connections.testFailure.sshUnknownTitle");
     case "timeoutNetwork": return t("connections.testFailure.timeoutNetworkTitle");
     case "authentication": return t("connections.testFailure.authenticationTitle");
+    case "authenticationIdentity": return t("connections.testFailure.authenticationIdentityTitle");
     case "tls": return t("connections.testFailure.tlsTitle");
     case "databaseConfig": return t("connections.testFailure.databaseConfigTitle");
     case "unknown": return t("connections.testFailure.unknownTitle");
@@ -187,6 +192,7 @@ export function connectionTestFailureRecovery(
     case "sshUnknown": return t("connections.testFailure.sshUnknownRecovery");
     case "timeoutNetwork": return t("connections.testFailure.timeoutNetworkRecovery");
     case "authentication": return t("connections.testFailure.authenticationRecovery");
+    case "authenticationIdentity": return t("connections.testFailure.authenticationIdentityRecovery");
     case "tls": return t("connections.testFailure.tlsRecovery");
     case "databaseConfig": return t("connections.testFailure.databaseConfigRecovery");
     case "unknown": return t("connections.testFailure.unknownRecovery");
@@ -270,6 +276,16 @@ export function connectionTestFailureTarget(
   if (isWorkspaceManaged(context) || isMemberLocalBinding(context)) return null;
   if (failure.code.startsWith("ssh") || failure.field === "ssh") {
     return { tab: "sshSsl", fieldId: "connection-ssh-alias" };
+  }
+  if (failure.code === "authenticationIdentity") {
+    // The server refused the role itself, so the fix is the user, not the password.
+    return {
+      tab: "general",
+      fieldId:
+        context?.extraParams?.[CONNECTION_INPUT_MODE_PARAMETER] === "urlOnly"
+          ? "connection-url"
+          : "connection-username",
+    };
   }
   if (failure.field === "credentials") {
     return { tab: "general", fieldId: "connection-password" };

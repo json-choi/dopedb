@@ -30,7 +30,9 @@ import { resolveSqlNamespaceAtCaret } from "../queries/resolveMode";
 import {
   sqlExecutionMarkerPosition,
   sqlRunSourceFromSelection,
+  sqlRunChoices,
 } from "../queries/editorStatus";
+import { splitStatementRanges, splitStatements } from "../../lib/sqlStatements";
 import {
   canFallbackFromCombinedRead,
   initialSqlRunPath,
@@ -97,6 +99,7 @@ import {
 } from "../connections/options";
 import {
   blankConnection,
+  defaultConnectionName,
   demoSqliteConnection,
   findDemoSqliteConnection,
 } from "../connections/presets";
@@ -239,6 +242,10 @@ describe("workbench state ownership", () => {
       code: "authentication",
       field: "credentials",
     }, managedManager)).toBeNull();
+    expect(connectionTestFailureTarget({
+      code: "authenticationIdentity",
+      field: "credentials",
+    })).toEqual({ tab: "general", fieldId: "connection-username" });
     expect(CONNECTION_TEST_FAILURE_CODES).toEqual([
       "sshClientMissing",
       "sshConfiguration",
@@ -249,6 +256,7 @@ describe("workbench state ownership", () => {
       "sshUnknown",
       "timeoutNetwork",
       "authentication",
+      "authenticationIdentity",
       "tls",
       "databaseConfig",
       "unknown",
@@ -474,6 +482,31 @@ describe("workbench state ownership", () => {
       to: selectedEnd - 2,
     });
     expect(sqlRunSourceFromSelection(selectedDraft, 0, 0)).toBeUndefined();
+
+    // A scope choice must authorize exactly the previewed occurrence, never a
+    // repeated statement elsewhere or a semicolon inside a literal/comment.
+    const script = "  SELECT 1;\n\nSELECT 2;  ";
+    const choices = sqlRunChoices(script, script.indexOf("SELECT 2") + 4);
+    expect(choices).toEqual([
+      { kind: "statement", source: { sql: "SELECT 2", from: 13, to: 21 } },
+      { kind: "script", source: { sql: script.trim(), from: 2, to: 22 } },
+    ]);
+    const repeated = "SELECT 1; SELECT 1;";
+    expect(sqlRunChoices(repeated, 14)[0].source.from).toBe(10);
+    expect(sqlRunChoices(script, 10)[0].source.sql).toBe("SELECT 1");
+    expect(sqlRunChoices(script, script.length)[0].source.sql).toBe("SELECT 2");
+    for (const text of ["SELECT 1;", "-- only comments;", "/* only ; */"]) {
+      expect(sqlRunChoices(text, 0)).toEqual([]);
+    }
+    const quoted = "-- title;\nSELECT '한글😀;'; SELECT $$x;y$$; /* ; */ SELECT 3; -- tail";
+    const ranges = splitStatementRanges(quoted);
+    expect(ranges.map((range) => range.sql)).toEqual(splitStatements(quoted));
+    expect(ranges).toHaveLength(3);
+    for (const range of ranges) {
+      expect(quoted.slice(range.from, range.to)).toBe(range.sql);
+    }
+    expect(sqlRunChoices(quoted, quoted.indexOf("x;y"))[0].source.sql)
+      .toBe("SELECT $$x;y$$");
 
     expect(queryResultPhase(undefined, new Error("offline"))).toBe("coldError");
     expect(queryResultPhase(undefined, null)).toBe("coldLoading");
@@ -973,9 +1006,15 @@ describe("workbench state ownership", () => {
       capabilities: ["sql"],
       recommended: true,
     };
-    const nameless = { ...blankConnection(), database: "app" };
+    // An unnamed draft is saved under its endpoint name; only a draft without
+    // an endpoint still asks for one, and that never blocks a server check.
+    const nameless = { ...blankConnection(), database: "app", username: "app" };
+    expect(defaultConnectionName(nameless)).toBe("PostgreSQL localhost:5432");
+    expect(
+      diagnoseConnection(nameless, [], [postgresDriver], false, false),
+    ).toEqual([]);
     const namelessDiagnostics = diagnoseConnection(
-      nameless,
+      { ...nameless, host: "" },
       [],
       [postgresDriver],
       false,
@@ -983,13 +1022,20 @@ describe("workbench state ownership", () => {
     );
     expect(namelessDiagnostics.map(({ code }) => code)).toEqual([
       "nameRequired",
+      "hostRequired",
     ]);
-    expect(namelessDiagnostics.some(connectionDiagnosticBlocksTest)).toBe(
-      false,
-    );
-    expect(
-      namelessDiagnostics.some(({ tone }) => tone === "danger"),
-    ).toBe(true);
+    expect(connectionDiagnosticBlocksTest(namelessDiagnostics[0]!)).toBe(false);
+    // PostgreSQL and MySQL refuse an empty user at the handshake, so a personal
+    // draft must name the role before a check; managed profiles are exempt.
+    for (const engine of ["postgres", "mysql"] as const) {
+      const userless = { ...nameless, engine, username: " " };
+      const userDiagnostics = diagnoseConnection(userless, [], [], false, true);
+      expect(userDiagnostics.map(({ code }) => code)).toEqual(["usernameRequired"]);
+      expect(userDiagnostics.some(connectionDiagnosticBlocksTest)).toBe(true);
+      expect(
+        diagnoseConnection({ ...userless, username: "", credentialMode: "managed" }, [], [], false, true),
+      ).toEqual([]);
+    }
 
     // Server discovery/testing can use a default database, but the saved grant
     // must name a target accepted by the native runtime's 255-byte contract.
@@ -1015,6 +1061,7 @@ describe("workbench state ownership", () => {
     const mongo = switchConnectionSource(
       {
         ...nameless,
+        username: "",
         driverId: postgresDriver.id,
         extraParams: {
           "dopedb.timeZone": "UTC",

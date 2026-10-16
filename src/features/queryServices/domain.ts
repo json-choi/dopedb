@@ -296,7 +296,12 @@ function isStreamViewState(value: unknown) {
     /^[0-9a-f]{64}$/i.test(value.rowSource.capability) &&
     typeof value.truncated === "boolean" &&
     isNullableNumber(value.durationMs) &&
-    (value.error === null || typeof value.error === "string")
+    (value.error === null || typeof value.error === "string") &&
+    // Client timings ride along since the renderer measured them; snapshots
+    // restored from before they existed keep the backend total alone.
+    (value.timings === undefined ||
+      (isRecord(value.timings) &&
+        isNonNegativeNumber(value.timings.clientTotalMs)))
   );
 }
 
