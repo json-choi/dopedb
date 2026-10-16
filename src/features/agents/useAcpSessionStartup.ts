@@ -162,7 +162,8 @@ export function useAcpSessionStartup({
       })();
       const entry = {
         key: startKey,
-        foreground,
+        // A replaced foreground start hands its waiting state to its successor.
+        foreground: foreground || pendingStartRef.current?.foreground === true,
         promise: pending,
         finishForeground: foreground ? beginForegroundAgentStart(connectionId, provider) : null,
       };
