@@ -15,6 +15,47 @@ runtime과 성능 수치로 수행한다.
 - `missing`: 범위에는 속하지만 아직 구현하지 않음
 - `out-of-scope`: 제품 범위 결정상 화면이나 placeholder를 만들지 않음
 
+## 로컬 Claude Code 게이트웨이 인증
+
+- 상태: `partial` — 계정 로그인과 CLI가 관리하는 게이트웨이 인증 설정을 같은
+  공개 `auth status` 응답으로 확인한다. 상태 검사와 공식 어댑터 실행은
+  `AcpPluginId::local_cli_configuration_environment`의 제공자별 허용 목록을
+  공유하며 자격 증명을 IPC·로그·앱 저장소에 추가하지 않는다. 빈 API key도
+  그대로 전달하고 Claude 설정은 Codex 실행에 전달하지 않는다. 게이트웨이가 쓰는
+  `ANTHROPIC_MODEL`과 `ANTHROPIC_DEFAULT_{OPUS,SONNET,HAIKU}_MODEL`도 보존하며,
+  제공자가 광고한 기본 모델명 대신 사용자가 지정한 CLI 모델 매핑을 유지한다.
+- 인증 상태 명령의 실패·잘못된 JSON을 미로그인과 구분하고, 설정 안내는 CLI
+  사용자/관리형 설정과 helper 경로를 설명한다. 설정 확인은 원격 연결 성공이
+  아니며 실제 조직 게이트웨이의 정상 응답·잘못된 토큰·GUI 실행과 기존 구독
+  로그인 회귀 QA는 남아 있다. 개발 앱은 안정 앱과 별도 데이터 root를 사용한다.
+- 공식 Claude Code 2.1.301의 격리된 설정에서 미설정·빈 토큰의 exit 1과
+  환경변수/사용자 설정 기반 가짜 게이트웨이 토큰의 설정 확인을 검증했다.
+  기존 브리지 E2E 안에서 Claude 설정 전달·빈 API key 보존·Codex로의 전달 차단과
+  등록 bearer/실행 hook 제거를 확인했다. frontend build/smoke 및 Rust 검증을
+  통과했다. macOS 개발 서명 runner는 종료 코드 1로 실패해, 빌드된 debug binary와
+  Vite를 직접 실행했고 실제 1200×800 창과 Agent 설정 진입 화면을 확인했다.
+  보조 접근 권한이 없어 native control 자동 조작은 수행하지 않았다.
+
+## Personal DB-only Agent 시작과 hosted Knowledge
+
+- 상태: `partial` — 개인 DB만 선택한 내장 ACP 시작과 Environment 목록 조회는
+  DopeDB 계정 로그인 여부만으로 Personal GitHub Knowledge 서버 준비를 요구하지
+  않는다. 기존 로컬 Project/Environment/DB revision·account pin 검증은 유지한다.
+- Team 세션과 하나 이상의 GitHub source를 명시적으로 선택한 Personal 세션은
+  hosted authority 재확인을 필수로 유지하며 서버 오류를 무시하는 fallback은 없다.
+  목록 조회는 실행 grant가 아니고 실제 시작 시 선택한 source를 다시 확인한다.
+- 운영 서버의 `Personal Knowledge scope could not be prepared` 500 자체는 아직
+  해결하지 않았다. 실제 GitHub source를 선택한 세션은 이 서버 문제에 계속 영향을
+  받는다. 수정된 macOS 개발 앱의 Personal DB 1개·source 0개 선택에서 Claude ACP
+  초기화 성공과 어댑터 candidate→current 승격을 확인했다. 이어진 사용자 메시지는
+  게이트웨이가 거절한 기본 모델명으로 `model_not_found`를 반환해, 상속된 CLI 모델
+  매핑도 보존하도록 수정했다. 실제 게이트웨이 정상 응답 QA는 남아 있다.
+- 후속 macOS debug QA에서 Agent의 catalog search 처리 중 Tokio worker stack
+  overflow로 앱이 SIGABRT 종료됐다. 크래시 스택은 Broker의 `catalog_search` →
+  `catalog` → `resolve_connection` → `terminal_authority_for_selector` 경로를
+  가리키며 원인 확정·수정·재검증은 미완료다. 이 크래시와 운영 Personal Knowledge
+  500은 자동 테스트 통과와 별개인 merge 전 QA blocker로 유지한다.
+
 ## SQL 결과 제목과 시간 표시
 
 - 주석에서 결과 제목을 추출하고 출력에 행 수와 시간을 표시한다. 스트리밍의
@@ -98,6 +139,29 @@ native packaged 화면의 직접 조작, 실제 공급자 대화와 BigQuery Goo
   통과했다. 공식 packaged 앱 전체 화면의 검수와 새 Desktop 릴리스는 남아 있다.
 
 ## 공개 소개 사이트
+
+- 2026-10-08 홈페이지의 세 팀 시나리오: `partial`. `HomeWorkflows.tsx`가
+  공용 `SectionLabel`과 기존 night/cream/hairline 역할, 정적 Tailwind로
+  문제 → 세 단계 → 결과 → 시작 조건을 서버 렌더링한다. `homeWorkflowContent.ts`가
+  한·영 설명을 소유한다. Desktop에서는 두 열, 390px에서는 문서 순서대로 한 열이며
+  document가 유일한 세로 스크롤 소유자다. 시나리오 설명과 실행 기록을 구분한다.
+  기존 실제 앱 이미지는 역사적 0.4.21 caption·alt·파일을 그대로 유지한다.
+  이 변경은 로컬 검수용이며 운영 반영 영수증은 없다.
+- 로컬 검증: Node 24.11.0 / pnpm 11.25.0의 `pnpm --dir site build` 성공.
+  Next middleware 폐기 예정 및 Next 내부 Edge `process.cwd` 경고가 남는다.
+  격리된 실제 Chrome과 omowright로 `/`, `/ko`를 1440px 및 iPhone 14
+  390px에서 열어 세 시나리오·언어·0.4.21 alt를 확인했다. 네 조합 모두
+  document scrollWidth와 viewport 폭이 일치했다. 각 조합의 상단, 소개,
+  세 시나리오, 하단 총 24개 PNG와 viewport JSON을 로컬 QA artifact로 생성했다.
+  이는 소개 사이트 렌더 증거이며 Desktop 실사용 증거가 아니다.
+- Draft 완료 게이트: #245의 현재 개발 Desktop Demo 한·영 2400×1600 캡처와
+  개인정보 검수는 미확보다. 이 worktree에는 개발 Desktop bundle이 없고
+  실행 세션에는 OS 화면 조작 도구가 없다. #272의 지원 provider 두 구성원
+  managed 접근·발급·조회, 공식 Agent의 선택 소스/DB 조사와 미선택 리소스 거부,
+  동일 내부 Article 열람·각자 수동 재조회·로컬 결과 영수증도 미확보다.
+  계정/provider 변경 없이 얻을 수 없는 영수증을 합성하지 않는다.
+  실제 시나리오 그래픽, 전체 light/dark·상태·motion QA, Lighthouse,
+  실제 Safari·모바일 기기 검수는 남아 있다. #245/#272 완료 근거로 사용하지 않는다.
 
 - 상태: `partial` — Three.js 은하 배경은 로컬 검수 후 사용자 요청에 따라
   Cloudflare 운영 사이트에 반영했다. 실제 Safari·모바일 기기 성능,
@@ -274,7 +338,7 @@ grid의 query field·header action·필터 popover 밀도도 같은 앱에서 �
 | Analysis Article | `partial` | `features/analysisArticles`, cloud analysis application | Personal Workspace는 로그인 없이 기기 내 암호화 저장소에 개인 Article을 만들고 편집·revision 이력·삭제·수동 재조회하며, 공유 초대와 공개 발행은 Team Workspace만 제공한다. Workspace 범위를 확인하지 못한 동안에만 Explorer 필터를 숨기고 로그인/Workspace 선택 복구 동작과 중립 Project/Analysis status context를 보여 준다. 사용자 상태·revision·결과 제한 문구는 i18n presentation mapping을 거친다. Explorer 소유 문자 필터와 단일 중앙 HTML document를 유지한다. Article은 1000px 단일 열, 간결한 sans 제목과 작성 정보, 평평한 핵심 지표·차트로 정리했다. 출처·revision·목차·저장 쿼리·로컬 결과는 본문 아래 검수 disclosure에 기본으로 접고 재조회·취소는 제목 아래에 유지한다. 작성 안내는 사용 가능한 Agent HTML·시각화 스킬을 우선 활용하고 없으면 직접 작성하도록 한다. 핵심 지표와 발견 내용을 짧게 전달하되 구성·색상·지표·차트 개수를 고정하지 않으며 DopeDB HTML·저장 계약만 연결한다. 새 안내로 실제 Agent가 생성·저장하는 검수는 남아 있다. 상단 Edit·Share·More와 publication modal을 유지한다. 실제 reader 컴포넌트와 합성 HTML을 사용한 브라우저 검수에서 1100/740/390px, 라이트·다크, 한·영 검수 label, 기본 접힘과 저장 쿼리 비노출, 키보드 펼치기·접기, 목차 focus 이동과 실행 중 취소 action 노출을 확인했다. 실제 DB 재조회·취소와 native packaged 검수는 남아 있다. 본문 DOM은 memo로 보존해 목차 관찰과 keyboard focus가 유지된다. 실제 컴포넌트의 로컬 fixture에서 1536/1200/860/740px 배치, 목차 이동·포커스, 공유·편집·공개 modal·Escape, 로딩 실패 복구를 확인했다. authenticated Article의 packaged 검수는 남아 있다. 공개 HTML의 제목·publication·오류·없는 링크 안내는 한·영 copy를 사용하고 publication 시각은 명시적 UTC와 machine-readable time으로 표시한다. 없는 링크는 식별 정보를 밝히지 않는 중립 복구 화면으로, runtime 오류는 retry 화면으로 처리한다. 새 공개 경로의 브라우저 검수와 exact 단일 query의 로컬 수동 재조회, immutable public HTML 발행·RFC3339 응답의 실제 환경 검수는 남아 있다. |
 | Article private sharing / invitations | `partial` | `features/analysisArticles`, `workspace-cloud/features/articleSharing` | 이메일 지정 48시간 초대, verified-email 수락 시 membership + 정확한 DB read grant, 기존 높은 권한 유지, 취소·만료·권한 변경·동시 수락·소비한 링크의 권한 복원 차단은 격리 PostgreSQL harness로 검수했다. Desktop 공유 dialog의 생성·복사·취소·앱 복귀 UI는 로컬 fixture로 검수했다. 브라우저의 Article deep link가 packaged macOS 개발 앱을 열고 비로그인 계정의 로그인 복구 화면으로 연결되는 것을 확인했다. 새 Cloud 배포와 Desktop 배포를 연결한 실제 설치→로그인→원래 Article 복귀는 아직 배포 전이며, query 자동 실행은 없다. |
 | Appearance/theme | `partial` | `design-system/theme.ts`, `screens/Settings/Appearance`, `lib/appProviders` | 시스템 기본값·명시적 라이트/다크·기기별 저장과 복원을 구현했다. 다크 palette의 큰 면은 채도를 낮춘 남색 surface 단계로 구성하고 선명한 파랑은 주 동작·focus에, 옅은 파랑은 선택·정보에 사용한다. Welcome 장식의 주황은 작업 상태색에 사용하지 않는다. 역할별 값과 컴포넌트 배정은 `docs/DARK_COLOR_COMPONENT_MAP.md`에서 관리한다. 탐색 아이콘과 헤더 정렬은 App shell/chrome 항목에서 관리한다. macOS 개발 bundle에서 기본 선택·다크 적용·앱 재시작 후 복원·시스템 복귀를 확인했다. 실제 컴포넌트 fixture에서 OS 변경 event 반영과 고정 테마 유지, SQL 편집 내용·터미널 출력 보존, Agent 코드·Mermaid 재렌더링을 확인했다. 새 palette의 실제 Desktop 화면 검수, Windows packaged 및 실제 OS 자동 전환 검수는 남아 있다. |
-| Language | `partial` | `lib/i18n/runtime`, `screens/Settings` | 신규 설치의 시스템 기본값, 명시적 한국어·영어 선택 보존, 시스템 locale의 한국어/영어 해석, 기기별 preference 저장·복원과 언어 변경/focus 갱신을 구현했다. 기존 smoke에서 기본값·지원하지 않는 locale의 영어 fallback·고정 선택·자동 preference 저장을 검수했다. macOS 0.4.55 개발 bundle에서 시스템 기본 선택, 영어·한국어·시스템 즉시 전환과 재시작 후 시스템 선택 복원을 확인했다. 실제 macOS/Windows OS 언어 변경과 Windows packaged 검수는 남아 있다. |
+| Language | `partial` | `lib/i18n/runtime`, `screens/Settings` | 신규 설치의 시스템 기본값, 명시적 한국어·영어 선택 보존, 시스템 locale의 한국어/영어 해석, 기기별 preference 저장·복원과 언어 변경/focus 갱신을 구현했다. 시스템 선택 중에만 locale 이벤트를 구독하고 고정 선택·unmount 시 구독을 해제한다. 기존 smoke에서 기본값·지원하지 않는 locale의 영어 fallback·고정 선택·자동 preference 저장과 languagechange/focus·구독 해제·시스템 복귀 시 최신 locale 갱신을 검수했다. macOS 0.4.55 개발 bundle에서 시스템 기본 선택, 영어·한국어·시스템 즉시 전환과 재시작 후 시스템 선택 복원을 확인했다. 0.4.56 production preview의 실제 Chrome Settings에서 영어·한국어·시스템 전환과 preference 저장을 추가 확인했다. 이 preview에는 Tauri IPC가 없으므로 packaged 검수를 대신하지 않는다. 실제 macOS/Windows OS 언어 변경과 Windows packaged 검수는 남아 있다. |
 | Settings | `partial` | `features/settings`, `features/safetySettings` | 설정과 전역 Action Search가 같은 한·영 검색 keyword를 사용하며 검색 지우기는 닫기와 구분한 accessible name을 사용한다. 개인정보 설명은 수집 제외·공유·전송/보관·철회 효과를 의미별 description list로 유지한다. 현재 desktop section은 `aria-current`로 노출한다. 연결이 없는 Safety도 정상 탐색해 기존 연결 선택 안내에 도달하며, 실제 쓰기 control은 연결과 권한 경계를 계속 요구한다. Updates는 checking·download·install·relaunch를 지속 live status로 알리고 진행 중 재확인·설치 버튼의 focus를 유지하면서 모든 activation을 차단한다. Safety 적용은 연결별 동기 single-flight 잠금으로 반복 activation을 차단하고 모든 입력을 잠그며, focusable-disabled Apply와 독립 live status로 진행 상태를 유지한다. 연결 전환 generation이 다른 늦은 완료는 현재 편집 상태·오류·toast를 갱신하지 않는다. 700px 이하에서는 검색·tree·breadcrumb 대신 한 줄 section select를 사용한다. Desktop `Settings → Safety` 하나에서 항상 켜진 읽기와 누적 DML·DDL 권한을 체크박스로 표시한다. DDL은 DML을 필요로 하고 DML 해제 시 함께 꺼지며, 중복 상태 badge 없이 관리자용 workspace 상한 + 기기 gate를 한 번의 적용 동작으로 fail-closed 저장하고 미적용 변경을 표시한다. 관리형 DDL은 exact `manage` grant와 검증된 Neon 또는 GCP Cloud SQL PostgreSQL schema lease가 있을 때만 열고, 지원하지 않는 provider·engine과 schema scope가 없는 GCP 연결은 서버가 반환한 capability를 기반으로 DDL control과 기기 gate 저장을 차단한다. capability 누락·회수는 fail-closed로 처리하고 오래된 DDL opt-in도 해제한다. 데이터 전용 GCP에는 별도 schema 준비·검증이 필요하다고 안내하며 재연결을 해결책으로 제시하지 않는다. 실제 Safety 컴포넌트의 한·영 로컬 fixture에서 DML 유지, DDL 차단 안내와 검증된 capability의 활성화를 확인했다. 새 packaged 앱과 운영 서비스 연결 검수는 남아 있다. Safety와 SQL 실행 오류는 exact 연결의 `워크스페이스 관리 → 공급자` 복구 command를 제공하며, 관리 권한이 없는 구성원에게는 관리자 복구 요청을 안내한다. provider/연결/오류 화면은 별도 변경 control을 만들지 않으며 `워크스페이스 관리 → DB 접근 권한`은 같은 상한을 상태로만 표시한다. compact viewport 검수. 현재 section `aria-current`, Safety 적용과 Updates 진행 live status, 진행 중 activation 차단을 실제 앱에서 keyboard-only와 VoiceOver로 확인하는 검수는 남아 있다. |
 | Local diagnostic logs | `partial` | `features/diagnostics`, `Settings/Advanced/Diagnostics`, Rust diagnostics layer | 기본 꺼짐, 1,000건 process-memory 보관과 끄기·비우기 generation 경계, 인증정보 필터, payload 없는 IPC 진단, 개인정보 경고 뒤 복사·GitHub 이동을 구현했다. macOS 격리 개발 bundle에서 기본 꺼짐·수집 활성화·설정 밖 IPC 작업 후 조회·경고 확인 뒤 복사 성공·빈 GitHub 작성 페이지 이동·비우기·끄기를 수동 검수했다. 기존 보안 테스트에 수집 차단·1,000건 보관 한도·인증정보 필터·stale generation 거부를 추가했다. 사용자 QA와 Windows packaged 검수는 남아 있다. 로그를 자동 첨부·전송하지 않으며 host/DB/user/path는 수동 마스킹 대상이다. |
 | Diagnostics/Recovery | `complete` | design-system diagnostics, feature recovery boundaries | failure injection에서 오류 owner와 retry가 유지되는지 확인한다. Workspace managed lease·provider 실패는 로컬 host/password 오류와 구분하고 관리자용 exact Web recovery와 일반 구성원용 관리자 요청을 유지한다. |

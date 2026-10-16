@@ -1,11 +1,48 @@
-//! Reads public account identity through the official Codex CLI's local stdio
-//! server. No token files, login requests, refreshes or provider HTTP exist here.
+//! Interprets public Claude status and reads Codex identity through its local
+//! stdio server. No token files, login requests, refreshes or provider HTTP exist here.
 
 use serde_json::{json, Value};
 use std::path::Path;
 use std::process::Stdio;
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+
+type ClaudeAccountStatus = (bool, Option<String>, Option<String>, Option<String>);
+
+pub(super) fn claude_account(output: &str) -> Option<ClaudeAccountStatus> {
+    let value: Value = serde_json::from_str(output).ok()?;
+    let configured = value.get("loggedIn")?.as_bool()?;
+    // loggedIn reports available credentials (including gateway tokens), not
+    // remote validation. A signed-out status must not retain a stale identity.
+    Some(if configured {
+        (
+            true,
+            public_text(value.get("authMethod")),
+            public_text(value.get("email")),
+            public_text(value.get("subscriptionType")),
+        )
+    } else {
+        (false, None, None, None)
+    })
+}
+
+#[cfg(test)]
+pub(super) fn assert_claude_account_contract() {
+    for method in ["oauth_token", "claude.ai", "api_key"] {
+        let status =
+            claude_account(&json!({"loggedIn":true,"authMethod":method}).to_string()).unwrap();
+        assert!(status.0);
+        assert_eq!(status.1.as_deref(), Some(method));
+        assert!(status.2.is_none());
+    }
+    assert_eq!(
+        claude_account(r#"{"loggedIn":false,"email":"stale@example.com"}"#),
+        Some((false, None, None, None))
+    );
+    for invalid in ["", "not JSON", "{}", r#"{"loggedIn":"true"}"#] {
+        assert!(claude_account(invalid).is_none());
+    }
+}
 
 pub(super) fn public_text(value: Option<&Value>) -> Option<String> {
     value
@@ -19,7 +56,7 @@ pub(super) async fn codex_account(
 ) -> Option<(String, Option<String>, Option<String>)> {
     let mut command = super::cli_probe::quiet_command(binary);
     command.args(["app-server", "--stdio"]);
-    super::cli_probe::apply_probe_environment(&mut command);
+    super::cli_probe::apply_probe_environment(&mut command, dopedb_protocol::AcpPluginId::Codex);
     command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

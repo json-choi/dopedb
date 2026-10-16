@@ -15,7 +15,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import type { CatalogTable } from "../../ipc/types";
 import { errMessage } from "../../ipc/types";
 import { useI18n } from "../../lib/i18n";
-import { AGENT_SETUP_URLS } from "../../lib/externalLinks";
+import { AGENT_SETUP_URLS, CLAUDE_AUTH_SETUP_URL } from "../../lib/externalLinks";
 import { useCatalogScope } from "../../lib/queries";
 import type { ConnectionProfile } from "../connections/domain";
 import type { KnowledgeEnvironmentFocus } from "../knowledge/domain";
@@ -560,7 +560,8 @@ export function useAcpChatController({
   async function openSetupGuide(provider: AgentProvider) {
     setError(null);
     try {
-      await openUrl(AGENT_SETUP_URLS[provider]);
+      const installed = cliStatusQuery.data?.some((cli) => cli.id === provider && cli.installed);
+      await openUrl(provider === "claude" && installed ? CLAUDE_AUTH_SETUP_URL : AGENT_SETUP_URLS[provider]);
     } catch (reason) {
       setError(agentFailure(reason, t, (error) => t("agent.acpSetupActionFailed", { error })));
     }

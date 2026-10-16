@@ -60,6 +60,25 @@ impl AcpPluginId {
         }
     }
 
+    /// Names only: the status probe and launcher preserve the same CLI-owned
+    /// configuration. Values must never enter IPC, logs, or app persistence.
+    /// Keep this provider-scoped; never inherit arbitrary credentials or hooks.
+    pub const fn local_cli_configuration_environment(self) -> &'static [&'static str] {
+        match self {
+            Self::Claude => &[
+                "CLAUDE_CONFIG_DIR",
+                "ANTHROPIC_BASE_URL",
+                "ANTHROPIC_AUTH_TOKEN",
+                "ANTHROPIC_API_KEY",
+                "ANTHROPIC_MODEL",
+                "ANTHROPIC_DEFAULT_OPUS_MODEL",
+                "ANTHROPIC_DEFAULT_SONNET_MODEL",
+                "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+            ],
+            Self::Codex => &["CODEX_HOME"],
+        }
+    }
+
     pub const fn upstream_repository(self) -> &'static str {
         match self {
             Self::Claude => "https://github.com/agentclientprotocol/claude-agent-acp",

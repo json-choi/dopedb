@@ -98,7 +98,7 @@ export function createErdSvg(
                 `<text x="${position.x + 16}" y="${position.y + 67 + index * 24}" fill="${ERD_EXPORT_PALETTE.columnName}" font-size="12" font-family="ui-monospace, monospace">${escapeXml(column.name)}<tspan x="${position.x + NODE_WIDTH - 16}" text-anchor="end" fill="${ERD_EXPORT_PALETTE.columnType}">${escapeXml(column.nativeType)}</tspan></text>`,
             )
             .join("");
-      return `<g><rect x="${position.x}" y="${position.y}" width="${NODE_WIDTH}" height="${height}" rx="8" fill="${ERD_EXPORT_PALETTE.nodeSurface}" stroke="${ERD_EXPORT_PALETTE.nodeBorder}"/><text x="${position.x + 16}" y="${position.y + 34}" fill="${ERD_EXPORT_PALETTE.nodeTitle}" font-size="14" font-weight="600" font-family="ui-sans-serif, sans-serif">${label}</text>${columns}</g>`;
+      return `<g><rect x="${position.x}" y="${position.y}" width="${NODE_WIDTH}" height="${height}" rx="8" fill="${ERD_EXPORT_PALETTE.nodeSurface}" stroke="${ERD_EXPORT_PALETTE.nodeBorder}"/><text x="${position.x + 16}" y="${position.y + 34}" fill="${ERD_EXPORT_PALETTE.nodeTitle}" font-size="14" font-weight="600" font-family="'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif">${label}</text>${columns}</g>`;
     })
     .join("");
   return `<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg" width="${frame.width}" height="${frame.height}" viewBox="${frame.minX} ${frame.minY} ${frame.width} ${frame.height}"><rect x="${frame.minX}" y="${frame.minY}" width="${frame.width}" height="${frame.height}" fill="${ERD_EXPORT_PALETTE.canvas}"/>${edges}${nodes}</svg>`;

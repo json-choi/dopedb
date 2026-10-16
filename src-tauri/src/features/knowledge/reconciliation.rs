@@ -3,10 +3,10 @@
 //! Generic read entry points never reconcile access or mutate grants/Environment
 //! bindings. Project inventory reads may refresh their bounded local copy of remote
 //! Projects. Agent entry points (session start, the Agent Environment list, and
-//! `dopedb agent start`) reconcile deliberately before consuming hosted authority
-//! and receive a bounded receipt; transport layers do not reach into one another
-//! to trigger it. A failed sync is tolerated only in a Personal workspace with no
-//! hosted (GitHub) source, where no local state depends on hosted grants.
+//! `dopedb agent start`) reconcile deliberately, and only when they consume hosted
+//! authority: Team access, or a selected hosted source. Personal databases stay
+//! device-owned even with a selected account. A required sync that fails is never
+//! turned into an offline fallback.
 
 use std::collections::BTreeSet;
 
@@ -100,14 +100,14 @@ where
     })
 }
 
-/// Whether an Agent may proceed after hosted access sync failed. Team access is
-/// always hosted-governed; Personal access depends on hosted grants only through
-/// hosted (GitHub) Knowledge sources.
-pub(crate) fn hosted_sync_failure_is_tolerable(
+/// Whether an Agent entry point consumes hosted authority and so must reconcile
+/// first. Team access is always hosted-governed; Personal access depends on hosted
+/// grants only through a selected hosted (GitHub) source.
+pub(crate) fn agent_entry_requires_hosted_reconciliation(
     kind: WorkspaceKind,
-    has_hosted_source: bool,
+    selects_hosted_source: bool,
 ) -> bool {
-    kind == WorkspaceKind::Personal && !has_hosted_source
+    kind == WorkspaceKind::Team || selects_hosted_source
 }
 
 fn selected_remote_account(scope: &ActiveResourceScope) -> AppResult<AccountId> {

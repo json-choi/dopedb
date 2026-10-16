@@ -259,11 +259,16 @@ async fn issue_session(
         .knowledge
         .pin_connection_for_read(config.anchor_connection_id)
         .await?;
-    if anchor.scope.selected_account_id.is_some() {
-        services
-            .knowledge
-            .reconcile_access_for_agent(&anchor)
-            .await?;
+    // The same rule as Desktop Agent entry points: Personal databases are
+    // device-owned, while Team access and selected hosted sources must sync.
+    if crate::features::knowledge::agent_entry_requires_hosted_reconciliation(
+        anchor.scope.workspace_kind,
+        config
+            .resource_scopes
+            .iter()
+            .any(|scope| !scope.source_ids.is_empty()),
+    ) {
+        services.knowledge.reconcile_access_for_agent().await?;
         anchor = services
             .knowledge
             .pin_connection_for_read(config.anchor_connection_id)

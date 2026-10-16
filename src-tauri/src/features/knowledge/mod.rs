@@ -14,7 +14,9 @@ pub(crate) mod transport;
 
 pub(crate) use adapters::local::LocalFolderAdapter;
 pub(crate) use ports::{PinnedSourceAuthority, PinnedSourceReadRequest, PinnedSourceSearchRequest};
-pub(crate) use reconciliation::KnowledgeAccessReconciliation;
+pub(crate) use reconciliation::{
+    agent_entry_requires_hosted_reconciliation, KnowledgeAccessReconciliation,
+};
 pub(crate) use runtime_adapter::{KeychainKnowledgeSourceRoot, TauriKnowledgeSourceEventSink};
 pub(crate) use source_sync::KnowledgeSourceSynchronizer;
 
@@ -37,5 +39,4 @@ pub(crate) mod test_support {
         KnowledgeGrantPort, KnowledgeGraphRepositoryPort, KnowledgeMappingRepositoryPort,
         KnowledgeRepositoryPort, KnowledgeScopeRepositoryPort,
     };
-    pub(crate) use super::reconciliation::hosted_sync_failure_is_tolerable;
 }

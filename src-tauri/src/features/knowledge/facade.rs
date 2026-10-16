@@ -50,59 +50,31 @@ where
         self.repository.active_resource_scope().await
     }
 
-    /// Reconcile hosted access before an Agent entry point consumes it. A
-    /// connection with no selected account needs no hosted authority. A failed
-    /// sync is tolerated only in a Personal workspace that, re-read after the
-    /// failure, holds no hosted (GitHub) source; otherwise it fails closed with
-    /// the stable `knowledge_access_sync_failed` code and the original detail.
-    pub(crate) async fn reconcile_access_for_agent(
-        &self,
-        connection: &PinnedConnection,
-    ) -> AppResult<()> {
-        if connection.scope.selected_account_id.is_none() {
-            return Ok(());
+    /// Reconcile hosted access for an Agent entry point that consumes it (see
+    /// [`super::reconciliation::agent_entry_requires_hosted_reconciliation`]).
+    /// Every failure fails closed. A hosted control-plane failure (server error or
+    /// offline) carries the stable `knowledge_access_sync_failed` code before the
+    /// original detail; sign-in, policy, and configuration errors keep their kind.
+    pub(crate) async fn reconcile_access_for_agent(&self) -> AppResult<()> {
+        match self.reconcile_current_access().await {
+            Ok(receipt) => {
+                tracing::debug!(
+                    projects = receipt.projects.len(),
+                    grants = receipt.grant_count,
+                    environment_bindings = receipt.environment_binding_count,
+                    "reconciled exact Project Knowledge access"
+                );
+                Ok(())
+            }
+            Err(AppError::Network(detail)) => Err(AppError::Network(format!(
+                "{KNOWLEDGE_ACCESS_SYNC_FAILED}\n{detail}"
+            ))),
+            Err(error) => Err(error),
         }
-        let error = match self.reconcile_current_access().await {
-            Ok(_) => return Ok(()),
-            Err(error) => error,
-        };
-        let has_hosted_source = self
-            .scopes(connection.scope.workspace_id)
-            .await?
-            .iter()
-            .any(|scope| scope.binding.provider == KnowledgeSourceProvider::Github);
-        if super::reconciliation::hosted_sync_failure_is_tolerable(
-            connection.scope.workspace_kind,
-            has_hosted_source,
-        ) {
-            tracing::warn!(
-                %error,
-                "hosted Project Knowledge access sync failed; continuing with local-only Personal resources"
-            );
-            return Ok(());
-        }
-        Err(AppError::Network(format!(
-            "{KNOWLEDGE_ACCESS_SYNC_FAILED}\n{error}"
-        )))
     }
 
-    /// Reconcile hosted grants and Environment bindings explicitly before an
-    /// Agent or graph workflow consumes them. Generic read transports never
-    /// trigger this mutation implicitly; Agent entry points use
-    /// [`Self::reconcile_access_for_agent`].
-    pub(crate) async fn reconcile_current_access(
-        &self,
-    ) -> AppResult<KnowledgeAccessReconciliation> {
-        let receipt =
-            super::reconciliation::reconcile_current_access(&self.repository, &self.authority)
-                .await?;
-        tracing::debug!(
-            projects = receipt.projects.len(),
-            grants = receipt.grant_count,
-            environment_bindings = receipt.environment_binding_count,
-            "reconciled exact Project Knowledge access"
-        );
-        Ok(receipt)
+    async fn reconcile_current_access(&self) -> AppResult<KnowledgeAccessReconciliation> {
+        super::reconciliation::reconcile_current_access(&self.repository, &self.authority).await
     }
 
     pub(crate) async fn knowledge_projects(

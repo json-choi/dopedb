@@ -25,6 +25,12 @@ body {
   -webkit-font-smoothing: auto;
 }
 
+/* Without Preflight, WebView controls default to the OS UI font. Inherit the
+   family only, so existing control sizes stay with their own rules. */
+:where(button, input, select, textarea, optgroup) {
+  font-family: inherit;
+}
+
 #root {
   min-height: 100dvh;
   background: transparent;
