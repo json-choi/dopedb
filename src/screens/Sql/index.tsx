@@ -2,10 +2,11 @@
 // execution results and output occupy the central document.
 // Multi-statement scripts execute through the backend script runner and preserve
 // per-statement results. ⌘↩ and the toolbar Run both run the selection when there
-// is one ("Run selection"), otherwise the whole draft; ⌘. / Ctrl+. cancels a run.
-// The editor and the result view stay mounted side by side so switching keeps
-// scroll, widths, zoom, and filter.
-import { useEffect, useRef, useState } from "react";
+// is one ("Run selection"), otherwise choose current statement/all for a script;
+// ⌘. / Ctrl+. cancels a run.
+// The editor stays above its results in a resizable split. Executing updates
+// results without hiding the editor or moving focus away from the query.
+import { useEffect } from "react";
 import { StatusBadge } from "../../design-system/components/Status";
 import QueryResultsPane from "../../features/queryServices/QueryResultsPane";
 import type { QueryServiceStore } from "../../features/queryServices/store";
@@ -20,6 +21,7 @@ import {
   WorkbenchToolbar,
 } from "../../design-system/components/Workbench";
 import ManualTransactionControls from "../../features/queries/ManualTransactionControls";
+import SqlResultSplit from "../../features/queries/SqlResultSplit";
 import type { SqlResolveMode } from "../../features/queries/resolveMode";
 import {
   useSqlWorkbenchController,
@@ -29,6 +31,7 @@ import { databaseDisplayLabel } from "../../features/connections/domain";
 import { useI18n } from "../../lib/i18n";
 import SqlDocumentDetails from "./SqlDocumentDetails";
 import SqlParameterDialog from "./SqlParameterDialog";
+import SqlRunMenu from "./SqlRunMenu";
 
 const IS_MAC =
   typeof navigator !== "undefined" &&
@@ -40,15 +43,6 @@ export default function Sql(props: Omit<SqlWorkbenchProps, "onShowResult"> & {
   onOpenSafety: (connectionId: string) => void;
 }) {
   const { t } = useI18n();
-  const [view, setView] = useState<"editor" | "result">("editor");
-  const editorRegionRef = useRef<HTMLDivElement>(null);
-  const resultRegionRef = useRef<HTMLDivElement>(null);
-  // Focus follows the view a keyboard run or a jump-to-error switched to; it is
-  // applied after the target view becomes visible.
-  const [focusRequest, setFocusRequest] = useState<{
-    view: "editor" | "result";
-    serial: number;
-  } | null>(null);
   const {
     connection,
     safety,
@@ -108,31 +102,12 @@ export default function Sql(props: Omit<SqlWorkbenchProps, "onShowResult"> & {
     planErr,
     resolveModeHint,
     running,
+    runChooser,
     setDraft,
   } = useSqlWorkbenchController({
     ...props,
-    onShowResult: (sessionId) => {
-      props.resultStore.activate(sessionId);
-      // A run started from the editor hides it; keep focus on what replaced it.
-      const fromEditor = editorRegionRef.current?.contains(document.activeElement);
-      setView("result");
-      if (fromEditor) {
-        setFocusRequest((current) => ({
-          view: "result",
-          serial: (current?.serial ?? 0) + 1,
-        }));
-      }
-    },
+    onShowResult: (sessionId) => props.resultStore.activate(sessionId),
   });
-
-  useEffect(() => {
-    if (!focusRequest || focusRequest.view !== view) return;
-    if (view === "result") {
-      resultRegionRef.current?.focus({ preventScroll: true });
-    } else {
-      jumpToError();
-    }
-  }, [focusRequest, jumpToError, view]);
 
   // ⌘. (macOS) / Ctrl+. cancels this document's run from anywhere while it runs.
   useEffect(() => {
@@ -157,13 +132,7 @@ export default function Sql(props: Omit<SqlWorkbenchProps, "onShowResult"> & {
           sessionId: latestSessionId,
           line: errorLocation.line,
           column: errorLocation.column,
-          jump: () => {
-            setView("editor");
-            setFocusRequest((current) => ({
-              view: "editor",
-              serial: (current?.serial ?? 0) + 1,
-            }));
-          },
+          jump: jumpToError,
         }
       : null;
 
@@ -222,10 +191,7 @@ export default function Sql(props: Omit<SqlWorkbenchProps, "onShowResult"> & {
                   : t("sql.explainTitle")
             }
             aria-label={t("sql.explain")}
-            onClick={() => {
-              setView("editor");
-              explain();
-            }}
+            onClick={explain}
           >
             <Icon name={explaining ? "refresh" : "target"} />
           </WorkbenchButton>
@@ -294,20 +260,6 @@ export default function Sql(props: Omit<SqlWorkbenchProps, "onShowResult"> & {
           aria-keyshortcuts={IS_MAC ? "Meta+." : "Control+."}
         >
           <Icon name="stop" />
-        </WorkbenchButton>
-        <WorkbenchButton
-          active={view === "editor"}
-          aria-pressed={view === "editor"}
-          onClick={() => setView("editor")}
-        >
-          SQL
-        </WorkbenchButton>
-        <WorkbenchButton
-          active={view === "result"}
-          aria-pressed={view === "result"}
-          onClick={() => setView("result")}
-        >
-          {t("services.resultTab")}
         </WorkbenchButton>
         <WorkbenchButton
           iconOnly
@@ -387,14 +339,7 @@ export default function Sql(props: Omit<SqlWorkbenchProps, "onShowResult"> & {
           </span>
         ) : null}
       </WorkbenchToolbar>
-      <div className="tw:grid tw:min-h-0 tw:flex-1 tw:grid-cols-1 tw:grid-rows-1">
-      <div
-        ref={editorRegionRef}
-        data-active={view === "editor"}
-        inert={view !== "editor" ? true : undefined}
-        className="tw:col-start-1 tw:row-start-1 tw:flex tw:min-h-0 tw:flex-col tw:overflow-hidden tw:data-[active=false]:invisible"
-        data-sql-editor-view
-      >
+      <SqlResultSplit editor={
         <WorkbenchContainedBody>
           <div
             data-workbench-scroll-owner="sql-editor"
@@ -416,6 +361,7 @@ export default function Sql(props: Omit<SqlWorkbenchProps, "onShowResult"> & {
               onEditorReady={handleEditorReady}
               onBlur={flushEditorState}
               executionStatus={editorExecutionStatus}
+              previewSource={runChooser.previewSource}
               errorRange={errorLocation}
               ariaLabel={t("sql.editorLabel", {
                 connection: connection.name || t("app.unnamed"),
@@ -435,16 +381,7 @@ export default function Sql(props: Omit<SqlWorkbenchProps, "onShowResult"> & {
             onClosePlan={closePlan}
           />
         </WorkbenchContainedBody>
-      </div>
-      <div
-        ref={resultRegionRef}
-        role="region"
-        aria-label={t("sql.resultsRegion")}
-        tabIndex={-1}
-        data-active={view === "result"}
-        inert={view !== "result" ? true : undefined}
-        className="tw:col-start-1 tw:row-start-1 tw:flex tw:min-h-0 tw:flex-col tw:overflow-hidden tw:outline-none tw:data-[active=false]:invisible"
-      >
+      } result={
         <QueryResultsPane
           store={props.resultStore}
           connection={connection}
@@ -454,8 +391,8 @@ export default function Sql(props: Omit<SqlWorkbenchProps, "onShowResult"> & {
           onOpenActivity={onOpenHistory}
           errorNavigation={errorNavigation}
         />
-      </div>
-      </div>
+      } />
+      <SqlRunMenu chooser={runChooser} />
       {parameterDialog ? (
         <SqlParameterDialog
           parameters={parameterDialog.parameters}

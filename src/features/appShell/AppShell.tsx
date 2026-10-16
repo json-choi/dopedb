@@ -467,7 +467,7 @@ function Shell() {
             showWelcome: commands.route.showWelcome,
             activateDocument: commands.documents.activateId,
             restoreDocument: commands.documents.restoreDraft,
-            newQuery: commands.documents.newQuery,
+            newQuery: commands.documents.openQuery,
           },
           agent: {
             toggle: showAgentDock ? agentDock.close : openOrFocusAgentDock,
