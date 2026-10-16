@@ -428,8 +428,10 @@ pub(crate) fn assert_cli_environment_contract() {
     assert!(directories.contains(&PathBuf::from("/fixture/volta/bin")));
     assert!(directories.contains(&PathBuf::from("/fixture/program-files/nodejs")));
 
+    // `Path::join` inserts `\` on Windows, so the Unix fixtures match on `/`.
+    let fixture_key = |path: &Path| path.to_str().map(|path| path.replace('\\', "/"));
     let children = |directory: &Path| -> Vec<PathBuf> {
-        let names: &[&str] = match directory.to_str() {
+        let names: &[&str] = match fixture_key(directory).as_deref() {
             Some("/opt/homebrew/opt") => &["node@22", "openssl@3", "node@24", "node"],
             Some("/fixture/home/.nvm/versions/node") => &["v22.9.0", "v20.19.0", "v22.10.0"],
             Some("/fixture/asdf/installs/nodejs") => &["20.11.0", "22.2.0"],
@@ -437,7 +439,7 @@ pub(crate) fn assert_cli_environment_contract() {
         };
         names.iter().map(|name| directory.join(name)).collect()
     };
-    let read_text = |file: &Path| match file.to_str() {
+    let read_text = |file: &Path| match fixture_key(file).as_deref() {
         Some("/fixture/home/.nvm/alias/default") => Some("lts/jod\n".to_owned()),
         Some("/fixture/home/.nvm/alias/lts/jod") => Some("22.9\n".to_owned()),
         _ => None,

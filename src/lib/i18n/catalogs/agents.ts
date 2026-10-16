@@ -494,6 +494,7 @@ export const agentsCatalog = defineCatalog(
     "agentTools.pluginUpdateDescription":
       "Signed release {release} is available for adapter {version}. The current adapter remains active until you install it.",
     "agentTools.pluginProgress": "Preparing {provider}",
+    "agentTools.pluginFailureDetail": "Prepare this Agent again to repair its chat connection. Reason: {reason}",
     "agentTools.pluginStagedDescription":
       "The signed adapter is installed. Its first successful chat promotes it to the active version.",
     "agentTools.pluginState.notInstalled": "Not installed",
@@ -1079,6 +1080,7 @@ export const agentsCatalog = defineCatalog(
     "agentTools.pluginUpdateDescription":
       "어댑터 {version}용 서명 릴리스 {release}을 설치할 수 있습니다. 설치하기 전까지 현재 어댑터가 계속 사용됩니다.",
     "agentTools.pluginProgress": "{provider} 준비 중",
+    "agentTools.pluginFailureDetail": "채팅 연결을 복구하려면 이 Agent를 다시 준비하세요. 사유: {reason}",
     "agentTools.pluginStagedDescription":
       "서명된 어댑터가 설치되었습니다. 첫 채팅이 정상적으로 시작되면 활성 버전으로 확정됩니다.",
     "agentTools.pluginState.notInstalled": "설치되지 않음",
