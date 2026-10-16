@@ -14,7 +14,10 @@
     "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
     system-ui, Roboto, "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo",
     "Noto Sans KR", "Malgun Gothic", sans-serif;
-  --ds-font-serif: Georgia, "Iowan Old Style", "Palatino Linotype", "AppleMyungjo", Batang, serif;
+  /* The display role keeps its serif name for Tailwind, but every surface uses Pretendard. */
+  --ds-font-serif:
+    "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
+    system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   --ds-font-mono:
     "SF Mono", SFMono-Regular, ui-monospace, "Cascadia Code", Menlo, Consolas,
     "Liberation Mono", monospace;

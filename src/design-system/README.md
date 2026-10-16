@@ -223,7 +223,15 @@ color를 거부한다.
   package `pretendard`의 dynamic-subset Variable WOFF2를 고정 버전으로 포함하며
   CDN이나 설치된 시스템 폰트에 의존하지 않는다. 같은 UI 글꼴을 Desktop,
   Workspace, 소개 사이트에서 사용한다.
-- Serif: `--ds-font-serif`. 브랜드와 별도로 정한 editorial surface에 사용한다. Article은 sans 제목·heading으로 지표와 같은 읽기 흐름을 유지한다.
+- Display: `--ds-font-serif`(`tw:font-serif`). 이름만 serif이고 값은 Pretendard
+  display stack이다. 워드마크와 브랜드 제목에 사용하며 Workspace Web의
+  `--font-workspace-display`와 같은 글꼴을 쓴다. Article은 sans 제목·heading으로
+  지표와 같은 읽기 흐름을 유지한다.
+- Form control: Preflight가 없으므로 `system.css`의 전역 reset이 `button`,
+  `input`, `select`, `textarea`, `optgroup`에 `font-family: inherit`를 준다.
+  raw control도 OS 기본 UI 글꼴 대신 Pretendard를 상속한다.
+- ERD SVG export는 Pretendard 우선 stack을 직접 적는다. 보는 쪽에 Pretendard가
+  없으면 OS sans-serif로 대체된다.
 - Mono: `--ds-font-mono`. 경로, SQL, 값, 식별자, 숫자 비교에 사용한다.
 - Body: 15px.
 - Dense UI: 14px.
