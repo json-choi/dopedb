@@ -6,6 +6,8 @@ import type { AgentProvider } from "../agents/domain";
 import type { SkillTarget } from "../../ipc/types";
 
 const STORAGE_KEY = "dopedb.agent-providers.v1";
+/** Set by "Later" so the startup prompt stops covering every launch. */
+const SETUP_DEFERRED_KEY = "dopedb.agent-setup-deferred.v1";
 const CHANGE_EVENT = "dopedb:agent-providers-changed";
 export const OPEN_AGENT_SETUP_EVENT = "dopedb:open-agent-setup";
 
@@ -29,6 +31,23 @@ export const SUPPORTED_AGENT_TARGETS = [
 export function hasSavedAgentTargets() {
   if (typeof localStorage === "undefined") return false;
   return localStorage.getItem(STORAGE_KEY) !== null;
+}
+
+export function agentSetupDeferred() {
+  try {
+    return localStorage.getItem(SETUP_DEFERRED_KEY) !== null;
+  } catch {
+    return false;
+  }
+}
+
+/** Agent setup stays reachable from the Agent panel and Settings afterwards. */
+export function deferAgentSetup() {
+  try {
+    localStorage.setItem(SETUP_DEFERRED_KEY, "1");
+  } catch {
+    // Unavailable storage only means the prompt returns on the next launch.
+  }
 }
 
 export function loadAgentTargets(): SkillTarget[] {

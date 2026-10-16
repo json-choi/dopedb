@@ -97,6 +97,7 @@ import {
 } from "../connections/options";
 import {
   blankConnection,
+  defaultConnectionName,
   demoSqliteConnection,
   findDemoSqliteConnection,
 } from "../connections/presets";
@@ -239,6 +240,10 @@ describe("workbench state ownership", () => {
       code: "authentication",
       field: "credentials",
     }, managedManager)).toBeNull();
+    expect(connectionTestFailureTarget({
+      code: "authenticationIdentity",
+      field: "credentials",
+    })).toEqual({ tab: "general", fieldId: "connection-username" });
     expect(CONNECTION_TEST_FAILURE_CODES).toEqual([
       "sshClientMissing",
       "sshConfiguration",
@@ -249,6 +254,7 @@ describe("workbench state ownership", () => {
       "sshUnknown",
       "timeoutNetwork",
       "authentication",
+      "authenticationIdentity",
       "tls",
       "databaseConfig",
       "unknown",
@@ -973,9 +979,15 @@ describe("workbench state ownership", () => {
       capabilities: ["sql"],
       recommended: true,
     };
-    const nameless = { ...blankConnection(), database: "app" };
+    // An unnamed draft is saved under its endpoint name; only a draft without
+    // an endpoint still asks for one, and that never blocks a server check.
+    const nameless = { ...blankConnection(), database: "app", username: "app" };
+    expect(defaultConnectionName(nameless)).toBe("PostgreSQL localhost:5432");
+    expect(
+      diagnoseConnection(nameless, [], [postgresDriver], false, false),
+    ).toEqual([]);
     const namelessDiagnostics = diagnoseConnection(
-      nameless,
+      { ...nameless, host: "" },
       [],
       [postgresDriver],
       false,
@@ -983,13 +995,20 @@ describe("workbench state ownership", () => {
     );
     expect(namelessDiagnostics.map(({ code }) => code)).toEqual([
       "nameRequired",
+      "hostRequired",
     ]);
-    expect(namelessDiagnostics.some(connectionDiagnosticBlocksTest)).toBe(
-      false,
-    );
-    expect(
-      namelessDiagnostics.some(({ tone }) => tone === "danger"),
-    ).toBe(true);
+    expect(connectionDiagnosticBlocksTest(namelessDiagnostics[0]!)).toBe(false);
+    // PostgreSQL and MySQL refuse an empty user at the handshake, so a personal
+    // draft must name the role before a check; managed profiles are exempt.
+    for (const engine of ["postgres", "mysql"] as const) {
+      const userless = { ...nameless, engine, username: " " };
+      const userDiagnostics = diagnoseConnection(userless, [], [], false, true);
+      expect(userDiagnostics.map(({ code }) => code)).toEqual(["usernameRequired"]);
+      expect(userDiagnostics.some(connectionDiagnosticBlocksTest)).toBe(true);
+      expect(
+        diagnoseConnection({ ...userless, username: "", credentialMode: "managed" }, [], [], false, true),
+      ).toEqual([]);
+    }
 
     // Server discovery/testing can use a default database, but the saved grant
     // must name a target accepted by the native runtime's 255-byte contract.
@@ -1015,6 +1034,7 @@ describe("workbench state ownership", () => {
     const mongo = switchConnectionSource(
       {
         ...nameless,
+        username: "",
         driverId: postgresDriver.id,
         extraParams: {
           "dopedb.timeZone": "UTC",

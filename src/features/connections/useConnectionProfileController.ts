@@ -25,6 +25,7 @@ import {
 } from "./connectionTestFailure";
 import { formatConnectionUrl } from "./connectionUrl";
 import { connectionId, type ConnectionProfile } from "./domain";
+import { defaultConnectionName } from "./presets";
 import {
   CONNECTION_INPUT_MODE_PARAMETER,
 } from "./options";
@@ -120,16 +121,20 @@ export function useConnectionProfileController({
     status.setRunning(closeEditor ? "save" : "apply");
     status.setMessage(null);
     status.setTestFailure(null);
+    // The Name placeholder shows the endpoint name an unnamed draft is saved under.
+    const draft = form.value.name.trim()
+      ? form.value
+      : { ...form.value, name: defaultConnectionName(form.value) };
     let saved: ConnectionProfile;
     try {
       saved = isSharedTemplate
         ? await updateWorkspaceConnection({
-            ...form.value,
+            ...draft,
             readonlyDefault: true,
             allowWrites: false,
           })
         : await upsertConnection(
-            form.value,
+            draft,
             credentials.password || undefined,
             credentials.clearStoredPassword && !credentials.password,
           );

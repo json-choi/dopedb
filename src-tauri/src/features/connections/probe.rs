@@ -84,6 +84,10 @@ pub(crate) enum ConnectionTestFailureCode {
     SshUnknown,
     TimeoutNetwork,
     Authentication,
+    /// The server refused the role itself, not its secret. PostgreSQL SQLSTATE
+    /// 28000 covers a missing role, an empty user name, and a `pg_hba.conf`
+    /// rule that rejects this user or address.
+    AuthenticationIdentity,
     Tls,
     DatabaseConfig,
     Unknown,
@@ -270,6 +274,14 @@ fn classify_database_identity(
     ConnectionTestFailureCode,
     Option<ConnectionTestFailureField>,
 ) {
+    // MySQL reports a wrong password (1045) under SQLSTATE 28000 as well, so
+    // only a PostgreSQL rejection is classified as an identity failure.
+    if sqlstate == Some("28000") && mysql_number.is_none() {
+        return (
+            ConnectionTestFailureCode::AuthenticationIdentity,
+            Some(ConnectionTestFailureField::Credentials),
+        );
+    }
     if sqlstate.is_some_and(|code| code.starts_with("28"))
         || matches!(mysql_number, Some(1_044 | 1_045))
     {
@@ -458,6 +470,24 @@ pub(crate) fn assert_connection_test_failure_contract() {
             ConnectionTestFailureCode::Authentication,
             Some(ConnectionTestFailureField::Credentials),
         ),
+    );
+    assert_eq!(
+        classify_database_identity(Some("28000"), None),
+        (
+            ConnectionTestFailureCode::AuthenticationIdentity,
+            Some(ConnectionTestFailureField::Credentials),
+        ),
+    );
+    assert_eq!(
+        classify_database_identity(Some("28000"), Some(1_045)),
+        (
+            ConnectionTestFailureCode::Authentication,
+            Some(ConnectionTestFailureField::Credentials),
+        ),
+    );
+    assert_eq!(
+        serde_json::to_value(ConnectionTestFailureCode::AuthenticationIdentity).unwrap(),
+        serde_json::json!("authenticationIdentity"),
     );
     assert_eq!(
         classify_database_identity(Some("08006"), None).0,
