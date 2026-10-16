@@ -232,6 +232,9 @@ color를 거부한다.
   raw control도 OS 기본 UI 글꼴 대신 Pretendard를 상속한다.
 - ERD SVG export는 Pretendard 우선 stack을 직접 적는다. 보는 쪽에 Pretendard가
   없으면 OS sans-serif로 대체된다.
+- 알려진 예외: Agent 응답의 Mermaid 다이어그램은 `font-src`가 없는 격리 iframe에
+  그려지므로 OS에 Pretendard가 없으면 라벨이 OS sans-serif로 표시된다. native
+  `select` popup 목록도 OS가 그린다.
 - Mono: `--ds-font-mono`. 경로, SQL, 값, 식별자, 숫자 비교에 사용한다.
 - Body: 15px.
 - Dense UI: 14px.
