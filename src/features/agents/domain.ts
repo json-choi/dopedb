@@ -66,6 +66,8 @@ export type AgentComposerRequest = {
   connectionId: ConnectionId;
   projectEnvironmentId: string;
   prompt: string;
+  /** The requested write target; null keeps the handoff read-only. */
+  writeConnectionId: ConnectionId | null;
 };
 
 export type AcpSessionLifecycle =

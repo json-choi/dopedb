@@ -73,6 +73,8 @@ type ShellLayoutModel = {
   agent: {
     open: boolean;
     composerRequest: AgentComposerRequest | null;
+    /** Clears the handoff once the panel sent, rejected, or cancelled it. */
+    settleComposerRequest: (requestId: string) => void;
     width: number;
     buttonRef: RefObject<HTMLButtonElement | null>;
     returnFocusRef: RefObject<HTMLElement | null>;
@@ -480,6 +482,7 @@ function ShellLayoutContent({ model, commands }: Props) {
           connection={workspace.selected}
           connections={workspace.connections}
           composerRequest={agent.composerRequest}
+          onComposerRequestSettled={agent.settleComposerRequest}
           knowledgeFocus={explorer.knowledgeFocus}
           documents={workbench.documents}
           activeDocumentId={workbench.activeDocumentId}

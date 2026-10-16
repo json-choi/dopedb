@@ -280,7 +280,13 @@ export default function AnalysisArticles({
           <WorkbenchEmptyState icon="chart">
             <strong>{projectName}</strong>
             <span>{t("analysis.simpleEmptyBody")}</span>
+            {controller.staleAgentBinding && onOpenAgent && controller.canManageBindings ? <span>{t("analysis.emptyBindingStale")}</span> : null}
             <span className="tw:flex tw:flex-wrap tw:items-center tw:justify-center tw:gap-2">
+              {controller.staleAgentBinding && onOpenAgent && controller.canManageBindings ? (
+                <Button variant="primary" disabled={controller.reconfirmingBinding} onClick={controller.reconfirmForAgent}>
+                  <Icon name="refresh" /> {t(controller.reconfirmingBinding ? "analysis.reconfirmingBinding" : "analysis.reconfirmForAgent")}
+                </Button>
+              ) : null}
               {controller.agentBinding?.connectionId && onOpenAgent ? (
                 <Button variant="primary" onClick={controller.askAgent}>
                   <Icon name="terminal" /> {t("analysis.askAgent")}

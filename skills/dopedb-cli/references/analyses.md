@@ -18,9 +18,10 @@ session.
    result columns. Use that same database's declared role.
 3. Call `analysis_article_verify` to validate and execute that definition
    through the same exact-grant read runtime.
-4. After successful verification, use `analysis_article_propose` to create and
-   share a new Article, or `analysis_article_update` with the exact expected
-   revision.
+4. After successful verification, use `analysis_article_propose` to create a
+   new Article (saved privately on this device in a Personal workspace, shared
+   with the workspace in a Team workspace), or `analysis_article_update` with
+   the exact expected revision.
 
 The Agent cannot schedule refreshes, share query rows, or publish/revoke the
 external HTML page. Those actions remain outside the Agent; reruns and publishing

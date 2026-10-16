@@ -15,6 +15,10 @@ export function ownsAcpComposerRequest(
   return isLiveSession(session.lifecycle) && session.knowledgeScopes.some((scope) =>
     scope.projectEnvironmentId === request.projectEnvironmentId
     && scope.connections.some((connection) => connection.connectionId === request.connectionId),
+  ) && (
+    // A read-only session never swallows a handoff that needs a write target.
+    request.writeConnectionId === null
+    || session.writeConnectionId === request.writeConnectionId
   );
 }
 

@@ -32,6 +32,7 @@ export default function Onboarding({
   onCreateDemoDatabase,
   onNewConnection,
   onNewQuery,
+  onResumeGuidedDemo,
   onUseLocalListener,
 }: {
   connectionName?: string;
@@ -50,6 +51,8 @@ export default function Onboarding({
   onCreateDemoDatabase?: () => void;
   onNewConnection: () => void;
   onNewQuery?: () => void;
+  /** Returns to the existing guided demo from another connection's Welcome. */
+  onResumeGuidedDemo?: () => void;
 }) {
   const { t } = useI18n();
   const connected = Boolean(connectionName);
@@ -86,6 +89,14 @@ export default function Onboarding({
       label: t("ide.action.newQuery"),
       onClick: onNewQuery,
     });
+    if (onResumeGuidedDemo) {
+      commands.push({
+        id: "demo-resume",
+        icon: "history",
+        label: t("onboarding.demoStart"),
+        onClick: onResumeGuidedDemo,
+      });
+    }
   } else if (!connected) {
     if (localDiscovery && onUseLocalListener) {
       if (localDiscovery.status === "idle" || localDiscovery.status === "running") {

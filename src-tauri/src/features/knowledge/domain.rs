@@ -14,6 +14,10 @@ use uuid::Uuid;
 use crate::error::{AppError, AppResult};
 use crate::kernel::identity::{AccountId, WorkspaceId};
 
+/// Stable code for a hosted access sync failure that leaves hosted-governed
+/// resources blocked; the original error follows on the next line.
+pub(crate) const KNOWLEDGE_ACCESS_SYNC_FAILED: &str = "knowledge_access_sync_failed";
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct Project {

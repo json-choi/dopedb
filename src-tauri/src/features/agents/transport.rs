@@ -238,7 +238,11 @@ pub async fn start_agent_acp_session(
         connection.scope.workspace_kind,
         &resource_scopes,
     ) {
-        state.services.knowledge.reconcile_current_access().await?;
+        state
+            .services
+            .knowledge
+            .reconcile_access_for_agent()
+            .await?;
     }
     let ports = DesktopAcpRuntimePorts::new(app, state.agent_plugins.clone());
     state
@@ -263,10 +267,12 @@ fn agent_session_requires_hosted_knowledge_reconciliation(
     // Only selected hosted sources require Personal GitHub provisioning; Team
     // authority is always remote. Never turn a reconciliation failure into an
     // offline fallback for either of those remote-authority cases.
-    workspace_kind == WorkspaceKind::Team
-        || resource_scopes
+    crate::features::knowledge::agent_entry_requires_hosted_reconciliation(
+        workspace_kind,
+        resource_scopes
             .iter()
-            .any(|scope| !scope.source_ids.is_empty())
+            .any(|scope| !scope.source_ids.is_empty()),
+    )
 }
 
 /// List exact Project Environments available through this connection revision.
@@ -285,7 +291,11 @@ pub async fn list_agent_knowledge_environments(
     // are device-owned; selected hosted sources are reconciled at session start.
     if agent_session_requires_hosted_knowledge_reconciliation(connection.scope.workspace_kind, &[])
     {
-        state.services.knowledge.reconcile_current_access().await?;
+        state
+            .services
+            .knowledge
+            .reconcile_access_for_agent()
+            .await?;
     }
     state
         .services

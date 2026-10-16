@@ -213,7 +213,9 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
   자원을 재사용하고 team membership, 공유 credential, 권한을 꾸며내지 않는다.
   준비된 Welcome은 sample table 탐색, exact Environment에 고정된 Agent 읽기,
   `Settings → Safety`를 거치는 Agent 쓰기 승인의 실제 command 세 개만 flat
-  목록으로 보여준다.
+  목록으로 보여준다. 데모 연결이 있는 상태에서 다른 연결의 Welcome을 보면 같은
+  `가이드 데모` command 하나가 데모 연결을 다시 선택하고 준비된 Welcome으로
+  돌아가는 복귀 경로가 된다.
 - 연결이 하나도 없는 시작 화면은 `이 컴퓨터에서 데이터베이스 찾기` command 하나를
   제공한다. 사용자가 실행했을 때만 PD-44의 닫힌 loopback allowlist를 자격 증명 없이
   한 번 확인하고, 응답한 서버를 engine·host·port가 채워진 새 연결 초안으로 여는

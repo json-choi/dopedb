@@ -367,7 +367,9 @@ export default function Safety({
       rememberSafetyDraft(connectionId, null);
       if (requestIsCurrent()) {
         setDraft(freshDraft(connectionId, persisted));
-        toast(t("safety.saved"));
+        // A local write-ceiling change bumps the connection revision: its Agent
+        // sessions end and Project bindings go stale until reconfirmed.
+        toast(t(localPolicyChange ? "safety.savedWritePolicyChanged" : "safety.saved"));
       }
     } catch (e) {
       const details = errDetails(e);

@@ -163,6 +163,7 @@ type WorkbenchContentCommands = {
     analyzeRevenue: () => void;
     practiceApproval: () => void;
     openSafety: () => void;
+    resume: (() => void) | null;
   } | null;
 };
 
@@ -218,6 +219,10 @@ function WorkbenchContentResolved({ model, commands }: Props) {
           onOpenSafety: commands.guidedDemo.openSafety,
         }
       : undefined;
+  // Another connection's Welcome offers one way back to the existing demo.
+  const resumeGuidedDemo = guidedDemo
+    ? undefined
+    : commands.guidedDemo?.resume ?? undefined;
   const dialogFallback = (onClose: () => void) => (
     <ModalBackdrop>
       <ModalSurface
@@ -351,6 +356,7 @@ function WorkbenchContentResolved({ model, commands }: Props) {
       <Onboarding
         connectionName={selected ? selected.name || selected.database : undefined}
         guidedDemo={guidedDemo}
+        onResumeGuidedDemo={resumeGuidedDemo}
         onNewQuery={selected ? commands.documents.newQuery : undefined}
         creatingDemo={connection.creatingDemo}
         guidedDemoAvailable={connection.guidedDemoAvailable}
@@ -432,6 +438,7 @@ function WorkbenchContentResolved({ model, commands }: Props) {
             <Onboarding
               connectionName={selected.name || selected.database}
               guidedDemo={guidedDemo}
+              onResumeGuidedDemo={resumeGuidedDemo}
               onNewConnection={() => commands.connections.new()}
               onNewQuery={commands.documents.newQuery}
             />

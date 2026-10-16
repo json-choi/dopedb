@@ -3,6 +3,7 @@ import { MutationObserver, QueryClient } from "@tanstack/react-query";
 import * as ipcCore from "../../ipc/core";
 import { knowledgeInventoryQuery } from "../knowledge/inventory";
 import { listKnowledgeEnvironmentConnections } from "../knowledge/tauriAdapter";
+import type { EnvironmentConnection, KnowledgeProject } from "../knowledge/domain";
 import { listAnalysisArticles } from "../analysisArticles/tauriAdapter";
 import { readWithCatalogIssue } from "../catalogExplorer/catalogDomain";
 import { createElement } from "react";
@@ -1447,11 +1448,27 @@ describe("workbench state ownership", () => {
       riskClass: "development";
       graphRevisionCount: number;
     }> = [];
+    let demoProjects: KnowledgeProject[] = [];
+    let demoBindings: EnvironmentConnection[] = [];
     const guidedDemoGateway = {
       listAgentEnvironments: async () => agentEnvironments,
-      listProjects: async () => [],
+      listEnvironmentConnections: async () => demoBindings,
+      listProjects: async () => demoProjects,
       createProject: async () => {
         createdProjects += 1;
+        demoProjects = [{
+          id: "project-demo",
+          name: GUIDED_DEMO_PROJECT_NAME,
+          revision: 1,
+          environments: [
+            {
+              id: "environment-demo",
+              name: GUIDED_DEMO_ENVIRONMENT_NAME,
+              riskClass: "development" as const,
+              revision: 1,
+            },
+          ],
+        }];
         return {
           id: "project-demo",
           name: GUIDED_DEMO_PROJECT_NAME,
@@ -1485,6 +1502,20 @@ describe("workbench state ownership", () => {
             graphRevisionCount: 0,
           },
         ];
+        demoBindings = [{
+          id: "binding-demo",
+          projectEnvironmentId: input.projectEnvironmentId,
+          environmentRevision: 1,
+          connectionId: input.connectionId,
+          remoteConnectionId: null,
+          connectionRevision: 1,
+          connectionContentRevision: 1,
+          currentConnectionRevision: 1,
+          connectionName: demo.name,
+          role: input.role,
+          alias: input.alias,
+          stale: false,
+        }];
         return {
           id: "binding-demo",
           projectEnvironmentId: input.projectEnvironmentId,
@@ -1519,6 +1550,19 @@ describe("workbench state ownership", () => {
       createdEnvironmentId: null,
       binding: null,
     });
+    // A write-policy change makes the binding stale and hides it from the Agent
+    // projection; setup must leave it for explicit reconfirmation, not rebind it.
+    const boundAgentEnvironments = agentEnvironments;
+    agentEnvironments = [];
+    demoBindings = demoBindings.map((binding) => ({ ...binding, stale: true }));
+    expect(
+      await ensureGuidedDemoEnvironment(demo, guidedDemoGateway),
+    ).toEqual({
+      environmentId: "environment-demo",
+      createdEnvironmentId: null,
+      binding: null,
+    });
+    agentEnvironments = boundAgentEnvironments;
     expect(createdProjects).toBe(1);
     expect(boundConnections).toBe(1);
     const explorerProject = {

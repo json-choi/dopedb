@@ -48,6 +48,9 @@ export const analysisCatalog = defineCatalog(
     "analysis.chooseTeamWorkspace": "Choose a team workspace",
     "analysis.signInForTeamWorkspace": "Sign in to choose a team workspace",
     "analysis.askAgent": "Ask Agent for an analysis",
+    "analysis.emptyBindingStale":
+      "The database changed after it was added to this Project. Reconfirm it to ask the Agent again.",
+    "analysis.reconfirmForAgent": "Reconfirm database",
     "analysis.connectDatabase": "Connect database",
     "analysis.refresh": "Refresh Articles",
     "analysis.filterPlaceholder": "Filter Articles",
@@ -242,6 +245,9 @@ export const analysisCatalog = defineCatalog(
     "analysis.chooseTeamWorkspace": "팀 워크스페이스 선택",
     "analysis.signInForTeamWorkspace": "로그인하고 팀 워크스페이스 선택",
     "analysis.askAgent": "Agent에게 분석 요청",
+    "analysis.emptyBindingStale":
+      "이 데이터베이스가 프로젝트에 추가된 뒤 변경되었습니다. 재확인하면 Agent에게 다시 요청할 수 있습니다.",
+    "analysis.reconfirmForAgent": "데이터베이스 재확인",
     "analysis.connectDatabase": "데이터베이스 연결",
     "analysis.refresh": "분석 아티클 새로고침",
     "analysis.filterPlaceholder": "분석 아티클 필터",
