@@ -1,4 +1,5 @@
-// AI Chat feedback above the transcript: a dismissible notice, and the error
+// AI Chat feedback above the transcript: a cancellable screen handoff waiting
+// for a ready Agent, a dismissible notice, and the error
 // whose action retries a failed session list or dismisses the message. A
 // conversation whose pinned resources changed also offers a new one with the
 // same resources. An unrecognized failure offers its raw detail for copying,
@@ -22,6 +23,25 @@ export default function AcpChatFeedback({
   const errorDetail = feedback.error ? feedback.errorDetail : null;
   return (
     <>
+      {feedback.pendingRequest ? (
+        <InlineNotice
+          tone="warning"
+          icon="send"
+          role="status"
+          action={
+            <Button
+              size="xs"
+              variant="ghost"
+              onClick={commands.feedback.cancelPendingRequest}
+            >
+              {t("agent.acpPendingRequestCancel")}
+            </Button>
+          }
+        >
+          {t("agent.acpPendingRequest")}
+        </InlineNotice>
+      ) : null}
+
       {feedback.notice ? (
         <InlineNotice
           tone="warning"

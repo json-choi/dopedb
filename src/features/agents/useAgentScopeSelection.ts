@@ -172,11 +172,20 @@ export function useAgentScopeSelection({
         ),
       );
       if (project) {
+        // A requested write target is honored only when that exact selected
+        // database can enter the write path; otherwise the draft stays read-only.
+        const writable = project.databases.some(
+          (database) =>
+            database.connectionId === composerRequest.writeConnectionId &&
+            database.connectionId === composerRequest.connectionId &&
+            database.environmentId === composerRequest.projectEnvironmentId &&
+            database.writable,
+        );
         const next = {
           projectId: project.id,
           databaseIds: [composerRequest.connectionId],
           sourceIds: [],
-          writeConnectionId: null,
+          writeConnectionId: writable ? composerRequest.connectionId : null,
         };
         setSelection((current) => sameSelection(current, next) ? current : next);
         onSelectConnection(composerRequest.connectionId);

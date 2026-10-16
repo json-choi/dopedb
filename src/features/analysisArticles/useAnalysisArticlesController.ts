@@ -5,7 +5,8 @@
 // Before a rerun it checks this device's connection pin and credential from cached
 // state and offers the matching recovery step instead of starting a doomed run;
 // after a re-check it offers the real fix (reconfirm the binding, edit the Article)
-// or says whom to ask.
+// or says whom to ask. With no Article yet, a stale-only Agent binding is offered
+// for explicit reconfirmation instead of hiding the Agent request.
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -266,6 +267,11 @@ export function useAnalysisArticlesController({
       )
     ),
   );
+  // Every Agent-usable binding went stale (e.g. its write policy changed); the
+  // person reconfirms one explicitly before the empty state offers the Agent again.
+  const staleAgentBinding = agentBinding
+    ? null
+    : bindings.find((binding) => binding.connectionId && binding.stale) ?? null;
   const askAgent = () => {
     if (!agentBinding?.connectionId || !onOpenAgent) return;
     onOpenAgent(agentBinding.connectionId, environment.id,
@@ -358,6 +364,21 @@ export function useAnalysisArticlesController({
     reloadEditorBase,
     remove,
     resultOutdated,
+    canManageBindings,
+    staleAgentBinding,
+    reconfirmingBinding: reconfirmBinding.isPending,
+    reconfirmForAgent: () => {
+      if (!canManageBindings || !staleAgentBinding?.connectionId) return;
+      reconfirmBinding.mutate({
+        input: {
+          projectEnvironmentId: staleAgentBinding.projectEnvironmentId,
+          connectionId: staleAgentBinding.connectionId,
+          role: staleAgentBinding.role,
+          alias: staleAgentBinding.alias,
+        },
+        articleId: undefined,
+      });
+    },
     revisions,
     runBlocker,
     runSession,

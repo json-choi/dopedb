@@ -50,7 +50,6 @@ import {
 } from "./queryOptions";
 import {
   isLiveSession,
-  ownsAcpComposerRequest,
   selectWorkspaceSessions,
 } from "./sessionFocus";
 import {
@@ -78,12 +77,15 @@ import { useAcpSessionStartup } from "./useAcpSessionStartup";
 import { useAcpScopeCommands } from "./useAcpScopeCommands";
 import { useAcpChatViewport } from "./useAcpChatViewport";
 import { useAcpComposerContext } from "./useAcpComposerContext";
+import { useAcpComposerHandoff } from "./useAcpComposerHandoff";
 
 const MAX_PROMPT_CHARS = 8 * 1024;
 export type AcpChatControllerInput = {
   connection: ConnectionProfile;
   connections: ConnectionProfile[];
   composerRequest: AgentComposerRequest | null;
+  /** Lets the request owner drop a handoff once it is sent, rejected, or cancelled. */
+  onComposerRequestSettled?: (requestId: string) => void;
   knowledgeFocus: KnowledgeEnvironmentFocus | null;
   documents: WorkbenchDocument[];
   activeDocumentId: string | null;
@@ -98,6 +100,7 @@ export function useAcpChatController({
   connection,
   connections,
   composerRequest,
+  onComposerRequestSettled,
   knowledgeFocus,
   documents,
   activeDocumentId,
@@ -138,6 +141,11 @@ export function useAcpChatController({
     select: selectScopedConnection,
   } = useAgentScopeConnection(connection, connections);
   const [consumedComposerRequestId, setConsumedComposerRequestId] = useState<string | null>(null);
+  // The owner forgets a settled handoff too, so a remounted panel never resends it.
+  const consumeComposerRequest = useCallback((requestId: string) => {
+    setConsumedComposerRequestId(requestId);
+    onComposerRequestSettled?.(requestId);
+  }, [onComposerRequestSettled]);
   // Returning from a terminal install or sign-in re-probes only the chosen
   // CLIs that are not ready; a ready CLI is never spawned again on focus.
   const cliStatusQuery = useAgentCliStatusQuery(configuredProviders);
@@ -476,64 +484,27 @@ export function useAcpChatController({
     ],
   );
 
-  useEffect(() => {
-    if (
-      composerRequest === null ||
-      consumedComposerRequestId === composerRequest.id ||
-      !environmentInventory.success
-    ) return;
-    const environment = availableKnowledgeEnvironments.find(
-      (candidate) => candidate.id === composerRequest.projectEnvironmentId,
-    );
-    if (!environment) {
-      setConsumedComposerRequestId(composerRequest.id);
-      setError(t("agent.acpEnvironmentRequiredBody"));
-      return;
-    }
-    if (active && !ownsAcpComposerRequest(active, composerRequest)) {
-      releaseUntouchedActive();
-      selectActiveSession(null);
-      return;
-    }
-    if (!agentScope.resourceScopes.some((scope) =>
-      scope.projectEnvironmentId === environment.id
-      && scope.connectionIds.includes(composerRequest.connectionId),
-    )) return;
-    if (
-      starting ||
-      !prerequisitesReady ||
-      (active !== null && !["ready", "closed", "failed"].includes(active.lifecycle))
-    ) return;
-    setConsumedComposerRequestId(composerRequest.id);
-    setHistoryOpen(false);
-    if (!composerRequest.prompt) return;
-    const submitted = composerRequest.prompt.slice(0, MAX_PROMPT_CHARS);
-    setPrompt(submitted);
-    setError(null);
-    setIncludeEditorContext(false);
-    void submitPromptText(submitted, EMPTY_ACP_PROMPT_CONTEXT)
-      .then((sent) => {
-        if (sent) setPrompt("");
-      })
-      .catch((reason) => {
-        setError(agentFailure(reason, t, (error) => t("agent.acpSendFailed", { error })));
-      });
-  }, [
+  const composerHandoff = useAcpComposerHandoff({
+    request: composerRequest,
+    consumedId: consumedComposerRequestId,
+    consume: consumeComposerRequest,
     active,
-    availableKnowledgeEnvironments,
-    composerRequest,
-    consumedComposerRequestId,
-    environmentInventory.success,
+    inventoryReady: environmentInventory.success,
+    environments: availableKnowledgeEnvironments,
+    scope: agentScope,
+    environmentScopeReady,
     prerequisitesReady,
+    starting,
+    maxPromptChars: MAX_PROMPT_CHARS,
+    composerPrompt: prompt,
     releaseUntouchedActive,
     selectActiveSession,
-    agentScope.resourceScopes,
     setError,
+    setPrompt,
+    setHistoryOpen,
     setIncludeEditorContext,
-    starting,
     submitPromptText,
-    t,
-  ]);
+  });
 
   function beginNewChat() {
     if (starting) return;
@@ -717,6 +688,8 @@ export function useAcpChatController({
       offerSameResources:
         errorState?.code === "agent_scope_changed" && active !== null && !activeLive,
       notice,
+      // A screen handoff waits for a ready Agent; say so instead of hiding it.
+      pendingRequest: composerHandoff.pending,
     },
     commands: {
       session: {
@@ -755,6 +728,7 @@ export function useAcpChatController({
       feedback: {
         dismiss: () => setError(null),
         dismissNotice: () => setNotice(null),
+        cancelPendingRequest: composerHandoff.cancel,
       },
       links: {
         openMessage: openMessageLink,

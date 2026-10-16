@@ -17,7 +17,7 @@ use super::domain::{
     validate_binding_draft, EnvironmentConnectionBinding, EnvironmentRiskClass,
     KnowledgeEnvironmentSummary, KnowledgeMappingProposal, KnowledgeSessionScope, Project,
     ProjectDefinition, ProjectEnvironment, SourceBindingDraft, SourceLocator, SourceSnapshot,
-    StoredKnowledgeScope,
+    StoredKnowledgeScope, KNOWLEDGE_ACCESS_SYNC_FAILED,
 };
 use super::ports::{
     AppendKnowledgeEnvironmentRequest, CreateKnowledgeProjectRequest, CreateKnowledgeSourceRequest,
@@ -50,9 +50,46 @@ where
         self.repository.active_resource_scope().await
     }
 
+    /// Reconcile hosted access before an Agent entry point consumes it. A
+    /// connection with no selected account needs no hosted authority. A failed
+    /// sync is tolerated only in a Personal workspace that, re-read after the
+    /// failure, holds no hosted (GitHub) source; otherwise it fails closed with
+    /// the stable `knowledge_access_sync_failed` code and the original detail.
+    pub(crate) async fn reconcile_access_for_agent(
+        &self,
+        connection: &PinnedConnection,
+    ) -> AppResult<()> {
+        if connection.scope.selected_account_id.is_none() {
+            return Ok(());
+        }
+        let error = match self.reconcile_current_access().await {
+            Ok(_) => return Ok(()),
+            Err(error) => error,
+        };
+        let has_hosted_source = self
+            .scopes(connection.scope.workspace_id)
+            .await?
+            .iter()
+            .any(|scope| scope.binding.provider == KnowledgeSourceProvider::Github);
+        if super::reconciliation::hosted_sync_failure_is_tolerable(
+            connection.scope.workspace_kind,
+            has_hosted_source,
+        ) {
+            tracing::warn!(
+                %error,
+                "hosted Project Knowledge access sync failed; continuing with local-only Personal resources"
+            );
+            return Ok(());
+        }
+        Err(AppError::Network(format!(
+            "{KNOWLEDGE_ACCESS_SYNC_FAILED}\n{error}"
+        )))
+    }
+
     /// Reconcile hosted grants and Environment bindings explicitly before an
-    /// Agent or graph workflow consumes them. Read transports never trigger
-    /// this mutation implicitly.
+    /// Agent or graph workflow consumes them. Generic read transports never
+    /// trigger this mutation implicitly; Agent entry points use
+    /// [`Self::reconcile_access_for_agent`].
     pub(crate) async fn reconcile_current_access(
         &self,
     ) -> AppResult<KnowledgeAccessReconciliation> {

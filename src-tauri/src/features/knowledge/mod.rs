@@ -37,4 +37,5 @@ pub(crate) mod test_support {
         KnowledgeGrantPort, KnowledgeGraphRepositoryPort, KnowledgeMappingRepositoryPort,
         KnowledgeRepositoryPort, KnowledgeScopeRepositoryPort,
     };
+    pub(crate) use super::reconciliation::hosted_sync_failure_is_tolerable;
 }

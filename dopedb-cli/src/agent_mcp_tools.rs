@@ -345,7 +345,7 @@ pub(super) fn tools_result() -> Value {
             tool_definition(
                 TOOL_ANALYSIS_ARTICLE_PROPOSE,
                 "Propose an Analysis Article",
-                "Creates a shared Article containing sanitized HTML and one bounded read-only saved query for the exact selected connectionId. The Broker injects its current authority. This cannot schedule work or publish the HTML.",
+                "Creates a new Article containing sanitized HTML and one bounded read-only saved query for the exact selected connectionId. In a Personal workspace it is saved privately on this device; in a Team workspace it is shared with the workspace. The Broker injects its current authority. This cannot schedule work, invite people, or publish the HTML.",
                 analysis_article_input_schema(false),
                 false,
                 false,

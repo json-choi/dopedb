@@ -7,6 +7,11 @@ import { errMessage } from "../../ipc/types";
 import { useI18n } from "../../lib/i18n";
 import type { CatalogScope } from "../../lib/queries";
 import { useToast } from "../../components/Toast";
+import { agentSessionErrorLabel } from "../agents/agentErrorLabels";
+import {
+  catalogLoadIssueMessage,
+  isCatalogLoadIssue,
+} from "../catalogExplorer/catalogDomain";
 import type { ConnectionProfile } from "../connections/domain";
 import {
   createDemoSqlite,
@@ -18,14 +23,17 @@ import {
   demoSqliteConnection,
   findDemoSqliteConnection,
 } from "../connections/presets";
-import { knowledgeQueryKeys } from "../knowledge/queryKeys";
 import { captureProductEvent } from "../productAnalytics/client";
 import {
   productAnalyticsAccessMode,
   productAnalyticsConnectionEngine,
   productAnalyticsWorkspaceContext,
 } from "../productAnalytics/outcomes";
-import { ensureGuidedDemoEnvironment } from "./demoSetup";
+import {
+  ensureGuidedDemoEnvironment,
+  GuidedDemoEnvironmentMissingError,
+  refreshGuidedDemoQueries,
+} from "./demoSetup";
 
 type GuidedDemoSetupInput = {
   scope: CatalogScope;
@@ -69,23 +77,7 @@ export function useGuidedDemoSetup({
 
       if (scope.workspaceKind === "personal") {
         const setup = await ensureGuidedDemoEnvironment(saved);
-        await Promise.all([
-          queryClient.invalidateQueries({
-            queryKey: knowledgeQueryKeys.inventory(scope.key),
-            refetchType: "active",
-          }),
-          queryClient.invalidateQueries({
-            queryKey: knowledgeQueryKeys.environmentConnections(),
-            refetchType: "active",
-          }),
-          queryClient.invalidateQueries({
-            queryKey: knowledgeQueryKeys.agentEnvironments(
-              saved.id,
-              scope.key,
-            ),
-            refetchType: "active",
-          }),
-        ]);
+        await refreshGuidedDemoQueries(queryClient, scope, saved.id);
         const analyticsContext = productAnalyticsWorkspaceContext(scope);
         if (analyticsContext && setup.createdEnvironmentId) {
           void captureProductEvent({
@@ -115,11 +107,18 @@ export function useGuidedDemoSetup({
         t(
           scope.workspaceKind === "personal"
             ? "onboarding.demoReady"
-            : "connections.demoCreated",
+            : "connections.demoCreatedLocalOnly",
         ),
       );
     } catch (error) {
-      toast(errMessage(error), "error");
+      toast(
+        error instanceof GuidedDemoEnvironmentMissingError
+          ? t("onboarding.demoEnvironmentMissing")
+          : isCatalogLoadIssue(error)
+            ? catalogLoadIssueMessage(t, error)
+            : agentSessionErrorLabel(errMessage(error), t),
+        "error",
+      );
     } finally {
       setCreating(false);
     }

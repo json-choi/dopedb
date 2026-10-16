@@ -260,7 +260,10 @@ async fn issue_session(
         .pin_connection_for_read(config.anchor_connection_id)
         .await?;
     if anchor.scope.selected_account_id.is_some() {
-        services.knowledge.reconcile_current_access().await?;
+        services
+            .knowledge
+            .reconcile_access_for_agent(&anchor)
+            .await?;
         anchor = services
             .knowledge
             .pin_connection_for_read(config.anchor_connection_id)

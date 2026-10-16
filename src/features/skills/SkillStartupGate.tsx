@@ -71,6 +71,15 @@ export default function SkillStartupGate() {
     enabled: postPaintReady,
   });
   const [selected, setSelected] = useState<SkillTarget[]>(loadAgentTargets);
+  // Until the person changes a checkbox, a first run without saved targets
+  // starts from the Agent CLIs already installed on this computer.
+  const [touched, setTouched] = useState(false);
+  const shownSelected =
+    touched || hasSavedAgentTargets()
+      ? selected
+      : SUPPORTED_AGENT_TARGETS.filter((agent) =>
+          agentsQ.data?.some((cli) => cli.id === agent.provider && cli.installed),
+        ).map((agent) => agent.target);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState<AcpPluginId | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -82,6 +91,7 @@ export default function SkillStartupGate() {
   useEffect(() => {
     const show = () => {
       setSelected(loadAgentTargets());
+      setTouched(false);
       setError(null);
       setOpen(true);
     };
@@ -96,13 +106,15 @@ export default function SkillStartupGate() {
   }, [busy, refetchPlugins]);
 
   async function installSelected() {
-    if (selected.length === 0) {
+    if (shownSelected.length === 0) {
       setError(t("agentTools.startupSelectOne"));
       return;
     }
     setError(null);
     const failures: string[] = [];
-    for (const target of selected) {
+    for (const agent of SUPPORTED_AGENT_TARGETS) {
+      const target = agent.target;
+      if (!shownSelected.includes(target)) continue;
       const id = pluginId(target);
       const current = pluginsQ.data?.find((plugin) => plugin.pluginId === id);
       if (
@@ -117,7 +129,12 @@ export default function SkillStartupGate() {
       try {
         await installAgentAcpPlugin(id);
       } catch (reason) {
-        failures.push(`${target}: ${errMessage(reason)}`);
+        failures.push(
+          t("agentTools.startupInstallFailed", {
+            provider: agent.label,
+            error: errMessage(reason),
+          }),
+        );
       } finally {
         await pluginsQ.refetch();
       }
@@ -127,7 +144,7 @@ export default function SkillStartupGate() {
       setError(failures.join("\n"));
       return;
     }
-    saveAgentTargets(selected);
+    saveAgentTargets(shownSelected);
     setOpen(false);
   }
 
@@ -139,10 +156,11 @@ export default function SkillStartupGate() {
 
   function toggleTarget(target: SkillTarget, checked: boolean) {
     setError(null);
-    setSelected((current) =>
+    setTouched(true);
+    setSelected(
       checked
-        ? [...new Set([...current, target])]
-        : current.filter((candidate) => candidate !== target),
+        ? [...new Set([...shownSelected, target])]
+        : shownSelected.filter((candidate) => candidate !== target),
     );
   }
 
@@ -192,7 +210,7 @@ export default function SkillStartupGate() {
                           ? true
                           : undefined
                       }
-                      checked={selected.includes(agent.target)}
+                      checked={shownSelected.includes(agent.target)}
                       disabled={busy !== null}
                       onChange={(event) =>
                         toggleTarget(agent.target, event.target.checked)

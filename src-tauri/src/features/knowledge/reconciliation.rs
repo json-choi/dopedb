@@ -1,10 +1,12 @@
 //! Explicit reconciliation of hosted Knowledge authority into device-local state.
 //!
-//! Read entry points never reconcile access or mutate grants/Environment bindings.
-//! Project inventory reads may refresh their bounded local copy of remote Projects.
-//! Callers that require current hosted authority invoke this application workflow
-//! deliberately and receive a bounded receipt; transport layers do not reach into
-//! one another to trigger it.
+//! Generic read entry points never reconcile access or mutate grants/Environment
+//! bindings. Project inventory reads may refresh their bounded local copy of remote
+//! Projects. Agent entry points (session start, the Agent Environment list, and
+//! `dopedb agent start`) reconcile deliberately before consuming hosted authority
+//! and receive a bounded receipt; transport layers do not reach into one another
+//! to trigger it. A failed sync is tolerated only in a Personal workspace with no
+//! hosted (GitHub) source, where no local state depends on hosted grants.
 
 use std::collections::BTreeSet;
 
@@ -96,6 +98,16 @@ where
         grant_count: grants.len(),
         environment_binding_count,
     })
+}
+
+/// Whether an Agent may proceed after hosted access sync failed. Team access is
+/// always hosted-governed; Personal access depends on hosted grants only through
+/// hosted (GitHub) Knowledge sources.
+pub(crate) fn hosted_sync_failure_is_tolerable(
+    kind: WorkspaceKind,
+    has_hosted_source: bool,
+) -> bool {
+    kind == WorkspaceKind::Personal && !has_hosted_source
 }
 
 fn selected_remote_account(scope: &ActiveResourceScope) -> AppResult<AccountId> {

@@ -46,6 +46,7 @@ const AGENT_ERROR_MESSAGES = new Map<string, MessageKey>([
   ["agent_session_revoked", "agent.acpSqlApprovalRevokedError"],
   ["agent_scope_changed", "agent.acpScopeChanged"],
   ["agent_scope_unverified", "agent.acpScopeUnverified"],
+  ["knowledge_access_sync_failed", "agent.acpKnowledgeAccessSyncFailed"],
   ["auth_probe_timeout", "agent.acpAuthProbeTimeout"],
   ["agent_cli_missing", "agent.acpNotInstalled"],
   ["agent_cli_not_authenticated", "agent.acpNotAuthenticated"],

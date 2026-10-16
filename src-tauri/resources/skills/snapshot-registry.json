@@ -376,6 +376,21 @@
           "normalizedTextSha256": "b6265c76ab225d4870f0446d9a07c9a08fc18d29e06bc49a69219e1e8c54dc71"
         }
       ]
+    },
+    {
+      "releaseRevision": 26,
+      "appVersion": "0.5.6",
+      "packageDigest": "2c0a881ebf3f2e88f5f6e839c0f2e5ff69ecba88ff26ec0300d21fde9e6b9bd9",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "sourcePath": "generated:discovery-stub",
+          "size": 481,
+          "executable": false,
+          "sha256": "b6265c76ab225d4870f0446d9a07c9a08fc18d29e06bc49a69219e1e8c54dc71",
+          "normalizedTextSha256": "b6265c76ab225d4870f0446d9a07c9a08fc18d29e06bc49a69219e1e8c54dc71"
+        }
+      ]
     }
   ]
 }

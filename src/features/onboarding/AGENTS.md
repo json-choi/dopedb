@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-13 | Updated: 2026-09-13 -->
+<!-- Generated: 2026-09-13 | Updated: 2026-10-17 -->
 
 # src/features/onboarding
 
@@ -13,8 +13,8 @@ calling the same commands a real user flow would call.
 ## Key Files
 | File | Description |
 |------|-------------|
-| `demoSetup.ts` | Composes connection + Project Environment creation into one guided-demo setup; defines `GUIDED_DEMO_PROJECT_NAME`/`GUIDED_DEMO_ENVIRONMENT_NAME`. |
-| `useGuidedDemoCommands.ts` | Hook exposing the guided-demo command set (`browseOrders`, `analyzeRevenue`, `practiceApproval`, `openSafety`). |
+| `demoSetup.ts` | Composes connection + Project Environment creation into one guided-demo setup; defines `GUIDED_DEMO_PROJECT_NAME`/`GUIDED_DEMO_ENVIRONMENT_NAME`, `GuidedDemoEnvironmentMissingError`, and `refreshGuidedDemoQueries` (the inventory, Environment-binding, and Agent-environment invalidations both hooks await). Binds the demo connection only on first setup; an existing binding, even a stale one, is never silently rebound and is reconfirmed by the person. |
+| `useGuidedDemoCommands.ts` | Hook exposing the guided-demo command set (`browseOrders`, `analyzeRevenue`, read-only; `practiceApproval`, opened with `{ write: true }`; `openSafety`; `resume`, which reselects the existing demo connection and reopens its Welcome from another connection, or `null`). |
 | `useGuidedDemoSetup.ts` | Hook that creates/reuses the demo SQLite connection, verifies it, and records analytics for the guided demo. |
 
 ## Subdirectories
@@ -39,7 +39,7 @@ None.
 ## Dependencies
 
 ### Internal
-- `../agents` — `listAgentKnowledgeEnvironments` (read-only).
+- `../agents` — `listAgentKnowledgeEnvironments` (read-only) and `agentSessionErrorLabel` for stable-code failure copy.
 - `../knowledge` — environment/project creation and binding.
 - `../connections` — demo SQLite connection presets, `testConnection`, `upsertConnection`, `createDemoSqlite`.
 - `../productAnalytics` — outcome capture for guided-demo events.

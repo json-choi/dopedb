@@ -233,11 +233,11 @@ pub async fn start_agent_acp_session(
         .knowledge
         .pin_connection_for_read(Uuid::from(connection_id))
         .await?;
-    if agent_session_requires_hosted_knowledge_reconciliation(
-        connection.scope.selected_account_id.as_deref(),
-    ) {
-        state.services.knowledge.reconcile_current_access().await?;
-    }
+    state
+        .services
+        .knowledge
+        .reconcile_access_for_agent(&connection)
+        .await?;
     let ports = DesktopAcpRuntimePorts::new(app, state.agent_plugins.clone());
     state
         .agents_acp
@@ -253,12 +253,6 @@ pub async fn start_agent_acp_session(
         .await
 }
 
-fn agent_session_requires_hosted_knowledge_reconciliation(
-    selected_account_id: Option<&str>,
-) -> bool {
-    selected_account_id.is_some()
-}
-
 /// List exact Project Environments available through this connection revision.
 #[tauri::command]
 pub async fn list_agent_knowledge_environments(
@@ -271,9 +265,11 @@ pub async fn list_agent_knowledge_environments(
         .knowledge
         .pin_connection_for_read(Uuid::from(connection_id))
         .await?;
-    if connection.scope.selected_account_id.is_some() {
-        state.services.knowledge.reconcile_current_access().await?;
-    }
+    state
+        .services
+        .knowledge
+        .reconcile_access_for_agent(&connection)
+        .await?;
     state
         .services
         .knowledge
@@ -387,12 +383,23 @@ pub async fn detect_agent_clis(
 
 #[cfg(test)]
 pub(crate) fn assert_agent_transport_contract() {
-    assert!(!agent_session_requires_hosted_knowledge_reconciliation(
-        None,
-    ));
-    assert!(agent_session_requires_hosted_knowledge_reconciliation(
-        Some("account-1"),
-    ));
+    {
+        use crate::features::knowledge::test_support::hosted_sync_failure_is_tolerable;
+        use crate::kernel::access::WorkspaceKind;
+        assert!(hosted_sync_failure_is_tolerable(
+            WorkspaceKind::Personal,
+            false
+        ));
+        assert!(!hosted_sync_failure_is_tolerable(
+            WorkspaceKind::Personal,
+            true
+        ));
+        assert!(!hosted_sync_failure_is_tolerable(
+            WorkspaceKind::Team,
+            false
+        ));
+        assert!(!hosted_sync_failure_is_tolerable(WorkspaceKind::Team, true));
+    }
     assert_eq!(
         validated_external_agent_link("https://example.test/path?q=1")
             .expect("valid external link"),
