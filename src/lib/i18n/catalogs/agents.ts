@@ -96,7 +96,7 @@ export const agentsCatalog = defineCatalog(
     "agent.acpStartCancelled": "Agent start was cancelled.",
     "agent.acpUntitledSession": "New conversation",
     "agent.acpAuthProbeTimeout":
-      "The local CLI did not report its sign-in status in time. Check again.",
+      "The local CLI did not report its authentication status in time. Check again.",
     "agent.acpCliNodeMissing":
       "This CLI runs on Node.js, but no node runtime is on DopeDB's search path. Install Node.js or link its bin directory, then check again.",
     "agent.acpCliUnexpectedVersion":
@@ -115,7 +115,9 @@ export const agentsCatalog = defineCatalog(
     "agent.acpSessionLimit":
       "Up to 8 Agent sessions can run at once. Close a conversation you no longer need, then try again.",
     "agent.acpNotAuthenticated":
-      "{provider} is not signed in. Run `{command}` in a local terminal, then try again.",
+      "{provider} requires local authentication. Check the CLI's account or gateway configuration. For account sign-in, run `{command}` in a local terminal.",
+    "agent.acpAuthProbeFailed":
+      "The local CLI did not return a readable authentication status. This does not mean you are signed out. Check the CLI configuration, then try again.",
     "agent.acpNotInstalled":
       "{provider} is not installed. Install its official local CLI, then try again.",
     "agent.acpStartTimedOut":
@@ -150,18 +152,18 @@ export const agentsCatalog = defineCatalog(
     "agent.acpStartedNewSession":
       "The previous conversation was closed, so this message started a new session. The earlier history stays in the session list.",
     "agent.acpLocalAuth":
-      "Authentication stays in your local Claude or Codex login. DopeDB never reads or stores its token.",
+      "Your local Claude or Codex CLI owns account or gateway authentication. DopeDB does not open credential files or store tokens.",
     "agent.acpNew": "New Chat",
     "agent.acpMore": "More chat actions",
     "agent.acpNoSessions": "No conversations in this workspace yet.",
     "agent.acpReplayTruncated":
       "Earlier local transcript events were removed by the replay limit.",
-    "agent.acpNoToken": "Local login · no app token",
+    "agent.acpNoToken": "Local CLI authentication · no app token storage",
     "agent.acpOpenLink": "Open link in the system browser",
     "agent.acpOpenSetup": "Set up Agent",
     "agent.acpNoReadyAgents": "No Agent ready for chat",
     "agent.acpNoReadyAgentsBody":
-      "Prepare an Agent in Settings and sign in to its local CLI to use it here.",
+      "Prepare an Agent in Settings and configure authentication in its local CLI to use it here.",
     "agent.acpPlainTextFallback":
       "This response is shown as plain text to keep the chat stable.",
     "agent.acpPermission": "Permission required",
@@ -286,9 +288,12 @@ export const agentsCatalog = defineCatalog(
       "{provider} is not installed. Install it from the provider's official guide, then check again.",
     "agent.acpSetupLoginBody":
       "{provider} is installed but not signed in. Run `{command}` in a local terminal, finish the provider login, then check again.",
+    "agent.acpSetupClaudeAuthBody":
+      "Claude Code is installed, but it did not report an authentication configuration. Use a Claude account or your organization's gateway. For apps launched outside your terminal, configure the gateway in Claude Code's user settings (~/.claude/settings.json), managed settings, or a credential helper; terminal exports alone do not reach the app. Then check again.",
+    "agent.acpSetupOpenAuthGuide": "Open authentication guide",
     "agent.acpSetupOpenGuide": "Open install guide",
     "agent.acpSetupPrivacy":
-      "The provider processes prompts under its terms. Authentication remains in the local CLI; DopeDB never reads or stores its token.",
+      "The provider processes prompts under its terms. The local CLI owns authentication; DopeDB does not open credential files or store tokens. Configured credentials do not prove a live connection.",
     "agent.acpSetupRequired": "Waiting for local setup",
     "agent.acpSetupTitle": "{provider} local access",
     "agent.acpStartCodex": "Start Agent",
@@ -396,17 +401,17 @@ export const agentsCatalog = defineCatalog(
     "agent.acpTurnRefused": "Agent refused this turn",
     "agent.acpWaiting": "Waiting…",
     "agent.acpWorking": "Agent is working",
-    "agentTools.authenticated": "Signed in",
+    "agentTools.authenticated": "Local authentication configured",
     "agentTools.autoUpdateFailed":
       "Could not automatically update {target}: {error}",
     "agentTools.autoUpdated":
       "{target} DopeDB Skill updated to revision {revision}.",
     "agentTools.startupBody":
-      "Choose the Agents you want to use in DopeDB. The app prepares each selected Agent and checks its local sign-in.",
+      "Choose the Agents you want to use in DopeDB. The app prepares each selected Agent and checks its local authentication configuration.",
     "agentTools.startupHeading": "Choose Agents for DopeDB",
     "agentTools.startupLater": "Later",
     "agentTools.startupSafety":
-      "If an Agent is missing or signed out, finish setup with its official app. DopeDB never reads its login token.",
+      "If an Agent or its authentication configuration is missing, finish setup with its official CLI. DopeDB does not open credential files or store tokens.",
     "agentTools.startupInstallSelected": "Prepare selected Agents",
     "agentTools.startupInstalling": "Preparing Agents…",
     "agentTools.startupSaveSelected": "Save selection",
@@ -435,14 +440,14 @@ export const agentsCatalog = defineCatalog(
     "agentTools.agentsTitle": "Agents",
     "agentTools.cliAccount": "CLI account: {account}",
     "agentTools.apiKeyAccount": "API key authentication",
-    "agentTools.accountIdentityUnavailable": "Signed in · CLI did not provide an account name",
+    "agentTools.accountIdentityUnavailable": "Authentication configured · CLI did not provide an account name",
     "agentTools.manageAccount": "Manage Agent accounts",
     "agentTools.accountChangeInstructions": "Change your account using the official CLI in your terminal, check again, and start a new chat. A conversation in progress is not restarted automatically.",
     "agentTools.copyAccountCommand": "Copy sign-in command",
     "agentTools.accountCommandCopied": "Sign-in command copied.",
     "agentTools.accountCommandCopyFailed": "Could not copy the command.",
     "agentTools.agentsDescription":
-      "Choose an Agent to prepare it for AI Chat. Local installation and sign-in are checked in the same row.",
+      "Choose an Agent to prepare it for AI Chat. Local installation and authentication configuration are checked in the same row.",
     "agentTools.agentPrepared": "Agent connection prepared.",
     "agentTools.agentReady": "Ready to chat",
     "agentTools.agentNotReady": "Setup needed",
@@ -495,7 +500,7 @@ export const agentsCatalog = defineCatalog(
     "agentTools.pluginState.rollbackRequired": "Recovery required",
     "agentTools.localClisTitle": "Local Agent CLIs",
     "agentTools.localClisDescription":
-      "Claude Code and Codex own authentication. DopeDB injects their verified local executable path and never reads a token.",
+      "Claude Code and Codex own authentication. DopeDB uses their verified executable and provider-scoped local configuration without opening credential files or storing tokens.",
     "agentTools.skillTitle": "DopeDB Skill",
     "agentTools.skillDescription":
       "Optional discovery guide for Agents working outside built-in AI Chat.",
@@ -503,7 +508,7 @@ export const agentsCatalog = defineCatalog(
     "agentTools.installAll": "Install DopeDB Skill",
     "agentTools.installAndUpdate": "Install & update",
     "agentTools.installedRevision": "Installed revision {revision}",
-    "agentTools.notAuthenticated": "Sign-in required",
+    "agentTools.notAuthenticated": "Local authentication required",
     "agentTools.path": "Install path",
     "agentTools.reasonFilesDifferFromManagedSnapshot":
       "Installed files differ from the managed snapshot.",
@@ -669,7 +674,7 @@ export const agentsCatalog = defineCatalog(
     "agent.acpStartCancelled": "Agent 시작을 취소했습니다.",
     "agent.acpUntitledSession": "새 대화",
     "agent.acpAuthProbeTimeout":
-      "로컬 CLI가 제시간에 로그인 상태를 알려 주지 않았습니다. 다시 확인하세요.",
+      "로컬 CLI가 제시간에 인증 상태를 알려 주지 않았습니다. 다시 확인하세요.",
     "agent.acpCliNodeMissing":
       "이 CLI는 Node.js로 실행되지만 DopeDB 검색 경로에 node 런타임이 없습니다. Node.js를 설치하거나 bin 폴더를 연결한 뒤 다시 확인하세요.",
     "agent.acpCliUnexpectedVersion":
@@ -688,7 +693,9 @@ export const agentsCatalog = defineCatalog(
     "agent.acpSessionLimit":
       "Agent 세션은 동시에 최대 8개까지 실행할 수 있습니다. 필요 없는 대화를 닫은 뒤 다시 시도하세요.",
     "agent.acpNotAuthenticated":
-      "{provider}에 로그인되어 있지 않습니다. 로컬 터미널에서 `{command}`를 실행한 뒤 다시 시도하세요.",
+      "{provider}의 로컬 인증 설정이 필요합니다. CLI의 계정 또는 게이트웨이 설정을 확인하세요. 계정 로그인은 로컬 터미널에서 `{command}`로 진행할 수 있습니다.",
+    "agent.acpAuthProbeFailed":
+      "로컬 CLI의 인증 상태 응답을 확인하지 못했습니다. 로그아웃 상태라는 뜻은 아닙니다. CLI 설정을 확인한 뒤 다시 시도하세요.",
     "agent.acpNotInstalled":
       "{provider}가 설치되어 있지 않습니다. 공식 로컬 CLI를 설치한 뒤 다시 시도하세요.",
     "agent.acpStartTimedOut":
@@ -723,18 +730,18 @@ export const agentsCatalog = defineCatalog(
     "agent.acpStartedNewSession":
       "이전 대화가 닫혀 있어 이 메시지로 새 세션을 시작했습니다. 이전 기록은 세션 목록에 남아 있습니다.",
     "agent.acpLocalAuth":
-      "인증은 사용자의 로컬 Claude 또는 Codex 로그인이 소유합니다. DopeDB는 토큰을 읽거나 저장하지 않습니다.",
+      "계정·게이트웨이 인증은 사용자의 로컬 Claude 또는 Codex CLI가 소유합니다. DopeDB는 자격 증명 파일을 열거나 토큰을 저장하지 않습니다.",
     "agent.acpNew": "새 채팅",
     "agent.acpMore": "채팅 작업 더보기",
     "agent.acpNoSessions": "이 워크스페이스에는 아직 대화가 없습니다.",
     "agent.acpReplayTruncated":
       "로컬 재생 한도를 넘은 이전 대화 기록은 정리되었습니다.",
-    "agent.acpNoToken": "로컬 로그인 · 앱 토큰 없음",
+    "agent.acpNoToken": "로컬 CLI 인증 · 앱에 토큰 저장 안 함",
     "agent.acpOpenLink": "시스템 브라우저에서 링크 열기",
     "agent.acpOpenSetup": "에이전트 설정",
     "agent.acpNoReadyAgents": "채팅할 수 있는 Agent가 없습니다",
     "agent.acpNoReadyAgentsBody":
-      "설정에서 사용할 Agent를 준비하고 로컬 CLI에 로그인하세요.",
+      "설정에서 사용할 Agent를 준비하고 로컬 CLI의 인증을 설정하세요.",
     "agent.acpPlainTextFallback":
       "채팅을 안정적으로 유지하기 위해 이 답변을 일반 텍스트로 표시합니다.",
     "agent.acpPermission": "권한 승인 필요",
@@ -858,9 +865,12 @@ export const agentsCatalog = defineCatalog(
       "{provider}가 설치되어 있지 않습니다. 제공자의 공식 안내에서 설치한 뒤 다시 확인하세요.",
     "agent.acpSetupLoginBody":
       "{provider}가 설치되어 있지만 로그인되지 않았습니다. 로컬 터미널에서 `{command}`를 실행해 제공자 로그인을 마친 뒤 다시 확인하세요.",
+    "agent.acpSetupClaudeAuthBody":
+      "Claude Code가 설치되어 있지만 인증 설정을 보고하지 않았습니다. Claude 계정 또는 조직 게이트웨이를 사용할 수 있습니다. 터미널 밖에서 실행한 앱에는 export만으로 설정이 전달되지 않으므로 Claude Code 사용자 설정(~/.claude/settings.json), 관리형 설정 또는 자격 증명 helper에 게이트웨이를 구성한 뒤 다시 확인하세요.",
+    "agent.acpSetupOpenAuthGuide": "인증 설정 안내 열기",
     "agent.acpSetupOpenGuide": "설치 안내 열기",
     "agent.acpSetupPrivacy":
-      "프롬프트는 제공자 약관에 따라 처리됩니다. 인증은 로컬 CLI에 남으며 DopeDB는 토큰을 읽거나 저장하지 않습니다.",
+      "프롬프트는 제공자 약관에 따라 처리됩니다. 인증은 로컬 CLI가 소유하며 DopeDB는 자격 증명 파일을 열거나 토큰을 저장하지 않습니다. 인증 설정 확인은 실제 연결 성공을 뜻하지 않습니다.",
     "agent.acpSetupRequired": "로컬 설정 대기 중",
     "agent.acpSetupTitle": "{provider} 로컬 접근",
     "agent.acpStartCodex": "Agent 시작",
@@ -968,17 +978,17 @@ export const agentsCatalog = defineCatalog(
     "agent.acpTurnRefused": "Agent가 작업을 거절함",
     "agent.acpWaiting": "기다리는 중…",
     "agent.acpWorking": "Agent가 작업 중입니다",
-    "agentTools.authenticated": "로그인됨",
+    "agentTools.authenticated": "로컬 인증 설정 확인됨",
     "agentTools.autoUpdateFailed":
       "{target}을 자동 업데이트하지 못했습니다: {error}",
     "agentTools.autoUpdated":
       "{target} DopeDB Skill을 리비전 {revision}(으)로 업데이트했습니다.",
     "agentTools.startupBody":
-      "DopeDB에서 사용할 Agent를 선택하세요. 선택한 Agent의 채팅 연결을 준비하고 로컬 로그인 상태를 확인합니다.",
+      "DopeDB에서 사용할 Agent를 선택하세요. 선택한 Agent의 채팅 연결을 준비하고 로컬 인증 설정을 확인합니다.",
     "agentTools.startupHeading": "DopeDB에서 사용할 Agent 선택",
     "agentTools.startupLater": "나중에",
     "agentTools.startupSafety":
-      "Agent가 없거나 로그아웃 상태라면 공식 앱에서 설정을 마쳐야 합니다. DopeDB는 로그인 토큰을 읽지 않습니다.",
+      "Agent나 인증 설정이 없으면 공식 CLI에서 설정을 마치세요. DopeDB는 자격 증명 파일을 열거나 토큰을 저장하지 않습니다.",
     "agentTools.startupInstallSelected": "선택한 Agent 준비",
     "agentTools.startupInstalling": "Agent 준비 중…",
     "agentTools.startupSaveSelected": "선택 저장",
@@ -1007,14 +1017,14 @@ export const agentsCatalog = defineCatalog(
     "agentTools.agentsTitle": "사용할 에이전트",
     "agentTools.cliAccount": "CLI 계정: {account}",
     "agentTools.apiKeyAccount": "API 키 인증",
-    "agentTools.accountIdentityUnavailable": "로그인됨 · CLI에서 계정 이름을 제공하지 않음",
+    "agentTools.accountIdentityUnavailable": "인증 설정됨 · CLI에서 계정 이름을 제공하지 않음",
     "agentTools.manageAccount": "에이전트 계정 관리",
     "agentTools.accountChangeInstructions": "터미널에서 공식 CLI로 계정을 변경한 뒤 다시 확인하고 새 채팅을 시작하세요. 진행 중인 채팅은 자동으로 재시작하지 않습니다.",
     "agentTools.copyAccountCommand": "로그인 명령 복사",
     "agentTools.accountCommandCopied": "로그인 명령을 복사했습니다.",
     "agentTools.accountCommandCopyFailed": "명령을 복사하지 못했습니다.",
     "agentTools.agentsDescription":
-      "AI Chat에서 사용할 Agent를 선택하세요. 연결 준비와 로컬 로그인 상태를 한곳에서 확인합니다.",
+      "AI Chat에서 사용할 Agent를 선택하세요. 연결 준비와 로컬 인증 설정을 한곳에서 확인합니다.",
     "agentTools.agentPrepared": "Agent 연결을 준비했습니다.",
     "agentTools.agentReady": "채팅 준비 완료",
     "agentTools.agentNotReady": "설정 필요",
@@ -1067,7 +1077,7 @@ export const agentsCatalog = defineCatalog(
     "agentTools.pluginState.rollbackRequired": "복구 필요",
     "agentTools.localClisTitle": "로컬 Agent CLI",
     "agentTools.localClisDescription":
-      "Claude Code와 Codex가 인증을 소유합니다. DopeDB는 검증한 로컬 실행 경로만 주입하며 토큰을 읽지 않습니다.",
+      "Claude Code와 Codex가 인증을 소유합니다. DopeDB는 검증한 실행 경로와 제공자별 로컬 설정을 사용하며 자격 증명 파일을 열거나 토큰을 저장하지 않습니다.",
     "agentTools.skillTitle": "DopeDB 스킬",
     "agentTools.skillDescription":
       "내장 AI Chat 밖에서 작업하는 Agent를 위한 선택형 탐색 안내입니다.",
@@ -1075,7 +1085,7 @@ export const agentsCatalog = defineCatalog(
     "agentTools.installAll": "DopeDB 스킬 설치",
     "agentTools.installAndUpdate": "설치 및 업데이트",
     "agentTools.installedRevision": "설치된 리비전 {revision}",
-    "agentTools.notAuthenticated": "로그인 필요",
+    "agentTools.notAuthenticated": "로컬 인증 설정 필요",
     "agentTools.path": "설치 경로",
     "agentTools.reasonFilesDifferFromManagedSnapshot":
       "설치된 파일이 관리 기록과 다릅니다.",

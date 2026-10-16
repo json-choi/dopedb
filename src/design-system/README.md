@@ -513,7 +513,7 @@ loopback 문서는 이 정본을 빌드 시 포함하며 네트워크 font나 sc
   feature별 임시 SVG나 상태색 대용 브랜드색을 만들지 않는다.
 - `AgentCliStatusIndicators`, `AgentCliDetectionNotice`: 시작 모달과 Agent Tools가
   공유하고 AI Chat도 같은 상태 어휘를 따르는 feature composition. 로컬 CLI의
-  탐지 중, probe 실패, 미설치, 로그인 필요, 준비 상태를 구분하며 실패를
+  탐지 중, probe 실패, 미설치, 로컬 인증 설정 필요, 준비 상태를 구분하며 실패를
   미설치로 축약하지 않는다. probe 상세와 재시도는 같은 inline 상태 surface가
   소유한다.
 - `ToolbarMenu menuSize="scope"`: Explorer schema scope popover의 outer

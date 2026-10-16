@@ -15,6 +15,47 @@ runtime과 성능 수치로 수행한다.
 - `missing`: 범위에는 속하지만 아직 구현하지 않음
 - `out-of-scope`: 제품 범위 결정상 화면이나 placeholder를 만들지 않음
 
+## 로컬 Claude Code 게이트웨이 인증
+
+- 상태: `partial` — 계정 로그인과 CLI가 관리하는 게이트웨이 인증 설정을 같은
+  공개 `auth status` 응답으로 확인한다. 상태 검사와 공식 어댑터 실행은
+  `AcpPluginId::local_cli_configuration_environment`의 제공자별 허용 목록을
+  공유하며 자격 증명을 IPC·로그·앱 저장소에 추가하지 않는다. 빈 API key도
+  그대로 전달하고 Claude 설정은 Codex 실행에 전달하지 않는다. 게이트웨이가 쓰는
+  `ANTHROPIC_MODEL`과 `ANTHROPIC_DEFAULT_{OPUS,SONNET,HAIKU}_MODEL`도 보존하며,
+  제공자가 광고한 기본 모델명 대신 사용자가 지정한 CLI 모델 매핑을 유지한다.
+- 인증 상태 명령의 실패·잘못된 JSON을 미로그인과 구분하고, 설정 안내는 CLI
+  사용자/관리형 설정과 helper 경로를 설명한다. 설정 확인은 원격 연결 성공이
+  아니며 실제 조직 게이트웨이의 정상 응답·잘못된 토큰·GUI 실행과 기존 구독
+  로그인 회귀 QA는 남아 있다. 개발 앱은 안정 앱과 별도 데이터 root를 사용한다.
+- 공식 Claude Code 2.1.301의 격리된 설정에서 미설정·빈 토큰의 exit 1과
+  환경변수/사용자 설정 기반 가짜 게이트웨이 토큰의 설정 확인을 검증했다.
+  기존 브리지 E2E 안에서 Claude 설정 전달·빈 API key 보존·Codex로의 전달 차단과
+  등록 bearer/실행 hook 제거를 확인했다. frontend build/smoke 및 Rust 검증을
+  통과했다. macOS 개발 서명 runner는 종료 코드 1로 실패해, 빌드된 debug binary와
+  Vite를 직접 실행했고 실제 1200×800 창과 Agent 설정 진입 화면을 확인했다.
+  보조 접근 권한이 없어 native control 자동 조작은 수행하지 않았다.
+
+## Personal DB-only Agent 시작과 hosted Knowledge
+
+- 상태: `partial` — 개인 DB만 선택한 내장 ACP 시작과 Environment 목록 조회는
+  DopeDB 계정 로그인 여부만으로 Personal GitHub Knowledge 서버 준비를 요구하지
+  않는다. 기존 로컬 Project/Environment/DB revision·account pin 검증은 유지한다.
+- Team 세션과 하나 이상의 GitHub source를 명시적으로 선택한 Personal 세션은
+  hosted authority 재확인을 필수로 유지하며 서버 오류를 무시하는 fallback은 없다.
+  목록 조회는 실행 grant가 아니고 실제 시작 시 선택한 source를 다시 확인한다.
+- 운영 서버의 `Personal Knowledge scope could not be prepared` 500 자체는 아직
+  해결하지 않았다. 실제 GitHub source를 선택한 세션은 이 서버 문제에 계속 영향을
+  받는다. 수정된 macOS 개발 앱의 Personal DB 1개·source 0개 선택에서 Claude ACP
+  초기화 성공과 어댑터 candidate→current 승격을 확인했다. 이어진 사용자 메시지는
+  게이트웨이가 거절한 기본 모델명으로 `model_not_found`를 반환해, 상속된 CLI 모델
+  매핑도 보존하도록 수정했다. 실제 게이트웨이 정상 응답 QA는 남아 있다.
+- 후속 macOS debug QA에서 Agent의 catalog search 처리 중 Tokio worker stack
+  overflow로 앱이 SIGABRT 종료됐다. 크래시 스택은 Broker의 `catalog_search` →
+  `catalog` → `resolve_connection` → `terminal_authority_for_selector` 경로를
+  가리키며 원인 확정·수정·재검증은 미완료다. 이 크래시와 운영 Personal Knowledge
+  500은 자동 테스트 통과와 별개인 merge 전 QA blocker로 유지한다.
+
 ## 2026-10-13 기능 복구 검수
 
 워크스페이스 생성의 로그인 진입, 검색 옆 쿼리 이력, BigQuery의 별도 연결 진입,

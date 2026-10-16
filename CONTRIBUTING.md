@@ -25,6 +25,11 @@ secret-free Project 설정을 사용자가 화면에서 검토한 뒤 `dopedb ag
 로컬 `codex`/`claude` CLI만 실행한다. 두 경로의 typed MCP bridge는 exact
 Project-resource grant와 process ancestry에만 묶인 runtime-only endpoint이며 저장된
 범용 MCP server가 아니다. 앱과 CLI는 provider login token을 읽거나 갱신하지 않는다.
+로컬 CLI 인증에는 구독 로그인뿐 아니라 CLI가 관리하는 게이트웨이 인증도 포함한다.
+제공자별 허용 목록에 한해 상속된 CLI 설정을 해당 상태 검사와 공식 어댑터에 그대로
+전달할 수 있다. 앱은 자격 증명 파일을 열거나 설정/helper에서 비밀값을 추출하지
+않으며 해당 값을 로그·영속 저장하지 않고, 설정을 제거해 다른 endpoint로 재시도하지
+않는다. CLI가 보고한 인증 준비 상태는 실제 원격 요청 성공을 보장하지 않는다.
 
 ## 기본 흐름
 

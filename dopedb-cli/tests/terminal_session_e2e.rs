@@ -954,7 +954,7 @@ mod platform {
         let launcher_target = temp.path().join("verified-node-target");
         fs::write(
         &launcher_target,
-        b"#!/bin/sh\nif env | grep -Eq '^(DOPEDB_SESSION_TOKEN|DOPEDB_TEST_PARENT_HOOK|DOPEDB_TEST_SECRET)='; then exit 91; fi\nprintf '%s\\n%s\\n%s\\n%s\\n' \"$1\" \"$CODEX_PATH\" \"$DOPEDB_TERMINAL_SESSION_ID\" \"$HOME\"\n",
+        b"#!/bin/sh\nif env | grep -Eq '^(DOPEDB_SESSION_TOKEN|DOPEDB_TEST_PARENT_HOOK|DOPEDB_TEST_SECRET|NODE_OPTIONS)='; then exit 91; fi\nif [ -n \"$CLAUDE_CODE_EXECUTABLE\" ]; then\n [ \"$ANTHROPIC_BASE_URL\" = 'https://llm-gateway.example.com' ] && [ \"$ANTHROPIC_AUTH_TOKEN\" = 'fixture-gateway-token' ] && [ \"${ANTHROPIC_API_KEY+x}\" = x ] && [ -z \"$ANTHROPIC_API_KEY\" ] && [ \"$CLAUDE_CONFIG_DIR\" = \"$HOME/claude-config\" ] || exit 92\n [ -z \"${CODEX_HOME+x}\" ] || exit 93\n [ \"$ANTHROPIC_MODEL\" = 'fixture-selected-model' ] && [ \"$ANTHROPIC_DEFAULT_OPUS_MODEL\" = 'fixture-opus' ] && [ \"$ANTHROPIC_DEFAULT_SONNET_MODEL\" = 'fixture-sonnet' ] && [ \"$ANTHROPIC_DEFAULT_HAIKU_MODEL\" = 'fixture-haiku' ] || exit 96\nelse\n if env | grep -Eq '^(ANTHROPIC_|CLAUDE_CONFIG_DIR=)'; then exit 94; fi\n [ \"$CODEX_HOME\" = \"$HOME/codex-config\" ] || exit 95\nfi\nprintf '%s\\n%s\\n%s\\n%s\\n' \"$1\" \"${CODEX_PATH:-$CLAUDE_CODE_EXECUTABLE}\" \"$DOPEDB_TERMINAL_SESSION_ID\" \"$HOME\"\n",
     )
     .unwrap();
         fs::set_permissions(&launcher_target, fs::Permissions::from_mode(0o700)).unwrap();
@@ -982,70 +982,84 @@ mod platform {
         let expected_provider_cli_resolved = provider_cli_resolved.to_string_lossy().into_owned();
         let expected_provider_cli_sha256 = provider_cli_sha256.clone();
         let launcher_server = thread::spawn(move || {
-            let (mut stream, _) = launcher_listener.accept().unwrap();
-            let request = read_request(&mut stream);
-            assert_eq!(request.command, CommandName::AgentSessionRegister);
-            let authentication = request.authentication.as_ref().unwrap();
-            assert_eq!(authentication.terminal_session_id, launcher_session_id);
-            assert_eq!(authentication.token(), Some("cd".repeat(32).as_str()));
-            let arguments: AgentSessionRegisterArguments =
-                serde_json::from_value(request.arguments.clone()).unwrap();
-            assert_eq!(arguments.plugin_id, AcpPluginId::Codex);
-            assert_eq!(arguments.adapter_bundle_version, "1.0.0");
-            assert_eq!(arguments.runtime_executable, expected_launcher);
-            assert_eq!(
-                arguments.runtime_resolved_executable,
-                expected_resolved_launcher
-            );
-            assert_eq!(arguments.runtime_sha256, expected_sha256);
-            assert_eq!(arguments.adapter_entrypoint, expected_adapter);
-            assert_eq!(arguments.adapter_entrypoint_sha256, expected_adapter_sha256);
-            assert_eq!(arguments.provider_cli_executable, expected_provider_cli);
-            assert_eq!(
-                arguments.provider_cli_resolved_executable,
-                expected_provider_cli_resolved
-            );
-            assert_eq!(arguments.provider_cli_sha256, expected_provider_cli_sha256);
-            respond(&mut stream, &request, &EmptyArguments::default());
+            for provider in [AcpPluginId::Codex, AcpPluginId::Claude] {
+                let (mut stream, _) = launcher_listener.accept().unwrap();
+                let request = read_request(&mut stream);
+                assert_eq!(request.command, CommandName::AgentSessionRegister);
+                let authentication = request.authentication.as_ref().unwrap();
+                assert_eq!(authentication.terminal_session_id, launcher_session_id);
+                assert_eq!(authentication.token(), Some("cd".repeat(32).as_str()));
+                let arguments: AgentSessionRegisterArguments =
+                    serde_json::from_value(request.arguments.clone()).unwrap();
+                assert_eq!(arguments.plugin_id, provider);
+                assert_eq!(arguments.adapter_bundle_version, "1.0.0");
+                assert_eq!(arguments.runtime_executable, expected_launcher);
+                assert_eq!(
+                    arguments.runtime_resolved_executable,
+                    expected_resolved_launcher
+                );
+                assert_eq!(arguments.runtime_sha256, expected_sha256);
+                assert_eq!(arguments.adapter_entrypoint, expected_adapter);
+                assert_eq!(arguments.adapter_entrypoint_sha256, expected_adapter_sha256);
+                assert_eq!(arguments.provider_cli_executable, expected_provider_cli);
+                assert_eq!(
+                    arguments.provider_cli_resolved_executable,
+                    expected_provider_cli_resolved
+                );
+                assert_eq!(arguments.provider_cli_sha256, expected_provider_cli_sha256);
+                respond(&mut stream, &request, &EmptyArguments::default());
+            }
         });
 
-        let launcher_status = Command::new(env!("CARGO_BIN_EXE_dopedb-agent-bridge"))
-            .args([
-                "launch",
-                AcpPluginId::Codex.as_str(),
-                "1.0.0",
-                launcher.to_str().unwrap(),
-                launcher_resolved.to_str().unwrap(),
-                launcher_sha256.as_str(),
-                adapter.to_str().unwrap(),
-                adapter_sha256.as_str(),
-                provider_cli.to_str().unwrap(),
-                provider_cli_resolved.to_str().unwrap(),
-                provider_cli_sha256.as_str(),
-            ])
-            .env("DOPEDB_RUNTIME_FILE", &launcher_runtime_file)
-            .env(
-                "DOPEDB_TERMINAL_SESSION_ID",
-                launcher_session_id.to_string(),
-            )
-            .env("DOPEDB_SESSION_TOKEN", "cd".repeat(32))
-            .env("DOPEDB_TEST_PARENT_HOOK", "stale-terminal-session")
-            .env("DOPEDB_TEST_SECRET", "unrelated-parent-credential")
-            .env("HOME", temp.path())
-            .output()
-            .unwrap();
-        assert!(launcher_status.status.success());
+        for provider in [AcpPluginId::Codex, AcpPluginId::Claude] {
+            let launcher_status = Command::new(env!("CARGO_BIN_EXE_dopedb-agent-bridge"))
+                .args([
+                    "launch",
+                    provider.as_str(),
+                    "1.0.0",
+                    launcher.to_str().unwrap(),
+                    launcher_resolved.to_str().unwrap(),
+                    launcher_sha256.as_str(),
+                    adapter.to_str().unwrap(),
+                    adapter_sha256.as_str(),
+                    provider_cli.to_str().unwrap(),
+                    provider_cli_resolved.to_str().unwrap(),
+                    provider_cli_sha256.as_str(),
+                ])
+                .env("DOPEDB_RUNTIME_FILE", &launcher_runtime_file)
+                .env(
+                    "DOPEDB_TERMINAL_SESSION_ID",
+                    launcher_session_id.to_string(),
+                )
+                .env("DOPEDB_SESSION_TOKEN", "cd".repeat(32))
+                .env("DOPEDB_TEST_PARENT_HOOK", "stale-terminal-session")
+                .env("DOPEDB_TEST_SECRET", "unrelated-parent-credential")
+                .env("NODE_OPTIONS", "--require=unrelated-parent-hook")
+                .env("ANTHROPIC_BASE_URL", "https://llm-gateway.example.com")
+                .env("ANTHROPIC_AUTH_TOKEN", "fixture-gateway-token")
+                .env("ANTHROPIC_API_KEY", "")
+                .env("ANTHROPIC_MODEL", "fixture-selected-model")
+                .env("ANTHROPIC_DEFAULT_OPUS_MODEL", "fixture-opus")
+                .env("ANTHROPIC_DEFAULT_SONNET_MODEL", "fixture-sonnet")
+                .env("ANTHROPIC_DEFAULT_HAIKU_MODEL", "fixture-haiku")
+                .env("CLAUDE_CONFIG_DIR", temp.path().join("claude-config"))
+                .env("CODEX_HOME", temp.path().join("codex-config"))
+                .env("HOME", temp.path())
+                .output()
+                .unwrap();
+            assert!(launcher_status.status.success());
+            let inherited = String::from_utf8(launcher_status.stdout).unwrap();
+            assert_eq!(
+                inherited.lines().collect::<Vec<_>>(),
+                [
+                    adapter.to_string_lossy().as_ref(),
+                    provider_cli.to_string_lossy().as_ref(),
+                    launcher_session_id.to_string().as_str(),
+                    temp.path().to_string_lossy().as_ref(),
+                ]
+            );
+        }
         launcher_server.join().unwrap();
-        let inherited = String::from_utf8(launcher_status.stdout).unwrap();
-        assert_eq!(
-            inherited.lines().collect::<Vec<_>>(),
-            [
-                adapter.to_string_lossy().as_ref(),
-                provider_cli.to_string_lossy().as_ref(),
-                launcher_session_id.to_string().as_str(),
-                temp.path().to_string_lossy().as_ref(),
-            ]
-        );
     }
 
     /// `dopedb agent init` writes a secret-free, checked-in config.

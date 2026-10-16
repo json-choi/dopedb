@@ -7,6 +7,7 @@ use tauri_plugin_opener::OpenerExt;
 use url::Url;
 
 use crate::error::AppResult;
+use crate::kernel::access::WorkspaceKind;
 use crate::kernel::identity::{AcpSessionId, ConnectionId};
 use crate::state::AppState;
 use uuid::Uuid;
@@ -234,7 +235,8 @@ pub async fn start_agent_acp_session(
         .pin_connection_for_read(Uuid::from(connection_id))
         .await?;
     if agent_session_requires_hosted_knowledge_reconciliation(
-        connection.scope.selected_account_id.as_deref(),
+        connection.scope.workspace_kind,
+        &resource_scopes,
     ) {
         state.services.knowledge.reconcile_current_access().await?;
     }
@@ -254,9 +256,17 @@ pub async fn start_agent_acp_session(
 }
 
 fn agent_session_requires_hosted_knowledge_reconciliation(
-    selected_account_id: Option<&str>,
+    workspace_kind: WorkspaceKind,
+    resource_scopes: &[AgentResourceScopeSelection],
 ) -> bool {
-    selected_account_id.is_some()
+    // Personal database authority is local even when a cloud account is selected.
+    // Only selected hosted sources require Personal GitHub provisioning; Team
+    // authority is always remote. Never turn a reconciliation failure into an
+    // offline fallback for either of those remote-authority cases.
+    workspace_kind == WorkspaceKind::Team
+        || resource_scopes
+            .iter()
+            .any(|scope| !scope.source_ids.is_empty())
 }
 
 /// List exact Project Environments available through this connection revision.
@@ -271,7 +281,10 @@ pub async fn list_agent_knowledge_environments(
         .knowledge
         .pin_connection_for_read(Uuid::from(connection_id))
         .await?;
-    if connection.scope.selected_account_id.is_some() {
+    // This inventory is not an execution grant. Personal Projects/DB bindings
+    // are device-owned; selected hosted sources are reconciled at session start.
+    if agent_session_requires_hosted_knowledge_reconciliation(connection.scope.workspace_kind, &[])
+    {
         state.services.knowledge.reconcile_current_access().await?;
     }
     state
@@ -387,12 +400,40 @@ pub async fn detect_agent_clis(
 
 #[cfg(test)]
 pub(crate) fn assert_agent_transport_contract() {
-    assert!(!agent_session_requires_hosted_knowledge_reconciliation(
-        None,
-    ));
-    assert!(agent_session_requires_hosted_knowledge_reconciliation(
-        Some("account-1"),
-    ));
+    let mut selections = vec![AgentResourceScopeSelection {
+        project_environment_id: Uuid::from_u128(1),
+        authority_connection_id: Uuid::from_u128(2),
+        connection_ids: vec![Uuid::from_u128(2)],
+        source_ids: Vec::new(),
+    }];
+    for resources in [&[][..], selections.as_slice()] {
+        assert!(!agent_session_requires_hosted_knowledge_reconciliation(
+            WorkspaceKind::Personal,
+            resources
+        ));
+        assert!(agent_session_requires_hosted_knowledge_reconciliation(
+            WorkspaceKind::Team,
+            resources
+        ));
+    }
+    // A hosted source in any selected Environment keeps reconciliation mandatory,
+    // including a source-only selection; no selected-account shortcut bypasses it.
+    selections.push(AgentResourceScopeSelection {
+        project_environment_id: Uuid::from_u128(3),
+        authority_connection_id: Uuid::from_u128(4),
+        connection_ids: Vec::new(),
+        source_ids: vec![Uuid::from_u128(5)],
+    });
+    for kind in [WorkspaceKind::Personal, WorkspaceKind::Team] {
+        assert!(agent_session_requires_hosted_knowledge_reconciliation(
+            kind,
+            &selections
+        ));
+        assert!(agent_session_requires_hosted_knowledge_reconciliation(
+            kind,
+            &selections[1..]
+        ));
+    }
     assert_eq!(
         validated_external_agent_link("https://example.test/path?q=1")
             .expect("valid external link"),
