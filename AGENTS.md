@@ -77,6 +77,12 @@ visible Desktop review of the checked-in, secret-free Project resource config.
 Holding that line is what keeps subscription users working, and it means a
 policy change at one provider drops only that adapter or CLI launcher. Do not
 build a bespoke chat protocol or a per-provider integration.
+Local CLI authentication includes CLI-managed gateway credentials, not only
+subscription login. A provider-scoped allowlist may pass inherited CLI
+configuration unchanged to that provider's status probe and official adapter;
+the app never opens credential files, extracts settings/helper secrets, logs or
+persists those values, or retries against a different endpoint by removing them.
+CLI-reported credential readiness is not proof of a successful remote request.
 Do not expose saved connections through an always-on general MCP database server.
 A typed MCP-compatible bridge may exist only inside an exact Desktop-launched
 ACP session or a visible Desktop-approved `dopedb agent start` session. Both are

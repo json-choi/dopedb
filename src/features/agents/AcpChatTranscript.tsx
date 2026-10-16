@@ -159,7 +159,7 @@ export default function AcpChatTranscript({
           copied={setup.copiedSetupCommand === setup.selectedProvider}
           checking={setup.cliFetching}
           onPrimary={() =>
-            void (setup.selectedCliStatus?.installed
+            void (setup.selectedCliStatus?.installed && setup.selectedProvider !== "claude"
               ? commands.setup.copyLoginCommand(setup.selectedProvider)
               : commands.setup.openSetupGuide(setup.selectedProvider))
           }
@@ -321,13 +321,16 @@ function AgentSetupGuidance({
 }) {
   const { t } = useI18n();
   const provider = providerLabel(cli.id);
+  const claudeSetup = cli.installed && cli.id === "claude";
   return (
     <div className="tw:grid tw:gap-5">
       <ProviderHeading provider={cli.id} />
       <AgentPermissionCard
         title={t("agent.acpSetupTitle", { provider })}
         description={
-          cli.installed
+          claudeSetup
+            ? t("agent.acpSetupClaudeAuthBody")
+            : cli.installed
             ? t("agent.acpSetupLoginBody", {
                 provider,
                 command: loginCommand(cli.id),
@@ -339,7 +342,9 @@ function AgentSetupGuidance({
         actions={
           <div className="tw:flex tw:flex-wrap tw:gap-2">
             <Button size="xs" variant="primary" onClick={onPrimary}>
-              {cli.installed
+              {claudeSetup
+                ? t("agent.acpSetupOpenAuthGuide")
+                : cli.installed
                 ? copied
                   ? t("agent.acpSetupCopied")
                   : t("agent.acpSetupCopyLogin")
