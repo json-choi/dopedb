@@ -38,9 +38,9 @@ stable upgrade targets:
 
 - `dashmap` 7 is release-candidate only; 6.2 is the latest stable line.
 - `libc` 1 is alpha only; 0.2 is the latest stable line.
-- `zip` 9.0 is stable, but `calamine` 0.36 and `rust_xlsxwriter` 0.99 still
-  require `zip` ^8, so the direct dependency stays on 8.6 to keep one zip
-  version until both accept 9.
+- `zip` 9 is stable, but `calamine` and `rust_xlsxwriter` still require zip 8,
+  so the direct dependency stays on 8. `tauri-plugin-updater` needs zip 4 only
+  for its default `zip` feature, which DopeDB disables.
 
 ## Audit record
 
@@ -65,17 +65,13 @@ Actions remain pinned to the commit behind their latest eligible stable tag.
 OSV exceptions are explicit and expire on 2026-12-04: Linux-only GTK3 entries
 that are not compiled for the shipped macOS or verified Windows targets, plus
 unmaintained-only `unic-*` entries currently required by Tauri's `urlpattern`
-build dependency. Any other OSV finding fails CI.
-
-The 2026-10-17 `zip` extraction advisories (RUSTSEC-2026-0367, -0368, -0369)
-affect only the `extract` APIs. This repository disabled the updater plugin's
-default `zip` feature, the only caller, which handles Windows `.zip` and Linux
-AppImage update archives that DopeDB does not ship. The remaining `zip` 8.6 is
-used by DopeDB, `calamine`, and `rust_xlsxwriter` to read or write archives
-without extracting them, and the root `clippy.toml` rejects the extract APIs.
-The OSV exceptions expire on 2026-11-30. They are scoped by advisory ID, so they
-would also hide these advisories for another `zip` version: do not re-enable the
-updater's `zip` feature while they exist.
+build dependency. The `zip` extraction advisories RUSTSEC-2026-0367, -0368, and
+-0369 expire on 2026-11-17: the fix exists only in zip 9, which the XLSX crates
+do not accept yet. DopeDB never calls `extract()`, and the root `clippy.toml`
+rejects the extract APIs. The Tauri updater's default `zip` feature, the only
+caller, is disabled because DopeDB ships macOS `.app.tar.gz` and Windows NSIS
+`.exe` updates, not `.zip` packages. Keep it disabled while the exceptions,
+which are scoped by advisory ID, remain. Any other OSV finding fails CI.
 
 The following registry releases were intentionally held because they were less
 than 24 hours old when the lockfiles were regenerated:
