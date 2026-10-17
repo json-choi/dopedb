@@ -10,12 +10,12 @@
 
 <h1 align="center">DopeDB</h1>
 
-<p align="center">
-  <strong>DB 접근은 함께, 인증정보는 각자 보관하세요.</strong>
-</p>
+<h3 align="center">Codex에게 prod DB를 맡기기 전에, 경계부터 정하세요.</h3>
 
 <p align="center">
-  실제 데이터베이스에 Codex나 Claude를 연결하는 팀을 위한 오픈소스 데이터베이스 워크스페이스입니다.
+  <strong>DB 접근은 함께, 인증정보는 각자 보관하세요.</strong><br />
+  Codex와 Claude가 내가 고른 정확한 권한 안에서만 일하고,<br />
+  모든 DB 쓰기는 사람의 승인을 기다리는 오픈소스 데이터베이스 워크스페이스입니다.
 </p>
 
 <p align="center">
@@ -33,25 +33,69 @@
 </p>
 
 <p align="center">
-  <a href="https://dopedb.dev/ko">
-    <img src="./site/public/dopedb-desktop-0.4.21-ko.png" width="100%" alt="개인 워크스페이스에서 Demo SQLite의 주문 테이블·컬럼·외래 키를 보여주는 DopeDB 0.4.21" />
+  <a href="./assets/readme/dopedb-0.5.6-tour.mp4">
+    <img src="./assets/readme/dopedb-0.5.6-tour.webp" width="100%" alt="DopeDB 0.5.6 가이드 데모: 기본 Demo SQLite를 열고 주문 테이블을 본 뒤, 해당 DB에 고정된 Claude session에 매출 분석을 요청하는 화면" />
   </a>
 </p>
 
-<p align="center"><sub>DopeDB 0.4.21 · 개인 워크스페이스 · 기본 Demo SQLite · 다크 테마</sub></p>
+<p align="center"><sub>DopeDB 0.5.6 실제 화면 녹화(길이만 편집) · 기본 Demo SQLite 가이드 데모 · 영어 UI · <a href="./assets/readme/dopedb-0.5.6-tour.mp4">MP4로 보기</a></sub></p>
 
-## Agent에게 운영 데이터베이스를 맡기기 전에
+## 어려운 건 SQL이 아닙니다
 
-어려운 일은 SQL을 만드는 것이 아닙니다. 하나의 공용 비밀번호를 배포하거나 저장된
-모든 연결을 제한 없는 도구 서버에 열지 않고, 팀원과 Agent가 정확한 권한으로 올바른
-데이터베이스에 닿게 하는 일입니다.
+팀원이나 Agent가 정확한 권한으로 올바른 데이터베이스에 닿게 하는 일이 어렵습니다.
+공용 비밀번호를 메신저에 붙여넣거나, 저장된 모든 연결을 제한 없는 도구 서버에 열지
+않고서요.
 
 DopeDB는 공유 정체성과 정책은 워크스페이스에 두고, 인증정보·DB traffic·승인·중단·
 복구·감사는 Desktop 경계에 남깁니다.
 
-| 접근 경로는 함께 공유 | 인증정보는 각자 보관 | Agent session은 정확히 고정 |
+| 공용 비밀번호 없이 | 모든 열쇠를 쥔 Agent 없이 | 몰래 일어나는 쓰기 없이 |
 | --- | --- | --- |
-| 워크스페이스가 연결 정보, 클라우드 리소스, 환경 정책, 권한과 변경 버전을 관리합니다. | 구성원은 OS에 저장한 개인 인증정보를 사용하거나 최소 권한의 단기 인증정보를 메모리에서만 사용합니다. | Codex나 Claude는 한 Project에서 명시적으로 선택한 DB·BigQuery·소스만 사용하며, DB 하나까지 쓰기 대상으로 지정할 수 있습니다. |
+| 워크스페이스는 비밀값 없는 연결 정의만 공유합니다. 구성원은 OS에 저장한 개인 인증정보를 쓰거나, 최소 권한의 단기 인증정보를 메모리에서만 사용합니다. | Codex나 Claude는 한 Project에서 명시적으로 선택한 DB·BigQuery·소스만 사용하며, DB 하나까지만 쓰기 대상으로 지정할 수 있습니다. | 읽기가 기본입니다. 데이터·스키마 변경은 연결마다 직접 켜야 하고, 모든 변경은 정확한 승인을 거칩니다. 취소, 수동 트랜잭션 롤백, 해시 체인 감사 기록이 함께 남습니다. |
+
+## 실제 화면으로 보기
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="./assets/readme/dopedb-0.5.6-agent-session.png" alt="Demo SQLite에 고정된 Claude session이 답하기 전에 DB 구조와 데이터를 먼저 확인하는 화면" />
+      <p><strong>Agent는 실제 스키마부터 확인합니다.</strong><br />선택한 Demo SQLite에 고정된 공식 Claude session이 답하기 전에 구조와 데이터를 먼저 읽습니다.</p>
+    </td>
+    <td width="50%" valign="top">
+      <img src="./assets/readme/dopedb-0.5.6-data-grid.png" alt="DopeDB 데이터 그리드에 표시된 Demo SQLite의 orders 테이블" />
+      <p><strong>결과는 내 기기에 남습니다.</strong><br />쿼리와 결과 행은 호스팅 DB 프록시가 아니라 내 Desktop을 거칩니다.</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="./assets/readme/dopedb-0.5.6-safety-guardrails.png" alt="읽기만 켜져 있고 데이터·스키마 변경은 꺼진 연결별 안전 설정 화면" />
+      <p><strong>연결마다 정하는 안전장치.</strong><br />필요한 곳에서만 데이터·스키마 변경을 켭니다. 워크스페이스 권한과 DB 인증정보가 여전히 바깥 한계를 정합니다.</p>
+    </td>
+    <td width="50%" valign="top">
+      <img src="./assets/readme/dopedb-0.5.6-write-reconfirm.png" alt="선택한 DB의 revision이 바뀌어 Agent 시작 전에 다시 확인을 요구하는 화면" />
+      <p><strong>권한 범위가 바뀌면 Agent는 기다립니다.</strong><br />선택한 DB의 revision이 바뀌면 다음 Agent session을 시작하기 전에 다시 확인을 요청합니다.</p>
+    </td>
+  </tr>
+</table>
+
+<sub>위 화면은 영어 UI로 촬영했습니다. 앱은 한국어와 영어를 모두 지원합니다.</sub>
+
+## 계정도 DB도 없이 바로 체험하기
+
+1. macOS나 Windows용 [Alpha를 다운로드](#alpha-다운로드)합니다. 개인 워크스페이스는
+   로그인이 필요 없습니다.
+2. 처음 실행하면 사용할 Agent를 고릅니다. DopeDB는 공식 CLI의 로컬 로그인 상태만
+   확인하며 자격 증명 파일을 열거나 토큰을 저장하지 않습니다.
+3. 시작 화면에서 **가이드 데모로 둘러보기**를 누르면 샘플 주문이 담긴 로컬 Demo
+   SQLite가 만들어집니다. 샘플 주문 보기, Agent에게 매출 분석 요청, 정확한 쓰기
+   승인 연습까지 실제 제품 흐름 세 가지를 따라가 보세요.
+
+<table>
+  <tr>
+    <td width="50%"><img src="./assets/readme/dopedb-0.5.6-agent-setup-ko.png" alt="Claude와 Codex 중 사용할 Agent를 고르는 DopeDB 첫 실행 화면" /></td>
+    <td width="50%"><img src="./assets/readme/dopedb-0.5.6-welcome-ko.png" alt="이 컴퓨터에서 DB 찾기, 새 연결, 가이드 데모 둘러보기를 제공하는 DopeDB 시작 화면" /></td>
+  </tr>
+</table>
 
 ## 한눈에 보는 권한 경계
 

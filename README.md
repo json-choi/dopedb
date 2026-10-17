@@ -10,12 +10,12 @@
 
 <h1 align="center">DopeDB</h1>
 
-<p align="center">
-  <strong>Share database access. Keep credentials personal.</strong>
-</p>
+<h3 align="center">Before Codex meets prod, set the boundary.</h3>
 
 <p align="center">
-  An open-source database workspace for teams that use Codex or Claude against real databases.
+  <strong>Share database access. Keep credentials personal.</strong><br />
+  The open-source database workspace where Codex or Claude works only inside the exact grant you chose,<br />
+  and every database write waits for a human.
 </p>
 
 <p align="center">
@@ -33,25 +33,66 @@
 </p>
 
 <p align="center">
-  <a href="https://dopedb.dev">
-    <img src="./site/public/dopedb-desktop-0.4.21.png" width="100%" alt="DopeDB 0.4.21 showing the Demo SQLite orders table, columns, and foreign key in Personal Workspace" />
+  <a href="./assets/readme/dopedb-0.5.6-tour.mp4">
+    <img src="./assets/readme/dopedb-0.5.6-tour.webp" width="100%" alt="DopeDB 0.5.6 guided demo: open the bundled Demo SQLite, browse the orders table, then ask a Claude session pinned to that database to analyze revenue" />
   </a>
 </p>
 
-<p align="center"><sub>DopeDB 0.4.21 · Personal Workspace · bundled Demo SQLite · dark theme</sub></p>
+<p align="center"><sub>Real DopeDB 0.5.6 screen capture, trimmed for length · guided demo on the bundled Demo SQLite · <a href="./assets/readme/dopedb-0.5.6-tour.mp4">watch as MP4</a></sub></p>
 
-## Before you hand an Agent your production database
+## The hard part isn't the SQL
 
-The hard part is not generating SQL. It is letting a teammate or Agent reach the
-right database with the right authority—without distributing one shared password
-or exposing every saved connection through an unrestricted tool server.
+It is letting a teammate or Agent reach the right database with the right
+authority—without pasting one shared password into chat or exposing every saved
+connection through an unrestricted tool server.
 
 DopeDB keeps shared identity and policy in the workspace, while credentials,
 database traffic, approval, stop, recovery, and audit stay at the Desktop boundary.
 
-| Share the access path | Keep credentials personal | Pin every Agent session |
+| No shared password | No Agent holding every key | No surprise writes |
 | --- | --- | --- |
-| The workspace owns connection identity, provider resource, environment policy, grants, and revisions. | Each member uses an OS-stored local credential or a least-privilege, short-lived managed credential held only in process memory. | Codex or Claude works with explicitly selected databases, BigQuery resources, and sources from one Project, with at most one database as a write target. |
+| The workspace shares a secretless connection definition. Each member uses an OS-stored local credential or a least-privilege, short-lived managed credential held only in process memory. | Each Codex or Claude session works with explicitly selected databases, BigQuery resources, and sources from one Project, with at most one database as a write target. | Reading is the baseline. Data and schema changes are opt-in per connection, and every mutation still needs your exact approval, with cancellation, manual transaction rollback, and a hash-chained audit trail. |
+
+## See it work
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="./assets/readme/dopedb-0.5.6-agent-session.png" alt="A Claude session pinned to Demo SQLite inspects the database structure and reads data before answering" />
+      <p><strong>The Agent checks the real schema first.</strong><br />An official Claude session, pinned to the selected Demo SQLite, inspects structure and reads data before it answers.</p>
+    </td>
+    <td width="50%" valign="top">
+      <img src="./assets/readme/dopedb-0.5.6-data-grid.png" alt="The orders table of Demo SQLite in the DopeDB data grid" />
+      <p><strong>Results stay on your machine.</strong><br />Queries and result rows run through your Desktop, not a hosted database proxy.</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="./assets/readme/dopedb-0.5.6-safety-guardrails.png" alt="Per-connection guardrails with read data on and data or schema changes off" />
+      <p><strong>Guardrails per connection.</strong><br />Turn on data or schema changes only where you mean to. Workspace grants and database credentials still set the outer limit.</p>
+    </td>
+    <td width="50%" valign="top">
+      <img src="./assets/readme/dopedb-0.5.6-write-reconfirm.png" alt="DopeDB asks to reconfirm the database selection after its revision changed, before the Agent starts" />
+      <p><strong>Grant changed? The Agent waits.</strong><br />When a selected database changes revision, DopeDB asks you to reconfirm before the next Agent session starts.</p>
+    </td>
+  </tr>
+</table>
+
+## Try it without an account or a database
+
+1. [Download the alpha](#download-the-alpha) for macOS or Windows. Personal
+   Workspace needs no sign-in.
+2. On the welcome screen, choose **Explore the guided demo**. DopeDB creates a
+   local Demo SQLite with sample orders.
+3. Follow three real product flows: browse the sample orders, ask the Agent to
+   analyze revenue, then practice an exact write approval.
+
+The Agent step uses your existing local `claude` or `codex` login. DopeDB never
+reads or refreshes that token.
+
+<p align="center">
+  <img src="./assets/readme/dopedb-0.5.6-welcome.png" width="88%" alt="DopeDB welcome screen offering to find a local database, create a new connection, or explore the guided demo" />
+</p>
 
 ## The boundary at a glance
 
