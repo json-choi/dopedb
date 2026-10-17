@@ -227,15 +227,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "arbitrary"
-version = "1.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3d036a3c4ab069c7b410a2ce876bd74808d2d0888a82667669f8e783a898bf1"
-dependencies = [
- "derive_arbitrary",
-]
-
-[[package]]
 name = "arrayvec"
 version = "0.7.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -750,7 +741,7 @@ dependencies = [
  "log",
  "quick-xml",
  "serde",
- "zip 8.6.0",
+ "zip",
 ]
 
 [[package]]
@@ -1471,17 +1462,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "derive_arbitrary"
-version = "1.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e567bd82dcff979e4b03460c307b3cdc9e96fde3d73bed1496d2bc75d9dd62a"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.119",
-]
-
-[[package]]
 name = "derive_more"
 version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1690,7 +1670,7 @@ dependencies = [
  "windows-sys 0.61.2",
  "x509-parser",
  "zeroize",
- "zip 8.6.0",
+ "zip",
 ]
 
 [[package]]
@@ -5111,7 +5091,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "34f2d2cda7223168a14fb86bc7411dbc3379bd7d49749ecc53b91ed98585b6b0"
 dependencies = [
  "tempfile",
- "zip 8.6.0",
+ "zip",
 ]
 
 [[package]]
@@ -6586,7 +6566,6 @@ dependencies = [
  "tokio",
  "url",
  "windows-sys 0.60.2",
- "zip 4.6.1",
 ]
 
 [[package]]
@@ -8495,18 +8474,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.4",
-]
-
-[[package]]
-name = "zip"
-version = "4.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "caa8cd6af31c3b31c6631b8f483848b91589021b28fffe50adada48d4f4d2ed1"
-dependencies = [
- "arbitrary",
- "crc32fast",
- "indexmap 2.14.1",
- "memchr",
 ]
 
 [[package]]

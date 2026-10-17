@@ -98,7 +98,10 @@ tree-sitter-rust = "0.24.2"
 tauri-plugin-deep-link = "2.4.10"
 tauri-plugin-process = "2.3.1"
 tauri-plugin-single-instance = { version = "2.4.4", features = ["deep-link"] }
-tauri-plugin-updater = "2.11.0"
+# Updates ship as signed macOS .app.tar.gz and Windows NSIS .exe artifacts, so the
+# plugin's default `zip` feature (Windows .zip and Linux AppImage archives) is off.
+# Keep it off: it calls zip's extract API that osv-scanner.toml waives.
+tauri-plugin-updater = { version = "2.11.0", default-features = false, features = ["rustls-tls", "system-proxy"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

@@ -38,7 +38,9 @@ stable upgrade targets:
 
 - `dashmap` 7 is release-candidate only; 6.2 is the latest stable line.
 - `libc` 1 is alpha only; 0.2 is the latest stable line.
-- `zip` 9 is prerelease only; 8 is the latest stable line.
+- `zip` 9.0 is stable, but `calamine` 0.36 and `rust_xlsxwriter` 0.99 still
+  require `zip` ^8, so the direct dependency stays on 8.6 to keep one zip
+  version until both accept 9.
 
 ## Audit record
 
@@ -64,6 +66,16 @@ OSV exceptions are explicit and expire on 2026-12-04: Linux-only GTK3 entries
 that are not compiled for the shipped macOS or verified Windows targets, plus
 unmaintained-only `unic-*` entries currently required by Tauri's `urlpattern`
 build dependency. Any other OSV finding fails CI.
+
+The 2026-10-17 `zip` extraction advisories (RUSTSEC-2026-0367, -0368, -0369)
+affect only the `extract` APIs. This repository disabled the updater plugin's
+default `zip` feature, the only caller, which handles Windows `.zip` and Linux
+AppImage update archives that DopeDB does not ship. The remaining `zip` 8.6 is
+used by DopeDB, `calamine`, and `rust_xlsxwriter` to read or write archives
+without extracting them, and the root `clippy.toml` rejects the extract APIs.
+The OSV exceptions expire on 2026-11-30. They are scoped by advisory ID, so they
+would also hide these advisories for another `zip` version: do not re-enable the
+updater's `zip` feature while they exist.
 
 The following registry releases were intentionally held because they were less
 than 24 hours old when the lockfiles were regenerated:
