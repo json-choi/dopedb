@@ -1,0 +1,9 @@
+# zip < 9 extraction APIs keep SUID/SGID bits and follow attacker-controlled
+# symlinks (RUSTSEC-2026-0367, -0368, -0369). osv-scanner.toml waives those
+# advisories only because DopeDB never calls them; read entries through
+# `enclosed_name` and write files explicitly instead.
+disallowed-methods = [
+    { path = "zip::read::ZipArchive::extract", reason = "unsafe zip extraction; copy validated entries explicitly" },
+    { path = "zip::read::ZipArchive::extract_unwrapped_root_dir", reason = "unsafe zip extraction; copy validated entries explicitly" },
+    { path = "zip::unstable::stream::ZipStreamReader::extract", reason = "unsafe zip extraction; copy validated entries explicitly" },
+]

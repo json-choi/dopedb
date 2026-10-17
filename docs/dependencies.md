@@ -38,8 +38,9 @@ stable upgrade targets:
 
 - `dashmap` 7 is release-candidate only; 6.2 is the latest stable line.
 - `libc` 1 is alpha only; 0.2 is the latest stable line.
-- `zip` 9 is stable, but `calamine` and `rust_xlsxwriter` still require zip 8
-  and `tauri-plugin-updater` requires zip 4, so the direct dependency stays on 8.
+- `zip` 9 is stable, but `calamine` and `rust_xlsxwriter` still require zip 8,
+  so the direct dependency stays on 8. `tauri-plugin-updater` needs zip 4 only
+  for its default `zip` feature, which DopeDB disables.
 
 ## Audit record
 
@@ -66,9 +67,11 @@ that are not compiled for the shipped macOS or verified Windows targets, plus
 unmaintained-only `unic-*` entries currently required by Tauri's `urlpattern`
 build dependency. The `zip` extraction advisories RUSTSEC-2026-0367, -0368, and
 -0369 expire on 2026-11-17: the fix exists only in zip 9, which the XLSX crates
-and Tauri updater do not accept yet. DopeDB never calls `extract()`; the only
-caller is the Windows updater on a signature-verified release package. Any other
-OSV finding fails CI.
+do not accept yet. DopeDB never calls `extract()`, and the root `clippy.toml`
+rejects the extract APIs. The Tauri updater's default `zip` feature, the only
+caller, is disabled because DopeDB ships macOS `.app.tar.gz` and Windows NSIS
+`.exe` updates, not `.zip` packages. Keep it disabled while the exceptions,
+which are scoped by advisory ID, remain. Any other OSV finding fails CI.
 
 The following registry releases were intentionally held because they were less
 than 24 hours old when the lockfiles were regenerated:
