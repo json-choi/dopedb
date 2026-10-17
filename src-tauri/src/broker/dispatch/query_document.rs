@@ -30,8 +30,7 @@ pub(super) async fn handle(
             };
             respond(
                 request_id,
-                dispatcher
-                    .document_run(&session, arguments, client_protocol_version)
+                Box::pin(dispatcher.document_run(&session, arguments, client_protocol_version))
                     .await,
             )
         }
@@ -42,9 +41,7 @@ pub(super) async fn handle(
             };
             respond(
                 request_id,
-                dispatcher
-                    .query_plan(&session, arguments, client_protocol_version)
-                    .await,
+                Box::pin(dispatcher.query_plan(&session, arguments, client_protocol_version)).await,
             )
         }
         CommandName::QueryRun => {
@@ -54,9 +51,7 @@ pub(super) async fn handle(
             };
             respond(
                 request_id,
-                dispatcher
-                    .query_run(&session, arguments, client_protocol_version)
-                    .await,
+                Box::pin(dispatcher.query_run(&session, arguments, client_protocol_version)).await,
             )
         }
         CommandName::QueryCancel => {
@@ -66,14 +61,13 @@ pub(super) async fn handle(
             };
             respond(
                 request_id,
-                dispatcher
-                    .cancel_operation(
-                        &session,
-                        arguments.operation_id,
-                        arguments.connection.as_ref(),
-                        client_protocol_version,
-                    )
-                    .await,
+                Box::pin(dispatcher.cancel_operation(
+                    &session,
+                    arguments.operation_id,
+                    arguments.connection.as_ref(),
+                    client_protocol_version,
+                ))
+                .await,
             )
         }
         CommandName::SqlPropose => {
@@ -83,8 +77,7 @@ pub(super) async fn handle(
             };
             respond(
                 request_id,
-                dispatcher
-                    .sql_propose(&session, arguments, client_protocol_version)
+                Box::pin(dispatcher.sql_propose(&session, arguments, client_protocol_version))
                     .await,
             )
         }
@@ -95,8 +88,7 @@ pub(super) async fn handle(
             };
             respond(
                 request_id,
-                dispatcher
-                    .show_operation(&session, arguments, client_protocol_version)
+                Box::pin(dispatcher.show_operation(&session, arguments, client_protocol_version))
                     .await,
             )
         }
@@ -107,8 +99,7 @@ pub(super) async fn handle(
             };
             respond(
                 request_id,
-                dispatcher
-                    .wait_operation(&session, arguments, client_protocol_version)
+                Box::pin(dispatcher.wait_operation(&session, arguments, client_protocol_version))
                     .await,
             )
         }
@@ -119,14 +110,13 @@ pub(super) async fn handle(
             };
             respond(
                 request_id,
-                dispatcher
-                    .cancel_operation(
-                        &session,
-                        arguments.operation_id,
-                        arguments.connection.as_ref(),
-                        client_protocol_version,
-                    )
-                    .await,
+                Box::pin(dispatcher.cancel_operation(
+                    &session,
+                    arguments.operation_id,
+                    arguments.connection.as_ref(),
+                    client_protocol_version,
+                ))
+                .await,
             )
         }
         _ => unreachable!(),

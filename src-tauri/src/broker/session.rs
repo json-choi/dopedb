@@ -440,16 +440,9 @@ mod tests {
     use std::str::FromStr;
     use std::time::Duration;
 
-    use std::collections::HashMap;
-
     use crate::features::knowledge::domain::KnowledgeSessionConnection;
-    use crate::kernel::access::PinnedConnection;
-    use crate::kernel::access::WorkspaceKind;
-    use crate::kernel::access::{AccountScope, ActiveResourceScope, CatalogCachePolicy};
-    use crate::model::{
-        ConnectionProfile, Engine, Provider, WorkspaceConnectionAccess, WorkspaceCredentialMode,
-    };
 
+    use super::test_support::pinned_connection as pin;
     use super::*;
 
     fn registration(plugin_id: dopedb_protocol::AcpPluginId) -> AgentSessionRegisterArguments {
@@ -469,46 +462,6 @@ mod tests {
             provider_cli_executable: format!("{root}/provider-cli"),
             provider_cli_resolved_executable: format!("{root}/provider-cli"),
             provider_cli_sha256: "ef".repeat(32),
-        }
-    }
-
-    fn pin(connection_id: Uuid) -> PinnedConnection {
-        PinnedConnection {
-            scope: ActiveResourceScope {
-                workspace_id: Uuid::nil(),
-                workspace_kind: WorkspaceKind::Personal,
-                selected_account_id: None,
-                account_scope: AccountScope::Personal,
-                generation: 7,
-            },
-            connection_id,
-            connection_revision: 11,
-            binding_revision: 3,
-            binding_updated_at: Utc::now().to_rfc3339(),
-            profile: ConnectionProfile {
-                id: connection_id,
-                name: "fixture".into(),
-                engine: Engine::Sqlite,
-                provider: Provider::Auto,
-                driver_id: None,
-                host: String::new(),
-                port: 0,
-                database: ":memory:".into(),
-                username: String::new(),
-                sslmode: "disable".into(),
-                extra_params: HashMap::new(),
-                readonly_default: true,
-                allow_writes: false,
-                secret_ref: None,
-                env: Some("dev".into()),
-                schema_group: None,
-                workspace_access: WorkspaceConnectionAccess::Local,
-                credential_mode: WorkspaceCredentialMode::Local,
-                provider_target: None,
-                schema_access_available: false,
-            },
-            requires_remote_rbac: false,
-            catalog_cache_policy: CatalogCachePolicy::Persistent,
         }
     }
 
@@ -783,5 +736,62 @@ mod tests {
         assert_eq!(registry.sweep_expired(), 1);
         assert_eq!(registry.len(), 0);
         assert_eq!(revoked.try_recv().unwrap().terminal_session_id, idle);
+    }
+}
+
+/// Fixtures shared by Broker session and dispatch tests.
+#[cfg(test)]
+pub(crate) mod test_support {
+    use std::collections::HashMap;
+
+    use chrono::Utc;
+    use uuid::Uuid;
+
+    use crate::kernel::access::{
+        AccountScope, ActiveResourceScope, CatalogCachePolicy, PinnedConnection, WorkspaceKind,
+    };
+    use crate::model::{
+        ConnectionProfile, Engine, Provider, WorkspaceConnectionAccess, WorkspaceCredentialMode,
+    };
+
+    /// A local SQLite connection pin at fixed scope generation 7 and revision 11.
+    pub(crate) fn pinned_connection(connection_id: Uuid) -> PinnedConnection {
+        PinnedConnection {
+            scope: ActiveResourceScope {
+                workspace_id: Uuid::nil(),
+                workspace_kind: WorkspaceKind::Personal,
+                selected_account_id: None,
+                account_scope: AccountScope::Personal,
+                generation: 7,
+            },
+            connection_id,
+            connection_revision: 11,
+            binding_revision: 3,
+            binding_updated_at: Utc::now().to_rfc3339(),
+            profile: ConnectionProfile {
+                id: connection_id,
+                name: "fixture".into(),
+                engine: Engine::Sqlite,
+                provider: Provider::Auto,
+                driver_id: None,
+                host: String::new(),
+                port: 0,
+                database: ":memory:".into(),
+                username: String::new(),
+                sslmode: "disable".into(),
+                extra_params: HashMap::new(),
+                readonly_default: true,
+                allow_writes: false,
+                secret_ref: None,
+                env: Some("dev".into()),
+                schema_group: None,
+                workspace_access: WorkspaceConnectionAccess::Local,
+                credential_mode: WorkspaceCredentialMode::Local,
+                provider_target: None,
+                schema_access_available: false,
+            },
+            requires_remote_rbac: false,
+            catalog_cache_policy: CatalogCachePolicy::Persistent,
+        }
     }
 }

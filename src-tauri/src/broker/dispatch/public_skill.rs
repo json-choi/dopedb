@@ -81,9 +81,9 @@ pub(super) async fn handle(
                     .and_then(|result| result.map_err(map_skill_error)),
             )
         }
-        CommandName::SkillInstall => install(dispatcher, request).await,
-        CommandName::SkillRepair => repair(dispatcher, request).await,
-        CommandName::SkillRemove => remove(dispatcher, request).await,
+        CommandName::SkillInstall => Box::pin(install(dispatcher, request)).await,
+        CommandName::SkillRepair => Box::pin(repair(dispatcher, request)).await,
+        CommandName::SkillRemove => Box::pin(remove(dispatcher, request)).await,
         _ => failure(request_id, ErrorCode::InvalidRequest, false),
     }
 }
