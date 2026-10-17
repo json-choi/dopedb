@@ -31,8 +31,8 @@ pub(super) async fn handle(
     request: &RequestEnvelope,
 ) -> ResponseEnvelope {
     match request.command {
-        CommandName::ExternalAgentConfigCreate => configure(dispatcher, request).await,
-        CommandName::ExternalAgentSessionStart => start(dispatcher, request).await,
+        CommandName::ExternalAgentConfigCreate => Box::pin(configure(dispatcher, request)).await,
+        CommandName::ExternalAgentSessionStart => Box::pin(start(dispatcher, request)).await,
         CommandName::ExternalAgentSessionRevoke => revoke(dispatcher, request),
         _ => failure(request.request_id, ErrorCode::InvalidRequest, false),
     }

@@ -77,7 +77,7 @@ pub(super) async fn handle(
             if decode_arguments::<AnalysisArticleListCommand>(request).is_err() {
                 Err(ErrorCode::InvalidRequest)
             } else {
-                match list_granted_articles(services, &session).await {
+                match Box::pin(list_granted_articles(services, &session)).await {
                     Ok(articles) => serde_json::to_value(AnalysisArticleListResult { articles })
                         .map_err(|_| ErrorCode::Internal),
                     Err(error) => return failure(request_id, map_application_error(error), false),
@@ -89,21 +89,21 @@ pub(super) async fn handle(
                 Ok(arguments) => arguments,
                 Err(_) => return failure(request_id, ErrorCode::InvalidRequest, false),
             };
-            propose(dispatcher, &session, source, arguments).await
+            Box::pin(propose(dispatcher, &session, source, arguments)).await
         }
         CommandName::AnalysisArticleUpdate => {
             let arguments = match decode_arguments::<AnalysisArticleUpdateCommand>(request) {
                 Ok(arguments) => arguments,
                 Err(_) => return failure(request_id, ErrorCode::InvalidRequest, false),
             };
-            update_article(dispatcher, &session, source, arguments).await
+            Box::pin(update_article(dispatcher, &session, source, arguments)).await
         }
         CommandName::AnalysisArticleVerify => {
             let arguments = match decode_arguments::<AnalysisArticleVerifyCommand>(request) {
                 Ok(arguments) => arguments,
                 Err(_) => return failure(request_id, ErrorCode::InvalidRequest, false),
             };
-            verify_article(dispatcher, &session, source, arguments).await
+            Box::pin(verify_article(dispatcher, &session, source, arguments)).await
         }
         _ => Err(ErrorCode::InvalidRequest),
     };

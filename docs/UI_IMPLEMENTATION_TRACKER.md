@@ -51,10 +51,14 @@ runtime과 성능 수치로 수행한다.
   게이트웨이가 거절한 기본 모델명으로 `model_not_found`를 반환해, 상속된 CLI 모델
   매핑도 보존하도록 수정했다. 실제 게이트웨이 정상 응답 QA는 남아 있다.
 - 후속 macOS debug QA에서 Agent의 catalog search 처리 중 Tokio worker stack
-  overflow로 앱이 SIGABRT 종료됐다. 크래시 스택은 Broker의 `catalog_search` →
-  `catalog` → `resolve_connection` → `terminal_authority_for_selector` 경로를
-  가리키며 원인 확정·수정·재검증은 미완료다. 이 크래시와 운영 Personal Knowledge
-  500은 자동 테스트 통과와 별개인 merge 전 QA blocker로 유지한다.
+  overflow로 앱이 SIGABRT 종료됐다. 재귀가 아니라 최적화 없는 빌드의 Broker
+  dispatch `match`가 모든 command future의 stack slot을 동시에 잡아, 크래시 경로가
+  2 MiB worker stack 중 약 1.9 MiB를 쓴 것이 원인이다. release 빌드는 같은 경로가
+  약 200 KiB였다. dispatch와 각 command handler 호출을 `Box::pin`으로 감싸 DB
+  읽기 직전까지의 debug 경로를 512 KiB 미만으로 줄였고, `assert_dispatch_contract`가
+  1 MiB worker stack에서 인증된 catalog search가 연결 권한 확인까지 도달하는지
+  검증한다. DB 읽기 이후 구간과 실제 debug 앱의 Agent catalog search 재검수, 운영
+  Personal Knowledge 500은 남은 QA blocker다.
 
 ## SQL 결과 제목과 시간 표시
 

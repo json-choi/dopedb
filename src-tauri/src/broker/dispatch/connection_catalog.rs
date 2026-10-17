@@ -30,9 +30,7 @@ pub(super) async fn handle(
             }
             respond(
                 request_id,
-                dispatcher
-                    .connection_list(&session, client_protocol_version)
-                    .await,
+                Box::pin(dispatcher.connection_list(&session, client_protocol_version)).await,
             )
         }
         CommandName::ConnectionShow => {
@@ -42,9 +40,12 @@ pub(super) async fn handle(
             };
             respond(
                 request_id,
-                dispatcher
-                    .resolve_connection(&session, &arguments.connection, client_protocol_version)
-                    .await,
+                Box::pin(dispatcher.resolve_connection(
+                    &session,
+                    &arguments.connection,
+                    client_protocol_version,
+                ))
+                .await,
             )
         }
         CommandName::ConnectionTest => {
@@ -54,8 +55,7 @@ pub(super) async fn handle(
             };
             respond(
                 request_id,
-                dispatcher
-                    .connection_test(&session, &arguments, client_protocol_version)
+                Box::pin(dispatcher.connection_test(&session, &arguments, client_protocol_version))
                     .await,
             )
         }
@@ -66,9 +66,12 @@ pub(super) async fn handle(
             };
             respond(
                 request_id,
-                dispatcher
-                    .database_list(&session, &arguments.connection, client_protocol_version)
-                    .await,
+                Box::pin(dispatcher.database_list(
+                    &session,
+                    &arguments.connection,
+                    client_protocol_version,
+                ))
+                .await,
             )
         }
         CommandName::CatalogShow => {
@@ -78,9 +81,7 @@ pub(super) async fn handle(
             };
             respond(
                 request_id,
-                dispatcher
-                    .catalog(&session, &arguments, client_protocol_version)
-                    .await,
+                Box::pin(dispatcher.catalog(&session, &arguments, client_protocol_version)).await,
             )
         }
         CommandName::CatalogSearch => {
@@ -90,8 +91,7 @@ pub(super) async fn handle(
             };
             respond(
                 request_id,
-                dispatcher
-                    .catalog_search(&session, arguments, client_protocol_version)
+                Box::pin(dispatcher.catalog_search(&session, arguments, client_protocol_version))
                     .await,
             )
         }
@@ -102,8 +102,7 @@ pub(super) async fn handle(
             };
             respond(
                 request_id,
-                dispatcher
-                    .schema_list(&session, &arguments, client_protocol_version)
+                Box::pin(dispatcher.schema_list(&session, &arguments, client_protocol_version))
                     .await,
             )
         }
@@ -114,8 +113,7 @@ pub(super) async fn handle(
             };
             respond(
                 request_id,
-                dispatcher
-                    .table_describe(&session, &arguments, client_protocol_version)
+                Box::pin(dispatcher.table_describe(&session, &arguments, client_protocol_version))
                     .await,
             )
         }
@@ -234,16 +232,14 @@ impl BrokerDispatcher {
             &arguments.connection,
             client_protocol_version,
         )?;
+        let catalog = &self.services()?.catalog;
+        // Boxed for the same worker-stack reason as the dispatch match.
         if let Some(database) = &arguments.database {
-            self.services()?
-                .catalog
-                .load_terminal_database_snapshot(&authority, database.clone())
+            Box::pin(catalog.load_terminal_database_snapshot(&authority, database.clone()))
                 .await
                 .map_err(map_application_error)
         } else {
-            self.services()?
-                .catalog
-                .load_terminal_snapshot(&authority, CatalogReadPolicy::CacheFirst)
+            Box::pin(catalog.load_terminal_snapshot(&authority, CatalogReadPolicy::CacheFirst))
                 .await
                 .map_err(map_application_error)
         }

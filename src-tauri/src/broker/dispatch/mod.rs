@@ -60,6 +60,7 @@ pub(crate) fn assert_dispatch_contract() {
     connection_catalog::assert_catalog_search_contract();
     projection::assert_execution_error_contract();
     analysis_article_operation::assert_article_scope_contract();
+    tests::assert_catalog_search_fits_worker_stack();
 }
 
 #[derive(Clone, Serialize)]
@@ -187,12 +188,15 @@ impl BrokerDispatcher {
             return failure(request_id, ErrorCode::ProtocolMismatch, false);
         }
 
+        // Each command family is boxed so this match does not reserve a stack slot
+        // for every family's future at once; unoptimized builds otherwise overflow
+        // the 2 MiB async worker stack before a catalog read reaches the database.
         match request.command {
             CommandName::AgentSessionRegister => self.register_agent_session(&request),
             CommandName::ExternalAgentConfigCreate
             | CommandName::ExternalAgentSessionStart
             | CommandName::ExternalAgentSessionRevoke => {
-                external_agent::handle(self, &request).await
+                Box::pin(external_agent::handle(self, &request)).await
             }
             CommandName::Version
             | CommandName::Status
@@ -202,7 +206,7 @@ impl BrokerDispatcher {
             | CommandName::SkillStatus
             | CommandName::SkillInstall
             | CommandName::SkillRepair
-            | CommandName::SkillRemove => public_skill::handle(self, &request).await,
+            | CommandName::SkillRemove => Box::pin(public_skill::handle(self, &request)).await,
             CommandName::ConnectionList
             | CommandName::ConnectionShow
             | CommandName::ConnectionTest
@@ -210,20 +214,24 @@ impl BrokerDispatcher {
             | CommandName::CatalogShow
             | CommandName::CatalogSearch
             | CommandName::SchemaList
-            | CommandName::TableDescribe => connection_catalog::handle(self, &request).await,
+            | CommandName::TableDescribe => {
+                Box::pin(connection_catalog::handle(self, &request)).await
+            }
             CommandName::DocumentRun
             | CommandName::QueryPlan
             | CommandName::QueryRun
-            | CommandName::QueryCancel => query_document::handle(self, &request).await,
+            | CommandName::QueryCancel => Box::pin(query_document::handle(self, &request)).await,
             CommandName::SqlPropose
             | CommandName::OperationShow
             | CommandName::OperationWait
-            | CommandName::OperationCancel => query_document::handle(self, &request).await,
+            | CommandName::OperationCancel => {
+                Box::pin(query_document::handle(self, &request)).await
+            }
             CommandName::AnalysisArticlePropose
             | CommandName::AnalysisArticleUpdate
             | CommandName::AnalysisArticleVerify
             | CommandName::AnalysisArticleList => {
-                analysis_article_operation::handle(self, &request).await
+                Box::pin(analysis_article_operation::handle(self, &request)).await
             }
             CommandName::KnowledgeSearch
             | CommandName::SourceSearch
@@ -235,7 +243,9 @@ impl BrokerDispatcher {
             | CommandName::KnowledgeDiff
             | CommandName::FunnelTrace
             | CommandName::EnvironmentContext
-            | CommandName::KnowledgeMappingPropose => knowledge::handle(self, &request).await,
+            | CommandName::KnowledgeMappingPropose => {
+                Box::pin(knowledge::handle(self, &request)).await
+            }
             CommandName::Unknown => failure(request_id, ErrorCode::InvalidRequest, false),
         }
     }
@@ -291,5 +301,67 @@ impl BrokerDispatcher {
 
     pub(super) fn services(&self) -> Result<&ApplicationServices, ErrorCode> {
         self.services.as_ref().ok_or(ErrorCode::Internal)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// An authenticated catalog search must reach connection authority resolution on
+    /// half of Tokio's default 2 MiB worker stack in an unoptimized build. The rest is
+    /// left for the socket task below dispatch and the database read after it.
+    pub(super) fn assert_catalog_search_fits_worker_stack() {
+        const WORKER_STACK_BYTES: usize = 1024 * 1024;
+        let runtime_id = RuntimeId::from(Uuid::new_v4());
+        let sessions = BrokerSessionRegistry::new(runtime_id);
+        let issued = sessions
+            .issue(
+                TerminalSessionId::from(Uuid::new_v4()),
+                &crate::broker::session::test_support::pinned_connection(Uuid::new_v4()),
+                [BrokerCapability::CatalogRead],
+                Duration::from_secs(60),
+            )
+            .expect("issue catalog-read session");
+        let dispatcher = BrokerDispatcher::new(
+            runtime_id,
+            "0.0.0",
+            sessions,
+            ExternalAgentRequestRegistry::default(),
+            None,
+            None,
+            None,
+        );
+        let request = RequestEnvelope {
+            protocol_version: PROTOCOL_MAX,
+            command_schema_version: COMMAND_SCHEMA_VERSION,
+            request_id: Uuid::new_v4(),
+            authentication: Some(dopedb_protocol::SessionAuthentication::new(
+                issued.terminal_session_id.into(),
+                issued.token().to_owned(),
+            )),
+            command: CommandName::CatalogSearch,
+            arguments: serde_json::json!({ "connection": "current", "query": "users" }),
+        };
+        // A separate OS thread owns the runtime because the caller may already be
+        // inside one. An overflow aborts the test process instead of returning.
+        let code = std::thread::spawn(move || {
+            let runtime = tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(1)
+                .thread_stack_size(WORKER_STACK_BYTES)
+                .enable_all()
+                .build()
+                .expect("build bounded-stack runtime");
+            runtime
+                .block_on(runtime.spawn(async move { dispatcher.dispatch(request).await }))
+                .expect("join catalog search")
+                .error()
+                .map(ProtocolError::code)
+        })
+        .join()
+        .expect("bounded-stack runtime thread");
+        // Without application services the search stops right after authority
+        // resolution, which is the deepest frame of the observed overflow.
+        assert_eq!(code, Some(ErrorCode::Internal));
     }
 }
