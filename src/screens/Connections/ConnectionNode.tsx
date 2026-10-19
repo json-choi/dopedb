@@ -14,6 +14,7 @@ import { Button } from "../../design-system/components/Button";
 import { EnvironmentBadge } from "../../design-system/components/EnvironmentBadge";
 import { Menu, MenuCheckbox, MenuItem, ToolbarMenu } from "../../design-system/components/Menu";
 import {
+  canBindMemberCredentials,
   connectionAccessIssue,
   databaseDisplayLabel,
   type ConnectionProfile,
@@ -218,12 +219,7 @@ export default function ConnectionNode(props: Props) {
   // this device's credential through the workspace dialog, while a local connection
   // reopens its own editor at the credential field.
   const resolveCredentials =
-    accessIssue === "credentials"
-    || (
-      connection.credentialMode === "memberLocal"
-      && connection.workspaceAccess !== "view"
-      && connection.engine !== "bigquery"
-    )
+    accessIssue === "credentials" || canBindMemberCredentials(connection)
       ? () => props.onWorkspaceDialog("credentials")
       : connection.workspaceAccess === "local"
           && connection.credentialMode === "local"
@@ -563,10 +559,7 @@ export default function ConnectionNode(props: Props) {
                   {t("connections.edit")}
                 </MenuItem>
               ) : null}
-              {connection.workspaceAccess !== "view" &&
-              connection.workspaceAccess !== "local" &&
-              connection.engine !== "bigquery" &&
-              connection.credentialMode === "memberLocal" ? (
+              {canBindMemberCredentials(connection) ? (
                 <MenuItem
                   onClick={() => {
                     props.onOpenMenu(null);

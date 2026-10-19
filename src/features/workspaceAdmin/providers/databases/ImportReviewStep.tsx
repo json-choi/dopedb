@@ -1,7 +1,6 @@
 // Third step of the add-database flow: what will be registered (authorized account,
 // pinned target, credential policy), the name shown in the workspace, Neon
 // preparation when the provider needs it, and the explicit production approval.
-import type { ReactNode } from "react";
 import {
   CheckboxField,
   Field,
@@ -11,30 +10,7 @@ import { InlineNotice } from "../../../../design-system/components/Status";
 import { useI18n } from "../../../../lib/i18n";
 import NeonBootstrapPanel from "./NeonBootstrapPanel";
 import type { ManagedDatabaseImport } from "./useManagedDatabaseImport";
-
-function ReviewItem({
-  term,
-  monospace = false,
-  children,
-}: {
-  term: string;
-  monospace?: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <>
-      <dt className="tw:border-b tw:border-border-subtle tw:py-2 tw:pr-3 tw:text-muted-foreground tw:@max-[520px]:border-b-0 tw:@max-[520px]:pb-0">
-        {term}
-      </dt>
-      <dd
-        data-monospace={monospace}
-        className="tw:m-0 tw:min-w-0 tw:border-b tw:border-border-subtle tw:py-2 tw:text-foreground tw:[overflow-wrap:anywhere] tw:data-[monospace=true]:font-mono"
-      >
-        {children}
-      </dd>
-    </>
-  );
-}
+import { ReviewItem, ReviewList } from "./WizardFrame";
 
 export default function ImportReviewStep({
   flow,
@@ -48,7 +24,7 @@ export default function ImportReviewStep({
 
   return (
     <div className="tw:grid tw:min-w-0 tw:gap-4">
-      <dl className="tw:m-0 tw:grid tw:min-w-0 tw:grid-cols-[minmax(0,160px)_minmax(0,1fr)] tw:border-t tw:border-border-subtle tw:text-sm tw:@max-[520px]:grid-cols-1">
+      <ReviewList>
         <ReviewItem term={t("workspaceProviderDatabases.reviewAccount")}>{accountName}</ReviewItem>
         <ReviewItem term={t("workspaceProviderDatabases.reviewTarget")} monospace>
           {discovery.targetPath}
@@ -56,7 +32,7 @@ export default function ImportReviewStep({
         <ReviewItem term={t("workspaceProviderDatabases.reviewCredentials")}>
           {t("workspaceProviderDatabases.credentialDescription")}
         </ReviewItem>
-      </dl>
+      </ReviewList>
 
       <div className="tw:max-w-[480px]">
         <Field

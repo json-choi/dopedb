@@ -112,6 +112,10 @@ export function writeBlockRecoveryKind(
       ? "schemaSafety"
       : "schemaUnavailable";
   }
+  // A provisioned account is bounded by the administrator's write ceiling alone.
+  if (!connection.allowWrites && connection.credentialMode === "provisioned") {
+    return "workspacePolicy";
+  }
   if (!connection.allowWrites && connection.credentialMode === "managed") {
     return connection.workspaceAccess === "manage"
       ? "workspacePolicyAndDevice"

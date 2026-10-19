@@ -17,7 +17,9 @@ import useRetryCountdown from "../../features/catalogExplorer/useRetryCountdown"
 import type {
   BigQueryAuthMode,
   ConnectionAccessIssue,
+  ConnectionId,
 } from "../../features/connections/domain";
+import ProvisioningTreeStatus from "../../features/directAccess/ProvisioningTreeStatus";
 import { useI18n } from "../../lib/i18n";
 import { fullTime } from "../../lib/relTime";
 
@@ -25,6 +27,7 @@ interface CatalogTreeStatusProps {
   /** Capture time of the persisted catalog currently shown, if any. */
   persistedAt?: string | null;
   accessIssue?: ConnectionAccessIssue;
+  connectionId: ConnectionId;
   error?: CatalogLoadIssue;
   detailError?: CatalogLoadIssue;
   catalogLoaded: boolean;
@@ -53,6 +56,7 @@ interface CatalogTreeStatusProps {
 export function CatalogTreeStatus({
   persistedAt = null,
   accessIssue,
+  connectionId,
   error,
   detailError,
   catalogLoaded,
@@ -159,7 +163,13 @@ export function CatalogTreeStatus({
   );
   return (
     <>
-      {accessIssue ? (
+      {accessIssue === "provisioning" ? (
+        <ProvisioningTreeStatus
+          connectionId={connectionId}
+          databaseTreeKey={databaseTreeKey}
+          treeLevel={treeLevel}
+        />
+      ) : accessIssue ? (
         <TreeInlineStatus
           icon={accessIssue === "grant" ? "lock" : "key"}
           action={accessIssue === "credentials" && onResolveAccess ? (

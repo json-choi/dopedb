@@ -7,6 +7,7 @@ import { appCatalog } from "./catalogs/app";
 import { approvalCatalog } from "./catalogs/approval";
 import { cliCatalog } from "./catalogs/cli";
 import { connectionsCatalog } from "./catalogs/connections";
+import { directAccessCatalog } from "./catalogs/directAccess";
 import { documentsCatalog } from "./catalogs/documents";
 import { jobsCatalog } from "./catalogs/jobs";
 import { knowledgeCatalog } from "./catalogs/knowledge";
@@ -41,6 +42,7 @@ export const catalogParts = [
   approvalCatalog,
   cliCatalog,
   connectionsCatalog,
+  directAccessCatalog,
   documentsCatalog,
   jobsCatalog,
   knowledgeCatalog,
