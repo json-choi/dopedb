@@ -67,7 +67,7 @@
     },
     "src-tauri/src/features/queries/domain_tests.rs": {
       "tests": 1,
-      "protects": "Production guidance, namespace safety, current Services result shape, ephemeral table-page retention, exact fail-closed Skill installation/conflict handling, credential-free cross-platform Agent CLI probing, the closed loopback engine/port allowlist and printable-version bound of local database discovery, official ACP model/permission-mode allowlists without default escalation, secret-free typed connection-test receipts, opt-in bounded local diagnostics with authentication-material filtering and clear-generation isolation, redacted non-retryable database timeout/cancellation classification across query, Article, and target operations, and an authenticated catalog search reaching connection authority resolution within a 1 MiB async worker stack in unoptimized builds"
+      "protects": "Production guidance, namespace safety, current Services result shape, ephemeral table-page retention, exact fail-closed Skill installation/conflict handling, credential-free cross-platform Agent CLI probing, the closed loopback engine/port allowlist and printable-version bound of local database discovery, official ACP model/permission-mode allowlists without default escalation, secret-free typed connection-test receipts, opt-in bounded local diagnostics with authentication-material filtering and clear-generation isolation, redacted non-retryable database timeout/cancellation classification across query, Article, and target operations, an authenticated catalog search reaching connection authority resolution within a 1 MiB async worker stack in unoptimized builds, and direct shared-database principal rules (SCRAM and caching_sha2 verifier vectors and exact-format validators, DopeDB-only principal naming, version/scope gates, fixed grant plans without default privileges, and marker/identity ownership proof before any destructive change)"
     },
     "src-tauri/src/operations/canonicalize.rs": {
       "tests": 3,
@@ -164,6 +164,18 @@
       "importedBy": "workspace-cloud/lib/d1-workspace-scenarios.harness.ts",
       "tests": 0,
       "protects": "Exports verifyD1PermissionChanges; owns the member permission change assertions"
+    },
+    "workspace-cloud/lib/d1-direct-access-scenarios.harness.ts": {
+      "role": "helper",
+      "importedBy": "workspace-cloud/lib/d1-workspace-scenarios.harness.ts",
+      "tests": 0,
+      "protects": "Exports verifyD1DirectAccess; owns direct shared-database trigger enforcement (immutable principal identity, closed state machine, provisioned member-local only, endpoint-before-receipt), the derived desired-level work list, claim and compare-and-swap receipts with fingerprint binding, revocation items and team-read materialization"
+    },
+    "workspace-cloud/lib/direct-access-contracts.harness.ts": {
+      "role": "helper",
+      "importedBy": "workspace-cloud/lib/control-plane-contracts.harness.ts",
+      "tests": 0,
+      "protects": "Exports assertDirectAccessContracts; owns the direct shared-database goldens, verifier and scope rejection corpus, role x capability x write-ceiling level matrix, registration input parsing and secretless public projection"
     },
     "workspace-cloud/lib/d1-route-scenarios.harness.ts": {
       "role": "helper",

@@ -1,3 +1,5 @@
+// Workspace role and per-connection capability ranks, and the single effective
+// access rule that publicConnection and direct principals both use.
 const workspaceRoleNames = [
   "viewer",
   "analyst",
@@ -80,4 +82,10 @@ export function accessModeForConnectionGrant(
   }
   if (capability === "read" || capability === "use" || capability === "manage") return "read" as const;
   return "view" as const;
+}
+
+/** Whether an effective access mode carries write authority. Shared by managed
+ * leases and direct (provisioned) databases so the rule exists once. */
+export function accessModeAllowsWrite(accessMode: "view" | "read" | "write" | "manage") {
+  return accessMode === "write" || accessMode === "manage";
 }

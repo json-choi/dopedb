@@ -1,3 +1,6 @@
+// D1 tables for shared connections, their grants and credential mode; the
+// provisioning mode marks direct shared databases without changing the
+// member-local read-only CHECK.
 import { sql } from "drizzle-orm";
 import { sqliteTable, text, integer, check, foreignKey, index, primaryKey, unique, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { utcDate, utcNow, uuidDefault } from "./values";
@@ -25,6 +28,9 @@ export const workspaceConnection = sqliteTable(
     allowWrites: integer("allow_writes", { mode: "boolean" }).notNull().default(false),
     teamReadEnabled: integer("team_read_enabled", { mode: "boolean" }).notNull().default(false),
     credentialMode: text("credential_mode").notNull().default("member_local"),
+    // 'provisioned' marks a direct shared database whose per-member principals
+    // are created by an administrator device; the row itself stays secretless.
+    provisioningMode: text("provisioning_mode").notNull().default("none"),
     providerIntegrationId: text("provider_integration_id").references(
       () => workspaceProviderIntegration.id,
       { onDelete: "set null" },
@@ -79,6 +85,11 @@ export const workspaceConnection = sqliteTable(
           AND ${table.revocationPendingAt} IS NOT NULL)`,
     ),
     check("workspace_connection_team_read_enabled", sql`typeof(${table.teamReadEnabled}) = 'integer' AND ${table.teamReadEnabled} IN (0, 1)`),
+    check(
+      "workspace_connection_provisioning_mode",
+      sql`${table.provisioningMode} IN ('none', 'provisioned')
+        AND (${table.provisioningMode} = 'none' OR ${table.credentialMode} = 'member_local')`,
+    ),
     check("workspace_connection_content_revision", sql`${table.contentRevision} >= 1 AND ${table.contentRevision} <= 9007199254740991`),
     check("workspace_connection_revision", sql`${table.revision} >= 1 AND ${table.revision} <= 9007199254740991`),
     // Member-local templates are secretless and read-only. Managed integrations

@@ -19,7 +19,8 @@ export async function setWorkspaceTeamRead(input: {
   const result = await atomicD1({
     scope: sql`SELECT '{}' AS payload FROM workspace_connection connection
       WHERE connection.organization_id = ${input.organizationId} AND connection.id = ${input.connectionId}
-        AND connection.credential_mode = 'managed' AND connection.deleted_at IS NULL AND ${gate}
+        AND (connection.credential_mode = 'managed' OR connection.provisioning_mode = 'provisioned')
+        AND connection.deleted_at IS NULL AND ${gate}
         AND EXISTS (${workspaceMemberAuthority(input.organizationId, input.authority, ["admin", "owner"])})
         AND EXISTS (SELECT 1 FROM workspace_connection_grant WHERE organization_id = ${input.organizationId}
           AND connection_id = ${input.connectionId} AND member_id = ${input.authority.membershipId} AND capability = 'manage')`,

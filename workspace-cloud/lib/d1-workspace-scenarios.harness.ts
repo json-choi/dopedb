@@ -1,4 +1,5 @@
 import { verifyD1PermissionChanges } from "./d1-permission-scenarios.harness";
+import { verifyD1DirectAccess } from "./d1-direct-access-scenarios.harness";
 import { verifyD1Operations } from "./d1-operation-scenarios.harness";
 import { verifyD1Retention } from "./d1-lifecycle-scenarios.harness";
 import { verifyD1Backups } from "./d1-backup-scenarios.harness";
@@ -161,4 +162,5 @@ export async function verifyD1WorkspaceMutations(db: D1Database, identity: {
     await db.prepare("UPDATE member SET revocation_pending_at = NULL WHERE id = ?").bind(membershipId).run();
   }
   await verifyD1PermissionChanges(db, authority, connectionId);
+  await verifyD1DirectAccess(db, authority);
 }
