@@ -295,6 +295,21 @@ pub(crate) fn assert_workspace_admin_route_contract() {
         "connectionId": "../../account/sessions",
     }))
     .is_err());
+    // The member-centric grant aggregate is one literal workspace-scoped GET.
+    let member_grants: WorkspaceAdminOperation = serde_json::from_value(json!({
+        "kind": "listMemberGrants", "workspaceId": workspace_id,
+    }))
+    .expect("member grants operation decodes");
+    let route = member_grants.route().expect("member grants route");
+    assert_eq!(route.method, AdminMethod::Get);
+    assert_eq!(
+        route.segments,
+        vec!["api", "v1", "workspaces", &Uuid::nil().to_string(), "member-grants"]
+    );
+    assert!(serde_json::from_value::<WorkspaceAdminOperation>(json!({
+        "kind": "listMemberGrants", "workspaceId": workspace_id, "memberId": Uuid::nil(),
+    }))
+    .is_err());
     // A deletion confirmation is compared exactly and is never trimmed.
     let deletion: WorkspaceAdminOperation = serde_json::from_value(json!({
         "kind": "scheduleWorkspaceDeletion", "workspaceId": workspace_id,

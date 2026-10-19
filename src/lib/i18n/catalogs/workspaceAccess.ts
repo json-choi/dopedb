@@ -3,7 +3,7 @@ import { defineCatalog } from "../types";
 
 export const workspaceAccessCatalog = defineCatalog(
   {
-    "workspaceAccess.description": "Choose who can view, read, run, or manage each shared database.",
+    "workspaceAccess.description": "Review how each shared database issues credentials, its write ceiling and team read access.",
     "workspaceAccess.databaseLabel": "Shared database",
     "workspaceAccess.loadingDatabases": "Loading shared databases…",
     "workspaceAccess.loadDatabasesFailed": "Couldn't load shared databases.",
@@ -13,6 +13,8 @@ export const workspaceAccessCatalog = defineCatalog(
     "workspaceAccess.noManagedDatabases":
       "You don't manage any shared database here. A member who manages a database can give you manage access.",
     "workspaceAccess.openProviders": "Open Providers",
+    "workspaceAccess.memberPermissionsNote": "Member permissions are set in Members.",
+    "workspaceAccess.openMembers": "Open Members",
     "workspaceAccess.credentialManaged": "Managed credentials",
     "workspaceAccess.credentialLocal": "Members' own credentials",
     "workspaceAccess.managedDescription":
@@ -42,21 +44,8 @@ export const workspaceAccessCatalog = defineCatalog(
       "Team-granted access is removed, and every active short-lived credential for this database is revoked now. Individual grants stay unchanged.",
     "workspaceAccess.saving": "Saving…",
     "workspaceAccess.teamReadFailed": "Couldn't change team read access.",
-    "workspaceAccess.membersTitle": "Member access",
-    "workspaceAccess.roleCeilingHint":
-      "A member's workspace role still caps what any access level allows.",
-    "workspaceAccess.loadingMembers": "Loading member access…",
-    "workspaceAccess.loadMembersFailed": "Couldn't load member access for this database.",
-    "workspaceAccess.refreshMembersFailed":
-      "Couldn't refresh member access. The last loaded levels are shown.",
-    "workspaceAccess.noMembers": "This workspace has no active members.",
-    "workspaceAccess.you": "You",
-    "workspaceAccess.memberRole": "Role: {role}",
     "workspaceAccess.teamOrigin": "Team access",
-    "workspaceAccess.teamOriginHint":
-      "Granted by team read access. Choosing a level turns it into an individual grant; No access keeps team access from returning for this member.",
     "workspaceAccess.ownAccessHint": "You can't change your own access.",
-    "workspaceAccess.memberAccessLabel": "Access for {name}",
     "workspaceAccess.updatingAccess": "Updating…",
     "workspaceAccess.capabilityNone": "No access",
     "workspaceAccess.capabilityView": "View · connection details only",
@@ -64,7 +53,6 @@ export const workspaceAccessCatalog = defineCatalog(
     "workspaceAccess.capabilityUseManaged": "Use · role-based automatic access",
     "workspaceAccess.capabilityUseLocal": "Use · own credentials",
     "workspaceAccess.capabilityManage": "Manage · access and settings",
-    "workspaceAccess.grantFailed": "Couldn't change this member's access.",
     "workspaceAccess.grantLowerPartial":
       "The previous access was removed, but the lower level couldn't be granted. This member has no access now; choose the level again.",
     "workspaceAccess.conflictsTitle": "Connection changes to review",
@@ -147,7 +135,7 @@ export const workspaceAccessCatalog = defineCatalog(
       "The workspace service returned an unexpected response. Update DopeDB or try again later.",
   },
   {
-    "workspaceAccess.description": "공유 데이터베이스마다 보기·읽기·실행·관리 권한을 정합니다.",
+    "workspaceAccess.description": "공유 데이터베이스마다 자격 증명 방식, 쓰기 상한, 팀 읽기 접근을 확인합니다.",
     "workspaceAccess.databaseLabel": "공유 데이터베이스",
     "workspaceAccess.loadingDatabases": "공유 데이터베이스를 불러오는 중…",
     "workspaceAccess.loadDatabasesFailed": "공유 데이터베이스를 불러오지 못했습니다.",
@@ -157,6 +145,8 @@ export const workspaceAccessCatalog = defineCatalog(
     "workspaceAccess.noManagedDatabases":
       "관리 권한이 있는 공유 데이터베이스가 없습니다. 해당 데이터베이스의 관리자에게 관리 권한을 요청하세요.",
     "workspaceAccess.openProviders": "공급자 열기",
+    "workspaceAccess.memberPermissionsNote": "구성원 권한은 구성원 화면에서 정합니다.",
+    "workspaceAccess.openMembers": "구성원 열기",
     "workspaceAccess.credentialManaged": "관리형 자격 증명",
     "workspaceAccess.credentialLocal": "구성원 자격 증명",
     "workspaceAccess.managedDescription":
@@ -186,21 +176,8 @@ export const workspaceAccessCatalog = defineCatalog(
       "팀 공유로 부여한 접근을 해제하고 이 데이터베이스에 발급된 활성 단기 자격 증명을 모두 즉시 폐기합니다. 개별 권한은 그대로 유지됩니다.",
     "workspaceAccess.saving": "저장 중…",
     "workspaceAccess.teamReadFailed": "팀 읽기 접근을 변경하지 못했습니다.",
-    "workspaceAccess.membersTitle": "구성원 접근 권한",
-    "workspaceAccess.roleCeilingHint":
-      "어떤 접근 수준을 주더라도 구성원의 워크스페이스 역할이 허용 범위의 상한입니다.",
-    "workspaceAccess.loadingMembers": "구성원 접근 권한을 불러오는 중…",
-    "workspaceAccess.loadMembersFailed": "이 데이터베이스의 구성원 접근 권한을 불러오지 못했습니다.",
-    "workspaceAccess.refreshMembersFailed":
-      "구성원 접근 권한을 새로 고치지 못했습니다. 마지막으로 불러온 수준을 표시합니다.",
-    "workspaceAccess.noMembers": "이 워크스페이스에 활성 구성원이 없습니다.",
-    "workspaceAccess.you": "나",
-    "workspaceAccess.memberRole": "역할: {role}",
     "workspaceAccess.teamOrigin": "팀 공유",
-    "workspaceAccess.teamOriginHint":
-      "팀 읽기 접근으로 부여된 권한입니다. 수준을 고르면 개별 권한으로 바뀌고, 접근 없음을 고르면 이 구성원에게 팀 접근이 다시 부여되지 않습니다.",
     "workspaceAccess.ownAccessHint": "자신의 접근 권한은 변경할 수 없습니다.",
-    "workspaceAccess.memberAccessLabel": "{name}의 접근 권한",
     "workspaceAccess.updatingAccess": "변경 중…",
     "workspaceAccess.capabilityNone": "접근 없음",
     "workspaceAccess.capabilityView": "보기 · 연결 정보만",
@@ -208,7 +185,6 @@ export const workspaceAccessCatalog = defineCatalog(
     "workspaceAccess.capabilityUseManaged": "사용 · 역할 기반 자동 접근",
     "workspaceAccess.capabilityUseLocal": "사용 · 본인 자격 증명",
     "workspaceAccess.capabilityManage": "관리 · 권한과 설정 변경",
-    "workspaceAccess.grantFailed": "구성원의 접근 권한을 변경하지 못했습니다.",
     "workspaceAccess.grantLowerPartial":
       "이전 권한은 해제했지만 더 낮은 수준을 부여하지 못했습니다. 이 구성원은 지금 접근 권한이 없으니 수준을 다시 선택하세요.",
     "workspaceAccess.conflictsTitle": "검토할 연결 변경",

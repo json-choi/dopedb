@@ -139,6 +139,29 @@ export const directAccessCatalog = defineCatalog(
       "Schema changes are never available on a direct connection. Members get data access only.",
     "directAccess.editor.accountLabel": "Member accounts",
     "directAccess.editor.accountBadge": "Created per member by DopeDB",
+    "directAccess.badge": "Direct connection",
+    "directAccess.lowering.blocked":
+      "This device does not have the admin credential for {database}, so DB access cannot be revoked now.",
+    "directAccess.lowering.pendingNote":
+      "Nothing has changed yet. A device that has the admin credential applies it, or you can apply it from the pending list in Members.",
+    "directAccess.lowering.enterCredential": "Enter the admin credential",
+    "directAccess.lowering.leavePending": "Leave it pending",
+    "directAccess.lowering.leftPending":
+      "Left pending. Members lists it until a device with the credential applies it.",
+    "directAccess.lowering.credentialTitle": "Admin credential for {database}",
+    "directAccess.lowering.saveToKeychain": "Save to this device's keychain",
+    "directAccess.lowering.revokeNow": "Revoke now",
+    "directAccess.lowering.revoking": "Revoking access…",
+    "directAccess.lowering.retryFailed":
+      "Could not revoke access with this credential. Check it and try again.",
+    "directAccess.lowering.aMember": "A member",
+    "directAccess.lowering.failed": "{member} on {database}: {reason}",
+    "directAccess.lowering.deferred":
+      "Another administrator device is applying this change. It stays pending until that finishes.",
+    "directAccess.lowering.revocationRequired":
+      "The workspace still sees database access that has to be revoked first. Reload and try again, or apply the pending item.",
+    "directAccess.lowering.rejected":
+      "The database access was revoked, but the workspace refused the change. Check the refreshed list and try again.",
   },
   {
     "directAccess.add.open": "직접 연결 추가",
@@ -274,5 +297,23 @@ export const directAccessCatalog = defineCatalog(
       "직접 연결에서는 스키마 변경을 사용할 수 없습니다. 구성원은 데이터 접근만 받습니다.",
     "directAccess.editor.accountLabel": "구성원 계정",
     "directAccess.editor.accountBadge": "DopeDB가 구성원별로 생성",
+    "directAccess.badge": "직접 연결",
+    "directAccess.lowering.blocked": "이 기기에는 {database}의 관리자 자격 증명이 없어 지금은 DB 접근을 회수할 수 없습니다.",
+    "directAccess.lowering.pendingNote":
+      "아직 아무것도 바뀌지 않았습니다. 관리자 자격 증명이 있는 기기가 적용하거나, 구성원 화면의 대기 목록에서 직접 적용할 수 있습니다.",
+    "directAccess.lowering.enterCredential": "관리자 자격 증명 입력",
+    "directAccess.lowering.leavePending": "대기 상태로 두기",
+    "directAccess.lowering.leftPending": "대기 상태로 두었습니다. 자격 증명이 있는 기기가 적용할 때까지 구성원 화면에 표시됩니다.",
+    "directAccess.lowering.credentialTitle": "{database} 관리자 자격 증명",
+    "directAccess.lowering.saveToKeychain": "이 기기의 키체인에 저장",
+    "directAccess.lowering.revokeNow": "지금 회수",
+    "directAccess.lowering.revoking": "접근을 회수하는 중…",
+    "directAccess.lowering.retryFailed": "이 자격 증명으로 접근을 회수하지 못했습니다. 확인한 뒤 다시 시도하세요.",
+    "directAccess.lowering.aMember": "구성원",
+    "directAccess.lowering.failed": "{database}의 {member}: {reason}",
+    "directAccess.lowering.deferred": "다른 관리자 기기가 이 변경을 적용하는 중입니다. 끝날 때까지 대기 상태로 남습니다.",
+    "directAccess.lowering.revocationRequired":
+      "먼저 회수해야 하는 DB 접근이 워크스페이스에 남아 있습니다. 새로 고친 뒤 다시 시도하거나 대기 항목을 적용하세요.",
+    "directAccess.lowering.rejected": "DB 접근은 회수했지만 워크스페이스가 변경을 거부했습니다. 새로 고친 목록을 확인하고 다시 시도하세요.",
   },
 );

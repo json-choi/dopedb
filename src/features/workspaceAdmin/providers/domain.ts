@@ -36,6 +36,8 @@ export type SharedConnection = {
   allowWrites: boolean;
   revision: number;
   accessMode: "view" | "read" | "write" | "manage";
+  /** Present (non-null) for a direct connection, whose members each get their own account. */
+  provisioning?: object | null;
 };
 
 export type Resource = {

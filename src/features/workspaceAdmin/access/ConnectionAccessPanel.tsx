@@ -1,9 +1,9 @@
 // Workspace management → Database access. A workspace admin picks one shared
-// database they manage, reviews how members get credentials, the write ceiling and
-// team read access, and sets each member's access level; offline edits that
-// conflict with a database's current version are reviewed above the picker.
-// Reads come from the area queries; every change runs through useAccessCommands,
-// one command at a time. The selection is local view state only.
+// database they manage and reviews how members get credentials, the write ceiling and
+// team read access; offline edits that conflict with a database's current version are
+// reviewed above the picker. Per-member permission lives in Members. Reads come from
+// the area queries; every change runs through useAccessCommands, one command at a
+// time. The selection is local view state only.
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "../../../design-system/components/Button";
@@ -12,6 +12,8 @@ import { InlineNotice, LoadingLabel } from "../../../design-system/components/St
 import { useI18n } from "../../../lib/i18n";
 import { queryResultPhase } from "../../../lib/queryResultPhase";
 import type { WorkspaceAdminPanelProps } from "../navigationRequest";
+import AccessLoweringPrompt from "../accessLowering/AccessLoweringPrompt";
+import { useAccessLowering } from "../accessLowering/useAccessLowering";
 import ConflictReview from "./ConflictReview";
 import DatabaseAccess from "./DatabaseAccess";
 import { manageableDatabases } from "./domain";
@@ -21,7 +23,8 @@ import { useAccessCommands } from "./useAccessCommands";
 
 export default function ConnectionAccessPanel({ scope, onNavigate }: WorkspaceAdminPanelProps) {
   const { lang, t } = useI18n();
-  const commands = useAccessCommands(scope);
+  const lowering = useAccessLowering(scope);
+  const commands = useAccessCommands(scope, lowering);
   const databasesQuery = useQuery(sharedDatabasesQuery(scope));
   const conflictsQuery = useQuery(connectionConflictsQuery(scope));
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -59,6 +62,7 @@ export default function ConnectionAccessPanel({ scope, onNavigate }: WorkspaceAd
         {t("workspaceAccess.description")}
       </p>
 
+      <AccessLoweringPrompt lowering={lowering} memberName={() => null} />
       {conflictNotice && !conflictStillListed ? (
         <InlineNotice tone="danger" icon="alert" role="alert">
           <strong className="tw:font-semibold">{conflictNotice.connectionName}</strong>

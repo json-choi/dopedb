@@ -6,8 +6,8 @@ import { workspaceAdminQueryKey } from "../queryKeys";
 import { runWorkspaceAdmin } from "../requests";
 import {
   parseConnectionConflicts,
-  parseGrantSnapshot,
   parseSharedDatabases,
+  parseTeamReadState,
 } from "./parsers";
 
 const AREA = "access";
@@ -32,12 +32,12 @@ export function sharedDatabasesQuery(scope: WorkspaceAdminScope) {
   });
 }
 
-/** Every active member's grant on one database the acting member manages. */
-export function databaseGrantsQuery(scope: WorkspaceAdminScope, connectionId: string) {
+/** Whether team read access is on for one database the acting member manages. */
+export function teamReadQuery(scope: WorkspaceAdminScope, connectionId: string) {
   return queryOptions({
-    queryKey: workspaceAdminQueryKey(scope, AREA, "grants", connectionId),
+    queryKey: workspaceAdminQueryKey(scope, AREA, "teamRead", connectionId),
     queryFn: async () =>
-      parseGrantSnapshot(
+      parseTeamReadState(
         await runWorkspaceAdmin(scope.accountId, {
           kind: "listConnectionGrants",
           workspaceId: scope.workspaceId,

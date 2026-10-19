@@ -1,14 +1,14 @@
 // Database access contracts for one team workspace: the shared databases the acting
-// member manages, each database's member grants, and preserved offline edits that
-// conflict with the current version. The pure policies mirror the server's grant
-// ordering and conflict-decision eligibility so the screen never guesses which
-// request is valid; response validation lives in parsers.ts.
+// member manages, a database's team read state, and preserved offline edits that
+// conflict with the current version. Per-member grants are edited in Members
+// (`members/memberGrants.ts`). The pure policies mirror the server's conflict-decision
+// eligibility so the screen never guesses which request is valid; response
+// validation lives in parsers.ts.
 import type { Lang } from "../../../lib/i18n";
 import { formatAdminDate } from "../dateFormat";
-import type { ConflictResolution, ConnectionCapability } from "../domain";
+import type { ConflictResolution } from "../domain";
 
 export type CredentialMode = "managed" | "member_local";
-export type GrantOrigin = "explicit" | "team";
 
 export interface SharedDatabase {
   id: string;
@@ -19,22 +19,13 @@ export interface SharedDatabase {
   credentialMode: CredentialMode;
   allowWrites: boolean;
   writeAvailable: boolean;
+  /** A direct connection: each member gets a DopeDB-created account on the database. */
+  provisioned: boolean;
 }
 
-export interface MemberGrant {
-  memberId: string;
-  name: string;
-  email: string;
-  role: string;
-  capability: ConnectionCapability | null;
-  origin: GrantOrigin | null;
-}
-
-export interface GrantSnapshot {
+export interface TeamReadState {
   connectionId: string;
-  actorMemberId: string;
   teamReadEnabled: boolean;
-  grants: MemberGrant[];
 }
 
 export interface ConflictPayload {
@@ -73,42 +64,9 @@ export interface ConnectionConflict {
   currentMatchesCandidate: boolean;
 }
 
-const CAPABILITY_RANK: Record<ConnectionCapability, number> = {
-  view: 0,
-  read: 1,
-  use: 2,
-  manage: 3,
-};
-
-export function isConnectionCapability(value: unknown): value is ConnectionCapability {
-  return value === "view" || value === "read" || value === "use" || value === "manage";
-}
-
-/** Grants and conflicts are administered only where the member holds manage access. */
+/** Grants, team read and conflicts are administered only where the member holds manage access. */
 export function manageableDatabases(databases: readonly SharedDatabase[]): SharedDatabase[] {
   return databases.filter((database) => database.accessMode === "manage");
-}
-
-/**
- * The control plane only raises or keeps a grant. Lowering removes the current
- * grant first (draining that member's active credentials), then grants the lower
- * level; choosing no access is the removal alone.
- */
-export type GrantChangePlan = {
-  remove: boolean;
-  grant: ConnectionCapability | null;
-};
-
-export function planGrantChange(
-  previous: ConnectionCapability | null,
-  next: ConnectionCapability | null,
-): GrantChangePlan | null {
-  if (previous === next) return null;
-  if (next === null) return { remove: true, grant: null };
-  return {
-    remove: previous !== null && CAPABILITY_RANK[next] < CAPABILITY_RANK[previous],
-    grant: next,
-  };
 }
 
 /**

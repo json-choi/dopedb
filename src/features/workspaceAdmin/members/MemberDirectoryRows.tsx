@@ -1,7 +1,9 @@
 // Rows of the member directory. A member row edits the role or removes access, except
 // for the owner and the acting administrator, whose rows are read-only as the server
-// requires; an invitation row copies, re-creates or revokes its link. Rows only render
-// the command state they are given and report intent through callbacks.
+// requires, and expands to the member's per-database permissions; an invitation row
+// copies, re-creates or revokes its link. Rows only render the command state they are
+// given and report intent through callbacks.
+import type { ReactNode } from "react";
 import ConfirmButton from "../../../components/ConfirmButton";
 import { Icon } from "../../../components/Icon";
 import { Button } from "../../../design-system/components/Button";
@@ -37,6 +39,9 @@ export function MemberRow({
   busy,
   pending,
   failure,
+  expanded,
+  grants,
+  onToggle,
   onChangeRole,
   onRemove,
 }: {
@@ -48,6 +53,10 @@ export function MemberRow({
   /** The running command when it targets this member. */
   pending: MemberCommand | null;
   failure: string | null;
+  expanded: boolean;
+  /** The per-database permission editor, rendered below the row while expanded. */
+  grants: ReactNode;
+  onToggle: () => void;
   onChangeRole: (role: AssignableWorkspaceRole) => void;
   onRemove: () => void;
 }) {
@@ -108,7 +117,18 @@ export function MemberRow({
         </span>
       }
       actions={
-        editableRole ? (
+        <>
+          <Button
+            iconOnly
+            size="compact"
+            variant="ghost"
+            aria-expanded={expanded}
+            aria-label={t("workspaceMembers.databaseAccessToggle", { member: name })}
+            onClick={onToggle}
+          >
+            <Icon name={expanded ? "chevronDown" : "chevronRight"} />
+          </Button>
+          {editableRole ? (
           <ConfirmButton
             iconOnly
             size="compact"
@@ -124,10 +144,16 @@ export function MemberRow({
           >
             <Icon name="trash" />
           </ConfirmButton>
-        ) : undefined
+          ) : null}
+        </>
       }
     >
-      {failure ? <RowFailure message={failure} /> : null}
+      {failure || expanded ? (
+        <span className="tw:grid tw:min-w-0 tw:gap-1.5">
+          {failure ? <RowFailure message={failure} /> : null}
+          {expanded ? grants : null}
+        </span>
+      ) : null}
     </SettingsRow>
   );
 }
