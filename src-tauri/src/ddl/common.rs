@@ -22,7 +22,7 @@ pub(super) fn quoted_ref(engine: DatabaseEngine, reference: &ObjectRef) -> Strin
     parts.join(".")
 }
 
-pub(super) fn quote_identifier(engine: DatabaseEngine, value: &str) -> String {
+pub(crate) fn quote_identifier(engine: DatabaseEngine, value: &str) -> String {
     match engine {
         DatabaseEngine::Mysql | DatabaseEngine::Bigquery => {
             format!("`{}`", value.replace('`', "``"))
