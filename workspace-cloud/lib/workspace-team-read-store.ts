@@ -6,7 +6,9 @@ import { sql } from "drizzle-orm";
 import { atomicD1 } from "./d1/atomic";
 import { workspaceMemberAuthority, type MemberAuthority } from "./d1/member-authority";
 import { utcNow, uuidDefault } from "./d1/schema/values";
-import { directLoweringTargets, noDirectLoweringBlockers } from "./workspace-direct-access-store";
+import {
+  directLoweringTargets, directSettlePairs, noDirectLoweringBlockers, settleDirectRevocationsAfterMutation,
+} from "./workspace-direct-access-store";
 
 export async function setWorkspaceTeamRead(input: {
   organizationId: string; connectionId: string; authority: MemberAuthority;
@@ -34,6 +36,7 @@ export async function setWorkspaceTeamRead(input: {
         RETURNING team_read_enabled AS teamReadEnabled`,
       sql`DELETE FROM workspace_connection_grant WHERE organization_id = ${input.organizationId}
         AND connection_id = ${input.connectionId} AND origin = 'team' AND ${!input.enabled} AND EXISTS (${scope})`,
+      settleDirectRevocationsAfterMutation(input.organizationId, scope, directSettlePairs.connection(input.connectionId)),
       sql`INSERT INTO workspace_audit_event (organization_id, actor_user_id, action, resource_type, resource_id, redacted_summary, request_id)
         SELECT ${input.organizationId}, ${input.authority.userId}, 'connection.team_read.update', 'connection', ${input.connectionId},
           json_object('enabled', json(${input.enabled ? "true" : "false"})), ${uuidDefault} FROM (${scope})`,
