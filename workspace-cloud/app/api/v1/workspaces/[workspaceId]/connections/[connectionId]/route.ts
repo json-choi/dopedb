@@ -11,6 +11,8 @@ import {
   privateJson,
   privateResponse,
 } from "../../../../../../../lib/http";
+import { directRevocationRequired } from "../../../../../../../lib/workspace-direct-access-http";
+import { directLoweringTargets, findDirectLoweringBlockers, loadDirectConnectionView } from "../../../../../../../lib/workspace-direct-access-store";
 import { activeProviderIntegration, revokeActiveLeases } from "../../../../../../../lib/provider-integrations";
 import {
   claimRevocationGate,
@@ -201,6 +203,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       sslmode: true,
       readonlyDefault: true,
       credentialMode: true,
+      provisioningMode: true,
       allowWrites: true,
       environment: true,
       schemaGroup: true,
@@ -225,6 +228,13 @@ export async function PATCH(request: Request, context: RouteContext) {
     });
   } catch (error) {
     return jsonError(error instanceof Error ? error.message : "Invalid connection template", 400);
+  }
+  // A direct database's principals live on exactly this server; its identity never edits in place.
+  if (existing.provisioningMode === "provisioned" && (
+    input.provider !== "generic" || input.engine !== existing.engine || input.host !== existing.host
+    || input.port !== existing.port || input.database !== existing.databaseName
+  )) {
+    return jsonError("A direct database endpoint cannot be edited. Register a new direct database.", 409, "direct_endpoint_immutable");
   }
   if (existing.credentialMode === "managed" && input.engine !== existing.engine) {
     return jsonError(
@@ -362,6 +372,9 @@ export async function PATCH(request: Request, context: RouteContext) {
       authorization.accessMode,
       writeAvailable,
       schemaAccessAvailable,
+      existing.provisioningMode === "provisioned"
+        ? await loadDirectConnectionView(workspaceId, connectionId, authorization.membership.id)
+        : null,
     ),
   });
 }
@@ -405,6 +418,8 @@ export async function DELETE(request: Request, context: RouteContext) {
     if (!conflictId) return jsonError("Connection changed concurrently. Retry deletion.", 409);
     return privateJson({ error: "Connection conflict", conflictId }, { status: 409 });
   }
+  const blockers = await findDirectLoweringBlockers(workspaceId, directLoweringTargets.connection(workspaceId, connectionId));
+  if (blockers.length > 0) return directRevocationRequired(blockers);
   const claim = await claimRevocationGate({
     kind: "connection",
     organizationId: workspaceId,

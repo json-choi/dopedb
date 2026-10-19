@@ -32,6 +32,11 @@ export const DIRECT_REVOCATION_KINDS = [
 export type DirectRevocationKind = (typeof DIRECT_REVOCATION_KINDS)[number];
 
 export const DIRECT_CLAIM_LEASE_SECONDS = 120;
+export const DIRECT_REVOCATION_REQUIRED = "direct_revocation_required" as const;
+/** Kinds an administrator may declare; self_leave and account_deleted are recorded by the database. */
+export const DIRECT_ADMIN_REVOCATION_KINDS = [
+  "member_removed", "grant_lowered", "role_lowered", "team_read_off", "db_deleted",
+] as const;
 export const DIRECT_SCOPE_MAX_ENTRIES = 32;
 const DIRECT_SCOPE_MAX_BYTES = { postgres: 63, mysql: 64 } as const;
 
@@ -83,6 +88,17 @@ export function generatePrincipalMarker() {
   let binary = "";
   for (const byte of randomBytes(32)) binary += String.fromCharCode(byte);
   return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
+}
+
+const DIRECT_LEVEL_RANK: Readonly<Record<DirectLevel, number>> = { none: 0, read: 1, write: 2 };
+
+export function directLevelRank(level: DirectLevel) {
+  return DIRECT_LEVEL_RANK[level];
+}
+
+/** A pending revocation item caps the desired level at its target (never raises it). */
+export function capDirectLevel(level: DirectLevel, cap: DirectLevel | null): DirectLevel {
+  return cap !== null && DIRECT_LEVEL_RANK[cap] < DIRECT_LEVEL_RANK[level] ? cap : level;
 }
 
 /**

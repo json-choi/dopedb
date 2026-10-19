@@ -267,3 +267,23 @@ WHEN OLD.state = 'pending' AND EXISTS (SELECT 1 FROM workspace_connection
 BEGIN
   SELECT RAISE(ABORT, 'A pending direct revocation cannot be deleted');
 END;
+--> statement-breakpoint
+-- A membership that disappears without an administrator-declared revocation (self-leave,
+-- account deletion) leaves its database role behind; record the pending item in the same
+-- transaction so an administrator device drops it. Skipped when the workspace itself is
+-- being removed, or when an item is already pending for that principal.
+CREATE TRIGGER workspace_direct_member_departure AFTER DELETE ON member
+WHEN EXISTS (SELECT 1 FROM organization WHERE id = OLD.organization_id)
+BEGIN
+  INSERT INTO workspace_direct_revocation (organization_id, connection_id, member_id, kind, target_level)
+  SELECT principal.organization_id, principal.connection_id, principal.member_id,
+    CASE WHEN EXISTS (SELECT 1 FROM user WHERE id = OLD.user_id) THEN 'self_leave' ELSE 'account_deleted' END, 'none'
+  FROM workspace_direct_principal principal
+  JOIN workspace_connection connection ON connection.organization_id = principal.organization_id
+    AND connection.id = principal.connection_id
+  WHERE principal.organization_id = OLD.organization_id AND principal.member_id = OLD.id
+    AND principal.state <> 'dropped' AND connection.provisioning_mode = 'provisioned' AND connection.deleted_at IS NULL
+    AND NOT EXISTS (SELECT 1 FROM workspace_direct_revocation pending
+      WHERE pending.organization_id = principal.organization_id AND pending.connection_id = principal.connection_id
+        AND pending.member_id = principal.member_id AND pending.state = 'pending');
+END;

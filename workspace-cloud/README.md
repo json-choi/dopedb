@@ -57,6 +57,32 @@ still verify the cookie session against the state's user, then end on the token-
 integrations and finds an authorized Google Cloud setup through
 `GET .../provider-integrations/gcp-setup`.
 
+## Direct shared databases
+
+A direct shared database is an ordinary member-local, read-only shared connection with
+`provisioning_mode = 'provisioned'` plus a secretless `workspace_direct_endpoint` (engine,
+schema/database scope, write ceiling). The control plane never holds a database password,
+an administrator credential or a username other than the server-generated
+`dopedb_<20 hex>` principal name. Each member uploads only the public verifier of a locally
+generated password (`PUT .../connections/:id/direct/principal`); an administrator device
+that holds the administrator credential claims work (`direct/work`, `direct/claims`),
+creates or lowers the database roles itself, and answers with receipts (`direct/receipts`).
+Desired levels are derived at read time from the member's grant, role and the write
+ceiling, then capped by pending revocation items.
+
+Trust boundary for lowering access: a grant removal, role change that lowers the level,
+member removal, team-read switch-off or shared-database deletion on a provisioned database
+is refused with HTTP 409 `direct_revocation_required` until every affected member's
+principal is absent, dropped or already at the lower level. The check is a SQL fragment
+evaluated both before the mutation and inside its atomic batch, so a racing device cannot
+slip a higher grant in. Administrators declare intent with `POST .../direct/revocations`
+(pending items cap the work list so no device re-grants), apply it on the database, post
+receipts, perform the mutation, then settle the items. Self-leave and account deletion are
+never blocked: a database trigger records `self_leave`/`account_deleted` items in the same
+transaction as the membership deletion, and an administrator device drops the principal.
+Data model: `workspace_direct_endpoint`, `workspace_direct_principal` (verifier, state,
+applied level, ownership marker) and `workspace_direct_revocation` (migration `0010`).
+
 ## Local setup
 
 ### Environment
