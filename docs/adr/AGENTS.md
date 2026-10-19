@@ -20,6 +20,7 @@ See `../AGENTS.md` for how these relate to the other canonical docs.
 | `0007-analysis-article-bi-domain.md` | Analysis Article is a published sanitized-HTML document with exactly one saved read-only query and a Desktop-only manual rerun; this supersedes the earlier block/graph BI composition model and excludes dashboards, transforms, schedules, and signals. |
 | `0008-desktop-loopback-pkce-login.md` | Desktop Workspace login uses hosted account approval plus an ephemeral IPv4 loopback callback and PKCE S256; native secrets stay outside the WebView while RFC 8628 remains a compatibility boundary. |
 | `0009-desktop-workspace-administration.md` | Workspace administration moves from the Workspace Web console into Desktop (a Workspace management dialog, with account sessions in Settings → Account); Rust calls a closed, validated catalog of control-plane admin operations with the account's Bearer session, provider OAuth goes through a same-origin start page, and the web keeps only sign-in, invitations, OAuth handoff and public Articles. |
+| `0010-direct-shared-database-principals.md` | Publicly reachable PostgreSQL/MySQL without a provider API are shared through per-member DopeDB principals: the admin credential stays in the admin device keychain, members upload only SCRAM/caching_sha2 verifiers, privileges follow the existing grant model with no expiry, and revocation is applied on the admin device before the server commits it. |
 
 ## For AI Agents
 
