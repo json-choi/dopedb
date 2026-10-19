@@ -266,7 +266,7 @@ export function ConnectionGeneralTab({
             </PropertyRow>
           )}
 
-          {isMongo && !isSharedTemplate ? (
+          {isMongo && (!isSharedTemplate || canEditConnection) ? (
             <PropertyRow label={t("connections.srv")}>
               <CheckboxField
                 label={t("connections.srv")}

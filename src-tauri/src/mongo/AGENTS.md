@@ -18,7 +18,7 @@ server-side grant.
 
 | File | Description |
 |------|-------------|
-| `mod.rs` | Adapter entry point wiring `introspect` and `query`. |
+| `mod.rs` | Adapter entry point wiring `introspect` and `query`; owns the URI builder and the shared-template option keys (`srv`, `authSource`, `replicaSet`) via `template_options` / `apply_template_options`. |
 | `introspect.rs` | Collection discovery for the shared Catalog contract: collections map to tables (schema `None`, like SQLite/MySQL), sampled top-level fields map to columns, `listIndexes` maps to indexes exactly, and `estimatedDocumentCount` fills the row estimate — matching the Catalog contract's "statistics, not exact" semantics. Sampled columns are inherently approximate; only `_id` is certain. |
 | `query.rs` | Typed, read-only document query path — MongoDB's stand-in for L1+L2. `classify` walks the actual request tree (never raw strings) against a hard aggregation-stage allowlist, recursing into `$lookup`/`$facet`/`$unionWith` sub-pipelines, and fail-safes anything unrecognized to a High-risk write so the L4 gate blocks it. `run` is structurally read-only: it only ever calls the driver's typed `find`/`aggregate`/`count_documents`, never `run_command`. |
 

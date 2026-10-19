@@ -40,7 +40,7 @@ public-contract rule that governs every file here.
 | `external_agent.rs` | Secret-free project configuration and approval-bound external Agent sessions (backs `dopedb agent start`). |
 | `skill_command.rs` | Versioned Skill bundle, inventory, and mutation command payloads. |
 | `acp_plugin.rs` | Closed first-party ACP adapter plugin and signed catalog contracts; the Desktop accepts only the two IDs defined here, and a catalog entry can select a version of one of those plugins but never introduce another executable identity or provider. |
-| `control_plane.rs` | Versioned, credential-bearing Workspace control-plane wire contracts (HTTPS payloads shared by Workspace Cloud and Desktop); contains no transport/storage/authority behavior, and parsed secret fields own zeroizing strings. |
+| `control_plane.rs` | Versioned, credential-bearing Workspace control-plane wire contracts (HTTPS payloads shared by Workspace Cloud and Desktop); contains no transport/storage/authority behavior, and parsed secret fields own zeroizing strings; also `SharedMongoOptions` and `SharedConnectionTemplate` (closed MongoDB options and the exact Cloudflare D1 identity boundary of a shared template). |
 
 ## For AI Agents
 

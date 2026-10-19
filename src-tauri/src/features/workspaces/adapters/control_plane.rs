@@ -106,6 +106,9 @@ struct RemoteConnectionResponse {
     access_mode: String,
     credential_mode: String,
     provider_target: Option<ConnectionProviderTarget>,
+    /// Closed MongoDB template options; absent for every other engine.
+    #[serde(default)]
+    mongo_options: Option<dopedb_protocol::SharedMongoOptions>,
     /// Additive status of the caller's own principal on a direct shared database.
     /// `credentialMode` stays `member_local` on the wire; this field alone marks a
     /// provisioned connection.
@@ -161,6 +164,8 @@ struct SharedConnectionRequest<'a> {
     allow_writes: bool,
     env: &'a Option<String>,
     schema_group: &'a Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    mongo_options: Option<dopedb_protocol::SharedMongoOptions>,
 }
 
 /// The one canonical hosted-origin validator. Provider adapters reuse this
@@ -222,6 +227,7 @@ pub(crate) fn assert_hosted_workspace_response_bounds_contract() {
         "shared connections",
     )
     .is_err());
+    connections::assert_shared_template_contract();
 }
 
 /// Production bridge injected into the connection-pool runtime. Keeping this

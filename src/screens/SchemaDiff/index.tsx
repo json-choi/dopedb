@@ -6,7 +6,10 @@
 import { useMemo, useState } from "react";
 import { useQueries, useQueryClient } from "@tanstack/react-query";
 import { requestConnectionCredentials } from "../../features/connections/connectionEditorShellBridge";
-import type { ConnectionProfile } from "../../features/connections/domain";
+import {
+  usesCliAuthentication,
+  type ConnectionProfile,
+} from "../../features/connections/domain";
 import { useManagedConnectionRecoveryLauncher } from "../../features/connections/useManagedConnectionRecovery";
 import {
   catalogFromSnapshot,
@@ -185,7 +188,7 @@ export default function SchemaDiff({
         return { label: t("workspace.bindCredentialsShort"), run: openCredentials };
       case "recoverAuthentication":
         // A shared connection opens only with this device's workspace session.
-        return connection.workspaceAccess !== "local" && connection.engine !== "bigquery"
+        return connection.workspaceAccess !== "local" && !usesCliAuthentication(connection)
           ? { label: t("workspace.login"), run: () => requestAccountSettings() }
           : { label: t("connections.edit"), run: openCredentials };
       case "recoverManaged":

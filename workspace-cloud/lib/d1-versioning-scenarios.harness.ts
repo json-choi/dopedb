@@ -78,4 +78,26 @@ export async function verifyD1ConnectionVersioning(db: D1Database, organizationI
   } finally {
     await db.exec("DROP TRIGGER fixture_restore_failure");
   }
+  // MongoDB template options persist through create, update and snapshot restore.
+  const mongoId = randomUUID();
+  const mongo = parseConnectionVersionPayload({ name: "Atlas fixture", engine: "mongodb", provider: "generic",
+    driverId: null, host: "cluster0.fixture.invalid", port: 27017, database: "fixture", sslmode: "require",
+    readonlyDefault: true, allowWrites: false, env: null, schemaGroup: null,
+    mongoOptions: { srv: true, authSource: "admin" }, deleted: false }, { credentialMode: "member_local" });
+  const createdMongo = await commitConnectionCreate({ organizationId, connectionId: mongoId, authority, input: mongo });
+  expect(createdMongo?.mongoOptions).toEqual({ srv: true, authSource: "admin" });
+  const mongoClaim = await claimRevocationGate({ kind: "connection", organizationId, connectionId: mongoId });
+  const nextOptions = { srv: true, authSource: "admin", replicaSet: "fixture-shard-0" };
+  const updatedMongo = await commitConnectionMutation({ organizationId, connectionId: mongoId, authority,
+    expectedContentRevision: 1, expectedAuthorityRevision: mongoClaim!.connectionRevision!, claimId: mongoClaim!.claimId,
+    mutation: { kind: "update", ...mongo, databaseName: mongo.database, environment: mongo.env,
+      mongoOptions: nextOptions, payload: { ...mongo, mongoOptions: nextOptions } } });
+  expect(updatedMongo?.mongoOptions).toEqual(nextOptions);
+  const restoredMongoId = randomUUID();
+  const { deleted: _mongoDeleted, ...mongoTemplate } = mongo;
+  expect(await restoreWorkspaceSnapshot({ ...restore, expectedRevision: 2,
+    snapshot: { ...snapshot, connections: [{ ...mongoTemplate, id: restoredMongoId, contentRevision: 1 }] } }))
+    .toEqual({ revision: 3, restored: 1, conflictIds: [] });
+  expect(JSON.parse(String(await db.prepare("SELECT mongo_options FROM workspace_connection WHERE id = ?")
+    .bind(restoredMongoId).first("mongo_options")))).toEqual({ srv: true, authSource: "admin" });
 }

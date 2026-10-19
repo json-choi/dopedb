@@ -1,0 +1,1 @@
+ALTER TABLE `workspace_connection` ADD `mongo_options` text;

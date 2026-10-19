@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 
 import {
   parseSharedConnection,
+  storedMongoOptions,
   type SharedConnectionCredentialMode,
 } from "./workspace-connections";
 
@@ -83,9 +84,11 @@ export function persistedConnectionVersionPayload(
     host: string; port: number; databaseName: string; sslmode: string;
     readonlyDefault: boolean; allowWrites: boolean; environment: string | null;
     schemaGroup: string | null;
+    mongoOptions?: unknown;
   },
   deleted = false,
 ): ConnectionVersionPayload {
+  const mongoOptions = row.engine === "mongodb" ? storedMongoOptions(row.mongoOptions) : null;
   return {
     name: row.name,
     engine: row.engine as ConnectionInput["engine"],
@@ -99,6 +102,7 @@ export function persistedConnectionVersionPayload(
     allowWrites: row.allowWrites,
     env: row.environment,
     schemaGroup: row.schemaGroup,
+    ...(mongoOptions ? { mongoOptions } : {}),
     deleted,
   };
 }

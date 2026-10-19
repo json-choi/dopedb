@@ -61,11 +61,11 @@ export async function restoreWorkspaceSnapshot({ organizationId, backupId, expec
             SELECT item ->> 'conflictId', ${organizationId}, 'connection', item ->> 'id', item ->> 'contentRevision',
               snapshot ->> 'serverId', item ->> 'versionId', ${authority.userId} FROM (${existing})`,
           sql`INSERT INTO workspace_connection (id, organization_id, name, engine, provider, driver_id, host, port,
-              database_name, sslmode, readonly_default, allow_writes, environment, schema_group, content_revision, created_by_user_id)
+              database_name, sslmode, readonly_default, allow_writes, environment, schema_group, mongo_options, content_revision, created_by_user_id)
             SELECT item ->> 'id', ${organizationId}, item ->> '$.payload.name', item ->> '$.payload.engine',
               item ->> '$.payload.provider', item ->> '$.payload.driverId', item ->> '$.payload.host', item ->> '$.payload.port',
               item ->> '$.payload.database', item ->> '$.payload.sslmode', 1, 0, item ->> '$.payload.env',
-              item ->> '$.payload.schemaGroup', item ->> 'contentRevision', ${authority.userId} FROM (${missing})`,
+              item ->> '$.payload.schemaGroup', item -> '$.payload.mongoOptions', item ->> 'contentRevision', ${authority.userId} FROM (${missing})`,
           sql`INSERT INTO workspace_connection_grant (organization_id, connection_id, member_id, capability)
             SELECT ${organizationId}, item ->> 'id', ${authority.membershipId}, 'manage' FROM (${missing})`,
           sql`INSERT INTO workspace_resource_version (id, organization_id, resource_type, resource_id, revision,

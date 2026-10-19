@@ -13,11 +13,12 @@ use dopedb_protocol::{
     OperationShowCommand, OperationWaitCommand, ProtocolError, QueryCancelCommand,
     QueryPlanCommand, QueryRunCommand, RequestEnvelope, ResponseEnvelope, RuntimeDiscovery,
     SchemaListCommand, SessionAuthentication, SharedAnalysisArticleCreate,
-    SignedAcpPluginManifestV2, SkillInstallCommand, SkillRemoveCommand, SkillRepairCommand,
-    SkillStatusCommand, SkillsGetCommand, SkillsListCommand, SourceReadCommand, SqlProposeCommand,
-    StatusCommand, StatusResult, TableDescribeCommand, VersionCommand, VersionResult,
-    WorkspaceMemberGrants, WorkspaceSyncPageResponse, ACP_PLUGIN_MANIFEST_SCHEMA_VERSION,
-    ACP_PLUGIN_PROTOCOL_VERSION, ACP_PLUGIN_RUNTIME_CONTRACT_VERSION, COMMAND_SCHEMA_VERSION,
+    SharedConnectionTemplate, SignedAcpPluginManifestV2, SkillInstallCommand, SkillRemoveCommand,
+    SkillRepairCommand, SkillStatusCommand, SkillsGetCommand, SkillsListCommand, SourceReadCommand,
+    SqlProposeCommand, StatusCommand, StatusResult, TableDescribeCommand, VersionCommand,
+    VersionResult, WorkspaceMemberGrants, WorkspaceSyncPageResponse,
+    ACP_PLUGIN_MANIFEST_SCHEMA_VERSION, ACP_PLUGIN_PROTOCOL_VERSION,
+    ACP_PLUGIN_RUNTIME_CONTRACT_VERSION, COMMAND_SCHEMA_VERSION,
     CONTROL_PLANE_CONTRACTS_SCHEMA_VERSION, GRAPH_BUILD_ARTIFACT_SCHEMA_VERSION,
     MANAGED_LEASE_CONTRACT_VERSION, MAX_KNOWLEDGE_GRAPH_ARTIFACT_BYTES, PROTOCOL_MAX,
 };
@@ -51,6 +52,21 @@ struct ControlPlaneContracts {
     semantic_rejections: Vec<SemanticRejection>,
     direct_access: Value,
     direct_access_rejections: Vec<DirectAccessRejection>,
+    shared_connection_templates: SharedTemplateGoldens,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SharedTemplateGoldens {
+    accepted: Vec<SharedTemplateCase>,
+    rejected: Vec<SharedTemplateCase>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SharedTemplateCase {
+    name: String,
+    template: Value,
 }
 
 #[derive(Deserialize)]
@@ -518,6 +534,24 @@ fn public_protocol_goldens_match_pinned_agent_and_control_plane_contracts() {
             serde_json::from_value(fixture.clone()).expect("workspace sync golden must decode");
         assert!(page.valid_for(workspace_id, cursor));
         assert_eq!(serde_json::to_value(page).unwrap(), *fixture);
+    }
+    // Shared template goldens: the same accept/reject vectors drive Workspace Cloud's
+    // parser; Desktop must decode the accepted ones and refuse the rejected ones.
+    for case in &contracts.shared_connection_templates.accepted {
+        let template: SharedConnectionTemplate = serde_json::from_value(case.template.clone())
+            .unwrap_or_else(|error| panic!("{} must decode: {error}", case.name));
+        assert!(template.validate_engine_boundary(), "{}", case.name);
+        assert_eq!(
+            serde_json::to_value(&template).unwrap(),
+            case.template,
+            "{}",
+            case.name
+        );
+    }
+    for case in &contracts.shared_connection_templates.rejected {
+        let accepted = serde_json::from_value::<SharedConnectionTemplate>(case.template.clone())
+            .is_ok_and(|template| template.validate_engine_boundary());
+        assert!(!accepted, "{} must be refused", case.name);
     }
     let request: ManagedLeaseRequest =
         serde_json::from_value(contracts.managed_lease.request.clone())

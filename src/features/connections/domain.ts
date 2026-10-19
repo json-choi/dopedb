@@ -224,17 +224,33 @@ export function canRecoverBigQueryAuthentication(
 }
 
 /**
+ * BigQuery and Cloudflare D1 authenticate through the member's own official CLI
+ * login (Google Cloud CLI, Wrangler), so no username or password is ever bound.
+ */
+export function usesCliAuthentication(
+  connection: Pick<ConnectionProfile, "engine" | "provider">,
+): boolean {
+  return (
+    connection.engine === "bigquery" ||
+    (connection.engine === "sqlite" && connection.provider === "cloudflareD1")
+  );
+}
+
+/**
  * A shared member-local connection whose credential this member binds by hand.
  * Provisioned connections are excluded: their credential is generated and tracked
  * by the provisioning status, so no surface may offer a manual password path.
  */
 export function canBindMemberCredentials(
-  connection: Pick<ConnectionProfile, "engine" | "credentialMode" | "workspaceAccess">,
+  connection: Pick<
+    ConnectionProfile,
+    "engine" | "provider" | "credentialMode" | "workspaceAccess"
+  >,
 ): boolean {
   return connection.credentialMode === "memberLocal"
     && connection.workspaceAccess !== "view"
     && connection.workspaceAccess !== "local"
-    && connection.engine !== "bigquery";
+    && !usesCliAuthentication(connection);
 }
 
 /** A provisioned connection opens only once its generated account is ready (named). */
@@ -248,13 +264,13 @@ export function provisioningNotReady(
 export function connectionAccessIssue(
   connection: Pick<
     ConnectionProfile,
-    "engine" | "credentialMode" | "secretRef" | "username" | "workspaceAccess"
+    "engine" | "provider" | "credentialMode" | "secretRef" | "username" | "workspaceAccess"
   >,
 ): ConnectionAccessIssue | undefined {
   if (connection.workspaceAccess === "view") return "grant";
   if (provisioningNotReady(connection)) return "provisioning";
   if (
-    connection.engine !== "bigquery"
+    !usesCliAuthentication(connection)
     && connection.workspaceAccess !== "local"
     && connection.credentialMode === "memberLocal"
     && connection.secretRef === null

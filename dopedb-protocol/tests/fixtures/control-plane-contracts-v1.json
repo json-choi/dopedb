@@ -740,5 +740,333 @@
         }
       ]
     }
-  ]
+  ],
+  "sharedConnectionTemplates": {
+    "accepted": [
+      {
+        "name": "MongoDB SRV with authSource and replicaSet",
+        "template": {
+          "name": "Template",
+          "engine": "mongodb",
+          "provider": "generic",
+          "driverId": null,
+          "host": "cluster0.abcde.example.test",
+          "port": 27017,
+          "database": "app",
+          "sslmode": "require",
+          "readonlyDefault": true,
+          "allowWrites": false,
+          "env": null,
+          "schemaGroup": null,
+          "mongoOptions": {
+            "srv": true,
+            "authSource": "admin",
+            "replicaSet": "atlas-shard-0"
+          }
+        }
+      },
+      {
+        "name": "MongoDB seed list without options",
+        "template": {
+          "name": "Template",
+          "engine": "mongodb",
+          "provider": "generic",
+          "driverId": null,
+          "host": "a.example.test:27018,b.example.test:27018",
+          "port": 27018,
+          "database": "app",
+          "sslmode": "require",
+          "readonlyDefault": true,
+          "allowWrites": false,
+          "env": null,
+          "schemaGroup": null
+        }
+      },
+      {
+        "name": "MongoDB external authSource",
+        "template": {
+          "name": "Template",
+          "engine": "mongodb",
+          "provider": "generic",
+          "driverId": null,
+          "host": "mongo.example.test",
+          "port": 27017,
+          "database": "app",
+          "sslmode": "require",
+          "readonlyDefault": true,
+          "allowWrites": false,
+          "env": null,
+          "schemaGroup": null,
+          "mongoOptions": {
+            "srv": false,
+            "authSource": "$external"
+          }
+        }
+      },
+      {
+        "name": "Cloudflare D1 identity",
+        "template": {
+          "name": "Template",
+          "engine": "sqlite",
+          "provider": "cloudflareD1",
+          "driverId": "cloudflare-d1-wrangler",
+          "host": "0123456789abcdef0123456789abcdef",
+          "port": 443,
+          "database": "11111111-1111-4111-8111-111111111111",
+          "sslmode": "require",
+          "readonlyDefault": true,
+          "allowWrites": false,
+          "env": null,
+          "schemaGroup": null
+        }
+      }
+    ],
+    "rejected": [
+      {
+        "name": "MongoDB option outside the closed set",
+        "template": {
+          "name": "Template",
+          "engine": "mongodb",
+          "provider": "generic",
+          "driverId": null,
+          "host": "cluster0.abcde.example.test",
+          "port": 27017,
+          "database": "app",
+          "sslmode": "require",
+          "readonlyDefault": true,
+          "allowWrites": false,
+          "env": null,
+          "schemaGroup": null,
+          "mongoOptions": {
+            "srv": true,
+            "tls": true
+          }
+        }
+      },
+      {
+        "name": "MongoDB authSource with unsafe characters",
+        "template": {
+          "name": "Template",
+          "engine": "mongodb",
+          "provider": "generic",
+          "driverId": null,
+          "host": "cluster0.abcde.example.test",
+          "port": 27017,
+          "database": "app",
+          "sslmode": "require",
+          "readonlyDefault": true,
+          "allowWrites": false,
+          "env": null,
+          "schemaGroup": null,
+          "mongoOptions": {
+            "srv": false,
+            "authSource": "admin&tls=false"
+          }
+        }
+      },
+      {
+        "name": "MongoDB replicaSet over the bound",
+        "template": {
+          "name": "Template",
+          "engine": "mongodb",
+          "provider": "generic",
+          "driverId": null,
+          "host": "cluster0.abcde.example.test",
+          "port": 27017,
+          "database": "app",
+          "sslmode": "require",
+          "readonlyDefault": true,
+          "allowWrites": false,
+          "env": null,
+          "schemaGroup": null,
+          "mongoOptions": {
+            "srv": false,
+            "replicaSet": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr"
+          }
+        }
+      },
+      {
+        "name": "MongoDB SRV with an explicit port",
+        "template": {
+          "name": "Template",
+          "engine": "mongodb",
+          "provider": "generic",
+          "driverId": null,
+          "host": "cluster0.abcde.example.test",
+          "port": 27018,
+          "database": "app",
+          "sslmode": "require",
+          "readonlyDefault": true,
+          "allowWrites": false,
+          "env": null,
+          "schemaGroup": null,
+          "mongoOptions": {
+            "srv": true
+          }
+        }
+      },
+      {
+        "name": "MongoDB SRV with a seed list",
+        "template": {
+          "name": "Template",
+          "engine": "mongodb",
+          "provider": "generic",
+          "driverId": null,
+          "host": "a.example.test,b.example.test",
+          "port": 27017,
+          "database": "app",
+          "sslmode": "require",
+          "readonlyDefault": true,
+          "allowWrites": false,
+          "env": null,
+          "schemaGroup": null,
+          "mongoOptions": {
+            "srv": true
+          }
+        }
+      },
+      {
+        "name": "MongoDB options on another engine",
+        "template": {
+          "name": "Template",
+          "engine": "postgres",
+          "provider": "generic",
+          "driverId": null,
+          "host": "db.example.test",
+          "port": 5432,
+          "database": "app",
+          "sslmode": "require",
+          "readonlyDefault": true,
+          "allowWrites": false,
+          "env": null,
+          "schemaGroup": null,
+          "mongoOptions": {
+            "srv": false
+          }
+        }
+      },
+      {
+        "name": "Generic extraParams stay forbidden",
+        "template": {
+          "name": "Template",
+          "engine": "mongodb",
+          "provider": "generic",
+          "driverId": null,
+          "host": "cluster0.abcde.example.test",
+          "port": 27017,
+          "database": "app",
+          "sslmode": "require",
+          "readonlyDefault": true,
+          "allowWrites": false,
+          "env": null,
+          "schemaGroup": null,
+          "extraParams": {
+            "authSource": "admin"
+          }
+        }
+      },
+      {
+        "name": "Local SQLite file path",
+        "template": {
+          "name": "Template",
+          "engine": "sqlite",
+          "provider": "generic",
+          "driverId": null,
+          "host": "",
+          "port": 1,
+          "database": "/tmp/app.db",
+          "sslmode": "require",
+          "readonlyDefault": true,
+          "allowWrites": false,
+          "env": null,
+          "schemaGroup": null
+        }
+      },
+      {
+        "name": "Cloudflare D1 with a short account id",
+        "template": {
+          "name": "Template",
+          "engine": "sqlite",
+          "provider": "cloudflareD1",
+          "driverId": null,
+          "host": "0123",
+          "port": 443,
+          "database": "11111111-1111-4111-8111-111111111111",
+          "sslmode": "require",
+          "readonlyDefault": true,
+          "allowWrites": false,
+          "env": null,
+          "schemaGroup": null
+        }
+      },
+      {
+        "name": "Cloudflare D1 with a non-UUID database",
+        "template": {
+          "name": "Template",
+          "engine": "sqlite",
+          "provider": "cloudflareD1",
+          "driverId": null,
+          "host": "0123456789abcdef0123456789abcdef",
+          "port": 443,
+          "database": "main",
+          "sslmode": "require",
+          "readonlyDefault": true,
+          "allowWrites": false,
+          "env": null,
+          "schemaGroup": null
+        }
+      },
+      {
+        "name": "Cloudflare D1 delegating writes",
+        "template": {
+          "name": "Template",
+          "engine": "sqlite",
+          "provider": "cloudflareD1",
+          "driverId": null,
+          "host": "0123456789abcdef0123456789abcdef",
+          "port": 443,
+          "database": "11111111-1111-4111-8111-111111111111",
+          "sslmode": "require",
+          "readonlyDefault": true,
+          "allowWrites": true,
+          "env": null,
+          "schemaGroup": null
+        }
+      },
+      {
+        "name": "Cloudflare D1 off port 443",
+        "template": {
+          "name": "Template",
+          "engine": "sqlite",
+          "provider": "cloudflareD1",
+          "driverId": null,
+          "host": "0123456789abcdef0123456789abcdef",
+          "port": 8443,
+          "database": "11111111-1111-4111-8111-111111111111",
+          "sslmode": "require",
+          "readonlyDefault": true,
+          "allowWrites": false,
+          "env": null,
+          "schemaGroup": null
+        }
+      },
+      {
+        "name": "Cloudflare D1 provider on another engine",
+        "template": {
+          "name": "Template",
+          "engine": "postgres",
+          "provider": "cloudflareD1",
+          "driverId": null,
+          "host": "0123456789abcdef0123456789abcdef",
+          "port": 443,
+          "database": "11111111-1111-4111-8111-111111111111",
+          "sslmode": "require",
+          "readonlyDefault": true,
+          "allowWrites": false,
+          "env": null,
+          "schemaGroup": null
+        }
+      }
+    ]
+  }
 }

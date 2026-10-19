@@ -30,7 +30,7 @@ export function ConnectionCloudflareD1Fields({ profile }: { profile: Profile }) 
 
   return (
     <section className="tw:grid tw:gap-3">
-      {!isSharedTemplate ? (
+      {!isSharedTemplate || cloudflareD1.enabled ? (
         <PropertyRow label={t("connections.authentication")}>
           <div className="tw:grid tw:min-w-0 tw:gap-1.5">
             <div className="tw:flex tw:min-h-control-md tw:min-w-0 tw:flex-wrap tw:items-center tw:gap-2">
@@ -61,7 +61,7 @@ export function ConnectionCloudflareD1Fields({ profile }: { profile: Profile }) 
                     : undefined
                 }
                 disabled={
-                  !canEditConnection ||
+                  (!canEditConnection && !isSharedTemplate) ||
                   cloudflareD1.pending ||
                   !cloudflareD1.cliAvailable
                 }
@@ -69,7 +69,9 @@ export function ConnectionCloudflareD1Fields({ profile }: { profile: Profile }) 
               >
                 {cloudflareD1.auth?.authenticated
                   ? t("connections.cloudflareD1ChangeAccount")
-                  : t("connections.cloudflareD1ConnectAccount")}
+                  : t(isSharedTemplate
+                      ? "connections.cloudflareD1SignIn"
+                      : "connections.cloudflareD1ConnectAccount")}
               </Button>
             </div>
             {cloudflareD1.auth?.email ? (

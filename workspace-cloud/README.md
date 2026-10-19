@@ -57,6 +57,34 @@ still verify the cookie session against the state's user, then end on the token-
 integrations and finds an authorized Google Cloud setup through
 `GET .../provider-integrations/gcp-setup`.
 
+## Shared connection templates
+
+A shared template is secret-free: engine, provider, endpoint, database, TLS mode and
+labels. The parser (`lib/workspace-connections.ts`) rejects, rather than drops,
+credentials, URLs and the generic `extraParams`. Engines are `postgres`, `mysql`,
+`mongodb`, `bigquery`, and `sqlite` only as Cloudflare D1.
+
+- **MongoDB (Atlas)** may carry one closed `mongoOptions` object:
+  `{ srv: boolean, authSource?: string, replicaSet?: string }`. `authSource` is 1-64
+  characters of `[A-Za-z0-9_.$-]`, `replicaSet` is 1-128 of `[A-Za-z0-9_.-]`, and any
+  other key is refused. `srv: true` requires a single DNS host (no `,` or `:`) and
+  the pinned port 27017, because `mongodb+srv` ignores the port. The options are stored
+  in `workspace_connection.mongo_options` (migration `0011`), versioned with the
+  template payload, included in encrypted backups and restores, and returned by
+  `publicConnection`. Members still bind their own username and password; TLS files
+  stay in each member's local binding.
+- **Cloudflare D1** is accepted only as `engine: "sqlite"`, `provider:
+  "cloudflareD1"`, a 32-hex account id as `host`, the D1 database UUID as `database`,
+  port `443`, `sslmode: "require"`, no schema group, `allowWrites: false` and
+  member-local credentials. Local SQLite file paths are rejected. `publicConnection`
+  reports `credentialsRequired: false`: each member signs in with their own Wrangler
+  login on their device, and no Wrangler token or home directory is ever shared or
+  uploaded. Agent and Analysis Article paths stay closed for D1.
+
+The accept/reject vectors live in `dopedb-protocol/tests/fixtures/control-plane-contracts-v1.json`
+(`sharedConnectionTemplates`) and are run by both this parser's harness and the
+Desktop protocol golden test.
+
 ## Direct shared databases
 
 A direct shared database is an ordinary member-local, read-only shared connection with

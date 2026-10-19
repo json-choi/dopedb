@@ -10,6 +10,7 @@ import {
   pickConnectionFile,
 } from "../connections/tauriAdapter";
 import { bigQueryAuthMode } from "../connections/bigQueryOnboardingModel";
+import { usesCliAuthentication } from "../connections/domain";
 import {
   canRecoverBigQueryAuthentication,
   type ConnectionProfile,
@@ -146,9 +147,9 @@ export function useCatalogExplorerLoading(
           : undefined,
       // A shared connection is leased and authorized with this device's workspace
       // session, so its `authenticationRequired` means that session expired. A
-      // provider sign-in (BigQuery) is renewed by its own recovery above instead.
+      // provider sign-in (BigQuery, Cloudflare) is renewed by its own recovery above instead.
       onSignInWorkspace:
-        connection.workspaceAccess !== "local" && connection.engine !== "bigquery"
+        connection.workspaceAccess !== "local" && !usesCliAuthentication(connection)
           ? () => requestAccountSettings()
           : undefined,
     };

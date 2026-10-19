@@ -310,6 +310,13 @@ impl Store {
                     let mut current = profile.clone();
                     current.username = username;
                     current.extra_params = serde_json::from_str(&extra_params).unwrap_or_default();
+                    if current.engine == crate::model::Engine::Mongodb {
+                        // The template, not the stored binding copy, decides `srv`.
+                        crate::mongo::apply_template_options(
+                            &mut current.extra_params,
+                            crate::mongo::template_options(&profile.extra_params).as_ref(),
+                        );
+                    }
                     if binding_endpoint_admits(bound_endpoint.as_deref(), &current) {
                         continue;
                     }
@@ -347,7 +354,7 @@ impl Store {
                            ?16,?17,?18,?1,NULL,?19,'synced',?20,?21,?22,?23,NULL)
                    ON CONFLICT(id) DO UPDATE SET
                      name=?2, engine=?3, provider=?4, driver_id=?5, host=?6, port=?7,
-                     db_name=?8, sslmode=?10, readonly_default=?13, allow_writes=?14,
+                     db_name=?8, sslmode=?10, extra_params=?11, readonly_default=?13, allow_writes=?14,
                      updated_at=?15, env=?16, schema_group=?17, remote_id=?1, revision=?19,
                      sync_status='synced', workspace_access=?20, credential_mode=?21,
                      provider_target=?22, schema_access_available=?23, deleted_at=NULL
@@ -363,7 +370,8 @@ impl Store {
             .bind(&profile.database)
             .bind("")
             .bind(&profile.sslmode)
-            .bind("{}")
+            // Template-owned driver options (MongoDB); empty for every other engine.
+            .bind(serde_json::to_string(&profile.extra_params)?)
             .bind(Option::<String>::None)
             .bind(profile.readonly_default)
             .bind(profile.allow_writes)

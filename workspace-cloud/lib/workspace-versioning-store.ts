@@ -15,6 +15,11 @@ import {
   workspaceResourceConflictResolution,
   workspaceResourceVersion,
 } from "./schema";
+import {
+  serializeMongoOptions,
+  storedMongoOptions,
+  type MongoTemplateOptions,
+} from "./workspace-connections";
 import { directLoweringTargets, noDirectLoweringBlockers } from "./workspace-direct-access-store";
 import {
   canonicalHash,
@@ -44,7 +49,7 @@ function connectionAuthority(organizationId: string, authority: MutationAuthorit
 
 const connectionProjection = sql`id, name, engine, provider, driver_id AS driverId, host, port,
   database_name AS databaseName, sslmode, readonly_default AS readonlyDefault, allow_writes AS allowWrites,
-  environment, schema_group AS schemaGroup, credential_mode AS credentialMode,
+  environment, schema_group AS schemaGroup, mongo_options AS mongoOptions, credential_mode AS credentialMode,
   content_revision AS contentRevision, updated_at AS updatedAt`;
 
 
@@ -346,7 +351,7 @@ export async function resolveConnectionConflict({
 export type StoredConnection = Pick<typeof workspaceConnection.$inferSelect,
   "id" | "name" | "engine" | "provider" | "driverId" | "host" | "port" | "databaseName"
   | "sslmode" | "readonlyDefault" | "allowWrites" | "environment" | "schemaGroup"
-  | "credentialMode" | "contentRevision" | "updatedAt">;
+  | "credentialMode" | "contentRevision" | "updatedAt"> & { mongoOptions: MongoTemplateOptions | null };
 
 type RawConnectionRow = Record<string, unknown>;
 
@@ -377,6 +382,7 @@ export function returnedConnection(row: RawConnectionRow | undefined): StoredCon
     host: row.host, port, databaseName: row.databaseName, sslmode: row.sslmode,
     readonlyDefault, allowWrites, environment: row.environment,
     schemaGroup: row.schemaGroup, credentialMode: row.credentialMode, contentRevision, updatedAt,
+    mongoOptions: storedMongoOptions(row.mongoOptions),
   };
 }
 
@@ -397,11 +403,11 @@ export async function commitConnectionCreate({
     scope: sql`SELECT '{}' AS payload WHERE ${connectionAuthority(organizationId, authority, undefined, true)}`,
     statements: (scope) => [
       sql`INSERT INTO workspace_connection (id, organization_id, name, engine, provider, driver_id, host, port,
-          database_name, sslmode, readonly_default, allow_writes, environment, schema_group, content_revision,
-          provisioning_mode, created_by_user_id)
+          database_name, sslmode, readonly_default, allow_writes, environment, schema_group, mongo_options,
+          content_revision, provisioning_mode, created_by_user_id)
         SELECT ${connectionId}, ${organizationId}, ${input.name}, ${input.engine}, ${input.provider}, ${input.driverId},
           ${input.host}, ${input.port}, ${input.database}, ${input.sslmode}, ${input.readonlyDefault}, ${input.allowWrites},
-          ${input.env}, ${input.schemaGroup}, 1, ${direct ? "provisioned" : "none"}, ${authority.userId}
+          ${input.env}, ${input.schemaGroup}, ${serializeMongoOptions(input.mongoOptions)}, 1, ${direct ? "provisioned" : "none"}, ${authority.userId}
         FROM (${scope}) RETURNING ${connectionProjection}`,
       ...(direct ? [sql`INSERT INTO workspace_direct_endpoint (organization_id, connection_id, engine, scope, write_ceiling, created_by_user_id)
         SELECT ${organizationId}, ${connectionId}, ${input.engine}, ${JSON.stringify(direct.scope)}, ${direct.writeCeiling},
@@ -444,6 +450,7 @@ export async function commitConnectionMutation({
     name: string; engine: string; provider: string; driverId: string | null;
     host: string; port: number; databaseName: string; sslmode: string;
     readonlyDefault: boolean; allowWrites: boolean; environment: string | null; schemaGroup: string | null;
+    mongoOptions?: MongoTemplateOptions;
   } | {
     kind: "delete";
     payload: ConnectionVersionPayload;
@@ -455,6 +462,7 @@ export async function commitConnectionMutation({
       "database_name" = ${mutation.databaseName}, "sslmode" = ${mutation.sslmode},
       "readonly_default" = ${mutation.readonlyDefault}, "allow_writes" = ${mutation.allowWrites},
       "environment" = ${mutation.environment}, "schema_group" = ${mutation.schemaGroup},
+      "mongo_options" = ${serializeMongoOptions(mutation.kind === "update" ? mutation.mongoOptions : undefined)},
       "revocation_pending_at" = NULL, "revocation_claimed_at" = NULL, "revocation_claim_id" = NULL,
       "content_revision" = "content_revision" + 1, "updated_at" = ${utcNow}`
     : sql`"deleted_at" = ${utcNow}, "provider_integration_id" = NULL, "provider_resource" = NULL,

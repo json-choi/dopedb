@@ -9,6 +9,9 @@
 pub mod introspect;
 pub mod query;
 
+use std::collections::HashMap;
+
+use dopedb_protocol::SharedMongoOptions;
 use mongodb::bson::doc;
 use mongodb::options::ClientOptions;
 use mongodb::Client;
@@ -16,6 +19,60 @@ use mongodb::Client;
 use crate::connection::providers;
 use crate::error::{AppError, AppResult};
 use crate::model::ConnectionProfile;
+
+/// Option names a shared template owns. `build_uri` reads exactly these spellings
+/// (the driver matches option names case-insensitively, so a stray spelling is
+/// folded onto them), and no other driver parameter is shared.
+const SRV_KEY: &str = "srv";
+const AUTH_SOURCE_KEY: &str = "authSource";
+const REPLICA_SET_KEY: &str = "replicaSet";
+
+fn is_template_key(key: &str) -> bool {
+    [SRV_KEY, AUTH_SOURCE_KEY, REPLICA_SET_KEY]
+        .iter()
+        .any(|owned| key.eq_ignore_ascii_case(owned))
+}
+
+fn param<'a>(params: &'a HashMap<String, String>, name: &str) -> Option<&'a str> {
+    params
+        .iter()
+        .find(|(key, _)| key.eq_ignore_ascii_case(name))
+        .map(|(_, value)| value.trim())
+        .filter(|value| !value.is_empty())
+}
+
+/// The shareable subset of a local MongoDB profile's parameters, or `None` when it
+/// sets none of them. TLS files, read preference and every other option stay out.
+pub(crate) fn template_options(params: &HashMap<String, String>) -> Option<SharedMongoOptions> {
+    let srv = param(params, SRV_KEY).is_some_and(|value| value.eq_ignore_ascii_case("true"));
+    let auth_source = param(params, AUTH_SOURCE_KEY).map(str::to_owned);
+    let replica_set = param(params, REPLICA_SET_KEY).map(str::to_owned);
+    (srv || auth_source.is_some() || replica_set.is_some()).then_some(SharedMongoOptions {
+        srv,
+        auth_source,
+        replica_set,
+    })
+}
+
+/// Make `options` the only template-owned parameters in `params`: stale or
+/// differently-cased copies are removed first, so a member binding can neither
+/// keep nor override what the shared template says.
+pub(crate) fn apply_template_options(
+    params: &mut HashMap<String, String>,
+    options: Option<&SharedMongoOptions>,
+) {
+    params.retain(|key, _| !is_template_key(key));
+    let Some(options) = options else { return };
+    if options.srv {
+        params.insert(SRV_KEY.into(), "true".into());
+    }
+    if let Some(value) = &options.auth_source {
+        params.insert(AUTH_SOURCE_KEY.into(), value.clone());
+    }
+    if let Some(value) = &options.replica_set {
+        params.insert(REPLICA_SET_KEY.into(), value.clone());
+    }
+}
 
 /// A live MongoDB client bound to the profile's database. Cheap to clone —
 /// `Client` is an `Arc` handle over its own connection pool.

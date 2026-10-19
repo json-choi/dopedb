@@ -39,6 +39,8 @@ export const workspaceConnection = sqliteTable(
     providerResourceId: text("provider_resource_id"),
     environment: text("environment"),
     schemaGroup: text("schema_group"),
+    // MongoDB-only closed template options ({srv, authSource?, replicaSet?}); null otherwise.
+    mongoOptions: text("mongo_options", { mode: "json" }),
     // Content optimistic-concurrency is separate from the revocation/lease epoch.
     contentRevision: integer("content_revision").notNull().default(1),
     revision: integer("revision").notNull().default(1),

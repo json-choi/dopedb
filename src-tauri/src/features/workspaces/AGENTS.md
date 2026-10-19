@@ -44,7 +44,7 @@ webview, logs, local SQLite, or frontend query caches.
 | File | Description |
 |------|-------------|
 | `authentication.rs` | Desktop authorization code, session, and membership HTTP exchanges. |
-| `connections.rs` | Redacted shared-connection and managed-lease HTTP exchanges. |
+| `connections.rs` | Redacted shared-connection and managed-lease HTTP exchanges; builds the template body (closed MongoDB options, exact Cloudflare D1 identity) and restores those options into template-owned driver parameters. |
 | `provider_local_target.rs` | Redacted shared-connection and short-lived provider-lease HTTP exchanges. |
 | `sync.rs` | Payload-free ordered workspace change cursor exchange. |
 

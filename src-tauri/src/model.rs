@@ -166,6 +166,15 @@ pub struct ConnectionProfile {
     pub provider_target: Option<ConnectionProviderTarget>,
 }
 
+impl ConnectionProfile {
+    /// BigQuery and Cloudflare D1 authenticate through the member's own official
+    /// CLI login, so the profile never carries a username, password or secret.
+    pub fn uses_cli_authentication(&self) -> bool {
+        self.engine == Engine::Bigquery
+            || (self.engine == Engine::Sqlite && self.provider == Provider::CloudflareD1)
+    }
+}
+
 /// Per-connection safety configuration (mirrors `connection_safety` in app.db).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

@@ -3,11 +3,12 @@
 import type { I18nKey } from "../../lib/i18n";
 import { errDetails } from "../../ipc/types";
 
-import type {
-  ConnectionProfile,
-  ConnectionTestFailure,
-  ConnectionTestFailureCode,
-  ConnectionTestIssue,
+import {
+  usesCliAuthentication,
+  type ConnectionProfile,
+  type ConnectionTestFailure,
+  type ConnectionTestFailureCode,
+  type ConnectionTestIssue,
 } from "./domain";
 import type { ConnectionTab } from "./connectionEditorModel";
 import { CONNECTION_INPUT_MODE_PARAMETER } from "./options";
@@ -267,11 +268,11 @@ export function connectionTestIssueRecovery(
  */
 export function connectionTestFailureOpensBinding(
   failure: ConnectionTestIssue,
-  context: Pick<ConnectionProfile, "credentialMode" | "engine" | "workspaceAccess">,
+  context: Pick<ConnectionProfile, "credentialMode" | "engine" | "provider" | "workspaceAccess">,
 ): boolean {
   return isMemberLocalBinding(context)
     && context.workspaceAccess !== "view"
-    && context.engine !== "bigquery"
+    && !usesCliAuthentication(context)
     && (isBindingFailure(failure.code)
       || failure.field === "credentials"
       || failure.field === "ssh"

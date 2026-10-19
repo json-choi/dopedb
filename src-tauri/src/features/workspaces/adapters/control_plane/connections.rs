@@ -54,6 +54,61 @@ fn valid_provider_target(provider: &str, target: &ConnectionProviderTarget) -> b
     }
 }
 
+/// Build the redacted template body for a local profile. Only the closed MongoDB
+/// options and the exact Cloudflare D1 identity are engine-specific; the shared
+/// protocol boundary check runs here so an unshareable profile never leaves the
+/// device, and the server applies the same rules again.
+fn shared_connection_request(
+    profile: &ConnectionProfile,
+    allow_writes: bool,
+) -> AppResult<SharedConnectionRequest<'_>> {
+    let mongo_options = (profile.engine == crate::model::Engine::Mongodb)
+        .then(|| crate::mongo::template_options(&profile.extra_params))
+        .flatten();
+    // `mongodb+srv` ignores the port; the template pins the driver default.
+    let port = if mongo_options.as_ref().is_some_and(|options| options.srv) {
+        dopedb_protocol::SHARED_MONGO_SRV_PORT
+    } else {
+        profile.port
+    };
+    let request = SharedConnectionRequest {
+        name: &profile.name,
+        engine: crate::store::engine_str(profile.engine),
+        provider: crate::store::provider_str(profile.provider),
+        driver_id: &profile.driver_id,
+        host: &profile.host,
+        port,
+        database: &profile.database,
+        sslmode: &profile.sslmode,
+        readonly_default: true,
+        allow_writes,
+        env: &profile.env,
+        schema_group: &profile.schema_group,
+        mongo_options,
+    };
+    let template = dopedb_protocol::SharedConnectionTemplate {
+        name: request.name.to_owned(),
+        engine: request.engine.to_owned(),
+        provider: request.provider.to_owned(),
+        driver_id: request.driver_id.clone(),
+        host: request.host.to_owned(),
+        port: request.port,
+        database: request.database.to_owned(),
+        sslmode: request.sslmode.to_owned(),
+        readonly_default: true,
+        allow_writes: request.allow_writes,
+        env: request.env.clone(),
+        schema_group: request.schema_group.clone(),
+        mongo_options: request.mongo_options.clone(),
+    };
+    if !template.validate_engine_boundary() {
+        return Err(AppError::Config(
+            "this connection cannot be shared as a workspace template".into(),
+        ));
+    }
+    Ok(request)
+}
+
 fn remote_connection(value: RemoteConnectionResponse) -> AppResult<(ConnectionProfile, i64)> {
     let id = Uuid::parse_str(&value.id)
         .map_err(|_| AppError::Network("shared connection returned an invalid id".into()))?;
@@ -111,6 +166,42 @@ fn remote_connection(value: RemoteConnectionResponse) -> AppResult<(ConnectionPr
             "shared connection returned an invalid provider target".into(),
         ));
     }
+    let engine = crate::store::parse_engine(value.engine.clone())?;
+    let mut extra_params = std::collections::HashMap::new();
+    if let Some(options) = value.mongo_options.as_ref() {
+        // Options belong to MongoDB only; they become the template-owned driver
+        // parameters, which a member binding can neither keep nor override.
+        if engine != crate::model::Engine::Mongodb || !options.validate() {
+            return Err(AppError::Network(
+                "shared connection returned invalid MongoDB options".into(),
+            ));
+        }
+        crate::mongo::apply_template_options(&mut extra_params, Some(options));
+    }
+    let template = dopedb_protocol::SharedConnectionTemplate {
+        name: value.name.clone(),
+        engine: value.engine.clone(),
+        provider: value.provider.clone(),
+        driver_id: value.driver_id.clone(),
+        host: value.host.clone(),
+        port: value.port,
+        database: value.database.clone(),
+        sslmode: value.sslmode.clone(),
+        readonly_default: value.readonly_default,
+        allow_writes: value.allow_writes,
+        env: value.env.clone(),
+        schema_group: value.schema_group.clone(),
+        mongo_options: value.mongo_options.clone(),
+    };
+    // SQLite is shareable only as a member-authenticated Cloudflare D1 identity.
+    if !template.validate_engine_boundary()
+        || (engine == crate::model::Engine::Sqlite
+            && credential_mode != WorkspaceCredentialMode::MemberLocal)
+    {
+        return Err(AppError::Network(
+            "shared connection returned an unsafe template".into(),
+        ));
+    }
     let revision = value.revision;
     if revision < 1 {
         return Err(AppError::Network(
@@ -121,7 +212,7 @@ fn remote_connection(value: RemoteConnectionResponse) -> AppResult<(ConnectionPr
         ConnectionProfile {
             id,
             name: value.name,
-            engine: crate::store::parse_engine(value.engine)?,
+            engine,
             provider: crate::store::parse_provider(value.provider)?,
             driver_id: value.driver_id,
             host: value.host,
@@ -131,7 +222,7 @@ fn remote_connection(value: RemoteConnectionResponse) -> AppResult<(ConnectionPr
             // a provisioned principal name is the only server-supplied username.
             username,
             sslmode: value.sslmode,
-            extra_params: Default::default(),
+            extra_params,
             readonly_default: value.readonly_default,
             // Managed write authority is an effective server projection of the
             // live role, per-connection grant, and administrator policy.
@@ -211,21 +302,8 @@ pub(super) async fn share_connection(
         .ok_or_else(|| {
             AppError::Config("sharing a connection requires an authenticated session".into())
         })?;
-    let request = SharedConnectionRequest {
-        name: &profile.name,
-        engine: crate::store::engine_str(profile.engine),
-        provider: crate::store::provider_str(profile.provider),
-        driver_id: &profile.driver_id,
-        host: &profile.host,
-        port: profile.port,
-        database: &profile.database,
-        sslmode: &profile.sslmode,
-        // Do not let a local write preference cross the shared-template boundary.
-        readonly_default: true,
-        allow_writes: false,
-        env: &profile.env,
-        schema_group: &profile.schema_group,
-    };
+    // Do not let a local write preference cross the shared-template boundary.
+    let request = shared_connection_request(profile, false)?;
     let origin = origin()?;
     let response = client()?
         .post(format!(
@@ -268,21 +346,10 @@ pub(super) async fn update_connection(
                 "updating a shared connection requires an authenticated session".into(),
             )
         })?;
-    let request = SharedConnectionRequest {
-        name: &profile.name,
-        engine: crate::store::engine_str(profile.engine),
-        provider: crate::store::provider_str(profile.provider),
-        driver_id: &profile.driver_id,
-        host: &profile.host,
-        port: profile.port,
-        database: &profile.database,
-        sslmode: &profile.sslmode,
-        readonly_default: true,
-        allow_writes: profile.credential_mode == WorkspaceCredentialMode::Managed
-            && profile.allow_writes,
-        env: &profile.env,
-        schema_group: &profile.schema_group,
-    };
+    let request = shared_connection_request(
+        profile,
+        profile.credential_mode == WorkspaceCredentialMode::Managed && profile.allow_writes,
+    )?;
     let origin = origin()?;
     let response = client()?
         .patch(format!(
@@ -593,4 +660,83 @@ pub(super) async fn release_managed_connection_lease(
         return Err(oauth_error(response).await);
     }
     Ok(())
+}
+
+/// Contract assertions for the shared-template restore and request rules: MongoDB
+/// options come back as template-owned driver parameters, and Cloudflare D1 is a
+/// credential-less, member-authenticated identity.
+#[cfg(test)]
+pub(super) fn assert_shared_template_contract() {
+    fn response(extra: serde_json::Value) -> RemoteConnectionResponse {
+        let mut base = json!({
+            "id": "11111111-1111-4111-8111-111111111111",
+            "name": "Shared", "engine": "mongodb", "provider": "generic", "driverId": null,
+            "host": "cluster0.example.test", "port": 27017, "database": "app",
+            "sslmode": "require", "readonlyDefault": true, "allowWrites": false,
+            "env": null, "schemaGroup": null, "revision": 1,
+            "accessMode": "read", "credentialMode": "member_local", "providerTarget": null,
+        });
+        base.as_object_mut()
+            .unwrap()
+            .extend(extra.as_object().unwrap().clone());
+        serde_json::from_value(base).expect("shared connection response decodes")
+    }
+    let (restored, _) = remote_connection(response(json!({
+        "mongoOptions": { "srv": true, "authSource": "admin", "replicaSet": "rs0" }
+    })))
+    .expect("MongoDB options restore");
+    let param = |name: &str| restored.extra_params.get(name).map(String::as_str);
+    assert_eq!(
+        (param("srv"), param("authSource"), param("replicaSet")),
+        (Some("true"), Some("admin"), Some("rs0"))
+    );
+    assert!(restored.username.is_empty() && restored.secret_ref.is_none());
+    for rejected in [
+        json!({ "mongoOptions": { "srv": false, "authSource": "admin&tls=false" } }),
+        json!({ "mongoOptions": { "srv": true }, "port": 27018 }),
+        json!({ "engine": "postgres", "mongoOptions": { "srv": false } }),
+    ] {
+        assert!(remote_connection(response(rejected)).is_err());
+    }
+    let d1 = json!({
+        "engine": "sqlite", "provider": "cloudflareD1", "driverId": "cloudflare-d1-wrangler",
+        "host": "0123456789abcdef0123456789abcdef", "port": 443, "sslmode": "require",
+        "database": "22222222-2222-4222-8222-222222222222",
+    });
+    let (profile, _) = remote_connection(response(d1.clone())).expect("D1 identity restores");
+    assert!(profile.uses_cli_authentication() && profile.extra_params.is_empty());
+    for rejected in [
+        json!({ "database": "/tmp/app.db" }),
+        json!({ "allowWrites": true }),
+        json!({ "credentialMode": "managed" }),
+    ] {
+        let mut value = d1.clone();
+        value
+            .as_object_mut()
+            .unwrap()
+            .extend(rejected.as_object().unwrap().clone());
+        assert!(remote_connection(response(value)).is_err());
+    }
+    // Sharing builds the closed option set and pins the SRV port; an unshareable
+    // MongoDB option never leaves the device.
+    let mut local = restored.clone();
+    local.workspace_access = WorkspaceConnectionAccess::Local;
+    local.port = 1;
+    local
+        .extra_params
+        .insert("tlsCAFile".into(), "/ca.pem".into());
+    let request = shared_connection_request(&local, false).expect("SRV profile shares");
+    assert_eq!(request.port, dopedb_protocol::SHARED_MONGO_SRV_PORT);
+    assert_eq!(
+        request
+            .mongo_options
+            .as_ref()
+            .and_then(|o| o.replica_set.as_deref()),
+        Some("rs0")
+    );
+    assert!(!serde_json::to_string(&request)
+        .unwrap()
+        .contains("tlsCAFile"));
+    local.extra_params.insert("authSource".into(), "a&b".into());
+    assert!(shared_connection_request(&local, false).is_err());
 }

@@ -207,6 +207,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       allowWrites: true,
       environment: true,
       schemaGroup: true,
+      mongoOptions: true,
       providerResourceId: true,
       providerIntegrationId: true,
       revision: true,
@@ -356,6 +357,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       host: normalized.host, port: normalized.port, databaseName: normalized.database, sslmode: normalized.sslmode,
       readonlyDefault: normalized.readonlyDefault, allowWrites: normalized.allowWrites,
       environment: normalized.env, schemaGroup: normalized.schemaGroup,
+      mongoOptions: normalized.mongoOptions,
     },
   }).catch(async (error) => {
     await abandonClaim(claim);

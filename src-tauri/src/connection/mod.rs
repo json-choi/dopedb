@@ -44,7 +44,7 @@ pub use pool::DbPool as Pool;
 use crate::error::{AppError, AppResult};
 use crate::kernel::access::PinnedConnection;
 use crate::kernel::TerminalAuthority;
-use crate::model::{ConnectionProfile, Engine, WorkspaceConnectionAccess, WorkspaceCredentialMode};
+use crate::model::{ConnectionProfile, WorkspaceConnectionAccess, WorkspaceCredentialMode};
 use uuid::Uuid;
 
 /// Validate a Terminal capability against the exact scope-pinned connection snapshot.
@@ -80,7 +80,7 @@ pub fn fetch_profile_secret(profile: &ConnectionProfile) -> AppResult<String> {
             "managed credentials must be obtained from a short-lived lease".into(),
         ));
     }
-    if profile.engine == Engine::Bigquery {
+    if profile.uses_cli_authentication() {
         return Ok(String::new());
     }
     let secret_id = match profile.secret_ref.as_deref() {
