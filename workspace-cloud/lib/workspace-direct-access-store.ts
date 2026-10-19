@@ -524,6 +524,42 @@ export async function hasPendingDirectRevocation(organizationId: string, connect
   return Boolean(row);
 }
 
+/** Which pending items a mutation concerns; columns are those of `workspace_direct_revocation`. */
+export const directSettlePairs = {
+  grant: (connectionId: string, memberId: string) => sql`connection_id = ${connectionId} AND member_id = ${memberId}`,
+  member: (memberId: string) => sql`member_id = ${memberId}`,
+  connection: (connectionId: string) => sql`connection_id = ${connectionId}`,
+};
+
+/**
+ * Atomic-batch statement run after an access mutation: every pending lowering item of the
+ * affected pairs becomes `applied` when the member's new effective level (same mapping as
+ * `directDesiredLevel`, read from the already-mutated rows) is at most its target, else
+ * `cancelled` because access was raised again and the stale cap must stop binding.
+ * Self-leave and account-deleted items belong to the worker and are left alone.
+ */
+export function settleDirectRevocationsAfterMutation(organizationId: string, scope: SQL, pair: SQL) {
+  return sql`UPDATE workspace_direct_revocation SET updated_at = ${utcNow}, state = CASE WHEN COALESCE((
+        SELECT CASE
+          WHEN member.role NOT IN ('viewer', 'analyst', 'editor', 'admin', 'owner') THEN 0
+          WHEN grant.capability IN ('use', 'manage') AND member.role IN ('editor', 'admin', 'owner')
+            THEN CASE WHEN endpoint.write_ceiling THEN 2 ELSE 1 END
+          WHEN grant.capability IN ('read', 'use', 'manage') THEN 1 ELSE 0 END
+        FROM member
+        JOIN workspace_connection_grant grant ON grant.organization_id = member.organization_id AND grant.member_id = member.id
+          AND grant.connection_id = workspace_direct_revocation.connection_id
+        JOIN workspace_connection connection ON connection.organization_id = member.organization_id
+          AND connection.id = grant.connection_id AND connection.deleted_at IS NULL
+        JOIN workspace_direct_endpoint endpoint ON endpoint.organization_id = connection.organization_id
+          AND endpoint.connection_id = connection.id
+        WHERE member.organization_id = workspace_direct_revocation.organization_id
+          AND member.id = workspace_direct_revocation.member_id), 0)
+        <= CASE workspace_direct_revocation.target_level WHEN 'read' THEN 1 ELSE 0 END
+      THEN 'applied' ELSE 'cancelled' END
+    WHERE organization_id = ${organizationId} AND state = 'pending' AND kind NOT IN ('self_leave', 'account_deleted')
+      AND ${pair} AND EXISTS (${scope})`;
+}
+
 /**
  * pending -> cancelled always; pending -> applied only once the guard would let the
  * member's access stand lowered (principal absent, dropped or at most the target level).
