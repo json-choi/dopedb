@@ -171,7 +171,7 @@ change that table first and the screen second.
   branch or pull request. A GitHub Issue is optional.
 - Never force-push, delete `main`, hide failed checks, or expose repository
   secrets and signing keys.
-- Product identifiers, examples, fixtures, documentation, analytics, and logs
+- Product identifiers, examples, fixtures, documentation, and logs
   must use product-owned neutral namespaces. Never derive them from a
   contributor's employer, email domain, legal name, personal account, or local
   workstation context. Do not retain such values as compatibility aliases or

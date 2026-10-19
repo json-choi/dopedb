@@ -32,7 +32,6 @@ rather than calling `invoke` for connection commands directly.
 | `connectionEditorModel.ts` | Pure editor types/engine rules shared across profile/catalog/schema controllers: `ConnectionEditorView`, `ConnectionTab`, SSL mode lists per engine, `STANDARD_CONNECTION_SOURCES`, `compatibleDrivers`, `sslModeForEngine`. |
 | `connectionTestFailure.ts` | Projects a closed native connection-test receipt into localized recovery copy and an editor focus target, per its header comment, without inspecting driver message text. A check refused before contacting a server (`refusal: "savedCredentialEndpointChanged"`) and a local save refused with `credentialBindingRequired` share the dedicated "enter the saved password again" copy; a `retryLater` refusal keeps its network-family title with the live remaining seconds, and `sharedConnectionChanged` asks for a workspace refresh. |
 | `connectionUrl.ts` | `parseConnectionUrl`/`formatConnectionUrl` — URL translation for SQL, SQLite, and multi-host MongoDB connection strings; kept out of the editor UI per its header comment so the Tailwind editor stays focused on state/interaction. |
-| `connectionVerificationAnalytics.ts` | `connectionVerificationRecorder` — captures one privacy-bounded verification analytics event; per its header comment, never exposes host, database, user, error detail, or credentials. |
 | `diagnostics.ts` | `ConnectionDiagnosticCode`/`ConnectionDiagnostic` and `diagnoseConnection`, the validation pass a profile must pass before test/save is enabled. |
 | `domain.ts` | Branded `ConnectionId`; `ConnectionEngine`, `ConnectionProvider`, `WorkspaceConnectionAccess`, `WorkspaceCredentialMode` (`local`\|`memberLocal`\|`managed`), `ConnectionProviderTarget`, `ConnectionProfile`, BigQuery auth types, `ConnectionTestFailureCode`, `ConnectionProbeRefusal`, and the check and `DatabaseDiscoveryReceipt` wire receipts. |
 | `options.ts` | Connection option parameter keys/bounds (`dopedb.timeZone`, `dopedb.keepAliveSeconds`, `dopedb.sshAlias`, etc.) and `isConnectionOptionSupported`/`isSshHostAlias`. |
@@ -68,9 +67,6 @@ rather than calling `invoke` for connection commands directly.
   `CLAUDE.md`/`AGENTS.md`'s "Work safely" section, which this feature
   directly implements. Provision new, verifiably DopeDB-owned principals
   instead of rewriting existing ones.
-- `connectionVerificationAnalytics.ts` must not gain a path for host,
-  database, user, error detail, or credentials — this is a verified privacy
-  boundary, not a style choice.
 - `connectionUrl.ts` stays UI-free; new URL formats should be added as pure
   parse/format functions here, not inline in the editor component.
 
@@ -98,7 +94,6 @@ rather than calling `invoke` for connection commands directly.
 - `src/features/workspaces/tauriAdapter.ts` (`deleteWorkspaceConnection`, `updateWorkspaceConnection`), `src/features/workspaces/domain.ts`.
 - `src/features/workspaceAdmin/navigationRequest.ts` (`requestWorkspaceAdmin`) and `src/features/workspaceAdmin/providers/gcp/repairSignal.ts` (`onManagedConnectionsRepaired`) for managed-connection recovery.
 - `src/features/providers/domain.ts` (`ProviderKind`).
-- `src/features/productAnalytics/{client,outcomes}.ts`.
 - `src/lib/{capabilities,queries}.ts`.
 - Rust counterpart: `src-tauri/src/features/connections/transport.rs` (verified present).
 

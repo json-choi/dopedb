@@ -24,7 +24,7 @@ project from the repository root (own `package.json`, `pnpm-lock.yaml`,
 | Directory | Purpose |
 |-----------|---------|
 | `app/` | Next.js App Router routes, page sections, and API routes (see `app/AGENTS.md`). |
-| `lib/` | DOM-free site logic: analytics event validation and the Three.js galaxy renderer (see `lib/AGENTS.md`). |
+| `lib/` | DOM-free site logic: the Three.js galaxy renderer (see `lib/AGENTS.md`). |
 | `public/` | Static assets served at the site root: icons, favicons, screenshots, `llms.txt` (see `public/AGENTS.md`). |
 
 ## For AI Agents
@@ -39,7 +39,7 @@ project from the repository root (own `package.json`, `pnpm-lock.yaml`,
 - No frontend unit tests live here; the 208-test critical budget is scoped to the desktop app (`src/`), not this project.
 
 ### Common Patterns
-- Server components stay the default; `"use client"` is added only where interactivity or browser APIs are required (`GalaxyHero.tsx`, `PlatformDownloads.tsx`, `TrackedLink.tsx`, `HomeDemoShowcase.tsx`, `HomeScopeWalkthrough.tsx`, `SitePageEffects.tsx`, `DopeDBMark.tsx`).
+- Server components stay the default; `"use client"` is added only where interactivity or browser APIs are required (`GalaxyHero.tsx`, `PlatformDownloads.tsx`, `HomeDemoShowcase.tsx`, `HomeScopeWalkthrough.tsx`, `SitePageEffects.tsx`, `DopeDBMark.tsx`).
 
 ## Dependencies
 

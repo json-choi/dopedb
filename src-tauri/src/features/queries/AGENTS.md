@@ -95,7 +95,7 @@ code stays independent of persistence and pool adapters.
 
 ### Internal
 
-- Imports `crate::features::{agents, connections, jobs, knowledge, product_analytics, workspaces}`
+- Imports `crate::features::{agents, connections, jobs, knowledge, workspaces}`
   and `crate::kernel::{access, agent_policy, identity, sync}`.
 - Imported by `crate::features::scripts` (shares the desktop SQL proposal/
   execution boundary for multi-statement scripts).

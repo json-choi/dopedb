@@ -321,8 +321,7 @@ loopback 문서는 이 정본을 빌드 시 포함하며 네트워크 font나 sc
   database engine·외부 Agent provider 로고와 과거 버전의 실제 screenshot은
   이 브랜드 자산으로 대체하거나 덧그리지 않는다.
 - `site/app/MarketingButton`: 공개 마케팅 사이트의 다운로드·소스 CTA가 공유하는
-  primary/secondary anchor primitive. `TrackedLink`를 합성해 선택적인 analytics
-  event와 동일한 반응형 폭·상태를 소유하며 page에서 CTA utility를 복사하지
+  primary/secondary anchor primitive. 동일한 반응형 폭·상태를 소유하며 page에서 CTA utility를 복사하지
   않는다. 사이트 전용 색·배경·그림자는 `site/app/globals.css`의 theme token만
   소유하고 화면 selector는 두지 않는다.
 - 같은 `site/app/MarketingButton` 모듈의 `MarketingAction`은 native button의
@@ -372,8 +371,7 @@ loopback 문서는 이 정본을 빌드 시 포함하며 네트워크 font나 sc
 - `site/app/PlatformDownloads`: 공개 사이트의 header·hero·download CTA가 공유하는
   OS/CPU 추천 경계. Windows와 브라우저가 확실히 밝힌 Mac architecture만 안정된
   latest-download 별칭으로 직접 연결하고, Mac CPU가 숨겨지거나 지원하지 않는
-  기기에서는 Apple Silicon/Intel/Windows 선택 surface로 이동한다. 추천과 수동
-  선택 analytics를 구분하며 user-agent 추측으로 잘못된 DMG를 자동 선택하지 않는다.
+  기기에서는 Apple Silicon/Intel/Windows 선택 surface로 이동한다. user-agent 추측으로 잘못된 DMG를 자동 선택하지 않는다.
 - `workspace-cloud/app/components/Controls`: Workspace Web에 남은 브라우저
   surface의 compact `ControlButton` 하나를 소유한다. Workspace 관리는 Desktop의
   워크스페이스 관리 dialog로 이동했으므로 Web에 관리용 field·select·link

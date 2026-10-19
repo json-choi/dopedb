@@ -2,7 +2,6 @@
 import { DopeDBMark } from "./DopeDBMark";
 import { Arrow } from "./MarketingButton";
 import { RecommendedHeaderDownload } from "./PlatformDownloads";
-import { TrackedLink } from "./TrackedLink";
 import { repoUrl, workspaceUrls, type HomeCopy, type Lang } from "./homeContent";
 
 export function HomeHeader({ c: existing, lang }: { c: HomeCopy; lang: Lang }) {
@@ -18,7 +17,7 @@ export function HomeHeader({ c: existing, lang }: { c: HomeCopy; lang: Lang }) {
       </nav>
       <div className="tw:flex tw:items-center tw:gap-5 tw:max-sm:gap-4">
         <a href={otherLang === "ko" ? "/ko" : "/"} hrefLang={otherLang} aria-label={otherLang === "ko" ? "한국어로 보기" : "View in English"} className="tw:flex tw:min-h-11 tw:items-center tw:font-mono tw:text-[11px] tw:text-cream-muted tw:hover:text-signal">{otherLang === "ko" ? "KO" : "EN"}</a>
-        <TrackedLink href={workspaceUrls[lang]} event="Workspace Opened" properties={{ source: "header" }} className="tw:hidden tw:min-h-11 tw:items-center tw:gap-2 tw:text-[12px] tw:text-cream-muted tw:hover:text-cream tw:md:flex">{c.workspace}<Arrow diagonal className="tw:size-3" /></TrackedLink>
+        <a href={workspaceUrls[lang]} className="tw:hidden tw:min-h-11 tw:items-center tw:gap-2 tw:text-[12px] tw:text-cream-muted tw:hover:text-cream tw:md:flex">{c.workspace}<Arrow diagonal className="tw:size-3" /></a>
         <RecommendedHeaderDownload copy={existing.download} fallbackLabel={c.download} />
       </div>
     </div>
@@ -31,7 +30,7 @@ export function HomeFooter({ c: existing, lang }: { c: HomeCopy; lang: Lang }) {
     <div className="tw:mx-auto tw:flex tw:max-w-[1264px] tw:flex-wrap tw:items-center tw:justify-between tw:gap-5 tw:text-[11px] tw:text-cream-muted/70">
       <span>© {new Date().getFullYear()} DopeDB. Your data. Your orbit.</span>
       <nav aria-label={lang === "ko" ? "하단 메뉴" : "Footer navigation"} className="tw:flex tw:flex-wrap tw:gap-x-6 tw:gap-y-3">
-        <TrackedLink href={workspaceUrls[lang]} event="Workspace Opened" properties={{ source: "footer" }} className="tw:flex tw:min-h-11 tw:items-center tw:hover:text-signal">{c.workspace}</TrackedLink>
+        <a href={workspaceUrls[lang]} className="tw:flex tw:min-h-11 tw:items-center tw:hover:text-signal">{c.workspace}</a>
         <a href={repoUrl} target="_blank" rel="noreferrer" className="tw:flex tw:min-h-11 tw:items-center tw:hover:text-signal">GitHub ↗</a>
         <a href={lang === "ko" ? "/ko/privacy" : "/privacy"} className="tw:flex tw:min-h-11 tw:items-center tw:hover:text-signal">{c.privacy}</a>
         <a href={lang === "ko" ? "/ko/terms" : "/terms"} className="tw:flex tw:min-h-11 tw:items-center tw:hover:text-signal">{c.terms}</a>

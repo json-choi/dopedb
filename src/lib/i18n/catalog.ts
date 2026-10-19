@@ -31,7 +31,6 @@ import { workspaceProvidersCatalog } from "./catalogs/workspaceProviders";
 import { workspaceProviderDatabasesCatalog } from "./catalogs/workspaceProviderDatabases";
 import { workspaceNeonBranchesCatalog } from "./catalogs/workspaceNeonBranches";
 import { providerProvisioningCatalog } from "./catalogs/providerProvisioning";
-import { productAnalyticsCatalog } from "./catalogs/productAnalytics";
 import type { Lang, MessageCatalog } from "./types";
 
 export const catalogParts = [
@@ -66,7 +65,6 @@ export const catalogParts = [
   workspaceProviderDatabasesCatalog,
   workspaceNeonBranchesCatalog,
   providerProvisioningCatalog,
-  productAnalyticsCatalog,
 ] as const;
 
 type CatalogKey<Parts extends readonly MessageCatalog[]> = Parts[number] extends infer Part

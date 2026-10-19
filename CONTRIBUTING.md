@@ -65,7 +65,7 @@ Project-resource grant와 process ancestry에만 묶인 runtime-only endpoint이
    wrapper를 사용하지 않는다. 저장소 소유자가 명시적으로 요청한 direct-`main`
    push만 `pnpm gh:owner -- git push origin main`을 사용한다.
 
-제품 식별자, 예시, fixture, 문서, 분석 이벤트와 로그에는 제품이 소유한 중립
+제품 식별자, 예시, fixture, 문서와 로그에는 제품이 소유한 중립
 namespace만 사용한다. 기여자의 직장, 이메일 도메인, 실명, 개인 계정이나 로컬
 컴퓨터 정보에서 값을 만들지 않으며, 그런 값을 호환성 alias나 migration 흔적으로
 남기지 않는다. 연속성을 위해 필요하다면 작업을 멈추고 개인정보를 보존하지 않는

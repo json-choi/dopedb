@@ -23,16 +23,16 @@ Settings surface (`../src/features/workspaceAdmin/`, ADR
 Desktop approval, invitation acceptance, provider authorization start/complete
 pages, public Articles, and a settings-moved notice. A companion Cloudflare Worker in
 `infrastructure/` (a separate deploy target) mints the short-lived Workload
-Identity Federation tokens this app and the analytics Worker use to reach GCP;
+Identity Federation tokens this app uses to reach GCP;
 it is not part of the Next.js build.
 
 ## Key Files
 | File | Description |
 |------|-------------|
 | `package.json` | App name `dopedb-workspace-cloud`; Next.js 16, React 19, Drizzle ORM 0.45, `better-auth`, `@neondatabase/serverless`, `sanitize-html`; devDependencies include `wrangler`, `@opennextjs/cloudflare`, `drizzle-kit`, `vitest`, `miniflare`. Scripts cover `dev`/`build`/`start`, D1 migration (`db:*`) and contract tests, Cloudflare build/deploy (`build:cloudflare`, `preview:cloudflare`, `deploy:cloudflare`), and the separate identity Worker (`build:identity`, `deploy:identity`). |
-| `next.config.mjs` | Sets `outputFileTracingRoot`/`turbopack.root` to the repo root, rewrites `/ko` and `/ko/:path*` to the locale-independent path, and emits a strict `Content-Security-Policy` plus HSTS/`X-Frame-Options: DENY`/`Referrer-Policy: no-referrer` on every response; Microsoft Clarity domains are added to the CSP only when `NEXT_PUBLIC_CLARITY_PROJECT_ID` is a valid project id at build time. |
+| `next.config.mjs` | Sets `outputFileTracingRoot`/`turbopack.root` to the repo root, rewrites `/ko` and `/ko/:path*` to the locale-independent path, and emits a strict `Content-Security-Policy` plus HSTS/`X-Frame-Options: DENY`/`Referrer-Policy: no-referrer` on every response. |
 | `middleware.ts` | Derives the request locale from the path, stores it in a one-year cookie, forwards it as a header for server components, and forces `cache-control: private, no-store` on `/analyses/*`, `/article-invitations/*`, and `/open-article/*` (revocable/identity-bearing pages that must never be cached). |
-| `wrangler.jsonc` | Deploy config for the main Worker `dopedb-workspace` (custom domain `app.dopedb.dev`, no `workers_dev`/`preview_urls`). Declares the `WORKSPACE_DB` D1 binding (`migrations_dir: "d1-migrations"`), service bindings to `dopedb-product-analytics` and to this same Worker's identity companion (`WORKLOAD_IDENTITY` → `dopedb-workspace-identity`, entrypoint `WorkspaceIdentity`), and the fixed OIDC vars consumed by `infrastructure/`. |
+| `wrangler.jsonc` | Deploy config for the main Worker `dopedb-workspace` (custom domain `app.dopedb.dev`, no `workers_dev`/`preview_urls`). Declares the `WORKSPACE_DB` D1 binding (`migrations_dir: "d1-migrations"`), a service binding to this same Worker's identity companion (`WORKLOAD_IDENTITY` → `dopedb-workspace-identity`, entrypoint `WorkspaceIdentity`), and the fixed OIDC vars consumed by `infrastructure/`. |
 | `wrangler.identity.jsonc` | Deploy config for the separate `dopedb-workspace-identity` Worker built from `infrastructure/` — see `infrastructure/AGENTS.md`. |
 | `open-next.config.ts` | `defineCloudflareConfig()` with no overrides; the actual Cloudflare adapter entry point for `build:cloudflare`/`preview:cloudflare`/`deploy:cloudflare`. |
 | `drizzle.d1.config.ts` | drizzle-kit config for the **live** D1 schema (`dialect: "sqlite"`, schema `./lib/d1/schema/index.ts`, out `./d1-migrations`) — the target of `pnpm db:generate`/`db:check`; see `d1-migrations/AGENTS.md`. |
@@ -42,8 +42,7 @@ it is not part of the Next.js build.
 | `cloudflare-env.d.ts` | Wrangler-generated ambient `CloudflareEnv` bindings for the main Worker (regenerate with `pnpm cf:typegen`, never hand-edit). |
 | `cloudflare-bindings.d.ts` | Hand-written narrow re-exports of `Fetcher`/`Service`/`WorkerVersionMetadata`/`D1Database` types from `@cloudflare/workers-types`, kept separate so importing them doesn't shadow the browser DOM's `Request`/`Response` globals used elsewhere in the app. |
 | `identity-env.d.ts` | Wrangler-generated ambient `IdentityEnv` bindings for the separate identity Worker (regenerate per `infrastructure/AGENTS.md`, never hand-edit). |
-| `deployment-public.json` | The only build-time public value read into a production Cloudflare build: `NEXT_PUBLIC_CLARITY_PROJECT_ID`. Runtime secrets never enter the build this way. |
-| `README.md` | Local-setup and product-behavior notes: this app is a separate trust boundary from the Tauri desktop, the `WORKSPACE_DB` D1 binding is used directly (no Postgres connection string/emulation in production), and the opt-in web analytics consent/CSP/event-contract model. |
+| `README.md` | Local-setup and product-behavior notes: this app is a separate trust boundary from the Tauri desktop, the `WORKSPACE_DB` D1 binding is used directly (no Postgres connection string/emulation in production). |
 | `.env.example` | Documented local environment variables (Google OAuth client, `BETTER_AUTH_SECRET`/`URL`, `WORKSPACE_CREDENTIAL_KEY`, Workspace KMS key/WIF settings, `CRON_SECRET`, background scheduler settings, GitHub Knowledge App settings) with placeholder, non-functional values only. |
 | `.gitignore` | Ignores `.open-next/`, `.wrangler/`, and `.dev.vars*` (local Wrangler secrets). |
 | `pnpm-workspace.yaml` | pnpm settings for this sub-project: `allowBuilds` for `esbuild`/`workerd`, pinned `overrides` (`postcss`, `sharp`, a `nanoid` floor, an `esbuild-kit` transitive pin), and a 1440-minute (`minimumReleaseAgeStrict`) minimum package-release age gate. |
@@ -91,7 +90,6 @@ it is not part of the Next.js build.
 - `../docs/adr/0007-analysis-article-bi-domain.md` — the ADR this app's Analysis Article sharing/publication model implements.
 - `../docs/adr/0009-desktop-workspace-administration.md` and `../src/features/workspaceAdmin/` — the decision that moved workspace administration out of this app, and the Desktop Settings client of its administration routes.
 - `../scripts/deploy-workspace-cloudflare.mjs`, `../scripts/check-workspace-deployment.mjs`, `../scripts/test-provider-import-d1.sh` — repo-root automation that builds, deploys, and verifies this sub-project.
-- `product-analytics-cloudflare/` — the separate sub-project `wrangler.jsonc` declares a service binding to (`PRODUCT_ANALYTICS`), and whose own Worker consumes the identity Worker's `AnalyticsIdentity` entrypoint alongside this app's `WorkspaceIdentity` one.
 
 ### External
 - `next` 16, `react`/`react-dom` 19, `drizzle-orm` 0.45 + `drizzle-kit`, `better-auth` + `@better-auth/drizzle-adapter`, `@neondatabase/serverless`, `sanitize-html`, `pretendard` (font).

@@ -7,18 +7,17 @@ import { useEffect, useState } from "react";
 import { ArrowDown, ArrowUpRight, Download, MonitorDown } from "lucide-react";
 import { MarketingButton } from "./MarketingButton";
 import {
-  TrackedLink,
-  type DownloadTarget,
-  type TrackedLinkTrackingProps,
-} from "./TrackedLink";
-import {
   downloadUrls,
   releasesUrl,
   type HomeCopy,
 } from "./homeContent";
 
 type DownloadCopy = HomeCopy["download"];
-type RecommendationSource = "header" | "hero" | "download_section";
+type DownloadTarget =
+  | "latest_release"
+  | "windows_x64_installer"
+  | "macos_arm64_dmg"
+  | "macos_x64_dmg";
 type UserAgentData = {
   platform?: string;
   getHighEntropyValues?: (
@@ -32,7 +31,6 @@ type DownloadRecommendation =
       platform: "unknown" | "windows" | "macos-arm64" | "macos-x64";
       href: string;
       target: DownloadTarget;
-      selection: "detected" | "fallback";
     }
   | {
       kind: "options";
@@ -45,7 +43,6 @@ const fallbackRecommendation: DownloadRecommendation = {
   platform: "unknown",
   href: releasesUrl,
   target: "latest_release",
-  selection: "fallback",
 };
 
 let recommendationPromise: Promise<DownloadRecommendation> | undefined;
@@ -76,7 +73,6 @@ async function detectDownloadRecommendation(): Promise<DownloadRecommendation> {
       platform: "windows",
       href: downloadUrls.windows,
       target: "windows_x64_installer",
-      selection: "detected",
     };
   }
   if (/mac/i.test(`${platform} ${userAgent}`)) {
@@ -104,7 +100,6 @@ async function detectDownloadRecommendation(): Promise<DownloadRecommendation> {
         platform: "macos-arm64",
         href: downloadUrls.macApple,
         target: "macos_arm64_dmg",
-        selection: "detected",
       };
     }
     if (architecture === "x64") {
@@ -113,7 +108,6 @@ async function detectDownloadRecommendation(): Promise<DownloadRecommendation> {
         platform: "macos-x64",
         href: downloadUrls.macIntel,
         target: "macos_x64_dmg",
-        selection: "detected",
       };
     }
     return { kind: "options", platform: "macos", href: "#download-options" };
@@ -185,42 +179,18 @@ function recommendationStatus(
   }
 }
 
-function downloadTracking(
-  current: DownloadRecommendation,
-  source: RecommendationSource,
-): TrackedLinkTrackingProps {
-  if (current.kind === "options") {
-    return {
-      event: "Download Options Opened",
-      properties: { source, detected: current.platform },
-    };
-  }
-  return {
-    event: "Download Clicked",
-    properties: {
-      source,
-      target: current.target,
-      selection: current.selection,
-    },
-  };
-}
-
 export function RecommendedMarketingDownload({
   copy,
   fallbackLabel,
-  source,
 }: {
   copy: DownloadCopy;
   fallbackLabel: string;
-  source: Exclude<RecommendationSource, "header">;
 }) {
   const current = useDownloadRecommendation();
   const label = recommendationLabel(current, copy, fallbackLabel);
-  const tracking = downloadTracking(current, source);
 
   return (
     <MarketingButton
-      {...tracking}
       aria-label={label}
       data-download-recommendation={current.platform}
       href={current.href}
@@ -241,11 +211,9 @@ export function RecommendedHeaderDownload({
 }) {
   const current = useDownloadRecommendation();
   const label = recommendationLabel(current, copy, fallbackLabel);
-  const tracking = downloadTracking(current, "header");
 
   return (
-    <TrackedLink
-      {...tracking}
+    <a
       aria-label={label}
       className="tw:flex tw:min-h-11 tw:items-center tw:gap-2 tw:text-[12px] tw:font-medium tw:text-signal tw:hover:text-signal-strong"
       data-download-recommendation={current.platform}
@@ -254,7 +222,7 @@ export function RecommendedHeaderDownload({
     >
       {fallbackLabel}
       <ArrowUpRight size={13} />
-    </TrackedLink>
+    </a>
   );
 }
 
@@ -297,17 +265,11 @@ export function PlatformDownloadOptions({ copy }: { copy: DownloadCopy }) {
         {platforms.map((platform) => {
           const recommended = recommendedTarget === platform.target;
           return (
-            <TrackedLink
+            <a
               className="tw:flex tw:min-h-[76px] tw:items-center tw:justify-between tw:gap-3 tw:bg-night-raised tw:px-4 tw:font-mono tw:text-[10px] tw:font-medium tw:leading-relaxed tw:tracking-[0.06em] tw:text-cream-muted tw:uppercase tw:transition-colors tw:hover:bg-night-soft tw:hover:text-cream tw:data-[recommended=true]:bg-signal/10 tw:data-[recommended=true]:text-cream tw:data-[recommended=true]:outline tw:data-[recommended=true]:-outline-offset-1 tw:data-[recommended=true]:outline-signal/60"
               data-recommended={recommended || undefined}
-              event="Download Clicked"
               href={platform.href}
               key={platform.target}
-              properties={{
-                source: "platform_grid",
-                target: platform.target,
-                selection: "manual",
-              }}
             >
               <span>{platform.label}</span>
               <span className="tw:flex tw:shrink-0 tw:items-center tw:gap-2">
@@ -318,7 +280,7 @@ export function PlatformDownloadOptions({ copy }: { copy: DownloadCopy }) {
                 ) : null}
                 <ArrowDown className="tw:text-signal" size={14} />
               </span>
-            </TrackedLink>
+            </a>
           );
         })}
       </div>

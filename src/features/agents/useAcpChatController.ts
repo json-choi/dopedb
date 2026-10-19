@@ -57,7 +57,6 @@ import {
   retryAcpSessionSnapshot,
   useAcpSessionSnapshot,
 } from "./sessionStore";
-import { observeAgentTurnOutcome } from "./productAnalytics";
 import {
   closeAgentAcpSession,
   openAgentExternalLink,
@@ -458,23 +457,12 @@ export function useAcpChatController({
         if (session && replacingConversation) setNotice(t("agent.acpStartedNewSession"));
       }
       if (!session || session.lifecycle !== "ready") return false;
-      const stopObservingTurn = observeAgentTurnOutcome(
-        catalogScope,
-        session.id,
-        session.provider,
-      );
-      try {
-        await promptAgentAcpSession(session.id, submitted, {
-          ...submittedContext, responseLanguage: lang,
-        });
-      } catch (reason) {
-        stopObservingTurn?.();
-        throw reason;
-      }
+      await promptAgentAcpSession(session.id, submitted, {
+        ...submittedContext, responseLanguage: lang,
+      });
       return true;
     }, [
       active,
-      catalogScope,
       environmentScopeReady, lang,
       prerequisitesReady,
       selectedProvider,

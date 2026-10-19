@@ -1,7 +1,7 @@
 // One Environment creation dialog. With a target Project it adds an Environment
 // (production needs an explicit confirmation); with none it creates a new Project
 // together with its first Environment. Both return the revisioned Project.
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "../../../design-system/components/Button";
@@ -20,10 +20,6 @@ import {
 import { InlineNotice } from "../../../design-system/components/Status";
 import { errMessage } from "../../../ipc/types";
 import { useI18n } from "../../../lib/i18n";
-import { useCatalogScope } from "../../../lib/queries";
-import { captureProductEvent } from "../../productAnalytics/client";
-import type { ProductAnalyticsWorkspaceContextInput } from "../../productAnalytics/domain";
-import { productAnalyticsWorkspaceContext } from "../../productAnalytics/outcomes";
 import type { KnowledgeEnvironment, KnowledgeProject } from "../domain";
 import { knowledgeQueryKeys } from "../queryKeys";
 import { createKnowledgeEnvironment, createKnowledgeProject } from "../tauriAdapter";
@@ -55,12 +51,7 @@ export function EnvironmentSetupDialog({
 }) {
   const { t } = useI18n();
   const queryClient = useQueryClient();
-  const catalogScope = useCatalogScope();
   const newProject = preferredProjectId === null;
-  const analyticsAttempt = useRef<{
-    context: ProductAnalyticsWorkspaceContextInput;
-    existingEnvironmentIds: Set<string>;
-  } | null>(null);
   const [projectId, setProjectId] = useState(() =>
     initialProjectId(projects, preferredProjectId),
   );
@@ -84,34 +75,7 @@ export function EnvironmentSetupDialog({
             name: environmentName.trim(),
             riskClass,
           }),
-    onMutate: () => {
-      const context = productAnalyticsWorkspaceContext(catalogScope);
-      analyticsAttempt.current =
-        context && (newProject || selectedProject)
-          ? {
-              context,
-              existingEnvironmentIds: new Set(
-                selectedProject?.environments.map((environment) => environment.id),
-              ),
-            }
-          : null;
-    },
     onSuccess: async (project) => {
-      const attempt = analyticsAttempt.current;
-      analyticsAttempt.current = null;
-      const environment = attempt
-        ? project.environments.find(
-            (candidate) => !attempt.existingEnvironmentIds.has(candidate.id),
-          )
-        : null;
-      if (attempt && environment) {
-        void captureProductEvent({
-          name: "knowledge_environment_created",
-          properties: { creationKind: newProject ? "project_default" : "additional" },
-          context: attempt.context,
-          dedupeId: environment.id,
-        });
-      }
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: knowledgeQueryKeys.inventory(catalogScopeKey),
@@ -122,9 +86,6 @@ export function EnvironmentSetupDialog({
       ]);
       onCreated(project);
       onClose();
-    },
-    onError: () => {
-      analyticsAttempt.current = null;
     },
   });
   const canCreate =

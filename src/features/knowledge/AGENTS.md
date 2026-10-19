@@ -22,8 +22,8 @@ itself run Agents or execute queries.
 | `queryKeys.ts` | `knowledgeQueryKeys`; exports `KNOWLEDGE_WORKSPACE_QUERY_ROOTS`/`AGENT_KNOWLEDGE_CONNECTION_QUERY_ROOTS` prefixes explicitly for intentional cross-surface invalidation, per its header comment — Knowledge and its Agent-environment projection share one cache identity rooted in the authenticated workspace generation. |
 | `tauriAdapter.ts` | `listKnowledgeProjects`, `listKnowledgeInventory`, `listKnowledgeEnvironmentConnections`, `bindKnowledgeEnvironmentConnection`, `revokeKnowledgeEnvironmentConnection`, `createKnowledgeProject`/`Environment`, `deleteKnowledgeProject`, GitHub install/connect (`beginKnowledgeGithubInstall`, `listKnowledgeGithubRepositories`, `connectKnowledgeGithubSource`), `connectKnowledgeLocalFolder`, `listKnowledgeSources`, `revokeKnowledgeSource`, `onKnowledgeSourceChanged`. |
 | `useKnowledgeGithubInstall.ts` | Owns the external GitHub App installation browser window and the return-to-app repository refresh, per its header comment. |
-| `useKnowledgeSourceActivity.ts` | Reconciles live Knowledge indexing events with inventory query snapshots and analytics. |
-| `workspaceModel.ts` | `knowledgeRepositoryLabel`, source health status keys, and `captureKnowledgeSyncOutcome`/`finishKnowledgeSyncOutcome` product-analytics helpers. |
+| `useKnowledgeSourceActivity.ts` | Reconciles live Knowledge indexing events with inventory query snapshots. |
+| `workspaceModel.ts` | `knowledgeRepositoryLabel`, source health status keys, and the source-activity type. |
 
 ### `components/`
 
@@ -70,7 +70,6 @@ mutations are owned by the hooks above or passed in as props, not created here.
 ### Internal
 
 - `src/features/workspaces/tauriAdapter.ts` (`refreshWorkspaceAuthState`).
-- `src/features/productAnalytics/domain.ts`/`client.ts` (sync outcome analytics).
 - `src/features/connections/domain.ts` (`ConnectionProfile`, consumed by `components/KnowledgeDatabaseSection.tsx`).
 - `src/ipc/types` (`errDetails`).
 - Rust counterpart: `src-tauri/src/features/knowledge/transport.rs` (verified present).

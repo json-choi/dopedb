@@ -525,6 +525,7 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
 | PD-45 | 로컬 진단 로그와 버그 제보 | `구현` | Settings → 고급에서 명시적으로 켠 뒤 Desktop의 Rust 진단 이벤트, frontend 오류와 IPC 결과·시간을 bounded process-memory에만 수집한다. 기본은 꺼짐이며 끄기·종료 시 비우고 파일·서버에 전송하지 않는다. 인증 비밀값과 명시적 SQL·결과·Agent payload는 제외하되 호스트·DB 이름·사용자명·경로 같은 내부 정보는 포함될 수 있다. 조회·비우기와 개인정보 경고 확인 뒤 수동 복사·GitHub 이슈 작성 페이지 열기만 제공하며 자동 첨부·제출과 완전한 개인정보 자동 마스킹은 제공하지 않는다. |
 | PD-46 | Desktop workspace 관리 | `구현` | workspace 생성, 구성원 초대·역할·제거, DB grant·팀 읽기 공유·연결 편집 충돌, 공급자 계정 승인·managed DB 등록/복구·Neon branch, 소유자의 backup·key rotation·retention·삭제 예약, 계정 session 종료와 삭제 예약 취소를 Desktop이 소유한다. workspace 범위 관리는 앱 `Settings`와 분리된 `워크스페이스 관리` dialog가, 계정 session 종료와 삭제 예약 취소는 `Settings → 계정`이 맡는다. 데이터 소스 카탈로그의 `공유 DB 추가`는 관리자·소유자에게만 그 dialog의 DB 추가를 여는 바로가기다. Rust가 계정별 Bearer session으로 control plane의 닫힌 작업 목록만 호출하고 경로 식별자를 검증하며 token·provider state·입력한 provider secret을 WebView 캐시나 로컬 저장소에 남기지 않는다. 브라우저 OAuth가 필요한 공급자는 control plane origin의 시작 확인 페이지만 열고 완료 뒤 Desktop에서 이어 간다. Workspace Web의 관리 화면은 제거하고 로그인·초대 수락·OAuth 시작 확인과 완료 안내·공개 Article만 남긴다. 권한이 없는 구성원에게는 관리 진입점과 section을 비활성 항목 없이 숨긴다. |
 | PD-47 | Schema diagram 문서 | `구현` | 선택한 연결의 스키마 다이어그램(`schema` 문서)은 핵심 기능이 아닌 보조 surface다. 진입점은 연결 행의 ⋮ 메뉴와 Action Search의 `스키마 다이어그램` command뿐이며 title toolbar, 상태 표시줄, Welcome에는 launcher를 두지 않는다. 읽기 전용 조회 화면이고 DDL 작성·실행 command를 추가하지 않는다. |
+| PD-48 | 사용 분석(제품 analytics·웹사이트 방문 집계·세션 녹화) | `구현 안 함` | DopeDB는 오픈소스이며 Desktop, Workspace Web, 공개 웹사이트 어디에서도 사용 이벤트, 방문 집계, 세션 녹화, 동의 UI를 수집하거나 두지 않는다. 장애 대응용 정제된 오류 진단(Sentry)만 남기며 제품 퍼널 측정에 쓰지 않는다. |
 
 
 ## 변경 규칙

@@ -11,7 +11,6 @@ all_phases=(
   frontend-smoke
   rust-smoke
   provider-postgres
-  analytics-cloudflare
   scheduler-cloudflare
   site-build
 )
@@ -28,7 +27,6 @@ Phases (default: every phase, in this order):
   rust-smoke            stage sidecars, cargo fmt, clippy, the four cargo tests
   provider-postgres     Workspace Workers, D1 migrations, Cloud SQL policy,
                         harness safety guard
-  analytics-cloudflare  analytics Worker build, test, wrangler dry-run
   scheduler-cloudflare  scheduler Worker build, test, wrangler dry-run
   site-build            marketing Worker build, wrangler dry-run
 
@@ -520,7 +518,7 @@ check_dependencies() {
 
 needs_package_manager() {
   local phase
-  for phase in frontend-smoke provider-postgres analytics-cloudflare scheduler-cloudflare site-build; do
+  for phase in frontend-smoke provider-postgres scheduler-cloudflare site-build; do
     if is_selected "$phase"; then
       return 0
     fi
@@ -544,9 +542,6 @@ run_preflight_checks() {
   if is_selected provider-postgres; then
     check_dependencies "workspace-cloud" "workspace-cloud"
     check_postgres
-  fi
-  if is_selected analytics-cloudflare; then
-    check_dependencies "product-analytics-cloudflare" "product-analytics-cloudflare"
   fi
   if is_selected scheduler-cloudflare; then
     check_dependencies "workspace-scheduler-cloudflare" "workspace-scheduler-cloudflare"
@@ -656,17 +651,6 @@ phase_provider_postgres() {
   return 0
 }
 
-phase_analytics_cloudflare() {
-  pnpm_install "product-analytics-cloudflare" || return 1
-  run_step "Type-check the analytics Worker" \
-    "${package_manager_command[@]}" --dir product-analytics-cloudflare build || return 1
-  run_step "Test the analytics Worker public contract" \
-    "${package_manager_command[@]}" --dir product-analytics-cloudflare test || return 1
-  run_step "Dry-run the analytics Worker deploy" \
-    "${package_manager_command[@]}" --dir product-analytics-cloudflare exec wrangler deploy --dry-run || return 1
-  return 0
-}
-
 phase_scheduler_cloudflare() {
   pnpm_install "workspace-scheduler-cloudflare" || return 1
   run_step "Type-check the scheduler Worker" \
@@ -692,7 +676,6 @@ dispatch_phase() {
     frontend-smoke) phase_frontend_smoke ;;
     rust-smoke) phase_rust_smoke ;;
     provider-postgres) phase_provider_postgres ;;
-    analytics-cloudflare) phase_analytics_cloudflare ;;
     scheduler-cloudflare) phase_scheduler_cloudflare ;;
     site-build) phase_site_build ;;
     *)

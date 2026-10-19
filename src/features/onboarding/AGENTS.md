@@ -15,7 +15,7 @@ calling the same commands a real user flow would call.
 |------|-------------|
 | `demoSetup.ts` | Composes connection + Project Environment creation into one guided-demo setup; defines `GUIDED_DEMO_PROJECT_NAME`/`GUIDED_DEMO_ENVIRONMENT_NAME`, `GuidedDemoEnvironmentMissingError`, and `refreshGuidedDemoQueries` (the inventory, Environment-binding, and Agent-environment invalidations both hooks await). Binds the demo connection only on first setup; an existing binding, even a stale one, is never silently rebound and is reconfirmed by the person. |
 | `useGuidedDemoCommands.ts` | Hook exposing the guided-demo command set (`browseOrders`, `analyzeRevenue`, read-only; `practiceApproval`, opened with `{ write: true }`; `openSafety`; `resume`, which reselects the existing demo connection and reopens its Welcome from another connection, or `null`). |
-| `useGuidedDemoSetup.ts` | Hook that creates/reuses the demo SQLite connection, verifies it, and records analytics for the guided demo. |
+| `useGuidedDemoSetup.ts` | Hook that creates/reuses the demo SQLite connection, and verifies it for the guided demo. |
 
 ## Subdirectories
 None.
@@ -33,8 +33,6 @@ None.
 - No test file exists in this directory; not part of the `pnpm test` smoke suite.
 
 ### Common Patterns
-- Hooks report outcomes through `../productAnalytics/client` using the closed
-  `productAnalytics` outcome vocabulary rather than ad hoc event names.
 
 ## Dependencies
 
@@ -42,7 +40,6 @@ None.
 - `../agents` — `listAgentKnowledgeEnvironments` (read-only) and `agentSessionErrorLabel` for stable-code failure copy.
 - `../knowledge` — environment/project creation and binding.
 - `../connections` — demo SQLite connection presets, `testConnection`, `upsertConnection`, `createDemoSqlite`.
-- `../productAnalytics` — outcome capture for guided-demo events.
 
 ### External
 - No dedicated Rust module or `transport.rs`; this feature has no `tauriAdapter.ts`

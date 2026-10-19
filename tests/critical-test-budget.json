@@ -41,7 +41,7 @@
     },
     "src/features/workspaces/authPolicy.test.ts": {
       "tests": 3,
-      "protects": "Workspace authentication cooldown, request deduplication, exact external authentication URL scope, token-free Desktop callback schemes, managed-connection recovery and the shared-database shortcut that open exactly Workspace management → Providers and hand their focus over once while dropping a superseded or 60-second-stale focus, personal/team shared-authority separation, active-observer cache clearing, connection-scoped Agent Knowledge reset, localized persisted-session recovery, role-only authority refetch, responsive Agent modeless/modal and Escape contracts, and consent-gated product analytics identity, queue, scope, bucketing, and raw-field exclusion"
+      "protects": "Workspace authentication cooldown, request deduplication, exact external authentication URL scope, token-free Desktop callback schemes, managed-connection recovery and the shared-database shortcut that open exactly Workspace management → Providers and hand their focus over once while dropping a superseded or 60-second-stale focus, personal/team shared-authority separation, active-observer cache clearing, connection-scoped Agent Knowledge reset, localized persisted-session recovery, role-only authority refetch, responsive Agent modeless/modal and Escape contracts"
     }
   },
   "rust": {
@@ -99,12 +99,6 @@
     }
   },
   "harness": {
-    "product-analytics-cloudflare/src/index.harness.ts": {
-      "role": "entry-point",
-      "runner": "product-analytics-cloudflare/vitest.config.ts",
-      "tests": 1,
-      "protects": "Product-analytics v1 event envelope: the shared golden fixture is accepted while free-form or stale mutations are rejected at the Cloudflare Worker boundary"
-    },
     "workspace-cloud/lib/control-plane-contracts.harness.ts": {
       "role": "entry-point",
       "runner": "workspace-cloud/vitest.contracts.config.ts",
@@ -212,12 +206,6 @@
       "importedBy": "workspace-cloud/lib/control-plane-contracts.harness.ts",
       "tests": 0,
       "protects": "Exports assertWorkloadIdentityContract; owns the workload identity federation contract assertions"
-    },
-    "workspace-cloud/lib/site-analytics.harness.ts": {
-      "role": "helper",
-      "importedBy": "workspace-cloud/lib/control-plane-contracts.harness.ts",
-      "tests": 0,
-      "protects": "Exports assertSiteAnalyticsContract; owns the site analytics envelope contract assertions"
     }
   }
 }

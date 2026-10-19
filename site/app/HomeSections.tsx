@@ -45,7 +45,7 @@ function HomeAccessSections({ c: existing, lang }: { c: HomeCopy; lang: Lang }) 
         {c.description}
       </p>
       <div data-primary-flow className="tw:mt-7 tw:flex tw:flex-wrap tw:items-center tw:gap-x-7 tw:gap-y-4">
-        <RecommendedMarketingDownload copy={existing.download} fallbackLabel={c.download} source="hero" />
+        <RecommendedMarketingDownload copy={existing.download} fallbackLabel={c.download} />
         <a href="#product" className="tw:flex tw:min-h-11 tw:items-center tw:gap-3 tw:text-[13px] tw:text-cream-muted tw:hover:text-cream">
           {c.seeProduct}<Arrow />
         </a>
@@ -87,7 +87,7 @@ function HomeActionSections({ c: existing, lang }: { c: HomeCopy; lang: Lang }) 
       <div className="tw:mx-auto tw:grid tw:max-w-[1264px] tw:items-center tw:gap-12 tw:lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] tw:lg:gap-20">
         <div><div className="tw:text-signal"><DopeDBMark className="tw:size-16" /></div><h2 className="tw:mt-6 tw:whitespace-pre-line tw:text-[clamp(34px,4.1vw,58px)] tw:leading-[1.18] tw:font-medium tw:tracking-[-0.05em]">{c.downloadTitle}</h2><p className="tw:mt-6 tw:max-w-[450px] tw:text-[14px] tw:leading-[1.9] tw:text-cream-muted">{c.downloadBody}</p><a href={workspaceUrls[lang]} target="_blank" rel="noreferrer" className="tw:mt-6 tw:inline-flex tw:min-h-11 tw:items-center tw:gap-3 tw:text-[13px] tw:text-signal tw:hover:underline">{c.workspace} <Arrow diagonal /></a></div>
         <div>
-          <div data-primary-flow className="tw:flex tw:flex-wrap tw:gap-3"><RecommendedMarketingDownload copy={existing.download} fallbackLabel={existing.download.primary} source="download_section" /><MarketingButton variant="secondary" href={`${repoUrl}/blob/main/docs/PROJECT.md#development`}>{existing.download.source} <Arrow diagonal /></MarketingButton></div>
+          <div data-primary-flow className="tw:flex tw:flex-wrap tw:gap-3"><RecommendedMarketingDownload copy={existing.download} fallbackLabel={existing.download.primary} /><MarketingButton variant="secondary" href={`${repoUrl}/blob/main/docs/PROJECT.md#development`}>{existing.download.source} <Arrow diagonal /></MarketingButton></div>
           <PlatformDownloadOptions copy={existing.download} />
           <details className="tw:mt-7 tw:border-y tw:border-hairline tw:py-4" open><summary className="tw:cursor-pointer tw:text-[12px] tw:text-cream">{c.install}</summary><div className="tw:mt-4 tw:space-y-3 tw:text-[12px] tw:leading-[1.85] tw:text-cream-muted"><p>{existing.download.macSigning}</p><p><span className="tw:text-warning">{existing.download.windowsWarningTitle}</span><br />{existing.download.windowsWarningBody}</p></div></details>
           <p className="tw:mt-5 tw:text-[11px] tw:leading-[1.8] tw:text-cream-muted/70">{c.alpha}</p>

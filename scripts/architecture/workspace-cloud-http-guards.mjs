@@ -30,9 +30,6 @@ const neonOperationsApplication =
   "workspace-cloud/lib/providers/neon-branch-operation-application.ts";
 const neonOperationsApplicationDirectory =
   "workspace-cloud/lib/providers/neon-branch-operations";
-const productAnalyticsRoute =
-  "workspace-cloud/app/api/v1/product-analytics/events/route.ts";
-const productAnalyticsService = "workspace-cloud/lib/product-analytics.ts";
 const knowledgeSourceBrowseRoute =
   "workspace-cloud/app/api/v1/workspaces/[workspaceId]/knowledge/sources/[sourceId]/browse/route.ts";
 const knowledgeSourceBrowseApplication =
@@ -193,79 +190,7 @@ export function collectWorkspaceCloudHttpDiagnostics({ lineCount, read, relative
     }
   }
 
-  const analyticsRouteSource = read(productAnalyticsRoute);
-  const analyticsServiceSource = read(productAnalyticsService);
-  for (const token of [
-    "const MAX_BODY_BYTES = 32 * 1_024",
-    "boundedJsonBody(request, MAX_BODY_BYTES)",
-    "env.productAnalyticsRelayEnabled()",
-    "acceptsProductAnalyticsContract(request.headers)",
-    "parseProductAnalyticsEnvelope(parsed.value)",
-    "consumeProductAnalyticsIngressBudget(request.headers)",
-    "consumeProductAnalyticsEnvelopeBudget(\n      envelope.installationId,\n      envelope.events.length,\n    )",
-    "{ accepted: true, retryable: false }",
-    "retryAfterMs: RETRY_AFTER_MS",
-    'headers: { "retry-after": String(RETRY_AFTER_SECONDS) }',
-  ]) {
-    if (!analyticsRouteSource.includes(token)) {
-      diagnostics.push(`${productAnalyticsRoute}: product analytics boundary is missing ${token}`);
-    }
-  }
-  if (
-    analyticsRouteSource.indexOf("env.productAnalyticsRelayEnabled()") >
-      analyticsRouteSource.indexOf("consumeProductAnalyticsIngressBudget(request.headers)")
-  ) {
-    diagnostics.push(
-      `${productAnalyticsRoute}: dormant product analytics must fail before allocating rate-limit state`,
-    );
-  }
-  if (
-    analyticsRouteSource.indexOf("consumeProductAnalyticsIngressBudget(request.headers)") >
-      analyticsRouteSource.indexOf("boundedJsonBody(request, MAX_BODY_BYTES)")
-  ) {
-    diagnostics.push(
-      `${productAnalyticsRoute}: product analytics ingress budget must run before the body is read`,
-    );
-  }
-  for (const token of [
-    "PRODUCT_EVENT_PROPERTIES",
-    'namespace: "product-analytics-ip"',
-    'namespace: "product-analytics-installation"',
-    'namespace: "product-analytics-global-requests"',
-    'namespace: "product-analytics-global-events"',
-    "productAnalyticsIngressBudgetPlan(headers)",
-    "productAnalyticsEnvelopeBudgetPlan(installationId, eventCount)",
-    "for (const budget of budgets)",
-    "if (!await consumeRateLimit(budget)) return false",
-    "productAnalyticsBindingFetch(new Request(\"https://analytics.internal/v1/events\"",
-    "body: JSON.stringify(envelope)",
-    "AbortSignal.timeout(CLOUDFLARE_TIMEOUT_MS)",
-  ]) {
-    if (!analyticsServiceSource.includes(token)) {
-      diagnostics.push(`${productAnalyticsService}: product analytics relay is missing ${token}`);
-    }
-  }
-  if (analyticsServiceSource.includes("${clientKey}\\u0000${installationId}")) {
-    diagnostics.push(
-      `${productAnalyticsService}: IP and installation budgets must not share one rotatable key`,
-    );
-  }
-  if (/\b(?:posthog-js|posthog-node|@posthog)\b/.test(read("workspace-cloud/package.json"))) {
-    diagnostics.push("workspace-cloud/package.json: product analytics must not add a vendor SDK");
-  }
   const environmentSource = read("workspace-cloud/lib/env.ts");
-  const sinkConfiguration = JSON.parse(read("product-analytics-cloudflare/wrangler.jsonc"));
-  const workspaceConfiguration = JSON.parse(read("workspace-cloud/wrangler.jsonc"));
-  const bindingSource = read("workspace-cloud/lib/product-analytics-binding.ts");
-  if (sinkConfiguration.workers_dev !== false || sinkConfiguration.preview_urls !== false
-    || sinkConfiguration.routes?.length || sinkConfiguration.d1_databases?.length
-    || !workspaceConfiguration.services?.some((binding) =>
-      binding.binding === "PRODUCT_ANALYTICS" && binding.service === sinkConfiguration.name)
-    || workspaceConfiguration.account_id !== sinkConfiguration.account_id
-    || !bindingSource.includes("getCloudflareContext().env.PRODUCT_ANALYTICS.fetch(")
-    || /\bfetch\(/.test(analyticsServiceSource)) {
-    diagnostics.push("product analytics must use only its private service binding and no raw D1 storage");
-  }
 
   const sourceBrowseRouteSource = read(knowledgeSourceBrowseRoute);
   const sourceBrowseApplicationSource = read(knowledgeSourceBrowseApplication);

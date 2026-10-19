@@ -1,7 +1,7 @@
 # Cloudflare production operations
 
 DopeDB's public site, Workspace application, workload identity service,
-background coordinator, and product analytics service run on Cloudflare. The
+and background coordinator run on Cloudflare. The
 Workspace application stores account and collaboration records in D1. Checked-in
 Wrangler configuration is the source of truth for Worker names, routes, bindings,
 account IDs, and compatibility settings.
@@ -16,15 +16,10 @@ credentials stay outside the repository. Never copy them into a build-visible
 | --- | --- | --- |
 | Workspace pages and APIs | `workspace-cloud/wrangler.jsonc` | `app.dopedb.dev` |
 | Workload identity metadata and binding-only token delivery | `workspace-cloud/wrangler.identity.jsonc` | `identity.dopedb.dev` |
-| Public site and website analytics ingress | `site/wrangler.jsonc` | `dopedb.dev`, `www.dopedb.dev` |
+| Public site | `site/wrangler.jsonc` | `dopedb.dev`, `www.dopedb.dev` |
 | Due-time coordination | `workspace-scheduler-cloudflare/wrangler.jsonc` | authenticated service binding |
-| Optional Desktop analytics | `product-analytics-cloudflare/wrangler.jsonc` | private service binding; BigQuery EU storage |
 
 The Workspace Worker binds to the identity Worker through `WORKLOAD_IDENTITY`.
-Desktop analytics uses the separate `AnalyticsIdentity` entrypoint and
-`dopedb:analytics:production` subject. Its dedicated GCP pool and service account
-can append to the analytics dataset, without Workspace KMS or customer-resource
-grants. See [analytics operations](../product-analytics-cloudflare/README.md).
 The public identity origin serves discovery metadata and JWKS only; token delivery
 must remain inaccessible over the public route. The production OIDC issuer,
 audience, account, workload ID, and subject must match in both Wrangler files.
@@ -56,9 +51,8 @@ pnpm --dir workspace-cloud deploy:cloudflare --preserve-secrets
 
 This checks the configured account, required secret names and exact D1 migration
 receipts without applying migrations or uploading secrets. It then builds,
-deploys and verifies the production version. Public build configuration comes
-only from `workspace-cloud/deployment-public.json`; the deployment wrapper passes
-its allowlisted Clarity ID to the build without exposing production secrets.
+deploys and verifies the production version. The Workspace build takes no public
+build values and no production secrets.
 Pending migrations fail this path; use the environment-file workflow below when
 a deployment actually requires migration or runtime-secret changes.
 

@@ -9,9 +9,6 @@
 /site/node_modules
 /workspace-cloud/.next
 /workspace-cloud/node_modules
-/product-analytics-cloudflare/node_modules
-/product-analytics-cloudflare/.wrangler
-/product-analytics-cloudflare/.dev.vars*
 /workspace-cloud/tsconfig.tsbuildinfo
 /site/tsconfig.tsbuildinfo
 src-tauri/target

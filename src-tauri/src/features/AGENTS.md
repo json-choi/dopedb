@@ -36,7 +36,6 @@ reference Tauri, SQLx, `Store`, the keychain, the network, or the global
 | `knowledge/` | Project Knowledge graph extraction, hosted/local sources, and Agent-scoped reads (see `knowledge/AGENTS.md`). |
 | `monitoring/` | Scope-aware database monitoring status and fixed PostgreSQL role changes (see `monitoring/AGENTS.md`). |
 | `operation_control/` | Desktop-only exact-hash approval orchestration for durable Operations (see `operation_control/AGENTS.md`). |
-| `product_analytics/` | Privacy-bounded, closed-vocabulary product analytics transport (see `product_analytics/AGENTS.md`). |
 | `providers/` | Member-local provider credentials and managed-access provisioning lifecycles (see `providers/AGENTS.md`). |
 | `queries/` | SQL query use cases for desktop and authenticated Terminal/Agent workflows (see `queries/AGENTS.md`). |
 | `safety_settings/` | Per-connection safety settings (row caps, write/schema gates) (see `safety_settings/AGENTS.md`). |
@@ -106,7 +105,7 @@ reference Tauri, SQLx, `Store`, the keychain, the network, or the global
 - Cross-feature edges observed in code: `agents` and `analysis_articles` →
   `knowledge`; `connections` and `jobs` → `catalog`; `knowledge` and
   `providers` → `workspaces`; `scripts` → `catalog`, `queries`; `queries` →
-  `agents`, `connections`, `jobs`, `knowledge`, `product_analytics`,
+  `agents`, `connections`, `jobs`, `knowledge`,
   `workspaces`; `workspace_admin` → `workspaces` (transport only, for the
   signed-in accounts); `workspaces` → `analysis_articles`, `connections`. Every
   feature's own `AGENTS.md` documents its exact imports.

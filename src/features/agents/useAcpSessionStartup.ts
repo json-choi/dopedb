@@ -19,7 +19,6 @@ import {
   ownsStartedAcpSession,
   type AcpFocusRequest,
 } from "./sessionFocus";
-import { beginAgentInitializationOutcome } from "./productAnalytics";
 import { recordAcpSessionFocus } from "./sessionStore";
 import { closeAgentAcpSession, startAgentAcpSession } from "./tauriAdapter";
 
@@ -107,10 +106,6 @@ export function useAcpSessionStartup({
         return pendingStartRef.current.promise;
       }
       const request = beginFocusRequest();
-      const completeAnalytics = beginAgentInitializationOutcome(
-        catalogScope,
-        provider,
-      );
       const previousStart = pendingStartRef.current?.promise;
       const pending = (async () => {
         if (foreground) onStartingChange(true);
@@ -128,7 +123,6 @@ export function useAcpSessionStartup({
             selectedResourceScopes,
             writeConnectionId,
           );
-          completeAnalytics("success");
           if (
             currentSelectionRef.current !== startKey ||
             !ownsStartedAcpSession(
@@ -153,7 +147,6 @@ export function useAcpSessionStartup({
           // The code arrives behind the error variant's prefix, so it is
           // parsed rather than compared with the whole message.
           if (stableAgentErrorCode(errMessage(reason))?.code === AGENT_START_CANCELLED) return null;
-          completeAnalytics("failed");
           if (currentSelectionRef.current !== startKey || !focusRequestIsCurrent(request)) return null;
           onError(agentFailure(reason, t, (error) =>
             t("agent.acpStartFailed", { provider: providerLabel(provider), error })));
