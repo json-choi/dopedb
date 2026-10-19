@@ -29,7 +29,6 @@ import Appearance from "./Appearance";
 import LanguageSettings from "./Language";
 import AgentTools from "./AgentTools";
 import CliSettings from "./Cli";
-import PrivacySettings from "./Privacy";
 import Safety from "./Safety";
 import Updates from "./Updates";
 
@@ -148,7 +147,6 @@ export default function Settings({
       {section === "agent-tools" && <AgentTools />}
       {section === "advanced" && <AdvancedSettings />}
       {section === "cli" && <CliSettings connection={connection} />}
-      {section === "privacy" && <PrivacySettings />}
       {section === "updates" && (
         <Updates
           snapshot={updater}

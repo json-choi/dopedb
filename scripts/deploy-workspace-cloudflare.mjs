@@ -18,8 +18,7 @@ function run([command, ...args], { env = {}, input, capture = false, step = args
     // Do not inherit production credentials from the invoking shell into builds.
     const clean = Object.fromEntries(Object.entries(process.env).filter(([key]) =>
       !(key in example) && !["DATABASE_URL", "DATABASE_URL_UNPOOLED"].includes(key)
-      && !key.startsWith("OIDC_") && !key.startsWith("NEXT_PUBLIC_")
-      && !key.startsWith("PRODUCT_ANALYTICS_")));
+      && !key.startsWith("OIDC_") && !key.startsWith("NEXT_PUBLIC_")));
     const child = spawn(command, args, { cwd, env: { ...clean, ...env },
       stdio: [input === undefined ? "ignore" : "pipe", capture ? "pipe" : "inherit", "inherit"] });
     let output = "";
@@ -45,11 +44,6 @@ async function main() {
   const checkOnly = args.includes("--check");
   const preserveSecrets = args.includes("--preserve-secrets");
   const rest = args.filter((arg) => !["--check", "--preserve-secrets"].includes(arg));
-  const publicBuildEnv = JSON.parse(await readFile(`${cwd}/deployment-public.json`, "utf8"));
-  if (Object.keys(publicBuildEnv).join(",") !== "NEXT_PUBLIC_CLARITY_PROJECT_ID"
-    || !/^[a-z0-9]+$/.test(publicBuildEnv.NEXT_PUBLIC_CLARITY_PROJECT_ID)) {
-    throw new Error("Invalid public Workspace build configuration.");
-  }
   let values = {};
   if (preserveSecrets) {
     if (rest.length) throw new Error("--preserve-secrets must not receive an environment file.");
@@ -64,7 +58,7 @@ async function main() {
     values = parseEnv(await readFile(rest[1], "utf8"));
     for (const [key, value] of Object.entries(values)) {
       if (!(key in example)) throw new Error(`Unexpected runtime variable: ${key}`);
-      if (key.startsWith("NEXT_PUBLIC_")) throw new Error("Public build values belong in deployment-public.json.");
+      if (key.startsWith("NEXT_PUBLIC_")) throw new Error("The Workspace build takes no public build values.");
       if (!value.trim() || /\[SENSITIVE\]|replace-me|replace-with-|example\.com|example\.workers\.dev/i.test(value)) {
         throw new Error(`The original production value is required for ${key}.`);
       }
@@ -88,9 +82,6 @@ async function main() {
       if (values[switchKey] === "1" && (!values[`${prefix}_URL`] || !values[`${prefix}_TOKEN`])) {
         throw new Error(`The enabled ${switchKey} requires its existing URL and token.`);
       }
-    }
-    if (values.PRODUCT_ANALYTICS_RELAY_ENABLED && !["0", "1"].includes(values.PRODUCT_ANALYTICS_RELAY_ENABLED)) {
-      throw new Error("Invalid PRODUCT_ANALYTICS_RELAY_ENABLED.");
     }
     const githubKeys = Object.keys(example).filter((key) => key.startsWith("GITHUB_KNOWLEDGE_"));
     for (const group of [githubKeys, ["PLANETSCALE_CLIENT_ID", "PLANETSCALE_CLIENT_SECRET"],
@@ -131,7 +122,7 @@ async function main() {
       throw new Error(`Remove the build-visible ${name}; keep production values outside the app directory.`);
     }
   }
-  await run(packageScript("build:cloudflare"), { env: publicBuildEnv, step: "build:cloudflare" });
+  await run(packageScript("build:cloudflare"), { step: "build:cloudflare" });
   if (!preserveSecrets) {
     await run(nodeScript("scripts/migrate-d1.mjs"), { step: "migrate-d1" });
     await run([...localBin(cwd, "wrangler"), "secret", "bulk"], { input: JSON.stringify(values), step: "wrangler secret bulk" });

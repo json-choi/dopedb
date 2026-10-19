@@ -4,13 +4,10 @@
 import { useSyncExternalStore } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 
-import type { CatalogScope } from "../../lib/queries";
 import type { AnalysisArticleDocument, AnalysisDefinitionRunReceipt } from "./domain";
-import { beginManualAnalysisRunOutcome } from "./productAnalytics";
 import { analysisQueryKeys } from "./queryKeys";
 import {
   cancelAnalysisArticleRun,
-  listAnalysisArticleRuns,
   runAnalysisArticle,
 } from "./tauriAdapter";
 
@@ -77,19 +74,16 @@ async function refreshRunViews(queryClient: QueryClient, scopeKey: string, artic
 export function startAnalysisRun({
   queryClient,
   scopeKey,
-  catalogScope,
   article,
 }: {
   queryClient: QueryClient;
   scopeKey: string;
-  catalogScope: CatalogScope;
   article: AnalysisArticleDocument;
 }) {
   const key = sessionKey(scopeKey, article.id);
   if (read(key).running) return;
   const runId = crypto.randomUUID();
   const querySignature = analysisQuerySignature(article);
-  const completeAnalytics = beginManualAnalysisRunOutcome(catalogScope);
   update(key, (current) => ({
     ...current,
     running: { runId, articleRevision: article.revision, cancelRequested: false },
@@ -97,7 +91,6 @@ export function startAnalysisRun({
   }));
   void runAnalysisArticle(article.id, article.revision, runId).then(
     async (value) => {
-      completeAnalytics(value.run);
       update(key, () => ({
         running: null,
         result: { receipt: value.result, querySignature },
@@ -114,12 +107,6 @@ export function startAnalysisRun({
         running: null,
         notice: cancelled ? { kind: "cancelled" } : { kind: "failed", error },
       }));
-      try {
-        const page = await listAnalysisArticleRuns(article.id);
-        completeAnalytics(page.runs.find((run) => run.id === runId));
-      } catch {
-        // Do not infer a terminal analytics state without a durable run receipt.
-      }
       await refreshRunViews(queryClient, scopeKey, article.id);
     },
   );

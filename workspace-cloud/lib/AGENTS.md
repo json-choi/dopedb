@@ -111,14 +111,6 @@ default privilege, or ACL (see root `CLAUDE.md`/`AGENTS.md`).
 | `workspace-kms-core.ts` | Pure validation regexes/types for Cloud KMS key names, versions, and Workload Identity Federation audience. |
 | `workspace-kms.ts` | Cloud KMS envelope boundary authenticated only via the production workload OIDC token and WIF. |
 
-### Product Analytics
-| File | Description |
-|------|-------------|
-| `clarity-plugin.ts` | Microsoft Clarity `WebAnalyticsPlugin` adapter (start/stop/track). |
-| `product-analytics-binding.ts` | Forwards requests to the production-only `PRODUCT_ANALYTICS` Cloudflare Worker binding; the sink has no public route. |
-| `product-analytics.ts` | Strict product-outcome event validation and the optional Cloudflare analytics sink; never persists raw analytics. |
-| `web-analytics.ts` | Browser analytics event contract and plugin fan-out; only reviewed enums are accepted, no arbitrary properties or identifiers. |
-
 ### HTTP, Errors & Validation
 | File | Description |
 |------|-------------|
@@ -138,7 +130,7 @@ default privilege, or ACL (see root `CLAUDE.md`/`AGENTS.md`).
 ### Tests & Contract Harnesses
 | File | Description |
 |------|-------------|
-| `control-plane-contracts.harness.ts` | Decodes the versioned control-plane fixture and composes the GCP-bootstrap, workload-identity, and site-analytics contract checks; a `test:contracts` entry point. |
+| `control-plane-contracts.harness.ts` | Decodes the versioned control-plane fixture and composes the GCP-bootstrap and workload-identity contract checks; a `test:contracts` entry point. |
 | `d1-analysis-run-scenarios.harness.ts` | Verifies Analysis Article runner registration/revocation and run create/cancel/complete against a live D1 instance. |
 | `d1-analysis-scenarios.harness.ts` | Verifies Analysis Article create/mutate/delete, composing the runner and run scenario helpers. |
 | `d1-backup-scenarios.harness.ts` | Verifies workspace DEK rotation and encrypted backup insert/tombstone against D1, mocking the KMS API. |
@@ -153,7 +145,6 @@ default privilege, or ACL (see root `CLAUDE.md`/`AGENTS.md`).
 | `d1-switch-scenarios.harness.ts` | Verifies the Neon branch-switch provider-operation plan/execute/complete path against D1. |
 | `d1-versioning-scenarios.harness.ts` | Verifies connection version create/mutate/conflict/resolve and snapshot restore against D1, using revocation gates. |
 | `d1-workspace-scenarios.harness.ts` | Top-level D1 scenario composer that runs the permission, operation, retention, and backup scenario suites together. |
-| `site-analytics.harness.ts` | Asserts the public website analytics wire contract admits no customer identifiers or arbitrary properties. |
 
 ## Subdirectories
 | Directory | Purpose |
@@ -174,7 +165,7 @@ default privilege, or ACL (see root `CLAUDE.md`/`AGENTS.md`).
 - "Runtime-neutral" modules (e.g. `workspace-versioning.ts`, `providers/neon-identifiers.ts`) avoid Node and `server-only` imports so the same code executes inside browser-side contract tests.
 
 ### Testing Requirements
-- `pnpm test:contracts` (vitest, `vitest.contracts.config.ts`) runs `control-plane-contracts.harness.ts` and `d1-storage.harness.ts`; the former transitively pulls in every `d1-*-scenarios.harness.ts`, the GCP/workload-identity harnesses, and `site-analytics.harness.ts`.
+- `pnpm test:contracts` (vitest, `vitest.contracts.config.ts`) runs `control-plane-contracts.harness.ts` and `d1-storage.harness.ts`; the former transitively pulls in every `d1-*-scenarios.harness.ts` and the GCP/workload-identity harnesses.
 - `pnpm test:d1-import` (`scripts/test-d1-migrations.mjs`) exercises the D1 migration entry point.
 - New tests here count against the repository's 208-test budget only when they add new `it`/`test` cases; see root `tests/critical-test-budget.json`.
 
@@ -187,12 +178,11 @@ default privilege, or ACL (see root `CLAUDE.md`/`AGENTS.md`).
 
 ### Internal
 - `../app/api/**` route handlers are the primary callers of this directory's server-only modules.
-- `../../site/lib/analytics` shares the `web-analytics.ts` contract, verified by `site-analytics.harness.ts`.
 
 ### External
 - `better-auth` and `@better-auth/drizzle-adapter` for identity, session, and organization.
 - `drizzle-orm` (`drizzle-orm/d1`, `drizzle-orm/sqlite-core`) for the D1 schema and queries.
-- `@neondatabase/serverless`, `sanitize-html`, `@microsoft/clarity`, `@cloudflare/workers-types`.
+- `@neondatabase/serverless`, `sanitize-html`, `@cloudflare/workers-types`.
 - `vitest` and `miniflare` for the contract/scenario harnesses.
 
 <!-- MANUAL: Any manually added notes below this line are preserved on regeneration -->

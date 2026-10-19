@@ -13,7 +13,7 @@ document/route state, not by path.
 ## Key Files
 | File | Description |
 |------|-------------|
-| `main.tsx` | Boots the React tree: starts product-analytics and client-monitoring, resolves a `PackagedBenchmarkApplication` instead of the real `App` when `VITE_DOPEDB_PACKAGED_BENCHMARK=1`, wraps everything in `AppProviders`, and records a `first_shell_commit` startup mark after the first two animation frames. |
+| `main.tsx` | Boots the React tree: starts client-monitoring, resolves a `PackagedBenchmarkApplication` instead of the real `App` when `VITE_DOPEDB_PACKAGED_BENCHMARK=1`, wraps everything in `AppProviders`, and records a `first_shell_commit` startup mark after the first two animation frames. |
 | `App.tsx` | Re-exports `features/appShell/AppShell` as the default app component; contains no logic of its own. |
 | `reactDomClient.ts` | Picks `react-dom/client` normally or `react-dom/profiling` under the packaged benchmark build, so `createRoot` always has one call site. |
 | `vite-env.d.ts` | Vite client type reference plus ambient module declarations for `*.css` imports and the `react-dom/profiling` shim. |

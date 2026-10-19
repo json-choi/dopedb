@@ -88,7 +88,6 @@ export function useConnectionProfileController({
   const check = useConnectionTestCommand({
     profileState,
     dialogs,
-    catalogScope,
     hasTestBlockingProblems: problems.hasTestBlocking,
   });
 

@@ -14,16 +14,11 @@ import {
   initializeClientMonitoring,
   listenForAgentPluginTelemetry,
 } from "./features/monitoring/client";
-import { initializeProductAnalytics } from "./features/productAnalytics/client";
-import { ProductAnalyticsWorkspaceScopeObserver } from "./features/productAnalytics/WorkspaceScopeObserver";
-import { ProductAnalyticsConsentPrompt } from "./features/productAnalytics/ConsentPrompt";
 import { AppProviders } from "./lib/appProviders";
 import { initializeLocalDiagnostics } from "./features/diagnostics/tauriAdapter";
 
 const stopLocalDiagnostics = initializeLocalDiagnostics();
 import.meta.hot?.dispose(stopLocalDiagnostics);
-
-void initializeProductAnalytics();
 
 void initializeClientMonitoring()
   .then(() => listenForAgentPluginTelemetry())
@@ -50,9 +45,7 @@ if (benchmarkConfig?.kind === "workload" || benchmarkConfig?.kind === "qa") {
 } else {
   application = (
     <AppProviders>
-      {!packagedBenchmark ? <ProductAnalyticsWorkspaceScopeObserver /> : null}
       <App />
-      {!packagedBenchmark ? <ProductAnalyticsConsentPrompt /> : null}
     </AppProviders>
   );
 }

@@ -272,7 +272,7 @@ Every completed item needs evidence proportional to its risk:
 
 - Rust and TypeScript contract checks for wire changes;
 - cross-workspace, stale-revision, explicit-deny, and confused-deputy tests;
-- credential and sensitive-data leak checks for logs, analytics, crash reports, sync,
+- credential and sensitive-data leak checks for logs, crash reports, sync,
   and backups;
 - macOS and Windows packaged behavior for credential and process boundaries;
 - target database tests proving Workspace state cannot bypass database read-only or

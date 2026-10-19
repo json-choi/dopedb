@@ -29,8 +29,7 @@ the browser's session token nor Google tokens cross the callback.
 
 Apply the generated D1 migration before deploying these endpoints. This table
 belongs to the D1 authentication path. Desktop uses only this PKCE authorization flow.
-Authentication pages never initialize web
-analytics and are served with `private, no-store`.
+Authentication pages are served with `private, no-store`.
 
 ## Workspace administration
 
@@ -59,46 +58,6 @@ integrations and finds an authorized Google Cloud setup through
 `GET .../provider-integrations/gcp-setup`.
 
 ## Local setup
-
-### Optional workspace web analytics
-
-Set `NEXT_PUBLIC_CLARITY_PROJECT_ID` at **build time** to register the
-`@microsoft/clarity` plugin. Without a project ID no analytics SDK is loaded and
-the CSP stays closed to Clarity. Each browser must explicitly allow analytics;
-DNT and Global Privacy Control override saved consent. Advertising consent is
-always denied. The visible usage analytics control can revoke consent; changes
-reload the document, and revocation is synchronized across tabs.
-
-Production builds take the public project ID from `deployment-public.json` through
-the deployment command's explicit build allowlist. Runtime secrets never enter the
-build. Local builds remain opt-in through `NEXT_PUBLIC_CLARITY_PROJECT_ID`.
-
-`WorkspaceWebAnalytics` registers the configured plugins; the common
-`WebAnalyticsProvider` accepts a lazy plugin factory, owns the browser lifecycle
-and exposes `useWebAnalytics()`.
-`lib/web-analytics.ts` owns the versioned, runtime-validated event contract and
-plugin fan-out (`start`, `track`, `stop`). Plugin failures do not interrupt the
-workspace or other plugins. Events before startup or after revocation are dropped,
-with no persistent queue. `lib/clarity-plugin.ts` alone imports the vendor SDK.
-The initial event is `workspace_page_viewed` with only fixed page/language enums.
-Do not forward exceptions, console output, SQL, result rows, identities or tokens.
-
-Recording is limited to HTTPS `/settings` and `/ko/settings` without query strings
-or fragments. Authentication, invitations, public Articles, resource-specific URLs
-and local development do not initialize recording. The document is explicitly
-masked before SDK initialization. Navigation stops collection before history
-mutation; full document navigation restores eligibility. Clarity's automatic
-recording is separate from the typed events: text masking is not a general-purpose
-attribute/URL sanitizer. Keep the Clarity project on Strict masking and review
-recordings before broadening route eligibility. The privacy notice links to
-Microsoft's policy. No custom user/session identifiers are sent via Identify.
-
-To add BigQuery later, implement another `WebAnalyticsPlugin` and register it
-alongside Clarity in `WorkspaceWebAnalytics`. Send the same reviewed contract to a same-origin,
-validated/rate-limited server endpoint, then write to BigQuery server-side. Never
-put Google credentials in a browser plugin or `NEXT_PUBLIC_*` configuration. The
-BigQuery endpoint, credentials and delivery/retry policy are intentionally not
-provisioned by this integration. Desktop's product analytics relay is independent.
 
 ### Environment
 
@@ -134,25 +93,6 @@ grant missing any of them instead of leaving a partially working integration.
 To deliver invitation email, also set `RESEND_API_KEY` and a verified
 `WORKSPACE_INVITATION_FROM` sender; without them, Desktop
 **Workspace management → Members** keeps the email-bound copy-link fallback.
-The anonymous first-party product-outcome endpoint is disabled unless
-`PRODUCT_ANALYTICS_RELAY_ENABLED=1`. Production uses the `PRODUCT_ANALYTICS`
-Cloudflare service binding; there is no public sink URL or shared bearer token.
-The private Worker accepts only bounded schema-v1 outcome enums and stores them
-in Google BigQuery (EU), separately from the workspace database. The anonymous
-first-party endpoint requires the exact
-`x-dopedb-product-analytics-contract: 2` contract-version header; that marker is
-not authentication. Independent one-minute budgets apply to the one-way source-IP
-hash (60 requests), one-way installation UUID hash (60 requests), a 400-request global
-circuit, and a 16-event global circuit. The Worker repeats the 16-event global circuit with a
-Durable Object storing only one minute/count record,
-so a leaked server relay capability cannot bypass the storage ceiling. Global gates run before caller-controlled
-keys, bounding worst-case new limiter rows below the 1,000-row/minute cleanup rate;
-rotating a UUID cannot reset the source budget and neither raw value enters the table.
-A successful batch returns HTTP 202.
-HTTP 429 and transient HTTP 503 responses set `Retry-After: 60` and return
-`retryable: true` with `retryAfterMs: 60000`; contract, validation, and permanent relay
-rejections return `retryable: false`. Missing or invalid relay configuration therefore
-fails closed instead of acknowledging and dropping events.
 Configure this Google redirect URI:
 
 ```text

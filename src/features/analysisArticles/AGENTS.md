@@ -26,7 +26,6 @@ reruns stay on the exact-grant Desktop.
 | `AnalysisShareButton.tsx` | Per-Article member sharing: create/revoke an `ArticleInvitation` scoped to `{ accountId, workspaceId, articleId }`. |
 | `ArticleLinkGate.tsx` | Handles an incoming Desktop "Article link" deep-link request: runs the workspace/account authority transition and login flow before opening the linked Article. |
 | `domain.ts` | `AnalysisArticleSource` (`human` \| `dopedb.acp.claude` \| `dopedb.acp.codex`), column/value/query types, `AnalysisArticleRecord`, `AnalysisRun`, `AnalysisPublication`, and related wire contracts. |
-| `productAnalytics.ts` | `beginManualAnalysisRunOutcome` — per its header comment, deliberately has no path for article text, SQL, parameters, result rows, or error bodies to reach the analytics contract; only closed state and run receipts. |
 | `queryKeys.ts` | `analysisQueryKeys` — every key is rooted in the authenticated workspace scope key, because (per its header comment) hosted accounts may legitimately share the same client-generated Article id across scopes. |
 | `tauriAdapter.ts` | `listAnalysisArticles` (title-and-identity `AnalysisArticleRecord` summaries), `getAnalysisArticle` (one `AnalysisArticleDocument` with HTML and SQL, read on open), `updateAnalysisArticle` (saved or conflict result), `deleteAnalysisArticle` (also stops public HTML), `listAnalysisArticleRevisions`/`Runs`, `getLocalAnalysisArticleResult`, `runAnalysisArticle`, `cancelAnalysisArticleRun`, `onAnalysisArticleChanged`, publication (`listAnalysisPublications`, `publishAnalysisSnapshot`, `revokeAnalysisPublication`, `analysisPublicationUrl`), and sharing/link types (`ArticleSharingScope`, `ArticleInvitation`, `DesktopArticleLink`). |
 | `useAnalysisArticlesController.ts` | Owns the "intentionally small" (per header comment) Article workflow: select, edit one HTML document, manually rerun its one saved query, recover the local result, and inspect immutable history. |
@@ -41,8 +40,6 @@ reruns stay on the exact-grant Desktop.
   `publishAnalysisSnapshot`) — public articles are immutable HTML snapshots per
   ADR 0007; only Desktop, through `AnalysisArticleReader.tsx`'s manual rerun,
   may execute the saved query.
-- Keep `productAnalytics.ts` limited to closed lifecycle outcomes; do not add
-  article text, SQL, parameters, or row data to any event captured there.
 - `queryKeys.ts` keys must stay scoped by the workspace scope key, not the bare
   Article id, to avoid cross-account cache collisions.
 
@@ -63,7 +60,6 @@ reruns stay on the exact-grant Desktop.
 
 - `src/features/knowledge/domain.ts` (`EnvironmentConnection`, `KnowledgeEnvironment`).
 - `src/features/workspaces/{cache,domain,loginRequest,queries,tauriAdapter}.ts` (auth/account/workspace transition for `ArticleLinkGate.tsx`).
-- `src/features/productAnalytics/{client,outcomes}.ts`.
 - `src/design-system/components/AnalysisArticleBody` (shared with Workspace Web).
 - Rust counterpart: `src-tauri/src/features/analysis_articles/transport.rs` (verified present).
 

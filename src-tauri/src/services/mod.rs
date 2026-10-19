@@ -15,7 +15,6 @@ use crate::features::jobs::{self, JobsFeature};
 use crate::features::knowledge::{self, KnowledgeFeature};
 use crate::features::monitoring::{self, MonitoringFeature};
 use crate::features::operation_control::{self, OperationControlFeature};
-use crate::features::product_analytics::{self, ProductAnalyticsFeature};
 use crate::features::providers::ProvidersFeature;
 use crate::features::queries::QueriesFeature;
 use crate::features::safety_settings::{self, SafetySettingsFeature};
@@ -42,7 +41,6 @@ pub(crate) struct ApplicationServices {
     pub(crate) monitoring: MonitoringFeature,
     pub(crate) operation: OperationControlFeature,
     pub(crate) providers: ProvidersFeature,
-    pub(crate) product_analytics: ProductAnalyticsFeature,
     pub(crate) queries: QueriesFeature,
     pub(crate) safety: SafetySettingsFeature,
     pub(crate) script: ScriptFeature,
@@ -104,7 +102,6 @@ impl ApplicationServices {
             monitoring: monitoring::compose(store.clone(), connections.clone(), operation.clone()),
             operation: operation_service,
             providers,
-            product_analytics: product_analytics::compose(store.clone()),
             queries,
             safety: safety_settings::compose(store.clone(), connections.clone()),
             script,

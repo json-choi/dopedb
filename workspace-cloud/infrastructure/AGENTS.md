@@ -13,9 +13,8 @@ Federation (`aud: https://iam.googleapis.com`) and publish the matching OIDC
 discovery/JWKS metadata. It signs its own assertion with an RSA key it holds as
 a Cloudflare secret; it does not call Google, does not hold any GCP
 service-account key, and does not itself obtain a GCP credential — token
-exchange with GCP STS happens outside this directory. Two fixed subjects are
-supported (`dopedb:workspace:production`, `dopedb:analytics:production`), each
-gated behind its own RPC entrypoint class, reachable only through a Cloudflare
+exchange with GCP STS happens outside this directory. One fixed subject is
+supported (`dopedb:workspace:production`), gated behind its own RPC entrypoint class, reachable only through a Cloudflare
 service binding from one other specific Worker — never over public HTTP. The
 public HTTP surface at `identity.dopedb.dev` serves only the OIDC discovery
 document and JWKS; it can never mint a token.
@@ -30,8 +29,8 @@ Cloud SQL) is not visible from this directory's code and is not asserted here.
 ## Key Files
 | File | Description |
 |------|--------------|
-| `identity-worker.ts` | Worker entry point. Exports `WorkspaceIdentity` and `AnalyticsIdentity` (`WorkerEntrypoint` RPC classes, each answering only `POST /token` and returning `{ token }` with `cache-control: private, no-store`), plus a default `fetch` export that serves only `identityMetadataResponse` (OIDC discovery/JWKS) over public HTTP and never issues a token. |
-| `workload-identity-core.ts` | All token-issuance and metadata logic: `identityMetadataResponse` (serves `/.well-known/openid-configuration` and `/.well-known/jwks.json`, 404/405 otherwise), `issueWorkloadIdentity`/`issueAnalyticsIdentity` (fix the JWT `sub` claim), and `issueIdentity` (validates config, cross-checks the private signing key against the published JWKS, hand-builds and RS256-signs a 15-minute JWT via Web Crypto). |
+| `identity-worker.ts` | Worker entry point. Exports `WorkspaceIdentity` (a `WorkerEntrypoint` RPC class answering only `POST /token` and returning `{ token }` with `cache-control: private, no-store`), plus a default `fetch` export that serves only `identityMetadataResponse` (OIDC discovery/JWKS) over public HTTP and never issues a token. |
+| `workload-identity-core.ts` | All token-issuance and metadata logic: `identityMetadataResponse` (serves `/.well-known/openid-configuration` and `/.well-known/jwks.json`, 404/405 otherwise), `issueWorkloadIdentity` (validates config, cross-checks the private signing key against the published JWKS, hand-builds and RS256-signs a 15-minute JWT via Web Crypto). |
 | `tsconfig.identity.json` | Standalone strict TS project scoped to just these two files plus the generated `../identity-env.d.ts`; types are `@cloudflare/workers-types` + `node` (Node compat comes from the `nodejs_compat` flag in `wrangler.identity.jsonc`, which is what makes `Buffer` available). |
 
 ## For AI Agents
@@ -42,19 +41,16 @@ Cloud SQL) is not visible from this directory's code and is not asserted here.
   app's build or wrangler config. Do not import these files from the main
   Next.js/OpenNext app; consumers reach it only through a Cloudflare service
   binding (RPC) or the public discovery endpoints.
-- `issueIdentity` hard-validates `OIDC_ISSUER`, `OIDC_AUDIENCE`,
+- `issueWorkloadIdentity` hard-validates `OIDC_ISSUER`, `OIDC_AUDIENCE`,
   `OIDC_ACCOUNT_ID`, `OIDC_WORKLOAD_ID`, and `OIDC_SUBJECT` against fixed
-  expected values before signing anything — including when issuing the
-  analytics-subject token, where `configuration.OIDC_SUBJECT` must still equal
-  `"dopedb:workspace:production"` (it is a fixed environment guard, not a
-  per-call subject selector; the actual `sub` claim comes from the `subject`
-  argument, not from this var). Do not loosen this check to "support" a new
-  subject without re-reading `issueIdentity` end to end.
+  expected values before signing anything; `configuration.OIDC_SUBJECT` must equal
+  `"dopedb:workspace:production"`, which is also the fixed `sub` claim. Do not loosen this check to "support" a new
+  subject without re-reading `issueWorkloadIdentity` end to end.
 - `publicKeys()` explicitly rejects any JWK carrying `d`/`p`/`q` (private key
   material) even though it is only meant to render the public JWKS — preserve
   that check; it is the guard against a private key ever being served as
   public.
-- `issueIdentity` also refuses to sign unless the private `OIDC_SIGNING_KEY`
+- `issueWorkloadIdentity` also refuses to sign unless the private `OIDC_SIGNING_KEY`
   secret's `kid`/`n`/`e` match an entry already present in `OIDC_PUBLIC_KEYS`.
   Rotating the signing key requires publishing the new public key in
   `OIDC_PUBLIC_KEYS` first (or alongside), not swapping the private secret
@@ -75,7 +71,7 @@ Cloud SQL) is not visible from this directory's code and is not asserted here.
   the actual behavioral coverage. `../lib/control-plane-contracts.harness.ts`
   calls `assertWorkloadIdentityContract()` from
   `../lib/providers/workload-identity.harness.ts`, which imports
-  `issueWorkloadIdentity`, `issueAnalyticsIdentity`, and
+  `issueWorkloadIdentity` and
   `identityMetadataResponse` directly (bypassing the RPC binding) and
   round-trips them against the consumer-side verifier in
   `../lib/providers/workload-oidc.ts`. It asserts: correct claims and 900s
@@ -86,8 +82,7 @@ Cloud SQL) is not visible from this directory's code and is not asserted here.
 
 ### Common Patterns
 - RPC-only privilege separation: only `WorkerEntrypoint` subclasses exposed
-  through a named service binding can reach `issueWorkloadIdentity` /
-  `issueAnalyticsIdentity`; the default-exported plain `fetch` handler (public
+  through a named service binding can reach `issueWorkloadIdentity`; the default-exported plain `fetch` handler (public
   internet surface) is wired only to `identityMetadataResponse`, which cannot
   issue a token. Preserve this split when adding any new capability here.
 - Signing-key/public-key consistency check before every signature (see above)
@@ -110,10 +105,6 @@ Cloud SQL) is not visible from this directory's code and is not asserted here.
   `../lib/workload-identity.ts` (`workloadOidcToken()`), which fetches
   `POST /token` on that binding and validates the response shape before
   trusting it.
-- `product-analytics-cloudflare/wrangler.jsonc` (separate subproject) declares
-  service binding `ANALYTICS_IDENTITY` → the same `dopedb-workspace-identity`
-  Worker's `AnalyticsIdentity` entrypoint. This directory does not contain that
-  consumer; only the binding declaration was checked.
 - `../lib/providers/workload-identity.harness.ts` and
   `../lib/providers/workload-oidc.ts` — test-only consumer/verifier pair for
   the contract test described above.

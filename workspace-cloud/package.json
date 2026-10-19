@@ -24,7 +24,6 @@
   },
   "dependencies": {
     "@better-auth/drizzle-adapter": "^1.7.4",
-    "@microsoft/clarity": "1.0.2",
     "@neondatabase/serverless": "^1.1.0",
     "better-auth": "^1.7.4",
     "drizzle-orm": "^0.45.2",

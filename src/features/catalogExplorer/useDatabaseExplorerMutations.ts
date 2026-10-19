@@ -21,12 +21,6 @@ import {
   deleteKnowledgeProject,
   revokeKnowledgeEnvironmentConnection,
 } from "../knowledge/tauriAdapter";
-import { captureProductEvent } from "../productAnalytics/client";
-import {
-  productAnalyticsAccessMode,
-  productAnalyticsConnectionEngine,
-  productAnalyticsWorkspaceContext,
-} from "../productAnalytics/outcomes";
 import { refreshDesktopConnections } from "../workspaceAdmin/desktopConnections";
 import { useDeleteConnection } from "../connections/useDeleteConnection";
 import { errMessage } from "../../ipc/types";
@@ -171,22 +165,6 @@ export function useDatabaseExplorerMutations({
           refetchType: "active",
         }),
       ]);
-      const context = productAnalyticsWorkspaceContext(catalogScope);
-      if (context) {
-        void captureProductEvent({
-          name: "environment_connection_bound",
-          properties: {
-            accessMode: productAnalyticsAccessMode(
-              promotedSourceId === null
-                ? connection.credentialMode
-                : "memberLocal",
-            ),
-            engine: productAnalyticsConnectionEngine(connection.engine),
-          },
-          context,
-          dedupeId: binding.id,
-        });
-      }
       toast(
         t("connections.environmentConnectionMoved", {
           connection:

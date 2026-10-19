@@ -14,7 +14,7 @@ files require the repository owner's review (see `CODEOWNERS`), matching root
 |------|-------------|
 | `CODEOWNERS` | Requires the repository owner's review for `/.github/`, `AGENTS.md`, `CLAUDE.md`, `CONTRIBUTING.md`, `package.json`, `Cargo.lock`, and `src-tauri`'s `Cargo.toml`/`tauri*.json`. |
 | `SECURITY.md` | Owns the vulnerability-reporting policy: private GitHub advisories only, security fixes applied to latest stable and `main`. |
-| `dependabot.yml` | Security-only grouped updates (`open-pull-requests-limit: 0`) for GitHub Actions and every npm/Cargo project in the repo (root, `workspace-cloud`, `site`, `product-analytics-cloudflare`, `workspace-scheduler-cloudflare`, `agent-runtime/plugins`, and Cargo). |
+| `dependabot.yml` | Security-only grouped updates (`open-pull-requests-limit: 0`) for GitHub Actions and every npm/Cargo project in the repo (root, `workspace-cloud`, `site`, `workspace-scheduler-cloudflare`, `agent-runtime/plugins`, and Cargo). |
 
 ## Subdirectories
 | Directory | Purpose |
@@ -29,7 +29,7 @@ files require the repository owner's review (see `CODEOWNERS`), matching root
 | `acp-adapter-release.yml` | `workflow_dispatch` (choose plugin: claude/codex/all; channel: candidate/stable) | `build-sign-publish` job builds, signs, and publishes an ACP adapter bundle; stable promotion requires confirming healthy candidate telemetry. |
 | `canary.yml` | `pull_request` (labeled/reopened/synchronize) against `main` | `build` job builds an unprivileged canary installer only for a same-repo `work/<login>/<topic>` PR carrying the `canary` label. |
 | `canary-publish.yml` | `workflow_dispatch` (build run ID input) | `validate` then `publish`: publishes only the caller's own successful canary build as an unsigned prerelease, gated by a per-caller environment approval. |
-| `ci.yml` | `pull_request`; `push` to `main` | Required-check pipeline: dependency vulnerability scan, frontend smoke tests, Rust smoke tests, provider/Postgres import test, site build, site deploy, analytics/scheduler Cloudflare Worker checks. |
+| `ci.yml` | `pull_request`; `push` to `main` | Required-check pipeline: dependency vulnerability scan, frontend smoke tests, Rust smoke tests, provider/Postgres import test, site build, site deploy, scheduler Cloudflare Worker checks. |
 | `codeql.yml` | `pull_request`; `push` to `main`; weekly `schedule` (`23 3 * * 2`) | CodeQL static analysis across JavaScript/TypeScript, Rust, and Actions workflow languages. |
 | `packaged-performance.yml` | `workflow_dispatch` only (deliberately no push/PR/schedule) | Manual long-running packaged-app performance benchmark for a chosen scenario and sample counts. |
 | `release-cache.yml` | `push` to `main` on `Cargo.lock`/self changes; `workflow_dispatch` | Pre-warms release-profile Rust dependency compilation on `main` under the same cache key `release.yml` uses, since tag-triggered runs cannot see prior tag caches. |

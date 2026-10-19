@@ -63,11 +63,6 @@ import {
   proposalSqlRunPath,
 } from "./runPath";
 import {
-  scriptProductAnalyticsSummary,
-  streamProductAnalyticsOutcome,
-  useQueryExecutionAnalytics,
-} from "./productAnalytics";
-import {
   inspectSql,
   proposeScript,
   proposeSql,
@@ -223,7 +218,6 @@ export function useSqlWorkbenchController({
   const draftVersionRef = useRef(draftVersion);
   draftVersionRef.current = draftVersion;
   const {
-    catalogScope,
     catalog,
     databaseOptions,
     effectiveDatabase,
@@ -236,25 +230,6 @@ export function useSqlWorkbenchController({
     setSelectedDatabase,
     selectedSchema,
     setSelectedSchema,
-  });
-  const scriptAnalytics = scriptOut
-    ? scriptProductAnalyticsSummary(scriptOut.outcome)
-    : null;
-  const queryAnalytics = useQueryExecutionAnalytics({
-    scope: catalogScope,
-    connectionEngine: connection.engine,
-    credentialMode: connection.credentialMode,
-    cancelled,
-    failed: runErr !== null,
-    materializedCompleted: run !== null,
-    materializedRowCount: run?.outcome.result?.rowCount ?? null,
-    materializedDurationMs: run?.outcome.result?.durationMs ?? null,
-    scriptOutcome: scriptAnalytics?.outcome ?? null,
-    scriptRowCount: scriptAnalytics?.rowCount ?? null,
-    streamRunId: stream.runId,
-    streamOutcome: streamProductAnalyticsOutcome(stream.phase),
-    streamRowCount: stream.rowCount,
-    streamDurationMs: stream.durationMs,
   });
   const resolveModeHint =
     resolveMode === "script"
@@ -345,7 +320,6 @@ export function useSqlWorkbenchController({
 
     const statements = splitStatements(sql);
     const script = statements.length > 1;
-    const analyticsAttempt = queryAnalytics.begin(sql, stream.runId);
     const at = new Date().toLocaleTimeString();
     const sessionId = nextQueryServiceSessionId(documentId);
     serviceSessionRef.current = {
@@ -384,7 +358,6 @@ export function useSqlWorkbenchController({
     try {
       await execute(async () => {
         await resetDesktopStream();
-        queryAnalytics.arm(analyticsAttempt);
         if (script) {
           const proposal = await proposeScript(
             connection.id,
@@ -394,9 +367,6 @@ export function useSqlWorkbenchController({
             effectiveDatabase,
           );
           checkpoint();
-          if (proposal.approvalRequired) {
-            queryAnalytics.requireApproval(analyticsAttempt);
-          }
           await approveManualOperationIfRequired(proposal, approveOperation);
           checkpoint();
           track(proposal.operationId);
@@ -416,7 +386,6 @@ export function useSqlWorkbenchController({
             const approvalRequired =
               proposalSqlRunPath(proposal) === "approval";
             if (approvalRequired) {
-              queryAnalytics.requireApproval(analyticsAttempt);
               await approveManualOperationIfRequired(
                 proposal,
                 approveOperation,
@@ -442,7 +411,6 @@ export function useSqlWorkbenchController({
             initialSqlRunPath(safety.autoRunReads, sql) ===
               "combinedReadStream"
           ) {
-            queryAnalytics.disarm(analyticsAttempt);
             try {
               // Exactly one IPC for auto reads. Only the backend's typed,
               // pre-target `proposalRequired` signal may enter the proposal UI.
@@ -459,15 +427,12 @@ export function useSqlWorkbenchController({
               );
             } catch (error) {
               if (!canFallbackFromCombinedRead(errDetails(error).kind)) {
-                queryAnalytics.arm(analyticsAttempt);
                 throw error;
               }
               await resetDesktopStream();
-              queryAnalytics.arm(analyticsAttempt);
               checkpoint();
               await runPlannedSql();
             }
-            queryAnalytics.arm(analyticsAttempt);
           } else {
             // Manual/read-only settings still stream after the durable proposal;
             // approved write/DDL returns its bounded materialized outcome.
@@ -476,7 +441,6 @@ export function useSqlWorkbenchController({
         }
       });
     } catch (e) {
-      queryAnalytics.arm(analyticsAttempt);
       // Decide from this run's own error, never a render-time snapshot of the
       // stream (a previous run's `cancelled` phase must not hide this failure).
       if (isQueryCancellationError(e)) return;

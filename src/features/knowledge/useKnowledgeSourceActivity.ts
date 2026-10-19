@@ -1,23 +1,16 @@
-// Reconciles live Knowledge indexing events with inventory snapshots and analytics.
-import { useEffect, useRef, useState } from "react";
+// Reconciles live Knowledge indexing events with inventory snapshots.
+import { useEffect, useState } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 
 import type { KnowledgeSource } from "./domain";
 import { knowledgeQueryKeys } from "./queryKeys";
 import { onKnowledgeSourceChanged } from "./tauriAdapter";
-import {
-  finishKnowledgeSyncOutcome,
-  type KnowledgeSourceActivity,
-  type PendingKnowledgeSyncAnalytics,
-} from "./workspaceModel";
+import type { KnowledgeSourceActivity } from "./workspaceModel";
 
 export function useKnowledgeSourceActivity(
   sources: KnowledgeSource[] | undefined,
   queryClient: QueryClient,
 ) {
-  const pendingSyncAnalytics = useRef(
-    new Map<string, PendingKnowledgeSyncAnalytics>(),
-  );
   const [activity, setActivity] = useState(
     new Map<string, KnowledgeSourceActivity>(),
   );
@@ -38,23 +31,12 @@ export function useKnowledgeSourceActivity(
         return next;
       });
       if (change.state === "ready") {
-        finishKnowledgeSyncOutcome(
-          pendingSyncAnalytics.current,
-          change.sourceId,
-          "success",
-        );
         void queryClient.invalidateQueries({
           queryKey: knowledgeQueryKeys.inventory(),
         });
         void queryClient.invalidateQueries({
           queryKey: knowledgeQueryKeys.agentEnvironments(),
         });
-      } else if (change.state === "failed") {
-        finishKnowledgeSyncOutcome(
-          pendingSyncAnalytics.current,
-          change.sourceId,
-          "failed",
-        );
       }
     }).then((stop) => {
       if (disposed) stop();
@@ -68,30 +50,6 @@ export function useKnowledgeSourceActivity(
 
   useEffect(() => {
     if (!sources) return;
-    for (const [sourceId, pending] of pendingSyncAnalytics.current) {
-      const source = sources.find(
-        (candidate) => candidate.sourceId === sourceId,
-      );
-      if (!source) continue;
-      if (source.health === "failed" || source.health === "stale") {
-        finishKnowledgeSyncOutcome(
-          pendingSyncAnalytics.current,
-          sourceId,
-          "failed",
-        );
-        continue;
-      }
-      if (
-        source.health === "ready" &&
-        source.graphRevisionId !== pending.previousGraphRevisionId
-      ) {
-        finishKnowledgeSyncOutcome(
-          pendingSyncAnalytics.current,
-          sourceId,
-          "success",
-        );
-      }
-    }
     setActivity((current) => {
       let changed = false;
       const next = new Map(current);
@@ -127,7 +85,6 @@ export function useKnowledgeSourceActivity(
   }, [sources]);
 
   return {
-    pendingSyncAnalytics,
     activity,
   };
 }

@@ -7,10 +7,8 @@
 import { useEffect, useRef } from "react";
 
 import { useI18n } from "../../lib/i18n";
-import type { useCatalogScope } from "../../lib/queries";
 import { connectionTestResultIsCurrent } from "./connectionEditorInteraction";
 import { connectionTestIssue } from "./connectionTestFailure";
-import { connectionVerificationRecorder } from "./connectionVerificationAnalytics";
 import { testConnection, testConnectionProfile } from "./tauriAdapter";
 import type { ConnectionEditorDialogs } from "./useConnectionEditorDialogs";
 import type { ConnectionProfileState } from "./useConnectionProfileState";
@@ -22,12 +20,10 @@ export type ConnectionTestUnavailableReason =
 export function useConnectionTestCommand({
   profileState,
   dialogs,
-  catalogScope,
   hasTestBlockingProblems,
 }: {
   profileState: ConnectionProfileState;
   dialogs: ConnectionEditorDialogs;
-  catalogScope: ReturnType<typeof useCatalogScope>;
   hasTestBlockingProblems: boolean;
 }) {
   const { t } = useI18n();
@@ -79,10 +75,6 @@ export function useConnectionTestCommand({
         requestId,
         testRequestId.current,
       );
-    const recordVerification = connectionVerificationRecorder(
-      catalogScope,
-      form.value,
-    );
     status.setRunning("test");
     status.setMessage(null);
     status.setTestFailure(null);
@@ -116,13 +108,11 @@ export function useConnectionTestCommand({
           return;
         }
         dialogs.problems.setOpen(true);
-        recordVerification("failed");
         return;
       }
       status.setMessage(t("connections.connectionOk"));
       status.setMessageIsError(false);
       status.setVerified(true);
-      recordVerification("success");
     } catch {
       if (!mounted.current) return;
       if (!isCurrent()) return;
@@ -132,7 +122,6 @@ export function useConnectionTestCommand({
       });
       status.setMessageIsError(true);
       dialogs.problems.setOpen(true);
-      recordVerification("failed");
     } finally {
       if (mounted.current && requestId === testRequestId.current) {
         status.setRunning(null);

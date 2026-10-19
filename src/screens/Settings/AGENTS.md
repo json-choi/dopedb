@@ -5,7 +5,7 @@
 
 ## Purpose
 Settings shell for Agent tools, advanced, command-line, appearance, language,
-privacy, updates, the signed-in account, and per-connection safety. Kept as an
+updates, the signed-in account, and per-connection safety. Kept as an
 overlay dialog outside the document strip so navigation stays focused on the
 currently selected database. Sections split into two scopes: `application`
 (device- or user-wide) sections and one `dataSource` section (`safety`).
@@ -25,7 +25,6 @@ management dialog (`src/screens/WorkspaceAdmin`).
 | `Advanced/` | `index.tsx` — default-exported `AdvancedSettings`: debugging toggle (`useAgentDebugDetails`/`saveAgentDebugDetails` from `features/agents/displayPreferences`) inside a `SettingsGroup`; `DiagnosticBundle.tsx` presents opt-in bounded local logs and explicit privacy warnings before copying or opening the GitHub issue form. |
 | `AgentTools/` | `index.tsx` — default-exported `AgentTools`: composes provider-first Agent setup rows and install/self-test status via `useAgentToolsController` (all from `features/settings/agentTools/`). |
 | `Cli/` | `index.tsx` — default-exported `CliSettings`: version-matched CLI sidecar install status/action via `cliInstallationStatusQuery` and `features/skills/tauriAdapter`'s `installCli`; `AdvancedShellTerminal.tsx` — `AdvancedShellTerminalLauncher`, the explicit developer-only Shell PTY pinned to the selected connection (separate surface from ACP Agent sessions; only reachable from here, never a general work screen). |
-| `Privacy/` | `index.tsx` — default-exported `PrivacySettings`: product-analytics consent grant/deny via `features/productAnalytics/client` and a link to the privacy policy (`openProductAnalyticsPrivacyPolicy`). |
 | `Safety/` | `index.tsx` — default-exported `Safety`: per-connection `SafetySettings` editor (`get_safety`/`set_safety` via `features/safetySettings/persistence`); `MonitoringAccess.tsx` — `MonitoringAccess` compact PostgreSQL monitoring-role panel that exposes backend-owned fixed `GRANT`/`REVOKE pg_monitor` approval and a DBA-copy fallback SQL string, without exposing arbitrary write toggles. |
 | `Updates/` | `index.tsx` — default-exported `Updates`: app updater status/progress display and refresh/install actions against `features/updater/controller`'s `AppUpdaterSnapshot`. |
 
@@ -64,7 +63,7 @@ management dialog (`src/screens/WorkspaceAdmin`).
 
 ### Internal
 - `features/settings/agentTools/`, `features/safetySettings/`,
-  `features/productAnalytics/`, `features/updater/`, `features/skills/`,
+  `features/updater/`, `features/skills/`,
   `features/terminals/PtySurface`, `features/agents/displayPreferences`,
   `design-system/theme`, `design-system/components/Settings`.
 
