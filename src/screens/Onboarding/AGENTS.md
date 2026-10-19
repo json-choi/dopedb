@@ -13,7 +13,7 @@ here.
 ## Key Files
 | File | Description |
 |------|-------------|
-| `index.tsx` | Default-exported `Onboarding` screen: connection/demo entry commands plus an optional `guidedDemo` step list; renders `features/cosmicScene/CosmicBackdrop` as the visual backdrop. |
+| `index.tsx` | Default-exported `Onboarding` screen: first-run start list (`features/connections/ConnectionStartList`) or connected/demo commands plus an optional `guidedDemo` step list; renders `features/cosmicScene/CosmicBackdrop` as the visual backdrop. |
 
 ## For AI Agents
 

@@ -9,7 +9,8 @@ import { Field, SelectInput } from "../../../../design-system/components/FormCon
 import { ProgressBar } from "../../../../design-system/components/Progress";
 import { SettingsSectionHeader } from "../../../../design-system/components/SettingsList";
 import { InlineNotice } from "../../../../design-system/components/Status";
-import { useI18n, type I18nKey, type Lang } from "../../../../lib/i18n";
+import { useI18n, type I18nKey } from "../../../../lib/i18n";
+import { formatAdminDate } from "../../dateFormat";
 import { databaseEngineLabel } from "../../../connections/domain";
 import type { WorkspaceAdminScope } from "../../domain";
 import { workspaceAdminErrorMessage } from "../../requests";
@@ -68,14 +69,6 @@ function useElapsedSeconds(running: boolean) {
     return () => window.clearInterval(timer);
   }, [running]);
   return elapsed;
-}
-
-function formatTime(value: string, lang: Lang): string {
-  const time = Date.parse(value);
-  return Number.isFinite(time)
-    ? new Intl.DateTimeFormat(lang === "ko" ? "ko-KR" : "en-US", { timeStyle: "short" })
-      .format(new Date(time))
-    : value;
 }
 
 export default function GcpSetupWizard({
@@ -141,7 +134,7 @@ export default function GcpSetupWizard({
         {!wizard.sessionExpired ? (
           <p className="tw:m-0 tw:text-xs tw:text-muted-foreground">
             {t("workspaceProviders.gcpExpiresAt", {
-              time: formatTime(projects.data?.expiresAt ?? session.expiresAt, lang),
+              time: formatAdminDate(projects.data?.expiresAt ?? session.expiresAt, lang, { timeStyle: "short" }),
             })}
           </p>
         ) : null}

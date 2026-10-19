@@ -2,7 +2,6 @@ import type { WorkspaceLocale } from "./workspace-locale";
 
 const en = {
   brand: {
-    home: "DopeDB workspace home",
     marketingHome: "DopeDB product overview",
   },
   signIn: {
@@ -54,6 +53,7 @@ const en = {
     failedTitle: "The connection was not completed.",
     connectedBody: "Return to the DopeDB app. The repository list refreshes when the app becomes active.",
     failedBody: "Return to the DopeDB app and try the GitHub repository selection again. This browser window can be closed.",
+    openApp: "Open DopeDB",
   },
   settingsMoved: {
     eyebrow: "WORKSPACE ADMINISTRATION",
@@ -91,6 +91,10 @@ const en = {
     switchError: "Could not switch accounts.",
     otherAccountQuestion: "Was this invitation sent to another account?",
     addAccount: "Add another Google account",
+    acceptedBody: "You joined the workspace. Open DopeDB to continue; install it first if you have not yet.",
+    openApp: "Open DopeDB",
+    openAppLinkHint: "If the button does nothing, open this link:",
+    download: "Install DopeDB",
   },
   deviceAccounts: {
     loadError: "Could not load accounts.",
@@ -107,7 +111,6 @@ type DeepStringShape<T> = T extends string
 
 const ko: DeepStringShape<typeof en> = {
   brand: {
-    home: "DopeDB 워크스페이스 홈",
     marketingHome: "DopeDB 제품 소개",
   },
   signIn: {
@@ -159,6 +162,7 @@ const ko: DeepStringShape<typeof en> = {
     failedTitle: "연결을 완료하지 못했습니다.",
     connectedBody: "DopeDB 앱으로 돌아가세요. 앱이 다시 활성화되면 저장소 목록을 새로고침합니다.",
     failedBody: "DopeDB 앱으로 돌아가 GitHub 저장소 선택을 다시 시도하세요. 이 브라우저 창은 닫아도 됩니다.",
+    openApp: "DopeDB 열기",
   },
   settingsMoved: {
     eyebrow: "WORKSPACE ADMINISTRATION",
@@ -196,6 +200,10 @@ const ko: DeepStringShape<typeof en> = {
     switchError: "계정을 전환하지 못했습니다.",
     otherAccountQuestion: "다른 계정으로 받은 초대인가요?",
     addAccount: "다른 Google 계정 추가",
+    acceptedBody: "워크스페이스에 참여했습니다. DopeDB를 열어 계속하세요. 아직 설치하지 않았다면 먼저 설치하세요.",
+    openApp: "DopeDB 열기",
+    openAppLinkHint: "버튼이 동작하지 않으면 이 링크를 여세요:",
+    download: "DopeDB 설치",
   },
   deviceAccounts: {
     loadError: "계정 목록을 불러오지 못했습니다.",

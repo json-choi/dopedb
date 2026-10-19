@@ -4,10 +4,10 @@
 import { useEffect } from "react";
 import { useEventCallback } from "../../lib/useEventCallback";
 import { onWorkspaceAdminRequested } from "./navigationRequest";
-import type { WorkspaceAdminDestination } from "./sections";
+import type { WorkspaceAdminSection } from "./sections";
 
 export function useWorkspaceAdminRequests(
-  open: (destination: WorkspaceAdminDestination) => void,
+  open: (destination: WorkspaceAdminSection) => void,
 ) {
   const handleRequest = useEventCallback(open);
   useEffect(() => onWorkspaceAdminRequested(handleRequest), [handleRequest]);

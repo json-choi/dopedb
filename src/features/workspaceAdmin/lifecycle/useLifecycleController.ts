@@ -8,7 +8,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCatalogScope } from "../../../lib/queries";
-import { ownedWorkspacesQueryKey } from "../account/queries";
+import { ownedWorkspacesQueryKey } from "../../settings/account/queries";
 import { refreshDesktopConnections } from "../desktopConnections";
 import type { WorkspaceAdminScope } from "../domain";
 import { workspaceAdminQueryKey } from "../queryKeys";

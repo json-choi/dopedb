@@ -13,7 +13,7 @@ import { Button } from "../design-system/components/Button";
 import { tableLabel } from "../lib/tableRef";
 import { useI18n } from "../lib/i18n";
 import { Icon, type IconName } from "./Icon";
-import ToolbarMenu, { ToolbarMenuItem } from "./ToolbarMenu";
+import { MenuItem, ToolbarMenu } from "../design-system/components/Menu";
 
 export default function WorkbenchDocumentStrip({
   documents,
@@ -110,7 +110,7 @@ export default function WorkbenchDocumentStrip({
           {presentedDocuments.map(({ document, title }) => {
             const active = document.id === activeId;
             return (
-              <ToolbarMenuItem
+              <MenuItem
                 key={document.id}
                 icon={active ? "check" : icon(document)}
                 aria-current={active ? "page" : undefined}
@@ -120,7 +120,7 @@ export default function WorkbenchDocumentStrip({
                 <span className="tw:max-w-[320px] tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap">
                   {title}
                 </span>
-              </ToolbarMenuItem>
+              </MenuItem>
             );
           })}
         </ToolbarMenu>

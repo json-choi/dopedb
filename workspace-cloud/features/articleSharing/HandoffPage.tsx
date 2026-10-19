@@ -4,9 +4,8 @@ import { authoritativeSession } from "../../lib/authoritative-session";
 import { env } from "../../lib/env";
 import { localizedWorkspacePath } from "../../lib/workspace-locale";
 import { getWorkspaceLocale } from "../../lib/workspace-locale-server";
-import { Brand } from "../../app/components/Brand";
-import { LocaleSwitcher } from "../../app/components/LocaleSwitcher";
-import { IdentityBody, IdentityCard, IdentityEyebrow, IdentitySecondaryLink, IdentitySingleShell, IdentityTitle } from "../../../src/design-system/components/WorkspaceIdentity";
+import { AccountSwitchBlock, IdentityPage } from "../../app/components/IdentityPage";
+import { IdentityBody, IdentityEyebrow, IdentitySecondaryLink, IdentityTitle } from "../../../src/design-system/components/WorkspaceIdentity";
 import { articleSharingCopy } from "./copy";
 import { inspectArticleInvitation } from "./acceptance";
 import { articlePath, loadArticleSharing, type SharingScope } from "./store";
@@ -27,32 +26,27 @@ export async function HandoffPage({ invitationId, scope }: { invitationId?: stri
   const desktopUrl = targetPath ? `dopedb://article/${targetPath.replace("/open-article/", "")}` : undefined;
   const accepted = !invitationId || (resource && "accepted" in resource && resource.accepted);
   return (
-    <IdentitySingleShell>
-      <div className="tw:flex tw:w-full tw:items-center tw:justify-between tw:gap-4"><Brand destination="marketing" /><LocaleSwitcher /></div>
-      <div className="tw:m-auto tw:w-[min(620px,100%)] tw:py-8">
-        <IdentityCard>
-          <IdentityEyebrow>{invitationId ? copy.invitation : copy.open}</IdentityEyebrow>
-          <IdentityTitle>{resource?.title ?? copy.unavailable}</IdentityTitle>
-          <IdentityBody>{copy.email}: {session.user.email}</IdentityBody>
-          {resource ? <>
-            <div className="tw:grid tw:gap-1 tw:rounded-control tw:border tw:border-border tw:bg-surface-raised tw:p-4 tw:text-sm">
-              <strong>{resource.workspaceName}</strong><span className="tw:text-muted-foreground">{resource.connectionName}</span>
-            </div>
-            {accepted ? <>
-              <IdentityBody>{copy.steps}</IdentityBody>
-              <IdentitySecondaryLink href={`https://dopedb.dev${locale === "ko" ? "/ko" : ""}#download`} target="_blank" rel="noopener noreferrer">{copy.download}</IdentitySecondaryLink>
-              <IdentitySecondaryLink href={desktopUrl}>{copy.desktop}</IdentitySecondaryLink>
-              <IdentityBody>{copy.manual}</IdentityBody>
-              {resource.credentialMode !== "managed" ? <IdentityBody>{copy.local}</IdentityBody> : null}
-            </> : <>
-              <IdentityBody>{copy.scope}</IdentityBody>
-              <IdentityBody>{resource.credentialMode === "managed" ? copy.managed : copy.local}</IdentityBody>
-              <InvitationAcceptButton id={invitationId!} destination={"path" in resource ? resource.path : path} />
-            </>}
-          </> : <IdentityBody>{copy.unavailableBody}</IdentityBody>}
-          <IdentitySecondaryLink href={signInPath}>{copy.account}</IdentitySecondaryLink>
-        </IdentityCard>
-      </div>
-    </IdentitySingleShell>
+    <IdentityPage wide>
+      <IdentityEyebrow>{invitationId ? copy.invitation : copy.open}</IdentityEyebrow>
+      <IdentityTitle>{resource?.title ?? copy.unavailable}</IdentityTitle>
+      <IdentityBody>{copy.email}: {session.user.email}</IdentityBody>
+      {resource ? <>
+        <div className="tw:grid tw:gap-1 tw:rounded-control tw:border tw:border-border tw:bg-surface-raised tw:p-4 tw:text-sm">
+          <strong>{resource.workspaceName}</strong><span className="tw:text-muted-foreground">{resource.connectionName}</span>
+        </div>
+        {accepted ? <>
+          <IdentityBody>{copy.steps}</IdentityBody>
+          <IdentitySecondaryLink href={`https://dopedb.dev${locale === "ko" ? "/ko" : ""}#download`} target="_blank" rel="noopener noreferrer">{copy.download}</IdentitySecondaryLink>
+          <IdentitySecondaryLink href={desktopUrl}>{copy.desktop}</IdentitySecondaryLink>
+          <IdentityBody>{copy.manual}</IdentityBody>
+          {resource.credentialMode !== "managed" ? <IdentityBody>{copy.local}</IdentityBody> : null}
+        </> : <>
+          <IdentityBody>{copy.scope}</IdentityBody>
+          <IdentityBody>{resource.credentialMode === "managed" ? copy.managed : copy.local}</IdentityBody>
+          <InvitationAcceptButton id={invitationId!} destination={"path" in resource ? resource.path : path} />
+        </>}
+      </> : <IdentityBody>{copy.unavailableBody}</IdentityBody>}
+      <AccountSwitchBlock currentUserId={session.user.id} returnTo={path} />
+    </IdentityPage>
   );
 }

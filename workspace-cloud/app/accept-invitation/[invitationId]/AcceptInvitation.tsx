@@ -1,19 +1,20 @@
-// Verified invitation acceptance with a multi-account escape hatch. Users can switch
-// to an already signed-in identity or add the Google account that received the invite.
+// Verified invitation acceptance. After a successful accept the page shows an
+// "Open DopeDB" hand-off to the Desktop app (also as a plain link, since custom-scheme
+// links can fail silently) with the download page as the fallback.
 "use client";
 
 import { useState } from "react";
 import {
-  IdentityAccountChoice,
+  IdentityBody,
   IdentityError,
   IdentityPrimaryButton,
   IdentitySecondaryLink,
 } from "../../../../src/design-system/components/WorkspaceIdentity";
 import { authClient } from "../../../lib/auth-client";
-import { useDeviceAccounts } from "../../../lib/useDeviceAccounts";
-import { localizedWorkspacePath } from "../../../lib/workspace-locale";
+import { desktopWorkspaceAccessCallbackUrl } from "../../../lib/desktop-deep-link";
 import { workspaceMessages } from "../../../lib/workspace-messages";
 import { localizedServerMessage } from "../../../lib/workspace-server-message";
+import { AccountSwitchBlock } from "../../components/IdentityPage";
 import { useWorkspaceLocale } from "../../components/WorkspaceLocale";
 
 export function AcceptInvitation({
@@ -26,8 +27,8 @@ export function AcceptInvitation({
   const locale = useWorkspaceLocale();
   const copy = workspaceMessages[locale].invitation;
   const [pending, setPending] = useState(false);
+  const [accepted, setAccepted] = useState(false);
   const [error, setError] = useState("");
-  const { accounts, error: accountError } = useDeviceAccounts();
 
   async function accept() {
     setPending(true);
@@ -40,20 +41,31 @@ export function AcceptInvitation({
         : copy.acceptError);
       return;
     }
-    window.location.assign(localizedWorkspacePath("/settings", locale));
+    setAccepted(true);
   }
 
-  async function switchAccount(sessionToken: string) {
-    setPending(true);
-    const result = await authClient.multiSession.setActive({ sessionToken });
-    if (result.error) {
-      setPending(false);
-      setError(result.error.message
-        ? localizedServerMessage(result.error.message, locale, copy.switchError)
-        : copy.switchError);
-      return;
-    }
-    window.location.reload();
+  if (accepted) {
+    return (
+      <>
+        <IdentityBody>{copy.acceptedBody}</IdentityBody>
+        <IdentitySecondaryLink href={desktopWorkspaceAccessCallbackUrl}>
+          {copy.openApp}
+        </IdentitySecondaryLink>
+        <IdentityBody>
+          {copy.openAppLinkHint}{" "}
+          <a className="tw:break-all tw:underline" href={desktopWorkspaceAccessCallbackUrl}>
+            {desktopWorkspaceAccessCallbackUrl}
+          </a>
+        </IdentityBody>
+        <IdentitySecondaryLink
+          href={`https://dopedb.dev${locale === "ko" ? "/ko" : ""}#download`}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {copy.download}
+        </IdentitySecondaryLink>
+      </>
+    );
   }
 
   return (
@@ -62,36 +74,11 @@ export function AcceptInvitation({
         {pending ? copy.accepting : copy.accept}
         <span>→</span>
       </IdentityPrimaryButton>
-      {accounts.length > 1 ? (
-        <div className="tw:mt-4 tw:grid tw:border-t tw:border-border">
-          <small className="tw:px-0 tw:pt-3 tw:pb-2 tw:text-2xs tw:text-muted-foreground">
-            {copy.otherAccountQuestion}
-          </small>
-          {accounts.filter((account) => account.user.id !== currentUserId).map((account) => (
-            <IdentityAccountChoice
-              key={account.user.id}
-              name={account.user.name}
-              email={account.user.email}
-              onClick={() =>
-                void switchAccount(account.sessions[0].session.token)
-              }
-              disabled={pending}
-            />
-          ))}
-        </div>
-      ) : null}
-      <IdentitySecondaryLink
-        href={localizedWorkspacePath(
-          `/auth/sign-in?returnTo=${encodeURIComponent(localizedWorkspacePath(`/accept-invitation/${invitationId}`, locale))}`,
-          locale,
-        )}
-      >
-        {copy.addAccount}
-      </IdentitySecondaryLink>
+      <AccountSwitchBlock
+        currentUserId={currentUserId}
+        returnTo={`/accept-invitation/${invitationId}`}
+      />
       {error ? <IdentityError>{error}</IdentityError> : null}
-      {!error && accountError ? (
-        <IdentityError>{accountError}</IdentityError>
-      ) : null}
     </>
   );
 }

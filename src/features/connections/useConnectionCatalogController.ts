@@ -175,7 +175,7 @@ export function useConnectionCatalogController({
       ),
   );
   const demoMatches = matchesAddSearch(
-    t("connections.demoSqlite"),
+    t("onboarding.demoStart"),
     t("connections.sampleDatabase"),
     "demo sqlite",
     "sample",

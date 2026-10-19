@@ -35,6 +35,7 @@ import {
   stableDocument,
   tableDocument,
   type HistoryQueryTarget,
+  type StableDocumentKind,
   type WorkbenchDocument,
 } from "../workbench/domain";
 import { publishWorkbenchDraft } from "../workbench/draftStore";
@@ -274,15 +275,26 @@ export function useAppShellWorkbenchController({
     activateDocument(document);
   }
 
+  // Without a selection there is no tab host, so fall back to the workbench.
   function openStableDocument(
-    kind: "schema" | "activity" | "results",
+    kind: StableDocumentKind,
     closeMobileExplorer = true,
   ) {
-    if (!selected) return;
+    if (!selected) return showWorkbench();
     activateDocument(
       stableDocument(selected.id, kind),
       closeMobileExplorer,
     );
+  }
+
+  function openStableDocumentFor(connectionId: string, kind: StableDocumentKind) {
+    if (!connections.some((connection) => connection.id === connectionId)) return;
+    const document = stableDocument(connectionId, kind);
+    if (selectedId !== connectionId) {
+      workbench.prime(document);
+      setSelectedId(connectionId);
+    }
+    activateDocument(document);
   }
 
   async function openQueryDocument(connection?: ConnectionProfile) {
@@ -442,7 +454,6 @@ export function useAppShellWorkbenchController({
   return {
     route: {
       pending: routePending,
-      welcomeOpen: mainRoute.kind === "welcome",
       settingsOpen,
       settingsSection,
       workspaceAdminSection,
@@ -482,11 +493,6 @@ export function useAppShellWorkbenchController({
     commands: {
       route: {
         showWorkbench,
-        showWelcome: () => {
-          navigate({ type: "showWelcome" });
-          mobileExplorer.setOpen(false);
-          mobileExplorer.focusMainAfterSelection();
-        },
         closeSettings: () => navigate({ type: "closeSettings" }),
         openSettings: editorDialogs.openSettings,
         closeWorkspaceAdmin: () => navigate({ type: "closeWorkspaceAdmin" }),
@@ -521,16 +527,16 @@ export function useAppShellWorkbenchController({
         newQuery: () => void openQueryDocument(),
         openQuery: openQueryDocument,
         openTable,
-        openResults: (connectionId: string) => {
-          if (!connections.some((connection) => connection.id === connectionId)) return;
-          const document = stableDocument(connectionId, "results");
-          if (selectedId !== connectionId) {
-            workbench.prime(document);
-            setSelectedId(connectionId);
-          }
-          activateDocument(document);
-        },
+        openResults: (connectionId: string) =>
+          openStableDocumentFor(connectionId, "results"),
+        openSchema: (connectionId: string) =>
+          openStableDocumentFor(connectionId, "schema"),
         openStable: openStableDocument,
+        openWelcome: () => openStableDocument("welcome"),
+        openActivity: () => {
+          activity.markSeen();
+          openStableDocument("activity");
+        },
         restoreDraft: publishWorkbenchDraft,
         setTitle: setActiveQueryTitle,
         setDatabase: setActiveQueryDatabase,

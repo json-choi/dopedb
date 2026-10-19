@@ -20,7 +20,7 @@ read-only saved query; result rows and rerun stay on the exact-grant Desktop
 
 ### Working In This Directory
 - Mounted by `WorkbenchContent.tsx` when `route.knowledgeEnvironmentFocus` is
-  set, wrapped in a `RenderRecoveryBoundary` (see `KnowledgeRecovery` fallback
+  set, wrapped in a `RenderRecoveryBoundary` (see the `RenderRecoveryFallback` fallback
   in that file) keyed on `focus.requestId`.
 - Composes `features/knowledge/*` (domain, tauriAdapter, inventory,
   queryKeys, `bindEnvironmentConnection`), `features/analysisArticles/*`, and

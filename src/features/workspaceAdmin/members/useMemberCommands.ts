@@ -1,15 +1,15 @@
 // Owns the members area's write lifecycle: one invitation or membership command runs at
 // a time, the row it targets shows progress, and a refusal stays beside that target until
-// the next command. Success refreshes every administration read of the workspace. The
-// short-lived invitation-link copy feedback is owned here too, so presentation holds no timers.
-import { useEffect, useRef, useState } from "react";
+// the next command. Success refreshes every administration read of the workspace.
+import { useRef } from "react";
 import { useIsMutating, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useI18n, type I18nKey, type Lang } from "../../../lib/i18n";
+import { useI18n, type I18nKey } from "../../../lib/i18n";
 import type { AssignableWorkspaceRole, WorkspaceAdminScope } from "../domain";
 import {
   runWorkspaceAdmin,
   workspaceAdminErrorMessage,
   WorkspaceAdminRequestError,
+  type WorkspaceAdminI18n,
 } from "../requests";
 import {
   MemberDirectoryShapeError,
@@ -37,10 +37,6 @@ export interface InviteOutcome {
   requestedRole: AssignableWorkspaceRole;
   invitation: CreatedInvitation | null;
 }
-
-export type LinkCopyState = { target: string; status: "copied" | "failed" } | null;
-
-type Translate = (key: I18nKey, vars?: Record<string, string | number>) => string;
 
 const GENERIC_FAILURE: Record<MemberAction, I18nKey> = {
   load: "workspaceMembers.loadFailed",
@@ -77,7 +73,7 @@ const REFUSAL_SENTENCES: ReadonlyArray<{ status: number; includes: string; key: 
 export function memberFailureMessage(
   error: unknown,
   action: MemberAction,
-  i18n: { lang: Lang; t: Translate },
+  i18n: WorkspaceAdminI18n,
 ): string {
   if (error instanceof MemberDirectoryShapeError) {
     return i18n.t("workspaceMembers.loadIncompatible");
@@ -215,32 +211,4 @@ export function useMemberCommands(scope: WorkspaceAdminScope) {
       : null,
     inviteOutcome: mutation.isSuccess ? mutation.data : null,
   };
-}
-
-/** Copies an invitation link and keeps a brief "copied" or a lasting "failed" state per target. */
-export function useInvitationLinkCopy() {
-  const [state, setState] = useState<LinkCopyState>(null);
-  const timer = useRef<{ id?: number }>({});
-  useEffect(() => {
-    const pending = timer.current;
-    return () => window.clearTimeout(pending.id);
-  }, []);
-
-  async function copyLink(target: string, url: string) {
-    window.clearTimeout(timer.current.id);
-    try {
-      if (!navigator.clipboard?.writeText) throw new Error("Clipboard is unavailable");
-      await navigator.clipboard.writeText(url);
-      setState({ target, status: "copied" });
-      timer.current.id = window.setTimeout(() => {
-        setState((current) =>
-          current?.target === target && current.status === "copied" ? null : current,
-        );
-      }, 2_000);
-    } catch {
-      setState({ target, status: "failed" });
-    }
-  }
-
-  return { state, copyLink };
 }

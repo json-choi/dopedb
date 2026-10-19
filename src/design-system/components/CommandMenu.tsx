@@ -4,6 +4,7 @@
 import {
   forwardRef,
   type ButtonHTMLAttributes,
+  type HTMLAttributes,
   type ReactNode,
   type RefObject,
   useEffect,
@@ -11,6 +12,27 @@ import {
 } from "react";
 
 export type CommandMenuDismissReason = "escape" | "outside" | "selection";
+
+/**
+ * The one searchable-popup surface: border, radius, popover color and shadow.
+ * `anchor` hangs below a relative trigger, `center` fixes it mid-viewport, and
+ * `inline` leaves placement to a parent that already positions the dialog.
+ */
+export const CommandSurface = forwardRef<
+  HTMLDivElement,
+  {
+    placement?: "anchor" | "center" | "inline";
+  } & Omit<HTMLAttributes<HTMLDivElement>, "className">
+>(function CommandSurface({ placement = "anchor", ...props }, ref) {
+  return (
+    <div
+      ref={ref}
+      data-placement={placement}
+      className="tw:flex tw:flex-col tw:overflow-hidden tw:rounded-md tw:border tw:border-border-strong tw:bg-popover tw:text-popover-foreground tw:shadow-popover tw:data-[placement=anchor]:absolute tw:data-[placement=anchor]:top-[calc(100%+var(--ds-popover-offset))] tw:data-[placement=anchor]:left-0 tw:data-[placement=anchor]:z-[var(--ds-z-popover)] tw:data-[placement=anchor]:max-h-[min(440px,calc(100dvh-var(--ds-space-6)))] tw:data-[placement=anchor]:w-[min(320px,calc(100vw-var(--ds-space-6)))] tw:data-[placement=center]:fixed tw:data-[placement=center]:top-1/2 tw:data-[placement=center]:left-1/2 tw:data-[placement=center]:z-[var(--ds-z-popover)] tw:data-[placement=center]:max-h-[min(440px,calc(100dvh-var(--ds-space-6)))] tw:data-[placement=center]:w-[min(320px,calc(100vw-var(--ds-space-6)))] tw:data-[placement=center]:-translate-x-1/2 tw:data-[placement=center]:-translate-y-1/2 tw:data-[placement=inline]:max-h-full tw:data-[placement=inline]:w-[min(672px,100%)]"
+      {...props}
+    />
+  );
+});
 
 export const CommandMenu = forwardRef<
   HTMLDivElement,
@@ -63,13 +85,12 @@ export const CommandMenu = forwardRef<
   }
 
   return (
-    <div
+    <CommandSurface
       ref={setRefs}
       id={id}
-      data-placement={placement}
+      placement={placement}
       role="dialog"
       aria-label={label}
-      className="tw:absolute tw:top-[calc(100%+var(--ds-popover-offset))] tw:left-0 tw:z-[var(--ds-z-popover)] tw:flex tw:max-h-[min(440px,calc(100dvh-var(--ds-space-6)))] tw:w-[min(320px,calc(100vw-var(--ds-space-6)))] tw:flex-col tw:overflow-hidden tw:rounded-md tw:border tw:border-border-strong tw:bg-popover tw:text-popover-foreground tw:shadow-popover tw:data-[placement=center]:fixed tw:data-[placement=center]:top-1/2 tw:data-[placement=center]:left-1/2 tw:data-[placement=center]:-translate-x-1/2 tw:data-[placement=center]:-translate-y-1/2"
       onKeyDown={(event) => {
         if (event.key !== "Escape") return;
         event.preventDefault();
@@ -100,7 +121,7 @@ export const CommandMenu = forwardRef<
       <div className="tw:grid tw:min-h-0 tw:gap-3 tw:overflow-y-auto tw:overscroll-contain tw:p-2">
         {children}
       </div>
-    </div>
+    </CommandSurface>
   );
 });
 

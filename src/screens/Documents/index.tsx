@@ -19,6 +19,7 @@ import {
   catalogLoadIssue,
   catalogLoadIssueMessage,
 } from "../../features/catalogExplorer/catalogDomain";
+import { DataGridStatusScope } from "../../design-system/components/DataGridStatusScope";
 import InspectableResultGrid from "../../features/queryResults/InspectableResultGrid";
 import { Icon } from "../../components/Icon";
 import ResultToolbar from "../../features/queryResults/ResultToolbar";
@@ -30,7 +31,7 @@ import {
 import {
   WorkbenchDivider,
   WorkbenchContainedBody,
-  ResultMeta,
+  DataGridStatusPill,
   WorkbenchEmptyState,
   WorkbenchPane,
   WorkbenchSelect,
@@ -448,31 +449,36 @@ export default function Documents({
         </div>
 
         {result && (
-          <div className="tw:flex tw:min-h-0 tw:flex-1 tw:flex-col">
-            <ResultMeta>
+          <DataGridStatusScope>
+            <div className="tw:flex tw:min-h-0 tw:flex-1 tw:flex-col">
+              <WorkbenchToolbar label={t("services.resultToolbar")} compact>
+                <ResultToolbar
+                  columns={gridResult.columns}
+                  rows={gridResult.rows}
+                  scopeLabel={t("results.currentPage")}
+                  filenameBase={`documents-${result.collection}-${stamp()}`}
+                  presentation="workbench"
+                />
+              </WorkbenchToolbar>
+              {gridResult.columns.length > 0 ? (
+                <InspectableResultGrid
+                  result={gridResult}
+                  inspectionKey={result.page}
+                  surface="workbench"
+                  footerInset
+                />
+              ) : (
+                <WorkbenchEmptyState icon="table">
+                  {t("documents.noDocuments")}
+                </WorkbenchEmptyState>
+              )}
+            </div>
+            <DataGridStatusPill>
               {t("documents.docCount", { count: result.page.docCount })}
-              {result.page.truncated && ` - ${t("documents.truncated")}`} ·{" "}
-              {result.page.durationMs} ms · {result.at}
-              {" · "}
-              <ResultToolbar
-                columns={gridResult.columns}
-                rows={gridResult.rows}
-                scopeLabel={t("results.currentPage")}
-                filenameBase={`documents-${result.collection}-${stamp()}`}
-              />
-            </ResultMeta>
-            {gridResult.columns.length > 0 ? (
-              <InspectableResultGrid
-                result={gridResult}
-                inspectionKey={result.page}
-                surface="workbench"
-              />
-            ) : (
-              <WorkbenchEmptyState icon="table">
-                {t("documents.noDocuments")}
-              </WorkbenchEmptyState>
-            )}
-          </div>
+              {result.page.truncated && ` · ${t("documents.truncated")}`}
+              {` · ${result.page.durationMs} ms · ${result.at}`}
+            </DataGridStatusPill>
+          </DataGridStatusScope>
         )}
       </WorkbenchContainedBody>
     </WorkbenchPane>

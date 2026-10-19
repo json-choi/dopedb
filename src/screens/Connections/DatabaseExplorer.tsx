@@ -15,7 +15,6 @@ import {
   type ConnectionProfile,
 } from "../../features/connections/domain";
 import type { ConnectionLaunchPreset } from "../../features/connections/presets";
-import type { ProviderKind } from "../../features/providers/domain";
 import type {
   EnvironmentConnection,
   KnowledgeEnvironmentView,
@@ -69,12 +68,12 @@ export function DatabaseExplorer({
   activeSchemaGroupKey,
   onSelectConn,
   onNewQuery,
+  onOpenSchema,
   onOpenTable,
   onOpenSchemaDiff,
   onEdit,
   onDeleted,
   onConnectionUpdated,
-  workspaceAccount,
   workspaceHeader,
   onNewConnection,
   onCreateDemoDatabase,
@@ -96,13 +95,13 @@ export function DatabaseExplorer({
   activeSchemaGroupKey: string | null;
   onSelectConn: (id: string) => void;
   onNewQuery?: (connection: ConnectionProfile) => void;
+  onOpenSchema?: (connectionId: string) => void;
   onOpenTable: (conn: ConnectionProfile, table: CatalogTable) => void;
   onOpenSchemaDiff: (group: SchemaConnectionGroup) => void;
   /** `initialFocus` opens the editor at the credential this device lost. */
   onEdit: (conn: ConnectionProfile, initialFocus?: "credentials") => void;
   onDeleted: (id: string) => void;
   onConnectionUpdated: (conn: ConnectionProfile) => void;
-  workspaceAccount?: ReactNode;
   workspaceHeader?: ReactNode;
   onNewConnection: (preset?: ConnectionLaunchPreset) => void;
   onCreateDemoDatabase: () => void;
@@ -172,9 +171,6 @@ export function DatabaseExplorer({
     onResultsChange: onSearchResultsChange,
     move: moveSearchResult,
   } = useDatabaseExplorerSearch(treeKeyboard.restoreFocus);
-  const [providerCredentialsOpen, setProviderCredentialsOpen] =
-    useState<ProviderKind | null>(null);
-  const providerReturnFocusRef = useRef<HTMLElement | null>(null);
   const {
     state: {
       wanted,
@@ -216,13 +212,6 @@ export function DatabaseExplorer({
     environmentConnectionsById,
   );
 
-  function openProviderCredentials(provider: ProviderKind) {
-    providerReturnFocusRef.current =
-      document.activeElement instanceof HTMLElement
-        ? document.activeElement
-        : null;
-    setProviderCredentialsOpen(provider);
-  }
   // Query observers survive the shell while a workspace changes. Clear the explorer's
   // per-connection intent at the same boundary as its scoped keys so no hidden row can
   // resubscribe an old connection in the newly active account.
@@ -467,6 +456,7 @@ export function DatabaseExplorer({
         onToggleOpen={() => toggleOpen(connection.id)}
         onSelect={() => onSelectConn(connection.id)}
         onNewQuery={onNewQuery ? () => onNewQuery(connection) : undefined}
+        onOpenSchema={onOpenSchema ? () => onOpenSchema(connection.id) : undefined}
         onEdit={() => onEdit(connection)}
         onEditCredentials={() => onEdit(connection, "credentials")}
         onRefreshWorkspace={() => void resyncSharedConnection(connection.id)}
@@ -616,7 +606,6 @@ export function DatabaseExplorer({
           <DatabaseExplorerEmptyState
             creatingDemo={creatingDemo}
             onNewConnection={onNewConnection}
-            onOpenProviderCredentials={openProviderCredentials}
             onCreateDemoDatabase={onCreateDemoDatabase}
           />
         ) : null}
@@ -729,7 +718,6 @@ export function DatabaseExplorer({
       </div>
 
       <DatabaseExplorerOverlays
-        workspaceAccount={workspaceAccount}
         catalogScopeKey={catalogScope.key}
         projects={knowledgeProjects.data ?? []}
         projectSetupOpen={projectSetupOpen}
@@ -739,8 +727,6 @@ export function DatabaseExplorer({
         connections={connections}
         pendingGroupChange={pendingGroupChange}
         workspaceDialog={workspaceDialog}
-        providerCredentialsOpen={providerCredentialsOpen}
-        providerReturnFocusRef={providerReturnFocusRef}
         onProjectCreated={openCreatedProject}
         onEnvironmentCreated={openCreatedEnvironment}
         onCloseProjectSetup={() => setProjectSetupOpen(false)}
@@ -751,7 +737,6 @@ export function DatabaseExplorer({
         onCloseWorkspaceDialog={() =>
           commands.patch({ workspaceDialog: null })
         }
-        onCloseProviderCredentials={() => setProviderCredentialsOpen(null)}
       />
     </ToolWindowSideSurface>
   );

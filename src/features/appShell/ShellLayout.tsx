@@ -119,6 +119,7 @@ type ShellLayoutCommands = {
     toggleLocalHistory: () => void;
     closeLocalHistory: () => void;
     selectConnection: (id: string) => void;
+    openSchema: (connectionId: string) => void;
     openTable: (connection: ConnectionProfile, table: CatalogTable) => void;
     openSchemaDiff: (group: SchemaConnectionGroup) => void;
     openProjectEnvironment: (
@@ -156,7 +157,7 @@ type ShellLayoutCommands = {
       transaction: WorkspaceManualTransaction,
     ) => Promise<void>;
     revealDatabaseContext: () => void;
-    openNotifications: () => void;
+    openActivity: () => void;
   };
   viewport: {
     startSidebarDrag: (event: {
@@ -307,8 +308,10 @@ function ShellLayoutContent({ model, commands }: Props) {
         onNewQuery={commands.workbench.newQuery}
         onWelcome={commands.workbench.showWelcome}
         onToggleLeftPanel={commands.explorer.togglePanel}
-        onOpenQueryHistory={commands.status.openNotifications}
-        queryHistoryOpen={activeWorkbenchDocument?.kind === "activity"}
+        onOpenActivity={commands.status.openActivity}
+        activityOpen={activeWorkbenchDocument?.kind === "activity"}
+        unseenOperationCount={status.unseenOperationCount}
+        onToggleLocalHistory={commands.explorer.toggleLocalHistory}
         onToggleAgent={commands.agent.toggle}
         agentButtonRef={agent.buttonRef}
         agentPendingApprovals={agentPendingApprovals}
@@ -367,6 +370,7 @@ function ShellLayoutContent({ model, commands }: Props) {
             onNewQuery={commands.workbench.newQuery}
             onOpenTable={commands.explorer.openTable}
             onOpenSchemaDiff={commands.explorer.openSchemaDiff}
+            onOpenSchema={commands.explorer.openSchema}
             onEdit={commands.workspace.editConnection}
             onDeleted={commands.workspace.deleteConnection}
             onConnectionUpdated={commands.workspace.updateConnection}
@@ -458,7 +462,6 @@ function ShellLayoutContent({ model, commands }: Props) {
         manualTransactions={status.manualTransactions}
         settlingManualTransactionIds={status.settlingManualTransactionIds}
         writeEnabled={workspace.writeEnabled}
-        unseenOperationCount={status.unseenOperationCount}
         onOpenQueryTask={commands.status.openQueryResult}
         onOpenAgentTask={commands.agent.openTask}
         onOpenAgentProposal={(connectionId, sessionId, operationId) => {
@@ -472,7 +475,6 @@ function ShellLayoutContent({ model, commands }: Props) {
         onRollbackManualTransaction={commands.status.rollbackManualTransaction}
         onCancelBackgroundTask={commands.status.cancelBackgroundTask}
         onRevealDatabaseContext={commands.status.revealDatabaseContext}
-        onOpenNotifications={commands.status.openNotifications}
         onSafetySettings={commands.workspace.safetySettings}
       />
       {/* Keep the exact-resource controller mounted while hidden so its
@@ -503,7 +505,7 @@ function ShellLayoutContent({ model, commands }: Props) {
             commands.explorer.openProjectEnvironment(environmentId, "databases")
           }
           onSafetySettings={commands.workspace.safetySettings}
-          onOpenActivity={commands.status.openNotifications}
+          onOpenActivity={commands.status.openActivity}
           onClose={commands.agent.close}
           returnFocusRef={agent.returnFocusRef}
         />

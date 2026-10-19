@@ -19,7 +19,7 @@ positioning.
 | `AnalysisArticleBody.tsx` | Shared presentation of server-sanitized Analysis Article HTML, used by both Desktop and Workspace Web; takes a DOM `bodyRef` instead of using React internally so the Workspace build doesn't need Desktop's React install. |
 | `AppChrome.tsx` | Canonical application chrome surfaces (title/status bar geometry) shared across the shell. |
 | `Button.tsx` | Canonical Tailwind button primitive: variant, density, icon geometry, tone, and active/expanded state as semantic props instead of class maps; supports a `menuItem` presentation for full-width popup actions. |
-| `CommandMenu.tsx` | Canonical searchable command popup (floating surface, search input, grouped/dense result rows) used by Action Search and "새 연결" provider selection. |
+| `CommandMenu.tsx` | Canonical searchable command popup (shared `CommandSurface`, search input, search input, grouped/dense result rows) used by Action Search and "새 연결" provider selection. |
 | `DataGridViewport.tsx` | Canonical scroll surface shared by table and virtual data-grid renderers; caller picks `panel`/`workbench`/`embedded` sizing, never restyles the viewport itself. |
 | `Diagnostics.tsx` | Shared compact problems/diagnostics list for settings and property editors, with `warning`/`danger` tone. |
 | `DopeDBMark.tsx` | Thin wrapper around `DopeDBMarkGraphic` that supplies a unique `useId()` per instance to avoid SVG mask collisions. |
@@ -28,15 +28,16 @@ positioning.
 | `FormControls.tsx` | Canonical Tailwind form controls (`Field`, `TextInput`, `TextAreaInput`, `SelectInput`, `InlineSelect`, `CheckboxField`) that own label/focus/disabled state at dense desktop sizing. |
 | `IconRailTabs.tsx` | Canonical 42px vertical icon-only category rail for dense dialogs, with tooltip parity and roving keyboard focus. |
 | `IdeTabs.tsx` | Flat IDE tab-strip primitives (`IdeTab`, `IdeTabStrip`) where the active tab sits inside the strip rather than filling a whole rectangle. |
+| `Menu.tsx` | The one popup-menu module: `Menu` (portal surface with external anchor), `MenuItem`, `MenuCheckbox`, and `ToolbarMenu` (thin trigger-owned wrapper that opens a `Menu` on its own button); shares `floating.ts` positioning and `menuInteraction.ts` keyboard/focus. |
 | `Modal.tsx` | Canonical modal backdrop/dialog frame: viewport placement, elevation, responsive bounds, focus containment, and background-interaction blocking (`ModalBackdrop`, `ModalSurface`, `ModalHeader`, `ModalFooter`, `ModalDetailActionBar`). |
 | `PanelTabs.tsx` | Dense ARIA tabs for settings/property panels; horizontally scrollable, auto-exposes the active tab, roving keyboard focus skips disabled tabs. |
-| `PopupMenu.tsx` | Canonical flat popup-menu surface and command/checkbox row items (`PopupMenu`, `PopupMenuItem`, `PopupMenuCheckbox`), sharing the `floating.ts` positioning hook. |
 | `Progress.tsx` | `ProgressBar` determinate/indeterminate progress primitive (`default`/`compact` density) for downloads, query work, and export. |
 | `RenderRecoveryBoundary.tsx` | Error boundary isolating render failures of optional rich surfaces (Markdown, diagrams, provider payloads); shows only a safe caller-provided fallback and retry, never the raw error. |
 | `ResizeSeparator.tsx` | Canonical keyboard/pointer resize boundary with ARIA `now`/`min`/`max`, bounded arrow-key steps, Home/End, and double-click reset; caller keeps persisted size and drag lifecycle. |
 | `SegmentedControl.tsx` | Compact mutually-exclusive radiogroup for property editors; owns disabling whole/individual options and keyboard focus that skips them. |
 | `SectionDialog.tsx` | `SectionDialog`: canonical rail-and-body settings dialog shared by Settings and Workspace management (settings-size `ModalSurface`, optional keyword search, grouped rail, narrow-width section select, breadcrumb, Done footer). |
-| `Settings.tsx` | `SettingsGroup`: flat divider/heading rhythm for dense preference groups, no nested card surfaces. |
+| `Settings.tsx` | `SettingsGroup`: flat divider/heading rhythm for dense preference groups, no nested card surfaces; `SettingsPage`: shared Settings section width/padding; `SettingsToggleRow`: checkbox preference row. |
+| `CopyLinkField.tsx` | Read-only link with a copy button and copied/failed feedback (`lib/useLinkCopy`), shared by invitation and article share links. |
 | `SettingsList.tsx` | Dense settings inventory rows (`SettingsSectionHeader` and related row primitives) sharing one identity/state/action grid. |
 | `Status.tsx` | Small semantic status primitives (`neutral`/`success`/`warning`/`danger` tone); color always communicates state, never navigation selection. |
 | `ToolWindow.tsx` | Canonical dense tool-window primitives (header, body, sections) shared by Explorer, Agent, and provider panels. |
@@ -60,7 +61,7 @@ None.
   `ToolWindow.tsx`, `TreeControls.tsx`, `Workbench.tsx`) — this is the one
   sanctioned upward dependency out of `design-system/`; do not introduce
   others back into `src/features/` or `src/screens/`.
-- Portal/floating surfaces (`Tooltip.tsx`, `CommandMenu.tsx`, `PopupMenu.tsx`,
+- Portal/floating surfaces (`Tooltip.tsx`, `CommandMenu.tsx`, `Menu.tsx`,
   `IconRailTabs.tsx`) should reuse `../floating.ts`'s
   `useAnchoredFloatingSurface`/middleware rather than hand-rolling
   positioning.
@@ -93,6 +94,6 @@ None.
 ### External
 - `@tanstack/react-virtual` (`VirtualTreeRows.tsx`).
 - `react-dom`'s `createPortal` (used by portal surfaces such as `Modal.tsx`,
-  `PopupMenu.tsx`).
+  `Menu.tsx`).
 
 <!-- MANUAL: Any manually added notes below this line are preserved on regeneration -->

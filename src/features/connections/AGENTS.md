@@ -19,6 +19,12 @@ rather than calling `invoke` for connection commands directly.
 |------|-------------|
 | `ManagedConnectionRecoveryNotice.tsx` | Default-exported notice reusing the exact-connection recovery command in Safety and SQL error surfaces. |
 | `ConnectionCredentialRecoveryNotice.tsx` | SQL result notice for a run that could not use this device's credential: enter a local password or connect a shared member credential (through `requestConnectionCredentials`), sign in to the workspace again, or renew a provider sign-in in the editor; a refused OS credential store has its own copy. |
+| `RecoveryNotice.tsx` | Default-exported `RecoveryNotice` — the one inline notice (message, optional title, one recovery command) used by the credential, managed-workspace and check-failure surfaces. |
+| `ConnectionStartList.tsx` | Default-exported first-run start list shared by Welcome and the empty Database Explorer: found local listeners, the popular sources of `STANDARD_CONNECTION_SOURCES`, All data sources and the sample database. |
+| `useDeleteConnection.ts` | `useDeleteConnection`/`canDeleteConnection` — the one delete command (local vs managed branch, confirm copy, failure message) used by the explorer menu and the editor. |
+| `connectionSummary.ts` | `connectionSummary`/`connectionEndpoint` — the one `engine · branch · host · database` description used by the picker, action search and Settings. |
+| `connectionCheck.ts` | `checkSavedConnection` — one-shot check of a saved connection mapped to a typed issue, used after binding a member credential. |
+| `ConnectionFilePathField.tsx` | Default-exported labelled file-path field with Browse, shared by the editor's security tab and the member credential dialog. |
 | `ProviderTargetLabel.tsx` | `providerTargetDisplayName` and `ProviderTargetLabel` — renders a Neon-style branch target (`branchName`/`branchId`). |
 | `bigQueryOnboardingModel.ts` | Pure BigQuery values shared by validation/queries/editor: `bigQueryAuthMode`, `isValidBigQueryProjectId`, `isValidBigQueryDatasetId`, `bigQueryResourceInputMode`. |
 | `connectionDiagnosticMessage.ts` | Maps each `ConnectionDiagnosticCode` to a localized message key. |

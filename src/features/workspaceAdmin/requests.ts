@@ -54,7 +54,15 @@ export function isWorkspaceSessionRejected(error: unknown): boolean {
   return errDetails(error).kind === "authenticationRequired";
 }
 
-type Translate = (key: I18nKey, vars?: Record<string, string | number>) => string;
+export type Translate = (key: I18nKey, vars?: Record<string, string | number>) => string;
+export type WorkspaceAdminI18n = { lang: Lang; t: Translate };
+
+/** The control-plane refusal behind an error; a rejected session is not one. */
+export function workspaceAdminRefusal(error: unknown): WorkspaceAdminRequestError | null {
+  return error instanceof WorkspaceAdminRequestError && !isWorkspaceSessionRejected(error)
+    ? error
+    : null;
+}
 
 /**
  * One user-facing sentence for a failed administration command. The server's own
@@ -62,7 +70,7 @@ type Translate = (key: I18nKey, vars?: Record<string, string | number>) => strin
  */
 export function workspaceAdminErrorMessage(
   error: unknown,
-  i18n: { lang: Lang; t: Translate },
+  i18n: WorkspaceAdminI18n,
   fallback: I18nKey,
 ): string {
   if (isWorkspaceSessionRejected(error)) return i18n.t("workspaceAdmin.sessionExpired");

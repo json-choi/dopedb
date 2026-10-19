@@ -4,7 +4,6 @@ import { defineCatalog } from "../types";
 export const activityCatalog = defineCatalog(
   {
     "activity.actorLocalUser": "This device's user",
-    "activity.queryHistory": "Query history",
     "activity.allOrigins": "All origins",
     "activity.allStatuses": "All statuses",
     "activity.auditBrokenDetail":
@@ -122,7 +121,6 @@ export const activityCatalog = defineCatalog(
   },
   {
     "activity.actorLocalUser": "이 기기 사용자",
-    "activity.queryHistory": "쿼리 이력",
     "activity.allOrigins": "모든 출처",
     "activity.allStatuses": "모든 상태",
     "activity.auditBrokenDetail":

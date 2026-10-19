@@ -2,10 +2,9 @@
 // workflow, including the unsaved-change decision this screen presents;
 // this screen only composes grouped presentation models.
 import { useRef } from "react";
-import { Button } from "../../design-system/components/Button";
+import ConfirmDialog from "../../components/ConfirmDialog";
 import {
   ModalBackdrop,
-  ModalFooter,
   ModalHeader,
   ModalSurface,
 } from "../../design-system/components/Modal";
@@ -133,43 +132,14 @@ export function ConnectionForm(props: ConnectionEditorProps) {
             bindWorkspaceConnection={commands.bindWorkspaceConnection}
           />
           {commands.discard.pending ? (
-            <ModalBackdrop
-              onMouseDown={(event) => {
-                if (event.target === event.currentTarget) {
-                  commands.discard.keepEditing();
-                }
-              }}
-            >
-              <ModalSurface
-                size="alert"
-                role="alertdialog"
-                aria-labelledby="connection-discard-title"
-                aria-describedby="connection-discard-body"
-                onRequestClose={commands.discard.keepEditing}
-              >
-                <ModalHeader
-                  title={t("connections.discardChangesTitle")}
-                  titleId="connection-discard-title"
-                />
-                <p
-                  id="connection-discard-body"
-                  className="tw:m-0 tw:px-5 tw:py-6 tw:text-sm tw:leading-ui tw:text-foreground tw:[overflow-wrap:anywhere] tw:max-[640px]:px-4"
-                >
-                  {t("connections.discardChangesBody")}
-                </p>
-                <ModalFooter>
-                  <Button
-                    data-modal-initial-focus
-                    onClick={commands.discard.keepEditing}
-                  >
-                    {t("connections.keepEditing")}
-                  </Button>
-                  <Button variant="danger" onClick={commands.discard.confirm}>
-                    {t("connections.discardChanges")}
-                  </Button>
-                </ModalFooter>
-              </ModalSurface>
-            </ModalBackdrop>
+            <ConfirmDialog
+              title={t("connections.discardChangesTitle")}
+              description={t("connections.discardChangesBody")}
+              cancelLabel={t("connections.keepEditing")}
+              confirmLabel={t("connections.discardChanges")}
+              onCancel={commands.discard.keepEditing}
+              onConfirm={commands.discard.confirm}
+            />
           ) : null}
         </div>
       </ModalSurface>

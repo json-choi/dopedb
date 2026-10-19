@@ -1,11 +1,12 @@
 // Turns a refused database-access command into one sentence in the UI language.
 // Documented control-plane refusals map to specific guidance; session, timeout,
 // network and unknown failures follow the shared administration message rules.
-import type { I18nKey, Lang } from "../../../lib/i18n";
+import type { I18nKey } from "../../../lib/i18n";
 import {
   WorkspaceAdminRequestError,
-  isWorkspaceSessionRejected,
   workspaceAdminErrorMessage,
+  workspaceAdminRefusal,
+  type WorkspaceAdminI18n,
 } from "../requests";
 import { AccessResponseError } from "./parsers";
 
@@ -85,8 +86,6 @@ const KNOWN_REFUSALS = new Map<string, I18nKey>([
   ],
 ]);
 
-type Translate = (key: I18nKey, vars?: Record<string, string | number>) => string;
-
 /** A stale expected revision is preserved by the server as a new conflict to review. */
 function recordedNewConflict(error: WorkspaceAdminRequestError): boolean {
   const body = error.body;
@@ -99,15 +98,16 @@ function recordedNewConflict(error: WorkspaceAdminRequestError): boolean {
 
 export function accessErrorMessage(
   error: unknown,
-  i18n: { lang: Lang; t: Translate },
+  i18n: WorkspaceAdminI18n,
   fallback: I18nKey,
 ): string {
   if (error instanceof AccessResponseError) return i18n.t("workspaceAccess.responseInvalid");
-  if (error instanceof WorkspaceAdminRequestError && !isWorkspaceSessionRejected(error)) {
-    if (recordedNewConflict(error)) return i18n.t("workspaceAccess.errorApplyConflict");
-    const known = error.serverMessage === null ? undefined : KNOWN_REFUSALS.get(error.serverMessage);
+  const refusal = workspaceAdminRefusal(error);
+  if (refusal) {
+    if (recordedNewConflict(refusal)) return i18n.t("workspaceAccess.errorApplyConflict");
+    const known = refusal.serverMessage === null ? undefined : KNOWN_REFUSALS.get(refusal.serverMessage);
     if (known) return i18n.t(known);
-    if (error.status === 403) return i18n.t("workspaceAccess.errorForbidden");
+    if (refusal.status === 403) return i18n.t("workspaceAccess.errorForbidden");
   }
   return workspaceAdminErrorMessage(error, i18n, fallback);
 }

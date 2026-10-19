@@ -54,7 +54,6 @@ export const schemaCatalog = defineCatalog(
     "schema.fkCount": "{count} relationships",
     "schema.generatedValue": "Generated",
     "schema.hideDetails": "Hide schema details",
-    "schema.indexes": "Indexes",
     "schema.issueSentence": "{message}.",
     "schema.keyCheck": "Check constraint",
     "schema.keyForeign": "Foreign key",
@@ -63,7 +62,6 @@ export const schemaCatalog = defineCatalog(
     "schema.loadDetails": "Load schema details",
     "schema.lockTimeout":
       "Another session holds a lock this read needs, so it stopped waiting. Try again in a moment.",
-    "schema.noForeignKeys": "No foreign keys found.",
     "schema.noMatch": "No schema objects match the filter.",
     "schema.openData": "Open data",
     "schema.persistedRefreshing":
@@ -71,7 +69,6 @@ export const schemaCatalog = defineCatalog(
     "schema.persistedShown": "Showing the schema read at {time}.",
     "schema.pk": "PK",
     "schema.refreshWorkspace": "Refresh workspace",
-    "schema.relationships": "Relationships",
     "schema.reread": "Reread schema",
     "schema.rereadFailed": "Could not reread the schema. {error}",
     "schema.rereading": "Rereading the schema…",
@@ -138,7 +135,6 @@ export const schemaCatalog = defineCatalog(
     "schema.fkCount": "관계 {count}개",
     "schema.generatedValue": "생성식",
     "schema.hideDetails": "스키마 상세 정보 숨기기",
-    "schema.indexes": "인덱스",
     "schema.issueSentence": "{message}.",
     "schema.keyCheck": "검사 제약",
     "schema.keyForeign": "외래 키",
@@ -147,7 +143,6 @@ export const schemaCatalog = defineCatalog(
     "schema.loadDetails": "상세 스키마 불러오기",
     "schema.lockTimeout":
       "이 읽기에 필요한 잠금을 다른 세션이 잡고 있어 기다리기를 멈췄습니다. 잠시 후 다시 시도하세요.",
-    "schema.noForeignKeys": "외래 키를 찾지 못했습니다.",
     "schema.noMatch": "필터와 일치하는 스키마 객체가 없습니다.",
     "schema.openData": "데이터 열기",
     "schema.persistedRefreshing":
@@ -155,7 +150,6 @@ export const schemaCatalog = defineCatalog(
     "schema.persistedShown": "{time}에 읽은 스키마를 표시하고 있습니다.",
     "schema.pk": "PK",
     "schema.refreshWorkspace": "워크스페이스 새로고침",
-    "schema.relationships": "관계",
     "schema.reread": "스키마 다시 읽기",
     "schema.rereadFailed": "스키마를 다시 읽지 못했습니다. {error}",
     "schema.rereading": "스키마를 다시 읽는 중…",

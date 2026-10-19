@@ -6,7 +6,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
 } from "react";
-import CellViewer from "../../components/CellViewer";
+import InspectedCell from "../../features/queryResults/InspectedCell";
 import LazySqlViewer from "../../components/LazySqlViewer";
 import { useToast } from "../../components/Toast";
 import { Icon } from "../../components/Icon";
@@ -308,9 +308,10 @@ export default function TableSidePanel(props: Props) {
         </div>
       )}
       {selectedCell && !editor && !reviewing && (
-        <CellViewer
+        <InspectedCell
           value={selectedCell.value}
           column={selectedCell.column}
+          truncatedBytes={selectedCell.truncatedBytes}
           onClose={props.onCloseCell}
         />
       )}

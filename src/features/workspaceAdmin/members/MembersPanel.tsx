@@ -12,6 +12,7 @@ import {
 } from "../../../design-system/components/SettingsList";
 import { InlineNotice } from "../../../design-system/components/Status";
 import { useI18n } from "../../../lib/i18n";
+import { useLinkCopy } from "../../../lib/useLinkCopy";
 import type { WorkspaceAdminPanelProps } from "../navigationRequest";
 import { invitationExpired, reinviteRole } from "./domain";
 import InviteForm from "./InviteForm";
@@ -20,7 +21,6 @@ import { memberDirectoryQuery } from "./queries";
 import {
   commandTarget,
   memberFailureMessage,
-  useInvitationLinkCopy,
   useMemberCommands,
   type MemberCommand,
 } from "./useMemberCommands";
@@ -39,7 +39,7 @@ export default function MembersPanel({ scope }: WorkspaceAdminPanelProps) {
   const { t } = i18n;
   const directory = useQuery(memberDirectoryQuery(scope));
   const commands = useMemberCommands(scope);
-  const links = useInvitationLinkCopy();
+  const links = useLinkCopy();
   const data = directory.data;
   const now = Date.now();
   const pendingTarget = commands.pending ? commandTarget(commands.pending) : null;
@@ -80,10 +80,8 @@ export default function MembersPanel({ scope }: WorkspaceAdminPanelProps) {
         inviting={commands.pending?.kind === "invite"}
         failure={failure?.command.kind === "invite" ? failure.message : null}
         outcome={commands.inviteOutcome}
-        copy={links.state}
         onInvite={(email, role, onSuccess) =>
           commands.run({ kind: "invite", email, role }, onSuccess)}
-        onCopy={(target, url) => void links.copyLink(target, url)}
       />
 
       <section className="tw:grid tw:min-w-0 tw:content-start tw:gap-2">

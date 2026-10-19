@@ -2,15 +2,15 @@
 // Documented control-plane sentences (English or Korean) map to catalogue keys so
 // either UI language reads them; anything else follows the shared admin rule of
 // showing the server text only when it is already in the UI language.
-import type { I18nKey, Lang } from "../../../../lib/i18n";
+import type { I18nKey } from "../../../../lib/i18n";
 import {
   isWorkspaceSessionRejected,
   workspaceAdminErrorMessage,
+  workspaceAdminRefusal,
   WorkspaceAdminRequestError,
+  type Translate,
+  type WorkspaceAdminI18n,
 } from "../../requests";
-
-type Translate = (key: I18nKey, vars?: Record<string, string | number>) => string;
-export type ProviderI18n = { lang: Lang; t: Translate };
 
 const SERVER_SENTENCES: Readonly<Record<string, I18nKey>> = {
   "Another provider access change is already in progress":
@@ -145,17 +145,12 @@ function knownServerSentence(message: string, t: Translate): string | null {
 
 export function providerErrorMessage(
   error: unknown,
-  i18n: ProviderI18n,
+  i18n: WorkspaceAdminI18n,
   fallback: I18nKey,
 ): string {
-  if (
-    error instanceof WorkspaceAdminRequestError
-    && error.serverMessage
-    && !isWorkspaceSessionRejected(error)
-  ) {
-    const known = knownServerSentence(error.serverMessage, i18n.t);
-    if (known) return known;
-  }
+  const message = workspaceAdminRefusal(error)?.serverMessage;
+  const known = message ? knownServerSentence(message, i18n.t) : null;
+  if (known) return known;
   return workspaceAdminErrorMessage(error, i18n, fallback);
 }
 
@@ -174,7 +169,7 @@ export type DisconnectFailure = {
   refresh: boolean;
 };
 
-export function disconnectFailure(error: unknown, i18n: ProviderI18n): DisconnectFailure {
+export function disconnectFailure(error: unknown, i18n: WorkspaceAdminI18n): DisconnectFailure {
   const message = providerErrorMessage(error, i18n, "workspaceProviders.disconnectFailed");
   if (!(error instanceof WorkspaceAdminRequestError)) {
     return { message, retryable: true, refresh: false };

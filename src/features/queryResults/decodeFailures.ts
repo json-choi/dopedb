@@ -59,17 +59,3 @@ export function gridCellInspection(
     ? { blocked: true as const, failure }
     : { blocked: false as const, value, truncatedBytes };
 }
-
-export function remapDecodeFailures(
-  failures: readonly CellDecodeFailure[] | undefined,
-  sourceRowIndexes: readonly number[],
-) {
-  if (!failures?.length) return [];
-  const targetRows = new Map(
-    sourceRowIndexes.map((sourceRow, targetRow) => [sourceRow, targetRow]),
-  );
-  return failures.flatMap((failure) => {
-    const rowIndex = targetRows.get(failure.rowIndex);
-    return rowIndex === undefined ? [] : [{ ...failure, rowIndex }];
-  });
-}

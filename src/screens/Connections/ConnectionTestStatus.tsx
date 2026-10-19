@@ -5,6 +5,7 @@
 import { Button } from "../../design-system/components/Button";
 import { ModalDetailActionBar } from "../../design-system/components/Modal";
 import { LoadingLabel } from "../../design-system/components/Status";
+import RecoveryNotice from "../../features/connections/RecoveryNotice";
 import type { ConnectionEditorController } from "../../features/connections/useConnectionEditorController";
 import { useI18n } from "../../lib/i18n";
 
@@ -25,39 +26,23 @@ export function ConnectionTestFailureNotice({
       ? { label: t("workspace.login"), run: commands.signIn }
       : failure.refusal
         ? null
-        : commands.managedConnection.canOpenSettings
+        : commands.managedConnection.canOpenWorkspaceProviders
           ? {
               label: t("connections.managedWorkspace.open"),
-              run: () => commands.managedConnection.openSettings(),
+              run: () => commands.managedConnection.openWorkspaceProviders(),
             }
           : commands.failureOpensBinding
             ? { label: t("workspace.bindCredentialsShort"), run: commands.openFailureBinding }
             : null;
 
   return (
-    <section
-      className="tw:mx-auto tw:mb-4 tw:grid tw:w-full tw:max-w-[840px] tw:gap-1.5 tw:rounded-sm tw:border tw:border-danger/40 tw:bg-danger-muted tw:p-3"
-      role="alert"
-    >
-      <strong className="tw:text-sm tw:font-semibold tw:text-danger">
-        {commands.testFailureTitle(failure)}
-      </strong>
-      <p className="tw:m-0 tw:text-sm tw:leading-body tw:text-foreground">
-        {commands.testFailureRecovery(failure)}
-      </p>
-      {action ? (
-        <div className="tw:mt-1">
-          <Button
-            size="compact"
-            tone="primary"
-            disabled={commands.busy}
-            onClick={action.run}
-          >
-            {action.label}
-          </Button>
-        </div>
-      ) : null}
-    </section>
+    <div className="tw:mx-auto tw:mb-4 tw:w-full tw:max-w-[840px]">
+      <RecoveryNotice
+        title={commands.testFailureTitle(failure)}
+        message={commands.testFailureRecovery(failure)}
+        action={action ? { ...action, disabled: commands.busy } : null}
+      />
+    </div>
   );
 }
 

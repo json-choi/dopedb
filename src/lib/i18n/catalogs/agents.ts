@@ -300,7 +300,6 @@ export const agentsCatalog = defineCatalog(
     "agent.acpSetupOpenGuide": "Open install guide",
     "agent.acpSetupPrivacy":
       "The provider processes prompts under its terms. The local CLI owns authentication; DopeDB does not open credential files or store tokens. Configured credentials do not prove a live connection.",
-    "agent.acpSetupRequired": "Waiting for local setup",
     "agent.acpSetupTitle": "{provider} local access",
     "agent.acpStartCodex": "Start Agent",
     "agent.acpStartFailed": "Could not start {provider} through ACP: {error}",
@@ -886,7 +885,6 @@ export const agentsCatalog = defineCatalog(
     "agent.acpSetupOpenGuide": "설치 안내 열기",
     "agent.acpSetupPrivacy":
       "프롬프트는 제공자 약관에 따라 처리됩니다. 인증은 로컬 CLI가 소유하며 DopeDB는 자격 증명 파일을 열거나 토큰을 저장하지 않습니다. 인증 설정 확인은 실제 연결 성공을 뜻하지 않습니다.",
-    "agent.acpSetupRequired": "로컬 설정 대기 중",
     "agent.acpSetupTitle": "{provider} 로컬 접근",
     "agent.acpStartCodex": "Agent 시작",
     "agent.acpStartFailed": "ACP로 {provider}를 시작하지 못했습니다: {error}",

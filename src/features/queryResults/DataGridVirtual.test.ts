@@ -9,9 +9,8 @@ import {
 } from "../../lib/sqlBuild";
 import { cellClipboardText, prettyJsonText, toTsv, tsvField } from "../../lib/export";
 import type { CatalogTable } from "../../ipc/types";
-import { shouldVirtualizeDataGrid } from "./DataGrid";
 import { clampDataGridZoom } from "../../design-system/useDataGridZoom";
-import { nearestScrollOffset, virtualGridWindow } from "./DataGridVirtual";
+import { nearestScrollOffset, virtualGridWindow } from "./DataGrid";
 import {
   extendGridSelection,
   gridSelectionClipboardText,
@@ -159,7 +158,6 @@ describe("DataGridVirtual window", () => {
       truncated: false,
       durationMs: 1,
     };
-    expect(shouldVirtualizeDataGrid(wideResult)).toBe(true);
     expect(
       dataGridSelectionResetIdentity(wideResult).materializedResult,
     ).toBe(wideResult);

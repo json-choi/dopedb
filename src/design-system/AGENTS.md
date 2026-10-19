@@ -85,7 +85,7 @@ is the authoritative UI contract referenced from root `CLAUDE.md`/`AGENTS.md`.
 
 ### External
 - `@floating-ui/react-dom` (`floating.ts`, `Tooltip.tsx`, `CommandMenu.tsx`,
-  `PopupMenu.tsx`).
+  `Menu.tsx`).
 - `tailwindcss` v4.3.3 pinned, via `@tailwindcss/vite` (see root
   `vite.config.ts`).
 - `shiki` (`agentSyntax.ts`), `pretendard` npm package (`index.css`, the

@@ -1,6 +1,8 @@
 // Settings navigation is application state shared by the shell and the modal screen.
 // Keeping the section identity outside `screens/` prevents feature state from
 // depending on a presentation entry point.
+import type { I18nKey } from "../../lib/i18n";
+
 export type SettingsSection =
   | "agent-tools"
   | "advanced"
@@ -26,3 +28,26 @@ export const settingsSearchKeywords: Record<SettingsSection, string> = {
   appearance: "theme appearance light dark system 테마 화면 라이트 다크 시스템",
   account: "account sessions devices sign out deletion 계정 세션 기기 로그아웃 삭제 예약",
 };
+
+export type SettingsScope = "application" | "agents" | "account" | "dataSource";
+
+// The one ordered list of Settings sections. The Settings dialog rail and Action
+// Search both derive their entries from it so a new section cannot be missed by one.
+export const settingsSections: ReadonlyArray<{
+  id: SettingsSection;
+  label: I18nKey;
+  group: SettingsScope;
+  needsConnection?: true;
+  needsAccount?: true;
+}> = [
+  { id: "agent-tools", label: "settings.agentTools", group: "agents" },
+  { id: "advanced", label: "settings.advanced", group: "application" },
+  { id: "cli", label: "settings.cli", group: "agents" },
+  { id: "appearance", label: "settings.appearance", group: "application" },
+  { id: "language", label: "settings.languageTitle", group: "application" },
+  { id: "privacy", label: "settings.privacy", group: "application" },
+  { id: "updates", label: "settings.updates", group: "application" },
+  { id: "account", label: "workspaceAdmin.account", group: "account", needsAccount: true },
+  { id: "connection", label: "settings.connectionEnvironment", group: "dataSource", needsConnection: true },
+  { id: "safety", label: "settings.safety", group: "dataSource", needsConnection: true },
+];

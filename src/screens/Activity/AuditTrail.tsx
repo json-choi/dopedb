@@ -18,6 +18,7 @@ import {
   recordedIdentityLabel,
   sqlFirstLine,
 } from "./activityLabels";
+import LoadErrorNotice from "./LoadErrorNotice";
 
 // The audit log is append-only, so a later verification can never cover fewer rows.
 // This app-session high-water mark turns a shrinking chain into a visible failure.
@@ -99,10 +100,7 @@ function AuditRow({
         >
           {detail.isPending ? <Skeleton lines={3} /> : null}
           {detail.isError ? (
-            <p role="alert" className="tw:m-0 tw:flex tw:flex-wrap tw:items-center tw:gap-2 tw:text-ui tw:text-danger">
-              {t("activity.auditEntryLoadError")}
-              <Button size="xs" onClick={() => void detail.refetch()}>{t("activity.retry")}</Button>
-            </p>
+            <LoadErrorNotice message={t("activity.auditEntryLoadError")} onRetry={() => void detail.refetch()} />
           ) : null}
           {exact ? (
             <>
@@ -333,10 +331,7 @@ export default function AuditTrail({ connectionId }: { connectionId: string }) {
             </p>
           </div>
           {page.isError ? (
-            <p role="alert" className="tw:m-0 tw:flex tw:flex-wrap tw:items-center tw:gap-2 tw:text-ui tw:text-danger">
-              {t("activity.auditLoadError")}
-              <Button size="xs" onClick={() => void page.refetch()}>{t("activity.retry")}</Button>
-            </p>
+            <LoadErrorNotice message={t("activity.auditLoadError")} onRetry={() => void page.refetch()} />
           ) : null}
           {page.isPending ? <Skeleton lines={4} /> : null}
           {!page.isPending && !page.isError && entries.length === 0 ? (

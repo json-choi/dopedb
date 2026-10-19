@@ -3,29 +3,20 @@
 import Link from "next/link";
 import { useId } from "react";
 import { DopeDBMarkGraphic } from "../../../src/design-system/components/DopeDBMarkGraphic";
-import { localizedWorkspacePath } from "../../lib/workspace-locale";
 import { workspaceMessages } from "../../lib/workspace-messages";
 import { useWorkspaceLocale } from "./WorkspaceLocale";
 
-export function Brand({
-  destination = "workspace",
-  tone = "default",
-}: {
-  destination?: "marketing" | "workspace";
-  tone?: "default" | "inverse";
-}) {
+export function Brand({ tone = "default" }: { tone?: "default" | "inverse" }) {
   const instanceId = useId();
   const locale = useWorkspaceLocale();
   const copy = workspaceMessages[locale].brand;
-  const href = destination === "marketing"
-    ? `https://dopedb.dev${locale === "ko" ? "/ko" : ""}`
-    : localizedWorkspacePath("/settings", locale);
+  const href = `https://dopedb.dev${locale === "ko" ? "/ko" : ""}`;
   return (
     <Link
       className="tw:group tw:relative tw:z-[2] tw:inline-flex tw:items-center tw:gap-2.5 tw:font-semibold tw:tracking-[-0.025em] tw:data-[tone=inverse]:text-chrome-foreground"
       data-tone={tone}
       href={href}
-      aria-label={destination === "marketing" ? copy.marketingHome : copy.home}
+      aria-label={copy.marketingHome}
     >
       <DopeDBMarkGraphic
         instanceId={instanceId}

@@ -19,6 +19,10 @@ export type ConfirmDialogProps = {
   title: ReactNode;
   description: ReactNode;
   confirmLabel: ReactNode;
+  /** Defaults to Cancel; use for "Keep editing" style first actions. */
+  cancelLabel?: ReactNode;
+  /** "primary" for a confirmation that is not destructive. */
+  confirmVariant?: "danger" | "primary";
   onCancel: () => void;
   onConfirm: () => void;
   confirmDisabled?: boolean;
@@ -32,6 +36,8 @@ export default function ConfirmDialog({
   title,
   description,
   confirmLabel,
+  cancelLabel,
+  confirmVariant = "danger",
   onCancel,
   onConfirm,
   confirmDisabled,
@@ -64,19 +70,19 @@ export default function ConfirmDialog({
       >
         <ModalHeader title={title} titleId={titleId} />
         <div className="tw:grid tw:min-w-0 tw:flex-1 tw:content-center tw:gap-2 tw:overflow-auto tw:px-5 tw:py-6 tw:max-[640px]:px-4 tw:max-[640px]:py-5">
-          <p
+          <div
             id={descriptionId}
-            className="tw:m-0 tw:min-w-0 tw:text-sm tw:leading-ui tw:text-foreground tw:[overflow-wrap:anywhere]"
+            className="tw:grid tw:min-w-0 tw:gap-3 tw:text-sm tw:leading-ui tw:text-foreground tw:[overflow-wrap:anywhere]"
           >
             {description}
-          </p>
+          </div>
         </div>
         <ModalFooter>
           <Button data-modal-initial-focus onClick={onCancel} {...busy}>
-            {t("common.cancel")}
+            {cancelLabel ?? t("common.cancel")}
           </Button>
           <Button
-            variant="danger"
+            variant={confirmVariant}
             disabled={confirmDisabled}
             labelBehavior="wrap"
             onClick={onConfirm}

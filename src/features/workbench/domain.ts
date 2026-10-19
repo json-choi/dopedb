@@ -11,6 +11,9 @@ import {
   type SqlResolveMode,
 } from "../queries/resolveMode";
 
+/** Documents that exist once per connection and carry no state of their own. */
+export type StableDocumentKind = "welcome" | "schema" | "activity" | "results";
+
 export type WorkbenchDocument =
   | {
       id: string;
@@ -21,7 +24,7 @@ export type WorkbenchDocument =
   | {
       id: string;
       connectionId: string;
-      kind: "welcome" | "schema" | "activity" | "results";
+      kind: StableDocumentKind;
     }
   | {
       id: string;
@@ -52,7 +55,7 @@ let sequence = 0;
 
 export function stableDocument(
   connectionId: string,
-  kind: "welcome" | "schema" | "activity" | "results",
+  kind: StableDocumentKind,
 ): WorkbenchDocument {
   return { id: `${connectionId}:${kind}`, connectionId, kind };
 }

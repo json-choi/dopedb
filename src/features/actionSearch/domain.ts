@@ -14,7 +14,6 @@ export type ActionSearchItem = Readonly<{
   label: string;
   detail?: string;
   keywords?: readonly string[];
-  shortcut?: string;
   disabled?: boolean;
   run: () => void | Promise<void>;
 }>;

@@ -8,7 +8,7 @@
 // inline backend text, and a moved shared connection offers its refresh.
 import { DataGridStatusScope } from "../../design-system/components/DataGridStatusScope";
 import { useQueryClient } from "@tanstack/react-query";
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useState } from "react";
 
 import { useToast } from "../../components/Toast";
 import { Button } from "../../design-system/components/Button";
@@ -19,8 +19,6 @@ import {
   ResultWorkbenchFooter,
   ResultWorkbenchToolbar,
 } from "../queryResults/ResultWorkbench";
-import { gridCellText } from "../queryResults/dataGridSelection";
-import { remapDecodeFailures } from "../queryResults/decodeFailures";
 import {
   ResultMeta,
   SqlSnippet,
@@ -29,6 +27,7 @@ import {
   WorkbenchScrollBody,
 } from "../../design-system/components/Workbench";
 import { Icon } from "../../components/Icon";
+import LazySqlViewer from "../../components/LazySqlViewer";
 import type { ScriptStatementError } from "../../ipc/types";
 import { stamp } from "../../lib/export";
 import { useI18n } from "../../lib/i18n";
@@ -135,29 +134,9 @@ function MaterializedResult({
 }: Omit<Extract<QueryServiceResultModel, { kind: "materialized" }>, "kind">) {
   const { t } = useI18n();
   const [limit, setLimit] = useState(PAGE_STEP);
-  const [filterOpen, setFilterOpen] = useState(false);
-  const [filter, setFilter] = useState("");
   const result = outcome.result;
-  const normalizedFilter = filter.trim().toLocaleLowerCase();
-  const filteredResult = useMemo(() => {
-    if (!result) return { rows: [], sourceRows: [] as number[] };
-    const sourceRows = result.rows.flatMap((row, index) =>
-      !normalizedFilter ||
-      row.some((value) =>
-        gridCellText(value).toLocaleLowerCase().includes(normalizedFilter),
-      )
-        ? [index]
-        : [],
-    );
-    return { rows: sourceRows.map((index) => result.rows[index]), sourceRows };
-  }, [normalizedFilter, result]);
-  const filteredRows = filteredResult.rows;
-  const filteredDecodeFailures = remapDecodeFailures(
-    result?.decodeFailures,
-    filteredResult.sourceRows,
-  );
-  const visibleRows = filteredRows.slice(0, limit);
-  const visibleDecodeFailures = filteredDecodeFailures.filter(
+  const visibleRows = result?.rows.slice(0, limit) ?? [];
+  const visibleDecodeFailures = result?.decodeFailures?.filter(
     (failure) => failure.rowIndex < visibleRows.length,
   );
 
@@ -168,26 +147,15 @@ function MaterializedResult({
           <>
             <ResultWorkbenchToolbar
               columns={result.columns}
-              rows={filteredRows}
-              decodeFailures={filteredDecodeFailures}
+              rows={result.rows}
+              decodeFailures={result.decodeFailures}
               filenameBase={`query-${stamp()}`}
-              filterOpen={filterOpen}
-              filter={filter}
-              onToggleFilter={() => {
-                setFilterOpen((open) => !open);
-                if (filterOpen) setFilter("");
-              }}
-              onFilterChange={(value) => {
-                setFilter(value);
-                setLimit(PAGE_STEP);
-              }}
             />
             <InspectableResultGrid
               result={{
                 ...result,
                 rows: visibleRows,
                 decodeFailures: visibleDecodeFailures,
-                rowCount: filteredRows.length,
               }}
               inspectionKey={result}
               surface="workbench"
@@ -196,16 +164,15 @@ function MaterializedResult({
             <ResultWorkbenchFooter
               visible={visibleRows.length}
               total={result.rows.length}
-              onClearFilter={normalizedFilter ? () => setFilter("") : undefined}
               duration={result.durationMs}
               truncated={result.truncated}
               maxRows={maxRows}
               showMoreCount={Math.min(
                 PAGE_STEP,
-                filteredRows.length - visibleRows.length,
+                result.rows.length - visibleRows.length,
               )}
               onShowMore={
-                filteredRows.length > limit
+                result.rows.length > limit
                   ? () => setLimit((current) => current + PAGE_STEP)
                   : undefined
               }
@@ -648,9 +615,9 @@ function SqlErrorCard({
         <summary className="tw:min-h-control-md tw:cursor-pointer tw:px-3 tw:py-2 tw:text-ui tw:text-muted-foreground">
           {t("sql.errorContext")}
         </summary>
-        <pre className="tw:m-0 tw:max-h-[280px] tw:overflow-auto tw:border-t tw:border-border-subtle tw:bg-background tw:p-3 tw:font-mono tw:text-sm tw:whitespace-pre-wrap tw:[overflow-wrap:anywhere]">
-          {prompt}
-        </pre>
+        <div className="tw:max-h-[280px] tw:overflow-auto tw:border-t tw:border-border-subtle">
+          <LazySqlViewer value={prompt} engine={connection?.engine} minHeight="40px" />
+        </div>
       </details>
     </div>
   );

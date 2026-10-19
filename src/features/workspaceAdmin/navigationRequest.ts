@@ -1,9 +1,9 @@
 // Routes "open workspace management" from anywhere in the shell to the one
-// shell-owned dialog route; an "account" request opens Settings instead. A one-time
+// shell-owned dialog route. A one-time
 // focus (a database to reveal, or the add-database flow) travels beside the request
 // and is taken once by the Providers section, so no screen writes another's state.
 import type { WorkspaceAdminScope } from "./domain";
-import type { WorkspaceAdminDestination } from "./sections";
+import type { WorkspaceAdminSection } from "./sections";
 
 const WORKSPACE_ADMIN_REQUEST_EVENT = "dopedb:request-workspace-admin";
 const FOCUS_TTL_MS = 60_000;
@@ -16,22 +16,22 @@ export type WorkspaceAdminFocus =
 let pendingFocus: { focus: WorkspaceAdminFocus; requestedAt: number } | null = null;
 
 export function requestWorkspaceAdmin(
-  destination: WorkspaceAdminDestination,
+  destination: WorkspaceAdminSection,
   focus?: WorkspaceAdminFocus,
 ) {
   pendingFocus = focus ? { focus, requestedAt: Date.now() } : null;
   window.dispatchEvent(
-    new CustomEvent<WorkspaceAdminDestination>(WORKSPACE_ADMIN_REQUEST_EVENT, {
+    new CustomEvent<WorkspaceAdminSection>(WORKSPACE_ADMIN_REQUEST_EVENT, {
       detail: destination,
     }),
   );
 }
 
 export function onWorkspaceAdminRequested(
-  handler: (destination: WorkspaceAdminDestination) => void,
+  handler: (destination: WorkspaceAdminSection) => void,
 ) {
   const listener = (event: Event) => {
-    handler((event as CustomEvent<WorkspaceAdminDestination>).detail);
+    handler((event as CustomEvent<WorkspaceAdminSection>).detail);
   };
   window.addEventListener(WORKSPACE_ADMIN_REQUEST_EVENT, listener);
   return () => window.removeEventListener(WORKSPACE_ADMIN_REQUEST_EVENT, listener);
@@ -40,8 +40,8 @@ export function onWorkspaceAdminRequested(
 /** Props every scoped administration panel receives from the Workspace management dialog. */
 export interface WorkspaceAdminPanelProps {
   scope: WorkspaceAdminScope;
-  /** Moves to another section, or to Settings → Account for "account". */
-  onNavigate: (destination: WorkspaceAdminDestination) => void;
+  /** Moves to another Workspace management section. */
+  onNavigate: (destination: WorkspaceAdminSection) => void;
 }
 
 /** Returns the requested focus once; a stale or superseded focus is discarded. */

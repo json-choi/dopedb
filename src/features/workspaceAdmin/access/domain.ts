@@ -4,6 +4,7 @@
 // ordering and conflict-decision eligibility so the screen never guesses which
 // request is valid; response validation lives in parsers.ts.
 import type { Lang } from "../../../lib/i18n";
+import { formatAdminDate } from "../dateFormat";
 import type { ConflictResolution, ConnectionCapability } from "../domain";
 
 export type CredentialMode = "managed" | "member_local";
@@ -194,13 +195,11 @@ export function relativeTimeLabel(iso: string, lang: Lang, now = Date.now()): st
 }
 
 export function absoluteTimeLabel(iso: string, lang: Lang): string {
-  const time = Date.parse(iso);
-  if (!Number.isFinite(time)) return iso;
-  return new Intl.DateTimeFormat(lang === "ko" ? "ko-KR" : "en-US", {
+  return formatAdminDate(iso, lang, {
     year: "numeric",
     month: "short",
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
-  }).format(new Date(time));
+  });
 }

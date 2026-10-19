@@ -6,21 +6,17 @@ import { useQuery } from "@tanstack/react-query";
 import type { ConnectionProfile } from "../../features/connections/domain";
 import type { SafetySettings } from "../../ipc/types";
 import {
-  Field,
-  SelectInput,
-} from "../../design-system/components/FormControls";
-import {
   SectionDialog,
   type SectionDialogEntry,
 } from "../../design-system/components/SectionDialog";
 import { useI18n } from "../../lib/i18n";
-import { settingsSearchKeywords, type SettingsSection } from "../../features/settings/domain";
+import { settingsSearchKeywords, settingsSections, type SettingsScope, type SettingsSection } from "../../features/settings/domain";
 import { workspaceAuthStateQuery } from "../../features/workspaces/queries";
 import {
   appUpdaterProgress,
   type AppUpdaterSnapshot,
 } from "../../features/updater/controller";
-import AccountSettings from "./Account";
+import AccountPanel from "../../features/settings/account/AccountPanel";
 import ConnectionSettings from "./Connection";
 import { Button } from "../../design-system/components/Button";
 import { SettingsGroup } from "../../design-system/components/Settings";
@@ -30,13 +26,12 @@ import { workspaceAdminSectionsFor } from "../../features/workspaceAdmin/section
 import { requestWorkspaceAdmin } from "../../features/workspaceAdmin/navigationRequest";
 import AdvancedSettings from "./Advanced";
 import Appearance from "./Appearance";
+import LanguageSettings from "./Language";
 import AgentTools from "./AgentTools";
 import CliSettings from "./Cli";
 import PrivacySettings from "./Privacy";
 import Safety from "./Safety";
 import Updates from "./Updates";
-
-type SettingsScope = "application" | "agents" | "account" | "dataSource";
 
 export default function Settings({
   connection,
@@ -66,7 +61,7 @@ export default function Settings({
   onUpdateRefresh: () => Promise<void>;
   onUpdateInstall: () => Promise<void>;
 }) {
-  const { langPreference, setLang, t } = useI18n();
+  const { t } = useI18n();
   const [section, setSection] = useState<SettingsSection>(
     initialSection ?? "agent-tools",
   );
@@ -105,22 +100,16 @@ export default function Settings({
       keywords: settingsSearchKeywords[id],
       status,
     });
-    return [
-      entry("agent-tools", t("settings.agentTools"), "agents"),
-      entry("advanced", t("settings.advanced"), "application"),
-      entry("cli", t("settings.cli"), "agents"),
-      entry("appearance", t("settings.appearance"), "application"),
-      entry("language", t("settings.languageTitle"), "application"),
-      entry("privacy", t("settings.privacy"), "application"),
-      entry("updates", t("settings.updates"), "application", updateNavigationStatus),
-      ...(signedIn ? [entry("account", t("workspaceAdmin.account"), "account")] : []),
-      entry("connection", t("settings.connectionEnvironment"), "dataSource"),
-      entry(
-        "safety",
-        `${t("settings.safety")}${connection ? ` · ${connection.name || t("app.unnamed")}` : ""}`,
-        "dataSource",
-      ),
-    ];
+    return settingsSections
+      .filter((section) => !section.needsAccount || signedIn)
+      .map((section) => {
+        const label = t(section.label);
+        if (section.id === "updates") return entry(section.id, label, section.group, updateNavigationStatus);
+        if (section.id === "safety") {
+          return entry(section.id, `${label}${connection ? ` · ${connection.name || t("app.unnamed")}` : ""}`, section.group);
+        }
+        return entry(section.id, label, section.group);
+      });
   }, [connection, signedIn, t, updateNavigationStatus]);
 
   useEffect(() => {
@@ -172,25 +161,10 @@ export default function Settings({
         {adminScope?.canManage ? <SettingsGroup title={t("workspaceAdmin.manage")}><SettingsList>
           {workspaceAdminSectionsFor(adminScope).map((entry) => <SettingsRow key={entry.id} identity={t(entry.label)} details={adminScope.workspaceName} actions={<Button size="compact" onClick={() => requestWorkspaceAdmin(entry.id)}>{t("settings.openManagement")}</Button>} />)}
         </SettingsList></SettingsGroup> : null}
-        <AccountSettings />
+        <AccountPanel />
       </>}
       {section === "connection" && (connection ? <ConnectionSettings connection={connection} onEdit={onEditConnection} onOpenProject={onOpenProjectEnvironment} /> : <p>{t("settings.selectConnection")}</p>)}
-      {section === "language" && (
-        <div className="tw:grid tw:max-w-[560px] tw:gap-4 tw:p-4">
-          <Field label={t("language.label")}>
-            <SelectInput
-              value={langPreference}
-              onChange={(e) =>
-                setLang(e.target.value as typeof langPreference)
-              }
-            >
-              <option value="system">{t("language.system")}</option>
-              <option value="ko">{t("language.korean")}</option>
-              <option value="en">{t("language.english")}</option>
-            </SelectInput>
-          </Field>
-        </div>
-      )}
+      {section === "language" && <LanguageSettings />}
       {section === "safety" &&
         (connection ? (
           <Safety

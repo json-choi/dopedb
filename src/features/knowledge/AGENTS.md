@@ -32,11 +32,10 @@ mutations are owned by the hooks above or passed in as props, not created here.
 
 | File | Description |
 |------|-------------|
-| `EnvironmentSetupDialog.tsx` | Environment-creation dialog; per its header comment, this is a scoped Project mutation — the dialog explicitly selects the target Project and returns the updated revisioned Project inventory. |
+| `EnvironmentSetupDialog.tsx` | The one Environment-creation dialog: adds an Environment to a selected Project (production needs confirmation), or with no target Project creates a new Project with its first Environment; returns the updated revisioned Project inventory. |
 | `KnowledgeDatabaseSection.tsx` | Database grant and exact-revision binding presentation for one Environment. |
 | `KnowledgeSourceSections.tsx` | `KnowledgeConnectSourceSection` and `KnowledgeSourceInventory` — connect-a-source form and the connected-source inventory list for one Environment. |
 | `KnowledgeWorkspaceHeader.tsx` | Shared heading and load-failure feedback for the selected Knowledge Environment view. |
-| `ProjectSetupDialog.tsx` | Project-creation dialog. |
 
 ## For AI Agents
 

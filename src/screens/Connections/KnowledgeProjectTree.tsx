@@ -15,7 +15,7 @@ import {
   TreeRowActions,
   TreeSectionButton,
 } from "../../design-system/components/TreeControls";
-import ToolbarMenu from "../../components/ToolbarMenu";
+import { ToolbarMenu } from "../../design-system/components/Menu";
 import type { ConnectionProfile } from "../../features/connections/domain";
 import type {
   EnvironmentConnection,

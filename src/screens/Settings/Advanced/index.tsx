@@ -1,30 +1,26 @@
-import { CheckboxField } from "../../../design-system/components/FormControls";
-import { SettingsGroup } from "../../../design-system/components/Settings";
+// Advanced settings: the agent debugging preference and the local diagnostic bundle.
+import { SettingsGroup, SettingsPage, SettingsToggleRow } from "../../../design-system/components/Settings";
 import {
   saveAgentDebugDetails,
   useAgentDebugDetails,
 } from "../../../features/agents/displayPreferences";
 import { useI18n } from "../../../lib/i18n";
-import Diagnostics from "./Diagnostics";
+import DiagnosticBundle from "./DiagnosticBundle";
 
 export default function AdvancedSettings() {
   const { t } = useI18n();
   const agentDebugDetails = useAgentDebugDetails();
   return (
-    <div className="tw:grid tw:w-full tw:max-w-[800px] tw:gap-4 tw:p-4 tw:@max-[700px]:p-0">
+    <SettingsPage>
       <SettingsGroup title={t("settings.debugging")}>
-        <div className="tw:grid tw:min-w-0 tw:gap-1 tw:py-2">
-          <CheckboxField
-            checked={agentDebugDetails}
-            onChange={(event) => saveAgentDebugDetails(event.target.checked)}
-            label={t("settings.agentDebugDetails")}
-          />
-          <p className="tw:m-0 tw:pl-6 tw:text-xs tw:leading-body tw:text-muted-foreground">
-            {t("settings.agentDebugDetailsBody")}
-          </p>
-        </div>
+        <SettingsToggleRow
+          label={t("settings.agentDebugDetails")}
+          description={t("settings.agentDebugDetailsBody")}
+          checked={agentDebugDetails}
+          onChange={saveAgentDebugDetails}
+        />
       </SettingsGroup>
-      <Diagnostics />
-    </div>
+      <DiagnosticBundle />
+    </SettingsPage>
   );
 }

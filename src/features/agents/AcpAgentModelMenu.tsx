@@ -2,7 +2,7 @@
 // The adapter still owns the advertised model values and their current selection.
 
 import { Icon } from "../../components/Icon";
-import ToolbarMenu, { ToolbarMenuItem } from "../../components/ToolbarMenu";
+import { MenuItem, ToolbarMenu } from "../../design-system/components/Menu";
 import { AgentProviderMark } from "../../design-system/components/Agent";
 import { useI18n } from "../../lib/i18n";
 import { configSelectChoices } from "./approvalModePreference";
@@ -45,12 +45,12 @@ export function AcpAgentModelMenu({
         }
       >
         <div className="tw:px-2 tw:py-1"><AgentAccountIdentity cli={setup.selectedCliStatus} /></div>
-        <ToolbarMenuItem icon="user" onClick={openAgentSetup}>{t("agentTools.manageAccount")}</ToolbarMenuItem>
+        <MenuItem icon="user" onClick={openAgentSetup}>{t("agentTools.manageAccount")}</MenuItem>
         <span className="tw:px-2 tw:pt-1 tw:text-2xs tw:font-semibold tw:text-muted-foreground">
           {t("agent.acpProvider")}
         </span>
         {setup.pickerProviders.map((provider) => (
-          <ToolbarMenuItem
+          <MenuItem
             key={provider}
             icon={<AgentProviderMark provider={provider} />}
             role="menuitemradio"
@@ -58,7 +58,7 @@ export function AcpAgentModelMenu({
             onClick={() => void commands.setup.changeProvider(provider)}
           >
             {providerLabel(provider)}
-          </ToolbarMenuItem>
+          </MenuItem>
         ))}
         {model && choices.length > 0 ? (
           <>
@@ -66,7 +66,7 @@ export function AcpAgentModelMenu({
               {model.name}
             </span>
             {choices.map((choice) => (
-              <ToolbarMenuItem
+              <MenuItem
                 key={choice.value}
                 icon={<span aria-hidden="true" className="tw:grid tw:size-3.5 tw:shrink-0 tw:place-items-center">{choice.value === model.currentValue ? <Icon name="check" /> : null}</span>}
                 role="menuitemradio"
@@ -76,7 +76,7 @@ export function AcpAgentModelMenu({
                 onClick={() => void commands.composer.changeConfigOption(model, choice.value)}
               >
                 {choice.name}
-              </ToolbarMenuItem>
+              </MenuItem>
             ))}
           </>
         ) : null}

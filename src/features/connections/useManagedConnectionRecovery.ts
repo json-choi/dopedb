@@ -39,15 +39,15 @@ export function useManagedConnectionRecoveryLauncher(
     };
   }, [catalogScope.key]);
 
-  function canOpenSettings(profile: ConnectionProfile) {
+  function canOpenWorkspaceProviders(profile: ConnectionProfile) {
     return managedRecoveryActive(profile)
       && profile.workspaceAccess === "manage"
       && catalogScope.workspaceKind === "team"
       && catalogScope.workspaceId !== null;
   }
 
-  function openSettings(profile: ConnectionProfile, onReturn?: ReturnAction) {
-    if (!canOpenSettings(profile)) return;
+  function openWorkspaceProviders(profile: ConnectionProfile, onReturn?: ReturnAction) {
+    if (!canOpenWorkspaceProviders(profile)) return;
     if (onReturn) returnActions.current.set(profile.id, onReturn);
     else returnActions.current.delete(profile.id);
     requestWorkspaceAdmin("workspace-providers", {
@@ -57,8 +57,8 @@ export function useManagedConnectionRecoveryLauncher(
   }
 
   return {
-    canOpenSettings,
-    openSettings,
+    canOpenWorkspaceProviders,
+    openWorkspaceProviders,
   };
 }
 
@@ -70,8 +70,8 @@ export function useManagedConnectionRecovery(
 
   return {
     active: managedRecoveryActive(profile),
-    canOpenSettings: launcher.canOpenSettings(profile),
-    openSettings: (onReturn?: ReturnAction) => launcher.openSettings(
+    canOpenWorkspaceProviders: launcher.canOpenWorkspaceProviders(profile),
+    openWorkspaceProviders: (onReturn?: ReturnAction) => launcher.openWorkspaceProviders(
       profile,
       onReturn,
     ),

@@ -388,7 +388,7 @@ export function checkFrontendArchitecture(harness) {
   for (const token of [
     "<RenderRecoveryBoundary",
     "resetKeys={[focus.requestId]}",
-    "<KnowledgeRecovery onRetry={retry}",
+    "<RenderRecoveryFallback",
   ]) {
     if (!workbenchContent.includes(token)) {
       failures.push(

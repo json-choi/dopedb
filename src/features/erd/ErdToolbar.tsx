@@ -6,7 +6,7 @@ import {
   type ErdLayoutMode,
 } from "./domain";
 import { Icon } from "../../components/Icon";
-import ToolbarMenu, { ToolbarMenuItem } from "../../components/ToolbarMenu";
+import { MenuItem, ToolbarMenu } from "../../design-system/components/Menu";
 import { Button } from "../../design-system/components/Button";
 import {
   WorkbenchSelect,
@@ -154,20 +154,20 @@ export default function ErdToolbar({
         </Button>
         <ToolbarMenu label={t("schema.erdExport")} icon="download">
           {(["svg", "png", "pdf", "json"] as const).map((format) => (
-            <ToolbarMenuItem
+            <MenuItem
               icon="download"
               key={format}
               onClick={() => onExport(format)}
             >
               {format.toUpperCase()}
-            </ToolbarMenuItem>
+            </MenuItem>
           ))}
-          <ToolbarMenuItem
+          <MenuItem
             icon="copy"
             onClick={() => onExport("copy")}
           >
             {t("schema.erdCopyShare")}
-          </ToolbarMenuItem>
+          </MenuItem>
         </ToolbarMenu>
       </div>
     </WorkbenchToolbar>

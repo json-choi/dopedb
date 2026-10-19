@@ -4,22 +4,15 @@ import { Icon, type IconName } from "../../components/Icon";
 import { useI18n } from "../../lib/i18n";
 import { Button } from "../../design-system/components/Button";
 import CosmicBackdrop from "../../features/cosmicScene/CosmicBackdrop";
-import {
-  databaseEngineLabel,
-  type LocalDatabaseListener,
-} from "../../features/connections/domain";
+import ConnectionStartList from "../../features/connections/ConnectionStartList";
+import type { LocalDatabaseListener } from "../../features/connections/domain";
+import type { ConnectionLaunchPreset } from "../../features/connections/presets";
 import type { LocalListenerDiscovery } from "../../features/connections/useLocalListenerDiscovery";
-
-function listenerLabel(listener: LocalDatabaseListener): string {
-  const version = listener.serverVersion ? ` ${listener.serverVersion}` : "";
-  return `${databaseEngineLabel(listener.engine)}${version} · ${listener.host}:${listener.port}`;
-}
 
 type WelcomeCommand = {
   id: string;
   icon: IconName;
   label: string;
-  disabled?: boolean;
   onClick: (returnFocus: HTMLButtonElement) => void;
 };
 
@@ -49,7 +42,7 @@ export default function Onboarding({
     onOpenSafety: () => void;
   };
   onCreateDemoDatabase?: () => void;
-  onNewConnection: () => void;
+  onNewConnection: (preset?: ConnectionLaunchPreset) => void;
   onNewQuery?: () => void;
   /** Returns to the existing guided demo from another connection's Welcome. */
   onResumeGuidedDemo?: () => void;
@@ -97,70 +90,6 @@ export default function Onboarding({
         onClick: onResumeGuidedDemo,
       });
     }
-  } else if (!connected) {
-    if (localDiscovery && onUseLocalListener) {
-      if (localDiscovery.status === "idle" || localDiscovery.status === "running") {
-        commands.push({
-          id: "discover-local-listeners",
-          icon: "search",
-          label: t(
-            localDiscovery.status === "running"
-              ? "onboarding.localDiscoveryRunning"
-              : "onboarding.localDiscoveryStart",
-          ),
-          disabled: localDiscovery.status === "running",
-          onClick: localDiscovery.run,
-        });
-      } else if (
-        localDiscovery.status === "failed" ||
-        localDiscovery.listeners.length === 0
-      ) {
-        // A server started after the first look is found by an explicit retry.
-        commands.push({
-          id: "discover-local-listeners",
-          icon: "refresh",
-          label: t("connections.localDiscoveryRetry"),
-          onClick: localDiscovery.run,
-        });
-      }
-      for (const listener of localDiscovery.listeners) {
-        commands.push({
-          id: `local-listener-${listener.engine}-${listener.port}`,
-          icon: "database",
-          label: listenerLabel(listener),
-          onClick: () => onUseLocalListener(listener),
-        });
-      }
-    }
-    commands.push({
-      id: "new-data-source",
-      icon: "database",
-      label: t("connections.new"),
-      onClick: onNewConnection,
-    });
-    if (guidedDemoAvailable && onCreateDemoDatabase) {
-      commands.push({
-        id: "create-demo-sqlite",
-        icon: "download",
-        label: t(
-          creatingDemo ? "onboarding.demoStarting" : "onboarding.demoStart",
-        ),
-        disabled: creatingDemo,
-        onClick: onCreateDemoDatabase,
-      });
-    }
-  }
-
-  let localDiscoveryNotice: string | null = null;
-  if (!connected && localDiscovery) {
-    if (localDiscovery.status === "failed") {
-      localDiscoveryNotice = t("onboarding.localDiscoveryFailed");
-    } else if (
-      localDiscovery.status === "ready" &&
-      localDiscovery.listeners.length === 0
-    ) {
-      localDiscoveryNotice = t("onboarding.localDiscoveryNone");
-    }
   }
 
   return (
@@ -179,40 +108,43 @@ export default function Onboarding({
               )}
             </p>
           ) : null}
-          <div
-            className="tw:grid tw:gap-[2px]"
-            aria-label={t("onboarding.title")}
-            role="group"
-          >
-            {commands.map((command) => (
-              <div
-                key={command.id}
-                className="tw:min-w-0"
-              >
-                <Button
-                  presentation="menuItem"
-                  size="compact"
-                  variant="ghost"
-                  disabled={command.disabled}
-                  onClick={(event) => {
-                    event.currentTarget.focus({ preventScroll: true });
-                    command.onClick(event.currentTarget);
-                  }}
-                >
-                  <Icon name={command.icon} />
-                  <span className="tw:min-w-0 tw:truncate">{command.label}</span>
-                </Button>
-              </div>
-            ))}
-          </div>
-          {localDiscoveryNotice ? (
-            <p
-              className="tw:mt-3 tw:mb-0 tw:text-center tw:text-ui tw:leading-body tw:text-muted-foreground"
-              role="status"
+          {connected || guidedDemo ? (
+            <div
+              className="tw:grid tw:gap-[2px]"
+              aria-label={t("onboarding.title")}
+              role="group"
             >
-              {localDiscoveryNotice}
-            </p>
-          ) : null}
+              {commands.map((command) => (
+                <div
+                  key={command.id}
+                  className="tw:min-w-0"
+                >
+                  <Button
+                    presentation="menuItem"
+                    size="compact"
+                    variant="ghost"
+                    onClick={(event) => {
+                      event.currentTarget.focus({ preventScroll: true });
+                      command.onClick(event.currentTarget);
+                    }}
+                  >
+                    <Icon name={command.icon} />
+                    <span className="tw:min-w-0 tw:truncate">{command.label}</span>
+                  </Button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <ConnectionStartList
+              creatingDemo={creatingDemo}
+              localDiscovery={localDiscovery}
+              onCreateDemoDatabase={
+                guidedDemoAvailable ? onCreateDemoDatabase : undefined
+              }
+              onNewConnection={onNewConnection}
+              onUseLocalListener={onUseLocalListener}
+            />
+          )}
         </main>
       </div>
     </div>

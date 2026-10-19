@@ -6,8 +6,8 @@ import { useEffect, useRef } from "react";
 import { Button } from "../../../design-system/components/Button";
 import { InlineNotice } from "../../../design-system/components/Status";
 import { useI18n } from "../../../lib/i18n";
+import { requestAccountSettings } from "../../settings/accountRequest";
 import { requestWorkspaceMembershipRefresh } from "../../workspaces/membershipRefreshRequest";
-import type { WorkspaceAdminPanelProps } from "../navigationRequest";
 import type { LifecycleStatus } from "./domain";
 import { FailureNotice, LifecycleFacts, LifecycleSection } from "./LifecycleParts";
 import { formatLifecycleTime } from "./messages";
@@ -16,11 +16,9 @@ import type { LifecycleController } from "./useLifecycleController";
 export default function DeletionScheduledView({
   controller,
   status,
-  onNavigate,
 }: {
   controller: LifecycleController;
   status: LifecycleStatus;
-  onNavigate: WorkspaceAdminPanelProps["onNavigate"];
 }) {
   const { lang, t } = useI18n();
   const { busy, deletionNotice, justScheduled } = controller;
@@ -64,7 +62,7 @@ export default function DeletionScheduledView({
         <Button
           size="compact"
           onClick={() => {
-            onNavigate("account");
+            requestAccountSettings();
             // Leaving the view also moves Desktop off this no longer usable workspace.
             void requestWorkspaceMembershipRefresh().catch(() => undefined);
           }}

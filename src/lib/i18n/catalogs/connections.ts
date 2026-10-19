@@ -121,7 +121,6 @@ export const connectionsCatalog = defineCatalog(
       "Create a Project first, then organize database access, source code, and Analysis Articles by Environment.",
     "connections.projectName": "Project name",
     "connections.projectNamePlaceholder": "e.g. Customer portal",
-    "connections.firstEnvironment": "First Environment",
     "connections.environmentName": "Environment name",
     "connections.environmentNamePlaceholder": "e.g. main or development",
     "connections.environmentSetupTitle": "Add Environment",
@@ -489,12 +488,10 @@ export const connectionsCatalog = defineCatalog(
     "connections.problemSqliteFileRequired":
       "Choose a SQLite database file.",
     "connections.duplicate": "Duplicate connection",
-    "connections.demoCreating": "Creating Demo SQLite...",
     "connections.demoCreatedLocalOnly":
       "Demo SQLite is ready on this device. SQLite files can't join a Team Project, so the Agent can't use this demo.",
     "connections.demoDescription":
       "Create a local database with seeded sample data",
-    "connections.demoSqlite": "Create Demo SQLite",
     "connections.edit": "Edit connection",
     "connections.engine": "Engine",
     "connections.enableTls": "Use TLS",
@@ -751,7 +748,6 @@ export const connectionsCatalog = defineCatalog(
       "프로젝트를 먼저 만든 다음 환경별로 데이터베이스 접근, 소스 코드, 분석 아티클을 정리합니다.",
     "connections.projectName": "프로젝트 이름",
     "connections.projectNamePlaceholder": "예: 고객 포털",
-    "connections.firstEnvironment": "첫 환경",
     "connections.environmentName": "환경 이름",
     "connections.environmentNamePlaceholder": "예: main 또는 development",
     "connections.environmentSetupTitle": "환경 추가",
@@ -1117,12 +1113,10 @@ export const connectionsCatalog = defineCatalog(
     "connections.problemSqliteFileRequired":
       "SQLite 데이터베이스 파일을 선택하세요.",
     "connections.duplicate": "연결 복제",
-    "connections.demoCreating": "Demo SQLite 생성 중...",
     "connections.demoCreatedLocalOnly":
       "이 기기에 Demo SQLite가 준비됐습니다. SQLite 파일은 Team Project에 추가할 수 없어 Agent가 이 데모를 사용할 수 없습니다.",
     "connections.demoDescription":
       "샘플 데이터가 포함된 로컬 데이터베이스 생성",
-    "connections.demoSqlite": "Demo SQLite 생성",
     "connections.edit": "연결 편집",
     "connections.engine": "엔진",
     "connections.enableTls": "TLS 사용",

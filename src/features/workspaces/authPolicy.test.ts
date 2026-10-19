@@ -266,9 +266,6 @@ describe("workspace auth lifecycle", () => {
       requestWorkspaceAdmin("workspace-providers", recoveryFocus);
       requestWorkspaceAdmin("workspace-members");
       expect(takePendingWorkspaceAdminFocus()).toBeNull();
-      requestWorkspaceAdmin("workspace-providers", { kind: "addDatabase" });
-      requestWorkspaceAdmin("account");
-      expect(takePendingWorkspaceAdminFocus()).toBeNull();
       requestWorkspaceAdmin("workspace-providers", recoveryFocus);
       expect(takePendingWorkspaceAdminFocus(Date.now() + 61_000)).toBeNull();
       stopListening();
@@ -278,8 +275,6 @@ describe("workspace auth lifecycle", () => {
         "workspace-providers",
         "workspace-providers",
         "workspace-members",
-        "workspace-providers",
-        "account",
         "workspace-providers",
       ]);
     } finally {

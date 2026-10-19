@@ -4,6 +4,7 @@
 // operation, warning, blocker, branch and safe-run states. Pure functions only.
 import type { StatusTone } from "../../../../design-system/components/Status";
 import type { I18nKey, Lang } from "../../../../lib/i18n";
+import { formatAdminDate } from "../../dateFormat";
 import type { NeonDecideAction, NeonExecuteAction, NeonPlanAction } from "../../domain";
 import { WorkspaceAdminRequestError, workspaceAdminErrorMessage } from "../../requests";
 import type { Integration, ManagedConnection } from "../domain";
@@ -422,12 +423,11 @@ export const neonSafeRunStepStateKey: Record<NeonSafeRunStepState, I18nKey> = {
 };
 
 export function formatNeonTime(value: string, lang: Lang, includeDate = true): string {
-  const time = Date.parse(value);
-  if (!Number.isFinite(time)) return value;
-  return new Intl.DateTimeFormat(
-    lang === "ko" ? "ko-KR" : "en-US",
+  return formatAdminDate(
+    value,
+    lang,
     includeDate
       ? { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }
       : { hour: "numeric", minute: "2-digit", second: "2-digit" },
-  ).format(new Date(time));
+  );
 }

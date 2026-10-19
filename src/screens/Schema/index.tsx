@@ -31,6 +31,9 @@ import {
   catalogLoadIssueMessage,
 } from "../../features/catalogExplorer/catalogDomain";
 import { Icon } from "../../components/Icon";
+import RelationStructure, {
+  structureFromRelation,
+} from "../../features/erd/RelationStructure";
 import InfoTip from "../../components/InfoTip";
 import Skeleton from "../../components/Skeleton";
 import { Button } from "../../design-system/components/Button";
@@ -439,74 +442,11 @@ export default function SchemaExplorer({
                       </Button>
                     )}
                   </div>
-                  <div className="tw:mt-3 tw:grid tw:gap-0 tw:border-t tw:border-border-subtle">
-                    {selected.columns.map((column) => (
-                      <div
-                        className="tw:grid tw:grid-cols-[minmax(0,1fr)_minmax(90px,auto)] tw:items-center tw:gap-3 tw:border-b tw:border-border-subtle tw:py-2 tw:text-sm tw:@max-[760px]:grid-cols-1 tw:@max-[760px]:gap-1"
-                        key={column.name}
-                      >
-                        <span className="tw:flex tw:min-w-0 tw:items-center tw:gap-2">
-                          <code className="tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap">
-                            {column.name}
-                          </code>
-                          {selected.constraints.some(
-                            (constraint) =>
-                              constraint.kind === "primary" &&
-                              constraint.columns.includes(column.name),
-                          ) && (
-                            <b className="tw:rounded-xs tw:bg-primary/10 tw:px-1 tw:text-2xs tw:leading-4 tw:text-primary">
-                              {t("schema.pk")}
-                            </b>
-                          )}
-                        </span>
-                        <em className="tw:text-right tw:text-muted-foreground tw:not-italic tw:@max-[760px]:text-left">
-                          {column.nativeType}
-                        </em>
-                      </div>
-                    ))}
+                  <div className="tw:mt-3">
+                    <RelationStructure
+                      structure={structureFromRelation(selected)}
+                    />
                   </div>
-                  <h3>{t("schema.relationships")}</h3>
-                  {selected.constraints.some(
-                    (constraint) => constraint.kind === "foreign",
-                  ) ? (
-                    <ul className="tw:mt-2 tw:grid tw:list-none tw:gap-2 tw:p-0 tw:text-sm tw:leading-[1.45] tw:text-muted-foreground">
-                      {selected.constraints
-                        .filter((constraint) => constraint.kind === "foreign")
-                        .map((constraint) => (
-                          <li key={constraint.name}>
-                            {constraint.name}: {constraint.columns.join(", ")}
-                            {" → "}
-                            {constraint.referencedRelation
-                              ? relationDisplayName(
-                                  constraint.referencedRelation,
-                                )
-                              : "?"}
-                            .{constraint.referencedColumns.join(", ")}
-                          </li>
-                        ))}
-                    </ul>
-                  ) : (
-                    <p className="tw:text-muted-foreground">
-                      {t("schema.noForeignKeys")}
-                    </p>
-                  )}
-                  <h3>{t("schema.indexes")}</h3>
-                  {selected.indexes.length ? (
-                    <ul className="tw:mt-2 tw:grid tw:list-none tw:gap-2 tw:p-0 tw:text-sm tw:leading-[1.45] tw:text-muted-foreground">
-                      {selected.indexes.map((index) => (
-                        <li key={index.name}>
-                          {index.name}:{" "}
-                          {index.keys
-                            .map((key) => key.column ?? key.expression ?? "?")
-                            .join(", ")}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="tw:text-muted-foreground">
-                      {t("common.none")}
-                    </p>
-                  )}
                 </>
               ) : (
                 <InfoTip label={t("schema.selectTable")} />

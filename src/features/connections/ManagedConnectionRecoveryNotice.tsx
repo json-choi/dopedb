@@ -1,9 +1,8 @@
 // Reuses the exact-connection recovery command in Safety and SQL error surfaces.
-import { Button } from "../../design-system/components/Button";
-import { InlineNotice } from "../../design-system/components/Status";
 import { useI18n } from "../../lib/i18n";
 import { useCatalogScope } from "../../lib/queries";
 import type { ConnectionProfile } from "./domain";
+import RecoveryNotice from "./RecoveryNotice";
 import { useManagedConnectionRecovery } from "./useManagedConnectionRecovery";
 
 export default function ManagedConnectionRecoveryNotice({
@@ -14,19 +13,16 @@ export default function ManagedConnectionRecoveryNotice({
   const { t } = useI18n();
   const recovery = useManagedConnectionRecovery(connection, useCatalogScope());
   return (
-    <InlineNotice
-      tone="danger"
-      icon="alert"
-      role="alert"
-      action={recovery.canOpenSettings ? (
-        <Button size="compact" onClick={() => recovery.openSettings()}>
-          {t("connections.managedWorkspace.recover")}
-        </Button>
-      ) : undefined}
-    >
-      {t(recovery.canOpenSettings
+    <RecoveryNotice
+      message={t(recovery.canOpenWorkspaceProviders
         ? "connections.managedWorkspace.recoveryRequiredManager"
         : "connections.managedWorkspace.recoveryRequiredMember")}
-    </InlineNotice>
+      action={recovery.canOpenWorkspaceProviders
+        ? {
+            label: t("connections.managedWorkspace.recover"),
+            run: () => recovery.openWorkspaceProviders(),
+          }
+        : null}
+    />
   );
 }

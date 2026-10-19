@@ -1,19 +1,9 @@
-// Footer, setup dialogs, drag preview, and modal overlays for Database Explorer.
-import type { ReactNode, RefObject } from "react";
+// Setup dialogs, drag preview, and modal overlays for Database Explorer.
 
 import EngineMark from "../../components/EngineMark";
-import { Button } from "../../design-system/components/Button";
-import {
-  ModalBackdrop,
-  ModalFooter,
-  ModalHeader,
-  ModalSurface,
-} from "../../design-system/components/Modal";
+import ConfirmDialog from "../../components/ConfirmDialog";
 import type { PendingSchemaGroupChange } from "../../features/catalogExplorer/useSchemaGroupDrag";
-import { ProviderCredentialDialog } from "../../features/providers/ProviderCredentialDialog";
-import type { ProviderKind } from "../../features/providers/domain";
 import { EnvironmentSetupDialog } from "../../features/knowledge/components/EnvironmentSetupDialog";
-import { ProjectSetupDialog } from "../../features/knowledge/components/ProjectSetupDialog";
 import type { KnowledgeProject } from "../../features/knowledge/domain";
 import type { WorkspaceDialogState } from "../../features/catalogExplorer/domain";
 import type { ConnectionProfile } from "../../features/connections/domain";
@@ -21,7 +11,6 @@ import WorkspaceConnectionDialog from "../../features/workspaces/components/Work
 import { useI18n } from "../../lib/i18n";
 
 interface DatabaseExplorerOverlaysProps {
-  workspaceAccount?: ReactNode;
   catalogScopeKey: string;
   projects: KnowledgeProject[];
   projectSetupOpen: boolean;
@@ -36,8 +25,6 @@ interface DatabaseExplorerOverlaysProps {
   connections: ConnectionProfile[];
   pendingGroupChange: PendingSchemaGroupChange | null;
   workspaceDialog: WorkspaceDialogState | null;
-  providerCredentialsOpen: ProviderKind | null;
-  providerReturnFocusRef: RefObject<HTMLElement | null>;
   onProjectCreated: (project: KnowledgeProject) => void;
   onEnvironmentCreated: (project: KnowledgeProject) => void;
   onCloseProjectSetup: () => void;
@@ -46,11 +33,9 @@ interface DatabaseExplorerOverlaysProps {
   onConfirmGroupChange: () => void;
   onCancelGroupChange: () => void;
   onCloseWorkspaceDialog: () => void;
-  onCloseProviderCredentials: () => void;
 }
 
 export function DatabaseExplorerOverlays({
-  workspaceAccount,
   catalogScopeKey,
   projects,
   projectSetupOpen,
@@ -60,8 +45,6 @@ export function DatabaseExplorerOverlays({
   connections,
   pendingGroupChange,
   workspaceDialog,
-  providerCredentialsOpen,
-  providerReturnFocusRef,
   onProjectCreated,
   onEnvironmentCreated,
   onCloseProjectSetup,
@@ -70,7 +53,6 @@ export function DatabaseExplorerOverlays({
   onConfirmGroupChange,
   onCancelGroupChange,
   onCloseWorkspaceDialog,
-  onCloseProviderCredentials,
 }: DatabaseExplorerOverlaysProps) {
   const { t } = useI18n();
   const draggedConnection = dragPreview
@@ -90,14 +72,10 @@ export function DatabaseExplorerOverlays({
       : null;
   return (
     <>
-      {workspaceAccount ? (
-        <div className="ds-control-row tw:flex tw:min-w-0 tw:shrink-0 tw:items-center tw:gap-2 tw:border-t tw:border-border-subtle tw:bg-background tw:p-2">
-          {workspaceAccount}
-        </div>
-      ) : null}
-
       {projectSetupOpen ? (
-        <ProjectSetupDialog
+        <EnvironmentSetupDialog
+          projects={projects}
+          preferredProjectId={null}
           catalogScopeKey={catalogScopeKey}
           onClose={onCloseProjectSetup}
           onCreated={onProjectCreated}
@@ -151,34 +129,14 @@ export function DatabaseExplorerOverlays({
       ) : null}
 
       {pendingGroupChange ? (
-        <ModalBackdrop onMouseDown={onCancelGroupChange}>
-          <ModalSurface
-            size="alert"
-            role="alertdialog"
-            aria-labelledby="schema-group-change-title"
-            aria-describedby="schema-group-change-body"
-            onRequestClose={onCancelGroupChange}
-          >
-            <ModalHeader
-              title={t("connections.schemaGroup")}
-              titleId="schema-group-change-title"
-            />
-            <p
-              id="schema-group-change-body"
-              className="tw:m-0 tw:px-5 tw:py-4 tw:text-ui tw:leading-body"
-            >
-              {pendingGroupChange.message}
-            </p>
-            <ModalFooter>
-              <Button data-modal-initial-focus onClick={onCancelGroupChange}>
-                {t("common.cancel")}
-              </Button>
-              <Button variant="primary" onClick={onConfirmGroupChange}>
-                {t("common.apply")}
-              </Button>
-            </ModalFooter>
-          </ModalSurface>
-        </ModalBackdrop>
+        <ConfirmDialog
+          title={t("connections.schemaGroup")}
+          description={pendingGroupChange.message}
+          confirmLabel={t("common.apply")}
+          confirmVariant="primary"
+          onCancel={onCancelGroupChange}
+          onConfirm={onConfirmGroupChange}
+        />
       ) : null}
       {workspaceDialog ? (
         <WorkspaceConnectionDialog
@@ -192,13 +150,6 @@ export function DatabaseExplorerOverlays({
           mode={workspaceDialog.mode}
           onBound={onConnectionUpdated}
           onClose={onCloseWorkspaceDialog}
-        />
-      ) : null}
-      {providerCredentialsOpen ? (
-        <ProviderCredentialDialog
-          initialProvider={providerCredentialsOpen}
-          onClose={onCloseProviderCredentials}
-          returnFocusRef={providerReturnFocusRef}
         />
       ) : null}
     </>

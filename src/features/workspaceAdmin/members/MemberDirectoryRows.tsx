@@ -19,7 +19,8 @@ import {
   type PendingInvitation,
   type WorkspaceMember,
 } from "./domain";
-import type { LinkCopyState, MemberCommand } from "./useMemberCommands";
+import type { LinkCopyState } from "../../../lib/useLinkCopy";
+import type { MemberCommand } from "./useMemberCommands";
 
 function RowFailure({ message }: { message: string }) {
   return (

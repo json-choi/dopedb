@@ -156,7 +156,7 @@ change.
 ## Components (app/components/)
 | File | Description |
 |------|-------------|
-| `Brand.tsx` | Client. Logo + "DopeDB Workspace" wordmark link; points to the marketing site or `/settings` depending on `destination` |
+| `Brand.tsx` | Client. Logo + "DopeDB Workspace" wordmark link to the marketing site |
 | `Controls.tsx` | No directive (server- and client-safe). Only `ControlButton`, the compact command button (`tone` `neutral`/`primary`/`danger`, `size` `small`/`field`); used by the analytics consent controls in `WebAnalyticsProvider.tsx` |
 | `LocaleSwitcher.tsx` | Client. EN/KO toggle link that preserves the current path and query string |
 | `WebAnalyticsProvider.tsx` | Client. Consent-gated analytics provider: checks eligibility (HTTPS, not localhost, no DNT/GPC), reads/writes a `localStorage` consent flag, lazy-loads the Clarity plugin only after consent, and stops tracking before client-side navigation |
@@ -165,7 +165,7 @@ change.
 The identity shell/card/typography/button primitives (`IdentitySingleShell`, `IdentityCard`, `IdentityTitle`, `IdentityPrimaryButton`, etc.) are not in this directory: the sign-in, Desktop approval, provider authorization, GitHub completion, invitation, Article handoff, settings-moved, error, and not-found pages import them from the Desktop design system's `../../src/design-system/components/WorkspaceIdentity.tsx`.
 
 ## Settings (app/settings/)
-Workspace administration moved to DopeDB Desktop Settings (ADR `../../docs/adr/0009-desktop-workspace-administration.md`). This directory keeps only the former console address, so old links and bookmarks, the `/` redirect, the `Brand` workspace link, and the redirect after accepting a workspace invitation still land on a useful page. Do not rebuild administration panels here.
+Workspace administration moved to DopeDB Desktop Settings (ADR `../../docs/adr/0009-desktop-workspace-administration.md`). This directory keeps only the former console address, so old links and bookmarks, the `/` redirect, and the `/` redirect still land on a useful page; accepting a workspace invitation now ends in an "Open DopeDB" hand-off on the accept page itself. Do not rebuild administration panels here.
 
 | File | Description |
 |------|-------------|

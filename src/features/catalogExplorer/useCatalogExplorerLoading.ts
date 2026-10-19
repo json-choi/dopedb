@@ -15,7 +15,7 @@ import {
   type ConnectionProfile,
 } from "../connections/domain";
 import { useManagedConnectionRecoveryLauncher } from "../connections/useManagedConnectionRecovery";
-import { requestWorkspaceAdmin } from "../workspaceAdmin/navigationRequest";
+import { requestAccountSettings } from "../settings/accountRequest";
 import { qk, type CatalogScope } from "../../lib/queries";
 import { catalogLoadIssue, readWithCatalogIssue } from "./catalogDomain";
 import type { useCatalogExplorerState } from "./state";
@@ -138,8 +138,8 @@ export function useCatalogExplorerLoading(
         ? catalogLoadIssue(authenticationRecovery.error)
         : undefined,
       onRecoverManagedConnection:
-        managedConnectionRecovery.canOpenSettings(connection)
-          ? () => managedConnectionRecovery.openSettings(
+        managedConnectionRecovery.canOpenWorkspaceProviders(connection)
+          ? () => managedConnectionRecovery.openWorkspaceProviders(
               connection,
               onManagedReturn,
             )
@@ -149,7 +149,7 @@ export function useCatalogExplorerLoading(
       // provider sign-in (BigQuery) is renewed by its own recovery above instead.
       onSignInWorkspace:
         connection.workspaceAccess !== "local" && connection.engine !== "bigquery"
-          ? () => requestWorkspaceAdmin("account")
+          ? () => requestAccountSettings()
           : undefined,
     };
   }

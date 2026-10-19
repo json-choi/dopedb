@@ -28,7 +28,7 @@ import {
   productAnalyticsWorkspaceContext,
 } from "../productAnalytics/outcomes";
 import { refreshDesktopConnections } from "../workspaceAdmin/desktopConnections";
-import { deleteWorkspaceConnection } from "../workspaces/tauriAdapter";
+import { useDeleteConnection } from "../connections/useDeleteConnection";
 import { errMessage } from "../../ipc/types";
 import { useI18n } from "../../lib/i18n";
 import { qk, type CatalogScope } from "../../lib/queries";
@@ -80,6 +80,7 @@ export function useDatabaseExplorerMutations({
 }: Props) {
   const { t } = useI18n();
   const toast = useToast();
+  const deleteConnectionCommand = useDeleteConnection();
   const queryClient = useQueryClient();
   const currentScopeKeyRef = useRef(catalogScope.key);
   const [deletingProjectId, setDeletingProjectId] = useState<string | null>(
@@ -287,15 +288,12 @@ export function useDatabaseExplorerMutations({
   async function removeConnection(connection: ConnectionProfile) {
     commands.patch({ deletingId: connection.id });
     try {
-      if (connection.workspaceAccess === "manage") {
-        await deleteWorkspaceConnection(connection.id);
-      } else {
-        await deleteConnection(connection.id);
+      const failure = await deleteConnectionCommand.remove(connection);
+      if (failure) {
+        toast(failure, "error");
+        return;
       }
       forgetDeletedConnection(connection.id);
-      toast(t("connections.connectionDeleted"));
-    } catch (error) {
-      toast(errMessage(error), "error");
     } finally {
       commands.patch({ deletingId: null });
     }

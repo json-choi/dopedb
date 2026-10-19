@@ -23,7 +23,7 @@ import {
 } from "../../agents/AgentCliStatus";
 import { agentReadyForChat } from "../../agents/availability";
 import { AgentAccountIdentity } from "../../agents/AgentAccountIdentity";
-import { loginCommand } from "../../agents/acpTranscriptPresentation";
+import { copyAgentLoginCommand, loginCommand, pluginStateLabel } from "../../agents/agentSetup";
 import type { AcpPluginStatus, AgentCliInfo } from "../../agents/domain";
 import { SUPPORTED_AGENT_TARGETS, useEnabledAgentProviders } from "../../skills/agentPreferences";
 import { AgentSkillSection } from "./AgentSkillSection";
@@ -31,7 +31,6 @@ import {
   activePluginStates,
   agentToolPlugins,
   pluginStateIndicator,
-  pluginStateLabel,
   pluginTone,
 } from "./model";
 import type { AgentToolsController } from "./useAgentToolsController";
@@ -148,7 +147,7 @@ export function AgentPluginSection({ controller }: { controller: AgentToolsContr
                       <p className="tw:m-0 tw:text-xs tw:text-muted-foreground">{t("agentTools.accountChangeInstructions")}</p>
                       <div className="ds-control-row tw:flex tw:flex-wrap tw:items-center tw:gap-2">
                         <code className="tw:text-xs">{loginCommand(agent.provider)}</code>
-                        <Button size="compact" onClick={() => void navigator.clipboard.writeText(loginCommand(agent.provider)).then(() => toast(t("agentTools.accountCommandCopied"))).catch(() => toast(t("agentTools.accountCommandCopyFailed"), "error"))}>{t("agentTools.copyAccountCommand")}</Button>
+                        <Button size="compact" onClick={() => void copyAgentLoginCommand(agent.provider).then(() => toast(t("agentTools.accountCommandCopied"))).catch(() => toast(t("agentTools.accountCommandCopyFailed"), "error"))}>{t("agentTools.copyAccountCommand")}</Button>
                         <Button size="compact" disabled={cliQuery.isFetching} onClick={() => void cliQuery.refetch()}>{t("agentTools.checkAgain")}</Button>
                       </div>
                     </div>

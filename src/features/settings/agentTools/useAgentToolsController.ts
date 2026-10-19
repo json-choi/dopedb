@@ -9,10 +9,10 @@ import {
 } from "../../agents/queryOptions";
 import {
   checkAgentAcpPluginUpdates,
-  installAgentAcpPlugin,
   removeAgentAcpPlugin,
   setAgentAcpPluginEnabled,
 } from "../../agents/tauriAdapter";
+import { prepareAgentPlugin } from "../../agents/agentSetup";
 import type { AcpPluginId } from "../../agents/domain";
 import {
   installSkill,
@@ -64,11 +64,7 @@ export function useAgentToolsController() {
       const current = pluginQuery.data?.find((plugin) => plugin.pluginId === pluginId);
       // A recorded failure means the installed adapter is not chat-ready even
       // when a version is present, so Prepare must verify or reinstall it.
-      if ((current?.state === "ready" || current?.state === "staged") && !current.failure) {
-        if (!current.enabled) await setAgentAcpPluginEnabled(pluginId, true);
-      } else {
-        await installAgentAcpPlugin(pluginId);
-      }
+      await prepareAgentPlugin(pluginId, current);
       const refreshed = await pluginQuery.refetch();
       if (refreshed.error) throw refreshed.error;
       const prepared = refreshed.data?.find((plugin) => plugin.pluginId === pluginId);

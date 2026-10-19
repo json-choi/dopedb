@@ -1,6 +1,7 @@
-// Environment creation stays a scoped Project mutation. The dialog selects the
-// target Project explicitly and returns the updated revisioned Project inventory.
-import { useMemo, useRef, useState } from "react";
+// One Environment creation dialog. With a target Project it adds an Environment
+// (production needs an explicit confirmation); with none it creates a new Project
+// together with its first Environment. Both return the revisioned Project.
+import { useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "../../../design-system/components/Button";
@@ -25,7 +26,7 @@ import type { ProductAnalyticsWorkspaceContextInput } from "../../productAnalyti
 import { productAnalyticsWorkspaceContext } from "../../productAnalytics/outcomes";
 import type { KnowledgeEnvironment, KnowledgeProject } from "../domain";
 import { knowledgeQueryKeys } from "../queryKeys";
-import { createKnowledgeEnvironment } from "../tauriAdapter";
+import { createKnowledgeEnvironment, createKnowledgeProject } from "../tauriAdapter";
 
 const ENVIRONMENT_SETUP_TITLE_ID = "environment-setup-title";
 
@@ -46,6 +47,7 @@ export function EnvironmentSetupDialog({
   onCreated,
 }: {
   projects: KnowledgeProject[];
+  /** The Project to add an Environment to; null creates a new Project instead. */
   preferredProjectId: string | null;
   catalogScopeKey: string;
   onClose: () => void;
@@ -54,6 +56,7 @@ export function EnvironmentSetupDialog({
   const { t } = useI18n();
   const queryClient = useQueryClient();
   const catalogScope = useCatalogScope();
+  const newProject = preferredProjectId === null;
   const analyticsAttempt = useRef<{
     context: ProductAnalyticsWorkspaceContextInput;
     existingEnvironmentIds: Set<string>;
@@ -61,26 +64,37 @@ export function EnvironmentSetupDialog({
   const [projectId, setProjectId] = useState(() =>
     initialProjectId(projects, preferredProjectId),
   );
-  const selectedProject = useMemo(
-    () => projects.find((project) => project.id === projectId) ?? null,
-    [projectId, projects],
-  );
-  const [environmentName, setEnvironmentName] = useState("");
+  const selectedProject = newProject
+    ? null
+    : projects.find((project) => project.id === projectId) ?? null;
+  const [projectName, setProjectName] = useState("");
+  const [environmentName, setEnvironmentName] = useState(newProject ? "main" : "");
   const [riskClass, setRiskClass] =
     useState<KnowledgeEnvironment["riskClass"]>("development");
   const [productionConfirmed, setProductionConfirmed] = useState(false);
-  const createEnvironment = useMutation({
-    mutationFn: createKnowledgeEnvironment,
+  const create = useMutation({
+    mutationFn: () =>
+      newProject
+        ? createKnowledgeProject({
+            name: projectName.trim(),
+            environments: [{ name: environmentName.trim(), riskClass }],
+          })
+        : createKnowledgeEnvironment({
+            projectId,
+            name: environmentName.trim(),
+            riskClass,
+          }),
     onMutate: () => {
       const context = productAnalyticsWorkspaceContext(catalogScope);
-      analyticsAttempt.current = context && selectedProject
-        ? {
-            context,
-            existingEnvironmentIds: new Set(
-              selectedProject.environments.map((environment) => environment.id),
-            ),
-          }
-        : null;
+      analyticsAttempt.current =
+        context && (newProject || selectedProject)
+          ? {
+              context,
+              existingEnvironmentIds: new Set(
+                selectedProject?.environments.map((environment) => environment.id),
+              ),
+            }
+          : null;
     },
     onSuccess: async (project) => {
       const attempt = analyticsAttempt.current;
@@ -93,7 +107,7 @@ export function EnvironmentSetupDialog({
       if (attempt && environment) {
         void captureProductEvent({
           name: "knowledge_environment_created",
-          properties: { creationKind: "additional" },
+          properties: { creationKind: newProject ? "project_default" : "additional" },
           context: attempt.context,
           dedupeId: environment.id,
         });
@@ -114,58 +128,69 @@ export function EnvironmentSetupDialog({
     },
   });
   const canCreate =
-    selectedProject !== null &&
     environmentName.trim().length > 0 &&
-    (riskClass !== "production" || productionConfirmed);
+    (newProject
+      ? projectName.trim().length > 0
+      : selectedProject !== null &&
+        (riskClass !== "production" || productionConfirmed));
 
   return (
     <ModalBackdrop
       onMouseDown={() => {
-        if (!createEnvironment.isPending) onClose();
+        if (!create.isPending) onClose();
       }}
     >
       <ModalSurface
         aria-labelledby={ENVIRONMENT_SETUP_TITLE_ID}
         onRequestClose={onClose}
-        dismissible={!createEnvironment.isPending}
+        dismissible={!create.isPending}
       >
         <form
           className="tw:flex tw:min-h-0 tw:flex-1 tw:flex-col"
           onSubmit={(event) => {
             event.preventDefault();
-            if (!canCreate || createEnvironment.isPending) return;
-            createEnvironment.mutate({
-              projectId,
-              name: environmentName.trim(),
-              riskClass,
-            });
+            if (!canCreate || create.isPending) return;
+            create.mutate();
           }}
         >
           <ModalHeader
-            title={t("connections.environmentSetupTitle")}
+            title={t(newProject ? "connections.projectSetupTitle" : "connections.environmentSetupTitle")}
             titleId={ENVIRONMENT_SETUP_TITLE_ID}
           />
           <div className="tw:grid tw:min-h-0 tw:flex-1 tw:content-start tw:gap-4 tw:overflow-y-auto tw:p-5 tw:max-[640px]:p-4">
             <p className="tw:m-0 tw:text-sm tw:leading-relaxed tw:text-muted-foreground">
-              {t("connections.environmentSetupDescription")}
+              {t(newProject ? "connections.projectSetupDescription" : "connections.environmentSetupDescription")}
             </p>
-            <Field label={t("connections.projects")}>
-              <SelectInput
-                density="compact"
-                value={projectId}
-                onChange={(event) => setProjectId(event.target.value)}
-              >
-                {projects.map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
-                  </option>
-                ))}
-              </SelectInput>
-            </Field>
+            {newProject ? (
+              <Field label={t("connections.projectName")}>
+                <TextInput
+                  data-modal-initial-focus
+                  density="compact"
+                  value={projectName}
+                  placeholder={t("connections.projectNamePlaceholder")}
+                  autoComplete="off"
+                  onChange={(event) => setProjectName(event.target.value)}
+                />
+              </Field>
+            ) : (
+              <Field label={t("connections.projects")}>
+                <SelectInput
+                  density="compact"
+                  value={projectId}
+                  onChange={(event) => setProjectId(event.target.value)}
+                >
+                  {projects.map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.name}
+                    </option>
+                  ))}
+                </SelectInput>
+              </Field>
+            )}
             <div className="tw:grid tw:grid-cols-2 tw:gap-3 tw:@max-[520px]:grid-cols-1">
               <Field label={t("connections.environmentName")}>
                 <TextInput
-                  data-modal-initial-focus
+                  data-modal-initial-focus={newProject ? undefined : true}
                   density="compact"
                   value={environmentName}
                   placeholder={t("connections.environmentNamePlaceholder")}
@@ -202,7 +227,11 @@ export function EnvironmentSetupDialog({
                 </SelectInput>
               </Field>
             </div>
-            {riskClass === "production" ? (
+            {newProject ? (
+              <p className="tw:m-0 tw:text-xs tw:leading-relaxed tw:text-muted-foreground">
+                {t("connections.projectSetupNextStep")}
+              </p>
+            ) : riskClass === "production" ? (
               <InlineNotice tone="warning" icon="alert">
                 <CheckboxField
                   checked={productionConfirmed}
@@ -213,16 +242,16 @@ export function EnvironmentSetupDialog({
                 />
               </InlineNotice>
             ) : null}
-            {createEnvironment.error ? (
+            {create.error ? (
               <InlineNotice tone="danger" icon="alert" role="alert">
-                {errMessage(createEnvironment.error)}
+                {errMessage(create.error)}
               </InlineNotice>
             ) : null}
           </div>
           <ModalFooter>
             <Button
               variant="ghost"
-              disabled={createEnvironment.isPending}
+              disabled={create.isPending}
               onClick={onClose}
             >
               {t("common.cancel")}
@@ -230,11 +259,11 @@ export function EnvironmentSetupDialog({
             <Button
               type="submit"
               variant="primary"
-              disabled={!canCreate || createEnvironment.isPending}
+              disabled={!canCreate || create.isPending}
             >
-              {createEnvironment.isPending
-                ? t("connections.creatingEnvironment")
-                : t("connections.addEnvironment")}
+              {create.isPending
+                ? t(newProject ? "connections.creatingProject" : "connections.creatingEnvironment")
+                : t(newProject ? "connections.createProject" : "connections.addEnvironment")}
             </Button>
           </ModalFooter>
         </form>

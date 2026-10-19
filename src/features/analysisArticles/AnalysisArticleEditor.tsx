@@ -5,6 +5,7 @@
 import { useMemo, useState } from "react";
 
 import { Button } from "../../design-system/components/Button";
+import ConfirmDialog from "../../components/ConfirmDialog";
 import {
   PropertyRow,
   SelectInput,
@@ -237,30 +238,14 @@ export function AnalysisArticleEditor({
           </Button>
         </ModalFooter>
         {confirmingDiscard ? (
-          <ModalBackdrop
-            onMouseDown={(event) => {
-              if (event.target === event.currentTarget) setConfirmingDiscard(false);
-            }}
-          >
-            <ModalSurface
-              size="alert"
-              role="alertdialog"
-              aria-labelledby="analysis-discard-title"
-              aria-describedby="analysis-discard-body"
-              onRequestClose={() => setConfirmingDiscard(false)}
-            >
-              <ModalHeader title={t("analysis.discardTitle")} titleId="analysis-discard-title" />
-              <p id="analysis-discard-body" className="tw:m-0 tw:px-5 tw:py-6 tw:text-sm tw:leading-ui">
-                {t("analysis.discardBody")}
-              </p>
-              <ModalFooter>
-                <Button data-modal-initial-focus onClick={() => setConfirmingDiscard(false)}>
-                  {t("analysis.keepEditing")}
-                </Button>
-                <Button variant="danger" onClick={onClose}>{t("analysis.discardChanges")}</Button>
-              </ModalFooter>
-            </ModalSurface>
-          </ModalBackdrop>
+          <ConfirmDialog
+            title={t("analysis.discardTitle")}
+            description={t("analysis.discardBody")}
+            cancelLabel={t("analysis.keepEditing")}
+            confirmLabel={t("analysis.discardChanges")}
+            onCancel={() => setConfirmingDiscard(false)}
+            onConfirm={onClose}
+          />
         ) : null}
       </ModalSurface>
     </ModalBackdrop>

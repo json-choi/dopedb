@@ -103,7 +103,7 @@ SQL 데이터 값, provider 로고, 그래프 범주에는 앱 chrome 팔레트�
 | [`src/design-system/components/IdeTabs.tsx`](../src/design-system/components/IdeTabs.tsx) | card·foreground·muted-foreground·selection·ring: 열린 탭 |
 | [`src/design-system/components/Modal.tsx`](../src/design-system/components/Modal.tsx) | popover·overlay·foreground·border-strong·ring: dialog |
 | [`src/design-system/components/PanelTabs.tsx`](../src/design-system/components/PanelTabs.tsx) | card·foreground·selection·ring: 설정/property 탭 |
-| [`src/design-system/components/PopupMenu.tsx`](../src/design-system/components/PopupMenu.tsx) | popover·foreground·selection·ring: 메뉴 행 |
+| [`src/design-system/components/Menu.tsx`](../src/design-system/components/Menu.tsx) | popover·foreground·selection·ring: 메뉴 행 |
 | [`src/design-system/components/Progress.tsx`](../src/design-system/components/Progress.tsx) | muted·primary·info: 진행 막대 |
 | [`src/design-system/components/RenderRecoveryBoundary.tsx`](../src/design-system/components/RenderRecoveryBoundary.tsx) | card·foreground·danger·primary: 재시도 |
 | [`src/design-system/components/ResizeSeparator.tsx`](../src/design-system/components/ResizeSeparator.tsx) | border-subtle·ring: 크기 조절 focus |
@@ -133,7 +133,6 @@ SQL 데이터 값, provider 로고, 그래프 범주에는 앱 chrome 팔레트�
 | [`src/components/Skeleton.tsx`](../src/components/Skeleton.tsx) | muted: 로딩 자리 표시 |
 | [`src/components/SqlViewer.tsx`](../src/components/SqlViewer.tsx) | editor·foreground; SQL syntax는 전용 palette |
 | [`src/components/Toast.tsx`](../src/components/Toast.tsx) | popover·foreground + 실제 상태색 |
-| [`src/components/ToolbarMenu.tsx`](../src/components/ToolbarMenu.tsx) | popover·foreground·selection·ring |
 | [`src/components/WorkbenchDocumentStrip.tsx`](../src/components/WorkbenchDocumentStrip.tsx) | card·foreground·selection·ring |
 
 ### Desktop 기능·화면 (166개)
@@ -191,7 +190,6 @@ SQL 데이터 값, provider 로고, 그래프 범주에는 앱 chrome 팔레트�
 | [`src/features/queries/ManualTransactionsMenu.tsx`](../src/features/queries/ManualTransactionsMenu.tsx) | editor·foreground·muted-foreground·ring; 쓰기/오류는 warning/danger |
 | [`src/features/queryResults/DataGrid.tsx`](../src/features/queryResults/DataGrid.tsx) | editor·foreground·muted-foreground·border-subtle·selection·ring; 오류만 danger |
 | [`src/features/queryResults/DataGridColumnFilterMenu.tsx`](../src/features/queryResults/DataGridColumnFilterMenu.tsx) | editor·foreground·muted-foreground·border-subtle·selection·ring; 오류만 danger |
-| [`src/features/queryResults/DataGridVirtual.tsx`](../src/features/queryResults/DataGridVirtual.tsx) | editor·foreground·muted-foreground·border-subtle·selection·ring; 오류만 danger |
 | [`src/features/queryResults/InspectableResultGrid.tsx`](../src/features/queryResults/InspectableResultGrid.tsx) | editor·foreground·muted-foreground·border-subtle·selection·ring; 오류만 danger |
 | [`src/features/queryResults/ResultToolbar.tsx`](../src/features/queryResults/ResultToolbar.tsx) | editor·foreground·muted-foreground·border-subtle·selection·ring; 오류만 danger |
 | [`src/features/queryResults/ResultWorkbench.tsx`](../src/features/queryResults/ResultWorkbench.tsx) | editor·foreground·muted-foreground·border-subtle·selection·ring; 오류만 danger |
@@ -207,9 +205,9 @@ SQL 데이터 값, provider 로고, 그래프 범주에는 앱 chrome 팔레트�
 | [`src/features/workspaceAdmin/access/DatabaseAccess.tsx`](../src/features/workspaceAdmin/access/DatabaseAccess.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
 | [`src/features/workspaceAdmin/access/MemberGrants.tsx`](../src/features/workspaceAdmin/access/MemberGrants.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
 | [`src/features/workspaceAdmin/access/TeamReadAccess.tsx`](../src/features/workspaceAdmin/access/TeamReadAccess.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
-| [`src/features/workspaceAdmin/account/AccountPanel.tsx`](../src/features/workspaceAdmin/account/AccountPanel.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
-| [`src/features/workspaceAdmin/account/AccountSessions.tsx`](../src/features/workspaceAdmin/account/AccountSessions.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
-| [`src/features/workspaceAdmin/account/DeletionPendingWorkspaces.tsx`](../src/features/workspaceAdmin/account/DeletionPendingWorkspaces.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
+| [`src/features/settings/account/AccountPanel.tsx`](../src/features/settings/account/AccountPanel.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
+| [`src/features/settings/account/AccountSessions.tsx`](../src/features/settings/account/AccountSessions.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
+| [`src/features/settings/account/DeletionPendingWorkspaces.tsx`](../src/features/settings/account/DeletionPendingWorkspaces.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
 | [`src/features/workspaceAdmin/lifecycle/BackupsSection.tsx`](../src/features/workspaceAdmin/lifecycle/BackupsSection.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
 | [`src/features/workspaceAdmin/lifecycle/DeletionScheduledView.tsx`](../src/features/workspaceAdmin/lifecycle/DeletionScheduledView.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
 | [`src/features/workspaceAdmin/lifecycle/EncryptionKeySection.tsx`](../src/features/workspaceAdmin/lifecycle/EncryptionKeySection.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
@@ -270,7 +268,7 @@ SQL 데이터 값, provider 로고, 그래프 범주에는 앱 chrome 팔레트�
 | [`src/screens/Connections/DatabaseExplorerEmptyState.tsx`](../src/screens/Connections/DatabaseExplorerEmptyState.tsx) | sidebar·foreground·muted-foreground·selection·border-subtle·ring |
 | [`src/screens/Connections/DatabaseExplorerOverlays.tsx`](../src/screens/Connections/DatabaseExplorerOverlays.tsx) | sidebar·foreground·muted-foreground·selection·border-subtle·ring |
 | [`src/screens/Connections/DatabaseExplorerToolbar.tsx`](../src/screens/Connections/DatabaseExplorerToolbar.tsx) | sidebar·foreground·muted-foreground·selection·border-subtle·ring |
-| [`src/screens/Connections/DdlModal.tsx`](../src/screens/Connections/DdlModal.tsx) | popover·foreground·overlay·ring; 상태만 semantic 색 |
+| [`src/screens/Tables/DdlModal.tsx`](../src/screens/Tables/DdlModal.tsx) | popover·foreground·overlay·ring; 상태만 semantic 색 |
 | [`src/screens/Connections/KnowledgeProjectTree.tsx`](../src/screens/Connections/KnowledgeProjectTree.tsx) | sidebar·foreground·muted-foreground·selection·border-subtle·ring |
 | [`src/screens/Connections/ManagedWorkspaceConnectionField.tsx`](../src/screens/Connections/ManagedWorkspaceConnectionField.tsx) | card·foreground·muted-foreground·input·border-subtle·ring; 검증만 danger |
 | [`src/screens/Connections/SchemaConnectionGroupRow.tsx`](../src/screens/Connections/SchemaConnectionGroupRow.tsx) | sidebar·foreground·muted-foreground·selection·border-subtle·ring |

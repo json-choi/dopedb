@@ -3,22 +3,13 @@
 // Agent change only opens its approval card here; it is never decided here.
 
 import { Icon, type IconName } from "../../components/Icon";
-import ToolbarMenu from "../../components/ToolbarMenu";
+import { ToolbarMenu } from "../../design-system/components/Menu";
 import { Button } from "../../design-system/components/Button";
 import { ProgressBar } from "../../design-system/components/Progress";
 import { StatusDot, type StatusTone } from "../../design-system/components/Status";
-import { useI18n, type I18nKey } from "../../lib/i18n";
+import { useI18n } from "../../lib/i18n";
 import type { BackgroundTask, BackgroundTaskStatus } from "./domain";
-
-const STATUS_KEYS: Record<BackgroundTaskStatus, I18nKey> = {
-  cancelling: "ide.backgroundTask.status.cancelling",
-  paused: "ide.backgroundTask.status.paused",
-  pausing: "ide.backgroundTask.status.pausing",
-  running: "ide.backgroundTask.status.running",
-  starting: "ide.backgroundTask.status.starting",
-  waitingApproval: "ide.backgroundTask.status.waitingApproval",
-  waitingPermission: "ide.backgroundTask.status.waitingPermission",
-};
+import { backgroundTaskStatusKey } from "./presentation";
 
 function taskIcon(task: BackgroundTask): IconName {
   if (task.kind === "agent") return "user";
@@ -107,9 +98,7 @@ export default function BackgroundTasksMenu({
             task.kind === "agent" ||
             task.kind === "agentProposal" ||
             task.kind === "query";
-          const statusLabel = task.kind === "agentApproval"
-            ? t("ide.backgroundTask.status.agentApproval")
-            : t(STATUS_KEYS[task.status]);
+          const statusLabel = t(backgroundTaskStatusKey(task));
           const context = [
             task.connectionName,
             statusLabel,

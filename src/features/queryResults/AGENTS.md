@@ -4,8 +4,8 @@
 # src/features/queryResults
 
 ## Purpose
-Shared results-grid rendering: a plain `DataGrid` and a windowed `DataGridVirtual`
-for large result sets, plus toolbar/export chrome. `DataGrid` renders whatever rows
+Shared results-grid rendering: one windowed `DataGrid` for every result size,
+plus toolbar/export chrome. `DataGrid` renders whatever rows
 it is handed — callers window/cap the data first — so plain read-only callers (SQL
 results, document results, Analysis Article results) all render unchanged; every
 interactive behavior (sort, filter, row/cell selection) is opt-in via callback
@@ -14,10 +14,9 @@ props. This directory has no IPC of its own.
 ## Key Files
 | File | Description |
 |------|-------------|
-| `DataGrid.tsx` | Shared results table: sticky header, row numbers, null styling, opt-in sort/filter/selection callbacks, drag-resizable columns. |
+| `DataGrid.tsx` | The one results-grid renderer: windowed rows and columns (only cells intersecting the viewport + small overscan enter the DOM), sticky header, row numbers, null styling, opt-in sort/filter/selection callbacks, drag-resizable columns. |
 | `DataGridColumnFilterMenu.tsx` | Compact value/count filter popup opened from a `DataGrid` header filter action. |
 | `DataGridVirtual.test.ts` | Tests virtualization windowing and cell-selection helpers together with `../../lib/sqlBuild` grid query building. |
-| `DataGridVirtual.tsx` | Windowed row-and-column renderer for large query results; only cells intersecting the viewport (+ small overscan) enter the DOM. |
 | `ResultToolbar.tsx` | Compact export/copy controls for any result grid; every action operates on the full result rows, not just the visible window. |
 | `resultExports.ts` | Window-owned stored-result export registry: an export outlives the toolbar that started it, toolbars observe its progress (none while the save dialog is open), the status bar lists every export that is writing, and completion is announced with the chosen file name. `saveRendererExport` saves rows the renderer holds (filtered, materialized, script statement, one cell) through the same native save dialog and toasts. |
 | `ResultWorkbench.tsx` | Toolbar/footer chrome (`ResultWorkbenchToolbar`, status pill) wrapping a result grid in the workbench layout. |
@@ -30,11 +29,11 @@ None.
 ## For AI Agents
 
 ### Working In This Directory
-- Keep `DataGrid`/`DataGridVirtual` interactivity strictly opt-in via props; do not
+- Keep `DataGrid` interactivity strictly opt-in via props; do not
   add a behavior that fires without a caller-supplied callback, since read-only
   consumers (Analysis Article rendering) depend on inert-by-default behavior.
-- `dataGridKeyboard.ts`'s row-header-at-index-0 convention is shared by both
-  renderers — do not let one renderer diverge from the other's coordinate model.
+- `dataGridKeyboard.ts`'s row-header-at-index-0 convention is the grid's
+  coordinate model; keep it.
 
 ### Testing Requirements
 - `DataGridVirtual.test.ts` is part of the `pnpm test` smoke suite

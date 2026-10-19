@@ -1,12 +1,9 @@
 // Opt-in result inspection shared by SQL and Mongo surfaces. Grid callbacks already
 // reject cells that failed to decode; changing the result or page invalidates its value.
-// A selected cell exports through the native save dialog with a completion toast.
+// The selected cell is shown by `InspectedCell`, which owns its copy and export wiring.
 import { useRef, useState, type ComponentProps } from "react";
-import CellViewer from "../../components/CellViewer";
-import { useToast } from "../../components/Toast";
-import { useI18n } from "../../lib/i18n";
 import DataGrid from "./DataGrid";
-import { saveRendererExport } from "./resultExports";
+import InspectedCell from "./InspectedCell";
 
 type Props = ComponentProps<typeof DataGrid> & {
   inspectionKey?: unknown;
@@ -15,8 +12,6 @@ type Props = ComponentProps<typeof DataGrid> & {
 
 export default function InspectableResultGrid(props: Props) {
   const { inspectionKey, inspectionDisabled, onCellClick, ...gridProps } = props;
-  const { t } = useI18n();
-  const toast = useToast();
   const identity = inspectionKey ?? props.rowSource ?? props.result;
   const surfaceRef = useRef<HTMLDivElement>(null);
   const [selected, setSelected] = useState<{
@@ -57,19 +52,9 @@ export default function InspectableResultGrid(props: Props) {
       />
       {current ? (
         <aside className="tw:max-h-[40%] tw:min-h-0 tw:shrink-0 tw:overflow-auto tw:border-t tw:border-border-subtle tw:p-3">
-          <CellViewer
+          <InspectedCell
             value={current.value}
             column={current.column}
-            onExport={(format) =>
-              void saveRendererExport(
-                format,
-                "selected-cell",
-                [current.column],
-                [[current.value]],
-                t,
-                toast,
-              )
-            }
             closeOnEscape={false}
             truncatedBytes={current.truncatedBytes}
             onClose={close}

@@ -1,16 +1,11 @@
-// Shared results table. Renders whatever rows it's handed (callers window/cap first).
-// Sticky header + row numbers + null styling. All interactivity is opt-in via callbacks
-// so plain read-only callers (SQL, document, and Analysis Article results) render unchanged:
-//   - onSort     → clickable headers that cycle asc/desc/none (arrow on the sorted col)
-//   - onFilter   → compact value/count popup from a header filter action
-//   - onSelectRow/onCellClick → row highlight + click-to-open a cell in the side viewer
-//   - startIndex → row numbers continue across pages (rows 101-200, not 1-100 again)
-// Columns are drag-resizable: first drag snapshots every rendered width so only the
-// dragged column moves. Double-click fits only that column to loaded display text.
-// The row-number column widens to its largest number; copies use the shared TSV and
-// single-cell clipboard convention (NULL empty, JSON digits kept).
+// The one results-grid renderer, for every size. Windowed row-and-column renderer. The scroll spacer owns
+// geometry; only cells intersecting the viewport (+ a small overscan) enter the DOM.
+// Keyboard moves scroll only as far as the focused cell needs, the row-number column
+// fits its largest number, and a page that cannot be read back explains why with a
+// bounded retry or a re-run instead of re-requesting it on every render.
 import {
   useEffect,
+  useMemo,
   useRef,
   useState,
   type KeyboardEvent,
@@ -18,8 +13,34 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from "react";
 import type { QueryResult } from "../../ipc/types";
+import { type SqlStreamRowSource } from "../queries/domain";
+import {
+  collectCachedSqlResultDecodeFailures,
+  iterateCachedSqlResultRows,
+  ensureSqlResultRange,
+  retrySqlResultPages,
+  sqlResultDecodeFailureAt,
+  sqlResultRangeIsCached,
+  sqlResultRowAt,
+  truncatedCellBytes,
+} from "../queries/resultPageCache";
+import { cellClipboardText, tsvField } from "../../lib/export";
+import { Button } from "../../design-system/components/Button";
+import { readSqlResultPage } from "../queries/tauriAdapter";
+import { useSqlResultPages } from "../queries/useSqlResultPages";
 import type { GridSort } from "../../lib/sqlBuild";
-import type { SqlStreamRowSource } from "../queries/domain";
+import { Icon } from "../../components/Icon";
+import DataGridColumnFilterMenu from "./DataGridColumnFilterMenu";
+import { useI18n } from "../../lib/i18n";
+import {
+  extendGridSelection,
+  gridCellText,
+  gridSelectionBounds,
+  gridSelectionClipboardText,
+  gridSelectionIncludes,
+  singleGridCell,
+  type GridCellSelection,
+} from "./dataGridSelection";
 import {
   DATA_GRID_DEFAULT_COLUMN_WIDTH,
   DATA_GRID_HEADER_HEIGHT,
@@ -32,20 +53,10 @@ import {
 } from "../../design-system/components/DataGridViewport";
 import useDataGridZoom from "../../design-system/useDataGridZoom";
 import { ResizeSeparator } from "../../design-system/components/ResizeSeparator";
-import { Icon } from "../../components/Icon";
-import DataGridColumnFilterMenu from "./DataGridColumnFilterMenu";
-import DataGridVirtual from "./DataGridVirtual";
-import { useI18n } from "../../lib/i18n";
 import {
-  extendGridSelection,
-  gridCellText,
-  gridSelectionClipboardText,
-  gridSelectionIncludes,
-  singleGridCell,
-  type GridCellSelection,
-} from "./dataGridSelection";
-import { cellClipboardText, tsvField } from "../../lib/export";
-import { truncatedCellBytes } from "../queries/resultPageCache";
+  createFrameCoalescer,
+  type FrameCoalescer,
+} from "../../lib/frameCoalescer";
 import {
   dataGridKeyboardTarget,
   type DataGridFocus,
@@ -60,8 +71,18 @@ import { useDataGridNumericColumns } from "./dataGridNumericColumns";
 import { useDataGridSelectionReset } from "./useDataGridSelectionReset";
 import { dataGridAutoFitWidth, toggleDataGridAutoFit } from "./dataGridAutoFit";
 
-type DataGridProps = {
+const OVERSCAN = 4;
+
+type VirtualScroll = {
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+};
+
+type Props = {
   result: QueryResult;
+  rowSource?: SqlStreamRowSource;
   startIndex?: number;
   sort?: GridSort | null;
   onSort?: (col: string) => void;
@@ -69,177 +90,203 @@ type DataGridProps = {
   onFilter?: (col: string, value: string) => void;
   selectedRow?: number | null;
   onSelectRow?: (i: number) => void;
+  renderCell?: (value: unknown, row: number, column: string) => ReactNode;
   onCellClick?: (
     value: unknown,
     rowIndex: number,
     col: string,
     detail?: GridCellDetail,
   ) => void;
-  renderCell?: (value: unknown, row: number, column: string) => ReactNode;
   columnMeta?: Record<string, { dataType: string; pk: boolean }>;
-  /** A chunked streaming source; rows are never flattened for the grid. */
-  rowSource?: SqlStreamRowSource;
-  /** Flush workbench grids fill their pane without a card border or radius. */
   surface?: DataGridSurface;
-  /** Reserve scrollable room beneath a floating workbench status footer. */
   footerInset?: boolean;
-  /** Re-runs the query when a stored result page can no longer be read back. */
+  /** Re-runs the query when its stored result can no longer be read back. */
   onRerun?: () => void;
 };
 
-export function shouldVirtualizeDataGrid(
-  result: QueryResult,
-  rowSource?: SqlStreamRowSource,
+export function virtualGridWindow(
+  rowCount: number,
+  columnCount: number,
+  offsets: number[],
+  scroll: { top: number; left: number; width: number; height: number },
+  zoom = 1,
 ) {
-  return !!rowSource || result.rows.length > 200 || result.columns.length > 18;
-}
-
-export default function DataGrid(props: DataGridProps) {
-  // This wrapper must stay O(columns). In particular, do not add table-only
-  // scans here: virtual results may carry 50k × 50 rows.
-  const shouldVirtualize = shouldVirtualizeDataGrid(
-    props.result,
-    props.rowSource,
+  const startRow = Math.max(
+    0,
+    Math.floor(scroll.top / zoom / DATA_GRID_ROW_HEIGHT) - OVERSCAN,
   );
-  if (shouldVirtualize) {
-    return (
-      <DataGridVirtual
-        result={props.result}
-        startIndex={props.startIndex ?? 0}
-        sort={props.sort}
-        onSort={props.onSort}
-        filters={props.filters}
-        onFilter={props.onFilter}
-        selectedRow={props.selectedRow}
-        onSelectRow={props.onSelectRow}
-        onCellClick={props.onCellClick}
-        renderCell={props.renderCell}
-        columnMeta={props.columnMeta}
-        rowSource={props.rowSource}
-        surface={props.surface}
-        footerInset={props.footerInset}
-        onRerun={props.onRerun}
-      />
-    );
+  const endRow = Math.min(
+    rowCount,
+    Math.ceil((scroll.top + scroll.height) / zoom / DATA_GRID_ROW_HEIGHT) + OVERSCAN,
+  );
+  let firstColumn = 0;
+  while (firstColumn < columnCount && offsets[firstColumn + 1] <= scroll.left / zoom)
+    firstColumn += 1;
+  const visibleColumns: number[] = [];
+  for (
+    let index = Math.max(0, firstColumn - OVERSCAN);
+    index < columnCount;
+    index += 1
+  ) {
+    if (
+      offsets[index] >
+      (scroll.left + scroll.width) / zoom + DATA_GRID_DEFAULT_COLUMN_WIDTH * OVERSCAN
+    )
+      break;
+    visibleColumns.push(index);
   }
-  return <DataGridTable {...props} />;
+  return { startRow, endRow, visibleColumns };
 }
 
-function DataGridTable({
-  result,
-  startIndex = 0,
-  sort,
-  onSort,
-  filters,
-  onFilter,
-  selectedRow,
-  onSelectRow,
-  onCellClick,
-  columnMeta,
-  renderCell,
-  rowSource,
-  surface,
-  footerInset,
-}: DataGridProps) {
+/**
+ * Scroll offset that brings `[start, start + size)` into the part of the viewport
+ * not covered by sticky chrome (`inset`), moving as little as possible.
+ */
+export function nearestScrollOffset(
+  current: number,
+  viewport: number,
+  inset: number,
+  start: number,
+  size: number,
+) {
+  const visibleStart = current + inset;
+  const visibleEnd = current + viewport;
+  if (start < visibleStart) return Math.max(0, start - inset);
+  if (start + size > visibleEnd) {
+    return Math.max(0, Math.min(start - inset, start + size - viewport));
+  }
+  return current;
+}
+
+export default function DataGrid(rawProps: Props) {
+  const props = { ...rawProps, startIndex: rawProps.startIndex ?? 0 };
   const { t } = useI18n();
-  const interactive = !!onSelectRow || !!onCellClick;
-  // Column widths keyed by header-cell index (0 = rownum).
-  const [widths, setWidths] = useState<Record<number, number>>({});
-  const previousWidths = useRef(new Map<number, number>());
-  // Selected cell (click to select, ⌘C to copy, Esc to clear). Independent of onCellClick.
-  const [sel, setSel] = useState<GridCellSelection | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const { zoom, resetZoom } = useDataGridZoom(scrollRef);
+  const scrollCoalescerRef = useRef<FrameCoalescer<VirtualScroll> | null>(null);
+  const [scroll, setScroll] = useState<VirtualScroll>({
+    top: 0,
+    left: 0,
+    width: 720,
+    height: 320,
+  });
+  const [selection, setSelection] = useState<GridCellSelection | null>(null);
   const [copyError, setCopyError] = useState<string | null>(null);
   const [focus, setFocus] = useState<DataGridFocus>({ row: 0, column: 0 });
   const focusRequestedRef = useRef(false);
-  const viewportRef = useRef<HTMLDivElement>(null);
-  const tableRef = useRef<HTMLTableElement>(null);
-  const { zoom, resetZoom } = useDataGridZoom(viewportRef);
-  const sig = result.columns.join(" ");
+  const [widths, setWidths] = useState<Record<number, number>>({});
+  const previousWidths = useRef(new Map<number, number>());
+  const columnSignature = props.result.columns.join(" ");
+  useEffect(() => { previousWidths.current.clear(); }, [columnSignature]);
+  const interactive = !!props.onCellClick || !!props.onSelectRow;
+  const rowCount = props.rowSource?.rowCount ?? props.result.rows.length;
+  const rowAt = (index: number) =>
+    props.rowSource
+      ? sqlResultRowAt(props.rowSource, index)
+      : props.result.rows[index];
+  const failureAt = (rowIndex: number, columnIndex: number) =>
+    props.rowSource
+      ? sqlResultDecodeFailureAt(props.rowSource, rowIndex, columnIndex)
+      : cellDecodeFailureAt(
+          props.result.decodeFailures,
+          rowIndex,
+          columnIndex,
+        );
+  const columnWidths = useMemo(
+    () =>
+      props.result.columns.map(
+        (_, index) => widths[index] ?? DATA_GRID_DEFAULT_COLUMN_WIDTH,
+      ),
+    [props.result.columns, widths],
+  );
+  const rowNumberWidth = dataGridRowNumberWidth(props.startIndex + rowCount);
+  const offsets = useMemo(() => {
+    const next = [rowNumberWidth];
+    for (const width of columnWidths) next.push(next[next.length - 1] + width);
+    return next;
+  }, [columnWidths, rowNumberWidth]);
+  const totalWidth = offsets[offsets.length - 1] ?? rowNumberWidth;
+  const { startRow, endRow, visibleColumns } = virtualGridWindow(
+    rowCount,
+    props.result.columns.length,
+    offsets,
+    scroll,
+    zoom,
+  );
+  const pageError = useSqlResultPages(
+    props.rowSource,
+    startRow,
+    endRow,
+    props.result.columns,
+  );
+  const visibleColumnWindowKey = visibleColumns.join(",");
+
   useEffect(() => {
-    setWidths({}); // new column set → stale widths dropped
-    previousWidths.current.clear();
-  }, [sig]);
+    const element = scrollRef.current;
+    if (!element) return;
+    const coalescer = createFrameCoalescer<VirtualScroll>(setScroll);
+    scrollCoalescerRef.current = coalescer;
+    const update = () =>
+      coalescer.push({
+        top: element.scrollTop,
+        left: element.scrollLeft,
+        width: element.clientWidth,
+        height: element.clientHeight,
+      });
+    update();
+    const observer =
+      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(update);
+    observer?.observe(element);
+    return () => {
+      observer?.disconnect();
+      coalescer.cancel();
+      if (scrollCoalescerRef.current === coalescer) {
+        scrollCoalescerRef.current = null;
+      }
+    };
+  }, []);
   useDataGridSelectionReset({
-    result,
-    rowSource,
-    setSelection: setSel,
+    result: props.result,
+    rowSource: props.rowSource,
+    setSelection,
     setCopyError,
     setFocus,
   });
-  useEffect(() => {
-    if (!focusRequestedRef.current) return;
-    focusRequestedRef.current = false;
-    const target = tableRef.current?.querySelector<HTMLElement>(
-      `[data-grid-focus="${focus.row}:${focus.column}"]`,
-    );
-    target?.focus({ preventScroll: true });
-    target?.scrollIntoView({ block: "nearest", inline: "nearest" });
-  }, [focus]);
-  const resized = Object.keys(widths).length > 0;
-  const columnWidths = [
-    widths[0] ?? dataGridRowNumberWidth(startIndex + result.rows.length),
-    ...result.columns.map(
-      (_, index) => widths[index + 1] ?? DATA_GRID_DEFAULT_COLUMN_WIDTH,
-    ),
-  ];
-  const totalW = columnWidths.reduce((total, width) => total + width, 0);
-
-  const numericCols = useDataGridNumericColumns({ result, rowSource });
-
-  function startResize(
-    e: { preventDefault(): void; stopPropagation(): void; clientX: number },
-    colIdx: number,
-  ) {
-    e.preventDefault();
-    e.stopPropagation(); // don't trigger the sort click on the header
-    const table = tableRef.current;
-    if (!table) return;
-    const ths = Array.from(
-      table.querySelectorAll<HTMLTableCellElement>("thead tr:first-child th"),
-    );
-    const snap: Record<number, number> = { ...widths };
-    ths.forEach((th, i) => {
-      if (snap[i] == null) snap[i] = th.offsetWidth;
-    });
-    const startX = e.clientX;
-    const startW = snap[colIdx];
-    // Coalesce mousemoves to one setWidths per frame — reconciling the whole tbody
-    // on every pointer event churns badly on large result sets.
-    let raf = 0;
-    let pendingW = startW;
-    const flush = () => {
-      raf = 0;
-      setWidths({ ...snap, [colIdx]: pendingW });
-    };
-    const move = (ev: MouseEvent) => {
-      pendingW = Math.min(1200, Math.max(50, startW + (ev.clientX - startX) / zoom));
-      if (pendingW !== startW) previousWidths.current.delete(colIdx);
-      if (!raf) raf = requestAnimationFrame(flush);
-    };
-    const up = () => {
-      if (raf) cancelAnimationFrame(raf);
-      flush(); // commit the final position (a queued frame may not have run)
-      document.removeEventListener("mousemove", move);
-      document.removeEventListener("mouseup", up);
-    };
-    document.addEventListener("mousemove", move);
-    document.addEventListener("mouseup", up);
+  const numericRows: Array<readonly unknown[]> = [];
+  if (props.rowSource) {
+    for (let row = startRow; row < endRow; row += 1) {
+      const loaded = rowAt(row);
+      if (loaded) numericRows.push(loaded);
+    }
   }
+  const numericCols = useDataGridNumericColumns({
+    result: props.result,
+    rowSource: props.rowSource,
+    observedRows: numericRows,
+    observedColumns: visibleColumns,
+  });
 
-  // Click and Enter (see below) both land here so keyboard nav opens the same viewer a click does.
-  function selectCell(i: number, j: number, extend: boolean) {
+  const activate = (row: number, col: number, extend = false) => {
     focusRequestedRef.current = true;
-    setFocus({ row: i, column: j + 1 });
-    if (extend && sel) {
-      setSel(extendGridSelection(sel, i, j));
+    setFocus({ row, column: col + 1 });
+    if (extend && selection) {
+      setSelection(extendGridSelection(selection, row, col));
       return;
     }
-    setSel(singleGridCell(i, j));
+    setSelection(singleGridCell(row, col));
+    const loadedRow = rowAt(row);
+    if (!loadedRow && props.rowSource) {
+      setCopyError(t("grid.incompleteInspectionBlocked"));
+      return;
+    }
+    const failures = props.rowSource
+      ? collectCachedSqlResultDecodeFailures(props.rowSource)
+      : props.result.decodeFailures;
     const inspection = gridCellInspection(
-      result.decodeFailures,
-      i,
-      j,
-      result.rows[i]?.[j],
+      failures,
+      row,
+      col,
+      loadedRow?.[col],
     );
     if (inspection.blocked) {
       setCopyError(
@@ -252,333 +299,482 @@ function DataGridTable({
       return;
     }
     setCopyError(null);
-    onSelectRow?.(i);
-    onCellClick?.(inspection.value, i, result.columns[j], {
+    props.onSelectRow?.(row);
+    props.onCellClick?.(inspection.value, row, props.result.columns[col], {
       truncatedBytes: inspection.truncatedBytes,
     });
-  }
-
-  // ⌘C/Ctrl+C copies the selected cell — but yield to a real text selection so users
-  // can still copy dragged-over text normally. Esc clears the cell selection. Arrow keys
-  // roving-select a cell (mirrors App.tsx's tab-bar pattern: move sel, then focus the td —
-  // valid even at tabIndex=-1, only Tab-order membership depends on that). Enter opens it.
-  function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {
-    if ((e.target as HTMLElement).closest("input, textarea, button")) return;
-    if (e.key === "Escape" && sel) {
-      setSel(null);
-      return;
-    }
-    if ((e.metaKey || e.ctrlKey) && (e.key === "c" || e.key === "C") && sel) {
-      if ((window.getSelection()?.toString() ?? "") !== "") return; // real selection wins
-      e.preventDefault();
-      const failure = firstDecodeFailureInSelection(
-        result.decodeFailures,
-        sel,
+  };
+  const copySelection = async (selected: GridCellSelection) => {
+    if (props.rowSource) {
+      const bounds = gridSelectionBounds(selected);
+      await ensureSqlResultRange(
+        props.rowSource,
+        bounds.firstRow,
+        bounds.lastRow + 1,
+        props.result.columns,
+        readSqlResultPage,
       );
-      if (failure) {
-        setCopyError(
-          truncatedCellBytes(failure) === null
-            ? t("grid.decodeFailureCopyBlocked", {
-                row: failure.rowIndex + 1,
-                column: failure.columnIndex + 1,
-                type: failure.databaseType,
-              })
-            : t("grid.truncatedCopyBlocked", {
-                row: failure.rowIndex + 1,
-                column: failure.columnIndex + 1,
-              }),
-        );
+      if (
+        !sqlResultRangeIsCached(
+          props.rowSource,
+          bounds.firstRow,
+          bounds.lastRow + 1,
+        )
+      ) {
+        setCopyError(t("grid.incompleteCopyBlocked"));
         return;
       }
-      setCopyError(null);
-      void navigator.clipboard.writeText(
-        gridSelectionClipboardText(
-          sel,
-          (row) => result.rows[row],
-          tsvField,
-          cellClipboardText,
-        ),
+    }
+    const failure = firstDecodeFailureInSelection(
+      props.rowSource
+        ? collectCachedSqlResultDecodeFailures(props.rowSource)
+        : props.result.decodeFailures,
+      selected,
+    );
+    if (failure) {
+      setCopyError(
+        truncatedCellBytes(failure) === null
+          ? t("grid.decodeFailureCopyBlocked", {
+              row: failure.rowIndex + 1,
+              column: failure.columnIndex + 1,
+              type: failure.databaseType,
+            })
+          : t("grid.truncatedCopyBlocked", {
+              row: failure.rowIndex + 1,
+              column: failure.columnIndex + 1,
+            }),
       );
+      return;
+    }
+    setCopyError(null);
+    await navigator.clipboard.writeText(
+      gridSelectionClipboardText(selected, rowAt, tsvField, cellClipboardText),
+    );
+  };
+  useEffect(() => {
+    if (!focusRequestedRef.current) return;
+    const cell = scrollRef.current?.querySelector<HTMLElement>(
+      `[data-grid-focus="${focus.row}:${focus.column}"]`,
+    );
+    if (!cell) return;
+    focusRequestedRef.current = false;
+    cell?.focus({ preventScroll: true });
+    cell?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [focus, startRow, endRow, visibleColumnWindowKey]);
+  useEffect(() => {
+    const activeElement = document.activeElement;
+    if (activeElement && scrollRef.current?.contains(activeElement)) return;
+    const focusColumnVisible =
+      focus.column === 0 || visibleColumns.includes(focus.column - 1);
+    if (
+      focus.row >= startRow &&
+      focus.row < endRow &&
+      focusColumnVisible
+    ) {
+      return;
+    }
+    setFocus({ row: Math.min(Math.max(0, startRow), Math.max(0, rowCount - 1)), column: 0 });
+  }, [endRow, focus, rowCount, startRow, visibleColumns]);
+  const move = (event: KeyboardEvent<HTMLDivElement>) => {
+    if ((event.target as HTMLElement).closest("input, textarea, button")) return;
+    if (event.key === "Escape") return setSelection(null);
+    if (
+      (event.metaKey || event.ctrlKey) &&
+      event.key.toLowerCase() === "c" &&
+      selection
+    ) {
+      if (window.getSelection()?.toString()) return;
+      event.preventDefault();
+      void copySelection(selection);
       return;
     }
     if (
       focus.column === 0 &&
-      (e.key === "Enter" || e.key === " ") &&
-      onSelectRow
+      (event.key === "Enter" || event.key === " ") &&
+      props.onSelectRow
     ) {
-      e.preventDefault();
-      onSelectRow(focus.row);
+      event.preventDefault();
+      props.onSelectRow(focus.row);
       return;
     }
-    if (e.key === "Enter" && focus.column > 0) {
-      e.preventDefault();
-      selectCell(focus.row, focus.column - 1, false);
+    if (event.key === "Enter" && focus.column > 0) {
+      event.preventDefault();
+      activate(focus.row, focus.column - 1);
       return;
     }
     const target = dataGridKeyboardTarget({
-      key: e.key,
-      ctrlKey: e.ctrlKey,
-      metaKey: e.metaKey,
+      key: event.key,
+      ctrlKey: event.ctrlKey,
+      metaKey: event.metaKey,
       current: focus,
-      rowCount: result.rows.length,
-      dataColumnCount: result.columns.length,
+      rowCount,
+      dataColumnCount: props.result.columns.length,
       pageRows: Math.max(
         1,
         Math.floor(
-          ((viewportRef.current?.clientHeight ?? 280) / zoom -
-            DATA_GRID_HEADER_HEIGHT) /
-            DATA_GRID_ROW_HEIGHT,
+          (scroll.height / zoom - DATA_GRID_HEADER_HEIGHT) / DATA_GRID_ROW_HEIGHT,
         ),
       ),
     });
     if (!target) return;
-    e.preventDefault();
+    event.preventDefault();
     focusRequestedRef.current = true;
     setFocus(target);
     if (target.column > 0) {
       const dataColumn = target.column - 1;
-      setSel(
-        e.shiftKey && sel
-          ? extendGridSelection(sel, target.row, dataColumn)
+      setSelection((current) =>
+        event.shiftKey && current
+          ? extendGridSelection(current, target.row, dataColumn)
           : singleGridCell(target.row, dataColumn),
       );
     }
-  }
+    // Move only as far as the target needs past the sticky header and row
+    // numbers; a cell already in view keeps the viewport where it is.
+    const element = scrollRef.current;
+    if (!element) return;
+    const top = nearestScrollOffset(
+      element.scrollTop,
+      element.clientHeight,
+      DATA_GRID_HEADER_HEIGHT * zoom,
+      (DATA_GRID_HEADER_HEIGHT + target.row * DATA_GRID_ROW_HEIGHT) * zoom,
+      DATA_GRID_ROW_HEIGHT * zoom,
+    );
+    const left =
+      target.column === 0
+        ? element.scrollLeft
+        : nearestScrollOffset(
+            element.scrollLeft,
+            element.clientWidth,
+            rowNumberWidth * zoom,
+            offsets[target.column - 1] * zoom,
+            columnWidths[target.column - 1] * zoom,
+          );
+    if (top !== element.scrollTop || left !== element.scrollLeft) {
+      element.scrollTo({ top, left });
+    }
+  };
+  const resize = (event: ReactMouseEvent, index: number) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX;
+    const initial = columnWidths[index];
+    const widthAt = (clientX: number) =>
+      Math.max(72, Math.min(1200, initial + (clientX - startX) / zoom));
+    const coalescer = createFrameCoalescer<number>((width) =>
+      setWidths((current) => ({
+        ...current,
+        [index]: width,
+      })),
+    );
+    const onMove = (moveEvent: MouseEvent) => {
+      if (widthAt(moveEvent.clientX) !== initial) previousWidths.current.delete(index);
+      coalescer.push(widthAt(moveEvent.clientX));
+    };
+    const onUp = (upEvent: MouseEvent) => {
+      if (widthAt(upEvent.clientX) !== initial) previousWidths.current.delete(index);
+      coalescer.push(widthAt(upEvent.clientX));
+      coalescer.flush();
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  };
 
   return (
     <DataGridViewport
-      ref={viewportRef}
+      ref={scrollRef}
       zoom={zoom}
       onResetZoom={resetZoom}
       resetZoomLabel={t("grid.resetZoom")}
-      surface={surface}
-      footerInset={footerInset}
-      tabIndex={result.rows.length === 0 ? 0 : undefined}
-      onKeyDown={onKeyDown}
+      surface={props.surface}
+      virtual
+      footerInset={props.footerInset}
+      role="grid"
+      aria-label={t("grid.label")}
+      aria-rowcount={Math.max(props.result.rowCount, props.startIndex + rowCount) + 1}
+      aria-colcount={props.result.columns.length + 1}
+      tabIndex={rowCount === 0 ? 0 : undefined}
+      onKeyDown={move}
+      onScroll={(event) =>
+        scrollCoalescerRef.current?.push({
+          top: event.currentTarget.scrollTop,
+          left: event.currentTarget.scrollLeft,
+          width: event.currentTarget.clientWidth,
+          height: event.currentTarget.clientHeight,
+        })
+      }
     >
+      {pageError ? (
+        <div
+          className="tw:sticky tw:top-control-sm tw:left-0 tw:z-[var(--ds-z-sticky)] tw:flex tw:w-fit tw:max-w-[min(560px,90%)] tw:items-center tw:gap-2 tw:bg-danger-muted tw:px-2 tw:py-1 tw:font-sans tw:text-xs tw:text-danger"
+          role="status"
+        >
+          <span className="tw:min-w-0">
+            {pageError.kind === "authorityChanged"
+              ? t("grid.resultAuthorityChanged")
+              : pageError.kind === "expired"
+                ? t("grid.resultExpired")
+                : pageError.retrying
+                  ? t("grid.resultPageRetrying")
+                  : t("grid.resultPageUnavailable")}
+          </span>
+          {pageError.kind === "unavailable" && !pageError.retrying && props.rowSource ? (
+            <Button
+              size="xs"
+              onClick={() => {
+                if (props.rowSource) retrySqlResultPages(props.rowSource);
+              }}
+            >
+              {t("grid.resultPageRetry")}
+            </Button>
+          ) : pageError.kind !== "unavailable" && props.onRerun ? (
+            <Button size="xs" onClick={props.onRerun}>
+              {t("grid.resultRerun")}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
       {copyError ? (
         <div
-          className="tw:sticky tw:top-0 tw:left-0 tw:z-[var(--ds-z-sticky)] tw:w-fit tw:max-w-[min(520px,90%)] tw:bg-danger-muted tw:px-2 tw:py-1 tw:font-sans tw:text-xs tw:text-danger"
+          className="tw:sticky tw:top-control-sm tw:left-0 tw:z-[var(--ds-z-sticky)] tw:w-fit tw:max-w-[min(520px,90%)] tw:bg-danger-muted tw:px-2 tw:py-1 tw:font-sans tw:text-xs tw:text-danger"
           role="alert"
         >
           {copyError}
         </div>
       ) : null}
-      <table
-        ref={tableRef}
-        role="grid"
-        aria-label={t("grid.label")}
-        aria-rowcount={Math.max(result.rowCount, startIndex + result.rows.length) + 1}
-        aria-colcount={result.columns.length + 1}
-        className="tw:table-fixed tw:border-separate tw:border-spacing-0 tw:bg-background tw:font-mono tw:text-ui tw:[&_td]:box-border tw:[&_td]:max-w-none tw:[&_td]:overflow-hidden tw:[&_td]:border-b tw:[&_td]:border-border-subtle tw:[&_td]:px-2 tw:[&_td]:py-1 tw:[&_td]:leading-ui tw:[&_td]:text-left tw:[&_td]:text-ellipsis tw:[&_td]:whitespace-nowrap tw:[&_th]:box-border tw:[&_th]:max-w-none tw:[&_th]:overflow-hidden tw:[&_th]:border-r tw:[&_th]:border-b tw:[&_th]:border-border-subtle tw:[&_th]:px-2 tw:[&_th]:py-px tw:[&_th]:leading-ui tw:[&_th]:text-left tw:[&_th]:text-ellipsis tw:[&_th]:whitespace-nowrap tw:[&_thead_th]:sticky tw:[&_thead_th]:top-0 tw:[&_thead_th]:z-[var(--ds-z-raised)] tw:[&_thead_th]:h-control-sm tw:[&_thead_th]:bg-card"
-        style={{ tableLayout: "fixed", width: totalW, zoom }}
+      <div
+        className="tw:relative tw:min-w-full tw:font-mono tw:[&_[data-grid-box]]:absolute tw:[&_[data-grid-box]]:box-border tw:[&_[data-grid-box]]:h-control-sm tw:[&_[data-grid-box]]:overflow-hidden tw:[&_[data-grid-box]]:border-b tw:[&_[data-grid-box]]:border-border-subtle tw:[&_[data-grid-box]]:bg-background tw:[&_[data-grid-box]]:px-2 tw:[&_[data-grid-box]]:py-1 tw:[&_[data-grid-box]]:leading-ui tw:[&_[data-grid-box]]:text-ellipsis tw:[&_[data-grid-box]]:whitespace-nowrap"
+        style={{
+          width: totalWidth,
+          zoom,
+          height: DATA_GRID_HEADER_HEIGHT + rowCount * DATA_GRID_ROW_HEIGHT,
+        }}
       >
-        <colgroup>
-          <col style={{ width: columnWidths[0] }} />
-          {result.columns.map((_, j) => (
-            <col key={j} style={{ width: columnWidths[j + 1] }} />
-          ))}
-        </colgroup>
-        <thead>
-          <tr role="row" aria-rowindex={1}>
-            <th
-              role="columnheader"
-              aria-colindex={1}
-              className="tw:left-0 tw:z-[calc(var(--ds-z-raised)+1)] tw:text-right tw:text-muted-foreground"
-            >
-              #
-            </th>
-            {result.columns.map((c, j) => (
-              <th
-                key={j}
-                role="columnheader"
-                aria-colindex={j + 2}
-                aria-sort={
-                  onSort
-                    ? sort?.col === c
-                      ? sort.dir === "asc"
-                        ? "ascending"
-                        : "descending"
-                      : "none"
-                    : undefined
+        <div
+          className="tw:sticky tw:top-0 tw:left-0 tw:right-0 tw:z-[var(--ds-z-raised)] tw:h-control-sm tw:overflow-visible tw:bg-card"
+          role="row"
+          aria-rowindex={1}
+        >
+          <div
+            data-grid-box
+            className="tw:top-0 tw:left-0 tw:z-[calc(var(--ds-z-raised)+1)] tw:border-r tw:!bg-card tw:text-right tw:text-muted-foreground tw:tabular-nums"
+            role="columnheader"
+            aria-colindex={1}
+            style={{ width: rowNumberWidth }}
+          >
+            #
+          </div>
+          {visibleColumns.map((index) => {
+            const name = props.result.columns[index];
+            const sortableHeaderProps = props.onSort
+              ? {
+                  tabIndex: 0,
+                  "aria-sort": (props.sort?.col === name
+                    ? props.sort.dir === "asc"
+                      ? "ascending"
+                      : "descending"
+                    : "none") as "ascending" | "descending" | "none",
+                  onClick: () => props.onSort?.(name),
+                  onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      props.onSort?.(name);
+                    }
+                  },
                 }
+              : {};
+            return (
+              <div
+                key={index}
+                data-grid-box
+                data-sortable={props.onSort ? "true" : undefined}
+                className="tw:top-0 tw:border-r tw:!bg-card tw:font-semibold tw:data-[sortable=true]:cursor-pointer tw:data-[sortable=true]:hover:text-primary"
+                role="columnheader"
+                aria-colindex={index + 2}
+                style={{ left: offsets[index], width: columnWidths[index] }}
+                {...sortableHeaderProps}
               >
-                <span className="tw:flex tw:min-w-0 tw:items-center tw:gap-1">
-                  {onSort ? (
-                    <button
-                      type="button"
-                      className="tw:inline-flex tw:h-control-xs tw:min-w-0 tw:flex-1 tw:cursor-pointer tw:items-center tw:gap-1 tw:overflow-hidden tw:border-0 tw:bg-transparent tw:p-0 tw:font-sans tw:text-left tw:text-ui tw:font-semibold tw:text-inherit tw:hover:text-primary tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring"
-                      title={columnMeta?.[c]?.dataType}
-                      onClick={() => onSort(c)}
-                    >
-                      {columnMeta?.[c] ? (
-                        <Icon
-                          name={columnMeta[c].pk ? "key" : "columns"}
-                          className="tw:shrink-0 tw:text-xs tw:text-muted-foreground"
-                        />
-                      ) : null}
-                      <span
-                        data-grid-column-label
-                        className="tw:overflow-hidden tw:text-ellipsis"
-                      >
-                        {c}
-                      </span>
-                      {sort?.col === c ? (
-                        <Icon
-                          name={sort.dir === "asc" ? "caretUp" : "caretDown"}
-                          className="tw:shrink-0 tw:text-body tw:text-muted-foreground"
-                        />
-                      ) : null}
-                    </button>
-                  ) : (
-                    <span
-                      className="tw:inline-flex tw:min-w-0 tw:flex-1 tw:items-center tw:gap-1 tw:overflow-hidden"
-                      title={columnMeta?.[c]?.dataType}
-                    >
-                      {columnMeta?.[c] ? (
-                        <Icon
-                          name={columnMeta[c].pk ? "key" : "columns"}
-                          className="tw:shrink-0 tw:text-xs tw:text-muted-foreground"
-                        />
-                      ) : null}
-                      <span
-                        data-grid-column-label
-                        className="tw:overflow-hidden tw:text-ellipsis"
-                      >
-                        {c}
-                      </span>
-                    </span>
-                  )}
-                  {onFilter ? (
+                <span className="tw:flex tw:min-w-0 tw:items-center tw:gap-1 tw:pr-1">
+                  <span
+                    className="tw:inline-flex tw:min-w-0 tw:flex-1 tw:items-center tw:gap-1 tw:overflow-hidden tw:align-middle tw:[&_.icon]:shrink-0 tw:[&>span]:overflow-hidden tw:[&>span]:text-ellipsis"
+                    title={props.columnMeta?.[name]?.dataType}
+                  >
+                    {props.columnMeta?.[name] ? (
+                      <Icon
+                        name={props.columnMeta[name].pk ? "key" : "columns"}
+                        className="tw:text-xs tw:text-muted-foreground"
+                      />
+                    ) : null}
+                    <span data-grid-column-label>{name}</span>
+                    {props.sort?.col === name ? (
+                      <Icon
+                        name={
+                          props.sort.dir === "asc" ? "caretUp" : "caretDown"
+                        }
+                        className="tw:text-body tw:text-muted-foreground"
+                      />
+                    ) : null}
+                  </span>
+                  {props.onFilter ? (
                     <DataGridColumnFilterMenu
-                      column={c}
-                      values={result.rows.map((row) => row[j])}
-                      filter={filters?.[c] ?? ""}
-                      onFilter={(value) => onFilter(c, value)}
+                      column={name}
+                      values={props.result.rows.map((row) => row[index])}
+                      filter={props.filters?.[name] ?? ""}
+                      onFilter={(value) => props.onFilter?.(name, value)}
                     />
                   ) : null}
                 </span>
                 <ResizeSeparator
                   data-grid-resize-handle
                   className="tw:absolute tw:top-0 tw:right-0 tw:z-[var(--ds-z-sticky)] tw:h-full tw:w-2 tw:cursor-col-resize tw:hover:bg-primary/55 tw:active:bg-primary/55"
-                  label={`${c}: ${t("grid.resizeHint")}`}
-                  tooltip={t(previousWidths.current.has(j + 1)
+                  label={`${name}: ${t("grid.resizeHint")}`}
+                  tooltip={t(previousWidths.current.has(index)
                     ? "grid.restoreWidthTooltip" : "grid.resizeTooltip")}
                   orientation="vertical"
-                  value={columnWidths[j + 1]}
-                  minimum={50}
+                  value={columnWidths[index]}
+                  minimum={72}
                   maximum={1200}
                   onChange={(width) => {
-                    previousWidths.current.delete(j + 1);
-                    setWidths((current) => ({ ...current, [j + 1]: width }));
+                    previousWidths.current.delete(index);
+                    setWidths((current) => ({ ...current, [index]: width }));
                   }}
                   onReset={() => {
-                    const header = tableRef.current?.querySelector<HTMLElement>(
-                      `[role=columnheader][aria-colindex="${j + 2}"]`,
+                    const header = scrollRef.current?.querySelector<HTMLElement>(
+                      `[role=columnheader][aria-colindex="${index + 2}"]`,
                     );
                     if (!header) return;
-                    const texts = result.rows.map((row, index) => {
-                      const failure = cellDecodeFailureAt(
-                        result.decodeFailures, index, j,
-                      );
-                      return failure && truncatedCellBytes(failure) === null
-                        ? t("grid.decodeFailure", { type: failure.databaseType })
-                        : gridCellText(row[j]);
-                    });
+                    const rows = props.rowSource
+                      ? iterateCachedSqlResultRows(props.rowSource)
+                      : props.result.rows.entries();
+                    function* texts() {
+                      for (const [rowIndex, row] of rows) {
+                        const failure = failureAt(rowIndex, index);
+                        yield failure && truncatedCellBytes(failure) === null
+                          ? t("grid.decodeFailure", { type: failure.databaseType })
+                          : gridCellText(row[index]);
+                      }
+                    }
                     const width = toggleDataGridAutoFit(
-                      previousWidths.current, j + 1, columnWidths[j + 1],
-                      () => dataGridAutoFitWidth(header, texts, 50),
+                      previousWidths.current, index, columnWidths[index],
+                      () => dataGridAutoFitWidth(header, texts(), 72),
                     );
-                    setWidths((current) => ({ ...current, [j + 1]: width }));
+                    setWidths((current) => ({ ...current, [index]: width }));
                   }}
-                  onMouseDown={(e) => startResize(e, j + 1)}
+                  onMouseDown={(event) => resize(event, index)}
                 />
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {result.rows.map((row, i) => (
-            <tr
-              key={i}
-              role="row"
-              aria-rowindex={startIndex + i + 2}
-              data-selected={selectedRow === i}
-              className="tw:group tw:[contain-intrinsic-size:0_var(--ds-control-sm)] tw:[content-visibility:auto] tw:hover:[&>td]:bg-muted tw:data-[selected=true]:[&>td]:bg-selection"
+              </div>
+            );
+          })}
+        </div>
+        {Array.from(
+          { length: Math.max(0, endRow - startRow) },
+          (_, offset) => startRow + offset,
+        ).map((rowIndex) => (
+          <div
+            key={rowIndex}
+            data-selected={props.selectedRow === rowIndex}
+            className="tw:group tw:absolute tw:top-0 tw:left-0 tw:right-0 tw:h-control-sm"
+            role="row"
+            aria-rowindex={props.startIndex + rowIndex + 2}
+            style={{
+              transform: `translateY(${
+                DATA_GRID_HEADER_HEIGHT + rowIndex * DATA_GRID_ROW_HEIGHT
+              }px)`,
+            }}
+          >
+            <div
+              data-grid-box
+              data-interactive={props.onSelectRow ? "true" : undefined}
+              data-focused={focus.row === rowIndex && focus.column === 0}
+              data-grid-focus={`${rowIndex}:0`}
+              className="tw:left-0 tw:z-[var(--ds-z-base)] tw:border-r tw:!bg-card tw:text-right tw:text-muted-foreground tw:tabular-nums tw:group-data-[selected=true]:!bg-selection tw:data-[interactive=true]:cursor-pointer tw:data-[focused=true]:shadow-[inset_0_0_0_var(--ds-border-width-strong)_var(--ds-ring)]"
+              role="rowheader"
+              aria-colindex={1}
+              aria-selected={props.selectedRow === rowIndex}
+              tabIndex={focus.row === rowIndex && focus.column === 0 ? 0 : -1}
+              style={{ width: rowNumberWidth }}
+              onFocus={() => setFocus({ row: rowIndex, column: 0 })}
+              onClick={() => {
+                focusRequestedRef.current = true;
+                setFocus({ row: rowIndex, column: 0 });
+                props.onSelectRow?.(rowIndex);
+              }}
             >
-              <td
-                data-interactive={onSelectRow ? "true" : undefined}
-                data-focused={focus.row === i && focus.column === 0}
-                data-grid-focus={`${i}:0`}
-                className="tw:sticky tw:left-0 tw:z-[var(--ds-z-base)] tw:border-r tw:bg-card tw:text-right tw:text-muted-foreground tw:data-[interactive=true]:cursor-pointer tw:data-[focused=true]:shadow-[inset_0_0_0_var(--ds-border-width-strong)_var(--ds-ring)]"
-                role="rowheader"
-                aria-colindex={1}
-                aria-selected={selectedRow === i}
-                tabIndex={focus.row === i && focus.column === 0 ? 0 : -1}
-                onFocus={() => setFocus({ row: i, column: 0 })}
-                onClick={() => {
-                  focusRequestedRef.current = true;
-                  setFocus({ row: i, column: 0 });
-                  onSelectRow?.(i);
-                }}
-              >
-                {startIndex + i + 1}
-              </td>
-              {row.map((v, j) => {
-                const failure = cellDecodeFailureAt(
-                  result.decodeFailures,
-                  i,
-                  j,
-                );
-                const truncated = failure ? truncatedCellBytes(failure) !== null : false;
-                const decodeFailure = truncated ? undefined : failure;
-                const text = decodeFailure
-                  ? t("grid.decodeFailure", { type: decodeFailure.databaseType })
+              {props.startIndex + rowIndex + 1}
+            </div>
+            {visibleColumns.map((columnIndex) => {
+              const value = rowAt(rowIndex)?.[columnIndex];
+              const loading = value === undefined && !!props.rowSource;
+              const failure = failureAt(rowIndex, columnIndex);
+              const truncated = failure ? truncatedCellBytes(failure) !== null : false;
+              const decodeFailure = truncated ? undefined : failure;
+              const text = loading
+                ? "…"
+                : decodeFailure
+                  ? t("grid.decodeFailure", {
+                      type: decodeFailure.databaseType,
+                    })
                   : truncated
-                    ? `${gridCellText(v)}…`
-                    : gridCellText(v);
-                const isSel = gridSelectionIncludes(sel, i, j);
-                const isFocus = focus.row === i && focus.column === j + 1;
-                return (
-                  <td
-                    key={j}
-                    data-null={v === null && !decodeFailure}
-                    data-decode-failure={decodeFailure ? "true" : undefined}
-                    data-truncated={truncated ? "true" : undefined}
-                    data-numeric={!decodeFailure && !truncated && numericCols[j]}
-                    data-interactive={interactive}
-                    data-selected={isSel}
-                    data-focused={isFocus}
-                    data-grid-focus={`${i}:${j + 1}`}
-                    className="tw:max-w-[480px] tw:overflow-hidden tw:bg-background tw:text-ellipsis tw:data-[null=true]:text-muted-foreground tw:data-[null=true]:italic tw:data-[decode-failure=true]:text-danger tw:data-[truncated=true]:text-warning tw:data-[numeric=true]:text-right tw:data-[numeric=true]:tabular-nums tw:data-[interactive=true]:cursor-pointer tw:data-[selected=true]:!bg-selection tw:data-[focused=true]:shadow-[inset_0_0_0_var(--ds-border-width-strong)_var(--ds-ring)]"
-                    // Compact fixed columns can truncate any value.
-                    title={
-                      truncated
-                        ? t("grid.truncatedCellTitle")
-                        : resized || text.length > 40 || text.includes("\n")
-                          ? text
-                          : undefined
-                    }
-                    // Roving tabindex: only the selected cell is a tab stop; arrows move it (onKeyDown above).
-                    tabIndex={isFocus ? 0 : -1}
-                    role="gridcell"
-                    aria-colindex={j + 2}
-                    aria-selected={isSel}
-                    aria-description={truncated ? t("grid.truncatedCellTitle") : undefined}
-                    data-grid-value
-                    onFocus={() => setFocus({ row: i, column: j + 1 })}
-                    onClick={(event: ReactMouseEvent) =>
-                      selectCell(i, j, event.shiftKey)
-                    }
-                  >
-                    {!decodeFailure && !truncated && renderCell ? renderCell(v, i, result.columns[j]) : text}
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+                    ? `${gridCellText(value)}…`
+                    : gridCellText(value);
+              const selected = gridSelectionIncludes(
+                selection,
+                rowIndex,
+                columnIndex,
+              );
+              const focused =
+                focus.row === rowIndex && focus.column === columnIndex + 1;
+              return (
+                <div
+                  key={columnIndex}
+                  data-grid-cell={`${rowIndex}:${columnIndex}`}
+                  data-grid-focus={`${rowIndex}:${columnIndex + 1}`}
+                  data-grid-box
+                  data-null={value === null && !decodeFailure}
+                  data-decode-failure={decodeFailure ? "true" : undefined}
+                  data-truncated={truncated ? "true" : undefined}
+                  data-loading={loading}
+                  data-numeric={
+                    !loading && !decodeFailure && !truncated && numericCols[columnIndex]
+                  }
+                  data-interactive={interactive}
+                  data-selected={selected}
+                  data-focused={focused}
+                  className="tw:group-data-[selected=true]:!bg-selection tw:data-[null=true]:text-muted-foreground tw:data-[null=true]:italic tw:data-[decode-failure=true]:text-danger tw:data-[truncated=true]:text-warning tw:data-[loading=true]:text-muted-foreground tw:data-[numeric=true]:text-right tw:data-[numeric=true]:tabular-nums tw:data-[interactive=true]:cursor-pointer tw:data-[selected=true]:!bg-selection tw:data-[focused=true]:shadow-[inset_0_0_0_var(--ds-border-width-strong)_var(--ds-ring)]"
+                  role="gridcell"
+                  aria-colindex={columnIndex + 2}
+                  aria-selected={selected}
+                  aria-description={truncated ? t("grid.truncatedCellTitle") : undefined}
+                  tabIndex={focused ? 0 : -1}
+                  title={
+                    truncated
+                      ? t("grid.truncatedCellTitle")
+                      : text.length > 40 || text.includes("\n")
+                        ? text
+                        : undefined
+                  }
+                  style={{
+                    left: offsets[columnIndex],
+                    width: columnWidths[columnIndex],
+                  }}
+                  onClick={(event) =>
+                    activate(rowIndex, columnIndex, event.shiftKey)
+                  }
+                  onFocus={() =>
+                    setFocus({ row: rowIndex, column: columnIndex + 1 })
+                  }
+                >
+                  {!loading && !decodeFailure && !truncated && props.renderCell
+                    ? props.renderCell(value, rowIndex, props.result.columns[columnIndex])
+                    : text}
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
     </DataGridViewport>
   );
 }

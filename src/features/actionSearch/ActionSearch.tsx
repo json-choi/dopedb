@@ -1,7 +1,6 @@
 // Presents scoped action-search results and commits keyboard or pointer selections.
 
 import {
-  type KeyboardEvent,
   useEffect,
   useMemo,
   useRef,
@@ -11,7 +10,8 @@ import { createPortal } from "react-dom";
 
 import { Icon, type IconName } from "../../components/Icon";
 import { Button } from "../../design-system/components/Button";
-import { CommandMenuItem } from "../../design-system/components/CommandMenu";
+import { CommandMenuItem, CommandSurface } from "../../design-system/components/CommandMenu";
+import { moveHorizontalTabFocus } from "../../design-system/tabKeyboard";
 import { useModalBehavior } from "../../design-system/components/Modal";
 import { useI18n } from "../../lib/i18n";
 import { errMessage } from "../../ipc/types";
@@ -96,7 +96,7 @@ export default function ActionSearch({
   const [scope, setScope] = useState<ActionSearchScope>("all");
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
-  const surfaceRef = useRef<HTMLElement>(null);
+  const surfaceRef = useRef<HTMLDivElement>(null);
   useModalBehavior({
     surfaceRef,
     onRequestClose: () => { if (pendingItem === null) onClose("dismiss"); },
@@ -171,46 +171,15 @@ export default function ActionSearch({
     setActiveIndex(0);
   }
 
-  function moveScope(
-    event: KeyboardEvent<HTMLButtonElement>,
-    tabIndex: number,
-  ) {
-    let nextIndex: number | null = null;
-    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
-      nextIndex = (tabIndex + 1) % searchScopeTabs.length;
-    } else if (
-      event.key === "ArrowLeft" ||
-      event.key === "ArrowUp"
-    ) {
-      nextIndex =
-        (tabIndex - 1 + searchScopeTabs.length) %
-        searchScopeTabs.length;
-    } else if (event.key === "Home") {
-      nextIndex = 0;
-    } else if (event.key === "End") {
-      nextIndex = searchScopeTabs.length - 1;
-    }
-    if (nextIndex === null) return;
-    const nextTab = searchScopeTabs[nextIndex];
-    if (!nextTab) return;
-    event.preventDefault();
-    selectScope(nextTab.id);
-    const tabs =
-      event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>(
-        '[role="tab"]',
-      );
-    window.requestAnimationFrame(() => tabs?.[nextIndex]?.focus());
-  }
-
   return createPortal(
     <div
       className="tw:fixed tw:inset-0 tw:z-[var(--ds-z-modal)] tw:flex tw:items-start tw:justify-center tw:bg-transparent tw:px-4 tw:pt-[clamp(48px,20.45dvh,190px)] tw:pb-6"
       role="presentation"
       onMouseDown={closeAndRestoreFocus}
     >
-      <section
+      <CommandSurface
         ref={surfaceRef}
-        className="tw:flex tw:max-h-full tw:w-[min(672px,100%)] tw:flex-col tw:overflow-hidden tw:rounded-md tw:border tw:border-border-strong tw:bg-popover tw:text-popover-foreground tw:shadow-popover"
+        placement="inline"
         role="dialog"
         aria-modal="true"
         aria-label={t("ide.action.actionSearch")}
@@ -222,7 +191,7 @@ export default function ActionSearch({
           role="tablist"
           aria-label={t("ide.search.scopes")}
         >
-          {searchScopeTabs.map((tab, tabIndex) => (
+          {searchScopeTabs.map((tab) => (
             <Button
               key={tab.id}
               disabled={pendingItem !== null}
@@ -231,13 +200,17 @@ export default function ActionSearch({
               role="tab"
               aria-selected={scope === tab.id}
               tabIndex={scope === tab.id ? 0 : -1}
-              onClick={() => {
+              onClick={(event) => {
                 selectScope(tab.id);
-                window.requestAnimationFrame(() =>
-                  inputRef.current?.focus(),
-                );
+                // Keyboard tab movement keeps focus on the tab; a pointer click
+                // returns it to the search field.
+                if (event.detail > 0) {
+                  window.requestAnimationFrame(() =>
+                    inputRef.current?.focus(),
+                  );
+                }
               }}
-              onKeyDown={(event) => moveScope(event, tabIndex)}
+              onKeyDown={moveHorizontalTabFocus}
             >
               {t(tab.labelKey)}
             </Button>
@@ -336,10 +309,6 @@ export default function ActionSearch({
                       <Icon name="refresh" className="tw:animate-spin tw:motion-reduce:animate-none" />
                       {t("common.loading")}
                     </span>
-                  ) : item.shortcut ? (
-                    <kbd className="tw:rounded-xs tw:border tw:border-border-subtle tw:bg-background tw:px-1.5 tw:py-1 tw:font-mono tw:text-2xs tw:text-muted-foreground">
-                      {item.shortcut}
-                    </kbd>
                   ) : undefined
                 }
                 onMouseEnter={() => setActiveIndex(itemIndex)}
@@ -359,7 +328,7 @@ export default function ActionSearch({
             ) : null}
           </div>
         ) : null}
-      </section>
+      </CommandSurface>
     </div>,
     document.body,
   );

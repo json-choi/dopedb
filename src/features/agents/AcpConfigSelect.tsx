@@ -1,6 +1,6 @@
 // Render the official adapter's advertised mode choices without inventing IDs.
 import { Icon } from "../../components/Icon";
-import ToolbarMenu, { ToolbarMenuItem } from "../../components/ToolbarMenu";
+import { MenuItem, ToolbarMenu } from "../../design-system/components/Menu";
 import { useI18n } from "../../lib/i18n";
 import type { AcpSessionConfigOption, AgentProvider } from "./domain";
 import { configSelectChoices } from "./approvalModePreference";
@@ -91,7 +91,7 @@ export function AcpConfigSelect({
       }
     >
       {choices.map((choice) => (
-        <ToolbarMenuItem
+        <MenuItem
           key={choice.value}
           icon={
             <span
@@ -109,7 +109,7 @@ export function AcpConfigSelect({
           }}
         >
           {choiceLabel(choice.value, choice.name)}
-        </ToolbarMenuItem>
+        </MenuItem>
       ))}
       {isMode ? (
         <p className="tw:m-0 tw:mt-1 tw:border-t tw:border-border-subtle tw:px-2 tw:py-2 tw:text-xs tw:leading-body tw:text-muted-foreground">

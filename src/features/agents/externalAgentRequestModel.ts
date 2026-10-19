@@ -7,36 +7,6 @@ import type {
   AgentSourceResourceChoice,
 } from "./useAgentEnvironmentInventory";
 
-export type ExternalAgentResourceSelection = {
-  projectId: string | null;
-  databaseIds: ConnectionId[];
-  sourceIds: string[];
-  writeConnectionId: ConnectionId | null;
-};
-
-export const EMPTY_EXTERNAL_AGENT_SELECTION: ExternalAgentResourceSelection = {
-  projectId: null,
-  databaseIds: [],
-  sourceIds: [],
-  writeConnectionId: null,
-};
-
-export function selectedExternalAgentResources(
-  projects: AgentProjectResourceChoice[],
-  selection: ExternalAgentResourceSelection,
-) {
-  const project = projects.find((candidate) => candidate.id === selection.projectId);
-  return {
-    project,
-    databases:
-      project?.databases.filter((database) =>
-        selection.databaseIds.includes(database.connectionId),
-      ) ?? [],
-    sources:
-      project?.sources.filter((source) => selection.sourceIds.includes(source.sourceId)) ?? [],
-  };
-}
-
 export function requestedExternalAgentResources(
   config: ExternalAgentConfig | undefined,
   projects: AgentProjectResourceChoice[],

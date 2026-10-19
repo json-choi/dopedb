@@ -201,10 +201,6 @@ export function providerLabel(provider: AgentProvider) {
   return provider === "claude" ? "Claude" : "Codex";
 }
 
-export function loginCommand(provider: AgentProvider) {
-  return provider === "claude" ? "claude auth login" : "codex login";
-}
-
 export function lifecycleTone(lifecycle: AcpSessionLifecycle): StatusTone {
   if (lifecycle === "ready") return "success";
   if (lifecycle === "running" || lifecycle === "waitingPermission") {

@@ -3,6 +3,7 @@
 // assign, and date display. Pure functions only; requests and refusal wording live in
 // the commands controller.
 import type { I18nKey, Lang } from "../../../lib/i18n";
+import { formatAdminDate } from "../dateFormat";
 import type { WorkspaceRole } from "../../workspaces/domain";
 import type { AssignableWorkspaceRole } from "../domain";
 
@@ -215,8 +216,9 @@ export function memberDisplayName(member: Pick<WorkspaceMember, "name" | "email"
 
 /** Join dates read as a day; invitation expiry also needs the time within its short window. */
 export function formatMemberDate(value: string, lang: Lang, withTime = false) {
-  return new Intl.DateTimeFormat(
-    lang === "ko" ? "ko-KR" : "en-US",
+  return formatAdminDate(
+    value,
+    lang,
     withTime ? { dateStyle: "medium", timeStyle: "short" } : { dateStyle: "medium" },
-  ).format(new Date(value));
+  );
 }

@@ -2,13 +2,10 @@ import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "../../../lib/auth";
 import { isUuid } from "../../../lib/http";
-import { Brand } from "../../components/Brand";
-import { LocaleSwitcher } from "../../components/LocaleSwitcher";
+import { IdentityPage } from "../../components/IdentityPage";
 import {
   IdentityBody,
-  IdentityCard,
   IdentityEyebrow,
-  IdentitySingleShell,
   IdentityTitle,
 } from "../../../../src/design-system/components/WorkspaceIdentity";
 import { AcceptInvitation } from "./AcceptInvitation";
@@ -36,25 +33,17 @@ export default async function InvitationPage({
     ));
   }
   return (
-    <IdentitySingleShell>
-      <div className="tw:flex tw:w-full tw:items-center tw:justify-between tw:gap-4">
-        <Brand destination="marketing" />
-        <LocaleSwitcher />
-      </div>
-      <div className="tw:m-auto tw:w-[min(540px,100%)]">
-        <IdentityCard>
-          <IdentityEyebrow>{copy.eyebrow}</IdentityEyebrow>
-          <IdentityTitle>{copy.title}</IdentityTitle>
-          <IdentityBody>
-            {copy.descriptionBeforeEmail}{copy.descriptionBeforeEmail ? " " : ""}
-            {session.user.email}{copy.descriptionAfterEmail}
-          </IdentityBody>
-          <AcceptInvitation
-            invitationId={invitationId}
-            currentUserId={session.user.id}
-          />
-        </IdentityCard>
-      </div>
-    </IdentitySingleShell>
+    <IdentityPage>
+      <IdentityEyebrow>{copy.eyebrow}</IdentityEyebrow>
+      <IdentityTitle>{copy.title}</IdentityTitle>
+      <IdentityBody>
+        {copy.descriptionBeforeEmail}{copy.descriptionBeforeEmail ? " " : ""}
+        {session.user.email}{copy.descriptionAfterEmail}
+      </IdentityBody>
+      <AcceptInvitation
+        invitationId={invitationId}
+        currentUserId={session.user.id}
+      />
+    </IdentityPage>
   );
 }

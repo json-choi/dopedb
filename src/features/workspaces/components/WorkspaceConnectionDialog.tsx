@@ -18,8 +18,9 @@ import {
   canManageWorkspaceConnections,
   parseWorkspaceChoice,
 } from "../choices";
+import { checkSavedConnection } from "../../connections/connectionCheck";
+import ConnectionFilePathField from "../../connections/ConnectionFilePathField";
 import {
-  connectionTestIssue,
   connectionTestIssueRecovery,
   connectionTestIssueTitle,
 } from "../../connections/connectionTestFailure";
@@ -28,10 +29,7 @@ import type {
   ConnectionTestIssue,
 } from "../../connections/domain";
 import { CONNECTION_SSH_ALIAS_PARAMETER } from "../../connections/options";
-import {
-  pickConnectionFile,
-  testConnection,
-} from "../../connections/tauriAdapter";
+import { pickConnectionFile } from "../../connections/tauriAdapter";
 import { errDetails } from "../../../ipc/types";
 import { useI18n, type I18nKey } from "../../../lib/i18n";
 import { useToast } from "../../../components/Toast";
@@ -227,18 +225,12 @@ export default function WorkspaceConnectionDialog({
     onBound(bound);
     setPassword("");
     setPending("checking");
-    let receipt;
-    try {
-      receipt = await testConnection(bound.id);
-    } catch {
-      setCheckFailure({ issue: { code: "unknown", field: null } });
-      return;
-    }
-    if (!receipt.ok) {
+    const check = await checkSavedConnection(bound.id);
+    if (!check.ok) {
       // A refusal made before connecting keeps its own guidance and wait.
       setCheckFailure({
-        issue: connectionTestIssue(receipt.failure),
-        retryAfterSeconds: receipt.failure.retryAfterSeconds,
+        issue: check.issue,
+        retryAfterSeconds: check.retryAfterSeconds,
       });
       return;
     }
@@ -402,31 +394,16 @@ export default function WorkspaceConnectionDialog({
                     />
                   ) : null}
                   {tlsFileFields.map(({ key, label }) => (
-                    <Field key={key} label={t(label)}>
-                      {({ controlProps }) => (
-                        <div className="tw:grid tw:min-w-0 tw:grid-cols-[minmax(0,1fr)_auto] tw:items-center tw:gap-2">
-                          <TextInput
-                            {...controlProps()}
-                            value={tlsFiles[key] ?? ""}
-                            disabled={pending !== null || tlsFilesDisabled}
-                            autoCapitalize="none"
-                            autoCorrect="off"
-                            spellCheck={false}
-                            onChange={(event) => {
-                              const value = event.target.value;
-                              setTlsFiles((current) => ({ ...current, [key]: value }));
-                            }}
-                          />
-                          <Button
-                            aria-label={`${t("connections.browse")}: ${t(label)}`}
-                            disabled={pending !== null || tlsFilesDisabled}
-                            onClick={() => void browse(key)}
-                          >
-                            {t("connections.browse")}
-                          </Button>
-                        </div>
-                      )}
-                    </Field>
+                    <ConnectionFilePathField
+                      key={key}
+                      label={t(label)}
+                      value={tlsFiles[key] ?? ""}
+                      disabled={pending !== null || tlsFilesDisabled}
+                      onChange={(value) =>
+                        setTlsFiles((current) => ({ ...current, [key]: value }))
+                      }
+                      onBrowse={() => void browse(key)}
+                    />
                   ))}
                 </section>
               ) : null}

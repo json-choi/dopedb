@@ -50,19 +50,6 @@ export const activePluginStates = new Set<AcpPluginInstallationState>([
   "removing",
 ]);
 
-export const pluginStateLabel: Record<AcpPluginInstallationState, I18nKey> = {
-  not_installed: "agentTools.pluginState.notInstalled",
-  checking: "agentTools.pluginState.checking",
-  downloading: "agentTools.pluginState.downloading",
-  verifying: "agentTools.pluginState.verifying",
-  staged: "agentTools.pluginState.staged",
-  ready: "agentTools.pluginState.ready",
-  update_available: "agentTools.pluginState.updateAvailable",
-  removing: "agentTools.pluginState.removing",
-  failed: "agentTools.pluginState.failed",
-  rollback_required: "agentTools.pluginState.rollbackRequired",
-};
-
 export function pluginTone(state: AcpPluginInstallationState) {
   if (state === "ready" || state === "staged") return "success" as const;
   if (state === "failed" || state === "rollback_required") return "danger" as const;
