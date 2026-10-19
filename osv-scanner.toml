@@ -108,3 +108,18 @@ reason = "zip 9.0 fixes extract() symlink and permission handling, but calamine 
 id = "RUSTSEC-2026-0369"
 ignoreUntil = 2026-11-17
 reason = "zip 9.0 fixes extract() symlink and permission handling, but calamine 0.36.1 and rust_xlsxwriter 0.99.1 still require zip 8. DopeDB never calls extract(): XLSX validation only reads entries, and the Windows BigQuery SDK unpacker rejects symlinks and unsafe paths and writes new files without restoring mode bits. The updater's zip feature, the only extract() caller, is disabled, and clippy.toml rejects the extract APIs."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0370"
+ignoreUntil = 2026-12-04
+reason = "zvariant reaches the graph only through the Linux-only zbus D-Bus stack of keyring, tauri-plugin-opener and tauri-plugin-single-instance, which is not compiled for the currently shipped macOS or verified Windows targets."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0371"
+ignoreUntil = 2026-12-04
+reason = "zbus_names reaches the graph only through the Linux-only zbus D-Bus stack of keyring, tauri-plugin-opener and tauri-plugin-single-instance, which is not compiled for the currently shipped macOS or verified Windows targets."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0372"
+ignoreUntil = 2026-12-04
+reason = "zvariant_derive reaches the graph only through the Linux-only zbus D-Bus stack of keyring, tauri-plugin-opener and tauri-plugin-single-instance, which is not compiled for the currently shipped macOS or verified Windows targets."
