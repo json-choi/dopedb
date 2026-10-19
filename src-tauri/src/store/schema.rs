@@ -309,7 +309,7 @@ CREATE TABLE connections (
     revision          INTEGER NOT NULL DEFAULT 1,
     sync_status       TEXT NOT NULL DEFAULT 'local', -- local|dirty|synced|conflict
     workspace_access  TEXT NOT NULL DEFAULT 'local', -- view|read|write|manage|local
-    credential_mode   TEXT NOT NULL DEFAULT 'local', -- local|member_local|managed
+    credential_mode   TEXT NOT NULL DEFAULT 'local', -- local|member_local|managed|provisioned
     schema_access_available INTEGER NOT NULL DEFAULT 0 CHECK(schema_access_available IN (0, 1)),
     provider_target   TEXT
                       CHECK(provider_target IS NULL OR

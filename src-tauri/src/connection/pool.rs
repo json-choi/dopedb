@@ -455,7 +455,7 @@ pub(crate) async fn connect_sqlx(
 // Fail CLOSED on unknown sslmode: a typo like "verrify-full" must NOT silently
 // downgrade to a non-verifying mode. Trim + lowercase; empty means "unspecified"
 // and keeps the platform default; anything else unknown is a config error.
-fn pg_ssl_mode(mode: &str) -> AppResult<PgSslMode> {
+pub(crate) fn pg_ssl_mode(mode: &str) -> AppResult<PgSslMode> {
     Ok(match mode.trim().to_ascii_lowercase().as_str() {
         "" => PgSslMode::Prefer, // ponytail: empty = unspecified, not a typo
         "disable" => PgSslMode::Disable,
@@ -472,7 +472,7 @@ fn pg_ssl_mode(mode: &str) -> AppResult<PgSslMode> {
     })
 }
 
-fn mysql_ssl_mode(mode: &str) -> AppResult<MySqlSslMode> {
+pub(crate) fn mysql_ssl_mode(mode: &str) -> AppResult<MySqlSslMode> {
     Ok(match mode.trim().to_ascii_lowercase().as_str() {
         "" => MySqlSslMode::Preferred, // ponytail: empty = unspecified, not a typo
         "disable" | "disabled" => MySqlSslMode::Disabled,

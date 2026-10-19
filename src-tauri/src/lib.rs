@@ -120,6 +120,8 @@ pub fn run() {
                     }
                 }
             });
+            let direct_access = state.services.direct_access.clone();
+            tauri::async_runtime::spawn(direct_access.run_worker());
             features::queries::manual_transaction_exit::guard_quit_menu_item(app);
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
@@ -160,6 +162,16 @@ pub fn run() {
             features::agents::transport::set_agent_acp_plugin_enabled,
             features::agents::transport::open_agent_external_link,
             features::workspaces::transport::workspace_feature_state,
+            features::direct_access::transport::direct_access_prefill_from_connection,
+            features::direct_access::transport::direct_access_preflight,
+            features::direct_access::transport::direct_access_register,
+            features::direct_access::transport::direct_access_member_request,
+            features::direct_access::transport::direct_access_status,
+            features::direct_access::transport::direct_access_sync_now,
+            features::direct_access::transport::direct_access_revoke_apply,
+            features::direct_access::transport::direct_access_revocations,
+            features::direct_access::transport::direct_access_revocation_cancel,
+            features::direct_access::transport::direct_access_forget_admin_credential,
             commands::cli_installation_status,
             commands::install_cli,
             commands::skill_status,

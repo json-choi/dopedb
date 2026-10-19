@@ -10,8 +10,6 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
-use dopedb_protocol::DatabaseEngine;
-
 /// Engines that support direct principal provisioning.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -21,13 +19,6 @@ pub(crate) enum DirectEngine {
 }
 
 impl DirectEngine {
-    pub(crate) fn database_engine(self) -> DatabaseEngine {
-        match self {
-            Self::Postgres => DatabaseEngine::Postgres,
-            Self::Mysql => DatabaseEngine::Mysql,
-        }
-    }
-
     pub(crate) fn verifier_kind(self) -> VerifierKind {
         match self {
             Self::Postgres => VerifierKind::ScramSha256,
@@ -107,7 +98,10 @@ pub(crate) enum AccessLevel {
     Write,
 }
 
-/// Workspace grant modes as the control plane stores them.
+/// Workspace grant modes as the control plane stores them. Desktop never computes
+/// the effective level (the server projects it into the work list); the mapping is
+/// kept compiled only to pin it against the control plane's matrix in tests.
+#[cfg(test)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum GrantMode {
@@ -123,6 +117,7 @@ pub(crate) enum GrantMode {
 /// callers fold those absences into `Option::None` before calling.
 /// `none`/`view` and absent grants give no access, `read` reads, and `write`/`manage`
 /// write only while the shared database's write ceiling is on.
+#[cfg(test)]
 pub(crate) fn effective_level(grant: Option<GrantMode>, write_ceiling: bool) -> AccessLevel {
     match grant {
         None | Some(GrantMode::None) | Some(GrantMode::View) => AccessLevel::None,
@@ -311,10 +306,6 @@ impl Marker {
                 .bytes()
                 .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_'))
         .then(|| Self(value.to_owned()))
-    }
-
-    pub(crate) fn as_str(&self) -> &str {
-        &self.0
     }
 
     /// PostgreSQL `COMMENT ON ROLE` text; read back from `pg_shdescription`.

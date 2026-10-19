@@ -5,19 +5,19 @@ use dopedb_protocol::{
     AcpPluginUpstream, AgentSessionRegisterArguments, AppOpenCommand, AppOpenResult,
     AuthenticationRequirement, CatalogSearchCommand, CatalogShowCommand, CommandName, CommandSpec,
     ConnectionListCommand, ConnectionShowCommand, ConnectionTestCommand, DatabaseListCommand,
-    DocumentRunCommand, ErrorCode, ExternalAgentConfig, ExternalAgentConfigCreateCommand,
-    ExternalAgentProvider, ExternalAgentResourceScope, ExternalAgentSessionRevokeCommand,
-    ExternalAgentSessionStartCommand, GraphBuildArtifactV1, ManagedAccessMode, ManagedLeaseRequest,
-    ManagedLeaseResponse, OperationCancelCommand, OperationShowCommand, OperationWaitCommand,
     DirectProvisioningStatus, DirectReceiptRequest, DirectRevocationEntry, DirectVerifierRequest,
-    DirectWorkList, WorkspaceMemberGrants, ProtocolError, QueryCancelCommand, QueryPlanCommand, QueryRunCommand, RequestEnvelope,
-    ResponseEnvelope, RuntimeDiscovery, SchemaListCommand, SessionAuthentication,
-    SharedAnalysisArticleCreate, SignedAcpPluginManifestV2, SkillInstallCommand,
-    SkillRemoveCommand, SkillRepairCommand, SkillStatusCommand, SkillsGetCommand,
-    SkillsListCommand, SourceReadCommand, SqlProposeCommand, StatusCommand, StatusResult,
-    TableDescribeCommand, VersionCommand, VersionResult, WorkspaceSyncPageResponse,
-    ACP_PLUGIN_MANIFEST_SCHEMA_VERSION, ACP_PLUGIN_PROTOCOL_VERSION,
-    ACP_PLUGIN_RUNTIME_CONTRACT_VERSION, COMMAND_SCHEMA_VERSION,
+    DirectWorkList, DocumentRunCommand, ErrorCode, ExternalAgentConfig,
+    ExternalAgentConfigCreateCommand, ExternalAgentProvider, ExternalAgentResourceScope,
+    ExternalAgentSessionRevokeCommand, ExternalAgentSessionStartCommand, GraphBuildArtifactV1,
+    ManagedAccessMode, ManagedLeaseRequest, ManagedLeaseResponse, OperationCancelCommand,
+    OperationShowCommand, OperationWaitCommand, ProtocolError, QueryCancelCommand,
+    QueryPlanCommand, QueryRunCommand, RequestEnvelope, ResponseEnvelope, RuntimeDiscovery,
+    SchemaListCommand, SessionAuthentication, SharedAnalysisArticleCreate,
+    SignedAcpPluginManifestV2, SkillInstallCommand, SkillRemoveCommand, SkillRepairCommand,
+    SkillStatusCommand, SkillsGetCommand, SkillsListCommand, SourceReadCommand, SqlProposeCommand,
+    StatusCommand, StatusResult, TableDescribeCommand, VersionCommand, VersionResult,
+    WorkspaceMemberGrants, WorkspaceSyncPageResponse, ACP_PLUGIN_MANIFEST_SCHEMA_VERSION,
+    ACP_PLUGIN_PROTOCOL_VERSION, ACP_PLUGIN_RUNTIME_CONTRACT_VERSION, COMMAND_SCHEMA_VERSION,
     CONTROL_PLANE_CONTRACTS_SCHEMA_VERSION, GRAPH_BUILD_ARTIFACT_SCHEMA_VERSION,
     MANAGED_LEASE_CONTRACT_VERSION, MAX_KNOWLEDGE_GRAPH_ARTIFACT_BYTES, PROTOCOL_MAX,
 };
@@ -616,14 +616,21 @@ fn public_protocol_goldens_match_pinned_agent_and_control_plane_contracts() {
             .filter(validate)
     }
     let direct = &contracts.direct_access;
-    for key in ["provisioning", "provisioningNotRequested", "provisioningFailed"] {
+    for key in [
+        "provisioning",
+        "provisioningNotRequested",
+        "provisioningFailed",
+    ] {
         let status = decode_direct::<DirectProvisioningStatus>(&direct[key], |v| v.validate())
             .unwrap_or_else(|| panic!("{key} golden must decode"));
         assert_eq!(serde_json::to_value(status).unwrap(), direct[key]);
     }
     let grants = decode_direct::<WorkspaceMemberGrants>(&direct["memberGrants"], |v| v.validate())
         .expect("member grants golden must decode");
-    assert_eq!(serde_json::to_value(grants).unwrap(), direct["memberGrants"]);
+    assert_eq!(
+        serde_json::to_value(grants).unwrap(),
+        direct["memberGrants"]
+    );
     for key in ["verifierRequestPostgres", "verifierRequestMysql"] {
         let request = decode_direct::<DirectVerifierRequest>(&direct[key], |v| v.validate())
             .unwrap_or_else(|| panic!("{key} golden must decode"));
@@ -670,7 +677,9 @@ fn public_protocol_goldens_match_pinned_agent_and_control_plane_contracts() {
             "directVerifierRequestPostgres" | "directVerifierRequestMysql" => {
                 decode_direct::<DirectVerifierRequest>(&candidate, |v| v.validate()).is_some()
             }
-            "directWorkList" => decode_direct::<DirectWorkList>(&candidate, |v| v.validate()).is_some(),
+            "directWorkList" => {
+                decode_direct::<DirectWorkList>(&candidate, |v| v.validate()).is_some()
+            }
             "directReceipt" => {
                 decode_direct::<DirectReceiptRequest>(&candidate, |v| v.validate()).is_some()
             }

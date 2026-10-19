@@ -9,6 +9,7 @@ use crate::features::agents::{self, AgentsFeature};
 use crate::features::analysis_articles::{self, DesktopAnalysisArticlesFeature};
 use crate::features::catalog::{self, CatalogFeature};
 use crate::features::connections::{self as connection_feature, ConnectionsFeature};
+use crate::features::direct_access::{self, DirectAccessFeature};
 use crate::features::documents::{self, DocumentFeature};
 use crate::features::erd::{self, ErdFeature};
 use crate::features::jobs::{self, JobsFeature};
@@ -34,6 +35,7 @@ pub(crate) struct ApplicationServices {
     pub(crate) analysis_article: DesktopAnalysisArticlesFeature,
     pub(crate) connections: ConnectionsFeature,
     pub(crate) catalog: CatalogFeature,
+    pub(crate) direct_access: DirectAccessFeature,
     pub(crate) document: DocumentFeature,
     pub(crate) erd: ErdFeature,
     pub(crate) job: JobsFeature,
@@ -95,6 +97,7 @@ impl ApplicationServices {
             analysis_article,
             connections: connection_feature,
             catalog,
+            direct_access: direct_access::compose(store.clone(), connection_credentials.clone()),
             document: documents::compose(store.clone(), connections.clone(), operation.clone()),
             erd,
             job,
