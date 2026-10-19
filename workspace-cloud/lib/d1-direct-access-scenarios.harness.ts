@@ -4,9 +4,14 @@ import { randomUUID } from "node:crypto";
 import { expect } from "vitest";
 import type { D1Database } from "@cloudflare/workers-types";
 import type { MemberAuthority } from "./d1/member-authority";
+import { claimRevocationGate, clearRevocationGate } from "./revocation-gates";
+import { publicConnection } from "./workspace-connections";
 import {
-  claimDirectPrincipal,
-  createDirectRevocation,
+  claimDirectWork,
+  createDirectRevocations,
+  directLoweringTargets,
+  directRoleLowering,
+  findDirectLoweringBlockers,
   listDirectWorkItems,
   listPendingDirectRevocations,
   settleDirectReceipt,
@@ -14,6 +19,9 @@ import {
   submitDirectVerifier,
   type DirectReceipt,
 } from "./workspace-direct-access-store";
+import { removeConnectionGrant } from "./workspace-grant-store";
+import { listWorkspaceMemberGrants } from "./workspace-member-grants";
+import { accessModeForConnectionGrant } from "./workspace-permissions";
 import { setWorkspaceTeamRead } from "./workspace-team-read-store";
 
 const PG_VERIFIER = "SCRAM-SHA-256$4096:Y0ea1poJCyWCd+yPum+ZQQ==$h7BOWJYfmpnYU9QEagtbeT58Pku9IfWsqPsXwgzbHYs=:s+rNM0M7MbUlI1EDLJs+ei56p3ONXezfDdbGJoCFPAY=";
@@ -80,6 +88,9 @@ export async function verifyD1DirectAccess(
   const viewer = await newMember("viewer");
   const pending = await newMember("owner", true);
   const orphan = await newMember("analyst");
+  // The acting administrator manages this connection (needed to declare revocations).
+  await run("INSERT INTO workspace_connection_grant (organization_id, connection_id, member_id, capability) VALUES (?, ?, ?, 'manage')",
+    organizationId, connectionId, authority.membershipId);
   const grants: [typeof analyst, string, string][] = [
     [analyst, "read", "team"], [editor, "use", "explicit"], [viewer, "view", "team"], [pending, "manage", "explicit"],
   ];
@@ -118,10 +129,10 @@ export async function verifyD1DirectAccess(
   expect((await listDirectWorkItems({ organizationId, connectionId })).find((item) => item.memberId === editor.memberId)?.desiredLevel).toBe("read");
   await run("UPDATE workspace_direct_endpoint SET write_ceiling = 1 WHERE connection_id = ?", connectionId);
 
-  // Claim lease and compare-and-swap settlement.
+  // Claim lease and compare-and-swap settlement; the direction is derived, never supplied.
   const principalId = principals.get(editor.memberId)!;
-  const claim = (deviceId: string, to: "applying" | "drop_pending" = "applying", id = principalId) =>
-    claimDirectPrincipal({ organizationId, connectionId, principalId: id, deviceId, to });
+  const claim = async (deviceId: string, id = principalId) =>
+    (await claimDirectWork({ organizationId, connectionId, deviceId, actorUserId: authority.userId, principalIds: [id] })).length === 1;
   expect(await claim("device-a")).toBe(true);
   expect(await claim("device-b")).toBe(false);
   expect(await claim("device-a")).toBe(true);
@@ -131,7 +142,7 @@ export async function verifyD1DirectAccess(
     appliedVerifierVersion: 1, scopeRevisionApplied: 3, serverRoleOid: "16421", serverFingerprint: "16384", failureCode: null,
   };
   const settle = (input: Partial<DirectReceipt>, id = principalId) =>
-    settleDirectReceipt({ organizationId, connectionId, receipt: { ...receipt, principalId: id, ...input } });
+    settleDirectReceipt({ organizationId, connectionId, actorUserId: authority.userId, receipt: { ...receipt, principalId: id, ...input } });
   expect(await settle({})).toBe(false);
   expect(await settle({ deviceId: "device-a", appliedVerifierVersion: 9 })).toBe(false);
   expect(await settle({ deviceId: "device-a", to: "failed", failureCode: null })).toBe(false);
@@ -143,7 +154,7 @@ export async function verifyD1DirectAccess(
   expect((await listDirectWorkItems({ organizationId, connectionId })).find((item) => item.principalId === principalId)).toMatchObject({ action: "idle", appliedLevel: "write" });
   // A different server fingerprint (restored or repointed database) is refused for every principal.
   const analystPrincipal = principals.get(analyst.memberId)!;
-  expect(await claim("device-a", "applying", analystPrincipal)).toBe(true);
+  expect(await claim("device-a", analystPrincipal)).toBe(true);
   expect(await settle({ deviceId: "device-a", appliedLevel: "read", serverFingerprint: "99999", serverRoleOid: "1", appliedVerifierVersion: 2 }, analystPrincipal)).toBe(false);
   expect(await settle({ deviceId: "device-a", to: "failed", failureCode: "oid_mismatch", appliedLevel: "none", serverRoleOid: null, serverFingerprint: null, appliedVerifierVersion: 0 }, analystPrincipal)).toBe(true);
   expect(await row(analyst.memberId)).toMatchObject({ state: "failed", failure_code: "oid_mismatch" });
@@ -153,33 +164,97 @@ export async function verifyD1DirectAccess(
   expect(await row(analyst.memberId)).toMatchObject({ state: "requested", failure_code: null });
   // Drop path: a demoted member is dropped, then the receipt is terminal.
   const viewerPrincipal = principals.get(viewer.memberId)!;
-  expect(await claim("device-a", "drop_pending", viewerPrincipal)).toBe(true);
+  expect(await claim("device-a", viewerPrincipal)).toBe(true);
+  expect(await row(viewer.memberId)).toMatchObject({ state: "drop_pending" });
   expect(await settle({ deviceId: "device-a", from: "drop_pending", to: "ready" }, viewerPrincipal)).toBe(false);
   expect(await settle({ deviceId: "device-a", from: "drop_pending", to: "dropped", appliedLevel: "write", serverRoleOid: null }, viewerPrincipal)).toBe(false);
   expect(await settle({ deviceId: "device-a", from: "drop_pending", to: "dropped", appliedLevel: "none", serverRoleOid: null, serverFingerprint: null, appliedVerifierVersion: 0, scopeRevisionApplied: null }, viewerPrincipal)).toBe(true);
   await rejects("UPDATE workspace_direct_principal SET state = 'requested' WHERE id = ?", viewerPrincipal);
   await run("DELETE FROM workspace_direct_principal WHERE id = ?", viewerPrincipal);
 
-  // Revocation items: deduplicated while pending, settle exactly once, immutable facts.
-  const revocation = { organizationId, connectionId, memberId: editor.memberId, kind: "self_leave" as const, targetLevel: "none" as const, requestedByUserId: null };
-  const revocationId = await createDirectRevocation(revocation);
-  expect(revocationId).toMatch(/^[0-9a-f-]{36}$/u);
-  expect(await createDirectRevocation(revocation)).toBeNull();
-  await expect(createDirectRevocation({ ...revocation, connectionId: plainId })).rejects.toThrow();
-  expect(await listPendingDirectRevocations({ organizationId, connectionId })).toMatchObject([
-    { id: revocationId, memberId: editor.memberId, kind: "self_leave", targetLevel: "none", state: "pending" },
-  ]);
-  await rejects("UPDATE workspace_direct_revocation SET kind = 'member_removed' WHERE id = ?", revocationId);
-  await rejects("DELETE FROM workspace_direct_revocation WHERE id = ?", revocationId);
-  expect(await settleDirectRevocation({ organizationId, connectionId: plainId, revocationId: revocationId!, to: "applied" })).toBe(false);
-  expect(await settleDirectRevocation({ organizationId, connectionId, revocationId: revocationId!, to: "applied" })).toBe(true);
-  expect(await settleDirectRevocation({ organizationId, connectionId, revocationId: revocationId!, to: "cancelled" })).toBe(false);
-  await rejects("UPDATE workspace_direct_revocation SET state = 'pending' WHERE id = ?", revocationId);
+  // Revocation items: deduplicated while pending, cap the derived level, settle exactly once.
+  const declare = (memberIds: string[], kind: "grant_lowered" | "member_removed", targetLevel: "none" | "read") =>
+    createDirectRevocations({ organizationId, connectionId, authority, memberIds, kind, targetLevel });
+  await expect(createDirectRevocations({ organizationId, connectionId: plainId, authority, memberIds: [editor.memberId],
+    kind: "grant_lowered", targetLevel: "read" })).resolves.toBeNull();
+  const lowered = (await declare([editor.memberId, orphan.memberId], "grant_lowered", "read"))!;
+  expect(lowered).toHaveLength(2);
+  expect(await declare([editor.memberId, viewer.memberId], "grant_lowered", "read")).toEqual(
+    lowered.filter((item) => item.memberId === editor.memberId));
+  const editorItem = lowered.find((item) => item.memberId === editor.memberId)!;
+  const workOf = async (member: { memberId: string }) =>
+    (await listDirectWorkItems({ organizationId, connectionId })).find((item) => item.memberId === member.memberId)!;
+  await rejects("DELETE FROM workspace_direct_revocation WHERE id = ?", editorItem.id);
+  // A pending item caps desired access and cannot be undone by a re-grant before it is settled.
+  expect(await workOf(editor)).toMatchObject({ desiredLevel: "read", appliedLevel: "write", action: "apply" });
+  const removal = (await declare([editor.memberId], "member_removed", "none"))![0];
+  expect(await workOf(editor)).toMatchObject({ desiredLevel: "none", action: "drop" });
+  expect(await settleDirectRevocation({ organizationId, connectionId, revocationId: removal.id, actorUserId: authority.userId, to: "cancelled" })).toBe(true);
+  expect(await workOf(editor)).toMatchObject({ desiredLevel: "read" });
+  // The guard refuses lowering while the principal still holds the higher level.
+  const editorTarget = (level: "none" | "read") => directLoweringTargets.grant(connectionId, editor.memberId, level);
+  expect((await findDirectLoweringBlockers(organizationId, editorTarget("none"))).map((item) => item.memberId)).toEqual([editor.memberId]);
+  expect(await findDirectLoweringBlockers(organizationId, editorTarget("read"))).toHaveLength(1);
+  expect(await findDirectLoweringBlockers(organizationId, directLoweringTargets.connection(organizationId, connectionId))).not.toHaveLength(0);
+  expect(await settleDirectRevocation({ organizationId, connectionId, revocationId: editorItem.id, actorUserId: authority.userId, to: "applied" })).toBe(false);
+  // The same guard sits inside the atomic mutations: removing the grant is refused.
+  const gate = await claimRevocationGate({ kind: "member", organizationId, memberId: editor.memberId, userId: editor.userId });
+  const removeGrant = () => removeConnectionGrant({ organizationId, connectionId, authority, memberId: editor.memberId,
+    userId: editor.userId, claimId: gate!.claimId });
+  expect(await removeGrant()).toEqual([]);
+  await clearRevocationGate(gate!);
+  // A role change that lowers the level is detected per connection (editor -> analyst loses write).
+  expect(await directRoleLowering({ organizationId, memberId: editor.memberId, previousRole: "editor", role: "analyst" }))
+    .toEqual([{ connectionId, level: "read" }]);
+  expect(await directRoleLowering({ organizationId, memberId: editor.memberId, previousRole: "editor", role: "admin" })).toEqual([]);
+  // After the device lowers the principal (receipt), lowering to read passes and the item settles.
+  expect(await claim("device-a")).toBe(true);
+  expect(await settle({ deviceId: "device-a", appliedLevel: "read", appliedVerifierVersion: 1 })).toBe(true);
+  expect(await findDirectLoweringBlockers(organizationId, editorTarget("read"))).toEqual([]);
+  expect(await findDirectLoweringBlockers(organizationId, editorTarget("none"))).toHaveLength(1);
+  expect(await settleDirectRevocation({ organizationId, connectionId, revocationId: editorItem.id, actorUserId: authority.userId, to: "applied" })).toBe(true);
+  expect(await settleDirectRevocation({ organizationId, connectionId, revocationId: editorItem.id, actorUserId: authority.userId, to: "cancelled" })).toBe(false);
+  expect(await workOf(editor)).toMatchObject({ desiredLevel: "write", appliedLevel: "read", action: "apply" });
+  // A never-applied principal never blocks, and its item settles at once.
+  expect(await findDirectLoweringBlockers(organizationId, directLoweringTargets.grant(connectionId, orphan.memberId))).toEqual([]);
+  expect(await settleDirectRevocation({ organizationId, connectionId: plainId, revocationId: lowered.find((item) => item.memberId === orphan.memberId)!.id,
+    actorUserId: authority.userId, to: "applied" })).toBe(false);
+  expect(await settleDirectRevocation({ organizationId, connectionId, revocationId: lowered.find((item) => item.memberId === orphan.memberId)!.id,
+    actorUserId: authority.userId, to: "applied" })).toBe(true);
   expect(await listPendingDirectRevocations({ organizationId, connectionId })).toEqual([]);
+  await rejects("UPDATE workspace_direct_revocation SET kind = 'member_removed' WHERE id = ?", editorItem.id);
+  await rejects("UPDATE workspace_direct_revocation SET state = 'pending' WHERE id = ?", editorItem.id);
+
+  // Self-leave and account deletion record their own items in the same transaction.
+  await run("DELETE FROM member WHERE id = ?", orphan.memberId);
+  await run("DELETE FROM user WHERE id = ?", pending.userId);
+  expect((await listPendingDirectRevocations({ organizationId, connectionId })).map((item) => [item.memberId, item.kind, item.targetLevel]).sort())
+    .toEqual([[orphan.memberId, "self_leave", "none"], [pending.memberId, "account_deleted", "none"]].sort());
+  expect(await workOf(orphan)).toMatchObject({ desiredLevel: "none", action: "drop" });
+
+  // The aggregate reports the same effective mode publicConnection derives, per member.
+  const aggregate = await listWorkspaceMemberGrants(organizationId);
+  const record = (await db.prepare(`SELECT id, name, engine, provider, driver_id AS driverId, host, port, database_name AS databaseName,
+      sslmode, readonly_default AS readonlyDefault, allow_writes AS allowWrites, environment, schema_group AS schemaGroup,
+      credential_mode AS credentialMode, content_revision AS contentRevision, updated_at AS updatedAt
+    FROM workspace_connection WHERE id = ?`).bind(connectionId).first<Record<string, unknown>>())!;
+  const shared = { ...record, readonlyDefault: true, allowWrites: false, updatedAt: new Date(String(record.updatedAt)) } as Parameters<typeof publicConnection>[0];
+  for (const [member, role, expected] of [[analyst, "analyst", "read"], [editor, "editor", "write"], [viewer, "viewer", "view"]] as const) {
+    const entry = aggregate.members.find((item) => item.memberId === member.memberId)?.grants.find((grant) => grant.connectionId === connectionId)!;
+    expect(entry.effectiveAccessMode).toBe(expected);
+    const direct = { writeCeiling: true, principal: null };
+    const connection = publicConnection(shared, role, accessModeForConnectionGrant(role, entry.capability), false, false, direct);
+    expect(connection.accessMode).toBe(entry.effectiveAccessMode);
+    expect(connection.allowWrites).toBe(expected === "write");
+    expect(entry.provisioning).toMatchObject({ state: expect.any(String) });
+  }
+  expect(aggregate.members.find((item) => item.memberId === analyst.memberId)!.grants.find((grant) => grant.connectionId === connectionId))
+    .toMatchObject({ origin: "team", capability: "read", provisioning: { state: "requested", level: "none" } });
+  expect(aggregate.members.find((item) => item.memberId === editor.memberId)!.grants.find((grant) => grant.connectionId === connectionId))
+    .toMatchObject({ origin: "explicit", effectiveAccessMode: "write", provisioning: { state: "ready", level: "read" } });
+  expect(aggregate.members.find((item) => item.memberId === pending.memberId)).toBeUndefined();
 
   // Team read now materializes ordinary read grants on a provisioned database.
-  await run("INSERT INTO workspace_connection_grant (organization_id, connection_id, member_id, capability) VALUES (?, ?, ?, 'manage')",
-    organizationId, connectionId, authority.membershipId);
   const late = await newMember("analyst");
   expect(await setWorkspaceTeamRead({ organizationId, connectionId, authority, enabled: true })).toBe(true);
   expect(await db.prepare("SELECT capability, origin FROM workspace_connection_grant WHERE connection_id = ? AND member_id = ?")

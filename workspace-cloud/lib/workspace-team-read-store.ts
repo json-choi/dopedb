@@ -1,10 +1,12 @@
 // Manager-owned team-read policy materializes ordinary grants. Disabling it is
-// allowed only after the connection revocation gate has drained every lease.
+// allowed only after the connection revocation gate has drained every lease and every
+// provisioned principal holding a team grant has been lowered.
 import "server-only";
 import { sql } from "drizzle-orm";
 import { atomicD1 } from "./d1/atomic";
 import { workspaceMemberAuthority, type MemberAuthority } from "./d1/member-authority";
 import { utcNow, uuidDefault } from "./d1/schema/values";
+import { directLoweringTargets, noDirectLoweringBlockers } from "./workspace-direct-access-store";
 
 export async function setWorkspaceTeamRead(input: {
   organizationId: string; connectionId: string; authority: MemberAuthority;
@@ -14,6 +16,7 @@ export async function setWorkspaceTeamRead(input: {
     ? sql`connection.revocation_pending_at IS NULL AND connection.revocation_claim_id IS NULL`
     : sql`connection.revocation_claim_id = ${input.claimId ?? null}
         AND connection.revision = ${input.revision ?? null}
+        AND ${noDirectLoweringBlockers(input.organizationId, directLoweringTargets.teamRead(input.organizationId, input.connectionId))}
         AND NOT EXISTS (SELECT 1 FROM workspace_credential_lease WHERE organization_id = ${input.organizationId}
           AND connection_id = ${input.connectionId} AND revoked_at IS NULL)`;
   const result = await atomicD1({

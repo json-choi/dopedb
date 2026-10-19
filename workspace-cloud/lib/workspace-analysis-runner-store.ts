@@ -6,6 +6,7 @@ import { sql, type SQL } from "drizzle-orm";
 import { atomicD1 } from "./d1/atomic";
 import { utcNow } from "./d1/schema/values";
 import { workspaceMemberAuthority } from "./d1/member-authority";
+import { directLoweringTargets, noDirectLoweringBlockers } from "./workspace-direct-access-store";
 import type { AnalysisRunnerRegistration } from "./workspace-analysis-runs";
 import type { AnalysisRunAuthority } from "./workspace-analysis-run-store";
 import {
@@ -166,6 +167,7 @@ export async function removeMemberAfterAnalysisRunnerCleanup(input: {
         AND target.organization_id = ${input.organizationId} AND target.user_id = ${input.target.userId}
         AND target.role = ${input.target.role} AND target.role <> 'owner' AND target.revocation_claim_id = ${input.target.claimId}
         AND NOT EXISTS (SELECT 1 FROM workspace_analysis_article WHERE organization_id = target.organization_id
-          AND owner_member_id = target.id AND deleted_at IS NULL))`,
+          AND owner_member_id = target.id AND deleted_at IS NULL))
+      AND ${noDirectLoweringBlockers(input.organizationId, directLoweringTargets.member(input.organizationId, input.target.memberId))}`,
   });
 }

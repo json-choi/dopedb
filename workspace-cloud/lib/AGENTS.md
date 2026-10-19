@@ -74,6 +74,10 @@ default privilege, or ACL (see root `CLAUDE.md`/`AGENTS.md`).
 | `provider-provisioning-target.ts` | Ephemeral, secret-free authority for one saved managed connection; every mutation and lease re-authorizes it independently. |
 | `revocation-gates.ts` | Durable, UUID-owned authorization-mutation claim gates guarding grant/lease/connection changes. |
 | `workspace-connections.ts` | Strict parser and public serializer for shared connection templates; rejects (rather than silently drops) secret-bearing fields. |
+| `workspace-direct-access-core.ts` | Pure direct-database rules: verifier shapes, server-generated principal name/marker, closed state/failure/revocation vocabularies, desired-level projection and the revocation cap. |
+| `workspace-direct-access-store.ts` | D1 helpers for direct databases: derived work list, device claims, receipt compare-and-swap, revocation items, and the lowering guard (`directLoweringTargets`, `noDirectLoweringBlockers`) embedded in the atomic scopes of grant removal, team-read off, role change, member removal and connection delete. |
+| `workspace-direct-access-http.ts` | Route helpers for direct databases: per-route request budgets, administrator-device authorization, the typed 409 `direct_revocation_required`, and wire projections validated by the shared strict parsers. |
+| `workspace-member-grants.ts` | One-query member x connection grant aggregate (with provisioning status) and `sharedConnectionListable`, the single listing predicate shared with the connections route. |
 | `workspace-grant-store.ts` | Mutates connection-grant capabilities (`view`/`read`/`use`/`manage`) for a member. |
 | `workspace-managed-mode-store.ts` | Disables workspace managed access and revokes its leases atomically. |
 | `workspace-snapshot-restore.ts` | Atomically restores a secretless connection template from a backup snapshot; existing identities surface as reviewable conflicts. |

@@ -15,6 +15,7 @@ import {
   workspaceResourceConflictResolution,
   workspaceResourceVersion,
 } from "./schema";
+import { directLoweringTargets, noDirectLoweringBlockers } from "./workspace-direct-access-store";
 import {
   canonicalHash,
   parseConnectionVersionPayload,
@@ -379,22 +380,32 @@ export function returnedConnection(row: RawConnectionRow | undefined): StoredCon
   };
 }
 
+/**
+ * Create a shared connection. With `direct`, the same atomic batch also marks it
+ * provisioned and writes its endpoint, so a direct database is never half-registered.
+ */
 export async function commitConnectionCreate({
-  organizationId, connectionId, authority, input,
+  organizationId, connectionId, authority, input, direct,
 }: {
   organizationId: string;
   connectionId: string;
   authority: MutationAuthority;
   input: ConnectionVersionPayload;
+  direct?: { scope: readonly string[]; writeCeiling: boolean };
 }): Promise<StoredConnection | null> {
   const result = await atomicD1({
     scope: sql`SELECT '{}' AS payload WHERE ${connectionAuthority(organizationId, authority, undefined, true)}`,
     statements: (scope) => [
       sql`INSERT INTO workspace_connection (id, organization_id, name, engine, provider, driver_id, host, port,
-          database_name, sslmode, readonly_default, allow_writes, environment, schema_group, content_revision, created_by_user_id)
+          database_name, sslmode, readonly_default, allow_writes, environment, schema_group, content_revision,
+          provisioning_mode, created_by_user_id)
         SELECT ${connectionId}, ${organizationId}, ${input.name}, ${input.engine}, ${input.provider}, ${input.driverId},
           ${input.host}, ${input.port}, ${input.database}, ${input.sslmode}, ${input.readonlyDefault}, ${input.allowWrites},
-          ${input.env}, ${input.schemaGroup}, 1, ${authority.userId} FROM (${scope}) RETURNING ${connectionProjection}`,
+          ${input.env}, ${input.schemaGroup}, 1, ${direct ? "provisioned" : "none"}, ${authority.userId}
+        FROM (${scope}) RETURNING ${connectionProjection}`,
+      ...(direct ? [sql`INSERT INTO workspace_direct_endpoint (organization_id, connection_id, engine, scope, write_ceiling, created_by_user_id)
+        SELECT ${organizationId}, ${connectionId}, ${input.engine}, ${JSON.stringify(direct.scope)}, ${direct.writeCeiling},
+          ${authority.userId} FROM (${scope})`] : []),
       sql`INSERT INTO workspace_connection_grant (organization_id, connection_id, member_id, capability)
         SELECT ${organizationId}, ${connectionId}, ${authority.membershipId}, 'manage' FROM (${scope})`,
       sql`INSERT INTO workspace_resource_version (organization_id, resource_type, resource_id, revision, base_revision,
@@ -403,7 +414,7 @@ export async function commitConnectionCreate({
           ${JSON.stringify(input)}, ${canonicalHash(input)}, ${authority.userId} FROM (${scope})`,
       sql`INSERT INTO workspace_audit_event (organization_id, actor_user_id, action, resource_type,
           resource_id, redacted_summary, request_id)
-        SELECT ${organizationId}, ${authority.userId}, 'connection.share', 'connection', ${connectionId},
+        SELECT ${organizationId}, ${authority.userId}, ${direct ? "direct.endpoint.register" : "connection.share"}, 'connection', ${connectionId},
           ${JSON.stringify({ name: input.name, engine: input.engine })}, ${crypto.randomUUID()} FROM (${scope})`,
     ],
   });
@@ -462,10 +473,17 @@ export async function commitConnectionMutation({
       WHERE connection.id = ${connectionId} AND connection.organization_id = ${organizationId}
         AND connection.content_revision = ${expectedContentRevision} AND connection.revision = ${expectedAuthorityRevision}
         AND connection.revocation_claim_id = ${claimId} AND connection.deleted_at IS NULL
-        AND ${connectionAuthority(organizationId, authority, sql`${connectionId}`, requireWorkspaceManager)}`,
+        AND ${connectionAuthority(organizationId, authority, sql`${connectionId}`, requireWorkspaceManager)}
+        ${mutation.kind === "delete"
+          ? sql`AND ${noDirectLoweringBlockers(organizationId, directLoweringTargets.connection(organizationId, connectionId))}`
+          : sql``}`,
     statements: (scope) => [
       sql`UPDATE workspace_connection SET ${set} WHERE id = ${connectionId} AND EXISTS (${scope})
         RETURNING ${connectionProjection}`,
+      // The guard above proved every principal lowered, so a deleted database has nothing left to revoke.
+      ...(mutation.kind === "delete" ? [sql`UPDATE workspace_direct_revocation SET state = 'applied', updated_at = ${utcNow}
+        WHERE organization_id = ${organizationId} AND connection_id = ${connectionId} AND state = 'pending'
+          AND EXISTS (${scope})`] : []),
       sql`INSERT INTO workspace_resource_version (organization_id, resource_type, resource_id, revision,
           base_revision, parent_version_id, branch, operation, payload, payload_hash, created_by_user_id)
         SELECT ${organizationId}, 'connection', ${connectionId}, ${expectedContentRevision + 1}, ${expectedContentRevision},

@@ -33,6 +33,12 @@ import {
 } from "../../../../../../lib/schema";
 import { removeMemberAfterAnalysisRunnerCleanup } from "../../../../../../lib/workspace-analysis-runner-store";
 import { authorizeWorkspace } from "../../../../../../lib/workspace-authorization";
+import { directRevocationRequired } from "../../../../../../lib/workspace-direct-access-http";
+import {
+  directLoweringTargets,
+  directRoleLowering,
+  findDirectLoweringBlockers,
+} from "../../../../../../lib/workspace-direct-access-store";
 
 type RouteContext = { params: Promise<{ workspaceId: string }> };
 const assignableRoles = ["viewer", "analyst", "editor", "admin"] as const;
@@ -192,6 +198,16 @@ export async function PATCH(request: Request, context: RouteContext) {
     ).catch(() => false);
     return jsonError("Owner role cannot be changed here", 403);
   }
+  const directLowering = await directRoleLowering({
+    organizationId: workspaceId, memberId, previousRole: claim.memberRole, role: body.role,
+  });
+  if (directLowering.length > 0) {
+    const blockers = await findDirectLoweringBlockers(workspaceId, directLoweringTargets.levels(memberId, directLowering));
+    if (blockers.length > 0) {
+      await abandonMemberClaim(claim);
+      return directRevocationRequired(blockers);
+    }
+  }
   const canOwnSharedContent = body.role === "editor" || body.role === "admin";
   if (!canOwnSharedContent) {
     const ownedArticle = await db.query.workspaceAnalysisArticle.findFirst({
@@ -244,7 +260,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     authority: { sessionId: authorization.session.session.id, userId: authorization.session.user.id,
       membershipId: authorization.membership.id, role: authorization.role },
     userId: renewedClaim.userId, claimId: renewedClaim.claimId, previousRole: renewedClaim.memberRole!, role: body.role,
-    revokedLeases: revocation.revoked, deferredRevocations: revocation.deferred,
+    revokedLeases: revocation.revoked, deferredRevocations: revocation.deferred, directLowering,
   }).catch(async (error) => {
     await abandonMemberClaim(renewedClaim);
     throw error;
@@ -336,6 +352,11 @@ export async function DELETE(request: Request, context: RouteContext) {
           : releaseRevocationGateClaim(claim)
       ).catch(() => false);
       return jsonError("Owner cannot be removed", 403);
+    }
+    const blockers = await findDirectLoweringBlockers(workspaceId, directLoweringTargets.member(workspaceId, existing.id));
+    if (blockers.length > 0) {
+      await abandonMemberClaim(claim);
+      return directRevocationRequired(blockers);
     }
     const ownedArticle = await db.query.workspaceAnalysisArticle.findFirst({
       where: and(

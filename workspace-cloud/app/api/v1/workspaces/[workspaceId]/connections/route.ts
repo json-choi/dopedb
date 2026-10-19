@@ -1,6 +1,6 @@
 // Workspace-scoped shared connection collection. Templates intentionally exclude
 // credentials; role and membership are resolved server-side on every request.
-import { and, desc, eq, isNull, or } from "drizzle-orm";
+import { and, desc, eq, isNull, ne } from "drizzle-orm";
 import { db } from "../../../../../../lib/db";
 import { env } from "../../../../../../lib/env";
 import {
@@ -13,6 +13,8 @@ import {
 import {
   workspaceConnection,
   workspaceConnectionGrant,
+  workspaceDirectEndpoint,
+  workspaceDirectPrincipal,
   workspaceProviderIntegration,
   workspaceProviderResource,
 } from "../../../../../../lib/schema";
@@ -23,12 +25,15 @@ import {
   accessModeForConnectionGrant,
   type WorkspaceConnectionCapability,
 } from "../../../../../../lib/workspace-permissions";
+import type { DirectFailureCode, DirectLevel, DirectPrincipalState } from "../../../../../../lib/workspace-direct-access-core";
 import {
   parseSharedConnection,
   providerResourceSupportsSchema,
   providerResourceSupportsWrite,
   publicConnection,
+  type DirectConnectionView,
 } from "../../../../../../lib/workspace-connections";
+import { sharedConnectionListable } from "../../../../../../lib/workspace-member-grants";
 import {
   connectionVersionPayload,
   parseExpectedRevision,
@@ -44,6 +49,20 @@ function mutationAuthority(authorization: {
     membershipId: authorization.membership.id, role: authorization.role as "admin" | "owner" };
 }
 
+function directPrincipalView(row: {
+  principalState: string | null; principalAppliedLevel: string | null; principalName: string | null;
+  principalLastSyncedAt: Date | null; principalFailureCode: string | null;
+}): DirectConnectionView["principal"] {
+  if (row.principalState === null || row.principalName === null) return null;
+  return {
+    state: row.principalState as DirectPrincipalState,
+    appliedLevel: (row.principalAppliedLevel ?? "none") as DirectLevel,
+    principalName: row.principalName,
+    lastSyncedAt: row.principalLastSyncedAt,
+    failureCode: row.principalFailureCode as DirectFailureCode | null,
+  };
+}
+
 export async function GET(request: Request, context: RouteContext) {
   const { workspaceId } = await context.params;
   if (!isUuid(workspaceId)) return jsonError("Invalid workspace id", 400);
@@ -57,6 +76,12 @@ export async function GET(request: Request, context: RouteContext) {
       providerMetadata: workspaceProviderResource.redactedMetadata,
       grantedScope: workspaceProviderIntegration.grantedScope,
       activeIntegrationId: workspaceProviderIntegration.id,
+      writeCeiling: workspaceDirectEndpoint.writeCeiling,
+      principalState: workspaceDirectPrincipal.state,
+      principalAppliedLevel: workspaceDirectPrincipal.appliedLevel,
+      principalName: workspaceDirectPrincipal.principalName,
+      principalLastSyncedAt: workspaceDirectPrincipal.lastSyncedAt,
+      principalFailureCode: workspaceDirectPrincipal.failureCode,
     })
     .from(workspaceConnectionGrant)
     .innerJoin(
@@ -87,26 +112,33 @@ export async function GET(request: Request, context: RouteContext) {
         eq(workspaceProviderResource.provider, workspaceConnection.provider),
       ),
     )
+    .leftJoin(
+      workspaceDirectEndpoint,
+      and(
+        eq(workspaceDirectEndpoint.organizationId, workspaceConnection.organizationId),
+        eq(workspaceDirectEndpoint.connectionId, workspaceConnection.id),
+      ),
+    )
+    .leftJoin(
+      workspaceDirectPrincipal,
+      and(
+        eq(workspaceDirectPrincipal.organizationId, workspaceConnection.organizationId),
+        eq(workspaceDirectPrincipal.connectionId, workspaceConnection.id),
+        eq(workspaceDirectPrincipal.memberId, authorization.membership.id),
+        ne(workspaceDirectPrincipal.state, "dropped"),
+      ),
+    )
     .where(and(
       eq(workspaceConnectionGrant.organizationId, workspaceId),
       eq(workspaceConnectionGrant.memberId, authorization.membership.id),
-      or(
-        eq(workspaceConnection.credentialMode, "managed"),
-        and(
-          eq(workspaceConnection.credentialMode, "member_local"),
-          eq(workspaceConnection.readonlyDefault, true),
-          eq(workspaceConnection.allowWrites, false),
-        ),
-      ),
-      isNull(workspaceConnection.deletedAt),
-      isNull(workspaceConnection.revocationPendingAt),
+      sharedConnectionListable,
     ))
     .orderBy(desc(workspaceConnection.updatedAt));
   return privateJson({
     workspaceId,
     role: authorization.role,
     accessMode: authorization.accessMode,
-    connections: rows.map(({ connection, capability, capabilityManifest, providerMetadata, grantedScope, activeIntegrationId }) => {
+    connections: rows.map(({ connection, capability, capabilityManifest, providerMetadata, grantedScope, activeIntegrationId, writeCeiling, ...principal }) => {
       const accessMode = accessModeForConnectionGrant(
         authorization.role,
         capability as WorkspaceConnectionCapability,
@@ -123,6 +155,9 @@ export async function GET(request: Request, context: RouteContext) {
           grantedScope,
           database: connection.databaseName,
         }),
+        connection.provisioningMode === "provisioned"
+          ? { writeCeiling: writeCeiling ?? false, principal: directPrincipalView(principal) }
+          : null,
       );
     }),
   });

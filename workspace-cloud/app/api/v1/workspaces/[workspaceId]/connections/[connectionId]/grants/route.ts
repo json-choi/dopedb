@@ -26,6 +26,8 @@ import {
 } from "../../../../../../../../lib/schema";
 import { changeTeamRead } from "../../../../../../../../lib/workspace-team-read-http";
 import { authorizeWorkspaceConnection } from "../../../../../../../../lib/workspace-authorization";
+import { directRevocationRequired } from "../../../../../../../../lib/workspace-direct-access-http";
+import { directLoweringTargets, findDirectLoweringBlockers } from "../../../../../../../../lib/workspace-direct-access-store";
 
 type RouteContext = { params: Promise<{ workspaceId: string; connectionId: string }> };
 type GrantCapability = "view" | "read" | "use" | "manage";
@@ -139,6 +141,8 @@ export async function DELETE(request: Request, context: RouteContext) {
     columns: { id: true, userId: true },
   });
   if (!target) return jsonError("Connection grant changed concurrently. Retry.", 409);
+  const blockers = await findDirectLoweringBlockers(workspaceId, directLoweringTargets.grant(connectionId, target.id));
+  if (blockers.length > 0) return directRevocationRequired(blockers);
   const claim = await claimRevocationGate({
     kind: "member",
     organizationId: workspaceId,
