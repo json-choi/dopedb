@@ -29,6 +29,13 @@ function isWorkspaceManaged(
     && context.workspaceAccess !== "local";
 }
 
+/** A generated per-member account: nothing for this member to edit or re-enter. */
+function isProvisioned(
+  context?: ConnectionTestFailureContext,
+): boolean {
+  return context?.credentialMode === "provisioned";
+}
+
 function isMemberLocalBinding(
   context?: ConnectionTestFailureContext,
 ): boolean {
@@ -145,6 +152,7 @@ export function connectionTestFailureTitle(
   code: ConnectionTestFailureCode,
   context?: ConnectionTestFailureContext,
 ): string {
+  if (isProvisioned(context)) return t("directAccess.testFailure.title");
   if (isWorkspaceManaged(context)) {
     return t("connections.testFailure.managedTitle");
   }
@@ -171,6 +179,7 @@ export function connectionTestFailureRecovery(
   context?: ConnectionTestFailureContext,
   options?: { usedSavedCredential?: boolean },
 ): string {
+  if (isProvisioned(context)) return t("directAccess.testFailure.recovery");
   if (isWorkspaceManaged(context)) {
     return context?.workspaceAccess === "manage"
       ? t("connections.testFailure.managedManagerRecovery")
@@ -273,7 +282,11 @@ export function connectionTestFailureTarget(
   failure: ConnectionTestIssue,
   context?: ConnectionTestFailureContext,
 ): { tab: ConnectionTab; fieldId: string } | null {
-  if (isWorkspaceManaged(context) || isMemberLocalBinding(context)) return null;
+  if (
+    isWorkspaceManaged(context)
+    || isProvisioned(context)
+    || isMemberLocalBinding(context)
+  ) return null;
   if (failure.code.startsWith("ssh") || failure.field === "ssh") {
     return { tab: "sshSsl", fieldId: "connection-ssh-alias" };
   }

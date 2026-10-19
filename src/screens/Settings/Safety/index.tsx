@@ -407,13 +407,15 @@ export default function Safety({
     ? null
     : memberLocalReadOnly
       ? "safety.memberLocalSchemaUnavailable"
-      : connection.credentialMode === "managed" && connection.workspaceAccess !== "manage"
-        ? "safety.schemaRequiresManage"
-        : connection.credentialMode === "managed"
-          ? connection.provider === "gcpCloudSql" && connection.engine === "postgres"
-            ? "safety.schemaPreparationRequired"
-            : "safety.schemaProviderUnavailable"
-          : "safety.mutationsEngineUnavailable";
+      : connection.credentialMode === "provisioned"
+        ? "directAccess.safetySchemaUnavailable"
+        : connection.credentialMode === "managed" && connection.workspaceAccess !== "manage"
+          ? "safety.schemaRequiresManage"
+          : connection.credentialMode === "managed"
+            ? connection.provider === "gcpCloudSql" && connection.engine === "postgres"
+              ? "safety.schemaPreparationRequired"
+              : "safety.schemaProviderUnavailable"
+            : "safety.mutationsEngineUnavailable";
 
   const accessPermissions = [
     {

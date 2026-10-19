@@ -5,7 +5,7 @@
 import { useI18n } from "../../lib/i18n";
 import { requestAccountSettings } from "../settings/accountRequest";
 import { requestConnectionCredentials } from "./connectionEditorShellBridge";
-import type { ConnectionProfile } from "./domain";
+import { canBindMemberCredentials, type ConnectionProfile } from "./domain";
 import RecoveryNotice from "./RecoveryNotice";
 
 const CREDENTIAL_RECOVERY_KINDS = new Set([
@@ -54,11 +54,11 @@ export default function ConnectionCredentialRecoveryNotice({
       />
     );
   }
-  const canEnter = !shared || (
-    connection.credentialMode === "memberLocal" &&
-    connection.workspaceAccess !== "view" &&
-    connection.engine !== "bigquery"
-  );
+  if (connection.credentialMode === "provisioned") {
+    // The account is generated; its Explorer status owns the only recovery.
+    return <RecoveryNotice message={t("directAccess.credentialNotice")} />;
+  }
+  const canEnter = !shared || canBindMemberCredentials(connection);
   return (
     <RecoveryNotice
       message={shared

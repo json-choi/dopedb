@@ -29,7 +29,17 @@ export type WorkspaceConnectionAccess =
   | "write"
   | "manage"
   | "local";
-export type WorkspaceCredentialMode = "local" | "memberLocal" | "managed";
+/**
+ * `provisioned` is a shared database whose per-member account DopeDB created. The
+ * workspace still reports `member_local`; Desktop projects it into its own mode
+ * because the username is the generated principal (empty until the account is
+ * ready) and the password is generated, never typed.
+ */
+export type WorkspaceCredentialMode =
+  | "local"
+  | "memberLocal"
+  | "managed"
+  | "provisioned";
 
 export type NeonBranchState =
   | "init"
@@ -186,7 +196,7 @@ export type DatabaseDiscoveryReceipt = {
   refusal?: ConnectionProbeRefusal;
 };
 
-export type ConnectionAccessIssue = "grant" | "credentials";
+export type ConnectionAccessIssue = "grant" | "credentials" | "provisioning";
 
 /**
  * BigQuery authentication is member-local even when its redacted connection
@@ -213,14 +223,36 @@ export function canRecoverBigQueryAuthentication(
   );
 }
 
+/**
+ * A shared member-local connection whose credential this member binds by hand.
+ * Provisioned connections are excluded: their credential is generated and tracked
+ * by the provisioning status, so no surface may offer a manual password path.
+ */
+export function canBindMemberCredentials(
+  connection: Pick<ConnectionProfile, "engine" | "credentialMode" | "workspaceAccess">,
+): boolean {
+  return connection.credentialMode === "memberLocal"
+    && connection.workspaceAccess !== "view"
+    && connection.workspaceAccess !== "local"
+    && connection.engine !== "bigquery";
+}
+
+/** A provisioned connection opens only once its generated account is ready (named). */
+export function provisioningNotReady(
+  connection: Pick<ConnectionProfile, "credentialMode" | "username">,
+): boolean {
+  return connection.credentialMode === "provisioned" && connection.username === "";
+}
+
 /** One authority-neutral projection shared by Explorer loading and recovery UI. */
 export function connectionAccessIssue(
   connection: Pick<
     ConnectionProfile,
-    "engine" | "credentialMode" | "secretRef" | "workspaceAccess"
+    "engine" | "credentialMode" | "secretRef" | "username" | "workspaceAccess"
   >,
 ): ConnectionAccessIssue | undefined {
   if (connection.workspaceAccess === "view") return "grant";
+  if (provisioningNotReady(connection)) return "provisioning";
   if (
     connection.engine !== "bigquery"
     && connection.workspaceAccess !== "local"
