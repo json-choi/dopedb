@@ -8,6 +8,8 @@
 
 use std::sync::{Arc, Mutex};
 
+use crate::kernel::sync::lock_unpoisoned;
+
 use serde_json::{json, Value};
 use uuid::Uuid;
 
@@ -127,10 +129,7 @@ impl TargetSession for FakeSession {
             if refused {
                 return Err(FailureCode::PermissionDenied);
             }
-            self.0
-                .log
-                .lock()
-                .unwrap()
+            lock_unpoisoned(&self.0.log)
                 .statements
                 .push(statement.sql.clone());
         }
@@ -214,7 +213,7 @@ impl DirectControlPlanePort for FakeControl {
             request.validate(),
             "receipts must satisfy the wire contract"
         );
-        self.0.log.lock().unwrap().receipts.push(request.clone());
+        lock_unpoisoned(&self.0.log).receipts.push(request.clone());
         Ok(())
     }
     async fn list_revocations(
@@ -248,16 +247,13 @@ impl DirectControlPlanePort for FakeControl {
         } else {
             "cancelled"
         };
-        self.0
-            .log
-            .lock()
-            .unwrap()
+        lock_unpoisoned(&self.0.log)
             .settled
             .push((id.to_owned(), label));
         Ok(())
     }
     async fn mutate(&self, _: &AccountId, operation: Value) -> AppResult<MutationOutcome> {
-        self.0.log.lock().unwrap().mutations.push(operation);
+        lock_unpoisoned(&self.0.log).mutations.push(operation);
         Ok(MutationOutcome::Done)
     }
 }
@@ -396,7 +392,7 @@ pub(super) async fn assert_revocation_ordering_contract() {
     assert_eq!(outcome.mutation, MutationState::Done);
     assert_eq!((outcome.applied.len(), outcome.pending.len()), (1, 0));
     {
-        let log = log.lock().unwrap();
+        let log = lock_unpoisoned(&log);
         assert!(log
             .statements
             .iter()
@@ -429,7 +425,7 @@ pub(super) async fn assert_revocation_ordering_contract() {
         ),
         (0, 1, 1)
     );
-    assert!(log.lock().unwrap().mutations.is_empty());
+    assert!(lock_unpoisoned(&log).mutations.is_empty());
 
     // No administrator credential: blocked, no database or control-plane effect.
     let (blocked, log) = coordinator(false, &[], &all);
@@ -451,7 +447,7 @@ pub(super) async fn assert_revocation_ordering_contract() {
     );
     assert_eq!(outcome.pending.len(), 1);
     {
-        let log = log.lock().unwrap();
+        let log = lock_unpoisoned(&log);
         assert!(log.statements.is_empty() && log.receipts.is_empty() && log.mutations.is_empty());
     }
 
@@ -471,7 +467,7 @@ pub(super) async fn assert_revocation_ordering_contract() {
         .unwrap();
     assert_eq!(outcome.mutation, MutationState::NotAttempted);
     assert!(outcome.applied.is_empty() && outcome.pending.len() == 2);
-    assert!(log.lock().unwrap().mutations.is_empty());
+    assert!(lock_unpoisoned(&log).mutations.is_empty());
     let (whole, log) = coordinator(true, &[], &all);
     let outcome = whole
         .revoke_apply(
@@ -489,7 +485,7 @@ pub(super) async fn assert_revocation_ordering_contract() {
         (outcome.mutation, outcome.applied.len()),
         (MutationState::Done, 2)
     );
-    assert_eq!(log.lock().unwrap().mutations.len(), 1);
+    assert_eq!(lock_unpoisoned(&log).mutations.len(), 1);
 
     // Deleting the database settles its own items on the server.
     let delete = json!({
@@ -505,5 +501,5 @@ pub(super) async fn assert_revocation_ordering_contract() {
         .await
         .unwrap();
     assert_eq!(outcome.applied.len(), 1);
-    assert!(log.lock().unwrap().settled.is_empty());
+    assert!(lock_unpoisoned(&log).settled.is_empty());
 }

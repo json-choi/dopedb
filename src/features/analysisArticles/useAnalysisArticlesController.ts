@@ -12,7 +12,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useI18n } from "../../lib/i18n";
 import { useCatalogScope } from "../../lib/queries";
-import { connectionAccessIssue, type ConnectionProfile } from "../connections/domain";
+import {
+  canBindMemberCredentials,
+  connectionAccessIssue,
+  type ConnectionProfile,
+} from "../connections/domain";
 import { connectionQueryKeys, connectionsQuery } from "../connections/queries";
 import { bindKnowledgeEnvironmentConnectionWithRefresh } from "../knowledge/bindEnvironmentConnection";
 import type {
@@ -346,7 +350,9 @@ export function useAnalysisArticlesController({
         ? { message: t("analysis.errorCredentialBinding"), detail: null, recovery: "connectCredentials" }
         : runAccessIssue === "grant"
           ? { message: t("analysis.errorPermission"), detail: null }
-          : null;
+          : runAccessIssue === "provisioning"
+            ? { message: t("directAccess.analysisBlocked"), detail: null }
+            : null;
 
   return {
     available,
@@ -397,7 +403,7 @@ export function useAnalysisArticlesController({
     connectionRechecked: (recheckConnection.isSuccess || reconfirmBinding.isSuccess)
       && runBlocker === null,
     recover: (recovery: AnalysisRecovery) => {
-      if (recovery === "connectCredentials" && runConnection && canBindCredentials(runConnection)) {
+      if (recovery === "connectCredentials" && runConnection && canBindMemberCredentials(runConnection)) {
         setCredentialTarget(runConnection);
         return;
       }
@@ -456,10 +462,4 @@ export function useAnalysisArticlesController({
   };
 }
 
-/** The same member-local credential binding the Connections screen offers. */
-function canBindCredentials(connection: ConnectionProfile) {
-  return connection.credentialMode === "memberLocal"
-    && connection.workspaceAccess !== "view"
-    && connection.workspaceAccess !== "local"
-    && connection.engine !== "bigquery";
-}
+

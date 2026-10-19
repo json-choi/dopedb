@@ -1,6 +1,7 @@
 // Shared databases of the active workspace in Workspace management → Providers: the inventory
 // joined with each managed connection's provider target, removal, the managed-access
-// repair entry, the inline add-database flow and Neon branch administration. Reads
+// repair entry, the inline add-database flows (provider resource or direct
+// PostgreSQL/MySQL connection) and Neon branch administration. Reads
 // come from the shared provider queries; this view owns the removal mutation and its
 // notices, and asks the shell to pull each committed change into this device.
 import { useEffect, useId, useMemo, useRef, useState } from "react";
@@ -23,6 +24,7 @@ import { invalidateProviderReads } from "../accounts/providerReads";
 import type { ManagedConnection, SharedConnection } from "../domain";
 import NeonBranchManager from "../neonBranches/NeonBranchManager";
 import { providerInventoryQuery, sharedConnectionsQuery } from "../queries";
+import AddDirectDatabase from "./AddDirectDatabase";
 import AddManagedDatabase from "./AddManagedDatabase";
 import { canRepairManagedAccess } from "./model";
 import {
@@ -48,6 +50,8 @@ export interface SharedDatabasesViewProps {
   /** Reports whether a mutation is running so the panel can lock view changes. */
   onBusyChange: (busy: boolean) => void;
 }
+
+type AddKind = "provider" | "direct";
 
 type ViewNotice = Readonly<{ tone: "warning" | "danger"; message: string }>;
 
@@ -116,8 +120,9 @@ export default function SharedDatabasesView({
   const connections = useQuery(sharedConnectionsQuery(scope));
   const inventory = useQuery(providerInventoryQuery(scope));
   const catalogScope = useCatalogScope();
-  // The wizard renders only once the provider inventory arrives.
-  const [adding, setAdding] = useState(initiallyAdding);
+  // The provider wizard renders only once the provider inventory arrives.
+  const [addKind, setAddKind] = useState<AddKind | null>(initiallyAdding ? "provider" : null);
+  const adding = addKind !== null;
   const [wizardBusy, setWizardBusy] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [notice, setNotice] = useState<ViewNotice | null>(null);
@@ -217,15 +222,15 @@ export default function SharedDatabasesView({
     }
   }
 
-  function openAdd() {
-    if (locked || !snapshot) return;
+  function openAdd(kind: AddKind) {
+    if (locked || (kind === "provider" && !snapshot)) return;
     setNotice(null);
     setAddedId(null);
-    setAdding(true);
+    setAddKind(kind);
   }
 
   function closeAdd() {
-    setAdding(false);
+    setAddKind(null);
     setWizardBusy(false);
     requestAnimationFrame(() => addButton.current?.focus());
   }
@@ -271,16 +276,26 @@ export default function SharedDatabasesView({
         <SettingsSectionHeader
           title={<span id={headingId}>{t("workspaceProviderDatabases.title")}</span>}
           trailing={adding ? undefined : (
-            <Button
-              ref={addButton}
-              size="compact"
-              variant={emphasizeRepair ? "default" : "primary"}
-              disabled={locked || !snapshot}
-              onClick={openAdd}
-            >
-              <Icon name="plus" />
-              {t("workspaceProviderDatabases.add")}
-            </Button>
+            <span className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
+              <Button
+                size="compact"
+                disabled={locked}
+                onClick={() => openAdd("direct")}
+              >
+                <Icon name="plus" />
+                {t("directAccess.add.open")}
+              </Button>
+              <Button
+                ref={addButton}
+                size="compact"
+                variant={emphasizeRepair ? "default" : "primary"}
+                disabled={locked || !snapshot}
+                onClick={() => openAdd("provider")}
+              >
+                <Icon name="plus" />
+                {t("workspaceProviderDatabases.add")}
+              </Button>
+            </span>
           )}
         />
         <p className="tw:m-0 tw:max-w-[680px] tw:text-sm tw:leading-body tw:text-muted-foreground">
@@ -288,7 +303,15 @@ export default function SharedDatabasesView({
         </p>
       </div>
 
-      {adding && snapshot ? (
+      {addKind === "direct" ? (
+        <AddDirectDatabase
+          scope={scope}
+          onCancel={closeAdd}
+          onRegistered={imported}
+          onBusyChange={setWizardBusy}
+        />
+      ) : null}
+      {addKind === "provider" && snapshot ? (
         hasActiveAccount ? (
           <AddManagedDatabase
             scope={scope}

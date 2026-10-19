@@ -737,6 +737,7 @@ export default function CatalogTree(props: Props) {
                 fullCatalog ? persistedCatalogCapturedAt(fullCatalog) : null
               }
               accessIssue={accessIssue}
+              connectionId={connection.id}
               error={error}
               detailError={detailError}
               catalogLoaded={Boolean(catalog)}

@@ -8,6 +8,7 @@
 import { useEffect, useRef } from "react";
 
 import { useEventCallback } from "../../lib/useEventCallback";
+import { canBindMemberCredentials } from "./domain";
 import type { ConnectionEditorDialogs } from "./useConnectionEditorDialogs";
 import type { ConnectionProfileState } from "./useConnectionProfileState";
 
@@ -65,12 +66,7 @@ export function useCredentialRecoveryEntry(
     if (!pending.current) return;
     pending.current = false;
     const { flags, value } = profileState.form;
-    if (
-      flags.isSharedTemplate &&
-      value.credentialMode === "memberLocal" &&
-      value.workspaceAccess !== "view" &&
-      value.engine !== "bigquery"
-    ) {
+    if (flags.isSharedTemplate && canBindMemberCredentials(value)) {
       workspaceDialog.setMode("credentials");
       return;
     }

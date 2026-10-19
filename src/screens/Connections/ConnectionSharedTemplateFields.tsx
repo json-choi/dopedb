@@ -108,40 +108,46 @@ export function ConnectionSharedTemplateFields({
           />
         </PropertyRow>
       ) : null}
-      <PropertyRow label={t("workspace.bindCredentialsShort")}>
-        <div className="tw:flex tw:min-h-control-md tw:flex-wrap tw:items-center tw:gap-2">
-          {/* Only a passed check is success; a saved or managed credential is unverified. */}
-          <StatusBadge
-            tone={
-              profile.verified
-                ? "success"
-                : form.credentialMode === "managed" || form.secretRef
-                  ? "neutral"
-                  : "warning"
-            }
-          >
-            {profile.verified
-              ? t("connections.credentialVerified")
-              : form.credentialMode === "managed"
-                ? t("connections.managedWorkspace.status")
-                : form.secretRef
-                  ? t("connections.credentialSavedOnDevice")
-                  : t("providerCredentials.credentialsRequired")}
-          </StatusBadge>
-          {form.credentialMode === "memberLocal" &&
-          form.workspaceAccess !== "view" ? (
-            <Button
-              size="compact"
-              onClick={(event) => {
-                workspaceDialog.buttonRef.current = event.currentTarget;
-                workspaceDialog.setMode("credentials");
-              }}
+      {form.credentialMode === "provisioned" ? (
+        <PropertyRow label={t("directAccess.editor.accountLabel")}>
+          <StatusBadge tone="neutral">{t("directAccess.editor.accountBadge")}</StatusBadge>
+        </PropertyRow>
+      ) : (
+        <PropertyRow label={t("workspace.bindCredentialsShort")}>
+          <div className="tw:flex tw:min-h-control-md tw:flex-wrap tw:items-center tw:gap-2">
+            {/* Only a passed check is success; a saved or managed credential is unverified. */}
+            <StatusBadge
+              tone={
+                profile.verified
+                  ? "success"
+                  : form.credentialMode === "managed" || form.secretRef
+                    ? "neutral"
+                    : "warning"
+              }
             >
-              {t("workspace.bindCredentialsShort")}
-            </Button>
-          ) : null}
-        </div>
-      </PropertyRow>
+              {profile.verified
+                ? t("connections.credentialVerified")
+                : form.credentialMode === "managed"
+                  ? t("connections.managedWorkspace.status")
+                  : form.secretRef
+                    ? t("connections.credentialSavedOnDevice")
+                    : t("providerCredentials.credentialsRequired")}
+            </StatusBadge>
+            {form.credentialMode === "memberLocal" &&
+            form.workspaceAccess !== "view" ? (
+              <Button
+                size="compact"
+                onClick={(event) => {
+                  workspaceDialog.buttonRef.current = event.currentTarget;
+                  workspaceDialog.setMode("credentials");
+                }}
+              >
+                {t("workspace.bindCredentialsShort")}
+              </Button>
+            ) : null}
+          </div>
+        </PropertyRow>
+      )}
       <p
         id="connection-managed-endpoint-note"
         className="tw:m-0 tw:border-t tw:border-border-subtle tw:pt-3 tw:text-sm tw:leading-body tw:text-muted-foreground"
