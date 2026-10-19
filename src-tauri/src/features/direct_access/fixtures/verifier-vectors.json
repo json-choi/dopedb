@@ -1,0 +1,15 @@
+{
+  "source": "Public test vectors: RFC 7677 SCRAM-SHA-256 example credentials (StoredKey/ServerKey computed independently) and the sha256-crypt specification (Drepper). Not credentials.",
+  "scram": {
+    "password": "pencil",
+    "saltBase64": "W22ZaJ0SNY7soEsUEjb6gQ==",
+    "verifier": "SCRAM-SHA-256$4096:W22ZaJ0SNY7soEsUEjb6gQ==$WG5d8oPm3OtcPnkdi4Uo7BkeZkBFzpcXkuLmtbsT4qY=:wfPLwcE6nTWhTAmQ7tl2KeoiWGPlZqQxSrmfPwDl2dU=",
+    "nonAsciiPassword": "pässword"
+  },
+  "sha256Crypt": [
+    { "password": "Hello world!", "salt": "saltstring", "rounds": 5000, "digest": "5B8vYYiY.CVt1RlTTf8KbXBH3hsxY/GNooZaBBGWEc5" },
+    { "password": "Hello world!", "salt": "saltstringsaltst", "rounds": 10000, "digest": "3xv.VbSHBb41AL9AvLeujZkZRBAwqFMz2.opqey6IcA" },
+    { "password": "This is just a test", "salt": "toolongsaltstrin", "rounds": 5000, "digest": "Un/5jzAHMgOGZ5.mWJpuVolil07guHPvOW8mGRcvxa5" }
+  ],
+  "mysql": { "password": "Hello world!", "salt": "abcdefghijklmnopqrst" }
+}
