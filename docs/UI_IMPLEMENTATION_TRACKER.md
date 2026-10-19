@@ -469,9 +469,24 @@ HTML snapshot만 읽고 재조회 command는 인증된 Desktop에만 존재한�
 
 ### 2026-09-22 관리형 팀 읽기 공유
 
+> 2026-10-20 결정(PD-50)으로 별도 `팀 읽기` switch는 제거 대상이다. 새 팀 연결은 analyst 이상 팀 전체 읽기를 기본으로 갖고 구성원별 변경은 `구성원` section만 소유한다. 아래 내용은 제거 전 현재 구현이다.
+
 - `partial`: Desktop `워크스페이스 관리 → DB 접근 권한`은 관리자에게 현재·향후 멤버의 팀 읽기 공유를 켜고 끄는 command를 제공한다. 기존 개별 제한·회수와 별도 쓰기 권한을 설명하며 정책으로 생성된 grant를 구분한다.
 - Desktop 이전 뒤 실제 Settings 컴포넌트의 격리 WebKit fixture에서 팀 읽기 공유 표시, 정책으로 생긴 grant 표시와 일반 멤버의 관리 section 숨김을 확인했다.
 - 격리 D1 harness는 신규·재가입 멤버, 명시적 grant 보존, 회수 exclusion과 active lease가 남은 공유 해제 차단을 검증한다. 기존 운영 연결의 공유 활성화와 두 실제 멤버의 Desktop 연결 검수는 배포 후 남아 있다.
+
+### 팀 연결 모델과 환경 고정 목록 (2026-10-20)
+
+계약은 PD-50·PD-51과 [ADR 0011](./adr/0011-team-connections-and-environments.md)이 소유한다.
+
+- `missing`: 연결 편집기가 팀 연결의 유일한 입구다. 저장이 secret-free workspace 연결과 만든 사람의 로컬 binding을 함께 만들고, 자격 증명 방식(member-local, 공급자 managed, 구성원별 DopeDB 계정)을 편집기 속성으로 고른다. 기존 `공유 DB 추가`(카탈로그 메뉴, 클라우드 안내, 워크스페이스 관리 공급자), 공유 데이터베이스 목록, `워크스페이스로 복사`는 제거해야 한다.
+- `missing`: 새 팀 연결의 기본 접근을 analyst 이상 팀 전체 읽기로 하고 `팀 읽기` switch를 제거한다. member-local 팀 연결의 읽기 전용 강제를 없애고 쓰기를 구성원 권한·승인에 맡긴다.
+- `partial`: 직접 연결(PD-49)의 principal 동기화·회수는 구현돼 있으나 진입점이 `공유 DB 추가 → 직접 연결`이다. 연결 편집기의 자격 증명 방식으로 옮겨야 한다.
+- `missing`: 팀 workspace의 기존 팀 로컬 연결 자동 승격(SQLite 파일 제외)과 SQLite 파일은 공유할 수 없다는 안내.
+- `missing`: 환경 대화상자를 개발·스테이징·운영·테스트 고정 select로 바꾸고 자유 이름, 위험 등급, `custom` 입력을 제거한다. 연결 편집기의 환경 select도 같은 4개 값이며 선택 사항이다. `운영` 환경 생성(새 Project의 첫 환경 포함)에 명시적 확인을 추가한다.
+- `missing`: PROD 확인, 운영 주의 표시, 저장 스냅샷 게시 차단을 유효 환경(binding된 환경 중 가장 민감한 종류, 미binding은 연결 select)에서만 파생한다. provider 가져오기는 `운영인가` 질문 대신 환경 select를 묻는다.
+- `missing`: 기존 환경의 종류 이전(environment id 보존)과 이전 Desktop을 위한 riskClass 호환 매핑.
+- 실제 계정·두 구성원 Desktop 검수, 이전 로컬 데이터가 있는 packaged 업데이트 검수는 구현 뒤에 남는다.
 
 ### GCP 스키마 관리자 연결 전환
 
