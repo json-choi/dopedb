@@ -60,6 +60,10 @@ pub(crate) enum WorkspaceAdminOperation {
         workspace_id: WorkspaceId,
         connection_id: ConnectionId,
     },
+    /// Every member's grant on every shared database, with provisioning status.
+    ListMemberGrants {
+        workspace_id: WorkspaceId,
+    },
     GrantConnectionAccess {
         workspace_id: WorkspaceId,
         connection_id: ConnectionId,

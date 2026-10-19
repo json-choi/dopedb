@@ -3,7 +3,9 @@
 // repair entry, the inline add-database flows (provider resource or direct
 // PostgreSQL/MySQL connection) and Neon branch administration. Reads
 // come from the shared provider queries; this view owns the removal mutation and its
-// notices, and asks the shell to pull each committed change into this device.
+// notices (removing a direct connection first revokes its member accounts through the
+// shared access-lowering hook) and asks the shell to pull each committed change into
+// this device.
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Icon } from "../../../../components/Icon";
@@ -18,7 +20,9 @@ import { useI18n, type I18nKey } from "../../../../lib/i18n";
 import { useCatalogScope } from "../../../../lib/queries";
 import { useEventCallback } from "../../../../lib/useEventCallback";
 import type { WorkspaceAdminScope } from "../../domain";
-import { runWorkspaceAdmin, workspaceAdminErrorMessage } from "../../requests";
+import AccessLoweringPrompt from "../../accessLowering/AccessLoweringPrompt";
+import { useAccessLowering } from "../../accessLowering/useAccessLowering";
+import { workspaceAdminErrorMessage } from "../../requests";
 import { refreshDesktopConnections } from "../../desktopConnections";
 import { invalidateProviderReads } from "../accounts/providerReads";
 import type { ManagedConnection, SharedConnection } from "../domain";
@@ -120,6 +124,13 @@ export default function SharedDatabasesView({
   const connections = useQuery(sharedConnectionsQuery(scope));
   const inventory = useQuery(providerInventoryQuery(scope));
   const catalogScope = useCatalogScope();
+  // A removal finished by a retry with a typed credential completes like a direct one.
+  const lowering = useAccessLowering(scope, (change) => {
+    const connectionId = change.targets[0]?.connectionId;
+    if (!connectionId) return;
+    toast(t("workspaceProviderDatabases.removed", { name: lowering.databaseName(connectionId) }));
+    pullIntoDevice([connectionId]);
+  });
   // The provider wizard renders only once the provider inventory arrives.
   const [addKind, setAddKind] = useState<AddKind | null>(initiallyAdding ? "provider" : null);
   const adding = addKind !== null;
@@ -132,7 +143,7 @@ export default function SharedDatabasesView({
   const revealedId = useRef<string | null>(null);
 
   const busy = wizardBusy || removingId !== null;
-  const locked = busy || repairingConnectionId !== null;
+  const locked = busy || repairingConnectionId !== null || lowering.incomplete !== null;
   const reportBusy = useEventCallback(onBusyChange);
   useEffect(() => {
     reportBusy(busy);
@@ -197,12 +208,14 @@ export default function SharedDatabasesView({
     setRemovingId(connection.id);
     setNotice(null);
     try {
-      await runWorkspaceAdmin(scope.accountId, {
+      const outcome = await lowering.runDeletion(connection.id, {
         kind: "deleteSharedConnection",
         workspaceId: scope.workspaceId,
         connectionId: connection.id,
         expectedRevision: connection.revision,
       });
+      // Pending revocation: the prompt below explains it and the database stays listed.
+      if (outcome === "incomplete") return;
       toast(t("workspaceProviderDatabases.removed", { name: connection.name }));
       pullIntoDevice([connection.id]);
       // Keep the row locked until the refreshed list no longer shows it.
@@ -332,6 +345,7 @@ export default function SharedDatabasesView({
         )
       ) : null}
 
+      <AccessLoweringPrompt lowering={lowering} memberName={() => null} />
       {notice ? (
         <InlineNotice
           tone={notice.tone}

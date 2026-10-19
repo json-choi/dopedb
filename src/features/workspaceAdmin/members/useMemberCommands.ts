@@ -1,10 +1,22 @@
-// Owns the members area's write lifecycle: one invitation or membership command runs at
-// a time, the row it targets shows progress, and a refusal stays beside that target until
-// the next command. Success refreshes every administration read of the workspace.
+// Owns the members area's write lifecycle: one invitation, membership or database-grant
+// command runs at a time, the row it targets shows progress, and a refusal stays beside
+// that target until the next command. Every change that lowers a member's database
+// access (role change, removal, lowered or removed grant) is handed to the shared
+// access-lowering hook, which revokes provisioned accounts first. Success refreshes
+// every administration read of the workspace.
 import { useRef } from "react";
 import { useIsMutating, useMutation, useQueryClient } from "@tanstack/react-query";
+import { connectionId as toConnectionId } from "../../connections/domain";
 import { useI18n, type I18nKey } from "../../../lib/i18n";
-import type { AssignableWorkspaceRole, WorkspaceAdminScope } from "../domain";
+import { accessErrorMessage } from "../access/errors";
+import type { SharedDatabase } from "../access/domain";
+import { LoweringFollowUpError, type AccessLowering } from "../accessLowering/useAccessLowering";
+import type {
+  AssignableWorkspaceRole,
+  ConnectionCapability,
+  WorkspaceAdminOperation,
+  WorkspaceAdminScope,
+} from "../domain";
 import {
   runWorkspaceAdmin,
   workspaceAdminErrorMessage,
@@ -16,12 +28,25 @@ import {
   parseCreatedInvitation,
   type CreatedInvitation,
 } from "./domain";
+import {
+  planGrantChange,
+  removalPlan,
+  roleLoweringPlan,
+  type MemberGrantsRow,
+} from "./memberGrants";
 import { memberDirectoryQuery } from "./queries";
 
 export type MemberCommand =
   | { kind: "invite"; email: string; role: AssignableWorkspaceRole }
   | { kind: "changeRole"; memberId: string; role: AssignableWorkspaceRole }
   | { kind: "remove"; memberId: string }
+  | {
+      kind: "setGrant";
+      memberId: string;
+      connectionId: string;
+      previous: ConnectionCapability | null;
+      next: ConnectionCapability | null;
+    }
   | { kind: "revokeInvitation"; invitationId: string }
   | {
       kind: "recreateInvitation";
@@ -44,6 +69,7 @@ const GENERIC_FAILURE: Record<MemberAction, I18nKey> = {
   invite: "workspaceMembers.inviteFailed",
   changeRole: "workspaceMembers.roleChangeFailed",
   remove: "workspaceMembers.removeFailed",
+  setGrant: "workspaceMembers.grantFailed",
   revokeInvitation: "workspaceMembers.revokeFailed",
   recreateInvitation: "workspaceMembers.recreateFailed",
 };
@@ -55,6 +81,7 @@ const REFUSAL_CODES = new Map<string, I18nKey>([
   ["INVITATION_LIMIT_REACHED", "workspaceMembers.errorInvitationLimit"],
   ["ORGANIZATION_MEMBERSHIP_LIMIT_REACHED", "workspaceMembers.errorMembershipLimit"],
   ["INVITATION_NOT_FOUND", "workspaceMembers.errorInvitationGone"],
+  ["direct_revocation_required", "workspaceMembers.errorRevocationRequired"],
 ]);
 
 // The English UI shows the control plane's own sentence. These rules only pick the
@@ -78,10 +105,17 @@ export function memberFailureMessage(
   if (error instanceof MemberDirectoryShapeError) {
     return i18n.t("workspaceMembers.loadIncompatible");
   }
+  if (error instanceof LoweringFollowUpError) {
+    return i18n.t("workspaceAccess.grantLowerPartial");
+  }
   let fallback = GENERIC_FAILURE[action];
+  const coded = error instanceof WorkspaceAdminRequestError && error.code
+    ? REFUSAL_CODES.get(error.code)
+    : undefined;
+  if (coded) return i18n.t(coded);
+  // Grant refusals have their own documented sentences.
+  if (action === "setGrant") return accessErrorMessage(error, i18n, fallback);
   if (error instanceof WorkspaceAdminRequestError) {
-    const coded = error.code ? REFUSAL_CODES.get(error.code) : undefined;
-    if (coded) return i18n.t(coded);
     const sentence = error.serverMessage ?? "";
     fallback = REFUSAL_SENTENCES.find(
       (rule) => rule.status === error.status && sentence.includes(rule.includes),
@@ -95,6 +129,7 @@ export function commandTarget(command: MemberCommand): string | null {
   switch (command.kind) {
     case "changeRole":
     case "remove":
+    case "setGrant":
       return command.memberId;
     case "revokeInvitation":
     case "recreateInvitation":
@@ -104,11 +139,22 @@ export function commandTarget(command: MemberCommand): string | null {
   }
 }
 
+/** What the controller reads at run time to decide whether a change lowers provisioned access. */
+export interface MemberCommandContext {
+  lowering: AccessLowering;
+  grants: readonly MemberGrantsRow[] | undefined;
+  /** The shared databases the acting administrator manages, by id. */
+  databases: ReadonlyMap<string, SharedDatabase>;
+}
+
 async function executeMemberCommand(
   scope: WorkspaceAdminScope,
   command: MemberCommand,
+  context: MemberCommandContext,
 ): Promise<InviteOutcome | null> {
   const { accountId, workspaceId } = scope;
+  const { lowering } = context;
+  const grantsOf = (memberId: string) => context.grants?.find((row) => row.memberId === memberId);
   switch (command.kind) {
     case "invite": {
       const body = await runWorkspaceAdmin(accountId, {
@@ -123,21 +169,55 @@ async function executeMemberCommand(
         invitation: parseCreatedInvitation(body),
       };
     }
-    case "changeRole":
-      await runWorkspaceAdmin(accountId, {
+    case "changeRole": {
+      const mutation: WorkspaceAdminOperation = {
         kind: "changeMemberRole",
         workspaceId,
         memberId: command.memberId,
         role: command.role,
-      });
+      };
+      const row = grantsOf(command.memberId);
+      const plan = row ? roleLoweringPlan(row, command.role, context.databases) : null;
+      if (plan) await lowering.run({ kind: "role_lowered", ...plan, mutation });
+      else await runWorkspaceAdmin(accountId, mutation);
       return null;
-    case "remove":
-      await runWorkspaceAdmin(accountId, {
+    }
+    case "remove": {
+      const mutation: WorkspaceAdminOperation = {
         kind: "removeMember",
         workspaceId,
         memberId: command.memberId,
-      });
+      };
+      const row = grantsOf(command.memberId);
+      const plan = row ? removalPlan(row, context.databases) : null;
+      if (plan) await lowering.run({ kind: "member_removed", ...plan, mutation });
+      else await runWorkspaceAdmin(accountId, mutation);
       return null;
+    }
+    case "setGrant": {
+      const plan = planGrantChange(command.previous, command.next);
+      if (!plan) return null;
+      const target = {
+        workspaceId,
+        connectionId: command.connectionId,
+        memberId: command.memberId,
+      };
+      const grant: WorkspaceAdminOperation | undefined = plan.grant
+        ? { kind: "grantConnectionAccess", ...target, capability: plan.grant }
+        : undefined;
+      if (plan.remove) {
+        await lowering.run({
+          kind: "grant_lowered",
+          targetLevel: "none",
+          targets: [{ connectionId: toConnectionId(command.connectionId), memberIds: [command.memberId] }],
+          mutation: { kind: "removeConnectionAccess", ...target },
+          ...(grant ? { then: grant } : {}),
+        });
+      } else if (grant) {
+        await runWorkspaceAdmin(accountId, grant);
+      }
+      return null;
+    }
     case "revokeInvitation":
       await runWorkspaceAdmin(accountId, {
         kind: "cancelInvitation",
@@ -167,7 +247,7 @@ async function executeMemberCommand(
   }
 }
 
-export function useMemberCommands(scope: WorkspaceAdminScope) {
+export function useMemberCommands(scope: WorkspaceAdminScope, context: MemberCommandContext) {
   const i18n = useI18n();
   const queryClient = useQueryClient();
   // Guards the gap between a click and the re-render that disables every action.
@@ -177,7 +257,7 @@ export function useMemberCommands(scope: WorkspaceAdminScope) {
   const running = useIsMutating({ mutationKey }) > 0;
   const mutation = useMutation({
     mutationKey,
-    mutationFn: (command: MemberCommand) => executeMemberCommand(scope, command),
+    mutationFn: (command: MemberCommand) => executeMemberCommand(scope, command, context),
     // Grants and access lists depend on roles, so every administration read of this
     // workspace (the member directory included) is refreshed. Returning the promise
     // keeps the command pending until the refreshed directory is on screen.

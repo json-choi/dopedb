@@ -1,48 +1,38 @@
 // Owns every Database access change made from the open panel: one command at a
 // time, the inline notice a refusal leaves behind, and the cache refresh that shows
 // the server's confirmed state afterwards. Components render this state and call
-// the commands; none of them writes grant, policy or conflict state directly.
+// the commands; none of them writes team read, policy or conflict state directly.
+// Applying a preserved deletion goes through the shared access-lowering hook.
 import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "../../../components/Toast";
 import { useI18n, type I18nKey } from "../../../lib/i18n";
 import { useCatalogScope } from "../../../lib/queries";
+import type { AccessLowering } from "../accessLowering/useAccessLowering";
 import { refreshDesktopConnections } from "../desktopConnections";
-import type { ConnectionCapability, WorkspaceAdminScope } from "../domain";
+import type { WorkspaceAdminScope } from "../domain";
 import { runWorkspaceAdmin } from "../requests";
 import {
   applyCandidateResolution,
   candidateTemplate,
   keepCurrentResolution,
-  planGrantChange,
   type ConnectionConflict,
-  type MemberGrant,
 } from "./domain";
 import { accessErrorMessage } from "./errors";
 import { AccessResponseError, parseTeamReadResult } from "./parsers";
-import {
-  accessQueryRoot,
-  connectionConflictsQuery,
-  databaseGrantsQuery,
-} from "./queries";
+import { accessQueryRoot, connectionConflictsQuery, teamReadQuery } from "./queries";
 
 export type AccessBusy =
-  | {
-      kind: "grant";
-      connectionId: string;
-      memberId: string;
-      next: ConnectionCapability | null;
-    }
   | { kind: "teamRead"; connectionId: string }
   | { kind: "conflict"; conflictId: string; action: "keep" | "apply" };
 
 export type AccessNotice =
-  | { area: "grants" | "teamRead"; connectionId: string; message: string }
+  | { area: "teamRead"; connectionId: string; message: string }
   | { area: "conflict"; conflictId: string; connectionName: string; message: string };
 
 export type AccessCommands = ReturnType<typeof useAccessCommands>;
 
-export function useAccessCommands(scope: WorkspaceAdminScope) {
+export function useAccessCommands(scope: WorkspaceAdminScope, lowering: AccessLowering) {
   const queryClient = useQueryClient();
   const { lang, t } = useI18n();
   const toast = useToast();
@@ -72,53 +62,10 @@ export function useAccessCommands(scope: WorkspaceAdminScope) {
   // A refusal may mean the database, its grants or its conflicts moved on, so it
   // re-reads the whole area; a confirmed change refreshes only what it touched.
   const refreshArea = () => queryClient.invalidateQueries({ queryKey: accessQueryRoot(scope) });
-  const refreshGrants = (connectionId: string) =>
-    queryClient.invalidateQueries({ queryKey: databaseGrantsQuery(scope, connectionId).queryKey });
+  const refreshTeamRead = (connectionId: string) =>
+    queryClient.invalidateQueries({ queryKey: teamReadQuery(scope, connectionId).queryKey });
   const refreshConflicts = () =>
     queryClient.invalidateQueries({ queryKey: connectionConflictsQuery(scope).queryKey });
-
-  async function changeGrant(
-    connectionId: string,
-    grant: MemberGrant,
-    next: ConnectionCapability | null,
-  ) {
-    const plan = planGrantChange(grant.capability, next);
-    if (!plan) return;
-    if (!begin({ kind: "grant", connectionId, memberId: grant.memberId, next })) return;
-    let removed = false;
-    let failed = false;
-    try {
-      if (plan.remove) {
-        await runWorkspaceAdmin(scope.accountId, {
-          kind: "removeConnectionAccess",
-          workspaceId: scope.workspaceId,
-          connectionId,
-          memberId: grant.memberId,
-        });
-        removed = true;
-      }
-      if (plan.grant) {
-        await runWorkspaceAdmin(scope.accountId, {
-          kind: "grantConnectionAccess",
-          workspaceId: scope.workspaceId,
-          connectionId,
-          memberId: grant.memberId,
-          capability: plan.grant,
-        });
-      }
-    } catch (error) {
-      failed = true;
-      setNotice({
-        area: "grants",
-        connectionId,
-        message: removed && plan.grant
-          ? t("workspaceAccess.grantLowerPartial")
-          : refusal(error, "workspaceAccess.grantFailed"),
-      });
-    } finally {
-      await finish(failed ? refreshArea() : refreshGrants(connectionId));
-    }
-  }
 
   async function setTeamRead(connectionId: string, enabled: boolean) {
     if (!begin({ kind: "teamRead", connectionId })) return;
@@ -141,7 +88,7 @@ export function useAccessCommands(scope: WorkspaceAdminScope) {
         message: refusal(error, "workspaceAccess.teamReadFailed"),
       });
     } finally {
-      await finish(failed ? refreshArea() : refreshGrants(connectionId));
+      await finish(failed ? refreshArea() : refreshTeamRead(connectionId));
     }
   }
 
@@ -182,23 +129,24 @@ export function useAccessCommands(scope: WorkspaceAdminScope) {
       // a current version that already equals it only needs the decision.
       if (!conflict.currentMatchesCandidate) {
         try {
-          await runWorkspaceAdmin(
-            scope.accountId,
-            deletion
-              ? {
-                  kind: "deleteSharedConnection",
-                  workspaceId: scope.workspaceId,
-                  connectionId: conflict.connectionId,
-                  expectedRevision: conflict.current.revision,
-                }
-              : {
-                  kind: "applyConnectionCandidate",
-                  workspaceId: scope.workspaceId,
-                  connectionId: conflict.connectionId,
-                  expectedRevision: conflict.current.revision,
-                  payload: candidateTemplate(conflict.candidate.payload),
-                },
-          );
+          if (deletion) {
+            const outcome = await lowering.runDeletion(conflict.connectionId, {
+              kind: "deleteSharedConnection",
+              workspaceId: scope.workspaceId,
+              connectionId: conflict.connectionId,
+              expectedRevision: conflict.current.revision,
+            });
+            // Pending revocation: the prompt explains it; the conflict stays open.
+            if (outcome === "incomplete") return;
+          } else {
+            await runWorkspaceAdmin(scope.accountId, {
+              kind: "applyConnectionCandidate",
+              workspaceId: scope.workspaceId,
+              connectionId: conflict.connectionId,
+              expectedRevision: conflict.current.revision,
+              payload: candidateTemplate(conflict.candidate.payload),
+            });
+          }
           templateChanged = true;
         } catch (error) {
           setNotice(conflictNotice(conflict, refusal(error, "workspaceAccess.applyFailed")));
@@ -234,7 +182,6 @@ export function useAccessCommands(scope: WorkspaceAdminScope) {
   return {
     busy,
     notice,
-    changeGrant,
     setTeamRead,
     keepCurrent,
     applyCandidate,

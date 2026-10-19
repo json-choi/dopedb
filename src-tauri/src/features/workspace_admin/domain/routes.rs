@@ -233,6 +233,10 @@ impl WorkspaceAdminOperation {
                 workspace_id,
                 connection_id,
             } => AdminRoute::get(connection_path(*workspace_id, *connection_id, &["grants"])),
+            Op::ListMemberGrants { workspace_id } => {
+                AdminRoute::get(workspace_path(*workspace_id, &["member-grants"]))
+                    .with_max_response_bytes(CONNECTION_LIST_RESPONSE_BYTES)
+            }
             Op::GrantConnectionAccess {
                 workspace_id,
                 connection_id,

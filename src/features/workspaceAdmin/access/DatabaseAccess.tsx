@@ -1,6 +1,7 @@
 // One selected shared database: how members receive credentials, the workspace
-// write ceiling (status only), team read access, and the member access list. Grants
-// are read for this database alone; every change is handed to the access commands.
+// write ceiling (status only) and team read access. Per-member permission is edited
+// in Members, which the last line points to; every change here is handed to the
+// access commands.
 import { useQuery } from "@tanstack/react-query";
 import InfoTip from "../../../components/InfoTip";
 import { Button } from "../../../design-system/components/Button";
@@ -14,8 +15,7 @@ import { useI18n } from "../../../lib/i18n";
 import type { WorkspaceAdminScope } from "../domain";
 import type { WorkspaceAdminPanelProps } from "../navigationRequest";
 import type { SharedDatabase } from "./domain";
-import MemberGrants from "./MemberGrants";
-import { databaseGrantsQuery } from "./queries";
+import { teamReadQuery } from "./queries";
 import TeamReadAccess from "./TeamReadAccess";
 import type { AccessCommands } from "./useAccessCommands";
 
@@ -31,12 +31,12 @@ export default function DatabaseAccess({
   onNavigate: WorkspaceAdminPanelProps["onNavigate"];
 }) {
   const { t } = useI18n();
-  const grantsQuery = useQuery(databaseGrantsQuery(scope, database.id));
+  const teamRead = useQuery(teamReadQuery(scope, database.id));
   const { busy, notice } = commands;
   const managed = database.credentialMode === "managed";
   const writesEnabled = database.allowWrites && database.writeAvailable;
-  const noticeFor = (area: "grants" | "teamRead") =>
-    notice?.area === area && notice.connectionId === database.id ? notice.message : null;
+  const teamReadNotice =
+    notice?.area === "teamRead" && notice.connectionId === database.id ? notice.message : null;
 
   return (
     <div className="tw:grid tw:min-w-0 tw:gap-5">
@@ -84,24 +84,22 @@ export default function DatabaseAccess({
           {managed ? (
             <TeamReadAccess
               scope={scope}
-              snapshot={grantsQuery.data}
-              loadFailed={grantsQuery.isError}
+              snapshot={teamRead.data}
+              loadFailed={teamRead.isError}
               locked={busy !== null}
               saving={busy?.kind === "teamRead" && busy.connectionId === database.id}
-              notice={noticeFor("teamRead")}
+              notice={teamReadNotice}
               onChange={(enabled) => void commands.setTeamRead(database.id, enabled)}
             />
           ) : null}
         </SettingsList>
       </section>
-      <MemberGrants
-        connectionId={database.id}
-        credentialMode={database.credentialMode}
-        query={grantsQuery}
-        busy={busy}
-        notice={noticeFor("grants")}
-        onChange={(grant, next) => void commands.changeGrant(database.id, grant, next)}
-      />
+      <p className="tw:m-0 tw:flex tw:min-w-0 tw:flex-wrap tw:items-center tw:gap-2 tw:text-xs tw:leading-body tw:text-muted-foreground">
+        {t("workspaceAccess.memberPermissionsNote")}
+        <Button size="compact" variant="ghost" onClick={() => onNavigate("workspace-members")}>
+          {t("workspaceAccess.openMembers")}
+        </Button>
+      </p>
     </div>
   );
 }
