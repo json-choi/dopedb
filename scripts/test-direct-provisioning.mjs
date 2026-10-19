@@ -189,13 +189,15 @@ const buildPostgres = async () => {
     return out.stdout.trim();
   };
   await waitFor(() => run("docker", ["exec", name, "psql", "-U", "postgres", "-h", "127.0.0.1", "-c", "select 1"]).status === 0, "postgres");
-  const pw = { owner: secret(), reader: secret(), writer: secret(), full: secret(), weak: secret(), none: secret() };
+  const pw = { owner: secret(), reader: secret(), writer: secret(), full: secret(), weak: secret(), none: secret(), signal: secret() };
   psql(
     `CREATE ROLE app_owner NOLOGIN;
 CREATE ROLE app_reader LOGIN PASSWORD '${pw.reader}';
 CREATE ROLE app_writer LOGIN PASSWORD '${pw.writer}';
 CREATE ROLE dba_admin LOGIN CREATEROLE PASSWORD '${pw.full}';
 CREATE ROLE weak_admin LOGIN CREATEROLE PASSWORD '${pw.weak}';
+CREATE ROLE signal_admin LOGIN CREATEROLE PASSWORD '${pw.signal}';
+GRANT pg_signal_backend TO signal_admin;
 CREATE ROLE no_admin LOGIN PASSWORD '${pw.none}';
 CREATE DATABASE shop OWNER app_owner;
 COMMENT ON ROLE app_reader IS 'existing application reader';
@@ -204,8 +206,8 @@ ALTER ROLE app_writer CONNECTION LIMIT 50;`,
   );
   psql(
     `REVOKE ALL ON DATABASE shop FROM PUBLIC;
-GRANT CONNECT ON DATABASE shop TO app_reader, app_writer, dba_admin, weak_admin, no_admin;
-GRANT app_owner TO dba_admin;
+GRANT CONNECT ON DATABASE shop TO app_reader, app_writer, dba_admin, weak_admin, signal_admin, no_admin;
+GRANT app_owner TO dba_admin, signal_admin;
 ALTER ROLE app_reader IN DATABASE shop SET statement_timeout = '20s';
 SET ROLE app_owner;
 CREATE SCHEMA sales; CREATE SCHEMA hr; CREATE SCHEMA secret;
@@ -252,7 +254,7 @@ UNION ALL SELECT 'defacl|' || coalesce(n.nspname, '') || '|' || pg_get_userbyid(
     name: "postgres",
     endpoint: { host: "127.0.0.1", port, database: "shop" },
     scope: ["sales", "hr"],
-    admins: { full: { user: "dba_admin", password: pw.full }, weak: { user: "weak_admin", password: pw.weak }, none: { user: "no_admin", password: pw.none }, inspector: { user: "dba_admin", password: pw.full }, terminator: { user: "dba_admin", password: pw.full } },
+    admins: { full: { user: "dba_admin", password: pw.full }, weak: { user: "weak_admin", password: pw.weak }, none: { user: "no_admin", password: pw.none }, inspector: { user: "dba_admin", password: pw.full }, terminator: { user: "signal_admin", password: pw.signal } },
     appReader: { user: "app_reader", password: pw.reader },
     deniedCodes: ["42501"],
     snapshot: () => psql(snapshotSql),
@@ -427,6 +429,9 @@ const scenarios = async (engine) => {
       check("wildcard-matching database is not grantable", byName.shopXa?.grantable !== true, JSON.stringify(byName.shopXa));
     }
     check("no grantor warning for the full admin", !(full.warnings ?? []).includes("grantor_insufficient"));
+    check("full admin without session-kill rights is reported", full.canEndSessions === false, JSON.stringify(full.canEndSessions));
+    const killer = driver(engine, { cmd: "preflight", scope: engine.scope, write: false }, { admin: engine.admins.terminator });
+    check("admin that can end sessions is reported", killer.ok && killer.canEndSessions === true, JSON.stringify(killer));
     const weak = driver(engine, { cmd: "preflight", scope: engine.scope, write: true }, { admin: engine.admins.weak });
     check("under-privileged admin can create but is not a grantor", weak.ok && weak.canCreatePrincipal === true && (weak.warnings ?? []).includes("grantor_insufficient"), JSON.stringify(weak));
     const none = driver(engine, { cmd: "preflight", scope: engine.scope, write: false }, { admin: engine.admins.none });
@@ -490,18 +495,23 @@ const scenarios = async (engine) => {
     engine.dropNewTable();
   });
 
-  // `lingerAllowed` marks the documented MySQL limit: without PROCESS + CONNECTION_ADMIN the
-  // administrator cannot find or kill the member's open connection, which keeps the db-level
-  // privileges it cached at login; the account is locked and dropped so no new login works.
+  // Without the right to end sessions (PostgreSQL superuser / pg_signal_backend; MySQL PROCESS +
+  // CONNECTION_ADMIN) the administrator must not borrow it by changing role memberships (the
+  // snapshot comparison proves no membership changed): the drop reports that open sessions may
+  // persist. PostgreSQL still revokes first, so an open session keeps only PUBLIC rights. MySQL
+  // sessions keep the db-level privileges cached at login (`lingerAllowed`) until they disconnect;
+  // the account is locked and dropped so no new login works.
   const revokeWhileConnected = async (title, admin, expectTerminated, lingerAllowed = false) => {
     await scenarioRun(engine, title, async () => {
       const victim = newPrincipal();
-      const made = create(engine, victim, "read");
+      // The same administrator account creates and revokes (PostgreSQL records the creator's membership).
+      const made = create(engine, victim, "read", { admin });
       check("principal created", made.ok, JSON.stringify(made));
       const session = hold(engine, victim, engine.readOne);
       check("principal session opened", await session.ready);
       const dropped = driver(engine, { cmd: "drop", scope: engine.scope, from: "read", ...receipt(victim) }, { admin, memberPassword: victim.password });
       check("drop principal", dropped.ok, JSON.stringify(dropped));
+      check("drop reports whether open sessions may persist", dropped.openSessions === !expectTerminated, JSON.stringify(dropped));
       const outcome = await session.outcome(20000);
       if (!lingerAllowed) check("open session can no longer read", outcome?.ended === true, JSON.stringify(outcome));
       if (expectTerminated) {
@@ -517,7 +527,7 @@ const scenarios = async (engine) => {
   await revokeWhileConnected("d. revoke ends open session", engine.admins.terminator, true);
   if (engine.admins.terminator.user !== engine.admins.full.user) {
     // Without PROCESS/CONNECTION_ADMIN the session cannot be ended, but it must have lost access.
-    await revokeWhileConnected("d2. revoke without session-kill rights", engine.admins.full, false, true);
+    await revokeWhileConnected("d2. revoke without session-kill rights", engine.admins.full, false, engine.name === "mysql");
   }
 
   await scenarioRun(engine, "e. ownership refusals", async () => {

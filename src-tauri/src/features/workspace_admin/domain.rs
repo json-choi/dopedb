@@ -304,10 +304,41 @@ pub(crate) fn assert_workspace_admin_route_contract() {
     assert_eq!(route.method, AdminMethod::Get);
     assert_eq!(
         route.segments,
-        vec!["api", "v1", "workspaces", &Uuid::nil().to_string(), "member-grants"]
+        vec![
+            "api",
+            "v1",
+            "workspaces",
+            &Uuid::nil().to_string(),
+            "member-grants"
+        ]
     );
     assert!(serde_json::from_value::<WorkspaceAdminOperation>(json!({
         "kind": "listMemberGrants", "workspaceId": workspace_id, "memberId": Uuid::nil(),
+    }))
+    .is_err());
+    // Lowering a grant is one PATCH on the grants route and can never name `manage`.
+    let lowering: WorkspaceAdminOperation = serde_json::from_value(json!({
+        "kind": "lowerConnectionAccess", "workspaceId": workspace_id,
+        "connectionId": Uuid::nil(), "memberId": Uuid::nil(), "capability": "read",
+    }))
+    .expect("grant lowering operation decodes");
+    let route = lowering.route().expect("grant lowering route");
+    assert_eq!(route.method, AdminMethod::Patch);
+    assert_eq!(
+        route.segments,
+        vec![
+            "api",
+            "v1",
+            "workspaces",
+            &Uuid::nil().to_string(),
+            "connections",
+            &Uuid::nil().to_string(),
+            "grants"
+        ]
+    );
+    assert!(serde_json::from_value::<WorkspaceAdminOperation>(json!({
+        "kind": "lowerConnectionAccess", "workspaceId": workspace_id,
+        "connectionId": Uuid::nil(), "memberId": Uuid::nil(), "capability": "manage",
     }))
     .is_err());
     // A deletion confirmation is compared exactly and is never trimmed.

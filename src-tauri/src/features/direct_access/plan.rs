@@ -103,6 +103,10 @@ impl Planner {
         Ok(Self { engine, scope })
     }
 
+    pub(crate) fn engine(&self) -> DirectEngine {
+        self.engine
+    }
+
     fn account(&self, name: &PrincipalName) -> String {
         match self.engine {
             DirectEngine::Postgres => quote_identifier(DatabaseEngine::Postgres, name.as_str()),
@@ -344,26 +348,9 @@ impl Planner {
         plan
     }
 
-    /// PostgreSQL only: a CREATEROLE administrator holds ADMIN OPTION on a role it
-    /// created, which does not allow ending that role's sessions. The administrator
-    /// borrows membership of the DopeDB-owned principal for the termination and gives
-    /// it back; the principal's own membership rows are the only ones touched.
-    pub(crate) fn borrowed_membership(
-        &self,
-        name: &PrincipalName,
-    ) -> Option<(PlannedStatement, PlannedStatement)> {
-        if self.engine != DirectEngine::Postgres {
-            return None;
-        }
-        let account = self.account(name);
-        Some((
-            PlannedStatement::fixed(format!("GRANT {account} TO CURRENT_USER")),
-            PlannedStatement::fixed(format!("REVOKE {account} FROM CURRENT_USER")),
-        ))
-    }
-
-    /// Select the session identifiers of the principal. PostgreSQL terminates in the
-    /// same statement (one `pg_terminate_backend` row per session); MySQL returns
+    /// Select the session identifiers of the principal. Only an administrator that
+    /// [can end sessions](super::ports::TargetSession::terminate_sessions) runs this; it
+    /// never changes a role membership. PostgreSQL terminates in the same statement (one `pg_terminate_backend` row per session); MySQL returns
     /// connection ids for [`kill_connection`].
     pub(crate) fn sessions_to_terminate(&self, name: &PrincipalName) -> PlannedStatement {
         let (sql, binds) = match self.engine {

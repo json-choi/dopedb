@@ -48,6 +48,8 @@ struct World {
     credential: bool,
     /// Principal ids whose DROP/REVOKE statements the database refuses.
     failing: Vec<String>,
+    /// Whether the administrator account may end other accounts' sessions.
+    can_end_sessions: bool,
     items: Arc<Vec<DirectWorkListItem>>,
 }
 
@@ -139,8 +141,8 @@ impl TargetSession for FakeSession {
         &mut self,
         _: &Planner,
         _: &PrincipalName,
-    ) -> Result<(), FailureCode> {
-        Ok(())
+    ) -> Result<bool, FailureCode> {
+        Ok(self.0.can_end_sessions)
     }
     async fn close(self) {}
 }
@@ -150,6 +152,7 @@ fn entry_for(
     id: Uuid,
     member: &str,
     kind: DirectRevocationKind,
+    target_level: DirectLevel,
 ) -> DirectRevocationEntry {
     DirectRevocationEntry {
         id: id.to_string(),
@@ -157,7 +160,7 @@ fn entry_for(
         member_id: member.to_owned(),
         principal_name: None,
         kind,
-        target_level: DirectLevel::None,
+        target_level,
         state: DirectRevocationState::Pending,
         created_at: "2026-01-01T00:00:00Z".into(),
     }
@@ -228,11 +231,11 @@ impl DirectControlPlanePort for FakeControl {
         scope: &DirectScope,
         kind: DirectRevocationKind,
         member_ids: &[String],
-        _: DirectLevel,
+        target_level: DirectLevel,
     ) -> AppResult<Vec<DirectRevocationEntry>> {
         Ok(member_ids
             .iter()
-            .map(|m| entry_for(scope, Uuid::new_v4(), m, kind))
+            .map(|m| entry_for(scope, Uuid::new_v4(), m, kind, target_level))
             .collect())
     }
     async fn settle_revocation(
@@ -321,9 +324,19 @@ fn coordinator(
     failing: &[&DirectWorkListItem],
     items: &[DirectWorkListItem],
 ) -> (Coordinator, Arc<Mutex<Log>>) {
+    coordinator_with(true, credential, failing, items)
+}
+
+fn coordinator_with(
+    can_end_sessions: bool,
+    credential: bool,
+    failing: &[&DirectWorkListItem],
+    items: &[DirectWorkListItem],
+) -> (Coordinator, Arc<Mutex<Log>>) {
     let world = World {
         log: Arc::default(),
         credential,
+        can_end_sessions,
         failing: failing.iter().map(|i| i.principal_name.clone()).collect(),
         items: Arc::new(items.to_vec()),
     };
@@ -345,15 +358,28 @@ fn request(
     members: &[&DirectWorkListItem],
     mutation: Value,
 ) -> RevokeApplyRequest {
+    request_levels(kind, scope, &[(DirectLevel::None, members)], mutation)
+}
+
+/// One target per level on the same connection.
+fn request_levels(
+    kind: DirectRevocationKind,
+    scope: &DirectScope,
+    levels: &[(DirectLevel, &[&DirectWorkListItem])],
+    mutation: Value,
+) -> RevokeApplyRequest {
     RevokeApplyRequest {
         account_id: scope.account_id.clone(),
         workspace_id: scope.workspace_id,
         kind,
-        target_level: DirectLevel::None,
-        targets: vec![RevocationTarget {
-            connection_id: scope.connection_id,
-            member_ids: members.iter().map(|m| m.member_id.clone()).collect(),
-        }],
+        targets: levels
+            .iter()
+            .map(|(target_level, members)| RevocationTarget {
+                connection_id: scope.connection_id,
+                target_level: *target_level,
+                member_ids: members.iter().map(|m| m.member_id.clone()).collect(),
+            })
+            .collect(),
         mutation,
         credentials: Vec::new(),
     }
@@ -401,6 +427,73 @@ pub(super) async fn assert_revocation_ordering_contract() {
         assert_eq!(log.mutations.len(), 1);
         assert_eq!(log.settled.len(), 1);
     }
+
+    // Role lowering can leave different levels per account: one accepts none (dropped),
+    // the other read (revoked to read, kept). A write target is refused.
+    let (mixed, log) = coordinator(true, &[], &all);
+    let outcome = mixed
+        .revoke_apply(
+            &signed_in,
+            request_levels(
+                DirectRevocationKind::RoleLowered,
+                &scope,
+                &[(DirectLevel::None, &[&a]), (DirectLevel::Read, &[&b])],
+                remove(&a),
+            ),
+        )
+        .await
+        .unwrap();
+    assert_eq!(outcome.mutation, MutationState::Done);
+    assert_eq!((outcome.applied.len(), outcome.pending.len()), (2, 0));
+    assert!(!outcome.open_sessions_may_persist);
+    {
+        let log = lock_unpoisoned(&log);
+        let dropped = log
+            .statements
+            .iter()
+            .filter(|sql| sql.starts_with("DROP ROLE"))
+            .count();
+        assert_eq!(dropped, 1, "only the none-target account is dropped");
+        let levels: Vec<_> = log.receipts.iter().map(|r| r.applied_level).collect();
+        assert!(
+            levels.contains(&DirectLevel::Read),
+            "the read target stays: {levels:?}"
+        );
+    }
+    assert!(mixed
+        .revoke_apply(
+            &signed_in,
+            request_levels(
+                DirectRevocationKind::RoleLowered,
+                &scope,
+                &[(DirectLevel::Write, &[&a])],
+                remove(&a),
+            ),
+        )
+        .await
+        .is_err());
+
+    // An administrator account that cannot end sessions still revokes and drops, and the
+    // outcome says already-open sessions may persist.
+    let (limited, log) = coordinator_with(false, true, &[], &all);
+    let outcome = limited
+        .revoke_apply(
+            &signed_in,
+            request(
+                DirectRevocationKind::MemberRemoved,
+                &scope,
+                &[&a],
+                remove(&a),
+            ),
+        )
+        .await
+        .unwrap();
+    assert_eq!(outcome.mutation, MutationState::Done);
+    assert!(outcome.open_sessions_may_persist);
+    assert!(lock_unpoisoned(&log)
+        .statements
+        .iter()
+        .any(|sql| sql.starts_with("DROP ROLE")));
 
     // A refused database revoke never reaches the control-plane mutation.
     let (refused, log) = coordinator(true, &[&a], &all);

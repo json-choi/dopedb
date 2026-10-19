@@ -10,9 +10,9 @@ use crate::kernel::identity::{ConnectionId, ProviderIntegrationId, WorkspaceId};
 
 use super::values::{
     AssignableWorkspaceRole, ConflictResolution, ConnectionCapability, EnvironmentClassification,
-    GcpSchemaAuthority, GcpSetupInventory, NeonDecideAction, NeonDecision, NeonExecuteAction,
-    NeonPlanAction, ProviderResourceKind, ProviderSelectionKey, SecretText,
-    VaultAppRoleConfiguration,
+    GcpSchemaAuthority, GcpSetupInventory, LoweredConnectionCapability, NeonDecideAction,
+    NeonDecision, NeonExecuteAction, NeonPlanAction, ProviderResourceKind, ProviderSelectionKey,
+    SecretText, VaultAppRoleConfiguration,
 };
 
 /// One administration command for the hosted workspace control plane.
@@ -69,6 +69,13 @@ pub(crate) enum WorkspaceAdminOperation {
         connection_id: ConnectionId,
         member_id: Uuid,
         capability: ConnectionCapability,
+    },
+    /// Lowers an existing grant in place, keeping a provisioned member's database account.
+    LowerConnectionAccess {
+        workspace_id: WorkspaceId,
+        connection_id: ConnectionId,
+        member_id: Uuid,
+        capability: LoweredConnectionCapability,
     },
     RemoveConnectionAccess {
         workspace_id: WorkspaceId,

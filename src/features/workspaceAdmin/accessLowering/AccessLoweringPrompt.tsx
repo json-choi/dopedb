@@ -19,8 +19,21 @@ export default function AccessLoweringPrompt({
   memberName: (memberId: string) => string | null;
 }) {
   const { t } = useI18n();
-  const { incomplete } = lowering;
-  if (!incomplete) return null;
+  const { incomplete, sessionsMayPersist } = lowering;
+  if (!incomplete) {
+    return sessionsMayPersist ? (
+      <div className="tw:grid tw:min-w-0 tw:gap-2" role="status">
+        <InlineNotice tone="warning" icon="alert">
+          {t("directAccess.lowering.sessionsMayPersist")}
+        </InlineNotice>
+        <div className="ds-control-row tw:flex tw:flex-wrap tw:items-center tw:gap-2">
+          <Button size="compact" onClick={lowering.dismiss}>
+            {t("common.close")}
+          </Button>
+        </div>
+      </div>
+    ) : null;
+  }
   const { outcome, credentialsOpen, retrying, error } = incomplete;
   const blocked = outcome.blockedNoCredential;
   const waiting = blocked.length === 0 && outcome.failed.length === 0 && outcome.mutation === "not_attempted";
@@ -41,6 +54,11 @@ export default function AccessLoweringPrompt({
           })}
         </InlineNotice>
       ))}
+      {sessionsMayPersist ? (
+        <InlineNotice tone="warning" icon="alert">
+          {t("directAccess.lowering.sessionsMayPersist")}
+        </InlineNotice>
+      ) : null}
       {waiting ? (
         <InlineNotice tone="warning" icon="alert">
           {t("directAccess.lowering.deferred")}

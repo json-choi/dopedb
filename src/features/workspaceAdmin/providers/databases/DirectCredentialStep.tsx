@@ -53,6 +53,11 @@ function PreflightReportView({ report }: { report: DirectPreflightReport }) {
           {t("directAccess.add.warningGrantor")}
         </InlineNotice>
       ) : null}
+      {report.canCreatePrincipal && !report.canEndSessions ? (
+        <InlineNotice tone="warning" icon="alert">
+          {t("directAccess.add.warningSessions")}
+        </InlineNotice>
+      ) : null}
       {report.warnings.includes("public_create") ? (
         <InlineNotice tone="warning" icon="alert">
           {t("directAccess.add.warningPublicCreate", {

@@ -70,7 +70,7 @@ creates or lowers the database roles itself, and answers with receipts (`direct/
 Desired levels are derived at read time from the member's grant, role and the write
 ceiling, then capped by pending revocation items.
 
-Trust boundary for lowering access: a grant removal, role change that lowers the level,
+Trust boundary for lowering access: a grant removal or in-place lowering (`PATCH .../grants`, guarded at the new effective level so the member keeps their database account), role change that lowers the level,
 member removal, team-read switch-off or shared-database deletion on a provisioned database
 is refused with HTTP 409 `direct_revocation_required` until every affected member's
 principal is absent, dropped or already at the lower level. The check is a SQL fragment

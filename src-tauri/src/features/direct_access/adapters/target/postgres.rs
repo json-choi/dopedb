@@ -122,6 +122,7 @@ impl PostgresSession {
             .collect::<Result<Vec<_>, FailureCode>>()?;
         Ok(PreflightFacts {
             can_create_principal: superuser || create_role,
+            can_end_sessions: self.can_end_sessions().await?,
             namespaces,
         })
     }
@@ -220,29 +221,35 @@ impl PostgresSession {
         within(statement_timeout(), transaction.commit()).await
     }
 
+    /// Superuser, or (through inheritance) a member of `pg_signal_backend`. Read-only.
+    async fn can_end_sessions(&mut self) -> Result<bool, FailureCode> {
+        within(
+            statement_timeout(),
+            sqlx::query_scalar::<_, bool>(
+                "SELECT r.rolsuper OR pg_has_role(current_user, 'pg_signal_backend', 'USAGE')
+                 FROM pg_roles r WHERE r.rolname = current_user",
+            )
+            .fetch_one(&mut self.conn),
+        )
+        .await
+    }
+
     pub(super) async fn terminate_sessions(
         &mut self,
         planner: &Planner,
         name: &PrincipalName,
-    ) -> Result<(), FailureCode> {
-        let borrowed = planner.borrowed_membership(name);
-        if let Some((grant, _)) = &borrowed {
-            // Refused when the administrator is allowed to signal anyway (or cannot
-            // grant); the termination below then decides.
-            let _ = self.execute(std::slice::from_ref(grant)).await;
+    ) -> Result<bool, FailureCode> {
+        // The administrator's own role memberships are never touched to gain the right.
+        if !self.can_end_sessions().await? {
+            return Ok(false);
         }
         let statement = planner.sessions_to_terminate(name);
         let mut query = sqlx::query(AssertSqlSafe(statement.sql.clone()));
         for bind in &statement.binds {
             query = query.bind(bind.clone());
         }
-        let ended = within(statement_timeout(), query.fetch_all(&mut self.conn))
-            .await
-            .map(|_| ());
-        if let Some((_, revoke)) = &borrowed {
-            let _ = self.execute(std::slice::from_ref(revoke)).await;
-        }
-        ended
+        within(statement_timeout(), query.fetch_all(&mut self.conn)).await?;
+        Ok(true)
     }
 
     pub(super) async fn close(self) {

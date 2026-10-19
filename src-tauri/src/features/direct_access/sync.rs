@@ -153,10 +153,25 @@ pub(crate) enum SyncSkip {
 /// Outcome of revoking one member's principal on the target.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum RevokeEffect {
-    Dropped,
-    Lowered(AccessLevel),
+    /// `open_sessions`: sessions opened before the revoke may persist, with only PUBLIC
+    /// rights (PostgreSQL) or the privileges they had at login (MySQL), because the
+    /// administrator account cannot end sessions.
+    Dropped { open_sessions: bool },
+    Lowered {
+        level: AccessLevel,
+        open_sessions: bool,
+    },
     /// The control plane's recorded level already satisfies the target.
     Unchanged,
+}
+
+impl RevokeEffect {
+    pub(super) const fn open_sessions(self) -> bool {
+        match self {
+            Self::Dropped { open_sessions } | Self::Lowered { open_sessions, .. } => open_sessions,
+            Self::Unchanged => false,
+        }
+    }
 }
 
 impl<V, T, C, L> DirectAccessUseCases<V, T, C, L>
@@ -491,7 +506,7 @@ where
         let dropping = target == DirectLevel::None;
         let request = match result {
             Ok(RevokeEffect::Unchanged) => return Ok(true),
-            Ok(RevokeEffect::Dropped) => DirectReceiptRequest {
+            Ok(RevokeEffect::Dropped { .. }) => DirectReceiptRequest {
                 principal_id: item.principal_id.clone(),
                 device_id: prepared.device_id.clone(),
                 from: DirectReceiptFrom::DropPending,
@@ -503,7 +518,7 @@ where
                 server_fingerprint: None,
                 failure_code: None,
             },
-            Ok(RevokeEffect::Lowered(level)) => DirectReceiptRequest {
+            Ok(RevokeEffect::Lowered { level, .. }) => DirectReceiptRequest {
                 principal_id: item.principal_id.clone(),
                 device_id: prepared.device_id.clone(),
                 from: DirectReceiptFrom::Applying,
@@ -624,28 +639,50 @@ pub(super) async fn revoke<S: TargetSession>(
     let observation = session.observe(&receipt.name).await?;
     if !observation.name_exists {
         return if target == AccessLevel::None {
-            Ok(RevokeEffect::Dropped)
+            Ok(RevokeEffect::Dropped {
+                open_sessions: false,
+            })
         } else {
             Err(FailureCode::MarkerMismatch)
         };
     }
     let proven = prove_ownership(receipt, &observation)?;
+    let postgres = planner.engine() == DirectEngine::Postgres;
     if target == AccessLevel::None {
-        // Lock first so no new session starts while the old ones are ended; when the
-        // lock or the termination is not permitted the REVOKE and DROP below still
-        // remove every privilege.
+        // PostgreSQL privileges are checked per statement, so revoking first strips an
+        // open session of everything but PUBLIC rights even when it cannot be ended.
+        // Then lock so no new session starts, end sessions when the administrator
+        // account may, and drop. No role membership is ever granted or changed.
+        if postgres {
+            session
+                .execute(&planner.change_level(proven.name(), applied, AccessLevel::None))
+                .await?;
+        }
         let _ = session.execute(&[planner.lock(proven.name())]).await;
-        let _ = session.terminate_sessions(planner, proven.name()).await;
+        let ended = session
+            .terminate_sessions(planner, proven.name())
+            .await
+            .unwrap_or(false);
+        let remaining = if postgres { AccessLevel::None } else { applied };
         session
-            .execute(&planner.drop_principal(proven.name(), applied))
+            .execute(&planner.drop_principal(proven.name(), remaining))
             .await?;
-        Ok(RevokeEffect::Dropped)
+        Ok(RevokeEffect::Dropped {
+            open_sessions: !ended,
+        })
     } else {
         session
             .execute(&planner.change_level(proven.name(), applied, target))
             .await?;
-        let _ = session.terminate_sessions(planner, proven.name()).await;
-        Ok(RevokeEffect::Lowered(target))
+        let ended = session
+            .terminate_sessions(planner, proven.name())
+            .await
+            .unwrap_or(false);
+        Ok(RevokeEffect::Lowered {
+            level: target,
+            // PostgreSQL applies the lowered privileges to open sessions at once.
+            open_sessions: !ended && !postgres,
+        })
     }
 }
 

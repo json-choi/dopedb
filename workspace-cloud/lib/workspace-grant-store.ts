@@ -4,6 +4,7 @@ import { sql } from "drizzle-orm";
 import { atomicD1 } from "./d1/atomic";
 import { workspaceMemberAuthority, type MemberAuthority } from "./d1/member-authority";
 import { utcNow, uuidDefault } from "./d1/schema/values";
+import type { DirectLevel } from "./workspace-direct-access-core";
 import {
   directLoweringTargets, directSettlePairs, noDirectLoweringBlockers, settleDirectRevocationsAfterMutation,
 } from "./workspace-direct-access-store";
@@ -40,6 +41,49 @@ export async function increaseConnectionGrant(input: GrantMutation & { capabilit
       settleDirectRevocationsAfterMutation(input.organizationId, scope, directSettlePairs.grant(input.connectionId, input.memberId)),
       sql`INSERT INTO workspace_audit_event (organization_id, actor_user_id, action, resource_type, resource_id, redacted_summary, request_id)
         SELECT ${input.organizationId}, ${input.authority.userId}, 'connection.grant.update', 'connection', ${input.connectionId},
+          json_object('memberId', ${input.memberId}, 'capability', ${input.capability}), ${uuidDefault} FROM (${scope})`,
+    ],
+  });
+  return result.rows[0] as { capability: GrantCapability }[];
+}
+
+/**
+ * Lower an existing grant to a strictly lower capability without removing it, so a
+ * provisioned member keeps their database account. `newLevel` is the direct level the
+ * member's role and the new capability yield; the lowering guard evaluates the principal's
+ * applied level against it inside the atomic scope. `claimId` is the member revocation
+ * gate and is required only while managed leases may exist (never for provisioned
+ * databases, where the gate would read as full revocation).
+ */
+export async function lowerConnectionGrant(input: GrantMutation & {
+  capability: GrantCapability;
+  memberRole: string;
+  newLevel: DirectLevel;
+  claimId: string | null;
+  userId: string;
+}) {
+  const rank = { view: 0, read: 1, use: 2, manage: 3 };
+  const caseRank = sql`CASE grant.capability WHEN 'view' THEN 0 WHEN 'read' THEN 1 WHEN 'use' THEN 2 ELSE 3 END`;
+  const gateOpen = input.claimId === null
+    ? sql`target.revocation_pending_at IS NULL AND target.revocation_claim_id IS NULL`
+    : sql`target.revocation_pending_at IS NOT NULL AND target.revocation_claim_id = ${input.claimId}`;
+  const result = await atomicD1({
+    scope: sql`SELECT '{}' AS payload FROM member target JOIN workspace_connection_grant grant ON grant.member_id = target.id
+      AND grant.organization_id = target.organization_id AND grant.connection_id = ${input.connectionId}
+      WHERE target.id = ${input.memberId} AND target.organization_id = ${input.organizationId} AND target.user_id = ${input.userId}
+        AND target.role = ${input.memberRole} AND target.id <> ${input.authority.membershipId} AND ${gateOpen}
+        AND EXISTS (${managerAuthority(input)})
+        AND ${caseRank} > ${rank[input.capability]}
+        AND ${noDirectLoweringBlockers(input.organizationId, directLoweringTargets.grant(input.connectionId, input.memberId, input.newLevel))}
+        AND NOT EXISTS (SELECT 1 FROM workspace_credential_lease WHERE organization_id = ${input.organizationId}
+          AND connection_id = ${input.connectionId} AND user_id = ${input.userId} AND revoked_at IS NULL)`,
+    statements: (scope) => [
+      sql`UPDATE workspace_connection_grant SET capability = ${input.capability}, origin = 'explicit', updated_at = ${utcNow}
+        WHERE organization_id = ${input.organizationId} AND connection_id = ${input.connectionId}
+        AND member_id = ${input.memberId} AND EXISTS (${scope}) RETURNING capability`,
+      settleDirectRevocationsAfterMutation(input.organizationId, scope, directSettlePairs.grant(input.connectionId, input.memberId)),
+      sql`INSERT INTO workspace_audit_event (organization_id, actor_user_id, action, resource_type, resource_id, redacted_summary, request_id)
+        SELECT ${input.organizationId}, ${input.authority.userId}, 'connection.grant.lower', 'connection', ${input.connectionId},
           json_object('memberId', ${input.memberId}, 'capability', ${input.capability}), ${uuidDefault} FROM (${scope})`,
     ],
   });

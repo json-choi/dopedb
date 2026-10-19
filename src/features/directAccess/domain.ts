@@ -100,6 +100,8 @@ export interface DirectPreflightReport {
   serverVersion: string | null;
   versionSupported: boolean;
   canCreatePrincipal: boolean;
+  /** False when revoking a member cannot end sessions that are already open. */
+  canEndSessions: boolean;
   namespaces: DirectNamespaceFacts[];
   warnings: DirectPreflightWarning[];
   failureCode: DirectFailureCode | null;
@@ -160,6 +162,8 @@ export interface DirectRevocationEntry {
 
 export interface DirectRevocationTarget {
   connectionId: ConnectionId;
+  /** The level this database's accounts are revoked to; one connection may appear once per level. */
+  targetLevel: Exclude<DirectLevel, "write">;
   memberIds: string[];
 }
 
@@ -177,8 +181,6 @@ export interface DirectRevokeApplyRequest {
   accountId: AccountId;
   workspaceId: WorkspaceId;
   kind: DirectRevocationKind;
-  /** `none` or `read`; never `write`. */
-  targetLevel: Exclude<DirectLevel, "write">;
   targets: DirectRevocationTarget[];
   /** The access-lowering change, committed only after every principal was revoked. */
   mutation: WorkspaceAdminOperation;
@@ -209,6 +211,8 @@ export interface DirectRevocationOutcome {
   /** Connections whose administrator credential is missing on this device. */
   blockedNoCredential: string[];
   failed: DirectRevocationFailure[];
+  /** The administrator account cannot end sessions: already-open sessions may persist. */
+  openSessionsMayPersist: boolean;
   mutation: DirectMutationState;
 }
 

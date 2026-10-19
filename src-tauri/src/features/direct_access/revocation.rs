@@ -27,7 +27,7 @@ use super::ports::{
     AdminCredentialVault, DirectControlPlanePort, DirectLocalPort, MutationOutcome,
     RevocationSettle, TargetDatabasePort, TargetSession,
 };
-use super::sync::{level_of, PrepareError, Prepared, WorkListEngine};
+use super::sync::{level_of, PrepareError, Prepared, RevokeEffect, WorkListEngine};
 use super::types::{AdminCredential, DirectScope, Secret};
 use crate::error::{AppError, AppResult};
 use crate::kernel::identity::{AccountId, ConnectionId, WorkspaceId};
@@ -39,6 +39,9 @@ const MAX_MEMBERS_PER_TARGET: usize = 1_000;
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct RevocationTarget {
     pub(crate) connection_id: ConnectionId,
+    /// `none` or `read` for this database; never `write`. One connection may appear in
+    /// several targets, one per level.
+    pub(crate) target_level: DirectLevel,
     pub(crate) member_ids: Vec<String>,
 }
 
@@ -61,8 +64,6 @@ pub(crate) struct RevokeApplyRequest {
     pub(crate) account_id: AccountId,
     pub(crate) workspace_id: WorkspaceId,
     pub(crate) kind: DirectRevocationKind,
-    /// `none` or `read`; never `write`.
-    pub(crate) target_level: DirectLevel,
     pub(crate) targets: Vec<RevocationTarget>,
     /// The access-lowering change, as one closed workspace-administration operation.
     pub(crate) mutation: Value,
@@ -102,6 +103,10 @@ pub(crate) struct RevocationOutcome {
     pub(crate) pending: Vec<RevocationRef>,
     pub(crate) blocked_no_credential: Vec<String>,
     pub(crate) failed: Vec<RevocationFailure>,
+    /// A revoked account's already-open sessions may persist (the administrator
+    /// account cannot end sessions), keeping at most PUBLIC rights (PostgreSQL) or the
+    /// privileges they had at login (MySQL) until they disconnect.
+    pub(crate) open_sessions_may_persist: bool,
     pub(crate) mutation: MutationState,
 }
 
@@ -152,10 +157,12 @@ where
         request: RevokeApplyRequest,
     ) -> AppResult<RevocationOutcome> {
         require_signed_in(signed_in, &request.account_id)?;
-        if request.target_level == DirectLevel::Write
+        if request.targets.is_empty()
             || request.targets.len() > MAX_TARGETS
             || request.targets.iter().any(|target| {
-                target.member_ids.is_empty() || target.member_ids.len() > MAX_MEMBERS_PER_TARGET
+                target.target_level == DirectLevel::Write
+                    || target.member_ids.is_empty()
+                    || target.member_ids.len() > MAX_MEMBERS_PER_TARGET
             })
             || request.mutation.get("workspaceId").and_then(Value::as_str)
                 != Some(request.workspace_id.to_string().as_str())
@@ -166,7 +173,9 @@ where
         crate::features::workspace_admin::domain::validate_operation(&request.mutation)?;
         let _guard = self.device_lock.lock().await;
 
-        // Step 1: record the intent. A failure undoes the items created so far.
+        // Step 1: record the intent, one item per (connection, level, member). A failure
+        // undoes the items created so far. Targets of one connection share one database
+        // session in step 2, each entry revoked to its own level.
         let mut entries: Vec<(DirectScope, Vec<DirectRevocationEntry>)> = Vec::new();
         for target in &request.targets {
             let scope = DirectScope {
@@ -180,11 +189,19 @@ where
                     &scope,
                     request.kind,
                     &target.member_ids,
-                    request.target_level,
+                    target.target_level,
                 )
                 .await
             {
-                Ok(created) => entries.push((scope, created)),
+                Ok(created) => {
+                    match entries
+                        .iter_mut()
+                        .find(|(known, _)| known.connection_id == scope.connection_id)
+                    {
+                        Some((_, existing)) => existing.extend(created),
+                        None => entries.push((scope, created)),
+                    }
+                }
                 Err(error) => {
                     for (_, created) in &entries {
                         for entry in created {
@@ -208,6 +225,7 @@ where
         let mut blocked = Vec::new();
         let mut failed = Vec::new();
         let mut unfinished = false;
+        let mut open_sessions = false;
         for (scope, created) in &entries {
             let inline = request
                 .credentials
@@ -247,9 +265,11 @@ where
             if save && self.vault.store(scope, &credential).is_err() {
                 tracing::warn!("administrator credential was not saved to the keychain");
             }
-            let results = self.revoke_entries(&mut prepared, scope, created).await;
+            let revoked = self.revoke_entries(&mut prepared, scope, created).await;
             prepared.session.close().await;
-            for (entry, result) in created.iter().zip(results?) {
+            let (results, persist) = revoked?;
+            open_sessions |= persist;
+            for (entry, result) in created.iter().zip(results) {
                 match result {
                     EntryResult::Revoked => {}
                     EntryResult::NotClaimed => unfinished = true,
@@ -274,6 +294,7 @@ where
                 pending: all.iter().map(|entry| reference(entry)).collect(),
                 blocked_no_credential: blocked,
                 failed,
+                open_sessions_may_persist: open_sessions,
                 mutation: MutationState::NotAttempted,
             });
         }
@@ -313,6 +334,7 @@ where
             pending,
             blocked_no_credential: blocked,
             failed,
+            open_sessions_may_persist: open_sessions,
             mutation,
         })
     }
@@ -354,7 +376,7 @@ where
         prepared: &mut Prepared<T::Session>,
         scope: &DirectScope,
         entries: &[DirectRevocationEntry],
-    ) -> AppResult<Vec<EntryResult>> {
+    ) -> AppResult<(Vec<EntryResult>, bool)> {
         let engine = prepared.work.engine_direct();
         let work = prepared.work.clone();
         let mut ids = Vec::new();
@@ -373,6 +395,7 @@ where
             self.control.claim(scope, &prepared.device_id, &ids).await?
         };
         let mut results = Vec::with_capacity(entries.len());
+        let mut open_sessions = false;
         for entry in entries {
             let Some(item) = work
                 .items
@@ -401,13 +424,14 @@ where
             let posted = self
                 .post_revoke_receipt(prepared, scope, claimed_item, entry.target_level, outcome)
                 .await?;
+            open_sessions |= posted && outcome.is_ok_and(RevokeEffect::open_sessions);
             results.push(match (posted, outcome) {
                 (true, _) => EntryResult::Revoked,
                 (false, Err(code)) => EntryResult::Failed(code),
                 (false, Ok(_)) => EntryResult::Failed(FailureCode::Network),
             });
         }
-        Ok(results)
+        Ok((results, open_sessions))
     }
 
     /// Deferred items on an administrator device: revoke on the database, then
@@ -419,7 +443,7 @@ where
         scope: &DirectScope,
         entries: &[DirectRevocationEntry],
     ) -> AppResult<(u32, u32)> {
-        let results = self.revoke_entries(prepared, scope, entries).await?;
+        let (results, _) = self.revoke_entries(prepared, scope, entries).await?;
         // Group all-or-nothing kinds so their single change waits for every entry.
         let mut groups: BTreeMap<(String, &'static str), Vec<usize>> = BTreeMap::new();
         for (index, entry) in entries.iter().enumerate() {
@@ -501,7 +525,7 @@ where
                     })
                 } else {
                     json!({
-                        "kind": "grantConnectionAccess",
+                        "kind": "lowerConnectionAccess",
                         "workspaceId": scope.workspace_id,
                         "connectionId": scope.connection_id,
                         "memberId": member_id,

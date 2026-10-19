@@ -65,6 +65,17 @@ fn covers(privileges: &str, needed: &[&str]) -> bool {
         })
 }
 
+fn global_covers(grants: &[GrantLine], privilege: &str) -> bool {
+    grants.iter().any(|grant| {
+        matches!(grant.scope, GrantScope::Global) && covers(&grant.privileges, &[privilege])
+    })
+}
+
+fn ends_sessions(grants: &[GrantLine]) -> bool {
+    global_covers(grants, "PROCESS")
+        && (global_covers(grants, "CONNECTION_ADMIN") || global_covers(grants, "SUPER"))
+}
+
 async fn text_column(row: &sqlx::mysql::MySqlRow, index: usize) -> Result<String, FailureCode> {
     match row.try_get::<String, _>(index) {
         Ok(value) => Ok(value),
@@ -120,12 +131,21 @@ impl MysqlSession {
         Ok(lines)
     }
 
-    pub(super) async fn preflight(&mut self, write: bool) -> Result<PreflightFacts, FailureCode> {
+    async fn current_grants(&mut self) -> Result<Vec<GrantLine>, FailureCode> {
         let lines = self.grants("SHOW GRANTS FOR CURRENT_USER()").await?;
-        let grants: Vec<GrantLine> = lines.iter().filter_map(|line| parse_grant(line)).collect();
-        let can_create_principal = grants.iter().any(|grant| {
-            matches!(grant.scope, GrantScope::Global) && covers(&grant.privileges, &["CREATE USER"])
-        });
+        Ok(lines.iter().filter_map(|line| parse_grant(line)).collect())
+    }
+
+    /// `PROCESS` plus `CONNECTION_ADMIN` or `SUPER`, granted globally. Read-only.
+    async fn can_end_sessions(&mut self) -> Result<bool, FailureCode> {
+        let grants = self.current_grants().await?;
+        Ok(ends_sessions(&grants))
+    }
+
+    pub(super) async fn preflight(&mut self, write: bool) -> Result<PreflightFacts, FailureCode> {
+        let grants = self.current_grants().await?;
+        let can_create_principal = global_covers(&grants, "CREATE USER");
+        let can_end_sessions = ends_sessions(&grants);
         let needed: &[&str] = if write {
             &["SELECT", "INSERT", "UPDATE", "DELETE"]
         } else {
@@ -162,6 +182,7 @@ impl MysqlSession {
         }
         Ok(PreflightFacts {
             can_create_principal,
+            can_end_sessions,
             namespaces,
         })
     }
@@ -247,7 +268,12 @@ impl MysqlSession {
         &mut self,
         planner: &Planner,
         name: &PrincipalName,
-    ) -> Result<(), FailureCode> {
+    ) -> Result<bool, FailureCode> {
+        // Without PROCESS the process list shows only our own thread, and without
+        // CONNECTION_ADMIN or SUPER a KILL of another account's thread is refused.
+        if !self.can_end_sessions().await? {
+            return Ok(false);
+        }
         let statement = planner.sessions_to_terminate(name);
         let mut query = sqlx::query(AssertSqlSafe(statement.sql.clone()));
         for bind in &statement.binds {
@@ -264,7 +290,7 @@ impl MysqlSession {
             )
             .await;
         }
-        Ok(())
+        Ok(true)
     }
 
     pub(super) async fn close(self) {

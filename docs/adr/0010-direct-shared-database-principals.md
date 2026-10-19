@@ -42,11 +42,18 @@
    추정하지 않는다.
 5. **만료 없음, 행위 시점 회수.** principal은 만료되지 않는다. 구성원 제거·강퇴,
    권한 하향·제거, 역할 하향으로 실효 접근이 줄어드는 경우, 팀 읽기 해제, 공유 DB
-   삭제는 관리자 Desktop에서 일어난다. 그 기기의 Rust `RevocationCoordinator`가 서버
-   revocation gate를 claim하고, DB 쪽 REVOKE·DROP과 해당 principal 세션 종료
-   (PostgreSQL `pg_terminate_backend`, MySQL `KILL CONNECTION`)를 먼저 성공시킨 뒤
-   receipt를 올린다. 서버는 receipt가 확인될 때만 grant 변경을 확정한다. 서버가 DB보다
-   먼저 "권한 없음"을 주장하지 않는다.
+   삭제는 관리자 Desktop에서 일어난다. 그 기기의 Rust `RevocationCoordinator`가
+   revocation 항목(연결·구성원별 목표 수준 none/read)을 남기고, DB 쪽 REVOKE·DROP을
+   먼저 성공시킨 뒤 receipt를 올린다. 관리자 계정이 세션을 종료할 수 있으면(PostgreSQL
+   superuser 또는 `pg_signal_backend`, MySQL `PROCESS`와 `CONNECTION_ADMIN`/`SUPER`;
+   읽기 전용 검사) 해당 principal의 열린 세션도 끊는다(`pg_terminate_backend`,
+   `KILL CONNECTION`). 아니면 권한을 먼저 회수하고 계정을 잠가(NOLOGIN/ACCOUNT LOCK)
+   삭제하며, 이미 열린 세션이 연결을 끊을 때까지 남을 수 있음을 결과에 기록한다.
+   기존 role membership은 세션 종료를 위해서도 바꾸지 않는다. 서버는 receipt가 확인될
+   때만 grant 변경을 확정한다. 서버가 DB보다 먼저 "권한 없음"을 주장하지 않는다.
+   역할 하향처럼 연결마다 목표 수준이 다르면 항목도 연결·수준별로 만들고, 목표 수준이
+   read인 계정은 삭제하지 않고 read로만 낮춘다. 권한을 낮추되 유지하는 변경(쓰기→읽기)은
+   grant 행을 지우지 않는 `PATCH .../grants` 하향으로 처리해 구성원의 DB 계정을 보존한다.
 6. **자격 증명이 없는 기기.** 행위 기기에 그 DB의 관리자 자격 증명이 없으면 행위를
    진행하지 않고 경고한다. 관리자는 자격 증명을 입력하거나(키체인 저장 선택),
    보유 기기에서 적용하도록 `회수 대기` 항목을 남긴다. 그동안 서버 grant는 유지되어
@@ -97,7 +104,7 @@ domain 계약 테스트가 verifier 형식, desired 계산, 소유권 증명 거
 (`colima` 등) 무작위 loopback 포트와 생성한 비밀번호로 두 컨테이너를 띄우고
 끝나면 `docker rm -f`로 지운다. 기능 플래그 `direct-access-e2e`의 example
 (`src-tauri/examples/direct_access_e2e.rs`, 프로덕션 빌드에는 컴파일되지 않음)가
-실제 planner·verifier·소유권 증명·`SqlxTargetDatabase`를 구동하고, 스크립트는 기존
+실제 planner·verifier·소유권 증명·`SqlxTargetDatabase`를 구동하고 `pg_signal_backend`가 있는/없는 PostgreSQL 관리자 모두에서 membership 스냅샷 불변과 세션 종료 여부를 비교하고, 스크립트는 기존
 애플리케이션 seed(PUBLIC ACL, default privileges, CREATEROLE/CREATE USER 관리자)
 위에서 preflight, 읽기→쓰기→읽기 변경과 PostgreSQL 재부여, 비밀번호 회전, 열린
 세션 종료를 동반한 회수, 마커·oid·membership·소유 객체 거부, 실패한 provision을
@@ -105,8 +112,12 @@ domain 계약 테스트가 verifier 형식, desired 계산, 소유권 증명 거
 
 - MySQL 관리자에게 `PROCESS`와 `CONNECTION_ADMIN`(또는 `SUPER`)이 없으면 회수 뒤에도
   구성원의 열린 연결이 로그인 시 캐시된 DB 권한으로 남는다. 계정은 잠그고 삭제하므로
-  새 로그인은 막히지만 즉시 끊기려면 두 권한이 필요하다.
+  새 로그인은 막히지만 즉시 끊기려면 두 권한이 필요하다. PostgreSQL은 종료 권한이
+  없어도 REVOKE가 열린 세션에 다음 문장부터 적용된다.
 - MySQL에서 다른 계정의 grant 목록은 `mysql` 스키마 SELECT가 있어야 읽힌다. 읽을 수
   없으면 membership 검사는 건너뛰고 마커와 서버 신원으로만 소유를 증명한다.
-- PostgreSQL CREATEROLE 관리자는 만든 role에 ADMIN OPTION만 가지므로 세션 종료 동안만
-  principal의 membership을 빌렸다가 되돌린다.
+- PostgreSQL CREATEROLE 관리자는 만든 role에 ADMIN OPTION만 가지므로 다른 role의
+  세션을 종료할 수 없다. 기존 membership을 임시로도 바꾸지 않는다: superuser 또는
+  `pg_signal_backend` 구성원일 때만 종료하고, 아니면 REVOKE → NOLOGIN → DROP 순서로
+  진행한다. 이때 열린 세션은 다음 문장부터 PUBLIC 권한만 가지며 연결을 끊을 때까지
+  남을 수 있다. preflight의 `canEndSessions`가 이 한계를 추가 화면에서 경고한다.
