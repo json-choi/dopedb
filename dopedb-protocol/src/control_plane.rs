@@ -190,7 +190,7 @@ fn js_whitespace(character: char) -> bool {
     character.is_whitespace() || character == '\u{feff}'
 }
 
-fn valid_uuid_text(value: &str) -> bool {
+pub(crate) fn valid_uuid_text(value: &str) -> bool {
     let bytes = value.as_bytes();
     bytes.len() == 36
         && [8, 13, 18, 23].iter().all(|index| bytes[*index] == b'-')
@@ -203,7 +203,7 @@ fn valid_uuid_text(value: &str) -> bool {
         && Uuid::parse_str(value).is_ok()
 }
 
-fn valid_rfc3339_instant(value: &str) -> bool {
+pub(crate) fn valid_rfc3339_instant(value: &str) -> bool {
     let bytes = value.as_bytes();
     if bytes.len() < 20
         || ![4, 7, 10, 13, 16]

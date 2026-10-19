@@ -9,7 +9,8 @@ use dopedb_protocol::{
     ExternalAgentProvider, ExternalAgentResourceScope, ExternalAgentSessionRevokeCommand,
     ExternalAgentSessionStartCommand, GraphBuildArtifactV1, ManagedAccessMode, ManagedLeaseRequest,
     ManagedLeaseResponse, OperationCancelCommand, OperationShowCommand, OperationWaitCommand,
-    ProtocolError, QueryCancelCommand, QueryPlanCommand, QueryRunCommand, RequestEnvelope,
+    DirectProvisioningStatus, DirectReceiptRequest, DirectRevocationEntry, DirectVerifierRequest,
+    DirectWorkList, WorkspaceMemberGrants, ProtocolError, QueryCancelCommand, QueryPlanCommand, QueryRunCommand, RequestEnvelope,
     ResponseEnvelope, RuntimeDiscovery, SchemaListCommand, SessionAuthentication,
     SharedAnalysisArticleCreate, SignedAcpPluginManifestV2, SkillInstallCommand,
     SkillRemoveCommand, SkillRepairCommand, SkillStatusCommand, SkillsGetCommand,
@@ -20,7 +21,7 @@ use dopedb_protocol::{
     CONTROL_PLANE_CONTRACTS_SCHEMA_VERSION, GRAPH_BUILD_ARTIFACT_SCHEMA_VERSION,
     MANAGED_LEASE_CONTRACT_VERSION, MAX_KNOWLEDGE_GRAPH_ARTIFACT_BYTES, PROTOCOL_MAX,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
@@ -48,6 +49,16 @@ struct ControlPlaneContracts {
     analysis_article_create: Value,
     analysis_article_acceptances: Vec<SemanticAcceptance>,
     semantic_rejections: Vec<SemanticRejection>,
+    direct_access: Value,
+    direct_access_rejections: Vec<DirectAccessRejection>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct DirectAccessRejection {
+    name: String,
+    contract: String,
+    mutations: Vec<SemanticMutation>,
 }
 
 #[derive(Deserialize)]
@@ -595,6 +606,82 @@ fn public_protocol_goldens_match_pinned_agent_and_control_plane_contracts() {
         .expect("brokered generic managed lease must decode");
     assert!(brokered_generic.validate());
     assert_eq!(brokered_generic.lease.provider, "generic");
+    // Direct shared databases: same goldens as Workspace Cloud, lossless and strict.
+    fn decode_direct<T: serde::de::DeserializeOwned + Serialize>(
+        value: &Value,
+        validate: fn(&T) -> bool,
+    ) -> Option<T> {
+        serde_json::from_value::<T>(value.clone())
+            .ok()
+            .filter(validate)
+    }
+    let direct = &contracts.direct_access;
+    for key in ["provisioning", "provisioningNotRequested", "provisioningFailed"] {
+        let status = decode_direct::<DirectProvisioningStatus>(&direct[key], |v| v.validate())
+            .unwrap_or_else(|| panic!("{key} golden must decode"));
+        assert_eq!(serde_json::to_value(status).unwrap(), direct[key]);
+    }
+    let grants = decode_direct::<WorkspaceMemberGrants>(&direct["memberGrants"], |v| v.validate())
+        .expect("member grants golden must decode");
+    assert_eq!(serde_json::to_value(grants).unwrap(), direct["memberGrants"]);
+    for key in ["verifierRequestPostgres", "verifierRequestMysql"] {
+        let request = decode_direct::<DirectVerifierRequest>(&direct[key], |v| v.validate())
+            .unwrap_or_else(|| panic!("{key} golden must decode"));
+        assert_eq!(serde_json::to_value(request).unwrap(), direct[key]);
+    }
+    let work_list = decode_direct::<DirectWorkList>(&direct["workList"], |v| v.validate())
+        .expect("work list golden must decode");
+    assert_eq!(serde_json::to_value(work_list).unwrap(), direct["workList"]);
+    let receipt = decode_direct::<DirectReceiptRequest>(&direct["receipt"], |v| v.validate())
+        .expect("receipt golden must decode");
+    assert_eq!(serde_json::to_value(receipt).unwrap(), direct["receipt"]);
+    let revocation_golden = &direct["workList"]["revocations"][0];
+    assert!(decode_direct::<DirectRevocationEntry>(revocation_golden, |v| v.validate()).is_some());
+    // An old payload without the additive field still decodes.
+    let legacy = direct["memberGrants"].clone();
+    legacy["members"][0]["grants"][1]
+        .as_object()
+        .expect("grant")
+        .get("provisioning")
+        .is_none()
+        .then_some(())
+        .expect("fixture keeps one grant without provisioning");
+    assert!(decode_direct::<WorkspaceMemberGrants>(&legacy, |v| v.validate()).is_some());
+    for rejection in &contracts.direct_access_rejections {
+        let base = match rejection.contract.as_str() {
+            "directProvisioning" => &direct["provisioning"],
+            "directProvisioningFailed" => &direct["provisioningFailed"],
+            "directMemberGrants" => &direct["memberGrants"],
+            "directVerifierRequestPostgres" => &direct["verifierRequestPostgres"],
+            "directVerifierRequestMysql" => &direct["verifierRequestMysql"],
+            "directWorkList" => &direct["workList"],
+            "directReceipt" => &direct["receipt"],
+            "directRevocation" => revocation_golden,
+            other => panic!("unknown direct contract {other}"),
+        };
+        let candidate = apply_semantic_mutations(base, &rejection.mutations);
+        let accepted = match rejection.contract.as_str() {
+            "directProvisioning" | "directProvisioningFailed" => {
+                decode_direct::<DirectProvisioningStatus>(&candidate, |v| v.validate()).is_some()
+            }
+            "directMemberGrants" => {
+                decode_direct::<WorkspaceMemberGrants>(&candidate, |v| v.validate()).is_some()
+            }
+            "directVerifierRequestPostgres" | "directVerifierRequestMysql" => {
+                decode_direct::<DirectVerifierRequest>(&candidate, |v| v.validate()).is_some()
+            }
+            "directWorkList" => decode_direct::<DirectWorkList>(&candidate, |v| v.validate()).is_some(),
+            "directReceipt" => {
+                decode_direct::<DirectReceiptRequest>(&candidate, |v| v.validate()).is_some()
+            }
+            _ => decode_direct::<DirectRevocationEntry>(&candidate, |v| v.validate()).is_some(),
+        };
+        assert!(
+            !accepted,
+            "direct access semantic rejection accepted: {}",
+            rejection.name
+        );
+    }
     let article: SharedAnalysisArticleCreate =
         serde_json::from_value(contracts.analysis_article_create.clone())
             .expect("Analysis Article create golden must decode");

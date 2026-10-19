@@ -2,6 +2,15 @@
 // bearing fields are rejected rather than silently discarded to surface client bugs.
 import type { WorkspaceRoleName } from "./workspace-permissions";
 import { parseNeonResource } from "./providers/neon-core";
+import { accessModeAllowsWrite } from "./workspace-permissions";
+import {
+  isDirectEngine,
+  parseDirectScope,
+  type DirectEngine,
+  type DirectFailureCode,
+  type DirectLevel,
+  type DirectPrincipalState,
+} from "./workspace-direct-access-core";
 
 // SQLite paths identify files on one machine and are not meaningful team endpoints.
 const engines = ["postgres", "mysql", "mongodb", "bigquery"] as const;
@@ -131,6 +140,14 @@ function publicProviderTarget(row: {
   };
 }
 
+function validHost(value: unknown) {
+  const host = text(value, 512, true)!;
+  if (/[@/?#\s]/.test(host) || host.includes("://")) {
+    throw new Error("Host must not contain credentials or a connection URL");
+  }
+  return host;
+}
+
 export function parseSharedConnection(
   value: unknown,
   options: { credentialMode?: SharedConnectionCredentialMode } = {},
@@ -163,10 +180,7 @@ export function parseSharedConnection(
   if (credentialMode === "member_local" && allowWrites) {
     throw new Error("Member-local shared connections cannot delegate write authority");
   }
-  const host = text(body.host, 512, true)!;
-  if (/[@/?#\s]/.test(host) || host.includes("://")) {
-    throw new Error("Host must not contain credentials or a connection URL");
-  }
+  const host = validHost(body.host);
   const database = text(body.database, 1024) ?? "";
   if (/[?#\r\n]/.test(database)) throw new Error("Invalid database name");
   if (engine === "bigquery") {
@@ -199,6 +213,38 @@ export function parseSharedConnection(
   };
 }
 
+/** Member-visible status of the caller's own database principal on a direct database. */
+export type PublicDirectProvisioning = {
+  state: DirectPrincipalState | "not_requested";
+  level: DirectLevel;
+  principalName: string | null;
+  lastSyncedAt: string | null;
+  failureCode: DirectFailureCode | null;
+};
+
+/** Direct-endpoint facts and the caller's receipt, supplied only for provisioned rows. */
+export type DirectConnectionView = {
+  writeCeiling: boolean;
+  principal: {
+    state: DirectPrincipalState;
+    appliedLevel: DirectLevel;
+    principalName: string;
+    lastSyncedAt: Date | null;
+    failureCode: DirectFailureCode | null;
+  } | null;
+};
+
+export function publicDirectProvisioning(direct: DirectConnectionView): PublicDirectProvisioning {
+  const principal = direct.principal;
+  return {
+    state: principal?.state ?? "not_requested",
+    level: principal?.appliedLevel ?? "none",
+    principalName: principal?.principalName ?? null,
+    lastSyncedAt: principal?.lastSyncedAt?.toISOString() ?? null,
+    failureCode: principal?.failureCode ?? null,
+  };
+}
+
 export function publicConnection(
   row: {
     id: string; name: string; engine: string; provider: string; driverId: string | null;
@@ -211,12 +257,17 @@ export function publicConnection(
   accessMode: "view" | "read" | "write" | "manage",
   writeAvailable = false,
   schemaAccessAvailable = false,
+  direct: DirectConnectionView | null = null,
 ) {
   const managed = row.credentialMode === "managed";
-  const effectiveWrite = managed
-    && writeAvailable
-    && row.allowWrites
-    && (accessMode === "write" || accessMode === "manage");
+  // A direct database stays member_local on the wire; its write ceiling lives on the
+  // endpoint and applies on top of the same grant-derived access mode.
+  const effectiveWrite = direct
+    ? direct.writeCeiling && accessModeAllowsWrite(accessMode)
+    : managed
+      && writeAvailable
+      && row.allowWrites
+      && accessModeAllowsWrite(accessMode);
   return {
     id: row.id,
     name: row.name,
@@ -238,7 +289,72 @@ export function publicConnection(
     role,
     accessMode,
     credentialMode: managed ? "managed" : "member_local",
-    credentialsRequired: !managed && row.engine !== "bigquery",
+    credentialsRequired: !managed && !direct && row.engine !== "bigquery",
+    provisioning: direct ? publicDirectProvisioning(direct) : null,
     providerTarget: publicProviderTarget(row),
+  };
+}
+
+const directKeys = new Set([
+  "name", "engine", "host", "port", "database", "sslmode", "env", "schemaGroup",
+  "scope", "writeCeiling",
+]);
+const directSslModes: Record<DirectEngine, readonly string[]> = {
+  postgres: ["verify-full", "require"],
+  mysql: ["VERIFY_IDENTITY", "REQUIRED"],
+};
+
+export type DirectEndpointInput = {
+  connection: SharedConnectionInput;
+  scope: string[];
+  writeCeiling: boolean;
+};
+
+/**
+ * Strict input for registering a direct shared database. The shared record is the
+ * same secretless member-local template (generic provider, read-only default);
+ * credentials, usernames and URLs are rejected, never discarded.
+ */
+export function parseDirectEndpoint(value: unknown): DirectEndpointInput {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Direct endpoint must be an object");
+  }
+  const body = value as Record<string, unknown>;
+  for (const key of Object.keys(body)) {
+    if (forbiddenKeys.has(key)) throw new Error(`Secret-bearing field '${key}' is not accepted`);
+    if (!directKeys.has(key)) throw new Error(`Unknown direct endpoint field '${key}'`);
+  }
+  if (!isDirectEngine(body.engine)) throw new Error("Direct databases support PostgreSQL and MySQL");
+  const engine = body.engine;
+  if (!Number.isInteger(body.port) || Number(body.port) < 1 || Number(body.port) > 65535) {
+    throw new Error("Invalid port");
+  }
+  const sslmode = body.sslmode === undefined ? directSslModes[engine][0] : body.sslmode;
+  if (typeof sslmode !== "string" || !directSslModes[engine].includes(sslmode)) {
+    throw new Error("Invalid direct sslmode");
+  }
+  const host = validHost(body.host);
+  const database = text(body.database, 1024, true)!;
+  if (/[?#\r\n]/.test(database)) throw new Error("Invalid database name");
+  if (body.writeCeiling !== undefined && typeof body.writeCeiling !== "boolean") {
+    throw new Error("Invalid write ceiling");
+  }
+  return {
+    connection: {
+      name: text(body.name, 120, true)!,
+      engine,
+      provider: "generic",
+      driverId: null,
+      host,
+      port: Number(body.port),
+      database,
+      sslmode,
+      readonlyDefault: true,
+      allowWrites: false,
+      env: text(body.env, 32),
+      schemaGroup: text(body.schemaGroup, 120),
+    },
+    scope: parseDirectScope(engine, body.scope),
+    writeCeiling: body.writeCeiling === true,
   };
 }

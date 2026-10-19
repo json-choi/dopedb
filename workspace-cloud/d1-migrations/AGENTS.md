@@ -25,6 +25,7 @@ new migrations here from `../lib/d1/schema/index.ts`.
 | `0007_unusual_lionheart.sql` | Generated Desktop authorization-code table, hashed code/approval uniqueness, browser-session/user foreign keys, and constrained client/challenge fields. |
 
 | `0008_remove_device_authorization.sql` | Removes the unused device-code authorization table; Desktop PKCE uses its own authorization-code table. |
+| `0010_direct_shared_database.sql` | Direct shared databases: in-place `workspace_connection.provisioning_mode`, `workspace_direct_endpoint` / `workspace_direct_principal` / `workspace_direct_revocation`, immutability and closed state-machine triggers, and team-read triggers widened to provisioned connections. |
 
 ## Subdirectories
 | Directory | Purpose |

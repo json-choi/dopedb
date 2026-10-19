@@ -5,6 +5,7 @@ export * from "./integrations";
 export * from "./operations";
 export * from "./discovery";
 export * from "./connections";
+export * from "./direct-access";
 export * from "./versions";
 export * from "./keys";
 export * from "./leases";

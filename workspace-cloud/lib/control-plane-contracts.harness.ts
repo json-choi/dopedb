@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import { assertGcpBootstrapReadinessContract } from "./providers/gcp-cloud-bootstrap.harness";
 import { assertWorkloadIdentityContract } from "./providers/workload-identity.harness";
 import { assertSiteAnalyticsContract } from "./site-analytics.harness";
+import { assertDirectAccessContracts } from "./direct-access-contracts.harness";
 
 import { describe, expect, it, vi } from "vitest";
 
@@ -88,6 +89,8 @@ type Fixture = Readonly<{
     mutations: SemanticRejection["mutations"];
   }>[];
   semanticRejections: readonly SemanticRejection[];
+  directAccess: Record<string, unknown>;
+  directAccessRejections: readonly Readonly<{ name: string; contract: string; mutations: SemanticRejection["mutations"] }>[];
 }>;
 
 type SemanticRejection = Readonly<{
@@ -942,6 +945,8 @@ describe("Desktop control-plane contracts", () => {
       }
       expect(rejected, rejection.name).toBe(true);
     }
+
+    assertDirectAccessContracts(fixture, applySemanticMutations as never);
 
     expect(() => parseWorkspaceSyncPage({
       ...(fixture.workspaceSync.bootstrap as object),
