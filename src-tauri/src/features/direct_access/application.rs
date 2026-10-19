@@ -189,6 +189,7 @@ where
             server_version: None,
             version_supported: false,
             can_create_principal: false,
+            can_end_sessions: false,
             namespaces: Vec::new(),
             warnings: Vec::new(),
             failure_code: None,
@@ -234,6 +235,7 @@ where
         report.version_supported = true;
         let facts = session.preflight(write_ceiling).await?;
         report.can_create_principal = facts.can_create_principal;
+        report.can_end_sessions = facts.can_end_sessions;
         report.namespaces = facts.namespaces;
         if let Some(scope) = scope {
             let chosen: Vec<&NamespaceFacts> = scope

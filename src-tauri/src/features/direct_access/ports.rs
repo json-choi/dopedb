@@ -56,12 +56,16 @@ pub(crate) trait TargetSession: Send {
         plan: &[PlannedStatement],
     ) -> impl Future<Output = Result<(), FailureCode>> + Send;
 
-    /// End every session of the principal.
+    /// End every open session of the principal, but only when the administrator account
+    /// is allowed to (read-only privilege check, never a membership or grant change).
+    /// `Ok(false)` means it is not allowed and nothing was attempted: the caller has
+    /// already revoked and locked the principal, and open sessions may persist until
+    /// they disconnect.
     fn terminate_sessions(
         &mut self,
         planner: &Planner,
         name: &PrincipalName,
-    ) -> impl Future<Output = Result<(), FailureCode>> + Send;
+    ) -> impl Future<Output = Result<bool, FailureCode>> + Send;
 
     fn close(self) -> impl Future<Output = ()> + Send;
 }

@@ -1,7 +1,7 @@
 // Per-template grant administration. Workspace membership is necessary but never
 // sufficient for target-database access; every mutation rechecks the live grant.
 import { and, asc, eq, isNull } from "drizzle-orm";
-import { increaseConnectionGrant, removeConnectionGrant } from "../../../../../../../../lib/workspace-grant-store";
+import { increaseConnectionGrant, lowerConnectionGrant, removeConnectionGrant } from "../../../../../../../../lib/workspace-grant-store";
 import { db } from "../../../../../../../../lib/db";
 import { env } from "../../../../../../../../lib/env";
 import {
@@ -26,8 +26,9 @@ import {
 } from "../../../../../../../../lib/schema";
 import { changeTeamRead } from "../../../../../../../../lib/workspace-team-read-http";
 import { authorizeWorkspaceConnection } from "../../../../../../../../lib/workspace-authorization";
+import { directDesiredLevel } from "../../../../../../../../lib/workspace-direct-access-core";
 import { directRevocationRequired } from "../../../../../../../../lib/workspace-direct-access-http";
-import { directLoweringTargets, findDirectLoweringBlockers } from "../../../../../../../../lib/workspace-direct-access-store";
+import { directLoweringTargets, findDirectLoweringBlockers, loadDirectEndpoint } from "../../../../../../../../lib/workspace-direct-access-store";
 
 type RouteContext = { params: Promise<{ workspaceId: string; connectionId: string }> };
 type GrantCapability = "view" | "read" | "use" | "manage";
@@ -117,8 +118,89 @@ export async function POST(request: Request, context: RouteContext) {
     authority: { sessionId: authorization.session.session.id, userId: authorization.session.user.id,
       membershipId: authorization.membership.id, role: authorization.role },
   }) };
-  if (!result.rows[0]) return jsonError("Access changed or needs a lower level. Remove the current grant before granting less access.", 409);
+  if (!result.rows[0]) return jsonError("Access changed, or the member already holds a higher level. Lower the grant instead.", 409);
   return privateJson({ memberId: body.memberId, capability: result.rows[0].capability });
+}
+
+/**
+ * Lower an existing grant to a strictly lower capability. The grant row stays, so a
+ * provisioned member keeps their database account; the lowering guard is evaluated at the
+ * new effective level. Managed connections additionally revoke active leases first.
+ */
+export async function PATCH(request: Request, context: RouteContext) {
+  if (!mutationAllowed(request, env.appOrigin())) return jsonError("Invalid request origin", 403);
+  const { workspaceId, connectionId } = await context.params;
+  if (!isUuid(workspaceId) || !isUuid(connectionId)) return jsonError("Invalid workspace or connection id", 400);
+  const parsed = await boundedJsonBody(request, 1_024);
+  if (!parsed.ok) {
+    return jsonError(
+      parsed.reason === "too_large" ? "Connection grant is too large" : "Invalid connection grant",
+      parsed.reason === "too_large" ? 413 : 400,
+    );
+  }
+  const body = parsed.value as { memberId?: unknown; capability?: unknown } | null;
+  if (!body || typeof body !== "object" || Object.keys(body).length !== 2 || !validMemberId(body.memberId)
+    || typeof body.capability !== "string" || !["view", "read", "use"].includes(body.capability)) {
+    return jsonError("Invalid connection grant", 400);
+  }
+  const authorization = await liveManageGrant(request, workspaceId, connectionId);
+  if (!authorization.ok) return jsonError(authorization.error, authorization.status);
+  if (body.memberId === authorization.membership.id) return jsonError("A manager cannot reduce their own connection grant", 409);
+  const capability = body.capability as GrantCapability;
+  const target = await db.query.member.findFirst({
+    where: and(
+      eq(member.organizationId, workspaceId),
+      eq(member.id, body.memberId),
+      isNull(member.revocationPendingAt),
+      isNull(member.revocationClaimId),
+    ),
+    columns: { id: true, userId: true, role: true },
+  });
+  if (!target) return jsonError("Connection grant changed concurrently. Retry.", 409);
+  const endpoint = await loadDirectEndpoint(workspaceId, connectionId);
+  const newLevel = endpoint
+    ? directDesiredLevel({ role: target.role, capability, writeCeiling: endpoint.writeCeiling })
+    : "none";
+  const blockers = await findDirectLoweringBlockers(workspaceId, directLoweringTargets.grant(connectionId, target.id, newLevel));
+  if (blockers.length > 0) return directRevocationRequired(blockers);
+  const authority = { sessionId: authorization.session.session.id, userId: authorization.session.user.id,
+    membershipId: authorization.membership.id, role: authorization.role };
+  const lower = (claimId: string | null) => lowerConnectionGrant({
+    organizationId: workspaceId, connectionId, memberId: target.id, userId: target.userId, authority,
+    capability, memberRole: target.role, newLevel, claimId,
+  });
+  // A provisioned database issues no managed leases, and the member gate would read as a
+  // full revocation to the direct worker, so only managed connections go through the gate.
+  if (endpoint) {
+    const rows = await lower(null);
+    if (!rows[0]) return jsonError("Connection grant changed concurrently. Retry.", 409);
+    return privateJson({ memberId: target.id, capability: rows[0].capability });
+  }
+  const claim = await claimRevocationGate({
+    kind: "member",
+    organizationId: workspaceId,
+    memberId: target.id,
+    userId: target.userId,
+  });
+  if (!claim) return jsonError("Connection grant changed concurrently. Retry.", 409);
+  if (!claim.firstPending) {
+    await releaseRevocationGateClaim(claim).catch(() => false);
+    return jsonError("Another membership access change is already in progress", 409);
+  }
+  try {
+    const revocation = await revokeActiveLeases({ organizationId: workspaceId, connectionId, userId: target.userId });
+    if (revocation.deferred > 0) {
+      await renewRevocationGateClaim(claim).catch(() => null);
+      return jsonError("Active database access could not be revoked. Retry grant removal.", 409);
+    }
+    const rows = await lower(claim.claimId);
+    await clearRevocationGate(claim).catch(() => false);
+    if (!rows[0]) return jsonError("Connection grant changed concurrently. Retry.", 409);
+    return privateJson({ memberId: target.id, capability: rows[0].capability });
+  } catch (error) {
+    await clearRevocationGate(claim).catch(() => false);
+    throw error;
+  }
 }
 
 export async function DELETE(request: Request, context: RouteContext) {

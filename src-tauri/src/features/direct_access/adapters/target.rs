@@ -192,7 +192,7 @@ impl TargetSession for SqlxTargetSession {
         &mut self,
         planner: &Planner,
         name: &PrincipalName,
-    ) -> Result<(), FailureCode> {
+    ) -> Result<bool, FailureCode> {
         match &mut self.inner {
             Inner::Postgres(session) => session.terminate_sessions(planner, name).await,
             Inner::Mysql(session) => session.terminate_sessions(planner, name).await,

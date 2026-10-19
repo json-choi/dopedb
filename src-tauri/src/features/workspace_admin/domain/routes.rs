@@ -246,6 +246,15 @@ impl WorkspaceAdminOperation {
                 connection_path(*workspace_id, *connection_id, &["grants"]),
                 json!({ "memberId": member_id, "capability": capability.as_str() }),
             )?,
+            Op::LowerConnectionAccess {
+                workspace_id,
+                connection_id,
+                member_id,
+                capability,
+            } => AdminRoute::patch(
+                connection_path(*workspace_id, *connection_id, &["grants"]),
+                json!({ "memberId": member_id, "capability": capability.as_str() }),
+            )?,
             Op::RemoveConnectionAccess {
                 workspace_id,
                 connection_id,

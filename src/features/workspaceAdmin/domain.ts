@@ -82,6 +82,14 @@ export type WorkspaceAdminOperation =
       capability: ConnectionCapability;
     }
   | {
+      /** Lowers an existing grant in place, keeping a provisioned member's database account. */
+      kind: "lowerConnectionAccess";
+      workspaceId: WorkspaceId;
+      connectionId: string;
+      memberId: string;
+      capability: Exclude<ConnectionCapability, "manage">;
+    }
+  | {
       kind: "removeConnectionAccess";
       workspaceId: WorkspaceId;
       connectionId: string;

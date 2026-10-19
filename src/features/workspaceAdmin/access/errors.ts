@@ -14,7 +14,7 @@ const KNOWN_REFUSALS = new Map<string, I18nKey>([
   ["A manager cannot reduce their own connection grant", "workspaceAccess.errorOwnGrant"],
   ["A manager cannot remove their own connection grant", "workspaceAccess.errorOwnGrant"],
   [
-    "Access changed or needs a lower level. Remove the current grant before granting less access.",
+    "Access changed, or the member already holds a higher level. Lower the grant instead.",
     "workspaceAccess.errorGrantChanged",
   ],
   ["Connection grant changed concurrently. Retry.", "workspaceAccess.errorGrantConcurrent"],

@@ -53,8 +53,6 @@ export const workspaceAccessCatalog = defineCatalog(
     "workspaceAccess.capabilityUseManaged": "Use · role-based automatic access",
     "workspaceAccess.capabilityUseLocal": "Use · own credentials",
     "workspaceAccess.capabilityManage": "Manage · access and settings",
-    "workspaceAccess.grantLowerPartial":
-      "The previous access was removed, but the lower level couldn't be granted. This member has no access now; choose the level again.",
     "workspaceAccess.conflictsTitle": "Connection changes to review",
     "workspaceAccess.conflictsCount": "{count} open",
     "workspaceAccess.conflictsDescription":
@@ -102,7 +100,7 @@ export const workspaceAccessCatalog = defineCatalog(
     "workspaceAccess.errorMemberChangeInProgress":
       "Another access change for this member is in progress. Try again shortly.",
     "workspaceAccess.errorMemberLeaseRevoke":
-      "This member's active database credentials couldn't be revoked yet. Try removing access again shortly.",
+      "This member's active database credentials couldn't be revoked yet. Try changing access again shortly.",
     "workspaceAccess.errorAccessChanged":
       "This database's access changed in the meantime. The latest state is shown; try again.",
     "workspaceAccess.errorConnectionChangeInProgress":
@@ -185,8 +183,6 @@ export const workspaceAccessCatalog = defineCatalog(
     "workspaceAccess.capabilityUseManaged": "사용 · 역할 기반 자동 접근",
     "workspaceAccess.capabilityUseLocal": "사용 · 본인 자격 증명",
     "workspaceAccess.capabilityManage": "관리 · 권한과 설정 변경",
-    "workspaceAccess.grantLowerPartial":
-      "이전 권한은 해제했지만 더 낮은 수준을 부여하지 못했습니다. 이 구성원은 지금 접근 권한이 없으니 수준을 다시 선택하세요.",
     "workspaceAccess.conflictsTitle": "검토할 연결 변경",
     "workspaceAccess.conflictsCount": "미결 {count}건",
     "workspaceAccess.conflictsDescription":
@@ -234,7 +230,7 @@ export const workspaceAccessCatalog = defineCatalog(
     "workspaceAccess.errorMemberChangeInProgress":
       "이 구성원의 다른 접근 권한 변경이 진행 중입니다. 잠시 뒤 다시 시도하세요.",
     "workspaceAccess.errorMemberLeaseRevoke":
-      "이 구성원의 활성 데이터베이스 자격 증명을 아직 폐기하지 못했습니다. 잠시 뒤 다시 접근 해제를 시도하세요.",
+      "이 구성원의 활성 데이터베이스 자격 증명을 아직 폐기하지 못했습니다. 잠시 뒤 다시 접근 변경을 시도하세요.",
     "workspaceAccess.errorAccessChanged":
       "그사이 이 데이터베이스의 접근 설정이 바뀌었습니다. 최신 상태를 표시했으니 다시 시도하세요.",
     "workspaceAccess.errorConnectionChangeInProgress":

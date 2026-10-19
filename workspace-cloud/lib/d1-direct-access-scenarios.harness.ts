@@ -20,7 +20,7 @@ import {
   submitDirectVerifier,
   type DirectReceipt,
 } from "./workspace-direct-access-store";
-import { increaseConnectionGrant, removeConnectionGrant } from "./workspace-grant-store";
+import { increaseConnectionGrant, lowerConnectionGrant, removeConnectionGrant } from "./workspace-grant-store";
 import { changeWorkspaceMemberRole } from "./workspace-member-store";
 import { listWorkspaceMemberGrants } from "./workspace-member-grants";
 import { accessModeForConnectionGrant } from "./workspace-permissions";
@@ -209,6 +209,11 @@ export async function verifyD1DirectAccess(
   expect(await directRoleLowering({ organizationId, memberId: editor.memberId, previousRole: "editor", role: "analyst" }))
     .toEqual([{ connectionId, level: "read" }]);
   expect(await directRoleLowering({ organizationId, memberId: editor.memberId, previousRole: "editor", role: "admin" })).toEqual([]);
+  // Lowering a grant in place is guarded at the new level: the principal still holds write.
+  const lowerEditor = (capability: "view" | "read" | "use", newLevel: "none" | "read" | "write") => lowerConnectionGrant({
+    organizationId, connectionId, authority, memberId: editor.memberId, userId: editor.userId,
+    capability, memberRole: "editor", newLevel, claimId: null });
+  expect(await lowerEditor("read", "read")).toEqual([]);
   // After the device lowers the principal (receipt), lowering to read passes and the item settles.
   expect(await claim("device-a")).toBe(true);
   expect(await settle({ deviceId: "device-a", appliedLevel: "read", appliedVerifierVersion: 1 })).toBe(true);
@@ -217,6 +222,11 @@ export async function verifyD1DirectAccess(
   expect(await settleDirectRevocation({ organizationId, connectionId, revocationId: editorItem.id, actorUserId: authority.userId, to: "applied" })).toBe(true);
   expect(await settleDirectRevocation({ organizationId, connectionId, revocationId: editorItem.id, actorUserId: authority.userId, to: "cancelled" })).toBe(false);
   expect(await workOf(editor)).toMatchObject({ desiredLevel: "write", appliedLevel: "read", action: "apply" });
+  // The in-place lowering keeps the grant row and the principal; a non-lowering request changes nothing.
+  expect(await lowerEditor("read", "read")).toEqual([{ capability: "read" }]);
+  expect(await lowerEditor("use", "write")).toEqual([]);
+  expect(await workOf(editor)).toMatchObject({ desiredLevel: "read", appliedLevel: "read" });
+  expect(await increaseConnectionGrant({ organizationId, connectionId, authority, memberId: editor.memberId, capability: "use" })).toHaveLength(1);
   // A never-applied principal never blocks, and its item settles at once.
   expect(await findDirectLoweringBlockers(organizationId, directLoweringTargets.grant(connectionId, orphan.memberId))).toEqual([]);
   expect(await settleDirectRevocation({ organizationId, connectionId: plainId, revocationId: lowered.find((item) => item.memberId === orphan.memberId)!.id,

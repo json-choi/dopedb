@@ -13,7 +13,6 @@ import { useI18n } from "../../../lib/i18n";
 import {
   directFailureCodeOf,
   type DirectInlineCredential,
-  type DirectLevel,
   type DirectRevocationKind,
   type DirectRevocationOutcome,
   type DirectRevocationTarget,
@@ -28,24 +27,13 @@ import { runWorkspaceAdmin } from "../requests";
 
 export interface LoweringChange {
   kind: DirectRevocationKind;
-  /** `none` or `read`; the level the affected accounts are revoked to first. */
-  targetLevel: Exclude<DirectLevel, "write">;
-  /** Every database/member pair the change affects; non-provisioned ones are ignored. */
+  /**
+   * Every database/level/member set the change affects, each revoked to its own target
+   * level first; non-provisioned databases are ignored.
+   */
   targets: DirectRevocationTarget[];
   /** The change the screen would have sent, committed after the revocation. */
   mutation: WorkspaceAdminOperation;
-  /** A second operation that restores a lower level once the first one committed. */
-  then?: WorkspaceAdminOperation;
-}
-
-/** `then` failed after `mutation` committed: the first half is already in effect. */
-export class LoweringFollowUpError extends Error {
-  readonly reason: unknown;
-  constructor(reason: unknown) {
-    super("The follow-up access change failed.");
-    this.name = "LoweringFollowUpError";
-    this.reason = reason;
-  }
 }
 
 export interface IncompleteLowering {
@@ -68,6 +56,8 @@ export function useAccessLowering(
   const queryClient = useQueryClient();
   const databases = useQuery(sharedDatabasesQuery(scope));
   const [incomplete, setIncomplete] = useState<IncompleteLowering | null>(null);
+  // The last revocation could not end already-open sessions (admin account lacks the right).
+  const [sessionsMayPersist, setSessionsMayPersist] = useState(false);
   const known = databases.data ?? [];
   const provisioned = new Set(known.filter((database) => database.provisioned).map((d) => d.id));
 
@@ -78,19 +68,10 @@ export function useAccessLowering(
     });
   }
 
-  async function followUp(change: LoweringChange) {
-    if (!change.then) return;
-    try {
-      await runWorkspaceAdmin(scope.accountId, change.then);
-    } catch (error) {
-      throw new LoweringFollowUpError(error);
-    }
-  }
-
-  async function settle(change: LoweringChange, outcome: DirectRevocationOutcome) {
+  function settle(change: LoweringChange, outcome: DirectRevocationOutcome) {
+    setSessionsMayPersist(outcome.openSessionsMayPersist);
     if (outcome.mutation === "done") {
       setIncomplete(null);
-      await followUp(change);
       return "done" as const;
     }
     setIncomplete({ change, outcome, credentialsOpen: false, retrying: false, error: null });
@@ -103,7 +84,6 @@ export function useAccessLowering(
       accountId: scope.accountId,
       workspaceId: scope.workspaceId,
       kind: change.kind,
-      targetLevel: change.targetLevel,
       targets: change.targets,
       mutation: change.mutation,
       ...(credentials ? { credentials } : {}),
@@ -119,9 +99,9 @@ export function useAccessLowering(
       (target) => provisioned.has(target.connectionId) && target.memberIds.length > 0,
     );
     setIncomplete(null);
+    setSessionsMayPersist(false);
     if (targets.length === 0) {
       await runWorkspaceAdmin(scope.accountId, change.mutation);
-      await followUp(change);
       return "done";
     }
     const scoped = { ...change, targets };
@@ -139,9 +119,9 @@ export function useAccessLowering(
       const memberIds = rows
         .filter((row) => row.grants.some((grant) => grant.connectionId === connectionId))
         .map((row) => row.memberId);
-      targets = [{ connectionId: toConnectionId(connectionId), memberIds }];
+      targets = [{ connectionId: toConnectionId(connectionId), targetLevel: "none", memberIds }];
     }
-    return run({ kind: "db_deleted", targetLevel: "none", targets, mutation });
+    return run({ kind: "db_deleted", targets, mutation });
   }
 
   async function submitCredentials(credentials: DirectInlineCredential[]) {
@@ -150,7 +130,7 @@ export function useAccessLowering(
     setIncomplete({ ...incomplete, retrying: true, error: null });
     try {
       const outcome = await request(change, credentials);
-      const result = await settle(change, outcome);
+      const result = settle(change, outcome);
       void refresh();
       if (result === "done") onDeferredDone?.(change);
     } catch (error) {
@@ -180,12 +160,16 @@ export function useAccessLowering(
     run,
     runDeletion,
     incomplete,
+    sessionsMayPersist,
     databaseName: (connectionId: string) =>
       known.find((database) => database.id === connectionId)?.name ?? connectionId,
     submitCredentials,
     openCredentials: () => setCredentialsOpen(true),
     closeCredentials: () => setCredentialsOpen(false),
     leavePending,
-    dismiss: () => setIncomplete(null),
+    dismiss: () => {
+      setIncomplete(null);
+      setSessionsMayPersist(false);
+    },
   };
 }

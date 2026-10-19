@@ -36,13 +36,11 @@ function queuedMutation(
   if (entry.kind === "member_removed") {
     return { kind: "removeMember", workspaceId, memberId: entry.memberId };
   }
-  if (entry.kind === "grant_lowered" && entry.targetLevel === "none") {
-    return {
-      kind: "removeConnectionAccess",
-      workspaceId,
-      connectionId: entry.connectionId,
-      memberId: entry.memberId,
-    };
+  if (entry.kind === "grant_lowered") {
+    const target = { workspaceId, connectionId: entry.connectionId, memberId: entry.memberId };
+    return entry.targetLevel === "none"
+      ? { kind: "removeConnectionAccess", ...target }
+      : { kind: "lowerConnectionAccess", ...target, capability: "read" };
   }
   return null;
 }
@@ -102,8 +100,11 @@ export default function RevocationPending({
         } else {
           await lowering.run({
             kind: entry.kind,
-            targetLevel: entry.targetLevel === "read" ? "read" : "none",
-            targets: [{ connectionId: connection.connectionId, memberIds: [entry.memberId] }],
+            targets: [{
+              connectionId: connection.connectionId,
+              targetLevel: entry.targetLevel === "read" ? "read" : "none",
+              memberIds: [entry.memberId],
+            }],
             mutation,
           });
         }

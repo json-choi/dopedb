@@ -62,6 +62,8 @@ export const directAccessCatalog = defineCatalog(
       "This administrator cannot grant on every object, so some namespaces are unavailable.",
     "directAccess.add.warningPublicCreate":
       "Anyone can create objects in {names}. A member could then own objects there; consider restricting that first.",
+    "directAccess.add.warningSessions":
+      "This administrator account cannot end other accounts' sessions. When you revoke a member, sessions they already have open can keep running until they disconnect (PostgreSQL: with only PUBLIC rights; MySQL: with the privileges they had at login). Their access is still revoked and new logins are blocked. Use an account that can end sessions to close them at once.",
     "directAccess.add.noGrantable":
       "This administrator cannot grant access on any namespace. Use an account with grant rights.",
     "directAccess.add.scopeNounPostgres": "Schemas",
@@ -162,6 +164,8 @@ export const directAccessCatalog = defineCatalog(
       "The workspace still sees database access that has to be revoked first. Reload and try again, or apply the pending item.",
     "directAccess.lowering.rejected":
       "The database access was revoked, but the workspace refused the change. Check the refreshed list and try again.",
+    "directAccess.lowering.sessionsMayPersist":
+      "The administrator account cannot end sessions, so sessions a member already had open can keep running until they disconnect (PostgreSQL: with only PUBLIC rights; MySQL: with the privileges they had at login). New logins are blocked.",
   },
   {
     "directAccess.add.open": "직접 연결 추가",
@@ -220,6 +224,8 @@ export const directAccessCatalog = defineCatalog(
       "이 관리자는 모든 객체에 권한을 부여할 수 없어 일부 네임스페이스를 쓸 수 없습니다.",
     "directAccess.add.warningPublicCreate":
       "{names}에서는 누구나 객체를 만들 수 있습니다. 구성원이 그곳의 객체를 소유할 수 있으니 먼저 제한하는 것을 권장합니다.",
+    "directAccess.add.warningSessions":
+      "이 관리자 계정은 다른 계정의 세션을 종료할 수 없습니다. 구성원을 회수해도 이미 열린 세션은 연결을 끊을 때까지 계속될 수 있습니다(PostgreSQL: PUBLIC 권한만 유지, MySQL: 로그인 당시의 권한 유지). 접근 권한은 회수되고 새 로그인은 차단됩니다. 즉시 종료하려면 세션을 종료할 수 있는 계정을 사용하세요.",
     "directAccess.add.noGrantable":
       "이 관리자는 어떤 네임스페이스에도 접근 권한을 부여할 수 없습니다. 권한 부여 권한이 있는 계정을 사용하세요.",
     "directAccess.add.scopeNounPostgres": "스키마",
@@ -315,5 +321,7 @@ export const directAccessCatalog = defineCatalog(
     "directAccess.lowering.revocationRequired":
       "먼저 회수해야 하는 DB 접근이 워크스페이스에 남아 있습니다. 새로 고친 뒤 다시 시도하거나 대기 항목을 적용하세요.",
     "directAccess.lowering.rejected": "DB 접근은 회수했지만 워크스페이스가 변경을 거부했습니다. 새로 고친 목록을 확인하고 다시 시도하세요.",
+    "directAccess.lowering.sessionsMayPersist":
+      "관리자 계정이 세션을 종료할 수 없어, 구성원이 이미 열어 둔 세션은 연결을 끊을 때까지 계속될 수 있습니다(PostgreSQL: PUBLIC 권한만 유지, MySQL: 로그인 당시의 권한 유지). 새 로그인은 차단됩니다.",
   },
 );

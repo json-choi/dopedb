@@ -202,6 +202,9 @@ pub(crate) struct NamespaceFacts {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PreflightFacts {
     pub(crate) can_create_principal: bool,
+    /// The administrator can end other accounts' sessions (PostgreSQL superuser or
+    /// `pg_signal_backend`; MySQL `PROCESS` plus `CONNECTION_ADMIN` or `SUPER`).
+    pub(crate) can_end_sessions: bool,
     pub(crate) namespaces: Vec<NamespaceFacts>,
 }
 
@@ -222,6 +225,8 @@ pub(crate) struct PreflightReport {
     pub(crate) server_version: Option<String>,
     pub(crate) version_supported: bool,
     pub(crate) can_create_principal: bool,
+    /// When false, revoking a member cannot end sessions that are already open.
+    pub(crate) can_end_sessions: bool,
     pub(crate) namespaces: Vec<NamespaceFacts>,
     pub(crate) warnings: Vec<PreflightWarning>,
     pub(crate) failure_code: Option<FailureCode>,
