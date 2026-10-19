@@ -11,6 +11,7 @@ pub(crate) mod catalog;
 pub(crate) mod connections;
 pub(crate) mod cosmic_scene;
 pub(crate) mod diagnostics;
+pub(crate) mod direct_access;
 pub(crate) mod documents;
 pub(crate) mod erd;
 pub(crate) mod jobs;
