@@ -144,6 +144,15 @@ pub(super) async fn authorize_pin(
     access: ConnectionAccess,
 ) -> AppResult<ConnectionAuthorization> {
     let mutation = access.is_mutation();
+    // A provisioned connection opens only as the server-generated principal the
+    // control plane reported ready; the name is empty in every other state.
+    if pin.profile.credential_mode == WorkspaceCredentialMode::Provisioned
+        && pin.profile.username.is_empty()
+    {
+        return Err(AppError::Blocked {
+            reason: "your personal database account on this shared database is not ready".into(),
+        });
+    }
     if pin.requires_remote_rbac
         && pin.profile.credential_mode == WorkspaceCredentialMode::MemberLocal
         && mutation

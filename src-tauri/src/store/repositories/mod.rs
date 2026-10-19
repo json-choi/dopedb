@@ -3,6 +3,7 @@
 mod analysis_run_identity;
 mod catalog;
 mod connections;
+mod direct_access;
 mod history;
 mod safety;
 mod workspaces;

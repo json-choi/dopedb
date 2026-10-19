@@ -100,7 +100,13 @@ pub(super) fn row_to_connection_with_binding(
             profile.username.clear();
             profile.extra_params.clear();
             profile.secret_ref = None;
-        } else if profile.credential_mode == WorkspaceCredentialMode::MemberLocal {
+        } else if matches!(
+            profile.credential_mode,
+            WorkspaceCredentialMode::MemberLocal | WorkspaceCredentialMode::Provisioned
+        ) {
+            // A provisioned binding's username is the server-generated principal
+            // name written only by `apply_provisioned_principal`; it stays empty
+            // until the principal is ready, which keeps the connection closed.
             profile.username = r
                 .try_get::<Option<String>, _>("binding_username")?
                 .unwrap_or_default();

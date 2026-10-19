@@ -130,11 +130,17 @@ pub struct DirectProvisioningStatus {
 impl DirectProvisioningStatus {
     pub fn validate(&self) -> bool {
         use DirectProvisioningState as S;
-        self.principal_name.as_deref().is_none_or(valid_principal_name)
-            && self.last_synced_at.as_deref().is_none_or(valid_rfc3339_instant)
+        self.principal_name
+            .as_deref()
+            .is_none_or(valid_principal_name)
+            && self
+                .last_synced_at
+                .as_deref()
+                .is_none_or(valid_rfc3339_instant)
             && (self.state == S::NotRequested) == self.principal_name.is_none()
             && (self.state == S::Failed) == self.failure_code.is_some()
-            && (!matches!(self.state, S::NotRequested | S::Dropped) || self.level == DirectLevel::None)
+            && (!matches!(self.state, S::NotRequested | S::Dropped)
+                || self.level == DirectLevel::None)
             && (self.state != S::Ready || self.level != DirectLevel::None)
     }
 }
@@ -180,7 +186,10 @@ impl WorkspaceMemberGrants {
                     && member.grants.len() <= 1_000
                     && member.grants.iter().all(|grant| {
                         valid_uuid_text(&grant.connection_id)
-                            && matches!(grant.capability.as_str(), "view" | "read" | "use" | "manage")
+                            && matches!(
+                                grant.capability.as_str(),
+                                "view" | "read" | "use" | "manage"
+                            )
                             && match grant.origin.as_str() {
                                 "explicit" => true,
                                 "team" => matches!(grant.capability.as_str(), "view" | "read"),
@@ -190,7 +199,10 @@ impl WorkspaceMemberGrants {
                                 grant.effective_access_mode.as_str(),
                                 "view" | "read" | "write" | "manage"
                             )
-                            && grant.provisioning.as_ref().is_none_or(|status| status.validate())
+                            && grant
+                                .provisioning
+                                .as_ref()
+                                .is_none_or(|status| status.validate())
                     })
             })
     }
@@ -247,7 +259,10 @@ impl DirectRevocationEntry {
             && valid_uuid_text(&self.connection_id)
             && !self.member_id.is_empty()
             && self.member_id.len() <= 128
-            && self.principal_name.as_deref().is_none_or(valid_principal_name)
+            && self
+                .principal_name
+                .as_deref()
+                .is_none_or(valid_principal_name)
             && self.target_level != DirectLevel::Write
             && valid_rfc3339_instant(&self.created_at)
     }
@@ -295,7 +310,10 @@ impl DirectWorkList {
                         .server_role_oid
                         .as_deref()
                         .is_none_or(|value| (1..=64).contains(&value.len()))
-                    && item.claim_expires_at.as_deref().is_none_or(valid_rfc3339_instant)
+                    && item
+                        .claim_expires_at
+                        .as_deref()
+                        .is_none_or(valid_rfc3339_instant)
             })
             && self.revocations.iter().all(DirectRevocationEntry::validate)
     }
@@ -429,7 +447,9 @@ pub fn valid_direct_scope(engine: DirectEngine, scope: &[String]) -> bool {
                 && !scope[..index].contains(name)
                 && match engine {
                     DirectEngine::Postgres => {
-                        name.len() <= 63 && !lower.starts_with("pg_") && lower != "information_schema"
+                        name.len() <= 63
+                            && !lower.starts_with("pg_")
+                            && lower != "information_schema"
                     }
                     DirectEngine::Mysql => {
                         name.chars().count() <= 64

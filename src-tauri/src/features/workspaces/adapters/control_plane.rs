@@ -106,6 +106,11 @@ struct RemoteConnectionResponse {
     access_mode: String,
     credential_mode: String,
     provider_target: Option<ConnectionProviderTarget>,
+    /// Additive status of the caller's own principal on a direct shared database.
+    /// `credentialMode` stays `member_local` on the wire; this field alone marks a
+    /// provisioned connection.
+    #[serde(default)]
+    provisioning: Option<dopedb_protocol::DirectProvisioningStatus>,
 }
 
 #[derive(Debug, Deserialize)]

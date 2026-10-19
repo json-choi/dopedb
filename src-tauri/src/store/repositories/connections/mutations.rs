@@ -287,7 +287,10 @@ impl Store {
                 .bind(now)
                 .execute(&mut *tx)
                 .await?;
-            } else if profile.credential_mode == WorkspaceCredentialMode::MemberLocal {
+            } else if matches!(
+                profile.credential_mode,
+                WorkspaceCredentialMode::MemberLocal | WorkspaceCredentialMode::Provisioned
+            ) {
                 // A member's saved credential stays bound to the template endpoint it
                 // was entered for. When this template moves the endpoint, weakens its
                 // transport, or changes a verified trust anchor, the credential is
@@ -382,8 +385,10 @@ impl Store {
             reconcile_safety_write_ceiling(
                 &mut tx,
                 profile.id,
-                profile.credential_mode == WorkspaceCredentialMode::Managed
-                    && profile.allow_writes
+                matches!(
+                    profile.credential_mode,
+                    WorkspaceCredentialMode::Managed | WorkspaceCredentialMode::Provisioned
+                ) && profile.allow_writes
                     && profile.workspace_access.can_write(),
             )
             .await?;
@@ -409,6 +414,23 @@ impl Store {
             .bind(now)
             .execute(&mut *tx)
             .await?;
+            if profile.credential_mode == WorkspaceCredentialMode::Provisioned {
+                // The remote projection carries the principal name only while the
+                // principal is ready, so a lowered or dropped principal closes the
+                // connection here as well.
+                sqlx::query(
+                    "UPDATE workspace_connection_bindings
+                     SET username = ?3, revision = revision + 1, updated_at = ?4
+                     WHERE connection_id = ?1 AND account_user_id = ?2
+                       AND username IS NOT ?3",
+                )
+                .bind(profile.id.to_string())
+                .bind(account_user_id)
+                .bind(&profile.username)
+                .bind(now)
+                .execute(&mut *tx)
+                .await?;
+            }
         }
         tx.commit().await?;
         Ok(removed_credential_ids.into_iter().collect())

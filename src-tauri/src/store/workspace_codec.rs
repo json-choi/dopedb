@@ -58,6 +58,7 @@ pub(crate) fn credential_mode_str(mode: WorkspaceCredentialMode) -> &'static str
         WorkspaceCredentialMode::Local => "local",
         WorkspaceCredentialMode::MemberLocal => "member_local",
         WorkspaceCredentialMode::Managed => "managed",
+        WorkspaceCredentialMode::Provisioned => "provisioned",
     }
 }
 
@@ -66,6 +67,7 @@ pub(crate) fn parse_credential_mode(value: String) -> AppResult<WorkspaceCredent
         "local" => Ok(WorkspaceCredentialMode::Local),
         "member_local" => Ok(WorkspaceCredentialMode::MemberLocal),
         "managed" => Ok(WorkspaceCredentialMode::Managed),
+        "provisioned" => Ok(WorkspaceCredentialMode::Provisioned),
         other => Err(AppError::Config(format!(
             "unknown workspace credential mode '{other}'"
         ))),

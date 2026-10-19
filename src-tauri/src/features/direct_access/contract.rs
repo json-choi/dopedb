@@ -17,7 +17,8 @@ fn marker() -> Marker {
     Marker::parse("Zm9vYmFyYmF6cXV4MTIz").unwrap()
 }
 
-pub(crate) fn assert_direct_access_contract() {
+pub(crate) async fn assert_direct_access_contract() {
+    super::application_contract::assert_revocation_ordering_contract().await;
     // PostgreSQL SCRAM-SHA-256. Vector computed independently with Python
     // hashlib.pbkdf2_hmac/hmac; password "pencil" and salt "W22ZaJ0SNY7soEsUEjb6gQ=="
     // are the RFC 7677 example credentials, whose StoredKey/ServerKey this matches.
