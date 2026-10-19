@@ -195,19 +195,29 @@ impl MysqlSession {
             sqlx::query_scalar::<_, String>("SELECT @@server_uuid").fetch_one(&mut self.conn),
         )
         .await?;
-        // `GRANT <role> TO <user>` lines are the only grants without `ON`.
+        // `GRANT <role> TO <user>` lines are the only grants without `ON`. Reading another
+        // account's grants needs SELECT on the `mysql` schema, which a plain CREATE USER
+        // administrator does not have; the marker and server identity still prove ownership,
+        // so an unreadable grant list counts as no foreign membership rather than blocking
+        // every later revocation.
         let account = format!("'{}'@'%'", name.as_str());
-        let grants = within(
+        let mut memberships = 0u32;
+        match within(
             statement_timeout(),
             sqlx::query(AssertSqlSafe(format!("SHOW GRANTS FOR {account}")))
                 .fetch_all(&mut self.conn),
         )
-        .await?;
-        let mut memberships = 0u32;
-        for line in &grants {
-            if !text_column(line, 0).await?.contains(" ON ") {
-                memberships += 1;
+        .await
+        {
+            Ok(grants) => {
+                for line in &grants {
+                    if !text_column(line, 0).await?.contains(" ON ") {
+                        memberships += 1;
+                    }
+                }
             }
+            Err(FailureCode::PermissionDenied) => {}
+            Err(code) => return Err(code),
         }
         let identity = Some(ServerIdentity::MysqlServerUuid(uuid));
         Ok(ObservedPrincipal {
