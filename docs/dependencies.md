@@ -71,7 +71,12 @@ do not accept yet. DopeDB never calls `extract()`, and the root `clippy.toml`
 rejects the extract APIs. The Tauri updater's default `zip` feature, the only
 caller, is disabled because DopeDB ships macOS `.app.tar.gz` and Windows NSIS
 `.exe` updates, not `.zip` packages. Keep it disabled while the exceptions,
-which are scoped by advisory ID, remain. Any other OSV finding fails CI.
+which are scoped by advisory ID, remain. The `zvariant`, `zbus_names`, and
+`zvariant_derive` advisories RUSTSEC-2026-0370, -0371, and -0372 have no fixed
+release yet; they expire on 2026-12-04 because those crates arrive only through
+the Linux-only `zbus` D-Bus stack of `keyring` and the Tauri opener and
+single-instance plugins. `ammonia` is pinned to 4.2.4 for RUSTSEC-2026-0373.
+Any other OSV finding fails CI.
 
 The following registry releases were intentionally held because they were less
 than 24 hours old when the lockfiles were regenerated:
