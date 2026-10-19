@@ -239,10 +239,14 @@ where
                 profile.allow_writes = current.credential_mode == WorkspaceCredentialMode::Managed
                     && current.allow_writes;
                 profile.schema_access_available = current.schema_access_available;
-                if current.credential_mode == WorkspaceCredentialMode::Managed {
-                    // The provider integration owns a managed endpoint. Moving it
-                    // from the template would make every member's issued lease stop
-                    // matching the connection, so these fields are never edited here.
+                if matches!(
+                    current.credential_mode,
+                    WorkspaceCredentialMode::Managed | WorkspaceCredentialMode::Provisioned
+                ) {
+                    // The provider integration owns a managed endpoint and a direct
+                    // database's principals are bound to its server. Moving either
+                    // from the template would orphan every issued lease or principal,
+                    // so these fields are never edited here.
                     profile.host = current.host.clone();
                     profile.port = current.port;
                     profile.database = current.database.clone();

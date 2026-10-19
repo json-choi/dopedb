@@ -72,7 +72,25 @@ fn remote_connection(value: RemoteConnectionResponse) -> AppResult<(ConnectionPr
             "shared connection returned invalid access".into(),
         ));
     }
-    let credential_mode = crate::store::parse_credential_mode(value.credential_mode)?;
+    let mut credential_mode = crate::store::parse_credential_mode(value.credential_mode)?;
+    // The wire keeps `member_local`; a provisioning status is what makes the
+    // connection DopeDB-provisioned on this device.
+    let mut username = String::new();
+    if let Some(status) = value.provisioning.as_ref() {
+        if credential_mode != WorkspaceCredentialMode::MemberLocal || !status.validate() {
+            return Err(AppError::Network(
+                "shared connection returned invalid provisioning".into(),
+            ));
+        }
+        credential_mode = WorkspaceCredentialMode::Provisioned;
+        // The principal name opens the connection only while it is ready with a
+        // privilege level; every other state leaves it closed.
+        if status.state == dopedb_protocol::DirectProvisioningState::Ready
+            && status.level != dopedb_protocol::DirectLevel::None
+        {
+            username = status.principal_name.clone().unwrap_or_default();
+        }
+    }
     if credential_mode == WorkspaceCredentialMode::Local {
         return Err(AppError::Network(
             "shared connection returned invalid credential mode".into(),
@@ -109,8 +127,9 @@ fn remote_connection(value: RemoteConnectionResponse) -> AppResult<(ConnectionPr
             host: value.host,
             port: value.port,
             database: value.database,
-            // Managed usernames and passwords are supplied only by the lease route.
-            username: String::new(),
+            // Managed usernames and passwords are supplied only by the lease route;
+            // a provisioned principal name is the only server-supplied username.
+            username,
             sslmode: value.sslmode,
             extra_params: Default::default(),
             readonly_default: value.readonly_default,

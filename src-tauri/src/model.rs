@@ -72,6 +72,10 @@ impl WorkspaceConnectionAccess {
 
 /// Credential source for a connection. Managed secrets are leased into process memory
 /// only; member-local and personal secrets may reference the OS credential store.
+/// `Provisioned` is a shared database whose per-member principal DopeDB created: the
+/// control plane still reports it as `member_local` plus a `provisioning` status, the
+/// username is the server-generated principal name, and the generated password sits
+/// in this member's credential store.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum WorkspaceCredentialMode {
@@ -79,6 +83,7 @@ pub enum WorkspaceCredentialMode {
     Local,
     MemberLocal,
     Managed,
+    Provisioned,
 }
 
 /// Redacted provider identity pinned to a managed connection. Provider credentials,

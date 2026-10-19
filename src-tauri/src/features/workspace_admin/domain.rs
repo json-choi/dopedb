@@ -84,6 +84,7 @@ pub(crate) struct WorkspaceAdminResponse {
 pub(crate) enum AdminMethod {
     Get,
     Post,
+    Put,
     Patch,
     Delete,
 }
@@ -117,7 +118,7 @@ impl fmt::Debug for AdminRoute {
 }
 
 impl AdminRoute {
-    fn new(method: AdminMethod, segments: Vec<String>) -> Self {
+    pub(crate) fn new(method: AdminMethod, segments: Vec<String>) -> Self {
         Self {
             method,
             segments,
@@ -129,57 +130,71 @@ impl AdminRoute {
         }
     }
 
-    fn get(segments: Vec<String>) -> Self {
+    pub(crate) fn get(segments: Vec<String>) -> Self {
         Self::new(AdminMethod::Get, segments)
     }
 
-    fn post(segments: Vec<String>, body: Value) -> AppResult<Self> {
+    pub(crate) fn post(segments: Vec<String>, body: Value) -> AppResult<Self> {
         Self::new(AdminMethod::Post, segments).with_body(&body)
     }
 
-    fn post_empty(segments: Vec<String>) -> Self {
+    pub(crate) fn post_empty(segments: Vec<String>) -> Self {
         Self::new(AdminMethod::Post, segments)
     }
 
-    fn patch(segments: Vec<String>, body: Value) -> AppResult<Self> {
+    pub(crate) fn put(segments: Vec<String>, body: Value) -> AppResult<Self> {
+        Self::new(AdminMethod::Put, segments).with_body(&body)
+    }
+
+    pub(crate) fn patch(segments: Vec<String>, body: Value) -> AppResult<Self> {
         Self::new(AdminMethod::Patch, segments).with_body(&body)
     }
 
-    fn delete(segments: Vec<String>) -> Self {
+    pub(crate) fn delete(segments: Vec<String>) -> Self {
         Self::new(AdminMethod::Delete, segments)
     }
 
-    fn delete_with_body(segments: Vec<String>, body: Value) -> AppResult<Self> {
+    pub(crate) fn delete_with_body(segments: Vec<String>, body: Value) -> AppResult<Self> {
         Self::new(AdminMethod::Delete, segments).with_body(&body)
     }
 
-    fn with_body(mut self, body: &Value) -> AppResult<Self> {
+    pub(crate) fn with_body(mut self, body: &Value) -> AppResult<Self> {
         self.body = Some(Zeroizing::new(serde_json::to_vec(body)?));
         Ok(self)
     }
 
-    fn with_query(mut self, key: &'static str, value: String) -> Self {
+    pub(crate) fn with_query(mut self, key: &'static str, value: String) -> Self {
         self.query.push((key, value));
         self
     }
 
-    fn with_timeout(mut self, timeout: Duration) -> Self {
+    pub(crate) fn with_timeout(mut self, timeout: Duration) -> Self {
         self.timeout = timeout;
         self
     }
 
-    fn with_max_response_bytes(mut self, maximum: usize) -> Self {
+    pub(crate) fn with_max_response_bytes(mut self, maximum: usize) -> Self {
         self.max_response_bytes = maximum;
         self
     }
 
-    fn with_expected_revision(mut self, revision: i64) -> AppResult<Self> {
+    pub(crate) fn with_expected_revision(mut self, revision: i64) -> AppResult<Self> {
         if revision < 0 {
             return Err(invalid("expected revision"));
         }
         self.expected_revision = Some(revision);
         Ok(self)
     }
+}
+
+/// Check that a JSON value is one operation of the closed catalog with a valid
+/// route, without sending anything. Used by callers that carry an operation to
+/// run later (the revocation coordinator).
+pub(crate) fn validate_operation(value: &Value) -> AppResult<()> {
+    serde_json::from_value::<WorkspaceAdminOperation>(value.clone())
+        .map_err(|_| invalid("operation"))?
+        .route()
+        .map(|_| ())
 }
 
 fn invalid(field: &str) -> AppError {

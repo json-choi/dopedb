@@ -11,8 +11,9 @@ pub(crate) mod domain;
 mod ports;
 pub(crate) mod transport;
 
-use adapters::HostedWorkspaceAdmin;
+pub(crate) use adapters::HostedWorkspaceAdmin;
 pub(crate) use application::WorkspaceAdminUseCases;
+pub(crate) use ports::WorkspaceAdminControlPlanePort;
 
 pub(crate) type WorkspaceAdminFeature = WorkspaceAdminUseCases<HostedWorkspaceAdmin>;
 

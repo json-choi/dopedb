@@ -30,6 +30,7 @@ reference Tauri, SQLx, `Store`, the keychain, the network, or the global
 | `catalog/` | Scope-pinned metadata catalog reads (see `catalog/AGENTS.md`). |
 | `connections/` | Saved connection domain, validation, and adapters (see `connections/AGENTS.md`). |
 | `cosmic_scene/` | Deterministic, allocation-free scene seed for the decorative Welcome artwork (see `cosmic_scene/AGENTS.md`). |
+| `direct_access/` | Direct shared PostgreSQL/MySQL databases: per-member principal rules (domain/verifier/plan/ownership), preflight/register/member request/status/sync/revocation use cases over ports, keyring-only administrator vault, single-connection target adapters, 60 s administrator-device worker, and IPC. |
 | `documents/` | Transport-neutral, typed read-only MongoDB document queries (see `documents/AGENTS.md`). |
 | `erd/` | Workspace-scoped ERD (entity relationship diagram) canvas-layout persistence (see `erd/AGENTS.md`). |
 | `jobs/` | Durable, resumable import/export Job Engine (see `jobs/AGENTS.md`). |

@@ -21,7 +21,7 @@ use super::ports::WorkspaceAdminControlPlanePort;
 
 const ACTION: &str = "workspace administration request";
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 pub(crate) struct HostedWorkspaceAdmin;
 
 fn route_url(origin: &str, route: &AdminRoute) -> AppResult<Url> {
@@ -75,6 +75,7 @@ impl WorkspaceAdminControlPlanePort for HostedWorkspaceAdmin {
         let method = match route.method {
             AdminMethod::Get => Method::GET,
             AdminMethod::Post => Method::POST,
+            AdminMethod::Put => Method::PUT,
             AdminMethod::Patch => Method::PATCH,
             AdminMethod::Delete => Method::DELETE,
         };

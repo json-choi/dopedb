@@ -1,21 +1,57 @@
-//! Direct shared database principals: pure rules.
+//! Direct shared database principals.
 //!
 //! A workspace can share a PostgreSQL or MySQL server directly by provisioning one
-//! DopeDB-owned principal per member. This slice owns only the transport-neutral
-//! rules for that: engine/version gate, scope and level types, principal naming,
-//! public password verifiers, the fixed SQL plan templates, and the ownership proof
-//! that must hold before any ALTER/REVOKE/DROP. It performs no I/O and has no
-//! adapters, IPC, or worker yet; later layers must interpolate only values these
-//! modules validated.
+//! DopeDB-owned principal per member. This slice owns the transport-neutral
+//! rules (`domain`, `verifier`, `plan`, `ownership`: engine/version gate, scope and
+//! level types, principal naming, public password verifiers, the fixed SQL plan
+//! templates, and the ownership proof before any ALTER/REVOKE/DROP), the use cases
+//! over ports (`application`, `sync`, `revocation`), their adapters, the
+//! administrator-device `worker`, and the IPC `transport`.
 
-// The adapters, worker, and IPC that consume these rules arrive in later phases.
-#![allow(dead_code)]
-
+mod adapters;
+mod application;
 pub(crate) mod domain;
 pub(crate) mod ownership;
 pub(crate) mod plan;
+mod ports;
+mod revocation;
+mod sync;
+pub(crate) mod transport;
+mod types;
 pub(crate) mod verifier;
+mod worker;
 
+use std::sync::Arc;
+
+use adapters::{
+    HostedDirectControlPlane, KeyringAdminCredentialVault, SqlxTargetDatabase, StoreDirectLocal,
+};
+pub(crate) use application::DirectAccessUseCases;
+
+use crate::features::connections::ConnectionCredentialVault;
+use crate::store::Store;
+
+pub(crate) type DirectAccessFeature = DirectAccessUseCases<
+    KeyringAdminCredentialVault,
+    SqlxTargetDatabase,
+    HostedDirectControlPlane,
+    StoreDirectLocal,
+>;
+
+pub(crate) fn compose(
+    store: Store,
+    credentials: Arc<dyn ConnectionCredentialVault>,
+) -> DirectAccessFeature {
+    DirectAccessUseCases::new(
+        KeyringAdminCredentialVault,
+        SqlxTargetDatabase,
+        HostedDirectControlPlane::default(),
+        StoreDirectLocal::new(store, credentials),
+    )
+}
+
+#[cfg(test)]
+mod application_contract;
 #[cfg(test)]
 mod contract;
 
