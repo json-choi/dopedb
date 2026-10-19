@@ -225,14 +225,24 @@ impl PostgresSession {
         planner: &Planner,
         name: &PrincipalName,
     ) -> Result<(), FailureCode> {
+        let borrowed = planner.borrowed_membership(name);
+        if let Some((grant, _)) = &borrowed {
+            // Refused when the administrator is allowed to signal anyway (or cannot
+            // grant); the termination below then decides.
+            let _ = self.execute(std::slice::from_ref(grant)).await;
+        }
         let statement = planner.sessions_to_terminate(name);
         let mut query = sqlx::query(AssertSqlSafe(statement.sql.clone()));
         for bind in &statement.binds {
             query = query.bind(bind.clone());
         }
-        within(statement_timeout(), query.fetch_all(&mut self.conn))
+        let ended = within(statement_timeout(), query.fetch_all(&mut self.conn))
             .await
-            .map(|_| ())
+            .map(|_| ());
+        if let Some((_, revoke)) = &borrowed {
+            let _ = self.execute(std::slice::from_ref(revoke)).await;
+        }
+        ended
     }
 
     pub(super) async fn close(self) {

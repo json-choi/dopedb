@@ -429,61 +429,30 @@ where
             return Err(FailureCode::PermissionDenied);
         }
         let engine = prepared.work.engine_direct();
-        let mut receipt = receipt_of(engine, item)?;
+        let receipt = receipt_of(engine, item)?;
         let applied = level_of(item.applied_level);
-        let observation = prepared.session.observe(&receipt.name).await?;
         if applied == AccessLevel::None {
             // New principal, or a previous attempt that died before its receipt.
-            let plan = match check_creatable(&receipt, &observation)? {
-                CreateDecision::Create => prepared.planner.create(
-                    &receipt.name,
-                    &receipt.marker,
-                    &item.verifier,
-                    desired,
-                )?,
-                CreateDecision::ResumeOwned(proven) => {
-                    let mut plan = prepared
-                        .planner
-                        .alter_verifier(proven.name(), &item.verifier)?;
-                    plan.push(prepared.planner.unlock(proven.name()));
-                    plan.extend(prepared.planner.regrant(proven.name(), desired));
-                    plan
-                }
-            };
-            prepared.session.execute(&plan).await?;
-            let fresh = prepared.session.observe(&receipt.name).await?;
-            receipt.state = PrincipalState::Applying;
-            receipt.identity = None;
-            return prove_ownership(&receipt, &fresh);
+            return provision(
+                &mut prepared.session,
+                &prepared.planner,
+                &receipt,
+                &item.verifier,
+                desired,
+            )
+            .await;
         }
-        let proven = prove_ownership(&receipt, &observation)?;
-        let mut plan = Vec::new();
-        if item.verifier_version > item.applied_verifier_version {
-            plan.extend(
-                prepared
-                    .planner
-                    .alter_verifier(proven.name(), &item.verifier)?,
-            );
-        }
-        if applied != desired {
-            plan.extend(
-                prepared
-                    .planner
-                    .change_level(proven.name(), applied, desired),
-            );
-        } else {
-            plan.extend(prepared.planner.regrant(proven.name(), desired));
-        }
-        prepared.session.execute(&plan).await?;
-        if super::domain::lowers_access(applied, desired) {
-            // Best effort: privileges are checked per statement, so a session that
-            // outlives the revoke cannot use what was removed.
-            let _ = prepared
-                .session
-                .terminate_sessions(&prepared.planner, proven.name())
-                .await;
-        }
-        Ok(proven)
+        let verifier = (item.verifier_version > item.applied_verifier_version)
+            .then_some(item.verifier.as_str());
+        reconcile(
+            &mut prepared.session,
+            &prepared.planner,
+            &receipt,
+            applied,
+            desired,
+            verifier,
+        )
+        .await
     }
 
     /// Lower `item`'s principal to `target`, dropping it when `target` is none. The
@@ -506,32 +475,7 @@ where
             return Ok(RevokeEffect::Unchanged);
         }
         let receipt = receipt_of(engine, item)?;
-        let observation = session.observe(&receipt.name).await?;
-        if !observation.name_exists {
-            return if target == AccessLevel::None {
-                Ok(RevokeEffect::Dropped)
-            } else {
-                Err(FailureCode::MarkerMismatch)
-            };
-        }
-        let proven = prove_ownership(&receipt, &observation)?;
-        if target == AccessLevel::None {
-            // Lock first so no new session starts while the old ones are ended;
-            // when the lock or the termination is not permitted the REVOKE and
-            // DROP below still remove every privilege.
-            let _ = session.execute(&[planner.lock(proven.name())]).await;
-            let _ = session.terminate_sessions(planner, proven.name()).await;
-            session
-                .execute(&planner.drop_principal(proven.name(), applied))
-                .await?;
-            Ok(RevokeEffect::Dropped)
-        } else {
-            session
-                .execute(&planner.change_level(proven.name(), applied, target))
-                .await?;
-            let _ = session.terminate_sessions(planner, proven.name()).await;
-            Ok(RevokeEffect::Lowered(target))
-        }
+        revoke(session, planner, &receipt, applied, target).await
     }
 
     /// Answer a revocation with the receipt the server's guard reads. Returns
@@ -591,6 +535,117 @@ where
         let succeeded = request.failure_code.is_none();
         self.control.receipt(scope, &request).await?;
         Ok(succeeded)
+    }
+}
+
+/// Create the principal, or resume our own marked one left by a failed attempt, and
+/// return the ownership proof learned from the server afterwards. PostgreSQL runs the
+/// plan in one transaction; MySQL cannot, so a freshly created account whose grants
+/// failed is dropped again (only after proving the marker) instead of lingering
+/// without access.
+pub(super) async fn provision<S: TargetSession>(
+    session: &mut S,
+    planner: &Planner,
+    receipt: &Receipt,
+    verifier: &str,
+    desired: AccessLevel,
+) -> Result<ProvenOwnership, FailureCode> {
+    let observation = session.observe(&receipt.name).await?;
+    let (plan, created) = match check_creatable(receipt, &observation)? {
+        CreateDecision::Create => (
+            planner.create(&receipt.name, &receipt.marker, verifier, desired)?,
+            true,
+        ),
+        CreateDecision::ResumeOwned(proven) => {
+            let mut plan = planner.alter_verifier(proven.name(), verifier)?;
+            plan.push(planner.unlock(proven.name()));
+            plan.extend(planner.regrant(proven.name(), desired));
+            (plan, false)
+        }
+    };
+    let mut fresh = receipt.clone();
+    fresh.state = PrincipalState::Applying;
+    fresh.identity = None;
+    if let Err(code) = session.execute(&plan).await {
+        if created {
+            if let Ok(observed) = session.observe(&fresh.name).await {
+                if let Ok(proven) = prove_ownership(&fresh, &observed) {
+                    let _ = session
+                        .execute(&planner.drop_principal(proven.name(), AccessLevel::Write))
+                        .await;
+                }
+            }
+        }
+        return Err(code);
+    }
+    let observed = session.observe(&fresh.name).await?;
+    prove_ownership(&fresh, &observed)
+}
+
+/// Rotate the verifier (when given) and move an existing principal from `applied` to
+/// `desired`, or re-grant at the same level. Ownership is proven first.
+pub(super) async fn reconcile<S: TargetSession>(
+    session: &mut S,
+    planner: &Planner,
+    receipt: &Receipt,
+    applied: AccessLevel,
+    desired: AccessLevel,
+    rotate_verifier: Option<&str>,
+) -> Result<ProvenOwnership, FailureCode> {
+    let observation = session.observe(&receipt.name).await?;
+    let proven = prove_ownership(receipt, &observation)?;
+    let mut plan = Vec::new();
+    if let Some(verifier) = rotate_verifier {
+        plan.extend(planner.alter_verifier(proven.name(), verifier)?);
+    }
+    if applied != desired {
+        plan.extend(planner.change_level(proven.name(), applied, desired));
+    } else {
+        plan.extend(planner.regrant(proven.name(), desired));
+    }
+    session.execute(&plan).await?;
+    if super::domain::lowers_access(applied, desired) {
+        // Best effort: privileges are checked per statement, so a session that
+        // outlives the revoke cannot use what was removed.
+        let _ = session.terminate_sessions(planner, proven.name()).await;
+    }
+    Ok(proven)
+}
+
+/// Prove ownership, then lower the principal to `target` or drop it. A principal that
+/// is already gone has nothing to revoke.
+pub(super) async fn revoke<S: TargetSession>(
+    session: &mut S,
+    planner: &Planner,
+    receipt: &Receipt,
+    applied: AccessLevel,
+    target: AccessLevel,
+) -> Result<RevokeEffect, FailureCode> {
+    let observation = session.observe(&receipt.name).await?;
+    if !observation.name_exists {
+        return if target == AccessLevel::None {
+            Ok(RevokeEffect::Dropped)
+        } else {
+            Err(FailureCode::MarkerMismatch)
+        };
+    }
+    let proven = prove_ownership(receipt, &observation)?;
+    if target == AccessLevel::None {
+        // Lock first so no new session starts while the old ones are ended; when the
+        // lock or the termination is not permitted the REVOKE and DROP below still
+        // remove every privilege.
+        let _ = session.execute(&[planner.lock(proven.name())]).await;
+        let _ = session.terminate_sessions(planner, proven.name()).await;
+        session
+            .execute(&planner.drop_principal(proven.name(), applied))
+            .await?;
+        Ok(RevokeEffect::Dropped)
+    } else {
+        session
+            .execute(&planner.change_level(proven.name(), applied, target))
+            .await?;
+        let _ = session.terminate_sessions(planner, proven.name()).await;
+        Ok(RevokeEffect::Lowered(target))
     }
 }
 

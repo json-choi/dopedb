@@ -15,6 +15,9 @@ mod driver;
 mod error;
 mod executor;
 pub mod features;
+#[cfg(feature = "direct-access-e2e")]
+#[doc(hidden)]
+pub use features::direct_access::e2e as direct_access_e2e;
 mod hosted_control_plane;
 mod introspect;
 mod kernel;
