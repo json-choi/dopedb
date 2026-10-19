@@ -4,7 +4,7 @@
 //! them against the exact canonical Catalog snapshot and renders a complete,
 //! reviewable plan without executing target-database mutations.
 
-mod common;
+pub(crate) mod common;
 mod mysql;
 mod postgres;
 mod sqlite;
