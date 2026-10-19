@@ -1,10 +1,13 @@
 // Access policy HTTP mutation shares the connection revocation protocol so no
-// previously issued team credential survives a successful policy disable.
+// previously issued team credential, or provisioned database principal, survives a
+// successful policy disable.
 import "server-only";
 import { jsonError, privateJson } from "./http";
 import { authorizeWorkspaceConnection } from "./workspace-authorization";
 import { revokeActiveLeases } from "./provider-integrations/lease-cleanup";
 import { claimRevocationGate, clearRevocationGate, releaseRevocationGateClaim } from "./revocation-gates";
+import { directRevocationRequired } from "./workspace-direct-access-http";
+import { directLoweringTargets, findDirectLoweringBlockers } from "./workspace-direct-access-store";
 import { setWorkspaceTeamRead } from "./workspace-team-read-store";
 
 export async function changeTeamRead(request: Request, organizationId: string, connectionId: string, body: object) {
@@ -21,6 +24,8 @@ export async function changeTeamRead(request: Request, organizationId: string, c
     return await setWorkspaceTeamRead(input)
       ? privateJson({ teamReadEnabled: true }) : jsonError("Connection access changed. Refresh and retry.", 409);
   }
+  const blockers = await findDirectLoweringBlockers(organizationId, directLoweringTargets.teamRead(organizationId, connectionId));
+  if (blockers.length > 0) return directRevocationRequired(blockers);
   const claim = await claimRevocationGate({ kind: "connection", organizationId, connectionId });
   if (!claim) return jsonError("Connection access changed. Refresh and retry.", 409);
   if (!claim.firstPending) {

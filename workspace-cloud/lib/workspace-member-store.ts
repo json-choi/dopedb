@@ -3,11 +3,14 @@ import { sql } from "drizzle-orm";
 import { atomicD1 } from "./d1/atomic";
 import { workspaceMemberAuthority, type MemberAuthority } from "./d1/member-authority";
 import { uuidDefault } from "./d1/schema/values";
+import { directLoweringTargets, noDirectLoweringBlockers } from "./workspace-direct-access-store";
+import type { DirectLevel } from "./workspace-direct-access-core";
 
 export async function changeWorkspaceMemberRole(input: {
   organizationId: string; authority: MemberAuthority; memberId: string; userId: string; claimId: string;
   previousRole: string; role: "viewer" | "analyst" | "editor" | "admin";
   revokedLeases: number; deferredRevocations: number;
+  directLowering: readonly { connectionId: string; level: DirectLevel }[];
 }) {
   const canOwn = ["editor", "admin"].includes(input.role);
   const result = await atomicD1({
@@ -18,6 +21,7 @@ export async function changeWorkspaceMemberRole(input: {
         AND EXISTS (${workspaceMemberAuthority(input.organizationId, input.authority, ["admin", "owner"])})
         AND (${canOwn} OR NOT EXISTS (SELECT 1 FROM workspace_analysis_article WHERE organization_id = ${input.organizationId}
           AND owner_member_id = ${input.memberId} AND deleted_at IS NULL))
+        AND ${noDirectLoweringBlockers(input.organizationId, directLoweringTargets.levels(input.memberId, input.directLowering))}
         AND NOT EXISTS (SELECT 1 FROM workspace_credential_lease WHERE organization_id = ${input.organizationId}
           AND user_id = ${input.userId} AND revoked_at IS NULL)`,
     statements: (scope) => [

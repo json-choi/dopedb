@@ -4,6 +4,7 @@ import { sql } from "drizzle-orm";
 import { atomicD1 } from "./d1/atomic";
 import { workspaceMemberAuthority, type MemberAuthority } from "./d1/member-authority";
 import { utcNow, uuidDefault } from "./d1/schema/values";
+import { directLoweringTargets, noDirectLoweringBlockers } from "./workspace-direct-access-store";
 
 type GrantCapability = "view" | "read" | "use" | "manage";
 type GrantMutation = { organizationId: string; connectionId: string; authority: MemberAuthority; memberId: string };
@@ -49,6 +50,7 @@ export async function removeConnectionGrant(input: GrantMutation & { claimId: st
       WHERE target.id = ${input.memberId} AND target.organization_id = ${input.organizationId} AND target.user_id = ${input.userId}
         AND target.id <> ${input.authority.membershipId} AND target.revocation_pending_at IS NOT NULL AND target.revocation_claim_id = ${input.claimId}
         AND EXISTS (${managerAuthority(input)})
+        AND ${noDirectLoweringBlockers(input.organizationId, directLoweringTargets.grant(input.connectionId, input.memberId))}
         AND NOT EXISTS (SELECT 1 FROM workspace_credential_lease WHERE organization_id = ${input.organizationId}
           AND connection_id = ${input.connectionId} AND user_id = ${input.userId} AND revoked_at IS NULL)`,
     statements: (scope) => [

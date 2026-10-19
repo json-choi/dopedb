@@ -70,7 +70,7 @@ export async function verifyD1PermissionChanges(db: D1Database, authority: Provi
     .bind(connectionId).run()).rejects.toThrow();
   const roleClaim = await claimRevocationGate({ kind: "member", organizationId, memberId, userId });
   const roleInput = { organizationId, authority, memberId, userId, claimId: roleClaim!.claimId, previousRole: "viewer",
-    role: "analyst" as const, revokedLeases: 0, deferredRevocations: 0 };
+    role: "analyst" as const, revokedLeases: 0, deferredRevocations: 0, directLowering: [] };
   expect(await changeWorkspaceMemberRole({ ...roleInput, claimId: randomUUID() })).toEqual([]);
   expect((await changeWorkspaceMemberRole(roleInput))[0]?.role).toBe("analyst");
   expect(await changeWorkspaceMemberRole(roleInput)).toEqual([]);
