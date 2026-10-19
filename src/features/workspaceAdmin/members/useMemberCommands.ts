@@ -6,11 +6,10 @@
 // every administration read of the workspace.
 import { useRef } from "react";
 import { useIsMutating, useMutation, useQueryClient } from "@tanstack/react-query";
-import { connectionId as toConnectionId } from "../../connections/domain";
 import { useI18n, type I18nKey } from "../../../lib/i18n";
 import { accessErrorMessage } from "../access/errors";
 import type { SharedDatabase } from "../access/domain";
-import { LoweringFollowUpError, type AccessLowering } from "../accessLowering/useAccessLowering";
+import type { AccessLowering } from "../accessLowering/useAccessLowering";
 import type {
   AssignableWorkspaceRole,
   ConnectionCapability,
@@ -29,6 +28,7 @@ import {
   type CreatedInvitation,
 } from "./domain";
 import {
+  grantLoweringPlan,
   planGrantChange,
   removalPlan,
   roleLoweringPlan,
@@ -104,9 +104,6 @@ export function memberFailureMessage(
 ): string {
   if (error instanceof MemberDirectoryShapeError) {
     return i18n.t("workspaceMembers.loadIncompatible");
-  }
-  if (error instanceof LoweringFollowUpError) {
-    return i18n.t("workspaceAccess.grantLowerPartial");
   }
   let fallback = GENERIC_FAILURE[action];
   const coded = error instanceof WorkspaceAdminRequestError && error.code
@@ -202,20 +199,21 @@ async function executeMemberCommand(
         connectionId: command.connectionId,
         memberId: command.memberId,
       };
-      const grant: WorkspaceAdminOperation | undefined = plan.grant
-        ? { kind: "grantConnectionAccess", ...target, capability: plan.grant }
-        : undefined;
-      if (plan.remove) {
-        await lowering.run({
-          kind: "grant_lowered",
-          targetLevel: "none",
-          targets: [{ connectionId: toConnectionId(command.connectionId), memberIds: [command.memberId] }],
-          mutation: { kind: "removeConnectionAccess", ...target },
-          ...(grant ? { then: grant } : {}),
-        });
-      } else if (grant) {
-        await runWorkspaceAdmin(accountId, grant);
-      }
+      const mutation: WorkspaceAdminOperation =
+        plan.kind === "remove"
+          ? { kind: "removeConnectionAccess", ...target }
+          : plan.kind === "lower"
+            ? { kind: "lowerConnectionAccess", ...target, capability: plan.capability }
+            : { kind: "grantConnectionAccess", ...target, capability: plan.capability };
+      // A lowering keeps the grant row (and a provisioned member's database account);
+      // the account is revoked to the level it ends on first, or not at all when the
+      // effective level does not drop.
+      const row = grantsOf(command.memberId);
+      const revocation = plan.kind !== "grant" && row
+        ? grantLoweringPlan(row, command.connectionId, command.next, context.databases)
+        : null;
+      if (revocation) await lowering.run({ kind: "grant_lowered", ...revocation, mutation });
+      else await runWorkspaceAdmin(accountId, mutation);
       return null;
     }
     case "revokeInvitation":

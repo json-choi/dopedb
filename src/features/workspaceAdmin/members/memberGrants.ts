@@ -1,8 +1,8 @@
 // Member-centric view of every shared database's grants: the strict parser for the
 // control-plane aggregate, the capability <-> none/read/write mapping the Members editor
 // offers, the pure effective-level rule (mirroring the server's) that decides which
-// changes lower a provisioned member's database access, and the revocation targets those
-// changes carry. Requests and wording live in the commands controller and components.
+// changes lower a provisioned member's database access, and the per-database revocation
+// targets those changes carry. Requests and wording live in the commands controller and components.
 import type { I18nKey } from "../../../lib/i18n";
 import type { WorkspaceRole } from "../../workspaces/domain";
 import {
@@ -131,25 +131,25 @@ export function capabilityOf(level: GrantLevel | "manage"): ConnectionCapability
 }
 
 /**
- * The control plane only raises or keeps a grant. Lowering removes the current
- * grant first (draining that member's active credentials), then grants the lower
- * level; choosing no access is the removal alone.
+ * How a grant selection reaches the control plane: raising or creating a grant,
+ * lowering it in place (the grant row and a provisioned member's database account
+ * stay), or removing it.
  */
-export type GrantChangePlan = {
-  remove: boolean;
-  grant: ConnectionCapability | null;
-};
+export type GrantChangePlan =
+  | { kind: "grant"; capability: ConnectionCapability }
+  | { kind: "lower"; capability: Exclude<ConnectionCapability, "manage"> }
+  | { kind: "remove" };
 
 export function planGrantChange(
   previous: ConnectionCapability | null,
   next: ConnectionCapability | null,
 ): GrantChangePlan | null {
   if (previous === next) return null;
-  if (next === null) return { remove: true, grant: null };
-  return {
-    remove: previous !== null && CAPABILITY_RANK[next] < CAPABILITY_RANK[previous],
-    grant: next,
-  };
+  if (next === null) return { kind: "remove" };
+  if (previous === null || next === "manage" || CAPABILITY_RANK[next] > CAPABILITY_RANK[previous]) {
+    return { kind: "grant", capability: next };
+  }
+  return { kind: "lower", capability: next };
 }
 
 const ROLE_RANK: Record<WorkspaceRole, number> = {
@@ -199,8 +199,8 @@ export function writeBlock(database: SharedDatabase, role: WorkspaceRole): Write
   return roleCanWrite(role) ? null : "roleLimited";
 }
 
+/** Accounts to revoke, each database to its own level, before the change commits. */
 export interface RevocationPlan {
-  targetLevel: "none" | "read";
   targets: DirectRevocationTarget[];
 }
 
@@ -214,6 +214,11 @@ function provisionedGrants(
   });
 }
 
+/** `after` is below a held level, so it is never `write`. */
+function revokedTo(after: DirectLevel): Exclude<DirectLevel, "write"> {
+  return after === "none" ? "none" : "read";
+}
+
 /** Removing a member revokes the account they hold on every provisioned database. */
 export function removalPlan(
   row: MemberGrantsRow,
@@ -221,36 +226,57 @@ export function removalPlan(
 ): RevocationPlan | null {
   const targets = provisionedGrants(row, databases).map(({ grant }) => ({
     connectionId: toConnectionId(grant.connectionId),
+    targetLevel: "none" as const,
     memberIds: [row.memberId],
   }));
-  return targets.length > 0 ? { targetLevel: "none", targets } : null;
+  return targets.length > 0 ? { targets } : null;
 }
 
 /**
- * A role change that lowers the effective level of some provisioned account. The
- * accounts are revoked to the lowest level any of them ends on; the worker restores
- * the higher ones afterwards.
+ * Lowering or removing one grant on a provisioned database when it lowers the account's
+ * effective level; `next` is the capability left afterwards (null removes the grant).
+ */
+export function grantLoweringPlan(
+  row: MemberGrantsRow,
+  connectionId: string,
+  next: ConnectionCapability | null,
+  databases: ReadonlyMap<string, SharedDatabase>,
+): RevocationPlan | null {
+  const held = provisionedGrants(row, databases).find(({ grant }) => grant.connectionId === connectionId);
+  if (!held) return null;
+  const before = effectiveDirectLevel(row.role, held.grant.capability, held.database.allowWrites);
+  const after = effectiveDirectLevel(row.role, next, held.database.allowWrites);
+  return LEVEL_RANK[after] < LEVEL_RANK[before]
+    ? {
+        targets: [{
+          connectionId: toConnectionId(connectionId),
+          targetLevel: revokedTo(after),
+          memberIds: [row.memberId],
+        }],
+      }
+    : null;
+}
+
+/**
+ * A role change that lowers the effective level of some provisioned account. Each
+ * account is revoked to the level the new role leaves it on that database (some none,
+ * some read), so accounts that keep read access are not dropped.
  */
 export function roleLoweringPlan(
   row: MemberGrantsRow,
   nextRole: WorkspaceRole,
   databases: ReadonlyMap<string, SharedDatabase>,
 ): RevocationPlan | null {
-  const lowered = provisionedGrants(row, databases).flatMap(({ grant, database }) => {
+  const targets = provisionedGrants(row, databases).flatMap(({ grant, database }) => {
     const before = effectiveDirectLevel(row.role, grant.capability, database.allowWrites);
     const after = effectiveDirectLevel(nextRole, grant.capability, database.allowWrites);
-    return LEVEL_RANK[after] < LEVEL_RANK[before] ? [{ grant, after }] : [];
+    return LEVEL_RANK[after] < LEVEL_RANK[before]
+      ? [{
+          connectionId: toConnectionId(grant.connectionId),
+          targetLevel: revokedTo(after),
+          memberIds: [row.memberId],
+        }]
+      : [];
   });
-  if (lowered.length === 0) return null;
-  const lowest = lowered.reduce<DirectLevel>(
-    (min, { after }) => (LEVEL_RANK[after] < LEVEL_RANK[min] ? after : min),
-    "write",
-  );
-  return {
-    targetLevel: lowest === "none" ? "none" : "read",
-    targets: lowered.map(({ grant }) => ({
-      connectionId: toConnectionId(grant.connectionId),
-      memberIds: [row.memberId],
-    })),
-  };
+  return targets.length > 0 ? { targets } : null;
 }

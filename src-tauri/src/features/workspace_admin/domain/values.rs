@@ -53,6 +53,25 @@ impl AssignableWorkspaceRole {
     }
 }
 
+/// The capabilities an existing grant can be lowered to; `manage` is never a lowering.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum LoweredConnectionCapability {
+    View,
+    Read,
+    Use,
+}
+
+impl LoweredConnectionCapability {
+    pub(super) const fn as_str(self) -> &'static str {
+        match self {
+            Self::View => "view",
+            Self::Read => "read",
+            Self::Use => "use",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) enum ConnectionCapability {

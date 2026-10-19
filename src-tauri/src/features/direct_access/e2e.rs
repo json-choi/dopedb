@@ -180,6 +180,7 @@ async fn preflight(
     Ok(json!({
         "version": format!("{}.{}.{}", version.major, version.minor, version.patch),
         "canCreatePrincipal": facts.can_create_principal,
+        "canEndSessions": facts.can_end_sessions,
         "namespaces": facts.namespaces,
         "warnings": warnings,
     }))
@@ -230,7 +231,8 @@ async fn change(
     Ok(json!({}))
 }
 
-/// `sync::revoke` with a target of none: prove, lock, end sessions, revoke, drop.
+/// `sync::revoke` with a target of none: prove, revoke, lock, end sessions when the
+/// administrator account may, drop. Reports whether open sessions may persist.
 async fn drop_principal(
     session: &mut Session,
     engine: DirectEngine,
@@ -238,7 +240,7 @@ async fn drop_principal(
 ) -> Result<Value, FailureCode> {
     let planner = planner(session, engine, request).await?;
     let receipt = receipt(request, engine)?;
-    revoke(
+    let effect = revoke(
         session,
         &planner,
         &receipt,
@@ -246,7 +248,7 @@ async fn drop_principal(
         AccessLevel::None,
     )
     .await?;
-    Ok(json!({}))
+    Ok(json!({ "openSessions": effect.open_sessions() }))
 }
 
 async fn observe(session: &mut Session, request: &Value) -> Result<Value, FailureCode> {
