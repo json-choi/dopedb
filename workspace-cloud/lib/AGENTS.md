@@ -73,7 +73,7 @@ default privilege, or ACL (see root `CLAUDE.md`/`AGENTS.md`).
 | `provider-operation-switch.ts` | Completes a Neon branch switch by atomically retargeting the connection and revoking the old lease epoch. |
 | `provider-provisioning-target.ts` | Ephemeral, secret-free authority for one saved managed connection; every mutation and lease re-authorizes it independently. |
 | `revocation-gates.ts` | Durable, UUID-owned authorization-mutation claim gates guarding grant/lease/connection changes. |
-| `workspace-connections.ts` | Strict parser and public serializer for shared connection templates; rejects (rather than silently drops) secret-bearing fields. |
+| `workspace-connections.ts` | Strict parser and public serializer for shared connection templates; rejects (rather than silently drops) secret-bearing fields; accepts a closed `mongoOptions` (`srv`/`authSource`/`replicaSet`) for MongoDB and `sqlite` only as an exact Cloudflare D1 identity. |
 | `workspace-direct-access-core.ts` | Pure direct-database rules: verifier shapes, server-generated principal name/marker, closed state/failure/revocation vocabularies, desired-level projection and the revocation cap. |
 | `workspace-direct-access-store.ts` | D1 helpers for direct databases: derived work list, device claims, receipt compare-and-swap, revocation items, and the lowering guard (`directLoweringTargets`, `noDirectLoweringBlockers`) embedded in the atomic scopes of grant removal, team-read off, role change, member removal and connection delete. |
 | `workspace-direct-access-http.ts` | Route helpers for direct databases: per-route request budgets, administrator-device authorization, the typed 409 `direct_revocation_required`, and wire projections validated by the shared strict parsers. |

@@ -312,3 +312,97 @@ where
 {
     Option::<T>::deserialize(deserializer)
 }
+
+/// Port a `mongodb+srv` template pins; the SRV scheme ignores the port, so the
+/// shared record carries the driver default instead of a meaningless value.
+pub const SHARED_MONGO_SRV_PORT: u16 = 27_017;
+const SHARED_D1_PORT: u16 = 443;
+const SHARED_D1_SSLMODE: &str = "require";
+const SHARED_D1_DRIVER: &str = "cloudflare-d1-wrangler";
+
+/// The only MongoDB driver options a shared template carries. Every other driver
+/// parameter stays member-local or is refused by Workspace Cloud.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SharedMongoOptions {
+    pub srv: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auth_source: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub replica_set: Option<String>,
+}
+
+fn safe_option_name(value: &str, max: usize, allow_dollar: bool) -> bool {
+    !value.is_empty()
+        && value.len() <= max
+        && value.bytes().all(|byte| {
+            byte.is_ascii_alphanumeric()
+                || matches!(byte, b'_' | b'.' | b'-')
+                || (allow_dollar && byte == b'$')
+        })
+}
+
+impl SharedMongoOptions {
+    /// Bounded, safe-charset check shared with Workspace Cloud's template parser.
+    pub fn validate(&self) -> bool {
+        self.auth_source
+            .as_deref()
+            .is_none_or(|value| safe_option_name(value, 64, true))
+            && self
+                .replica_set
+                .as_deref()
+                .is_none_or(|value| safe_option_name(value, 128, false))
+    }
+}
+
+/// Secret-free shared connection template as Workspace Cloud accepts it. Only the
+/// engine-specific boundaries that Desktop must also honor are checked here.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SharedConnectionTemplate {
+    pub name: String,
+    pub engine: String,
+    pub provider: String,
+    pub driver_id: Option<String>,
+    pub host: String,
+    pub port: u16,
+    pub database: String,
+    pub sslmode: String,
+    pub readonly_default: bool,
+    pub allow_writes: bool,
+    pub env: Option<String>,
+    pub schema_group: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mongo_options: Option<SharedMongoOptions>,
+}
+
+impl SharedConnectionTemplate {
+    /// MongoDB options belong to MongoDB only, an SRV host is one DNS name on the
+    /// pinned port, and SQLite is shareable solely as an exact Cloudflare D1 identity.
+    pub fn validate_engine_boundary(&self) -> bool {
+        if let Some(options) = &self.mongo_options {
+            let srv_shape = !options.srv
+                || (self.port == SHARED_MONGO_SRV_PORT && !self.host.contains([',', ':']));
+            if self.engine != "mongodb" || !options.validate() || !srv_shape {
+                return false;
+            }
+        }
+        match (self.engine.as_str(), self.provider.as_str()) {
+            ("sqlite", "cloudflareD1") => {
+                self.port == SHARED_D1_PORT
+                    && self.sslmode == SHARED_D1_SSLMODE
+                    && !self.allow_writes
+                    && self.host.len() == 32
+                    && self.host.bytes().all(|byte| byte.is_ascii_hexdigit())
+                    && Uuid::parse_str(&self.database).is_ok()
+                    && self
+                        .driver_id
+                        .as_deref()
+                        .is_none_or(|id| id == SHARED_D1_DRIVER)
+                    && self.schema_group.is_none()
+            }
+            ("sqlite", _) | (_, "cloudflareD1") => false,
+            _ => true,
+        }
+    }
+}

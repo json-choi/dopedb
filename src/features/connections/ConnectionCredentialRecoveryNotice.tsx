@@ -5,7 +5,11 @@
 import { useI18n } from "../../lib/i18n";
 import { requestAccountSettings } from "../settings/accountRequest";
 import { requestConnectionCredentials } from "./connectionEditorShellBridge";
-import { canBindMemberCredentials, type ConnectionProfile } from "./domain";
+import {
+  canBindMemberCredentials,
+  usesCliAuthentication,
+  type ConnectionProfile,
+} from "./domain";
 import RecoveryNotice from "./RecoveryNotice";
 
 const CREDENTIAL_RECOVERY_KINDS = new Set([
@@ -37,15 +41,20 @@ export default function ConnectionCredentialRecoveryNotice({
   }
   if (errorKind === "authenticationRequired") {
     // A shared connection opens only with this device's workspace session; a
-    // provider CLI sign-in, such as BigQuery's, is renewed in the editor.
-    const workspaceSession = shared && connection.engine !== "bigquery";
+    // provider CLI sign-in, such as BigQuery's or Wrangler's, is renewed in the editor.
+    const workspaceSession = shared && !usesCliAuthentication(connection);
+    const cloudflare = connection.engine === "sqlite";
     return (
       <RecoveryNotice
         message={workspaceSession
           ? t("sql.authenticationRequired.workspace")
-          : t("sql.authenticationRequired.provider")}
+          : t(cloudflare
+              ? "sql.authenticationRequired.cloudflare"
+              : "sql.authenticationRequired.provider")}
         action={{
-          label: workspaceSession ? t("workspace.login") : t("connections.edit"),
+          label: workspaceSession
+            ? t("workspace.login")
+            : t(cloudflare ? "connections.cloudflareD1SignIn" : "connections.edit"),
           run: () =>
             workspaceSession
               ? requestAccountSettings()

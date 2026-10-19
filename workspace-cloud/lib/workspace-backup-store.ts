@@ -10,6 +10,7 @@ import { utcNow, uuidDefault } from "./d1/schema/values";
 const snapshotColumns = ["id", "content_revision", "name", "engine", "provider", "driver_id", "host", "port",
   "database_name", "sslmode", "readonly_default", "allow_writes", "environment", "schema_group",
   "credential_mode", "provider_integration_id"] as const;
+// JSON columns compare by value, so key order in the stored text cannot cause a mismatch.
 
 export async function insertWorkspaceBackup(input: {
   organizationId: string; backupId: string; authority: MemberAuthority;
@@ -30,7 +31,9 @@ export async function insertWorkspaceBackup(input: {
       WHERE connection.organization_id = ${input.organizationId} AND connection.deleted_at IS NULL
         AND ${sql.join(snapshotColumns.map((column) => sql`connection.${sql.identifier(column)} IS json_extract(supplied.value, ${sql.raw("'$." + column + "'")})`), sql` AND `)}
         AND (connection.provider_resource IS json_extract(supplied.value, '$.provider_resource')
-          OR ${jsonEqual(sql`connection.provider_resource`, sql`json_extract(supplied.value, '$.provider_resource')`)})))`;
+          OR ${jsonEqual(sql`connection.provider_resource`, sql`json_extract(supplied.value, '$.provider_resource')`)})
+        AND (connection.mongo_options IS json_extract(supplied.value, '$.mongo_options')
+          OR ${jsonEqual(sql`connection.mongo_options`, sql`json_extract(supplied.value, '$.mongo_options')`)})))`;
   const storage = backupEnvelopeStorage(input.sealed.ciphertext);
   const result = await atomicD1({
     scope: sql`WITH chunks(payload) AS (${supplied}), supplied AS (SELECT value FROM chunks, json_each(chunks.payload)) SELECT '{}' AS payload FROM workspace_profile profile

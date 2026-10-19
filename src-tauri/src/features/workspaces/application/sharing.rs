@@ -122,6 +122,12 @@ where
         };
         remote.push((created.clone(), revision));
         let credential_ref = credential_id.map(|id| id.to_string());
+        // The workspace template now owns the shareable MongoDB options; the member's
+        // own binding keeps only what stays on this device (TLS files, SSH alias).
+        let mut binding_params = source.extra_params.clone();
+        if source.engine == crate::model::Engine::Mongodb {
+            crate::mongo::apply_template_options(&mut binding_params, None);
+        }
         let local_result = async {
             let removed_credential_ids = self
                 .runtime
@@ -135,7 +141,7 @@ where
                     created.id.into(),
                     &account.user.id,
                     &source.username,
-                    &source.extra_params,
+                    &binding_params,
                     credential_ref.as_deref(),
                 )
                 .await
@@ -401,9 +407,9 @@ where
                 reason: "this shared connection uses automatically managed credentials".into(),
             });
         }
-        if profile.engine == crate::model::Engine::Bigquery {
+        if profile.uses_cli_authentication() {
             return Err(AppError::Blocked {
-                reason: "BigQuery authentication is owned by Google Cloud CLI and cannot be bound as a workspace password"
+                reason: "this connection authenticates through the member's own Google Cloud or Wrangler login and cannot be bound as a workspace password"
                     .into(),
             });
         }

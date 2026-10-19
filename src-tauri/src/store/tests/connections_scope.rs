@@ -1293,11 +1293,58 @@ async fn remote_template_sync_preserves_member_local_credential_binding() {
     bigquery_template.allow_writes = false;
     bigquery_template.workspace_access = crate::model::WorkspaceConnectionAccess::Read;
     bigquery_template.credential_mode = crate::model::WorkspaceCredentialMode::MemberLocal;
+    // MongoDB shares only srv/authSource/replicaSet; Cloudflare D1 shares only its
+    // account and database identity and is authenticated by each member's Wrangler.
+    let mongo_id = Uuid::new_v4();
+    let mut mongo_template = sqlite_profile(mongo_id, "shared atlas");
+    mongo_template.engine = Engine::Mongodb;
+    mongo_template.host = "cluster0.example.test".into();
+    mongo_template.port = 27017;
+    mongo_template.database = "app".into();
+    mongo_template.sslmode = "require".into();
+    mongo_template.workspace_access = crate::model::WorkspaceConnectionAccess::Read;
+    mongo_template.credential_mode = crate::model::WorkspaceCredentialMode::MemberLocal;
+    crate::mongo::apply_template_options(
+        &mut mongo_template.extra_params,
+        Some(&dopedb_protocol::SharedMongoOptions {
+            srv: true,
+            auth_source: Some("admin".into()),
+            replica_set: None,
+        }),
+    );
+    let d1_id = Uuid::new_v4();
+    let mut d1_template = sqlite_profile(d1_id, "shared d1");
+    d1_template.provider = crate::model::Provider::CloudflareD1;
+    d1_template.driver_id = Some("cloudflare-d1-wrangler".into());
+    d1_template.host = "0123456789abcdef0123456789abcdef".into();
+    d1_template.port = 443;
+    d1_template.database = Uuid::new_v4().to_string();
+    d1_template.sslmode = "require".into();
+    d1_template.workspace_access = crate::model::WorkspaceConnectionAccess::Read;
+    d1_template.credential_mode = crate::model::WorkspaceCredentialMode::MemberLocal;
+    let shared_templates = [
+        (bigquery_template.clone(), 1),
+        (mongo_template, 1),
+        (d1_template, 1),
+    ];
     store
         .sync_remote_connections(
             workspace_id,
             &user.id,
-            &[(local_binding, 1), (bigquery_template.clone(), 1)],
+            &[&[(local_binding, 1)][..], &shared_templates[..]].concat(),
+        )
+        .await
+        .unwrap();
+    let mut mongo_member_options = HashMap::new();
+    mongo_member_options.insert("authSource".into(), "member-override".into());
+    mongo_member_options.insert("tlsCAFile".into(), "/member/ca.pem".into());
+    store
+        .bind_connection_credentials(
+            mongo_id,
+            &user.id,
+            "mongo-member",
+            &mongo_member_options,
+            None,
         )
         .await
         .unwrap();
@@ -1333,7 +1380,7 @@ async fn remote_template_sync_preserves_member_local_credential_binding() {
         .sync_remote_connections(
             workspace_id,
             &user.id,
-            &[(remote_update, 2), (bigquery_template, 1)],
+            &[&[(remote_update, 2)][..], &shared_templates[..]].concat(),
         )
         .await
         .unwrap();
@@ -1379,6 +1426,20 @@ async fn remote_template_sync_preserves_member_local_credential_binding() {
             .map(String::as_str),
         Some("1073741824")
     );
+
+    let loaded_mongo = store.get_connection(mongo_id).await.unwrap();
+    assert_eq!(loaded_mongo.username, "mongo-member");
+    let mongo_param = |name: &str| loaded_mongo.extra_params.get(name).map(String::as_str);
+    assert_eq!(mongo_param("srv"), Some("true"));
+    // The template owns the shared options; a member binding cannot override them
+    // but keeps its own device-local TLS file.
+    assert_eq!(mongo_param("authSource"), Some("admin"));
+    assert_eq!(mongo_param("replicaSet"), None);
+    assert_eq!(mongo_param("tlsCAFile"), Some("/member/ca.pem"));
+    let loaded_d1 = store.get_connection(d1_id).await.unwrap();
+    assert!(loaded_d1.username.is_empty() && loaded_d1.secret_ref.is_none());
+    assert!(loaded_d1.extra_params.is_empty());
+    assert!(loaded_d1.uses_cli_authentication());
 
     // An Environment with a GitHub source but no graph remains an exact Agent
     // scope. Raw source identity is pinned independently from graph grants.

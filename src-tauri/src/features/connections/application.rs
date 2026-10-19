@@ -11,7 +11,7 @@ use zeroize::Zeroizing;
 use crate::error::{AppError, AppResult};
 use crate::kernel::identity::ConnectionId;
 use crate::kernel::TerminalAuthority;
-use crate::model::{ConnectionProfile, Engine, WorkspaceConnectionAccess, WorkspaceCredentialMode};
+use crate::model::{ConnectionProfile, WorkspaceConnectionAccess, WorkspaceCredentialMode};
 
 use super::credential_endpoint::same_credential_endpoint;
 use super::domain::{
@@ -160,9 +160,7 @@ where
             });
         }
         profile.schema_group = normalize_schema_group(profile.schema_group);
-        let uses_cli_authentication = profile.engine == Engine::Bigquery
-            || (profile.engine == Engine::Sqlite
-                && profile.provider == crate::model::Provider::CloudflareD1);
+        let uses_cli_authentication = profile.uses_cli_authentication();
         if uses_cli_authentication {
             profile.secret_ref = None;
         }
@@ -393,9 +391,7 @@ where
                 reason: "shared connections must be tested through workspace authorization".into(),
             }));
         }
-        let uses_cli_authentication = profile.engine == Engine::Bigquery
-            || (profile.engine == Engine::Sqlite
-                && profile.provider == crate::model::Provider::CloudflareD1);
+        let uses_cli_authentication = profile.uses_cli_authentication();
         let supplied = password.filter(|password| !password.is_empty());
         if supplied
             .as_ref()

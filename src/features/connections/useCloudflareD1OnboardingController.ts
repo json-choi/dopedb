@@ -28,23 +28,31 @@ export function useCloudflareD1OnboardingController(
   const createdAuthProfile = useRef<ConnectionProfile | null>(null);
   const { form } = profileState;
   const profile = form.value;
-  const applicable =
-    profile.engine === "sqlite" &&
-    profile.provider === "cloudflareD1" &&
-    profile.workspaceAccess === "local";
-  const enabled = applicable && cliAvailable && catalogScope.ready;
+  const isCloudflareD1 =
+    profile.engine === "sqlite" && profile.provider === "cloudflareD1";
+  // Discovery and the identity selectors belong to the editor of a local profile.
+  const applicable = isCloudflareD1 && profile.workspaceAccess === "local";
+  // A member signs in to their own Wrangler for a shared identity template too; the
+  // login is scoped to this workspace, account and connection and is never shared.
+  const memberSignIn =
+    isCloudflareD1 &&
+    profile.workspaceAccess !== "local" &&
+    profile.credentialMode === "memberLocal";
+  const enabled =
+    (applicable || memberSignIn) && cliAvailable && catalogScope.ready;
   const auth = useQuery({
     ...cloudflareD1AuthStateQuery(profile, catalogScope.key),
     enabled,
   });
   const accounts = useQuery({
     ...cloudflareD1AccountsQuery(profile, catalogScope.key),
-    enabled: enabled && auth.data?.authenticated === true,
+    enabled: applicable && enabled && auth.data?.authenticated === true,
   });
   const accountId = profile.host.trim();
   const databases = useQuery({
     ...cloudflareD1DatabasesQuery(profile, accountId, catalogScope.key),
     enabled:
+      applicable &&
       enabled &&
       auth.data?.authenticated === true &&
       /^[a-f0-9]{32}$/iu.test(accountId),
@@ -135,7 +143,7 @@ export function useCloudflareD1OnboardingController(
     accountsError: localizedError(accounts.error, "accounts"),
     databasesError: localizedError(databases.error, "databases"),
     connect: () => {
-      if (applicable && cliAvailable) connect.mutate();
+      if ((applicable || memberSignIn) && cliAvailable) connect.mutate();
     },
     selectAccount,
     selectDatabase,

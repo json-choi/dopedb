@@ -26,6 +26,7 @@ new migrations here from `../lib/d1/schema/index.ts`.
 
 | `0008_remove_device_authorization.sql` | Removes the unused device-code authorization table; Desktop PKCE uses its own authorization-code table. |
 | `0010_direct_shared_database.sql` | Direct shared databases: in-place `workspace_connection.provisioning_mode`, `workspace_direct_endpoint` / `workspace_direct_principal` / `workspace_direct_revocation`, immutability and closed state-machine triggers, and team-read triggers widened to provisioned connections, and the `workspace_direct_member_departure` trigger that records a pending `self_leave`/`account_deleted` revocation item in the same transaction as a membership deletion. |
+| `0011_mongo_template_options.sql` | Adds the nullable `workspace_connection.mongo_options` JSON column for the closed MongoDB template options (`srv`, `authSource`, `replicaSet`); validation is the parser's job, so no table rebuild or CHECK is used. |
 
 ## Subdirectories
 | Directory | Purpose |

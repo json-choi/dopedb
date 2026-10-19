@@ -96,7 +96,9 @@ pub(super) fn row_to_connection_with_binding(
                 None => HashMap::new(),
             };
             profile.secret_ref = None;
-        } else if profile.engine == Engine::Bigquery {
+        } else if profile.uses_cli_authentication() {
+            // Managed BigQuery or Cloudflare D1: the member's own CLI login is the
+            // only credential, so no username, parameter or secret is projected.
             profile.username.clear();
             profile.extra_params.clear();
             profile.secret_ref = None;
@@ -110,6 +112,7 @@ pub(super) fn row_to_connection_with_binding(
             profile.username = r
                 .try_get::<Option<String>, _>("binding_username")?
                 .unwrap_or_default();
+            let template_params = std::mem::take(&mut profile.extra_params);
             profile.extra_params = match r.try_get::<Option<String>, _>("binding_extra_params")? {
                 Some(value) => serde_json::from_str(&value).map_err(|error| {
                     AppError::Config(format!(
@@ -118,6 +121,14 @@ pub(super) fn row_to_connection_with_binding(
                 })?,
                 None => HashMap::new(),
             };
+            // The synced template owns the MongoDB driver options; whatever the
+            // member's binding holds under those names is replaced, never merged.
+            if profile.engine == Engine::Mongodb {
+                crate::mongo::apply_template_options(
+                    &mut profile.extra_params,
+                    crate::mongo::template_options(&template_params).as_ref(),
+                );
+            }
             profile.secret_ref = r.try_get("binding_secret_ref")?;
             // A member's saved credential stays bound to the template endpoint it
             // was entered for. A moved or weakened template never reaches the OS

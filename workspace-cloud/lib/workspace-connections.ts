@@ -12,17 +12,88 @@ import {
   type DirectPrincipalState,
 } from "./workspace-direct-access-core";
 
-// SQLite paths identify files on one machine and are not meaningful team endpoints.
-const engines = ["postgres", "mysql", "mongodb", "bigquery"] as const;
-const providers = ["auto", "generic", "neon", "planetScale", "gcpCloudSql"] as const;
+// SQLite paths identify files on one machine and are not meaningful team endpoints;
+// the one shareable SQLite engine is Cloudflare D1, accepted only by its exact identity.
+const engines = ["postgres", "mysql", "mongodb", "bigquery", "sqlite"] as const;
+const providers = ["auto", "generic", "neon", "planetScale", "gcpCloudSql", "cloudflareD1"] as const;
 const allowedKeys = new Set([
   "name", "engine", "provider", "driverId", "host", "port", "database",
-  "sslmode", "readonlyDefault", "allowWrites", "env", "schemaGroup",
+  "sslmode", "readonlyDefault", "allowWrites", "env", "schemaGroup", "mongoOptions",
 ]);
 const forbiddenKeys = new Set([
   "password", "secret", "secretRef", "token", "connectionString", "connectionUrl",
   "url", "username", "extraParams", "certificate", "privateKey",
 ]);
+
+/**
+ * The only driver options a MongoDB template shares. Every other driver parameter
+ * (TLS files, read preference, credentials) stays member-local or is refused.
+ */
+export type MongoTemplateOptions = {
+  srv: boolean;
+  authSource?: string;
+  replicaSet?: string;
+};
+
+const mongoOptionKeys = new Set(["srv", "authSource", "replicaSet"]);
+const mongoAuthSource = /^[A-Za-z0-9_.$-]{1,64}$/;
+const mongoReplicaSet = /^[A-Za-z0-9_.-]{1,128}$/;
+/** `mongodb+srv` ignores the port, so the template pins the driver default. */
+export const MONGO_SRV_PORT = 27017;
+
+function mongoName(value: unknown, pattern: RegExp, label: string): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "string" || !pattern.test(value)) throw new Error(`Invalid MongoDB ${label}`);
+  return value;
+}
+
+/** Strict, key-order-stable parse; returns null when the template carries no options. */
+export function parseMongoOptions(value: unknown): MongoTemplateOptions | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "object" || Array.isArray(value)) throw new Error("Invalid MongoDB options");
+  const body = value as Record<string, unknown>;
+  for (const key of Object.keys(body)) {
+    if (!mongoOptionKeys.has(key)) throw new Error(`Unknown MongoDB option '${key}'`);
+  }
+  if (typeof body.srv !== "boolean") throw new Error("Invalid MongoDB srv option");
+  const authSource = mongoName(body.authSource, mongoAuthSource, "authSource");
+  const replicaSet = mongoName(body.replicaSet, mongoReplicaSet, "replicaSet");
+  return {
+    srv: body.srv,
+    ...(authSource === undefined ? {} : { authSource }),
+    ...(replicaSet === undefined ? {} : { replicaSet }),
+  };
+}
+
+/** Canonical JSON text for the `mongo_options` column; null when absent. */
+export function serializeMongoOptions(options: MongoTemplateOptions | undefined): string | null {
+  return options ? JSON.stringify(options) : null;
+}
+
+/** Rebuild options from the persisted JSON column; a corrupt value reads as absent. */
+export function storedMongoOptions(value: unknown): MongoTemplateOptions | null {
+  try {
+    return parseMongoOptions(typeof value === "string" ? JSON.parse(value) : value);
+  } catch {
+    return null;
+  }
+}
+
+const d1AccountId = /^[0-9a-fA-F]{32}$/;
+const d1DatabaseId = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
+/** Cloudflare D1 shares account and database identifiers only; Wrangler auth is member-local. */
+function validCloudflareD1Identity(body: Record<string, unknown>, host: string, database: string, allowWrites: boolean) {
+  return body.engine === "sqlite"
+    && body.provider === "cloudflareD1"
+    && body.port === 443
+    && body.sslmode === "require"
+    && !allowWrites
+    && d1AccountId.test(host)
+    && d1DatabaseId.test(database)
+    && (body.driverId === null || body.driverId === undefined || body.driverId === "cloudflare-d1-wrangler")
+    && (body.schemaGroup === null || body.schemaGroup === undefined);
+}
 
 export type SharedConnectionInput = {
   name: string;
@@ -37,6 +108,8 @@ export type SharedConnectionInput = {
   allowWrites: boolean;
   env: string | null;
   schemaGroup: string | null;
+  /** MongoDB only; omitted otherwise so existing version payload hashes stay stable. */
+  mongoOptions?: MongoTemplateOptions;
 };
 
 export type SharedConnectionCredentialMode = "member_local" | "managed";
@@ -197,6 +270,22 @@ export function parseSharedConnection(
       throw new Error("Invalid BigQuery shared connection boundary");
     }
   }
+  if (engine === "sqlite" && (
+    credentialMode !== "member_local"
+    || !validCloudflareD1Identity(body, host, database, allowWrites)
+  )) {
+    throw new Error("Only a Cloudflare D1 identity can be shared as SQLite");
+  }
+  if (body.provider === "cloudflareD1" && engine !== "sqlite") {
+    throw new Error("Invalid Cloudflare D1 shared connection boundary");
+  }
+  const mongoOptions = parseMongoOptions(body.mongoOptions);
+  if (mongoOptions && engine !== "mongodb") {
+    throw new Error("Only MongoDB templates accept MongoDB options");
+  }
+  if (mongoOptions?.srv && (body.port !== MONGO_SRV_PORT || /[,:]/.test(host))) {
+    throw new Error("SRV hosts are a single DNS name on the default port");
+  }
   return {
     name: text(body.name, 120, true)!,
     engine,
@@ -210,6 +299,7 @@ export function parseSharedConnection(
     allowWrites,
     env: text(body.env, 32),
     schemaGroup: text(body.schemaGroup, 120),
+    ...(mongoOptions ? { mongoOptions } : {}),
   };
 }
 
@@ -245,13 +335,18 @@ export function publicDirectProvisioning(direct: DirectConnectionView): PublicDi
   };
 }
 
+function mongoOptionsField(value: unknown) {
+  const mongoOptions = storedMongoOptions(value);
+  return mongoOptions ? { mongoOptions } : {};
+}
+
 export function publicConnection(
   row: {
     id: string; name: string; engine: string; provider: string; driverId: string | null;
     host: string; port: number; databaseName: string; sslmode: string;
     readonlyDefault: boolean; allowWrites: boolean; environment: string | null;
     schemaGroup: string | null; credentialMode: string; contentRevision: number; updatedAt: Date;
-    providerResource?: unknown; providerMetadata?: unknown;
+    providerResource?: unknown; providerMetadata?: unknown; mongoOptions?: unknown;
   },
   role: WorkspaceRoleName,
   accessMode: "view" | "read" | "write" | "manage",
@@ -289,7 +384,9 @@ export function publicConnection(
     role,
     accessMode,
     credentialMode: managed ? "managed" : "member_local",
-    credentialsRequired: !managed && !direct && row.engine !== "bigquery",
+    // BigQuery and Cloudflare D1 authenticate through each member's own official CLI.
+    credentialsRequired: !managed && !direct && row.engine !== "bigquery" && row.engine !== "sqlite",
+    ...(row.engine === "mongodb" ? mongoOptionsField(row.mongoOptions) : {}),
     provisioning: direct ? publicDirectProvisioning(direct) : null,
     providerTarget: publicProviderTarget(row),
   };

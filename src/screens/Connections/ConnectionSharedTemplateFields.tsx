@@ -26,7 +26,7 @@ export function ConnectionSharedTemplateFields({
 }) {
   const { t } = useI18n();
   const { form, set, flags } = profile;
-  const { isMongo, canEditConnection, sqlSslModes } = flags;
+  const { isMongo, isCloudflareD1, canEditConnection, sqlSslModes } = flags;
 
   return (
     <>
@@ -108,7 +108,7 @@ export function ConnectionSharedTemplateFields({
           />
         </PropertyRow>
       ) : null}
-      {form.credentialMode === "provisioned" ? (
+      {isCloudflareD1 ? null : form.credentialMode === "provisioned" ? (
         <PropertyRow label={t("directAccess.editor.accountLabel")}>
           <StatusBadge tone="neutral">{t("directAccess.editor.accountBadge")}</StatusBadge>
         </PropertyRow>

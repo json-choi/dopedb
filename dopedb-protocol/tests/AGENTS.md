@@ -32,7 +32,7 @@ before it silently breaks `dopedb-cli` or the Desktop/Cloud sync path.
 | `runtime-discovery.json` | Public, secret-free runtime discovery metadata fixture (`discovery.rs`). |
 | `command-catalog-v18.json` | Versioned catalog of every `CommandName`/`CommandSpec` the broker accepts, at command-schema version 18. |
 | `cli-command-contract-v14.json` | Versioned CLI command contract fixture, at contract version 14. |
-| `control-plane-contracts-v1.json` | Workspace control-plane HTTPS payload contracts fixture (`control_plane.rs`), version 1. |
+| `control-plane-contracts-v1.json` | Workspace control-plane HTTPS payload contracts fixture (`control_plane.rs`), version 1; its `sharedConnectionTemplates` accept/reject vectors (MongoDB options, Cloudflare D1 identity) are also run by Workspace Cloud's parser harness. |
 | `skill-command-contract-v1.json` | Skill bundle/inventory/mutation command contract fixture (`skill_command.rs`), version 1. |
 | `graph-build-artifact-v1.json` | Project Knowledge graph-build artifact fixture (`GraphBuildArtifactV1`), version 1. |
 

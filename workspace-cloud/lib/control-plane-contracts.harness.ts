@@ -84,6 +84,10 @@ type Fixture = Readonly<{
     response: unknown;
   }>;
   analysisArticleCreate: unknown;
+  sharedConnectionTemplates: Readonly<{
+    accepted: readonly Readonly<{ name: string; template: unknown }>[];
+    rejected: readonly Readonly<{ name: string; template: unknown }>[];
+  }>;
   analysisArticleAcceptances: readonly Readonly<{
     name: string;
     mutations: SemanticRejection["mutations"];
@@ -863,6 +867,29 @@ describe("Desktop control-plane contracts", () => {
       schemaGroup: null,
     });
     expect(bigQueryTemplate.engine).toBe("bigquery");
+    // Shared goldens also decode in the Desktop protocol crate, so both parsers agree.
+    for (const { name, template } of fixture.sharedConnectionTemplates.accepted) {
+      expect(() => parseSharedConnection(template), name).not.toThrow();
+    }
+    for (const { name, template } of fixture.sharedConnectionTemplates.rejected) {
+      expect(() => parseSharedConnection(template), name).toThrow();
+    }
+    const mongoGolden = parseSharedConnection(fixture.sharedConnectionTemplates.accepted[0].template);
+    expect(mongoGolden.mongoOptions).toEqual({ srv: true, authSource: "admin", replicaSet: "atlas-shard-0" });
+    expect(Object.keys(mongoGolden.mongoOptions!)).toEqual(["srv", "authSource", "replicaSet"]);
+    const d1Golden = parseSharedConnection(fixture.sharedConnectionTemplates.accepted[3].template);
+    expect(() => parseSharedConnection(d1Golden, { credentialMode: "managed" })).toThrow();
+    const sharedRow = (template: typeof mongoGolden) => ({
+      id: "connection-template", ...template, databaseName: template.database,
+      environment: template.env, contentRevision: 1, updatedAt: new Date("2026-10-20T00:00:00Z"),
+      credentialMode: "member_local",
+    });
+    expect(publicConnection(sharedRow(d1Golden), "analyst", "read").credentialsRequired).toBe(false);
+    const publicMongo = publicConnection(sharedRow(mongoGolden), "analyst", "read");
+    expect(publicMongo.credentialsRequired).toBe(true);
+    expect(publicMongo).toMatchObject({ mongoOptions: mongoGolden.mongoOptions });
+    expect(publicConnection(sharedRow({ ...mongoGolden, mongoOptions: undefined }), "analyst", "read"))
+      .not.toHaveProperty("mongoOptions");
     expect(() => parseSharedConnection(bigQueryTemplate, {
       credentialMode: "managed",
     })).toThrow("member-local Google Cloud CLI");
