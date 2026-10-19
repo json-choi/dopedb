@@ -20,6 +20,13 @@ default = []
 # Release-profile application used only by scripts/benchmark-packaged-release.mjs.
 # Ordinary production artifacts never compile the isolated fixture/report paths.
 packaged-benchmark = ["dep:objc2", "dep:objc2-app-kit"]
+# Docker end-to-end driver for the direct shared database adapters, used only by
+# scripts/test-direct-provisioning.mjs. Production builds never compile it.
+direct-access-e2e = []
+
+[[example]]
+name = "direct_access_e2e"
+required-features = ["direct-access-e2e"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

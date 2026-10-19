@@ -11,6 +11,9 @@
 mod adapters;
 mod application;
 pub(crate) mod domain;
+#[cfg(feature = "direct-access-e2e")]
+#[doc(hidden)]
+pub mod e2e;
 pub(crate) mod ownership;
 pub(crate) mod plan;
 mod ports;
