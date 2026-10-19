@@ -4,7 +4,9 @@ import { sql } from "drizzle-orm";
 import { atomicD1 } from "./d1/atomic";
 import { workspaceMemberAuthority, type MemberAuthority } from "./d1/member-authority";
 import { utcNow, uuidDefault } from "./d1/schema/values";
-import { directLoweringTargets, noDirectLoweringBlockers } from "./workspace-direct-access-store";
+import {
+  directLoweringTargets, directSettlePairs, noDirectLoweringBlockers, settleDirectRevocationsAfterMutation,
+} from "./workspace-direct-access-store";
 
 type GrantCapability = "view" | "read" | "use" | "manage";
 type GrantMutation = { organizationId: string; connectionId: string; authority: MemberAuthority; memberId: string };
@@ -35,6 +37,7 @@ export async function increaseConnectionGrant(input: GrantMutation & { capabilit
         AND connection_id = ${input.connectionId}
         AND user_id = (SELECT user_id FROM member WHERE id = ${input.memberId} AND organization_id = ${input.organizationId})
         AND EXISTS (${scope})`,
+      settleDirectRevocationsAfterMutation(input.organizationId, scope, directSettlePairs.grant(input.connectionId, input.memberId)),
       sql`INSERT INTO workspace_audit_event (organization_id, actor_user_id, action, resource_type, resource_id, redacted_summary, request_id)
         SELECT ${input.organizationId}, ${input.authority.userId}, 'connection.grant.update', 'connection', ${input.connectionId},
           json_object('memberId', ${input.memberId}, 'capability', ${input.capability}), ${uuidDefault} FROM (${scope})`,
@@ -58,6 +61,7 @@ export async function removeConnectionGrant(input: GrantMutation & { claimId: st
         SELECT ${input.organizationId}, ${input.connectionId}, ${input.userId} FROM (${scope})`,
       sql`DELETE FROM workspace_connection_grant WHERE organization_id = ${input.organizationId} AND connection_id = ${input.connectionId}
         AND member_id = ${input.memberId} AND EXISTS (${scope}) RETURNING member_id AS memberId`,
+      settleDirectRevocationsAfterMutation(input.organizationId, scope, directSettlePairs.grant(input.connectionId, input.memberId)),
       sql`INSERT INTO workspace_audit_event (organization_id, actor_user_id, action, resource_type, resource_id, redacted_summary, request_id)
         SELECT ${input.organizationId}, ${input.authority.userId}, 'connection.grant.revoke', 'connection', ${input.connectionId},
           json_object('memberId', ${input.memberId}), ${uuidDefault} FROM (${scope})`,

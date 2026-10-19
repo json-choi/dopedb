@@ -1,5 +1,7 @@
 // Settle one pending revocation item. `cancelled` lifts the cap; `applied` is accepted
 // only once the member's principal is absent, dropped or already at most the target level.
+// Requesting the state the item already has (the mutation itself may have settled it)
+// is idempotent; a different terminal state is refused.
 import { env } from "@/lib/env";
 import { boundedJsonBody, isUuid, jsonError, mutationAllowed, privateJson } from "@/lib/http";
 import { authorizeDirectAdmin, directRateLimited, directRevocationWire } from "@/lib/workspace-direct-access-http";
@@ -25,19 +27,25 @@ export async function POST(request: Request, context: RouteContext) {
   const limited = await directRateLimited(
     "direct-revocation-settle", `${workspaceId}:${admin.authority.userId}:${item.connectionId}`, 60);
   if (limited) return limited;
-  const settled = await settleDirectRevocation({
-    organizationId: workspaceId,
-    connectionId: item.connectionId,
-    revocationId,
-    actorUserId: admin.authority.userId,
-    to: body.state,
-  });
-  if (!settled) {
-    return jsonError(
-      "Revocation is already settled or the database principal has not been lowered yet",
-      409,
-      "direct_revocation_unsettled",
-    );
+  if (item.state !== body.state) {
+    const settled = await settleDirectRevocation({
+      organizationId: workspaceId,
+      connectionId: item.connectionId,
+      revocationId,
+      actorUserId: admin.authority.userId,
+      to: body.state,
+    });
+    if (!settled) {
+      // A concurrent settlement to the requested state is still success.
+      const current = await loadDirectRevocation(workspaceId, revocationId);
+      if (current?.state !== body.state) {
+        return jsonError(
+          "Revocation is already settled or the database principal has not been lowered yet",
+          409,
+          "direct_revocation_unsettled",
+        );
+      }
+    }
   }
   const settledItem = await loadDirectRevocation(workspaceId, revocationId);
   return privateJson({ revocation: settledItem ? directRevocationWire(settledItem) : null });

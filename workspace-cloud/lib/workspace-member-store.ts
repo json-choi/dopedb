@@ -3,7 +3,9 @@ import { sql } from "drizzle-orm";
 import { atomicD1 } from "./d1/atomic";
 import { workspaceMemberAuthority, type MemberAuthority } from "./d1/member-authority";
 import { uuidDefault } from "./d1/schema/values";
-import { directLoweringTargets, noDirectLoweringBlockers } from "./workspace-direct-access-store";
+import {
+  directLoweringTargets, directSettlePairs, noDirectLoweringBlockers, settleDirectRevocationsAfterMutation,
+} from "./workspace-direct-access-store";
 import type { DirectLevel } from "./workspace-direct-access-core";
 
 export async function changeWorkspaceMemberRole(input: {
@@ -28,6 +30,7 @@ export async function changeWorkspaceMemberRole(input: {
       sql`UPDATE member SET role = ${input.role}, revocation_pending_at = NULL, revocation_claimed_at = NULL, revocation_claim_id = NULL
         WHERE id = ${input.memberId} AND organization_id = ${input.organizationId} AND EXISTS (${scope})
         RETURNING id, organization_id AS organizationId, user_id AS userId, role, created_at AS createdAt`,
+      settleDirectRevocationsAfterMutation(input.organizationId, scope, directSettlePairs.member(input.memberId)),
       sql`INSERT INTO workspace_audit_event (organization_id, actor_user_id, action, resource_type, resource_id, redacted_summary, request_id)
         SELECT ${input.organizationId}, ${input.authority.userId}, 'member.role.update', 'member', ${input.memberId},
           json_object('from', ${input.previousRole}, 'to', ${input.role}, 'revokedLeases', ${input.revokedLeases},

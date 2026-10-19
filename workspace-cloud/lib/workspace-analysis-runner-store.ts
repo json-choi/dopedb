@@ -6,7 +6,9 @@ import { sql, type SQL } from "drizzle-orm";
 import { atomicD1 } from "./d1/atomic";
 import { utcNow } from "./d1/schema/values";
 import { workspaceMemberAuthority } from "./d1/member-authority";
-import { directLoweringTargets, noDirectLoweringBlockers } from "./workspace-direct-access-store";
+import {
+  directLoweringTargets, directSettlePairs, noDirectLoweringBlockers, settleDirectRevocationsAfterMutation,
+} from "./workspace-direct-access-store";
 import type { AnalysisRunnerRegistration } from "./workspace-analysis-runs";
 import type { AnalysisRunAuthority } from "./workspace-analysis-run-store";
 import {
@@ -114,7 +116,8 @@ async function cleanupRunnerWork(input: { organizationId: string; authority: Ana
         sql`DELETE FROM workspace_analysis_article_query_receipt WHERE organization_id = ${input.organizationId}
           AND run_id IN (${ids("runIds")})`,
         ...(options.removal ? [sql`DELETE FROM member WHERE organization_id = ${input.organizationId}
-          AND id = ${options.targetId} AND EXISTS (${scope})`] : []),
+          AND id = ${options.targetId} AND EXISTS (${scope})`,
+        settleDirectRevocationsAfterMutation(input.organizationId, scope, directSettlePairs.member(options.targetId))] : []),
         sql`INSERT INTO workspace_audit_event (organization_id, actor_user_id, action, resource_type,
             resource_id, redacted_summary, request_id)
           SELECT ${input.organizationId}, ${input.authority.userId}, ${options.removal ? "member.remove" : "analysis_runner.revoke"},

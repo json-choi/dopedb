@@ -14,12 +14,14 @@ import {
   findDirectLoweringBlockers,
   listDirectWorkItems,
   listPendingDirectRevocations,
+  loadDirectRevocation,
   settleDirectReceipt,
   settleDirectRevocation,
   submitDirectVerifier,
   type DirectReceipt,
 } from "./workspace-direct-access-store";
-import { removeConnectionGrant } from "./workspace-grant-store";
+import { increaseConnectionGrant, removeConnectionGrant } from "./workspace-grant-store";
+import { changeWorkspaceMemberRole } from "./workspace-member-store";
 import { listWorkspaceMemberGrants } from "./workspace-member-grants";
 import { accessModeForConnectionGrant } from "./workspace-permissions";
 import { setWorkspaceTeamRead } from "./workspace-team-read-store";
@@ -173,7 +175,7 @@ export async function verifyD1DirectAccess(
   await run("DELETE FROM workspace_direct_principal WHERE id = ?", viewerPrincipal);
 
   // Revocation items: deduplicated while pending, cap the derived level, settle exactly once.
-  const declare = (memberIds: string[], kind: "grant_lowered" | "member_removed", targetLevel: "none" | "read") =>
+  const declare = (memberIds: string[], kind: "grant_lowered" | "member_removed" | "role_lowered", targetLevel: "none" | "read") =>
     createDirectRevocations({ organizationId, connectionId, authority, memberIds, kind, targetLevel });
   await expect(createDirectRevocations({ organizationId, connectionId: plainId, authority, memberIds: [editor.memberId],
     kind: "grant_lowered", targetLevel: "read" })).resolves.toBeNull();
@@ -224,6 +226,26 @@ export async function verifyD1DirectAccess(
   expect(await listPendingDirectRevocations({ organizationId, connectionId })).toEqual([]);
   await rejects("UPDATE workspace_direct_revocation SET kind = 'member_removed' WHERE id = ?", editorItem.id);
   await rejects("UPDATE workspace_direct_revocation SET state = 'pending' WHERE id = ?", editorItem.id);
+
+  // An access mutation settles its pending lowering items in the same batch: applied when the
+  // new effective level is within the target, cancelled (cap lifted) when access was raised.
+  const stateOf = async (id: string) => (await loadDirectRevocation(organizationId, id))!.state;
+  const roleItem = (await declare([editor.memberId], "role_lowered", "read"))![0];
+  const roleGate = await claimRevocationGate({ kind: "member", organizationId, memberId: editor.memberId, userId: editor.userId });
+  expect(await changeWorkspaceMemberRole({ organizationId, authority, memberId: editor.memberId, userId: editor.userId,
+    claimId: roleGate!.claimId, previousRole: "editor", role: "analyst", revokedLeases: 0, deferredRevocations: 0,
+    directLowering: [{ connectionId, level: "read" }] })).toHaveLength(1);
+  expect(await stateOf(roleItem.id)).toBe("applied");
+  await run("UPDATE member SET role = 'editor' WHERE id = ?", editor.memberId);
+  const raiseItem = (await declare([analyst.memberId], "grant_lowered", "none"))![0];
+  expect(await workOf(analyst)).toMatchObject({ desiredLevel: "none" });
+  expect(await increaseConnectionGrant({ organizationId, connectionId, authority, memberId: analyst.memberId, capability: "use" })).toHaveLength(1);
+  expect(await stateOf(raiseItem.id)).toBe("cancelled");
+  expect(await workOf(analyst)).toMatchObject({ desiredLevel: "read" });
+  // Settling to the state an item already has is the route's idempotent case; the store reports it unchanged.
+  expect(await settleDirectRevocation({ organizationId, connectionId, revocationId: raiseItem.id, actorUserId: authority.userId, to: "cancelled" })).toBe(false);
+  expect(await stateOf(raiseItem.id)).toBe("cancelled");
+  await run("UPDATE workspace_connection_grant SET capability = 'read', origin = 'team' WHERE connection_id = ? AND member_id = ?", connectionId, analyst.memberId);
 
   // Self-leave and account deletion record their own items in the same transaction.
   await run("DELETE FROM member WHERE id = ?", orphan.memberId);
