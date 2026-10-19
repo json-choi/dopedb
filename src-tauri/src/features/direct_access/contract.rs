@@ -19,45 +19,49 @@ fn marker() -> Marker {
 
 pub(crate) async fn assert_direct_access_contract() {
     super::application_contract::assert_revocation_ordering_contract().await;
-    // PostgreSQL SCRAM-SHA-256. Vector computed independently with Python
-    // hashlib.pbkdf2_hmac/hmac; password "pencil" and salt "W22ZaJ0SNY7soEsUEjb6gQ=="
-    // are the RFC 7677 example credentials, whose StoredKey/ServerKey this matches.
-    let salt: [u8; 16] = base64_decode("W22ZaJ0SNY7soEsUEjb6gQ==")
+    // Public test vectors live in fixtures/verifier-vectors.json (RFC 7677 SCRAM
+    // example credentials and the sha256-crypt specification), not in source.
+    let vectors: serde_json::Value =
+        serde_json::from_str(include_str!("fixtures/verifier-vectors.json")).unwrap();
+    let text = |value: &serde_json::Value| value.as_str().unwrap().to_owned();
+    let scram_vector = &vectors["scram"];
+    let salt: [u8; 16] = base64_decode(&text(&scram_vector["saltBase64"]))
         .try_into()
         .unwrap();
-    let scram = postgres_scram_verifier_with_salt("pencil", &salt).unwrap();
-    assert_eq!(
-        scram,
-        "SCRAM-SHA-256$4096:W22ZaJ0SNY7soEsUEjb6gQ==$WG5d8oPm3OtcPnkdi4Uo7BkeZkBFzpcXkuLmtbsT4qY=:wfPLwcE6nTWhTAmQ7tl2KeoiWGPlZqQxSrmfPwDl2dU="
-    );
+    let scram = postgres_scram_verifier_with_salt(&text(&scram_vector["password"]), &salt).unwrap();
+    assert_eq!(scram, text(&scram_vector["verifier"]));
     assert!(is_valid_verifier(VerifierKind::ScramSha256, &scram));
     assert_eq!(
-        postgres_scram_verifier_with_salt("pässword", &salt),
+        postgres_scram_verifier_with_salt(&text(&scram_vector["nonAsciiPassword"]), &salt),
         Err(VerifierError::NonAscii)
     );
 
-    // sha256-crypt vectors from Drepper's specification (rounds 5000 is the default
-    // and the MySQL round count; 10000 checks the explicit-rounds path).
-    assert_eq!(
-        sha256_crypt_digest(b"Hello world!", b"saltstring", 5000),
-        "5B8vYYiY.CVt1RlTTf8KbXBH3hsxY/GNooZaBBGWEc5"
-    );
-    assert_eq!(
-        sha256_crypt_digest(b"Hello world!", b"saltstringsaltst", 10000),
-        "3xv.VbSHBb41AL9AvLeujZkZRBAwqFMz2.opqey6IcA"
-    );
-    assert_eq!(
-        sha256_crypt_digest(b"This is just a test", b"toolongsaltstrin", 5000),
-        "Un/5jzAHMgOGZ5.mWJpuVolil07guHPvOW8mGRcvxa5"
-    );
-    let mysql =
-        mysql_caching_sha2_verifier_with_salt("Hello world!", b"abcdefghijklmnopqrst").unwrap();
-    assert!(mysql.starts_with("$A$005$abcdefghijklmnopqrst"));
+    // sha256-crypt: rounds 5000 is the default and the MySQL round count; 10000
+    // checks the explicit-rounds path.
+    for case in vectors["sha256Crypt"].as_array().unwrap() {
+        assert_eq!(
+            sha256_crypt_digest(
+                text(&case["password"]).as_bytes(),
+                text(&case["salt"]).as_bytes(),
+                case["rounds"].as_u64().unwrap() as u32,
+            ),
+            text(&case["digest"])
+        );
+    }
+    let mysql_vector = &vectors["mysql"];
+    let mysql_salt = text(&mysql_vector["salt"]);
+    let mysql = mysql_caching_sha2_verifier_with_salt(
+        &text(&mysql_vector["password"]),
+        mysql_salt.as_bytes().try_into().unwrap(),
+    )
+    .unwrap();
+    assert!(mysql.starts_with(&format!("$A$005${mysql_salt}")));
     assert_eq!(mysql.len(), 7 + 20 + 43);
     assert!(is_valid_verifier(VerifierKind::CachingSha2, &mysql));
+    let generated = generate_member_password().unwrap();
     assert!(is_valid_verifier(
         VerifierKind::CachingSha2,
-        &mysql_caching_sha2_verifier("secret").unwrap()
+        &mysql_caching_sha2_verifier(&generated).unwrap()
     ));
     let password = generate_member_password().unwrap();
     assert_eq!(password.len(), 43);
