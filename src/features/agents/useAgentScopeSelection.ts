@@ -10,29 +10,22 @@ import type {
   AgentComposerRequest,
   AgentResourceScopeSelection,
 } from "./domain";
+import {
+  EMPTY_AGENT_RESOURCE_SELECTION,
+  activeAgentWriteTarget,
+  selectAgentWriteTarget,
+  selectedAgentResources,
+  toggleAgentResource,
+  type AgentResourceSelection,
+} from "./agentResourceSelectionRules";
 import { externalAgentResourceBoundaries } from "./externalAgentRequestModel";
 import type {
   AgentDatabaseResourceChoice,
-  AgentProjectResourceChoice,
   AgentSourceResourceChoice,
   useAgentEnvironmentInventory,
 } from "./useAgentEnvironmentInventory";
 
 type EnvironmentInventory = ReturnType<typeof useAgentEnvironmentInventory>;
-
-type ResourceSelection = {
-  projectId: string | null;
-  databaseIds: ConnectionId[];
-  sourceIds: string[];
-  writeConnectionId: ConnectionId | null;
-};
-
-const EMPTY_SELECTION: ResourceSelection = {
-  projectId: null,
-  databaseIds: [],
-  sourceIds: [],
-  writeConnectionId: null,
-};
 
 export function useAgentScopeConnection(
   defaultConnection: ConnectionProfile,
@@ -48,27 +41,7 @@ export function useAgentScopeConnection(
   return { connection, select: setConnectionId };
 }
 
-function selectedResources(
-  projects: AgentProjectResourceChoice[],
-  selection: ResourceSelection,
-) {
-  const project = projects.find(
-    (candidate) => candidate.id === selection.projectId,
-  );
-  const databaseIds = new Set(selection.databaseIds);
-  const sourceIds = new Set(selection.sourceIds);
-  return {
-    project,
-    databases:
-      project?.databases.filter((database) =>
-        databaseIds.has(database.connectionId),
-      ) ?? [],
-    sources:
-      project?.sources.filter((source) => sourceIds.has(source.sourceId)) ?? [],
-  };
-}
-
-function sameSelection(left: ResourceSelection, right: ResourceSelection) {
+function sameSelection(left: AgentResourceSelection, right: AgentResourceSelection) {
   return (
     left.projectId === right.projectId &&
     left.writeConnectionId === right.writeConnectionId &&
@@ -134,7 +107,7 @@ export function useAgentScopeSelection({
   onSelectConnection: (connectionId: ConnectionId) => void;
   selectionLocked: boolean;
 }) {
-  const [selection, setSelection] = useState<ResourceSelection>(EMPTY_SELECTION);
+  const [selection, setSelection] = useState<AgentResourceSelection>(EMPTY_AGENT_RESOURCE_SELECTION);
   const inventoryProjects = inventory.projects;
 
   useEffect(() => {
@@ -192,7 +165,7 @@ export function useAgentScopeSelection({
         return;
       }
     }
-    const currentResources = selectedResources(inventoryProjects, selection);
+    const currentResources = selectedAgentResources(inventoryProjects, selection);
     if (currentResources.databases.length + currentResources.sources.length > 0) {
       return;
     }
@@ -226,7 +199,7 @@ export function useAgentScopeSelection({
   ]);
 
   const resources = useMemo(
-    () => selectedResources(inventoryProjects, selection),
+    () => selectedAgentResources(inventoryProjects, selection),
     [inventoryProjects, selection],
   );
 
@@ -235,11 +208,9 @@ export function useAgentScopeSelection({
     // draft never keeps a write target that no longer passes the write path;
     // a started conversation's pinned target is re-checked by the Broker.
     if (selectionLocked || selection.writeConnectionId === null) return;
-    const stillWritable = resources.databases.some(
-      (database) =>
-        database.connectionId === selection.writeConnectionId && database.writable,
-    );
-    if (!stillWritable) {
+    if (
+      activeAgentWriteTarget(resources.databases, selection.writeConnectionId) === null
+    ) {
       setSelection((current) => ({ ...current, writeConnectionId: null }));
     }
   }, [resources.databases, selection.writeConnectionId, selectionLocked]);
@@ -267,33 +238,11 @@ export function useAgentScopeSelection({
         .find((candidate) => candidate.key === resourceKey);
       const resource = database ?? source;
       if (!resource) return;
+      const next = toggleAgentResource(selection, resource);
+      if (!next) return;
       onClearError();
-      const sameProject = selection.projectId === resource.projectId;
-      const databaseIds = sameProject ? [...selection.databaseIds] : [];
-      const sourceIds = sameProject ? [...selection.sourceIds] : [];
-      if (database) {
-        const index = databaseIds.indexOf(database.connectionId);
-        if (index >= 0) databaseIds.splice(index, 1);
-        else databaseIds.push(database.connectionId);
-      } else if (source) {
-        const index = sourceIds.indexOf(source.sourceId);
-        if (index >= 0) sourceIds.splice(index, 1);
-        else sourceIds.push(source.sourceId);
-      }
-      if (databaseIds.length + sourceIds.length === 0) return;
-      const writeConnectionId =
-        sameProject &&
-        selection.writeConnectionId !== null &&
-        databaseIds.includes(selection.writeConnectionId)
-          ? selection.writeConnectionId
-          : null;
-      const next: ResourceSelection = {
-        projectId: resource.projectId,
-        databaseIds,
-        sourceIds,
-        writeConnectionId,
-      };
-      const nextResources = selectedResources(inventoryProjects, next);
+      const writeConnectionId = next.writeConnectionId;
+      const nextResources = selectedAgentResources(inventoryProjects, next);
       const anchor =
         writeConnectionId ??
         nextResources.databases[0]?.connectionId ??
@@ -313,22 +262,16 @@ export function useAgentScopeSelection({
   const selectWriteTarget = useCallback(
     (writeConnectionId: ConnectionId | null) => {
       if (selectionLocked) return;
-      if (
-        writeConnectionId !== null &&
-        !resources.databases.some(
-          (database) =>
-            database.connectionId === writeConnectionId && database.writable,
-        )
-      ) {
-        return;
-      }
+      const next = selectAgentWriteTarget(selection, resources.databases, writeConnectionId);
+      if (!next) return;
       onClearError();
-      setSelection((current) => ({ ...current, writeConnectionId }));
+      setSelection(next);
       if (writeConnectionId) onSelectConnection(writeConnectionId);
     }, [
       onClearError,
       onSelectConnection,
       resources.databases,
+      selection,
       selectionLocked,
     ],
   );

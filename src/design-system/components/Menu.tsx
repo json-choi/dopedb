@@ -1,30 +1,193 @@
-// Owns portalled toolbar menus, trigger variants, and shared keyboard focus behavior.
-
+// Canonical popup menu. `Menu` is the one floating surface (external anchor,
+// shared keyboard/focus contract from menuInteraction); `MenuItem`,
+// `MenuCheckbox` are its rows; `ToolbarMenu` is the thin trigger-owned wrapper
+// that renders its own button and opens a `Menu` anchored to it.
 import {
   type ButtonHTMLAttributes,
+  type InputHTMLAttributes,
+  type KeyboardEventHandler,
+  type MouseEventHandler,
+  type ReactElement,
+  type ReactNode,
+  type RefObject,
   useCallback,
   useEffect,
   useId,
   useRef,
   useState,
-  type ReactElement,
-  type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
-import { Tooltip } from "../design-system/components/Tooltip";
+
+import { Icon, type IconName } from "../../components/Icon";
 import {
-  floatingPortalOwnerId,
   floatingPortalIsModalOwned,
+  floatingPortalOwnerId,
   useAnchoredFloatingSurface,
-} from "../design-system/floating";
+} from "../floating";
 import {
   menuInitialFocusForTriggerKey,
   type MenuInitialFocus,
   useMenuInteractions,
-} from "../design-system/menuInteraction";
-import { Icon, type IconName } from "./Icon";
+} from "../menuInteraction";
+import { Tooltip } from "./Tooltip";
 
-export default function ToolbarMenu({
+type MenuPlacement = "bottom-end" | "bottom-start" | "right-end" | "top-start";
+type MenuSize = "default" | "narrow" | "account" | "scope" | "tasks";
+
+export function Menu({
+  id,
+  children,
+  anchorRef,
+  getAnchorRect,
+  placement = "bottom-end",
+  size = "default",
+  ariaLabel,
+  onClick,
+  onKeyDown,
+  initialFocus = null,
+  onRequestClose,
+  onReferenceHidden,
+}: {
+  id?: string;
+  children: ReactNode;
+  anchorRef: RefObject<HTMLElement | null>;
+  /** Optional vendor-measured caret/cell geometry; the real anchor still owns focus. */
+  getAnchorRect?: () => DOMRect;
+  placement?: MenuPlacement;
+  size?: MenuSize;
+  ariaLabel?: string;
+  onClick?: MouseEventHandler<HTMLDivElement>;
+  onKeyDown?: KeyboardEventHandler<HTMLDivElement>;
+  initialFocus?: MenuInitialFocus;
+  onRequestClose?: () => void;
+  onReferenceHidden?: () => void;
+}) {
+  const generatedId = useId();
+  const menuId = id ?? `menu-${generatedId.replace(/:/g, "")}`;
+  const menuRef = useRef<HTMLDivElement>(null);
+  const {
+    refs,
+    floatingStyles,
+    placement: resolvedPlacement,
+    isPositioned,
+    middlewareData,
+  } = useAnchoredFloatingSurface({ open: true, placement });
+  const setMenu = useCallback(
+    (node: HTMLDivElement | null) => {
+      menuRef.current = node;
+      refs.setFloating(node);
+    },
+    [refs],
+  );
+  const interactions = useMenuInteractions({
+    open: true,
+    ready: isPositioned,
+    menuRef,
+    triggerRef: anchorRef,
+    initialFocus,
+    onRequestClose: () => onRequestClose?.(),
+  });
+
+  useEffect(() => {
+    refs.setReference(getAnchorRect
+      ? { getBoundingClientRect: getAnchorRect, contextElement: anchorRef.current ?? undefined }
+      : anchorRef.current);
+    return () => refs.setReference(null);
+  }, [anchorRef, getAnchorRect, refs]);
+
+  useEffect(() => {
+    if (!middlewareData.hide?.referenceHidden) return;
+    onReferenceHidden?.();
+  }, [middlewareData.hide?.referenceHidden, onReferenceHidden]);
+
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div
+      ref={setMenu}
+      id={menuId}
+      role="menu"
+      aria-label={ariaLabel}
+      data-placement={resolvedPlacement.split("-")[0]}
+      data-floating-owner-id={floatingPortalOwnerId(anchorRef.current)}
+      data-modal-owned={floatingPortalIsModalOwned(anchorRef.current)}
+      data-size={size}
+      className="tw:fixed tw:z-[var(--ds-z-popover)] tw:grid tw:max-h-[calc(100dvh-(var(--ds-viewport-gutter)*2))] tw:min-w-[var(--ds-menu-min-width)] tw:max-w-[min(var(--ds-menu-max-width),calc(100vw-(var(--ds-viewport-gutter)*2)))] tw:gap-[var(--ds-segment-gap)] tw:overflow-auto tw:overscroll-contain tw:rounded-md tw:border tw:border-border-strong tw:bg-popover tw:p-1 tw:text-popover-foreground tw:shadow-popover tw:data-[modal-owned=true]:z-[var(--ds-z-modal-popover)] tw:data-[size=narrow]:w-[min(220px,calc(100vw-(var(--ds-viewport-gutter)*2)))] tw:data-[size=account]:w-[min(284px,calc(100vw-(var(--ds-viewport-gutter)*2)))] tw:data-[size=scope]:w-[min(var(--ds-schema-scope-menu-width),calc(100vw-(var(--ds-viewport-gutter)*2)))] tw:data-[size=tasks]:w-[min(380px,calc(100vw-(var(--ds-viewport-gutter)*2)))] tw:data-[size=tasks]:max-w-none"
+      style={{
+        ...floatingStyles,
+        visibility: isPositioned ? "visible" : "hidden",
+      }}
+      onClick={(event) => {
+        interactions.onClick(event);
+        onClick?.(event);
+      }}
+      onKeyDown={(event) => {
+        interactions.onKeyDown(event);
+        onKeyDown?.(event);
+      }}
+    >
+      {children}
+    </div>,
+    document.body,
+  );
+}
+
+export function MenuItem({
+  icon,
+  children,
+  ...props
+}: {
+  /** Optional leading icon; rows that bring their own mark may pass an element. */
+  icon?: IconName | ReactElement;
+  children: ReactNode;
+} & Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children" | "className">) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      className="tw:flex tw:min-h-control-md tw:w-full tw:min-w-[var(--ds-menu-min-width)] tw:cursor-pointer tw:items-center tw:justify-start tw:gap-2 tw:rounded-sm tw:border-0 tw:bg-transparent tw:px-2 tw:font-sans tw:text-left tw:text-ui tw:leading-ui tw:text-inherit tw:whitespace-nowrap tw:data-[tone=danger]:text-danger tw:aria-checked:bg-selection tw:aria-checked:text-selection-foreground tw:data-[selected=true]:bg-selection tw:data-[selected=true]:text-selection-foreground tw:disabled:cursor-default tw:disabled:opacity-45 tw:hover:bg-muted tw:hover:text-foreground tw:focus-visible:bg-muted tw:focus-visible:text-foreground tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-inset tw:focus-visible:ring-ring"
+      {...props}
+    >
+      {typeof icon === "string" ? (
+        <Icon name={icon} className="tw:shrink-0 tw:text-sm" />
+      ) : icon}
+      {children}
+    </button>
+  );
+}
+
+export function MenuCheckbox({
+  children,
+  checked,
+  disabled,
+  ...props
+}: {
+  children: ReactNode;
+} & Omit<
+  InputHTMLAttributes<HTMLInputElement>,
+  "className" | "children" | "type"
+>) {
+  return (
+    <label
+      data-checked={Boolean(checked)}
+      data-disabled={Boolean(disabled)}
+      className="tw:flex tw:min-h-control-md tw:cursor-pointer tw:items-center tw:gap-2 tw:rounded-sm tw:px-2 tw:text-ui tw:leading-ui tw:text-foreground tw:data-[checked=true]:bg-selection tw:data-[checked=true]:text-selection-foreground tw:data-[disabled=true]:cursor-default tw:data-[disabled=true]:opacity-45 tw:hover:bg-muted"
+    >
+      <input
+        {...props}
+        type="checkbox"
+        role="menuitemcheckbox"
+        aria-checked={Boolean(checked)}
+        aria-disabled={Boolean(disabled)}
+        checked={checked}
+        disabled={disabled}
+        className="tw:size-4 tw:accent-primary"
+      />
+      <span>{children}</span>
+    </label>
+  );
+}
+
+export function ToolbarMenu({
   label,
   icon,
   trigger,
@@ -56,41 +219,16 @@ export default function ToolbarMenu({
     | "treeBadge"
     | "gridHeader"
     | "statusBar";
-  menuSize?: "default" | "scope" | "tasks";
+  menuSize?: MenuSize;
   triggerTabIndex?: number;
   openRequest?: number;
 }) {
   const generatedId = useId();
   const menuId = `toolbar-menu-${generatedId.replace(/:/g, "")}`;
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
   const lastOpenRequest = useRef(openRequest);
   const [open, setOpen] = useState(false);
   const [initialFocus, setInitialFocus] = useState<MenuInitialFocus>(null);
-  const {
-    refs,
-    floatingStyles,
-    placement,
-    isPositioned,
-    middlewareData,
-  } = useAnchoredFloatingSurface({
-    open,
-    placement: align === "start" ? "bottom-start" : "bottom-end",
-  });
-  const setTrigger = useCallback(
-    (node: HTMLButtonElement | null) => {
-      triggerRef.current = node;
-      refs.setReference(node);
-    },
-    [refs],
-  );
-  const setMenu = useCallback(
-    (node: HTMLDivElement | null) => {
-      menuRef.current = node;
-      refs.setFloating(node);
-    },
-    [refs],
-  );
 
   useEffect(() => {
     if (
@@ -105,55 +243,14 @@ export default function ToolbarMenu({
     setOpen(true);
   }, [disabled, openRequest]);
 
-  function close() {
+  const close = useCallback(() => {
     setOpen(false);
     setInitialFocus(null);
-  }
-
-  const interactions = useMenuInteractions({
-    open,
-    ready: isPositioned,
-    menuRef,
-    triggerRef,
-    initialFocus,
-    onRequestClose: close,
-  });
-
-  useEffect(() => {
-    if (!open || !middlewareData.hide?.referenceHidden) return;
-    close();
-  }, [middlewareData.hide?.referenceHidden, open]);
-
-  const menu = open
-    ? createPortal(
-        <div
-          ref={setMenu}
-          id={menuId}
-          role="menu"
-          aria-label={label}
-          data-placement={placement.split("-")[0]}
-          data-size={menuSize}
-          data-floating-owner-id={floatingPortalOwnerId(triggerRef.current)}
-          data-modal-owned={floatingPortalIsModalOwned(triggerRef.current)}
-          className="tw:fixed tw:z-[var(--ds-z-popover)] tw:grid tw:max-h-[calc(100dvh-(var(--ds-viewport-gutter)*2))] tw:min-w-[var(--ds-menu-min-width)] tw:max-w-[min(var(--ds-menu-max-width),calc(100vw-(var(--ds-viewport-gutter)*2)))] tw:gap-[var(--ds-segment-gap)] tw:overflow-auto tw:overscroll-contain tw:rounded-md tw:border tw:border-border-strong tw:bg-popover tw:p-1 tw:text-popover-foreground tw:shadow-popover tw:data-[modal-owned=true]:z-[var(--ds-z-modal-popover)] tw:data-[size=scope]:w-[min(var(--ds-schema-scope-menu-width),calc(100vw-(var(--ds-viewport-gutter)*2)))] tw:data-[size=tasks]:w-[min(380px,calc(100vw-(var(--ds-viewport-gutter)*2)))] tw:data-[size=tasks]:max-w-none"
-          style={{
-            ...floatingStyles,
-            visibility: isPositioned ? "visible" : "hidden",
-          }}
-          onKeyDown={interactions.onKeyDown}
-          onClick={(event) => {
-            interactions.onClick(event);
-          }}
-        >
-          {children}
-        </div>,
-        document.body,
-      )
-    : null;
+  }, []);
 
   const triggerButton = (
     <button
-      ref={setTrigger}
+      ref={triggerRef}
       type="button"
       data-custom={Boolean(trigger)}
       data-variant={triggerVariant}
@@ -197,30 +294,20 @@ export default function ToolbarMenu({
       ) : (
         <Tooltip label={label}>{triggerButton}</Tooltip>
       )}
-      {menu}
+      {open ? (
+        <Menu
+          id={menuId}
+          anchorRef={triggerRef}
+          placement={align === "start" ? "bottom-start" : "bottom-end"}
+          size={menuSize}
+          ariaLabel={label}
+          initialFocus={initialFocus}
+          onRequestClose={close}
+          onReferenceHidden={close}
+        >
+          {children}
+        </Menu>
+      ) : null}
     </span>
-  );
-}
-
-export function ToolbarMenuItem({
-  icon,
-  children,
-  ...props
-}: {
-  icon: IconName | ReactElement;
-  children: ReactNode;
-} & Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children" | "className">) {
-  return (
-    <button
-      type="button"
-      role="menuitem"
-      className="tw:flex tw:min-h-control-md tw:w-full tw:min-w-[var(--ds-menu-min-width)] tw:cursor-pointer tw:items-center tw:justify-start tw:gap-2 tw:rounded-sm tw:border-0 tw:bg-transparent tw:px-2 tw:font-sans tw:text-left tw:text-ui tw:leading-ui tw:text-inherit tw:whitespace-nowrap tw:aria-checked:bg-selection tw:aria-checked:text-selection-foreground tw:disabled:cursor-default tw:disabled:opacity-45 tw:hover:bg-muted tw:hover:text-foreground tw:focus-visible:bg-muted tw:focus-visible:text-foreground tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-inset tw:focus-visible:ring-ring"
-      {...props}
-    >
-      {typeof icon === "string" ? (
-        <Icon name={icon} className="tw:shrink-0 tw:text-sm" />
-      ) : icon}
-      {children}
-    </button>
   );
 }

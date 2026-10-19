@@ -33,7 +33,7 @@ import Skeleton from "../../components/Skeleton";
 import { useToast } from "../../components/Toast";
 import { Button } from "../../design-system/components/Button";
 import { InlineNotice } from "../../design-system/components/Status";
-import DdlModal from "../Connections/DdlModal";
+import DdlModal from "./DdlModal";
 import {
   DataGridStatusPill,
   WorkbenchContainedBody,
@@ -54,7 +54,8 @@ import EditableTableCell from "../../features/tableData/EditableTableCell";
 import { cellEditKey, sameCellEditRow, stageCellEdit } from "../../features/tableData/cellEdits";
 import TableSidePanel from "./TableSidePanel";
 import TableExpressionBar from "./TableExpressionBar";
-import TableStructure from "./TableStructure";
+import RelationStructure, { structureFromTable } from "../../features/erd/RelationStructure";
+import { tsvField } from "../../lib/export";
 import TableToolbar from "./TableToolbar";
 import { useManualTransaction } from "../../features/queries/useManualTransaction";
 import { firstDecodeFailureInRow } from "../../features/queryResults/decodeFailures";
@@ -326,15 +327,7 @@ export default function SqlTableData({
           null,
           2,
         )
-      : selRow
-          .map((v) =>
-            v == null
-              ? ""
-              : typeof v === "object"
-                ? JSON.stringify(v)
-                : String(v),
-          )
-          .join("\t");
+      : selRow.map(tsvField).join("\t");
     void navigator.clipboard.writeText(text);
     toast(t("tables.copyRow"));
   }
@@ -525,7 +518,11 @@ export default function SqlTableData({
         />
 
         <WorkbenchContainedBody>
-          {structure && <TableStructure table={table} />}
+          {structure && (
+            <div className="tw:min-h-0 tw:flex-[0_1_280px] tw:overflow-auto tw:border-b tw:border-border-subtle tw:p-3">
+              <RelationStructure structure={structureFromTable(table)} />
+            </div>
+          )}
 
           {err && (
             <div className="tw:border-b tw:border-border-subtle tw:px-3 tw:py-2 tw:text-ui tw:text-danger tw:whitespace-pre-wrap tw:[overflow-wrap:anywhere]">
@@ -581,7 +578,7 @@ export default function SqlTableData({
                       agentSelection.clear();
                     }
                   }}
-                  onCellClick={(value, i, column) => {
+                  onCellClick={(value, i, column, detail) => {
                     const failure = firstDecodeFailureInRow(
                       result.decodeFailures,
                       i,
@@ -600,7 +597,11 @@ export default function SqlTableData({
                     }
                     commands.patch({
                       selectedRow: i,
-                      selectedCell: { value, column },
+                      selectedCell: {
+                        value,
+                        column,
+                        truncatedBytes: detail?.truncatedBytes ?? null,
+                      },
                       jobsOpen: false,
                     });
                     agentSelection.select({

@@ -19,18 +19,15 @@ import {
   AgentCliDetectionNotice,
   AgentCliStatusIndicators,
 } from "../agents/AgentCliStatus";
-import type {
-  AcpPluginId,
-  AcpPluginInstallationState,
-} from "../agents/domain";
+import type { AcpPluginId } from "../agents/domain";
 import {
   agentCliDetectionQuery,
   agentPluginStatusQuery,
 } from "../agents/queryOptions";
 import { agentPluginReady } from "../agents/availability";
-import { installAgentAcpPlugin } from "../agents/tauriAdapter";
+import { pluginStateLabel, prepareAgentPlugin } from "../agents/agentSetup";
 import { errMessage, type SkillTarget } from "../../ipc/types";
-import { useI18n, type I18nKey } from "../../lib/i18n";
+import { useI18n } from "../../lib/i18n";
 import { usePostPaintReady } from "../../lib/usePostPaintReady";
 import {
   agentSetupDeferred,
@@ -41,19 +38,6 @@ import {
   saveAgentTargets,
   SUPPORTED_AGENT_TARGETS,
 } from "./agentPreferences";
-
-const pluginStateLabel: Record<AcpPluginInstallationState, I18nKey> = {
-  not_installed: "agentTools.pluginState.notInstalled",
-  checking: "agentTools.pluginState.checking",
-  downloading: "agentTools.pluginState.downloading",
-  verifying: "agentTools.pluginState.verifying",
-  staged: "agentTools.pluginState.staged",
-  ready: "agentTools.pluginState.ready",
-  update_available: "agentTools.pluginState.updateAvailable",
-  removing: "agentTools.pluginState.removing",
-  failed: "agentTools.pluginState.failed",
-  rollback_required: "agentTools.pluginState.rollbackRequired",
-};
 
 function pluginId(target: SkillTarget): AcpPluginId {
   return target === "claude-code" ? "dopedb.acp.claude" : "dopedb.acp.codex";
@@ -123,7 +107,7 @@ export default function SkillStartupGate() {
       if (agentPluginReady(current)) continue;
       setBusy(id);
       try {
-        await installAgentAcpPlugin(id);
+        await prepareAgentPlugin(id, current);
       } catch (reason) {
         failures.push(
           t("agentTools.startupInstallFailed", {

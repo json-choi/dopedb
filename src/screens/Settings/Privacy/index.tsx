@@ -3,8 +3,7 @@
 import { useState } from "react";
 
 import { Button } from "../../../design-system/components/Button";
-import { CheckboxField } from "../../../design-system/components/FormControls";
-import { SettingsGroup } from "../../../design-system/components/Settings";
+import { SettingsGroup, SettingsPage, SettingsToggleRow } from "../../../design-system/components/Settings";
 import {
   denyProductAnalyticsConsent,
   grantProductAnalyticsConsent,
@@ -33,15 +32,14 @@ export default function PrivacySettings() {
     analytics.consent === "granted";
 
   return (
-    <div className="tw:grid tw:w-full tw:max-w-[800px] tw:gap-4 tw:p-4 tw:@max-[700px]:p-0">
+    <SettingsPage>
       <SettingsGroup title={t("settings.privacy")}>
-        <div className="tw:grid tw:min-w-0 tw:gap-1 tw:py-2">
-          <CheckboxField
-            checked={analytics.consent === "granted"}
-            disabled={busy || analytics.availability === "checking" || !canChange}
-            onChange={(event) => void updateConsent(event.target.checked)}
-            label={t("productAnalytics.settingLabel")}
-          />
+        <SettingsToggleRow
+          checked={analytics.consent === "granted"}
+          disabled={busy || analytics.availability === "checking" || !canChange}
+          onChange={(granted) => void updateConsent(granted)}
+          label={t("productAnalytics.settingLabel")}
+        >
           <dl className="tw:m-0 tw:ml-6 tw:grid tw:border-t tw:border-border-subtle tw:[&>div]:grid tw:[&>div]:grid-cols-[140px_minmax(0,1fr)] tw:[&>div]:gap-4 tw:[&>div]:border-b tw:[&>div]:border-border-subtle tw:[&>div]:py-3 tw:[&_dd]:m-0 tw:[&_dd]:text-sm tw:[&_dd]:leading-body tw:[&_dd]:text-muted-foreground tw:[&_dt]:text-sm tw:[&_dt]:font-semibold tw:@max-[620px]:[&>div]:grid-cols-1 tw:@max-[620px]:[&>div]:gap-1">
             <div>
               <dt>{t("productAnalytics.notCollectedTitle")}</dt>
@@ -77,7 +75,7 @@ export default function PrivacySettings() {
               {t("productAnalytics.updateFailed")}
             </p>
           ) : null}
-        </div>
+        </SettingsToggleRow>
       </SettingsGroup>
 
       {analytics.availability === "unavailable" ? (
@@ -87,6 +85,6 @@ export default function PrivacySettings() {
           </p>
         </SettingsGroup>
       ) : null}
-    </div>
+    </SettingsPage>
   );
 }

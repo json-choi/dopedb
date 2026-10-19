@@ -26,7 +26,7 @@ import {
 import { WorkbenchButton } from "../../design-system/components/Workbench";
 import { ProgressBar } from "../../design-system/components/Progress";
 import { Icon } from "../../components/Icon";
-import ToolbarMenu, { ToolbarMenuItem } from "../../components/ToolbarMenu";
+import { MenuItem, ToolbarMenu } from "../../design-system/components/Menu";
 import { useToast } from "../../components/Toast";
 
 export default function ResultToolbar({
@@ -202,12 +202,12 @@ export default function ResultToolbar({
             </>
           }
         >
-          <ToolbarMenuItem icon="download" onClick={exportCsv}>
+          <MenuItem icon="download" onClick={exportCsv}>
             {csvTitle}
-          </ToolbarMenuItem>
-          <ToolbarMenuItem icon="download" onClick={exportJson}>
+          </MenuItem>
+          <MenuItem icon="download" onClick={exportJson}>
             {jsonTitle}
-          </ToolbarMenuItem>
+          </MenuItem>
         </ToolbarMenu>
       ) : (
         <>

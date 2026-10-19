@@ -23,7 +23,7 @@ import {
   runWorkspaceAdmin,
   workspaceAdminErrorMessage,
   WorkspaceAdminRequestError,
-} from "../requests";
+} from "../../workspaceAdmin/requests";
 import type { AccountSession, AccountSessionClient } from "./domain";
 import { formatDay, relativeAge } from "./format";
 import { accountSessionsQuery, accountSessionsQueryKey } from "./queries";

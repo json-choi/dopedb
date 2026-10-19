@@ -38,6 +38,7 @@ import {
   sqlFirstLine,
   type Translate,
 } from "./activityLabels";
+import LoadErrorNotice from "./LoadErrorNotice";
 
 function duration(ms: number | null): string {
   if (ms == null) return "—";
@@ -224,16 +225,10 @@ export default function Activity({
           )}
 
           {history.error ? (
-            <p role="alert" className="tw:m-0 tw:flex tw:flex-wrap tw:items-center tw:gap-2 tw:text-ui tw:text-danger">
-              {t("activity.historyLoadError")}
-              <Button size="xs" onClick={() => void history.refetch()}>{t("activity.retry")}</Button>
-            </p>
+            <LoadErrorNotice message={t("activity.historyLoadError")} onRetry={() => void history.refetch()} />
           ) : null}
           {openFailedId ? (
-            <p role="alert" className="tw:m-0 tw:flex tw:flex-wrap tw:items-center tw:gap-2 tw:text-ui tw:text-danger">
-              {t("activity.historyEntryLoadError")}
-              <Button size="xs" onClick={() => void openStatement(openFailedId)}>{t("activity.retry")}</Button>
-            </p>
+            <LoadErrorNotice message={t("activity.historyEntryLoadError")} onRetry={() => void openStatement(openFailedId)} />
           ) : null}
           {history.isPending && <Skeleton lines={5} />}
           {!history.isPending && !history.error && rows.length === 0 && (

@@ -1,7 +1,7 @@
 // Workspace management navigation identity, shared by the shell route, the Workspace
 // management dialog and Action Search. This module alone decides which sections a role
-// sees and in what order. Account stays an application Settings section; panels may
-// still ask for it, and the shell answers by opening Settings.
+// sees and in what order. Account is an application Settings section
+// reached through `requestAccountSettings`, not a section here.
 import type { I18nKey } from "../../lib/i18n";
 import type { WorkspaceAdminScope } from "./domain";
 
@@ -10,9 +10,6 @@ export type WorkspaceAdminSection =
   | "workspace-access"
   | "workspace-providers"
   | "workspace-lifecycle";
-
-/** Where an administration panel or request may send the person next. */
-export type WorkspaceAdminDestination = WorkspaceAdminSection | "account";
 
 export type WorkspaceAdminSectionDefinition = Readonly<{
   id: WorkspaceAdminSection;

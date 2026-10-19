@@ -5,6 +5,7 @@
 import { useId, useRef, useState, type FormEvent } from "react";
 import { Icon } from "../../../components/Icon";
 import { Button } from "../../../design-system/components/Button";
+import { CopyLinkField } from "../../../design-system/components/CopyLinkField";
 import { Field, SelectInput, TextInput } from "../../../design-system/components/FormControls";
 import { SettingsSectionHeader } from "../../../design-system/components/SettingsList";
 import { InlineNotice, LoadingLabel } from "../../../design-system/components/Status";
@@ -18,25 +19,21 @@ import {
   ROLE_LABEL_KEYS,
   ROLE_OPTION_KEYS,
 } from "./domain";
-import type { InviteOutcome, LinkCopyState } from "./useMemberCommands";
+import type { InviteOutcome } from "./useMemberCommands";
 
 export default function InviteForm({
   busy,
   inviting,
   failure,
   outcome,
-  copy,
   onInvite,
-  onCopy,
 }: {
   /** Any members command is running; one command at a time. */
   busy: boolean;
   inviting: boolean;
   failure: string | null;
   outcome: InviteOutcome | null;
-  copy: LinkCopyState;
   onInvite: (email: string, role: AssignableWorkspaceRole, onSuccess: () => void) => void;
-  onCopy: (target: string, url: string) => void;
 }) {
   const { t } = useI18n();
   const [email, setEmail] = useState("");
@@ -121,20 +118,12 @@ export default function InviteForm({
           {failure}
         </InlineNotice>
       ) : null}
-      {outcome ? <InviteOutcomeNotice outcome={outcome} copy={copy} onCopy={onCopy} /> : null}
+      {outcome ? <InviteOutcomeNotice outcome={outcome} /> : null}
     </section>
   );
 }
 
-function InviteOutcomeNotice({
-  outcome,
-  copy,
-  onCopy,
-}: {
-  outcome: InviteOutcome;
-  copy: LinkCopyState;
-  onCopy: (target: string, url: string) => void;
-}) {
+function InviteOutcomeNotice({ outcome }: { outcome: InviteOutcome }) {
   const { t, lang } = useI18n();
   const invitation = outcome.invitation;
   if (!invitation) {
@@ -148,9 +137,6 @@ function InviteOutcomeNotice({
   const keptRole = invitation.role !== null && invitation.role !== outcome.requestedRole
     ? invitation.role
     : null;
-  const target = `outcome:${invitation.id}`;
-  const copied = copy?.target === target && copy.status === "copied";
-  const copyFailed = copy?.target === target && copy.status === "failed";
   return (
     <div className="tw:grid tw:min-w-0 tw:gap-2">
       {keptRole ? (
@@ -171,31 +157,13 @@ function InviteOutcomeNotice({
           </span>
         </p>
       )}
-      <div className="ds-control-row tw:flex tw:min-w-0 tw:items-center tw:gap-2 tw:[--ds-row-control-size:var(--ds-control-md)]">
-        <span className="tw:min-w-0 tw:flex-1">
-          <TextInput
-            density="compact"
-            monospace
-            readOnly
-            value={invitation.inviteUrl}
-            aria-label={t("workspaceMembers.inviteLink")}
-            onFocus={(event) => event.currentTarget.select()}
-          />
-        </span>
-        <Button
-          size="compact"
-          tone={copied ? "success" : "neutral"}
-          onClick={() => onCopy(target, invitation.inviteUrl)}
-        >
-          <Icon name={copied ? "check" : "copy"} />
-          {copied ? t("common.copied") : t("workspaceMembers.copyLink")}
-        </Button>
-      </div>
-      {copyFailed ? (
-        <p role="alert" className="tw:m-0 tw:text-xs tw:text-danger">
-          {t("workspaceMembers.copyFailed")}
-        </p>
-      ) : null}
+      <CopyLinkField
+        url={invitation.inviteUrl}
+        label={t("workspaceMembers.inviteLink")}
+        copyLabel={t("workspaceMembers.copyLink")}
+        copiedLabel={t("common.copied")}
+        failedLabel={t("workspaceMembers.copyFailed")}
+      />
     </div>
   );
 }

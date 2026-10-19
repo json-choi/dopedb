@@ -9,6 +9,7 @@ import {
   AgentActivityLine,
   AgentPermissionCard,
   AgentProviderMark,
+  AgentToolCallCard,
 } from "../../design-system/components/Agent";
 import {
   AgentPlainText,
@@ -25,8 +26,8 @@ import { useI18n } from "../../lib/i18n";
 import { reportRenderFailure } from "../monitoring/client";
 import AcpToolCallCard from "./AcpToolCallCard";
 import { agentSessionErrorLabel } from "./agentErrorLabels";
+import { loginCommand } from "./agentSetup";
 import {
-  loginCommand,
   planEntryLabel,
   providerLabel,
   recordString,
@@ -325,22 +326,22 @@ function AgentSetupGuidance({
   return (
     <div className="tw:grid tw:gap-5">
       <ProviderHeading provider={cli.id} />
-      <AgentPermissionCard
-        title={t("agent.acpSetupTitle", { provider })}
-        description={
-          claudeSetup
+      <InlineNotice tone="warning" icon="info" role="status">
+        <span className="tw:grid tw:gap-2 tw:leading-body">
+          <strong className="tw:text-ui tw:font-semibold">
+            {t("agent.acpSetupTitle", { provider })}
+          </strong>
+          <span>
+            {claudeSetup
             ? t("agent.acpSetupClaudeAuthBody")
             : cli.installed
             ? t("agent.acpSetupLoginBody", {
                 provider,
                 command: loginCommand(cli.id),
               })
-            : t("agent.acpSetupInstallBody", { provider })
-        }
-        pending
-        status={t("agent.acpSetupRequired")}
-        actions={
-          <div className="tw:flex tw:flex-wrap tw:gap-2">
+            : t("agent.acpSetupInstallBody", { provider })}
+          </span>
+          <span className="tw:flex tw:flex-wrap tw:gap-2">
             <Button size="xs" variant="primary" onClick={onPrimary}>
               {claudeSetup
                 ? t("agent.acpSetupOpenAuthGuide")
@@ -363,9 +364,9 @@ function AgentSetupGuidance({
               />
               {t("agent.acpSetupCheckAgain")}
             </Button>
-          </div>
-        }
-      />
+          </span>
+        </span>
+      </InlineNotice>
       <p className="tw:m-0 tw:text-xs tw:leading-body tw:text-muted-foreground">
         {t("agent.acpSetupPrivacy")}
       </p>
@@ -558,11 +559,11 @@ const TranscriptItemView = memo(function TranscriptItemView({
       );
     }
     return (
-      <section className="tw:grid tw:max-w-full tw:min-w-0 tw:gap-2 tw:overflow-hidden tw:rounded-md tw:border tw:border-border-subtle tw:bg-card tw:p-3">
-        <strong className="tw:flex tw:items-center tw:gap-2 tw:text-sm">
-          <Icon name="list" />
-          {t("agent.acpPlan")}
-        </strong>
+      <AgentToolCallCard
+        title={t("agent.acpPlan")}
+        status={t("agent.acpActivityPlanning")}
+        tone="neutral"
+      >
         {entries.length > 0 ? (
           <ol className="tw:m-0 tw:grid tw:min-w-0 tw:gap-1 tw:pl-5 tw:text-xs tw:leading-body tw:[&>li]:break-words">
             {entries.map((entry, index) => (
@@ -574,17 +575,14 @@ const TranscriptItemView = memo(function TranscriptItemView({
             {safeJson(item.data)}
           </pre>
         )}
-      </section>
+      </AgentToolCallCard>
     );
   }
   if (item.kind === "error") {
     return (
-      <div
-        className="tw:max-w-full tw:min-w-0 tw:overflow-hidden tw:break-words tw:rounded-md tw:border tw:border-danger-border tw:bg-danger-muted tw:px-3 tw:py-2 tw:text-sm tw:leading-body tw:text-danger"
-        role="alert"
-      >
+      <InlineNotice tone="danger" icon="alert" role="alert">
         {agentSessionErrorLabel(item.message, t)}
-      </div>
+      </InlineNotice>
     );
   }
   if (item.kind === "turnEnd") {

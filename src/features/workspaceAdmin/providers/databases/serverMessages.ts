@@ -2,16 +2,16 @@
 // both UI languages. Known sentences map to catalogue keys; documented conflict
 // sentences are classified so the screens can recover (refresh, reload, re-plan).
 // Anything unknown falls back to the shared administration error policy.
-import type { I18nKey, Lang } from "../../../../lib/i18n";
+import type { I18nKey } from "../../../../lib/i18n";
 import {
   WorkspaceAdminRequestError,
   workspaceAdminErrorMessage,
+  type Translate,
+  type WorkspaceAdminI18n,
 } from "../../requests";
 import type { NeonBootstrapFinding } from "../domain";
 import type { WizardError } from "./model";
 
-type Translate = (key: I18nKey, vars?: Record<string, string | number>) => string;
-type I18n = { lang: Lang; t: Translate };
 
 const PROVIDER_MESSAGES = new Map<string, I18nKey>([
   ["Neon API key is invalid or revoked", "workspaceProviderDatabases.serverError.neonKeyInvalid"],
@@ -59,14 +59,14 @@ function refusal(error: unknown): WorkspaceAdminRequestError | null {
 }
 
 /** One sentence for a failed provider command, localized when the refusal is known. */
-export function providerErrorMessage(error: unknown, i18n: I18n, fallback: I18nKey): string {
+export function providerErrorMessage(error: unknown, i18n: WorkspaceAdminI18n, fallback: I18nKey): string {
   const message = refusal(error)?.serverMessage;
   const known = message ? PROVIDER_MESSAGES.get(message) : undefined;
   return known ? i18n.t(known) : workspaceAdminErrorMessage(error, i18n, fallback);
 }
 
 /** The specific reason for a failure, or null when only a generic failure is known. */
-export function providerErrorDetail(error: unknown, i18n: I18n): string | null {
+export function providerErrorDetail(error: unknown, i18n: WorkspaceAdminI18n): string | null {
   const message = providerErrorMessage(error, i18n, "workspaceAdmin.requestFailed");
   return message === i18n.t("workspaceAdmin.requestFailed") ? null : message;
 }
@@ -85,7 +85,7 @@ export function integrationDisplayName(value: string, t: Translate): string {
     : value;
 }
 
-export function describeFailure(error: unknown, i18n: I18n, fallback: I18nKey): WizardError {
+export function describeFailure(error: unknown, i18n: WorkspaceAdminI18n, fallback: I18nKey): WizardError {
   return {
     message: providerErrorMessage(error, i18n, fallback),
     reconnect: suggestsProviderReconnect(error),

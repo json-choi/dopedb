@@ -428,13 +428,12 @@ export function ManagedAccessDialog({
             <p className="tw:m-0 tw:px-2 tw:py-1 tw:text-xs tw:font-semibold tw:tracking-wide tw:text-muted-foreground tw:uppercase">
               {t("managedAccess.provider")}
             </p>
-            <div className="tw:grid tw:gap-0.5" role="listbox" aria-label={t("managedAccess.provider")}>
+            <div className="tw:grid tw:gap-0.5">
               {statuses.data?.map((status) => (
                 <Button
                   key={status.provider}
                   type="button"
-                  role="option"
-                  aria-selected={provider === status.provider}
+                  aria-pressed={provider === status.provider}
                   presentation="listItem"
                   active={provider === status.provider}
                   onClick={() => selectProvider(status.provider)}

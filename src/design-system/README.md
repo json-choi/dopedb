@@ -424,7 +424,10 @@ loopback 문서는 이 정본을 빌드 시 포함하며 네트워크 font나 sc
   `ModalHeader`·`ModalFooter`를 조합하며, trigger 없이 시작되는 확인(예: 열린
   수동 트랜잭션이 있을 때 창 닫기·앱 종료)이 같은 dialog를 직접 렌더링한다.
   확정한 작업이 진행 중이면 `pending`으로 두 action을 focus 가능한 비활성
-  상태로 두고 `aria-busy`를 노출한다. 확인 dialog의 class 목록을 복사하지 않는다.
+  상태로 두고 `aria-busy`를 노출한다. 첫 action 문구가 "계속 편집"처럼 Cancel이
+아닐 때는 `cancelLabel`, 파괴적이지 않은 확정은 `confirmVariant="primary"`를 쓴다.
+`description`은 여러 문단을 담을 수 있다. 확인 dialog의 class 목록을 복사하지
+않고 `role="alertdialog"` 확인을 손으로 조립하지 않는다.
 - `ResizeSeparator`: shell sidebar와 data-grid column이 공유하는
   keyboard/pointer resize 경계. 실제 dimension과 min/max/now ARIA를 연결하고,
   방향키의 bounded step, Home/End 경계 이동, double-click/Enter action을 소유한다.
@@ -460,7 +463,8 @@ loopback 문서는 이 정본을 빌드 시 포함하며 네트워크 font나 sc
 - `RenderRecoveryBoundary`: Markdown, diagram, provider payload처럼 선택적인
   rich surface의 render 실패를 해당 feature 안에 격리한다. 오류 원문은 UI에
   노출하지 않고 호출자가 제공한 안전한 fallback과 명시적 retry만 표시하며,
-  이후 진단 수집은 별도 observer가 소유한다.
+  이후 진단 수집은 별도 observer가 소유한다. 패널 단위 fallback 표시는
+  `RenderRecoveryFallback`(제목, 본문, retry 한 개)이 하나로 소유한다.
 - `ProviderTargetLabel`: Explorer, connection picker, workbench가 공유하는
   provider target feature composition. 현재는 PD-28의 Neon branch identity만
   허용하며, 긴 ID는 mono ellipsis와 tooltip으로 보존하고 provider state는
@@ -514,7 +518,7 @@ loopback 문서는 이 정본을 빌드 시 포함하며 네트워크 font나 sc
   비율·색상 변경 없이 로컬 번들로 사용한다. 출처는
   [`src/assets/agent-icons/README.md`](../assets/agent-icons/README.md)에 기록한다.
   provider 선택은 아이콘·현재 이름·chevron을 하나의 `ToolbarMenu` trigger로
-  정렬한다. `ToolbarMenuItem`은 일반 `IconName` 또는 공용 브랜드 마크를 받는다.
+  정렬한다. `MenuItem`은 일반 `IconName` 또는 공용 브랜드 마크를 받는다.
   좁은 context row에서는 resource 이름이 가용 폭 안에서 줄어들고 count·chevron은
   유지한다. `ToolbarMenu triggerVariant="composer"`는 선택기의 28px 높이·14px
   medium 글자·14px chevron과 가용 폭 내 줄임을 소유한다. 승인 모드는 어댑터가
@@ -620,14 +624,19 @@ loopback 문서는 이 정본을 빌드 시 포함하며 네트워크 font나 sc
   연다. 검색은 원래 펼침 상태와 focus key를
   변경하지 않고 임시 visible set만 투영한다. 가상화 row의 이동은
   전체 모델 순서로 대상을 계산한 뒤 해당 row를 pin·scroll·focus한다.
-- `PopupMenu`, `PopupMenuItem`, `PopupMenuCheckbox`: trigger에 연결된 portal
-  popover surface와 keyboard-focus 가능한 command/check row. 공용 Floating UI
-  hook이 rail·topbar·tree row에서 viewport 충돌, flip, shift, size, 숨김 감지를
-  처리하며 feature는 위치별 Tailwind 분기를 만들지 않는다.
-  `getAnchorRect`는 CodeMirror caret 같은 vendor geometry에 한해 virtual reference를
-  제공하고 실제 `anchorRef`는 포커스 복원과 portal 소유권을 유지한다. 위치가 필요한
-  화면에서 absolute anchor나 별도 popup CSS를 만들지 않는다. `PopupMenuItem`의
-  `data-selected`는 실행 범위처럼 hover·키보드 focus로 미리보는 현재 후보를 표시한다.
+- `Menu`, `MenuItem`, `MenuCheckbox`, `ToolbarMenu` (`components/Menu.tsx`): 하나뿐인
+  popup menu 모듈. `Menu`가 유일한 portal surface(외부 `anchorRef`, 크기
+  `default`/`narrow`/`account`/`scope`/`tasks`)이고 `MenuItem`(선택적 `icon`,
+  `data-tone="danger"`, `data-selected`)과 `MenuCheckbox`가 행을 소유한다.
+  `ToolbarMenu`는 자기 trigger 버튼을 그리고 그 버튼에 anchor한 `Menu`를 여는 얇은
+  wrapper일 뿐 두 번째 surface가 아니다. 외부 anchor가 필요한 화면(caret, 우클릭,
+  계정 메뉴)은 `Menu`를 직접 쓴다. 공용 Floating UI hook이 rail·topbar·tree row에서
+  viewport 충돌, flip, shift, size, 숨김 감지를 처리하며 feature는 위치별 Tailwind
+  분기를 만들지 않는다. `getAnchorRect`는 CodeMirror caret 같은 vendor geometry에
+  한해 virtual reference를 제공하고 실제 `anchorRef`는 포커스 복원과 portal 소유권을
+  유지한다. 위치가 필요한 화면에서 absolute anchor나 별도 popup CSS를 만들지 않는다.
+  `MenuItem`의 `data-selected`는 실행 범위처럼 hover·키보드 focus로 미리보는 현재
+  후보를 표시한다.
 - `ToolbarMenu triggerVariant="statusBar"`와 `menuSize="tasks"`: status bar
   높이를 유지하는 background-task trigger와 380px 이내의 관찰·중단 popup.
   실제 전역 작업 모델에 있는 task만 표시하고 지원되지 않는 중단 control은
@@ -637,10 +646,13 @@ loopback 문서는 이 정본을 빌드 시 포함하며 네트워크 font나 sc
   `aria-selected`는 Action Search와 같은 listbox의 공용 선택 row
   treatment를 소유한다. 이 surface는 modeless anchored popup으로 유지하며,
   Escape만 trigger focus를 복원하고 outside pointer·selection dismiss는 현재
-  작업 focus를 강제로 되돌리지 않는다.
+  작업 focus를 강제로 되돌리지 않는다. 표면(border·radius·popover 색·shadow)은
+  `CommandSurface` 하나가 소유하고 `CommandMenu`(anchor/center)와 Action
+  Search(inline)가 같이 쓴다.
 - Action Search는 672px 이하의 transparent-backdrop modal로 투영한다. 최상위
   modal Escape와 focus containment를 공유하고 dismiss 뒤 opener focus를
-  복원한다. 빈 질의는 결과 영역을
+  복원한다. scope tab은 `tabKeyboard.ts`의 `moveHorizontalTabFocus`를 쓰며
+  pointer click만 입력창으로 focus를 되돌린다. 빈 질의는 결과 영역을
   늘리지 않고, 실제 검색 가능한 Database·Documents·Actions·Settings
   범위만 `Button` tab으로 표시한다. `/`는 실제 action catalog를
   열며 Files·Code·Text 같은 범위 밖 category placeholder를 만들지
@@ -696,7 +708,7 @@ loopback 문서는 이 정본을 빌드 시 포함하며 네트워크 font나 sc
   같은 lifecycle projection을 사용한다. 동일한 SQL이 여러 번 있어도 단순
   문자열 검색으로 첫 occurrence에 붙이지 않으며, widget은 정적 Tailwind
   utility와 semantic token만 사용한다.
-  여러 구문에서 선택 없이 Run하면 caret 옆 `PopupMenu`로 현재 구문·전체 script를
+  여러 구문에서 선택 없이 Run하면 caret 옆 `Menu`로 현재 구문·전체 script를
   고른다. 후보의 정확한 source range는 selection 역할 배경과 ring으로 미리보되
   실제 CodeMirror selection·본문은 유지하고, 미리보기 동안 이전 실행 mark는 숨긴다.
   메뉴의 hover·focus 변경은 같은 범위를 표시하며 revision 변경·Escape는 후보를
@@ -896,14 +908,14 @@ DopeDB의 실제 작업 흐름과 접근성, supported viewport를 위한 제품
   읽을 수 있는 짧은 문구로 표시하고, 선택 상태 같은 추가 상세는 접근 가능한 title에
   유지한다. grid를 밀어내는 전체 폭 footer는 만들지 않는다.
 - `ResultWorkbenchToolbar`, `ResultWorkbenchFooter`: materialized/streaming
-  결과가 공유하는 grid mode, 전체 셀 검색, 실제 export action과 행·duration
+  결과가 공유하는 grid mode, 실제 export action과 행·duration
   상태. workbench export는 별도 CSV/JSON text button을 나열하지 않고
   `CSV` format menu 하나로 투영하며, inline metadata
   표현만 명시적 text action을 유지한다. 두 표현은 같은 export handler를
   공유한다. 실행 SQL 문맥은 document/session/result tab이 소유하므로 result
   command row에 SQL snippet을 반복하지 않는다. `ResultWorkbenchFooter`는
-  `DataGridStatusPill`을 합성하고, 부분
-  stream은 평탄화하지 않고 완료된 결과에만 검색을 적용한다.
+  `DataGridStatusPill`을 합성한다. 결과 view에는 받은 행 quick-filter를 두지 않는다
+  (PD-26).
 - `useDataGridZoom`: 조회 viewport 전체에 non-passive WebKit gesture와 ctrl-wheel
   pinch listener를 등록한다. 표별 로컬 비율 50~200%를 frame batching으로 갱신하며
   일반 wheel은 그대로 통과시킨다. table/virtual content의 CSS `zoom`만 바꾸고
@@ -990,7 +1002,7 @@ DopeDB의 실제 작업 흐름과 접근성, supported viewport를 위한 제품
   inspector는 결과 pane의 아래쪽 최대 40%만 사용하고 내부에서 스크롤한다.
   Mongo 내보내기는 가져온 현재 페이지에 한정하고 페이지 이동·조회 실패 중에는
   이전 페이지를 새 페이지 이름으로 내보낼 수 없다.
-- `ToolbarMenu`, `ToolbarMenuItem`: portal 기반 floating command/check surface와
+- `ToolbarMenu`, `MenuItem`: portal 기반 floating command/check surface와
   공통 command row. `triggerVariant="badge"`는 Explorer의 선택/전체 수처럼
   조밀한 범위 trigger를 소유한다. trigger가 compact 전환이나 tool-window
   교체로 viewport 밖에 나가면 열린 portal도 함께 닫는다. command 선택으로
@@ -1040,9 +1052,15 @@ DopeDB의 실제 작업 흐름과 접근성, supported viewport를 위한 제품
   오류/경고 개수를 같은 compact hierarchy로 표시.
 - `SettingsGroup`: 설정·정책 화면의 제목, 상단 divider, dense spacing을 공유하는
   평평한 control group. Settings dialog 안에 card surface를 다시 중첩하지 않는다.
+  `SettingsPage`는 Settings 각 section 본문의 폭(800px)·여백·세로 간격을 한 곳에서
+  소유하므로 section마다 `max-w`·padding을 따로 두지 않고, `SettingsToggleRow`는
+  checkbox 한 개와 보조 설명(및 추가 상세 children)을 가진 설정 행의 정본이다.
   202px settings rail은 검색 input에 8px gutter를 두고 24px hierarchy의
   hover/selection row는 rail 전체 폭을 차지하는 평평한 surface를 사용한다.
   선택 항목을 inset rounded pill로 만들지 않는다.
+- `CopyLinkField`: 읽기 전용 링크와 복사 버튼, 복사됨/실패 피드백을 한 곳에서 소유한다.
+  초대·Analysis 공유 링크처럼 사람이 복사해 전달하는 링크는 별도 input+button을
+  만들지 않고 이 컴포넌트를 쓴다.
 - `SectionDialog`: Settings와 워크스페이스 관리처럼 왼쪽 section rail과 오른쪽
   본문을 가진 설정형 dialog의 정본. `ModalSurface size="settings"`, 선택적
   `TreeSearch` 검색(keyword 필터, 지우기, 결과 없음 문구), group별 rail
@@ -1239,7 +1257,7 @@ toolbar의 command overflow menu는 반드시 portal 기반 `ToolbarMenu`를 사
 - 각 항목은 박스형 `Button`을 중첩하지 않고 평평한
   `role="menuitem"` `.ds-menu-item`을 사용한다.
 
-`PopupMenu`와 `ToolbarMenu`는 `menuInteraction.ts`의 하나의 상호작용 계약을
+`Menu`와 `ToolbarMenu`는 `menuInteraction.ts`의 하나의 상호작용 계약을
 공유한다.
 
 - trigger의 Enter, Space, ArrowDown은 menu를 열고 첫 enabled item에 focus하며,

@@ -15,7 +15,7 @@ import {
 import type { ConnectionProfile } from "../connections/domain";
 import type { ConnectionLaunchPreset } from "../connections/presets";
 import type { SettingsSection } from "../settings/domain";
-import type { WorkspaceAdminDestination } from "../workspaceAdmin/sections";
+import type { WorkspaceAdminSection } from "../workspaceAdmin/sections";
 import type {
   AppShellMode,
   AppShellNavigationCommand,
@@ -62,7 +62,7 @@ export function connectionEditorDialogCommands(
     else open();
   }
 
-  function openWorkspaceAdmin(destination: WorkspaceAdminDestination) {
+  function openWorkspaceAdmin(destination: WorkspaceAdminSection) {
     // The open editor marks its own requests (managed recovery, shared database
     // add); Workspace management then opens over it and returns to it.
     const returnToEditor = takeConnectionEditorReturn();

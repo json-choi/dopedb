@@ -20,13 +20,14 @@ import {
 } from "../../features/catalogExplorer/catalogDomain";
 import useRetryCountdown from "../../features/catalogExplorer/useRetryCountdown";
 import { refreshDesktopConnections } from "../../features/workspaceAdmin/desktopConnections";
-import { requestWorkspaceAdmin } from "../../features/workspaceAdmin/navigationRequest";
+import { requestAccountSettings } from "../../features/settings/accountRequest";
 import {
   selectSchemaDiffBaseline,
   useSchemaDiffBaselineGroups,
 } from "../../features/catalogExplorer/schemaDiffBaseline";
 import EngineMark from "../../components/EngineMark";
 import { Button } from "../../design-system/components/Button";
+import { SegmentedControl } from "../../design-system/components/SegmentedControl";
 import { SelectInput } from "../../design-system/components/FormControls";
 import {
   IdeTab,
@@ -185,13 +186,13 @@ export default function SchemaDiff({
       case "recoverAuthentication":
         // A shared connection opens only with this device's workspace session.
         return connection.workspaceAccess !== "local" && connection.engine !== "bigquery"
-          ? { label: t("workspace.login"), run: () => requestWorkspaceAdmin("account") }
+          ? { label: t("workspace.login"), run: () => requestAccountSettings() }
           : { label: t("connections.edit"), run: openCredentials };
       case "recoverManaged":
-        return managedRecovery.canOpenSettings(connection)
+        return managedRecovery.canOpenWorkspaceProviders(connection)
           ? {
               label: t("connections.managedWorkspace.recover"),
-              run: () => managedRecovery.openSettings(connection, rereadSide),
+              run: () => managedRecovery.openWorkspaceProviders(connection, rereadSide),
             }
           : { label: t("app.retry"), run: rereadSide };
       case "refreshWorkspace":
@@ -313,14 +314,15 @@ export default function SchemaDiff({
 
           <div className="tw:flex tw:min-h-0 tw:flex-1 tw:flex-col tw:overflow-hidden">
             <div className="ds-control-row tw:flex tw:shrink-0 tw:flex-wrap tw:items-center tw:gap-2 tw:border-b tw:border-border-subtle tw:px-3 tw:py-2">
-              <div className="ds-control-row tw:flex tw:flex-wrap tw:gap-1" role="group" aria-label={t("schemaDiff.filterStatus")}>
-                {(["all", "added", "missing", "changed"] as const).map((status) => (
-                  <Button key={status} size="xs" variant={statusFilter === status ? "selected" : "ghost"} aria-pressed={statusFilter === status} onClick={() => setStatusFilter(status)}>
-                    {status === "all" ? t("schemaDiff.statusAll") : t(STATUS_LABELS[status])}
-                    <span className="tw:font-mono tw:tabular-nums">{!comparisonShown || !selectedDiff ? "—" : status === "all" ? selectedDiff.total : counts?.[status] ?? "—"}</span>
-                  </Button>
-                ))}
-              </div>
+              <SegmentedControl
+                value={statusFilter}
+                label={t("schemaDiff.filterStatus")}
+                options={(["all", "added", "missing", "changed"] as const).map((status) => ({
+                  value: status,
+                  label: `${status === "all" ? t("schemaDiff.statusAll") : t(STATUS_LABELS[status])} ${!comparisonShown || !selectedDiff ? "—" : status === "all" ? selectedDiff.total : counts?.[status] ?? "—"}`,
+                }))}
+                onChange={setStatusFilter}
+              />
             </div>
 
             {comparisonShown ? <SchemaDiffScope /> : null}

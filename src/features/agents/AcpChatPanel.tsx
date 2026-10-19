@@ -8,6 +8,7 @@ import { Icon } from "../../components/Icon";
 import { Button } from "../../design-system/components/Button";
 import { useModalBehavior } from "../../design-system/components/Modal";
 import RenderRecoveryBoundary from "../../design-system/components/RenderRecoveryBoundary";
+import RenderRecoveryFallback from "../../design-system/components/RenderRecoveryFallback";
 import { ResizeSeparator } from "../../design-system/components/ResizeSeparator";
 import { StatusDot } from "../../design-system/components/Status";
 import {
@@ -232,26 +233,13 @@ function AcpChatPanelRecovery({
           />
         }
       />
-      <div
-        className="tw:m-auto tw:flex tw:w-[min(360px,calc(100%_-_var(--ds-space-6)))] tw:flex-col tw:items-center tw:justify-center tw:gap-3 tw:text-center tw:text-sm tw:text-muted-foreground"
-        role="alert"
-      >
-        <Icon className="tw:size-7 tw:text-warning" name="alert" />
-        <strong className="tw:text-title tw:text-foreground">
-          {t("agent.acpRenderFailed")}
-        </strong>
-        <p className="tw:m-0 tw:leading-body">{t("agent.acpRenderFailedBody")}</p>
-        <Button
-          data-agent-focus-target="recovery"
-          data-modal-initial-focus
-          onClick={onRetry}
-          size="compact"
-          variant="primary"
-        >
-          <Icon name="refresh" />
-          {t("agent.acpRenderRetry")}
-        </Button>
-      </div>
+      <RenderRecoveryFallback
+        title={t("agent.acpRenderFailed")}
+        body={t("agent.acpRenderFailedBody")}
+        retryLabel={t("agent.acpRenderRetry")}
+        onRetry={onRetry}
+        focusTarget="recovery"
+      />
     </AcpChatSurface>
   );
 }

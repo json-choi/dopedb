@@ -655,12 +655,10 @@ describe("workbench state ownership", () => {
         requestId: 1,
       },
     });
-    const welcome = appShellNavigationReducer(knowledge, { type: "showWelcome" });
-    expect(welcome).toEqual({ kind: "content", route: { kind: "welcome" } });
     expect(appShellNavigationReducer(
-      appShellNavigationReducer(welcome, { type: "openSettings" }),
+      appShellNavigationReducer(knowledge, { type: "openSettings" }),
       { type: "closeSettings" },
-    )).toEqual(welcome);
+    )).toEqual(knowledge);
     // Workspace management is its own modal over the same background route: an account
     // request replaces it with Settings → Account, and only its own close returns to
     // the background content.
@@ -675,7 +673,7 @@ describe("workbench state ownership", () => {
     });
     expect(appShellNavigationReducer(workspaceAdmin, { type: "closeSettings" })).toBe(workspaceAdmin);
     expect(
-      appShellNavigationReducer(workspaceAdmin, { type: "openWorkspaceAdmin", destination: "account" }),
+      appShellNavigationReducer(workspaceAdmin, { type: "openSettings", section: "account" }),
     ).toEqual({ kind: "settings", route: { kind: "workbench" }, section: "account" });
     expect(appShellNavigationReducer(
       appShellNavigationReducer(knowledge, {
@@ -686,11 +684,11 @@ describe("workbench state ownership", () => {
     )).toEqual(knowledge);
     expect(appShellNavigationReducer(knowledge, {
       type: "connectionDeleted", connectionId: "db-1", remainingConnections: 0,
-    })).toEqual(welcome);
+    })).toEqual(initialAppShellMode);
     expect(appShellNavigationReducer(knowledge, {
       type: "connectionDeleted", connectionId: "db-1", remainingConnections: 1,
     })).toEqual(knowledge);
-    expect(appShellNavigationReducer(welcome, { type: "showWorkbench" })).toEqual(initialAppShellMode);
+    expect(appShellNavigationReducer(knowledge, { type: "showWorkbench" })).toEqual(initialAppShellMode);
     expect(
       appShellNavigationReducer(knowledge, {
         type: "openSchemaDiff",

@@ -111,8 +111,8 @@ export function ConnectionSourcePicker({ catalog, nameInputRef, creatingDemo, on
               }}
             >
               {creatingDemo
-                ? t("connections.demoCreating")
-                : t("connections.demoSqlite")}
+                ? t("onboarding.demoStarting")
+                : t("onboarding.demoStart")}
             </CommandMenuItem>
           ) : null}
         </CommandMenuGroup>

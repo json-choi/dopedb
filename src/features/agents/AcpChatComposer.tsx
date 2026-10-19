@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 
 import { Icon } from "../../components/Icon";
 import { Button } from "../../design-system/components/Button";
+import { InlineNotice } from "../../design-system/components/Status";
 import {
   ToolWindowComposer,
   ToolWindowComposerContext,
@@ -280,16 +281,11 @@ function ComposerNoticeBar({
   action: ReactNode;
 }) {
   return (
-    <div
-      className="tw:mb-2 tw:flex tw:min-h-control-lg tw:items-center tw:gap-3 tw:rounded-md tw:border tw:border-border-subtle tw:bg-card tw:px-3 tw:py-2"
-      role="status"
-    >
-      <div className="tw:grid tw:min-w-0 tw:flex-1 tw:gap-1">
-        <p className="tw:m-0 tw:min-w-0 tw:text-xs tw:leading-body tw:text-muted-foreground">
-          {message}
-        </p>
+    <InlineNotice tone="warning" icon="info" role="status" action={action}>
+      <span className="tw:grid tw:gap-1 tw:leading-body">
+        <span>{message}</span>
         {details && details.length > 0 ? (
-          <ul className="tw:m-0 tw:grid tw:min-w-0 tw:gap-0.5 tw:pl-4 tw:text-xs tw:leading-body tw:text-muted-foreground">
+          <ul className="tw:m-0 tw:grid tw:min-w-0 tw:gap-0.5 tw:pl-4">
             {details.map((detail) => (
               <li key={detail} className="tw:break-words">
                 {detail}
@@ -297,8 +293,7 @@ function ComposerNoticeBar({
             ))}
           </ul>
         ) : null}
-      </div>
-      {action}
-    </div>
+      </span>
+    </InlineNotice>
   );
 }

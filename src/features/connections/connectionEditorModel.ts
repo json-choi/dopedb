@@ -38,6 +38,8 @@ export type StandardConnectionSource = {
   provider: Provider;
   label: string;
   category: "database" | "warehouse" | "file";
+  /** Offered directly on the first-run start list, ahead of "All data sources". */
+  popular?: true;
 };
 
 export const POSTGRES_SSL_MODES = [
@@ -93,13 +95,17 @@ export const CONTROLLED_CONNECTION_PARAMETERS = new Set<string>([
 ]);
 
 export const STANDARD_CONNECTION_SOURCES: StandardConnectionSource[] = [
-  { engine: "postgres", provider: "auto", label: "PostgreSQL", category: "database" },
-  { engine: "mysql", provider: "auto", label: "MySQL / MariaDB", category: "database" },
-  { engine: "mongodb", provider: "generic", label: "MongoDB", category: "database" },
+  { engine: "postgres", provider: "auto", label: "PostgreSQL", category: "database", popular: true },
+  { engine: "mysql", provider: "auto", label: "MySQL / MariaDB", category: "database", popular: true },
+  { engine: "mongodb", provider: "generic", label: "MongoDB", category: "database", popular: true },
   { engine: "bigquery", provider: "generic", label: "Google BigQuery", category: "warehouse" },
   { engine: "sqlite", provider: "cloudflareD1", label: "Cloudflare D1", category: "database" },
-  { engine: "sqlite", provider: "generic", label: "SQLite", category: "file" },
+  { engine: "sqlite", provider: "generic", label: "SQLite", category: "file", popular: true },
 ];
+export const POPULAR_CONNECTION_SOURCES = STANDARD_CONNECTION_SOURCES.filter(
+  (source) => source.popular,
+);
+
 export function compatibleDrivers(
   drivers: DriverDescriptor[],
   engine: Engine,

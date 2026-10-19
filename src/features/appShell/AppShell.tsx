@@ -34,8 +34,7 @@ import { useAgentDock } from "./useAgentDock";
 import { useToolWindowLayout } from "./useToolWindowLayout";
 import { useAppShellWorkbenchController } from "./useAppShellWorkbenchController";
 import { useConnectionProjectNames } from "./useConnectionProjectNames";
-import type { WorkspaceAdminDestination } from "../workspaceAdmin/sections";
-import { useWorkspaceAdminRequests } from "../workspaceAdmin/useWorkspaceAdminRequests";
+import { useShellDialogRequests } from "./useShellDialogRequests";
 
 export default function App() {
   return (
@@ -99,11 +98,9 @@ function Shell() {
     catalogScope,
     connections.selected === null,
   );
-  const openWorkspaceAdmin = (destination: WorkspaceAdminDestination) => {
-    commands.route.openWorkspaceAdmin(destination);
-    setMobileExplorerOpen(false);
-  };
-  useWorkspaceAdminRequests(openWorkspaceAdmin);
+  const { openWorkspaceAdmin } = useShellDialogRequests(commands.route, () =>
+    setMobileExplorerOpen(false),
+  );
   const backgroundTasks = useBackgroundTasks({
     connections: connections.items,
     queryServiceStore: queryServices.store,
@@ -194,7 +191,6 @@ function Shell() {
     openAgentTask,
     openSafety: () => commands.route.openSettings("safety"),
     connections: connections.items, selectConnection: commands.connections.select,
-    showWelcome: commands.route.showWelcome,
   });
 
   async function cancelBackgroundTask(task: BackgroundTask) {
@@ -294,10 +290,12 @@ function Shell() {
     documents: documents.items,
     supportsSql: connections.supportsSql,
     commands: {
-      showWelcome: commands.route.showWelcome,
+      showWelcome: commands.documents.openWelcome,
       newConnection: () => commands.connections.new(),
       newQuery: commands.documents.openQuery,
       openResults: () => commands.documents.openStable("results"),
+      openSchema: () => commands.documents.openStable("schema"),
+      openActivity: commands.documents.openActivity,
       toggleDatabaseExplorer: toolWindows.toggleDatabaseExplorer,
       showLocalHistory: () => {
         toolWindows.showLocalHistory();
@@ -452,6 +450,7 @@ function Shell() {
             toggleLocalHistory: () => toggleLeftPanel("history"),
             closeLocalHistory: toolWindows.closeLocalHistory,
             selectConnection: commands.connections.select,
+            openSchema: commands.documents.openSchema,
             openTable: commands.documents.openTable,
             openSchemaDiff: (group) =>
               commands.route.openSchemaDiff(group.key),
@@ -463,7 +462,7 @@ function Shell() {
             dismissMobile: () => dismissMobileExplorer(true),
           },
           workbench: {
-            showWelcome: commands.route.showWelcome,
+            showWelcome: commands.documents.openWelcome,
             activateDocument: commands.documents.activateId,
             restoreDocument: commands.documents.restoreDraft,
             newQuery: commands.documents.openQuery,
@@ -483,10 +482,7 @@ function Shell() {
             rollbackManualTransaction: (transaction) =>
               settleManualTransaction(transaction, "rollback"),
             revealDatabaseContext,
-            openNotifications: () => {
-              activity.markSeen();
-              commands.documents.openStable("activity");
-            },
+            openActivity: commands.documents.openActivity,
           },
           viewport: {
             startSidebarDrag,

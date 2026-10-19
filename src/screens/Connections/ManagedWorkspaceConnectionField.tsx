@@ -25,18 +25,18 @@ export function ManagedWorkspaceConnectionField({
               ? t("connections.credentialVerified")
               : t("connections.managedWorkspace.status")}
           </StatusBadge>
-          {recovery.canOpenSettings ? (
+          {recovery.canOpenWorkspaceProviders ? (
             <Button
               size="compact"
               disabled={busy}
-              onClick={() => recovery.openSettings()}
+              onClick={() => recovery.openWorkspaceProviders()}
             >
               {t("connections.managedWorkspace.open")}
             </Button>
           ) : null}
         </div>
         <p className="tw:m-0 tw:max-w-[560px] tw:text-xs tw:leading-body tw:text-muted-foreground">
-          {recovery.canOpenSettings
+          {recovery.canOpenWorkspaceProviders
             ? t("connections.managedWorkspace.managerDescription")
             : t("connections.managedWorkspace.memberDescription")}
         </p>

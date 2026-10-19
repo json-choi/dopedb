@@ -2,7 +2,7 @@
 // Agent and model selection stay in the header's leading slot.
 
 import { Icon } from "../../components/Icon";
-import ToolbarMenu, { ToolbarMenuItem } from "../../components/ToolbarMenu";
+import { MenuItem, ToolbarMenu } from "../../design-system/components/Menu";
 import { Button } from "../../design-system/components/Button";
 import { ToolWindowHideButton } from "../../design-system/components/ToolWindow";
 import { useI18n } from "../../lib/i18n";
@@ -48,16 +48,16 @@ export function AcpChatHeaderActions({
         icon="moreVertical"
         label={t("agent.acpMore")}
       >
-        <ToolbarMenuItem icon="gear" onClick={commands.setup.openAgentSetup}>
+        <MenuItem icon="gear" onClick={commands.setup.openAgentSetup}>
           {t("agent.acpAgentSetup")}
-        </ToolbarMenuItem>
+        </MenuItem>
         {active && active.lifecycle !== "closed" && active.lifecycle !== "failed" ? (
-          <ToolbarMenuItem
+          <MenuItem
             icon="trash"
             onClick={() => void commands.session.close()}
           >
             {t("agent.acpCloseSession")}
-          </ToolbarMenuItem>
+          </MenuItem>
         ) : null}
       </ToolbarMenu>
       <ToolWindowHideButton label={t("common.close")} onClick={onClose} />

@@ -1,7 +1,7 @@
 // Projects revision-pinned run choices into the shared caret-anchored menu.
 // Hover/keyboard focus previews exact ranges; confirmation delegates to the
 // controller's existing execution path rather than executing SQL here.
-import { PopupMenu, PopupMenuItem } from "../../design-system/components/PopupMenu";
+import { Menu, MenuItem } from "../../design-system/components/Menu";
 import type { useSqlRunChooser } from "../../features/queries/useSqlRunChooser";
 import { useI18n } from "../../lib/i18n";
 
@@ -14,7 +14,8 @@ export default function SqlRunMenu({
   const pending = chooser.current;
   if (!pending) return null;
   return (
-    <PopupMenu
+    <Menu
+      size="narrow"
       anchorRef={chooser.anchorRef}
       getAnchorRect={pending.getAnchorRect}
       placement="bottom-start"
@@ -27,7 +28,7 @@ export default function SqlRunMenu({
         {t("sql.chooseExecution")}
       </div>
       {pending.choices.map((choice, index) => (
-        <PopupMenuItem
+        <MenuItem
           key={choice.kind}
           data-selected={pending.previewIndex === index}
           onFocus={() => chooser.preview(index)}
@@ -46,8 +47,8 @@ export default function SqlRunMenu({
               {choice.source.sql.replace(/\s+/g, " ").slice(0, 160)}
             </span>
           </span>
-        </PopupMenuItem>
+        </MenuItem>
       ))}
-    </PopupMenu>
+    </Menu>
   );
 }

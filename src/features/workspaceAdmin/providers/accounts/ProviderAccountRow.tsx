@@ -11,6 +11,7 @@ import {
   StatusBadge,
 } from "../../../../design-system/components/Status";
 import { useI18n, type I18nKey, type Lang } from "../../../../lib/i18n";
+import { formatAdminDate } from "../../dateFormat";
 import type { Integration, ManagedConnection } from "../domain";
 import type { GcpSetupSession } from "../gcp/gcpModel";
 import {
@@ -35,9 +36,9 @@ type MarkedEngine = "postgres" | "mysql";
 function formatTime(value: string, lang: Lang, withDate: boolean): string | null {
   const time = Date.parse(value);
   if (!Number.isFinite(time)) return null;
-  return new Intl.DateTimeFormat(lang === "ko" ? "ko-KR" : "en-US", withDate
+  return formatAdminDate(value, lang, withDate
     ? { dateStyle: "medium", timeStyle: "short" }
-    : { timeStyle: "short" }).format(new Date(time));
+    : { timeStyle: "short" });
 }
 
 function ConnectedAccountItem({

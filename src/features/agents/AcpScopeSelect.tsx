@@ -3,8 +3,8 @@
 
 import type { ReactNode } from "react";
 
-import { Icon, type IconName } from "../../components/Icon";
-import ToolbarMenu, { ToolbarMenuItem } from "../../components/ToolbarMenu";
+import { Icon } from "../../components/Icon";
+import { MenuItem, ToolbarMenu } from "../../design-system/components/Menu";
 import { EnvironmentBadge } from "../../design-system/components/EnvironmentBadge";
 import { useI18n } from "../../lib/i18n";
 import {
@@ -15,6 +15,11 @@ import {
   githubSourceRevisionLabel,
   knowledgeEnvironmentBadge,
 } from "../knowledge/presentation";
+import {
+  AgentResourceChoiceRow,
+  AgentWriteTargetRadio,
+} from "./AgentResourceChoice";
+import { isLastSelectedAgentResource } from "./agentResourceSelectionRules";
 import type { AcpChatController } from "./useAcpChatController";
 
 export function AcpScopeSelect({
@@ -66,6 +71,14 @@ export function AcpScopeSelect({
   const triggerTitle = locked
     ? `${accessibleSelection} · ${t("agent.acpScopeLocked")}`
     : accessibleSelection;
+  const selectionFor = (resourceKey: string) => {
+    const checked = knowledge.selectedResourceKeys.has(resourceKey);
+    return {
+      checked,
+      disabled: locked || isLastSelectedAgentResource(checked, selectedCount),
+      onChange: () => onToggle(resourceKey),
+    };
+  };
   const firstSelectedDatabase = knowledge.selectedDatabases[0];
 
   return (
@@ -124,14 +137,9 @@ export function AcpScopeSelect({
               <ResourceGroupLabel>{t("agent.acpDatabaseResources")}</ResourceGroupLabel>
             ) : null}
             {project.databases.map((database) => (
-              <ResourceCheckbox
+              <AgentResourceChoiceRow
                 key={database.key}
-                checked={knowledge.selectedResourceKeys.has(database.key)}
-                disabled={
-                  locked ||
-                  (selectedCount === 1 &&
-                    knowledge.selectedResourceKeys.has(database.key))
-                }
+                layout="menu"
                 icon="database"
                 label={database.databaseName}
                 detail={
@@ -145,21 +153,16 @@ export function AcpScopeSelect({
                   />
                 }
                 reconfirm={database.needsReconfirmation}
-                onChange={() => onToggle(database.key)}
+                selection={selectionFor(database.key)}
               />
             ))}
             {project.sources.length > 0 ? (
               <ResourceGroupLabel>{t("agent.acpSourceResources")}</ResourceGroupLabel>
             ) : null}
             {project.sources.map((source) => (
-              <ResourceCheckbox
+              <AgentResourceChoiceRow
                 key={source.key}
-                checked={knowledge.selectedResourceKeys.has(source.key)}
-                disabled={
-                  locked ||
-                  (selectedCount === 1 &&
-                    knowledge.selectedResourceKeys.has(source.key))
-                }
+                layout="menu"
                 icon="branch"
                 label={source.displayName}
                 detail={githubSourceRevisionLabel(
@@ -167,7 +170,7 @@ export function AcpScopeSelect({
                   source.commitSha,
                 )}
                 reconfirm={source.needsReconfirmation}
-                onChange={() => onToggle(source.key)}
+                selection={selectionFor(source.key)}
               />
             ))}
           </div>
@@ -181,7 +184,8 @@ export function AcpScopeSelect({
             className="tw:mt-1 tw:grid tw:gap-0.5 tw:border-t tw:border-border-subtle tw:pt-1"
           >
             <ResourceGroupLabel>{t("agent.acpWriteTarget")}</ResourceGroupLabel>
-            <WriteTargetRadio
+            <AgentWriteTargetRadio
+              layout="menu"
               checked={knowledge.writeConnectionId === null}
               disabled={locked}
               label={t("agent.acpReadOnlyContext")}
@@ -190,7 +194,8 @@ export function AcpScopeSelect({
             {knowledge.selectedDatabases
               .filter((database) => database.writable)
               .map((database) => (
-                <WriteTargetRadio
+                <AgentWriteTargetRadio
+                  layout="menu"
                   key={database.connectionId}
                   checked={knowledge.writeConnectionId === database.connectionId}
                   disabled={locked}
@@ -204,12 +209,12 @@ export function AcpScopeSelect({
                 <p className="tw:m-0 tw:px-2 tw:py-1 tw:text-xs tw:leading-body tw:text-muted-foreground">
                   {t("agent.acpNoWritableDatabase")}
                 </p>
-                <ToolbarMenuItem
+                <MenuItem
                   icon="lock"
                   onClick={() => onOpenSafety(firstSelectedDatabase.connectionId)}
                 >
                   {t("agent.acpOpenSafety")}
-                </ToolbarMenuItem>
+                </MenuItem>
               </>
             ) : null}
           </div>
@@ -227,91 +232,5 @@ function ResourceGroupLabel({ children }: { children: ReactNode }) {
     >
       {children}
     </div>
-  );
-}
-
-function ResourceCheckbox({
-  checked,
-  disabled,
-  icon,
-  label,
-  detail,
-  suffix,
-  reconfirm,
-  onChange,
-}: {
-  checked: boolean;
-  disabled: boolean;
-  icon: IconName;
-  label: string;
-  detail: string;
-  suffix?: ReactNode;
-  reconfirm: boolean;
-  onChange: () => void;
-}) {
-  const { t } = useI18n();
-  return (
-    <label
-      data-checked={checked}
-      data-disabled={disabled}
-      data-menu-keep-open
-      title={`${label} · ${detail}${reconfirm ? ` · ${t("agent.acpEnvironmentReconfirm")}` : ""}`}
-      className="tw:flex tw:min-h-control-md tw:min-w-0 tw:cursor-pointer tw:items-center tw:gap-2 tw:rounded-sm tw:px-2 tw:py-1 tw:text-foreground tw:data-[checked=true]:bg-selection tw:data-[checked=true]:text-selection-foreground tw:data-[disabled=true]:cursor-default tw:data-[disabled=true]:opacity-55 tw:hover:bg-muted"
-    >
-      <input
-        type="checkbox"
-        role="menuitemcheckbox"
-        aria-checked={checked}
-        aria-disabled={disabled}
-        checked={checked}
-        disabled={disabled}
-        onChange={onChange}
-        className="tw:size-4 tw:shrink-0 tw:accent-primary"
-      />
-      <Icon name={icon} className="tw:shrink-0 tw:text-muted-foreground" />
-      <span className="tw:grid tw:min-w-0 tw:flex-1 tw:gap-0.5">
-        <span className="tw:truncate tw:text-sm tw:font-medium">{label}</span>
-        <span className="tw:truncate tw:text-xs tw:font-normal tw:text-muted-foreground">
-          {detail}
-          {reconfirm ? ` · ${t("agent.acpEnvironmentReconfirm")}` : ""}
-        </span>
-      </span>
-      {suffix ? <span className="tw:shrink-0">{suffix}</span> : null}
-    </label>
-  );
-}
-
-function WriteTargetRadio({
-  checked,
-  disabled,
-  label,
-  onChange,
-}: {
-  checked: boolean;
-  disabled: boolean;
-  label: string;
-  onChange: () => void;
-}) {
-  return (
-    <label
-      data-checked={checked}
-      data-disabled={disabled}
-      data-menu-keep-open
-      title={label}
-      className="tw:flex tw:min-h-control-md tw:min-w-0 tw:cursor-pointer tw:items-center tw:gap-2 tw:rounded-sm tw:px-2 tw:text-sm tw:font-medium tw:text-foreground tw:data-[checked=true]:bg-selection tw:data-[checked=true]:text-selection-foreground tw:data-[disabled=true]:cursor-default tw:data-[disabled=true]:opacity-55 tw:hover:bg-muted"
-    >
-      <input
-        type="radio"
-        role="menuitemradio"
-        aria-checked={checked}
-        aria-disabled={disabled}
-        name="agent-write-target"
-        checked={checked}
-        disabled={disabled}
-        onChange={onChange}
-        className="tw:size-4 tw:shrink-0 tw:accent-primary"
-      />
-      <span className="tw:min-w-0 tw:truncate">{label}</span>
-    </label>
   );
 }

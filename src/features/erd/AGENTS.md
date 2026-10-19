@@ -16,6 +16,7 @@ relationships plus their persisted layout (positions, viewport, layout mode).
 |------|-------------|
 | `ErdCanvas.tsx` | Default-exported React Flow surface: cancellable ELK auto-layout, workspace-scoped layout persistence, virtual relationship overlays, deterministic local export, and a compact mode for large schemas. |
 | `ErdRelationNode.tsx` | Memoized React Flow node type for one Catalog V2 relation (`ErdFlowNode`); compact mode avoids mounting per-column rows for large schemas. |
+| `RelationStructure.tsx` | The one read-only structure view (columns, indexes, foreign keys) shared by the Tables structure panel and the Schema inspector, with adapters from `CatalogTable` and Catalog V2 relations. |
 | `ErdToolbar.tsx` | Default-exported flat command bar for layout mode, persistence, virtual edges, and local export. |
 | `ErdCanvas.css` | The one documented CSS exception in this feature: styles React Flow's own generated subtree (background, minimap, controls) using design-system CSS variables; DopeDB-owned surface/control layout stays in Tailwind per this file's own header comment. |
 | `domain.ts` | Branded `ErdLayoutId`/`ErdVirtualRelationId`, `ErdLayoutMode` (`physical`\|`logical`\|`uml`), and the `ErdLayout`/`SaveErdLayoutRequest`/`SaveErdLayoutOutcome` persistence contracts. |
@@ -52,7 +53,7 @@ relationships plus their persisted layout (positions, viewport, layout mode).
 - `src/features/connections/domain.ts` (`ConnectionId`), `src/ipc/types`
   (`CatalogObjectRef`, `CatalogRelationV2`).
 - `src/lib/erdGraph.ts` (`relationDisplayName`).
-- `src/design-system/components/{Workbench,FormControls}`, `src/components/{Icon,ToolbarMenu}`.
+- `src/design-system/components/{Workbench,FormControls}`, `src/components/Icon`, `src/design-system/components/Menu`.
 - Rust counterpart: `src-tauri/src/features/erd/transport.rs` (verified present).
 
 ### External

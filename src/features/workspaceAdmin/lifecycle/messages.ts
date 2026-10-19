@@ -2,14 +2,18 @@
 // refusals get a specific sentence in both languages; anything else follows the shared
 // administration error policy (session, timeout, network, or the section's fallback).
 import type { I18nKey, Lang } from "../../../lib/i18n";
-import { isWorkspaceSessionRejected, workspaceAdminErrorMessage } from "../requests";
+import { formatAdminDate } from "../dateFormat";
+import {
+  isWorkspaceSessionRejected,
+  workspaceAdminErrorMessage,
+  type WorkspaceAdminI18n,
+} from "../requests";
 import {
   classifyLifecycleFailure,
   type DeletionBlockerKind,
   type LifecycleFailure,
 } from "./domain";
 
-type Translate = (key: I18nKey, vars?: Record<string, string | number>) => string;
 
 const FAILURE_MESSAGES: Record<LifecycleFailure, I18nKey> = {
   unexpectedResponse: "workspaceLifecycle.errorUnexpectedResponse",
@@ -35,7 +39,7 @@ const FAILURE_MESSAGES: Record<LifecycleFailure, I18nKey> = {
 
 export function describeLifecycleFailure(
   error: unknown,
-  i18n: { lang: Lang; t: Translate },
+  i18n: WorkspaceAdminI18n,
   fallback: I18nKey,
 ): string {
   if (isWorkspaceSessionRejected(error)) return i18n.t("workspaceAdmin.sessionExpired");
@@ -51,17 +55,7 @@ export const BLOCKER_LABELS: Record<DeletionBlockerKind, I18nKey> = {
   memberRevocations: "workspaceLifecycle.blockerMemberRevocations",
 };
 
-const timeFormats = new Map<Lang, Intl.DateTimeFormat>();
-
 /** Parsers already rejected invalid timestamps, so every value here formats. */
 export function formatLifecycleTime(timestamp: string, lang: Lang): string {
-  let format = timeFormats.get(lang);
-  if (!format) {
-    format = new Intl.DateTimeFormat(lang === "ko" ? "ko-KR" : "en-US", {
-      dateStyle: "medium",
-      timeStyle: "short",
-    });
-    timeFormats.set(lang, format);
-  }
-  return format.format(new Date(timestamp));
+  return formatAdminDate(timestamp, lang, { dateStyle: "medium", timeStyle: "short" });
 }

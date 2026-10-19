@@ -12,19 +12,14 @@ import EngineMark from "../../components/EngineMark";
 import { Icon } from "../../components/Icon";
 import { Button } from "../../design-system/components/Button";
 import { EnvironmentBadge } from "../../design-system/components/EnvironmentBadge";
-import ToolbarMenu from "../../components/ToolbarMenu";
-import {
-  PopupMenu,
-  PopupMenuCheckbox,
-  PopupMenuItem,
-} from "../../design-system/components/PopupMenu";
+import { Menu, MenuCheckbox, MenuItem, ToolbarMenu } from "../../design-system/components/Menu";
 import {
   connectionAccessIssue,
   databaseDisplayLabel,
   type ConnectionProfile,
 } from "../../features/connections/domain";
 import { ProviderTargetLabel } from "../../features/connections/ProviderTargetLabel";
-import { isDemoSqliteConnection } from "../../features/connections/presets";
+import { useDeleteConnection } from "../../features/connections/useDeleteConnection";
 import type {
   Catalog,
   CatalogOverview,
@@ -115,6 +110,7 @@ type Props = {
   onToggleOpen: () => void;
   onSelect: () => void;
   onNewQuery?: () => void;
+  onOpenSchema?: () => void;
   onEdit: () => void;
   /** Opens this device's connection editor focused on re-entering a lost credential. */
   onEditCredentials: () => void;
@@ -148,6 +144,7 @@ type Props = {
 
 export default function ConnectionNode(props: Props) {
   const { t } = useI18n();
+  const deleteConnection = useDeleteConnection();
   const connectionMenuTriggerRef = useRef<HTMLButtonElement>(null);
   const [connectionMenuInitialFocus, setConnectionMenuInitialFocus] =
     useState<MenuInitialFocus>(null);
@@ -394,7 +391,7 @@ export default function ConnectionNode(props: Props) {
                     })}
                   </span>
                 </div>
-                <PopupMenuCheckbox
+                <MenuCheckbox
                   checked={scopedSchemas.length === 0}
                   disabled={props.schemaScopeSaving}
                   onChange={(event) => {
@@ -402,10 +399,10 @@ export default function ConnectionNode(props: Props) {
                   }}
                 >
                   {t("connections.allSchemas")}
-                </PopupMenuCheckbox>
+                </MenuCheckbox>
                 <div className="tw:grid tw:border-t tw:border-border-subtle tw:pt-1 tw:pl-4">
                   {availableSchemas.map((schema) => (
-                    <PopupMenuCheckbox
+                    <MenuCheckbox
                       key={schema}
                       checked={
                         scopedSchemas.length === 0 ||
@@ -424,7 +421,7 @@ export default function ConnectionNode(props: Props) {
                       }
                     >
                       {schema}
-                    </PopupMenuCheckbox>
+                    </MenuCheckbox>
                   ))}
                 </div>
               </div>
@@ -495,8 +492,9 @@ export default function ConnectionNode(props: Props) {
             <Icon name="moreVertical" />
           </Button>
           {props.openMenuId === connectionMenuKey ? (
-            <PopupMenu
+            <Menu
               id={connectionMenuId}
+              size="narrow"
               anchorRef={connectionMenuTriggerRef}
               initialFocus={connectionMenuInitialFocus}
               onRequestClose={() => {
@@ -506,19 +504,29 @@ export default function ConnectionNode(props: Props) {
               onReferenceHidden={() => props.onOpenMenu(null)}
             >
               {props.onNewQuery && !isDocumentEngine(connection.engine) ? (
-                <PopupMenuItem
+                <MenuItem
                   onClick={() => {
                     props.onOpenMenu(null);
                     props.onNewQuery?.();
                   }}
                 >
                   {t("ide.action.newQuery")}
-                </PopupMenuItem>
+                </MenuItem>
+              ) : null}
+              {props.onOpenSchema && !isDocumentEngine(connection.engine) ? (
+                <MenuItem
+                  onClick={() => {
+                    props.onOpenMenu(null);
+                    props.onOpenSchema?.();
+                  }}
+                >
+                  {t("tabs.schema")}
+                </MenuItem>
               ) : null}
               {props.projectDatabaseOrder &&
               props.onMoveProjectDatabase ? (
                 <>
-                  <PopupMenuItem
+                  <MenuItem
                     disabled={!canMoveProjectDatabaseUp}
                     onClick={() => {
                       props.onOpenMenu(null);
@@ -529,8 +537,8 @@ export default function ConnectionNode(props: Props) {
                     <span className="tw:ml-auto tw:text-xs tw:text-muted-foreground">
                       {MOVE_KEY_MODIFIER}↑
                     </span>
-                  </PopupMenuItem>
-                  <PopupMenuItem
+                  </MenuItem>
+                  <MenuItem
                     disabled={!canMoveProjectDatabaseDown}
                     onClick={() => {
                       props.onOpenMenu(null);
@@ -541,45 +549,45 @@ export default function ConnectionNode(props: Props) {
                     <span className="tw:ml-auto tw:text-xs tw:text-muted-foreground">
                       {MOVE_KEY_MODIFIER}↓
                     </span>
-                  </PopupMenuItem>
+                  </MenuItem>
                 </>
               ) : null}
               {connection.workspaceAccess === "local" ||
               connection.workspaceAccess === "manage" ? (
-                <PopupMenuItem
+                <MenuItem
                   onClick={() => {
                     props.onOpenMenu(null);
                     props.onEdit();
                   }}
                 >
                   {t("connections.edit")}
-                </PopupMenuItem>
+                </MenuItem>
               ) : null}
               {connection.workspaceAccess !== "view" &&
               connection.workspaceAccess !== "local" &&
               connection.engine !== "bigquery" &&
               connection.credentialMode === "memberLocal" ? (
-                <PopupMenuItem
+                <MenuItem
                   onClick={() => {
                     props.onOpenMenu(null);
                     props.onWorkspaceDialog("credentials");
                   }}
                 >
                   {t("workspace.bindCredentialsShort")}
-                </PopupMenuItem>
+                </MenuItem>
               ) : null}
               {connection.workspaceAccess === "local" ? (
-                <PopupMenuItem
+                <MenuItem
                   onClick={() => {
                     props.onOpenMenu(null);
                     props.onWorkspaceDialog("copy");
                   }}
                 >
                   {t("workspace.copyToWorkspace")}
-                </PopupMenuItem>
+                </MenuItem>
               ) : null}
               {connection.workspaceAccess !== "view" ? (
-                <PopupMenuItem
+                <MenuItem
                   disabled={props.refreshingId === connection.id}
                   onClick={() => {
                     props.onOpenMenu(null);
@@ -589,28 +597,28 @@ export default function ConnectionNode(props: Props) {
                   {props.refreshingId === connection.id
                     ? t("common.working")
                     : t("connections.refreshSchema")}
-                </PopupMenuItem>
+                </MenuItem>
               ) : null}
               {schemaGroup &&
               schemaGroup.connections.length > 1 &&
               props.onOpenSchemaDiff ? (
-                <PopupMenuItem
+                <MenuItem
                   onClick={() => {
                     props.onOpenMenu(null);
                     props.onOpenSchemaDiff?.();
                   }}
                 >
                   {t("schemaDiff.open")}
-                </PopupMenuItem>
+                </MenuItem>
               ) : null}
-              <PopupMenuCheckbox
+              <MenuCheckbox
                 checked={props.showRowCounts}
                 onChange={(event) =>
                   props.onShowRowCounts(event.target.checked)
                 }
               >
                 {t("connections.showRowCounts")}
-              </PopupMenuCheckbox>
+              </MenuCheckbox>
               {props.onUnbind ? (
                 <ConfirmButton
                   confirmLabel={t("connections.reallyRemoveFromProject")}
@@ -623,14 +631,9 @@ export default function ConnectionNode(props: Props) {
                 >
                   {t("connections.removeFromProject")}
                 </ConfirmButton>
-              ) : connection.workspaceAccess === "local" ||
-                connection.workspaceAccess === "manage" ? (
+              ) : deleteConnection.canDelete(connection) ? (
                 <ConfirmButton
-                  confirmLabel={t(
-                    isDemoSqliteConnection(connection)
-                      ? "connections.reallyDeleteDemo"
-                      : "common.reallyDelete",
-                  )}
+                  confirmLabel={deleteConnection.confirmLabel(connection)}
                   disabled={props.deletingId === connection.id}
                   presentation="menuItem"
                   size="compact"
@@ -641,7 +644,7 @@ export default function ConnectionNode(props: Props) {
                   {t("common.delete")}
                 </ConfirmButton>
               ) : null}
-            </PopupMenu>
+            </Menu>
           ) : null}
         </div>
       </div>

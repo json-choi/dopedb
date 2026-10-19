@@ -2,8 +2,8 @@
 // account or workspace switch clears them with every other private resource.
 import { queryOptions } from "@tanstack/react-query";
 import type { AccountId } from "../../workspaces/domain";
-import { accountAdminQueryKey } from "../queryKeys";
-import { runWorkspaceAdmin } from "../requests";
+import { accountAdminQueryKey } from "../../workspaceAdmin/queryKeys";
+import { runWorkspaceAdmin } from "../../workspaceAdmin/requests";
 import { parseAccountSessions, parseDeletionPendingWorkspaces } from "./domain";
 
 export function accountSessionsQueryKey(accountId: AccountId) {

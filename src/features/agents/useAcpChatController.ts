@@ -31,7 +31,8 @@ import {
   rememberAcpMode,
 } from "./approvalModePreference";
 import { agentCliReady, agentPluginReady } from "./availability";
-import { loginCommand, selectRichTranscriptKeys } from "./acpTranscriptPresentation";
+import { copyAgentLoginCommand } from "./agentSetup";
+import { selectRichTranscriptKeys } from "./acpTranscriptPresentation";
 import { agentErrorLabel, agentFailure, type AgentFailure } from "./agentErrorLabels";
 import { useAgentDebugDetails } from "./displayPreferences";
 import { useAgentApprovalFocusSelection } from "./pendingApprovals";
@@ -570,7 +571,7 @@ export function useAcpChatController({
   async function copyLoginCommand(provider: AgentProvider) {
     setError(null);
     try {
-      await navigator.clipboard.writeText(loginCommand(provider));
+      await copyAgentLoginCommand(provider);
       setCopiedSetupCommand(provider);
     } catch (reason) {
       setError(agentFailure(reason, t, (error) => t("agent.acpSetupActionFailed", { error })));

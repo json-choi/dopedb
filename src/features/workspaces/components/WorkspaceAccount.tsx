@@ -37,17 +37,14 @@ import {
   shouldRevalidateWorkspaceAuth,
   workspaceAuthRetryDelay,
 } from "../authPolicy";
-import { requestWorkspaceAdmin } from "../../workspaceAdmin/navigationRequest";
+import { requestAccountSettings } from "../../settings/accountRequest";
 import { onWorkspaceLoginRequested } from "../loginRequest";
 import { onWorkspaceMembershipRefreshRequested } from "../membershipRefreshRequest";
 import { errMessage } from "../../../ipc/types";
 import { useI18n } from "../../../lib/i18n";
 import { Icon } from "../../../components/Icon";
 import { useToast } from "../../../components/Toast";
-import {
-  PopupMenu,
-  PopupMenuItem,
-} from "../../../design-system/components/PopupMenu";
+import { Menu, MenuItem } from "../../../design-system/components/Menu";
 import { Button } from "../../../design-system/components/Button";
 import {
   cancelWorkspaceResourceQueries,
@@ -631,7 +628,7 @@ export default function WorkspaceAccount({
             </Button>
           ) : null}
           {menuOpen ? (
-            <PopupMenu
+            <Menu
               anchorRef={triggerRef}
               placement={accountMenuPlacement}
               size="account"
@@ -689,22 +686,22 @@ export default function WorkspaceAccount({
               })}
               {/* Sessions and workspaces scheduled for deletion are user-level, so they
                   open in Settings → Account rather than in Workspace management. */}
-              <PopupMenuItem
+              <MenuItem
                 onClick={() => {
                   setMenuOpen(false);
-                  requestWorkspaceAdmin("account");
+                  requestAccountSettings();
                 }}
               >
                 <Icon name="user" />
                 {t("workspaceAdmin.manageAccount")}
-              </PopupMenuItem>
+              </MenuItem>
               <ProviderCredentialsMenuItem
                 onOpen={() => {
                   setMenuOpen(false);
                   setProviderCredentialsOpen(true);
                 }}
               />
-              <PopupMenuItem
+              <MenuItem
                 onClick={() => {
                   setMenuOpen(false);
                   if (loginPhase === "waiting") cancelLogin();
@@ -714,18 +711,18 @@ export default function WorkspaceAccount({
               >
                 <Icon name="plus" />
                 {loginPhase === "waiting" ? t("workspace.loginCancel") : t("workspace.addAccount")}
-              </PopupMenuItem>
+              </MenuItem>
               {auth.data && auth.data.accounts.length > 1 ? (
-                <PopupMenuItem
+                <MenuItem
                   data-tone="danger"
                   onClick={() => void logoutAll()}
                   disabled={loggingOut !== null}
                 >
                   <Icon name="logOut" />
                   {t("workspace.logoutAll")}
-                </PopupMenuItem>
+                </MenuItem>
               ) : null}
-            </PopupMenu>
+            </Menu>
           ) : null}
           {providerCredentialsOpen ? (
             <ProviderCredentialDialog

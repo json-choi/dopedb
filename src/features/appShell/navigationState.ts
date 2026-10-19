@@ -9,13 +9,11 @@ import type { ConnectionLaunchPreset } from "../connections/presets";
 import type { KnowledgeEnvironmentFocus } from "../knowledge/domain";
 import type { SettingsSection } from "../settings/domain";
 import type {
-  WorkspaceAdminDestination,
   WorkspaceAdminSection,
 } from "../workspaceAdmin/sections";
 
 export type AppShellRoute =
   | { kind: "workbench" }
-  | { kind: "welcome" }
   | {
       kind: "connectionEditor";
       target:
@@ -46,7 +44,6 @@ export type AppShellMode =
 export type AppShellNavigationCommand =
   | { type: "workspaceScopeChanged" }
   | { type: "showWorkbench" }
-  | { type: "showWelcome" }
   | {
       type: "openConnectionEditor";
       target: Extract<AppShellRoute, { kind: "connectionEditor" }>[
@@ -59,7 +56,7 @@ export type AppShellNavigationCommand =
   | { type: "closeSettings" }
   | {
       type: "openWorkspaceAdmin";
-      destination: WorkspaceAdminDestination;
+      destination: WorkspaceAdminSection;
       /** The open connection editor made this request and stays underneath. */
       returnToEditor?: boolean;
     }
@@ -114,8 +111,6 @@ export function appShellNavigationReducer(
     case "workspaceScopeChanged":
     case "showWorkbench":
       return initialAppShellMode;
-    case "showWelcome":
-      return { kind: "content", route: { kind: "welcome" } };
     case "openConnectionEditor":
       return {
         kind: "content",
@@ -143,9 +138,7 @@ export function appShellNavigationReducer(
         : mode;
     case "openWorkspaceAdmin": {
       const route = dialogBackground(mode, command.returnToEditor === true);
-      return command.destination === "account"
-        ? { kind: "settings", route, section: "account" }
-        : { kind: "workspaceAdmin", route, section: command.destination };
+      return { kind: "workspaceAdmin", route, section: command.destination };
     }
     case "closeWorkspaceAdmin":
       return mode.kind === "workspaceAdmin"
@@ -165,7 +158,7 @@ export function appShellNavigationReducer(
     }
     case "connectionDeleted": {
       if (command.remainingConnections === 0) {
-        return { kind: "content", route: { kind: "welcome" } };
+        return initialAppShellMode;
       }
       const route = routeOf(mode);
       const editingDeletedConnection =

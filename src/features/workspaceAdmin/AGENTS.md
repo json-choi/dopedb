@@ -22,15 +22,15 @@ with a closed operation; the Bearer session and provider OAuth state stay in Rus
 | `requests.ts` | `runWorkspaceAdmin`, `WorkspaceAdminRequestError` (status, code, body), session-rejection detection and localized error text. |
 | `scope.ts` | `workspaceAdminScope` / `useWorkspaceAdminScope`: the exact signed-in account, team workspace and role; `null` for personal, disabled or signed-out states. |
 | `queryKeys.ts` | `workspaceAdmin` and `workspaceAccountAdmin` query roots, keyed by account and workspace and cleared on any scope change. |
-| `sections.ts` | `WorkspaceAdminSection` / `WorkspaceAdminDestination` (sections plus `account`) and the search keywords shared by the dialog and Action Search. |
+| `sections.ts` | `WorkspaceAdminSection` and the search keywords shared by the dialog and Action Search. |
 | `navigationRequest.ts` | `requestWorkspaceAdmin(destination, focus?)` / `onWorkspaceAdminRequested`, and a one-time, 60-second focus the Providers section takes: a database to reveal for managed-connection recovery, or the add-database flow for the shared database shortcut. |
-| `useWorkspaceAdminRequests.ts` | Lets the shell, which owns the Workspace management and Settings routes, answer those requests; `account` opens Settings → Account. |
+| `useWorkspaceAdminRequests.ts` | Lets the shell, which owns the Workspace management route, answer those requests. |
 
 ## Subdirectories
 
 | Directory | Purpose |
 |-----------|---------|
-| `account/` | Account section: other sessions (revoke) and owned workspaces pending deletion (cancel). |
+| `dateFormat.ts` | `formatAdminDate` / `adminLocale`: the one UI-language date and time formatter for every panel here and the Settings account section. |
 | `workspaces/` | New-workspace dialog. |
 | `members/` | Member directory, invitations, role changes and removal. |
 | `access/` | Database access: team read sharing, member grants, conflict review, shared-database removal. |

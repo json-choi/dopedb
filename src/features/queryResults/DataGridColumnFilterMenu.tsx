@@ -11,7 +11,7 @@ import {
   type GridFilterValue,
 } from "../../lib/gridValueFilter";
 import { useI18n } from "../../lib/i18n";
-import ToolbarMenu from "../../components/ToolbarMenu";
+import { ToolbarMenu } from "../../design-system/components/Menu";
 
 type FilterChoice = {
   key: string;

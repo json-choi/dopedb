@@ -13,11 +13,11 @@ import {
   ToolWindowAction,
   ToolWindowSearchRow,
 } from "../../design-system/components/ToolWindow";
-import { isDemoSqliteConnection } from "../../features/connections/presets";
 import type {
   ConnectionEditorController,
   ConnectionEditorProps,
 } from "../../features/connections/useConnectionEditorController";
+import { useDeleteConnection } from "../../features/connections/useDeleteConnection";
 import { useI18n } from "../../lib/i18n";
 
 type Controller = ConnectionEditorController;
@@ -345,6 +345,7 @@ export function ConnectionSourceCommands({
   const { t } = useI18n();
   const { form, identity, flags, url } = profile;
   const { workspace } = dialogs;
+  const deleteConnection = useDeleteConnection();
 
   return (
     <>
@@ -375,21 +376,6 @@ export function ConnectionSourceCommands({
           >
             <Icon name="copy" />
           </Button>
-          <ConfirmButton
-            disabled={commands.busy}
-            iconOnly
-            label={t("common.delete")}
-            size="xs"
-            variant="ghost"
-            confirmLabel={t(
-              isDemoSqliteConnection(form)
-                ? "connections.reallyDeleteDemo"
-                : "common.reallyDelete",
-            )}
-            onConfirm={() => void commands.remove()}
-          >
-            <Icon name="trash" />
-          </ConfirmButton>
         </>
       ) : null}
       {!identity.isNew &&
@@ -412,14 +398,14 @@ export function ConnectionSourceCommands({
           <Icon name="key" />
         </Button>
       ) : null}
-      {!identity.isNew && form.workspaceAccess === "manage" ? (
+      {!identity.isNew && deleteConnection.canDelete(form) ? (
         <ConfirmButton
           disabled={commands.busy}
           iconOnly
           label={t("common.delete")}
           size="xs"
           variant="ghost"
-          confirmLabel={t("common.reallyDelete")}
+          confirmLabel={deleteConnection.confirmLabel(form)}
           onConfirm={() => void commands.remove()}
         >
           <Icon name="trash" />

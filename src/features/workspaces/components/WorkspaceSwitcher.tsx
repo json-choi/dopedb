@@ -21,14 +21,13 @@ import CreateWorkspaceDialog from "../../workspaceAdmin/workspaces/CreateWorkspa
 import { requestWorkspaceAdmin } from "../../workspaceAdmin/navigationRequest";
 import { leaveConnectionEditor } from "../../connections/connectionEditorShellBridge";
 import { useWorkspaceAdminScope } from "../../workspaceAdmin/scope";
+import { workspaceAdminSectionsFor } from "../../workspaceAdmin/sections";
 import { errMessage } from "../../../ipc/types";
 import { useI18n } from "../../../lib/i18n";
 import { Icon } from "../../../components/Icon";
 import { useToast } from "../../../components/Toast";
 import { DopeDBMark } from "../../../design-system/components/DopeDBMark";
-import ToolbarMenu, {
-  ToolbarMenuItem,
-} from "../../../components/ToolbarMenu";
+import { MenuItem, ToolbarMenu } from "../../../design-system/components/Menu";
 
 export default function WorkspaceSwitcher({
   onChanged,
@@ -43,6 +42,7 @@ export default function WorkspaceSwitcher({
   const context = useQuery(workspaceContextQuery());
   const auth = useQuery(workspaceAuthStateQuery());
   const adminScope = useWorkspaceAdminScope();
+  const firstAdminSection = workspaceAdminSectionsFor(adminScope)[0];
   const [switching, setSwitching] = useState(false);
   // The account that opened "New workspace"; the dialog closes if it stops being active.
   const [creatingFor, setCreatingFor] = useState<AccountId | null>(null);
@@ -152,7 +152,7 @@ export default function WorkspaceSwitcher({
                   ? t("workspace.personalName")
                   : choice.workspace.name;
               return (
-                <ToolbarMenuItem
+                <MenuItem
                   key={choice.value}
                   icon={active ? "check" : "folder"}
                   role="menuitemradio"
@@ -168,7 +168,7 @@ export default function WorkspaceSwitcher({
                       </span>
                     ) : null}
                   </span>
-                </ToolbarMenuItem>
+                </MenuItem>
               );
             })}
           </div>
@@ -177,13 +177,13 @@ export default function WorkspaceSwitcher({
           className="tw:my-1 tw:h-px tw:bg-border-subtle"
           role="separator"
         />
-        <ToolbarMenuItem icon="plus" onClick={() => onNew()}>
+        <MenuItem icon="plus" onClick={() => onNew()}>
           {t("connections.new")}
-        </ToolbarMenuItem>
+        </MenuItem>
         {/* Both commands open surfaces outside this menu, so selection closes the menu
             first and the opened dialog returns focus to the menu trigger. */}
         {context.data?.feature.enabled ? (
-          <ToolbarMenuItem
+          <MenuItem
             icon="folderPlus"
             disabled={auth.data === undefined}
             onClick={() => {
@@ -195,15 +195,15 @@ export default function WorkspaceSwitcher({
             }}
           >
             {t("workspaceAdmin.newWorkspace")}
-          </ToolbarMenuItem>
+          </MenuItem>
         ) : null}
-        {adminScope?.canManage ? (
-          <ToolbarMenuItem
+        {firstAdminSection ? (
+          <MenuItem
             icon="gear"
-            onClick={() => requestWorkspaceAdmin("workspace-members")}
+            onClick={() => requestWorkspaceAdmin(firstAdminSection.id)}
           >
             {t("workspaceAdmin.manage")}
-          </ToolbarMenuItem>
+          </MenuItem>
         ) : null}
       </ToolbarMenu>
       {creatingFor !== null && signedInUserId === creatingFor ? (

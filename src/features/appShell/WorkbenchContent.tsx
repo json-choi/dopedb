@@ -6,6 +6,7 @@ import WorkbenchDocumentStrip from "../../components/WorkbenchDocumentStrip";
 import { Button } from "../../design-system/components/Button";
 import { ModalBackdrop, ModalSurface } from "../../design-system/components/Modal";
 import RenderRecoveryBoundary from "../../design-system/components/RenderRecoveryBoundary";
+import RenderRecoveryFallback from "../../design-system/components/RenderRecoveryFallback";
 import { LoadingLabel } from "../../design-system/components/Status";
 import Skeleton from "../../components/Skeleton";
 import { WorkbenchEmptyState } from "../../design-system/components/Workbench";
@@ -28,7 +29,6 @@ import { localSchemaConnectionPreset } from "../connections/presets";
 import { effectiveSafetySettings } from "../safetySettings/policy";
 import type { SettingsSection } from "../settings/domain";
 import type {
-  WorkspaceAdminDestination,
   WorkspaceAdminSection,
 } from "../workspaceAdmin/sections";
 import type { SqlDocument } from "../sqlDocuments/domain";
@@ -36,6 +36,7 @@ import type { AppUpdaterSnapshot } from "../updater/controller";
 import {
   historyQueryTarget,
   type HistoryQueryTarget,
+  type StableDocumentKind,
   type WorkbenchDocument,
 } from "../workbench/domain";
 import ConnectionPicker from "./ConnectionPicker";
@@ -70,7 +71,6 @@ const BLOCKED_SAFETY_SETTINGS: SafetySettings = {
 
 type WorkbenchContentModel = {
   route: {
-    welcomeOpen: boolean;
     settingsOpen: boolean;
     settingsSection?: SettingsSection;
     /** Active Workspace management section, or null while the dialog is closed. */
@@ -107,7 +107,7 @@ type WorkbenchContentModel = {
 type WorkbenchContentCommands = {
   route: {
     closeSettings: () => void;
-    openWorkspaceAdmin: (destination: WorkspaceAdminDestination) => void;
+    openWorkspaceAdmin: (destination: WorkspaceAdminSection) => void;
     closeWorkspaceAdmin: () => void;
     closeSurface: () => void;
     openSafety: (connectionId: string) => void;
@@ -147,7 +147,7 @@ type WorkbenchContentCommands = {
     setResolveMode: (value: SqlResolveMode) => void;
     persisted: (document: SqlDocument) => void;
     openTable: (connection: ConnectionProfile, table: CatalogTable) => void;
-    openStable: (kind: "schema" | "activity" | "results") => void;
+    openStable: (kind: StableDocumentKind) => void;
     loadSql: (sql: string, target: HistoryQueryTarget) => Promise<void>;
   };
   queryServices: {
@@ -318,7 +318,12 @@ function WorkbenchContentResolved({ model, commands }: Props) {
       <section className="scrollbar-sleek tw:min-h-0 tw:flex-1 tw:overflow-auto tw:bg-background">
         <RenderRecoveryBoundary
           fallback={({ retry }) => (
-            <KnowledgeRecovery onRetry={retry} />
+            <RenderRecoveryFallback
+              title={t("knowledge.renderFailed")}
+              body={t("knowledge.renderFailedBody")}
+              retryLabel={t("knowledge.retry")}
+              onRetry={retry}
+            />
           )}
           resetKeys={[focus.requestId]}
         >
@@ -351,29 +356,33 @@ function WorkbenchContentResolved({ model, commands }: Props) {
     return withDialogs(<WorkbenchLoading />);
   }
 
-  if (route.welcomeOpen || connection.items.length === 0) {
-    return withDialogs(
-      <Onboarding
-        connectionName={selected ? selected.name || selected.database : undefined}
-        guidedDemo={guidedDemo}
-        onResumeGuidedDemo={resumeGuidedDemo}
-        onNewQuery={selected ? commands.documents.newQuery : undefined}
-        creatingDemo={connection.creatingDemo}
-        guidedDemoAvailable={connection.guidedDemoAvailable}
-        onCreateDemoDatabase={commands.connections.createDemo}
-        localDiscovery={
-          connection.items.length === 0 ? localDiscovery : undefined
-        }
-        onUseLocalListener={(listener) =>
-          commands.connections.new({
-            engine: listener.engine,
-            host: listener.host,
-            port: listener.port,
-          })
-        }
-        onNewConnection={() => commands.connections.new()}
-      />,
-    );
+  // The one Onboarding presentation: the `welcome` document tab, or the whole
+  // workbench when no connection exists to host a tab.
+  const onboarding = (
+    <Onboarding
+      connectionName={selected ? selected.name || selected.database : undefined}
+      guidedDemo={guidedDemo}
+      onResumeGuidedDemo={resumeGuidedDemo}
+      onNewQuery={selected ? commands.documents.newQuery : undefined}
+      creatingDemo={connection.creatingDemo}
+      guidedDemoAvailable={connection.guidedDemoAvailable}
+      onCreateDemoDatabase={commands.connections.createDemo}
+      localDiscovery={
+        connection.items.length === 0 ? localDiscovery : undefined
+      }
+      onUseLocalListener={(listener) =>
+        commands.connections.new({
+          engine: listener.engine,
+          host: listener.host,
+          port: listener.port,
+        })
+      }
+      onNewConnection={commands.connections.new}
+    />
+  );
+
+  if (connection.items.length === 0) {
+    return withDialogs(onboarding);
   }
 
   const safetyFallback = connection.safetyError ? (
@@ -435,13 +444,7 @@ function WorkbenchContentResolved({ model, commands }: Props) {
               <Documents key={`${selected.id}:mongo-query`} connection={selected} />
             )
           ) : activeDocument.kind === "welcome" ? (
-            <Onboarding
-              connectionName={selected.name || selected.database}
-              guidedDemo={guidedDemo}
-              onResumeGuidedDemo={resumeGuidedDemo}
-              onNewConnection={() => commands.connections.new()}
-              onNewQuery={commands.documents.newQuery}
-            />
+            onboarding
           ) : activeDocument.kind === "data" ? (
             effectiveSafety ? (
               <TableData
@@ -515,27 +518,5 @@ function WorkbenchContentResolved({ model, commands }: Props) {
       {settingsDialog}
       {workspaceAdminDialog}
     </>
-  );
-}
-
-function KnowledgeRecovery({ onRetry }: { onRetry: () => void }) {
-  const { t } = useI18n();
-  return (
-    <div
-      className="tw:flex tw:h-full tw:min-h-[240px] tw:flex-col tw:items-center tw:justify-center tw:gap-3 tw:p-[var(--ds-pane-pad)] tw:text-center tw:text-sm tw:text-muted-foreground"
-      role="alert"
-    >
-      <Icon className="tw:size-7 tw:text-warning" name="alert" />
-      <strong className="tw:text-title tw:text-foreground">
-        {t("knowledge.renderFailed")}
-      </strong>
-      <p className="tw:m-0 tw:max-w-[420px] tw:leading-body">
-        {t("knowledge.renderFailedBody")}
-      </p>
-      <Button onClick={onRetry} size="compact" variant="primary">
-        <Icon name="refresh" />
-        {t("knowledge.retry")}
-      </Button>
-    </div>
   );
 }

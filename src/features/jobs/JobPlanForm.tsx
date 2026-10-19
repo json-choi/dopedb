@@ -2,6 +2,7 @@
 // in useJobPanelController; this leaf owns only accessible form projection.
 import { Icon } from "../../components/Icon";
 import { Button } from "../../design-system/components/Button";
+import { SegmentedControl } from "../../design-system/components/SegmentedControl";
 import {
   CheckboxField,
   Field,
@@ -34,30 +35,15 @@ export function JobPlanForm({ controller }: { controller: JobPanelController }) 
 
   return (
     <>
-      <div
-        className="tw:grid tw:grid-cols-2 tw:gap-1"
-        role="group"
-        aria-label={t("jobs.kind")}
-      >
-        <Button
-          size="compact"
-          active={kind === "export"}
-          aria-pressed={kind === "export"}
-          onClick={() => commands.resetPlan("export", format)}
-        >
-          <Icon name="download" />
-          {t("jobs.export")}
-        </Button>
-        <Button
-          size="compact"
-          active={kind === "import"}
-          aria-pressed={kind === "import"}
-          onClick={() => commands.resetPlan("import", format)}
-        >
-          <Icon name="upload" />
-          {t("jobs.import")}
-        </Button>
-      </div>
+      <SegmentedControl
+        value={kind}
+        label={t("jobs.kind")}
+        options={[
+          { value: "export", label: t("jobs.export") },
+          { value: "import", label: t("jobs.import") },
+        ]}
+        onChange={(next) => commands.resetPlan(next, format)}
+      />
 
       <div className="tw:grid tw:grid-cols-[minmax(0,1fr)_minmax(112px,0.45fr)] tw:gap-3 tw:border-t tw:border-border-subtle tw:pt-3 tw:@max-[760px]:grid-cols-1">
         <Field label={t("jobs.format")}>

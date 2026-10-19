@@ -3,7 +3,7 @@
 // commands backed by the connection-scoped transaction owner, with the time left
 // before each transaction's automatic rollback.
 import { Icon } from "../../components/Icon";
-import ToolbarMenu from "../../components/ToolbarMenu";
+import { ToolbarMenu } from "../../design-system/components/Menu";
 import { Button } from "../../design-system/components/Button";
 import {
   StatusDot,

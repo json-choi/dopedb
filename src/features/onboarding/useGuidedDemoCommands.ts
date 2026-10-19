@@ -35,7 +35,6 @@ type GuidedDemoCommandsInput = {
   connection: ConnectionProfile | null;
   connections: ConnectionProfile[];
   selectConnection: (connectionId: string) => void;
-  showWelcome: () => void;
   openTable: (connection: ConnectionProfile, table: CatalogTable) => void;
   openAgentTask: (
     connectionId: string,
@@ -53,7 +52,6 @@ export function useGuidedDemoCommands({
   connection,
   connections,
   selectConnection,
-  showWelcome,
   openTable,
   openAgentTask,
   openSafety,
@@ -115,10 +113,7 @@ export function useGuidedDemoCommands({
     openSafety,
     resume:
       demo && connection?.id !== demo.id
-        ? () => {
-            selectConnection(demo.id);
-            showWelcome();
-          }
+        ? () => selectConnection(demo.id)
         : null,
   };
 }

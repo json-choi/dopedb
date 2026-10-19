@@ -221,9 +221,13 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
   한 번 확인하고, 응답한 서버를 engine·host·port가 채워진 새 연결 초안으로 여는
   command로 같은 평평한 목록에 덧붙인다. 감지된 서버가 없거나 확인에 실패하면 그
   사실만 문장으로 표시하고 `새 연결`과 `가이드 데모` command는 그대로 둔다.
-- 시작 화면은 연결 유무와 관계없이 상단 Home command와 Action Search로 다시
-  열 수 있다. 돌아갈 때 기존 쿼리 문서를 삭제하거나 연결을 해제하지 않는다.
-  마지막 연결을 삭제한 뒤에는 이전 Project 화면 대신 시작 화면을 연다.
+- 시작 화면은 선택한 연결의 `welcome` 문서 탭 하나로만 열며 상단 Home command와
+  Action Search로 다시 열 수 있다. 돌아갈 때 기존 쿼리 문서를 삭제하거나 연결을
+  해제하지 않는다. 연결이 하나도 없으면 탭을 둘 연결이 없으므로 같은 시작 화면을
+  workbench의 빈 상태로 표시한다. 마지막 연결을 삭제한 뒤에는 이 빈 상태로 돌아간다.
+- 실행 기록(Activity) 문서의 진입점은 title toolbar의 기록 버튼 하나와 Action
+  Search이며 이름은 `실행 기록`으로 통일한다. 읽지 않은 작업 표시는 그 버튼에
+  붙는다. 상태 표시줄에는 별도 알림 버튼을 두지 않는다.
 - 오른쪽 Agent surface는 한 Project의 명시적으로 선택된 resource set에 고정된
   대화, 도구 진행, 승인과 복구를 소유한다. context control은 Project 안의 DB,
   BigQuery, GitHub source revision을 같은 평평한 선택 surface에서 개별 또는 다중
@@ -499,7 +503,7 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
 | PD-23 | authentication/save policy 선택 | `구현 안 함` | engine마다 검증된 최소 입력 경로 하나를 유지한다. |
 | PD-24 | status breadcrumb 탐색 | `구현` | 현재 문맥을 표시하고 Explorer의 정확한 문맥을 reveal한다. |
 | PD-25 | 전역 manual transaction 상태 | `구현` | 장기 transaction을 발견하고 해당 연결에서 commit/rollback하도록 한다. 만료 5분 전에 경고하고, 열린 transaction이 있으면 창 닫기와 앱 종료 전에 롤백 확인을 받으며 어떤 종료 경로도 암묵적으로 commit하지 않는다. |
-| PD-26 | data grid quick-filter/history | `구현 안 함` | 기존 column filter와 WHERE/ORDER BY, Agent 재조회 경로를 사용한다. |
+| PD-26 | data grid quick-filter/history | `구현 안 함` | 기존 column filter와 WHERE/ORDER BY, Agent 재조회 경로를 사용한다. 쿼리 결과 view에도 받은 행 substring quick-filter를 두지 않는다. |
 | PD-27 | 범용 workspace settings bag | `구현 안 함` | 공유 상태는 connection과 Analysis Article 같은 실제 revision owner에 둔다. |
 | PD-28 | safe branch checkpoint/restore | `구현` | 승인된 격리 생성, connection revision 전환, 복귀·폐기와 audit를 하나의 durable operation으로 묶는다. |
 | PD-29 | engine별 native query cancellation | `구현 안 함` | exact operation signal, timeout, connection-close fallback과 unknown outcome 보존을 유지한다. |
@@ -520,6 +524,7 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
 | PD-44 | 로컬 데이터베이스 리스너 감지 | `구현` | 첫 연결의 입력을 줄이기 위해 사용자가 명시적으로 실행한 1회 감지만 수행한다. 대상은 loopback 주소와 engine별 기본 포트의 닫힌 allowlist(PostgreSQL 5432, MySQL/MariaDB 3306, MongoDB 27017)로 한정하고 임의 host, 포트 범위, 로컬 네트워크 대역, container runtime, 파일 시스템을 탐색하지 않는다. 각 후보는 자격 증명 없이 protocol handshake만 수행해 engine을, 프로토콜이 인증 전에 알려 주는 경우에만 서버 버전을 확인한 뒤 즉시 닫으며 인증 시도, startup 패킷, query를 보내지 않는다. `~/.pgpass`, `~/.my.cnf`, `pg_service.conf`, 환경 변수, 프로젝트 `.env` 같은 클라이언트 설정과 자격 증명 저장소는 읽지 않는다. 감지 결과는 engine, host, port, driver만 편집 가능한 초안에 채우는 제안이며 username, 비밀번호, database는 사람이 입력하거나 기존 database discovery가 채운다. 감지는 연결을 저장하거나 자동으로 접속하지 않고 백그라운드 polling과 주기적 재감지를 하지 않는다. 미설치와 감지 실패는 정확한 빈 상태로 표시하고 기존 수동 입력 경로를 막지 않는다. |
 | PD-45 | 로컬 진단 로그와 버그 제보 | `구현` | Settings → 고급에서 명시적으로 켠 뒤 Desktop의 Rust 진단 이벤트, frontend 오류와 IPC 결과·시간을 bounded process-memory에만 수집한다. 기본은 꺼짐이며 끄기·종료 시 비우고 파일·서버에 전송하지 않는다. 인증 비밀값과 명시적 SQL·결과·Agent payload는 제외하되 호스트·DB 이름·사용자명·경로 같은 내부 정보는 포함될 수 있다. 조회·비우기와 개인정보 경고 확인 뒤 수동 복사·GitHub 이슈 작성 페이지 열기만 제공하며 자동 첨부·제출과 완전한 개인정보 자동 마스킹은 제공하지 않는다. |
 | PD-46 | Desktop workspace 관리 | `구현` | workspace 생성, 구성원 초대·역할·제거, DB grant·팀 읽기 공유·연결 편집 충돌, 공급자 계정 승인·managed DB 등록/복구·Neon branch, 소유자의 backup·key rotation·retention·삭제 예약, 계정 session 종료와 삭제 예약 취소를 Desktop이 소유한다. workspace 범위 관리는 앱 `Settings`와 분리된 `워크스페이스 관리` dialog가, 계정 session 종료와 삭제 예약 취소는 `Settings → 계정`이 맡는다. 데이터 소스 카탈로그의 `공유 DB 추가`는 관리자·소유자에게만 그 dialog의 DB 추가를 여는 바로가기다. Rust가 계정별 Bearer session으로 control plane의 닫힌 작업 목록만 호출하고 경로 식별자를 검증하며 token·provider state·입력한 provider secret을 WebView 캐시나 로컬 저장소에 남기지 않는다. 브라우저 OAuth가 필요한 공급자는 control plane origin의 시작 확인 페이지만 열고 완료 뒤 Desktop에서 이어 간다. Workspace Web의 관리 화면은 제거하고 로그인·초대 수락·OAuth 시작 확인과 완료 안내·공개 Article만 남긴다. 권한이 없는 구성원에게는 관리 진입점과 section을 비활성 항목 없이 숨긴다. |
+| PD-47 | Schema diagram 문서 | `구현` | 선택한 연결의 스키마 다이어그램(`schema` 문서)은 핵심 기능이 아닌 보조 surface다. 진입점은 연결 행의 ⋮ 메뉴와 Action Search의 `스키마 다이어그램` command뿐이며 title toolbar, 상태 표시줄, Welcome에는 launcher를 두지 않는다. 읽기 전용 조회 화면이고 DDL 작성·실행 command를 추가하지 않는다. |
 
 
 ## 변경 규칙

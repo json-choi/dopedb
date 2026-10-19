@@ -1,15 +1,15 @@
 // Presents the local diagnostics owner and explicit support-sharing warnings.
 // Collection state belongs to Rust; this surface never uploads or submits logs.
 import { Button } from "../../../design-system/components/Button";
+import ConfirmDialog from "../../../components/ConfirmDialog";
 import { CheckboxField } from "../../../design-system/components/FormControls";
-import { ModalBackdrop, ModalFooter, ModalHeader, ModalSurface } from "../../../design-system/components/Modal";
 import { SettingsGroup } from "../../../design-system/components/Settings";
 import { InlineNotice } from "../../../design-system/components/Status";
 import { formatDiagnosticLog } from "../../../features/diagnostics/domain";
 import { useDiagnostics } from "../../../features/diagnostics/useDiagnostics";
 import { useI18n } from "../../../lib/i18n";
 
-export default function Diagnostics() {
+export default function DiagnosticBundle() {
   const { t } = useI18n();
   const diagnostics = useDiagnostics();
   const { query, toggle, clear, sharing, sharingBusy, actionStatus } = diagnostics;
@@ -72,31 +72,24 @@ export default function Diagnostics() {
         </p> : null}
       </div>
       {sharing ? (
-        <ModalBackdrop onMouseDown={(event) => {
-          if (event.target === event.currentTarget) diagnostics.cancelShare();
-        }}>
-          <ModalSurface size="alert" role="alertdialog" aria-labelledby="diagnostic-share-title"
-            aria-describedby="diagnostic-share-body" onRequestClose={diagnostics.cancelShare}
-            dismissible={!sharingBusy}>
-            <ModalHeader title={t("settings.diagnosticShareTitle")} titleId="diagnostic-share-title" />
-            <div id="diagnostic-share-body" className="tw:grid tw:gap-3 tw:p-4 tw:text-sm tw:leading-body">
-              <p className="tw:m-0">{t("settings.diagnosticPrivacyBody")}</p>
-              <p className="tw:m-0 tw:font-semibold">{t("settings.diagnosticPublicBody")}</p>
-              <p className="tw:m-0 tw:text-xs tw:text-muted-foreground">{t("settings.diagnosticManualSharing")}</p>
-              {actionStatus === "failed" ? <p role="alert" className="tw:m-0 tw:text-danger">
+        <ConfirmDialog
+          title={t("settings.diagnosticShareTitle")}
+          description={
+            <>
+              <span>{t("settings.diagnosticPrivacyBody")}</span>
+              <strong className="tw:font-semibold">{t("settings.diagnosticPublicBody")}</strong>
+              <small className="tw:text-xs tw:text-muted-foreground">{t("settings.diagnosticManualSharing")}</small>
+              {actionStatus === "failed" ? <span role="alert" className="tw:text-danger">
                 {t("settings.diagnosticFailed")}
-              </p> : null}
-            </div>
-            <ModalFooter>
-              <Button autoFocus disabled={sharingBusy} onClick={diagnostics.cancelShare}>
-                {t("common.cancel")}
-              </Button>
-              <Button variant="primary" disabled={sharingBusy} onClick={() => void diagnostics.confirmShare()}>
-                {t(sharing === "copy" ? "settings.diagnosticConfirmCopy" : "settings.diagnosticConfirmIssue")}
-              </Button>
-            </ModalFooter>
-          </ModalSurface>
-        </ModalBackdrop>
+              </span> : null}
+            </>
+          }
+          confirmLabel={t(sharing === "copy" ? "settings.diagnosticConfirmCopy" : "settings.diagnosticConfirmIssue")}
+          confirmVariant="primary"
+          pending={sharingBusy}
+          onCancel={() => { if (!sharingBusy) diagnostics.cancelShare(); }}
+          onConfirm={() => void diagnostics.confirmShare()}
+        />
       ) : null}
     </SettingsGroup>
   );

@@ -7,7 +7,12 @@ export type RowEditorState = {
   initial: Record<string, string | null>;
 };
 
-export type SelectedCell = { value: unknown; column: string };
+export type SelectedCell = {
+  value: unknown;
+  column: string;
+  /** Original size of a value shortened to fit its result page. */
+  truncatedBytes: number | null;
+};
 
 export type StagedWrite = {
   id: string;

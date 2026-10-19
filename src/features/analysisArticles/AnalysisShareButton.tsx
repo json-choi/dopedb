@@ -4,11 +4,13 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Icon } from "../../components/Icon";
 import { Button } from "../../design-system/components/Button";
+import { CopyLinkField } from "../../design-system/components/CopyLinkField";
 import { Field, TextInput } from "../../design-system/components/FormControls";
 import { ModalBackdrop, ModalFooter, ModalHeader, ModalSurface } from "../../design-system/components/Modal";
 import { InlineNotice, LoadingLabel } from "../../design-system/components/Status";
 import { useI18n } from "../../lib/i18n";
 import { useCatalogScope } from "../../lib/queries";
+import { useLinkCopy } from "../../lib/useLinkCopy";
 import { errMessage } from "../../ipc/types";
 import { createArticleInvitation, getArticleSharing, revokeArticleInvitation } from "./tauriAdapter";
 
@@ -35,7 +37,7 @@ function ShareDialog({ scope, scopeKey, onClose }: {
   const sharing = useQuery({ queryKey: key, queryFn: () => getArticleSharing(scope), retry: false });
   const [email, setEmail] = useState("");
   const [createdLink, setCreatedLink] = useState<string | null>(null);
-  const [feedback, setFeedback] = useState<string | null>(null);
+  const rowCopy = useLinkCopy();
   const [error, setError] = useState<string | null>(null);
   const invite = useMutation({
     mutationFn: () => createArticleInvitation(scope, email.trim()),
@@ -47,10 +49,6 @@ function ShareDialog({ scope, scopeKey, onClose }: {
     onSuccess: async () => { setCreatedLink(null); setError(null); await queryClient.invalidateQueries({ queryKey: key }); },
     onError: (reason) => setError(errMessage(reason)),
   });
-  async function copy(url: string) {
-    try { await navigator.clipboard.writeText(url); setFeedback(t("analysis.copiedLink")); setError(null); }
-    catch (reason) { setError(errMessage(reason)); }
-  }
   const busy = invite.isPending || revoke.isPending;
   const data = sharing.data;
   return <ModalBackdrop onMouseDown={onClose}>
@@ -63,21 +61,19 @@ function ShareDialog({ scope, scopeKey, onClose }: {
           <section className="tw:grid tw:gap-2">
             <strong className="tw:text-sm">{t("analysis.shareExisting")}</strong>
             <p className="tw:m-0 tw:text-xs tw:leading-body tw:text-muted-foreground">{t("analysis.shareExistingBody")}</p>
-            <TextInput aria-label={t("analysis.shareExisting")} value={data.url} readOnly onFocus={(event) => event.currentTarget.select()} />
-            <Button onClick={() => void copy(data.url)}><Icon name="copy" />{t("analysis.copyLink")}</Button>
+            <CopyLinkField url={data.url} label={t("analysis.shareExisting")} copyLabel={t("analysis.copyLink")} copiedLabel={t("analysis.copiedLink")} failedLabel={t("analysis.copyFailed")} />
           </section>
           {data.canInvite ? <section className="tw:grid tw:gap-3 tw:border-t tw:border-border-subtle tw:pt-4">
             <strong className="tw:text-sm">{t("analysis.inviteTitle")}</strong>
             <p className="tw:m-0 tw:text-xs tw:leading-body tw:text-muted-foreground">{data.connectionName} · {t("analysis.inviteScope")}</p>
             {data.credentialMode !== "managed" ? <InlineNotice icon="alert" tone="warning">{t("analysis.inviteLocal")}</InlineNotice> : null}
-            <form className="tw:grid tw:gap-3" onSubmit={(event) => { event.preventDefault(); setFeedback(null); invite.mutate(); }}>
+            <form className="tw:grid tw:gap-3" onSubmit={(event) => { event.preventDefault(); invite.mutate(); }}>
               <Field label={t("analysis.inviteEmail")}><TextInput type="email" required maxLength={254} value={email} disabled={busy} onChange={(event) => { setEmail(event.target.value); setCreatedLink(null); }} /></Field>
               <Button type="submit" variant="primary" disabled={busy || !email.trim() || !!createdLink}>{invite.isPending ? t("analysis.creatingInvite") : t("analysis.createInvite")}</Button>
             </form>
             {createdLink ? <div className="tw:grid tw:gap-2">
               <p className="tw:m-0 tw:text-xs tw:leading-body tw:text-muted-foreground">{t("analysis.inviteLink")}</p>
-              <TextInput aria-label={t("analysis.inviteLink")} value={createdLink} readOnly onFocus={(event) => event.currentTarget.select()} />
-              <Button onClick={() => void copy(createdLink)}><Icon name="copy" />{t("analysis.copyLink")}</Button>
+              <CopyLinkField url={createdLink} label={t("analysis.inviteLink")} copyLabel={t("analysis.copyLink")} copiedLabel={t("analysis.copiedLink")} failedLabel={t("analysis.copyFailed")} />
             </div> : null}
             {data.invitations.length > 0 ? <>
               <strong className="tw:mt-2 tw:text-xs">{t("analysis.inviteHistory")}</strong>
@@ -87,7 +83,7 @@ function ShareDialog({ scope, scopeKey, onClose }: {
                   const status = invitation.acceptedAt ? t("analysis.inviteAccepted") : invitation.revokedAt ? t("analysis.inviteRevoked") : !active ? t("analysis.inviteExpired") : t("analysis.invitePending", { date: new Date(invitation.expiresAt).toLocaleDateString(lang) });
                   return <li key={invitation.id} className="tw:flex tw:flex-wrap tw:items-center tw:justify-between tw:gap-2">
                     <div className="tw:grid tw:min-w-0 tw:gap-1"><span className="tw:break-all tw:text-xs">{invitation.recipientEmail}</span><span className="tw:text-2xs tw:text-muted-foreground">{status}</span></div>
-                    {active ? <div className="tw:flex tw:gap-1"><Button size="compact" aria-label={`${t("analysis.copyLink")} · ${invitation.recipientEmail}`} disabled={busy} onClick={() => void copy(`${new URL(data.url).origin}/article-invitations/${invitation.id}`)}>{t("analysis.copyLink")}</Button><Button size="compact" disabled={busy} onClick={() => revoke.mutate(invitation.id)}>{t("analysis.cancelInvite")}</Button></div> : null}
+                    {active ? <div className="tw:flex tw:gap-1"><Button size="compact" aria-label={`${t("analysis.copyLink")} · ${invitation.recipientEmail}`} disabled={busy} onClick={() => void rowCopy.copyLink(invitation.id, `${new URL(data.url).origin}/article-invitations/${invitation.id}`)}>{t("analysis.copyLink")}</Button><Button size="compact" disabled={busy} onClick={() => revoke.mutate(invitation.id)}>{t("analysis.cancelInvite")}</Button></div> : null}
                   </li>;
                 })}
               </ul>
@@ -95,7 +91,8 @@ function ShareDialog({ scope, scopeKey, onClose }: {
             </> : null}
           </section> : <p className="tw:m-0 tw:text-xs tw:leading-body tw:text-muted-foreground">{t("analysis.inviteAdminOnly")}</p>}
         </> : null}
-        {feedback ? <p className="tw:m-0 tw:text-xs tw:text-success" role="status">{feedback}</p> : null}
+        {rowCopy.state?.status === "copied" ? <p className="tw:m-0 tw:text-xs tw:text-success" role="status">{t("analysis.copiedLink")}</p> : null}
+        {rowCopy.state?.status === "failed" ? <InlineNotice icon="alert" tone="danger" role="alert">{t("analysis.copyFailed")}</InlineNotice> : null}
         {error ? <InlineNotice icon="alert" tone="danger" role="alert">{error}</InlineNotice> : null}
       </div>
       <ModalFooter><Button onClick={onClose}>{t("common.close")}</Button></ModalFooter>

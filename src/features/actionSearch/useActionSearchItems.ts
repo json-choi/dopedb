@@ -6,8 +6,9 @@ import { useI18n } from "../../lib/i18n";
 import type { CatalogScope } from "../../lib/queries";
 import { navigationTableFromOverview } from "../catalog/tauriAdapter";
 import { filterCatalogOverview } from "../catalogExplorer/scopeFilter";
+import { connectionSummary } from "../connections/connectionSummary";
 import { databaseDisplayLabel, type ConnectionProfile } from "../connections/domain";
-import { settingsSearchKeywords, type SettingsSection } from "../settings/domain";
+import { settingsSearchKeywords, settingsSections, type SettingsSection } from "../settings/domain";
 import { useWorkspaceAdminScope } from "../workspaceAdmin/scope";
 import { workspaceAdminSectionsFor, type WorkspaceAdminSection } from "../workspaceAdmin/sections";
 import { workspaceAuthStateQuery } from "../workspaces/queries";
@@ -29,6 +30,8 @@ type ActionSearchItemsInput = {
     newConnection: () => void;
     newQuery: () => void | Promise<void>;
     openResults: () => void;
+    openSchema: () => void;
+    openActivity: () => void;
     toggleDatabaseExplorer: () => void;
     showLocalHistory: () => void;
     openAgent: () => void;
@@ -93,7 +96,6 @@ export function useActionSearchItems({
       kind: "action",
       label: t("ide.action.newQuery"),
       keywords: ["sql", "console", "query", "쿼리"],
-      shortcut: "⌘N",
       disabled: !selected || !supportsSql,
       run: commands.newQuery,
     },
@@ -121,6 +123,14 @@ export function useActionSearchItems({
       run: commands.openResults,
     },
     {
+      id: "action:activity", kind: "action", label: t("tabs.activity"), disabled: !selected,
+      keywords: ["history", "audit", "operations", "기록", "이력", "감사"], run: commands.openActivity,
+    },
+    {
+      id: "action:schema-diagram", kind: "action", label: t("tabs.schema"), disabled: !selected || !supportsSql,
+      keywords: ["schema", "erd", "diagram", "스키마", "다이어그램"], run: commands.openSchema,
+    },
+    {
       id: "action:ai-chat",
       kind: "action",
       label: t("agent.acpTitle"),
@@ -133,7 +143,6 @@ export function useActionSearchItems({
       kind: "action",
       label: t("common.settings"),
       keywords: ["preferences", "설정"],
-      shortcut: "⌘,",
       run: () => commands.openSettings(),
     },
   ];
@@ -143,15 +152,7 @@ export function useActionSearchItems({
       id: `connection:${connection.id}`,
       kind: "connection",
       label: connection.name || t("app.unnamed"),
-      detail: [
-        connection.engine,
-        connection.providerTarget?.branchName ??
-          connection.providerTarget?.branchId,
-        connection.host,
-        visibleDatabase(connection, connection.database),
-      ]
-        .filter(Boolean)
-        .join(" · "),
+      detail: connectionSummary(connection),
       keywords: [
         connection.provider,
         connection.providerTarget?.branchId ?? "",
@@ -209,26 +210,14 @@ export function useActionSearchItems({
     },
   );
 
-  const settings: ActionSearchItem[] = (
-    [
-      ["agent-tools", t("settings.agentTools"), false],
-      ["cli", t("settings.cli"), false],
-      ["privacy", t("settings.privacy"), false],
-      ["safety", t("settings.safety"), !selected],
-      ["connection", t("settings.connectionEnvironment"), !selected],
-      ["language", t("settings.languageTitle"), false],
-      ["appearance", t("settings.appearance"), false],
-      ["updates", t("settings.updates"), false],
-      ...(signedIn
-        ? ([["account", t("workspaceAdmin.account"), false]] as const)
-        : []),
-    ] satisfies ReadonlyArray<readonly [SettingsSection, string, boolean]>
-  ).map(([section, label, disabled]) => ({
+  const settings: ActionSearchItem[] = settingsSections
+    .filter((section) => !section.needsAccount || signedIn)
+    .map(({ id: section, label, needsConnection }): ActionSearchItem => ({
     id: `setting:${section}`,
     kind: "setting",
-    label,
+    label: t(label),
     detail: t("common.settings"),
-    disabled,
+    disabled: Boolean(needsConnection) && !selected,
     keywords: [section, settingsSearchKeywords[section]],
     run: () => commands.openSettings(section),
   }));

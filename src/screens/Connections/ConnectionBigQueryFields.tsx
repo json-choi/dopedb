@@ -19,6 +19,7 @@ import { bigQueryResourceInputMode } from "../../features/connections/bigQueryOn
 import type { BigQueryAuthMode } from "../../features/connections/domain";
 import type { ConnectionEditorController } from "../../features/connections/useConnectionEditorController";
 import { useI18n } from "../../lib/i18n";
+import { ResourceStatus } from "./ResourceStatus";
 
 type Controller = ConnectionEditorController;
 
@@ -175,33 +176,20 @@ export function ConnectionBigQueryFields({
           />
         )}
         {!isSharedTemplate ? <div id="connection-bigquery-project-status" className="tw:grid tw:gap-1.5" aria-live="polite">
-        {!isSharedTemplate && bigQuery.projectsError ? (
-          <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
-            <p
-              className="tw:m-0 tw:text-xs tw:leading-body tw:text-danger"
-              role="alert"
-            >
-              {bigQuery.projectsError}
-            </p>
-            <Button size="xs" aria-label={`${t("common.refresh")}: ${t("connections.bigQueryProjectId")}`} onClick={bigQuery.refreshProjects}>
-              {t("common.refresh")}
-            </Button>
-          </div>
-        ) : null}
-        {!isSharedTemplate &&
-        bigQuery.auth?.authenticated &&
-        bigQuery.projectsLoaded &&
-        bigQuery.projects.length === 0 &&
-        !bigQuery.projectsError ? (
-          <span className="tw:text-xs tw:text-muted-foreground" role="status">
-            {t("connections.bigQueryNoProjects")}
-          </span>
-        ) : null}
-        {!isSharedTemplate && bigQuery.projectsPending ? (
-          <span className="tw:text-xs tw:text-muted-foreground" role="status">
-            {t("connections.bigQueryProjectsLoading")}
-          </span>
-        ) : null}
+        <ResourceStatus
+          pending={bigQuery.projectsPending}
+          empty={
+            !!bigQuery.auth?.authenticated &&
+            bigQuery.projectsLoaded &&
+            bigQuery.projects.length === 0
+          }
+          error={bigQuery.projectsError}
+          loadingLabel={t("connections.bigQueryProjectsLoading")}
+          emptyLabel={t("connections.bigQueryNoProjects")}
+          refreshLabel={t("common.refresh")}
+          refreshAriaLabel={`${t("common.refresh")}: ${t("connections.bigQueryProjectId")}`}
+          onRefresh={bigQuery.refreshProjects}
+        />
         </div> : null}
         </>}
       </PropertyRow>
@@ -248,33 +236,20 @@ export function ConnectionBigQueryFields({
           />
         )}
         {!isSharedTemplate ? <div id="connection-bigquery-dataset-status" className="tw:grid tw:gap-1.5" aria-live="polite">
-        {!isSharedTemplate && bigQuery.datasetsError ? (
-          <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
-            <p
-              className="tw:m-0 tw:text-xs tw:leading-body tw:text-danger"
-              role="alert"
-            >
-              {bigQuery.datasetsError}
-            </p>
-            <Button size="xs" aria-label={`${t("common.refresh")}: ${t("connections.bigQueryDataset")}`} onClick={bigQuery.refreshDatasets}>
-              {t("common.refresh")}
-            </Button>
-          </div>
-        ) : null}
-        {!isSharedTemplate &&
-        form.host.trim() &&
-        bigQuery.datasetsLoaded &&
-        bigQuery.datasets.length === 0 &&
-        !bigQuery.datasetsError ? (
-          <span className="tw:text-xs tw:text-muted-foreground" role="status">
-            {t("connections.bigQueryNoDatasets")}
-          </span>
-        ) : null}
-        {!isSharedTemplate && bigQuery.datasetsPending ? (
-          <span className="tw:text-xs tw:text-muted-foreground" role="status">
-            {t("connections.bigQueryDatasetsLoading")}
-          </span>
-        ) : null}
+        <ResourceStatus
+          pending={bigQuery.datasetsPending}
+          empty={
+            !!form.host.trim() &&
+            bigQuery.datasetsLoaded &&
+            bigQuery.datasets.length === 0
+          }
+          error={bigQuery.datasetsError}
+          loadingLabel={t("connections.bigQueryDatasetsLoading")}
+          emptyLabel={t("connections.bigQueryNoDatasets")}
+          refreshLabel={t("common.refresh")}
+          refreshAriaLabel={`${t("common.refresh")}: ${t("connections.bigQueryDataset")}`}
+          onRefresh={bigQuery.refreshDatasets}
+        />
         </div> : null}
         </>}
       </PropertyRow>

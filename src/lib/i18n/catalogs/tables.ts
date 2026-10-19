@@ -41,9 +41,6 @@ export const tablesCatalog = defineCatalog(
     "tables.expressionTooLong": "The expression is too long.",
     "tables.expressionUnbalanced":
       "Close every quote, identifier and parenthesis before applying.",
-    "tables.exportCsv": "Export CSV",
-    "tables.exportJson": "Export JSON",
-    "tables.exportPageTitle": "Exports the current page",
     "tables.databaseWhere": "DB query · WHERE",
     "tables.databaseFilters": "DB conditions {count}",
     "tables.filterState": "DB column conditions",
@@ -138,9 +135,6 @@ export const tablesCatalog = defineCatalog(
     "tables.expressionTooLong": "표현식이 너무 깁니다.",
     "tables.expressionUnbalanced":
       "적용하기 전에 따옴표, 식별자, 괄호를 모두 닫으세요.",
-    "tables.exportCsv": "CSV 내보내기",
-    "tables.exportJson": "JSON 내보내기",
-    "tables.exportPageTitle": "현재 페이지를 내보냅니다",
     "tables.databaseWhere": "DB 조회 · WHERE",
     "tables.databaseFilters": "DB 조회 조건 {count}개",
     "tables.filterState": "DB 컬럼 조회 조건",

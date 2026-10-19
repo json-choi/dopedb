@@ -96,6 +96,7 @@ import workspaceRevocationGatesSource from "../../../workspace-cloud/lib/revocat
 import workspaceSchemaSource from "../../../workspace-cloud/lib/d1/schema/leases.ts?raw";
 import workspaceVersioningStoreSource from "../../../workspace-cloud/lib/workspace-versioning-store.ts?raw";
 import workspaceSnapshotRestoreSource from "../../../workspace-cloud/lib/workspace-snapshot-restore.ts?raw";
+import { settingsSections } from "../settings/domain";
 import desktopSettingsSource from "../../../src/screens/Settings/index.tsx?raw";
 import workspaceAdminDialogSource from "../../../src/screens/WorkspaceAdmin/index.tsx?raw";
 import sectionDialogSource from "../../../src/design-system/components/SectionDialog.tsx?raw";
@@ -2752,7 +2753,7 @@ describe("provider credential Tauri adapter", () => {
     expect(sectionDialogSource).toContain(
       'aria-current={active === entry.id ? "page" : undefined}',
     );
-    expect(desktopSettingsSource).toMatch(/entry\(\s*"safety",[\s\S]*?"dataSource",\s*\)/);
+    expect(settingsSections.find((section) => section.id === "safety")?.group).toBe("dataSource");
     expect(desktopSettingsSource).toContain('t("settings.selectConnection")');
     expect(workspaceSnapshotRestoreSource).toContain("readonlyDefault: true");
     expect(workspaceSnapshotRestoreSource).toContain("allowWrites: false");

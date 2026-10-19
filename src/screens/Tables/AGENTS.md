@@ -13,12 +13,12 @@ edit-proposal flows even though they share toolbar/pager/side-panel pieces.
 | File | Description |
 |------|-------------|
 | `index.tsx` | Default-exported `TableData`: routes to `MongoTableData` for document engines (`isDocumentEngine`) or `SqlTableData` otherwise. |
+| `DdlModal.tsx` | Default-exported `DdlModal` — read-only DDL viewer dialog backed by `features/catalog/useTableDdl`, opened from `SqlTableData`. |
 | `SqlTableData.tsx` | SQL table query, paging, filtering, and staged row-edit controller; proposes changes via `features/tableData/tauriAdapter` and runs approved scripts via `features/queries/tauriAdapter`. |
 | `MongoTableData.tsx` | MongoDB collection paging/count via `documentCountQuery`/`documentRowsQuery`, converts documents to grid rows with `lib/documentGrid`. |
 | `TableToolbar.tsx` | Toolbar: export (CSV/JSON via `lib/export`), pager, manual transaction controls. |
 | `TableExpressionBar.tsx` | Grid expression (filter/sort) input fields validated by `lib/sqlBuild`'s `gridExpressionIssue`. |
 | `TableSidePanel.tsx` | Row/cell inspector and `RowEditor` host for staged writes and pending deletes. |
-| `TableStructure.tsx` | Read-only column/PK/nullable structure table for a `CatalogTable`. |
 | `Pager.tsx` | Shared pagination control (page/pageSize/total/hasMore) used by both engine variants and the toolbar. |
 
 ## For AI Agents

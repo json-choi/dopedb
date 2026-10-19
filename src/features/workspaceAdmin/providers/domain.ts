@@ -2,6 +2,7 @@
 // accounts, managed connections, discovered resources, Neon bootstrap and Google
 // Cloud setup responses. Pure functions only; no I/O or presentation copy.
 import type { VaultAppRoleConfiguration } from "../domain";
+import { formatAdminDate } from "../dateFormat";
 
 export type ResourceLevel = { key: string; kind: string; label: string };
 export type Provider = {
@@ -448,11 +449,11 @@ export function gcpActiveLeaseRetryMessage(
   const replacements = {
     count: String(conflict.activeLeaseCount),
     minutes: String(Math.max(1, Math.ceil((retryAt - now) / (60 * 1_000)))),
-    time: new Intl.DateTimeFormat(locale === "ko" ? "ko-KR" : "en-US", {
+    time: formatAdminDate(retryAt, locale, {
       hour: "numeric",
       minute: "2-digit",
       second: "2-digit",
-    }).format(new Date(retryAt)),
+    }),
   };
   return Object.entries(replacements).reduce(
     (message, [key, replacement]) => message.split(`{${key}}`).join(replacement),

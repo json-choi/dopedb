@@ -1,12 +1,12 @@
 // Presents the immutable external Agent start scope and reconfirmation action.
 import { useState } from "react";
 
-import { Icon } from "../../components/Icon";
 import { Button } from "../../design-system/components/Button";
 import { InlineNotice } from "../../design-system/components/Status";
 import { useI18n } from "../../lib/i18n";
 import { databaseEngineLabel, type ConnectionId } from "../connections/domain";
 import { githubSourceRevisionLabel } from "../knowledge/presentation";
+import { AgentResourceChoiceRow } from "./AgentResourceChoice";
 import type { ExternalAgentRequestSummary } from "./externalAgentDomain";
 import {
   externalAgentResourceBoundaries,
@@ -134,44 +134,32 @@ function ResourceReviewList({
   return (
     <div className="tw:grid tw:gap-2">
       {databases.map((database) => (
-        <div
+        <AgentResourceChoiceRow
           key={database.connectionId}
-          className="tw:flex tw:items-center tw:gap-3 tw:rounded-md tw:border tw:border-border-subtle tw:bg-card tw:px-3 tw:py-2"
-        >
-          <Icon name="database" className="tw:text-muted-foreground" />
-          <span className="tw:grid tw:min-w-0 tw:flex-1">
-            <span className="tw:truncate tw:text-sm tw:font-medium">
-              {database.databaseName}
+          layout="card"
+          icon="database"
+          label={database.databaseName}
+          detail={t("agent.externalDatabaseRevision", {
+            engine: databaseEngineLabel(database.engine),
+            revision: database.connectionRevision,
+          })}
+          suffix={
+            <span className="tw:text-muted-foreground">
+              {database.connectionId === writeConnectionId
+                ? t("agent.externalWriteTarget")
+                : t("agent.acpReadOnlyContext")}
             </span>
-            <span className="tw:truncate tw:text-xs tw:text-muted-foreground">
-              {t("agent.externalDatabaseRevision", {
-                engine: databaseEngineLabel(database.engine),
-                revision: database.connectionRevision,
-              })}
-            </span>
-          </span>
-          <span className="tw:max-w-[40%] tw:shrink-0 tw:text-xs tw:text-muted-foreground">
-            {database.connectionId === writeConnectionId
-              ? t("agent.externalWriteTarget")
-              : t("agent.acpReadOnlyContext")}
-          </span>
-        </div>
+          }
+        />
       ))}
       {sources.map((source) => (
-        <div
+        <AgentResourceChoiceRow
           key={source.sourceId}
-          className="tw:flex tw:items-center tw:gap-3 tw:rounded-md tw:border tw:border-border-subtle tw:bg-card tw:px-3 tw:py-2"
-        >
-          <Icon name="branch" className="tw:text-muted-foreground" />
-          <span className="tw:grid tw:min-w-0 tw:flex-1">
-            <span className="tw:truncate tw:text-sm tw:font-medium">
-              {source.displayName}
-            </span>
-            <span className="tw:truncate tw:text-xs tw:text-muted-foreground">
-              {githubSourceRevisionLabel(source.repository, source.commitSha)}
-            </span>
-          </span>
-        </div>
+          layout="card"
+          icon="branch"
+          label={source.displayName}
+          detail={githubSourceRevisionLabel(source.repository, source.commitSha)}
+        />
       ))}
     </div>
   );

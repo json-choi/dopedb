@@ -11,15 +11,11 @@ import { useConnectionEnvironmentContext } from "./useConnectionEnvironmentConte
 import { useCatalogScope } from "../../lib/queries";
 import { useToast } from "../../components/Toast";
 import { refreshDesktopConnections } from "../workspaceAdmin/desktopConnections";
-import { requestWorkspaceAdmin } from "../workspaceAdmin/navigationRequest";
-import {
-  deleteWorkspaceConnection,
-  updateWorkspaceConnection,
-} from "../workspaces/tauriAdapter";
+import { requestAccountSettings } from "../settings/accountRequest";
+import { updateWorkspaceConnection } from "../workspaces/tauriAdapter";
 import { markConnectionEditorReturn } from "./connectionEditorShellBridge";
 import type { ConnectionTab } from "./connectionEditorModel";
 import {
-  connectionDeleteFailureMessage,
   connectionSaveFailureMessage,
   connectionSaveNeedsPassword,
 } from "./connectionTestFailure";
@@ -29,7 +25,7 @@ import { defaultConnectionName } from "./presets";
 import {
   CONNECTION_INPUT_MODE_PARAMETER,
 } from "./options";
-import { deleteConnection, upsertConnection } from "./tauriAdapter";
+import { upsertConnection } from "./tauriAdapter";
 import type { BigQueryOnboardingController } from "./useBigQueryOnboardingController";
 import type { CloudflareD1OnboardingController } from "./useCloudflareD1OnboardingController";
 import type { ConnectionCatalogController } from "./useConnectionCatalogController";
@@ -37,6 +33,7 @@ import type { ConnectionEditorDialogs } from "./useConnectionEditorDialogs";
 import { useConnectionProblems } from "./useConnectionProblems";
 import type { ConnectionProfileState } from "./useConnectionProfileState";
 import { useConnectionTestCommand } from "./useConnectionTestCommand";
+import { useDeleteConnection } from "./useDeleteConnection";
 import { useManagedConnectionRecovery } from "./useManagedConnectionRecovery";
 import { useConnectionDatabaseDiscovery } from "./useConnectionDatabaseDiscovery";
 
@@ -81,6 +78,7 @@ export function useConnectionProfileController({
   const { isSharedTemplate, isMongo, isBigQuery } = form.flags;
   const databaseDiscovery = useConnectionDatabaseDiscovery(profileState);
   const managedConnection = useManagedConnectionRecovery(form.value, catalogScope);
+  const deleteConnectionCommand = useDeleteConnection();
   const problems = useConnectionProblems({
     profileState,
     connections,
@@ -239,28 +237,18 @@ export function useConnectionProfileController({
   }
 
   async function removeCurrentConnection() {
-    if (
-      identity.isNew ||
-      (isSharedTemplate && form.value.workspaceAccess !== "manage")
-    ) {
-      return;
-    }
+    if (identity.isNew) return;
     check.cancel();
     status.setBusy(true);
     status.setMessage(null);
-    try {
-      if (isSharedTemplate) {
-        await deleteWorkspaceConnection(form.value.id);
-      } else {
-        await deleteConnection(form.value.id);
-      }
-      toast(t("connections.connectionDeleted"));
-      await onDeletedConnection(form.value.id);
-      onCancel();
-    } catch (error) {
-      status.showError("delete", connectionDeleteFailureMessage(t, error));
+    const failure = await deleteConnectionCommand.remove(form.value);
+    if (failure) {
+      status.showError("delete", failure);
       status.setBusy(false);
+      return;
     }
+    await onDeletedConnection(form.value.id);
+    onCancel();
   }
 
   /**
@@ -378,9 +366,9 @@ export function useConnectionProfileController({
         ...managedConnection,
         // Workspace management opens over this editor and returns to it, so the
         // draft, including any unsaved edit, survives the repair round trip.
-        openSettings: () => {
+        openWorkspaceProviders: () => {
           markConnectionEditorReturn();
-          managedConnection.openSettings();
+          managedConnection.openWorkspaceProviders();
         },
       },
       save,
@@ -391,7 +379,7 @@ export function useConnectionProfileController({
       /** Settings → Account opens over this editor and returns to it after sign-in. */
       signIn: () => {
         markConnectionEditorReturn();
-        requestWorkspaceAdmin("account");
+        requestAccountSettings();
       },
       cancel: requestCancel,
       bindWorkspaceConnection,

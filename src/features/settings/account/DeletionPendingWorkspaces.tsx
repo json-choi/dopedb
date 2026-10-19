@@ -15,7 +15,7 @@ import {
   runWorkspaceAdmin,
   workspaceAdminErrorMessage,
   WorkspaceAdminRequestError,
-} from "../requests";
+} from "../../workspaceAdmin/requests";
 import { parseWorkspaceLifecycleSnapshot, type DeletionPendingWorkspace } from "./domain";
 import { formatMoment } from "./format";
 import { deletionPendingWorkspacesQuery, ownedWorkspacesQueryKey } from "./queries";

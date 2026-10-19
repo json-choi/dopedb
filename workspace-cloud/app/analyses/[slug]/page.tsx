@@ -70,7 +70,7 @@ export default async function AnalysisPublicationPage({ params }: { params: Prom
     <>
       <header className="tw:relative tw:z-[1] tw:border-b tw:border-border tw:bg-surface/90 tw:backdrop-blur-xl">
         <div className="tw:mx-auto tw:flex tw:min-h-control-lg tw:w-full tw:max-w-[1440px] tw:items-center tw:justify-between tw:px-6 tw:py-3 tw:max-[640px]:px-4">
-          <Brand destination="marketing" />
+          <Brand />
           <span className="tw:font-mono tw:text-2xs tw:text-muted-foreground">
             {copy.publicationResult}
           </span>

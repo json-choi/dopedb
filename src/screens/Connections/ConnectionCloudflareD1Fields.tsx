@@ -13,6 +13,7 @@ import {
 } from "../../design-system/components/Status";
 import type { ConnectionEditorController } from "../../features/connections/useConnectionEditorController";
 import { useI18n } from "../../lib/i18n";
+import { ResourceStatus } from "./ResourceStatus";
 
 type Profile = ConnectionEditorController["profile"];
 
@@ -221,37 +222,4 @@ export function ConnectionCloudflareD1Fields({ profile }: { profile: Profile }) 
       ) : null}
     </section>
   );
-}
-
-function ResourceStatus({
-  pending,
-  empty,
-  error,
-  loadingLabel,
-  emptyLabel,
-  refreshLabel,
-  onRefresh,
-}: {
-  pending: boolean;
-  empty: boolean;
-  error: string | null;
-  loadingLabel: string;
-  emptyLabel: string;
-  refreshLabel: string;
-  onRefresh: () => void;
-}) {
-  if (pending) {
-    return <span className="tw:text-xs tw:text-muted-foreground">{loadingLabel}</span>;
-  }
-  if (error) {
-    return (
-      <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
-        <span className="tw:text-xs tw:text-danger" role="alert">{error}</span>
-        <Button size="xs" onClick={onRefresh}>{refreshLabel}</Button>
-      </div>
-    );
-  }
-  return empty ? (
-    <span className="tw:text-xs tw:text-muted-foreground">{emptyLabel}</span>
-  ) : null;
 }

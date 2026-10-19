@@ -7,6 +7,7 @@
 import { useToast } from "../../../components/Toast";
 import { LoadingLabel } from "../../../design-system/components/Status";
 import { useI18n } from "../../../lib/i18n";
+import { requestAccountSettings } from "../../settings/accountRequest";
 import { requestWorkspaceMembershipRefresh } from "../../workspaces/membershipRefreshRequest";
 import type { WorkspaceAdminPanelProps } from "../navigationRequest";
 import BackupsSection from "./BackupsSection";
@@ -23,7 +24,7 @@ export default function LifecyclePanel({ scope, onNavigate }: WorkspaceAdminPane
   const controller = useLifecycleController(scope, {
     onDeletionScheduled: (scheduled) => {
       toast(t("workspaceLifecycle.scheduledToast", { name: scheduled.workspaceName }));
-      onNavigate("account");
+      requestAccountSettings();
       // The account lifecycle retries on its own if this refresh fails.
       void requestWorkspaceMembershipRefresh().catch(() => undefined);
     },
@@ -64,7 +65,6 @@ export default function LifecyclePanel({ scope, onNavigate }: WorkspaceAdminPane
             <DeletionScheduledView
               controller={controller}
               status={lifecycle}
-              onNavigate={onNavigate}
             />
           ) : (
             <>

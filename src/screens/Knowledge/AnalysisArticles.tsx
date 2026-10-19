@@ -6,6 +6,7 @@ import { useState, type ReactNode } from "react";
 
 import ConfirmButton from "../../components/ConfirmButton";
 import { Icon, type IconName } from "../../components/Icon";
+import DataGrid from "../../features/queryResults/DataGrid";
 import InfoTip from "../../components/InfoTip";
 import { AnalysisArticleEditor } from "../../features/analysisArticles/AnalysisArticleEditor";
 import { AnalysisShareButton } from "../../features/analysisArticles/AnalysisShareButton";
@@ -29,7 +30,7 @@ import { Button } from "../../design-system/components/Button";
 import { ModalBackdrop, ModalFooter, ModalHeader, ModalSurface } from "../../design-system/components/Modal";
 import { catalogLoadIssue, catalogLoadIssueAction, catalogLoadIssueMessage } from "../../features/catalogExplorer/catalogDomain";
 import { AnalysisArticleReader } from "../../features/analysisArticles/AnalysisArticleReader";
-import ToolbarMenu, { ToolbarMenuItem } from "../../components/ToolbarMenu";
+import { MenuItem, ToolbarMenu } from "../../design-system/components/Menu";
 import { InlineNotice, LoadingLabel, StatusBadge } from "../../design-system/components/Status";
 import {
   WorkbenchEmptyState,
@@ -39,12 +40,6 @@ import type { I18nKey } from "../../lib/i18n";
 import { fullTime } from "../../lib/relTime";
 
 const RESULT_ROW_LIMIT = 500;
-
-function cellText(value: string | number | boolean | null) {
-  if (value === null) return "—";
-  if (typeof value === "boolean") return value ? "true" : "false";
-  return String(value);
-}
 
 type Translate = (key: I18nKey, vars?: Record<string, string | number>) => string;
 
@@ -313,10 +308,10 @@ export default function AnalysisArticles({
                   </span>
                 ) : null}
                 <ToolbarMenu label={t("ide.action.more")} icon="moreHorizontal">
-                  {controller.canWrite && controller.agentBinding?.connectionId && onOpenAgent ? <ToolbarMenuItem icon="terminal" onClick={controller.askAgent}>{t("analysis.editWithAgent")}</ToolbarMenuItem> : null}
-                  <ToolbarMenuItem icon="history" onClick={() => controller.setTab(controller.tab === "history" ? "article" : "history")}>{t(controller.tab === "history" ? "analysis.tabArticle" : "analysis.tabHistory")}</ToolbarMenuItem>
-                  {sharedWorkspace && controller.canWrite ? <ToolbarMenuItem icon="upload" onClick={() => { controller.setTab("article"); setShowPublication(true); }}>{t("analysis.publishHtml")}</ToolbarMenuItem> : null}
-                  <ToolbarMenuItem icon="refresh" onClick={() => void controller.articles.refetch()}>{t("analysis.refresh")}</ToolbarMenuItem>
+                  {controller.canWrite && controller.agentBinding?.connectionId && onOpenAgent ? <MenuItem icon="terminal" onClick={controller.askAgent}>{t("analysis.editWithAgent")}</MenuItem> : null}
+                  <MenuItem icon="history" onClick={() => controller.setTab(controller.tab === "history" ? "article" : "history")}>{t(controller.tab === "history" ? "analysis.tabArticle" : "analysis.tabHistory")}</MenuItem>
+                  {sharedWorkspace && controller.canWrite ? <MenuItem icon="upload" onClick={() => { controller.setTab("article"); setShowPublication(true); }}>{t("analysis.publishHtml")}</MenuItem> : null}
+                  <MenuItem icon="refresh" onClick={() => void controller.articles.refetch()}>{t("analysis.refresh")}</MenuItem>
                   {controller.canWrite ? (
                     <div role="none" data-menu-keep-open>
                       <ConfirmButton
@@ -464,7 +459,7 @@ function ArticleDocument({
           {ranAt ? <time className="tw:text-xs tw:text-muted-foreground" dateTime={ranAt}>{fullTime(ranAt, lang)}</time> : null}
         </div>
         {resultLoading ? <LoadingLabel>{t("analysis.loadingLocalResult")}</LoadingLabel> : null}
-        {!resultLoading && result ? <ResultTable result={result} title={t("analysis.latestLocalResult")} /> : null}
+        {!resultLoading && result ? <ResultTable result={result} /> : null}
         {!resultLoading && !result ? (
           <p className="tw:m-0 tw:text-sm tw:text-muted-foreground">
             {t(resultOutdated ? "analysis.resultOutdated" : "analysis.noLocalResult")}
@@ -476,27 +471,20 @@ function ArticleDocument({
   );
 }
 
-function ResultTable({ result, title }: { result: AnalysisResultData; title: string }) {
+function ResultTable({ result }: { result: AnalysisResultData }) {
   const { t } = useI18n();
   const shownRows = result.rows.slice(0, RESULT_ROW_LIMIT);
   return (
     <div className="tw:grid tw:gap-2">
-      <div className="tw:max-h-[520px] tw:overflow-auto tw:rounded-md tw:border tw:border-border-subtle">
-        <table className="tw:w-full tw:min-w-max tw:border-collapse tw:text-left tw:text-xs">
-          <caption className="tw:sr-only">{title}</caption>
-          <thead className="tw:sticky tw:top-0 tw:bg-background">
-            <tr>{result.columns.map((column) => (
-              <th className="tw:border-r tw:border-b tw:border-border-subtle tw:px-2 tw:py-1.5 tw:font-medium tw:text-muted-foreground" key={column.name}>{column.name}</th>
-            ))}</tr>
-          </thead>
-          <tbody>{shownRows.map((row, rowIndex) => (
-            <tr className="tw:odd:bg-card" key={rowIndex}>{result.columns.map((column, index) => {
-              const value = cellText(row[index] ?? null);
-              return <td className="tw:max-w-[420px] tw:truncate tw:border-r tw:border-b tw:border-border-subtle tw:px-2 tw:py-1.5 tw:font-mono tw:tabular-nums" title={value} key={column.name}>{value}</td>;
-            })}</tr>
-          ))}</tbody>
-        </table>
-      </div>
+      <DataGrid
+        result={{
+          columns: result.columns.map((column) => column.name),
+          rows: shownRows,
+          rowCount: shownRows.length,
+          truncated: result.truncated,
+          durationMs: 0,
+        }}
+      />
       {result.rows.length > RESULT_ROW_LIMIT ? (
         <p className="tw:m-0 tw:text-xs tw:text-muted-foreground" role="note">
           {t("analysis.resultRowsShown", { shown: RESULT_ROW_LIMIT, total: result.rows.length })}

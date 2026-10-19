@@ -35,7 +35,7 @@ export default async function SignInPage({
       id="main-content"
     >
       <div className="tw:relative tw:z-[1] tw:flex tw:items-center tw:justify-between">
-        <Brand destination="marketing" />
+        <Brand />
         <LocaleSwitcher />
       </div>
       <section className="tw:relative tw:z-[1] tw:m-auto tw:grid tw:w-[min(1280px,100%)] tw:grid-cols-[minmax(0,1.15fr)_minmax(380px,0.72fr)] tw:items-center tw:gap-[clamp(48px,8vw,120px)] tw:py-[clamp(68px,10vh,128px)] tw:max-[860px]:grid-cols-1 tw:max-[860px]:gap-12">

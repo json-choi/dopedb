@@ -16,13 +16,13 @@ management dialog (`src/screens/WorkspaceAdmin`).
 | File | Description |
 |------|-------------|
 | `index.tsx` | Default-exported `Settings` modal on `design-system/components/SectionDialog`: section entries with the shared search keywords from `features/settings/domain`, section routing, refreshes safety on close via `refreshSafety`. |
+| `Language.tsx` | Default-exported `LanguageSettings` section: UI language preference. |
 | `Appearance.tsx` | Default-exported `Appearance` section: theme preference (`system`/`light`/`dark`) via `design-system/theme`'s `useTheme`/`setThemePreference`; device-local, applies immediately. |
 
 ## Subdirectories
 | Directory | Purpose |
 |-----------|---------|
-| `Account/` | `index.tsx` — default-exported `AccountSettings`, shown only while signed in: other sessions of the account and owned workspaces scheduled for deletion (`features/workspaceAdmin/account`). |
-| `Advanced/` | `index.tsx` — default-exported `AdvancedSettings`: debugging toggle (`useAgentDebugDetails`/`saveAgentDebugDetails` from `features/agents/displayPreferences`) inside a `SettingsGroup`; `Diagnostics.tsx` presents opt-in bounded local logs and explicit privacy warnings before copying or opening the GitHub issue form. |
+| `Advanced/` | `index.tsx` — default-exported `AdvancedSettings`: debugging toggle (`useAgentDebugDetails`/`saveAgentDebugDetails` from `features/agents/displayPreferences`) inside a `SettingsGroup`; `DiagnosticBundle.tsx` presents opt-in bounded local logs and explicit privacy warnings before copying or opening the GitHub issue form. |
 | `AgentTools/` | `index.tsx` — default-exported `AgentTools`: composes provider-first Agent setup rows and install/self-test status via `useAgentToolsController` (all from `features/settings/agentTools/`). |
 | `Cli/` | `index.tsx` — default-exported `CliSettings`: version-matched CLI sidecar install status/action via `cliInstallationStatusQuery` and `features/skills/tauriAdapter`'s `installCli`; `AdvancedShellTerminal.tsx` — `AdvancedShellTerminalLauncher`, the explicit developer-only Shell PTY pinned to the selected connection (separate surface from ACP Agent sessions; only reachable from here, never a general work screen). |
 | `Privacy/` | `index.tsx` — default-exported `PrivacySettings`: product-analytics consent grant/deny via `features/productAnalytics/client` and a link to the privacy policy (`openProductAnalyticsPrivacyPolicy`). |

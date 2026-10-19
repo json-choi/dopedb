@@ -1,12 +1,12 @@
 // Presents TLS and SSH alias properties from the profile model without owning
 // file picking, option normalization, or validation state.
-import { Button } from "../../design-system/components/Button";
 import {
   CheckboxField,
   Field,
   SelectInput,
   TextInput,
 } from "../../design-system/components/FormControls";
+import ConnectionFilePathField from "../../features/connections/ConnectionFilePathField";
 import { CONNECTION_SSH_ALIAS_PARAMETER } from "../../features/connections/options";
 import type { ConnectionEditorController } from "../../features/connections/useConnectionEditorController";
 import { useI18n } from "../../lib/i18n";
@@ -38,64 +38,30 @@ export function ConnectionSecurityTab({
               }
             />
             <div className="tw:grid tw:grid-cols-2 tw:gap-3 tw:@max-[620px]:grid-cols-1">
-              <Field label={t("connections.caCertificate")}>
-                {({ controlProps }) => (
-                <div className="ds-control-row tw:grid tw:min-w-0 tw:grid-cols-[minmax(0,1fr)_auto] tw:items-center tw:gap-2">
-                  <TextInput
-                    {...controlProps()}
-                    value={form.extraParams.tlsCAFile ?? ""}
-                    disabled={!flags.mongoTlsEnabled}
-                    onChange={(event) =>
-                      options.setExtraParameter(
-                        "tlsCAFile",
-                        event.target.value,
-                      )
-                    }
-                    placeholder="/path/to/ca.pem"
-                  />
-                  <Button
-                    aria-label={`${t("connections.browse")}: ${t("connections.caCertificate")}`}
-                    disabled={!flags.mongoTlsEnabled}
-                    onClick={() =>
-                      void options.pickExtraParameterFile("tlsCAFile")
-                    }
-                  >
-                    {t("connections.browse")}
-                  </Button>
-                </div>
-                )}
-              </Field>
-              <Field label={t("connections.clientCertificateKey")}>
-                {({ controlProps }) => (
-                <div className="ds-control-row tw:grid tw:min-w-0 tw:grid-cols-[minmax(0,1fr)_auto] tw:items-center tw:gap-2">
-                  <TextInput
-                    {...controlProps()}
-                    value={
-                      form.extraParams.tlsCertificateKeyFile ?? ""
-                    }
-                    disabled={!flags.mongoTlsEnabled}
-                    onChange={(event) =>
-                      options.setExtraParameter(
-                        "tlsCertificateKeyFile",
-                        event.target.value,
-                      )
-                    }
-                    placeholder="/path/to/client.pem"
-                  />
-                  <Button
-                    aria-label={`${t("connections.browse")}: ${t("connections.clientCertificateKey")}`}
-                    disabled={!flags.mongoTlsEnabled}
-                    onClick={() =>
-                      void options.pickExtraParameterFile(
-                        "tlsCertificateKeyFile",
-                      )
-                    }
-                  >
-                    {t("connections.browse")}
-                  </Button>
-                </div>
-                )}
-              </Field>
+              <ConnectionFilePathField
+                label={t("connections.caCertificate")}
+                value={form.extraParams.tlsCAFile ?? ""}
+                disabled={!flags.mongoTlsEnabled}
+                placeholder="/path/to/ca.pem"
+                onChange={(value) =>
+                  options.setExtraParameter("tlsCAFile", value)
+                }
+                onBrowse={() =>
+                  void options.pickExtraParameterFile("tlsCAFile")
+                }
+              />
+              <ConnectionFilePathField
+                label={t("connections.clientCertificateKey")}
+                value={form.extraParams.tlsCertificateKeyFile ?? ""}
+                disabled={!flags.mongoTlsEnabled}
+                placeholder="/path/to/client.pem"
+                onChange={(value) =>
+                  options.setExtraParameter("tlsCertificateKeyFile", value)
+                }
+                onBrowse={() =>
+                  void options.pickExtraParameterFile("tlsCertificateKeyFile")
+                }
+              />
             </div>
           </>
         ) : (
@@ -133,30 +99,15 @@ export function ConnectionSecurityTab({
                   ],
                 ] as const
               ).map(([key, label, placeholder]) => (
-                <Field key={key} label={t(label)}>
-                  {({ controlProps }) => (
-                  <div className="ds-control-row tw:grid tw:min-w-0 tw:grid-cols-[minmax(0,1fr)_auto] tw:items-center tw:gap-2">
-                    <TextInput
-                      {...controlProps()}
-                      value={form.extraParams[key] ?? ""}
-                      disabled={!flags.sqlTlsEnabled}
-                      onChange={(event) =>
-                        options.setExtraParameter(key, event.target.value)
-                      }
-                      placeholder={placeholder}
-                    />
-                    <Button
-                      aria-label={`${t("connections.browse")}: ${t(label)}`}
-                      disabled={!flags.sqlTlsEnabled}
-                      onClick={() =>
-                        void options.pickExtraParameterFile(key)
-                      }
-                    >
-                      {t("connections.browse")}
-                    </Button>
-                  </div>
-                  )}
-                </Field>
+                <ConnectionFilePathField
+                  key={key}
+                  label={t(label)}
+                  value={form.extraParams[key] ?? ""}
+                  disabled={!flags.sqlTlsEnabled}
+                  placeholder={placeholder}
+                  onChange={(value) => options.setExtraParameter(key, value)}
+                  onBrowse={() => void options.pickExtraParameterFile(key)}
+                />
               ))}
             </div>
           </>

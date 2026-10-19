@@ -1,9 +1,7 @@
 // Composes table commands, current-page export, pagination, and manual-transaction controls.
 
 import { Icon } from "../../components/Icon";
-import ToolbarMenu, {
-  ToolbarMenuItem,
-} from "../../components/ToolbarMenu";
+import { MenuItem, ToolbarMenu } from "../../design-system/components/Menu";
 import {
   WorkbenchButton,
   WorkbenchDivider,
@@ -12,11 +10,9 @@ import {
 import type { CatalogTable, QueryResult } from "../../ipc/types";
 import { stamp } from "../../lib/export";
 import { useI18n } from "../../lib/i18n";
-import { useToast } from "../../components/Toast";
 import Pager from "./Pager";
 import ManualTransactionControls from "../../features/queries/ManualTransactionControls";
-import { truncatedCellBytes } from "../../features/queries/resultPageCache";
-import { saveRendererExport } from "../../features/queryResults/resultExports";
+import ResultToolbar from "../../features/queryResults/ResultToolbar";
 import type { ManualTransactionController } from "../../features/queries/useManualTransaction";
 
 type Props = {
@@ -58,7 +54,6 @@ type Props = {
 
 export default function TableToolbar(props: Props) {
   const { t } = useI18n();
-  const toast = useToast();
   const {
     table,
     result,
@@ -80,32 +75,6 @@ export default function TableToolbar(props: Props) {
     supportsMutationTools,
     supportsBulkJobs,
   } = props;
-  // The first undecodable or shortened cell stops export with translated guidance.
-  const exportBlocked = () => {
-    const failure = result?.decodeFailures?.[0];
-    if (!failure) return false;
-    const location = { row: failure.rowIndex + 1, column: failure.columnIndex + 1 };
-    toast(
-      truncatedCellBytes(failure) !== null
-        ? t("results.exportBlockedTruncated", location)
-        : t("results.exportBlockedDecode", { ...location, type: failure.databaseType }),
-      "error",
-    );
-    return true;
-  };
-  const exportPage = (format: "csv" | "json") => {
-    if (!result || exportBlocked()) return;
-    void saveRendererExport(
-      format,
-      `${table.name}-page${page + 1}-${stamp()}`,
-      result.columns,
-      result.rows,
-      t,
-      toast,
-    );
-  };
-  const exportCsv = () => exportPage("csv");
-  const exportJson = () => exportPage("json");
   const lastPage =
     total != null ? Math.max(0, Math.ceil(total / pageSize) - 1) : null;
   const hasPrev = page > 0;
@@ -248,108 +217,76 @@ export default function TableToolbar(props: Props) {
         >
           <Icon name="columns" />
         </WorkbenchButton>
-        <span className="tw:@max-[480px]:hidden">
-          <ToolbarMenu
-            label={t("tables.exportPageTitle")}
-            trigger={
-              <>
-                CSV
-                <Icon name="chevronDown" />
-              </>
-            }
-          >
-            <ToolbarMenuItem
-              icon="download"
-              disabled={!rows}
-              onClick={exportCsv}
-            >
-              {t("tables.exportCsv")}
-            </ToolbarMenuItem>
-            <ToolbarMenuItem
-              icon="download"
-              disabled={!rows}
-              onClick={exportJson}
-            >
-              {t("tables.exportJson")}
-            </ToolbarMenuItem>
-          </ToolbarMenu>
-        </span>
+        {result ? (
+          <ResultToolbar
+            columns={result.columns}
+            rows={result.rows}
+            decodeFailures={result.decodeFailures}
+            scopeLabel={t("results.currentPage")}
+            filenameBase={`${table.name}-page${page + 1}-${stamp()}`}
+            presentation="workbench"
+          />
+        ) : null}
         <ToolbarMenu label={t("tables.more")} icon="moreVertical">
           {/* Previous/next stay visible in the pager at every width; only the
               first/last jumps collapse into this menu on narrow workbenches. */}
-          <ToolbarMenuItem
+          <MenuItem
             icon="chevronsLeft"
             disabled={busy || !hasPrev}
             onClick={() => props.onPage(0)}
           >
             {t("common.first")}
-          </ToolbarMenuItem>
-          <ToolbarMenuItem
+          </MenuItem>
+          <MenuItem
             icon="chevronsRight"
             disabled={busy || lastPage == null || !hasNext}
             onClick={() => lastPage != null && props.onPage(lastPage)}
           >
             {t("tables.last")}
-          </ToolbarMenuItem>
-          <ToolbarMenuItem
+          </MenuItem>
+          <MenuItem
             icon="refresh"
             disabled={busy}
             onClick={props.onRefresh}
           >
             {t("common.refresh")}
-          </ToolbarMenuItem>
+          </MenuItem>
           {supportsBulkJobs ? (
-            <ToolbarMenuItem
+            <MenuItem
               icon="download"
               disabled={!catalogAvailable}
               onClick={props.onToggleJobs}
             >
               {t("jobs.open")}
-            </ToolbarMenuItem>
+            </MenuItem>
           ) : null}
-          <ToolbarMenuItem icon="columns" onClick={props.onToggleStructure}>
+          <MenuItem icon="columns" onClick={props.onToggleStructure}>
             {t("tables.structureTitle")}
-          </ToolbarMenuItem>
-          <ToolbarMenuItem
+          </MenuItem>
+          <MenuItem
             icon="copy"
             disabled={!canEdit || selected == null || !!selectedRowBlockedReason}
             title={selectedRowBlockedReason ?? (canEdit ? undefined : noEditTitle)}
             onClick={() => props.onOpenEdit("duplicate")}
           >
             {t("tables.duplicate")}
-          </ToolbarMenuItem>
-          <ToolbarMenuItem
+          </MenuItem>
+          <MenuItem
             icon="copy"
             disabled={selected == null || !!selectedRowBlockedReason}
             title={selectedRowBlockedReason ?? undefined}
             onClick={() => props.onCopyRow(false)}
           >
             {t("tables.copyTsv")}
-          </ToolbarMenuItem>
-          <ToolbarMenuItem
+          </MenuItem>
+          <MenuItem
             icon="copy"
             disabled={selected == null || !!selectedRowBlockedReason}
             title={selectedRowBlockedReason ?? undefined}
             onClick={() => props.onCopyRow(true)}
           >
             {t("tables.copyJson")}
-          </ToolbarMenuItem>
-          <ToolbarMenuItem
-            icon="download"
-            disabled={!rows}
-            title={t("tables.exportPageTitle")}
-            onClick={exportCsv}
-          >
-            {t("tables.exportCsv")}
-          </ToolbarMenuItem>
-          <ToolbarMenuItem
-            icon="download"
-            disabled={!rows}
-            title={t("tables.exportPageTitle")}
-            onClick={exportJson}
-          >
-            {t("tables.exportJson")}
-          </ToolbarMenuItem>
+          </MenuItem>
         </ToolbarMenu>
       </Pager>
     </WorkbenchToolbar>

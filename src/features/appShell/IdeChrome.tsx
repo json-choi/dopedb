@@ -18,9 +18,7 @@ import { SQL_EDITOR_INDENT_SIZE } from "../queries/editorStatus";
 import { useSqlEditorCursor } from "../queries/editorStatusStore";
 import { Icon } from "../../components/Icon";
 import { DopeDBMark } from "../../design-system/components/DopeDBMark";
-import ToolbarMenu, {
-  ToolbarMenuItem,
-} from "../../components/ToolbarMenu";
+import { MenuItem, ToolbarMenu } from "../../design-system/components/Menu";
 import {
   IdeStatusBarSurface,
   IdeToolbarLauncher,
@@ -50,8 +48,10 @@ export function IdeTopBar({
   onNewQuery,
   onWelcome,
   onToggleLeftPanel,
-  onOpenQueryHistory,
-  queryHistoryOpen,
+  onOpenActivity,
+  activityOpen,
+  unseenOperationCount,
+  onToggleLocalHistory,
   onToggleAgent,
   agentButtonRef,
   agentPendingApprovals,
@@ -72,8 +72,11 @@ export function IdeTopBar({
   onNewQuery: () => void;
   onWelcome: () => void;
   onToggleLeftPanel: () => void;
-  onOpenQueryHistory: () => void;
-  queryHistoryOpen: boolean;
+  /** Opens Execution history and clears its unread mark. */
+  onOpenActivity: () => void;
+  activityOpen: boolean;
+  unseenOperationCount: number;
+  onToggleLocalHistory: () => void;
   onToggleAgent: () => void;
   agentButtonRef: RefObject<HTMLButtonElement | null>;
   actionSearchButtonRef: RefObject<HTMLButtonElement | null>;
@@ -93,6 +96,10 @@ export function IdeTopBar({
     selected && !agentDockOpen && agentPendingApprovals > 0
       ? t("agent.acpPendingApprovalsAnnouncement", { count: agentPendingApprovals })
       : "";
+  const activityLabel =
+    unseenOperationCount > 0
+      ? t("tabs.activityUnread", { count: unseenOperationCount })
+      : t("tabs.activity");
   const panelLabel = t(leftPanelOpen ? "ide.action.hideLeftPanel" : "ide.action.showLeftPanel");
 
   return (
@@ -125,7 +132,7 @@ export function IdeTopBar({
           className="tw:flex tw:h-control-md tw:w-[min(320px,30vw)] tw:cursor-pointer tw:items-center tw:gap-2 tw:rounded-none tw:border tw:border-border-subtle tw:bg-card tw:px-3 tw:py-0 tw:font-sans tw:text-sm tw:text-muted-foreground tw:hover:border-border-strong tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:max-[760px]:w-control-md tw:max-[760px]:justify-center tw:max-[760px]:px-0"
           onClick={(event) => onActionSearch(event.currentTarget)}
         ><Icon name="search" /><span className="tw:truncate tw:max-[760px]:hidden">{t("ide.action.actionSearch")}</span><kbd className="tw:ml-auto tw:font-sans tw:text-xs tw:max-[760px]:hidden">⇧ ⇧</kbd></button>
-        <IdeToolbarLauncher active={queryHistoryOpen} disabled={!selected} onClick={onOpenQueryHistory} title={t("activity.queryHistory")} aria-label={t("activity.queryHistory")}>
+        <IdeToolbarLauncher active={activityOpen} disabled={!selected} count={selected ? unseenOperationCount : 0} onClick={onOpenActivity} title={activityLabel} aria-label={activityLabel}>
           <Icon name="history" />
         </IdeToolbarLauncher>
         <ToolbarMenu
@@ -133,13 +140,20 @@ export function IdeTopBar({
           icon="moreHorizontal"
           label={t("ide.action.more")}
         >
-          <ToolbarMenuItem
+          <MenuItem
             icon="play"
             disabled={queryDisabled}
-            onClick={onNewQuery}
+            onClick={() => onNewQuery()}
           >
             {t("ide.action.newQuery")}
-          </ToolbarMenuItem>
+          </MenuItem>
+          <MenuItem
+            icon="history"
+            disabled={queryDisabled}
+            onClick={onToggleLocalHistory}
+          >
+            {t("localHistory.title")}
+          </MenuItem>
         </ToolbarMenu>
         </>
       }
@@ -176,7 +190,6 @@ export function IdeStatusBar({
   manualTransactions,
   settlingManualTransactionIds,
   writeEnabled,
-  unseenOperationCount,
   onOpenQueryTask,
   onOpenAgentTask,
   onOpenAgentProposal,
@@ -185,7 +198,6 @@ export function IdeStatusBar({
   onRollbackManualTransaction,
   onCancelBackgroundTask,
   onRevealDatabaseContext,
-  onOpenNotifications,
   onSafetySettings,
 }: {
   selected: ConnectionProfile | null;
@@ -199,7 +211,6 @@ export function IdeStatusBar({
   manualTransactions: WorkspaceManualTransaction[];
   settlingManualTransactionIds: ReadonlySet<string>;
   writeEnabled: boolean;
-  unseenOperationCount: number;
   onOpenQueryTask: (sessionId: string) => void;
   onOpenAgentTask: (connectionId: string) => void;
   onOpenAgentProposal: (
@@ -218,7 +229,6 @@ export function IdeStatusBar({
   ) => Promise<void>;
   onCancelBackgroundTask: (task: BackgroundTask) => Promise<void>;
   onRevealDatabaseContext: () => void;
-  onOpenNotifications: () => void;
   onSafetySettings: (connectionId: ConnectionProfile["id"]) => void;
 }) {
   const { t } = useI18n();
@@ -369,19 +379,6 @@ export function IdeStatusBar({
           onClick={() => onSafetySettings(selected.id)}
         />
       ) : null}
-      <StatusBarIconButton
-        icon="bell"
-        label={
-          unseenOperationCount > 0
-            ? t("ide.notificationsUnread", {
-                count: unseenOperationCount,
-              })
-            : t("ide.notifications")
-        }
-        onClick={onOpenNotifications}
-        attention={unseenOperationCount > 0}
-        disabled={!selected}
-      />
     </IdeStatusBarSurface>
   );
 }

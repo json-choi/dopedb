@@ -10,6 +10,7 @@ import {
   databaseDisplayLabel,
   type ConnectionProfile,
 } from "../connections/domain";
+import { connectionEndpoint, connectionSummary } from "../connections/connectionSummary";
 import { ProviderTargetLabel } from "../connections/ProviderTargetLabel";
 import { useConnectionEnvironmentInventory } from "../connections/useConnectionEnvironmentContext";
 import { useI18n } from "../../lib/i18n";
@@ -17,17 +18,6 @@ import {
   buildConnectionSections,
   type SchemaConnectionGroup,
 } from "../../lib/schemaDiff";
-
-function connectionEndpoint(connection: ConnectionProfile) {
-  if (connection.engine === "sqlite") {
-    return databaseDisplayLabel(
-      connection.engine,
-      connection.database || connection.host,
-    )
-      || "sqlite";
-  }
-  return `${connection.host}${connection.port ? `:${connection.port}` : ""}`;
-}
 
 export default function ConnectionPicker({
   connections,
@@ -71,7 +61,7 @@ export default function ConnectionPicker({
         type="button"
         className="tw:flex tw:min-h-[76px] tw:min-w-0 tw:cursor-pointer tw:flex-col tw:items-stretch tw:justify-between tw:gap-2 tw:rounded-md tw:border tw:border-border-subtle tw:bg-card tw:p-3 tw:font-sans tw:text-left tw:text-foreground tw:transition-[border-color,background] tw:duration-150 tw:hover:border-border-strong tw:hover:bg-selection/40 tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring"
         onClick={() => onSelect(connection.id)}
-        title={[projectLabel, connection.engine, endpoint, safetyLabel]
+        title={[projectLabel, connectionSummary(connection), safetyLabel]
           .filter(Boolean)
           .join(" · ")}
         aria-label={[t("app.openConnection", { name }), projectLabel]

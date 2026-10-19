@@ -5,14 +5,20 @@ import { Icon } from "../../components/Icon";
 import { Button } from "../../design-system/components/Button";
 import { useI18n } from "../../lib/i18n";
 import type { ConnectionId } from "../connections/domain";
+import { databaseEngineLabel } from "../connections/domain";
 import { githubSourceRevisionLabel } from "../knowledge/presentation";
-import type { ExternalAgentConfig, ExternalAgentRequestSummary } from "./externalAgentDomain";
+import { AgentResourceChoiceRow, AgentWriteTargetRadio } from "./AgentResourceChoice";
 import {
-  EMPTY_EXTERNAL_AGENT_SELECTION,
-  externalAgentResourceBoundaries,
-  selectedExternalAgentResources,
-  type ExternalAgentResourceSelection,
-} from "./externalAgentRequestModel";
+  EMPTY_AGENT_RESOURCE_SELECTION,
+  activeAgentWriteTarget,
+  isLastSelectedAgentResource,
+  selectAgentWriteTarget,
+  selectedAgentResources,
+  toggleAgentResource,
+  type AgentResourceSelection,
+} from "./agentResourceSelectionRules";
+import type { ExternalAgentConfig, ExternalAgentRequestSummary } from "./externalAgentDomain";
+import { externalAgentResourceBoundaries } from "./externalAgentRequestModel";
 import { agentResourceScopes } from "./useAgentScopeSelection";
 import type {
   AgentDatabaseResourceChoice,
@@ -38,8 +44,8 @@ export function ExternalAgentConfigurationPicker({
   onApprove: (config: ExternalAgentConfig) => void;
 }) {
   const { t } = useI18n();
-  const [selection, setSelection] = useState<ExternalAgentResourceSelection>(
-    EMPTY_EXTERNAL_AGENT_SELECTION,
+  const [selection, setSelection] = useState<AgentResourceSelection>(
+    EMPTY_AGENT_RESOURCE_SELECTION,
   );
   const [preparing, setPreparing] = useState(false);
 
@@ -56,11 +62,15 @@ export function ExternalAgentConfigurationPicker({
     });
   }, [projects, selection.projectId]);
 
-  const resources = selectedExternalAgentResources(projects, selection);
+  const resources = selectedAgentResources(projects, selection);
   const resourceCount = resources.databases.length + resources.sources.length;
+  const writeConnectionId = activeAgentWriteTarget(
+    resources.databases,
+    selection.writeConnectionId,
+  );
   const config = useMemo<ExternalAgentConfig | null>(() => {
     const anchorConnectionId =
-      selection.writeConnectionId
+      writeConnectionId
       ?? resources.databases[0]?.connectionId
       ?? resources.sources[0]?.authorityConnectionId;
     if (!resources.project || !anchorConnectionId || resourceCount === 0) return null;
@@ -70,40 +80,19 @@ export function ExternalAgentConfigurationPicker({
       projectId: resources.project.id,
       anchorConnectionId,
       resourceScopes: agentResourceScopes(resources.databases, resources.sources),
-      ...(selection.writeConnectionId
-        ? { writeConnectionId: selection.writeConnectionId }
-        : {}),
+      ...(writeConnectionId ? { writeConnectionId } : {}),
     };
-  }, [request.provider, resourceCount, resources, selection.writeConnectionId]);
+  }, [request.provider, resourceCount, resources, writeConnectionId]);
 
   function toggle(resource: AgentDatabaseResourceChoice | AgentSourceResourceChoice) {
     if (disabled || preparing) return;
-    setSelection((current) => {
-      const sameProject = current.projectId === resource.projectId;
-      const databaseIds = sameProject ? [...current.databaseIds] : [];
-      const sourceIds = sameProject ? [...current.sourceIds] : [];
-      if (resource.kind === "database") {
-        const index = databaseIds.indexOf(resource.connectionId);
-        if (index >= 0) databaseIds.splice(index, 1);
-        else databaseIds.push(resource.connectionId);
-      } else {
-        const index = sourceIds.indexOf(resource.sourceId);
-        if (index >= 0) sourceIds.splice(index, 1);
-        else sourceIds.push(resource.sourceId);
-      }
-      if (databaseIds.length + sourceIds.length === 0) return current;
-      return {
-        projectId: resource.projectId,
-        databaseIds,
-        sourceIds,
-        writeConnectionId:
-          sameProject
-          && current.writeConnectionId !== null
-          && databaseIds.includes(current.writeConnectionId)
-            ? current.writeConnectionId
-            : null,
-      };
-    });
+    setSelection((current) => toggleAgentResource(current, resource) ?? current);
+  }
+
+  function selectWriteTarget(target: ConnectionId | null) {
+    setSelection(
+      (current) => selectAgentWriteTarget(current, resources.databases, target) ?? current,
+    );
   }
 
   async function approve() {
@@ -153,42 +142,30 @@ export function ExternalAgentConfigurationPicker({
                 resource.kind === "database"
                   ? selection.databaseIds.includes(resource.connectionId)
                   : selection.sourceIds.includes(resource.sourceId);
-              const resourceDisabled =
-                disabled || preparing || (checked && resourceCount === 1);
               return (
-                <label
+                <AgentResourceChoiceRow
                   key={resource.key}
-                  className="tw:flex tw:min-h-control-xl tw:cursor-pointer tw:items-center tw:gap-3 tw:rounded-md tw:border tw:border-border-subtle tw:bg-card tw:px-3 tw:py-2 tw:data-[checked=true]:border-ring tw:data-[checked=true]:bg-selection tw:data-[disabled=true]:cursor-default tw:data-[disabled=true]:opacity-55"
-                  data-checked={checked}
-                  data-disabled={resourceDisabled}
-                >
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    disabled={resourceDisabled}
-                    onChange={() => toggle(resource)}
-                    className="tw:size-4 tw:accent-primary"
-                  />
-                  <Icon
-                    name={resource.kind === "database" ? "database" : "branch"}
-                    className="tw:text-muted-foreground"
-                  />
-                  <span className="tw:grid tw:min-w-0 tw:flex-1 tw:gap-0.5">
-                    <span className="tw:truncate tw:text-sm tw:font-medium">
-                      {resource.kind === "database"
-                        ? resource.databaseName
-                        : resource.displayName}
-                    </span>
-                    <span className="tw:truncate tw:text-xs tw:font-normal tw:text-muted-foreground">
-                      {resource.kind === "database"
-                        ? resource.engine
-                        : githubSourceRevisionLabel(
-                            resource.repository,
-                            resource.commitSha,
-                          )}
-                    </span>
-                  </span>
-                </label>
+                  layout="card"
+                  icon={resource.kind === "database" ? "database" : "branch"}
+                  label={
+                    resource.kind === "database"
+                      ? resource.databaseName
+                      : resource.displayName
+                  }
+                  detail={
+                    resource.kind === "database"
+                      ? databaseEngineLabel(resource.engine)
+                      : githubSourceRevisionLabel(resource.repository, resource.commitSha)
+                  }
+                  selection={{
+                    checked,
+                    disabled:
+                      disabled
+                      || preparing
+                      || isLastSelectedAgentResource(checked, resourceCount),
+                    onChange: () => toggle(resource),
+                  }}
+                />
               );
             })}
           </div>
@@ -199,39 +176,24 @@ export function ExternalAgentConfigurationPicker({
           <legend className="tw:text-sm tw:font-semibold">
             {t("agent.acpWriteTarget")}
           </legend>
-          <label className="tw:flex tw:items-center tw:gap-2 tw:text-sm">
-            <input
-              type="radio"
-              checked={selection.writeConnectionId === null}
-              disabled={disabled || preparing}
-              onChange={() =>
-                setSelection((current) => ({ ...current, writeConnectionId: null }))
-              }
-              className="tw:size-4 tw:accent-primary"
-            />
-            {t("agent.acpReadOnlyContext")}
-          </label>
+          <AgentWriteTargetRadio
+            layout="card"
+            checked={writeConnectionId === null}
+            disabled={disabled || preparing}
+            label={t("agent.acpReadOnlyContext")}
+            onChange={() => selectWriteTarget(null)}
+          />
           {resources.databases
             .filter((database) => database.writable)
             .map((database) => (
-              <label
+              <AgentWriteTargetRadio
                 key={database.connectionId}
-                className="tw:flex tw:items-center tw:gap-2 tw:text-sm"
-              >
-                <input
-                  type="radio"
-                  checked={selection.writeConnectionId === database.connectionId}
-                  disabled={disabled || preparing}
-                  onChange={() =>
-                    setSelection((current) => ({
-                      ...current,
-                      writeConnectionId: database.connectionId,
-                    }))
-                  }
-                  className="tw:size-4 tw:accent-primary"
-                />
-                {database.databaseName}
-              </label>
+                layout="card"
+                checked={writeConnectionId === database.connectionId}
+                disabled={disabled || preparing}
+                label={database.databaseName}
+                onChange={() => selectWriteTarget(database.connectionId)}
+              />
             ))}
         </fieldset>
       ) : null}

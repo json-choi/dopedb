@@ -153,8 +153,8 @@ export default function Sql(props: Omit<SqlWorkbenchProps, "onShowResult"> & {
           <WorkbenchButton
             iconOnly
             onClick={onOpenHistory}
-            title={t("sql.history")}
-            aria-label={t("sql.history")}
+            title={t("tabs.activity")}
+            aria-label={t("tabs.activity")}
           >
             <Icon name="history" />
           </WorkbenchButton>

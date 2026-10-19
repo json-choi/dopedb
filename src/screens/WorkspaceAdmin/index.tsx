@@ -1,8 +1,7 @@
 // Workspace management dialog for the active team workspace, opened from the workspace
 // menu, Action Search, the data source catalog or connection recovery instead of the
 // application Settings. The shell route owns the active section, so a request that
-// arrives while the dialog is open moves it too, and an "account" request from a panel
-// replaces the dialog with Settings → Account. It lists only the sections the
+// arrives while the dialog is open moves it too, It lists only the sections the
 // signed-in member's role can run and closes itself when that authority disappears.
 import { Fragment, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -17,7 +16,6 @@ import ProvidersPanel from "../../features/workspaceAdmin/providers/ProvidersPan
 import { useWorkspaceAdminScope } from "../../features/workspaceAdmin/scope";
 import {
   workspaceAdminSectionsFor,
-  type WorkspaceAdminDestination,
   type WorkspaceAdminSection,
 } from "../../features/workspaceAdmin/sections";
 import {
@@ -35,8 +33,8 @@ export default function WorkspaceAdmin({
 }: {
   /** Requested section; an unavailable one shows the first section the role can run. */
   section: WorkspaceAdminSection;
-  /** Moves to another section, or to Settings → Account for "account". */
-  onNavigate: (destination: WorkspaceAdminDestination) => void;
+  /** Moves to another Workspace management section. */
+  onNavigate: (section: WorkspaceAdminSection) => void;
   onClose: () => void;
 }) {
   const { t } = useI18n();

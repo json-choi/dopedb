@@ -4,8 +4,9 @@
 # src/features/settings
 
 ## Purpose
-Settings screen navigation state plus the Agent Tools settings sub-feature
-(`agentTools/`). `domain.ts` keeps section identity as application state outside
+Settings screen navigation state (the one ordered `settingsSections` list), the
+signed-in account section (`account/`: other sessions and workspaces pending
+deletion) plus the Agent Tools settings sub-feature (`agentTools/`). `domain.ts` keeps section identity as application state outside
 `screens/` so feature state does not depend on a presentation entry point. The
 `cli` section here is the "Command line" entry referenced in the root `CLAUDE.md` —
 the advanced Shell PTY is surfaced only when a user explicitly opens it from this
@@ -14,6 +15,7 @@ settings screen, never from a general work surface.
 ## Key Files
 | File | Description |
 |------|-------------|
+| `accountRequest.ts` | `requestAccountSettings()` / `onAccountSettingsRequested`: event-bus request the shell answers by opening Settings → Account. |
 | `domain.ts` | `SettingsSection` union (`agent-tools`, `advanced`, `cli`, `privacy`, `safety`, `updates`, `language`, `appearance`, `account`) — settings navigation is shared application state, not screen-local state. |
 
 ## Subdirectories
