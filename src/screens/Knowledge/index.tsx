@@ -1,6 +1,6 @@
 // Composes the selected Project Environment's sources and Articles within workspace authority.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { errMessage } from "../../ipc/types";
@@ -11,16 +11,6 @@ import {
   sharedWorkspaceScopeAvailable,
   useCatalogScope,
 } from "../../lib/queries";
-import { captureProductEvent } from "../../features/productAnalytics/client";
-import type {
-  ProductAnalyticsEngine,
-  ProductAnalyticsWorkspaceContextInput,
-} from "../../features/productAnalytics/domain";
-import {
-  productAnalyticsAccessMode,
-  productAnalyticsConnectionEngine,
-  productAnalyticsWorkspaceContext,
-} from "../../features/productAnalytics/outcomes";
 import { workspaceAuthStateQuery } from "../../features/workspaces/queries";
 import { requestWorkspaceLogin } from "../../features/workspaces/loginRequest";
 import { requestWorkspaceSelection } from "../../features/workspaces/selectionRequest";
@@ -49,8 +39,6 @@ import { KnowledgeWorkspaceHeader } from "../../features/knowledge/components/Kn
 import { useKnowledgeGithubInstall } from "../../features/knowledge/useKnowledgeGithubInstall";
 import { useKnowledgeSourceActivity } from "../../features/knowledge/useKnowledgeSourceActivity";
 import {
-  captureKnowledgeSyncOutcome,
-  type PendingKnowledgeSyncAnalytics,
 } from "../../features/knowledge/workspaceModel";
 import AnalysisArticles from "./AnalysisArticles";
 
@@ -126,15 +114,6 @@ export default function Knowledge({
   const [connectionRole, setConnectionRole] = useState("primary");
   const [connectionAlias, setConnectionAlias] = useState("");
   const [view, setView] = useState<KnowledgeEnvironmentView>("sources");
-  const pendingGithubConnectAnalytics =
-    useRef<PendingKnowledgeSyncAnalytics | null>(null);
-  const pendingLocalConnectAnalytics =
-    useRef<PendingKnowledgeSyncAnalytics | null>(null);
-  const pendingBindingAnalytics = useRef<{
-    context: ProductAnalyticsWorkspaceContextInput;
-    engine: ProductAnalyticsEngine;
-    accessMode: "local" | "managed";
-  } | null>(null);
   const {
     state: githubInstallState,
     begin: beginGithubInstall,
@@ -144,10 +123,7 @@ export default function Knowledge({
     refetchRepositories,
     onError: setActionError,
   });
-  const {
-    pendingSyncAnalytics: pendingSourceSyncAnalytics,
-    activity: sourceActivity,
-  } = useKnowledgeSourceActivity(
+  const { activity: sourceActivity } = useKnowledgeSourceActivity(
     sources.data,
     queryClient,
   );
@@ -271,78 +247,19 @@ export default function Knowledge({
 
   const connectGithub = useMutation({
     mutationFn: connectKnowledgeGithubSource,
-    onMutate: () => {
-      const context = productAnalyticsWorkspaceContext(catalogScope);
-      pendingGithubConnectAnalytics.current = context
-        ? {
-            attemptId: crypto.randomUUID(),
-            context,
-            previousGraphRevisionId: null,
-            sourceKind: "github",
-            syncReason: "initial",
-          }
-        : null;
-    },
-    onSuccess: async (source) => {
-      const analyticsAttempt = pendingGithubConnectAnalytics.current;
-      pendingGithubConnectAnalytics.current = null;
-      if (analyticsAttempt) {
-        if (source.health === "ready") {
-          captureKnowledgeSyncOutcome(analyticsAttempt, "success");
-        } else {
-          pendingSourceSyncAnalytics.current.set(
-            source.sourceId,
-            {
-              ...analyticsAttempt,
-              previousGraphRevisionId: source.graphRevisionId,
-            },
-          );
-        }
-      }
+    onSuccess: async () => {
       setActionError(null);
       await refreshInventory();
     },
     onError: async (error) => {
-      captureKnowledgeSyncOutcome(
-        pendingGithubConnectAnalytics.current,
-        "failed",
-      );
-      pendingGithubConnectAnalytics.current = null;
       setActionError(errMessage(error));
       await queryClient.invalidateQueries({ queryKey: sourceKey });
     },
   });
   const connectLocal = useMutation({
     mutationFn: connectKnowledgeLocalFolder,
-    onMutate: () => {
-      const context = productAnalyticsWorkspaceContext(catalogScope);
-      pendingLocalConnectAnalytics.current = context
-        ? {
-            attemptId: crypto.randomUUID(),
-            context,
-            previousGraphRevisionId: null,
-            sourceKind: "local_folder",
-            syncReason: "initial",
-          }
-        : null;
-    },
     onSuccess: async (source) => {
-      const analyticsAttempt = pendingLocalConnectAnalytics.current;
-      pendingLocalConnectAnalytics.current = null;
       if (!source) return;
-      if (analyticsAttempt) {
-        if (source.health === "ready") {
-          captureKnowledgeSyncOutcome(analyticsAttempt, "success");
-        } else {
-          pendingSourceSyncAnalytics.current.set(
-            source.sourceId,
-            {
-              ...analyticsAttempt,
-              previousGraphRevisionId: source.graphRevisionId,
-            },
-          );
-        }
-      }
       setActionError(null);
       await queryClient.invalidateQueries({ queryKey: sourceKey });
       await queryClient.invalidateQueries({
@@ -350,11 +267,6 @@ export default function Knowledge({
       });
     },
     onError: async (error) => {
-      captureKnowledgeSyncOutcome(
-        pendingLocalConnectAnalytics.current,
-        "failed",
-      );
-      pendingLocalConnectAnalytics.current = null;
       setActionError(errMessage(error));
       await queryClient.invalidateQueries({ queryKey: sourceKey });
     },
@@ -372,35 +284,7 @@ export default function Knowledge({
   });
   const bindConnection = useMutation({
     mutationFn: bindKnowledgeEnvironmentConnectionWithRefresh,
-    onMutate: (input) => {
-      const context = productAnalyticsWorkspaceContext(catalogScope);
-      const connection = connections.data?.find(
-        (candidate) => candidate.id === input.connectionId,
-      );
-      const engine = connection
-        ? productAnalyticsConnectionEngine(connection.engine)
-        : null;
-      const accessMode = connection
-        ? productAnalyticsAccessMode(connection.credentialMode)
-        : null;
-      pendingBindingAnalytics.current = context && engine && accessMode
-        ? { context, engine, accessMode }
-        : null;
-    },
-    onSuccess: async (binding) => {
-      const analyticsAttempt = pendingBindingAnalytics.current;
-      pendingBindingAnalytics.current = null;
-      if (analyticsAttempt) {
-        void captureProductEvent({
-          name: "environment_connection_bound",
-          properties: {
-            accessMode: analyticsAttempt.accessMode,
-            engine: analyticsAttempt.engine,
-          },
-          context: analyticsAttempt.context,
-          dedupeId: binding.id,
-        });
-      }
+    onSuccess: async () => {
       setActionError(null);
       await queryClient.invalidateQueries({
         queryKey: knowledgeQueryKeys.environmentConnections(),
@@ -409,10 +293,7 @@ export default function Knowledge({
         queryKey: knowledgeQueryKeys.agentEnvironments(),
       });
     },
-    onError: (error) => {
-      pendingBindingAnalytics.current = null;
-      setActionError(errMessage(error));
-    },
+    onError: (error) => setActionError(errMessage(error)),
   });
   const unbindConnection = useMutation({
     mutationFn: ({ environmentId: id, bindingId }: { environmentId: string; bindingId: string }) =>

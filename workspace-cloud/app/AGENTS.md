@@ -56,7 +56,6 @@ change.
 | `/api/v1/knowledge/github/callback` | `app/api/v1/knowledge/github/callback/route.ts` | GET | GitHub App installation/user-authorization OAuth callback: validates opaque setup state, rechecks workspace `manage` authority, inspects/validates the installation, then upserts `knowledge_github_installation`; redirects to `/auth/github/complete` |
 | `/api/v1/knowledge/github/webhook` | `app/api/v1/knowledge/github/webhook/route.ts` | POST | Verifies the GitHub HMAC signature on a size-bounded body, then updates `knowledge_source` sync state for `push`, `installation`, `installation_repositories`, and `repository` events |
 | `/api/v1/personal/knowledge/scope` | `app/api/v1/personal/knowledge/scope/route.ts` | POST | Provisions/updates the signed-in user's private Personal Knowledge scope (Projects/Environments) from a bounded, strictly-shaped payload |
-| `/api/v1/product-analytics/events` | `app/api/v1/product-analytics/events/route.ts` | POST | Anonymous first-party analytics ingestion: content-type/size checks, ingress + per-installation rate limits, then relays the envelope; distinguishes retryable (429/503) from terminal (400/415/422) outcomes |
 | `/api/v1/providers/planet-scale/callback` | `app/api/v1/providers/planet-scale/callback/route.ts` | GET | PlanetScale OAuth callback: requires the cookie session, consumes single-use state, re-authorizes the workspace, exchanges the code, verifies managed scopes, and persists/reconnects the provider integration (revoking prior leases on reconnect); every outcome, including a missing session, redirects to the token-free `/auth/provider/complete` page |
 | `/api/v1/public/analyses/[slug]` | `app/api/v1/public/analyses/[slug]/route.ts` | GET | Rate-limited, secret-free JSON read of one live (non-revoked) public Analysis Article publication; strict CSP/robots headers |
 | `/api/v1/session` | `app/api/v1/session/route.ts` | GET | Returns the current authenticated user/session identity, or 401 |
@@ -151,15 +150,13 @@ change.
 | `/settings` | `app/settings/page.tsx` | page (RSC) | Settings-moved notice with an Open DopeDB deep link and an install link; reads no session or workspace state — see Settings section below |
 
 ## Layout, misc top-level files
-- `app/layout.tsx` — root server layout: resolves locale, sets metadata (noindex), loads Pretendard + IBM Plex Mono fonts, wraps children in `WorkspaceLocaleProvider` and `WorkspaceWebAnalytics`.
+- `app/layout.tsx` — root server layout: resolves locale, sets metadata (noindex), loads Pretendard + IBM Plex Mono fonts, wraps children in `WorkspaceLocaleProvider`.
 
 ## Components (app/components/)
 | File | Description |
 |------|-------------|
 | `Brand.tsx` | Client. Logo + "DopeDB Workspace" wordmark link to the marketing site |
-| `Controls.tsx` | No directive (server- and client-safe). Only `ControlButton`, the compact command button (`tone` `neutral`/`primary`/`danger`, `size` `small`/`field`); used by the analytics consent controls in `WebAnalyticsProvider.tsx` |
 | `LocaleSwitcher.tsx` | Client. EN/KO toggle link that preserves the current path and query string |
-| `WebAnalyticsProvider.tsx` | Client. Consent-gated analytics provider: checks eligibility (HTTPS, not localhost, no DNT/GPC), reads/writes a `localStorage` consent flag, lazy-loads the Clarity plugin only after consent, and stops tracking before client-side navigation |
 | `WorkspaceLocale.tsx` | Client. React context provider (`WorkspaceLocaleProvider`) and hook (`useWorkspaceLocale`) for the resolved locale |
 
 The identity shell/card/typography/button primitives (`IdentitySingleShell`, `IdentityCard`, `IdentityTitle`, `IdentityPrimaryButton`, etc.) are not in this directory: the sign-in, Desktop approval, provider authorization, GitHub completion, invitation, Article handoff, settings-moved, error, and not-found pages import them from the Desktop design system's `../../src/design-system/components/WorkspaceIdentity.tsx`.
@@ -169,7 +166,7 @@ Workspace administration moved to DopeDB Desktop Settings (ADR `../../docs/adr/0
 
 | File | Description |
 |------|-------------|
-| `page.tsx` | Server. Settings-moved notice: reads no session, account, or workspace state; renders the localized `settingsMoved` copy in the identity shell with an Open DopeDB link (`desktopWorkspaceAccessCallbackUrl`) and a `dopedb.dev#download` install link. `/settings` and `/ko/settings` remain the only paths eligible for opt-in web analytics recording (`lib/web-analytics.ts`) |
+| `page.tsx` | Server. Settings-moved notice: reads no session, account, or workspace state; renders the localized `settingsMoved` copy in the identity shell with an Open DopeDB link (`desktopWorkspaceAccessCallbackUrl`) and a `dopedb.dev#download` install link. |
 
 ## Auth flows (app/auth/*)
 - **Desktop loopback flow** (`auth/desktop`): hosted login, explicit account choice and approval followed by a `127.0.0.1` callback carrying only a 120-second authorization code and state. `api/auth/desktop/authorize` requires exact Origin, cookie-only live session and a request/session-bound nonce; `api/auth/desktop/token` accepts native JSON S256 exchange only, atomically consumes the code and creates a separate Better Auth Bearer session.
@@ -219,7 +216,6 @@ The Desktop approval page owns `DesktopAccountActions.tsx`, which selects an exp
 - `drizzle-orm` — every SQL query and schema reference in `route.ts` files.
 - `sanitize-html` — via `src/design-system/components/AnalysisArticleBody`, used to render public Analysis Article HTML in `analyses/[slug]/PublicAnalysisArticle.tsx`.
 - `@opennextjs/cloudflare` (`getCloudflareContext`) — `api/internal/deployment/route.ts`.
-- `@microsoft/clarity` (via `lib/clarity-plugin`) — lazy-loaded by `components/WebAnalyticsProvider.tsx` only after explicit consent.
 - `next/font/google` (`IBM_Plex_Mono`) and the `pretendard` package — loaded once in `layout.tsx`.
 
 <!-- MANUAL: Any manually added notes below this line are preserved on regeneration -->

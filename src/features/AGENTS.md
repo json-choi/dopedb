@@ -57,7 +57,6 @@ Agent surface reads through `useAcpSessionSnapshot`, and
 | `monitoring/` | Privacy-bounded desktop error monitoring (Sentry); scrubs database/workspace/Agent payloads before an event leaves the WebView. |
 | `onboarding/` | Guided-demo setup composed from existing connection and Project Environment commands. |
 | `operations/` | Single shared adapter for SQL/job/provider approval decisions (`approveOperation`/`rejectOperation`). |
-| `productAnalytics/` | Product analytics consent UI plus the event client and outcome helpers other features call into. |
 | `providers/` | Managed provider access dialogs and the provider domain model. |
 | `queries/` | SQL query/document editor workflow: manual transactions, editor status, and results plumbing. |
 | `query/` | Query execution and run-signal domain, gated by Safety Settings. |
@@ -108,9 +107,6 @@ Agent surface reads through `useAcpSessionSnapshot`, and
 - Branded string ids via a `declare const ...Brand: unique symbol` plus a
   constructor function, so a `ConnectionId` and a `JobId` cannot be swapped by
   accident (`connections/domain.ts`, `jobs/domain.ts`, `erd/domain.ts`).
-- Analytics modules (`*/productAnalytics.ts`) state in their header comment
-  exactly which fields are excluded from the event payload (prompt text, SQL,
-  row data, error bodies) — follow that exclusion list when extending one.
 
 ## Dependencies
 

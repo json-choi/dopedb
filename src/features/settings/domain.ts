@@ -7,7 +7,6 @@ export type SettingsSection =
   | "agent-tools"
   | "advanced"
   | "cli"
-  | "privacy"
   | "safety"
   | "connection"
   | "updates"
@@ -20,7 +19,6 @@ export const settingsSearchKeywords: Record<SettingsSection, string> = {
   "agent-tools": "agent codex claude tools account login 에이전트 도구 설치 플러그인 스킬 계정 로그인",
   advanced: "advanced debug debugging diagnostics logs bug report developer 디버깅 진단 로그 버그 제보 고급",
   cli: "command line terminal path cli 명령줄 터미널 경로",
-  privacy: "privacy analytics telemetry consent 개인정보 분석 통계 동의",
   safety: "read only write approval policy audit schema 읽기 전용 쓰기 권한 승인 정책 감사 스키마 안전",
   connection: "connection database host port credentials environment dev prod staging 연결 데이터베이스 주소 자격 증명 환경 개발 운영",
   updates: "version release upgrade update 버전 릴리스 업그레이드 업데이트",
@@ -45,7 +43,6 @@ export const settingsSections: ReadonlyArray<{
   { id: "cli", label: "settings.cli", group: "agents" },
   { id: "appearance", label: "settings.appearance", group: "application" },
   { id: "language", label: "settings.languageTitle", group: "application" },
-  { id: "privacy", label: "settings.privacy", group: "application" },
   { id: "updates", label: "settings.updates", group: "application" },
   { id: "account", label: "workspaceAdmin.account", group: "account", needsAccount: true },
   { id: "connection", label: "settings.connectionEnvironment", group: "dataSource", needsConnection: true },

@@ -89,13 +89,6 @@ function githubKnowledgePrivateKey(): string | null {
   return key;
 }
 
-function productAnalyticsRelayEnabled(): boolean {
-  const value = optional("PRODUCT_ANALYTICS_RELAY_ENABLED");
-  if (value === null || value === "0") return false;
-  if (value === "1") return true;
-  throw new Error("PRODUCT_ANALYTICS_RELAY_ENABLED must be 0 or 1");
-}
-
 
 function workspaceBackgroundSchedulerEnabled(): boolean {
   const value = optional("WORKSPACE_BACKGROUND_SCHEDULER_ENABLED");
@@ -152,7 +145,6 @@ export const env = {
   githubKnowledgeWebhookSecret: () => optional("GITHUB_KNOWLEDGE_WEBHOOK_SECRET"),
   planetScaleClientId: () => optional("PLANETSCALE_CLIENT_ID"),
   planetScaleClientSecret: () => optional("PLANETSCALE_CLIENT_SECRET"),
-  productAnalyticsRelayEnabled,
   resendApiKey: () => optional("RESEND_API_KEY"),
   vaultBrokerOrigins,
   workspaceInvitationFrom: () => optional("WORKSPACE_INVITATION_FROM"),

@@ -16,7 +16,7 @@ authoritative replacement and scope transition passes through it.
 ## Key Files
 | File | Description |
 |------|-------------|
-| `authPolicy.test.ts` | Cross-checks workspace auth/login-callback URLs and deep-link handling against `src-tauri/tauri*.conf.json`, `src-tauri/capabilities/default.json`, and `workspace-cloud`'s deep-link constant, the one-time database focus of `workspaceAdmin/navigationRequest.ts`, plus a product-analytics fixture. |
+| `authPolicy.test.ts` | Cross-checks workspace auth/login-callback URLs and deep-link handling against `src-tauri/tauri*.conf.json`, `src-tauri/capabilities/default.json`, and `workspace-cloud`'s deep-link constant, the one-time database focus of `workspaceAdmin/navigationRequest.ts`. |
 | `authPolicy.ts` | Workspace identity stays visually stable while the server silently revalidates the OS-keychain session; defines recheck/retry backoff timing (`WORKSPACE_AUTH_RECHECK_MS`, `WORKSPACE_AUTH_RETRY_MS`, exponential `workspaceAuthRetryDelay`). Resource APIs still authorize every sensitive action regardless of this cached visual state. |
 | `cache.ts` | Sole owner of authoritative workspace Query-cache replacement/invalidation and scope-transition cancellation. |
 | `choices.ts` | Pure account/workspace option projection for the switcher and secure-copy dialog; composite values keep duplicate cross-account memberships distinct. |

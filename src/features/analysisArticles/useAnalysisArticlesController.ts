@@ -451,7 +451,7 @@ export function useAnalysisArticlesController({
       setActionFailure(null);
       resetRecheck();
       resetReconfirm();
-      startAnalysisRun({ queryClient, scopeKey, catalogScope, article: articleDocument });
+      startAnalysisRun({ queryClient, scopeKey, article: articleDocument });
     },
   };
 }

@@ -13,9 +13,6 @@ vi.mock("react", async (importOriginal) => ({
   useRef: vi.fn(), useCallback: vi.fn(), useEffect: vi.fn(),
 }));
 vi.mock("../src/lib/i18n", () => ({ useI18n: () => ({ t: () => "start failed" }) }));
-vi.mock("../src/features/agents/productAnalytics", () => ({
-  beginAgentInitializationOutcome: () => vi.fn(),
-}));
 
 function deferred<T>() {
   let resolve: (value: T) => void = () => { throw new Error("promise executor did not run"); };

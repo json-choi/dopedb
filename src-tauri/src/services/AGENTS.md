@@ -14,7 +14,7 @@ Desktop app and the Broker construct features identically.
 
 | File | Description |
 |------|-------------|
-| `mod.rs` | Defines `ApplicationServices`, a `Clone`-able facade holding one composed instance of every feature (`activity`, `agents`, `analysis_article`, `connections`, `catalog`, `document`, `erd`, `job`, `knowledge`, `monitoring`, `operation`, `providers`, `product_analytics`, `queries`, `safety`, `script`, `sql_documents`, `workspace`). `ApplicationServices::with_providers` composes them all from one `Store`, `ConnectionManager`, `OperationRuntime`, and `ProvidersFeature`, so every clone shares the same store and scope-aware connection runtime — one authority boundary per process. |
+| `mod.rs` | Defines `ApplicationServices`, a `Clone`-able facade holding one composed instance of every feature (`activity`, `agents`, `analysis_article`, `connections`, `catalog`, `document`, `erd`, `job`, `knowledge`, `monitoring`, `operation`, `providers`, `queries`, `safety`, `script`, `sql_documents`, `workspace`). `ApplicationServices::with_providers` composes them all from one `Store`, `ConnectionManager`, `OperationRuntime`, and `ProvidersFeature`, so every clone shares the same store and scope-aware connection runtime — one authority boundary per process. |
 
 ## For AI Agents
 

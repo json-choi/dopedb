@@ -14,7 +14,6 @@ import type {
   AcpSessionSummary,
   AgentProvider,
 } from "./domain";
-import { beginAgentInitializationOutcome } from "./productAnalytics";
 import {
   isCurrentAcpFocusRequest,
   isLiveSession,
@@ -166,18 +165,12 @@ export function useAcpActiveSession({
   async function resume() {
     if (!active || starting || active.acpSessionId === null) return;
     const request = beginFocusRequest();
-    const completeAnalytics = beginAgentInitializationOutcome(
-      catalogScope,
-      active.provider,
-    );
     setStarting(true);
     setError(null);
     try {
       const focus = await resumeAgentAcpSession(active.id);
-      completeAnalytics("success");
       recordFocus(focus);
     } catch (reason) {
-      completeAnalytics("failed");
       if (!focusRequestIsCurrent(request)) return;
       setError(agentFailure(reason, t, (error) => t("agent.acpResumeFailed", { error })));
       try {

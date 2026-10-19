@@ -18,7 +18,6 @@
     "binding": "ASSETS"
   },
   "services": [
-    { "binding": "PRODUCT_ANALYTICS", "service": "dopedb-product-analytics" },
     {
       "binding": "WORKER_SELF_REFERENCE",
       "service": "dopedb-workspace"

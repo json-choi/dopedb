@@ -59,16 +59,6 @@ function encode(value: unknown) {
 }
 
 export async function issueWorkloadIdentity(configuration: IdentityConfiguration) {
-  return issueIdentity(configuration, "dopedb:workspace:production");
-}
-
-// The analytics service binding has its own fixed subject, which cannot assume
-// the workspace's KMS or customer-resource grants.
-export async function issueAnalyticsIdentity(configuration: IdentityConfiguration) {
-  return issueIdentity(configuration, "dopedb:analytics:production");
-}
-
-async function issueIdentity(configuration: IdentityConfiguration, subject: string) {
   if (configuration.OIDC_ISSUER !== "https://identity.dopedb.dev"
     || configuration.OIDC_AUDIENCE !== "https://iam.googleapis.com"
     || !/^[a-f0-9]{32}$/.test(configuration.OIDC_ACCOUNT_ID)
@@ -86,7 +76,7 @@ async function issueIdentity(configuration: IdentityConfiguration, subject: stri
   const payload = `${encode({ alg: "RS256", kid: key.kid, typ: "JWT" })}.${encode({
     iss: configuration.OIDC_ISSUER,
     aud: configuration.OIDC_AUDIENCE,
-    sub: subject,
+    sub: "dopedb:workspace:production",
     account_id: configuration.OIDC_ACCOUNT_ID,
     workload_id: configuration.OIDC_WORKLOAD_ID,
     environment: "production",

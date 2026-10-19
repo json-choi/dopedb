@@ -24,7 +24,6 @@ holds pure client-side SQL text analysis with no IPC.
 | `editorStatusStore.ts` | `useSyncExternalStore`-based store for the current `SqlEditorStatus`. |
 | `generated/contracts.ts` | ts-rs-generated wire contracts (`SqlInspection`, `SqlOperationProposal`) from `src-tauri/src/features/queries/adapters/desktop_contracts.rs`; keep synchronized with the Rust DTOs, do not hand-edit its shape without regenerating. |
 | `namespace.ts` | Resolves the default SQL namespace per connection engine (sqlite `main`, postgres `public`, else the database name). |
-| `productAnalytics.ts` | Reduces query runtime state to one content-free product event per manual attempt; SQL text and statement errors never enter retained analytics state. |
 | `resolveMode.ts` | `playground`/`script` resolve-mode type and a non-code masking helper used by mode resolution. |
 | `resultPageCache.ts` | Bounds SQL stream result retention to `SQL_RESULT_CACHE_MAX_PAGES` (6) plus one in-flight page; a page that cannot be read back is retried a bounded number of times with backoff and then reported as a closed reason (`authorityChanged`/`expired`/`unavailable`) instead of being re-requested on every render. |
 | `runPath.ts` | Pure branching logic: backend classification stays authoritative; this only decides combined vs. planned streaming for a manual run. |
@@ -74,7 +73,6 @@ holds pure client-side SQL text analysis with no IPC.
 - `../connections` — `ConnectionProfile`, `ConnectionEngine`.
 - `../operations` — `approveOperation` (used by `useSqlWorkbenchController.ts`).
 - `../query` — `localizeRunSignal`, `useSqlDraftAnalysis`, `formatSqlDocument`, `SqlParameter`.
-- `../productAnalytics/client` — event capture for manual-attempt outcomes.
 - `../../ipc/generated/protocol-contracts`, `../../ipc/types`.
 
 ### External

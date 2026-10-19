@@ -18,17 +18,10 @@ import {
   testConnection,
   upsertConnection,
 } from "../connections/tauriAdapter";
-import { connectionVerificationRecorder } from "../connections/connectionVerificationAnalytics";
 import {
   demoSqliteConnection,
   findDemoSqliteConnection,
 } from "../connections/presets";
-import { captureProductEvent } from "../productAnalytics/client";
-import {
-  productAnalyticsAccessMode,
-  productAnalyticsConnectionEngine,
-  productAnalyticsWorkspaceContext,
-} from "../productAnalytics/outcomes";
 import {
   ensureGuidedDemoEnvironment,
   GuidedDemoEnvironmentMissingError,
@@ -64,40 +57,12 @@ export function useGuidedDemoSetup({
       const existing = findDemoSqliteConnection(connections, path);
       const saved =
         existing ?? (await upsertConnection(demoSqliteConnection(path)));
-      const recordVerification = connectionVerificationRecorder(scope, saved);
-      const receipt = await testConnection(saved.id).catch((error) => {
-        recordVerification("failed");
-        throw error;
-      });
-      if (!receipt.ok) {
-        recordVerification("failed");
-        throw new Error(receipt.failure.detail);
-      }
-      recordVerification("success");
+      const receipt = await testConnection(saved.id);
+      if (!receipt.ok) throw new Error(receipt.failure.detail);
 
       if (scope.workspaceKind === "personal") {
-        const setup = await ensureGuidedDemoEnvironment(saved);
+        await ensureGuidedDemoEnvironment(saved);
         await refreshGuidedDemoQueries(queryClient, scope, saved.id);
-        const analyticsContext = productAnalyticsWorkspaceContext(scope);
-        if (analyticsContext && setup.createdEnvironmentId) {
-          void captureProductEvent({
-            name: "knowledge_environment_created",
-            properties: { creationKind: "project_default" },
-            context: analyticsContext,
-            dedupeId: setup.createdEnvironmentId,
-          });
-        }
-        if (analyticsContext && setup.binding) {
-          void captureProductEvent({
-            name: "environment_connection_bound",
-            properties: {
-              accessMode: productAnalyticsAccessMode(saved.credentialMode),
-              engine: productAnalyticsConnectionEngine(saved.engine),
-            },
-            context: analyticsContext,
-            dedupeId: setup.binding.id,
-          });
-        }
       }
 
       if (!existing) await refreshConnections();

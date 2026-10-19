@@ -51,7 +51,6 @@ import {
   resetWorkspaceResourceQueries,
   resumePendingWorkspaceResourceQueries,
 } from "../../../lib/queryClient";
-import { captureProductEvent } from "../../productAnalytics/client";
 import {
   menuInitialFocusForTriggerKey,
   type MenuInitialFocus,
@@ -81,10 +80,8 @@ export default function WorkspaceAccount({
   const loginAttempt = useRef(0);
   const pendingLogin = useRef<{
     attempt: number;
-    analyticsAttemptId: string;
     attemptId?: string;
   } | null>(null);
-  const completedLoginAnalyticsAttempts = useRef(new Set<string>());
   const membershipRefreshInFlight = useRef<Promise<void> | null>(null);
   const membershipRefreshRetryTimer = useRef<number | null>(null);
   const membershipRefreshFailures = useRef(0);
@@ -304,31 +301,6 @@ export default function WorkspaceAccount({
     refreshWorkspaceAuthority,
   ]);
 
-  function captureLoginOutcome(
-    analyticsAttemptId: string,
-    outcome: "success" | "denied" | "expired" | "failed",
-    actorId?: string,
-  ) {
-    if (completedLoginAnalyticsAttempts.current.has(analyticsAttemptId)) return;
-    completedLoginAnalyticsAttempts.current.add(analyticsAttemptId);
-    if (outcome === "success" && actorId) {
-      void captureProductEvent({
-        name: "workspace_authentication_completed",
-        properties: { outcome },
-        context: { actorId },
-        dedupeId: analyticsAttemptId,
-      });
-      return;
-    }
-    if (outcome !== "success") {
-      void captureProductEvent({
-        name: "workspace_authentication_completed",
-        properties: { outcome },
-        dedupeId: analyticsAttemptId,
-      });
-    }
-  }
-
   function abortLoginAttempt() {
     loginAttempt.current += 1;
     if (pendingLogin.current?.attemptId) {
@@ -347,14 +319,9 @@ export default function WorkspaceAccount({
   async function handleLoginResult(result: WorkspaceLoginResult, attempt: number) {
     if (pendingLogin.current?.attempt !== attempt) return true;
     if (result.status === "signedIn" && result.user) {
-      const analyticsAttemptId = pendingLogin.current.analyticsAttemptId;
       pendingLogin.current = null;
       if (loginAttempt.current === attempt) loginAttempt.current += 1;
       setLoginPhase("idle");
-      // Native returns `signedIn` only after the account credential has
-      // been durably accepted. Scope synchronization is measured separately and
-      // must not turn a successful authentication into a second outcome.
-      captureLoginOutcome(analyticsAttemptId, "success", result.user.id);
       try {
         await refreshWorkspaceAuthority(workspaceAuthState);
         toast(t("workspace.loginComplete", { name: result.user.displayName }), "success");
@@ -364,11 +331,9 @@ export default function WorkspaceAccount({
       return true;
     }
     if (result.status === "denied" || result.status === "expired") {
-      const analyticsAttemptId = pendingLogin.current.analyticsAttemptId;
       pendingLogin.current = null;
       if (loginAttempt.current === attempt) loginAttempt.current += 1;
       setLoginPhase("idle");
-      captureLoginOutcome(analyticsAttemptId, result.status);
       toast(
         t(result.status === "denied" ? "workspace.loginDenied" : "workspace.loginExpired"),
         "error",
@@ -435,9 +400,8 @@ export default function WorkspaceAccount({
     if (loginPhase !== "idle" || pendingLogin.current) return;
     abortLoginAttempt();
     const attempt = ++loginAttempt.current;
-    const analyticsAttemptId = crypto.randomUUID();
     let attemptId: string | undefined;
-    pendingLogin.current = { attempt, analyticsAttemptId };
+    pendingLogin.current = { attempt };
     setLoginPhase("starting");
     try {
       const authorization = await beginDesktopWorkspaceLogin();
@@ -445,7 +409,6 @@ export default function WorkspaceAccount({
       if (loginAttempt.current !== attempt) return;
       pendingLogin.current = {
         attempt,
-        analyticsAttemptId,
         attemptId,
       };
       setLoginPhase("waiting");
@@ -457,7 +420,6 @@ export default function WorkspaceAccount({
     } catch (error) {
       if (loginAttempt.current !== attempt) return;
       pendingLogin.current = null;
-      captureLoginOutcome(analyticsAttemptId, "failed");
       toast(t("workspace.loginFailed", { error: errMessage(error) }), "error");
     } finally {
       if (attemptId) {

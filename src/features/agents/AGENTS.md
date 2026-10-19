@@ -11,7 +11,7 @@ proposal review/approval surfaces, and the external (`dopedb agent start`)
 Agent request gate. Per repeated header comments across this feature, an
 Agent session's resource grant is immutable once started, at most one selected
 database may be a write target, and prompt/tool/result content must never
-enter product analytics.
+leave the session boundary.
 
 ## Key Files
 
@@ -45,7 +45,6 @@ enter product analytics.
 | `externalAgentRequestModel.ts` | Pure selection/projection for external Agent approval: `requestedExternalAgentResources`, `externalAgentResourceBoundaries`. |
 | `externalAgentTauriAdapter.ts` | `listExternalAgentRequests`, `respondExternalAgentRequest`, `onExternalAgentRequested`, `onExternalAgentRequestFinished`. |
 | `layout.ts` | Responsive geometry policy for the Agent dock: `AGENT_DOCK_{DEFAULT,MIN,MAX}_WIDTH`, `agentDockLayout` (`compact`\|`docked`\|`overlay`), `clampAgentDockWidth`, `shouldOverlayAgentDock`. |
-| `productAnalytics.ts` | `beginAgentInitializationOutcome`, `observeAgentTurnOutcome`; per its header comment, observes only closed lifecycle outcomes — prompt text, ACP error messages, event payloads, connection details, and session ids never enter the analytics contract. |
 | `queryKeys.ts` | `agentQueryKeys` (`pluginStatus`, `cliStatus`, `sqlProposalReview`). |
 | `queryOptions.ts` | `agentPluginStatusQuery`, `agentCliDetectionQuery`, `agentSqlProposalReviewQuery` — read-only `queryOptions()` for local Agent CLI/adapter status and Agent SQL proposal reviews. |
 | `selectionContext.tsx` | `AgentSelectionProvider`/`useAgentSelection` — React context carrying the active table/connection selection into the composer's context attachment. |
@@ -77,9 +76,6 @@ enter product analytics.
   in-flight grant.
 - At most one selected database may be a write target per session
   (`useAgentScopeSelection.ts`) — do not add a path that allows more than one.
-- Never add prompt text, tool payloads, connection details, or session
-  identifiers to `productAnalytics.ts`'s event contract; it is scoped to
-  closed lifecycle outcomes only, by design.
 - `sessionStore.ts`'s `AcpSessionStore` is the one writer for live ACP session
   state — read it via `useAcpSessionSnapshot`, do not create a second
   `listAgentAcpSessions`/`onAgentAcpChanged` subscription elsewhere.

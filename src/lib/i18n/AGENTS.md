@@ -39,7 +39,6 @@ together.
 | `knowledge.ts` | Project Knowledge messages. |
 | `localHistory.ts` | `localHistory.*` |
 | `onboarding.ts` | `onboarding.*` |
-| `productAnalytics.ts` | `productAnalytics.*` |
 | `providerProvisioning.ts` | `managedAccess.*` (managed-access provisioning flow; note the namespace does not match the filename). |
 | `results.ts` | `grid.*`, `results.*` |
 | `rowEditor.ts` | `rowEditor.*` |

@@ -14,7 +14,6 @@ to their source (see `src/`, `src-tauri/`, `dopedb-cli/tests/`,
 | File | Description |
 |------|-------------|
 | `critical-test-budget.json` | The manifest enforcing the repository's **hard 208-test budget**: `policy.totalCap: 208` split into `frontendCap: 80` (max 16 frontend test files) and `rustCap: 128` (max 26 Rust test files). Every counted file is listed with its exact `tests` count and a `protects` rationale string (≥12 characters) explaining the critical behavior it covers — a security/safety invariant, a public wire contract, or a core end-to-end journey, per root `AGENTS.md`. The separate `harness` section tracks the `*.harness.*` contract suites, which run under their own vitest configs **outside** that 208 budget (see below). |
-| `fixtures/product-analytics-v1.json` | Shared golden fixture for the schema-v1 product-analytics event envelope; imported by `../product-analytics-cloudflare/src/index.harness.ts` as `golden` so the Cloudflare Worker's contract test and any Desktop-side producer stay aligned on one canonical example payload. |
 
 ## The `harness` section (outside the 208 budget)
 
@@ -63,8 +62,8 @@ caps, which needs an explicit owner request.
 ## Dependencies
 
 ### Internal
-- Read by `../scripts/check-critical-test-budget.mjs`. `fixtures/product-analytics-v1.json` is read by `../product-analytics-cloudflare/src/index.harness.ts` (see `../product-analytics-cloudflare/AGENTS.md`).
-- The `harness` section names three vitest configs it must stay consistent with: `../workspace-cloud/vitest.contracts.config.ts` (`pnpm --dir workspace-cloud test:contracts`, also reached by root `pnpm check:knowledge`), `../product-analytics-cloudflare/vitest.config.ts` (`pnpm analytics:cloudflare:test`), and `../workspace-scheduler-cloudflare/vitest.config.ts` (`pnpm scheduler:cloudflare:test`).
+- Read by `../scripts/check-critical-test-budget.mjs`.
+- The `harness` section names two vitest configs it must stay consistent with: `../workspace-cloud/vitest.contracts.config.ts` (`pnpm --dir workspace-cloud test:contracts`, also reached by root `pnpm check:knowledge`), and `../workspace-scheduler-cloudflare/vitest.config.ts` (`pnpm scheduler:cloudflare:test`).
 
 ### External
 - None.

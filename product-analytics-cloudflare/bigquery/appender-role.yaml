@@ -1,7 +1,0 @@
-title: DopeDB Analytics Appender
-description: Insert analytics events and read destination metadata, without data reads or query jobs.
-stage: GA
-includedPermissions:
-  - bigquery.datasets.get
-  - bigquery.tables.get
-  - bigquery.tables.updateData

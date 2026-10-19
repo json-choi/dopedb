@@ -181,8 +181,6 @@ SQL 데이터 값, provider 로고, 그래프 범주에는 앱 chrome 팔레트�
 | [`src/features/knowledge/components/KnowledgeWorkspaceHeader.tsx`](../src/features/knowledge/components/KnowledgeWorkspaceHeader.tsx) | background·card·foreground·muted-foreground·input·ring; 접근 상태만 semantic 색 |
 | [`src/features/knowledge/components/ProjectSetupDialog.tsx`](../src/features/knowledge/components/ProjectSetupDialog.tsx) | background·card·foreground·muted-foreground·input·ring; 접근 상태만 semantic 색 |
 | [`src/features/localHistory/LocalHistoryToolWindow.tsx`](../src/features/localHistory/LocalHistoryToolWindow.tsx) | sidebar·foreground·muted-foreground·selection·ring |
-| [`src/features/productAnalytics/ConsentPrompt.tsx`](../src/features/productAnalytics/ConsentPrompt.tsx) | popover·foreground·muted-foreground·primary·ring |
-| [`src/features/productAnalytics/WorkspaceScopeObserver.tsx`](../src/features/productAnalytics/WorkspaceScopeObserver.tsx) | 직접 색 없음: 범위 상태 관찰 |
 | [`src/features/providers/ManagedAccessDialog.tsx`](../src/features/providers/ManagedAccessDialog.tsx) | popover·foreground·input·ring; 연결 진단만 semantic 색 |
 | [`src/features/providers/ProviderCredentialDialog.tsx`](../src/features/providers/ProviderCredentialDialog.tsx) | popover·foreground·input·ring; 연결 진단만 semantic 색 |
 | [`src/features/providers/ProviderCredentialsMenuItem.tsx`](../src/features/providers/ProviderCredentialsMenuItem.tsx) | popover·foreground·input·ring; 연결 진단만 semantic 색 |
@@ -287,7 +285,6 @@ SQL 데이터 값, provider 로고, 그래프 범주에는 앱 chrome 팔레트�
 | [`src/screens/Settings/Appearance.tsx`](../src/screens/Settings/Appearance.tsx) | background·card·foreground·muted-foreground·input·ring; 접근 상태만 semantic 색 |
 | [`src/screens/Settings/Cli/AdvancedShellTerminal.tsx`](../src/screens/Settings/Cli/AdvancedShellTerminal.tsx) | editor·foreground·ring; 출력의 ANSI는 terminal 전용 palette |
 | [`src/screens/Settings/Cli/index.tsx`](../src/screens/Settings/Cli/index.tsx) | background·card·foreground·muted-foreground·input·ring; 접근 상태만 semantic 색 |
-| [`src/screens/Settings/Privacy/index.tsx`](../src/screens/Settings/Privacy/index.tsx) | background·card·foreground·muted-foreground·input·ring; 접근 상태만 semantic 색 |
 | [`src/screens/Settings/Safety/AccessPermissions.tsx`](../src/screens/Settings/Safety/AccessPermissions.tsx) | background·card·foreground·muted-foreground·input·ring; 접근 상태만 semantic 색 |
 | [`src/screens/Settings/Safety/MonitoringAccess.tsx`](../src/screens/Settings/Safety/MonitoringAccess.tsx) | background·card·foreground·muted-foreground·input·ring; 접근 상태만 semantic 색 |
 | [`src/screens/Settings/Safety/index.tsx`](../src/screens/Settings/Safety/index.tsx) | background·card·foreground·muted-foreground·input·ring; 접근 상태만 semantic 색 |
@@ -323,9 +320,7 @@ SQL 데이터 값, provider 로고, 그래프 범주에는 앱 chrome 팔레트�
 | [`workspace-cloud/app/auth/sign-in/SignInButton.tsx`](../workspace-cloud/app/auth/sign-in/SignInButton.tsx) | Workspace `surface`·`text`·`accent`·`ring`: 버튼/입력 |
 | [`workspace-cloud/app/auth/sign-in/page.tsx`](../workspace-cloud/app/auth/sign-in/page.tsx) | 직접 색 없음 또는 상위 Workspace surface 상속 |
 | [`workspace-cloud/app/components/Brand.tsx`](../workspace-cloud/app/components/Brand.tsx) | Workspace 브랜드 자산 + `text`; Desktop palette 직접 사용 없음 |
-| [`workspace-cloud/app/components/Controls.tsx`](../workspace-cloud/app/components/Controls.tsx) | Workspace `surface`·`text`·`accent`·`ring`: 버튼/입력 |
 | [`workspace-cloud/app/components/LocaleSwitcher.tsx`](../workspace-cloud/app/components/LocaleSwitcher.tsx) | Workspace `background`·`surface`·`text`·`accent`; 위험 동작만 danger |
-| [`workspace-cloud/app/components/WebAnalyticsProvider.tsx`](../workspace-cloud/app/components/WebAnalyticsProvider.tsx) | 직접 색 없음 또는 상위 Workspace surface 상속 |
 | [`workspace-cloud/app/components/WorkspaceLocale.tsx`](../workspace-cloud/app/components/WorkspaceLocale.tsx) | 직접 색 없음 또는 상위 Workspace surface 상속 |
 | [`workspace-cloud/app/error.tsx`](../workspace-cloud/app/error.tsx) | Workspace `surface`·`text`·`danger`/`accent`: 안내/복구 |
 | [`workspace-cloud/app/layout.tsx`](../workspace-cloud/app/layout.tsx) | 직접 색 없음 또는 상위 Workspace surface 상속 |
@@ -349,7 +344,6 @@ SQL 데이터 값, provider 로고, 그래프 범주에는 앱 chrome 팔레트�
 | [`site/app/MarketingButton.tsx`](../site/app/MarketingButton.tsx) | site `paper`/`ink` 또는 `landing-night`/`cream` + `landing-signal` |
 | [`site/app/PlatformDownloads.tsx`](../site/app/PlatformDownloads.tsx) | site `paper`/`ink` 또는 `landing-night`/`cream` + `landing-signal` |
 | [`site/app/SitePageEffects.tsx`](../site/app/SitePageEffects.tsx) | 직접 색 없음 또는 site 상위 surface 상속 |
-| [`site/app/TrackedLink.tsx`](../site/app/TrackedLink.tsx) | 직접 색 없음 또는 site 상위 surface 상속 |
 | [`site/app/components/LegalDocument.tsx`](../site/app/components/LegalDocument.tsx) | site `paper`·`ink`·`muted`·`line`; 링크/CTA만 brand |
 | [`site/app/layout.tsx`](../site/app/layout.tsx) | 직접 색 없음 또는 site 상위 surface 상속 |
 | [`site/app/page.tsx`](../site/app/page.tsx) | 직접 색 없음 또는 site 상위 surface 상속 |

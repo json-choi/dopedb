@@ -65,22 +65,6 @@ updates:
           - "*"
 
   - package-ecosystem: npm
-    directory: /product-analytics-cloudflare
-    # Disable routine version PRs; security updates remain enabled.
-    open-pull-requests-limit: 0
-    schedule:
-      interval: weekly
-    labels:
-      - dependencies
-    commit-message:
-      prefix: chore(deps-analytics)
-    groups:
-      analytics-dependencies:
-        applies-to: security-updates
-        patterns:
-          - "*"
-
-  - package-ecosystem: npm
     directory: /workspace-scheduler-cloudflare
     # Disable routine version PRs; security updates remain enabled.
     open-pull-requests-limit: 0
