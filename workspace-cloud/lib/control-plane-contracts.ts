@@ -2,6 +2,26 @@
 // through these exact validators, while the same versioned JSON fixture is decoded
 // by Rust so independently deployed clients cannot drift silently.
 
+import {
+  DIRECT_FAILURE_CODES,
+  DIRECT_LEVELS,
+  DIRECT_PRINCIPAL_STATES,
+  DIRECT_REVOCATION_KINDS,
+  DIRECT_VERIFIER_KINDS,
+  isDirectEngine,
+  isValidDirectVerifier,
+  isValidPrincipalMarker,
+  isValidPrincipalName,
+  parseDirectScope,
+  verifierKindForEngine,
+  type DirectEngine,
+  type DirectFailureCode,
+  type DirectLevel,
+  type DirectPrincipalState,
+  type DirectRevocationKind,
+  type DirectVerifierKind,
+} from "./workspace-direct-access-core";
+
 export const CONTROL_PLANE_CONTRACTS_SCHEMA_VERSION = 1 as const;
 export const MANAGED_LEASE_CONTRACT_VERSION = "access-v6" as const;
 
@@ -300,4 +320,328 @@ export function managedLeaseResponse(value: unknown): ManagedLeaseResponse {
       expiresAt: lease.expiresAt,
     },
   };
+}
+
+// ---- Direct shared databases -------------------------------------------------
+// Members upload only a public verifier; an administrator device receives a work list
+// and answers with receipts. No payload below ever carries a password, a username
+// beyond the server-generated principal name, or an administrator credential.
+
+const WORKSPACE_ROLES = ["viewer", "analyst", "editor", "admin", "owner"] as const;
+const CONNECTION_CAPABILITIES = ["view", "read", "use", "manage"] as const;
+const GRANT_ORIGINS = ["explicit", "team"] as const;
+const ACCESS_MODES = ["view", "read", "write", "manage"] as const;
+const WORK_ACTIONS = ["apply", "drop", "idle"] as const;
+const REVOCATION_STATES = ["pending", "applied", "cancelled"] as const;
+const MAX_MEMBERS = 1_000;
+const MAX_GRANTS_PER_MEMBER = 1_000;
+const MAX_WORK_ITEMS = 1_000;
+const MAX_SAFE = Number.MAX_SAFE_INTEGER;
+
+export type DirectProvisioningStatus = Readonly<{
+  state: DirectPrincipalState | "not_requested";
+  level: DirectLevel;
+  principalName: string | null;
+  lastSyncedAt: string | null;
+  failureCode: DirectFailureCode | null;
+}>;
+
+export type WorkspaceMemberGrantEntry = Readonly<{
+  connectionId: string;
+  capability: (typeof CONNECTION_CAPABILITIES)[number];
+  origin: (typeof GRANT_ORIGINS)[number];
+  effectiveAccessMode: (typeof ACCESS_MODES)[number];
+  provisioning?: DirectProvisioningStatus;
+}>;
+
+export type WorkspaceMemberGrants = Readonly<{
+  workspaceId: string;
+  members: ReadonlyArray<Readonly<{
+    memberId: string;
+    role: (typeof WORKSPACE_ROLES)[number];
+    revocationPending: boolean;
+    grants: readonly WorkspaceMemberGrantEntry[];
+  }>>;
+}>;
+
+export type DirectVerifierRequest = Readonly<{
+  verifierKind: DirectVerifierKind;
+  verifier: string;
+}>;
+
+export type DirectWorkListItem = Readonly<{
+  principalId: string;
+  memberId: string;
+  principalName: string;
+  marker: string;
+  verifierKind: DirectVerifierKind;
+  verifier: string;
+  verifierVersion: number;
+  appliedVerifierVersion: number;
+  appliedLevel: DirectLevel;
+  desiredLevel: DirectLevel;
+  state: DirectPrincipalState;
+  serverRoleOid: string | null;
+  claimExpiresAt: string | null;
+  action: (typeof WORK_ACTIONS)[number];
+}>;
+
+export type DirectRevocationEntry = Readonly<{
+  id: string;
+  connectionId: string;
+  memberId: string;
+  principalName: string | null;
+  kind: DirectRevocationKind;
+  targetLevel: "none" | "read";
+  state: (typeof REVOCATION_STATES)[number];
+  createdAt: string;
+}>;
+
+export type DirectWorkList = Readonly<{
+  connectionId: string;
+  engine: DirectEngine;
+  scope: readonly string[];
+  scopeRevision: number;
+  writeCeiling: boolean;
+  serverFingerprint: string | null;
+  items: readonly DirectWorkListItem[];
+  revocations: readonly DirectRevocationEntry[];
+}>;
+
+export type DirectReceiptRequest = Readonly<{
+  principalId: string;
+  deviceId: string;
+  from: "applying" | "drop_pending";
+  to: "ready" | "failed" | "dropped";
+  appliedLevel: DirectLevel;
+  appliedVerifierVersion: number;
+  scopeRevisionApplied: number | null;
+  serverRoleOid: string | null;
+  serverFingerprint: string | null;
+  failureCode: DirectFailureCode | null;
+}>;
+
+function oneOf<const Literals extends readonly string[]>(value: unknown, literals: Literals): Literals[number] {
+  if (!isStringLiteral(value, literals)) throw new Error("Invalid direct access contract");
+  return value;
+}
+
+function uuidField(value: unknown) {
+  if (typeof value !== "string" || !UUID.test(value)) throw new Error("Invalid direct access contract");
+  return value;
+}
+
+function boundedText(value: unknown, max: number) {
+  if (typeof value !== "string" || value.length < 1 || value.length > max || /[\u0000-\u001f\u007f]/u.test(value)) {
+    throw new Error("Invalid direct access contract");
+  }
+  return value;
+}
+
+function nullable<T>(value: unknown, parse: (value: unknown) => T): T | null {
+  return value === null ? null : parse(value);
+}
+
+function safeInteger(value: unknown, min: number) {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < min || value > MAX_SAFE) {
+    throw new Error("Invalid direct access contract");
+  }
+  return value;
+}
+
+function direct<T>(value: unknown, required: readonly string[], optional: readonly string[], build: (record: Record<string, unknown>) => T): T {
+  const record = exactRecord(value, required, optional);
+  if (!record) throw new Error("Invalid direct access contract");
+  return build(record);
+}
+
+export function parseDirectProvisioningStatus(value: unknown): DirectProvisioningStatus {
+  return direct(value, ["state", "level", "principalName", "lastSyncedAt", "failureCode"], [], (record) => {
+    const state = oneOf(record.state, [...DIRECT_PRINCIPAL_STATES, "not_requested"] as const);
+    const principalName = nullable(record.principalName, (name) => {
+      if (!isValidPrincipalName(name)) throw new Error("Invalid direct access contract");
+      return name;
+    });
+    const failureCode = nullable(record.failureCode, (code) => oneOf(code, DIRECT_FAILURE_CODES));
+    const lastSyncedAt = nullable(record.lastSyncedAt, (instant) => {
+      if (!validRfc3339Instant(instant)) throw new Error("Invalid direct access contract");
+      return instant;
+    });
+    const level = oneOf(record.level, DIRECT_LEVELS);
+    if (
+      (state === "not_requested") !== (principalName === null)
+      || (state === "failed") !== (failureCode !== null)
+      || ((state === "not_requested" || state === "dropped") && level !== "none")
+      || (state === "ready" && level === "none")
+    ) throw new Error("Invalid direct access contract");
+    return { state, level, principalName, lastSyncedAt, failureCode };
+  });
+}
+
+export function parseWorkspaceMemberGrants(value: unknown): WorkspaceMemberGrants {
+  return direct(value, ["workspaceId", "members"], [], (record) => {
+    if (!Array.isArray(record.members) || record.members.length > MAX_MEMBERS) {
+      throw new Error("Invalid direct access contract");
+    }
+    const seen = new Set<string>();
+    const members = record.members.map((entry) => direct(entry, ["memberId", "role", "revocationPending", "grants"], [], (member) => {
+      const memberId = boundedText(member.memberId, 128);
+      if (seen.has(memberId) || typeof member.revocationPending !== "boolean"
+        || !Array.isArray(member.grants) || member.grants.length > MAX_GRANTS_PER_MEMBER) {
+        throw new Error("Invalid direct access contract");
+      }
+      seen.add(memberId);
+      const connections = new Set<string>();
+      const grants = member.grants.map((grant) => direct(grant,
+        ["connectionId", "capability", "origin", "effectiveAccessMode"], ["provisioning"], (item) => {
+          const connectionId = uuidField(item.connectionId);
+          if (connections.has(connectionId)) throw new Error("Invalid direct access contract");
+          connections.add(connectionId);
+          const capability = oneOf(item.capability, CONNECTION_CAPABILITIES);
+          const origin = oneOf(item.origin, GRANT_ORIGINS);
+          if (origin === "team" && capability !== "view" && capability !== "read") {
+            throw new Error("Invalid direct access contract");
+          }
+          return {
+            connectionId,
+            capability,
+            origin,
+            effectiveAccessMode: oneOf(item.effectiveAccessMode, ACCESS_MODES),
+            ...(item.provisioning === undefined
+              ? {}
+              : { provisioning: parseDirectProvisioningStatus(item.provisioning) }),
+          };
+        }));
+      return {
+        memberId,
+        role: oneOf(member.role, WORKSPACE_ROLES),
+        revocationPending: member.revocationPending,
+        grants,
+      };
+    }));
+    return { workspaceId: uuidField(record.workspaceId), members };
+  });
+}
+
+export function parseDirectVerifierRequest(value: unknown): DirectVerifierRequest {
+  return direct(value, ["verifierKind", "verifier"], [], (record) => {
+    const verifierKind = oneOf(record.verifierKind, DIRECT_VERIFIER_KINDS);
+    if (!isValidDirectVerifier(verifierKind, record.verifier)) throw new Error("Invalid direct access contract");
+    return { verifierKind, verifier: record.verifier };
+  });
+}
+
+function parseRevocationEntry(value: unknown): DirectRevocationEntry {
+  return direct(value, ["id", "connectionId", "memberId", "principalName", "kind", "targetLevel", "state", "createdAt"], [], (record) => {
+    if (!validRfc3339Instant(record.createdAt)) throw new Error("Invalid direct access contract");
+    return {
+      id: uuidField(record.id),
+      connectionId: uuidField(record.connectionId),
+      memberId: boundedText(record.memberId, 128),
+      principalName: nullable(record.principalName, (name) => {
+        if (!isValidPrincipalName(name)) throw new Error("Invalid direct access contract");
+        return name;
+      }),
+      kind: oneOf(record.kind, DIRECT_REVOCATION_KINDS),
+      targetLevel: oneOf(record.targetLevel, ["none", "read"] as const),
+      state: oneOf(record.state, REVOCATION_STATES),
+      createdAt: record.createdAt,
+    };
+  });
+}
+
+export function parseDirectRevocationEntry(value: unknown): DirectRevocationEntry {
+  return parseRevocationEntry(value);
+}
+
+function parseWorkListItem(value: unknown, engine: DirectEngine): DirectWorkListItem {
+  return direct(value, [
+    "principalId", "memberId", "principalName", "marker", "verifierKind", "verifier", "verifierVersion",
+    "appliedVerifierVersion", "appliedLevel", "desiredLevel", "state", "serverRoleOid", "claimExpiresAt", "action",
+  ], [], (record) => {
+    const verifierKind = oneOf(record.verifierKind, DIRECT_VERIFIER_KINDS);
+    const verifierVersion = safeInteger(record.verifierVersion, 1);
+    const appliedVerifierVersion = safeInteger(record.appliedVerifierVersion, 0);
+    if (
+      verifierKind !== verifierKindForEngine(engine)
+      || !isValidDirectVerifier(verifierKind, record.verifier)
+      || !isValidPrincipalName(record.principalName)
+      || !isValidPrincipalMarker(record.marker)
+      || appliedVerifierVersion > verifierVersion
+    ) throw new Error("Invalid direct access contract");
+    return {
+      principalId: uuidField(record.principalId),
+      memberId: boundedText(record.memberId, 128),
+      principalName: record.principalName,
+      marker: record.marker,
+      verifierKind,
+      verifier: record.verifier as string,
+      verifierVersion,
+      appliedVerifierVersion,
+      appliedLevel: oneOf(record.appliedLevel, DIRECT_LEVELS),
+      desiredLevel: oneOf(record.desiredLevel, DIRECT_LEVELS),
+      state: oneOf(record.state, DIRECT_PRINCIPAL_STATES),
+      serverRoleOid: nullable(record.serverRoleOid, (oid) => boundedText(oid, 64)),
+      claimExpiresAt: nullable(record.claimExpiresAt, (instant) => {
+        if (!validRfc3339Instant(instant)) throw new Error("Invalid direct access contract");
+        return instant;
+      }),
+      action: oneOf(record.action, WORK_ACTIONS),
+    };
+  });
+}
+
+export function parseDirectWorkList(value: unknown): DirectWorkList {
+  return direct(value, [
+    "connectionId", "engine", "scope", "scopeRevision", "writeCeiling", "serverFingerprint", "items", "revocations",
+  ], [], (record) => {
+    if (!isDirectEngine(record.engine) || typeof record.writeCeiling !== "boolean"
+      || !Array.isArray(record.items) || record.items.length > MAX_WORK_ITEMS
+      || !Array.isArray(record.revocations) || record.revocations.length > MAX_WORK_ITEMS) {
+      throw new Error("Invalid direct access contract");
+    }
+    const engine = record.engine;
+    return {
+      connectionId: uuidField(record.connectionId),
+      engine,
+      scope: parseDirectScope(engine, record.scope),
+      scopeRevision: safeInteger(record.scopeRevision, 1),
+      writeCeiling: record.writeCeiling,
+      serverFingerprint: nullable(record.serverFingerprint, (fingerprint) => boundedText(fingerprint, 128)),
+      items: record.items.map((item) => parseWorkListItem(item, engine)),
+      revocations: record.revocations.map(parseRevocationEntry),
+    };
+  });
+}
+
+export function parseDirectReceiptRequest(value: unknown): DirectReceiptRequest {
+  return direct(value, [
+    "principalId", "deviceId", "from", "to", "appliedLevel", "appliedVerifierVersion",
+    "scopeRevisionApplied", "serverRoleOid", "serverFingerprint", "failureCode",
+  ], [], (record) => {
+    const from = oneOf(record.from, ["applying", "drop_pending"] as const);
+    const to = oneOf(record.to, ["ready", "failed", "dropped"] as const);
+    const appliedLevel = oneOf(record.appliedLevel, DIRECT_LEVELS);
+    const failureCode = nullable(record.failureCode, (code) => oneOf(code, DIRECT_FAILURE_CODES));
+    const serverRoleOid = nullable(record.serverRoleOid, (oid) => boundedText(oid, 64));
+    const serverFingerprint = nullable(record.serverFingerprint, (fingerprint) => boundedText(fingerprint, 128));
+    if (
+      !(from === "applying" ? to === "ready" || to === "failed" : to === "dropped" || to === "failed")
+      || (to === "failed") !== (failureCode !== null)
+      || (to === "ready" && (appliedLevel === "none" || serverRoleOid === null || serverFingerprint === null))
+      || (to === "dropped" && appliedLevel !== "none")
+    ) throw new Error("Invalid direct access contract");
+    return {
+      principalId: uuidField(record.principalId),
+      deviceId: boundedText(record.deviceId, 128),
+      from,
+      to,
+      appliedLevel,
+      appliedVerifierVersion: safeInteger(record.appliedVerifierVersion, 0),
+      scopeRevisionApplied: nullable(record.scopeRevisionApplied, (revision) => safeInteger(revision, 1)),
+      serverRoleOid,
+      serverFingerprint,
+      failureCode,
+    };
+  });
 }

@@ -13,6 +13,7 @@ pub mod command;
 pub mod connection;
 pub mod control_plane;
 pub mod ddl;
+pub mod direct_access;
 pub mod discovery;
 pub mod document_command;
 pub mod error;
@@ -43,6 +44,7 @@ pub use command::{
 pub use connection::*;
 pub use control_plane::*;
 pub use ddl::*;
+pub use direct_access::*;
 pub use discovery::{
     RuntimeDiscovery, RuntimeDiscoveryError, RUNTIME_DIRECTORY_NAME, RUNTIME_FILE_NAME,
     RUNTIME_SCHEMA_VERSION,

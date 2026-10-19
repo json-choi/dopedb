@@ -305,5 +305,440 @@
         { "path": ["definition", "query", "maxRows"], "value": 50001 }
       ]
     }
+  ],
+  "directAccess": {
+    "provisioning": {
+      "state": "ready",
+      "level": "read",
+      "principalName": "dopedb_0123456789abcdef0123",
+      "lastSyncedAt": "2026-10-20T01:02:03.456Z",
+      "failureCode": null
+    },
+    "provisioningNotRequested": {
+      "state": "not_requested",
+      "level": "none",
+      "principalName": null,
+      "lastSyncedAt": null,
+      "failureCode": null
+    },
+    "provisioningFailed": {
+      "state": "failed",
+      "level": "none",
+      "principalName": "dopedb_0123456789abcdef0123",
+      "lastSyncedAt": null,
+      "failureCode": "owns_objects"
+    },
+    "memberGrants": {
+      "workspaceId": "11111111-1111-4111-8111-111111111111",
+      "members": [
+        {
+          "memberId": "member-fixture-1",
+          "role": "analyst",
+          "revocationPending": false,
+          "grants": [
+            {
+              "connectionId": "44444444-4444-4444-8444-444444444444",
+              "capability": "read",
+              "origin": "team",
+              "effectiveAccessMode": "read",
+              "provisioning": {
+                "state": "ready",
+                "level": "read",
+                "principalName": "dopedb_0123456789abcdef0123",
+                "lastSyncedAt": "2026-10-20T01:02:03.456Z",
+                "failureCode": null
+              }
+            },
+            {
+              "connectionId": "66666666-6666-4666-8666-666666666666",
+              "capability": "use",
+              "origin": "explicit",
+              "effectiveAccessMode": "read"
+            }
+          ]
+        },
+        {
+          "memberId": "member-fixture-2",
+          "role": "editor",
+          "revocationPending": true,
+          "grants": []
+        }
+      ]
+    },
+    "verifierRequestPostgres": {
+      "verifierKind": "scram-sha-256",
+      "verifier": "SCRAM-SHA-256$4096:Y0ea1poJCyWCd+yPum+ZQQ==$h7BOWJYfmpnYU9QEagtbeT58Pku9IfWsqPsXwgzbHYs=:s+rNM0M7MbUlI1EDLJs+ei56p3ONXezfDdbGJoCFPAY="
+    },
+    "verifierRequestMysql": {
+      "verifierKind": "caching_sha2",
+      "verifier": "$A$005$abcdefghijklmnopqrstC/R0iWNjUF5epeXWrOjr.xOnYKQJsftGfUKPxxb58oQ"
+    },
+    "workList": {
+      "connectionId": "44444444-4444-4444-8444-444444444444",
+      "engine": "postgres",
+      "scope": [
+        "public",
+        "analytics"
+      ],
+      "scopeRevision": 3,
+      "writeCeiling": true,
+      "serverFingerprint": "16384",
+      "items": [
+        {
+          "principalId": "77777777-7777-4777-8777-777777777777",
+          "memberId": "member-fixture-1",
+          "principalName": "dopedb_0123456789abcdef0123",
+          "marker": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "verifierKind": "scram-sha-256",
+          "verifier": "SCRAM-SHA-256$4096:Y0ea1poJCyWCd+yPum+ZQQ==$h7BOWJYfmpnYU9QEagtbeT58Pku9IfWsqPsXwgzbHYs=:s+rNM0M7MbUlI1EDLJs+ei56p3ONXezfDdbGJoCFPAY=",
+          "verifierVersion": 2,
+          "appliedVerifierVersion": 1,
+          "appliedLevel": "read",
+          "desiredLevel": "write",
+          "state": "ready",
+          "serverRoleOid": "16421",
+          "claimExpiresAt": null,
+          "action": "apply"
+        }
+      ],
+      "revocations": [
+        {
+          "id": "88888888-8888-4888-8888-888888888888",
+          "connectionId": "44444444-4444-4444-8444-444444444444",
+          "memberId": "member-fixture-3",
+          "principalName": "dopedb_0123456789abcdef0123",
+          "kind": "self_leave",
+          "targetLevel": "none",
+          "state": "pending",
+          "createdAt": "2026-10-20T01:00:00.000Z"
+        }
+      ]
+    },
+    "receipt": {
+      "principalId": "77777777-7777-4777-8777-777777777777",
+      "deviceId": "device-fixture-1",
+      "from": "applying",
+      "to": "ready",
+      "appliedLevel": "write",
+      "appliedVerifierVersion": 2,
+      "scopeRevisionApplied": 3,
+      "serverRoleOid": "16421",
+      "serverFingerprint": "16384",
+      "failureCode": null
+    }
+  },
+  "directAccessRejections": [
+    {
+      "name": "work list rejects a quoting character in the scope",
+      "contract": "directWorkList",
+      "mutations": [{ "path": ["scope", 1], "value": "ana\"lytics" }]
+    },
+    {
+      "name": "work list rejects a scope above thirty-two entries",
+      "contract": "directWorkList",
+      "mutations": [{ "path": ["scope"], "value": ["s0", "s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "s10", "s11", "s12", "s13", "s14", "s15", "s16", "s17", "s18", "s19", "s20", "s21", "s22", "s23", "s24", "s25", "s26", "s27", "s28", "s29", "s30", "s31", "s32"] }]
+    },
+    {
+      "name": "provisioning rejects an unknown state",
+      "contract": "directProvisioning",
+      "mutations": [
+        {
+          "path": [
+            "state"
+          ],
+          "value": "active"
+        }
+      ]
+    },
+    {
+      "name": "provisioning rejects a failure code outside the closed set",
+      "contract": "directProvisioningFailed",
+      "mutations": [
+        {
+          "path": [
+            "failureCode"
+          ],
+          "value": "password_wrong"
+        }
+      ]
+    },
+    {
+      "name": "provisioning rejects a malformed principal name",
+      "contract": "directProvisioning",
+      "mutations": [
+        {
+          "path": [
+            "principalName"
+          ],
+          "value": "dopedb_ZZZ"
+        }
+      ]
+    },
+    {
+      "name": "provisioning rejects a secret-bearing key",
+      "contract": "directProvisioning",
+      "mutations": [
+        {
+          "path": [
+            "password"
+          ],
+          "value": "fixture-secret-never-log"
+        }
+      ]
+    },
+    {
+      "name": "member grants reject an unknown effective access mode",
+      "contract": "directMemberGrants",
+      "mutations": [
+        {
+          "path": [
+            "members",
+            0,
+            "grants",
+            0,
+            "effectiveAccessMode"
+          ],
+          "value": "owner"
+        }
+      ]
+    },
+    {
+      "name": "member grants reject a team grant above read",
+      "contract": "directMemberGrants",
+      "mutations": [
+        {
+          "path": [
+            "members",
+            0,
+            "grants",
+            0,
+            "capability"
+          ],
+          "value": "manage"
+        }
+      ]
+    },
+    {
+      "name": "verifier request rejects a SCRAM verifier with the wrong iteration count",
+      "contract": "directVerifierRequestPostgres",
+      "mutations": [
+        {
+          "path": [
+            "verifier"
+          ],
+          "value": "SCRAM-SHA-256$4097:Y0ea1poJCyWCd+yPum+ZQQ==$h7BOWJYfmpnYU9QEagtbeT58Pku9IfWsqPsXwgzbHYs=:s+rNM0M7MbUlI1EDLJs+ei56p3ONXezfDdbGJoCFPAY="
+        }
+      ]
+    },
+    {
+      "name": "verifier request rejects a truncated SCRAM verifier",
+      "contract": "directVerifierRequestPostgres",
+      "mutations": [
+        {
+          "path": [
+            "verifier"
+          ],
+          "value": "SCRAM-SHA-256$4096:Y0ea1poJCyWCd+yPum+ZQQ==$h7BOWJYfmpnYU9QEagtbeT58Pku9IfWsqPsXwgzbHYs=:s+rNM0M7MbUlI1EDLJs+ei56p3ONXezfDdbGJoC"
+        }
+      ]
+    },
+    {
+      "name": "verifier request rejects a verifier for the other engine",
+      "contract": "directVerifierRequestPostgres",
+      "mutations": [
+        {
+          "path": [
+            "verifierKind"
+          ],
+          "value": "caching_sha2"
+        }
+      ]
+    },
+    {
+      "name": "verifier request rejects a MySQL salt containing a dollar sign",
+      "contract": "directVerifierRequestMysql",
+      "mutations": [
+        {
+          "path": [
+            "verifier"
+          ],
+          "value": "$A$005$abcdefghi$klmnopqrstC/R0iWNjUF5epeXWrOjr.xOnYKQJsftGfUKPxxb58oQ"
+        }
+      ]
+    },
+    {
+      "name": "verifier request rejects a MySQL salt containing a quote",
+      "contract": "directVerifierRequestMysql",
+      "mutations": [
+        {
+          "path": [
+            "verifier"
+          ],
+          "value": "$A$005$abcdefghi'klmnopqrstC/R0iWNjUF5epeXWrOjr.xOnYKQJsftGfUKPxxb58oQ"
+        }
+      ]
+    },
+    {
+      "name": "verifier request rejects a MySQL digest with the wrong rounds",
+      "contract": "directVerifierRequestMysql",
+      "mutations": [
+        {
+          "path": [
+            "verifier"
+          ],
+          "value": "$A$006$abcdefghijklmnopqrstC/R0iWNjUF5epeXWrOjr.xOnYKQJsftGfUKPxxb58oQ"
+        }
+      ]
+    },
+    {
+      "name": "verifier request rejects an extra password field",
+      "contract": "directVerifierRequestPostgres",
+      "mutations": [
+        {
+          "path": [
+            "password"
+          ],
+          "value": "fixture-secret-never-log"
+        }
+      ]
+    },
+    {
+      "name": "work list rejects an unknown desired level",
+      "contract": "directWorkList",
+      "mutations": [
+        {
+          "path": [
+            "items",
+            0,
+            "desiredLevel"
+          ],
+          "value": "admin"
+        }
+      ]
+    },
+    {
+      "name": "work list rejects a verifier that does not match the engine",
+      "contract": "directWorkList",
+      "mutations": [
+        {
+          "path": [
+            "engine"
+          ],
+          "value": "mysql"
+        }
+      ]
+    },
+    {
+      "name": "work list rejects a system schema in the scope",
+      "contract": "directWorkList",
+      "mutations": [
+        {
+          "path": [
+            "scope",
+            1
+          ],
+          "value": "pg_catalog"
+        }
+      ]
+    },
+    {
+      "name": "work list rejects a duplicate scope entry",
+      "contract": "directWorkList",
+      "mutations": [
+        {
+          "path": [
+            "scope",
+            1
+          ],
+          "value": "public"
+        }
+      ]
+    },
+    {
+      "name": "work list rejects an applied verifier version above the stored version",
+      "contract": "directWorkList",
+      "mutations": [
+        {
+          "path": [
+            "items",
+            0,
+            "appliedVerifierVersion"
+          ],
+          "value": 3
+        }
+      ]
+    },
+    {
+      "name": "receipt rejects a ready transition without a server fingerprint",
+      "contract": "directReceipt",
+      "mutations": [
+        {
+          "path": [
+            "serverFingerprint"
+          ],
+          "value": null
+        }
+      ]
+    },
+    {
+      "name": "receipt rejects a failed transition without a failure code",
+      "contract": "directReceipt",
+      "mutations": [
+        {
+          "path": [
+            "to"
+          ],
+          "value": "failed"
+        }
+      ]
+    },
+    {
+      "name": "receipt rejects a transition outside the claimed states",
+      "contract": "directReceipt",
+      "mutations": [
+        {
+          "path": [
+            "from"
+          ],
+          "value": "ready"
+        }
+      ]
+    },
+    {
+      "name": "receipt rejects a secret-bearing key",
+      "contract": "directReceipt",
+      "mutations": [
+        {
+          "path": [
+            "adminPassword"
+          ],
+          "value": "fixture-secret-never-log"
+        }
+      ]
+    },
+    {
+      "name": "revocation rejects an unknown kind",
+      "contract": "directRevocation",
+      "mutations": [
+        {
+          "path": [
+            "kind"
+          ],
+          "value": "expired"
+        }
+      ]
+    },
+    {
+      "name": "revocation rejects a target level that keeps write",
+      "contract": "directRevocation",
+      "mutations": [
+        {
+          "path": [
+            "targetLevel"
+          ],
+          "value": "write"
+        }
+      ]
+    }
   ]
 }
