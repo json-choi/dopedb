@@ -73,6 +73,7 @@ export type WorkspaceAdminOperation =
   | { kind: "cancelInvitation"; workspaceId: WorkspaceId; invitationId: string }
   | { kind: "listConnections"; workspaceId: WorkspaceId }
   | { kind: "listConnectionGrants"; workspaceId: WorkspaceId; connectionId: string }
+  | { kind: "listMemberGrants"; workspaceId: WorkspaceId }
   | {
       kind: "grantConnectionAccess";
       workspaceId: WorkspaceId;

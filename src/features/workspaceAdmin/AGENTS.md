@@ -32,8 +32,9 @@ with a closed operation; the Bearer session and provider OAuth state stay in Rus
 |-----------|---------|
 | `dateFormat.ts` | `formatAdminDate` / `adminLocale`: the one UI-language date and time formatter for every panel here and the Settings account section. |
 | `workspaces/` | New-workspace dialog. |
-| `members/` | Member directory, invitations, role changes and removal. |
-| `access/` | Database access: team read sharing, member grants, conflict review, shared-database removal. |
+| `members/` | Member directory, invitations, role changes and removal, plus the single canonical editor of per-member per-shared-database permission (none / read / write for managed, member-local and direct-connection databases, with provisioning status chips) fed by `listMemberGrants`, and the pending-revocation list. |
+| `accessLowering/` | `useAccessLowering`, the one place that sends an access-lowering change: a provisioned (direct connection) database goes through `applyDirectRevocation` first, anything else runs its plain operation. `AccessLoweringPrompt` and `DirectAdminCredentialForm` render an unfinished change (missing admin credential, failed steps) with enter-credential / leave-pending actions. |
+| `access/` | Database-level settings only: team read sharing, write status, credential mode, conflict review and applying a preserved deletion. Per-member grants are not edited here; it links to Members. |
 | `providers/` | Provider accounts (`accounts/`), Google Cloud SQL setup (`gcp/`), managed database import and Neon bootstrap (`databases/`), and the Neon branch manager (`neonBranches/`). |
 | `lifecycle/` | Owner-only backups, encryption-key rotation and workspace deletion. |
 
@@ -51,6 +52,11 @@ with a closed operation; the Bearer session and provider OAuth state stay in Rus
   instead of calling the auth adapter directly.
 - Sections are shown only when they can act: members/access/providers for owners
   and admins, lifecycle for owners. Do not add disabled placeholders for other roles.
+- Any change that lowers a member's database access (grant lower/remove, role
+  change that lowers the effective level, member removal, shared-database
+  deletion) is sent through `useAccessLowering`, never by calling
+  `runWorkspaceAdmin` directly; provisioned databases need their accounts revoked
+  on the database before the workspace change commits.
 - Destructive actions (remove member, revoke invitation, delete shared database,
   delete or restore a backup) go through `ConfirmButton`'s blocking confirmation
   dialog; scheduling workspace deletion requires the exact workspace name. Never use

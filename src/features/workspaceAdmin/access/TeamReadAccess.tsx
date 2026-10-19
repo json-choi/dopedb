@@ -9,7 +9,7 @@ import { SettingsRow } from "../../../design-system/components/SettingsList";
 import { LoadingLabel, StatusBadge } from "../../../design-system/components/Status";
 import { useI18n } from "../../../lib/i18n";
 import type { WorkspaceAdminScope } from "../domain";
-import type { GrantSnapshot } from "./domain";
+import type { TeamReadState } from "./domain";
 
 export default function TeamReadAccess({
   scope,
@@ -21,7 +21,7 @@ export default function TeamReadAccess({
   onChange,
 }: {
   scope: WorkspaceAdminScope;
-  snapshot: GrantSnapshot | undefined;
+  snapshot: TeamReadState | undefined;
   loadFailed: boolean;
   locked: boolean;
   saving: boolean;
@@ -29,12 +29,10 @@ export default function TeamReadAccess({
   onChange: (enabled: boolean) => void;
 }) {
   const { t } = useI18n();
-  const actorGrant = snapshot?.grants.find((grant) => grant.memberId === snapshot.actorMemberId);
-  // Team read is a workspace-admin policy on a database the admin manages; anyone
-  // else sees its state without a control the server would refuse.
-  const canChange = scope.canManage
-    && actorGrant?.capability === "manage"
-    && (actorGrant.role === "admin" || actorGrant.role === "owner");
+  // Team read is a workspace-admin policy on a database the admin manages (only such
+  // databases are listed here); anyone else sees its state without a control the
+  // server would refuse.
+  const canChange = scope.canManage;
 
   const action: ReactNode = !snapshot || !canChange ? undefined : snapshot.teamReadEnabled ? (
     <ConfirmButton

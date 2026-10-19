@@ -51,6 +51,7 @@ export default function SharedDatabaseRow({
 }) {
   const { t } = useI18n();
   const managedAccess = connection.credentialMode === "managed";
+  const direct = connection.provisioning != null;
   const repairable = canRepairManagedAccess(connection, managed);
   const removable = canRemoveSharedConnection(connection);
   const path = managed ? managedTargetPath(managed, provider) : "";
@@ -90,13 +91,17 @@ export default function SharedDatabaseRow({
           <span className="tw:flex tw:min-w-0 tw:items-center tw:gap-2">
             <StatusBadge
               density="compact"
-              title={t(managedAccess
-                ? "workspaceProviderDatabases.managedModeHint"
-                : "workspaceProviderDatabases.localModeHint")}
+              title={t(direct
+                ? "workspaceProviderDatabases.directModeHint"
+                : managedAccess
+                  ? "workspaceProviderDatabases.managedModeHint"
+                  : "workspaceProviderDatabases.localModeHint")}
             >
-              {t(managedAccess
-                ? "workspaceProviderDatabases.managedMode"
-                : "workspaceProviderDatabases.localMode")}
+              {t(direct
+                ? "directAccess.badge"
+                : managedAccess
+                  ? "workspaceProviderDatabases.managedMode"
+                  : "workspaceProviderDatabases.localMode")}
             </StatusBadge>
             {target ? (
               <Tooltip label={target}>
@@ -109,7 +114,9 @@ export default function SharedDatabaseRow({
               </Tooltip>
             ) : managedAccess ? null : (
               <span className="tw:min-w-0 tw:truncate tw:text-xs tw:text-muted-foreground">
-                {t("workspaceProviderDatabases.localModeHint")}
+                {t(direct
+                  ? "workspaceProviderDatabases.directModeHint"
+                  : "workspaceProviderDatabases.localModeHint")}
               </span>
             )}
           </span>

@@ -1,7 +1,10 @@
 // Workspace management → Members for one team workspace. Composes the invite form, the
-// member list and the pending invitations from a single directory read. Every write goes
-// through the members command controller, one at a time; the control plane authorizes
-// each command, so this panel only hides actions the server would always refuse.
+// pending revocations, the member list (each row expands to that member's permission on
+// every shared database, the single place those grants are edited) and the pending
+// invitations. Every write goes through the members command controller, one at a time;
+// the control plane authorizes each command, so this panel only hides actions the
+// server would always refuse.
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Icon } from "../../../components/Icon";
 import Skeleton from "../../../components/Skeleton";
@@ -10,14 +13,21 @@ import {
   SettingsList,
   SettingsSectionHeader,
 } from "../../../design-system/components/SettingsList";
-import { InlineNotice } from "../../../design-system/components/Status";
+import { InlineNotice, LoadingLabel } from "../../../design-system/components/Status";
 import { useI18n } from "../../../lib/i18n";
 import { useLinkCopy } from "../../../lib/useLinkCopy";
+import { manageableDatabases } from "../access/domain";
+import { sharedDatabasesQuery } from "../access/queries";
+import AccessLoweringPrompt from "../accessLowering/AccessLoweringPrompt";
+import { useAccessLowering } from "../accessLowering/useAccessLowering";
 import type { WorkspaceAdminPanelProps } from "../navigationRequest";
-import { invitationExpired, reinviteRole } from "./domain";
+import { invitationExpired, memberDisplayName, reinviteRole, type WorkspaceMember } from "./domain";
 import InviteForm from "./InviteForm";
+import MemberGrantEditor from "./MemberGrantEditor";
 import { InvitationRow, MemberRow } from "./MemberDirectoryRows";
-import { memberDirectoryQuery } from "./queries";
+import { MemberGrantsShapeError } from "./memberGrants";
+import { memberDirectoryQuery, memberGrantsQuery } from "./queries";
+import RevocationPending from "./RevocationPending";
 import {
   commandTarget,
   memberFailureMessage,
@@ -38,7 +48,23 @@ export default function MembersPanel({ scope }: WorkspaceAdminPanelProps) {
   const i18n = useI18n();
   const { t } = i18n;
   const directory = useQuery(memberDirectoryQuery(scope));
-  const commands = useMemberCommands(scope);
+  const grants = useQuery(memberGrantsQuery(scope));
+  const databases = useQuery(sharedDatabasesQuery(scope));
+  const lowering = useAccessLowering(scope);
+  const manageable = useMemo(
+    () => (databases.data ? manageableDatabases(databases.data) : []),
+    [databases.data],
+  );
+  const manageableById = useMemo(
+    () => new Map(manageable.map((database) => [database.id, database])),
+    [manageable],
+  );
+  const commands = useMemberCommands(scope, {
+    lowering,
+    grants: grants.data,
+    databases: manageableById,
+  });
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const links = useLinkCopy();
   const data = directory.data;
   const now = Date.now();
@@ -56,6 +82,7 @@ export default function MembersPanel({ scope }: WorkspaceAdminPanelProps) {
     ? orphaned.message
     : null;
   const memberOrphan = orphaned && !invitationOrphan ? orphaned.message : null;
+  const memberNames = new Map((data?.members ?? []).map((item) => [item.id, memberDisplayName(item)]));
   const retry = (
     <Button
       size="compact"
@@ -66,6 +93,62 @@ export default function MembersPanel({ scope }: WorkspaceAdminPanelProps) {
       {t("workspaceAdmin.retry")}
     </Button>
   );
+
+  function renderGrants(member: WorkspaceMember) {
+    if (grants.isPending || databases.isPending) {
+      return <LoadingLabel>{t("workspaceMembers.grantsLoading")}</LoadingLabel>;
+    }
+    if (!grants.data || !databases.data) {
+      const error = grants.error ?? databases.error;
+      return (
+        <InlineNotice
+          tone="danger"
+          icon="alert"
+          role="alert"
+          action={
+            <Button
+              size="compact"
+              onClick={() => {
+                void grants.refetch();
+                void databases.refetch();
+              }}
+            >
+              {t("workspaceAdmin.retry")}
+            </Button>
+          }
+        >
+          {t(error instanceof MemberGrantsShapeError
+            ? "workspaceMembers.loadIncompatible"
+            : "workspaceMembers.grantsLoadFailed")}
+        </InlineNotice>
+      );
+    }
+    const self = member.userId === scope.accountId;
+    const running = commands.pending?.kind === "setGrant" && commands.pending.memberId === member.id
+      ? commands.pending
+      : null;
+    return (
+      <MemberGrantEditor
+        member={member}
+        memberName={memberDisplayName(member)}
+        row={grants.data.find((row) => row.memberId === member.id)}
+        databases={manageable}
+        locked={commands.busy || lowering.incomplete !== null}
+        self={self}
+        pending={running ? { connectionId: running.connectionId, next: running.next } : null}
+        onChange={(database, next) =>
+          commands.run({
+            kind: "setGrant",
+            memberId: member.id,
+            connectionId: database.id,
+            previous: grants.data
+              ?.find((row) => row.memberId === member.id)
+              ?.grants.find((grant) => grant.connectionId === database.id)?.capability ?? null,
+            next,
+          })}
+      />
+    );
+  }
 
   return (
     <div
@@ -109,6 +192,13 @@ export default function MembersPanel({ scope }: WorkspaceAdminPanelProps) {
         <p className="tw:m-0 tw:text-xs tw:leading-body tw:text-muted-foreground">
           {t("workspaceMembers.membersHint")}
         </p>
+        <AccessLoweringPrompt lowering={lowering} memberName={(id) => memberNames.get(id) ?? null} />
+        <RevocationPending
+          scope={scope}
+          lowering={lowering}
+          memberName={(id) => memberNames.get(id) ?? t("directAccess.lowering.aMember")}
+          busy={commands.busy}
+        />
         {directory.isPending ? (
           <Skeleton lines={3} />
         ) : !data ? (
@@ -142,6 +232,9 @@ export default function MembersPanel({ scope }: WorkspaceAdminPanelProps) {
                     busy={commands.busy}
                     pending={pendingTarget === member.id ? commands.pending : null}
                     failure={failureTarget === member.id ? failure?.message ?? null : null}
+                    expanded={expandedId === member.id}
+                    onToggle={() => setExpandedId(expandedId === member.id ? null : member.id)}
+                    grants={renderGrants(member)}
                     onChangeRole={(role) =>
                       commands.run({ kind: "changeRole", memberId: member.id, role })}
                     onRemove={() => commands.run({ kind: "remove", memberId: member.id })}

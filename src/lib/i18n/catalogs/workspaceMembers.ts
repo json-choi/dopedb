@@ -3,7 +3,7 @@ import { defineCatalog } from "../types";
 
 export const workspaceMembersCatalog = defineCatalog(
   {
-    "workspaceMembers.description": "Invite members, choose their workspace role, and remove access.",
+    "workspaceMembers.description": "Invite members, choose their workspace role, set their access to each shared database, and remove access.",
     "workspaceMembers.inviteTitle": "Invite a member",
     "workspaceMembers.emailLabel": "Email",
     "workspaceMembers.emailPlaceholder": "name@example.com",
@@ -34,6 +34,45 @@ export const workspaceMembersCatalog = defineCatalog(
     "workspaceMembers.removeConfirm":
       "{member} will lose access to {workspace}. Their workspace access, database grants and running database credentials are revoked immediately.",
     "workspaceMembers.removing": "Removing…",
+    "workspaceMembers.databaseAccessToggle": "Database access for {member}",
+    "workspaceMembers.databaseAccessFor": "Database access for {member}",
+    "workspaceMembers.accessTo": "Access to {database} for {member}",
+    "workspaceMembers.noManagedDatabases":
+      "You don't manage any shared database here. A member who manages a database can give you manage access.",
+    "workspaceMembers.levelWriteDirect": "Write · member's own account",
+    "workspaceMembers.writeBlockedCeiling":
+      "Write is unavailable: this database's write ceiling is off for everyone.",
+    "workspaceMembers.writeBlockedManaged":
+      "Write is unavailable: writes are off for this database or its provider connection has no write identity.",
+    "workspaceMembers.writeBlockedRole":
+      "Write is unavailable: this member's workspace role is limited to read.",
+    "workspaceMembers.grantsLoading": "Loading database access…",
+    "workspaceMembers.grantsLoadFailed": "Could not load database access.",
+    "workspaceMembers.grantFailed": "Could not change this member's database access.",
+    "workspaceMembers.errorRevocationRequired":
+      "This member's database accounts have to be revoked first. Reload and try again, or apply the pending item.",
+    "workspaceMembers.pendingTitle": "Waiting for revocation",
+    "workspaceMembers.pendingHint":
+      "These changes lower database access but have not been applied. Until they are, the member's access is capped at the target level.",
+    "workspaceMembers.pendingKindRemoved": "Member removal",
+    "workspaceMembers.pendingKindGrant": "Access lowered or removed",
+    "workspaceMembers.pendingKindRole": "Role change",
+    "workspaceMembers.pendingKindTeamRead": "Team read turned off",
+    "workspaceMembers.pendingKindDeleted": "Shared database removal",
+    "workspaceMembers.pendingKindLeft": "Member left",
+    "workspaceMembers.pendingKindAccountDeleted": "Account deleted",
+    "workspaceMembers.pendingToNone": "to no access",
+    "workspaceMembers.pendingToRead": "to read",
+    "workspaceMembers.pendingSince": "since {date}",
+    "workspaceMembers.pendingApply": "Apply now",
+    "workspaceMembers.pendingWorking": "Applying…",
+    "workspaceMembers.pendingSynced": "Applied {applied}, {pending} still pending.",
+    "workspaceMembers.pendingSkipped":
+      "This device could not reach the database, or another device is working on it.",
+    "workspaceMembers.pendingRepeat":
+      "Repeat this change from this device to enter the admin credential.",
+    "workspaceMembers.pendingApplyFailed": "Could not apply this item.",
+    "workspaceMembers.pendingCancelFailed": "Could not cancel this item.",
     "workspaceMembers.loadFailed": "Could not load members and invitations.",
     "workspaceMembers.loadIncompatible":
       "The workspace service returned a member list this version of DopeDB cannot read.",
@@ -77,7 +116,7 @@ export const workspaceMembersCatalog = defineCatalog(
     "workspaceMembers.errorMembershipLimit": "This workspace has reached its member limit.",
   },
   {
-    "workspaceMembers.description": "구성원을 초대하고 워크스페이스 역할을 정하거나 접근을 제거합니다.",
+    "workspaceMembers.description": "구성원을 초대하고 워크스페이스 역할과 공유 데이터베이스별 접근을 정하거나 접근을 제거합니다.",
     "workspaceMembers.inviteTitle": "구성원 초대",
     "workspaceMembers.emailLabel": "이메일",
     "workspaceMembers.emailPlaceholder": "name@example.com",
@@ -108,6 +147,41 @@ export const workspaceMembersCatalog = defineCatalog(
     "workspaceMembers.removeConfirm":
       "{member} 님은 {workspace}에 더 이상 접근할 수 없습니다. 워크스페이스 접근 권한, DB 권한과 실행 중인 DB 자격 증명이 즉시 회수됩니다.",
     "workspaceMembers.removing": "제거하는 중…",
+    "workspaceMembers.databaseAccessToggle": "{member}의 데이터베이스 접근",
+    "workspaceMembers.databaseAccessFor": "{member}의 데이터베이스 접근",
+    "workspaceMembers.accessTo": "{member}의 {database} 접근",
+    "workspaceMembers.noManagedDatabases":
+      "관리 권한이 있는 공유 데이터베이스가 없습니다. 해당 데이터베이스의 관리자에게 관리 권한을 요청하세요.",
+    "workspaceMembers.levelWriteDirect": "쓰기 · 구성원 본인 계정",
+    "workspaceMembers.writeBlockedCeiling": "쓰기를 선택할 수 없습니다. 이 데이터베이스의 쓰기 상한이 모두에게 꺼져 있습니다.",
+    "workspaceMembers.writeBlockedManaged":
+      "쓰기를 선택할 수 없습니다. 이 데이터베이스의 쓰기가 꺼져 있거나 공급자 연결에 쓰기 신원이 없습니다.",
+    "workspaceMembers.writeBlockedRole": "쓰기를 선택할 수 없습니다. 이 구성원의 워크스페이스 역할은 읽기까지만 가능합니다.",
+    "workspaceMembers.grantsLoading": "데이터베이스 접근을 불러오는 중…",
+    "workspaceMembers.grantsLoadFailed": "데이터베이스 접근을 불러오지 못했습니다.",
+    "workspaceMembers.grantFailed": "이 구성원의 데이터베이스 접근을 변경하지 못했습니다.",
+    "workspaceMembers.errorRevocationRequired":
+      "먼저 이 구성원의 데이터베이스 계정을 회수해야 합니다. 새로 고친 뒤 다시 시도하거나 대기 항목을 적용하세요.",
+    "workspaceMembers.pendingTitle": "회수 대기",
+    "workspaceMembers.pendingHint":
+      "데이터베이스 접근을 낮추는 변경이 아직 적용되지 않았습니다. 적용될 때까지 구성원의 접근은 목표 수준으로 제한됩니다.",
+    "workspaceMembers.pendingKindRemoved": "구성원 제거",
+    "workspaceMembers.pendingKindGrant": "접근 낮춤 또는 제거",
+    "workspaceMembers.pendingKindRole": "역할 변경",
+    "workspaceMembers.pendingKindTeamRead": "팀 읽기 해제",
+    "workspaceMembers.pendingKindDeleted": "공유 데이터베이스 제거",
+    "workspaceMembers.pendingKindLeft": "구성원 탈퇴",
+    "workspaceMembers.pendingKindAccountDeleted": "계정 삭제",
+    "workspaceMembers.pendingToNone": "접근 없음으로",
+    "workspaceMembers.pendingToRead": "읽기로",
+    "workspaceMembers.pendingSince": "{date}부터",
+    "workspaceMembers.pendingApply": "지금 적용",
+    "workspaceMembers.pendingWorking": "적용하는 중…",
+    "workspaceMembers.pendingSynced": "{applied}건 적용, {pending}건 대기 중입니다.",
+    "workspaceMembers.pendingSkipped": "이 기기가 데이터베이스에 연결하지 못했거나 다른 기기가 작업 중입니다.",
+    "workspaceMembers.pendingRepeat": "관리자 자격 증명을 입력하려면 이 기기에서 같은 변경을 다시 실행하세요.",
+    "workspaceMembers.pendingApplyFailed": "이 항목을 적용하지 못했습니다.",
+    "workspaceMembers.pendingCancelFailed": "이 항목을 취소하지 못했습니다.",
     "workspaceMembers.loadFailed": "구성원과 초대 목록을 불러오지 못했습니다.",
     "workspaceMembers.loadIncompatible":
       "워크스페이스 서비스가 이 버전의 DopeDB에서 읽을 수 없는 구성원 목록을 반환했습니다.",

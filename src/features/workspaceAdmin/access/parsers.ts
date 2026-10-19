@@ -1,14 +1,12 @@
 // Validates control-plane bodies for Database access before they reach the cache.
 // A body this Desktop cannot interpret safely becomes one typed error instead of a
 // partially rendered list, so the screen shows an explicit incompatible state.
-import {
-  isConnectionCapability,
-  type ConflictPayload,
-  type ConflictVersion,
-  type ConnectionConflict,
-  type GrantSnapshot,
-  type MemberGrant,
-  type SharedDatabase,
+import type {
+  ConflictPayload,
+  ConflictVersion,
+  ConnectionConflict,
+  SharedDatabase,
+  TeamReadState,
 } from "./domain";
 
 /** The control plane answered with a body this Desktop cannot interpret safely. */
@@ -66,49 +64,17 @@ export function parseSharedDatabases(value: unknown): SharedDatabase[] {
       credentialMode: row.credentialMode,
       allowWrites: row.allowWrites,
       writeAvailable: row.writeAvailable,
+      provisioned: row.provisioning !== null && row.provisioning !== undefined,
     };
   });
 }
 
-export function parseGrantSnapshot(value: unknown, connectionId: string): GrantSnapshot {
+export function parseTeamReadState(value: unknown, connectionId: string): TeamReadState {
   const body = record(value);
-  if (
-    !body
-    || !Array.isArray(body.grants)
-    || typeof body.actorMemberId !== "string"
-    || typeof body.teamReadEnabled !== "boolean"
-  ) {
-    throw new AccessResponseError("member access");
+  if (!body || typeof body.teamReadEnabled !== "boolean") {
+    throw new AccessResponseError("team read access");
   }
-  const grants = body.grants.map((item): MemberGrant => {
-    const row = record(item);
-    const capability = row?.capability;
-    const origin = row?.origin;
-    if (
-      !row
-      || typeof row.memberId !== "string"
-      || typeof row.email !== "string"
-      || typeof row.role !== "string"
-      || (capability !== null && !isConnectionCapability(capability))
-      || (origin !== null && origin !== undefined && origin !== "explicit" && origin !== "team")
-    ) {
-      throw new AccessResponseError("member access");
-    }
-    return {
-      memberId: row.memberId,
-      name: typeof row.name === "string" ? row.name : "",
-      email: row.email,
-      role: row.role,
-      capability,
-      origin: capability === null ? null : origin ?? "explicit",
-    };
-  });
-  return {
-    connectionId,
-    actorMemberId: body.actorMemberId,
-    teamReadEnabled: body.teamReadEnabled,
-    grants,
-  };
+  return { connectionId, teamReadEnabled: body.teamReadEnabled };
 }
 
 export function parseTeamReadResult(value: unknown): boolean {

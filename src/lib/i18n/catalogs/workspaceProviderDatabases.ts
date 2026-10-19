@@ -23,6 +23,8 @@ export const workspaceProviderDatabasesCatalog = defineCatalog(
     "workspaceProviderDatabases.managedModeHint": "Role-based automatic access",
     "workspaceProviderDatabases.localMode": "Member local",
     "workspaceProviderDatabases.localModeHint": "Each member enters database credentials locally",
+    "workspaceProviderDatabases.directModeHint":
+      "DopeDB creates a personal account for each member on the database",
     "workspaceProviderDatabases.target": "{provider} · {path}",
     "workspaceProviderDatabases.neonProjectsAccount": "Neon · {count} projects",
     "workspaceProviderDatabases.connectFirst": "Connect a provider account first",
@@ -310,6 +312,7 @@ export const workspaceProviderDatabasesCatalog = defineCatalog(
     "workspaceProviderDatabases.managedModeHint": "역할 기반 자동 접근",
     "workspaceProviderDatabases.localMode": "구성원 로컬",
     "workspaceProviderDatabases.localModeHint": "구성원이 각자 로컬에서 DB 자격 증명을 입력합니다",
+    "workspaceProviderDatabases.directModeHint": "DopeDB가 구성원마다 데이터베이스에 개인 계정을 만듭니다",
     "workspaceProviderDatabases.target": "{provider} · {path}",
     "workspaceProviderDatabases.neonProjectsAccount": "Neon · 프로젝트 {count}개",
     "workspaceProviderDatabases.connectFirst": "먼저 공급자 계정을 연결하세요",
