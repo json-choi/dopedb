@@ -36,6 +36,25 @@ export const connectionsCatalog = defineCatalog(
     "connections.projectMenu": "Project actions",
     "connections.connectionOk": "Connection test passed. Testing does not save changes.",
     "connections.managedWorkspace.label": "Endpoint and credentials",
+    "connections.credentialMethod.label": "Credential method",
+    "connections.credentialMethod.memberAccount": "Each member uses their own account",
+    "connections.credentialMethod.memberAccountHint":
+      "Members enter their own database username and password on their device. Nothing secret is shared with the team.",
+    "connections.credentialMethod.providerManaged": "Provider-managed short-lived credentials",
+    "connections.credentialMethod.providerManagedHint":
+      "Pick a database from a connected provider account. Members receive short-lived credentials for their role. Requires a workspace admin.",
+    "connections.credentialMethod.perMemberAccount": "A DopeDB account per member, created automatically",
+    "connections.credentialMethod.perMemberAccountHint":
+      "DopeDB creates a separate database account for each permitted member using an administrator credential kept on this device. Requires a workspace admin.",
+    "connections.credentialMethod.added": "Added {name} as a team connection.",
+    "connections.credentialMethod.directDeleteHint":
+      "Deleting this connection first removes the database accounts DopeDB created for its members.",
+    "connections.deviceOnly": "This device only",
+    "connections.deviceOnlyHint":
+      "A SQLite file lives on this device, so it cannot be shared with the team.",
+    "connections.deviceOnlyEditorNote":
+      "A SQLite file stays on this device. It is not shared with the team, even in a team workspace.",
+    "connections.repairManagedAccess": "Repair managed access",
     "connections.managedWorkspace.status": "Managed by the workspace",
     "connections.managedWorkspace.managerDescription":
       "The real endpoint and a short-lived credential are issued when this database is used. Repair its provider setup in Workspace management → Providers; member access is managed in Database access.",
@@ -152,8 +171,6 @@ export const connectionsCatalog = defineCatalog(
       "Could not load Environment databases",
     "connections.environmentConnectionMoved":
       "Moved {connection} to {environment}.",
-    "connections.projectConnectionCleanupFailed":
-      "Added {connection} to the Project, but its old Unassigned local copy could not be removed. Delete that copy from its connection menu.",
     "connections.environmentConnectionRemoved":
       "Removed {connection} from the Project.",
     "connections.removeFromProject": "Remove from Project",
@@ -389,7 +406,7 @@ export const connectionsCatalog = defineCatalog(
     "connections.testFailure.managedMemberRecovery":
       "This connection is managed by the workspace, not on this device. Ask a workspace admin to check its provider account, database registration, and your access, then test again.",
     "connections.testFailure.memberBindingRecovery":
-      "Your username, password, SSH Host alias, and TLS files for this shared connection are kept on this device. Open Connect credentials to check them, then test again.",
+      "Your username, password, SSH Host alias, and TLS files for this team connection are kept on this device. Open Connect credentials to check them, then test again.",
     "connections.testFailure.savedCredentialRecovery":
       "The check used the password saved on this device. If it changed, or this device no longer has it, enter the password again and save.",
     "connections.testFailure.savedCredentialEndpointChangedTitle":
@@ -397,7 +414,7 @@ export const connectionsCatalog = defineCatalog(
     "connections.testFailure.savedCredentialEndpointChangedRecovery":
       "A saved password is used only with the host, port, user, and SSH Host alias it was saved for, over TLS settings at least as strict, so nothing was sent. Enter the password for these settings, or restore the earlier ones.",
     "connections.testFailure.sharedConnectionChangedTitle":
-      "This shared connection changed in the workspace",
+      "This team connection changed in the workspace",
     "connections.testFailure.sharedConnectionChangedRecovery":
       "This device still has the earlier version, so nothing was opened. Refresh the workspace data, then test again.",
     "connections.testFailure.workspaceSignInRequiredTitle":
@@ -432,7 +449,7 @@ export const connectionsCatalog = defineCatalog(
       "The temporary sign-in created for this connection could not be removed from this device.",
     "connections.testCancel": "Stop test",
     "connections.testUnavailableSharedDraft":
-      "Save the shared connection first. Testing checks the saved version.",
+      "Save the team connection first. Testing checks the saved version.",
     "connections.testUnavailableManagedCooldown":
       "Workspace-managed access can be checked again in {seconds}s.",
     "connections.parameterReserved":
@@ -664,6 +681,20 @@ export const connectionsCatalog = defineCatalog(
     "connections.projectMenu": "프로젝트 메뉴",
     "connections.connectionOk": "연결 검사 성공. 검사는 변경 내용을 저장하지 않습니다.",
     "connections.managedWorkspace.label": "엔드포인트 및 자격 증명",
+    "connections.credentialMethod.label": "자격 증명 방식",
+    "connections.credentialMethod.memberAccount": "구성원마다 자기 계정 사용",
+    "connections.credentialMethod.memberAccountHint": "구성원이 각자의 DB 사용자와 비밀번호를 자기 기기에 입력합니다. 비밀값은 팀과 공유되지 않습니다.",
+    "connections.credentialMethod.providerManaged": "공급자가 관리하는 단기 자격 증명",
+    "connections.credentialMethod.providerManagedHint":
+      "연결된 공급자 계정에서 DB를 고릅니다. 구성원은 역할에 맞는 단기 자격 증명을 받습니다. 워크스페이스 관리자가 필요합니다.",
+    "connections.credentialMethod.perMemberAccount": "구성원마다 DopeDB 계정 자동 생성",
+    "connections.credentialMethod.perMemberAccountHint": "관리자 자격 증명(이 기기에만 보관)으로 허용된 구성원마다 별도의 DB 계정을 만듭니다. 워크스페이스 관리자가 필요합니다.",
+    "connections.credentialMethod.added": "‘{name}’을(를) 팀 연결로 추가했습니다.",
+    "connections.credentialMethod.directDeleteHint": "이 연결을 삭제하면 먼저 DopeDB가 구성원용으로 만든 DB 계정을 제거합니다.",
+    "connections.deviceOnly": "이 기기 전용",
+    "connections.deviceOnlyHint": "SQLite 파일은 이 기기에 있으므로 팀과 공유할 수 없습니다.",
+    "connections.deviceOnlyEditorNote": "SQLite 파일은 이 기기에만 남습니다. 팀 워크스페이스에서도 팀과 공유되지 않습니다.",
+    "connections.repairManagedAccess": "관리형 접근 복구",
     "connections.managedWorkspace.status": "워크스페이스에서 관리됨",
     "connections.managedWorkspace.managerDescription":
       "이 DB를 사용할 때 실제 엔드포인트와 단기 자격 증명이 발급됩니다. 공급자 설정은 워크스페이스 관리 → 공급자에서 복구하고, 구성원 접근은 DB 접근 권한에서 관리합니다.",
@@ -780,8 +811,6 @@ export const connectionsCatalog = defineCatalog(
       "환경 데이터베이스를 불러오지 못했습니다",
     "connections.environmentConnectionMoved":
       "{connection} 연결을 {environment} 환경으로 이동했습니다.",
-    "connections.projectConnectionCleanupFailed":
-      "{connection} 연결을 프로젝트에 추가했지만 기존 미분류 로컬 복사본을 제거하지 못했습니다. 해당 연결 메뉴에서 복사본을 삭제해 주세요.",
     "connections.environmentConnectionRemoved":
       "{connection} 연결을 프로젝트에서 제거했습니다.",
     "connections.removeFromProject": "프로젝트에서 제거",
@@ -1016,7 +1045,7 @@ export const connectionsCatalog = defineCatalog(
     "connections.testFailure.managedMemberRecovery":
       "이 연결은 이 기기가 아니라 워크스페이스에서 관리됩니다. 워크스페이스 관리자에게 공급자 계정, DB 등록과 내 접근 권한 확인을 요청한 뒤 다시 테스트하세요.",
     "connections.testFailure.memberBindingRecovery":
-      "이 공유 연결의 사용자명, 비밀번호, SSH Host 별칭, TLS 파일은 이 기기에 저장됩니다. 자격 증명 연결을 열어 확인한 뒤 다시 테스트하세요.",
+      "이 팀 연결의 사용자명, 비밀번호, SSH Host 별칭, TLS 파일은 이 기기에 저장됩니다. 자격 증명 연결을 열어 확인한 뒤 다시 테스트하세요.",
     "connections.testFailure.savedCredentialRecovery":
       "이 기기에 저장된 비밀번호로 검사했습니다. 비밀번호가 바뀌었거나 이 기기에 남아 있지 않다면 다시 입력하고 저장하세요.",
     "connections.testFailure.savedCredentialEndpointChangedTitle":
@@ -1024,7 +1053,7 @@ export const connectionsCatalog = defineCatalog(
     "connections.testFailure.savedCredentialEndpointChangedRecovery":
       "저장된 비밀번호는 저장할 때의 호스트, 포트, 사용자, SSH Host 별칭과 그때보다 약하지 않은 TLS 설정에서만 사용하므로 아무것도 보내지 않았습니다. 이 설정의 비밀번호를 입력하거나 이전 설정으로 되돌리세요.",
     "connections.testFailure.sharedConnectionChangedTitle":
-      "워크스페이스에서 이 공유 연결이 변경되었습니다",
+      "워크스페이스에서 이 팀 연결이 변경되었습니다",
     "connections.testFailure.sharedConnectionChangedRecovery":
       "이 기기에는 이전 버전이 남아 있어 연결을 열지 않았습니다. 워크스페이스 데이터를 새로고침한 뒤 다시 테스트하세요.",
     "connections.testFailure.workspaceSignInRequiredTitle":
@@ -1059,7 +1088,7 @@ export const connectionsCatalog = defineCatalog(
       "이 연결을 위해 만든 임시 로그인을 이 기기에서 제거하지 못했습니다.",
     "connections.testCancel": "테스트 중지",
     "connections.testUnavailableSharedDraft":
-      "공유 연결을 먼저 저장하세요. 테스트는 저장된 버전을 확인합니다.",
+      "팀 연결을 먼저 저장하세요. 테스트는 저장된 버전을 확인합니다.",
     "connections.testUnavailableManagedCooldown":
       "워크스페이스 관리형 접근은 {seconds}초 뒤에 다시 확인할 수 있습니다.",
     "connections.parameterReserved":

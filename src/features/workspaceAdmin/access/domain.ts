@@ -1,6 +1,5 @@
-// Database access contracts for one team workspace: the shared databases the acting
-// member manages, a database's team read state, and preserved offline edits that
-// conflict with the current version. Per-member grants are edited in Members
+// Team connection contracts for one team workspace: the connections the acting member
+// can see, and preserved offline edits that conflict with the current version. Per-member grants are edited in Members
 // (`members/memberGrants.ts`). The pure policies mirror the server's conflict-decision
 // eligibility so the screen never guesses which request is valid; response
 // validation lives in parsers.ts.
@@ -19,13 +18,10 @@ export interface SharedDatabase {
   credentialMode: CredentialMode;
   allowWrites: boolean;
   writeAvailable: boolean;
+  /** Content revision a guarded deletion or update names. */
+  revision: number;
   /** A direct connection: each member gets a DopeDB-created account on the database. */
   provisioned: boolean;
-}
-
-export interface TeamReadState {
-  connectionId: string;
-  teamReadEnabled: boolean;
 }
 
 export interface ConflictPayload {
@@ -64,7 +60,7 @@ export interface ConnectionConflict {
   currentMatchesCandidate: boolean;
 }
 
-/** Grants, team read and conflicts are administered only where the member holds manage access. */
+/** Grants and conflicts are administered only where the member holds manage access. */
 export function manageableDatabases(databases: readonly SharedDatabase[]): SharedDatabase[] {
   return databases.filter((database) => database.accessMode === "manage");
 }

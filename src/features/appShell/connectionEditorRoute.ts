@@ -63,8 +63,8 @@ export function connectionEditorDialogCommands(
   }
 
   function openWorkspaceAdmin(destination: WorkspaceAdminSection) {
-    // The open editor marks its own requests (managed recovery, shared database
-    // add); Workspace management then opens over it and returns to it.
+    // The open editor marks its own requests (managed recovery, connecting a provider
+    // account); Workspace management then opens over it and returns to it.
     const returnToEditor = takeConnectionEditorReturn();
     const open = () =>
       navigate({ type: "openWorkspaceAdmin", destination, returnToEditor });

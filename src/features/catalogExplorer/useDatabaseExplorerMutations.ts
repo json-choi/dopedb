@@ -7,7 +7,6 @@ import { analysisQueryKeys } from "../analysisArticles/queryKeys";
 import type { ConnectionProfile } from "../connections/domain";
 import { connectionQueryKeys } from "../connections/queries";
 import {
-  deleteConnection,
   upsertConnection,
 } from "../connections/tauriAdapter";
 import type {
@@ -15,7 +14,10 @@ import type {
   KnowledgeEnvironmentView,
   KnowledgeProject,
 } from "../knowledge/domain";
-import { bindKnowledgeEnvironmentConnectionWithRefresh } from "../knowledge/bindEnvironmentConnection";
+import {
+  bindingRefusal,
+  bindKnowledgeEnvironmentConnectionWithRefresh,
+} from "../knowledge/bindEnvironmentConnection";
 import { knowledgeQueryKeys } from "../knowledge/queryKeys";
 import {
   deleteKnowledgeProject,
@@ -31,7 +33,6 @@ import { refreshConnectionCatalog } from "../../lib/catalogQueries";
 import { catalogLoadIssue } from "./catalogDomain";
 import {
   projectResourceKey,
-  promotedProjectConnectionSourceId,
 } from "./projectResources";
 import { SCHEMA_SCOPE_PARAMETER } from "./scopeFilter";
 import type { useCatalogExplorerState } from "./state";
@@ -127,36 +128,20 @@ export function useDatabaseExplorerMutations({
       .flatMap((project) => project.environments)
       .find((candidate) => candidate.id === environmentId);
     if (!environment) return;
+    const refusal = bindingRefusal(connection, catalogScope.workspaceKind === "team");
+    if (refusal) {
+      toast(t(refusal), "error");
+      return;
+    }
     try {
-      const binding = await bindKnowledgeEnvironmentConnectionWithRefresh({
+      await bindKnowledgeEnvironmentConnectionWithRefresh({
         projectEnvironmentId: environmentId,
         connectionId: connection.id,
         role: "primary",
         alias:
           connection.name.trim() || connection.database.trim() || "database",
       });
-      const promotedSourceId = promotedProjectConnectionSourceId(
-        connection,
-        binding,
-      );
-      let localCleanupFailed = false;
-      if (promotedSourceId !== null) {
-        try {
-          await deleteConnection(promotedSourceId);
-          forgetDeletedConnection(promotedSourceId);
-        } catch {
-          // The shared Project binding is already authoritative. Preserve both
-          // records and make the recoverable local duplicate visible to the user.
-          localCleanupFailed = true;
-        }
-      }
       await Promise.all([
-        promotedSourceId !== null
-          ? queryClient.invalidateQueries({
-              queryKey: connectionQueryKeys.all(catalogScope.key),
-              refetchType: "active",
-            })
-          : Promise.resolve(),
         queryClient.invalidateQueries({
           queryKey: knowledgeQueryKeys.environmentConnections(),
           refetchType: "active",
@@ -173,15 +158,6 @@ export function useDatabaseExplorerMutations({
           environment: environmentKindLabel(t, environment.kind),
         }),
       );
-      if (localCleanupFailed) {
-        toast(
-          t("connections.projectConnectionCleanupFailed", {
-            connection:
-              connection.name || connection.database || t("app.unnamed"),
-          }),
-          "error",
-        );
-      }
     } catch (error) {
       toast(errMessage(error), "error");
     }

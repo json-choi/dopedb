@@ -32,7 +32,7 @@ export function preflightDirectDatabase(
   return invoke("direct_access_preflight", { input });
 }
 
-/** Registers the shared database and keeps the administrator credential on this device. */
+/** Registers the team connection and keeps the administrator credential on this device. */
 export function registerDirectDatabase(
   input: DirectRegisterInput,
 ): Promise<DirectRegisteredDatabase> {

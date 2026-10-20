@@ -109,7 +109,7 @@ export function useAccessLowering(
   }
 
   /**
-   * Deletes a shared database. A provisioned one first revokes the account of every
+   * Deletes a team connection. A provisioned one first revokes the account of every
    * member who holds a grant on it, all-or-nothing, before the deletion commits.
    */
   async function runDeletion(connectionId: string, mutation: WorkspaceAdminOperation) {

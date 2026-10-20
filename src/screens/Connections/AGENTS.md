@@ -20,7 +20,11 @@ connection persistence itself.
 | `ConnectionTestStatus.tsx` | `ConnectionTestFailureNotice` (the last check outcome with its one recovery action) and `ConnectionTestActionBar` (Test/Stop, why a check is unavailable, and persistent live regions for each result). |
 | `ResourceStatus.tsx` | `ResourceStatus` — loading/empty/failed-with-refresh state of a provider resource list (BigQuery projects and datasets, Cloudflare D1 accounts and databases). |
 | `ConnectionGeneralTab.tsx` | `ConnectionGeneralTab` — General properties (name, engine, host/port/database) from profile/driver/workspace-dialog view models. The local password row renders in field and URL-only modes, so every credential recovery finds `connection-password`. |
-| `ConnectionSharedTemplateFields.tsx` | Shared-template rows of the General tab: template- or provider-owned transport security shown read-only where a binding or integration owns it, environment and schema group labels, and the member credential state with its binding command. |
+| `ConnectionTeamFields.tsx` | Team-connection rows of the General tab: transport security the team connection or its provider owns (read-only where a binding or integration owns it), schema group labels, and the member credential state with its binding command. |
+| `ConnectionCredentialMethodRow.tsx` | The credential method select of a new team connection (each member's own account, provider-managed short-lived credentials, per-member DopeDB accounts); shared by the General tab and the method flows. |
+| `ConnectionMethodFlow.tsx` | Hosts the provider-managed import and per-member-account flows inside the editor, reusing the step components and controllers in `features/workspaceAdmin/providers/databases`; shows the provider-account requirement with a link to Providers. |
+| `ConnectionTeamPanel.tsx` | Team-connection administration inside the editor of a connection the member manages: preserved-edit conflict review and the guarded deletion of a connection with per-member DopeDB accounts. |
+| `ConnectionPromotionNotice.tsx` | Explorer notice for connections that were only on this device in a team workspace: a toast per newly shared batch and persistent reasons the rest stay local. |
 | `ConnectionDatabaseField.tsx` | Native target-database field and accessible loading/empty/error discovery feedback; late suggestions never move focus from another control. A discovery refused because the endpoint moved offers an explicit "Enter password" command. |
 | `ConnectionOptionsTab.tsx` | `ConnectionOptionsTab` — runtime-backed connection/session options; mutation/validation stays in the feature controller. |
 | `ConnectionAdvancedTab.tsx` | `ConnectionAdvancedTab` — free-form driver parameters and capabilities from grouped profile/catalog view models. |
@@ -28,7 +32,7 @@ connection persistence itself.
 | `ConnectionSecurityTab.tsx` | `ConnectionSecurityTab` — TLS and SSH alias properties; no file picking or validation state owned here. |
 | `ConnectionBigQueryFields.tsx` | `ConnectionBigQueryFields` — BigQuery's official-CLI profile fields, kept separate from socket/password fields. |
 | `ConnectionCatalogCompactSelector.tsx` | `ConnectionCatalogCompactSelector` — compact catalog (engine/provider) selector used below the editor's wide-layout breakpoint. |
-| `ConnectionCatalogDetail.tsx` | `ConnectionCatalogDetail` — selected cloud provider or driver details from the catalog view model, including the controller's shared database shortcut; does not load or mutate catalog state. |
+| `ConnectionCatalogDetail.tsx` | `ConnectionCatalogDetail` — selected cloud provider or driver details from the catalog view model, does not load or mutate catalog state. |
 | `ConnectionCatalogNavigation.tsx` | `ConnectionCatalogNavigation` — catalog navigation and source commands in the editor; query/mutation ownership stays in feature controllers. |
 | `ConnectionSourcePicker.tsx` | `ConnectionSourcePicker` — one source picker shared by both wide and compact connection editor layouts. |
 | `ConnectionEditorDialogs.tsx` | `ConnectionEditorDialogs` — provider-credential and workspace-binding dialogs driven by dialog controller state. |

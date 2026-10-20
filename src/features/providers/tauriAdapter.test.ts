@@ -99,6 +99,8 @@ import workspaceSnapshotRestoreSource from "../../../workspace-cloud/lib/workspa
 import { settingsSections } from "../settings/domain";
 import desktopSettingsSource from "../../../src/screens/Settings/index.tsx?raw";
 import workspaceAdminDialogSource from "../../../src/screens/WorkspaceAdmin/index.tsx?raw";
+import connectionTeamPanelSource from "../../../src/screens/Connections/ConnectionTeamPanel.tsx?raw";
+import connectionMethodFlowSource from "../../../src/screens/Connections/ConnectionMethodFlow.tsx?raw";
 import sectionDialogSource from "../../../src/design-system/components/SectionDialog.tsx?raw";
 import safetySettingsScreenSource from "../../../src/screens/Settings/Safety/index.tsx?raw";
 import desktopSharedConnectionSource from "../../../src-tauri/src/features/workspaces/adapters/control_plane/connections.rs?raw";
@@ -147,10 +149,6 @@ import {
   managedDatabaseCount,
   providerAccountGroups,
 } from "../workspaceAdmin/providers/accounts/accountModel";
-import {
-  canRemoveSharedConnection,
-  canRepairManagedAccess,
-} from "../workspaceAdmin/providers/databases/model";
 import {
   gcpActiveLeaseRetryMessage,
   parseGcpActiveLeaseConflict,
@@ -1542,18 +1540,9 @@ describe("provider credential Tauri adapter", () => {
     expect(gcpSetupRouteSource).toContain("writeAccess: true");
     expect(gcpSetupRouteSource).toContain("matchesManagedGcpRepairTarget");
     expect(gcpSetupRouteSource).toContain('eq(workspaceConnection.credentialMode, "managed")');
-    // Desktop repairs managed access only for members who manage the database:
-    // Cloud SQL pins the server-projected target in memory for one browser
-    // authorization, and other providers reconnect the account that serves it.
-    const repairConnection = {
-      id: connectionId,
-      name: "Shared production",
-      engine: "postgres",
-      credentialMode: "managed",
-      allowWrites: false,
-      revision: 4,
-      accessMode: "manage",
-    } as const;
+    // Desktop repairs managed access from Providers: Cloud SQL pins the
+    // server-projected target in memory for one browser authorization, and other
+    // providers reconnect the account that serves it.
     const repairManaged = {
       connectionId,
       integrationId,
@@ -1565,14 +1554,8 @@ describe("provider credential Tauri adapter", () => {
         password: "must-not-pass",
       },
     };
-    expect(canRepairManagedAccess(repairConnection, repairManaged)).toBe(true);
-    expect(canRepairManagedAccess({ ...repairConnection, accessMode: "write" }, repairManaged))
-      .toBe(false);
-    expect(canRepairManagedAccess(repairConnection, { ...repairManaged, provider: "neon" }))
-      .toBe(true);
-    expect(canRepairManagedAccess(repairConnection, null)).toBe(false);
-    expect(workspaceAdminSource("providers/databases/SharedDatabaseRow.tsx")).toContain(
-      "onRepair(managed)",
+    expect(workspaceAdminSource("providers/ProvidersPanel.tsx")).toContain(
+      "onRepair={() => void repair(focusedRepair)}",
     );
     // Only identifiers and the pinned project, instance and database travel.
     const repairTarget = gcpRepairTarget(repairManaged);
@@ -2112,19 +2095,18 @@ describe("provider credential Tauri adapter", () => {
       expect(source.includes("invoke("), modulePath)
         .toBe(modulePath === "../workspaceAdmin/tauriAdapter.ts");
     }
-    // Removing a shared database is manager-only and revision-pinned: Desktop sends
+    // Removing a direct connection is manager-only and revision-pinned: the editor sends
     // the listed revision and only Rust turns it into DELETE plus the dedicated header.
-    expect(canRemoveSharedConnection(repairConnection)).toBe(true);
-    for (const connection of [
-      { ...repairConnection, accessMode: "write" },
-      { ...repairConnection, revision: 0 },
-      { ...repairConnection, revision: 1.5 },
-    ] as const) {
-      expect(canRemoveSharedConnection(connection)).toBe(false);
-    }
-    const sharedDatabasesView = workspaceAdminSource("providers/databases/SharedDatabasesView.tsx");
-    expect(sharedDatabasesView).toContain('kind: "deleteSharedConnection"');
-    expect(sharedDatabasesView).toContain("expectedRevision: connection.revision");
+    const teamPanel = connectionTeamPanelSource;
+    // Provider-managed and per-member-account databases are added in the connection
+    // editor through the existing step flows; Providers has no add-database path.
+    expect(connectionMethodFlowSource).toContain("<AddManagedDatabase");
+    expect(connectionMethodFlowSource).toContain("<AddDirectDatabase");
+    expect(workspaceAdminSource("providers/ProvidersPanel.tsx")).not.toContain("AddManagedDatabase");
+    expect("workspaceAdmin.addSharedDatabase" in messages.en).toBe(false);
+    expect("workspaceAccess.teamRead" in messages.en).toBe(false);
+    expect(teamPanel).toContain('kind: "deleteSharedConnection"');
+    expect(teamPanel).toContain("expectedRevision: revision");
     const deleteRoute = workspaceAdminRoutesSource.slice(
       workspaceAdminRoutesSource.indexOf("Op::DeleteSharedConnection {"),
       workspaceAdminRoutesSource.indexOf("Op::GetLifecycle {"),
@@ -2137,31 +2119,15 @@ describe("provider credential Tauri adapter", () => {
     expect(hostedControlPlaneSource).toContain(
       'EXPECTED_REVISION_HEADER: &str = "x-dopedb-expected-revision"',
     );
-    // The destructive command waits for an in-app confirmation naming the database;
-    // a recovery request reveals its database once and leads with the repair.
-    const sharedDatabaseRow = workspaceAdminSource("providers/databases/SharedDatabaseRow.tsx");
-    expect(sharedDatabaseRow).toContain("<ConfirmButton");
-    expect(sharedDatabaseRow).toContain(
+    // The destructive command waits for an in-app confirmation naming the connection.
+    expect(teamPanel).toContain("<ConfirmButton");
+    expect(teamPanel).toContain(
       't("workspaceProviderDatabases.removeConfirm", { name: connection.name })',
     );
-    expect(sharedDatabaseRow).toContain("onConfirm={() => onRemove(connection)}");
-    expect(sharedDatabaseRow).toContain('"workspaceProviderDatabases.focusRepair"');
-    expect(sharedDatabaseRow).toContain('t("workspaceProviderDatabases.openAccounts")');
     expect(workspaceAdminSource("providers/ProvidersPanel.tsx")).toContain(
       "useState(() => takePendingWorkspaceAdminFocus())",
     );
-    // Database access shows the workspace write ceiling as status only: it changes
-    // in Settings → Safety, and no administration operation can toggle it.
-    const databaseAccess = workspaceAdminSource("access/DatabaseAccess.tsx");
-    expect(databaseAccess).toContain('t("workspaceAccess.writeCeiling")');
-    expect(databaseAccess).toContain('t("workspaceAccess.writeCeilingHint")');
-    expect(databaseAccess).not.toMatch(/CheckboxField|type="checkbox"|<Switch\b/);
-    expect(messages.en["workspaceAccess.writeCeilingHint"]).toContain("Settings → Safety");
-    expect(messages.ko["workspaceAccess.writeCeilingHint"]).toContain("설정 → 안전");
     expect(workspaceAdminSource("domain.ts")).not.toMatch(/allowWrites|writePolicy|WritePolicy/);
-    const connectionAccessPanel = workspaceAdminSource("access/ConnectionAccessPanel.tsx");
-    expect(connectionAccessPanel).toContain('t("workspaceAccess.loadingDatabases")');
-    expect(connectionAccessPanel).toContain('t("workspaceAdmin.retry")');
     // A response for another account or workspace can never fill this one's view.
     const adminScope = {
       accountId: adminAccountId,
@@ -2230,8 +2196,8 @@ describe("provider credential Tauri adapter", () => {
     expect(safetySettingsScreenSource).toContain(
       "saveError?.connectionId === connectionId",
     );
-    expect(messages.en["workspaceProviderDatabases.remove"]).toBe("Remove shared database");
-    expect(messages.ko["workspaceProviderDatabases.remove"]).toBe("공유 DB 제거");
+    expect(messages.en["workspaceProviderDatabases.remove"]).toBe("Remove team connection");
+    expect(messages.ko["workspaceProviderDatabases.remove"]).toBe("팀 연결 제거");
     expect(neonBranchViewSource).not.toMatch(/>Switch<|>Restore<|>Delete</);
     const branchPlan = {
       version: 1,
@@ -2740,7 +2706,6 @@ describe("provider credential Tauri adapter", () => {
       workspaceAdminSectionsFor(scope).map((section) => section.id);
     expect(sectionIds({ canManage: true, isOwner: true })).toEqual([
       "workspace-members",
-      "workspace-access",
       "workspace-providers",
       "workspace-lifecycle",
     ]);

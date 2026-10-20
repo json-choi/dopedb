@@ -32,7 +32,7 @@ export type WorkspaceConnectionAccess =
   | "manage"
   | "local";
 /**
- * `provisioned` is a shared database whose per-member account DopeDB created. The
+ * `provisioned` is a team connection whose per-member account DopeDB created. The
  * workspace still reports `member_local`; Desktop projects it into its own mode
  * because the username is the generated principal (empty until the account is
  * ready) and the password is generated, never typed.
@@ -200,6 +200,18 @@ export type DatabaseDiscoveryReceipt = {
   databases: { name: string }[];
   refusal?: ConnectionProbeRefusal;
 };
+
+/**
+ * A SQLite file lives on one device, so in a team workspace it can never become a team
+ * connection. Cloudflare D1 uses the SQLite engine but is a hosted database and is shared.
+ */
+export function isDeviceOnlySqlite(
+  connection: Pick<ConnectionProfile, "engine" | "provider" | "workspaceAccess">,
+): boolean {
+  return connection.workspaceAccess === "local"
+    && connection.engine === "sqlite"
+    && connection.provider !== "cloudflareD1";
+}
 
 export type ConnectionAccessIssue = "grant" | "credentials" | "provisioning";
 

@@ -27,7 +27,7 @@ import { ConnectionProfilePanel } from "./ConnectionProfilePanel";
 export function ConnectionForm(props: ConnectionEditorProps) {
   const { t } = useI18n();
   const nameInputRef = useRef<HTMLInputElement>(null);
-  const { profile, catalog, navigation, schema, dialogs, commands } =
+  const { profile, catalog, navigation, schema, credentialMethod, dialogs, commands } =
     useConnectionEditorController(props);
   const { creatingDemo, onCreateDemoDatabase } = props;
 
@@ -101,6 +101,7 @@ export function ConnectionForm(props: ConnectionEditorProps) {
                   schema={schema}
                   problems={dialogs.problems}
                   workspaceDialog={dialogs.workspace}
+                  credentialMethod={credentialMethod}
                   commands={commands}
                 />
               ) : (
@@ -115,6 +116,7 @@ export function ConnectionForm(props: ConnectionEditorProps) {
           <ConnectionEditorFooter
             view={catalog.navigation.view}
             canEditConnection={profile.flags.canEditConnection}
+            flowActive={credentialMethod.flowActive}
             commands={commands}
             onCancel={() => void commands.cancel()}
           />

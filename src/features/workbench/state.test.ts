@@ -142,7 +142,6 @@ import {
   projectDatabasesDropTargets,
   projectNameByConnectionId,
   projectResourceKey,
-  promotedProjectConnectionSourceId,
 } from "../catalogExplorer/projectResources";
 import type { Catalog, CatalogObject, CatalogTable } from "../../ipc/types";
 import { ModalHeader } from "../../design-system/components/Modal";
@@ -454,6 +453,7 @@ describe("workbench state ownership", () => {
         memberships: [{ workspaceId: teamWorkspaceId, role }],
       }],
       authorityGeneration: 4,
+      connectionPromotion: { promoted: 0, roleDenied: 0, unreachable: 0, refused: 0 },
     });
     const teamContext: WorkspaceContextState = {
       feature: { enabled: true },
@@ -1898,22 +1898,6 @@ describe("workbench state ownership", () => {
       ),
     ).toEqual(new Map());
     expect(
-      promotedProjectConnectionSourceId(bigQuery, {
-        connectionId: "shared-bigquery",
-      }),
-    ).toBe(bigQuery.id);
-    expect(
-      promotedProjectConnectionSourceId(bigQuery, {
-        connectionId: bigQuery.id,
-      }),
-    ).toBeNull();
-    expect(
-      promotedProjectConnectionSourceId(
-        { ...bigQuery, workspaceAccess: "read" },
-        { connectionId: "shared-bigquery" },
-      ),
-    ).toBeNull();
-    expect(
       selectGuidedDemoEnvironment([
         {
           id: "environment-other",
@@ -2362,6 +2346,7 @@ describe("workbench state ownership", () => {
         profile: current, drivers,
         sources: {} as ConnectionEditorController["catalog"]["sources"],
         workspaceDialog: {} as ConnectionEditorController["dialogs"]["workspace"],
+        credentialMethod: { selectable: false, scope: null } as unknown as ConnectionEditorController["credentialMethod"],
         managedConnection: { active: false } as ConnectionEditorController["commands"]["managedConnection"], busy: false,
       }));
       const nativeMarkup = general(profile);

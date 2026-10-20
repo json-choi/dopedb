@@ -6,8 +6,9 @@
 ## Purpose
 Workspace management dialog for the active team workspace. It is a separate shell
 modal from the application Settings, so administration of the shared workspace
-never mixes with per-device preferences. Owners and admins see Members, Database
-access and Providers; owners also see Backups & deletion. The account area (other
+never mixes with per-device preferences. Owners and admins see Members and
+Providers (accounts only); owners also see Backups & deletion. Databases are added
+in the connection editor and listed only in Explorer. The account area (other
 sessions, workspaces scheduled for deletion) stays in Settings → Account because it
 belongs to the signed-in user, not to one workspace.
 
@@ -24,14 +25,13 @@ belongs to the signed-in user, not to one workspace.
   `onSelectSection`, so a request that arrives while it is open moves it too.
 - Entry points all go through `requestWorkspaceAdmin` from
   `features/workspaceAdmin/navigationRequest`: the workspace menu's `Manage
-  workspace`, Action Search, managed-connection recovery, and the data source
-  catalog's `Add shared database` shortcut (which also hands the Providers section a
-  one-time add-database focus).
+  workspace`, Action Search, and managed-connection recovery (which hands the
+  Providers section a one-time focus on the connection to repair).
 - Show only sections the role can run; never add disabled placeholders for other
   roles.
 - Manual UI check: run `pnpm dev:app` signed in as a team owner or admin, open the
-  workspace menu → Manage workspace, step through each section, and open
-  `Add shared database` from the data source `+` menu.
+  workspace menu → Manage workspace and step through each section; add a team
+  connection from the editor's credential method select.
 
 ### Testing Requirements
 - No dedicated automated test for this screen; the navigation reducer and the

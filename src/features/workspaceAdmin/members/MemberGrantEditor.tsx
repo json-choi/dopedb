@@ -1,4 +1,4 @@
-// The expanded part of a member row: every shared database the administrator manages
+// The expanded part of a member row: every team connection the administrator manages
 // with a none / read / write selector for this member, the provisioning status of a
 // direct connection account, and the reason a level is unavailable. Rendering only; a
 // change is reported to the members command controller.
@@ -143,7 +143,7 @@ export default function MemberGrantEditor({
   member: WorkspaceMember;
   memberName: string;
   row: MemberGrantsRow | undefined;
-  /** The shared databases the acting administrator manages. */
+  /** The team connections the acting administrator manages. */
   databases: readonly SharedDatabase[];
   /** Another command is running. */
   locked: boolean;

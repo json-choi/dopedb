@@ -456,7 +456,7 @@ export function checkFrontendArchitecture(harness) {
     ["src/screens/Connections/ConnectionProfilePanel.tsx", 180],
     ["src/screens/Connections/ConnectionSchemaTab.tsx", 220],
     ["src/screens/Connections/ConnectionSecurityTab.tsx", 260],
-    ["src/screens/Connections/ConnectionSharedTemplateFields.tsx", 190],
+    ["src/screens/Connections/ConnectionTeamFields.tsx", 190],
     ["src/screens/Connections/ConnectionTestStatus.tsx", 160],
     ["src/features/appShell/connectionEditorRoute.ts", 100],
     ["src/features/connections/connectionEditorModel.ts", 300],
@@ -768,10 +768,10 @@ export function checkFrontendArchitecture(harness) {
       );
     }
   }
-  const sharedDatabasesViewPath = `${providerAdminRoot}/databases/SharedDatabasesView.tsx`;
-  if (!read(sharedDatabasesViewPath).includes("useQuery(providerInventoryQuery(scope))")) {
+  const methodFlowPath = "src/screens/Connections/ConnectionMethodFlow.tsx";
+  if (!read(methodFlowPath).includes("providerInventoryQuery(scope)")) {
     failures.push(
-      `${sharedDatabasesViewPath}: shared databases require the managed connection inventory request`,
+      `${methodFlowPath}: the provider-managed method requires the managed connection inventory request`,
     );
   }
   const providerAccountModelPath = `${providerAdminRoot}/accounts/accountModel.ts`;

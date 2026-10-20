@@ -73,7 +73,6 @@ export type WorkspaceAdminOperation =
   | { kind: "removeMember"; workspaceId: WorkspaceId; memberId: string }
   | { kind: "cancelInvitation"; workspaceId: WorkspaceId; invitationId: string }
   | { kind: "listConnections"; workspaceId: WorkspaceId }
-  | { kind: "listConnectionGrants"; workspaceId: WorkspaceId; connectionId: string }
   | { kind: "listMemberGrants"; workspaceId: WorkspaceId }
   | {
       kind: "grantConnectionAccess";
@@ -95,12 +94,6 @@ export type WorkspaceAdminOperation =
       workspaceId: WorkspaceId;
       connectionId: string;
       memberId: string;
-    }
-  | {
-      kind: "setTeamReadAccess";
-      workspaceId: WorkspaceId;
-      connectionId: string;
-      enabled: boolean;
     }
   | { kind: "listConnectionConflicts"; workspaceId: WorkspaceId }
   | {

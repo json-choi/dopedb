@@ -6,7 +6,6 @@ import type {
   ConflictVersion,
   ConnectionConflict,
   SharedDatabase,
-  TeamReadState,
 } from "./domain";
 
 /** The control plane answered with a body this Desktop cannot interpret safely. */
@@ -64,25 +63,10 @@ export function parseSharedDatabases(value: unknown): SharedDatabase[] {
       credentialMode: row.credentialMode,
       allowWrites: row.allowWrites,
       writeAvailable: row.writeAvailable,
+      revision: finiteInteger(row.revision) ?? 0,
       provisioned: row.provisioning !== null && row.provisioning !== undefined,
     };
   });
-}
-
-export function parseTeamReadState(value: unknown, connectionId: string): TeamReadState {
-  const body = record(value);
-  if (!body || typeof body.teamReadEnabled !== "boolean") {
-    throw new AccessResponseError("team read access");
-  }
-  return { connectionId, teamReadEnabled: body.teamReadEnabled };
-}
-
-export function parseTeamReadResult(value: unknown): boolean {
-  const body = record(value);
-  if (!body || typeof body.teamReadEnabled !== "boolean") {
-    throw new AccessResponseError("team read access");
-  }
-  return body.teamReadEnabled;
 }
 
 function parseConflictPayload(value: unknown): ConflictPayload | null {

@@ -9,7 +9,6 @@ import type {
   Integration,
   ManagedConnection,
   Provider,
-  SharedConnection,
 } from "./domain";
 
 export type ProviderAccessSnapshot = {
@@ -46,18 +45,9 @@ export function parseProviderAccessSnapshot(
   };
 }
 
-export function parseSharedConnections(value: unknown): SharedConnection[] {
-  const body = record(value);
-  if (!body || !Array.isArray(body.connections)) {
-    throw new Error("The workspace service returned an incompatible database list.");
-  }
-  return body.connections as SharedConnection[];
-}
-
 export const providerQueryRoots = {
   accounts: "providerAccounts",
   inventory: "providerInventory",
-  sharedConnections: "sharedConnections",
 } as const;
 
 /** Provider catalog and connected accounts only. */
@@ -88,20 +78,6 @@ export function providerInventoryQuery(scope: WorkspaceAdminScope) {
           includeManagedConnections: true,
         }),
         true,
-      ),
-  });
-}
-
-/** Shared database templates visible to the acting member. */
-export function sharedConnectionsQuery(scope: WorkspaceAdminScope) {
-  return queryOptions({
-    queryKey: workspaceAdminQueryKey(scope, providerQueryRoots.sharedConnections),
-    queryFn: async () =>
-      parseSharedConnections(
-        await runWorkspaceAdmin(scope.accountId, {
-          kind: "listConnections",
-          workspaceId: scope.workspaceId,
-        }),
       ),
   });
 }

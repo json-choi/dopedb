@@ -199,9 +199,6 @@ SQL 데이터 값, provider 로고, 그래프 범주에는 앱 chrome 팔레트�
 | [`src/features/skills/SkillStartupGate.tsx`](../src/features/skills/SkillStartupGate.tsx) | popover·foreground·primary·ring |
 | [`src/features/terminals/PtySurface.tsx`](../src/features/terminals/PtySurface.tsx) | editor·foreground; ANSI는 terminal 전용 palette |
 | [`src/features/workspaceAdmin/access/ConflictReview.tsx`](../src/features/workspaceAdmin/access/ConflictReview.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
-| [`src/features/workspaceAdmin/access/ConnectionAccessPanel.tsx`](../src/features/workspaceAdmin/access/ConnectionAccessPanel.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
-| [`src/features/workspaceAdmin/access/DatabaseAccess.tsx`](../src/features/workspaceAdmin/access/DatabaseAccess.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
-| [`src/features/workspaceAdmin/access/TeamReadAccess.tsx`](../src/features/workspaceAdmin/access/TeamReadAccess.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
 | [`src/features/workspaceAdmin/accessLowering/AccessLoweringPrompt.tsx`](../src/features/workspaceAdmin/accessLowering/AccessLoweringPrompt.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
 | [`src/features/workspaceAdmin/accessLowering/DirectAdminCredentialForm.tsx`](../src/features/workspaceAdmin/accessLowering/DirectAdminCredentialForm.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
 | [`src/features/settings/account/AccountPanel.tsx`](../src/features/settings/account/AccountPanel.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
@@ -230,8 +227,6 @@ SQL 데이터 값, provider 로고, 그래프 범주에는 앱 chrome 팔레트�
 | [`src/features/workspaceAdmin/providers/databases/ImportReviewStep.tsx`](../src/features/workspaceAdmin/providers/databases/ImportReviewStep.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
 | [`src/features/workspaceAdmin/providers/databases/NeonBootstrapPanel.tsx`](../src/features/workspaceAdmin/providers/databases/NeonBootstrapPanel.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
 | [`src/features/workspaceAdmin/providers/databases/ResourceTargetStep.tsx`](../src/features/workspaceAdmin/providers/databases/ResourceTargetStep.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
-| [`src/features/workspaceAdmin/providers/databases/SharedDatabaseRow.tsx`](../src/features/workspaceAdmin/providers/databases/SharedDatabaseRow.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
-| [`src/features/workspaceAdmin/providers/databases/SharedDatabasesView.tsx`](../src/features/workspaceAdmin/providers/databases/SharedDatabasesView.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
 | [`src/features/workspaceAdmin/providers/gcp/GcpSetupApprovals.tsx`](../src/features/workspaceAdmin/providers/gcp/GcpSetupApprovals.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
 | [`src/features/workspaceAdmin/providers/gcp/GcpSetupWizard.tsx`](../src/features/workspaceAdmin/providers/gcp/GcpSetupWizard.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
 | [`src/features/workspaceAdmin/providers/neonBranches/NeonBranchBrowser.tsx`](../src/features/workspaceAdmin/providers/neonBranches/NeonBranchBrowser.tsx) | background·card·foreground·muted-foreground·input·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
@@ -255,16 +250,20 @@ SQL 데이터 값, provider 로고, 그래프 범주에는 앱 chrome 팔레트�
 | [`src/screens/Connections/ConnectionCatalogNavigation.tsx`](../src/screens/Connections/ConnectionCatalogNavigation.tsx) | card·foreground·muted-foreground·input·border-subtle·ring; 검증만 danger |
 | [`src/screens/Connections/ConnectionCloudflareD1Fields.tsx`](../src/screens/Connections/ConnectionCloudflareD1Fields.tsx) | card·foreground·muted-foreground·input·border-subtle·ring; 검증만 danger |
 | [`src/screens/Connections/ConnectionDatabaseField.tsx`](../src/screens/Connections/ConnectionDatabaseField.tsx) | card·foreground·muted-foreground·input·border-subtle·ring; 검증만 danger |
+| [`src/screens/Connections/ConnectionCredentialMethodRow.tsx`](../src/screens/Connections/ConnectionCredentialMethodRow.tsx) | card·foreground·muted-foreground·input·border-subtle·ring; 검증만 danger |
 | [`src/screens/Connections/ConnectionEditorDialogs.tsx`](../src/screens/Connections/ConnectionEditorDialogs.tsx) | popover·foreground·overlay·ring; 상태만 semantic 색 |
 | [`src/screens/Connections/ConnectionEditorFooter.tsx`](../src/screens/Connections/ConnectionEditorFooter.tsx) | card·foreground·muted-foreground·input·border-subtle·ring; 검증만 danger |
 | [`src/screens/Connections/ConnectionForm.tsx`](../src/screens/Connections/ConnectionForm.tsx) | card·foreground·muted-foreground·input·border-subtle·ring; 검증만 danger |
 | [`src/screens/Connections/ConnectionGeneralTab.tsx`](../src/screens/Connections/ConnectionGeneralTab.tsx) | card·foreground·muted-foreground·input·border-subtle·ring; 검증만 danger |
+| [`src/screens/Connections/ConnectionMethodFlow.tsx`](../src/screens/Connections/ConnectionMethodFlow.tsx) | card·foreground·muted-foreground·input·border-subtle·ring; 위험 동작만 danger, 접근·공급자 상태만 semantic 색 |
 | [`src/screens/Connections/ConnectionNode.tsx`](../src/screens/Connections/ConnectionNode.tsx) | sidebar·foreground·muted-foreground·selection·border-subtle·ring |
+| [`src/screens/Connections/ConnectionPromotionNotice.tsx`](../src/screens/Connections/ConnectionPromotionNotice.tsx) | sidebar·foreground·muted-foreground·border-subtle; 경고만 warning |
 | [`src/screens/Connections/ConnectionOptionsTab.tsx`](../src/screens/Connections/ConnectionOptionsTab.tsx) | card·foreground·muted-foreground·input·border-subtle·ring; 검증만 danger |
 | [`src/screens/Connections/ConnectionProfilePanel.tsx`](../src/screens/Connections/ConnectionProfilePanel.tsx) | card·foreground·muted-foreground·input·border-subtle·ring; 검증만 danger |
 | [`src/screens/Connections/ConnectionSchemaTab.tsx`](../src/screens/Connections/ConnectionSchemaTab.tsx) | card·foreground·muted-foreground·input·border-subtle·ring; 검증만 danger |
 | [`src/screens/Connections/ConnectionSecurityTab.tsx`](../src/screens/Connections/ConnectionSecurityTab.tsx) | card·foreground·muted-foreground·input·border-subtle·ring; 검증만 danger |
 | [`src/screens/Connections/ConnectionSourcePicker.tsx`](../src/screens/Connections/ConnectionSourcePicker.tsx) | card·foreground·muted-foreground·input·border-subtle·ring; 검증만 danger |
+| [`src/screens/Connections/ConnectionTeamPanel.tsx`](../src/screens/Connections/ConnectionTeamPanel.tsx) | card·foreground·muted-foreground·border-subtle; 위험 동작만 danger, 충돌 경고만 warning |
 | [`src/screens/Connections/DatabaseExplorer.tsx`](../src/screens/Connections/DatabaseExplorer.tsx) | sidebar·foreground·muted-foreground·selection·border-subtle·ring |
 | [`src/screens/Connections/DatabaseExplorerEmptyState.tsx`](../src/screens/Connections/DatabaseExplorerEmptyState.tsx) | sidebar·foreground·muted-foreground·selection·border-subtle·ring |
 | [`src/screens/Connections/DatabaseExplorerOverlays.tsx`](../src/screens/Connections/DatabaseExplorerOverlays.tsx) | sidebar·foreground·muted-foreground·selection·border-subtle·ring |

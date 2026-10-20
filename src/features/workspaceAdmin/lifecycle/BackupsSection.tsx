@@ -8,7 +8,6 @@ import { Button } from "../../../design-system/components/Button";
 import { SettingsList, SettingsRow } from "../../../design-system/components/SettingsList";
 import { InlineNotice, LoadingLabel } from "../../../design-system/components/Status";
 import { useI18n, type I18nKey } from "../../../lib/i18n";
-import type { WorkspaceAdminPanelProps } from "../navigationRequest";
 import type { LifecycleStatus } from "./domain";
 import { FailureNotice, LifecycleSection } from "./LifecycleParts";
 import { formatLifecycleTime } from "./messages";
@@ -23,11 +22,9 @@ const FAILURE_FALLBACK: Record<"create" | "restore" | "delete", I18nKey> = {
 export default function BackupsSection({
   controller,
   status,
-  onNavigate,
 }: {
   controller: LifecycleController;
   status: LifecycleStatus;
-  onNavigate: WorkspaceAdminPanelProps["onNavigate"];
 }) {
   const { lang, t } = useI18n();
   const { backups, busy, backupsNotice } = controller;
@@ -55,7 +52,6 @@ export default function BackupsSection({
           notice={backupsNotice}
           controller={controller}
           retentionDays={status.backupRetentionDays}
-          onNavigate={onNavigate}
         />
       ) : null}
       {backups.isPending ? <Skeleton lines={2} /> : null}
@@ -146,12 +142,10 @@ function BackupsResult({
   notice,
   controller,
   retentionDays,
-  onNavigate,
 }: {
   notice: BackupsNotice;
   controller: LifecycleController;
   retentionDays: number;
-  onNavigate: WorkspaceAdminPanelProps["onNavigate"];
 }) {
   const { t } = useI18n();
   if (notice.kind === "failed") {
@@ -183,11 +177,6 @@ function BackupsResult({
       tone="warning"
       icon="alert"
       role="status"
-      action={
-        <Button size="compact" onClick={() => onNavigate("workspace-access")}>
-          {t("workspaceLifecycle.reviewConflicts")}
-        </Button>
-      }
     >
       {restored} {t("workspaceLifecycle.restoreConflicts", { count: notice.conflicts })}
     </InlineNotice>

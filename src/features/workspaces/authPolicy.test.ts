@@ -80,6 +80,7 @@ function authState(
     authenticated: true,
     user,
     authorityGeneration: 1,
+    connectionPromotion: { promoted: 0, roleDenied: 0, unreachable: 0, refused: 0 },
     accounts: [{
       user,
       memberships: membership
@@ -177,9 +178,8 @@ describe("workspace auth lifecycle", () => {
     }
 
     expect(desktopWorkspaceAccessCallbackUrl).toBe("dopedb://workspace/access-complete");
-    // Managed-connection recovery and the shared-database shortcut open exactly
-    // Workspace management → Providers and hand their focus over once; a stale or
-    // superseded focus never reaches the panel.
+    // Managed-connection recovery opens exactly Workspace management → Providers and
+    // hands its focus over once; a stale or superseded focus never reaches the panel.
     const previousWindow = (globalThis as { window?: unknown }).window;
     (globalThis as { window?: unknown }).window = new EventTarget();
     try {
@@ -191,17 +191,14 @@ describe("workspace auth lifecycle", () => {
       expect(requested).toEqual(["workspace-providers"]);
       expect(takePendingWorkspaceAdminFocus()).toEqual(recoveryFocus);
       expect(takePendingWorkspaceAdminFocus()).toBeNull();
-      requestWorkspaceAdmin("workspace-providers", { kind: "addDatabase" });
-      expect(takePendingWorkspaceAdminFocus()).toEqual({ kind: "addDatabase" });
       requestWorkspaceAdmin("workspace-providers", recoveryFocus);
       requestWorkspaceAdmin("workspace-members");
       expect(takePendingWorkspaceAdminFocus()).toBeNull();
       requestWorkspaceAdmin("workspace-providers", recoveryFocus);
       expect(takePendingWorkspaceAdminFocus(Date.now() + 61_000)).toBeNull();
       stopListening();
-      requestWorkspaceAdmin("workspace-access");
+      requestWorkspaceAdmin("workspace-lifecycle");
       expect(requested).toEqual([
-        "workspace-providers",
         "workspace-providers",
         "workspace-providers",
         "workspace-members",
@@ -409,6 +406,7 @@ describe("workspace auth lifecycle", () => {
       user: { id: accountId(scopeActorId), email: "member@dopedb.example", displayName: "Member" },
       accounts: [],
       authorityGeneration: 1,
+      connectionPromotion: { promoted: 0, roleDenied: 0, unreachable: 0, refused: 0 },
     } satisfies WorkspaceAuthState);
     const renderScope = () => {
       const scopes: CatalogScope[] = [];

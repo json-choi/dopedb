@@ -1,6 +1,5 @@
 // Presents the selected cloud provider or driver details from the catalog view
-// model without loading or mutating catalog state itself, including the
-// manager-only shared database shortcut the catalog controller exposes.
+// model without loading or mutating catalog state itself.
 import EngineMark from "../../components/EngineMark";
 import { Icon } from "../../components/Icon";
 import { Button } from "../../design-system/components/Button";
@@ -17,7 +16,7 @@ export function ConnectionCatalogDetail({
   profile: ConnectionEditorController["profile"];
 }) {
   const { t } = useI18n();
-  const { navigation, clouds, drivers, sharedDatabase } = catalog;
+  const { navigation, clouds, drivers } = catalog;
 
   if (navigation.view === "clouds") {
     return (
@@ -38,11 +37,6 @@ export function ConnectionCatalogDetail({
                   <p className="tw:m-0 tw:text-sm tw:leading-body tw:text-muted-foreground">
                     {t("connections.cloudCatalogDescription")}
                   </p>
-                  {sharedDatabase.available ? (
-                    <p className="tw:m-0 tw:text-sm tw:leading-body tw:text-muted-foreground">
-                      {t("workspaceAdmin.addSharedDatabaseHint")}
-                    </p>
-                  ) : null}
                 </div>
               </div>
               <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
@@ -58,12 +52,6 @@ export function ConnectionCatalogDetail({
                   >
                     <Icon name="key" />
                     {t("connections.cloudCredentialDescription")}
-                  </Button>
-                ) : null}
-                {sharedDatabase.available ? (
-                  <Button onClick={sharedDatabase.add}>
-                    <Icon name="plus" />
-                    {t("workspaceAdmin.addSharedDatabase")}
                   </Button>
                 ) : null}
                 {!profile.identity.isNew ? (

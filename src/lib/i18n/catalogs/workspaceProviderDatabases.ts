@@ -1,31 +1,15 @@
-// Workspace shared database inventory, removal, managed-access repair entry and the
-// add-database flow (including Neon least-privilege preparation) are owned by this
-// bounded feature catalogue. The `neonFinding`, `neonValue` and `serverError`
+// The connection editor's provider-managed credential flow (account, target, review and
+// Neon least-privilege preparation) and the guarded removal of a team connection are
+// owned by this bounded feature catalogue. The `neonFinding`, `neonValue` and `serverError`
 // families localize fixed control-plane sentences; the Korean `neonFinding` and
 // `neonValue` entries repeat the control plane's own wording.
 import { defineCatalog } from "../types";
 
 export const workspaceProviderDatabasesCatalog = defineCatalog(
   {
-    "workspaceProviderDatabases.title": "Workspace databases",
-    "workspaceProviderDatabases.description":
-      "Register a database once for the team. Each permitted member receives short-lived credentials for their role, rotated automatically.",
-    "workspaceProviderDatabases.add": "Add database",
-    "workspaceProviderDatabases.listLabel": "Shared databases",
-    "workspaceProviderDatabases.loading": "Loading shared databases…",
-    "workspaceProviderDatabases.loadError": "Could not load the shared databases.",
+    "workspaceProviderDatabases.loading": "Loading team connections…",
     "workspaceProviderDatabases.inventoryError":
       "Provider details could not be loaded. Provider targets stay hidden and adding a database is unavailable until they load.",
-    "workspaceProviderDatabases.emptyTitle": "No databases have been shared yet",
-    "workspaceProviderDatabases.emptyDescription":
-      "Use Add database to register one from a connected provider account.",
-    "workspaceProviderDatabases.managedMode": "Managed",
-    "workspaceProviderDatabases.managedModeHint": "Role-based automatic access",
-    "workspaceProviderDatabases.localMode": "Member local",
-    "workspaceProviderDatabases.localModeHint": "Each member enters database credentials locally",
-    "workspaceProviderDatabases.directModeHint":
-      "DopeDB creates a personal account for each member on the database",
-    "workspaceProviderDatabases.target": "{provider} · {path}",
     "workspaceProviderDatabases.neonProjectsAccount": "Neon · {count} projects",
     "workspaceProviderDatabases.connectFirst": "Connect a provider account first",
     "workspaceProviderDatabases.connectFirstDescription":
@@ -34,26 +18,20 @@ export const workspaceProviderDatabasesCatalog = defineCatalog(
       "The connected provider accounts must be reconnected before their databases can be listed.",
     "workspaceProviderDatabases.openAccounts": "Open provider accounts",
     "workspaceProviderDatabases.goToAccounts": "Go to provider accounts",
-    "workspaceProviderDatabases.focusRepair":
-      "If Desktop still cannot connect to this database, repair its managed access.",
-    "workspaceProviderDatabases.focusManaged":
-      "Managed access for this database comes from its provider account. If Desktop still cannot connect, check that account.",
-    "workspaceProviderDatabases.focusMissing":
-      "The requested database is not among this workspace's shared databases. It may have been removed.",
     "workspaceProviderDatabases.repairDescription":
       "Google authorization is requested again while this exact project and instance stay pinned. DopeDB then rechecks IAM database authentication, the dedicated database users and the PostgreSQL schema owner.",
     "workspaceProviderDatabases.repairAccountDescription":
       "The provider account that serves this database is connected again. The database registration and every member's access stay the same.",
     "workspaceProviderDatabases.repair": "Repair managed access",
     "workspaceProviderDatabases.repairing": "Opening repair…",
-    "workspaceProviderDatabases.remove": "Remove shared database",
+    "workspaceProviderDatabases.remove": "Remove team connection",
     "workspaceProviderDatabases.removing": "Removing…",
     "workspaceProviderDatabases.removeConfirm":
       "Remove “{name}” from the workspace? Its active credentials and execution sessions will end.",
     "workspaceProviderDatabases.removed": "Removed “{name}” from the workspace.",
-    "workspaceProviderDatabases.removeError": "Could not remove the shared database.",
+    "workspaceProviderDatabases.removeError": "Could not remove the team connection.",
     "workspaceProviderDatabases.removeConflict":
-      "“{name}” changed after this list was loaded, so it was not removed. The change was recorded as a conflict under Database access, and the list has been refreshed.",
+      "“{name}” changed after this list was loaded, so it was not removed. The change was recorded as a conflict to review in the connection editor.",
     "workspaceProviderDatabases.removeChanged":
       "“{name}” or its access changed while it was being removed, so nothing was removed. The list has been refreshed; try again.",
     "workspaceProviderDatabases.removeMissing":
@@ -62,11 +40,10 @@ export const workspaceProviderDatabasesCatalog = defineCatalog(
       "Active database access for “{name}” could not be revoked yet. Try again after its short-lived credentials expire.",
     "workspaceProviderDatabases.removeBusy":
       "Another access change for “{name}” is in progress. Try again shortly.",
-    "workspaceProviderDatabases.imported": "Added “{name}” to the workspace.",
 
-    "workspaceProviderDatabases.wizardTitle": "Add a shared database",
+    "workspaceProviderDatabases.wizardTitle": "Provider-managed credentials",
     "workspaceProviderDatabases.wizardDescription":
-      "Choose an authorized provider account, then one fixed database target.",
+      "Choose an authorized provider account, then one fixed database target. Members receive short-lived credentials for their role.",
     "workspaceProviderDatabases.stepsLabel": "Add database steps",
     "workspaceProviderDatabases.stepProgress": "Step {current} of {total}",
     "workspaceProviderDatabases.stepAccount": "Account",
@@ -119,10 +96,10 @@ export const workspaceProviderDatabasesCatalog = defineCatalog(
       "I approve adding this production database. The approval is recorded in the audit log.",
     "workspaceProviderDatabases.back": "Back",
     "workspaceProviderDatabases.continue": "Continue",
-    "workspaceProviderDatabases.create": "Create shared database",
+    "workspaceProviderDatabases.create": "Create team connection",
     "workspaceProviderDatabases.creating": "Creating…",
     "workspaceProviderDatabases.verifyingSelection": "Verifying the selection…",
-    "workspaceProviderDatabases.importProgress": "Registering the shared database",
+    "workspaceProviderDatabases.importProgress": "Registering the team connection",
     "workspaceProviderDatabases.selectionExpired":
       "The provider selection expired or changed. The list was reloaded; check the database and try again.",
     "workspaceProviderDatabases.selectionUnavailable":
@@ -130,10 +107,10 @@ export const workspaceProviderDatabasesCatalog = defineCatalog(
     "workspaceProviderDatabases.receiptError": "Could not verify the selected provider resource.",
     "workspaceProviderDatabases.receiptShapeError":
       "The provider resource verification response is invalid.",
-    "workspaceProviderDatabases.importError": "Could not create the shared database.",
+    "workspaceProviderDatabases.importError": "Could not create the team connection.",
     "workspaceProviderDatabases.alreadyImported": "This database is already shared in the workspace.",
     "workspaceProviderDatabases.receiptRejected":
-      "The verification for this selection expired or was already used. Create the shared database again to verify it anew.",
+      "The verification for this selection expired or was already used. Create the team connection again to verify it anew.",
     "workspaceProviderDatabases.idempotencyConflict":
       "This request conflicted with an earlier attempt. Try again.",
 
@@ -172,7 +149,7 @@ export const workspaceProviderDatabasesCatalog = defineCatalog(
     "workspaceProviderDatabases.productionChangeApprovalDescription":
       "The approval is recorded in the audit log together with the plan hash.",
     "workspaceProviderDatabases.neonVerified":
-      "Setup and verification are complete. The read role blocks writes, and the write role allows DML while denying DDL and role administration. The shared database is created with writes disabled.",
+      "Setup and verification are complete. The read role blocks writes, and the write role allows DML while denying DDL and role administration. The team connection is created with writes disabled.",
     "workspaceProviderDatabases.recheck": "Run preflight again",
     "workspaceProviderDatabases.apply": "Approve, apply and verify",
     "workspaceProviderDatabases.applying": "Applying and verifying…",
@@ -291,24 +268,9 @@ export const workspaceProviderDatabasesCatalog = defineCatalog(
       "This Cloud SQL account connection predates the fixed database inventory. Reconnect it under provider accounts.",
   },
   {
-    "workspaceProviderDatabases.title": "워크스페이스 DB",
-    "workspaceProviderDatabases.description":
-      "DB를 한 번 등록하면 팀에 공유되고, 허용된 구성원마다 역할에 맞는 단기 자격 증명이 자동으로 회전됩니다.",
-    "workspaceProviderDatabases.add": "DB 추가",
-    "workspaceProviderDatabases.listLabel": "공유 DB",
-    "workspaceProviderDatabases.loading": "공유 DB를 불러오는 중…",
-    "workspaceProviderDatabases.loadError": "공유 DB를 불러오지 못했습니다.",
+    "workspaceProviderDatabases.loading": "팀 연결을 불러오는 중…",
     "workspaceProviderDatabases.inventoryError":
       "공급자 정보를 불러오지 못했습니다. 다시 불러올 때까지 공급자 대상이 표시되지 않고 DB를 추가할 수 없습니다.",
-    "workspaceProviderDatabases.emptyTitle": "아직 공유된 DB가 없습니다",
-    "workspaceProviderDatabases.emptyDescription":
-      "DB 추가에서 연결된 공급자 계정의 DB를 등록하세요.",
-    "workspaceProviderDatabases.managedMode": "관리형",
-    "workspaceProviderDatabases.managedModeHint": "역할 기반 자동 접근",
-    "workspaceProviderDatabases.localMode": "구성원 로컬",
-    "workspaceProviderDatabases.localModeHint": "구성원이 각자 로컬에서 DB 자격 증명을 입력합니다",
-    "workspaceProviderDatabases.directModeHint": "DopeDB가 구성원마다 데이터베이스에 개인 계정을 만듭니다",
-    "workspaceProviderDatabases.target": "{provider} · {path}",
     "workspaceProviderDatabases.neonProjectsAccount": "Neon · 프로젝트 {count}개",
     "workspaceProviderDatabases.connectFirst": "먼저 공급자 계정을 연결하세요",
     "workspaceProviderDatabases.connectFirstDescription":
@@ -317,39 +279,31 @@ export const workspaceProviderDatabasesCatalog = defineCatalog(
       "연결된 공급자 계정을 다시 연결해야 DB 목록을 불러올 수 있습니다.",
     "workspaceProviderDatabases.openAccounts": "공급자 계정 열기",
     "workspaceProviderDatabases.goToAccounts": "공급자 계정으로 이동",
-    "workspaceProviderDatabases.focusRepair":
-      "Desktop에서 이 DB에 계속 연결되지 않으면 관리형 접근을 복구하세요.",
-    "workspaceProviderDatabases.focusManaged":
-      "이 DB의 관리형 접근은 연결된 공급자 계정이 제공합니다. Desktop에서 계속 연결되지 않으면 해당 계정을 확인하세요.",
-    "workspaceProviderDatabases.focusMissing":
-      "요청한 DB가 이 워크스페이스의 공유 DB 목록에 없습니다. 이미 제거되었을 수 있습니다.",
     "workspaceProviderDatabases.repairDescription":
       "Google 승인을 다시 받은 뒤 이 프로젝트와 인스턴스를 그대로 고정해 IAM DB 인증, 전용 DB 사용자와 PostgreSQL 스키마 소유자를 다시 점검합니다.",
     "workspaceProviderDatabases.repairAccountDescription":
       "이 DB를 제공하는 공급자 계정을 다시 연결합니다. DB 등록과 구성원의 접근 권한은 그대로 유지됩니다.",
     "workspaceProviderDatabases.repair": "관리형 접근 복구",
     "workspaceProviderDatabases.repairing": "복구 화면 여는 중…",
-    "workspaceProviderDatabases.remove": "공유 DB 제거",
+    "workspaceProviderDatabases.remove": "팀 연결 제거",
     "workspaceProviderDatabases.removing": "제거 중…",
     "workspaceProviderDatabases.removeConfirm":
-      "‘{name}’ 공유 DB를 워크스페이스에서 제거할까요? 이 DB의 활성 자격 증명과 실행 세션이 종료됩니다.",
-    "workspaceProviderDatabases.removed": "‘{name}’ 공유 DB를 워크스페이스에서 제거했습니다.",
-    "workspaceProviderDatabases.removeError": "공유 DB를 제거하지 못했습니다.",
+      "‘{name}’ 팀 연결을 워크스페이스에서 제거할까요? 이 DB의 활성 자격 증명과 실행 세션이 종료됩니다.",
+    "workspaceProviderDatabases.removed": "‘{name}’ 팀 연결을 워크스페이스에서 제거했습니다.",
+    "workspaceProviderDatabases.removeError": "팀 연결을 제거하지 못했습니다.",
     "workspaceProviderDatabases.removeConflict":
-      "목록을 불러온 뒤 ‘{name}’ 공유 DB가 변경되어 제거하지 않았습니다. 변경 내용은 DB 접근 권한의 충돌 항목에 기록되었고 목록을 새로 고쳤습니다.",
+      "연결 정보를 불러온 뒤 ‘{name}’ 팀 연결이 변경되어 제거하지 않았습니다. 변경 내용은 연결 편집기에서 검토할 충돌로 기록되었습니다.",
     "workspaceProviderDatabases.removeChanged":
-      "제거하는 동안 ‘{name}’ 공유 DB 또는 접근 권한이 변경되어 아무것도 제거하지 않았습니다. 목록을 새로 고쳤으니 다시 시도하세요.",
+      "제거하는 동안 ‘{name}’ 팀 연결 또는 접근 권한이 변경되어 아무것도 제거하지 않았습니다. 목록을 새로 고쳤으니 다시 시도하세요.",
     "workspaceProviderDatabases.removeMissing":
-      "‘{name}’ 공유 DB는 더 이상 이 워크스페이스에 없습니다. 목록을 새로 고쳤습니다.",
+      "‘{name}’ 팀 연결은 더 이상 이 워크스페이스에 없습니다. 목록을 새로 고쳤습니다.",
     "workspaceProviderDatabases.removeRevocationPending":
-      "‘{name}’ 공유 DB의 활성 접근을 아직 회수하지 못했습니다. 단기 자격 증명이 만료된 뒤 다시 시도하세요.",
+      "‘{name}’ 팀 연결의 활성 접근을 아직 회수하지 못했습니다. 단기 자격 증명이 만료된 뒤 다시 시도하세요.",
     "workspaceProviderDatabases.removeBusy":
-      "‘{name}’ 공유 DB에 다른 접근 변경이 진행 중입니다. 잠시 뒤 다시 시도하세요.",
-    "workspaceProviderDatabases.imported": "‘{name}’ 공유 DB를 워크스페이스에 추가했습니다.",
+      "‘{name}’ 팀 연결에 다른 접근 변경이 진행 중입니다. 잠시 뒤 다시 시도하세요.",
 
-    "workspaceProviderDatabases.wizardTitle": "공유 DB 추가",
-    "workspaceProviderDatabases.wizardDescription":
-      "인증된 공급자 계정과 고정할 DB 대상을 차례로 선택합니다.",
+    "workspaceProviderDatabases.wizardTitle": "공급자 관리형 자격 증명",
+    "workspaceProviderDatabases.wizardDescription": "인증된 공급자 계정과 고정할 DB 대상을 차례로 선택합니다. 구성원은 역할에 맞는 단기 자격 증명을 받습니다.",
     "workspaceProviderDatabases.stepsLabel": "DB 추가 단계",
     "workspaceProviderDatabases.stepProgress": "{current}/{total}단계",
     "workspaceProviderDatabases.stepAccount": "계정",
@@ -402,10 +356,10 @@ export const workspaceProviderDatabasesCatalog = defineCatalog(
       "이 운영 DB 추가를 승인합니다. 승인은 감사 기록에 남습니다.",
     "workspaceProviderDatabases.back": "이전",
     "workspaceProviderDatabases.continue": "계속",
-    "workspaceProviderDatabases.create": "공유 DB 만들기",
+    "workspaceProviderDatabases.create": "팀 연결 만들기",
     "workspaceProviderDatabases.creating": "만드는 중…",
     "workspaceProviderDatabases.verifyingSelection": "선택을 확인하는 중…",
-    "workspaceProviderDatabases.importProgress": "공유 DB를 등록하는 중",
+    "workspaceProviderDatabases.importProgress": "팀 연결을 등록하는 중",
     "workspaceProviderDatabases.selectionExpired":
       "공급자 선택이 만료되었거나 변경되었습니다. 목록을 다시 불러왔으니 DB를 확인한 뒤 다시 시도하세요.",
     "workspaceProviderDatabases.selectionUnavailable":
@@ -413,10 +367,10 @@ export const workspaceProviderDatabasesCatalog = defineCatalog(
     "workspaceProviderDatabases.receiptError": "선택한 공급자 리소스를 확인하지 못했습니다.",
     "workspaceProviderDatabases.receiptShapeError":
       "공급자 리소스 확인 응답 형식을 확인하지 못했습니다.",
-    "workspaceProviderDatabases.importError": "공유 DB를 만들지 못했습니다.",
+    "workspaceProviderDatabases.importError": "팀 연결을 만들지 못했습니다.",
     "workspaceProviderDatabases.alreadyImported": "이 DB는 이미 워크스페이스에 공유되어 있습니다.",
     "workspaceProviderDatabases.receiptRejected":
-      "이 선택의 확인이 만료되었거나 이미 사용되었습니다. 공유 DB를 다시 만들면 새로 확인합니다.",
+      "이 선택의 확인이 만료되었거나 이미 사용되었습니다. 팀 연결을 다시 만들면 새로 확인합니다.",
     "workspaceProviderDatabases.idempotencyConflict":
       "이전 시도와 요청이 충돌했습니다. 다시 시도하세요.",
 
@@ -454,7 +408,7 @@ export const workspaceProviderDatabasesCatalog = defineCatalog(
     "workspaceProviderDatabases.productionChangeApprovalDescription":
       "승인은 계획 해시와 함께 감사 기록에 남습니다.",
     "workspaceProviderDatabases.neonVerified":
-      "설정과 검증을 완료했습니다. 읽기 역할의 쓰기 차단과 쓰기 역할의 DML 허용·DDL 및 역할 관리 거부를 확인했습니다. 공유 DB는 쓰기가 꺼진 상태로 생성됩니다.",
+      "설정과 검증을 완료했습니다. 읽기 역할의 쓰기 차단과 쓰기 역할의 DML 허용·DDL 및 역할 관리 거부를 확인했습니다. 팀 연결은 쓰기가 꺼진 상태로 생성됩니다.",
     "workspaceProviderDatabases.recheck": "다시 점검",
     "workspaceProviderDatabases.apply": "승인 후 설정·검증",
     "workspaceProviderDatabases.applying": "설정·검증 중…",

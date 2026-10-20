@@ -10,23 +10,22 @@ export const workspaceLifecycleCatalog = defineCatalog(
       "Could not refresh the backups and deletion status. What you see may be out of date.",
     "workspaceLifecycle.backupsTitle": "Backups",
     "workspaceLifecycle.backupsDescription":
-      "Encrypted snapshots of the workspace's shared connection definitions. They never contain database credentials or query results.",
+      "Encrypted snapshots of the workspace's team connection definitions. They never contain database credentials or query results.",
     "workspaceLifecycle.createBackup": "Create backup",
     "workspaceLifecycle.creatingBackup": "Creating backup…",
     "workspaceLifecycle.backupCreated": "Backup created.",
     "workspaceLifecycle.backupDeleted": "Backup deleted. It is permanently purged after {days} days.",
     "workspaceLifecycle.backupsLoadFailed": "Could not load the backup list.",
     "workspaceLifecycle.noBackups":
-      "No backups yet. Create one to keep a restorable copy of the shared connection definitions.",
+      "No backups yet. Create one to keep a restorable copy of the team connection definitions.",
     "workspaceLifecycle.backupDetails": "Workspace revision {revision} · key {keyVersion}",
     "workspaceLifecycle.restoreBackup": "Restore the backup from {date}",
     "workspaceLifecycle.restoreConfirm":
-      "Connections in this backup that no longer exist are re-created as read-only, with access granted only to you. Connections that still exist are not overwritten: each one gets the backed-up version as a conflict to review in Database access.",
+      "Connections in this backup that no longer exist are re-created as read-only, with access granted only to you. Connections that still exist are not overwritten: each one gets the backed-up version as a conflict to review in that connection's editor.",
     "workspaceLifecycle.restoring": "Restoring backup…",
     "workspaceLifecycle.restoreDone": "Backup restored. Connections re-created: {count}.",
     "workspaceLifecycle.restoreConflicts":
-      "Connections that already existed: {count}. Their backed-up versions are waiting as conflicts in Database access.",
-    "workspaceLifecycle.reviewConflicts": "Review conflicts",
+      "Connections that already existed: {count}. Their backed-up versions are waiting as conflicts to review in each connection's editor.",
     "workspaceLifecycle.deleteBackup": "Delete the backup from {date}",
     "workspaceLifecycle.deleteBackupConfirm":
       "The backup is hidden now and permanently purged after {days} days. A deleted backup can no longer be restored.",
@@ -95,7 +94,7 @@ export const workspaceLifecycleCatalog = defineCatalog(
     "workspaceLifecycle.errorMetadataUnavailable":
       "The workspace's metadata is unavailable, so no backup was created.",
     "workspaceLifecycle.errorConnectionLimit":
-      "A backup can hold up to 1,000 shared connections. Remove connections you no longer need, then try again.",
+      "A backup can hold up to 1,000 team connections. Remove connections you no longer need, then try again.",
     "workspaceLifecycle.errorBackupChanged":
       "The workspace changed while the backup was being created. Try again.",
     "workspaceLifecycle.errorKeyIntegrity":
@@ -127,23 +126,22 @@ export const workspaceLifecycleCatalog = defineCatalog(
       "백업과 삭제 상태를 새로 고치지 못했습니다. 표시된 내용이 최신이 아닐 수 있습니다.",
     "workspaceLifecycle.backupsTitle": "백업",
     "workspaceLifecycle.backupsDescription":
-      "워크스페이스 공유 연결 정의의 암호화된 스냅샷입니다. DB 자격 증명이나 쿼리 결과는 포함하지 않습니다.",
+      "워크스페이스 팀 연결 정의의 암호화된 스냅샷입니다. DB 자격 증명이나 쿼리 결과는 포함하지 않습니다.",
     "workspaceLifecycle.createBackup": "백업 만들기",
     "workspaceLifecycle.creatingBackup": "백업 만드는 중…",
     "workspaceLifecycle.backupCreated": "백업을 만들었습니다.",
     "workspaceLifecycle.backupDeleted": "백업을 삭제했습니다. {days}일 뒤 영구 제거됩니다.",
     "workspaceLifecycle.backupsLoadFailed": "백업 목록을 불러오지 못했습니다.",
     "workspaceLifecycle.noBackups":
-      "아직 백업이 없습니다. 백업을 만들면 공유 연결 정의를 복원할 수 있는 사본이 남습니다.",
+      "아직 백업이 없습니다. 백업을 만들면 팀 연결 정의를 복원할 수 있는 사본이 남습니다.",
     "workspaceLifecycle.backupDetails": "워크스페이스 리비전 {revision} · 키 {keyVersion}",
     "workspaceLifecycle.restoreBackup": "{date} 백업 복원",
     "workspaceLifecycle.restoreConfirm":
-      "이 백업에 있지만 지금은 없는 연결을 읽기 전용으로 다시 만들고 접근 권한은 나에게만 부여합니다. 아직 있는 연결은 덮어쓰지 않으며, 연결마다 백업 버전을 DB 접근 권한에서 검토할 충돌로 남깁니다.",
+      "이 백업에 있지만 지금은 없는 연결을 읽기 전용으로 다시 만들고 접근 권한은 나에게만 부여합니다. 아직 있는 연결은 덮어쓰지 않으며, 연결마다 백업 버전을 해당 연결의 편집기에서 검토할 충돌로 남깁니다.",
     "workspaceLifecycle.restoring": "백업 복원 중…",
     "workspaceLifecycle.restoreDone": "백업을 복원했습니다. 다시 만든 연결은 {count}개입니다.",
     "workspaceLifecycle.restoreConflicts":
-      "이미 있던 연결 {count}개는 백업 버전이 DB 접근 권한에서 검토할 충돌로 남았습니다.",
-    "workspaceLifecycle.reviewConflicts": "충돌 검토",
+      "이미 있던 연결 {count}개는 백업 버전이 각 연결의 편집기에서 검토할 충돌로 남았습니다.",
     "workspaceLifecycle.deleteBackup": "{date} 백업 삭제",
     "workspaceLifecycle.deleteBackupConfirm":
       "백업을 지금 숨기고 {days}일 뒤 영구 제거합니다. 삭제한 백업은 복원할 수 없습니다.",
@@ -212,7 +210,7 @@ export const workspaceLifecycleCatalog = defineCatalog(
     "workspaceLifecycle.errorMetadataUnavailable":
       "워크스페이스 메타데이터를 읽을 수 없어 백업을 만들지 못했습니다.",
     "workspaceLifecycle.errorConnectionLimit":
-      "백업에는 공유 연결을 1,000개까지만 담을 수 있습니다. 필요 없는 연결을 정리한 뒤 다시 시도하세요.",
+      "백업에는 팀 연결을 1,000개까지만 담을 수 있습니다. 필요 없는 연결을 정리한 뒤 다시 시도하세요.",
     "workspaceLifecycle.errorBackupChanged": "백업을 만드는 동안 워크스페이스가 바뀌었습니다. 다시 시도하세요.",
     "workspaceLifecycle.errorKeyIntegrity":
       "워크스페이스 키나 백업의 무결성 검증에 실패해 작업을 멈췄습니다.",

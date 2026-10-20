@@ -60,6 +60,21 @@ pub(crate) struct WorkspaceAuthState {
     /// Monotonic identity for every active workspace/account/membership authority.
     /// Renderer caches and external stores must scope private state to this value.
     pub(crate) authority_generation: i64,
+    /// Where promoting this device's team-local connections to team connections stands.
+    pub(crate) connection_promotion: ConnectionPromotionStatus,
+}
+
+/// Closed counts only: connections shared since launch, and the still-local ones by reason.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ConnectionPromotionStatus {
+    pub(crate) promoted: usize,
+    /// The account's role is below editor.
+    pub(crate) role_denied: usize,
+    /// The workspace service could not be reached; retried automatically.
+    pub(crate) unreachable: usize,
+    /// The service or this device refused the connection as it is.
+    pub(crate) refused: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

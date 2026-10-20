@@ -1,4 +1,4 @@
-// Pure rules for the shared database view and its add flow: which provider levels
+// Pure rules for the connection editor's provider-managed method: which provider levels
 // Desktop may browse, the exact discovery request for each level, provider target
 // paths, response checks for discovery, receipts and imports, and the import name
 // policy. No React, I/O or query cache access.
@@ -13,7 +13,6 @@ import type {
   ManagedConnection,
   Provider,
   Resource,
-  SharedConnection,
 } from "../domain";
 
 /** Selection proofs expire after five minutes; reuse a discovered list for at most four. */
@@ -132,24 +131,6 @@ export function managedTargetPath(managed: ManagedConnection, provider: Provider
     .map((level) => resource[level.key])
     .filter((value): value is string => typeof value === "string" && value.length > 0)
     .join(" / ");
-}
-
-/**
- * Members who manage the database can repair its managed access: Cloud SQL by
- * re-authorizing its pinned project and instance, every other provider by
- * reconnecting the account that serves it.
- */
-export function canRepairManagedAccess(
-  connection: SharedConnection,
-  managed: ManagedConnection | null,
-): managed is ManagedConnection {
-  return managed !== null && connection.accessMode === "manage";
-}
-
-export function canRemoveSharedConnection(connection: SharedConnection): boolean {
-  return connection.accessMode === "manage"
-    && Number.isInteger(connection.revision)
-    && connection.revision >= 1;
 }
 
 /** Thrown by discovery when the control plane answers with an incompatible list. */

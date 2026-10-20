@@ -150,6 +150,7 @@ where
             user,
             accounts,
             authority_generation,
+            connection_promotion: self.promotion_status(),
         })
     }
 

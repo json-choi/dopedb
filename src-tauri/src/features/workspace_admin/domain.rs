@@ -291,8 +291,8 @@ pub(crate) fn assert_workspace_admin_route_contract() {
     }))
     .is_err());
     assert!(serde_json::from_value::<WorkspaceAdminOperation>(json!({
-        "kind": "listConnectionGrants", "workspaceId": workspace_id,
-        "connectionId": "../../account/sessions",
+        "kind": "removeConnectionAccess", "workspaceId": workspace_id,
+        "connectionId": "../../account/sessions", "memberId": Uuid::nil(),
     }))
     .is_err());
     // The member-centric grant aggregate is one literal workspace-scoped GET.

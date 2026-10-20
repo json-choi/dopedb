@@ -32,10 +32,6 @@ const KNOWN_REFUSALS = new Map<string, I18nKey>([
     "workspaceAccess.errorConnectionChangeInProgress",
   ],
   [
-    "Active database access could not be revoked. Retry after its credentials expire.",
-    "workspaceAccess.errorTeamReadLeaseRevoke",
-  ],
-  [
     "Workspace administrator permission is required to change write access",
     "workspaceAccess.errorWritePolicyAdmin",
   ],

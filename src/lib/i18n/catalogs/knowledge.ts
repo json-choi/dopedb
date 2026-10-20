@@ -68,6 +68,10 @@ export const knowledgeCatalog = defineCatalog(
     "knowledge.refreshSources": "Refresh sources",
     "knowledge.loadingSources": "Loading sources…",
     "knowledge.projectsLoadFailed": "Knowledge Projects could not be loaded. {error}",
+    "knowledge.bindFailure.deviceOnly":
+      "A SQLite file stays on this device, so it cannot be added to a team Project.",
+    "knowledge.bindFailure.notShared":
+      "This connection is not a team connection yet. Open it in the connection editor and save it, then add it to the Project again.",
     "knowledge.sourcesLoadFailed": "Knowledge sources could not be loaded. {error}",
     "knowledge.emptySources": "No source is connected to this Environment yet.",
     "knowledge.sourceBrowseMode": "Exact-commit GitHub source browsing · graph indexing is off",
@@ -151,6 +155,8 @@ export const knowledgeCatalog = defineCatalog(
     "knowledge.refreshSources": "소스 새로고침",
     "knowledge.loadingSources": "소스 불러오는 중…",
     "knowledge.projectsLoadFailed": "Knowledge 프로젝트를 불러오지 못했습니다. {error}",
+    "knowledge.bindFailure.deviceOnly": "SQLite 파일은 이 기기에만 있어 팀 Project에 추가할 수 없습니다.",
+    "knowledge.bindFailure.notShared": "이 연결은 아직 팀 연결이 아닙니다. 연결 편집기에서 열어 저장한 뒤 Project에 다시 추가하세요.",
     "knowledge.sourcesLoadFailed": "Knowledge 소스를 불러오지 못했습니다. {error}",
     "knowledge.emptySources": "이 환경에 연결된 소스가 아직 없습니다.",
     "knowledge.sourceBrowseMode": "정확한 커밋의 GitHub 원문 탐색 · 그래프 인덱싱 꺼짐",

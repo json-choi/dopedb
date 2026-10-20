@@ -1,4 +1,4 @@
-// Neon safe-branch administration inside Workspace management → Providers → Shared databases. It
+// Neon safe-branch administration inside Workspace management → Providers. It
 // discovers Neon project targets from managed connections and each integration's
 // operation history, then mounts one keyed panel per project so selection, drafts and
 // the reconcile timer never leak across projects, integration generations or scopes.
@@ -45,7 +45,7 @@ export default function NeonBranchManager({
     )),
     [integrations],
   );
-  // Operation history also names projects that no shared database references yet.
+  // Operation history also names projects that no team connection references yet.
   const catalogs = useQueries({
     queries: neonIntegrations.map((integration) => neonBranchOperationsQuery(
       scope,

@@ -5,10 +5,7 @@ import { defineCatalog } from "../types";
 
 export const workspaceProvidersCatalog = defineCatalog(
   {
-    "workspaceProviders.description": "Connect provider accounts and register managed databases for the workspace.",
-    "workspaceProviders.views": "Provider tasks",
-    "workspaceProviders.viewAccounts": "Connect accounts",
-    "workspaceProviders.viewDatabases": "Shared databases",
+    "workspaceProviders.description": "Connect provider accounts, repair managed access and manage Neon branches. Add databases from the connection editor.",
 
     "workspaceProviders.accountsTitle": "Provider accounts",
     "workspaceProviders.accountsDescription":
@@ -16,7 +13,7 @@ export const workspaceProvidersCatalog = defineCatalog(
     "workspaceProviders.loadFailed": "Could not load provider accounts.",
     "workspaceProviders.unavailable": "No managed provider is available in this deployment.",
     "workspaceProviders.inventoryFailed":
-      "Shared database counts could not be loaded. Accounts are still shown.",
+      "Team connection counts could not be loaded. Accounts are still shown.",
     "workspaceProviders.connect": "Connect",
     "workspaceProviders.addAccount": "Add",
     "workspaceProviders.connectProviderAccount": "Connect a {provider} account",
@@ -36,8 +33,8 @@ export const workspaceProvidersCatalog = defineCatalog(
 
     "workspaceProviders.accountActive": "Active",
     "workspaceProviders.accountReconnectRequired": "Reconnect required",
-    "workspaceProviders.accountDatabases": "Shared databases: {count}",
-    "workspaceProviders.accountDatabasesUnavailable": "Shared database count unavailable",
+    "workspaceProviders.accountDatabases": "Team connections: {count}",
+    "workspaceProviders.accountDatabasesUnavailable": "Team connection count unavailable",
     "workspaceProviders.accountLastChecked": "Last checked {time}",
     "workspaceProviders.accountReconnectNeeded":
       "Credentials cannot be issued until this account is reconnected.",
@@ -47,7 +44,7 @@ export const workspaceProvidersCatalog = defineCatalog(
     "workspaceProviders.reconnectAccount": "Reconnect {name}",
     "workspaceProviders.disconnectAccount": "Disconnect {name}",
     "workspaceProviders.disconnectConfirm":
-      "Databases registered through {name} return to member-local credentials, and active short-lived access is revoked. Disconnect this provider account?",
+      "Connections added through {name} return to each member's own account credentials, and active short-lived access is revoked. Disconnect this provider account?",
     "workspaceProviders.disconnecting": "Disconnecting…",
     "workspaceProviders.disconnectFailed": "Could not disconnect the provider account.",
 
@@ -66,9 +63,8 @@ export const workspaceProvidersCatalog = defineCatalog(
     "workspaceProviders.checkAgain": "Check again",
     "workspaceProviders.startAgain": "Start again",
     "workspaceProviders.accountConnected":
-      "{provider} account connected. Add its databases under Shared databases.",
+      "{provider} account connected. Add its databases from the connection editor with the provider-managed credential method.",
     "workspaceProviders.gcpRepaired": "Managed database access was repaired and saved.",
-    "workspaceProviders.openSharedDatabases": "Open shared databases",
     "workspaceProviders.repairProviderUnavailable":
       "This database's provider is not available in this deployment, so it cannot be repaired here.",
     "workspaceProviders.gcpRepairInventoryUnavailable":
@@ -88,7 +84,7 @@ export const workspaceProvidersCatalog = defineCatalog(
     "workspaceProviders.neonIntro":
       "Neon does not offer browser sign-in for third-party apps, so it connects with an API key. Use a project-scoped organization API key when possible.",
     "workspaceProviders.neonKeyStorage":
-      "The workspace service verifies the key, then stores it encrypted on the server for this workspace. It is not saved on this device or with any shared database.",
+      "The workspace service verifies the key, then stores it encrypted on the server for this workspace. It is not saved on this device or with any team connection.",
     "workspaceProviders.neonGuideTitle": "Create the right Neon key",
     "workspaceProviders.neonGuideDescription":
       "Follow these Neon Console menus. A project-scoped organization key keeps the connection limited to one project.",
@@ -159,7 +155,7 @@ export const workspaceProvidersCatalog = defineCatalog(
     "workspaceProviders.vaultDatabase": "Database",
     "workspaceProviders.vaultProduction": "This target contains production data",
     "workspaceProviders.vaultProductionDescription":
-      "Production targets need an additional explicit confirmation when the shared database is imported.",
+      "Production targets need an additional explicit confirmation when the connection is added.",
     "workspaceProviders.vaultConnectFailed": "Could not verify and connect the Vault broker.",
 
     "workspaceProviders.gcpTitle": "Set up Google Cloud SQL",
@@ -187,7 +183,7 @@ export const workspaceProvidersCatalog = defineCatalog(
     "workspaceProviders.gcpPinnedDescription":
       "The project and instance cannot be changed during repair. DopeDB reuses this integration and rechecks every managed-access prerequisite.",
     "workspaceProviders.gcpRepairTargetUnavailable":
-      "The managed Cloud SQL target could not be found. Return to Shared databases and start the repair again.",
+      "The managed Cloud SQL target could not be found. Start the repair again from the connection's menu in Explorer.",
     "workspaceProviders.gcpTargetTitle": "Connection target",
     "workspaceProviders.gcpTargetDescription":
       "Choose a project and instance to see only the changes and approvals it needs.",
@@ -347,7 +343,7 @@ export const workspaceProvidersCatalog = defineCatalog(
     "workspaceProviders.serverGcpAlreadyConnected":
       "These Cloud SQL service accounts or this instance are already connected.",
     "workspaceProviders.serverGcpRepairTargetChanged":
-      "The managed Cloud SQL repair target changed. Start the repair again from Shared databases.",
+      "The managed Cloud SQL repair target changed. Start the repair again from the connection's menu in Explorer.",
     "workspaceProviders.serverGcpProjectChanged":
       "The Google Cloud project changed during setup. Choose the project again.",
     "workspaceProviders.serverGcpProjectUnavailable":
@@ -416,10 +412,7 @@ export const workspaceProvidersCatalog = defineCatalog(
       "Could not save the Cloud SQL permission recovery state. Try again shortly.",
   },
   {
-    "workspaceProviders.description": "공급자 계정을 연결하고 워크스페이스의 관리형 데이터베이스를 등록합니다.",
-    "workspaceProviders.views": "공급자 작업",
-    "workspaceProviders.viewAccounts": "계정 연결",
-    "workspaceProviders.viewDatabases": "공유 데이터베이스",
+    "workspaceProviders.description": "공급자 계정을 연결하고 관리형 접근 복구와 Neon 브랜치를 관리합니다. DB는 연결 편집기에서 추가합니다.",
 
     "workspaceProviders.accountsTitle": "공급자 계정",
     "workspaceProviders.accountsDescription":
@@ -427,7 +420,7 @@ export const workspaceProvidersCatalog = defineCatalog(
     "workspaceProviders.loadFailed": "공급자 계정을 불러오지 못했습니다.",
     "workspaceProviders.unavailable": "이 배포 환경에서 사용할 수 있는 관리형 공급자가 없습니다.",
     "workspaceProviders.inventoryFailed":
-      "공유 DB 수를 불러오지 못했습니다. 계정 목록은 그대로 표시됩니다.",
+      "팀 연결 수를 불러오지 못했습니다. 계정 목록은 그대로 표시됩니다.",
     "workspaceProviders.connect": "연결",
     "workspaceProviders.addAccount": "추가",
     "workspaceProviders.connectProviderAccount": "{provider} 계정 연결",
@@ -447,8 +440,8 @@ export const workspaceProvidersCatalog = defineCatalog(
 
     "workspaceProviders.accountActive": "정상",
     "workspaceProviders.accountReconnectRequired": "재연결 필요",
-    "workspaceProviders.accountDatabases": "공유 DB {count}개",
-    "workspaceProviders.accountDatabasesUnavailable": "공유 DB 수를 확인할 수 없음",
+    "workspaceProviders.accountDatabases": "팀 연결 {count}개",
+    "workspaceProviders.accountDatabasesUnavailable": "팀 연결 수를 확인할 수 없음",
     "workspaceProviders.accountLastChecked": "마지막 확인 {time}",
     "workspaceProviders.accountReconnectNeeded":
       "이 계정을 다시 연결해야 자격 증명을 발급할 수 있습니다.",
@@ -476,10 +469,8 @@ export const workspaceProvidersCatalog = defineCatalog(
     "workspaceProviders.authorizationCheckFailed": "승인 결과를 확인하지 못했습니다.",
     "workspaceProviders.checkAgain": "다시 확인",
     "workspaceProviders.startAgain": "다시 시작",
-    "workspaceProviders.accountConnected":
-      "{provider} 계정을 연결했습니다. 공유 데이터베이스에서 DB를 추가하세요.",
+    "workspaceProviders.accountConnected": "{provider} 계정을 연결했습니다. 연결 편집기에서 공급자 관리형 자격 증명 방식으로 DB를 추가하세요.",
     "workspaceProviders.gcpRepaired": "관리형 DB 접근을 복구하고 저장했습니다.",
-    "workspaceProviders.openSharedDatabases": "공유 데이터베이스 열기",
     "workspaceProviders.repairProviderUnavailable":
       "이 DB의 공급자를 이 배포 환경에서 사용할 수 없어 여기서 복구할 수 없습니다.",
     "workspaceProviders.gcpRepairInventoryUnavailable":
@@ -499,7 +490,7 @@ export const workspaceProvidersCatalog = defineCatalog(
     "workspaceProviders.neonIntro":
       "Neon은 제3자 앱용 브라우저 로그인을 제공하지 않아 API 키로 연결합니다. 가능하면 프로젝트 범위 조직 API 키를 사용하세요.",
     "workspaceProviders.neonKeyStorage":
-      "워크스페이스 서비스가 키를 검증한 뒤 이 워크스페이스용으로 서버에 암호화해 보관합니다. 이 기기나 공유 DB에는 저장하지 않습니다.",
+      "워크스페이스 서비스가 키를 검증한 뒤 이 워크스페이스용으로 서버에 암호화해 보관합니다. 이 기기나 팀 연결에는 저장하지 않습니다.",
     "workspaceProviders.neonGuideTitle": "올바른 Neon 키 만들기",
     "workspaceProviders.neonGuideDescription":
       "아래 Neon Console 메뉴를 순서대로 따라가세요. 프로젝트 범위 조직 키는 연결 권한을 한 프로젝트로 제한합니다.",
@@ -570,7 +561,7 @@ export const workspaceProvidersCatalog = defineCatalog(
     "workspaceProviders.vaultDatabase": "데이터베이스",
     "workspaceProviders.vaultProduction": "이 대상은 운영 데이터를 포함합니다",
     "workspaceProviders.vaultProductionDescription":
-      "운영 대상은 공유 DB로 가져올 때 별도의 명시적 확인이 필요합니다.",
+      "운영 대상은 연결로 추가할 때 별도의 명시적 확인이 필요합니다.",
     "workspaceProviders.vaultConnectFailed": "Vault 브로커를 검증하고 연결하지 못했습니다.",
 
     "workspaceProviders.gcpTitle": "Google Cloud SQL 연결 설정",
@@ -597,8 +588,7 @@ export const workspaceProvidersCatalog = defineCatalog(
     "workspaceProviders.gcpPinnedTitle": "고정된 기존 DB",
     "workspaceProviders.gcpPinnedDescription":
       "복구 중에는 프로젝트와 인스턴스를 바꿀 수 없습니다. 기존 연동을 재사용하고 관리형 접근의 모든 필수 조건을 다시 확인합니다.",
-    "workspaceProviders.gcpRepairTargetUnavailable":
-      "복구할 관리형 Cloud SQL 대상을 찾지 못했습니다. 공유 데이터베이스에서 복구를 다시 시작하세요.",
+    "workspaceProviders.gcpRepairTargetUnavailable": "복구할 관리형 Cloud SQL 대상을 찾지 못했습니다. Explorer의 연결 메뉴에서 복구를 다시 시작하세요.",
     "workspaceProviders.gcpTargetTitle": "연결 대상",
     "workspaceProviders.gcpTargetDescription":
       "프로젝트와 인스턴스를 고르면 필요한 변경과 승인 항목만 표시합니다.",
@@ -753,7 +743,7 @@ export const workspaceProvidersCatalog = defineCatalog(
     "workspaceProviders.serverGcpAlreadyConnected":
       "이 Cloud SQL 서비스 계정 또는 인스턴스는 이미 연결되어 있습니다.",
     "workspaceProviders.serverGcpRepairTargetChanged":
-      "복구할 관리형 Cloud SQL 대상이 바뀌었습니다. 공유 데이터베이스에서 복구를 다시 시작하세요.",
+      "복구할 관리형 Cloud SQL 대상이 바뀌었습니다. Explorer의 연결 메뉴에서 복구를 다시 시작하세요.",
     "workspaceProviders.serverGcpProjectChanged":
       "설정 중에 Google Cloud 프로젝트 정보가 바뀌었습니다. 프로젝트를 다시 선택하세요.",
     "workspaceProviders.serverGcpProjectUnavailable":

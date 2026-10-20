@@ -59,7 +59,7 @@ export function neonIntegrationDisplayName(value: string, lang: Lang): string {
   return projects ? `Neon · ${projects[1]} projects` : value;
 }
 
-/** Active Neon projects that back a shared database or have branch operation history. */
+/** Active Neon projects that back a team connection or have branch operation history. */
 export function neonProjectTargets(
   integrations: readonly Integration[],
   managedConnections: readonly ManagedConnection[],

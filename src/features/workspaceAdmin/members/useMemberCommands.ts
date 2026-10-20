@@ -140,7 +140,7 @@ export function commandTarget(command: MemberCommand): string | null {
 export interface MemberCommandContext {
   lowering: AccessLowering;
   grants: readonly MemberGrantsRow[] | undefined;
-  /** The shared databases the acting administrator manages, by id. */
+  /** The team connections the acting administrator manages, by id. */
   databases: ReadonlyMap<string, SharedDatabase>;
 }
 

@@ -58,6 +58,19 @@ export interface WorkspaceAuthState {
   accounts: WorkspaceAuthAccount[];
   /** Monotonic native authority generation shared by every private cache owner. */
   authorityGeneration: number;
+  /** Where sharing this device's team-local connections with the team stands. */
+  connectionPromotion: ConnectionPromotionStatus;
+}
+
+/** Closed counts only: shared since launch, and still-local connections by reason. */
+export interface ConnectionPromotionStatus {
+  promoted: number;
+  /** The member's role is below editor. */
+  roleDenied: number;
+  /** The workspace service could not be reached; retried automatically. */
+  unreachable: number;
+  /** The service or this device refused the connection as it is. */
+  refused: number;
 }
 
 /** Public attempt handle only; native owns the listener and PKCE secrets. */

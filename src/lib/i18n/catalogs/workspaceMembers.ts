@@ -3,7 +3,7 @@ import { defineCatalog } from "../types";
 
 export const workspaceMembersCatalog = defineCatalog(
   {
-    "workspaceMembers.description": "Invite members, choose their workspace role, set their access to each shared database, and remove access.",
+    "workspaceMembers.description": "Invite members, choose their workspace role, set their access to each team connection, and remove access.",
     "workspaceMembers.inviteTitle": "Invite a member",
     "workspaceMembers.emailLabel": "Email",
     "workspaceMembers.emailPlaceholder": "name@example.com",
@@ -38,7 +38,7 @@ export const workspaceMembersCatalog = defineCatalog(
     "workspaceMembers.databaseAccessFor": "Database access for {member}",
     "workspaceMembers.accessTo": "Access to {database} for {member}",
     "workspaceMembers.noManagedDatabases":
-      "You don't manage any shared database here. A member who manages a database can give you manage access.",
+      "You don't manage any team connection here. A member who manages a database can give you manage access.",
     "workspaceMembers.levelWriteDirect": "Write · member's own account",
     "workspaceMembers.writeBlockedCeiling":
       "Write is unavailable: this database's write ceiling is off for everyone.",
@@ -58,7 +58,7 @@ export const workspaceMembersCatalog = defineCatalog(
     "workspaceMembers.pendingKindGrant": "Access lowered or removed",
     "workspaceMembers.pendingKindRole": "Role change",
     "workspaceMembers.pendingKindTeamRead": "Team read turned off",
-    "workspaceMembers.pendingKindDeleted": "Shared database removal",
+    "workspaceMembers.pendingKindDeleted": "Team connection removal",
     "workspaceMembers.pendingKindLeft": "Member left",
     "workspaceMembers.pendingKindAccountDeleted": "Account deleted",
     "workspaceMembers.pendingToNone": "to no access",
@@ -116,7 +116,7 @@ export const workspaceMembersCatalog = defineCatalog(
     "workspaceMembers.errorMembershipLimit": "This workspace has reached its member limit.",
   },
   {
-    "workspaceMembers.description": "구성원을 초대하고 워크스페이스 역할과 공유 데이터베이스별 접근을 정하거나 접근을 제거합니다.",
+    "workspaceMembers.description": "구성원을 초대하고 워크스페이스 역할과 팀 연결별 접근을 정하거나 접근을 제거합니다.",
     "workspaceMembers.inviteTitle": "구성원 초대",
     "workspaceMembers.emailLabel": "이메일",
     "workspaceMembers.emailPlaceholder": "name@example.com",
@@ -151,7 +151,7 @@ export const workspaceMembersCatalog = defineCatalog(
     "workspaceMembers.databaseAccessFor": "{member}의 데이터베이스 접근",
     "workspaceMembers.accessTo": "{member}의 {database} 접근",
     "workspaceMembers.noManagedDatabases":
-      "관리 권한이 있는 공유 데이터베이스가 없습니다. 해당 데이터베이스의 관리자에게 관리 권한을 요청하세요.",
+      "관리 권한이 있는 팀 연결이 없습니다. 해당 데이터베이스의 관리자에게 관리 권한을 요청하세요.",
     "workspaceMembers.levelWriteDirect": "쓰기 · 구성원 본인 계정",
     "workspaceMembers.writeBlockedCeiling": "쓰기를 선택할 수 없습니다. 이 데이터베이스의 쓰기 상한이 모두에게 꺼져 있습니다.",
     "workspaceMembers.writeBlockedManaged":
@@ -169,7 +169,7 @@ export const workspaceMembersCatalog = defineCatalog(
     "workspaceMembers.pendingKindGrant": "접근 낮춤 또는 제거",
     "workspaceMembers.pendingKindRole": "역할 변경",
     "workspaceMembers.pendingKindTeamRead": "팀 읽기 해제",
-    "workspaceMembers.pendingKindDeleted": "공유 데이터베이스 제거",
+    "workspaceMembers.pendingKindDeleted": "팀 연결 제거",
     "workspaceMembers.pendingKindLeft": "구성원 탈퇴",
     "workspaceMembers.pendingKindAccountDeleted": "계정 삭제",
     "workspaceMembers.pendingToNone": "접근 없음으로",

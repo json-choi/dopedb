@@ -1,7 +1,7 @@
-// Presents the shared-template rows of the General tab: transport security the
-// template or the provider owns, schema group labels, and this
-// member's credential state with its binding command. Values a member binding or
-// a provider integration owns are shown read-only rather than edited here.
+// Presents the team-connection rows of the General tab: transport security the team
+// connection or its provider owns, schema group labels, and this member's credential
+// state with its binding command. Values a member binding or a provider integration
+// owns are shown read-only rather than edited here.
 import { Button } from "../../design-system/components/Button";
 import {
   PropertyRow,
@@ -14,7 +14,7 @@ import { useI18n } from "../../lib/i18n";
 
 type Controller = ConnectionEditorController;
 
-export function ConnectionSharedTemplateFields({
+export function ConnectionTeamFields({
   profile,
   workspaceDialog,
   managedActive,
@@ -154,7 +154,7 @@ export function ConnectionSharedTemplateFields({
       >
         {managedActive
           ? t("connections.managedWorkspace.securityNote")
-          : t("workspace.sharedTemplateNote")}
+          : t("workspace.teamConnectionNote")}
       </p>
     </>
   );

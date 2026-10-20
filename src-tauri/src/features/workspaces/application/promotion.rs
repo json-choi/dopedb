@@ -7,13 +7,14 @@
 //! SQLite files are never listed, and a failed row is retried later, never reported with
 //! backend text.
 
+use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
 use crate::error::AppError;
 use crate::features::connections::ConnectionCredentialVault;
 use crate::kernel::identity::{AccountId, ConnectionId};
 
-use super::super::domain::can_create_team_connection;
+use super::super::domain::{can_create_team_connection, ConnectionPromotionStatus};
 use super::super::ports::{
     WorkspaceConfigurationPort, WorkspaceControlPlanePort, WorkspaceRepositoryPort,
     WorkspaceRuntimePort,
@@ -23,6 +24,39 @@ use super::{WorkspaceConnectionPublishRequest, WorkspaceUseCases};
 /// A transient failure retries on the next synchronization soon; a refusal waits longer.
 const TRANSIENT_RETRY: Duration = Duration::from_secs(60);
 const REFUSED_RETRY: Duration = Duration::from_secs(10 * 60);
+
+/// Why a team-local connection is still only on this device.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PromotionBlock {
+    RoleDenied,
+    Unreachable,
+    Refused,
+}
+
+/// What the person can be told about promotion: connections shared since launch and the
+/// reason each remaining local connection waits. Connection ids never leave this struct.
+#[derive(Debug, Default)]
+pub(crate) struct PromotionState {
+    promoted: usize,
+    blocked: HashMap<ConnectionId, PromotionBlock>,
+}
+
+impl PromotionState {
+    fn status(&self) -> ConnectionPromotionStatus {
+        let count = |reason| {
+            self.blocked
+                .values()
+                .filter(|block| **block == reason)
+                .count()
+        };
+        ConnectionPromotionStatus {
+            promoted: self.promoted,
+            role_denied: count(PromotionBlock::RoleDenied),
+            unreachable: count(PromotionBlock::Unreachable),
+            refused: count(PromotionBlock::Refused),
+        }
+    }
+}
 
 /// Closed outcome counts of one promotion pass. Nothing identifying is kept.
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -50,6 +84,27 @@ where
     /// Publish every team-local connection the account created in the team workspaces it can
     /// add connections to. Idempotent: a published row is no longer local, and a retried
     /// publication reuses the id the service already holds.
+    pub(super) fn promotion_status(&self) -> ConnectionPromotionStatus {
+        self.promotion_state
+            .lock()
+            .map(|state| state.status())
+            .unwrap_or_default()
+    }
+
+    fn record_promotion(&self, connection_id: ConnectionId, outcome: Option<PromotionBlock>) {
+        if let Ok(mut state) = self.promotion_state.lock() {
+            match outcome {
+                Some(block) => {
+                    state.blocked.insert(connection_id, block);
+                }
+                None => {
+                    state.blocked.remove(&connection_id);
+                    state.promoted += 1;
+                }
+            }
+        }
+    }
+
     pub(super) async fn promote_local_connections(
         &self,
         account_user_id: &AccountId,
@@ -69,6 +124,14 @@ where
                 return report;
             }
         };
+        let listed: HashSet<ConnectionId> = local
+            .iter()
+            .map(|(_, profile)| ConnectionId::from(profile.id))
+            .collect();
+        if let Ok(mut state) = self.promotion_state.lock() {
+            // A connection that was deleted or moved on is no longer waiting.
+            state.blocked.retain(|id, _| listed.contains(id));
+        }
         for (workspace_id, profile) in local {
             let connection_id = ConnectionId::from(profile.id);
             if self.promotion_deferred(connection_id) {
@@ -81,6 +144,7 @@ where
             };
             if !allowed {
                 report.role_denied += 1;
+                self.record_promotion(connection_id, Some(PromotionBlock::RoleDenied));
                 continue;
             }
             match self
@@ -91,7 +155,10 @@ where
                 })
                 .await
             {
-                Ok(_) => report.promoted += 1,
+                Ok(_) => {
+                    report.promoted += 1;
+                    self.record_promotion(connection_id, None);
+                }
                 Err(error) => {
                     let transient = matches!(
                         error,
@@ -102,8 +169,10 @@ where
                     );
                     if transient {
                         report.unreachable += 1;
+                        self.record_promotion(connection_id, Some(PromotionBlock::Unreachable));
                     } else {
                         report.refused += 1;
+                        self.record_promotion(connection_id, Some(PromotionBlock::Refused));
                     }
                     tracing::warn!(
                         error_kind = error.kind(),

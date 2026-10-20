@@ -26,21 +26,17 @@ function ProgressRow({ label, actions }: { label: string; actions?: ReactNode })
 export default function ProviderStatusNotice({
   status,
   notice,
-  databasesVisible,
   onCheckNow,
   onCancel,
   onStart,
   onDismissNotice,
-  onOpenDatabases,
 }: {
   status: AuthorizationStatus;
   notice: ProvidersNotice | null;
-  databasesVisible: boolean;
   onCheckNow: () => void;
   onCancel: () => void;
   onStart: (request: AuthorizationRequest) => void;
   onDismissNotice: () => void;
-  onOpenDatabases: () => void;
 }) {
   const { t } = useI18n();
   const cancel = (
@@ -187,14 +183,7 @@ export default function ProviderStatusNotice({
           ? t("workspaceProviders.accountConnected", { provider: notice.providerName })
           : t("workspaceProviders.gcpRepaired")}
       </span>
-      <span className="tw:flex tw:flex-wrap tw:gap-2">
-        {notice.kind === "connected" && !databasesVisible ? (
-          <Button size="compact" onClick={onOpenDatabases}>
-            {t("workspaceProviders.openSharedDatabases")}
-          </Button>
-        ) : null}
-        {close}
-      </span>
+      <span className="tw:flex tw:flex-wrap tw:gap-2">{close}</span>
     </div>
   );
 }

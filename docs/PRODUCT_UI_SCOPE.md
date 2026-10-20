@@ -34,7 +34,7 @@ flowchart LR
   end
 
   subgraph Desktop[Desktop · 관리와 실제 데이터 작업]
-    A0[워크스페이스 관리<br/>구성원 · DB 접근 권한 · 공급자 · 백업 및 삭제]
+    A0[워크스페이스 관리<br/>구성원 · 공급자 · 백업 및 삭제]
     A1[Settings → 계정<br/>세션 종료 · 삭제 예약 취소]
     D0[Workspace · Project 선택]
     D1{연결 준비 여부}
@@ -63,7 +63,8 @@ flowchart LR
 | workspace 생성 | Desktop workspace menu `새 워크스페이스` | 브라우저는 workspace를 만들지 않음 |
 | 구성원 초대·역할·제거 | Desktop `워크스페이스 관리 → 구성원` | 브라우저는 이메일 초대 링크의 수락만 소유 |
 | 팀 연결 생성(연결 정보·자격 증명 방식·환경) | Desktop connection editor(`새 연결`·데이터 소스 선택기) | 별도 공유 DB 추가·복사 경로는 없고, 저장이 secret-free workspace 연결과 만든 사람의 로컬 자격 증명 binding을 함께 만든다 |
-| 구성원별 DB 권한(없음·읽기·쓰기)·연결 편집 충돌 | Desktop `워크스페이스 관리 → 구성원`(권한), `DB 접근 권한`(충돌) | 연결 편집기와 Explorer는 적용된 권한만 표시 |
+| 구성원별 DB 권한(없음·읽기·쓰기) | Desktop `워크스페이스 관리 → 구성원` | 연결 편집기와 Explorer는 적용된 권한만 표시 |
+| 연결 편집 충돌 검토(보존된 오프라인 편집) | Desktop 연결 편집기(해당 연결을 관리하는 구성원) | 별도 `DB 접근 권한` section은 없다 |
 | provider 계정 승인·재승인·managed 연결 복구·Neon branch | Desktop `워크스페이스 관리 → 공급자` | 브라우저는 OAuth 시작 확인과 완료 안내만 소유하고 설정을 진행하지 않음. 연결 편집기·Explorer는 연결 상태와 이 화면의 exact 연결 복구 command만 제공하고, DB 등록은 연결 편집기가 소유하므로 이 화면에 DB 추가 경로를 두지 않음 |
 | server backup·key rotation·retention·workspace 삭제 예약 | Desktop `워크스페이스 관리 → 백업 및 삭제`(Owner) | 삭제가 예약되면 취소는 `Settings → 계정`이 소유 |
 | 삭제 예약 취소·다른 기기와 브라우저 session 종료 | Desktop `Settings → 계정` | 계정 전환·추가·로그아웃은 title toolbar 계정 메뉴가 소유하고, 같은 메뉴의 `계정 관리`가 이 section을 연다 |
@@ -317,8 +318,8 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
   상태를 보여주되 이미 document가 소유한 설명을 반복하지 않는다.
 - Workspace 관리는 Desktop의 `워크스페이스 관리` dialog가 소유한다. 앱
   환경설정인 `Settings`와 분리된 shell modal이며 두 dialog는 서로를 대체할 뿐 겹쳐
-  열리지 않는다. 팀 workspace의 관리자·소유자만 열 수 있고 `구성원`, `DB 접근
-  권한`, `공급자`와 소유자 전용 `백업 및 삭제` 네 section을 둔다. 권한이 없는
+  열리지 않는다. 팀 workspace의 관리자·소유자만 열 수 있고 `구성원`, `공급자`와
+  소유자 전용 `백업 및 삭제` 세 section을 둔다. 권한이 없는
   구성원에게는 진입점과 section을 비활성 항목 없이 숨긴다. 진입점은 workspace
   menu의 `워크스페이스 관리`, Action Search와 관리형 연결 복구이다. 팀 workspace의
   모든 연결은 팀 연결이므로 `공유 DB 추가`라는 별도 진입점과 공유 데이터베이스
@@ -435,9 +436,9 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
   credential을 편집 가능한 로컬 값처럼 표시하지 않는다. 연결 검사가 실패하면
   로컬 host·password 수정을 안내하지 않고 관리 주체, 관리자가 확인할 provider
   account·DB 등록·멤버 접근을 설명한다. exact `manage` 권한이 있으면
-  `워크스페이스 관리 → 공급자`의 해당 DB 행을 여는 실제 command를 제공한다.
-  해당 DB 행은 설명에서 끝나지 않고 provider 재승인을 시작하는 복구 command를
-  소유한다. GCP Cloud SQL 복구는 기존 integration·project·instance를 고정한 채
+  `워크스페이스 관리 → 공급자`에서 해당 연결의 복구를 제안하는 실제 command를
+  Explorer 연결 ⋮ 메뉴(`관리형 접근 복구`)와 오류 안내에 제공한다. 공급자 화면은
+  설명에서 끝나지 않고 provider 재승인을 시작하는 복구 command를 소유한다. GCP Cloud SQL 복구는 기존 integration·project·instance를 고정한 채
   브라우저에서 OAuth를 다시 받고, Desktop에 돌아와 IAM DB 인증 flag와 전용 DB 사용자를
   재검증·복구한다. 기존 connection ID와 멤버 grant는 유지한다.
 - GCP Cloud SQL 연결·복구 승인은 기존 애플리케이션 객체의 소유권 이전이나
@@ -533,11 +534,11 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
 | PD-43 | 문서 탭 닫기와 재열기 | `구현` | 탭 닫기는 SQL document 삭제가 아니며 본문과 revision을 보존한다. 열린 SQL 탭 목록, 순서, 활성 SQL 탭은 workspace·account·connection 범위의 member-local 상태로만 영속하고 공유 레코드에 두지 않는다. 저장된 상태가 없으면 기존처럼 복원하고 저장된 빈 목록은 사용자가 모두 닫은 상태로 존중한다. 닫은 문서는 Action Search의 최소 재열기 command로 다시 연다. 별도 문서 관리 화면과 Local History 비교 UI는 만들지 않는다. |
 | PD-44 | 로컬 데이터베이스 리스너 감지 | `구현` | 첫 연결의 입력을 줄이기 위해 사용자가 명시적으로 실행한 1회 감지만 수행한다. 대상은 loopback 주소와 engine별 기본 포트의 닫힌 allowlist(PostgreSQL 5432, MySQL/MariaDB 3306, MongoDB 27017)로 한정하고 임의 host, 포트 범위, 로컬 네트워크 대역, container runtime, 파일 시스템을 탐색하지 않는다. 각 후보는 자격 증명 없이 protocol handshake만 수행해 engine을, 프로토콜이 인증 전에 알려 주는 경우에만 서버 버전을 확인한 뒤 즉시 닫으며 인증 시도, startup 패킷, query를 보내지 않는다. `~/.pgpass`, `~/.my.cnf`, `pg_service.conf`, 환경 변수, 프로젝트 `.env` 같은 클라이언트 설정과 자격 증명 저장소는 읽지 않는다. 감지 결과는 engine, host, port, driver만 편집 가능한 초안에 채우는 제안이며 username, 비밀번호, database는 사람이 입력하거나 기존 database discovery가 채운다. 감지는 연결을 저장하거나 자동으로 접속하지 않고 백그라운드 polling과 주기적 재감지를 하지 않는다. 미설치와 감지 실패는 정확한 빈 상태로 표시하고 기존 수동 입력 경로를 막지 않는다. |
 | PD-45 | 로컬 진단 로그와 버그 제보 | `구현` | Settings → 고급에서 명시적으로 켠 뒤 Desktop의 Rust 진단 이벤트, frontend 오류와 IPC 결과·시간을 bounded process-memory에만 수집한다. 기본은 꺼짐이며 끄기·종료 시 비우고 파일·서버에 전송하지 않는다. 인증 비밀값과 명시적 SQL·결과·Agent payload는 제외하되 호스트·DB 이름·사용자명·경로 같은 내부 정보는 포함될 수 있다. 조회·비우기와 개인정보 경고 확인 뒤 수동 복사·GitHub 이슈 작성 페이지 열기만 제공하며 자동 첨부·제출과 완전한 개인정보 자동 마스킹은 제공하지 않는다. |
-| PD-46 | Desktop workspace 관리 | `구현` | workspace 생성, 구성원 초대·역할·제거·구성원별 DB 권한, 연결 편집 충돌, 공급자 계정 승인·재승인, managed 연결 복구와 Neon branch 관리, 소유자의 backup·key rotation·retention·삭제 예약, 계정 session 종료와 삭제 예약 취소를 Desktop이 소유한다. workspace 범위 관리는 앱 `Settings`와 분리된 `워크스페이스 관리` dialog가, 계정 session 종료와 삭제 예약 취소는 `Settings → 계정`이 맡는다. 팀 연결 생성은 이 dialog가 아니라 연결 편집기가 소유한다(PD-50). Rust가 계정별 Bearer session으로 control plane의 닫힌 작업 목록만 호출하고 경로 식별자를 검증하며 token·provider state·입력한 provider secret을 WebView 캐시나 로컬 저장소에 남기지 않는다. 브라우저 OAuth가 필요한 공급자는 control plane origin의 시작 확인 페이지만 열고 완료 뒤 Desktop에서 이어 간다. Workspace Web의 관리 화면은 제거하고 로그인·초대 수락·OAuth 시작 확인과 완료 안내·공개 Article만 남긴다. 구성원별 공유 DB 권한(없음·읽기·쓰기)은 `워크스페이스 관리 → 구성원` 행을 펼쳐 한 곳에서만 설정하고, `DB 접근 권한` section은 쓰기 허용 상태, 자격 증명 방식 표시, 충돌 검토, 삭제 같은 DB 단위 설정만 맡고 별도 팀 읽기 switch는 두지 않으며 구성원별 편집을 중복해 두지 않는다. 직접 연결 DB의 회수 대기 항목은 구성원 section에 유지한다. 권한이 없는 구성원에게는 관리 진입점과 section을 비활성 항목 없이 숨긴다. |
+| PD-46 | Desktop workspace 관리 | `구현` | workspace 생성, 구성원 초대·역할·제거·구성원별 DB 권한, 연결 편집 충돌, 공급자 계정 승인·재승인, managed 연결 복구와 Neon branch 관리, 소유자의 backup·key rotation·retention·삭제 예약, 계정 session 종료와 삭제 예약 취소를 Desktop이 소유한다. workspace 범위 관리는 앱 `Settings`와 분리된 `워크스페이스 관리` dialog가, 계정 session 종료와 삭제 예약 취소는 `Settings → 계정`이 맡는다. 팀 연결 생성은 이 dialog가 아니라 연결 편집기가 소유한다(PD-50). Rust가 계정별 Bearer session으로 control plane의 닫힌 작업 목록만 호출하고 경로 식별자를 검증하며 token·provider state·입력한 provider secret을 WebView 캐시나 로컬 저장소에 남기지 않는다. 브라우저 OAuth가 필요한 공급자는 control plane origin의 시작 확인 페이지만 열고 완료 뒤 Desktop에서 이어 간다. Workspace Web의 관리 화면은 제거하고 로그인·초대 수락·OAuth 시작 확인과 완료 안내·공개 Article만 남긴다. 구성원별 팀 연결 권한(없음·읽기·쓰기)은 `워크스페이스 관리 → 구성원` 행을 펼쳐 한 곳에서만 설정한다. `DB 접근 권한` section과 별도 팀 읽기 switch는 없고, 보존된 오프라인 편집의 충돌 검토와 구성원별 DopeDB 계정을 가진 연결의 삭제는 해당 연결의 편집기가 맡는다. 직접 연결 DB의 회수 대기 항목은 구성원 section에 유지한다. 권한이 없는 구성원에게는 관리 진입점과 section을 비활성 항목 없이 숨긴다. |
 | PD-47 | Schema diagram 문서 | `구현` | 선택한 연결의 스키마 다이어그램(`schema` 문서)은 핵심 기능이 아닌 보조 surface다. 진입점은 연결 행의 ⋮ 메뉴와 Action Search의 `스키마 다이어그램` command뿐이며 title toolbar, 상태 표시줄, Welcome에는 launcher를 두지 않는다. 읽기 전용 조회 화면이고 DDL 작성·실행 command를 추가하지 않는다. |
 | PD-48 | Desktop·호스팅 워크스페이스 사용 분석(제품 analytics·세션 녹화) | `구현 안 함` | DopeDB는 오픈소스이며 Desktop 앱과 호스팅 워크스페이스(app.dopedb.dev)에서 사용 이벤트, 퍼널, 세션 녹화, 동의 UI를 수집하거나 두지 않는다. 장애 대응용 정제된 오류 진단(Sentry)만 남기며 제품 퍼널 측정에 쓰지 않는다. 공개 소개 사이트(dopedb.dev)의 페이지 조회·다운로드 수 같은 식별자 없는 기본 집계만 유지하며 경계는 `docs/PRODUCT_ANALYTICS.md`가 소유한다. |
 | PD-49 | 직접 연결 자격 증명 방식(구성원별 principal) | `구현` | 공급자 API가 없는 공개 접근 가능 PostgreSQL 14+ / MySQL 8.0.21+ 서버를 workspace 관리자가 연결 편집기에서 자격 증명 방식 `구성원별 DopeDB 계정`을 골라 등록한다(별도 공유 DB 추가 흐름은 없다). 서버에는 host·port·DB·TLS 모드와 공유 범위(PostgreSQL schema / MySQL database)만 저장하고 관리자 DB 자격 증명은 그 관리자 기기의 OS credential store에만 둔다. 등록 전 관리자 Desktop이 연결, 서버 버전, principal 생성 권한(PostgreSQL `CREATEROLE` 또는 superuser, MySQL `CREATE USER`와 `GRANT OPTION`), grantor 권한을 읽기 전용으로 검사하고 생성될 항목의 정확한 계획을 보여 준다. 각 구성원 Desktop은 강한 임의 비밀번호를 로컬에서 만들어 자기 OS credential store에 두고 PostgreSQL SCRAM-SHA-256 verifier 또는 MySQL `caching_sha2_password` 인증 문자열만 올리며 평문은 기기 밖으로 나가지 않는다. 관리자 자격 증명을 가진 관리자 기기가 서버가 만든 비추측 이름의 DopeDB 전용 principal을 만들고, 기존 권한 모델(역할·연결별 권한·팀 연결 기본 읽기·쓰기 허용)이 계산한 실효 접근을 그대로 반영한다: 없음·보기는 principal 없음, 읽기는 공유 범위의 CONNECT·USAGE·SELECT, 쓰기와 관리는 INSERT·UPDATE·DELETE까지이며 DDL은 부여하지 않는다. principal은 만료 없이 유지되고 구성원 제거·강퇴, 권한 하향·제거, 팀 연결 삭제 때만 회수한다. 관리자가 이 동작을 하면 그 관리자 기기가 서버 상태를 확정하기 전에 control plane receipt, DB 쪽 marker(PostgreSQL `COMMENT ON ROLE`, MySQL user `ATTRIBUTE`), role oid 또는 server uuid가 모두 일치하는 principal에만 REVOKE·DROP을 동기 적용하고 성공 뒤에만 완료를 보고한다. 관리자 계정이 세션을 종료할 수 있을 때(PostgreSQL superuser 또는 `pg_signal_backend`, MySQL `PROCESS`와 `CONNECTION_ADMIN`/`SUPER`)는 해당 principal의 열린 세션도 종료하고, 그렇지 않으면 접근을 회수하고 새 로그인을 막으며(기존 role membership은 바꾸지 않는다) 이미 열린 세션이 연결을 끊을 때까지 남을 수 있음을 결과로 알리고 추가 화면이 미리 경고한다. 쓰기→읽기 같은 하향은 DB 계정을 삭제하지 않고 목표 수준으로만 낮춘다. 그 기기에 해당 DB의 관리자 자격 증명이 없으면 즉시 회수가 불가능함을 경고하고 자격 증명 입력이나 보유 기기에서의 적용을 고르게 하며, 그동안 서버 권한은 유지한 채 `회수 대기`로 표시한다. 구성원 자가 탈퇴와 계정 삭제는 다음 관리자 기기 동기화에서 처리한다. 기존 사용자, role membership, 비밀번호, 권한, DEFAULT PRIVILEGES, PUBLIC ACL, 객체 소유권은 바꾸지 않고 principal이 객체를 소유하거나 소유권 증명이 하나라도 어긋나면 구체 진단과 함께 멈춘다. PostgreSQL은 기존 role의 기본 권한을 바꾸지 않으므로 공유 범위에 새로 생긴 테이블은 관리자 기기의 다음 동기화 뒤에 보인다. MariaDB, 다른 엔진, 공용 static 비밀번호, 자동 DDL 권한은 범위 밖이다. |
-| PD-50 | 팀 연결 모델 | `구현` | 팀 workspace의 모든 연결은 팀 연결이며 별도 `공유 DB`, 공유 데이터베이스 목록, `워크스페이스로 복사`, `팀 읽기` switch, `공유 DB 추가`는 없다. 입구는 연결 편집기(`새 연결`·데이터 소스 선택기) 하나이고 저장이 secret-free workspace 연결과 만든 사람의 로컬 자격 증명 binding을 함께 만든다. editor 이상 역할이 팀 연결을 만들 수 있다. 새 팀 연결의 기본 접근은 analyst 이상 팀 전체 읽기이고 이후 구성원별 변경은 `워크스페이스 관리 → 구성원`에서만 한다. 자격 증명 방식은 연결 편집기의 속성이며 각 구성원이 자기 계정을 binding하는 member-local, 공급자 계정(`공급자`에서 연결)의 단기 managed 자격 증명, PD-49의 구성원별 DopeDB 계정 자동 생성 중 하나다. 쓰기 가능 여부는 구성원 권한과 쓰기 승인을 따르며 자격 증명 방식과 무관하다(member-local 팀 연결도 읽기 전용으로 강제하지 않는다). `공급자`는 공급자 계정 연결·재승인과 managed 연결 복구만 맡는다. 업데이트 시 팀 workspace의 기존 팀 로컬(`나만`) 연결은 자동으로 팀 연결로 승격한다. SQLite 파일 연결은 기기 전용이라 승격 대상이 아니며 UI는 SQLite 파일은 공유할 수 없다고 알린다. 개인 workspace는 변하지 않는다. 장기 비밀값은 공유 레코드를 따라가지 않고 기존 DB principal은 바꾸지 않는다. 결정 근거는 [ADR 0011](adr/0011-team-connections-and-environments.md)이다. |
+| PD-50 | 팀 연결 모델 | `구현` | 팀 workspace의 모든 연결은 팀 연결이며 별도 `공유 DB`, 공유 데이터베이스 목록, `워크스페이스로 복사`, `팀 읽기` switch, `공유 DB 추가`는 없다. 입구는 연결 편집기(`새 연결`·데이터 소스 선택기) 하나이고 저장이 secret-free workspace 연결과 만든 사람의 로컬 자격 증명 binding을 함께 만든다. editor 이상 역할이 팀 연결을 만들고 Project 환경에 배치할 수 있다(환경 binding 서버 규칙도 editor 이상이다). 새 팀 연결의 기본 접근은 analyst 이상 팀 전체 읽기이고 이후 구성원별 변경은 `워크스페이스 관리 → 구성원`에서만 한다. 자격 증명 방식은 새 연결의 편집기에서 고르는 속성이며 각 구성원이 자기 계정을 쓰는 기본 방식, 공급자 계정(`공급자`에서 연결)의 단기 managed 자격 증명(관리자), PD-49의 구성원별 DopeDB 계정 자동 생성(관리자) 중 하나다. 뒤의 두 방식은 편집기 안에서 기존 단계 흐름으로 진행하며 공급자 계정이 없으면 `공급자`로 안내한다. 승격·거절·도달 불가 결과와 기기 전용 SQLite 표시는 Explorer가 보여 준다. 쓰기 가능 여부는 구성원 권한과 쓰기 승인을 따르며 자격 증명 방식과 무관하다(member-local 팀 연결도 읽기 전용으로 강제하지 않는다). `공급자`는 공급자 계정 연결·재승인과 managed 연결 복구만 맡는다. 업데이트 시 팀 workspace의 기존 팀 로컬(`나만`) 연결은 자동으로 팀 연결로 승격한다. SQLite 파일 연결은 기기 전용이라 승격 대상이 아니며 UI는 SQLite 파일은 공유할 수 없다고 알린다. 개인 workspace는 변하지 않는다. 장기 비밀값은 공유 레코드를 따라가지 않고 기존 DB principal은 바꾸지 않는다. 결정 근거는 [ADR 0011](adr/0011-team-connections-and-environments.md)이다. |
 | PD-51 | 환경 고정 목록과 유효 환경 | `구현` | 환경은 `개발`·`스테이징`·`운영`·`테스트` 고정 목록에서 고른 값 하나이고 그 값이 환경 이름이다. Project당 종류별 환경은 하나이며 자유 입력 이름, 별도 위험 등급(riskClass), `custom`은 없다. 기존 환경은 가장 가까운 종류로 이전한다(자유 이름은 현재 위험 등급에 따라, custom은 개발). 연결의 유효 환경은 가장 민감한 값(`운영 > 스테이징 > 테스트 > 개발`)이며 묶인 환경들과 연결 자체 표시 중에서 고른다. 연결 자체 표시는 연결 편집기의 선택 사항 환경 select(같은 4개 값)다. 변경 작업의 PROD 확인, 운영 주의 표시, 저장 스냅샷 게시 차단은 유효 환경에서만 파생한다. `운영` 환경 생성은(새 Project의 첫 환경 포함) 명시적 확인을 받고, provider 가져오기는 별도 `운영인가` 질문 대신 같은 환경 select를 묻는다. 이전 Desktop을 위해 control plane은 전환 기간 동안 기존 환경 필드(riskClass)를 종류로 매핑해 받고 돌려준다. 결정 근거는 [ADR 0011](adr/0011-team-connections-and-environments.md)이다. |
 
 

@@ -1,5 +1,6 @@
-// Database access reads. Every key sits under one area root, so a refusal can
-// re-read the whole panel while a confirmed change refreshes only what it touched.
+// Team connection reads shared by Members, access lowering and the editor's conflict
+// review. Every key sits under one area root, so a refusal can re-read the whole area
+// while a confirmed change refreshes only what it touched.
 import { queryOptions } from "@tanstack/react-query";
 import type { WorkspaceAdminScope } from "../domain";
 import { workspaceAdminQueryKey } from "../queryKeys";
@@ -7,7 +8,6 @@ import { runWorkspaceAdmin } from "../requests";
 import {
   parseConnectionConflicts,
   parseSharedDatabases,
-  parseTeamReadState,
 } from "./parsers";
 
 const AREA = "access";
@@ -18,7 +18,7 @@ export function accessQueryRoot(scope: ScopeKey) {
   return workspaceAdminQueryKey(scope, AREA);
 }
 
-/** Shared databases visible to the acting member, with their effective access. */
+/** Team connections visible to the acting member, with their effective access. */
 export function sharedDatabasesQuery(scope: WorkspaceAdminScope) {
   return queryOptions({
     queryKey: workspaceAdminQueryKey(scope, AREA, "databases"),
@@ -28,22 +28,6 @@ export function sharedDatabasesQuery(scope: WorkspaceAdminScope) {
           kind: "listConnections",
           workspaceId: scope.workspaceId,
         }),
-      ),
-  });
-}
-
-/** Whether team read access is on for one database the acting member manages. */
-export function teamReadQuery(scope: WorkspaceAdminScope, connectionId: string) {
-  return queryOptions({
-    queryKey: workspaceAdminQueryKey(scope, AREA, "teamRead", connectionId),
-    queryFn: async () =>
-      parseTeamReadState(
-        await runWorkspaceAdmin(scope.accountId, {
-          kind: "listConnectionGrants",
-          workspaceId: scope.workspaceId,
-          connectionId,
-        }),
-        connectionId,
       ),
   });
 }

@@ -62,7 +62,7 @@ export default function WorkspaceSwitcher({
     () => buildWorkspaceChoiceGroups(
       auth.data,
       context.data?.workspaces ?? [],
-      t("workspace.localOnly"),
+      t("workspace.personalGroup"),
     ),
     [auth.data, context.data?.workspaces, t],
   );

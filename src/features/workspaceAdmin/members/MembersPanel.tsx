@@ -1,6 +1,6 @@
 // Workspace management → Members for one team workspace. Composes the invite form, the
 // pending revocations, the member list (each row expands to that member's permission on
-// every shared database, the single place those grants are edited) and the pending
+// every team connection, the single place those grants are edited) and the pending
 // invitations. Every write goes through the members command controller, one at a time;
 // the control plane authorizes each command, so this panel only hides actions the
 // server would always refuse.

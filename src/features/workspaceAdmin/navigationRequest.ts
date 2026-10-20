@@ -1,17 +1,15 @@
 // Routes "open workspace management" from anywhere in the shell to the one
 // shell-owned dialog route. A one-time
-// focus (a database to reveal, or the add-database flow) travels beside the request
-// and is taken once by the Providers section, so no screen writes another's state.
+// focus (a managed connection to repair) travels beside the request and is taken once
+// by the Providers section, so no screen writes another's state.
 import type { WorkspaceAdminScope } from "./domain";
 import type { WorkspaceAdminSection } from "./sections";
 
 const WORKSPACE_ADMIN_REQUEST_EVENT = "dopedb:request-workspace-admin";
 const FOCUS_TTL_MS = 60_000;
 
-/** What the Providers section opens when the request arrives. */
-export type WorkspaceAdminFocus =
-  | { kind: "connection"; connectionId: string }
-  | { kind: "addDatabase" };
+/** The managed connection the Providers section offers to repair when the request arrives. */
+export type WorkspaceAdminFocus = { kind: "connection"; connectionId: string };
 
 let pendingFocus: { focus: WorkspaceAdminFocus; requestedAt: number } | null = null;
 

@@ -1,4 +1,4 @@
-// Member-centric view of every shared database's grants: the strict parser for the
+// Member-centric view of every team connection's grants: the strict parser for the
 // control-plane aggregate, the capability <-> none/read/write mapping the Members editor
 // offers, the pure effective-level rule (mirroring the server's) that decides which
 // changes lower a provisioned member's database access, and the per-database revocation

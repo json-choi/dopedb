@@ -250,6 +250,12 @@ export function useConnectionProfileController({
     onCancel();
   }
 
+  /** A guarded deletion done elsewhere (per-member accounts revoked first) finished. */
+  async function finishRemoteDeletion() {
+    await onDeletedConnection(form.value.id);
+    onCancel();
+  }
+
   /**
    * A shared connection that changed in the workspace is checked again only after
    * this device pulls its current revision; the stale one is never opened.
@@ -374,6 +380,7 @@ export function useConnectionProfileController({
       test: check.test,
       duplicate: duplicateCurrentConnection,
       remove: removeCurrentConnection,
+      finishRemoteDeletion,
       refreshWorkspace,
       /** Settings → Account opens over this editor and returns to it after sign-in. */
       signIn: () => {
