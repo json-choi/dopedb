@@ -50,6 +50,7 @@ pub(super) async fn bootstrap_local_store(pool: &SqlitePool) -> AppResult<LocalS
         add_binding_endpoint_pins(pool).await?;
         add_deferred_credential_deletes(pool).await?;
         add_history_targets(pool).await?;
+        normalize_environment_kinds(pool).await?;
         retire_older_catalog_producer(pool).await?;
         sqlx::raw_sql(schema::PERSONAL_ARTICLES_SCHEMA)
             .execute(pool)
@@ -233,5 +234,189 @@ async fn add_binding_endpoint_pins(pool: &SqlitePool) -> AppResult<()> {
     .execute(&mut *transaction)
     .await?;
     transaction.commit().await?;
+    Ok(())
+}
+
+/// Rewrites Project environments to the fixed kind list exactly once and
+/// normalises connection labels to the same vocabulary.
+///
+/// A row's kind is `production` when it was flagged production or classed so,
+/// `custom` becomes `development`, and every other class carries over. When a
+/// Project holds several rows of one kind, the lowest id keeps that kind (the
+/// control plane folds by the same rule, so a cache and its server agree) and
+/// the others fold into it: their sources, bindings, graph revisions, heads,
+/// grants, mapping proposals, and Personal Articles are re-pointed at the
+/// survivor (stamped with its revision) and the emptied rows are removed, so no
+/// binding is lost and ids that were never duplicated stay stable. Graph
+/// revisions are immutable, so their update trigger is lifted for the re-point
+/// only. The table is rebuilt with foreign keys off, as SQLite requires, and
+/// checked before commit.
+async fn normalize_environment_kinds(pool: &SqlitePool) -> AppResult<()> {
+    // A store already in the fixed vocabulary is only read, so a read-only database opens.
+    let retired_labels: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM connections
+         WHERE env IS NOT NULL AND env NOT IN ('production', 'staging', 'test', 'development'))",
+    )
+    .fetch_one(pool)
+    .await?;
+    if retired_labels {
+        sqlx::query(
+            "UPDATE connections
+             SET env = CASE lower(trim(env))
+                     WHEN 'prod' THEN 'production' WHEN 'dev' THEN 'development'
+                     WHEN 'staging' THEN 'staging' WHEN 'test' THEN 'test'
+                     ELSE NULL END
+             WHERE env IS NOT NULL
+               AND env NOT IN ('production', 'staging', 'test', 'development')",
+        )
+        .execute(pool)
+        .await?;
+    }
+    let columns = sqlx::query("PRAGMA table_info(knowledge_project_environments)")
+        .fetch_all(pool)
+        .await?;
+    if !columns
+        .iter()
+        .any(|row| row.get::<String, _>("name") == "risk_class")
+    {
+        return Ok(());
+    }
+    let mut connection = pool.acquire().await?;
+    let foreign_keys: i64 = sqlx::query_scalar("PRAGMA foreign_keys")
+        .fetch_one(&mut *connection)
+        .await?;
+    sqlx::query("PRAGMA foreign_keys = OFF")
+        .execute(&mut *connection)
+        .await?;
+    let rebuilt = rebuild_environments_by_kind(&mut connection).await;
+    if foreign_keys != 0 {
+        sqlx::query("PRAGMA foreign_keys = ON")
+            .execute(&mut *connection)
+            .await?;
+    }
+    rebuilt
+}
+
+async fn rebuild_environments_by_kind(connection: &mut sqlx::SqliteConnection) -> AppResult<()> {
+    const KIND: &str = "CASE WHEN {t}.production = 1 THEN 'production'
+                             WHEN {t}.risk_class = 'custom' THEN 'development'
+                             ELSE {t}.risk_class END";
+    let kind_of = |table: &str| KIND.replace("{t}", table);
+    let mut tx = sqlx::Connection::begin(&mut *connection).await?;
+    let trigger: Option<String> = sqlx::query_scalar(
+        "SELECT sql FROM sqlite_master
+         WHERE type = 'trigger' AND name = 'knowledge_graph_revisions_reject_update'",
+    )
+    .fetch_optional(&mut *tx)
+    .await?;
+    // Assembled only from compile-time constants.
+    sqlx::query(sqlx::AssertSqlSafe(format!(
+        "CREATE TEMP TABLE environment_merge AS
+         SELECT old.id AS old_id,
+                (SELECT owner.id FROM knowledge_project_environments owner
+                 WHERE owner.project_id = old.project_id
+                   AND ({owner_kind}) = ({old_kind})
+                 ORDER BY owner.id LIMIT 1) AS owner_id
+         FROM knowledge_project_environments old",
+        owner_kind = kind_of("owner"),
+        old_kind = kind_of("old"),
+    )))
+    .execute(&mut *tx)
+    .await?;
+    if trigger.is_some() {
+        sqlx::query("DROP TRIGGER knowledge_graph_revisions_reject_update")
+            .execute(&mut *tx)
+            .await?;
+    }
+    let owner_revision = "(SELECT revision FROM knowledge_project_environments
+                           WHERE id = (SELECT owner_id FROM environment_merge WHERE old_id = {t}.project_environment_id))";
+    let folded = "(SELECT old_id FROM environment_merge WHERE old_id <> owner_id)";
+    for table in [
+        "knowledge_sources",
+        "knowledge_environment_connections",
+        "knowledge_graph_revisions",
+        "knowledge_environment_heads",
+        "knowledge_grants",
+    ] {
+        // Table names come from this constant list.
+        sqlx::query(sqlx::AssertSqlSafe(format!(
+            "UPDATE {table}
+             SET environment_revision = {revision},
+                 project_environment_id =
+                     (SELECT owner_id FROM environment_merge
+                      WHERE old_id = {table}.project_environment_id)
+             WHERE project_environment_id IN {folded}",
+            revision = owner_revision.replace("{t}", table),
+        )))
+        .execute(&mut *tx)
+        .await?;
+    }
+    sqlx::query(sqlx::AssertSqlSafe(format!(
+        "UPDATE knowledge_mapping_proposals
+         SET project_environment_id =
+             (SELECT owner_id FROM environment_merge
+              WHERE old_id = knowledge_mapping_proposals.project_environment_id)
+         WHERE project_environment_id IN {folded}"
+    )))
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query(sqlx::AssertSqlSafe(format!(
+        "UPDATE personal_analysis_articles
+         SET environment_id =
+             (SELECT owner_id FROM environment_merge
+              WHERE old_id = personal_analysis_articles.environment_id)
+         WHERE environment_id IN {folded}"
+    )))
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query(sqlx::AssertSqlSafe(format!(
+        "DELETE FROM knowledge_project_environments WHERE id IN {folded}"
+    )))
+    .execute(&mut *tx)
+    .await?;
+    if let Some(sql) = trigger {
+        sqlx::query(sqlx::AssertSqlSafe(sql))
+            .execute(&mut *tx)
+            .await?;
+    }
+    sqlx::raw_sql(
+        "CREATE TABLE knowledge_project_environments_next (
+             id         TEXT PRIMARY KEY,
+             project_id TEXT NOT NULL REFERENCES knowledge_projects(id) ON DELETE CASCADE,
+             kind       TEXT NOT NULL CHECK(kind IN ('production', 'staging', 'test', 'development')),
+             revision   INTEGER NOT NULL CHECK(revision > 0),
+             created_at TEXT NOT NULL,
+             updated_at TEXT NOT NULL,
+             UNIQUE(project_id, kind)
+         );",
+    )
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query(sqlx::AssertSqlSafe(format!(
+        "INSERT INTO knowledge_project_environments_next
+             (id, project_id, kind, revision, created_at, updated_at)
+         SELECT id, project_id, {kind}, revision, created_at, updated_at
+         FROM knowledge_project_environments",
+        kind = kind_of("knowledge_project_environments"),
+    )))
+    .execute(&mut *tx)
+    .await?;
+    sqlx::raw_sql(
+        "DROP TABLE knowledge_project_environments;
+         ALTER TABLE knowledge_project_environments_next
+             RENAME TO knowledge_project_environments;
+         DROP TABLE environment_merge;",
+    )
+    .execute(&mut *tx)
+    .await?;
+    let broken = sqlx::query("PRAGMA foreign_key_check")
+        .fetch_all(&mut *tx)
+        .await?;
+    if !broken.is_empty() {
+        return Err(AppError::Config(
+            "the Project environment migration left a dangling reference".into(),
+        ));
+    }
+    tx.commit().await?;
     Ok(())
 }

@@ -9,11 +9,8 @@ import {
   mutationAllowed,
   privateJson,
 } from "@/lib/http";
-import {
-  insertKnowledgeProject,
-  KNOWLEDGE_RISK_CLASSES,
-  type KnowledgeRiskClass,
-} from "@/lib/knowledge/project-store";
+import { insertKnowledgeProject } from "@/lib/knowledge/project-store";
+import { parseEnvironmentKind } from "@/lib/knowledge/environment-kind";
 import {
   knowledgeMutationAuthority,
   knowledgeMutationAuthoritySql,
@@ -51,38 +48,20 @@ export async function POST(request: Request, context: RouteContext) {
     || typeof body.name !== "string"
     || !isSafeDisplayText(body.name.trim(), 512)
     || environments.length < 1
-    || environments.length > 20
-    || !environments.every((value) => {
-      if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-      const environment = value as Record<string, unknown>;
-      return Object.keys(environment).sort().join(",") === "name,riskClass"
-        && typeof environment.name === "string"
-        && isSafeDisplayText(environment.name.trim(), 512)
-        && typeof environment.riskClass === "string"
-        && KNOWLEDGE_RISK_CLASSES.includes(
-          environment.riskClass as KnowledgeRiskClass,
-        );
-    })
+    || environments.length > 4
   ) {
     return jsonError("Invalid Project Knowledge scope", 400);
   }
-  const projectName = body.name.trim();
-  const normalizedEnvironments = environments.map((value) => {
-    const environment = value as {
-      name: string;
-      riskClass: KnowledgeRiskClass;
-    };
-    return {
-      name: environment.name.trim(),
-      riskClass: environment.riskClass,
-    };
-  });
-  if (
-    new Set(normalizedEnvironments.map((environment) => environment.name)).size !==
-    normalizedEnvironments.length
-  ) {
-    return jsonError("Environment names must be unique", 400);
+  // `{kind}` is the shape; pre-kind Desktops send `{name, riskClass}`, read as the kind.
+  const kinds = environments.map((value) => parseEnvironmentKind(value));
+  const normalizedEnvironments = kinds.filter((kind) => kind !== null);
+  if (normalizedEnvironments.length !== kinds.length) {
+    return jsonError("Invalid Project Knowledge scope", 400);
   }
+  if (new Set(normalizedEnvironments).size !== normalizedEnvironments.length) {
+    return jsonError("A Project holds one Environment per kind", 400);
+  }
+  const projectName = body.name.trim();
   try {
     const created = await insertKnowledgeProject({
       organizationId: workspaceId,

@@ -5,12 +5,12 @@
 import {
   CheckboxField,
   Field,
-  SelectInput,
   TextInput,
 } from "../../../../design-system/components/FormControls";
 import { InlineNotice, LoadingLabel } from "../../../../design-system/components/Status";
+import { EnvironmentKindSelect } from "../../../../components/EnvironmentKindSelect";
 import { useI18n } from "../../../../lib/i18n";
-import type { DirectDatabaseSetup, DirectEnvironment } from "./useDirectDatabaseSetup";
+import type { DirectDatabaseSetup } from "./useDirectDatabaseSetup";
 
 function PlanBlock({ title, statements }: { title: string; statements: readonly string[] }) {
   return (
@@ -27,7 +27,6 @@ function PlanBlock({ title, statements }: { title: string; statements: readonly 
   );
 }
 
-const ENVIRONMENTS: readonly DirectEnvironment[] = ["", "dev", "staging", "prod"];
 
 export default function DirectScopeStep({ flow }: { flow: DirectDatabaseSetup }) {
   const { t } = useI18n();
@@ -118,23 +117,13 @@ export default function DirectScopeStep({ flow }: { flow: DirectDatabaseSetup })
             />
           )}
         </Field>
-        <Field label={t("directAccess.add.environment")}>
-          {(binding) => (
-            <SelectInput
-              {...binding.controlProps()}
-              density="compact"
-              value={flow.environment}
-              disabled={busy}
-              onChange={(event) => flow.setEnvironment(event.target.value as DirectEnvironment)}
-            >
-              {ENVIRONMENTS.map((value) => (
-                <option key={value} value={value}>
-                  {value === "" ? t("directAccess.add.environmentNone") : value}
-                </option>
-              ))}
-            </SelectInput>
-          )}
-        </Field>
+        <EnvironmentKindSelect
+          label={t("directAccess.add.environment")}
+          emptyLabel={t("directAccess.add.environmentNone")}
+          value={flow.environment}
+          disabled={busy}
+          onChange={flow.setEnvironment}
+        />
       </div>
     </div>
   );

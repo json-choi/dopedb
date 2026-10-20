@@ -3,10 +3,10 @@
 // approval gate that must pass before the reviewed prepare request is sent, and
 // the in-memory repair intent that pins one managed connection's project and
 // instance across a single browser authorization (never browser storage).
+import type { EnvironmentKind } from "../../../../lib/environmentKind";
 import type { WorkspaceAdminOperation, WorkspaceAdminScope } from "../../domain";
 import {
   parseGcpSetupPermissionCheck,
-  type GcpEnvironmentClassification,
   type GcpSetupInstance,
   type GcpSetupInventory,
   type GcpSetupPermissionCheck,
@@ -46,7 +46,8 @@ export type GcpSchemaChoice = {
 
 export type GcpApprovalInput = {
   instance: GcpSetupInstance | null;
-  environment: GcpEnvironmentClassification;
+  /** The environment chosen for an instance the provider cannot classify. */
+  environment: EnvironmentKind | null;
   productionApproved: boolean;
   iamChangeApproved: boolean;
   iamRoleGrantApproved: boolean;
@@ -268,7 +269,7 @@ export function pendingGcpRepair(scope: ScopeIdentity, now = Date.now()): GcpRep
 
 export function gcpEffectiveProduction(
   instance: GcpSetupInstance | null,
-  environment: GcpEnvironmentClassification,
+  environment: EnvironmentKind | null,
 ): boolean {
   return Boolean(instance && (
     instance.production === true
@@ -284,7 +285,7 @@ export function gcpSchemaRequested(schema: GcpSchemaChoice): boolean {
 export function gcpApprovalsComplete(input: GcpApprovalInput): boolean {
   const { instance, permissions, schema } = input;
   if (!instance || !instance.ready || !permissions) return false;
-  if (instance.production === "unknown" && input.environment === "") return false;
+  if (instance.production === "unknown" && input.environment === null) return false;
   if (
     gcpSchemaRequested(schema)
     && !(
@@ -313,8 +314,9 @@ export function gcpPrepareOperation(input: GcpApprovalInput & {
 }): PrepareGcpSetupOperation | null {
   const { instance, permissions, project } = input;
   if (!project || !instance || !permissions || !gcpApprovalsComplete(input)) return null;
-  const environmentClassification = instance.production === "unknown"
-    ? input.environment || null
+  // The provider only distinguishes production from everything else.
+  const environmentClassification = instance.production === "unknown" && input.environment
+    ? input.environment === "production" ? "production" : "development"
     : null;
   const schemaAuthority = input.schema.approved
     ? { database: input.schema.database.trim(), owner: input.schema.owner.trim() }

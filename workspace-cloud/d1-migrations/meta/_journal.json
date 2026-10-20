@@ -85,6 +85,13 @@
       "when": 1792452654923,
       "tag": "0011_mongo_template_options",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1792454283756,
+      "tag": "0012_environment_kind",
+      "breakpoints": true
     }
   ]
 }

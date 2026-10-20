@@ -6,13 +6,13 @@ use uuid::Uuid;
 
 use crate::error::{AppError, AppResult};
 use crate::features::knowledge::domain::{
-    EnvironmentRiskClass, Project, ProjectEnvironment, SourceSnapshot, StoredKnowledgeScope,
+    Project, ProjectEnvironment, SourceSnapshot, StoredKnowledgeScope,
 };
 use crate::kernel::identity::WorkspaceId;
 use crate::store::{parse_uuid, Store};
 
 use super::codec::{
-    checked_name, parse_risk_class, provider_value, risk_class_value, u64_to_i64, visibility_value,
+    checked_name, parse_environment_kind, provider_value, u64_to_i64, visibility_value,
     KnowledgeScopeRow,
 };
 
@@ -37,7 +37,6 @@ impl Store {
             });
         }
         let project_name = checked_name(&project.name)?;
-        let environment_name = checked_name(&environment.name)?;
         let binding_json = serde_json::to_string(binding)?;
         if binding_json.len() > 65_536 {
             return Err(AppError::Config(
@@ -80,12 +79,10 @@ impl Store {
 
         sqlx::query(
             "INSERT INTO knowledge_project_environments
-                 (id, project_id, name, production, risk_class, revision, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)
+                 (id, project_id, kind, revision, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?5)
              ON CONFLICT(id) DO UPDATE SET
-                 name = excluded.name,
-                 production = excluded.production,
-                 risk_class = excluded.risk_class,
+                 kind = excluded.kind,
                  revision = excluded.revision,
                  updated_at = excluded.updated_at
              WHERE knowledge_project_environments.project_id = excluded.project_id
@@ -93,9 +90,7 @@ impl Store {
         )
         .bind(environment.id.to_string())
         .bind(project.id.to_string())
-        .bind(environment_name)
-        .bind(environment.risk_class == EnvironmentRiskClass::Production)
-        .bind(risk_class_value(environment.risk_class))
+        .bind(environment.kind.as_str())
         .bind(environment_revision)
         .bind(now)
         .execute(&mut *tx)
@@ -167,7 +162,7 @@ impl Store {
     ) -> AppResult<Vec<StoredKnowledgeScope>> {
         let rows: Vec<KnowledgeScopeRow> = sqlx::query_as(
             "SELECT project.id, project.name, project.revision,
-                    environment.id, environment.name, environment.risk_class,
+                    environment.id, environment.kind,
                     environment.revision, source.environment_revision,
                     source.binding_json
              FROM knowledge_sources source
@@ -176,7 +171,7 @@ impl Store {
                ON environment.id = source.project_environment_id
               AND environment.project_id = project.id
              WHERE project.workspace_id = ?1 AND source.revoked_at IS NULL
-             ORDER BY project.name, environment.name, source.display_name",
+             ORDER BY project.name, environment.kind, source.display_name",
         )
         .bind(workspace_id.to_string())
         .fetch_all(self.pool())
@@ -188,8 +183,7 @@ impl Store {
                     project_name,
                     project_revision,
                     environment_id,
-                    environment_name,
-                    risk_class,
+                    kind,
                     environment_revision,
                     source_environment_revision,
                     binding_json,
@@ -222,8 +216,7 @@ impl Store {
                         environment: ProjectEnvironment {
                             id: environment_id,
                             project_id,
-                            name: environment_name,
-                            risk_class: parse_risk_class(&risk_class)?,
+                            kind: parse_environment_kind(&kind)?,
                             revision: u64::try_from(environment_revision).map_err(|_| {
                                 AppError::Config(
                                     "the stored Environment revision is invalid".into(),

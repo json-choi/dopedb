@@ -24,7 +24,7 @@ positioning.
 | `Diagnostics.tsx` | Shared compact problems/diagnostics list for settings and property editors, with `warning`/`danger` tone. |
 | `DopeDBMark.tsx` | Thin wrapper around `DopeDBMarkGraphic` that supplies a unique `useId()` per instance to avoid SVG mask collisions. |
 | `DopeDBMarkGraphic.tsx` | Generated (by `pnpm icons`, do not hand-edit) hook-free brand mark SVG shared by Desktop, `site/`, and Workspace. |
-| `EnvironmentBadge.tsx` | Neutral uppercase dev/staging/prod label with a small semantic-color dot; used only on DB connection rows in Explorer. |
+| `EnvironmentBadge.tsx` | Neutral uppercase environment-kind label (`kind` + localized `label`) with a small semantic-color dot; used only on DB connection rows in Explorer. |
 | `FormControls.tsx` | Canonical Tailwind form controls (`Field`, `TextInput`, `TextAreaInput`, `SelectInput`, `InlineSelect`, `CheckboxField`) that own label/focus/disabled state at dense desktop sizing. |
 | `IconRailTabs.tsx` | Canonical 42px vertical icon-only category rail for dense dialogs, with tooltip parity and roving keyboard focus. |
 | `IdeTabs.tsx` | Flat IDE tab-strip primitives (`IdeTab`, `IdeTabStrip`) where the active tab sits inside the strip rather than filling a whole rectangle. |

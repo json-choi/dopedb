@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::kernel::access::ActiveResourceScope;
+use crate::kernel::environment::{effective_environment, EnvironmentKind};
 
 pub(super) fn row_to_active_resource_scope(
     row: &sqlx::sqlite::SqliteRow,
@@ -27,6 +28,12 @@ pub(super) fn row_to_active_resource_scope(
     })
 }
 
+/// A stored connection label is an environment kind or nothing: a retired label
+/// (`custom`, free text) reads as none rather than failing the row.
+fn parse_stored_environment(label: Option<String>) -> Option<EnvironmentKind> {
+    label.as_deref().and_then(EnvironmentKind::parse)
+}
+
 // ── row → model mappers ─────────────────────────────────────────────────────
 
 pub(super) fn row_to_connection(r: &sqlx::sqlite::SqliteRow) -> AppResult<ConnectionProfile> {
@@ -50,6 +57,7 @@ pub(super) fn row_to_connection(r: &sqlx::sqlite::SqliteRow) -> AppResult<Connec
     let raw_port: i64 = r.try_get("port")?;
     let port = u16::try_from(raw_port)
         .map_err(|_| AppError::Config(format!("connection port {raw_port} is out of range")))?;
+    let env = parse_stored_environment(r.try_get("env")?);
     Ok(ConnectionProfile {
         id: parse_uuid(r.try_get("id")?)?,
         name: r.try_get("name")?,
@@ -65,7 +73,8 @@ pub(super) fn row_to_connection(r: &sqlx::sqlite::SqliteRow) -> AppResult<Connec
         readonly_default: r.try_get("readonly_default")?,
         allow_writes: r.try_get("allow_writes")?,
         secret_ref: r.try_get("secret_ref")?,
-        env: r.try_get("env")?,
+        env,
+        effective_env: env,
         schema_group: r.try_get("schema_group")?,
         workspace_access: parse_workspace_access(r.try_get("workspace_access")?)?,
         credential_mode: parse_credential_mode(r.try_get("credential_mode")?)?,
@@ -78,6 +87,13 @@ pub(super) fn row_to_connection_with_binding(
     r: &sqlx::sqlite::SqliteRow,
 ) -> AppResult<ConnectionProfile> {
     let mut profile = row_to_connection(r)?;
+    let bound = r
+        .try_get::<Option<String>, _>("bound_environments")?
+        .unwrap_or_default();
+    profile.effective_env = effective_environment(
+        profile.env,
+        bound.split(',').filter_map(EnvironmentKind::parse),
+    );
     if profile.workspace_access != WorkspaceConnectionAccess::Local {
         if profile.engine == Engine::Bigquery
             && profile.credential_mode == WorkspaceCredentialMode::MemberLocal

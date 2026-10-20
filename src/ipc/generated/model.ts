@@ -1,6 +1,8 @@
 // Generated from src-tauri/src/model.rs by ts-rs 12.0.1.
 // Keep this checked-in wire contract synchronized with the Rust DTOs.
 
+import type { EnvironmentKind } from "../../lib/environmentKind";
+
 export type JsonValue =
   | string
   | number
@@ -41,12 +43,20 @@ schemaAccessAvailable: boolean,
  */
 secretRef: string | null,
 /**
- * Environment label ("dev" | "staging" | "prod") — drives the sidebar/header chip.
+ * The connection's own optional environment; a connection bound to a Project
+ * environment is governed by the effective environment instead. Retired
+ * labels (`custom`, free text) read as none.
  */
-env: string | null,
+env: EnvironmentKind | null,
+/**
+ * Derived, never stored or accepted from a caller: the most sensitive kind
+ * among the Project environments this connection is bound to in its workspace,
+ * otherwise `env`. Every production safeguard reads this and nothing else.
+ */
+effectiveEnv: EnvironmentKind | null,
 /**
  * Shared schema family. Connections with the same value are compared as
- * dev/staging/prod siblings, using prod as the default baseline when present.
+ * siblings, using the production member as the default baseline when present.
  */
 schemaGroup: string | null,
 /**

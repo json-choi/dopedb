@@ -14,6 +14,7 @@ import {
   type StatusTone,
 } from "../../../design-system/components/Status";
 import { errMessage } from "../../../ipc/types";
+import { environmentKindLabel } from "../../../lib/environmentKind";
 import { useI18n } from "../../../lib/i18n";
 import type { QueryResultPhase } from "../../../lib/queryResultPhase";
 import type {
@@ -32,7 +33,7 @@ import {
 
 interface KnowledgeConnectSourceSectionProps {
   projectName: string;
-  environmentName: string;
+  environmentLabel: string;
   githubProviderVisible: boolean;
   personalAuthResolved: boolean;
   githubAvailable: boolean;
@@ -60,7 +61,7 @@ interface KnowledgeConnectSourceSectionProps {
 
 export function KnowledgeConnectSourceSection({
   projectName,
-  environmentName,
+  environmentLabel,
   githubProviderVisible,
   personalAuthResolved,
   githubAvailable,
@@ -99,7 +100,7 @@ export function KnowledgeConnectSourceSection({
           <p className="tw:m-0 tw:text-sm tw:text-muted-foreground">
             {t("knowledge.connectSourceScope", {
               project: projectName,
-              environment: environmentName,
+              environment: environmentLabel,
             })}
           </p>
         </div>
@@ -372,7 +373,7 @@ export function KnowledgeSourceInventory({
                     </StatusBadge>
                   </div>
                   <span className="tw:truncate tw:text-xs tw:text-muted-foreground">
-                    {source.projectName} / {source.environmentName} · {knowledgeRevisionLabel(source.revision, {
+                    {source.projectName} / {environmentKindLabel(t, source.environmentKind)} · {knowledgeRevisionLabel(source.revision, {
                       dirty: t("knowledge.revisionDirty"),
                       snapshot: t("knowledge.revisionSnapshot"),
                     })}

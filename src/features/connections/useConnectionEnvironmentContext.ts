@@ -2,11 +2,15 @@
 // properties and Settings. A standalone profile label never overrides a binding.
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import {
+  compareEnvironmentKinds,
+  effectiveEnvironment,
+  type EnvironmentKind,
+} from "../../lib/environmentKind";
 import { useCatalogScope } from "../../lib/queries";
 import { knowledgeInventoryQuery } from "../knowledge/inventory";
 import { knowledgeQueryKeys } from "../knowledge/queryKeys";
 import { listKnowledgeEnvironmentConnections } from "../knowledge/tauriAdapter";
-import { knowledgeEnvironmentBadge } from "../knowledge/presentation";
 
 export function useConnectionEnvironmentInventory() {
   const scope = useCatalogScope();
@@ -18,22 +22,26 @@ export function useConnectionEnvironmentInventory() {
     staleTime: 60_000,
     enabled,
   });
-  const markersByConnectionId = useMemo(() => {
+  /** Every kind a connection is bound to, most sensitive first. */
+  const boundKindsByConnectionId = useMemo(() => {
     const environments = new Map(inventory.data?.projects.flatMap((project) => project.environments.map((environment) => [environment.id, environment] as const)));
-    const markers = new Map<string, Set<string>>();
+    const kinds = new Map<string, Set<EnvironmentKind>>();
     for (const binding of bindings.data ?? []) {
       if (!binding.connectionId) continue;
       const environment = environments.get(binding.projectEnvironmentId);
-      const current = markers.get(binding.connectionId) ?? new Set<string>();
-      if (environment) current.add(knowledgeEnvironmentBadge(environment.riskClass));
-      markers.set(binding.connectionId, current);
+      const current = kinds.get(binding.connectionId) ?? new Set<EnvironmentKind>();
+      if (environment) current.add(environment.kind);
+      kinds.set(binding.connectionId, current);
     }
-    return new Map(Array.from(markers, ([id, values]) => [id, Array.from(values).sort().join(" / ") || null]));
+    return new Map(Array.from(kinds, ([id, values]) => [id, Array.from(values).sort(compareEnvironmentKinds)]));
   }, [inventory.data, bindings.data]);
   return {
     projects: inventory.data?.projects,
     bindings: bindings.data,
-    markersByConnectionId,
+    boundKindsByConnectionId,
+    /** The connection's effective environment: the most sensitive of its bound kinds and its own label. */
+    effectiveFor: (connectionId: string, own: EnvironmentKind | null) =>
+      effectiveEnvironment(own, boundKindsByConnectionId.get(connectionId) ?? []),
     pending: enabled && (inventory.isPending || bindings.isPending),
     error: inventory.error ?? bindings.error,
   };
@@ -49,7 +57,10 @@ export function useConnectionEnvironmentContext(connectionId: string, presetEnvi
     project,
     environment,
     bound: Boolean(environmentId) || bindings.length > 0,
-    marker: environment ? knowledgeEnvironmentBadge(environment.riskClass) : inventory.markersByConnectionId.get(connectionId) ?? null,
+    /** Bound kinds, most sensitive first; the first one is the effective environment. */
+    boundKinds: environment
+      ? [environment.kind]
+      : inventory.boundKindsByConnectionId.get(connectionId) ?? [],
     pending: inventory.pending,
     error: inventory.error,
   };

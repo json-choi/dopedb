@@ -1,10 +1,11 @@
-// Neon least-privilege preparation for the chosen database: environment
-// classification, the no-change preflight, explicit approvals and the idempotent
+// Neon least-privilege preparation for the chosen database: the environment the
+// administrator chose, the no-change preflight, explicit approvals and the idempotent
 // apply that yields the one-use import receipt. The sealed plan and receipt live
 // only in this component state and are dropped whenever the selection changes.
 import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useI18n } from "../../../../lib/i18n";
+import type { EnvironmentKind } from "../../../../lib/environmentKind";
 import type { WorkspaceAdminScope } from "../../domain";
 import { runWorkspaceAdmin } from "../../requests";
 import {
@@ -12,7 +13,6 @@ import {
   parseNeonBootstrapApply,
   parseNeonBootstrapPreflight,
   type NeonBootstrapState,
-  type NeonEnvironmentClassification,
 } from "../domain";
 import {
   isFutureInstant,
@@ -41,7 +41,10 @@ export function useNeonBootstrap({
   discovery,
   run,
   fail,
+  kind,
 }: {
+  /** The environment the administrator chose for this database. */
+  kind: EnvironmentKind | null;
   scope: WorkspaceAdminScope;
   discovery: ResourceDiscovery;
   /** Runs one exclusive flow mutation; nothing else may start while it is in flight. */
@@ -51,13 +54,12 @@ export function useNeonBootstrap({
   const i18n = useI18n();
   const { t } = i18n;
   const queryClient = useQueryClient();
-  const [classification, setClassification] = useState<NeonEnvironmentClassification>("");
   const [bootstrap, setBootstrap] = useState<NeonBootstrapState>(emptyNeonBootstrap);
   const [publicAclApproved, setPublicAclApproved] = useState(false);
   const [productionApproved, setProductionApproved] = useState(false);
   const pendingApply = useRef<PendingApply | null>(null);
 
-  const environment = neonEnvironment(discovery.branch, classification);
+  const environment = neonEnvironment(discovery.branch, kind);
   const report = bootstrap.report;
   const verified = Boolean(
     report && bootstrap.receipt && isFutureInstant(bootstrap.receiptExpiresAt),
@@ -78,13 +80,6 @@ export function useNeonBootstrap({
 
   function reset() {
     clearPlan();
-    setClassification("");
-  }
-
-  function classify(value: NeonEnvironmentClassification) {
-    setClassification(value);
-    clearPlan();
-    fail(null);
   }
 
   function preflight() {
@@ -225,7 +220,6 @@ export function useNeonBootstrap({
   }
 
   return {
-    classification,
     environment,
     bootstrap,
     report,
@@ -235,7 +229,7 @@ export function useNeonBootstrap({
     productionApproved,
     setPublicAclApproved,
     setProductionApproved,
-    classify,
+    clearPlan,
     preflight,
     apply,
     expire,

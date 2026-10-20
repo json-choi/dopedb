@@ -3,6 +3,7 @@
 import type { WorkspaceRoleName } from "./workspace-permissions";
 import { parseNeonResource } from "./providers/neon-core";
 import { accessModeAllowsWrite } from "./workspace-permissions";
+import { connectionEnvironmentLabel } from "./knowledge/environment-kind";
 import {
   isDirectEngine,
   parseDirectScope,
@@ -297,7 +298,7 @@ export function parseSharedConnection(
     sslmode: text(body.sslmode, 64, true)!,
     readonlyDefault: true,
     allowWrites,
-    env: text(body.env, 32),
+    env: connectionEnvironmentLabel(text(body.env, 32)),
     schemaGroup: text(body.schemaGroup, 120),
     ...(mongoOptions ? { mongoOptions } : {}),
   };
@@ -448,7 +449,7 @@ export function parseDirectEndpoint(value: unknown): DirectEndpointInput {
       sslmode,
       readonlyDefault: true,
       allowWrites: false,
-      env: text(body.env, 32),
+      env: connectionEnvironmentLabel(text(body.env, 32)),
       schemaGroup: text(body.schemaGroup, 120),
     },
     scope: parseDirectScope(engine, body.scope),

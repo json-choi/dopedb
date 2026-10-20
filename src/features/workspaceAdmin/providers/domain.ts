@@ -130,8 +130,6 @@ export type VaultConfiguration = {
   production: boolean;
 };
 
-export type NeonEnvironmentClassification = "" | "development" | "production";
-
 export type NeonBootstrapFinding = {
   code: string;
   level: "blocker" | "change" | "verified";
@@ -361,8 +359,6 @@ export type GcpSetupInstance = {
   production: boolean | "unknown";
   iamAuthenticationEnabled: boolean;
 };
-
-export type GcpEnvironmentClassification = "" | "production" | "development";
 
 export type GcpSetupInventory = {
   account: string;

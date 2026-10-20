@@ -310,7 +310,7 @@ const gcpInstance: NonNullable<GcpApprovalInput["instance"]> = {
 };
 const gcpApproval: GcpApprovalInput = {
   instance: gcpInstance,
-  environment: "",
+  environment: null,
   productionApproved: false,
   iamChangeApproved: false,
   iamRoleGrantApproved: false,

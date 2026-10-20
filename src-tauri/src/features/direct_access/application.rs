@@ -70,7 +70,7 @@ pub(crate) struct RegisterInput {
     pub(crate) account_id: AccountId,
     pub(crate) workspace_id: WorkspaceId,
     pub(crate) name: String,
-    pub(crate) env: Option<String>,
+    pub(crate) env: Option<crate::kernel::environment::EnvironmentKind>,
     pub(crate) schema_group: Option<String>,
     pub(crate) endpoint: EndpointInput,
     pub(crate) credential: CredentialInput,
@@ -312,8 +312,8 @@ where
             "scope": scope.names(),
             "writeCeiling": input.write_ceiling,
         });
-        if let Some(env) = input.env.filter(|value| !value.trim().is_empty()) {
-            body["env"] = json!(env.trim());
+        if let Some(env) = input.env {
+            body["env"] = json!(env.wire_token());
         }
         if let Some(group) = input.schema_group.filter(|value| !value.trim().is_empty()) {
             body["schemaGroup"] = json!(group.trim());

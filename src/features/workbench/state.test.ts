@@ -70,6 +70,7 @@ import {
   CONNECTION_TEST_FAILURE_FIELDS,
   databaseDisplayLabel,
   connectionId as connectionProfileId,
+  type ConnectionProfile,
   type DriverDescriptor,
 } from "../connections/domain";
 import { queryServiceSessionProjection } from "../queryServices/useQueryServices";
@@ -106,7 +107,6 @@ import {
 } from "../connections/presets";
 import {
   ensureGuidedDemoEnvironment,
-  GUIDED_DEMO_ENVIRONMENT_NAME,
   GUIDED_DEMO_PROJECT_NAME,
   selectGuidedDemoEnvironment,
 } from "../onboarding/demoSetup";
@@ -144,7 +144,6 @@ import {
   projectResourceKey,
   promotedProjectConnectionSourceId,
 } from "../catalogExplorer/projectResources";
-import { knowledgeEnvironmentBadge } from "../knowledge/presentation";
 import type { Catalog, CatalogObject, CatalogTable } from "../../ipc/types";
 import { ModalHeader } from "../../design-system/components/Modal";
 import { Button, type ButtonProps } from "../../design-system/components/Button";
@@ -153,7 +152,8 @@ import {
   PropertyRow,
 } from "../../design-system/components/FormControls";
 import { queryResultPhase } from "../../lib/queryResultPhase";
-import { compareCatalogs, diffCounts, SCHEMA_DIFF_SCOPE } from "../../lib/schemaDiff";
+import { effectiveEnvironment, parseEnvironmentKind } from "../../lib/environmentKind";
+import { compareCatalogs, defaultSchemaBaseline, diffCounts, SCHEMA_DIFF_SCOPE } from "../../lib/schemaDiff";
 import { SCHEMA_DIFF_ASPECT_LABELS } from "../../screens/SchemaDiff/SchemaDiffResults";
 import { tableRef } from "../../lib/tableRef";
 import type { I18nKey } from "../../lib/i18n";
@@ -1442,8 +1442,7 @@ describe("workbench state ownership", () => {
     let agentEnvironments: Array<{
       id: string;
       projectName: string;
-      name: string;
-      riskClass: "development";
+      kind: "development";
       graphRevisionCount: number;
     }> = [];
     let demoProjects: KnowledgeProject[] = [];
@@ -1461,8 +1460,7 @@ describe("workbench state ownership", () => {
           environments: [
             {
               id: "environment-demo",
-              name: GUIDED_DEMO_ENVIRONMENT_NAME,
-              riskClass: "development" as const,
+              kind: "development" as const,
               revision: 1,
             },
           ],
@@ -1474,8 +1472,7 @@ describe("workbench state ownership", () => {
           environments: [
             {
               id: "environment-demo",
-              name: GUIDED_DEMO_ENVIRONMENT_NAME,
-              riskClass: "development" as const,
+              kind: "development" as const,
               revision: 1,
             },
           ],
@@ -1495,8 +1492,7 @@ describe("workbench state ownership", () => {
           {
             id: input.projectEnvironmentId,
             projectName: GUIDED_DEMO_PROJECT_NAME,
-            name: GUIDED_DEMO_ENVIRONMENT_NAME,
-            riskClass: "development",
+            kind: "development",
             graphRevisionCount: 0,
           },
         ];
@@ -1570,14 +1566,12 @@ describe("workbench state ownership", () => {
       environments: [
         {
           id: "environment-development",
-          name: "Development",
-          riskClass: "development" as const,
+          kind: "development" as const,
           revision: 3,
         },
         {
           id: "environment-production",
-          name: "Production",
-          riskClass: "production" as const,
+          kind: "production" as const,
           revision: 4,
         },
       ],
@@ -1596,42 +1590,65 @@ describe("workbench state ownership", () => {
       projectDatabaseRows.map(({ environment, resource }) => ({
         environmentId: environment.id,
         databaseId: resource.id,
-        badge: knowledgeEnvironmentBadge(environment.riskClass),
+        badge: environment.kind,
       })),
     ).toEqual([
       {
         environmentId: "environment-development",
         databaseId: "database-development",
-        badge: "dev",
+        badge: "development",
       },
       {
         environmentId: "environment-production",
         databaseId: "database-production",
-        badge: "prod",
+        badge: "production",
       },
     ]);
-    const groupedConnections = [
+    const groupedConnections: ConnectionProfile[] = [
       {
         ...blankConnection(),
         id: connectionProfileId("connection-prod-mirai"),
         name: "Prod-mirai",
-        env: "prod",
+        env: "production",
+        effectiveEnv: "production",
         schemaGroup: "mirai",
       },
       {
         ...blankConnection(),
         id: connectionProfileId("connection-mirai-log"),
         name: "Mirai-log",
-        env: "prod",
+        env: "production",
+        effectiveEnv: "production",
       },
       {
         ...blankConnection(),
         id: connectionProfileId("connection-dev-mirai"),
         name: "Dev-mirai",
-        env: "dev",
+        env: "development",
+        effectiveEnv: "development",
         schemaGroup: "mirai",
       },
     ];
+    // The kind is the environment: the most sensitive of the bound kinds and the connection's
+    // own label wins, and retired labels are not environments.
+    expect(effectiveEnvironment("development", ["staging", "production"])).toBe("production");
+    expect(effectiveEnvironment("production", ["development"])).toBe("production");
+    expect(effectiveEnvironment(null, ["test", "staging"])).toBe("staging");
+    expect(effectiveEnvironment("test", [])).toBe("test");
+    expect(effectiveEnvironment(null, [])).toBeNull();
+    expect(parseEnvironmentKind("prod")).toBe("production");
+    expect(parseEnvironmentKind("custom")).toBeNull();
+    // The schema diff baseline follows the effective environment, not the connection's own label.
+    expect(
+      defaultSchemaBaseline({
+        key: "mirai",
+        label: "mirai",
+        connections: [
+          { ...groupedConnections[2]!, env: null, effectiveEnv: "development" },
+          { ...groupedConnections[0]!, env: null, effectiveEnv: "production" },
+        ],
+      })?.id,
+    ).toBe(groupedConnections[0]!.id);
     const groupedProjectDatabaseRows = [
       {
         environment: explorerProject.environments[1]!,
@@ -1792,14 +1809,12 @@ describe("workbench state ownership", () => {
             environments: [
               {
                 id: "environment-development",
-                name: "Development",
-                riskClass: "development",
+                kind: "development",
                 revision: 1,
               },
               {
                 id: "environment-production",
-                name: "Production",
-                riskClass: "production",
+                kind: "production",
                 revision: 1,
               },
             ],
@@ -1811,8 +1826,7 @@ describe("workbench state ownership", () => {
             environments: [
               {
                 id: "environment-other",
-                name: "Development",
-                riskClass: "development",
+                kind: "development",
                 revision: 1,
               },
             ],
@@ -1853,8 +1867,7 @@ describe("workbench state ownership", () => {
             environments: [
               {
                 id: "environment-development",
-                name: "Development",
-                riskClass: "development",
+                kind: "development",
                 revision: 1,
               },
             ],
@@ -1866,8 +1879,7 @@ describe("workbench state ownership", () => {
             environments: [
               {
                 id: "environment-other",
-                name: "Development",
-                riskClass: "development",
+                kind: "development",
                 revision: 1,
               },
             ],
@@ -1906,8 +1918,7 @@ describe("workbench state ownership", () => {
         {
           id: "environment-other",
           projectName: "Other",
-          name: "Production",
-          riskClass: "production",
+          kind: "production",
           graphRevisionCount: 2,
         },
         ...agentEnvironments,

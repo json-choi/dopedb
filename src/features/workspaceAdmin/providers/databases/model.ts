@@ -2,6 +2,7 @@
 // Desktop may browse, the exact discovery request for each level, provider target
 // paths, response checks for discovery, receipts and imports, and the import name
 // policy. No React, I/O or query cache access.
+import type { EnvironmentKind } from "../../../../lib/environmentKind";
 import type { I18nKey } from "../../../../lib/i18n";
 import type {
   EnvironmentClassification,
@@ -10,7 +11,6 @@ import type {
 } from "../../domain";
 import type {
   ManagedConnection,
-  NeonEnvironmentClassification,
   Provider,
   Resource,
   SharedConnection,
@@ -243,14 +243,15 @@ export function newIdempotencyKey(): string {
 }
 
 /**
- * The environment a Neon branch is prepared as: the provider's protection flag wins,
- * and only an unclassified branch uses the administrator's explicit choice.
+ * The classification a Neon branch is prepared as. The provider's protection flag always
+ * wins; otherwise the administrator's chosen environment decides: production stays
+ * production and every other kind is prepared as non-production.
  */
 export function neonEnvironment(
   branch: Resource | null,
-  classification: NeonEnvironmentClassification,
+  kind: EnvironmentKind | null,
 ): EnvironmentClassification | null {
   if (branch?.production === true) return "production";
-  if (branch?.production === false) return "development";
-  return classification || null;
+  if (kind === null) return null;
+  return kind === "production" ? "production" : "development";
 }

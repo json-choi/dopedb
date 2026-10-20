@@ -52,17 +52,57 @@ beforeAll(async () => {
     fixtureBinding.value = db;
   });
 
+  const applyMigration = async (name: string) => {
+    const source = await readFile(new URL(`../d1-migrations/${name}`, import.meta.url), "utf8");
+    const statements = source.includes("--> statement-breakpoint")
+      ? source.split("--> statement-breakpoint")
+      : source.split(/(?=CREATE TRIGGER )/);
+    for (const statement of statements) {
+      const text = statement.replace(/^\s*--.*$/gm, "").trim();
+      if (text) await db.exec(text.replace(/\r?\n/g, " "));
+    }
+  };
   await withStage("migrations", async () => {
     for (const name of ["0000_workspace_baseline.sql", "0001_workspace_guards.sql", "0002_storage_types.sql", "0003_atomic_scope.sql", "0004_member_evidence_detachment.sql", "0005_backup_chunks.sql", "0006_retention_purge.sql", "0007_unusual_lionheart.sql", "0008_remove_device_authorization.sql", "0009_bored_lady_ursula.sql", "0010_direct_shared_database.sql", "0011_mongo_template_options.sql"]) {
-      const source = await readFile(new URL(`../d1-migrations/${name}`, import.meta.url), "utf8");
-      const statements = source.includes("--> statement-breakpoint")
-        ? source.split("--> statement-breakpoint")
-        : source.split(/(?=CREATE TRIGGER )/);
-      for (const statement of statements) {
-        const text = statement.replace(/^\s*--.*$/gm, "").trim();
-        if (text) await db.exec(text.replace(/\r?\n/g, " "));
-      }
+      await applyMigration(name);
     }
+  });
+
+  // Pre-kind Project environments (free names, risk classes, a duplicated kind with a
+  // binding on the folded row) must migrate to the fixed kind list without losing the binding.
+  await withStage("environment-kind-migration", async () => {
+    const organizationId = randomUUID();
+    const projectId = randomUUID();
+    const connectionId = randomUUID();
+    const [productionId, duplicateProductionId, customId] = ["1", "2", "3"].map((suffix) => `00000000-0000-4000-8000-00000000000${suffix}`);
+    await db.prepare("INSERT INTO organization (id, name, slug) VALUES (?, 'Kind migration', 'kind-migration')").bind(organizationId).run();
+    await db.prepare("INSERT INTO knowledge_project (id, organization_id, name) VALUES (?, ?, 'Legacy')").bind(projectId, organizationId).run();
+    const insertEnvironment = db.prepare("INSERT INTO knowledge_project_environment (id, organization_id, project_id, name, production, risk_class, revision) VALUES (?, ?, ?, ?, ?, ?, ?)");
+    await insertEnvironment.bind(productionId, organizationId, projectId, "live", 0, "production", 1).run();
+    await insertEnvironment.bind(duplicateProductionId, organizationId, projectId, "prod-eu", 1, "custom", 4).run();
+    await insertEnvironment.bind(customId, organizationId, projectId, "main", 0, "custom", 1).run();
+    await db.prepare("INSERT INTO workspace_connection (id, organization_id, name, engine, host, port, database_name, sslmode) VALUES (?, ?, 'Legacy', 'postgres', 'db.invalid', 5432, 'app', 'require')")
+      .bind(connectionId, organizationId).run();
+    await db.prepare("INSERT INTO knowledge_environment_connection (organization_id, project_environment_id, environment_revision, connection_id, connection_revision, role, alias) VALUES (?, ?, 4, ?, 1, 'primary', 'legacy')")
+      .bind(organizationId, duplicateProductionId, connectionId).run();
+
+    await applyMigration("0012_environment_kind.sql");
+
+    const environments = await db.prepare("SELECT id, kind, name, production, risk_class, revision FROM knowledge_project_environment WHERE project_id = ? ORDER BY id")
+      .bind(projectId).all();
+    expect(environments.results).toEqual([
+      { id: productionId, kind: "production", name: "Production", production: 1, risk_class: "production", revision: 1 },
+      { id: customId, kind: "development", name: "Development", production: 0, risk_class: "development", revision: 1 },
+    ]);
+    // The binding on the folded row follows the surviving production environment and its revision.
+    expect(await db.prepare("SELECT project_environment_id || '/' || environment_revision AS bound FROM knowledge_environment_connection WHERE connection_id = ?")
+      .bind(connectionId).first("bound")).toBe(`${productionId}/1`);
+    expect(await db.prepare("SELECT revision FROM knowledge_project WHERE id = ?").bind(projectId).first("revision")).toBe(2);
+    expect(await db.prepare("SELECT count(*) AS count FROM workspace_audit_event WHERE organization_id = ? AND action = 'knowledge.environment.normalize'")
+      .bind(organizationId).first("count")).toBe(3);
+    // One environment per kind, and a kind outside the list, are database-enforced.
+    await expect(insertEnvironment.bind(randomUUID(), organizationId, projectId, "again", 0, "production", 1).run()).rejects.toThrow();
+    await expect(db.prepare("UPDATE knowledge_project_environment SET kind = 'custom' WHERE id = ?").bind(customId).run()).rejects.toThrow();
   });
 });
 
@@ -113,7 +153,7 @@ describe("Workspace D1 safety", () => {
       const projection = {
         userId: memberUser.id, sessionId,
         projects: [{ id: randomUUID(), name: "Project", revision: 1,
-          environments: [{ id: randomUUID(), name: "Development", riskClass: "development" as const, revision: 1 }] }],
+          environments: [{ id: randomUUID(), kind: "development" as const, revision: 1 }] }],
       };
       const originalEnvironment = {
         BETTER_AUTH_URL: process.env.BETTER_AUTH_URL,
@@ -131,6 +171,22 @@ describe("Workspace D1 safety", () => {
         const token = await db.prepare("SELECT token FROM session WHERE id = ?").bind(sessionId).first<string>("token");
         const authenticated = await getAuth().api.getSession({ headers: new Headers({ authorization: `Bearer ${token}` }) });
         expect(authenticated?.user.id).toBe(memberUser.id);
+        // Pre-kind Desktops sync `{name, riskClass}`; it reads as the kind and `custom` is development.
+        const { POST: syncPersonalScope } = await import("../app/api/v1/personal/knowledge/scope/route");
+        const personalScopeRequest = (environments: unknown[]) => new Request("https://workspace.dopedb.dev/api/fixture", {
+          method: "POST",
+          headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+          body: JSON.stringify({ projects: [{ id: projection.projects[0].id, name: "Project", revision: 1, environments }] }),
+        });
+        const legacyEnvironment = { id: projection.projects[0].environments[0].id, name: "main", riskClass: "custom", revision: 1 };
+        expect((await syncPersonalScope(personalScopeRequest([legacyEnvironment]))).status).toBe(200);
+        expect(await db.prepare("SELECT kind || '/' || name || '/' || risk_class AS stored FROM knowledge_project_environment WHERE id = ?")
+          .bind(legacyEnvironment.id).first("stored")).toBe("development/Development/development");
+        expect((await syncPersonalScope(personalScopeRequest([{ id: legacyEnvironment.id, kind: "development", revision: 1 }]))).status).toBe(200);
+        expect((await syncPersonalScope(personalScopeRequest([
+          legacyEnvironment, { id: randomUUID(), kind: "development", revision: 1 },
+        ]))).status).toBe(400);
+        expect((await syncPersonalScope(personalScopeRequest([{ id: legacyEnvironment.id, kind: "custom", revision: 1 }]))).status).toBe(400);
         const organization = await getAuth().api.createOrganization({
           headers: new Headers({ authorization: `Bearer ${token}` }),
           body: { name: "D1 Workspace", slug: "d1-workspace" },

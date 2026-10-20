@@ -1,17 +1,13 @@
 import { env } from "@/lib/env";
 import {
   boundedJsonBody,
-  isSafeDisplayText,
   isUuid,
   jsonError,
   mutationAllowed,
   privateJson,
 } from "@/lib/http";
-import {
-  appendKnowledgeEnvironment,
-  KNOWLEDGE_RISK_CLASSES,
-  type KnowledgeRiskClass,
-} from "@/lib/knowledge/project-store";
+import { parseEnvironmentKind } from "@/lib/knowledge/environment-kind";
+import { appendKnowledgeEnvironment } from "@/lib/knowledge/project-store";
 import { knowledgeMutationAuthority } from "@/lib/knowledge/mutation-authority";
 import { authorizeWorkspace } from "@/lib/workspace-authorization";
 import {
@@ -38,35 +34,30 @@ export async function POST(request: Request, context: RouteContext) {
   const authority = knowledgeMutationAuthority(authorization, workspaceId, "manage");
   const parsed = await boundedJsonBody(request, 8 * 1024);
   const body = parsed.ok ? parsed.value as Record<string, unknown> : null;
+  // `{kind}` is the shape; pre-kind Desktops send `{name, riskClass}`, read as the kind.
+  const kind = body ? parseEnvironmentKind(body, ["expectedProjectRevision"]) : null;
   if (
     !body
-    || Object.keys(body).sort().join(",") !== "expectedProjectRevision,name,riskClass"
+    || !kind
     || typeof body.expectedProjectRevision !== "number"
     || !Number.isSafeInteger(body.expectedProjectRevision)
     || body.expectedProjectRevision < 1
-    || typeof body.name !== "string"
-    || !isSafeDisplayText(body.name.trim(), 512)
-    || typeof body.riskClass !== "string"
-    || !KNOWLEDGE_RISK_CLASSES.includes(body.riskClass as KnowledgeRiskClass)
   ) {
     return jsonError("Invalid Environment", 400);
   }
 
   const expectedProjectRevision = body.expectedProjectRevision;
-  const environmentName = body.name.trim();
-  const riskClass = body.riskClass as KnowledgeRiskClass;
   try {
     const project = await appendKnowledgeEnvironment({
       organizationId: workspaceId,
       projectId,
       expectedProjectRevision,
-      name: environmentName,
-      riskClass,
+      kind,
       authority,
     });
     if (!project) {
       return jsonError(
-        "Project revision changed or Environment name is already in use",
+        "Project revision changed or the Project already has an Environment of that kind",
         409,
       );
     }

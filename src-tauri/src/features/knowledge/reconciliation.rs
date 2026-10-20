@@ -273,8 +273,7 @@ where
                 &ProjectEnvironment {
                     id: remote_environment.id,
                     project_id: remote_project.id,
-                    name: remote_environment.name.clone(),
-                    risk_class: remote_environment.risk_class,
+                    kind: remote_environment.kind,
                     revision: remote_environment.revision,
                 },
                 &binding,
@@ -359,8 +358,7 @@ where
         let environment = ProjectEnvironment {
             id: remote_environment.id,
             project_id: remote_project.id,
-            name: remote_environment.name.clone(),
-            risk_class: remote_environment.risk_class,
+            kind: remote_environment.kind,
             revision: remote_environment.revision,
         };
         for graph_scope in &grant.graph_scopes {
@@ -535,8 +533,7 @@ fn project_definition(workspace_id: Uuid, project: &RemoteKnowledgeProject) -> P
             .map(|environment| ProjectEnvironment {
                 id: environment.id,
                 project_id: project.id,
-                name: environment.name.clone(),
-                risk_class: environment.risk_class,
+                kind: environment.kind,
                 revision: environment.revision,
             })
             .collect(),
@@ -553,8 +550,7 @@ fn project_projection(definition: ProjectDefinition) -> RemoteKnowledgeProject {
             .into_iter()
             .map(|environment| super::ports::RemoteKnowledgeEnvironment {
                 id: environment.id,
-                name: environment.name,
-                risk_class: environment.risk_class,
+                kind: environment.kind,
                 revision: environment.revision,
             })
             .collect(),

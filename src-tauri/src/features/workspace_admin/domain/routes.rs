@@ -470,6 +470,7 @@ impl WorkspaceAdminOperation {
                 receipt,
                 idempotency_key: key,
                 name,
+                environment,
                 production_approved,
             } => AdminRoute::post(
                 integration_path(*workspace_id, *integration_id, &["imports"]),
@@ -477,6 +478,7 @@ impl WorkspaceAdminOperation {
                     "receipt": receipt,
                     "idempotencyKey": idempotency_key(key)?,
                     "name": display_text(name, 120, "connection name")?,
+                    "environment": environment.as_str(),
                     "productionApproved": production_approved,
                 }),
             )?

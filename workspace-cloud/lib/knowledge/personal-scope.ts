@@ -6,6 +6,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { atomicD1 } from "../d1/atomic";
 import { utcNow } from "../d1/schema/values";
+import type { EnvironmentKind } from "./environment-kind";
 
 const PERSONAL_KNOWLEDGE_NAMESPACE = "dopedb.personal-knowledge.v1";
 const PERSONAL_KNOWLEDGE_METADATA = JSON.stringify({
@@ -19,8 +20,7 @@ export type PersonalKnowledgeProject = {
   revision: number;
   environments: Array<{
     id: string;
-    name: string;
-    riskClass: "production" | "staging" | "development" | "test" | "custom";
+    kind: EnvironmentKind;
     revision: number;
   }>;
 };
@@ -77,8 +77,7 @@ export async function ensurePersonalKnowledgeScope(input: {
     value ->> 'revision' AS revision, value -> 'environments' AS environments
     FROM json_each(${projects})`;
   const requestedEnvironments = sql`SELECT project.id AS project_id, environment.value ->> 'id' AS id,
-    environment.value ->> 'name' AS name, environment.value ->> 'riskClass' AS risk_class,
-    environment.value ->> 'revision' AS revision
+    environment.value ->> 'kind' AS kind, environment.value ->> 'revision' AS revision
     FROM (${requestedProjects}) project, json_each(project.environments) environment`;
   const outcome = await atomicD1({
     scope: sql`SELECT json_object('created', NOT EXISTS (SELECT 1 FROM organization WHERE id = ${workspaceId})) AS payload
@@ -112,12 +111,14 @@ export async function ensurePersonalKnowledgeScope(input: {
           updated_at = excluded.updated_at, deleted_at = NULL
         WHERE knowledge_project.organization_id = excluded.organization_id RETURNING id`,
       sql`INSERT INTO knowledge_project_environment
-          (id, organization_id, project_id, name, production, risk_class, revision, updated_at)
-        SELECT requested.id, ${workspaceId}, requested.project_id, requested.name,
-          requested.risk_class = 'production', requested.risk_class, requested.revision, ${utcNow}
+          (id, organization_id, project_id, kind, name, production, risk_class, revision, updated_at)
+        SELECT requested.id, ${workspaceId}, requested.project_id, requested.kind,
+          CASE requested.kind WHEN 'production' THEN 'Production' WHEN 'staging' THEN 'Staging'
+            WHEN 'test' THEN 'Test' ELSE 'Development' END,
+          requested.kind = 'production', requested.kind, requested.revision, ${utcNow}
         FROM (${requestedEnvironments}) requested CROSS JOIN (${scope}) WHERE TRUE
-        ON CONFLICT (id) DO UPDATE SET name = excluded.name, production = excluded.production,
-          risk_class = excluded.risk_class, revision = excluded.revision, updated_at = excluded.updated_at
+        ON CONFLICT (id) DO UPDATE SET kind = excluded.kind, name = excluded.name,
+          production = excluded.production, risk_class = excluded.risk_class, revision = excluded.revision, updated_at = excluded.updated_at
         WHERE knowledge_project_environment.organization_id = excluded.organization_id
           AND knowledge_project_environment.project_id = excluded.project_id RETURNING id`,
       sql`SELECT member.id AS memberId FROM member CROSS JOIN (${scope})

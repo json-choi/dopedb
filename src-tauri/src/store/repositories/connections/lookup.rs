@@ -69,14 +69,17 @@ impl Store {
                 "a team workspace has no active authenticated account".into(),
             ));
         }
-        let rows = sqlx::query(
+        let rows = sqlx::query(concat!(
             "SELECT c.*,
                     b.username AS binding_username,
                     b.extra_params AS binding_extra_params,
                     b.secret_ref AS binding_secret_ref,
                     b.bound_endpoint AS binding_bound_endpoint,
                     b.workspace_access AS binding_workspace_access,
-                    b.allow_writes AS binding_allow_writes
+                    b.allow_writes AS binding_allow_writes,
+                    ",
+            bound_environments_sql!(),
+            " AS bound_environments
              FROM connections c
              LEFT JOIN workspace_connection_bindings b
                ON b.connection_id = c.id AND b.account_user_id = ?2
@@ -84,8 +87,8 @@ impl Store {
                AND (?3 = 'personal'
                     OR (c.remote_id IS NOT NULL AND b.connection_id IS NOT NULL)
                     OR c.account_user_id = ?2)
-             ORDER BY c.name",
-        )
+             ORDER BY c.name"
+        ))
         .bind(workspace.id.to_string())
         .bind(account_user_id)
         .bind(workspace_kind_str(workspace.kind))
@@ -102,22 +105,25 @@ impl Store {
                 "a team workspace has no active authenticated account".into(),
             ));
         }
-        let row = sqlx::query(
+        let row = sqlx::query(concat!(
             "SELECT c.*,
                     b.username AS binding_username,
                     b.extra_params AS binding_extra_params,
                     b.secret_ref AS binding_secret_ref,
                     b.bound_endpoint AS binding_bound_endpoint,
                     b.workspace_access AS binding_workspace_access,
-                    b.allow_writes AS binding_allow_writes
+                    b.allow_writes AS binding_allow_writes,
+                    ",
+            bound_environments_sql!(),
+            " AS bound_environments
              FROM connections c
              LEFT JOIN workspace_connection_bindings b
                ON b.connection_id = c.id AND b.account_user_id = ?3
              WHERE c.id = ?1 AND c.workspace_id = ?2 AND c.deleted_at IS NULL
                AND (?4 = 'personal'
                     OR (c.remote_id IS NOT NULL AND b.connection_id IS NOT NULL)
-                    OR c.account_user_id = ?3)",
-        )
+                    OR c.account_user_id = ?3)"
+        ))
         .bind(id.to_string())
         .bind(workspace.id.to_string())
         .bind(account_user_id)
@@ -147,7 +153,7 @@ impl Store {
         id: Uuid,
         require_read: bool,
     ) -> AppResult<PinnedConnection> {
-        let row = sqlx::query(
+        let row = sqlx::query(concat!(
             "SELECT c.*,
                     b.username AS binding_username,
                     b.extra_params AS binding_extra_params,
@@ -155,6 +161,9 @@ impl Store {
                     b.bound_endpoint AS binding_bound_endpoint,
                     b.workspace_access AS binding_workspace_access,
                     b.allow_writes AS binding_allow_writes,
+                    ",
+            bound_environments_sql!(),
+            " AS bound_environments,
                     active.workspace_id AS pinned_workspace_id,
                     active.workspace_kind AS pinned_workspace_kind,
                     active.selected_account_id AS pinned_selected_account_id,
@@ -203,8 +212,8 @@ impl Store {
                     ))
                AND (active.workspace_kind = 'personal'
                     OR (c.remote_id IS NOT NULL AND b.connection_id IS NOT NULL)
-                    OR c.account_user_id = active.selected_account_id)",
-        )
+                    OR c.account_user_id = active.selected_account_id)"
+        ))
         .bind(id.to_string())
         .fetch_optional(&self.pool)
         .await?

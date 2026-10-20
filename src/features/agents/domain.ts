@@ -1,6 +1,7 @@
 /** ACP conversation and credential-free CLI status contracts. */
 
 import type { ConnectionId } from "../connections/domain";
+import type { EnvironmentKind } from "../../lib/environmentKind";
 
 declare const acpSessionIdBrand: unique symbol;
 
@@ -55,8 +56,7 @@ export interface AgentCliInfo {
 export interface AgentKnowledgeEnvironment {
   id: string;
   projectName: string;
-  name: string;
-  riskClass: "production" | "staging" | "development" | "test" | "custom";
+  kind: EnvironmentKind;
   graphRevisionCount: number;
 }
 

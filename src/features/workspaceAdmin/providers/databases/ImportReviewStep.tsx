@@ -6,6 +6,7 @@ import {
   Field,
   TextInput,
 } from "../../../../design-system/components/FormControls";
+import { EnvironmentKindSelect } from "../../../../components/EnvironmentKindSelect";
 import { InlineNotice } from "../../../../design-system/components/Status";
 import { useI18n } from "../../../../lib/i18n";
 import NeonBootstrapPanel from "./NeonBootstrapPanel";
@@ -50,6 +51,22 @@ export default function ImportReviewStep({
             />
           )}
         </Field>
+      </div>
+
+      <div className="tw:grid tw:max-w-[320px] tw:gap-1.5">
+        <EnvironmentKindSelect
+          label={t("connections.environment")}
+          emptyLabel={flow.environment === null ? t("workspaceProviderDatabases.chooseEnvironment") : undefined}
+          value={flow.environment}
+          allowed={flow.environmentLocked ? ["production"] : undefined}
+          disabled={busy || flow.neon.verified}
+          onChange={flow.chooseEnvironment}
+        />
+        {flow.environmentLocked ? (
+          <p className="tw:m-0 tw:text-xs tw:text-muted-foreground">
+            {t("workspaceProviderDatabases.environmentLockedProduction")}
+          </p>
+        ) : null}
       </div>
 
       {discovery.isNeon ? <NeonBootstrapPanel flow={flow} /> : null}

@@ -80,14 +80,11 @@ CREATE TABLE knowledge_projects (
 CREATE TABLE knowledge_project_environments (
     id         TEXT PRIMARY KEY,
     project_id TEXT NOT NULL REFERENCES knowledge_projects(id) ON DELETE CASCADE,
-    name       TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND 512),
-    production INTEGER NOT NULL CHECK(production IN (0, 1)),
-    risk_class TEXT NOT NULL DEFAULT 'custom'
-               CHECK(risk_class IN ('production', 'staging', 'development', 'test', 'custom')),
+    kind       TEXT NOT NULL CHECK(kind IN ('production', 'staging', 'test', 'development')),
     revision   INTEGER NOT NULL CHECK(revision > 0),
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
-    UNIQUE(project_id, name)
+    UNIQUE(project_id, kind)
 );
 
 CREATE TABLE knowledge_sources (

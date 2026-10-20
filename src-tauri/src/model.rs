@@ -147,11 +147,21 @@ pub struct ConnectionProfile {
     pub schema_access_available: bool,
     /// Credential-store item id for the secret, if one has been stored.
     pub secret_ref: Option<String>,
-    /// Environment label ("dev" | "staging" | "prod") — drives the sidebar/header chip.
-    #[serde(default)]
-    pub env: Option<String>,
+    /// The connection's own optional environment; a connection bound to a Project
+    /// environment is governed by the effective environment instead. Retired
+    /// labels (`custom`, free text) read as none.
+    #[serde(
+        default,
+        deserialize_with = "crate::kernel::environment::deserialize_optional_kind"
+    )]
+    pub env: Option<crate::kernel::environment::EnvironmentKind>,
+    /// Derived, never stored or accepted from a caller: the most sensitive kind
+    /// among the Project environments this connection is bound to in its workspace,
+    /// otherwise `env`. Every production safeguard reads this and nothing else.
+    #[serde(default, skip_deserializing)]
+    pub effective_env: Option<crate::kernel::environment::EnvironmentKind>,
     /// Shared schema family. Connections with the same value are compared as
-    /// dev/staging/prod siblings, using prod as the default baseline when present.
+    /// siblings, using the production member as the default baseline when present.
     #[serde(default)]
     pub schema_group: Option<String>,
     /// Local cache of the authenticated workspace member's effective permission.

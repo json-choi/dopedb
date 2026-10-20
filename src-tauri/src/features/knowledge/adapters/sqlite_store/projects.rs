@@ -5,31 +5,27 @@ use std::collections::HashSet;
 use uuid::Uuid;
 
 use crate::error::{AppError, AppResult};
-use crate::features::knowledge::domain::{
-    EnvironmentRiskClass, Project, ProjectDefinition, ProjectEnvironment,
-};
+use crate::features::knowledge::domain::{Project, ProjectDefinition, ProjectEnvironment};
+use crate::kernel::environment::EnvironmentKind;
 use crate::kernel::identity::WorkspaceId;
 use crate::store::{parse_uuid, Store};
 
-use super::codec::{
-    checked_name, parse_risk_class, positive_revision, risk_class_value, u64_to_i64,
-};
+use super::codec::{checked_name, parse_environment_kind, positive_revision, u64_to_i64};
 
 impl Store {
     pub(in crate::features::knowledge::adapters) async fn knowledge_projects(
         &self,
         workspace_id: Uuid,
     ) -> AppResult<Vec<ProjectDefinition>> {
-        let rows: Vec<(String, String, i64, String, String, String, i64)> = sqlx::query_as(
+        let rows: Vec<(String, String, i64, String, String, i64)> = sqlx::query_as(
             "SELECT project.id, project.name, project.revision,
-                    environment.id, environment.name, environment.risk_class,
-                    environment.revision
+                    environment.id, environment.kind, environment.revision
              FROM knowledge_projects project
              JOIN knowledge_project_environments environment
                ON environment.project_id = project.id
              WHERE project.workspace_id = ?1
              ORDER BY project.name COLLATE NOCASE, project.id,
-                      environment.name COLLATE NOCASE, environment.id",
+                      environment.kind, environment.id",
         )
         .bind(workspace_id.to_string())
         .fetch_all(self.pool())
@@ -40,8 +36,7 @@ impl Store {
             project_name,
             project_revision,
             environment_id,
-            environment_name,
-            risk_class,
+            kind,
             environment_revision,
         ) in rows
         {
@@ -50,8 +45,7 @@ impl Store {
             let environment = ProjectEnvironment {
                 id: parse_uuid(environment_id)?,
                 project_id,
-                name: checked_name(&environment_name)?.to_owned(),
-                risk_class: parse_risk_class(&risk_class)?,
+                kind: parse_environment_kind(&kind)?,
                 revision: positive_revision(environment_revision, "environment revision")?,
             };
             if let Some(current) = projects
@@ -78,7 +72,7 @@ impl Store {
         &self,
         workspace_id: Uuid,
         name: &str,
-        environments: &[(String, EnvironmentRiskClass)],
+        environments: &[EnvironmentKind],
     ) -> AppResult<ProjectDefinition> {
         let name = checked_name(name)?.to_owned();
         if environments.is_empty() || environments.len() > 100 {
@@ -86,16 +80,14 @@ impl Store {
                 "a Project requires between 1 and 100 Environments".into(),
             ));
         }
-        let mut normalized_environments = Vec::with_capacity(environments.len());
-        let mut environment_names = std::collections::HashSet::new();
-        for (environment_name, risk_class) in environments {
-            let environment_name = checked_name(environment_name)?.to_owned();
-            if !environment_names.insert(environment_name.clone()) {
-                return Err(AppError::Config(
-                    "Project Environment names must be unique".into(),
-                ));
-            }
-            normalized_environments.push((environment_name, *risk_class));
+        let mut environment_kinds = HashSet::new();
+        if !environments
+            .iter()
+            .all(|kind| environment_kinds.insert(*kind))
+        {
+            return Err(AppError::Config(
+                "a Project holds at most one Environment per kind".into(),
+            ));
         }
         let workspace_exists: bool = sqlx::query_scalar(
             "SELECT EXISTS(
@@ -130,13 +122,12 @@ impl Store {
             name,
             revision: 1,
         };
-        let environments = normalized_environments
-            .into_iter()
-            .map(|(name, risk_class)| ProjectEnvironment {
+        let environments = environments
+            .iter()
+            .map(|kind| ProjectEnvironment {
                 id: Uuid::new_v4(),
                 project_id: project.id,
-                name,
-                risk_class,
+                kind: *kind,
                 revision: 1,
             })
             .collect::<Vec<_>>();
@@ -152,10 +143,8 @@ impl Store {
         &self,
         workspace_id: Uuid,
         project_id: Uuid,
-        name: &str,
-        risk_class: EnvironmentRiskClass,
+        kind: EnvironmentKind,
     ) -> AppResult<ProjectDefinition> {
-        let name = checked_name(name)?.to_owned();
         let mut tx = self.pool().begin().await?;
         let project_revision: Option<i64> = sqlx::query_scalar(
             "SELECT revision FROM knowledge_projects
@@ -170,16 +159,16 @@ impl Store {
         let duplicate: bool = sqlx::query_scalar(
             "SELECT EXISTS(
                  SELECT 1 FROM knowledge_project_environments
-                 WHERE project_id = ?1 AND name = ?2
+                 WHERE project_id = ?1 AND kind = ?2
              )",
         )
         .bind(project_id.to_string())
-        .bind(&name)
+        .bind(kind.as_str())
         .fetch_one(&mut *tx)
         .await?;
         if duplicate {
             return Err(AppError::Config(
-                "an Environment with that name already exists".into(),
+                "the Project already has an Environment of that kind".into(),
             ));
         }
         let now = Utc::now();
@@ -201,15 +190,12 @@ impl Store {
         }
         sqlx::query(
             "INSERT INTO knowledge_project_environments
-                 (id, project_id, name, production, risk_class, revision,
-                  created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, 1, ?6, ?6)",
+                 (id, project_id, kind, revision, created_at, updated_at)
+             VALUES (?1, ?2, ?3, 1, ?4, ?4)",
         )
         .bind(Uuid::new_v4().to_string())
         .bind(project_id.to_string())
-        .bind(&name)
-        .bind(risk_class == EnvironmentRiskClass::Production)
-        .bind(risk_class_value(risk_class))
+        .bind(kind.as_str())
         .bind(now)
         .execute(&mut *tx)
         .await?;
@@ -270,17 +256,13 @@ impl Store {
             });
         }
         for environment in &definition.environments {
-            let environment_name = checked_name(&environment.name)?;
             let environment_revision = u64_to_i64(environment.revision, "environment revision")?;
             sqlx::query(
                 "INSERT INTO knowledge_project_environments
-                     (id, project_id, name, production, risk_class, revision,
-                      created_at, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)
+                     (id, project_id, kind, revision, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?5)
                  ON CONFLICT(id) DO UPDATE SET
-                     name = excluded.name,
-                     production = excluded.production,
-                     risk_class = excluded.risk_class,
+                     kind = excluded.kind,
                      revision = excluded.revision,
                      updated_at = excluded.updated_at
                  WHERE knowledge_project_environments.project_id = excluded.project_id
@@ -288,9 +270,7 @@ impl Store {
             )
             .bind(environment.id.to_string())
             .bind(definition.project.id.to_string())
-            .bind(environment_name)
-            .bind(environment.risk_class == EnvironmentRiskClass::Production)
-            .bind(risk_class_value(environment.risk_class))
+            .bind(environment.kind.as_str())
             .bind(environment_revision)
             .bind(now)
             .execute(&mut *tx)

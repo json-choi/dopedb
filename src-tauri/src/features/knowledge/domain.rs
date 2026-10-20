@@ -12,6 +12,7 @@ use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use crate::error::{AppError, AppResult};
+use crate::kernel::environment::EnvironmentKind;
 use crate::kernel::identity::{AccountId, WorkspaceId};
 
 /// Stable code for a hosted access sync failure that leaves hosted-governed
@@ -32,8 +33,7 @@ pub(crate) struct Project {
 pub(crate) struct ProjectEnvironment {
     pub(crate) id: Uuid,
     pub(crate) project_id: Uuid,
-    pub(crate) name: String,
-    pub(crate) risk_class: EnvironmentRiskClass,
+    pub(crate) kind: EnvironmentKind,
     pub(crate) revision: u64,
 }
 
@@ -41,16 +41,6 @@ pub(crate) struct ProjectEnvironment {
 pub(crate) struct ProjectDefinition {
     pub(crate) project: Project,
     pub(crate) environments: Vec<ProjectEnvironment>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub(crate) enum EnvironmentRiskClass {
-    Production,
-    Staging,
-    Development,
-    Test,
-    Custom,
 }
 
 /// Exact Project Environment option available to a connection-pinned Agent.
@@ -61,8 +51,7 @@ pub(crate) enum EnvironmentRiskClass {
 pub(crate) struct KnowledgeEnvironmentSummary {
     pub(crate) id: Uuid,
     pub(crate) project_name: String,
-    pub(crate) name: String,
-    pub(crate) risk_class: EnvironmentRiskClass,
+    pub(crate) kind: EnvironmentKind,
     pub(crate) graph_revision_count: u64,
 }
 
@@ -314,7 +303,7 @@ pub(crate) fn validate_graph_publish(
                 .into(),
         });
     }
-    if environment.risk_class == EnvironmentRiskClass::Production
+    if environment.kind == EnvironmentKind::Production
         && matches!(
             artifact.binding.revision,
             SourceRevisionIdentity::LocalGit { dirty: true, .. }
@@ -333,8 +322,7 @@ pub(crate) fn assert_knowledge_domain_contract() {
     let environment = ProjectEnvironment {
         id: Uuid::from_u128(3),
         project_id: Uuid::from_u128(2),
-        name: "Production".into(),
-        risk_class: EnvironmentRiskClass::Production,
+        kind: EnvironmentKind::Production,
         revision: 1,
     };
     let draft = SourceBindingDraft {

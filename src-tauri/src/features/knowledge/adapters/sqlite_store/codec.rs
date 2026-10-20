@@ -2,7 +2,7 @@ use dopedb_protocol::{GraphBuildArtifactV1, KnowledgeSourceProvider, KnowledgeSo
 use sha2::{Digest, Sha256};
 
 use crate::error::{AppError, AppResult};
-use crate::features::knowledge::domain::EnvironmentRiskClass;
+use crate::kernel::environment::EnvironmentKind;
 
 const MAX_GRAPH_ARTIFACT_JSON_BYTES: usize = 256 * 1024 * 1024;
 
@@ -18,17 +18,7 @@ pub(super) type EnvironmentConnectionRow = (
     String,
     String,
 );
-pub(super) type KnowledgeScopeRow = (
-    String,
-    String,
-    i64,
-    String,
-    String,
-    String,
-    i64,
-    i64,
-    String,
-);
+pub(super) type KnowledgeScopeRow = (String, String, i64, String, String, i64, i64, String);
 pub(super) fn checked_name(value: &str) -> AppResult<&str> {
     let value = value.trim();
     if value.is_empty() || value.len() > 512 || value.chars().any(char::is_control) {
@@ -53,27 +43,9 @@ pub(super) fn visibility_value(visibility: KnowledgeSourceVisibility) -> &'stati
     }
 }
 
-pub(super) fn risk_class_value(risk_class: EnvironmentRiskClass) -> &'static str {
-    match risk_class {
-        EnvironmentRiskClass::Production => "production",
-        EnvironmentRiskClass::Staging => "staging",
-        EnvironmentRiskClass::Development => "development",
-        EnvironmentRiskClass::Test => "test",
-        EnvironmentRiskClass::Custom => "custom",
-    }
-}
-
-pub(super) fn parse_risk_class(value: &str) -> AppResult<EnvironmentRiskClass> {
-    match value {
-        "production" => Ok(EnvironmentRiskClass::Production),
-        "staging" => Ok(EnvironmentRiskClass::Staging),
-        "development" => Ok(EnvironmentRiskClass::Development),
-        "test" => Ok(EnvironmentRiskClass::Test),
-        "custom" => Ok(EnvironmentRiskClass::Custom),
-        _ => Err(AppError::Config(
-            "the stored Project Environment risk class is invalid".into(),
-        )),
-    }
+pub(super) fn parse_environment_kind(value: &str) -> AppResult<EnvironmentKind> {
+    EnvironmentKind::parse(value)
+        .ok_or_else(|| AppError::Config("the stored Project Environment kind is invalid".into()))
 }
 
 pub(super) fn u64_to_i64(value: u64, field: &str) -> AppResult<i64> {

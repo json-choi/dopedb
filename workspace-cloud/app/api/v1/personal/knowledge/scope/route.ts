@@ -14,7 +14,7 @@ import {
   ensurePersonalKnowledgeScope,
   type PersonalKnowledgeProject,
 } from "@/lib/knowledge/personal-scope";
-import { KNOWLEDGE_RISK_CLASSES } from "@/lib/knowledge/project-store";
+import { parseEnvironmentKind } from "@/lib/knowledge/environment-kind";
 import {
   databaseErrorCode,
   logKnowledgeMutationFailure,
@@ -41,10 +41,10 @@ function parseProjects(value: unknown): PersonalKnowledgeProject[] | null {
       || !positiveRevision(project.revision)
       || !Array.isArray(project.environments)
       || project.environments.length < 1
-      || project.environments.length > 20
+      || project.environments.length > 4
     ) return null;
     const environmentIds = new Set<string>();
-    const environmentNames = new Set<string>();
+    const environmentKinds = new Set<string>();
     const environments: PersonalKnowledgeProject["environments"] = [];
     for (const candidateEnvironment of project.environments) {
       if (
@@ -53,28 +53,19 @@ function parseProjects(value: unknown): PersonalKnowledgeProject[] | null {
         || Array.isArray(candidateEnvironment)
       ) return null;
       const environment = candidateEnvironment as Record<string, unknown>;
+      // `{id, kind, revision}`, or the pre-kind `{id, name, riskClass, revision}` read as the kind.
+      const kind = parseEnvironmentKind(environment, ["id", "revision"]);
       if (
-        Object.keys(environment).sort().join(",") !== "id,name,revision,riskClass"
+        !kind
         || typeof environment.id !== "string"
         || !isUuid(environment.id)
         || environmentIds.has(environment.id)
-        || typeof environment.name !== "string"
-        || !isSafeDisplayText(environment.name.trim(), 512)
-        || environmentNames.has(environment.name.trim())
-        || typeof environment.riskClass !== "string"
-        || !KNOWLEDGE_RISK_CLASSES.includes(
-          environment.riskClass as PersonalKnowledgeProject["environments"][number]["riskClass"],
-        )
+        || environmentKinds.has(kind)
         || !positiveRevision(environment.revision)
       ) return null;
       environmentIds.add(environment.id);
-      environmentNames.add(environment.name.trim());
-      environments.push({
-        id: environment.id,
-        name: environment.name.trim(),
-        riskClass: environment.riskClass as PersonalKnowledgeProject["environments"][number]["riskClass"],
-        revision: environment.revision,
-      });
+      environmentKinds.add(kind);
+      environments.push({ id: environment.id, kind, revision: environment.revision });
     }
     projectIds.add(project.id);
     projects.push({

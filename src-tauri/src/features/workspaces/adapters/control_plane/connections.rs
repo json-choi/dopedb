@@ -82,7 +82,9 @@ fn shared_connection_request(
         sslmode: &profile.sslmode,
         readonly_default: true,
         allow_writes,
-        env: &profile.env,
+        env: profile
+            .env
+            .map(crate::kernel::environment::EnvironmentKind::wire_token),
         schema_group: &profile.schema_group,
         mongo_options,
     };
@@ -97,7 +99,7 @@ fn shared_connection_request(
         sslmode: request.sslmode.to_owned(),
         readonly_default: true,
         allow_writes: request.allow_writes,
-        env: request.env.clone(),
+        env: request.env.map(str::to_owned),
         schema_group: request.schema_group.clone(),
         mongo_options: request.mongo_options.clone(),
     };
@@ -228,7 +230,14 @@ fn remote_connection(value: RemoteConnectionResponse) -> AppResult<(ConnectionPr
             // live role, per-connection grant, and administrator policy.
             allow_writes: value.allow_writes && access.can_write(),
             secret_ref: None,
-            env: value.env,
+            env: value
+                .env
+                .as_deref()
+                .and_then(crate::kernel::environment::EnvironmentKind::parse),
+            effective_env: value
+                .env
+                .as_deref()
+                .and_then(crate::kernel::environment::EnvironmentKind::parse),
             schema_group: value.schema_group,
             workspace_access: access,
             credential_mode,

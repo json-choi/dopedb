@@ -1,6 +1,8 @@
 // Loads scoped connection profiles and identifies changes to runtime connection identity.
+// The native core derives each profile's effective environment at read time; here it is
+// recomputed from the live Project bindings so a bind or revoke is reflected without a reload.
 
-import { useCallback, type SetStateAction } from "react";
+import { useCallback, useMemo, type SetStateAction } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { ConnectionProfile } from "../connections/domain";
@@ -9,6 +11,8 @@ import {
   connectionsQuery,
 } from "../connections/queries";
 import { errMessage } from "../../ipc/types";
+import { effectiveEnvironment } from "../../lib/environmentKind";
+import { useConnectionEnvironmentInventory } from "../connections/useConnectionEnvironmentContext";
 
 function runtimeFingerprint(profile: ConnectionProfile): string {
   return JSON.stringify([
@@ -51,6 +55,18 @@ export function useConnectionProfiles(scopeKey: string) {
   const queryClient = useQueryClient();
   const options = connectionsQuery(scopeKey);
   const query = useQuery(options);
+  const environments = useConnectionEnvironmentInventory();
+  const connections = useMemo(() => {
+    // Without a complete binding projection the native value stays authoritative.
+    if (!environments.projects || !environments.bindings) return query.data ?? [];
+    return (query.data ?? []).map((profile) => {
+      const effectiveEnv = effectiveEnvironment(
+        profile.env,
+        environments.boundKindsByConnectionId.get(profile.id) ?? [],
+      );
+      return effectiveEnv === profile.effectiveEnv ? profile : { ...profile, effectiveEnv };
+    });
+  }, [query.data, environments.projects, environments.bindings, environments.boundKindsByConnectionId]);
 
   const refresh = useCallback(async (): Promise<ConnectionProfile[] | null> => {
     const result = await queryClient.fetchQuery({
@@ -61,7 +77,7 @@ export function useConnectionProfiles(scopeKey: string) {
   }, [queryClient, scopeKey]);
 
   return {
-    connections: query.data ?? [],
+    connections,
     setConnections: useCallback(
       (update: SetStateAction<ConnectionProfile[]>) => {
         queryClient.setQueryData(

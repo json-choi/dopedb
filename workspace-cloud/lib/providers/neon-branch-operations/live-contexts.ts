@@ -1,5 +1,6 @@
 // Fresh Provider and workspace snapshots used to plan, approve, and execute
 // Neon branch mutations. Every caller revalidates against these exact shapes.
+import { connectionEnvironmentKind } from "../../knowledge/environment-kind";
 import "server-only";
 
 import { and, count, eq, gt, isNull, sql } from "drizzle-orm";
@@ -74,7 +75,7 @@ export async function liveCreatePlanContext(input: {
     if (
       resource.project === input.projectId
       && resource.branch === input.sourceBranchId
-      && row.environment === "production"
+      && connectionEnvironmentKind(row.environment) === "production"
     ) {
       workspaceProductionReference = true;
     }
@@ -344,7 +345,7 @@ export async function liveSwitchPlanContext(input: {
     )),
   ]);
   const connection = connectionRows.length === 1 ? connectionRows[0] : null;
-  const connectionEnvironment = connection?.environment;
+  const connectionEnvironment = connectionEnvironmentKind(connection?.environment);
   if (
     !connection
     || !connection.providerResourceId

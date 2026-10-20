@@ -6,6 +6,7 @@ import type {
   KnowledgeEnvironmentView,
   KnowledgeProject,
 } from "../knowledge/domain";
+import { compareEnvironmentKinds } from "../../lib/environmentKind";
 import type { ConnectionProfile } from "../connections/domain";
 
 export type ProjectEnvironmentResource<T> = {
@@ -21,14 +22,6 @@ export type ProjectDatabaseBlockPosition = {
   connectionIds: readonly string[];
   previousBlockBindingId: string | null;
   nextBlockBindingId: string | null;
-};
-
-const ENVIRONMENT_RISK_ORDER: Record<KnowledgeEnvironment["riskClass"], number> = {
-  production: 0,
-  staging: 1,
-  development: 2,
-  test: 3,
-  custom: 4,
 };
 
 export function projectResourceKey(
@@ -249,10 +242,11 @@ function projectDatabaseBlocks<T extends ProjectDatabaseResource>(
     ...block,
     rows: block.grouped
       ? [...block.rows].sort((left, right) => {
-          const riskOrder =
-            ENVIRONMENT_RISK_ORDER[left.environment.riskClass] -
-            ENVIRONMENT_RISK_ORDER[right.environment.riskClass];
-          if (riskOrder !== 0) return riskOrder;
+          const kindOrder = compareEnvironmentKinds(
+            left.environment.kind,
+            right.environment.kind,
+          );
+          if (kindOrder !== 0) return kindOrder;
           const leftConnection = left.resource.connectionId
             ? connectionById.get(left.resource.connectionId)
             : undefined;

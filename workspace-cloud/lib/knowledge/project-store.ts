@@ -7,19 +7,14 @@ import { randomUUID } from "node:crypto";
 import { atomicD1 } from "../d1/atomic";
 import { utcNow } from "../d1/schema/values";
 import {
+  isEnvironmentKind,
+  legacyEnvironmentFields,
+  type EnvironmentKind,
+} from "./environment-kind";
+import {
   knowledgeMutationAuthoritySql,
   type KnowledgeMutationAuthority,
 } from "./mutation-authority";
-
-export const KNOWLEDGE_RISK_CLASSES = [
-  "production",
-  "staging",
-  "development",
-  "test",
-  "custom",
-] as const;
-
-export type KnowledgeRiskClass = (typeof KNOWLEDGE_RISK_CLASSES)[number];
 
 export type StoredKnowledgeProject = {
   id: string;
@@ -27,8 +22,10 @@ export type StoredKnowledgeProject = {
   revision: number;
   environments: Array<{
     id: string;
+    kind: EnvironmentKind;
+    /** Pre-kind fields derived from `kind` for older Desktops. */
     name: string;
-    riskClass: KnowledgeRiskClass;
+    riskClass: EnvironmentKind;
     revision: number;
   }>;
 };
@@ -38,10 +35,16 @@ type ProjectRow = {
   projectName: string;
   projectRevision: string | number;
   environmentId: string;
-  environmentName: string;
-  riskClass: KnowledgeRiskClass;
+  kind: EnvironmentKind;
   environmentRevision: string | number;
 };
+
+/** The legacy `name` column value for a kind, derived in SQL so one statement carries it. */
+function environmentNameSql(kind: string | ReturnType<typeof sql>) {
+  const value = typeof kind === "string" ? sql.raw(kind) : kind;
+  return sql`CASE ${value} WHEN 'production' THEN 'Production' WHEN 'staging' THEN 'Staging'
+    WHEN 'test' THEN 'Test' ELSE 'Development' END`;
+}
 
 export type DeleteKnowledgeProjectOutcome =
   | "deleted"
@@ -64,7 +67,7 @@ function projectFromRows(rows: ProjectRow[]): StoredKnowledgeProject | null {
       (row) =>
         row.projectId !== first.projectId ||
         row.projectName !== first.projectName ||
-        !KNOWLEDGE_RISK_CLASSES.includes(row.riskClass),
+        !isEnvironmentKind(row.kind),
     )
   ) {
     throw new Error("Project Knowledge crossed a Project identity");
@@ -75,8 +78,8 @@ function projectFromRows(rows: ProjectRow[]): StoredKnowledgeProject | null {
     revision: positiveRevision(first.projectRevision, "Project revision"),
     environments: rows.map((row) => ({
       id: row.environmentId,
-      name: row.environmentName,
-      riskClass: row.riskClass,
+      kind: row.kind,
+      ...legacyEnvironmentFields(row.kind),
       revision: positiveRevision(row.environmentRevision, "Environment revision"),
     })),
   };
@@ -84,16 +87,16 @@ function projectFromRows(rows: ProjectRow[]): StoredKnowledgeProject | null {
 
 function projectRows(projectId: string, scope: ReturnType<typeof sql>) {
   return sql`SELECT project.id AS projectId, project.name AS projectName, project.revision AS projectRevision,
-    environment.id AS environmentId, environment.name AS environmentName,
-    environment.risk_class AS riskClass, environment.revision AS environmentRevision
+    environment.id AS environmentId, environment.kind AS kind,
+    environment.revision AS environmentRevision
     FROM knowledge_project project JOIN knowledge_project_environment environment ON environment.project_id = project.id
-    CROSS JOIN (${scope}) WHERE project.id = ${projectId} ORDER BY environment.name, environment.id`;
+    CROSS JOIN (${scope}) WHERE project.id = ${projectId} ORDER BY environment.kind, environment.id`;
 }
 
 export async function insertKnowledgeProject(input: {
   organizationId: string;
   name: string;
-  environments: Array<{ name: string; riskClass: KnowledgeRiskClass }>;
+  environments: EnvironmentKind[];
   authority: KnowledgeMutationAuthority;
 }): Promise<StoredKnowledgeProject | null> {
   const id = randomUUID();
@@ -104,9 +107,9 @@ export async function insertKnowledgeProject(input: {
     statements: (scope) => [
       sql`INSERT INTO knowledge_project (id, organization_id, name)
         SELECT ${id}, ${input.organizationId}, ${input.name} FROM (${scope})`,
-      sql`INSERT INTO knowledge_project_environment (organization_id, project_id, name, production, risk_class)
-        SELECT ${input.organizationId}, ${id}, requested.value ->> 'name',
-          requested.value ->> 'riskClass' = 'production', requested.value ->> 'riskClass'
+      sql`INSERT INTO knowledge_project_environment (organization_id, project_id, kind, name, production, risk_class)
+        SELECT ${input.organizationId}, ${id}, requested.value, ${environmentNameSql("requested.value")},
+          requested.value = 'production', requested.value
         FROM json_each(${JSON.stringify(input.environments)}) requested CROSS JOIN (${scope})`,
       projectRows(id, scope),
     ],
@@ -118,8 +121,7 @@ export async function appendKnowledgeEnvironment(input: {
   organizationId: string;
   projectId: string;
   expectedProjectRevision: number;
-  name: string;
-  riskClass: KnowledgeRiskClass;
+  kind: EnvironmentKind;
   authority: KnowledgeMutationAuthority;
 }): Promise<StoredKnowledgeProject | null> {
   const result = await atomicD1({
@@ -128,13 +130,13 @@ export async function appendKnowledgeEnvironment(input: {
         AND project.organization_id = ${input.organizationId} AND project.id = ${input.projectId}
         AND project.revision = ${input.expectedProjectRevision} AND project.deleted_at IS NULL
         AND NOT EXISTS (SELECT 1 FROM knowledge_project_environment
-          WHERE project_id = project.id AND name = ${input.name})`,
+          WHERE project_id = project.id AND kind = ${input.kind})`,
     statements: (scope) => [
       sql`UPDATE knowledge_project SET revision = revision + 1, updated_at = ${utcNow}
         WHERE id = ${input.projectId} AND EXISTS (${scope})`,
-      sql`INSERT INTO knowledge_project_environment (organization_id, project_id, name, production, risk_class)
-        SELECT ${input.organizationId}, ${input.projectId}, ${input.name}, ${input.riskClass === "production"},
-          ${input.riskClass} FROM (${scope})`,
+      sql`INSERT INTO knowledge_project_environment (organization_id, project_id, kind, name, production, risk_class)
+        SELECT ${input.organizationId}, ${input.projectId}, ${input.kind}, ${environmentNameSql(sql`${input.kind}`)},
+          ${input.kind === "production"}, ${input.kind} FROM (${scope})`,
       projectRows(input.projectId, scope),
     ],
   });

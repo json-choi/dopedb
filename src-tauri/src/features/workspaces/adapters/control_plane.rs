@@ -162,7 +162,7 @@ struct SharedConnectionRequest<'a> {
     sslmode: &'a str,
     readonly_default: bool,
     allow_writes: bool,
-    env: &'a Option<String>,
+    env: Option<&'static str>,
     schema_group: &'a Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     mongo_options: Option<dopedb_protocol::SharedMongoOptions>,

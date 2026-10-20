@@ -187,11 +187,11 @@ export function schemaGroupIsCompatible(group: SchemaConnectionGroup): boolean {
   return !!engine && group.connections.every((connection) => connection.engine === engine);
 }
 
-/** The chosen baseline when it is still a member, else production, else the first member. */
+/** The chosen baseline when it is still a member, else the member whose effective environment is production, else the first. */
 export function defaultSchemaBaseline(group: SchemaConnectionGroup): ConnectionProfile | null {
   return (
     group.connections.find((connection) => connection.id === group.baselineId) ??
-    group.connections.find((connection) => connection.env === "prod") ??
+    group.connections.find((connection) => connection.effectiveEnv === "production") ??
     group.connections[0] ??
     null
   );

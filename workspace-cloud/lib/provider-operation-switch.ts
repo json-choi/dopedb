@@ -1,5 +1,6 @@
 import "server-only";
 
+import { connectionEnvironmentLabel } from "./knowledge/environment-kind";
 import { sql } from "drizzle-orm";
 
 import { atomicD1 } from "./d1/atomic";
@@ -140,7 +141,7 @@ export async function completeNeonBranchSwitch(
     sslmode: projection.sslmode,
     readonlyDefault: input.plan.source.readonlyDefault,
     allowWrites: input.plan.source.allowWrites,
-    env: input.plan.target.environment,
+    env: connectionEnvironmentLabel(input.plan.target.environment),
     schemaGroup: input.plan.source.schemaGroup,
     deleted: false,
   };
@@ -235,7 +236,7 @@ export async function completeNeonBranchSwitch(
         AND connection."readonly_default" = ${input.plan.source.readonlyDefault}
         AND connection."allow_writes" = ${input.plan.source.allowWrites}
         AND connection."schema_group" IS ${input.plan.source.schemaGroup}
-        AND connection."environment" = ${input.plan.source.environment}
+        AND connection."environment" = ${connectionEnvironmentLabel(input.plan.source.environment)}
         AND connection."content_revision" = ${input.plan.source.contentRevision}
         AND connection."revision" = ${expectedAuthorityRevision}
         AND connection."revocation_pending_at" IS NOT NULL
@@ -265,7 +266,7 @@ export async function completeNeonBranchSwitch(
         FROM (${scope}) WHERE TRUE ON CONFLICT (organization_id, provider, resource_fingerprint) DO UPDATE SET
           resource = excluded.resource, redacted_metadata = excluded.redacted_metadata, capability_manifest = excluded.capability_manifest, updated_at = excluded.updated_at`,
       sql`UPDATE workspace_connection SET host = ${projection.host}, port = ${projection.port}, database_name = ${projection.database},
-          sslmode = ${projection.sslmode}, environment = ${input.plan.target.environment},
+          sslmode = ${projection.sslmode}, environment = ${connectionEnvironmentLabel(input.plan.target.environment)},
           provider_resource_id = (SELECT json_extract(payload, '$.targetId') FROM (${scope})), provider_resource = ${canonicalJson(projection.resource)},
           content_revision = content_revision + 1, revocation_pending_at = NULL, revocation_claimed_at = NULL, revocation_claim_id = NULL, updated_at = ${committedAt}
         WHERE id = ${input.plan.source.connectionId} AND EXISTS (${scope})`,

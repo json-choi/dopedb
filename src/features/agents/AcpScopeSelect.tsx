@@ -5,16 +5,13 @@ import type { ReactNode } from "react";
 
 import { Icon } from "../../components/Icon";
 import { MenuItem, ToolbarMenu } from "../../design-system/components/Menu";
-import { EnvironmentBadge } from "../../design-system/components/EnvironmentBadge";
+import { EnvironmentKindBadge } from "../../components/EnvironmentKindBadge";
 import { useI18n } from "../../lib/i18n";
 import {
   databaseEngineLabel,
   type ConnectionId,
 } from "../connections/domain";
-import {
-  githubSourceRevisionLabel,
-  knowledgeEnvironmentBadge,
-} from "../knowledge/presentation";
+import { githubSourceRevisionLabel } from "../knowledge/presentation";
 import {
   AgentResourceChoiceRow,
   AgentWriteTargetRadio,
@@ -148,9 +145,7 @@ export function AcpScopeSelect({
                     : databaseEngineLabel(database.engine)
                 }
                 suffix={
-                  <EnvironmentBadge
-                    environment={knowledgeEnvironmentBadge(database.riskClass)}
-                  />
+                  <EnvironmentKindBadge kind={database.environmentKind} />
                 }
                 reconfirm={database.needsReconfirmation}
                 selection={selectionFor(database.key)}

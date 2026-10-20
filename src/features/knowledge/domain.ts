@@ -1,10 +1,12 @@
 // Wire contract for Knowledge projects, environments, sources, and environment-connection
 // bindings. A source revision carries the exact commit or snapshot fingerprint a grant is
 // pinned to, and record revisions let a stale editor be rejected instead of overwriting.
+import type { EnvironmentKind } from "../../lib/environmentKind";
+
+/** The kind is the environment: a Project holds at most one per kind. */
 export type KnowledgeEnvironment = {
   id: string;
-  name: string;
-  riskClass: "production" | "staging" | "development" | "test" | "custom";
+  kind: EnvironmentKind;
   revision: number;
 };
 
@@ -65,9 +67,8 @@ export type KnowledgeSource = {
   projectId: string;
   projectName: string;
   projectEnvironmentId: string;
-  environmentName: string;
   environmentRevision: number;
-  riskClass: KnowledgeEnvironment["riskClass"];
+  environmentKind: EnvironmentKind;
   provider: "github" | "local_folder";
   displayName: string;
   visibility: "local_only" | "shared_graph";
@@ -84,13 +85,12 @@ export type KnowledgeInventory = {
 
 export type CreateKnowledgeProjectInput = {
   name: string;
-  environments: Array<{ name: string; riskClass: KnowledgeEnvironment["riskClass"] }>;
+  environments: Array<{ kind: EnvironmentKind }>;
 };
 
 export type CreateKnowledgeEnvironmentInput = {
   projectId: string;
-  name: string;
-  riskClass: KnowledgeEnvironment["riskClass"];
+  kind: EnvironmentKind;
 };
 
 export type GithubKnowledgeSourceInput = {

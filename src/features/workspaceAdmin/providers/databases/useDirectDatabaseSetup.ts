@@ -18,6 +18,7 @@ import {
 } from "../../../directAccess/domain";
 import { directPreflightQuery, directPrefillQuery } from "../../../directAccess/queries";
 import { registerDirectDatabase } from "../../../directAccess/tauriAdapter";
+import type { EnvironmentKind } from "../../../../lib/environmentKind";
 import { useEventCallback } from "../../../../lib/useEventCallback";
 import type { WorkspaceAdminScope } from "../../domain";
 
@@ -34,7 +35,6 @@ export type EndpointDraft = Readonly<{
 
 export type CredentialDraft = Readonly<{ username: string; password: string }>;
 
-export type DirectEnvironment = "" | "dev" | "staging" | "prod";
 
 /** What the flow could not do, as a closed localizable reason. */
 export type DirectFlowError =
@@ -118,7 +118,7 @@ export function useDirectDatabaseSetup({
   const [selection, setSelection] = useState<readonly string[] | null>(null);
   const [writeCeiling, setWriteCeiling] = useState(false);
   const [name, setName] = useState("");
-  const [environment, setEnvironment] = useState<DirectEnvironment>("");
+  const [environment, setEnvironment] = useState<EnvironmentKind | null>(null);
   const [error, setError] = useState<DirectFlowError | null>(null);
 
   const issues = endpointIssues(endpoint);
@@ -249,7 +249,7 @@ export function useDirectDatabaseSetup({
         accountId: scope.accountId,
         workspaceId: scope.workspaceId,
         name: nameValue,
-        env: environment || null,
+        env: environment,
         schemaGroup: null,
         endpoint: resolved,
         credential: { username: credential.username.trim(), password: credential.password },

@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
+use crate::kernel::environment::EnvironmentKind;
 use crate::kernel::identity::{ConnectionId, OperationId, QueryRunId};
 use crate::kernel::TerminalAuthority;
 use crate::model::{ConnectionProfile, QueryResult};
@@ -439,7 +440,7 @@ pub(crate) fn planning_guidance(
     let mut caution = false;
     let mut notices = Vec::new();
     let mut suggestions = Vec::new();
-    if profile.env.as_deref() == Some("prod") {
+    if profile.effective_env == Some(EnvironmentKind::Production) {
         caution = true;
         notices.push("This connection is labeled production.".into());
         suggestions
@@ -462,7 +463,7 @@ pub(crate) fn planning_guidance(
             notices.push(format!("EXPLAIN estimates {rows} result/plan rows, above the configured {estimate_limit} review threshold."));
             suggestions.push("Add a selective time/filter condition or aggregate before joining large log tables.".into());
         }
-        None if profile.env.as_deref() == Some("prod") => {
+        None if profile.effective_env == Some(EnvironmentKind::Production) => {
             caution = true;
             notices.push(
                 "EXPLAIN did not provide a usable row estimate for this production query.".into(),

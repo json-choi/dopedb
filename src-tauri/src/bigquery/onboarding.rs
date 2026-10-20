@@ -367,6 +367,7 @@ pub(super) fn assert_onboarding_contract() {
         allow_writes: false,
         secret_ref: None,
         env: None,
+        effective_env: None,
         schema_group: None,
         workspace_access: WorkspaceConnectionAccess::Local,
         credential_mode: crate::model::WorkspaceCredentialMode::Local,
