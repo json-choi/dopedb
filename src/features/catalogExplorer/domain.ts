@@ -3,7 +3,6 @@ import type { CatalogLoadIssue } from "./catalogDomain";
 
 export type WorkspaceDialogState = {
   connection: ConnectionProfile;
-  mode: "copy" | "credentials";
 };
 
 export type CatalogExplorerState = {

@@ -1,9 +1,7 @@
 //! Knowledge Environment binding command transport.
 
 use super::*;
-use crate::features::workspaces::WorkspaceConnectionCopyRequest;
-use crate::kernel::identity::ConnectionId;
-use crate::model::{Engine, WorkspaceConnectionAccess, WorkspaceCredentialMode};
+use crate::model::{Engine, Provider};
 
 #[tauri::command]
 pub(crate) async fn list_knowledge_environment_connections(
@@ -73,136 +71,43 @@ pub(crate) async fn list_knowledge_environment_connections(
         .collect())
 }
 
-async fn rollback_promoted_connection(
-    state: &AppState,
-    promoted_connection_id: Option<ConnectionId>,
-    original_error: AppError,
-) -> AppError {
-    let Some(connection_id) = promoted_connection_id else {
-        return original_error;
-    };
-    if let Err(rollback_error) = state
-        .services
-        .workspace
-        .delete_connection(connection_id)
-        .await
-    {
-        tracing::warn!(
-            connection_id = %connection_id,
-            error_kind = rollback_error.kind(),
-            "temporary shared connection cleanup deferred after Project binding failure"
-        );
-        return AppError::Blocked {
-            reason: format!(
-                "{original_error}; the temporary shared connection could not be removed. Refresh Explorer and remove its Unassigned copy before retrying"
-            ),
-        };
-    }
-    original_error
-}
-
 #[tauri::command]
 pub(crate) async fn bind_knowledge_environment_connection(
     state: State<'_, AppState>,
     input: BindEnvironmentConnectionInput,
 ) -> AppResult<EnvironmentConnectionProjection> {
-    let mut connection = state
+    let connection = state
         .services
         .knowledge
         .pin_connection_for_read(input.connection_id)
         .await?;
     let proposed_binding_id = Uuid::new_v4();
-    let mut promoted_connection_id = None;
     let mut remote_binding_account = None;
     let mut remote_binding_workspace_id = None;
     let mut projected_remote_connection_id = None;
     let binding_id = if connection.scope.workspace_kind == WorkspaceKind::Team {
         let account = selected_team_account(&connection.scope)?;
-        let mut remote_connection_id = state
+        // Binding never publishes anything: a Project binds a team connection. A team-local
+        // connection is published by the connection editor's save or by the next
+        // synchronization of its creator's device.
+        let Some(remote_connection_id) = state
             .services
             .knowledge
             .remote_connection_id(&connection)
-            .await?;
-        if remote_connection_id.is_none() {
-            if connection.profile.workspace_access != WorkspaceConnectionAccess::Local
-                || connection.profile.credential_mode != WorkspaceCredentialMode::Local
-            {
-                return Err(AppError::Blocked {
-                    reason: "the workspace connection identity is unavailable; refresh Explorer before assigning it to a Project"
-                        .into(),
-                });
-            }
-            if connection.profile.engine == Engine::Sqlite {
-                return Err(AppError::Blocked {
-                    reason:
-                        "SQLite files stay on one device and cannot be shared with a Team Project"
-                            .into(),
-                });
-            }
-            let source_connection_id = ConnectionId::from(connection.connection_id);
-            let workspace_id = WorkspaceId::from(connection.scope.workspace_id);
-            drop(connection);
-            let shared = state
-                .services
-                .workspace
-                .copy_connection(WorkspaceConnectionCopyRequest {
-                    connection_id: source_connection_id,
-                    workspace_id,
-                    account_user_id: account.clone(),
-                    allow_active_workspace: true,
-                })
-                .await?;
-            let shared_connection_id = ConnectionId::from(shared.id);
-            promoted_connection_id = Some(shared_connection_id);
-            connection = match state
-                .services
-                .knowledge
-                .pin_connection_for_read(shared.id)
-                .await
-            {
-                Ok(connection) => connection,
-                Err(error) => {
-                    return Err(rollback_promoted_connection(
-                        &state,
-                        promoted_connection_id,
-                        error,
-                    )
-                    .await);
-                }
-            };
-            remote_connection_id = match state
-                .services
-                .knowledge
-                .remote_connection_id(&connection)
-                .await
-            {
-                Ok(Some(remote_connection_id)) => Some(remote_connection_id),
-                Ok(None) => {
-                    drop(connection);
-                    return Err(rollback_promoted_connection(
-                        &state,
-                        promoted_connection_id,
-                        AppError::Blocked {
-                            reason: "the new shared connection identity was not synchronized"
-                                .into(),
-                        },
-                    )
-                    .await);
-                }
-                Err(error) => {
-                    drop(connection);
-                    return Err(rollback_promoted_connection(
-                        &state,
-                        promoted_connection_id,
-                        error,
-                    )
-                    .await);
-                }
-            };
-        }
-        let remote_connection_id = remote_connection_id.ok_or_else(|| AppError::Blocked {
-            reason: "the shared workspace connection identity is unavailable".into(),
-        })?;
+            .await?
+        else {
+            return Err(AppError::Blocked {
+                reason: if connection.profile.engine == Engine::Sqlite
+                    && connection.profile.provider != Provider::CloudflareD1
+                {
+                    "SQLite files stay on one device and cannot be shared with a Team Project"
+                        .into()
+                } else {
+                    "this connection is not a team connection yet; save it in the connection editor or refresh Explorer before assigning it to a Project"
+                        .into()
+                },
+            });
+        };
         let remote_binding = state
             .services
             .knowledge
@@ -224,12 +129,7 @@ pub(crate) async fn bind_knowledge_environment_connection(
                 projected_remote_connection_id = Some(remote_connection_id);
                 binding.id
             }
-            Err(error) => {
-                drop(connection);
-                return Err(
-                    rollback_promoted_connection(&state, promoted_connection_id, error).await,
-                );
-            }
+            Err(error) => return Err(error),
         }
     } else {
         proposed_binding_id
@@ -275,7 +175,7 @@ pub(crate) async fn bind_knowledge_environment_connection(
                     });
                 }
             }
-            return Err(rollback_promoted_connection(&state, promoted_connection_id, error).await);
+            return Err(error);
         }
     };
     Ok(EnvironmentConnectionProjection {

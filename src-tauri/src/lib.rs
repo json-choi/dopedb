@@ -206,7 +206,6 @@ pub fn run() {
             features::workspaces::transport::get_active_workspace,
             features::workspaces::transport::set_active_workspace,
             features::workspaces::transport::set_active_workspace_account,
-            features::workspaces::transport::copy_connection_to_workspace,
             features::workspaces::transport::bind_workspace_connection_credentials,
             features::workspaces::transport::update_workspace_connection,
             features::workspaces::transport::set_workspace_connection_write_policy,

@@ -147,7 +147,6 @@ export function DatabaseExplorerOverlays({
               (connection) => connection.id === workspaceDialog.connection.id,
             ) ?? workspaceDialog.connection
           }
-          mode={workspaceDialog.mode}
           onBound={onConnectionUpdated}
           onClose={onCloseWorkspaceDialog}
         />

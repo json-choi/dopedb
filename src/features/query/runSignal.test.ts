@@ -73,10 +73,21 @@ describe("SQL run guidance", () => {
         requestedWrites,
       ).allowWrites,
     ).toBe(false);
+    // A member credential writes only inside the grant the server projected into allowWrites.
     expect(
       effectiveSafetySettings(
         {
           allowWrites: true,
+          credentialMode: "memberLocal",
+          workspaceAccess: "write",
+        },
+        requestedWrites,
+      ).allowWrites,
+    ).toBe(true);
+    expect(
+      effectiveSafetySettings(
+        {
+          allowWrites: false,
           credentialMode: "memberLocal",
           workspaceAccess: "write",
         },
@@ -118,7 +129,7 @@ describe("SQL run guidance", () => {
         },
         { ...safety, allowWrites: true },
       ).allowWrites,
-    ).toBe(false);
+    ).toBe(true);
     const managedConnection = {
       allowWrites: true,
       credentialMode: "managed" as const,
@@ -245,7 +256,18 @@ describe("SQL run guidance", () => {
         },
         blockedWrite,
       ),
-    ).toBe("managedCredential");
+    ).toBe("deviceSafety");
+    // A member credential is bounded by the grant the server projected into allowWrites.
+    expect(
+      writeBlockRecoveryKind(
+        {
+          allowWrites: false,
+          credentialMode: "memberLocal",
+          workspaceAccess: "write",
+        },
+        blockedWrite,
+      ),
+    ).toBe("workspacePolicy");
     expect(
       writeBlockRecoveryKind(
         {

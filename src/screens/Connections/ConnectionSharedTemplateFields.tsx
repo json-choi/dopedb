@@ -139,7 +139,7 @@ export function ConnectionSharedTemplateFields({
                 size="compact"
                 onClick={(event) => {
                   workspaceDialog.buttonRef.current = event.currentTarget;
-                  workspaceDialog.setMode("credentials");
+                  workspaceDialog.setOpen(true);
                 }}
               >
                 {t("workspace.bindCredentialsShort")}
@@ -154,7 +154,7 @@ export function ConnectionSharedTemplateFields({
       >
         {managedActive
           ? t("connections.managedWorkspace.securityNote")
-          : t("workspace.copySecurityNote")}
+          : t("workspace.sharedTemplateNote")}
       </p>
     </>
   );

@@ -44,6 +44,14 @@ pub async fn upsert_connection(
     password: Option<String>,
     clear_password: Option<bool>,
 ) -> AppResult<ConnectionProfile> {
+    // In a team workspace the editor's save is the only way a connection becomes a team
+    // connection: refuse an unauthorized role before anything is stored, store the credential
+    // on this device as always, then publish the secret-free template.
+    state
+        .services
+        .workspace
+        .ensure_team_connection_allowed(&profile)
+        .await?;
     let saved = state
         .services
         .connections
@@ -53,6 +61,15 @@ pub async fn upsert_connection(
             clear_password: clear_password.unwrap_or(false),
         })
         .await?;
+    let saved = match state
+        .services
+        .workspace
+        .publish_active_connection(ConnectionId::from(saved.id))
+        .await?
+    {
+        Some(published) => published,
+        None => saved,
+    };
     if saved.engine == crate::model::Engine::Bigquery
         && !crate::bigquery::uses_service_account_auth(&saved)?
     {

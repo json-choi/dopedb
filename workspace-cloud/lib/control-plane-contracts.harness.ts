@@ -908,6 +908,15 @@ describe("Desktop control-plane contracts", () => {
     expect(publicConnection(managedTemplate, "owner", "manage", true).schemaAccessAvailable).toBe(false);
     expect(publicConnection(managedTemplate, "owner", "manage", false, true).schemaAccessAvailable).toBe(false);
     expect(publicConnection(managedTemplate, "owner", "manage", true, true).schemaAccessAvailable).toBe(true);
+    // A member's own credential writes only through the additive `memberWrite`: the grant and role
+    // decide it, the template wire flag stays false, and the read-only engines never write.
+    const postgresTemplate = { ...publicTemplate, engine: "postgres", provider: "generic" };
+    expect(publicConnection(postgresTemplate, "editor", "write")).toMatchObject({ allowWrites: false, memberWrite: true });
+    expect(publicConnection(postgresTemplate, "editor", "read").memberWrite).toBe(false);
+    expect(publicConnection(managedTemplate, "owner", "manage", true).memberWrite).toBe(false);
+    expect([bigQueryTemplate.engine, "mongodb", "sqlite"].map((engine) =>
+      publicConnection({ ...postgresTemplate, engine, provider: engine === "sqlite" ? "cloudflareD1" : "generic" }, "owner", "manage").memberWrite))
+      .toEqual([false, false, false]);
 
     expect(upstreamMessage(
       403,

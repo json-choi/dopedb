@@ -3,3 +3,5 @@
 mod grouping;
 mod lookup;
 mod mutations;
+
+pub(crate) use mutations::PublishedBinding;

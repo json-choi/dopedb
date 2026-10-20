@@ -67,7 +67,7 @@ export function useCredentialRecoveryEntry(
     pending.current = false;
     const { flags, value } = profileState.form;
     if (flags.isSharedTemplate && canBindMemberCredentials(value)) {
-      workspaceDialog.setMode("credentials");
+      workspaceDialog.setOpen(true);
       return;
     }
     if (!flags.isSharedTemplate && !flags.isBigQuery && !flags.isCloudflareD1) {

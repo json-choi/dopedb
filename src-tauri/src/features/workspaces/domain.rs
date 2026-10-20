@@ -163,6 +163,18 @@ pub(crate) fn parse_workspace_role(value: Option<&str>) -> AppResult<WorkspaceRo
     }
 }
 
+/// Editors and above create team connections; viewers and analysts only use them.
+pub(crate) fn can_create_team_connection(role: WorkspaceRole) -> bool {
+    role >= WorkspaceRole::Editor
+}
+
+/// A team connection is publishable unless it names a file on one machine: a SQLite path is
+/// device-only, while Cloudflare D1 is an account and database identity any member can reach.
+pub(crate) fn is_publishable(profile: &crate::model::ConnectionProfile) -> bool {
+    profile.engine != crate::model::Engine::Sqlite
+        || profile.provider == crate::model::Provider::CloudflareD1
+}
+
 pub(crate) fn validate_member_username(username: &str) -> AppResult<&str> {
     let username = username.trim();
     if username.len() > 320 || username.chars().any(char::is_control) {

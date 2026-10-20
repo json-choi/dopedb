@@ -44,7 +44,7 @@ webview, logs, local SQLite, or frontend query caches.
 | File | Description |
 |------|-------------|
 | `authentication.rs` | Desktop authorization code, session, and membership HTTP exchanges. |
-| `connections.rs` | Redacted shared-connection and managed-lease HTTP exchanges; builds the template body (closed MongoDB options, exact Cloudflare D1 identity) and restores those options into template-owned driver parameters. |
+| `connections.rs` | Redacted shared-connection and managed-lease HTTP exchanges; builds the template body (closed MongoDB options, exact Cloudflare D1 identity, the published connection's own id) and restores those options into template-owned driver parameters; reads the additive `memberWrite` as a member credential's write permission. |
 | `provider_local_target.rs` | Redacted shared-connection and short-lived provider-lease HTTP exchanges. |
 | `sync.rs` | Payload-free ordered workspace change cursor exchange. |
 
@@ -54,8 +54,9 @@ webview, logs, local SQLite, or frontend query caches.
 |------|-------------|
 | `mod.rs` (`application.rs`) | Account-aware workspace use cases; mutation ordering/rollback policy live in the child modules, with SQLite/hosted HTTP/keychain/pool/environment/Tauri details behind ports. |
 | `authentication.rs` | Authentication lifecycle use cases. |
-| `navigation.rs` | Workspace/account selection and remote synchronization use cases. |
-| `sharing.rs` | Shared connection publication and member-local credential binding use cases. |
+| `navigation.rs` | Workspace/account selection and remote synchronization use cases; every membership synchronization ends with the creator device's promotion pass. |
+| `promotion.rs` | Promotes the signed-in account's own team-local connections (never SQLite files) to team connections once per row, with a per-connection retry delay and closed outcome counts. |
+| `sharing.rs` | One publication path (`publish_connection`, used by the editor's save and by promotion): the local id is kept, the template and the publisher's credential binding land in one local transaction, and a failure deletes the new server connection. Also template update, delete, and member-local credential binding. |
 
 ## For AI Agents
 

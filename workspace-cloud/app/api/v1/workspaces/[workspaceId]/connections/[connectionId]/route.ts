@@ -120,13 +120,23 @@ export async function POST(request: Request, context: RouteContext) {
   if (connection.credentialMode !== "member_local" && connection.credentialMode !== "managed") {
     return jsonError("Shared connection template is unsafe", 409);
   }
-  if (body.action !== "read" && (
-    connection.credentialMode !== "managed"
-    || !connection.allowWrites
-    || !hasWorkspaceCapability(authorization.role, "write")
-    || !providerResourceSupportsWrite(connection.providerCapabilityManifest)
-  )) {
-    return jsonError("Managed write access is not allowed for this member and connection", 403);
+  // A managed credential needs the administrator write policy and a provider that can issue a
+  // write lease. A member's own credential needs only an editor-or-above role and the `use`
+  // grant already proven above, plus a direct database's ceiling; the read-only engines
+  // (BigQuery, MongoDB, Cloudflare D1) never write. The device Safety approval gates every statement.
+  const ownCredentialWrite = body.action === "write"
+    && connection.credentialMode === "member_local"
+    && connection.engine !== "bigquery"
+    && connection.engine !== "mongodb"
+    && connection.provider !== "cloudflareD1"
+    && hasWorkspaceCapability(authorization.role, "write")
+    && (connection.provisioningMode !== "provisioned" || connection.directWriteCeiling === true);
+  const managedWrite = connection.credentialMode === "managed"
+    && connection.allowWrites
+    && hasWorkspaceCapability(authorization.role, "write")
+    && providerResourceSupportsWrite(connection.providerCapabilityManifest);
+  if (body.action !== "read" && !ownCredentialWrite && !managedWrite) {
+    return jsonError("Write access is not allowed for this member and connection", 403);
   }
   if (body.action === "schema" && (
     !hasWorkspaceCapability(authorization.role, "manage")

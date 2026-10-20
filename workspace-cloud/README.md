@@ -85,6 +85,35 @@ The accept/reject vectors live in `dopedb-protocol/tests/fixtures/control-plane-
 (`sharedConnectionTemplates`) and are run by both this parser's harness and the
 Desktop protocol golden test.
 
+## Team connections, default access and member writes
+
+Every connection in a team workspace is a team connection (ADR 0011). An editor or above
+creates one with `POST .../connections`; a viewer or analyst is refused (403) and the
+atomic batch re-proves the role. The body may name the new connection with an optional
+`id`, which is how Desktop publishes a local connection without changing its identity: the
+id is globally unique (a clash is 409), and a retry by the same creator returns the
+connection already created. Creation, in one atomic D1 batch, also writes the creator's
+`manage` grant, an explicit `manage` grant for every current administrator and owner, and
+turns the team-read policy on (`team_read_enabled = 1`), so the team-read triggers
+materialize `read` grants for analysts and above and `view` for viewers, now and for
+members who join later. Direct shared databases keep their separate administrator-only
+registration and are not opened to the team by default. Editing and deleting a connection
+follow its `manage` grant, as everything else about its access does; changing a managed
+write policy stays administrator-only.
+
+A member-local team connection carries no write authority in the shared record: the
+`workspace_connection_member_local_read_only` CHECK still holds because the template never
+delegates writes. A member's own credential writes when their connection grant is `use` or
+`manage` and their role is editor or above. `publicConnection` reports that as the additive
+`memberWrite` (always false for managed, BigQuery, MongoDB and Cloudflare D1; a direct
+database also needs its endpoint ceiling), and `POST .../connections/:id` with `write`
+accepts it under the same rule. Template `allowWrites` stays false on the wire for these
+connections because Desktops that predate `memberWrite` reject any member-local record that
+delegates writes. The device Safety approval still gates every statement. The team-read
+toggle route remains for those Desktops and works for every credential method; D1 migration
+`0013` only redefines its three triggers, so no table is rebuilt and grants, principals,
+revocations and versions are untouched.
+
 ## Direct shared databases
 
 A direct shared database is an ordinary member-local, read-only shared connection with

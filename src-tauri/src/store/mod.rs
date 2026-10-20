@@ -43,8 +43,8 @@ use workspace_codec::{
 
 use bootstrap::*;
 use projections::*;
-pub(crate) use repositories::personal_article_key;
 use repositories::*;
+pub(crate) use repositories::{personal_article_key, PublishedBinding};
 
 pub(crate) use projections::{
     engine_str, kind_str, parse_engine, parse_kind, parse_provider, parse_uuid, provider_str,

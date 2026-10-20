@@ -279,6 +279,8 @@ export const connectionsCatalog = defineCatalog(
     "connections.problemHostRequired": "Enter the database host.",
     "connections.problemConnectionUrlInvalid":
       "Enter a supported PostgreSQL, MySQL, SQLite, MongoDB, BigQuery, or Cloudflare D1 URL.",
+    "connections.problemTeamRoleCannotAdd":
+      "Your role in this team workspace cannot add connections. Ask an editor or administrator, or switch to your Personal workspace.",
     "connections.problemCloudflareAccountRequired":
       "Enter the Cloudflare account ID.",
     "connections.problemCloudflareAccountInvalid":
@@ -904,6 +906,8 @@ export const connectionsCatalog = defineCatalog(
     "connections.problemHostRequired": "데이터베이스 호스트를 입력하세요.",
     "connections.problemConnectionUrlInvalid":
       "지원되는 PostgreSQL, MySQL, SQLite, MongoDB, BigQuery 또는 Cloudflare D1 URL을 입력하세요.",
+    "connections.problemTeamRoleCannotAdd":
+      "이 팀 워크스페이스의 역할로는 연결을 추가할 수 없습니다. 편집자나 관리자에게 요청하거나 개인 워크스페이스로 전환하세요.",
     "connections.problemCloudflareAccountRequired":
       "Cloudflare 계정 ID를 입력하세요.",
     "connections.problemCloudflareAccountInvalid":

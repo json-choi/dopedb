@@ -341,6 +341,25 @@ function mongoOptionsField(value: unknown) {
   return mongoOptions ? { mongoOptions } : {};
 }
 
+/**
+ * Whether a member-credential connection may be written by this member. The template
+ * carries no write authority; the member's connection grant (`use` or `manage`) with an
+ * editor-or-above role is the only ceiling, plus a direct database's endpoint ceiling.
+ * BigQuery and Cloudflare D1 authenticate through read-only official CLI sessions, and
+ * DopeDB reads MongoDB through typed queries only, so none of them write.
+ */
+function memberCredentialWrite(
+  row: { credentialMode: string; engine: string; provider: string },
+  accessMode: "view" | "read" | "write" | "manage",
+  direct: DirectConnectionView | null,
+) {
+  if (
+    row.credentialMode === "managed" || row.engine === "bigquery" || row.engine === "mongodb"
+    || row.provider === "cloudflareD1"
+  ) return false;
+  return accessModeAllowsWrite(accessMode) && (direct ? direct.writeCeiling : true);
+}
+
 export function publicConnection(
   row: {
     id: string; name: string; engine: string; provider: string; driverId: string | null;
@@ -376,6 +395,10 @@ export function publicConnection(
     sslmode: row.sslmode,
     readonlyDefault: true,
     allowWrites: effectiveWrite,
+    // The member's own credential may attempt writes when their grant and role allow it (and a
+    // direct database's ceiling does); Safety approval still gates every statement on the device.
+    // Additive so a Desktop that predates it keeps reading `allowWrites` alone.
+    memberWrite: memberCredentialWrite(row, accessMode, direct),
     writeAvailable: managed && writeAvailable,
     schemaAccessAvailable: managed && writeAvailable && schemaAccessAvailable,
     env: row.environment,

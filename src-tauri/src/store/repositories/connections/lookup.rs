@@ -134,6 +134,76 @@ impl Store {
         row_to_connection_with_binding(&row)
     }
 
+    /// Local connections one account created in team workspaces it belongs to and has not
+    /// published yet. SQLite files are excluded: a path names a file on one machine, so only
+    /// Cloudflare D1 (an account and database identity) is a shareable `sqlite` connection.
+    /// Not scope-pinned: promotion covers every signed-in team workspace, not just the active one.
+    pub(crate) async fn promotable_local_connections(
+        &self,
+        account_user_id: &str,
+    ) -> AppResult<Vec<(Uuid, ConnectionProfile)>> {
+        self.promotable_rows(account_user_id, None, None).await
+    }
+
+    /// One promotable connection by id, read from its own workspace regardless of the active scope.
+    pub(crate) async fn get_promotable_connection(
+        &self,
+        workspace_id: Uuid,
+        account_user_id: &str,
+        id: Uuid,
+    ) -> AppResult<ConnectionProfile> {
+        self.promotable_rows(account_user_id, Some(workspace_id), Some(id))
+            .await?
+            .into_iter()
+            .next()
+            .map(|(_, profile)| profile)
+            .ok_or_else(|| AppError::NotFound(format!("local team connection {id}")))
+    }
+
+    async fn promotable_rows(
+        &self,
+        account_user_id: &str,
+        workspace_id: Option<Uuid>,
+        id: Option<Uuid>,
+    ) -> AppResult<Vec<(Uuid, ConnectionProfile)>> {
+        let rows = sqlx::query(concat!(
+            "SELECT c.*,
+                    NULL AS binding_username,
+                    NULL AS binding_extra_params,
+                    NULL AS binding_secret_ref,
+                    NULL AS binding_bound_endpoint,
+                    NULL AS binding_workspace_access,
+                    NULL AS binding_allow_writes,
+                    ",
+            bound_environments_sql!(),
+            " AS bound_environments
+             FROM connections c
+             JOIN workspaces w
+               ON w.id = c.workspace_id AND w.kind = 'team' AND w.lifecycle_state = 'active'
+             JOIN workspace_members m
+               ON m.workspace_id = c.workspace_id
+              AND m.user_id = ?1 AND m.status = 'active'
+             WHERE c.account_user_id = ?1
+               AND c.remote_id IS NULL AND c.deleted_at IS NULL
+               AND c.workspace_access = 'local' AND c.credential_mode = 'local'
+               AND NOT (c.engine = 'sqlite' AND c.provider <> 'cloudflareD1')
+               AND (?2 IS NULL OR c.workspace_id = ?2)
+               AND (?3 IS NULL OR c.id = ?3)
+             ORDER BY c.created_at, c.id"
+        ))
+        .bind(account_user_id)
+        .bind(workspace_id.map(|id| id.to_string()))
+        .bind(id.map(|id| id.to_string()))
+        .fetch_all(&self.pool)
+        .await?;
+        rows.iter()
+            .map(|row| {
+                let workspace: String = row.try_get("workspace_id")?;
+                Ok((parse_uuid(workspace)?, row_to_connection_with_binding(row)?))
+            })
+            .collect()
+    }
+
     /// Resolve a readable connection and every local authority/revision value in one
     /// SQLite snapshot. Long-running services keep this pin and use conditional writes
     /// so a result completed after a workspace, account, template, or credential

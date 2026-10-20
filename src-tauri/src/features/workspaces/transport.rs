@@ -12,9 +12,9 @@ use crate::state::AppState;
 
 use super::domain::WorkspaceAuthorityFingerprint;
 use super::{
-    Workspace, WorkspaceAuthState, WorkspaceConnectionCopyRequest,
-    WorkspaceConnectionUpdateRequest, WorkspaceCredentialBindingRequest, WorkspaceFeatureState,
-    WorkspaceLoginResult, WorkspaceLoginStatus,
+    Workspace, WorkspaceAuthState, WorkspaceConnectionUpdateRequest,
+    WorkspaceCredentialBindingRequest, WorkspaceFeatureState, WorkspaceLoginResult,
+    WorkspaceLoginStatus,
 };
 
 fn fence_runtime_authority(state: &AppState, app: &tauri::AppHandle) {
@@ -424,25 +424,6 @@ pub async fn set_active_workspace_account(
     }
     drop(authority_transition);
     result
-}
-
-#[tauri::command]
-pub async fn copy_connection_to_workspace(
-    state: State<'_, AppState>,
-    connection_id: ConnectionId,
-    workspace_id: WorkspaceId,
-    account_user_id: AccountId,
-) -> AppResult<ConnectionProfile> {
-    state
-        .services
-        .workspace
-        .copy_connection(WorkspaceConnectionCopyRequest {
-            connection_id,
-            workspace_id,
-            account_user_id,
-            allow_active_workspace: false,
-        })
-        .await
 }
 
 #[tauri::command]

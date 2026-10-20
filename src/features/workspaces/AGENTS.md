@@ -19,7 +19,7 @@ authoritative replacement and scope transition passes through it.
 | `authPolicy.test.ts` | Cross-checks workspace auth/login-callback URLs and deep-link handling against `src-tauri/tauri*.conf.json`, `src-tauri/capabilities/default.json`, and `workspace-cloud`'s deep-link constant, the one-time database focus of `workspaceAdmin/navigationRequest.ts`. |
 | `authPolicy.ts` | Workspace identity stays visually stable while the server silently revalidates the OS-keychain session; defines recheck/retry backoff timing (`WORKSPACE_AUTH_RECHECK_MS`, `WORKSPACE_AUTH_RETRY_MS`, exponential `workspaceAuthRetryDelay`). Resource APIs still authorize every sensitive action regardless of this cached visual state. |
 | `cache.ts` | Sole owner of authoritative workspace Query-cache replacement/invalidation and scope-transition cancellation. |
-| `choices.ts` | Pure account/workspace option projection for the switcher and secure-copy dialog; composite values keep duplicate cross-account memberships distinct. |
+| `choices.ts` | Pure account/workspace option projection for the switcher, plus the role checks for adding (editor and above) and managing (admin and owner) team connections; composite values keep duplicate cross-account memberships distinct. |
 | `domain.ts` | Branded `WorkspaceId`/`AccountId` and workspace wire/domain contracts. |
 | `loginRequest.ts` | Window-event bus (`requestWorkspaceLogin`/`onWorkspaceLoginRequested`) routing contextual sign-in actions through the one shell-owned login lifecycle. |
 | `membershipRefreshRequest.ts` | Window-event bus (`requestWorkspaceMembershipRefresh`/`onWorkspaceMembershipRefreshRequested`) that lets workspace administration ask `WorkspaceAccount` to re-read memberships after a change to the member's own authority; resolves once that refresh settles. |
@@ -37,7 +37,7 @@ authoritative replacement and scope transition passes through it.
 | File | Description |
 |------|-------------|
 | `WorkspaceAccount.tsx` | Account-specific native loopback/PKCE login lifecycle and the unified local account menu (including `Manage account`, which opens Settings → Account); caches only public identity, session tokens stay behind Rust IPC. |
-| `WorkspaceConnectionDialog.tsx` | Secure workspace connection flow: publishes only a redacted local template, or binds a member-local credential to an already-synchronized template. |
+| `WorkspaceConnectionDialog.tsx` | Member credential flow: binds this member's own credential to an already-synchronized team connection. Publishing a template is the connection editor's save, never this dialog. |
 | `WorkspaceSwitcher.tsx` | Active workspace/project menu for the title toolbar; clears cached resource reads before the shell reloads the newly selected account scope, and opens `New workspace` and, for owners and admins, `Manage workspace`, which opens the Workspace management dialog. |
 
 ## For AI Agents
@@ -52,10 +52,10 @@ authoritative replacement and scope transition passes through it.
   `queryClient.setQueryData`/`invalidateQueries` on workspace keys from a
   component or another adapter.
 - **Security invariant (verified in code):** `WorkspaceConnectionDialog.tsx`
-  publishes only a redacted template to the shared workspace record; a member's
-  own credential is bound locally, never attached to the shared record (matches
-  root `AGENTS.md` axis 1: "long-lived secrets never travel with the shared
-  record").
+  binds a member's own credential locally and never attaches it to the shared
+  record (matches root `AGENTS.md` axis 1: "long-lived secrets never travel with
+  the shared record"); the redacted template is published by the connection
+  editor's save in the Rust workspace feature.
 - `authPolicy.ts`'s cached "visually stable" auth state must never itself gate a
   sensitive action; only a live resource-API check may authorize one.
 
@@ -67,8 +67,8 @@ authoritative replacement and scope transition passes through it.
   constant, so a change to either side's callback URL shape must keep this test passing.
 
 ### Common Patterns
-- `WorkspaceSwitcher.tsx` and `WorkspaceConnectionDialog.tsx` both route mutations
-  through `cache.ts` (`invalidateWorkspaceContext`, `runWorkspaceAuthorityTransition`,
+- `WorkspaceSwitcher.tsx` routes mutations through `cache.ts`
+  (`invalidateWorkspaceContext`, `runWorkspaceAuthorityTransition`,
   `synchronizeWorkspaceScope`) rather than calling `tauriAdapter.ts` and the query
   client separately.
 

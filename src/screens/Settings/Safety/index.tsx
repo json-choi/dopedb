@@ -143,7 +143,7 @@ export default function Safety({
   const workspacePolicyEditable = canManageWorkspaceWritePolicy(connection);
   const writeControlAvailable = safetyWriteControlAvailable(connection);
   const schemaControlAvailable = safetySchemaControlAvailable(connection);
-  const memberLocalReadOnly = connection.credentialMode === "memberLocal";
+  const memberLocal = connection.credentialMode === "memberLocal";
   const [draft, setDraft] = useState<SafetyDraft | null>(null);
   const [saveError, setSaveError] = useState<{
     connectionId: string; kind: string | null; message: string;
@@ -405,7 +405,7 @@ export default function Safety({
 
   const schemaUnavailableHint: I18nKey | null = schemaControlAvailable
     ? null
-    : memberLocalReadOnly
+    : memberLocal
       ? "safety.memberLocalSchemaUnavailable"
       : connection.credentialMode === "provisioned"
         ? "directAccess.safetySchemaUnavailable"
@@ -495,8 +495,7 @@ export default function Safety({
         <SettingsGroup title={t("safety.guardrails")}>
           <AccessPermissions
             permissions={accessPermissions}
-            hint={memberLocalReadOnly ? "safety.memberLocalReadOnlyHint"
-              : workspacePolicyEditable ? "safety.sharedWritesManagerHint"
+            hint={workspacePolicyEditable ? "safety.sharedWritesManagerHint"
               : workspaceManaged ? "safety.sharedWritesHint" : "safety.accessLevelHint"}
             unavailableHint={schemaUnavailableHint}
             localSchemaRequired={localSchemaRequired}

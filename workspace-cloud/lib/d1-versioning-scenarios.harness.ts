@@ -7,6 +7,8 @@ import { claimRevocationGate } from "./revocation-gates";
 import { parseConnectionVersionPayload } from "./workspace-versioning";
 import { restoreWorkspaceSnapshot } from "./workspace-snapshot-restore";
 import type { WorkspaceMetadataSnapshot } from "./workspace-backup-core";
+import { publicConnection } from "./workspace-connections";
+import { accessModeForConnectionGrant } from "./workspace-permissions";
 
 export async function verifyD1ConnectionVersioning(db: D1Database, organizationId: string, authority: MutationAuthority) {
   const connectionId = randomUUID();
@@ -15,6 +17,7 @@ export async function verifyD1ConnectionVersioning(db: D1Database, organizationI
     readonlyDefault: true, allowWrites: false, env: null, schemaGroup: null, deleted: false }, { credentialMode: "member_local" });
   const created = await commitConnectionCreate({ organizationId, connectionId, authority, input: payload });
   expect(created?.contentRevision).toBe(1);
+  await verifyTeamConnectionCreation(db, organizationId, authority, payload);
   const update = async (name: string, expectedContentRevision: number) => {
     const claim = await claimRevocationGate({ kind: "connection", organizationId, connectionId });
     expect(claim).not.toBeNull();
@@ -100,4 +103,57 @@ export async function verifyD1ConnectionVersioning(db: D1Database, organizationI
     .toEqual({ revision: 3, restored: 1, conflictIds: [] });
   expect(JSON.parse(String(await db.prepare("SELECT mongo_options FROM workspace_connection WHERE id = ?")
     .bind(restoredMongoId).first("mongo_options")))).toEqual({ srv: true, authSource: "admin" });
+}
+
+/**
+ * Team connection creation: an editor or above creates one, a viewer or analyst cannot, and the
+ * new connection opens to the team by default (read for analysts and above, view for viewers)
+ * while its creator and every administrator or owner hold manage. A member writes with their own
+ * credential only when their grant and role allow it.
+ */
+async function verifyTeamConnectionCreation(
+  db: D1Database, organizationId: string, owner: MutationAuthority, template: ReturnType<typeof parseConnectionVersionPayload>,
+) {
+  const newMember = async (role: string) => {
+    const userId = randomUUID(); const membershipId = randomUUID(); const sessionId = randomUUID();
+    await db.batch([
+      db.prepare("INSERT INTO user (id, name, email) VALUES (?, 'Create fixture', ?)").bind(userId, `${userId}@invalid.test`),
+      db.prepare("INSERT INTO member (id, organization_id, user_id, role) VALUES (?, ?, ?, ?)").bind(membershipId, organizationId, userId, role),
+      db.prepare("INSERT INTO session (id, token, user_id, expires_at) VALUES (?, ?, ?, ?)")
+        .bind(sessionId, randomUUID(), userId, new Date(Date.now() + 60_000).toISOString()),
+    ]);
+    return { sessionId, userId, membershipId, role };
+  };
+  const [viewer, analyst, editor] = [await newMember("viewer"), await newMember("analyst"), await newMember("editor")];
+  const input = { ...template, name: "Editor created" };
+  for (const denied of [viewer, analyst]) {
+    expect(await commitConnectionCreate({ organizationId, connectionId: randomUUID(), authority: denied, input })).toBeNull();
+  }
+  // An editor creates it under a caller-chosen id; the id is unique across the database.
+  const connectionId = randomUUID();
+  const created = await commitConnectionCreate({ organizationId, connectionId, authority: editor, input });
+  expect(created?.id).toBe(connectionId);
+  await expect(commitConnectionCreate({ organizationId, connectionId, authority: editor, input })).rejects.toThrow();
+  expect(await db.prepare("SELECT team_read_enabled FROM workspace_connection WHERE id = ?").bind(connectionId).first("team_read_enabled")).toBe(1);
+  const grants = Object.fromEntries((await db.prepare("SELECT member_id, capability, origin FROM workspace_connection_grant WHERE connection_id = ?")
+    .bind(connectionId).all<{ member_id: string; capability: string; origin: string }>()).results
+    .map((row) => [row.member_id, `${row.capability}/${row.origin}`]));
+  expect(grants).toMatchObject({
+    [editor.membershipId]: "manage/explicit", [owner.membershipId]: "manage/explicit",
+    [analyst.membershipId]: "read/team", [viewer.membershipId]: "view/team",
+  });
+  // A teammate who joins later is opened to the same default.
+  const late = await newMember("analyst");
+  expect(await db.prepare("SELECT capability || '/' || origin AS grant FROM workspace_connection_grant WHERE connection_id = ? AND member_id = ?")
+    .bind(connectionId, late.membershipId).first("grant")).toBe("read/team");
+  // Member-credential writes follow the grant and role, never a template flag.
+  const row = { ...created!, credentialMode: "member_local" };
+  const view = (role: "analyst" | "editor", capability: "read" | "manage") =>
+    publicConnection(row, role, accessModeForConnectionGrant(role, capability));
+  expect([view("analyst", "read").memberWrite, view("editor", "manage").memberWrite]).toEqual([false, true]);
+  expect(view("editor", "manage").allowWrites).toBe(false);
+  expect(await db.prepare("SELECT allow_writes FROM workspace_connection WHERE id = ?").bind(connectionId).first("allow_writes")).toBe(0);
+  // Leave the shared fixture as the following scenarios expect it: only the owner remains.
+  await db.batch([viewer, analyst, editor, late].map((member) =>
+    db.prepare("DELETE FROM member WHERE id = ?").bind(member.membershipId)));
 }
