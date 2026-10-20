@@ -37,6 +37,11 @@ export const knowledgeProjectEnvironment = sqliteTable(
     projectId: text("project_id").notNull().references(() => knowledgeProject.id, {
       onDelete: "cascade",
     }),
+    // `kind` (development | staging | production | test) is the environment. `name`,
+    // `production`, and `risk_class` are derived from it on every write and only
+    // answer pre-kind Desktops; SQLite cannot drop them without rebuilding the table.
+    // A BEFORE INSERT/UPDATE trigger in 0012 holds `kind` to the four values.
+    kind: text("kind").notNull().default("development"),
     name: text("name").notNull(),
     production: integer("production", { mode: "boolean" }).notNull().default(false),
     riskClass: text("risk_class").notNull().default("custom"),
@@ -47,6 +52,7 @@ export const knowledgeProjectEnvironment = sqliteTable(
   (table) => [
     unique("knowledge_environment_org_id_idx").on(table.organizationId, table.id),
     uniqueIndex("knowledge_environment_project_name_idx").on(table.projectId, table.name),
+    uniqueIndex("knowledge_environment_project_kind_idx").on(table.projectId, table.kind),
     foreignKey({
       columns: [table.organizationId, table.projectId],
       foreignColumns: [knowledgeProject.organizationId, knowledgeProject.id],

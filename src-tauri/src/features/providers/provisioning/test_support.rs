@@ -309,7 +309,12 @@ pub(super) async fn fixture_connection(
         readonly_default: false,
         allow_writes: true,
         secret_ref: None,
-        env: Some(if target.production() { "prod" } else { "dev" }.into()),
+        env: Some(if target.production() {
+            crate::kernel::environment::EnvironmentKind::Production
+        } else {
+            crate::kernel::environment::EnvironmentKind::Development
+        }),
+        effective_env: None,
         schema_group: None,
         workspace_access: WorkspaceConnectionAccess::Manage,
         credential_mode: WorkspaceCredentialMode::Managed,

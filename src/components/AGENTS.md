@@ -19,6 +19,8 @@ toolbar menu.
 | `ConfirmDialog.tsx` | The shared blocking confirmation `alertdialog` (Cancel first focus, backdrop/Escape cancel, never auto-dismisses, optional `pending` state, `cancelLabel`, `confirmVariant`). Rendered by `ConfirmButton` and directly by flows without a trigger, such as the close/quit confirmation for open manual transactions. |
 | `EngineMark.tsx` | Renders the small engine logo (`postgres`/`mysql`/`sqlite`/`mongodb` from `src/assets/db-icons/`, `bigquery` from Iconify) at `control` or `tree` size. |
 | `Icon.tsx` | The app's inline-SVG icon set (Feather/Lucide-style 24×24 glyphs, `currentColor`, `em`-sized); no icon-library dependency. Icons are `aria-hidden`; the enclosing control owns the accessible name. |
+| `EnvironmentKindBadge.tsx` | Localized environment marker: the design-system `EnvironmentBadge` plus the kind's display name. |
+| `EnvironmentKindSelect.tsx` | The one environment question (fixed kinds, optional empty choice, `allowed` narrowing) used by the Project dialog, provider imports, GCP setup, and direct database setup. |
 | `InfoTip.tsx` | Small circular "i" affordance that opens a `design-system` `Tooltip` with a caption. |
 | `LazySqlViewer.tsx` | `React.lazy` wrapper around `SqlViewer` so the CodeMirror bundle is only loaded when a SQL viewer is actually rendered. |
 | `RowEditor.tsx` | Row editor panel (one input per column, checkbox for SQL `NULL`, read-only primary keys on edit) that builds an `INSERT`/`UPDATE` via `sqlBuild` and hands it to the caller — it never executes SQL itself, so the caller's approval/audit pipeline still applies. |

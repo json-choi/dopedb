@@ -18,6 +18,8 @@ pub mod state_machine;
 pub(crate) use canonicalize::canonical_hash;
 #[cfg(feature = "packaged-benchmark")]
 pub(crate) use canonicalize::canonical_json;
+#[cfg(test)]
+pub(crate) use context::policy_requires_production_confirmation;
 pub(crate) use context::{
     actor_for_pin, agent_actor_for_pin, approver_for_pin, capture_policy, ensure_operation_scope,
     required_confirmation,

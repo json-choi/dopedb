@@ -16,7 +16,7 @@ itself run Agents or execute queries.
 | File | Description |
 |------|-------------|
 | `bindEnvironmentConnection.ts` | `isKnowledgeEnvironmentRevisionConflict` (detects a 409 "Environment or connection changed" conflict) and `bindKnowledgeEnvironmentConnectionWithRefresh`, which refreshes the native workspace projection and retries a bind after a shared Connection revision advances between an Explorer read and the bind action. |
-| `domain.ts` | `KnowledgeEnvironment` (with `riskClass`: production/staging/development/test/custom), `KnowledgeEnvironmentView`, `KnowledgeProject`, `GithubKnowledgeRepository`, `KnowledgeRevision`, `KnowledgeSource`, `KnowledgeInventory`, `EnvironmentConnection`, and create/bind input types. |
+| `domain.ts` | `KnowledgeEnvironment` (`kind`: production/staging/test/development; the kind is the environment), `KnowledgeEnvironmentView`, `KnowledgeProject`, `GithubKnowledgeRepository`, `KnowledgeRevision`, `KnowledgeSource`, `KnowledgeInventory`, `EnvironmentConnection`, and create/bind input types. |
 | `inventory.ts` | `knowledgeInventoryQuery` — `queryOptions()` wrapper (60s stale time, no retry) around `listKnowledgeInventory`. |
 | `presentation.ts` | Pure label formatters: `knowledgeRevisionLabel` (github/local_git/snapshot revision display), `githubSourceRevisionLabel`, `knowledgeEnvironmentBadge`. |
 | `queryKeys.ts` | `knowledgeQueryKeys`; exports `KNOWLEDGE_WORKSPACE_QUERY_ROOTS`/`AGENT_KNOWLEDGE_CONNECTION_QUERY_ROOTS` prefixes explicitly for intentional cross-surface invalidation, per its header comment — Knowledge and its Agent-environment projection share one cache identity rooted in the authenticated workspace generation. |

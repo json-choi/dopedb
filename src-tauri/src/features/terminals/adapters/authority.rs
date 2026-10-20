@@ -22,7 +22,10 @@ pub(super) fn connection_pin(pin: &PinnedConnection) -> TerminalConnectionPin {
         connection_revision: pin.connection_revision,
         connection_name: pin.profile.name.clone(),
         database: pin.profile.database.clone(),
-        environment: pin.profile.env.clone(),
+        environment: pin
+            .profile
+            .effective_env
+            .map(|kind| kind.as_str().to_owned()),
         engine: pin.profile.engine,
         policy,
     }

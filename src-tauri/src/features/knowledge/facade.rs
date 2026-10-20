@@ -12,12 +12,13 @@ use uuid::Uuid;
 
 use crate::error::{AppError, AppResult};
 use crate::kernel::access::{ActiveResourceScope, PinnedConnection, WorkspaceKind};
+use crate::kernel::environment::EnvironmentKind;
 
 use super::domain::{
-    validate_binding_draft, EnvironmentConnectionBinding, EnvironmentRiskClass,
-    KnowledgeEnvironmentSummary, KnowledgeMappingProposal, KnowledgeSessionScope, Project,
-    ProjectDefinition, ProjectEnvironment, SourceBindingDraft, SourceLocator, SourceSnapshot,
-    StoredKnowledgeScope, KNOWLEDGE_ACCESS_SYNC_FAILED,
+    validate_binding_draft, EnvironmentConnectionBinding, KnowledgeEnvironmentSummary,
+    KnowledgeMappingProposal, KnowledgeSessionScope, Project, ProjectDefinition,
+    ProjectEnvironment, SourceBindingDraft, SourceLocator, SourceSnapshot, StoredKnowledgeScope,
+    KNOWLEDGE_ACCESS_SYNC_FAILED,
 };
 use super::ports::{
     AppendKnowledgeEnvironmentRequest, CreateKnowledgeProjectRequest, CreateKnowledgeSourceRequest,
@@ -88,7 +89,7 @@ where
         &self,
         workspace_id: Uuid,
         name: &str,
-        environments: &[(String, EnvironmentRiskClass)],
+        environments: &[EnvironmentKind],
     ) -> AppResult<ProjectDefinition> {
         self.repository
             .create_knowledge_project(workspace_id, name, environments)
@@ -99,11 +100,10 @@ where
         &self,
         workspace_id: Uuid,
         project_id: Uuid,
-        name: &str,
-        risk_class: EnvironmentRiskClass,
+        kind: EnvironmentKind,
     ) -> AppResult<ProjectDefinition> {
         self.repository
-            .create_knowledge_environment(workspace_id, project_id, name, risk_class)
+            .create_knowledge_environment(workspace_id, project_id, kind)
             .await
     }
 

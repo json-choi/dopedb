@@ -188,7 +188,7 @@ impl QueryPlatformAdapter {
                 connection_id: ConnectionId::from(profile.id),
                 connection_name: profile.name,
                 database: lease.target_database().to_owned(),
-                environment: profile.env,
+                environment: profile.effective_env.map(|kind| kind.as_str().to_owned()),
                 plan_id,
                 decision,
                 notices,

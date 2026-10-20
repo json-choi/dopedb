@@ -1,4 +1,4 @@
-import type { KnowledgeEnvironment, KnowledgeRevision } from "./domain";
+import type { KnowledgeRevision } from "./domain";
 
 export function knowledgeRevisionLabel(
   revision: KnowledgeRevision,
@@ -19,12 +19,4 @@ export function githubSourceRevisionLabel(
 ): string {
   const revision = commitSha.trim().slice(0, 8);
   return revision ? `${repository} · ${revision}` : repository;
-}
-
-export function knowledgeEnvironmentBadge(
-  riskClass: KnowledgeEnvironment["riskClass"],
-): string {
-  if (riskClass === "production") return "prod";
-  if (riskClass === "development") return "dev";
-  return riskClass;
 }

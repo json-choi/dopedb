@@ -11,7 +11,7 @@ import ConfirmButton from "../../components/ConfirmButton";
 import EngineMark from "../../components/EngineMark";
 import { Icon } from "../../components/Icon";
 import { Button } from "../../design-system/components/Button";
-import { EnvironmentBadge } from "../../design-system/components/EnvironmentBadge";
+import { EnvironmentKindBadge } from "../../components/EnvironmentKindBadge";
 import { Menu, MenuCheckbox, MenuItem, ToolbarMenu } from "../../design-system/components/Menu";
 import {
   canBindMemberCredentials,
@@ -27,6 +27,7 @@ import type {
   CatalogTable,
   DatabaseSummary,
 } from "../../ipc/types";
+import { environmentKindLabel, type EnvironmentKind } from "../../lib/environmentKind";
 import { useI18n } from "../../lib/i18n";
 import { isDocumentEngine } from "../../lib/capabilities";
 import type { SchemaConnectionGroup } from "../../lib/schemaDiff";
@@ -60,7 +61,7 @@ const MOVE_KEY_MODIFIER =
 
 type Props = {
   connection: ConnectionProfile;
-  environmentBadge?: string | null;
+  environmentBadge?: EnvironmentKind | null;
   environmentDropId?: string;
   projectDatabaseOrder?: ProjectDatabaseOrderDrag;
   treeKey?: string;
@@ -152,7 +153,7 @@ export default function ConnectionNode(props: Props) {
   const { connection } = props;
   const environmentBadge =
     props.environmentBadge === undefined
-      ? connection.env
+      ? connection.effectiveEnv
       : props.environmentBadge;
   const accessLabelBase =
     connection.workspaceAccess === "view"
@@ -252,7 +253,7 @@ export default function ConnectionNode(props: Props) {
             ? "Alt+ArrowUp Alt+ArrowDown"
             : undefined
         }
-        aria-label={`${connection.name || t("app.unnamed")} · ${description}${environmentBadge ? ` · ${environmentBadge}` : ""}`}
+        aria-label={`${connection.name || t("app.unnamed")} · ${description}${environmentBadge ? ` · ${environmentKindLabel(t, environmentBadge)}` : ""}`}
         data-explorer-tree-item
         data-explorer-tree-key={connectionTreeKey}
         data-explorer-tree-parent-key={props.treeParentKey ?? undefined}
@@ -425,7 +426,7 @@ export default function ConnectionNode(props: Props) {
           </span>
         ) : null}
         {environmentBadge ? (
-          <EnvironmentBadge environment={environmentBadge} />
+          <EnvironmentKindBadge kind={environmentBadge} />
         ) : null}
         {accessLabel && (
           <span

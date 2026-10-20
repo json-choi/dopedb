@@ -1,6 +1,7 @@
 // Workspace administration wire contracts. The operation union mirrors the Rust
 // `WorkspaceAdminOperation` enum variant-for-variant and field-for-field; Rust
 // validates identifiers and bounds before any request reaches the control plane.
+import type { EnvironmentKind } from "../../lib/environmentKind";
 import type { AccountId, WorkspaceId, WorkspaceRole } from "../workspaces/domain";
 
 export type AssignableWorkspaceRole = Exclude<WorkspaceRole, "owner">;
@@ -189,6 +190,7 @@ export type WorkspaceAdminOperation =
       receipt: string;
       idempotencyKey: string;
       name: string;
+      environment: EnvironmentKind;
       productionApproved: boolean;
     }
   | {

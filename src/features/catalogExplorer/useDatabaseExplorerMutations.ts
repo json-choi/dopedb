@@ -24,6 +24,7 @@ import {
 import { refreshDesktopConnections } from "../workspaceAdmin/desktopConnections";
 import { useDeleteConnection } from "../connections/useDeleteConnection";
 import { errMessage } from "../../ipc/types";
+import { environmentKindLabel } from "../../lib/environmentKind";
 import { useI18n } from "../../lib/i18n";
 import { qk, type CatalogScope } from "../../lib/queries";
 import { refreshConnectionCatalog } from "../../lib/catalogQueries";
@@ -169,7 +170,7 @@ export function useDatabaseExplorerMutations({
         t("connections.environmentConnectionMoved", {
           connection:
             connection.name || connection.database || t("app.unnamed"),
-          environment: environment.name,
+          environment: environmentKindLabel(t, environment.kind),
         }),
       );
       if (localCleanupFailed) {

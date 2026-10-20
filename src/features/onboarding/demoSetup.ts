@@ -24,7 +24,7 @@ import {
 import { knowledgeQueryKeys } from "../knowledge/queryKeys";
 
 export const GUIDED_DEMO_PROJECT_NAME = "DopeDB Demo";
-export const GUIDED_DEMO_ENVIRONMENT_NAME = "Sandbox";
+export const GUIDED_DEMO_ENVIRONMENT_KIND = "development" as const;
 
 type GuidedDemoGateway = {
   listAgentEnvironments: (
@@ -77,7 +77,7 @@ export function selectGuidedDemoEnvironment(
   return environments.find(
     (environment) =>
       environment.projectName === GUIDED_DEMO_PROJECT_NAME &&
-      environment.name === GUIDED_DEMO_ENVIRONMENT_NAME,
+      environment.kind === GUIDED_DEMO_ENVIRONMENT_KIND,
   ) ?? environments[0] ?? null;
 }
 
@@ -105,27 +105,21 @@ export async function ensureGuidedDemoEnvironment(
   if (!project) {
     project = await gateway.createProject({
       name: GUIDED_DEMO_PROJECT_NAME,
-      environments: [
-        {
-          name: GUIDED_DEMO_ENVIRONMENT_NAME,
-          riskClass: "development",
-        },
-      ],
+      environments: [{ kind: GUIDED_DEMO_ENVIRONMENT_KIND }],
     });
     createdEnvironmentId = project.environments[0]?.id ?? null;
   }
 
   let environment = project.environments.find(
-    (candidate) => candidate.name === GUIDED_DEMO_ENVIRONMENT_NAME,
+    (candidate) => candidate.kind === GUIDED_DEMO_ENVIRONMENT_KIND,
   ) ?? null;
   if (!environment) {
     project = await gateway.createEnvironment({
       projectId: project.id,
-      name: GUIDED_DEMO_ENVIRONMENT_NAME,
-      riskClass: "development",
+      kind: GUIDED_DEMO_ENVIRONMENT_KIND,
     });
     environment = project.environments.find(
-      (candidate) => candidate.name === GUIDED_DEMO_ENVIRONMENT_NAME,
+      (candidate) => candidate.kind === GUIDED_DEMO_ENVIRONMENT_KIND,
     ) ?? null;
     createdEnvironmentId = environment?.id ?? null;
   }

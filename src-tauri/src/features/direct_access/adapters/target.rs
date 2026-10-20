@@ -85,6 +85,7 @@ fn template_profile(endpoint: &TargetEndpoint, credential: &AdminCredential) -> 
         schema_access_available: false,
         secret_ref: None,
         env: None,
+        effective_env: None,
         schema_group: None,
         workspace_access: WorkspaceConnectionAccess::Local,
         credential_mode: WorkspaceCredentialMode::Local,

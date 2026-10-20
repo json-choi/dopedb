@@ -216,8 +216,6 @@ export const workspaceProvidersCatalog = defineCatalog(
       "Existing instance labels are preserved; only the selected environment label is added. The Google account needs Cloud SQL Admin or the cloudsql.instances.update permission.",
     "workspaceProviders.gcpEnvironment": "Environment",
     "workspaceProviders.gcpChooseEnvironment": "Choose environment",
-    "workspaceProviders.gcpEnvironmentProduction": "Production · environment=production",
-    "workspaceProviders.gcpEnvironmentDevelopment": "Non-production · environment=development",
     "workspaceProviders.gcpSchemaTitle": "Schema access (optional)",
     "workspaceProviders.gcpSchemaDescription":
       "Create a separate login that acts as this owner in public. Existing users, object owners, and default privileges stay unchanged. Desktop verifies the role before running SQL; broader roles or unsafe defaults need a separate administrator review.",
@@ -629,8 +627,6 @@ export const workspaceProvidersCatalog = defineCatalog(
       "기존 인스턴스 라벨은 보존하고 선택한 environment 라벨만 추가합니다. Google 계정에 Cloud SQL Admin 또는 cloudsql.instances.update 권한이 필요합니다.",
     "workspaceProviders.gcpEnvironment": "환경",
     "workspaceProviders.gcpChooseEnvironment": "환경 선택",
-    "workspaceProviders.gcpEnvironmentProduction": "운영 · environment=production",
-    "workspaceProviders.gcpEnvironmentDevelopment": "비운영 · environment=development",
     "workspaceProviders.gcpSchemaTitle": "스키마 변경 접근 (선택)",
     "workspaceProviders.gcpSchemaDescription":
       "public에서 이 소유자 역할로 실행하는 별도 로그인을 만듭니다. 기존 사용자·객체 소유권·기본 권한은 유지합니다. Desktop이 SQL 실행 전에 역할을 검증하며, 권한이 너무 넓거나 기본 권한이 안전하지 않으면 DB 관리자의 별도 검토가 필요합니다.",

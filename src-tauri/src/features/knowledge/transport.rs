@@ -20,12 +20,13 @@ use crate::connection::keychain::{
 };
 use crate::error::{AppError, AppResult};
 use crate::kernel::access::{ActiveResourceScope, WorkspaceKind};
+use crate::kernel::environment::EnvironmentKind;
 use crate::kernel::identity::{AccountId, WorkspaceId};
 use crate::state::AppState;
 
 use super::domain::{
-    EnvironmentRiskClass, Project, ProjectDefinition, ProjectEnvironment, SourceBindingDraft,
-    SourceHealthState, SourceLocator, StoredKnowledgeScope,
+    Project, ProjectDefinition, ProjectEnvironment, SourceBindingDraft, SourceHealthState,
+    SourceLocator, StoredKnowledgeScope,
 };
 use super::ports::{
     AppendKnowledgeEnvironmentRequest, CreateKnowledgeEnvironmentRequest,
@@ -51,9 +52,8 @@ pub(crate) struct KnowledgeSourceProjection {
     project_id: Uuid,
     project_name: String,
     project_environment_id: Uuid,
-    environment_name: String,
     environment_revision: u64,
-    risk_class: EnvironmentRiskClass,
+    environment_kind: EnvironmentKind,
     provider: KnowledgeSourceProvider,
     display_name: String,
     visibility: KnowledgeSourceVisibility,
@@ -153,8 +153,7 @@ pub(crate) struct CreateProjectInput {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct CreateEnvironmentInput {
     project_id: Uuid,
-    name: String,
-    risk_class: EnvironmentRiskClass,
+    kind: EnvironmentKind,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -277,8 +276,7 @@ fn project_definition(workspace_id: Uuid, project: &RemoteKnowledgeProject) -> P
             .map(|environment| ProjectEnvironment {
                 id: environment.id,
                 project_id: project.id,
-                name: environment.name.clone(),
-                risk_class: environment.risk_class,
+                kind: environment.kind,
                 revision: environment.revision,
             })
             .collect(),
@@ -295,8 +293,7 @@ fn project_projection(definition: ProjectDefinition) -> RemoteKnowledgeProject {
             .into_iter()
             .map(|environment| RemoteKnowledgeEnvironment {
                 id: environment.id,
-                name: environment.name,
-                risk_class: environment.risk_class,
+                kind: environment.kind,
                 revision: environment.revision,
             })
             .collect(),
@@ -390,8 +387,7 @@ fn domain_scope(
         ProjectEnvironment {
             id: remote_environment.id,
             project_id: remote_project.id,
-            name: remote_environment.name.clone(),
-            risk_class: remote_environment.risk_class,
+            kind: remote_environment.kind,
             revision: remote_environment.revision,
         },
     ))
@@ -474,9 +470,8 @@ async fn project_source(
         project_id: scope.project.id,
         project_name: scope.project.name,
         project_environment_id: scope.environment.id,
-        environment_name: scope.environment.name,
         environment_revision: scope.environment.revision,
-        risk_class: scope.environment.risk_class,
+        environment_kind: scope.environment.kind,
         provider: scope.binding.provider,
         display_name: scope.binding.display_name,
         visibility: scope.binding.visibility,

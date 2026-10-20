@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import { expect } from "vitest";
 import type { D1Database } from "@cloudflare/workers-types";
 import { POST as bindEnvironment } from "../app/api/v1/workspaces/[workspaceId]/knowledge/environments/[environmentId]/connections/route";
+import { POST as createProject } from "../app/api/v1/workspaces/[workspaceId]/knowledge/projects/route";
+import { POST as createEnvironment } from "../app/api/v1/workspaces/[workspaceId]/knowledge/projects/[projectId]/environments/route";
 import { GET as syncWorkspace } from "../app/api/v1/workspaces/[workspaceId]/sync/route";
 
 export async function verifyD1WorkspaceRoutes(db: D1Database, input: {
@@ -33,6 +35,35 @@ export async function verifyD1WorkspaceRoutes(db: D1Database, input: {
       .bind(new Date().toISOString(), input.connectionId).run();
     expect((await bindEnvironment(request(), { params })).status).toBe(409);
     await db.prepare("UPDATE workspace_connection SET revocation_pending_at = NULL WHERE id = ?").bind(input.connectionId).run();
+
+    // The kind is the environment; pre-kind Desktops send `{name, riskClass}` and still work.
+    const post = (url: string, value: unknown) => new Request(url, { method: "POST", headers, body: JSON.stringify(value) });
+    const workspaceParams = { params: Promise.resolve({ workspaceId: input.organizationId }) };
+    const duplicateKinds = await createProject(post("https://workspace.dopedb.dev/api/fixture", {
+      name: "Kind route project", environments: [{ kind: "production" }, { name: "prod-eu", riskClass: "production" }],
+    }), workspaceParams);
+    expect(duplicateKinds.status).toBe(400);
+    expect((await createProject(post("https://workspace.dopedb.dev/api/fixture", {
+      name: "Kind route project", environments: [{ kind: "custom" }],
+    }), workspaceParams)).status).toBe(400);
+    const legacyProject = await createProject(post("https://workspace.dopedb.dev/api/fixture", {
+      name: "Kind route project", environments: [{ name: "main", riskClass: "custom" }],
+    }), workspaceParams);
+    expect(legacyProject.status).toBe(201);
+    const { project } = await legacyProject.json();
+    expect(project.environments).toEqual([
+      { id: expect.any(String), kind: "development", name: "Development", riskClass: "development", revision: 1 },
+    ]);
+    const environmentParams = { params: Promise.resolve({ workspaceId: input.organizationId, projectId: project.id }) };
+    const legacyEnvironment = await createEnvironment(post("https://workspace.dopedb.dev/api/fixture", {
+      expectedProjectRevision: 1, name: "live", riskClass: "production",
+    }), environmentParams);
+    expect(legacyEnvironment.status).toBe(201);
+    const withProduction = (await legacyEnvironment.json()).project;
+    expect(withProduction.environments.map((environment: { kind: string }) => environment.kind)).toEqual(["development", "production"]);
+    expect((await createEnvironment(post("https://workspace.dopedb.dev/api/fixture", {
+      expectedProjectRevision: withProduction.revision, kind: "production",
+    }), environmentParams)).status).toBe(409);
   } finally {
     if (previousOrigin === undefined) delete process.env.BETTER_AUTH_URL;
     else process.env.BETTER_AUTH_URL = previousOrigin;

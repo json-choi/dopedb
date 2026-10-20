@@ -83,7 +83,7 @@ impl From<&ConnectionProfile> for AgentConnectionSummary {
             name: profile.name.clone(),
             engine: profile.engine,
             database: profile.database.clone(),
-            environment: profile.env.clone(),
+            environment: profile.effective_env.map(|kind| kind.as_str().to_owned()),
             readonly: profile.readonly_default,
             allow_writes: profile.allow_writes,
         }

@@ -1,21 +1,13 @@
 // Review-step section that prepares Neon least-privilege access before import:
-// branch environment, the no-change preflight report and its findings, explicit
+// the no-change preflight report and its findings, explicit
 // approvals, and apply/verify. State and commands come from useNeonBootstrap.
 import { useId } from "react";
 import { Icon } from "../../../../components/Icon";
 import { Button } from "../../../../design-system/components/Button";
-import {
-  CheckboxField,
-  Field,
-  SelectInput,
-} from "../../../../design-system/components/FormControls";
+import { CheckboxField } from "../../../../design-system/components/FormControls";
 import { StatusBadge, type StatusTone } from "../../../../design-system/components/Status";
 import { useI18n, type I18nKey } from "../../../../lib/i18n";
-import type {
-  NeonBootstrapFinding,
-  NeonBootstrapReport,
-  NeonEnvironmentClassification,
-} from "../domain";
+import type { NeonBootstrapFinding, NeonBootstrapReport } from "../domain";
 import { neonFindingDescription, neonFindingValue } from "./serverMessages";
 import type { ManagedDatabaseImport } from "./useManagedDatabaseImport";
 
@@ -37,17 +29,11 @@ const REPORT_TITLES: Record<NeonBootstrapReport["status"], I18nKey> = {
   readyToApply: "workspaceProviderDatabases.readyTitle",
 };
 
-function environmentChoice(value: string): NeonEnvironmentClassification {
-  return value === "development" || value === "production" ? value : "";
-}
-
 export default function NeonBootstrapPanel({ flow }: { flow: ManagedDatabaseImport }) {
   const { t } = useI18n();
   const headingId = useId();
-  const { neon, discovery, busy, mutation } = flow;
+  const { neon, busy, mutation } = flow;
   const { report } = neon;
-  const branch = discovery.branch;
-  const unclassified = branch?.production !== true && branch?.production !== false;
 
   return (
     <section aria-labelledby={headingId} className="tw:grid tw:min-w-0 tw:gap-3 tw:border-t tw:border-border-subtle tw:pt-3">
@@ -59,32 +45,6 @@ export default function NeonBootstrapPanel({ flow }: { flow: ManagedDatabaseImpo
           {t("workspaceProviderDatabases.neonDescription")}
         </p>
       </div>
-
-      {unclassified ? (
-        <div className="tw:max-w-[320px]">
-          <Field label={t("workspaceProviderDatabases.branchEnvironment")}>
-            <SelectInput
-              density="compact"
-              value={neon.classification}
-              disabled={busy || neon.verified}
-              onChange={(event) => neon.classify(environmentChoice(event.target.value))}
-            >
-              <option value="">{t("workspaceProviderDatabases.chooseEnvironment")}</option>
-              <option value="development">{t("workspaceProviderDatabases.environmentDevelopment")}</option>
-              <option value="production">{t("workspaceProviderDatabases.environmentProduction")}</option>
-            </SelectInput>
-          </Field>
-        </div>
-      ) : (
-        <p
-          data-production={branch?.production === true}
-          className="tw:m-0 tw:border-l-2 tw:border-border-strong tw:pl-3 tw:text-sm tw:leading-body tw:text-muted-foreground tw:data-[production=true]:border-danger tw:data-[production=true]:text-danger"
-        >
-          {t(branch?.production === true
-            ? "workspaceProviderDatabases.protectedBranch"
-            : "workspaceProviderDatabases.developmentBranch")}
-        </p>
-      )}
 
       {!report ? (
         <div className="ds-control-row tw:flex tw:flex-wrap tw:items-center tw:justify-between tw:gap-3">

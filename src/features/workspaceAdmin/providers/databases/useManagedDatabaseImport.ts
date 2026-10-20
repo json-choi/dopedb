@@ -1,9 +1,12 @@
-// Controller of the inline add-database flow: step navigation, the import name and
-// production approval, the one-use provider receipt and the idempotent import. It
+// Controller of the inline add-database flow: step navigation, the import name, the
+// environment and its production approval, the one-use provider receipt and the
+// idempotent import. The provider's production detection only pre-selects the environment
+// (and cannot be lowered); the administrator's environment choice is what is imported. It
 // composes resource discovery and Neon preparation, owns the single in-flight
 // mutation and the flow's error, and reports busy state to the hosting view.
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import type { EnvironmentKind } from "../../../../lib/environmentKind";
 import { useI18n } from "../../../../lib/i18n";
 import { useEventCallback } from "../../../../lib/useEventCallback";
 import type { WorkspaceAdminScope } from "../../domain";
@@ -47,6 +50,7 @@ type PendingImport = Readonly<{
   integrationId: string;
   receipt: string;
   name: string;
+  environment: EnvironmentKind;
   productionApproved: boolean;
   idempotencyKey: string;
 }>;
@@ -72,6 +76,7 @@ export function useManagedDatabaseImport({
   const queryClient = useQueryClient();
   const [step, setStep] = useState<WizardStep>(1);
   const [nameDraft, setNameDraft] = useState<string | null>(null);
+  const [environmentDraft, setEnvironmentDraft] = useState<EnvironmentKind | null>(null);
   const [productionApproved, setProductionApproved] = useState(false);
   const [claim, setClaim] = useState<ClaimedReceipt | null>(null);
   const [mutation, setMutation] = useState<WizardMutation | null>(null);
@@ -93,7 +98,20 @@ export function useManagedDatabaseImport({
     }
   }
 
-  const neon = useNeonBootstrap({ scope, discovery, run, fail: setError });
+  // Provider detection pre-selects the environment. A database the provider marks as
+  // production stays production (the server refuses a lower classification); an unclassified
+  // Neon branch has no default and needs an explicit choice.
+  const { provider, leaf, isNeon } = discovery;
+  const providerProduction = isNeon
+    ? discovery.branch?.production === true
+    : leaf?.production === true;
+  const providerClassified = isNeon
+    ? discovery.branch?.production === true || discovery.branch?.production === false
+    : leaf !== null;
+  const environment: EnvironmentKind | null = providerProduction
+    ? "production"
+    : environmentDraft ?? (providerClassified ? "development" : null);
+  const neon = useNeonBootstrap({ scope, discovery, run, fail: setError, kind: environment });
 
   const reportBusy = useEventCallback(onBusyChange);
   useEffect(() => {
@@ -109,10 +127,7 @@ export function useManagedDatabaseImport({
     });
   }, [accountId, queryClient, reportBusy, workspaceId]);
 
-  const { provider, leaf, isNeon } = discovery;
-  const isProduction = isNeon
-    ? neon.report?.production === true || neon.environment === "production"
-    : leaf?.production === true;
+  const isProduction = environment === "production" || neon.report?.production === true;
   const defaultName = provider && leaf ? providerImportDisplayName(provider.name, leaf.name) : "";
   const name = nameDraft ?? defaultName;
   const nameIssue = importNameIssue(name);
@@ -123,6 +138,7 @@ export function useManagedDatabaseImport({
   const canCreate = step === 3
     && discovery.complete
     && nameIssue === null
+    && environment !== null
     && (!isProduction || productionApproved)
     && (!isNeon || neon.verified);
 
@@ -132,7 +148,16 @@ export function useManagedDatabaseImport({
     pendingImport.current = null;
     neon.reset();
     setNameDraft(null);
+    setEnvironmentDraft(null);
     setProductionApproved(false);
+    setError(null);
+  }
+
+  function chooseEnvironment(kind: EnvironmentKind | null) {
+    if (busy || providerProduction) return;
+    setEnvironmentDraft(kind);
+    setProductionApproved(false);
+    neon.clearPlan();
     setError(null);
   }
 
@@ -193,7 +218,7 @@ export function useManagedDatabaseImport({
   }
 
   function create() {
-    if (!canCreate || !discovery.integration || !leaf) return Promise.resolve();
+    if (!canCreate || !discovery.integration || !leaf || !environment) return Promise.resolve();
     const integrationId = discovery.integration.id;
     const finalName = name.trim();
     return run("import", async () => {
@@ -226,12 +251,14 @@ export function useManagedDatabaseImport({
         || pending.integrationId !== integrationId
         || pending.receipt !== receipt
         || pending.name !== finalName
+        || pending.environment !== environment
         || pending.productionApproved !== isProduction
       ) {
         pending = {
           integrationId,
           receipt,
           name: finalName,
+          environment,
           productionApproved: isProduction,
           idempotencyKey: newIdempotencyKey(),
         };
@@ -246,6 +273,7 @@ export function useManagedDatabaseImport({
           receipt: pending.receipt,
           idempotencyKey: pending.idempotencyKey,
           name: pending.name,
+          environment: pending.environment,
           productionApproved: pending.productionApproved,
         });
       } catch (caught) {
@@ -285,11 +313,14 @@ export function useManagedDatabaseImport({
     error,
     name,
     nameIssue,
+    environment,
+    environmentLocked: providerProduction,
     isProduction,
     productionApproved,
     canContinue,
     canCreate,
     setName: setNameDraft,
+    chooseEnvironment,
     setProductionApproved,
     clearError: () => setError(null),
     chooseIntegration,

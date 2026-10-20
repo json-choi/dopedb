@@ -359,7 +359,7 @@ pub(super) async fn assert_personal_article_contract() {
         .bind(connection_id.to_string()).bind(source_path.to_str().unwrap()).bind(&now).execute(store.pool()).await.unwrap();
     sqlx::query("INSERT INTO knowledge_projects(id,workspace_id,name,revision,created_at,updated_at) VALUES(?1,?2,'Article QA',1,?3,?3)")
         .bind(project_id.to_string()).bind(schema::PERSONAL_WORKSPACE_ID).bind(&now).execute(store.pool()).await.unwrap();
-    sqlx::query("INSERT INTO knowledge_project_environments(id,project_id,name,production,risk_class,revision,created_at,updated_at) VALUES(?1,?2,'main',0,'development',1,?3,?3)")
+    sqlx::query("INSERT INTO knowledge_project_environments(id,project_id,kind,revision,created_at,updated_at) VALUES(?1,?2,'development',1,?3,?3)")
         .bind(environment_id.to_string()).bind(project_id.to_string()).bind(&now).execute(store.pool()).await.unwrap();
     sqlx::query("INSERT INTO knowledge_environment_connections(id,workspace_id,project_environment_id,environment_revision,connection_id,connection_revision,role,alias,created_at) VALUES(?1,?2,?3,1,?4,1,'read','main',?5)")
         .bind(Uuid::new_v4().to_string()).bind(schema::PERSONAL_WORKSPACE_ID).bind(environment_id.to_string()).bind(connection_id.to_string()).bind(&now).execute(store.pool()).await.unwrap();

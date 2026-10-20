@@ -11,6 +11,7 @@ import { workspaceProviderIntegration, workspaceProviderResource, workspaceProvi
   workspaceProviderOperation } from "./d1/schema";
 import { insertKnowledgeProject, appendKnowledgeEnvironment, deleteKnowledgeProject } from "./knowledge/project-store";
 import { importProviderReceipt } from "./provider-import-store";
+import { connectionEnvironmentLabel } from "./knowledge/environment-kind";
 import { canonicalHash } from "./workspace-versioning";
 import { recordProviderDiscoveryReceipt, revalidateProviderDiscoveryAuthority } from "./provider-integrations/discovery-receipts";
 import { providerImportProjection } from "./providers/import-projection";
@@ -33,20 +34,24 @@ export async function verifyD1WorkspaceMutations(db: D1Database, identity: {
   await verifyD1IntegrationMutations(db, authority);
   await verifyD1ConnectionVersioning(db, organizationId, authority);
   const inserted = await insertKnowledgeProject({ organizationId, authority, name: "Atomic project",
-    environments: [{ name: "Development", riskClass: "development" }] });
-  expect(inserted?.environments).toHaveLength(1);
+    environments: ["development"] });
+  expect(inserted?.environments).toEqual([
+    { id: expect.any(String), kind: "development", name: "Development", riskClass: "development", revision: 1 },
+  ]);
   expect(await insertKnowledgeProject({ organizationId, authority, name: "Atomic project",
-    environments: [{ name: "Development", riskClass: "development" }] })).toBeNull();
-  const changes = await Promise.all(["Staging", "Production"].map((name) => appendKnowledgeEnvironment({
-    organizationId, projectId: inserted!.id, expectedProjectRevision: 1, name,
-    riskClass: name === "Production" ? "production" : "staging", authority,
+    environments: ["development"] })).toBeNull();
+  const changes = await Promise.all((["staging", "production"] as const).map((kind) => appendKnowledgeEnvironment({
+    organizationId, projectId: inserted!.id, expectedProjectRevision: 1, kind, authority,
   })));
   expect(changes.filter(Boolean)).toHaveLength(1);
   expect(changes.find(Boolean)?.revision).toBe(2);
+  // One environment per kind: a repeated kind is refused even at the current project revision.
+  expect(await appendKnowledgeEnvironment({ organizationId, projectId: inserted!.id, expectedProjectRevision: 2,
+    kind: "development", authority })).toBeNull();
   expect(await deleteKnowledgeProject({ organizationId, projectId: inserted!.id, expectedRevision: 1, authority })).toBe("stale");
   expect(await deleteKnowledgeProject({ organizationId, projectId: inserted!.id, expectedRevision: 2, authority })).toBe("deleted");
   expect(await appendKnowledgeEnvironment({ organizationId, projectId: inserted!.id, expectedProjectRevision: 3,
-    name: "Late", riskClass: "test", authority })).toBeNull();
+    kind: "test", authority })).toBeNull();
 
   const { orm } = createWorkspaceD1(db);
   const [integration] = await orm.insert(workspaceProviderIntegration).values({ organizationId, provider: "neon",
@@ -72,7 +77,7 @@ export async function verifyD1WorkspaceMutations(db: D1Database, identity: {
     return receipt.id;
   };
   const input = { organizationId, integrationId: integration.id, authority, receiptId: await makeReceipt(),
-    idempotencyKey: randomUUID(), name: "Imported database", productionApproved: false };
+    idempotencyKey: randomUUID(), name: "Imported database", environment: "development" as const, productionApproved: false };
   const teammateUserId = randomUUID(); const teammateMemberId = randomUUID();
   await db.batch([
     db.prepare("INSERT INTO user (id, name, email) VALUES (?, 'Existing teammate', ?)")
@@ -87,6 +92,12 @@ export async function verifyD1WorkspaceMutations(db: D1Database, identity: {
   const connectionId = connectionIds[0]!;
   expect(await db.prepare("SELECT count(*) AS count FROM workspace_resource_version WHERE resource_id = ?")
     .bind(connectionId).first("count")).toBe(1);
+  // Labels keep the legacy tokens pre-kind Desktops check (`prod`), whichever form arrives.
+  expect(["production", "development", "staging", "test", "prod", "dev", null].map((label) => connectionEnvironmentLabel(label)))
+    .toEqual(["prod", "dev", "staging", "test", "prod", "dev", null]);
+  // The import carries the Project-environment kind the administrator chose.
+  expect(await db.prepare("SELECT environment FROM workspace_connection WHERE id = ?")
+    .bind(connectionId).first("environment")).toBe("dev");
   expect(await db.prepare("SELECT count(*) AS count FROM workspace_connection_grant WHERE connection_id = ?")
     .bind(connectionId).first("count")).toBe(2);
   expect(await db.prepare("SELECT capability, origin FROM workspace_connection_grant WHERE connection_id = ? AND member_id = ?")
@@ -157,7 +168,7 @@ export async function verifyD1WorkspaceMutations(db: D1Database, identity: {
     expect(await recordProviderDiscoveryReceipt(discovery)).toBeNull();
     expect(await revalidateProviderDiscoveryAuthority(discovery)).toBe(false);
     expect(await insertKnowledgeProject({ organizationId, authority, name: "Revoked project",
-      environments: [{ name: "Development", riskClass: "development" }] })).toBeNull();
+      environments: ["development"] })).toBeNull();
   } finally {
     await db.prepare("UPDATE member SET revocation_pending_at = NULL WHERE id = ?").bind(membershipId).run();
   }

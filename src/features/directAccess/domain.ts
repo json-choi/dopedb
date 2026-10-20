@@ -1,6 +1,7 @@
 // Direct shared database wire values. Every shape mirrors the Rust serde types in
 // `src-tauri/src/features/direct_access` (camelCase fields, closed snake_case enums);
 // secrets only travel inward, as the `password` of an input, and are never returned.
+import type { EnvironmentKind } from "../../lib/environmentKind";
 import type { ConnectionId } from "../connections/domain";
 import type { AccountId, WorkspaceId } from "../workspaces/domain";
 import type { WorkspaceAdminOperation } from "../workspaceAdmin/domain";
@@ -113,7 +114,7 @@ export interface DirectRegisterInput {
   accountId: AccountId;
   workspaceId: WorkspaceId;
   name: string;
-  env: string | null;
+  env: EnvironmentKind | null;
   schemaGroup: string | null;
   endpoint: DirectEndpoint;
   credential: DirectAdminCredential;

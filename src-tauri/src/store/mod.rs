@@ -7,6 +7,21 @@
 //! runtime, not the compile-time `query!` macro) because this is a
 //! runtime-arbitrary-SQL client.
 
+/// The Project environment kinds a connection is actively bound to in its own
+/// workspace, as a comma-separated list. Every connection read that feeds
+/// `effective_environment` selects it so the safeguard cannot read a stale label.
+macro_rules! bound_environments_sql {
+    () => {
+        "(SELECT group_concat(DISTINCT bound_environment.kind)
+          FROM knowledge_environment_connections bound_binding
+          JOIN knowledge_project_environments bound_environment
+            ON bound_environment.id = bound_binding.project_environment_id
+          WHERE bound_binding.connection_id = c.id
+            AND bound_binding.workspace_id = c.workspace_id
+            AND bound_binding.revoked_at IS NULL)"
+    };
+}
+
 mod agent_acp;
 mod bootstrap;
 mod projections;

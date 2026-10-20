@@ -2,6 +2,7 @@
 
 use super::super::super::*;
 use crate::kernel::access::WorkspaceKind;
+use crate::kernel::environment::EnvironmentKind;
 
 impl Store {
     // ── connections ────────────────────────────────────────────────────────
@@ -122,7 +123,7 @@ impl Store {
         .bind(p.readonly_default)
         .bind(p.allow_writes)
         .bind(now)
-        .bind(&p.env)
+        .bind(p.env.map(EnvironmentKind::as_str))
         .bind(&p.schema_group)
         .bind(workspace_id.to_string())
         .bind(account_user_id)
@@ -376,7 +377,7 @@ impl Store {
             .bind(profile.readonly_default)
             .bind(profile.allow_writes)
             .bind(now)
-            .bind(&profile.env)
+            .bind(profile.env.map(EnvironmentKind::as_str))
             .bind(&profile.schema_group)
             .bind(workspace_id.to_string())
             .bind(*revision)
@@ -508,22 +509,25 @@ impl Store {
         extra_params: &HashMap<String, String>,
         secret_ref: Option<&str>,
     ) -> AppResult<ConnectionProfile> {
-        let row = sqlx::query(
+        let row = sqlx::query(concat!(
             "SELECT c.*,
                     b.username AS binding_username,
                     b.extra_params AS binding_extra_params,
                     b.secret_ref AS binding_secret_ref,
                     b.bound_endpoint AS binding_bound_endpoint,
                     b.workspace_access AS binding_workspace_access,
-                    b.allow_writes AS binding_allow_writes
+                    b.allow_writes AS binding_allow_writes,
+                    ",
+            bound_environments_sql!(),
+            " AS bound_environments
              FROM connections c
              JOIN workspace_members m
                ON m.workspace_id = c.workspace_id
               AND m.user_id = ?2 AND m.status = 'active'
              JOIN workspace_connection_bindings b
                ON b.connection_id = c.id AND b.account_user_id = ?2
-             WHERE c.id = ?1 AND c.remote_id IS NOT NULL AND c.deleted_at IS NULL",
-        )
+             WHERE c.id = ?1 AND c.remote_id IS NOT NULL AND c.deleted_at IS NULL"
+        ))
         .bind(id.to_string())
         .bind(account_user_id)
         .fetch_optional(&self.pool)

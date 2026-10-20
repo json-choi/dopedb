@@ -11,7 +11,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Icon } from "../../components/Icon";
 import { AgentToolCallCard } from "../../design-system/components/Agent";
 import { Button } from "../../design-system/components/Button";
-import { EnvironmentBadge } from "../../design-system/components/EnvironmentBadge";
+import { EnvironmentKindBadge } from "../../components/EnvironmentKindBadge";
+import { parseEnvironmentKind } from "../../lib/environmentKind";
 import { TextInput } from "../../design-system/components/FormControls";
 import {
   InlineNotice,
@@ -304,8 +305,8 @@ export default function AcpSqlApproval({
               <StatusBadge tone={riskTone(review.riskLevel)}>
                 {riskLabel(review.riskLevel, t)}
               </StatusBadge>
-              {review.environment ? (
-                <EnvironmentBadge environment={review.environment} />
+              {parseEnvironmentKind(review.environment) ? (
+                <EnvironmentKindBadge kind={parseEnvironmentKind(review.environment)!} />
               ) : null}
               <span
                 className="tw:min-w-0 tw:flex-1 tw:truncate tw:text-xs tw:font-medium tw:text-foreground"

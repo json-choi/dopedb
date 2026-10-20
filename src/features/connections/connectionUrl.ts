@@ -2,6 +2,7 @@
 // it here lets the Tailwind editor stay focused on state and interaction while
 // preserving support for SQL, SQLite, and multi-host MongoDB URLs.
 import type { Engine } from "../../ipc/types";
+import { parseEnvironmentKind } from "../../lib/environmentKind";
 import type { ConnectionProfile } from "./domain";
 import {
   CONNECTION_DEFAULT_PORTS,
@@ -108,7 +109,7 @@ function parseUrlMetaParams(params: URLSearchParams, nameFallback: string) {
         "connectionName",
         "connection_name",
       ]) || nameFallback,
-    env: firstSearchParam(params, ["env", "environment"]),
+    env: parseEnvironmentKind(firstSearchParam(params, ["env", "environment"])),
   };
 }
 

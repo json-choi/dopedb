@@ -28,7 +28,7 @@ pub(crate) async fn create_knowledge_project_command(
         let environments = input
             .environments
             .into_iter()
-            .map(|environment| (environment.name, environment.risk_class))
+            .map(|environment| environment.kind)
             .collect::<Vec<_>>();
         return state
             .services
@@ -197,12 +197,7 @@ pub(crate) async fn create_knowledge_environment_command(
         return state
             .services
             .knowledge
-            .create_knowledge_environment(
-                scope.workspace_id,
-                input.project_id,
-                &input.name,
-                input.risk_class,
-            )
+            .create_knowledge_environment(scope.workspace_id, input.project_id, input.kind)
             .await
             .map(project_projection);
     }
@@ -216,8 +211,7 @@ pub(crate) async fn create_knowledge_environment_command(
             input.project_id,
             &AppendKnowledgeEnvironmentRequest {
                 expected_project_revision: project.revision,
-                name: input.name,
-                risk_class: input.risk_class,
+                kind: input.kind,
             },
         )
         .await?;

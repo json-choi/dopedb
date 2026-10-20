@@ -92,7 +92,12 @@ async fn prepare_connections(store: &crate::store::Store, count: usize) -> AppRe
             readonly_default: true,
             allow_writes: false,
             secret_ref: None,
-            env: Some(if index % 5 == 0 { "staging" } else { "dev" }.into()),
+            env: Some(if index % 5 == 0 {
+                crate::kernel::environment::EnvironmentKind::Staging
+            } else {
+                crate::kernel::environment::EnvironmentKind::Development
+            }),
+            effective_env: None,
             schema_group: None,
             workspace_access: WorkspaceConnectionAccess::Local,
             credential_mode: WorkspaceCredentialMode::Local,

@@ -44,6 +44,7 @@ import {
   TreeSectionButton,
 } from "../../design-system/components/TreeControls";
 import { useTreeKeyboardNavigation } from "../../design-system/treeKeyboard";
+import type { EnvironmentKind } from "../../lib/environmentKind";
 import { useI18n } from "../../lib/i18n";
 import ConnectionNode from "./ConnectionNode";
 import { useCatalogTree } from "./useCatalogTree";
@@ -384,7 +385,7 @@ export function DatabaseExplorer({
     nested = false,
     treeParentKey: string | null = null,
     treeLevel = 1,
-    environmentBadge?: string | null,
+    environmentBadge?: EnvironmentKind | null,
     environmentDropId?: string,
     treeKey?: string,
     binding?: EnvironmentConnection,

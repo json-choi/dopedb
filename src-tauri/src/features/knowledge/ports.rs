@@ -10,11 +10,12 @@ use uuid::Uuid;
 
 use crate::error::AppResult;
 use crate::kernel::access::{ActiveResourceScope, PinnedConnection};
+use crate::kernel::environment::EnvironmentKind;
 
 use super::domain::{
-    EnvironmentConnectionBinding, EnvironmentRiskClass, KnowledgeEnvironmentSummary,
-    KnowledgeGrant, KnowledgeMappingProposal, KnowledgeSessionScope, KnowledgeSessionSource,
-    Project, ProjectDefinition, ProjectEnvironment, SourceSnapshot, StoredKnowledgeScope,
+    EnvironmentConnectionBinding, KnowledgeEnvironmentSummary, KnowledgeGrant,
+    KnowledgeMappingProposal, KnowledgeSessionScope, KnowledgeSessionSource, Project,
+    ProjectDefinition, ProjectEnvironment, SourceSnapshot, StoredKnowledgeScope,
 };
 
 /// Hosted Knowledge DTOs belong to the authority port rather than its HTTP
@@ -135,12 +136,13 @@ pub(crate) struct CreatedKnowledgeSource {
     pub(crate) commit_sha: Option<String>,
 }
 
+/// The control plane still echoes the pre-kind `name` and `riskClass` fields for
+/// older Desktops; this reader ignores them and trusts only `kind`.
 #[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct RemoteKnowledgeEnvironment {
     pub(crate) id: Uuid,
-    pub(crate) name: String,
-    pub(crate) risk_class: EnvironmentRiskClass,
+    pub(crate) kind: EnvironmentKind,
     pub(crate) revision: u64,
 }
 
@@ -190,8 +192,7 @@ pub(crate) struct RemoteKnowledgeGrant {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct CreateKnowledgeEnvironmentRequest {
-    pub(crate) name: String,
-    pub(crate) risk_class: EnvironmentRiskClass,
+    pub(crate) kind: EnvironmentKind,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -205,8 +206,7 @@ pub(crate) struct CreateKnowledgeProjectRequest {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct AppendKnowledgeEnvironmentRequest {
     pub(crate) expected_project_revision: u64,
-    pub(crate) name: String,
-    pub(crate) risk_class: EnvironmentRiskClass,
+    pub(crate) kind: EnvironmentKind,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -334,14 +334,13 @@ pub(crate) trait KnowledgeRepositoryPort:
         &self,
         workspace_id: Uuid,
         name: &str,
-        environments: &[(String, EnvironmentRiskClass)],
+        environments: &[EnvironmentKind],
     ) -> impl Future<Output = AppResult<ProjectDefinition>> + Send;
     fn create_knowledge_environment(
         &self,
         workspace_id: Uuid,
         project_id: Uuid,
-        name: &str,
-        risk_class: EnvironmentRiskClass,
+        kind: EnvironmentKind,
     ) -> impl Future<Output = AppResult<ProjectDefinition>> + Send;
     fn save_knowledge_project(
         &self,

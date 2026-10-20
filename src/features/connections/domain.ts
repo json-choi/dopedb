@@ -5,6 +5,8 @@
  * accidentally while preserving the UUID string sent over Tauri.
  */
 
+import type { EnvironmentKind } from "../../lib/environmentKind";
+
 declare const connectionIdBrand: unique symbol;
 
 export type ConnectionId = string & {
@@ -75,7 +77,10 @@ export interface ConnectionProfile {
   allowWrites: boolean;
   schemaAccessAvailable?: boolean;
   secretRef: string | null;
-  env: string | null;
+  /** The connection's own optional environment, used while it is bound to no Project environment. */
+  env: EnvironmentKind | null;
+  /** Derived by the native core, never sent back: the most sensitive bound kind, else `env`. */
+  effectiveEnv: EnvironmentKind | null;
   schemaGroup: string | null;
   workspaceAccess: WorkspaceConnectionAccess;
   credentialMode: WorkspaceCredentialMode;

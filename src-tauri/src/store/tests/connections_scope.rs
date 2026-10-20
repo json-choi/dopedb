@@ -216,9 +216,9 @@ async fn assert_current_store_baseline_and_invariants() {
         .unwrap();
 
     use crate::features::knowledge::domain::{
-        EnvironmentRiskClass, KnowledgeGrant, KnowledgeMappingProposal, MappingProposalState,
-        Project, ProjectEnvironment,
+        KnowledgeGrant, KnowledgeMappingProposal, MappingProposalState, Project, ProjectEnvironment,
     };
+    use crate::kernel::environment::EnvironmentKind;
     use crate::kernel::identity::{AccountId, WorkspaceId};
     use dopedb_protocol::{
         GraphBuildArtifactV1, KnowledgeSourceProvider, KnowledgeSourceVisibility,
@@ -230,7 +230,7 @@ async fn assert_current_store_baseline_and_invariants() {
         .create_knowledge_project(
             personal_workspace_id,
             "Personal Inventory",
-            &[("Development".into(), EnvironmentRiskClass::Development)],
+            &[EnvironmentKind::Development],
         )
         .await
         .unwrap();
@@ -243,8 +243,7 @@ async fn assert_current_store_baseline_and_invariants() {
         .create_knowledge_environment(
             personal_workspace_id,
             local_project.project.id,
-            "Production",
-            EnvironmentRiskClass::Production,
+            EnvironmentKind::Production,
         )
         .await
         .unwrap();
@@ -264,8 +263,7 @@ async fn assert_current_store_baseline_and_invariants() {
         .create_knowledge_environment(
             personal_workspace_id,
             local_project.project.id,
-            "Production",
-            EnvironmentRiskClass::Production,
+            EnvironmentKind::Production,
         )
         .await
         .is_err());
@@ -273,7 +271,7 @@ async fn assert_current_store_baseline_and_invariants() {
         .create_knowledge_project(
             personal_workspace_id,
             "Personal Inventory",
-            &[("Production".into(), EnvironmentRiskClass::Production)],
+            &[EnvironmentKind::Production],
         )
         .await
         .is_err());
@@ -292,8 +290,7 @@ async fn assert_current_store_baseline_and_invariants() {
     let environment = ProjectEnvironment {
         id: artifact.binding.project_environment_id,
         project_id: project.id,
-        name: "Development".into(),
-        risk_class: EnvironmentRiskClass::Development,
+        kind: EnvironmentKind::Development,
         revision: artifact.environment_revision,
     };
     knowledge
@@ -534,8 +531,16 @@ async fn assert_current_store_baseline_and_invariants() {
             .fetch_one(&pool)
             .await
             .unwrap();
-    let connections_before_project_delete =
-        serde_json::to_value(store.list_connections().await.unwrap()).unwrap();
+    // The effective environment is derived from live bindings, so it alone may change when
+    // the Project (and with it the binding) goes away.
+    let identities = |profiles: Vec<crate::model::ConnectionProfile>| {
+        let mut value = serde_json::to_value(profiles).unwrap();
+        for profile in value.as_array_mut().unwrap() {
+            profile.as_object_mut().unwrap().remove("effectiveEnv");
+        }
+        value
+    };
+    let connections_before_project_delete = identities(store.list_connections().await.unwrap());
     assert!(matches!(
         knowledge
             .delete_knowledge_project(personal_workspace_id, project.id, project.revision + 1)
@@ -585,7 +590,7 @@ async fn assert_current_store_baseline_and_invariants() {
         connection_count_before_project_delete
     );
     assert_eq!(
-        serde_json::to_value(store.list_connections().await.unwrap()).unwrap(),
+        identities(store.list_connections().await.unwrap()),
         connections_before_project_delete,
         "Project deletion must preserve complete connection identities and credential references"
     );
@@ -1147,12 +1152,267 @@ async fn assert_agent_acp_batch_replay_is_bounded(store: &Store, connection_id: 
     assert_eq!(retained_after_close, 100);
 }
 
+/// A store from before environments were a fixed list migrates to kinds without losing a
+/// binding, and every production safeguard reads the effective environment: the most
+/// sensitive Project environment a connection is bound to, else its own label.
+async fn assert_environment_kind_migration_and_effective_environment() {
+    use crate::kernel::environment::{effective_environment, EnvironmentKind};
+    use crate::model::SafetySettings;
+
+    let pool = memory_pool().await;
+    super::super::bootstrap::bootstrap_local_store(&pool)
+        .await
+        .unwrap();
+    let store = Store::from_pool_for_test(pool.clone());
+    let knowledge = SqliteKnowledgeRepository::new(store.clone());
+    let workspace_id = Uuid::parse_str(schema::PERSONAL_WORKSPACE_ID).unwrap();
+    let project_id = Uuid::from_u128(0x2100);
+    let [owner_id, folded_id, custom_id, test_id] =
+        [0x2111_u128, 0x2112, 0x2113, 0x2114].map(Uuid::from_u128);
+    let bound_id = Uuid::from_u128(0x2121);
+    let own_label_id = Uuid::from_u128(0x2122);
+    let retired_label_id = Uuid::from_u128(0x2123);
+    for (id, name) in [
+        (bound_id, "bound"),
+        (own_label_id, "own-label"),
+        (retired_label_id, "retired-label"),
+    ] {
+        store
+            .upsert_connection(&sqlite_profile(id, name))
+            .await
+            .unwrap();
+    }
+    sqlx::query("UPDATE connections SET env = 'prod' WHERE id = ?1")
+        .bind(own_label_id.to_string())
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE connections SET env = 'custom' WHERE id = ?1")
+        .bind(retired_label_id.to_string())
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query(
+        "INSERT INTO knowledge_projects (id, workspace_id, name, revision, created_at, updated_at)
+         VALUES (?1, ?2, 'Legacy', 1, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+    )
+    .bind(project_id.to_string())
+    .bind(workspace_id.to_string())
+    .execute(&pool)
+    .await
+    .unwrap();
+    // Rewrite the environments table to its pre-kind shape: free names, a production flag,
+    // and a risk class, with two rows that both mean production.
+    sqlx::raw_sql(
+        "PRAGMA foreign_keys = OFF;
+         DROP TABLE knowledge_project_environments;
+         CREATE TABLE knowledge_project_environments (
+             id TEXT PRIMARY KEY,
+             project_id TEXT NOT NULL REFERENCES knowledge_projects(id) ON DELETE CASCADE,
+             name TEXT NOT NULL,
+             production INTEGER NOT NULL,
+             risk_class TEXT NOT NULL DEFAULT 'custom',
+             revision INTEGER NOT NULL,
+             created_at TEXT NOT NULL,
+             updated_at TEXT NOT NULL,
+             UNIQUE(project_id, name)
+         );
+         PRAGMA foreign_keys = ON;",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    for (id, name, production, risk_class, revision, created_at) in [
+        (
+            owner_id,
+            "prod-eu",
+            0,
+            "production",
+            5,
+            "2026-01-03T00:00:00Z",
+        ),
+        (
+            folded_id,
+            "legacy-live",
+            1,
+            "custom",
+            4,
+            "2026-01-01T00:00:00Z",
+        ),
+        (custom_id, "main", 0, "custom", 1, "2026-01-02T00:00:00Z"),
+        (test_id, "QA", 0, "test", 1, "2026-01-04T00:00:00Z"),
+    ] {
+        sqlx::query(
+            "INSERT INTO knowledge_project_environments
+                 (id, project_id, name, production, risk_class, revision, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)",
+        )
+        .bind(id.to_string())
+        .bind(project_id.to_string())
+        .bind(name)
+        .bind(production)
+        .bind(risk_class)
+        .bind(revision)
+        .bind(created_at)
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    sqlx::query(
+        "INSERT INTO knowledge_environment_connections
+             (id, workspace_id, project_environment_id, environment_revision, connection_id,
+              connection_revision, role, alias, created_at)
+         VALUES (?1, ?2, ?3, 4, ?4, 1, 'primary', 'Bound', '2026-01-01T00:00:00Z')",
+    )
+    .bind(Uuid::from_u128(0x2130).to_string())
+    .bind(workspace_id.to_string())
+    .bind(folded_id.to_string())
+    .bind(bound_id.to_string())
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(
+        super::super::bootstrap::bootstrap_local_store(&pool)
+            .await
+            .unwrap(),
+        super::super::bootstrap::LocalStoreBootstrap::Ready { created: false }
+    );
+    let kinds: Vec<(String, String)> = sqlx::query_as(
+        "SELECT id, kind FROM knowledge_project_environments WHERE project_id = ?1 ORDER BY id",
+    )
+    .bind(project_id.to_string())
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        kinds,
+        vec![
+            (owner_id.to_string(), "production".into()),
+            (custom_id.to_string(), "development".into()),
+            (test_id.to_string(), "test".into()),
+        ]
+    );
+    // The binding follows the surviving production environment and takes its revision.
+    let rebound: (String, i64) = sqlx::query_as(
+        "SELECT project_environment_id, environment_revision FROM knowledge_environment_connections
+         WHERE connection_id = ?1",
+    )
+    .bind(bound_id.to_string())
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(rebound, (owner_id.to_string(), 5));
+    let foreign_keys: i64 = sqlx::query_scalar("PRAGMA foreign_keys")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(foreign_keys, 1);
+    // One environment per kind is enforced by the schema and by the repository.
+    assert!(knowledge
+        .create_knowledge_environment(workspace_id, project_id, EnvironmentKind::Production)
+        .await
+        .is_err());
+    assert!(knowledge
+        .create_knowledge_project(
+            workspace_id,
+            "Duplicate kinds",
+            &[EnvironmentKind::Test, EnvironmentKind::Test],
+        )
+        .await
+        .is_err());
+    // Connection labels use the same vocabulary; a retired label is no environment.
+    let labels: Vec<(String, Option<String>)> =
+        sqlx::query_as("SELECT name, env FROM connections WHERE id IN (?1, ?2) ORDER BY name")
+            .bind(own_label_id.to_string())
+            .bind(retired_label_id.to_string())
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        labels,
+        vec![
+            ("own-label".into(), Some("production".into())),
+            ("retired-label".into(), None),
+        ]
+    );
+
+    // A connection with no label of its own, bound to a production environment, is production.
+    let bound_pin = store.pin_connection_for_read(bound_id).await.unwrap();
+    assert_eq!(bound_pin.profile.env, None);
+    assert_eq!(
+        bound_pin.profile.effective_env,
+        Some(EnvironmentKind::Production)
+    );
+    let policy = crate::operations::capture_policy(&bound_pin, &SafetySettings::default()).unwrap();
+    assert!(crate::operations::policy_requires_production_confirmation(
+        &policy.snapshot
+    ));
+    // Unbound, only the connection's own label counts.
+    let own_pin = store.pin_connection_for_read(own_label_id).await.unwrap();
+    assert_eq!(
+        own_pin.profile.effective_env,
+        Some(EnvironmentKind::Production)
+    );
+    let retired_pin = store
+        .pin_connection_for_read(retired_label_id)
+        .await
+        .unwrap();
+    assert_eq!(retired_pin.profile.effective_env, None);
+    let policy =
+        crate::operations::capture_policy(&retired_pin, &SafetySettings::default()).unwrap();
+    assert!(!crate::operations::policy_requires_production_confirmation(
+        &policy.snapshot
+    ));
+    // The most sensitive bound kind wins, and the order is production > staging > test > development.
+    assert_eq!(
+        effective_environment(
+            Some(EnvironmentKind::Development),
+            [
+                EnvironmentKind::Test,
+                EnvironmentKind::Staging,
+                EnvironmentKind::Development
+            ],
+        ),
+        Some(EnvironmentKind::Staging)
+    );
+    assert_eq!(
+        effective_environment(Some(EnvironmentKind::Test), []),
+        Some(EnvironmentKind::Test)
+    );
+    // The connection's own label is never lowered by a less sensitive binding.
+    assert_eq!(
+        effective_environment(
+            Some(EnvironmentKind::Production),
+            [EnvironmentKind::Development]
+        ),
+        Some(EnvironmentKind::Production)
+    );
+    // Control-plane labels keep the legacy tokens older Desktops check, and read back as kinds.
+    for kind in [
+        EnvironmentKind::Production,
+        EnvironmentKind::Staging,
+        EnvironmentKind::Test,
+        EnvironmentKind::Development,
+    ] {
+        assert_eq!(EnvironmentKind::parse(kind.wire_token()), Some(kind));
+    }
+    assert_eq!(EnvironmentKind::Production.wire_token(), "prod");
+    assert_eq!(EnvironmentKind::Development.wire_token(), "dev");
+    assert_eq!(EnvironmentKind::parse("custom"), None);
+}
+
 #[tokio::test]
 async fn remote_template_sync_preserves_member_local_credential_binding() {
     assert_knowledge_source_revision_ipc_uses_camel_case_fields();
     assert_current_store_baseline_and_invariants().await;
+    assert_environment_kind_migration_and_effective_environment().await;
     let pool = memory_pool().await;
     sqlx::raw_sql(schema::SCHEMA).execute(&pool).await.unwrap();
+    sqlx::raw_sql(schema::KNOWLEDGE_SCHEMA)
+        .execute(&pool)
+        .await
+        .unwrap();
     let store = Store::from_pool_for_test(pool);
     let knowledge = SqliteKnowledgeRepository::new(store.clone());
     let workspace_id = Uuid::new_v4();
@@ -1443,10 +1703,6 @@ async fn remote_template_sync_preserves_member_local_credential_binding() {
 
     // An Environment with a GitHub source but no graph remains an exact Agent
     // scope. Raw source identity is pinned independently from graph grants.
-    sqlx::raw_sql(schema::KNOWLEDGE_SCHEMA)
-        .execute(store.pool())
-        .await
-        .unwrap();
     let project_id = Uuid::new_v4();
     let environment_id = Uuid::new_v4();
     sqlx::query(
@@ -1462,8 +1718,8 @@ async fn remote_template_sync_preserves_member_local_credential_binding() {
     .unwrap();
     sqlx::query(
         "INSERT INTO knowledge_project_environments
-             (id, project_id, name, production, risk_class, revision, created_at, updated_at)
-         VALUES (?1, ?2, 'Main', 0, 'development', 1, ?3, ?3)",
+             (id, project_id, kind, revision, created_at, updated_at)
+         VALUES (?1, ?2, 'development', 1, ?3, ?3)",
     )
     .bind(environment_id.to_string())
     .bind(project_id.to_string())
@@ -1531,8 +1787,8 @@ async fn remote_template_sync_preserves_member_local_credential_binding() {
     .unwrap();
     sqlx::query(
         "INSERT INTO knowledge_project_environments
-             (id, project_id, name, production, risk_class, revision, created_at, updated_at)
-         VALUES (?1, ?2, 'QA', 0, 'test', 1, ?3, ?3)",
+             (id, project_id, kind, revision, created_at, updated_at)
+         VALUES (?1, ?2, 'test', 1, ?3, ?3)",
     )
     .bind(duplicate_environment_id.to_string())
     .bind(duplicate_project_id.to_string())
@@ -1753,6 +2009,10 @@ async fn remote_template_sync_preserves_member_local_credential_binding() {
 async fn managed_remote_template_never_reads_or_accepts_a_local_binding() {
     let pool = memory_pool().await;
     sqlx::raw_sql(schema::SCHEMA).execute(&pool).await.unwrap();
+    sqlx::raw_sql(schema::KNOWLEDGE_SCHEMA)
+        .execute(&pool)
+        .await
+        .unwrap();
     let store = Store::from_pool_for_test(pool);
     let workspace_id = Uuid::new_v4();
     let user = workspace_user("10000000-0000-0000-0000-000000000001", "Owner");
@@ -1938,6 +2198,10 @@ async fn managed_remote_template_never_reads_or_accepts_a_local_binding() {
 async fn shared_connection_bindings_are_isolated_per_signed_in_account() {
     let pool = memory_pool().await;
     sqlx::raw_sql(schema::SCHEMA).execute(&pool).await.unwrap();
+    sqlx::raw_sql(schema::KNOWLEDGE_SCHEMA)
+        .execute(&pool)
+        .await
+        .unwrap();
     let store = Store::from_pool_for_test(pool);
     let workspace_id = Uuid::new_v4();
     let connection_id = Uuid::new_v4();
@@ -2325,6 +2589,10 @@ async fn shared_connection_bindings_are_isolated_per_signed_in_account() {
 async fn pinned_catalog_cache_rejects_scope_aba_and_keeps_accounts_isolated() {
     let pool = memory_pool().await;
     sqlx::raw_sql(schema::SCHEMA).execute(&pool).await.unwrap();
+    sqlx::raw_sql(schema::KNOWLEDGE_SCHEMA)
+        .execute(&pool)
+        .await
+        .unwrap();
     let store = Store::from_pool_for_test(pool);
     let workspace_id = Uuid::new_v4();
     let connection_id = Uuid::new_v4();

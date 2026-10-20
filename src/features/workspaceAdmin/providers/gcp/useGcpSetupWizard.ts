@@ -5,6 +5,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
+import type { EnvironmentKind } from "../../../../lib/environmentKind";
 import { useI18n, type I18nKey } from "../../../../lib/i18n";
 import type { WorkspaceAdminScope } from "../../domain";
 import { runWorkspaceAdmin, WorkspaceAdminRequestError } from "../../requests";
@@ -12,7 +13,6 @@ import { isGcpSetupExpired, providerErrorMessage } from "../accounts/providerErr
 import {
   gcpActiveLeaseRetryMessage,
   parseGcpActiveLeaseConflict,
-  type GcpEnvironmentClassification,
 } from "../domain";
 import {
   GcpBootstrapCancelled,
@@ -49,7 +49,7 @@ export function useGcpSetupWizard({
   const queryClient = useQueryClient();
   const [projectChoice, setProjectChoice] = useState("");
   const [instanceChoice, setInstanceChoice] = useState("");
-  const [environment, setEnvironmentValue] = useState<GcpEnvironmentClassification>("");
+  const [environment, setEnvironmentValue] = useState<EnvironmentKind | null>(null);
   const [productionApproved, setProductionApproved] = useState(false);
   const [iamChangeApproved, setIamChangeApproved] = useState(false);
   const [iamRoleGrantApproved, setIamRoleGrantApproved] = useState(false);
@@ -96,7 +96,7 @@ export function useGcpSetupWizard({
     && gcpApprovalsComplete(approvalInput);
 
   function resetApprovals() {
-    setEnvironmentValue("");
+    setEnvironmentValue(null);
     setProductionApproved(false);
     setIamChangeApproved(false);
     setIamRoleGrantApproved(false);
@@ -119,7 +119,7 @@ export function useGcpSetupWizard({
     resetApprovals();
   }
 
-  function setEnvironment(next: GcpEnvironmentClassification) {
+  function setEnvironment(next: EnvironmentKind | null) {
     setEnvironmentValue(next);
     setProductionApproved(false);
   }

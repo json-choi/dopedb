@@ -24,9 +24,10 @@
 1. **환경은 고정 목록의 값 하나다.** `개발`(development), `스테이징`(staging),
    `운영`(production), `테스트`(test) 중 고른 값이 곧 환경 이름이다. Project당 종류별
    환경은 하나다. 자유 입력 이름, 별도 위험 등급(riskClass), `custom`은 없다.
-2. **유효 환경.** 연결의 유효 환경은 binding된 Project 환경의 종류이며, 여러 환경에
-   묶이면 `운영 > 스테이징 > 테스트 > 개발` 중 가장 민감한 값이다. 묶이지 않은
-   연결은 연결 편집기의 선택 사항 환경 select(같은 4개 값)를 쓴다.
+2. **유효 환경.** 연결의 유효 환경은 묶인 Project 환경들의 종류와 연결 자체 표시
+   중 `운영 > 스테이징 > 테스트 > 개발` 순으로 가장 민감한 값이다. 연결 자체 표시는
+   연결 편집기의 선택 사항 환경 select(같은 4개 값)이며, 개발 환경에만 묶였더라도
+   운영으로 표시한 연결은 운영으로 남는다.
 3. **운영 안전은 유효 환경에서만 파생한다.** 변경 작업의 PROD 확인, 운영 주의
    표시, 저장 스냅샷 게시 차단은 유효 환경만 본다. `운영` 환경 생성(새 Project의 첫
    환경 포함)은 명시적 확인을 받는다. provider 가져오기는 별도 `운영인가` 질문 대신
@@ -55,9 +56,20 @@
 ## 이전
 
 - **환경 정규화.** 기존 환경은 environment id를 유지한 채 가장 가까운 종류로
-  바꾼다. `main` 같은 자유 이름은 현재 위험 등급으로, `custom`은 `개발`로 이전한다.
-  같은 Project에서 종류가 겹치면 코드 에이전트가 정하는 규칙으로 id를 보존하며
-  정리하고, binding은 잃지 않는다.
+  바꾼다. 운영 flag 또는 `production` 등급이면 `운영`, `staging`·`test`는 그대로,
+  `custom`과 자유 이름은 `개발`로 이전한다. 같은 Project에서 종류가 겹치면 **id가
+  가장 낮은 행**이 그 종류를 소유하고(Desktop SQLite와 D1이 같은 규칙이라 캐시와
+  서버가 어긋나지 않는다) 나머지의 source, binding, head, grant, mapping proposal,
+  graph revision, Article은 소유 행으로 옮기며 소유 행의 revision을 찍는다. 빈
+  행은 삭제하고 binding은 잃지 않는다. graph revision은 불변이므로 그 update guard를
+  이 재지정 동안만 해제한다.
+  - Desktop: 테이블을 외래 키를 끈 채 `kind` 스키마로 재작성하고
+    `foreign_key_check` 뒤 커밋한다. 연결 라벨은 `prod→production`, `dev→development`,
+    그 밖의 값(`custom`)은 없음으로 바꾼다. 이미 이전된 저장소는 읽기만 한다.
+  - D1: 테이블 재작성 없이 `kind` 열 추가, 값 이전, 위 병합, `(project_id, kind)`
+    unique index와 값 제한 trigger를 쓴다. 바뀐 이름·등급은 감사 기록에 남긴다.
+    이전 Desktop을 위해 `name`·`production`·`risk_class` 열은 종류에서 파생해
+    유지한다(열 삭제에는 재작성이 필요하다).
 - **팀 로컬 승격.** 업데이트 시 팀 workspace의 기존 팀 로컬(`나만`) 연결은 자동으로
   팀 연결로 승격한다. SQLite 파일 연결은 기기 전용이므로 제외하고 로컬에 남기며 UI는
   SQLite 파일은 공유할 수 없다고 알린다.
@@ -67,8 +79,15 @@
 
 ## 호환성
 
-control plane은 전환 기간 동안 이전 Desktop을 위해 기존 환경 필드(riskClass)를 종류로
-매핑해 받고 돌려준다. 관리 API는 지원 중인 Desktop 버전의 요청·응답 계약을 하위
+control plane은 전환 기간 동안 이전 Desktop을 위해 `{name, riskClass}`를 종류로
+매핑해 받고(이름은 무시, `custom`은 개발) 응답에 `kind`와 함께 종류에서 파생한
+`name`·`riskClass`를 돌려준다. 새 Desktop은 `{kind}`만 보내고 `kind`만 읽는다.
+provider 가져오기 요청의 `environment`는 선택 필드이며 없으면 연결 라벨이 비어 있다.
+control plane으로 가는 연결 `env`/`environment` 라벨은 D1과 응답에서 이전 토큰(`prod`,
+`dev`, `staging`, `test`)을 유지한다. 서버는 두 형태를 모두 받아 이전 토큰으로 저장하고,
+Desktop은 경계에서 종류와 토큰을 변환한다(`wire_token`/`parse`). 0.7.0 Desktop은
+`env == "prod"`만 확인하므로 새 Desktop이 쓴 운영 라벨에도 PROD 확인을 요구한다.
+로컬 SQLite는 종류를 저장한다. 관리 API는 지원 중인 Desktop 버전의 요청·응답 계약을 하위
 호환으로 유지한다(PRODUCT_UI_SCOPE). 제거 시점은 지원 중인 Desktop이 모두 새 필드를
 쓰게 된 뒤 별도 결정으로 정한다.
 

@@ -69,6 +69,7 @@ export function blankConnection(
     allowWrites: false,
     secretRef: null,
     env: null,
+    effectiveEnv: null,
     schemaGroup: null,
     workspaceAccess: "local",
     credentialMode: "local",
@@ -118,7 +119,8 @@ export function demoSqliteConnection(path: string): ConnectionProfile {
     name: "Demo SQLite",
     database: path,
     driverId: "sqlx-sqlite",
-    env: "dev",
+    env: "development",
+    effectiveEnv: "development",
   };
 }
 

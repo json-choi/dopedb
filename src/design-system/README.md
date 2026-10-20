@@ -585,7 +585,7 @@ loopback 문서는 이 정본을 빌드 시 포함하며 네트워크 font나 sc
 - `SegmentedControl`: 속성 편집기의 소수 상호 배타 선택을 위한 compact
   radiogroup. 전체 또는 capability가 없는 개별 option의 비활성화와 이를
   건너뛰는 keyboard focus, semantic selection treatment를 소유한다.
-- `EnvironmentBadge`: database context에서 dev/staging/prod를 neutral 대문자와
+- `EnvironmentBadge`: database context에서 고정 환경 종류(개발/스테이징/운영/테스트, `kind`+현지화 `label`; 앱 내부에서는 `components/EnvironmentKindBadge`)를 neutral 대문자와
   작은 의미색 점으로 표시한다. Explorer에서는 Project의 단일 `Databases`
   folder 아래 DB connection row에만 두고 Data source·Analysis Article·Project
   행에는 반복하지 않는다. Environment는 Explorer folder가 아니라 exact binding

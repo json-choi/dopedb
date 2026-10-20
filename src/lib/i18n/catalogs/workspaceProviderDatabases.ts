@@ -140,14 +140,9 @@ export const workspaceProviderDatabasesCatalog = defineCatalog(
     "workspaceProviderDatabases.neonTitle": "Prepare Neon least-privilege access",
     "workspaceProviderDatabases.neonDescription":
       "Before the database is registered, DopeDB inspects public privileges and ownership boundaries. Existing access is preserved, unsafe boundaries need a separate administrator review, and new short-lived read and write roles are verified against the live connection.",
-    "workspaceProviderDatabases.branchEnvironment": "Branch environment",
     "workspaceProviderDatabases.chooseEnvironment": "Choose environment",
-    "workspaceProviderDatabases.environmentDevelopment": "Development",
-    "workspaceProviderDatabases.environmentProduction": "Production",
-    "workspaceProviderDatabases.protectedBranch":
-      "Neon identifies this as a protected production branch. It cannot be treated as development.",
-    "workspaceProviderDatabases.developmentBranch":
-      "Neon identifies this as an unprotected development branch.",
+    "workspaceProviderDatabases.environmentLockedProduction":
+      "The provider marks this database as production, so it stays Production.",
     "workspaceProviderDatabases.preflightDescription":
       "No database privileges change yet. Review the no-change preflight first.",
     "workspaceProviderDatabases.preflight": "Run preflight",
@@ -428,13 +423,9 @@ export const workspaceProviderDatabasesCatalog = defineCatalog(
     "workspaceProviderDatabases.neonTitle": "Neon 최소 권한 준비",
     "workspaceProviderDatabases.neonDescription":
       "DB를 등록하기 전에 공개 권한과 소유권 경계를 점검합니다. 기존 접근은 보존하고, 안전하지 않은 경계는 별도 관리자 검토가 필요하며, 새 단기 읽기·쓰기 역할의 경계를 실제 연결로 검증합니다.",
-    "workspaceProviderDatabases.branchEnvironment": "브랜치 환경",
     "workspaceProviderDatabases.chooseEnvironment": "환경 선택",
-    "workspaceProviderDatabases.environmentDevelopment": "개발",
-    "workspaceProviderDatabases.environmentProduction": "운영",
-    "workspaceProviderDatabases.protectedBranch":
-      "Neon에서 보호된 운영 브랜치로 확인했습니다. 개발 환경으로 낮출 수 없습니다.",
-    "workspaceProviderDatabases.developmentBranch": "Neon에서 비보호 개발 브랜치로 확인했습니다.",
+    "workspaceProviderDatabases.environmentLockedProduction":
+      "공급자가 이 데이터베이스를 운영으로 표시했으므로 운영 환경으로 유지됩니다.",
     "workspaceProviderDatabases.preflightDescription":
       "아직 DB 권한을 변경하지 않습니다. 먼저 변경 없는 사전 점검 결과를 확인하세요.",
     "workspaceProviderDatabases.preflight": "사전 점검",

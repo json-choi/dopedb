@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import ConfirmButton from "../../components/ConfirmButton";
 import { Icon } from "../../components/Icon";
 import { Button } from "../../design-system/components/Button";
-import { EnvironmentBadge } from "../../design-system/components/EnvironmentBadge";
+import { EnvironmentKindBadge } from "../../components/EnvironmentKindBadge";
 import {
   LoadingLabel,
   StatusDot,
@@ -25,7 +25,6 @@ import type {
   KnowledgeSource,
 } from "../../features/knowledge/domain";
 import {
-  knowledgeEnvironmentBadge,
   knowledgeRevisionLabel,
 } from "../../features/knowledge/presentation";
 import {
@@ -39,6 +38,7 @@ import {
   catalogLoadIssueMessage,
 } from "../../features/catalogExplorer/catalogDomain";
 import type { AnalysisArticleRecord } from "../../features/analysisArticles/domain";
+import { environmentKindLabel, type EnvironmentKind } from "../../lib/environmentKind";
 import { useI18n } from "../../lib/i18n";
 import type { QueryResultPhase } from "../../lib/queryResultPhase";
 
@@ -55,7 +55,7 @@ type RenderConnection = (
   insideGroup?: boolean,
   treeParentKey?: string | null,
   treeLevel?: number,
-  environment?: ReturnType<typeof knowledgeEnvironmentBadge>,
+  environment?: EnvironmentKind,
   projectEnvironmentId?: string,
   treeItemKey?: string,
   environmentBinding?: EnvironmentConnection,
@@ -404,7 +404,7 @@ function KnowledgeProjectResources({
                     true,
                     databaseTreeKey,
                     3,
-                    knowledgeEnvironmentBadge(environment.riskClass),
+                    environment.kind,
                     environment.id,
                     `binding:${binding.id}:connection:${connection.id}`,
                     binding,
@@ -491,7 +491,7 @@ function KnowledgeProjectResources({
                 type="button"
                 className="tw:flex tw:min-h-control-lg tw:w-full tw:min-w-0 tw:items-center tw:gap-2.5 tw:rounded-sm tw:border-0 tw:bg-transparent tw:px-2 tw:py-2 tw:pl-5 tw:text-left tw:font-sans tw:text-sm tw:font-normal tw:leading-ui tw:text-foreground tw:hover:bg-muted tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring"
                 onClick={() => onOpenEnvironment(environment.id, "sources")}
-                title={`${environment.name} · ${source.provider === "github" ? "GitHub" : t("connections.environmentLocalFolder")} · ${knowledgeRevisionLabel(source.revision, {
+                title={`${environmentKindLabel(t, environment.kind)} · ${source.provider === "github" ? "GitHub" : t("connections.environmentLocalFolder")} · ${knowledgeRevisionLabel(source.revision, {
                   dirty: t("knowledge.revisionDirty"),
                   snapshot: t("knowledge.revisionSnapshot"),
                 })}`}
@@ -583,7 +583,7 @@ function KnowledgeProjectResources({
                 onClick={() =>
                   onOpenEnvironment(environment.id, "analyses", article.id)
                 }
-                title={`${environment.name} · ${article.definition.title}`}
+                title={`${environmentKindLabel(t, environment.kind)} · ${article.definition.title}`}
                 role="treeitem"
                 aria-level={3}
                 aria-selected={activeResourceId === article.id}
@@ -690,9 +690,7 @@ function UnavailableBindingRow({
         <span className="tw:min-w-0 tw:flex-1 tw:truncate">
           {binding.alias || binding.connectionName}
         </span>
-        <EnvironmentBadge
-          environment={knowledgeEnvironmentBadge(environment.riskClass)}
-        />
+        <EnvironmentKindBadge kind={environment.kind} />
         <Icon name="alert" className="tw:shrink-0 tw:text-warning" />
       </button>
       <TreeRowActions>

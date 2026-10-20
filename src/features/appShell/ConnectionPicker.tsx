@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 
 import EngineMark from "../../components/EngineMark";
-import { EnvironmentBadge } from "../../design-system/components/EnvironmentBadge";
+import { EnvironmentKindBadge } from "../../components/EnvironmentKindBadge";
 import { Icon } from "../../components/Icon";
 import { Button } from "../../design-system/components/Button";
 import {
@@ -38,9 +38,7 @@ export default function ConnectionPicker({
 
   function renderConnectionCard(connection: ConnectionProfile, grouped = false) {
     const name = connection.name || t("app.unnamed");
-    const environment = environments.pending ? null : environments.markersByConnectionId.has(connection.id)
-      ? environments.markersByConnectionId.get(connection.id)
-      : connection.env;
+    const environment = environments.pending ? null : environments.effectiveFor(connection.id, connection.env);
     const projectName = grouped
       ? undefined
       : projectNamesByConnectionId.get(connection.id);
@@ -75,7 +73,7 @@ export default function ConnectionPicker({
           </span>
           {environment ? (
             <span className="tw:ml-auto">
-              <EnvironmentBadge environment={environment} />
+              <EnvironmentKindBadge kind={environment} />
             </span>
           ) : null}
         </span>

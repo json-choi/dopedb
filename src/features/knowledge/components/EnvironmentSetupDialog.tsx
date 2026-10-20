@@ -1,6 +1,8 @@
-// One Environment creation dialog. With a target Project it adds an Environment
-// (production needs an explicit confirmation); with none it creates a new Project
-// together with its first Environment. Both return the revisioned Project.
+// One Environment creation dialog. The environment is one choice from the fixed list
+// (development, staging, production, test), limited to the kinds the Project does not
+// have yet. With a target Project it adds an Environment; with none it creates a new
+// Project together with its first. Choosing production needs an explicit confirmation
+// in both cases. Both return the revisioned Project.
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
@@ -19,8 +21,13 @@ import {
 } from "../../../design-system/components/Modal";
 import { InlineNotice } from "../../../design-system/components/Status";
 import { errMessage } from "../../../ipc/types";
+import {
+  ENVIRONMENT_KIND_CHOICES,
+  environmentKindLabel,
+  type EnvironmentKind,
+} from "../../../lib/environmentKind";
 import { useI18n } from "../../../lib/i18n";
-import type { KnowledgeEnvironment, KnowledgeProject } from "../domain";
+import type { KnowledgeProject } from "../domain";
 import { knowledgeQueryKeys } from "../queryKeys";
 import { createKnowledgeEnvironment, createKnowledgeProject } from "../tauriAdapter";
 
@@ -59,22 +66,22 @@ export function EnvironmentSetupDialog({
     ? null
     : projects.find((project) => project.id === projectId) ?? null;
   const [projectName, setProjectName] = useState("");
-  const [environmentName, setEnvironmentName] = useState(newProject ? "main" : "");
-  const [riskClass, setRiskClass] =
-    useState<KnowledgeEnvironment["riskClass"]>("development");
+  const availableKinds = ENVIRONMENT_KIND_CHOICES.filter(
+    (candidate) =>
+      !selectedProject?.environments.some((environment) => environment.kind === candidate),
+  );
+  const [chosenKind, setChosenKind] = useState<EnvironmentKind>("development");
+  // The choice follows the Project: a kind it already has is never selectable.
+  const kind = availableKinds.includes(chosenKind) ? chosenKind : availableKinds[0] ?? null;
   const [productionConfirmed, setProductionConfirmed] = useState(false);
   const create = useMutation({
     mutationFn: () =>
       newProject
         ? createKnowledgeProject({
             name: projectName.trim(),
-            environments: [{ name: environmentName.trim(), riskClass }],
+            environments: [{ kind: kind! }],
           })
-        : createKnowledgeEnvironment({
-            projectId,
-            name: environmentName.trim(),
-            riskClass,
-          }),
+        : createKnowledgeEnvironment({ projectId, kind: kind! }),
     onSuccess: async (project) => {
       await Promise.all([
         queryClient.invalidateQueries({
@@ -89,11 +96,9 @@ export function EnvironmentSetupDialog({
     },
   });
   const canCreate =
-    environmentName.trim().length > 0 &&
-    (newProject
-      ? projectName.trim().length > 0
-      : selectedProject !== null &&
-        (riskClass !== "production" || productionConfirmed));
+    kind !== null &&
+    (newProject ? projectName.trim().length > 0 : selectedProject !== null) &&
+    (kind !== "production" || productionConfirmed);
 
   return (
     <ModalBackdrop
@@ -148,51 +153,30 @@ export function EnvironmentSetupDialog({
                 </SelectInput>
               </Field>
             )}
-            <div className="tw:grid tw:grid-cols-2 tw:gap-3 tw:@max-[520px]:grid-cols-1">
-              <Field label={t("connections.environmentName")}>
-                <TextInput
+            {kind === null ? (
+              <InlineNotice tone="warning" icon="alert">
+                {t("connections.environmentKindsExhausted")}
+              </InlineNotice>
+            ) : (
+              <Field label={t("connections.environment")}>
+                <SelectInput
                   data-modal-initial-focus={newProject ? undefined : true}
                   density="compact"
-                  value={environmentName}
-                  placeholder={t("connections.environmentNamePlaceholder")}
-                  autoComplete="off"
-                  onChange={(event) => setEnvironmentName(event.target.value)}
-                />
-              </Field>
-              <Field label={t("connections.environmentRiskClass")}>
-                <SelectInput
-                  density="compact"
-                  value={riskClass}
+                  value={kind}
                   onChange={(event) => {
-                    setRiskClass(
-                      event.target.value as KnowledgeEnvironment["riskClass"],
-                    );
+                    setChosenKind(event.target.value as EnvironmentKind);
                     setProductionConfirmed(false);
                   }}
                 >
-                  <option value="development">
-                    {t("connections.environmentRiskDevelopment")}
-                  </option>
-                  <option value="staging">
-                    {t("connections.environmentRiskStaging")}
-                  </option>
-                  <option value="production">
-                    {t("connections.environmentRiskProduction")}
-                  </option>
-                  <option value="test">
-                    {t("connections.environmentRiskTest")}
-                  </option>
-                  <option value="custom">
-                    {t("connections.environmentRiskCustom")}
-                  </option>
+                  {availableKinds.map((candidate) => (
+                    <option key={candidate} value={candidate}>
+                      {environmentKindLabel(t, candidate)}
+                    </option>
+                  ))}
                 </SelectInput>
               </Field>
-            </div>
-            {newProject ? (
-              <p className="tw:m-0 tw:text-xs tw:leading-relaxed tw:text-muted-foreground">
-                {t("connections.projectSetupNextStep")}
-              </p>
-            ) : riskClass === "production" ? (
+            )}
+            {kind === "production" ? (
               <InlineNotice tone="warning" icon="alert">
                 <CheckboxField
                   checked={productionConfirmed}
@@ -202,6 +186,10 @@ export function EnvironmentSetupDialog({
                   label={t("connections.environmentProductionConfirm")}
                 />
               </InlineNotice>
+            ) : newProject ? (
+              <p className="tw:m-0 tw:text-xs tw:leading-relaxed tw:text-muted-foreground">
+                {t("connections.projectSetupNextStep")}
+              </p>
             ) : null}
             {create.error ? (
               <InlineNotice tone="danger" icon="alert" role="alert">

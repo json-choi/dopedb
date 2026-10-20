@@ -14,7 +14,7 @@ use crate::kernel::access::{AccountScope, PinnedConnection};
 use crate::kernel::identity::WorkspaceId;
 use crate::store::{parse_uuid, Store};
 
-use super::codec::{parse_risk_class, u64_to_i64, EnvironmentConnectionRow};
+use super::codec::{parse_environment_kind, u64_to_i64, EnvironmentConnectionRow};
 
 const MAX_WORKSPACE_BINDING_INVENTORY: usize = 10_000;
 
@@ -78,9 +78,8 @@ impl Store {
         &self,
         connection: &PinnedConnection,
     ) -> AppResult<Vec<KnowledgeEnvironmentSummary>> {
-        let rows: Vec<(String, String, String, String, i64)> = sqlx::query_as(
-            "SELECT environment.id, project.name, environment.name,
-                    environment.risk_class, environment.revision
+        let rows: Vec<(String, String, String, i64)> = sqlx::query_as(
+            "SELECT environment.id, project.name, environment.kind, environment.revision
              FROM knowledge_environment_connections binding
              JOIN knowledge_project_environments environment
                ON environment.id = binding.project_environment_id
@@ -90,7 +89,7 @@ impl Store {
                AND binding.connection_revision = ?2
                AND binding.revoked_at IS NULL
                AND project.workspace_id = ?3
-             ORDER BY project.name, environment.name, environment.id",
+             ORDER BY project.name, environment.kind, environment.id",
         )
         .bind(connection.connection_id.to_string())
         .bind(connection.connection_revision)
@@ -98,7 +97,7 @@ impl Store {
         .fetch_all(self.pool())
         .await?;
         let mut environments = Vec::new();
-        for (id, project_name, name, risk_class, environment_revision) in rows {
+        for (id, project_name, kind, environment_revision) in rows {
             let id = parse_uuid(id)?;
             let mut graphs = self.active_set(id).await?;
             if connection.scope.selected_account_id.is_none() {
@@ -143,8 +142,7 @@ impl Store {
             environments.push(KnowledgeEnvironmentSummary {
                 id,
                 project_name,
-                name,
-                risk_class: parse_risk_class(&risk_class)?,
+                kind: parse_environment_kind(&kind)?,
                 graph_revision_count: u64::try_from(graphs.len())
                     .map_err(|_| AppError::Config("the Knowledge graph count is invalid".into()))?,
             });

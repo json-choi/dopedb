@@ -6,6 +6,11 @@ import { and, eq, isNull } from "drizzle-orm";
 
 import { db } from "../db";
 import {
+  isEnvironmentKind,
+  legacyEnvironmentFields,
+  type EnvironmentKind,
+} from "./environment-kind";
+import {
   knowledgeEnvironmentConnection,
   knowledgeProject,
   knowledgeProjectEnvironment,
@@ -21,8 +26,7 @@ export async function listKnowledgeProjects(workspaceId: string) {
     projectName: knowledgeProject.name,
     projectRevision: knowledgeProject.revision,
     environmentId: knowledgeProjectEnvironment.id,
-    environmentName: knowledgeProjectEnvironment.name,
-    environmentRiskClass: knowledgeProjectEnvironment.riskClass,
+    environmentKind: knowledgeProjectEnvironment.kind,
     environmentRevision: knowledgeProjectEnvironment.revision,
   }).from(knowledgeProject).leftJoin(
     knowledgeProjectEnvironment,
@@ -40,8 +44,9 @@ export async function listKnowledgeProjects(workspaceId: string) {
     revision: number;
     environments: Array<{
       id: string;
+      kind: EnvironmentKind;
       name: string;
-      riskClass: string;
+      riskClass: EnvironmentKind;
       revision: number;
     }>;
   }>();
@@ -58,14 +63,13 @@ export async function listKnowledgeProjects(workspaceId: string) {
     }
     if (
       row.environmentId
-      && row.environmentName
-      && row.environmentRiskClass
+      && isEnvironmentKind(row.environmentKind)
       && row.environmentRevision
     ) {
       project.environments.push({
         id: row.environmentId,
-        name: row.environmentName,
-        riskClass: row.environmentRiskClass,
+        kind: row.environmentKind,
+        ...legacyEnvironmentFields(row.environmentKind),
         revision: row.environmentRevision,
       });
     }

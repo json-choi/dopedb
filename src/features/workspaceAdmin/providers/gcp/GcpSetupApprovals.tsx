@@ -7,9 +7,9 @@ import type { ReactNode } from "react";
 import {
   CheckboxField,
   Field,
-  SelectInput,
   TextInput,
 } from "../../../../design-system/components/FormControls";
+import { EnvironmentKindSelect } from "../../../../components/EnvironmentKindSelect";
 import { InlineNotice, LoadingLabel } from "../../../../design-system/components/Status";
 import { useI18n, type I18nKey, type Lang } from "../../../../lib/i18n";
 import { databaseEngineLabel } from "../../../connections/domain";
@@ -89,7 +89,7 @@ export default function GcpSetupApprovals({ wizard }: { wizard: GcpSetupWizardCo
       ? t("workspaceProviders.gcpNonProduction")
       : wizard.environment === "production"
         ? t("workspaceProviders.gcpPendingProduction")
-        : wizard.environment === "development"
+        : wizard.environment !== null
           ? t("workspaceProviders.gcpPendingDevelopment")
           : t("workspaceProviders.gcpClassificationRequired");
   const meta = [
@@ -113,30 +113,13 @@ export default function GcpSetupApprovals({ wizard }: { wizard: GcpSetupWizardCo
             <ApprovalBlock tone="warning">
               <BlockTitle>{t("workspaceProviders.gcpClassificationTitle")}</BlockTitle>
               <BlockText>{t("workspaceProviders.gcpClassificationDescription")}</BlockText>
-              <Field label={t("workspaceProviders.gcpEnvironment")}>
-                {(binding) => (
-                  <SelectInput
-                    {...binding.controlProps()}
-                    density="compact"
-                    disabled={disabled}
-                    value={wizard.environment}
-                    onChange={(event) => {
-                      const value = event.target.value;
-                      wizard.setEnvironment(
-                        value === "production" || value === "development" ? value : "",
-                      );
-                    }}
-                  >
-                    <option value="">{t("workspaceProviders.gcpChooseEnvironment")}</option>
-                    <option value="production">
-                      {t("workspaceProviders.gcpEnvironmentProduction")}
-                    </option>
-                    <option value="development">
-                      {t("workspaceProviders.gcpEnvironmentDevelopment")}
-                    </option>
-                  </SelectInput>
-                )}
-              </Field>
+              <EnvironmentKindSelect
+                label={t("workspaceProviders.gcpEnvironment")}
+                emptyLabel={t("workspaceProviders.gcpChooseEnvironment")}
+                value={wizard.environment}
+                disabled={disabled}
+                onChange={wizard.setEnvironment}
+              />
             </ApprovalBlock>
           ) : null}
           {instance.engine === "postgres" ? (

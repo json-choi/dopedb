@@ -6,6 +6,7 @@ import { atomicD1 } from "./d1/atomic";
 import { queryD1 } from "./d1/database";
 import { jsonEqual } from "./d1/json";
 import { utcNow } from "./d1/schema/values";
+import { connectionEnvironmentLabel, type EnvironmentKind } from "./knowledge/environment-kind";
 import { canonicalHash, parseConnectionVersionPayload } from "./workspace-versioning";
 import { returnedConnection, type MutationAuthority, type StoredConnection } from "./workspace-versioning-store";
 
@@ -16,7 +17,8 @@ export type ProviderImportResult =
 
 type ImportInput = {
   organizationId: string; integrationId: string; receiptId: string; idempotencyKey: string;
-  name: string; productionApproved: boolean; authority: ProviderImportAuthority;
+  name: string; environment: EnvironmentKind | null; productionApproved: boolean;
+  authority: ProviderImportAuthority;
 };
 type ResourceSnapshot = {
   resourceId: string; generation: number; provider: string; resource: string;
@@ -114,11 +116,13 @@ export async function importProviderReceipt(input: ImportInput): Promise<Provide
       driverId: null, host: snapshot.provider === "vault" ? resource.host : `${snapshot.provider.toLowerCase()}.managed.invalid`,
       port: snapshot.provider === "vault" ? Number(resource.port) : resource.engine === "postgres" ? 5432 : 3306,
       database: resource.database, sslmode: snapshot.provider === "vault" ? resource.sslmode : "verify-full",
-      readonlyDefault: true, allowWrites: false, env: null, schemaGroup: null, deleted: false,
+      readonlyDefault: true, allowWrites: false, env: connectionEnvironmentLabel(input.environment), schemaGroup: null, deleted: false,
     }, { credentialMode: "managed" });
   } catch {
     return { kind: "invalid_receipt" };
   }
+  // The environment label stays out of the witness hash: it is editable afterwards, while the
+  // hash binds the immutable import identity that local targets re-derive.
   const requestHash = canonicalHash({
     integrationGeneration: String(snapshot.generation), integrationId: input.integrationId,
     mode: "managed", name: input.name, organizationId: input.organizationId,
@@ -133,10 +137,10 @@ export async function importProviderReceipt(input: ImportInput): Promise<Provide
         sql`UPDATE workspace_provider_discovery_receipt SET consumed_at = ${utcNow}
           WHERE id = ${input.receiptId} AND EXISTS (${fresh})`,
         sql`INSERT INTO workspace_connection (id, organization_id, name, engine, provider, host, port,
-            database_name, sslmode, readonly_default, allow_writes, credential_mode,
+            database_name, sslmode, readonly_default, allow_writes, credential_mode, environment,
             provider_integration_id, provider_resource_id, provider_resource, content_revision, created_by_user_id)
           SELECT ${connectionId}, ${input.organizationId}, ${payload.name}, ${payload.engine}, ${payload.provider},
-            ${payload.host}, ${payload.port}, ${payload.database}, ${payload.sslmode}, 1, 0, 'managed',
+            ${payload.host}, ${payload.port}, ${payload.database}, ${payload.sslmode}, 1, 0, 'managed', ${payload.env},
             ${input.integrationId}, ${snapshot.resourceId}, ${snapshot.resource}, 1, ${input.authority.userId} FROM (${fresh})`,
         sql`INSERT INTO workspace_connection_grant (organization_id, connection_id, member_id, capability)
           SELECT ${input.organizationId}, ${connectionId}, ${input.authority.membershipId}, 'manage' FROM (${fresh})`,

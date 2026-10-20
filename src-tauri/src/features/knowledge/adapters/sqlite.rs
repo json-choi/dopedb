@@ -8,11 +8,12 @@ use uuid::Uuid;
 
 use crate::error::AppResult;
 use crate::kernel::access::{ActiveResourceScope, PinnedConnection};
+use crate::kernel::environment::EnvironmentKind;
 use crate::store::Store;
 
 use super::super::domain::{
-    EnvironmentConnectionBinding, EnvironmentRiskClass, KnowledgeEnvironmentSummary,
-    KnowledgeGrant, KnowledgeMappingProposal, KnowledgeSessionScope, Project, ProjectDefinition,
+    EnvironmentConnectionBinding, KnowledgeEnvironmentSummary, KnowledgeGrant,
+    KnowledgeMappingProposal, KnowledgeSessionScope, Project, ProjectDefinition,
     ProjectEnvironment, SourceSnapshot, StoredKnowledgeScope,
 };
 use super::super::ports::{
@@ -111,7 +112,7 @@ impl KnowledgeRepositoryPort for SqliteKnowledgeRepository {
         &self,
         workspace_id: Uuid,
         name: &str,
-        environments: &[(String, EnvironmentRiskClass)],
+        environments: &[EnvironmentKind],
     ) -> AppResult<ProjectDefinition> {
         self.store
             .create_knowledge_project(workspace_id, name, environments)
@@ -122,11 +123,10 @@ impl KnowledgeRepositoryPort for SqliteKnowledgeRepository {
         &self,
         workspace_id: Uuid,
         project_id: Uuid,
-        name: &str,
-        risk_class: EnvironmentRiskClass,
+        kind: EnvironmentKind,
     ) -> AppResult<ProjectDefinition> {
         self.store
-            .create_knowledge_environment(workspace_id, project_id, name, risk_class)
+            .create_knowledge_environment(workspace_id, project_id, kind)
             .await
     }
 

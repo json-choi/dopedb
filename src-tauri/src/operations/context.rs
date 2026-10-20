@@ -8,6 +8,7 @@ use serde_json::{json, Value};
 
 use crate::error::{AppError, AppResult};
 use crate::kernel::access::{AccountScope, PinnedConnection};
+use crate::kernel::environment::EnvironmentKind;
 use crate::model::SafetySettings;
 
 use super::{
@@ -32,12 +33,19 @@ pub(crate) fn required_confirmation(record: &OperationRecord) -> Option<&'static
     if record.risk_level == OperationRiskLevel::Critical {
         return Some(CRITICAL_CONFIRMATION);
     }
-    let production = record
-        .policy_snapshot
+    policy_requires_production_confirmation(&record.policy_snapshot)
+        .then_some(PRODUCTION_CONFIRMATION)
+}
+
+/// Whether a captured policy snapshot names a production effective environment. The
+/// snapshot carries the connection's effective environment (the most sensitive Project
+/// environment it is bound to, else its own label), never the bare connection label.
+pub(crate) fn policy_requires_production_confirmation(policy_snapshot: &Value) -> bool {
+    policy_snapshot
         .get("environment")
         .and_then(Value::as_str)
-        .is_some_and(|environment| environment.eq_ignore_ascii_case("prod"));
-    production.then_some(PRODUCTION_CONFIRMATION)
+        .and_then(EnvironmentKind::parse)
+        == Some(EnvironmentKind::Production)
 }
 
 pub(crate) fn capture_policy(
@@ -50,7 +58,7 @@ pub(crate) fn capture_policy(
         "bindingUpdatedAt": pin.binding_updated_at,
         "connectionRevision": pin.connection_revision,
         "credentialMode": pin.profile.credential_mode,
-        "environment": pin.profile.env,
+        "environment": pin.profile.effective_env,
         "safety": settings,
         "scopeGeneration": pin.scope.generation,
         "workspaceAccess": pin.profile.workspace_access,

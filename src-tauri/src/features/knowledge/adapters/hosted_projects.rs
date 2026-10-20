@@ -14,13 +14,7 @@ pub(super) async fn ensure_personal_knowledge_scope(
             project.name.trim().is_empty()
                 || project.name.len() > 512
                 || project.revision == 0
-                || project.environments.is_empty()
-                || project.environments.len() > 20
-                || project.environments.iter().any(|environment| {
-                    environment.name.trim().is_empty()
-                        || environment.name.len() > 512
-                        || environment.revision == 0
-                })
+                || !valid_environments(&project.environments)
         })
     {
         return Err(AppError::Config(
@@ -51,19 +45,26 @@ pub(super) async fn ensure_personal_knowledge_scope(
     })
 }
 
+/// A Project holds one revisioned Environment per kind, so the list is bounded by
+/// the fixed kinds and never repeats one.
+fn valid_environments(
+    environments: &[crate::features::knowledge::ports::RemoteKnowledgeEnvironment],
+) -> bool {
+    let mut kinds = std::collections::HashSet::new();
+    !environments.is_empty()
+        && environments.len() <= 4
+        && environments
+            .iter()
+            .all(|environment| environment.revision != 0 && kinds.insert(environment.kind))
+}
+
 pub(super) fn validate_project_inventory(projects: &[RemoteKnowledgeProject]) -> AppResult<()> {
     if projects.len() > 1_000
         || projects.iter().any(|project| {
             project.name.is_empty()
                 || project.name.len() > 512
                 || project.revision == 0
-                || project.environments.is_empty()
-                || project.environments.len() > 100
-                || project.environments.iter().any(|environment| {
-                    environment.name.is_empty()
-                        || environment.name.len() > 512
-                        || environment.revision == 0
-                })
+                || !valid_environments(&project.environments)
         })
     {
         return Err(AppError::Network(
@@ -238,11 +239,7 @@ pub(super) async fn create_knowledge_environment(
     .project;
     if project.id != project_id
         || project.revision != request.expected_project_revision.saturating_add(1)
-        || project.environments.is_empty()
-        || project.environments.len() > 100
-        || project.environments.iter().any(|environment| {
-            environment.name.is_empty() || environment.name.len() > 512 || environment.revision == 0
-        })
+        || !valid_environments(&project.environments)
     {
         return Err(AppError::Network(
             "Project Knowledge returned an invalid updated scope".into(),

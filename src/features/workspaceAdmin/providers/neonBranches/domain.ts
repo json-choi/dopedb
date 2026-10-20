@@ -3,6 +3,8 @@
 // the response-binding error, and the small rules every view applies the same way.
 // Pure types and functions only; parsing lives in branchInventory/branchOperations.
 
+import { parseEnvironmentKind } from "../../../../lib/environmentKind";
+
 export type NeonEnvironment = "development" | "production";
 export type NeonBranchState = "init" | "resetting" | "ready" | "archived" | "unknown";
 
@@ -299,7 +301,7 @@ export function neonBranchEnvironment(
   if (
     branch.protected
     || branch.production === true
-    || branch.connections.some((connection) => connection.environment === "production")
+    || branch.connections.some((connection) => parseEnvironmentKind(connection.environment) === "production")
   ) {
     return "production";
   }

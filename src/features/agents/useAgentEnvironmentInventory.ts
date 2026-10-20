@@ -5,6 +5,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { catalogLoadIssue, catalogLoadIssueMessage } from "../catalogExplorer/catalogDomain";
+import { compareEnvironmentKinds, type EnvironmentKind } from "../../lib/environmentKind";
 import { useI18n } from "../../lib/i18n";
 import {
   connectionId as asConnectionId,
@@ -48,8 +49,7 @@ export type AgentDatabaseResourceChoice = {
   projectId: string;
   projectName: string;
   environmentId: string;
-  environmentName: string;
-  riskClass: AgentKnowledgeEnvironment["riskClass"];
+  environmentKind: EnvironmentKind;
   connectionId: ConnectionId;
   authorityConnectionId: ConnectionId;
   /** The connection name the Explorer shows; the binding alias is secondary. */
@@ -69,8 +69,7 @@ export type AgentSourceResourceChoice = {
   projectId: string;
   projectName: string;
   environmentId: string;
-  environmentName: string;
-  riskClass: AgentKnowledgeEnvironment["riskClass"];
+  environmentKind: EnvironmentKind;
   sourceId: string;
   authorityConnectionId: ConnectionId;
   displayName: string;
@@ -185,8 +184,7 @@ export function useAgentEnvironmentInventory({
             id: environment.id,
             projectId: project.id,
             projectName: project.name,
-            name: environment.name,
-            riskClass: environment.riskClass,
+            kind: environment.kind,
             graphRevisionCount: (knowledgeInventory.data?.sources ?? []).filter(
               (source) =>
                 source.projectEnvironmentId === environment.id &&
@@ -197,10 +195,11 @@ export function useAgentEnvironmentInventory({
           };
         }),
       )
-      .sort((left, right) =>
-        `${left.projectName}\u0000${left.name}\u0000${left.id}`.localeCompare(
-          `${right.projectName}\u0000${right.name}\u0000${right.id}`,
-        ),
+      .sort(
+        (left, right) =>
+          left.projectName.localeCompare(right.projectName) ||
+          compareEnvironmentKinds(left.kind, right.kind) ||
+          left.id.localeCompare(right.id),
       );
   }, [connectionById, environmentConnectionsQuery.data, knowledgeInventory.data]);
 
@@ -227,8 +226,7 @@ export function useAgentEnvironmentInventory({
                 projectId: project.id,
                 projectName: project.name,
                 environmentId: environment.id,
-                environmentName: environment.name,
-                riskClass: environment.riskClass,
+                environmentKind: environment.kind,
                 connectionId,
                 authorityConnectionId: connectionId,
                 databaseName: profile.name || binding.alias,
@@ -273,8 +271,7 @@ export function useAgentEnvironmentInventory({
                 projectId: project.id,
                 projectName: project.name,
                 environmentId: environment.id,
-                environmentName: environment.name,
-                riskClass: environment.riskClass,
+                environmentKind: environment.kind,
                 sourceId: source.sourceId,
                 authorityConnectionId: asConnectionId(authority.connectionId),
                 displayName: source.displayName,

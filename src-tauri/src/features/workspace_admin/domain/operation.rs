@@ -6,6 +6,7 @@ use serde::Deserialize;
 use serde_json::Value;
 use uuid::Uuid;
 
+use crate::kernel::environment::EnvironmentKind;
 use crate::kernel::identity::{ConnectionId, ProviderIntegrationId, WorkspaceId};
 
 use super::values::{
@@ -181,6 +182,8 @@ pub(crate) enum WorkspaceAdminOperation {
         receipt: Uuid,
         idempotency_key: String,
         name: String,
+        /// The Project-environment kind the imported connection is labelled with.
+        environment: EnvironmentKind,
         production_approved: bool,
     },
     PreflightNeonBootstrap {

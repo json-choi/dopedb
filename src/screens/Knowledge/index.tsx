@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { errMessage } from "../../ipc/types";
 import { catalogLoadIssue, catalogLoadIssueAction, catalogLoadIssueMessage } from "../../features/catalogExplorer/catalogDomain";
+import { environmentKindLabel } from "../../lib/environmentKind";
 import { useI18n } from "../../lib/i18n";
 import { queryResultPhase } from "../../lib/queryResultPhase";
 import {
@@ -378,7 +379,7 @@ export default function Knowledge({
       {(projects.data?.length ?? 0) > 0 && view === "sources" ? (
         <KnowledgeConnectSourceSection
           projectName={selectedProject?.name ?? ""}
-          environmentName={selectedEnvironment?.name ?? ""}
+          environmentLabel={selectedEnvironment ? environmentKindLabel(t, selectedEnvironment.kind) : ""}
           githubProviderVisible={githubProviderVisible}
           personalAuthResolved={personalAuthResolved}
           githubAvailable={githubAvailable}

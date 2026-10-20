@@ -12,6 +12,12 @@ import {
 } from "../../design-system/components/FormControls";
 import type { ConnectionInputMode } from "../../features/connections/connectionEditorModel";
 import type { ConnectionEditorController } from "../../features/connections/useConnectionEditorController";
+import {
+  compareEnvironmentKinds,
+  ENVIRONMENT_KIND_CHOICES,
+  environmentKindLabel,
+  parseEnvironmentKind,
+} from "../../lib/environmentKind";
 import { useI18n } from "../../lib/i18n";
 import { ConnectionBigQueryFields } from "./ConnectionBigQueryFields";
 import { ManagedWorkspaceConnectionField } from "./ManagedWorkspaceConnectionField";
@@ -311,23 +317,30 @@ export function ConnectionGeneralTab({
         htmlFor="connection-environment"
         description={t(profile.environmentContext.bound ? "connections.projectEnvironmentHint" : "connections.environmentHint")}
       >
-        <SelectInput
-          id="connection-environment"
-          density="compact"
-          value={profile.environmentContext.marker ?? (profile.environmentContext.bound ? "" : form.env ?? "")}
-          disabled={!canEditConnection || busy || profile.environmentContext.pending || profile.environmentContext.bound}
-          onChange={(event) => set("env", event.target.value || null)}
-        >
-          {profile.environmentContext.bound && !profile.environmentContext.environment && profile.environmentContext.marker ? (
-            <option value={profile.environmentContext.marker}>{profile.environmentContext.marker.toUpperCase()}</option>
-          ) : null}
-          <option value="">{t("common.none")}</option>
-          <option value="dev">DEV</option>
-          <option value="staging">STAGING</option>
-          <option value="prod">PROD</option>
-          <option value="test">TEST</option>
-          <option value="custom">CUSTOM</option>
-        </SelectInput>
+        {profile.environmentContext.bound ? (
+          <TextInput
+            id="connection-environment"
+            density="compact"
+            readOnly
+            value={[...new Set([...profile.environmentContext.boundKinds, ...(form.env ? [form.env] : [])])]
+              .sort(compareEnvironmentKinds)
+              .map((kind) => environmentKindLabel(t, kind))
+              .join(" / ")}
+          />
+        ) : (
+          <SelectInput
+            id="connection-environment"
+            density="compact"
+            value={form.env ?? ""}
+            disabled={!canEditConnection || busy || profile.environmentContext.pending}
+            onChange={(event) => set("env", parseEnvironmentKind(event.target.value))}
+          >
+            <option value="">{t("common.none")}</option>
+            {ENVIRONMENT_KIND_CHOICES.map((kind) => (
+              <option key={kind} value={kind}>{environmentKindLabel(t, kind)}</option>
+            ))}
+          </SelectInput>
+        )}
       </PropertyRow>
     </div>
   );

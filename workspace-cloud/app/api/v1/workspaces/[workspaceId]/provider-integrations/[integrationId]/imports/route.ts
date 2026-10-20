@@ -9,6 +9,7 @@ import {
   mutationAllowed,
   privateJson,
 } from "../../../../../../../../lib/http";
+import { isEnvironmentKind } from "../../../../../../../../lib/knowledge/environment-kind";
 import { importProviderReceipt } from "../../../../../../../../lib/provider-import-store";
 import { authorizeWorkspace } from "../../../../../../../../lib/workspace-authorization";
 import { publicConnection } from "../../../../../../../../lib/workspace-connections";
@@ -46,14 +47,19 @@ export async function POST(request: Request, context: RouteContext) {
     receipt?: unknown;
     idempotencyKey?: unknown;
     name?: unknown;
+    environment?: unknown;
     productionApproved?: unknown;
   } | null;
   const name = importName(body?.name);
+  // `environment` is the Project-environment kind the imported connection is labelled with;
+  // Desktops that predate it omit the field and the connection stays unlabelled.
   const fields = ["receipt", "idempotencyKey", "name", "productionApproved"];
+  const environment = body && Object.hasOwn(body, "environment") ? body.environment : null;
   if (
     !body
-    || Object.keys(body).length !== fields.length
+    || Object.keys(body).length !== fields.length + (Object.hasOwn(body, "environment") ? 1 : 0)
     || fields.some((field) => !Object.hasOwn(body, field))
+    || (environment !== null && !isEnvironmentKind(environment))
     || typeof body.receipt !== "string" || !isUuid(body.receipt)
     || typeof body.idempotencyKey !== "string"
     || !/^[A-Za-z0-9_-]{16,128}$/.test(body.idempotencyKey)
@@ -68,6 +74,7 @@ export async function POST(request: Request, context: RouteContext) {
     receiptId: body.receipt,
     idempotencyKey: body.idempotencyKey,
     name,
+    environment,
     productionApproved: body.productionApproved,
     authority: {
       sessionId: authorization.session.session.id,
