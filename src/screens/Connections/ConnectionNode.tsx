@@ -17,6 +17,7 @@ import {
   canBindMemberCredentials,
   connectionAccessIssue,
   databaseDisplayLabel,
+  isDeviceOnlySqlite,
   type ConnectionProfile,
 } from "../../features/connections/domain";
 import { ProviderTargetLabel } from "../../features/connections/ProviderTargetLabel";
@@ -29,6 +30,7 @@ import type {
 } from "../../ipc/types";
 import { environmentKindLabel, type EnvironmentKind } from "../../lib/environmentKind";
 import { useI18n } from "../../lib/i18n";
+import { useCatalogScope } from "../../lib/queries";
 import { isDocumentEngine } from "../../lib/capabilities";
 import type { SchemaConnectionGroup } from "../../lib/schemaDiff";
 import { SchemaDiffTrigger } from "./schemaDiffPresentation";
@@ -151,6 +153,9 @@ export default function ConnectionNode(props: Props) {
   const [connectionMenuInitialFocus, setConnectionMenuInitialFocus] =
     useState<MenuInitialFocus>(null);
   const { connection } = props;
+  // A SQLite file in a team workspace stays on this device; say so instead of leaving
+  // it looking like a team connection that failed to sync.
+  const deviceOnly = useCatalogScope().workspaceKind === "team" && isDeviceOnlySqlite(connection);
   const environmentBadge =
     props.environmentBadge === undefined
       ? connection.effectiveEnv
@@ -428,6 +433,16 @@ export default function ConnectionNode(props: Props) {
         {environmentBadge ? (
           <EnvironmentKindBadge kind={environmentBadge} />
         ) : null}
+        {deviceOnly ? (
+          <span
+            className="tw:inline-flex tw:size-4 tw:shrink-0 tw:items-center tw:justify-center tw:text-muted-foreground"
+            aria-label={t("connections.deviceOnly")}
+            role="img"
+            title={t("connections.deviceOnlyHint")}
+          >
+            <Icon name="lock" aria-hidden="true" />
+          </span>
+        ) : null}
         {accessLabel && (
           <span
             className="tw:inline-flex tw:size-4 tw:shrink-0 tw:items-center tw:justify-center tw:text-muted-foreground"
@@ -568,6 +583,16 @@ export default function ConnectionNode(props: Props) {
                   }}
                 >
                   {t("workspace.bindCredentialsShort")}
+                </MenuItem>
+              ) : null}
+              {props.onRecoverManagedConnection ? (
+                <MenuItem
+                  onClick={() => {
+                    props.onOpenMenu(null);
+                    props.onRecoverManagedConnection?.();
+                  }}
+                >
+                  {t("connections.repairManagedAccess")}
                 </MenuItem>
               ) : null}
               {connection.workspaceAccess !== "view" ? (

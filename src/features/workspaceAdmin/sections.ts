@@ -7,7 +7,6 @@ import type { WorkspaceAdminScope } from "./domain";
 
 export type WorkspaceAdminSection =
   | "workspace-members"
-  | "workspace-access"
   | "workspace-providers"
   | "workspace-lifecycle";
 
@@ -27,16 +26,10 @@ const SECTIONS: readonly WorkspaceAdminSectionDefinition[] = [
     ownerOnly: false,
   },
   {
-    id: "workspace-access",
-    label: "workspaceAdmin.access",
-    keywords: "database access grant team read conflict 데이터베이스 접근 권한 팀 읽기 충돌",
-    ownerOnly: false,
-  },
-  {
     id: "workspace-providers",
     label: "workspaceAdmin.providers",
     keywords:
-      "provider planetscale neon google cloud sql vault branch import add shared database 공급자 브랜치 가져오기 관리형 공유 DB 추가",
+      "provider account planetscale neon google cloud sql vault branch repair managed reauthorize 공급자 계정 브랜치 복구 관리형 재승인",
     ownerOnly: false,
   },
   {

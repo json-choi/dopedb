@@ -1,4 +1,4 @@
-// Explorer status of the caller's own account on a provisioned shared database: not
+// Explorer status of the caller's own account on a provisioned team connection: not
 // requested, requested, being created by an administrator device, failed with a closed
 // reason, or revoked. The first Connect asks once (the account is created on the
 // server and the password stays on this device) and then calls the member request; a
@@ -79,7 +79,7 @@ export default function ProvisioningTreeStatus({
   const status = useQuery(directStatusQuery(scope));
   const request = useMutation({
     mutationFn: () => {
-      if (!scope) throw new Error("A shared database scope is required.");
+      if (!scope) throw new Error("A team connection scope is required.");
       return requestDirectMemberAccount(scope);
     },
     onSuccess: (next) => {

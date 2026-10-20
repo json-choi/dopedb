@@ -1,12 +1,15 @@
-// Workspace management → Providers. Owns the section's view switch, the one browser
-// authorization in flight, the credential form that is open, and the Google Cloud
-// SQL setup that replaces both views while it runs. Provider changes run one at a
-// time: switching views locks while any provider request is running, and every
-// saved change re-reads the provider projections the views render.
+// Workspace management → Providers. Owns the one browser authorization in flight, the
+// credential form that is open, the managed-connection repair a recovery request
+// focuses, and the Google Cloud SQL setup that replaces the page while it runs.
+// Providers hold accounts only: databases are added in the connection editor and
+// listed in Explorer. Provider changes run one at a time, and every saved change
+// re-reads the provider projections the page renders.
 import { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { SegmentedControl } from "../../../design-system/components/SegmentedControl";
+import { Icon } from "../../../components/Icon";
+import { Button } from "../../../design-system/components/Button";
+import { InlineNotice } from "../../../design-system/components/Status";
 import { useI18n } from "../../../lib/i18n";
 import { useCatalogScope } from "../../../lib/queries";
 import { useEventCallback } from "../../../lib/useEventCallback";
@@ -32,8 +35,8 @@ import {
   type AuthorizationRequest,
 } from "./accounts/useProviderAuthorization";
 import VaultConnectDialog from "./accounts/VaultConnectDialog";
-import SharedDatabasesView from "./databases/SharedDatabasesView";
 import type { ManagedConnection } from "./domain";
+import NeonBranchManager from "./neonBranches/NeonBranchManager";
 import GcpSetupWizard from "./gcp/GcpSetupWizard";
 import {
   forgetGcpRepair,
@@ -47,33 +50,68 @@ import { announceManagedConnectionsRepaired } from "./gcp/repairSignal";
 import type { GcpSetupSaved } from "./gcp/useGcpSetupWizard";
 import { providerAccountsQuery, providerInventoryQuery } from "./queries";
 
-type ProvidersView = "accounts" | "databases";
-
 type ActiveGcpSetup = {
   session: GcpSetupSession;
   repair: GcpRepairTarget | null;
   providerName: string;
 };
 
+/** The managed connection a recovery request opened this section for, with its repair command. */
+function FocusedRepair({
+  managed,
+  locked,
+  repairing,
+  onRepair,
+  onDismiss,
+}: {
+  managed: ManagedConnection;
+  locked: boolean;
+  repairing: boolean;
+  onRepair: () => void;
+  onDismiss: () => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <InlineNotice
+      tone="warning"
+      icon="shield"
+      role="status"
+      action={(
+        <span className="tw:flex tw:flex-wrap tw:gap-2">
+          <Button size="compact" variant="primary" disabled={locked} onClick={onRepair}>
+            {repairing ? (
+              <Icon name="refresh" className="tw:animate-spin tw:motion-reduce:animate-none" />
+            ) : (
+              <Icon name="shield" />
+            )}
+            {t(repairing
+              ? "workspaceProviderDatabases.repairing"
+              : "workspaceProviderDatabases.repair")}
+          </Button>
+          <Button size="compact" variant="ghost" onClick={onDismiss}>
+            {t("common.close")}
+          </Button>
+        </span>
+      )}
+    >
+      {t(managed.provider === "gcpCloudSql"
+        ? "workspaceProviderDatabases.repairDescription"
+        : "workspaceProviderDatabases.repairAccountDescription")}
+    </InlineNotice>
+  );
+}
+
 export default function ProvidersPanel({ scope }: WorkspaceAdminPanelProps) {
   const { lang, t } = useI18n();
   const queryClient = useQueryClient();
   const catalogScope = useCatalogScope();
-  // A request from outside the dialog reveals its database, or opens the add flow,
-  // exactly once; switching views afterwards never reopens it.
+  // A recovery request from outside the dialog focuses its managed connection once.
   const [initialFocus] = useState(() => takePendingWorkspaceAdminFocus());
-  const [view, setView] = useState<ProvidersView>(initialFocus ? "databases" : "accounts");
   const [focusConnectionId, setFocusConnectionId] = useState<string | null>(
-    initialFocus?.kind === "connection" ? initialFocus.connectionId : null,
+    initialFocus?.connectionId ?? null,
   );
-  const [addRequested, setAddRequested] = useState(initialFocus?.kind === "addDatabase");
-
-  function showView(next: ProvidersView) {
-    setAddRequested(false);
-    setView(next);
-  }
+  const inventory = useQuery(providerInventoryQuery(scope));
   const [accountsBusy, setAccountsBusy] = useState(false);
-  const [databasesBusy, setDatabasesBusy] = useState(false);
   const [wizardBusy, setWizardBusy] = useState(false);
   const [dialog, setDialog] = useState<ConnectDialogRequest | null>(null);
   const [notice, setNotice] = useState<ProvidersNotice | null>(null);
@@ -92,7 +130,7 @@ export default function ProvidersPanel({ scope }: WorkspaceAdminPanelProps) {
       providerName: outcome.providerName,
     });
   });
-  const busy = accountsBusy || databasesBusy || wizardBusy || authorization.busy;
+  const busy = accountsBusy || wizardBusy || authorization.busy;
 
   function startAuthorization(request: AuthorizationRequest) {
     if (busy) return;
@@ -107,7 +145,6 @@ export default function ProvidersPanel({ scope }: WorkspaceAdminPanelProps) {
   }
 
   const repair = useEventCallback(async (managed: ManagedConnection) => {
-    // The databases view locks its own commands while its changes run.
     if (accountsBusy || wizardBusy || authorization.busy) return;
     setNotice(null);
     let providerName: string;
@@ -129,7 +166,6 @@ export default function ProvidersPanel({ scope }: WorkspaceAdminPanelProps) {
       return;
     }
     if (connectable === "neon" || connectable === "vault") {
-      showView("accounts");
       setDialog({
         provider: connectable,
         providerName,
@@ -207,12 +243,15 @@ export default function ProvidersPanel({ scope }: WorkspaceAdminPanelProps) {
     }
     if (saved.repair) {
       setNotice({ kind: "repaired" });
-      setFocusConnectionId(saved.repair.connectionId);
-      showView("databases");
+      setFocusConnectionId(null);
       return;
     }
     setNotice({ kind: "connected", providerName: setup.providerName });
   }
+
+  const focusedRepair = focusConnectionId
+    ? inventory.data?.managedConnections?.find((item) => item.connectionId === focusConnectionId) ?? null
+    : null;
 
   if (gcpSetup) {
     return (
@@ -241,57 +280,41 @@ export default function ProvidersPanel({ scope }: WorkspaceAdminPanelProps) {
         <p className="tw:m-0 tw:text-ui tw:leading-body tw:text-muted-foreground">
           {t("workspaceProviders.description")}
         </p>
-        <SegmentedControl
-          value={view}
-          label={t("workspaceProviders.views")}
-          disabled={busy}
-          options={[
-            { value: "accounts", label: t("workspaceProviders.viewAccounts") },
-            { value: "databases", label: t("workspaceProviders.viewDatabases") },
-          ]}
-          onChange={(next) => {
-            if (!busy) showView(next);
-          }}
-        />
       </div>
       <ProviderStatusNotice
         status={authorization.status}
         notice={notice}
-        databasesVisible={view === "databases"}
         onCheckNow={authorization.checkNow}
         onCancel={authorization.cancel}
         onStart={startAuthorization}
         onDismissNotice={() => setNotice(null)}
-        onOpenDatabases={() => {
-          if (busy) return;
-          setNotice(null);
-          showView("databases");
-        }}
       />
-      {view === "accounts" ? (
-        <ProviderAccountsView
-          scope={scope}
-          locked={busy || authorization.inFlight}
-          authorizationInFlight={authorization.inFlight}
-          onStartAuthorization={startAuthorization}
-          onOpenDialog={openDialog}
-          onRepair={(managed) => void repair(managed)}
-          onContinueGcpSetup={continueGcpSetup}
-          onBusyChange={setAccountsBusy}
+      {focusedRepair ? (
+        <FocusedRepair
+          managed={focusedRepair}
+          locked={busy}
+          repairing={authorization.repairingConnectionId === focusedRepair.connectionId}
+          onRepair={() => void repair(focusedRepair)}
+          onDismiss={() => setFocusConnectionId(null)}
         />
-      ) : (
-        <SharedDatabasesView
+      ) : null}
+      <ProviderAccountsView
+        scope={scope}
+        locked={busy || authorization.inFlight}
+        authorizationInFlight={authorization.inFlight}
+        onStartAuthorization={startAuthorization}
+        onOpenDialog={openDialog}
+        onRepair={(managed) => void repair(managed)}
+        onContinueGcpSetup={continueGcpSetup}
+        onBusyChange={setAccountsBusy}
+      />
+      {inventory.data ? (
+        <NeonBranchManager
           scope={scope}
-          onConnectAccount={() => {
-            if (!busy) showView("accounts");
-          }}
-          onRepair={(managed) => void repair(managed)}
-          repairingConnectionId={authorization.repairingConnectionId}
-          focusConnectionId={focusConnectionId}
-          initiallyAdding={addRequested}
-          onBusyChange={setDatabasesBusy}
+          integrations={inventory.data.integrations}
+          managedConnections={inventory.data.managedConnections ?? []}
         />
-      )}
+      ) : null}
       {dialog?.provider === "neon" ? (
         <NeonConnectDialog
           scope={scope}

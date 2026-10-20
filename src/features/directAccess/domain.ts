@@ -1,4 +1,4 @@
-// Direct shared database wire values. Every shape mirrors the Rust serde types in
+// Direct team connection wire values. Every shape mirrors the Rust serde types in
 // `src-tauri/src/features/direct_access` (camelCase fields, closed snake_case enums);
 // secrets only travel inward, as the `password` of an input, and are never returned.
 import type { EnvironmentKind } from "../../lib/environmentKind";
@@ -35,7 +35,7 @@ export type DirectProvisioningState =
   | "drop_pending"
   | "dropped";
 
-/** The caller's own principal on one shared database. */
+/** The caller's own principal on one team connection. */
 export interface DirectProvisioningStatus {
   state: DirectProvisioningState;
   level: DirectLevel;
@@ -50,7 +50,7 @@ export interface DirectStatus {
   adminCredentialOnDevice: boolean;
 }
 
-/** Exact account, workspace and shared database a command acts on. */
+/** Exact account, workspace and team connection a command acts on. */
 export interface DirectScope {
   accountId: AccountId;
   workspaceId: WorkspaceId;

@@ -1,5 +1,5 @@
 // Workspace management dialog for the active team workspace, opened from the workspace
-// menu, Action Search, the data source catalog or connection recovery instead of the
+// menu, Action Search or connection recovery instead of the
 // application Settings. The shell route owns the active section, so a request that
 // arrives while the dialog is open moves it too, It lists only the sections the
 // signed-in member's role can run and closes itself when that authority disappears.
@@ -9,7 +9,6 @@ import {
   SectionDialog,
   type SectionDialogEntry,
 } from "../../design-system/components/SectionDialog";
-import ConnectionAccessPanel from "../../features/workspaceAdmin/access/ConnectionAccessPanel";
 import LifecyclePanel from "../../features/workspaceAdmin/lifecycle/LifecyclePanel";
 import MembersPanel from "../../features/workspaceAdmin/members/MembersPanel";
 import ProvidersPanel from "../../features/workspaceAdmin/providers/ProvidersPanel";
@@ -79,9 +78,6 @@ export default function WorkspaceAdmin({
     >
       <Fragment key={`${scope.accountId}:${scope.workspaceId}`}>
         {active === "workspace-members" && <MembersPanel scope={scope} onNavigate={onNavigate} />}
-        {active === "workspace-access" && (
-          <ConnectionAccessPanel scope={scope} onNavigate={onNavigate} />
-        )}
         {active === "workspace-providers" && (
           <ProvidersPanel scope={scope} onNavigate={onNavigate} />
         )}

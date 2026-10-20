@@ -8,11 +8,14 @@ import { useI18n } from "../../lib/i18n";
 export function ConnectionEditorFooter({
   view,
   canEditConnection,
+  flowActive,
   commands,
   onCancel,
 }: {
   view: ConnectionEditorController["catalog"]["navigation"]["view"];
   canEditConnection: boolean;
+  /** A credential-method flow owns its actions; the editor only offers closing. */
+  flowActive: boolean;
   commands: ConnectionEditorController["commands"];
   onCancel: ConnectionEditorProps["onCancel"];
 }) {
@@ -21,7 +24,7 @@ export function ConnectionEditorFooter({
   return (
     <ModalFooter>
       {view === "dataSources" ? (
-        canEditConnection ? (
+        canEditConnection && !flowActive ? (
           <>
             <Button
               size="compact"

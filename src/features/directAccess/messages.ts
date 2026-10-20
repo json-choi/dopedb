@@ -1,4 +1,4 @@
-// Closed localization maps for direct shared database values: every failure code and
+// Closed localization maps for direct team connection values: every failure code and
 // provisioning state names exactly one catalog key, so no raw server or driver text is
 // ever shown. Both the add flow and the member status read these maps.
 import type { I18nKey } from "../../lib/i18n";

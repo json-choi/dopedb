@@ -104,7 +104,7 @@ change.
 | Route | File | Methods | Purpose |
 |-------|------|---------|---------|
 | `.../knowledge/environment-connections` | `.../environment-connections/route.ts` | GET | One bounded workspace-wide snapshot of Environment→connection bindings |
-| `.../knowledge/environments/[environmentId]/connections` | `.../environments/[environmentId]/connections/route.ts` | GET, POST, DELETE | GET lists bindings for one Environment (flags staleness vs. current connection revision); POST creates/updates a binding via one atomic D1 statement group (rejects reassigning a connection already bound elsewhere); DELETE revokes a binding |
+| `.../knowledge/environments/[environmentId]/connections` | `.../environments/[environmentId]/connections/route.ts` | GET, POST, DELETE | GET lists bindings for one Environment (flags staleness vs. current connection revision); POST creates/updates a binding via one atomic D1 statement group (rejects reassigning a connection already bound elsewhere); DELETE revokes a binding. POST and DELETE need the `write` capability (editor and above), so the member who creates a connection can place it |
 | `.../knowledge/github/install` | `.../github/install/route.ts` | POST | Starts GitHub App installation OAuth: stores a hashed, 10-minute setup state, returns the installation authorization URL |
 | `.../knowledge/github/repositories` | `.../github/repositories/route.ts` | GET | Lists repositories visible to the workspace's active GitHub App installations |
 | `.../knowledge/grants` | `.../grants/route.ts` | GET, POST, DELETE | Knowledge-graph grants are not shipped: GET always returns `{ grants: [] }`; POST always 409; DELETE still revokes an old persisted grant row for cleanup |

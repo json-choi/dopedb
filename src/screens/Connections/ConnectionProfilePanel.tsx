@@ -10,6 +10,8 @@ import { PanelTabs } from "../../design-system/components/PanelTabs";
 import { defaultConnectionName } from "../../features/connections/presets";
 import type { ConnectionEditorController } from "../../features/connections/useConnectionEditorController";
 import { useI18n } from "../../lib/i18n";
+import { ConnectionTeamPanel } from "./ConnectionTeamPanel";
+import { ConnectionMethodFlow } from "./ConnectionMethodFlow";
 import { ConnectionAdvancedTab } from "./ConnectionAdvancedTab";
 import { ConnectionGeneralTab } from "./ConnectionGeneralTab";
 import { ConnectionOptionsTab } from "./ConnectionOptionsTab";
@@ -29,6 +31,7 @@ export function ConnectionProfilePanel({
   schema,
   problems,
   workspaceDialog,
+  credentialMethod,
   commands,
 }: {
   nameInputRef: RefObject<HTMLInputElement | null>;
@@ -39,9 +42,22 @@ export function ConnectionProfilePanel({
   schema: ConnectionEditorController["schema"];
   problems: ConnectionEditorController["dialogs"]["problems"];
   workspaceDialog: ConnectionEditorController["dialogs"]["workspace"];
+  credentialMethod: ConnectionEditorController["credentialMethod"];
   commands: ConnectionEditorController["commands"];
 }) {
   const { t } = useI18n();
+
+  // A provider import or per-member accounts replaces the whole form: those flows ask
+  // for their own name, environment and credentials.
+  if (credentialMethod.flowActive && credentialMethod.scope) {
+    return (
+      <ConnectionMethodFlow
+        scope={credentialMethod.scope}
+        credentialMethod={credentialMethod}
+        busy={commands.busy}
+      />
+    );
+  }
 
   return (
     <>
@@ -89,6 +105,14 @@ export function ConnectionProfilePanel({
       ) : null}
 
       <div className="tw:min-h-0 tw:min-w-0 tw:flex-1 tw:overflow-y-auto tw:p-5 tw:[container-type:inline-size]">
+        {!problems.open && credentialMethod.scope && !profile.identity.isNew
+        && profile.form.workspaceAccess === "manage" ? (
+          <ConnectionTeamPanel
+            scope={credentialMethod.scope}
+            connection={profile.form}
+            onDeleted={commands.finishRemoteDeletion}
+          />
+        ) : null}
         {!problems.open ? (
           <ConnectionTestFailureNotice commands={commands} />
         ) : null}
@@ -106,6 +130,7 @@ export function ConnectionProfilePanel({
             sources={sources}
             drivers={drivers}
             workspaceDialog={workspaceDialog}
+            credentialMethod={credentialMethod}
             managedConnection={commands.managedConnection}
             busy={commands.busy}
           />

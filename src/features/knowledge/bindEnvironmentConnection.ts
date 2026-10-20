@@ -1,4 +1,9 @@
+// Binding a connection to a Project environment: the revision-conflict retry that refreshes
+// the native workspace projection once, and the refusal checked before the request for a
+// connection that cannot be bound because it is not a team connection.
 import { errDetails } from "../../ipc/types";
+import type { I18nKey } from "../../lib/i18n";
+import { isDeviceOnlySqlite, type ConnectionProfile } from "../connections/domain";
 import { refreshWorkspaceAuthState } from "../workspaces/tauriAdapter";
 import type {
   BindEnvironmentConnectionInput,
@@ -28,4 +33,18 @@ export async function bindKnowledgeEnvironmentConnectionWithRefresh(
     await refreshWorkspaceAuthState();
     return bindKnowledgeEnvironmentConnection(input);
   }
+}
+
+/**
+ * Why a connection cannot be bound in a team workspace, checked before the request so the
+ * person gets actionable text. Native still refuses the same cases as the final guard.
+ */
+export function bindingRefusal(
+  connection: ConnectionProfile | undefined,
+  teamWorkspace: boolean,
+): I18nKey | null {
+  if (!connection || !teamWorkspace) return null;
+  if (isDeviceOnlySqlite(connection)) return "knowledge.bindFailure.deviceOnly";
+  if (connection.workspaceAccess === "local") return "knowledge.bindFailure.notShared";
+  return null;
 }

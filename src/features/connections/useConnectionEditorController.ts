@@ -10,6 +10,7 @@ import type { ConnectionProfile } from "./domain";
 import type { ConnectionLaunchPreset } from "./presets";
 import { useBigQueryOnboardingController } from "./useBigQueryOnboardingController";
 import { useConnectionCatalogController } from "./useConnectionCatalogController";
+import { useConnectionCredentialMethod } from "./useConnectionCredentialMethod";
 import { useCloudflareD1OnboardingController } from "./useCloudflareD1OnboardingController";
 import { useConnectionEditorDialogs } from "./useConnectionEditorDialogs";
 import { useConnectionProfileController } from "./useConnectionProfileController";
@@ -75,6 +76,7 @@ export function useConnectionEditorController(props: ConnectionEditorProps) {
     catalog.view.drivers.active?.installState === "installed",
   );
   const schema = useConnectionSchemaController(profileState);
+  const credentialMethod = useConnectionCredentialMethod(profileState, props);
   const profileController = useConnectionProfileController({
     connections: props.connections,
     onDeletedConnection: props.onDeletedConnection,
@@ -93,6 +95,7 @@ export function useConnectionEditorController(props: ConnectionEditorProps) {
     catalog: catalog.view,
     navigation: { editConnection, newConnection },
     schema,
+    credentialMethod,
     dialogs: {
       providerCredentials: dialogState.providerCredentials,
       workspace: dialogState.workspace,

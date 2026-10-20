@@ -32,26 +32,26 @@ export const workspaceNeonBranchesCatalog = defineCatalog(
     "workspaceNeonBranches.branchState.archived": "Archived",
     "workspaceNeonBranches.branchState.unknown": "Unknown state",
     "workspaceNeonBranches.missingTargets":
-      "{count} shared connections point to a branch that no longer exists: {names}. Remove or re-add them from the shared database list.",
+      "{count} team connections point to a branch that no longer exists: {names}. Remove or re-add them from Explorer.",
     "workspaceNeonBranches.selectedBranch": "Selected branch",
     "workspaceNeonBranches.selectBranchHint":
       "Select a ready branch to plan a connection switch or a discard.",
     "workspaceNeonBranches.environmentProduction": "Production",
     "workspaceNeonBranches.environmentDevelopment": "Development",
     "workspaceNeonBranches.environmentUnknown": "Environment not classified",
-    "workspaceNeonBranches.connectionCount": "{count} shared connections",
+    "workspaceNeonBranches.connectionCount": "{count} team connections",
     "workspaceNeonBranches.chooseEnvironment": "Choose environment",
-    "workspaceNeonBranches.switchTitle": "Switch shared connection target",
+    "workspaceNeonBranches.switchTitle": "Switch team connection target",
     "workspaceNeonBranches.switchDescription":
-      "Moves a shared connection to the selected branch. The connection ID and permissions stay; existing leases are revoked and a new revision pinned to this branch is created.",
-    "workspaceNeonBranches.switchConnection": "Shared connection to switch",
+      "Moves a team connection to the selected branch. The connection ID and permissions stay; existing leases are revoked and a new revision pinned to this branch is created.",
+    "workspaceNeonBranches.switchConnection": "Team connection to switch",
     "workspaceNeonBranches.targetEnvironment": "Target environment",
     "workspaceNeonBranches.alreadyTarget":
       "This connection already uses the selected branch. Choose a different target branch.",
     "workspaceNeonBranches.targetNotReady":
       "Finish least-privilege setup and database verification for this branch before using it as a connection target.",
     "workspaceNeonBranches.targetConflict":
-      "Another shared connection already uses the same database on this branch.",
+      "Another team connection already uses the same database on this branch.",
     "workspaceNeonBranches.activeLeases":
       "{count} active leases will be revoked. Running queries and Agent sessions end instead of moving to the new target.",
     "workspaceNeonBranches.createSwitchPlan": "Create switch plan",
@@ -108,7 +108,7 @@ export const workspaceNeonBranchesCatalog = defineCatalog(
     "workspaceNeonBranches.separateApproval":
       "A production-data plan must be approved from another administrator account. Ask another administrator to open this screen.",
     "workspaceNeonBranches.bootstrapRequired":
-      "The branch was created but is not a shared database yet. Select the new branch in Add database to finish least-privilege setup and database verification.",
+      "The branch was created but is not a team connection yet. Add it in the connection editor with provider-managed credentials and select the new branch to finish least-privilege setup and database verification.",
     "workspaceNeonBranches.failureCode": "Failure code",
     "workspaceNeonBranches.reject": "Reject",
     "workspaceNeonBranches.approve": "Approve plan",
@@ -155,7 +155,7 @@ export const workspaceNeonBranchesCatalog = defineCatalog(
     "workspaceNeonBranches.warning.recoveryNotGuaranteed":
       "The recovery window depends on your Neon account and is not guaranteed by DopeDB",
     "workspaceNeonBranches.warning.targetChanges":
-      "The shared connection moves to a new revision pinned to the target branch",
+      "The team connection moves to a new revision pinned to the target branch",
     "workspaceNeonBranches.warning.accessRevoked":
       "Existing leases and execution sessions end before the switch",
     "workspaceNeonBranches.warning.productionSwitch":
@@ -167,7 +167,7 @@ export const workspaceNeonBranchesCatalog = defineCatalog(
     "workspaceNeonBranches.blocker.protectedBranch": "A protected branch cannot be discarded",
     "workspaceNeonBranches.blocker.childBranches": "Remove child branches first",
     "workspaceNeonBranches.blocker.workspaceConnections":
-      "A shared connection still uses this branch",
+      "A team connection still uses this branch",
     "workspaceNeonBranches.blocker.activeLeases": "Active credential leases remain",
     "workspaceNeonBranches.blocker.providerRestricted": "Neon currently restricts this change",
     "workspaceNeonBranches.safeRun.title": "Current safe run · {branch}",
@@ -205,7 +205,7 @@ export const workspaceNeonBranchesCatalog = defineCatalog(
     "workspaceNeonBranches.safeRun.returnPlan": "Plan return to source",
     "workspaceNeonBranches.safeRun.discardPlan": "Plan isolated branch discard",
     "workspaceNeonBranches.safeRun.standaloneNotice":
-      "This isolated connection was added as a separate shared database. After inspecting the results, remove it from the shared database list before discarding the branch.",
+      "This isolated connection was added as a separate team connection. After inspecting the results, remove it from Explorer before discarding the branch.",
     "workspaceNeonBranches.errors.load": "Could not load the Neon branch state.",
     "workspaceNeonBranches.errors.loadOperations": "Could not load the Neon branch history.",
     "workspaceNeonBranches.errors.invalidResponse":
@@ -254,26 +254,26 @@ export const workspaceNeonBranchesCatalog = defineCatalog(
     "workspaceNeonBranches.branchState.archived": "보관됨",
     "workspaceNeonBranches.branchState.unknown": "상태 알 수 없음",
     "workspaceNeonBranches.missingTargets":
-      "공유 연결 {count}개가 더 이상 없는 브랜치를 가리킵니다: {names}. 공유 DB 목록에서 제거하거나 다시 추가하세요.",
+      "팀 연결 {count}개가 더 이상 없는 브랜치를 가리킵니다: {names}. Explorer에서 제거하거나 다시 추가하세요.",
     "workspaceNeonBranches.selectedBranch": "선택한 브랜치",
     "workspaceNeonBranches.selectBranchHint":
       "연결 전환이나 폐기를 계획하려면 준비된 브랜치를 선택하세요.",
     "workspaceNeonBranches.environmentProduction": "운영",
     "workspaceNeonBranches.environmentDevelopment": "개발",
     "workspaceNeonBranches.environmentUnknown": "환경 미분류",
-    "workspaceNeonBranches.connectionCount": "공유 연결 {count}개",
+    "workspaceNeonBranches.connectionCount": "팀 연결 {count}개",
     "workspaceNeonBranches.chooseEnvironment": "환경 선택",
-    "workspaceNeonBranches.switchTitle": "공유 연결 대상 전환",
+    "workspaceNeonBranches.switchTitle": "팀 연결 대상 전환",
     "workspaceNeonBranches.switchDescription":
-      "공유 연결을 선택한 브랜치로 옮깁니다. 연결 ID와 권한은 유지되며, 기존 단기 자격 증명을 폐기한 뒤 이 브랜치에 고정된 새 리비전을 만듭니다.",
-    "workspaceNeonBranches.switchConnection": "전환할 공유 연결",
+      "팀 연결을 선택한 브랜치로 옮깁니다. 연결 ID와 권한은 유지되며, 기존 단기 자격 증명을 폐기한 뒤 이 브랜치에 고정된 새 리비전을 만듭니다.",
+    "workspaceNeonBranches.switchConnection": "전환할 팀 연결",
     "workspaceNeonBranches.targetEnvironment": "대상 환경",
     "workspaceNeonBranches.alreadyTarget":
       "이 연결은 이미 선택한 브랜치를 사용합니다. 다른 대상 브랜치를 선택하세요.",
     "workspaceNeonBranches.targetNotReady":
       "이 브랜치를 연결 대상으로 쓰려면 먼저 최소 권한 준비와 DB 검증을 완료하세요.",
     "workspaceNeonBranches.targetConflict":
-      "이 브랜치의 같은 DB를 다른 공유 연결이 이미 사용하고 있습니다.",
+      "이 브랜치의 같은 DB를 다른 팀 연결이 이미 사용하고 있습니다.",
     "workspaceNeonBranches.activeLeases":
       "활성 단기 자격 증명 {count}개를 폐기합니다. 실행 중인 쿼리와 Agent 세션은 새 대상으로 옮겨지지 않고 종료됩니다.",
     "workspaceNeonBranches.createSwitchPlan": "전환 계획 만들기",
@@ -328,7 +328,7 @@ export const workspaceNeonBranchesCatalog = defineCatalog(
     "workspaceNeonBranches.separateApproval":
       "운영 데이터 계획은 다른 관리자 계정에서 승인해야 합니다. 다른 관리자에게 이 화면을 열어 달라고 요청하세요.",
     "workspaceNeonBranches.bootstrapRequired":
-      "브랜치는 만들어졌지만 아직 공유 DB가 아닙니다. DB 추가에서 새 브랜치를 선택해 최소 권한 준비와 DB 검증을 완료하세요.",
+      "브랜치는 만들어졌지만 아직 팀 연결이 아닙니다. 연결 편집기에서 공급자 관리형 자격 증명으로 추가하고 새 브랜치를 선택해 최소 권한 준비와 DB 검증을 완료하세요.",
     "workspaceNeonBranches.failureCode": "실패 코드",
     "workspaceNeonBranches.reject": "거절",
     "workspaceNeonBranches.approve": "계획 승인",
@@ -371,7 +371,7 @@ export const workspaceNeonBranchesCatalog = defineCatalog(
     "workspaceNeonBranches.warning.recoveryNotGuaranteed":
       "복구 가능 기간은 Neon 계정에 따라 다르며 DopeDB가 보장하지 않습니다",
     "workspaceNeonBranches.warning.targetChanges":
-      "공유 연결이 대상 브랜치에 고정된 새 리비전으로 바뀝니다",
+      "팀 연결이 대상 브랜치에 고정된 새 리비전으로 바뀝니다",
     "workspaceNeonBranches.warning.accessRevoked":
       "전환 전에 기존 단기 자격 증명과 실행 세션을 종료합니다",
     "workspaceNeonBranches.warning.productionSwitch":
@@ -383,7 +383,7 @@ export const workspaceNeonBranchesCatalog = defineCatalog(
     "workspaceNeonBranches.blocker.protectedBranch": "보호 브랜치는 폐기할 수 없습니다",
     "workspaceNeonBranches.blocker.childBranches": "하위 브랜치를 먼저 정리해야 합니다",
     "workspaceNeonBranches.blocker.workspaceConnections":
-      "이 브랜치를 사용하는 공유 연결이 있습니다",
+      "이 브랜치를 사용하는 팀 연결이 있습니다",
     "workspaceNeonBranches.blocker.activeLeases": "활성 단기 자격 증명이 남아 있습니다",
     "workspaceNeonBranches.blocker.providerRestricted": "Neon이 현재 이 변경을 제한합니다",
     "workspaceNeonBranches.safeRun.title": "현재 안전 실행 · {branch}",
@@ -421,7 +421,7 @@ export const workspaceNeonBranchesCatalog = defineCatalog(
     "workspaceNeonBranches.safeRun.returnPlan": "원본 복귀 계획",
     "workspaceNeonBranches.safeRun.discardPlan": "격리 브랜치 폐기 계획",
     "workspaceNeonBranches.safeRun.standaloneNotice":
-      "별도 공유 DB로 추가한 격리 연결입니다. 결과를 확인한 뒤 공유 DB 목록에서 이 연결을 제거해야 브랜치를 폐기할 수 있습니다.",
+      "별도 팀 연결로 추가한 격리 연결입니다. 결과를 확인한 뒤 Explorer에서 이 연결을 제거해야 브랜치를 폐기할 수 있습니다.",
     "workspaceNeonBranches.errors.load": "Neon 브랜치 상태를 불러오지 못했습니다.",
     "workspaceNeonBranches.errors.loadOperations": "Neon 브랜치 작업 내역을 불러오지 못했습니다.",
     "workspaceNeonBranches.errors.invalidResponse":

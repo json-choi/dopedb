@@ -1,4 +1,4 @@
-// Review list for preserved offline edits that conflict with a shared database's
+// Review list for preserved offline edits that conflict with a team connection's
 // current version. Each item shows only the fields that differ and offers the two
 // audited decisions; applying a deletion asks for confirmation first. Decisions
 // are handed to the panel's access commands.

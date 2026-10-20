@@ -1,4 +1,4 @@
-// Query options for direct shared database reads, keyed under the workspace
+// Query options for direct team connection reads, keyed under the workspace
 // administration root so an account or workspace switch clears them. The member's own
 // status polls only while the administrator device has not finished creating it.
 import { keepPreviousData, queryOptions, type QueryClient } from "@tanstack/react-query";
@@ -34,7 +34,7 @@ export function directStatusQuery(scope: DirectScope | null) {
       ? directAccessQueryKeys.status(scope)
       : (["workspaceAdmin", "none", "directStatus"] as const),
     queryFn: () => {
-      if (!scope) throw new Error("A shared database scope is required.");
+      if (!scope) throw new Error("A team connection scope is required.");
       return readDirectStatus(scope);
     },
     enabled: scope !== null,

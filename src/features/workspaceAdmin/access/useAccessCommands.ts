@@ -1,8 +1,8 @@
-// Owns every Database access change made from the open panel: one command at a
-// time, the inline notice a refusal leaves behind, and the cache refresh that shows
-// the server's confirmed state afterwards. Components render this state and call
-// the commands; none of them writes team read, policy or conflict state directly.
-// Applying a preserved deletion goes through the shared access-lowering hook.
+// Owns every preserved-edit conflict decision made from the connection editor: one
+// command at a time, the inline notice a refusal leaves behind, and the cache refresh
+// that shows the server's confirmed state afterwards. Components render this state and
+// call the commands; none of them writes conflict state directly. Applying a preserved
+// deletion goes through the shared access-lowering hook.
 import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "../../../components/Toast";
@@ -19,16 +19,16 @@ import {
   type ConnectionConflict,
 } from "./domain";
 import { accessErrorMessage } from "./errors";
-import { AccessResponseError, parseTeamReadResult } from "./parsers";
-import { accessQueryRoot, connectionConflictsQuery, teamReadQuery } from "./queries";
+import { accessQueryRoot, connectionConflictsQuery } from "./queries";
 
-export type AccessBusy =
-  | { kind: "teamRead"; connectionId: string }
-  | { kind: "conflict"; conflictId: string; action: "keep" | "apply" };
+export type AccessBusy = { kind: "conflict"; conflictId: string; action: "keep" | "apply" };
 
-export type AccessNotice =
-  | { area: "teamRead"; connectionId: string; message: string }
-  | { area: "conflict"; conflictId: string; connectionName: string; message: string };
+export type AccessNotice = {
+  area: "conflict";
+  conflictId: string;
+  connectionName: string;
+  message: string;
+};
 
 export type AccessCommands = ReturnType<typeof useAccessCommands>;
 
@@ -59,38 +59,11 @@ export function useAccessCommands(scope: WorkspaceAdminScope, lowering: AccessLo
     return accessErrorMessage(error, { lang, t }, fallback);
   }
 
-  // A refusal may mean the database, its grants or its conflicts moved on, so it
+  // A refusal may mean the connection, its grants or its conflicts moved on, so it
   // re-reads the whole area; a confirmed change refreshes only what it touched.
   const refreshArea = () => queryClient.invalidateQueries({ queryKey: accessQueryRoot(scope) });
-  const refreshTeamRead = (connectionId: string) =>
-    queryClient.invalidateQueries({ queryKey: teamReadQuery(scope, connectionId).queryKey });
   const refreshConflicts = () =>
     queryClient.invalidateQueries({ queryKey: connectionConflictsQuery(scope).queryKey });
-
-  async function setTeamRead(connectionId: string, enabled: boolean) {
-    if (!begin({ kind: "teamRead", connectionId })) return;
-    let failed = false;
-    try {
-      const confirmed = parseTeamReadResult(
-        await runWorkspaceAdmin(scope.accountId, {
-          kind: "setTeamReadAccess",
-          workspaceId: scope.workspaceId,
-          connectionId,
-          enabled,
-        }),
-      );
-      if (confirmed !== enabled) throw new AccessResponseError("team read access");
-    } catch (error) {
-      failed = true;
-      setNotice({
-        area: "teamRead",
-        connectionId,
-        message: refusal(error, "workspaceAccess.teamReadFailed"),
-      });
-    } finally {
-      await finish(failed ? refreshArea() : refreshTeamRead(connectionId));
-    }
-  }
 
   function conflictNotice(conflict: ConnectionConflict, message: string): AccessNotice {
     return {
@@ -182,7 +155,6 @@ export function useAccessCommands(scope: WorkspaceAdminScope, lowering: AccessLo
   return {
     busy,
     notice,
-    setTeamRead,
     keepCurrent,
     applyCandidate,
   };

@@ -47,6 +47,7 @@ import { useTreeKeyboardNavigation } from "../../design-system/treeKeyboard";
 import type { EnvironmentKind } from "../../lib/environmentKind";
 import { useI18n } from "../../lib/i18n";
 import ConnectionNode from "./ConnectionNode";
+import { ConnectionPromotionNotice } from "./ConnectionPromotionNotice";
 import { useCatalogTree } from "./useCatalogTree";
 import { KnowledgeProjectTree } from "./KnowledgeProjectTree";
 import { DatabaseExplorerToolbar } from "./DatabaseExplorerToolbar";
@@ -569,6 +570,7 @@ export function DatabaseExplorer({
         data-catalog-tree-scroll
         className="tw:min-h-0 tw:flex-1 tw:overflow-x-hidden tw:overflow-y-auto tw:px-3 tw:pt-1 tw:pb-3 tw:[container-name:db-sidebar] tw:[container-type:inline-size]"
       >
+        <ConnectionPromotionNotice />
         {knowledgeEnabled && knowledgeProjects.isPending ? (
           <div className="tw:min-h-control-md tw:px-2 tw:py-1 tw:text-xs">
             <LoadingLabel>{t("connections.loadingProjects")}</LoadingLabel>

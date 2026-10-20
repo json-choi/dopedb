@@ -19,11 +19,12 @@ import {
   parseEnvironmentKind,
 } from "../../lib/environmentKind";
 import { useI18n } from "../../lib/i18n";
+import { ConnectionCredentialMethodRow } from "./ConnectionCredentialMethodRow";
 import { ConnectionBigQueryFields } from "./ConnectionBigQueryFields";
 import { ManagedWorkspaceConnectionField } from "./ManagedWorkspaceConnectionField";
 import { ConnectionDatabaseField } from "./ConnectionDatabaseField";
 import { ConnectionCloudflareD1Fields } from "./ConnectionCloudflareD1Fields";
-import { ConnectionSharedTemplateFields } from "./ConnectionSharedTemplateFields";
+import { ConnectionTeamFields } from "./ConnectionTeamFields";
 
 type Controller = ConnectionEditorController;
 
@@ -32,6 +33,7 @@ export function ConnectionGeneralTab({
   sources,
   drivers,
   workspaceDialog,
+  credentialMethod,
   managedConnection,
   busy,
 }: {
@@ -39,6 +41,7 @@ export function ConnectionGeneralTab({
   sources: Controller["catalog"]["sources"];
   drivers: Controller["catalog"]["drivers"];
   workspaceDialog: Controller["dialogs"]["workspace"];
+  credentialMethod: Controller["credentialMethod"];
   managedConnection: Controller["commands"]["managedConnection"];
   busy: boolean;
 }) {
@@ -63,6 +66,7 @@ export function ConnectionGeneralTab({
 
   return (
     <div className="tw:mx-auto tw:grid tw:w-full tw:max-w-[840px] tw:gap-4">
+      <ConnectionCredentialMethodRow credentialMethod={credentialMethod} disabled={busy} />
       <section className="tw:grid tw:gap-1.5">
         <div className="tw:flex tw:min-h-control-md tw:flex-wrap tw:items-center tw:gap-x-6 tw:gap-y-1 tw:text-sm tw:text-foreground">
           {profile.identity.isNew && !isSharedTemplate ? (
@@ -209,6 +213,12 @@ export function ConnectionGeneralTab({
               </Button>
             </div>}
           </PropertyRow>
+          {credentialMethod.scope ? (
+            <p className="tw:m-0 tw:flex tw:items-start tw:gap-2 tw:text-xs tw:leading-body tw:text-muted-foreground">
+              <Icon name="lock" className="tw:mt-0.5 tw:shrink-0" />
+              {t("connections.deviceOnlyEditorNote")}
+            </p>
+          ) : null}
         </section>
       ) : isBigQuery ? (
         <ConnectionBigQueryFields profile={profile} drivers={drivers} />
@@ -283,7 +293,7 @@ export function ConnectionGeneralTab({
           ) : null}
 
           {isSharedTemplate ? (
-            <ConnectionSharedTemplateFields
+            <ConnectionTeamFields
               profile={profile}
               workspaceDialog={workspaceDialog}
               managedActive={managedConnection.active}

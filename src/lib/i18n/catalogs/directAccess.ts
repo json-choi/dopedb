@@ -1,4 +1,4 @@
-// Direct shared databases: the administrator's add flow (endpoint, credential check,
+// Per-member DopeDB accounts: the administrator's add flow in the connection editor (endpoint, credential check,
 // scope and grant plan) and the member's own account status on a provisioned
 // connection. Failure codes and provisioning states are closed families; each code or
 // state has exactly one sentence, so no server or driver text is ever shown.
@@ -6,8 +6,7 @@ import { defineCatalog } from "../types";
 
 export const directAccessCatalog = defineCatalog(
   {
-    "directAccess.add.open": "Add direct connection",
-    "directAccess.add.title": "Direct connection (PostgreSQL / MySQL)",
+    "directAccess.add.title": "Per-member DopeDB accounts (PostgreSQL / MySQL)",
     "directAccess.add.description":
       "Share one server directly. Each permitted member gets their own account that DopeDB creates; nobody shares a password.",
     "directAccess.add.stepsLabel": "Direct connection steps",
@@ -83,9 +82,9 @@ export const directAccessCatalog = defineCatalog(
     "directAccess.add.name": "Name in the workspace",
     "directAccess.add.environment": "Environment",
     "directAccess.add.environmentNone": "Not set",
-    "directAccess.add.registering": "Adding the shared database…",
+    "directAccess.add.registering": "Adding the team connection…",
     "directAccess.add.registerError":
-      "The shared database could not be added. Nothing was changed; review the details and try again.",
+      "The team connection could not be added. Nothing was changed; review the details and try again.",
 
     "directAccess.failure.markerMismatch":
       "The account on the server is not the one DopeDB created, so DopeDB left it untouched.",
@@ -133,7 +132,7 @@ export const directAccessCatalog = defineCatalog(
     "directAccess.credentialNotice":
       "Your account on this database is not ready. Check its status in the Explorer.",
     "directAccess.analysisBlocked":
-      "Your account on this shared database is not ready. Check its status in the Explorer, then run again.",
+      "Your account on this team connection is not ready. Check its status in the Explorer, then run again.",
     "directAccess.testFailure.title": "Your account could not connect",
     "directAccess.testFailure.recovery":
       "Your account on this database is created and managed by DopeDB. Check its status in the Explorer, or ask an administrator.",
@@ -168,8 +167,7 @@ export const directAccessCatalog = defineCatalog(
       "The administrator account cannot end sessions, so sessions a member already had open can keep running until they disconnect (PostgreSQL: with only PUBLIC rights; MySQL: with the privileges they had at login). New logins are blocked.",
   },
   {
-    "directAccess.add.open": "직접 연결 추가",
-    "directAccess.add.title": "직접 연결 (PostgreSQL / MySQL)",
+    "directAccess.add.title": "구성원별 DopeDB 계정 (PostgreSQL / MySQL)",
     "directAccess.add.description":
       "서버 하나를 그대로 공유합니다. 허용된 구성원마다 DopeDB가 개인 계정을 만들어 주므로 비밀번호를 함께 쓰지 않습니다.",
     "directAccess.add.stepsLabel": "직접 연결 단계",
@@ -245,9 +243,9 @@ export const directAccessCatalog = defineCatalog(
     "directAccess.add.name": "워크스페이스 표시 이름",
     "directAccess.add.environment": "환경",
     "directAccess.add.environmentNone": "지정 안 함",
-    "directAccess.add.registering": "공유 데이터베이스를 추가하는 중…",
+    "directAccess.add.registering": "팀 연결을 추가하는 중…",
     "directAccess.add.registerError":
-      "공유 데이터베이스를 추가하지 못했습니다. 아무것도 바뀌지 않았으니 입력을 검토하고 다시 시도하세요.",
+      "팀 연결을 추가하지 못했습니다. 아무것도 바뀌지 않았으니 입력을 검토하고 다시 시도하세요.",
 
     "directAccess.failure.markerMismatch":
       "서버의 계정이 DopeDB가 만든 계정이 아니어서 그대로 두었습니다.",
@@ -295,7 +293,7 @@ export const directAccessCatalog = defineCatalog(
     "directAccess.credentialNotice":
       "이 데이터베이스의 내 계정이 아직 준비되지 않았습니다. Explorer에서 상태를 확인하세요.",
     "directAccess.analysisBlocked":
-      "이 공유 데이터베이스의 내 계정이 아직 준비되지 않았습니다. Explorer에서 상태를 확인한 뒤 다시 실행하세요.",
+      "이 팀 연결의 내 계정이 아직 준비되지 않았습니다. Explorer에서 상태를 확인한 뒤 다시 실행하세요.",
     "directAccess.testFailure.title": "내 계정으로 연결하지 못했습니다",
     "directAccess.testFailure.recovery":
       "이 데이터베이스의 내 계정은 DopeDB가 만들고 관리합니다. Explorer에서 상태를 확인하거나 관리자에게 문의하세요.",

@@ -73,9 +73,9 @@ export async function POST(request: Request, context: RouteContext) {
   if (!isUuid(workspaceId) || !isUuid(environmentId)) {
     return jsonError("Invalid Environment scope", 400);
   }
-  const authorization = await authorizeWorkspace(request, workspaceId, "manage");
+  const authorization = await authorizeWorkspace(request, workspaceId, "write");
   if (!authorization.ok) return jsonError(authorization.error, authorization.status);
-  const authority = knowledgeMutationAuthority(authorization, workspaceId, "manage");
+  const authority = knowledgeMutationAuthority(authorization, workspaceId, "write");
   const parsed = await boundedJsonBody(request, 8 * 1024);
   const body = parsed.ok ? parsed.value as Record<string, unknown> : null;
   if (
@@ -174,9 +174,9 @@ export async function DELETE(request: Request, context: RouteContext) {
   if (!isUuid(workspaceId) || !isUuid(environmentId)) {
     return jsonError("Invalid Environment scope", 400);
   }
-  const authorization = await authorizeWorkspace(request, workspaceId, "manage");
+  const authorization = await authorizeWorkspace(request, workspaceId, "write");
   if (!authorization.ok) return jsonError(authorization.error, authorization.status);
-  const authority = knowledgeMutationAuthority(authorization, workspaceId, "manage");
+  const authority = knowledgeMutationAuthority(authorization, workspaceId, "write");
   const parsed = await boundedJsonBody(request, 4 * 1024);
   const body = parsed.ok ? parsed.value as Record<string, unknown> : null;
   if (!body || typeof body.bindingId !== "string" || !isUuid(body.bindingId)) {

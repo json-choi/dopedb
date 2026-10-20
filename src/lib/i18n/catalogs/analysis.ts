@@ -186,12 +186,12 @@ export const analysisCatalog = defineCatalog(
       "Choose the database and save; the Article then pins its current connection content.",
     "analysis.pinUnbound": "This Article's database is no longer bound to this Environment.",
     "analysis.pinBindingStale":
-      "The shared connection {name} changed after it was bound to this Environment (revision {from} → {to}).",
+      "The team connection {name} changed after it was bound to this Environment (revision {from} → {to}).",
     "analysis.pinContentChanged":
       "This Article is pinned to revision {pinned} of {name}'s connection content, but the Environment now uses revision {current}.",
     "analysis.pinUnavailable": "The {name} database is not available on this device.",
     "analysis.askEditor": "Ask a member who can edit Articles to update its database.",
-    "analysis.askAdminReconfirm": "Ask a workspace admin or owner to reconfirm this binding.",
+    "analysis.askAdminReconfirm": "Ask a workspace editor, admin or owner to reconfirm this binding.",
     "analysis.askAdminAccess": "Ask a workspace admin for access to this database.",
     "analysis.errorStopped":
       "The run stopped because its authority or the read-only policy could not be confirmed.",
@@ -384,12 +384,12 @@ export const analysisCatalog = defineCatalog(
       "데이터베이스를 고르고 저장하면 아티클이 현재 연결 내용으로 다시 고정됩니다.",
     "analysis.pinUnbound": "이 아티클의 데이터베이스가 더 이상 이 환경에 연결되어 있지 않습니다.",
     "analysis.pinBindingStale":
-      "{name} 공유 연결이 환경에 바인딩된 뒤 바뀌었습니다(리비전 {from} → {to}).",
+      "{name} 팀 연결이 환경에 바인딩된 뒤 바뀌었습니다(리비전 {from} → {to}).",
     "analysis.pinContentChanged":
       "아티클은 {name} 연결 내용의 리비전 {pinned}에 고정되어 있지만, 현재 환경의 연결 내용은 리비전 {current}입니다.",
     "analysis.pinUnavailable": "{name} 데이터베이스를 이 기기에서 사용할 수 없습니다.",
     "analysis.askEditor": "아티클 편집 권한이 있는 구성원에게 데이터베이스 연결 수정을 요청하세요.",
-    "analysis.askAdminReconfirm": "워크스페이스 관리자(admin·owner)에게 이 바인딩의 재확인을 요청하세요.",
+    "analysis.askAdminReconfirm": "워크스페이스 편집자(editor) 이상에게 이 바인딩의 재확인을 요청하세요.",
     "analysis.askAdminAccess": "워크스페이스 관리자에게 이 데이터베이스 접근 권한을 요청하세요.",
     "analysis.errorStopped":
       "실행 권한이나 읽기 전용 정책을 확인할 수 없어 실행을 중단했습니다.",

@@ -57,10 +57,6 @@ pub(crate) enum WorkspaceAdminOperation {
     ListConnections {
         workspace_id: WorkspaceId,
     },
-    ListConnectionGrants {
-        workspace_id: WorkspaceId,
-        connection_id: ConnectionId,
-    },
     /// Every member's grant on every shared database, with provisioning status.
     ListMemberGrants {
         workspace_id: WorkspaceId,
@@ -83,6 +79,8 @@ pub(crate) enum WorkspaceAdminOperation {
         connection_id: ConnectionId,
         member_id: Uuid,
     },
+    /// Settles a team-read-off change queued by an older device's pending revocation. The
+    /// Desktop UI no longer offers this switch; the server route stays for those devices.
     SetTeamReadAccess {
         workspace_id: WorkspaceId,
         connection_id: ConnectionId,

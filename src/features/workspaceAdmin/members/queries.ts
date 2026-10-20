@@ -24,7 +24,7 @@ export function memberDirectoryQuery(
   });
 }
 
-/** Every member's grant on every shared database, with provisioning status. */
+/** Every member's grant on every team connection, with provisioning status. */
 export function memberGrantsQuery(
   scope: Pick<WorkspaceAdminScope, "accountId" | "workspaceId">,
 ) {

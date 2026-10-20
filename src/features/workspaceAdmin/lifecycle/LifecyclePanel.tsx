@@ -68,7 +68,7 @@ export default function LifecyclePanel({ scope, onNavigate }: WorkspaceAdminPane
             />
           ) : (
             <>
-              <BackupsSection controller={controller} status={lifecycle} onNavigate={onNavigate} />
+              <BackupsSection controller={controller} status={lifecycle} />
               <EncryptionKeySection controller={controller} />
               <RetentionSection status={lifecycle} />
               <WorkspaceDeletionSection

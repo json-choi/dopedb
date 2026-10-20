@@ -99,7 +99,7 @@ export type RemovalFailure =
   | "revocationPending"
   | "busy";
 
-/** Documented refusals of a shared database removal; each one leaves the database intact. */
+/** Documented refusals of a team connection removal; each one leaves the database intact. */
 export function removalFailure(error: unknown): RemovalFailure | null {
   const failed = refusal(error);
   if (!failed) return null;

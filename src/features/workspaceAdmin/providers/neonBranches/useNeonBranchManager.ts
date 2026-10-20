@@ -14,6 +14,7 @@ import type { NeonDecision, NeonPlanAction, WorkspaceAdminScope } from "../../do
 import { workspaceAdminQueryKey } from "../../queryKeys";
 import { runWorkspaceAdmin } from "../../requests";
 import type { ManagedConnection } from "../domain";
+import { sharedDatabasesQuery } from "../../access/queries";
 import { providerQueryRoots } from "../queries";
 import {
   neonExecutionState,
@@ -214,7 +215,7 @@ export function useNeonBranchManager({
     if (includeSharedConnections) {
       keys.push(
         workspaceAdminQueryKey(scope, providerQueryRoots.inventory),
-        workspaceAdminQueryKey(scope, providerQueryRoots.sharedConnections),
+        sharedDatabasesQuery(scope).queryKey,
       );
     }
     await Promise.all(keys.map((queryKey) => queryClient.invalidateQueries({ queryKey })));

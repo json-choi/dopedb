@@ -21,7 +21,10 @@ import type {
   KnowledgeEnvironmentView,
 } from "../../features/knowledge/domain";
 import { knowledgeQueryKeys } from "../../features/knowledge/queryKeys";
-import { bindKnowledgeEnvironmentConnectionWithRefresh } from "../../features/knowledge/bindEnvironmentConnection";
+import {
+  bindingRefusal,
+  bindKnowledgeEnvironmentConnectionWithRefresh,
+} from "../../features/knowledge/bindEnvironmentConnection";
 import {
   connectKnowledgeGithubSource,
   connectKnowledgeLocalFolder,
@@ -283,6 +286,14 @@ export default function Knowledge({
     },
     onError: (error) => setActionError(errMessage(error)),
   });
+  const refuseBinding = (id: string) => {
+    const refusal = bindingRefusal(
+      connections.data?.find((connection) => connection.id === id),
+      catalogScope.workspaceKind === "team",
+    );
+    if (refusal) setActionError(t(refusal));
+    return refusal !== null;
+  };
   const bindConnection = useMutation({
     mutationFn: bindKnowledgeEnvironmentConnectionWithRefresh,
     onSuccess: async () => {
@@ -450,17 +461,18 @@ export default function Knowledge({
           }}
           onRoleChange={setConnectionRole}
           onAliasChange={setConnectionAlias}
-          onBind={() =>
+          onBind={() => {
+            if (refuseBinding(connectionId)) return;
             bindConnection.mutate({
               projectEnvironmentId: environmentId,
               connectionId,
               role: connectionRole.trim(),
               alias: connectionAlias.trim(),
-            })
-          }
+            });
+          }}
           onRetryBindings={() => void environmentConnections.refetch()}
           onReconfirm={(binding) => {
-            if (!binding.connectionId) return;
+            if (!binding.connectionId || refuseBinding(binding.connectionId)) return;
             bindConnection.mutate({
               projectEnvironmentId: environmentId,
               connectionId: binding.connectionId,

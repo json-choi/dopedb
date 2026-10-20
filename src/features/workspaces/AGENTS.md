@@ -16,11 +16,11 @@ authoritative replacement and scope transition passes through it.
 ## Key Files
 | File | Description |
 |------|-------------|
-| `authPolicy.test.ts` | Cross-checks workspace auth/login-callback URLs and deep-link handling against `src-tauri/tauri*.conf.json`, `src-tauri/capabilities/default.json`, and `workspace-cloud`'s deep-link constant, the one-time database focus of `workspaceAdmin/navigationRequest.ts`. |
+| `authPolicy.test.ts` | Cross-checks workspace auth/login-callback URLs and deep-link handling against `src-tauri/tauri*.conf.json`, `src-tauri/capabilities/default.json`, and `workspace-cloud`'s deep-link constant, the one-time managed-connection focus of `workspaceAdmin/navigationRequest.ts`. |
 | `authPolicy.ts` | Workspace identity stays visually stable while the server silently revalidates the OS-keychain session; defines recheck/retry backoff timing (`WORKSPACE_AUTH_RECHECK_MS`, `WORKSPACE_AUTH_RETRY_MS`, exponential `workspaceAuthRetryDelay`). Resource APIs still authorize every sensitive action regardless of this cached visual state. |
 | `cache.ts` | Sole owner of authoritative workspace Query-cache replacement/invalidation and scope-transition cancellation. |
-| `choices.ts` | Pure account/workspace option projection for the switcher, plus the role checks for adding (editor and above) and managing (admin and owner) team connections; composite values keep duplicate cross-account memberships distinct. |
-| `domain.ts` | Branded `WorkspaceId`/`AccountId` and workspace wire/domain contracts. |
+| `choices.ts` | Pure account/workspace option projection for the switcher, plus the role check for adding team connections and placing them in Project environments (editor and above); composite values keep duplicate cross-account memberships distinct. |
+| `domain.ts` | Branded `WorkspaceId`/`AccountId` and workspace wire/domain contracts, including the closed `connectionPromotion` counts the Explorer notice reads. |
 | `loginRequest.ts` | Window-event bus (`requestWorkspaceLogin`/`onWorkspaceLoginRequested`) routing contextual sign-in actions through the one shell-owned login lifecycle. |
 | `membershipRefreshRequest.ts` | Window-event bus (`requestWorkspaceMembershipRefresh`/`onWorkspaceMembershipRefreshRequested`) that lets workspace administration ask `WorkspaceAccount` to re-read memberships after a change to the member's own authority; resolves once that refresh settles. |
 | `queries.ts` | TanStack Query key/option definitions for workspace context and auth state. |

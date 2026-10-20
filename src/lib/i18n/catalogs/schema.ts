@@ -75,7 +75,7 @@ export const schemaCatalog = defineCatalog(
     "schema.retryIn": "Retry in {seconds}s",
     "schema.selectTable": "Select a table to inspect columns, indexes, and foreign keys.",
     "schema.sharedConnectionChanged":
-      "This shared connection changed in the workspace. Refresh the workspace data, then try again.",
+      "This team connection changed in the workspace. Refresh the workspace data, then try again.",
     "schema.showDetails": "Show schema details",
     "schema.tableCount": "{count} objects",
     "schema.types": "Types ({count})",
@@ -156,7 +156,7 @@ export const schemaCatalog = defineCatalog(
     "schema.retryIn": "{seconds}초 후 재시도",
     "schema.selectTable": "테이블을 선택하면 컬럼, 인덱스, 외래 키를 볼 수 있습니다.",
     "schema.sharedConnectionChanged":
-      "워크스페이스에서 이 공유 연결이 변경되었습니다. 워크스페이스 데이터를 새로고침한 뒤 다시 시도하세요.",
+      "워크스페이스에서 이 팀 연결이 변경되었습니다. 워크스페이스 데이터를 새로고침한 뒤 다시 시도하세요.",
     "schema.showDetails": "스키마 상세 정보 보기",
     "schema.tableCount": "{count}개 객체",
     "schema.types": "타입 ({count})",

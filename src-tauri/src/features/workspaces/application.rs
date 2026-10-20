@@ -55,6 +55,8 @@ where
     /// When each team-local connection may be tried again after a failed publication.
     pub(super) promotion_retry_at:
         Arc<std::sync::Mutex<std::collections::HashMap<ConnectionId, std::time::Instant>>>,
+    /// Why each still-local connection is not shared yet, and how many were shared since launch.
+    pub(super) promotion_state: Arc<std::sync::Mutex<promotion::PromotionState>>,
 }
 
 impl<R, A, C, V, E, S> Clone for WorkspaceUseCases<R, A, C, V, E, S>
@@ -76,6 +78,7 @@ where
             ssh_profiles: self.ssh_profiles.clone(),
             sync_lock: Arc::clone(&self.sync_lock),
             promotion_retry_at: Arc::clone(&self.promotion_retry_at),
+            promotion_state: Arc::clone(&self.promotion_state),
         }
     }
 }
@@ -106,6 +109,7 @@ where
             ssh_profiles,
             sync_lock: Arc::new(tokio::sync::Mutex::new(())),
             promotion_retry_at: Arc::default(),
+            promotion_state: Arc::default(),
         }
     }
 }

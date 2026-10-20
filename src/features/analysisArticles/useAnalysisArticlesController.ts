@@ -26,7 +26,6 @@ import type {
 } from "../knowledge/domain";
 import { knowledgeQueryKeys } from "../knowledge/queryKeys";
 import { useWorkspaceAdminScope } from "../workspaceAdmin/scope";
-import { canManageWorkspaceConnections } from "../workspaces/choices";
 import {
   analysisFailure,
   analysisPinFailure,
@@ -97,8 +96,8 @@ export function useAnalysisArticlesController({
   const available = catalogScope.ready && (sharedWorkspace || catalogScope.workspaceKind === "personal");
   const workspaceRole = useWorkspaceAdminScope()?.role ?? null;
   const canWrite = workspaceRole === null || WRITE_ROLES.has(workspaceRole);
-  // Environment bindings are workspace-managed (admin or owner), like the Databases view.
-  const canManageBindings = workspaceRole === null || canManageWorkspaceConnections(workspaceRole);
+  // Editors and above place connections in Project environments, as the server allows.
+  const canManageBindings = canWrite;
   const articleKey = useMemo(
     () => analysisQueryKeys.articles(scopeKey, environment.id),
     [environment.id, scopeKey],
@@ -310,7 +309,7 @@ export function useAnalysisArticlesController({
     },
     onSuccess: clearRunFailure,
   });
-  // The same rebind the Databases view's Reconfirm runs, for a binding that went stale
+  // The same rebind the Explorer's Reconfirm runs, for a binding that went stale
   // after its shared connection changed. The workspace service still authorizes it.
   const reconfirmBinding = useMutation({
     mutationFn: async ({ input, articleId }: {

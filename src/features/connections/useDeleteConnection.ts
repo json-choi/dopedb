@@ -1,7 +1,8 @@
 // Owns the one delete command for a saved connection: the local-versus-managed
 // branch, the manager-only guard for shared templates, the confirm copy and the
 // error mapping. The explorer menu and the connection editor both call it and
-// only decide what to refresh or close afterward.
+// only decide what to refresh or close afterward. A connection with per-member
+// DopeDB accounts is deleted only from its editor, which revokes those accounts first.
 import { useToast } from "../../components/Toast";
 import { useI18n } from "../../lib/i18n";
 import { deleteWorkspaceConnection } from "../workspaces/tauriAdapter";
@@ -10,11 +11,11 @@ import type { ConnectionProfile } from "./domain";
 import { isDemoSqliteConnection } from "./presets";
 import { deleteConnection } from "./tauriAdapter";
 
-/** Local connections and shared templates the member manages can be deleted. */
+/** Local connections and team connections the member manages can be deleted here. */
 export function canDeleteConnection(connection: ConnectionProfile): boolean {
   return (
     connection.workspaceAccess === "local"
-    || connection.workspaceAccess === "manage"
+    || (connection.workspaceAccess === "manage" && connection.credentialMode !== "provisioned")
   );
 }
 
