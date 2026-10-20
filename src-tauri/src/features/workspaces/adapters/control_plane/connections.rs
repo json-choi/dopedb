@@ -61,6 +61,7 @@ fn valid_provider_target(provider: &str, target: &ConnectionProviderTarget) -> b
 fn shared_connection_request(
     profile: &ConnectionProfile,
     allow_writes: bool,
+    publish_id: Option<Uuid>,
 ) -> AppResult<SharedConnectionRequest<'_>> {
     let mongo_options = (profile.engine == crate::model::Engine::Mongodb)
         .then(|| crate::mongo::template_options(&profile.extra_params))
@@ -72,6 +73,7 @@ fn shared_connection_request(
         profile.port
     };
     let request = SharedConnectionRequest {
+        id: publish_id,
         name: &profile.name,
         engine: crate::store::engine_str(profile.engine),
         provider: crate::store::provider_str(profile.provider),
@@ -153,8 +155,11 @@ fn remote_connection(value: RemoteConnectionResponse) -> AppResult<(ConnectionPr
             "shared connection returned invalid credential mode".into(),
         ));
     }
+    // A plain member-credential template never delegates writes; the additive `memberWrite`
+    // carries that member's own permission instead, and only for member credentials.
     if (credential_mode == WorkspaceCredentialMode::MemberLocal && value.allow_writes)
-        || (value.allow_writes && !access.can_write())
+        || (value.member_write && credential_mode == WorkspaceCredentialMode::Managed)
+        || ((value.allow_writes || value.member_write) && !access.can_write())
     {
         return Err(AppError::Network(
             "shared connection returned invalid write authority".into(),
@@ -228,7 +233,7 @@ fn remote_connection(value: RemoteConnectionResponse) -> AppResult<(ConnectionPr
             readonly_default: value.readonly_default,
             // Managed write authority is an effective server projection of the
             // live role, per-connection grant, and administrator policy.
-            allow_writes: value.allow_writes && access.can_write(),
+            allow_writes: (value.allow_writes || value.member_write) && access.can_write(),
             secret_ref: None,
             env: value
                 .env
@@ -312,7 +317,7 @@ pub(super) async fn share_connection(
             AppError::Config("sharing a connection requires an authenticated session".into())
         })?;
     // Do not let a local write preference cross the shared-template boundary.
-    let request = shared_connection_request(profile, false)?;
+    let request = shared_connection_request(profile, false, Some(profile.id))?;
     let origin = origin()?;
     let response = client()?
         .post(format!(
@@ -358,6 +363,7 @@ pub(super) async fn update_connection(
     let request = shared_connection_request(
         profile,
         profile.credential_mode == WorkspaceCredentialMode::Managed && profile.allow_writes,
+        None,
     )?;
     let origin = origin()?;
     let response = client()?
@@ -726,6 +732,27 @@ pub(super) fn assert_shared_template_contract() {
             .extend(rejected.as_object().unwrap().clone());
         assert!(remote_connection(response(value)).is_err());
     }
+    // A member's own credential writes only through the additive `memberWrite`, and only with a
+    // write-capable role; a plain member-credential template never delegates writes itself.
+    let (writable, _) = remote_connection(response(
+        json!({ "memberWrite": true, "accessMode": "write" }),
+    ))
+    .expect("member write restores");
+    assert!(
+        writable.allow_writes && writable.credential_mode == WorkspaceCredentialMode::MemberLocal
+    );
+    let (read_only, _) = remote_connection(response(
+        json!({ "memberWrite": false, "accessMode": "write" }),
+    ))
+    .expect("member read restores");
+    assert!(!read_only.allow_writes);
+    for rejected in [
+        json!({ "memberWrite": true, "accessMode": "read" }),
+        json!({ "allowWrites": true, "accessMode": "write" }),
+        json!({ "memberWrite": true, "accessMode": "write", "credentialMode": "managed" }),
+    ] {
+        assert!(remote_connection(response(rejected)).is_err());
+    }
     // Sharing builds the closed option set and pins the SRV port; an unshareable
     // MongoDB option never leaves the device.
     let mut local = restored.clone();
@@ -734,7 +761,7 @@ pub(super) fn assert_shared_template_contract() {
     local
         .extra_params
         .insert("tlsCAFile".into(), "/ca.pem".into());
-    let request = shared_connection_request(&local, false).expect("SRV profile shares");
+    let request = shared_connection_request(&local, false, None).expect("SRV profile shares");
     assert_eq!(request.port, dopedb_protocol::SHARED_MONGO_SRV_PORT);
     assert_eq!(
         request
@@ -746,6 +773,15 @@ pub(super) fn assert_shared_template_contract() {
     assert!(!serde_json::to_string(&request)
         .unwrap()
         .contains("tlsCAFile"));
+    // Publishing a local connection names its id; an update never does.
+    assert!(serde_json::to_string(&request)
+        .unwrap()
+        .find("\"id\"")
+        .is_none());
+    let published = shared_connection_request(&local, false, Some(local.id)).unwrap();
+    assert!(serde_json::to_string(&published)
+        .unwrap()
+        .contains(&local.id.to_string()));
     local.extra_params.insert("authSource".into(), "a&b".into());
-    assert!(shared_connection_request(&local, false).is_err());
+    assert!(shared_connection_request(&local, false, None).is_err());
 }

@@ -648,12 +648,6 @@ function WriteBlockRecoveryRow({
         connection: connection.name,
       });
       break;
-    case "managedCredential":
-      permission = t("sql.writeBlock.permissionManagedCredential");
-      guidance = t("sql.writeBlock.guidanceManagedCredential", {
-        connection: connection.name,
-      });
-      break;
     case "schemaSafety":
       permission = t("sql.writeBlock.permissionSchemaSafety");
       guidance = t("sql.writeBlock.guidanceSchemaSafety", {

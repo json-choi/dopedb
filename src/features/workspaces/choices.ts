@@ -25,8 +25,14 @@ export interface WorkspaceChoiceGroup {
 
 const LOCAL_ACCOUNT = "local";
 
+/** Administrators and owners manage Project bindings and workspace-wide access. */
 export function canManageWorkspaceConnections(role: WorkspaceRole | null) {
   return role === "admin" || role === "owner";
+}
+
+/** Editors and above add team connections; viewers and analysts only use them. */
+export function canAddWorkspaceConnections(role: WorkspaceRole | null) {
+  return role === "editor" || role === "admin" || role === "owner";
 }
 
 export function workspaceChoiceValue(id: WorkspaceId, accountUserId: AccountId | null) {

@@ -1,6 +1,6 @@
 // D1 tables for shared connections, their grants and credential mode; the
 // provisioning mode marks direct shared databases without changing the
-// member-local read-only CHECK.
+// member-local no-delegated-write CHECK.
 import { sql } from "drizzle-orm";
 import { sqliteTable, text, integer, check, foreignKey, index, primaryKey, unique, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { utcDate, utcNow, uuidDefault } from "./values";
@@ -94,9 +94,11 @@ export const workspaceConnection = sqliteTable(
     ),
     check("workspace_connection_content_revision", sql`${table.contentRevision} >= 1 AND ${table.contentRevision} <= 9007199254740991`),
     check("workspace_connection_revision", sql`${table.revision} >= 1 AND ${table.revision} <= 9007199254740991`),
-    // Member-local templates are secretless and read-only. Managed integrations
-    // may carry an administrator write policy, but credentials and provider
-    // capability remain outside this row and are rechecked at lease issuance.
+    // A member-local template is secretless and delegates no write authority: a member's
+    // writes come from the connection grant, the workspace role and the device Safety
+    // approval, never from these columns. Managed integrations may carry an administrator
+    // write policy, but credentials and provider capability remain outside this row and are
+    // rechecked at lease issuance.
     check(
       "workspace_connection_member_local_read_only",
       sql`(${table.credentialMode} = 'member_local' AND ${table.readonlyDefault} = TRUE AND ${table.allowWrites} = FALSE)

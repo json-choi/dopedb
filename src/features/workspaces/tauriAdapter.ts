@@ -75,18 +75,6 @@ export function setActiveWorkspaceAccount(userId: AccountId): Promise<Workspace>
   return invoke("set_active_workspace_account", { userId });
 }
 
-export function copyConnectionToWorkspace(
-  connectionId: ConnectionId,
-  workspaceId: WorkspaceId,
-  accountUserId: AccountId,
-): Promise<ConnectionProfile> {
-  return invoke("copy_connection_to_workspace", {
-    connectionId,
-    workspaceId,
-    accountUserId,
-  });
-}
-
 export function bindWorkspaceConnectionCredentials(
   id: ConnectionId,
   username: string,

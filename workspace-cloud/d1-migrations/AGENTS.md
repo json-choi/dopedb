@@ -29,6 +29,8 @@ new migrations here from `../lib/d1/schema/index.ts`.
 | `0011_mongo_template_options.sql` | Adds the nullable `workspace_connection.mongo_options` JSON column for the closed MongoDB template options (`srv`, `authSource`, `replicaSet`); validation is the parser's job, so no table rebuild or CHECK is used. |
 | `0012_environment_kind.sql` | Project environments become a fixed kind (`development`, `staging`, `production`, `test`): adds `knowledge_project_environment.kind`, maps the legacy production flag and risk class onto it (`custom` becomes development), audits the replaced names, folds a duplicated kind into the lowest id (re-pointing sources, bindings, heads, grants, proposals, graph revisions, and Articles with the survivor's revision, lifting the graph-revision immutability guard for that one re-point), enforces one environment per kind with a unique index and the four values with insert/update triggers. The legacy `name`, `production`, and `risk_class` columns stay, derived from the kind, only for pre-kind Desktops. |
 
+| `0013_team_connection_default_read.sql` | Redefines the three team-read triggers (`workspace_connection_team_read_enable`, `workspace_member_team_read_insert`, `workspace_member_team_read_update`) without the managed/provisioned restriction so a new team connection opens to the team for every credential method. Triggers only: the `workspace_connection` table is not rebuilt because a rebuild's `DROP TABLE` cascades into grants, principals, revocations and exclusions, and the member-local CHECK still states a true invariant. |
+
 ## Subdirectories
 | Directory | Purpose |
 |-----------|---------|

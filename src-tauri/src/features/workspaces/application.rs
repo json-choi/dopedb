@@ -6,6 +6,7 @@
 
 mod authentication;
 mod navigation;
+mod promotion;
 mod sharing;
 
 use std::sync::Arc;
@@ -20,14 +21,10 @@ use super::ports::{
     WorkspaceRuntimePort, WorkspaceSshProfilePort,
 };
 
-pub(crate) struct WorkspaceConnectionCopyRequest {
+pub(crate) struct WorkspaceConnectionPublishRequest {
     pub(crate) connection_id: ConnectionId,
     pub(crate) workspace_id: WorkspaceId,
     pub(crate) account_user_id: AccountId,
-    /// Project assignment may publish a team-local connection into its current
-    /// workspace before binding it. The general copy dialog keeps requiring a
-    /// different workspace so this narrower path stays explicit.
-    pub(crate) allow_active_workspace: bool,
 }
 
 pub(crate) struct WorkspaceCredentialBindingRequest {
@@ -55,6 +52,9 @@ where
     pub(super) configuration: E,
     pub(super) ssh_profiles: S,
     pub(super) sync_lock: Arc<tokio::sync::Mutex<()>>,
+    /// When each team-local connection may be tried again after a failed publication.
+    pub(super) promotion_retry_at:
+        Arc<std::sync::Mutex<std::collections::HashMap<ConnectionId, std::time::Instant>>>,
 }
 
 impl<R, A, C, V, E, S> Clone for WorkspaceUseCases<R, A, C, V, E, S>
@@ -75,6 +75,7 @@ where
             configuration: self.configuration.clone(),
             ssh_profiles: self.ssh_profiles.clone(),
             sync_lock: Arc::clone(&self.sync_lock),
+            promotion_retry_at: Arc::clone(&self.promotion_retry_at),
         }
     }
 }
@@ -104,6 +105,7 @@ where
             configuration,
             ssh_profiles,
             sync_lock: Arc::new(tokio::sync::Mutex::new(())),
+            promotion_retry_at: Arc::default(),
         }
     }
 }

@@ -150,6 +150,39 @@ impl Store {
         account_user_id: &str,
         connections: &[(ConnectionProfile, i64)],
     ) -> AppResult<Vec<Uuid>> {
+        self.reconcile_remote_connections(workspace_id, account_user_id, connections, None)
+            .await
+    }
+
+    /// Reconcile the collection that now contains a just-published local connection and write
+    /// the publisher's own credential binding in the same transaction. The local row keeps its
+    /// identity (the control plane accepted that id), so history, SQL documents, Safety and
+    /// Project bindings that name it stay valid; either both the template and the binding
+    /// land or neither does.
+    pub async fn publish_remote_connection(
+        &self,
+        workspace_id: Uuid,
+        account_user_id: &str,
+        connections: &[(ConnectionProfile, i64)],
+        published_id: Uuid,
+        binding: &PublishedBinding,
+    ) -> AppResult<Vec<Uuid>> {
+        self.reconcile_remote_connections(
+            workspace_id,
+            account_user_id,
+            connections,
+            Some((published_id, binding)),
+        )
+        .await
+    }
+
+    async fn reconcile_remote_connections(
+        &self,
+        workspace_id: Uuid,
+        account_user_id: &str,
+        connections: &[(ConnectionProfile, i64)],
+        published: Option<(Uuid, &PublishedBinding)>,
+    ) -> AppResult<Vec<Uuid>> {
         let membership_exists: bool = sqlx::query_scalar(
             "SELECT EXISTS(
                  SELECT 1 FROM workspace_members
@@ -355,11 +388,15 @@ impl Store {
                            ?16,?17,?18,?1,NULL,?19,'synced',?20,?21,?22,?23,NULL)
                    ON CONFLICT(id) DO UPDATE SET
                      name=?2, engine=?3, provider=?4, driver_id=?5, host=?6, port=?7,
-                     db_name=?8, sslmode=?10, extra_params=?11, readonly_default=?13, allow_writes=?14,
+                     db_name=?8, username='', sslmode=?10, extra_params=?11, secret_ref=NULL,
+                     readonly_default=?13, allow_writes=?14,
                      updated_at=?15, env=?16, schema_group=?17, remote_id=?1, revision=?19,
+                     account_user_id=NULL,
                      sync_status='synced', workspace_access=?20, credential_mode=?21,
                      provider_target=?22, schema_access_available=?23, deleted_at=NULL
-                   WHERE connections.workspace_id=?18"#,
+                   WHERE connections.workspace_id=?18
+                     AND (connections.remote_id IS NOT NULL
+                          OR connections.account_user_id IS ?24)"#,
             )
             .bind(profile.id.to_string())
             .bind(&profile.name)
@@ -385,6 +422,7 @@ impl Store {
             .bind(credential_mode_str(profile.credential_mode))
             .bind(provider_target)
             .bind(profile.schema_access_available)
+            .bind(account_user_id)
             .execute(&mut *tx)
             .await?;
             if !profile.schema_access_available {
@@ -394,10 +432,8 @@ impl Store {
             reconcile_safety_write_ceiling(
                 &mut tx,
                 profile.id,
-                matches!(
-                    profile.credential_mode,
-                    WorkspaceCredentialMode::Managed | WorkspaceCredentialMode::Provisioned
-                ) && profile.allow_writes
+                profile.credential_mode != WorkspaceCredentialMode::Local
+                    && profile.allow_writes
                     && profile.workspace_access.can_write(),
             )
             .await?;
@@ -441,26 +477,19 @@ impl Store {
                 .await?;
             }
         }
+        if let Some((id, binding)) = published {
+            write_member_binding(
+                &mut *tx,
+                id,
+                account_user_id,
+                &binding.username,
+                &binding.extra_params,
+                binding.secret_ref.as_deref(),
+            )
+            .await?;
+        }
         tx.commit().await?;
         Ok(removed_credential_ids.into_iter().collect())
-    }
-
-    /// Remove the local cache row for a just-created remote template after the server
-    /// confirms rollback. This is intentionally narrower than user-facing deletion.
-    pub async fn purge_remote_connection_cache(
-        &self,
-        workspace_id: Uuid,
-        connection_id: Uuid,
-    ) -> AppResult<()> {
-        sqlx::query(
-            "DELETE FROM connections
-             WHERE id = ?1 AND workspace_id = ?2 AND remote_id = ?1",
-        )
-        .bind(connection_id.to_string())
-        .bind(workspace_id.to_string())
-        .execute(&self.pool)
-        .await?;
-        Ok(())
     }
 
     // ── deferred credential deletes ────────────────────────────────────────
@@ -544,39 +573,68 @@ impl Store {
                 reason: "this shared connection uses automatically managed credentials".into(),
             });
         }
-        let extra_params_json = serde_json::to_string(extra_params)?;
-        // The credential is bound to the template endpoint exactly as it is now. The
-        // statement is assembled only from compile-time constants.
-        let bind_sql = format!(
-            "INSERT INTO workspace_connection_bindings
-                (connection_id, account_user_id, username, extra_params, secret_ref, updated_at,
-                 bound_endpoint)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6,
-                     (SELECT {TEMPLATE_ENDPOINT_JSON} FROM connections WHERE id = ?1))
-             ON CONFLICT(connection_id, account_user_id) DO UPDATE SET
-                username = excluded.username,
-                extra_params = excluded.extra_params,
-                secret_ref = excluded.secret_ref,
-                bound_endpoint = excluded.bound_endpoint,
-                revision = workspace_connection_bindings.revision + 1,
-                updated_at = excluded.updated_at
-             WHERE workspace_connection_bindings.username IS NOT excluded.username
-                OR workspace_connection_bindings.extra_params IS NOT excluded.extra_params
-                OR workspace_connection_bindings.secret_ref IS NOT excluded.secret_ref
-                OR workspace_connection_bindings.bound_endpoint IS NOT excluded.bound_endpoint"
-        );
-        sqlx::query(sqlx::AssertSqlSafe(bind_sql))
-            .bind(id.to_string())
-            .bind(account_user_id)
-            .bind(username.trim())
-            .bind(extra_params_json)
-            .bind(secret_ref)
-            .bind(Utc::now())
-            .execute(&self.pool)
-            .await?;
+        write_member_binding(
+            &self.pool,
+            id,
+            account_user_id,
+            username,
+            extra_params,
+            secret_ref,
+        )
+        .await?;
         profile.username = username.trim().to_string();
         profile.extra_params = extra_params.clone();
         profile.secret_ref = secret_ref.map(str::to_string);
         Ok(profile)
     }
+}
+
+/// A publisher's own credential binding: only the opaque credential-item id, never the secret.
+pub struct PublishedBinding {
+    pub username: String,
+    pub extra_params: HashMap<String, String>,
+    pub secret_ref: Option<String>,
+}
+
+/// Save one account's overlay for a shared template, bound to the template endpoint exactly as
+/// it is stored now. The statement is assembled only from compile-time constants.
+async fn write_member_binding<'executor, E>(
+    executor: E,
+    id: Uuid,
+    account_user_id: &str,
+    username: &str,
+    extra_params: &HashMap<String, String>,
+    secret_ref: Option<&str>,
+) -> AppResult<()>
+where
+    E: Executor<'executor, Database = Sqlite>,
+{
+    let bind_sql = format!(
+        "INSERT INTO workspace_connection_bindings
+            (connection_id, account_user_id, username, extra_params, secret_ref, updated_at,
+             bound_endpoint)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6,
+                 (SELECT {TEMPLATE_ENDPOINT_JSON} FROM connections WHERE id = ?1))
+         ON CONFLICT(connection_id, account_user_id) DO UPDATE SET
+            username = excluded.username,
+            extra_params = excluded.extra_params,
+            secret_ref = excluded.secret_ref,
+            bound_endpoint = excluded.bound_endpoint,
+            revision = workspace_connection_bindings.revision + 1,
+            updated_at = excluded.updated_at
+         WHERE workspace_connection_bindings.username IS NOT excluded.username
+            OR workspace_connection_bindings.extra_params IS NOT excluded.extra_params
+            OR workspace_connection_bindings.secret_ref IS NOT excluded.secret_ref
+            OR workspace_connection_bindings.bound_endpoint IS NOT excluded.bound_endpoint"
+    );
+    sqlx::query(sqlx::AssertSqlSafe(bind_sql))
+        .bind(id.to_string())
+        .bind(account_user_id)
+        .bind(username.trim())
+        .bind(serde_json::to_string(extra_params)?)
+        .bind(secret_ref)
+        .bind(Utc::now())
+        .execute(executor)
+        .await?;
+    Ok(())
 }

@@ -35,7 +35,11 @@ export type MutationAuthority = {
 };
 
 
-function connectionAuthority(organizationId: string, authority: MutationAuthority, connectionId?: SQL, manager = false) {
+/**
+ * Live session, membership and lifecycle proof for one connection mutation. `writer` admits
+ * editors and above (team connection creation); `manager` admits administrators and owners.
+ */
+function connectionAuthority(organizationId: string, authority: MutationAuthority, connectionId?: SQL, required: "writer" | "manager" | false = false) {
   const grant = connectionId ? sql`AND EXISTS (SELECT 1 FROM workspace_connection_grant
     WHERE organization_id = ${organizationId} AND connection_id = ${connectionId}
       AND member_id = ${authority.membershipId} AND capability = 'manage')` : sql``;
@@ -44,7 +48,8 @@ function connectionAuthority(organizationId: string, authority: MutationAuthorit
     WHERE session.id = ${authority.sessionId} AND session.user_id = ${authority.userId} AND session.expires_at > ${utcNow}
       AND member.id = ${authority.membershipId} AND member.organization_id = ${organizationId}
       AND member.role = ${authority.role} AND member.revocation_pending_at IS NULL AND member.revocation_claim_id IS NULL
-      AND profile.lifecycle_state = 'active' ${manager ? sql`AND member.role IN ('admin', 'owner')` : sql``} ${grant})`;
+      AND profile.lifecycle_state = 'active'
+      ${required === "manager" ? sql`AND member.role IN ('admin', 'owner')` : required === "writer" ? sql`AND member.role IN ('editor', 'admin', 'owner')` : sql``} ${grant})`;
 }
 
 const connectionProjection = sql`id, name, engine, provider, driver_id AS driverId, host, port,
@@ -387,8 +392,11 @@ export function returnedConnection(row: RawConnectionRow | undefined): StoredCon
 }
 
 /**
- * Create a shared connection. With `direct`, the same atomic batch also marks it
- * provisioned and writes its endpoint, so a direct database is never half-registered.
+ * Create a team connection. An editor or above may create one; a direct shared database
+ * (`direct`) stays administrator-only and also writes its endpoint in the same atomic
+ * batch, so it is never half-registered. A new team connection opens to the whole team by
+ * default (analyst and above read, viewers view) and is managed by its creator and every
+ * current administrator or owner.
  */
 export async function commitConnectionCreate({
   organizationId, connectionId, authority, input, direct,
@@ -400,7 +408,7 @@ export async function commitConnectionCreate({
   direct?: { scope: readonly string[]; writeCeiling: boolean };
 }): Promise<StoredConnection | null> {
   const result = await atomicD1({
-    scope: sql`SELECT '{}' AS payload WHERE ${connectionAuthority(organizationId, authority, undefined, true)}`,
+    scope: sql`SELECT '{}' AS payload WHERE ${connectionAuthority(organizationId, authority, undefined, direct ? "manager" : "writer")}`,
     statements: (scope) => [
       sql`INSERT INTO workspace_connection (id, organization_id, name, engine, provider, driver_id, host, port,
           database_name, sslmode, readonly_default, allow_writes, environment, schema_group, mongo_options,
@@ -414,6 +422,17 @@ export async function commitConnectionCreate({
           ${authority.userId} FROM (${scope})`] : []),
       sql`INSERT INTO workspace_connection_grant (organization_id, connection_id, member_id, capability)
         SELECT ${organizationId}, ${connectionId}, ${authority.membershipId}, 'manage' FROM (${scope})`,
+      ...(direct ? [] : [
+        // Administrators and owners can always manage a team connection, so it never depends on
+        // one creator. Later promotions are explicit grants by an existing manager.
+        sql`INSERT OR IGNORE INTO workspace_connection_grant (organization_id, connection_id, member_id, capability)
+          SELECT ${organizationId}, ${connectionId}, member.id, 'manage' FROM member
+          WHERE member.organization_id = ${organizationId} AND member.role IN ('admin', 'owner')
+            AND member.revocation_pending_at IS NULL AND member.revocation_claim_id IS NULL AND EXISTS (${scope})`,
+        // Default access: the team-read policy materializes read grants (the trigger fires on this UPDATE).
+        sql`UPDATE workspace_connection SET team_read_enabled = 1
+          WHERE id = ${connectionId} AND organization_id = ${organizationId} AND EXISTS (${scope})`,
+      ]),
       sql`INSERT INTO workspace_resource_version (organization_id, resource_type, resource_id, revision, base_revision,
           parent_version_id, branch, operation, payload, payload_hash, created_by_user_id)
         SELECT ${organizationId}, 'connection', ${connectionId}, 1, 0, NULL, 'main', 'create',
@@ -481,7 +500,7 @@ export async function commitConnectionMutation({
       WHERE connection.id = ${connectionId} AND connection.organization_id = ${organizationId}
         AND connection.content_revision = ${expectedContentRevision} AND connection.revision = ${expectedAuthorityRevision}
         AND connection.revocation_claim_id = ${claimId} AND connection.deleted_at IS NULL
-        AND ${connectionAuthority(organizationId, authority, sql`${connectionId}`, requireWorkspaceManager)}
+        AND ${connectionAuthority(organizationId, authority, sql`${connectionId}`, requireWorkspaceManager ? "manager" : false)}
         ${mutation.kind === "delete"
           ? sql`AND ${noDirectLoweringBlockers(organizationId, directLoweringTargets.connection(organizationId, connectionId))}`
           : sql``}`,

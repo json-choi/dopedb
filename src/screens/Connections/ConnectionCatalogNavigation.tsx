@@ -356,20 +356,6 @@ export function ConnectionSourceCommands({
             size="xs"
             variant="ghost"
             disabled={commands.busy}
-            onClick={(event) => {
-              workspace.buttonRef.current = event.currentTarget;
-              workspace.setMode("copy");
-            }}
-            title={t("workspace.copyToWorkspace")}
-            aria-label={t("workspace.copyToWorkspace")}
-          >
-            <Icon name="upload" />
-          </Button>
-          <Button
-            iconOnly
-            size="xs"
-            variant="ghost"
-            disabled={commands.busy}
             onClick={commands.duplicate}
             title={t("connections.duplicate")}
             aria-label={t("connections.duplicate")}
@@ -390,7 +376,7 @@ export function ConnectionSourceCommands({
           disabled={commands.busy}
           onClick={(event) => {
             workspace.buttonRef.current = event.currentTarget;
-            workspace.setMode("credentials");
+            workspace.setOpen(true);
           }}
           title={t("workspace.bindCredentialsShort")}
           aria-label={t("workspace.bindCredentialsShort")}

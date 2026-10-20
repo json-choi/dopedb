@@ -6,18 +6,21 @@ use crate::error::{AppError, AppResult};
 use crate::features::connections::{
     same_credential_endpoint, ConnectionCredentialVault, MAX_CONNECTION_CREDENTIAL_BYTES,
 };
-use crate::kernel::identity::ConnectionId;
-use crate::model::{ConnectionProfile, WorkspaceConnectionAccess, WorkspaceCredentialMode};
-
 use crate::kernel::access::WorkspaceKind;
+use crate::kernel::identity::{AccountId, ConnectionId, WorkspaceId};
+use crate::model::{ConnectionProfile, WorkspaceConnectionAccess, WorkspaceCredentialMode};
+use crate::store::PublishedBinding;
 
-use super::super::domain::{merge_member_tls_files, validate_member_username};
+use super::super::domain::{
+    can_create_team_connection, is_publishable, merge_member_tls_files, validate_member_username,
+    WorkspaceRole,
+};
 use super::super::ports::{
     WorkspaceConfigurationPort, WorkspaceConnectionMutationPort, WorkspaceControlPlanePort,
     WorkspaceRepositoryPort, WorkspaceRuntimePort,
 };
 use super::{
-    WorkspaceConnectionCopyRequest, WorkspaceConnectionUpdateRequest,
+    WorkspaceConnectionPublishRequest, WorkspaceConnectionUpdateRequest,
     WorkspaceCredentialBindingRequest, WorkspaceUseCases,
 };
 
@@ -35,151 +38,192 @@ where
     E: WorkspaceConfigurationPort,
     S: super::super::ports::WorkspaceSshProfilePort,
 {
-    /// Copy a local connection into a team workspace. Only its redacted template
-    /// crosses the network; the caller's credential is duplicated locally under the
-    /// remote resource UUID.
-    pub(crate) async fn copy_connection(
+    /// Publish a team-local connection as a team connection. Only its redacted template
+    /// crosses the network; the connection keeps its identity (the control plane accepts the
+    /// local id), so history, SQL documents, Safety, and Project bindings that name it stay
+    /// valid, and the publisher's own credential binding keeps pointing at the same
+    /// credential-store item. The template and the binding land in one local transaction;
+    /// when that fails the new team connection is deleted again.
+    pub(crate) async fn publish_connection(
         &self,
-        request: WorkspaceConnectionCopyRequest,
+        request: WorkspaceConnectionPublishRequest,
     ) -> AppResult<ConnectionProfile> {
-        let WorkspaceConnectionCopyRequest {
+        let WorkspaceConnectionPublishRequest {
             connection_id,
             workspace_id,
             account_user_id,
-            allow_active_workspace,
         } = request;
-        let source = self.repository.get_connection(connection_id).await?;
-        if source.workspace_access != WorkspaceConnectionAccess::Local {
-            return Err(AppError::Config(
-                "only a local connection can be copied into a workspace".into(),
-            ));
-        }
-        let target = self
+        let source = self
             .repository
-            .list_workspaces()
-            .await?
-            .into_iter()
-            .find(|workspace| workspace.id == workspace_id && workspace.kind == WorkspaceKind::Team)
-            .ok_or_else(|| AppError::NotFound(format!("team workspace {workspace_id}")))?;
-        let current_account = self.repository.active_account_id().await?;
-        if !allow_active_workspace
-            && target.id == self.repository.active_workspace_id().await?
-            && current_account.as_ref() == Some(&account_user_id)
-        {
-            return Err(AppError::Config("choose a different team workspace".into()));
+            .get_promotable_connection(workspace_id, &account_user_id, connection_id)
+            .await?;
+        if !is_publishable(&source) {
+            return Err(AppError::Blocked {
+                reason: "SQLite files stay on this device and cannot be shared with a team".into(),
+            });
         }
-        let account = self
-            .repository
-            .accounts()
-            .await?
-            .into_iter()
-            .find(|account| {
-                account.user.id == account_user_id
-                    && account
-                        .memberships
-                        .iter()
-                        .any(|membership| membership.workspace_id == workspace_id)
-            })
-            .ok_or_else(|| {
-                AppError::NotFound(format!(
-                    "workspace {workspace_id} for account {account_user_id}"
-                ))
-            })?;
-
-        // Resolve every local prerequisite and snapshot the current remote collection
-        // before creating the server resource. This avoids a remote template being left
-        // behind merely because a later credential read or collection fetch failed.
-        let copied_secret = if source.secret_ref.is_some() {
-            Some(self.credentials.fetch_profile(&source)?)
-        } else {
-            None
-        };
+        let role = self.membership_role(&account_user_id, workspace_id).await?;
+        if !can_create_team_connection(role) {
+            return Err(AppError::Blocked {
+                reason: "your workspace role cannot add team connections".into(),
+            });
+        }
+        // Serialize with the workspace pull so a collection snapshot taken before the
+        // template exists can never remove the row this publication converts.
+        let _sync_guard = self.sync_lock.lock().await;
         let mut remote = self
             .control_plane
-            .remote_connections(&account.user.id, workspace_id)
+            .remote_connections(&account_user_id, workspace_id)
             .await?
             .ok_or_else(|| {
                 AppError::Network(
                     "the workspace service has not deployed shared connections yet".into(),
                 )
             })?;
-        let credential_id = copied_secret.as_ref().map(|_| Uuid::new_v4());
-        if let (Some(credential_id), Some(secret)) = (credential_id, copied_secret.as_deref()) {
-            self.credentials.store(&credential_id, secret)?;
-        }
-        let shared = self
+        let (created, revision) = self
             .control_plane
-            .share_connection(&account.user.id, workspace_id, &source)
-            .await;
-        let (created, revision) = match shared {
-            Ok(created) => created,
-            Err(error) => {
-                if let Some(credential_id) = credential_id {
-                    self.delete_secret_best_effort(credential_id, "share_connection");
-                }
-                return Err(error);
-            }
-        };
+            .share_connection(&account_user_id, workspace_id, &source)
+            .await?;
+        // A retried publication returns the connection it already created.
+        remote.retain(|(candidate, _)| candidate.id != created.id);
         remote.push((created.clone(), revision));
-        let credential_ref = credential_id.map(|id| id.to_string());
-        // The workspace template now owns the shareable MongoDB options; the member's
-        // own binding keeps only what stays on this device (TLS files, SSH alias).
+        // The workspace template now owns the shareable MongoDB options; the member's own
+        // binding keeps only what stays on this device (TLS files, SSH alias).
         let mut binding_params = source.extra_params.clone();
         if source.engine == crate::model::Engine::Mongodb {
             crate::mongo::apply_template_options(&mut binding_params, None);
         }
-        let local_result = async {
-            let removed_credential_ids = self
-                .runtime
-                .sync_remote_connections(workspace_id, &account.user.id, &remote)
-                .await?;
-            for credential_id in removed_credential_ids {
-                self.delete_secret_best_effort(credential_id, "remove_remote_connection");
-            }
-            self.repository
-                .bind_connection_credentials(
-                    created.id.into(),
-                    &account.user.id,
-                    &source.username,
-                    &binding_params,
-                    credential_ref.as_deref(),
+        let binding = PublishedBinding {
+            username: source.username.clone(),
+            extra_params: binding_params,
+            secret_ref: source.secret_ref.clone(),
+        };
+        let published = if created.id == source.id {
+            self.runtime
+                .publish_remote_connection(
+                    workspace_id,
+                    &account_user_id,
+                    &remote,
+                    connection_id,
+                    &binding,
                 )
                 .await
-        }
-        .await;
-        match local_result {
-            Ok(profile) => Ok(profile),
-            Err(error) => {
-                if let Some(credential_id) = credential_id {
-                    self.delete_secret_best_effort(credential_id, "persist_shared_connection");
+        } else {
+            Err(AppError::Network(
+                "the workspace service published a different connection identity".into(),
+            ))
+        };
+        match published {
+            Ok(removed_credential_ids) => {
+                for credential_id in removed_credential_ids {
+                    self.delete_secret_best_effort(credential_id, "publish_connection");
                 }
-                match self
+                if self.repository.active_workspace_id().await? == workspace_id
+                    && self.repository.active_account_id().await?.as_ref() == Some(&account_user_id)
+                {
+                    return self.repository.get_connection(connection_id).await;
+                }
+                let mut profile = created;
+                profile.username = binding.username;
+                profile.extra_params = binding.extra_params;
+                profile.secret_ref = binding.secret_ref;
+                Ok(profile)
+            }
+            Err(error) => {
+                if let Err(rollback_error) = self
                     .control_plane
-                    .delete_connection(&account.user.id, workspace_id, created.id.into(), revision)
+                    .delete_connection(&account_user_id, workspace_id, created.id.into(), revision)
                     .await
                 {
-                    Ok(()) => {
-                        if let Err(cache_error) = self
-                            .repository
-                            .purge_remote_connection_cache(workspace_id, created.id.into())
-                            .await
-                        {
-                            tracing::warn!(
-                                connection_id = %created.id,
-                                %cache_error,
-                                "rolled-back shared connection cache cleanup deferred"
-                            );
-                        }
-                    }
-                    Err(rollback_error) => tracing::warn!(
+                    tracing::warn!(
                         connection_id = %created.id,
                         %rollback_error,
-                        "shared connection rollback deferred"
-                    ),
+                        "published team connection rollback deferred"
+                    );
                 }
                 Err(error)
             }
         }
+    }
+
+    /// Refuse to start a team connection the active account's role cannot add. Personal
+    /// workspaces and device-only SQLite files are unaffected.
+    pub(crate) async fn ensure_team_connection_allowed(
+        &self,
+        profile: &ConnectionProfile,
+    ) -> AppResult<()> {
+        let active = self.repository.active_workspace().await?;
+        if active.kind != WorkspaceKind::Team || !is_publishable(profile) {
+            return Ok(());
+        }
+        let account = self.repository.active_account_id().await?.ok_or_else(|| {
+            AppError::Config("team connections require an active workspace account".into())
+        })?;
+        if can_create_team_connection(self.membership_role(&account, active.id).await?) {
+            Ok(())
+        } else {
+            Err(AppError::Blocked {
+                reason: "your workspace role cannot add team connections".into(),
+            })
+        }
+    }
+
+    /// The one save path of a team workspace: after the connection editor stored a new or
+    /// existing team-local connection (and its credential on this device), publish it as a
+    /// team connection. `None` when nothing is published: a personal workspace, a SQLite
+    /// file that stays on this device, or a connection that is already a team connection.
+    pub(crate) async fn publish_active_connection(
+        &self,
+        connection_id: ConnectionId,
+    ) -> AppResult<Option<ConnectionProfile>> {
+        let active = self.repository.active_workspace().await?;
+        if active.kind != WorkspaceKind::Team {
+            return Ok(None);
+        }
+        let account = self.repository.active_account_id().await?.ok_or_else(|| {
+            AppError::Config("team connections require an active workspace account".into())
+        })?;
+        match self
+            .repository
+            .get_promotable_connection(active.id, &account, connection_id)
+            .await
+        {
+            Ok(_) => Ok(Some(
+                self.publish_connection(WorkspaceConnectionPublishRequest {
+                    connection_id,
+                    workspace_id: active.id,
+                    account_user_id: account,
+                })
+                .await?,
+            )),
+            Err(AppError::NotFound(_)) => Ok(None),
+            Err(error) => Err(error),
+        }
+    }
+
+    /// The role an account holds in one team workspace, from its last synchronized membership.
+    pub(super) async fn membership_role(
+        &self,
+        account_user_id: &AccountId,
+        workspace_id: WorkspaceId,
+    ) -> AppResult<WorkspaceRole> {
+        self.repository
+            .accounts()
+            .await?
+            .into_iter()
+            .find(|account| &account.user.id == account_user_id)
+            .and_then(|account| {
+                account
+                    .memberships
+                    .into_iter()
+                    .find(|membership| membership.workspace_id == workspace_id)
+            })
+            .map(|membership| membership.role)
+            .ok_or_else(|| {
+                AppError::NotFound(format!(
+                    "workspace {workspace_id} for account {account_user_id}"
+                ))
+            })
     }
 
     /// Update one shared, secret-free template and reconcile it into the active

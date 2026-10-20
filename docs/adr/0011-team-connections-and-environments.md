@@ -72,12 +72,59 @@
     유지한다(열 삭제에는 재작성이 필요하다).
 - **팀 로컬 승격.** 업데이트 시 팀 workspace의 기존 팀 로컬(`나만`) 연결은 자동으로
   팀 연결로 승격한다. SQLite 파일 연결은 기기 전용이므로 제외하고 로컬에 남기며 UI는
-  SQLite 파일은 공유할 수 없다고 알린다.
-- **서버 CHECK 변경.** member-local 팀 연결이 쓰기를 허용하도록 서버의 CHECK 제약을
-  바꾼다. 정확한 D1 기법(테이블 재작성 등)은 구현이 정하며 migration은 격리 DB
-  harness로 검증한다.
+  SQLite 파일은 공유할 수 없다고 알린다. 승격은 연결 편집기의 저장과 같은 코드
+  (`publish_connection`)이다.
+  - **id 보존.** Desktop이 로컬 연결의 id를 `POST /connections` 본문의 선택 필드 `id`로
+    보내고 서버가 그 id로 만든다(전역 유일, 충돌은 409, 같은 생성자의 재시도는 만들어 둔
+    연결을 그대로 돌려줘 멱등). 로컬 행은 같은 id로 제자리에서 팀 연결(`remote_id`·
+    `synced`)이 되므로 SQL 문서, 기록, Safety, Project 환경 binding, 카탈로그 캐시처럼
+    연결 id를 가진 참조는 하나도 옮기거나 복사하지 않는다. 템플릿과 만든 사람의
+    credential binding(같은 OS 자격 증명 항목을 가리킨다)은 한 로컬 transaction에서
+    함께 반영하고, 실패하면 방금 만든 서버 연결을 삭제한다. 자격 증명은 Keychain에서
+    읽거나 복제하지 않는다.
+  - **누가·언제.** 연결을 만든 계정의 기기만 자기 행을 승격하고(`account_user_id`가 같은
+    행), 멤버십 동기화(시작, 로그인, 창 포커스 갱신, workspace 전환)마다 편집자 이상인
+    팀 workspace에서 실행한다. 실패는 연결 단위로 다시 시도한다(네트워크·세션 문제는
+    1분 뒤, 서버나 기기가 거절한 연결은 10분 뒤). 결과는 승격 `promoted`, 역할 부족
+    `role_denied`, 도달 불가 `unreachable`, 거절 `refused`, 대기 `deferred`의 닫힌 개수로만
+    기록하고 연결 이름이나 서버 문구를 남기지 않는다.
+- **서버 CHECK는 바꾸지 않는다.** `workspace_connection_member_local_read_only`
+  CHECK는 "member-local 템플릿은 쓰기 권한을 위임하지 않는다"는 지금도 참인 불변식이다.
+  SQLite는 CHECK를 제자리에서 바꿀 수 없고, 부모 테이블을 다시 만들면(D1은 외래 키를
+  항상 강제하므로) `DROP TABLE`의 암묵적 DELETE가 `ON DELETE CASCADE`로 grant,
+  principal, revocation, 접근 제외 기록을 지운다(`defer_foreign_keys`는 제약 검사만 미룰
+  뿐 cascade는 막지 못한다). 그래서 쓰기를 템플릿 열이 아니라 이미 있는 권한 모델에서
+  끌어낸다: member-local 팀 연결의 쓰기는 연결 grant(`use` 이상)와 편집자 이상 역할이
+  정하고, 기기 Safety 승인이 문장마다 다시 막는다. 템플릿은 계속 `allowWrites: false`다.
+  이 방식은 테이블 재작성이 없으므로 grant, principal, revocation, version을 건드리지
+  않는다. D1 migration `0013`은 팀 읽기 trigger 세 개를 관리형·직접 제한 없이 다시
+  만들 뿐이다(기본 팀 읽기를 모든 자격 증명 방식에 적용). harness가 migration 전후
+  자식 행 개수가 같음을 확인한다.
+- **쓰기 판정.** 서버는 응답에 추가 필드 `memberWrite`를 싣는다: member-local(직접 DB
+  포함) 연결에서 구성원의 연결 grant와 역할이 쓰기를 허용하고, 직접 DB는 endpoint
+  ceiling까지 허용할 때 true. BigQuery, MongoDB, Cloudflare D1은 항상 false다.
+  `POST /connections/{id}` 쓰기 preflight도 같은 규칙으로 member-local 쓰기를 허용한다
+  (스키마 변경은 관리형 전용). Desktop은 `memberWrite`를 구성원 권한의 상한으로 읽어
+  Safety 승인과 함께 적용하고 쓰기 승인·Safety 게이트는 그대로다.
+- **권한.** 팀 연결 생성은 편집자 이상(서버 `POST /connections`와 Desktop
+  `canAddWorkspaceConnections`, 편집기 저장 전 역할 확인). 직접 DB 등록은 이번 단계에서
+  관리자·소유자 전용으로 둔다. 수정·삭제는 기존 grant 모델의 `manage`를 따른다: 만든
+  사람과 생성 시점의 모든 관리자·소유자가 명시적 `manage` grant를 받아 연결을 수정·삭제하고
+  구성원 접근을 바꿀 수 있다. 이후 관리자가 되는 구성원은 기존 manager가 grant를 올려
+  준다. 쓰기 정책(managed `allowWrites`) 변경은 계속 관리자·소유자 전용이다.
+- **기본 접근.** 생성과 같은 transaction에서 `team_read_enabled = 1`로 올려 analyst
+  이상 `read`, viewer `view` 팀 grant를 만든다(이후 합류하는 구성원에게도 적용). 기존
+  연결의 정책은 바꾸지 않는다.
 
 ## 호환성
+
+팀 읽기 switch는 UI에서 사라지지만 서버의 `teamReadEnabled` 토글 경로
+(`POST .../grants`)는 0.7.0 Desktop을 위해 유지하고, 이제 자격 증명 방식과 무관하게
+동작한다. 새 응답 필드 `memberWrite`와 생성 본문의 선택 필드 `id`는 추가 필드라 이전
+Desktop은 무시한다. 이전 Desktop은 member-local 연결에서 `allowWrites: true`를 받으면
+컬렉션 전체를 거부하므로, 서버는 직접 DB 밖의 member-local 응답에서 `allowWrites`를
+계속 false로 보내고 쓰기 허용은 `memberWrite`로만 전한다. 이전 서버를 만난 새
+Desktop은 `memberWrite`가 없으면 member-local 연결을 읽기 전용으로 본다.
 
 control plane은 전환 기간 동안 이전 Desktop을 위해 `{name, riskClass}`를 종류로
 매핑해 받고(이름은 무시, `custom`은 개발) 응답에 `kind`와 함께 종류에서 파생한

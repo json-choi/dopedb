@@ -95,6 +95,9 @@ where
         {
             self.sync_workspace_resources(&user.id, active.id).await?;
         }
+        // Connections made before every team connection was shared are published by their
+        // creator's device; a failure is retried on a later synchronization.
+        self.promote_local_connections(&user.id).await;
         Ok(())
     }
 

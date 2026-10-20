@@ -98,6 +98,10 @@ struct RemoteConnectionResponse {
     sslmode: String,
     readonly_default: bool,
     allow_writes: bool,
+    /// Additive: the member's own credential may attempt writes under their grant and role.
+    /// An older control plane omits it, which reads as read-only for member credentials.
+    #[serde(default)]
+    member_write: bool,
     #[serde(default)]
     schema_access_available: bool,
     env: Option<String>,
@@ -152,6 +156,9 @@ pub(crate) struct RemoteConnectionAuthority {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct SharedConnectionRequest<'a> {
+    /// Publishing a local connection keeps its identity; an update sends no id.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    id: Option<Uuid>,
     name: &'a str,
     engine: &'a str,
     provider: &'a str,

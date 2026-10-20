@@ -26,12 +26,11 @@ export function ConnectionEditorDialogs({
           returnFocusRef={dialogs.providerCredentials.returnFocusRef}
         />
       ) : null}
-      {dialogs.workspace.mode && !profile.identity.isNew ? (
+      {dialogs.workspace.open && !profile.identity.isNew ? (
         <WorkspaceConnectionDialog
           connection={profile.form}
-          mode={dialogs.workspace.mode}
           onBound={bindWorkspaceConnection}
-          onClose={() => dialogs.workspace.setMode(null)}
+          onClose={() => dialogs.workspace.setOpen(false)}
           returnFocusRef={dialogs.workspace.buttonRef}
         />
       ) : null}

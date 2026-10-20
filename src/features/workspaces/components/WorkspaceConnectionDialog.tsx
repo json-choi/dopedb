@@ -1,23 +1,9 @@
-// Secure workspace connection flow: publishes only a redacted local template or
-// binds a member-local credential to a synchronized template, then checks the
-// new binding once so the member sees whether it works.
-import {
-  useMemo,
-  useState,
-  type RefObject,
-} from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  bindWorkspaceConnectionCredentials,
-  copyConnectionToWorkspace,
-} from "../tauriAdapter";
-import { invalidateWorkspaceContext } from "../cache";
-import { workspaceAuthStateQuery, workspaceContextQuery } from "../queries";
-import {
-  buildWorkspaceChoiceGroups,
-  canManageWorkspaceConnections,
-  parseWorkspaceChoice,
-} from "../choices";
+// Member credential flow for a team connection: binds this member's own database
+// credential to a synchronized template, then checks the new binding once so the
+// member sees whether it works. The template itself is published by the connection
+// editor's save, never from here.
+import { useState, type RefObject } from "react";
+import { bindWorkspaceConnectionCredentials } from "../tauriAdapter";
 import { checkSavedConnection } from "../../connections/connectionCheck";
 import ConnectionFilePathField from "../../connections/ConnectionFilePathField";
 import {
@@ -37,7 +23,6 @@ import { Button } from "../../../design-system/components/Button";
 import {
   CheckboxField,
   Field,
-  SelectInput,
   TextInput,
 } from "../../../design-system/components/FormControls";
 import {
@@ -47,8 +32,6 @@ import {
   ModalSurface,
 } from "../../../design-system/components/Modal";
 import { LoadingLabel } from "../../../design-system/components/Status";
-
-type DialogMode = "copy" | "credentials";
 
 /**
  * TLS files a member keeps in their own binding. The shared template owns the
@@ -78,32 +61,23 @@ function memberTlsFiles(connection: ConnectionProfile) {
   return [];
 }
 
-/** Stable copy for a failed copy or binding; backend text never reaches the UI. */
-function workspaceConnectionErrorKey(
-  error: unknown,
-  mode: DialogMode,
-): I18nKey {
+/** Stable copy for a failed binding; backend text never reaches the UI. */
+function workspaceConnectionErrorKey(error: unknown): I18nKey {
   switch (errDetails(error).kind) {
     case "network":
     case "timeout":
       return "workspace.connectionServiceUnavailable";
     case "credentialBindingRequired":
-      return mode === "copy"
-        ? "workspace.copyCredentialMissing"
-        : "workspace.bindPasswordRequired";
+      return "workspace.bindPasswordRequired";
     case "keychain":
       return "workspace.bindCredentialStoreFailed";
     case "config":
-      return mode === "copy"
-        ? "workspace.copyRejected"
-        : "workspace.bindValuesRejected";
+      return "workspace.bindValuesRejected";
     case "blocked":
     case "safety":
       return "workspace.connectionActionBlocked";
     case "notFound":
-      return mode === "copy"
-        ? "workspace.copyTargetUnavailable"
-        : "workspace.bindConnectionUnavailable";
+      return "workspace.bindConnectionUnavailable";
     default:
       return "workspace.connectionActionFailed";
   }
@@ -111,44 +85,17 @@ function workspaceConnectionErrorKey(
 
 export default function WorkspaceConnectionDialog({
   connection,
-  mode,
   onBound,
   onClose,
   returnFocusRef,
 }: {
   connection: ConnectionProfile;
-  mode: DialogMode;
   onBound: (connection: ConnectionProfile) => void;
   onClose: () => void;
   returnFocusRef?: RefObject<HTMLElement | null>;
 }) {
   const { t } = useI18n();
   const toast = useToast();
-  const queryClient = useQueryClient();
-  const context = useQuery(workspaceContextQuery());
-  const auth = useQuery(workspaceAuthStateQuery());
-  const targetGroups = useMemo(
-    () => buildWorkspaceChoiceGroups(
-      auth.data,
-      context.data?.workspaces ?? [],
-      t("workspace.localOnly"),
-    )
-      .map((group) => ({
-        ...group,
-        choices: group.choices.filter((choice) =>
-          choice.workspace.kind === "team"
-          && canManageWorkspaceConnections(choice.role)
-          && !(
-            choice.workspace.id === context.data?.active.id
-            && choice.accountUserId === auth.data?.user?.id
-          ),
-        ),
-      }))
-      .filter((group) => group.choices.length > 0),
-    [auth.data, context.data, t],
-  );
-  const targets = targetGroups.flatMap((group) => group.choices);
-  const [targetValue, setTargetValue] = useState("");
   const [username, setUsername] = useState(connection.username);
   const [password, setPassword] = useState("");
   const [sshAlias, setSshAlias] = useState(
@@ -177,23 +124,6 @@ export default function WorkspaceConnectionDialog({
   } | null>(null);
   // An existing binding keeps its saved password when the field stays empty.
   const keepsSavedPassword = connection.secretRef !== null;
-  const selectedTargetValue = targetValue || targets[0]?.value || "";
-
-  async function copy() {
-    const target = parseWorkspaceChoice(selectedTargetValue);
-    if (!target?.accountUserId) {
-      setError("workspace.copyTargetRequired");
-      return;
-    }
-    await copyConnectionToWorkspace(
-      connection.id,
-      target.workspaceId,
-      target.accountUserId,
-    );
-    await invalidateWorkspaceContext(queryClient);
-    toast(t("workspace.connectionCopied"));
-    onClose();
-  }
 
   /** Every applicable setting is sent, so clearing a path removes it from the binding. */
   function tlsFilesRequest(): Record<string, string> | undefined {
@@ -244,10 +174,9 @@ export default function WorkspaceConnectionDialog({
     setError(null);
     setCheckFailure(null);
     try {
-      if (mode === "copy") await copy();
-      else await bind();
+      await bind();
     } catch (caught) {
-      setError(workspaceConnectionErrorKey(caught, mode));
+      setError(workspaceConnectionErrorKey(caught));
     } finally {
       setPending(null);
     }
@@ -273,57 +202,12 @@ export default function WorkspaceConnectionDialog({
         >
           <ModalHeader
             titleId="workspace-connection-title"
-            title={mode === "copy"
-                ? t("workspace.copyConnection", {
-                    name: connection.name,
-                  })
-                : t("workspace.bindCredentials", {
-                    name: connection.name,
-                  })}
+            title={t("workspace.bindCredentials", {
+              name: connection.name,
+            })}
           />
           <div className="tw:grid tw:min-h-0 tw:min-w-0 tw:gap-3 tw:overflow-y-auto tw:p-4">
-          {mode === "copy" ? (
-            <>
-              <p
-                id="workspace-connection-description"
-                className="tw:m-0 tw:text-ui tw:leading-body tw:text-muted-foreground tw:[overflow-wrap:anywhere]"
-              >
-                {t("workspace.copySecurityNote")}
-              </p>
-              <Field label={t("workspace.targetWorkspace")}>
-                <SelectInput
-                  data-modal-initial-focus
-                  value={selectedTargetValue}
-                  onChange={(event) =>
-                    setTargetValue(event.target.value)
-                  }
-                  disabled={pending !== null || targets.length === 0}
-                >
-                  {targetGroups.map((group) => (
-                    <optgroup key={group.key} label={group.label}>
-                      {group.choices.map((choice) => (
-                        <option
-                          value={choice.value}
-                          key={choice.value}
-                        >
-                          {choice.workspace.name}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </SelectInput>
-              </Field>
-              {targets.length === 0 ? (
-                <div
-                  className="tw:text-ui tw:text-danger"
-                  role="alert"
-                >
-                  {t("workspace.noManageableWorkspace")}
-                </div>
-              ) : null}
-            </>
-          ) : (
-            <>
+          <>
               <p
                 id="workspace-connection-description"
                 className="tw:m-0 tw:text-ui tw:leading-body tw:text-muted-foreground tw:[overflow-wrap:anywhere]"
@@ -407,8 +291,7 @@ export default function WorkspaceConnectionDialog({
                   ))}
                 </section>
               ) : null}
-            </>
-          )}
+          </>
           {pending === "checking" ? (
             <span className="tw:text-ui">
               <LoadingLabel>{t("workspace.bindChecking")}</LoadingLabel>
@@ -449,17 +332,10 @@ export default function WorkspaceConnectionDialog({
             <Button
               type="submit"
               variant="primary"
-              disabled={
-                pending !== null ||
-                (mode === "copy" && !selectedTargetValue)
-              }
+              disabled={pending !== null}
               disabledBehavior="focusable"
             >
-              {pending
-                ? t("common.working")
-                : mode === "copy"
-                  ? t("workspace.copy")
-                  : t("workspace.bind")}
+              {pending ? t("common.working") : t("workspace.bind")}
             </Button>
           </ModalFooter>
         </form>

@@ -46,7 +46,7 @@ function mutationAuthority(authorization: {
   role: string; session: { session: { id: string }; user: { id: string } }; membership: { id: string };
 }): MutationAuthority {
   return { sessionId: authorization.session.session.id, userId: authorization.session.user.id,
-    membershipId: authorization.membership.id, role: authorization.role as "admin" | "owner" };
+    membershipId: authorization.membership.id, role: authorization.role };
 }
 
 function directPrincipalView(row: {
@@ -163,15 +163,23 @@ export async function GET(request: Request, context: RouteContext) {
   });
 }
 
+/** A client may name the connection it publishes so a local connection keeps its identity. */
+function splitClientId(value: unknown): { id: string | null; template: unknown } {
+  if (!value || typeof value !== "object" || Array.isArray(value) || !("id" in value)) {
+    return { id: null, template: value };
+  }
+  const { id, ...template } = value as Record<string, unknown>;
+  if (typeof id !== "string" || !isUuid(id)) throw new Error("Invalid connection id");
+  return { id: id.toLowerCase(), template };
+}
+
 export async function POST(request: Request, context: RouteContext) {
   if (!mutationAllowed(request, env.appOrigin())) return jsonError("Invalid request origin", 403);
   const { workspaceId } = await context.params;
   if (!isUuid(workspaceId)) return jsonError("Invalid workspace id", 400);
-  const authorization = await authorizeWorkspace(request, workspaceId, "manage");
+  // Editors and above create team connections; administrators manage the rest of the workspace.
+  const authorization = await authorizeWorkspace(request, workspaceId, "write");
   if (!authorization.ok) return jsonError(authorization.error, authorization.status);
-  if (authorization.role !== "admin" && authorization.role !== "owner") {
-    return jsonError("Workspace access denied", 403);
-  }
   let expectedRevision: number | null;
   try {
     expectedRevision = parseExpectedRevision(request);
@@ -181,6 +189,7 @@ export async function POST(request: Request, context: RouteContext) {
   if (expectedRevision === null) return jsonError("Expected revision is required", 428);
   if (expectedRevision !== 0) return jsonError("New connections require expected revision 0", 409);
   let input;
+  let clientId: string | null;
   try {
     const body = await boundedJsonBody(request, 64 * 1_024);
     if (!body.ok) {
@@ -189,17 +198,44 @@ export async function POST(request: Request, context: RouteContext) {
         body.reason === "too_large" ? 413 : 400,
       );
     }
-    input = parseSharedConnection(body.value);
+    const split = splitClientId(body.value);
+    clientId = split.id;
+    input = parseSharedConnection(split.template);
   } catch (error) {
     return jsonError(error instanceof Error ? error.message : "Invalid connection template", 400);
   }
-  const connectionId = crypto.randomUUID();
-  const created = await commitConnectionCreate({
-    organizationId: workspaceId, connectionId, authority: mutationAuthority(authorization),
-    input: connectionVersionPayload(input),
-  });
+  const connectionId = clientId ?? crypto.randomUUID();
+  if (clientId) {
+    // A retry of the same publication by the same creator returns the connection it created.
+    const existing = await db.query.workspaceConnection.findFirst({
+      where: and(
+        eq(workspaceConnection.id, connectionId),
+        eq(workspaceConnection.organizationId, workspaceId),
+        eq(workspaceConnection.createdByUserId, authorization.session.user.id),
+        isNull(workspaceConnection.deletedAt),
+      ),
+    });
+    if (existing) {
+      return privateJson({
+        connection: publicConnection(existing, authorization.role, accessModeForConnectionGrant(authorization.role, "manage")),
+      });
+    }
+  }
+  // The creator holds the manage grant, so the response carries the manage-grant access mode.
+  const creatorAccess = accessModeForConnectionGrant(authorization.role, "manage");
+  let created;
+  try {
+    created = await commitConnectionCreate({
+      organizationId: workspaceId, connectionId, authority: mutationAuthority(authorization),
+      input: connectionVersionPayload(input),
+    });
+  } catch (error) {
+    // A caller-chosen id that another connection already owns reads as a plain conflict.
+    if (clientId) return jsonError("Connection id is unavailable.", 409);
+    throw error;
+  }
   if (!created) return jsonError("Connection changed concurrently. Retry creation.", 409);
   return privateJson({
-    connection: publicConnection(created, authorization.role, authorization.accessMode),
+    connection: publicConnection(created, authorization.role, creatorAccess),
   }, { status: 201 });
 }

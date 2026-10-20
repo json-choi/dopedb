@@ -11,7 +11,6 @@ export type ConnectionWriteAuthority = Pick<
 export type WriteBlockRecoveryKind =
   | "deviceSafety"
   | "localSafety"
-  | "managedCredential"
   | "schemaSafety"
   | "schemaUnavailable"
   | "workspaceGrant"
@@ -92,9 +91,6 @@ export function writeBlockRecoveryKind(
 ): WriteBlockRecoveryKind | null {
   const schemaAccessError = isSchemaAccessError(error);
   if (!schemaAccessError && !isWritesDisabledError(error)) return null;
-  if (connection.credentialMode === "memberLocal") {
-    return "managedCredential";
-  }
   if (
     connection.workspaceAccess === "view" ||
     connection.workspaceAccess === "read"
@@ -112,8 +108,13 @@ export function writeBlockRecoveryKind(
       ? "schemaSafety"
       : "schemaUnavailable";
   }
-  // A provisioned account is bounded by the administrator's write ceiling alone.
-  if (!connection.allowWrites && connection.credentialMode === "provisioned") {
+  // A provisioned account is bounded by the administrator's write ceiling alone; a member
+  // credential is bounded by the grant the server projected into `allowWrites`.
+  if (
+    !connection.allowWrites &&
+    (connection.credentialMode === "provisioned" ||
+      connection.credentialMode === "memberLocal")
+  ) {
     return "workspacePolicy";
   }
   if (!connection.allowWrites && connection.credentialMode === "managed") {
@@ -144,7 +145,7 @@ export function writeBlockRecoveryOpensSafety(
 export function connectionCanEnterWritePath(
   connection: ConnectionWriteAuthority,
 ): boolean {
-  if (!connection.allowWrites || connection.credentialMode === "memberLocal") {
+  if (!connection.allowWrites) {
     return false;
   }
   return (

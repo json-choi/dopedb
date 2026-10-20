@@ -1402,11 +1402,245 @@ async fn assert_environment_kind_migration_and_effective_environment() {
     assert_eq!(EnvironmentKind::parse("custom"), None);
 }
 
+/// A team-local connection becomes a team connection in place: it keeps its id, so history and
+/// Safety that name it stay valid, and the publisher's credential binding moves with it in one
+/// transaction. Device-only SQLite files are never offered for promotion, and a template whose
+/// MongoDB `srv` flips releases the saved credential.
+async fn assert_local_connection_publication_keeps_identity() {
+    let pool = memory_pool().await;
+    sqlx::raw_sql(schema::SCHEMA).execute(&pool).await.unwrap();
+    sqlx::raw_sql(schema::KNOWLEDGE_SCHEMA)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let store = Store::from_pool_for_test(pool);
+    let workspace_id = Uuid::new_v4();
+    let user = workspace_user("30000000-0000-0000-0000-000000000003", "Creator");
+    store
+        .sync_account_workspaces(
+            &user,
+            &[(workspace_id, "Team".into(), WorkspaceRole::Editor)],
+        )
+        .await
+        .unwrap();
+    store
+        .activate_workspace(workspace_id, Some(&user.id))
+        .await
+        .unwrap();
+
+    let id = Uuid::new_v4();
+    let credential_id = Uuid::new_v4();
+    let mut local = sqlite_profile(id, "orders");
+    local.engine = Engine::Postgres;
+    local.host = "db.example.test".into();
+    local.port = 5432;
+    local.database = "orders".into();
+    local.username = "creator".into();
+    local.sslmode = "require".into();
+    local.secret_ref = Some(credential_id.to_string());
+    store.upsert_connection(&local).await.unwrap();
+    // A SQLite file stays on this device; Cloudflare D1 is an identity and may be shared.
+    let file = Uuid::new_v4();
+    store
+        .upsert_connection(&sqlite_profile(file, "local file"))
+        .await
+        .unwrap();
+    let mut d1 = sqlite_profile(Uuid::new_v4(), "edge");
+    d1.provider = Provider::CloudflareD1;
+    d1.database = Uuid::new_v4().to_string();
+    store.upsert_connection(&d1).await.unwrap();
+    let promotable = store.promotable_local_connections(&user.id).await.unwrap();
+    let mut promotable_ids = promotable
+        .iter()
+        .map(|(_, profile)| profile.id)
+        .collect::<Vec<_>>();
+    promotable_ids.sort();
+    let mut expected = vec![id, d1.id];
+    expected.sort();
+    assert_eq!(promotable_ids, expected);
+    assert!(promotable
+        .iter()
+        .all(|(workspace, _)| *workspace == workspace_id));
+    // Only the creating account lists its own rows.
+    let other = workspace_user("40000000-0000-0000-0000-000000000004", "Other");
+    store
+        .sync_account_workspaces(
+            &other,
+            &[(workspace_id, "Team".into(), WorkspaceRole::Editor)],
+        )
+        .await
+        .unwrap();
+    assert!(store
+        .promotable_local_connections(&other.id)
+        .await
+        .unwrap()
+        .is_empty());
+
+    sqlx::query(
+        "INSERT INTO query_history (id, connection_id, account_scope, sql, kind, status, executed_at, origin)
+         VALUES (?1, ?2, ?3, 'SELECT 1', 'select', 'ok', ?4, 'manual')",
+    )
+    .bind(Uuid::new_v4().to_string())
+    .bind(id.to_string())
+    .bind(user.id.as_str())
+    .bind(Utc::now())
+    .execute(store.pool())
+    .await
+    .unwrap();
+    let local_safety = store.get_safety(id).await.unwrap();
+
+    let mut published = local.clone();
+    published.username.clear();
+    published.secret_ref = None;
+    published.workspace_access = crate::model::WorkspaceConnectionAccess::Manage;
+    published.credential_mode = crate::model::WorkspaceCredentialMode::MemberLocal;
+    // The member's own credential may write under their grant; the template carried no write flag.
+    published.allow_writes = true;
+    let mut binding_params = HashMap::new();
+    binding_params.insert("application_name".into(), "dopedb".into());
+    let binding = crate::store::PublishedBinding {
+        username: "creator".into(),
+        extra_params: binding_params.clone(),
+        secret_ref: Some(credential_id.to_string()),
+    };
+    store
+        .publish_remote_connection(
+            workspace_id,
+            &user.id,
+            &[(published.clone(), 1)],
+            id,
+            &binding,
+        )
+        .await
+        .unwrap();
+    let loaded = store.get_connection(id).await.unwrap();
+    assert_eq!(loaded.id, id);
+    assert_eq!(
+        loaded.credential_mode,
+        crate::model::WorkspaceCredentialMode::MemberLocal
+    );
+    assert_eq!(loaded.username, "creator");
+    assert_eq!(
+        loaded.secret_ref.as_deref(),
+        Some(credential_id.to_string().as_str())
+    );
+    assert_eq!(loaded.extra_params, binding_params);
+    assert!(loaded.allow_writes);
+    let converted: (Option<String>, Option<String>, String, String) = sqlx::query_as(
+        "SELECT remote_id, account_user_id, username, sync_status FROM connections WHERE id = ?1",
+    )
+    .bind(id.to_string())
+    .fetch_one(store.pool())
+    .await
+    .unwrap();
+    assert_eq!(
+        converted,
+        (Some(id.to_string()), None, String::new(), "synced".into())
+    );
+    // The reference rows are the same rows: nothing was copied or re-pointed.
+    let history: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM query_history WHERE connection_id = ?1")
+            .bind(id.to_string())
+            .fetch_one(store.pool())
+            .await
+            .unwrap();
+    assert_eq!(history, 1);
+    assert_eq!(
+        store.get_safety(id).await.unwrap().max_rows,
+        local_safety.max_rows
+    );
+    // Promoted rows leave the promotable list; the file and the unpublished D1 row remain.
+    let remaining = store.promotable_local_connections(&user.id).await.unwrap();
+    assert_eq!(remaining.len(), 1);
+    assert_eq!(remaining[0].1.id, d1.id);
+    // A repeated publication is idempotent.
+    store
+        .publish_remote_connection(workspace_id, &user.id, &[(published, 1)], id, &binding)
+        .await
+        .unwrap();
+    assert_eq!(store.get_connection(id).await.unwrap().username, "creator");
+
+    // Moving a MongoDB template between SRV and a seed list releases the saved credential.
+    let mongo_id = Uuid::new_v4();
+    let mongo_credential = Uuid::new_v4();
+    let mut mongo = sqlite_profile(mongo_id, "atlas");
+    mongo.engine = Engine::Mongodb;
+    mongo.host = "cluster0.example.test".into();
+    mongo.port = 27017;
+    mongo.database = "app".into();
+    mongo.sslmode = "require".into();
+    mongo.workspace_access = crate::model::WorkspaceConnectionAccess::Write;
+    mongo.credential_mode = crate::model::WorkspaceCredentialMode::MemberLocal;
+    let srv = |enabled: bool| dopedb_protocol::SharedMongoOptions {
+        srv: enabled,
+        auth_source: None,
+        replica_set: None,
+    };
+    crate::mongo::apply_template_options(&mut mongo.extra_params, Some(&srv(true)));
+    store
+        .sync_remote_connections(
+            workspace_id,
+            &user.id,
+            &[
+                (published_unchanged(&store, id).await, 1),
+                (mongo.clone(), 1),
+            ],
+        )
+        .await
+        .unwrap();
+    store
+        .bind_connection_credentials(
+            mongo_id,
+            &user.id,
+            "mongo-member",
+            &HashMap::new(),
+            Some(&mongo_credential.to_string()),
+        )
+        .await
+        .unwrap();
+    let released = store
+        .sync_remote_connections(
+            workspace_id,
+            &user.id,
+            &[
+                (published_unchanged(&store, id).await, 1),
+                (mongo.clone(), 2),
+            ],
+        )
+        .await
+        .unwrap();
+    assert!(
+        released.is_empty(),
+        "an unchanged template keeps the credential"
+    );
+    crate::mongo::apply_template_options(&mut mongo.extra_params, Some(&srv(false)));
+    let released = store
+        .sync_remote_connections(
+            workspace_id,
+            &user.id,
+            &[(published_unchanged(&store, id).await, 1), (mongo, 3)],
+        )
+        .await
+        .unwrap();
+    assert_eq!(released, vec![mongo_credential]);
+}
+
+/// The synchronized profile of an already published connection, as the control plane would
+/// return it again in a later collection.
+async fn published_unchanged(store: &Store, id: Uuid) -> ConnectionProfile {
+    let mut profile = store.get_connection(id).await.unwrap();
+    profile.username.clear();
+    profile.secret_ref = None;
+    profile.extra_params.clear();
+    profile
+}
+
 #[tokio::test]
 async fn remote_template_sync_preserves_member_local_credential_binding() {
     assert_knowledge_source_revision_ipc_uses_camel_case_fields();
     assert_current_store_baseline_and_invariants().await;
     assert_environment_kind_migration_and_effective_environment().await;
+    assert_local_connection_publication_keeps_identity().await;
     let pool = memory_pool().await;
     sqlx::raw_sql(schema::SCHEMA).execute(&pool).await.unwrap();
     sqlx::raw_sql(schema::KNOWLEDGE_SCHEMA)

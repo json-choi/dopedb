@@ -1,5 +1,6 @@
-// Manager-owned team-read policy materializes ordinary grants. Disabling it is
-// allowed only after the connection revocation gate has drained every lease and every
+// Manager-owned team-read policy materializes ordinary grants for every credential method.
+// A new team connection starts with it on; the toggle route remains for Desktops that predate
+// that default. Disabling it is allowed only after the connection revocation gate has drained every lease and every
 // provisioned principal holding a team grant has been lowered.
 import "server-only";
 import { sql } from "drizzle-orm";
@@ -24,7 +25,6 @@ export async function setWorkspaceTeamRead(input: {
   const result = await atomicD1({
     scope: sql`SELECT '{}' AS payload FROM workspace_connection connection
       WHERE connection.organization_id = ${input.organizationId} AND connection.id = ${input.connectionId}
-        AND (connection.credential_mode = 'managed' OR connection.provisioning_mode = 'provisioned')
         AND connection.deleted_at IS NULL AND ${gate}
         AND EXISTS (${workspaceMemberAuthority(input.organizationId, input.authority, ["admin", "owner"])})
         AND EXISTS (SELECT 1 FROM workspace_connection_grant WHERE organization_id = ${input.organizationId}

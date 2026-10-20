@@ -118,7 +118,7 @@ type Props = {
   onEditCredentials: () => void;
   /** Resynchronizes the workspace through the shell, then re-reads this catalog. */
   onRefreshWorkspace: () => void;
-  onWorkspaceDialog: (mode: "copy" | "credentials") => void;
+  onWorkspaceDialog: () => void;
   onRefresh: () => void;
   onDelete: () => void;
   onUnbind?: () => void;
@@ -221,7 +221,7 @@ export default function ConnectionNode(props: Props) {
   // reopens its own editor at the credential field.
   const resolveCredentials =
     accessIssue === "credentials" || canBindMemberCredentials(connection)
-      ? () => props.onWorkspaceDialog("credentials")
+      ? () => props.onWorkspaceDialog()
       : connection.workspaceAccess === "local"
           && connection.credentialMode === "local"
         ? props.onEditCredentials
@@ -564,20 +564,10 @@ export default function ConnectionNode(props: Props) {
                 <MenuItem
                   onClick={() => {
                     props.onOpenMenu(null);
-                    props.onWorkspaceDialog("credentials");
+                    props.onWorkspaceDialog();
                   }}
                 >
                   {t("workspace.bindCredentialsShort")}
-                </MenuItem>
-              ) : null}
-              {connection.workspaceAccess === "local" ? (
-                <MenuItem
-                  onClick={() => {
-                    props.onOpenMenu(null);
-                    props.onWorkspaceDialog("copy");
-                  }}
-                >
-                  {t("workspace.copyToWorkspace")}
                 </MenuItem>
               ) : null}
               {connection.workspaceAccess !== "view" ? (

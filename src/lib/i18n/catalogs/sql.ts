@@ -69,10 +69,6 @@ export const sqlCatalog = defineCatalog(
       "Data-change permission",
     "sql.writeBlock.guidanceLocalSafety":
       "Open Settings > Safety for {connection}, check Data changes, and apply the connection permissions.",
-    "sql.writeBlock.permissionManagedCredential":
-      "Managed write credential",
-    "sql.writeBlock.guidanceManagedCredential":
-      "{connection} uses a member-local credential, which is read-only. A workspace administrator must configure managed access and then enable its write policy in Settings > Safety.",
     "sql.writeBlock.permissionSchemaSafety": "Schema-change access",
     "sql.writeBlock.guidanceSchemaSafety":
       "Open Settings > Safety for {connection} and check Schema changes. If that permission is unavailable, the same screen shows the exact missing grant or provider capability.",
@@ -293,9 +289,6 @@ export const sqlCatalog = defineCatalog(
       "데이터 변경 권한",
     "sql.writeBlock.guidanceLocalSafety":
       "설정 → 안전 → {connection}에서 ‘데이터 변경’을 체크하고 연결 권한을 적용하세요.",
-    "sql.writeBlock.permissionManagedCredential": "관리형 쓰기 자격 증명",
-    "sql.writeBlock.guidanceManagedCredential":
-      "{connection}은 읽기 전용인 구성원 로컬 자격 증명을 사용합니다. 워크스페이스 관리자가 관리형 접근을 구성한 뒤 설정 → 안전에서 쓰기 정책을 켜야 합니다.",
     "sql.writeBlock.permissionSchemaSafety": "스키마 변경 접근",
     "sql.writeBlock.guidanceSchemaSafety":
       "설정 → 안전 → {connection}에서 ‘스키마 변경’을 체크하세요. 사용할 수 없다면 같은 화면에서 부족한 권한이나 공급자 지원 여부를 바로 확인할 수 있습니다.",

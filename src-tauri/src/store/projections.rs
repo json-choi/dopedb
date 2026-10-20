@@ -181,7 +181,9 @@ pub(super) fn row_to_connection_with_binding(
 /// [`binding_endpoint_admits`] reads it.
 pub(super) const TEMPLATE_ENDPOINT_JSON: &str =
     "json_object('engine', engine, 'provider', provider, \
-     'host', host, 'port', port, 'sslmode', sslmode)";
+     'host', host, 'port', port, 'sslmode', sslmode, \
+     'srv', json(CASE WHEN json_extract(extra_params, '$.srv') = 'true' \
+                      THEN 'true' ELSE 'false' END))";
 
 #[derive(serde::Deserialize)]
 struct BoundTemplateEndpoint {
@@ -190,6 +192,10 @@ struct BoundTemplateEndpoint {
     host: String,
     port: i64,
     sslmode: String,
+    /// MongoDB `mongodb+srv` resolution is part of the endpoint: a record that predates the
+    /// field was made against a non-SRV template.
+    #[serde(default)]
+    srv: bool,
 }
 
 /// Whether a member-local credential bound against `bound_endpoint` may still be
@@ -209,10 +215,15 @@ pub(super) fn binding_endpoint_admits(
             profile.host = bound.host;
             profile.port = u16::try_from(bound.port).ok()?;
             profile.sslmode = bound.sslmode;
-            Some(profile)
+            Some((profile, bound.srv))
         });
-    bound.is_some_and(|bound| {
-        crate::features::connections::same_credential_endpoint(&bound, current)
+    bound.is_some_and(|(bound, bound_srv)| {
+        // Switching a MongoDB template between SRV and a direct seed list resolves to other
+        // servers, so it moves the endpoint exactly like a changed host.
+        let current_srv = crate::mongo::template_options(&current.extra_params)
+            .is_some_and(|options| options.srv);
+        (current.engine != Engine::Mongodb || bound_srv == current_srv)
+            && crate::features::connections::same_credential_endpoint(&bound, current)
     })
 }
 

@@ -8,7 +8,7 @@ use crate::connection::{ConnectionAccess, ConnectionManager, ConnectionMutation}
 use crate::error::{AppError, AppResult};
 use crate::kernel::identity::{AccountId, ConnectionId, WorkspaceId};
 use crate::model::ConnectionProfile;
-use crate::store::Store;
+use crate::store::{PublishedBinding, Store};
 
 use super::super::domain::{
     workspace_feature_enabled, Workspace, WorkspaceAuthAccount, WorkspaceAuthUser,
@@ -154,13 +154,31 @@ impl WorkspaceRepositoryPort for SqliteWorkspaceRepository {
             .await
     }
 
-    async fn purge_remote_connection_cache(
+    async fn promotable_connections(
+        &self,
+        account_id: &AccountId,
+    ) -> AppResult<Vec<(WorkspaceId, ConnectionProfile)>> {
+        Ok(self
+            .store
+            .promotable_local_connections(account_id.as_str())
+            .await?
+            .into_iter()
+            .map(|(workspace_id, profile)| (WorkspaceId::from(workspace_id), profile))
+            .collect())
+    }
+
+    async fn get_promotable_connection(
         &self,
         workspace_id: WorkspaceId,
+        account_id: &AccountId,
         connection_id: ConnectionId,
-    ) -> AppResult<()> {
+    ) -> AppResult<ConnectionProfile> {
         self.store
-            .purge_remote_connection_cache(workspace_id.into(), connection_id.into())
+            .get_promotable_connection(
+                workspace_id.into(),
+                account_id.as_str(),
+                connection_id.into(),
+            )
             .await
     }
 
@@ -274,6 +292,25 @@ impl WorkspaceRuntimePort for ConnectionWorkspaceRuntime {
     ) -> AppResult<Vec<Uuid>> {
         self.connections
             .sync_remote_connections(workspace_id.into(), account_id.as_str(), connections)
+            .await
+    }
+
+    async fn publish_remote_connection(
+        &self,
+        workspace_id: WorkspaceId,
+        account_id: &AccountId,
+        connections: &[(ConnectionProfile, i64)],
+        published_id: ConnectionId,
+        binding: &PublishedBinding,
+    ) -> AppResult<Vec<Uuid>> {
+        self.connections
+            .publish_remote_connection(
+                workspace_id.into(),
+                account_id.as_str(),
+                connections,
+                published_id.into(),
+                binding,
+            )
             .await
     }
 

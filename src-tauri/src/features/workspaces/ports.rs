@@ -7,6 +7,7 @@ use uuid::Uuid;
 use crate::error::AppResult;
 use crate::kernel::identity::{AccountId, ConnectionId, WorkspaceId};
 use crate::model::ConnectionProfile;
+use crate::store::PublishedBinding;
 
 use super::domain::{
     RemoteWorkspace, Workspace, WorkspaceAuthAccount, WorkspaceAuthUser,
@@ -47,11 +48,19 @@ pub(crate) trait WorkspaceRepositoryPort: Clone + Send + Sync + 'static {
         secret_ref: Option<&str>,
     ) -> impl Future<Output = AppResult<ConnectionProfile>> + Send;
 
-    fn purge_remote_connection_cache(
+    /// Local connections this account created in team workspaces and has not published yet,
+    /// with the workspace each belongs to. SQLite files are never listed.
+    fn promotable_connections(
+        &self,
+        account_id: &AccountId,
+    ) -> impl Future<Output = AppResult<Vec<(WorkspaceId, ConnectionProfile)>>> + Send;
+
+    fn get_promotable_connection(
         &self,
         workspace_id: WorkspaceId,
+        account_id: &AccountId,
         connection_id: ConnectionId,
-    ) -> impl Future<Output = AppResult<()>> + Send;
+    ) -> impl Future<Output = AppResult<ConnectionProfile>> + Send;
 
     /// Remember an OS credential item whose deletion failed, so the connections
     /// feature retries it after a restart. Only the opaque item id is stored.
@@ -119,6 +128,17 @@ pub(crate) trait WorkspaceRuntimePort: Clone + Send + Sync + 'static {
         workspace_id: WorkspaceId,
         account_id: &AccountId,
         connections: &[(ConnectionProfile, i64)],
+    ) -> impl Future<Output = AppResult<Vec<Uuid>>> + Send;
+
+    /// Reconcile the collection holding a just-published local connection and bind the
+    /// publisher's own credential to it in one transaction.
+    fn publish_remote_connection(
+        &self,
+        workspace_id: WorkspaceId,
+        account_id: &AccountId,
+        connections: &[(ConnectionProfile, i64)],
+        published_id: ConnectionId,
+        binding: &PublishedBinding,
     ) -> impl Future<Output = AppResult<Vec<Uuid>>> + Send;
 
     fn begin_connection_mutation(

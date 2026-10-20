@@ -92,6 +92,13 @@
       "when": 1792454283756,
       "tag": "0012_environment_kind",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1792460351833,
+      "tag": "0013_team_connection_default_read",
+      "breakpoints": true
     }
   ]
 }

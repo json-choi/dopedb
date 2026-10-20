@@ -7,9 +7,7 @@ import type { ProviderKind } from "../providers/domain";
 export function useConnectionEditorDialogs() {
   const [providerCredentialsOpen, setProviderCredentialsOpen] =
     useState<ProviderKind | "all" | null>(null);
-  const [workspaceDialogMode, setWorkspaceDialogMode] = useState<
-    "copy" | "credentials" | null
-  >(null);
+  const [workspaceDialogOpen, setWorkspaceDialogOpen] = useState(false);
   const [problemsOpen, setProblemsOpen] = useState(false);
   const workspaceButtonRef = useRef<HTMLButtonElement | null>(null);
   const providerReturnFocusRef = useRef<HTMLElement | null>(null);
@@ -38,8 +36,8 @@ export function useConnectionEditorDialogs() {
       returnFocusRef: providerReturnFocusRef,
     },
     workspace: {
-      mode: workspaceDialogMode,
-      setMode: setWorkspaceDialogMode,
+      open: workspaceDialogOpen,
+      setOpen: setWorkspaceDialogOpen,
       buttonRef: workspaceButtonRef,
     },
   };

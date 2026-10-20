@@ -40,10 +40,8 @@ export const safetyCatalog = defineCatalog(
       "Safety settings could not be loaded. Check the connection, then retry.",
     "safety.maxRows": "Max rows",
     "safety.maxRowsHint": "Row cap applied to read result sets.",
-    "safety.memberLocalReadOnlyHint":
-      "Member-local credentials are read-only. Workspace writes require a managed connection and an administrator-enabled write policy.",
     "safety.memberLocalSchemaUnavailable":
-      "Schema changes are unavailable for member-local credentials. Configure managed access, then return to this Safety screen.",
+      "Schema changes are unavailable on team connections that use your own credential. Managed access is required for schema changes.",
     "safety.noUnsavedChanges": "Current settings are applied.",
     "safety.appliedWithSchemaUnavailable":
       "The selected read and data-change permissions are applied. Schema changes remain unavailable for the reason shown above.",
@@ -164,10 +162,8 @@ export const safetyCatalog = defineCatalog(
       "안전 설정을 불러오지 못했습니다. 연결을 확인한 뒤 다시 시도하세요.",
     "safety.maxRows": "최대 행 수",
     "safety.maxRowsHint": "읽기 결과 집합에 적용되는 행 수 제한입니다.",
-    "safety.memberLocalReadOnlyHint":
-      "구성원 로컬 자격 증명 연결은 읽기 전용입니다. 워크스페이스 쓰기는 관리형 연결과 관리자가 활성화한 쓰기 정책이 필요합니다.",
     "safety.memberLocalSchemaUnavailable":
-      "구성원 로컬 자격 증명에서는 스키마 변경을 사용할 수 없습니다. 관리형 접근을 구성한 뒤 이 안전 화면으로 돌아오세요.",
+      "본인 자격 증명을 쓰는 팀 연결에서는 스키마 변경을 사용할 수 없습니다. 스키마 변경에는 관리형 접근이 필요합니다.",
     "safety.noUnsavedChanges": "현재 설정이 적용되어 있습니다.",
     "safety.appliedWithSchemaUnavailable":
       "선택한 읽기·데이터 변경 권한은 적용됐습니다. 위에 표시된 이유로 스키마 변경은 계속 사용할 수 없습니다.",

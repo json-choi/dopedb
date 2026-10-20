@@ -104,6 +104,77 @@ beforeAll(async () => {
     await expect(insertEnvironment.bind(randomUUID(), organizationId, projectId, "again", 0, "production", 1).run()).rejects.toThrow();
     await expect(db.prepare("UPDATE knowledge_project_environment SET kind = 'custom' WHERE id = ?").bind(customId).run()).rejects.toThrow();
   });
+
+  // Team connections open to the team by default for every credential method. The migration only
+  // redefines the team-read triggers (no table is rebuilt), so existing grants, direct endpoints,
+  // principals, revocations, and versions must be exactly as they were, and a plain member-local
+  // connection must now materialize team grants too.
+  await withStage("team-connection-default-read-migration", async () => {
+    const { commitConnectionCreate } = await import("./workspace-versioning-store");
+    const { parseConnectionVersionPayload } = await import("./workspace-versioning");
+    const organizationId = randomUUID();
+    const ownerUser = randomUUID(); const ownerMember = randomUUID(); const sessionId = randomUUID();
+    const analystUser = randomUUID(); const analystMember = randomUUID();
+    await db.batch([
+      db.prepare("INSERT INTO organization (id, name, slug) VALUES (?, 'Default read', ?)").bind(organizationId, `default-read-${organizationId}`),
+      db.prepare("INSERT INTO workspace_profile (organization_id, encryption_key_ref) VALUES (?, 'fixture')").bind(organizationId),
+      db.prepare("INSERT INTO user (id, name, email) VALUES (?, 'Owner', ?)").bind(ownerUser, `${ownerUser}@invalid.test`),
+      db.prepare("INSERT INTO user (id, name, email) VALUES (?, 'Analyst', ?)").bind(analystUser, `${analystUser}@invalid.test`),
+      db.prepare("INSERT INTO member (id, organization_id, user_id, role) VALUES (?, ?, ?, 'owner')").bind(ownerMember, organizationId, ownerUser),
+      db.prepare("INSERT INTO member (id, organization_id, user_id, role) VALUES (?, ?, ?, 'analyst')").bind(analystMember, organizationId, analystUser),
+      db.prepare("INSERT INTO session (id, token, user_id, expires_at) VALUES (?, ?, ?, ?)")
+        .bind(sessionId, randomUUID(), ownerUser, new Date(Date.now() + 60_000).toISOString()),
+    ]);
+    const authority = { sessionId, userId: ownerUser, membershipId: ownerMember, role: "owner" };
+    const template = (name: string) => parseConnectionVersionPayload({ name, engine: "postgres", provider: "generic",
+      driverId: null, host: "migrate.invalid", port: 5432, database: "app", sslmode: "verify-full",
+      readonlyDefault: true, allowWrites: false, env: null, schemaGroup: null, deleted: false }, { credentialMode: "member_local" });
+    const plainId = randomUUID(); const directId = randomUUID();
+    expect(await commitConnectionCreate({ organizationId, connectionId: plainId, authority, input: template("Plain") })).not.toBeNull();
+    expect(await commitConnectionCreate({ organizationId, connectionId: directId, authority, input: template("Direct"),
+      direct: { scope: ["public"], writeCeiling: true } })).not.toBeNull();
+    // Before the migration neither connection reaches the analyst through team read.
+    await db.prepare("UPDATE workspace_connection SET team_read_enabled = 1 WHERE id = ?").bind(plainId).run();
+    const analystGrants = (id: string) => db.prepare("SELECT count(*) AS count FROM workspace_connection_grant WHERE connection_id = ? AND member_id = ?")
+      .bind(id, analystMember).first("count");
+    expect(await analystGrants(plainId)).toBe(0);
+    await db.prepare("UPDATE workspace_connection SET team_read_enabled = 0 WHERE id = ?").bind(plainId).run();
+    await db.prepare("INSERT INTO workspace_connection_grant (organization_id, connection_id, member_id, capability) VALUES (?, ?, ?, 'use')")
+      .bind(organizationId, directId, analystMember).run();
+    await db.prepare(`INSERT INTO workspace_direct_principal (organization_id, connection_id, member_id, user_id, principal_name, marker, verifier_kind, verifier)
+      VALUES (?, ?, ?, ?, 'dopedb_0123456789abcdef0123', ?, 'scram-sha-256', ?)`)
+      .bind(organizationId, directId, analystMember, analystUser, "A".repeat(43),
+        "SCRAM-SHA-256$4096:Y0ea1poJCyWCd+yPum+ZQQ==$h7BOWJYfmpnYU9QEagtbeT58Pku9IfWsqPsXwgzbHYs=:s+rNM0M7MbUlI1EDLJs+ei56p3ONXezfDdbGJoCFPAY=").run();
+    await db.prepare("INSERT INTO workspace_direct_revocation (organization_id, connection_id, member_id, kind, target_level) VALUES (?, ?, ?, 'grant_lowered', 'read')")
+      .bind(organizationId, directId, analystMember).run();
+    const tables = ["workspace_connection", "workspace_connection_grant", "workspace_direct_endpoint", "workspace_direct_principal",
+      "workspace_direct_revocation", "workspace_resource_version", "workspace_audit_event"];
+    const counts = async () => Promise.all(tables.map(async (table) => db
+      .prepare(`SELECT count(*) AS count FROM ${table} WHERE organization_id = ?`).bind(organizationId).first<number>("count")));
+    const before = await counts();
+    expect(before.every((count) => (count ?? 0) > 0)).toBe(true);
+
+    await applyMigration("0013_team_connection_default_read.sql");
+
+    expect(await counts()).toEqual(before);
+    // The CHECK stays: a member-local template still delegates no write authority.
+    await expect(db.prepare("UPDATE workspace_connection SET allow_writes = 1 WHERE id = ?").bind(plainId).run()).rejects.toThrow();
+    // Team read now materializes grants on a plain member-local connection, for members present and joining later.
+    // The team-read route (kept for Desktops that predate the default) works for them as well.
+    const { setWorkspaceTeamRead } = await import("./workspace-team-read-store");
+    expect(await setWorkspaceTeamRead({ organizationId, connectionId: plainId, authority, enabled: true })).toBe(true);
+    expect(await analystGrants(plainId)).toBe(1);
+    const lateUser = randomUUID(); const lateMember = randomUUID();
+    await db.batch([
+      db.prepare("INSERT INTO user (id, name, email) VALUES (?, 'Late', ?)").bind(lateUser, `${lateUser}@invalid.test`),
+      db.prepare("INSERT INTO member (id, organization_id, user_id, role) VALUES (?, ?, ?, 'viewer')").bind(lateMember, organizationId, lateUser),
+    ]);
+    expect(await db.prepare("SELECT capability || '/' || origin AS grant FROM workspace_connection_grant WHERE connection_id = ? AND member_id = ?")
+      .bind(plainId, lateMember).first("grant")).toBe("view/team");
+    // The explicit direct-database grant keeps its level.
+    expect(await db.prepare("SELECT capability FROM workspace_connection_grant WHERE connection_id = ? AND member_id = ?")
+      .bind(directId, analystMember).first("capability")).toBe("use");
+  });
 });
 
 afterAll(async () => {

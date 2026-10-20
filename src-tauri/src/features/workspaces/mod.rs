@@ -17,8 +17,7 @@ use adapters::{
     SqliteWorkspaceRepository, SystemWorkspaceSshProfile,
 };
 pub(crate) use application::{
-    WorkspaceConnectionCopyRequest, WorkspaceConnectionUpdateRequest,
-    WorkspaceCredentialBindingRequest, WorkspaceUseCases,
+    WorkspaceConnectionUpdateRequest, WorkspaceCredentialBindingRequest, WorkspaceUseCases,
 };
 pub(crate) use domain::{
     RemoteWorkspace, Workspace, WorkspaceAccountMembership, WorkspaceAuthAccount,

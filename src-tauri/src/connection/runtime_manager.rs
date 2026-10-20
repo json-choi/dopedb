@@ -570,17 +570,50 @@ impl ConnectionManager {
         account_user_id: &str,
         connections: &[(ConnectionProfile, i64)],
     ) -> AppResult<Vec<Uuid>> {
+        self.reconcile_connections("workspace connections changed", async |store: &Store| {
+            store
+                .sync_remote_connections(workspace_id, account_user_id, connections)
+                .await
+        })
+        .await
+    }
+
+    /// The same fenced reconciliation for a local connection that was just published: the
+    /// template and the publisher's credential binding land in one transaction.
+    pub(crate) async fn publish_remote_connection(
+        &self,
+        workspace_id: Uuid,
+        account_user_id: &str,
+        connections: &[(ConnectionProfile, i64)],
+        published_id: Uuid,
+        binding: &crate::store::PublishedBinding,
+    ) -> AppResult<Vec<Uuid>> {
+        self.reconcile_connections("workspace connections changed", async |store: &Store| {
+            store
+                .publish_remote_connection(
+                    workspace_id,
+                    account_user_id,
+                    connections,
+                    published_id,
+                    binding,
+                )
+                .await
+        })
+        .await
+    }
+
+    async fn reconcile_connections(
+        &self,
+        reason: &'static str,
+        apply: impl AsyncFnOnce(&Store) -> AppResult<Vec<Uuid>>,
+    ) -> AppResult<Vec<Uuid>> {
         let _session_gate = self.inner.session_gate.write().await;
         let gate = self.inner.scope_gate.write().await;
         let before = self.session_authority_snapshot().await;
-        let synced = self
-            .inner
-            .store
-            .sync_remote_connections(workspace_id, account_user_id, connections)
-            .await;
+        let synced = apply(&self.inner.store).await;
         let after = self.session_authority_snapshot().await;
         let changed = Self::connections_changed_between(&before, &after);
-        self.revoke_sessions_changed_between(before, after, "workspace connections changed")
+        self.revoke_sessions_changed_between(before, after, reason)
             .await;
         let removed_credential_ids = synced?;
         let retired = self.detach_changed(changed).await;

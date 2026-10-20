@@ -461,9 +461,7 @@ export function DatabaseExplorer({
         onEdit={() => onEdit(connection)}
         onEditCredentials={() => onEdit(connection, "credentials")}
         onRefreshWorkspace={() => void resyncSharedConnection(connection.id)}
-        onWorkspaceDialog={(mode) =>
-          commands.openWorkspaceDialog({ connection, mode })
-        }
+        onWorkspaceDialog={() => commands.openWorkspaceDialog({ connection })}
         onRefresh={() => void refreshSchema(connection.id)}
         onDelete={() => void removeConnection(connection)}
         onUnbind={

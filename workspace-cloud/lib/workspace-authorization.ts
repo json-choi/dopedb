@@ -9,6 +9,7 @@ import {
   member,
   workspaceConnection,
   workspaceConnectionGrant,
+  workspaceDirectEndpoint,
   workspaceProfile,
   workspaceProviderIntegration,
   workspaceProviderResource,
@@ -182,8 +183,10 @@ export async function authorizeWorkspaceConnectionAction(
       credentialMode: workspaceConnection.credentialMode,
       provider: workspaceConnection.provider,
       providerIntegrationId: workspaceConnection.providerIntegrationId,
+      provisioningMode: workspaceConnection.provisioningMode,
       revocationPendingAt: workspaceConnection.revocationPendingAt,
     },
+    directWriteCeiling: workspaceDirectEndpoint.writeCeiling,
     connectionCapability: workspaceConnectionGrant.capability,
     integrationStatus: workspaceProviderIntegration.status,
     integrationProvider: workspaceProviderIntegration.provider,
@@ -221,6 +224,12 @@ export async function authorizeWorkspaceConnectionAction(
       eq(workspaceProviderResource.organizationId, workspaceConnection.organizationId),
       eq(workspaceProviderResource.id, workspaceConnection.providerResourceId),
       eq(workspaceProviderResource.provider, workspaceConnection.provider),
+    ),
+  ).leftJoin(
+    workspaceDirectEndpoint,
+    and(
+      eq(workspaceDirectEndpoint.organizationId, workspaceConnection.organizationId),
+      eq(workspaceDirectEndpoint.connectionId, workspaceConnection.id),
     ),
   ).where(and(
     eq(member.organizationId, organizationId),
@@ -261,6 +270,7 @@ export async function authorizeWorkspaceConnectionAction(
       integrationRevocationPendingAt: row.integrationRevocationPendingAt,
       integrationRevocationClaimId: row.integrationRevocationClaimId,
       providerCapabilityManifest: row.providerCapabilityManifest,
+      directWriteCeiling: row.directWriteCeiling,
     },
   };
 }

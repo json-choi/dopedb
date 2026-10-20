@@ -403,7 +403,6 @@ export default function AnalysisArticles({
       {controller.credentialTarget ? (
         <WorkspaceConnectionDialog
           connection={controller.credentialTarget}
-          mode="credentials"
           onBound={controller.credentialsBound}
           onClose={controller.closeCredentials}
         />

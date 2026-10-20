@@ -153,12 +153,15 @@ pub(super) async fn authorize_pin(
             reason: "your personal database account on this shared database is not ready".into(),
         });
     }
+    // Data changes on a member-credential team connection follow the member's grant, role and
+    // device Safety like any other credential method; the control plane re-checks the grant
+    // below. Schema changes stay with managed credentials, whose owner lease they require.
     if pin.requires_remote_rbac
         && pin.profile.credential_mode == WorkspaceCredentialMode::MemberLocal
-        && mutation
+        && access.is_schema()
     {
         return Err(AppError::Blocked {
-            reason: "shared member-local connections are read-only".into(),
+            reason: "schema changes on a team connection need managed credentials".into(),
         });
     }
     if !pin.profile.workspace_access.can_read()

@@ -2,6 +2,8 @@
 // diagnostics revealed only after a touch or an attempt, inline field validation,
 // the Problems list including the last check outcome, and navigation from a
 // problem to the tab, field, or member binding that resolves it.
+import { canAddWorkspaceConnections } from "../workspaces/choices";
+import { useWorkspaceAdminScope } from "../workspaceAdmin/scope";
 import type { DiagnosticItem } from "../../design-system/components/Diagnostics";
 import type { FieldValidation } from "../../design-system/components/FormControls";
 import { useI18n, type I18nKey } from "../../lib/i18n";
@@ -84,8 +86,14 @@ export function useConnectionProblems({
   const connectionUrlInvalid =
     !isSharedTemplate && url.mode === "urlOnly" &&
     parseConnectionUrl(url.draft) === null;
+  // A team workspace saves every connection as a team connection, which needs an editor
+  // role. A SQLite file stays on this device and is the one connection any role may save.
+  const teamScope = useWorkspaceAdminScope();
+  const teamRoleCannotAdd = teamScope !== null && !isSharedTemplate &&
+    !canAddWorkspaceConnections(teamScope.role) &&
+    (diagnosticProfile.engine !== "sqlite" || diagnosticProfile.provider === "cloudflareD1");
   const hasBlocking =
-    connectionUrlInvalid ||
+    connectionUrlInvalid || teamRoleCannotAdd ||
     diagnostics.some((diagnostic) => diagnostic.tone === "danger");
   const hasTestBlocking =
     connectionUrlInvalid || diagnostics.some(connectionDiagnosticBlocksTest);
@@ -96,6 +104,13 @@ export function useConnectionProblems({
       tone: diagnostic.tone,
       title: connectionDiagnosticMessage(t, diagnostic.code),
     }));
+  if (teamRoleCannotAdd) {
+    items.push({
+      id: "team-connection-role",
+      tone: "danger",
+      title: t("connections.problemTeamRoleCannotAdd"),
+    });
+  }
   if (connectionUrlInvalid) {
     items.push({
       id: "connection-url-invalid",
@@ -176,7 +191,7 @@ export function useConnectionProblems({
       document.activeElement instanceof HTMLButtonElement
         ? document.activeElement
         : null;
-    dialogs.workspace.setMode("credentials");
+    dialogs.workspace.setOpen(true);
   }
 
   function openDiagnostic(diagnosticId: string) {
