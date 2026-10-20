@@ -17,6 +17,15 @@ runtime과 성능 수치로 수행한다.
 
 ## 로컬 Claude Code 게이트웨이 인증
 
+2026-10-20 공식 CLI 선택은 상태 검사와 ACP 실행이 같은 resolver를 사용한다.
+상속된 절대 PATH를 먼저 확인하고 GUI fallback에서는 사용자별 선택 설치 경로를
+공통 설치 경로보다 우선한다. mise shim은 사용자 홈에서 선택된 CLI 파일로
+해석해 실행 파일 검증에 고정한다. 기존 보안 계약 테스트에서 경로 우선순위,
+상대 경로 제외, 잘못된 shim 응답과 실행 불가능한 파일 거절을 검사한다.
+macOS의 기존 설치 앱에서 중복 명령 경로를 Codex CLI 0.163.0으로 전환하고,
+공식 Codex ACP 1.11.0과 기존 구독 계정의 6.1 Sol 응답을 확인했다. 이번 Rust
+resolver 변경을 포함한 새 패키지 및 Windows GUI 검수는 남아 있다.
+
 - 상태: `partial` — 계정 로그인과 CLI가 관리하는 게이트웨이 인증 설정을 같은
   공개 `auth status` 응답으로 확인한다. 상태 검사와 공식 어댑터 실행은
   `AcpPluginId::local_cli_configuration_environment`의 제공자별 허용 목록을

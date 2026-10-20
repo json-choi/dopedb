@@ -58,6 +58,7 @@ session.
 | File | Description |
 |------|-------------|
 | `cli_probe.rs` | Process adapter for bounded, credential-free Agent CLI status probes. |
+| `cli_runtime.rs` | Shared probe/ACP CLI selection, inherited PATH precedence, and mise shim resolution to the selected CLI file from the user home. |
 | `mod.rs` | Concrete desktop adapter for CLI discovery; exposes `ProcessAgentCliProbe`. |
 
 **`runtime/`**

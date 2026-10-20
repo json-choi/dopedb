@@ -52,12 +52,15 @@ impl AcpProcessLaunchPort for TauriAcpProcessLaunchPort {
                     .map_err(|_| {
                         AppError::Config("the ACP plugin verifier stopped unexpectedly".into())
                     })??;
-            let cli_name = match provider {
-                AgentProvider::Claude => "claude",
-                AgentProvider::Codex => "codex",
-            };
-            let provider_cli =
-                crate::cli_environment::find_executable(cli_name).ok_or_else(|| {
+            let provider_cli = super::super::adapters::resolve_provider_cli(provider)
+                .await
+                .map_err(|detail| {
+                    AppError::Agent(agent_error::with_detail(
+                        agent_error::CLI_PROBE_FAILED,
+                        detail,
+                    ))
+                })?
+                .ok_or_else(|| {
                     AppError::Agent(agent_error::for_provider(
                         agent_error::CLI_MISSING,
                         provider,
@@ -221,7 +224,7 @@ impl AcpProcess {
             ])
             .env(
                 "PATH",
-                crate::cli_environment::executable_search_path(None)
+                super::super::adapters::provider_executable_search_path()
                     .to_string_lossy()
                     .into_owned(),
             )

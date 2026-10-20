@@ -7,8 +7,6 @@ use std::time::Duration;
 
 use dopedb_protocol::AcpPluginId;
 
-use crate::cli_environment::{executable_search_path, find_executable};
-
 use super::super::domain::{agent_error, AgentCliInfo, AgentProvider};
 use super::super::ports::AgentCliProbePort;
 
@@ -76,7 +74,17 @@ impl AgentCliProbePort for ProcessAgentCliProbe {
 }
 
 async fn detect_claude() -> AgentCliInfo {
-    let Some(binary) = find_executable("claude") else {
+    let binary = match super::resolve_provider_cli(AgentProvider::Claude).await {
+        Ok(binary) => binary,
+        Err(error) => {
+            return probe_failed(
+                AgentProvider::Claude,
+                "Claude Code",
+                version_probe_error(&error),
+            )
+        }
+    };
+    let Some(binary) = binary else {
         return unavailable(
             AgentProvider::Claude,
             "Claude Code",
@@ -139,7 +147,17 @@ async fn detect_claude() -> AgentCliInfo {
 }
 
 async fn detect_codex() -> AgentCliInfo {
-    let Some(binary) = find_executable("codex") else {
+    let binary = match super::resolve_provider_cli(AgentProvider::Codex).await {
+        Ok(binary) => binary,
+        Err(error) => {
+            return probe_failed(
+                AgentProvider::Codex,
+                "Codex CLI",
+                version_probe_error(&error),
+            )
+        }
+    };
+    let Some(binary) = binary else {
         return unavailable(
             AgentProvider::Codex,
             "Codex CLI",
@@ -278,7 +296,7 @@ pub(super) fn apply_probe_environment(command: &mut std::process::Command, provi
             command.env(name, value);
         }
     }
-    command.env("PATH", executable_search_path(None));
+    command.env("PATH", super::provider_executable_search_path());
 }
 
 fn probe_environment_key_allowed(key: &OsStr, case_insensitive: bool) -> bool {

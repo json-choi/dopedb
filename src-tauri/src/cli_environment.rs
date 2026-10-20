@@ -139,10 +139,6 @@ fn non_empty_var(name: &str) -> Option<OsString> {
     std::env::var_os(name).filter(|value| !value.is_empty())
 }
 
-pub(crate) fn find_executable(binary: &str) -> Option<PathBuf> {
-    find_in_path(&executable_search_path(None), binary)
-}
-
 pub(crate) fn find_in_path(path: &OsStr, binary: &str) -> Option<PathBuf> {
     let names = binary_names(binary);
     std::env::split_paths(path)
