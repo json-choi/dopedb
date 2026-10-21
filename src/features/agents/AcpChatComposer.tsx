@@ -44,7 +44,7 @@ export default function AcpChatComposer({
   if (!session.activeLive && setup.pluginReadyProviders.length === 0) return null;
   const configDisabled =
     session.starting ||
-    active?.lifecycle !== "ready" ||
+    (active !== null && active.lifecycle !== "ready") ||
     composer.configChanging !== null;
   // Only missing prerequisites disable the input. A running turn or a start in
   // progress keeps it enabled so focus and the next draft are never lost;
@@ -122,7 +122,7 @@ export default function AcpChatComposer({
             }
             onClick={() =>
               void (active.acpSessionId === null
-                ? commands.session.start()
+                ? commands.session.beginNewChat()
                 : commands.session.resume())
             }
           >

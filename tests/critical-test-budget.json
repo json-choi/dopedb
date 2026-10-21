@@ -33,7 +33,7 @@
     },
     "src/features/agents/sessionStore.test.ts": {
       "tests": 8,
-      "protects": "Exact-scope ACP session isolation, stale-event and stale-focus-intent rejection, single-submit first-prompt startup, singleton list/listen ownership, live-only Agent outcome observation, frame-paced partial replies before turn completion and account-switch queue cancellation, bounded projection retention, and incomplete-inventory failure preservation"
+      "protects": "Exact-scope ACP session isolation, stale-event and stale-focus-intent rejection, idle drafts without adapter startup and single-flight first-prompt startup, adapter-advertised draft configuration and account-scoped mode selection, singleton list/listen ownership, live-only Agent outcome observation, frame-paced partial replies before turn completion and account-switch queue cancellation, bounded projection retention, and incomplete-inventory failure preservation"
     },
     "src/features/workbench/state.test.ts": {
       "tests": 5,

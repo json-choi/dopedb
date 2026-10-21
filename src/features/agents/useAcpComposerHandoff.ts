@@ -4,7 +4,7 @@
 // handoff waits for its writable target and a stale binding waits for the
 // composer's explicit reconfirm action instead of being dropped.
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type Dispatch, type SetStateAction } from "react";
 
 import { useI18n } from "../../lib/i18n";
 import { EMPTY_ACP_PROMPT_CONTEXT } from "./acpPromptContext";
@@ -60,7 +60,7 @@ export function useAcpComposerHandoff({
   releaseUntouchedActive: () => void;
   selectActiveSession: (id: AcpSessionId | null) => void;
   setError: (error: AgentFailure | string | null) => void;
-  setPrompt: (prompt: string) => void;
+  setPrompt: Dispatch<SetStateAction<string>>;
   setHistoryOpen: (open: boolean) => void;
   setIncludeEditorContext: (include: boolean) => void;
   submitPromptText: (text: string, context: AcpPromptContext) => Promise<boolean>;
@@ -130,7 +130,7 @@ export function useAcpComposerHandoff({
     setIncludeEditorContext(false);
     void submitPromptText(submitted, EMPTY_ACP_PROMPT_CONTEXT)
       .then((sent) => {
-        if (sent) setPrompt("");
+        if (sent) setPrompt((current) => current === submitted ? "" : current);
       })
       .catch((reason) => {
         setError(agentFailure(reason, t, (error) => t("agent.acpSendFailed", { error })));

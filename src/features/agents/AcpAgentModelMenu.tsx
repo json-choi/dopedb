@@ -25,7 +25,7 @@ export function AcpAgentModelMenu({
   const selectedModel = choices.find((choice) => choice.value === model?.currentValue);
   const modelLabel = selectedModel?.name ?? (typeof model?.currentValue === "string" ? model.currentValue : null);
   const providerName = providerLabel(setup.selectedProvider);
-  const modelDisabled = session.starting || session.active?.lifecycle !== "ready" || composer.configChanging !== null;
+  const modelDisabled = session.starting || (session.active !== null && session.active.lifecycle !== "ready") || composer.configChanging !== null;
 
   return (
     <span className="tw:w-28 tw:min-w-0">

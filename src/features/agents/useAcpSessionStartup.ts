@@ -1,5 +1,5 @@
-// Prepare an exact-scope session while the user composes. Background preparation
-// never blocks resource selection; obsolete grants are closed before adoption.
+// Starts an exact-scope session only when the first prompt is submitted. Pending
+// starts are shared; a changed scope or focus retires the obsolete grant.
 
 import { useCallback, useEffect, useRef } from "react";
 
@@ -25,7 +25,6 @@ import { closeAgentAcpSession, startAgentAcpSession } from "./tauriAdapter";
 const AGENT_START_CANCELLED = "agent_start_cancelled";
 
 type AcpSessionStartupInput = {
-  activeSessionId: string | null;
   beginFocusRequest: () => AcpFocusRequest;
   catalogScope: CatalogScope;
   connectionId: ConnectionId;
@@ -40,11 +39,9 @@ type AcpSessionStartupInput = {
   selectedResourceScopes: AgentResourceScopeSelection[];
   writeConnectionId: ConnectionId | null;
   selectedProvider: AgentProvider;
-  sessionsLoading: boolean;
 };
 
 export function useAcpSessionStartup({
-  activeSessionId,
   beginFocusRequest,
   catalogScope,
   connectionId,
@@ -59,17 +56,14 @@ export function useAcpSessionStartup({
   selectedResourceScopes,
   writeConnectionId,
   selectedProvider,
-  sessionsLoading,
 }: AcpSessionStartupInput) {
   const { t } = useI18n();
   const pendingStartRef = useRef<{
     key: string;
-    foreground: boolean;
     promise: Promise<AcpSessionFocus | null>;
     /** Ends the status bar's record of a start a person is waiting on. */
-    finishForeground: (() => void) | null;
+    finishForeground: () => void;
   } | null>(null);
-  const prewarmAttemptRef = useRef<string | null>(null);
   const selectionKey = [
     catalogScope.key,
     connectionId,
@@ -87,32 +81,22 @@ export function useAcpSessionStartup({
   }, [ready, selectionKey]);
 
   const startSession = useCallback(
-    (provider = selectedProvider, foreground = true): Promise<AcpSessionFocus | null> => {
+    (provider = selectedProvider): Promise<AcpSessionFocus | null> => {
       if (!ready || provider !== selectedProvider) {
         return Promise.resolve(null);
       }
       const startKey = selectionKey;
       if (pendingStartRef.current?.key === startKey) {
-        if (foreground) {
-          // A message sent during background preparation makes it the
-          // person's own start, shown and cancellable in the status bar.
-          pendingStartRef.current.foreground = true;
-          pendingStartRef.current.finishForeground ??= beginForegroundAgentStart(
-            connectionId,
-            provider,
-          );
-          onStartingChange(true);
-        }
         return pendingStartRef.current.promise;
       }
       const request = beginFocusRequest();
       const previousStart = pendingStartRef.current?.promise;
       const pending = (async () => {
-        if (foreground) onStartingChange(true);
+        onStartingChange(true);
         onError(null);
         try {
-          // Only one adapter initializes at a time. Rapid selection changes
-          // collapse to the latest grant without accumulating idle processes.
+          // Only one adapter initializes at a time. A changed grant cannot
+          // adopt the response of an earlier first-message submission.
           await previousStart;
           if (currentSelectionRef.current !== startKey || !focusRequestIsCurrent(request)) {
             return null;
@@ -140,6 +124,10 @@ export function useAcpSessionStartup({
           }
           onStarted(focus, provider);
           await onPrepared(focus);
+          if (currentSelectionRef.current !== startKey || !ownsStartedAcpSession(request, currentFocusRequest(), focus.session.id)) {
+            await closeAgentAcpSession(focus.session.id);
+            return null;
+          }
           return focus;
         } catch (reason) {
           // A person cancelled the slow start (status bar or chat): neither an
@@ -155,19 +143,16 @@ export function useAcpSessionStartup({
       })();
       const entry = {
         key: startKey,
-        // A replaced foreground start hands its waiting state to its successor.
-        foreground: foreground || pendingStartRef.current?.foreground === true,
         promise: pending,
-        finishForeground: foreground ? beginForegroundAgentStart(connectionId, provider) : null,
+        finishForeground: beginForegroundAgentStart(connectionId, provider),
       };
       pendingStartRef.current = entry;
       void pending.finally(() => {
         // Even a start replaced by a newer selection stops being shown.
-        entry.finishForeground?.();
+        entry.finishForeground();
         if (pendingStartRef.current?.promise !== pending) return;
-        const wasForeground = pendingStartRef.current.foreground;
         pendingStartRef.current = null;
-        if (wasForeground) onStartingChange(false);
+        onStartingChange(false);
       });
       return pending;
     },
@@ -189,34 +174,6 @@ export function useAcpSessionStartup({
       writeConnectionId,
     ],
   );
-
-  const prepareRef = useRef(startSession);
-  prepareRef.current = startSession;
-  useEffect(() => {
-    if (activeSessionId !== null || currentFocusRequest().selectedSessionId !== null) {
-      prewarmAttemptRef.current = null;
-      return;
-    }
-    if (sessionsLoading || !ready) {
-      prewarmAttemptRef.current = null;
-      return;
-    }
-    if (prewarmAttemptRef.current === selectionKey) return;
-    const timeout = window.setTimeout(() => {
-      // Record an attempt only when it actually runs. A rerender during the
-      // debounce must not cancel preparation permanently for this selection.
-      prewarmAttemptRef.current = selectionKey;
-      void prepareRef.current(selectedProvider, false);
-    }, 300);
-    return () => window.clearTimeout(timeout);
-  }, [
-    activeSessionId,
-    currentFocusRequest,
-    ready,
-    selectedProvider,
-    selectionKey,
-    sessionsLoading,
-  ]);
 
   return startSession;
 }

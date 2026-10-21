@@ -16,7 +16,7 @@ import type {
   AgentKnowledgeScope,
 } from "./domain";
 import { buildAcpArticleContext } from "./useAcpComposerContext";
-import { applyRememberedAcpMode, rememberAcpMode } from "./approvalModePreference";
+import { applyRememberedAcpMode, draftAcpConfigOptions, rememberAcpMode } from "./approvalModePreference";
 import { listAgentAcpSessions, onAgentAcpChanged, setAgentAcpConfigOption } from "./tauriAdapter";
 import {
   AcpSessionStore,
@@ -392,6 +392,14 @@ describe("ACP session store", () => {
         }],
       };
       rememberAcpMode("workspace:a", "codex", "full");
+      const options = focus.events[0].configOptions;
+      expect(draftAcpConfigOptions(options, undefined, "workspace:b", "codex")[0].currentValue).toBe("ask");
+      expect(draftAcpConfigOptions(options, undefined, "workspace:a", "codex")[0].currentValue).toBe("full");
+      expect(draftAcpConfigOptions(options, { mode: "unadvertised" }, "workspace:a", "codex")[0].currentValue).toBe("ask");
+      const models = [{ ...options[0], id: "model", category: "model" }];
+      expect(draftAcpConfigOptions(models, { model: "full" }, "workspace:b", "codex")[0].currentValue).toBe("full");
+      expect(draftAcpConfigOptions(models, { model: "invented-model" }, "workspace:b", "codex")[0].currentValue).toBe("ask");
+      expect(setConfig).not.toHaveBeenCalled();
       await applyRememberedAcpMode(focus, "workspace:b");
       expect(setConfig).not.toHaveBeenCalled();
       await applyRememberedAcpMode(focus, "workspace:a");

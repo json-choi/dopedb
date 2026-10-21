@@ -23,14 +23,14 @@ function deferred<T>() {
 export async function exerciseStartupOwnership(makeSession: (id: string) => AcpSessionSummary) {
   const useRef = vi.mocked(React.useRef);
   const useCallback = vi.mocked(React.useCallback).mockImplementation((callback) => callback);
-  // No DOM or timers: explicit starts exercise the same callback used by prewarm.
-  const useEffect = vi.mocked(React.useEffect).mockImplementation(() => undefined);
+  // Run mount effects too: an idle draft must never create an adapter session.
+  const useEffect = vi.mocked(React.useEffect).mockImplementation((effect) => { effect(); });
   const start = vi.mocked(startAgentAcpSession);
   const close = vi.mocked(closeAgentAcpSession);
   try {
-    for (const scenario of ["replacement", "chain", "promotion", "newer-foreground"] as const) {
+    for (const scenario of ["replacement", "chain", "duplicate", "focus-after-config"] as const) {
       // Given: one hook instance with stable refs and a pending adapter start.
-      const refs = [{ current: null }, { current: null }, { current: null }, { current: null }];
+      const refs = [{ current: null }, { current: null }];
       let current: AcpFocusRequest = {
         requestId: 0, scopeKey: "workspace:startup", selectionGeneration: 0, selectedSessionId: null,
       };
@@ -42,6 +42,8 @@ export async function exerciseStartupOwnership(makeSession: (id: string) => AcpS
       const lastRequested = deferred<void>();
       const closeResponse = deferred<void>();
       const obsoleteClosed = deferred<void>();
+      const configuring = deferred<void>();
+      const configured = deferred<void>();
       start.mockReset();
       start.mockImplementationOnce(() => {
         firstRequested.resolve();
@@ -59,7 +61,6 @@ export async function exerciseStartupOwnership(makeSession: (id: string) => AcpS
       const render = (key: string) => {
         for (const ref of refs) useRef.mockReturnValueOnce(ref);
         return useAcpSessionStartup({
-          activeSessionId: null,
           beginFocusRequest: () => {
             current = { ...current, requestId: current.requestId + 1 };
             return current;
@@ -76,32 +77,46 @@ export async function exerciseStartupOwnership(makeSession: (id: string) => AcpS
             connectionIds: [makeSession("fixture").connectionId], sourceIds: [],
           }],
           selectedProvider: "codex", writeConnectionId: null,
-          resourceScopeReady: true, prerequisitesReady: true, sessionsLoading: false,
-          onError: vi.fn(), onStarted, onPrepared: async () => undefined, onStartingChange,
+          resourceScopeReady: true, prerequisitesReady: true,
+          onError: vi.fn(), onStarted, onPrepared: async () => {
+            if (scenario === "focus-after-config") { configuring.resolve(); await configured.promise; }
+          }, onStartingChange,
         });
       };
       const firstStart = render("a");
-      const first = firstStart("codex", scenario !== "promotion");
+      expect(start).not.toHaveBeenCalled();
+      const first = firstStart("codex");
       await firstRequested.promise;
 
-      // When: foreground ownership is promoted or carried through replacements.
+      // When: first-send ownership is shared or carried through replacements.
       let latest: Promise<AcpSessionFocus | null>;
       let intermediate: Promise<AcpSessionFocus | null> | null = null;
-      if (scenario === "promotion") {
-        latest = render("a")("codex", true);
+      if (scenario === "duplicate" || scenario === "focus-after-config") {
+        latest = render("a")("codex");
         expect(latest).toBe(first);
       } else {
-        latest = render("b")("codex", scenario === "newer-foreground");
+        latest = render("b")("codex");
         if (scenario === "chain") {
           intermediate = latest;
-          latest = render("c")("codex", false);
+          latest = render("c")("codex");
         }
       }
       const firstFocus: AcpSessionFocus = {
         session: makeSession("obsolete"), events: [], replayTruncated: false,
       };
       firstResponse.resolve(firstFocus);
-      if (scenario !== "promotion") {
+      if (scenario === "focus-after-config") {
+        await configuring.promise;
+        current = { ...current, selectionGeneration: 1, selectedSessionId: makeSession("other").id };
+        closeResponse.resolve();
+        configured.resolve();
+        expect(await latest).toBeNull();
+        expect(close).toHaveBeenCalledWith(firstFocus.session.id);
+        expect(onStarted).toHaveBeenCalledTimes(1);
+        expect(onStartingChange.mock.calls[onStartingChange.mock.calls.length - 1]).toEqual([false]);
+        continue;
+      }
+      if (scenario !== "duplicate") {
         await obsoleteClosed.promise;
         expect(close).toHaveBeenCalledWith(firstFocus.session.id);
         expect(start).toHaveBeenCalledTimes(1);
@@ -115,10 +130,10 @@ export async function exerciseStartupOwnership(makeSession: (id: string) => AcpS
         lastResponse.resolve({ session: makeSession("latest"), events: [], replayTruncated: false });
       }
       const result = await latest;
-      expect(result?.session.id).toBe(makeSession(scenario === "promotion" ? "obsolete" : "latest").id);
+      expect(result?.session.id).toBe(makeSession(scenario === "duplicate" ? "obsolete" : "latest").id);
       expect(onStartingChange.mock.calls[onStartingChange.mock.calls.length - 1], scenario).toEqual([false]);
       expect(onStarted).toHaveBeenCalledTimes(1);
-      expect(start).toHaveBeenCalledTimes(scenario === "promotion" ? 1 : 2);
+      expect(start).toHaveBeenCalledTimes(scenario === "duplicate" ? 1 : 2);
     }
   } finally {
     useRef.mockReset();

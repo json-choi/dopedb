@@ -252,13 +252,15 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
   아니라 Agent proposal의 상한이며 `Settings → Safety`, workspace grant, 실제 DB
   privilege와 사람의 exact approval을 모두 통과해야 한다. 닫힌 trigger는 Project
   이름과 선택한 DB/source 수, 쓰기 대상 유무를 계속 표시한다.
-  첫 메시지 전에 선택한 exact grant의 세션을 백그라운드에서 준비한다. 리소스
-  선택은 즉시 반영하고 입력창·포커스·레이아웃을 유지하며 선행 준비 상태로
-  전체 surface를 로딩으로 바꾸지 않는다. 준비 중 선택이 바뀌면 이전 세션을
-  정리하고 마지막 선택만 준비한다. 첫 prompt는 같은 준비 작업을 기다려 한 번만
-  전송하며, 대화가 시작된 뒤에는 resource grant를 변경하지 않는다. 대화가 시작된
+  채팅 열기와 `새 대화`는 입력 초안만 준비한다. 비어 있지 않은 첫 메시지를 전송할
+  때만 선택한 exact grant의 ACP 세션을 만들고 대화 목록에 추가한다. 리소스와
+  provider 선택만으로 ACP process나 빈 대화를 만들지 않는다. 이전에 공식 adapter가
+  광고한 모델·승인 모드가 있으면 초안에서 선택하고 새 세션이 같은 선택지를 광고할
+  때만 적용한다. 첫 prompt는 한 번만 전송하며 시작 중 수정한 다음 입력은 보존한다.
+  입력창·포커스·레이아웃은 유지하고, 대화가 시작된 뒤에는 resource grant를
+  변경하지 않는다. 대화가 시작된
   뒤 범위 메뉴는 고정된 선택과 새 채팅이 필요한 이유를 읽기 전용으로 보여준다.
-  백그라운드 준비는 Project binding을 다시 쓰지 않는다. 선택한 DB가 Project에
+  세션 시작은 Project binding을 다시 쓰지 않는다. 선택한 DB가 Project에
   추가된 뒤 revision이 바뀌었으면 입력 영역에 변경 내용과 `재확인`을 표시하고,
   사람이 재확인해야 새 revision으로 준비한다. Project에 속하지 않은 연결은 Agent가
   사용할 수 없다고 알리고 `프로젝트에 추가`로 잇는다. session이 닫히거나 회수·
@@ -269,7 +271,7 @@ confirm을 겹치지 않으며, 기본 성공 경로 밖의 옵션은 명시적�
   입력창 아래에는 exact resource 범위와 현재 승인 모드만 표시한다. provider와
   model은 제목 없는 32px 헤더의 하나의 선택 메뉴에 모으며, 좁은 패널에서도 입력과 범위가
   우선 보이게 한다. 승인 모드는 공식 ACP adapter가 광고한 선택지만 제공한다.
-  사용자가 세션에서 명시적으로 선택한 모드는 이 기기의 현재 workspace/account와
+  사용자가 초안이나 세션에서 명시적으로 선택한 모드는 이 기기의 현재 workspace/account와
   provider에 한정해 기억하고, 새 세션에서 같은 선택지가 광고될 때만 적용한다.
   선택지가 없거나 적용에 실패하면 adapter의 현재 모드를 유지하고 실패를 표시한다.
   자동 승인은 adapter의 도구 권한 요청에 적용되며 exact resource grant,

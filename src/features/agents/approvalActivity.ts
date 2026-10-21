@@ -3,7 +3,7 @@
 // runs; the card and the status bar can both stop one through the executor's
 // cancel path, and the card reads back that a stop was requested so the outcome
 // is described as such. Session starts a person is waiting on: only the startup
-// hook writes them, so a silent background preparation never appears.
+// hook writes them after a first-message submission.
 import { useSyncExternalStore } from "react";
 
 import { cancelQuery } from "../queries/tauriAdapter";
@@ -104,8 +104,8 @@ export function useAgentApprovalRuns() {
   return useSyncExternalStore(subscribe, snapshot, snapshot);
 }
 
-// Foreground starts per connection and provider; the backend cannot tell a
-// person's start from a background preparation, so this registry does.
+// Foreground starts per connection and provider, including the wait before the
+// native start command has announced its exact session.
 const foregroundStarts = new Map<string, number>();
 let foregroundStartKeys: ReadonlySet<string> = new Set();
 const startListeners = new Set<() => void>();

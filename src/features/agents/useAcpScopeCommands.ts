@@ -1,5 +1,5 @@
-// Resource changes update the draft immediately and retire its old prepared
-// session in the background. A conversation's exact grant remains immutable.
+// Resource changes update the draft immediately and retire an unprompted session
+// left by a failed send. A conversation's exact grant remains immutable.
 
 import { useI18n } from "../../lib/i18n";
 import { agentFailure, type AgentFailure } from "./agentErrorLabels";
@@ -26,7 +26,7 @@ export function useAcpScopeCommands({
 }) {
   const { t } = useI18n();
 
-  async function replacePreparedSession(action: () => void) {
+  async function updateDraft(action: () => void) {
     if (starting || !scopeChangeAllowed) return;
     setError(null);
     onSelectSession(null);
@@ -43,10 +43,10 @@ export function useAcpScopeCommands({
   return {
     toggle(resourceKey: string | null) {
       if (resourceKey === null) return Promise.resolve();
-      return replacePreparedSession(() => toggleResource(resourceKey));
+      return updateDraft(() => toggleResource(resourceKey));
     },
     write(connectionId: ConnectionId | null) {
-      return replacePreparedSession(() => selectWriteTarget(connectionId));
+      return updateDraft(() => selectWriteTarget(connectionId));
     },
   };
 }

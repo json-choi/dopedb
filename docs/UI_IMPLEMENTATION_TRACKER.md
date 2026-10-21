@@ -286,8 +286,16 @@ reference·safety 값 보존을 검증한다.
 이번 Agent UI 정리에서는 AI Chat 입력을 직각 1~3줄 자동 높이로 제한하고 dock의
 최대 폭을 전체 창의 50%로 맞췄다. 앱 시작 시에는 CLI 탐지·adapter 검증·기존
 session 목록·Project inventory를 읽기 전용으로 예열한다. persisted connection으로
-exact resource가 확정되면 닫힌 panel을 mount한 채 write target 없는 ACP session까지
-선행 준비하고, exact resource 선택 전에는 ACP process나 Broker grant를 만들지 않는다.
+exact resource가 확정돼도 닫힌 panel은 입력 초안과 읽기 전용 준비 상태만 유지한다.
+2026-10-21부터 첫 메시지 전송 전에는 ACP process·Broker grant·대화 기록을 만들지
+않으며, `새 대화`와 provider/resource 선택도 초안만 변경한다. 공식 adapter가 이전에
+광고한 모델·승인 모드는 초안에 유지하고 첫 전송의 새 세션에서 다시 검증한다.
+시작 중 반복 전송은 하나로 묶고 그 사이 수정한 입력을 보존한다. 기존 회귀 테스트를
+확장해 시작·focus 소유권과 광고된 설정만 채택하는 경계를 확인했다. 실제 panel과
+controller를 사용한 headless 검수에서 빈 초안·반복 새 채팅·공백 전송·provider/resource
+전환의 무생성, 첫 전송 1회 생성·전송, 초안 설정 적용, 입력 수정 보존, 실패 후
+명시적 재시도와 계정별 초안 설정 격리를 확인했다. native packaged 공급자 응답
+검수는 남는다.
 Agent Tools는 중복 page title과 상시
 설명 문단을 제거하고, checkbox 자리를 예약한 고정 identity/state/action grid와
 32px 반복 action, tooltip 상태 아이콘을 사용한다. 전역 작업 검색과 설정·Explorer·

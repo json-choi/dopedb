@@ -6,6 +6,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type FormEvent,
 } from "react";
@@ -28,7 +29,10 @@ import { EMPTY_ACP_PROMPT_CONTEXT } from "./acpPromptContext";
 import {
   applyPanelModelChoice,
   applyRememberedAcpMode,
+  configSelectChoices,
+  draftAcpConfigOptions,
   rememberAcpMode,
+  useAcpPanelConfigChoices,
 } from "./approvalModePreference";
 import { agentCliReady, agentPluginReady } from "./availability";
 import { copyAgentLoginCommand } from "./agentSetup";
@@ -120,9 +124,8 @@ export function useAcpChatController({
   const [selectedProvider, setSelectedProvider] =
     useState<AgentProvider>("claude");
   const [configChanging, setConfigChanging] = useState<string | null>(null);
-  const [panelModelChoices, setPanelModelChoices] = useState<
-    Partial<Record<AgentProvider, string>>
-  >({});
+  const panelConfig = useAcpPanelConfigChoices(catalogScope.key);
+  const promptSubmissionRef = useRef(false);
   const [prompt, setPrompt] = useState("");
   const [errorState, setErrorState] = useState<AgentFailure | null>(null);
   // A failure from `agentFailure` carries its stable code and copyable raw
@@ -228,10 +231,10 @@ export function useAcpChatController({
     selectionLocked: !scopeChangeAllowed,
   });
   const richTranscriptKeys = selectRichTranscriptKeys(transcript);
-  // While a replacement session prepares, keep showing the provider's last
-  // advertised options (disabled) so the composer does not jump or lose them.
+  // A draft reuses the last adapter-advertised choices without starting a
+  // session. The first send revalidates them against the new adapter's options.
   const liveConfigOptions = activeProjection?.configOptions ?? [];
-  const configOptions =
+  const advertisedConfigOptions =
     liveConfigOptions.length > 0
       ? liveConfigOptions
       : lastAdvertisedConfigOptions(
@@ -239,6 +242,9 @@ export function useAcpChatController({
           sessionSnapshot.projections,
           activeProvider ?? selectedProvider,
         );
+  const configOptions = active === null
+    ? draftAcpConfigOptions(advertisedConfigOptions, panelConfig.choices[selectedProvider], catalogScope.preferenceKey ?? catalogScope.key, selectedProvider)
+    : advertisedConfigOptions;
   const modelOption = configOptions.find(
     (option) =>
       option.category === "model" &&
@@ -331,9 +337,8 @@ export function useAcpChatController({
     toggleResource: agentScope.toggle,
     selectWriteTarget: agentScope.selectWriteTarget,
   });
-  // A prepared session nobody has prompted holds an adapter process and one of
-  // the runtime's session slots. Leaving it for another provider, conversation,
-  // or resource must close it instead of only deselecting it.
+  // An explicitly started but unprompted session can remain after a failed
+  // send. Leaving it must release its adapter process and runtime session slot.
   const activeUntouched =
     active !== null && active.lifecycle === "ready" && transcript.length === 0;
   const releaseUntouchedActive = useCallback(() => {
@@ -388,8 +393,8 @@ export function useAcpChatController({
   ]);
 
   useEffect(() => {
-    // An untouched prepared session that closed (idle limit, provider removal)
-    // has nothing to resume; let the panel prepare a fresh one when needed.
+    // An untouched session that closed has nothing to resume. Return to the
+    // draft; the next message can start a fresh session.
     if (
       !active ||
       starting ||
@@ -414,14 +419,13 @@ export function useAcpChatController({
   const prepareRememberedMode = useCallback(async (focus: AcpSessionFocus) => {
     try {
       await applyRememberedAcpMode(focus, catalogScope.preferenceKey ?? catalogScope.key);
-      await applyPanelModelChoice(focus, panelModelChoices[focus.session.provider]);
+      await applyPanelModelChoice(focus, panelConfig.choices[focus.session.provider]?.model);
     } catch (reason) {
       setError(agentFailure(reason, t, (error) =>
         t("agent.acpConfigFailed", { name: t("agent.acpApprovalMode"), error })));
     }
-  }, [catalogScope.key, catalogScope.preferenceKey, panelModelChoices, setError, t]);
+  }, [catalogScope.key, catalogScope.preferenceKey, panelConfig.choices, setError, t]);
   const startSession = useAcpSessionStartup({
-    activeSessionId,
     beginFocusRequest,
     catalogScope,
     connectionId: agentScope.anchorConnectionId ?? scopedConnection.id,
@@ -436,31 +440,31 @@ export function useAcpChatController({
     selectedResourceScopes: agentScope.resourceScopes,
     writeConnectionId: agentScope.writeConnectionId,
     selectedProvider,
-    sessionsLoading: sessionSnapshot.loading,
   });
 
   const submitPromptText = useCallback(
     async (submitted: string, submittedContext: AcpPromptContext) => {
-      if (starting || !submitted.trim()) return false;
+      if (promptSubmissionRef.current || starting || !submitted.trim()) return false;
       if (!prerequisitesReady || !environmentScopeReady) return false;
-      let session = active;
-      if (
-        !session ||
-        session.lifecycle === "closed" ||
-        session.lifecycle === "failed"
-      ) {
-        const replacingConversation = session !== null && transcript.length > 0;
-        const focus = await startSession(selectedProvider);
-        session = focus?.session ?? null;
-        // Say so when a message opens a new conversation instead of continuing
-        // the closed one; its history stays in the session list.
-        if (session && replacingConversation) setNotice(t("agent.acpStartedNewSession"));
+      promptSubmissionRef.current = true;
+      try {
+        let session = active;
+        if (!session || session.lifecycle === "closed" || session.lifecycle === "failed") {
+          const replacingConversation = session !== null && transcript.length > 0;
+          const focus = await startSession(selectedProvider);
+          session = focus?.session ?? null;
+          // Say so when a message opens a new conversation instead of continuing
+          // the closed one; its history stays in the session list.
+          if (session && replacingConversation) setNotice(t("agent.acpStartedNewSession"));
+        }
+        if (!session || session.lifecycle !== "ready") return false;
+        await promptAgentAcpSession(session.id, submitted, {
+          ...submittedContext, responseLanguage: lang,
+        });
+        return true;
+      } finally {
+        promptSubmissionRef.current = false;
       }
-      if (!session || session.lifecycle !== "ready") return false;
-      await promptAgentAcpSession(session.id, submitted, {
-        ...submittedContext, responseLanguage: lang,
-      });
-      return true;
     }, [
       active,
       environmentScopeReady, lang,
@@ -497,9 +501,8 @@ export function useAcpChatController({
 
   function beginNewChat() {
     if (starting) return;
-    if (active?.lifecycle !== "ready" || transcript.length > 0) {
-      selectActiveSession(null);
-    }
+    releaseUntouchedActive();
+    selectActiveSession(null);
     setHistoryOpen(false);
     setPrompt("");
     setError(null);
@@ -540,7 +543,7 @@ export function useAcpChatController({
       const submittedContext = composerContext.included
         ? composerContext.context
         : EMPTY_ACP_PROMPT_CONTEXT;
-      if (await submitPromptText(submitted, submittedContext)) setPrompt("");
+      if (await submitPromptText(submitted, submittedContext)) setPrompt((current) => current === submitted ? "" : current);
     } catch (reason) {
       setError(agentFailure(reason, t, (error) => t("agent.acpSendFailed", { error })));
     }
@@ -570,16 +573,17 @@ export function useAcpChatController({
     option: AcpSessionConfigOption,
     value: string,
   ) {
-    if (!active || configChanging || option.currentValue === value) return;
+    if (configChanging || option.currentValue === value || !configSelectChoices(option).some((choice) => choice.value === value)) return;
+    if (active !== null && active.lifecycle !== "ready") return;
     setConfigChanging(option.id);
     setError(null);
     try {
-      await setAgentAcpConfigOption(active.id, option.id, value);
+      if (active) await setAgentAcpConfigOption(active.id, option.id, value);
       if (option.category === "mode") {
-        rememberAcpMode(catalogScope.preferenceKey ?? catalogScope.key, active.provider, value);
+        rememberAcpMode(catalogScope.preferenceKey ?? catalogScope.key, selectedProvider, value);
       }
-      if (option.category === "model") {
-        setPanelModelChoices((current) => ({ ...current, [active.provider]: value }));
+      if (option.category === "model" || option.category === "mode") {
+        panelConfig.choose(selectedProvider, option.category, value);
       }
     } catch (reason) {
       setError(agentFailure(reason, t, (error) =>
@@ -687,7 +691,6 @@ export function useAcpChatController({
         newWithSameResources,
         select: selectSession,
         resume: activeSession.commands.resume,
-        start: startSession,
         cancelStart: activeSession.commands.cancelStart,
         cancelTurn: activeSession.commands.cancelTurn,
         close: activeSession.commands.close,
