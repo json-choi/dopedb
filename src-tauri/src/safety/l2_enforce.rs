@@ -206,7 +206,8 @@ async fn run_read_only_byte_capped_inner(
                 )))
                 .execute(&mut *connection)
                 .await;
-                sqlx::query("START TRANSACTION READ ONLY")
+                // MySQL rejects transaction start in the prepared-statement protocol.
+                sqlx::raw_sql("START TRANSACTION READ ONLY")
                     .execute(&mut *connection)
                     .await?;
                 let query = sqlx::query::<sqlx::MySql>(AssertSqlSafe(sql));
@@ -357,7 +358,8 @@ async fn run_read_only_inner(
                 )))
                 .execute(&mut *conn)
                 .await;
-                sqlx::query("START TRANSACTION READ ONLY")
+                // MySQL rejects transaction start in the prepared-statement protocol.
+                sqlx::raw_sql("START TRANSACTION READ ONLY")
                     .execute(&mut *conn)
                     .await?;
                 guarded(stream_capped(
@@ -512,6 +514,10 @@ fn engine_label(engine: Engine) -> &'static str {
 }
 
 #[cfg(test)]
+#[path = "l2_mysql_contract.rs"]
+mod mysql_contract;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use sqlx::sqlite::SqlitePoolOptions;
@@ -623,6 +629,7 @@ mod tests {
 
     #[tokio::test]
     async fn no_truncation_under_cap() {
+        mysql_contract::assert_read_boundary_if_configured().await;
         let pool = mem_pool().await;
         let r = run_read_only(PoolRef::Sqlite(&pool), "SELECT id FROM t", 100)
             .await

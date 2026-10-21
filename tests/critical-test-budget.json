@@ -83,7 +83,7 @@
     },
     "src-tauri/src/safety/l2_enforce.rs": {
       "tests": 4,
-      "protects": "Result caps, truncation, column presence, numeric precision, and the EXPLAIN-preview opt-out before database access"
+      "protects": "Result caps, truncation, column presence, numeric precision, and the EXPLAIN-preview opt-out before database access; optional isolated live-MySQL checks exercise Agent and Article transaction setup, write rejection, unchanged data, and cleanup after truncation or errors"
     },
     "src-tauri/src/safety/l4_gate.rs": {
       "tests": 7,
