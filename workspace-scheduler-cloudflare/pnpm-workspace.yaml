@@ -8,6 +8,8 @@ minimumReleaseAgeStrict: true
 
 # GHSA-rgj7-g3m4-5g8c: use the patched libheif binary shipped by sharp.
 overrides:
+  # GHSA-587h-7wmj-h5pm, GHSA-698v-4r3x-3vcv, GHSA-r825-w8mm-5pxw.
+  'vite@>=8.0.0 <8.2.4': 8.2.4
   # GHSA-3wwx-pv8p-q78v: fix WebSocket decompression error handling.
   'undici@>=7.28.0 <7.29.1': 7.29.1
   # GHSA-wq5f-xc86-pv6w: use the sharp build with the patched librsvg.

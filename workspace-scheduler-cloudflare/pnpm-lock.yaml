@@ -5,6 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
+  vite@>=8.0.0 <8.2.4: 8.2.4
   undici@>=7.28.0 <7.29.1: 7.29.1
   sharp@<0.35.5: 0.35.5
   source-map-js@<1.2.2: 1.2.2
@@ -21,7 +22,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@types/node@26.5.1)(vite@8.2.1(@types/node@26.5.1)(esbuild@0.28.1))
+        version: 5.0.0(@types/node@26.5.1)(vite@8.2.4(@types/node@26.5.1)(esbuild@0.28.1))
       wrangler:
         specifier: 4.131.2
         version: 4.131.2(@types/node@26.5.1)
@@ -657,7 +658,7 @@ packages:
     resolution: {integrity: sha512-66PGTMIiVJP3t4a5yxU9qPtf7MdTBs8jmToMvy+HVflB3Yy13WJZTtPePdvU+wjRV02SKK5doLbSA6o9pwOmiA==}
     peerDependencies:
       msw: ^2.4.9
-      vite: ^6.0.0 || ^7.0.0 || ^8.0.0
+      vite: 8.2.4
     peerDependenciesMeta:
       msw:
         optional: true
@@ -895,13 +896,13 @@ packages:
   unenv@2.0.0-rc.24:
     resolution: {integrity: sha512-i7qRCmY42zmCwnYlh9H2SvLEypEFGye5iRmEMKjcGi7zk9UquigRjFtTLz0TYqr0ZGLZhaMHl/foy1bZR+Cwlw==}
 
-  vite@8.2.1:
-    resolution: {integrity: sha512-EU/eS7BH3XROHh2YnBefjM6DBKA6ZeMZEYQbj7NLWg5wHYlhB8B/Mayd5XsgWq+NFYccDOTemRpdETWR6Ka/lw==}
+  vite@8.2.4:
+    resolution: {integrity: sha512-lfauXnrf2x0p+UoA+wXh0dgFWnUjCyG6Js95KBkgaCwUU9k0DAHI4W6Q0WCx+h+5g+Alce1y4Zi2QjjK0UvGBw==}
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
     peerDependencies:
       '@types/node': ^20.19.0 || >=22.12.0
-      '@vitejs/devtools': ^0.4.0
+      '@vitejs/devtools': ^0.4.0 || ^0.5.0
       esbuild: ^0.27.0 || ^0.28.0
       jiti: '>=1.21.0'
       less: ^4.0.0
@@ -954,7 +955,7 @@ packages:
       '@vitest/ui': 5.0.0
       happy-dom: '*'
       jsdom: '*'
-      vite: ^6.4.0 || ^7.0.0 || ^8.0.0
+      vite: 8.2.4
     peerDependenciesMeta:
       '@edge-runtime/vm':
         optional: true
@@ -1384,14 +1385,14 @@ snapshots:
   '@typescript/typescript-win32-x64@7.0.2':
     optional: true
 
-  '@vitest/mocker@5.0.0(vite@8.2.1(@types/node@26.5.1)(esbuild@0.28.1))':
+  '@vitest/mocker@5.0.0(vite@8.2.4(@types/node@26.5.1)(esbuild@0.28.1))':
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
       '@vitest/spy': 5.0.0
       estree-walker: 3.0.3
       magic-string: 1.2.3
     optionalDependencies:
-      vite: 8.2.1(@types/node@26.5.1)(esbuild@0.28.1)
+      vite: 8.2.4(@types/node@26.5.1)(esbuild@0.28.1)
 
   '@vitest/spy@5.0.0': {}
 
@@ -1645,7 +1646,7 @@ snapshots:
     dependencies:
       pathe: 2.0.3
 
-  vite@8.2.1(@types/node@26.5.1)(esbuild@0.28.1):
+  vite@8.2.4(@types/node@26.5.1)(esbuild@0.28.1):
     dependencies:
       lightningcss: 1.33.0
       picomatch: 4.0.7
@@ -1657,10 +1658,10 @@ snapshots:
       esbuild: 0.28.1
       fsevents: 2.3.3
 
-  vitest@5.0.0(@types/node@26.5.1)(vite@8.2.1(@types/node@26.5.1)(esbuild@0.28.1)):
+  vitest@5.0.0(@types/node@26.5.1)(vite@8.2.4(@types/node@26.5.1)(esbuild@0.28.1)):
     dependencies:
       '@types/chai': 5.2.3
-      '@vitest/mocker': 5.0.0(vite@8.2.1(@types/node@26.5.1)(esbuild@0.28.1))
+      '@vitest/mocker': 5.0.0(vite@8.2.4(@types/node@26.5.1)(esbuild@0.28.1))
       chai: 6.2.2
       es-module-lexer: 2.3.2
       expect-type: 1.4.0
@@ -1671,7 +1672,7 @@ snapshots:
       tinybench: 6.1.4
       tinyexec: 1.3.0
       tinyglobby: 0.2.17
-      vite: 8.2.1(@types/node@26.5.1)(esbuild@0.28.1)
+      vite: 8.2.4(@types/node@26.5.1)(esbuild@0.28.1)
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/node': 26.5.1

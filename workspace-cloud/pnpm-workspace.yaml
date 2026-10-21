@@ -2,6 +2,8 @@ allowBuilds:
   esbuild: true
   workerd: true
 overrides:
+  # GHSA-587h-7wmj-h5pm, GHSA-698v-4r3x-3vcv, GHSA-r825-w8mm-5pxw.
+  'vite@>=8.0.0 <8.2.4': 8.2.4
   'brace-expansion@>=2.0.0 <2.1.7': 2.1.7
   'brace-expansion@>=5.0.0 <5.0.12': 5.0.12
   # GHSA-3wwx-pv8p-q78v: fix WebSocket decompression error handling.

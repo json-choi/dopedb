@@ -44,6 +44,28 @@ stable upgrade targets:
 
 ## Audit record
 
+### Security patch refresh — 2026-10-21
+
+The recursive CI scan reported newly published Vite, HTML sanitization, and
+TLS certificate advisories. Desktop now resolves Vite 8.3.4; Workspace Cloud
+resolves sanitize-html 2.18.1 and Vite 8.2.4; the scheduler resolves Vite
+8.2.4. The two independent Worker projects apply a scoped Vite override so
+their indirect Vitest dependency cannot retain an affected 8.x release.
+The 1,440-minute release-age and build-script policies remain in force.
+
+Mermaid 12.2.0 accepts the patched KaTeX 0.18 line, so Desktop updates Mermaid
+and removes the temporary [GHSA-238p-pmpm-9mq7](https://github.com/advisories/GHSA-238p-pmpm-9mq7)
+exception. Diagram rendering keeps strict security and disables HTML labels.
+KaTeX 0.18.11 was withdrawn for accidental breaking changes; an exact-version
+override selects the compatible, patched 0.18.10 instead of crossing into 0.19.
+
+Cargo updates only the affected compatible TLS dependencies:
+`rustls-webpki` 0.103.16, `webpki-roots` 1.0.10, and `webpki-root-certs`
+1.0.10. These address [RUSTSEC-2026-0382](https://rustsec.org/advisories/RUSTSEC-2026-0382.html),
+[RUSTSEC-2026-0381](https://rustsec.org/advisories/RUSTSEC-2026-0381.html), and
+[RUSTSEC-2026-0383](https://rustsec.org/advisories/RUSTSEC-2026-0383.html).
+No vulnerability suppression or CI gate is relaxed by this refresh.
+
 The 2026-09-05 review kept pnpm 11.25.0 aligned across every JavaScript project
 and CI workflow. The desktop, Workspace Cloud, site, scheduler
 Worker, and official ACP adapter pins have no update eligible under the
