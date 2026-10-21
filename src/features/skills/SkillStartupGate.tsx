@@ -1,7 +1,7 @@
 // Opens first-run setup only after missing Agent components are confirmed, and
 // answers explicit setup requests. Account management belongs to Settings.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { Icon } from "../../components/Icon";
@@ -69,16 +69,26 @@ export default function SkillStartupGate() {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState<AcpPluginId | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const startupChecked = useRef(false);
 
   useEffect(() => {
-    if (!postPaintReady || hasSavedAgentTargets() || agentSetupDeferred() || !pluginsQ.isSuccess || !agentsQ.isSuccess) return;
+    if (startupChecked.current || !postPaintReady) return;
+    if (pluginsQ.isPending || agentsQ.isPending || pluginsQ.isFetching || agentsQ.isFetching) return;
+    // Consume the initial decision even when detection failed. Later settings
+    // refreshes and deliberate adapter changes must not open a startup dialog.
+    startupChecked.current = true;
+    if (hasSavedAgentTargets() || agentSetupDeferred() || !pluginsQ.isSuccess || !agentsQ.isSuccess) return;
+    if (SUPPORTED_AGENT_TARGETS.some((agent) => {
+      const cli = agentsQ.data.find((entry) => entry.id === agent.provider);
+      return !cli || Boolean(cli.detectionError);
+    })) return;
     const installed = SUPPORTED_AGENT_TARGETS.filter((agent) =>
       agentsQ.data.some((cli) => cli.id === agent.provider && cli.installed),
     );
     if (installed.length === 0 || installed.some((agent) =>
       !agentPluginReady(pluginsQ.data.find((plugin) => plugin.pluginId === pluginId(agent.target))),
     )) setOpen(true);
-  }, [agentsQ.data, agentsQ.isSuccess, pluginsQ.data, pluginsQ.isSuccess, postPaintReady]);
+  }, [agentsQ.data, agentsQ.isFetching, agentsQ.isPending, agentsQ.isSuccess, pluginsQ.data, pluginsQ.isFetching, pluginsQ.isPending, pluginsQ.isSuccess, postPaintReady]);
 
   useEffect(() => {
     const show = () => {
