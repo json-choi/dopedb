@@ -127,7 +127,7 @@
       "role": "helper",
       "importedBy": "workspace-cloud/lib/d1-workspace-scenarios.harness.ts",
       "tests": 0,
-      "protects": "Exports verifyD1AnalysisArticles; owns Analysis Article create, mutate, delete and shared-create parsing assertions"
+      "protects": "Exports verifyD1AnalysisArticles; owns Analysis Article create, mutate, delete and shared-create parsing assertions, including a read-only source grant across save/rerun/edit, independent Workspace authorship, missing/view grant denial, unchanged grants, and atomic denial without history or audit writes"
     },
     "workspace-cloud/lib/d1-backup-scenarios.harness.ts": {
       "role": "helper",

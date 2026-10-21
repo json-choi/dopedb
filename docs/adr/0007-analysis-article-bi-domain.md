@@ -116,6 +116,10 @@ automation tables.
 An exact-grant ACP Agent may propose or update the HTML body and the one read-only
 query, and may perform a bounded pre-save read. It cannot publish or revoke a public
 page, broaden the connection grant, or run a query from the hosted service.
+Creating or editing an Article requires Workspace Editor access (or a higher role)
+and at least `read` access to its exact source connection. Article storage writes
+DopeDB metadata, so it must not require or increase source database write access.
+Connection `view` access alone does not authorize saving a query-backed Article.
 The Broker filters Article lists to the exact selected shared connection IDs,
 content revisions, and Environment revision before returning definitions to the Agent;
 the member's broader workspace visibility does not enlarge the session grant.

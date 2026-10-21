@@ -90,6 +90,8 @@ const editorRoles = ["editor", "admin", "owner"] as const;
 type ArticleInput = { organizationId: string; article: SharedAnalysisArticleCreate; authority: AnalysisArticleMutationAuthority };
 
 function connectionScope(input: ArticleInput) {
+  // Saving an Article writes Workspace metadata; its source query only needs
+  // read access. Workspace authorship is checked separately in the atomic scope.
   return sql`SELECT 1 FROM knowledge_project_environment environment
     JOIN knowledge_project project ON project.organization_id = environment.organization_id
       AND project.id = environment.project_id AND project.deleted_at IS NULL
@@ -102,7 +104,7 @@ function connectionScope(input: ArticleInput) {
       AND connection.revocation_pending_at IS NULL AND connection.revocation_claim_id IS NULL
     JOIN workspace_connection_grant connection_grant ON connection_grant.organization_id = connection.organization_id
       AND connection_grant.connection_id = connection.id AND connection_grant.member_id = ${input.authority.membershipId}
-      AND connection_grant.capability IN ('use', 'manage')
+      AND connection_grant.capability IN ('read', 'use', 'manage')
     WHERE environment.organization_id = ${input.organizationId} AND environment.id = ${input.article.projectEnvironmentId}
       AND environment.revision = ${input.article.environmentRevision}`;
 }
