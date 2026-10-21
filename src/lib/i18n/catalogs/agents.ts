@@ -444,7 +444,7 @@ export const agentsCatalog = defineCatalog(
     "agentTools.detectProviderError": "{provider}: {error}",
     "agentTools.detected": "CLI detected",
     "agentTools.error": "Could not manage Agent tools: {error}",
-    "agentTools.agentsTitle": "Agents",
+    "agentTools.agentsTitle": "Agent accounts",
     "agentTools.cliAccount": "CLI account: {account}",
     "agentTools.apiKeyAccount": "API key authentication",
     "agentTools.accountIdentityUnavailable": "Authentication configured · CLI did not provide an account name",
@@ -454,7 +454,7 @@ export const agentsCatalog = defineCatalog(
     "agentTools.accountCommandCopied": "Sign-in command copied.",
     "agentTools.accountCommandCopyFailed": "Could not copy the command.",
     "agentTools.agentsDescription":
-      "Choose an Agent to prepare it for AI Chat. Local installation and authentication configuration are checked in the same row.",
+      "Check the account and plan reported by each official CLI. Installation details and AI Chat setup are available below each Agent.",
     "agentTools.agentPrepared": "Agent connection prepared.",
     "agentTools.agentReady": "Ready to chat",
     "agentTools.agentNotReady": "Setup needed",
@@ -465,7 +465,7 @@ export const agentsCatalog = defineCatalog(
     "agentTools.preparingAgent": "Preparing {provider}",
     "agentTools.setupGuide": "Setup guide",
     "agentTools.loginGuide": "Sign-in guide",
-    "agentTools.agentDetails": "Account and installation settings",
+    "agentTools.agentDetails": "Installation details",
     "agentTools.localRuntime": "Official Agent CLI",
     "agentTools.externalSkill": "DopeDB Skill",
     "agentTools.externalSkillDescription":
@@ -1029,7 +1029,7 @@ export const agentsCatalog = defineCatalog(
     "agentTools.detectProviderError": "{provider}: {error}",
     "agentTools.detected": "CLI 감지됨",
     "agentTools.error": "Agent 도구를 관리하지 못했습니다: {error}",
-    "agentTools.agentsTitle": "사용할 에이전트",
+    "agentTools.agentsTitle": "에이전트 계정",
     "agentTools.cliAccount": "CLI 계정: {account}",
     "agentTools.apiKeyAccount": "API 키 인증",
     "agentTools.accountIdentityUnavailable": "인증 설정됨 · CLI에서 계정 이름을 제공하지 않음",
@@ -1039,7 +1039,7 @@ export const agentsCatalog = defineCatalog(
     "agentTools.accountCommandCopied": "로그인 명령을 복사했습니다.",
     "agentTools.accountCommandCopyFailed": "명령을 복사하지 못했습니다.",
     "agentTools.agentsDescription":
-      "AI Chat에서 사용할 Agent를 선택하세요. 연결 준비와 로컬 인증 설정을 한곳에서 확인합니다.",
+      "공식 CLI에서 확인한 로그인 계정과 플랜을 확인하세요. 설치 상세와 AI Chat 준비는 각 Agent 아래에서 관리합니다.",
     "agentTools.agentPrepared": "Agent 연결을 준비했습니다.",
     "agentTools.agentReady": "채팅 준비 완료",
     "agentTools.agentNotReady": "설정 필요",
@@ -1050,7 +1050,7 @@ export const agentsCatalog = defineCatalog(
     "agentTools.preparingAgent": "{provider} 준비 중",
     "agentTools.setupGuide": "설치 안내",
     "agentTools.loginGuide": "로그인 안내",
-    "agentTools.agentDetails": "계정·설치 관리",
+    "agentTools.agentDetails": "설치 상세",
     "agentTools.localRuntime": "공식 Agent CLI",
     "agentTools.externalSkill": "DopeDB 스킬",
     "agentTools.externalSkillDescription":

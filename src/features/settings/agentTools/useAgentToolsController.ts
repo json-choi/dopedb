@@ -45,6 +45,7 @@ export function useAgentToolsController() {
   const cliQuery = useQuery({
     ...agentCliDetectionQuery(),
     staleTime: 5 * 60_000,
+    refetchOnMount: "always",
     refetchOnWindowFocus: false,
   });
   const [busy, setBusy] = useState<AgentToolsBusyAction | null>(null);

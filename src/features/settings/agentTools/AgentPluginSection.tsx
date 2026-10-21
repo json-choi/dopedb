@@ -72,6 +72,9 @@ export function AgentPluginSection({ controller }: { controller: AgentToolsContr
       <p className="tw:mt-0 tw:mb-3 tw:text-ui tw:text-muted-foreground">
         {t("agentTools.agentsDescription")}
       </p>
+      <p className="tw:mt-0 tw:mb-3 tw:text-xs tw:text-muted-foreground">
+        {t("agentTools.accountChangeInstructions")}
+      </p>
       {pluginQuery.isPending ? <Skeleton lines={4} /> : pluginQuery.error ? (
         <p className="tw:text-ui tw:text-danger" role="alert">
           {t("agentTools.pluginsError", { error: errMessage(pluginQuery.error) })}
@@ -138,19 +141,18 @@ export function AgentPluginSection({ controller }: { controller: AgentToolsContr
                   <ProgressBar value={null} density="compact" label={t("agentTools.preparingAgent", { provider: agent.label })} />
                 ) : null}
                 {plugin.failure ? <p className="tw:m-0 tw:text-ui tw:text-danger" role="alert">{plugin.failure}</p> : null}
+                {cli?.installed ? (
+                  <div className="ds-control-row tw:mt-2 tw:flex tw:flex-wrap tw:items-center tw:gap-2">
+                    <code className="tw:text-xs">{loginCommand(agent.provider)}</code>
+                    <Button size="compact" onClick={() => void copyAgentLoginCommand(agent.provider).then(() => toast(t("agentTools.accountCommandCopied"))).catch(() => toast(t("agentTools.accountCommandCopyFailed"), "error"))}>{t("agentTools.copyAccountCommand")}</Button>
+                    <Button size="compact" disabled={cliQuery.isFetching} onClick={() => void cliQuery.refetch()}>{t("agentTools.checkAgain")}</Button>
+                  </div>
+                ) : null}
                 <details className="tw:group tw:mt-1">
                   <summary className="tw:cursor-pointer tw:text-xs tw:text-muted-foreground tw:hover:text-foreground">
                     {t("agentTools.agentDetails")}
                   </summary>
                   <div className="tw:mt-3 tw:grid tw:gap-3">
-                    <div className="tw:grid tw:gap-2">
-                      <p className="tw:m-0 tw:text-xs tw:text-muted-foreground">{t("agentTools.accountChangeInstructions")}</p>
-                      <div className="ds-control-row tw:flex tw:flex-wrap tw:items-center tw:gap-2">
-                        <code className="tw:text-xs">{loginCommand(agent.provider)}</code>
-                        <Button size="compact" onClick={() => void copyAgentLoginCommand(agent.provider).then(() => toast(t("agentTools.accountCommandCopied"))).catch(() => toast(t("agentTools.accountCommandCopyFailed"), "error"))}>{t("agentTools.copyAccountCommand")}</Button>
-                        <Button size="compact" disabled={cliQuery.isFetching} onClick={() => void cliQuery.refetch()}>{t("agentTools.checkAgain")}</Button>
-                      </div>
-                    </div>
                     <div className="tw:flex tw:flex-wrap tw:items-center tw:justify-between tw:gap-2">
                       <div className="tw:flex tw:min-w-0 tw:flex-wrap tw:items-center tw:gap-2">
                         <strong className="tw:text-ui">{t("agentTools.localRuntime")}</strong>

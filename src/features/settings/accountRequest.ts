@@ -1,21 +1,32 @@
-// Routes "open Settings → Account" from anywhere (account menu, expired-session
-// recovery, a scheduled deletion) to the shell, which owns the Settings route (`useShellDialogRequests` answers it).
+// Routes workspace and Agent account requests to the shell's single Settings owner.
 import { useEffect } from "react";
 import { useEventCallback } from "../../lib/useEventCallback";
+import type { SettingsSection } from "./domain";
 
 const ACCOUNT_SETTINGS_REQUEST_EVENT = "dopedb:request-account-settings";
+type AccountSettingsSection = Extract<SettingsSection, "account" | "agent-tools">;
 
 export function requestAccountSettings() {
-  window.dispatchEvent(new Event(ACCOUNT_SETTINGS_REQUEST_EVENT));
+  request("account");
 }
 
-function onAccountSettingsRequested(handler: () => void) {
-  window.addEventListener(ACCOUNT_SETTINGS_REQUEST_EVENT, handler);
-  return () => window.removeEventListener(ACCOUNT_SETTINGS_REQUEST_EVENT, handler);
+export function requestAgentAccountSettings() {
+  request("agent-tools");
 }
 
-/** Lets the shell, which owns the Settings route (`useShellDialogRequests` answers it). answer those requests. */
-export function useAccountSettingsRequests(open: () => void) {
+function request(section: AccountSettingsSection) {
+  window.dispatchEvent(new CustomEvent(ACCOUNT_SETTINGS_REQUEST_EVENT, { detail: section }));
+}
+
+export function useAccountSettingsRequests(open: (section: AccountSettingsSection) => void) {
   const handleRequest = useEventCallback(open);
-  useEffect(() => onAccountSettingsRequested(handleRequest), [handleRequest]);
+  useEffect(() => {
+    const receive = (event: Event) => {
+      if (event instanceof CustomEvent && (event.detail === "account" || event.detail === "agent-tools")) {
+        handleRequest(event.detail);
+      }
+    };
+    window.addEventListener(ACCOUNT_SETTINGS_REQUEST_EVENT, receive);
+    return () => window.removeEventListener(ACCOUNT_SETTINGS_REQUEST_EVENT, receive);
+  }, [handleRequest]);
 }

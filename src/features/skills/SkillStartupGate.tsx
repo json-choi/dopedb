@@ -1,4 +1,5 @@
-// Presents outstanding Agent Skill setup actions and coordinates guarded installation.
+// Opens first-run setup only after missing Agent components are confirmed, and
+// answers explicit setup requests. Account management belongs to Settings.
 
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -70,8 +71,14 @@ export default function SkillStartupGate() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!hasSavedAgentTargets() && !agentSetupDeferred()) setOpen(true);
-  }, []);
+    if (!postPaintReady || hasSavedAgentTargets() || agentSetupDeferred() || !pluginsQ.isSuccess || !agentsQ.isSuccess) return;
+    const installed = SUPPORTED_AGENT_TARGETS.filter((agent) =>
+      agentsQ.data.some((cli) => cli.id === agent.provider && cli.installed),
+    );
+    if (installed.length === 0 || installed.some((agent) =>
+      !agentPluginReady(pluginsQ.data.find((plugin) => plugin.pluginId === pluginId(agent.target))),
+    )) setOpen(true);
+  }, [agentsQ.data, agentsQ.isSuccess, pluginsQ.data, pluginsQ.isSuccess, postPaintReady]);
 
   useEffect(() => {
     const show = () => {
