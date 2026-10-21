@@ -18,8 +18,10 @@ claiming a trust level it has not earned.
 
 ### Working In This Directory
 - `distributionMode` must only move from `legacy-unsigned` to `developer-id` after the user explicitly enrolls and requests activation (root `AGENTS.md`); it is not toggled to unblock a build.
-- While `legacy-unsigned`, the pipeline must not require Apple credentials or claim notarization. While `developer-id` (the current value), a stable publish must fail closed unless both `arm64` and `x64` builds produce a Developer ID + notarization + staple + Gatekeeper pass bound to the exact app-payload assets.
+- While `legacy-unsigned`, the pipeline must not require Apple credentials or claim notarization. While `developer-id` (the current value), a stable publish must fail closed unless the supported macOS `arm64` build produces a Developer ID + notarization + staple + Gatekeeper pass bound to the exact app-payload assets.
 - Do not hand-edit `bundleIdentifier`/`teamIdentifier` to a personal or non-product-owned value; these are the production code-signing identity.
+
+macOS Intel installers and updater entries are no longer published. Windows x64 remains supported.
 
 ### Testing Requirements
 - Enforced by `.github/workflows/release.yml` and `scripts/release/capture-macos-distribution-trust.mjs`, which captures the trust receipt matching this file's declared mode.

@@ -160,7 +160,7 @@ export function CommandMenuItem({
   return (
     <button
       type="button"
-      className="tw:flex tw:min-h-control-lg tw:w-full tw:cursor-pointer tw:items-center tw:gap-2 tw:rounded-sm tw:border-0 tw:bg-transparent tw:px-2 tw:py-1.5 tw:font-sans tw:text-left tw:text-foreground tw:aria-selected:bg-selection tw:aria-selected:text-selection-foreground tw:aria-selected:hover:bg-selection tw:disabled:cursor-default tw:disabled:opacity-40 tw:hover:bg-muted tw:focus-visible:bg-muted tw:focus-visible:outline-none"
+      className="tw:flex tw:min-h-control-lg tw:w-full tw:cursor-pointer tw:items-center tw:gap-2 tw:rounded-sm tw:border-0 tw:bg-transparent tw:px-2 tw:py-1.5 tw:font-sans tw:text-left tw:text-foreground tw:aria-selected:bg-selection tw:aria-selected:text-selection-foreground tw:aria-selected:hover:bg-selection tw:aria-pressed:bg-selection tw:aria-pressed:text-selection-foreground tw:aria-pressed:hover:bg-selection tw:disabled:cursor-default tw:disabled:opacity-40 tw:hover:bg-muted tw:focus-visible:bg-muted tw:focus-visible:outline-none"
       {...props}
     >
       {leading ? (

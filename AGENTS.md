@@ -299,11 +299,13 @@ Node and match the checked-in pins. App release numbers are not adapter compatib
 A local catalog check alone is not release evidence. The build jobs must refuse to compile when the
 matching non-prerelease draft is absent, because GitHub Actions is deliberately
 not allowed to bypass the owner-only tag ruleset and create it.
+Stable and canary installers support macOS Apple Silicon and Windows x64 only; macOS Intel installers and updater entries are retired.
+
 The checked-in `distributionMode` in `.release/macos-distribution.json` owns
 macOS signing activation. Keep it `legacy-unsigned` until the user explicitly
 activates `developer-id` after enrollment; legacy mode must not require Apple
 credentials or claim notarization. Once activated, stable publication must fail
-closed unless both architectures produce a Developer ID, notarization, staple,
+closed unless the supported Apple Silicon architecture produces a Developer ID, notarization, staple,
 Gatekeeper, and identical app-payload trust receipt bound to the exact assets.
 
 The user-facing release-note pipeline is intentionally in `prepared` mode until

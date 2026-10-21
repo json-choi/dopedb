@@ -126,7 +126,7 @@ export default function AcpChatTranscript({
           <Button
             size="xs"
             variant="primary"
-            onClick={commands.setup.openAgentSetup}
+            onClick={commands.setup.openAgentSettings}
           >
             {t("agent.acpOpenSetup")}
           </Button>

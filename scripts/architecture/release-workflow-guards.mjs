@@ -68,11 +68,14 @@ export function collectReleaseWorkflowDiagnostics({ exists, read }) {
 
   for (const marker of [
     "DopeDB_${version}_aarch64.macos-trust.json",
-    "DopeDB_${version}_x64.macos-trust.json",
   ]) {
     if (!updaterAssetAllowlist.includes(marker)) {
       diagnostics.push(`${updaterFinalizerPath}: Developer ID trust receipt allowlist marker is missing (${marker})`);
     }
+  }
+
+  if (workflow.includes("target: x86_64-apple-darwin") || updaterFinalizer.includes('"darwin-x86_64"')) {
+    diagnostics.push("stable releases must not publish retired macOS Intel installers or updater entries");
   }
 
   return diagnostics;

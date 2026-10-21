@@ -1,13 +1,18 @@
-// One source picker serves both wide and compact connection editors.
+// Shares source groups and commands between the new-connection catalog and
+// the existing editor's explicit add popup; the feature controller owns choices.
 import type { RefObject } from "react";
 import EngineMark from "../../components/EngineMark";
 import { Icon } from "../../components/Icon";
+import { TreeSearch } from "../../design-system/components/TreeControls";
+import { ToolWindowSearchRow } from "../../design-system/components/ToolWindow";
 import { CommandMenu, CommandMenuGroup, CommandMenuItem } from "../../design-system/components/CommandMenu";
 import type { ConnectionEditorController, ConnectionEditorProps } from "../../features/connections/useConnectionEditorController";
 import { useI18n } from "../../lib/i18n";
 
-export function ConnectionSourcePicker({ catalog, nameInputRef, creatingDemo, onCreateDemoDatabase }: {
+export function ConnectionSourcePicker({ catalog, nameInputRef, creatingDemo, onCreateDemoDatabase, embedded = false, selected }: {
   catalog: ConnectionEditorController["catalog"];
+  embedded?: boolean;
+  selected?: { engine: string; provider: string };
   nameInputRef: RefObject<HTMLInputElement | null>;
   creatingDemo: boolean;
   onCreateDemoDatabase: ConnectionEditorProps["onCreateDemoDatabase"];
@@ -19,30 +24,12 @@ export function ConnectionSourcePicker({ catalog, nameInputRef, creatingDemo, on
     sources.selectAddSource(source);
     focusName();
   };
-  return (
-    <CommandMenu
-      id="connection-add-menu"
-      placement="center"
-      label={t("connections.addDataSourceMenu")}
-      searchLabel={t(
-        "connections.addDataSourceSearchLabel",
-      )}
-      searchPlaceholder={t(
-        "connections.addDataSourceSearchPlaceholder",
-      )}
-      searchValue={addMenu.search}
-      onSearchChange={addMenu.setSearch}
-      returnFocusRef={addMenu.buttonRef}
-      onDismiss={(reason) => {
-        addMenu.setOpen(false);
-        addMenu.setSearch("");
-        if (reason === "escape" && !addMenu.buttonRef.current) focusName();
-      }}
-    >
+  const items = (
+    <>
       {sources.filteredWarehouseSources.length > 0 ? (
         <CommandMenuGroup title={t("connections.cloudWarehouse")}>
           {sources.filteredWarehouseSources.map((source) => (
-            <CommandMenuItem key={source.engine} leading={<EngineMark engine={source.engine} />} trailing={<Icon name="chevronRight" />} description={t("connections.bigQueryConnectionDescription")} onClick={() => selectSource(source)}>
+            <CommandMenuItem key={source.engine} aria-pressed={selected?.engine === source.engine && selected?.provider === source.provider} leading={<EngineMark engine={source.engine} provider={source.provider} />} trailing={<Icon name="chevronRight" />} description={t("connections.bigQueryConnectionDescription")} onClick={() => selectSource(source)}>
               {source.label}
             </CommandMenuItem>
           ))}
@@ -55,7 +42,8 @@ export function ConnectionSourcePicker({ catalog, nameInputRef, creatingDemo, on
           {sources.filteredDatabaseSources.map((source) => (
             <CommandMenuItem
               key={`${source.engine}-${source.provider}`}
-              leading={<EngineMark engine={source.engine} />}
+              aria-pressed={selected?.engine === source.engine && selected?.provider === source.provider}
+              leading={<EngineMark engine={source.engine} provider={source.provider} />}
               trailing={<Icon name="chevronRight" />}
               description={sources.sourceDriverDescription(
                 source,
@@ -75,7 +63,8 @@ export function ConnectionSourcePicker({ catalog, nameInputRef, creatingDemo, on
           {sources.filteredFileSources.map((source) => (
             <CommandMenuItem
               key={`${source.engine}-${source.provider}`}
-              leading={<EngineMark engine={source.engine} />}
+              aria-pressed={selected?.engine === source.engine && selected?.provider === source.provider}
+              leading={<EngineMark engine={source.engine} provider={source.provider} />}
               trailing={<Icon name="chevronRight" />}
               description={sources.sourceDriverDescription(
                 source,
@@ -137,6 +126,18 @@ export function ConnectionSourcePicker({ catalog, nameInputRef, creatingDemo, on
           {t("connections.noDataSourceResults")}
         </p>
       ) : null}
+    </>
+  );
+  return embedded ? (
+    <div className="tw:flex tw:min-h-0 tw:flex-1 tw:flex-col">
+      <ToolWindowSearchRow>
+        <TreeSearch autoFocus={!selected} value={addMenu.search} placeholder={t("connections.addDataSourceSearchPlaceholder")} clearLabel={t("common.clearSearch")} onChange={addMenu.setSearch} onEscape={() => addMenu.setSearch("")} />
+      </ToolWindowSearchRow>
+      <nav aria-label={t("connections.addDataSourceMenu")} className="tw:grid tw:min-h-0 tw:content-start tw:gap-3 tw:overflow-y-auto tw:p-2">{items}</nav>
+    </div>
+  ) : (
+    <CommandMenu id="connection-add-menu" placement="center" label={t("connections.addDataSourceMenu")} searchLabel={t("connections.addDataSourceSearchLabel")} searchPlaceholder={t("connections.addDataSourceSearchPlaceholder")} searchValue={addMenu.search} onSearchChange={addMenu.setSearch} returnFocusRef={addMenu.buttonRef} onDismiss={(reason) => { addMenu.setOpen(false); addMenu.setSearch(""); if (reason === "escape" && !addMenu.buttonRef.current) focusName(); }}>
+      {items}
     </CommandMenu>
   );
 }

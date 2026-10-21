@@ -20,10 +20,8 @@ import { AGENT_SETUP_URLS, CLAUDE_AUTH_SETUP_URL } from "../../lib/externalLinks
 import { useCatalogScope } from "../../lib/queries";
 import type { ConnectionProfile } from "../connections/domain";
 import type { KnowledgeEnvironmentFocus } from "../knowledge/domain";
-import {
-  openAgentSetup,
-  useEnabledAgentProviders,
-} from "../skills/agentPreferences";
+import { useEnabledAgentProviders } from "../skills/agentPreferences";
+import { requestAgentAccountSettings } from "../settings/accountRequest";
 import type { WorkbenchDocument } from "../workbench/domain";
 import { EMPTY_ACP_PROMPT_CONTEXT } from "./acpPromptContext";
 import {
@@ -708,7 +706,7 @@ export function useAcpChatController({
       },
       setup: {
         changeProvider,
-        openAgentSetup,
+        openAgentSettings: requestAgentAccountSettings,
         openSetupGuide,
         copyLoginCommand,
         refreshCli: () => cliStatusQuery.refetch(),

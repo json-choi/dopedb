@@ -38,8 +38,9 @@ export function ConnectionCatalogCompactSelector({
     <div className="tw:hidden tw:shrink-0 tw:flex-wrap tw:items-center tw:gap-2 tw:border-b tw:border-border-subtle tw:bg-card tw:p-2 tw:@max-[760px]:flex">
       {navigation.view === "dataSources" ? (
         <>
+          {!profile.identity.isNew ? <>
           <SelectInput
-            value={profile.identity.isNew ? "__new__" : profile.form.id}
+            value={profile.form.id}
             onChange={(event) => {
               const connection = sources.connections.find(
                 (candidate) => candidate.id === event.target.value,
@@ -48,9 +49,6 @@ export function ConnectionCatalogCompactSelector({
             }}
             aria-label={t("connections.dataSources")}
           >
-            {profile.identity.isNew ? (
-              <option value="__new__">{t("connections.new")}</option>
-            ) : null}
             {sources.connections.map((connection) => (
               <option key={connection.id} value={connection.id}>
                 {connection.name || t("app.unnamed")}
@@ -67,11 +65,12 @@ export function ConnectionCatalogCompactSelector({
           >
             <Icon name="plus" />
           </Button>
-          <ConnectionSourceCommands
+          </> : null}
+          {(sources.selected || !profile.identity.isNew) && <ConnectionSourceCommands
             profile={profile}
             dialogs={dialogs}
             commands={commands}
-          />
+          />}
           <Button
             size="xs"
             variant="ghost"

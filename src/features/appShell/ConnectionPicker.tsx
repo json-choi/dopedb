@@ -67,7 +67,7 @@ export default function ConnectionPicker({
           .join(" · ")}
       >
         <span className="tw:flex tw:min-w-0 tw:items-center tw:gap-2">
-          {!grouped && <EngineMark engine={connection.engine} />}
+          {!grouped && <EngineMark engine={connection.engine} provider={connection.provider} />}
           <span className="tw:min-w-0 tw:overflow-hidden tw:text-body tw:font-bold tw:text-ellipsis tw:whitespace-nowrap">
             {name}
           </span>

@@ -79,7 +79,9 @@ packaged runtime 증거가 아니다.
   표시한다. 보조 tool window와 문서 생성은 실제 `ToolbarMenu`가 소유한다.
   이전 Explorer 기본값 396px만 296px로 이전하며 다른 사용자 저장 폭은 보존한다.
 - generic `새 연결` 진입은 특정 engine form을 임의 선택하지 않고 검색 가능한
-  provider/driver `CommandMenu`를 즉시 연다. engine/provider preset이 명시된
+  provider/driver 카탈로그를 왼쪽 패널에 즉시 표시한다. 저장된 연결 목록이나
+  자동 선택 popup을 중첩하지 않는다. 종류 미선택 상태는 선택 안내만 표시한다.
+  engine/provider preset이 명시된
   진입만 해당 속성 form을 바로 표시한다. 실제 생성하지 않는 demo나 지원하지
   않는 provider resource를 선택지 설명으로 약속하지 않는다.
 - Data Sources and Drivers dialog는 제품 계약의
@@ -155,7 +157,7 @@ packaged runtime 증거가 아니다.
 | `--ds-primary` / `--ds-primary-foreground` | 단일 affirmative action |
 | `--ds-secondary` / `--ds-secondary-foreground` | 낮은 강조의 control |
 | `--ds-muted` / `--ds-muted-foreground` | caption, placeholder, 비활성 chrome |
-| `--ds-selection` / `--ds-selection-foreground` | muted IDE selection, active tab, current row; affirmative primary blue와 분리 |
+| `--ds-selection` / `--ds-selection-foreground` | muted IDE selection, active tab, current row; primary 동작과 분리 |
 | `--ds-destructive` / `--ds-destructive-foreground` | 삭제·폐기·차단 |
 | `--ds-input` | form field와 outline control |
 | `--ds-ring` | focus-visible과 selected cell outline |
@@ -167,9 +169,9 @@ Desktop 테마는 `theme.ts`가 기기별 `dopedb.theme` preference를 소유한
 시스템 설정과 독립적으로 유지하며 다시 시작해도 복원한다. `index.html`의 작은
 bootstrap은 같은 키의 저장값만 첫 paint 전에 적용하고, live state는 복제하지 않는다.
 `data-theme`에는 해석된 light/dark만 두고 `tokens.css`와 `scoped-palettes.css`의
-동일 role을 바꾼다. 다크는 채도를 낮춘 남색을 배경·사이드바·작업 surface의
-단계로 사용한다. 선명한 파랑은 primary action과 focus에, 옅은 파랑은 선택과
-정보에 사용한다. 밝은 주황은 Welcome 장식에만 사용하며 경고·실패·데이터
+동일 role을 바꾼다. 다크는 푸른 기 없는 중립 차콜을 배경·사이드바·작업 surface의
+단계로 사용한다. 밝은 중립색은 primary action과 focus에, 중간 회색은 선택에
+사용한다. 정보·성공·경고·오류는 독립된 상태색을 유지한다. 밝은 주황은 Welcome 장식에만 사용하며 경고·실패·데이터
 상태를 뜻하지 않는다. 일반 작업 pane에 그라디언트나 주황 면을 깔지 않는다.
 라이트는 밝은 중립 surface·ink primary를 사용하며 화면 배치는 공유한다.
 
@@ -184,8 +186,8 @@ terminal session을 보존한다. Agent code fence는 CSS 역할을 사용하고
 `core:app:allow-set-app-theme`로 native chrome에도 선택을 적용하며 system은 null로
 해제한다. Settings → 화면 및 Action Search가 같은 preference command를 사용한다.
 Article은 기존 `chart` glyph를 유지하고, Agent는 계정의 `user`와 구분되는
-`chat` 말풍선 glyph를 사용한다. 외부 glyph의 저작권·사용 허가는 bundle의
-`resources/licenses/phosphor-icons-LICENSE.txt`에 포함한다.
+`astroid` 곡선 별 glyph를 사용한다. 기존 `chat` glyph는 일반 대화 용도로 유지하며
+그 저작권·사용 허가는 bundle의 `resources/licenses/phosphor-icons-LICENSE.txt`에 포함한다.
 
 DopeDB 기존 화면은 `--ds-surface-*`, `--ds-text*`, `--ds-accent*` 별칭을 사용한다.
 이 별칭은 위 역할 토큰에 연결되어 있으므로 새 화면에서는 역할이 더 명확한 정본
@@ -278,7 +280,7 @@ CLI 계정 이름과 플랜은 `AgentAccountIdentity`가 설정 inventory와 채
 Settings의 연결·환경 진입은 같은 연결 편집기와 Project binding command로 이동한다.
 bound DB의 환경 control은 실제 Project marker를 읽기 전용으로 표시해 독립 profile
 라벨과 혼동하지 않게 하고, 독립 연결은 General에서 환경을 편집한다.
-BigQuery는 기존 `CommandMenuGroup`의 별도 cloud warehouse 그룹을 사용한다.
+BigQuery는 연결 종류 카탈로그의 별도 cloud warehouse 그룹을 사용한다.
 Explorer는 설정된 DB만 직접 읽으며 서버의 다른 DB는 연결 편집기에서 선택한다.
 
 `workspace.css`는 Workspace Web과 Desktop의 독립 loopback 문서가 공유하는
@@ -482,8 +484,8 @@ loopback 문서는 이 정본을 빌드 시 포함하며 네트워크 font나 sc
 - `ToolWindowVerticalSplit`: Local History에서 관찰한 primary/secondary
   vertical split. 비율은 `--ds-tool-window-primary-ratio`가 소유한다.
 - `EngineMark`: form/action 기본 크기와 24px tree row 안의 `tree` 크기를
-  함께 소유한다. 로컬 엔진 SVG와 Iconify Simple Icons의 공식 브랜드 SVG가
-  동일한 quiet monochrome 크기·필터를 사용하며, feature가 이미지 크기나
+  함께 소유한다. 로컬에 번들한 원본 컬러 엔진 SVG가
+  동일한 크기와 원본 브랜드 색상을 사용하며, feature가 이미지 크기나
   wrapper 크기를 다시 지정하지 않는다.
 - `ToolWindowComposer`, `ToolWindowComposerDock`, `ToolWindowComposerInput`,
   `ToolWindowComposerContext`: AI Chat의 multiline 입력면, 내부 context row와
@@ -639,6 +641,8 @@ loopback 문서는 이 정본을 빌드 시 포함하며 네트워크 font나 sc
   높이를 유지하는 background-task trigger와 380px 이내의 관찰·중단 popup.
   실제 전역 작업 모델에 있는 task만 표시하고 지원되지 않는 중단 control은
   만들지 않는다.
+- `CommandMenuGroup`·`CommandMenuItem`은 새 연결의 상주 카탈로그에도 같은
+  그룹·설명 행을 제공한다. 선택된 종류는 `aria-pressed`로 표시한다.
 - `CommandMenu`, `CommandMenuGroup`, `CommandMenuItem`: 검색 입력, 분류,
   설명이 필요한 생성·선택 command popup. `CommandMenuItem`의
   `aria-selected`는 Action Search와 같은 listbox의 공용 선택 row
@@ -1341,10 +1345,10 @@ Tauri 최소 창 크기에서는 explorer와 main을 세로로 고정 분할하�
 - Article 공유는 `ModalSurface` 안에서 기존 권한용 링크와 이메일 지정 초대를
   나눈다. 읽기 권한의 대상 DB, 48시간 만료, 수락 후 Access 관리 경계를 명시한다.
   링크 생성·복사·취소는 실제 command 결과를 표시하고 실패를 숨기지 않는다.
-- `CommandMenu`의 `placement="center"`는 좁은 창에도 같은 source picker를
+- 새 연결의 source catalog는 좁은 창에서도 화면 안에서 같은 종류 목록을
   제공한다. 연결의 새 초안은 이 선택기를 먼저 열고 검색에 focus를 준다.
-  picker는 숨겨진 sidebar 안에 렌더링하지 않으며 뒤의 이름 입력란은 focus를
-  빼앗지 않는다. 일반 anchored command menu의 placement는 그대로 유지한다.
+  catalog는 화면에 표시된 panel 안에 렌더링하고 선택한 종류의 이름 입력란으로
+  focus를 이동한다. 기존 연결 편집의 명시적 추가 popup은 그대로 유지한다.
 
 ### Article 문서 중심 화면
 

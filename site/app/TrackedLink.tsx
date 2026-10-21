@@ -14,8 +14,7 @@ export type DownloadSource =
 export type DownloadTarget =
   | "latest_release"
   | "windows_x64_installer"
-  | "macos_arm64_dmg"
-  | "macos_x64_dmg";
+  | "macos_arm64_dmg";
 
 type DownloadTrackingProperties = {
   source: DownloadSource;

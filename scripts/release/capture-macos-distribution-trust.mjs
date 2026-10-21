@@ -20,7 +20,6 @@ const MAX_TREE_ENTRIES = 200_000;
 const MAX_ARCHIVE_ENTRIES = 200_000;
 const TARGETS = {
   "aarch64-apple-darwin": { architecture: "arm64", assetSuffix: "aarch64" },
-  "x86_64-apple-darwin": { architecture: "x64", assetSuffix: "x64" },
 };
 
 function fail(message) {

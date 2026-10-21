@@ -34,7 +34,7 @@ connection persistence itself.
 | `ConnectionCatalogCompactSelector.tsx` | `ConnectionCatalogCompactSelector` — compact catalog (engine/provider) selector used below the editor's wide-layout breakpoint. |
 | `ConnectionCatalogDetail.tsx` | `ConnectionCatalogDetail` — selected cloud provider or driver details from the catalog view model, does not load or mutate catalog state. |
 | `ConnectionCatalogNavigation.tsx` | `ConnectionCatalogNavigation` — catalog navigation and source commands in the editor; query/mutation ownership stays in feature controllers. |
-| `ConnectionSourcePicker.tsx` | `ConnectionSourcePicker` — one source picker shared by both wide and compact connection editor layouts. |
+| `ConnectionSourcePicker.tsx` | `ConnectionSourcePicker` — shared source groups and commands rendered inline for new connections and in the explicit add popup for existing editors. |
 | `ConnectionEditorDialogs.tsx` | `ConnectionEditorDialogs` — provider-credential and workspace-binding dialogs driven by dialog controller state. |
 | `ConnectionEditorFooter.tsx` | `ConnectionEditorFooter` — editor footer actions for profile and catalog editor modes. |
 | `ManagedWorkspaceConnectionField.tsx` | `ManagedWorkspaceConnectionField` — presents the server-owned managed endpoint boundary and its exact Web recovery command. |

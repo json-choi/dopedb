@@ -8,58 +8,52 @@ Desktop의 값은 `src/design-system/tokens.css`에 적용되어 있다. Workspa
 ## 색 사용 원칙
 
 선택한 네 색 `#0d1a63`, `#1a2ca3`, `#2845d6`, `#f68048`은 Welcome의 장식
-범위에서 직접 사용한다. 작업 화면은 같은 파랑 계열의 채도를 낮춘 면과 밝기를
-조절한 단일 primary blue를 사용한다. 주황은 경고·실패·쓰기 권한을 뜻하지 않는다.
+범위에서 직접 사용한다. 작업 화면은 푸른 기 없는 중립 차콜과 밝은 중립 primary를 사용한다. 주황은 경고·실패·쓰기 권한을 뜻하지 않는다.
 연결 상태는 neutral/info/success/warning/danger의 독립된 의미색을 사용한다.
 SQL 데이터 값, provider 로고, 그래프 범주에는 앱 chrome 팔레트를 강제로 씌우지
 않는다. 색만으로 선택·위험·환경을 전달하지 않고 텍스트와 표시를 함께 둔다.
 
 | 역할 | 다크 값 | 적용 위치 |
 | --- | --- | --- |
-| `background` | `#101422` | 작업 canvas |
-| `editor` | `#111722` | SQL/코드 입력과 출력 |
-| `sidebar` | `#151c2c` | Explorer, 보조 탐색 |
-| `sidebar-accent` | `#22304b` | Explorer의 낮은 강조 |
-| `secondary` | `#1b2537` | 낮은 강조의 구역과 control |
-| `card` | `#202a3e` | 선택 가능한 연결 카드와 정보 그룹 |
-| `popover` | `#29344a` | 떠 있는 메뉴·dialog·tooltip |
-| `muted` | `#242e42` | hover, 낮은 강조 배경 |
-| `selection` | `#253a70` | 선택된 탭·행; primary 버튼과 분리 |
-| `border-subtle` | `#39455b` | 장식적 구분선 |
-| `border-strong` | `#657795` | 필요한 control 경계 |
-| `foreground` | `#e8eefa` | 주요 글자 |
-| `card/popover/secondary-foreground` | `#e8eefa` | 각 surface 위 주요 글자 |
-| `muted-foreground` | `#acbbd2` | 보조 글자 |
-| `text-subtle` | `#97a7c1` | 덜 중요한 metadata |
-| `input` | `#354157` | 입력 필드 경계 |
-| `primary` | `#3556e5` | 한 흐름의 주 동작 |
-| `primary-hover` | `#4565f0` | 주 동작 hover |
-| `primary-foreground` | `#ffffff` | primary 버튼 위 글자 |
-| `accent-text` | `#a5b6ff` | 선택·강조의 작은 텍스트 |
-| `accent-soft` | `#24336b` | 낮은 강조의 blue 면 |
-| `ring` | `#8ba3ff` | 키보드 초점, 강한 선택 outline |
+| `background` | `#111111` | 작업 canvas |
+| `editor` | `#111111` | SQL/코드 입력과 출력 |
+| `sidebar` | `#191919` | Explorer, 보조 탐색 |
+| `sidebar-accent` | `#2a2a2a` | Explorer의 낮은 강조 |
+| `secondary` | `#222222` | 낮은 강조의 구역과 control |
+| `card` | `#191919` | 선택 가능한 연결 카드와 정보 그룹 |
+| `popover` | `#222222` | 떠 있는 메뉴·dialog·tooltip |
+| `muted` | `#2a2a2a` | hover, 낮은 강조 배경 |
+| `selection` | `#313131` | 선택된 탭·행; primary 버튼과 분리 |
+| `border-subtle` | `#3a3a3a` | 장식적 구분선 |
+| `border-strong` | `#6e6e6e` | 필요한 control 경계 |
+| `foreground` | `#eeeeee` | 주요 글자 |
+| `card/popover/secondary-foreground` | `#eeeeee` | 각 surface 위 주요 글자 |
+| `muted-foreground` | `#b4b4b4` | 보조 글자 |
+| `text-subtle` | `#909090` | 덜 중요한 metadata |
+| `input` | `#6e6e6e` | 입력 필드 경계 |
+| `primary` | `#eeeeee` | 한 흐름의 주 동작 |
+| `primary-hover` | `#d4d4d4` | 주 동작 hover |
+| `primary-foreground` | `#111111` | primary 버튼 위 글자 |
+| `accent-text` | `#eeeeee` | 선택·강조의 작은 텍스트 |
+| `accent-soft` | `#2a2a2a` | 낮은 강조의 중립 면 |
+| `ring` | `#b4b4b4` | 키보드 초점, 강한 선택 outline |
 | `overlay` | `rgb(0 0 0 / 0.6)` | modal 뒤 차광 |
 | `info` | `#8db4ff` | 진행·정보 |
 | `success` | `#88d7a9` | 확인된 성공·연결 |
 | `warning` | `#f4c26f` | 검토 필요 |
 | `danger` | `#f08a8d` | 실패·차단·삭제 |
-| `destructive-foreground` | `#101422` | danger 동작 면 위 글자 |
+| `destructive-foreground` | `#111111` | danger 동작 면 위 글자 |
 | `cosmic-night-raised` | `#0d1a63` | Welcome 장식의 깊은 파랑 |
 | `cosmic-night-soft` | `#1a2ca3` | Welcome 장식의 중간 파랑 |
 | `cosmic-electric` | `#2845d6` | Welcome 장식의 밝은 파랑 |
 | `cosmic-warm` | `#f68048` | Welcome의 작은 온색 강조 |
 
 표의 일반 역할은 같은 이름의 `--ds-*` 토큰을 뜻한다. 예외적으로 `editor`는
-`--ds-editor-surface`, `sidebar`는 `--ds-worktree-sidebar`와 sidebar의
-`--ds-surface-1`, `success`는 `--ds-positive`, `warning`은 `--ds-caution`,
+`--ds-editor-surface`, `sidebar`는 `--ds-worktree-sidebar`, `success`는 `--ds-positive`, `warning`은 `--ds-caution`,
 `danger`는 `--ds-destructive`(동작 면)와 `--ds-critical-emphasis`(문구)를
 뜻한다. 컴포넌트에서는 이 역할에 대응하는 공용 Tailwind utility를 사용한다.
 
-`primary`는 원래 팔레트의 밝은 파랑을 버튼에서 식별할 수 있게 밝힌 값이다.
-`foreground`/`background`는 15.75:1, `muted-foreground`/`card`는 7.38:1,
-흰 글자/`primary`는 5.81:1, `border-strong`/`card`는 3.16:1이다. 이 값은
-정의된 단색 쌍의 계산이다. 투명도·겹침·화면 밝기·실제 렌더링은 별도 검수가
-필요하다. `border-subtle`은 장식선이며 input·focus의 유일한 경계로 쓰지 않는다.
+`primary`는 밝은 중립색이며 짙은 글자로 동작을 구분한다. 실제 토큰의 단색 대비는 `foreground`/`background` 16.28:1, `muted-foreground`/`card` 8.48:1, `primary-foreground`/`primary` 16.28:1, `input`/`card` 3.45:1, `ring`/`background` 9.11:1이다. 투명도·겹침·화면 밝기·실제 렌더링은 별도 검수가 필요하다. `border-subtle`은 장식선이며 input·focus의 유일한 경계로 쓰지 않는다.
 
 ## 적용 경계
 

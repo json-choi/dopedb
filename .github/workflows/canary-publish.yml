@@ -149,7 +149,6 @@ jobs:
           set -euo pipefail
           assets=(
             release-assets/DopeDB-canary-macos-arm64.dmg
-            release-assets/DopeDB-canary-macos-x64.dmg
             release-assets/DopeDB-canary-windows-x64-setup.exe
           )
           for asset in "${assets[@]}"; do

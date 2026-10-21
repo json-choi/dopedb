@@ -107,7 +107,7 @@ export default async function Home({ searchParams }: HomeProps) {
     operatingSystem: "macOS, Windows",
     description: c.jsonDescription,
     url: siteUrl,
-    downloadUrl: [downloadUrls.windows, downloadUrls.macApple, downloadUrls.macIntel],
+    downloadUrl: [downloadUrls.windows, downloadUrls.macApple],
     codeRepository: repoUrl,
     image: `${siteUrl}${c.product.imageSrc}`,
     license: `${repoUrl}/blob/main/LICENSE`,

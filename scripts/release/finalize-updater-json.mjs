@@ -10,16 +10,12 @@ export const UPDATER_PLATFORMS = Object.freeze({
   "darwin-aarch64": {
     suffix: "aarch64.app.tar.gz",
   },
-  "darwin-x86_64": {
-    suffix: "x64.app.tar.gz",
-  },
   "windows-x86_64": {
     suffix: "x64-setup.exe",
   },
 });
 const UPDATER_PLATFORM_ALIASES = Object.freeze({
   "darwin-aarch64-app": "darwin-aarch64",
-  "darwin-x86_64-app": "darwin-x86_64",
   "windows-x86_64-nsis": "windows-x86_64",
 });
 export const STABLE_UPDATER_REPOSITORY = "json-choi/dopedb";
@@ -260,11 +256,8 @@ function allowedNonUpdaterAsset(name, version) {
     "latest.json",
     "DopeDB-windows-x64-setup.exe",
     "DopeDB-macos-arm64.dmg",
-    "DopeDB-macos-x64.dmg",
     `DopeDB_${version}_aarch64.dmg`,
     `DopeDB_${version}_aarch64.macos-trust.json`,
-    `DopeDB_${version}_x64.dmg`,
-    `DopeDB_${version}_x64.macos-trust.json`,
   ]).has(name);
 }
 

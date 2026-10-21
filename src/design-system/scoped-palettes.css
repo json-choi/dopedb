@@ -63,7 +63,7 @@
 :root[data-theme="dark"] {
   /* xterm ANSI theme. resolvePtyTheme is the only consumer. */
   --ds-terminal-ansi-black: #26282c;
-  --ds-terminal-ansi-bright-black: #548af7;
+  --ds-terminal-ansi-bright-black: #909090;
   --ds-terminal-ansi-red: #db5c5c;
   --ds-terminal-ansi-bright-red: #ff8789;
   --ds-terminal-ansi-green: #86efac;
@@ -76,13 +76,13 @@
   --ds-terminal-ansi-bright-magenta: #ddd6fe;
   --ds-terminal-ansi-cyan: #5eead4;
   --ds-terminal-ansi-bright-cyan: #99f6e4;
-  --ds-terminal-ansi-white: #467ff2;
+  --ds-terminal-ansi-white: #b4b4b4;
   --ds-terminal-ansi-bright-white: #dfe1e5;
 
   /* Completed Agent code fences. */
-  --ds-syntax-background: #111722;
-  --ds-syntax-foreground: #e8eefa;
-  --ds-syntax-comment: #97a7c1;
+  --ds-syntax-background: #111111;
+  --ds-syntax-foreground: #eeeeee;
+  --ds-syntax-comment: #909090;
   --ds-syntax-changed: #fbbf24;
   --ds-syntax-constant: #fde68a;
   --ds-syntax-deleted: #ff8789;
@@ -95,7 +95,7 @@
   --ds-syntax-string: #bbf7d0;
   --ds-syntax-string-expression: #99f6e4;
   --ds-syntax-ansi-black: #26282c;
-  --ds-syntax-ansi-bright-black: #548af7;
+  --ds-syntax-ansi-bright-black: #909090;
   --ds-syntax-ansi-red: #db5c5c;
   --ds-syntax-ansi-bright-red: #ff8789;
   --ds-syntax-ansi-green: #86efac;
@@ -108,6 +108,6 @@
   --ds-syntax-ansi-bright-magenta: #ddd6fe;
   --ds-syntax-ansi-cyan: #5eead4;
   --ds-syntax-ansi-bright-cyan: #99f6e4;
-  --ds-syntax-ansi-white: #467ff2;
+  --ds-syntax-ansi-white: #b4b4b4;
   --ds-syntax-ansi-bright-white: #dfe1e5;
 }

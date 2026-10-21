@@ -48,7 +48,7 @@ export function AcpChatHeaderActions({
         icon="moreVertical"
         label={t("agent.acpMore")}
       >
-        <MenuItem icon="gear" onClick={commands.setup.openAgentSetup}>
+        <MenuItem icon="gear" onClick={commands.setup.openAgentSettings}>
           {t("agent.acpAgentSetup")}
         </MenuItem>
         {active && active.lifecycle !== "closed" && active.lifecycle !== "failed" ? (

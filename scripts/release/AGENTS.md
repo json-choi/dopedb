@@ -14,7 +14,7 @@ for the human approval boundary these scripts implement.
 ## Key Files
 | File | Description |
 |------|-------------|
-| `capture-macos-distribution-trust.mjs` | Captures the Developer ID / notarization / staple / Gatekeeper trust receipt for both macOS architectures and binds it to the exact app-payload assets, per `.release/AGENTS.md`. |
+| `capture-macos-distribution-trust.mjs` | Captures the Developer ID / notarization / staple / Gatekeeper trust receipt for the supported macOS Apple Silicon architecture and binds it to the exact app-payload assets, per `.release/AGENTS.md`. |
 | `create-stable-draft.sh` | Creates the owner-attributed annotated `app-vX.Y.Z` tag and draft GitHub release; runs `verify-release-version.mjs` first. Invoked as `pnpm release:stable:draft -- X.Y.Z`. |
 | `download-public-updater-assets.mjs` | Downloads the immutable public updater closure (no credentials, no full-memory installer buffering) for finalization/verification. |
 | `finalize-updater-json.mjs` | Finalizes Tauri's `latest.json` updater metadata before a draft release becomes immutable, ensuring every asset URL resolves through GitHub's public release-download path; defines the `UPDATER_PLATFORMS` map. |

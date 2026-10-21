@@ -1,7 +1,7 @@
 // Public-site metrics use a closed vocabulary. No URL, query, identifier,
 // referrer, free text, or request header is retained in the dataset.
 const sources = ["header", "hero", "download_section", "platform_grid"];
-const targets = ["latest_release", "windows_x64_installer", "macos_arm64_dmg", "macos_x64_dmg"];
+const targets = ["latest_release", "windows_x64_installer", "macos_arm64_dmg"];
 
 export function siteAnalyticsPoint(value: unknown): string[] | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;

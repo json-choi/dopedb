@@ -85,7 +85,7 @@ export default function ConnectionStartList({
         {POPULAR_CONNECTION_SOURCES.map((source) => (
           <ToolWindowAction
             key={`${source.engine}-${source.provider}`}
-            leading={<EngineMark engine={source.engine} />}
+            leading={<EngineMark engine={source.engine} provider={source.provider} />}
             trailing={<Icon name="chevronRight" />}
             onClick={focusThen(() =>
               onNewConnection({

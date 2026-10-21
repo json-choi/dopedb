@@ -215,8 +215,6 @@ h3 {
   display: block;
   object-fit: contain;
   color: currentColor;
-  /* Brand logos stay quiet so the three-hue palette leads the screen. */
-  filter: grayscale(0.85) opacity(0.8);
 }
 
 .ds-title-line {

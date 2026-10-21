@@ -279,7 +279,7 @@ migration 진입점을 검증한다. 로컬 build만으로는 운영 반영을 �
 - macOS 서명 활성화는 `.release/macos-distribution.json`의 체크인된
   `distributionMode`가 소유한다. 사용자가 가입 후 명시적으로 `developer-id`를
   선택하기 전에는 `legacy-unsigned`를 유지하며 Apple 자격 증명이나 공증 완료를
-  요구·주장하지 않는다. 활성화한 뒤에는 ARM64/x64 모두 Developer ID·공증·
+  요구·주장하지 않는다. macOS 설치 파일은 Apple Silicon만, Windows는 x64를 지원하며 macOS Intel 배포는 중단한다. 활성화한 뒤에는 지원하는 ARM64 빌드가 Developer ID·공증·
   staple·Gatekeeper와 동일 app payload 영수증을 통과하지 못하면 실패한다.
 - 카나리 설치 파일은 같은 저장소의 `work/<github-login>/<topic>` PR에
   `canary` 라벨을 붙여 비권한 `canary-build` 워크플로에서만 빌드한다. 발행은

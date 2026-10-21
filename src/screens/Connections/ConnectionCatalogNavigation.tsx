@@ -1,6 +1,7 @@
 // Presents the Connection editor's catalog navigation and the open source's
 // commands, which the compact selector reuses below the editor breakpoint.
 // Query and mutation ownership stays in the feature controllers.
+import type { ReactNode } from "react";
 import ConfirmButton from "../../components/ConfirmButton";
 import EngineMark from "../../components/EngineMark";
 import { Icon } from "../../components/Icon";
@@ -28,7 +29,9 @@ export function ConnectionCatalogNavigation({
   dialogs,
   commands,
   onEditConnection,
+  newSources,
 }: {
+  newSources: ReactNode;
   catalog: Controller["catalog"];
   profile: Controller["profile"];
   dialogs: Controller["dialogs"];
@@ -94,8 +97,8 @@ export function ConnectionCatalogNavigation({
                 ? t("connections.clouds")
                 : t("connections.drivers")}
           </div>
-          <div className="tw:flex tw:h-control-lg tw:min-h-control-lg tw:items-center tw:border-b tw:border-border-subtle tw:px-3">
-            {navigation.view === "dataSources" ? (
+          {!(navigation.view === "dataSources" && identity.isNew) ? <div className="tw:flex tw:h-control-lg tw:min-h-control-lg tw:items-center tw:border-b tw:border-border-subtle tw:px-3">
+            {navigation.view === "dataSources" && !identity.isNew ? (
               <div className="tw:flex tw:items-center tw:gap-1">
                 <div
                   ref={addMenu.anchorRef}
@@ -169,8 +172,8 @@ export function ConnectionCatalogNavigation({
                 </Button>
               </div>
             ) : null}
-          </div>
-          {navigation.view !== "clouds" && navigation.searchOpen ? (
+          </div> : null}
+          {navigation.view !== "clouds" && !(navigation.view === "dataSources" && identity.isNew) && navigation.searchOpen ? (
             <ToolWindowSearchRow>
               <TreeSearch
                 value={
@@ -209,7 +212,8 @@ export function ConnectionCatalogNavigation({
             </ToolWindowSearchRow>
           ) : null}
           <nav className="tw:min-h-0 tw:flex-1 tw:overflow-y-auto tw:py-2">
-            {navigation.view === "dataSources" &&
+            {navigation.view === "dataSources" && identity.isNew ? newSources : null}
+            {navigation.view === "dataSources" && !identity.isNew &&
             sources.visibleConnections.length > 0 ? (
               <div className="tw:grid tw:gap-[2px]">
                 {sources.visibleConnections.map((connection) => (
@@ -217,7 +221,7 @@ export function ConnectionCatalogNavigation({
                     key={connection.id}
                     flush
                     leading={
-                      <EngineMark engine={connection.engine} size="tree" />
+                      <EngineMark engine={connection.engine} provider={connection.provider} size="tree" />
                     }
                     selected={
                       !identity.isNew && connection.id === form.id
@@ -229,7 +233,7 @@ export function ConnectionCatalogNavigation({
                 ))}
               </div>
             ) : null}
-            {navigation.view === "dataSources" &&
+            {navigation.view === "dataSources" && !identity.isNew &&
             sources.connections.length > 0 &&
             sources.visibleConnections.length === 0 ? (
               <p className="tw:px-2 tw:py-4 tw:text-center tw:text-sm tw:text-muted-foreground">

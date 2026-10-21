@@ -17,7 +17,7 @@ toolbar menu.
 | `CellViewer.tsx` | Side panel showing one grid cell's full value: pretty-printed JSON when the value is/parses to an object or array, wrapped plain text otherwise, with a copy-to-clipboard button. |
 | `ConfirmButton.tsx` | Two-step destructive confirm: the trigger keeps its geometry and opens `ConfirmDialog`; never uses `window.confirm`. |
 | `ConfirmDialog.tsx` | The shared blocking confirmation `alertdialog` (Cancel first focus, backdrop/Escape cancel, never auto-dismisses, optional `pending` state, `cancelLabel`, `confirmVariant`). Rendered by `ConfirmButton` and directly by flows without a trigger, such as the close/quit confirmation for open manual transactions. |
-| `EngineMark.tsx` | Renders the small engine logo (`postgres`/`mysql`/`sqlite`/`mongodb` from `src/assets/db-icons/`, `bigquery` from Iconify) at `control` or `tree` size. |
+| `EngineMark.tsx` | Renders the small engine logo (`postgres`/`mysql`/`sqlite`/`mongodb`/`bigquery` from `src/assets/db-icons/`) at `control` or `tree` size. |
 | `Icon.tsx` | The app's inline-SVG icon set (Feather/Lucide-style 24×24 glyphs, `currentColor`, `em`-sized); no icon-library dependency. Icons are `aria-hidden`; the enclosing control owns the accessible name. |
 | `EnvironmentKindBadge.tsx` | Localized environment marker: the design-system `EnvironmentBadge` plus the kind's display name. |
 | `EnvironmentKindSelect.tsx` | The one environment question (fixed kinds, optional empty choice, `allowed` narrowing) used by the Project dialog, provider imports, GCP setup, and direct database setup. |

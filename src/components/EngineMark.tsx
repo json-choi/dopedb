@@ -4,10 +4,12 @@ import mysqlIcon from "../assets/db-icons/mysql.svg";
 import mongodbIcon from "../assets/db-icons/mongodb.svg";
 import postgresqlIcon from "../assets/db-icons/postgresql.svg";
 import sqliteIcon from "../assets/db-icons/sqlite.svg";
-import GoogleBigQueryIcon from "@iconify-react/simple-icons/googlebigquery";
-import type { Engine } from "../ipc/types";
+import bigqueryIcon from "../assets/db-icons/googlebigquery.svg";
+import cloudflareIcon from "../assets/db-icons/cloudflare.svg";
+import type { Engine, Provider } from "../ipc/types";
 
-const ENGINE_ICON: Record<Exclude<Engine, "bigquery">, string> = {
+const ENGINE_ICON: Record<Engine, string> = {
+  bigquery: bigqueryIcon,
   postgres: postgresqlIcon,
   mysql: mysqlIcon,
   sqlite: sqliteIcon,
@@ -24,12 +26,15 @@ const ENGINE_LABEL: Record<Engine, string> = {
 
 export default function EngineMark({
   engine,
+  provider,
   size = "control",
 }: {
   engine: Engine;
+  provider?: Provider;
   size?: "control" | "tree";
 }) {
-  const label = ENGINE_LABEL[engine];
+  const cloudflare = engine === "sqlite" && provider === "cloudflareD1";
+  const label = cloudflare ? "Cloudflare D1" : ENGINE_LABEL[engine];
   return (
     <span
       className={
@@ -42,16 +47,12 @@ export default function EngineMark({
       title={label}
       aria-label={label}
     >
-      {engine === "bigquery" ? (
-        <GoogleBigQueryIcon aria-hidden="true" />
-      ) : (
-        <img
-          src={ENGINE_ICON[engine]}
-          alt=""
-          aria-hidden="true"
-          draggable={false}
-        />
-      )}
+      <img
+        src={cloudflare ? cloudflareIcon : ENGINE_ICON[engine]}
+        alt=""
+        aria-hidden="true"
+        draggable={false}
+      />
     </span>
   );
 }

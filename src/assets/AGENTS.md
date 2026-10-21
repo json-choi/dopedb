@@ -16,7 +16,7 @@ subdirectories below.
 | Directory | Purpose |
 |-----------|---------|
 | `agent-icons/` | Official third-party Agent provider marks. `README.md` — attribution table (file, official source, version, retrieval date: September 5, 2026) for the two icons below; required reading before adding/replacing a provider mark. `claude.svg` — Anthropic press-kit Claude Spark mark. `codex.svg` — OpenAI's Codex VS Code extension Blossom mark. Both are unchanged in path/proportion/color, transparent, with no background tile. |
-| `db-icons/` | Local database engine logo SVGs: `mongodb.svg`, `mysql.svg`, `postgresql.svg`, `sqlite.svg`. |
+| `db-icons/` | Local database engine logo SVGs: `mongodb.svg`, `mysql.svg`, `postgresql.svg`, `sqlite.svg`, `googlebigquery.svg`; provenance and hashes are in `db-icons/README.md`. |
 
 ## For AI Agents
 
@@ -25,9 +25,7 @@ subdirectories below.
   `agent-icons/README.md`'s source/version/retrieval-date table current if an
   icon is ever replaced, and do not alter path, proportion, or color per its
   documented terms.
-- `db-icons/` covers `postgres`/`mysql`/`sqlite`/`mongodb` only —
-  `bigquery`'s mark comes from Iconify's Simple Icons package instead (see
-  `src/components/EngineMark.tsx`), not from this directory.
+- `db-icons/` covers every database engine, including the official BigQuery color mark. Preserve original shapes and colors, and keep the source/license/hash table current.
 - Renaming or removing a file here requires updating its consumer:
   `agent-icons/` is imported by
   `src/design-system/components/Agent.tsx`; `db-icons/` is imported by

@@ -159,7 +159,7 @@ export function IdeTopBar({
       }
       actions={
         <>
-        <IdeToolbarLauncher buttonRef={agentButtonRef} active={agentDockOpen} disabled={!selected} count={selected ? agentPendingApprovals : 0} onClick={onToggleAgent} title={agentLauncherLabel} aria-label={agentLauncherLabel}><Icon name="chat" /></IdeToolbarLauncher>
+        <IdeToolbarLauncher buttonRef={agentButtonRef} active={agentDockOpen} disabled={!selected} count={selected ? agentPendingApprovals : 0} onClick={onToggleAgent} title={agentLauncherLabel} aria-label={agentLauncherLabel}><Icon name="astroid" /></IdeToolbarLauncher>
         <span className="tw:sr-only" role="status" aria-live="polite">
           {pendingApprovalAnnouncement}
         </span>

@@ -308,7 +308,7 @@ Stable release runs only on an owner-created `app-v*` tag whose commit is alread
 - build macOS Intel artifact
 - build Windows x64 NSIS installer with `src-tauri/tauri.windows.conf.json`
 - upload stable direct-download aliases:
-  `DopeDB-windows-x64-setup.exe`, `DopeDB-macos-arm64.dmg`, `DopeDB-macos-x64.dmg`
+  `DopeDB-windows-x64-setup.exe`, `DopeDB-macos-arm64.dmg`
 - upload installers, updater archives, signatures, and `latest.json`
 - keep the release as a draft until every matrix build and stable alias upload succeeds, then publish it for immutable tag and asset protection
 

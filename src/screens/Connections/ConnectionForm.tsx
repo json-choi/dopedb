@@ -30,6 +30,17 @@ export function ConnectionForm(props: ConnectionEditorProps) {
   const { profile, catalog, navigation, schema, credentialMethod, dialogs, commands } =
     useConnectionEditorController(props);
   const { creatingDemo, onCreateDemoDatabase } = props;
+  const choosingSource = profile.identity.isNew && !catalog.sources.selected;
+  const sourceCatalog = (
+    <ConnectionSourcePicker
+      catalog={catalog}
+      nameInputRef={nameInputRef}
+      creatingDemo={creatingDemo}
+      onCreateDemoDatabase={onCreateDemoDatabase}
+      embedded
+      selected={catalog.sources.selected ? profile.form : undefined}
+    />
+  );
 
   return (
     <ModalBackdrop>
@@ -60,7 +71,7 @@ export function ConnectionForm(props: ConnectionEditorProps) {
             if (command === "normalizeUrl" && input) {
               event.preventDefault();
               profile.url.normalize(input.value);
-            } else if (command === "save") {
+            } else if (command === "save" && !choosingSource) {
               event.preventDefault();
               void commands.save(true);
             }
@@ -75,6 +86,7 @@ export function ConnectionForm(props: ConnectionEditorProps) {
 
           <div className="tw:flex tw:min-h-0 tw:flex-1 tw:@max-[760px]:flex-col">
             <ConnectionCatalogNavigation
+              newSources={sourceCatalog}
               catalog={catalog}
               profile={profile}
               dialogs={dialogs}
@@ -91,8 +103,17 @@ export function ConnectionForm(props: ConnectionEditorProps) {
                 onEditConnection={navigation.editConnection}
                 onNewConnection={navigation.newConnection}
               />
+              {catalog.navigation.view === "dataSources" && profile.identity.isNew ? (
+                <div className="tw:hidden tw:max-h-[240px] tw:shrink-0 tw:flex-col tw:overflow-y-auto tw:border-b tw:border-border-subtle tw:@max-[760px]:flex">
+                  {sourceCatalog}
+                </div>
+              ) : null}
               {catalog.navigation.view === "dataSources" ? (
-                <ConnectionProfilePanel
+                choosingSource ? (
+                  <div className="tw:grid tw:min-h-0 tw:flex-1 tw:place-items-center tw:p-6 tw:text-center tw:text-sm tw:text-muted-foreground">
+                    {t("connections.chooseDataSource")}
+                  </div>
+                ) : <ConnectionProfilePanel
                   nameInputRef={nameInputRef}
                   autoFocus={!catalog.addMenu.open}
                   profile={profile}
@@ -115,7 +136,7 @@ export function ConnectionForm(props: ConnectionEditorProps) {
 
           <ConnectionEditorFooter
             view={catalog.navigation.view}
-            canEditConnection={profile.flags.canEditConnection}
+            canEditConnection={!choosingSource && profile.flags.canEditConnection}
             flowActive={credentialMethod.flowActive}
             commands={commands}
             onCancel={() => void commands.cancel()}

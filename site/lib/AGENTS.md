@@ -11,7 +11,7 @@ controls/scene/shaders/renderer modules.
 ## Key Files
 | File | Description |
 |------|-------------|
-| `analytics.ts` | Owns the site analytics closed vocabulary: fixed `sources` (`header`, `hero`, `download_section`, `platform_grid`) and `targets` (`latest_release`, `windows_x64_installer`, `macos_arm64_dmg`, `macos_x64_dmg`). `siteAnalyticsPoint` validates an unknown value into that vocabulary; no URL, query string, identifier, referrer, free text, or request header is ever retained. |
+| `analytics.ts` | Owns the site analytics closed vocabulary: fixed `sources` (`header`, `hero`, `download_section`, `platform_grid`) and `targets` (`latest_release`, `windows_x64_installer`, `macos_arm64_dmg`). `siteAnalyticsPoint` validates an unknown value into that vocabulary; no URL, query string, identifier, referrer, free text, or request header is ever retained. |
 | `galaxyControls.ts` | Owns pointer capture and hero-exploration shortcuts (drag, zoom clamp) while leaving ordinary page scrolling native. |
 | `galaxyRenderer.ts` | Creates the single viewport-sized Three.js scene that follows native section scroll across a fixed `chapters` sequence (`top`, `product`, `flow`, `trust`, `download`); owns explicit GPU lifecycle (create/dispose). |
 | `galaxyScene.ts` | Builds the bounded GPU scene and semantic color palette; buffers are generated once, not per frame. |

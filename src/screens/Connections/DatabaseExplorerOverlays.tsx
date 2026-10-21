@@ -99,7 +99,7 @@ export function DatabaseExplorerOverlays({
             transform: `translate3d(${Math.round(dragPreview.x + 12)}px, ${Math.round(dragPreview.y + 12)}px, 0)`,
           }}
         >
-          <EngineMark engine={draggedConnection.engine} />
+          <EngineMark engine={draggedConnection.engine} provider={draggedConnection.provider} />
           <span className="tw:min-w-0 tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap">
             {draggedSchemaGroup
               ? t("connections.schemaGroupTitle", {

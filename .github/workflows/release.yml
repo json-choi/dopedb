@@ -122,16 +122,10 @@ jobs:
         include:
           - platform: macos-15
             target: aarch64-apple-darwin
-            rust-targets: aarch64-apple-darwin,x86_64-apple-darwin
+            rust-targets: aarch64-apple-darwin
             args: --target aarch64-apple-darwin
             mac_asset_suffix: aarch64
             sentry_sourcemaps: "1"
-          - platform: macos-15
-            target: x86_64-apple-darwin
-            rust-targets: aarch64-apple-darwin,x86_64-apple-darwin
-            args: --target x86_64-apple-darwin
-            mac_asset_suffix: x64
-            sentry_sourcemaps: "0"
           - platform: windows-latest
             target: x86_64-pc-windows-msvc
             rust-targets: x86_64-pc-windows-msvc
@@ -409,20 +403,16 @@ jobs:
           }
 
           download_asset "DopeDB_${version}_aarch64.dmg"
-          download_asset "DopeDB_${version}_x64.dmg"
           download_asset "DopeDB_${version}_x64-setup.exe"
 
           cp "release-alias/source/DopeDB_${version}_aarch64.dmg" \
             release-alias/DopeDB-macos-arm64.dmg
-          cp "release-alias/source/DopeDB_${version}_x64.dmg" \
-            release-alias/DopeDB-macos-x64.dmg
           cp "release-alias/source/DopeDB_${version}_x64-setup.exe" \
             release-alias/DopeDB-windows-x64-setup.exe
 
           gh release upload "$tag" \
             --repo "$GITHUB_REPOSITORY" \
             release-alias/DopeDB-macos-arm64.dmg \
-            release-alias/DopeDB-macos-x64.dmg \
             release-alias/DopeDB-windows-x64-setup.exe \
             --clobber
 
@@ -499,8 +489,6 @@ jobs:
           assets=(
             "DopeDB_${version}_aarch64.app.tar.gz"
             "DopeDB_${version}_aarch64.app.tar.gz.sig"
-            "DopeDB_${version}_x64.app.tar.gz"
-            "DopeDB_${version}_x64.app.tar.gz.sig"
             "DopeDB_${version}_x64-setup.exe"
             "DopeDB_${version}_x64-setup.exe.sig"
           )
@@ -508,8 +496,6 @@ jobs:
             assets+=(
               "DopeDB_${version}_aarch64.dmg"
               "DopeDB_${version}_aarch64.macos-trust.json"
-              "DopeDB_${version}_x64.dmg"
-              "DopeDB_${version}_x64.macos-trust.json"
             )
           fi
           for asset in "${assets[@]}"; do
@@ -575,9 +561,7 @@ jobs:
           if [[ "$DOPEDB_MACOS_DISTRIBUTION_MODE" == "developer-id" ]]; then
             for asset in \
               "DopeDB_${version}_aarch64.dmg" \
-              "DopeDB_${version}_aarch64.macos-trust.json" \
-              "DopeDB_${version}_x64.dmg" \
-              "DopeDB_${version}_x64.macos-trust.json"; do
+              "DopeDB_${version}_aarch64.macos-trust.json"; do
               curl \
                 --fail \
                 --location \

@@ -13,15 +13,11 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 const REPOSITORY: &str = "json-choi/dopedb";
-const PLATFORMS: [(&str, &str, &[u8]); 3] = [
+const PLATFORMS: [(&str, &str, &[u8]); 2] = [
     ("darwin-aarch64", "aarch64.app.tar.gz", &[0x1f, 0x8b]),
-    ("darwin-x86_64", "x64.app.tar.gz", &[0x1f, 0x8b]),
     ("windows-x86_64", "x64-setup.exe", b"MZ"),
 ];
-const MACOS_DISTRIBUTIONS: [(&str, &str, &str); 2] = [
-    ("aarch64-apple-darwin", "arm64", "aarch64"),
-    ("x86_64-apple-darwin", "x64", "x64"),
-];
+const MACOS_DISTRIBUTIONS: [(&str, &str, &str); 1] = [("aarch64-apple-darwin", "arm64", "aarch64")];
 
 struct Arguments {
     assets: PathBuf,
@@ -265,12 +261,8 @@ fn digest(bytes: &[u8]) -> String {
 fn is_allowed_non_updater(name: &str, version: &str) -> bool {
     matches!(
         name,
-        "latest.json"
-            | "DopeDB-windows-x64-setup.exe"
-            | "DopeDB-macos-arm64.dmg"
-            | "DopeDB-macos-x64.dmg"
+        "latest.json" | "DopeDB-windows-x64-setup.exe" | "DopeDB-macos-arm64.dmg"
     ) || name == format!("DopeDB_{version}_aarch64.dmg")
-        || name == format!("DopeDB_{version}_x64.dmg")
 }
 
 fn looks_like_updater(name: &str) -> bool {
@@ -686,7 +678,13 @@ mod tests {
             "DopeDB_0.1.0_x64-setup.exe",
             "0.2.0"
         ));
-        assert!(is_allowed_non_updater("DopeDB-macos-x64.dmg", "0.2.0"));
+        assert!(!is_allowed_non_updater("DopeDB-macos-x64.dmg", "0.2.0"));
+        assert!(!is_allowed_non_updater("DopeDB_0.2.0_x64.dmg", "0.2.0"));
+        assert_eq!(PLATFORMS.len(), 2);
+        assert_eq!(
+            MACOS_DISTRIBUTIONS,
+            [("aarch64-apple-darwin", "arm64", "aarch64")]
+        );
         assert!(strict_digest(&digest(b"test")));
         assert!(!strict_digest("sha256:ABC"));
         assert!(!strict_digest(

@@ -9,6 +9,7 @@ export const connectionsCatalog = defineCatalog(
     "connections.advanced": "Advanced",
     "connections.advancedParameters": "Advanced parameters",
     "connections.addDataSourceMenu": "Add data source",
+    "connections.chooseDataSource": "Choose a data source to configure its connection.",
     "connections.addDataSourceSearchLabel": "Search data sources",
     "connections.addDataSourceSearchPlaceholder":
       "Search databases, cloud, or files",
@@ -654,6 +655,7 @@ export const connectionsCatalog = defineCatalog(
     "connections.advanced": "고급",
     "connections.advancedParameters": "고급 매개변수",
     "connections.addDataSourceMenu": "데이터 소스 추가",
+    "connections.chooseDataSource": "연결할 데이터 소스를 선택하세요.",
     "connections.addDataSourceSearchLabel": "데이터 소스 검색",
     "connections.addDataSourceSearchPlaceholder":
       "데이터베이스, 클라우드 또는 파일 검색",

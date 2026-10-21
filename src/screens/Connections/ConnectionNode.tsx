@@ -346,7 +346,7 @@ export default function ConnectionNode(props: Props) {
           />
         </span>
         {(!props.nested || props.projectDatabaseOrder) && (
-          <EngineMark engine={connection.engine} size="tree" />
+          <EngineMark engine={connection.engine} provider={connection.provider} size="tree" />
         )}
         <span className="tw:flex tw:min-w-0 tw:flex-1 tw:items-center tw:gap-1.5 tw:overflow-hidden">
           <span className="tw:min-w-0 tw:flex-1 tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap" title={connection.name || t("app.unnamed")}>

@@ -55,7 +55,8 @@ export function useConnectionCatalogController({
   const [catalogDriverId, setCatalogDriverId] = useState<string | null>(
     null,
   );
-  const [addMenuOpen, setAddMenuOpen] = useState(selectSourceOnOpen);
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const [sourceSelected, setSourceSelected] = useState(!selectSourceOnOpen);
   const [addSearch, setAddSearch] = useState("");
   const addMenuAnchorRef = useRef<HTMLDivElement | null>(null);
   const addButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -199,6 +200,7 @@ export function useConnectionCatalogController({
   }
 
   function selectAddSource(source: StandardConnectionSource) {
+    setSourceSelected(true);
     setAddMenuOpen(false);
     setAddSearch("");
     if (identity.isNew) {
@@ -298,6 +300,7 @@ export function useConnectionCatalogController({
       },
       sources: {
         available: STANDARD_CONNECTION_SOURCES,
+        selected: sourceSelected,
         connections,
         visibleConnections,
         search: sourceSearch,

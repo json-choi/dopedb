@@ -29,14 +29,14 @@ type UserAgentData = {
 type DownloadRecommendation =
   | {
       kind: "download";
-      platform: "unknown" | "windows" | "macos-arm64" | "macos-x64";
+      platform: "unknown" | "windows" | "macos-arm64";
       href: string;
       target: DownloadTarget;
       selection: "detected" | "fallback";
     }
   | {
       kind: "options";
-      platform: "macos" | "unsupported";
+      platform: "macos" | "macos-intel" | "unsupported";
       href: "#download-options";
     };
 
@@ -108,13 +108,7 @@ async function detectDownloadRecommendation(): Promise<DownloadRecommendation> {
       };
     }
     if (architecture === "x64") {
-      return {
-        kind: "download",
-        platform: "macos-x64",
-        href: downloadUrls.macIntel,
-        target: "macos_x64_dmg",
-        selection: "detected",
-      };
+      return { kind: "options", platform: "macos-intel", href: "#download-options" };
     }
     return { kind: "options", platform: "macos", href: "#download-options" };
   }
@@ -154,8 +148,8 @@ function recommendationLabel(
       return copy.downloadWindows;
     case "macos-arm64":
       return copy.downloadMacApple;
-    case "macos-x64":
-      return copy.downloadMacIntel;
+    case "macos-intel":
+      return copy.chooseDesktop;
     case "macos":
       return copy.chooseMac;
     case "unsupported":
@@ -174,8 +168,8 @@ function recommendationStatus(
       return copy.detectedWindows;
     case "macos-arm64":
       return copy.detectedMacApple;
-    case "macos-x64":
-      return copy.detectedMacIntel;
+    case "macos-intel":
+      return copy.unsupportedIntel;
     case "macos":
       return copy.detectedMacUnknown;
     case "unsupported":
@@ -192,7 +186,7 @@ function downloadTracking(
   if (current.kind === "options") {
     return {
       event: "Download Options Opened",
-      properties: { source, detected: current.platform },
+      properties: { source, detected: current.platform === "macos-intel" ? "unsupported" : current.platform },
     };
   }
   return {
@@ -272,11 +266,6 @@ export function PlatformDownloadOptions({ copy }: { copy: DownloadCopy }) {
       label: copy.macApple,
       target: "macos_arm64_dmg",
     },
-    {
-      href: downloadUrls.macIntel,
-      label: copy.macIntel,
-      target: "macos_x64_dmg",
-    },
   ] as const;
 
   return (
@@ -293,7 +282,7 @@ export function PlatformDownloadOptions({ copy }: { copy: DownloadCopy }) {
         <MonitorDown className="tw:shrink-0 tw:text-signal" size={14} />
         {recommendationStatus(current, copy)}
       </p>
-      <div className="tw:grid tw:grid-cols-3 tw:gap-px tw:bg-hairline tw:max-[620px]:grid-cols-1">
+      <div className="tw:grid tw:grid-cols-2 tw:gap-px tw:bg-hairline tw:max-[620px]:grid-cols-1">
         {platforms.map((platform) => {
           const recommended = recommendedTarget === platform.target;
           return (

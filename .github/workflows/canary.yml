@@ -33,11 +33,6 @@ jobs:
             artifact_glob: target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
             asset_name: DopeDB-canary-macos-arm64.dmg
             slug: macos-arm64
-          - platform: macos-15
-            target: x86_64-apple-darwin
-            artifact_glob: target/x86_64-apple-darwin/release/bundle/dmg/*.dmg
-            asset_name: DopeDB-canary-macos-x64.dmg
-            slug: macos-x64
           - platform: windows-latest
             target: x86_64-pc-windows-msvc
             artifact_glob: target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe
