@@ -157,8 +157,8 @@ jobs:
               exit 1
             fi
           done
-          if [[ "$(find release-assets -type f | wc -l | tr -d ' ')" != "3" ]]; then
-            echo "The canary build must contain exactly three installer files." >&2
+          if [[ "$(find release-assets -type f | wc -l | tr -d ' ')" != "${#assets[@]}" ]]; then
+            echo "The canary build must contain exactly ${#assets[@]} installer files." >&2
             exit 1
           fi
 
