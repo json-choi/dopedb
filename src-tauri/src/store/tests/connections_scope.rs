@@ -508,6 +508,26 @@ async fn assert_current_store_baseline_and_invariants() {
             .unwrap(),
         replacement_runner_device
     );
+    // Personal Article reruns use the account-free scope key, stay stable, and
+    // never share a device id with a team account in the same workspace.
+    let personal_runner_device = store
+        .analysis_run_device_id("personal", runner_workspace)
+        .await
+        .unwrap();
+    assert_eq!(
+        store
+            .analysis_run_device_id("personal", runner_workspace)
+            .await
+            .unwrap(),
+        personal_runner_device
+    );
+    assert_ne!(personal_runner_device, replacement_runner_device);
+    assert!(matches!(
+        store
+            .analysis_run_device_id("not-an-account", runner_workspace)
+            .await,
+        Err(AppError::Config(_))
+    ));
     sqlx::query("PRAGMA query_only = ON")
         .execute(&pool)
         .await

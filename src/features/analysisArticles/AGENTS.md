@@ -20,7 +20,7 @@ reruns stay on the exact-grant Desktop.
 |------|-------------|
 | `AnalysisArticleEditor.tsx` | Modal editor for one Article's title/HTML/target environment fields. Save failures and revision conflicts stay inside the dialog; a conflict keeps the draft and re-bases it on the latest revision, and unsaved edits need an explicit discard. |
 | `analysisRunStore.ts` | App-lifetime owner of manual runs (`useSyncExternalStore`): in-flight run, idempotent cancel, latest in-memory result with its exact query signature, and the terminal notice (own cancellation is neutral). Survives screen unmounts. |
-| `analysisFeedback.ts` | Maps command failures to catalog copy by closed error kind; only a database diagnostic is kept as optional detail. |
+| `analysisFeedback.ts` | Maps command failures to catalog copy by closed error kind; only a database diagnostic or the local backend's config reason is kept as optional detail; control-plane text never is. |
 | `AnalysisArticleReader.tsx` | Read surface composing the shared `AnalysisArticleBody` (from `design-system`) with a derived outline and the exact query tool; commands/results stay owned by the article controller per its header comment. |
 | `AnalysisPublicationPanel.tsx` | Lists/publishes/revokes public snapshot publications (`listAnalysisPublications`, `publishAnalysisSnapshot`, `revokeAnalysisPublication`) and opens the published URL. |
 | `AnalysisShareButton.tsx` | Per-Article member sharing: create/revoke an `ArticleInvitation` scoped to `{ accountId, workspaceId, articleId }`. |

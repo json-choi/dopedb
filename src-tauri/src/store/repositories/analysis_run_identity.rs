@@ -5,10 +5,18 @@ use super::super::*;
 
 impl Store {
     fn analysis_run_device_key(account_user_id: &str, workspace_id: Uuid) -> AppResult<String> {
-        let account_user_id = Uuid::parse_str(account_user_id)
-            .map_err(|_| AppError::Config("workspace account id is invalid".into()))?;
+        // Personal Articles run account-free under their own namespace; team
+        // runners stay bound to the exact workspace account UUID.
+        let personal = crate::kernel::access::AccountScope::Personal;
+        let account = if account_user_id == personal.storage_key() {
+            personal.storage_key().to_owned()
+        } else {
+            Uuid::parse_str(account_user_id)
+                .map_err(|_| AppError::Config("workspace account id is invalid".into()))?
+                .to_string()
+        };
         Ok(format!(
-            "analysis_runner_capability_device_id_v1:{account_user_id}:{workspace_id}"
+            "analysis_runner_capability_device_id_v1:{account}:{workspace_id}"
         ))
     }
 
