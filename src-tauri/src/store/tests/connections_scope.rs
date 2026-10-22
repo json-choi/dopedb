@@ -2,7 +2,6 @@
 
 use super::fixtures::*;
 use crate::features::knowledge::test_support::{
-    KnowledgeGrantPort, KnowledgeGraphRepositoryPort, KnowledgeMappingRepositoryPort,
     KnowledgeRepositoryPort, KnowledgeScopeRepositoryPort, SqliteKnowledgeRepository,
 };
 use crate::kernel::access::WorkspaceKind;
@@ -11,53 +10,21 @@ fn assert_knowledge_source_revision_ipc_uses_camel_case_fields() {
     use crate::features::knowledge::transport::serialize_knowledge_source_revision_for_test;
     use dopedb_protocol::SourceRevisionIdentity;
 
-    let cases = [
-        (
-            SourceRevisionIdentity::Github {
-                repository_id: "42".into(),
-                repository: "owner/repository".into(),
-                ref_name: "main".into(),
-                commit_sha: "0123456789abcdef0123456789abcdef01234567".into(),
-            },
-            serde_json::json!({
-                "kind": "github",
-                "repositoryId": "42",
-                "repository": "owner/repository",
-                "refName": "main",
-                "commitSha": "0123456789abcdef0123456789abcdef01234567",
-            }),
-        ),
-        (
-            SourceRevisionIdentity::LocalGit {
-                root_fingerprint: "root".into(),
-                git_root_fingerprint: "git-root".into(),
-                ref_name: "feature".into(),
-                commit_sha: "89abcdef0123456789abcdef0123456789abcdef".into(),
-                dirty: true,
-                worktree: false,
-            },
-            serde_json::json!({
-                "kind": "local_git",
-                "rootFingerprint": "root",
-                "gitRootFingerprint": "git-root",
-                "refName": "feature",
-                "commitSha": "89abcdef0123456789abcdef0123456789abcdef",
-                "dirty": true,
-                "worktree": false,
-            }),
-        ),
-        (
-            SourceRevisionIdentity::LocalSnapshot {
-                root_fingerprint: "root".into(),
-                snapshot_sha256: "snapshot".into(),
-            },
-            serde_json::json!({
-                "kind": "local_snapshot",
-                "rootFingerprint": "root",
-                "snapshotSha256": "snapshot",
-            }),
-        ),
-    ];
+    let cases = [(
+        SourceRevisionIdentity::Github {
+            repository_id: "42".into(),
+            repository: "owner/repository".into(),
+            ref_name: "main".into(),
+            commit_sha: "0123456789abcdef0123456789abcdef01234567".into(),
+        },
+        serde_json::json!({
+            "kind": "github",
+            "repositoryId": "42",
+            "repository": "owner/repository",
+            "refName": "main",
+            "commitSha": "0123456789abcdef0123456789abcdef01234567",
+        }),
+    )];
 
     for (revision, expected) in cases {
         assert_eq!(
@@ -215,16 +182,9 @@ async fn assert_current_store_baseline_and_invariants() {
         .await
         .unwrap();
 
-    use crate::features::knowledge::domain::{
-        KnowledgeGrant, KnowledgeMappingProposal, MappingProposalState, Project, ProjectEnvironment,
-    };
+    use crate::features::knowledge::domain::{Project, ProjectEnvironment};
     use crate::kernel::environment::EnvironmentKind;
-    use crate::kernel::identity::{AccountId, WorkspaceId};
-    use dopedb_protocol::{
-        GraphBuildArtifactV1, KnowledgeSourceProvider, KnowledgeSourceVisibility,
-        SourceRevisionIdentity,
-    };
-
+    use crate::kernel::identity::WorkspaceId;
     let personal_workspace_id = Uuid::parse_str(schema::PERSONAL_WORKSPACE_ID).unwrap();
     let local_project = knowledge
         .create_knowledge_project(
@@ -276,167 +236,109 @@ async fn assert_current_store_baseline_and_invariants() {
         .await
         .is_err());
 
-    let artifact: GraphBuildArtifactV1 = serde_json::from_str(include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../dopedb-protocol/tests/fixtures/graph-build-artifact-v1.json"
-    )))
-    .unwrap();
     let project = Project {
-        id: artifact.binding.project_id,
+        id: Uuid::from_u128(0x124),
         workspace_id: WorkspaceId::from(personal_workspace_id),
-        name: "DopeDB".into(),
+        name: "Source Project".into(),
         revision: 1,
     };
     let environment = ProjectEnvironment {
-        id: artifact.binding.project_environment_id,
+        id: Uuid::from_u128(0x125),
         project_id: project.id,
         kind: EnvironmentKind::Development,
-        revision: artifact.environment_revision,
+        revision: 1,
     };
     knowledge
-        .save_scope(
-            &project,
-            &environment,
-            &artifact.binding,
-            artifact.environment_revision,
-        )
-        .await
-        .unwrap();
-    knowledge.stage(&artifact).await.unwrap();
-    knowledge.activate(&artifact).await.unwrap();
-    assert_eq!(
-        knowledge
-            .active_for_source(artifact.binding.source_id)
-            .await
-            .unwrap()
-            .unwrap()
-            .graph_revision_id,
-        artifact.graph_revision_id
-    );
-    let mut second = artifact.clone();
-    second.binding.source_id = Uuid::from_u128(0x126);
-    second.binding.display_name = "Web".into();
-    second.binding.provider = KnowledgeSourceProvider::LocalFolder;
-    second.binding.visibility = KnowledgeSourceVisibility::LocalOnly;
-    second.binding.revision = SourceRevisionIdentity::LocalSnapshot {
-        root_fingerprint: "b".repeat(64),
-        snapshot_sha256: "c".repeat(64),
-    };
-    second.graph_revision_id = Uuid::from_u128(0x1260);
-    second.parent_graph_revision_id = None;
-    for evidence in &mut second.evidence {
-        evidence.source_id = second.binding.source_id;
-    }
-    knowledge
-        .save_scope(
-            &project,
-            &environment,
-            &second.binding,
-            second.environment_revision,
-        )
-        .await
-        .unwrap();
-    knowledge.stage(&second).await.unwrap();
-    knowledge.activate(&second).await.unwrap();
-    let active_set = [
-        knowledge
-            .active_for_source(artifact.binding.source_id)
-            .await
-            .unwrap()
-            .unwrap(),
-        knowledge
-            .active_for_source(second.binding.source_id)
-            .await
-            .unwrap()
-            .unwrap(),
-    ];
-    assert_eq!(active_set.len(), 2);
-    assert!(active_set
-        .iter()
-        .any(|candidate| candidate.graph_revision_id == artifact.graph_revision_id));
-    assert!(active_set
-        .iter()
-        .any(|candidate| candidate.graph_revision_id == second.graph_revision_id));
-
-    let account_id = AccountId::new("knowledge-member").unwrap();
-    store
-        .remember_workspace_account(&crate::features::workspaces::WorkspaceAuthUser {
-            id: account_id.clone(),
-            email: "knowledge@example.com".into(),
-            display_name: "Knowledge owner".into(),
+        .save_knowledge_project(&crate::features::knowledge::domain::ProjectDefinition {
+            project: project.clone(),
+            environments: vec![environment.clone()],
         })
         .await
         .unwrap();
-    let grant = KnowledgeGrant {
-        id: Uuid::from_u128(0x1262),
-        workspace_id: project.workspace_id,
-        account_id,
+    let source_id = Uuid::from_u128(0x126);
+    let source_binding = dopedb_protocol::KnowledgeSourceBindingV1 {
+        source_id,
         project_id: project.id,
         project_environment_id: environment.id,
-        environment_revision: environment.revision,
-        graph_revision_ids: active_set
-            .iter()
-            .filter(|candidate| candidate.binding.provider == KnowledgeSourceProvider::Github)
-            .map(|candidate| candidate.graph_revision_id)
-            .collect(),
-        expires_at: Utc::now() + chrono::Duration::hours(1),
+        provider: dopedb_protocol::KnowledgeSourceProvider::Github,
+        display_name: "fixture/source".into(),
+        revision: dopedb_protocol::SourceRevisionIdentity::Github {
+            repository_id: "42".into(),
+            repository: "fixture/source".into(),
+            ref_name: "main".into(),
+            commit_sha: "a".repeat(40),
+        },
     };
-    knowledge.save_grant(&grant).await.unwrap();
     knowledge
-        .retain_granted_environment_heads(environment.id, &grant.graph_revision_ids)
+        .save_scope(&project, &environment, &source_binding, 1)
         .await
         .unwrap();
-    assert!(knowledge
-        .active_for_source(artifact.binding.source_id)
-        .await
-        .unwrap()
-        .is_some());
-    assert!(knowledge
-        .active_for_source(second.binding.source_id)
-        .await
-        .unwrap()
-        .is_some());
-
-    let mapping = KnowledgeMappingProposal {
-        id: Uuid::from_u128(0x1261),
-        project_environment_id: environment.id,
-        graph_revision_id: artifact.graph_revision_id,
-        schema_fingerprint: "a".repeat(64),
-        from_node_id: artifact.nodes[0].id.clone(),
-        target_kind: "table".into(),
-        target_identity: serde_json::json!({
-            "connectionId": Uuid::from_u128(0x1291),
-            "connectionRevision": 1,
-            "database": "app",
-            "qualifiedTarget": "public.users"
-        })
-        .to_string(),
-        state: MappingProposalState::Proposed,
-        proposed_at: Utc::now(),
-    };
-    knowledge.propose_mapping(&mapping).await.unwrap();
-    let stored_mapping_state: String =
-        sqlx::query_scalar("SELECT state FROM knowledge_mapping_proposals WHERE id = ?1")
-            .bind(mapping.id.to_string())
-            .fetch_one(&pool)
+    // Simulate the supported baseline before retirement, including an immutable parent chain.
+    sqlx::raw_sql("ALTER TABLE knowledge_sources ADD COLUMN visibility TEXT NOT NULL DEFAULT 'shared_graph';
+        ALTER TABLE knowledge_sources ADD COLUMN source_revision_sha256 TEXT;
+        ALTER TABLE knowledge_sources ADD COLUMN snapshot_json TEXT;
+        CREATE TABLE knowledge_graph_revisions (graph_revision_id TEXT PRIMARY KEY,
+            parent_graph_revision_id TEXT REFERENCES knowledge_graph_revisions(graph_revision_id));
+        INSERT INTO knowledge_graph_revisions VALUES ('parent', NULL), ('child', 'parent');
+        CREATE TRIGGER knowledge_graph_revisions_reject_update BEFORE UPDATE ON knowledge_graph_revisions
+        BEGIN SELECT RAISE(ABORT, 'immutable'); END;
+        UPDATE knowledge_sources SET binding_json = json_set(binding_json, '$.visibility', 'shared_graph');")
+        .execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO agent_acp_sessions (id, connection_id, workspace_id, account_scope,
+        provider, title, lifecycle, knowledge_scopes, created_at, updated_at)
+        VALUES ('retired-metadata-fixture', 'fixture', ?1, 'personal', 'codex', 'Preserved transcript', 'closed',
+        '[{\"knowledgeGrantId\":null,\"graphRevisionIds\":[],\"projectId\":\"fixture\"}]', ?2, ?2)")
+        .bind(personal_workspace_id.to_string()).bind(Utc::now()).execute(&pool).await.unwrap();
+    assert_eq!(
+        super::super::bootstrap::bootstrap_local_store(&pool)
             .await
-            .unwrap();
-    assert_eq!(stored_mapping_state, "proposed");
-
+            .unwrap(),
+        super::super::bootstrap::LocalStoreBootstrap::Ready { created: false }
+    );
+    assert_eq!(
+        knowledge.scopes(personal_workspace_id).await.unwrap()[0].binding,
+        source_binding
+    );
+    let preserved_metadata: String = sqlx::query_scalar(
+        "SELECT knowledge_scopes FROM agent_acp_sessions WHERE id = 'retired-metadata-fixture'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&preserved_metadata).unwrap(),
+        serde_json::json!([{ "projectId": "fixture" }])
+    );
+    sqlx::query("DELETE FROM agent_acp_sessions WHERE id = 'retired-metadata-fixture'")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let retired: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM sqlite_master WHERE type = 'table'
+        AND name IN ('knowledge_graph_revisions', 'knowledge_environment_heads', 'knowledge_grants',
+            'knowledge_grant_graph_revisions', 'knowledge_mapping_proposals')",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(retired, 0);
+    assert!(sqlx::query("PRAGMA foreign_key_check")
+        .fetch_all(&pool)
+        .await
+        .unwrap()
+        .is_empty());
+    super::super::bootstrap::bootstrap_local_store(&pool)
+        .await
+        .unwrap();
     let current_connection_id = Uuid::from_u128(0x1291);
     let secondary_connection_id = Uuid::from_u128(0x1292);
     let mut resource_scope = crate::features::knowledge::domain::KnowledgeSessionScope {
         project_id: project.id,
-        knowledge_grant_id: Some(Uuid::from_u128(0x1290)),
         project_environment_id: environment.id,
         environment_revision: environment.revision,
         authority_connection_id: current_connection_id,
         authority_connection_revision: 1,
         sources: Vec::new(),
-        graph_revision_ids: active_set
-            .iter()
-            .map(|candidate| candidate.graph_revision_id)
-            .collect(),
         connections: vec![
             crate::features::knowledge::domain::KnowledgeSessionConnection {
                 connection_id: current_connection_id,
@@ -471,8 +373,6 @@ async fn assert_current_store_baseline_and_invariants() {
         resource_scope.authority_connection_id,
         current_connection_id
     );
-    assert!(resource_scope.graph_revision_ids.is_empty());
-    assert_eq!(resource_scope.knowledge_grant_id, None);
     assert!(matches!(
         crate::features::agents::acp::narrow_resource_scope(
             &mut resource_scope,
@@ -481,31 +381,6 @@ async fn assert_current_store_baseline_and_invariants() {
         ),
         Err(AppError::Blocked { .. })
     ));
-    let mut failed = artifact.clone();
-    failed.graph_revision_id = Uuid::from_u128(127);
-    failed.parent_graph_revision_id = Some(artifact.graph_revision_id);
-    failed.health.complete = false;
-    assert!(matches!(
-        knowledge.stage(&failed).await,
-        Err(AppError::Blocked { .. })
-    ));
-    let mut stale = artifact.clone();
-    stale.graph_revision_id = Uuid::from_u128(128);
-    stale.parent_graph_revision_id = None;
-    knowledge.stage(&stale).await.unwrap();
-    assert!(matches!(
-        knowledge.activate(&stale).await,
-        Err(AppError::Blocked { .. })
-    ));
-    assert_eq!(
-        knowledge
-            .active_for_source(artifact.binding.source_id)
-            .await
-            .unwrap()
-            .unwrap()
-            .graph_revision_id,
-        artifact.graph_revision_id
-    );
     let retained_connection_id = Uuid::from_u128(0x1266);
     let mut retained_profile = sqlite_profile(retained_connection_id, "project-retained");
     retained_profile.secret_ref = Some("fixture-credential-reference".into());
@@ -547,11 +422,6 @@ async fn assert_current_store_baseline_and_invariants() {
             .await,
         Err(AppError::Blocked { .. })
     ));
-    assert!(knowledge
-        .active_for_source(artifact.binding.source_id)
-        .await
-        .unwrap()
-        .is_some());
     assert_eq!(
         knowledge
             .environment_connections(personal_workspace_id, Some(environment.id))
@@ -564,16 +434,6 @@ async fn assert_current_store_baseline_and_invariants() {
         .delete_knowledge_project(personal_workspace_id, project.id, project.revision)
         .await
         .unwrap();
-    assert!(knowledge
-        .active_for_source(artifact.binding.source_id)
-        .await
-        .unwrap()
-        .is_none());
-    assert!(knowledge
-        .active_for_source(second.binding.source_id)
-        .await
-        .unwrap()
-        .is_none());
     assert!(knowledge
         .knowledge_projects(personal_workspace_id)
         .await
@@ -934,13 +794,11 @@ async fn assert_agent_acp_batch_replay_is_bounded(store: &Store, connection_id: 
         acp_session_id: Some("official-adapter-session".into()),
         knowledge_scopes: vec![KnowledgeSessionScope {
             project_id: Uuid::from_u128(0xac01),
-            knowledge_grant_id: None,
             project_environment_id: Uuid::from_u128(0xac02),
             environment_revision: 1,
             authority_connection_id: connection_id,
             authority_connection_revision: 1,
             sources: Vec::new(),
-            graph_revision_ids: Vec::new(),
             connections: vec![KnowledgeSessionConnection {
                 connection_id,
                 connection_revision: 1,
@@ -1955,8 +1813,7 @@ async fn remote_template_sync_preserves_member_local_credential_binding() {
     assert!(loaded_d1.extra_params.is_empty());
     assert!(loaded_d1.uses_cli_authentication());
 
-    // An Environment with a GitHub source but no graph remains an exact Agent
-    // scope. Raw source identity is pinned independently from graph grants.
+    // An Environment pins GitHub source identity independently from selected databases.
     let project_id = Uuid::new_v4();
     let environment_id = Uuid::new_v4();
     sqlx::query(
@@ -1987,11 +1844,10 @@ async fn remote_template_sync_preserves_member_local_credential_binding() {
         project_id,
         project_environment_id: environment_id,
         provider: dopedb_protocol::KnowledgeSourceProvider::Github,
-        display_name: "json-choi/raw".into(),
-        visibility: dopedb_protocol::KnowledgeSourceVisibility::SharedGraph,
+        display_name: "fixture/source".into(),
         revision: dopedb_protocol::SourceRevisionIdentity::Github {
             repository_id: "1004".into(),
-            repository: "json-choi/raw".into(),
+            repository: "fixture/source".into(),
             ref_name: "main".into(),
             commit_sha: "7".repeat(40),
         },
@@ -1999,8 +1855,8 @@ async fn remote_template_sync_preserves_member_local_credential_binding() {
     sqlx::query(
         "INSERT INTO knowledge_sources
              (id, project_id, project_environment_id, environment_revision,
-              provider, display_name, visibility, binding_json, created_at, updated_at)
-         VALUES (?1, ?2, ?3, 1, 'github', 'json-choi/raw', 'shared_graph', ?4, ?5, ?5)",
+              provider, display_name, binding_json, created_at, updated_at)
+         VALUES (?1, ?2, ?3, 1, 'github', 'fixture/source', ?4, ?5, ?5)",
     )
     .bind(source_id.to_string())
     .bind(project_id.to_string())
@@ -2067,7 +1923,6 @@ async fn remote_template_sync_preserves_member_local_credential_binding() {
         .await
         .unwrap();
     assert_eq!(environments.len(), 1);
-    assert_eq!(environments[0].graph_revision_count, 0);
     // Only the anchor and the selected databases are checked: a stale binding the
     // session does not select never blocks it, and a selected one still does.
     let stale_binding_id = Uuid::new_v4();
@@ -2096,17 +1951,45 @@ async fn remote_template_sync_preserves_member_local_credential_binding() {
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(environment_scope.knowledge_grant_id, None);
-    assert!(environment_scope.graph_revision_ids.is_empty());
     assert_eq!(environment_scope.connections.len(), 1);
     assert_eq!(environment_scope.sources.len(), 1);
     assert_eq!(environment_scope.sources[0].source_id, source_id);
     assert_eq!(environment_scope.sources[0].commit_sha, "7".repeat(40));
     assert!(knowledge
-        .exact_knowledge_session_graphs(&environment_scope, workspace_id, user.id.as_str())
+        .validate_knowledge_session_scope(&environment_scope, workspace_id, user.id.as_str())
         .await
-        .unwrap()
-        .is_empty());
+        .is_ok());
+    // File access keeps its exact-commit and revocation boundary after graph removal.
+    sqlx::query("UPDATE knowledge_sources SET binding_json = json_set(binding_json, '$.revision.commit_sha', ?2) WHERE id = ?1")
+        .bind(source_id.to_string()).bind("8".repeat(40)).execute(store.pool()).await.unwrap();
+    assert!(matches!(
+        knowledge
+            .validate_knowledge_session_scope(&environment_scope, workspace_id, user.id.as_str())
+            .await,
+        Err(AppError::Blocked { .. })
+    ));
+    sqlx::query("UPDATE knowledge_sources SET binding_json = ?2, revoked_at = ?3 WHERE id = ?1")
+        .bind(source_id.to_string())
+        .bind(serde_json::to_string(&binding).unwrap())
+        .bind(Utc::now())
+        .execute(store.pool())
+        .await
+        .unwrap();
+    assert!(matches!(
+        knowledge
+            .validate_knowledge_session_scope(&environment_scope, workspace_id, user.id.as_str())
+            .await,
+        Err(AppError::Blocked { .. })
+    ));
+    sqlx::query("UPDATE knowledge_sources SET revoked_at = NULL WHERE id = ?1")
+        .bind(source_id.to_string())
+        .execute(store.pool())
+        .await
+        .unwrap();
+    assert!(knowledge
+        .validate_knowledge_session_scope(&environment_scope, workspace_id, user.id.as_str())
+        .await
+        .is_ok());
     assert!(matches!(
         knowledge
             .knowledge_session_scope(&pinned, Some(environment_id), &[id, bigquery_id])

@@ -67,11 +67,3 @@ export function matches(value: SQLWrapper, pattern: string): SQL {
     default: throw new Error("Unreviewed Workspace schema pattern");
   }
 }
-
-export function safeRelativePath(value: SQLWrapper): SQL {
-  return sql`(substr(${value}, 1, 1) <> '/' AND instr(${value}, char(92)) = 0
-    AND instr(${value}, '//') = 0 AND ${value} NOT IN ('.', '..')
-    AND ${value} NOT LIKE './%' AND ${value} NOT LIKE '../%'
-    AND ${value} NOT LIKE '%/./%' AND ${value} NOT LIKE '%/../%'
-    AND ${value} NOT LIKE '%/.' AND ${value} NOT LIKE '%/..')`;
-}

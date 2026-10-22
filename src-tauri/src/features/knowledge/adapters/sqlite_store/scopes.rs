@@ -1,19 +1,16 @@
-//! Knowledge source scopes and source snapshots.
+//! GitHub source identity persistence scoped to exact Project environments.
 
 use chrono::Utc;
 use dopedb_protocol::KnowledgeSourceBindingV1;
 use uuid::Uuid;
 
 use crate::error::{AppError, AppResult};
-use crate::features::knowledge::domain::{
-    Project, ProjectEnvironment, SourceSnapshot, StoredKnowledgeScope,
-};
+use crate::features::knowledge::domain::{Project, ProjectEnvironment, StoredKnowledgeScope};
 use crate::kernel::identity::WorkspaceId;
 use crate::store::{parse_uuid, Store};
 
 use super::codec::{
-    checked_name, parse_environment_kind, provider_value, u64_to_i64, visibility_value,
-    KnowledgeScopeRow,
+    checked_name, parse_environment_kind, provider_value, u64_to_i64, KnowledgeScopeRow,
 };
 
 impl Store {
@@ -110,12 +107,11 @@ impl Store {
         sqlx::query(
             "INSERT INTO knowledge_sources
                  (id, project_id, project_environment_id, environment_revision,
-                  provider, display_name, visibility, binding_json, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9)
+                  provider, display_name, binding_json, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)
              ON CONFLICT(id) DO UPDATE SET
                  environment_revision = excluded.environment_revision,
                  display_name = excluded.display_name,
-                 visibility = excluded.visibility,
                  binding_json = excluded.binding_json,
                  updated_at = excluded.updated_at
              WHERE knowledge_sources.project_id = excluded.project_id
@@ -129,7 +125,6 @@ impl Store {
         .bind(environment_revision)
         .bind(provider_value(binding.provider))
         .bind(&binding.display_name)
-        .bind(visibility_value(binding.visibility))
         .bind(binding_json)
         .bind(now)
         .execute(&mut *tx)
@@ -248,79 +243,5 @@ impl Store {
             return Err(AppError::NotFound("the Project Knowledge source".into()));
         }
         Ok(())
-    }
-
-    pub(in crate::features::knowledge::adapters) async fn save_snapshot(
-        &self,
-        snapshot: &SourceSnapshot,
-    ) -> AppResult<()> {
-        if !snapshot.binding.validate()
-            || snapshot.environment_revision == 0
-            || snapshot.source_revision_sha256.len() != 64
-            || snapshot.files.len() > 100_000
-        {
-            return Err(AppError::Blocked {
-                reason: "the Knowledge source manifest is invalid".into(),
-            });
-        }
-        let json = serde_json::to_string(snapshot)?;
-        if json.len() > 64 * 1024 * 1024 {
-            return Err(AppError::Config(
-                "the Knowledge source manifest exceeds the local storage limit".into(),
-            ));
-        }
-        let updated = sqlx::query(
-            "UPDATE knowledge_sources
-             SET source_revision_sha256 = ?1, snapshot_json = ?2, updated_at = ?3
-             WHERE id = ?4
-               AND project_environment_id = ?5
-               AND environment_revision = ?6",
-        )
-        .bind(&snapshot.source_revision_sha256)
-        .bind(json)
-        .bind(Utc::now())
-        .bind(snapshot.binding.source_id.to_string())
-        .bind(snapshot.binding.project_environment_id.to_string())
-        .bind(u64_to_i64(
-            snapshot.environment_revision,
-            "environment revision",
-        )?)
-        .execute(self.pool())
-        .await?;
-        if updated.rows_affected() != 1 {
-            return Err(AppError::Blocked {
-                reason: "the Knowledge source scope changed before its manifest was saved".into(),
-            });
-        }
-        Ok(())
-    }
-
-    pub(in crate::features::knowledge::adapters) async fn source_snapshot(
-        &self,
-        source_id: Uuid,
-    ) -> AppResult<Option<SourceSnapshot>> {
-        let value: Option<String> =
-            sqlx::query_scalar("SELECT snapshot_json FROM knowledge_sources WHERE id = ?1")
-                .bind(source_id.to_string())
-                .fetch_optional(self.pool())
-                .await?
-                .flatten();
-        let Some(value) = value else { return Ok(None) };
-        if value.len() > 64 * 1024 * 1024 {
-            return Err(AppError::Config(
-                "the stored Knowledge source manifest exceeds the limit".into(),
-            ));
-        }
-        let snapshot: SourceSnapshot = serde_json::from_str(&value)?;
-        if !snapshot.binding.validate()
-            || snapshot.binding.source_id != source_id
-            || snapshot.source_revision_sha256.len() != 64
-            || snapshot.files.len() > 100_000
-        {
-            return Err(AppError::Config(
-                "the stored Knowledge source manifest failed integrity validation".into(),
-            ));
-        }
-        Ok(Some(snapshot))
     }
 }

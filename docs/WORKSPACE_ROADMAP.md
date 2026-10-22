@@ -132,7 +132,7 @@ flowchart LR
 | --- | --- | --- |
 | Connection | engine, endpoint fields, environment, safety ceiling, revision, grant, redacted provider selector | username, password, token, certificate, connection URL, local secret reference, live pool |
 | Provider integration | encrypted provider authorization or keyless trust metadata, verified scope, lifecycle and audit | one-time issued DB credential and local transport diagnostics |
-| Project | resource identity, Environment bindings, exact revisions and grants | Local Folder absolute path and member-specific credential binding |
+| Project | resource identity, Environment bindings, exact revisions and grants | member-specific credentials |
 | Agent session | no transcript, capability, SQL, result, or process token | exact runtime grant, process binding, transcript, proposals and execution results |
 | Analysis Article | sanitized HTML, one read-only query definition, exact connection content revision, immutable revisions, manual run receipt metadata | query result rows and bounded encrypted recovery artifact |
 | Public article | immutable sanitized HTML snapshot, slug state, publisher receipt | saved query, private result, database grant, rerun command |
@@ -286,13 +286,10 @@ removing its validation label.
 
 ## Deferred decisions
 
-- Knowledge graph construction is not shipped. A new implementation starts only after
-  a benchmark proves material quality or latency gains relative to GitHub exact-commit
-  reads and operating cost, and a paid or experimental entitlement is explicitly approved.
+- Knowledge graph construction, graph traversal, mapping and Local Folder indexing are excluded by PD-36 in `PRODUCT_UI_SCOPE.md`. GitHub exact-commit file browsing remains supported.
 - Additional providers and engines require verified demand and a complete connection,
   revoke, drift, and platform test plan.
 - Enterprise SSO/SCIM, configurable retention, and data residency beyond the current
   deployment remain separate decisions. Team self-hosting is accepted above;
   its packaging and implementation design remain pending.
-- Cross-device Personal Workspace database, credential, and Local Folder sync is not
-  implied by account sign-in.
+- Cross-device Personal Workspace database and credential sync is not implied by account sign-in.

@@ -372,23 +372,6 @@ async fn delete_project_cache(
     project_id: Uuid,
     expected_revision: Option<i64>,
 ) -> AppResult<()> {
-    // Active-head immutability deliberately blocks graph deletion. Clear the
-    // head pointers first, then let Project cascades remove graphs, grants,
-    // mappings, sources, Environments, and connection bindings. Connections
-    // themselves are owned by the workspace and remain intact.
-    sqlx::query(
-        "DELETE FROM knowledge_environment_heads
-         WHERE project_environment_id IN (
-           SELECT environment.id
-           FROM knowledge_project_environments environment
-           JOIN knowledge_projects project ON project.id = environment.project_id
-           WHERE project.id = ?1 AND project.workspace_id = ?2
-         )",
-    )
-    .bind(project_id.to_string())
-    .bind(workspace_id.to_string())
-    .execute(&mut **tx)
-    .await?;
     let deleted = if let Some(revision) = expected_revision {
         sqlx::query(
             "DELETE FROM knowledge_projects

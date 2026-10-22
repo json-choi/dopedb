@@ -32,15 +32,7 @@
   "operation.show",
   "operation.wait",
   "operation.cancel",
-  "knowledge.search",
   "source.search",
   "source.read",
-  "knowledge.explain",
-  "knowledge.neighbors",
-  "knowledge.path",
-  "knowledge.evidence",
-  "knowledge.diff",
-  "funnel.trace",
-  "environment.context",
-  "knowledge.mapping.propose"
+  "environment.context"
 ]

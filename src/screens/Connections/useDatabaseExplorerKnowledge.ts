@@ -1,7 +1,7 @@
 // Owns Knowledge Project inventory, resource expansion, and analysis query lifecycles
 // consumed by Database Explorer. Connection catalog state remains in the explorer.
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 
 import { analysisQueryKeys } from "../../features/analysisArticles/queryKeys";
 import { listAnalysisArticles } from "../../features/analysisArticles/tauriAdapter";
@@ -18,7 +18,6 @@ import { knowledgeInventoryQuery } from "../../features/knowledge/inventory";
 import { knowledgeQueryKeys } from "../../features/knowledge/queryKeys";
 import {
   listKnowledgeEnvironmentConnections,
-  onKnowledgeSourceChanged,
 } from "../../features/knowledge/tauriAdapter";
 import {
   sharedWorkspaceScopeAvailable,
@@ -36,7 +35,6 @@ export function useDatabaseExplorerKnowledge({
   activeEnvironmentId: string | null;
   activeEnvironmentView: KnowledgeEnvironmentView | null;
 }) {
-  const queryClient = useQueryClient();
   useWorkspaceResourceQueryRecovery(catalogScope.key, catalogScope.ready);
   const enabled =
     catalogScope.ready &&
@@ -158,27 +156,7 @@ export function useDatabaseExplorerKnowledge({
     knownScopeRef.current = { key: catalogScope.key, projectIds };
   }, [catalogScope.key, projects.data]);
 
-  useEffect(() => {
-    if (!enabled) return;
-    let disposed = false;
-    let unlisten: (() => void) | undefined;
-    void onKnowledgeSourceChanged(() => {
-      if (disposed) return;
-      void queryClient.invalidateQueries({
-        queryKey: knowledgeQueryKeys.inventory(),
-      });
-      void queryClient.invalidateQueries({
-        queryKey: knowledgeQueryKeys.agentEnvironments(),
-      });
-    }).then((stop) => {
-      if (disposed) stop();
-      else unlisten = stop;
-    });
-    return () => {
-      disposed = true;
-      unlisten?.();
-    };
-  }, [enabled, queryClient]);
+
 
   useEffect(() => {
     setAnalysisFilter("");

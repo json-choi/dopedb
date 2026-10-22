@@ -6,8 +6,8 @@
 ## Purpose
 
 The Knowledge Project/Environment layer: creating Projects and Environments,
-connecting/binding source repositories (GitHub or local) and databases into an
-Environment, and tracking indexing/inventory state. This is the resource
+connecting GitHub source repositories and binding databases into an
+Environment, and tracking exact-commit source inventory. This is the resource
 grouping that Agent sessions and Analysis Articles select from — it does not
 itself run Agents or execute queries.
 
@@ -18,11 +18,10 @@ itself run Agents or execute queries.
 | `bindEnvironmentConnection.ts` | `isKnowledgeEnvironmentRevisionConflict` (detects a 409 "Environment or connection changed" conflict) and `bindKnowledgeEnvironmentConnectionWithRefresh`, which refreshes the native workspace projection and retries a bind after a shared Connection revision advances between an Explorer read and the bind action. |
 | `domain.ts` | `KnowledgeEnvironment` (`kind`: production/staging/test/development; the kind is the environment), `KnowledgeEnvironmentView`, `KnowledgeProject`, `GithubKnowledgeRepository`, `KnowledgeRevision`, `KnowledgeSource`, `KnowledgeInventory`, `EnvironmentConnection`, and create/bind input types. |
 | `inventory.ts` | `knowledgeInventoryQuery` — `queryOptions()` wrapper (60s stale time, no retry) around `listKnowledgeInventory`. |
-| `presentation.ts` | Pure label formatters: `knowledgeRevisionLabel` (github/local_git/snapshot revision display), `githubSourceRevisionLabel`, `knowledgeEnvironmentBadge`. |
+| `presentation.ts` | Pure label formatters: `knowledgeRevisionLabel` (exact GitHub commit display), `githubSourceRevisionLabel`, `knowledgeEnvironmentBadge`. |
 | `queryKeys.ts` | `knowledgeQueryKeys`; exports `KNOWLEDGE_WORKSPACE_QUERY_ROOTS`/`AGENT_KNOWLEDGE_CONNECTION_QUERY_ROOTS` prefixes explicitly for intentional cross-surface invalidation, per its header comment — Knowledge and its Agent-environment projection share one cache identity rooted in the authenticated workspace generation. |
-| `tauriAdapter.ts` | `listKnowledgeProjects`, `listKnowledgeInventory`, `listKnowledgeEnvironmentConnections`, `bindKnowledgeEnvironmentConnection`, `revokeKnowledgeEnvironmentConnection`, `createKnowledgeProject`/`Environment`, `deleteKnowledgeProject`, GitHub install/connect (`beginKnowledgeGithubInstall`, `listKnowledgeGithubRepositories`, `connectKnowledgeGithubSource`), `connectKnowledgeLocalFolder`, `listKnowledgeSources`, `revokeKnowledgeSource`, `onKnowledgeSourceChanged`. |
+| `tauriAdapter.ts` | `listKnowledgeProjects`, `listKnowledgeInventory`, `listKnowledgeEnvironmentConnections`, `bindKnowledgeEnvironmentConnection`, `revokeKnowledgeEnvironmentConnection`, `createKnowledgeProject`/`Environment`, `deleteKnowledgeProject`, GitHub install/connect (`beginKnowledgeGithubInstall`, `listKnowledgeGithubRepositories`, `connectKnowledgeGithubSource`), `connectKnowledgeLocalFolder`, `listKnowledgeSources`, `revokeKnowledgeSource`. |
 | `useKnowledgeGithubInstall.ts` | Owns the external GitHub App installation browser window and the return-to-app repository refresh, per its header comment. |
-| `useKnowledgeSourceActivity.ts` | Reconciles live Knowledge indexing events with inventory query snapshots. |
 | `workspaceModel.ts` | `knowledgeRepositoryLabel`, source health status keys, and the source-activity type. |
 
 ### `components/`
@@ -59,11 +58,9 @@ mutations are owned by the hooks above or passed in as props, not created here.
 
 ### Common Patterns
 
-- Revision-typed sources (`KnowledgeRevision`: `github` \| `local_git` \|
-  snapshot) each carry their own identity fields (`refName`+`commitSha`,
-  `snapshotSha256`); `presentation.ts`'s `knowledgeRevisionLabel` is the one
-  place that renders all three consistently — extend it rather than
-  formatting a revision inline elsewhere.
+- `knowledgeRevisionLabel` formats the exact GitHub ref and commit. Graph fields,
+  Local Folder setup, indexing activity subscriptions and graph commands are
+  excluded by PD-36 in `docs/PRODUCT_UI_SCOPE.md`.
 
 ## Dependencies
 

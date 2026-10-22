@@ -233,19 +233,9 @@ impl BrokerDispatcher {
             | CommandName::AnalysisArticleList => {
                 Box::pin(analysis_article_operation::handle(self, &request)).await
             }
-            CommandName::KnowledgeSearch
-            | CommandName::SourceSearch
+            CommandName::SourceSearch
             | CommandName::SourceRead
-            | CommandName::KnowledgeExplain
-            | CommandName::KnowledgeNeighbors
-            | CommandName::KnowledgePath
-            | CommandName::KnowledgeEvidence
-            | CommandName::KnowledgeDiff
-            | CommandName::FunnelTrace
-            | CommandName::EnvironmentContext
-            | CommandName::KnowledgeMappingPropose => {
-                Box::pin(knowledge::handle(self, &request)).await
-            }
+            | CommandName::EnvironmentContext => Box::pin(knowledge::handle(self, &request)).await,
             CommandName::Unknown => failure(request_id, ErrorCode::InvalidRequest, false),
         }
     }

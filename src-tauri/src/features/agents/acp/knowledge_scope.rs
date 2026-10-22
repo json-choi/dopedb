@@ -64,9 +64,8 @@ impl AcpKnowledgeScopePort for FeatureKnowledgeScopePort {
     ) -> KnowledgeScopeFuture<'a, ()> {
         Box::pin(async move {
             self.knowledge
-                .exact_knowledge_session_graphs(scope, workspace_id, account_id)
+                .validate_knowledge_session_scope(scope, workspace_id, account_id)
                 .await
-                .map(|_| ())
         })
     }
 }
@@ -105,14 +104,12 @@ pub(super) fn summary_scopes(summary: &AcpSessionSummary) -> AppResult<Vec<Knowl
 }
 
 fn validate_scope(scope: &KnowledgeSessionScope) -> AppResult<()> {
-    let graph_ids_empty = scope.graph_revision_ids.is_empty();
     if scope.environment_revision == 0
         || scope.authority_connection_id.is_nil()
         || scope.authority_connection_revision <= 0
         || (scope.connections.is_empty() && scope.sources.is_empty())
         || scope.connections.len() > 32
         || scope.sources.len() > 100
-        || scope.graph_revision_ids.len() > 100
         || !scope
             .sources
             .iter()
@@ -131,14 +128,6 @@ fn validate_scope(scope: &KnowledgeSessionScope) -> AppResult<()> {
             .collect::<BTreeSet<_>>()
             .len()
             != scope.connections.len()
-        || scope
-            .graph_revision_ids
-            .iter()
-            .collect::<BTreeSet<_>>()
-            .len()
-            != scope.graph_revision_ids.len()
-        || ((graph_ids_empty && scope.knowledge_grant_id.is_some())
-            || (!graph_ids_empty && scope.knowledge_grant_id.is_none()))
     {
         return Err(incomplete_scope());
     }
@@ -190,11 +179,6 @@ pub(crate) fn narrow_resource_scope(
     scope
         .sources
         .retain(|source| requested_sources.contains(&source.source_id));
-    // Raw GitHub source browsing is independently pinned by source ID + commit.
-    // Graph products remain dormant for an arbitrary source subset until a
-    // source-to-graph identity is part of the public grant contract.
-    scope.graph_revision_ids.clear();
-    scope.knowledge_grant_id = None;
     validate_scope(scope)
 }
 

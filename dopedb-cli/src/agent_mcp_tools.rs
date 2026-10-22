@@ -19,7 +19,7 @@ pub(super) fn tools_result() -> Value {
         "format": "uuid",
         "description": "Exact selected connectionId from environment_context. Pass it explicitly whenever more than one database is selected."
     });
-    let mut result = json!({
+    let result = json!({
         "tools": [
             tool_definition(
                 TOOL_SESSION_CONTEXT,
@@ -152,7 +152,7 @@ pub(super) fn tools_result() -> Value {
             tool_definition(
                 TOOL_SOURCE_SEARCH,
                 "Search pinned GitHub source paths",
-                "Searches repository-relative paths in the exact commits pinned to this session. Use before database reads when an analysis depends on event or field semantics, business rules, routes, or data-writing behavior. Omit sourceId only when the Environment has at most four sources. This does not use or build a Knowledge graph.",
+                "Searches repository-relative paths in the exact commits pinned to this session. Use before database reads when an analysis depends on event or field semantics, business rules, routes, or data-writing behavior. Omit sourceId only when the Environment has at most four sources.",
                 json!({
                     "type": "object",
                     "properties": {
@@ -179,140 +179,6 @@ pub(super) fn tools_result() -> Value {
                         "lineEnd": { "type": "integer", "minimum": 1, "default": 200, "description": format!("Inclusive end line. Must be between lineStart and lineStart + {}.", MAX_SOURCE_READ_LINES - 1) }
                     },
                     "required": ["sourceId", "path"],
-                    "additionalProperties": false
-                }),
-                true,
-                true,
-            ),
-            tool_definition(
-                TOOL_KNOWLEDGE_SEARCH,
-                "Search project knowledge",
-                "Searches code, routes, events, migrations, tables, and funnels only inside this session's exact Project Environment graph revisions.",
-                json!({
-                    "type": "object",
-                    "properties": {
-                        "query": { "type": "string", "minLength": 1, "maxLength": MAX_KNOWLEDGE_QUERY_BYTES },
-                        "limit": { "type": "integer", "minimum": 1, "maximum": MAX_KNOWLEDGE_RESULTS, "default": 20 }
-                    },
-                    "required": ["query"],
-                    "additionalProperties": false
-                }),
-                true,
-                true,
-            ),
-            tool_definition(
-                TOOL_KNOWLEDGE_EXPLAIN,
-                "Explain knowledge node",
-                "Returns one exact node with its bounded incoming and outgoing relations and provenance.",
-                knowledge_node_schema(),
-                true,
-                true,
-            ),
-            tool_definition(
-                TOOL_KNOWLEDGE_NEIGHBORS,
-                "Get knowledge neighbors",
-                "Returns bounded adjacent nodes, relations, and evidence from the pinned Environment graph set.",
-                json!({
-                    "type": "object",
-                    "properties": {
-                        "nodeId": knowledge_hash_schema(),
-                        "direction": { "type": "string", "enum": ["incoming", "outgoing", "both"], "default": "both" },
-                        "limit": { "type": "integer", "minimum": 1, "maximum": MAX_KNOWLEDGE_NEIGHBORS, "default": 30 }
-                    },
-                    "required": ["nodeId"],
-                    "additionalProperties": false
-                }),
-                true,
-                true,
-            ),
-            tool_definition(
-                TOOL_KNOWLEDGE_PATH,
-                "Trace knowledge path",
-                "Finds a bounded directed path between two exact nodes and returns source evidence.",
-                json!({
-                    "type": "object",
-                    "properties": {
-                        "fromNodeId": knowledge_hash_schema(),
-                        "toNodeId": knowledge_hash_schema()
-                    },
-                    "required": ["fromNodeId", "toNodeId"],
-                    "additionalProperties": false
-                }),
-                true,
-                true,
-            ),
-            tool_definition(
-                TOOL_KNOWLEDGE_EVIDENCE,
-                "Read knowledge evidence",
-                "Resolves exact evidence identities to repository-relative paths and line ranges; source bodies and local paths are never returned.",
-                json!({
-                    "type": "object",
-                    "properties": {
-                        "evidenceIds": {
-                            "type": "array",
-                            "minItems": 1,
-                            "maxItems": MAX_KNOWLEDGE_EVIDENCE_IDS,
-                            "items": knowledge_hash_schema()
-                        }
-                    },
-                    "required": ["evidenceIds"],
-                    "additionalProperties": false
-                }),
-                true,
-                true,
-            ),
-            tool_definition(
-                TOOL_KNOWLEDGE_DIFF,
-                "Compare knowledge revisions",
-                "Compares the pinned active graph revision with its exact immutable parent revision.",
-                json!({
-                    "type": "object",
-                    "properties": {
-                        "fromGraphRevisionId": { "type": "string", "format": "uuid" },
-                        "toGraphRevisionId": { "type": "string", "format": "uuid" }
-                    },
-                    "required": ["fromGraphRevisionId", "toGraphRevisionId"],
-                    "additionalProperties": false
-                }),
-                true,
-                true,
-            ),
-            tool_definition(
-                TOOL_KNOWLEDGE_MAPPING_PROPOSE,
-                "Propose a code-to-database mapping",
-                "Proposes one relation from an exact code graph node to a live table or column. The Broker verifies and pins the graph, connection, connection revision, database, and schema fingerprint. This cannot approve the relation, and the proposal is not evidence until a person approves it in Desktop.",
-                json!({
-                    "type": "object",
-                    "properties": {
-                        "graphRevisionId": { "type": "string", "format": "uuid" },
-                        "connectionId": connection_property.clone(),
-                        "database": database_property.clone(),
-                        "fromNodeId": knowledge_hash_schema(),
-                        "targetKind": { "type": "string", "enum": ["table", "column"] },
-                        "targetIdentity": {
-                            "type": "string",
-                            "minLength": 1,
-                            "maxLength": MAX_KNOWLEDGE_TARGET_IDENTITY_BYTES,
-                            "description": "Exact qualified relation name, or qualified relation name followed by the exact column name."
-                        }
-                    },
-                    "required": ["graphRevisionId", "connectionId", "fromNodeId", "targetKind", "targetIdentity"],
-                    "additionalProperties": false
-                }),
-                false,
-                false,
-            ),
-            tool_definition(
-                TOOL_FUNNEL_TRACE,
-                "Trace a product funnel",
-                "Finds matching funnel, route, event, and table nodes plus their verified one-hop relations in the pinned Project Environment.",
-                json!({
-                    "type": "object",
-                    "properties": {
-                        "query": { "type": "string", "minLength": 1, "maxLength": MAX_KNOWLEDGE_QUERY_BYTES },
-                        "limit": { "type": "integer", "minimum": 1, "maximum": MAX_KNOWLEDGE_RESULTS, "default": 20 }
-                    },
-                    "required": ["query"],
                     "additionalProperties": false
                 }),
                 true,
@@ -450,29 +316,7 @@ pub(super) fn tools_result() -> Value {
             ),
         ]
     });
-    if let Some(tools) = result.get_mut("tools").and_then(Value::as_array_mut) {
-        tools.retain(|tool| {
-            !tool
-                .get("name")
-                .and_then(Value::as_str)
-                .is_some_and(is_dormant_knowledge_tool)
-        });
-    }
     result
-}
-
-pub(super) fn is_dormant_knowledge_tool(name: &str) -> bool {
-    matches!(
-        name,
-        TOOL_KNOWLEDGE_SEARCH
-            | TOOL_KNOWLEDGE_EXPLAIN
-            | TOOL_KNOWLEDGE_NEIGHBORS
-            | TOOL_KNOWLEDGE_PATH
-            | TOOL_KNOWLEDGE_EVIDENCE
-            | TOOL_KNOWLEDGE_DIFF
-            | TOOL_KNOWLEDGE_MAPPING_PROPOSE
-            | TOOL_FUNNEL_TRACE
-    )
 }
 
 fn tool_definition(
@@ -517,22 +361,6 @@ fn query_cancel_schema() -> Value {
             "connectionId": { "type": "string", "format": "uuid" }
         },
         "required": ["operationId"],
-        "additionalProperties": false
-    })
-}
-
-fn knowledge_hash_schema() -> Value {
-    json!({
-        "type": "string",
-        "pattern": "^[0-9a-f]{64}$"
-    })
-}
-
-fn knowledge_node_schema() -> Value {
-    json!({
-        "type": "object",
-        "properties": { "nodeId": knowledge_hash_schema() },
-        "required": ["nodeId"],
         "additionalProperties": false
     })
 }

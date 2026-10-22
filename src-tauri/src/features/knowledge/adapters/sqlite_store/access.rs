@@ -1,7 +1,6 @@
 //! Agent access scope and Project Environment connection bindings.
 
 use chrono::Utc;
-use dopedb_protocol::GraphBuildArtifactV1;
 use uuid::Uuid;
 
 use crate::error::{AppError, AppResult};
@@ -50,12 +49,7 @@ impl Store {
                 repository,
                 ref_name,
                 commit_sha,
-            } = binding.revision
-            else {
-                return Err(AppError::Config(
-                    "the stored GitHub source revision is invalid".into(),
-                ));
-            };
+            } = binding.revision;
             let source = KnowledgeSessionSource {
                 source_id: binding.source_id,
                 display_name: binding.display_name,
@@ -97,54 +91,12 @@ impl Store {
         .fetch_all(self.pool())
         .await?;
         let mut environments = Vec::new();
-        for (id, project_name, kind, environment_revision) in rows {
+        for (id, project_name, kind, _environment_revision) in rows {
             let id = parse_uuid(id)?;
-            let mut graphs = self.active_set(id).await?;
-            if connection.scope.selected_account_id.is_none() {
-                graphs.retain(|graph| {
-                    graph.binding.provider != dopedb_protocol::KnowledgeSourceProvider::Github
-                });
-            }
-            let environment_revision = u64::try_from(environment_revision).map_err(|_| {
-                AppError::Config("the stored Project Environment revision is invalid".into())
-            })?;
-            if graphs
-                .iter()
-                .any(|graph| graph.environment_revision != environment_revision)
-            {
-                continue;
-            }
-            let remote_graph_revision_ids = graphs
-                .iter()
-                .filter(|graph| {
-                    graph.binding.provider == dopedb_protocol::KnowledgeSourceProvider::Github
-                })
-                .map(|graph| graph.graph_revision_id)
-                .collect::<Vec<_>>();
-            if !remote_graph_revision_ids.is_empty() {
-                let Some(account_id) = connection.scope.selected_account_id.as_deref() else {
-                    continue;
-                };
-                if self
-                    .active_knowledge_grant(
-                        connection.scope.workspace_id,
-                        account_id,
-                        id,
-                        environment_revision,
-                        &remote_graph_revision_ids,
-                    )
-                    .await?
-                    .is_none()
-                {
-                    continue;
-                }
-            }
             environments.push(KnowledgeEnvironmentSummary {
                 id,
                 project_name,
                 kind: parse_environment_kind(&kind)?,
-                graph_revision_count: u64::try_from(graphs.len())
-                    .map_err(|_| AppError::Config("the Knowledge graph count is invalid".into()))?,
             });
         }
         Ok(environments)
@@ -196,62 +148,11 @@ impl Store {
         let environment_revision = u64::try_from(*environment_revision).map_err(|_| {
             AppError::Config("the stored Project Environment revision is invalid".into())
         })?;
-        let mut graphs = self.active_set(project_environment_id).await?;
-        if connection.scope.selected_account_id.is_none() {
-            graphs.retain(|graph| {
-                graph.binding.provider != dopedb_protocol::KnowledgeSourceProvider::Github
-            });
-        }
-        if graphs
-            .iter()
-            .any(|graph| graph.environment_revision != environment_revision)
-        {
-            return Err(AppError::Blocked {
-                reason: "the Project Environment Knowledge graph set is stale".into(),
-            });
-        }
-        let graph_revision_ids = graphs
-            .iter()
-            .map(|graph| graph.graph_revision_id)
-            .collect::<Vec<_>>();
         let sources = if connection.scope.selected_account_id.is_some() {
             self.github_session_sources(project_environment_id, environment_revision)
                 .await?
         } else {
             Vec::new()
-        };
-        let remote_graph_revision_ids = graphs
-            .iter()
-            .filter(|graph| {
-                graph.binding.provider == dopedb_protocol::KnowledgeSourceProvider::Github
-            })
-            .map(|graph| graph.graph_revision_id)
-            .collect::<Vec<_>>();
-        let knowledge_grant_id = if remote_graph_revision_ids.is_empty() {
-            None
-        } else {
-            let account_id = connection
-                .scope
-                .selected_account_id
-                .as_deref()
-                .ok_or_else(|| AppError::Blocked {
-                    reason: "Project Knowledge requires an exact member grant".into(),
-                })?;
-            Some(
-                self.active_knowledge_grant(
-                    connection.scope.workspace_id,
-                    account_id,
-                    project_environment_id,
-                    environment_revision,
-                    &remote_graph_revision_ids,
-                )
-                .await?
-                .ok_or_else(|| AppError::Blocked {
-                    reason:
-                        "this member has no current grant for the active Knowledge revision set"
-                            .into(),
-                })?,
-            )
         };
         let bindings = self
             .environment_connections(connection.scope.workspace_id, Some(project_environment_id))
@@ -315,23 +216,21 @@ impl Store {
         }
         Ok(Some(KnowledgeSessionScope {
             project_id,
-            knowledge_grant_id,
             project_environment_id,
             environment_revision,
             authority_connection_id: connection.connection_id,
             authority_connection_revision: connection.connection_revision,
             sources,
-            graph_revision_ids,
             connections,
         }))
     }
 
-    pub(in crate::features::knowledge::adapters) async fn exact_knowledge_session_graphs(
+    pub(in crate::features::knowledge::adapters) async fn validate_knowledge_session_scope(
         &self,
         scope: &KnowledgeSessionScope,
         expected_workspace_id: Uuid,
         expected_account_id: &str,
-    ) -> AppResult<Vec<GraphBuildArtifactV1>> {
+    ) -> AppResult<()> {
         let active_sources = if expected_account_id == AccountScope::Personal.storage_key() {
             Vec::new()
         } else {
@@ -348,68 +247,6 @@ impl Store {
                     "the Agent GitHub source scope changed; start a new session to reconfirm it"
                         .into(),
             });
-        }
-        let mut graphs = self.active_set(scope.project_environment_id).await?;
-        if expected_account_id == AccountScope::Personal.storage_key() {
-            graphs.retain(|graph| {
-                graph.binding.provider != dopedb_protocol::KnowledgeSourceProvider::Github
-            });
-        }
-        let active_ids = graphs
-            .iter()
-            .map(|graph| graph.graph_revision_id)
-            .collect::<Vec<_>>();
-        if graphs
-            .iter()
-            .any(|graph| graph.environment_revision != scope.environment_revision)
-            || scope
-                .graph_revision_ids
-                .iter()
-                .any(|revision_id| !active_ids.contains(revision_id))
-        {
-            return Err(AppError::Blocked {
-                reason: "the Agent Knowledge scope changed; start a new session to reconfirm it"
-                    .into(),
-            });
-        }
-        graphs.retain(|graph| scope.graph_revision_ids.contains(&graph.graph_revision_id));
-        let remote_graph_revision_ids = graphs
-            .iter()
-            .filter(|graph| {
-                graph.binding.provider == dopedb_protocol::KnowledgeSourceProvider::Github
-            })
-            .map(|graph| graph.graph_revision_id)
-            .collect::<Vec<_>>();
-        match (
-            scope.knowledge_grant_id,
-            remote_graph_revision_ids.is_empty(),
-        ) {
-            (None, true) => {}
-            (Some(grant_id), false) => {
-                let grant = self
-                    .exact_grant(grant_id)
-                    .await?
-                    .ok_or_else(|| AppError::Blocked {
-                        reason: "the Agent Knowledge grant expired or was revoked".into(),
-                    })?;
-                if Uuid::from(grant.workspace_id) != expected_workspace_id
-                    || grant.account_id.as_str() != expected_account_id
-                    || grant.project_environment_id != scope.project_environment_id
-                    || grant.environment_revision != scope.environment_revision
-                    || remote_graph_revision_ids
-                        .iter()
-                        .any(|revision_id| !grant.graph_revision_ids.contains(revision_id))
-                {
-                    return Err(AppError::Blocked {
-                        reason: "the Agent Knowledge grant changed; start a new session".into(),
-                    });
-                }
-            }
-            _ => {
-                return Err(AppError::Blocked {
-                    reason: "the Agent Knowledge graph authority is incomplete".into(),
-                });
-            }
         }
         if (scope.connections.is_empty() && scope.sources.is_empty())
             || scope.connections.len() > 32
@@ -493,7 +330,7 @@ impl Store {
                 });
             }
         }
-        Ok(graphs)
+        Ok(())
     }
 
     pub(in crate::features::knowledge::adapters) async fn bind_environment_connection(

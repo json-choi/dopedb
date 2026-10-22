@@ -1,6 +1,5 @@
 use dopedb_protocol::{
-    canonical_knowledge_json_bytes, catalog::CatalogSnapshot, decode_arguments,
-    knowledge_graph_artifact_size_allowed, valid_workspace_sync_cursor, AcpPluginArtifact,
+    catalog::CatalogSnapshot, decode_arguments, valid_workspace_sync_cursor, AcpPluginArtifact,
     AcpPluginCompatibility, AcpPluginId, AcpPluginLicense, AcpPluginManifestV2, AcpPluginProvider,
     AcpPluginUpstream, AgentSessionRegisterArguments, AppOpenCommand, AppOpenResult,
     AuthenticationRequirement, CatalogSearchCommand, CatalogShowCommand, CommandName, CommandSpec,
@@ -8,23 +7,20 @@ use dopedb_protocol::{
     DirectProvisioningStatus, DirectReceiptRequest, DirectRevocationEntry, DirectVerifierRequest,
     DirectWorkList, DocumentRunCommand, ErrorCode, ExternalAgentConfig,
     ExternalAgentConfigCreateCommand, ExternalAgentProvider, ExternalAgentResourceScope,
-    ExternalAgentSessionRevokeCommand, ExternalAgentSessionStartCommand, GraphBuildArtifactV1,
-    ManagedAccessMode, ManagedLeaseRequest, ManagedLeaseResponse, OperationCancelCommand,
-    OperationShowCommand, OperationWaitCommand, ProtocolError, QueryCancelCommand,
-    QueryPlanCommand, QueryRunCommand, RequestEnvelope, ResponseEnvelope, RuntimeDiscovery,
-    SchemaListCommand, SessionAuthentication, SharedAnalysisArticleCreate,
-    SharedConnectionTemplate, SignedAcpPluginManifestV2, SkillInstallCommand, SkillRemoveCommand,
-    SkillRepairCommand, SkillStatusCommand, SkillsGetCommand, SkillsListCommand, SourceReadCommand,
-    SqlProposeCommand, StatusCommand, StatusResult, TableDescribeCommand, VersionCommand,
-    VersionResult, WorkspaceMemberGrants, WorkspaceSyncPageResponse,
-    ACP_PLUGIN_MANIFEST_SCHEMA_VERSION, ACP_PLUGIN_PROTOCOL_VERSION,
+    ExternalAgentSessionRevokeCommand, ExternalAgentSessionStartCommand, ManagedAccessMode,
+    ManagedLeaseRequest, ManagedLeaseResponse, OperationCancelCommand, OperationShowCommand,
+    OperationWaitCommand, ProtocolError, QueryCancelCommand, QueryPlanCommand, QueryRunCommand,
+    RequestEnvelope, ResponseEnvelope, RuntimeDiscovery, SchemaListCommand, SessionAuthentication,
+    SharedAnalysisArticleCreate, SharedConnectionTemplate, SignedAcpPluginManifestV2,
+    SkillInstallCommand, SkillRemoveCommand, SkillRepairCommand, SkillStatusCommand,
+    SkillsGetCommand, SkillsListCommand, SourceReadCommand, SqlProposeCommand, StatusCommand,
+    StatusResult, TableDescribeCommand, VersionCommand, VersionResult, WorkspaceMemberGrants,
+    WorkspaceSyncPageResponse, ACP_PLUGIN_MANIFEST_SCHEMA_VERSION, ACP_PLUGIN_PROTOCOL_VERSION,
     ACP_PLUGIN_RUNTIME_CONTRACT_VERSION, COMMAND_SCHEMA_VERSION,
-    CONTROL_PLANE_CONTRACTS_SCHEMA_VERSION, GRAPH_BUILD_ARTIFACT_SCHEMA_VERSION,
-    MANAGED_LEASE_CONTRACT_VERSION, MAX_KNOWLEDGE_GRAPH_ARTIFACT_BYTES, PROTOCOL_MAX,
+    CONTROL_PLANE_CONTRACTS_SCHEMA_VERSION, MANAGED_LEASE_CONTRACT_VERSION, PROTOCOL_MAX,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use sha2::{Digest, Sha256};
 
 fn value(source: &str) -> Value {
     serde_json::from_str(source).expect("fixture must be valid JSON")
@@ -458,60 +454,6 @@ fn public_protocol_goldens_match_pinned_agent_and_control_plane_contracts() {
     oversized.artifact.packed_bytes = 1024;
     oversized.compatibility.node_version_min = "25.0.0".into();
     assert!(!oversized.validate());
-
-    let graph_source = include_str!("fixtures/graph-build-artifact-v1.json");
-    let graph: GraphBuildArtifactV1 =
-        serde_json::from_str(graph_source).expect("knowledge artifact fixture must decode");
-    assert_eq!(graph.schema_version, GRAPH_BUILD_ARTIFACT_SCHEMA_VERSION);
-    assert!(graph.validate());
-    assert!(knowledge_graph_artifact_size_allowed(
-        canonical_knowledge_json_bytes(&graph).unwrap().len(),
-    ));
-    assert!(knowledge_graph_artifact_size_allowed(
-        MAX_KNOWLEDGE_GRAPH_ARTIFACT_BYTES,
-    ));
-    assert!(!knowledge_graph_artifact_size_allowed(
-        MAX_KNOWLEDGE_GRAPH_ARTIFACT_BYTES + 1,
-    ));
-    let canonical_graph = canonical_knowledge_json_bytes(&graph).unwrap();
-    let canonical_graph_sha256 = Sha256::digest(&canonical_graph)
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect::<String>();
-    assert_eq!(
-        canonical_graph_sha256,
-        "cd6d4a78ca01576d8d2716ac1f168c1de3c75bbb7f73ded342edd93af28a55f0"
-    );
-    let canonical_vector = json!({
-        "z": [{"β": 2, "a": 1}, "한글"],
-        "a": {"😀": true, "\u{e000}": null, "2": "two", "10": "ten"},
-    });
-    let canonical_vector = canonical_knowledge_json_bytes(&canonical_vector).unwrap();
-    assert_eq!(
-        String::from_utf8(canonical_vector.clone()).unwrap(),
-        "{\"a\":{\"10\":\"ten\",\"2\":\"two\",\"\":null,\"😀\":true},\"z\":[{\"a\":1,\"β\":2},\"한글\"]}"
-    );
-    let canonical_vector_sha256 = Sha256::digest(canonical_vector)
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect::<String>();
-    assert_eq!(
-        canonical_vector_sha256,
-        "d6168ccb84693cd24b6b4d6c462dac4ab5b258b5566a684a0bbfd186fcfeebbd"
-    );
-    assert_eq!(serde_json::to_value(&graph).unwrap(), value(graph_source));
-    let mut unsafe_graph = serde_json::to_value(&graph).unwrap();
-    unsafe_graph["evidence"][0]["filePath"] = json!("../secrets.env");
-    let unsafe_graph: GraphBuildArtifactV1 = serde_json::from_value(unsafe_graph).unwrap();
-    assert!(!unsafe_graph.validate());
-    let mut backslash_graph = serde_json::to_value(&graph).unwrap();
-    backslash_graph["evidence"][0]["filePath"] = json!("src\\main.ts");
-    let backslash_graph: GraphBuildArtifactV1 = serde_json::from_value(backslash_graph).unwrap();
-    assert!(!backslash_graph.validate());
-    let mut prerelease_graph = serde_json::to_value(&graph).unwrap();
-    prerelease_graph["extractor"]["version"] = json!("1.0.0-beta");
-    let prerelease_graph: GraphBuildArtifactV1 = serde_json::from_value(prerelease_graph).unwrap();
-    assert!(!prerelease_graph.validate());
 
     let control_plane_source = include_str!("fixtures/control-plane-contracts-v1.json");
     let contracts: ControlPlaneContracts =
@@ -1077,15 +1019,15 @@ fn unknown_envelope_and_active_command_fields_fail_closed() {
 }
 
 #[test]
-fn command_names_match_the_v18_catalog() {
+fn command_names_match_the_v19_catalog() {
     let actual = dopedb_protocol::CommandName::ALL
         .into_iter()
         .map(|command| command.as_str())
         .collect::<Vec<_>>();
     let expected: Vec<String> =
-        serde_json::from_str(include_str!("fixtures/command-catalog-v18.json")).unwrap();
+        serde_json::from_str(include_str!("fixtures/command-catalog-v19.json")).unwrap();
     assert_eq!(actual, expected);
-    assert_eq!(COMMAND_SCHEMA_VERSION, 18);
+    assert_eq!(COMMAND_SCHEMA_VERSION, 19);
 
     let external_config = ExternalAgentConfig {
         schema_version: 1,

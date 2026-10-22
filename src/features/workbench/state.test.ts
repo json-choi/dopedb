@@ -1443,7 +1443,6 @@ describe("workbench state ownership", () => {
       id: string;
       projectName: string;
       kind: "development";
-      graphRevisionCount: number;
     }> = [];
     let demoProjects: KnowledgeProject[] = [];
     let demoBindings: EnvironmentConnection[] = [];
@@ -1493,7 +1492,6 @@ describe("workbench state ownership", () => {
             id: input.projectEnvironmentId,
             projectName: GUIDED_DEMO_PROJECT_NAME,
             kind: "development",
-            graphRevisionCount: 0,
           },
         ];
         demoBindings = [{
@@ -1903,7 +1901,6 @@ describe("workbench state ownership", () => {
           id: "environment-other",
           projectName: "Other",
           kind: "production",
-          graphRevisionCount: 2,
         },
         ...agentEnvironments,
       ])?.id,

@@ -34,6 +34,7 @@ pub(super) async fn bootstrap_local_store(pool: &SqlitePool) -> AppResult<LocalS
         .fetch_one(pool)
         .await?;
     if version == LOCAL_SCHEMA_BASELINE && application_id == LOCAL_SCHEMA_APPLICATION_ID {
+        super::retire_graph_storage::retire_graph_storage(pool).await?;
         // Add only a fail-closed hosted capability cache to the supported baseline.
         // This does not convert authority or reset existing local data.
         let columns = sqlx::query("PRAGMA table_info(connections)")
@@ -244,12 +245,10 @@ async fn add_binding_endpoint_pins(pool: &SqlitePool) -> AppResult<()> {
 /// `custom` becomes `development`, and every other class carries over. When a
 /// Project holds several rows of one kind, the lowest id keeps that kind (the
 /// control plane folds by the same rule, so a cache and its server agree) and
-/// the others fold into it: their sources, bindings, graph revisions, heads,
-/// grants, mapping proposals, and Personal Articles are re-pointed at the
+/// the others fold into it: their sources, bindings, and Personal Articles are re-pointed at the
 /// survivor (stamped with its revision) and the emptied rows are removed, so no
-/// binding is lost and ids that were never duplicated stay stable. Graph
-/// revisions are immutable, so their update trigger is lifted for the re-point
-/// only. The table is rebuilt with foreign keys off, as SQLite requires, and
+/// binding is lost and ids that were never duplicated stay stable. The table is
+/// rebuilt with foreign keys off, as SQLite requires, and
 /// checked before commit.
 async fn normalize_environment_kinds(pool: &SqlitePool) -> AppResult<()> {
     // A store already in the fixed vocabulary is only read, so a read-only database opens.
@@ -303,12 +302,6 @@ async fn rebuild_environments_by_kind(connection: &mut sqlx::SqliteConnection) -
                              ELSE {t}.risk_class END";
     let kind_of = |table: &str| KIND.replace("{t}", table);
     let mut tx = sqlx::Connection::begin(&mut *connection).await?;
-    let trigger: Option<String> = sqlx::query_scalar(
-        "SELECT sql FROM sqlite_master
-         WHERE type = 'trigger' AND name = 'knowledge_graph_revisions_reject_update'",
-    )
-    .fetch_optional(&mut *tx)
-    .await?;
     // Assembled only from compile-time constants.
     sqlx::query(sqlx::AssertSqlSafe(format!(
         "CREATE TEMP TABLE environment_merge AS
@@ -323,21 +316,10 @@ async fn rebuild_environments_by_kind(connection: &mut sqlx::SqliteConnection) -
     )))
     .execute(&mut *tx)
     .await?;
-    if trigger.is_some() {
-        sqlx::query("DROP TRIGGER knowledge_graph_revisions_reject_update")
-            .execute(&mut *tx)
-            .await?;
-    }
     let owner_revision = "(SELECT revision FROM knowledge_project_environments
                            WHERE id = (SELECT owner_id FROM environment_merge WHERE old_id = {t}.project_environment_id))";
     let folded = "(SELECT old_id FROM environment_merge WHERE old_id <> owner_id)";
-    for table in [
-        "knowledge_sources",
-        "knowledge_environment_connections",
-        "knowledge_graph_revisions",
-        "knowledge_environment_heads",
-        "knowledge_grants",
-    ] {
+    for table in ["knowledge_sources", "knowledge_environment_connections"] {
         // Table names come from this constant list.
         sqlx::query(sqlx::AssertSqlSafe(format!(
             "UPDATE {table}
@@ -352,15 +334,6 @@ async fn rebuild_environments_by_kind(connection: &mut sqlx::SqliteConnection) -
         .await?;
     }
     sqlx::query(sqlx::AssertSqlSafe(format!(
-        "UPDATE knowledge_mapping_proposals
-         SET project_environment_id =
-             (SELECT owner_id FROM environment_merge
-              WHERE old_id = knowledge_mapping_proposals.project_environment_id)
-         WHERE project_environment_id IN {folded}"
-    )))
-    .execute(&mut *tx)
-    .await?;
-    sqlx::query(sqlx::AssertSqlSafe(format!(
         "UPDATE personal_analysis_articles
          SET environment_id =
              (SELECT owner_id FROM environment_merge
@@ -374,11 +347,6 @@ async fn rebuild_environments_by_kind(connection: &mut sqlx::SqliteConnection) -
     )))
     .execute(&mut *tx)
     .await?;
-    if let Some(sql) = trigger {
-        sqlx::query(sqlx::AssertSqlSafe(sql))
-            .execute(&mut *tx)
-            .await?;
-    }
     sqlx::raw_sql(
         "CREATE TABLE knowledge_project_environments_next (
              id         TEXT PRIMARY KEY,

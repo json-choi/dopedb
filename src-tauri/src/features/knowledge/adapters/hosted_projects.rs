@@ -1,4 +1,4 @@
-//! Hosted Knowledge project, grant, mapping, and graph operations.
+//! Hosted Project and Environment identity operations.
 
 use super::*;
 
@@ -41,7 +41,6 @@ pub(super) async fn ensure_personal_knowledge_scope(
     }
     Ok(RemotePersonalKnowledgeScope {
         workspace_id: scope.workspace_id,
-        member_id: scope.member_id,
     })
 }
 
@@ -81,11 +80,7 @@ pub(super) fn validate_source_inventory(sources: &[RemoteKnowledgeSource]) -> Ap
                 || source.sync_revision == 0
                 || source.display_name.trim().is_empty()
                 || source.display_name.len() > 512
-                || source.visibility != "shared_graph"
-                || !matches!(
-                    source.sync_state.as_str(),
-                    "pending" | "syncing" | "ready" | "stale" | "failed"
-                )
+                || !matches!(source.sync_state.as_str(), "ready" | "stale" | "failed")
                 || source
                     .last_failure_code
                     .as_ref()
@@ -246,211 +241,4 @@ pub(super) async fn create_knowledge_environment(
         ));
     }
     Ok(project)
-}
-
-pub(super) async fn list_current_knowledge_grants(
-    user_id: &str,
-    workspace_id: Uuid,
-) -> AppResult<Vec<RemoteKnowledgeGrant>> {
-    let token = bearer(user_id).await?;
-    let response = client()?
-        // codeql[rust/cleartext-transmission]
-        .get(format!(
-            "{}/api/v1/workspaces/{workspace_id}/knowledge/grants?scope=mine",
-            origin()?
-        ))
-        .bearer_auth(token.as_str())
-        .send()
-        .await
-        .map_err(|error| request_error("loading current Knowledge grants", error))?;
-    if !response.status().is_success() {
-        return Err(oauth_error(response).await);
-    }
-    let grants =
-        knowledge_response::<KnowledgeGrantsResponse>(response, "reading current Knowledge grants")
-            .await?
-            .grants;
-    let now = chrono::Utc::now();
-    if grants.len() > 1_000
-        || grants.iter().any(|grant| {
-            grant.member_id.is_empty()
-                || grant.member_id.len() > 255
-                || grant.environment_revision == 0
-                || grant.graph_revision_ids.is_empty()
-                || grant.graph_revision_ids.len() > 100
-                || grant.graph_scopes.len() != grant.graph_revision_ids.len()
-                || grant.expires_at <= now
-                || grant.revoked_at.is_some()
-                || grant
-                    .graph_scopes
-                    .iter()
-                    .any(|scope| !grant.graph_revision_ids.contains(&scope.graph_revision_id))
-        })
-    {
-        return Err(AppError::Network(
-            "Project Knowledge returned invalid current grants".into(),
-        ));
-    }
-    Ok(grants)
-}
-
-pub(super) async fn create_current_knowledge_grant(
-    user_id: &str,
-    workspace_id: Uuid,
-    member_id: &str,
-    project_environment_id: Uuid,
-) -> AppResult<()> {
-    if member_id.trim().is_empty() || member_id.len() > 255 {
-        return Err(AppError::Config(
-            "the Personal Knowledge member authority is invalid".into(),
-        ));
-    }
-    let token = bearer(user_id).await?;
-    let response = client()?
-        // codeql[rust/cleartext-transmission]
-        .post(format!(
-            "{}/api/v1/workspaces/{workspace_id}/knowledge/grants",
-            origin()?
-        ))
-        .bearer_auth(token.as_str())
-        .json(&CreateKnowledgeGrantRequest {
-            member_id,
-            project_environment_id,
-            ttl_seconds: 60 * 60,
-        })
-        .send()
-        .await
-        .map_err(|error| request_error("issuing Personal Knowledge authority", error))?;
-    if !response.status().is_success() {
-        return Err(oauth_error(response).await);
-    }
-    let created = knowledge_response::<CreatedKnowledgeGrantResponse>(
-        response,
-        "reading Personal Knowledge authority",
-    )
-    .await?
-    .grant;
-    if created.expires_at <= chrono::Utc::now()
-        || created.graph_revision_ids.is_empty()
-        || created.graph_revision_ids.len() > 100
-    {
-        return Err(AppError::Network(
-            "Personal Knowledge returned an invalid grant".into(),
-        ));
-    }
-    let _ = created.id;
-    Ok(())
-}
-
-pub(super) fn valid_remote_mapping(mapping: &KnowledgeMappingProposal) -> bool {
-    mapping.schema_fingerprint.len() == 64
-        && mapping
-            .schema_fingerprint
-            .bytes()
-            .all(|value| value.is_ascii_hexdigit() && !value.is_ascii_uppercase())
-        && mapping.from_node_id.len() == 64
-        && mapping
-            .from_node_id
-            .bytes()
-            .all(|value| value.is_ascii_hexdigit() && !value.is_ascii_uppercase())
-        && !mapping.target_kind.trim().is_empty()
-        && mapping.target_kind.len() <= 128
-        && !mapping.target_identity.trim().is_empty()
-        && mapping.target_identity.len() <= 2_048
-        && !mapping.target_identity.chars().any(char::is_control)
-}
-
-pub(super) async fn propose_remote_knowledge_mapping(
-    user_id: &str,
-    workspace_id: Uuid,
-    grant_id: Uuid,
-    proposal: &KnowledgeMappingProposal,
-) -> AppResult<KnowledgeMappingProposal> {
-    let token = bearer(user_id).await?;
-    let response = client()?
-        .post(format!(
-            "{}/api/v1/workspaces/{workspace_id}/knowledge/mappings",
-            origin()?
-        ))
-        .bearer_auth(token.as_str())
-        .json(&ProposeKnowledgeMappingRequest {
-            grant_id,
-            graph_revision_id: proposal.graph_revision_id,
-            schema_fingerprint: &proposal.schema_fingerprint,
-            from_node_id: &proposal.from_node_id,
-            target_kind: &proposal.target_kind,
-            target_identity: &proposal.target_identity,
-        })
-        .send()
-        .await
-        .map_err(|error| request_error("proposing a Knowledge mapping", error))?;
-    if !response.status().is_success() {
-        return Err(oauth_error(response).await);
-    }
-    let mapping = knowledge_response::<KnowledgeMappingResponse>(
-        response,
-        "reading the Knowledge mapping proposal",
-    )
-    .await?
-    .mapping;
-    if mapping.project_environment_id != proposal.project_environment_id
-        || mapping.graph_revision_id != proposal.graph_revision_id
-        || mapping.schema_fingerprint != proposal.schema_fingerprint
-        || mapping.from_node_id != proposal.from_node_id
-        || mapping.target_kind != proposal.target_kind
-        || mapping.target_identity != proposal.target_identity
-        || mapping.state != MappingProposalState::Proposed
-        || !valid_remote_mapping(&mapping)
-    {
-        return Err(AppError::Network(
-            "Project Knowledge changed the mapping proposal".into(),
-        ));
-    }
-    Ok(mapping)
-}
-
-pub(super) async fn download_knowledge_graph(
-    user_id: &str,
-    workspace_id: Uuid,
-    grant_id: Uuid,
-    source_id: Uuid,
-    expected_graph_revision_id: Uuid,
-) -> AppResult<GraphBuildArtifactV1> {
-    let token = bearer(user_id).await?;
-    let response = client()?
-        // codeql[rust/cleartext-transmission]
-        .get(format!(
-            "{}/api/v1/workspaces/{workspace_id}/knowledge/sources/{source_id}/graph?grantId={grant_id}",
-            origin()?
-        ))
-        .bearer_auth(token.as_str())
-        .send()
-        .await
-        .map_err(|error| request_error("loading a granted Knowledge graph", error))?;
-    if !response.status().is_success() {
-        return Err(oauth_error(response).await);
-    }
-    let downloaded: DownloadedKnowledgeGraphResponse = bounded_json_response(
-        response,
-        "reading a granted Knowledge graph",
-        MAX_KNOWLEDGE_GRAPH_RESPONSE_BYTES,
-    )
-    .await?;
-    // Verify the raw JSON value before typed decoding. This preserves timestamp
-    // spellings while removing JSONB/object insertion order from the digest.
-    let canonical_artifact = canonical_knowledge_json_bytes(&downloaded.artifact)?;
-    let artifact_sha256 = hex::encode(Sha256::digest(&canonical_artifact));
-    let artifact: GraphBuildArtifactV1 = serde_json::from_value(downloaded.artifact)?;
-    if downloaded.graph_revision_id != expected_graph_revision_id
-        || artifact.graph_revision_id != expected_graph_revision_id
-        || artifact.binding.source_id != source_id
-        || !knowledge_graph_artifact_size_allowed(canonical_artifact.len())
-        || downloaded.artifact_sha256 != artifact_sha256
-        || !artifact.validate()
-    {
-        return Err(AppError::Network(
-            "Project Knowledge returned an invalid granted graph".into(),
-        ));
-    }
-    Ok(artifact)
 }

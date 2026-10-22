@@ -61,7 +61,7 @@ pub(super) async fn handle(
     for scope in &session.knowledge_scopes {
         if let Err(error) = services
             .knowledge
-            .exact_knowledge_session_graphs(
+            .validate_knowledge_session_scope(
                 scope,
                 Uuid::from(session.workspace_id),
                 session.knowledge_account_scope.as_str(),
@@ -413,13 +413,11 @@ pub(super) fn assert_article_scope_contract() {
     );
     let scope = KnowledgeSessionScope {
         project_id: Uuid::new_v4(),
-        knowledge_grant_id: None,
         project_environment_id: Uuid::new_v4(),
         environment_revision: 1,
         authority_connection_id: connection_id,
         authority_connection_revision: 1,
         sources: vec![],
-        graph_revision_ids: vec![],
         connections: vec![connection],
     };
     assert!(article_in_grant(

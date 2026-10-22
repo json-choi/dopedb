@@ -2,7 +2,6 @@
 
 import { invoke } from "../../ipc/core";
 import { readWithCatalogIssue } from "../catalogExplorer/catalogDomain";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   CreateKnowledgeProjectInput,
   CreateKnowledgeEnvironmentInput,
@@ -11,8 +10,6 @@ import type {
   KnowledgeProject,
   KnowledgeInventory,
   KnowledgeSource,
-  KnowledgeSourceChanged,
-  LocalKnowledgeSourceInput,
   EnvironmentConnection,
   BindEnvironmentConnectionInput,
 } from "./domain";
@@ -83,24 +80,10 @@ export function connectKnowledgeGithubSource(
   return invoke("connect_knowledge_github_source", { input });
 }
 
-export function connectKnowledgeLocalFolder(
-  input: LocalKnowledgeSourceInput,
-): Promise<KnowledgeSource | null> {
-  return invoke("connect_knowledge_local_folder", { input });
-}
-
 export function listKnowledgeSources(): Promise<KnowledgeSource[]> {
   return invoke("list_knowledge_sources");
 }
 
 export function revokeKnowledgeSource(sourceId: string): Promise<void> {
   return invoke("revoke_knowledge_source", { sourceId });
-}
-
-export function onKnowledgeSourceChanged(
-  listener: (event: KnowledgeSourceChanged) => void,
-): Promise<UnlistenFn> {
-  return listen<KnowledgeSourceChanged>("knowledge-source:changed", (event) =>
-    listener(event.payload),
-  );
 }

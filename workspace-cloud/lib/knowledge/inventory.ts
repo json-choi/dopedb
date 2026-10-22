@@ -85,7 +85,6 @@ export async function listKnowledgeSources(workspaceId: string) {
     environmentRevision: knowledgeSource.environmentRevision,
     provider: knowledgeSource.provider,
     displayName: knowledgeSource.displayName,
-    visibility: knowledgeSource.visibility,
     repositoryId: knowledgeSource.repositoryId,
     repositoryFullName: knowledgeSource.repositoryFullName,
     refName: knowledgeSource.refName,
@@ -97,7 +96,7 @@ export async function listKnowledgeSources(workspaceId: string) {
     eq(knowledgeSource.organizationId, workspaceId),
     isNull(knowledgeSource.revokedAt),
   ));
-  return sources.map((source) => ({ ...source, graphRevisionId: null }));
+  return sources;
 }
 
 export async function listKnowledgeEnvironmentConnections(workspaceId: string) {

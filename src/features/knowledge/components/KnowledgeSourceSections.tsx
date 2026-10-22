@@ -28,7 +28,6 @@ import type { GithubInstallState } from "../useKnowledgeGithubInstall";
 import {
   knowledgeRepositoryLabel,
   knowledgeSourceHealthKey,
-  type KnowledgeSourceActivity,
 } from "../workspaceModel";
 
 interface KnowledgeConnectSourceSectionProps {
@@ -48,7 +47,6 @@ interface KnowledgeConnectSourceSectionProps {
   environmentSelected: boolean;
   pending: boolean;
   githubPending: boolean;
-  localPending: boolean;
   onRepositoryChange: (repository: GithubKnowledgeRepository) => void;
   onRefNameChange: (value: string) => void;
   onDisplayNameChange: (value: string) => void;
@@ -56,7 +54,6 @@ interface KnowledgeConnectSourceSectionProps {
   onBeginGithubInstall: () => void;
   onLogin: () => void;
   onConnectGithub: () => void;
-  onConnectLocal: () => void;
 }
 
 export function KnowledgeConnectSourceSection({
@@ -76,7 +73,6 @@ export function KnowledgeConnectSourceSection({
   environmentSelected,
   pending,
   githubPending,
-  localPending,
   onRepositoryChange,
   onRefNameChange,
   onDisplayNameChange,
@@ -84,7 +80,6 @@ export function KnowledgeConnectSourceSection({
   onBeginGithubInstall,
   onLogin,
   onConnectGithub,
-  onConnectLocal,
 }: KnowledgeConnectSourceSectionProps) {
   const { t } = useI18n();
   // Archived repositories cannot be connected, so they never reach the picker.
@@ -269,32 +264,7 @@ export function KnowledgeConnectSourceSection({
             </div>
           </>
         )
-      ) : (
-        <>
-          <Field label={t("knowledge.displayName")}>
-            <TextInput
-              value={displayName}
-              placeholder={t("knowledge.localPlaceholder")}
-              onChange={(event) => onDisplayNameChange(event.target.value)}
-            />
-          </Field>
-          <p className="tw:m-0 tw:text-sm tw:leading-relaxed tw:text-muted-foreground">
-            {t("knowledge.localSafety")}
-          </p>
-          <div>
-            <Button
-              variant="primary"
-              disabled={!environmentSelected || !displayName.trim() || pending}
-              onClick={onConnectLocal}
-            >
-              <Icon name="folder" />
-              {localPending
-                ? t("knowledge.scanning")
-                : t("knowledge.chooseFolder")}
-            </Button>
-          </div>
-        </>
-      )}
+      ) : null}
     </section>
   );
 }
@@ -302,7 +272,6 @@ export function KnowledgeConnectSourceSection({
 interface KnowledgeSourceInventoryProps {
   phase: QueryResultPhase;
   sources: KnowledgeSource[];
-  activityBySourceId: ReadonlyMap<string, KnowledgeSourceActivity>;
   revokePending: boolean;
   onRefresh: () => void;
   onRevoke: (sourceId: string) => void;
@@ -311,7 +280,6 @@ interface KnowledgeSourceInventoryProps {
 export function KnowledgeSourceInventory({
   phase,
   sources,
-  activityBySourceId,
   revokePending,
   onRefresh,
   onRevoke,
@@ -342,11 +310,7 @@ export function KnowledgeSourceInventory({
       ) : (
         <div className="tw:grid tw:overflow-hidden tw:rounded-md tw:border tw:border-border-subtle">
           {sources.map((source) => {
-            const activity = activityBySourceId.get(source.sourceId);
-            const visibleHealth =
-              source.provider === "github"
-                ? source.health
-                : activity?.state ?? source.health;
+            const visibleHealth = source.health;
             const tone: StatusTone =
               visibleHealth === "ready"
                 ? "success"
@@ -367,32 +331,15 @@ export function KnowledgeSourceInventory({
                       {t(knowledgeSourceHealthKey[visibleHealth])}
                     </StatusBadge>
                     <StatusBadge density="compact">
-                      {source.provider === "github"
-                        ? "GitHub"
-                        : t("knowledge.localFolder")}
+                      GitHub
                     </StatusBadge>
                   </div>
                   <span className="tw:truncate tw:text-xs tw:text-muted-foreground">
-                    {source.projectName} / {environmentKindLabel(t, source.environmentKind)} · {knowledgeRevisionLabel(source.revision, {
-                      dirty: t("knowledge.revisionDirty"),
-                      snapshot: t("knowledge.revisionSnapshot"),
-                    })}
+                    {source.projectName} / {environmentKindLabel(t, source.environmentKind)} · {knowledgeRevisionLabel(source.revision)}
                   </span>
                   {source.provider === "github" ? (
                     <span className="tw:text-xs tw:text-muted-foreground">
                       {t("knowledge.sourceBrowseMode")}
-                    </span>
-                  ) : null}
-                  {source.provider === "local_folder" && !source.localCapabilityAvailable ? (
-                    <span className="tw:text-xs tw:text-warning">
-                      {t("knowledge.restoreLocalFolder")}
-                    </span>
-                  ) : null}
-                  {activity?.state === "failed" ? (
-                    <span className="tw:text-xs tw:text-danger">
-                      {t("knowledge.syncFailed", {
-                        error: activity.errorKind ?? t("knowledge.unknownSyncError"),
-                      })}
                     </span>
                   ) : null}
                 </div>

@@ -60,10 +60,10 @@
   바꾼다. 운영 flag 또는 `production` 등급이면 `운영`, `staging`·`test`는 그대로,
   `custom`과 자유 이름은 `개발`로 이전한다. 같은 Project에서 종류가 겹치면 **id가
   가장 낮은 행**이 그 종류를 소유하고(Desktop SQLite와 D1이 같은 규칙이라 캐시와
-  서버가 어긋나지 않는다) 나머지의 source, binding, head, grant, mapping proposal,
-  graph revision, Article은 소유 행으로 옮기며 소유 행의 revision을 찍는다. 빈
-  행은 삭제하고 binding은 잃지 않는다. graph revision은 불변이므로 그 update guard를
-  이 재지정 동안만 해제한다.
+  서버가 어긋나지 않는다) 나머지의 source, binding, Article은 소유 행으로 옮기며
+  소유 행의 revision을 찍는다. 빈 행은 삭제하고 binding은 잃지 않는다.
+  D1의 적용된 `0012`에는 당시 graph 데이터 이전도 남아 있으나, PD-36 결정에 따라
+  `0014`가 graph·mapping·전용 grant 저장소를 폐기한다.
   - Desktop: 테이블을 외래 키를 끈 채 `kind` 스키마로 재작성하고
     `foreign_key_check` 뒤 커밋한다. 연결 라벨은 `prod→production`, `dev→development`,
     그 밖의 값(`custom`)은 없음으로 바꾼다. 이미 이전된 저장소는 읽기만 한다.

@@ -99,6 +99,13 @@
       "when": 1792460351833,
       "tag": "0013_team_connection_default_read",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1792648958638,
+      "tag": "0014_remove_knowledge_graph",
+      "breakpoints": true
     }
   ]
 }

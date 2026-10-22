@@ -139,9 +139,9 @@ describe("ACP session store", () => {
     };
     const grant: AgentKnowledgeScope = {
       projectId: "project-one", projectEnvironmentId: article.projectEnvironmentId,
-      environmentRevision: article.environmentRevision, knowledgeGrantId: null,
+      environmentRevision: article.environmentRevision,
       authorityConnectionId: session("one").connectionId, authorityConnectionRevision: 1,
-      sources: [], graphRevisionIds: [],
+      sources: [],
       connections: [{
         connectionId: session("one").connectionId, connectionRevision: 1,
         remoteConnectionId: article.connectionId, connectionContentRevision: article.connectionRevision,

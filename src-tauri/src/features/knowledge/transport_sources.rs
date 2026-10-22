@@ -139,7 +139,6 @@ pub(crate) async fn revoke_knowledge_source(
     state: State<'_, AppState>,
     source_id: Uuid,
 ) -> AppResult<()> {
-    state.knowledge_watches.stop(source_id);
     let scope = state.services.knowledge.active_resource_scope().await?;
     let source = state
         .services
@@ -161,10 +160,6 @@ pub(crate) async fn revoke_knowledge_source(
                     source_id,
                 )
                 .await?;
-        }
-        KnowledgeSourceProvider::LocalFolder => {
-            let _ = state.local_knowledge_sources.revoke(&source.binding).await;
-            delete_knowledge_source_root(source_id)?;
         }
     }
     state.services.knowledge.remove_scope(source_id).await

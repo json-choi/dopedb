@@ -1,4 +1,4 @@
-// Pure labels and activity types for the Knowledge workspace.
+// Pure repository labels and source availability labels for the Knowledge workspace.
 import type { GithubKnowledgeRepository } from "./domain";
 
 export function knowledgeRepositoryLabel(
@@ -10,13 +10,6 @@ export function knowledgeRepositoryLabel(
 
 export const knowledgeSourceHealthKey = {
   ready: "knowledge.sourceHealthReady",
-  syncing: "knowledge.sourceHealthSyncing",
   stale: "knowledge.sourceHealthStale",
   failed: "knowledge.sourceHealthFailed",
 } as const;
-
-export interface KnowledgeSourceActivity {
-  state: "syncing" | "ready" | "failed";
-  errorKind: string | null;
-  previousGraphRevisionId?: string | null;
-}

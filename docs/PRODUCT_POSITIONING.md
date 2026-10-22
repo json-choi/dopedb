@@ -175,8 +175,6 @@ open roadmap work is complete:
   workspace deletion;
 - packaged two-member production validation of the current Analysis Article
   contract, manual rerun recovery, and fixed public HTML publication flow;
-- the remaining Local Folder Project Knowledge and any paid/experimental graph product;
-  GitHub exact-commit source browsing is the default source path, not a completed graph;
 - arbitrary cloud providers, database engines, credential brokers, or provider
   branching abstractions beyond the closed adapters named above.
 
@@ -187,9 +185,9 @@ When work competes for time, use this order:
 1. Make sharing one connection and obtaining individual access reliable.
 2. Finish provider discovery, least-privilege issuance, revoke, expiry, and drift.
 3. Strengthen the exact Agent authority, approval, stop, result, and recovery loop.
-4. Keep GitHub exploration cheap and exact through pinned tree/path/file reads, then
-   validate a graph product with measured quality, latency, and operating-cost gains
-   before implementing graph construction as a paid/experimental capability.
+4. Keep GitHub exploration cheap and exact through pinned tree/path/file reads.
+   Graph construction, traversal, mapping and Local Folder indexing are excluded
+   by PD-36 in `PRODUCT_UI_SCOPE.md`.
 5. Complete simple Analysis Article sharing and deletion, exact single-query manual rerun,
    and fixed public HTML publication only on top of that environment boundary.
 6. Deepen schema introspection where it improves Agent judgment.

@@ -126,7 +126,6 @@ async fn query_and_skill_security_contracts_stay_fail_closed() {
     crate::cli_environment::assert_cli_environment_contract();
     crate::skills::assert_skill_installation_contract();
     crate::features::agents::runtime::assert_acp_plugin_runtime_contract();
-    crate::features::knowledge::domain::assert_knowledge_domain_contract();
     crate::hosted_control_plane::assert_shared_http_client_contract();
     crate::features::workspaces::adapters::desktop_login::assert_desktop_login_contract().await;
     crate::features::workspaces::adapters::control_plane::assert_hosted_workspace_response_bounds_contract();

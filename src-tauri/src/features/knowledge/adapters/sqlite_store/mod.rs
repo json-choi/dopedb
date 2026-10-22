@@ -5,8 +5,5 @@
 
 mod access;
 mod codec;
-mod grants;
-mod graphs;
-mod mappings;
 mod projects;
 mod scopes;

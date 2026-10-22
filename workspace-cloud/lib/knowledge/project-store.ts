@@ -143,7 +143,7 @@ export async function appendKnowledgeEnvironment(input: {
   return projectFromRows(result.rows[2] as ProjectRow[]);
 }
 
-/** Tombstone the Project and revoke derived grants together; retain its evidence. */
+/** Tombstone the Project, revoke its bindings and sources, and retain its evidence. */
 export async function deleteKnowledgeProject(input: {
   organizationId: string;
   projectId: string;
@@ -152,8 +152,6 @@ export async function deleteKnowledgeProject(input: {
 }): Promise<DeleteKnowledgeProjectOutcome> {
   const environments = sql`SELECT id FROM knowledge_project_environment
     WHERE organization_id = ${input.organizationId} AND project_id = ${input.projectId}`;
-  const sources = sql`SELECT id FROM knowledge_source
-    WHERE organization_id = ${input.organizationId} AND project_id = ${input.projectId}`;
   const result = await atomicD1({
     scope: sql`SELECT json_object(
         'blocked', EXISTS (SELECT 1 FROM workspace_analysis_article
@@ -161,13 +159,7 @@ export async function deleteKnowledgeProject(input: {
         'bindingCount', (SELECT count(*) FROM knowledge_environment_connection
           WHERE organization_id = ${input.organizationId} AND project_environment_id IN (${environments}) AND revoked_at IS NULL),
         'sourceCount', (SELECT count(*) FROM knowledge_source
-          WHERE organization_id = ${input.organizationId} AND project_id = ${input.projectId} AND revoked_at IS NULL),
-        'grantCount', (SELECT count(*) FROM knowledge_grant
-          WHERE organization_id = ${input.organizationId} AND project_id = ${input.projectId} AND revoked_at IS NULL),
-        'syncJobCount', (SELECT count(*) FROM knowledge_source_sync_job
-          WHERE organization_id = ${input.organizationId} AND source_id IN (${sources}) AND state IN ('queued', 'claimed')),
-        'sourceEventCount', (SELECT count(*) FROM knowledge_source_event
-          WHERE organization_id = ${input.organizationId} AND source_id IN (${sources}) AND state IN ('pending', 'claimed'))
+          WHERE organization_id = ${input.organizationId} AND project_id = ${input.projectId} AND revoked_at IS NULL)
       ) AS payload FROM knowledge_project project
       WHERE ${knowledgeMutationAuthoritySql(input.authority, input.organizationId)}
         AND project.organization_id = ${input.organizationId} AND project.id = ${input.projectId}
@@ -184,16 +176,6 @@ export async function deleteKnowledgeProject(input: {
             revoked_at = ${utcNow}, updated_at = ${utcNow}
           WHERE organization_id = ${input.organizationId} AND project_id = ${input.projectId}
             AND revoked_at IS NULL AND EXISTS (${eligible})`,
-        sql`UPDATE knowledge_source_sync_job SET state = 'superseded', failure_code = 'project_deleted',
-            worker_id = NULL, claimed_at = NULL, lease_expires_at = NULL, finished_at = ${utcNow}, updated_at = ${utcNow}
-          WHERE organization_id = ${input.organizationId} AND source_id IN (${sources})
-            AND state IN ('queued', 'claimed') AND EXISTS (${eligible})`,
-        sql`UPDATE knowledge_source_event SET state = 'failed', consumed_at = ${utcNow}
-          WHERE organization_id = ${input.organizationId} AND source_id IN (${sources})
-            AND state IN ('pending', 'claimed') AND EXISTS (${eligible})`,
-        sql`UPDATE knowledge_grant SET revoked_at = ${utcNow}
-          WHERE organization_id = ${input.organizationId} AND project_id = ${input.projectId}
-            AND revoked_at IS NULL AND EXISTS (${eligible})`,
         sql`INSERT INTO workspace_audit_event (organization_id, actor_user_id, action, resource_type,
             resource_id, redacted_summary, request_id)
           SELECT ${input.organizationId}, ${input.authority.userId}, 'knowledge.project.delete', 'knowledge_project',
@@ -203,5 +185,5 @@ export async function deleteKnowledgeProject(input: {
     },
   });
   if (!result.matched) return "stale";
-  return result.rows[7][0]?.blocked === 1 ? "active_analyses" : "deleted";
+  return result.rows.at(-1)?.[0]?.blocked === 1 ? "active_analyses" : "deleted";
 }

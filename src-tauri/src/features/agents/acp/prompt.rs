@@ -240,13 +240,11 @@ pub(crate) fn assert_editor_context_scope_contract() {
         acp_session_id: Some("official-adapter-session".into()),
         knowledge_scopes: vec![KnowledgeSessionScope {
             project_id: Uuid::new_v4(),
-            knowledge_grant_id: None,
             project_environment_id: Uuid::new_v4(),
             environment_revision: 1,
             authority_connection_id: anchor_connection_id,
             authority_connection_revision: 1,
             sources: Vec::new(),
-            graph_revision_ids: Vec::new(),
             connections: vec![KnowledgeSessionConnection {
                 connection_id: selected_connection_id,
                 connection_revision: 1,
