@@ -334,7 +334,7 @@ async fn issue_session(
     for scope in &scopes {
         services
             .knowledge
-            .exact_knowledge_session_graphs(
+            .validate_knowledge_session_scope(
                 scope,
                 anchor.scope.workspace_id,
                 knowledge_account_scope,

@@ -340,7 +340,7 @@ grid의 query field·header action·필터 popover 밀도도 같은 앱에서 �
 | 결과/Jobs | `partial` | `features/queryServices`, `features/jobs` | 전역 하단 Services는 보조 보기 없이 제거했다. SQL 문서는 편집기 위·결과 아래의 높이 조절 가능한 상하 분할을 유지하며 실행 후 편집기 focus를 가져가지 않는다. 새 분할 검수는 위의 SQL 편집기/결과 상하 분할 항목을 따른다. 중앙 실행 결과 문서는 같은 연결의 보존된 session·Output·다중 statement를 표시한다. 상태 표시의 실행 중 query는 원래 문서로 이동해 controller를 유지한다. 브라우저 실제 컴포넌트에서 420px·900px 결과 폭, SQL 편집기 인스턴스·내용 보존, 다른 connection 결과 제외, Article/DB 탐색 분리를 확인했다. native packaged 실행·취소·재시작 복원 검수는 남아 있다. 비로그인 Personal 실행은 현재 process의 session/result를 즉시 보여 주되 계정 범위 영속화는 하지 않는다. Import/Export의 header와 주 동작은 고정하고 내용만 scroll한다. background cancel과 복원된 result handle, 쓰기 권한 차단 시 exact DB의 필요한 권한 계층·`Settings → Safety` 복구 진입을 검수한다. 관리형 DDL 실패도 별도 권한 창을 만들지 않고 동일한 Safety 단계와 provider 지원 여부로 복구한다. 직접 권한 변경·분류 불가 SQL은 `sqlPolicyBlocked`와 문자 기준 구문 위치로 안내하며 쓰기·DDL 설정을 복구 수단으로 제시하지 않는다. 실제 결과 컴포넌트에서 한·영 및 다크·라이트 안내를 검수했다. |
 | Agent tool window | `partial` | `features/agents`, ACP Rust runtime | Claude 표기를 사용하고, 15px 채팅 본문·14px control·12px 상태 계층과 28px header/context control을 적용했다. 공식 adapter가 제공한 model·mode select만 전달하고, ready 세션에서 명시적으로 승인 모드를 변경한다. 명시적으로 선택한 mode는 현재 기기의 workspace/account·provider에 기억하고 새 세션에서 adapter가 해당 선택지를 광고할 때만 적용한다. DB write approval은 별도다. 360px·396px 실제 컴포넌트 fixture에서 기존 두 행 정렬·light/dark·키보드 모드 변경·permission 대기 중 설정 비활성화를 확인했다. 실제 session store·transcript fixture에 시간차 조각을 보내 완료 전 본문 증가·작성 커서·완료 시 커서 제거·긴 답변의 입력창 유지와 자동 스크롤·위로 스크롤한 위치 보존을 확인했다. token burst는 화면 frame으로 합치며, 권한/완료 경계는 즉시 반영하고 account 전환 시 대기 frame을 취소한다. 실제 provider의 자동 승인 도구 실행 검수는 남아 있다. adapter가 없을 때 설정 CTA는 하나만 보여 준다. provider·model은 header 메뉴로 모으고 입력창 아래에는 resource와 mode를 한 행에 표시한다. 한 Project의 DB·BigQuery·GitHub source를 개별/다중 선택하고 trigger에 Project·선택 개수·읽기/쓰기 상태를 표시한다. 선택하지 않은 resource 차단, connection별 독립 read, 단일 write target, 공식 adapter 설치·실행 계약 호환성·로그아웃·permission·resume, resource 선택의 즉시 반영과 입력창을 유지하는 백그라운드 선행 준비, 동일 권한 focus-refresh 연속성, 저장 분석 요청의 Article verify/propose 영수증과 실제 Article 도구명에만 대응하는 저장 상태 표시를 packaged runtime에서 검수하면 `complete`로 복귀한다. 계정 관리 메뉴는 shell의 Settings → 에이전트·계정으로 이동하며 첫 설치 준비 이벤트를 보내지 않는다. 계정·플랜과 공식 CLI 로그인 명령 복사·재확인을 기본 표시하고 설치 상세만 접는다. 첫 실행의 자동 준비 창은 선택·나중에 기록이 없고 설치 상태 확인 후 준비가 필요한 경우에만 열린다. 초기 조회가 끝난 뒤 자동 표시를 한 번만 판단하고 검사 실패를 미설치와 구분한다. headless 컴포넌트 fixture에서 최초 준비 완료 후 어댑터 비활성화, CLI 검사 실패와 복구, 캐시가 있어도 진행 중인 조회 대기, 설치 필요·CLI 없음·선택 저장·나중에·Escape·명시적 준비 요청을 검수했다. 실제 컴포넌트와 shell route reducer를 사용한 headless 브라우저 fixture에서 메뉴 이동, 표시·명령 복사·상태 재확인, Escape, 준비 완료·설치 필요·나중에 분기, 한·영 및 1100/560/390px 배치를 검수했다. 실제 CLI 계정 전환과 packaged native 검수는 남아 있다. |
 | External Agent approval | `partial` | `features/agents/ExternalAgentRequestGate`, `dopedb-cli`, Local Broker | `agent init`의 secret-free config 생성, `agent start`의 immutable resource 재검토, token 없는 process-bound MCP 주입·종료 revoke는 자동 회귀 검수한다. macOS/Windows packaged CLI에서 Codex/Claude 각각의 실제 로그인·승인·종료 흐름을 검수하면 `complete`로 전환한다. |
-| Knowledge graph | `partial` | Rust `features/knowledge`, frontend Knowledge source projection | exact-commit GitHub 탐색과 Local source revision은 유지한다. 그래프 구성·매핑 검토 UI·exact graph grant는 benchmark와 entitlement 결정 뒤 새 실행 설계로 구현하고 packaged 검수한다. |
+| Knowledge graph | `out-of-scope` | PD-36 | 그래프 추출·탐색·매핑·전용 grant·코드 인덱싱·Local Folder 감시는 제거한다. GitHub 연결과 정확한 커밋의 파일 읽기·검색, Project·Environment DB 리소스 권한은 유지한다. |
 | Analysis Article | `partial` | `features/analysisArticles`, cloud analysis application | Personal Workspace는 로그인 없이 기기 내 암호화 저장소에 개인 Article을 만들고 편집·revision 이력·삭제·수동 재조회하며, 공유 초대와 공개 발행은 Team Workspace만 제공한다. Workspace 범위를 확인하지 못한 동안에만 Explorer 필터를 숨기고 로그인/Workspace 선택 복구 동작과 중립 Project/Analysis status context를 보여 준다. 사용자 상태·revision·결과 제한 문구는 i18n presentation mapping을 거친다. Explorer 소유 문자 필터와 단일 중앙 HTML document를 유지한다. Article은 1000px 단일 열, 간결한 sans 제목과 작성 정보, 평평한 핵심 지표·차트로 정리했다. 출처·revision·목차·저장 쿼리·로컬 결과는 본문 아래 검수 disclosure에 기본으로 접고 재조회·취소는 제목 아래에 유지한다. 작성 안내는 사용 가능한 Agent HTML·시각화 스킬을 우선 활용하고 없으면 직접 작성하도록 한다. 핵심 지표와 발견 내용을 짧게 전달하되 구성·색상·지표·차트 개수를 고정하지 않으며 DopeDB HTML·저장 계약만 연결한다. 새 안내로 실제 Agent가 생성·저장하는 검수는 남아 있다. 상단 Edit·Share·More와 publication modal을 유지한다. 실제 reader 컴포넌트와 합성 HTML을 사용한 브라우저 검수에서 1100/740/390px, 라이트·다크, 한·영 검수 label, 기본 접힘과 저장 쿼리 비노출, 키보드 펼치기·접기, 목차 focus 이동과 실행 중 취소 action 노출을 확인했다. 실제 DB 재조회·취소와 native packaged 검수는 남아 있다. 본문 DOM은 memo로 보존해 목차 관찰과 keyboard focus가 유지된다. 실제 컴포넌트의 로컬 fixture에서 1536/1200/860/740px 배치, 목차 이동·포커스, 공유·편집·공개 modal·Escape, 로딩 실패 복구를 확인했다. authenticated Article의 packaged 검수는 남아 있다. 공개 HTML의 제목·publication·오류·없는 링크 안내는 한·영 copy를 사용하고 publication 시각은 명시적 UTC와 machine-readable time으로 표시한다. 없는 링크는 식별 정보를 밝히지 않는 중립 복구 화면으로, runtime 오류는 retry 화면으로 처리한다. 새 공개 경로의 브라우저 검수와 exact 단일 query의 로컬 수동 재조회, immutable public HTML 발행·RFC3339 응답의 실제 환경 검수는 남아 있다. |
 | Article private sharing / invitations | `partial` | `features/analysisArticles`, `workspace-cloud/features/articleSharing` | 이메일 지정 48시간 초대, verified-email 수락 시 membership + 정확한 DB read grant, 기존 높은 권한 유지, 취소·만료·권한 변경·동시 수락·소비한 링크의 권한 복원 차단은 격리 PostgreSQL harness로 검수했다. Desktop 공유 dialog의 생성·복사·취소·앱 복귀 UI는 로컬 fixture로 검수했다. 브라우저의 Article deep link가 packaged macOS 개발 앱을 열고 비로그인 계정의 로그인 복구 화면으로 연결되는 것을 확인했다. 새 Cloud 배포와 Desktop 배포를 연결한 실제 설치→로그인→원래 Article 복귀는 아직 배포 전이며, query 자동 실행은 없다. |
 | Appearance/theme | `partial` | `design-system/theme.ts`, `screens/Settings/Appearance`, `lib/appProviders` | 시스템 기본값·명시적 라이트/다크·기기별 저장과 복원을 구현했다. 다크 palette의 큰 면은 채도를 낮춘 남색 surface 단계로 구성하고 선명한 파랑은 주 동작·focus에, 옅은 파랑은 선택·정보에 사용한다. Welcome 장식의 주황은 작업 상태색에 사용하지 않는다. 역할별 값과 컴포넌트 배정은 `docs/DARK_COLOR_COMPONENT_MAP.md`에서 관리한다. 탐색 아이콘과 헤더 정렬은 App shell/chrome 항목에서 관리한다. macOS 개발 bundle에서 기본 선택·다크 적용·앱 재시작 후 복원·시스템 복귀를 확인했다. 실제 컴포넌트 fixture에서 OS 변경 event 반영과 고정 테마 유지, SQL 편집 내용·터미널 출력 보존, Agent 코드·Mermaid 재렌더링을 확인했다. 새 palette의 실제 Desktop 화면 검수, Windows packaged 및 실제 OS 자동 전환 검수는 남아 있다. |
@@ -450,10 +450,29 @@ Acceptance: cancel 후 connection을 검증 없이 재사용하지 않고 write 
 Acceptance: general MCP server, arbitrary provider API, 승인 우회 mode와 stale session
 focus가 없어야 한다.
 
+### Knowledge 그래프 폐기 검증 (2026-10-22)
+
+PD-36에 따라 그래프·매핑·전용 grant·코드 인덱싱과 Local Folder 감시를 제거했다.
+클라우드 마이그레이션은 관련 9개 테이블을, 지원 중인 로컬 baseline의 정리는
+5개 테이블과 폐기된 소스 필드를 제거한다. 기존 GitHub 소스·웹훅 영수증·DB 연결·
+권한 바인딩과 로컬 대화 기록의 보존을 검증했다. 소스 커밋 변경과 회수는 기존
+Agent scope를 계속 거부한다. Broker command schema는 19다.
+
+폐기된 인덱싱 대기·진행 상태는 사용 가능한 소스로 전환하되 회수된 소스와 실제
+GitHub 오류는 보존한다. 처리자가 없어진 웹훅 큐는 종료 상태로 보존한다.
+마이그레이션 중간 실패를 강제로 발생시켜 테이블 삭제와 불변성 트리거까지
+원자적으로 되돌아오는 것을 검증했다.
+
+프런트엔드 build·43개 smoke test, Workspace Cloud build·D1 migration/contract
+harness, Rust fmt·clippy·전체 smoke와 wire goldens를 통과했다. Playwright headless의
+실제 소스 컴포넌트 fixture에서 한·영 연결 폼, 커밋 표시, 연결·제거·빈 목록과
+그래프·Local Folder UI 부재를 확인했다. 실제 GitHub 계정·packaged 앱의 새 통합
+검수와 운영 배포는 수행하지 않았다. Desktop과 Cloud는 함께 갱신해야 한다.
+
 ### 5. Knowledge와 Analysis Article
 
-1. GitHub repository 또는 Local Folder를 Project Environment에 연결한다.
-2. deterministic extraction이 immutable graph revision과 evidence anchor를 만든다.
+1. GitHub repository를 Project Environment에 연결한다.
+2. Agent가 선택한 정확한 커밋의 파일을 검색·읽는다. 브랜치가 이동하거나 소스·Environment 권한이 바뀌면 기존 세션의 읽기는 거부한다.
 3. Agent는 exact connection grant에서 sanitized HTML Article과 단일 bounded
    read query를 제안한다.
 4. 사람은 Desktop에서 query를 수동 재조회하고 immutable public HTML을 발행한다.

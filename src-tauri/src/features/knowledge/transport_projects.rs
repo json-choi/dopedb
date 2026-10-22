@@ -80,20 +80,15 @@ pub(crate) async fn delete_knowledge_project_command(
         .iter()
         .map(|environment| environment.id)
         .collect::<HashSet<_>>();
-    let project_sources = state
-        .services
-        .knowledge
-        .scopes(scope.workspace_id)
-        .await?
-        .into_iter()
-        .filter(|source| source.project.id == project_id)
-        .map(|source| (source.binding.source_id, source.binding.provider))
-        .collect::<Vec<_>>();
 
     if scope.workspace_kind == WorkspaceKind::Personal {
-        let has_hosted_source = project_sources
+        let has_hosted_source = state
+            .services
+            .knowledge
+            .scopes(scope.workspace_id)
+            .await?
             .iter()
-            .any(|(_, provider)| *provider == KnowledgeSourceProvider::Github);
+            .any(|source| source.project.id == project_id);
         if has_hosted_source {
             let account = selected_remote_account(&scope)?;
             let remote = state
@@ -152,20 +147,6 @@ pub(crate) async fn delete_knowledge_project_command(
                 error_kind = error.kind(),
                 "deleted Project cache cleanup deferred"
             );
-        }
-    }
-    for (source_id, provider) in project_sources {
-        state.knowledge_watches.stop(source_id);
-        if provider == KnowledgeSourceProvider::LocalFolder {
-            if let Err(error) = delete_knowledge_source_root(source_id) {
-                tracing::warn!(
-                    workspace_id = %scope.workspace_id,
-                    project_id = %project_id,
-                    source_id = %source_id,
-                    error_kind = error.kind(),
-                    "deleted Project local source credential cleanup deferred"
-                );
-            }
         }
     }
     let interrupted = state
@@ -265,7 +246,6 @@ pub(crate) async fn connect_knowledge_github_source(
         project_environment_id: environment.id,
         environment_revision: environment.revision,
         display_name: input.display_name,
-        visibility: KnowledgeSourceVisibility::SharedGraph,
         locator: SourceLocator::Github {
             installation_id: input.installation_id,
             repository_id: input.repository_id,
@@ -298,90 +278,4 @@ pub(crate) async fn connect_knowledge_github_source(
         None,
     )
     .await
-}
-
-#[tauri::command]
-pub(crate) async fn connect_knowledge_local_folder(
-    state: State<'_, AppState>,
-    app: tauri::AppHandle,
-    input: LocalFolderSourceInput,
-) -> AppResult<Option<KnowledgeSourceProjection>> {
-    use tauri_plugin_dialog::DialogExt;
-
-    let scope = state.services.knowledge.active_resource_scope().await?;
-    let projects = active_project_inventory(&state, &scope).await?;
-    let (project, environment) = domain_scope(
-        WorkspaceId::from(scope.workspace_id),
-        &projects,
-        input.project_id,
-        input.project_environment_id,
-    )?;
-    let Some(root) = app
-        .dialog()
-        .file()
-        .blocking_pick_folder()
-        .and_then(|path| path.into_path().ok())
-    else {
-        return Ok(None);
-    };
-    let source_id = Uuid::new_v4();
-    let draft = SourceBindingDraft {
-        source_id,
-        project_id: project.id,
-        project_environment_id: environment.id,
-        environment_revision: environment.revision,
-        display_name: input.display_name,
-        visibility: KnowledgeSourceVisibility::LocalOnly,
-        locator: SourceLocator::LocalFolder { root: root.clone() },
-    };
-    let binding = state
-        .local_knowledge_sources
-        .bind_for_environment(&draft, &environment)
-        .await?;
-    let snapshot = state
-        .local_knowledge_sources
-        .snapshot(&binding, None)
-        .await?;
-    if let Err(error) = store_knowledge_source_root(source_id, &root) {
-        let _ = state.local_knowledge_sources.revoke(&binding).await;
-        return Err(error);
-    }
-    if let Err(error) = state
-        .services
-        .knowledge
-        .save_scope(
-            &project,
-            &environment,
-            &snapshot.binding,
-            snapshot.environment_revision,
-        )
-        .await
-    {
-        let _ = delete_knowledge_source_root(source_id);
-        let _ = state.local_knowledge_sources.revoke(&binding).await;
-        return Err(error);
-    }
-    if let Err(error) = state.services.knowledge.save_snapshot(&snapshot).await {
-        let _ = state.services.knowledge.remove_scope(source_id).await;
-        let _ = delete_knowledge_source_root(source_id);
-        let _ = state.local_knowledge_sources.revoke(&binding).await;
-        return Err(error);
-    }
-    state.knowledge_watches.sync(source_id).await?;
-    state.knowledge_watches.start(
-        Arc::new(super::super::runtime_adapter::TauriKnowledgeSourceEventSink::new(app.clone())),
-        source_id,
-    );
-    Ok(Some(
-        project_source(
-            &state,
-            StoredKnowledgeScope {
-                project,
-                environment,
-                binding: snapshot.binding,
-            },
-            None,
-        )
-        .await?,
-    ))
 }

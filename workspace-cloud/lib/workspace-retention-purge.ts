@@ -20,8 +20,7 @@ const evidenceTables = [
   "workspace_analysis_article_revision", "workspace_analysis_article", "workspace_analysis_runner",
   "workspace_metadata_backup", "workspace_data_key_rotation", "workspace_data_key",
   "workspace_resource_conflict_resolution", "workspace_resource_conflict", "workspace_resource_version",
-  "workspace_provider_import_request", "knowledge_environment_head", "knowledge_grant", "knowledge_mapping_proposal",
-  "knowledge_graph_revision", "knowledge_source", "workspace_connection",
+  "workspace_provider_import_request", "knowledge_source", "workspace_connection",
 ] as const;
 
 export async function purgeDueWorkspace(organizationId: string, receiptId: string) {

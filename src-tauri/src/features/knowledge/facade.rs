@@ -4,10 +4,7 @@
 //! Knowledge authority, keeping both `Store` and workspace HTTP adapters out of
 //! transports, Analysis Articles, and the ACP Broker.
 
-use dopedb_protocol::{
-    GraphBuildArtifactV1, GraphRevisionDiffV1, KnowledgeSourceBindingV1, KnowledgeSourceProvider,
-    KnowledgeSourceVisibility, SourceRevisionIdentity,
-};
+use dopedb_protocol::{KnowledgeSourceBindingV1, KnowledgeSourceProvider, SourceRevisionIdentity};
 use uuid::Uuid;
 
 use crate::error::{AppError, AppResult};
@@ -16,9 +13,8 @@ use crate::kernel::environment::EnvironmentKind;
 
 use super::domain::{
     validate_binding_draft, EnvironmentConnectionBinding, KnowledgeEnvironmentSummary,
-    KnowledgeMappingProposal, KnowledgeSessionScope, Project, ProjectDefinition,
-    ProjectEnvironment, SourceBindingDraft, SourceLocator, SourceSnapshot, StoredKnowledgeScope,
-    KNOWLEDGE_ACCESS_SYNC_FAILED,
+    KnowledgeSessionScope, Project, ProjectDefinition, ProjectEnvironment, SourceBindingDraft,
+    SourceLocator, StoredKnowledgeScope, KNOWLEDGE_ACCESS_SYNC_FAILED,
 };
 use super::ports::{
     AppendKnowledgeEnvironmentRequest, CreateKnowledgeProjectRequest, CreateKnowledgeSourceRequest,
@@ -61,7 +57,6 @@ where
             Ok(receipt) => {
                 tracing::debug!(
                     projects = receipt.projects.len(),
-                    grants = receipt.grant_count,
                     environment_bindings = receipt.environment_binding_count,
                     "reconciled exact Project Knowledge access"
                 );
@@ -150,43 +145,6 @@ where
 
     pub(crate) async fn remove_scope(&self, source_id: Uuid) -> AppResult<()> {
         self.repository.remove_scope(source_id).await
-    }
-
-    pub(crate) async fn save_snapshot(&self, snapshot: &SourceSnapshot) -> AppResult<()> {
-        self.repository.save_snapshot(snapshot).await
-    }
-
-    pub(crate) async fn source_snapshot(
-        &self,
-        source_id: Uuid,
-    ) -> AppResult<Option<SourceSnapshot>> {
-        self.repository.source_snapshot(source_id).await
-    }
-
-    pub(crate) async fn stage(&self, graph: &GraphBuildArtifactV1) -> AppResult<()> {
-        self.repository.stage(graph).await
-    }
-
-    pub(crate) async fn activate(&self, graph: &GraphBuildArtifactV1) -> AppResult<()> {
-        self.repository.activate(graph).await
-    }
-
-    pub(crate) async fn active_for_source(
-        &self,
-        source_id: Uuid,
-    ) -> AppResult<Option<GraphBuildArtifactV1>> {
-        self.repository.active_for_source(source_id).await
-    }
-
-    pub(crate) async fn by_revision(
-        &self,
-        revision_id: Uuid,
-    ) -> AppResult<Option<GraphBuildArtifactV1>> {
-        self.repository.by_revision(revision_id).await
-    }
-
-    pub(crate) async fn diff(&self, from: Uuid, to: Uuid) -> AppResult<GraphRevisionDiffV1> {
-        self.repository.diff(from, to).await
     }
 
     pub(crate) async fn pin_connection_for_read(&self, id: Uuid) -> AppResult<PinnedConnection> {
@@ -311,14 +269,14 @@ where
         Ok(binding.connection_revision)
     }
 
-    pub(crate) async fn exact_knowledge_session_graphs(
+    pub(crate) async fn validate_knowledge_session_scope(
         &self,
         scope: &KnowledgeSessionScope,
         workspace_id: Uuid,
         account_id: &str,
-    ) -> AppResult<Vec<GraphBuildArtifactV1>> {
+    ) -> AppResult<()> {
         self.repository
-            .exact_knowledge_session_graphs(scope, workspace_id, account_id)
+            .validate_knowledge_session_scope(scope, workspace_id, account_id)
             .await
     }
 
@@ -334,13 +292,6 @@ where
         request: &PinnedSourceReadRequest<'_>,
     ) -> AppResult<RemoteSourceReadResult> {
         self.authority.read_source(request).await
-    }
-
-    pub(crate) async fn propose_mapping(
-        &self,
-        proposal: &KnowledgeMappingProposal,
-    ) -> AppResult<()> {
-        self.repository.propose_mapping(proposal).await
     }
 
     pub(crate) async fn environment_connections(
@@ -399,18 +350,6 @@ where
     ) -> AppResult<Vec<(Uuid, Uuid)>> {
         self.repository
             .local_connection_ids_for_remote(workspace_id)
-            .await
-    }
-
-    pub(crate) async fn propose_remote_mapping(
-        &self,
-        account_id: &str,
-        workspace_id: Uuid,
-        grant_id: Uuid,
-        proposal: &KnowledgeMappingProposal,
-    ) -> AppResult<KnowledgeMappingProposal> {
-        self.authority
-            .propose_mapping(account_id, workspace_id, grant_id, proposal)
             .await
     }
 
@@ -559,12 +498,7 @@ where
             repository_id,
             repository,
             ref_name,
-        } = &draft.locator
-        else {
-            return Err(crate::error::AppError::Config(
-                "the GitHub source received another provider".into(),
-            ));
-        };
+        } = &draft.locator;
         let created = self
             .authority
             .create_source(
@@ -599,7 +533,6 @@ where
             project_environment_id: draft.project_environment_id,
             provider: KnowledgeSourceProvider::Github,
             display_name: draft.display_name.trim().to_owned(),
-            visibility: KnowledgeSourceVisibility::SharedGraph,
             revision: SourceRevisionIdentity::Github {
                 repository_id: repository_id.clone(),
                 repository: repository.clone(),

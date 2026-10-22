@@ -37,7 +37,7 @@
     },
     "src/features/workbench/state.test.ts": {
       "tests": 5,
-      "protects": "System-default desktop language resolution and preference persistence with explicit-choice preservation, Workbench document identity, save ownership, SQL resolve context, mutually exclusive AppShell route transitions, first-connection Test/engine/Demo contracts including managed BigQuery tooling, typed authentication recovery, and discovered-resource selector fallback, a workspace administration scope bound to the signed-in member of the active team workspace that grants management only to admins and owners and ownership only to owners, with no scope for personal, disabled, membership-less or signed-out states, immutable Analysis snapshot controls, editable-target-safe Action Search shortcuts, Project-level Explorer resource flattening with exact Environment DB badges, member-local drag ordering with contiguous prod/dev schema groups, preferred-Environment Databases-folder drops, and exact shared-connection replacement receipts, 5,000-item loaded-only Explorer search and tree keyboard navigation, common modal title-only native drag isolation, durable Knowledge sync progress projection, and app-lifetime updater single-flight, retry, progress, relaunch, and resource cleanup; Desktop and CLI schema diff parity against one canonical environment fixture; non-destructive tab close with member-local open-tab restore that honours a stored empty set, drops documents deleted elsewhere, and never reopens a tab closed while the document list was still loading"
+      "protects": "System-default desktop language resolution and preference persistence with explicit-choice preservation, Workbench document identity, save ownership, SQL resolve context, mutually exclusive AppShell route transitions, first-connection Test/engine/Demo contracts including managed BigQuery tooling, typed authentication recovery, and discovered-resource selector fallback, a workspace administration scope bound to the signed-in member of the active team workspace that grants management only to admins and owners and ownership only to owners, with no scope for personal, disabled, membership-less or signed-out states, immutable Analysis snapshot controls, editable-target-safe Action Search shortcuts, Project-level Explorer resource flattening with exact Environment DB badges, member-local drag ordering with contiguous prod/dev schema groups, preferred-Environment Databases-folder drops, and exact shared-connection replacement receipts, 5,000-item loaded-only Explorer search and tree keyboard navigation, common modal title-only native drag isolation, app-lifetime updater single-flight, retry, progress, relaunch, and resource cleanup; Desktop and CLI schema diff parity against one canonical environment fixture; non-destructive tab close with member-local open-tab restore that honours a stored empty set, drops documents deleted elsewhere, and never reopens a tab closed while the document list was still loading"
     },
     "src/features/workspaces/authPolicy.test.ts": {
       "tests": 3,
@@ -91,7 +91,7 @@
     },
     "src-tauri/src/store/tests/connections_scope.rs": {
       "tests": 4,
-      "protects": "Account isolation, credential binding, managed write projection, scope ABA rejection, Knowledge source revision IPC casing, bounded History/Audit metadata and exact detail reads, streamed audit verification identity, current ACP provider state, strict connection snapshots, unreadable-session isolation, active-session-preserving history pruning, and ordered count/byte-bounded ACP replay batches"
+      "protects": "Account isolation, credential binding, managed write projection, scope ABA rejection, GitHub source revision IPC casing and graph-storage retirement preserving current source identities and connections, bounded History/Audit metadata and exact detail reads, streamed audit verification identity, current ACP provider state, strict connection snapshots, unreadable-session isolation, active-session-preserving history pruning, and ordered count/byte-bounded ACP replay batches"
     },
     "tools/release-updater-verify/src/main.rs": {
       "tests": 4,
@@ -109,7 +109,7 @@
       "role": "entry-point",
       "runner": "workspace-cloud/vitest.contracts.config.ts",
       "tests": 1,
-      "protects": "Workspace D1 safety over a Miniflare-backed database: relational guards, atomic rollback, and the shared concurrent request budget"
+      "protects": "Workspace D1 safety over a Miniflare-backed database: relational guards, atomic rollback, graph-retirement data preservation and interrupted-migration rollback, retired queue states, and the shared concurrent request budget"
     },
     "workspace-scheduler-cloudflare/src/index.harness.ts": {
       "role": "entry-point",

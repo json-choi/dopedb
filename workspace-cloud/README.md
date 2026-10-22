@@ -254,24 +254,16 @@ does not poll in the background. If the external browser has no DopeDB session, 
 callback routes through the normal Google sign-in page and resumes the same one-time
 setup state instead of discarding the installation attempt.
 
-The default path does not build or persist a graph. The control plane pins each source
+The control plane pins each source
 to an exact commit and exposes only bounded repository-relative tree search and UTF-8
 line reads. Every read rechecks the current workspace membership, Environment
 revision, source id, commit SHA, active GitHub installation, and tree membership before
 using an in-memory installation token. Tokens and source bodies are never returned to
-Desktop or stored in PostgreSQL. ACP sessions copy the exact source identities at
+Desktop as stored snapshots or persisted in D1. ACP sessions copy the exact source identities at
 session start, so a branch move makes an old session fail closed rather than silently
 changing its code view.
 
-Graph construction is not shipped by the control plane. Webhook pushes advance only
-the source's pinned commit and no recurring Knowledge task exists. The MVP baseline
-contains no upgrade path for unfinished pre-MVP graph jobs. A future paid or
-experimental graph product requires a new entitlement, scheduler, storage, and
-benchmarked execution design.
-
-Local Folder remains strictly device-local because the cloud cannot observe an
-offline path. Desktop indexes and watches it locally; the hosted source inventory and
-Cloudflare control plane accept GitHub sources only.
+Webhook pushes advance only the source's pinned commit. Graph extraction, graph traversal, mapping, graph grants, code-index jobs, and Local Folder indexing are excluded by PD-36 in `../docs/PRODUCT_UI_SCOPE.md`. Migration `0014_remove_knowledge_graph.sql` retires their tables while preserving GitHub identities, webhook receipt history, and database-owned storage guards. Deploy the matching Desktop and control-plane versions together: source projections no longer carry graph visibility or revision fields.
 
 ## Neon managed access
 

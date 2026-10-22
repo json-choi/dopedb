@@ -1,23 +1,15 @@
 //! Trusted Desktop transport for Project Knowledge source setup.
 //!
 //! The renderer receives source identity and revision evidence only. GitHub App
-//! installation tokens remain in the control plane, and Local Folder paths stay
-//! behind this native command boundary and the OS credential store.
+//! installation tokens remain in the control plane.
 
 use std::collections::{BTreeMap, HashSet};
-use std::sync::Arc;
 
-use dopedb_protocol::{
-    KnowledgeSourceBindingV1, KnowledgeSourceProvider, KnowledgeSourceVisibility,
-    SourceRevisionIdentity,
-};
+use dopedb_protocol::{KnowledgeSourceBindingV1, KnowledgeSourceProvider, SourceRevisionIdentity};
 use serde::{Deserialize, Serialize};
 use tauri::State;
 use uuid::Uuid;
 
-use crate::connection::keychain::{
-    delete_knowledge_source_root, fetch_knowledge_source_root, store_knowledge_source_root,
-};
 use crate::error::{AppError, AppResult};
 use crate::kernel::access::{ActiveResourceScope, WorkspaceKind};
 use crate::kernel::environment::EnvironmentKind;
@@ -30,18 +22,18 @@ use super::domain::{
 };
 use super::ports::{
     AppendKnowledgeEnvironmentRequest, CreateKnowledgeEnvironmentRequest,
-    CreateKnowledgeProjectRequest, LocalKnowledgeSourcePort, RemoteGithubRepository,
-    RemoteKnowledgeEnvironment, RemoteKnowledgeProject, RemoteKnowledgeSource,
+    CreateKnowledgeProjectRequest, RemoteGithubRepository, RemoteKnowledgeEnvironment,
+    RemoteKnowledgeProject, RemoteKnowledgeSource,
 };
 
-#[path = "transport_graph.rs"]
-mod graph;
+#[path = "transport_connections.rs"]
+mod connections;
 #[path = "transport_projects.rs"]
 mod projects;
 #[path = "transport_sources.rs"]
 mod sources;
 
-pub(crate) use graph::*;
+pub(crate) use connections::*;
 pub(crate) use projects::*;
 pub(crate) use sources::*;
 
@@ -56,17 +48,14 @@ pub(crate) struct KnowledgeSourceProjection {
     environment_kind: EnvironmentKind,
     provider: KnowledgeSourceProvider,
     display_name: String,
-    visibility: KnowledgeSourceVisibility,
     revision: KnowledgeSourceRevisionProjection,
     health: SourceHealthState,
-    graph_revision_id: Option<Uuid>,
-    local_capability_available: bool,
 }
 
-// `SourceRevisionIdentity` is also part of the persisted graph-artifact
+// `SourceRevisionIdentity` is also part of the persisted source-binding
 // protocol, where its fields intentionally use snake_case.  The desktop IPC
 // contract is camelCase, so translate at this boundary instead of changing the
-// protocol representation (and therefore its canonical hash).
+// protocol representation.
 #[derive(Debug, Clone, Serialize)]
 #[serde(
     tag = "kind",
@@ -79,18 +68,6 @@ enum KnowledgeSourceRevisionProjection {
         repository: String,
         ref_name: String,
         commit_sha: String,
-    },
-    LocalGit {
-        root_fingerprint: String,
-        git_root_fingerprint: String,
-        ref_name: String,
-        commit_sha: String,
-        dirty: bool,
-        worktree: bool,
-    },
-    LocalSnapshot {
-        root_fingerprint: String,
-        snapshot_sha256: String,
     },
 }
 
@@ -107,28 +84,6 @@ impl From<SourceRevisionIdentity> for KnowledgeSourceRevisionProjection {
                 repository,
                 ref_name,
                 commit_sha,
-            },
-            SourceRevisionIdentity::LocalGit {
-                root_fingerprint,
-                git_root_fingerprint,
-                ref_name,
-                commit_sha,
-                dirty,
-                worktree,
-            } => Self::LocalGit {
-                root_fingerprint,
-                git_root_fingerprint,
-                ref_name,
-                commit_sha,
-                dirty,
-                worktree,
-            },
-            SourceRevisionIdentity::LocalSnapshot {
-                root_fingerprint,
-                snapshot_sha256,
-            } => Self::LocalSnapshot {
-                root_fingerprint,
-                snapshot_sha256,
             },
         }
     }
@@ -165,14 +120,6 @@ pub(crate) struct GithubSourceInput {
     repository_id: String,
     repository: String,
     ref_name: String,
-    display_name: String,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub(crate) struct LocalFolderSourceInput {
-    project_id: Uuid,
-    project_environment_id: Uuid,
     display_name: String,
 }
 
@@ -410,7 +357,6 @@ fn remote_github_binding(source: &RemoteKnowledgeSource) -> AppResult<KnowledgeS
         project_environment_id: source.project_environment_id,
         provider: KnowledgeSourceProvider::Github,
         display_name: source.display_name.clone(),
-        visibility: KnowledgeSourceVisibility::SharedGraph,
         revision: SourceRevisionIdentity::Github {
             repository_id: repository_id.clone(),
             repository: repository.clone(),
@@ -427,43 +373,19 @@ fn remote_github_binding(source: &RemoteKnowledgeSource) -> AppResult<KnowledgeS
 }
 
 async fn project_source(
-    state: &AppState,
+    _state: &AppState,
     scope: StoredKnowledgeScope,
     remote: Option<&RemoteKnowledgeSource>,
 ) -> AppResult<KnowledgeSourceProjection> {
-    let local_capability_available = scope.binding.provider != KnowledgeSourceProvider::LocalFolder
-        || fetch_knowledge_source_root(scope.binding.source_id)
-            .ok()
-            .flatten()
-            .is_some();
-    let active_index = state
-        .services
-        .knowledge
-        .active_for_source(scope.binding.source_id)
-        .await?;
-    let active_index_available = active_index.is_some();
-    let (health, graph_revision_id) = match scope.binding.provider {
-        KnowledgeSourceProvider::Github => (
-            match remote.map(|source| source.sync_state.as_str()) {
-                Some("ready") => SourceHealthState::Ready,
-                Some("failed") => SourceHealthState::Failed,
-                Some("stale") => SourceHealthState::Stale,
-                None => SourceHealthState::Ready,
-                _ => SourceHealthState::Syncing,
-            },
-            remote.and_then(|source| source.graph_revision_id),
-        ),
-        KnowledgeSourceProvider::LocalFolder
-            if local_capability_available && active_index_available =>
-        {
-            (
-                SourceHealthState::Ready,
-                active_index
-                    .as_ref()
-                    .map(|artifact| artifact.graph_revision_id),
-            )
+    let health = match remote.map(|source| source.sync_state.as_str()) {
+        Some("failed") => SourceHealthState::Failed,
+        Some("stale") => SourceHealthState::Stale,
+        Some("ready") | None => SourceHealthState::Ready,
+        Some(_) => {
+            return Err(AppError::Network(
+                "the GitHub source has an invalid state".into(),
+            ))
         }
-        KnowledgeSourceProvider::LocalFolder => (SourceHealthState::Stale, None),
     };
     Ok(KnowledgeSourceProjection {
         source_id: scope.binding.source_id,
@@ -474,10 +396,7 @@ async fn project_source(
         environment_kind: scope.environment.kind,
         provider: scope.binding.provider,
         display_name: scope.binding.display_name,
-        visibility: scope.binding.visibility,
         revision: scope.binding.revision.into(),
         health,
-        graph_revision_id,
-        local_capability_available,
     })
 }

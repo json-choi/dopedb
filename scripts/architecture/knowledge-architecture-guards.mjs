@@ -42,7 +42,7 @@ export function checkKnowledgeArchitecture(harness) {
     "src-tauri/src/features/knowledge/adapters";
   const knowledgeCompositionPath = "src-tauri/src/features/knowledge/mod.rs";
   const knowledgeComposition = read(knowledgeCompositionPath);
-  for (const moduleName of ["adapters", "ports", "runtime_adapter"]) {
+  for (const moduleName of ["adapters", "ports"]) {
     const declarations = [...knowledgeComposition.matchAll(
       new RegExp(`^(?<visibility>\\s*pub(?:\\([^)]*\\))?\\s+)?mod\\s+${moduleName}\\s*;`, "gm"),
     )];
@@ -51,13 +51,6 @@ export function checkKnowledgeArchitecture(harness) {
         `${knowledgeCompositionPath}: ${moduleName} must remain a private production module`,
       );
     }
-  }
-  if (!knowledgeComposition.includes(
-    "pub(crate) use adapters::local::LocalFolderAdapter;",
-  )) {
-    failures.push(
-      `${knowledgeCompositionPath}: AppState may receive LocalFolderAdapter only through its narrow root re-export`,
-    );
   }
   if (
     !/pub\(crate\) fn compose\(store: crate::store::Store\) -> KnowledgeFeature/.test(
@@ -354,7 +347,7 @@ export function checkKnowledgeArchitecture(harness) {
     "src-tauri/src/features/knowledge/transport.rs",
     "src-tauri/src/features/knowledge/transport_projects.rs",
     "src-tauri/src/features/knowledge/transport_sources.rs",
-    "src-tauri/src/features/knowledge/transport_graph.rs",
+    "src-tauri/src/features/knowledge/transport_connections.rs",
   ].map(read).join("\n");
   const projectListQuery = rustFunctionSource(
     knowledgeTransport,
@@ -412,7 +405,6 @@ export function checkKnowledgeArchitecture(harness) {
   for (const functionName of [
     "active_remote_scope",
     "create_knowledge_environment_command",
-    "connect_knowledge_local_folder",
   ]) {
     const caller = rustFunctionSource(knowledgeTransport, functionName);
     if (!caller || !/active_project_inventory\s*\(/.test(caller)) {
@@ -478,26 +470,6 @@ export function checkKnowledgeArchitecture(harness) {
     failures.push(
       "ApplicationServices must construct Knowledge only through knowledge::compose(store)",
     );
-  }
-
-  // Long-lived Knowledge work receives dependencies at composition time. Tauri
-  // must never become a global AppState service locator or a path back into a
-  // feature transport helper.
-  for (const [filePath, rules] of [
-    ["src-tauri/src/features/knowledge/runtime.rs", [
-      [/\bAppState\b|\.state\s*::\s*</, "Knowledge watcher runtime must use injected dependencies rather than AppHandle state lookup"],
-      [/\btauri(?:::|\b)/, "Knowledge watcher runtime must emit through its desktop event port"],
-      [/\b(?:super::transport|crate::features::[A-Za-z0-9_]+::transport)\b/, "Knowledge watcher runtime must not call a feature transport helper"],
-    ]],
-    ["src-tauri/src/features/knowledge/source_sync.rs", [
-      [/\bAppState\b|\.state\s*::\s*</, "Knowledge source synchronization must use its injected feature facade"],
-      [/\b(?:super::transport|crate::features::[A-Za-z0-9_]+::transport)\b/, "Knowledge source synchronization must not depend on a feature transport"],
-    ]],
-  ]) {
-    const source = read(filePath);
-    for (const [pattern, reason] of rules) {
-      if (pattern.test(source)) failures.push(`${filePath}: ${reason}`);
-    }
   }
 
   // The ACP session actor remains singular, while platform responsibilities live

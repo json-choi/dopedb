@@ -114,7 +114,7 @@ Individual definitions are never clipped. To continue, pass `nextOffset` as
 `baselineFingerprint` / `targetFingerprint`. Catalog drift rejects continuation
 and requires a fresh first page. An individually oversized object fails clearly.
 
-The private Broker command schema is version 18. Version 18 added the
+The private Broker command schema is version 19. Version 18 added the
 `materializedView` object type, expression-key comparison and the `scope` field
 to the version-2 schema diff and an optional rejected-decision reason to
 operation summaries, so a

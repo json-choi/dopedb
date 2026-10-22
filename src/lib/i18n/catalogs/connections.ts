@@ -182,7 +182,6 @@ export const connectionsCatalog = defineCatalog(
     "connections.environmentDatabases": "Databases",
     "connections.environmentDatabaseUnavailable":
       "This workspace database is not available on this device",
-    "connections.environmentLocalFolder": "Local folder",
     "connections.environmentDataSources": "Data sources",
     "connections.environmentNoAnalyses": "No analyses yet",
     "connections.loadingConnections": "Loading connections…",
@@ -823,7 +822,6 @@ export const connectionsCatalog = defineCatalog(
     "connections.environmentDatabases": "데이터베이스",
     "connections.environmentDatabaseUnavailable":
       "이 워크스페이스 데이터베이스를 현재 기기에서 사용할 수 없습니다",
-    "connections.environmentLocalFolder": "로컬 폴더",
     "connections.environmentDataSources": "데이터 소스",
     "connections.environmentNoAnalyses": "아직 분석 아티클이 없습니다",
     "connections.loadingConnections": "연결 불러오는 중…",

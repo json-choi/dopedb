@@ -27,7 +27,6 @@ import {
 } from "../../features/knowledge/bindEnvironmentConnection";
 import {
   connectKnowledgeGithubSource,
-  connectKnowledgeLocalFolder,
   listKnowledgeGithubRepositories,
   listKnowledgeEnvironmentConnections,
   revokeKnowledgeSource,
@@ -41,9 +40,6 @@ import {
 import { KnowledgeDatabaseSection } from "../../features/knowledge/components/KnowledgeDatabaseSection";
 import { KnowledgeWorkspaceHeader } from "../../features/knowledge/components/KnowledgeWorkspaceHeader";
 import { useKnowledgeGithubInstall } from "../../features/knowledge/useKnowledgeGithubInstall";
-import { useKnowledgeSourceActivity } from "../../features/knowledge/useKnowledgeSourceActivity";
-import {
-} from "../../features/knowledge/workspaceModel";
 import AnalysisArticles from "./AnalysisArticles";
 
 export default function Knowledge({
@@ -127,10 +123,6 @@ export default function Knowledge({
     refetchRepositories,
     onError: setActionError,
   });
-  const { activity: sourceActivity } = useKnowledgeSourceActivity(
-    sources.data,
-    queryClient,
-  );
   const environmentConnections = useQuery({
     queryKey: knowledgeQueryKeys.environmentConnections(
       undefined,
@@ -260,21 +252,6 @@ export default function Knowledge({
       await queryClient.invalidateQueries({ queryKey: sourceKey });
     },
   });
-  const connectLocal = useMutation({
-    mutationFn: connectKnowledgeLocalFolder,
-    onSuccess: async (source) => {
-      if (!source) return;
-      setActionError(null);
-      await queryClient.invalidateQueries({ queryKey: sourceKey });
-      await queryClient.invalidateQueries({
-        queryKey: knowledgeQueryKeys.agentEnvironments(),
-      });
-    },
-    onError: async (error) => {
-      setActionError(errMessage(error));
-      await queryClient.invalidateQueries({ queryKey: sourceKey });
-    },
-  });
   const revoke = useMutation({
     mutationFn: revokeKnowledgeSource,
     onSuccess: async () => {
@@ -323,7 +300,7 @@ export default function Knowledge({
     },
     onError: (error) => setActionError(errMessage(error)),
   });
-  const pending = connectGithub.isPending || connectLocal.isPending;
+  const pending = connectGithub.isPending;
   const sourceLoadFailure = projects.error
     ? {
         hasData: projectsPhase === "staleError",
@@ -405,7 +382,6 @@ export default function Knowledge({
           environmentSelected={Boolean(environmentId)}
           pending={pending}
           githubPending={connectGithub.isPending}
-          localPending={connectLocal.isPending}
           onRepositoryChange={(repository) => {
             setRepositoryId(repository.id);
             setRefName(repository.defaultBranch);
@@ -428,13 +404,6 @@ export default function Knowledge({
               displayName: displayName.trim(),
             });
           }}
-          onConnectLocal={() =>
-            connectLocal.mutate({
-              projectId,
-              projectEnvironmentId: environmentId,
-              displayName: displayName.trim(),
-            })
-          }
         />
       ) : null}
 
@@ -490,7 +459,6 @@ export default function Knowledge({
         <KnowledgeSourceInventory
           phase={sourcesPhase}
           sources={selectedEnvironmentSources}
-          activityBySourceId={sourceActivity}
           revokePending={revoke.isPending}
           onRefresh={() => void sources.refetch()}
           onRevoke={(sourceId) => revoke.mutate(sourceId)}

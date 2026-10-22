@@ -185,11 +185,6 @@ export function useAgentEnvironmentInventory({
             projectId: project.id,
             projectName: project.name,
             kind: environment.kind,
-            graphRevisionCount: (knowledgeInventory.data?.sources ?? []).filter(
-              (source) =>
-                source.projectEnvironmentId === environment.id &&
-                source.graphRevisionId !== null,
-            ).length,
             bindings,
             needsReconfirmation: bindings.some((binding) => binding.stale),
           };
@@ -248,7 +243,6 @@ export function useAgentEnvironmentInventory({
             if (
               source.projectId !== project.id ||
               source.provider !== "github" ||
-              source.visibility !== "shared_graph" ||
               source.health !== "ready"
             ) {
               return [];

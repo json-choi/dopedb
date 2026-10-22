@@ -125,12 +125,12 @@ export async function POST(request: Request, context: RouteContext) {
     }>(sql`
       INSERT INTO ${knowledgeSource}
         ("id", "organization_id", "project_id", "project_environment_id",
-         "environment_revision", "provider", "display_name", "visibility",
+         "environment_revision", "provider", "display_name",
          "github_installation_id", "repository_id", "repository_full_name",
          "ref_name", "commit_sha", "sync_state")
       SELECT ${body.sourceId}, ${workspaceId}, environment."project_id",
         environment."id", environment."revision", 'github', ${body.displayName.trim()},
-        'shared_graph', installation."id", ${body.repositoryId}, ${repository.full_name},
+        installation."id", ${body.repositoryId}, ${repository.full_name},
         ${body.refName}, ${commitSha}, 'ready'
       FROM ${knowledgeProjectEnvironment} AS environment
       JOIN ${knowledgeProject} AS project

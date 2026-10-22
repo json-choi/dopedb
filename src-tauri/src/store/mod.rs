@@ -27,6 +27,7 @@ mod bootstrap;
 mod projections;
 mod query_services;
 mod repositories;
+mod retire_graph_storage;
 mod schema;
 mod workspace_codec;
 

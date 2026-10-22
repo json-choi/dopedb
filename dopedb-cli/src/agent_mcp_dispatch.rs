@@ -11,11 +11,6 @@ pub(super) async fn call_tool(
         .get("name")
         .and_then(Value::as_str)
         .ok_or_else(|| "the tool name is required".to_owned())?;
-    if is_dormant_knowledge_tool(name) {
-        return Err(
-            "knowledge graph tools are unavailable; use pinned source and database tools".into(),
-        );
-    }
     match name {
         TOOL_SESSION_CONTEXT => {
             let _: EmptyArguments = tool_arguments(params)?;
@@ -108,11 +103,6 @@ pub(super) async fn call_tool(
             .await?;
             tool_success(&result)
         }
-        TOOL_KNOWLEDGE_SEARCH => {
-            let arguments: KnowledgeSearchArguments = tool_arguments(params)?;
-            let result = broker_request::<KnowledgeSearchCommand>(client, &arguments).await?;
-            tool_success(&result)
-        }
         TOOL_SOURCE_SEARCH => {
             let arguments: SourceSearchArguments = tool_arguments(params)?;
             let result = broker_request::<SourceSearchCommand>(client, &arguments).await?;
@@ -129,48 +119,6 @@ pub(super) async fn call_tool(
             }
             validate_text(&arguments.path, MAX_SOURCE_PATH_BYTES, "source path")?;
             let result = broker_request::<SourceReadCommand>(client, &arguments).await?;
-            tool_success(&result)
-        }
-        TOOL_KNOWLEDGE_EXPLAIN => {
-            let arguments: KnowledgeNodeArguments = tool_arguments(params)?;
-            let result = broker_request::<KnowledgeExplainCommand>(client, &arguments).await?;
-            tool_success(&result)
-        }
-        TOOL_KNOWLEDGE_NEIGHBORS => {
-            let arguments: KnowledgeNeighborsArguments = tool_arguments(params)?;
-            let result = broker_request::<KnowledgeNeighborsCommand>(client, &arguments).await?;
-            tool_success(&result)
-        }
-        TOOL_KNOWLEDGE_PATH => {
-            let arguments: KnowledgePathArguments = tool_arguments(params)?;
-            let result = broker_request::<KnowledgePathCommand>(client, &arguments).await?;
-            tool_success(&result)
-        }
-        TOOL_KNOWLEDGE_EVIDENCE => {
-            let arguments: KnowledgeEvidenceArguments = tool_arguments(params)?;
-            let result = broker_request::<KnowledgeEvidenceCommand>(client, &arguments).await?;
-            tool_success(&result)
-        }
-        TOOL_KNOWLEDGE_DIFF => {
-            let arguments: KnowledgeDiffArguments = tool_arguments(params)?;
-            let result = broker_request::<KnowledgeDiffCommand>(client, &arguments).await?;
-            tool_success(&result)
-        }
-        TOOL_KNOWLEDGE_MAPPING_PROPOSE => {
-            let arguments: KnowledgeMappingProposeArguments = tool_arguments(params)?;
-            validate_database(arguments.database.as_deref())?;
-            validate_text(
-                &arguments.target_identity,
-                MAX_KNOWLEDGE_TARGET_IDENTITY_BYTES,
-                "mapping target",
-            )?;
-            let result =
-                broker_request::<KnowledgeMappingProposeCommand>(client, &arguments).await?;
-            tool_success(&result)
-        }
-        TOOL_FUNNEL_TRACE => {
-            let arguments: FunnelTraceArguments = tool_arguments(params)?;
-            let result = broker_request::<FunnelTraceCommand>(client, &arguments).await?;
             tool_success(&result)
         }
         TOOL_ANALYSIS_ARTICLE_GUIDE => {

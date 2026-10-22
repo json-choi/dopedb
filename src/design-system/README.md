@@ -807,7 +807,7 @@ DopeDB의 실제 작업 흐름과 접근성, supported viewport를 위한 제품
   folder나 Article을 중복 표시하지 않는다. Article 조회와 검색도 Articles 진입에서만 활성화한다. Environment는 exact grant와 binding identity로
   유지하지만 Project 아래에 별도 folder를 만들지 않는다. `Databases`는 Project의
   모든 Environment binding을 한 목록으로 투영하고 DB row에만 해당 Environment의
-  neutral badge를 표시한다. `Data sources`는 GitHub와 Local Folder source binding을,
+  neutral badge를 표시한다. `Data sources`는 정확한 커밋에 고정된 GitHub source binding을,
   `Analyses`는 Project의 종합 Analysis Article을 모아 표시하되 각 leaf action은
   원래 Environment identity를 중앙 pane에 그대로 전달한다. 환경에 묶인 DB를
   root에 중복 표시하지 않고, 아직 묶이지 않은 연결만 `Unassigned`에 둔다. 선택한

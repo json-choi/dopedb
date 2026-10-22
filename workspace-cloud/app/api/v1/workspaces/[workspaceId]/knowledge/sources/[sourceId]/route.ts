@@ -11,18 +11,6 @@ import { authorizeWorkspace } from "@/lib/workspace-authorization";
 
 type RouteContext = { params: Promise<{ workspaceId: string; sourceId: string }> };
 
-export async function POST(request: Request, context: RouteContext) {
-  if (!mutationAllowed(request, env.appOrigin())) return jsonError("Invalid request origin", 403);
-  const { workspaceId, sourceId } = await context.params;
-  if (!isUuid(workspaceId) || !isUuid(sourceId)) return jsonError("Invalid source id", 400);
-  const authorization = await authorizeWorkspace(request, workspaceId, "manage");
-  if (!authorization.ok) return jsonError(authorization.error, authorization.status);
-  return jsonError(
-    "Knowledge graph indexing is not available; this source uses exact-commit browsing",
-    409,
-  );
-}
-
 export async function DELETE(request: Request, context: RouteContext) {
   if (!mutationAllowed(request, env.appOrigin())) return jsonError("Invalid request origin", 403);
   const { workspaceId, sourceId } = await context.params;

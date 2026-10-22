@@ -7,11 +7,6 @@ use crate::connection::ConnectionManager;
 use crate::error::AppResult;
 use crate::features::agents::acp::AcpRuntime;
 use crate::features::agents::runtime::AcpPluginManager;
-use crate::features::knowledge::runtime::KnowledgeWatchRuntime;
-use crate::features::knowledge::{
-    KeychainKnowledgeSourceRoot, KnowledgeSourceSynchronizer, LocalFolderAdapter,
-    TauriKnowledgeSourceEventSink,
-};
 use crate::features::providers;
 use crate::features::terminals::{self, TerminalsFeature};
 use crate::operations::{LocalApprovalAuthority, OperationRuntime};
@@ -39,10 +34,6 @@ pub struct AppState {
     /// Desktop-only approval capability. CLI and Terminal adapters are composed
     /// without this authority and therefore cannot obtain it.
     pub(crate) local_operation_approval: LocalApprovalAuthority,
-    /// Process-local capability registry for Local Folder Knowledge sources.
-    /// Absolute roots are restored from the OS credential store and never cross IPC.
-    pub(crate) local_knowledge_sources: LocalFolderAdapter,
-    pub(crate) knowledge_watches: KnowledgeWatchRuntime,
     pub(crate) startup_trace: StartupTrace,
     pub(crate) desktop_login:
         crate::features::workspaces::adapters::desktop_login::DesktopLoginRuntime,
@@ -76,12 +67,6 @@ impl AppState {
         );
         let agents_acp = AcpRuntime::new(store.clone(), services.knowledge.clone(), broker.clone());
         let skills = SkillManager::new()?;
-        let local_knowledge_sources = LocalFolderAdapter::new();
-        let knowledge_watches = KnowledgeWatchRuntime::new(KnowledgeSourceSynchronizer::new(
-            services.knowledge.clone(),
-            local_knowledge_sources.clone(),
-            Arc::new(KeychainKnowledgeSourceRoot),
-        ));
         let started = startup_trace.stage_started();
         let recovery = services.operation.recover_previous_runtimes().await;
         startup_trace.finish("operation_recovery", "critical", started, recovery.is_ok());
@@ -108,8 +93,6 @@ impl AppState {
             agents_acp,
             agent_plugins,
             local_operation_approval,
-            local_knowledge_sources,
-            knowledge_watches,
             startup_trace,
             store,
             post_paint_recovery: PostPaintRecoveryGate::new(),
@@ -128,7 +111,6 @@ impl AppState {
         let services = self.services.clone();
         let skills = self.skills.clone();
         let agent_plugins = self.agent_plugins.clone();
-        let knowledge_watches = self.knowledge_watches.clone();
         tauri::async_runtime::spawn(async move {
             let started = trace.stage_started();
             let acp = store.recover_interrupted_agent_acp_sessions().await;
@@ -151,16 +133,6 @@ impl AppState {
                 let update_app = app.clone();
                 tauri::async_runtime::spawn(async move {
                     agent_plugins.check_installed_updates(&update_app).await;
-                });
-                let watch_app = app.clone();
-                tauri::async_runtime::spawn(async move {
-                    let events = Arc::new(TauriKnowledgeSourceEventSink::new(watch_app));
-                    if let Err(error) = knowledge_watches.start_workspace(events).await {
-                        tracing::warn!(
-                            error_kind = error.kind(),
-                            "Project Knowledge watcher recovery deferred"
-                        );
-                    }
                 });
             }
             gate.finish(succeeded);

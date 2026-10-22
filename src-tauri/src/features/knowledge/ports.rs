@@ -1,10 +1,8 @@
-//! Provider adapters and immutable graph persistence ports.
+//! GitHub source authority and Project resource persistence ports.
 
 use std::future::Future;
 
-use dopedb_protocol::{
-    GraphBuildArtifactV1, GraphRevisionDiffV1, KnowledgeSourceBindingV1, SourceRevisionIdentity,
-};
+use dopedb_protocol::KnowledgeSourceBindingV1;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -13,9 +11,8 @@ use crate::kernel::access::{ActiveResourceScope, PinnedConnection};
 use crate::kernel::environment::EnvironmentKind;
 
 use super::domain::{
-    EnvironmentConnectionBinding, KnowledgeEnvironmentSummary, KnowledgeGrant,
-    KnowledgeMappingProposal, KnowledgeSessionScope, KnowledgeSessionSource, Project,
-    ProjectDefinition, ProjectEnvironment, SourceSnapshot, StoredKnowledgeScope,
+    EnvironmentConnectionBinding, KnowledgeEnvironmentSummary, KnowledgeSessionScope,
+    KnowledgeSessionSource, Project, ProjectDefinition, ProjectEnvironment, StoredKnowledgeScope,
 };
 
 /// Hosted Knowledge DTOs belong to the authority port rather than its HTTP
@@ -56,7 +53,6 @@ pub(crate) struct RemoteKnowledgeSource {
     pub(crate) environment_revision: u64,
     pub(crate) provider: String,
     pub(crate) display_name: String,
-    pub(crate) visibility: String,
     pub(crate) repository_id: Option<String>,
     pub(crate) repository_full_name: Option<String>,
     pub(crate) ref_name: Option<String>,
@@ -64,7 +60,6 @@ pub(crate) struct RemoteKnowledgeSource {
     pub(crate) sync_state: String,
     pub(crate) sync_revision: u64,
     pub(crate) last_failure_code: Option<String>,
-    pub(crate) graph_revision_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -165,28 +160,6 @@ pub(crate) struct RemoteKnowledgeInventory {
 #[derive(Debug, Clone)]
 pub(crate) struct RemotePersonalKnowledgeScope {
     pub(crate) workspace_id: Uuid,
-    pub(crate) member_id: String,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub(crate) struct RemoteKnowledgeGraphScope {
-    pub(crate) source_id: Uuid,
-    pub(crate) graph_revision_id: Uuid,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub(crate) struct RemoteKnowledgeGrant {
-    pub(crate) id: Uuid,
-    pub(crate) member_id: String,
-    pub(crate) project_id: Uuid,
-    pub(crate) project_environment_id: Uuid,
-    pub(crate) environment_revision: u64,
-    pub(crate) graph_revision_ids: Vec<Uuid>,
-    pub(crate) graph_scopes: Vec<RemoteKnowledgeGraphScope>,
-    pub(crate) expires_at: chrono::DateTime<chrono::Utc>,
-    pub(crate) revoked_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -226,8 +199,7 @@ pub(crate) struct RemoteEnvironmentConnectionBinding {
 }
 
 pub(crate) trait KnowledgeScopeRepositoryPort: Clone + Send + Sync + 'static {
-    /// Persist only provider-neutral, secret-free identity. Local roots remain in
-    /// the Desktop adapter's process-local capability registry.
+    /// Persist only secret-free GitHub identity at one exact commit.
     fn save_scope(
         &self,
         project: &Project,
@@ -240,90 +212,13 @@ pub(crate) trait KnowledgeScopeRepositoryPort: Clone + Send + Sync + 'static {
         workspace_id: Uuid,
     ) -> impl Future<Output = AppResult<Vec<StoredKnowledgeScope>>> + Send;
     fn remove_scope(&self, source_id: Uuid) -> impl Future<Output = AppResult<()>> + Send;
-    fn save_snapshot(
-        &self,
-        snapshot: &SourceSnapshot,
-    ) -> impl Future<Output = AppResult<()>> + Send;
-    fn source_snapshot(
-        &self,
-        source_id: Uuid,
-    ) -> impl Future<Output = AppResult<Option<SourceSnapshot>>> + Send;
-}
-
-/// Device-local source operations used only by the Local Folder extractor.
-/// Hosted providers are registered and indexed by the workspace control plane.
-pub(crate) trait LocalKnowledgeSourcePort: Clone + Send + Sync + 'static {
-    type Watch: Send + 'static;
-
-    fn snapshot(
-        &self,
-        binding: &KnowledgeSourceBindingV1,
-        previous: Option<&SourceSnapshot>,
-    ) -> impl Future<Output = AppResult<SourceSnapshot>> + Send;
-    fn read_file_at_revision(
-        &self,
-        binding: &KnowledgeSourceBindingV1,
-        revision: &SourceRevisionIdentity,
-        path: &str,
-    ) -> impl Future<Output = AppResult<Vec<u8>>> + Send;
-    fn watch(
-        &self,
-        binding: &KnowledgeSourceBindingV1,
-    ) -> impl Future<Output = AppResult<Self::Watch>> + Send;
-    fn revoke(
-        &self,
-        binding: &KnowledgeSourceBindingV1,
-    ) -> impl Future<Output = AppResult<()>> + Send;
-}
-
-pub(crate) trait KnowledgeGraphRepositoryPort: Clone + Send + Sync + 'static {
-    /// Store a build candidate without changing the active graph revision.
-    fn stage(&self, artifact: &GraphBuildArtifactV1) -> impl Future<Output = AppResult<()>> + Send;
-    /// Atomically activate only a healthy candidate for the expected environment
-    /// revision; a failed build leaves the previous last-good revision active.
-    fn activate(
-        &self,
-        artifact: &GraphBuildArtifactV1,
-    ) -> impl Future<Output = AppResult<()>> + Send;
-    fn active_for_source(
-        &self,
-        source_id: Uuid,
-    ) -> impl Future<Output = AppResult<Option<GraphBuildArtifactV1>>> + Send;
-    fn by_revision(
-        &self,
-        graph_revision_id: Uuid,
-    ) -> impl Future<Output = AppResult<Option<GraphBuildArtifactV1>>> + Send;
-    fn diff(
-        &self,
-        from_graph_revision_id: Uuid,
-        to_graph_revision_id: Uuid,
-    ) -> impl Future<Output = AppResult<GraphRevisionDiffV1>> + Send;
-}
-
-pub(crate) trait KnowledgeGrantPort: Clone + Send + Sync + 'static {
-    fn save_grant(&self, grant: &KnowledgeGrant) -> impl Future<Output = AppResult<()>> + Send;
-}
-
-pub(crate) trait KnowledgeMappingRepositoryPort: Clone + Send + Sync + 'static {
-    fn propose_mapping(
-        &self,
-        proposal: &KnowledgeMappingProposal,
-    ) -> impl Future<Output = AppResult<()>> + Send;
 }
 
 /// Complete device-local persistence boundary consumed by the Knowledge
-/// facade. The narrower graph/scope/grant/mapping ports remain reusable by the
-/// extractor and store implementations, while this aggregate prevents the
+/// facade. The source-scope port is shared with the store adapter; this aggregate prevents the
 /// facade from naming SQLite or the global `Store`.
 pub(crate) trait KnowledgeRepositoryPort:
-    KnowledgeScopeRepositoryPort
-    + KnowledgeGraphRepositoryPort
-    + KnowledgeGrantPort
-    + KnowledgeMappingRepositoryPort
-    + Clone
-    + Send
-    + Sync
-    + 'static
+    KnowledgeScopeRepositoryPort + Clone + Send + Sync + 'static
 {
     fn active_resource_scope(&self) -> impl Future<Output = AppResult<ActiveResourceScope>> + Send;
     fn knowledge_projects(
@@ -374,25 +269,11 @@ pub(crate) trait KnowledgeRepositoryPort:
         environment_id: Option<Uuid>,
         selected_connection_ids: &[Uuid],
     ) -> impl Future<Output = AppResult<Option<KnowledgeSessionScope>>> + Send;
-    fn exact_knowledge_session_graphs(
+    fn validate_knowledge_session_scope(
         &self,
         scope: &KnowledgeSessionScope,
         workspace_id: Uuid,
         account_id: &str,
-    ) -> impl Future<Output = AppResult<Vec<GraphBuildArtifactV1>>> + Send;
-    fn revoke_knowledge_grants_for_account(
-        &self,
-        workspace_id: Uuid,
-        account_id: &str,
-    ) -> impl Future<Output = AppResult<()>> + Send;
-    fn import_granted_active_graph(
-        &self,
-        graph: &GraphBuildArtifactV1,
-    ) -> impl Future<Output = AppResult<()>> + Send;
-    fn retain_granted_environment_heads(
-        &self,
-        environment_id: Uuid,
-        revisions: &[Uuid],
     ) -> impl Future<Output = AppResult<()>> + Send;
     fn environment_connections(
         &self,
@@ -430,7 +311,7 @@ pub(crate) trait KnowledgeRepositoryPort:
 
 /// Authenticated workspace Knowledge authority. Implementations own all hosted
 /// HTTP details and session-token access; callers receive only validated,
-/// bounded DTOs and immutable graph artifacts.
+/// bounded source identities and file responses.
 pub(crate) trait HostedKnowledgeAuthorityPort: Clone + Send + Sync + 'static {
     fn ensure_personal_scope(
         &self,
@@ -462,33 +343,6 @@ pub(crate) trait HostedKnowledgeAuthorityPort: Clone + Send + Sync + 'static {
         project_id: Uuid,
         request: &AppendKnowledgeEnvironmentRequest,
     ) -> impl Future<Output = AppResult<RemoteKnowledgeProject>> + Send;
-    fn list_current_grants(
-        &self,
-        account_id: &str,
-        workspace_id: Uuid,
-    ) -> impl Future<Output = AppResult<Vec<RemoteKnowledgeGrant>>> + Send;
-    fn create_current_grant(
-        &self,
-        account_id: &str,
-        workspace_id: Uuid,
-        member_id: &str,
-        environment_id: Uuid,
-    ) -> impl Future<Output = AppResult<()>> + Send;
-    fn propose_mapping(
-        &self,
-        account_id: &str,
-        workspace_id: Uuid,
-        grant_id: Uuid,
-        proposal: &KnowledgeMappingProposal,
-    ) -> impl Future<Output = AppResult<KnowledgeMappingProposal>> + Send;
-    fn download_graph(
-        &self,
-        account_id: &str,
-        workspace_id: Uuid,
-        grant_id: Uuid,
-        source_id: Uuid,
-        expected_graph_revision_id: Uuid,
-    ) -> impl Future<Output = AppResult<GraphBuildArtifactV1>> + Send;
     fn list_environment_connections(
         &self,
         account_id: &str,

@@ -1,10 +1,5 @@
-use dopedb_protocol::{GraphBuildArtifactV1, KnowledgeSourceProvider, KnowledgeSourceVisibility};
-use sha2::{Digest, Sha256};
-
 use crate::error::{AppError, AppResult};
 use crate::kernel::environment::EnvironmentKind;
-
-const MAX_GRAPH_ARTIFACT_JSON_BYTES: usize = 256 * 1024 * 1024;
 
 pub(super) type EnvironmentConnectionRow = (
     String,
@@ -29,17 +24,9 @@ pub(super) fn checked_name(value: &str) -> AppResult<&str> {
     Ok(value)
 }
 
-pub(super) fn provider_value(provider: KnowledgeSourceProvider) -> &'static str {
+pub(super) fn provider_value(provider: dopedb_protocol::KnowledgeSourceProvider) -> &'static str {
     match provider {
-        KnowledgeSourceProvider::Github => "github",
-        KnowledgeSourceProvider::LocalFolder => "local_folder",
-    }
-}
-
-pub(super) fn visibility_value(visibility: KnowledgeSourceVisibility) -> &'static str {
-    match visibility {
-        KnowledgeSourceVisibility::LocalOnly => "local_only",
-        KnowledgeSourceVisibility::SharedGraph => "shared_graph",
+        dopedb_protocol::KnowledgeSourceProvider::Github => "github",
     }
 }
 
@@ -59,35 +46,4 @@ pub(super) fn positive_revision(value: i64, field: &str) -> AppResult<u64> {
         return Err(AppError::Config(format!("the stored {field} is invalid")));
     }
     Ok(value)
-}
-
-pub(super) fn artifact_json(artifact: &GraphBuildArtifactV1) -> AppResult<(String, String)> {
-    if !artifact.validate() {
-        return Err(AppError::Blocked {
-            reason: "an unhealthy Knowledge graph candidate cannot be staged".into(),
-        });
-    }
-    let json = serde_json::to_string(artifact)?;
-    if json.len() > MAX_GRAPH_ARTIFACT_JSON_BYTES {
-        return Err(AppError::Config(
-            "the Knowledge graph candidate exceeds the local storage limit".into(),
-        ));
-    }
-    let sha256 = hex::encode(Sha256::digest(json.as_bytes()));
-    Ok((json, sha256))
-}
-
-pub(super) fn parse_artifact(json: String) -> AppResult<GraphBuildArtifactV1> {
-    if json.len() > MAX_GRAPH_ARTIFACT_JSON_BYTES {
-        return Err(AppError::Config(
-            "the stored Knowledge graph exceeds the local storage limit".into(),
-        ));
-    }
-    let artifact: GraphBuildArtifactV1 = serde_json::from_str(&json)?;
-    if !artifact.validate() {
-        return Err(AppError::Config(
-            "the stored Knowledge graph failed integrity validation".into(),
-        ));
-    }
-    Ok(artifact)
 }

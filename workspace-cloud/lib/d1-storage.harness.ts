@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { Miniflare, convertV4MiniflareOptions } from "miniflare";
 import { sql } from "drizzle-orm";
 import { SQLiteSyncDialect } from "drizzle-orm/sqlite-core";
-import { matches, safeRelativePath } from "./d1/schema/patterns";
+import { matches } from "./d1/schema/patterns";
 import { atomicD1 } from "./d1/atomic";
 import { createWorkspaceD1 } from "./d1/database";
 import { user, workspaceProviderIntegration, knowledgeGithubInstallation, knowledgeSource } from "./d1/schema";
@@ -175,6 +175,91 @@ beforeAll(async () => {
     expect(await db.prepare("SELECT capability FROM workspace_connection_grant WHERE connection_id = ? AND member_id = ?")
       .bind(directId, analystMember).first("capability")).toBe("use");
   });
+
+  await withStage("graph-retirement-preserves-source-history", async () => {
+    const [org, project, environment, installation, source, event, parentGraph, graph] = Array.from({ length: 8 }, () => randomUUID());
+    await db.batch([
+      db.prepare("INSERT INTO organization (id, name, slug) VALUES (?, 'Source migration', ?)").bind(org, `source-migration-${org}`),
+      db.prepare("INSERT INTO knowledge_project (id, organization_id, name) VALUES (?, ?, 'Source migration')").bind(project, org),
+      db.prepare("INSERT INTO knowledge_project_environment (id, organization_id, project_id, kind, name, risk_class) VALUES (?, ?, ?, 'development', 'Development', 'development')").bind(environment, org, project),
+      db.prepare("INSERT INTO knowledge_github_installation (id, organization_id, installation_id, account_id, account_login) VALUES (?, ?, 42, '42', 'fixture')").bind(installation, org),
+      db.prepare(`INSERT INTO knowledge_source (id, organization_id, project_id, project_environment_id, environment_revision,
+        provider, display_name, visibility, github_installation_id, repository_id, repository_full_name, ref_name, commit_sha, sync_state)
+        VALUES (?, ?, ?, ?, 1, 'github', 'fixture/source', 'shared_graph', ?, '42', 'fixture/source', 'main', ?, 'ready')`)
+        .bind(source, org, project, environment, installation, "a".repeat(40)),
+      db.prepare("INSERT INTO knowledge_source_event (id, organization_id, source_id, delivery_id, event_kind, before_commit_sha, after_commit_sha, state) VALUES (?, ?, ?, 'migration-delivery', 'push', ?, ?, 'consumed')")
+        .bind(event, org, source, "b".repeat(40), "a".repeat(40)),
+      db.prepare(`INSERT INTO knowledge_graph_revision (id, organization_id, source_id, project_environment_id, environment_revision,
+        source_revision_sha256, artifact_sha256, artifact, generated_at) VALUES (?, ?, ?, ?, 1, ?, ?, '{}', ?)`)
+        .bind(parentGraph, org, source, environment, "c".repeat(64), "d".repeat(64), new Date().toISOString()),
+      db.prepare(`INSERT INTO knowledge_graph_revision (id, organization_id, source_id, project_environment_id, environment_revision,
+        parent_graph_revision_id, source_revision_sha256, artifact_sha256, artifact, generated_at) VALUES (?, ?, ?, ?, 1, ?, ?, ?, '{}', ?)`)
+        .bind(graph, org, source, environment, parentGraph, "e".repeat(64), "f".repeat(64), new Date().toISOString()),
+      db.prepare("INSERT INTO knowledge_environment_head (organization_id, project_environment_id, source_id, graph_revision_id, environment_revision) VALUES (?, ?, ?, ?, 1)")
+        .bind(org, environment, source, graph),
+    ]);
+    const sourceStates = [
+      { id: randomUUID(), old: "pending", failure: "graph_retry", revoked: null, next: "ready", nextFailure: null },
+      { id: randomUUID(), old: "syncing", failure: "graph_retry", revoked: null, next: "ready", nextFailure: null },
+      { id: randomUUID(), old: "stale", failure: "github_ref_deleted", revoked: null, next: "stale", nextFailure: "github_ref_deleted" },
+      { id: randomUUID(), old: "failed", failure: "github_unavailable", revoked: null, next: "failed", nextFailure: "github_unavailable" },
+      { id: randomUUID(), old: "syncing", failure: "graph_retry", revoked: new Date().toISOString(), next: "revoked", nextFailure: null },
+    ];
+    for (const entry of sourceStates) {
+      await db.prepare(`INSERT INTO knowledge_source (id, organization_id, project_id, project_environment_id, environment_revision,
+        provider, display_name, visibility, github_installation_id, repository_id, repository_full_name, ref_name, commit_sha,
+        sync_state, last_failure_code, revoked_at)
+        SELECT ?, organization_id, project_id, project_environment_id, environment_revision,
+          provider, display_name, visibility, github_installation_id, repository_id, repository_full_name, ref_name, commit_sha,
+          ?, ?, ? FROM knowledge_source WHERE id = ?`)
+        .bind(entry.id, entry.old, entry.failure, entry.revoked, source).run();
+    }
+    const unfinishedEvents = [randomUUID(), randomUUID()];
+    for (const [index, id] of unfinishedEvents.entries()) {
+      await db.prepare("INSERT INTO knowledge_source_event (id, organization_id, source_id, delivery_id, event_kind, state) VALUES (?, ?, ?, ?, 'push', ?)")
+        .bind(id, org, source, `retired-delivery-${index}`, index === 0 ? "pending" : "claimed").run();
+    }
+    const retainedTables = ["organization", "knowledge_project", "knowledge_project_environment", "knowledge_github_installation",
+      "workspace_connection", "knowledge_environment_connection", "workspace_resource_version", "workspace_audit_event",
+      "knowledge_source", "knowledge_source_event"];
+    const counts = () => Promise.all(retainedTables.map((table) => db.prepare(`SELECT count(*) AS count FROM ${table}`).first("count")));
+    const before = await counts();
+    const migration = await readFile(new URL("../d1-migrations/0014_remove_knowledge_graph.sql", import.meta.url), "utf8");
+    const statements = migration.split("--> statement-breakpoint")
+      .map((statement) => statement.replace(/^\s*--.*$/gm, "").trim()).filter(Boolean);
+    const retire = () => db.batch(statements.map((statement) => db.prepare(statement)));
+    // A failure after the graph DROPs must roll back both the data and its guards.
+    await db.prepare("CREATE TABLE __retained_knowledge_source_event (collision TEXT)").run();
+    await expect(retire()).rejects.toThrow();
+    expect(await counts()).toEqual(before);
+    expect(await db.prepare("SELECT count(*) AS count FROM knowledge_graph_revision").first("count")).toBe(2);
+    await expect(db.prepare("UPDATE knowledge_graph_revision SET parent_graph_revision_id = NULL WHERE id = ?").bind(graph).run()).rejects.toThrow();
+    await db.prepare("DROP TABLE __retained_knowledge_source_event").run();
+    await retire();
+    expect(await counts()).toEqual(before);
+    for (const entry of sourceStates) {
+      expect(await db.prepare("SELECT sync_state AS state, last_failure_code AS failure, revoked_at AS revoked FROM knowledge_source WHERE id = ?")
+        .bind(entry.id).first()).toEqual({ state: entry.next, failure: entry.nextFailure, revoked: entry.revoked });
+    }
+    for (const id of unfinishedEvents) {
+      expect(await db.prepare("SELECT state FROM knowledge_source_event WHERE id = ?").bind(id).first("state")).toBe("failed");
+      expect(await db.prepare("SELECT consumed_at FROM knowledge_source_event WHERE id = ?").bind(id).first("consumed_at")).not.toBeNull();
+    }
+    expect(await db.prepare("SELECT repository_full_name || '/' || commit_sha AS identity FROM knowledge_source WHERE id = ?")
+      .bind(source).first("identity")).toBe(`fixture/source/${"a".repeat(40)}`);
+    expect(await db.prepare("SELECT delivery_id || '/' || state AS receipt FROM knowledge_source_event WHERE id = ?")
+      .bind(event).first("receipt")).toBe("migration-delivery/consumed");
+    expect((await db.prepare("PRAGMA foreign_key_check").all()).results).toEqual([]);
+    expect((await db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name IN (
+      'knowledge_graph_revision', 'knowledge_environment_head', 'knowledge_grant', 'knowledge_grant_graph_revision',
+      'knowledge_mapping_proposal', 'knowledge_source_sync_job', 'knowledge_code_index_file',
+      'knowledge_code_index_activation_fragment', 'knowledge_code_index_activation_entity')`).all()).results).toEqual([]);
+    // Rebuilding tables must retain UUID, exact-integer and timestamp enforcement.
+    await expect(db.prepare("UPDATE knowledge_source SET environment_revision = 1.5 WHERE id = ?").bind(source).run()).rejects.toThrow();
+    await expect(db.prepare("UPDATE knowledge_source SET sync_state = 'syncing' WHERE id = ?").bind(source).run()).rejects.toThrow();
+    await expect(db.prepare("UPDATE knowledge_source_event SET state = 'pending' WHERE id = ?").bind(event).run()).rejects.toThrow();
+    await expect(db.prepare("UPDATE knowledge_source_event SET created_at = 'invalid' WHERE id = ?").bind(event).run()).rejects.toThrow();
+  });
 });
 
 afterAll(async () => {
@@ -280,7 +365,7 @@ describe("Workspace D1 safety", () => {
       const [source] = await orm.insert(knowledgeSource).values({
         organizationId: first.workspaceId, projectId: projection.projects[0].id,
         projectEnvironmentId: projection.projects[0].environments[0].id, environmentRevision: 1,
-        provider: "github", displayName: "fixture/source", visibility: "shared_graph",
+        provider: "github", displayName: "fixture/source",
         githubInstallationId: installation.id, repositoryId: "1004", repositoryFullName: "fixture/source",
         refName: "main", commitSha: "6".repeat(40), syncState: "ready",
       }).returning();
@@ -367,10 +452,6 @@ describe("Workspace D1 safety", () => {
           expect(await evaluate(matches(sql`${value}`, pattern)))
             .toBe(new RegExp(pattern).test(value) ? 1 : 0);
         }
-      }
-      for (const value of ["src/main.ts", "../main.ts", "src/../main.ts", "/main.ts", "a\\b", "a//b", "a/."]) {
-        expect(await evaluate(safeRelativePath(sql`${value}`)))
-          .toBe(value === "src/main.ts" ? 1 : 0);
       }
       expect((await db.prepare("PRAGMA foreign_key_check").all()).results).toHaveLength(0);
     });

@@ -77,28 +77,12 @@ pub enum CommandName {
     OperationWait,
     #[serde(rename = "operation.cancel")]
     OperationCancel,
-    #[serde(rename = "knowledge.search")]
-    KnowledgeSearch,
     #[serde(rename = "source.search")]
     SourceSearch,
     #[serde(rename = "source.read")]
     SourceRead,
-    #[serde(rename = "knowledge.explain")]
-    KnowledgeExplain,
-    #[serde(rename = "knowledge.neighbors")]
-    KnowledgeNeighbors,
-    #[serde(rename = "knowledge.path")]
-    KnowledgePath,
-    #[serde(rename = "knowledge.evidence")]
-    KnowledgeEvidence,
-    #[serde(rename = "knowledge.diff")]
-    KnowledgeDiff,
-    #[serde(rename = "funnel.trace")]
-    FunnelTrace,
     #[serde(rename = "environment.context")]
     EnvironmentContext,
-    #[serde(rename = "knowledge.mapping.propose")]
-    KnowledgeMappingPropose,
     /// Preserve envelope decodability long enough to return a stable schema/version
     /// error to a newer client. Unknown command payloads are never dispatched.
     #[serde(other)]
@@ -106,7 +90,7 @@ pub enum CommandName {
 }
 
 impl CommandName {
-    pub const ALL: [Self; 44] = [
+    pub const ALL: [Self; 36] = [
         Self::Version,
         Self::Status,
         Self::AppOpen,
@@ -140,17 +124,9 @@ impl CommandName {
         Self::OperationShow,
         Self::OperationWait,
         Self::OperationCancel,
-        Self::KnowledgeSearch,
         Self::SourceSearch,
         Self::SourceRead,
-        Self::KnowledgeExplain,
-        Self::KnowledgeNeighbors,
-        Self::KnowledgePath,
-        Self::KnowledgeEvidence,
-        Self::KnowledgeDiff,
-        Self::FunnelTrace,
         Self::EnvironmentContext,
-        Self::KnowledgeMappingPropose,
     ];
 
     pub const fn as_str(self) -> &'static str {
@@ -188,17 +164,9 @@ impl CommandName {
             Self::OperationShow => "operation.show",
             Self::OperationWait => "operation.wait",
             Self::OperationCancel => "operation.cancel",
-            Self::KnowledgeSearch => "knowledge.search",
             Self::SourceSearch => "source.search",
             Self::SourceRead => "source.read",
-            Self::KnowledgeExplain => "knowledge.explain",
-            Self::KnowledgeNeighbors => "knowledge.neighbors",
-            Self::KnowledgePath => "knowledge.path",
-            Self::KnowledgeEvidence => "knowledge.evidence",
-            Self::KnowledgeDiff => "knowledge.diff",
-            Self::FunnelTrace => "funnel.trace",
             Self::EnvironmentContext => "environment.context",
-            Self::KnowledgeMappingPropose => "knowledge.mapping.propose",
             Self::Unknown => "unknown",
         }
     }

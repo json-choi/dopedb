@@ -1,5 +1,5 @@
 // Exact-commit GitHub source revision updates. Webhook deliveries advance only
-// the pinned commit; graph construction is intentionally outside this path.
+// the pinned commit for direct file browsing.
 import "server-only";
 
 import { randomUUID } from "node:crypto";
@@ -62,9 +62,9 @@ export async function recordGithubSourceRevisions(
       value ->> 'eventId' AS event_id FROM json_each(${batch})`;
     const rows = await batchD1([
       sql`INSERT INTO knowledge_source_event (id, organization_id, source_id, delivery_id, event_kind,
-          before_commit_sha, after_commit_sha, changed_files, state, consumed_at)
+          before_commit_sha, after_commit_sha, state, consumed_at)
         SELECT requested.event_id, source.organization_id, source.id, requested.delivery_id, 'push',
-          requested.before_sha, requested.after_sha, '[]',
+          requested.before_sha, requested.after_sha,
           CASE WHEN source.commit_sha = requested.before_sha THEN 'consumed' ELSE 'failed' END, ${utcNow}
         FROM (${inputs}) requested JOIN knowledge_source source
           ON source.organization_id = requested.organization_id AND source.id = requested.source_id

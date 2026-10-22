@@ -34,7 +34,7 @@ reference Tauri, SQLx, `Store`, the keychain, the network, or the global
 | `documents/` | Transport-neutral, typed read-only MongoDB document queries (see `documents/AGENTS.md`). |
 | `erd/` | Workspace-scoped ERD (entity relationship diagram) canvas-layout persistence (see `erd/AGENTS.md`). |
 | `jobs/` | Durable, resumable import/export Job Engine (see `jobs/AGENTS.md`). |
-| `knowledge/` | Project Knowledge graph extraction, hosted/local sources, and Agent-scoped reads (see `knowledge/AGENTS.md`). |
+| `knowledge/` | Project/Environment database bindings, GitHub source identity and exact-commit Agent reads (see `knowledge/AGENTS.md`). |
 | `monitoring/` | Scope-aware database monitoring status and fixed PostgreSQL role changes (see `monitoring/AGENTS.md`). |
 | `operation_control/` | Desktop-only exact-hash approval orchestration for durable Operations (see `operation_control/AGENTS.md`). |
 | `providers/` | Member-local provider credentials and managed-access provisioning lifecycles (see `providers/AGENTS.md`). |

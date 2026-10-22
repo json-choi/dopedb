@@ -107,16 +107,13 @@ change.
 | `.../knowledge/environments/[environmentId]/connections` | `.../environments/[environmentId]/connections/route.ts` | GET, POST, DELETE | GET lists bindings for one Environment (flags staleness vs. current connection revision); POST creates/updates a binding via one atomic D1 statement group (rejects reassigning a connection already bound elsewhere); DELETE revokes a binding. POST and DELETE need the `write` capability (editor and above), so the member who creates a connection can place it |
 | `.../knowledge/github/install` | `.../github/install/route.ts` | POST | Starts GitHub App installation OAuth: stores a hashed, 10-minute setup state, returns the installation authorization URL |
 | `.../knowledge/github/repositories` | `.../github/repositories/route.ts` | GET | Lists repositories visible to the workspace's active GitHub App installations |
-| `.../knowledge/grants` | `.../grants/route.ts` | GET, POST, DELETE | Knowledge-graph grants are not shipped: GET always returns `{ grants: [] }`; POST always 409; DELETE still revokes an old persisted grant row for cleanup |
 | `.../knowledge/inventory` | `.../inventory/route.ts` | GET | One combined Projects + Sources snapshot for the Desktop Explorer |
-| `.../knowledge/mappings` | `.../mappings/route.ts` | GET, POST, PATCH | Graph-backed mapping proposals are not shipped: GET returns `{ mappings: [] }`, POST and PATCH always 409 |
 | `.../knowledge/projects/[projectId]/environments` | `.../projects/[projectId]/environments/route.ts` | POST | Appends a new Environment to a Project under an expected Project revision |
 | `.../knowledge/projects/[projectId]` | `.../projects/[projectId]/route.ts` | DELETE | Deletes a Project under an expected revision; blocked (409) if the Project still has active Analysis Articles |
 | `.../knowledge/projects` | `.../projects/route.ts` | GET, POST, PATCH | GET lists Projects; POST creates a Project with 1-20 Environments; PATCH renames a Project under an expected revision |
 | `.../knowledge/source-sync-progress` | `.../source-sync-progress/route.ts` | GET | Stub: always returns `{ progress: [] }` |
 | `.../knowledge/sources/[sourceId]/browse` | `.../sources/[sourceId]/browse/route.ts` | GET, POST | GET searches a pinned GitHub source at an exact commit; POST reads an exact file/line range from that pinned commit — both delegate to `source-browser-application` |
-| `.../knowledge/sources/[sourceId]/graph` | `.../sources/[sourceId]/graph/route.ts` | GET | Stub: always 409 ("Knowledge graph access is not available") |
-| `.../knowledge/sources/[sourceId]` | `.../sources/[sourceId]/route.ts` | POST, DELETE | POST always 409 (graph indexing unsupported; sources use exact-commit browsing); DELETE marks a source revoked |
+| `.../knowledge/sources/[sourceId]` | `.../sources/[sourceId]/route.ts` | DELETE | Marks a GitHub source revoked; exact-commit file access observes revocation |
 | `.../knowledge/sources` | `.../sources/route.ts` | GET, POST | GET lists Knowledge sources; POST binds a GitHub repository/ref as a new source, resolving and pinning its current commit SHA via the GitHub App |
 
 ### v1 / workspaces / {workspaceId} / backups

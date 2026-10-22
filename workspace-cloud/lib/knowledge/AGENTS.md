@@ -5,11 +5,10 @@
 
 ## Purpose
 Project Knowledge: the source-repository side of the Agent's exact grant. This directory owns
-GitHub App installation/token minting, tenant-scoped project/source/graph inventory reads, exact-
+GitHub App installation/token minting, tenant-scoped project/source inventory reads, exact-
 commit source-revision bookkeeping for webhook deliveries, account-backed Personal Workspace
 Knowledge scope, and read-only source browsing. It never receives or stores local folder paths,
-database records, or credentials, and graph construction itself is intentionally out of scope here
-(source-revision advancement and graph building are kept separate).
+database records, or credentials, and graph construction is excluded by PD-36 in `docs/PRODUCT_UI_SCOPE.md`.
 
 ## Key Files
 | File | Description |
@@ -21,7 +20,7 @@ database records, or credentials, and graph construction itself is intentionally
 | `project-store.ts` | Project and Environment mutations; authority is checked inside each atomic D1 batch. |
 | `source-browser-application.ts` | Application-level source browsing: resolves the environment/source/installation chain behind one authorization check. |
 | `source-browser.ts` | Pure bounds contract for source browsing (max query bytes, max matches, max file/text bytes, max manifest size) and the manifest file shape. |
-| `source-revisions.ts` | Exact-commit GitHub source revision updates; webhook deliveries advance only the pinned commit, graph construction stays outside this path. |
+| `source-revisions.ts` | Exact-commit GitHub source revision updates; webhook deliveries advance only the pinned commit, exact-commit file browsing stays independent of database access. |
 
 ## For AI Agents
 
@@ -29,7 +28,7 @@ database records, or credentials, and graph construction itself is intentionally
 - `mutation-authority.ts`'s pattern — revalidate authority inside the same D1 batch as the write — must be reused by any new Knowledge mutation; do not authorize once at the route boundary and mutate later.
 - `github-app.ts` tokens are function-local and short-lived; never persist one or return it to a client.
 - `personal-scope.ts` is the account-backed (not device/local) Personal Workspace boundary — it must stay free of local filesystem paths, database records, and credentials per its own header comment.
-- `source-revisions.ts` only advances the pinned commit; do not fold graph-building logic into this module.
+- `source-revisions.ts` only advances the pinned commit; retain webhook replay safety. Graph-building and indexing are excluded product features.
 
 ### Testing Requirements
 - `../d1-route-scenarios.harness.ts` exercises the knowledge environment-connection bind route directly (part of `pnpm test:contracts`).

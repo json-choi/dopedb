@@ -5,7 +5,7 @@
 
 ## Purpose
 Renders one Knowledge Project environment's focused view: connected sources
-(GitHub/local folder), environment connections, and Analysis Articles. Per
+(GitHub exact-commit browsing), environment connections, and Analysis Articles. Per
 ADR 0007, an Analysis Article shares only sanitized HTML and one exact
 read-only saved query; result rows and rerun stay on the exact-grant Desktop
 (see `docs/adr/0007-analysis-article-bi-domain.md`).

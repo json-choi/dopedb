@@ -218,7 +218,6 @@ pub fn run() {
             features::knowledge::transport::begin_knowledge_github_install_command,
             features::knowledge::transport::list_knowledge_github_repositories_command,
             features::knowledge::transport::connect_knowledge_github_source,
-            features::knowledge::transport::connect_knowledge_local_folder,
             features::knowledge::transport::list_knowledge_sources,
             features::knowledge::transport::revoke_knowledge_source,
             features::knowledge::transport::list_knowledge_environment_connections,

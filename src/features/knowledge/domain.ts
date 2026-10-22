@@ -1,5 +1,5 @@
 // Wire contract for Knowledge projects, environments, sources, and environment-connection
-// bindings. A source revision carries the exact commit or snapshot fingerprint a grant is
+// bindings. A source revision carries the exact GitHub commit a resource grant is
 // pinned to, and record revisions let a stale editor be rejected instead of overwriting.
 import type { EnvironmentKind } from "../../lib/environmentKind";
 
@@ -47,20 +47,7 @@ export type KnowledgeRevision =
       refName: string;
       commitSha: string;
     }
-  | {
-      kind: "local_git";
-      rootFingerprint: string;
-      gitRootFingerprint: string;
-      refName: string;
-      commitSha: string;
-      dirty: boolean;
-      worktree: boolean;
-    }
-  | {
-      kind: "local_snapshot";
-      rootFingerprint: string;
-      snapshotSha256: string;
-    };
+;
 
 export type KnowledgeSource = {
   sourceId: string;
@@ -69,13 +56,10 @@ export type KnowledgeSource = {
   projectEnvironmentId: string;
   environmentRevision: number;
   environmentKind: EnvironmentKind;
-  provider: "github" | "local_folder";
+  provider: "github";
   displayName: string;
-  visibility: "local_only" | "shared_graph";
   revision: KnowledgeRevision;
-  health: "ready" | "syncing" | "stale" | "failed";
-  graphRevisionId: string | null;
-  localCapabilityAvailable: boolean;
+  health: "ready" | "stale" | "failed";
 };
 
 export type KnowledgeInventory = {
@@ -101,18 +85,6 @@ export type GithubKnowledgeSourceInput = {
   repository: string;
   refName: string;
   displayName: string;
-};
-
-export type LocalKnowledgeSourceInput = {
-  projectId: string;
-  projectEnvironmentId: string;
-  displayName: string;
-};
-
-export type KnowledgeSourceChanged = {
-  sourceId: string;
-  state: "syncing" | "ready" | "failed";
-  errorKind: string | null;
 };
 
 export type EnvironmentConnection = {

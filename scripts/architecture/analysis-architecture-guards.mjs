@@ -277,7 +277,7 @@ export function checkAnalysisArchitecture(harness) {
 
   // Rust's Knowledge wire contract rejects every Unicode control character. Keep
   // cloud ingestion from accepting C1 controls (U+0080-U+009F) that would survive
-  // until Desktop validation and make an otherwise activated graph unusable.
+  // until Desktop validation and make a connected source unusable.
   for (const directory of [
     "workspace-cloud/lib/knowledge",
     "workspace-cloud/app/api/v1/knowledge",

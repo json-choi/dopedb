@@ -57,7 +57,6 @@ export interface AgentKnowledgeEnvironment {
   id: string;
   projectName: string;
   kind: EnvironmentKind;
-  graphRevisionCount: number;
 }
 
 /** One screen-owned handoff into the Environment-pinned Agent composer. */
@@ -98,13 +97,11 @@ export interface AgentKnowledgeConnectionScope {
 
 export interface AgentKnowledgeScope {
   projectId: string;
-  knowledgeGrantId: string | null;
   projectEnvironmentId: string;
   environmentRevision: number;
   authorityConnectionId: ConnectionId;
   authorityConnectionRevision: number;
   sources: AgentKnowledgeSourceScope[];
-  graphRevisionIds: string[];
   connections: AgentKnowledgeConnectionScope[];
 }
 

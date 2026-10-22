@@ -811,7 +811,7 @@ mod platform {
         assert!(response(8)["result"]["content"][0]["text"]
             .as_str()
             .unwrap()
-            .contains("knowledge graph tools are unavailable"));
+            .contains("unknown DopeDB tool"));
         let serialized = serde_json::to_string(&bridge).unwrap();
         assert!(!serialized.contains("must-never-escape"));
     }

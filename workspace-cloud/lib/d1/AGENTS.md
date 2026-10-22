@@ -39,21 +39,18 @@ in-D1 request-budget counter, and the full Drizzle table schema (`schema/`).
 | `projects.ts` | `knowledgeProject`, `knowledgeProjectEnvironment`, `knowledgeEnvironmentConnection` — Project Knowledge's project/environment grouping and its link to a workspace connection. |
 | `github.ts` | `knowledgeGithubInstallation`, `knowledgeGithubSetupState` — a Project's GitHub App installation identity and pending setup state. |
 | `sources.ts` | `knowledgeSource` — one Project Knowledge source repository/environment binding. |
-| `graphs.ts` | `knowledgeGraphRevision`, `knowledgeEnvironmentHead`, `knowledgeGrant`, `knowledgeGrantGraphRevision` — built knowledge-graph revisions, the active head per environment, and grant-to-revision links. |
-| `mappings.ts` | `knowledgeMappingProposal` — proposed mappings between a graph revision and an environment, pending review. |
 | `analysis.ts` | `workspaceAnalysisRunner`, `workspaceAnalysisArticle`, `workspaceArticleInvitation`, `workspaceAnalysisArticleRevision` — foreground Desktop runner registrations and Analysis Article definitions/history. |
 | `analysis-runs.ts` | `workspaceAnalysisArticleRun`, `workspaceAnalysisArticleQueryReceipt` — one explicit Desktop-triggered Analysis run's authority receipt and query receipt (never result rows). |
 | `publications.ts` | `workspaceAnalysisPublication` — immutable public Analysis Article HTML snapshot records. |
-| `sync.ts` | `knowledgeSourceEvent`, `knowledgeSourceSyncJob` — ordered webhook/source-sync event log and job state used for exact-commit replay safety. |
-| `code-index.ts` | `knowledgeCodeIndexFile`, `knowledgeCodeIndexActivationFragment`, `knowledgeCodeIndexActivationEntity` — per-file code-index entries and their activation fragments/entities. |
+| `sync.ts` | `knowledgeSourceEvent` — webhook receipt identities used for exact-commit replay safety. |
 | `values.ts` | Shared Drizzle `customType`s: `utcDate` (ISO-8601 text column mapped to `Date`), `utcNow`, `uuidDefault`, `integerBigInt`. |
-| `patterns.ts` | SQL `GLOB`/length column-constraint builders (`matches`, `safeRelativePath`) used by every table's `check()` constraints. |
+| `patterns.ts` | SQL `GLOB`/length column-constraint builders (`matches`) used by every table's `check()` constraints. |
 
 ## For AI Agents
 
 ### Working In This Directory
 - Every schema file imports its cross-table references directly (e.g. `connections.ts` imports `workspaceProviderIntegration` from `./integrations`) rather than through `index.ts`, avoiding a circular barrel import.
-- Column-level string/format constraints go through `patterns.ts` (`matches`, `safeRelativePath`) so allowed character sets stay declared once and enforced by SQLite `CHECK`, not just at the application layer.
+- Column-level string/format constraints go through `patterns.ts` (`matches`) so allowed character sets stay declared once and enforced by SQLite `CHECK`, not just at the application layer.
 - A mutation that must observe an authorization snapshot atomically composes `member-authority.ts`'s `workspaceMemberAuthority` SQL as the `scope` argument to `atomic.ts`'s `atomicD1`.
 - `database.ts` is the only place that resolves the Cloudflare `WORKSPACE_DB` binding; other modules receive a `D1Database` or use `../db.ts`'s wrapped client.
 

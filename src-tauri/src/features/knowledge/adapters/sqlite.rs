@@ -3,7 +3,7 @@
 //! The application facade owns this concrete adapter, preventing Tauri,
 //! Analysis Articles, and the Broker from receiving a raw global `Store`.
 
-use dopedb_protocol::{GraphBuildArtifactV1, GraphRevisionDiffV1, KnowledgeSourceBindingV1};
+use dopedb_protocol::KnowledgeSourceBindingV1;
 use uuid::Uuid;
 
 use crate::error::AppResult;
@@ -12,14 +12,10 @@ use crate::kernel::environment::EnvironmentKind;
 use crate::store::Store;
 
 use super::super::domain::{
-    EnvironmentConnectionBinding, KnowledgeEnvironmentSummary, KnowledgeGrant,
-    KnowledgeMappingProposal, KnowledgeSessionScope, Project, ProjectDefinition,
-    ProjectEnvironment, SourceSnapshot, StoredKnowledgeScope,
+    EnvironmentConnectionBinding, KnowledgeEnvironmentSummary, KnowledgeSessionScope, Project,
+    ProjectDefinition, ProjectEnvironment, StoredKnowledgeScope,
 };
-use super::super::ports::{
-    KnowledgeGrantPort, KnowledgeGraphRepositoryPort, KnowledgeMappingRepositoryPort,
-    KnowledgeRepositoryPort, KnowledgeScopeRepositoryPort,
-};
+use super::super::ports::{KnowledgeRepositoryPort, KnowledgeScopeRepositoryPort};
 
 #[derive(Clone)]
 pub(crate) struct SqliteKnowledgeRepository {
@@ -45,57 +41,6 @@ impl KnowledgeScopeRepositoryPort for SqliteKnowledgeRepository {
 
     async fn remove_scope(&self, source_id: Uuid) -> AppResult<()> {
         self.store.remove_scope(source_id).await
-    }
-
-    async fn save_snapshot(&self, snapshot: &SourceSnapshot) -> AppResult<()> {
-        self.store.save_snapshot(snapshot).await
-    }
-
-    async fn source_snapshot(&self, source_id: Uuid) -> AppResult<Option<SourceSnapshot>> {
-        self.store.source_snapshot(source_id).await
-    }
-}
-
-impl KnowledgeGraphRepositoryPort for SqliteKnowledgeRepository {
-    async fn stage(&self, artifact: &GraphBuildArtifactV1) -> AppResult<()> {
-        self.store.stage(artifact).await
-    }
-
-    async fn activate(&self, artifact: &GraphBuildArtifactV1) -> AppResult<()> {
-        self.store.activate(artifact).await
-    }
-
-    async fn active_for_source(&self, source_id: Uuid) -> AppResult<Option<GraphBuildArtifactV1>> {
-        self.store.active_for_source(source_id).await
-    }
-
-    async fn by_revision(
-        &self,
-        graph_revision_id: Uuid,
-    ) -> AppResult<Option<GraphBuildArtifactV1>> {
-        self.store.by_revision(graph_revision_id).await
-    }
-
-    async fn diff(
-        &self,
-        from_graph_revision_id: Uuid,
-        to_graph_revision_id: Uuid,
-    ) -> AppResult<GraphRevisionDiffV1> {
-        self.store
-            .diff(from_graph_revision_id, to_graph_revision_id)
-            .await
-    }
-}
-
-impl KnowledgeGrantPort for SqliteKnowledgeRepository {
-    async fn save_grant(&self, grant: &KnowledgeGrant) -> AppResult<()> {
-        self.store.save_grant(grant).await
-    }
-}
-
-impl KnowledgeMappingRepositoryPort for SqliteKnowledgeRepository {
-    async fn propose_mapping(&self, proposal: &KnowledgeMappingProposal) -> AppResult<()> {
-        self.store.propose_mapping(proposal).await
     }
 }
 
@@ -177,38 +122,14 @@ impl KnowledgeRepositoryPort for SqliteKnowledgeRepository {
             .await
     }
 
-    async fn exact_knowledge_session_graphs(
+    async fn validate_knowledge_session_scope(
         &self,
         scope: &KnowledgeSessionScope,
         workspace_id: Uuid,
         account_id: &str,
-    ) -> AppResult<Vec<GraphBuildArtifactV1>> {
-        self.store
-            .exact_knowledge_session_graphs(scope, workspace_id, account_id)
-            .await
-    }
-
-    async fn revoke_knowledge_grants_for_account(
-        &self,
-        workspace_id: Uuid,
-        account_id: &str,
     ) -> AppResult<()> {
         self.store
-            .revoke_knowledge_grants_for_account(workspace_id, account_id)
-            .await
-    }
-
-    async fn import_granted_active_graph(&self, graph: &GraphBuildArtifactV1) -> AppResult<()> {
-        self.store.import_granted_active_graph(graph).await
-    }
-
-    async fn retain_granted_environment_heads(
-        &self,
-        environment_id: Uuid,
-        revisions: &[Uuid],
-    ) -> AppResult<()> {
-        self.store
-            .retain_granted_environment_heads(environment_id, revisions)
+            .validate_knowledge_session_scope(scope, workspace_id, account_id)
             .await
     }
 

@@ -491,10 +491,7 @@ function KnowledgeProjectResources({
                 type="button"
                 className="tw:flex tw:min-h-control-lg tw:w-full tw:min-w-0 tw:items-center tw:gap-2.5 tw:rounded-sm tw:border-0 tw:bg-transparent tw:px-2 tw:py-2 tw:pl-5 tw:text-left tw:font-sans tw:text-sm tw:font-normal tw:leading-ui tw:text-foreground tw:hover:bg-muted tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring"
                 onClick={() => onOpenEnvironment(environment.id, "sources")}
-                title={`${environmentKindLabel(t, environment.kind)} · ${source.provider === "github" ? "GitHub" : t("connections.environmentLocalFolder")} · ${knowledgeRevisionLabel(source.revision, {
-                  dirty: t("knowledge.revisionDirty"),
-                  snapshot: t("knowledge.revisionSnapshot"),
-                })}`}
+                title={`${environmentKindLabel(t, environment.kind)} · GitHub · ${knowledgeRevisionLabel(source.revision)}`}
                 role="treeitem"
                 aria-level={3}
                 data-explorer-tree-item

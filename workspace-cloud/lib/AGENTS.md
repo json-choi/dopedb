@@ -154,7 +154,7 @@ default privilege, or ACL (see root `CLAUDE.md`/`AGENTS.md`).
 | Directory | Purpose |
 |-----------|---------|
 | `d1/` | D1 (Cloudflare SQLite) client, `atomicD1` batch helper, and the full Drizzle schema (see `d1/AGENTS.md`). |
-| `knowledge/` | Project Knowledge: GitHub App source browsing, source/graph inventory, personal-workspace scope (see `knowledge/AGENTS.md`). |
+| `knowledge/` | Project Knowledge: GitHub App source browsing, source inventory, personal-workspace scope (see `knowledge/AGENTS.md`). |
 | `provider-integrations/` | Provider integration authority, discovery receipts, and managed-credential lease issuance/cleanup (see `provider-integrations/AGENTS.md`). |
 | `providers/` | Per-provider adapters: GCP Cloud SQL, Neon, PlanetScale, Vault (see `providers/AGENTS.md`). |
 

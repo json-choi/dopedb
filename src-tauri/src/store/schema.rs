@@ -92,15 +92,9 @@ CREATE TABLE knowledge_sources (
     project_id             TEXT NOT NULL REFERENCES knowledge_projects(id) ON DELETE CASCADE,
     project_environment_id TEXT NOT NULL REFERENCES knowledge_project_environments(id) ON DELETE CASCADE,
     environment_revision   INTEGER NOT NULL CHECK(environment_revision > 0),
-    provider               TEXT NOT NULL CHECK(provider IN ('github', 'local_folder')),
+    provider               TEXT NOT NULL CHECK(provider = 'github'),
     display_name           TEXT NOT NULL CHECK(length(display_name) BETWEEN 1 AND 512),
-    visibility             TEXT NOT NULL CHECK(visibility IN ('local_only', 'shared_graph')),
     binding_json           TEXT NOT NULL CHECK(json_valid(binding_json) AND length(binding_json) <= 65536),
-    source_revision_sha256 TEXT CHECK(source_revision_sha256 IS NULL OR
-                               (length(source_revision_sha256) = 64 AND
-                                source_revision_sha256 NOT GLOB '*[^0-9a-f]*')),
-    snapshot_json          TEXT CHECK(snapshot_json IS NULL OR
-                               (json_valid(snapshot_json) AND length(snapshot_json) <= 67108864)),
     revoked_at             TEXT,
     created_at             TEXT NOT NULL,
     updated_at             TEXT NOT NULL
@@ -129,92 +123,6 @@ CREATE UNIQUE INDEX idx_knowledge_environment_connection_workspace_active
 CREATE INDEX idx_knowledge_environment_connection_scope
     ON knowledge_environment_connections(workspace_id, project_environment_id, revoked_at);
 
-CREATE TABLE knowledge_graph_revisions (
-    graph_revision_id        TEXT PRIMARY KEY,
-    source_id                TEXT NOT NULL REFERENCES knowledge_sources(id) ON DELETE CASCADE,
-    project_environment_id   TEXT NOT NULL REFERENCES knowledge_project_environments(id) ON DELETE CASCADE,
-    environment_revision     INTEGER NOT NULL CHECK(environment_revision > 0),
-    parent_graph_revision_id TEXT REFERENCES knowledge_graph_revisions(graph_revision_id),
-    source_revision_sha256   TEXT NOT NULL
-                             CHECK(length(source_revision_sha256) = 64
-                               AND source_revision_sha256 NOT GLOB '*[^0-9a-f]*'),
-    artifact_sha256          TEXT NOT NULL
-                             CHECK(length(artifact_sha256) = 64
-                               AND artifact_sha256 NOT GLOB '*[^0-9a-f]*'),
-    artifact_json            TEXT NOT NULL CHECK(json_valid(artifact_json)),
-    generated_at             TEXT NOT NULL,
-    staged_at                TEXT NOT NULL
-);
-CREATE INDEX idx_knowledge_graph_revisions_environment
-    ON knowledge_graph_revisions(project_environment_id, staged_at DESC);
-
-CREATE TABLE knowledge_environment_heads (
-    project_environment_id TEXT NOT NULL
-                           REFERENCES knowledge_project_environments(id) ON DELETE CASCADE,
-    source_id              TEXT NOT NULL
-                           REFERENCES knowledge_sources(id) ON DELETE CASCADE,
-    graph_revision_id      TEXT NOT NULL UNIQUE
-                           REFERENCES knowledge_graph_revisions(graph_revision_id),
-    environment_revision   INTEGER NOT NULL CHECK(environment_revision > 0),
-    activated_at           TEXT NOT NULL,
-    PRIMARY KEY (project_environment_id, source_id)
-);
-
-CREATE TABLE knowledge_grants (
-    id                     TEXT PRIMARY KEY,
-    workspace_id           TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-    account_user_id        TEXT NOT NULL CHECK(account_user_id <> ''),
-    project_id             TEXT NOT NULL REFERENCES knowledge_projects(id) ON DELETE CASCADE,
-    project_environment_id TEXT NOT NULL REFERENCES knowledge_project_environments(id) ON DELETE CASCADE,
-    environment_revision   INTEGER NOT NULL CHECK(environment_revision > 0),
-    graph_revision_id      TEXT NOT NULL REFERENCES knowledge_graph_revisions(graph_revision_id),
-    expires_at             TEXT NOT NULL,
-    created_at             TEXT NOT NULL,
-    UNIQUE(workspace_id, account_user_id, project_environment_id, graph_revision_id)
-);
-CREATE INDEX idx_knowledge_grants_account
-    ON knowledge_grants(workspace_id, account_user_id, expires_at);
-
-CREATE TABLE knowledge_grant_graph_revisions (
-    grant_id          TEXT NOT NULL REFERENCES knowledge_grants(id) ON DELETE CASCADE,
-    graph_revision_id TEXT NOT NULL REFERENCES knowledge_graph_revisions(graph_revision_id),
-    PRIMARY KEY (grant_id, graph_revision_id)
-);
-
-CREATE TABLE knowledge_mapping_proposals (
-    id                     TEXT PRIMARY KEY,
-    project_environment_id TEXT NOT NULL REFERENCES knowledge_project_environments(id) ON DELETE CASCADE,
-    graph_revision_id      TEXT NOT NULL REFERENCES knowledge_graph_revisions(graph_revision_id),
-    schema_fingerprint     TEXT NOT NULL
-                           CHECK(length(schema_fingerprint) = 64
-                             AND schema_fingerprint NOT GLOB '*[^0-9a-f]*'),
-    from_node_id           TEXT NOT NULL
-                           CHECK(length(from_node_id) = 64
-                             AND from_node_id NOT GLOB '*[^0-9a-f]*'),
-    target_kind            TEXT NOT NULL CHECK(length(target_kind) BETWEEN 1 AND 128),
-    target_identity        TEXT NOT NULL CHECK(length(target_identity) BETWEEN 1 AND 2048),
-    state                  TEXT NOT NULL CHECK(state IN ('proposed', 'approved', 'rejected', 'stale')),
-    proposed_at            TEXT NOT NULL,
-    decided_at             TEXT
-);
-CREATE INDEX idx_knowledge_mapping_proposals_review
-    ON knowledge_mapping_proposals(project_environment_id, state, proposed_at DESC);
-
-CREATE TRIGGER knowledge_graph_revisions_reject_update
-BEFORE UPDATE ON knowledge_graph_revisions
-BEGIN
-    SELECT RAISE(ABORT, 'knowledge graph revisions are immutable');
-END;
-
-CREATE TRIGGER knowledge_graph_revisions_reject_delete_active
-BEFORE DELETE ON knowledge_graph_revisions
-WHEN EXISTS (
-    SELECT 1 FROM knowledge_environment_heads
-    WHERE graph_revision_id = OLD.graph_revision_id
-)
-BEGIN
-    SELECT RAISE(ABORT, 'active knowledge graph revision cannot be deleted');
-END;
 "#;
 
 /// Current application schema, executed once for a new store.

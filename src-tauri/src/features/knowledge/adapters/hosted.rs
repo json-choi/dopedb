@@ -4,28 +4,22 @@
 use reqwest::Url;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::json;
 use uuid::Uuid;
 use zeroize::Zeroizing;
 
 use crate::connection::keychain::fetch_workspace_session;
 use crate::error::{AppError, AppResult};
-use crate::features::knowledge::domain::{KnowledgeMappingProposal, MappingProposalState};
 use crate::features::knowledge::ports::{
     AppendKnowledgeEnvironmentRequest, CreateKnowledgeProjectRequest, CreateKnowledgeSourceRequest,
     CreatedKnowledgeSource, HostedKnowledgeAuthorityPort, PinnedSourceReadRequest,
     PinnedSourceSearchRequest, RemoteEnvironmentConnectionBinding, RemoteGithubRepository,
-    RemoteKnowledgeGrant, RemoteKnowledgeInventory, RemoteKnowledgeProject, RemoteKnowledgeSource,
+    RemoteKnowledgeInventory, RemoteKnowledgeProject, RemoteKnowledgeSource,
     RemotePersonalKnowledgeScope, RemoteSourceReadResult, RemoteSourceSearchResult,
 };
 use crate::hosted_control_plane::{
     bounded_json_response, client, origin, request_error, response_error as oauth_error,
 };
-use dopedb_protocol::{
-    canonical_knowledge_json_bytes, knowledge_graph_artifact_size_allowed, GraphBuildArtifactV1,
-    MAX_KNOWLEDGE_GRAPH_RESPONSE_BYTES,
-};
-use sha2::{Digest, Sha256};
 
 #[path = "hosted_projects.rs"]
 mod projects;
@@ -110,59 +104,6 @@ struct DeleteKnowledgeProjectRequest {
 struct PersonalKnowledgeScopeResponse {
     workspace_id: Uuid,
     member_id: String,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct KnowledgeGrantsResponse {
-    grants: Vec<RemoteKnowledgeGrant>,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct CreateKnowledgeGrantRequest<'a> {
-    member_id: &'a str,
-    project_environment_id: Uuid,
-    ttl_seconds: u64,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct CreatedKnowledgeGrantResponse {
-    grant: CreatedKnowledgeGrant,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct CreatedKnowledgeGrant {
-    id: Uuid,
-    expires_at: chrono::DateTime<chrono::Utc>,
-    graph_revision_ids: Vec<Uuid>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct KnowledgeMappingResponse {
-    mapping: KnowledgeMappingProposal,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ProposeKnowledgeMappingRequest<'a> {
-    grant_id: Uuid,
-    graph_revision_id: Uuid,
-    schema_fingerprint: &'a str,
-    from_node_id: &'a str,
-    target_kind: &'a str,
-    target_identity: &'a str,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct DownloadedKnowledgeGraphResponse {
-    graph_revision_id: Uuid,
-    artifact_sha256: String,
-    artifact: Value,
 }
 
 #[derive(Deserialize)]
@@ -253,51 +194,6 @@ impl HostedKnowledgeAuthorityPort for HostedKnowledgeAuthority {
         request: &AppendKnowledgeEnvironmentRequest,
     ) -> impl std::future::Future<Output = AppResult<RemoteKnowledgeProject>> + Send {
         create_knowledge_environment(account_id, workspace_id, project_id, request)
-    }
-
-    fn list_current_grants(
-        &self,
-        account_id: &str,
-        workspace_id: Uuid,
-    ) -> impl std::future::Future<Output = AppResult<Vec<RemoteKnowledgeGrant>>> + Send {
-        list_current_knowledge_grants(account_id, workspace_id)
-    }
-
-    fn create_current_grant(
-        &self,
-        account_id: &str,
-        workspace_id: Uuid,
-        member_id: &str,
-        environment_id: Uuid,
-    ) -> impl std::future::Future<Output = AppResult<()>> + Send {
-        create_current_knowledge_grant(account_id, workspace_id, member_id, environment_id)
-    }
-
-    fn propose_mapping(
-        &self,
-        account_id: &str,
-        workspace_id: Uuid,
-        grant_id: Uuid,
-        proposal: &KnowledgeMappingProposal,
-    ) -> impl std::future::Future<Output = AppResult<KnowledgeMappingProposal>> + Send {
-        propose_remote_knowledge_mapping(account_id, workspace_id, grant_id, proposal)
-    }
-
-    fn download_graph(
-        &self,
-        account_id: &str,
-        workspace_id: Uuid,
-        grant_id: Uuid,
-        source_id: Uuid,
-        expected_graph_revision_id: Uuid,
-    ) -> impl std::future::Future<Output = AppResult<GraphBuildArtifactV1>> + Send {
-        download_knowledge_graph(
-            account_id,
-            workspace_id,
-            grant_id,
-            source_id,
-            expected_graph_revision_id,
-        )
     }
 
     fn list_environment_connections(

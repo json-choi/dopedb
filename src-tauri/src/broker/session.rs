@@ -44,11 +44,10 @@ pub(crate) enum BrokerCapability {
     OperationRead,
     OperationCancel,
     KnowledgeRead,
-    KnowledgePropose,
 }
 
 impl BrokerCapability {
-    pub(crate) const ALL: [Self; 13] = [
+    pub(crate) const ALL: [Self; 12] = [
         Self::ConnectionRead,
         Self::ConnectionTest,
         Self::CatalogRead,
@@ -61,7 +60,6 @@ impl BrokerCapability {
         Self::OperationRead,
         Self::OperationCancel,
         Self::KnowledgeRead,
-        Self::KnowledgePropose,
     ];
 }
 
@@ -73,8 +71,7 @@ pub(crate) struct AuthenticatedSession {
     pub(crate) workspace_id: WorkspaceId,
     pub(crate) account_scope: AccountScopeId,
     /// Database access stays in the Personal/Team storage partition, while a
-    /// Personal Workspace GitHub graph is additionally pinned to the exact
-    /// signed-in account that received its short-lived Knowledge grant.
+    /// GitHub file access is pinned to the exact signed-in account.
     pub(crate) knowledge_account_scope: AccountScopeId,
     pub(crate) scope_generation: i64,
     pub(crate) connection_id: ConnectionId,
@@ -674,13 +671,11 @@ mod tests {
                 AgentKnowledgeAuthorization {
                     scopes: vec![KnowledgeSessionScope {
                         project_id: Uuid::new_v4(),
-                        knowledge_grant_id: None,
                         project_environment_id: Uuid::new_v4(),
                         environment_revision: 1,
                         authority_connection_id: Uuid::from(second_connection),
                         authority_connection_revision: 11,
                         sources: Vec::new(),
-                        graph_revision_ids: Vec::new(),
                         connections: vec![KnowledgeSessionConnection {
                             connection_id: Uuid::from(selected_connection),
                             connection_revision: 3,

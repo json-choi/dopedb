@@ -169,6 +169,18 @@ fn delete_workspace_session_account(account: &str) -> AppResult<()> {
     }
 }
 
+/// Delete only retired Local Folder entries whose exact source IDs came from
+/// the supported app-owned SQLite baseline. The stored paths are never read.
+pub(crate) async fn retire_knowledge_source_roots(source_ids: Vec<Uuid>) -> AppResult<()> {
+    workspace_session_keychain_task(move || {
+        for source_id in source_ids {
+            delete_workspace_session_account(&format!("knowledge-source-root:{source_id}"))?;
+        }
+        Ok(())
+    })
+    .await
+}
+
 async fn workspace_session_keychain_task<T, F>(task: F) -> AppResult<T>
 where
     T: Send + 'static,
@@ -426,49 +438,6 @@ pub(crate) fn analysis_result_cache_key() -> AppResult<Zeroizing<[u8; 32]>> {
         AppError::Config("stored Analysis Article result cache key is invalid".into())
     })?;
     Ok(key)
-}
-
-fn knowledge_source_root_account(source_id: Uuid) -> String {
-    format!("knowledge-source-root:{source_id}")
-}
-
-/// Local Folder roots are device capabilities, not workspace metadata. Persist the
-/// canonical root only in the OS credential store under the source UUID.
-pub(crate) fn store_knowledge_source_root(
-    source_id: Uuid,
-    root: &std::path::Path,
-) -> AppResult<()> {
-    let canonical = std::fs::canonicalize(root)?;
-    if !canonical.is_dir() {
-        return Err(AppError::Config(
-            "the Project Knowledge root is not a directory".into(),
-        ));
-    }
-    let value = canonical
-        .to_str()
-        .ok_or_else(|| AppError::Config("the Project Knowledge root is not Unicode".into()))?;
-    store_workspace_session_account(&knowledge_source_root_account(source_id), value)
-}
-
-pub(crate) fn fetch_knowledge_source_root(
-    source_id: Uuid,
-) -> AppResult<Option<std::path::PathBuf>> {
-    let Some(value) = fetch_workspace_session_account(&knowledge_source_root_account(source_id))?
-    else {
-        return Ok(None);
-    };
-    let root = std::path::PathBuf::from(value);
-    let canonical = std::fs::canonicalize(&root)?;
-    if canonical != root || !canonical.is_dir() {
-        return Err(AppError::Blocked {
-            reason: "the Project Knowledge root capability changed".into(),
-        });
-    }
-    Ok(Some(root))
-}
-
-pub(crate) fn delete_knowledge_source_root(source_id: Uuid) -> AppResult<()> {
-    delete_workspace_session_account(&knowledge_source_root_account(source_id))
 }
 
 // ---------------------------------------------------------------------------

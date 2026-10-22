@@ -10,27 +10,23 @@
 
 use std::collections::BTreeSet;
 
-use dopedb_protocol::{
-    KnowledgeSourceBindingV1, KnowledgeSourceProvider, KnowledgeSourceVisibility,
-    SourceRevisionIdentity,
-};
+use dopedb_protocol::{KnowledgeSourceBindingV1, KnowledgeSourceProvider, SourceRevisionIdentity};
 use uuid::Uuid;
 
 use crate::error::{AppError, AppResult};
 use crate::kernel::access::{ActiveResourceScope, WorkspaceKind};
 use crate::kernel::identity::{AccountId, WorkspaceId};
 
-use super::domain::{KnowledgeGrant, Project, ProjectDefinition, ProjectEnvironment};
+use super::domain::{Project, ProjectDefinition, ProjectEnvironment};
 use super::ports::{
-    HostedKnowledgeAuthorityPort, KnowledgeRepositoryPort, RemoteKnowledgeGrant,
-    RemoteKnowledgeProject, RemoteKnowledgeSource,
+    HostedKnowledgeAuthorityPort, KnowledgeRepositoryPort, RemoteKnowledgeProject,
+    RemoteKnowledgeSource,
 };
 
 /// What one explicit hosted-authority reconciliation made locally available.
 #[derive(Debug, Clone)]
 pub(crate) struct KnowledgeAccessReconciliation {
     pub(crate) projects: Vec<RemoteKnowledgeProject>,
-    pub(crate) grant_count: usize,
     pub(crate) environment_binding_count: usize,
 }
 
@@ -45,46 +41,18 @@ where
     let scope = repository.active_resource_scope().await?;
     let account = selected_remote_account(&scope)?;
     let projects = project_inventory(repository, authority, &scope, &account).await?;
-    let (remote_workspace_id, personal_member_id) =
-        if scope.workspace_kind == WorkspaceKind::Personal {
-            let remote = authority
-                .ensure_personal_scope(account.as_str(), &projects)
-                .await?;
-            (remote.workspace_id, Some(remote.member_id))
-        } else {
-            (scope.workspace_id, None)
-        };
+    let remote_workspace_id = if scope.workspace_kind == WorkspaceKind::Personal {
+        authority
+            .ensure_personal_scope(account.as_str(), &projects)
+            .await?
+            .workspace_id
+    } else {
+        scope.workspace_id
+    };
     let sources = authority
         .list_sources(account.as_str(), remote_workspace_id)
         .await?;
     reconcile_sources(repository, &scope, &projects, &sources).await?;
-
-    let mut grants = authority
-        .list_current_grants(account.as_str(), remote_workspace_id)
-        .await?;
-    if let Some(member_id) = personal_member_id.as_deref() {
-        grants = ensure_personal_grants(
-            authority,
-            &account,
-            remote_workspace_id,
-            member_id,
-            &projects,
-            &sources,
-            grants,
-        )
-        .await?;
-    }
-
-    reconcile_grants(
-        repository,
-        authority,
-        &scope,
-        &account,
-        remote_workspace_id,
-        &projects,
-        &grants,
-    )
-    .await?;
 
     let environment_binding_count = if scope.workspace_kind == WorkspaceKind::Team {
         reconcile_environment_connections(repository, authority, &scope, &account, &projects)
@@ -95,7 +63,6 @@ where
 
     Ok(KnowledgeAccessReconciliation {
         projects,
-        grant_count: grants.len(),
         environment_binding_count,
     })
 }
@@ -155,63 +122,6 @@ where
     Ok(projects)
 }
 
-async fn ensure_personal_grants<H>(
-    authority: &H,
-    account: &AccountId,
-    remote_workspace_id: Uuid,
-    member_id: &str,
-    projects: &[RemoteKnowledgeProject],
-    sources: &[RemoteKnowledgeSource],
-    mut grants: Vec<RemoteKnowledgeGrant>,
-) -> AppResult<Vec<RemoteKnowledgeGrant>>
-where
-    H: HostedKnowledgeAuthorityPort,
-{
-    let mut created = false;
-    for project in projects {
-        for environment in &project.environments {
-            let mut graph_revision_ids = sources
-                .iter()
-                .filter(|source| {
-                    source.project_id == project.id
-                        && source.project_environment_id == environment.id
-                        && source.environment_revision == environment.revision
-                })
-                .filter_map(|source| source.graph_revision_id)
-                .collect::<Vec<_>>();
-            graph_revision_ids.sort_unstable();
-            graph_revision_ids.dedup();
-            if graph_revision_ids.is_empty()
-                || grants.iter().any(|grant| {
-                    grant_matches_revision_set(
-                        grant,
-                        environment.id,
-                        environment.revision,
-                        &graph_revision_ids,
-                    )
-                })
-            {
-                continue;
-            }
-            authority
-                .create_current_grant(
-                    account.as_str(),
-                    remote_workspace_id,
-                    member_id,
-                    environment.id,
-                )
-                .await?;
-            created = true;
-        }
-    }
-    if created {
-        grants = authority
-            .list_current_grants(account.as_str(), remote_workspace_id)
-            .await?;
-    }
-    Ok(grants)
-}
-
 async fn reconcile_sources<R>(
     repository: &R,
     scope: &ActiveResourceScope,
@@ -249,7 +159,6 @@ where
             project_environment_id: source.project_environment_id,
             provider: KnowledgeSourceProvider::Github,
             display_name: source.display_name.clone(),
-            visibility: KnowledgeSourceVisibility::SharedGraph,
             revision: SourceRevisionIdentity::Github {
                 repository_id: repository_id.clone(),
                 repository: repository_name.clone(),
@@ -288,134 +197,6 @@ where
         {
             repository.remove_scope(local.binding.source_id).await?;
         }
-    }
-    Ok(())
-}
-
-fn grant_matches_revision_set(
-    grant: &RemoteKnowledgeGrant,
-    environment_id: Uuid,
-    environment_revision: u64,
-    expected: &[Uuid],
-) -> bool {
-    if grant.project_environment_id != environment_id
-        || grant.environment_revision != environment_revision
-    {
-        return false;
-    }
-    let mut actual = grant.graph_revision_ids.clone();
-    actual.sort_unstable();
-    actual.dedup();
-    actual == expected
-}
-
-async fn reconcile_grants<R, H>(
-    repository: &R,
-    authority: &H,
-    scope: &ActiveResourceScope,
-    account: &AccountId,
-    remote_workspace_id: Uuid,
-    projects: &[RemoteKnowledgeProject],
-    grants: &[RemoteKnowledgeGrant],
-) -> AppResult<()>
-where
-    R: KnowledgeRepositoryPort,
-    H: HostedKnowledgeAuthorityPort,
-{
-    for project in projects {
-        for environment in &project.environments {
-            let allowed_graph_revision_ids = grants
-                .iter()
-                .filter(|grant| {
-                    grant.project_environment_id == environment.id
-                        && grant.environment_revision == environment.revision
-                })
-                .flat_map(|grant| grant.graph_revision_ids.iter().copied())
-                .collect::<Vec<_>>();
-            repository
-                .retain_granted_environment_heads(environment.id, &allowed_graph_revision_ids)
-                .await?;
-        }
-    }
-
-    for grant in grants {
-        let remote_project = projects
-            .iter()
-            .find(|project| project.id == grant.project_id)
-            .ok_or_else(|| AppError::Network("Knowledge grant project is missing".into()))?;
-        let remote_environment = remote_project
-            .environments
-            .iter()
-            .find(|environment| environment.id == grant.project_environment_id)
-            .filter(|environment| environment.revision == grant.environment_revision)
-            .ok_or_else(|| AppError::Network("Knowledge grant environment is stale".into()))?;
-        let project = Project {
-            id: remote_project.id,
-            workspace_id: WorkspaceId::from(scope.workspace_id),
-            name: remote_project.name.clone(),
-            revision: remote_project.revision,
-        };
-        let environment = ProjectEnvironment {
-            id: remote_environment.id,
-            project_id: remote_project.id,
-            kind: remote_environment.kind,
-            revision: remote_environment.revision,
-        };
-        for graph_scope in &grant.graph_scopes {
-            let artifact = match repository
-                .by_revision(graph_scope.graph_revision_id)
-                .await?
-            {
-                Some(artifact) => artifact,
-                None => {
-                    authority
-                        .download_graph(
-                            account.as_str(),
-                            remote_workspace_id,
-                            grant.id,
-                            graph_scope.source_id,
-                            graph_scope.graph_revision_id,
-                        )
-                        .await?
-                }
-            };
-            if artifact.binding.project_id != project.id
-                || artifact.binding.project_environment_id != environment.id
-                || artifact.environment_revision != environment.revision
-                || artifact.binding.source_id != graph_scope.source_id
-            {
-                return Err(AppError::Network(
-                    "Knowledge grant graph crossed its Project Environment".into(),
-                ));
-            }
-            repository
-                .save_scope(
-                    &project,
-                    &environment,
-                    &artifact.binding,
-                    artifact.environment_revision,
-                )
-                .await?;
-            repository.import_granted_active_graph(&artifact).await?;
-        }
-    }
-
-    repository
-        .revoke_knowledge_grants_for_account(scope.workspace_id, account.as_str())
-        .await?;
-    for grant in grants {
-        repository
-            .save_grant(&KnowledgeGrant {
-                id: grant.id,
-                workspace_id: WorkspaceId::from(scope.workspace_id),
-                account_id: account.clone(),
-                project_id: grant.project_id,
-                project_environment_id: grant.project_environment_id,
-                environment_revision: grant.environment_revision,
-                graph_revision_ids: grant.graph_revision_ids.clone(),
-                expires_at: grant.expires_at,
-            })
-            .await?;
     }
     Ok(())
 }

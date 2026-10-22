@@ -20,19 +20,13 @@ use dopedb_protocol::{
     ConnectionSelector, ConnectionSelectorArguments, ConnectionShowCommand, ConnectionSummary,
     ConnectionTestCommand, DatabaseListArguments, DatabaseListCommand, DocumentQuery,
     DocumentRunArguments, DocumentRunCommand, EmptyArguments, EnvironmentContextCommand,
-    EnvironmentContextResult, ErrorCode, FunnelTraceArguments, FunnelTraceCommand,
-    KnowledgeDiffArguments, KnowledgeDiffCommand, KnowledgeEvidenceArguments,
-    KnowledgeEvidenceCommand, KnowledgeExplainCommand, KnowledgeMappingProposeArguments,
-    KnowledgeMappingProposeCommand, KnowledgeNeighborsArguments, KnowledgeNeighborsCommand,
-    KnowledgeNodeArguments, KnowledgePathArguments, KnowledgePathCommand, KnowledgeSearchArguments,
-    KnowledgeSearchCommand, ObjectKind, OperationArguments, OperationCancelCommand,
+    EnvironmentContextResult, ErrorCode, ObjectKind, OperationArguments, OperationCancelCommand,
     OperationShowCommand, OperationWaitArguments, OperationWaitCommand, QueryCancelArguments,
     QueryCancelCommand, QueryPlanArguments, QueryPlanCommand, QueryRunArguments, QueryRunCommand,
     SchemaListCommand, SourceReadArguments, SourceReadCommand, SourceSearchArguments,
     SourceSearchCommand, SqlProposeArguments, SqlProposeCommand, TableDescribeArguments,
     TableDescribeCommand, MAX_CATALOG_SEARCH_KINDS, MAX_CATALOG_SEARCH_MATCHES,
-    MAX_CATALOG_SEARCH_QUERY_BYTES, MAX_KNOWLEDGE_EVIDENCE_IDS, MAX_KNOWLEDGE_NEIGHBORS,
-    MAX_KNOWLEDGE_QUERY_BYTES, MAX_KNOWLEDGE_RESULTS, MAX_KNOWLEDGE_TARGET_IDENTITY_BYTES,
+    MAX_CATALOG_SEARCH_QUERY_BYTES, MAX_KNOWLEDGE_QUERY_BYTES, MAX_KNOWLEDGE_RESULTS,
     MAX_REQUEST_BYTES, MAX_SOURCE_PATH_BYTES, MAX_SOURCE_READ_LINES, MAX_STRING_BYTES,
 };
 use serde::de::DeserializeOwned;
@@ -48,7 +42,7 @@ mod dispatch;
 mod tools;
 
 use dispatch::call_tool;
-use tools::{is_dormant_knowledge_tool, tools_result};
+use tools::tools_result;
 
 const MAX_MCP_MESSAGE_BYTES: usize = MAX_REQUEST_BYTES;
 const MCP_PROTOCOL_VERSION: &str = "2025-11-25";
@@ -94,16 +88,8 @@ const SQL_READ_POLICY_BLOCKED_READ_ONLY: &str = "DopeDB's safety policy blocked 
 const SQL_PROPOSE_POLICY_BLOCKED: &str = "DopeDB's safety policy blocked this proposal on this connection. USE, SET, and transaction control are never run: pass the database argument and send one statement. If the connection is read-only for this user or its data changes are turned off, tell the user what you intended instead of retrying.";
 // An external Agent's proposals wait in a bounded approval queue; none is dropped.
 const SQL_PROPOSE_CONFLICT: &str = "DopeDB could not accept another proposal now: earlier proposals still await a person's decision, or the connection changed. Check them with operation_status or operation_wait before proposing again.";
-const TOOL_KNOWLEDGE_SEARCH: &str = "knowledge_search";
 const TOOL_SOURCE_SEARCH: &str = "source_search";
 const TOOL_SOURCE_READ: &str = "source_read";
-const TOOL_KNOWLEDGE_EXPLAIN: &str = "knowledge_explain";
-const TOOL_KNOWLEDGE_NEIGHBORS: &str = "knowledge_neighbors";
-const TOOL_KNOWLEDGE_PATH: &str = "knowledge_path";
-const TOOL_KNOWLEDGE_EVIDENCE: &str = "knowledge_evidence";
-const TOOL_KNOWLEDGE_DIFF: &str = "knowledge_diff";
-const TOOL_KNOWLEDGE_MAPPING_PROPOSE: &str = "knowledge_mapping_propose";
-const TOOL_FUNNEL_TRACE: &str = "funnel_trace";
 const TOOL_ENVIRONMENT_CONTEXT: &str = "environment_context";
 
 #[derive(Debug, Default, Deserialize)]
