@@ -1,6 +1,7 @@
 // Maps Analysis Article command failures to catalog copy by closed error kind.
 // Backend and control-plane text never becomes the message; only a database's own
-// diagnostic is kept, as optional detail the person can expand. A run precondition
+// diagnostic or the local backend's config reason is kept, as optional detail the
+// person can expand; control-plane text never is. A run precondition
 // failure also says what changed and names the one recovery step this person can
 // take, or whom to ask when their role cannot take it.
 import type { I18nKey } from "../../lib/i18n";
@@ -114,7 +115,7 @@ export function analysisFailure(t: Translate, error: unknown): AnalysisFailure {
     case "notFound":
       return { message: t("analysis.errorNotFound"), detail: null };
     case "config":
-      return { message: t("analysis.errorInvalid"), detail: null };
+      return { message: t("analysis.errorInvalid"), detail: message };
     case "timeout":
       return { message: t("analysis.errorTimeout"), detail: null };
     case "credentialBindingRequired":
