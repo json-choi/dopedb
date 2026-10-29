@@ -82,7 +82,7 @@ unicode-normalization = "0.1.25"
 futures = "0.3"
 rust_xlsxwriter = { version = "0.99.0", features = ["constant_memory"] }
 calamine = "0.36.1"
-zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
+zip = { version = "9.0.5", default-features = false, features = ["deflate"] }
 reqwest = { version = "0.13.4", default-features = false, features = ["json", "rustls"] }
 tokio-util = "0.7.19"
 dashmap = "6.2.1"
