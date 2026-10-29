@@ -839,8 +839,8 @@
     },
     {
       "appVersion": "0.8.6",
-      "releaseRevision": 26,
-      "packageDigest": "2c0a881ebf3f2e88f5f6e839c0f2e5ff69ecba88ff26ec0300d21fde9e6b9bd9"
+      "releaseRevision": 27,
+      "packageDigest": "d242d54dac2ff5d1b73d1228c3a6600ecb8daf8ba9ef97ba5dab1692c973d096"
     }
   ]
 }

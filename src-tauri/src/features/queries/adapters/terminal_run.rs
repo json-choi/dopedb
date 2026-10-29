@@ -27,6 +27,7 @@ use super::platform::QueryPlatformAdapter;
 use super::terminal_plan::StoredAgentReadPayload;
 use super::terminal_support::{
     audit_best_effort, capture_agent_read_policy, persist_history, pool_ref, record_run_failure,
+    AgentReadOutcome,
 };
 
 /// Opaque capability whose ownership proves the durable plan was claimed exactly once.
@@ -110,6 +111,7 @@ impl PreparedAgentQueryRun {
                     &store,
                     &operation_pin,
                     &event_context.sql,
+                    &event_context.database,
                     engine,
                     origin,
                     &error,
@@ -133,6 +135,7 @@ impl PreparedAgentQueryRun {
                     &store,
                     &operation_pin,
                     &event_context.sql,
+                    &event_context.database,
                     engine,
                     origin,
                     &error,
@@ -189,6 +192,7 @@ impl PreparedAgentQueryRun {
                     &store,
                     &operation_pin,
                     &event_context.sql,
+                    &event_context.database,
                     engine,
                     origin,
                     &error,
@@ -235,10 +239,8 @@ impl PreparedAgentQueryRun {
             &store,
             &operation_pin,
             &event_context.sql,
-            "ok",
-            Some(result.row_count as i64),
-            Some(result.duration_ms as i64),
-            None,
+            &event_context.database,
+            AgentReadOutcome::succeeded(result.row_count as i64, result.duration_ms as i64),
         )
         .await
         {

@@ -333,6 +333,8 @@ impl BrokerDispatcher {
                             &needle,
                             relation.columns.iter().map(|column| column.name.as_str()),
                         ),
+                        comment: bounded_comment(relation.comment.as_deref()),
+                        row_estimate: relation.row_estimate,
                     },
                 });
             }
@@ -364,6 +366,8 @@ impl BrokerDispatcher {
                             &needle,
                             routine.arguments.iter().map(String::as_str),
                         ),
+                        comment: bounded_comment(routine.comment.as_deref()),
+                        row_estimate: None,
                     },
                 });
             }
@@ -391,14 +395,18 @@ impl BrokerDispatcher {
                         qualified_name,
                         object: object.object.clone(),
                         matched_fields: Vec::new(),
+                        comment: bounded_comment(object.comment.as_deref()),
+                        row_estimate: None,
                     },
                 });
             }
         }
 
+        // Equal relevance favors populated relations, so a live table outranks the
+        // empty archive or staging copies that share its name.
         matches.sort_by(|left, right| {
-            left.score
-                .cmp(&right.score)
+            search_rank(left.score, left.value.row_estimate)
+                .cmp(&search_rank(right.score, right.value.row_estimate))
                 .then_with(|| left.label.cmp(&right.label))
         });
         let total_matches = u64::try_from(matches.len()).unwrap_or(u64::MAX);
@@ -515,6 +523,8 @@ impl BrokerDispatcher {
     }
 }
 
+const MAX_CATALOG_SEARCH_COMMENT_CHARS: usize = 160;
+
 struct CatalogSearchCandidate {
     score: u8,
     label: String,
@@ -538,6 +548,27 @@ fn qualified_name(object: &dopedb_protocol::ObjectRef) -> String {
     .flatten()
     .collect::<Vec<_>>()
     .join(".")
+}
+
+/// Sort key for one match: relevance first, then the larger row estimate. Relations
+/// without an estimate and non-relations sort after any estimated relation.
+fn search_rank(score: u8, row_estimate: Option<i64>) -> (u8, std::cmp::Reverse<i64>) {
+    (score, std::cmp::Reverse(row_estimate.unwrap_or(-1)))
+}
+
+/// A catalog comment trimmed to a bounded preview so a wide search stays small; a
+/// relation's full comment is available from `table.describe`.
+fn bounded_comment(comment: Option<&str>) -> Option<String> {
+    let comment = comment?.trim();
+    if comment.is_empty() {
+        return None;
+    }
+    Some(
+        match comment.char_indices().nth(MAX_CATALOG_SEARCH_COMMENT_CHARS) {
+            Some((end, _)) => format!("{}…", &comment[..end]),
+            None => comment.to_owned(),
+        },
+    )
 }
 
 fn search_score(needle: &str, name: &str, qualified: &str, extras: &[&str]) -> Option<u8> {
@@ -574,6 +605,15 @@ pub(super) fn assert_catalog_search_contract() {
         search_score("user", "users", "app.public.users", &["deleted_at"]),
         Some(1)
     );
+    assert!(search_rank(2, Some(2_283)) < search_rank(2, Some(0)));
+    assert!(search_rank(2, Some(0)) < search_rank(2, None));
+    assert!(search_rank(1, None) < search_rank(2, Some(1_000_000)));
+    let long = "x".repeat(MAX_CATALOG_SEARCH_COMMENT_CHARS + 5);
+    assert_eq!(
+        bounded_comment(Some(&long)).map(|comment| comment.chars().count()),
+        Some(MAX_CATALOG_SEARCH_COMMENT_CHARS + 1)
+    );
+    assert_eq!(bounded_comment(Some("  ")), None);
 }
 
 fn matching_fields<'a>(needle: &'a str, fields: impl Iterator<Item = &'a str>) -> Vec<String> {

@@ -98,9 +98,17 @@ session-local typed stdio MCP server implemented by the exact bundled Agent brid
 tool maps bounded JSON directly to a protocol `CommandSpec` and `BrokerClient`; it does
 not invoke a shell, public CLI parser, or another CLI process per tool call. `query_read`
 still performs the Broker's exact plan request followed by its single-use run request,
-but exposes that safety sequence as one MCP round trip. Catalog search is evaluated while
-the canonical snapshot remains inside Desktop and returns only a bounded compact match set,
-so a wide schema cannot overflow the local Broker frame.
+but exposes that safety sequence as one MCP round trip, and may carry up to five
+independent reads that each keep their own plan, timeout, and receipt. Because every
+result is re-read on each later model turn, the bridge returns conversation-sized
+projections: plan diagnostics only when the Broker flagged something, at most a
+bounded row preview (default 50) with the omitted count, and compact relation
+descriptions for up to ten relations per call. A batch stops at its first failed read.
+Each Agent read is recorded in the connection's Desktop Activity with its database, so
+the user can reopen and rerun the SQL there. Catalog search is evaluated while the canonical snapshot remains
+inside Desktop and returns only a bounded compact match set, so a wide schema cannot
+overflow the local Broker frame; equally relevant matches list relations with larger
+planner row estimates first and carry a comment preview and that approximate estimate.
 
 The ACP server description contains no capability or credential, and the MCP child never
 receives the bearer capability. Desktop pins a closed Claude/Codex adapter descriptor,

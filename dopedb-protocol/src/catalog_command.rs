@@ -94,7 +94,8 @@ pub enum CatalogSearchMatchType {
 
 /// One intentionally compact catalog match. Detailed relation metadata stays behind
 /// `table.describe`, so a large schema can never overflow the Broker response merely
-/// because the Agent searched it.
+/// because the Agent searched it. The bounded comment and row estimate let a caller
+/// skip empty or deprecated look-alike relations without describing each one.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CatalogSearchMatch {
@@ -103,6 +104,10 @@ pub struct CatalogSearchMatch {
     pub object: ObjectRef,
     #[serde(default)]
     pub matched_fields: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub comment: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub row_estimate: Option<i64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

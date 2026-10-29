@@ -38,10 +38,10 @@
     {
       "path": "references/queries.md",
       "sourcePath": "skills/dopedb-cli/references/queries.md",
-      "size": 2731,
+      "size": 3023,
       "executable": false,
-      "sha256": "33fc880b24ac3e3a8be57b3aaf63b5487d217fb8b47430ec1c3a66cec126231c",
-      "normalizedTextSha256": "33fc880b24ac3e3a8be57b3aaf63b5487d217fb8b47430ec1c3a66cec126231c"
+      "sha256": "71b0106a1f515a2ead0d4659b6d4f8df7dc01931fd95f50299352ce4d32b86e6",
+      "normalizedTextSha256": "71b0106a1f515a2ead0d4659b6d4f8df7dc01931fd95f50299352ce4d32b86e6"
     },
     {
       "path": "references/safety.md",
@@ -63,7 +63,7 @@
       "content": "---\nname: dopedb-cli\ndescription: Set up or use the direct dopedb CLI outside an existing DopeDB Agent session. Do not load when a session-scoped DopeDB MCP server is already available.\n---\n\nWhen DopeDB supplies a session-scoped MCP server through built-in AI Chat or `dopedb agent start`, use its typed tools and do not run the public CLI or fetch this guide.\n\nOutside an approved Agent session, first load the version-matched setup and safety guide:\ndopedb skills get dopedb-cli\n"
     }
   ],
-  "releaseRevision": 26,
+  "releaseRevision": 27,
   "appVersion": "0.8.6",
-  "packageDigest": "2c0a881ebf3f2e88f5f6e839c0f2e5ff69ecba88ff26ec0300d21fde9e6b9bd9"
+  "packageDigest": "d242d54dac2ff5d1b73d1228c3a6600ecb8daf8ba9ef97ba5dab1692c973d096"
 }

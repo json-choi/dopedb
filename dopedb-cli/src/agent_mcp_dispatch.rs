@@ -88,21 +88,7 @@ pub(super) async fn call_tool(
         }
         TOOL_CATALOG_SEARCH => catalog_search(client, tool_arguments(params)?).await,
         TOOL_SCHEMA_DIFF => schema_diff(client, tool_arguments(params)?).await,
-        TOOL_TABLE_DESCRIBE => {
-            let arguments: TableDescribeToolArguments = tool_arguments(params)?;
-            validate_database(arguments.database.as_deref())?;
-            validate_text(&arguments.table, MAX_TABLE_BYTES, "table")?;
-            let result = broker_request::<TableDescribeCommand>(
-                client,
-                &TableDescribeArguments {
-                    connection: connection_selector(arguments.connection_id),
-                    database: arguments.database,
-                    table: arguments.table,
-                },
-            )
-            .await?;
-            tool_success(&result)
-        }
+        TOOL_TABLE_DESCRIBE => table_describe(client, tool_arguments(params)?).await,
         TOOL_SOURCE_SEARCH => {
             let arguments: SourceSearchArguments = tool_arguments(params)?;
             let result = broker_request::<SourceSearchCommand>(client, &arguments).await?;
@@ -363,15 +349,111 @@ async fn query_read(
     cancellation: &ToolCancellation,
 ) -> Result<Value, String> {
     validate_database(arguments.database.as_deref())?;
-    validate_text(&arguments.sql, MAX_STRING_BYTES, "SQL")?;
+    let preview_rows = arguments.preview_rows.unwrap_or(DEFAULT_QUERY_PREVIEW_ROWS);
+    if preview_rows == 0 || preview_rows > MAX_QUERY_PREVIEW_ROWS {
+        return Err("previewRows exceeds the configured bounds".into());
+    }
+    let timeout_ms = arguments
+        .timeout_ms
+        .unwrap_or(DEFAULT_QUERY_READ_TIMEOUT_MS);
+    if timeout_ms == 0 || timeout_ms > MAX_QUERY_READ_TIMEOUT_MS {
+        return Err("query timeout exceeds the configured bounds".into());
+    }
+    let batched = !arguments.reads.is_empty();
+    let reads = match (arguments.sql, batched) {
+        (Some(sql), false) => vec![QueryReadItem {
+            sql,
+            max_rows: arguments.max_rows,
+        }],
+        (None, true) if arguments.reads.len() <= MAX_QUERY_READ_BATCH => arguments.reads,
+        (None, true) => {
+            return Err(format!(
+                "reads accepts at most {MAX_QUERY_READ_BATCH} SQL reads"
+            ))
+        }
+        _ => return Err("provide exactly one of sql or reads".into()),
+    };
+    for read in &reads {
+        validate_text(&read.sql, MAX_STRING_BYTES, "SQL")?;
+    }
     let connection = connection_selector(arguments.connection_id);
+    if !batched {
+        let read = reads.into_iter().next().expect("one validated read");
+        let (plan, run) = plan_and_run(
+            client,
+            &connection,
+            arguments.connection_id,
+            arguments.database,
+            read,
+            timeout_ms,
+            cancellation,
+        )
+        .await?;
+        return tool_success(&compact::query_read(&plan, run, preview_rows));
+    }
+    // Independent reads share one tool round trip, but each keeps its own Broker
+    // plan, single-use run, timeout, and receipt. The first failure stops the batch:
+    // a timeout or session-level error would only repeat, and a failed read should be
+    // investigated before more reads run.
+    let mut results = Vec::with_capacity(reads.len());
+    let mut failure = None;
+    for read in reads {
+        if failure.is_some() {
+            results.push(json!({
+                "skipped": "not run because an earlier read in this batch failed",
+            }));
+            continue;
+        }
+        let max_rows = read.max_rows.or(arguments.max_rows);
+        let outcome = plan_and_run(
+            client,
+            &connection,
+            arguments.connection_id,
+            arguments.database.clone(),
+            QueryReadItem {
+                sql: read.sql,
+                max_rows,
+            },
+            timeout_ms,
+            cancellation,
+        )
+        .await;
+        match outcome {
+            Ok((plan, run)) => results.push(compact::query_read(&plan, run, preview_rows)),
+            Err(error) => {
+                results.push(json!({ "error": error }));
+                failure = Some(error);
+            }
+        }
+    }
+    if let (Some(error), Some(first)) = (&failure, results.first()) {
+        if first.get("error").is_some() {
+            return Err(format!(
+                "read 1 of {} failed and the remaining reads were not run: {error}",
+                results.len()
+            ));
+        }
+    }
+    tool_success(&json!({ "results": results }))
+}
+
+/// The Broker's mandatory plan request followed by its single-use run request.
+async fn plan_and_run(
+    client: &BrokerClient,
+    connection: &ConnectionSelector,
+    connection_id: Option<Uuid>,
+    database: Option<String>,
+    read: QueryReadItem,
+    timeout_ms: u64,
+    cancellation: &ToolCancellation,
+) -> Result<(QueryPlanResult, QueryRunResult), String> {
     let plan = broker_request_with_hints::<QueryPlanCommand>(
         client,
         &QueryPlanArguments {
             connection: connection.clone(),
-            database: arguments.database,
-            sql: arguments.sql,
-            max_rows: arguments.max_rows,
+            database,
+            sql: read.sql,
+            max_rows: read.max_rows,
         },
         SQL_READ_HINTS,
     )
@@ -382,36 +464,92 @@ async fn query_read(
             plan.decision
         ));
     }
-    cancellation.set_operation(plan.plan_id, arguments.connection_id);
-    let timeout_ms = arguments
-        .timeout_ms
-        .unwrap_or(DEFAULT_QUERY_READ_TIMEOUT_MS);
-    if timeout_ms == 0 || timeout_ms > MAX_QUERY_READ_TIMEOUT_MS {
-        return Err("query timeout exceeds the configured bounds".into());
-    }
+    cancellation.set_operation(plan.plan_id, connection_id);
     let run_arguments = QueryRunArguments {
         plan_id: plan.plan_id,
         connection: Some(connection.clone()),
     };
     let run_request = broker_request::<QueryRunCommand>(client, &run_arguments);
-    let run = match tokio::time::timeout(Duration::from_millis(timeout_ms), run_request).await {
-        Ok(result) => result?,
+    // A finished read is no longer a cancellation target for the next read's planning.
+    // A timed-out read stays one until its own cancel attempt has been sent.
+    match tokio::time::timeout(Duration::from_millis(timeout_ms), run_request).await {
+        Ok(run) => {
+            cancellation.clear_operation();
+            Ok((plan, run?))
+        }
         Err(_) => {
             let _ = tokio::time::timeout(
                 Duration::from_secs(2),
                 client.request::<QueryCancelCommand>(&QueryCancelArguments {
                     operation_id: plan.plan_id,
-                    connection: Some(connection),
+                    connection: Some(connection.clone()),
                 }),
             )
             .await;
-            return Err(format!(
+            cancellation.clear_operation();
+            Err(format!(
                 "query timed out after {timeout_ms}ms for connection {}",
                 plan.connection_id
-            ));
+            ))
         }
+    }
+}
+
+/// One or more exact relations described in a single conversation entry; an unknown
+/// relation is reported beside the others instead of failing the whole call.
+async fn table_describe(
+    client: &BrokerClient,
+    arguments: TableDescribeToolArguments,
+) -> Result<Value, String> {
+    validate_database(arguments.database.as_deref())?;
+    let tables = match (arguments.table, arguments.tables.is_empty()) {
+        (Some(table), true) => vec![table],
+        (None, false) if arguments.tables.len() <= MAX_TABLE_DESCRIBE_BATCH => arguments.tables,
+        (None, false) => {
+            return Err(format!(
+                "tables accepts at most {MAX_TABLE_DESCRIBE_BATCH} relations"
+            ))
+        }
+        _ => return Err("provide exactly one of table or tables".into()),
     };
-    tool_success(&json!({ "plan": plan, "run": run }))
+    for table in &tables {
+        validate_text(table, MAX_TABLE_BYTES, "table")?;
+    }
+    let single = tables.len() == 1;
+    let mut described = Vec::with_capacity(tables.len());
+    let mut errors = Vec::new();
+    let mut target = None;
+    for table in tables {
+        match broker_request::<TableDescribeCommand>(
+            client,
+            &TableDescribeArguments {
+                connection: connection_selector(arguments.connection_id),
+                database: arguments.database.clone(),
+                table: table.clone(),
+            },
+        )
+        .await
+        {
+            Ok(result) => {
+                target.get_or_insert((result.connection_id, result.database));
+                described.push(result.relation);
+            }
+            Err(error) if single => return Err(error),
+            Err(error) => errors.push(json!({ "table": table, "error": error })),
+        }
+    }
+    let Some((connection_id, database)) = target else {
+        return Err(format!(
+            "no requested relation could be described: {}",
+            serde_json::to_string(&errors).unwrap_or_default()
+        ));
+    };
+    tool_success(&compact::relations(
+        connection_id,
+        &database,
+        &described,
+        errors,
+    ))
 }
 
 async fn schema_diff(
@@ -509,5 +647,5 @@ async fn catalog_search(
         },
     )
     .await?;
-    tool_success(&result)
+    tool_success(&compact::catalog_search(result))
 }

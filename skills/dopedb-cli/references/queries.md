@@ -3,7 +3,11 @@
 Inside built-in AI Chat or a Desktop-approved `dopedb agent start` process, use
 the supplied typed DopeDB MCP tools instead of the commands below. The exact
 Project resource set is already pinned: call `environment_context`, search
-metadata with `catalog_search`, and execute a read with one `query_read` call.
+metadata with `catalog_search`, describe every relation you need in one
+`table_describe` call, and execute independent reads together in one
+`query_read` call. Only a bounded row preview enters the conversation; for longer
+listings, report how many rows were omitted. Each read is listed in the
+connection's Desktop Activity, where the user can reopen and rerun its SQL.
 When observing or cancelling work on a non-anchor database, pass its returned
 `connectionId` back to the `operation_status`, `operation_wait`, or
 `operation_cancel` tool.
