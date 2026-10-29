@@ -20,7 +20,7 @@ public-contract rule that governs every file here.
 | `response.rs` | Validated broker response envelope. |
 | `command.rs` | Typed command payload trait(s) shared by the Desktop broker and CLI; an active dispatcher must decode through one of these closed command specs before reaching an application service. |
 | `error.rs` | Stable broker `ErrorCode`s and redacted error envelopes (consumed by `dopedb-cli/src/exit_code.rs`). |
-| `version.rs` | Protocol and command-schema version negotiation (`PROTOCOL_MIN`/`PROTOCOL_MAX`, `COMMAND_SCHEMA_VERSION` = 19). A peer on another command-schema version receives `ProtocolMismatch`; the CLI then tells the user to update it from Settings → Command line. |
+| `version.rs` | Protocol and command-schema version negotiation (`PROTOCOL_MIN`/`PROTOCOL_MAX`, `COMMAND_SCHEMA_VERSION` = 20). A peer on another command-schema version receives `ProtocolMismatch`; the CLI then tells the user to update it from Settings → Command line. |
 | `discovery.rs` | Public, secret-free runtime discovery metadata (how the CLI finds a running Desktop runtime). |
 | `catalog.rs` | Catalog V2 DTOs shared by introspection, CLI, ERD, DDL, and table editing. |
 | `catalog_command.rs` | Typed catalog, schema, and relation command payloads. |

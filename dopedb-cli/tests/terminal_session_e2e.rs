@@ -99,8 +99,8 @@ mod platform {
         ExternalAgentSessionStartResult, NormalizedTypeFamily, ObjectKind, ObjectRef,
         ProtocolError, QueryHealth, QueryPlanArguments, QueryPlanResult, QueryResultPage,
         QueryRunArguments, QueryRunResult, Relation, RequestEnvelope, ResponseEnvelope,
-        RuntimeDiscovery, SchemaListResult, SchemaSummary, MAX_REQUEST_BYTES, MAX_RESPONSE_BYTES,
-        PROTOCOL_MAX, PROTOCOL_MIN,
+        RuntimeDiscovery, SchemaListResult, SchemaSummary, TableDescribeArguments,
+        TableDescribeResult, MAX_REQUEST_BYTES, MAX_RESPONSE_BYTES, PROTOCOL_MAX, PROTOCOL_MIN,
     };
     use sha2::{Digest, Sha256};
     use tempfile::TempDir;
@@ -223,8 +223,8 @@ mod platform {
                             native_type: "bigint".into(),
                             type_family: NormalizedTypeFamily::Integer,
                             length: None,
-                            precision: None,
-                            scale: None,
+                            precision: Some(64),
+                            scale: Some(0),
                             nullable: false,
                             default_expression: None,
                             generated_expression: None,
@@ -264,6 +264,9 @@ mod platform {
     /// Long-lived fixture shared by every journey below: the temporary runtime
     /// directory, the fake Broker socket, and the identifiers the fake Broker and
     /// the assertions agree on.
+    /// SQL the fake Broker refuses to plan, so a batch has a failing read.
+    const REJECTED_BATCH_SQL: &str = "SELECT rejected_by_fixture";
+
     struct BrokerFixture {
         temp: TempDir,
         runtime_directory: PathBuf,
@@ -272,6 +275,7 @@ mod platform {
         session_id: Uuid,
         connection_id: Uuid,
         plan_id: Uuid,
+        query_run_id: Uuid,
         sql: &'static str,
         proposal_definition: serde_json::Value,
     }
@@ -377,7 +381,7 @@ mod platform {
         let server = thread::spawn(move || {
             let mut catalog_searches = 0;
             let mut authority_retry_sent = false;
-            for _ in 0..7 {
+            for _ in 0..12 {
                 let (mut stream, _) = listener.accept().unwrap();
                 let request = read_request(&mut stream);
                 let authentication = request.authentication.as_ref().unwrap();
@@ -450,6 +454,8 @@ mod platform {
                                     } else {
                                         Vec::new()
                                     },
+                                    comment: Some("Application user accounts".into()),
+                                    row_estimate: Some(42),
                                 }],
                             },
                         );
@@ -459,6 +465,10 @@ mod platform {
                             serde_json::from_value(request.arguments.clone()).unwrap();
                         assert_eq!(arguments.connection, ConnectionSelector::Current);
                         assert_eq!(arguments.database.as_deref(), Some("app"));
+                        if arguments.sql == REJECTED_BATCH_SQL {
+                            respond_invalid_request(&mut stream, &request);
+                            continue;
+                        }
                         assert_eq!(arguments.sql, sql);
                         respond(
                             &mut stream,
@@ -506,14 +516,36 @@ mod platform {
                                 planning_decision: "ready".into(),
                                 result: QueryResultPage {
                                     columns: vec!["total_users".into()],
-                                    rows: vec![vec![serde_json::json!(42)]],
+                                    rows: vec![
+                                        vec![serde_json::json!(42)],
+                                        vec![serde_json::json!(43)],
+                                    ],
                                     decode_failures: Vec::new(),
-                                    row_count: 1,
+                                    row_count: 2,
                                     truncated: false,
                                     duration_ms: 1,
                                 },
                             },
                         );
+                    }
+                    CommandName::TableDescribe => {
+                        let arguments: TableDescribeArguments =
+                            serde_json::from_value(request.arguments.clone()).unwrap();
+                        assert_eq!(arguments.database.as_deref(), Some("app"));
+                        if arguments.table == "public.users" {
+                            respond(
+                                &mut stream,
+                                &request,
+                                &TableDescribeResult {
+                                    connection_id,
+                                    database: "app".into(),
+                                    relation: users_catalog(connection_id).relations()[0].clone(),
+                                },
+                            );
+                        } else {
+                            assert_eq!(arguments.table, "public.missing");
+                            respond_invalid_request(&mut stream, &request);
+                        }
                     }
                     CommandName::AnalysisArticlePropose => {
                         respond_invalid_request(&mut stream, &request);
@@ -554,6 +586,7 @@ mod platform {
                 session_id,
                 connection_id,
                 plan_id,
+                query_run_id,
                 sql,
                 proposal_definition,
             },
@@ -644,6 +677,32 @@ mod platform {
                         "arguments": { "query": "users" }
                     }
                 }),
+                serde_json::json!({
+                    "jsonrpc": "2.0",
+                    "id": 9,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "table_describe",
+                        "arguments": { "database": "app", "tables": ["public.users", "public.missing"] }
+                    }
+                }),
+                serde_json::json!({
+                    "jsonrpc": "2.0",
+                    "id": 10,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "query_read",
+                        "arguments": {
+                            "database": "app",
+                            "reads": [
+                                { "sql": sql },
+                                { "sql": REJECTED_BATCH_SQL },
+                                { "sql": sql }
+                            ],
+                            "previewRows": 1
+                        }
+                    }
+                }),
             ],
         )
     }
@@ -652,7 +711,7 @@ mod platform {
     /// the ones that must never be advertised.
     fn assert_tool_surface(bridge: &[serde_json::Value]) {
         let response = |id: i64| response_by_id(bridge, id);
-        assert_eq!(bridge.len(), 8);
+        assert_eq!(bridge.len(), 10);
         assert_eq!(response(1)["result"]["serverInfo"]["name"], "dopedb");
         let instructions = response(1)["result"]["instructions"].as_str().unwrap();
         assert!(instructions.contains("partial result"));
@@ -793,15 +852,50 @@ mod platform {
             "app.public.users"
         );
 
-        assert_eq!(response(6)["result"]["isError"], false);
         assert_eq!(
-            response(6)["result"]["structuredContent"]["plan"]["planId"],
-            plan_id.to_string()
-        );
-        assert_eq!(
-            response(6)["result"]["structuredContent"]["run"]["result"]["rows"][0][0],
+            response(4)["result"]["structuredContent"]["matches"][0]["rowEstimate"],
             42
         );
+        assert!(response(4)["result"]["structuredContent"]["matches"][0]
+            .get("object")
+            .is_none());
+
+        // A ready plan contributes only its receipt; rows within the preview arrive whole.
+        let read = &response(6)["result"]["structuredContent"];
+        assert_eq!(response(6)["result"]["isError"], false);
+        assert_eq!(read["queryRunId"], fixture.query_run_id.to_string());
+        assert_eq!(read["rows"], serde_json::json!([[42], [43]]));
+        assert!(read.get("plan").is_none() && read.get("preview").is_none());
+        assert!(!serde_json::to_string(read)
+            .unwrap()
+            .contains(&plan_id.to_string()));
+
+        // Batched describe reports the unknown relation beside the described one.
+        let described = &response(9)["result"]["structuredContent"];
+        assert_eq!(response(9)["result"]["isError"], false);
+        assert_eq!(described["relations"][0]["name"], "public.users");
+        assert_eq!(described["relations"][0]["columns"][0]["notNull"], true);
+        // Engine-reported precision never rewrites the native type into a fake one.
+        assert_eq!(described["relations"][0]["columns"][0]["type"], "bigint");
+        assert_eq!(described["errors"][0]["table"], "public.missing");
+
+        // Batched reads keep a receipt each, rows past previewRows never enter the
+        // conversation while their count stays visible, and the first failed read
+        // stops the batch instead of running the reads after it.
+        let batch = response(10)["result"]["structuredContent"]["results"]
+            .as_array()
+            .unwrap();
+        assert_eq!(response(10)["result"]["isError"], false);
+        assert_eq!(batch.len(), 3);
+        assert_eq!(batch[0]["rows"], serde_json::json!([[42]]));
+        assert_eq!(batch[0]["rowCount"], 2);
+        assert_eq!(batch[0]["preview"]["omittedRows"], 1);
+        assert!(batch[0]["preview"]["fullResult"]
+            .as_str()
+            .unwrap()
+            .contains("Desktop Activity"));
+        assert!(batch[1].get("error").is_some());
+        assert!(batch[2].get("skipped").is_some());
         assert_eq!(response(7)["result"]["isError"], true);
         assert!(response(7)["result"]["content"][0]["text"]
             .as_str()

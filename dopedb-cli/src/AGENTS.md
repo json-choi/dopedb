@@ -26,7 +26,8 @@ dispatch and vice versa.
 | `agent_bridge_main.rs` | Entrypoint for the `dopedb-agent-bridge` binary: registers the official ACP adapter process once, then serves typed MCP tools against the authenticated Local Broker. Bundled with Desktop, never installed as the public CLI. |
 | `agent_launch_policy.rs` | Closed command policy for app-only official ACP adapter launchers. |
 | `agent_mcp.rs` | Session-scoped typed MCP bridge shared by built-in ACP (via the bridge binary) and a Desktop-approved external Agent (via the hidden public-CLI entrypoint); every tool maps to one typed Local Broker command, never shelling out to another `dopedb` process. |
-| `agent_mcp_dispatch.rs` | MCP tool dispatch and Broker request execution. |
+| `agent_mcp_dispatch.rs` | MCP tool dispatch and Broker request execution, including batched `query_read` reads and `table_describe` relations. |
+| `agent_mcp_compact.rs` | Conversation-sized projections of query, catalog-search, and relation results: plan diagnostics only when flagged, a bounded row preview, and no repeated defaults or Broker bookkeeping. |
 | `agent_mcp_tools.rs` | MCP tool catalog and JSON Schema definitions served to ACP adapters. |
 
 ## Subdirectories

@@ -1019,15 +1019,15 @@ fn unknown_envelope_and_active_command_fields_fail_closed() {
 }
 
 #[test]
-fn command_names_match_the_v19_catalog() {
+fn command_names_match_the_v20_catalog() {
     let actual = dopedb_protocol::CommandName::ALL
         .into_iter()
         .map(|command| command.as_str())
         .collect::<Vec<_>>();
     let expected: Vec<String> =
-        serde_json::from_str(include_str!("fixtures/command-catalog-v19.json")).unwrap();
+        serde_json::from_str(include_str!("fixtures/command-catalog-v20.json")).unwrap();
     assert_eq!(actual, expected);
-    assert_eq!(COMMAND_SCHEMA_VERSION, 19);
+    assert_eq!(COMMAND_SCHEMA_VERSION, 20);
 
     let external_config = ExternalAgentConfig {
         schema_version: 1,
@@ -1095,7 +1095,9 @@ fn command_names_match_the_v19_catalog() {
                 "name": "users",
                 "kind": "table"
             },
-            "matchedFields": ["deleted_at"]
+            "matchedFields": ["deleted_at"],
+            "comment": "Soft-deleted rows have deleted_at set.",
+            "rowEstimate": 1200
         }]
     });
     typed_cli_contract::<CatalogSearchCommand>(&request, &result);

@@ -143,8 +143,15 @@ fail closed하고 runtime TTL·Desktop shutdown이 잔여 record를 정리한다
 
 Agent의 catalog 검색은 `catalog.show` 응답을 bridge로 옮긴 뒤 필터링하지 않는다.
 Desktop runtime이 canonical snapshot을 검색하고 최대 50개의 compact object
-reference와 일치 field만 `catalog.search`로 반환한다. 따라서 relation/column 수가
-많아도 검색 응답이 Broker frame 한도를 넘지 않는다.
+reference와 일치 field, 160자 이하의 comment 미리보기, planner 행 수 추정치만
+`catalog.search`로 반환한다. 관련도가 같으면 행 수 추정치가 큰 relation을 먼저 둔다.
+따라서 relation/column 수가 많아도 검색 응답이 Broker frame 한도를 넘지 않는다.
+
+Agent tool 결과는 이후 모든 turn에서 다시 읽히므로 bridge는 대화 크기에 맞춘
+projection을 반환한다. `query_read`는 Broker가 표시한 경우에만 plan 진단을 싣고
+최대 `previewRows`개 행만 대화에 넣는다. 한 호출에 최대 5개의 독립 read를 묶을 수
+있지만 각 read는 자기 plan, single-use run, timeout, receipt를 유지하고 첫 실패에서
+batch를 멈춘다. `table_describe`는 최대 10개 relation을 한 번에 기술한다.
 
 stdio MCP는 database tool을 한 번에 하나만 실행하되 stdin reader를 분리해 실행
 중에도 `notifications/cancelled`를 수신한다. 아직 대기 중인 tool은 queue에서

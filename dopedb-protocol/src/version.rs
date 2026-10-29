@@ -4,8 +4,8 @@ use thiserror::Error;
 
 pub const PROTOCOL_MIN: u16 = 1;
 pub const PROTOCOL_MAX: u16 = 1;
-/// 19: graph commands and graph fields are retired; exact-commit source browsing remains.
-pub const COMMAND_SCHEMA_VERSION: u16 = 19;
+/// 20: catalog search matches carry a bounded comment and row estimate.
+pub const COMMAND_SCHEMA_VERSION: u16 = 20;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
 #[error(

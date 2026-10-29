@@ -22,12 +22,13 @@ use dopedb_protocol::{
     DocumentRunArguments, DocumentRunCommand, EmptyArguments, EnvironmentContextCommand,
     EnvironmentContextResult, ErrorCode, ObjectKind, OperationArguments, OperationCancelCommand,
     OperationShowCommand, OperationWaitArguments, OperationWaitCommand, QueryCancelArguments,
-    QueryCancelCommand, QueryPlanArguments, QueryPlanCommand, QueryRunArguments, QueryRunCommand,
-    SchemaListCommand, SourceReadArguments, SourceReadCommand, SourceSearchArguments,
-    SourceSearchCommand, SqlProposeArguments, SqlProposeCommand, TableDescribeArguments,
-    TableDescribeCommand, MAX_CATALOG_SEARCH_KINDS, MAX_CATALOG_SEARCH_MATCHES,
-    MAX_CATALOG_SEARCH_QUERY_BYTES, MAX_KNOWLEDGE_QUERY_BYTES, MAX_KNOWLEDGE_RESULTS,
-    MAX_REQUEST_BYTES, MAX_SOURCE_PATH_BYTES, MAX_SOURCE_READ_LINES, MAX_STRING_BYTES,
+    QueryCancelCommand, QueryPlanArguments, QueryPlanCommand, QueryPlanResult, QueryRunArguments,
+    QueryRunCommand, QueryRunResult, SchemaListCommand, SourceReadArguments, SourceReadCommand,
+    SourceSearchArguments, SourceSearchCommand, SqlProposeArguments, SqlProposeCommand,
+    TableDescribeArguments, TableDescribeCommand, MAX_CATALOG_SEARCH_KINDS,
+    MAX_CATALOG_SEARCH_MATCHES, MAX_CATALOG_SEARCH_QUERY_BYTES, MAX_KNOWLEDGE_QUERY_BYTES,
+    MAX_KNOWLEDGE_RESULTS, MAX_REQUEST_BYTES, MAX_SOURCE_PATH_BYTES, MAX_SOURCE_READ_LINES,
+    MAX_STRING_BYTES,
 };
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -36,6 +37,8 @@ use uuid::Uuid;
 
 use crate::client::{BrokerClient, ClientError};
 
+#[path = "agent_mcp_compact.rs"]
+mod compact;
 #[path = "agent_mcp_dispatch.rs"]
 mod dispatch;
 #[path = "agent_mcp_tools.rs"]
@@ -51,6 +54,10 @@ const MAX_DATABASE_BYTES: usize = 256;
 const MAX_TABLE_BYTES: usize = 768;
 const MAX_OPERATION_WAIT_MS: u64 = 30_000;
 const DEFAULT_QUERY_READ_TIMEOUT_MS: u64 = 60_000;
+const DEFAULT_QUERY_PREVIEW_ROWS: usize = 50;
+const MAX_QUERY_PREVIEW_ROWS: usize = 200;
+const MAX_QUERY_READ_BATCH: usize = 5;
+const MAX_TABLE_DESCRIBE_BATCH: usize = 10;
 const MAX_QUERY_READ_TIMEOUT_MS: u64 = 300_000;
 const MAX_CONCURRENT_TOOL_CALLS: usize = 4;
 // Hosted authority calls have a 15-second hard timeout. Keep the tool call
@@ -149,7 +156,10 @@ struct TableDescribeToolArguments {
     connection_id: Option<Uuid>,
     #[serde(default)]
     database: Option<String>,
-    table: String,
+    #[serde(default)]
+    table: Option<String>,
+    #[serde(default)]
+    tables: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -159,11 +169,24 @@ struct QueryReadToolArguments {
     connection_id: Option<Uuid>,
     #[serde(default)]
     database: Option<String>,
-    sql: String,
+    #[serde(default)]
+    sql: Option<String>,
+    #[serde(default)]
+    reads: Vec<QueryReadItem>,
     #[serde(default)]
     max_rows: Option<u64>,
     #[serde(default)]
+    preview_rows: Option<usize>,
+    #[serde(default)]
     timeout_ms: Option<u64>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct QueryReadItem {
+    sql: String,
+    #[serde(default)]
+    max_rows: Option<u64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -248,6 +271,17 @@ impl ToolCancellation {
             .connection_id
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = connection_id;
+    }
+
+    fn clear_operation(&self) {
+        *self
+            .operation_id
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+        *self
+            .connection_id
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
     }
 
     fn operation_id(&self) -> Option<Uuid> {

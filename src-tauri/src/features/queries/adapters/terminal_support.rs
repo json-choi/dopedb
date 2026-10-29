@@ -76,14 +76,40 @@ pub(super) async fn audit_best_effort(
     }
 }
 
+/// How one Agent read ended, as recorded in the connection's Activity history.
+pub(super) struct AgentReadOutcome {
+    status: &'static str,
+    rows: Option<i64>,
+    duration_ms: Option<i64>,
+    error: Option<String>,
+}
+
+impl AgentReadOutcome {
+    pub(super) fn succeeded(rows: i64, duration_ms: i64) -> Self {
+        Self {
+            status: "ok",
+            rows: Some(rows),
+            duration_ms: Some(duration_ms),
+            error: None,
+        }
+    }
+
+    fn failed(message: String) -> Self {
+        Self {
+            status: "error",
+            rows: None,
+            duration_ms: None,
+            error: Some(message),
+        }
+    }
+}
+
 pub(super) async fn persist_history(
     store: &Store,
     pin: &PinnedConnection,
     sql: &str,
-    status: &str,
-    rows: Option<i64>,
-    duration_ms: Option<i64>,
-    error: Option<String>,
+    database: &str,
+    outcome: AgentReadOutcome,
 ) -> Result<QueryRunId, AppError> {
     let id = QueryRunId::from(Uuid::new_v4());
     store
@@ -94,13 +120,16 @@ pub(super) async fn persist_history(
                 connection_id: pin.connection_id,
                 sql: sql.to_string(),
                 kind: QueryKind::Read,
-                status: status.to_string(),
-                row_count: rows,
-                duration_ms,
-                error,
+                status: outcome.status.to_owned(),
+                row_count: outcome.rows,
+                duration_ms: outcome.duration_ms,
+                error: outcome.error,
                 executed_at: Utc::now(),
                 origin: "agent".into(),
-                database: None,
+                // Activity reopens the statement in the database the Agent read.
+                database: Some(database)
+                    .filter(|name| !name.is_empty())
+                    .map(str::to_owned),
                 namespace: None,
             },
         )
@@ -112,6 +141,7 @@ pub(super) async fn record_run_failure(
     store: &Store,
     pin: &PinnedConnection,
     sql: &str,
+    database: &str,
     engine: Engine,
     origin: AgentQueryInvocationOrigin,
     error: &AppError,
@@ -128,7 +158,7 @@ pub(super) async fn record_run_failure(
     )
     .await;
     if let Err(history_error) =
-        persist_history(store, pin, sql, "error", None, None, Some(message)).await
+        persist_history(store, pin, sql, database, AgentReadOutcome::failed(message)).await
     {
         tracing::error!("query failure history insert failed: {history_error}");
     }
