@@ -105,6 +105,16 @@ ignoreUntil = 2026-11-17
 reason = "zip 9.0 fixes extract() symlink and permission handling, but calamine 0.36.1 and rust_xlsxwriter 0.99.1 still require zip 8. DopeDB never calls extract(): XLSX validation only reads entries, and the Windows BigQuery SDK unpacker rejects symlinks and unsafe paths and writes new files without restoring mode bits. The updater's zip feature, the only extract() caller, is disabled, and clippy.toml rejects the extract APIs."
 
 [[IgnoredVulns]]
+id = "GHSA-m665-v7pm-7grj"
+ignoreUntil = 2026-11-17
+reason = "The zip <= 9.0.4 Local/Central header parser differential needs two readers to disagree, but DopeDB reads every archive only through ZipArchive (never ZipStreamReader): XLSX inspection reads entries in memory, and the Windows BigQuery SDK unpacker accepts only the size- and SHA-256-pinned official archive. The fix is zip 9.0.5, which calamine 0.36.1 and rust_xlsxwriter 0.99.1 do not accept yet."
+
+[[IgnoredVulns]]
+id = "GHSA-qwgh-2vcv-g2f7"
+ignoreUntil = 2026-11-30
+reason = "block-buffer 0.10.4 can corrupt its cursor only when the compress callback panics and the panic is caught before the buffer is reused. Its only callers are digest 0.10 hashes (sha2, hmac, pbkdf2, scrypt via sqlx, minisign and Tauri), whose compress functions do not panic. The fix exists only in block-buffer 0.12.1, which the digest 0.10 ecosystem cannot use."
+
+[[IgnoredVulns]]
 id = "RUSTSEC-2026-0370"
 ignoreUntil = 2026-12-04
 reason = "zvariant reaches the graph only through the Linux-only zbus D-Bus stack of keyring, tauri-plugin-opener and tauri-plugin-single-instance, which is not compiled for the currently shipped macOS or verified Windows targets."

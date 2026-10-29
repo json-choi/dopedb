@@ -8,7 +8,13 @@ overrides:
   'brace-expansion@>=5.0.0 <5.0.12': 5.0.12
   '@codemirror/state': 6.7.2
   '@codemirror/view': 6.43.10
-  'dompurify@<3.4.16': 3.4.16
+  # GHSA-c6gr-qvv4-5v3f, GHSA-cg2g-xh64-v4q7, GHSA-mrv2-3pqr-j5jr.
+  'dompurify@<3.4.17': 3.4.17
+  # GHSA-5fpq-26gf-qwcr, GHSA-c8p4-j97h-3vg8, GHSA-834v-8h66-3h79: vitest's optional
+  # browser environment; no test config selects it.
+  'happy-dom@<21.0.4': 21.0.4
+  # GHSA-mrhx-c7xc-m3w5.
+  'zod@>=4.0.0 <4.6.6': 4.6.6
   'lodash-es@<4.18.0': 4.18.1
   # GHSA-68fv-2mgg-jv7q: bound indexed source-map section offsets.
   'source-map-js@<1.2.2': 1.2.2
