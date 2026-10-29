@@ -97,7 +97,22 @@ which are scoped by advisory ID, remain. The `zvariant`, `zbus_names`, and
 `zvariant_derive` advisories RUSTSEC-2026-0370, -0371, and -0372 have no fixed
 release yet; they expire on 2026-12-04 because those crates arrive only through
 the Linux-only `zbus` D-Bus stack of `keyring` and the Tauri opener and
-single-instance plugins. `ammonia` is pinned to 4.2.4 for RUSTSEC-2026-0373.
+single-instance plugins. `ammonia` is pinned to 4.2.4 for RUSTSEC-2026-0373. The zip header
+parser-differential advisory GHSA-m665-v7pm-7grj also expires on 2026-11-17
+with the other zip entries: its fix is zip 9.0.5, and DopeDB reads archives only
+through `ZipArchive` (XLSX entries in memory, and the size- and SHA-256-pinned
+BigQuery SDK archive on Windows), never through a second streaming reader. The
+`block-buffer` 0.10.4 advisory GHSA-qwgh-2vcv-g2f7 expires on 2026-11-30: the
+fix exists only in 0.12.1, which the digest 0.10 hashes used by sqlx, minisign
+and Tauri cannot take, and the bug needs a panicking compress callback that
+those hashes never have. Workspace Cloud keeps `better-auth` 1.7.4 until an
+explicit identity migration: 1.7.7 and later reject the provider-scoped
+`account.issuer` column the baseline keeps for `identityStrategy: "provider-id"`.
+Its advisories GHSA-965c-763c-88jm (Magic Link), GHSA-r4xp-prcw-77qf (OAuth
+Proxy), and GHSA-44jh-23m7-hpcf (PostgreSQL rate limiting) expire on 2026-11-30;
+none of those plugins or that database is in use. These exceptions live in
+`workspace-cloud/osv-scanner.toml`, because OSV-Scanner reads the config beside
+each lockfile.
 Any other OSV finding fails CI.
 
 The following registry releases were intentionally held because they were less

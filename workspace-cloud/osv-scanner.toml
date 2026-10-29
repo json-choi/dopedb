@@ -1,0 +1,19 @@
+# Time-bounded exceptions for workspace-cloud/pnpm-lock.yaml. OSV-Scanner reads the
+# config beside each lockfile, so the root osv-scanner.toml does not apply here.
+# better-auth 1.7.7+ rejects the provider-scoped account.issuer column that the
+# Workspace identity baseline keeps (identityStrategy "provider-id"), so the upgrade
+# needs an explicit identity migration. None of these advisories' preconditions hold.
+[[IgnoredVulns]]
+id = "GHSA-965c-763c-88jm"
+ignoreUntil = 2026-11-30
+reason = "Requires the Magic Link plugin together with social or Generic OAuth sign-in; workspace-cloud/lib/auth.ts enables only Google sign-in with the multiSession, bearer and organization plugins, never Magic Link."
+
+[[IgnoredVulns]]
+id = "GHSA-r4xp-prcw-77qf"
+ignoreUntil = 2026-11-30
+reason = "Requires the OAuth Proxy plugin; workspace-cloud/lib/auth.ts never enables it, and OAuth state stays in the database-backed default."
+
+[[IgnoredVulns]]
+id = "GHSA-44jh-23m7-hpcf"
+ignoreUntil = 2026-11-30
+reason = "Affects database-backed rate limiting on PostgreSQL only; Workspace Cloud stores rate-limit records through the Drizzle sqlite provider on Cloudflare D1."
