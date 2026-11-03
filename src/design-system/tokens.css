@@ -152,6 +152,8 @@
   --ds-cosmic-night-raised: #183449;
   --ds-cosmic-night-soft: #202f40;
   --ds-cosmic-cream: #fff4e1;
+  /* Welcome text stays white in every theme; the theme's primary-foreground is dark in dark mode. */
+  --ds-cosmic-foreground: #ffffff;
   --ds-cosmic-muted: #bec9d2;
   --ds-cosmic-electric: #6a9dc5;
   --ds-cosmic-warm: #e6ab83;
